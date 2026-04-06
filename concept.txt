@@ -1,0 +1,118 @@
+
+    Engine1999 - A 2D games engine written in C
+    Copyright (C) 2026  Ekkehard Morgenstern
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+    NOTE: Programs created with a built-in programming language (if any),
+          do not fall under this license.
+
+    CONTACT INFO:
+        E-Mail: ekkehard@ekkehardmorgenstern.de
+        Mail: Ekkehard Morgenstern, Mozartstr. 1, D-76744 Woerth am Rhein,
+              Germany, Europe
+
+
+Engine 1999 concept
+-------------------
+
+Simulate computer screen with the following features:
+- 80 x 25 text screen
+- font size at least 8 x 12 pixels
+- graphics screen at least 640 x 300 pixels
+- sprite size at least 16 x 24 pixels
+- tile size at least 16 x 24 pixels
+- a background color or image
+- multilayered screen: background below tiles below text below graphics below sprites
+  (perhaps rearrangable)
+- each layer is a transparent bitmap, except the background
+- each layer has its own palette
+
+Tile Memory
+-----------
+
+The purpose of tiles is to provide a scrollable background made up of tiles. The tile screen control structure contains the address of the tile map, and two offsets for X and Y (0..15 each) shift. This also means that the tile screen has to be 41 x 13 (=533 total), the 12th row is only halfways visible, the 13th row is invisible unless scrolled, and the 41st column is invisible unless scrolled.
+
+Each tile is part of a tile map, and can be one of 256 tiles.
+A tile is 16 x 24 pixels in size, and a tile map is 16 x 16 tiles (resolution 256 x 384 pixels).
+Multiple tile maps can coexist in memory, but a maximum of one is active at any given time.
+
+Sprite Memory
+-------------
+
+The purpose of sprites is to facilitate moving objects on the screen.
+
+Each sprite image is part of a sprite map and can be one of 256 sprite images.
+A sprite image is 16 x 24 pixels in size, and a sprite map is 16 x 16 sprite images (resolution 256 x 384 pixels).
+Multiple sprite maps can coexist in memory, but a maximum of one is active at any given time.
+
+Each sprite can be animated, and a sprite anim sequence can contain up to 15 animation indices. The default anim sequence has just one index. There can be up to 256 animation sequences. Thus the memory consumption is 4 KiB.
+
+Each sprite control structure contains the following: The index of an animation sequence (0..255), the position within that sequence (0..15), and the screen X and Y coordinates (0..511 each), a sprite priority value (0..7) an active bit (0..1), a sprite-sprite collision enable flag (0..1), a sprite-sprite collision indicator bit (0..1), a sprite-tile collision enable flag (0..1) and a sprite-tile collision indicator bit (0..1). Total of 8+4+9+9+3+1+1+1+1+1 = 38 bits. The remainder of the bits is reserved. The size of the control structure is 64 bits (8 bytes).
+
+There is a maximum of 256 sprites, and their control structures take up 2 KiB.
+
+Color Encoding
+--------------
+
+Since palettized textures aren't supported in SDL2 anymore, ARGB8888 is used for color and transparency encoding in the textures.
+
+Text Screen
+-----------
+
+The text screen is organized as 80 x 25 character cells.
+
+Each character cell contains a foreground and background color index, from a palette of 256 ARGB8888 values, and a character index from the font.
+
+The font is a set of 8 x 12 monochrome characters. All characters can be redefined by the application. A pixel set in the font will use the foreground color, a pixel clear in the font will use the background color.
+
+Layers
+------
+
+Every layer has its own texture, to speed up recombination during redraw.
+
+Each layer has its own palette of 256 colors, defined as ARGB8888 values, which encodes color information as well as transparency information.
+
+If no layer has been modified, the screen isn't redrawn at all, unless:
+  - the window is moved to the background and then to the foreground again
+    (i.e. when it loses and regains input focus)
+
+When a layer is flagged as modified:
+  - the layer memory is regenerated if necessary
+    - the tile layer is the costliest to regenerate
+    - the text layer is the second costliest to regenerate
+  - the layer is flagged for update
+
+When a layer needs to be updated:
+  - the layer's memory is transferred to a texture memory buffer, using the layer's palette information. This is the costliest operation in the whole system, so it must be carefully optimized, b/c there are 5 layers.
+  - the layer's texture is updated from the buffer.
+
+When a screen redraw is scheduled:
+  - the screen is cleared with the background color
+  - the layer textures are copied onto the screen
+  - the screen is presented before or after waiting for the vblank interrupt
+
+From bottom to top, these are the supported layers:
+- background color (a single color value to clear the background with)
+- background layer (screen sized)
+- tiles layer (screen sized)
+- text layer (screen sized)
+- graphics layer (screen sized)
+- sprites layer (screen sized)
+
+Each screen-sized layer is 640 x 300 pixels, palettized with 8bpp, and thus consumes 192 KB (187.5 KiB). Thus, the total consumption is 960 KB (937.5 KiB).
+
+At 32 bpp for the textures, one texture consumes at least an additional 768 KB (750 KiB). The five layers plus one buffer thus consume 4.608 MB (4.5 MiB).
+
+Most video chips today have at least 1 GiB of video RAM, so this should be OK for most configurations (not older than 10-15 years). Even on older hardware, this should be OK (if it has at least 8-16 MiB of VRAM).
