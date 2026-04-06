@@ -26,15 +26,23 @@
 
 #include "textscreen.h"
 
+#define FONTSIZE 3072
+
 static textcell_t textscr[TXTSCR_WIDTH * TXTSCR_HEIGHT];
+static uint8_t    currfont[FONTSIZE];
 
-bool txtscr_init( void ) {
+extern const uint8_t fontdef1[FONTSIZE];
 
-}
-
-void txtscr_cleanup( void ) {
+void txtscr_init( void ) {
+      memcpy( currfont, fontdef1, FONTSIZE );
+      textcell_t cell = TXTSCR_MAKECELL( 32, TXTSCR_BGCOL, TXTSCR_FGCOL );
+      for ( size_t i=0; i < TXTSCR_WIDTH * TXTSCR_HEIGHT; ++i ) {
+            textscr[i] = cell;
+      }
+      return true;
 }
 
 void txtscr_render( uint8_t* target, const uint32_t* palette ) {
+      const textcell_t* s = &textscr[0];
 
 }
