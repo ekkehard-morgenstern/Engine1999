@@ -30,19 +30,67 @@
 
 static textcell_t textscr[TXTSCR_WIDTH * TXTSCR_HEIGHT];
 static uint8_t    currfont[FONTSIZE];
+static uint8_t    pen, paper;
 
 extern const uint8_t fontdef1[FONTSIZE];
+
+static void txtscr_write( int y, int x, int bg, int fg, const char* text ) {
+      if ( x < 0 || x > TXTSCR_WIDTH || y < 0 || y > TXTSCR_HEIGHT ) {
+            return;
+      }
+      if ( bg < 0 || bg > 255 || fg < 0 || fg > 255 || text == 0 ) {
+            return;
+      }
+      const char* s = text;
+      uint8_t* d = &textscr[ y * TXTSCR_WIDTH + x ];
+      size_t n = strlen( s );
+      if ( n > (size_t)( TXTSCR_WIDTH - x ) ) {
+            n = (size_t)( TXTSCR_WIDTH - x );
+      }
+      while ( n-- ) {
+            *d++ = TXTSCR_MAKECELL( *s++, bg, fg );
+      }
+}
 
 void txtscr_init( void ) {
       memcpy( currfont, fontdef1, FONTSIZE );
       textcell_t cell = TXTSCR_MAKECELL( 32, TXTSCR_BGCOL, TXTSCR_FGCOL );
+      paper = TXTSCR_BGCOL;
+      pen = TXTSCR_FGCOL;
       for ( size_t i=0; i < TXTSCR_WIDTH * TXTSCR_HEIGHT; ++i ) {
             textscr[i] = cell;
       }
-      return true;
+      txtscr_write(
+            0,
+            0,
+            TXTSCR_BGCOL,
+            TXTSCR_FGCOL,
+            "Hello world!"
+      );
 }
 
-void txtscr_render( uint8_t* target, const uint32_t* palette ) {
+void txtscr_render( uint8_t* target ) {
       const textcell_t* s = &textscr[0];
-
+      uint8_t* d = target;
+      int stride = TXTSCR_WIDTH * 8;
+      for ( uint8_t y=0; y < UINT8_C(TXTSCR_HEIGHT); ++y ) {
+            for ( uint8_t x=0; x < UINT8_C(TXTSCR_WIDTH); ++x ) {
+                  textcell_t cell = *s++;
+                  uint8_t bg = TXTSCR_CELL_BG(cell);
+                  uint8_t fg = TXTSCR_CELL_FG(cell);
+                  uint8_t ch = TXTSCR_CELL_CHR(cell);
+                  const uint8_t* fontchar = &currfont[ ch * 12 ];
+                  const uint8_t* d0 = d;
+                  for ( uint8_t cy=0; cy < UINT8_C(12); ++cy ) {
+                        uint8_t by = *fontchar++;
+                        for ( uint8_t cx=0; cx < UINT8_C(8); ++cx ) {
+                              *d++ = by & UINT8_C(0X80) ? fg : bg;
+                              by <<= UINT8_C(1);
+                        }
+                        d += stride - 8;
+                  }
+                  d = d0 + 8;
+            }
+            d += stride * 11;
+      }
 }

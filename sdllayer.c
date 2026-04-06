@@ -318,6 +318,7 @@ bool sdllay_init( sdllayer_t* lay, const char* title, SDL_Renderer* renderer ) {
         fprintf( stderr, "sdllay_init(): failed to create texture\n" );
         return false;
     }
+    memset( lay->memory, 0, SDL_SCREENWIDTH * SDL_SCREENHEIGHT );
     for ( int i=0; i < 256; ++i ) {
         lay->palette[i] = colinittab[i].argb;
     }

@@ -57,6 +57,6 @@ typedef uint32_t textcell_t;
 
 void txtscr_init( void );
 
-void txtscr_render( uint8_t* target, const uint32_t* palette );
+void txtscr_render( uint8_t* target );
 
 #endif
