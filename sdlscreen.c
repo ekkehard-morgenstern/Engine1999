@@ -57,6 +57,15 @@ static void print_sdlerror( const char* scope ) {
     fprintf( stderr, "SDL error [%s]: %s\n", scope, msg );
 }
 
+static void render_tiles( struct _sdllayer_t* lay, void* usrdata ) {
+}
+
+static void render_text( struct _sdllayer_t* lay, void* usrdata ) {
+}
+
+static void render_sprites( struct _sdllayer_t* lay, void* usrdata ) {
+}
+
 static bool sdlscr_initok = false;
 static bool sdlscr_doexit = false;
 
@@ -105,6 +114,10 @@ static void* sdlscr_worker( void* arg ) {
         fprintf( stderr, "failed to initialize layers\n" );
         goto ERR3;
     }
+
+    sdllay_setcall( &layers[LAY_TIL], render_tiles, 0 );
+    sdllay_setcall( &layers[LAY_TXT], render_text, 0 );
+    sdllay_setcall( &layers[LAY_SPR], render_sprites, 0 );
 
     // confirm init ok
     sdlscr_initok = true;
