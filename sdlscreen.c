@@ -61,6 +61,7 @@ static void render_tiles( struct _sdllayer_t* lay, void* usrdata ) {
 }
 
 static void render_text( struct _sdllayer_t* lay, void* usrdata ) {
+    txtscr_render( lay->memory );
 }
 
 static void render_sprites( struct _sdllayer_t* lay, void* usrdata ) {
