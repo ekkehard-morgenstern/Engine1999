@@ -323,11 +323,18 @@ bool sdllay_init( sdllayer_t* lay, const char* title, SDL_Renderer* renderer ) {
     }
     // NOTE that the color names aren't currently used, which might change in a future version.
     lay->modified = true;
+    lay->callback = 0;
+    lay->userdata = 0;
 }
 
 void sdllay_cleanup( sdllayer_t* lay ) {
     free( lay->memory ); lay->memory = 0;
     SDL_DestroyTexture( lay->texture ); lay->texture = 0;
+}
+
+void sdllay_setcall( sdllayer_t* lay, sdllaycb_t callback, void* userdata ) {
+    lay->callback = callback;
+    lay->userdata = userdata;
 }
 
 bool sdllay_init_many( sdllayer_t* lay, size_t cnt, const char* const* titles, SDL_Renderer* renderer ) {
@@ -350,6 +357,13 @@ void sdllay_cleanup_many( sdllayer_t* lay, size_t cnt ) {
     }
 }
 
+bool sdllay_needsredraw( const sdllayer_t* lay, size_t cnt ) {
+    for ( size_t i=0; i < cnt; ++i ) {
+        if ( lay->modified ) return true;
+    }
+    return false;
+}
+
 bool sdllay_2texture( sdllayer_t* lay ) {
     static uint32_t* buf = 0;
     if ( buf == 0 ) {
@@ -360,9 +374,12 @@ bool sdllay_2texture( sdllayer_t* lay ) {
         }
     }
     if ( !lay->modified ) {
-        return;
+        return true;
     }
     lay->modified = false;
+    if ( lay->callback ) {
+        lay->callback( lay, lay->userdata );
+    }
     const uint8_t* source = lay->memory;
     const uint32_t* palette = lay->palette;
     uint32_t* target = buf;
@@ -376,4 +393,29 @@ bool sdllay_2texture( sdllayer_t* lay ) {
         buf,
         SDL_SCREENWIDTH * sizeof(uint32_t)
     );
+    return true;
+}
+
+bool sdllay_2texture_many( sdllayer_t* lay, size_t cnt ) {
+    for ( size_t i=0; i < cnt; ++i ) {
+        if ( !sdllay_2texture( &lay[i] ) ) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void sdllay_draw_texture( const sdllayer_t* lay, SDL_Renderer* renderer ) {
+    SDL_RenderCopy(
+        renderer,
+        lay->texture,
+        0,
+        0
+    );
+}
+
+void sdllay_draw_texture_many( const sdllayer_t* lay, size_t cnt, SDL_Renderer* renderer ) {
+    for ( size_t i=0; i < cnt; ++i ) {
+        sdllay_draw_texture( &lay[i], renderer );
+    }
 }

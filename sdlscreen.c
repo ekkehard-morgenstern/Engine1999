@@ -25,7 +25,32 @@
 */
 
 #include "sdlscreen.h"
+#include "sdllayer.h"
 #include "sdlevent.h"
+
+#define NLAYERS 5
+#define LAY_BG          0
+#define LAY_TIL         1
+#define LAY_TXT         2
+#define LAY_GFX         3
+#define LAY_SPR         4
+
+static sdllayer_t layers[NLAYERS];
+static const char* const layer_titles[NLAYERS] = {
+    "background", "tiles", "text", "graphics", "sprites"
+};
+
+static bool init_layers( SDL_Renderer* renderer ) {
+    sdllay_init_many( &layers[0], NLAYERS, layer_titles, renderer );
+}
+
+static void cleanup_layers( void ) {
+    sdllay_cleanup_many( &layers[0], NLAYERS );
+}
+
+static void draw_layers( SDL_Renderer* renderer ) {
+    sdllay_draw_texture_many( &layers[0], NLAYERS, renderer );
+}
 
 static void print_sdlerror( const char* scope ) {
     const char* msg = SDL_GetError();
@@ -34,6 +59,8 @@ static void print_sdlerror( const char* scope ) {
 
 static bool sdlscr_initok = false;
 static bool sdlscr_doexit = false;
+
+static uint32_t sdlscr_bgcol = UINT32_C(0XFF708090); // SlateGray
 
 static void* sdlscr_worker( void* arg ) {
 
@@ -74,6 +101,11 @@ static void* sdlscr_worker( void* arg ) {
         goto ERR3;
     }
 
+    if ( !init_layers( renderer ) ) {
+        fprintf( stderr, "failed to initialize layers\n" );
+        goto ERR3;
+    }
+
     // confirm init ok
     sdlscr_initok = true;
     sdlev_raise( SDLEV_SCREENWORKERINITDONE );
@@ -84,17 +116,32 @@ static void* sdlscr_worker( void* arg ) {
             break;
         }
 
+        if ( !sdllay_needsredraw( &layers[0], NLAYERS ) ) {
+            continue;
+        }
+        sdllay_2texture_many( &layers[0], NLAYERS );
+        uint32_t c = sdlscr_bgcol;
+        uint8_t a = (uint8_t)( c >> UINT8_C(24) );
+        uint8_t r = (uint8_t)( c >> UINT8_C(16) );
+        uint8_t g = (uint8_t)( c >> UINT8_C( 8) );
+        uint8_t b = (uint8_t)( c                );
+        SDL_SetRenderDrawColor( renderer, r, g, b, a );
+        SDL_RenderClear( renderer );
+        draw_layers( renderer );
+        SDL_RenderPresent( renderer );
     }
 
 
     // cleanup
     sdlscr_initok = false;
+    cleanup_layers();
     SDL_DestroyRenderer( renderer );
     SDL_DestroyWindow( window );
     sdlev_raise( SDLEV_SCREENWORKERFINISHED );
     return 0;
 
         // error handling
+// ERR4:   cleanup_layers();
 ERR3:   SDL_DestroyRenderer( renderer );
 ERR2:   SDL_DestroyWindow( window );
 ERR1:   sdlev_raise( SDLEV_SCREENWORKERINITDONE );

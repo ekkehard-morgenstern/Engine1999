@@ -33,20 +33,35 @@
 #include "sdltypes.h"
 #endif
 
+struct _sdllayer_t;
+
+typedef void (*sdllaycb_t)( struct _sdllayer_t*, void* );
+
 typedef struct _sdllayer_t {
     const char*  title;     // string constant
     SDL_Texture* texture;   // always screen sized
     uint8_t*     memory;    // always screen sized
     uint32_t     palette[256];  // ARGB8888
     bool         modified;  // modified flag
+    sdllaycb_t   callback;  // memory renderer callback
+    void*        userdata;  // memory renderer userdata
 } sdllayer_t;
 
 bool sdllay_init( sdllayer_t* lay, const char* title, SDL_Renderer* renderer );
 void sdllay_cleanup( sdllayer_t* lay );
 
+void sdllay_setcall( sdllayer_t* lay, sdllaycb_t callback, void* userdata );
+
 bool sdllay_init_many( sdllayer_t* lay, size_t cnt, const char* const* titles, SDL_Renderer* renderer );
 void sdllay_cleanup_many( sdllayer_t* lay, size_t cnt );
 
+bool sdllay_needsredraw( const sdllayer_t* lay, size_t cnt );
+
 void sdllay_2texture( sdllayer_t* lay );
+void sdllay_2texture_many( sdllayer_t* lay, size_t cnt );
+
+void sdllay_draw_texture( const sdllayer_t* lay, SDL_Renderer* renderer  );
+void sdllay_draw_texture_many( const sdllayer_t* lay, size_t cnt, SDL_Renderer* renderer  );
+
 
 #endif
