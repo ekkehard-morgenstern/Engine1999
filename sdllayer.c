@@ -359,6 +359,10 @@ bool sdllay_2texture( sdllayer_t* lay ) {
             return false;
         }
     }
+    if ( !lay->modified ) {
+        return;
+    }
+    lay->modified = false;
     const uint8_t* source = lay->memory;
     const uint32_t* palette = lay->palette;
     uint32_t* target = buf;
