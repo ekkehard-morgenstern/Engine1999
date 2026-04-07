@@ -231,7 +231,6 @@ bool sdlscr_init( void ) {
 }
 
 static bool sdlscr_cleanup2( void ) {
-    sdlscr_doexit = true;
 
     // wait for handshake (thread termination)
     for (;;) {
@@ -268,4 +267,14 @@ void sdlscr_cleanup( void ) {
         // event processing failed, cannot exit
         SDL_Delay( 1000 );
     }
+}
+
+void sdlscr_printf( int y, int x, int bg, int fg, const char* fmt, ... ) {
+      static char buf[512];
+      va_list ap;
+      va_start( ap, fmt );
+      vsnprintf( buf, 512U, fmt, ap );
+      va_end( ap );
+      txtscr_print( y, x, bg, fg, buf );
+      sdllay_set_modified( &layers[LAY_TXT] );
 }

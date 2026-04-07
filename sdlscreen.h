@@ -39,4 +39,6 @@
 bool sdlscr_init( void );
 void sdlscr_cleanup( void );
 
+void sdlscr_printf( int y, int x, int bg, int fg, const char* fmt, ... );
+
 #endif

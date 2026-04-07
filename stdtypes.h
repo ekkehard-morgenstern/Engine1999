@@ -35,6 +35,7 @@
 #include <inttypes.h>
 #include <stdbool.h>
 #include <string.h>
+#include <stdarg.h>
 #include <errno.h>
 
 #endif

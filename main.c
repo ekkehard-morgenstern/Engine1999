@@ -25,12 +25,12 @@
 */
 
 #include "sdlmain.h"
+#include "sdlscreen.h"
 
 int main( int argc, char** argv ) {
 
     sdl_init();
-
-    SDL_Delay( 5000 );
+    sdlscr_printf( 0, 0, 0, 1, "Hello world!\nThere!" );
 
     return EXIT_SUCCESS;
 }

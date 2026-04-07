@@ -442,6 +442,10 @@ void sdllay_draw_texture_many( const sdllayer_t* lay, size_t cnt, SDL_Renderer* 
     }
 }
 
+void sdllay_set_modified( sdllayer_t* lay ) {
+    lay->modified = true;
+}
+
 void sdllay_enable( sdllayer_t* lay ) {
     lay->disabled = false;
 }

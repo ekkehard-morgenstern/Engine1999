@@ -34,24 +34,6 @@ static uint8_t    pen, paper;
 
 extern const uint8_t fontdef1[FONTSIZE];
 
-static void txtscr_write( int y, int x, int bg, int fg, const char* text ) {
-      if ( x < 0 || x > TXTSCR_WIDTH || y < 0 || y > TXTSCR_HEIGHT ) {
-            return;
-      }
-      if ( bg < 0 || bg > 255 || fg < 0 || fg > 255 || text == 0 ) {
-            return;
-      }
-      const char* s = text;
-      textcell_t* d = &textscr[ y * TXTSCR_WIDTH + x ];
-      size_t n = strlen( s );
-      if ( n > (size_t)( TXTSCR_WIDTH - x ) ) {
-            n = (size_t)( TXTSCR_WIDTH - x );
-      }
-      while ( n-- ) {
-            *d++ = TXTSCR_MAKECELL( *s++, bg, fg );
-      }
-}
-
 void txtscr_init( void ) {
       memcpy( currfont, fontdef1, FONTSIZE );
       textcell_t cell = TXTSCR_MAKECELL( 32, TXTSCR_BGCOL, TXTSCR_FGCOL );
@@ -60,13 +42,6 @@ void txtscr_init( void ) {
       for ( size_t i=0; i < TXTSCR_WIDTH * TXTSCR_HEIGHT; ++i ) {
             textscr[i] = cell;
       }
-      txtscr_write(
-            0,
-            0,
-            TXTSCR_BGCOL,
-            TXTSCR_FGCOL,
-            "Hello world!"
-      );
 }
 
 void txtscr_render( uint8_t* target ) {
@@ -93,4 +68,52 @@ void txtscr_render( uint8_t* target ) {
             }
             d += stride * 11;
       }
+}
+
+void txtscr_write( int y, int x, int bg, int fg, const char* text, int len ) {
+      if ( x < 0 || x > TXTSCR_WIDTH || y < 0 || y > TXTSCR_HEIGHT ) {
+            return;
+      }
+      if ( bg < 0 || bg > 255 || fg < 0 || fg > 255 || text == 0 ) {
+            return;
+      }
+      const char* s = text;
+      textcell_t* d = &textscr[ y * TXTSCR_WIDTH + x ];
+      size_t n = len < 0 ? strlen( s ) : len;
+      if ( n > (size_t)( TXTSCR_WIDTH - x ) ) {
+            n = (size_t)( TXTSCR_WIDTH - x );
+      }
+      while ( n-- ) {
+            *d++ = TXTSCR_MAKECELL( *s++, bg, fg );
+      }
+}
+
+void txtscr_print( int y, int x, int bg, int fg, const char* text ) {
+      const char* s = text;
+      int cx = x, cy = y;
+      while ( *s != '\0' ) {
+            const char* s0 = s;
+            while ( *s != '\n' && *s != '\0' ) {
+                  ++s;
+            }
+            size_t len = s - s0;
+            if ( len ) {
+                  txtscr_write( cy, cx, bg, fg, s0, (int) len );
+                  cx += (int) len;
+            }
+            if ( *s == '\n' ) {
+                  ++s;
+                  cx = 0;
+                  ++cy;
+            }
+      }
+}
+
+void txtscr_printf( int y, int x, int bg, int fg, const char* fmt, ... ) {
+      static char buf[512];
+      va_list ap;
+      va_start( ap, fmt );
+      vsnprintf( buf, 512U, fmt, ap );
+      va_end( ap );
+      txtscr_print( y, x, bg, fg, buf );
 }
