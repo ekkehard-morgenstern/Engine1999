@@ -72,12 +72,12 @@ static void tilescr_copy_tile_portion(
     }
 }
 
-typedef struct _rect_t {
+typedef struct _tilerect_t {
     uint16_t left, top;
     uint8_t width, height, empty, tile, offx, offy;
-} rect_t;
+} tilerect_t;
 
-static void init_rect( rect_t* r, uint16_t l, uint16_t t, uint8_t w, uint8_t h, int8_t tx, int8_t ty, uint8_t ox, uint8_t oy ) {
+static void init_tilerect( tilerect_t* r, uint16_t l, uint16_t t, uint8_t w, uint8_t h, int8_t tx, int8_t ty, uint8_t ox, uint8_t oy ) {
     r->left = l; r->top = t; r->width = w; r->height = h; r->offx = ox; r->offy = oy;
     r->empty = w == 0 || h == 0;
     if ( tx < 0 || tx >= TILESCR_WIDTH ) {
@@ -89,7 +89,7 @@ static void init_rect( rect_t* r, uint16_t l, uint16_t t, uint8_t w, uint8_t h, 
     r->tile = tilescr[ ty * TILESCR_WIDTH + tx ];
 }
 
-static void init_zones( rect_t r[4], uint16_t l, uint16_t t, uint8_t sx, uint8_t sy, int8_t tx, int8_t ty ) {
+static void init_tilezones( tilerect_t r[4], uint16_t l, uint16_t t, uint8_t sx, uint8_t sy, int8_t tx, int8_t ty ) {
     /*
     tile zones:
       A | B
@@ -100,10 +100,10 @@ static void init_zones( rect_t r[4], uint16_t l, uint16_t t, uint8_t sx, uint8_t
         |
     zone D is the normal tile shifted by the scroll offsets.
     */
-    init_rect( &r[0], l     , t     , sx             , sy              , tx - 1, ty - 1, TILE_WIDTH - sx, TILE_HEIGHT - sy );
-    init_rect( &r[1], l + sx, t     , TILE_WIDTH - sx, sy              , tx    , ty - 1, 0              , TILE_HEIGHT - sy );
-    init_rect( &r[2], l     , t + sy, sx             , TILE_HEIGHT - sy, tx - 1, ty    , TILE_WIDTH - sx, 0                );
-    init_rect( &r[3], l + sx, t + sy, TILE_WIDTH - sx, TILE_HEIGHT - sy, tx    , ty    , 0              , 0                );
+    init_tilerect( &r[0], l     , t     , sx             , sy              , tx - 1, ty - 1, TILE_WIDTH - sx, TILE_HEIGHT - sy );
+    init_tilerect( &r[1], l + sx, t     , TILE_WIDTH - sx, sy              , tx    , ty - 1, 0              , TILE_HEIGHT - sy );
+    init_tilerect( &r[2], l     , t + sy, sx             , TILE_HEIGHT - sy, tx - 1, ty    , TILE_WIDTH - sx, 0                );
+    init_tilerect( &r[3], l + sx, t + sy, TILE_WIDTH - sx, TILE_HEIGHT - sy, tx    , ty    , 0              , 0                );
     if ( sx == 0 && sy == 0 ) { // need only D
         r[2].empty = r[1].empty = r[0].empty = true;
     } else if ( sx == 0 ) { // need only B and D
@@ -137,8 +137,8 @@ static void tilescr_copy_logical_tile(
     */
     int8_t tilex = (int8_t)( targetx / TILE_WIDTH  );
     int8_t tiley = (int8_t)( targety / TILE_HEIGHT );
-    rect_t z[4];
-    init_zones( z, targetx, targety, scrolloffsx, scrolloffsy, tilex, tiley );
+    tilerect_t z[4];
+    init_tilezones( z, targetx, targety, scrolloffsx, scrolloffsy, tilex, tiley );
     for ( uint8_t i=0; i < UINT8_C(4); ++i ) {
         if ( z[i].empty ) continue;
         tilescr_copy_tile_portion(
