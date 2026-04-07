@@ -29,7 +29,14 @@
 #ifndef SDLSCREEN_H
 #define SDLSCREEN_H     1
 
+#ifndef STDTYPES_H
+#include "stdtypes.h"
+#endif
+
 #define SDL_SCREENWIDTH     640
 #define SDL_SCREENHEIGHT    300
+
+bool sdlscr_init( void );
+void sdlscr_cleanup( void );
 
 #endif

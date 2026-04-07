@@ -27,6 +27,8 @@
 #include "sdlscreen.h"
 #include "sdllayer.h"
 #include "sdlevent.h"
+#include "textscreen.h"
+#include "tilescreen.h"
 
 #define NLAYERS 5
 #define LAY_BG          0
@@ -58,6 +60,7 @@ static void print_sdlerror( const char* scope ) {
 }
 
 static void render_tiles( struct _sdllayer_t* lay, void* usrdata ) {
+    tilescr_render( lay->memory );
 }
 
 static void render_text( struct _sdllayer_t* lay, void* usrdata ) {
@@ -72,7 +75,9 @@ static bool sdlscr_doexit = false;
 
 static uint32_t sdlscr_bgcol = UINT32_C(0XFF708090); // SlateGray
 
-static void* sdlscr_worker( void* arg ) {
+static SDL_Thread* sdlscr_workerthr = 0;
+
+static int sdlscr_worker( void* arg ) {
 
     sdlscr_initok = false;
     sdlscr_doexit = false;
@@ -120,17 +125,42 @@ static void* sdlscr_worker( void* arg ) {
     sdllay_setcall( &layers[LAY_TXT], render_text, 0 );
     sdllay_setcall( &layers[LAY_SPR], render_sprites, 0 );
 
+    txtscr_init();
+    tilescr_init();
+
     // confirm init ok
     sdlscr_initok = true;
     sdlev_raise( SDLEV_SCREENWORKERINITDONE );
+
+    Uint64 lastTick = SDL_GetTicks64();
 
     // main loop
     for (;;) {
         if ( sdlscr_doexit ) {
             break;
         }
+        // process messages
+        SDL_Event ev;
+        while ( SDL_PollEvent( &ev ) ) {
+            Uint32 ty = ev.type;
+            switch ( ty ) {
+                case SDL_QUIT:
+                    sdlscr_doexit = true;
+                    break;
+            }
+        }
+
+        // get current time
+        Uint64 now = SDL_GetTicks64();
 
         if ( !sdllay_needsredraw( &layers[0], NLAYERS ) ) {
+            // no redraw: check time
+            if ( now - lastTick < 20U ) {
+                // make sure at least a 1/50 sec will have passed
+                Uint32 toWait = (Uint32)( 20U - ( now - lastTick ) );
+                SDL_Delay( toWait );
+            }
+            lastTick = now;
             continue;
         }
         sdllay_2texture_many( &layers[0], NLAYERS );
@@ -143,8 +173,8 @@ static void* sdlscr_worker( void* arg ) {
         SDL_RenderClear( renderer );
         draw_layers( renderer );
         SDL_RenderPresent( renderer );
+        lastTick = now;
     }
-
 
     // cleanup
     sdlscr_initok = false;
@@ -160,4 +190,67 @@ ERR3:   SDL_DestroyRenderer( renderer );
 ERR2:   SDL_DestroyWindow( window );
 ERR1:   sdlev_raise( SDLEV_SCREENWORKERINITDONE );
         return 0;
+}
+
+bool sdlscr_init( void ) {
+
+    // create worker thread
+    sdlscr_workerthr = SDL_CreateThread(
+        sdlscr_worker,
+        "sdlscr_worker",
+        0
+    );
+    if ( sdlscr_workerthr == 0 ) {
+        print_sdlerror( "sdlscr_init" );
+        return false;
+    }
+
+    // wait for handshake (init completion)
+    for (;;) {
+        int ev = sdlev_wait();
+        switch ( ev ) {
+            case SDLEV_ERROR:
+                fprintf( stderr, "sdlev_init(): sdlev_wait() returned error\n" );
+                return false;
+            case SDLEV_SCREENWORKERINITDONE:
+                return sdlscr_initok;
+            default:    // SDLEV_SIGNAL, SDLEV_TIMEOUT, SDLEV_NONE
+                break;
+        }
+    }
+
+    return true;
+}
+
+static bool sdlscr_cleanup2( void ) {
+    sdlscr_doexit = true;
+
+    // wait for handshake (thread termination)
+    for (;;) {
+        int ev = sdlev_wait();
+        switch ( ev ) {
+            case SDLEV_ERROR:
+                fprintf( stderr, "sdlev_cleanup(): sdlev_wait() returned error\n" );
+                // thread might still be running!
+                return false;
+            case SDLEV_SCREENWORKERFINISHED:
+                goto THREAD_DONE;
+            default:    // SDLEV_SIGNAL, SDLEV_TIMEOUT, SDLEV_NONE
+                break;
+        }
+    }
+
+    // wait for thread to terminate and reap the thread status
+THREAD_DONE:
+    int rv = 0;
+    SDL_WaitThread( sdlscr_workerthr, &rv ); sdlscr_workerthr = 0;
+    return true;
+}
+
+void sdlthr_cleanup( void ) {
+    for (;;) {
+        if ( sdlthr_cleanup2() ) break;
+        // event processing failed, cannot exit
+        SDL_Delay( 1000 );
+    }
 }

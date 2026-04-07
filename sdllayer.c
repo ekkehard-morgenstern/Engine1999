@@ -26,7 +26,6 @@
 
 #include "sdllayer.h"
 #include "sdlscreen.h"
-#include "textscreen.h"
 
 typedef struct _colinit_t {
     uint32_t argb;
