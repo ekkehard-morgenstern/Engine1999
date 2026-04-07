@@ -230,7 +230,7 @@ static bool sdlscr_cleanup2( void ) {
         int ev = sdlev_wait();
         switch ( ev ) {
             case SDLEV_ERROR:
-                fprintf( stderr, "sdlev_cleanup(): sdlev_wait() returned error\n" );
+                fprintf( stderr, "sdlev_cleanup2(): sdlev_wait() returned error\n" );
                 // thread might still be running!
                 return false;
             case SDLEV_SCREENWORKERFINISHED:
@@ -247,9 +247,16 @@ THREAD_DONE:
     return true;
 }
 
-void sdlthr_cleanup( void ) {
+void sdlscr_cleanup( void ) {
     for (;;) {
-        if ( sdlthr_cleanup2() ) break;
+        if ( sdlscr_cleanup2() ) break;
+        // check if the thread ran into cleanup processing
+        if ( !sdlscr_initok ) {
+            // yes: wait for thread to terminate
+            int rv = 0;
+            SDL_WaitThread( sdlscr_workerthr, &rv ); sdlscr_workerthr = 0;
+            break;
+        }
         // event processing failed, cannot exit
         SDL_Delay( 1000 );
     }
