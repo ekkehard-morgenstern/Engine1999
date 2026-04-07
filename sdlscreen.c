@@ -163,7 +163,9 @@ static int sdlscr_worker( void* arg ) {
             lastTick = now;
             continue;
         }
-        sdllay_2texture_many( &layers[0], NLAYERS );
+        if ( !sdllay_to_texture_many( &layers[0], NLAYERS ) ) {
+            break;
+        }
         uint32_t c = sdlscr_bgcol;
         uint8_t a = (uint8_t)( c >> UINT8_C(24) );
         uint8_t r = (uint8_t)( c >> UINT8_C(16) );

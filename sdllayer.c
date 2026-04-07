@@ -367,7 +367,7 @@ bool sdllay_needsredraw( const sdllayer_t* lay, size_t cnt ) {
     return false;
 }
 
-bool sdllay_2texture( sdllayer_t* lay ) {
+bool sdllay_to_texture( sdllayer_t* lay ) {
     static uint32_t* buf = 0;
     if ( buf == 0 ) {
         buf = (uint32_t*) malloc( sizeof(uint32_t) * SDL_SCREENWIDTH * SDL_SCREENHEIGHT );
@@ -399,9 +399,9 @@ bool sdllay_2texture( sdllayer_t* lay ) {
     return true;
 }
 
-bool sdllay_2texture_many( sdllayer_t* lay, size_t cnt ) {
+bool sdllay_to_texture_many( sdllayer_t* lay, size_t cnt ) {
     for ( size_t i=0; i < cnt; ++i ) {
-        if ( !sdllay_2texture( &lay[i] ) ) {
+        if ( !sdllay_to_texture( &lay[i] ) ) {
             return false;
         }
     }
@@ -434,4 +434,21 @@ void sdllay_draw_texture_many( const sdllayer_t* lay, size_t cnt, SDL_Renderer* 
             sdllay_draw_texture( l, renderer );
         }
     }
+}
+
+void sdllay_enable( sdllayer_t* lay ) {
+    lay->disabled = false;
+}
+
+void sdllay_disable( sdllayer_t* lay ) {
+    lay->disabled = true;
+}
+
+void sdllay_switch_priority( sdllayer_t* lay, size_t cnt, uint8_t index1, uint8_t index2 ) {
+    if ( index1 >= cnt || index2 >= cnt || index1 == index2 ) {
+        return;
+    }
+    uint8_t t = lay[index1].priority;
+    lay[index1].priority = lay[index2].priority;
+    lay[index2].priority = t;
 }

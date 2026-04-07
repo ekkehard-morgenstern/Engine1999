@@ -59,11 +59,15 @@ void sdllay_cleanup_many( sdllayer_t* lay, size_t cnt );
 
 bool sdllay_needsredraw( const sdllayer_t* lay, size_t cnt );
 
-void sdllay_2texture( sdllayer_t* lay );
-void sdllay_2texture_many( sdllayer_t* lay, size_t cnt );
+bool sdllay_to_texture( sdllayer_t* lay );
+bool sdllay_to_texture_many( sdllayer_t* lay, size_t cnt );
 
 void sdllay_draw_texture( const sdllayer_t* lay, SDL_Renderer* renderer  );
 void sdllay_draw_texture_many( const sdllayer_t* lay, size_t cnt, SDL_Renderer* renderer  );
 
+void sdllay_set_modified( sdllayer_t* lay );
+void sdllay_enable( sdllayer_t* lay );
+void sdllay_disable( sdllayer_t* lay );
+void sdllay_switch_priority( sdllayer_t* lay, size_t cnt, uint8_t index1, uint8_t index2 );
 
 #endif
