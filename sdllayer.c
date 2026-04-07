@@ -311,6 +311,7 @@ bool sdllay_init( sdllayer_t* lay, const char* title, uint8_t priority, SDL_Rend
             SDL_GetError() );
         return false;
     }
+    SDL_SetTextureBlendMode( lay->texture, SDL_BLENDMODE_BLEND );
     lay->memory = (uint8_t*) malloc( SDL_SCREENWIDTH * SDL_SCREENHEIGHT );
     if ( lay->memory == 0 ) {
         perror( "malloc(3)" );
@@ -391,12 +392,16 @@ bool sdllay_to_texture( sdllayer_t* lay ) {
     while ( pixcnt-- ) {
         *target++ = palette[*source++];
     }
-    SDL_UpdateTexture(
+    int rv = SDL_UpdateTexture(
         lay->texture,
         0,
         buf,
         SDL_SCREENWIDTH * sizeof(uint32_t)
     );
+    if ( rv < 0 ) {
+        fprintf( stderr, "layer %d: SDL_UpdateTexture failed with: %s\n", (int) lay->priority, SDL_GetError() );
+        return false;
+    }
     return true;
 }
 

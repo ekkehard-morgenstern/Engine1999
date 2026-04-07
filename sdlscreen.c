@@ -128,6 +128,12 @@ static int sdlscr_worker( void* arg ) {
     txtscr_init();
     tilescr_init();
 
+    // sdllay_disable( &layers[LAY_BG]  );
+    sdllay_disable( &layers[LAY_TIL] );
+    // sdllay_disable( &layers[LAY_TXT] );
+    sdllay_disable( &layers[LAY_GFX] );
+    sdllay_disable( &layers[LAY_SPR] );
+
     // confirm init ok
     sdlscr_initok = true;
     sdlev_raise( SDLEV_SCREENWORKERINITDONE );
