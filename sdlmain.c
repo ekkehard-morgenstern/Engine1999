@@ -34,7 +34,7 @@ static void sdl_cleanup( void ) {
 }
 
 void sdl_init( void ) {
-    int rv = SDL_Init( SDL_INIT_EVENTS | SDL_INIT_VIDEO );
+    int rv = SDL_Init( SDL_INIT_EVERYTHING );
     if ( rv < 0 ) {
         fprintf( stderr, "sdl_init(): failed to initialize SDL: %s\n", SDL_GetError() );
         exit( EXIT_FAILURE );

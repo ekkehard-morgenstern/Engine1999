@@ -43,11 +43,13 @@ typedef struct _sdllayer_t {
     uint8_t*     memory;    // always screen sized
     uint32_t     palette[256];  // ARGB8888
     bool         modified;  // modified flag
+    bool         disabled;  // disabled flag (not rendered)
+    uint8_t      priority;  // render priority
     sdllaycb_t   callback;  // memory renderer callback
     void*        userdata;  // memory renderer userdata
 } sdllayer_t;
 
-bool sdllay_init( sdllayer_t* lay, const char* title, SDL_Renderer* renderer );
+bool sdllay_init( sdllayer_t* lay, const char* title, uint8_t priority, SDL_Renderer* renderer );
 void sdllay_cleanup( sdllayer_t* lay );
 
 void sdllay_setcall( sdllayer_t* lay, sdllaycb_t callback, void* userdata );

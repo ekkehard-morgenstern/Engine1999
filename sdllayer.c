@@ -297,7 +297,7 @@ static const colinit_t colinittab[256] = {
     { UINT32_C(0X88FFFFFF), "TransparentWhite" }
 };
 
-bool sdllay_init( sdllayer_t* lay, const char* title, SDL_Renderer* renderer ) {
+bool sdllay_init( sdllayer_t* lay, const char* title, uint8_t priority, SDL_Renderer* renderer ) {
     lay->title = title;
     lay->texture = SDL_CreateTexture(
         renderer,
@@ -324,6 +324,8 @@ bool sdllay_init( sdllayer_t* lay, const char* title, SDL_Renderer* renderer ) {
     }
     // NOTE that the color names aren't currently used, which might change in a future version.
     lay->modified = true;
+    lay->disabled = false;
+    lay->priority = priority;
     lay->callback = 0;
     lay->userdata = 0;
 }
@@ -341,7 +343,7 @@ void sdllay_setcall( sdllayer_t* lay, sdllaycb_t callback, void* userdata ) {
 bool sdllay_init_many( sdllayer_t* lay, size_t cnt, const char* const* titles, SDL_Renderer* renderer ) {
     bool ok = true;
     for ( size_t i=0; i < cnt; ++i ) {
-        if ( !sdllay_init( &lay[i], titles[i], renderer ) ) {
+        if ( !sdllay_init( &lay[i], titles[i], (uint8_t) i, renderer ) ) {
             if ( i > 0U ) {
                 sdllay_cleanup_many( lay, i - 1U );
             }
@@ -360,7 +362,7 @@ void sdllay_cleanup_many( sdllayer_t* lay, size_t cnt ) {
 
 bool sdllay_needsredraw( const sdllayer_t* lay, size_t cnt ) {
     for ( size_t i=0; i < cnt; ++i ) {
-        if ( lay->modified ) return true;
+        if ( lay->modified && !lay->disabled ) return true;
     }
     return false;
 }
@@ -374,7 +376,7 @@ bool sdllay_2texture( sdllayer_t* lay ) {
             return false;
         }
     }
-    if ( !lay->modified ) {
+    if ( !lay->modified || lay->disabled ) {
         return true;
     }
     lay->modified = false;
@@ -407,6 +409,9 @@ bool sdllay_2texture_many( sdllayer_t* lay, size_t cnt ) {
 }
 
 void sdllay_draw_texture( const sdllayer_t* lay, SDL_Renderer* renderer ) {
+    if ( lay->disabled ) {
+        return;
+    }
     SDL_RenderCopy(
         renderer,
         lay->texture,
@@ -417,6 +422,16 @@ void sdllay_draw_texture( const sdllayer_t* lay, SDL_Renderer* renderer ) {
 
 void sdllay_draw_texture_many( const sdllayer_t* lay, size_t cnt, SDL_Renderer* renderer ) {
     for ( size_t i=0; i < cnt; ++i ) {
-        sdllay_draw_texture( &lay[i], renderer );
+        const sdllayer_t* l = &lay[0];
+        bool found = false;
+        for ( uint8_t j=0; j < (uint8_t) cnt; ++j, ++l ) {
+            if ( l->priority == (uint8_t) i ) {
+                found = true;
+                break;
+            }
+        }
+        if ( found ) {
+            sdllay_draw_texture( l, renderer );
+        }
     }
 }
