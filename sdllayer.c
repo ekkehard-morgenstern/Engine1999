@@ -328,6 +328,7 @@ bool sdllay_init( sdllayer_t* lay, const char* title, uint8_t priority, SDL_Rend
     lay->priority = priority;
     lay->callback = 0;
     lay->userdata = 0;
+    return true;
 }
 
 void sdllay_cleanup( sdllayer_t* lay ) {

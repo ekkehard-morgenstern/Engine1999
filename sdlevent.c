@@ -135,7 +135,6 @@ RETRY:
 int sdlev_wait( void ) {
     struct epoll_event ev;
     memset( &ev, 0, sizeof(ev) );
-RETRY:
     int rv = epoll_wait( sdlev_hnd, &ev, 1, 20 );
     if ( rv == -1 && errno == EINTR ) {
         return SDLEV_SIGNAL;

@@ -43,7 +43,7 @@ static const char* const layer_titles[NLAYERS] = {
 };
 
 static bool init_layers( SDL_Renderer* renderer ) {
-    sdllay_init_many( &layers[0], NLAYERS, layer_titles, renderer );
+    return sdllay_init_many( &layers[0], NLAYERS, layer_titles, renderer );
 }
 
 static void cleanup_layers( void ) {

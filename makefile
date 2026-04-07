@@ -1,0 +1,58 @@
+#   Engine1999 - A 2D games engine written in C
+#   Copyright (C) 2026  Ekkehard Morgenstern
+#
+#   This program is free software: you can redistribute it and/or modify
+#   it under the terms of the GNU General Public License as published by
+#   the Free Software Foundation, either version 3 of the License, or
+#   (at your option) any later version.
+#
+#   This program is distributed in the hope that it will be useful,
+#   but WITHOUT ANY WARRANTY; without even the implied warranty of
+#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#   GNU General Public License for more details.
+#
+#   You should have received a copy of the GNU General Public License
+#   along with this program.  If not, see <https://www.gnu.org/licenses/>.
+#
+#   NOTE: Programs created with a built-in programming language (if any),
+#         do not fall under this license.
+#
+#   CONTACT INFO:
+#       E-Mail: ekkehard@ekkehardmorgenstern.de
+#       Mail: Ekkehard Morgenstern, Mozartstr. 1, D-76744 Woerth am Rhein,
+#             Germany, Europe
+
+CCOMP=gcc
+
+CFLAGS=-Wall -Werror -p -O3 -march=native -mtune=native
+
+CC=$(CCOMP) -c $(CFLAGS)
+CL=$(CCOMP) $(CFLAGS)
+
+.c.o:
+	$(CC) -o $@ $<
+
+all: sdltest1
+	echo ok >all
+
+BASEMOD=sdlevent.o sdllayer.o sdlmain.o sdlscreen.o textscreen.o tilescreen.o 8x12font1.o
+BASEHDR=sdlevent.h sdllayer.h sdlmain.h sdlscreen.h sdltypes.h textscreen.h tilescreen.h unxtypes.h
+
+sdltest1: main.o $(BASEMOD)
+	$(CL) -o sdltest1 main.o $(BASEMOD) -lSDL2 -lrt
+
+main.o:	main.c $(BASEHDR)
+
+sdlevent.o: sdlevent.c $(BASEHDR)
+
+sdllayer.o: sdllayer.c $(BASEHDR)
+
+sdlmain.o: sdlmain.c $(BASEHDR)
+
+sdlscreen.o: sdlscreen.c $(BASEHDR)
+
+textscreen.o: textscreen.c $(BASEHDR)
+
+tilescreen.o: tilescreen.c $(BASEHDR)
+
+8x12font.o: 8x12font.c $(BASEHDR)

@@ -3,3 +3,7 @@ colors-raw.txt
 colors-sorted.txt
 colors-cfrag.txt
 .vscode
+*.o
+sdltest1
+gmon.out
+all
