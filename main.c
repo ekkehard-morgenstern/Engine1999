@@ -27,10 +27,50 @@
 #include "sdlmain.h"
 #include "sdlscreen.h"
 
+#define BLU 2
+#define WHT 140
+#define GOL 123
+
+static const uint8_t tiletest1[TILE_WIDTH * TILE_HEIGHT] = {
+    GOL, GOL, GOL, GOL, GOL, GOL, GOL, GOL, GOL, GOL, GOL, GOL, GOL, GOL, GOL, GOL,
+    GOL, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, GOL,
+    GOL, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, GOL,
+    GOL, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, GOL,
+    GOL, WHT, WHT, BLU, BLU, BLU, BLU, BLU, BLU, BLU, BLU, BLU, BLU, WHT, WHT, GOL,
+    GOL, WHT, WHT, WHT, BLU, WHT, WHT, WHT, WHT, WHT, WHT, BLU, WHT, WHT, WHT, GOL,
+    GOL, WHT, WHT, WHT, WHT, BLU, WHT, WHT, WHT, WHT, BLU, WHT, WHT, WHT, WHT, GOL,
+    GOL, WHT, WHT, WHT, WHT, WHT, BLU, WHT, WHT, BLU, WHT, WHT, WHT, WHT, WHT, GOL,
+    GOL, WHT, WHT, WHT, WHT, WHT, WHT, BLU, BLU, WHT, WHT, WHT, WHT, WHT, WHT, GOL,
+    GOL, WHT, WHT, WHT, WHT, WHT, WHT, BLU, BLU, WHT, WHT, WHT, WHT, WHT, WHT, GOL,
+    GOL, WHT, WHT, WHT, WHT, WHT, WHT, BLU, BLU, WHT, WHT, WHT, WHT, WHT, WHT, GOL,
+    GOL, WHT, WHT, WHT, WHT, WHT, WHT, BLU, BLU, WHT, WHT, WHT, WHT, WHT, WHT, GOL,
+    GOL, WHT, WHT, WHT, WHT, WHT, WHT, BLU, BLU, WHT, WHT, WHT, WHT, WHT, WHT, GOL,
+    GOL, WHT, WHT, WHT, WHT, WHT, WHT, BLU, BLU, WHT, WHT, WHT, WHT, WHT, WHT, GOL,
+    GOL, WHT, WHT, WHT, WHT, WHT, WHT, BLU, BLU, WHT, WHT, WHT, WHT, WHT, WHT, GOL,
+    GOL, WHT, WHT, WHT, WHT, WHT, WHT, BLU, BLU, WHT, WHT, WHT, WHT, WHT, WHT, GOL,
+    GOL, WHT, WHT, WHT, WHT, WHT, BLU, WHT, WHT, BLU, WHT, WHT, WHT, WHT, WHT, GOL,
+    GOL, WHT, WHT, WHT, WHT, BLU, WHT, WHT, WHT, WHT, BLU, WHT, WHT, WHT, WHT, GOL,
+    GOL, WHT, WHT, WHT, BLU, WHT, WHT, WHT, WHT, WHT, WHT, BLU, WHT, WHT, WHT, GOL,
+    GOL, WHT, WHT, BLU, BLU, BLU, BLU, BLU, BLU, BLU, BLU, BLU, BLU, WHT, WHT, GOL,
+    GOL, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, GOL,
+    GOL, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, GOL,
+    GOL, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, GOL,
+    GOL, GOL, GOL, GOL, GOL, GOL, GOL, GOL, GOL, GOL, GOL, GOL, GOL, GOL, GOL, GOL
+};
+
 int main( int argc, char** argv ) {
 
     sdl_init();
     sdlscr_printf( 0, 0, 0, 1, "Hello world!\nThere!" );
+    sdlscr_writetile( 0, tiletest1 );
+
+    int scrollx = 0, scrolly = 0;
+    while ( !sdlscr_term() ) {
+        scrollx = ( scrollx + 1 ) % TILE_WIDTH;
+        scrolly = ( scrolly + 1 ) % TILE_HEIGHT;
+        sdlscr_scrolltiles( scrollx, scrolly );
+        SDL_Delay( 100 );
+    }
 
     return EXIT_SUCCESS;
 }

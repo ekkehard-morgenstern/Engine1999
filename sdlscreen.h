@@ -33,12 +33,19 @@
 #include "stdtypes.h"
 #endif
 
+#ifndef TILESCREEN_H
+#include "tilescreen.h"
+#endif
+
 #define SDL_SCREENWIDTH     640
 #define SDL_SCREENHEIGHT    300
 
 bool sdlscr_init( void );
 void sdlscr_cleanup( void );
+bool sdlscr_term( void );
 
 void sdlscr_printf( int y, int x, int bg, int fg, const char* fmt, ... );
+void sdlscr_writetile( int tileno, const uint8_t data[TILE_WIDTH * TILE_HEIGHT]);
+void sdlscr_scrolltiles( int sx, int sy );
 
 #endif

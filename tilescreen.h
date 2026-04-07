@@ -51,5 +51,7 @@ void tilescr_init( void );
 
 void tilescr_render( uint8_t* target );
 
+void tilescr_writetile( int tileno, const uint8_t data[TILE_WIDTH * TILE_HEIGHT]);
+void tilescr_scroll( int sx, int sy );
 
 #endif

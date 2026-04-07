@@ -364,7 +364,7 @@ void sdllay_cleanup_many( sdllayer_t* lay, size_t cnt ) {
 
 bool sdllay_needsredraw( const sdllayer_t* lay, size_t cnt ) {
     for ( size_t i=0; i < cnt; ++i ) {
-        if ( lay->modified && !lay->disabled ) return true;
+        if ( lay[i].modified && !lay[i].disabled ) return true;
     }
     return false;
 }

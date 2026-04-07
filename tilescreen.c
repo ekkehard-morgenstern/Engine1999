@@ -37,11 +37,26 @@ void tilescr_init( void ) {
 }
 
 void tilescr_render( uint8_t* target ) {
-    const uint8_t* tsp = &tilescr[0];
     tileoffsx %= TILE_WIDTH;
     tileoffsy %= TILE_HEIGHT;
-    for ( uint8_t y=0; y < (uint8_t) TILESCR_HEIGHT; ++y ) {
-        for ( uint8_t x=0; x < (uint8_t) TILESCR_WIDTH; ++x ) {
+/*
+    for ( int y=0; y < TILETGT_HEIGHT; ++y ) {
+        short tiley = tileoffsy + y ) % TILETGT_HEIGHT;
+        short tilesy = tiley / TILE_HEIGHT;
+        short tileyo = tiley % TILE_HEIGHT;
+        for ( int x=0; x < TILETGT_WIDTH; ++x ) {
+            short tilex = ( tileoffsx + x ) % TILETGT_WIDTH;
+            short tilesx = tilesx / TILE_WIDTH;
+            short tilesxo = tilesx % TILE_WIDTH;
+            short
+        }
+    }
+
+
+*/
+    const uint8_t* tsp = &tilescr[0];
+    for ( uint8_t y=0; y < TILESCR_HEIGHT; ++y ) {
+        for ( uint8_t x=0; x < TILESCR_WIDTH; ++x ) {
             uint8_t tile = *tsp++;
             uint8_t mapx = tile % TILEMAP_CELLSX;
             uint8_t mapy = tile / TILEMAP_CELLSX;
@@ -96,4 +111,27 @@ void tilescr_render( uint8_t* target ) {
             }
         }
     }
+}
+
+void tilescr_writetile( int tileno, const uint8_t data[TILE_WIDTH * TILE_HEIGHT]) {
+    if ( tileno < 0 || tileno > 255 ) return;
+    uint8_t mapx = (uint8_t)( tileno % TILEMAP_CELLSX );
+    uint8_t mapy = (uint8_t)( tileno / TILEMAP_CELLSX );
+    uint16_t mapcx = mapx * TILE_WIDTH;
+    uint16_t mapcy = mapy * TILE_HEIGHT;
+    uint32_t mapof = mapcy * TILEMAP_WIDTH + mapcx;
+    const uint8_t* s = &data[0];
+    uint8_t* d = &tilemap[ mapof ];
+    for ( uint8_t y=0; y < (uint8_t) TILE_HEIGHT; ++y ) {
+        for ( uint8_t x=0; x < (uint8_t) TILE_WIDTH; ++x ) {
+            *d++ = *s++;
+        }
+        d += TILEMAP_WIDTH - TILE_WIDTH;
+    }
+}
+
+void tilescr_scroll( int sx, int sy ) {
+    if ( sx < 0 || sy < 0 ) return;
+    tileoffsx = (uint8_t)( sx % TILE_WIDTH );
+    tileoffsy = (uint8_t)( sy % TILE_HEIGHT );
 }

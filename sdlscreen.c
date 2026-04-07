@@ -182,7 +182,10 @@ static int sdlscr_worker( void* arg ) {
         draw_layers( renderer );
         SDL_RenderPresent( renderer );
         lastTick = now;
+        fprintf( stderr, "drawn frame, @%" PRIu64 "\n", lastTick );
     }
+
+    fprintf( stderr, "worker exiting @%" PRIu64 "...\n", lastTick );
 
     // cleanup
     sdlscr_initok = false;
@@ -277,4 +280,18 @@ void sdlscr_printf( int y, int x, int bg, int fg, const char* fmt, ... ) {
       va_end( ap );
       txtscr_print( y, x, bg, fg, buf );
       sdllay_set_modified( &layers[LAY_TXT] );
+}
+
+void sdlscr_writetile( int tileno, const uint8_t data[TILE_WIDTH * TILE_HEIGHT]) {
+    tilescr_writetile( tileno, data );
+    sdllay_set_modified( &layers[LAY_TIL] );
+}
+
+bool sdlscr_term( void ) {
+    return !sdlscr_initok;
+}
+
+void sdlscr_scrolltiles( int sx, int sy ) {
+    tilescr_scroll( sx, sy );
+    sdllay_set_modified( &layers[LAY_TIL] );
 }
