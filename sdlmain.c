@@ -26,7 +26,24 @@
 
 #include "sdlmain.h"
 #include "sdlevent.h"
+#include "sdlscreen.h"
+
+static void sdl_cleanup( void ) {
+    sdlscr_cleanup();
+    SDL_Quit();
+}
 
 void sdl_init( void ) {
+    int rv = SDL_Init( SDL_INIT_EVENTS | SDL_INIT_VIDEO );
+    if ( rv < 0 ) {
+        fprintf( stderr, "sdl_init(): failed to initialize SDL: %s\n", SDL_GetError() );
+        exit( EXIT_FAILURE );
+    }
     sdlev_init();
+    if ( !sdlscr_init() ) {
+        fprintf( stderr, "sdl_init(): failed to initialize screen\n" );
+        SQL_Quit();
+        exit( EXIT_FAILURE );
+    }
+    atexit( sdl_cleanup );
 }
