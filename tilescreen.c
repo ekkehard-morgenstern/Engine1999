@@ -74,12 +74,15 @@ static void tilescr_copy_logical_tile(
     uint16_t targety,
     // tile memory X position
     uint8_t tileposx,
-    uint8_t tileposy
+    uint8_t tileposy,
+    // scroll offsets
+    uint8_t scrolloffsx,
+    uint8_t scrolloffsy
 ) {
-    if ( tileoffsx == 0 && tileoffsy == 0 ) {
+    /* if ( scrolloffsx == 0 && scrolloffsy == 0 ) {
         // not scrolled: can copy full tile
         goto FULL_TILE;
-    }
+    } */
     if ( tileposy >= UINT8_C(1) && tileposx >= UINT8_C(1) ) {
         // not at the left/bottom edge: can copy full tile
         goto FULL_TILE;
@@ -89,8 +92,8 @@ static void tilescr_copy_logical_tile(
 
 FULL_TILE:
     // copy full tile (except at right / bottom border)
-    uint16_t left = targetx + tileoffsx;
-    uint16_t top  = targety + tileoffsy;
+    uint16_t left = targetx + scrolloffsx;
+    uint16_t top  = targety + scrolloffsy;
     uint16_t right = left + TILE_WIDTH;
     uint16_t bottom = top + TILE_HEIGHT;
     if ( right > TILETGT_WIDTH ) {
@@ -113,8 +116,8 @@ FULL_TILE:
 }
 
 void tilescr_render( uint8_t* target ) {
-    tileoffsx %= TILE_WIDTH;
-    tileoffsy %= TILE_HEIGHT;
+    uint8_t scrolloffsx = tileoffsx % TILE_WIDTH;
+    uint8_t scrolloffsy = tileoffsy % TILE_HEIGHT;
     for ( uint8_t y=0; y < TILESCR_HEIGHT-1; ++y ) {
         uint16_t scry = y * TILE_HEIGHT;
         for ( uint8_t x=0; x < TILESCR_WIDTH-1; ++x ) {
@@ -124,7 +127,9 @@ void tilescr_render( uint8_t* target ) {
                 scrx,
                 scry,
                 x,
-                y
+                y,
+                scrolloffsx,
+                scrolloffsy
             );
         }
     }
