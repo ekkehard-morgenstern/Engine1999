@@ -36,10 +36,101 @@ void tilescr_init( void ) {
     memset( &tilescr[0], 0, TILESCR_WIDTH * TILESCR_HEIGHT );
 }
 
+// copy portion of tile from tilemap to screen
+static void tilescr_copy_tile_portion(
+    // target memory buffer
+    uint8_t* target,
+    // target on-screen coordinates
+    uint16_t targetx,
+    uint16_t targety,
+    // tile index
+    uint8_t tile,
+    // tile portion to be transferred
+    uint8_t tilel, uint8_t tilet, uint8_t tilew, uint8_t tileh
+) {
+    uint8_t* tgtptr = &target[ targety * TILETGT_WIDTH + targetx ];
+    uint8_t tiley = tile / TILEMAP_CELLSX;
+    uint8_t tilex = tile % TILEMAP_CELLSX;
+    uint16_t tilecy = tiley * TILE_HEIGHT + tilet;
+    uint16_t tilecx = tilex * TILE_WIDTH + tilel;
+    const uint8_t* srcptr = &tilemap[ tilecy * TILEMAP_WIDTH + tilecx ];
+    for ( uint8_t y=0; y < tileh; ++y ) {
+        uint8_t*       tgt0 = tgtptr;
+        const uint8_t* src0 = srcptr;
+        for ( uint8_t x=0; x < tilew; ++x ) {
+            *tgtptr++ = *srcptr++;
+        }
+        tgtptr = tgt0 + TILETGT_WIDTH;
+        srcptr = src0 + TILEMAP_WIDTH;
+    }
+}
+
+// copy logical tile from tile memory to screen, using scroll offsets
+static void tilescr_copy_logical_tile(
+    // target memory buffer
+    uint8_t* target,
+    // target on-screen coordinates
+    uint16_t targetx,
+    uint16_t targety,
+    // tile memory X position
+    uint8_t tileposx,
+    uint8_t tileposy
+) {
+    if ( tileoffsx == 0 && tileoffsy == 0 ) {
+        // not scrolled: can copy full tile
+        goto FULL_TILE;
+    }
+    if ( tileposy >= UINT8_C(1) && tileposx >= UINT8_C(1) ) {
+        // not at the left/bottom edge: can copy full tile
+        goto FULL_TILE;
+    }
+    // TBD
+    return;
+
+FULL_TILE:
+    // copy full tile (except at right / bottom border)
+    uint16_t left = targetx + tileoffsx;
+    uint16_t top  = targety + tileoffsy;
+    uint16_t right = left + TILE_WIDTH;
+    uint16_t bottom = top + TILE_HEIGHT;
+    if ( right > TILETGT_WIDTH ) {
+        right = TILETGT_WIDTH;
+    }
+    if ( bottom > TILETGT_HEIGHT ) {
+        bottom = TILETGT_HEIGHT;
+    }
+    uint8_t tile = tilescr[ tileposy * TILESCR_WIDTH + tileposx ];
+    tilescr_copy_tile_portion(
+        target,
+        left,
+        top,
+        tile,
+        0,
+        0,
+        right - left,
+        bottom - top
+    );
+}
+
 void tilescr_render( uint8_t* target ) {
     tileoffsx %= TILE_WIDTH;
     tileoffsy %= TILE_HEIGHT;
-/*
+    for ( uint8_t y=0; y < TILESCR_HEIGHT-1; ++y ) {
+        uint16_t scry = y * TILE_HEIGHT;
+        for ( uint8_t x=0; x < TILESCR_WIDTH-1; ++x ) {
+            uint16_t scrx = x * TILE_WIDTH;
+            tilescr_copy_logical_tile(
+                target,
+                scrx,
+                scry,
+                x,
+                y
+            );
+        }
+    }
+
+
+    /*
     for ( int y=0; y < TILETGT_HEIGHT; ++y ) {
         short tiley = tileoffsy + y ) % TILETGT_HEIGHT;
         short tilesy = tiley / TILE_HEIGHT;
@@ -52,8 +143,6 @@ void tilescr_render( uint8_t* target ) {
         }
     }
 
-
-*/
     const uint8_t* tsp = &tilescr[0];
     for ( uint8_t y=0; y < TILESCR_HEIGHT; ++y ) {
         for ( uint8_t x=0; x < TILESCR_WIDTH; ++x ) {
@@ -111,6 +200,7 @@ void tilescr_render( uint8_t* target ) {
             }
         }
     }
+        */
 }
 
 void tilescr_writetile( int tileno, const uint8_t data[TILE_WIDTH * TILE_HEIGHT]) {
