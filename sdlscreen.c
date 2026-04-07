@@ -182,10 +182,10 @@ static int sdlscr_worker( void* arg ) {
         draw_layers( renderer );
         SDL_RenderPresent( renderer );
         lastTick = now;
-        fprintf( stderr, "drawn frame, @%" PRIu64 "\n", lastTick );
+        // fprintf( stderr, "drawn frame, @%" PRIu64 "\n", lastTick );
     }
 
-    fprintf( stderr, "worker exiting @%" PRIu64 "...\n", lastTick );
+    // fprintf( stderr, "worker exiting @%" PRIu64 "...\n", lastTick );
 
     // cleanup
     sdlscr_initok = false;

@@ -48,6 +48,13 @@ static void tilescr_copy_tile_portion(
     // tile portion to be transferred
     uint8_t tilel, uint8_t tilet, uint8_t tilew, uint8_t tileh
 ) {
+    if ( targety >= TILETGT_HEIGHT || targetx >= TILETGT_WIDTH ) return;
+    if ( targetx + tilew >= TILETGT_WIDTH ) {
+        tilew = TILETGT_WIDTH - targetx;
+    }
+    if ( targety + tileh >= TILETGT_HEIGHT ) {
+        tileh = TILETGT_HEIGHT - targety;
+    }
     uint8_t* tgtptr = &target[ targety * TILETGT_WIDTH + targetx ];
     uint8_t tiley = tile / TILEMAP_CELLSX;
     uint8_t tilex = tile % TILEMAP_CELLSX;
@@ -65,6 +72,47 @@ static void tilescr_copy_tile_portion(
     }
 }
 
+typedef struct _rect_t {
+    uint16_t left, top;
+    uint8_t width, height, empty, tile, offx, offy;
+} rect_t;
+
+static void init_rect( rect_t* r, uint16_t l, uint16_t t, uint8_t w, uint8_t h, int8_t tx, int8_t ty, uint8_t ox, uint8_t oy ) {
+    r->left = l; r->top = t; r->width = w; r->height = h; r->offx = ox; r->offy = oy;
+    r->empty = w == 0 || h == 0;
+    if ( tx < 0 || tx >= TILESCR_WIDTH ) {
+        tx = TILESCR_WIDTH - 1;
+    }
+    if ( ty < 0 || ty >= TILESCR_HEIGHT ) {
+        ty = TILESCR_HEIGHT - 1;
+    }
+    r->tile = tilescr[ ty * TILESCR_WIDTH + tx ];
+}
+
+static void init_zones( rect_t r[4], uint16_t l, uint16_t t, uint8_t sx, uint8_t sy, int8_t tx, int8_t ty ) {
+    /*
+    tile zones:
+      A | B
+        |
+      --+----
+      C | D
+        |
+        |
+    zone D is the normal tile shifted by the scroll offsets.
+    */
+    init_rect( &r[0], l     , t     , sx             , sy              , tx - 1, ty - 1, TILE_WIDTH - sx, TILE_HEIGHT - sy );
+    init_rect( &r[1], l + sx, t     , TILE_WIDTH - sx, sy              , tx    , ty - 1, 0              , TILE_HEIGHT - sy );
+    init_rect( &r[2], l     , t + sy, sx             , TILE_HEIGHT - sy, tx - 1, ty    , TILE_WIDTH - sx, 0                );
+    init_rect( &r[3], l + sx, t + sy, TILE_WIDTH - sx, TILE_HEIGHT - sy, tx    , ty    , 0              , 0                );
+    if ( sx == 0 && sy == 0 ) { // need only D
+        r[2].empty = r[1].empty = r[0].empty = true;
+    } else if ( sx == 0 ) { // need only B and D
+        r[2].empty = r[0].empty = true;
+    } else if ( sy == 0 ) { // need only C and D
+        r[1].empty = r[0].empty = true;
+    }
+}
+
 // copy logical tile from tile memory to screen, using scroll offsets
 static void tilescr_copy_logical_tile(
     // target memory buffer
@@ -72,140 +120,54 @@ static void tilescr_copy_logical_tile(
     // target on-screen coordinates
     uint16_t targetx,
     uint16_t targety,
-    // tile memory X position
-    uint8_t tileposx,
-    uint8_t tileposy,
     // scroll offsets
     uint8_t scrolloffsx,
     uint8_t scrolloffsy
 ) {
-    /* if ( scrolloffsx == 0 && scrolloffsy == 0 ) {
-        // not scrolled: can copy full tile
-        goto FULL_TILE;
-    } */
-    if ( tileposy >= UINT8_C(1) && tileposx >= UINT8_C(1) ) {
-        // not at the left/bottom edge: can copy full tile
-        goto FULL_TILE;
-    }
-    // TBD
-    return;
+    /*
+    tile zones:
+      A | B
+        |
+      --+----
+      C | D
+        |
+        |
 
-FULL_TILE:
-    // copy full tile (except at right / bottom border)
-    uint16_t left = targetx + scrolloffsx;
-    uint16_t top  = targety + scrolloffsy;
-    uint16_t right = left + TILE_WIDTH;
-    uint16_t bottom = top + TILE_HEIGHT;
-    if ( right > TILETGT_WIDTH ) {
-        right = TILETGT_WIDTH;
+    zone D is the normal tile shifted by the scroll offsets.
+    */
+    int8_t tilex = (int8_t)( targetx / TILE_WIDTH  );
+    int8_t tiley = (int8_t)( targety / TILE_HEIGHT );
+    rect_t z[4];
+    init_zones( z, targetx, targety, scrolloffsx, scrolloffsy, tilex, tiley );
+    for ( uint8_t i=0; i < UINT8_C(4); ++i ) {
+        if ( z[i].empty ) continue;
+        tilescr_copy_tile_portion(
+            target,
+            z[i].left,
+            z[i].top,
+            z[i].tile,
+            z[i].offx,
+            z[i].offy,
+            z[i].width,
+            z[i].height
+        );
     }
-    if ( bottom > TILETGT_HEIGHT ) {
-        bottom = TILETGT_HEIGHT;
-    }
-    uint8_t tile = tilescr[ tileposy * TILESCR_WIDTH + tileposx ];
-    tilescr_copy_tile_portion(
-        target,
-        left,
-        top,
-        tile,
-        0,
-        0,
-        right - left,
-        bottom - top
-    );
 }
 
 void tilescr_render( uint8_t* target ) {
     uint8_t scrolloffsx = tileoffsx % TILE_WIDTH;
     uint8_t scrolloffsy = tileoffsy % TILE_HEIGHT;
-    for ( uint8_t y=0; y < TILESCR_HEIGHT-1; ++y ) {
-        uint16_t scry = y * TILE_HEIGHT;
-        for ( uint8_t x=0; x < TILESCR_WIDTH-1; ++x ) {
-            uint16_t scrx = x * TILE_WIDTH;
+    for ( int y=0; y < TILETGT_HEIGHT; y += TILE_HEIGHT ) {
+        for ( int x=0; x < TILETGT_WIDTH; x += TILE_WIDTH ) {
             tilescr_copy_logical_tile(
                 target,
-                scrx,
-                scry,
-                x,
-                y,
+                (uint16_t) x,
+                (uint16_t) y,
                 scrolloffsx,
                 scrolloffsy
             );
         }
     }
-
-
-    /*
-    for ( int y=0; y < TILETGT_HEIGHT; ++y ) {
-        short tiley = tileoffsy + y ) % TILETGT_HEIGHT;
-        short tilesy = tiley / TILE_HEIGHT;
-        short tileyo = tiley % TILE_HEIGHT;
-        for ( int x=0; x < TILETGT_WIDTH; ++x ) {
-            short tilex = ( tileoffsx + x ) % TILETGT_WIDTH;
-            short tilesx = tilesx / TILE_WIDTH;
-            short tilesxo = tilesx % TILE_WIDTH;
-            short
-        }
-    }
-
-    const uint8_t* tsp = &tilescr[0];
-    for ( uint8_t y=0; y < TILESCR_HEIGHT; ++y ) {
-        for ( uint8_t x=0; x < TILESCR_WIDTH; ++x ) {
-            uint8_t tile = *tsp++;
-            uint8_t mapx = tile % TILEMAP_CELLSX;
-            uint8_t mapy = tile / TILEMAP_CELLSX;
-            uint16_t mapcx = mapx * TILE_WIDTH;
-            uint16_t mapcy = mapy * TILE_HEIGHT;
-            uint32_t mapof = mapcy * TILEMAP_WIDTH + mapcx;
-            int16_t left = x * TILE_WIDTH  + tileoffsx;
-            int16_t top  = y * TILE_HEIGHT + tileoffsy;
-            int16_t right = left + TILE_WIDTH - 1;
-            int16_t bottom = top + TILE_HEIGHT - 1;
-            uint8_t sx, sy, ex, ey;
-            if ( left < 0 ) {
-                sx = -left; left = 0;
-            } else {
-                sx = 0;
-            }
-            if ( top < 0 ) {
-                sy = -top; top = 0;
-            } else {
-                sy = 0;
-            }
-            ex = TILE_WIDTH;
-            ey = TILE_HEIGHT;
-            if ( right >= TILETGT_WIDTH ) {
-                int16_t delta = ( right - TILETGT_WIDTH ) + 1;
-                if ( delta >= TILE_WIDTH ) {
-                    ex = 0;
-                } else {
-                    ex -= delta;
-                }
-                right = TILETGT_WIDTH - 1;
-            }
-            if ( bottom >= TILETGT_HEIGHT ) {
-                int16_t delta = ( bottom - TILETGT_HEIGHT ) + 1;
-                if ( delta >= TILE_HEIGHT ) {
-                    ey = 0;
-                } else {
-                    ey -= delta;
-                }
-                bottom = TILETGT_HEIGHT - 1;
-            }
-            uint8_t* tgp = &target[ top * TILETGT_WIDTH + left ];
-            const uint8_t* tmp = &tilemap[ mapof + sy * TILEMAP_WIDTH + sx ];
-            for ( uint8_t cy=sy; cy < ey; ++cy ) {
-                uint8_t* tgp0 = tgp;
-                const uint8_t* tmp0 = tmp;
-                for ( uint8_t cx=sx; cx < ex; ++cx ) {
-                    *tgp++ = *tmp++;
-                }
-                tgp = tgp0 + TILETGT_WIDTH;
-                tmp = tmp0 + TILEMAP_WIDTH;
-            }
-        }
-    }
-        */
 }
 
 void tilescr_writetile( int tileno, const uint8_t data[TILE_WIDTH * TILE_HEIGHT]) {

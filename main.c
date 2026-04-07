@@ -69,7 +69,7 @@ int main( int argc, char** argv ) {
         scrollx = ( scrollx + 1 ) % TILE_WIDTH;
         scrolly = ( scrolly + 1 ) % TILE_HEIGHT;
         sdlscr_scrolltiles( scrollx, scrolly );
-        SDL_Delay( 100 );
+        SDL_Delay( 20 );
     }
 
     return EXIT_SUCCESS;
