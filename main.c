@@ -30,5 +30,7 @@ int main( int argc, char** argv ) {
 
     sdl_init();
 
+    SDL_Delay( 5000 );
+
     return EXIT_SUCCESS;
 }
