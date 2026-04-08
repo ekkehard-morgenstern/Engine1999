@@ -29,6 +29,10 @@
 #ifndef STDTYPES_H
 #define STDTYPES_H  1
 
+#ifndef _POSIX_C_SOURCE
+#define _POSIX_C_SOURCE  200112L
+#endif
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>

@@ -79,6 +79,35 @@ static uint32_t sdlscr_bgcol = UINT32_C(0XFF708090); // SlateGray
 
 static SDL_Thread* sdlscr_workerthr = 0;
 
+static uint64_t sdlscr_getnsec( struct timespec* pts ) {
+    struct timespec ts;
+    memset( &ts, 0, sizeof(ts) );
+    clock_gettime( CLOCK_REALTIME, &ts );
+    if ( pts ) {
+        *pts = ts;
+    }
+    return ( ts.tv_sec * UINT64_C(1000000000) ) + ts.tv_nsec;
+}
+
+static void sdlscr_nanosleep( uint64_t nsec, const struct timespec* pts ) {
+    struct timespec ts;
+    if ( pts ) {
+        ts = *pts;
+    } else {
+        memset( &ts, 0, sizeof(ts) );
+        clock_gettime( CLOCK_REALTIME, &ts );
+    }
+    long secs  = nsec / UINT64_C(1000000000);
+    long nsecs = nsec % UINT64_C(1000000000);
+    ts.tv_nsec += nsecs;
+    if ( ts.tv_nsec >= 1000000000L ) {
+        ts.tv_nsec -= 1000000000L;
+        ts.tv_sec++;
+    }
+    ts.tv_sec += secs;
+    clock_nanosleep( CLOCK_REALTIME, TIMER_ABSTIME, &ts, 0 );
+}
+
 static int sdlscr_worker( void* arg ) {
 
     sdlscr_initok = false;
@@ -100,7 +129,7 @@ static int sdlscr_worker( void* arg ) {
     SDL_Renderer* renderer = SDL_CreateRenderer(
         window,
         -1,
-        SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC
+        SDL_RENDERER_ACCELERATED // | SDL_RENDERER_PRESENTVSYNC
     );
     if ( renderer == 0 ) {
         print_sdlerror( "create renderer" );
@@ -141,7 +170,8 @@ static int sdlscr_worker( void* arg ) {
     sdlscr_initok = true;
     sdlev_raise( SDLEV_SCREENWORKERINITDONE );
 
-    Uint64 lastTick = SDL_GetTicks64();
+    struct timespec lts;
+    uint64_t lastTick = sdlscr_getnsec( &lts );
 
     // main loop
     for (;;) {
@@ -167,37 +197,35 @@ static int sdlscr_worker( void* arg ) {
             }
         }
 
-        // get current time
-        Uint64 now = SDL_GetTicks64();
-
-        if ( !sdllay_needsredraw( &layers[0], NLAYERS ) ) {
-            // no redraw: check time
-            if ( now - lastTick < 20U ) {
-                // make sure at least a 1/50 sec will have passed
-                Uint32 toWait = (Uint32)( 20U - ( now - lastTick ) );
-                SDL_Delay( toWait );
+        if ( sdllay_needsredraw( &layers[0], NLAYERS ) ) {
+            // needs redraw
+            if ( !sdllay_to_texture_many( &layers[0], NLAYERS ) ) {
+                break;
             }
-            lastTick = now;
-            continue;
+            uint32_t c = sdlscr_bgcol;
+            uint8_t a = (uint8_t)( c >> UINT8_C(24) );
+            uint8_t r = (uint8_t)( c >> UINT8_C(16) );
+            uint8_t g = (uint8_t)( c >> UINT8_C( 8) );
+            uint8_t b = (uint8_t)( c                );
+            SDL_SetRenderDrawColor( renderer, r, g, b, a );
+            SDL_RenderClear( renderer );
+            draw_layers( renderer );
+            SDL_RenderPresent( renderer );
         }
-        if ( !sdllay_to_texture_many( &layers[0], NLAYERS ) ) {
-            break;
-        }
-        uint32_t c = sdlscr_bgcol;
-        uint8_t a = (uint8_t)( c >> UINT8_C(24) );
-        uint8_t r = (uint8_t)( c >> UINT8_C(16) );
-        uint8_t g = (uint8_t)( c >> UINT8_C( 8) );
-        uint8_t b = (uint8_t)( c                );
-        SDL_SetRenderDrawColor( renderer, r, g, b, a );
-        SDL_RenderClear( renderer );
-        draw_layers( renderer );
-        SDL_RenderPresent( renderer );
-        lastTick = now;
-        // fprintf( stderr, "drawn frame, @%" PRIu64 "\n", lastTick );
-        sdlev_raise( SDLEV_VBLANK );
-    }
 
-    // fprintf( stderr, "worker exiting @%" PRIu64 "...\n", lastTick );
+        sdlev_raise( SDLEV_VBLANK );
+
+        // get current time
+        struct timespec ts;
+        uint64_t now  = sdlscr_getnsec( &ts );
+        uint64_t nsec = now - lastTick;
+        if ( nsec < UINT64_C(16666667) ) {
+            // make sure at least a 1/60th sec will have passed
+            uint64_t toWait = UINT64_C(16666667) - nsec;
+            sdlscr_nanosleep( toWait, &ts );
+        }
+        lastTick = now; lts = ts;
+    }
 
     // cleanup
     sdlscr_initok = false;
