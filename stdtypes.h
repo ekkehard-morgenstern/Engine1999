@@ -37,5 +37,6 @@
 #include <string.h>
 #include <stdarg.h>
 #include <errno.h>
+#include <time.h>
 
 #endif

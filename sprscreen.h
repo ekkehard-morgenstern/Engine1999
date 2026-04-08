@@ -55,7 +55,7 @@ void sprscr_prio( int sprno, int prio );
 void sprscr_move( int sprno, int x, int y );
 void sprscr_animdata( int animno, const uint8_t* seq, size_t size );
 void sprscr_animcfg( int sprno, int animno, int length, int speed );
-void sprscr_writemap( int sprno, const uint8_t data[SPRITE_WIDTH * SPRITE_HEIGHT]);
+void sprscr_writemap( int imgno, const uint8_t data[SPRITE_WIDTH * SPRITE_HEIGHT]);
 bool sprscr_changed( void );
 void sprscr_periodicals( void );
 void sprscr_render( uint8_t* target );

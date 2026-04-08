@@ -31,6 +31,10 @@
 #define WHT 140
 #define GOL 123
 
+#define TRN 0
+#define RED 76
+#define GRN 12
+
 static const uint8_t tiletest1[TILE_WIDTH * TILE_HEIGHT] = {
     GOL, GOL, GOL, GOL, GOL, GOL, GOL, GOL, GOL, GOL, GOL, GOL, GOL, GOL, GOL, GOL,
     GOL, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, WHT, GOL,
@@ -58,17 +62,68 @@ static const uint8_t tiletest1[TILE_WIDTH * TILE_HEIGHT] = {
     GOL, GOL, GOL, GOL, GOL, GOL, GOL, GOL, GOL, GOL, GOL, GOL, GOL, GOL, GOL, GOL
 };
 
+static const uint8_t sprtest1[SPRITE_WIDTH * SPRITE_HEIGHT] = {
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, GRN, GRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, GRN, GRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, GRN, TRN, TRN, GRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, GRN, TRN, TRN, GRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, GRN, TRN, TRN, TRN, TRN, GRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, GRN, TRN, TRN, TRN, TRN, GRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, GRN, TRN, TRN, TRN, TRN, TRN, TRN, GRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, GRN, TRN, TRN, TRN, TRN, TRN, TRN, GRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, GRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, GRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, GRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, GRN, TRN, TRN, TRN,
+    TRN, TRN, GRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, GRN, TRN, TRN,
+    TRN, TRN, GRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, GRN, TRN, TRN,
+    TRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, TRN,
+    TRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, RED, RED, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, RED, RED, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, RED, RED, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, RED, RED, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, RED, RED, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN
+};
+
 int main( int argc, char** argv ) {
 
     sdl_init();
+
+    srand( time(0) );
+
     sdlscr_printf( 0, 0, 0, 1, "Hello world!\nThere!" );
+
     sdlscr_writetile( 0, tiletest1 );
+
+    sdlscr_writesprite( 0, sprtest1 );
+    uint8_t animseq = 0;
+
+#define NSPR 10
+    int spx[NSPR], spy[NSPR];
+    sdlscr_spriteanimdata( 0, &animseq, 1U );
+    for ( int i=0; i < NSPR; ++i ) {
+        spx[i] = rand() % SPRTGT_WIDTH;
+        spy[i] = rand() % SPRTGT_HEIGHT;
+        sdlscr_spriteanimcfg( i, 0, 1, 1 );
+        sdlscr_spriteprio( i, 0 );
+        sdlscr_movesprite( i, spx[i], spy[i] );
+        sdlscr_showsprite( i, true );
+    }
 
     int scrollx = 0, scrolly = 0;
     while ( !sdlscr_term() ) {
         scrollx = ( scrollx + 1 ) % TILE_WIDTH;
         scrolly = ( scrolly + 1 ) % TILE_HEIGHT;
         sdlscr_scrolltiles( scrollx, scrolly );
+        for ( int i=0; i < NSPR; ++i ) {
+            if ( --spx[i] < -SPRITE_WIDTH  ) spx[i] = SPRTGT_WIDTH;
+            if ( --spy[i] < -SPRITE_HEIGHT ) spy[i] = SPRTGT_HEIGHT;
+            sdlscr_movesprite( i, spx[i], spy[i] );
+        }
         SDL_Delay( 20 );
     }
 

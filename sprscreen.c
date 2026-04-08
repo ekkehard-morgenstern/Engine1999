@@ -110,10 +110,10 @@ void sprscr_animcfg( int sprno, int animno, int length, int speed ) {
     sprchg = true;
 }
 
-void sprscr_writemap( int sprno, const uint8_t data[SPRITE_WIDTH * SPRITE_HEIGHT]) {
-    if ( sprno < 0 || sprno > 255 ) return;
-    uint8_t mapx = (uint8_t)( sprno % SPRMAP_CELLSX );
-    uint8_t mapy = (uint8_t)( sprno / SPRMAP_CELLSX );
+void sprscr_writemap( int imgno, const uint8_t data[SPRITE_WIDTH * SPRITE_HEIGHT]) {
+    if ( imgno < 0 || imgno > 255 ) return;
+    uint8_t mapx = (uint8_t)( imgno % SPRMAP_CELLSX );
+    uint8_t mapy = (uint8_t)( imgno / SPRMAP_CELLSX );
     uint16_t mapcx = mapx * SPRITE_WIDTH;
     uint16_t mapcy = mapy * SPRITE_HEIGHT;
     uint32_t mapof = mapcy * SPRMAP_WIDTH + mapcx;
