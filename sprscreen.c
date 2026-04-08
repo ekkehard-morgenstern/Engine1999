@@ -204,27 +204,28 @@ void sprscr_render( uint8_t* target ) {
         }
         if ( left < 0 ) {
             // left edge is off-screen
-            offsx = -left; width -= offsx; spricx += offsx; left = 0;
+            offsx = -left; spricx += offsx; left = 0;
         } else if ( right > SPRTGT_WIDTH ) {
             // right edge is off-screen
             width -= right - SPRTGT_WIDTH;
         }
         if ( top < 0 ) {
             // top edge is off-screen
-            offsy = -top; height -= offsy; spricy += offsy; top = 0;
+            offsy = -top; spricy += offsy; top = 0;
         } else if ( bottom > SPRTGT_HEIGHT ) {
             // bottom edge is off-screen
             height -= bottom - SPRTGT_HEIGHT;
         }
-        uint8_t spripos = spricy * SPRMAP_WIDTH + spricx;
-        uint32_t tgtpos = top    * SPRTGT_WIDTH + left;
+        uint32_t spripos = spricy * SPRMAP_WIDTH + spricx;
+        uint32_t tgtpos  = top    * SPRTGT_WIDTH + left;
         const uint8_t* s = &sprmap[ spripos ];
         uint8_t*       d = &target[ tgtpos  ];
-        for ( uint8_t y=0; y < height; ++y ) {
+        for ( uint8_t y=offsy; y < height; ++y ) {
             const uint8_t* s0 = s;
             uint8_t*       d0 = d;
-            for ( uint8_t x=0; x < width; ++x ) {
-                *d++ = *s++;
+            for ( uint8_t x=offsx; x < width; ++x ) {
+                *d = *s ? *s : *d;
+                ++d; ++s;
             }
             s = s0 + SPRMAP_WIDTH;
             d = d0 + SPRTGT_WIDTH;
