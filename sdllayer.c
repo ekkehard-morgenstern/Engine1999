@@ -454,6 +454,10 @@ void sdllay_disable( sdllayer_t* lay ) {
     lay->disabled = true;
 }
 
+bool sdllay_enabled( const sdllayer_t* lay ) {
+    return !lay->disabled;
+}
+
 void sdllay_switch_priority( sdllayer_t* lay, size_t cnt, uint8_t index1, uint8_t index2 ) {
     if ( index1 >= cnt || index2 >= cnt || index1 == index2 ) {
         return;

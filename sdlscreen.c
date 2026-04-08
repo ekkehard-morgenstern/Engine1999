@@ -29,6 +29,7 @@
 #include "sdlevent.h"
 #include "textscreen.h"
 #include "tilescreen.h"
+#include "sprscreen.h"
 
 #define NLAYERS 5
 #define LAY_BG          0
@@ -68,6 +69,7 @@ static void render_text( struct _sdllayer_t* lay, void* usrdata ) {
 }
 
 static void render_sprites( struct _sdllayer_t* lay, void* usrdata ) {
+    sprscr_render( lay->memory );
 }
 
 static bool sdlscr_initok = false;
@@ -127,6 +129,7 @@ static int sdlscr_worker( void* arg ) {
 
     txtscr_init();
     tilescr_init();
+    sprscr_init();
 
     // sdllay_disable( &layers[LAY_BG]  );
     // sdllay_disable( &layers[LAY_TIL] );
@@ -145,6 +148,14 @@ static int sdlscr_worker( void* arg ) {
         if ( sdlscr_doexit ) {
             break;
         }
+
+        if ( sdllay_enabled( &layers[LAY_SPR] ) ) {
+            sprscr_periodicals();
+            if ( sprscr_changed() ) {
+                sdllay_set_modified( &layers[LAY_SPR] );
+            }
+        }
+
         // process messages
         SDL_Event ev;
         while ( SDL_PollEvent( &ev ) ) {
@@ -294,4 +305,28 @@ bool sdlscr_term( void ) {
 void sdlscr_scrolltiles( int sx, int sy ) {
     tilescr_scroll( sx, sy );
     sdllay_set_modified( &layers[LAY_TIL] );
+}
+
+void sdlscr_showsprite( int sprno, bool active ) {
+    sprscr_show( sprno, active );
+}
+
+void sdlscr_spriteprio( int sprno, int prio ) {
+    sprscr_prio( sprno, prio );
+}
+
+void sdlscr_movesprite( int sprno, int x, int y ) {
+    sprscr_move( sprno, x, y );
+}
+
+void sdlscr_spriteanimdata( int animno, const uint8_t* seq, size_t size ) {
+    sprscr_animdata( animno, seq, size );
+}
+
+void sdlscr_spriteanimcfg( int sprno, int animno, int length, int speed ) {
+    sprscr_animcfg( sprno, animno, length, speed );
+}
+
+void sdlscr_writesprite( int sprno, const uint8_t data[SPRITE_WIDTH * SPRITE_HEIGHT]) {
+    sprscr_writemap( sprno, data );
 }

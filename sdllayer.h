@@ -68,6 +68,7 @@ void sdllay_draw_texture_many( const sdllayer_t* lay, size_t cnt, SDL_Renderer* 
 void sdllay_set_modified( sdllayer_t* lay );
 void sdllay_enable( sdllayer_t* lay );
 void sdllay_disable( sdllayer_t* lay );
+bool sdllay_enabled( const sdllayer_t* lay );
 void sdllay_switch_priority( sdllayer_t* lay, size_t cnt, uint8_t index1, uint8_t index2 );
 
 #endif

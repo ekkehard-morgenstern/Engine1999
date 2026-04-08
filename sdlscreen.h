@@ -37,6 +37,10 @@
 #include "tilescreen.h"
 #endif
 
+#ifndef SPRSCREEN_H
+#include "sprscreen.h"
+#endif
+
 #define SDL_SCREENWIDTH     640
 #define SDL_SCREENHEIGHT    300
 
@@ -44,8 +48,19 @@ bool sdlscr_init( void );
 void sdlscr_cleanup( void );
 bool sdlscr_term( void );
 
+// text screen functions
 void sdlscr_printf( int y, int x, int bg, int fg, const char* fmt, ... );
+
+// tile screen functions
 void sdlscr_writetile( int tileno, const uint8_t data[TILE_WIDTH * TILE_HEIGHT]);
 void sdlscr_scrolltiles( int sx, int sy );
+
+// sprite screen functions
+void sdlscr_showsprite( int sprno, bool active );
+void sdlscr_spriteprio( int sprno, int prio );
+void sdlscr_movesprite( int sprno, int x, int y );
+void sdlscr_spriteanimdata( int animno, const uint8_t* seq, size_t size );
+void sdlscr_spriteanimcfg( int sprno, int animno, int length, int speed );
+void sdlscr_writesprite( int sprno, const uint8_t data[SPRITE_WIDTH * SPRITE_HEIGHT]);
 
 #endif

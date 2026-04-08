@@ -37,9 +37,27 @@
 #define SPRMAP_HEIGHT   384
 #define SPRMAP_CELLSX   16
 #define SPRMAP_CELLSY   16
+#define MAX_SPRIMAG     256
+
+#define SPRTGT_WIDTH    640
+#define SPRTGT_HEIGHT   300
+
+#define SPRITE_WIDTH    16
+#define SPRITE_HEIGHT   24
 
 #define MAX_SPRITES     256
+#define MAX_ANIMSEQ     256
 #define MAX_SPRANIM     16
 
+void sprscr_init( void );
+void sprscr_show( int sprno, bool active );
+void sprscr_prio( int sprno, int prio );
+void sprscr_move( int sprno, int x, int y );
+void sprscr_animdata( int animno, const uint8_t* seq, size_t size );
+void sprscr_animcfg( int sprno, int animno, int length, int speed );
+void sprscr_writemap( int sprno, const uint8_t data[SPRITE_WIDTH * SPRITE_HEIGHT]);
+bool sprscr_changed( void );
+void sprscr_periodicals( void );
+void sprscr_render( uint8_t* target );
 
 #endif
