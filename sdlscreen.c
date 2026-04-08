@@ -194,6 +194,7 @@ static int sdlscr_worker( void* arg ) {
         SDL_RenderPresent( renderer );
         lastTick = now;
         // fprintf( stderr, "drawn frame, @%" PRIu64 "\n", lastTick );
+        sdlev_raise( SDLEV_VBLANK );
     }
 
     // fprintf( stderr, "worker exiting @%" PRIu64 "...\n", lastTick );
@@ -245,6 +246,11 @@ bool sdlscr_init( void ) {
 }
 
 static bool sdlscr_cleanup2( void ) {
+
+    int recent = sdlev_recent( 1 << SDLEV_SCREENWORKERFINISHED );
+    if ( recent & SDLEV_SCREENWORKERFINISHED ) {
+        goto THREAD_DONE;
+    }
 
     // wait for handshake (thread termination)
     for (;;) {

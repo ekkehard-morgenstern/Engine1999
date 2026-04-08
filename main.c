@@ -26,6 +26,7 @@
 
 #include "sdlmain.h"
 #include "sdlscreen.h"
+#include "sdlevent.h"
 
 #define BLU 2
 #define WHT 140
@@ -89,6 +90,142 @@ static const uint8_t sprtest1[SPRITE_WIDTH * SPRITE_HEIGHT] = {
     TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN
 };
 
+static const uint8_t sprtest1b[SPRITE_WIDTH * SPRITE_HEIGHT] = {
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, GRN, GRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, GRN, GRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, GRN, GRN, GRN, GRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, GRN, GRN, GRN, GRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, GRN, GRN, TRN, TRN, GRN, GRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, GRN, GRN, TRN, TRN, GRN, GRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, GRN, GRN, TRN, TRN, TRN, TRN, GRN, GRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, GRN, GRN, TRN, TRN, TRN, TRN, GRN, GRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, GRN, GRN, TRN, TRN, TRN, TRN, TRN, TRN, GRN, GRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, GRN, GRN, TRN, TRN, TRN, TRN, TRN, TRN, GRN, GRN, TRN, TRN, TRN,
+    TRN, TRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, TRN, TRN,
+    TRN, TRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, TRN, TRN,
+    TRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, TRN,
+    TRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, RED, RED, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, RED, RED, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, RED, RED, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, RED, RED, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, RED, RED, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN
+};
+
+static const uint8_t sprtest1c[SPRITE_WIDTH * SPRITE_HEIGHT] = {
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, GRN, GRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, GRN, GRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, GRN, GRN, GRN, GRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, GRN, GRN, GRN, GRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, GRN, GRN, GRN, GRN, GRN, GRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, GRN, GRN, GRN, GRN, GRN, GRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, GRN, GRN, GRN, TRN, TRN, GRN, GRN, GRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, GRN, GRN, GRN, TRN, TRN, GRN, GRN, GRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, TRN, TRN, TRN,
+    TRN, TRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, TRN, TRN,
+    TRN, TRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, TRN, TRN,
+    TRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, TRN,
+    TRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, RED, RED, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, RED, RED, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, RED, RED, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, RED, RED, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, RED, RED, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN
+};
+
+static const uint8_t sprtest1d[SPRITE_WIDTH * SPRITE_HEIGHT] = {
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, GRN, GRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, GRN, GRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, GRN, GRN, GRN, GRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, GRN, GRN, GRN, GRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, GRN, GRN, GRN, GRN, GRN, GRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, GRN, GRN, GRN, GRN, GRN, GRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, TRN, TRN, TRN,
+    TRN, TRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, TRN, TRN,
+    TRN, TRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, TRN, TRN,
+    TRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, TRN,
+    TRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, RED, RED, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, RED, RED, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, RED, RED, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, RED, RED, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, RED, RED, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN
+};
+
+static const uint8_t sprtest1e[SPRITE_WIDTH * SPRITE_HEIGHT] = {
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, GRN, GRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, GRN, GRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, GRN, TRN, TRN, GRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, GRN, TRN, TRN, GRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, GRN, TRN, GRN, GRN, TRN, GRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, GRN, TRN, GRN, GRN, TRN, GRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, GRN, TRN, GRN, GRN, GRN, GRN, TRN, GRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, GRN, TRN, GRN, GRN, GRN, GRN, TRN, GRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, GRN, TRN, GRN, GRN, GRN, GRN, GRN, GRN, TRN, GRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, GRN, TRN, GRN, GRN, GRN, GRN, GRN, GRN, TRN, GRN, TRN, TRN, TRN,
+    TRN, TRN, GRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, GRN, TRN, TRN,
+    TRN, TRN, GRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, GRN, TRN, TRN,
+    TRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, TRN,
+    TRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, RED, RED, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, RED, RED, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, RED, RED, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, RED, RED, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, RED, RED, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN
+};
+
+static const uint8_t sprtest1f[SPRITE_WIDTH * SPRITE_HEIGHT] = {
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, GRN, GRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, GRN, GRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, GRN, TRN, TRN, GRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, GRN, TRN, TRN, GRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, GRN, TRN, TRN, TRN, TRN, GRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, GRN, TRN, TRN, TRN, TRN, GRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, GRN, TRN, TRN, GRN, GRN, TRN, TRN, GRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, GRN, TRN, TRN, GRN, GRN, TRN, TRN, GRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, GRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, GRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, GRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, GRN, TRN, TRN, TRN,
+    TRN, TRN, GRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, GRN, TRN, TRN,
+    TRN, TRN, GRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, GRN, TRN, TRN,
+    TRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, TRN,
+    TRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, GRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, RED, RED, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, RED, RED, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, RED, RED, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, RED, RED, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, RED, RED, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN,
+    TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN
+};
+
+
 int main( int argc, char** argv ) {
 
     sdl_init();
@@ -99,16 +236,21 @@ int main( int argc, char** argv ) {
 
     sdlscr_writetile( 0, tiletest1 );
 
-    sdlscr_writesprite( 0, sprtest1 );
-    uint8_t animseq = 0;
+    sdlscr_writesprite( 0, sprtest1  );
+    sdlscr_writesprite( 1, sprtest1b );
+    sdlscr_writesprite( 2, sprtest1c );
+    sdlscr_writesprite( 3, sprtest1d );
+    sdlscr_writesprite( 4, sprtest1e );
+    sdlscr_writesprite( 5, sprtest1f );
+    static const uint8_t animseq[6] = { 0, 1, 2, 3, 4, 5 };
+    sdlscr_spriteanimdata( 0, &animseq[0], 6U );
 
 #define NSPR 10
     int spx[NSPR], spy[NSPR];
-    sdlscr_spriteanimdata( 0, &animseq, 1U );
     for ( int i=0; i < NSPR; ++i ) {
         spx[i] = rand() % SPRTGT_WIDTH;
         spy[i] = rand() % SPRTGT_HEIGHT;
-        sdlscr_spriteanimcfg( i, 0, 1, 1 );
+        sdlscr_spriteanimcfg( i, 0, 6, 20 );
         sdlscr_spriteprio( i, 0 );
         sdlscr_movesprite( i, spx[i], spy[i] );
         sdlscr_showsprite( i, true );
@@ -124,8 +266,22 @@ int main( int argc, char** argv ) {
             if ( --spy[i] < -SPRITE_HEIGHT ) spy[i] = SPRTGT_HEIGHT;
             sdlscr_movesprite( i, spx[i], spy[i] );
         }
-        SDL_Delay( 20 );
+        for (;;) {
+            int ev = sdlev_wait();
+            switch ( ev ) {
+                case SDLEV_ERROR:
+                    goto STOP;
+                case SDLEV_VBLANK:
+                    goto VBLANK;
+                case SDLEV_SCREENWORKERFINISHED:
+                    goto STOP;
+                default:
+                    break;
+            }
+        }
+VBLANK: // fprintf( stderr, "%" PRIu64 "\n", SDL_GetTicks64() );
     }
 
+STOP:
     return EXIT_SUCCESS;
 }

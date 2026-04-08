@@ -26,9 +26,9 @@
 
 #include "sdlevent.h"
 
-static int sdlev_hnd = -1;
-
+static int                sdlev_hnd = -1;
 static struct epoll_event sdlev_ary[SDLEV_COUNT];
+static SDL_mutex*         recent_mtx = 0;
 
 static void sdlev_cleanup2( int highest ) {
     for ( int i = highest-1; i >= 0; --i ) {
@@ -50,6 +50,7 @@ static void sdlev_cleanup2( int highest ) {
 }
 
 static void sdlev_cleanup( void ) {
+    SDL_DestroyMutex( recent_mtx ); recent_mtx = 0;
     sdlev_cleanup2( SDLEV_COUNT );
     int rv = close( sdlev_hnd );
     if ( rv == -1 ) {
@@ -90,9 +91,15 @@ void sdlev_init( void ) {
         }
     }
 
+    recent_mtx = SDL_CreateMutex();
+    if ( recent_mtx == 0 ) {
+        goto ERR2;
+    }
+
     atexit( sdlev_cleanup );
     return;
 
+// ERR3:     SDL_DestroyMutex( recent_mtx ); recent_mtx = 0;
 ERR2:     sdlev_cleanup2( i );
           close( sdlev_hnd ); sdlev_hnd = -1;
 ERR1:     exit( EXIT_FAILURE );
@@ -132,6 +139,16 @@ RETRY:
     return true;
 }
 
+static int evts_read = 0;
+
+int sdlev_recent( int remove ) {
+    SDL_LockMutex( recent_mtx );
+    int last = evts_read;
+    evts_read &= ~remove;
+    SDL_UnlockMutex( recent_mtx );
+    return last;
+}
+
 int sdlev_wait( void ) {
     struct epoll_event ev;
     memset( &ev, 0, sizeof(ev) );
@@ -149,6 +166,9 @@ int sdlev_wait( void ) {
     if ( ev.events & EPOLLIN ) {
         for ( int i=0; i < SDLEV_COUNT; ++i ) {
             if ( sdlev_check( i, ev.data.fd ) ) {
+                SDL_LockMutex( recent_mtx );
+                evts_read |= 1 << i;
+                SDL_UnlockMutex( recent_mtx );
                 return i;
             }
         }
