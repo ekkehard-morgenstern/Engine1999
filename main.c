@@ -256,6 +256,7 @@ int main( int argc, char** argv ) {
         sdlscr_showsprite( i, true );
     }
 
+    // uint64_t last = sdlscr_getnsec(0);
     int scrollx = 0, scrolly = 0;
     while ( !sdlscr_term() ) {
         scrollx = ( scrollx + 1 ) % TILE_WIDTH;
@@ -266,7 +267,7 @@ int main( int argc, char** argv ) {
             if ( --spy[i] < -SPRITE_HEIGHT ) spy[i] = SPRTGT_HEIGHT;
             sdlscr_movesprite( i, spx[i], spy[i] );
         }
-        for (;;) {
+        while ( !sdlscr_term() ) {
             int ev = sdlev_wait();
             switch ( ev ) {
                 case SDLEV_ERROR:
@@ -279,7 +280,9 @@ int main( int argc, char** argv ) {
                     break;
             }
         }
-VBLANK: // fprintf( stderr, "%" PRIu64 "\n", SDL_GetTicks64() );
+VBLANK: // uint64_t nsec = sdlscr_getnsec(0);
+        // fprintf( stderr, "%" PRIu64 "\n", nsec - last );
+        // last = nsec;
     }
 
 STOP:

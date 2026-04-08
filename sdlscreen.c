@@ -79,7 +79,7 @@ static uint32_t sdlscr_bgcol = UINT32_C(0XFF708090); // SlateGray
 
 static SDL_Thread* sdlscr_workerthr = 0;
 
-static uint64_t sdlscr_getnsec( struct timespec* pts ) {
+uint64_t sdlscr_getnsec( struct timespec* pts ) {
     struct timespec ts;
     memset( &ts, 0, sizeof(ts) );
     clock_gettime( CLOCK_REALTIME, &ts );
@@ -105,7 +105,15 @@ static void sdlscr_nanosleep( uint64_t nsec, const struct timespec* pts ) {
         ts.tv_sec++;
     }
     ts.tv_sec += secs;
-    clock_nanosleep( CLOCK_REALTIME, TIMER_ABSTIME, &ts, 0 );
+RETRY:
+    int rv = clock_nanosleep( CLOCK_REALTIME, TIMER_ABSTIME, &ts, 0 );
+    if ( rv == EINTR ) goto RETRY;
+}
+
+static uint64_t sdlscr_framecnt = 0;
+
+uint64_t sdlscr_getframecnt( void ) {
+    return sdlscr_framecnt;
 }
 
 static int sdlscr_worker( void* arg ) {
@@ -129,7 +137,7 @@ static int sdlscr_worker( void* arg ) {
     SDL_Renderer* renderer = SDL_CreateRenderer(
         window,
         -1,
-        SDL_RENDERER_ACCELERATED // | SDL_RENDERER_PRESENTVSYNC
+        SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC
     );
     if ( renderer == 0 ) {
         print_sdlerror( "create renderer" );
@@ -179,6 +187,8 @@ static int sdlscr_worker( void* arg ) {
             break;
         }
 
+        ++sdlscr_framecnt;
+
         if ( sdllay_enabled( &layers[LAY_SPR] ) ) {
             sprscr_periodicals();
             if ( sprscr_changed() ) {
@@ -210,10 +220,10 @@ static int sdlscr_worker( void* arg ) {
             SDL_SetRenderDrawColor( renderer, r, g, b, a );
             SDL_RenderClear( renderer );
             draw_layers( renderer );
-            SDL_RenderPresent( renderer );
         }
 
         sdlev_raise( SDLEV_VBLANK );
+        SDL_RenderPresent( renderer );
 
         // get current time
         struct timespec ts;
@@ -221,8 +231,8 @@ static int sdlscr_worker( void* arg ) {
         uint64_t nsec = now - lastTick;
         if ( nsec < UINT64_C(16666667) ) {
             // make sure at least a 1/60th sec will have passed
-            uint64_t toWait = UINT64_C(16666667) - nsec;
-            sdlscr_nanosleep( toWait, &ts );
+            uint64_t toWait = UINT64_C(16666667);
+            sdlscr_nanosleep( toWait, &lts );
         }
         lastTick = now; lts = ts;
     }

@@ -47,6 +47,8 @@
 bool sdlscr_init( void );
 void sdlscr_cleanup( void );
 bool sdlscr_term( void );
+uint64_t sdlscr_getnsec( struct timespec* pts );
+uint64_t sdlscr_getframecnt( void );
 
 // text screen functions
 void sdlscr_printf( int y, int x, int bg, int fg, const char* fmt, ... );
