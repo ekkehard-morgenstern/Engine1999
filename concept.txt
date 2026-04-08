@@ -59,7 +59,7 @@ Multiple sprite maps can coexist in memory, but a maximum of one is active at an
 
 Each sprite can be animated, and a sprite anim sequence can contain up to 15 animation indices. The default anim sequence has just one index. There can be up to 256 animation sequences. Thus the memory consumption is 4 KiB.
 
-Each sprite control structure contains the following: The index of an animation sequence (0..255), the position within that sequence (0..15), and the screen X and Y coordinates (0..511 each), a sprite priority value (0..7) an active bit (0..1), a sprite-sprite collision enable flag (0..1), a sprite-sprite collision indicator bit (0..1), a sprite-tile collision enable flag (0..1) and a sprite-tile collision indicator bit (0..1). Total of 8+4+9+9+3+1+1+1+1+1 = 38 bits. The remainder of the bits is reserved. The size of the control structure is 64 bits (8 bytes).
+Each sprite control structure contains the following: The index of an animation sequence (0..255), the position within that sequence (0..15), an animation speed counter and reset value (each 0..31) and the screen X and Y coordinates (0..511 each), a sprite priority value (0..7) an active bit (0..1), a sprite-sprite collision enable flag (0..1), a sprite-sprite collision indicator bit (0..1), a sprite-tile collision enable flag (0..1) and a sprite-tile collision indicator bit (0..1). Total of 8+4+5+5+9+9+3+1+1+1+1+1 = 48 bits. The remainder of the bits is reserved. The size of the control structure is 64 bits (8 bytes).
 
 There is a maximum of 256 sprites, and their control structures take up 2 KiB.
 
