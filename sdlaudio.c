@@ -26,6 +26,7 @@
 
 #include "sdlaudio.h"
 #include "sdltypes.h"
+#include "sdlevent.h"
 
 typedef struct _noteent_t {
     const char* name;
@@ -264,7 +265,7 @@ static void sdlaud_callback( void* userdata, Uint8* stream, int len ) {
     sdlaud_mixer_read( &sdlaud_mixer, (float*) stream, len / sizeof(float) );
 }
 
-bool sdlaud_init( void ) {
+static bool sdlaud_init_sdl( void ) {
     memset( &sdlaud_spec_in , 0, sizeof(SDL_AudioSpec) );
     memset( &sdlaud_spec_out, 0, sizeof(SDL_AudioSpec) );
     sdlaud_spec_in.freq     = SDLAUD_BUFFREQ;
@@ -283,7 +284,99 @@ bool sdlaud_init( void ) {
     return true;
 }
 
-void sdlaud_cleanup( void ) {
+static void sdlaud_cleanup_sdl( void ) {
     SDL_PauseAudioDevice( sdlaud_id, 1 );
     SDL_CloseAudioDevice( sdlaud_id ); sdlaud_id = 0;
+}
+
+static bool sdlaud_initok = false;
+static bool sdlaud_request_exit = false;
+static SDL_Thread* sdlaud_workerthr = 0;
+
+static int sdlaud_worker( void* arg ) {
+    sdlaud_initok = false;
+    sdlaud_request_exit = false;
+    if ( !sdlaud_init_sdl() ) {
+        goto ERR1;
+    }
+    sdlaud_initok = true;
+    sdlev_raise( SDLEV_AUDIOWORKERINITDONE );
+
+    while ( !sdlaud_request_exit ) {
+        SDL_Delay( 20 );
+    }
+
+    sdlaud_initok = false;
+    sdlaud_cleanup_sdl();
+    sdlev_raise( SDLEV_AUDIOWORKERFINISHED );
+    return 0;
+
+ERR2:   sdlaud_cleanup_sdl();
+ERR1:   return 0;
+}
+
+bool sdlaud_init( void ) {
+    sdlaud_workerthr = SDL_CreateThread( sdlaud_worker, "sdlaud_worker", 0 );
+    if ( sdlaud_workerthr == 0 ) {
+        fprintf( stderr, "failed to create audio worker: %s\n", SDL_GetError() );
+        return false;
+    }
+    for (;;) {
+        int ev = sdlev_wait();
+        switch ( ev ) {
+            case SDLEV_ERROR:
+                fprintf( stderr, "sdlaud_init(): sdlev_wait() returned error\n" );
+                return false;
+            case SDLEV_AUDIOWORKERINITDONE:
+                return sdlaud_initok;
+            default:    // SDLEV_SIGNAL, SDLEV_TIMEOUT, SDLEV_NONE
+                break;
+        }
+    }
+}
+
+static bool sdlaud_cleanup2( void ) {
+
+    int recent = sdlev_recent( 1 << SDLEV_AUDIOWORKERFINISHED );
+    if ( recent & SDLEV_AUDIOWORKERFINISHED ) {
+        goto THREAD_DONE;
+    }
+
+    sdlaud_request_exit = true;
+
+    // wait for handshake (thread termination)
+    for (;;) {
+        int ev = sdlev_wait();
+        switch ( ev ) {
+            case SDLEV_ERROR:
+                fprintf( stderr, "sdlaud_cleanup2(): sdlev_wait() returned error\n" );
+                // thread might still be running!
+                return false;
+            case SDLEV_AUDIOWORKERFINISHED:
+                goto THREAD_DONE;
+            default:    // SDLEV_SIGNAL, SDLEV_TIMEOUT, SDLEV_NONE
+                break;
+        }
+    }
+
+    // wait for thread to terminate and reap the thread status
+THREAD_DONE:
+    int rv = 0;
+    SDL_WaitThread( sdlaud_workerthr, &rv ); sdlaud_workerthr = 0;
+    return true;
+}
+
+void sdlaud_cleanup( void ) {
+    for (;;) {
+        if ( sdlaud_cleanup2() ) break;
+        // check if the thread ran into cleanup processing
+        if ( !sdlaud_initok ) {
+            // yes: wait for thread to terminate
+            int rv = 0;
+            SDL_WaitThread( sdlaud_workerthr, &rv ); sdlaud_workerthr = 0;
+            break;
+        }
+        // event processing failed, cannot exit
+        SDL_Delay( 1000 );
+    }
 }
