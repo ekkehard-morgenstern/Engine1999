@@ -35,8 +35,8 @@ CL=$(CCOMP) $(CFLAGS)
 all: sdltest1
 	echo ok >all
 
-BASEMOD=sdlevent.o sdllayer.o sdlmain.o sdlscreen.o textscreen.o tilescreen.o sprscreen.o 8x12font1.o sdlaudio.o
-BASEHDR=sdlevent.h sdllayer.h sdlmain.h sdlscreen.h sdltypes.h textscreen.h tilescreen.h sprscreen.h unxtypes.h sdlaudio.h
+BASEMOD=sdlevent.o sdllayer.o sdlmain.o sdlscreen.o textscreen.o tilescreen.o sprscreen.o 8x12font1.o sdlaudio.o sdlutil.o
+BASEHDR=sdlevent.h sdllayer.h sdlmain.h sdlscreen.h sdltypes.h textscreen.h tilescreen.h sprscreen.h unxtypes.h sdlaudio.h sdlutil.h
 
 sdltest1: main.o $(BASEMOD)
 	$(CL) -o sdltest1 main.o $(BASEMOD) -lSDL2 -lrt -lm
@@ -60,3 +60,5 @@ sprscreen.o: sprscreen.c $(BASEHDR)
 8x12font.o: 8x12font.c $(BASEHDR)
 
 sdlaudio.o: sdlaudio.c $(BASEHDR)
+
+sdlutil.o: sdlutil.c $(BASEHDR)

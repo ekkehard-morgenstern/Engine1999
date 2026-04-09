@@ -30,6 +30,7 @@
 #include "textscreen.h"
 #include "tilescreen.h"
 #include "sprscreen.h"
+#include "sdlutil.h"
 
 #define NLAYERS 5
 #define LAY_BG          0
@@ -78,37 +79,6 @@ static bool sdlscr_doexit = false;
 static uint32_t sdlscr_bgcol = UINT32_C(0XFF708090); // SlateGray
 
 static SDL_Thread* sdlscr_workerthr = 0;
-
-uint64_t sdlscr_getnsec( struct timespec* pts ) {
-    struct timespec ts;
-    memset( &ts, 0, sizeof(ts) );
-    clock_gettime( CLOCK_REALTIME, &ts );
-    if ( pts ) {
-        *pts = ts;
-    }
-    return ( ts.tv_sec * UINT64_C(1000000000) ) + ts.tv_nsec;
-}
-
-static void sdlscr_nanosleep( uint64_t nsec, const struct timespec* pts ) {
-    struct timespec ts;
-    if ( pts ) {
-        ts = *pts;
-    } else {
-        memset( &ts, 0, sizeof(ts) );
-        clock_gettime( CLOCK_REALTIME, &ts );
-    }
-    long secs  = nsec / UINT64_C(1000000000);
-    long nsecs = nsec % UINT64_C(1000000000);
-    ts.tv_nsec += nsecs;
-    if ( ts.tv_nsec >= 1000000000L ) {
-        ts.tv_nsec -= 1000000000L;
-        ts.tv_sec++;
-    }
-    ts.tv_sec += secs;
-RETRY:
-    int rv = clock_nanosleep( CLOCK_REALTIME, TIMER_ABSTIME, &ts, 0 );
-    if ( rv == EINTR ) goto RETRY;
-}
 
 static uint64_t sdlscr_framecnt = 0;
 
@@ -179,7 +149,7 @@ static int sdlscr_worker( void* arg ) {
     sdlev_raise( SDLEV_SCREENWORKERINITDONE );
 
     struct timespec lts;
-    uint64_t lastTick = sdlscr_getnsec( &lts );
+    uint64_t lastTick = sdlutil_getnsec( &lts );
 
     // main loop
     for (;;) {
@@ -227,12 +197,12 @@ static int sdlscr_worker( void* arg ) {
 
         // get current time
         struct timespec ts;
-        uint64_t now  = sdlscr_getnsec( &ts );
+        uint64_t now  = sdlutil_getnsec( &ts );
         uint64_t nsec = now - lastTick;
         if ( nsec < UINT64_C(16666667) ) {
             // make sure at least a 1/60th sec will have passed
             uint64_t toWait = UINT64_C(16666667);
-            sdlscr_nanosleep( toWait, &lts );
+            sdlutil_nanosleep( toWait, &lts );
         }
         lastTick = now; lts = ts;
     }

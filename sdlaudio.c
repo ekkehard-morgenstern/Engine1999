@@ -27,6 +27,7 @@
 #include "sdlaudio.h"
 #include "sdltypes.h"
 #include "sdlevent.h"
+#include "sdlutil.h"
 
 typedef struct _noteent_t {
     const char* name;
@@ -178,7 +179,7 @@ static void sdlaud_initmixer( sdlaud_mixer_t* mixer ) {
     mixer->fill = 0;
 }
 
-void sdlaud_mixer_playnote( sdlaud_mixer_t* mixer, int chan, int note, float vol ) {
+static void sdlaud_mixer_playnote( sdlaud_mixer_t* mixer, int chan, int note, float vol ) {
     if ( chan < 0 || chan >= SDLAUD_LOGCHAN ) {
         return;
     }
@@ -191,7 +192,7 @@ void sdlaud_mixer_playnote( sdlaud_mixer_t* mixer, int chan, int note, float vol
     sdlaud_initchan( &mixer->chan[chan], note, 0.0f, vol );
 }
 
-void sdlaud_mixer_playfreq( sdlaud_mixer_t* mixer, int chan, float freq, float vol ) {
+static void sdlaud_mixer_playfreq( sdlaud_mixer_t* mixer, int chan, float freq, float vol ) {
     if ( chan < 0 || chan >= SDLAUD_LOGCHAN ) {
         return;
     }
@@ -204,7 +205,7 @@ void sdlaud_mixer_playfreq( sdlaud_mixer_t* mixer, int chan, float freq, float v
     sdlaud_initchan( &mixer->chan[chan], -1, freq, vol );
 }
 
-void sdlaud_mixer_stopchan( sdlaud_mixer_t* mixer, int chan ) {
+static void sdlaud_mixer_stopchan( sdlaud_mixer_t* mixer, int chan ) {
     if ( chan < 0 || chan >= SDLAUD_LOGCHAN ) {
         return;
     }
@@ -289,9 +290,98 @@ static void sdlaud_cleanup_sdl( void ) {
     SDL_CloseAudioDevice( sdlaud_id ); sdlaud_id = 0;
 }
 
+typedef enum _sdlaud_msgtype_t {
+    SDLAUD_MSGTYPE_PLAY,
+    SDLAUD_MSGTYPE_TONE,
+    SDLAUD_MSGTYPE_STOP
+} sdlaud_msgtype_t;
+
+typedef struct _sdlaud_workermsg_t {
+    struct timespec     when;
+    sdlaud_msgtype_t    msgtype;
+    int                 chan;
+    int                 note;
+    float               freq;
+    float               vol;
+} sdlaud_workermsg_t;
+
+sdlaud_workermsg_t* sdlaud_create_workermsg( const struct timespec* when, sdlaud_msgtype_t msgtype, int chan ) {
+    sdlaud_workermsg_t* msg = (sdlaud_workermsg_t*) malloc( sizeof(sdlaud_workermsg_t) );
+    if ( msg == 0 ) return 0;
+    memset( msg, 0, sizeof(sdlaud_workermsg_t) );
+    msg->when = *when;
+    msg->msgtype = msgtype;
+    msg->chan = chan;
+    return msg;
+}
+
+static void sdlaud_delete_workermsg( sdlaud_workermsg_t* msg ) {
+    free( msg );
+}
+
+#define SDLAUD_MAXMSG   16384
+
 static bool sdlaud_initok = false;
 static bool sdlaud_request_exit = false;
 static SDL_Thread* sdlaud_workerthr = 0;
+static SDL_mutex* sdlaud_workermtx = 0;
+static sdlaud_workermsg_t* sdlaud_msgqueue[SDLAUD_MAXMSG];
+static int sdlaud_msgrpos = 0;
+static int sdlaud_msgwpos = 0;
+static struct timespec sdlaud_metronome = { 0, 0 };
+int sdlaud_bpm = 60;
+
+void sdlaud_start_metronome( void ) {
+    SDL_LockMutex( sdlaud_workermtx );
+    sdlutil_getnsec( &sdlaud_metronome );
+    SDL_UnlockMutex( sdlaud_workermtx );
+}
+
+void sdlaud_stop_metronome( void ) {
+    SDL_LockMutex( sdlaud_workermtx );
+    memset( &sdlaud_metronome, 0, sizeof(sdlaud_metronome) );
+    SDL_UnlockMutex( sdlaud_workermtx );
+}
+
+void sdlaud_enqueue_msg( sdlaud_workermsg_t* msg ) {
+    SDL_LockMutex( sdlaud_workermtx );
+    int lastpos = sdlaud_msgrpos - 1;
+    bool cando = true;
+    if ( lastpos < 0 ) {
+        lastpos += SDLAUD_MAXMSG;
+    }
+    if ( sdlaud_msgwpos == lastpos ) {
+        cando = false;
+    } else {
+        sdlaud_msgqueue[ sdlaud_msgwpos++ ] = msg;
+        if ( sdlaud_msgwpos >= SDLAUD_MAXMSG ) {
+            sdlaud_msgwpos = 0;
+        }
+    }
+    SDL_UnlockMutex( sdlaud_workermtx );
+    if ( !cando ) {
+        sdlaud_delete_workermsg( msg );
+    }
+}
+
+static sdlaud_workermsg_t* sdlaud_dequeue_msg( struct timespec* pwhen ) {
+    SDL_LockMutex( sdlaud_workermtx );
+    sdlaud_workermsg_t* msg = 0;
+    memset( pwhen, 0, sizeof(struct timespec));
+    if ( sdlaud_msgrpos != sdlaud_msgwpos ) {
+        sdlaud_workermsg_t* candidate = sdlaud_msgqueue[ sdlaud_msgrpos ];
+        struct timespec now;
+        sdlutil_getnsec( &now );
+        int cmp = sdlutil_comparetime( &now, &candidate->when );
+        if ( cmp >= 0 ) {
+            msg = candidate; sdlaud_msgrpos++;
+        } else {
+            *pwhen = candidate->when;
+        }
+    }
+    SDL_UnlockMutex( sdlaud_workermtx );
+    return msg;
+}
 
 static int sdlaud_worker( void* arg ) {
     sdlaud_initok = false;
@@ -299,15 +389,45 @@ static int sdlaud_worker( void* arg ) {
     if ( !sdlaud_init_sdl() ) {
         goto ERR1;
     }
+    sdlaud_workermtx = SDL_CreateMutex();
+    if ( sdlaud_workermtx == 0 ) {
+        fprintf( stderr, "sdlaud_worker: failed to create mutex: %s\n", SDL_GetError() );
+        goto ERR2;
+    }
     sdlaud_initok = true;
     sdlev_raise( SDLEV_AUDIOWORKERINITDONE );
 
     while ( !sdlaud_request_exit ) {
-        SDL_Delay( 20 );
+        struct timespec when;
+        sdlaud_workermsg_t* msg = sdlaud_dequeue_msg( &when );
+        if ( msg == 0 ) {
+            // no immediate message available, check if a time is known
+            if ( when.tv_sec ) {
+                // we (trustfully) sleep until the recommended time has elapsed
+                sdlutil_nanosleep( 0, &when );
+            } else {
+                // sleep 1 msec
+                sdlutil_nanosleep( UINT64_C(1000000), 0 );
+            }
+            continue;
+        }
+        switch ( msg->msgtype ) {
+            case SDLAUD_MSGTYPE_PLAY:
+                sdlaud_mixer_playnote( &sdlaud_mixer, msg->chan, msg->note, msg->vol );
+                break;
+            case SDLAUD_MSGTYPE_TONE:
+                sdlaud_mixer_playfreq( &sdlaud_mixer, msg->chan, msg->freq, msg->vol );
+                break;
+            case SDLAUD_MSGTYPE_STOP:
+                sdlaud_mixer_stopchan( &sdlaud_mixer, msg->chan );
+                break;
+        }
+        sdlaud_delete_workermsg( msg );
     }
 
         sdlaud_initok = false;
-        sdlaud_cleanup_sdl();
+        SDL_DestroyMutex( sdlaud_workermtx ); sdlaud_workermtx = 0;
+ERR2:   sdlaud_cleanup_sdl();
 ERR1:   sdlev_raise( SDLEV_AUDIOWORKERFINISHED );
         return 0;
 }
@@ -377,3 +497,16 @@ void sdlaud_cleanup( void ) {
         SDL_Delay( 1000 );
     }
 }
+
+/* LATER
+
+sdlaud_mixer_playnote( int chan, int note, int vol );
+
+                break;
+            case SDLAUD_MSGTYPE_TONE:
+                sdlaud_mixer_playfreq( &sdlaud_mixer, msg->chan, msg->freq, msg->vol );
+                break;
+            case SDLAUD_MSGTYPE_STOP:
+                sdlaud_mixer_stopchan( &sdlaud_mixer, msg->chan );
+                break;
+*/
