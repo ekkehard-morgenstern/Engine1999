@@ -39,7 +39,7 @@ BASEMOD=sdlevent.o sdllayer.o sdlmain.o sdlscreen.o textscreen.o tilescreen.o sp
 BASEHDR=sdlevent.h sdllayer.h sdlmain.h sdlscreen.h sdltypes.h textscreen.h tilescreen.h sprscreen.h unxtypes.h
 
 sdltest1: main.o $(BASEMOD)
-	$(CL) -o sdltest1 main.o $(BASEMOD) -lSDL2 -lrt
+	$(CL) -o sdltest1 main.o $(BASEMOD) -lSDL2 -lrt -lm
 
 main.o:	main.c $(BASEHDR)
 

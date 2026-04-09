@@ -26,22 +26,21 @@
               Germany, Europe
 */
 
-#ifndef STDTYPES_H
-#define STDTYPES_H  1
+#ifndef SDLAUDIO_H
+#define SDLAUDIO_H  1
 
-#ifndef _POSIX_C_SOURCE
-#define _POSIX_C_SOURCE  200112L
+#ifndef STDTYPES_H
+#include "stdtypes.h"
 #endif
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <stdint.h>
-#include <inttypes.h>
-#include <stdbool.h>
-#include <string.h>
-#include <stdarg.h>
-#include <errno.h>
-#include <time.h>
-#include <math.h>
+#define SDLAUD_BUFFREQ      44100
+#define SDLAUD_BUFSAMPLES   1024
+
+#define SDLAUD_LOGCHAN      8
+
+bool sdlaud_init( void );
+
+void sdlaud_cleanup( void );
+
 
 #endif
