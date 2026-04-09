@@ -178,7 +178,7 @@ static void sdlaud_initmixer( sdlaud_mixer_t* mixer ) {
     mixer->fill = 0;
 }
 
-static void sdlaud_mixer_playnote( sdlaud_mixer_t* mixer, int chan, int note, float vol ) {
+void sdlaud_mixer_playnote( sdlaud_mixer_t* mixer, int chan, int note, float vol ) {
     if ( chan < 0 || chan >= SDLAUD_LOGCHAN ) {
         return;
     }
@@ -191,7 +191,7 @@ static void sdlaud_mixer_playnote( sdlaud_mixer_t* mixer, int chan, int note, fl
     sdlaud_initchan( &mixer->chan[chan], note, 0.0f, vol );
 }
 
-static void sdlaud_mixer_playfreq( sdlaud_mixer_t* mixer, int chan, float freq, float vol ) {
+void sdlaud_mixer_playfreq( sdlaud_mixer_t* mixer, int chan, float freq, float vol ) {
     if ( chan < 0 || chan >= SDLAUD_LOGCHAN ) {
         return;
     }
@@ -204,7 +204,7 @@ static void sdlaud_mixer_playfreq( sdlaud_mixer_t* mixer, int chan, float freq, 
     sdlaud_initchan( &mixer->chan[chan], -1, freq, vol );
 }
 
-static void sdlaud_mixer_stopchan( sdlaud_mixer_t* mixer, int chan ) {
+void sdlaud_mixer_stopchan( sdlaud_mixer_t* mixer, int chan ) {
     if ( chan < 0 || chan >= SDLAUD_LOGCHAN ) {
         return;
     }
@@ -306,13 +306,10 @@ static int sdlaud_worker( void* arg ) {
         SDL_Delay( 20 );
     }
 
-    sdlaud_initok = false;
-    sdlaud_cleanup_sdl();
-    sdlev_raise( SDLEV_AUDIOWORKERFINISHED );
-    return 0;
-
-ERR2:   sdlaud_cleanup_sdl();
-ERR1:   return 0;
+        sdlaud_initok = false;
+        sdlaud_cleanup_sdl();
+ERR1:   sdlev_raise( SDLEV_AUDIOWORKERFINISHED );
+        return 0;
 }
 
 bool sdlaud_init( void ) {
@@ -338,7 +335,7 @@ bool sdlaud_init( void ) {
 static bool sdlaud_cleanup2( void ) {
 
     int recent = sdlev_recent( 1 << SDLEV_AUDIOWORKERFINISHED );
-    if ( recent & SDLEV_AUDIOWORKERFINISHED ) {
+    if ( recent & ( 1 << SDLEV_AUDIOWORKERFINISHED ) ) {
         goto THREAD_DONE;
     }
 

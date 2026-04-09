@@ -286,7 +286,7 @@ bool sdlscr_init( void ) {
 static bool sdlscr_cleanup2( void ) {
 
     int recent = sdlev_recent( 1 << SDLEV_SCREENWORKERFINISHED );
-    if ( recent & SDLEV_SCREENWORKERFINISHED ) {
+    if ( recent & ( 1 << SDLEV_SCREENWORKERFINISHED ) ) {
         goto THREAD_DONE;
     }
 

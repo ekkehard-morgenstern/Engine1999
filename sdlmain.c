@@ -28,8 +28,10 @@
 #include "sdlmain.h"
 #include "sdlevent.h"
 #include "sdlscreen.h"
+#include "sdlaudio.h"
 
 static void sdl_cleanup( void ) {
+    sdlaud_cleanup();
     sdlscr_cleanup();
     SDL_Quit();
 }
@@ -38,13 +40,22 @@ void sdl_init( void ) {
     int rv = SDL_Init( SDL_INIT_EVERYTHING );
     if ( rv < 0 ) {
         fprintf( stderr, "sdl_init(): failed to initialize SDL: %s\n", SDL_GetError() );
-        exit( EXIT_FAILURE );
+        goto ERR1;
     }
     sdlev_init();
     if ( !sdlscr_init() ) {
         fprintf( stderr, "sdl_init(): failed to initialize screen\n" );
-        SDL_Quit();
-        exit( EXIT_FAILURE );
+        goto ERR2;
+    }
+    if ( !sdlaud_init() ) {
+        fprintf( stderr, "sdl_init(): failed to initialize audio\n" );
+        goto ERR3;
     }
     atexit( sdl_cleanup );
+    return;
+
+// ERR4:   sdlaud_cleanup();
+ERR3:   sdlscr_cleanup();
+ERR2:   SDL_Quit();
+ERR1:   exit( EXIT_FAILURE );
 }
