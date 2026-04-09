@@ -40,7 +40,9 @@
 #define SDLEV_SCREENWORKERINITDONE  0
 #define SDLEV_SCREENWORKERFINISHED  1
 #define SDLEV_VBLANK                2
-#define SDLEV_COUNT                 3
+#define SDLEV_AUDIOWORKERINITDONE   3
+#define SDLEV_AUDIOWORKERFINISHED   4
+#define SDLEV_COUNT                 5
 
 void sdlev_init( void );
 void sdlev_raise( int evt );
