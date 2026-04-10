@@ -50,11 +50,10 @@ static const noteent_t sdlaud_notedefs[NUM_NOTEDEFS] = {
 };
 
 typedef struct _sdlaud_wave_t {
-    float   buf[SDLAUD_BUFSAMPLES];
-    float   amp;
-    float   freq;
-    int     nsamp;
+    float*  buf;
+    float   angle;
     int     rpos;
+    int     fill;
 } sdlaud_wave_t;
 
 #define SAMPLEDUR   2.26757369614e-05f
@@ -65,60 +64,114 @@ static int sdlaud_samplecnt( float freq ) {
     return (int) truncf( numcyc );
 }
 
-static void sdlaud_renderwave( float* buf, int nsamp, float vol ) {
-    float anglestep = ( 2.0f * 3.14159265f ) / ( (float) nsamp );
-    float angle = 0.0f;
-    float* ptr = buf;
-    for ( int i=0; i < nsamp; ++i ) {
-        *ptr++ = sinf( angle ) * vol;
-        angle += anglestep;
+static void sdlaud_renderwave( sdlaud_wave_t* wave, int projnsamp, float amp ) {
+    float anglestep = ( 2.0f * 3.14159265f ) / ( (float) projnsamp );
+    for ( int i=0; i < projnsamp; ++i ) {
+        wave->buf[ wave->fill++ ] = sinf( wave->angle ) * amp;
+        wave->angle += anglestep;
     }
 }
 
-static void sdlaud_initwave( sdlaud_wave_t* wave, float freq, float vol ) {
-    wave->nsamp = sdlaud_samplecnt( freq );
-    if ( wave->nsamp > SDLAUD_BUFSAMPLES ) {
-        wave->nsamp = SDLAUD_BUFSAMPLES;
-    } else if ( wave->nsamp < 13 ) {    // highest permissible note
-        wave->nsamp = 13;
+static sdlaud_wave_t* sdlaud_createwave( float freq, float vol, float angle ) {
+    sdlaud_wave_t* wave = (sdlaud_wave_t*) SDL_malloc( sizeof(sdlaud_wave_t) );
+    if ( wave == 0 ) return 0;
+    int projnsamp = sdlaud_samplecnt( freq );
+    if ( projnsamp > SDLAUD_BUFSAMPLES ) {
+        projnsamp = SDLAUD_BUFSAMPLES;
+    } else if ( projnsamp < 13 ) {    // highest permissible note
+        projnsamp = 13;
     }
-    wave->freq = freq;
-    wave->amp  = vol;
-    wave->rpos = wave->rpos < 0 ? 0 : ( wave->rpos >= wave->nsamp ? 0 : wave->rpos );
-    sdlaud_renderwave( wave->buf, wave->nsamp, vol );
+    wave->buf = (float*) SDL_malloc( sizeof(float) * projnsamp );
+    if ( wave->buf == 0 ) {
+        SDL_free( wave );
+        return 0;
+    }
+    wave->angle = angle;
+    wave->fill  = 0;
+    wave->rpos  = 0;
+    if ( vol == 0.0f ) {
+        memset( wave->buf, 0, sizeof(float) * projnsamp );
+        wave->fill = projnsamp;
+    } else {
+        sdlaud_renderwave( wave, projnsamp, vol );
+    }
+    return wave;
 }
 
-static void sdlaud_silencewave( sdlaud_wave_t* wave ) {
-    sdlaud_initwave( wave, 440.0f, 0.0f );
+static void sdlaud_deletewave( sdlaud_wave_t* wave ) {
+    SDL_free( wave->buf ); wave->buf = 0;
+    SDL_free( wave );
 }
 
-static void sdlaud_readwave( sdlaud_wave_t* wave, float* buf, int count ) {
-    if ( wave->nsamp < 0 || wave->rpos < 0 ) {
-        return; // sanity check
-    }
-    if ( wave->rpos >= wave->nsamp ) {
-        wave->rpos = 0;
-    }
+/* static sdlaud_wave_t* sdlaud_createsilence( void ) {
+    return sdlaud_createwave( 440.0f, 0.0f, 0.0f );
+} */
+
+static int sdlaud_readwave( sdlaud_wave_t* wave, float* buf, int count ) {
     int pos = 0;
     while ( pos < count ) {
         int remain_target = count - pos;
-        int remain_source = wave->nsamp - wave->rpos;
-        int tocopy        = remain_source < remain_target ? remain_source : remain_target;
+        int remain_source = wave->fill - wave->rpos;
+        int tocopy = remain_source < remain_target ? remain_source : remain_target;
         memcpy( &buf[pos], &wave->buf[wave->rpos], sizeof(float) * tocopy );
         pos += tocopy;
         wave->rpos += tocopy;
-        if ( wave->rpos >= wave->nsamp ) {
+        if ( wave->rpos >= wave->fill ) {
             wave->rpos = 0;
+            break;
         }
     }
+    return pos;
 }
 
+#define WAVEQUEUE_SIZE  512
+
 typedef struct _sdlaud_inst_t {
-    sdlaud_wave_t   wave;
+    sdlaud_wave_t*  wavequeue[WAVEQUEUE_SIZE];
+    int             qrpos, qwpos, waves;
     float           vol;
     float           freq;
+    float           angle;
     int             note;
 } sdlaud_inst_t;
+
+static bool sdlaud_enqueuewave( sdlaud_inst_t* inst, sdlaud_wave_t* wave ) {
+    int limit = inst->qrpos - 1;
+    if ( limit < 0 ) limit += WAVEQUEUE_SIZE;
+    if ( inst->qwpos == limit ) {
+        return false;
+    }
+    inst->wavequeue[ inst->qwpos++ ] = wave;
+    if ( inst->qwpos >= WAVEQUEUE_SIZE ) {
+        inst->qwpos = 0;
+    }
+    ++inst->waves;
+    return true;
+}
+
+static sdlaud_wave_t* sdlaud_dequeuewave( sdlaud_inst_t* inst ) {
+    if ( inst->qrpos == inst->qwpos || inst->waves < 1 ) {
+        return 0;
+    }
+    sdlaud_wave_t* wave = inst->wavequeue[ inst->qrpos++ ];
+    if ( inst->qrpos >= WAVEQUEUE_SIZE ) {
+        inst->qrpos = 0;
+    }
+    --inst->waves;
+    return wave;
+}
+
+static sdlaud_wave_t* sdlaud_peekwave( sdlaud_inst_t* inst ) {
+    if ( inst->qrpos == inst->qwpos || inst->waves < 1 ) {
+        return 0;
+    }
+    return inst->wavequeue[ inst->qrpos ];
+}
+
+static void sdlaud_prepareinst( sdlaud_inst_t* inst ) {
+    memset( inst, 0, sizeof(sdlaud_inst_t) );
+    inst->note = -1;
+}
 
 static void sdlaud_initinst( sdlaud_inst_t* inst, int note, float freq, float vol ) {
     if ( note == -1 ) {
@@ -135,18 +188,44 @@ static void sdlaud_initinst( sdlaud_inst_t* inst, int note, float freq, float vo
         inst->freq = sdlaud_notedefs[ inst->note ].freq;
     }
     inst->vol = vol;
-    sdlaud_initwave( &inst->wave, inst->freq, inst->vol );
+    if ( inst->waves == 0 ) inst->angle = 0.0f;
+    sdlaud_wave_t* wave = sdlaud_createwave( inst->freq, inst->vol, inst->angle );
+    if ( wave ) {
+        inst->angle = wave->angle;
+        sdlaud_enqueuewave( inst, wave );
+    }
 }
 
 static void sdlaud_silenceinst( sdlaud_inst_t* inst ) {
-    inst->freq = 440.0f;
-    inst->note = -1;
-    inst->vol  = 0.0f;
-    sdlaud_silencewave( &inst->wave );
+    for (;;) {
+        sdlaud_wave_t* wave = sdlaud_dequeuewave( inst );
+        if ( wave == 0 ) break;
+        sdlaud_deletewave( wave );
+    }
 }
 
 static void sdlaud_readinst( sdlaud_inst_t* inst, float* buf, int count ) {
-    sdlaud_readwave( &inst->wave, buf, count );
+    if ( inst->waves == 0 ) {
+        memset( buf, 0, sizeof(float) * count );
+        return;
+    }
+    while ( count > 0 ) {
+
+        sdlaud_wave_t* wave = sdlaud_peekwave( inst );
+        if ( wave == 0 ) {
+            memset( buf, 0, sizeof(float) * count );
+            break;
+        }
+
+        int copied = sdlaud_readwave( wave, buf, count );
+
+        if ( inst->waves > 1 ) {
+            sdlaud_dequeuewave( inst );
+            sdlaud_deletewave( wave );
+        }
+
+        count -= copied; buf += copied;
+    }
 }
 
 typedef struct _sdlaud_chan_t {
@@ -154,6 +233,10 @@ typedef struct _sdlaud_chan_t {
     float           vol;
     bool            active;
 } sdlaud_chan_t;
+
+static void sdlaud_preparechan( sdlaud_chan_t* chan) {
+    sdlaud_prepareinst( &chan->inst );
+}
 
 static void sdlaud_initchan( sdlaud_chan_t* chan, int note, float freq, float vol ) {
     chan->vol = vol;
@@ -183,6 +266,7 @@ typedef struct _sdlaud_mixer_t {
 
 static void sdlaud_initmixer( sdlaud_mixer_t* mixer ) {
     for ( int i=0; i < SDLAUD_LOGCHAN; ++i ) {
+        sdlaud_preparechan( &mixer->chan[i] );
         sdlaud_silencechan( &mixer->chan[i] );
     }
     memset( &mixer->chnbuf[0][0], 0, sizeof(float) * SDLAUD_LOGCHAN * MIXBUF_SAMP );
