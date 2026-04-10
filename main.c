@@ -287,12 +287,12 @@ int main( int argc, char** argv ) {
             int from = 110 + ( rand() % 331 );
             int to   = 110 + ( rand() % 331 );
             if ( from > to ) {
-                for ( int i=from; i >= to; --i ) {
+                for ( int i=from; i >= to; i -= 10 ) {
                     sdlaud_playfreq( c, i, 0.5f, 0.0625f );
                 }
                 sdlaud_stopchan( c, 0 );
             } else if ( from < to ) {
-                for ( int i=from; i <= to; ++i ) {
+                for ( int i=from; i <= to; i += 10 ) {
                     sdlaud_playfreq( c, i, 0.5f, 0.0625f );
                 }
                 sdlaud_stopchan( c, 0 );

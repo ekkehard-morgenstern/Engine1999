@@ -254,7 +254,7 @@ static void sdlaud_readchan( sdlaud_chan_t* chan, float* buf, int count ) {
     sdlaud_readinst( &chan->inst, buf, count );
 }
 
-#define MIXBUF_SAMP     256
+#define MIXBUF_SAMP     1024
 
 typedef struct _sdlaud_mixer_t {
     sdlaud_chan_t chan[SDLAUD_LOGCHAN];
