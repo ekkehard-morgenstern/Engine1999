@@ -206,6 +206,7 @@ static void sdlaud_silenceinst( sdlaud_inst_t* inst ) {
 
 static void sdlaud_readinst( sdlaud_inst_t* inst, float* buf, int count ) {
     if ( inst->waves == 0 ) {
+        inst->angle = 0.0f;
         memset( buf, 0, sizeof(float) * count );
         return;
     }
@@ -213,13 +214,14 @@ static void sdlaud_readinst( sdlaud_inst_t* inst, float* buf, int count ) {
 
         sdlaud_wave_t* wave = sdlaud_peekwave( inst );
         if ( wave == 0 ) {
+            inst->angle = 0.0f;
             memset( buf, 0, sizeof(float) * count );
             break;
         }
 
         int copied = sdlaud_readwave( wave, buf, count );
 
-        if ( inst->waves > 1 ) {
+        if ( wave->rpos == 0 && inst->waves > 1 ) {
             sdlaud_dequeuewave( inst );
             sdlaud_deletewave( wave );
         }
