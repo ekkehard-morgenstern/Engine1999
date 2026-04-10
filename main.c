@@ -281,6 +281,23 @@ int main( int argc, char** argv ) {
             if ( --spy[i] < -SPRITE_HEIGHT ) spy[i] = SPRTGT_HEIGHT;
             sdlscr_movesprite( i, spx[i], spy[i] );
         }
+        int r = rand() % 100;
+        if ( r < 10 ) {
+            int c    = 4 + ( rand() & 3 );
+            int from = 110 + ( rand() % 331 );
+            int to   = 110 + ( rand() % 331 );
+            if ( from > to ) {
+                for ( int i=from; i >= to; --i ) {
+                    sdlaud_playfreq( c, i, 0.5f, 0.0625f );
+                }
+                sdlaud_stopchan( c, 0 );
+            } else if ( from < to ) {
+                for ( int i=from; i <= to; ++i ) {
+                    sdlaud_playfreq( c, i, 0.5f, 0.0625f );
+                }
+                sdlaud_stopchan( c, 0 );
+            }
+        }
         int ev = sdlev_wait( SDLEV_VBLANK | SDLEV_SCREENWORKERFINISHED );
         if ( ev & SDLEV_SCREENWORKERFINISHED ) break;
     }

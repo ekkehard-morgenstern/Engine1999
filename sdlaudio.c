@@ -84,6 +84,7 @@ static void sdlaud_initwave( sdlaud_wave_t* wave, float freq, float vol ) {
     }
     wave->freq = freq;
     wave->amp  = vol;
+    wave->rpos = wave->rpos < 0 ? 0 : ( wave->rpos >= wave->nsamp ? 0 : wave->rpos );
     sdlaud_renderwave( wave->buf, wave->nsamp, vol );
 }
 
@@ -92,7 +93,12 @@ static void sdlaud_silencewave( sdlaud_wave_t* wave ) {
 }
 
 static void sdlaud_readwave( sdlaud_wave_t* wave, float* buf, int count ) {
-    if ( wave->nsamp < 0 ) return; // sanity check
+    if ( wave->nsamp < 0 || wave->rpos < 0 ) {
+        return; // sanity check
+    }
+    if ( wave->rpos >= wave->nsamp ) {
+        wave->rpos = 0;
+    }
     int pos = 0;
     while ( pos < count ) {
         int remain_target = count - pos;
@@ -256,6 +262,7 @@ static void sdlaud_mixer_mix( sdlaud_mixer_t* mixer, int maxsamp ) {
         mixer->sumbuf[j] *= mult;
     }
     mixer->fill = maxsamp;
+    mixer->rpos = 0;
 }
 
 static void sdlaud_mixer_read( sdlaud_mixer_t* mixer, float* buf, int count ) {
