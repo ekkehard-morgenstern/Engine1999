@@ -34,7 +34,7 @@
 
 uint64_t sdlutil_getnsec( struct timespec* pts );
 int sdlutil_comparetime( const struct timespec* a, const struct timespec* b );
-void sdlutil_projecttime( uint16_t nsec, const struct timespec* from, struct timespec* to );
+void sdlutil_projecttime( uint64_t nsec, const struct timespec* from, struct timespec* to );
 void sdlutil_nanosleep( uint64_t nsec, const struct timespec* pts );
 
 #endif

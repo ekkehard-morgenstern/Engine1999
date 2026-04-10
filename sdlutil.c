@@ -49,7 +49,7 @@ int sdlutil_comparetime( const struct timespec* a, const struct timespec* b ) {
     return 0;
 }
 
-void sdlutil_projecttime( uint16_t nsec, const struct timespec* from, struct timespec* to ) {
+void sdlutil_projecttime( uint64_t nsec, const struct timespec* from, struct timespec* to ) {
     struct timespec ts;
     if ( from ) {
         ts = *from;
