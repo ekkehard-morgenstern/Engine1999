@@ -258,8 +258,11 @@ int main( int argc, char** argv ) {
     }
 
     sdlaud_playnote( 0, 12, 0.75f, 1.0f );
-    sdlaud_playnote( 1, 14, 0.75f, 1.0f );
-    sdlaud_playnote( 2, 16, 0.75f, 1.0f );
+    sdlaud_stopchan( 0, 0 );
+    sdlaud_playnote( 0, 14, 0.75f, 1.0f );
+    sdlaud_stopchan( 0, 0 );
+    sdlaud_playnote( 0, 16, 0.75f, 1.0f );
+    sdlaud_stopchan( 0, 0 );
 
     // uint64_t last = sdlscr_getnsec(0);
     int scrollx = 0, scrolly = 0;
