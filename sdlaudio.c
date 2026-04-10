@@ -182,12 +182,19 @@ static void sdlaud_initmixer( sdlaud_mixer_t* mixer ) {
     mixer->fill = 0;
 }
 
-static bool sdlaud_mixer_active( const sdlaud_mixer_t* mixer ) {
+static bool sdlaud_mixer_active_chan( const sdlaud_mixer_t* mixer, int chan ) {
+    if ( chan < 0 || chan >= SDLAUD_LOGCHAN ) {
+        return false;
+    }
+    return mixer->chan[ chan ].active;
+}
+
+/* static bool sdlaud_mixer_active( const sdlaud_mixer_t* mixer ) {
     for ( int i=0; i < SDLAUD_LOGCHAN; ++i ) {
         if ( mixer->chan[i].active ) return true;
     }
     return false;
-}
+} */
 
 static void sdlaud_mixer_playnote( sdlaud_mixer_t* mixer, int chan, int note, float vol ) {
     if ( chan < 0 || chan >= SDLAUD_LOGCHAN ) {
@@ -271,9 +278,12 @@ static void sdlaud_mixer_read( sdlaud_mixer_t* mixer, float* buf, int count ) {
 static SDL_AudioSpec sdlaud_spec_in, sdlaud_spec_out;
 static SDL_AudioDeviceID sdlaud_id;
 static sdlaud_mixer_t sdlaud_mixer;
+static SDL_mutex* sdlaud_mixer_mtx = 0;
 
 static void sdlaud_callback( void* userdata, Uint8* stream, int len ) {
+    SDL_LockMutex( sdlaud_mixer_mtx );
     sdlaud_mixer_read( &sdlaud_mixer, (float*) stream, len / sizeof(float) );
+    SDL_UnlockMutex( sdlaud_mixer_mtx );
 }
 
 static bool sdlaud_init_sdl( void ) {
@@ -338,42 +348,61 @@ static SDL_mutex* sdlaud_workermtx = 0;
 static sdlaud_workermsg_t* sdlaud_msgqueue[SDLAUD_MAXMSG];
 static int sdlaud_msgrpos = 0;
 static int sdlaud_msgwpos = 0;
-static struct timespec sdlaud_metronome = { 0, 0 };
+static struct timespec sdlaud_metronome[SDLAUD_LOGCHAN];
 static int sdlaud_bpm = 60;
 
-static void sdlaud_start_metronome( void ) {
+static void sdlaud_init_msgqueue( void ) {
+    memset( sdlaud_msgqueue, 0, sizeof(sdlaud_workermsg_t*) * SDLAUD_MAXMSG );
+}
+
+static void sdlaud_init_metronomes( void ) {
+    memset( &sdlaud_metronome[0], 0, sizeof(struct timespec) * SDLAUD_LOGCHAN );
+}
+
+static void sdlaud_start_metronome( int chan ) {
+    if ( chan < 0 || chan >= SDLAUD_LOGCHAN ) return;
     SDL_LockMutex( sdlaud_workermtx );
-    sdlutil_getnsec( &sdlaud_metronome );
+    sdlutil_getnsec( &sdlaud_metronome[ chan ] );
     SDL_UnlockMutex( sdlaud_workermtx );
 }
 
-static void sdlaud_stop_metronome( void ) {
+static void sdlaud_stop_metronome( int chan ) {
+    if ( chan < 0 || chan >= SDLAUD_LOGCHAN ) return;
     SDL_LockMutex( sdlaud_workermtx );
-    memset( &sdlaud_metronome, 0, sizeof(sdlaud_metronome) );
+    memset( &sdlaud_metronome[ chan ], 0, sizeof(struct timespec) );
     SDL_UnlockMutex( sdlaud_workermtx );
 }
 
-/* void sdlaud_advance_metronome( uint64_t nsec ) {
+/* void sdlaud_advance_metronome( int chan, uint64_t nsec ) {
+    if ( chan < 0 || chan >= SDLAUD_LOGCHAN ) return;
     SDL_LockMutex( sdlaud_workermtx );
-    sdlutil_projecttime( nsec, &sdlaud_metronome, &sdlaud_metronome );
+    sdlutil_projecttime( nsec, &sdlaud_metronome[ chan ], &sdlaud_metronome[ chan ] );
     SDL_UnlockMutex( sdlaud_workermtx );
 } */
 
-static void sdlaud_get_metronome( struct timespec* to ) {
+static void sdlaud_get_metronome( struct timespec* to, int chan ) {
+    if ( chan < 0 || chan >= SDLAUD_LOGCHAN ) {
+        memset( to, 0, sizeof(struct timespec) );
+        return;
+    }
     SDL_LockMutex( sdlaud_workermtx );
-    *to = sdlaud_metronome;
+    *to = sdlaud_metronome[ chan ];
     SDL_UnlockMutex( sdlaud_workermtx );
 }
 
-static void sdlaud_get_event_start_time( struct timespec* to, float beats ) {
+static void sdlaud_get_event_start_time( struct timespec* to, int chan, float beats ) {
+    if ( chan < 0 || chan >= SDLAUD_LOGCHAN ) {
+        memset( to, 0, sizeof(struct timespec) );
+        return;
+    }
     float duration_minutes = beats / ( (float) sdlaud_bpm );
     uint64_t duration_nsec = (int64_t)( duration_minutes * 60000000000.0f );
     SDL_LockMutex( sdlaud_workermtx );
-    if ( sdlaud_metronome.tv_sec == 0 ) {
-        sdlutil_getnsec( &sdlaud_metronome );
+    if ( sdlaud_metronome[ chan ].tv_sec == 0 ) {
+        sdlutil_getnsec( &sdlaud_metronome[ chan ] );
     }
-    *to = sdlaud_metronome;
-    sdlutil_projecttime( duration_nsec, &sdlaud_metronome, &sdlaud_metronome );
+    *to = sdlaud_metronome[ chan ];
+    sdlutil_projecttime( duration_nsec, &sdlaud_metronome[ chan ], &sdlaud_metronome[ chan ] );
     SDL_UnlockMutex( sdlaud_workermtx );
 }
 
@@ -384,7 +413,7 @@ static void sdlaud_enqueue_msg( sdlaud_workermsg_t* msg ) {
     if ( lastpos < 0 ) {
         lastpos += SDLAUD_MAXMSG;
     }
-    if ( sdlaud_msgwpos == lastpos ) {
+    if ( sdlaud_msgwpos == lastpos || sdlaud_msgqueue[ sdlaud_msgwpos ] != 0 ) {
         cando = false;
     } else {
         sdlaud_msgqueue[ sdlaud_msgwpos++ ] = msg;
@@ -408,7 +437,7 @@ static sdlaud_workermsg_t* sdlaud_dequeue_msg( struct timespec* pwhen ) {
         sdlutil_getnsec( &now );
         int cmp = sdlutil_comparetime( &now, &candidate->when );
         if ( cmp >= 0 ) {
-            msg = candidate; sdlaud_msgrpos++;
+            msg = candidate; sdlaud_msgqueue[ sdlaud_msgrpos++ ] = 0;
             if ( sdlaud_msgrpos >= SDLAUD_MAXMSG ) {
                 sdlaud_msgrpos = 0;
             }
@@ -423,14 +452,21 @@ static sdlaud_workermsg_t* sdlaud_dequeue_msg( struct timespec* pwhen ) {
 static int sdlaud_worker( void* arg ) {
     sdlaud_initok = false;
     sdlaud_request_exit = false;
-    if ( !sdlaud_init_sdl() ) {
+    sdlaud_mixer_mtx = SDL_CreateMutex();
+    if ( sdlaud_mixer_mtx == 0 ) {
+        fprintf( stderr, "sdlaud_worker: failed to create mutex: %s\n", SDL_GetError() );
         goto ERR1;
+    }
+    if ( !sdlaud_init_sdl() ) {
+        goto ERR2;
     }
     sdlaud_workermtx = SDL_CreateMutex();
     if ( sdlaud_workermtx == 0 ) {
         fprintf( stderr, "sdlaud_worker: failed to create mutex: %s\n", SDL_GetError() );
-        goto ERR2;
+        goto ERR3;
     }
+    sdlaud_init_msgqueue();
+    sdlaud_init_metronomes();
     sdlaud_initok = true;
     sdlev_raise( SDLEV_AUDIOWORKERINITDONE );
 
@@ -449,25 +485,31 @@ static int sdlaud_worker( void* arg ) {
             continue;
         }
         struct timespec metronome;
-        sdlaud_get_metronome( &metronome );
+        sdlaud_get_metronome( &metronome, msg->chan );
         bool metronome_on = metronome.tv_sec != 0;
         switch ( msg->msgtype ) {
             case SDLAUD_MSGTYPE_PLAY:
+                SDL_LockMutex( sdlaud_mixer_mtx );
                 sdlaud_mixer_playnote( &sdlaud_mixer, msg->chan, msg->note, msg->vol );
-                if ( !metronome_on && sdlaud_mixer_active( &sdlaud_mixer ) ) {
-                    sdlaud_start_metronome();
+                SDL_UnlockMutex( sdlaud_mixer_mtx );
+                if ( !metronome_on && sdlaud_mixer_active_chan( &sdlaud_mixer, msg->chan ) ) {
+                    sdlaud_start_metronome( msg->chan );
                 }
                 break;
             case SDLAUD_MSGTYPE_TONE:
+                SDL_LockMutex( sdlaud_mixer_mtx );
                 sdlaud_mixer_playfreq( &sdlaud_mixer, msg->chan, msg->freq, msg->vol );
-                if ( !metronome_on && sdlaud_mixer_active( &sdlaud_mixer ) ) {
-                    sdlaud_start_metronome();
+                SDL_UnlockMutex( sdlaud_mixer_mtx );
+                if ( !metronome_on && sdlaud_mixer_active_chan( &sdlaud_mixer, msg->chan ) ) {
+                    sdlaud_start_metronome( msg->chan );
                 }
                 break;
             case SDLAUD_MSGTYPE_STOP:
+                SDL_LockMutex( sdlaud_mixer_mtx );
                 sdlaud_mixer_stopchan( &sdlaud_mixer, msg->chan );
-                if ( metronome_on && !sdlaud_mixer_active( &sdlaud_mixer ) ) {
-                    sdlaud_stop_metronome();
+                SDL_UnlockMutex( sdlaud_mixer_mtx );
+                if ( metronome_on && !sdlaud_mixer_active_chan( &sdlaud_mixer, msg->chan ) ) {
+                    sdlaud_stop_metronome( msg->chan );
                 }
                 break;
         }
@@ -476,7 +518,8 @@ static int sdlaud_worker( void* arg ) {
 
         sdlaud_initok = false;
         SDL_DestroyMutex( sdlaud_workermtx ); sdlaud_workermtx = 0;
-ERR2:   sdlaud_cleanup_sdl();
+ERR3:   sdlaud_cleanup_sdl();
+ERR2:   SDL_DestroyMutex( sdlaud_mixer_mtx ); sdlaud_mixer_mtx = 0;
 ERR1:   sdlev_raise( SDLEV_AUDIOWORKERFINISHED );
         return 0;
 }
@@ -549,7 +592,7 @@ void sdlaud_cleanup( void ) {
 
 void sdlaud_playnote( int chan, int note, float vol, float beats ) {
     struct timespec when;
-    sdlaud_get_event_start_time( &when, beats );
+    sdlaud_get_event_start_time( &when, chan, beats );
     sdlaud_workermsg_t* msg = sdlaud_create_workermsg( &when, SDLAUD_MSGTYPE_PLAY, chan );
     if ( msg == 0 ) return;
     msg->note = note;
@@ -559,7 +602,7 @@ void sdlaud_playnote( int chan, int note, float vol, float beats ) {
 
 void sdlaud_playfreq( int chan, float freq, float vol, float beats ) {
     struct timespec when;
-    sdlaud_get_event_start_time( &when, beats );
+    sdlaud_get_event_start_time( &when, chan, beats );
     sdlaud_workermsg_t* msg = sdlaud_create_workermsg( &when, SDLAUD_MSGTYPE_TONE, chan );
     if ( msg == 0 ) return;
     msg->freq = freq;
@@ -569,7 +612,7 @@ void sdlaud_playfreq( int chan, float freq, float vol, float beats ) {
 
 void sdlaud_stopchan( int chan, float beats ) {
     struct timespec when;
-    sdlaud_get_event_start_time( &when, beats );
+    sdlaud_get_event_start_time( &when, chan, beats );
     sdlaud_workermsg_t* msg = sdlaud_create_workermsg( &when, SDLAUD_MSGTYPE_STOP, chan );
     if ( msg == 0 ) return;
     sdlaud_enqueue_msg( msg );

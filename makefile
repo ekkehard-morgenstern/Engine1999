@@ -24,7 +24,13 @@
 
 CCOMP=gcc
 
-CFLAGS=-Wall -Werror -p -O3 -march=native -mtune=native
+ifdef DEBUG
+DBGFLG=-g
+else
+DBGFLG=-O3
+endif
+
+CFLAGS=-Wall -Werror -p $(DBGFLG) -march=native -mtune=native
 
 CC=$(CCOMP) -c $(CFLAGS)
 CL=$(CCOMP) $(CFLAGS)
