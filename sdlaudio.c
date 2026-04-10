@@ -409,6 +409,9 @@ static sdlaud_workermsg_t* sdlaud_dequeue_msg( struct timespec* pwhen ) {
         int cmp = sdlutil_comparetime( &now, &candidate->when );
         if ( cmp >= 0 ) {
             msg = candidate; sdlaud_msgrpos++;
+            if ( sdlaud_msgrpos >= SDLAUD_MAXMSG ) {
+                sdlaud_msgrpos = 0;
+            }
         } else {
             *pwhen = candidate->when;
         }
