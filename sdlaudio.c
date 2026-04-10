@@ -143,16 +143,19 @@ static void sdlaud_readinst( sdlaud_inst_t* inst, float* buf, int count ) {
 typedef struct _sdlaud_chan_t {
     sdlaud_inst_t   inst;
     float           vol;
+    bool            active;
 } sdlaud_chan_t;
 
 static void sdlaud_initchan( sdlaud_chan_t* chan, int note, float freq, float vol ) {
     chan->vol = vol;
     sdlaud_initinst( &chan->inst, note, freq, vol );
+    chan->active = true;
 }
 
 static void sdlaud_silencechan( sdlaud_chan_t* chan ) {
     chan->vol = 0.0f;
     sdlaud_silenceinst( &chan->inst );
+    chan->active = false;
 }
 
 static void sdlaud_readchan( sdlaud_chan_t* chan, float* buf, int count ) {
@@ -177,6 +180,13 @@ static void sdlaud_initmixer( sdlaud_mixer_t* mixer ) {
     memset( &mixer->sumbuf[0], 0, sizeof(float) * MIXBUF_SAMP );
     mixer->rpos = 0;
     mixer->fill = 0;
+}
+
+static bool sdlaud_mixer_active( const sdlaud_mixer_t* mixer ) {
+    for ( int i=0; i < SDLAUD_LOGCHAN; ++i ) {
+        if ( mixer->chan[i].active ) return true;
+    }
+    return false;
 }
 
 static void sdlaud_mixer_playnote( sdlaud_mixer_t* mixer, int chan, int note, float vol ) {
@@ -305,7 +315,7 @@ typedef struct _sdlaud_workermsg_t {
     float               vol;
 } sdlaud_workermsg_t;
 
-sdlaud_workermsg_t* sdlaud_create_workermsg( const struct timespec* when, sdlaud_msgtype_t msgtype, int chan ) {
+static sdlaud_workermsg_t* sdlaud_create_workermsg( const struct timespec* when, sdlaud_msgtype_t msgtype, int chan ) {
     sdlaud_workermsg_t* msg = (sdlaud_workermsg_t*) malloc( sizeof(sdlaud_workermsg_t) );
     if ( msg == 0 ) return 0;
     memset( msg, 0, sizeof(sdlaud_workermsg_t) );
@@ -329,21 +339,45 @@ static sdlaud_workermsg_t* sdlaud_msgqueue[SDLAUD_MAXMSG];
 static int sdlaud_msgrpos = 0;
 static int sdlaud_msgwpos = 0;
 static struct timespec sdlaud_metronome = { 0, 0 };
-int sdlaud_bpm = 60;
+static int sdlaud_bpm = 60;
 
-void sdlaud_start_metronome( void ) {
+static void sdlaud_start_metronome( void ) {
     SDL_LockMutex( sdlaud_workermtx );
     sdlutil_getnsec( &sdlaud_metronome );
     SDL_UnlockMutex( sdlaud_workermtx );
 }
 
-void sdlaud_stop_metronome( void ) {
+static void sdlaud_stop_metronome( void ) {
     SDL_LockMutex( sdlaud_workermtx );
     memset( &sdlaud_metronome, 0, sizeof(sdlaud_metronome) );
     SDL_UnlockMutex( sdlaud_workermtx );
 }
 
-void sdlaud_enqueue_msg( sdlaud_workermsg_t* msg ) {
+/* void sdlaud_advance_metronome( uint64_t nsec ) {
+    SDL_LockMutex( sdlaud_workermtx );
+    sdlutil_projecttime( nsec, &sdlaud_metronome, &sdlaud_metronome );
+    SDL_UnlockMutex( sdlaud_workermtx );
+} */
+
+static void sdlaud_get_metronome( struct timespec* to ) {
+    SDL_LockMutex( sdlaud_workermtx );
+    *to = sdlaud_metronome;
+    SDL_UnlockMutex( sdlaud_workermtx );
+}
+
+static void sdlaud_get_event_start_time( struct timespec* to, float beats ) {
+    float duration_minutes = beats / ( (float) sdlaud_bpm );
+    uint64_t duration_nsec = (int64_t)( duration_minutes * 60000000000.0f );
+    SDL_LockMutex( sdlaud_workermtx );
+    if ( sdlaud_metronome.tv_sec == 0 ) {
+        sdlutil_getnsec( &sdlaud_metronome );
+    }
+    *to = sdlaud_metronome;
+    sdlutil_projecttime( duration_nsec, &sdlaud_metronome, &sdlaud_metronome );
+    SDL_UnlockMutex( sdlaud_workermtx );
+}
+
+static void sdlaud_enqueue_msg( sdlaud_workermsg_t* msg ) {
     SDL_LockMutex( sdlaud_workermtx );
     int lastpos = sdlaud_msgrpos - 1;
     bool cando = true;
@@ -411,15 +445,27 @@ static int sdlaud_worker( void* arg ) {
             }
             continue;
         }
+        struct timespec metronome;
+        sdlaud_get_metronome( &metronome );
+        bool metronome_on = metronome.tv_sec != 0;
         switch ( msg->msgtype ) {
             case SDLAUD_MSGTYPE_PLAY:
                 sdlaud_mixer_playnote( &sdlaud_mixer, msg->chan, msg->note, msg->vol );
+                if ( !metronome_on && sdlaud_mixer_active( &sdlaud_mixer ) ) {
+                    sdlaud_start_metronome();
+                }
                 break;
             case SDLAUD_MSGTYPE_TONE:
                 sdlaud_mixer_playfreq( &sdlaud_mixer, msg->chan, msg->freq, msg->vol );
+                if ( !metronome_on && sdlaud_mixer_active( &sdlaud_mixer ) ) {
+                    sdlaud_start_metronome();
+                }
                 break;
             case SDLAUD_MSGTYPE_STOP:
                 sdlaud_mixer_stopchan( &sdlaud_mixer, msg->chan );
+                if ( metronome_on && !sdlaud_mixer_active( &sdlaud_mixer ) ) {
+                    sdlaud_stop_metronome();
+                }
                 break;
         }
         sdlaud_delete_workermsg( msg );
@@ -498,15 +544,30 @@ void sdlaud_cleanup( void ) {
     }
 }
 
-/* LATER
+void sdlaud_playnote( int chan, int note, float vol, float beats ) {
+    struct timespec when;
+    sdlaud_get_event_start_time( &when, beats );
+    sdlaud_workermsg_t* msg = sdlaud_create_workermsg( &when, SDLAUD_MSGTYPE_PLAY, chan );
+    if ( msg == 0 ) return;
+    msg->note = note;
+    msg->vol  = vol;
+    sdlaud_enqueue_msg( msg );
+}
 
-sdlaud_mixer_playnote( int chan, int note, int vol );
+void sdlaud_playfreq( int chan, float freq, float vol, float beats ) {
+    struct timespec when;
+    sdlaud_get_event_start_time( &when, beats );
+    sdlaud_workermsg_t* msg = sdlaud_create_workermsg( &when, SDLAUD_MSGTYPE_TONE, chan );
+    if ( msg == 0 ) return;
+    msg->freq = freq;
+    msg->vol  = vol;
+    sdlaud_enqueue_msg( msg );
+}
 
-                break;
-            case SDLAUD_MSGTYPE_TONE:
-                sdlaud_mixer_playfreq( &sdlaud_mixer, msg->chan, msg->freq, msg->vol );
-                break;
-            case SDLAUD_MSGTYPE_STOP:
-                sdlaud_mixer_stopchan( &sdlaud_mixer, msg->chan );
-                break;
-*/
+void sdlaud_stopchan( int chan, float beats ) {
+    struct timespec when;
+    sdlaud_get_event_start_time( &when, beats );
+    sdlaud_workermsg_t* msg = sdlaud_create_workermsg( &when, SDLAUD_MSGTYPE_STOP, chan );
+    if ( msg == 0 ) return;
+    sdlaud_enqueue_msg( msg );
+}

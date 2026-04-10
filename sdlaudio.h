@@ -39,8 +39,9 @@
 #define SDLAUD_LOGCHAN      8
 
 bool sdlaud_init( void );
-
 void sdlaud_cleanup( void );
-
+void sdlaud_playnote( int chan, int note, float vol, float beats );
+void sdlaud_playfreq( int chan, float freq, float vol, float beats );
+void sdlaud_stopchan( int chan, float beats );
 
 #endif
