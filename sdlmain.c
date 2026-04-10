@@ -33,6 +33,7 @@
 static void sdl_cleanup( void ) {
     sdlaud_cleanup();
     sdlscr_cleanup();
+    sdlev_cleanup();
     SDL_Quit();
 }
 
@@ -42,20 +43,24 @@ void sdl_init( void ) {
         fprintf( stderr, "sdl_init(): failed to initialize SDL: %s\n", SDL_GetError() );
         goto ERR1;
     }
-    sdlev_init();
+    if ( !sdlev_init() ) {
+        fprintf( stderr, "sdl_init(): failed to initialize events\n" );
+        goto ERR2;
+    }
     if ( !sdlscr_init() ) {
         fprintf( stderr, "sdl_init(): failed to initialize screen\n" );
-        goto ERR2;
+        goto ERR3;
     }
     if ( !sdlaud_init() ) {
         fprintf( stderr, "sdl_init(): failed to initialize audio\n" );
-        goto ERR3;
+        goto ERR4;
     }
     atexit( sdl_cleanup );
     return;
 
 // ERR4:   sdlaud_cleanup();
-ERR3:   sdlscr_cleanup();
-ERR2:   SDL_Quit();
+ERR4:   sdlscr_cleanup();
+ERR3:   SDL_Quit();
+ERR2:   sdlev_cleanup();
 ERR1:   exit( EXIT_FAILURE );
 }

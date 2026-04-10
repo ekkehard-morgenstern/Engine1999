@@ -281,24 +281,9 @@ int main( int argc, char** argv ) {
             if ( --spy[i] < -SPRITE_HEIGHT ) spy[i] = SPRTGT_HEIGHT;
             sdlscr_movesprite( i, spx[i], spy[i] );
         }
-        while ( !sdlscr_term() ) {
-            int ev = sdlev_wait();
-            switch ( ev ) {
-                case SDLEV_ERROR:
-                    goto STOP;
-                case SDLEV_VBLANK:
-                    goto VBLANK;
-                case SDLEV_SCREENWORKERFINISHED:
-                    goto STOP;
-                default:
-                    break;
-            }
-        }
-VBLANK: // uint64_t nsec = sdlscr_getnsec(0);
-        // fprintf( stderr, "%" PRIu64 "\n", nsec - last );
-        // last = nsec;
+        int ev = sdlev_wait( SDLEV_VBLANK | SDLEV_SCREENWORKERFINISHED );
+        if ( ev & SDLEV_SCREENWORKERFINISHED ) break;
     }
 
-STOP:
     return EXIT_SUCCESS;
 }

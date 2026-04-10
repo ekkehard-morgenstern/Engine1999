@@ -73,5 +73,12 @@ void sdlutil_nanosleep( uint64_t nsec, const struct timespec* pts ) {
     sdlutil_projecttime( nsec, pts, &ts );
 RETRY:
     int rv = clock_nanosleep( CLOCK_REALTIME, TIMER_ABSTIME, &ts, 0 );
-    if ( rv == EINTR ) goto RETRY;
+    if ( rv == EINTR ) {
+        struct timespec now;
+        clock_gettime( CLOCK_REALTIME, &now );
+        int cmp = sdlutil_comparetime( &now, &ts );
+        if ( cmp < 0 ) {
+            goto RETRY;
+        }
+    }
 }

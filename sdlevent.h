@@ -29,24 +29,20 @@
 #ifndef SDLEVENT_H
 #define SDLEVENT_H  1
 
-#ifndef SDLTYPES_H
-#include "sdltypes.h"
+#ifndef STDTYPES_H
+#include "stdtypes.h"
 #endif
 
-#define SDLEV_ERROR                 -4
-#define SDLEV_SIGNAL                -3
-#define SDLEV_TIMEOUT               -2
-#define SDLEV_NONE                  -1
-#define SDLEV_SCREENWORKERINITDONE  0
-#define SDLEV_SCREENWORKERFINISHED  1
-#define SDLEV_VBLANK                2
-#define SDLEV_AUDIOWORKERINITDONE   3
-#define SDLEV_AUDIOWORKERFINISHED   4
-#define SDLEV_COUNT                 5
+#define SDLEV_SCREENWORKERINITDONE  (1 << 0)
+#define SDLEV_SCREENWORKERFINISHED  (1 << 1)
+#define SDLEV_VBLANK                (1 << 2)
+#define SDLEV_AUDIOWORKERINITDONE   (1 << 3)
+#define SDLEV_AUDIOWORKERFINISHED   (1 << 4)
+#define SDLEV_COUNT                 (1 << 5)
 
-void sdlev_init( void );
-void sdlev_raise( int evt );
-int sdlev_recent( int remove );
-int sdlev_wait( void );
+bool sdlev_init( void );
+void sdlev_cleanup( void );
+void sdlev_raise( int evtmsk );
+int sdlev_wait( int evtmsk );
 
 #endif

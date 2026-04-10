@@ -237,64 +237,35 @@ bool sdlscr_init( void ) {
     }
 
     // wait for handshake (init completion)
-    for (;;) {
-        int ev = sdlev_wait();
-        switch ( ev ) {
-            case SDLEV_ERROR:
-                fprintf( stderr, "sdlev_init(): sdlev_wait() returned error\n" );
-                return false;
-            case SDLEV_SCREENWORKERINITDONE:
-                return sdlscr_initok;
-            default:    // SDLEV_SIGNAL, SDLEV_TIMEOUT, SDLEV_NONE
-                break;
-        }
+    sdlev_wait( SDLEV_SCREENWORKERINITDONE );
+    if ( !sdlscr_initok ) {
+        // wait for thread to terminate and reap the thread status
+        int rv = 0;
+        SDL_WaitThread( sdlscr_workerthr, &rv );
+        sdlscr_workerthr = 0;
+        return false;
     }
 
-    return true;
-}
-
-static bool sdlscr_cleanup2( void ) {
-
-    int recent = sdlev_recent( 1 << SDLEV_SCREENWORKERFINISHED );
-    if ( recent & ( 1 << SDLEV_SCREENWORKERFINISHED ) ) {
-        goto THREAD_DONE;
-    }
-
-    // wait for handshake (thread termination)
-    for (;;) {
-        int ev = sdlev_wait();
-        switch ( ev ) {
-            case SDLEV_ERROR:
-                fprintf( stderr, "sdlev_cleanup2(): sdlev_wait() returned error\n" );
-                // thread might still be running!
-                return false;
-            case SDLEV_SCREENWORKERFINISHED:
-                goto THREAD_DONE;
-            default:    // SDLEV_SIGNAL, SDLEV_TIMEOUT, SDLEV_NONE
-                break;
-        }
-    }
-
-    // wait for thread to terminate and reap the thread status
-THREAD_DONE:
-    int rv = 0;
-    SDL_WaitThread( sdlscr_workerthr, &rv ); sdlscr_workerthr = 0;
     return true;
 }
 
 void sdlscr_cleanup( void ) {
-    for (;;) {
-        if ( sdlscr_cleanup2() ) break;
-        // check if the thread ran into cleanup processing
-        if ( !sdlscr_initok ) {
-            // yes: wait for thread to terminate
-            int rv = 0;
-            SDL_WaitThread( sdlscr_workerthr, &rv ); sdlscr_workerthr = 0;
-            break;
-        }
-        // event processing failed, cannot exit
-        SDL_Delay( 1000 );
+
+    if ( sdlscr_workerthr == 0 ) {
+        // thread already cleaned up or not running
+        return;
     }
+
+    // wait for handshake (thread termination)
+    if ( sdlscr_initok ) {
+        // thread did not reach its cleanup code yet: set termination flag and wait for signal
+        sdlscr_doexit = true;
+        sdlev_wait( SDLEV_SCREENWORKERFINISHED );
+    }
+
+    // wait for thread to terminate and reap the thread status
+    int rv = 0;
+    SDL_WaitThread( sdlscr_workerthr, &rv ); sdlscr_workerthr = 0;
 }
 
 void sdlscr_printf( int y, int x, int bg, int fg, const char* fmt, ... ) {

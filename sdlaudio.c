@@ -530,64 +530,31 @@ bool sdlaud_init( void ) {
         fprintf( stderr, "failed to create audio worker: %s\n", SDL_GetError() );
         return false;
     }
-    for (;;) {
-        int ev = sdlev_wait();
-        switch ( ev ) {
-            case SDLEV_ERROR:
-                fprintf( stderr, "sdlaud_init(): sdlev_wait() returned error\n" );
-                return false;
-            case SDLEV_AUDIOWORKERINITDONE:
-                return sdlaud_initok;
-            default:    // SDLEV_SIGNAL, SDLEV_TIMEOUT, SDLEV_NONE
-                break;
-        }
+    sdlev_wait( SDLEV_AUDIOWORKERINITDONE );
+    if ( !sdlaud_initok ) {
+        // wait for thread to terminate and reap the thread status
+        int rv = 0;
+        SDL_WaitThread( sdlaud_workerthr, &rv );
+        sdlaud_workerthr = 0;
+        return false;
     }
-}
-
-static bool sdlaud_cleanup2( void ) {
-
-    int recent = sdlev_recent( 1 << SDLEV_AUDIOWORKERFINISHED );
-    if ( recent & ( 1 << SDLEV_AUDIOWORKERFINISHED ) ) {
-        goto THREAD_DONE;
-    }
-
-    sdlaud_request_exit = true;
-
-    // wait for handshake (thread termination)
-    for (;;) {
-        int ev = sdlev_wait();
-        switch ( ev ) {
-            case SDLEV_ERROR:
-                fprintf( stderr, "sdlaud_cleanup2(): sdlev_wait() returned error\n" );
-                // thread might still be running!
-                return false;
-            case SDLEV_AUDIOWORKERFINISHED:
-                goto THREAD_DONE;
-            default:    // SDLEV_SIGNAL, SDLEV_TIMEOUT, SDLEV_NONE
-                break;
-        }
-    }
-
-    // wait for thread to terminate and reap the thread status
-THREAD_DONE:
-    int rv = 0;
-    SDL_WaitThread( sdlaud_workerthr, &rv ); sdlaud_workerthr = 0;
     return true;
 }
 
 void sdlaud_cleanup( void ) {
-    for (;;) {
-        if ( sdlaud_cleanup2() ) break;
-        // check if the thread ran into cleanup processing
-        if ( !sdlaud_initok ) {
-            // yes: wait for thread to terminate
-            int rv = 0;
-            SDL_WaitThread( sdlaud_workerthr, &rv ); sdlaud_workerthr = 0;
-            break;
-        }
-        // event processing failed, cannot exit
-        SDL_Delay( 1000 );
+
+    if ( sdlaud_workerthr == 0 ) return;
+
+    if ( sdlaud_initok ) {
+        // thread did not reach its cleanup code yet, set exit flag and wait for signal
+        sdlaud_request_exit = true;
+        // wait for handshake (thread termination)
+        sdlev_wait( SDLEV_AUDIOWORKERFINISHED );
     }
+
+    // wait for thread to terminate and reap the thread status
+    int rv = 0;
+    SDL_WaitThread( sdlaud_workerthr, &rv ); sdlaud_workerthr = 0;
 }
 
 void sdlaud_playnote( int chan, int note, float vol, float beats ) {

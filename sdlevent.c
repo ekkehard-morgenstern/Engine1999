@@ -25,153 +25,52 @@
 */
 
 #include "sdlevent.h"
+#include "sdltypes.h"
+#include "sdlutil.h"
 
-static int                sdlev_hnd = -1;
-static struct epoll_event sdlev_ary[SDLEV_COUNT];
-static SDL_mutex*         recent_mtx = 0;
+static SDL_mutex* sdlev_mtx = 0;
+static int        sdlev_pending = 0;
 
-static void sdlev_cleanup2( int highest ) {
-    for ( int i = highest-1; i >= 0; --i ) {
-        int rv = epoll_ctl(
-            sdlev_hnd,
-            EPOLL_CTL_DEL,
-            sdlev_ary[i].data.fd,
-            0
-        );
-        if ( rv == -1 ) {
-            perror( "epoll_ctl(2)" );
-        }
-        rv = close( sdlev_ary[i].data.fd );
-        if ( rv == -1 ) {
-            perror( "close(2)");
-        }
-        sdlev_ary[i].data.fd = -1;
-    }
-}
-
-static void sdlev_cleanup( void ) {
-    SDL_DestroyMutex( recent_mtx ); recent_mtx = 0;
-    sdlev_cleanup2( SDLEV_COUNT );
-    int rv = close( sdlev_hnd );
-    if ( rv == -1 ) {
-        perror( "close(2)" );
-    }
-    sdlev_hnd = -1;
-}
-
-void sdlev_init( void ) {
-
-    memset( &sdlev_ary[0], 0, sizeof(struct epoll_event) * SDLEV_COUNT );
-
-    sdlev_hnd = epoll_create1( 0 );
-    if ( sdlev_hnd == -1 ) {
-        perror( "epoll_create1(2)" );
-        goto ERR1;
-    }
-
-    int i;
-    for ( i=0; i < SDLEV_COUNT; ++i ) {
-        int fd = eventfd( 0, 0 );
-        if ( fd == -1 ) {
-            perror( "eventfd(2)" );
-            goto ERR2;
-        }
-        sdlev_ary[i].events = EPOLLIN;
-        sdlev_ary[i].data.fd = fd;
-        int rv = epoll_ctl(
-            sdlev_hnd,
-            EPOLL_CTL_ADD,
-            fd,
-            &sdlev_ary[i]
-        );
-        if ( rv == -1 ) {
-            perror( "epoll_ctl(2)" );
-            close( fd );
-            goto ERR2;
-        }
-    }
-
-    recent_mtx = SDL_CreateMutex();
-    if ( recent_mtx == 0 ) {
-        goto ERR2;
-    }
-
-    atexit( sdlev_cleanup );
-    return;
-
-// ERR3:     SDL_DestroyMutex( recent_mtx ); recent_mtx = 0;
-ERR2:     sdlev_cleanup2( i );
-          close( sdlev_hnd ); sdlev_hnd = -1;
-ERR1:     exit( EXIT_FAILURE );
-}
-
-void sdlev_raise( int evt ) {
-    if ( evt < 0 || evt >= SDLEV_COUNT ) {
-        return;
-    }
-    uint64_t dummy = UINT64_C(1);
-RETRY:
-    int rv = write( sdlev_ary[evt].data.fd, &dummy, sizeof(dummy) );
-    if ( rv == -1 && errno == EINTR ) {
-        goto RETRY;
-    }
-    if ( rv == -1 ) {
-        perror( "write(2)" );
-    }
-}
-
-static bool sdlev_check( int evt, int fd ) {
-    if ( evt < 0 || evt >= SDLEV_COUNT || fd == -1 ) {
+bool sdlev_init( void ) {
+    sdlev_mtx = SDL_CreateMutex();
+    if ( sdlev_mtx == 0 ) {
+        fprintf( stderr, "failed to create mutex: %s\n", SDL_GetError() );
         return false;
-    }
-    if ( sdlev_ary[evt].data.fd != fd ) {
-        return false;
-    }
-    uint64_t dummy = 0;
-RETRY:
-    int rv = read( sdlev_ary[evt].data.fd, &dummy, sizeof(dummy) );
-    if ( rv == -1 && errno == EINTR ) {
-        goto RETRY;
-    }
-    if ( rv == -1 ) {
-        perror( "read(2)" );
     }
     return true;
 }
 
-static int evts_read = 0;
-
-int sdlev_recent( int remove ) {
-    SDL_LockMutex( recent_mtx );
-    int last = evts_read;
-    evts_read &= ~remove;
-    SDL_UnlockMutex( recent_mtx );
-    return last;
+void sdlev_cleanup( void ) {
+    SDL_DestroyMutex( sdlev_mtx ); sdlev_mtx = 0;
 }
 
-int sdlev_wait( void ) {
-    struct epoll_event ev;
-    memset( &ev, 0, sizeof(ev) );
-    int rv = epoll_wait( sdlev_hnd, &ev, 1, 20 );
-    if ( rv == -1 && errno == EINTR ) {
-        return SDLEV_SIGNAL;
-    }
-    if ( rv == -1 ) {
-        perror( "epoll_wait(2)" );
-        return SDLEV_ERROR;
-    }
-    if ( rv == 0 ) {
-        return SDLEV_TIMEOUT;
-    }
-    if ( ev.events & EPOLLIN ) {
-        for ( int i=0; i < SDLEV_COUNT; ++i ) {
-            if ( sdlev_check( i, ev.data.fd ) ) {
-                SDL_LockMutex( recent_mtx );
-                evts_read |= 1 << i;
-                SDL_UnlockMutex( recent_mtx );
-                return i;
-            }
+void sdlev_raise( int evtmsk ) {
+    SDL_LockMutex( sdlev_mtx );
+    sdlev_pending |= evtmsk;
+    SDL_UnlockMutex( sdlev_mtx );
+}
+
+#define SDLEV_WAIT_MIN_NSEC     UINT64_C(250000)
+#define SDLEV_WAIT_MAX_NSEC     UINT64_C(4000000)
+
+int sdlev_wait( int evtmsk ) {
+    uint64_t waitnsec = SDLEV_WAIT_MIN_NSEC;
+    uint64_t result = 0;
+    for (;;) {
+        SDL_LockMutex( sdlev_mtx );
+        if ( sdlev_pending & evtmsk ) {
+            result = sdlev_pending & evtmsk;
+            sdlev_pending &= ~evtmsk;
+        }
+        SDL_UnlockMutex( sdlev_mtx );
+        if ( result ) {
+            break;
+        }
+        sdlutil_nanosleep( waitnsec, 0 );
+        waitnsec *= 2U;
+        if ( waitnsec > SDLEV_WAIT_MAX_NSEC ) {
+            waitnsec = SDLEV_WAIT_MAX_NSEC;
         }
     }
-    return SDLEV_NONE;
+    return result;
 }
