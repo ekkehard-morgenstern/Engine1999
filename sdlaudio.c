@@ -79,6 +79,8 @@ static void sdlaud_initwave( sdlaud_wave_t* wave, float freq, float vol ) {
     wave->nsamp = sdlaud_samplecnt( freq );
     if ( wave->nsamp > SDLAUD_BUFSAMPLES ) {
         wave->nsamp = SDLAUD_BUFSAMPLES;
+    } else if ( wave->nsamp < 13 ) {    // highest permissible note
+        wave->nsamp = 13;
     }
     wave->freq = freq;
     wave->amp  = vol;
@@ -90,6 +92,7 @@ static void sdlaud_silencewave( sdlaud_wave_t* wave ) {
 }
 
 static void sdlaud_readwave( sdlaud_wave_t* wave, float* buf, int count ) {
+    if ( wave->nsamp < 0 ) return; // sanity check
     int pos = 0;
     while ( pos < count ) {
         int remain_target = count - pos;
@@ -279,14 +282,20 @@ static SDL_AudioSpec sdlaud_spec_in, sdlaud_spec_out;
 static SDL_AudioDeviceID sdlaud_id;
 static sdlaud_mixer_t sdlaud_mixer;
 static SDL_mutex* sdlaud_mixer_mtx = 0;
+static bool sdlaud_cleanup_warning = false;
 
 static void sdlaud_callback( void* userdata, Uint8* stream, int len ) {
+    if ( sdlaud_cleanup_warning ) {
+        memset( userdata, 0, len );
+        return;
+    }
     SDL_LockMutex( sdlaud_mixer_mtx );
     sdlaud_mixer_read( &sdlaud_mixer, (float*) stream, len / sizeof(float) );
     SDL_UnlockMutex( sdlaud_mixer_mtx );
 }
 
 static bool sdlaud_init_sdl( void ) {
+    sdlaud_cleanup_warning = false;
     memset( &sdlaud_spec_in , 0, sizeof(SDL_AudioSpec) );
     memset( &sdlaud_spec_out, 0, sizeof(SDL_AudioSpec) );
     sdlaud_spec_in.freq     = SDLAUD_BUFFREQ;
@@ -306,6 +315,7 @@ static bool sdlaud_init_sdl( void ) {
 }
 
 static void sdlaud_cleanup_sdl( void ) {
+    sdlaud_cleanup_warning = true;
     SDL_PauseAudioDevice( sdlaud_id, 1 );
     SDL_CloseAudioDevice( sdlaud_id ); sdlaud_id = 0;
 }
@@ -457,12 +467,12 @@ static int sdlaud_worker( void* arg ) {
         fprintf( stderr, "sdlaud_worker: failed to create mutex: %s\n", SDL_GetError() );
         goto ERR1;
     }
-    if ( !sdlaud_init_sdl() ) {
-        goto ERR2;
-    }
     sdlaud_workermtx = SDL_CreateMutex();
     if ( sdlaud_workermtx == 0 ) {
         fprintf( stderr, "sdlaud_worker: failed to create mutex: %s\n", SDL_GetError() );
+        goto ERR2;
+    }
+    if ( !sdlaud_init_sdl() ) {
         goto ERR3;
     }
     sdlaud_init_msgqueue();
@@ -517,8 +527,8 @@ static int sdlaud_worker( void* arg ) {
     }
 
         sdlaud_initok = false;
-        SDL_DestroyMutex( sdlaud_workermtx ); sdlaud_workermtx = 0;
-ERR3:   sdlaud_cleanup_sdl();
+        sdlaud_cleanup_sdl();
+ERR3:   SDL_DestroyMutex( sdlaud_workermtx ); sdlaud_workermtx = 0;
 ERR2:   SDL_DestroyMutex( sdlaud_mixer_mtx ); sdlaud_mixer_mtx = 0;
 ERR1:   sdlev_raise( SDLEV_AUDIOWORKERFINISHED );
         return 0;
