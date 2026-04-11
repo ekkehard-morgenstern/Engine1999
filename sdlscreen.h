@@ -29,8 +29,8 @@
 #ifndef SDLSCREEN_H
 #define SDLSCREEN_H     1
 
-#ifndef STDTYPES_H
-#include "stdtypes.h"
+#ifndef SDLTYPES_H
+#include "sdltypes.h"
 #endif
 
 #ifndef TILESCREEN_H
@@ -44,11 +44,24 @@
 #define SDL_SCREENWIDTH     640
 #define SDL_SCREENHEIGHT    300
 
+#define SDLSCR_INPUT_KEYPRESS       0
+#define SDLSCR_INPUT_TEXT           1
+
+typedef struct _sdlscr_inputmsg_t {
+    int     inputtype;
+    union {
+        SDL_Keycode     symbol;
+        char            text[SDL_TEXTINPUTEVENT_TEXT_SIZE];
+    };
+} sdlscr_inputmsg_t;
+
 bool sdlscr_init( void );
 void sdlscr_cleanup( void );
 bool sdlscr_term( void );
 uint64_t sdlscr_getnsec( struct timespec* pts );
 uint64_t sdlscr_getframecnt( void );
+sdlscr_inputmsg_t* sdlscr_dequeueinputmsg( void );
+void sdlscr_enableinput( bool enable );
 
 // text screen functions
 void sdlscr_printf( int y, int x, int bg, int fg, const char* fmt, ... );

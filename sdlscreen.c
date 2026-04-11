@@ -84,22 +84,29 @@ static uint64_t sdlscr_framecnt = 0;
 static bool sdlscr_awaitinput = false;
 static SDL_mutex* sdlscr_inputmtx = 0;
 
-#define SDLSCR_INPUT_KEYPRESS       0
-#define SDLSCR_INPUT_TEXT           1
-
-typedef struct _sdlscr_inputmsg_t {
-    int     inputtype;
-    union {
-        SDL_Keycode     symbol;
-        char            text[SDL_TEXTINPUTEVENT_TEXT_SIZE];
-    };
-} sdlscr_inputmsg_t;
-
 #define SDLSCR_INPUTQUEUE_SIZE  16
 
 static sdlscr_inputmsg_t*   sdlscr_inputqueue[SDLSCR_INPUTQUEUE_SIZE];
 static int                  sdlscr_iqr = 0;
 static int                  sdlscr_iqw = 0;
+
+void sdlscr_enableinput( bool enable ) {
+    sdlscr_awaitinput = enable;
+}
+
+sdlscr_inputmsg_t* sdlscr_dequeueinputmsg( void ) {
+    SDL_LockMutex( sdlscr_inputmtx );
+    if ( sdlscr_iqr == sdlscr_iqw ) {
+        SDL_UnlockMutex( sdlscr_inputmtx );
+        return 0;
+    }
+    sdlscr_inputmsg_t* msg = sdlscr_inputqueue[ sdlscr_iqr++ ];
+    if ( sdlscr_iqr >= SDLSCR_INPUTQUEUE_SIZE ) {
+        sdlscr_iqr = 0;
+    }
+    SDL_UnlockMutex( sdlscr_inputmtx );
+    return msg;
+}
 
 static bool sdlscr_enqueueinputmsg( sdlscr_inputmsg_t* msg ) {
     SDL_LockMutex( sdlscr_inputmtx );
