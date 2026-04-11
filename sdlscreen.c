@@ -246,6 +246,10 @@ static int sdlscr_worker( void* arg ) {
 
         ++sdlscr_framecnt;
 
+        if ( txtscr_blinkcursor() ) {
+            sdllay_set_modified( &layers[LAY_TXT] );
+        }
+
         if ( sdllay_enabled( &layers[LAY_SPR] ) ) {
             sprscr_periodicals();
             if ( sprscr_changed() ) {

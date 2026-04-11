@@ -27,18 +27,41 @@
 #include "textscreen.h"
 
 #define FONTSIZE 3072
+#define BLINKCOUNTER_ON       45
+#define BLINKCOUNTER_OFF      15
 
 static textcell_t textscr[TXTSCR_WIDTH * TXTSCR_HEIGHT];
 static uint8_t    currfont[FONTSIZE];
-static uint8_t    pen, paper;
+static uint8_t    pen, paper, cursx, cursy, blnkti;
+static bool       cursena, curson;
 
 extern const uint8_t fontdef1[FONTSIZE];
+
+bool txtscr_blinkcursor( void ) {
+      if ( !cursena ) {
+            return false;
+      }
+      if ( blnkti ) {
+            --blnkti;
+      }
+      if ( blnkti == 0 ) {
+            curson = !curson;
+            blnkti = curson ? BLINKCOUNTER_ON : BLINKCOUNTER_OFF;
+            return true;
+      }
+      return false;
+}
 
 void txtscr_init( void ) {
       memcpy( currfont, fontdef1, FONTSIZE );
       textcell_t cell = TXTSCR_MAKECELL( 32, TXTSCR_BGCOL, TXTSCR_FGCOL );
       paper = TXTSCR_BGCOL;
       pen = TXTSCR_FGCOL;
+      cursx = 0;
+      cursy = 0;
+      blnkti = 0;
+      cursena = true;
+      curson = true;
       for ( size_t i=0; i < TXTSCR_WIDTH * TXTSCR_HEIGHT; ++i ) {
             textscr[i] = cell;
       }
@@ -54,6 +77,9 @@ void txtscr_render( uint8_t* target ) {
                   uint8_t bg = TXTSCR_CELL_BG(cell);
                   uint8_t fg = TXTSCR_CELL_FG(cell);
                   uint8_t ch = TXTSCR_CELL_CHR(cell);
+                  if ( curson && y == cursy && x == cursx ) {
+                        uint8_t t = fg; fg = bg; bg = t;
+                  }
                   const uint8_t* fontchar = &currfont[ ch * 12 ];
                   uint8_t* d0 = d;
                   for ( uint8_t cy=0; cy < UINT8_C(12); ++cy ) {

@@ -55,6 +55,8 @@
 
 typedef uint32_t textcell_t;
 
+bool txtscr_blinkcursor( void );
+
 void txtscr_init( void );
 
 void txtscr_render( uint8_t* target );
