@@ -81,15 +81,95 @@ static uint32_t sdlscr_bgcol = UINT32_C(0XFF708090); // SlateGray
 static SDL_Thread* sdlscr_workerthr = 0;
 
 static uint64_t sdlscr_framecnt = 0;
+static bool sdlscr_awaitinput = false;
+static SDL_mutex* sdlscr_inputmtx = 0;
+
+#define SDLSCR_INPUT_KEYPRESS       0
+#define SDLSCR_INPUT_TEXT           1
+
+typedef struct _sdlscr_inputmsg_t {
+    int     inputtype;
+    union {
+        SDL_Keycode     symbol;
+        char            text[SDL_TEXTINPUTEVENT_TEXT_SIZE];
+    };
+} sdlscr_inputmsg_t;
+
+#define SDLSCR_INPUTQUEUE_SIZE  16
+
+static sdlscr_inputmsg_t*   sdlscr_inputqueue[SDLSCR_INPUTQUEUE_SIZE];
+static int                  sdlscr_iqr = 0;
+static int                  sdlscr_iqw = 0;
+
+static bool sdlscr_enqueueinputmsg( sdlscr_inputmsg_t* msg ) {
+    SDL_LockMutex( sdlscr_inputmtx );
+    int limit = sdlscr_iqr - 1;
+    if ( limit < 0 ) limit += SDLSCR_INPUTQUEUE_SIZE;
+    if ( sdlscr_iqw == limit ) {
+        SDL_UnlockMutex( sdlscr_inputmtx );
+        return false;
+    }
+    sdlscr_inputqueue[ sdlscr_iqw++ ] = msg;
+    if ( sdlscr_iqw >= SDLSCR_INPUTQUEUE_SIZE ) {
+        sdlscr_iqw = 0;
+    }
+    SDL_UnlockMutex( sdlscr_inputmtx );
+    return true;
+}
+
+static sdlscr_inputmsg_t* sdlscr_createinputmsg( int inputtype ) {
+    sdlscr_inputmsg_t* msg = (sdlscr_inputmsg_t*) SDL_malloc( sizeof(sdlscr_inputmsg_t) );
+    if ( msg == 0 ) return 0;
+    msg->inputtype = inputtype;
+    return msg;
+}
+
+static void sdlscr_deleteinputmsg( sdlscr_inputmsg_t* msg ) {
+    SDL_free( msg );
+}
+
+static void sdlscr_enqueuekeypress( SDL_Keycode key ) {
+    sdlscr_inputmsg_t* msg = sdlscr_createinputmsg( SDLSCR_INPUT_KEYPRESS );
+    if ( msg == 0 ) return;
+    msg->symbol = key;
+    if ( !sdlscr_enqueueinputmsg( msg ) ) {
+        sdlscr_deleteinputmsg( msg );
+    }
+}
+
+static void sdlscr_enqueuetext( const char text[SDL_TEXTINPUTEVENT_TEXT_SIZE] ) {
+    sdlscr_inputmsg_t* msg = sdlscr_createinputmsg( SDLSCR_INPUT_KEYPRESS );
+    if ( msg == 0 ) return;
+    snprintf( msg->text, SDL_TEXTINPUTEVENT_TEXT_SIZE, "%s", text );
+    if ( !sdlscr_enqueueinputmsg( msg ) ) {
+        sdlscr_deleteinputmsg( msg );
+    }
+}
 
 uint64_t sdlscr_getframecnt( void ) {
     return sdlscr_framecnt;
+}
+
+static void sdlscr_handlekey( SDL_KeyCode key ) {
+    if ( !sdlscr_awaitinput ) return;
+    sdlscr_enqueuekeypress( key );
+}
+
+static void sdlscr_handletext( const char text[SDL_TEXTINPUTEVENT_TEXT_SIZE] ) {
+    if ( !sdlscr_awaitinput ) return;
+    sdlscr_enqueuetext( text );
 }
 
 static int sdlscr_worker( void* arg ) {
 
     sdlscr_initok = false;
     sdlscr_doexit = false;
+
+    sdlscr_inputmtx = SDL_CreateMutex();
+    if ( sdlscr_inputmtx == 0 ) {
+        print_sdlerror( "create input mutex" );
+        goto ERR1;
+    }
 
     SDL_Window* window = SDL_CreateWindow(
         "",
@@ -101,7 +181,7 @@ static int sdlscr_worker( void* arg ) {
     );
     if ( window == 0 ) {
         print_sdlerror( "create window" );
-        goto ERR1;
+        goto ERR2;
     }
 
     SDL_Renderer* renderer = SDL_CreateRenderer(
@@ -111,7 +191,7 @@ static int sdlscr_worker( void* arg ) {
     );
     if ( renderer == 0 ) {
         print_sdlerror( "create renderer" );
-        goto ERR2;
+        goto ERR3;
     }
 
     SDL_SetHint( SDL_HINT_RENDER_SCALE_QUALITY, "linear" );
@@ -122,12 +202,12 @@ static int sdlscr_worker( void* arg ) {
     );
     if ( rv < 0 ) {
         print_sdlerror( "set logical size" );
-        goto ERR3;
+        goto ERR4;
     }
 
     if ( !init_layers( renderer ) ) {
         fprintf( stderr, "failed to initialize layers\n" );
-        goto ERR3;
+        goto ERR4;
     }
 
     sdllay_setcall( &layers[LAY_TIL], render_tiles, 0 );
@@ -174,6 +254,12 @@ static int sdlscr_worker( void* arg ) {
                 case SDL_QUIT:
                     sdlscr_doexit = true;
                     break;
+                case SDL_KEYDOWN:
+                    sdlscr_handlekey( ev.key.keysym.sym );
+                    break;
+                case SDL_TEXTINPUT:
+                    sdlscr_handletext( ev.text.text );
+                    break;
             }
         }
 
@@ -209,17 +295,12 @@ static int sdlscr_worker( void* arg ) {
 
     // cleanup
     sdlscr_initok = false;
-    cleanup_layers();
-    SDL_DestroyRenderer( renderer );
-    SDL_DestroyWindow( window );
-    sdlev_raise( SDLEV_SCREENWORKERFINISHED );
-    return 0;
 
-        // error handling
-// ERR4:   cleanup_layers();
-ERR3:   SDL_DestroyRenderer( renderer );
-ERR2:   SDL_DestroyWindow( window );
-ERR1:   sdlev_raise( SDLEV_SCREENWORKERINITDONE );
+/* ERR5: */ cleanup_layers();
+ERR4:   SDL_DestroyRenderer( renderer );
+ERR3:   SDL_DestroyWindow( window );
+ERR2:   SDL_DestroyMutex( sdlscr_inputmtx ); sdlscr_inputmtx = 0;
+ERR1:   sdlev_raise( SDLEV_SCREENWORKERINITDONE | SDLEV_SCREENWORKERFINISHED );
         return 0;
 }
 

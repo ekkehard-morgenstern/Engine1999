@@ -257,7 +257,7 @@ int main( int argc, char** argv ) {
         sdlscr_showsprite( i, true );
     }
 
-    sdlaud_playnote( 0, 12, 0.75f, 0.5f );
+    /* sdlaud_playnote( 0, 12, 0.75f, 0.5f );
     sdlaud_stopchan( 0, 0 );
     sdlaud_playnote( 0, 14, 0.75f, 0.5f );
     sdlaud_stopchan( 0, 0 );
@@ -268,7 +268,7 @@ int main( int argc, char** argv ) {
     sdlaud_playnote( 2, 16, 0.75f, 0.5f );
     sdlaud_stopchan( 0, 0 );
     sdlaud_stopchan( 1, 0 );
-    sdlaud_stopchan( 2, 0 );
+    sdlaud_stopchan( 2, 0 ); */
 
     // uint64_t last = sdlscr_getnsec(0);
     int scrollx = 0, scrolly = 0;
@@ -281,6 +281,7 @@ int main( int argc, char** argv ) {
             if ( --spy[i] < -SPRITE_HEIGHT ) spy[i] = SPRTGT_HEIGHT;
             sdlscr_movesprite( i, spx[i], spy[i] );
         }
+        /*
         int r = rand() % 100;
         if ( r < 10 ) {
             int c    = 4 + ( rand() & 3 );
@@ -298,6 +299,7 @@ int main( int argc, char** argv ) {
                 sdlaud_stopchan( c, 0 );
             }
         }
+        */
         int ev = sdlev_wait( SDLEV_VBLANK | SDLEV_SCREENWORKERFINISHED );
         if ( ev & SDLEV_SCREENWORKERFINISHED ) break;
     }
