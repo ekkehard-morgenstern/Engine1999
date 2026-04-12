@@ -37,6 +37,12 @@ static bool       cursena, curson;
 
 extern const uint8_t fontdef1[FONTSIZE];
 
+bool txtscr_enablecursor( bool enable ) {
+      bool old = cursena;
+      cursena = enable;
+      return old != enable;
+}
+
 bool txtscr_blinkcursor( void ) {
       if ( !cursena ) {
             return false;
@@ -77,7 +83,7 @@ void txtscr_render( uint8_t* target ) {
                   uint8_t bg = TXTSCR_CELL_BG(cell);
                   uint8_t fg = TXTSCR_CELL_FG(cell);
                   uint8_t ch = TXTSCR_CELL_CHR(cell);
-                  if ( curson && y == cursy && x == cursx ) {
+                  if ( cursena && curson && y == cursy && x == cursx ) {
                         uint8_t t = fg; fg = bg; bg = t;
                   }
                   const uint8_t* fontchar = &currfont[ ch * 12 ];
@@ -96,36 +102,66 @@ void txtscr_render( uint8_t* target ) {
       }
 }
 
-void txtscr_write( int y, int x, int bg, int fg, const char* text, int len ) {
-      if ( x < 0 || x > TXTSCR_WIDTH || y < 0 || y > TXTSCR_HEIGHT ) {
-            return;
-      }
-      if ( bg < 0 || bg > 255 || fg < 0 || fg > 255 || text == 0 ) {
-            return;
-      }
+int txtscr_write( int y, int x, int bg, int fg, const char* text, int len ) {
       const char* s = text;
-      textcell_t* d = &textscr[ y * TXTSCR_WIDTH + x ];
       size_t n = len < 0 ? strlen( s ) : len;
+      if ( x <= (int)(-n) ) {
+            return 0;
+      } else if ( x < 0 ) {
+            int skip = -x;
+            x = 0;
+            n -= skip; text += skip;
+      }
       if ( n > (size_t)( TXTSCR_WIDTH - x ) ) {
             n = (size_t)( TXTSCR_WIDTH - x );
       }
+      if ( x >= TXTSCR_WIDTH || y < 0 || y > TXTSCR_HEIGHT ) {
+            return 0;
+      }
+      if ( bg < 0 ) {
+            bg = paper;
+      }
+      if ( fg < 0 ) {
+            fg = pen;
+      }
+      if ( bg < 0 || bg > 255 || fg < 0 || fg > 255 || text == 0 ) {
+            return 0;
+      }
+      textcell_t* d = &textscr[ y * TXTSCR_WIDTH + x ];
+      int ret = n;
       while ( n-- ) {
             *d++ = TXTSCR_MAKECELL( *s++, bg, fg );
       }
+      return ret;
+}
+
+void txtscr_scrollup( void ) {
+
 }
 
 void txtscr_print( int y, int x, int bg, int fg, const char* text ) {
       const char* s = text;
-      int cx = x, cy = y;
+      int cx = x >= 0 ? x : cursx, cy = y >= 0 ? y : cursy;
       while ( *s != '\0' ) {
             const char* s0 = s;
             while ( *s != '\n' && *s != '\0' ) {
                   ++s;
             }
             size_t len = s - s0;
-            if ( len ) {
-                  txtscr_write( cy, cx, bg, fg, s0, (int) len );
-                  cx += (int) len;
+            while ( len ) {
+                  int n = txtscr_write( cy, cx, bg, fg, s0, (int) len );
+                  if ( n == 0 ) {
+                        break;
+                  }
+                  cx += n; len -= n; s0 += n;
+                  if ( cx >= TXTSCR_WIDTH ) {
+                        cx = 0;
+                        ++cy;
+                        if ( cy >= TXTSCR_HEIGHT ) {
+                              cy = TXTSCR_HEIGHT - 1;
+                              txtscr_scrollup();
+                        }
+                  }
             }
             if ( *s == '\n' ) {
                   ++s;
@@ -133,6 +169,7 @@ void txtscr_print( int y, int x, int bg, int fg, const char* text ) {
                   ++cy;
             }
       }
+      cursx = cx; cursy = cy;
 }
 
 void txtscr_printf( int y, int x, int bg, int fg, const char* fmt, ... ) {

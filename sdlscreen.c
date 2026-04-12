@@ -246,7 +246,9 @@ static int sdlscr_worker( void* arg ) {
 
         ++sdlscr_framecnt;
 
-        if ( txtscr_blinkcursor() ) {
+        if ( sdlscr_awaitinput && ( txtscr_enablecursor( true ) || txtscr_blinkcursor() ) ) {
+            sdllay_set_modified( &layers[LAY_TXT] );
+        } else if ( !sdlscr_awaitinput && txtscr_enablecursor( false ) ) {
             sdllay_set_modified( &layers[LAY_TXT] );
         }
 

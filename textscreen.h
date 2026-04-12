@@ -55,13 +55,14 @@
 
 typedef uint32_t textcell_t;
 
+bool txtscr_enablecursor( bool enable );
 bool txtscr_blinkcursor( void );
 
 void txtscr_init( void );
 
 void txtscr_render( uint8_t* target );
 
-void txtscr_write( int y, int x, int bg, int fg, const char* text, int len );
+int txtscr_write( int y, int x, int bg, int fg, const char* text, int len );
 void txtscr_print( int y, int x, int bg, int fg, const char* text );
 void txtscr_printf( int y, int x, int bg, int fg, const char* fmt, ... );
 
