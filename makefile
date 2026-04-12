@@ -38,7 +38,7 @@ CL=$(CCOMP) $(CFLAGS)
 .c.o:
 	$(CC) -o $@ $<
 
-all: sdltest1
+all: sdltest1 engine1999
 	echo ok >all
 
 BASEMOD=sdlevent.o sdllayer.o sdlmain.o sdlscreen.o textscreen.o tilescreen.o sprscreen.o 8x12font1.o sdlaudio.o sdlutil.o
@@ -52,6 +52,11 @@ sdltest1: sdltest1.o $(LIBNAME)
 	$(CL) -o sdltest1 sdltest1.o $(LIBNAME) -lSDL2 -lrt -lm
 
 sdltest1.o:	sdltest1.c $(LIBHDR)
+
+engine1999: engine1999.o $(LIBNAME)
+	$(CL) -o engine1999 engine1999.o $(LIBNAME) -lSDL2 -lrt -lm
+
+engine1999.o: engine1999.c $(LIBHDR)
 
 $(LIBNAME): $(LIBMOD)
 	-rm $(LIBNAME)
