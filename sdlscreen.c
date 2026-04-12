@@ -135,22 +135,26 @@ static void sdlscr_deleteinputmsg( sdlscr_inputmsg_t* msg ) {
     SDL_free( msg );
 }
 
-static void sdlscr_enqueuekeypress( SDL_Keycode key ) {
+static bool sdlscr_enqueuekeypress( SDL_Keycode key ) {
     sdlscr_inputmsg_t* msg = sdlscr_createinputmsg( SDLSCR_INPUT_KEYPRESS );
-    if ( msg == 0 ) return;
+    if ( msg == 0 ) return false;
     msg->symbol = key;
     if ( !sdlscr_enqueueinputmsg( msg ) ) {
         sdlscr_deleteinputmsg( msg );
+        return false;
     }
+    return true;
 }
 
-static void sdlscr_enqueuetext( const char text[SDL_TEXTINPUTEVENT_TEXT_SIZE] ) {
-    sdlscr_inputmsg_t* msg = sdlscr_createinputmsg( SDLSCR_INPUT_KEYPRESS );
-    if ( msg == 0 ) return;
+static bool sdlscr_enqueuetext( const char text[SDL_TEXTINPUTEVENT_TEXT_SIZE] ) {
+    sdlscr_inputmsg_t* msg = sdlscr_createinputmsg( SDLSCR_INPUT_TEXT );
+    if ( msg == 0 ) return false;
     snprintf( msg->text, SDL_TEXTINPUTEVENT_TEXT_SIZE, "%s", text );
     if ( !sdlscr_enqueueinputmsg( msg ) ) {
         sdlscr_deleteinputmsg( msg );
+        return false;
     }
+    return true;
 }
 
 uint64_t sdlscr_getframecnt( void ) {
@@ -159,12 +163,16 @@ uint64_t sdlscr_getframecnt( void ) {
 
 static void sdlscr_handlekey( SDL_KeyCode key ) {
     if ( !sdlscr_awaitinput ) return;
-    sdlscr_enqueuekeypress( key );
+    if ( sdlscr_enqueuekeypress( key ) ) {
+        sdlev_raise( SDLEV_INPUT );
+    }
 }
 
 static void sdlscr_handletext( const char text[SDL_TEXTINPUTEVENT_TEXT_SIZE] ) {
     if ( !sdlscr_awaitinput ) return;
-    sdlscr_enqueuetext( text );
+    if ( sdlscr_enqueuetext( text ) ) {
+        sdlev_raise( SDLEV_INPUT );
+    }
 }
 
 static int sdlscr_worker( void* arg ) {
@@ -238,6 +246,8 @@ static int sdlscr_worker( void* arg ) {
     struct timespec lts;
     uint64_t lastTick = sdlutil_getnsec( &lts );
 
+    bool oldawaitinput = false;
+
     // main loop
     for (;;) {
         if ( sdlscr_doexit ) {
@@ -245,6 +255,15 @@ static int sdlscr_worker( void* arg ) {
         }
 
         ++sdlscr_framecnt;
+
+        if ( sdlscr_awaitinput != oldawaitinput ) {
+            if ( sdlscr_awaitinput ) {
+                SDL_StartTextInput();
+            } else {
+                SDL_StopTextInput();
+            }
+            oldawaitinput = sdlscr_awaitinput;
+        }
 
         if ( sdlscr_awaitinput && ( txtscr_enablecursor( true ) || txtscr_blinkcursor() ) ) {
             sdllay_set_modified( &layers[LAY_TXT] );
@@ -304,6 +323,10 @@ static int sdlscr_worker( void* arg ) {
             sdlutil_nanosleep( toWait, &lts );
         }
         lastTick = now; lts = ts;
+    }
+
+    if ( oldawaitinput ) {
+        SDL_StopTextInput();
     }
 
     // cleanup
@@ -370,6 +393,84 @@ void sdlscr_printf( int y, int x, int bg, int fg, const char* fmt, ... ) {
       va_end( ap );
       txtscr_print( y, x, bg, fg, buf );
       sdllay_set_modified( &layers[LAY_TXT] );
+}
+
+int sdlscr_lineinput( int stop_evtmsk, char* buf, size_t bufsz, void (*vblank_handler)( void* ), void* usrdata ) {
+    if ( buf == 0 || bufsz < 2U ) return 0;
+    sdlscr_awaitinput = true;
+    int outmsk = 0;
+    int bufpos = 0;
+    int remain = bufsz - 1;
+    for (;;) {
+        int ev = sdlev_wait( stop_evtmsk | SDLEV_VBLANK | SDLEV_SCREENWORKERFINISHED | SDLEV_INPUT );
+        if ( ev & SDLEV_SCREENWORKERFINISHED ) {
+            outmsk |= SDLEV_SCREENWORKERFINISHED;
+            break;
+        }
+        if ( ev & stop_evtmsk ) {
+            outmsk |= ev & stop_evtmsk;
+            break;
+        }
+        if ( ev & SDLEV_VBLANK ) {
+            if ( vblank_handler ) {
+                vblank_handler( usrdata );
+            }
+        }
+        if ( !( ev & SDLEV_INPUT ) ) {
+            continue;
+        }
+        bool done = false;
+        for (;;) {
+            sdlscr_inputmsg_t* msg = sdlscr_dequeueinputmsg();
+            if ( msg == 0 ) break;
+            switch ( msg->inputtype ) {
+                case SDLSCR_INPUT_KEYPRESS:
+                    switch ( msg->symbol ) {
+                        case SDLK_BACKSPACE:
+                            if ( bufpos > 0 ) {
+                                txtscr_rubout();
+                                --bufpos; ++remain;
+                                sdllay_set_modified( &layers[LAY_TXT] );
+                            }
+                            break;
+                        case SDLK_RETURN:
+                            done = true;
+                            break;
+                    }
+                    break;
+                case SDLSCR_INPUT_TEXT:
+                    {
+                        size_t len = strlen( msg->text );
+                        if ( len > 1U ) {
+                            // Unicode: Ignore for now
+                            break;
+                        }
+                        int chr = msg->text[0] & 255;
+                        if ( chr < 32 || chr > 127 ) {
+                            // Non-printable character: Ignore for now
+                            break;
+                        }
+                        if ( remain < 1 ) {
+                            // no room in buffer: stop
+                            break;
+                        }
+                        buf[ bufpos++ ] = (char) chr; --remain;
+                        txtscr_print( -1, -1, -1, -1, msg->text );
+                        sdllay_set_modified( &layers[LAY_TXT] );
+                    }
+                    break;
+            }
+            sdlscr_deleteinputmsg( msg );
+        }
+        if ( done ) {
+            buf[ bufpos ] = '\0';
+            txtscr_print( -1, -1, -1, -1, "\n" );
+            sdllay_set_modified( &layers[LAY_TXT] );
+            break;
+        }
+    }
+    sdlscr_awaitinput = false;
+    return outmsk;
 }
 
 void sdlscr_writetile( int tileno, const uint8_t data[TILE_WIDTH * TILE_HEIGHT]) {

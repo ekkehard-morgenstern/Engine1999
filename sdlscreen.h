@@ -65,6 +65,7 @@ void sdlscr_enableinput( bool enable );
 
 // text screen functions
 void sdlscr_printf( int y, int x, int bg, int fg, const char* fmt, ... );
+int sdlscr_lineinput( int stop_evtmsk, char* buf, size_t bufsz, void (*vblank_handler)( void* ), void* usrdata );
 
 // tile screen functions
 void sdlscr_writetile( int tileno, const uint8_t data[TILE_WIDTH * TILE_HEIGHT]);

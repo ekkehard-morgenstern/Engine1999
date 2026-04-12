@@ -226,6 +226,40 @@ static const uint8_t sprtest1f[SPRITE_WIDTH * SPRITE_HEIGHT] = {
     TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN, TRN
 };
 
+#define NSPR 10
+
+typedef struct _testdata_t {
+    int spx[NSPR], spy[NSPR];
+    int scrollx, scrolly;
+} testdata_t;
+
+static void init_usrdata( testdata_t* data ) {
+    for ( int i=0; i < NSPR; ++i ) {
+        data->spx[i] = rand() % SPRTGT_WIDTH;
+        data->spy[i] = rand() % SPRTGT_HEIGHT;
+        sdlscr_spriteanimcfg( i, 0, 6, 20 );
+        sdlscr_spriteprio( i, 0 );
+        sdlscr_movesprite( i, data->spx[i], data->spy[i] );
+        sdlscr_showsprite( i, true );
+    }
+    data->scrollx = data->scrolly = 0;
+}
+
+static void vblank_handler( void* usrdata ) {
+    testdata_t* data = (testdata_t*) usrdata;
+    data->scrollx = ( data->scrollx + 1 ) % TILE_WIDTH;
+    data->scrolly = ( data->scrolly + 1 ) % TILE_HEIGHT;
+    sdlscr_scrolltiles( data->scrollx, data->scrolly );
+    for ( int i=0; i < NSPR; ++i ) {
+        if ( --data->spx[i] < -SPRITE_WIDTH  ) {
+            data->spx[i] = SPRTGT_WIDTH;
+        }
+        if ( --data->spy[i] < -SPRITE_HEIGHT ) {
+            data->spy[i] = SPRTGT_HEIGHT;
+        }
+        sdlscr_movesprite( i, data->spx[i], data->spy[i] );
+    }
+}
 
 int main( int argc, char** argv ) {
 
@@ -233,7 +267,7 @@ int main( int argc, char** argv ) {
 
     srand( time(0) );
 
-    sdlscr_printf( 0, 0, 0, 1, "Hello world!\nThere!" );
+    sdlscr_printf( 0, 0, 0, 1, "Hello world!\nThere!\n" );
 
     sdlscr_writetile( 0, tiletest1 );
 
@@ -246,62 +280,15 @@ int main( int argc, char** argv ) {
     static const uint8_t animseq[6] = { 0, 1, 2, 3, 4, 5 };
     sdlscr_spriteanimdata( 0, &animseq[0], 6U );
 
-#define NSPR 10
-    int spx[NSPR], spy[NSPR];
-    for ( int i=0; i < NSPR; ++i ) {
-        spx[i] = rand() % SPRTGT_WIDTH;
-        spy[i] = rand() % SPRTGT_HEIGHT;
-        sdlscr_spriteanimcfg( i, 0, 6, 20 );
-        sdlscr_spriteprio( i, 0 );
-        sdlscr_movesprite( i, spx[i], spy[i] );
-        sdlscr_showsprite( i, true );
-    }
-
-    /* sdlaud_playnote( 0, 12, 0.75f, 0.5f );
-    sdlaud_stopchan( 0, 0 );
-    sdlaud_playnote( 0, 14, 0.75f, 0.5f );
-    sdlaud_stopchan( 0, 0 );
-    sdlaud_playnote( 0, 16, 0.75f, 0.5f );
-    sdlaud_stopchan( 0, 0 );
-    sdlaud_playnote( 0, 12, 0.75f, 0.5f );
-    sdlaud_playnote( 1, 14, 0.75f, 0.5f );
-    sdlaud_playnote( 2, 16, 0.75f, 0.5f );
-    sdlaud_stopchan( 0, 0 );
-    sdlaud_stopchan( 1, 0 );
-    sdlaud_stopchan( 2, 0 ); */
+    testdata_t usrdata;
+    init_usrdata( &usrdata );
 
     // uint64_t last = sdlscr_getnsec(0);
-    int scrollx = 0, scrolly = 0;
     while ( !sdlscr_term() ) {
-        scrollx = ( scrollx + 1 ) % TILE_WIDTH;
-        scrolly = ( scrolly + 1 ) % TILE_HEIGHT;
-        sdlscr_scrolltiles( scrollx, scrolly );
-        for ( int i=0; i < NSPR; ++i ) {
-            if ( --spx[i] < -SPRITE_WIDTH  ) spx[i] = SPRTGT_WIDTH;
-            if ( --spy[i] < -SPRITE_HEIGHT ) spy[i] = SPRTGT_HEIGHT;
-            sdlscr_movesprite( i, spx[i], spy[i] );
-        }
-        /*
-        int r = rand() % 100;
-        if ( r < 10 ) {
-            int c    = 4 + ( rand() & 3 );
-            int from = 110 + ( rand() % 331 );
-            int to   = 110 + ( rand() % 331 );
-            if ( from > to ) {
-                for ( int i=from; i >= to; i -= 10 ) {
-                    sdlaud_playfreq( c, i, 0.5f, 0.0625f );
-                }
-                sdlaud_stopchan( c, 0 );
-            } else if ( from < to ) {
-                for ( int i=from; i <= to; i += 10 ) {
-                    sdlaud_playfreq( c, i, 0.5f, 0.0625f );
-                }
-                sdlaud_stopchan( c, 0 );
-            }
-        }
-        */
-        int ev = sdlev_wait( SDLEV_VBLANK | SDLEV_SCREENWORKERFINISHED );
+        char buf[128];
+        int ev = sdlscr_lineinput( 0, buf, 128U, vblank_handler, &usrdata );
         if ( ev & SDLEV_SCREENWORKERFINISHED ) break;
+        sdlscr_printf( -1, -1, -1, -1, "%s\n", buf );
     }
 
     return EXIT_SUCCESS;

@@ -38,7 +38,7 @@
 #define SDLEV_VBLANK                (1 << 2)
 #define SDLEV_AUDIOWORKERINITDONE   (1 << 3)
 #define SDLEV_AUDIOWORKERFINISHED   (1 << 4)
-#define SDLEV_COUNT                 (1 << 5)
+#define SDLEV_INPUT                 (1 << 5)
 
 bool sdlev_init( void );
 void sdlev_cleanup( void );

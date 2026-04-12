@@ -135,6 +135,40 @@ int txtscr_write( int y, int x, int bg, int fg, const char* text, int len ) {
       return ret;
 }
 
+void txtscr_scrolldown( void ) {
+
+}
+
+void txtscr_backspace( void ) {
+      if ( cursx == 0 ) {
+            cursx = TXTSCR_WIDTH - 1;
+            if ( --cursy < 0 ) {
+                  cursy = 0;
+                  txtscr_scrolldown();
+            }
+            return;
+      }
+      --cursx;
+}
+
+void txtscr_rubout( void ) {
+      txtscr_backspace();
+      txtscr_write( cursy, cursx, -1, -1, " ", 1 );
+}
+
+void txtscr_locate( int x, int y ) {
+      if ( x < 0 ) {
+            x = cursx;
+      }
+      if ( y < 0 ) {
+            y = cursy;
+      }
+      if ( x < 0 || x >= TXTSCR_WIDTH || y < 0 || y >= TXTSCR_HEIGHT ) {
+            return;
+      }
+      cursx = x; cursy = y;
+}
+
 void txtscr_scrollup( void ) {
 
 }
@@ -166,7 +200,10 @@ void txtscr_print( int y, int x, int bg, int fg, const char* text ) {
             if ( *s == '\n' ) {
                   ++s;
                   cx = 0;
-                  ++cy;
+                  if ( ++cy >= TXTSCR_HEIGHT ) {
+                        cy = 0;
+                        txtscr_scrollup();
+                  }
             }
       }
       cursx = cx; cursy = cy;

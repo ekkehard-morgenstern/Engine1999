@@ -63,6 +63,11 @@ void txtscr_init( void );
 void txtscr_render( uint8_t* target );
 
 int txtscr_write( int y, int x, int bg, int fg, const char* text, int len );
+void txtscr_locate( int x, int y );
+void txtscr_scrolldown( void );
+void txtscr_backspace( void );
+void txtscr_rubout( void );
+void txtscr_scrollup( void );
 void txtscr_print( int y, int x, int bg, int fg, const char* text );
 void txtscr_printf( int y, int x, int bg, int fg, const char* fmt, ... );
 
