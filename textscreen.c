@@ -136,7 +136,12 @@ int txtscr_write( int y, int x, int bg, int fg, const char* text, int len ) {
 }
 
 void txtscr_scrolldown( void ) {
-
+      size_t chunksz = TXTSCR_WIDTH * ( TXTSCR_HEIGHT - 1 );
+      memmove( &textscr[TXTSCR_WIDTH], &textscr[0], sizeof(textcell_t) * chunksz );
+      textcell_t cell = TXTSCR_MAKECELL( 32, TXTSCR_BGCOL, TXTSCR_FGCOL );
+      for ( size_t i=0; i < TXTSCR_WIDTH; ++i ) {
+            textscr[i] = cell;
+      }
 }
 
 void txtscr_backspace( void ) {
@@ -170,7 +175,12 @@ void txtscr_locate( int x, int y ) {
 }
 
 void txtscr_scrollup( void ) {
-
+      size_t chunksz = TXTSCR_WIDTH * ( TXTSCR_HEIGHT - 1 );
+      memmove( &textscr[0], &textscr[TXTSCR_WIDTH], sizeof(textcell_t) * chunksz );
+      textcell_t cell = TXTSCR_MAKECELL( 32, TXTSCR_BGCOL, TXTSCR_FGCOL );
+      for ( size_t i=0; i < TXTSCR_WIDTH; ++i ) {
+            textscr[chunksz + i] = cell;
+      }
 }
 
 void txtscr_print( int y, int x, int bg, int fg, const char* text ) {
@@ -201,7 +211,7 @@ void txtscr_print( int y, int x, int bg, int fg, const char* text ) {
                   ++s;
                   cx = 0;
                   if ( ++cy >= TXTSCR_HEIGHT ) {
-                        cy = 0;
+                        cy = TXTSCR_HEIGHT - 1;
                         txtscr_scrollup();
                   }
             }
