@@ -44,10 +44,18 @@ all: sdltest1
 BASEMOD=sdlevent.o sdllayer.o sdlmain.o sdlscreen.o textscreen.o tilescreen.o sprscreen.o 8x12font1.o sdlaudio.o sdlutil.o
 BASEHDR=sdlevent.h sdllayer.h sdlmain.h sdlscreen.h sdltypes.h textscreen.h tilescreen.h sprscreen.h unxtypes.h sdlaudio.h sdlutil.h
 
-sdltest1: main.o $(BASEMOD)
-	$(CL) -o sdltest1 main.o $(BASEMOD) -lSDL2 -lrt -lm
+LIBMOD=$(BASEMOD)
+LIBHDR=$(BASEHDR)
+LIBNAME=engine.lib
 
-main.o:	main.c $(BASEHDR)
+sdltest1: sdltest1.o $(LIBNAME)
+	$(CL) -o sdltest1 sdltest1.o $(LIBNAME) -lSDL2 -lrt -lm
+
+sdltest1.o:	sdltest1.c $(LIBHDR)
+
+$(LIBNAME): $(LIBMOD)
+	-rm $(LIBNAME)
+	ar q $(LIBNAME) $(LIBMOD)
 
 sdlevent.o: sdlevent.c $(BASEHDR)
 
