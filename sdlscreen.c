@@ -386,10 +386,10 @@ void sdlscr_cleanup( void ) {
 }
 
 void sdlscr_printf( int y, int x, int bg, int fg, const char* fmt, ... ) {
-      static char buf[512];
+      static char buf[2048U];
       va_list ap;
       va_start( ap, fmt );
-      vsnprintf( buf, 512U, fmt, ap );
+      vsnprintf( buf, 2048U, fmt, ap );
       va_end( ap );
       txtscr_print( y, x, bg, fg, buf );
       sdllay_set_modified( &layers[LAY_TXT] );
@@ -471,6 +471,18 @@ int sdlscr_lineinput( int stop_evtmsk, char* buf, size_t bufsz, void (*vblank_ha
     }
     sdlscr_awaitinput = false;
     return outmsk;
+}
+
+void sdlscr_gettextscreensize( int* outsx, int* outsy ) {
+    txtscr_getsize( outsx, outsy );
+}
+
+void sdlscr_gettextcursor( int* outx, int* outy ) {
+    txtscr_getcursor( outx, outy );
+}
+
+void sdlscr_locate( int x, int y ) {
+    txtscr_locate( x, y );
 }
 
 void sdlscr_writetile( int tileno, const uint8_t data[TILE_WIDTH * TILE_HEIGHT]) {

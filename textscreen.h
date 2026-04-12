@@ -57,6 +57,8 @@ typedef uint32_t textcell_t;
 
 bool txtscr_enablecursor( bool enable );
 bool txtscr_blinkcursor( void );
+void txtscr_getsize( int* outsx, int* outsy );
+void txtscr_getcursor( int* outx, int* outy );
 
 void txtscr_init( void );
 

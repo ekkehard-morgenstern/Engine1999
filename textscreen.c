@@ -58,6 +58,14 @@ bool txtscr_blinkcursor( void ) {
       return false;
 }
 
+void txtscr_getsize( int* outsx, int* outsy ) {
+      *outsx = TXTSCR_WIDTH; *outsy = TXTSCR_HEIGHT;
+}
+
+void txtscr_getcursor( int* outx, int* outy ) {
+      *outx = cursx; *outy = cursy;
+}
+
 void txtscr_init( void ) {
       memcpy( currfont, fontdef1, FONTSIZE );
       textcell_t cell = TXTSCR_MAKECELL( 32, TXTSCR_BGCOL, TXTSCR_FGCOL );
