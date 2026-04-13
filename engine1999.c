@@ -664,6 +664,20 @@ static void vblank_handler( void* usrdata ) {
     data->dummy++;
 }
 
+static void ucase_buf( char* buf ) {
+    char* p = buf; bool quote = false;
+    while ( *p != '\0' ) {
+        char c = *p;
+        if ( c == '"' ) {
+            quote = !quote;
+        } else if ( !quote && c >= 'a' && c <= 'z' ) {
+            *p -= 'a' - 'A';
+        }
+        ++p;
+    }
+}
+
+static usrdata_t usrdata;
 static jmp_buf ready_jump, exit_jump;
 
 #define PAGER_TEXT_COLOR    22
@@ -701,12 +715,13 @@ static void pager( const char *text ) {
                     sdlscr_gettextcursor( &cursX, &cursY );
                     sdlscr_printf( -1, -1, -1, PAGER_QUERY_COLOR, "%s", "Press ENTER to continue, Q + ENTER to quit: " );
                     tmp[0] = '\0';
-                    int ev = sdlscr_lineinput( 0, tmp, 16U, 0, 0 );
+                    int ev = sdlscr_lineinput( 0, tmp, 16U, vblank_handler, &usrdata );
                     if ( ev & SDLEV_SCREENWORKERFINISHED ) {
                         longjmp( exit_jump, 1 );
                     }
                     if ( tmp[0] == '\0' ) break;
-                    if ( strcmp( tmp, "Q" ) == 0 || strcmp( tmp, "q" ) == 0 ) {
+                    ucase_buf( tmp );
+                    if ( strcmp( tmp, "Q" ) == 0 ) {
                         longjmp( ready_jump, 1 );
                     }
                 }
@@ -725,15 +740,18 @@ static void pager( const char *text ) {
     longjmp( ready_jump, 1 );
 }
 
-static void handle_input( const char* buf ) {
+static void handle_input( char* buf ) {
+    ucase_buf( buf );
     // sdlscr_printf( -1, -1, -1, -1, "%s\n", buf );
-    if ( strcmp( buf, "show warranty" ) == 0 || strcmp( buf, "SHOW WARRANTY" ) == 0 ) {
+    if ( strcmp( buf, "SHOW WARRANTY" ) == 0 ) {
         pager( warranty );
+        // does not return
     }
-    if ( strcmp( buf, "show copying" ) == 0 || strcmp( buf, "SHOW COPYING" ) == 0 ) {
+    if ( strcmp( buf, "SHOW COPYING" ) == 0 ) {
         pager( copying );
+        // does not return
     }
-
+    // ...
 }
 
 int main( int argc, char** argv ) {
@@ -742,7 +760,6 @@ int main( int argc, char** argv ) {
 
     srand( time(0) );
 
-    usrdata_t usrdata;
     init_usrdata( &usrdata );
 
 #define TITLECOLOR  3
