@@ -26,6 +26,8 @@
 
 #include "basic.h"
 
+// -- single character tokens -----------------------------------------------
+
 static bool eat_sngchrtok( const char** pp, uint8_t* ptok ) {
     const char* p = *pp;
     switch ( *p ) {
@@ -52,6 +54,8 @@ static bool eat_sngchrtok( const char** pp, uint8_t* ptok ) {
     *pp = p;
     return true;
 }
+
+// -- uint16 ----------------------------------------------------------------
 
 static bool eat_uint16( const char** pp, uint16_t* target ) {
     int n = 0;
@@ -84,6 +88,8 @@ static void read_uint16( const uint8_t** pp, uint16_t* target ) {
     *pp = p;
 }
 
+// -- linehdr_t -------------------------------------------------------------
+
 static void emit_linehdr( uint8_t** pp, const linehdr_t* source ) {
     emit_uint16( pp, source->nextoffs );
     emit_uint16( pp, source->prevoffs );
@@ -97,6 +103,8 @@ static void read_linehdr( const uint8_t** pp, linehdr_t* target ) {
     read_uint16( pp, target->lineno   );
     read_uint16( pp, target->length   );
 }
+
+// -- identifiers -----------------------------------------------------------
 
 static bool eat_ident( const char** pp, char target[256] ) {
     int n = 0; const char* p = *pp;
@@ -142,7 +150,9 @@ static bool read_ident( const uint8_t** pp, char target[256] ) {
     return true;
 }
 
-static bool eat_lit( char** pp, char target[256], int beg, int end ) {
+// -- literals (general) ----------------------------------------------------
+
+static bool eat_lit( const char** pp, char target[256], int beg, int end ) {
     int n = 0; const char* p = *pp; char fmt[16];
     if ( end ) {
         snprintf( fmt, 16U, "%c%%255[^%c]%c%%n", beg, end, end );
@@ -202,7 +212,182 @@ static bool read_lit( const uint8_t** pp, char target[256], int tok ) {
     return true;
 }
 
-static bool eat_strlit( char** pp, char target[256] ) {
+// -- numeric literals (general) --------------------------------------------
+
+static bool eat_numlit( const char** pp, char target[256], int* pbase ) {
+    const char* p = *pp;
+    while ( *p == ' ' ) ++p;
+    int base = *pbase;
+    if ( base == 0 && *p == '&' ) {
+        ++p;
+        switch ( *p ) {
+            case 'H':   base = 16; break;
+            case 'D':   base = 10; break;
+            case 'O':   base = 8; break;
+            case 'Q':   base = 4; break;
+            case 'B':   base = 2; break;
+            default:    return false;
+        }
+        ++p;
+    }
+    if ( base < 2 || base > 36 ) return false;
+    const char* p0 = p;
+    int ndig = 0;
+    for (;;) {
+        char   c = *p++;
+        int8_t v = INT8_C(-1);
+        if ( c >= '0' && c <= '9' ) {
+            v = c - '0';
+        } else if ( c >= 'A' && c <= 'Z' ) {
+            v = c - 'A' + 10;
+        } else if ( ndig ) {
+            break;
+        } else {
+            return false;
+        }
+        if ( ++ndig > 255 ) {
+            return false;
+        }
+        if ( v >= base ) {
+            return false;
+        }
+    }
+    if ( base == 10 ) { // floating-point support (decimal only)
+        if ( *p == '.' ) {  // fraction
+            ++p;
+            if ( *p < '0' || *p > '9' ) {
+                return false;
+            }
+            do {
+                ++p;
+            } while ( *p >= '0' && *p <= '9' );
+        }
+        if ( *p == 'E' ) {  // exponent
+            ++p;
+            if ( *p == '+' || *p == '-' ) {
+                ++p;
+            }
+            if ( *p < '0' || *p > '9' ) {
+                return false;
+            }
+            do {
+                ++p;
+            } while ( *p >= '0' && *p <= '9' );
+        }
+    }
+    memcpy( target, p0, ndig );
+    target[ndig] = '\0';
+    *pbase = base;
+    *pp = p;
+    return true;
+}
+
+static bool print_numlit( char** pp, size_t* premain, const char source[256], int base ) {
+    char fmt[16];
+    int fp = 0;
+    int bc = 0;
+    switch ( base ) {
+        case 16:    bc = 'X'; break;
+        case 10:    break;
+        case 8:     bc = 'O'; break;
+        case 4:     bc = 'Q'; break;
+        case 2:     bc = 'B'; break;
+    }
+    if ( bc ) {
+        fmt[fp++] = '&';
+        fmt[fp++] = bc;
+    }
+    fmt[fp++] = '%';
+    fmt[fp++] = 's';
+    fmt[fp] = '\0';
+    int rv = snprintf( *pp, *premain, fmt, source );
+    if ( rv < 0 ) return false; // error
+    if ( rv >= (int) (*premain) ) return false; // cut off
+    *pp += rv; *premain -= rv;
+    return true;
+}
+
+static void emit_numlit( uint8_t** pp, const char source[256], int tok ) {
+    emit_lit( pp, source, tok );
+}
+
+static bool read_numlit( const uint8_t** pp, char target[256], int tok ) {
+    return read_lit( pp, target, tok );
+}
+
+// -- decimal literals ------------------------------------------------------
+
+static bool print_declit( char** pp, size_t* premain, const char source[256] ) {
+    return print_numlit( pp, premain, source, 10 );
+}
+
+static void emit_declit( uint8_t** pp, const char source[256], int tok ) {
+    emit_numlit( pp, source, TOK_DECLIT );
+}
+
+static bool read_declit( const uint8_t** pp, char target[256], int tok ) {
+    return read_numlit( pp, target, TOK_DECLIT );
+}
+
+// -- hexadecimal literals --------------------------------------------------
+
+static bool print_hexlit( char** pp, size_t* premain, const char source[256] ) {
+    return print_numlit( pp, premain, source, 16 );
+}
+
+static void emit_hexlit( uint8_t** pp, const char source[256], int tok ) {
+    emit_numlit( pp, source, TOK_HEXLIT );
+}
+
+static bool read_hexlit( const uint8_t** pp, char target[256], int tok ) {
+    return read_numlit( pp, target, TOK_HEXLIT );
+}
+
+// -- octal literals --------------------------------------------------------
+
+static bool print_octlit( char** pp, size_t* premain, const char source[256] ) {
+    return print_numlit( pp, premain, source, 8 );
+}
+
+static void emit_octlit( uint8_t** pp, const char source[256], int tok ) {
+    emit_numlit( pp, source, TOK_OCTLIT );
+}
+
+static bool read_octlit( const uint8_t** pp, char target[256], int tok ) {
+    return read_numlit( pp, target, TOK_OCTLIT );
+}
+
+// -- quaternary literals ---------------------------------------------------
+
+static bool print_qualit( char** pp, size_t* premain, const char source[256] ) {
+    return print_numlit( pp, premain, source, 4 );
+}
+
+static void emit_qualit( uint8_t** pp, const char source[256], int tok ) {
+    emit_numlit( pp, source, TOK_QUALIT );
+}
+
+static bool read_qualit( const uint8_t** pp, char target[256], int tok ) {
+    return read_numlit( pp, target, TOK_QUALIT );
+}
+
+// -- binary literals -------------------------------------------------------
+
+static bool print_binlit( char** pp, size_t* premain, const char source[256] ) {
+    return print_numlit( pp, premain, source, 2 );
+}
+
+static void emit_binlit( uint8_t** pp, const char source[256], int tok ) {
+    emit_numlit( pp, source, TOK_BINLIT );
+}
+
+static bool read_binlit( const uint8_t** pp, char target[256], int tok ) {
+    return read_numlit( pp, target, TOK_BINLIT );
+}
+
+// -- string literals -------------------------------------------------------
+
+static bool eat_strlit( const char** pp, char target[256] ) {
     return eat_lit( pp, target, '"', '"' );
 }
 
@@ -218,7 +403,9 @@ static bool read_strlit( const uint8_t** pp, char target[256] ) {
     return read_lit( pp, target, TOK_STRLIT );
 }
 
-static bool eat_shllit( char** pp, char target[256] ) {
+// -- shell literals --------------------------------------------------------
+
+static bool eat_shllit( const char** pp, char target[256] ) {
     return eat_lit( pp, target, '`', '`' );
 }
 
@@ -234,7 +421,9 @@ static bool read_shllit( const uint8_t** pp, char target[256] ) {
     return read_lit( pp, target, TOK_SHLLIT );
 }
 
-static bool eat_quolit( char** pp, char target[256] ) {
+// -- quote literals (comments) ---------------------------------------------
+
+static bool eat_quolit( const char** pp, char target[256] ) {
     return eat_lit( pp, target, '\'', '\0' );
 }
 
@@ -246,11 +435,13 @@ static void emit_quolit( uint8_t** pp, const char source[256] ) {
     emit_lit( pp, source, TOK_QUOLIT );
 }
 
-static bool read_strlit( const uint8_t** pp, char target[256] ) {
+static bool read_quolit( const uint8_t** pp, char target[256] ) {
     return read_lit( pp, target, TOK_QUOLIT );
 }
 
-static bool eat_brklit( char** pp, char target[256] ) {
+// -- bracket literals ------------------------------------------------------
+
+static bool eat_brklit( const char** pp, char target[256] ) {
     return eat_lit( pp, target, '[', ']' );
 }
 
@@ -266,7 +457,9 @@ static bool read_brklit( const uint8_t** pp, char target[256] ) {
     return read_lit( pp, target, TOK_BRKLIT );
 }
 
-static bool eat_brclit( char** pp, char target[256] ) {
+// -- brace literals --------------------------------------------------------
+
+static bool eat_brclit( const char** pp, char target[256] ) {
     return eat_lit( pp, target, '{', '}' );
 }
 
@@ -281,6 +474,8 @@ static void emit_brclit( uint8_t** pp, const char source[256] ) {
 static bool read_brclit( const uint8_t** pp, char target[256] ) {
     return read_lit( pp, target, TOK_BRCLIT );
 }
+
+// -- buffer preprocessing --------------------------------------------------
 
 static void preprocess_buffer( char* buf ) {
     // Replace series of space and tab characters to single spaces.
