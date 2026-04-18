@@ -281,3 +281,37 @@ static void emit_brclit( uint8_t** pp, const char source[256] ) {
 static bool read_brclit( const uint8_t** pp, char target[256] ) {
     return read_lit( pp, target, TOK_BRCLIT );
 }
+
+static void preprocess_buffer( char* buf ) {
+    // Replace series of space and tab characters to single spaces.
+    // Remove carriage return characters.
+    // Convert lower case characters to upper case.
+    // (All take place everywhere except within double quotes or shell quotes.)
+    const char* s = buf;
+    char*       d = buf;
+    bool        quote = false;
+    while ( *s != '\0' ) {
+        if ( !quote ) {
+            if ( *s == ' ' || *s == '\t' ) {
+                do {
+                    ++s;
+                } while ( *s == ' ' || *s == '\t' );
+                *d++ = ' ';
+                continue;
+            }
+            if ( *s == '\r' ) {
+                ++s;
+                continue;
+            }
+            if ( *s >= 'a' && *s <= 'z' ) {
+                *d++ = ( *s++ - 'a' ) + 'A';
+                continue;
+            }
+        }
+        if ( *s == '"' ) {
+            quote = !quote;
+        }
+        *d++ = *s++;
+    }
+    *d = '\0';
+}
