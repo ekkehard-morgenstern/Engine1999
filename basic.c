@@ -135,7 +135,7 @@ static bool eat_lit( char** pp, char target[256], int beg, int end ) {
         // we scan until the hopefully nonexistent character 255
         // this avoids having to guess whether the implementation supports [^\0]
         // this is hopefully enough for this tiny interpreter
-        snprintf( fmt, 16U, "%c%%255[^\277]%%n", beg, end );
+        snprintf( fmt, 16U, "%c%%255[^\277]%%n", beg );
     }
     while ( *p == ' ' ) ++p;
     if ( sscanf( p, fmt, target, &n ) >= 1 ) {
