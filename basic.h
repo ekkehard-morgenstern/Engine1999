@@ -39,9 +39,20 @@
 #define TOK_HEXLIT      UINT8_C(4)          // hexadecimal literal, <len> <digchr> ...
 #define TOK_OCTLIT      UINT8_C(5)          // octal literal, <len> <digchr> ...
 #define TOK_BINLIT      UINT8_C(6)          // binary literal, <len> <digchr> ...
+#define TOK_SHLLIT      UINT8_C(7)          // shell literal, <len> <chr> ...
+#define TOK_QUOLIT      UINT8_C(8)          // quote literal, <len> <chr> ...
+#define TOK_BRKLIT      UINT8_C(9)          // bracket literal, <len> <chr> ...
+#define TOK_BRCLIT      UINT8_C(10)         // brace literal <len> <chr> ...
+#define TOK_SPACE       UINT8_C(32)         // space
+#define TOK_PLING       UINT8_C(33)         // ! pling
+#define TOK_LATTICE     UINT8_C(35)         // # lattice
+#define TOK_AMP         UINT8_C(38)         // & ampersand
+#define TOK_QUOTE       UINT8_C(39)         // ' quote (comment)
+#define TOK_LPAREN      UINT8_C(40)         // ( left parenthesis
+#define TOK_RPAREN      UINT8_C(41)         // ) right parenthesis
 #define TOK_MULT        UINT8_C(42)         // * operator
 #define TOK_PLUS        UINT8_C(43)         // + operator
-#define TOK_COMMA       UINT8_C(44)         // , operator
+#define TOK_COMMA       UINT8_C(44)         // , comma
 #define TOK_MINUS       UINT8_C(45)         // - operator
 #define TOK_DIV         UINT8_C(47)         // / operator
 #define TOK_DEC0        UINT8_C(48)         // decimal 0
@@ -54,12 +65,20 @@
 #define TOK_DEC7        UINT8_C(55)         // decimal 7
 #define TOK_DEC8        UINT8_C(56)         // decimal 8
 #define TOK_DEC9        UINT8_C(57)         // decimal 9
-#define TOK_COLON       UINT8_C(58)         // : operator
-#define TOK_SEMIC       UINT8_C(59)         // ; operator
+#define TOK_COLON       UINT8_C(58)         // : colon
+#define TOK_SEMIC       UINT8_C(59)         // ; semicolon
 #define TOK_LT          UINT8_C(60)         // < operator
 #define TOK_EQ          UINT8_C(61)         // = operator
 #define TOK_GT          UINT8_C(62)         // > operator
+#define TOK_LBRACK      UINT8_C(91)         // [ left bracket
+#define TOK_BACKSL      UINT8_C(92)         // \ operator (integer division)
+#define TOK_RBRACK      UINT8_C(93)         // ] right bracket
 #define TOK_POW         UINT8_C(94)         // ^ operator (**)
+#define TOK_BACKTK      UINT8_C(96)         // ` back tick (shell operator)
+#define TOK_LBRACE      UINT8_C(123)        // { left brace
+#define TOK_COLUMN      UINT8_C(124)        // | column
+#define TOK_RBRACE      UINT8_C(125)        // } right brace
+#define TOK_TILDE       UINT8_C(126)        // ~ tilde
 
 #define LINENO_MIN      UINT16_C(0)         // minimum user-supplied line number
 #define LINENO_MAX      UINT16_C(65534)     // maximum user-supplied line number
