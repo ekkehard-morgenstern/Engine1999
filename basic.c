@@ -248,11 +248,14 @@ STATIC bool eat_numlit( const char** pp, char target[256], int* pbase ) {
         }
         ++p;
     }
+    if ( base == 0 ) {
+        base = 10;
+    }
     if ( base < 2 || base > 36 ) return false;
     const char* p0 = p;
     int ndig = 0;
     for (;;) {
-        char   c = *p++;
+        char   c = *p;
         int8_t v = INT8_C(-1);
         if ( c >= '0' && c <= '9' ) {
             v = c - '0';
@@ -269,6 +272,7 @@ STATIC bool eat_numlit( const char** pp, char target[256], int* pbase ) {
         if ( v >= base ) {
             return false;
         }
+        ++p;
     }
     if ( base == 10 ) { // floating-point support (decimal only)
         if ( *p == '.' ) {  // fraction
@@ -293,6 +297,7 @@ STATIC bool eat_numlit( const char** pp, char target[256], int* pbase ) {
             } while ( *p >= '0' && *p <= '9' );
         }
     }
+    ndig = (int)( p - p0 );
     memcpy( target, p0, ndig );
     target[ndig] = '\0';
     *pbase = base;
