@@ -87,6 +87,12 @@ int main( int argc, char** argv ) {
         }
 
         printf( "\n" );
+        buf[0] = '\0'; remain = 1024U; p = &tokens[sizeof(linehdr_t)];
+        if ( !detokenize_line( buf, p, &remain, &hdr ) ) {
+            printf( "? Detok error\n" );
+            continue;
+        }
+        printf( CYA "%s" NRM "\n", buf );
     }
 
     return 0;

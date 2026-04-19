@@ -30,9 +30,8 @@
 
 // -- single character tokens -----------------------------------------------
 
-STATIC bool eat_sngchrtok( const char** pp, uint8_t* ptok ) {
-    const char* p = *pp;
-    switch ( *p ) {
+STATIC bool is_sngchrtok( char tok ) {
+    switch ( tok ) {
         case TOK_SPACE:     // space
         case TOK_PLING:     // ! pling
         case TOK_LATTICE:   // # lattice
@@ -51,10 +50,17 @@ STATIC bool eat_sngchrtok( const char** pp, uint8_t* ptok ) {
         case TOK_POW:       // ^ operator (**)
         case TOK_COLUMN:    // | column
         case TOK_TILDE:     // ~ tilde
-            *ptok = *p++;
-            break;
-        default:
-            return false;
+            return true;
+    }
+    return false;
+}
+
+STATIC bool eat_sngchrtok( const char** pp, uint8_t* ptok ) {
+    const char* p = *pp;
+    if ( is_sngchrtok( *p ) ) {
+        *ptok = *p++;
+    } else {
+        return false;
     }
     *pp = p;
     return true;
@@ -524,74 +530,50 @@ bool tokenize_line( const char* buf, uint8_t* whereto, size_t* premain, linehdr_
                 *d++ = item[0]; // '0'..'9' = TOK_DEC0..9
                 continue;
             }
-            switch ( base ) {
-                case 16:
-                    if ( !emit_hexlit( &d, item, &remain ) ) {
+            static const struct {
+                int base;
+                bool (*emit_fn)( uint8_t**, const char [256], size_t* );
+            } numemittbl[] = {
+                { 16, emit_hexlit }, { 10, emit_declit }, { 8, emit_octlit },
+                {  4, emit_qualit }, {  2, emit_binlit }, { 0, 0 }
+            };
+            bool found = false;
+            for ( int i=0; numemittbl[i].base; ++i ) {
+                if ( numemittbl[i].base == base ) {
+                    if ( !numemittbl[i].emit_fn( &d, item, &remain ) ) {
                         return false;
                     }
+                    found = true;
                     break;
-                case 10:
-                    if ( !emit_declit( &d, item, &remain ) ) {
-                        return false;
-                    }
-                    break;
-                case 8:
-                    if ( !emit_octlit( &d, item, &remain ) ) {
-                        return false;
-                    }
-                    break;
-                case 4:
-                    if ( !emit_qualit( &d, item, &remain ) ) {
-                        return false;
-                    }
-                    break;
-                case 2:
-                    if ( !emit_binlit( &d, item, &remain ) ) {
-                        return false;
-                    }
-                    break;
-                default:
+                }
+            }
+            if ( !found ) {
+                return false;
+            }
+            continue;
+        }
+        static const struct {
+            bool (*eat_fn)( const char**, char [256] );
+            bool (*emit_fn)( uint8_t**, const char [256], size_t* );
+        } littbl[] = {
+            { eat_ident , emit_ident  }, { eat_strlit, emit_strlit }, { eat_shllit, emit_shllit },
+            { eat_quolit, emit_quolit }, { eat_brklit, emit_brklit }, { eat_brclit, emit_brclit },
+            { 0, 0 }
+        };
+        bool found = false;
+        for ( int i=0; littbl[i].eat_fn; ++i ) {
+            if ( littbl[i].eat_fn( &s, item ) ) {
+                if ( !littbl[i].emit_fn( &d, item, &remain ) ) {
                     return false;
+                }
+                found = true;
+                break;
             }
-            continue;
         }
-        if ( eat_ident( &s, item ) ) {
-            if ( !emit_ident( &d, item, &remain ) ) {
-                return false;
-            }
-            continue;
+        if ( !found ) {
+            return false;
         }
-        if ( eat_strlit( &s, item ) ) {
-            if ( !emit_strlit( &d, item, &remain ) ) {
-                return false;
-            }
-            continue;
-        }
-        if ( eat_shllit( &s, item ) ) {
-            if ( !emit_shllit( &d, item, &remain ) ) {
-                return false;
-            }
-            continue;
-        }
-        if ( eat_quolit( &s, item ) ) {
-            if ( !emit_quolit( &d, item, &remain ) ) {
-                return false;
-            }
-            continue;
-        }
-        if ( eat_brklit( &s, item ) ) {
-            if ( !emit_brklit( &d, item, &remain ) ) {
-                return false;
-            }
-            continue;
-        }
-        if ( eat_brclit( &s, item ) ) {
-            if ( !emit_brclit( &d, item, &remain ) ) {
-                return false;
-            }
-            continue;
-        }
-        return false;
+        continue;
     }
     *d++ = TOK_EOL;
     *premain = --remain;
@@ -599,6 +581,54 @@ bool tokenize_line( const char* buf, uint8_t* whereto, size_t* premain, linehdr_
     d = whereto;
     emit_linehdr( &d, &hdr );
     *phdr = hdr;
+    return true;
+}
+
+// -- detokenization --------------------------------------------------------
+
+bool detokenize_line( char* buf, const uint8_t* wherefrom, size_t* premain, const linehdr_t* phdr ) {
+    const uint8_t* s = wherefrom; size_t remain = *premain;
+    char* d = buf;
+    while ( *s != TOK_EOL ) {
+        uint8_t tok = *s; char item[256];
+        static const struct {
+            uint8_t tok;
+            bool (*read_fn)( const uint8_t**, char [256] );
+            bool (*print_fn)( char**, size_t*, const char* );
+        } littbl[] = {
+            { TOK_IDENT , read_ident , print_ident  }, { TOK_STRLIT, read_strlit, print_strlit },
+            { TOK_HEXLIT, read_hexlit, print_hexlit }, { TOK_DECLIT, read_declit, print_declit },
+            { TOK_OCTLIT, read_octlit, print_octlit }, { TOK_QUALIT, read_qualit, print_qualit },
+            { TOK_BINLIT, read_binlit, print_binlit }, { TOK_SHLLIT, read_shllit, print_shllit },
+            { TOK_QUOLIT, read_quolit, print_quolit }, { TOK_BRKLIT, read_brklit, print_brklit },
+            { TOK_BRCLIT, read_brclit, print_brclit }, { 0, 0, 0 }
+        };
+        bool found = false;
+        for ( int i=0; littbl[i].tok; ++i ) {
+            if ( littbl[i].tok == tok ) {
+                if ( !littbl[i].read_fn( &s, item ) ) {
+                    return false;
+                }
+                if ( !littbl[i].print_fn( &d, &remain, item ) ) {
+                    return false;
+                }
+                found = true;
+                break;
+            }
+        }
+        if ( !found ) {
+            if ( is_sngchrtok( tok ) || ( tok >= TOK_DEC0 && tok <= TOK_DEC9 ) ) {
+                if ( remain <= 1U ) {
+                    return false;
+                }
+                *d++ = tok; ++s; --remain;
+            } else {
+                return false;
+            }
+        }
+    }
+    *d = '\0'; --remain;
+    *premain = remain;
     return true;
 }
 

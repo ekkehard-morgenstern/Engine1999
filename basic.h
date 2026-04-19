@@ -121,6 +121,7 @@ typedef struct _program_t {
 } program_t;
 
 bool tokenize_line( const char* buf, uint8_t* whereto, size_t* premain, linehdr_t* phdr );
+bool detokenize_line( char* buf, const uint8_t* wherefrom, size_t* premain, const linehdr_t* phdr );
 void preprocess_buffer( char* buf );
 
 #endif
