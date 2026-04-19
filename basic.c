@@ -46,6 +46,7 @@ STATIC bool is_sngchrtok( char tok ) {
         case TOK_COLON:     // : colon
         case TOK_SEMIC:     // ; semicolon
         case TOK_EQ:        // = operator
+        case TOK_ADDROF:    // @ address-of operator
         case TOK_BACKSL:    // \ operator (integer division)
         case TOK_POW:       // ^ operator (**)
         case TOK_COLUMN:    // | column
@@ -316,7 +317,7 @@ STATIC bool print_numlit( char** pp, size_t* premain, const char source[256], in
     int fp = 0;
     int bc = 0;
     switch ( base ) {
-        case 16:    bc = 'X'; break;
+        case 16:    bc = 'H'; break;
         case 10:    break;
         case 8:     bc = 'O'; break;
         case 4:     bc = 'Q'; break;
@@ -504,6 +505,65 @@ STATIC bool read_brclit( const uint8_t** pp, char target[256] ) {
     return read_lit( pp, target, TOK_BRCLIT );
 }
 
+// -- keywords --------------------------------------------------------------
+
+STATIC const struct {
+    uint8_t     tok;
+    const char* name;
+} keywtbl[] = {
+    { TOK_PRINT, "PRINT" }, { TOK_INPUT, "INPUT" }, { TOK_PUT, "PUT" }, { TOK_GET, "GET" }, { TOK_LIST, "LIST" },
+    { TOK_READ, "READ" }, { TOK_DATA, "DATA" }, { TOK_RESTORE, "RESTORE" }, { TOK_SAVE, "SAVE" }, { TOK_RUN, "RUN" },
+    { TOK_AUTO, "AUTO" }, { TOK_RENUM, "RENUM" }, { TOK_DELETE, "DELETE" }, { TOK_MERGE, "MERGE" }, { TOK_CHAIN, "CHAIN" },
+    { TOK_FILES, "FILES" }, { TOK_NEW, "NEW" }, { TOK_CLEAR, "CLEAR" }, { TOK_ERASE, "ERASE" }, { TOK_EDIT, "EDIT" },
+    { TOK_LOAD, "LOAD" }, { TOK_SHOW, "SHOW" }, { TOK_WARRANTY, "WARRANTY" }, { TOK_COPYING, "COPYING" },
+    { TOK_AMP, "&" }, { TOK_LE, "<=" }, { TOK_GE, ">=" }, { TOK_NE, "<>" }, { 0, 0 }
+};
+
+STATIC bool is_keyword( const char* name, uint8_t* ptok ) {
+    for ( int i=0; keywtbl[i].tok; ++i ) {
+        if ( strcmp( keywtbl[i].name, name ) == 0 ) {
+            *ptok = keywtbl[i].tok;
+            return true;
+        }
+    }
+    return false;
+}
+
+STATIC bool is_keyword2( uint8_t tok ) {
+    for ( int i=0; keywtbl[i].tok; ++i ) {
+        if ( keywtbl[i].tok == tok ) {
+            return true;
+        }
+    }
+    return false;
+}
+
+STATIC bool print_keyword( uint8_t tok, char** whereto, size_t* premain ) {
+    for ( int i=0; keywtbl[i].tok; ++i ) {
+        if ( keywtbl[i].tok == tok ) {
+            size_t len = strlen( keywtbl[i].name );
+            if ( *premain <= len ) {
+                return false;
+            }
+            memcpy( *whereto, keywtbl[i].name, len );
+            *whereto += len; *premain -= len;
+            return true;
+        }
+    }
+    return false;
+}
+
+// -- double-character tokens -----------------------------------------------
+
+STATIC bool eat_dblchrtok( const char** pp, uint8_t* ptok, const char* match, uint8_t tok ) {
+    const char* p = *pp;
+    if ( p[0] == match[0] && p[1] == match[1] ) {
+        p += 2; *pp = p; *ptok = tok;
+        return true;
+    }
+    return false;
+}
+
 // -- tokenization ----------------------------------------------------------
 
 bool tokenize_line( const char* buf, uint8_t* whereto, size_t* premain, linehdr_t* phdr ) {
@@ -515,7 +575,9 @@ bool tokenize_line( const char* buf, uint8_t* whereto, size_t* premain, linehdr_
     // main line
     while ( *s != '\0' ) {
         char item[256]; int base = 0; uint8_t tok;
-        if ( eat_sngchrtok( &s, &tok ) ) {
+        if ( eat_sngchrtok( &s, &tok ) || eat_dblchrtok( &s, &tok, "<=", TOK_LE ) ||
+             eat_dblchrtok( &s, &tok, "<>", TOK_NE ) || eat_dblchrtok( &s, &tok, "><", TOK_NE ) ||
+             eat_dblchrtok( &s, &tok, ">=", TOK_GE ) ) {
             if ( remain <= 1U ) {
                 return false;
             }
@@ -552,11 +614,24 @@ bool tokenize_line( const char* buf, uint8_t* whereto, size_t* premain, linehdr_
             }
             continue;
         }
+        if ( eat_ident( &s, item ) ) {
+            if ( is_keyword( item, &tok ) ) {
+                if ( remain <= 1U ) {
+                    return false;
+                }
+                *d++ = tok;
+                continue;
+            }
+            if ( !emit_ident( &d, item, &remain ) ) {
+                return false;
+            }
+            continue;
+        }
         static const struct {
             bool (*eat_fn)( const char**, char [256] );
             bool (*emit_fn)( uint8_t**, const char [256], size_t* );
         } littbl[] = {
-            { eat_ident , emit_ident  }, { eat_strlit, emit_strlit }, { eat_shllit, emit_shllit },
+            { eat_strlit, emit_strlit }, { eat_shllit, emit_shllit },
             { eat_quolit, emit_quolit }, { eat_brklit, emit_brklit }, { eat_brclit, emit_brclit },
             { 0, 0 }
         };
@@ -571,6 +646,19 @@ bool tokenize_line( const char* buf, uint8_t* whereto, size_t* premain, linehdr_
             }
         }
         if ( !found ) {
+            if ( *s == '&' ) {
+                if ( remain <= 1U ) {
+                    return false;
+                }
+                *d++ = TOK_AMP; --remain; ++s;
+                continue;
+            } else if ( *s == '?' ) {
+                if ( remain <= 2U ) {
+                    return false;
+                }
+                *d++ = TOK_PRINT; *d++ = TOK_SPACE; remain -= 2; ++s;
+                continue;
+            }
             return false;
         }
         continue;
@@ -589,6 +677,11 @@ bool tokenize_line( const char* buf, uint8_t* whereto, size_t* premain, linehdr_
 bool detokenize_line( char* buf, const uint8_t* wherefrom, size_t* premain, const linehdr_t* phdr ) {
     const uint8_t* s = wherefrom; size_t remain = *premain;
     char* d = buf;
+    if ( phdr->lineno ) {
+        if ( !print_uint16( &d, &remain, phdr->lineno ) ) {
+            return false;
+        }
+    }
     while ( *s != TOK_EOL ) {
         uint8_t tok = *s; char item[256];
         static const struct {
@@ -622,6 +715,11 @@ bool detokenize_line( char* buf, const uint8_t* wherefrom, size_t* premain, cons
                     return false;
                 }
                 *d++ = tok; ++s; --remain;
+            } else if ( is_keyword2( tok ) ) {
+                if ( !print_keyword( tok, &d, &remain ) ) {
+                    return false;
+                }
+                ++s;
             } else {
                 return false;
             }

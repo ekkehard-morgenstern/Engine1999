@@ -61,7 +61,27 @@
 #define TOK_OCTLIT      UINT8_C(8)          // octal literal, <len> <digchr> ...
 #define TOK_BRCLIT      UINT8_C(9)          // brace literal <len> <chr> ...
 #define TOK_DECLIT      UINT8_C(10)         // decimal literal, <len> <digchr> ...
+#define TOK_PRINT       UINT8_C(11)         // PRINT keyword
+#define TOK_INPUT       UINT8_C(12)         // INPUT keyword
+#define TOK_PUT         UINT8_C(13)         // PUT keyword
+#define TOK_GET         UINT8_C(14)         // GET keyword
+#define TOK_LIST        UINT8_C(15)         // LIST keyword
 #define TOK_HEXLIT      UINT8_C(16)         // hexadecimal literal, <len> <digchr> ...
+#define TOK_READ        UINT8_C(17)         // READ keyword
+#define TOK_DATA        UINT8_C(18)         // DATA keyword
+#define TOK_RESTORE     UINT8_C(19)         // RESTORE keyword
+#define TOK_SAVE        UINT8_C(20)         // SAVE keyword
+#define TOK_RUN         UINT8_C(21)         // RUN keyword
+#define TOK_AUTO        UINT8_C(22)         // AUTO keyword
+#define TOK_RENUM       UINT8_C(23)         // RENUM keyword
+#define TOK_DELETE      UINT8_C(24)         // DELETE keyword
+#define TOK_MERGE       UINT8_C(25)         // MERGE keyword
+#define TOK_CHAIN       UINT8_C(26)         // CHAIN keyword
+#define TOK_FILES       UINT8_C(27)         // FILES keyword
+#define TOK_NEW         UINT8_C(28)         // NEW keyword
+#define TOK_CLEAR       UINT8_C(29)         // CLEAR keyword
+#define TOK_ERASE       UINT8_C(30)         // ERASE keyword
+#define TOK_EDIT        UINT8_C(31)         // EDIT keyword
 #define TOK_SPACE       UINT8_C(32)         // space
 #define TOK_PLING       UINT8_C(33)         // ! pling
 #define TOK_LATTICE     UINT8_C(35)         // # lattice
@@ -91,6 +111,14 @@
 #define TOK_LT          UINT8_C(60)         // < operator
 #define TOK_EQ          UINT8_C(61)         // = operator
 #define TOK_GT          UINT8_C(62)         // > operator
+#define TOK_LOAD        UINT8_C(63)         // LOAD keyword
+#define TOK_ADDROF      UINT8_C(64)         // @ address-of operator
+#define TOK_LE          UINT8_C(65)         // <= operator
+#define TOK_NE          UINT8_C(66)         // <> not-equal operator
+#define TOK_GE          UINT8_C(67)         // >= operator
+#define TOK_SHOW        UINT8_C(68)         // SHOW keyword
+#define TOK_WARRANTY    UINT8_C(69)         // WARRANTY keyword
+#define TOK_COPYING     UINT8_C(70)         // COPYING keyword
 #define TOK_LBRACK      UINT8_C(91)         // [ left bracket
 #define TOK_BACKSL      UINT8_C(92)         // \ operator (integer division)
 #define TOK_RBRACK      UINT8_C(93)         // ] right bracket
