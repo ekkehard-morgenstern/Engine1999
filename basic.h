@@ -170,6 +170,7 @@
 #define TOK_OFF         UINT8_C(119)        // OFF keyword
 #define TOK_SYMBOL      UINT8_C(120)        // SYMBOL keyword
 #define TOK_FN          UINT8_C(121)        // FN keyword
+#define TOK_LET         UINT8_C(122)        // LET keyword
 #define TOK_LBRACE      UINT8_C(123)        // { left brace
 #define TOK_COLUMN      UINT8_C(124)        // | column
 #define TOK_RBRACE      UINT8_C(125)        // } right brace
