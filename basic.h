@@ -119,11 +119,57 @@
 #define TOK_SHOW        UINT8_C(68)         // SHOW keyword
 #define TOK_WARRANTY    UINT8_C(69)         // WARRANTY keyword
 #define TOK_COPYING     UINT8_C(70)         // COPYING keyword
+#define TOK_DIM         UINT8_C(71)         // DIM keyword
+#define TOK_DEF         UINT8_C(72)         // DEF keyword
+#define TOK_INT         UINT8_C(73)         // INT keyword
+#define TOK_STR         UINT8_C(74)         // STR keyword
+#define TOK_FLT         UINT8_C(75)         // FLT keyword
+#define TOK_OPTION      UINT8_C(76)         // OPTION keyword
+#define TOK_BASE        UINT8_C(77)         // BASE keyword
+#define TOK_ASC         UINT8_C(78)         // ASC keyword
+#define TOK_VAL         UINT8_C(79)         // VAL keyword
+#define TOK_LEFT        UINT8_C(80)         // LEFT keyword
+#define TOK_MID         UINT8_C(81)         // MID keyword
+#define TOK_RIGHT       UINT8_C(82)         // RIGHT keyword
+#define TOK_INKEY       UINT8_C(83)         // INKEY keyword
+#define TOK_BIN         UINT8_C(84)         // BIN keyword
+#define TOK_QUA         UINT8_C(85)         // QUA keyword
+#define TOK_OCT         UINT8_C(86)         // OCT keyword
+#define TOK_DEC         UINT8_C(87)         // DEC keyword
+#define TOK_HEX         UINT8_C(88)         // HEX keyword
+#define TOK_GOTO        UINT8_C(89)         // GOTO keyword
+#define TOK_GOSUB       UINT8_C(90)         // GOSUB keyword
 #define TOK_LBRACK      UINT8_C(91)         // [ left bracket
 #define TOK_BACKSL      UINT8_C(92)         // \ operator (integer division)
 #define TOK_RBRACK      UINT8_C(93)         // ] right bracket
-#define TOK_POW         UINT8_C(94)         // ^ operator (**)
+#define TOK_POW         UINT8_C(94)         // ^ operator (*)
+#define TOK_GO          UINT8_C(95)         // GO keyword
 #define TOK_BACKTK      UINT8_C(96)         // ` back tick (shell operator)
+#define TOK_TO          UINT8_C(97)         // TO keyword
+#define TOK_SUB         UINT8_C(98)         // SUB keyword
+#define TOK_RETURN      UINT8_C(99)         // RETURN keyword
+#define TOK_IF          UINT8_C(100)        // IF keyword
+#define TOK_UNLESS      UINT8_C(101)        // UNLESS keyword
+#define TOK_THEN        UINT8_C(102)        // THEN keyword
+#define TOK_ELSE        UINT8_C(103)        // ELSE keyword
+#define TOK_ENDIF       UINT8_C(104)        // ENDIF keyword
+#define TOK_ENDUNLESS   UINT8_C(105)        // ENDUNLESS keyword
+#define TOK_END         UINT8_C(106)        // END keyword
+#define TOK_FOR         UINT8_C(107)        // FOR keyword
+#define TOK_STEP        UINT8_C(108)        // STEP keyword
+#define TOK_NEXT        UINT8_C(109)        // NEXT keyword
+#define TOK_REPEAT      UINT8_C(110)        // REPEAT keyword
+#define TOK_WHILE       UINT8_C(111)        // WHILE keyword
+#define TOK_UNTIL       UINT8_C(112)        // UNTIL keyword
+#define TOK_WEND        UINT8_C(113)        // WEND keyword
+#define TOK_UEND        UINT8_C(114)        // UEND keyword
+#define TOK_POP         UINT8_C(115)        // POP keyword
+#define TOK_AFTER       UINT8_C(116)        // AFTER keyword
+#define TOK_EVERY       UINT8_C(117)        // EVERY keyword
+#define TOK_ON          UINT8_C(118)        // ON keyword
+#define TOK_OFF         UINT8_C(119)        // OFF keyword
+#define TOK_SYMBOL      UINT8_C(120)        // SYMBOL keyword
+#define TOK_FN          UINT8_C(121)        // FN keyword
 #define TOK_LBRACE      UINT8_C(123)        // { left brace
 #define TOK_COLUMN      UINT8_C(124)        // | column
 #define TOK_RBRACE      UINT8_C(125)        // } right brace
