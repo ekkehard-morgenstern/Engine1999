@@ -31,21 +31,24 @@
 static bool eat_sngchrtok( const char** pp, uint8_t* ptok ) {
     const char* p = *pp;
     switch ( *p ) {
-        case TOK_PLING: // ! pling
-        case TOK_LATTICE: // # lattice
-        case TOK_LPAREN: // ( left parenthesis
-        case TOK_RPAREN: // ) right parenthesis
-        case TOK_PLUS: // + operator
-        case TOK_COMMA: // , comma
-        case TOK_MINUS: // - operator
-        case TOK_DIV: // / operator
-        case TOK_COLON: // : colon
-        case TOK_SEMIC: // ; semicolon
-        case TOK_EQ: // = operator
-        case TOK_BACKSL: // \ operator (integer division)
-        case TOK_POW: // ^ operator (**)
-        case TOK_COLUMN: // | column
-        case TOK_TILDE: // ~ tilde
+        case TOK_SPACE:     // space
+        case TOK_PLING:     // ! pling
+        case TOK_LATTICE:   // # lattice
+        case TOK_STRING:    // $ string type sigil
+        case TOK_INTEGER:   // % integer type sigil
+        case TOK_LPAREN:    // ( left parenthesis
+        case TOK_RPAREN:    // ) right parenthesis
+        case TOK_PLUS:      // + operator
+        case TOK_COMMA:     // , comma
+        case TOK_MINUS:     // - operator
+        case TOK_DIV:       // / operator
+        case TOK_COLON:     // : colon
+        case TOK_SEMIC:     // ; semicolon
+        case TOK_EQ:        // = operator
+        case TOK_BACKSL:    // \ operator (integer division)
+        case TOK_POW:       // ^ operator (**)
+        case TOK_COLUMN:    // | column
+        case TOK_TILDE:     // ~ tilde
             *ptok = *p++;
             break;
         default:
@@ -120,21 +123,30 @@ static bool eat_ident( const char** pp, char target[256] ) {
 
 static bool print_ident( char** pp, size_t* premain, const char source[256] ) {
     int rv = snprintf( *pp, *premain, "%s", source );
-    if ( rv < 0 ) return false; // error
-    if ( rv >= (int) (*premain) ) return false; // cut off
+    if ( rv < 0 ) {
+        return false; // error
+    }
+    if ( rv >= (int) (*premain) ) {
+        return false; // cut off
+    }
     *pp += rv; *premain -= rv;
     return true;
 }
 
-static void emit_ident( uint8_t** pp, const char source[256] ) {
+static bool emit_ident( uint8_t** pp, const char source[256], size_t* premain ) {
     uint8_t* p = *pp; size_t len = strlen( source );
+    if ( *premain <= len + 2U ) {
+        return false;
+    }
     *p++ = TOK_IDENT;
     *p++ = (uint8_t) len;
     if ( len ) {
         memcpy( p, source, len );
         p += len;
     }
+    *premain -= p - *pp;
     *pp = p;
+    return true;
 }
 
 static bool read_ident( const uint8_t** pp, char target[256] ) {
@@ -188,8 +200,11 @@ static bool print_lit( char** pp, size_t* premain, const char source[256], int b
     return true;
 }
 
-static void emit_lit( uint8_t** pp, const char source[256], int tok ) {
+static bool emit_lit( uint8_t** pp, const char source[256], int tok, size_t* premain ) {
     uint8_t* p = *pp; size_t len = strlen( source );
+    if ( *premain <= len + 2U ) {
+        return false;
+    }
     *p++ = tok;
     *p++ = (uint8_t) len;
     if ( len ) {
@@ -197,6 +212,7 @@ static void emit_lit( uint8_t** pp, const char source[256], int tok ) {
         p += len;
     }
     *pp = p;
+    return true;
 }
 
 static bool read_lit( const uint8_t** pp, char target[256], int tok ) {
@@ -307,8 +323,8 @@ static bool print_numlit( char** pp, size_t* premain, const char source[256], in
     return true;
 }
 
-static void emit_numlit( uint8_t** pp, const char source[256], int tok ) {
-    emit_lit( pp, source, tok );
+static bool emit_numlit( uint8_t** pp, const char source[256], int tok, size_t* premain ) {
+    return emit_lit( pp, source, tok, premain );
 }
 
 static bool read_numlit( const uint8_t** pp, char target[256], int tok ) {
@@ -321,11 +337,11 @@ static bool print_declit( char** pp, size_t* premain, const char source[256] ) {
     return print_numlit( pp, premain, source, 10 );
 }
 
-static void emit_declit( uint8_t** pp, const char source[256], int tok ) {
-    emit_numlit( pp, source, TOK_DECLIT );
+static bool emit_declit( uint8_t** pp, const char source[256], size_t* premain ) {
+    return emit_numlit( pp, source, TOK_DECLIT, premain );
 }
 
-static bool read_declit( const uint8_t** pp, char target[256], int tok ) {
+static bool read_declit( const uint8_t** pp, char target[256] ) {
     return read_numlit( pp, target, TOK_DECLIT );
 }
 
@@ -335,11 +351,11 @@ static bool print_hexlit( char** pp, size_t* premain, const char source[256] ) {
     return print_numlit( pp, premain, source, 16 );
 }
 
-static void emit_hexlit( uint8_t** pp, const char source[256], int tok ) {
-    emit_numlit( pp, source, TOK_HEXLIT );
+static bool emit_hexlit( uint8_t** pp, const char source[256], size_t* premain ) {
+    return emit_numlit( pp, source, TOK_HEXLIT, premain );
 }
 
-static bool read_hexlit( const uint8_t** pp, char target[256], int tok ) {
+static bool read_hexlit( const uint8_t** pp, char target[256] ) {
     return read_numlit( pp, target, TOK_HEXLIT );
 }
 
@@ -349,11 +365,11 @@ static bool print_octlit( char** pp, size_t* premain, const char source[256] ) {
     return print_numlit( pp, premain, source, 8 );
 }
 
-static void emit_octlit( uint8_t** pp, const char source[256], int tok ) {
-    emit_numlit( pp, source, TOK_OCTLIT );
+static bool emit_octlit( uint8_t** pp, const char source[256], size_t* premain ) {
+    return emit_numlit( pp, source, TOK_OCTLIT, premain );
 }
 
-static bool read_octlit( const uint8_t** pp, char target[256], int tok ) {
+static bool read_octlit( const uint8_t** pp, char target[256] ) {
     return read_numlit( pp, target, TOK_OCTLIT );
 }
 
@@ -363,11 +379,11 @@ static bool print_qualit( char** pp, size_t* premain, const char source[256] ) {
     return print_numlit( pp, premain, source, 4 );
 }
 
-static void emit_qualit( uint8_t** pp, const char source[256], int tok ) {
-    emit_numlit( pp, source, TOK_QUALIT );
+static bool emit_qualit( uint8_t** pp, const char source[256], size_t* premain ) {
+    return emit_numlit( pp, source, TOK_QUALIT, premain );
 }
 
-static bool read_qualit( const uint8_t** pp, char target[256], int tok ) {
+static bool read_qualit( const uint8_t** pp, char target[256] ) {
     return read_numlit( pp, target, TOK_QUALIT );
 }
 
@@ -377,11 +393,11 @@ static bool print_binlit( char** pp, size_t* premain, const char source[256] ) {
     return print_numlit( pp, premain, source, 2 );
 }
 
-static void emit_binlit( uint8_t** pp, const char source[256], int tok ) {
-    emit_numlit( pp, source, TOK_BINLIT );
+static bool emit_binlit( uint8_t** pp, const char source[256], size_t* premain ) {
+    return emit_numlit( pp, source, TOK_BINLIT, premain );
 }
 
-static bool read_binlit( const uint8_t** pp, char target[256], int tok ) {
+static bool read_binlit( const uint8_t** pp, char target[256] ) {
     return read_numlit( pp, target, TOK_BINLIT );
 }
 
@@ -395,8 +411,8 @@ static bool print_strlit( char** pp, size_t* premain, const char source[256] ) {
     return print_lit( pp, premain, source, '"', '"' );
 }
 
-static void emit_strlit( uint8_t** pp, const char source[256] ) {
-    emit_lit( pp, source, TOK_STRLIT );
+static bool emit_strlit( uint8_t** pp, const char source[256], size_t* premain ) {
+    return emit_lit( pp, source, TOK_STRLIT, premain );
 }
 
 static bool read_strlit( const uint8_t** pp, char target[256] ) {
@@ -413,8 +429,8 @@ static bool print_shllit( char** pp, size_t* premain, const char source[256] ) {
     return print_lit( pp, premain, source, '`', '`' );
 }
 
-static void emit_shllit( uint8_t** pp, const char source[256] ) {
-    emit_lit( pp, source, TOK_SHLLIT );
+static bool emit_shllit( uint8_t** pp, const char source[256], size_t* premain ) {
+    return emit_lit( pp, source, TOK_SHLLIT, premain );
 }
 
 static bool read_shllit( const uint8_t** pp, char target[256] ) {
@@ -431,8 +447,8 @@ static bool print_quolit( char** pp, size_t* premain, const char source[256] ) {
     return print_lit( pp, premain, source, '\'', '\0' );
 }
 
-static void emit_quolit( uint8_t** pp, const char source[256] ) {
-    emit_lit( pp, source, TOK_QUOLIT );
+static bool emit_quolit( uint8_t** pp, const char source[256], size_t* premain ) {
+    return emit_lit( pp, source, TOK_QUOLIT, premain );
 }
 
 static bool read_quolit( const uint8_t** pp, char target[256] ) {
@@ -449,8 +465,8 @@ static bool print_brklit( char** pp, size_t* premain, const char source[256] ) {
     return print_lit( pp, premain, source, '[', ']' );
 }
 
-static void emit_brklit( uint8_t** pp, const char source[256] ) {
-    emit_lit( pp, source, TOK_BRKLIT );
+static bool emit_brklit( uint8_t** pp, const char source[256], size_t* premain ) {
+    return emit_lit( pp, source, TOK_BRKLIT, premain );
 }
 
 static bool read_brklit( const uint8_t** pp, char target[256] ) {
@@ -467,12 +483,115 @@ static bool print_brclit( char** pp, size_t* premain, const char source[256] ) {
     return print_lit( pp, premain, source, '{', '}' );
 }
 
-static void emit_brclit( uint8_t** pp, const char source[256] ) {
-    emit_lit( pp, source, TOK_BRCLIT );
+static bool emit_brclit( uint8_t** pp, const char source[256], size_t* premain ) {
+    return emit_lit( pp, source, TOK_BRCLIT, premain );
 }
 
 static bool read_brclit( const uint8_t** pp, char target[256] ) {
     return read_lit( pp, target, TOK_BRCLIT );
+}
+
+// -- tokenization ----------------------------------------------------------
+
+linehdr_t* tokenize_line( const char* buf, uint8_t* whereto, size_t* premain ) {
+    const char* s = buf; uint8_t* d = whereto; size_t remain = *premain;
+    if ( remain < sizeof(linehdr_t) ) return 0;
+    linehdr_t hdr; memset( &hdr, 0, sizeof(hdr) ); remain -= sizeof(linehdr_t); d += sizeof(linehdr_t);
+    // optional line number
+    eat_uint16( &s, &hdr.lineno );
+    // main line
+    while ( *s != '\0' ) {
+        char item[256]; int base = 0; uint8_t tok;
+        if ( eat_sngchrtok( &s, &tok ) ) {
+            if ( remain <= 1U ) {
+                return false;
+            }
+            *d++ = tok;
+            continue;
+        }
+        if ( eat_numlit( &s, item, &base ) ) {
+            if ( base == 10 && item[1] == '\0' ) {
+                if ( remain <= 1U ) {
+                    return false;
+                }
+                *d++ = item[0]; // '0'..'9' = TOK_DEC0..9
+                continue;
+            }
+            switch ( base ) {
+                case 16:
+                    if ( !emit_hexlit( &d, item, &remain ) ) {
+                        return false;
+                    }
+                    break;
+                case 10:
+                    if ( !emit_declit( &d, item, &remain ) ) {
+                        return false;
+                    }
+                    break;
+                case 8:
+                    if ( !emit_octlit( &d, item, &remain ) ) {
+                        return false;
+                    }
+                    break;
+                case 4:
+                    if ( !emit_qualit( &d, item, &remain ) ) {
+                        return false;
+                    }
+                    break;
+                case 2:
+                    if ( !emit_binlit( &d, item, &remain ) ) {
+                        return false;
+                    }
+                    break;
+                default:
+                    return false;
+            }
+            continue;
+        }
+        if ( eat_ident( &s, item ) ) {
+            if ( !emit_ident( &d, item, &remain ) ) {
+                return false;
+            }
+            continue;
+        }
+        if ( eat_strlit( &s, item ) ) {
+            if ( !emit_strlit( &d, item, &remain ) ) {
+                return false;
+            }
+            continue;
+        }
+        if ( eat_shllit( &s, item ) ) {
+            if ( !emit_shllit( &d, item, &remain ) ) {
+                return false;
+            }
+            continue;
+        }
+        if ( eat_quolit( &s, item ) ) {
+            if ( !emit_quolit( &d, item, &remain ) ) {
+                return false;
+            }
+            continue;
+        }
+        if ( eat_brklit( &s, item ) ) {
+            if ( !emit_brklit( &d, item, &remain ) ) {
+                return false;
+            }
+            continue;
+        }
+        if ( eat_brclit( &s, item ) ) {
+            if ( !emit_brclit( &d, item, &remain ) ) {
+                return false;
+            }
+            continue;
+        }
+        return false;
+    }
+    *d++ = TOK_EOL;
+    *premain = --remain;
+    hdr.length = d - whereto;
+    d = whereto;
+    emit_linehdr( &d, &hdr );
+    return true;
 }
 
 // -- buffer preprocessing --------------------------------------------------

@@ -33,6 +33,24 @@
 #include "stdtypes.h"
 #endif
 
+/*
+
+   The interpreter keeps only the tokenized form in special memory. Before running
+   a program, it may produce a transformed version to avoid repeated parsing of the
+   same text.
+
+   Rationale behind the encoding of various literals:
+    - Every literal should have a length byte, so it is easy to read back in.
+    - Numbers should be encoded as strings, so when you save a program, it is saved
+      in an architecture independent format (i.e. regardless of the numeric precision
+      of the host interpreter). Thus, a number conversion error is a runtime error
+      (which might be reported before actually running the program, see above).
+    - Numerals 0..9 when appearing alone are encoded as separate tokens to speed up
+      reading of one-digit numbers.
+
+*/
+
+#define TOK_EOL         UINT8_C(0)          // end of line
 #define TOK_IDENT       UINT8_C(1)          // identifier, <len> <chr> ...
 #define TOK_BINLIT      UINT8_C(2)          // binary literal, <len> <digchr> ...
 #define TOK_STRLIT      UINT8_C(3)          // string literal, <len> <chr> ...
@@ -47,6 +65,8 @@
 #define TOK_SPACE       UINT8_C(32)         // space
 #define TOK_PLING       UINT8_C(33)         // ! pling
 #define TOK_LATTICE     UINT8_C(35)         // # lattice
+#define TOK_STRING      UINT8_C(36)         // $ string type sigil
+#define TOK_INTEGER     UINT8_C(37)         // % integer type sigil
 #define TOK_AMP         UINT8_C(38)         // & ampersand
 #define TOK_QUOTE       UINT8_C(39)         // ' quote (comment)
 #define TOK_LPAREN      UINT8_C(40)         // ( left parenthesis
