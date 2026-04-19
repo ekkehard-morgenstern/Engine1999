@@ -606,9 +606,9 @@ void preprocess_buffer( char* buf ) {
     // (All take place everywhere except within double quotes or shell quotes.)
     const char* s = buf;
     char*       d = buf;
-    bool        quote = false;
+    int         quote = 0;
     while ( *s != '\0' ) {
-        if ( !quote ) {
+        if ( quote == 0 ) {
             if ( *s == ' ' || *s == '\t' ) {
                 do {
                     ++s;
@@ -626,7 +626,10 @@ void preprocess_buffer( char* buf ) {
             }
         }
         if ( *s == '"' ) {
-            quote = !quote;
+            quote ^= 1;
+        }
+        if ( *s == '`' ) {
+            quote ^= 2;
         }
         *d++ = *s++;
     }

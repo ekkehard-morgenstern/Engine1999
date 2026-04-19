@@ -71,6 +71,13 @@ int main( int argc, char** argv ) {
 #define WHI _CSI _FG _WHI _SGR
 #define NRM _CSI _SGR
 
+        printf( YEL "[" BLU "%u %u %u %u" YEL "]" NRM,
+            (unsigned) hdr.nextoffs,
+            (unsigned) hdr.prevoffs,
+            (unsigned) hdr.lineno,
+            (unsigned) hdr.length
+        );
+
         len = hdr.length; const uint8_t* p = &tokens[sizeof(linehdr_t)];
         const uint8_t* e = &tokens[len];
         while ( p < e ) {
