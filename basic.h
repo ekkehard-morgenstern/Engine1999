@@ -120,6 +120,7 @@ typedef struct _program_t {
     uint8_t     memory[65536];
 } program_t;
 
-
+bool tokenize_line( const char* buf, uint8_t* whereto, size_t* premain, linehdr_t* phdr );
+void preprocess_buffer( char* buf );
 
 #endif

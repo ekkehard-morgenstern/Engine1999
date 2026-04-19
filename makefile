@@ -38,11 +38,11 @@ CL=$(CCOMP) $(CFLAGS)
 .c.o:
 	$(CC) -o $@ $<
 
-all: sdltest1 engine1999
+all: sdltest1 engine1999 basictest1
 	echo ok >all
 
-BASEMOD=sdlevent.o sdllayer.o sdlmain.o sdlscreen.o textscreen.o tilescreen.o sprscreen.o 8x12font1.o sdlaudio.o sdlutil.o
-BASEHDR=sdlevent.h sdllayer.h sdlmain.h sdlscreen.h sdltypes.h textscreen.h tilescreen.h sprscreen.h unxtypes.h sdlaudio.h sdlutil.h
+BASEMOD=sdlevent.o sdllayer.o sdlmain.o sdlscreen.o textscreen.o tilescreen.o sprscreen.o 8x12font1.o sdlaudio.o sdlutil.o basic.o
+BASEHDR=sdlevent.h sdllayer.h sdlmain.h sdlscreen.h sdltypes.h textscreen.h tilescreen.h sprscreen.h unxtypes.h sdlaudio.h sdlutil.h basic.h
 
 LIBMOD=$(BASEMOD)
 LIBHDR=$(BASEHDR)
@@ -57,6 +57,11 @@ engine1999: engine1999.o $(LIBNAME)
 	$(CL) -o engine1999 engine1999.o $(LIBNAME) -lSDL2 -lrt -lm
 
 engine1999.o: engine1999.c $(LIBHDR)
+
+basictest1: basictest1.o $(LIBNAME)
+	$(CL) -o basictest1 basictest1.o $(LIBNAME) -lm
+
+engine1999.o: basictest1.c $(LIBHDR)
 
 $(LIBNAME): $(LIBMOD)
 	-rm $(LIBNAME)
@@ -81,3 +86,5 @@ sprscreen.o: sprscreen.c $(BASEHDR)
 sdlaudio.o: sdlaudio.c $(BASEHDR)
 
 sdlutil.o: sdlutil.c $(BASEHDR)
+
+basic.o: basic.c $(BASEHDR)
