@@ -178,7 +178,8 @@
 
 #define LINENO_MIN      UINT16_C(0)         // minimum user-supplied line number
 #define LINENO_MAX      UINT16_C(65534)     // maximum user-supplied line number
-#define LINENO_DEL      UINT16_C(65535)     // deleted line
+#define LINENO_DEL      UINT16_C(65535)     // deleted line or no line number
+#define LINENO_NONE     UINT16_C(65535)
 
 #pragma pack(2)
 typedef struct _linehdr_t {
@@ -187,13 +188,26 @@ typedef struct _linehdr_t {
     uint16_t    prevoffs;   // from beginning of memory
     uint16_t    lineno;
     uint16_t    length;
+    uint16_t    alloc;
     // followed by tokenized line data
 } linehdr_t;
 #pragma pack()
 
+#define MAX_PROGRAMSIZE 65536
+
 typedef struct _program_t {
-    uint8_t     memory[65536];
+    uint8_t     memory[MAX_PROGRAMSIZE];
+    uint16_t    fillpos, firstlineoffs, lastlineoffs;
 } program_t;
+
+typedef struct _pgmiter_t {
+    program_t*  pgm;
+    uint8_t*    ptr;
+    uint8_t*    end;
+    uint8_t*    tok;
+    uint16_t    offs;
+    linehdr_t   hdr;
+} pgmiter_t;
 
 bool tokenize_line( const char* buf, uint8_t* whereto, size_t* premain, linehdr_t* phdr );
 bool detokenize_line( char* buf, const uint8_t* wherefrom, size_t* premain, const linehdr_t* phdr );
