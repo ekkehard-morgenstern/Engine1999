@@ -61,7 +61,7 @@ engine1999.o: engine1999.c $(LIBHDR)
 basictest1: basictest1.o $(LIBNAME)
 	$(CL) -o basictest1 basictest1.o $(LIBNAME) -lm
 
-engine1999.o: basictest1.c $(LIBHDR)
+basictest1.o: basictest1.c $(LIBHDR)
 
 $(LIBNAME): $(LIBMOD)
 	-rm $(LIBNAME)
