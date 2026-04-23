@@ -39,10 +39,8 @@ int main( int argc, char** argv ) {
             buf[--len] = '\0';
         }
         preprocess_buffer( buf );
-        printf( "%s\n", buf );
+        printf( ">>%s<<\n", buf );
         linehdr_t hdr;
-        memset( &hdr, 0, sizeof(hdr) );
-
         size_t remain = 1024U;
         if ( !tokenize_line( buf, tokens, &remain, &hdr ) ) {
             printf( "? Syntax error\n" );
@@ -71,11 +69,12 @@ int main( int argc, char** argv ) {
 #define WHI _CSI _FG _WHI _SGR
 #define NRM _CSI _SGR
 
-        printf( YEL "[" BLU "%u %u %u %u" YEL "]" NRM,
+        printf( YEL "[" BLU "%u %u %u %u %u" YEL "]" NRM,
             (unsigned) hdr.nextoffs,
             (unsigned) hdr.prevoffs,
             (unsigned) hdr.lineno,
-            (unsigned) hdr.length
+            (unsigned) hdr.length,
+            (unsigned) hdr.alloc
         );
 
         len = hdr.length; const uint8_t* p = &tokens[sizeof(linehdr_t)];
