@@ -28,6 +28,9 @@
 
 int main( int argc, char** argv ) {
 
+    program_t pgm;
+    init_program( &pgm );
+
     for (;;) {
         char buf[1024]; uint8_t tokens[1024];
         buf[0] = '\0';
@@ -92,6 +95,10 @@ int main( int argc, char** argv ) {
             continue;
         }
         printf( CYA "%s" NRM "\n", buf );
+
+        if ( !enter_line( &pgm, &tokens[0] ) ) {
+            fprintf( stderr, "enter failed\n" );
+        }
     }
 
     return 0;

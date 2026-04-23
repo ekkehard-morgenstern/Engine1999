@@ -181,6 +181,8 @@
 #define LINENO_DEL      UINT16_C(65535)     // deleted line or no line number
 #define LINENO_NONE     UINT16_C(65535)
 
+#define LINEOFFS_NONE   UINT16_C(65535)
+
 #pragma pack(2)
 typedef struct _linehdr_t {
     // all values in network byte order (big endian)
@@ -212,5 +214,7 @@ typedef struct _pgmiter_t {
 bool tokenize_line( const char* buf, uint8_t* whereto, size_t* premain, linehdr_t* phdr );
 bool detokenize_line( char* buf, const uint8_t* wherefrom, size_t* premain, const linehdr_t* phdr );
 void preprocess_buffer( char* buf );
+void init_program( program_t* pgm );
+bool enter_line( program_t* pgm, const uint8_t* tokline );
 
 #endif
