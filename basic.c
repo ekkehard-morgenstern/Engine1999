@@ -165,7 +165,6 @@ static bool remove_linenode( program_t* pgm, uint16_t pos, linenode_t* outnode )
 }
 
 static bool emplace_linenode( program_t* pgm, uint16_t prevpos, uint16_t pos, uint16_t nextpos, linenode_t* outnode ) {
-    printf( "emplace %u %u %u\n", (unsigned) prevpos, (unsigned) pos, (unsigned) nextpos );
     linenode_t node = LINENODE_INIT;
     if ( !read_linenode( pgm, pos, &node ) ) {
         return false;
@@ -325,7 +324,6 @@ static bool linelist_addtail( program_t* pgm, uint16_t listoffs, uint16_t nodeof
     // the next position is always the tail node of the list
     uint16_t nextpos = listoffs + sizeof(linenode_t);
     // emplace the current node between these two nodes
-    printf( "prevpos=%u nodeoffs=%u nextpos=%u\n", (unsigned) prevpos, (unsigned) nodeoffs, (unsigned) nextpos );
     return emplace_linenode( pgm, prevpos, nodeoffs, nextpos, outnode );
 }
 
@@ -1181,7 +1179,6 @@ static short find_line( program_t* pgm, uint16_t lineno, pgmiter_t* piter, uint1
         return FOUND_NONE;
     }
     do {
-        printf( "find iter: no %u (search %u)\n", (unsigned) iter.hdr.lineno, (unsigned) lineno );
         if ( iter.hdr.lineno == lineno ) {
             // exact match
             uint16_t prevno = LINENO_NONE, nextno = LINENO_NONE;
@@ -1220,7 +1217,6 @@ static short find_line( program_t* pgm, uint16_t lineno, pgmiter_t* piter, uint1
                 // otherwise, we stay on the current line (insert before first line)
                 nextno = iter.hdr.lineno;
             }
-            printf( "prev=%u, next=%u\n", (unsigned) prevno, (unsigned) nextno );
             if ( pprevno ) {
                 *pprevno = prevno;
             }
@@ -1372,7 +1368,6 @@ static bool update_line( pgmiter_t* iter, const linehdr_t* newhdr, const uint8_t
     if ( newhdr->length == sizeof(linehdr_t) + 1U && *newtokens == TOK_EOL ) {
         // new line only contains line number: delete line
         if ( !unlink_line( iter ) ) {
-            fprintf( stderr, "unlink failed\n" );
             return false;
         }
         zero_line( iter );
@@ -1381,11 +1376,9 @@ static bool update_line( pgmiter_t* iter, const linehdr_t* newhdr, const uint8_t
     if ( newhdr->length > iter->hdr.alloc ) {
         // unlink and discard old version of line
         if ( !unlink_line( iter ) ) {
-            fprintf( stderr, "unlink failed\n" );
             return false;
         }
         zero_line( iter );
-        fprintf( stderr, "create new\n" );
         // create new line
         // WARNING:
         //      This is kind of hairy, because the program memory might get reorganized during a call of create_line()!
@@ -1396,7 +1389,6 @@ static bool update_line( pgmiter_t* iter, const linehdr_t* newhdr, const uint8_t
         if ( !create_line( iter->pgm, &iter->hdr, newtokens, &newpos ) ) {
             return false;
         }
-        printf( "newpos = %u\n", (unsigned) newpos );
         iter->pos = newpos;
         if ( !emplace_line( iter->pgm, prevno, iter, nextno ) ) {
             return false;
@@ -1420,27 +1412,22 @@ bool enter_line( program_t* pgm, const uint8_t* tokline ) {
         // direct mode
         return direct_mode( pgm, p );
     }
-    printf( "hdr.lineno = %u\n", (unsigned) hdr.lineno );
     pgmiter_t iter; clear_iter( &iter, pgm ); uint16_t prevno = LINENO_NONE, nextno = LINENO_NONE;
     uint16_t newpos = LINEOFFS_NONE;
     short res = find_line( pgm, hdr.lineno, &iter, &prevno, &nextno );
     switch ( res ) {
         case FOUND_ERROR:
-            fprintf( stderr, "FOUND_ERROR\n" );
             return false;
         case FOUND_EXACT:
-            fprintf( stderr, "FOUND_EXACT, prev=%u, next=%u\n", (unsigned) prevno, (unsigned) nextno  );
             if ( !update_line( &iter, &hdr, p, prevno, nextno ) ) {
                 return false;
             }
             return true;
         case FOUND_INSERT:
-            fprintf( stderr, "FOUND_INSERT, prev=%u, next=%u\n", (unsigned) prevno, (unsigned) nextno );
             iter.hdr = hdr;
             if ( !create_line( pgm, &iter.hdr, p, &newpos ) ) {
                 return false;
             }
-            printf( "newpos = %u\n", (unsigned) newpos );
             iter.pos = newpos;
             if ( !emplace_line( pgm, prevno, &iter, nextno ) ) {
                 return false;
@@ -1448,7 +1435,6 @@ bool enter_line( program_t* pgm, const uint8_t* tokline ) {
             return true;
         case FOUND_NONE:
         case FOUND_BEYOND:
-            fprintf( stderr, "FOUND_NONE / FOUND_BEYOND\n" );
             if ( hdr.length == sizeof(linehdr_t) + 1U && *tokline == TOK_EOL ) {
                 // deleting non-existent line: nothing happens
                 return true;
