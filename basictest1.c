@@ -73,8 +73,8 @@ int main( int argc, char** argv ) {
 #define NRM _CSI _SGR
 
         printf( YEL "[" BLU "%u %u %u %u %u" YEL "]" NRM,
-            (unsigned) hdr.nextoffs,
-            (unsigned) hdr.prevoffs,
+            (unsigned) hdr.node.nextoffs,
+            (unsigned) hdr.node.prevoffs,
             (unsigned) hdr.lineno,
             (unsigned) hdr.length,
             (unsigned) hdr.alloc

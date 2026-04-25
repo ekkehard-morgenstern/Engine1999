@@ -184,10 +184,17 @@
 #define LINEOFFS_NONE   UINT16_C(65535)
 
 #pragma pack(2)
-typedef struct _linehdr_t {
-    // all values in network byte order (big endian)
+typedef struct _linenode_t {
     uint16_t    nextoffs;   // from beginning of memory
     uint16_t    prevoffs;   // from beginning of memory
+} linenode_t;
+typedef struct _linelist_t {
+    linenode_t  head;
+    linenode_t  tail;
+} linelist_t;
+typedef struct _linehdr_t {
+    // all values in network byte order (big endian)
+    linenode_t  node;
     uint16_t    lineno;
     uint16_t    length;
     uint16_t    alloc;
@@ -195,19 +202,22 @@ typedef struct _linehdr_t {
 } linehdr_t;
 #pragma pack()
 
+#define LINENODE_INIT { LINEOFFS_NONE, LINEOFFS_NONE }
+#define LINELIST_INIT { LINENODE_INIT, LINENODE_INIT }
+
 #define MAX_PROGRAMSIZE 65536
+
+#define LINELIST_POS    UINT16_C(0)
 
 typedef struct _program_t {
     uint8_t     memory[MAX_PROGRAMSIZE];
-    uint16_t    fillpos, firstlineoffs, lastlineoffs;
+    uint16_t    fillpos;
 } program_t;
 
 typedef struct _pgmiter_t {
     program_t*  pgm;
-    uint8_t*    ptr;
-    uint8_t*    end;
     uint8_t*    tok;
-    uint16_t    offs;
+    uint16_t    pos;
     linehdr_t   hdr;
 } pgmiter_t;
 
