@@ -165,6 +165,7 @@ static bool remove_linenode( program_t* pgm, uint16_t pos, linenode_t* outnode )
 }
 
 static bool emplace_linenode( program_t* pgm, uint16_t prevpos, uint16_t pos, uint16_t nextpos, linenode_t* outnode ) {
+    printf( "emplace %u %u %u\n", (unsigned) prevpos, (unsigned) pos, (unsigned) nextpos );
     linenode_t node = LINENODE_INIT;
     if ( !read_linenode( pgm, pos, &node ) ) {
         return false;
@@ -176,7 +177,7 @@ static bool emplace_linenode( program_t* pgm, uint16_t prevpos, uint16_t pos, ui
     prev.nextoffs = pos;
     node.prevoffs = prevpos;
     node.nextoffs = nextpos;
-    node.prevoffs = pos;
+    next.prevoffs = pos;
     if ( !emit_linenode( pgm, prevpos, &prev ) || !emit_linenode( pgm, nextpos, &next ) ) {
         return false;
     }
@@ -1062,7 +1063,7 @@ void init_program( program_t* pgm ) {
 static void clear_iter( pgmiter_t* iter, program_t* pgm ) {
     iter->pgm = pgm;
     iter->tok = 0;
-    iter->pos = UINT16_C(0);
+    iter->pos = LINEOFFS_NONE;
     clear_linehdr( &iter->hdr );
 }
 
@@ -1394,6 +1395,8 @@ static bool update_line( pgmiter_t* iter, const linehdr_t* newhdr, const uint8_t
         if ( !create_line( iter->pgm, &iter->hdr, newtokens, &newpos ) ) {
             return false;
         }
+        printf( "newpos = %u\n", (unsigned) newpos );
+        iter->pos = newpos;
         if ( !emplace_line( iter->pgm, prevno, iter, nextno ) ) {
             return false;
         }
@@ -1418,6 +1421,7 @@ bool enter_line( program_t* pgm, const uint8_t* tokline ) {
     }
     printf( "hdr.lineno = %u\n", (unsigned) hdr.lineno );
     pgmiter_t iter; clear_iter( &iter, pgm ); uint16_t prevno = LINENO_NONE, nextno = LINENO_NONE;
+    uint16_t newpos = LINEOFFS_NONE;
     short res = find_line( pgm, hdr.lineno, &iter, &prevno, &nextno );
     switch ( res ) {
         case FOUND_ERROR:
@@ -1431,6 +1435,12 @@ bool enter_line( program_t* pgm, const uint8_t* tokline ) {
             return true;
         case FOUND_INSERT:
             fprintf( stderr, "FOUND_INSERT, prev=%u, next=%u\n", (unsigned) prevno, (unsigned) nextno );
+            iter.hdr = hdr;
+            if ( !create_line( pgm, &iter.hdr, p, &newpos ) ) {
+                return false;
+            }
+            printf( "newpos = %u\n", (unsigned) newpos );
+            iter.pos = newpos;
             if ( !emplace_line( pgm, prevno, &iter, nextno ) ) {
                 return false;
             }
