@@ -1207,18 +1207,19 @@ static short find_line( program_t* pgm, uint16_t lineno, pgmiter_t* piter, uint1
             if ( !linelist_prevnode( iter.pgm, iter.pos, &prevpos, 0 ) ) {
                 return FOUND_ERROR;
             }
+            uint16_t prevno = LINENO_NONE, nextno = LINENO_NONE;
             if ( prevpos != LINEOFFS_NONE ) {
                 if ( !iter_load_line( &iter, prevpos ) ) {
                     return FOUND_ERROR;
                 }
+                if ( !get_prev_next_linenos( &iter, &prevno, &nextno ) ) {
+                    return FOUND_ERROR;
+                }
+                prevno = iter.hdr.lineno;
             } else {
-                // otherwise, we stay on the current line
+                // otherwise, we stay on the current line (insert before first line)
+                nextno = iter.hdr.lineno;
             }
-            uint16_t prevno = LINENO_NONE, nextno = LINENO_NONE;
-            if ( !get_prev_next_linenos( &iter, &prevno, &nextno ) ) {
-                return FOUND_ERROR;
-            }
-            prevno = iter.hdr.lineno;
             printf( "prev=%u, next=%u\n", (unsigned) prevno, (unsigned) nextno );
             if ( pprevno ) {
                 *pprevno = prevno;
