@@ -99,6 +99,8 @@ int main( int argc, char** argv ) {
         if ( !enter_line( &pgm, &tokens[0] ) ) {
             fprintf( stderr, "enter failed\n" );
         }
+
+        list_program( &pgm, LINENO_NONE, LINENO_NONE );
     }
 
     return 0;

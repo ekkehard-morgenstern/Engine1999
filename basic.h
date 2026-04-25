@@ -226,5 +226,6 @@ bool detokenize_line( char* buf, const uint8_t* wherefrom, size_t* premain, cons
 void preprocess_buffer( char* buf );
 void init_program( program_t* pgm );
 bool enter_line( program_t* pgm, const uint8_t* tokline );
+void list_program( program_t* pgm, uint16_t lineno_first, uint16_t lineno_last );
 
 #endif

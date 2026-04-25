@@ -224,7 +224,7 @@ static bool read_linelist( program_t* pgm, uint16_t offs, linelist_t* target ) {
     return true;
 }
 
-/* static bool linelist_empty( program_t* pgm, uint16_t offs, bool* pempty ) {
+static bool linelist_empty( program_t* pgm, uint16_t offs, bool* pempty ) {
     // NOTE return value indicates success/error not state
     linelist_t list = LINELIST_INIT;
     if ( !read_linelist( pgm, offs, &list ) ) {
@@ -236,7 +236,7 @@ static bool read_linelist( program_t* pgm, uint16_t offs, linelist_t* target ) {
         *pempty = false;
     }
     return true;
-} */
+}
 
 static bool linelist_firstnode( program_t* pgm, uint16_t listpos, uint16_t* pnodepos ) {
     linelist_t list = LINELIST_INIT;
@@ -1446,4 +1446,42 @@ bool enter_line( program_t* pgm, const uint8_t* tokline ) {
         default:
             return false;
     }
+}
+
+void list_program( program_t* pgm, uint16_t lineno_first, uint16_t lineno_last ) {
+
+    bool isEmpty = true;
+    if ( !linelist_empty( pgm, LINELIST_POS, &isEmpty ) || isEmpty ) {
+        return;
+    }
+
+    uint16_t line_pos = LINEOFFS_NONE;
+    if ( !linelist_firstnode( pgm, LINELIST_POS, &line_pos ) ) {
+        return;
+    }
+
+    do {
+        pgmiter_t iter; clear_iter( &iter, pgm );
+        if ( !iter_load_line( &iter, line_pos ) ) {
+            break;
+        }
+
+        uint16_t lineno = iter.hdr.lineno; bool display = false;
+        if ( ( lineno_first == LINENO_NONE || lineno >= lineno_first ) &&
+             ( lineno_last  == LINENO_NONE || lineno <= lineno_last  ) ) {
+            display = true;
+        }
+
+        if ( !display ) {
+            continue;
+        }
+
+        static char buf[1024]; size_t remain = 1024U;
+        if ( !detokenize_line( buf, iter.tok, &remain, &iter.hdr ) ) {
+            break;
+        }
+
+        printf( "%s\n", buf );
+
+    } while ( linelist_nextnode( pgm, line_pos, &line_pos, 0 ) && line_pos != LINEOFFS_NONE );
 }
