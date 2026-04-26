@@ -72,4 +72,10 @@ typedef struct _compiler_t {
     cpcalltbl_t calltable;
 } compiler_t;
 
+void init_compiler( compiler_t* comp, program_t* pgm );
+bool comp_nextline( compiler_t* comp );
+bool comp_fetchtok( compiler_t* comp );
+bool begin_comp( compiler_t* comp );
+void run_compiler( compiler_t* comp );
+
 #endif

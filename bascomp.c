@@ -32,12 +32,29 @@ void init_compiler( compiler_t* comp, program_t* pgm ) {
     comp->currtok = TOK_EOL;
 }
 
+bool comp_nextline( compiler_t* comp ) {
+    if ( !step_iterate_program( &comp->iter ) ) {
+        return false;
+    }
+    comp->tokp = comp->iter.tok;
+    comp->currtok = TOK_EOL;
+    return true;
+}
+
 bool comp_fetchtok( compiler_t* comp ) {
+NEXTTOK:
     if ( comp->tokp == 0 ) {
         return false;
     }
     uint8_t tok = comp->currtok = *comp->tokp++;
     if ( tok == TOK_EOL ) {
+        --comp->tokp;
+        if ( comp->iter.hdr.lineno != LINENO_NONE ) {
+            if ( !comp_nextline( comp ) ) {
+                return false;
+            }
+            goto NEXTTOK;
+        }
         return false;
     }
     static const struct {
@@ -83,6 +100,22 @@ bool comp_fetchtok( compiler_t* comp ) {
     return false;
 }
 
+bool begin_comp( compiler_t* comp ) {
+    // fetch first token
+    if ( !comp_fetchtok( comp ) ) {
+        return false;
+    }
+
+    return true;
+}
+
 void run_compiler( compiler_t* comp ) {
+
+    // begin compilation
+    if ( !begin_comp( comp ) ) {
+        return;
+    }
+
+    //
 
 }
