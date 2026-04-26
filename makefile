@@ -42,8 +42,8 @@ all: sdltest1 engine1999 basictest1
 	echo ok >all
 
 BASEMOD=sdlevent.o sdllayer.o sdlmain.o sdlscreen.o textscreen.o tilescreen.o sprscreen.o 8x12font1.o sdlaudio.o sdlutil.o \
-		basic.o baspgm.o baslin.o bastok.o
-BASEHDR=sdlevent.h sdllayer.h sdlmain.h sdlscreen.h sdltypes.h textscreen.h tilescreen.h sprscreen.h unxtypes.h sdlaudio.h sdlutil.h basic.h baspgm.h baslin.h bastok.h
+		basic.o basintp.o baspgm.o baslin.o bastok.o
+BASEHDR=sdlevent.h sdllayer.h sdlmain.h sdlscreen.h sdltypes.h textscreen.h tilescreen.h sprscreen.h unxtypes.h sdlaudio.h sdlutil.h basic.h basintp.h baspgm.h baslin.h bastok.h
 
 LIBMOD=$(BASEMOD)
 LIBHDR=$(BASEHDR)
@@ -95,3 +95,5 @@ baspgm.o: baspgm.c $(BASEHDR)
 baslin.o: baslin.c $(BASEHDR)
 
 bastok.o: bastok.c $(BASEHDR)
+
+basintp.o: basintp.c $(BASEHDR)

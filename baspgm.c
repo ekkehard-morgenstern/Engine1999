@@ -26,7 +26,7 @@
 
 #include "baspgm.h"
 #include "bastok.h"
-#include "basic.h"
+#include "basintp.h"
 
 // -- program management ----------------------------------------------------
 
