@@ -26,8 +26,8 @@
               Germany, Europe
 */
 
-#ifndef BASINTP_H
-#define BASINTP_H   1
+#ifndef BASCOMP_H
+#define BASCOMP_H   1
 
 #ifndef STDTYPES_H
 #include "stdtypes.h"
@@ -45,22 +45,22 @@
 #include "baspgm.h"
 #endif
 
-struct _interpr_t;
+struct _compiler_t;
 
-typedef void (*ipcallbk_t)( struct _interpr_t*, void* );
+typedef void (*cpcallbk_t)( struct _compiler_t*, void* );
 
-typedef struct _ipprintparam_t {
+typedef struct _cpprintparam_t {
     void*       userdata;
     const char* text;
-} ipprintparam_t;
+} cpprintparam_t;
 
-typedef struct _ipcalltbl_t {
+typedef struct _cpcalltbl_t {
     void*       userdata;
-    ipcallbk_t  yield;  // called once after every instruction
-    ipcallbk_t  print;
-} ipcalltbl_t;
+    cpcallbk_t  yield;  // called once after every instruction
+    cpcallbk_t  print;
+} cpcalltbl_t;
 
-typedef struct _interpr_t {
+typedef struct _compiler_t {
     pgmiter_t   iter;
     uint8_t*    tokp;
     uint8_t     currtok;
@@ -69,17 +69,7 @@ typedef struct _interpr_t {
         double      number;
     };
     jmp_buf     ready_jump, exit_jump;
-    ipcalltbl_t calltable;
-} interpr_t;
-
-// -- direct mode -----------------------------------------------------------
-
-bool direct_mode( program_t* pgm, const uint8_t* tokens );
-
-// -- interpreter -----------------------------------------------------------
-
-void init_interpr( interpr_t* interp, program_t* pgm );
-bool intp_fetchtok( interpr_t* interp );
-void run_interpr( interpr_t* interp );
+    cpcalltbl_t calltable;
+} compiler_t;
 
 #endif
