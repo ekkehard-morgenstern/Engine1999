@@ -46,9 +46,7 @@ NEXTTOK:
     if ( comp->tokp == 0 ) {
         return false;
     }
-    uint8_t tok = comp->currtok = *comp->tokp++;
-    if ( tok == TOK_EOL ) {
-        --comp->tokp;
+    if ( comp->currtok == TOK_EOL ) {
         if ( comp->iter.hdr.lineno != LINENO_NONE ) {
             if ( !comp_nextline( comp ) ) {
                 return false;
@@ -56,6 +54,11 @@ NEXTTOK:
             goto NEXTTOK;
         }
         return false;
+    }
+    uint8_t tok = comp->currtok = *comp->tokp++;
+    if ( tok == TOK_EOL ) {
+        --comp->tokp;
+        return true;
     }
     static const struct {
         uint8_t tok;

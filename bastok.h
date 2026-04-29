@@ -175,6 +175,15 @@
 #define TOK_COLUMN      UINT8_C(124)        // | column
 #define TOK_RBRACE      UINT8_C(125)        // } right brace
 #define TOK_TILDE       UINT8_C(126)        // ~ tilde
+#define TOK_NOT         UINT8_C(127)        // NOT operator
+#define TOK_AND         UINT8_C(128)        // AND operator
+#define TOK_OR          UINT8_C(129)        // OR operator
+#define TOK_XOR         UINT8_C(130)        // XOR operator
+#define TOK_NAND        UINT8_C(131)        // NAND operator
+#define TOK_NOR         UINT8_C(132)        // NOR operator
+#define TOK_XNOR        UINT8_C(133)        // XNOR operator
+#define TOK_LSHIFT      UINT8_C(134)        // LSHIFT operator
+#define TOK_RSHIFT      UINT8_C(135)        // RSHIFT operator
 
 // -- single character tokens -----------------------------------------------
 
