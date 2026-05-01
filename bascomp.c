@@ -112,7 +112,17 @@ bool comp_gen_jump( compiler_t* comp ) {
 }
 
 bool comp_gen_drop( compiler_t* comp, uint16_t cnt ) {
-    return comp_gen_ins( comp, INS_DROP, UINT8_C(0), UINT16_C(0) );
+    if ( cnt == UINT16_C(0) ) {
+        return true;
+    }
+    if ( cnt == UINT16_C(1) ) {
+        return comp_gen_ins( comp, INS_DROP, UINT8_C(0), UINT16_C(0) );
+    }
+    return comp_gen_ins( comp, INS_DROP | INSF_P, UINT8_C(0), cnt );
+}
+
+bool comp_gen_line( compiler_t* comp, uint16_t line ) {
+    return comp_gen_ins( comp, INS_LINE | INSF_P, UINT8_C(0), line );
 }
 
 bool comp_gen_exp_ins( compiler_t* comp, uint16_t ins ) {

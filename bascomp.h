@@ -125,9 +125,9 @@ The 16 basic instructions are as follows:
                         depending on C, a code or data item is dropped from the stack.
                         if a parameter field is also given, it specifies the number of
                         items to drop.
-
-
-
+    1001 - LINE         set line number immediate
+                        sets the current line number (must be the first instruction of a line)
+                        C field must be 0, P must be set and a line number specified as parameter.
 
     1111 reserved
 
@@ -162,9 +162,44 @@ The 4096 extended instructions are as follows:
     0000 00101001       CSLE - compare string less or equal         ( s1 s2 -- n )  C=0 P=0
     0000 00101010       CSGT - compare string greater than          ( s1 s2 -- n )  C=0 P=0
     0000 00101011       CSLT - compare string less than             ( s1 s2 -- n )  C=0 P=0
+        .
+        .
+        .
+    0001 00000000       CRNV - create regular numeric variable (param=name) ( -- v ) C=0 P=1
+    0001 00000001       CRIV - create regular integer variable (param=name) ( -- v ) C=0 P=1
+    0001 00000010       CRSV - create regular string  variable (param=name) ( -- v ) C=0 P=1
+    0001 00000011       (reserved)
+    0001 00000100       CNAV - create numeric array variable (param=name) ( size ... ndim -- v ) C=0 P=1
+    0001 00000101       CIAV - create integer array variable (param=name) ( size ... ndim -- v ) C=0 P=1
+    0001 00000110       CSAV - create string  array variable (param=name) ( size ... ndim -- v ) C=0 P=1
+    0001 00000111       (reserved)
 
+    0001 00001000       DRNV - delete regular numeric variable ( v -- ) C=0 P=1
+    0001 00001001       DRIV - delete regular integer variable ( v -- ) C=0 P=1
+    0001 00001010       DRSV - delete regular string  variable ( v -- ) C=0 P=1
+    0001 00001011       (reserved)
+    0001 00001100       DNAV - delete numeric array variable ( v -- ) C=0 P=0
+    0001 00001101       DIAV - delete integer array variable ( v -- ) C=0 P=0
+    0001 00001110       DSAV - delete string  array variable ( v -- ) C=0 P=0
+    0001 00001111       (reserved)
 
+    0001 00010000       RRNV - read regular numeric variable ( v -- n ) C=0 P=0
+    0001 00010001       RRIV - read regular integer variable ( v -- n ) C=0 P=0
+    0001 00010010       RRSV - read regular string  variable ( v -- s ) C=0 P=0
+    0001 00010011       (reserved)
+    0001 00010100       RNAE - read numeric array element (param=offs) ( inx ... ndim v -- n ) C=0 P=0
+    0001 00010101       RIAE - read integer array element (param=offs) ( inx ... ndim v -- n ) C=0 P=0
+    0001 00010110       RSAE - read string  array element (param=offs) ( inx ... ndim v -- s ) C=0 P=0
+    0001 00010111       (reserved)
 
+    0001 00011000       WRNV - write regular numeric variable ( n v -- ) C=0 P=0
+    0001 00011001       WRIV - write regular integer variable ( n v -- ) C=0 P=0
+    0001 00011010       WRSV - write regular string  variable ( s v -- ) C=0 P=0
+    0001 00011011       (reserved)
+    0001 00011100       WNAE - write numeric array element ( inx ... ndim n v -- ) C=0 P=0
+    0001 00011101       WIAE - write integer array element ( inx ... ndim n v -- ) C=0 P=0
+    0001 00011110       WSAE - write string  array element ( inx ... ndim s v -- ) C=0 P=0
+    0001 00011111       (reserved)
 
 
 
@@ -193,6 +228,7 @@ The 4096 extended instructions are as follows:
 #define INS_JPCC        MKINS_I(6)
 #define INS_JUMP        MKINS_I(7)
 #define INS_DROP        MKINS_I(8)
+#define INS_LINE        MKINS_I(9)
 
 #define INS_NEG         UINT16_C(0X010)
 #define INS_NOT         UINT16_C(0X011)
@@ -222,6 +258,18 @@ The 4096 extended instructions are as follows:
 #define INS_CSLE        UINT16_C(0X029)
 #define INS_CSGT        UINT16_C(0X02A)
 #define INS_CSLT        UINT16_C(0X02B)
+#define INS_CRNV        UINT16_C(0X100)
+#define INS_CRIV        UINT16_C(0X101)
+#define INS_CRSV        UINT16_C(0X102)
+#define INS_CNAV        UINT16_C(0X104)
+#define INS_CIAV        UINT16_C(0X105)
+#define INS_CSAV        UINT16_C(0X106)
+#define INS_DRNV        UINT16_C(0X108)
+#define INS_DRIV        UINT16_C(0X109)
+#define INS_DRSV        UINT16_C(0X10A)
+#define INS_DNAV        UINT16_C(0X10C)
+#define INS_DIAV        UINT16_C(0X10D)
+#define INS_DSAV        UINT16_C(0X10E)
 
 #define CODESIZE_MAX    65536U
 #define DATASIZE_MAX    65536U
@@ -254,6 +302,7 @@ bool comp_gen_brir( compiler_t* comp, int32_t rel_offs );
 bool comp_gen_jpcc( compiler_t* comp );
 bool comp_gen_jump( compiler_t* comp );
 bool comp_gen_drop( compiler_t* comp, uint16_t cnt );
+bool comp_gen_line( compiler_t* comp, uint16_t line );
 bool comp_gen_exp_ins( compiler_t* comp, uint16_t ins );
 
 bool comp_nextline( compiler_t* comp );
