@@ -165,5 +165,5 @@ control-flow-stmt := for-stmt | next-stmt | goto-stmt | return-stmt | label-stmt
 
 stmt := io-stmt | assign-stmt | control-flow-stmt .
 stmt-list := stmt { TOK_COLON stmt } .
-stmt-line := stmt-list TOK_EOL .
+stmt-line := stmt-list [ TOK_QUOLIT ] TOK_EOL .
 stmt-lines := stmt-line { stmt-line } .

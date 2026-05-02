@@ -395,7 +395,7 @@ Explanation of node types:
               and has a variable list associated with it. Thus, all context
               resolution has to happen at runtime through a loop context stack.
 
-    NT_NEXT         NEXT statement
+    NT_NEXTSTMT     NEXT statement
         data:
             - at least 2 bytes of numeric variable offset (can be multiple)
 
@@ -413,29 +413,122 @@ Explanation of node types:
             - 1 branch of goto/gosub keyword
             - 1 branch of goto/gosub target
 
-    NT_RETURN       RETURN statement
+    NT_RETURNSTMT   RETURN statement
 
-    NT_LABEL        LABEL statement
+    NT_LABELSTMT    LABEL statement
         data:
             - 2 bytes of label variable offset
 
+    [ NT_ENDIFKW - not generated ]
+    [ NT_ENDUNLESSKW - not generated ]
+    [ NT_THENKW - not generated ]
 
+    NT_SINGLELINEIFSTMT     Single-line IF statement
+        data:
+            - 1 optional byte of TOK_GOTO if THEN/ELSE are goto targets
+        branches:
+            - 1 branch of IF numeric expression
+            - 1 branch of THEN gosub/goto target or statement list
+            - 1 optional branch of ELSE gosub/goto target or statement list
+        immediate processing:
+            - THEN/ELSE branches are either both gosub/goto targets or
+              both statement lists
 
+    NT_MULTILINEIFSTMT      Multi-line IF statement
+        data:
+            - 1 byte of IF/UNLESS token
+        branches:
+            - 1 branch of statement lines
+            - 1 optional branch of ELSE statement lines
 
+    [ NT_CONTROLFLOWSTMT - not generated ]
+    [ NT_STMT - not generated ]
 
+    NT_STMTLIST         Statement list
+        branches:
+            - 2 or more statements
+        immediate processing:
+            - generated only if more than 1 statement
 
+    NT_STMTLINE         Statement line
+        data:
+            - 2 bytes of line number (not present in direct mode)
+        branches:
+            - 1 branch of statement list
+            - this is the root node for direct mode
 
-
-
-
-
-
-
-
-
-
-
+    NT_STMTLINES        Statement lines
+        branches:
+            - 2 or more statement lines
+        immediate processing:
+            - generated only if more than 1 statement
+            - this is the root node for program mode
 */
+
+#define NT_UNKNOWN              UINT8_C(0X00)   // unknown node type
+#define NT_NUMEXLIST            UINT8_C(0X01)   // numeric expression list
+#define NT_STREXLIST            UINT8_C(0X02)   // string expression list
+#define NT_EXPRLIST             UINT8_C(0X03)   // generic expression list
+#define NT_ARRAYSUB             UINT8_C(0X04)   // array subscript
+#define NT_ARRAYDIMDECL         UINT8_C(0X05)   // array dimension declaration
+#define NT_ARRAYDECL            UINT8_C(0X06)   // array declaration
+#define NT_ARRAYDECLLIST        UINT8_C(0X07)   // array declaration list
+#define NT_EMPTYARRAYREF        UINT8_C(0X08)   // empty array reference, needed for ERASE statement
+#define NT_EMPTYARRAYREFLIST    UINT8_C(0X09)   // empty array reference list
+#define NT_NUMBASEVARREF        UINT8_C(0X0A)   // numeric base variable reference
+#define NT_NUMVARREF            UINT8_C(0X0B)   // numeric variable reference
+#define NT_STRBASEVARREF        UINT8_C(0X0C)   // string base variable reference
+#define NT_STRVARREF            UINT8_C(0X0D)   // string variable reference
+#define NT_DECLIT               UINT8_C(0X0E)   // decimal literal
+#define NT_NUMLIT               UINT8_C(0X0F)   // numeric literal
+#define NT_STRLIT               UINT8_C(0X10)   // string literal
+#define NT_STRLITS              UINT8_C(0X11)   // string literals
+#define NT_NUMUSRFNNAME         UINT8_C(0X12)   // numeric user function name
+#define NT_STRUSRFNNAME         UINT8_C(0X13)   // string  user function name
+#define NT_NUMUSRFNCALL         UINT8_C(0X14)   // numeric user function call
+#define NT_STRUSRFNCALL         UINT8_C(0X15)   // string user function call
+#define NT_SYSNOARGSTRNAME      UINT8_C(0X16)   // system no-argument string name
+#define NT_STRADDEXPR           UINT8_C(0X17)   // string addition expression
+#define NT_NUMUNARYOP           UINT8_C(0X18)   // numeric unary operator
+#define NT_NUMUNARYEX           UINT8_C(0X19)   // numeric unary expression
+#define NT_NUMMULTOP            UINT8_C(0X1A)   // numeric multiplication operator
+#define NT_NUMMULTEX            UINT8_C(0X1B)   // numeric multiplication expression
+#define NT_NUMADDOP             UINT8_C(0X1C)   // numeric addition operator
+#define NT_NUMADDEX             UINT8_C(0X1D)   // numeric addition expression
+#define NT_NUMSHIFTOP           UINT8_C(0X1E)   // numeric shift operator
+#define NT_NUMSHIFTEX           UINT8_C(0X1F)   // numeric shift expression
+#define NT_NUMCMPOP             UINT8_C(0X20)   // numeric comparison operator
+#define NT_NUMCMPEX             UINT8_C(0X21)   // numeric shift expression
+#define NT_NUMANDOP             UINT8_C(0X22)   // numeric AND operator
+#define NT_NUMANDEX             UINT8_C(0X23)   // numeric AND expression
+#define NT_NUMOROP              UINT8_C(0X24)   // numeric OR operator
+#define NT_NUMOREX              UINT8_C(0X25)   // numeric OR expression
+#define NT_SAVESTMT             UINT8_C(0X26)   // SAVE statement
+#define NT_CHANSPEC             UINT8_C(0X27)   // channel specifier
+#define NT_PRINTSEP             UINT8_C(0X28)   // print separator
+#define NT_PRINTARG             UINT8_C(0X29)   // print argument
+#define NT_PRINTARGLIST         UINT8_C(0X2A)   // print argument
+#define NT_PRINTSTMT            UINT8_C(0X2B)   // print statement
+#define NT_NUMASSIGN            UINT8_C(0X2C)   // numeric assignment
+#define NT_STRASSIGN            UINT8_C(0X2D)   // string assignment
+#define NT_SUBSTROP             UINT8_C(0X2E)   // substring operator
+#define NT_SUBSTRASSIGN         UINT8_C(0X2F)   // substring assignment
+#define NT_ASSIGNLIST           UINT8_C(0X30)   // assignment list
+#define NT_LETSTMT              UINT8_C(0X31)   // LET statement
+#define NT_DIMSTMT              UINT8_C(0X32)   // DIM statement
+#define NT_ERASESTMT            UINT8_C(0X33)   // ERASE statement
+#define NT_FORSTMT              UINT8_C(0X34)   // FOR statement
+#define NT_NEXTSTMT             UINT8_C(0X35)   // NEXT statement
+#define NT_GOTOKW               UINT8_C(0X36)   // GOTO/GOSUB keyword
+#define NT_GOTOTARGET           UINT8_C(0X37)   // GOTO/GOSUB target
+#define NT_GOTOSTMT             UINT8_C(0X38)   // GOTO/GOSUB statement
+#define NT_RETURNSTMT           UINT8_C(0X39)   // RETURN statement
+#define NT_LABELSTMT            UINT8_C(0X3A)   // LABEL statement
+#define NT_SINGLELINEIFSTMT     UINT8_C(0X3B)   // Single-line IF statement
+#define NT_MULTILINEIFSTMT      UINT8_C(0X3C)   // Multi-line IF statement
+#define NT_STMTLIST             UINT8_C(0X3D)   // Statement list
+#define NT_STMTLINE             UINT8_C(0X3E)   // Statement line
+#define NT_STMTLINES            UINT8_C(0X3F)   // Statement lines
 
 /*
 The runtime system has two stacks:
