@@ -755,7 +755,7 @@ typedef struct _compiler_t {
     uint32_t        datasize;
 } compiler_t;
 
-void init_compiler( compiler_t* comp, program_t* pgm );
+void init_compiler( compiler_t* comp, program_t* pgm, bool keepmemory );
 
 bool comp_alloc_tree( compiler_t* comp, uint16_t size, uint16_t* poffs );
 bool comp_alloc_code( compiler_t* comp, uint16_t size, uint16_t* poffs );

@@ -26,10 +26,16 @@
 
 #include "bascomp.h"
 
-void init_compiler( compiler_t* comp, program_t* pgm ) {
+void init_compiler( compiler_t* comp, program_t* pgm, bool keepmemory ) {
     clear_iter( &comp->iter, pgm );
     comp->tokp = 0;
     comp->currtok = TOK_EOL;
+    comp->treesize = UINT16_C(0);
+    if ( !keepmemory ) {
+        // CAUTION: Set the "keepmemory" flag only if you know what you're doing!
+        comp->codesize = UINT16_C(0);
+        comp->datasize = UINT16_C(0);
+    }
 }
 
 bool comp_alloc_tree( compiler_t* comp, uint16_t size, uint16_t* poffs ) {
