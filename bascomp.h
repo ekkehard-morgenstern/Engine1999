@@ -380,6 +380,48 @@ Explanation of node types:
 
     [ NT_ASSIGNSTMT - not generated ]
 
+    NT_FORSTMT      FOR statement
+        data:
+            - 2 bytes of numeric variable offset
+            - 8 bytes of starting value
+            - 8 bytes of ending value
+            - optionally, 8 bytes of step value
+        immediate processing:
+            - stores base numeric variable offset in data
+            - the expressions are evaluated and must be constant
+            - their computed values are stored in the data field
+            - NOTE there's no code block associated with the FOR statement
+              the reason for that is the NEXT statement can be located anywhere
+              and has a variable list associated with it. Thus, all context
+              resolution has to happen at runtime through a loop context stack.
+
+    NT_NEXT         NEXT statement
+        data:
+            - at least 2 bytes of numeric variable offset (can be multiple)
+
+    NT_GOTOKW       GOTO/GOSUB keyword
+        data:
+            - 1 byte of keyword token (even if originally written apart)
+
+    NT_GOTOTARGET   GOTO/GOSUB target
+        data:
+            - 2 bytes of variable offset (label!), or
+            - 8 bytes of line number
+
+    NT_GOTOSTMT     GOTO/GOSUB statement
+        branches:
+            - 1 branch of goto/gosub keyword
+            - 1 branch of goto/gosub target
+
+    NT_RETURN       RETURN statement
+
+    NT_LABEL        LABEL statement
+        data:
+            - 2 bytes of label variable offset
+
+
+
+
 
 
 
