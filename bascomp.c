@@ -121,8 +121,40 @@ bool comp_create_node( compiler_t* comp, uint16_t* pnodeoffs, uint8_t nodetype, 
 }
 
 bool comp_add_branch( compiler_t* comp, uint16_t nodeoffs, uint16_t branchoffs ) {
+    if ( nodeoffs == NODEOFFS_NONE || branchoffs == NODEOFFS_NONE ) {
+        return false;
+    }
+    // <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    if ( comp->tree[ nodeoffs + 1U ] == UINT8_C(255) ) {    // numbranches too big
+        return false;
+    }
+    // read last branch link from node
+    uint16_t lastbranch =
+        ( ( (uint16_t) comp->tree[ nodeoffs + 6U ] ) << UINT8_C(8) ) |
+                       comp->tree[ nodeoffs + 7U ];
+    // allocate new branch entry
+    uint16_t offs = NODEOFFS_NONE;
+    if ( !comp_alloc_tree( comp, BRANCHENT_SIZE, &offs ) || offs == NODEOFFS_NONE ) {
+        return false;
+    }
+    if ( lastbranch != NODEOFFS_NONE ) {
+        // if there was a previous branch, link it to this one
+        // <nodepos.16> <nextbranch.16>
+        comp->tree[ lastbranch + 2U ] = (uint8_t) ( offs >> UINT8_C(8) );
+        comp->tree[ lastbranch + 3U ] = (uint8_t)   offs;
+    }
+    lastbranch = offs;  // now this node is the last one in the list
+    // update lastbranch link in node
+    comp->tree[ nodeoffs + 6U ] = (uint8_t) ( offs >> UINT8_C(8) );
+    comp->tree[ nodeoffs + 7U ] = (uint8_t)   offs;
+    // store new branch info
     // <nodepos.16> <nextbranch.16>
-    return false; // TBD
+    comp->tree[ offs++ ] = (uint8_t) ( branchoffs >> UINT8_C(8) );
+    comp->tree[ offs++ ] = (uint8_t)   branchoffs;
+    comp->tree[ offs++ ] = (uint8_t) ( NODEOFFS_NONE >> UINT8_C(8) );
+    comp->tree[ offs++ ] = (uint8_t)   NODEOFFS_NONE;
+    // done
+    return true;
 }
 
 static bool comp_gen_ins( compiler_t* comp, uint8_t ins, uint8_t ext, uint16_t param ) {
