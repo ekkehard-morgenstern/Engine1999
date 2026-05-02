@@ -159,6 +159,155 @@ bool comp_add_branch( compiler_t* comp, uint16_t nodeoffs, uint16_t branchoffs )
     return true;
 }
 
+bool comp_eat_list( compiler_t* comp, uint16_t* pnodeoffs, uint8_t nodetype, comp_eatfn_t element_eater, uint8_t septok ) {
+    // list := element { SEPTOK element } .  -- if SEPTOK is TOK_EOL, there's no separator token
+    uint16_t expr1 = NODEOFFS_NONE;
+    if ( !element_eater( comp, &expr1 ) ) {
+        return false;
+    }
+    if ( expr1 == NODEOFFS_NONE ) {
+        return false;
+    }
+    uint16_t nodeoffs = NODEOFFS_NONE;
+    for (;;) {
+        uint8_t* backup = comp->tokp;
+        bool mandatory = false; uint16_t expr2 = NODEOFFS_NONE;
+        if ( septok != TOK_EOL && comp->currtok == septok ) {
+            // read next token
+            if ( !comp_fetchtok( comp ) ) {
+                // stop processing
+                break;
+            }
+            mandatory = true;   // the following expression is mandatory
+        } else if ( septok != TOK_EOL ) {
+            // have a separator, but it's not present
+            break;
+        }
+        if ( !element_eater( comp, &expr2 ) || expr2 == NODEOFFS_NONE ) {
+            if ( mandatory ) {  // mandatory expression missing: stop
+                // rewind token pointer
+CANCEL:         comp->tokp = backup;
+                // re-fetch the separator token (if any)
+                comp_fetchtok( comp );
+                // stop processing
+                break;
+            }
+        }
+        // we have now a new branch; first see if we already have a node or need to create one
+        if ( nodeoffs == NODEOFFS_NONE ) {
+            if ( !comp_create_node( comp, &nodeoffs, nodetype, UINT8_C(2), UINT16_C(0), 0, (int) expr1, (int) expr2 ) ) {
+                // failed to create node: cancel operation
+                goto CANCEL;
+            }
+            if ( nodeoffs == NODEOFFS_NONE ) {
+                // something went wrong: cancel
+                goto CANCEL;
+            }
+        } else {
+            // the node already exists: add a new branch
+            if ( !comp_add_branch( comp, nodeoffs, expr2 ) ) {
+                // something went wrong: cancel
+                goto CANCEL;
+            }
+        }
+        // successful, continue
+    }
+    // either return node with what we already have, or just the first branch
+    *pnodeoffs = nodeoffs != NODEOFFS_NONE ? nodeoffs : expr1;
+    return true;
+}
+
+bool comp_eat_numexlist( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // num-ex-list := num-expr { TOK_COMMA num-expr } .
+    return comp_eat_list( comp, pnodeoffs, NT_NUMEXLIST, comp_eat_numexpr, TOK_COMMA );
+}
+
+bool comp_eat_strexlist( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // str-ex-list := str-expr { TOK_COMMA str-expr } .
+    return comp_eat_list( comp, pnodeoffs, NT_STREXLIST, comp_eat_strexpr, TOK_COMMA );
+}
+
+bool comp_eat_exprlist( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // expr-list := expr { TOK_COMMA expr } .
+    return comp_eat_list( comp, pnodeoffs, NT_EXPRLIST, comp_eat_expr, TOK_COMMA );
+}
+
+bool comp_eat_arraysub( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_arraydimdecl( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_arraydecl( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_arraydecllist( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_emptyarrayref( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_emptyarrayreflist( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_numbasevarref( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_numvarref( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_strbasevarref( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_strvarref( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_anybasevarref( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_declit( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_numlit( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_strlit( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_strlits( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_numusrfnname( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_strusrfnname( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_numusrfncall( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_strusrfncall( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_sysnoargstrname( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_sysnoargstrcall( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_numfunccall( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_strfunccall( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_strbaseexpr( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_straddexpr( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_strexpr( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_numsubexpr( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_numbaseexpr( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_numunaryop( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_numunaryex( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_nummultop( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_nummultex( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_numaddop( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_numaddex( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_numshiftop( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_numshiftex( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_numcmpop( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_numcmpex( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_numandop( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_numandex( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_numorop( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_numorex( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_numexpr( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_expr( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_savestmt( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_chanspec( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_printsep( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_printarg( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_printarglist( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_printstmt( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_iostmt( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_numassign( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_strassign( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_substrop( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_substrassign( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_anyassign( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_assignlist( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_letstmt( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_dimstmt( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_erasestmt( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_assignstmt( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_forstmt( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_nextstmt( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_gotokw( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_gototarget( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_gotostmt( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_returnstmt( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_labelstmt( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_singlelineifstmt( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_multilineifstmt( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_controlflowstmt( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_stmt( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_stmtlist( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_stmtline( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_stmtlines( compiler_t* comp, uint16_t* pnodeoffs );
+
 static bool comp_gen_ins( compiler_t* comp, uint8_t ins, uint8_t ext, uint16_t param ) {
     uint8_t size = UINT8_C(1);
     if ( ins & INSF_E ) ++size;
@@ -263,10 +412,14 @@ NEXTTOK:
         }
         return false;
     }
+SKIPTOK:
     uint8_t tok = comp->currtok = *comp->tokp++;
     if ( tok == TOK_EOL ) {
         --comp->tokp;
         return true;
+    }
+    if ( tok == TOK_SPACE ) {
+        goto SKIPTOK;
     }
     static const struct {
         uint8_t tok;
