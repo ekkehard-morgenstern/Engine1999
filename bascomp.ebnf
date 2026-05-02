@@ -109,10 +109,12 @@ expr         := num-expr | str-expr .
 
 save-stmt := SAVE str-expr [ TOK_COMMA TOK_IDENT ] .
 
+chan-spec := TOK_LATTICE num-expr .
+
 print-sep := TOK_COMMA | TOK_SEMIC .
 print-arg := expr [ print-sep ] .
 print-arg-list := print-arg { print-arg } .
-print-stmt := TOK_PRINT [ print-arg-list ] .
+print-stmt := TOK_PRINT [ chan-spec TOK_COMMA ] [ print-arg-list ] .
 
 io-stmt := save-stmt | print-stmt .
 
@@ -121,7 +123,8 @@ str-assign := str-var-ref TOK_EQ str-expr .
 substr-op := TOK_LEFT | TOK_MID | TOK_RIGHT .
 substr-assign := substr-op TOK_DOLLAR TOK_LPAREN expr-list TOK_RPAREN .
 any-assign := num-assign | substr-assign | str-assign .
-let-stmt := [ TOK_LET ] any-assign .
+assign-list := any-assign { TOK_COMMA any-assign } .
+let-stmt := [ TOK_LET ] assign-list .
 
 dim-stmt := TOK_DIM array-decl-list .
 erase-stmt := TOK_ERASE empty-array-ref-list .

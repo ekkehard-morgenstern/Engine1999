@@ -305,9 +305,80 @@ Explanation of node types:
     [ NT_NUMEXPR - not generated ]
     [ NT_EXPR - not generated ]
 
-    NT_SAVESTMT
+    NT_SAVESTMT     SAVE statement
+        data:
+            - n bytes of save mode (optional)
+        branches:
+            - 1 branch of string expression
+        immediate processing:
+            - the SAVE statement is special b/c it uses an identifier as optional second parameter
+              denoting save mode (A for ASCII, B (default) for binary)
+            - the file name need not be a string literal
 
+    NT_CHANSPEC     channel specifier
+        branches:
+            - 1 branch of numeric expression
 
+    NT_PRINTSEP     print separator
+        data:
+            - 1 byte of separator token
+
+    NT_PRINTARG     print argument
+        branches:
+            - 1 branch of expression
+            - 1 optional branch of separator
+
+    NT_PRINTARGLIST     print argument
+        branches:
+            - 2 or more branches of print arguments
+        immediate processing:
+            - generated only if there's more than one print argument
+
+    NT_PRINTSTMT    print statement
+        branches:
+            - 1 optional branch of channel info
+            - 1 optional branch of print argument list
+
+    [ NT_IOSTMT - not generated ]
+
+    NT_NUMASSIGN    numeric assignment
+        branches:
+            - 1 branch of numeric variable reference
+            - 1 branch of numeric expression
+
+    NT_STRASSIGN    string assignment
+        branches:
+            - 1 branch of string variable reference
+            - 1 branch of string expression
+
+    NT_SUBSTROP     substring operator
+        data:
+            - 1 byte of substring operator
+
+    NT_SUBSTRASSIGN     substring assignment
+        branches:
+            - 1 branch of substring operator
+            - 1 branch of expression list
+
+    [ NT_ANYASSIGN - not generated ]
+
+    NT_ASSIGNLIST       assignment list
+        branches:
+            - 1 or more branches of assignment expressions
+
+    NT_LETSTMT      LET statement
+        branches:
+            - 1 branch of assignment list
+
+    NT_DIMSTMT      DIM statement
+        branches:
+            - 1 branch of array declarator list
+
+    NT_ERASESTMT    ERASE statement
+        branches:
+            - 1 branch of empty array reference list
+
+    [ NT_ASSIGNSTMT - not generated ]
 
 
 
