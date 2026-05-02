@@ -50,6 +50,195 @@ See bascomp.ebnf for syntax definition.
 */
 
 /*
+The syntax tree is temporary for the compiler run and organized as follows:
+
+    <nodetype.8> <numbranches.8> <datalen.16> <data...> <firstbranch.16>
+
+For every branch entry:
+
+    <nodepos.16> <nextbranch.16>
+
+16-bit values are stored in network byte order (big endian).
+
+Explanation of node types:
+
+    NT_NUMEXLIST    numeric expression list
+    NT_STREXLIST    string expression list
+    NT_EXPRLIST     generic expression list
+        data: none
+        branches: point to expression objects in the list
+        immediate processing: none
+
+    [ NT_ARRAYINDEX - not generated ]
+
+    NT_ARRAYSUB     array subscript
+        data: none
+        branches: 1
+            - points to either NT_NUMEXLIST or string expression
+        immediate processing: none
+
+    NT_ARRAYDIMDECL array dimension declaration
+        data:
+            - 1 byte (TOK_DYNAMIC or TOK_ASSOC), if specified
+            - 2 bytes per dimension of size information, if specified
+        branches: none
+        immediate processing:
+            - if given, the numeric expressions are evaluated to
+              see if they're constant. it's an error if they aren't.
+            - the total size of the expected array is computed
+              it's an error if it's too small or too large.
+            - this computes the list of output dimensions
+
+    NT_ARRAYDECL    array declaration
+        data:
+            - 1 byte of type indicator, 2 bytes of variable offset
+        branches: none
+        immediate processing:
+            - the variable is looked up, to see if it exists
+            - if it does, it's an error
+            - if it doesn't, the variable is created, and the type and
+              offset stored in the data field
+
+    NT_ARRAYDECLLIST    array declaration list
+        data: none
+        branches: the NT_ARRAYDECL nodes
+
+    NT_EMPTYARRAYREF    empty array reference, needed for ERASE statement
+        data:
+            - 1 byte of type indicator, 2 bytes of variable offset
+        branches: none
+        immediate processing:
+            - the array is looked up, it's an error if it doesn't exist
+            - the variable offset is encoded in the data field
+
+    NT_EMPTYARRAYREFLIST    empty array reference list
+        data: none
+        branches: the NT_EMPTYARRAYREF nodes
+
+    NT_NUMBASEVARREF    numeric base variable reference
+        data:
+            - 1 byte of type indicator, n bytes of name
+        branches: none
+        immediate processing: none (!)
+        note:
+            - because it's used in compound contexts, the variable reference
+              cannot be resolved here.
+
+    NT_NUMVARREF        numeric variable reference
+        data:
+            - 1 byte of type indicator
+            - 2 bytes of variable offset
+        branches:
+            - list of array index expressions
+
+    NT_STRBASEVARREF    string base variable reference
+        data:
+            - 1 byte of type indicator, n bytes of name
+        branches: none
+        immediate processing: none (!)
+        note:
+            - because it's used in compound contexts, the variable reference
+              cannot be resolved here.
+
+    NT_STRVARREF        string variable reference
+        data:
+            - 1 byte of type indicator
+            - 2 bytes of variable offset
+        branches:
+            - list of array index expressions
+
+    [ NT_ANYBASEVARREF - not generated ]
+
+    NT_DECLIT       decimal literal
+        data:
+            - numeric value, 8 bytes in network byte order
+        immediate processing:
+            - consumes TOK_DECLIT or TOK_DEC0..DEC9, and generates a floating-point representation,
+              which is then stored into the data field.
+
+    NT_NUMLIT       numeric literal
+        data:
+            - numeric value, 8 bytes in network byte order
+        immediate processing:
+            - attempts NT_DECLIT first, and if successful, returns it as a NT_NUMLIT node.
+            - otherwise, attempts the other number base literals (hex, oct, quad and bin)
+
+    NT_STRLIT       string literal
+        data:
+            - 1 byte of type indicator (can be string, shell, bracket or brace literal)
+            - n bytes of text
+        branches: none
+        note:
+            - note that shell/bracket/brace literals aren't evaluated here, just gathered.
+
+    NT_STRLITS      string literals
+        data: none
+        branches:
+            - list of string literals (NT_STRLIT)
+
+    NT_NUMUSRFNNAME     numeric user function name
+    NT_STRUSRFNNAME     string  user function name
+        data:
+            - 1 byte of type indicator
+            - n bytes of name
+
+    NT_NUMUSRFNCALL     numeric user function call
+    NT_STRUSRFNCALL     string user function call
+        data:
+            - 1 byte of type indicator
+            - 2 bytes of variable offset
+        branches:
+            - argument expression list
+        immediate processing:
+            - looks up user-function variable and returns its offset
+            - it's an error if it doesn't already exist
+            - the expression list provided must match the parameters specified
+              in the declaration
+            - the variable must contain a code offset for calling
+
+    NT_SYSNOARGSTRNAME  system no-argument string name
+        data:
+            - 1 byte of function token (like TOK_INKEY)
+
+    [ NT_SYSNOARGSTR - not generated ]
+    [ NT_SYSNOARGSTRCALL - not generated ]
+    [ NT_NUMFUNCCALL - not generated ]
+    [ NT_STRFUNCCALL - not generated ]
+    [ NT_STRBASEXPR - not generated ]
+
+    NT_STRADDEXPR   string addition expression
+        branches:
+            - at least 2 branches of string expressions
+        immediate processing:
+            - generated only if there is 2 or more nodes
+
+    [ NT_STREXPR - not generated ]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+*/
+
+/*
 The runtime system has two stacks:
 
     - a data stack for holding parameters and return values
@@ -165,46 +354,24 @@ The 4096 extended instructions are as follows:
         .
         .
         .
-    0001 00000000       CRNV - create regular numeric variable (param=name) ( -- v ) C=0 P=1
-    0001 00000001       CRIV - create regular integer variable (param=name) ( -- v ) C=0 P=1
-    0001 00000010       CRSV - create regular string  variable (param=name) ( -- v ) C=0 P=1
+
+    0001 00000000       RRNV - read regular numeric variable (param=varoffs) ( -- n ) C=0 P=1
+    0001 00000001       RRIV - read regular integer variable (param=varoffs) ( -- n ) C=0 P=1
+    0001 00000010       RRSV - read regular string  variable (param=varoffs) ( -- s ) C=0 P=1
     0001 00000011       (reserved)
-    0001 00000100       CNAV - create numeric array variable (param=name) ( size ... ndim -- v ) C=0 P=1
-    0001 00000101       CIAV - create integer array variable (param=name) ( size ... ndim -- v ) C=0 P=1
-    0001 00000110       CSAV - create string  array variable (param=name) ( size ... ndim -- v ) C=0 P=1
+    0001 00000100       RNAE - read numeric array element (param=varoffs) ( inx ... ndim -- n ) C=0 P=1
+    0001 00000101       RIAE - read integer array element (param=varoffs) ( inx ... ndim -- n ) C=0 P=1
+    0001 00000110       RSAE - read string  array element (param=varoffs) ( inx ... ndim -- s ) C=0 P=1
     0001 00000111       (reserved)
 
-    0001 00001000       DRNV - delete regular numeric variable ( v -- ) C=0 P=1
-    0001 00001001       DRIV - delete regular integer variable ( v -- ) C=0 P=1
-    0001 00001010       DRSV - delete regular string  variable ( v -- ) C=0 P=1
+    0001 00001000       WRNV - write regular numeric variable (param=varoffs) ( n -- ) C=0 P=1
+    0001 00001001       WRIV - write regular integer variable (param=varoffs) ( n -- ) C=0 P=1
+    0001 00001010       WRSV - write regular string  variable (param=varoffs) ( s -- ) C=0 P=1
     0001 00001011       (reserved)
-    0001 00001100       DNAV - delete numeric array variable ( v -- ) C=0 P=0
-    0001 00001101       DIAV - delete integer array variable ( v -- ) C=0 P=0
-    0001 00001110       DSAV - delete string  array variable ( v -- ) C=0 P=0
+    0001 00001100       WNAE - write numeric array element (param=varoffs) ( inx ... ndim n -- ) C=0 P=1
+    0001 00001101       WIAE - write integer array element (param=varoffs) ( inx ... ndim n -- ) C=0 P=1
+    0001 00001110       WSAE - write string  array element (param=varoffs) ( inx ... ndim s -- ) C=0 P=1
     0001 00001111       (reserved)
-
-    0001 00010000       RRNV - read regular numeric variable ( v -- n ) C=0 P=0
-    0001 00010001       RRIV - read regular integer variable ( v -- n ) C=0 P=0
-    0001 00010010       RRSV - read regular string  variable ( v -- s ) C=0 P=0
-    0001 00010011       (reserved)
-    0001 00010100       RNAE - read numeric array element (param=offs) ( inx ... ndim v -- n ) C=0 P=0
-    0001 00010101       RIAE - read integer array element (param=offs) ( inx ... ndim v -- n ) C=0 P=0
-    0001 00010110       RSAE - read string  array element (param=offs) ( inx ... ndim v -- s ) C=0 P=0
-    0001 00010111       (reserved)
-
-    0001 00011000       WRNV - write regular numeric variable ( n v -- ) C=0 P=0
-    0001 00011001       WRIV - write regular integer variable ( n v -- ) C=0 P=0
-    0001 00011010       WRSV - write regular string  variable ( s v -- ) C=0 P=0
-    0001 00011011       (reserved)
-    0001 00011100       WNAE - write numeric array element ( inx ... ndim n v -- ) C=0 P=0
-    0001 00011101       WIAE - write integer array element ( inx ... ndim n v -- ) C=0 P=0
-    0001 00011110       WSAE - write string  array element ( inx ... ndim s v -- ) C=0 P=0
-    0001 00011111       (reserved)
-
-
-
-
-
 
 
 
@@ -258,19 +425,20 @@ The 4096 extended instructions are as follows:
 #define INS_CSLE        UINT16_C(0X029)
 #define INS_CSGT        UINT16_C(0X02A)
 #define INS_CSLT        UINT16_C(0X02B)
-#define INS_CRNV        UINT16_C(0X100)
-#define INS_CRIV        UINT16_C(0X101)
-#define INS_CRSV        UINT16_C(0X102)
-#define INS_CNAV        UINT16_C(0X104)
-#define INS_CIAV        UINT16_C(0X105)
-#define INS_CSAV        UINT16_C(0X106)
-#define INS_DRNV        UINT16_C(0X108)
-#define INS_DRIV        UINT16_C(0X109)
-#define INS_DRSV        UINT16_C(0X10A)
-#define INS_DNAV        UINT16_C(0X10C)
-#define INS_DIAV        UINT16_C(0X10D)
-#define INS_DSAV        UINT16_C(0X10E)
+#define INS_RRNV        UINT16_C(0X100)
+#define INS_RRIV        UINT16_C(0X101)
+#define INS_RRSV        UINT16_C(0X102)
+#define INS_RNAV        UINT16_C(0X104)
+#define INS_RIAV        UINT16_C(0X105)
+#define INS_RSAV        UINT16_C(0X106)
+#define INS_WRNV        UINT16_C(0X108)
+#define INS_WRIV        UINT16_C(0X109)
+#define INS_WRSV        UINT16_C(0X10A)
+#define INS_WNAV        UINT16_C(0X10C)
+#define INS_WIAV        UINT16_C(0X10D)
+#define INS_WSAV        UINT16_C(0X10E)
 
+#define TREESIZE_MAX    65535U
 #define CODESIZE_MAX    65536U
 #define DATASIZE_MAX    65536U
 
@@ -283,8 +451,10 @@ typedef struct _compiler_t {
         double      number;
     };
     jmp_buf         ready_jump, exit_jump;
+    uint8_t         tree[TREESIZE_MAX];
     uint8_t         code[CODESIZE_MAX];
     uint8_t         data[DATASIZE_MAX];
+    uint32_t        treesize;
     uint32_t        codesize;
     uint32_t        datasize;
 } compiler_t;

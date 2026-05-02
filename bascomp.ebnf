@@ -33,7 +33,7 @@ expr-list   := expr { TOK_COMMA expr } .
 array-index := num-ex-list | str-expr .
 array-sub := TOK_LPAREN array-index TOK_RPAREN .
 
-array-dim-decl := num-expr-list | TOK_DYNAMIC .
+array-dim-decl := num-expr-list | TOK_DYNAMIC | TOK_ASSOC .
 array-decl := any-base-var-ref TOK_LPAREN array-dim-decl TOK_RPAREN .
 array-decl-list := array-decl { TOK_COMMA array-decl } .
 
@@ -51,7 +51,7 @@ any-base-var-ref := num-base-var-ref | str-base-var-ref .
 dec-lit := TOK_DECLIT | TOK_DEC0 .. TOK_DEC9 .
 num-lit := dec-lit | TOK_HEXLIT | TOK_OCTLIT | TOK_QUALIT | TOK_BINLIT .
 
-str-lit := TOK_STRLIT | TOK_SHLLIT .
+str-lit := TOK_STRLIT | TOK_SHLLIT | TOK_BRKLIT | TOK_BRCLIT .
 str-lits := str-lit { str-lit } .
 
 num-usr-fn-name := TOK_FN TOK_IDENT [ TOK_PERCENT ] .
