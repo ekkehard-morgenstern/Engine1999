@@ -32,6 +32,15 @@ void init_compiler( compiler_t* comp, program_t* pgm ) {
     comp->currtok = TOK_EOL;
 }
 
+bool comp_alloc_tree( compiler_t* comp, uint16_t size, uint16_t* poffs ) {
+    if ( size > TREESIZE_MAX - comp->treesize ) {
+        return false;
+    }
+    *poffs = (uint16_t) comp->treesize;
+    comp->treesize += size;
+    return true;
+}
+
 bool comp_alloc_code( compiler_t* comp, uint16_t size, uint16_t* poffs ) {
     if ( size > CODESIZE_MAX - comp->codesize ) {
         return false;
@@ -48,6 +57,66 @@ bool comp_alloc_data( compiler_t* comp, uint16_t size, uint16_t* poffs ) {
     *poffs = (uint16_t) comp->datasize;
     comp->datasize += size;
     return true;
+}
+
+bool comp_create_node( compiler_t* comp, uint16_t* pnodeoffs, uint8_t nodetype, uint8_t numbranches, uint16_t datalen,
+    const void* pdata, ... ) {
+    if ( comp == 0 || pnodeoffs == 0 || nodetype == NT_UNKNOWN || ( datalen != UINT16_C(0) && pdata == 0 ) ) {
+        return false;
+    }
+    uint16_t size = NODEHDR_SIZE + datalen + BRANCHENT_SIZE * numbranches;
+    uint16_t nodepos = NODEOFFS_NONE;
+    if ( !comp_alloc_tree( comp, size, &nodepos ) || nodepos == NODEOFFS_NONE ) {
+        return false;
+    }
+    // <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    uint16_t offs = nodepos;
+    comp->tree[ offs++ ] = nodetype;
+    comp->tree[ offs++ ] = numbranches;
+    comp->tree[ offs++ ] = (uint8_t) ( datalen >> UINT8_C(8) );
+    comp->tree[ offs++ ] = (uint8_t)   datalen;
+    uint16_t linkoffs = offs;
+    comp->tree[ offs++ ] = (uint8_t) ( NODEOFFS_NONE >> UINT8_C(8) );
+    comp->tree[ offs++ ] = (uint8_t)   NODEOFFS_NONE;
+    comp->tree[ offs++ ] = (uint8_t) ( NODEOFFS_NONE >> UINT8_C(8) );
+    comp->tree[ offs++ ] = (uint8_t)   NODEOFFS_NONE;
+    if ( datalen ) {
+        memcpy( &comp->tree[ offs ], pdata, datalen );
+        offs += datalen;
+    }
+    if ( numbranches ) {
+        uint16_t firstbranch = NODEOFFS_NONE, lastbranch = NODEOFFS_NONE;
+        va_list ap; va_start( ap, pdata );
+        while ( numbranches-- ) {
+            uint16_t branchoffs = (uint16_t) va_arg( ap, int );
+            if ( firstbranch == NODEOFFS_NONE ) {
+                firstbranch = offs;
+            }
+            if ( lastbranch != NODEOFFS_NONE ) {
+                // <nodepos.16> <nextbranch.16>
+                comp->tree[ lastbranch + 2U ] = (uint8_t) ( offs >> UINT8_C(8) );
+                comp->tree[ lastbranch + 3U ] = (uint8_t)   offs;
+            }
+            lastbranch = offs;
+            // <nodepos.16> <nextbranch.16>
+            comp->tree[ offs++ ] = (uint8_t) ( branchoffs >> UINT8_C(8) );
+            comp->tree[ offs++ ] = (uint8_t)   branchoffs;
+            comp->tree[ offs++ ] = (uint8_t) ( NODEOFFS_NONE >> UINT8_C(8) );
+            comp->tree[ offs++ ] = (uint8_t)   NODEOFFS_NONE;
+        }
+        va_end( ap );
+        comp->tree[ linkoffs      ] = (uint8_t) ( firstbranch >> UINT8_C(8) );
+        comp->tree[ linkoffs + 1U ] = (uint8_t)   firstbranch;
+        comp->tree[ linkoffs + 2U ] = (uint8_t) ( lastbranch >> UINT8_C(8) );
+        comp->tree[ linkoffs + 3U ] = (uint8_t)   lastbranch;
+    }
+    *pnodeoffs = nodepos;
+    return true;
+}
+
+bool comp_add_branch( compiler_t* comp, uint16_t nodeoffs, uint16_t branchoffs ) {
+    // <nodepos.16> <nextbranch.16>
+    return false; // TBD
 }
 
 static bool comp_gen_ins( compiler_t* comp, uint8_t ins, uint8_t ext, uint16_t param ) {

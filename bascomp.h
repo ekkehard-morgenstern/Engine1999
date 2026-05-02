@@ -49,10 +49,14 @@
 See bascomp.ebnf for syntax definition.
 */
 
+#define NODEOFFS_NONE       UINT16_C(0XFFFF)
+#define NODEHDR_SIZE        UINT8_C(8)
+#define BRANCHENT_SIZE      UINT8_C(4)
+
 /*
 The syntax tree is temporary for the compiler run and organized as follows:
 
-    <nodetype.8> <numbranches.8> <datalen.16> <data...> <firstbranch.16>
+    <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
 
 For every branch entry:
 
@@ -752,8 +756,15 @@ typedef struct _compiler_t {
 } compiler_t;
 
 void init_compiler( compiler_t* comp, program_t* pgm );
+
+bool comp_alloc_tree( compiler_t* comp, uint16_t size, uint16_t* poffs );
 bool comp_alloc_code( compiler_t* comp, uint16_t size, uint16_t* poffs );
 bool comp_alloc_data( compiler_t* comp, uint16_t size, uint16_t* poffs );
+
+bool comp_create_node( compiler_t* comp, uint16_t* pnodeoffs, uint8_t nodetype, uint8_t numbranches, uint16_t datalen,
+    const void* pdata, ... );
+bool comp_add_branch( compiler_t* comp, uint16_t nodeoffs, uint16_t branchoffs );
+
 bool comp_gen_brk( compiler_t* comp );
 bool comp_gen_nop( compiler_t* comp );
 bool comp_gen_phpa_c( compiler_t* comp, uint16_t offs );
