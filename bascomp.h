@@ -213,13 +213,99 @@ Explanation of node types:
             - generated only if there is 2 or more nodes
 
     [ NT_STREXPR - not generated ]
+    [ NT_NUMSUBEXPR - not generated ]
+    [ NT_NUMBASEEXPR - not generated ]
 
+    NT_NUMUNARYOP   numeric unary operator
+        data:
+            - 1 byte of operator token
 
+    NT_NUMUNARYEX   numeric unary expression
+        branches:
+            - 1 branch of NT_NUMUNARYOP
+            - 1 branch of expression
+        immediate processing:
+            - generated only if a unary operator was used and the result is not constant
+            - if the result is a constant expression, return NT_NUMLIT instead
 
+    NT_NUMMULTOP   numeric multiplication operator
+        data:
+            - 1 byte of operator token
 
+    NT_NUMMULTEX   numeric multiplication expression
+        branches:
+            - 1 branch of NT_NUMMULTOP
+            - at least 2 branches of expressions
+        immediate processing:
+            - generated only if a multiplication operator was used and the result is not constant
+            - if the result is a constant expression, return NT_NUMLIT instead
+            - if a division by zero would occur, generate error
 
+    NT_NUMADDOP   numeric addition operator
+        data:
+            - 1 byte of operator token
 
+    NT_NUMADDEX   numeric addition expression
+        branches:
+            - 1 branch of NT_NUMADDOP
+            - at least 2 branches of expressions
+        immediate processing:
+            - generated only if an addition operator was used and the result is not constant
+            - if the result is a constant expression, return NT_NUMLIT instead
 
+    NT_NUMSHIFTOP   numeric shift operator
+        data:
+            - 1 byte of operator token
+
+    NT_NUMSHIFTEX   numeric shift expression
+        branches:
+            - 1 branch of NT_NUMSHIFTOP
+            - 2 branches of expressions
+        immediate processing:
+            - generated only if a shift operator was used and the result is not constant
+            - if the result is a constant expression, return NT_NUMLIT instead
+
+    NT_NUMCMPOP   numeric comparison operator
+        data:
+            - 1 byte of operator token
+
+    NT_NUMCMPEX   numeric shift expression
+        branches:
+            - 1 branch of NT_NUMCMPOP
+            - 2 branches of expressions
+        immediate processing:
+            - generated only if a comparison operator was used and the result is not constant
+            - if the result is a constant expression, return NT_NUMLIT instead
+            - if two string expressions are compared, the result will be numeric
+
+    NT_NUMANDOP     numeric AND operator
+        data:
+            - 1 byte of operator token
+
+    NT_NUMANDEX   numeric AND expression
+        branches:
+            - 1 branch of NT_NUMANDOP
+            - at least 2 branches of expressions
+        immediate processing:
+            - generated only if an AND operator was used and the result is not constant
+            - if the result is a constant expression, return NT_NUMLIT instead
+
+    NT_NUMOROP     numeric OR operator
+        data:
+            - 1 byte of operator token
+
+    NT_NUMOREX   numeric OR expression
+        branches:
+            - 1 branch of NT_NUMOROP
+            - at least 2 branches of expressions
+        immediate processing:
+            - generated only if an OR operator was used and the result is not constant
+            - if the result is a constant expression, return NT_NUMLIT instead
+
+    [ NT_NUMEXPR - not generated ]
+    [ NT_EXPR - not generated ]
+
+    NT_SAVESTMT
 
 
 

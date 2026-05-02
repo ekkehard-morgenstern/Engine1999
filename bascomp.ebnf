@@ -94,7 +94,8 @@ num-shift-op := TOK_LSHIFT | TOK_RSHIFT .
 num-shift-ex := num-add-ex [ num-shift-op num-add-ex ] .
 
 num-cmp-op   := TOK_EQ | TOK_NE | TOK_LE | TOK_GE | TOK_LT | TOK_GT .
-num-cmp-ex   := num-shift-ex [ num-cmp-op num-shift-ex ] .
+num-cmp-ex   := num-shift-ex [ num-cmp-op num-shift-ex ] |
+                str-expr num-cmp-op str-expr .
 
 num-and-op   := TOK_AND | TOK_NAND .
 num-and-ex   := num-cmp-ex { num-and-op num-cmp-ex } .
