@@ -31,10 +31,33 @@ void init_compiler( compiler_t* comp, program_t* pgm, bool keepmemory ) {
     comp->tokp = 0;
     comp->currtok = TOK_EOL;
     comp->treesize = UINT16_C(0);
-    if ( !keepmemory ) {
-        // CAUTION: Set the "keepmemory" flag only if you know what you're doing!
-        comp->codesize = UINT16_C(0);
-        comp->datasize = UINT16_C(0);
+    // CAUTION: Set the "keepmemory" flag only if you know what you're doing!
+    if ( keepmemory ) {
+        return;
+    }
+    comp->report   = 0;
+    comp->halt     = 0;
+    comp->userdata = 0;
+    comp->codesize = UINT16_C(0);
+    comp->datasize = UINT16_C(0);
+}
+
+void comp_error( compiler_t* comp, const char* text ) {
+    char buf[128];
+    if ( comp->iter.hdr.lineno != LINENO_NONE ) {
+        snprintf( buf, 128U, "? %s in line %u\n", text, (unsigned) comp->iter.hdr.lineno );
+    } else {
+        snprintf( buf, 128U, "? %s\n", text );
+    }
+    if ( comp->report ) {
+        comp->report( comp, comp->userdata, buf );
+    } else {
+        fprintf( stderr, "%s", buf );
+    }
+    if ( comp->halt ) {
+        comp->halt( comp, comp->userdata );
+    } else {
+        exit( EXIT_FAILURE );
     }
 }
 
@@ -159,7 +182,8 @@ bool comp_add_branch( compiler_t* comp, uint16_t nodeoffs, uint16_t branchoffs )
     return true;
 }
 
-bool comp_eat_list( compiler_t* comp, uint16_t* pnodeoffs, uint8_t nodetype, comp_eatfn_t element_eater, uint8_t septok ) {
+bool comp_eat_list( compiler_t* comp, uint16_t* pnodeoffs, uint8_t nodetype, comp_eatfn_t element_eater, uint8_t septok,
+    const char* errortext ) {
     // list := element { SEPTOK element } .  -- if SEPTOK is TOK_EOL, there's no separator token
     uint16_t expr1 = NODEOFFS_NONE;
     if ( !element_eater( comp, &expr1 ) ) {
@@ -185,29 +209,29 @@ bool comp_eat_list( compiler_t* comp, uint16_t* pnodeoffs, uint8_t nodetype, com
         }
         if ( !element_eater( comp, &expr2 ) || expr2 == NODEOFFS_NONE ) {
             if ( mandatory ) {  // mandatory expression missing: stop
+                comp_error( comp, errortext );
+                // in case the function returns (which it should not)
                 // rewind token pointer
 CANCEL:         comp->tokp = backup;
                 // re-fetch the separator token (if any)
                 comp_fetchtok( comp );
-                // stop processing
-                break;
             }
+            // stop processing
+            break;
         }
         // we have now a new branch; first see if we already have a node or need to create one
         if ( nodeoffs == NODEOFFS_NONE ) {
-            if ( !comp_create_node( comp, &nodeoffs, nodetype, UINT8_C(2), UINT16_C(0), 0, (int) expr1, (int) expr2 ) ) {
+            if ( !comp_create_node( comp, &nodeoffs, nodetype, UINT8_C(2), UINT16_C(0), 0, (int) expr1, (int) expr2 ) ||
+                 nodeoffs == NODEOFFS_NONE ) {
                 // failed to create node: cancel operation
-                goto CANCEL;
-            }
-            if ( nodeoffs == NODEOFFS_NONE ) {
-                // something went wrong: cancel
+OOM:            comp_error( comp, "Out of memory" );
                 goto CANCEL;
             }
         } else {
             // the node already exists: add a new branch
             if ( !comp_add_branch( comp, nodeoffs, expr2 ) ) {
                 // something went wrong: cancel
-                goto CANCEL;
+                goto OOM;
             }
         }
         // successful, continue
@@ -219,20 +243,26 @@ CANCEL:         comp->tokp = backup;
 
 bool comp_eat_numexlist( compiler_t* comp, uint16_t* pnodeoffs ) {
     // num-ex-list := num-expr { TOK_COMMA num-expr } .
-    return comp_eat_list( comp, pnodeoffs, NT_NUMEXLIST, comp_eat_numexpr, TOK_COMMA );
+    return comp_eat_list( comp, pnodeoffs, NT_NUMEXLIST, comp_eat_numexpr, TOK_COMMA, "Numeric expression expected" );
 }
 
 bool comp_eat_strexlist( compiler_t* comp, uint16_t* pnodeoffs ) {
     // str-ex-list := str-expr { TOK_COMMA str-expr } .
-    return comp_eat_list( comp, pnodeoffs, NT_STREXLIST, comp_eat_strexpr, TOK_COMMA );
+    return comp_eat_list( comp, pnodeoffs, NT_STREXLIST, comp_eat_strexpr, TOK_COMMA, "String expression expected" );
 }
 
 bool comp_eat_exprlist( compiler_t* comp, uint16_t* pnodeoffs ) {
     // expr-list := expr { TOK_COMMA expr } .
-    return comp_eat_list( comp, pnodeoffs, NT_EXPRLIST, comp_eat_expr, TOK_COMMA );
+    return comp_eat_list( comp, pnodeoffs, NT_EXPRLIST, comp_eat_expr, TOK_COMMA, "Expression expected" );
 }
 
-bool comp_eat_arraysub( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_arraysub( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // array-index := num-ex-list | str-expr .
+    // array-sub := TOK_LPAREN array-index TOK_RPAREN .
+    return false; // TBD
+}
+
+/*
 bool comp_eat_arraydimdecl( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_arraydecl( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_arraydecllist( compiler_t* comp, uint16_t* pnodeoffs );
@@ -307,6 +337,7 @@ bool comp_eat_stmt( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_stmtlist( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_stmtline( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_stmtlines( compiler_t* comp, uint16_t* pnodeoffs );
+*/
 
 static bool comp_gen_ins( compiler_t* comp, uint8_t ins, uint8_t ext, uint16_t param ) {
     uint8_t size = UINT8_C(1);

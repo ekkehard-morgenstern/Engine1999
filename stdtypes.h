@@ -45,4 +45,10 @@
 #include <math.h>
 #include <setjmp.h>
 
+#ifdef __GNUC__
+#define ATTR_NORETURN __attribute__ ((noreturn))
+#else
+#define ATTR_NORETURN
+#endif
+
 #endif

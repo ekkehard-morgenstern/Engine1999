@@ -746,7 +746,9 @@ typedef struct _compiler_t {
         char        param[256];
         double      number;
     };
-    jmp_buf         ready_jump, exit_jump;
+    void*           userdata;
+    void            (*report)( struct _compiler_t*, void*, const char* );
+    void            (*halt)( struct _compiler_t*, void* ) ATTR_NORETURN;
     uint8_t         tree[TREESIZE_MAX];
     uint8_t         code[CODESIZE_MAX];
     uint8_t         data[DATASIZE_MAX];
@@ -756,6 +758,7 @@ typedef struct _compiler_t {
 } compiler_t;
 
 void init_compiler( compiler_t* comp, program_t* pgm, bool keepmemory );
+void comp_error( compiler_t* comp, const char* text ) ATTR_NORETURN;
 
 bool comp_alloc_tree( compiler_t* comp, uint16_t size, uint16_t* poffs );
 bool comp_alloc_code( compiler_t* comp, uint16_t size, uint16_t* poffs );
@@ -767,7 +770,8 @@ bool comp_add_branch( compiler_t* comp, uint16_t nodeoffs, uint16_t branchoffs )
 
 typedef bool (*comp_eatfn_t)( compiler_t*, uint16_t* );
 
-bool comp_eat_list( compiler_t* comp, uint16_t* pnodeoffs, uint8_t nodetype, comp_eatfn_t element_eater, uint8_t septok );
+bool comp_eat_list( compiler_t* comp, uint16_t* pnodeoffs, uint8_t nodetype, comp_eatfn_t element_eater, uint8_t septok,
+    const char* errortext );
 
 bool comp_eat_numexlist( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_strexlist( compiler_t* comp, uint16_t* pnodeoffs );
