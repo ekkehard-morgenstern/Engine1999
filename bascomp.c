@@ -145,14 +145,16 @@ bool comp_add_branch( compiler_t* comp, uint16_t nodeoffs, uint16_t branchoffs )
     }
     lastbranch = offs;  // now this node is the last one in the list
     // update lastbranch link in node
-    comp->tree[ nodeoffs + 6U ] = (uint8_t) ( offs >> UINT8_C(8) );
-    comp->tree[ nodeoffs + 7U ] = (uint8_t)   offs;
+    comp->tree[ nodeoffs + 6U ] = (uint8_t) ( lastbranch >> UINT8_C(8) );
+    comp->tree[ nodeoffs + 7U ] = (uint8_t)   lastbranch;
+    // increment number of branches
+    comp->tree[ nodeoffs + 1U ] += UINT8_C(1);
     // store new branch info
     // <nodepos.16> <nextbranch.16>
     comp->tree[ offs++ ] = (uint8_t) ( branchoffs >> UINT8_C(8) );
     comp->tree[ offs++ ] = (uint8_t)   branchoffs;
     comp->tree[ offs++ ] = (uint8_t) ( NODEOFFS_NONE >> UINT8_C(8) );
-    comp->tree[ offs++ ] = (uint8_t)   NODEOFFS_NONE;
+    comp->tree[ offs   ] = (uint8_t)   NODEOFFS_NONE;
     // done
     return true;
 }
