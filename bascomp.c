@@ -38,8 +38,10 @@ void init_compiler( compiler_t* comp, program_t* pgm, bool keepmemory ) {
     comp->report   = 0;
     comp->halt     = 0;
     comp->userdata = 0;
+    comp->treesize = UINT16_C(0);
     comp->codesize = UINT16_C(0);
     comp->datasize = UINT16_C(0);
+    comp->strssize = UINT16_C(0);
 }
 
 void comp_error( compiler_t* comp, const char* text ) {
@@ -402,8 +404,43 @@ LARGE:      comp_error( comp, "Array too large" );
     return true;
 }
 
+bool comp_eat_arraydecl( compiler_t* comp, uint16_t* pnodeoffs ) {
+    /*
+     NT_ARRAYDECL    array declaration
+        data:
+            - 1 byte of type indicator, 2 bytes of variable offset
+        branches: none
+        immediate processing:
+            - the variable is looked up, to see if it exists
+            - if it does, it's an error
+            - if it doesn't, the variable is created, and the type and
+              offset stored in the data field
+    */
+    // array-decl := any-base-var-ref TOK_LPAREN array-dim-decl TOK_RPAREN .
+    uint16_t varnodeoffs = NODEOFFS_NONE;
+    if ( !comp_eat_anybasevarref( comp, &varnodeoffs ) || varnodeoffs == NODEOFFS_NONE ) {
+        return false;
+    }
+    if ( comp->currtok != TOK_LPAREN || !comp_fetchtok( comp ) ) {
+        comp_error( comp, "Opening parenthesis '(' expected" );
+        return false;
+    }
+    uint16_t declnodeoffs = NODEOFFS_NONE;
+    if ( !comp_eat_arraydimdecl( comp, &declnodeoffs ) || declnodeoffs == NODEOFFS_NONE ) {
+        comp_error( comp, "Array dimension declaration expected" );
+        return false;
+    }
+    if ( comp->currtok != TOK_RPAREN || !comp_fetchtok( comp ) ) {
+        comp_error( comp, "Closing parenthesis ')' expected" );
+        return false;
+    }
+
+    // TBD
+
+    return false;
+}
+
 /*
-bool comp_eat_arraydecl( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_arraydecllist( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_emptyarrayref( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_emptyarrayreflist( compiler_t* comp, uint16_t* pnodeoffs );

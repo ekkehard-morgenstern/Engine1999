@@ -546,6 +546,51 @@ Explanation of node types:
 #define NT_STMTLINES            UINT8_C(0X3F)   // Statement lines
 
 /*
+The data segment contains all the variables in the program (or direct mode line).
+
+Variables are stored one after the other. There's no list mechanism to chain them together.
+
+If the memory is full and another variable is to be allocated, the variable space is compacted
+first before making another attempt.
+
+Strings are stored in a an extra space to avoid rapid exhaustion of the variable space.
+If string space is exhausted when another string is allocated, the string space is compacted
+first before making another attempt.
+
+In the type field, it is also recorded if the variable has been deleted.
+
+The variable header is as follows:
+
+    <size.16> <type.8> <namelen.8> <name...> [ <arraydims...> | <numargs> <argdesc...> ] <data...>
+
+    The size field is a 16-bit field in network byte order.
+
+    The type field contains information about the variable type:
+
+        +---+---+---+---++---+---+---+---+
+        | d | . | f | s || e | e | e | e |
+        +---+---+---+---++---+---+---+---+
+
+        d - deleted
+        f - user-defined function (supertype 0 only)
+        s - supertype (0=regular, 1=array)
+        e - element type
+            0000 - floating-point (64 bit IEEE)
+            0001 - integer (16 bit)
+            0010 - string
+            0011 - label
+            0100 .. 1111 reserved
+    An array variable has an additional arraydims field. Each dimension is stored as a
+    16-bit value (in network byte order).
+
+
+
+
+
+*/
+
+
+/*
 The runtime system has two stacks:
 
     - a data stack for holding parameters and return values
@@ -748,6 +793,7 @@ The 4096 extended instructions are as follows:
 #define TREESIZE_MAX    65535U
 #define CODESIZE_MAX    65536U
 #define DATASIZE_MAX    65536U
+#define STRSSIZE_MAX    65536U
 #define MAXDIM          6U
 
 typedef struct _compiler_t {
@@ -764,11 +810,13 @@ typedef struct _compiler_t {
     uint8_t         tree[TREESIZE_MAX];
     uint8_t         code[CODESIZE_MAX];
     uint8_t         data[DATASIZE_MAX];
+    uint8_t         strs[STRSSIZE_MAX];
     uint16_t        arraydim[MAXDIM];
     uint8_t         numdim;
     uint32_t        treesize;
     uint32_t        codesize;
     uint32_t        datasize;
+    uint32_t        strssize;
 } compiler_t;
 
 void init_compiler( compiler_t* comp, program_t* pgm, bool keepmemory );
