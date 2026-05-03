@@ -347,7 +347,7 @@ bool comp_eat_arraydimdecl( compiler_t* comp, uint16_t* pnodeoffs ) {
             return false;
         }
         if ( !comp_create_node( comp, pnodeoffs, NT_ARRAYDIMDECL, UINT8_C(0), datalen, &data ) || *pnodeoffs == NODEOFFS_NONE ) {
-            comp_error( comp, "Out of memory" );
+OOM:        comp_error( comp, "Out of memory" );
             return false;
         }
         return true;
@@ -370,12 +370,35 @@ bool comp_eat_arraydimdecl( compiler_t* comp, uint16_t* pnodeoffs ) {
         }
     } else {
         // unexpected node type
-        comp_error( comp, "Internal error" );
+INTERR: comp_error( comp, "Internal error" );
         return false;
     }
-    // ...
-
-
+    // make sure we have at least one dimension
+    if ( comp->numdim == UINT8_C(0) ) {
+        goto INTERR;
+    }
+    // finally, create the node
+    uint16_t datalen2 = ( (uint16_t) comp->numdim ) * UINT16_C(2);
+    uint8_t  data2[ MAXDIM * 2U ];
+    size_t   totalsize = 0;
+    for ( uint8_t i=UINT8_C(0); i < comp->numdim; ++i ) {
+        if ( totalsize == 0 ) {
+            totalsize += comp->arraydim[i];
+        } else if ( comp->arraydim[i] && totalsize > SIZE_MAX / comp->arraydim[i] ) {
+LARGE:      comp_error( comp, "Array too large" );
+            return false;
+        } else {
+            totalsize *= comp->arraydim[i];
+        }
+        data2[ i * 2U      ] = (uint8_t)( comp->arraydim[i] >> UINT8_C(8) );
+        data2[ i * 2U + 1U ] = (uint8_t)  comp->arraydim[i];
+    }
+    if ( totalsize == 0 || totalsize > 65535U ) {
+        goto LARGE;
+    }
+    if ( !comp_create_node( comp, pnodeoffs, NT_ARRAYDIMDECL, UINT8_C(0), datalen2, data2 ) || *pnodeoffs == NODEOFFS_NONE ) {
+        goto OOM;
+    }
     return true;
 }
 
