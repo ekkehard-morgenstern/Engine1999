@@ -184,6 +184,8 @@
 #define TOK_XNOR        UINT8_C(133)        // XNOR operator
 #define TOK_LSHIFT      UINT8_C(134)        // LSHIFT operator
 #define TOK_RSHIFT      UINT8_C(135)        // RSHIFT operator
+#define TOK_DYNAMIC     UINT8_C(136)        // DYNAMIC keyword
+#define TOK_ASSOC       UINT8_C(137)        // ASSOC keyword
 
 // -- single character tokens -----------------------------------------------
 

@@ -102,13 +102,10 @@ bool comp_create_node( compiler_t* comp, uint16_t* pnodeoffs, uint8_t nodetype, 
     uint16_t offs = nodepos;
     comp->tree[ offs++ ] = nodetype;
     comp->tree[ offs++ ] = numbranches;
-    comp->tree[ offs++ ] = (uint8_t) ( datalen >> UINT8_C(8) );
-    comp->tree[ offs++ ] = (uint8_t)   datalen;
+    WRITE16( comp, offs, datalen ); offs += UINT16_C(2);
     uint16_t linkoffs = offs;
-    comp->tree[ offs++ ] = (uint8_t) ( NODEOFFS_NONE >> UINT8_C(8) );
-    comp->tree[ offs++ ] = (uint8_t)   NODEOFFS_NONE;
-    comp->tree[ offs++ ] = (uint8_t) ( NODEOFFS_NONE >> UINT8_C(8) );
-    comp->tree[ offs++ ] = (uint8_t)   NODEOFFS_NONE;
+    WRITE16( comp, offs, NODEOFFS_NONE ); offs += UINT16_C(2);
+    WRITE16( comp, offs, NODEOFFS_NONE ); offs += UINT16_C(2);
     if ( datalen ) {
         memcpy( &comp->tree[ offs ], pdata, datalen );
         offs += datalen;
@@ -123,21 +120,16 @@ bool comp_create_node( compiler_t* comp, uint16_t* pnodeoffs, uint8_t nodetype, 
             }
             if ( lastbranch != NODEOFFS_NONE ) {
                 // <nodepos.16> <nextbranch.16>
-                comp->tree[ lastbranch + 2U ] = (uint8_t) ( offs >> UINT8_C(8) );
-                comp->tree[ lastbranch + 3U ] = (uint8_t)   offs;
+                WRITE16( comp, lastbranch + 2U, offs );
             }
             lastbranch = offs;
             // <nodepos.16> <nextbranch.16>
-            comp->tree[ offs++ ] = (uint8_t) ( branchoffs >> UINT8_C(8) );
-            comp->tree[ offs++ ] = (uint8_t)   branchoffs;
-            comp->tree[ offs++ ] = (uint8_t) ( NODEOFFS_NONE >> UINT8_C(8) );
-            comp->tree[ offs++ ] = (uint8_t)   NODEOFFS_NONE;
+            WRITE16( comp, offs, branchoffs    ); offs += UINT16_C(2);
+            WRITE16( comp, offs, NODEOFFS_NONE ); offs += UINT16_C(2);
         }
         va_end( ap );
-        comp->tree[ linkoffs      ] = (uint8_t) ( firstbranch >> UINT8_C(8) );
-        comp->tree[ linkoffs + 1U ] = (uint8_t)   firstbranch;
-        comp->tree[ linkoffs + 2U ] = (uint8_t) ( lastbranch >> UINT8_C(8) );
-        comp->tree[ linkoffs + 3U ] = (uint8_t)   lastbranch;
+        WRITE16( comp, linkoffs     , firstbranch );
+        WRITE16( comp, linkoffs + 2U, lastbranch  );
     }
     *pnodeoffs = nodepos;
     return true;
@@ -152,9 +144,7 @@ bool comp_add_branch( compiler_t* comp, uint16_t nodeoffs, uint16_t branchoffs )
         return false;
     }
     // read last branch link from node
-    uint16_t lastbranch =
-        ( ( (uint16_t) comp->tree[ nodeoffs + 6U ] ) << UINT8_C(8) ) |
-                       comp->tree[ nodeoffs + 7U ];
+    uint16_t lastbranch = EXTRACT16( comp, nodeoffs + 6U );
     // allocate new branch entry
     uint16_t offs = NODEOFFS_NONE;
     if ( !comp_alloc_tree( comp, BRANCHENT_SIZE, &offs ) || offs == NODEOFFS_NONE ) {
@@ -163,21 +153,17 @@ bool comp_add_branch( compiler_t* comp, uint16_t nodeoffs, uint16_t branchoffs )
     if ( lastbranch != NODEOFFS_NONE ) {
         // if there was a previous branch, link it to this one
         // <nodepos.16> <nextbranch.16>
-        comp->tree[ lastbranch + 2U ] = (uint8_t) ( offs >> UINT8_C(8) );
-        comp->tree[ lastbranch + 3U ] = (uint8_t)   offs;
+        WRITE16( comp, lastbranch + 2U, offs );
     }
     lastbranch = offs;  // now this node is the last one in the list
     // update lastbranch link in node
-    comp->tree[ nodeoffs + 6U ] = (uint8_t) ( lastbranch >> UINT8_C(8) );
-    comp->tree[ nodeoffs + 7U ] = (uint8_t)   lastbranch;
+    WRITE16( comp, nodeoffs + 6U, lastbranch );
     // increment number of branches
     comp->tree[ nodeoffs + 1U ] += UINT8_C(1);
     // store new branch info
     // <nodepos.16> <nextbranch.16>
-    comp->tree[ offs++ ] = (uint8_t) ( branchoffs >> UINT8_C(8) );
-    comp->tree[ offs++ ] = (uint8_t)   branchoffs;
-    comp->tree[ offs++ ] = (uint8_t) ( NODEOFFS_NONE >> UINT8_C(8) );
-    comp->tree[ offs   ] = (uint8_t)   NODEOFFS_NONE;
+    WRITE16( comp, offs, branchoffs    ); offs += UINT16_C(2);
+    WRITE16( comp, offs, NODEOFFS_NONE );
     // done
     return true;
 }
@@ -186,15 +172,11 @@ bool comp_eat_list( compiler_t* comp, uint16_t* pnodeoffs, uint8_t nodetype, com
     const char* errortext ) {
     // list := element { SEPTOK element } .  -- if SEPTOK is TOK_EOL, there's no separator token
     uint16_t expr1 = NODEOFFS_NONE;
-    if ( !element_eater( comp, &expr1 ) ) {
-        return false;
-    }
-    if ( expr1 == NODEOFFS_NONE ) {
+    if ( !element_eater( comp, &expr1 ) || expr1 == NODEOFFS_NONE ) {
         return false;
     }
     uint16_t nodeoffs = NODEOFFS_NONE;
     for (;;) {
-        uint8_t* backup = comp->tokp;
         bool mandatory = false; uint16_t expr2 = NODEOFFS_NONE;
         if ( septok != TOK_EOL && comp->currtok == septok ) {
             // read next token
@@ -210,11 +192,6 @@ bool comp_eat_list( compiler_t* comp, uint16_t* pnodeoffs, uint8_t nodetype, com
         if ( !element_eater( comp, &expr2 ) || expr2 == NODEOFFS_NONE ) {
             if ( mandatory ) {  // mandatory expression missing: stop
                 comp_error( comp, errortext );
-                // in case the function returns (which it should not)
-                // rewind token pointer
-CANCEL:         comp->tokp = backup;
-                // re-fetch the separator token (if any)
-                comp_fetchtok( comp );
             }
             // stop processing
             break;
@@ -225,7 +202,7 @@ CANCEL:         comp->tokp = backup;
                  nodeoffs == NODEOFFS_NONE ) {
                 // failed to create node: cancel operation
 OOM:            comp_error( comp, "Out of memory" );
-                goto CANCEL;
+                break;
             }
         } else {
             // the node already exists: add a new branch
@@ -256,14 +233,153 @@ bool comp_eat_exprlist( compiler_t* comp, uint16_t* pnodeoffs ) {
     return comp_eat_list( comp, pnodeoffs, NT_EXPRLIST, comp_eat_expr, TOK_COMMA, "Expression expected" );
 }
 
-bool comp_eat_arraysub( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_arrayindex( compiler_t* comp, uint16_t* pnodeoffs ) {
     // array-index := num-ex-list | str-expr .
+    if ( comp_eat_numexlist( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+        return true;
+    }
+    if ( comp_eat_strexpr( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+        return true;
+    }
+    return false;
+}
+
+bool comp_eat_arraysub( compiler_t* comp, uint16_t* pnodeoffs ) {
     // array-sub := TOK_LPAREN array-index TOK_RPAREN .
-    return false; // TBD
+    if ( comp->currtok == TOK_LPAREN ) {
+        if ( !comp_fetchtok( comp ) ) {
+ERROR:      comp_error( comp, "Array index expected" );
+            return false;
+        }
+        if ( !comp_eat_arrayindex( comp, pnodeoffs ) ) {
+            goto ERROR;
+        }
+        if ( comp->currtok != TOK_RPAREN || !comp_fetchtok( comp ) ) {
+            comp_error( comp, "Closing parenthesis ')' expected" );
+            return false;
+        }
+        return true;
+    }
+    return false;
+}
+
+bool comp_node_iter_branches( compiler_t* comp, uint16_t nodeoffs, void* userdata, bool (*callback)( void*, uint16_t ) ) {
+    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    //  <nodepos.16> <nextbranch.16>
+    if ( nodeoffs == NODEOFFS_NONE || comp->tree[ nodeoffs + 1U ] == UINT8_C(0) || callback == 0 ) {
+        return false;
+    }
+    uint16_t branch = EXTRACT16( comp, nodeoffs + 4U );
+    while ( branch != NODEOFFS_NONE ) {
+        uint16_t brnode = EXTRACT16( comp, branch );
+        if ( !callback( userdata, brnode ) ) {
+            return false;
+        }
+        branch = EXTRACT16( comp, branch + 2U );
+    }
+    return true;
+}
+
+static double comp_extract_float( compiler_t* comp, uint16_t offs ) {
+    uint64_t val =
+        ( ( (uint64_t) comp->tree[ offs      ] ) << UINT8_C(56) ) |
+        ( ( (uint64_t) comp->tree[ offs + 1U ] ) << UINT8_C(48) ) |
+        ( ( (uint64_t) comp->tree[ offs + 2U ] ) << UINT8_C(40) ) |
+        ( ( (uint64_t) comp->tree[ offs + 3U ] ) << UINT8_C(32) ) |
+        ( ( (uint32_t) comp->tree[ offs + 4U ] ) << UINT8_C(24) ) |
+        ( ( (uint32_t) comp->tree[ offs + 5U ] ) << UINT8_C(16) ) |
+        ( ( (uint16_t) comp->tree[ offs + 6U ] ) << UINT8_C( 8) ) |
+                       comp->tree[ offs + 7U ]                    ;
+    union {
+        uint64_t ui64;
+        double   dbl;
+    } u;
+    u.ui64 = val;
+    return u.dbl;
+}
+
+static bool comp_gather_dims( void* userdata, uint16_t node ) {
+    compiler_t* comp = (compiler_t*) userdata;
+    if ( comp->numdim >= MAXDIM ) {
+        comp_error( comp, "Too many dimensions" );
+        return false;
+    }
+    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    uint8_t nodetype = comp->tree[ node ];
+    if ( nodetype != NT_NUMLIT ) {
+        comp_error( comp, "Number expected" );
+        return false;
+    }
+    uint16_t datalen = EXTRACT16( comp, node + 2U );
+    if ( datalen != UINT16_C(8) ) {
+        comp_error( comp, "Bad number" );
+        return false;
+    }
+    double val = comp_extract_float( comp, node + 8U );
+    if ( val < 1.0 || val >= 65536.0 ) {
+        comp_error( comp, "Dimension out of range" );
+        return false;
+    }
+    uint16_t v16 = (uint16_t)( (int64_t) val );
+    comp->arraydim[ comp->numdim++ ] = v16;
+    return true;
+}
+
+bool comp_eat_arraydimdecl( compiler_t* comp, uint16_t* pnodeoffs ) {
+    /*
+    NT_ARRAYDIMDECL array dimension declaration
+        data:
+            - 1 byte (TOK_DYNAMIC or TOK_ASSOC), if specified
+            - 2 bytes per dimension of size information, if specified
+        branches: none
+        immediate processing:
+            - if given, the numeric expressions are evaluated to
+              see if they're constant. it's an error if they aren't.
+            - the total size of the expected array is computed
+              it's an error if it's too small or too large.
+            - this computes the list of output dimensions
+    */
+    // array-dim-decl := num-expr-list | TOK_DYNAMIC | TOK_ASSOC .
+    uint8_t data = TOK_EOL; uint16_t datalen = UINT16_C(0);
+    if ( comp->currtok == TOK_DYNAMIC || comp->currtok == TOK_ASSOC ) {
+        data = comp->currtok; ++datalen;
+        if ( !comp_fetchtok( comp ) ) {
+            return false;
+        }
+        if ( !comp_create_node( comp, pnodeoffs, NT_ARRAYDIMDECL, UINT8_C(0), datalen, &data ) || *pnodeoffs == NODEOFFS_NONE ) {
+            comp_error( comp, "Out of memory" );
+            return false;
+        }
+        return true;
+    }
+    uint16_t numexpr = NODEOFFS_NONE;
+    if ( !comp_eat_numexlist( comp, &numexpr ) || numexpr == NODEOFFS_NONE ) {
+        comp_error( comp, "Numeric expression expected" );
+        return false;
+    }
+    comp->numdim = UINT8_C(0);
+    if ( comp->tree[ numexpr ] == NT_NUMLIT ) {
+        // single dimension
+        if ( !comp_gather_dims( comp, numexpr ) ) {
+            return false;
+        }
+    } else if ( comp->tree[ numexpr ] == NT_NUMEXLIST ) {
+        // multiple dimensions
+        if ( !comp_node_iter_branches( comp, numexpr, comp, comp_gather_dims ) ) {
+            return false;
+        }
+    } else {
+        // unexpected node type
+        comp_error( comp, "Internal error" );
+        return false;
+    }
+    // ...
+
+
+    return true;
 }
 
 /*
-bool comp_eat_arraydimdecl( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_arraydecl( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_arraydecllist( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_emptyarrayref( compiler_t* comp, uint16_t* pnodeoffs );

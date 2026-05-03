@@ -53,6 +53,17 @@ See bascomp.ebnf for syntax definition.
 #define NODEHDR_SIZE        UINT8_C(8)
 #define BRANCHENT_SIZE      UINT8_C(4)
 
+#define EXTRACT16( comp, offs ) \
+    ( ( ((uint16_t)( (comp)->tree[ offs ] )) << UINT8_C(8) ) | \
+    ( (comp)->tree[ (offs) + 1U ] ) )
+
+#define WRITE16( comp, offs, value ) \
+    { \
+        (comp)->tree[ offs ] = (uint8_t)( (value) >> UINT8_C(8) ); \
+        (comp)->tree[ (offs) + 1U ] = (uint8_t) (value); \
+    }
+
+
 /*
 The syntax tree is temporary for the compiler run and organized as follows:
 
@@ -737,6 +748,7 @@ The 4096 extended instructions are as follows:
 #define TREESIZE_MAX    65535U
 #define CODESIZE_MAX    65536U
 #define DATASIZE_MAX    65536U
+#define MAXDIM          6U
 
 typedef struct _compiler_t {
     pgmiter_t       iter;
@@ -752,6 +764,8 @@ typedef struct _compiler_t {
     uint8_t         tree[TREESIZE_MAX];
     uint8_t         code[CODESIZE_MAX];
     uint8_t         data[DATASIZE_MAX];
+    uint16_t        arraydim[MAXDIM];
+    uint8_t         numdim;
     uint32_t        treesize;
     uint32_t        codesize;
     uint32_t        datasize;
@@ -776,6 +790,7 @@ bool comp_eat_list( compiler_t* comp, uint16_t* pnodeoffs, uint8_t nodetype, com
 bool comp_eat_numexlist( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_strexlist( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_exprlist( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_arrayindex( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_arraysub( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_arraydimdecl( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_arraydecl( compiler_t* comp, uint16_t* pnodeoffs );
