@@ -546,18 +546,21 @@ Explanation of node types:
 #define NT_STMTLINES            UINT8_C(0X3F)   // Statement lines
 
 /*
-The data segment contains all the variables in the program (or direct mode line).
+The variable segment contains all the variables in the program (or direct mode line).
+
+There is a maximum of 1024 variables. The first 2 KiB of memory contains the real offsets of the variables.
 
 Variables are stored one after the other. There's no list mechanism to chain them together.
 
 If the memory is full and another variable is to be allocated, the variable space is compacted
-first before making another attempt.
+first before making another attempt. The variable index at the beginning of the variable memory
+is updated accordingly.
 
 Strings are stored in a an extra space to avoid rapid exhaustion of the variable space.
 If string space is exhausted when another string is allocated, the string space is compacted
 first before making another attempt.
 
-In the type field, it is also recorded if the variable has been deleted.
+A variable is regarded as deleted when its index entry contains a special offset value.
 
 The variable header is as follows:
 
@@ -795,6 +798,7 @@ The 4096 extended instructions are as follows:
 #define VARSSIZE_MAX    65536U
 #define STRSSIZE_MAX    65536U
 #define MAXDIM          6U
+#define MAXVARS         1024U
 
 typedef struct _compiler_t {
     pgmiter_t       iter;
@@ -817,6 +821,7 @@ typedef struct _compiler_t {
     uint32_t        codesize;
     uint32_t        varssize;
     uint32_t        strssize;
+    uint16_t        numvars;
 } compiler_t;
 
 void init_compiler( compiler_t* comp, program_t* pgm, bool keepmemory );

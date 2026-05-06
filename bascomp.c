@@ -40,8 +40,9 @@ void init_compiler( compiler_t* comp, program_t* pgm, bool keepmemory ) {
     comp->userdata = 0;
     comp->treesize = UINT16_C(0);
     comp->codesize = UINT16_C(0);
-    comp->varssize = UINT16_C(0);
+    comp->varssize = MAXVARS * 2U;
     comp->strssize = UINT16_C(0);
+    comp->numvars  = UINT16_C(0);
 }
 
 void comp_error( compiler_t* comp, const char* text ) {
@@ -82,7 +83,12 @@ bool comp_alloc_code( compiler_t* comp, uint16_t size, uint16_t* poffs ) {
 }
 
 static void comp_compact_vars( compiler_t* comp ) {
-
+    // algorithm:
+    //  - by scanning the (...), iterate over every variable (regular and array)
+    //  - if it's still being used (not marked as deleted), copy it to temporary memory.
+    //  - copy the resulting memory back, noting the new size
+    //
+    // *** POSTPONE ***
 }
 
 bool comp_alloc_vars( compiler_t* comp, uint16_t size, uint16_t* poffs ) {
@@ -98,7 +104,12 @@ bool comp_alloc_vars( compiler_t* comp, uint16_t size, uint16_t* poffs ) {
 }
 
 static void comp_compact_strs( compiler_t* comp ) {
-
+    // algorithm:
+    //  - iterate over all string variables (incl. every cell of each string array)
+    //  - if the variable is non-empty, copy the string it points to to temporary memory
+    //  - copy the resulting memory back, noting the new size
+    //
+    // *** POSTPONE ***
 }
 
 bool comp_alloc_strs( compiler_t* comp, uint16_t size, uint16_t* poffs ) {
