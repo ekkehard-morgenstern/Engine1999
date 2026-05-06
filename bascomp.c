@@ -103,6 +103,25 @@ bool comp_alloc_vars( compiler_t* comp, uint16_t size, uint16_t* poffs ) {
     return true;
 }
 
+bool comp_create_var_offset( compiler_t* comp, uint16_t* poffs ) {
+    if ( comp->numvars >= MAXVARS ) {
+        for ( uint16_t i=UINT16_C(0); i < MAXVARS; ++i ) {
+            uint16_t pos  = i * UINT16_C(2);
+            uint16_t offs = VEXTRACT16( comp, pos );
+            if ( offs != VAROFFS_NONE ) {
+                continue;
+            }
+            *poffs = pos;
+            return true;
+        }
+        return false;
+    }
+    uint16_t pos = comp->numvars * UINT16_C(2);
+    VWRITE16( comp, pos, VAROFFS_NONE );
+    *poffs = pos; ++comp->numvars;
+    return true;
+}
+
 static void comp_compact_strs( compiler_t* comp ) {
     // algorithm:
     //  - iterate over all string variables (incl. every cell of each string array)

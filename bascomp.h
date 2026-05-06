@@ -592,6 +592,18 @@ The variable header is as follows:
 
 */
 
+#define VAROFFS_NONE    UINT16_C(0XFFFF)
+
+#define VEXTRACT16( comp, offs ) \
+    ( ( ((uint16_t)( (comp)->vars[ offs ] )) << UINT8_C(8) ) | \
+    ( (comp)->vars[ (offs) + 1U ] ) )
+
+#define VWRITE16( comp, offs, value ) \
+    { \
+        (comp)->vars[ offs ] = (uint8_t)( (value) >> UINT8_C(8) ); \
+        (comp)->vars[ (offs) + 1U ] = (uint8_t) (value); \
+    }
+
 
 /*
 The runtime system has two stacks:
