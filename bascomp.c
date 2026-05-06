@@ -40,7 +40,7 @@ void init_compiler( compiler_t* comp, program_t* pgm, bool keepmemory ) {
     comp->userdata = 0;
     comp->treesize = UINT16_C(0);
     comp->codesize = UINT16_C(0);
-    comp->datasize = UINT16_C(0);
+    comp->varssize = UINT16_C(0);
     comp->strssize = UINT16_C(0);
 }
 
@@ -81,12 +81,21 @@ bool comp_alloc_code( compiler_t* comp, uint16_t size, uint16_t* poffs ) {
     return true;
 }
 
-bool comp_alloc_data( compiler_t* comp, uint16_t size, uint16_t* poffs ) {
-    if ( size > DATASIZE_MAX - comp->datasize ) {
+bool comp_alloc_vars( compiler_t* comp, uint16_t size, uint16_t* poffs ) {
+    if ( size > VARSSIZE_MAX - comp->varssize ) {
         return false;
     }
-    *poffs = (uint16_t) comp->datasize;
-    comp->datasize += size;
+    *poffs = (uint16_t) comp->varssize;
+    comp->varssize += size;
+    return true;
+}
+
+bool comp_alloc_strs( compiler_t* comp, uint16_t size, uint16_t* poffs ) {
+    if ( size > STRSSIZE_MAX - comp->strssize ) {
+        return false;
+    }
+    *poffs = (uint16_t) comp->strssize;
+    comp->strssize += size;
     return true;
 }
 

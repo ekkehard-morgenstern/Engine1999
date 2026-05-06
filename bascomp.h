@@ -792,7 +792,7 @@ The 4096 extended instructions are as follows:
 
 #define TREESIZE_MAX    65535U
 #define CODESIZE_MAX    65536U
-#define DATASIZE_MAX    65536U
+#define VARSSIZE_MAX    65536U
 #define STRSSIZE_MAX    65536U
 #define MAXDIM          6U
 
@@ -809,13 +809,13 @@ typedef struct _compiler_t {
     void            (*halt)( struct _compiler_t*, void* ) ATTR_NORETURN;
     uint8_t         tree[TREESIZE_MAX];
     uint8_t         code[CODESIZE_MAX];
-    uint8_t         data[DATASIZE_MAX];
+    uint8_t         vars[VARSSIZE_MAX];
     uint8_t         strs[STRSSIZE_MAX];
     uint16_t        arraydim[MAXDIM];
     uint8_t         numdim;
     uint32_t        treesize;
     uint32_t        codesize;
-    uint32_t        datasize;
+    uint32_t        varssize;
     uint32_t        strssize;
 } compiler_t;
 
@@ -824,7 +824,8 @@ void comp_error( compiler_t* comp, const char* text ) ATTR_NORETURN;
 
 bool comp_alloc_tree( compiler_t* comp, uint16_t size, uint16_t* poffs );
 bool comp_alloc_code( compiler_t* comp, uint16_t size, uint16_t* poffs );
-bool comp_alloc_data( compiler_t* comp, uint16_t size, uint16_t* poffs );
+bool comp_alloc_vars( compiler_t* comp, uint16_t size, uint16_t* poffs );
+bool comp_alloc_strs( compiler_t* comp, uint16_t size, uint16_t* poffs );
 
 bool comp_create_node( compiler_t* comp, uint16_t* pnodeoffs, uint8_t nodetype, uint8_t numbranches, uint16_t datalen,
     const void* pdata, ... );
