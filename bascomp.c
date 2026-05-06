@@ -81,18 +81,32 @@ bool comp_alloc_code( compiler_t* comp, uint16_t size, uint16_t* poffs ) {
     return true;
 }
 
+static void comp_compact_vars( compiler_t* comp ) {
+
+}
+
 bool comp_alloc_vars( compiler_t* comp, uint16_t size, uint16_t* poffs ) {
     if ( size > VARSSIZE_MAX - comp->varssize ) {
-        return false;
+        comp_compact_vars( comp );
+        if ( size > VARSSIZE_MAX - comp->varssize ) {
+            return false;
+        }
     }
     *poffs = (uint16_t) comp->varssize;
     comp->varssize += size;
     return true;
 }
 
+static void comp_compact_strs( compiler_t* comp ) {
+
+}
+
 bool comp_alloc_strs( compiler_t* comp, uint16_t size, uint16_t* poffs ) {
     if ( size > STRSSIZE_MAX - comp->strssize ) {
-        return false;
+        comp_compact_strs( comp );
+        if ( size > STRSSIZE_MAX - comp->strssize ) {
+            return false;
+        }
     }
     *poffs = (uint16_t) comp->strssize;
     comp->strssize += size;
