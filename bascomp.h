@@ -564,35 +564,39 @@ A variable is regarded as deleted when its index entry contains a special offset
 
 The variable header is as follows:
 
-    <size.16> <type.8> <namelen.8> <name...> [ <arraydims...> | <numargs> <argdesc...> ] <data...>
+    <size.16> <type.8> <namelen.8> <name...> [ <numdims.8> <arraydims...> | <numargs> <argdesc...> ] <data...>
 
     The size field is a 16-bit field in network byte order.
 
     The type field contains information about the variable type:
 
         +---+---+---+---++---+---+---+---+
-        | d | . | f | s || e | e | e | e |
+        | . | . | f | s || e | e | e | e |
         +---+---+---+---++---+---+---+---+
 
-        d - deleted
         f - user-defined function (supertype 0 only)
         s - supertype (0=regular, 1=array)
         e - element type
             0000 - floating-point (64 bit IEEE)
             0001 - integer (16 bit)
-            0010 - string
-            0011 - label
+            0010 - string (16 bit offset into string memory + 16 bit length)
+            0011 - label (16 bit offset into code memory)
             0100 .. 1111 reserved
+
     An array variable has an additional arraydims field. Each dimension is stored as a
     16-bit value (in network byte order).
-
-
-
-
-
 */
 
+#define VARTYPEF_FUNC   UINT8_C(0X20)
+#define VARTYPEF_ARRAY  UINT8_C(0X10)
+#define VARTYPEM_BASE   UINT8_C(0X0F)
+#define VARTYPEV_FLOAT  UINT8_C(0X00)
+#define VARTYPEV_INT    UINT8_C(0X01)
+#define VARTYPEV_STR    UINT8_C(0X02)
+#define VARTYPEV_LABEL  UINT8_C(0X03)
+
 #define VAROFFS_NONE    UINT16_C(0XFFFF)
+#define STROFFS_NONE    UINT16_C(0XFFFF)
 
 #define VEXTRACT16( comp, offs ) \
     ( ( ((uint16_t)( (comp)->vars[ offs ] )) << UINT8_C(8) ) | \
@@ -602,6 +606,12 @@ The variable header is as follows:
     { \
         (comp)->vars[ offs ] = (uint8_t)( (value) >> UINT8_C(8) ); \
         (comp)->vars[ (offs) + 1U ] = (uint8_t) (value); \
+    }
+
+#define VTWRITE16( tmp, offs, value ) \
+    { \
+        (tmp)[ offs ] = (uint8_t)( (value) >> UINT8_C(8) ); \
+        (tmp)[ (offs) + 1U ] = (uint8_t) (value); \
     }
 
 

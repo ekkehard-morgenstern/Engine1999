@@ -84,11 +84,36 @@ bool comp_alloc_code( compiler_t* comp, uint16_t size, uint16_t* poffs ) {
 
 static void comp_compact_vars( compiler_t* comp ) {
     // algorithm:
-    //  - by scanning the (...), iterate over every variable (regular and array)
+    //  - by scanning the variable offset table, iterate over every variable (regular and array)
     //  - if it's still being used (not marked as deleted), copy it to temporary memory.
     //  - copy the resulting memory back, noting the new size
-    //
-    // *** POSTPONE ***
+    static uint8_t tmp[VARSSIZE_MAX];
+    uint16_t tmpoffs = MAXVARS * 2U;
+    // iterate over the variables
+    for ( uint16_t i=0; i < comp->numvars; ++i ) {
+        uint16_t indexpos = i * 2U;
+        // get the offset of the variable header stored in the offset cell
+        uint16_t offs = VEXTRACT16( comp, indexpos );
+        if ( offs == VAROFFS_NONE ) {
+            // variable is unused; store that info
+            VTWRITE16( tmp, indexpos, VAROFFS_NONE );
+            continue;
+        }
+        // offset points to a variable header: check
+        // <size.16> <type.8> <namelen.8> <name...> [ <arraydims...> | <numargs> <argdesc...> ] <data...>
+        uint16_t size = VEXTRACT16( comp, offs );
+        uint16_t begoffs = tmpoffs;
+        // we need to trust that the size is correct.
+        if ( size ) {
+            memcpy( &tmp[ tmpoffs ], &comp->vars[ offs ], size );
+            tmpoffs += size;
+        }
+        // store the new offset in the target area
+        VTWRITE16( tmp, indexpos, begoffs );
+    }
+    // copy the results back
+    memcpy( comp->vars, tmp, tmpoffs );
+    comp->varssize = tmpoffs;
 }
 
 bool comp_alloc_vars( compiler_t* comp, uint16_t size, uint16_t* poffs ) {
@@ -122,13 +147,104 @@ bool comp_create_var_offset( compiler_t* comp, uint16_t* poffs ) {
     return true;
 }
 
+static void comp_get_array_num_elems( compiler_t* comp, uint16_t varoffs, uint16_t* pnumelem, uint16_t* pdataoffs ) {
+    // call this ONLY for an array type!
+    // <size.16> <type.8> <namelen.8> <name...> <numdims.8> <arraydims...>
+    uint16_t numdimsfld = varoffs + UINT16_C(4) + comp->vars[ varoffs + 3U ];
+    uint16_t arrdimsfld = numdimsfld + UINT16_C(1);
+    uint16_t numelems   = UINT16_C(0);
+    uint8_t  numdims    = comp->vars[ numdimsfld ];
+    for ( uint8_t i = UINT8_C(0); i < numdims; ++i ) {
+        uint16_t dim = VEXTRACT16( comp, arrdimsfld );
+        if ( numelems ) {
+            numelems *= dim;
+        } else {
+            numelems += dim;
+        }
+        arrdimsfld += UINT16_C(2);
+    }
+    *pnumelem  = numelems;
+    *pdataoffs = arrdimsfld;
+}
+
 static void comp_compact_strs( compiler_t* comp ) {
     // algorithm:
     //  - iterate over all string variables (incl. every cell of each string array)
     //  - if the variable is non-empty, copy the string it points to to temporary memory
     //  - copy the resulting memory back, noting the new size
     //
-    // *** POSTPONE ***
+    static uint8_t tmp[STRSSIZE_MAX];
+    uint16_t tmpoffs = UINT16_C(0);
+    // iterate over the variables
+    for ( uint16_t i=0; i < comp->numvars; ++i ) {
+        uint16_t indexpos = i * 2U;
+        // get the offset of the variable header stored in the offset cell
+        uint16_t offs = VEXTRACT16( comp, indexpos );
+        if ( offs == VAROFFS_NONE ) {
+            // variable is unused; skip
+            continue;
+        }
+        // offset points to a variable header: check
+        // <size.16> <type.8> <namelen.8> <name...> [ <numdims.8> <arraydims...> | <numargs> <argdesc...> ] <data...>
+        uint16_t vartype = VEXTRACT16( comp, offs + 2U );
+        /*
+            +---+---+---+---++---+---+---+---+
+            | . | . | f | s || e | e | e | e |
+            +---+---+---+---++---+---+---+---+
+        */
+        if ( vartype & VARTYPEF_ARRAY ) {
+            if ( ( vartype & VARTYPEM_BASE ) != VARTYPEV_STR ) {
+                // not string array: skip
+                continue;
+            }
+            // an array
+            uint16_t numelems = UINT16_C(0);
+            uint16_t dataoffs = UINT16_C(0);
+            comp_get_array_num_elems( comp, offs, &numelems, &dataoffs );
+            // each element is comprised of <stroffs.16> <length.16>
+            for ( uint16_t j=UINT16_C(0); j < numelems; ++j ) {
+                uint16_t varfld  = dataoffs;
+                uint16_t lenfld  = varfld + UINT16_C(2);
+                uint16_t stroffs = VEXTRACT16( comp, varfld );
+                uint16_t length  = VEXTRACT16( comp, lenfld );
+                if ( stroffs == STROFFS_NONE ) {
+                    // empty string, skip
+                    continue;
+                }
+                // have offset: transfer string to temporary area
+                uint16_t tmpbeg = tmpoffs;
+                if ( length ) {
+                    memcpy( &tmp[ tmpoffs ], &comp->strs[ stroffs ], length );
+                    tmpoffs += length;
+                }
+                // write new offset
+                VWRITE16( comp, stroffs, tmpbeg );
+                // next element
+                dataoffs += UINT16_C(4);
+            }
+        } else if ( ( vartype & VARTYPEM_BASE ) == VARTYPEV_STR ) {
+            // <size.16> <type.8> <namelen.8> <name...> <stroffs.16> <length.16>
+            uint16_t strfld  = offs + UINT16_C(4) + comp->vars[ offs + 3U ];
+            uint16_t lenfld  = strfld + UINT16_C(2);
+            uint16_t stroffs = VEXTRACT16( comp, strfld );
+            uint16_t length  = VEXTRACT16( comp, lenfld );
+            if ( stroffs == STROFFS_NONE ) {
+                // empty string, skip
+                continue;
+            }
+            // have offset: transfer string to temporary area
+            uint16_t tmpbeg = tmpoffs;
+            if ( length ) {
+                memcpy( &tmp[ tmpoffs ], &comp->strs[ stroffs ], length );
+                tmpoffs += length;
+            }
+            // write new offset
+            VWRITE16( comp, stroffs, tmpbeg );
+        }
+    }
+    // copy the results back
+    memcpy( comp->strs, tmp, tmpoffs );
+    comp->strssize = tmpoffs;
 }
 
 bool comp_alloc_strs( compiler_t* comp, uint16_t size, uint16_t* poffs ) {
