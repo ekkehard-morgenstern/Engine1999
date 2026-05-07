@@ -209,6 +209,7 @@ static void comp_compact_strs( compiler_t* comp ) {
                 uint16_t length  = VEXTRACT16( comp, lenfld );
                 if ( stroffs == STROFFS_NONE ) {
                     // empty string, skip
+                    dataoffs += UINT16_C(4);
                     continue;
                 }
                 // have offset: transfer string to temporary area
