@@ -197,6 +197,35 @@ Explanation of node types:
             - 1 byte of type indicator
             - n bytes of name
 
+    [ NT_USRFNARG - not generated ]
+
+    NT_USERFNARGLIST    user function argument list
+        branches:
+            - 2 or more branches of user function argument declarations
+        immediate processing:
+            - generated only if there are more than 2 arguments
+
+    [ NT_ANYUSRFNNAME - not generated ]
+
+    NT_SINGLELINEUSRFNBODY  single-line user function body
+        branches:
+            - 1 branch of expression
+
+    NT_MULTILINEUSERFNBODY  multi-line user function body
+        branches:
+            - 0 or more branches of statement lines
+
+    [ NT_USRFNBODY - not generated ]
+
+    NT_USRFNDECL
+        data:
+            - 1 byte of type indicator
+            - n bytes of name
+        branches:
+            - 1 optional branch of argument list
+            - 1 optional branch of expression
+            - 1 optional branch of statement list
+
     NT_NUMUSRFNCALL     numeric user function call
     NT_STRUSRFNCALL     string user function call
         data:
@@ -393,6 +422,10 @@ Explanation of node types:
         branches:
             - 1 branch of empty array reference list
 
+    NT_DEFSTMT      DEF statement
+        branches:
+            - 1 branch of user function declaration
+
     [ NT_ASSIGNSTMT - not generated ]
 
     NT_FORSTMT      FOR statement
@@ -544,6 +577,11 @@ Explanation of node types:
 #define NT_STMTLIST             UINT8_C(0X3D)   // Statement list
 #define NT_STMTLINE             UINT8_C(0X3E)   // Statement line
 #define NT_STMTLINES            UINT8_C(0X3F)   // Statement lines
+#define NT_USERFNARGLIST        UINT8_C(0X40)   // User function argument list
+#define NT_SINGLELINEUSERFNBODY UINT8_C(0X41)   // single-line user function body
+#define NT_MULTILINEUSERFNBODY  UINT8_C(0X42)   // multi-line user function body
+#define NT_USRFNDECL            UINT8_C(0X43)   // user function declaration
+#define NT_DEFSTMT              UINT8_C(0X44)   // User function definition
 
 /*
 The variable segment contains all the variables in the program (or direct mode line).
@@ -585,6 +623,8 @@ The variable header is as follows:
 
     An array variable has an additional arraydims field. Each dimension is stored as a
     16-bit value (in network byte order).
+
+    A user-defined function variable has N argument descriptor fields. Each argument descriptor contains a type field and a name field (with preceding length byte).
 */
 
 #define VARTYPEF_FUNC   UINT8_C(0X20)

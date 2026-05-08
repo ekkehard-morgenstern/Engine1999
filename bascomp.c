@@ -167,6 +167,77 @@ static void comp_get_array_num_elems( compiler_t* comp, uint16_t varoffs, uint16
     *pdataoffs = arrdimsfld;
 }
 
+bool comp_lookup_var( compiler_t* comp, uint8_t vartype, const char* name, uint16_t* poutoffs ) {
+    /*
+    WARNING: The function return value doesn't indicate find success.
+    If the function returns true with an offset of VAROFFS_NONE, the variable was not found.
+    */
+    size_t namelen = strlen( name );
+    if ( namelen == 0 ) {
+        // it's an error to have a zero-length name
+        return false;
+    }
+    for ( uint16_t i=0; i < comp->numvars; ++i ) {
+        uint16_t indexpos = i * 2U;
+        // get the offset of the variable header stored in the offset cell
+        uint16_t offs = VEXTRACT16( comp, indexpos );
+        if ( offs == VAROFFS_NONE ) {
+            // variable is unused; skip
+            continue;
+        }
+        // offset points to a variable header: check
+        // <size.16> <type.8> <namelen.8> <name...> [ <numdims.8> <arraydims...> | <numargs> <argdesc...> ] <data...>
+        uint16_t var_type = VEXTRACT16( comp, offs + 2U );
+        /*
+            +---+---+---+---++---+---+---+---+
+            | . | . | f | s || e | e | e | e |
+            +---+---+---+---++---+---+---+---+
+        */
+        if ( var_type != vartype ) {
+            // wrong variable type, skip ->
+            // (in BASIC, it's permitted to have variables with same name but different type, like 'a$' and 'a' are distinct)
+            continue;
+        }
+        uint8_t name_len = comp->vars[ offs + 3U ];
+        if ( name_len != namelen ) {
+            // different name length, skip ->
+            continue;
+        }
+        if ( memcmp( &comp->vars[ offs + 4U ], name, name_len ) != 0 ) {
+            // name mismatch, skip ->
+            continue;
+        }
+        // exact match: return variable index offset
+        *poutoffs = indexpos;
+        return true;
+    }
+    // not found
+    *poutoffs = VAROFFS_NONE;
+    return true;
+}
+
+bool comp_create_var( compiler_t* comp, uint8_t vartype, const char* name, uint8_t numdims, uint16_t dims[MAXDIM],
+    uint16_t* poutoffs ) {
+    uint16_t indexpos = VAROFFS_NONE;
+    if ( !comp_lookup_var( comp, vartype, name, &indexpos ) || indexpos != VAROFFS_NONE ) {
+        // error or variable already exists: return error
+        comp_error( comp, "Variable already exists" );
+        return false;
+    }
+    // variable really does not exist: create
+    if ( !comp_create_var_offset( comp, &indexpos ) || indexpos == VAROFFS_NONE ) {
+        // most likely, variable index is full
+        comp_error( comp, "Too many variables" );
+        return false;
+    }
+    // We expect that everything concerning the variable parameters has already been checked.
+    // Supplying nonsense here WILL result in undefined behavior.
+
+    // ... TBD ...
+
+    return false;
+}
+
 static void comp_compact_strs( compiler_t* comp ) {
     // algorithm:
     //  - iterate over all string variables (incl. every cell of each string array)

@@ -57,6 +57,14 @@ str-lits := str-lit { str-lit } .
 num-usr-fn-name := TOK_FN TOK_IDENT [ TOK_PERCENT ] .
 str-usr-fn-name := TOK_FN TOK_IDENT TOK_DOLLAR .
 
+usr-fn-arg := empty-array-ref | any-base-var-ref .
+usr-fn-arg-list := usr-fn-arg { TOK_COMMA usr-fn-arg } .
+any-usr-fn-name := num-usr-fn-name | str-usr-fn-name .
+singleline-usr-fn-body := TOK_EQ expr .
+multiline-usr-fn-body := TOK_EOL stmt-lines TOK_END TOK_FN .
+usr-fn-body := singleline-usr-fn-body | multiline-usr-fn-body .
+usr-fn-decl := any-usr-fn-name [ TOK_LPAREN [ usr-fn-arg-list ] TOK_RPAREN ] usr-fn-body .
+
 num-usr-fn-call := num-usr-fn-name TOK_LPAREN expr-list TOK_RPAREN .
 str-usr-fn-call := str-usr-fn-name TOK_LPAREN expr-list TOK_RPAREN .
 
@@ -128,8 +136,9 @@ let-stmt := [ TOK_LET ] assign-list .
 
 dim-stmt := TOK_DIM array-decl-list .
 erase-stmt := TOK_ERASE empty-array-ref-list .
+def-stmt := TOK_DEF usr-fn-decl .
 
-assign-stmt := let-stmt | dim-stmt | erase-stmt .
+assign-stmt := let-stmt | dim-stmt | erase-stmt | def-stmt .
 
 for-stmt := num-base-var-ref TOK_EQ num-expr TOK_TO num-expr [ TOK_STEP num-expr ] .
 next-stmt := TOK_NEXT [ num-base-var-ref { TOK_COMMA num-base-var-ref } ] .
