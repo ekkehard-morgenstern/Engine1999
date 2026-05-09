@@ -629,7 +629,8 @@ The variable header is as follows:
 
 #define VARTYPEF_FUNC   UINT8_C(0X20)
 #define VARTYPEF_ARRAY  UINT8_C(0X10)
-#define VARTYPEM_BASE   UINT8_C(0X0F)
+#define VARTYPEM_BASE   UINT8_C(0X03)
+#define VARTYPEM_INVAL  UINT8_C(0XCC)
 #define VARTYPEV_FLOAT  UINT8_C(0X00)
 #define VARTYPEV_INT    UINT8_C(0X01)
 #define VARTYPEV_STR    UINT8_C(0X02)
@@ -654,6 +655,10 @@ The variable header is as follows:
         (tmp)[ (offs) + 1U ] = (uint8_t) (value); \
     }
 
+typedef struct _usrparam_t {
+    const char* paramname;
+    uint8_t     paramtype;
+} usrparam_t;
 
 /*
 The runtime system has two stacks:
@@ -860,6 +865,7 @@ The 4096 extended instructions are as follows:
 #define VARSSIZE_MAX    65536U
 #define STRSSIZE_MAX    65536U
 #define MAXDIM          6U
+#define MAXPARAM        8U
 #define MAXVARS         1024U
 
 typedef struct _compiler_t {

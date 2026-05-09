@@ -216,9 +216,33 @@ bool comp_lookup_var( compiler_t* comp, uint8_t vartype, const char* name, uint1
     return true;
 }
 
-bool comp_create_var( compiler_t* comp, uint8_t vartype, const char* name, uint8_t numdims, uint16_t dims[MAXDIM],
-    uint16_t* poutoffs ) {
+bool comp_create_var( compiler_t* comp, uint8_t vartype, const char* name, uint8_t numdims, const uint16_t* dims,
+    uint8_t numparams, const usrparam_t* params, uint16_t* poutoffs ) {
     uint16_t indexpos = VAROFFS_NONE;
+    size_t namelen = name ? strlen(name) : 0;
+    // some sanity checks
+    if ( vartype & VARTYPEM_INVAL || name == 0 || namelen == 0 || namelen > 255U || ( numdims != 0 && dims == 0 ) ||
+        numdims > MAXDIM || ( numparams != 0 && params == 0 ) || numparams > MAXPARAM || poutoffs == 0 ) {
+INTERR: comp_error( comp, "Internal error" );
+        return false;
+    }
+    size_t dimsize = 0;
+    for ( uint8_t i=0; i < numdims; ++i ) {
+        if ( i == 0 ) {
+            dimsize += dims[i];
+        } else {
+            dimsize *= dims[i];
+        }
+    }
+    if ( ( numdims && dimsize == 0 ) || dimsize > 65535U ) {
+        goto INTERR;
+    }
+    for ( uint8_t i=0; i < numparams; ++i ) {
+        if ( params[i].paramname == 0 || params[i].paramtype & VARTYPEM_INVAL ) {
+            goto INTERR;
+        }
+    }
+    // parameters seem OK, attempt to look up the variable
     if ( !comp_lookup_var( comp, vartype, name, &indexpos ) || indexpos != VAROFFS_NONE ) {
         // error or variable already exists: return error
         comp_error( comp, "Variable already exists" );
@@ -232,6 +256,7 @@ bool comp_create_var( compiler_t* comp, uint8_t vartype, const char* name, uint8
     }
     // We expect that everything concerning the variable parameters has already been checked.
     // Supplying nonsense here WILL result in undefined behavior.
+    // I added some simple checks at the beginning to remedy that a bit, but they don't cover all of the cases.
 
     // ... TBD ...
 
