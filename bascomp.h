@@ -897,8 +897,14 @@ void init_compiler( compiler_t* comp, program_t* pgm, bool keepmemory );
 void comp_error( compiler_t* comp, const char* text ) ATTR_NORETURN;
 
 bool comp_alloc_tree( compiler_t* comp, uint16_t size, uint16_t* poffs );
+
 bool comp_alloc_code( compiler_t* comp, uint16_t size, uint16_t* poffs );
+
 bool comp_alloc_vars( compiler_t* comp, uint16_t size, uint16_t* poffs );
+bool comp_lookup_var( compiler_t* comp, uint8_t vartype, const char* name, uint16_t* poutoffs );
+bool comp_create_var( compiler_t* comp, uint8_t vartype, const char* name, uint8_t numdims, const uint16_t* dims,
+    uint8_t numparams, const usrparam_t* params, uint16_t* poutoffs );
+
 bool comp_alloc_strs( compiler_t* comp, uint16_t size, uint16_t* poffs );
 
 bool comp_create_node( compiler_t* comp, uint16_t* pnodeoffs, uint8_t nodetype, uint8_t numbranches, uint16_t datalen,

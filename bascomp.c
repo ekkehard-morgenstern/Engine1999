@@ -128,7 +128,7 @@ bool comp_alloc_vars( compiler_t* comp, uint16_t size, uint16_t* poffs ) {
     return true;
 }
 
-bool comp_create_var_offset( compiler_t* comp, uint16_t* poffs ) {
+static bool comp_create_var_offset( compiler_t* comp, uint16_t* poffs ) {
     if ( comp->numvars >= MAXVARS ) {
         for ( uint16_t i=UINT16_C(0); i < MAXVARS; ++i ) {
             uint16_t pos  = i * UINT16_C(2);
