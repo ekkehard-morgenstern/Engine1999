@@ -226,6 +226,10 @@ bool comp_create_var( compiler_t* comp, uint8_t vartype, const char* name, uint8
 INTERR: comp_error( comp, "Internal error" );
         return false;
     }
+    if ( ( vartype & ( VARTYPEF_ARRAY | VARTYPEF_FUNC ) ) == ( VARTYPEF_ARRAY | VARTYPEF_FUNC ) ) {
+        // cannot be array and function at the same time
+        goto INTERR;
+    }
     size_t dimsize = 0;
     for ( uint8_t i=0; i < numdims; ++i ) {
         if ( i == 0 ) {
@@ -235,10 +239,18 @@ INTERR: comp_error( comp, "Internal error" );
         }
     }
     if ( ( numdims && dimsize == 0 ) || dimsize > 65535U ) {
+        if ( dimsize > 65535U ) {
+TOOLARGE:   comp_error( comp, "Array too large" );
+            return false;
+        }
         goto INTERR;
     }
     for ( uint8_t i=0; i < numparams; ++i ) {
         if ( params[i].paramname == 0 || params[i].paramtype & VARTYPEM_INVAL ) {
+            goto INTERR;
+        }
+        size_t nlen = strlen( params[i].paramname );
+        if ( nlen == 0U || nlen > 255U ) {
             goto INTERR;
         }
     }
@@ -258,9 +270,125 @@ INTERR: comp_error( comp, "Internal error" );
     // Supplying nonsense here WILL result in undefined behavior.
     // I added some simple checks at the beginning to remedy that a bit, but they don't cover all of the cases.
 
-    // ... TBD ...
+    // <size.16> <type.8> <namelen.8> <name...> [ <numdims.8> <arraydims...> | <numargs> <argdesc...> ] <data...>
+    //
+    // A user-defined function variable has N argument descriptor fields. Each argument descriptor contains a type field
+    // and a name field (with preceding length byte).
 
-    return false;
+    size_t elemsize = 0U;
+    switch ( vartype & VARTYPEM_BASE ) {
+        case VARTYPEV_FLOAT:    elemsize = 8U; break;   // 64 bit float
+        case VARTYPEV_INT:      elemsize = 2U; break;   // 16 bit integer
+        case VARTYPEV_STR:      elemsize = 4U; break;   // offset in string space + length
+        case VARTYPEV_LABEL:    elemsize = 2U; break;   // offset in code space
+    }
+
+    size_t varsize = 4U + namelen;
+    if ( vartype & VARTYPEF_ARRAY ) {
+        if ( numdims == 0U ) {
+            goto INTERR;
+        }
+        varsize += 1U + numdims * 2U + dimsize * elemsize;
+    } else if ( vartype & VARTYPEF_FUNC ) {
+        varsize += 1U;
+        for ( uint8_t i=UINT8_C(0); i < numparams; ++i ) {
+            varsize += 2U + strlen( params[i].paramname );
+        }
+        varsize += 2U;  // offset in code segment
+    } else {
+        // regular variable
+        varsize += elemsize;
+    }
+
+    if ( varsize > 65535U ) {
+        goto TOOLARGE;
+    }
+
+    uint16_t memoffs = VAROFFS_NONE;
+    if ( !comp_alloc_vars( comp, (uint16_t) varsize, &memoffs ) || memoffs == VAROFFS_NONE ) {
+        comp_error( comp, "Out of memory" );
+        return false;
+    }
+
+    // got the variable memory: set up variable header
+
+    // <size.16> <type.8> <namelen.8> <name...> [ <numdims.8> <arraydims...> | <numargs> <argdesc...> ] <data...>
+    //
+    // A user-defined function variable has N argument descriptor fields. Each argument descriptor contains a type field
+    // and a name field (with preceding length byte).
+
+    uint16_t membeg = memoffs;
+    VWRITE16( comp, memoffs, varsize );
+    comp->vars[ memoffs + 2U ] = vartype;
+    comp->vars[ memoffs + 3U ] = (uint8_t) namelen;
+    memoffs += UINT16_C(4);
+    memcpy( &comp->vars[ memoffs ], name, namelen );
+    memoffs += (uint16_t) namelen;
+
+    if ( vartype & VARTYPEF_ARRAY ) {
+        comp->vars[ memoffs++ ] = numdims;
+        for ( uint8_t i=0; i < numdims; ++i ) {
+            VWRITE16( comp, memoffs, dims[i] );
+            memoffs += UINT16_C(2);
+        }
+    } else if ( vartype & VARTYPEF_FUNC ) {
+        comp->vars[ memoffs++ ] = numparams;
+        for ( uint8_t i=0; i < numparams; ++i ) {
+            uint8_t nlen = (uint8_t) strlen( params[i].paramname );
+            comp->vars[ memoffs++ ] = params[i].paramtype;
+            comp->vars[ memoffs++ ] = nlen;
+            memcpy( &comp->vars[ memoffs ], params[i].paramname, nlen );
+            memoffs += nlen;
+        }
+    }
+
+    // initialize the data
+    if ( vartype & VARTYPEF_ARRAY ) {
+        uint16_t numwritten = memoffs - membeg;
+        uint16_t numleft    = (uint16_t)( varsize - numwritten );
+        switch ( vartype & VARTYPEM_BASE ) {
+            case VARTYPEV_FLOAT:
+            case VARTYPEV_INT:
+                // float and int arrays are initialized to zero
+                memset( &comp->vars[ memoffs ], 0, numleft );
+                break;
+            case VARTYPEV_STR:
+                // string arrays are initialized to STROFFS_NONE (0xFFFF)
+                memset( &comp->vars[ memoffs ], 0xFF, numleft );
+                break;
+            case VARTYPEV_LABEL:
+                // label arrays do not exist
+                goto INTERR;
+        }
+    } else if ( vartype & VARTYPEF_FUNC ) {
+        // a function only has a single offset member
+        VWRITE16( comp, memoffs, CODEOFFS_NONE );
+    } else {
+        // individual variables
+        switch ( vartype & VARTYPEM_BASE ) {
+            case VARTYPEV_FLOAT:
+                // a float variable is set to zero
+                memset( &comp->vars[ memoffs ], 0, 8U );
+                break;
+            case VARTYPEV_INT:
+                // an int variable is set to zero
+                memset( &comp->vars[ memoffs ], 0, 2U );
+                break;
+            case VARTYPEV_STR:
+                // a string variable is set to STROFFS_NONE
+                VWRITE16( comp, memoffs, STROFFS_NONE );
+                break;
+            case VARTYPEV_LABEL:
+                // a label variable is set to CODEOFFS_NONE
+                VWRITE16( comp, memoffs, CODEOFFS_NONE );
+                break;
+        }
+    }
+
+    // return the variable index
+    *poutoffs = indexpos;
+
+    return true;
 }
 
 static void comp_compact_strs( compiler_t* comp ) {

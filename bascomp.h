@@ -638,6 +638,7 @@ The variable header is as follows:
 
 #define VAROFFS_NONE    UINT16_C(0XFFFF)
 #define STROFFS_NONE    UINT16_C(0XFFFF)
+#define CODEOFFS_NONE   UINT16_C(0XFFFF)
 
 #define VEXTRACT16( comp, offs ) \
     ( ( ((uint16_t)( (comp)->vars[ offs ] )) << UINT8_C(8) ) | \
