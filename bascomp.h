@@ -622,7 +622,8 @@ The variable header is as follows:
             0100 .. 1111 reserved
 
     An array variable has an additional arraydims field. Each dimension is stored as a
-    16-bit value (in network byte order).
+    16-bit value (in network byte order), succeeded by another 16-bit value in network byte
+    order specifying the slice size in bytes (to simplify addressing in multidimensional arrays).
 
     A user-defined function variable has N argument descriptor fields. Each argument descriptor contains a type field and a name field (with preceding length byte).
 */
@@ -660,6 +661,17 @@ typedef struct _usrparam_t {
     const char* paramname;
     uint8_t     paramtype;
 } usrparam_t;
+
+typedef union _varvalue_t {
+    struct {
+        uint16_t    stroffs;
+        uint16_t    strsize;
+    };
+    double      dblval;
+    int16_t     intval;
+    uint16_t    lbloffs;
+    uint16_t    codeoffs;
+} varvalue_t;
 
 /*
 The runtime system has two stacks:
@@ -904,6 +916,11 @@ bool comp_alloc_vars( compiler_t* comp, uint16_t size, uint16_t* poffs );
 bool comp_lookup_var( compiler_t* comp, uint8_t vartype, const char* name, uint16_t* poutoffs );
 bool comp_create_var( compiler_t* comp, uint8_t vartype, const char* name, uint8_t numdims, const uint16_t* dims,
     uint8_t numparams, const usrparam_t* params, uint16_t* poutoffs );
+bool comp_delete_var( compiler_t* comp, uint16_t varoffs );
+bool comp_get_var( compiler_t* comp, uint16_t varoffs, uint8_t vartype, uint8_t numdims, const uint16_t* diminx,
+    varvalue_t* pvalue );
+bool comp_set_var( compiler_t* comp, uint16_t varoffs, uint8_t vartype, uint8_t numdims, const uint16_t* diminx,
+    const varvalue_t* pvalue );
 
 bool comp_alloc_strs( compiler_t* comp, uint16_t size, uint16_t* poffs );
 

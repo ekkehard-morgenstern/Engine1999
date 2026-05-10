@@ -161,7 +161,7 @@ static void comp_get_array_num_elems( compiler_t* comp, uint16_t varoffs, uint16
         } else {
             numelems += dim;
         }
-        arrdimsfld += UINT16_C(2);
+        arrdimsfld += UINT16_C(4);
     }
     *pnumelem  = numelems;
     *pdataoffs = arrdimsfld;
@@ -216,6 +216,16 @@ bool comp_lookup_var( compiler_t* comp, uint8_t vartype, const char* name, uint1
     return true;
 }
 
+static uint16_t get_elemsize( uint8_t vartype ) {
+    switch ( vartype & VARTYPEM_BASE ) {
+        case VARTYPEV_FLOAT:    return UINT16_C(8);     // 64 bit float
+        case VARTYPEV_INT:      return UINT16_C(2);     // 16 bit integer
+        case VARTYPEV_STR:      return UINT16_C(4);     // offset in string space + length
+        case VARTYPEV_LABEL:    return UINT16_C(2);     // offset in code space
+    }
+    return UINT16_C(0);
+}
+
 bool comp_create_var( compiler_t* comp, uint8_t vartype, const char* name, uint8_t numdims, const uint16_t* dims,
     uint8_t numparams, const usrparam_t* params, uint16_t* poutoffs ) {
     uint16_t indexpos = VAROFFS_NONE;
@@ -230,12 +240,19 @@ INTERR: comp_error( comp, "Internal error" );
         // cannot be array and function at the same time
         goto INTERR;
     }
-    size_t dimsize = 0;
+    size_t dimsize = 0, slicesize[MAXDIM] = { 0, 0, 0, 0, 0, 0 };
     for ( uint8_t i=0; i < numdims; ++i ) {
         if ( i == 0 ) {
             dimsize += dims[i];
         } else {
             dimsize *= dims[i];
+        }
+        for ( uint8_t j = i + UINT8_C(1); j < numdims; ++j ) {
+            if ( j == 0 ) {
+                slicesize[i] += dims[j];
+            } else {
+                slicesize[i] *= dims[j];
+            }
         }
     }
     if ( ( numdims && dimsize == 0 ) || dimsize > 65535U ) {
@@ -272,23 +289,20 @@ TOOLARGE:   comp_error( comp, "Array too large" );
 
     // <size.16> <type.8> <namelen.8> <name...> [ <numdims.8> <arraydims...> | <numargs> <argdesc...> ] <data...>
     //
+    // An array variable has an additional arraydims field. Each dimension is stored as a
+    // 16-bit value (in network byte order), succeeded by another 16-bit value in network byte
+    // order specifying the slice size in bytes (to simplify addressing in multidimensional arrays).
+    //
     // A user-defined function variable has N argument descriptor fields. Each argument descriptor contains a type field
     // and a name field (with preceding length byte).
 
-    size_t elemsize = 0U;
-    switch ( vartype & VARTYPEM_BASE ) {
-        case VARTYPEV_FLOAT:    elemsize = 8U; break;   // 64 bit float
-        case VARTYPEV_INT:      elemsize = 2U; break;   // 16 bit integer
-        case VARTYPEV_STR:      elemsize = 4U; break;   // offset in string space + length
-        case VARTYPEV_LABEL:    elemsize = 2U; break;   // offset in code space
-    }
-
+    size_t elemsize = get_elemsize( vartype );
     size_t varsize = 4U + namelen;
     if ( vartype & VARTYPEF_ARRAY ) {
         if ( numdims == 0U ) {
             goto INTERR;
         }
-        varsize += 1U + numdims * 2U + dimsize * elemsize;
+        varsize += 1U + numdims * 4U + dimsize * elemsize;
     } else if ( vartype & VARTYPEF_FUNC ) {
         varsize += 1U;
         for ( uint8_t i=UINT8_C(0); i < numparams; ++i ) {
@@ -314,6 +328,10 @@ TOOLARGE:   comp_error( comp, "Array too large" );
 
     // <size.16> <type.8> <namelen.8> <name...> [ <numdims.8> <arraydims...> | <numargs> <argdesc...> ] <data...>
     //
+    // An array variable has an additional arraydims field. Each dimension is stored as a
+    // 16-bit value (in network byte order), succeeded by another 16-bit value in network byte
+    // order specifying the slice size in bytes (to simplify addressing in multidimensional arrays).
+    //
     // A user-defined function variable has N argument descriptor fields. Each argument descriptor contains a type field
     // and a name field (with preceding length byte).
 
@@ -328,7 +346,10 @@ TOOLARGE:   comp_error( comp, "Array too large" );
     if ( vartype & VARTYPEF_ARRAY ) {
         comp->vars[ memoffs++ ] = numdims;
         for ( uint8_t i=0; i < numdims; ++i ) {
+            uint16_t slice = (uint16_t)( slicesize[i] * elemsize );
             VWRITE16( comp, memoffs, dims[i] );
+            memoffs += UINT16_C(2);
+            VWRITE16( comp, memoffs, slice   );
             memoffs += UINT16_C(2);
         }
     } else if ( vartype & VARTYPEF_FUNC ) {
@@ -385,9 +406,190 @@ TOOLARGE:   comp_error( comp, "Array too large" );
         }
     }
 
-    // return the variable index
+    // set the variable index entry
+    VWRITE16( comp, indexpos, membeg );
+
+    // return the variable index position
     *poutoffs = indexpos;
 
+    return true;
+}
+
+bool comp_delete_var( compiler_t* comp, uint16_t varoffs ) {
+    if ( varoffs >= MAXVARS * 2U ) {    // bad varoffs
+        return false;
+    }
+    uint16_t memoffs = VEXTRACT16( comp, varoffs );
+    if ( memoffs == VAROFFS_NONE ) {    // not allocated
+        return false;
+    }
+    // <size.16> <type.8> <namelen.8> <name...> [ <numdims.8> <arraydims...> | <numargs> <argdesc...> ] <data...>
+    uint16_t membeg = memoffs;
+    uint16_t blksize = VEXTRACT16( comp, memoffs );
+    if ( blksize == UINT16_C(0) ) {
+        return false;
+    }
+    memset( &comp->vars[ membeg ], 0, blksize );
+    VWRITE16( comp, varoffs, VAROFFS_NONE );
+    return true;
+}
+
+static bool comp_get_array_elem( compiler_t* comp, uint8_t vartype, uint8_t numdims, const uint16_t* diminx, uint16_t* pmemoffs ) {
+    uint16_t memoffs = *pmemoffs;
+    uint8_t dimcnt = comp->vars[ memoffs++ ];
+    if ( dimcnt != numdims || dimcnt > MAXDIM || diminx == 0 ) {
+        return false;
+    }
+    uint16_t maxdim[MAXDIM], slice[MAXDIM];
+    for ( uint8_t i=0; i < dimcnt; ++i ) {
+        maxdim[i] = VEXTRACT16( comp, memoffs );
+        memoffs += UINT16_C(2);
+        slice[i] = VEXTRACT16( comp, memoffs );
+        memoffs += UINT16_C(2);
+    }
+    uint16_t elemsize = get_elemsize( vartype );
+    for ( uint8_t i=0; i < dimcnt; ++i ) {
+        if ( diminx[i] >= maxdim[i] ) {
+            return false;
+        }
+        if ( i == dimcnt - UINT8_C(1) ) {
+            memoffs += diminx[i] * elemsize;
+        } else {
+            memoffs *= diminx[i] * slice[i];
+        }
+    }
+    *pmemoffs = memoffs;
+    return true;
+}
+
+static double comp_extract_float( const uint8_t* mem, uint16_t offs );
+static void comp_write_float( uint8_t* mem, uint16_t offs, double val );
+
+bool comp_get_var( compiler_t* comp, uint16_t varoffs, uint8_t vartype, uint8_t numdims, const uint16_t* diminx,
+    varvalue_t* pvalue ) {
+    if ( pvalue == 0 ) {
+        return false;
+    }
+    if ( varoffs >= MAXVARS * 2U ) {    // bad varoffs
+        return false;
+    }
+    if ( vartype & VARTYPEM_INVAL ) {
+        return false;
+    }
+    uint16_t memoffs = VEXTRACT16( comp, varoffs );
+    if ( memoffs == VAROFFS_NONE ) {    // not allocated
+        return false;
+    }
+    // <size.16> <type.8> <namelen.8> <name...> [ <numdims.8> <arraydims...> | <numargs> <argdesc...> ] <data...>
+    uint8_t vartype2 = comp->vars[ memoffs + 2U ];
+    if ( ( vartype2 & VARTYPEM_INVAL ) != 0 || vartype2 != vartype ) {
+        return false;
+    }
+    uint8_t namelen = comp->vars[ memoffs + 3U ];
+    memoffs += UINT16_C(4) + namelen;
+    if ( vartype & VARTYPEF_ARRAY ) {
+        if ( !comp_get_array_elem( comp, vartype, numdims, diminx, &memoffs ) ) {
+            return false;
+        }
+        // array element is addressed by memoffs
+    } else if ( vartype & VARTYPEF_FUNC ) {
+        // A user-defined function variable has N argument descriptor fields. Each argument descriptor contains a
+        // type field and a name field (with preceding length byte).
+        uint8_t numargs = comp->vars[ memoffs++ ];
+        if ( numargs > MAXPARAM ) {
+            return false;
+        }
+        for ( uint8_t i=UINT8_C(0); i < numargs; ++i ) {
+            ++memoffs; // uint8_t argtype = comp->vars[ memoffs++ ];
+            uint8_t argnlen = comp->vars[ memoffs++ ];
+            memoffs += argnlen;
+        }
+        // the remaining field is a code offset
+        pvalue->codeoffs = VEXTRACT16( comp, memoffs );
+        return true;
+    } else {
+        // regular variable, memoffs points to data field
+    }
+    switch ( vartype & VARTYPEM_BASE ) {
+        case VARTYPEV_FLOAT:
+            pvalue->dblval = comp_extract_float( comp->vars, memoffs );
+            break;
+        case VARTYPEV_INT:
+            pvalue->intval = VEXTRACT16( comp, memoffs );
+            break;
+        case VARTYPEV_STR:
+            pvalue->stroffs = VEXTRACT16( comp, memoffs );
+            memoffs += UINT16_C(2);
+            pvalue->strsize = VEXTRACT16( comp, memoffs );
+            break;
+        case VARTYPEV_LABEL:
+            pvalue->lbloffs = VEXTRACT16( comp, memoffs );
+            break;
+    }
+    return true;
+}
+
+bool comp_set_var( compiler_t* comp, uint16_t varoffs, uint8_t vartype, uint8_t numdims, const uint16_t* diminx,
+    const varvalue_t* pvalue ) {
+    if ( pvalue == 0 ) {
+        return false;
+    }
+    if ( varoffs >= MAXVARS * 2U ) {    // bad varoffs
+        return false;
+    }
+    if ( vartype & VARTYPEM_INVAL ) {
+        return false;
+    }
+    uint16_t memoffs = VEXTRACT16( comp, varoffs );
+    if ( memoffs == VAROFFS_NONE ) {    // not allocated
+        return false;
+    }
+    // <size.16> <type.8> <namelen.8> <name...> [ <numdims.8> <arraydims...> | <numargs> <argdesc...> ] <data...>
+    uint8_t vartype2 = comp->vars[ memoffs + 2U ];
+    if ( ( vartype2 & VARTYPEM_INVAL ) != 0 || vartype2 != vartype ) {
+        return false;
+    }
+    uint8_t namelen = comp->vars[ memoffs + 3U ];
+    memoffs += UINT16_C(4) + namelen;
+    if ( vartype & VARTYPEF_ARRAY ) {
+        if ( !comp_get_array_elem( comp, vartype, numdims, diminx, &memoffs ) ) {
+            return false;
+        }
+        // array element is addressed by memoffs
+    } else if ( vartype & VARTYPEF_FUNC ) {
+        // A user-defined function variable has N argument descriptor fields. Each argument descriptor contains a
+        // type field and a name field (with preceding length byte).
+        uint8_t numargs = comp->vars[ memoffs++ ];
+        if ( numargs > MAXPARAM ) {
+            return false;
+        }
+        for ( uint8_t i=UINT8_C(0); i < numargs; ++i ) {
+            ++memoffs; // uint8_t argtype = comp->vars[ memoffs++ ];
+            uint8_t argnlen = comp->vars[ memoffs++ ];
+            memoffs += argnlen;
+        }
+        // the remaining field is a code offset
+        VWRITE16( comp, memoffs, pvalue->codeoffs );
+        return true;
+    } else {
+        // regular variable, memoffs points to data field
+    }
+    switch ( vartype & VARTYPEM_BASE ) {
+        case VARTYPEV_FLOAT:
+            comp_write_float( comp->vars, memoffs, pvalue->dblval );
+            break;
+        case VARTYPEV_INT:
+            VWRITE16( comp, memoffs, pvalue->intval );
+            break;
+        case VARTYPEV_STR:
+            VWRITE16( comp, memoffs, pvalue->stroffs );
+            memoffs += UINT16_C(2);
+            VWRITE16( comp, memoffs, pvalue->strsize );
+            break;
+        case VARTYPEV_LABEL:
+            VWRITE16( comp, memoffs, pvalue->lbloffs );
+            break;
+    }
     return true;
 }
 
@@ -676,22 +878,38 @@ bool comp_node_iter_branches( compiler_t* comp, uint16_t nodeoffs, void* userdat
     return true;
 }
 
-static double comp_extract_float( compiler_t* comp, uint16_t offs ) {
+static double comp_extract_float( const uint8_t* mem, uint16_t offs ) {
     uint64_t val =
-        ( ( (uint64_t) comp->tree[ offs      ] ) << UINT8_C(56) ) |
-        ( ( (uint64_t) comp->tree[ offs + 1U ] ) << UINT8_C(48) ) |
-        ( ( (uint64_t) comp->tree[ offs + 2U ] ) << UINT8_C(40) ) |
-        ( ( (uint64_t) comp->tree[ offs + 3U ] ) << UINT8_C(32) ) |
-        ( ( (uint32_t) comp->tree[ offs + 4U ] ) << UINT8_C(24) ) |
-        ( ( (uint32_t) comp->tree[ offs + 5U ] ) << UINT8_C(16) ) |
-        ( ( (uint16_t) comp->tree[ offs + 6U ] ) << UINT8_C( 8) ) |
-                       comp->tree[ offs + 7U ]                    ;
+        ( ( (uint64_t) mem[ offs      ] ) << UINT8_C(56) ) |
+        ( ( (uint64_t) mem[ offs + 1U ] ) << UINT8_C(48) ) |
+        ( ( (uint64_t) mem[ offs + 2U ] ) << UINT8_C(40) ) |
+        ( ( (uint64_t) mem[ offs + 3U ] ) << UINT8_C(32) ) |
+        ( ( (uint32_t) mem[ offs + 4U ] ) << UINT8_C(24) ) |
+        ( ( (uint32_t) mem[ offs + 5U ] ) << UINT8_C(16) ) |
+        ( ( (uint16_t) mem[ offs + 6U ] ) << UINT8_C( 8) ) |
+                       mem[ offs + 7U ]                    ;
     union {
         uint64_t ui64;
         double   dbl;
     } u;
     u.ui64 = val;
     return u.dbl;
+}
+
+static void comp_write_float( uint8_t* mem, uint16_t offs, double val ) {
+    union {
+        uint64_t ui64;
+        double   dbl;
+    } u;
+    u.dbl = val;
+    mem[ offs      ] = (uint8_t)( u.ui64 >> UINT8_C(56) );
+    mem[ offs + 1U ] = (uint8_t)( u.ui64 >> UINT8_C(48) );
+    mem[ offs + 2U ] = (uint8_t)( u.ui64 >> UINT8_C(40) );
+    mem[ offs + 3U ] = (uint8_t)( u.ui64 >> UINT8_C(32) );
+    mem[ offs + 4U ] = (uint8_t)( u.ui64 >> UINT8_C(24) );
+    mem[ offs + 5U ] = (uint8_t)( u.ui64 >> UINT8_C(16) );
+    mem[ offs + 6U ] = (uint8_t)( u.ui64 >> UINT8_C( 8) );
+    mem[ offs + 7U ] = (uint8_t)( u.ui64                );
 }
 
 static bool comp_gather_dims( void* userdata, uint16_t node ) {
@@ -711,7 +929,7 @@ static bool comp_gather_dims( void* userdata, uint16_t node ) {
         comp_error( comp, "Bad number" );
         return false;
     }
-    double val = comp_extract_float( comp, node + 8U );
+    double val = comp_extract_float( comp->tree, node + 8U );
     if ( val < 1.0 || val >= 65536.0 ) {
         comp_error( comp, "Dimension out of range" );
         return false;
