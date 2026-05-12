@@ -89,22 +89,22 @@ static void report_error( compiler_t* comp, void* user, const char* text ) {
 }
 
 // book keeping info for verification purposes
-typedef union _keepvar_t {
+typedef union _keepval_t {
     double  dval;
     int16_t ival;
     char*   sval;
-} keepvar_t;
+} keepval_t;
 
-static void init_keepvar( uint8_t vartype, keepvar_t* var ) {
+static void init_keepval( uint8_t vartype, keepval_t* val ) {
     switch ( vartype & VARTYPEM_BASE ) {
         case VARTYPEV_FLOAT:
-            var->dval = 0;
+            val->dval = 0;
             break;
         case VARTYPEV_INT:
-            var->ival = 0;
+            val->ival = 0;
             break;
         case VARTYPEV_STR:
-            var->sval = 0;
+            val->sval = 0;
             break;
         default:
             fprintf( stderr, "? invalid var type\n" );
@@ -112,22 +112,22 @@ static void init_keepvar( uint8_t vartype, keepvar_t* var ) {
     }
 }
 
-static void setrand_keepvar( uint8_t vartype, keepvar_t* var ) {
+static void setrand_keepval( uint8_t vartype, keepval_t* val ) {
     char buf[256];
     switch ( vartype & VARTYPEM_BASE ) {
         case VARTYPEV_FLOAT:
-            var->dval = (double) getrand( INT32_MAX );
+            val->dval = (double) getrand( INT32_MAX );
             break;
         case VARTYPEV_INT:
-            var->ival = (int16_t) getrand( INT16_MAX );
+            val->ival = (int16_t) getrand( INT16_MAX );
             break;
         case VARTYPEV_STR:
             getrandstr( buf, 0 );
-            if ( var->sval ) {
-                free( var->sval );
+            if ( val->sval ) {
+                free( val->sval );
             }
-            var->sval = strdup( buf );
-            if ( var->sval == 0 ) {
+            val->sval = strdup( buf );
+            if ( val->sval == 0 ) {
                 fprintf( stderr, "? out of memory\n" );
                 exit( 1 );
             }
@@ -137,6 +137,80 @@ static void setrand_keepvar( uint8_t vartype, keepvar_t* var ) {
             exit( 1 );
     }
 }
+
+typedef struct _keepvar_t {
+    char*       name;
+    uint8_t     vartype;
+    keepval_t   value;
+    union {
+        struct {
+            size_t      numcells;
+            keepval_t*  cells;
+            uint8_t     numdims;
+            uint16_t    dims[MAXDIM];
+        };
+        struct {
+            uint8_t     numparams;
+            usrparam_t  params[MAXPARAM];
+        };
+    };
+} keepvar_t;
+
+static void init_keepvar( keepvar_t* var ) {
+    char buf[256];
+    getrandstr( buf, 0 );
+    var->name = strdup( buf );
+    if ( var->name == 0 ) {
+        fprintf( stderr, "? out of memory\n" );
+        exit( 1 );
+    }
+    var->vartype = ( (uint8_t) getrand( INT32_C(256) ) ) & ~VARTYPEM_INVAL;
+    if ( var->vartype & VARTYPEF_ARRAY ) {
+        if ( ( var->vartype & VARTYPEM_BASE ) == VARTYPEV_LABEL ) {
+            // arrays of labels not allowed
+            var->vartype = ( var->vartype & ~VARTYPEM_BASE ) | VARTYPEV_INT;
+        }
+        // arrays of functions not allowed
+        var->vartype &= ~VARTYPEF_FUNC;
+        var->numdims = UINT8_C(1) + ( (uint8_t) getrand( MAXDIM - UINT8_C(1) ) );
+        static const uint16_t maxmax[MAXDIM] = {
+            UINT16_C(24),
+            UINT16_C(15),
+            UINT16_C(10),
+            UINT16_C(5),
+            UINT16_C(4),
+            UINT16_C(3),
+        };
+        for ( uint8_t i=UINT8_C(0); i < var->numdims; ++i ) {
+            var->dims[i] = UINT16_C(2) + (uint16_t) getrand( maxmax[i] - UINT16_C(2) );
+        }
+        var->numcells = 0;
+        for ( uint8_t i=UINT8_C(0); i < var->numdims; ++i ) {
+            if ( i == UINT8_C(0) ) {
+                var->numcells += var->dims[i];
+            } else {
+                var->numcells *= var->dims[i];
+            }
+        }
+        var->cells = (keepval_t*) calloc( var->numcells, sizeof(keepval_t) );
+        if ( var->cells == 0 ) {
+            fprintf( stderr, "? Out of memory\n" );
+            exit( 1 );
+        }
+        for ( size_t i=0; i < var->numcells; ++i ) {
+            init_keepval( var->vartype & ~VARTYPEF_ARRAY, &var->cells[i] );
+        }
+    } else {
+        init_keepval( var->vartype, &var->value );
+        var->numcells = 0; var->cells = 0;
+        var->numdims = 0;
+    }
+
+
+
+}
+
+
 
 typedef struct _keep_t {
     int eff;
