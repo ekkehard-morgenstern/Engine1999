@@ -41,12 +41,12 @@ static int32_t getrand( int32_t modulo ) {
         fprand = fopen( "/dev/urandom", "rb" );
         if ( fprand == 0 ) {
             perror( "fopen(3) /dev/urandom" );
-            exit( 1 );
+            exit( EXIT_FAILURE );
         }
     }
     if ( fread( &val, sizeof(int32_t), 1U, fprand ) != 1 ) {
         fprintf( stderr, "/dev/urandom: I/O error\n" );
-        exit( 1 );
+        exit( EXIT_FAILURE );
     }
     return ( val & INT32_MAX ) % modulo;
 }
@@ -56,7 +56,7 @@ static void getrandstr( char buf[256], uint8_t* plen ) {
     if ( len ) {
         if ( fread( buf, len, 1U, fprand ) != 1 ) {
             fprintf( stderr, "/dev/urandom: I/O error\n" );
-            exit( 1 );
+            exit( EXIT_FAILURE );
         }
     }
     buf[ len ] = '\0';
@@ -108,7 +108,7 @@ static void init_keepval( uint8_t vartype, keepval_t* val ) {
             break;
         default:
             fprintf( stderr, "? invalid var type\n" );
-            exit( 1 );
+            exit( EXIT_FAILURE );
     }
 }
 
@@ -129,12 +129,12 @@ static void setrand_keepval( uint8_t vartype, keepval_t* val ) {
             val->sval = strdup( buf );
             if ( val->sval == 0 ) {
                 fprintf( stderr, "? out of memory\n" );
-                exit( 1 );
+                exit( EXIT_FAILURE );
             }
             break;
         default:
             fprintf( stderr, "? invalid var type\n" );
-            exit( 1 );
+            exit( EXIT_FAILURE );
     }
 }
 
@@ -142,27 +142,22 @@ typedef struct _keepvar_t {
     char*       name;
     uint8_t     vartype;
     keepval_t   value;
-    union {
-        struct {
-            size_t      numcells;
-            keepval_t*  cells;
-            uint8_t     numdims;
-            uint16_t    dims[MAXDIM];
-        };
-        struct {
-            uint8_t     numparams;
-            usrparam_t  params[MAXPARAM];
-        };
-    };
+    size_t      numcells;
+    keepval_t*  cells;
+    uint8_t     numdims;
+    uint16_t    dims[MAXDIM];
+    uint8_t     numparams;
+    usrparam_t  params[MAXPARAM];
 } keepvar_t;
 
 static void init_keepvar( keepvar_t* var ) {
+    memset( var, 0, sizeof(keepvar_t) );
     char buf[256];
     getrandstr( buf, 0 );
     var->name = strdup( buf );
     if ( var->name == 0 ) {
         fprintf( stderr, "? out of memory\n" );
-        exit( 1 );
+        exit( EXIT_FAILURE );
     }
     var->vartype = ( (uint8_t) getrand( INT32_C(256) ) ) & ~VARTYPEM_INVAL;
     if ( var->vartype & VARTYPEF_ARRAY ) {
@@ -195,19 +190,30 @@ static void init_keepvar( keepvar_t* var ) {
         var->cells = (keepval_t*) calloc( var->numcells, sizeof(keepval_t) );
         if ( var->cells == 0 ) {
             fprintf( stderr, "? Out of memory\n" );
-            exit( 1 );
+            exit( EXIT_FAILURE );
         }
         for ( size_t i=0; i < var->numcells; ++i ) {
             init_keepval( var->vartype & ~VARTYPEF_ARRAY, &var->cells[i] );
         }
+    } else if ( var->vartype & VARTYPEF_FUNC ) {
+        // function variables hold an integer value (code offset)
+        init_keepval( VARTYPEV_LABEL, &var->value );
+        // set up arguments
+        var->numparams = (uint8_t) getrand( MAXPARAM );
+        for ( uint8_t i=UINT8_C(0); i < var->numparams; ++i ) {
+            do {
+                getrandstr( buf, 0 );
+            } while ( buf[0] == '\0' );
+            var->params[i].paramname = strdup( buf );
+            if ( var->params[i].paramname == 0 ) {
+                fprintf( stderr, "? Out of memory\n" );
+                exit( EXIT_FAILURE );
+            }
+            var->params[i].paramtype = (uint8_t) getrand( VARTYPEV_LABEL ); // 0..2
+        }
     } else {
         init_keepval( var->vartype, &var->value );
-        var->numcells = 0; var->cells = 0;
-        var->numdims = 0;
     }
-
-
-
 }
 
 
@@ -246,5 +252,5 @@ int main( int argc, char** argv ) {
 
 
 
-    return 0;
+    return EXIT_SUCCESS;
 }
