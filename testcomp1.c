@@ -148,6 +148,12 @@ typedef struct _keepvar_t {
     uint16_t    dims[MAXDIM];
     uint8_t     numparams;
     usrparam_t  params[MAXPARAM];
+    uint16_t    varoffs;
+    uint32_t    numchecks;
+    uint64_t    cumul_nsec_create;
+    uint64_t    cumul_nsec_delete;
+    uint64_t    cumul_nsec_read;
+    uint64_t    cumul_nsec_write;
 } keepvar_t;
 
 static void init_keepvar( keepvar_t* var ) {
@@ -214,9 +220,50 @@ static void init_keepvar( keepvar_t* var ) {
     } else {
         init_keepval( var->vartype, &var->value );
     }
+    var->varoffs = VAROFFS_NONE;
 }
 
+static bool alloc_keepvar( compiler_t* comp, keepvar_t* var ) {
+    if ( var->varoffs != VAROFFS_NONE ) {
+        return true;
+    }
+    uint64_t ti0 = sdlutil_getnsec(0);
+    bool ok = comp_create_var( comp, var->vartype, var->name, var->numdims, var->dims, var->numparams, var->params, &var->varoffs );
+    uint64_t ti1 = sdlutil_getnsec(0);
+    var->cumul_nsec_create += ti1 - ti0;
+    if ( !ok || var->varoffs == VAROFFS_NONE ) {
+        fprintf( stderr, "comp_create_var() failed\n" );
+        return false;
+    }
+    return true;
+}
 
+static bool dealloc_keepvar( compiler_t* comp, keepvar_t* var ) {
+    if ( var->varoffs == VAROFFS_NONE ) {
+        return true;
+    }
+    uint64_t ti0 = sdlutil_getnsec(0);
+    bool ok = comp_delete_var( comp, var->varoffs );
+    var->varoffs = VAROFFS_NONE;
+    uint64_t ti1 = sdlutil_getnsec(0);
+    var->cumul_nsec_delete += ti1 - ti0;
+    if ( !ok ) {
+        fprintf( stderr, "comp_delete_var() failed\n" );
+        return false;
+    }
+    return true;
+}
+
+static void test_keepvar( keepvar_t* var ) {
+    if ( var->varoffs == VAROFFS_NONE ) {
+        // no variable space allocated: stop
+        return;
+    }
+
+}
+
+static void modify_keepvar( keepvar_t* var ) {
+}
 
 typedef struct _keep_t {
     int eff;
