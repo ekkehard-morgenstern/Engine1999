@@ -254,15 +254,61 @@ static bool dealloc_keepvar( compiler_t* comp, keepvar_t* var ) {
     return true;
 }
 
-static void test_keepvar( keepvar_t* var ) {
+static bool test_keepvar( compiler_t* comp, keepvar_t* var ) {
     if ( var->varoffs == VAROFFS_NONE ) {
         // no variable space allocated: stop
-        return;
+        return true;
     }
-
+    // retrieve variable content (or for arrays, a random cell value)
+    uint16_t diminx[MAXDIM]; memset( diminx, 0, sizeof(uint16_t) * MAXDIM );
+    for ( uint8_t i=UINT8_C(0); i < var->numdims; ++i ) {
+        diminx[i] = (uint16_t) getrand( var->dims[i] );
+    }
+    varvalue_t value; memset( &value, 0, sizeof(varvalue_t) );
+    uint64_t ti0 = sdlutil_getnsec(0);
+    bool ok = comp_get_var( comp, var->varoffs, var->vartype, var->numdims, diminx, &value );
+    uint64_t ti1 = sdlutil_getnsec(0);
+    var->cumul_nsec_read += ti1 - ti0;
+    if ( !ok ) {
+        fprintf( stderr, "comp_get_var() failed\n" );
+        return false;
+    }
+    // check result against stored (kept) content
+    const keepval_t* pval = 0;
+    if ( var->vartype & VARTYPEF_ARRAY ) {
+        // TBD
+    } else {
+        pval = &var->value;
+    }
+    switch ( var->vartype & VARTYPEM_BASE ) {
+        case VARTYPEV_FLOAT:
+            if ( value.dblval != pval->dval ) {
+                fprintf( stderr, "? Variable error, expected %g but got %g\n", pval->dval, value.dblval );
+                return false;
+            }
+            return true;
+        case VARTYPEV_INT:
+            if ( value.intval != pval->ival ) {
+                fprintf( stderr, "? Variable error, expected " PRId16 " but got " PRId16 "\n", pval->ival, value.intval );
+                return false;
+            }
+            return true;
+        case VARTYPEV_STR:
+            // TBD
+            break;
+        case VARTYPEV_LABEL:
+            if ( value.lbloffs != (uint16_t) pval->ival ) {
+                fprintf( stderr, "? Variable error, expected " PRIu16 " but got " PRIu16 "\n", value.lbloffs,
+                    (uint16_t) pval->ival );
+                return false;
+            }
+            return true;
+    }
+    fprintf( stderr, "? Internal error\n" );
+    return false;
 }
 
-static void modify_keepvar( keepvar_t* var ) {
+static void modify_keepvar( compiler_t* comp, keepvar_t* var ) {
 }
 
 typedef struct _keep_t {
