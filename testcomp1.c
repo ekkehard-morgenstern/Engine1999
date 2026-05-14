@@ -276,10 +276,36 @@ static bool test_keepvar( compiler_t* comp, keepvar_t* var ) {
     // check result against stored (kept) content
     const keepval_t* pval = 0;
     if ( var->vartype & VARTYPEF_ARRAY ) {
-        // TBD
+        uint16_t offs = UINT16_C(0);
+        for ( uint8_t i=0; i < var->numdims; ++i ) {
+            // compute slice size (the computed product over all subsequent dimensions)
+            uint16_t slice = UINT16_C(0);
+            for ( uint8_t j=i+UINT8_C(1); j < var->numdims; ++j ) {
+                if ( j == UINT8_C(0) ) {
+                    slice += var->dims[j];
+                } else {
+                    slice *= var->dims[j];
+                }
+            }
+            if ( i == var->numdims - UINT8_C(1) ) {
+                // final dimension:
+                // add last index
+                offs += diminx[i];
+            } else {
+                // not final dimension:
+                // add N x slice to the offset
+                offs += diminx[i] * slice;
+            }
+            if ( offs >= var->numcells ) {
+                fprintf( stderr, "? internal error\n" );
+                return false;
+            }
+            pval = &var->cells[offs];
+        }
     } else {
         pval = &var->value;
     }
+    const char* compstr = 0; char* tmp = 0;
     switch ( var->vartype & VARTYPEM_BASE ) {
         case VARTYPEV_FLOAT:
             if ( value.dblval != pval->dval ) {
@@ -294,7 +320,33 @@ static bool test_keepvar( compiler_t* comp, keepvar_t* var ) {
             }
             return true;
         case VARTYPEV_STR:
-            // TBD
+            if ( value.stroffs == STROFFS_NONE ) {
+                compstr = "";
+            } else {
+                tmp = (char*) malloc( value.strsize + 1U );
+                if ( tmp == 0 ) {
+                    fprintf( stderr, "? Out of memory\n" );
+                    return false;
+                }
+                if ( ( (uint32_t) value.stroffs ) + ( (uint32_t) value.strsize ) >= comp->strssize ) {
+                    fprintf( stderr, "? Variable error, offset/size out of bounds (%" PRIu16 "/%" PRIu16 ")\n",
+                        value.stroffs, value.strsize );
+                    return false;
+                }
+                if ( value.strsize ) {
+                    memcpy( tmp, &comp->strs[ value.stroffs ], value.strsize );
+                }
+                tmp[ value.strsize ] = '\0';
+                bool ok;
+                if ( strcmp( tmp, pval->sval ) != 0 ) {
+                    fprintf( stderr, "? Variable error, expected '%s' but got '%s'\n", pval->sval, tmp );
+                    ok = false;
+                } else {
+                    ok = true;
+                }
+                free( tmp );
+                return ok;
+            }
             break;
         case VARTYPEV_LABEL:
             if ( value.lbloffs != (uint16_t) pval->ival ) {

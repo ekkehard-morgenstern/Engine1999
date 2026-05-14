@@ -455,7 +455,7 @@ static bool comp_get_array_elem( compiler_t* comp, uint8_t vartype, uint8_t numd
         if ( i == dimcnt - UINT8_C(1) ) {
             memoffs += diminx[i] * elemsize;
         } else {
-            memoffs *= diminx[i] * slice[i];
+            memoffs += diminx[i] * slice[i];
         }
     }
     *pmemoffs = memoffs;
