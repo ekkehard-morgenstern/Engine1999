@@ -360,7 +360,97 @@ static bool test_keepvar( compiler_t* comp, keepvar_t* var ) {
     return false;
 }
 
-static void modify_keepvar( compiler_t* comp, keepvar_t* var ) {
+static bool modify_keepvar( compiler_t* comp, keepvar_t* var ) {
+    // retrieve variable content (or for arrays, a random cell value)
+    uint16_t diminx[MAXDIM]; memset( diminx, 0, sizeof(uint16_t) * MAXDIM );
+    for ( uint8_t i=UINT8_C(0); i < var->numdims; ++i ) {
+        diminx[i] = (uint16_t) getrand( var->dims[i] );
+    }
+    varvalue_t value; memset( &value, 0, sizeof(varvalue_t) );
+
+    // compute cell address to be modified
+    keepval_t* pval = 0;
+    if ( var->vartype & VARTYPEF_ARRAY ) {
+        uint16_t offs = UINT16_C(0);
+        for ( uint8_t i=0; i < var->numdims; ++i ) {
+            // compute slice size (the computed product over all subsequent dimensions)
+            uint16_t slice = UINT16_C(0);
+            for ( uint8_t j=i+UINT8_C(1); j < var->numdims; ++j ) {
+                if ( j == UINT8_C(0) ) {
+                    slice += var->dims[j];
+                } else {
+                    slice *= var->dims[j];
+                }
+            }
+            if ( i == var->numdims - UINT8_C(1) ) {
+                // final dimension:
+                // add last index
+                offs += diminx[i];
+            } else {
+                // not final dimension:
+                // add N x slice to the offset
+                offs += diminx[i] * slice;
+            }
+            if ( offs >= var->numcells ) {
+                fprintf( stderr, "? internal error\n" );
+                return false;
+            }
+            pval = &var->cells[offs];
+        }
+    } else {
+        pval = &var->value;
+    }
+
+    // modify the value to be modified
+    char tmp[256]; tmp[0] = '\0'; uint8_t len = UINT8_C(0); uint64_t ti0, ti1;
+    switch ( var->vartype & VARTYPEM_BASE ) {
+        case VARTYPEV_FLOAT:
+            value.dblval = pval->dval = (double) getrand( INT32_MAX );
+            break;
+        case VARTYPEV_INT:
+            value.intval = pval->ival = (int16_t) getrand( INT32_MAX );
+            break;
+        case VARTYPEV_STR:
+            getrandstr( tmp, &len );
+            if ( pval->sval ) {
+                free( pval->sval ); pval->sval = 0;
+            }
+            pval->sval = strdup( tmp );
+            if ( pval->sval == 0 ) {
+                fprintf( stderr, "? Out of memory\n" );
+                return false;
+            }
+            if ( len == UINT8_C(0) ) {
+                // special case empty string:
+                value.stroffs = STROFFS_NONE;
+                value.strsize = len;
+            } else {
+                value.stroffs = STROFFS_NONE;
+                value.strsize = UINT8_C(0);
+                ti0 = sdlutil_getnsec(0);
+                if ( comp_alloc_strs( comp, len, &value.stroffs ) && value.stroffs != STROFFS_NONE ) {
+                    value.strsize = len;
+                }
+                ti1 = sdlutil_getnsec(0);
+                var->cumul_nsec_write += ti1 - ti0;
+            }
+            break;
+        case VARTYPEV_LABEL:
+            value.lbloffs = pval->ival = CODEOFFS_NONE;
+            break;
+    }
+
+    ti0 = sdlutil_getnsec(0);
+    bool ok = comp_set_var( comp, var->varoffs, var->vartype, var->numdims, diminx, &value );
+    ti1 = sdlutil_getnsec(0);
+    var->cumul_nsec_write += ti1 - ti0;
+
+    if ( !ok ) {
+        fprintf( stderr, "comp_set_var() failed\n" );
+        return false;
+    }
+
+    return true;
 }
 
 typedef struct _keep_t {
