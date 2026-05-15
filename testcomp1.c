@@ -35,6 +35,12 @@
 TEST for the variable and strings subsystems
 */
 
+typedef enum _tristate_t {
+    tri_false,
+    tri_true,
+    tri_undecided
+} tristate_t;
+
 static FILE* fprand = 0;
 
 static int32_t getrand( int32_t modulo ) {
@@ -260,10 +266,10 @@ static bool dealloc_keepvar( compiler_t* comp, keepvar_t* var ) {
     return true;
 }
 
-static bool test_keepvar( compiler_t* comp, keepvar_t* var ) {
+static tristate_t test_keepvar( compiler_t* comp, keepvar_t* var ) {
     if ( var->varoffs == VAROFFS_NONE ) {
         // no variable space allocated: stop
-        return true;
+        return tri_undecided;
     }
     // retrieve variable content (or for arrays, a random cell value)
     uint16_t diminx[MAXDIM]; memset( diminx, 0, sizeof(uint16_t) * MAXDIM );
@@ -277,7 +283,7 @@ static bool test_keepvar( compiler_t* comp, keepvar_t* var ) {
     var->cumul_nsec_read += ti1 - ti0;
     if ( !ok ) {
         fprintf( stderr, "comp_get_var() failed\n" );
-        return false;
+        return tri_false;
     }
     // check result against stored (kept) content
     const keepval_t* pval = 0;
@@ -304,7 +310,7 @@ static bool test_keepvar( compiler_t* comp, keepvar_t* var ) {
             }
             if ( offs >= var->numcells ) {
                 fprintf( stderr, "? internal error\n" );
-                return false;
+                return tri_false;
             }
             pval = &var->cells[offs];
         }
@@ -314,20 +320,20 @@ static bool test_keepvar( compiler_t* comp, keepvar_t* var ) {
         pval = &var->value;
     }
     if ( pval == 0 ) {
-        return true;    // function variable: not checked
+        return tri_undecided;    // function variable: not checked
     }
-    const char* compstr = 0; char* tmp = 0;
+    const char* compstr = 0; char* tmp = 0; tristate_t tri;
     switch ( var->vartype & VARTYPEM_BASE ) {
         case VARTYPEV_FLOAT:
             if ( value.dblval != pval->dval ) {
                 fprintf( stderr, "? Variable error, expected %g but got %g\n", pval->dval, value.dblval );
-                return false;
+                return tri_false;
             }
             return true;
         case VARTYPEV_INT:
             if ( value.intval != pval->ival ) {
                 fprintf( stderr, "? Variable error, expected %" PRId16 " but got %" PRId16 "\n", pval->ival, value.intval );
-                return false;
+                return tri_false;
             }
             return true;
         case VARTYPEV_STR:
@@ -337,12 +343,12 @@ static bool test_keepvar( compiler_t* comp, keepvar_t* var ) {
                 tmp = (char*) malloc( value.strsize + 1U );
                 if ( tmp == 0 ) {
                     fprintf( stderr, "? Out of memory\n" );
-                    return false;
+                    return tri_false;
                 }
                 if ( ( (uint32_t) value.stroffs ) + ( (uint32_t) value.strsize ) >= comp->strssize ) {
                     fprintf( stderr, "? Variable error, offset/size out of bounds (%" PRIu16 "/%" PRIu16 ")\n",
                         value.stroffs, value.strsize );
-                    return false;
+                    return tri_false;
                 }
                 if ( value.strsize ) {
                     memcpy( tmp, &comp->strs[ value.stroffs ], value.strsize );
@@ -352,31 +358,31 @@ static bool test_keepvar( compiler_t* comp, keepvar_t* var ) {
             }
             if ( strcmp( compstr, pval->sval ? pval->sval : "" ) != 0 ) {
                 fprintf( stderr, "? Variable error, expected '%s' but got '%s'\n", pval->sval, compstr );
-                ok = false;
+                tri = tri_false;
             } else {
-                ok = true;
+                tri = tri_true;
             }
             if ( compstr == tmp ) {
                 free( tmp );
             }
-            return ok;
+            return tri;
         case VARTYPEV_LABEL:
             if ( value.lbloffs != (uint16_t) pval->ival ) {
                 fprintf( stderr, "? Variable error, expected %" PRIu16 " but got %" PRIu16 "\n", value.lbloffs,
                     (uint16_t) pval->ival );
-                return false;
+                return tri_false;
             }
-            return true;
+            return tri_true;
     }
     fprintf( stderr, "? Internal error\n" );
-    return false;
+    return tri_false;
 }
 
-static bool modify_keepvar( compiler_t* comp, keepvar_t* var ) {
+static tristate_t modify_keepvar( compiler_t* comp, keepvar_t* var ) {
 
     if ( var->varoffs == VAROFFS_NONE ) {
         // not allocated
-        return true;
+        return tri_undecided;
     }
 
     // retrieve variable content (or for arrays, a random cell value)
@@ -411,7 +417,7 @@ static bool modify_keepvar( compiler_t* comp, keepvar_t* var ) {
             }
             if ( offs >= var->numcells ) {
                 fprintf( stderr, "? internal error\n" );
-                return false;
+                return tri_false;
             }
             pval = &var->cells[offs];
         }
@@ -423,7 +429,7 @@ static bool modify_keepvar( compiler_t* comp, keepvar_t* var ) {
 
     if ( pval == 0 ) {
         // function varable: not modified
-        return true;
+        return tri_undecided;
     }
 
     // modify the value to be modified
@@ -443,7 +449,7 @@ static bool modify_keepvar( compiler_t* comp, keepvar_t* var ) {
             pval->sval = strdup( tmp );
             if ( pval->sval == 0 ) {
                 fprintf( stderr, "? Out of memory\n" );
-                return false;
+                return tri_false;
             }
             if ( len == UINT8_C(0) ) {
                 // special case empty string:
@@ -472,10 +478,10 @@ static bool modify_keepvar( compiler_t* comp, keepvar_t* var ) {
 
     if ( !ok ) {
         fprintf( stderr, "comp_set_var() failed\n" );
-        return false;
+        return tri_false;
     }
 
-    return true;
+    return tri_true;
 }
 
 #define NKEEPVARS       10
@@ -530,17 +536,23 @@ static bool keep_iterate( keep_t* keep, compiler_t* comp ) {
         // 3, 4, 5, 6
 
         if ( action < 5 ) {
-            if ( !modify_keepvar( comp, &keep->kv[kv] ) ) {
+            tristate_t tri = modify_keepvar( comp, &keep->kv[kv] );
+            if ( tri == tri_false ) {
                 fprintf( stderr, "modify_keepvar() returned false\n" );
                 return false;
             }
-            ++keep->num_write;
+            if ( tri == tri_true ) {
+                ++keep->num_write;
+            }
         } else {
-            if ( !test_keepvar( comp, &keep->kv[kv] ) ) {
+            tristate_t tri = test_keepvar( comp, &keep->kv[kv] );
+            if ( tri == tri_false ) {
                 fprintf( stderr, "test_keepvar() returned false\n" );
                 return false;
             }
-            ++keep->num_read;
+            if ( tri == tri_true ) {
+                ++keep->num_read;
+            }
         }
 
     } else {    // do nothing
