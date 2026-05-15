@@ -350,7 +350,7 @@ static bool test_keepvar( compiler_t* comp, keepvar_t* var ) {
                 tmp[ value.strsize ] = '\0';
                 compstr = tmp;
             }
-            if ( strcmp( compstr, pval->sval ) != 0 ) {
+            if ( strcmp( compstr, pval->sval ? pval->sval : "" ) != 0 ) {
                 fprintf( stderr, "? Variable error, expected '%s' but got '%s'\n", pval->sval, compstr );
                 ok = false;
             } else {
@@ -569,6 +569,27 @@ int main( int argc, char** argv ) {
             break;
         }
     }
+
+    uint64_t cumul_create = 0, cumul_delete = 0, cumul_read = 0, cumul_write = 0;
+    for ( int i=0; i < NKEEPVARS; ++i ) {
+        cumul_create += keep.kv[i].cumul_nsec_create;
+        cumul_delete += keep.kv[i].cumul_nsec_delete;
+        cumul_read   += keep.kv[i].cumul_nsec_read;
+        cumul_write  += keep.kv[i].cumul_nsec_write;
+    }
+    uint64_t avg_create = cumul_create / ( (unsigned) ( keep.num_create ? keep.num_create : 0 ) );
+    uint64_t avg_delete = cumul_delete / ( (unsigned) ( keep.num_delete ? keep.num_delete : 0 ) );
+    uint64_t avg_read   = cumul_read   / ( (unsigned) ( keep.num_read   ? keep.num_read   : 0 ) );
+    uint64_t avg_write  = cumul_write  / ( (unsigned) ( keep.num_write  ? keep.num_write  : 0 ) );
+    int action_cnt = keep.num_create + keep.num_delete + keep.num_read + keep.num_write;
+    int num_idle = keep.iterations - action_cnt;
+
+    printf( "iterations: %d\n", keep.iterations );
+    printf( "create: %d (time: %" PRIu64 " ns, avg: %" PRIu64 " ns)\n", keep.num_create, cumul_create, avg_create );
+    printf( "delete: %d (time: %" PRIu64 " ns, avg: %" PRIu64 " ns)\n", keep.num_delete, cumul_delete, avg_delete );
+    printf( "read  : %d (time: %" PRIu64 " ns, avg: %" PRIu64 " ns)\n", keep.num_read  , cumul_read  , avg_read   );
+    printf( "write : %d (time: %" PRIu64 " ns, avg: %" PRIu64 " ns)\n", keep.num_write , cumul_write , avg_write  );
+    printf( "idle  : %d\n", num_idle );
 
     // TBD: output statistics
 
