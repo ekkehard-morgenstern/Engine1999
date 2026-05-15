@@ -24,6 +24,8 @@
               Germany, Europe
 */
 
+#define _XOPEN_SOURCE   500     // for strdup(3)
+
 #include "bascomp.h"
 #include "stdtypes.h"
 #include "unxtypes.h"
@@ -80,6 +82,8 @@ static void getrandstr( char buf[256], uint8_t* plen ) {
 
 static jmp_buf errorjmp;
 
+static void fatal_error( compiler_t* comp, void* usr ) ATTR_NORETURN;
+
 static void fatal_error( compiler_t* comp, void* usr ) {
     longjmp( errorjmp, 1 );
 }
@@ -107,11 +111,12 @@ static void init_keepval( uint8_t vartype, keepval_t* val ) {
             val->sval = 0;
             break;
         default:
-            fprintf( stderr, "? invalid var type\n" );
-            exit( EXIT_FAILURE );
+            val->ival = CODEOFFS_NONE;
+            break;
     }
 }
 
+/*
 static void setrand_keepval( uint8_t vartype, keepval_t* val ) {
     char buf[256];
     switch ( vartype & VARTYPEM_BASE ) {
@@ -137,6 +142,7 @@ static void setrand_keepval( uint8_t vartype, keepval_t* val ) {
             exit( EXIT_FAILURE );
     }
 }
+*/
 
 typedef struct _keepvar_t {
     char*       name;
@@ -302,8 +308,13 @@ static bool test_keepvar( compiler_t* comp, keepvar_t* var ) {
             }
             pval = &var->cells[offs];
         }
+    } else if ( var->vartype & VARTYPEF_FUNC ) {
+        pval = 0;
     } else {
         pval = &var->value;
+    }
+    if ( pval == 0 ) {
+        return true;    // function variable: not checked
     }
     const char* compstr = 0; char* tmp = 0;
     switch ( var->vartype & VARTYPEM_BASE ) {
@@ -315,7 +326,7 @@ static bool test_keepvar( compiler_t* comp, keepvar_t* var ) {
             return true;
         case VARTYPEV_INT:
             if ( value.intval != pval->ival ) {
-                fprintf( stderr, "? Variable error, expected " PRId16 " but got " PRId16 "\n", pval->ival, value.intval );
+                fprintf( stderr, "? Variable error, expected %" PRId16 " but got %" PRId16 "\n", pval->ival, value.intval );
                 return false;
             }
             return true;
@@ -337,20 +348,21 @@ static bool test_keepvar( compiler_t* comp, keepvar_t* var ) {
                     memcpy( tmp, &comp->strs[ value.stroffs ], value.strsize );
                 }
                 tmp[ value.strsize ] = '\0';
-                bool ok;
-                if ( strcmp( tmp, pval->sval ) != 0 ) {
-                    fprintf( stderr, "? Variable error, expected '%s' but got '%s'\n", pval->sval, tmp );
-                    ok = false;
-                } else {
-                    ok = true;
-                }
-                free( tmp );
-                return ok;
+                compstr = tmp;
             }
-            break;
+            if ( strcmp( compstr, pval->sval ) != 0 ) {
+                fprintf( stderr, "? Variable error, expected '%s' but got '%s'\n", pval->sval, compstr );
+                ok = false;
+            } else {
+                ok = true;
+            }
+            if ( compstr == tmp ) {
+                free( tmp );
+            }
+            return ok;
         case VARTYPEV_LABEL:
             if ( value.lbloffs != (uint16_t) pval->ival ) {
-                fprintf( stderr, "? Variable error, expected " PRIu16 " but got " PRIu16 "\n", value.lbloffs,
+                fprintf( stderr, "? Variable error, expected %" PRIu16 " but got %" PRIu16 "\n", value.lbloffs,
                     (uint16_t) pval->ival );
                 return false;
             }
@@ -361,6 +373,12 @@ static bool test_keepvar( compiler_t* comp, keepvar_t* var ) {
 }
 
 static bool modify_keepvar( compiler_t* comp, keepvar_t* var ) {
+
+    if ( var->varoffs == VAROFFS_NONE ) {
+        // not allocated
+        return true;
+    }
+
     // retrieve variable content (or for arrays, a random cell value)
     uint16_t diminx[MAXDIM]; memset( diminx, 0, sizeof(uint16_t) * MAXDIM );
     for ( uint8_t i=UINT8_C(0); i < var->numdims; ++i ) {
@@ -397,8 +415,15 @@ static bool modify_keepvar( compiler_t* comp, keepvar_t* var ) {
             }
             pval = &var->cells[offs];
         }
+    } else if ( var->vartype & VARTYPEF_FUNC ) {
+        pval = 0;
     } else {
         pval = &var->value;
+    }
+
+    if ( pval == 0 ) {
+        // function varable: not modified
+        return true;
     }
 
     // modify the value to be modified
@@ -453,10 +478,77 @@ static bool modify_keepvar( compiler_t* comp, keepvar_t* var ) {
     return true;
 }
 
-typedef struct _keep_t {
-    int eff;
+#define NKEEPVARS       10
+#define MAXITERATIONS   100
 
+typedef struct _keep_t {
+    keepvar_t   kv[NKEEPVARS];
+    int         num_create, num_delete, num_read, num_write;
+    int         iterations;
 } keep_t;
+
+static keep_t   keep;
+
+static void init_keep( keep_t* keep ) {
+    memset( keep, 0, sizeof(keep_t) );
+    for ( int i=0; i < NKEEPVARS; ++i ) {
+        init_keepvar( &keep->kv[i] );
+    }
+}
+
+static bool keep_iterate( keep_t* keep, compiler_t* comp ) {
+    if ( ++keep->iterations > MAXITERATIONS ) {
+        --keep->iterations;
+        return false;
+    }
+
+    // select random keep variable
+    int kv = getrand( NKEEPVARS );
+
+    // select random action
+    int32_t action = getrand( 10 );
+
+    if ( action < 3 ) {  // allocate or remove a variable
+        // 0, 1, 2
+        if ( action == 2 ) {
+            // remove
+            if ( !dealloc_keepvar( comp, &keep->kv[kv] ) ) {
+                fprintf( stderr, "dealloc_keepvar() returned false\n" );
+                return false;
+            }
+            ++keep->num_delete;
+        } else if ( action == 1 ) {
+            // create
+            if ( !alloc_keepvar( comp, &keep->kv[kv] ) ) {
+                fprintf( stderr, "alloc_keepvar() returned false\n" );
+                return false;
+            }
+            ++keep->num_create;
+        }
+
+    } else if ( action < 7 ) {   // manipulate or verify a variable
+        // 3, 4, 5, 6
+
+        if ( action < 5 ) {
+            if ( !modify_keepvar( comp, &keep->kv[kv] ) ) {
+                fprintf( stderr, "modify_keepvar() returned false\n" );
+                return false;
+            }
+            ++keep->num_write;
+        } else {
+            if ( !test_keepvar( comp, &keep->kv[kv] ) ) {
+                fprintf( stderr, "test_keepvar() returned false\n" );
+                return false;
+            }
+            ++keep->num_read;
+        }
+
+    } else {    // do nothing
+        sdlutil_nanosleep( UINT64_C(1000000000) / 100, 0 );
+    }
+
+    return true;
+}
 
 int main( int argc, char** argv ) {
 
@@ -470,22 +562,15 @@ int main( int argc, char** argv ) {
     comp.halt = fatal_error;
     comp.report = report_error;
 
+    init_keep( &keep );
+
     for (;;) {
-
-        int32_t v = getrand( 10 );
-
-        if ( v < 3 ) {  // allocate or remove a variable
-
-        } else if ( v < 7 ) {   // manipulate a string
-
-
-        } else {    // do nothing
-            sdlutil_nanosleep( UINT64_C(1000000000) / 100, 0 );
+        if ( !keep_iterate( &keep, &comp ) ) {
+            break;
         }
-
     }
 
-
+    // TBD: output statistics
 
     return EXIT_SUCCESS;
 }

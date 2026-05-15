@@ -766,6 +766,7 @@ bool comp_add_branch( compiler_t* comp, uint16_t nodeoffs, uint16_t branchoffs )
     return true;
 }
 
+#if 0
 bool comp_eat_list( compiler_t* comp, uint16_t* pnodeoffs, uint8_t nodetype, comp_eatfn_t element_eater, uint8_t septok,
     const char* errortext ) {
     // list := element { SEPTOK element } .  -- if SEPTOK is TOK_EOL, there's no separator token
@@ -877,6 +878,7 @@ bool comp_node_iter_branches( compiler_t* comp, uint16_t nodeoffs, void* userdat
     }
     return true;
 }
+#endif
 
 static double comp_extract_float( const uint8_t* mem, uint16_t offs ) {
     uint64_t val =
@@ -912,6 +914,7 @@ static void comp_write_float( uint8_t* mem, uint16_t offs, double val ) {
     mem[ offs + 7U ] = (uint8_t)( u.ui64                );
 }
 
+#if 0
 static bool comp_gather_dims( void* userdata, uint16_t node ) {
     compiler_t* comp = (compiler_t*) userdata;
     if ( comp->numdim >= MAXDIM ) {
@@ -1126,6 +1129,7 @@ bool comp_eat_stmtlist( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_stmtline( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_stmtlines( compiler_t* comp, uint16_t* pnodeoffs );
 */
+#endif
 
 static bool comp_gen_ins( compiler_t* comp, uint8_t ins, uint8_t ext, uint16_t param ) {
     uint8_t size = UINT8_C(1);
