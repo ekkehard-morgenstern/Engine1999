@@ -266,6 +266,41 @@ static bool dealloc_keepvar( compiler_t* comp, keepvar_t* var ) {
     return true;
 }
 
+static void dump_vartype( uint8_t vartype ) {
+    fprintf( stderr, "%02" PRIX8 " ( ", vartype );
+    if ( vartype & VARTYPEF_ARRAY ) {
+        fprintf( stderr, "array of " );
+    } else if ( vartype & VARTYPEF_FUNC ) {
+        fprintf( stderr, "function returning " );
+    }
+    switch ( vartype & VARTYPEM_BASE ) {
+        case VARTYPEV_FLOAT:    fprintf( stderr, "float " ); break;
+        case VARTYPEV_INT:      fprintf( stderr, "int " ); break;
+        case VARTYPEV_STR:      fprintf( stderr, "string " ); break;
+        case VARTYPEV_LABEL:    fprintf( stderr, "label " ); break;
+    }
+    fprintf( stderr, ")\n" );
+}
+
+static void dump_keepvar( const keepvar_t* var ) {
+    fprintf( stderr, "%p:\n  name: '%s'\n", (void*) var, var->name );
+    fprintf( stderr, "  type: " ); dump_vartype( var->vartype );
+    if ( var->vartype & VARTYPEF_ARRAY ) {
+        fprintf( stderr, "  dimensions: " );
+        for ( uint8_t i=0; i < var->numdims; ++i ) {
+            fprintf( stderr, "%s%" PRIu16, i ? ", " : "", var->dims[i] );
+        }
+        fprintf( stderr, "\n" );
+    } else if ( var->vartype & VARTYPEF_FUNC ) {
+        fprintf( stderr, "  parameters: " );
+        for ( uint8_t i=0 ; i < var->numparams; ++i ) {
+            fprintf( stderr, "    name: '%s', type: ", var->params[i].paramname );
+            dump_vartype( var->params[i].paramtype );
+            fprintf( stderr, "\n" );
+        }
+    }
+}
+
 static tristate_t test_keepvar( compiler_t* comp, keepvar_t* var ) {
     if ( var->varoffs == VAROFFS_NONE ) {
         // no variable space allocated: stop
@@ -283,6 +318,7 @@ static tristate_t test_keepvar( compiler_t* comp, keepvar_t* var ) {
     var->cumul_nsec_read += ti1 - ti0;
     if ( !ok ) {
         fprintf( stderr, "comp_get_var() failed\n" );
+        dump_keepvar( var );
         return tri_false;
     }
     // check result against stored (kept) content
@@ -310,6 +346,7 @@ static tristate_t test_keepvar( compiler_t* comp, keepvar_t* var ) {
             }
             if ( offs >= var->numcells ) {
                 fprintf( stderr, "? internal error\n" );
+                dump_keepvar( var );
                 return tri_false;
             }
             pval = &var->cells[offs];
@@ -327,12 +364,14 @@ static tristate_t test_keepvar( compiler_t* comp, keepvar_t* var ) {
         case VARTYPEV_FLOAT:
             if ( value.dblval != pval->dval ) {
                 fprintf( stderr, "? Variable error, expected %g but got %g\n", pval->dval, value.dblval );
+                dump_keepvar( var );
                 return tri_false;
             }
             return true;
         case VARTYPEV_INT:
             if ( value.intval != pval->ival ) {
                 fprintf( stderr, "? Variable error, expected %" PRId16 " but got %" PRId16 "\n", pval->ival, value.intval );
+                dump_keepvar( var );
                 return tri_false;
             }
             return true;
@@ -343,11 +382,13 @@ static tristate_t test_keepvar( compiler_t* comp, keepvar_t* var ) {
                 tmp = (char*) malloc( value.strsize + 1U );
                 if ( tmp == 0 ) {
                     fprintf( stderr, "? Out of memory\n" );
+                    dump_keepvar( var );
                     return tri_false;
                 }
                 if ( ( (uint32_t) value.stroffs ) + ( (uint32_t) value.strsize ) >= comp->strssize ) {
                     fprintf( stderr, "? Variable error, offset/size out of bounds (%" PRIu16 "/%" PRIu16 ")\n",
                         value.stroffs, value.strsize );
+                    dump_keepvar( var );
                     return tri_false;
                 }
                 if ( value.strsize ) {
@@ -358,6 +399,7 @@ static tristate_t test_keepvar( compiler_t* comp, keepvar_t* var ) {
             }
             if ( strcmp( compstr, pval->sval ? pval->sval : "" ) != 0 ) {
                 fprintf( stderr, "? Variable error, expected '%s' but got '%s'\n", pval->sval, compstr );
+                dump_keepvar( var );
                 tri = tri_false;
             } else {
                 tri = tri_true;
@@ -370,11 +412,13 @@ static tristate_t test_keepvar( compiler_t* comp, keepvar_t* var ) {
             if ( value.lbloffs != (uint16_t) pval->ival ) {
                 fprintf( stderr, "? Variable error, expected %" PRIu16 " but got %" PRIu16 "\n", value.lbloffs,
                     (uint16_t) pval->ival );
+                dump_keepvar( var );
                 return tri_false;
             }
             return tri_true;
     }
     fprintf( stderr, "? Internal error\n" );
+    dump_keepvar( var );
     return tri_false;
 }
 
@@ -485,7 +529,7 @@ static tristate_t modify_keepvar( compiler_t* comp, keepvar_t* var ) {
 }
 
 #define NKEEPVARS       10
-#define MAXITERATIONS   100
+#define MAXITERATIONS   1000
 
 typedef struct _keep_t {
     keepvar_t   kv[NKEEPVARS];
@@ -556,7 +600,11 @@ static bool keep_iterate( keep_t* keep, compiler_t* comp ) {
         }
 
     } else {    // do nothing
-        sdlutil_nanosleep( UINT64_C(1000000000) / 100, 0 );
+        uint64_t min_sleep = UINT64_C(1000000000) / UINT64_C(10000);
+        uint64_t max_sleep = UINT64_C(1000000000) / UINT64_C(100);
+        uint64_t max_rand  = max_sleep - min_sleep;
+        uint64_t rnd_sleep = min_sleep + getrand( (int32_t) max_rand );
+        sdlutil_nanosleep( rnd_sleep, 0 );
     }
 
     return true;
@@ -589,10 +637,10 @@ int main( int argc, char** argv ) {
         cumul_read   += keep.kv[i].cumul_nsec_read;
         cumul_write  += keep.kv[i].cumul_nsec_write;
     }
-    uint64_t avg_create = cumul_create / ( (unsigned) ( keep.num_create ? keep.num_create : 0 ) );
-    uint64_t avg_delete = cumul_delete / ( (unsigned) ( keep.num_delete ? keep.num_delete : 0 ) );
-    uint64_t avg_read   = cumul_read   / ( (unsigned) ( keep.num_read   ? keep.num_read   : 0 ) );
-    uint64_t avg_write  = cumul_write  / ( (unsigned) ( keep.num_write  ? keep.num_write  : 0 ) );
+    uint64_t avg_create = cumul_create / ( (unsigned) ( keep.num_create ? keep.num_create : 1 ) );
+    uint64_t avg_delete = cumul_delete / ( (unsigned) ( keep.num_delete ? keep.num_delete : 1 ) );
+    uint64_t avg_read   = cumul_read   / ( (unsigned) ( keep.num_read   ? keep.num_read   : 1 ) );
+    uint64_t avg_write  = cumul_write  / ( (unsigned) ( keep.num_write  ? keep.num_write  : 1 ) );
     int action_cnt = keep.num_create + keep.num_delete + keep.num_read + keep.num_write;
     int num_idle = keep.iterations - action_cnt;
 
