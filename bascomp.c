@@ -1133,9 +1133,22 @@ bool comp_eat_arraydecl( compiler_t* comp, uint16_t* pnodeoffs ) {
     return true;
 }
 
+bool comp_eat_arraydecllist( compiler_t* comp, uint16_t* pnodeoffs ) {
+    /*
+        NT_ARRAYDECLLIST    array declaration list
+            data: none
+            branches: the NT_ARRAYDECL nodes
+    */
+    // array-decl-list := array-decl { TOK_COMMA array-decl } .
+    return comp_eat_list( comp, pnodeoffs, NT_ARRAYDECLLIST, comp_eat_arraydecl, TOK_COMMA, "Array declaration expected" );
+}
+
+bool comp_eat_emptyarrayref( compiler_t* comp, uint16_t* pnodeoffs ) {
+
+    return false; // TBD
+}
+
 /*
-bool comp_eat_arraydecllist( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_emptyarrayref( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_emptyarrayreflist( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_numbasevarref( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_numvarref( compiler_t* comp, uint16_t* pnodeoffs );
