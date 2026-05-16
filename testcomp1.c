@@ -474,10 +474,12 @@ static tristate_t modify_keepvar( compiler_t* comp, keepvar_t* var ) {
             if ( pval->sval ) {
                 free( pval->sval ); pval->sval = 0;
             }
-            pval->sval = strdup( tmp );
-            if ( pval->sval == 0 ) {
-                fprintf( stderr, "? Out of memory\n" );
-                return tri_false;
+            if ( len ) {
+                pval->sval = strdup( tmp );
+                if ( pval->sval == 0 ) {
+                    fprintf( stderr, "? Out of memory\n" );
+                    return tri_false;
+                }
             }
             if ( len == UINT8_C(0) ) {
                 // special case empty string:
@@ -562,6 +564,14 @@ static bool keep_iterate( keep_t* keep, compiler_t* comp ) {
                 return false;
             }
             ++keep->num_create;
+            tristate_t tri = modify_keepvar( comp, &keep->kv[kv] );
+            if ( tri == tri_false ) {
+                fprintf( stderr, "modify_keepvar() returned false\n" );
+                return false;
+            }
+            if ( tri == tri_true ) {
+                ++keep->num_write;
+            }
         }
 
     } else if ( action < 7 ) {   // manipulate or verify a variable

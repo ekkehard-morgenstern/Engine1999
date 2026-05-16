@@ -377,8 +377,13 @@ TOOLARGE:   comp_error( comp, "Array too large" );
                 memset( &comp->vars[ memoffs ], 0, numleft );
                 break;
             case VARTYPEV_STR:
-                // string arrays are initialized to STROFFS_NONE (0xFFFF)
-                memset( &comp->vars[ memoffs ], 0xFF, numleft );
+                // string arrays are initialized to STROFFS_NONE (0xFFFF) / zero length
+                for ( size_t i=0; i < dimsize; ++i ) {
+                    VWRITE16( comp, memoffs, STROFFS_NONE );
+                    memoffs += UINT16_C(2);
+                    VWRITE16( comp, memoffs, 0 );
+                    memoffs += UINT16_C(2);
+                }
                 break;
             case VARTYPEV_LABEL:
                 // label arrays do not exist
@@ -396,10 +401,12 @@ TOOLARGE:   comp_error( comp, "Array too large" );
                 break;
             case VARTYPEV_INT:
                 // an int variable is set to zero
-                memset( &comp->vars[ memoffs ], 0, 2U );
+                VWRITE16( comp, memoffs, 0 );
                 break;
             case VARTYPEV_STR:
-                // a string variable is set to STROFFS_NONE
+                // a string variable is set to STROFFS_NONE / zero length
+                VWRITE16( comp, memoffs, STROFFS_NONE );
+                memoffs += UINT16_C(2);
                 VWRITE16( comp, memoffs, STROFFS_NONE );
                 break;
             case VARTYPEV_LABEL:
