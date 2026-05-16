@@ -612,8 +612,46 @@ bool comp_eat_emptyarrayreflist( compiler_t* comp, uint16_t* pnodeoffs ) {
     return comp_eat_list( comp, pnodeoffs, NT_EMPTYARRAYREFLIST, comp_eat_emptyarrayref, TOK_COMMA, "Array reference expected" );
 }
 
+bool comp_eat_numbasevarref( compiler_t* comp, uint16_t* pnodeoffs ) {
+    /*
+        NT_NUMBASEVARREF    numeric base variable reference
+            data:
+                - 1 byte of type indicator, n bytes of name
+            branches: none
+            immediate processing: none (!)
+            note:
+                - because it's used in compound contexts, the variable reference
+                  cannot be resolved here.
+    */
+    // num-base-var-ref := TOK_IDENT [ TOK_INTEGER ] .
+
+    if ( comp->currtok != TOK_IDENT ) {
+        return false;
+    }
+    static char data[257];
+    data[0] = VARTYPEV_FLOAT;
+    snprintf( &data[1], 256U, "%s", comp->param );
+    uint16_t datalen = UINT16_C(1) + ( (uint16_t) strlen( &data[1] ) );
+    if ( !comp_fetchtok( comp ) ) {
+        return false;
+    }
+
+    if ( comp->currtok == TOK_INTEGER ) {
+        data[0] = VARTYPEV_INT;
+        if ( !comp_fetchtok( comp ) ) {
+            return false;
+        }
+    }
+
+    if ( !comp_create_node( comp, pnodeoffs, NT_NUMVARREF, UINT8_C(0), datalen, data ) || *pnodeoffs == NODEOFFS_NONE ) {
+        comp_error( comp, "Out of memory" );
+        return false;
+    }
+
+    return true;
+}
+
 /*
-bool comp_eat_numbasevarref( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_numvarref( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_strbasevarref( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_strvarref( compiler_t* comp, uint16_t* pnodeoffs );
