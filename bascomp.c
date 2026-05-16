@@ -776,7 +776,6 @@ bool comp_add_branch( compiler_t* comp, uint16_t nodeoffs, uint16_t branchoffs )
     return true;
 }
 
-#if 0
 bool comp_eat_list( compiler_t* comp, uint16_t* pnodeoffs, uint8_t nodetype, comp_eatfn_t element_eater, uint8_t septok,
     const char* errortext ) {
     // list := element { SEPTOK element } .  -- if SEPTOK is TOK_EOL, there's no separator token
@@ -888,7 +887,6 @@ bool comp_node_iter_branches( compiler_t* comp, uint16_t nodeoffs, void* userdat
     }
     return true;
 }
-#endif
 
 static double comp_extract_float( const uint8_t* mem, uint16_t offs ) {
     uint64_t val =
@@ -924,7 +922,6 @@ static void comp_write_float( uint8_t* mem, uint16_t offs, double val ) {
     mem[ offs + 7U ] = (uint8_t)( u.ui64                );
 }
 
-#if 0
 static bool comp_gather_dims( void* userdata, uint16_t node ) {
     compiler_t* comp = (compiler_t*) userdata;
     if ( comp->numdim >= MAXDIM ) {
@@ -1060,9 +1057,80 @@ bool comp_eat_arraydecl( compiler_t* comp, uint16_t* pnodeoffs ) {
         return false;
     }
 
-    // TBD
+    // read dimension declaration
+    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    if ( comp->tree[ declnodeoffs ] != NT_ARRAYDIMDECL || comp->tree[ declnodeoffs + 1U ] != 0 ) {
+        comp_error( comp, "Internal error (NT_ARRAYDIMDECL expected)" );
+        return false;
+    }
 
-    return false;
+    uint16_t datalen = EXTRACT16( comp, declnodeoffs + 2U );
+    if ( datalen <= UINT16_C(1) ) { // DYNAMIC or ASSOC
+        comp_error( comp, "Feature not supported yet" );
+        return false;
+    }
+
+    uint16_t dataoffs = declnodeoffs + UINT16_C(8);
+    uint16_t numdims = datalen / UINT16_C(2);
+    if ( numdims > MAXDIM ) {
+        comp_error( comp, "Internal error (unexpected number of dimensions)" );
+        return false;
+    }
+    uint16_t dims[MAXDIM];
+    for ( uint16_t i=0; i < numdims; ++i ) {
+        dims[i] = EXTRACT16( comp, dataoffs );
+        dataoffs += UINT16_C(2);
+    }
+
+    /*
+        NT_NUMBASEVARREF    numeric base variable reference
+        NT_STRBASEVARREF    string base variable reference
+            data:
+                - 1 byte of type indicator, n bytes of name
+    */
+    // read variable reference
+    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    datalen  = EXTRACT16( comp, varnodeoffs + 2U );
+    dataoffs = varnodeoffs + UINT16_C(8);
+    static char name[256]; name[0] = '\0'; uint8_t namelen = UINT8_C(0);
+    uint8_t vartype = VARTYPEF_ARRAY;
+    if ( comp->tree[ varnodeoffs ] == NT_NUMBASEVARREF || comp->tree[ varnodeoffs ] == NT_STRBASEVARREF ) {
+        if ( datalen < UINT16_C(2) ) {
+            comp_error( comp, "Internal error (fault in variable reference)" );
+            return false;
+        }
+        // data:
+        //    - 1 byte of type indicator, n bytes of name
+        uint8_t typeind = comp->tree[ dataoffs++ ];
+        uint8_t namelen = comp->tree[ dataoffs++ ];
+        if ( namelen ) {
+            memcpy( name, &comp->tree[ dataoffs ], namelen );
+        }
+        name[ namelen ] = '\0';
+        vartype |= typeind & VARTYPEM_BASE;
+    } else {
+        comp_error( comp, "Internal error (base variable reference expected)" );
+        return false;
+    }
+
+    uint16_t varoffs = VAROFFS_NONE;
+    bool ok = comp_create_var( comp, vartype, name, numdims, dims, UINT8_C(0), 0, &varoffs );
+    if ( !ok || varoffs == VAROFFS_NONE ) {
+        comp_error( comp, "Failed to create variable" );
+        return false;
+    }
+
+    uint8_t data[3];
+    data[0] = vartype;
+    data[1] = (uint8_t)( varoffs >> UINT8_C(8) );
+    data[2] = (uint8_t)  varoffs;
+
+    if ( !comp_create_node( comp, pnodeoffs, NT_ARRAYDECL, UINT8_C(0), UINT16_C(3), data ) || *pnodeoffs == NODEOFFS_NONE ) {
+        comp_error( comp, "Out of memory" );
+        return false;
+    }
+
+    return true;
 }
 
 /*
@@ -1139,7 +1207,6 @@ bool comp_eat_stmtlist( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_stmtline( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_stmtlines( compiler_t* comp, uint16_t* pnodeoffs );
 */
-#endif
 
 static bool comp_gen_ins( compiler_t* comp, uint8_t ins, uint8_t ext, uint16_t param ) {
     uint8_t size = UINT8_C(1);
