@@ -83,6 +83,7 @@ bool comp_alloc_code( compiler_t* comp, uint16_t size, uint16_t* poffs ) {
 }
 
 static void comp_compact_vars( compiler_t* comp ) {
+fprintf( stderr, "*** comp_compact_vars() called ***\n" );
     // algorithm:
     //  - by scanning the variable offset table, iterate over every variable (regular and array)
     //  - if it's still being used (not marked as deleted), copy it to temporary memory.
@@ -147,24 +148,23 @@ static bool comp_create_var_offset( compiler_t* comp, uint16_t* poffs ) {
     return true;
 }
 
-static void comp_get_array_num_elems( compiler_t* comp, uint16_t varoffs, uint16_t* pnumelem, uint16_t* pdataoffs ) {
+static void comp_get_array_num_elems( compiler_t* comp, uint16_t offs, uint16_t* pnumelem, uint16_t* pdataoffs ) {
     // call this ONLY for an array type!
-    // <size.16> <type.8> <namelen.8> <name...> <numdims.8> <arraydims...>
-    uint16_t numdimsfld = varoffs + UINT16_C(4) + comp->vars[ varoffs + 3U ];
-    uint16_t arrdimsfld = numdimsfld + UINT16_C(1);
-    uint16_t numelems   = UINT16_C(0);
-    uint8_t  numdims    = comp->vars[ numdimsfld ];
+    // <numdims.8> <arraydims...>
+    uint8_t  numdims  = comp->vars[ offs++ ];
+    uint16_t numelems = UINT16_C(0);
     for ( uint8_t i = UINT8_C(0); i < numdims; ++i ) {
-        uint16_t dim = VEXTRACT16( comp, arrdimsfld );
+        // <dim.16> <slice.16>
+        uint16_t dim = VEXTRACT16( comp, offs );
         if ( numelems ) {
             numelems *= dim;
         } else {
             numelems += dim;
         }
-        arrdimsfld += UINT16_C(4);
+        offs += UINT16_C(4);
     }
     *pnumelem  = numelems;
-    *pdataoffs = arrdimsfld;
+    *pdataoffs = offs;
 }
 
 bool comp_lookup_var( compiler_t* comp, uint8_t vartype, const char* name, uint16_t* poutoffs ) {
@@ -253,6 +253,9 @@ INTERR: comp_error( comp, "Internal error" );
             } else {
                 slicesize[i] *= dims[j];
             }
+        }
+        if ( slicesize[i] == 0 ) {
+            slicesize[i] = 1;   // final dimension
         }
     }
     if ( ( numdims && dimsize == 0 ) || dimsize > 65535U ) {
@@ -349,7 +352,7 @@ TOOLARGE:   comp_error( comp, "Array too large" );
             uint16_t slice = (uint16_t)( slicesize[i] * elemsize );
             VWRITE16( comp, memoffs, dims[i] );
             memoffs += UINT16_C(2);
-            VWRITE16( comp, memoffs, slice   );
+            VWRITE16( comp, memoffs, slice   ); // note the premultiplied slice info
             memoffs += UINT16_C(2);
         }
     } else if ( vartype & VARTYPEF_FUNC ) {
@@ -447,16 +450,12 @@ static bool comp_get_array_elem( compiler_t* comp, uint8_t vartype, uint8_t numd
         slice[i] = VEXTRACT16( comp, memoffs );
         memoffs += UINT16_C(2);
     }
-    uint16_t elemsize = get_elemsize( vartype );
     for ( uint8_t i=0; i < dimcnt; ++i ) {
-        if ( diminx[i] >= maxdim[i] ) {
+        uint16_t inx = diminx[i];
+        if ( inx >= maxdim[i] ) {
             return false;
         }
-        if ( i == dimcnt - UINT8_C(1) ) {
-            memoffs += diminx[i] * elemsize;
-        } else {
-            memoffs += diminx[i] * slice[i];
-        }
+        memoffs += inx * slice[i];
     }
     *pmemoffs = memoffs;
     return true;
@@ -594,6 +593,7 @@ bool comp_set_var( compiler_t* comp, uint16_t varoffs, uint8_t vartype, uint8_t 
 }
 
 static void comp_compact_strs( compiler_t* comp ) {
+fprintf( stderr, "*** comp_compact_strs() called ***\n" );
     // algorithm:
     //  - iterate over all string variables (incl. every cell of each string array)
     //  - if the variable is non-empty, copy the string it points to to temporary memory
@@ -613,6 +613,9 @@ static void comp_compact_strs( compiler_t* comp ) {
         // offset points to a variable header: check
         // <size.16> <type.8> <namelen.8> <name...> [ <numdims.8> <arraydims...> | <numargs> <argdesc...> ] <data...>
         uint16_t vartype = VEXTRACT16( comp, offs + 2U );
+        // skip intro fields
+        uint8_t namelen = comp->vars[ offs + 3U ];
+        offs += UINT16_C(4) + namelen;
         /*
             +---+---+---+---++---+---+---+---+
             | . | . | f | s || e | e | e | e |
@@ -645,13 +648,13 @@ static void comp_compact_strs( compiler_t* comp ) {
                     tmpoffs += length;
                 }
                 // write new offset
-                VWRITE16( comp, stroffs, tmpbeg );
+                VWRITE16( comp, varfld, tmpbeg );
                 // next element
                 dataoffs += UINT16_C(4);
             }
         } else if ( ( vartype & VARTYPEM_BASE ) == VARTYPEV_STR ) {
             // <size.16> <type.8> <namelen.8> <name...> <stroffs.16> <length.16>
-            uint16_t strfld  = offs + UINT16_C(4) + comp->vars[ offs + 3U ];
+            uint16_t strfld  = offs;
             uint16_t lenfld  = strfld + UINT16_C(2);
             uint16_t stroffs = VEXTRACT16( comp, strfld );
             uint16_t length  = VEXTRACT16( comp, lenfld );
@@ -666,7 +669,7 @@ static void comp_compact_strs( compiler_t* comp ) {
                 tmpoffs += length;
             }
             // write new offset
-            VWRITE16( comp, stroffs, tmpbeg );
+            VWRITE16( comp, strfld, tmpbeg );
         }
     }
     // copy the results back

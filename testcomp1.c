@@ -158,6 +158,7 @@ typedef struct _keepvar_t {
     keepval_t*  cells;
     uint8_t     numdims;
     uint16_t    dims[MAXDIM];
+    uint16_t    slices[MAXDIM];
     uint8_t     numparams;
     usrparam_t  params[MAXPARAM];
     uint16_t    varoffs;
@@ -196,6 +197,21 @@ static void init_keepvar( keepvar_t* var ) {
         };
         for ( uint8_t i=UINT8_C(0); i < var->numdims; ++i ) {
             var->dims[i] = UINT16_C(2) + (uint16_t) getrand( maxmax[i] - UINT16_C(2) );
+        }
+        for ( uint8_t i=UINT8_C(0); i < var->numdims; ++i ) {
+            // compute slice size
+            uint16_t slice = UINT16_C(0);
+            for ( uint8_t j=i+UINT8_C(1); j < var->numdims; ++j ) {
+                if ( j == UINT8_C(0) ) {
+                    slice += var->dims[j];
+                } else {
+                    slice *= var->dims[j];
+                }
+            }
+            if ( slice == UINT16_C(0) ) {
+                slice = UINT16_C(1);    // final dimension
+            }
+            var->slices[i] = slice;
         }
         var->numcells = 0;
         for ( uint8_t i=UINT8_C(0); i < var->numdims; ++i ) {
@@ -326,31 +342,15 @@ static tristate_t test_keepvar( compiler_t* comp, keepvar_t* var ) {
     if ( var->vartype & VARTYPEF_ARRAY ) {
         uint16_t offs = UINT16_C(0);
         for ( uint8_t i=0; i < var->numdims; ++i ) {
-            // compute slice size (the computed product over all subsequent dimensions)
-            uint16_t slice = UINT16_C(0);
-            for ( uint8_t j=i+UINT8_C(1); j < var->numdims; ++j ) {
-                if ( j == UINT8_C(0) ) {
-                    slice += var->dims[j];
-                } else {
-                    slice *= var->dims[j];
-                }
-            }
-            if ( i == var->numdims - UINT8_C(1) ) {
-                // final dimension:
-                // add last index
-                offs += diminx[i];
-            } else {
-                // not final dimension:
-                // add N x slice to the offset
-                offs += diminx[i] * slice;
-            }
-            if ( offs >= var->numcells ) {
-                fprintf( stderr, "? internal error\n" );
-                dump_keepvar( var );
-                return tri_false;
-            }
-            pval = &var->cells[offs];
+            // add N x slice to the offset
+            offs += diminx[i] * var->slices[i];
         }
+        if ( offs >= var->numcells ) {
+            fprintf( stderr, "? internal error\n" );
+            dump_keepvar( var );
+            return tri_false;
+        }
+        pval = &var->cells[offs];
     } else if ( var->vartype & VARTYPEF_FUNC ) {
         pval = 0;
     } else {
@@ -385,9 +385,9 @@ static tristate_t test_keepvar( compiler_t* comp, keepvar_t* var ) {
                     dump_keepvar( var );
                     return tri_false;
                 }
-                if ( ( (uint32_t) value.stroffs ) + ( (uint32_t) value.strsize ) >= comp->strssize ) {
-                    fprintf( stderr, "? Variable error, offset/size out of bounds (%" PRIu16 "/%" PRIu16 ")\n",
-                        value.stroffs, value.strsize );
+                if ( ( (uint32_t) value.stroffs ) + ( (uint32_t) value.strsize ) > comp->strssize ) {
+                    fprintf( stderr, "? Variable error, offset/size out of bounds (%" PRIu16 "/%" PRIu16 "//%" PRIu32 ")\n",
+                        value.stroffs, value.strsize, comp->strssize );
                     dump_keepvar( var );
                     return tri_false;
                 }
@@ -441,30 +441,14 @@ static tristate_t modify_keepvar( compiler_t* comp, keepvar_t* var ) {
     if ( var->vartype & VARTYPEF_ARRAY ) {
         uint16_t offs = UINT16_C(0);
         for ( uint8_t i=0; i < var->numdims; ++i ) {
-            // compute slice size (the computed product over all subsequent dimensions)
-            uint16_t slice = UINT16_C(0);
-            for ( uint8_t j=i+UINT8_C(1); j < var->numdims; ++j ) {
-                if ( j == UINT8_C(0) ) {
-                    slice += var->dims[j];
-                } else {
-                    slice *= var->dims[j];
-                }
-            }
-            if ( i == var->numdims - UINT8_C(1) ) {
-                // final dimension:
-                // add last index
-                offs += diminx[i];
-            } else {
-                // not final dimension:
-                // add N x slice to the offset
-                offs += diminx[i] * slice;
-            }
-            if ( offs >= var->numcells ) {
-                fprintf( stderr, "? internal error\n" );
-                return tri_false;
-            }
-            pval = &var->cells[offs];
+            // add N x slice to the offset
+            offs += diminx[i] * var->slices[i];
         }
+        if ( offs >= var->numcells ) {
+            fprintf( stderr, "? internal error\n" );
+            return tri_false;
+        }
+        pval = &var->cells[offs];
     } else if ( var->vartype & VARTYPEF_FUNC ) {
         pval = 0;
     } else {
@@ -505,7 +489,11 @@ static tristate_t modify_keepvar( compiler_t* comp, keepvar_t* var ) {
                 ti0 = sdlutil_getnsec(0);
                 if ( comp_alloc_strs( comp, len, &value.stroffs ) && value.stroffs != STROFFS_NONE ) {
                     value.strsize = len;
+                } else {
+                    fprintf( stderr, "comp_alloc_strs() failed\n" );
+                    return tri_false;
                 }
+                memcpy( &comp->strs[ value.stroffs ], pval->sval, value.strsize );
                 ti1 = sdlutil_getnsec(0);
                 var->cumul_nsec_write += ti1 - ti0;
             }
