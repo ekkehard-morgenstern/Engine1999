@@ -557,8 +557,8 @@ static tristate_t modify_keepvar( compiler_t* comp, keepvar_t* var ) {
     return tri_true;
 }
 
-#define NKEEPVARS       10
-#define MAXITERATIONS   1000
+#define NKEEPVARS       15
+#define MAXITERATIONS   5000
 
 typedef struct _keep_t {
     keepvar_t   kv[NKEEPVARS];
@@ -585,7 +585,7 @@ static bool keep_iterate( keep_t* keep, compiler_t* comp ) {
     int kv = getrand( NKEEPVARS );
 
     // select random action
-    int32_t action = getrand( 10 );
+    int32_t action = getrand( 120 );
 
     if ( action < 3 ) {  // allocate or remove a variable
         // 0, 1, 2
@@ -613,10 +613,10 @@ static bool keep_iterate( keep_t* keep, compiler_t* comp ) {
             }
         }
 
-    } else if ( action < 7 ) {   // manipulate or verify a variable
-        // 3, 4, 5, 6
+    } else if ( action < 100 ) {   // manipulate or verify a variable
+        // 3..99
 
-        if ( action < 5 ) {
+        if ( action < 30 ) {
             tristate_t tri = modify_keepvar( comp, &keep->kv[kv] );
             if ( tri == tri_false ) {
                 fprintf( stderr, "modify_keepvar() returned false\n" );
@@ -647,26 +647,7 @@ static bool keep_iterate( keep_t* keep, compiler_t* comp ) {
     return true;
 }
 
-int main( int argc, char** argv ) {
-
-    if ( setjmp( errorjmp ) != 0 ) {
-        fprintf( stderr, "*** FATAL, stop\n" );
-        return 1;
-    }
-
-    compiler_t comp;
-    init_compiler( &comp, 0, false );
-    comp.halt = fatal_error;
-    comp.report = report_error;
-
-    init_keep( &keep );
-
-    for (;;) {
-        if ( !keep_iterate( &keep, &comp ) ) {
-            break;
-        }
-    }
-
+static void output_stats( void ) {
     uint64_t cumul_create = 0, cumul_delete = 0, cumul_read = 0, cumul_write = 0;
     for ( int i=0; i < NKEEPVARS; ++i ) {
         cumul_create += keep.kv[i].cumul_nsec_create;
@@ -687,8 +668,30 @@ int main( int argc, char** argv ) {
     printf( "read  : %d (time: %" PRIu64 " ns, avg: %" PRIu64 " ns)\n", keep.num_read  , cumul_read  , avg_read   );
     printf( "write : %d (time: %" PRIu64 " ns, avg: %" PRIu64 " ns)\n", keep.num_write , cumul_write , avg_write  );
     printf( "idle  : %d\n", num_idle );
+}
 
-    // TBD: output statistics
+int main( int argc, char** argv ) {
+
+    if ( setjmp( errorjmp ) != 0 ) {
+        fprintf( stderr, "*** FATAL, stop\n" );
+        output_stats();
+        return 1;
+    }
+
+    compiler_t comp;
+    init_compiler( &comp, 0, false );
+    comp.halt = fatal_error;
+    comp.report = report_error;
+
+    init_keep( &keep );
+
+    for (;;) {
+        if ( !keep_iterate( &keep, &comp ) ) {
+            break;
+        }
+    }
+
+    output_stats();
 
     return EXIT_SUCCESS;
 }
