@@ -266,6 +266,29 @@ static bool alloc_keepvar( compiler_t* comp, keepvar_t* var ) {
     return true;
 }
 
+static void cleanup_keepvar( keepvar_t* var ) {
+    // don't called if already cleaned up
+    free( var->name );
+    if ( var->vartype & VARTYPEF_ARRAY ) {
+        if ( ( var->vartype & VARTYPEM_BASE ) == VARTYPEV_STR ) {
+            for ( uint16_t i=0; i < var->numcells; ++i ) {
+                if ( var->cells[i].sval ) {
+                    free( var->cells[i].sval );
+                }
+            }
+        }
+        free( var->cells );
+    } else if ( var->vartype & VARTYPEF_FUNC ) {
+        for ( uint8_t i=0; i < var->numparams; ++i ) {
+            free( (char*) var->params[i].paramname );
+        }
+    } else if ( ( var->vartype & VARTYPEM_BASE ) == VARTYPEV_STR ) {
+        if ( var->value.sval ) {
+            free( var->value.sval );
+        }
+    }
+}
+
 static bool dealloc_keepvar( compiler_t* comp, keepvar_t* var ) {
     if ( var->varoffs == VAROFFS_NONE ) {
         return true;
@@ -279,6 +302,22 @@ static bool dealloc_keepvar( compiler_t* comp, keepvar_t* var ) {
         fprintf( stderr, "comp_delete_var() failed\n" );
         return false;
     }
+    // after deallocation, the variable has lost all of its values, we must free up memory first and then reinit
+    cleanup_keepvar( var );
+    // save metrics
+    uint32_t numchecks         = var->numchecks;
+    uint64_t cumul_nsec_create = var->cumul_nsec_create;
+    uint64_t cumul_nsec_delete = var->cumul_nsec_delete;
+    uint64_t cumul_nsec_read   = var->cumul_nsec_read;
+    uint64_t cumul_nsec_write  = var->cumul_nsec_write;
+    // re-init variable
+    init_keepvar( var );
+    // restore metrics
+    var->numchecks         = numchecks;
+    var->cumul_nsec_create = cumul_nsec_create;
+    var->cumul_nsec_delete = cumul_nsec_delete;
+    var->cumul_nsec_read   = cumul_nsec_read;
+    var->cumul_nsec_write  = cumul_nsec_write;
     return true;
 }
 
