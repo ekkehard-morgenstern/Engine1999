@@ -84,9 +84,14 @@ For every branch entry:
 #include "vars.h"
 #endif
 
+#ifndef RUNTIME_H
+#include "runtime.h"
+#endif
+
 #define TREESIZE_MAX    65535U
 
 typedef struct _compiler_t {
+    runtime_t*      rt;
     pgmiter_t       iter;
     uint8_t*        tokp;
     uint8_t         currtok;
@@ -103,7 +108,7 @@ typedef struct _compiler_t {
     uint8_t         numdim;
 } compiler_t;
 
-void init_compiler( compiler_t* comp, program_t* pgm, bool keepmemory );
+void init_compiler( compiler_t* comp, runtime_t* rt, program_t* pgm, bool keepmemory );
 void comp_error( compiler_t* comp, const char* text ) ATTR_NORETURN;
 
 bool comp_alloc_tree( compiler_t* comp, uint16_t size, uint16_t* poffs );

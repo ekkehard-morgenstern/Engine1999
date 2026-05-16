@@ -26,7 +26,8 @@
 
 #include "bascomp.h"
 
-void init_compiler( compiler_t* comp, program_t* pgm, bool keepmemory ) {
+void init_compiler( compiler_t* comp, runtime_t* rt, program_t* pgm, bool keepmemory ) {
+    comp->rt = rt;
     clear_iter( &comp->iter, pgm );
     comp->tokp = 0;
     comp->currtok = TOK_EOL;
@@ -401,7 +402,6 @@ LARGE:      comp_error( comp, "Array too large" );
     return true;
 }
 
-#if 0
 bool comp_eat_arraydecl( compiler_t* comp, uint16_t* pnodeoffs ) {
     /*
      NT_ARRAYDECL    array declaration
@@ -490,14 +490,11 @@ bool comp_eat_arraydecl( compiler_t* comp, uint16_t* pnodeoffs ) {
     }
 
     uint16_t varoffs = VAROFFS_NONE;
-    /*
-    bool ok = comp_create_var( comp, vartype, name, numdims, dims, UINT8_C(0), 0, &varoffs );
+    bool ok = vmem_create_var( &comp->rt->varmem, vartype, name, numdims, dims, UINT8_C(0), 0, &varoffs );
     if ( !ok || varoffs == VAROFFS_NONE ) {
         comp_error( comp, "Failed to create variable" );
         return false;
     }
-    */
-   // TBD
 
     uint8_t data[3];
     data[0] = vartype;
@@ -511,7 +508,6 @@ bool comp_eat_arraydecl( compiler_t* comp, uint16_t* pnodeoffs ) {
 
     return true;
 }
-#endif
 
 bool comp_eat_arraydecllist( compiler_t* comp, uint16_t* pnodeoffs ) {
     /*
@@ -524,13 +520,99 @@ bool comp_eat_arraydecllist( compiler_t* comp, uint16_t* pnodeoffs ) {
 }
 
 bool comp_eat_emptyarrayref( compiler_t* comp, uint16_t* pnodeoffs ) {
-    // empty-array-ref := any-base-var-ref TOK_LPAREN TOK_RPAREN .
+    /*
+        NT_EMPTYARRAYREF    empty array reference, needed for ERASE statement
+            data:
+                - 1 byte of type indicator, 2 bytes of variable offset
+            branches: none
+            immediate processing:
+                - the array is looked up, it's an error if it doesn't exist
+                - the variable offset is encoded in the data field
 
-    return false; // TBD
+        ATTENTION:
+            - there's a problem when generated code erases a variable that is subsequently used or redefined.
+            - this needs to be solved TBD FIXME
+    */
+    // empty-array-ref := any-base-var-ref TOK_LPAREN TOK_RPAREN .
+    uint16_t varnodeoffs = NODEOFFS_NONE;
+    if ( !comp_eat_anybasevarref( comp, &varnodeoffs ) || varnodeoffs == NODEOFFS_NONE ) {
+        return false;
+    }
+    if ( comp->currtok != TOK_LPAREN || !comp_fetchtok( comp ) ) {
+        comp_error( comp, "Opening parenthesis '(' expected" );
+        return false;
+    }
+    if ( comp->currtok != TOK_RPAREN || !comp_fetchtok( comp ) ) {
+        comp_error( comp, "Closing parenthesis ')' expected" );
+        return false;
+    }
+    /*
+        NT_NUMBASEVARREF    numeric base variable reference
+        NT_STRBASEVARREF    string base variable reference
+            data:
+                - 1 byte of type indicator, n bytes of name
+    */
+    // read variable reference
+    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    uint16_t datalen  = EXTRACT16( comp, varnodeoffs + 2U );
+    uint16_t dataoffs = varnodeoffs + UINT16_C(8);
+    static char name[256]; name[0] = '\0'; uint8_t namelen = UINT8_C(0);
+    uint8_t vartype = VARTYPEF_ARRAY;
+    if ( comp->tree[ varnodeoffs ] == NT_NUMBASEVARREF || comp->tree[ varnodeoffs ] == NT_STRBASEVARREF ) {
+        if ( datalen < UINT16_C(2) ) {
+            comp_error( comp, "Internal error (fault in variable reference)" );
+            return false;
+        }
+        // data:
+        //    - 1 byte of type indicator, n bytes of name
+        uint8_t typeind = comp->tree[ dataoffs++ ];
+        uint8_t namelen = comp->tree[ dataoffs++ ];
+        if ( namelen ) {
+            memcpy( name, &comp->tree[ dataoffs ], namelen );
+        }
+        name[ namelen ] = '\0';
+        vartype |= typeind & VARTYPEM_BASE;
+    } else {
+        comp_error( comp, "Internal error (base variable reference expected)" );
+        return false;
+    }
+    uint16_t varoffs = VAROFFS_NONE;
+    bool ok = vmem_lookup_var( &comp->rt->varmem, vartype, name, &varoffs );
+    if ( !ok || varoffs == VAROFFS_NONE ) {
+        comp_error( comp, "Undefined variable" );
+        return false;
+    }
+    /*
+            data:
+                - 1 byte of type indicator, 2 bytes of variable offset
+            branches: none
+            immediate processing:
+                - the array is looked up, it's an error if it doesn't exist
+                - the variable offset is encoded in the data field
+    */
+    uint8_t data[3];
+    data[0] = vartype;
+    data[1] = (uint8_t)( varoffs >> UINT8_C(8) );
+    data[2] = (uint8_t)  varoffs;
+    if ( !comp_create_node( comp, pnodeoffs, NT_EMPTYARRAYREF, UINT8_C(0), UINT16_C(3), data ) || *pnodeoffs == NODEOFFS_NONE ) {
+        comp_error( comp, "Out of memory" );
+        return false;
+    }
+
+    return true;
+}
+
+bool comp_eat_emptyarrayreflist( compiler_t* comp, uint16_t* pnodeoffs ) {
+    /*
+        NT_EMPTYARRAYREFLIST    empty array reference list
+            data: none
+            branches: the NT_EMPTYARRAYREF nodes
+    */
+    // empty-array-ref-list := empty-array-ref { TOK_COMMA empty-array-ref } .
+    return comp_eat_list( comp, pnodeoffs, NT_EMPTYARRAYREFLIST, comp_eat_emptyarrayref, TOK_COMMA, "Array reference expected" );
 }
 
 /*
-bool comp_eat_emptyarrayreflist( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_numbasevarref( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_numvarref( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_strbasevarref( compiler_t* comp, uint16_t* pnodeoffs );
