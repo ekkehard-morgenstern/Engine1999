@@ -233,7 +233,7 @@ bool comp_create_var( compiler_t* comp, uint8_t vartype, const char* name, uint8
     // some sanity checks
     if ( vartype & VARTYPEM_INVAL || name == 0 || namelen == 0 || namelen > 255U || ( numdims != 0 && dims == 0 ) ||
         numdims > MAXDIM || ( numparams != 0 && params == 0 ) || numparams > MAXPARAM || poutoffs == 0 ) {
-INTERR: comp_error( comp, "Internal error" );
+INTERR: comp_error( comp, "Internal error (invalid parameter to comp_create_var())" );
         return false;
     }
     if ( ( vartype & ( VARTYPEF_ARRAY | VARTYPEF_FUNC ) ) == ( VARTYPEF_ARRAY | VARTYPEF_FUNC ) ) {
@@ -323,7 +323,7 @@ TOOLARGE:   comp_error( comp, "Array too large" );
 
     uint16_t memoffs = VAROFFS_NONE;
     if ( !comp_alloc_vars( comp, (uint16_t) varsize, &memoffs ) || memoffs == VAROFFS_NONE ) {
-        comp_error( comp, "Out of memory" );
+        comp_error( comp, "Out of memory (ran out of variable space in comp_alloc_vars())" );
         return false;
     }
 

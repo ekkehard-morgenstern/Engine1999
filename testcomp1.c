@@ -95,7 +95,7 @@ static void fatal_error( compiler_t* comp, void* usr ) {
 }
 
 static void report_error( compiler_t* comp, void* user, const char* text ) {
-    fprintf( stderr, "? %s\n", text );
+    fprintf( stderr, "%s\n", text );
 }
 
 // book keeping info for verification purposes
