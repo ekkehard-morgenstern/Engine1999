@@ -26,9 +26,8 @@
 
 #define _XOPEN_SOURCE   500     // for strdup(3)
 
-#include "bascomp.h"
-#include "stdtypes.h"
-#include "unxtypes.h"
+#include "vars.h"
+#include "codegen.h"
 #include "sdlutil.h"
 
 /*
@@ -88,13 +87,13 @@ static void getrandstr( char buf[256], uint8_t* plen ) {
 
 static jmp_buf errorjmp;
 
-static void fatal_error( compiler_t* comp, void* usr ) ATTR_NORETURN;
+static void fatal_error( varmem_t* vmem, void* usr ) ATTR_NORETURN;
 
-static void fatal_error( compiler_t* comp, void* usr ) {
+static void fatal_error( varmem_t* vmem, void* usr ) {
     longjmp( errorjmp, 1 );
 }
 
-static void report_error( compiler_t* comp, void* user, const char* text ) {
+static void report_error( varmem_t* vmem, void* user, const char* text ) {
     fprintf( stderr, "%s\n", text );
 }
 
@@ -251,16 +250,16 @@ static void init_keepvar( keepvar_t* var ) {
     var->varoffs = VAROFFS_NONE;
 }
 
-static bool alloc_keepvar( compiler_t* comp, keepvar_t* var ) {
+static bool alloc_keepvar( varmem_t* vmem, keepvar_t* var ) {
     if ( var->varoffs != VAROFFS_NONE ) {
         return true;
     }
     uint64_t ti0 = sdlutil_getnsec(0);
-    bool ok = comp_create_var( comp, var->vartype, var->name, var->numdims, var->dims, var->numparams, var->params, &var->varoffs );
+    bool ok = vmem_create_var( vmem, var->vartype, var->name, var->numdims, var->dims, var->numparams, var->params, &var->varoffs );
     uint64_t ti1 = sdlutil_getnsec(0);
     var->cumul_nsec_create += ti1 - ti0;
     if ( !ok || var->varoffs == VAROFFS_NONE ) {
-        fprintf( stderr, "comp_create_var() failed\n" );
+        fprintf( stderr, "vmem_create_var() failed\n" );
         return false;
     }
     return true;
@@ -289,17 +288,17 @@ static void cleanup_keepvar( keepvar_t* var ) {
     }
 }
 
-static bool dealloc_keepvar( compiler_t* comp, keepvar_t* var ) {
+static bool dealloc_keepvar( varmem_t* vmem, keepvar_t* var ) {
     if ( var->varoffs == VAROFFS_NONE ) {
         return true;
     }
     uint64_t ti0 = sdlutil_getnsec(0);
-    bool ok = comp_delete_var( comp, var->varoffs );
+    bool ok = vmem_delete_var( vmem, var->varoffs );
     var->varoffs = VAROFFS_NONE;
     uint64_t ti1 = sdlutil_getnsec(0);
     var->cumul_nsec_delete += ti1 - ti0;
     if ( !ok ) {
-        fprintf( stderr, "comp_delete_var() failed\n" );
+        fprintf( stderr, "vmem_delete_var() failed\n" );
         return false;
     }
     // after deallocation, the variable has lost all of its values, we must free up memory first and then reinit
@@ -356,7 +355,7 @@ static void dump_keepvar( const keepvar_t* var ) {
     }
 }
 
-static tristate_t test_keepvar( compiler_t* comp, keepvar_t* var ) {
+static tristate_t test_keepvar( varmem_t* vmem, keepvar_t* var ) {
     if ( var->varoffs == VAROFFS_NONE ) {
         // no variable space allocated: stop
         return tri_undecided;
@@ -368,11 +367,11 @@ static tristate_t test_keepvar( compiler_t* comp, keepvar_t* var ) {
     }
     varvalue_t value; memset( &value, 0, sizeof(varvalue_t) );
     uint64_t ti0 = sdlutil_getnsec(0);
-    bool ok = comp_get_var( comp, var->varoffs, var->vartype, var->numdims, diminx, &value );
+    bool ok = vmem_get_var( vmem, var->varoffs, var->vartype, var->numdims, diminx, &value );
     uint64_t ti1 = sdlutil_getnsec(0);
     var->cumul_nsec_read += ti1 - ti0;
     if ( !ok ) {
-        fprintf( stderr, "comp_get_var() failed\n" );
+        fprintf( stderr, "vmem_get_var() failed\n" );
         dump_keepvar( var );
         return tri_false;
     }
@@ -424,14 +423,14 @@ static tristate_t test_keepvar( compiler_t* comp, keepvar_t* var ) {
                     dump_keepvar( var );
                     return tri_false;
                 }
-                if ( ( (uint32_t) value.stroffs ) + ( (uint32_t) value.strsize ) > comp->strssize ) {
+                if ( ( (uint32_t) value.stroffs ) + ( (uint32_t) value.strsize ) > vmem->strssize ) {
                     fprintf( stderr, "? Variable error, offset/size out of bounds (%" PRIu16 "/%" PRIu16 "//%" PRIu32 ")\n",
-                        value.stroffs, value.strsize, comp->strssize );
+                        value.stroffs, value.strsize, vmem->strssize );
                     dump_keepvar( var );
                     return tri_false;
                 }
                 if ( value.strsize ) {
-                    memcpy( tmp, &comp->strs[ value.stroffs ], value.strsize );
+                    memcpy( tmp, &vmem->strs[ value.stroffs ], value.strsize );
                 }
                 tmp[ value.strsize ] = '\0';
                 compstr = tmp;
@@ -461,7 +460,7 @@ static tristate_t test_keepvar( compiler_t* comp, keepvar_t* var ) {
     return tri_false;
 }
 
-static tristate_t modify_keepvar( compiler_t* comp, keepvar_t* var ) {
+static tristate_t modify_keepvar( varmem_t* vmem, keepvar_t* var ) {
 
     if ( var->varoffs == VAROFFS_NONE ) {
         // not allocated
@@ -528,13 +527,13 @@ static tristate_t modify_keepvar( compiler_t* comp, keepvar_t* var ) {
                 value.stroffs = STROFFS_NONE;
                 value.strsize = UINT8_C(0);
                 ti0 = sdlutil_getnsec(0);
-                if ( comp_alloc_strs( comp, len, &value.stroffs ) && value.stroffs != STROFFS_NONE ) {
+                if ( vmem_alloc_strs( vmem, len, &value.stroffs ) && value.stroffs != STROFFS_NONE ) {
                     value.strsize = len;
                 } else {
-                    fprintf( stderr, "comp_alloc_strs() failed\n" );
+                    fprintf( stderr, "vmem_alloc_strs() failed\n" );
                     return tri_false;
                 }
-                memcpy( &comp->strs[ value.stroffs ], pval->sval, value.strsize );
+                memcpy( &vmem->strs[ value.stroffs ], pval->sval, value.strsize );
                 ti1 = sdlutil_getnsec(0);
                 var->cumul_nsec_write += ti1 - ti0;
             }
@@ -545,12 +544,12 @@ static tristate_t modify_keepvar( compiler_t* comp, keepvar_t* var ) {
     }
 
     ti0 = sdlutil_getnsec(0);
-    bool ok = comp_set_var( comp, var->varoffs, var->vartype, var->numdims, diminx, &value );
+    bool ok = vmem_set_var( vmem, var->varoffs, var->vartype, var->numdims, diminx, &value );
     ti1 = sdlutil_getnsec(0);
     var->cumul_nsec_write += ti1 - ti0;
 
     if ( !ok ) {
-        fprintf( stderr, "comp_set_var() failed\n" );
+        fprintf( stderr, "vmem_set_var() failed\n" );
         return tri_false;
     }
 
@@ -575,7 +574,7 @@ static void init_keep( keep_t* keep ) {
     }
 }
 
-static bool keep_iterate( keep_t* keep, compiler_t* comp ) {
+static bool keep_iterate( keep_t* keep, varmem_t* vmem ) {
     if ( ++keep->iterations > MAXITERATIONS ) {
         --keep->iterations;
         return false;
@@ -591,19 +590,19 @@ static bool keep_iterate( keep_t* keep, compiler_t* comp ) {
         // 0, 1, 2
         if ( action == 2 ) {
             // remove
-            if ( !dealloc_keepvar( comp, &keep->kv[kv] ) ) {
+            if ( !dealloc_keepvar( vmem, &keep->kv[kv] ) ) {
                 fprintf( stderr, "dealloc_keepvar() returned false\n" );
                 return false;
             }
             ++keep->num_delete;
         } else if ( action == 1 ) {
             // create
-            if ( !alloc_keepvar( comp, &keep->kv[kv] ) ) {
+            if ( !alloc_keepvar( vmem, &keep->kv[kv] ) ) {
                 fprintf( stderr, "alloc_keepvar() returned false\n" );
                 return false;
             }
             ++keep->num_create;
-            tristate_t tri = modify_keepvar( comp, &keep->kv[kv] );
+            tristate_t tri = modify_keepvar( vmem, &keep->kv[kv] );
             if ( tri == tri_false ) {
                 fprintf( stderr, "modify_keepvar() returned false\n" );
                 return false;
@@ -617,7 +616,7 @@ static bool keep_iterate( keep_t* keep, compiler_t* comp ) {
         // 3..99
 
         if ( action < 30 ) {
-            tristate_t tri = modify_keepvar( comp, &keep->kv[kv] );
+            tristate_t tri = modify_keepvar( vmem, &keep->kv[kv] );
             if ( tri == tri_false ) {
                 fprintf( stderr, "modify_keepvar() returned false\n" );
                 return false;
@@ -626,7 +625,7 @@ static bool keep_iterate( keep_t* keep, compiler_t* comp ) {
                 ++keep->num_write;
             }
         } else {
-            tristate_t tri = test_keepvar( comp, &keep->kv[kv] );
+            tristate_t tri = test_keepvar( vmem, &keep->kv[kv] );
             if ( tri == tri_false ) {
                 fprintf( stderr, "test_keepvar() returned false\n" );
                 return false;
@@ -678,15 +677,15 @@ int main( int argc, char** argv ) {
         return 1;
     }
 
-    compiler_t comp;
-    init_compiler( &comp, 0, false );
-    comp.halt = fatal_error;
-    comp.report = report_error;
+    varmem_t vmem;
+    init_varmem( &vmem );
+    vmem.halt = fatal_error;
+    vmem.report = report_error;
 
     init_keep( &keep );
 
     for (;;) {
-        if ( !keep_iterate( &keep, &comp ) ) {
+        if ( !keep_iterate( &keep, &vmem ) ) {
             break;
         }
     }
