@@ -258,8 +258,6 @@ ERROR:      comp_error( comp, "Array index expected" );
             out_of_memory( comp );
             return false;
         }
-
-
         return true;
     }
     return false;
@@ -663,7 +661,7 @@ bool comp_eat_numbasevarref( compiler_t* comp, uint16_t* pnodeoffs ) {
         }
     }
 
-    if ( !comp_create_node( comp, pnodeoffs, NT_NUMVARREF, UINT8_C(0), datalen, data ) || *pnodeoffs == NODEOFFS_NONE ) {
+    if ( !comp_create_node( comp, pnodeoffs, NT_NUMBASEVARREF, UINT8_C(0), datalen, data ) || *pnodeoffs == NODEOFFS_NONE ) {
         out_of_memory( comp );
         return false;
     }
@@ -671,8 +669,128 @@ bool comp_eat_numbasevarref( compiler_t* comp, uint16_t* pnodeoffs ) {
     return true;
 }
 
+bool comp_eat_numvarref( compiler_t* comp, uint16_t* pnodeoffs ) {
+
+    /*
+        NT_NUMVARREF        numeric variable reference
+            data:
+                - 1 byte of type indicator
+                - 2 bytes of variable offset
+            branches:
+                - list of array index expressions
+    */
+    // num-var-ref      := num-base-var-ref [ array-sub ] .
+    uint16_t varnodeoffs = NODEOFFS_NONE;
+    if ( !comp_eat_numbasevarref( comp, &varnodeoffs ) || varnodeoffs == NODEOFFS_NONE ) {
+        return false;
+    }
+    uint16_t arraysubnode = NODEOFFS_NONE, arrayindexnode;
+    if ( !comp_eat_arraysub( comp, &arraysubnode ) || varnodeoffs == NODEOFFS_NONE ) {
+        arrayindexnode = NODEOFFS_NONE;
+    } else {    // NT_ARRAYSUB
+        /*
+            NT_ARRAYSUB     array subscript
+                data: none
+                branches: 1
+                    - points to either NT_NUMEXLIST or string expression
+                immediate processing: none
+        */
+        //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+        //  <nodepos.16> <nextbranch.16>
+        if ( comp->tree[ arraysubnode ] != NT_ARRAYSUB ) {
+NOSUB:      comp_error( comp, "Internal error (array subscript expected)" );
+            return false;
+        }
+        uint16_t branch = EXTRACT16( comp, arraysubnode + 4U );
+        if ( branch == NODEOFFS_NONE ) {
+            goto NOSUB;
+        }
+        arrayindexnode = EXTRACT16( comp, branch );
+        if ( arrayindexnode == NODEOFFS_NONE ) {
+            goto NOSUB;
+        }
+    }
+
+    /*
+        NT_NUMBASEVARREF    numeric base variable reference
+            data:
+                - 1 byte of type indicator, n bytes of name
+    */
+    // read variable reference
+    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    uint16_t datalen  = EXTRACT16( comp, varnodeoffs + 2U );
+    uint16_t dataoffs = varnodeoffs + UINT16_C(8);
+    static char name[256]; name[0] = '\0'; uint8_t namelen = UINT8_C(0);
+    uint8_t vartype = arraysubnode != NODEOFFS_NONE ? VARTYPEF_ARRAY : UINT8_C(0);
+    if ( comp->tree[ varnodeoffs ] == NT_NUMBASEVARREF ) {
+        if ( datalen < UINT16_C(2) ) {
+            comp_error( comp, "Internal error (fault in variable reference)" );
+            return false;
+        }
+        // data:
+        //    - 1 byte of type indicator, n bytes of name
+        uint8_t typeind = comp->tree[ dataoffs++ ];
+        uint8_t namelen = comp->tree[ dataoffs++ ];
+        if ( namelen ) {
+            memcpy( name, &comp->tree[ dataoffs ], namelen );
+        }
+        name[ namelen ] = '\0';
+        vartype |= typeind & VARTYPEM_BASE;
+    } else {
+        comp_error( comp, "Internal error (base variable reference expected)" );
+        return false;
+    }
+
+    // lookup or create variable
+    uint16_t varoffs = VAROFFS_NONE;
+    bool ok = vmem_lookup_var( &comp->rt->varmem, vartype, name, &varoffs );
+    if ( !ok || varoffs == VAROFFS_NONE ) {
+        // variable not found: create it
+        if ( vartype & VARTYPEF_ARRAY ) {
+            // default array: single dimension, 10 elements
+            uint16_t dim = UINT16_C(10);
+            ok = vmem_create_var( comp, vartype, name, UINT8_C(1), &dim, UINT8_C(0), 0, &varoffs );
+        } else {
+            // default regular variable, initialized to 0 or empty string
+            ok = vmem_create_var( comp, vartype, name, UINT8_C(0), 0, UINT8_C(0), 0, &varoffs );
+        }
+        if ( !ok || varoffs == VAROFFS_NONE ) {
+            out_of_memory( comp );
+            return false;
+        }
+    }
+
+    // create result node
+    /*
+            data:
+                - 1 byte of type indicator
+                - 2 bytes of variable offset
+            branches:
+                - list of array index expressions
+    */
+    uint8_t data[3];
+    data[0] = vartype;
+    data[1] = (uint8_t)( varoffs >> UINT8_C(8) );
+    data[2] = (uint8_t)  varoffs;
+
+    if ( arrayindexnode != NODEOFFS_NONE ) {
+        if ( !comp_create_node( comp, pnodeoffs, NT_NUMVARREF, UINT8_C(0), UINT8_C(3), data, (int) arrayindexnode ) ||
+            *pnodeoffs == NODEOFFS_NONE ) {
+            out_of_memory( comp );
+            return false;
+        }
+    } else {
+        if ( !comp_create_node( comp, pnodeoffs, NT_NUMVARREF, UINT8_C(0), UINT8_C(3), data ) || *pnodeoffs == NODEOFFS_NONE ) {
+            out_of_memory( comp );
+            return false;
+        }
+    }
+
+    return true;
+}
+
+
 /*
-bool comp_eat_numvarref( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_strbasevarref( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_strvarref( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_anybasevarref( compiler_t* comp, uint16_t* pnodeoffs );
