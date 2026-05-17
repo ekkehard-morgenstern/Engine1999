@@ -40,13 +40,13 @@ array-decl-list := array-decl { TOK_COMMA array-decl } .
 empty-array-ref := any-base-var-ref TOK_LPAREN TOK_RPAREN .
 empty-array-ref-list := empty-array-ref { TOK_COMMA empty-array-ref } .
 
-num-base-var-ref := TOK_IDENT [ TOK_PERCENT ] .
+num-base-var-ref := TOK_IDENT [ TOK_INTEGER ] .
 num-var-ref      := num-base-var-ref [ array-sub ] .
 
-str-base-var-ref := TOK_IDENT TOK_DOLLAR .
+str-base-var-ref := TOK_IDENT TOK_STRING .
 str-var-ref      := str-base-var-ref [ array-sub ] .
 
-any-base-var-ref := num-base-var-ref | str-base-var-ref .
+any-base-var-ref := TOK_IDENT [ TOK_INTEGER | TOK_STRING ] .
 
 dec-lit := TOK_DECLIT | TOK_DEC0 .. TOK_DEC9 .
 num-lit := dec-lit | TOK_HEXLIT | TOK_OCTLIT | TOK_QUALIT | TOK_BINLIT .

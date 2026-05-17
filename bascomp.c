@@ -486,7 +486,7 @@ bool comp_eat_arraydecl( compiler_t* comp, uint16_t* pnodeoffs ) {
     //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
     datalen  = EXTRACT16( comp, varnodeoffs + 2U );
     dataoffs = varnodeoffs + UINT16_C(8);
-    static char name[256]; name[0] = '\0'; uint8_t namelen = UINT8_C(0);
+    static char name[256]; name[0] = '\0';
     uint8_t vartype = VARTYPEF_ARRAY;
     if ( comp->tree[ varnodeoffs ] == NT_NUMBASEVARREF || comp->tree[ varnodeoffs ] == NT_STRBASEVARREF ) {
         if ( datalen < UINT16_C(2) ) {
@@ -574,7 +574,7 @@ bool comp_eat_emptyarrayref( compiler_t* comp, uint16_t* pnodeoffs ) {
     //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
     uint16_t datalen  = EXTRACT16( comp, varnodeoffs + 2U );
     uint16_t dataoffs = varnodeoffs + UINT16_C(8);
-    static char name[256]; name[0] = '\0'; uint8_t namelen = UINT8_C(0);
+    static char name[256]; name[0] = '\0';
     uint8_t vartype = VARTYPEF_ARRAY;
     if ( comp->tree[ varnodeoffs ] == NT_NUMBASEVARREF || comp->tree[ varnodeoffs ] == NT_STRBASEVARREF ) {
         if ( datalen < UINT16_C(2) ) {
@@ -669,10 +669,12 @@ bool comp_eat_numbasevarref( compiler_t* comp, uint16_t* pnodeoffs ) {
     return true;
 }
 
-bool comp_eat_numvarref( compiler_t* comp, uint16_t* pnodeoffs ) {
+static bool comp_eat_varref( compiler_t* comp, uint16_t* pnodeoffs, uint8_t basetype,
+    bool (*baseeater)( compiler_t*, uint16_t* ), uint8_t nodetype ) {
 
     /*
         NT_NUMVARREF        numeric variable reference
+        NT_STRVARREF        string variable reference
             data:
                 - 1 byte of type indicator
                 - 2 bytes of variable offset
@@ -681,7 +683,7 @@ bool comp_eat_numvarref( compiler_t* comp, uint16_t* pnodeoffs ) {
     */
     // num-var-ref      := num-base-var-ref [ array-sub ] .
     uint16_t varnodeoffs = NODEOFFS_NONE;
-    if ( !comp_eat_numbasevarref( comp, &varnodeoffs ) || varnodeoffs == NODEOFFS_NONE ) {
+    if ( !baseeater( comp, &varnodeoffs ) || varnodeoffs == NODEOFFS_NONE ) {
         return false;
     }
     uint16_t arraysubnode = NODEOFFS_NONE, arrayindexnode;
@@ -713,6 +715,7 @@ NOSUB:      comp_error( comp, "Internal error (array subscript expected)" );
 
     /*
         NT_NUMBASEVARREF    numeric base variable reference
+        NT_STRBASEVARREF    string base variable reference
             data:
                 - 1 byte of type indicator, n bytes of name
     */
@@ -720,9 +723,9 @@ NOSUB:      comp_error( comp, "Internal error (array subscript expected)" );
     //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
     uint16_t datalen  = EXTRACT16( comp, varnodeoffs + 2U );
     uint16_t dataoffs = varnodeoffs + UINT16_C(8);
-    static char name[256]; name[0] = '\0'; uint8_t namelen = UINT8_C(0);
+    static char name[256]; name[0] = '\0';
     uint8_t vartype = arraysubnode != NODEOFFS_NONE ? VARTYPEF_ARRAY : UINT8_C(0);
-    if ( comp->tree[ varnodeoffs ] == NT_NUMBASEVARREF ) {
+    if ( comp->tree[ varnodeoffs ] == basetype ) {
         if ( datalen < UINT16_C(2) ) {
             comp_error( comp, "Internal error (fault in variable reference)" );
             return false;
@@ -749,10 +752,10 @@ NOSUB:      comp_error( comp, "Internal error (array subscript expected)" );
         if ( vartype & VARTYPEF_ARRAY ) {
             // default array: single dimension, 10 elements
             uint16_t dim = UINT16_C(10);
-            ok = vmem_create_var( comp, vartype, name, UINT8_C(1), &dim, UINT8_C(0), 0, &varoffs );
+            ok = vmem_create_var( &comp->rt->varmem, vartype, name, UINT8_C(1), &dim, UINT8_C(0), 0, &varoffs );
         } else {
             // default regular variable, initialized to 0 or empty string
-            ok = vmem_create_var( comp, vartype, name, UINT8_C(0), 0, UINT8_C(0), 0, &varoffs );
+            ok = vmem_create_var( &comp->rt->varmem, vartype, name, UINT8_C(0), 0, UINT8_C(0), 0, &varoffs );
         }
         if ( !ok || varoffs == VAROFFS_NONE ) {
             out_of_memory( comp );
@@ -774,26 +777,109 @@ NOSUB:      comp_error( comp, "Internal error (array subscript expected)" );
     data[2] = (uint8_t)  varoffs;
 
     if ( arrayindexnode != NODEOFFS_NONE ) {
-        if ( !comp_create_node( comp, pnodeoffs, NT_NUMVARREF, UINT8_C(0), UINT8_C(3), data, (int) arrayindexnode ) ||
-            *pnodeoffs == NODEOFFS_NONE ) {
-            out_of_memory( comp );
-            return false;
-        }
+        ok = comp_create_node( comp, pnodeoffs, nodetype, UINT8_C(0), UINT8_C(3), data, (int) arrayindexnode );
     } else {
-        if ( !comp_create_node( comp, pnodeoffs, NT_NUMVARREF, UINT8_C(0), UINT8_C(3), data ) || *pnodeoffs == NODEOFFS_NONE ) {
-            out_of_memory( comp );
-            return false;
-        }
+        ok = comp_create_node( comp, pnodeoffs, NT_NUMVARREF, UINT8_C(0), UINT8_C(3), data );
+    }
+    if ( !ok || *pnodeoffs == NODEOFFS_NONE ) {
+        out_of_memory( comp );
+        return false;
     }
 
     return true;
 }
 
+bool comp_eat_numvarref( compiler_t* comp, uint16_t* pnodeoffs ) {
+    return comp_eat_varref( comp, pnodeoffs, NT_NUMBASEVARREF, comp_eat_numbasevarref, NT_NUMVARREF );
+}
+
+bool comp_eat_strbasevarref( compiler_t* comp, uint16_t* pnodeoffs ) {
+    /*
+        NT_STRBASEVARREF    string base variable reference
+            data:
+                - 1 byte of type indicator, n bytes of name
+            branches: none
+            immediate processing: none (!)
+            note:
+                - because it's used in compound contexts, the variable reference
+                  cannot be resolved here.
+    */
+    // str-base-var-ref := TOK_IDENT TOK_DOLLAR .
+
+    if ( comp->currtok != TOK_IDENT ) {
+        return false;
+    }
+    static char data[257];
+    data[0] = VARTYPEV_STR;
+    snprintf( &data[1], 256U, "%s", comp->param );
+    uint16_t datalen = UINT16_C(1) + ( (uint16_t) strlen( &data[1] ) );
+    if ( !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    if ( comp->currtok != TOK_STRING || !comp_fetchtok( comp ) ) {
+        comp_error( comp, "String sigil '$' expected" );
+        return false;
+    }
+
+    if ( !comp_create_node( comp, pnodeoffs, NT_STRBASEVARREF, UINT8_C(0), datalen, data ) || *pnodeoffs == NODEOFFS_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+
+    return true;
+}
+
+bool comp_eat_strvarref( compiler_t* comp, uint16_t* pnodeoffs ) {
+    return comp_eat_varref( comp, pnodeoffs, NT_STRBASEVARREF, comp_eat_strbasevarref, NT_STRVARREF );
+}
+
+bool comp_eat_anybasevarref( compiler_t* comp, uint16_t* pnodeoffs ) {
+    /*
+        NT_NUMBASEVARREF    numeric base variable reference
+        NT_STRBASEVARREF    string base variable reference
+            data:
+                - 1 byte of type indicator, n bytes of name
+            branches: none
+            immediate processing: none (!)
+            note:
+                - because it's used in compound contexts, the variable reference
+                  cannot be resolved here.
+    */
+    // any-base-var-ref := TOK_IDENT [ TOK_INTEGER | TOK_STRING ] .
+
+    if ( comp->currtok != TOK_IDENT ) {
+        return false;
+    }
+    static char data[257];
+    data[0] = VARTYPEV_FLOAT;
+    snprintf( &data[1], 256U, "%s", comp->param );
+    uint16_t datalen = UINT16_C(1) + ( (uint16_t) strlen( &data[1] ) );
+    if ( !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    if ( comp->currtok == TOK_INTEGER ) {
+        data[0] = VARTYPEV_INT;
+        if ( !comp_fetchtok( comp ) ) {
+            return false;
+        }
+    } else if ( comp->currtok == TOK_STRING ) {
+        data[0] = VARTYPEV_STR;
+        if ( !comp_fetchtok( comp ) ) {
+            return false;
+        }
+    }
+
+    uint8_t nodetype = data[0] == VARTYPEV_STR ? NT_STRBASEVARREF : NT_NUMBASEVARREF;
+
+    if ( !comp_create_node( comp, pnodeoffs, nodetype, UINT8_C(0), datalen, data ) || *pnodeoffs == NODEOFFS_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+
+    return true;
+}
 
 /*
-bool comp_eat_strbasevarref( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_strvarref( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_anybasevarref( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_declit( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_numlit( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_strlit( compiler_t* comp, uint16_t* pnodeoffs );
