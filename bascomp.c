@@ -61,6 +61,12 @@ void comp_error( compiler_t* comp, const char* text ) {
     }
 }
 
+static void out_of_memory( compiler_t* comp ) ATTR_NORETURN;
+
+static void out_of_memory( compiler_t* comp ) {
+    comp_error( comp, "Out of memory" );
+}
+
 bool comp_alloc_tree( compiler_t* comp, uint16_t size, uint16_t* poffs ) {
     if ( size > TREESIZE_MAX - comp->treesize ) {
         return false;
@@ -183,7 +189,7 @@ bool comp_eat_list( compiler_t* comp, uint16_t* pnodeoffs, uint8_t nodetype, com
             if ( !comp_create_node( comp, &nodeoffs, nodetype, UINT8_C(2), UINT16_C(0), 0, (int) expr1, (int) expr2 ) ||
                  nodeoffs == NODEOFFS_NONE ) {
                 // failed to create node: cancel operation
-OOM:            comp_error( comp, "Out of memory" );
+OOM:            out_of_memory( comp );
                 break;
             }
         } else {
@@ -227,19 +233,33 @@ bool comp_eat_arrayindex( compiler_t* comp, uint16_t* pnodeoffs ) {
 }
 
 bool comp_eat_arraysub( compiler_t* comp, uint16_t* pnodeoffs ) {
+    /*
+        NT_ARRAYSUB     array subscript
+            data: none
+            branches: 1
+                - points to either NT_NUMEXLIST or string expression
+            immediate processing: none
+    */
     // array-sub := TOK_LPAREN array-index TOK_RPAREN .
     if ( comp->currtok == TOK_LPAREN ) {
         if ( !comp_fetchtok( comp ) ) {
 ERROR:      comp_error( comp, "Array index expected" );
             return false;
         }
-        if ( !comp_eat_arrayindex( comp, pnodeoffs ) ) {
+        uint16_t arrayindexnode = NODEOFFS_NONE;
+        if ( !comp_eat_arrayindex( comp, &arrayindexnode ) || arrayindexnode == NODEOFFS_NONE ) {
             goto ERROR;
         }
         if ( comp->currtok != TOK_RPAREN || !comp_fetchtok( comp ) ) {
             comp_error( comp, "Closing parenthesis ')' expected" );
             return false;
         }
+        if ( !comp_create_node( comp, pnodeoffs, NT_ARRAYSUB, UINT8_C(1), UINT16_C(0), 0, (int) arrayindexnode ) ) {
+            out_of_memory( comp );
+            return false;
+        }
+
+
         return true;
     }
     return false;
@@ -347,7 +367,7 @@ bool comp_eat_arraydimdecl( compiler_t* comp, uint16_t* pnodeoffs ) {
             return false;
         }
         if ( !comp_create_node( comp, pnodeoffs, NT_ARRAYDIMDECL, UINT8_C(0), datalen, &data ) || *pnodeoffs == NODEOFFS_NONE ) {
-OOM:        comp_error( comp, "Out of memory" );
+OOM:        out_of_memory( comp );
             return false;
         }
         return true;
@@ -502,7 +522,7 @@ bool comp_eat_arraydecl( compiler_t* comp, uint16_t* pnodeoffs ) {
     data[2] = (uint8_t)  varoffs;
 
     if ( !comp_create_node( comp, pnodeoffs, NT_ARRAYDECL, UINT8_C(0), UINT16_C(3), data ) || *pnodeoffs == NODEOFFS_NONE ) {
-        comp_error( comp, "Out of memory" );
+        out_of_memory( comp );
         return false;
     }
 
@@ -595,7 +615,7 @@ bool comp_eat_emptyarrayref( compiler_t* comp, uint16_t* pnodeoffs ) {
     data[1] = (uint8_t)( varoffs >> UINT8_C(8) );
     data[2] = (uint8_t)  varoffs;
     if ( !comp_create_node( comp, pnodeoffs, NT_EMPTYARRAYREF, UINT8_C(0), UINT16_C(3), data ) || *pnodeoffs == NODEOFFS_NONE ) {
-        comp_error( comp, "Out of memory" );
+        out_of_memory( comp );
         return false;
     }
 
@@ -644,7 +664,7 @@ bool comp_eat_numbasevarref( compiler_t* comp, uint16_t* pnodeoffs ) {
     }
 
     if ( !comp_create_node( comp, pnodeoffs, NT_NUMVARREF, UINT8_C(0), datalen, data ) || *pnodeoffs == NODEOFFS_NONE ) {
-        comp_error( comp, "Out of memory" );
+        out_of_memory( comp );
         return false;
     }
 
