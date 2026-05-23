@@ -879,11 +879,113 @@ bool comp_eat_anybasevarref( compiler_t* comp, uint16_t* pnodeoffs ) {
     return true;
 }
 
+bool comp_eat_numlit( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // dec-lit := TOK_DECLIT | TOK_DEC0 .. TOK_DEC9 .
+    // num-lit := dec-lit | TOK_HEXLIT | TOK_OCTLIT | TOK_QUALIT | TOK_BINLIT .
+    double num = 0;
+    uint8_t tok = comp->currtok;
+    switch ( tok ) {
+        case TOK_DECLIT: case TOK_HEXLIT: case TOK_OCTLIT: case TOK_QUALIT: case TOK_BINLIT:
+            num = comp->number;
+            break;
+        case TOK_DEC0: case TOK_DEC1: case TOK_DEC2: case TOK_DEC3: case TOK_DEC4:
+        case TOK_DEC5: case TOK_DEC6: case TOK_DEC7: case TOK_DEC8: case TOK_DEC9:
+            num = tok - TOK_DEC0;
+            break;
+        default:
+            return false;
+    }
+    if ( !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    /*
+        NT_DECLIT       decimal literal
+            data:
+                - numeric value, 8 bytes in network byte order
+            immediate processing:
+                - consumes TOK_DECLIT or TOK_DEC0..DEC9, and generates a floating-point representation,
+                  which is then stored into the data field.
+
+        NT_NUMLIT       numeric literal
+            data:
+                - numeric value, 8 bytes in network byte order
+            immediate processing:
+                - attempts NT_DECLIT first, and if successful, returns it as a NT_NUMLIT node.
+                - otherwise, attempts the other number base literals (hex, oct, quad and bin)
+    */
+    union {
+        uint64_t    ui64;
+        double      dbl;
+    } u;
+    u.dbl = num;
+    uint8_t data[8];
+    data[0] = (uint8_t)( u.ui64 >> UINT8_C(56) );
+    data[1] = (uint8_t)( u.ui64 >> UINT8_C(48) );
+    data[2] = (uint8_t)( u.ui64 >> UINT8_C(40) );
+    data[3] = (uint8_t)( u.ui64 >> UINT8_C(32) );
+    data[4] = (uint8_t)( u.ui64 >> UINT8_C(24) );
+    data[5] = (uint8_t)( u.ui64 >> UINT8_C(16) );
+    data[6] = (uint8_t)( u.ui64 >> UINT8_C( 8) );
+    data[7] = (uint8_t)( u.ui64                );
+    if ( !comp_create_node( comp, pnodeoffs, NT_DECLIT, UINT8_C(0), UINT16_C(8), data ) || *pnodeoffs == NODEOFFS_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
+bool comp_eat_strlit( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // str-lit := TOK_STRLIT | TOK_SHLLIT | TOK_BRKLIT | TOK_BRCLIT .
+    /*
+       NT_STRLIT       string literal
+        data:
+            - 1 byte of type indicator (can be string, shell, bracket or brace literal)
+            - n bytes of text
+        branches: none
+        note:
+            - note that shell/bracket/brace literals aren't evaluated here, just gathered.
+    */
+    switch ( comp->currtok ) {
+        case TOK_STRLIT:
+        case TOK_SHLLIT:
+        case TOK_BRKLIT:
+        case TOK_BRCLIT:
+            break;
+        default:
+            return false;
+    }
+    static uint8_t data[257];
+    data[0] = comp->currtok;
+    size_t len = strlen( comp->param );
+    if ( len ) {
+        memcpy( &data[1], comp->param, len );
+    }
+    if ( !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    if ( !comp_create_node( comp, pnodeoffs, data[0], UINT8_C(0), (uint16_t)( 1U + len ), data ) || *pnodeoffs == NODEOFFS_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
+bool comp_eat_strlits( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // str-lits := str-lit { str-lit } .
+    /*
+        NT_STRLITS      string literals
+            data: none
+            branches:
+                - list of string literals (NT_STRLIT)
+    */
+    return comp_eat_list( comp, pnodeoffs, NT_STRLITS, comp_eat_strlit, TOK_EOL, "String literal expected" );
+}
+
+bool comp_eat_numusrfnname( compiler_t* comp, uint16_t* pnodeoffs ) {
+    return false; // TBD
+}
+
 /*
-bool comp_eat_declit( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_numlit( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_strlit( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_strlits( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_numusrfnname( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_strusrfnname( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_numusrfncall( compiler_t* comp, uint16_t* pnodeoffs );
