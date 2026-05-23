@@ -40,13 +40,13 @@ array-decl-list := array-decl { TOK_COMMA array-decl } .
 empty-array-ref := any-base-var-ref TOK_LPAREN TOK_RPAREN .
 empty-array-ref-list := empty-array-ref { TOK_COMMA empty-array-ref } .
 
-num-base-var-ref := TOK_IDENT [ TOK_INTEGER ] .
+num-base-var-ref := TOK_NUMIDENT | TOK_INTIDENT .
 num-var-ref      := num-base-var-ref [ array-sub ] .
 
-str-base-var-ref := TOK_IDENT TOK_STRING .
+str-base-var-ref := TOK_STRIDENT .
 str-var-ref      := str-base-var-ref [ array-sub ] .
 
-any-base-var-ref := TOK_IDENT [ TOK_INTEGER | TOK_STRING ] .
+any-base-var-ref := TOK_NUMIDENT | TOK_INTIDENT | TOK_STRIDENT .
 
 dec-lit := TOK_DECLIT | TOK_DEC0 .. TOK_DEC9 .
 num-lit := dec-lit | TOK_HEXLIT | TOK_OCTLIT | TOK_QUALIT | TOK_BINLIT .
@@ -54,8 +54,8 @@ num-lit := dec-lit | TOK_HEXLIT | TOK_OCTLIT | TOK_QUALIT | TOK_BINLIT .
 str-lit := TOK_STRLIT | TOK_SHLLIT | TOK_BRKLIT | TOK_BRCLIT .
 str-lits := str-lit { str-lit } .
 
-num-usr-fn-name := TOK_FN TOK_IDENT [ TOK_PERCENT ] .
-str-usr-fn-name := TOK_FN TOK_IDENT TOK_DOLLAR .
+num-usr-fn-name := TOK_FN ( TOK_NUMIDENT | TOK_INTIDENT ) .
+str-usr-fn-name := TOK_FN TOK_STRIDENT .
 
 usr-fn-arg := empty-array-ref | any-base-var-ref .
 usr-fn-arg-list := usr-fn-arg { TOK_COMMA usr-fn-arg } .
@@ -115,7 +115,7 @@ num-expr     := num-or-ex .
 
 expr         := num-expr | str-expr .
 
-save-stmt := SAVE str-expr [ TOK_COMMA TOK_IDENT ] .
+save-stmt := SAVE str-expr [ TOK_COMMA TOK_NUMIDENT ] .
 
 chan-spec := TOK_LATTICE num-expr .
 
@@ -144,12 +144,12 @@ for-stmt := num-base-var-ref TOK_EQ num-expr TOK_TO num-expr [ TOK_STEP num-expr
 next-stmt := TOK_NEXT [ num-base-var-ref { TOK_COMMA num-base-var-ref } ] .
 
 goto-kw := TOK_GO TOK_TO | TOK_GOTO | TOK_GO TOK_SUB | TOK_GOSUB .
-goto-target := TOK_DECNUM | TOK_IDENT .
+goto-target := TOK_DECNUM | TOK_NUMIDENT .
 goto-stmt := goto-kw goto-target .
 
 return-stmt := TOK_RETURN .
 
-label-stmt := TOK_LABEL TOK_IDENT .
+label-stmt := TOK_LABEL TOK_NUMIDENT .
 
 endif-kw := TOK_END TOK_IF | TOK_ENDIF .
 endunless-kw := TOK_END TOK_UNLESS | TOK_ENDUNLESS .

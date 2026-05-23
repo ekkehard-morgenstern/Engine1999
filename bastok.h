@@ -186,6 +186,9 @@
 #define TOK_RSHIFT      UINT8_C(135)        // RSHIFT operator
 #define TOK_DYNAMIC     UINT8_C(136)        // DYNAMIC keyword
 #define TOK_ASSOC       UINT8_C(137)        // ASSOC keyword
+#define TOK_NUMIDENT    UINT8_C(138)        // numeric identifier
+#define TOK_STRIDENT    UINT8_C(139)        // string identifier
+#define TOK_INTIDENT    UINT8_C(140)        // integer identifier
 
 // -- single character tokens -----------------------------------------------
 
@@ -203,7 +206,7 @@ void read_uint16( const uint8_t** pp, uint16_t* target );
 
 bool eat_ident( const char** pp, char target[256] );
 bool print_ident( char** pp, size_t* premain, const char source[256] );
-bool emit_ident( uint8_t** pp, const char source[256], size_t* premain );
+bool emit_ident( uint8_t** pp, const char source[256], size_t* premain, uint8_t tok );
 bool read_ident( const uint8_t** pp, char target[256] );
 
 // -- literals (general) ----------------------------------------------------

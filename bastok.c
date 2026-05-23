@@ -124,12 +124,17 @@ bool print_ident( char** pp, size_t* premain, const char source[256] ) {
     return true;
 }
 
-bool emit_ident( uint8_t** pp, const char source[256], size_t* premain ) {
+bool emit_ident( uint8_t** pp, const char source[256], size_t* premain, uint8_t tok ) {
     uint8_t* p = *pp; size_t len = strlen( source );
     if ( *premain <= len + 2U ) {
         return false;
     }
-    *p++ = TOK_IDENT;
+    if ( tok == TOK_STRIDENT || tok == TOK_INTIDENT ) {
+        if ( len == UINT8_C(255) ) {
+            --len;
+        }
+    }
+    *p++ = tok;
     *p++ = (uint8_t) len;
     if ( len ) {
         memcpy( p, source, len );
@@ -142,11 +147,27 @@ bool emit_ident( uint8_t** pp, const char source[256], size_t* premain ) {
 
 bool read_ident( const uint8_t** pp, char target[256] ) {
     const uint8_t* p = *pp;
-    if ( *p++ != TOK_IDENT ) return false;
+    uint8_t tok = *p++;
+    switch ( tok ) {
+        case TOK_IDENT: case TOK_NUMIDENT: case TOK_STRIDENT: case TOK_INTIDENT:
+            break;
+        default:
+            return false;
+    }
     size_t len = *p++;
+    if ( tok != TOK_IDENT && tok != TOK_NUMIDENT ) {
+        if ( len == UINT8_C(255) ) {
+            --len;
+        }
+    }
     if ( len ) {
         memcpy( target, p, len );
         p += len;
+    }
+    if ( tok == TOK_STRIDENT ) {
+        target[ len++ ] = '$';
+    } else if ( tok == TOK_INTIDENT ) {
+        target[ len++ ] = '%';
     }
     target[ len ] = '\0';
     *pp = p;
@@ -620,7 +641,13 @@ bool tokenize_line( const char* buf, uint8_t* whereto, size_t* premain, struct _
                 *d++ = tok;
                 continue;
             }
-            if ( !emit_ident( &d, item, &remain ) ) {
+            uint8_t tok = TOK_NUMIDENT;
+            if ( *s == '$' ) {
+                ++s; tok = TOK_STRIDENT;
+            } else if ( *s == '%' ) {
+                ++s; tok = TOK_INTIDENT;
+            }
+            if ( !emit_ident( &d, item, &remain, tok ) ) {
                 return false;
             }
             continue;
@@ -688,12 +715,15 @@ bool detokenize_line( char* buf, const uint8_t* wherefrom, size_t* premain, cons
             bool (*read_fn)( const uint8_t**, char [256] );
             bool (*print_fn)( char**, size_t*, const char* );
         } littbl[] = {
-            { TOK_IDENT , read_ident , print_ident  }, { TOK_STRLIT, read_strlit, print_strlit },
+            { TOK_IDENT, read_ident, print_ident }, { TOK_NUMIDENT, read_ident, print_ident  },
+            { TOK_STRIDENT, read_ident, print_ident }, { TOK_INTIDENT, read_ident, print_ident },
+            { TOK_STRLIT, read_strlit, print_strlit },
             { TOK_HEXLIT, read_hexlit, print_hexlit }, { TOK_DECLIT, read_declit, print_declit },
             { TOK_OCTLIT, read_octlit, print_octlit }, { TOK_QUALIT, read_qualit, print_qualit },
             { TOK_BINLIT, read_binlit, print_binlit }, { TOK_SHLLIT, read_shllit, print_shllit },
             { TOK_QUOLIT, read_quolit, print_quolit }, { TOK_BRKLIT, read_brklit, print_brklit },
-            { TOK_BRCLIT, read_brclit, print_brclit }, { 0, 0, 0 }
+            { TOK_BRCLIT, read_brclit, print_brclit },
+            { 0, 0, 0 }
         };
         bool found = false;
         for ( int i=0; littbl[i].tok; ++i ) {

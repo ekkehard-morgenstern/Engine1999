@@ -71,20 +71,18 @@ static void out_of_memory( compiler_t* comp ) {
 void comp_push_context( compiler_t* comp ) {
     comp_ctxstk_t* ctx = (comp_ctxstk_t*) malloc( sizeof(comp_ctxstk_t) );
     if ( ctx == 0 ) {
-        comp_error( "Out of memory" );
+        comp_error( comp, "Out of memory" );
         return;
     }
     ctx->prev = comp->ctxstk; comp->ctxstk = ctx;
     memcpy( &ctx->iter, &comp->iter, sizeof(pgmiter_t) );
     ctx->tokp = comp->tokp; ctx->currtok = comp->currtok;
     switch ( ctx->currtok ) {
-        case TOK_HEXLIT: case TOK_DECLIT: case TOK_OCTLIT:
-        case TOK_QUALIT: case TOK_BINLIT:
+        case TOK_HEXLIT: case TOK_DECLIT: case TOK_OCTLIT: case TOK_QUALIT: case TOK_BINLIT:
             ctx->number = comp->number;
             break;
-        case TOK_IDENT: case TOK_STRLIT:
-        case TOK_SHLLIT: case TOK_QUOLIT: case TOK_BRKLIT:
-        case TOK_BRCLIT:
+        case TOK_IDENT: case TOK_NUMIDENT: case TOK_STRIDENT: case TOK_INTIDENT:
+        case TOK_STRLIT: case TOK_SHLLIT: case TOK_QUOLIT: case TOK_BRKLIT: case TOK_BRCLIT:
             snprintf( ctx->param, 256U, "%s", comp->param );
             break;
     }
@@ -108,13 +106,11 @@ void comp_pop_context( compiler_t* comp ) {
     memcpy( &comp->iter, &ctx->iter, sizeof(pgmiter_t) );
     comp->tokp = ctx->tokp; comp->currtok = ctx->currtok;
     switch ( comp->currtok ) {
-        case TOK_HEXLIT: case TOK_DECLIT: case TOK_OCTLIT:
-        case TOK_QUALIT: case TOK_BINLIT:
+        case TOK_HEXLIT: case TOK_DECLIT: case TOK_OCTLIT: case TOK_QUALIT: case TOK_BINLIT:
             comp->number = ctx->number;
             break;
-        case TOK_IDENT: case TOK_STRLIT:
-        case TOK_SHLLIT: case TOK_QUOLIT: case TOK_BRKLIT:
-        case TOK_BRCLIT:
+        case TOK_IDENT: case TOK_NUMIDENT: case TOK_STRIDENT: case TOK_INTIDENT:
+        case TOK_STRLIT: case TOK_SHLLIT: case TOK_QUOLIT: case TOK_BRKLIT: case TOK_BRCLIT:
             snprintf( comp->param, 256U, "%s", ctx->param );
             break;
     }
@@ -695,24 +691,17 @@ bool comp_eat_numbasevarref( compiler_t* comp, uint16_t* pnodeoffs ) {
                 - because it's used in compound contexts, the variable reference
                   cannot be resolved here.
     */
-    // num-base-var-ref := TOK_IDENT [ TOK_INTEGER ] .
+    // num-base-var-ref := TOK_NUMIDENT | TOK_INTIDENT .
 
-    if ( comp->currtok != TOK_IDENT ) {
+    if ( comp->currtok != TOK_NUMIDENT && comp->currtok != TOK_INTIDENT ) {
         return false;
     }
     static char data[257];
-    data[0] = VARTYPEV_FLOAT;
+    data[0] = comp->currtok == TOK_NUMIDENT ? VARTYPEV_FLOAT : VARTYPEV_INT;
     snprintf( &data[1], 256U, "%s", comp->param );
     uint16_t datalen = UINT16_C(1) + ( (uint16_t) strlen( &data[1] ) );
     if ( !comp_fetchtok( comp ) ) {
         return false;
-    }
-
-    if ( comp->currtok == TOK_INTEGER ) {
-        data[0] = VARTYPEV_INT;
-        if ( !comp_fetchtok( comp ) ) {
-            return false;
-        }
     }
 
     if ( !comp_create_node( comp, pnodeoffs, NT_NUMBASEVARREF, UINT8_C(0), datalen, data ) || *pnodeoffs == NODEOFFS_NONE ) {
@@ -858,9 +847,9 @@ bool comp_eat_strbasevarref( compiler_t* comp, uint16_t* pnodeoffs ) {
                 - because it's used in compound contexts, the variable reference
                   cannot be resolved here.
     */
-    // str-base-var-ref := TOK_IDENT TOK_DOLLAR .
+    // str-base-var-ref := TOK_STRIDENT .
 
-    if ( comp->currtok != TOK_IDENT ) {
+    if ( comp->currtok != TOK_STRIDENT ) {
         return false;
     }
     static char data[257];
@@ -868,10 +857,6 @@ bool comp_eat_strbasevarref( compiler_t* comp, uint16_t* pnodeoffs ) {
     snprintf( &data[1], 256U, "%s", comp->param );
     uint16_t datalen = UINT16_C(1) + ( (uint16_t) strlen( &data[1] ) );
     if ( !comp_fetchtok( comp ) ) {
-        return false;
-    }
-    if ( comp->currtok != TOK_STRING || !comp_fetchtok( comp ) ) {
-        comp_error( comp, "String sigil '$' expected" );
         return false;
     }
 
@@ -899,28 +884,22 @@ bool comp_eat_anybasevarref( compiler_t* comp, uint16_t* pnodeoffs ) {
                 - because it's used in compound contexts, the variable reference
                   cannot be resolved here.
     */
-    // any-base-var-ref := TOK_IDENT [ TOK_INTEGER | TOK_STRING ] .
+    // any-base-var-ref := TOK_NUMIDENT | TOK_INTIDENT | TOK_STRIDENT .
 
-    if ( comp->currtok != TOK_IDENT ) {
+    if ( comp->currtok != TOK_NUMIDENT && comp->currtok != TOK_INTIDENT && comp->currtok != TOK_STRIDENT ) {
         return false;
     }
     static char data[257];
     data[0] = VARTYPEV_FLOAT;
+    if ( comp->currtok == TOK_STRIDENT ) {
+        data[0] = VARTYPEV_STR;
+    } else if ( comp->currtok == TOK_INTIDENT ) {
+        data[0] = VARTYPEV_INT;
+    }
     snprintf( &data[1], 256U, "%s", comp->param );
     uint16_t datalen = UINT16_C(1) + ( (uint16_t) strlen( &data[1] ) );
     if ( !comp_fetchtok( comp ) ) {
         return false;
-    }
-    if ( comp->currtok == TOK_INTEGER ) {
-        data[0] = VARTYPEV_INT;
-        if ( !comp_fetchtok( comp ) ) {
-            return false;
-        }
-    } else if ( comp->currtok == TOK_STRING ) {
-        data[0] = VARTYPEV_STR;
-        if ( !comp_fetchtok( comp ) ) {
-            return false;
-        }
     }
 
     uint8_t nodetype = data[0] == VARTYPEV_STR ? NT_STRBASEVARREF : NT_NUMBASEVARREF;
@@ -1138,12 +1117,10 @@ SKIPTOK:
         uint8_t tok;
         bool (*read_fn)( const uint8_t**, char [256] );
     } littbl[] = {
-        { TOK_IDENT , read_ident  }, { TOK_STRLIT, read_strlit },
-        { TOK_HEXLIT, read_hexlit }, { TOK_DECLIT, read_declit },
-        { TOK_OCTLIT, read_octlit }, { TOK_QUALIT, read_qualit },
-        { TOK_BINLIT, read_binlit }, { TOK_SHLLIT, read_shllit },
-        { TOK_QUOLIT, read_quolit }, { TOK_BRKLIT, read_brklit },
-        { TOK_BRCLIT, read_brclit }, { 0, 0 }
+        { TOK_IDENT, read_ident }, { TOK_NUMIDENT, read_ident }, { TOK_STRIDENT, read_ident }, { TOK_INTIDENT, read_ident },
+        { TOK_STRLIT, read_strlit }, { TOK_HEXLIT, read_hexlit }, { TOK_DECLIT, read_declit }, { TOK_OCTLIT, read_octlit },
+        { TOK_QUALIT, read_qualit }, { TOK_BINLIT, read_binlit }, { TOK_SHLLIT, read_shllit }, { TOK_QUOLIT, read_quolit },
+        { TOK_BRKLIT, read_brklit }, { TOK_BRCLIT, read_brclit }, { 0, 0 }
     };
     for ( int i=0; littbl[i].tok; ++i ) {
         if ( littbl[i].tok == tok ) {
