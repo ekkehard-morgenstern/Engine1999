@@ -90,6 +90,17 @@ For every branch entry:
 
 #define TREESIZE_MAX    65535U
 
+typedef struct _comp_ctxstk_t {
+    struct _comp_ctxstk_t*  prev;
+    pgmiter_t               iter;
+    uint8_t*                tokp;
+    uint8_t                 currtok;
+    union {
+        char                param[256];
+        double              number;
+    };
+} comp_ctxstk_t;
+
 typedef struct _compiler_t {
     runtime_t*      rt;
     pgmiter_t       iter;
@@ -99,6 +110,7 @@ typedef struct _compiler_t {
         char        param[256];
         double      number;
     };
+    comp_ctxstk_t*  ctxstk;
     void*           userdata;
     void            (*report)( struct _compiler_t*, void*, const char* );
     void            (*halt)( struct _compiler_t*, void* ) ATTR_NORETURN;
@@ -110,6 +122,9 @@ typedef struct _compiler_t {
 
 void init_compiler( compiler_t* comp, runtime_t* rt, program_t* pgm, bool keepmemory );
 void comp_error( compiler_t* comp, const char* text ) ATTR_NORETURN;
+void comp_push_context( compiler_t* comp );
+void comp_commit_context( compiler_t* comp );
+void comp_pop_context( compiler_t* comp );
 
 bool comp_alloc_tree( compiler_t* comp, uint16_t size, uint16_t* poffs );
 

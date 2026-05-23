@@ -32,6 +32,7 @@ void init_compiler( compiler_t* comp, runtime_t* rt, program_t* pgm, bool keepme
     comp->tokp = 0;
     comp->currtok = TOK_EOL;
     comp->treesize = UINT16_C(0);
+    comp->ctxstk = 0;
     // CAUTION: Set the "keepmemory" flag only if you know what you're doing!
     if ( keepmemory ) {
         return;
@@ -65,6 +66,59 @@ static void out_of_memory( compiler_t* comp ) ATTR_NORETURN;
 
 static void out_of_memory( compiler_t* comp ) {
     comp_error( comp, "Out of memory" );
+}
+
+void comp_push_context( compiler_t* comp ) {
+    comp_ctxstk_t* ctx = (comp_ctxstk_t*) malloc( sizeof(comp_ctxstk_t) );
+    if ( ctx == 0 ) {
+        comp_error( "Out of memory" );
+        return;
+    }
+    ctx->prev = comp->ctxstk; comp->ctxstk = ctx;
+    memcpy( &ctx->iter, &comp->iter, sizeof(pgmiter_t) );
+    ctx->tokp = comp->tokp; ctx->currtok = comp->currtok;
+    switch ( ctx->currtok ) {
+        case TOK_HEXLIT: case TOK_DECLIT: case TOK_OCTLIT:
+        case TOK_QUALIT: case TOK_BINLIT:
+            ctx->number = comp->number;
+            break;
+        case TOK_IDENT: case TOK_STRLIT:
+        case TOK_SHLLIT: case TOK_QUOLIT: case TOK_BRKLIT:
+        case TOK_BRCLIT:
+            snprintf( ctx->param, 256U, "%s", comp->param );
+            break;
+    }
+}
+
+void comp_commit_context( compiler_t* comp ) {
+    comp_ctxstk_t* ctx = comp->ctxstk;
+    if ( ctx == 0 ) {
+        return;
+    }
+    comp->ctxstk = ctx->prev;
+    free( ctx );
+}
+
+void comp_pop_context( compiler_t* comp ) {
+    comp_ctxstk_t* ctx = comp->ctxstk;
+    if ( ctx == 0 ) {
+        return;
+    }
+    comp->ctxstk = ctx->prev;
+    memcpy( &comp->iter, &ctx->iter, sizeof(pgmiter_t) );
+    comp->tokp = ctx->tokp; comp->currtok = ctx->currtok;
+    switch ( comp->currtok ) {
+        case TOK_HEXLIT: case TOK_DECLIT: case TOK_OCTLIT:
+        case TOK_QUALIT: case TOK_BINLIT:
+            comp->number = ctx->number;
+            break;
+        case TOK_IDENT: case TOK_STRLIT:
+        case TOK_SHLLIT: case TOK_QUOLIT: case TOK_BRKLIT:
+        case TOK_BRCLIT:
+            snprintf( comp->param, 256U, "%s", ctx->param );
+            break;
+    }
+    free( ctx );
 }
 
 bool comp_alloc_tree( compiler_t* comp, uint16_t size, uint16_t* poffs ) {
