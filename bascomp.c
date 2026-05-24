@@ -960,7 +960,7 @@ bool comp_eat_numlit( compiler_t* comp, uint16_t* pnodeoffs ) {
     data[5] = (uint8_t)( u.ui64 >> UINT8_C(16) );
     data[6] = (uint8_t)( u.ui64 >> UINT8_C( 8) );
     data[7] = (uint8_t)( u.ui64                );
-    if ( !comp_create_node( comp, pnodeoffs, NT_DECLIT, UINT8_C(0), UINT16_C(8), data ) || *pnodeoffs == NODEOFFS_NONE ) {
+    if ( !comp_create_node( comp, pnodeoffs, NT_NUMLIT, UINT8_C(0), UINT16_C(8), data ) || *pnodeoffs == NODEOFFS_NONE ) {
         out_of_memory( comp );
         return false;
     }
@@ -1015,12 +1015,72 @@ bool comp_eat_strlits( compiler_t* comp, uint16_t* pnodeoffs ) {
 }
 
 bool comp_eat_numusrfnname( compiler_t* comp, uint16_t* pnodeoffs ) {
-    return false; // TBD
+    // num-usr-fn-name := TOK_FN ( TOK_NUMIDENT | TOK_INTIDENT ) .
+    if ( comp->currtok != TOK_FN ) {
+        return false;
+    }
+    comp_push_context( comp );
+    uint8_t tok = TOK_EOL;
+    if ( !comp_fetchtok( comp ) || ( tok = comp->currtok, ( tok != TOK_NUMIDENT && tok != TOK_INTIDENT ) ) ||
+         !comp_fetchtok( comp ) ) {
+        comp_pop_context( comp );
+        return false;
+    }
+    comp_commit_context( comp );
+
+    /*
+        NT_NUMUSRFNNAME     numeric user function name
+            data:
+                - 1 byte of type indicator
+                - n bytes of name
+    */
+    static uint8_t data[257];
+    data[0] = tok == TOK_NUMIDENT ? VARTYPEV_FLOAT : VARTYPEV_INT;
+    snprintf( &data[1], 256U, "%s", comp->param );
+    uint16_t datalen = (uint16_t)( 1U + strlen( &data[1] ) );
+
+    if ( !comp_create_node( comp, pnodeoffs, NT_NUMUSRFNNAME, UINT8_C(0), datalen, data ) || *pnodeoffs == NODEOFFS_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+
+    return true;
+}
+
+bool comp_eat_strusrfnname( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // str-usr-fn-name := TOK_FN TOK_STRIDENT .
+    if ( comp->currtok != TOK_FN ) {
+        return false;
+    }
+    comp_push_context( comp );
+    uint8_t tok = TOK_EOL;
+    if ( !comp_fetchtok( comp ) || ( tok = comp->currtok, tok != TOK_STRIDENT ) ||
+         !comp_fetchtok( comp ) ) {
+        comp_pop_context( comp );
+        return false;
+    }
+    comp_commit_context( comp );
+
+    /*
+        NT_STRUSRFNNAME     string user function name
+            data:
+                - 1 byte of type indicator
+                - n bytes of name
+    */
+    static uint8_t data[257];
+    data[0] = VARTYPEV_STR;
+    snprintf( &data[1], 256U, "%s", comp->param );
+    uint16_t datalen = (uint16_t)( 1U + strlen( &data[1] ) );
+
+    if ( !comp_create_node( comp, pnodeoffs, NT_STRUSRFNNAME, UINT8_C(0), datalen, data ) || *pnodeoffs == NODEOFFS_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+
+    return true;
 }
 
 /*
-bool comp_eat_numusrfnname( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_strusrfnname( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_numusrfncall( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_strusrfncall( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_sysnoargstrname( compiler_t* comp, uint16_t* pnodeoffs );
