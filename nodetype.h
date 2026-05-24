@@ -155,7 +155,10 @@ Explanation of node types:
             - 1 byte of type indicator
             - n bytes of name
 
-    [ NT_USRFNARG - not generated ]
+    NT_USRFNARG         user function argument
+        data:
+            - 1 byte of type indicator
+            - n bytes of name (NUL-terminated)
 
     NT_USERFNARGLIST    user function argument list
         branches:
@@ -529,5 +532,6 @@ Explanation of node types:
 #define NT_MULTILINEUSERFNBODY  UINT8_C(0X42)   // multi-line user function body
 #define NT_USRFNDECL            UINT8_C(0X43)   // user function declaration
 #define NT_DEFSTMT              UINT8_C(0X44)   // User function definition
+#define NT_USRFNARG             UINT8_C(0X45)   // User function argument
 
 #endif

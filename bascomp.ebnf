@@ -57,7 +57,7 @@ str-lits := str-lit { str-lit } .
 num-usr-fn-name := TOK_FN ( TOK_NUMIDENT | TOK_INTIDENT ) .
 str-usr-fn-name := TOK_FN TOK_STRIDENT .
 
-usr-fn-arg := empty-array-ref | any-base-var-ref .
+usr-fn-arg := any-base-var-ref [ TOK_LPAREN TOK_RPAREN ] .
 usr-fn-arg-list := usr-fn-arg { TOK_COMMA usr-fn-arg } .
 any-usr-fn-name := num-usr-fn-name | str-usr-fn-name .
 singleline-usr-fn-body := TOK_EQ expr .

@@ -1081,15 +1081,54 @@ bool comp_eat_strusrfnname( compiler_t* comp, uint16_t* pnodeoffs ) {
 }
 
 bool comp_eat_usrfnarg( compiler_t* comp, uint16_t* pnodeoffs ) {
-    // usr-fn-arg := empty-array-ref | any-base-var-ref .
-    // [ NT_USRFNARG - not generated ]
-    if ( comp_eat_emptyarrayref( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
-        return true;
+    // usr-fn-arg := any-base-var-ref [ TOK_LPAREN TOK_RPAREN ] .
+    /*
+        NT_USRFNARG         user function argument
+            data:
+                - 1 byte of type indicator
+                - n bytes of name (NUL-terminated)
+    */
+    uint16_t namenode = NODEOFFS_NONE;
+    if ( !comp_eat_anybasevarref( comp, &namenode ) || namenode == NODEOFFS_NONE ) {
+        return false;
     }
-    if ( comp_eat_anybasevarref( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
-        return true;
+    bool is_array = false;
+    if ( comp->currtok == TOK_LPAREN && comp_fetchtok( comp ) ) {
+        if ( comp->currtok != TOK_RPAREN || !comp_fetchtok( comp ) ) {
+            comp_error( comp, "Closing parenthesis ')' expected" );
+        }
+        is_array = true;
     }
-    return false;
+    /*
+        NT_NUMBASEVARREF    numeric base variable reference
+        NT_STRBASEVARREF    numeric base variable reference
+            data:
+                - 1 byte of type indicator, n bytes of name
+    */
+    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    uint8_t nodetype = comp->tree[ namenode ];
+    if ( nodetype != NT_NUMBASEVARREF && nodetype != NT_STRBASEVARREF ) {
+UNEXP:  comp_error( comp, "Internal error (unexpected node type)" );
+        return false;
+    }
+    uint16_t datalen = EXTRACT16( comp, namenode + 2U );
+    if ( datalen < 2U || datalen >= 256U ) {
+        goto UNEXP;
+    }
+    uint16_t dataoffs = namenode + UINT16_C(8);
+    static char name[257];
+    name[0] = comp->tree[ dataoffs ] & VARTYPEM_BASE;
+    if ( is_array ) {
+        name[0] |= VARTYPEF_ARRAY;
+    }
+    memcpy( &name[1], &comp->tree[ dataoffs + 1U ], datalen - 1U );
+    name[ 1U + ( datalen - 1U ) ] = '\0';
+    ++datalen;
+    if ( !comp_create_node( comp, pnodeoffs, NT_USRFNARG, UINT8_C(0), datalen, name ) || *pnodeoffs == NODEOFFS_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
 }
 
 bool comp_eat_usrfnarglist( compiler_t* comp, uint16_t* pnodeoffs ) {
@@ -1179,6 +1218,56 @@ bool comp_eat_usrfnbody( compiler_t* comp, uint16_t* pnodeoffs ) {
     return false;
 }
 
+typedef struct _cgbargs_t {
+    compiler_t* comp;
+    uint16_t*   branches;
+    size_t      maxbranches;
+    size_t      numbranches;
+} cgbargs_t;
+
+static bool cgb_worker( void* userdata, uint16_t nodepos ) {
+    cgbargs_t* args = (cgbargs_t*) userdata;
+    if ( args->numbranches >= args->maxbranches ) {
+        comp_error( args->comp, "Too many arguments" );
+        return false;
+    }
+    args->branches[ args->numbranches++ ] = nodepos;
+    return true;
+}
+
+static bool comp_gather_branches( compiler_t* comp, uint16_t nodeoffs, uint8_t listtype, uint16_t* branches, size_t maxbranches,
+    size_t* pnumbranches ) {
+    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    if ( comp->tree[ nodeoffs ] == listtype ) {
+        cgbargs_t args = { comp, branches, maxbranches, 0 };
+        if ( !comp_node_iter_branches( comp, nodeoffs, &args, cgb_worker ) ) {
+            return false;
+        }
+        *pnumbranches = args.numbranches;
+    } else if ( maxbranches >= 1U ) {
+        branches[0] = nodeoffs;
+        *pnumbranches = 1U;
+    } else {
+        comp_error( comp, "Internal error (invalid argument)" );
+        return false;
+    }
+    return true;
+}
+
+static bool comp_convert_func_param( compiler_t* comp, uint16_t paramoffs[MAXPARAM], size_t numparams ) {
+    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    //
+    // empty-array-ref := any-base-var-ref TOK_LPAREN TOK_RPAREN .
+    // any-base-var-ref := TOK_NUMIDENT | TOK_INTIDENT | TOK_STRIDENT .
+    // usr-fn-arg := empty-array-ref | any-base-var-ref .
+    //
+    /* for ( size_t i=0; i < numparams && i < MAXPARAM; ++i ) {
+        uint16_t nodepos =
+
+    } */
+    return false;
+}
+
 bool comp_eat_usrfndecl( compiler_t* comp, uint16_t* pnodeoffs ) {
     // usr-fn-decl := any-usr-fn-name [ TOK_LPAREN [ usr-fn-arg-list ] TOK_RPAREN ] usr-fn-body .
     uint16_t fnname = NODEOFFS_NONE;
@@ -1186,6 +1275,8 @@ bool comp_eat_usrfndecl( compiler_t* comp, uint16_t* pnodeoffs ) {
         return false;
     }
     uint16_t fnarglist = NODEOFFS_NONE;
+    uint16_t paramoffs[MAXPARAM];
+    size_t numparams = 0U;
     if ( comp->currtok == TOK_LPAREN ) {
         if ( !comp_fetchtok( comp ) ) {
             comp_error( comp, "Function argument list expected" );
@@ -1203,6 +1294,16 @@ bool comp_eat_usrfndecl( compiler_t* comp, uint16_t* pnodeoffs ) {
         return false;
     }
     // TODO: Create variable and return offset instead of name
+    if ( numparams ) {
+        if ( !comp_gather_branches( comp, fnarglist, NT_USERFNARGLIST, paramoffs, MAXPARAM, &numparams ) ) {
+            return false;
+        }
+        if ( !comp_convert_func_param( comp, paramoffs, numparams ) ) {
+            return false;
+        }
+    }
+
+
     /*
         NT_USRFNDECL
             branches:
@@ -1218,6 +1319,7 @@ bool comp_eat_usrfndecl( compiler_t* comp, uint16_t* pnodeoffs ) {
     return true;
 }
 
+/*
 static bool comp_eat_usrfncall( compiler_t* comp, uint16_t* pnodeoffs, uint8_t nodetype,
     bool (*eater_func)( compiler_t*, uint16_t* ) ) {
     // num-usr-fn-call := num-usr-fn-name [ TOK_LPAREN [ expr-list ] TOK_RPAREN ] .
@@ -1234,13 +1336,13 @@ static bool comp_eat_usrfncall( compiler_t* comp, uint16_t* pnodeoffs, uint8_t n
         }
     }
     // TODO: Change so that the variable is looked up and parameters are checked
-    /*
+    **
         NT_NUMUSRFNCALL     numeric user function call
         NT_STRUSRFNCALL     string user function call
             branches:
                 - name
                 - argument expression list (can be empty)
-    */
+    **
     if ( !comp_create_node( comp, pnodeoffs, nodetype, UINT8_C(2), UINT16_C(0), 0, (int) fnname, (int) exprlist ) ||
         *pnodeoffs == NODEOFFS_NONE ) {
         out_of_memory( comp );
@@ -1248,6 +1350,7 @@ static bool comp_eat_usrfncall( compiler_t* comp, uint16_t* pnodeoffs, uint8_t n
     }
     return true;
 }
+*/
 
 bool comp_eat_numusrfncall( compiler_t* comp, uint16_t* pnodeoffs ) {
     // num-usr-fn-call := num-usr-fn-name TOK_LPAREN expr-list TOK_RPAREN .
