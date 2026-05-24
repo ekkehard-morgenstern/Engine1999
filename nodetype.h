@@ -176,13 +176,10 @@ Explanation of node types:
     [ NT_USRFNBODY - not generated ]
 
     NT_USRFNDECL
-        data:
-            - 1 byte of type indicator
-            - n bytes of name
         branches:
+            - 1 branch of name
             - 1 optional branch of argument list
-            - 1 optional branch of expression
-            - 1 optional branch of statement list
+            - 1 branch of expression or statement list
 
     NT_NUMUSRFNCALL     numeric user function call
     NT_STRUSRFNCALL     string user function call

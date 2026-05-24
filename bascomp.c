@@ -1034,7 +1034,7 @@ bool comp_eat_numusrfnname( compiler_t* comp, uint16_t* pnodeoffs ) {
                 - 1 byte of type indicator
                 - n bytes of name
     */
-    static uint8_t data[257];
+    static char data[257];
     data[0] = tok == TOK_NUMIDENT ? VARTYPEV_FLOAT : VARTYPEV_INT;
     snprintf( &data[1], 256U, "%s", comp->param );
     uint16_t datalen = (uint16_t)( 1U + strlen( &data[1] ) );
@@ -1067,7 +1067,7 @@ bool comp_eat_strusrfnname( compiler_t* comp, uint16_t* pnodeoffs ) {
                 - 1 byte of type indicator
                 - n bytes of name
     */
-    static uint8_t data[257];
+    static char data[257];
     data[0] = VARTYPEV_STR;
     snprintf( &data[1], 256U, "%s", comp->param );
     uint16_t datalen = (uint16_t)( 1U + strlen( &data[1] ) );
@@ -1080,9 +1080,152 @@ bool comp_eat_strusrfnname( compiler_t* comp, uint16_t* pnodeoffs ) {
     return true;
 }
 
+bool comp_eat_usrfnarg( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // usr-fn-arg := empty-array-ref | any-base-var-ref .
+    // [ NT_USRFNARG - not generated ]
+    if ( comp_eat_emptyarrayref( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+        return true;
+    }
+    if ( comp_eat_anybasevarref( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+        return true;
+    }
+    return false;
+}
+
+bool comp_eat_usrfnarglist( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // usr-fn-arg-list := usr-fn-arg { TOK_COMMA usr-fn-arg } .
+    /*
+    NT_USERFNARGLIST    user function argument list
+        branches:
+            - 2 or more branches of user function argument declarations
+        immediate processing:
+            - generated only if there are more than 2 arguments
+    */
+    return comp_eat_list( comp, pnodeoffs, NT_USERFNARGLIST, comp_eat_usrfnarg, TOK_COMMA, "User function argument expected" );
+}
+
+bool comp_eat_anyusrfnname( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // any-usr-fn-name := num-usr-fn-name | str-usr-fn-name .
+    if ( comp_eat_numusrfnname( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+        return true;
+    }
+    if ( comp_eat_strusrfnname( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+        return true;
+    }
+    return false;
+}
+
+bool comp_eat_singlelineusrfnbody( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // singleline-usr-fn-body := TOK_EQ expr .
+    if ( comp->currtok != TOK_EQ ) {
+        return false;
+    }
+    uint16_t exprnode = NODEOFFS_NONE;
+    if ( !comp_fetchtok( comp ) || !comp_eat_expr( comp, &exprnode ) || exprnode == NODEOFFS_NONE ) {
+        comp_error( comp, "Expression expected" );
+        return false;
+    }
+    /*
+        NT_SINGLELINEUSRFNBODY  single-line user function body
+            branches:
+                - 1 branch of expression
+    */
+    if ( !comp_create_node( comp, pnodeoffs, NT_SINGLELINEUSERFNBODY, UINT8_C(1), UINT8_C(0), 0, (int) exprnode ) ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
+bool comp_eat_multilineusrfnbody( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // multiline-usr-fn-body := TOK_EOL stmt-lines TOK_END TOK_FN .
+    if ( comp->currtok != TOK_EOL ) {
+        return false;
+    }
+    uint16_t stmtlines = NODEOFFS_NONE;
+    if ( !comp_fetchtok( comp ) || !comp_eat_stmtlines( comp, &stmtlines ) || stmtlines == NODEOFFS_NONE ) {
+        comp_error( comp, "Function body expected" );
+        return false;
+    }
+    if ( comp->currtok != TOK_END || !comp_fetchtok( comp ) ) {
+        comp_error( comp, "END expected" );
+        return false;
+    }
+    if ( comp->currtok != TOK_FN || !comp_fetchtok( comp ) ) {
+        comp_error( comp, "FN expected" );
+        return false;
+    }
+    /*
+        NT_MULTILINEUSERFNBODY  multi-line user function body
+            branches:
+                - 0 or more branches of statement lines
+    */
+    if ( !comp_create_node( comp, pnodeoffs, NT_MULTILINEUSERFNBODY, UINT8_C(1), UINT8_C(0), 0, (int) stmtlines ) ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
+bool comp_eat_usrfnbody( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // usr-fn-body := singleline-usr-fn-body | multiline-usr-fn-body .
+    // [ NT_USRFNBODY - not generated ]
+    if ( comp_eat_singlelineusrfnbody( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+        return true;
+    }
+    if ( comp_eat_multilineusrfnbody( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+        return true;
+    }
+    return false;
+}
+
+bool comp_eat_usrfndecl( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // usr-fn-decl := any-usr-fn-name [ TOK_LPAREN [ usr-fn-arg-list ] TOK_RPAREN ] usr-fn-body .
+    uint16_t fnname = NODEOFFS_NONE;
+    if ( !comp_eat_anyusrfnname( comp, &fnname ) ) {
+        return false;
+    }
+    uint16_t fnarglist = NODEOFFS_NONE;
+    if ( comp->currtok == TOK_LPAREN ) {
+        if ( !comp_fetchtok( comp ) ) {
+            comp_error( comp, "Function argument list expected" );
+            return false;
+        }
+        comp_eat_usrfnarglist( comp, &fnarglist );
+        if ( comp->currtok != TOK_RPAREN || !comp_fetchtok( comp ) ) {
+            comp_error( comp, "Closing parenthesis ')' expected" );
+            return false;
+        }
+    }
+    uint16_t fnbody = NODEOFFS_NONE;
+    if ( !comp_eat_usrfnbody( comp, &fnbody ) || fnbody == NODEOFFS_NONE ) {
+        comp_error( comp, "User function body expected" );
+        return false;
+    }
+    /*
+        NT_USRFNDECL
+            branches:
+                - 1 branch of name
+                - 1 optional branch of argument list
+                - 1 branch of expression or statement list
+    */
+    if ( !comp_create_node( comp, pnodeoffs, NT_USRFNDECL, UINT8_C(3), UINT8_C(0), 0, (int) fnname, (int) fnarglist,
+        (int) fnbody ) ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
+bool comp_eat_numusrfncall( compiler_t* comp, uint16_t* pnodeoffs ) {
+    return false;
+}
+
+bool comp_eat_strusrfncall( compiler_t* comp, uint16_t* pnodeoffs ) {
+    return false;
+}
+
 /*
-bool comp_eat_numusrfncall( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_strusrfncall( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_sysnoargstrname( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_sysnoargstrcall( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_numfunccall( compiler_t* comp, uint16_t* pnodeoffs );
