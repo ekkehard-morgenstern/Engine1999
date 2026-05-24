@@ -1202,6 +1202,7 @@ bool comp_eat_usrfndecl( compiler_t* comp, uint16_t* pnodeoffs ) {
         comp_error( comp, "User function body expected" );
         return false;
     }
+    // TODO: Create variable and return offset instead of name
     /*
         NT_USRFNDECL
             branches:
@@ -1217,11 +1218,45 @@ bool comp_eat_usrfndecl( compiler_t* comp, uint16_t* pnodeoffs ) {
     return true;
 }
 
+static bool comp_eat_usrfncall( compiler_t* comp, uint16_t* pnodeoffs, uint8_t nodetype,
+    bool (*eater_func)( compiler_t*, uint16_t* ) ) {
+    // num-usr-fn-call := num-usr-fn-name [ TOK_LPAREN [ expr-list ] TOK_RPAREN ] .
+    // str-usr-fn-call := str-usr-fn-name [ TOK_LPAREN [ expr-list ] TOK_RPAREN ] .
+    uint16_t fnname = NODEOFFS_NONE;
+    if ( !eater_func( comp, &fnname ) || fnname == NODEOFFS_NONE ) {
+        return false;
+    }
+    uint16_t exprlist = NODEOFFS_NONE;
+    if ( comp->currtok == TOK_LPAREN && comp_fetchtok( comp ) ) {
+        comp_eat_exprlist( comp, &exprlist );
+        if ( comp->currtok != TOK_RPAREN || !comp_fetchtok( comp ) ) {
+            comp_error( comp, "Closing parenthesis ')' expected" );
+        }
+    }
+    // TODO: Change so that the variable is looked up and parameters are checked
+    /*
+        NT_NUMUSRFNCALL     numeric user function call
+        NT_STRUSRFNCALL     string user function call
+            branches:
+                - name
+                - argument expression list (can be empty)
+    */
+    if ( !comp_create_node( comp, pnodeoffs, nodetype, UINT8_C(2), UINT16_C(0), 0, (int) fnname, (int) exprlist ) ||
+        *pnodeoffs == NODEOFFS_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
 bool comp_eat_numusrfncall( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // num-usr-fn-call := num-usr-fn-name TOK_LPAREN expr-list TOK_RPAREN .
     return false;
 }
 
 bool comp_eat_strusrfncall( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // str-usr-fn-call := str-usr-fn-name TOK_LPAREN expr-list TOK_RPAREN .
+
     return false;
 }
 

@@ -183,17 +183,9 @@ Explanation of node types:
 
     NT_NUMUSRFNCALL     numeric user function call
     NT_STRUSRFNCALL     string user function call
-        data:
-            - 1 byte of type indicator
-            - 2 bytes of variable offset
         branches:
-            - argument expression list
-        immediate processing:
-            - looks up user-function variable and returns its offset
-            - it's an error if it doesn't already exist
-            - the expression list provided must match the parameters specified
-              in the declaration
-            - the variable must contain a code offset for calling
+            - name
+            - argument expression list (can be empty)
 
     NT_SYSNOARGSTRNAME  system no-argument string name
         data:

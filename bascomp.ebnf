@@ -65,8 +65,8 @@ multiline-usr-fn-body := TOK_EOL stmt-lines TOK_END TOK_FN .
 usr-fn-body := singleline-usr-fn-body | multiline-usr-fn-body .
 usr-fn-decl := any-usr-fn-name [ TOK_LPAREN [ usr-fn-arg-list ] TOK_RPAREN ] usr-fn-body .
 
-num-usr-fn-call := num-usr-fn-name TOK_LPAREN expr-list TOK_RPAREN .
-str-usr-fn-call := str-usr-fn-name TOK_LPAREN expr-list TOK_RPAREN .
+num-usr-fn-call := num-usr-fn-name [ TOK_LPAREN [ expr-list ] TOK_RPAREN ] .
+str-usr-fn-call := str-usr-fn-name [ TOK_LPAREN [ expr-list ] TOK_RPAREN ] .
 
 sys-num-func := TOK_ASC | TOK_BIN | TOK_QUA | TOK_OCT | TOK_DEC | TOK_HEX .
 sys-str-func-name := TOK_LEFT | TOK_MID | TOK_RIGHT | TOK_STR .
