@@ -1254,26 +1254,63 @@ static bool comp_gather_branches( compiler_t* comp, uint16_t nodeoffs, uint8_t l
     return true;
 }
 
-static bool comp_convert_func_param( compiler_t* comp, uint16_t paramoffs[MAXPARAM], size_t numparams ) {
+static bool comp_get_func_params( compiler_t* comp, uint16_t paramoffs[MAXPARAM], size_t numparams, usrparam_t params[MAXPARAM] ) {
+    // usr-fn-arg := any-base-var-ref [ TOK_LPAREN TOK_RPAREN ] .
+    //
+    /*
+        NT_USRFNARG         user function argument
+        data:
+            - 1 byte of type indicator
+            - n bytes of name (NUL-terminated)
+    */
     //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
-    //
-    // empty-array-ref := any-base-var-ref TOK_LPAREN TOK_RPAREN .
-    // any-base-var-ref := TOK_NUMIDENT | TOK_INTIDENT | TOK_STRIDENT .
-    // usr-fn-arg := empty-array-ref | any-base-var-ref .
-    //
-    /* for ( size_t i=0; i < numparams && i < MAXPARAM; ++i ) {
-        uint16_t nodepos =
-
-    } */
+    for ( size_t i=0; i < numparams && i < MAXPARAM; ++i ) {
+        uint16_t nodepos = paramoffs[i];
+        if ( comp->tree[ nodepos ] != NT_USRFNARG ) {
+UNEXP:      comp_error( comp, "Internal error (unexpected parameter node)" );
+            return false;
+        }
+        uint16_t datalen = EXTRACT16( comp, nodepos + 2U );
+        if ( datalen < 2U ) {
+            goto UNEXP;
+        }
+        uint16_t datapos = nodepos + UINT16_C(8);
+        params[i].paramtype = comp->tree[ datapos ];
+        params[i].paramname = (char*)( &comp->tree[ datapos + 1U ] );
+    }
     return false;
 }
 
 bool comp_eat_usrfndecl( compiler_t* comp, uint16_t* pnodeoffs ) {
     // usr-fn-decl := any-usr-fn-name [ TOK_LPAREN [ usr-fn-arg-list ] TOK_RPAREN ] usr-fn-body .
     uint16_t fnname = NODEOFFS_NONE;
-    if ( !comp_eat_anyusrfnname( comp, &fnname ) ) {
+    if ( !comp_eat_anyusrfnname( comp, &fnname ) || fnname == NODEOFFS_NONE ) {
         return false;
     }
+    /*
+        NT_NUMUSRFNNAME     numeric user function name
+        NT_STRUSRFNNAME     string  user function name
+            data:
+                - 1 byte of type indicator
+                - n bytes of name
+    */
+    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    // get name
+    if ( comp->tree[ fnname ] != NT_NUMUSRFNNAME && comp->tree[ fnname ] != NT_STRUSRFNNAME ) {
+UNEXP:  comp_error( comp, "Internal error (unexpected name node)" );
+        return false;
+    }
+    uint16_t datalen = EXTRACT16( comp, fnname + 2U );
+    if ( datalen < 2U || datalen > 256U ) {
+        goto UNEXP;
+    }
+    uint16_t dataoffs = fnname + UINT16_C(8);
+    uint8_t functype = ( comp->tree[ dataoffs ] & VARTYPEM_BASE ) | VARTYPEF_FUNC;
+    static char name[ 256U ];
+    memcpy( name, &comp->tree[ dataoffs + 1U ], datalen - 1U );
+    name[ datalen - 1U ] = '\0';
+
+    // get arguments
     uint16_t fnarglist = NODEOFFS_NONE;
     uint16_t paramoffs[MAXPARAM];
     size_t numparams = 0U;
@@ -1288,31 +1325,44 @@ bool comp_eat_usrfndecl( compiler_t* comp, uint16_t* pnodeoffs ) {
             return false;
         }
     }
+    usrparam_t params[MAXPARAM];
+    if ( numparams ) {
+        if ( !comp_gather_branches( comp, fnarglist, NT_USERFNARGLIST, paramoffs, MAXPARAM, &numparams ) ) {
+            return false;
+        }
+        if ( !comp_get_func_params( comp, paramoffs, numparams, params ) ) {
+            return false;
+        }
+    }
     uint16_t fnbody = NODEOFFS_NONE;
     if ( !comp_eat_usrfnbody( comp, &fnbody ) || fnbody == NODEOFFS_NONE ) {
         comp_error( comp, "User function body expected" );
         return false;
     }
-    // TODO: Create variable and return offset instead of name
-    if ( numparams ) {
-        if ( !comp_gather_branches( comp, fnarglist, NT_USERFNARGLIST, paramoffs, MAXPARAM, &numparams ) ) {
-            return false;
-        }
-        if ( !comp_convert_func_param( comp, paramoffs, numparams ) ) {
-            return false;
-        }
+
+    // create variable
+    uint16_t varoffs = VAROFFS_NONE;
+    if ( !vmem_create_var( &comp->rt->varmem, functype, name, UINT8_C(0), 0, (uint8_t) numparams, params, &varoffs ) ||
+        varoffs == VAROFFS_NONE ) {
+        out_of_memory( comp );
+        return false;
     }
 
+    uint8_t data[3];
+    data[0] = functype;
+    data[1] = (uint8_t)( varoffs >> UINT8_C(8) );
+    data[2] = (uint8_t)  varoffs;
 
     /*
         NT_USRFNDECL
+            data:
+                - 1 byte of function type
+                - 2 bytes of variable offset
             branches:
-                - 1 branch of name
-                - 1 optional branch of argument list
                 - 1 branch of expression or statement list
     */
-    if ( !comp_create_node( comp, pnodeoffs, NT_USRFNDECL, UINT8_C(3), UINT8_C(0), 0, (int) fnname, (int) fnarglist,
-        (int) fnbody ) ) {
+    if ( !comp_create_node( comp, pnodeoffs, NT_USRFNDECL, UINT8_C(1), UINT16_C(3), data, (int) fnbody ) ||
+        *pnodeoffs == NODEOFFS_NONE ) {
         out_of_memory( comp );
         return false;
     }
