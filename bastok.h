@@ -189,6 +189,8 @@
 #define TOK_NUMIDENT    UINT8_C(138)        // numeric identifier
 #define TOK_STRIDENT    UINT8_C(139)        // string identifier
 #define TOK_INTIDENT    UINT8_C(140)        // integer identifier
+#define TOK_FRE         UINT8_C(141)        // FRE function
+#define TOK_TI          UINT8_C(142)        // TI function
 
 // -- single character tokens -----------------------------------------------
 

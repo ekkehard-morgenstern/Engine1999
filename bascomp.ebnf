@@ -68,7 +68,7 @@ usr-fn-decl := any-usr-fn-name [ TOK_LPAREN [ usr-fn-arg-list ] TOK_RPAREN ] usr
 num-usr-fn-call := num-usr-fn-name [ TOK_LPAREN [ expr-list ] TOK_RPAREN ] .
 str-usr-fn-call := str-usr-fn-name [ TOK_LPAREN [ expr-list ] TOK_RPAREN ] .
 
-sys-num-func := TOK_ASC | TOK_BIN | TOK_QUA | TOK_OCT | TOK_DEC | TOK_HEX .
+sys-num-func := TOK_ASC | TOK_BIN | TOK_QUA | TOK_OCT | TOK_DEC | TOK_HEX | TOK_VAL | TOK_FRE .
 sys-str-func-name := TOK_LEFT | TOK_MID | TOK_RIGHT | TOK_STR .
 sys-str-func := sys-str-func-name TOK_DOLLAR .
 
@@ -79,7 +79,11 @@ sys-noarg-str-name := TOK_INKEY .
 sys-noarg-str := sys-noarg-str-name TOK_DOLLAR .
 sys-noarg-str-call := sys-no-arg-str .
 
-num-func-call := num-usr-fn-call | sys-num-fn-arg-call .
+sys-noarg-num-name := TOK_TI .
+sys-noarg-num := sys-noarg-num-name .
+sys-noarg-num-call := sys-no-arg-num .
+
+num-func-call := num-usr-fn-call | sys-num-fn-arg-call | sys-noarg-num-call .
 str-func-call := str-usr-fn-call | sys-str-fn-arg-call | sys-noarg-str-call .
 
 str-base-expr := str-var-ref | str-lits | str-func-call .

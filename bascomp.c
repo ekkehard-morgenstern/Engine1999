@@ -1480,9 +1480,21 @@ bool comp_eat_strusrfncall( compiler_t* comp, uint16_t* pnodeoffs ) {
     return comp_eat_usrfncall( comp, pnodeoffs, NT_STRUSRFNCALL, NT_STRUSRFNNAME, comp_eat_strusrfnname );
 }
 
+// sys-num-func := TOK_ASC | TOK_BIN | TOK_QUA | TOK_OCT | TOK_DEC | TOK_HEX .
+// sys-str-func-name := TOK_LEFT | TOK_MID | TOK_RIGHT | TOK_STR .
+// sys-str-func := sys-str-func-name TOK_DOLLAR .
+
 /*
-bool comp_eat_sysnoargstrname( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_sysnoargstrcall( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_sysnoargstrname( compiler_t* comp, uint16_t* pnodeoffs ) {
+
+}
+
+bool comp_eat_sysnoargstrcall( compiler_t* comp, uint16_t* pnodeoffs ) {
+
+}
+*/
+
+/*
 bool comp_eat_numfunccall( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_strfunccall( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_strbaseexpr( compiler_t* comp, uint16_t* pnodeoffs );

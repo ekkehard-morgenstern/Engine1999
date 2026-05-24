@@ -534,5 +534,7 @@ Explanation of node types:
 #define NT_USRFNDECL            UINT8_C(0X43)   // user function declaration
 #define NT_DEFSTMT              UINT8_C(0X44)   // User function definition
 #define NT_USRFNARG             UINT8_C(0X45)   // User function argument
+#define NT_SYSNUMFUNC           UINT8_C(0X46)   // Numeric system function
+#define NT_SYSSTRFUNC           UINT8_C(0X47)   // String system function
 
 #endif
