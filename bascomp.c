@@ -1348,11 +1348,7 @@ UNEXP:  comp_error( comp, "Internal error (unexpected name node)" );
         return false;
     }
 
-    uint8_t data[3];
-    data[0] = functype;
-    data[1] = (uint8_t)( varoffs >> UINT8_C(8) );
-    data[2] = (uint8_t)  varoffs;
-
+    // create node
     /*
         NT_USRFNDECL
             data:
@@ -1361,6 +1357,12 @@ UNEXP:  comp_error( comp, "Internal error (unexpected name node)" );
             branches:
                 - 1 branch of expression or statement list
     */
+
+    uint8_t data[3];
+    data[0] = functype;
+    data[1] = (uint8_t)( varoffs >> UINT8_C(8) );
+    data[2] = (uint8_t)  varoffs;
+
     if ( !comp_create_node( comp, pnodeoffs, NT_USRFNDECL, UINT8_C(1), UINT16_C(3), data, (int) fnbody ) ||
         *pnodeoffs == NODEOFFS_NONE ) {
         out_of_memory( comp );
@@ -1369,9 +1371,8 @@ UNEXP:  comp_error( comp, "Internal error (unexpected name node)" );
     return true;
 }
 
-/*
 static bool comp_eat_usrfncall( compiler_t* comp, uint16_t* pnodeoffs, uint8_t nodetype,
-    bool (*eater_func)( compiler_t*, uint16_t* ) ) {
+    uint8_t nametype, bool (*eater_func)( compiler_t*, uint16_t* ) ) {
     // num-usr-fn-call := num-usr-fn-name [ TOK_LPAREN [ expr-list ] TOK_RPAREN ] .
     // str-usr-fn-call := str-usr-fn-name [ TOK_LPAREN [ expr-list ] TOK_RPAREN ] .
     uint16_t fnname = NODEOFFS_NONE;
@@ -1385,32 +1386,98 @@ static bool comp_eat_usrfncall( compiler_t* comp, uint16_t* pnodeoffs, uint8_t n
             comp_error( comp, "Closing parenthesis ')' expected" );
         }
     }
-    // TODO: Change so that the variable is looked up and parameters are checked
-    **
+
+    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    uint8_t nametype2 = comp->tree[ fnname ];
+    if ( nametype2 != nametype ) {
+UNEXP:  comp_error( comp, "Internal error (unexpected name type)" );
+        return false;
+    }
+    uint16_t datalen  = EXTRACT16( comp, fnname + 2U );
+    uint16_t dataoffs = fnname + UINT16_C(8);
+    if ( datalen < 2U || datalen > 256U ) {
+        goto UNEXP;
+    }
+    // data is type + name
+    uint8_t functype = ( comp->tree[ dataoffs ] & VARTYPEM_BASE ) | VARTYPEF_FUNC;
+    static char name[256];
+    memcpy( name, &comp->tree[ dataoffs + 1U ], datalen - 1U );
+    name[ datalen - 1U ] = '\0';
+
+    // lookup variable
+    uint16_t varoffs = VAROFFS_NONE;
+    if ( !vmem_lookup_var( &comp->rt->varmem, functype, name, &varoffs ) || varoffs == VAROFFS_NONE ) {
+UNDEF:  comp_error( comp, "Undefined function" );
+        return false;
+    }
+
+    // read true variable offset from index
+    uint16_t varoffs2 = VEXTRACT16( &comp->rt->varmem, varoffs );
+    if ( varoffs2 == VAROFFS_NONE ) {
+        goto UNDEF;
+    }
+
+    // <size.16> <type.8> <namelen.8> <name...> [ <numdims.8> <arraydims...> | <numargs> <argdesc...> ] <data...>
+    uint8_t  namelen = comp->rt->varmem.vars[ varoffs2 + 3U ];
+    uint16_t argoffs = varoffs2 + UINT16_C(4) + namelen;
+    uint8_t  numargs = comp->rt->varmem.vars[ argoffs++ ];
+
+    // check argument count
+    if ( numargs == UINT8_C(0) && exprlist == NODEOFFS_NONE ) {
+        // OK, no arguments
+    } else if ( numargs == UINT8_C(0) || exprlist == NODEOFFS_NONE ) {
+MISM:   comp_error( comp, "Argument count mismatch" );
+        return false;
+    } else {
+        //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+        if ( comp->tree[ exprlist ] == NT_EXPRLIST ) {
+            // several branches
+            uint8_t numbranches = comp->tree[ exprlist + 1U ];
+            if ( numbranches != numargs ) {
+                goto MISM;
+            }
+        } else {
+            // 1 branch
+            if ( numargs != 1U ) {
+                goto MISM;
+            }
+        }
+    }
+
+    // not checking argument types at this point (TODO: Fix?)
+
+    // we're all good: output node
+
+    /*
         NT_NUMUSRFNCALL     numeric user function call
         NT_STRUSRFNCALL     string user function call
+            data:
+                - 1 byte of function type
+                - 2 bytes of variable offset
             branches:
-                - name
                 - argument expression list (can be empty)
-    **
-    if ( !comp_create_node( comp, pnodeoffs, nodetype, UINT8_C(2), UINT16_C(0), 0, (int) fnname, (int) exprlist ) ||
+    */
+    uint8_t data[3];
+    data[0] = functype;
+    data[1] = (uint8_t)( varoffs >> UINT8_C(8) );
+    data[2] = (uint8_t)  varoffs;
+
+    if ( !comp_create_node( comp, pnodeoffs, nodetype, UINT8_C(1), UINT16_C(3), data, (int) exprlist ) ||
         *pnodeoffs == NODEOFFS_NONE ) {
         out_of_memory( comp );
         return false;
     }
     return true;
 }
-*/
 
 bool comp_eat_numusrfncall( compiler_t* comp, uint16_t* pnodeoffs ) {
     // num-usr-fn-call := num-usr-fn-name TOK_LPAREN expr-list TOK_RPAREN .
-    return false;
+    return comp_eat_usrfncall( comp, pnodeoffs, NT_NUMUSRFNCALL, NT_NUMUSRFNNAME, comp_eat_numusrfnname );
 }
 
 bool comp_eat_strusrfncall( compiler_t* comp, uint16_t* pnodeoffs ) {
     // str-usr-fn-call := str-usr-fn-name TOK_LPAREN expr-list TOK_RPAREN .
-
-    return false;
+    return comp_eat_usrfncall( comp, pnodeoffs, NT_STRUSRFNCALL, NT_STRUSRFNNAME, comp_eat_strusrfnname );
 }
 
 /*
