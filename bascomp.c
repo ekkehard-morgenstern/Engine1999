@@ -313,7 +313,7 @@ ERROR:      comp_error( comp, "Array index expected" );
     return false;
 }
 
-bool comp_node_iter_branches( compiler_t* comp, uint16_t nodeoffs, void* userdata, bool (*callback)( void*, uint16_t ) ) {
+static bool comp_node_iter_branches( compiler_t* comp, uint16_t nodeoffs, void* userdata, bool (*callback)( void*, uint16_t ) ) {
     //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
     //  <nodepos.16> <nextbranch.16>
     if ( nodeoffs == NODEOFFS_NONE || comp->tree[ nodeoffs + 1U ] == UINT8_C(0) || callback == 0 ) {
@@ -1575,6 +1575,15 @@ UNEXP:  comp_error( comp, "Internal error (unexpected argument)" );
         return false;
     }
 
+    /*
+        NT_SYSNUMFUNCARGCALL    numeric system function call with arguments
+        NT_SYSSTRFUNCARGCALL    string system function call with arguments
+            data:
+                - 1 byte of function token (like TOK_VAL)
+            branches:
+                - 1 branch of expression list
+    */
+
     // generate node
     if ( !comp_create_node( comp, pnodeoffs, nodetype, UINT8_C(1), UINT16_C(1), &tok, (int) exprlist ) ||
         *pnodeoffs == NODEOFFS_NONE ) {
@@ -1595,15 +1604,39 @@ bool comp_eat_sysstrfuncargcall( compiler_t* comp, uint16_t* pnodeoffs ) {
     return comp_eat_sysfuncargcall( comp, pnodeoffs, comp_eat_sysstrfunc, NT_SYSSTRFUNCARGCALL, NT_SYSSTRFUNC );
 }
 
-/*
-bool comp_eat_sysnoargstrname( compiler_t* comp, uint16_t* pnodeoffs ) {
-
+bool comp_eat_sysnoargnumcall( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // sys-noarg-num-name := TOK_TI .
+    // sys-noarg-num := sys-noarg-num-name .
+    // sys-noarg-num-call := sys-no-arg-num .
+    uint8_t tok = comp->currtok;
+    if ( tok != TOK_TI || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    if ( !comp_create_node( comp, pnodeoffs, NT_SYSNOARGNUMCALL, UINT8_C(0), UINT16_C(1), &tok ) || *pnodeoffs == NODEOFFS_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
 }
 
 bool comp_eat_sysnoargstrcall( compiler_t* comp, uint16_t* pnodeoffs ) {
-
+    // sys-noarg-str-name := TOK_INKEY .
+    // sys-noarg-str := sys-noarg-str-name TOK_STRING .
+    // sys-noarg-str-call := sys-no-arg-str .
+    uint8_t tok = comp->currtok;
+    if ( tok != TOK_INKEY || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    if ( comp->currtok != TOK_STRING || !comp_fetchtok( comp ) ) {
+        comp_error( comp, "String sigil '$' expected" );
+        return false;
+    }
+    if ( !comp_create_node( comp, pnodeoffs, NT_SYSNOARGSTRCALL, UINT8_C(0), UINT16_C(1), &tok ) || *pnodeoffs == NODEOFFS_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
 }
-*/
 
 /*
 bool comp_eat_numfunccall( compiler_t* comp, uint16_t* pnodeoffs );

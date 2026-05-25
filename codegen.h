@@ -57,6 +57,7 @@ typedef struct _codegen_t {
 } codegen_t;
 
 void init_codegen( codegen_t* cgen );
+bool cgen_alloc_code( codegen_t* cgen, uint16_t size, uint16_t* poffs );
 
 bool cgen_gen_brk( codegen_t* cgen );
 bool cgen_gen_nop( codegen_t* cgen );

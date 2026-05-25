@@ -128,8 +128,6 @@ void comp_pop_context( compiler_t* comp );
 
 bool comp_alloc_tree( compiler_t* comp, uint16_t size, uint16_t* poffs );
 
-bool comp_alloc_code( compiler_t* comp, uint16_t size, uint16_t* poffs );
-
 bool comp_create_node( compiler_t* comp, uint16_t* pnodeoffs, uint8_t nodetype, uint8_t numbranches, uint16_t datalen,
     const void* pdata, ... );
 bool comp_add_branch( compiler_t* comp, uint16_t nodeoffs, uint16_t branchoffs );
@@ -154,7 +152,6 @@ bool comp_eat_numvarref( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_strbasevarref( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_strvarref( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_anybasevarref( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_declit( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_numlit( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_strlit( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_strlits( compiler_t* comp, uint16_t* pnodeoffs );
@@ -169,7 +166,11 @@ bool comp_eat_usrfnbody( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_usrfndecl( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_numusrfncall( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_strusrfncall( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_sysnoargstrname( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_sysnumfunc( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_sysstrfunc( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_sysnumfuncargcall( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_sysstrfuncargcall( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_sysnoargnumcall( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_sysnoargstrcall( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_numfunccall( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_strfunccall( compiler_t* comp, uint16_t* pnodeoffs );

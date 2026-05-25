@@ -203,12 +203,11 @@ Explanation of node types:
         branches:
             - 1 branch of expression list
 
-    NT_SYSNOARGSTRNAME  system no-argument string name
+    NT_SYSNOARGSTRCALL  system string function call without arguments
+    NT_SYSNOARGNUMCALL  system number function call without arguments
         data:
-            - 1 byte of function token (like TOK_INKEY)
+            - 1 byte of function token (like TOK_TI)
 
-    [ NT_SYSNOARGSTR - not generated ]
-    [ NT_SYSNOARGSTRCALL - not generated ]
     [ NT_NUMFUNCCALL - not generated ]
     [ NT_STRFUNCCALL - not generated ]
     [ NT_STRBASEXPR - not generated ]
@@ -498,7 +497,6 @@ Explanation of node types:
 #define NT_STRUSRFNNAME         UINT8_C(0X13)   // string  user function name
 #define NT_NUMUSRFNCALL         UINT8_C(0X14)   // numeric user function call
 #define NT_STRUSRFNCALL         UINT8_C(0X15)   // string user function call
-#define NT_SYSNOARGSTRNAME      UINT8_C(0X16)   // system no-argument string name
 #define NT_STRADDEXPR           UINT8_C(0X17)   // string addition expression
 #define NT_NUMUNARYOP           UINT8_C(0X18)   // numeric unary operator
 #define NT_NUMUNARYEX           UINT8_C(0X19)   // numeric unary expression
@@ -550,5 +548,7 @@ Explanation of node types:
 #define NT_SYSSTRFUNC           UINT8_C(0X47)   // String system function
 #define NT_SYSNUMFUNCARGCALL    UINT8_C(0X48)   // Numeric system function call with arguments
 #define NT_SYSSTRFUNCARGCALL    UINT8_C(0X49)   // String system function call with arguments
+#define NT_SYSNOARGSTRCALL      UINT8_C(0X16)   // system no-argument string function call
+#define NT_SYSNOARGNUMCALL      UINT8_C(0X4A)   // system no-argument number function call
 
 #endif
