@@ -1638,12 +1638,59 @@ bool comp_eat_sysnoargstrcall( compiler_t* comp, uint16_t* pnodeoffs ) {
     return true;
 }
 
+bool comp_eat_numfunccall( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // num-func-call := num-usr-fn-call | sys-num-fn-arg-call | sys-noarg-num-call .
+    if ( comp_eat_numusrfncall( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+        return true;
+    }
+    if ( comp_eat_sysnumfuncargcall( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+        return true;
+    }
+    if ( comp_eat_sysnoargnumcall( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+        return true;
+    }
+    return false;
+}
+
+bool comp_eat_strfunccall( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // str-func-call := str-usr-fn-call | sys-str-fn-arg-call | sys-noarg-str-call .
+    if ( comp_eat_strusrfncall( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+        return true;
+    }
+    if ( comp_eat_sysstrfuncargcall( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+        return true;
+    }
+    if ( comp_eat_sysnoargstrcall( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+        return true;
+    }
+    return false;
+}
+
+bool comp_eat_strbaseexpr( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // str-base-expr := str-var-ref | str-lits | str-func-call .
+    if ( comp_eat_strvarref( comp, *pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+        return true;
+    }
+    if ( comp_eat_strlits( comp, *pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+        return true;
+    }
+    if ( comp_eat_strfunccall( comp, *pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+        return true;
+    }
+    return false;
+}
+
+bool comp_eat_straddexpr( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // str-add-expr := str-base-expr { TOK_PLUS str-base-expr } .
+    return comp_eat_list( comp, pnodeoffs, NT_STRADDEXPR, comp_eat_strbaseexpr, TOK_PLUS, "String expression expected" );
+}
+
+bool comp_eat_strexpr( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // str-expr := str-add-expr .
+    return comp_eat_straddexpr( comp, pnodeoffs );
+}
+
 /*
-bool comp_eat_numfunccall( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_strfunccall( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_strbaseexpr( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_straddexpr( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_strexpr( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_numsubexpr( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_numbaseexpr( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_numunaryop( compiler_t* comp, uint16_t* pnodeoffs );
