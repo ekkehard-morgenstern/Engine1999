@@ -1668,13 +1668,13 @@ bool comp_eat_strfunccall( compiler_t* comp, uint16_t* pnodeoffs ) {
 
 bool comp_eat_strbaseexpr( compiler_t* comp, uint16_t* pnodeoffs ) {
     // str-base-expr := str-var-ref | str-lits | str-func-call .
-    if ( comp_eat_strvarref( comp, *pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+    if ( comp_eat_strvarref( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
         return true;
     }
-    if ( comp_eat_strlits( comp, *pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+    if ( comp_eat_strlits( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
         return true;
     }
-    if ( comp_eat_strfunccall( comp, *pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+    if ( comp_eat_strfunccall( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
         return true;
     }
     return false;
@@ -1690,9 +1690,104 @@ bool comp_eat_strexpr( compiler_t* comp, uint16_t* pnodeoffs ) {
     return comp_eat_straddexpr( comp, pnodeoffs );
 }
 
+bool comp_eat_numsubexpr( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // num-sub-expr := TOK_LPAREN num-expr TOK_RPAREN .
+    if ( comp->currtok != TOK_LPAREN || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    uint16_t subexpr = NODEOFFS_NONE;
+    if ( !comp_eat_numexpr( comp, &subexpr ) || subexpr == NODEOFFS_NONE ) {
+        comp_error( comp, "Numeric expression expected" );
+        return false;
+    }
+    if ( comp->currtok != TOK_RPAREN || !comp_fetchtok( comp ) ) {
+        comp_error( comp, "Closing parenthesis ')' expected" );
+        return false;
+    }
+    *pnodeoffs = subexpr;
+    return true;
+}
+
+bool comp_eat_numbaseexpr( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // num-base-expr := num-var-ref | num-lit | num-func-call | num-sub-expr .
+    if ( comp_eat_numvarref( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+        return true;
+    }
+    if ( comp_eat_numlit( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+        return true;
+    }
+    if ( comp_eat_numfunccall( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+        return true;
+    }
+    if ( comp_eat_numsubexpr( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+        return true;
+    }
+    return false;
+}
+
+bool comp_eat_list2( compiler_t* comp, uint16_t* pnodeoffs, uint8_t nodetype, comp_eatfn_t element_eater, const uint8_t* septoks,
+    const char* errortext ) {
+    // list := element { SEPTOK element } .  -- if SEPTOK is TOK_EOL, there's no separator token
+    uint16_t expr1 = NODEOFFS_NONE;
+    if ( !element_eater( comp, &expr1 ) || expr1 == NODEOFFS_NONE ) {
+        return false;
+    }
+    uint16_t nodeoffs = NODEOFFS_NONE;
+    for (;;) {
+        bool mandatory = false; uint16_t expr2 = NODEOFFS_NONE;
+        const uint8_t* sep = septoks; uint8_t septok = TOK_EOL;
+        while ( *sep ) {
+            if ( comp->currtok == *sep ) {
+                septok = *sep;
+                break;
+            }
+            ++sep;
+        }
+        if ( septok != TOK_EOL ) {
+            // read next token
+            if ( !comp_fetchtok( comp ) ) {
+                // stop processing
+                break;
+            }
+            mandatory = true;   // the following expression is mandatory
+        }
+        if ( !element_eater( comp, &expr2 ) || expr2 == NODEOFFS_NONE ) {
+            if ( mandatory ) {  // mandatory expression missing: stop
+                comp_error( comp, errortext );
+            }
+            // stop processing
+            break;
+        }
+        // expr2 does contain a new branch now, but we need a node to tell what operation is to be done to it
+        // create a new node that contains that token as data
+        uint16_t operand = NODEOFFS_NONE;
+        if ( !comp_create_node( comp, &operand, NT_OPERATOR, UINT8_C(1), UINT16_C(1), &septok, (int) expr2 ) ||
+            operand == NODEOFFS_NONE ) {
+OOM:        out_of_memory( comp );
+            return false;
+        }
+        // we have now a new branch; first see if we already have a node or need to create one
+        if ( nodeoffs == NODEOFFS_NONE ) {
+            if ( !comp_create_node( comp, &nodeoffs, nodetype, UINT8_C(2), UINT16_C(0), 0, (int) expr1, (int) operand ) ||
+                 nodeoffs == NODEOFFS_NONE ) {
+                // failed to create node: cancel operation
+                goto OOM;
+            }
+        } else {
+            // the node already exists: add a new branch
+            if ( !comp_add_branch( comp, nodeoffs, operand ) ) {
+                // something went wrong: cancel
+                goto OOM;
+            }
+        }
+        // successful, continue
+    }
+    // either return node with what we already have, or just the first branch
+    *pnodeoffs = nodeoffs != NODEOFFS_NONE ? nodeoffs : expr1;
+    return true;
+}
+
 /*
-bool comp_eat_numsubexpr( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_numbaseexpr( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_numunaryop( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_numunaryex( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_nummultop( compiler_t* comp, uint16_t* pnodeoffs );

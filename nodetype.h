@@ -222,91 +222,61 @@ Explanation of node types:
     [ NT_NUMSUBEXPR - not generated ]
     [ NT_NUMBASEEXPR - not generated ]
 
-    NT_NUMUNARYOP   numeric unary operator
+    NT_OPERATOR     operator
         data:
             - 1 byte of operator token
+        branches:
+            - 1 branch of operand
 
     NT_NUMUNARYEX   numeric unary expression
-        branches:
-            - 1 branch of NT_NUMUNARYOP
-            - 1 branch of expression
-        immediate processing:
-            - generated only if a unary operator was used and the result is not constant
-            - if the result is a constant expression, return NT_NUMLIT instead
-
-    NT_NUMMULTOP   numeric multiplication operator
         data:
             - 1 byte of operator token
+        branches:
+            - 1 branch of operand
+        immediate proessing:
+            - generated only if a unary expression was used
 
     NT_NUMMULTEX   numeric multiplication expression
         branches:
-            - 1 branch of NT_NUMMULTOP
-            - at least 2 branches of expressions
+            - 1 branch of first operand
+            - at least 1 branch of NT_OPERATOR
         immediate processing:
-            - generated only if a multiplication operator was used and the result is not constant
-            - if the result is a constant expression, return NT_NUMLIT instead
-            - if a division by zero would occur, generate error
-
-    NT_NUMADDOP   numeric addition operator
-        data:
-            - 1 byte of operator token
+            - generated only if a multiplication operator was used
 
     NT_NUMADDEX   numeric addition expression
         branches:
-            - 1 branch of NT_NUMADDOP
-            - at least 2 branches of expressions
+            - 1 branch of first operand
+            - at least 1 branch of NT_OPERATOR
         immediate processing:
-            - generated only if an addition operator was used and the result is not constant
-            - if the result is a constant expression, return NT_NUMLIT instead
-
-    NT_NUMSHIFTOP   numeric shift operator
-        data:
-            - 1 byte of operator token
+            - generated only if a multiplication operator was used
 
     NT_NUMSHIFTEX   numeric shift expression
         branches:
-            - 1 branch of NT_NUMSHIFTOP
-            - 2 branches of expressions
+            - 1 branch of first operand
+            - at least 1 branch of NT_OPERATOR
         immediate processing:
-            - generated only if a shift operator was used and the result is not constant
-            - if the result is a constant expression, return NT_NUMLIT instead
-
-    NT_NUMCMPOP   numeric comparison operator
-        data:
-            - 1 byte of operator token
+            - generated only if a multiplication operator was used
 
     NT_NUMCMPEX   numeric shift expression
         branches:
-            - 1 branch of NT_NUMCMPOP
-            - 2 branches of expressions
+            - 1 branch of first operand
+            - at least 1 branch of NT_OPERATOR
         immediate processing:
-            - generated only if a comparison operator was used and the result is not constant
-            - if the result is a constant expression, return NT_NUMLIT instead
-            - if two string expressions are compared, the result will be numeric
-
-    NT_NUMANDOP     numeric AND operator
-        data:
-            - 1 byte of operator token
+            - generated only if a multiplication operator was used
 
     NT_NUMANDEX   numeric AND expression
         branches:
-            - 1 branch of NT_NUMANDOP
-            - at least 2 branches of expressions
+            - 1 branch of first operand
+            - at least 1 branch of NT_OPERATOR
         immediate processing:
-            - generated only if an AND operator was used and the result is not constant
-            - if the result is a constant expression, return NT_NUMLIT instead
-
-    NT_NUMOROP     numeric OR operator
-        data:
-            - 1 byte of operator token
+            - generated only if a multiplication operator was used
 
     NT_NUMOREX   numeric OR expression
         branches:
-            - 1 branch of NT_NUMOROP
-            - at least 2 branches of expressions
+            - 1 branch of first operand
+            - at least 1 branch of NT_OPERATOR
         immediate processing:
-            - generated only if an OR operator was used and the result is not constant
-            - if the result is a constant expression, return NT_NUMLIT instead
+            - generated only if a multiplication operator was used
 
     [ NT_NUMEXPR - not generated ]
     [ NT_EXPR - not generated ]
@@ -550,5 +520,6 @@ Explanation of node types:
 #define NT_SYSSTRFUNCARGCALL    UINT8_C(0X49)   // String system function call with arguments
 #define NT_SYSNOARGSTRCALL      UINT8_C(0X16)   // system no-argument string function call
 #define NT_SYSNOARGNUMCALL      UINT8_C(0X4A)   // system no-argument number function call
+#define NT_OPERATOR             UINT8_C(0X4B)   // operator token
 
 #endif
