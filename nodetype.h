@@ -327,20 +327,19 @@ Explanation of node types:
             - 1 branch of string variable reference
             - 1 branch of string expression
 
-    NT_SUBSTROP     substring operator
+    NT_SUBSTRASSIGN     substring assignment
         data:
             - 1 byte of substring operator
-
-    NT_SUBSTRASSIGN     substring assignment
         branches:
-            - 1 branch of substring operator
             - 1 branch of expression list
 
     [ NT_ANYASSIGN - not generated ]
 
     NT_ASSIGNLIST       assignment list
         branches:
-            - 1 or more branches of assignment expressions
+            - 2 or more branches of assignment expressions
+        immediate processing:
+            - not generated if there's only one assignment expression
 
     NT_LETSTMT      LET statement
         branches:

@@ -2141,15 +2141,167 @@ bool comp_eat_iostmt( compiler_t* comp, uint16_t* pnodeoffs ) {
     return false;
 }
 
+bool comp_eat_numassign( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // num-assign := num-var-ref TOK_EQ num-expr .
+    uint16_t varref = NODEOFFS_NONE;
+    if ( !comp_eat_numvarref( comp, &varref ) || varref == NODEOFFS_NONE ) {
+        return false;
+    }
+    if ( comp->currtok != TOK_EQ || !comp_fetchtok( comp ) ) {
+        comp_error( comp, "Assignment operator '=' expected" );
+        return false;
+    }
+    uint16_t numexpr = NODEOFFS_NONE;
+    if ( !comp_eat_numexpr( comp, &numexpr ) || numexpr == NODEOFFS_NONE ) {
+        comp_error( comp, "Numeric expression expected" );
+        return false;
+    }
+    /*
+        NT_NUMASSIGN    numeric assignment
+            branches:
+                - 1 branch of numeric variable reference
+                - 1 branch of numeric expression
+    */
+    if ( !comp_create_node( comp, pnodeoffs, NT_NUMASSIGN, UINT8_C(2), UINT16_C(0), 0, (int) varref, (int) numexpr ) ||
+        *pnodeoffs == NODEOFFS_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
+bool comp_eat_strassign( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // str-assign := str-var-ref TOK_EQ str-expr .
+    uint16_t varref = NODEOFFS_NONE;
+    if ( !comp_eat_strvarref( comp, &varref ) || varref == NODEOFFS_NONE ) {
+        return false;
+    }
+    if ( comp->currtok != TOK_EQ || !comp_fetchtok( comp ) ) {
+        comp_error( comp, "Assignment operator '=' expected" );
+        return false;
+    }
+    uint16_t strexpr = NODEOFFS_NONE;
+    if ( !comp_eat_numexpr( comp, &strexpr ) || strexpr == NODEOFFS_NONE ) {
+        comp_error( comp, "String expression expected" );
+        return false;
+    }
+    /*
+        NT_STRASSIGN    string assignment
+            branches:
+                - 1 branch of string variable reference
+                - 1 branch of string expression
+    */
+    if ( !comp_create_node( comp, pnodeoffs, NT_STRASSIGN, UINT8_C(2), UINT16_C(0), 0, (int) varref, (int) strexpr ) ||
+        *pnodeoffs == NODEOFFS_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
+bool comp_eat_substrassign( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // substr-op := TOK_LEFT | TOK_MID | TOK_RIGHT .
+    // substr-assign := substr-op TOK_STRING TOK_LPAREN expr-list TOK_RPAREN .
+    uint8_t tok = comp->currtok;
+    switch ( tok ) {
+        case TOK_LEFT: case TOK_MID: case TOK_RIGHT:
+            break;
+        default:
+            return false;
+    }
+    if ( !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    if ( comp->currtok != TOK_STRING || !comp_fetchtok( comp ) ) {
+        comp_error( comp, "String sigil '$' expected" );
+        return false;
+    }
+    if ( comp->currtok != TOK_LPAREN || !comp_fetchtok( comp ) ) {
+        comp_error( comp, "Opening parenthesis '(' expected" );
+        return false;
+    }
+    uint16_t exprlist = NODEOFFS_NONE;
+    if ( !comp_eat_exprlist( comp, &exprlist ) || exprlist == NODEOFFS_NONE ) {
+        comp_error( comp, "Expression list expected" );
+        return false;
+    }
+    if ( comp->currtok != TOK_RPAREN || !comp_fetchtok( comp ) ) {
+        comp_error( comp, "Closing parenthesis ')' expected" );
+        return false;
+    }
+    /*
+        NT_SUBSTRASSIGN     substring assignment
+            data:
+                - 1 byte of substring operator
+            branches:
+                - 1 branch of expression list
+    */
+    if ( !comp_create_node( comp, pnodeoffs, NT_SUBSTRASSIGN, UINT8_C(1), UINT16_C(1), &tok, (int) exprlist ) ||
+        *pnodeoffs == NODEOFFS_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
+bool comp_eat_anyassign( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // any-assign := num-assign | substr-assign | str-assign .
+    // [ NT_ANYASSIGN - not generated ]
+    if ( comp_eat_numassign( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+        return true;
+    }
+    if ( comp_eat_substrassign( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+        return true;
+    }
+    if ( comp_eat_strassign( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+        return true;
+    }
+    return false;
+}
+
+bool comp_eat_assignlist( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // assign-list := any-assign { TOK_COMMA any-assign } .
+    /*
+        NT_ASSIGNLIST       assignment list
+            branches:
+                - 2 or more branches of assignment expressions
+            immediate processing:
+                - not generated if there's only one assignment expression
+    */
+    return comp_eat_list( comp, pnodeoffs, NT_ASSIGNLIST, comp_eat_anyassign, TOK_COMMA, "Assignment expected" );
+}
+
+bool comp_eat_letstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // let-stmt := [ TOK_LET ] assign-list .
+    bool mandatory = false;
+    if ( comp->currtok == TOK_LET ) {
+        if ( !comp_fetchtok( comp ) ) {
+            return false;
+        }
+        // if LET is given, assignment list must be too.
+        mandatory = true;
+    }
+    uint16_t assignlist = NODEOFFS_NONE;
+    if ( !comp_eat_assignlist( comp, &assignlist ) || assignlist == NODEOFFS_NONE ) {
+        if ( mandatory ) {
+            comp_error( comp, "Assignment list expected after LET" );
+        }
+        return false;
+    }
+    /*
+        NT_LETSTMT      LET statement
+            branches:
+                - 1 branch of assignment list
+    */
+    if ( !comp_create_node( comp, pnodeoffs, NT_LETSTMT, UINT8_C(1), UINT16_C(0), 0, (int) assignlist ) ||
+        *pnodeoffs == NODEOFFS_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
 
 /*
-bool comp_eat_numassign( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_strassign( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_substrop( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_substrassign( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_anyassign( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_assignlist( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_letstmt( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_dimstmt( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_erasestmt( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_assignstmt( compiler_t* comp, uint16_t* pnodeoffs );
