@@ -1983,14 +1983,166 @@ bool comp_eat_expr( compiler_t* comp, uint16_t* pnodeoffs ) {
     return false;
 }
 
+bool comp_eat_savestmt( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // save-stmt := SAVE str-expr [ TOK_COMMA TOK_NUMIDENT ] .
+    if ( comp->currtok != TOK_SAVE || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    uint16_t strexpr = NODEOFFS_NONE;
+    if ( !comp_eat_strexpr( comp, &strexpr ) || strexpr == NODEOFFS_NONE ) {
+        comp_error( comp, "String expression expected" );
+        return false;
+    }
+    static char saveopt[256];
+    if ( comp->currtok == TOK_COMMA && comp_fetchtok( comp ) ) {
+        if ( comp->currtok != TOK_NUMIDENT || !comp_fetchtok( comp ) ) {
+            comp_error( comp, "SAVE options expected" );
+            return false;
+        }
+        snprintf( saveopt, 256U, "%s", comp->param );
+    } else {
+        saveopt[0] = '\0';
+    }
+    /*
+        NT_SAVESTMT     SAVE statement
+            data:
+                - n bytes of save mode (optional)
+            branches:
+                - 1 branch of string expression
+            immediate processing:
+                - the SAVE statement is special b/c it uses an identifier as optional second parameter
+                  denoting save mode (A for ASCII, B (default) for binary)
+                - the file name need not be a string literal
+    */
+    uint8_t saveoptlen = (uint8_t) strlen( saveopt );
+    if ( !comp_create_node( comp, pnodeoffs, NT_SAVESTMT, UINT8_C(1), saveoptlen, saveopt, (int) strexpr ) ||
+        *pnodeoffs == NODEOFFS_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
+bool comp_eat_chanspec( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // chan-spec := TOK_LATTICE num-expr .
+    if ( comp->currtok != TOK_LATTICE || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    uint16_t numexpr = NODEOFFS_NONE;
+    if ( !comp_eat_numexpr( comp, &numexpr ) || numexpr == NODEOFFS_NONE ) {
+        comp_error( comp, "Numeric expression expected" );
+        return false;
+    }
+    /*
+        NT_CHANSPEC     channel specifier
+            branches:
+                - 1 branch of numeric expression
+    */
+    if ( !comp_create_node( comp, pnodeoffs, NT_CHANSPEC, UINT8_C(1), UINT16_C(0), 0, (int) numexpr ) ||
+        *pnodeoffs == NODEOFFS_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
+bool comp_eat_printsep( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // print-sep := TOK_COMMA | TOK_SEMIC .
+    uint8_t tok = comp->currtok;
+    if ( tok != TOK_COMMA && tok != TOK_SEMIC ) {
+        return false;
+    }
+    if ( !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    /*
+        NT_PRINTSEP     print separator
+            data:
+                - 1 byte of separator token
+    */
+    if ( !comp_create_node( comp, pnodeoffs, NT_PRINTSEP, UINT8_C(0), UINT16_C(1), &tok ) || *pnodeoffs == NODEOFFS_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
+bool comp_eat_printarg( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // print-arg := expr [ print-sep ] .
+    uint16_t expr = NODEOFFS_NONE;
+    if ( !comp_eat_expr( comp, &expr ) || expr == NODEOFFS_NONE ) {
+        return false;
+    }
+    uint16_t sep = NODEOFFS_NONE;
+    comp_eat_printsep( comp, &sep );
+    /*
+        NT_PRINTARG     print argument
+            branches:
+                - 1 branch of expression
+                - 1 optional branch of separator
+    */
+    if ( !comp_create_node( comp, pnodeoffs, NT_PRINTARG, UINT8_C(2), UINT16_C(0), 0, (int) expr, (int) sep ) ||
+        *pnodeoffs == NODEOFFS_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
+bool comp_eat_printarglist( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // print-arg-list := print-arg { print-arg } .
+    /*
+        NT_PRINTARGLIST     print argument
+            branches:
+                - 2 or more branches of print arguments
+            immediate processing:
+                - generated only if there's more than one print argument
+    */
+    return comp_eat_list( comp, pnodeoffs, NT_PRINTARGLIST, comp_eat_printarg, TOK_EOL, "PRINT argument expected" );
+}
+
+bool comp_eat_printstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // print-stmt := TOK_PRINT [ chan-spec TOK_COMMA ] [ print-arg-list ] .
+    if ( comp->currtok != TOK_PRINT || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    uint16_t chan = NODEOFFS_NONE;
+    if ( comp_eat_chanspec( comp, &chan ) && chan != NODEOFFS_NONE ) {
+        if ( comp->currtok != TOK_COMMA || !comp_fetchtok( comp ) ) {
+            comp_error( comp, "Comma ',' expected" );
+            return false;
+        }
+    }
+    uint16_t args = NODEOFFS_NONE;
+    comp_eat_printarglist( comp, &args );
+    /*
+        NT_PRINTSTMT    print statement
+            branches:
+                - 1 optional branch of channel info
+                - 1 optional branch of print argument list
+    */
+    if ( !comp_create_node( comp, pnodeoffs, NT_PRINTSTMT, UINT8_C(2), UINT16_C(0), 0, (int) chan, (int) args ) ||
+        *pnodeoffs == NODEOFFS_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
+bool comp_eat_iostmt( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // io-stmt := save-stmt | print-stmt .
+    // [ NT_IOSTMT - not generated ]
+    if ( comp_eat_savestmt( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+        return true;
+    }
+    if ( comp_eat_printstmt( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+        return true;
+    }
+    return false;
+}
+
+
 /*
-bool comp_eat_savestmt( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_chanspec( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_printsep( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_printarg( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_printarglist( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_printstmt( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_iostmt( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_numassign( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_strassign( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_substrop( compiler_t* comp, uint16_t* pnodeoffs );
