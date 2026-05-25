@@ -137,7 +137,7 @@ typedef bool (*comp_eatfn_t)( compiler_t*, uint16_t* );
 bool comp_eat_list( compiler_t* comp, uint16_t* pnodeoffs, uint8_t nodetype, comp_eatfn_t element_eater, uint8_t septok,
     const char* errortext );
 bool comp_eat_list2( compiler_t* comp, uint16_t* pnodeoffs, uint8_t nodetype, comp_eatfn_t element_eater, const uint8_t* septoks,
-    const char* errortext );
+    const char* errortext, bool oneoperator, bool forceexpr );
 
 bool comp_eat_numexlist( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_strexlist( compiler_t* comp, uint16_t* pnodeoffs );

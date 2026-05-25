@@ -233,7 +233,7 @@ Explanation of node types:
             - 1 byte of operator token
         branches:
             - 1 branch of operand
-        immediate proessing:
+        immediate processing:
             - generated only if a unary expression was used
 
     NT_NUMMULTEX   numeric multiplication expression

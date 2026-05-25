@@ -1726,10 +1726,23 @@ bool comp_eat_numbaseexpr( compiler_t* comp, uint16_t* pnodeoffs ) {
 }
 
 bool comp_eat_list2( compiler_t* comp, uint16_t* pnodeoffs, uint8_t nodetype, comp_eatfn_t element_eater, const uint8_t* septoks,
-    const char* errortext ) {
+    const char* errortext, bool oneoperator, bool forceexpr ) {
+    /*
+        The meaning of the "oneoperator" flag: Sometimes we wish that no more than one NT_OPERATOR node is present.
+        The meaning of the "forceexpr" flag: Sometimes we wish to enforce that an expression with two operands is present.
+        If only the first expression is present, this results in a rollback of state before the first expression was read.
+    */
     // list := element { SEPTOK element } .  -- if SEPTOK is TOK_EOL, there's no separator token
+    if ( forceexpr ) {
+        // push current context
+        comp_push_context( comp );
+    }
     uint16_t expr1 = NODEOFFS_NONE;
     if ( !element_eater( comp, &expr1 ) || expr1 == NODEOFFS_NONE ) {
+        if ( forceexpr ) {
+            // make sure first expression has not been read
+            comp_pop_context( comp );
+        }
         return false;
     }
     uint16_t nodeoffs = NODEOFFS_NONE;
@@ -1753,6 +1766,10 @@ bool comp_eat_list2( compiler_t* comp, uint16_t* pnodeoffs, uint8_t nodetype, co
         }
         if ( !element_eater( comp, &expr2 ) || expr2 == NODEOFFS_NONE ) {
             if ( mandatory ) {  // mandatory expression missing: stop
+                if ( forceexpr ) {
+                    // commit to changes before generating error
+                    comp_commit_context( comp );
+                }
                 comp_error( comp, errortext );
             }
             // stop processing
@@ -1763,7 +1780,11 @@ bool comp_eat_list2( compiler_t* comp, uint16_t* pnodeoffs, uint8_t nodetype, co
         uint16_t operand = NODEOFFS_NONE;
         if ( !comp_create_node( comp, &operand, NT_OPERATOR, UINT8_C(1), UINT16_C(1), &septok, (int) expr2 ) ||
             operand == NODEOFFS_NONE ) {
-OOM:        out_of_memory( comp );
+OOM:        if ( forceexpr ) {
+                // commit to changes before generating error
+                comp_commit_context( comp );
+            }
+            out_of_memory( comp );
             return false;
         }
         // we have now a new branch; first see if we already have a node or need to create one
@@ -1780,30 +1801,189 @@ OOM:        out_of_memory( comp );
                 goto OOM;
             }
         }
-        // successful, continue
+        // successful, continue, unless only one additional operand is allowed
+        if ( oneoperator ) {
+            break;
+        }
+    }
+    if ( nodeoffs == NODEOFFS_NONE && forceexpr ) {
+        // rewind so that the first expression has not been read
+        comp_pop_context( comp );
+        return false;
+    } else if ( forceexpr ) {
+        // all fine, commit to it
+        comp_commit_context( comp );
     }
     // either return node with what we already have, or just the first branch
     *pnodeoffs = nodeoffs != NODEOFFS_NONE ? nodeoffs : expr1;
     return true;
 }
 
+bool comp_eat_numunaryex( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // num-unary-op := TOK_MINUS | TOK_PLUS | TOK_NOT .
+    // num-unary-ex := [ num-unary-op ] num-base-expr .
+    uint8_t tok = comp->currtok;
+    switch ( tok ) {
+        case TOK_MINUS: case TOK_PLUS: case TOK_NOT:
+            break;
+        default:
+            tok = TOK_EOL;
+            break;
+    }
+    uint16_t baseexpr = NODEOFFS_NONE;
+    if ( !comp_eat_numbaseexpr( comp, &baseexpr ) || baseexpr == NODEOFFS_NONE ) {
+        if ( tok != TOK_EOL ) { // mandatory expression when operator present
+            comp_error( comp, "Numeric expression expected" );
+        }
+        return false;
+    }
+    /*
+        NT_NUMUNARYEX   numeric unary expression
+            data:
+                - 1 byte of operator token
+            branches:
+                - 1 branch of operand
+            immediate processing:
+                - generated only if a unary expression was used
+    */
+    if ( tok == TOK_EOL ) {
+        // no operator present: return expression directly
+        *pnodeoffs = baseexpr;
+        return true;
+    }
+    // operator present: create new node
+    if ( !comp_create_node( comp, pnodeoffs, NT_NUMUNARYEX, UINT8_C(1), UINT16_C(1), &tok, (int) baseexpr ) ||
+        *pnodeoffs == NODEOFFS_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
+bool comp_eat_nummultex( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // num-mult-op := TOK_MULT | TOK_DIV | TOK_POW .
+    // num-mult-ex := num-unary-ex { num-mult-op num-unary-ex } .
+    static const uint8_t septoks[] = { TOK_MULT, TOK_DIV, TOK_POW, 0 };
+    /*
+        NT_NUMMULTEX   numeric multiplication expression
+            branches:
+                - 1 branch of first operand
+                - at least 1 branch of NT_OPERATOR
+            immediate processing:
+                - generated only if a multiplication operator was used
+    */
+    return comp_eat_list2( comp, pnodeoffs, NT_NUMMULTEX, comp_eat_numunaryex, septoks, "Multiplication expression expected",
+        false, false );
+}
+
+bool comp_eat_numaddex( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // num-add-op := TOK_PLUS | TOK_MINUS .
+    // num-add-ex := num-mult-ex { num-add-op num-mult-ex } .
+    static const uint8_t septoks[] = { TOK_PLUS, TOK_MINUS, 0 };
+    /*
+        NT_NUMADDEX   numeric addition expression
+            branches:
+                - 1 branch of first operand
+                - at least 1 branch of NT_OPERATOR
+            immediate processing:
+                - generated only if a multiplication operator was used
+    */
+    return comp_eat_list2( comp, pnodeoffs, NT_NUMADDEX, comp_eat_nummultex, septoks, "Add expression expected",
+        false, false );
+}
+
+bool comp_eat_numshiftex( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // num-shift-op := TOK_LSHIFT | TOK_RSHIFT .
+    // num-shift-ex := num-add-ex [ num-shift-op num-add-ex ] .
+    static const uint8_t septoks[] = { TOK_LSHIFT, TOK_RSHIFT, 0 };
+    /*
+        NT_NUMSHIFTEX   numeric shift expression
+            branches:
+                - 1 branch of first operand
+                - at least 1 branch of NT_OPERATOR
+            immediate processing:
+                - generated only if a multiplication operator was used
+    */
+    return comp_eat_list2( comp, pnodeoffs, NT_NUMSHIFTEX, comp_eat_numaddex, septoks, "Shift expression expected",
+        true, false );
+}
+
+bool comp_eat_numcmpex( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // num-cmp-op := TOK_EQ | TOK_NE | TOK_LE | TOK_GE | TOK_LT | TOK_GT .
+    // num-cmp-ex := num-shift-ex [ num-cmp-op num-shift-ex ] |
+    //               str-expr num-cmp-op str-expr .
+    static const uint8_t septoks[] = { TOK_EQ, TOK_NE, TOK_LE, TOK_GE, TOK_LT, TOK_GT, 0 };
+    // numeric version
+    /*
+        NT_NUMCMPEX   numeric shift expression
+            branches:
+                - 1 branch of first operand
+                - at least 1 branch of NT_OPERATOR
+            immediate processing:
+                - generated only if a multiplication operator was used
+    */
+    if ( comp_eat_list2( comp, pnodeoffs, NT_NUMCMPEX, comp_eat_numshiftex, septoks, "Comparison expression expected",
+        true, false ) && *pnodeoffs != NODEOFFS_NONE ) {
+        return true;
+    }
+    if ( comp_eat_list2( comp, pnodeoffs, NT_NUMCMPEX, comp_eat_strexpr, septoks, "Comparison expression expected",
+        true, true ) && *pnodeoffs != NODEOFFS_NONE ) {
+        return true;
+    }
+    return false;
+}
+
+bool comp_eat_numandex( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // num-and-op := TOK_AND | TOK_NAND .
+    // num-and-ex := num-cmp-ex { num-and-op num-cmp-ex } .
+    static const uint8_t septoks[] = { TOK_AND, TOK_NAND, 0 };
+    /*
+        NT_NUMANDEX   numeric AND expression
+            branches:
+                - 1 branch of first operand
+                - at least 1 branch of NT_OPERATOR
+            immediate processing:
+                - generated only if a multiplication operator was used
+    */
+    return comp_eat_list2( comp, pnodeoffs, NT_NUMANDEX, comp_eat_numcmpex, septoks, "AND expression expected",
+        false, false );
+}
+
+bool comp_eat_numorex( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // num-or-op := TOK_OR | TOK_XOR | TOK_NOR | TOK_XNOR .
+    // num-or-ex := num-and-ex { num-or-op num-and-ex } .
+    static const uint8_t septoks[] = { TOK_OR, TOK_XOR, TOK_NOR, TOK_XNOR, 0 };
+    /*
+        NT_NUMOREX   numeric OR expression
+            branches:
+                - 1 branch of first operand
+                - at least 1 branch of NT_OPERATOR
+            immediate processing:
+                - generated only if a multiplication operator was used
+    */
+    return comp_eat_list2( comp, pnodeoffs, NT_NUMOREX, comp_eat_numandex, septoks, "OR expression expected",
+        false, false );
+}
+
+bool comp_eat_numexpr( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // num-expr := num-or-ex .
+    // [ NT_NUMEXPR - not generated ]
+    return comp_eat_numorex( comp, pnodeoffs );
+}
+
+bool comp_eat_expr( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // expr := num-expr | str-expr .
+    // [ NT_EXPR - not generated ]
+    if ( comp_eat_numexpr( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+        return true;
+    }
+    if ( comp_eat_strexpr( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+        return true;
+    }
+    return false;
+}
+
 /*
-bool comp_eat_numunaryop( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_numunaryex( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_nummultop( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_nummultex( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_numaddop( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_numaddex( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_numshiftop( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_numshiftex( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_numcmpop( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_numcmpex( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_numandop( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_numandex( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_numorop( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_numorex( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_numexpr( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_expr( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_savestmt( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_chanspec( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_printsep( compiler_t* comp, uint16_t* pnodeoffs );
