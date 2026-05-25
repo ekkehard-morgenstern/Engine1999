@@ -191,6 +191,18 @@ Explanation of node types:
             - name
             - argument expression list (can be empty)
 
+    NT_SYSNUMFUNC       numeric system function
+    NT_SYSSTRFUNC       string system function
+        data:
+            - 1 byte of function token (like TOK_VAL)
+
+    NT_SYSNUMFUNCARGCALL    numeric system function call with arguments
+    NT_SYSSTRFUNCARGCALL    string system function call with arguments
+        data:
+            - 1 byte of function token (like TOK_VAL)
+        branches:
+            - 1 branch of expression list
+
     NT_SYSNOARGSTRNAME  system no-argument string name
         data:
             - 1 byte of function token (like TOK_INKEY)
@@ -536,5 +548,7 @@ Explanation of node types:
 #define NT_USRFNARG             UINT8_C(0X45)   // User function argument
 #define NT_SYSNUMFUNC           UINT8_C(0X46)   // Numeric system function
 #define NT_SYSSTRFUNC           UINT8_C(0X47)   // String system function
+#define NT_SYSNUMFUNCARGCALL    UINT8_C(0X48)   // Numeric system function call with arguments
+#define NT_SYSSTRFUNCARGCALL    UINT8_C(0X49)   // String system function call with arguments
 
 #endif

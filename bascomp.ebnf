@@ -70,13 +70,13 @@ str-usr-fn-call := str-usr-fn-name [ TOK_LPAREN [ expr-list ] TOK_RPAREN ] .
 
 sys-num-func := TOK_ASC | TOK_BIN | TOK_QUA | TOK_OCT | TOK_DEC | TOK_HEX | TOK_VAL | TOK_FRE .
 sys-str-func-name := TOK_LEFT | TOK_MID | TOK_RIGHT | TOK_STR .
-sys-str-func := sys-str-func-name TOK_DOLLAR .
+sys-str-func := sys-str-func-name TOK_STRING .
 
 sys-num-fn-arg-call := sys-num-func TOK_LPAREN expr-list TOK_RPAREN .
 sys-str-fn-arg-call := sys-str-func TOK_LPAREN expr-list TOK_RPAREN .
 
 sys-noarg-str-name := TOK_INKEY .
-sys-noarg-str := sys-noarg-str-name TOK_DOLLAR .
+sys-noarg-str := sys-noarg-str-name TOK_STRING .
 sys-noarg-str-call := sys-no-arg-str .
 
 sys-noarg-num-name := TOK_TI .
@@ -133,7 +133,7 @@ io-stmt := save-stmt | print-stmt .
 num-assign := num-var-ref TOK_EQ num-expr .
 str-assign := str-var-ref TOK_EQ str-expr .
 substr-op := TOK_LEFT | TOK_MID | TOK_RIGHT .
-substr-assign := substr-op TOK_DOLLAR TOK_LPAREN expr-list TOK_RPAREN .
+substr-assign := substr-op TOK_STRING TOK_LPAREN expr-list TOK_RPAREN .
 any-assign := num-assign | substr-assign | str-assign .
 assign-list := any-assign { TOK_COMMA any-assign } .
 let-stmt := [ TOK_LET ] assign-list .

@@ -1480,9 +1480,120 @@ bool comp_eat_strusrfncall( compiler_t* comp, uint16_t* pnodeoffs ) {
     return comp_eat_usrfncall( comp, pnodeoffs, NT_STRUSRFNCALL, NT_STRUSRFNNAME, comp_eat_strusrfnname );
 }
 
-// sys-num-func := TOK_ASC | TOK_BIN | TOK_QUA | TOK_OCT | TOK_DEC | TOK_HEX .
-// sys-str-func-name := TOK_LEFT | TOK_MID | TOK_RIGHT | TOK_STR .
-// sys-str-func := sys-str-func-name TOK_DOLLAR .
+bool comp_eat_sysnumfunc( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // sys-num-func := TOK_ASC | TOK_BIN | TOK_QUA | TOK_OCT | TOK_DEC | TOK_HEX | TOK_VAL | TOK_FRE .
+
+    switch ( comp->currtok ) {
+        case TOK_ASC: case TOK_BIN: case TOK_QUA: case TOK_OCT: case TOK_DEC: case TOK_HEX: case TOK_VAL: case TOK_FRE:
+            break;
+        default:
+            return false;
+    }
+    uint8_t tok = comp->currtok;
+    if ( !comp_fetchtok( comp ) ) {
+        return false;
+    }
+
+    /*
+        NT_SYSNUMFUNC       numeric system function
+            data:
+                - 1 byte of function token (like TOK_VAL)
+    */
+
+    if ( !comp_create_node( comp, pnodeoffs, NT_SYSNUMFUNC, UINT8_C(0), UINT16_C(1), &tok ) ) {
+        out_of_memory( comp );
+        return false;
+    }
+
+    return true;
+}
+
+bool comp_eat_sysstrfunc( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // sys-str-func-name := TOK_LEFT | TOK_MID | TOK_RIGHT | TOK_STR .
+    // sys-str-func := sys-str-func-name TOK_DOLLAR .
+    switch ( comp->currtok ) {
+        case TOK_LEFT: case TOK_MID: case TOK_RIGHT: case TOK_STR:
+            break;
+        default:
+            return false;
+    }
+    uint8_t tok = comp->currtok;
+    if ( !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    if ( comp->currtok != TOK_STRING || !comp_fetchtok( comp ) ) {
+        comp_error( comp, "String sigil '$' expected" );
+        return false;
+    }
+
+    /*
+        NT_SYSSTRFUNC       string system function
+            data:
+                - 1 byte of function token (like TOK_VAL)
+    */
+
+    if ( !comp_create_node( comp, pnodeoffs, NT_SYSSTRFUNC, UINT8_C(0), UINT16_C(1), &tok ) ) {
+        out_of_memory( comp );
+        return false;
+    }
+
+    return true;
+}
+
+static bool comp_eat_sysfuncargcall( compiler_t* comp, uint16_t* pnodeoffs, bool (*eater)( compiler_t*, uint16_t* ),
+    uint8_t nodetype, uint8_t eatentype ) {
+    // sys-num-fn-arg-call := sys-num-func TOK_LPAREN expr-list TOK_RPAREN .
+    // sys-str-fn-arg-call := sys-str-func TOK_LPAREN expr-list TOK_RPAREN .
+    uint16_t eatenoffs = NODEOFFS_NONE;
+    if ( !eater( comp, &eatenoffs ) || eatenoffs == NODEOFFS_NONE ) {
+        return false;
+    }
+    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    if ( comp->tree[ eatenoffs ] != eatentype ) {
+UNEXP:  comp_error( comp, "Internal error (unexpected argument)" );
+        return false;
+    }
+    uint16_t datalen = EXTRACT16( comp, eatenoffs + 2U );
+    if ( datalen != 1U ) {
+        goto UNEXP;
+    }
+    uint16_t dataoffs = eatenoffs + UINT16_C(8);
+    uint8_t tok = comp->tree[ dataoffs ];
+
+    // read argument list
+    if ( comp->currtok != TOK_LPAREN || !comp_fetchtok( comp ) ) {
+        comp_error( comp, "Opening parenthesis '(' expected" );
+        return false;
+    }
+    uint16_t exprlist = NODEOFFS_NONE;
+    if ( !comp_eat_exprlist( comp, &exprlist ) || exprlist == NODEOFFS_NONE ) {
+        comp_error( comp, "Expression list expected" );
+        return false;
+    }
+    if ( comp->currtok != TOK_RPAREN || !comp_fetchtok( comp ) ) {
+        comp_error( comp, "Closing parenthesis ')' expected" );
+        return false;
+    }
+
+    // generate node
+    if ( !comp_create_node( comp, pnodeoffs, nodetype, UINT8_C(1), UINT16_C(1), &tok, (int) exprlist ) ||
+        *pnodeoffs == NODEOFFS_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+
+    return true;
+}
+
+bool comp_eat_sysnumfuncargcall( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // sys-num-fn-arg-call := sys-num-func TOK_LPAREN expr-list TOK_RPAREN .
+    return comp_eat_sysfuncargcall( comp, pnodeoffs, comp_eat_sysnumfunc, NT_SYSNUMFUNCARGCALL, NT_SYSNUMFUNC );
+}
+
+bool comp_eat_sysstrfuncargcall( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // sys-str-fn-arg-call := sys-str-func TOK_LPAREN expr-list TOK_RPAREN .
+    return comp_eat_sysfuncargcall( comp, pnodeoffs, comp_eat_sysstrfunc, NT_SYSSTRFUNCARGCALL, NT_SYSSTRFUNC );
+}
 
 /*
 bool comp_eat_sysnoargstrname( compiler_t* comp, uint16_t* pnodeoffs ) {
