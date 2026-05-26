@@ -76,7 +76,7 @@ bool defrag_memory( program_t* pgm );
 bool create_line( program_t* pgm, linehdr_t* newhdr, const uint8_t* newtokens, uint16_t* poffs );
 bool emplace_line( program_t* pgm, uint16_t prevno, pgmiter_t* curr, uint16_t nextno );
 bool update_line( pgmiter_t* iter, const linehdr_t* newhdr, const uint8_t* newtokens, uint16_t prevno, uint16_t nextno );
-bool enter_line( program_t* pgm, const uint8_t* tokline );
-void list_program( program_t* pgm, uint16_t lineno_first, uint16_t lineno_last );
+bool enter_line( program_t* pgm, const uint8_t* tokline, bool (*directmode)( program_t*, const uint8_t* ) );
+void list_program( program_t* pgm, uint16_t lineno_first, uint16_t lineno_last, void (*printer)( const char* ) );
 
 #endif

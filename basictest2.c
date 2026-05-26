@@ -48,6 +48,24 @@
 #define WHI _CSI _FG _WHI _SGR
 #define NRM _CSI _SGR
 
+static jmp_buf jmp_exit, jmp_loop;
+
+static void rt_halt( struct _runtime_t* rt, void* usrdata ) {
+    longjmp( jmp_exit, 1 );
+}
+
+static void rt_report( struct _runtime_t* rt, void* usrdata, const char* text ) {
+    printf( RED "? %s" NRM "\n", text );
+}
+
+static void comp_halt( struct _compiler_t* comp, void* usrdata ) {
+    longjmp( jmp_loop, 1 );
+}
+
+static void comp_report( struct _compiler_t* comp, void* usrdata, const char* text ) {
+    printf( MAG "? %s" NRM "\n", text );
+}
+
 static void pgm_printer( const char* text ) {
     printf( YEL "%s" NRM "\n", text );
 }
@@ -62,7 +80,22 @@ int main( int argc, char** argv ) {
     program_t pgm;
     init_program( &pgm );
 
+    if ( setjmp( jmp_exit ) ) {
+        printf( RED "*** HALTED" NRM "\n" );
+        return EXIT_FAILURE;
+    }
+
+    runtime_t rt;
+    init_runtime( &rt );
+    rt.halt = rt_halt;
+    rt.report = rt_report;
+
     for (;;) {
+
+        if ( setjmp( jmp_loop ) ) {
+            printf( MAG "*** ERROR" NRM "\n" );
+        }
+
         char buf[1024]; uint8_t tokens[1024];
         buf[0] = '\0';
         if ( fgets( buf, 1024, stdin ) == 0 ) {
@@ -105,8 +138,8 @@ int main( int argc, char** argv ) {
         }
         printf( CYA "%s" NRM "\n", buf );
 
-        if ( !enter_line( &pgm, &tokens[0], directmode ) ) {
-            fprintf( stderr, "enter failed\n" );
+        if ( !enter_line( &pgm, &tokens[0] ) ) {
+            printf( "? Enter failed\n" );
         }
 
         list_program( &pgm, LINENO_NONE, LINENO_NONE, pgm_printer );

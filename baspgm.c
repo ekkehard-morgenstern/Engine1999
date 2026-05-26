@@ -377,13 +377,13 @@ bool update_line( pgmiter_t* iter, const linehdr_t* newhdr, const uint8_t* newto
     return true;
 }
 
-bool enter_line( program_t* pgm, const uint8_t* tokline ) {
+bool enter_line( program_t* pgm, const uint8_t* tokline, bool (*directmode)( program_t*, const uint8_t* ) ) {
     linehdr_t hdr; const uint8_t* p = tokline;
     memset( &hdr, 0, sizeof(linehdr_t) );
     read_linehdr_raw( &p, &hdr );
     if ( hdr.lineno == LINENO_NONE ) {
         // direct mode
-        return direct_mode( pgm, p );
+        return directmode( pgm, p );
     }
     pgmiter_t iter; clear_iter( &iter, pgm ); uint16_t prevno = LINENO_NONE, nextno = LINENO_NONE;
     uint16_t newpos = LINEOFFS_NONE;
@@ -421,7 +421,7 @@ bool enter_line( program_t* pgm, const uint8_t* tokline ) {
     }
 }
 
-void list_program( program_t* pgm, uint16_t lineno_first, uint16_t lineno_last ) {
+void list_program( program_t* pgm, uint16_t lineno_first, uint16_t lineno_last, void (*printer)( const char* ) ) {
 
     bool isEmpty = true;
     if ( !linelist_empty( pgm, LINELIST_POS, &isEmpty ) || isEmpty ) {
@@ -454,7 +454,7 @@ void list_program( program_t* pgm, uint16_t lineno_first, uint16_t lineno_last )
             break;
         }
 
-        printf( "%s\n", buf );
+        printer( buf );
 
     } while ( linelist_nextnode( pgm, line_pos, &line_pos, 0 ) && line_pos != LINEOFFS_NONE );
 }

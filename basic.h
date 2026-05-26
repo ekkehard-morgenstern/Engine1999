@@ -45,8 +45,16 @@
 #include "baspgm.h"
 #endif
 
-#ifndef BASINTP_H
-#include "basintp.h"
+#ifndef VARS_H
+#include "vars.h"
+#endif
+
+#ifndef RUNTIME_H
+#include "runtime.h"
+#endif
+
+#ifndef BASCOMP_H
+#include "bascomp.h"
 #endif
 
 #endif
