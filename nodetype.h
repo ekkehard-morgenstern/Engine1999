@@ -393,7 +393,8 @@ Explanation of node types:
 
     NT_SINGLELINEIFSTMT     Single-line IF statement
         data:
-            - 1 optional byte of TOK_GOTO if THEN/ELSE are goto targets
+            - 1 token byte: IF/UNLESS
+            - 1 token byte: THEN/GOTO/GOSUB
         branches:
             - 1 branch of IF numeric expression
             - 1 branch of THEN gosub/goto target or statement list

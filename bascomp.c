@@ -2624,7 +2624,7 @@ bool comp_eat_thenorgoto( compiler_t* comp, uint8_t* ptok ) {
     // then-kw := TOK_THEN [ goto-kw ] .
     uint8_t tok = TOK_EOL;
     if ( comp->currtok == TOK_THEN && comp_fetchtok( comp ) ) {
-        tok = TOK_GOTO;
+        tok = TOK_THEN;
     }
     if ( comp->currtok == TOK_GO && comp_fetchtok( comp ) ) {
         if ( comp->currtok == TOK_TO ) {
@@ -2650,9 +2650,95 @@ UNEXP:      comp_error( comp, "TO or SUB expected after GO" );
     return true;
 }
 
+bool comp_eat_singlelineifstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // singleline-if-stmt := ( TOK_IF | TOK_UNLESS ) num-expr
+    //                       ( then-kw  goto-target [ TOK_ELSE goto-target ] |
+    //                         TOK_THEN stmt-list   [ TOK_ELSE stmt-list   ] ) .
+    if ( comp->currtok != TOK_IF && comp->currtok != TOK_UNLESS ) {
+        return false;
+    }
+    uint8_t iftok = comp->currtok;
+    // -- first marker: at IF/UNLESS token
+    comp_push_context( comp );
+    if ( !comp_fetchtok( comp ) ) {
+POP:    comp_pop_context( comp );
+        return false;
+    }
+    uint16_t numexpr = NODEOFFS_NONE;
+    if ( !comp_eat_numexpr( comp, &numexpr ) || numexpr == NODEOFFS_NONE ) {
+        goto POP;
+    }
+    uint8_t gotok = TOK_EOL;
+    if ( !comp_eat_thenorgoto( comp, &gotok ) || gotok == TOK_EOL ) {
+        goto POP;
+    }
+    // -- second marker: at THEN or GOTO keyword
+    comp_push_context( comp );
+    uint16_t target1 = NODEOFFS_NONE, target2 = NODEOFFS_NONE;
+    if ( comp_eat_gototarget( comp, &target1 ) && target1 != NODEOFFS_NONE ) {
+        // 1st variant, using one or two goto targets
+        comp_commit_context( comp );
+        comp_commit_context( comp );
+        if ( comp->currtok == TOK_ELSE && comp_fetchtok( comp ) ) {
+            // ELSE branch on 1st variant: Must also be GOTO target
+            if ( !comp_eat_gototarget( comp, &target2 ) || target2 == NODEOFFS_NONE ) {
+                comp_error( comp, "Jump target expected" );
+                return false;
+            }
+        }
+    } else if ( gotok == TOK_THEN ) {
+        // 2nd variant, using two statement lists: make sure we're at the right position
+        comp_pop_context( comp );
+        target1 = NODEOFFS_NONE;
+        if ( !comp_eat_stmtlist( comp, &target1 ) || target1 == NODEOFFS_NONE ) {
+            // doesn't satisfy statement list, could be multiline IF/UNLESS, rewind
+            goto POP;
+        }
+        // commit to the context
+        comp_commit_context( comp );
+        // check for ELSE branch
+        if ( comp->currtok == TOK_ELSE && comp_fetchtok( comp ) ) {
+            // ELSE branch on 1st variant: Must also be GOTO target
+            if ( !comp_eat_stmtlist( comp, &target2 ) || target2 == NODEOFFS_NONE ) {
+                comp_error( comp, "Statement list expected" );
+                return false;
+            }
+        }
+    } else {
+        // unknown variant: rewind
+        comp_pop_context( comp );
+        goto POP;
+    }
+    /*
+        NT_SINGLELINEIFSTMT     Single-line IF statement
+            data:
+                - 1 token byte: IF/UNLESS
+                - 1 token byte: THEN/GOTO/GOSUB
+            branches:
+                - 1 branch of IF numeric expression
+                - 1 branch of THEN gosub/goto target or statement list
+                - 1 optional branch of ELSE gosub/goto target or statement list
+            immediate processing:
+                - THEN/ELSE branches are either both gosub/goto targets or
+                  both statement lists
+    */
+    // at this point, we have our one or two targets
+    uint8_t data[2];
+    data[0] = iftok;
+    data[1] = gotok;
+    if ( !comp_create_node( comp, pnodeoffs, NT_SINGLELINEIFSTMT, UINT8_C(2), UINT16_C(2), data,
+        (int) target1, (int) target2 ) || *pnodeoffs == NODEOFFS_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
+bool comp_eat_multilineifstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
+    return false;
+}
+
 /*
-bool comp_eat_singlelineifstmt( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_multilineifstmt( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_controlflowstmt( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_stmt( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_stmtlist( compiler_t* comp, uint16_t* pnodeoffs );
