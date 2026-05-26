@@ -147,8 +147,8 @@ assign-stmt := let-stmt | dim-stmt | erase-stmt | def-stmt .
 for-stmt := TOK_FOR num-base-var-ref TOK_EQ num-expr TOK_TO num-expr [ TOK_STEP num-expr ] .
 next-stmt := TOK_NEXT [ num-base-var-ref { TOK_COMMA num-base-var-ref } ] .
 
-goto-kw := TOK_GO TOK_TO | TOK_GOTO | TOK_GO TOK_SUB | TOK_GOSUB .
-goto-target := TOK_DECNUM | TOK_NUMIDENT .
+goto-kw := TOK_GOTO | TOK_GOSUB | TOK_GO ( TOK_TO | TOK_SUB ) .
+goto-target := dec-lit | TOK_NUMIDENT .
 goto-stmt := goto-kw goto-target .
 
 return-stmt := TOK_RETURN .

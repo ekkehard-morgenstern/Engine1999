@@ -370,18 +370,15 @@ Explanation of node types:
         branches:
             - 1 branch of variable reference list
 
-    NT_GOTOKW       GOTO/GOSUB keyword
-        data:
-            - 1 byte of keyword token (even if originally written apart)
-
     NT_GOTOTARGET   GOTO/GOSUB target
         data:
-            - 2 bytes of variable offset (label!), or
-            - 8 bytes of line number
+            - 1 byte of type (integer or label)
+            - 2 bytes of line number or variable offset (label!)
 
     NT_GOTOSTMT     GOTO/GOSUB statement
+        data:
+            - 1 byte of GOTO/GOSUB token
         branches:
-            - 1 branch of goto/gosub keyword
             - 1 branch of goto/gosub target
 
     NT_RETURNSTMT   RETURN statement

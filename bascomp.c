@@ -2462,10 +2462,114 @@ bool comp_eat_nextstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
     return true;
 }
 
+bool comp_eat_gototarget( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // dec-lit := TOK_DECLIT | TOK_DEC0 .. TOK_DEC9 .
+    // goto-target := dec-lit | TOK_NUMIDENT .
+    double num = 0; static char label[256]; label[0] = '\0';
+    uint8_t tok = comp->currtok;
+    switch ( tok ) {
+        case TOK_DECLIT:
+            num = comp->number;
+            break;
+        case TOK_DEC0: case TOK_DEC1: case TOK_DEC2: case TOK_DEC3: case TOK_DEC4:
+        case TOK_DEC5: case TOK_DEC6: case TOK_DEC7: case TOK_DEC8: case TOK_DEC9:
+            num = tok - TOK_DEC0;
+            break;
+        case TOK_NUMIDENT:
+            snprintf( label, 256U, "%s", comp->param );
+            break;
+        default:
+            return false;
+    }
+    if ( !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    uint8_t data[3];
+    if ( label[0] == '\0' ) {
+        // line number
+        int64_t ival = (int64_t) num;
+        if ( ival < INT64_C(0) || ival > INT64_C(65535) ) {
+            comp_error( comp, "Invalid line number" );
+            return false;
+        }
+        uint16_t lnum = (uint16_t) ival;
+        data[0] = VARTYPEV_INT;
+        data[1] = (uint8_t)( lnum >> UINT8_C(8) );
+        data[2] = (uint8_t)  lnum;
+    } else {
+        // label: lookup or create
+        uint16_t lvar = VAROFFS_NONE;
+        if ( !vmem_lookup_var( &comp->rt->varmem, VARTYPEV_LABEL, label, &lvar ) || lvar == VAROFFS_NONE ) {
+            lvar = VAROFFS_NONE;
+            if ( !vmem_create_var( &comp->rt->varmem, VARTYPEV_LABEL, label, UINT8_C(0), 0, UINT8_C(0), 0, &lvar ) ||
+                lvar == VAROFFS_NONE ) {
+                out_of_memory( comp );
+                return false;
+            }
+        }
+        // create node
+        data[0] = VARTYPEV_LABEL;
+        data[1] = (uint8_t)( lvar >> UINT8_C(8) );
+        data[2] = (uint8_t)  lvar;
+    }
+    /*
+        NT_GOTOTARGET   GOTO/GOSUB target
+            data:
+                - 1 byte of type (integer or label)
+                - 2 bytes of line number or variable offset (label!)
+    */
+    if ( !comp_create_node( comp, pnodeoffs, NT_GOTOTARGET, UINT8_C(0), UINT16_C(3), data ) || *pnodeoffs == NODEOFFS_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
+bool comp_eat_gotostmt( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // goto-kw := TOK_GOTO | TOK_GOSUB | TOK_GO ( TOK_TO | TOK_SUB ) .
+    // goto-stmt := goto-kw goto-target .
+    uint8_t tok = TOK_EOL;
+    if ( comp->currtok == TOK_GO && comp_fetchtok( comp ) ) {
+        if ( comp->currtok == TOK_TO ) {
+            tok = TOK_GOTO;
+        } else if ( comp->currtok == TOK_SUB ) {
+            tok = TOK_GOSUB;
+        } else {
+UNEXP:      comp_error( comp, "TO or SUB expected after GO" );
+            return false;
+        }
+        if ( !comp_fetchtok( comp ) ) {
+            goto UNEXP;
+        }
+    } else if ( comp->currtok == TOK_GOTO || comp->currtok == TOK_GOSUB ) {
+        tok = comp->currtok;
+        if ( !comp_fetchtok( comp ) ) {
+            return false;
+        }
+    } else {
+        return false;
+    }
+    uint16_t target = NODEOFFS_NONE;
+    if ( !comp_eat_gototarget( comp, &target ) || target == NODEOFFS_NONE ) {
+        comp_error( comp, "Jump target expected" );
+        return false;
+    }
+    /*
+        NT_GOTOSTMT     GOTO/GOSUB statement
+            data:
+                - 1 byte of GOTO/GOSUB token
+            branches:
+                - 1 branch of goto/gosub target
+    */
+    if ( !comp_create_node( comp, pnodeoffs, NT_GOTOSTMT, UINT8_C(1), UINT16_C(1), &tok, (int) target ) ||
+        *pnodeoffs == NODEOFFS_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
 /*
-bool comp_eat_gotokw( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_gototarget( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_gotostmt( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_returnstmt( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_labelstmt( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_singlelineifstmt( compiler_t* comp, uint16_t* pnodeoffs );
