@@ -118,6 +118,7 @@ typedef struct _compiler_t {
     uint32_t        treesize;
     uint16_t        arraydim[MAXDIM];
     uint8_t         numdim;
+    uint16_t        syntree;
 } compiler_t;
 
 void init_compiler( compiler_t* comp, runtime_t* rt, program_t* pgm, bool keepmemory );
@@ -199,7 +200,6 @@ bool comp_eat_printstmt( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_iostmt( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_numassign( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_strassign( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_substrop( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_substrassign( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_anyassign( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_assignlist( compiler_t* comp, uint16_t* pnodeoffs );
@@ -210,7 +210,6 @@ bool comp_eat_defstmt( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_assignstmt( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_forstmt( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_nextstmt( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_gotokw( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_gototarget( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_gotostmt( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_returnstmt( compiler_t* comp, uint16_t* pnodeoffs );
@@ -222,7 +221,6 @@ bool comp_eat_stmt( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_stmtlist( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_stmtline( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_stmtlines( compiler_t* comp, uint16_t* pnodeoffs );
-
 
 bool comp_nextline( compiler_t* comp );
 bool comp_fetchtok( compiler_t* comp );

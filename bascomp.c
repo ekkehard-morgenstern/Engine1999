@@ -41,6 +41,7 @@ void init_compiler( compiler_t* comp, runtime_t* rt, program_t* pgm, bool keepme
     comp->halt     = 0;
     comp->userdata = 0;
     comp->treesize = UINT16_C(0);
+    comp->syntree  = NODEOFFS_NONE;
 }
 
 void comp_error( compiler_t* comp, const char* text ) {
@@ -2488,7 +2489,7 @@ bool comp_eat_gototarget( compiler_t* comp, uint16_t* pnodeoffs ) {
     if ( label[0] == '\0' ) {
         // line number
         int64_t ival = (int64_t) num;
-        if ( ival < INT64_C(0) || ival > INT64_C(65535) ) {
+        if ( ival < (int64_t) LINENO_MIN || ival > (int64_t) LINENO_MAX ) {
             comp_error( comp, "Invalid line number" );
             return false;
         }
@@ -2734,17 +2735,200 @@ POP:    comp_pop_context( comp );
     return true;
 }
 
-bool comp_eat_multilineifstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
+static bool comp_get_endiftoken( compiler_t* comp, uint8_t iftok, uint8_t* pendiftok ) {
+    // endif-kw := TOK_END TOK_IF | TOK_ENDIF .
+    // endunless-kw := TOK_END TOK_UNLESS | TOK_ENDUNLESS .
+    uint8_t endtok = TOK_EOL;
+    switch ( iftok ) {
+        case TOK_IF:        endtok = TOK_ENDIF; break;
+        case TOK_UNLESS:    endtok = TOK_ENDUNLESS; break;
+        default:
+            comp_error( comp, "Internal error (invalid IF token)" );
+            return false;
+    }
+    if ( comp->currtok == TOK_END && comp_fetchtok( comp ) ) {
+        // END IF/UNLESS
+        if ( comp->currtok != iftok || !comp_fetchtok( comp ) ) {
+            comp_error( comp, "END IF/UNLESS expected" );
+            return false;
+        }
+OK:     if ( pendiftok ) {
+            *pendiftok = endtok;
+        }
+        return true;
+    }
+    if ( comp->currtok == endtok && comp_fetchtok( comp ) ) {
+        goto OK;
+    }
     return false;
 }
 
-/*
-bool comp_eat_controlflowstmt( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_stmt( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_stmtlist( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_stmtline( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_stmtlines( compiler_t* comp, uint16_t* pnodeoffs );
-*/
+bool comp_eat_multilineifstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
+    /*
+        endif-kw := TOK_END TOK_IF | TOK_ENDIF .
+        endunless-kw := TOK_END TOK_UNLESS | TOK_ENDUNLESS .
+        multiline-if-stmt := TOK_IF num-expr TOK_THEN TOK_EOL
+                             stmt-lines
+                             [ TOK_ELSE stmt-lines ]
+                             endif-kw |
+                             TOK_UNLESS num-expr TOK_THEN TOK_EOL
+                             stmt-lines
+                             [ TOK_ELSE stmt-lines ]
+                             endunless-kw TOK_EOL .
+    */
+    if ( comp->currtok != TOK_IF && comp->currtok != TOK_UNLESS ) {
+        return false;
+    }
+    uint8_t iftok = comp->currtok;
+    if ( !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    uint16_t numexpr = NODEOFFS_NONE;
+    if ( !comp_eat_numexpr( comp, &numexpr ) || numexpr == NODEOFFS_NONE ) {
+        comp_error( comp, "Numeric expression expected" );
+        return false;
+    }
+    if ( comp->currtok != TOK_THEN || !comp_fetchtok( comp ) ) {
+        comp_error( comp, "THEN expected" );
+        return false;
+    }
+    if ( comp->currtok != TOK_EOL || !comp_fetchtok( comp ) ) {
+        comp_error( comp, "End of line expected" );
+        return false;
+    }
+    uint16_t target1 = NODEOFFS_NONE, target2 = NODEOFFS_NONE;
+    if ( !comp_eat_stmtlines( comp, &target1 ) || target1 == NODEOFFS_NONE ) {
+        comp_error( comp, "Statement list expected" );
+    }
+    if ( comp->currtok == TOK_ELSE && comp_fetchtok( comp ) ) {
+        if ( !comp_eat_stmtlines( comp, &target2 ) || target2 == NODEOFFS_NONE ) {
+            comp_error( comp, "Statement list expected" );
+        }
+    }
+    if ( !comp_get_endiftoken( comp, iftok, 0 ) ) {
+        comp_error( comp, "END IF / END UNLESS / ENDIF / ENDUNLESS expected" );
+        return false;
+    }
+    /*
+        NT_MULTILINEIFSTMT      Multi-line IF statement
+            data:
+                - 1 byte of IF/UNLESS token
+            branches:
+                - 1 branch of statement lines
+                - 1 optional branch of ELSE statement lines
+    */
+    if ( !comp_create_node( comp, pnodeoffs, NT_MULTILINEIFSTMT, UINT8_C(2), UINT16_C(1), &iftok,
+        (int) target1, (int) target2 ) || *pnodeoffs == NODEOFFS_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
+bool comp_eat_controlflowstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // control-flow-stmt := for-stmt | next-stmt | goto-stmt | return-stmt | label-stmt |
+    //                      singleline-if-stmt | multiline-if-stmt .
+    // [ NT_CONTROLFLOWSTMT - not generated ]
+    if ( comp_eat_forstmt( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+        return true;
+    }
+    if ( comp_eat_nextstmt( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+        return true;
+    }
+    if ( comp_eat_gotostmt( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+        return true;
+    }
+    if ( comp_eat_returnstmt( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+        return true;
+    }
+    if ( comp_eat_labelstmt( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+        return true;
+    }
+    if ( comp_eat_singlelineifstmt( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+        return true;
+    }
+    if ( comp_eat_multilineifstmt( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+        return true;
+    }
+    return false;
+}
+
+bool comp_eat_stmt( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // stmt := io-stmt | assign-stmt | control-flow-stmt .
+    // [ NT_STMT - not generated ]
+    if ( comp_eat_iostmt( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+        return true;
+    }
+    if ( comp_eat_assignstmt( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+        return true;
+    }
+    if ( comp_eat_controlflowstmt( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+        return true;
+    }
+    return false;
+}
+
+bool comp_eat_stmtlist( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // stmt-list := stmt { TOK_COLON stmt } .
+    /*
+        NT_STMTLIST         Statement list
+            branches:
+                - 2 or more statements
+            immediate processing:
+                - generated only if more than 1 statement
+    */
+    return comp_eat_list( comp, pnodeoffs, NT_STMTLIST, comp_eat_stmt, TOK_COLON, "Statement expected" );
+}
+
+bool comp_eat_stmtline( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // stmt-line := stmt-list [ TOK_QUOLIT ] TOK_EOL .
+    uint16_t lnum = comp->iter.hdr.lineno;
+    uint16_t stmtlist = NODEOFFS_NONE;
+    if ( !comp_eat_stmtlist( comp, &stmtlist ) || stmtlist == NODEOFFS_NONE ) {
+        return false;
+    }
+    if ( comp->currtok == TOK_QUOLIT ) {
+        comp_fetchtok( comp );
+    }
+    if ( comp->currtok != TOK_EOL ) {
+        comp_error( comp, "End of line expected" );
+        return false;
+    }
+    // ATTN: May return false at the end of text!
+    comp_fetchtok( comp );
+    /*
+        NT_STMTLINE         Statement line
+            data:
+                - 2 bytes of line number (not present in direct mode)
+            branches:
+                - 1 branch of statement list
+                - this is the root node for direct mode
+    */
+    uint8_t data[2];
+    data[0] = (uint8_t)( lnum >> UINT8_C(8) );
+    data[1] = (uint8_t)  lnum;
+    uint16_t datalen = lnum == LINENO_DEL ? UINT16_C(0) : UINT16_C(2);
+    // create node
+    if ( !comp_create_node( comp, pnodeoffs, NT_STMTLINE, UINT8_C(1), datalen, data, (int) stmtlist ) ||
+        *pnodeoffs == NODEOFFS_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
+bool comp_eat_stmtlines( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // stmt-lines := stmt-line { stmt-line } .
+    /*
+        NT_STMTLINES        Statement lines
+            branches:
+                - 2 or more statement lines
+            immediate processing:
+                - generated only if more than 1 statement
+                - this is the root node for program mode
+    */
+    return comp_eat_list( comp, pnodeoffs, NT_STMTLINES, comp_eat_stmtline, TOK_EOL, "Statement line expected" );
+}
 
 bool comp_nextline( compiler_t* comp ) {
     if ( !step_iterate_program( &comp->iter ) ) {
@@ -2820,6 +3004,11 @@ SKIPTOK:
 }
 
 bool begin_comp( compiler_t* comp ) {
+
+    if ( comp->syntree != NODEOFFS_NONE ) {
+        return false;
+    }
+
     // fetch first token
     if ( !comp_fetchtok( comp ) ) {
         return false;
@@ -2835,6 +3024,14 @@ void run_compiler( compiler_t* comp ) {
         return;
     }
 
-    //
+    // compile statement lines
+    if ( !comp_eat_stmtlines( comp, &comp->syntree ) || comp->syntree == NODEOFFS_NONE ) {
+        comp_error( comp, "Statement lines expected" );
+        return;
+    }
 
+    if ( comp->currtok != TOK_EOL ) {
+        comp_error( comp, "Internal error (not at end of text)" );
+        return;
+    }
 }
