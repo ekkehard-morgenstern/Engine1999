@@ -144,7 +144,7 @@ def-stmt := TOK_DEF usr-fn-decl .
 
 assign-stmt := let-stmt | dim-stmt | erase-stmt | def-stmt .
 
-for-stmt := num-base-var-ref TOK_EQ num-expr TOK_TO num-expr [ TOK_STEP num-expr ] .
+for-stmt := TOK_FOR num-base-var-ref TOK_EQ num-expr TOK_TO num-expr [ TOK_STEP num-expr ] .
 next-stmt := TOK_NEXT [ num-base-var-ref { TOK_COMMA num-base-var-ref } ] .
 
 goto-kw := TOK_GO TOK_TO | TOK_GOTO | TOK_GO TOK_SUB | TOK_GOSUB .

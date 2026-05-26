@@ -2385,9 +2385,68 @@ bool comp_eat_assignstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
     return false;
 }
 
+bool comp_eat_forstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // for-stmt := TOK_FOR num-base-var-ref TOK_EQ num-expr TOK_TO num-expr [ TOK_STEP num-expr ] .
+    if ( comp->currtok != TOK_FOR || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    // loop variable
+    uint16_t varref = NODEOFFS_NONE;
+    if ( !comp_eat_numbasevarref( comp, &varref ) || varref == NODEOFFS_NONE ) {
+        comp_error( comp, "Numeric variable expected" );
+        return false;
+    }
+    if ( comp->currtok != TOK_EQ || !comp_fetchtok( comp ) ) {
+        comp_error( comp, "Assignment operator '=' expected" );
+        return false;
+    }
+    // from expression
+    uint16_t fromexp = NODEOFFS_NONE;
+    if ( !comp_eat_numexpr( comp, &fromexp ) || fromexp == NODEOFFS_NONE ) {
+        comp_error( comp, "Numeric expression expected" );
+        return false;
+    }
+    if ( comp->currtok != TOK_TO || !comp_fetchtok( comp ) ) {
+        comp_error( comp, "TO keyword expected" );
+        return false;
+    }
+    // TO expression
+    uint16_t toexp = NODEOFFS_NONE;
+    if ( !comp_eat_numexpr( comp, &toexp ) || toexp == NODEOFFS_NONE ) {
+        comp_error( comp, "Numeric expression expected" );
+        return false;
+    }
+    uint16_t stepexp = NODEOFFS_NONE;
+    if ( comp->currtok == TOK_STEP && comp_fetchtok( comp ) ) {
+        // STEP expression
+        if ( !comp_eat_numexpr( comp, &stepexp ) || stepexp == NODEOFFS_NONE ) {
+            comp_error( comp, "Numeric expression expected" );
+            return false;
+        }
+    }
+    /*
+        NT_FORSTMT      FOR statement
+            branches:
+                - 1 branch of variable reference
+                - 1 branch of FROM expression
+                - 1 branch of TO expression
+                - 1 branch of STEP expression (may be empty)
+    */
+    // create node
+    if ( !comp_create_node( comp, pnodeoffs, NT_FORSTMT, UINT8_C(4), UINT16_C(0), 0,
+        (int) varref, (int) fromexp, (int) toexp, (int) stepexp ) || *pnodeoffs == NODEOFFS_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
+bool comp_eat_nextstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // next-stmt := TOK_NEXT [ num-base-var-ref { TOK_COMMA num-base-var-ref } ] .
+    return false;
+}
+
 /*
-bool comp_eat_forstmt( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_nextstmt( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_gotokw( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_gototarget( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_gotostmt( compiler_t* comp, uint16_t* pnodeoffs );

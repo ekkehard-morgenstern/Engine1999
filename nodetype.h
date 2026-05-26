@@ -360,19 +360,11 @@ Explanation of node types:
     [ NT_ASSIGNSTMT - not generated ]
 
     NT_FORSTMT      FOR statement
-        data:
-            - 2 bytes of numeric variable offset
-            - 8 bytes of starting value
-            - 8 bytes of ending value
-            - optionally, 8 bytes of step value
-        immediate processing:
-            - stores base numeric variable offset in data
-            - the expressions are evaluated and must be constant
-            - their computed values are stored in the data field
-            - NOTE there's no code block associated with the FOR statement
-              the reason for that is the NEXT statement can be located anywhere
-              and has a variable list associated with it. Thus, all context
-              resolution has to happen at runtime through a loop context stack.
+        branches:
+            - 1 branch of variable reference
+            - 1 branch of FROM expression
+            - 1 branch of TO expression
+            - 1 branch of STEP expression (may be empty)
 
     NT_NEXTSTMT     NEXT statement
         data:
