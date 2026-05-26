@@ -2619,6 +2619,37 @@ UNEXP:  comp_error( comp, "Numeric identifier expected" );
     return true;
 }
 
+bool comp_eat_thenorgoto( compiler_t* comp, uint8_t* ptok ) {
+    // goto-kw := TOK_GOTO | TOK_GOSUB | TOK_GO ( TOK_TO | TOK_SUB ) .
+    // then-kw := TOK_THEN [ goto-kw ] .
+    uint8_t tok = TOK_EOL;
+    if ( comp->currtok == TOK_THEN && comp_fetchtok( comp ) ) {
+        tok = TOK_GOTO;
+    }
+    if ( comp->currtok == TOK_GO && comp_fetchtok( comp ) ) {
+        if ( comp->currtok == TOK_TO ) {
+            tok = TOK_GOTO;
+        } else if ( comp->currtok == TOK_SUB ) {
+            tok = TOK_GOSUB;
+        } else {
+UNEXP:      comp_error( comp, "TO or SUB expected after GO" );
+            return false;
+        }
+        if ( !comp_fetchtok( comp ) ) {
+            goto UNEXP;
+        }
+    } else if ( comp->currtok == TOK_GOTO || comp->currtok == TOK_GOSUB ) {
+        tok = comp->currtok;
+        if ( !comp_fetchtok( comp ) ) {
+            return false;
+        }
+    } else if ( tok == TOK_EOL ) {
+        return false;
+    }
+    *ptok = tok;
+    return true;
+}
+
 /*
 bool comp_eat_singlelineifstmt( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_multilineifstmt( compiler_t* comp, uint16_t* pnodeoffs );

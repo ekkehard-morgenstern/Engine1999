@@ -158,7 +158,7 @@ label-stmt := TOK_LABEL TOK_NUMIDENT .
 endif-kw := TOK_END TOK_IF | TOK_ENDIF .
 endunless-kw := TOK_END TOK_UNLESS | TOK_ENDUNLESS .
 
-then-kw := TOK_THEN | goto-kw .
+then-kw := TOK_THEN [ goto-kw ] .
 
 singleline-if-stmt := ( TOK_IF | TOK_UNLESS ) num-expr
            then-kw ( goto-target [ TOK_ELSE goto-target ] |
