@@ -2443,7 +2443,23 @@ bool comp_eat_forstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
 
 bool comp_eat_nextstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
     // next-stmt := TOK_NEXT [ num-base-var-ref { TOK_COMMA num-base-var-ref } ] .
-    return false;
+    if ( comp->currtok != TOK_NEXT || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    uint16_t reflist = NODEOFFS_NONE;
+    comp_eat_list( comp, &reflist, NT_NUMBASEVARREFLIST, comp_eat_numbasevarref, TOK_COMMA, "Numeric variable reference expected" );
+    /*
+        NT_NEXTSTMT     NEXT statement
+            branches:
+                - 1 branch of variable reference list
+    */
+    // create node
+    if ( !comp_create_node( comp, pnodeoffs, NT_NEXTSTMT, UINT8_C(1), UINT16_C(0), 0, (int) reflist ) ||
+        *pnodeoffs == NODEOFFS_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
 }
 
 /*

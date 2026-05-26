@@ -367,8 +367,8 @@ Explanation of node types:
             - 1 branch of STEP expression (may be empty)
 
     NT_NEXTSTMT     NEXT statement
-        data:
-            - at least 2 bytes of numeric variable offset (can be multiple)
+        branches:
+            - 1 branch of variable reference list
 
     NT_GOTOKW       GOTO/GOSUB keyword
         data:
@@ -459,19 +459,12 @@ Explanation of node types:
 #define NT_NUMUSRFNCALL         UINT8_C(0X14)   // numeric user function call
 #define NT_STRUSRFNCALL         UINT8_C(0X15)   // string user function call
 #define NT_STRADDEXPR           UINT8_C(0X17)   // string addition expression
-#define NT_NUMUNARYOP           UINT8_C(0X18)   // numeric unary operator
 #define NT_NUMUNARYEX           UINT8_C(0X19)   // numeric unary expression
-#define NT_NUMMULTOP            UINT8_C(0X1A)   // numeric multiplication operator
 #define NT_NUMMULTEX            UINT8_C(0X1B)   // numeric multiplication expression
-#define NT_NUMADDOP             UINT8_C(0X1C)   // numeric addition operator
 #define NT_NUMADDEX             UINT8_C(0X1D)   // numeric addition expression
-#define NT_NUMSHIFTOP           UINT8_C(0X1E)   // numeric shift operator
 #define NT_NUMSHIFTEX           UINT8_C(0X1F)   // numeric shift expression
-#define NT_NUMCMPOP             UINT8_C(0X20)   // numeric comparison operator
 #define NT_NUMCMPEX             UINT8_C(0X21)   // numeric shift expression
-#define NT_NUMANDOP             UINT8_C(0X22)   // numeric AND operator
 #define NT_NUMANDEX             UINT8_C(0X23)   // numeric AND expression
-#define NT_NUMOROP              UINT8_C(0X24)   // numeric OR operator
 #define NT_NUMOREX              UINT8_C(0X25)   // numeric OR expression
 #define NT_SAVESTMT             UINT8_C(0X26)   // SAVE statement
 #define NT_CHANSPEC             UINT8_C(0X27)   // channel specifier
@@ -512,5 +505,13 @@ Explanation of node types:
 #define NT_SYSNOARGSTRCALL      UINT8_C(0X16)   // system no-argument string function call
 #define NT_SYSNOARGNUMCALL      UINT8_C(0X4A)   // system no-argument number function call
 #define NT_OPERATOR             UINT8_C(0X4B)   // operator token
+#define NT_NUMBASEVARREFLIST    UINT8_C(0X4C)   // numeric base variable reference list
+#define NT_ZZZZZZZZ1            UINT8_C(0X18)   //
+#define NT_ZZZZZZZZ2            UINT8_C(0X1A)   //
+#define NT_ZZZZZZZZ3            UINT8_C(0X1C)   //
+#define NT_ZZZZZZZZ4            UINT8_C(0X1E)   //
+#define NT_ZZZZZZZZ5            UINT8_C(0X20)   //
+#define NT_ZZZZZZZZ6            UINT8_C(0X22)   //
+#define NT_ZZZZZZZZ7            UINT8_C(0X24)   //
 
 #endif
