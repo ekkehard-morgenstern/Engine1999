@@ -2301,10 +2301,91 @@ bool comp_eat_letstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
     return true;
 }
 
+bool comp_eat_dimstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // dim-stmt := TOK_DIM array-decl-list .
+    if ( comp->currtok != TOK_DIM || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    uint16_t decllist = NODEOFFS_NONE;
+    if ( !comp_eat_arraydecllist( comp, &decllist ) || decllist == NODEOFFS_NONE ) {
+        comp_error( comp, "Array declaration list expected" );
+        return false;
+    }
+    /*
+        NT_DIMSTMT      DIM statement
+            branches:
+                - 1 branch of array declarator list
+    */
+    if ( !comp_create_node( comp, pnodeoffs, NT_DIMSTMT, UINT8_C(1), UINT16_C(0), 0, (int) decllist ) ||
+        *pnodeoffs == NODEOFFS_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
+bool comp_eat_erasestmt( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // erase-stmt := TOK_ERASE empty-array-ref-list .
+    if ( comp->currtok != TOK_ERASE || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    uint16_t reflist = NODEOFFS_NONE;
+    if ( !comp_eat_emptyarrayreflist( comp, &reflist ) || reflist == NODEOFFS_NONE ) {
+        comp_error( comp, "Empty array reference list expected" );
+        return false;
+    }
+    /*
+        NT_ERASESTMT    ERASE statement
+            branches:
+                - 1 branch of empty array reference list
+    */
+    if ( !comp_create_node( comp, pnodeoffs, NT_ERASESTMT, UINT8_C(1), UINT16_C(0), 0, (int) reflist ) ||
+        *pnodeoffs == NODEOFFS_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
+bool comp_eat_defstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // def-stmt := TOK_DEF usr-fn-decl .
+    uint16_t fndecl = NODEOFFS_NONE;
+    if ( !comp_eat_usrfndecl( comp, &fndecl ) || fndecl == NODEOFFS_NONE ) {
+        comp_error( comp, "User function declaration expected" );
+        return false;
+    }
+    /*
+        NT_DEFSTMT      DEF statement
+            branches:
+                - 1 branch of user function declaration
+    */
+    if ( !comp_create_node( comp, pnodeoffs, NT_DEFSTMT, UINT8_C(1), UINT16_C(0), 0, (int) fndecl ) ||
+        *pnodeoffs == NODEOFFS_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
+bool comp_eat_assignstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // assign-stmt := let-stmt | dim-stmt | erase-stmt | def-stmt .
+    // [ NT_ASSIGNSTMT - not generated ]
+    if ( comp_eat_letstmt( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+        return true;
+    }
+    if ( comp_eat_dimstmt( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+        return true;
+    }
+    if ( comp_eat_erasestmt( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+        return true;
+    }
+    if ( comp_eat_defstmt( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+        return true;
+    }
+    return false;
+}
+
 /*
-bool comp_eat_dimstmt( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_erasestmt( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_assignstmt( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_forstmt( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_nextstmt( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_gotokw( compiler_t* comp, uint16_t* pnodeoffs );
