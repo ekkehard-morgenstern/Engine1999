@@ -191,6 +191,7 @@
 #define TOK_INTIDENT    UINT8_C(140)        // integer identifier
 #define TOK_FRE         UINT8_C(141)        // FRE function
 #define TOK_TI          UINT8_C(142)        // TI function
+#define TOK_LABEL       UINT8_C(143)        // LABEL keyword
 
 // -- single character tokens -----------------------------------------------
 

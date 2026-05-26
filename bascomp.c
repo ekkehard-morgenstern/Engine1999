@@ -2569,9 +2569,57 @@ UNEXP:      comp_error( comp, "TO or SUB expected after GO" );
     return true;
 }
 
+bool comp_eat_returnstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // return-stmt := TOK_RETURN .
+    if ( comp->currtok != TOK_RETURN || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    if ( !comp_create_node( comp, pnodeoffs, NT_RETURNSTMT, UINT8_C(0), UINT16_C(0), 0 ) || *pnodeoffs == NODEOFFS_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
+bool comp_eat_labelstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // label-stmt := TOK_LABEL TOK_NUMIDENT .
+    if ( comp->currtok != TOK_LABEL || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    if ( comp->currtok != TOK_NUMIDENT ) {
+UNEXP:  comp_error( comp, "Numeric identifier expected" );
+        return false;
+    }
+    static char label[256];
+    snprintf( label, 256U, "%s", comp->param );
+    if ( !comp_fetchtok( comp ) ) {
+        goto UNEXP;
+    }
+    uint16_t labvar = VAROFFS_NONE;
+    if ( !vmem_lookup_var( &comp->rt->varmem, VARTYPEV_LABEL, label, &labvar ) || labvar == VAROFFS_NONE ) {
+        labvar = VAROFFS_NONE;
+        if ( !vmem_create_var( &comp->rt->varmem, VARTYPEV_LABEL, label, UINT8_C(0), 0, UINT16_C(0), 0, &labvar ) ||
+            labvar == VAROFFS_NONE ) {
+            out_of_memory( comp );
+            return false;
+        }
+    }
+    /*
+        NT_LABELSTMT    LABEL statement
+            data:
+                - 2 bytes of label variable offset
+    */
+    uint8_t data[2];
+    data[0] = (uint8_t)( labvar >> UINT8_C(8) );
+    data[1] = (uint8_t)  labvar;
+    if ( !comp_create_node( comp, pnodeoffs, NT_LABELSTMT, UINT8_C(0), UINT16_C(2), data ) || *pnodeoffs == NODEOFFS_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
 /*
-bool comp_eat_returnstmt( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_labelstmt( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_singlelineifstmt( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_multilineifstmt( compiler_t* comp, uint16_t* pnodeoffs );
 bool comp_eat_controlflowstmt( compiler_t* comp, uint16_t* pnodeoffs );
