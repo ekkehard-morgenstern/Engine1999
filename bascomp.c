@@ -997,7 +997,8 @@ bool comp_eat_strlit( compiler_t* comp, uint16_t* pnodeoffs ) {
     if ( !comp_fetchtok( comp ) ) {
         return false;
     }
-    if ( !comp_create_node( comp, pnodeoffs, data[0], UINT8_C(0), (uint16_t)( 1U + len ), data ) || *pnodeoffs == NODEOFFS_NONE ) {
+    if ( !comp_create_node( comp, pnodeoffs, NT_STRLIT, UINT8_C(0), (uint16_t)( 1U + len ), data ) ||
+        *pnodeoffs == NODEOFFS_NONE ) {
         out_of_memory( comp );
         return false;
     }
