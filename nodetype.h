@@ -512,4 +512,6 @@ Explanation of node types:
 #define NT_ZZZZZZZZ6            UINT8_C(0X22)   //
 #define NT_ZZZZZZZZ7            UINT8_C(0X24)   //
 
+const char* nodename( uint8_t nodetype );
+
 #endif

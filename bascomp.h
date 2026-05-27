@@ -132,6 +132,7 @@ bool comp_alloc_tree( compiler_t* comp, uint16_t size, uint16_t* poffs );
 bool comp_create_node( compiler_t* comp, uint16_t* pnodeoffs, uint8_t nodetype, uint8_t numbranches, uint16_t datalen,
     const void* pdata, ... );
 bool comp_add_branch( compiler_t* comp, uint16_t nodeoffs, uint16_t branchoffs );
+bool comp_node_iter_branches( compiler_t* comp, uint16_t nodeoffs, void* userdata, bool (*callback)( void*, uint16_t ) );
 
 typedef bool (*comp_eatfn_t)( compiler_t*, uint16_t* );
 

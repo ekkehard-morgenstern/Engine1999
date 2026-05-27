@@ -38,11 +38,11 @@ CL=$(CCOMP) $(CFLAGS)
 .c.o:
 	$(CC) -o $@ $<
 
-all: sdltest1 engine1999 basictest1 testcomp1
+all: sdltest1 engine1999 basictest1 testcomp1 basictest2
 	echo ok >all
 
 BASEMOD=sdlevent.o sdllayer.o sdlmain.o sdlscreen.o textscreen.o tilescreen.o sprscreen.o 8x12font1.o sdlaudio.o sdlutil.o \
-		basic.o basintp.o baspgm.o baslin.o bastok.o bascomp.o codegen.o vars.o runtime.o
+		basic.o basintp.o baspgm.o baslin.o bastok.o bascomp.o nodetype.o codegen.o vars.o runtime.o
 BASEHDR=sdlevent.h sdllayer.h sdlmain.h sdlscreen.h sdltypes.h textscreen.h tilescreen.h sprscreen.h unxtypes.h sdlaudio.h sdlutil.h basic.h basintp.h baspgm.h baslin.h bastok.h bascomp.h nodetype.h codegen.h instset.h vars.h runtime.h
 
 LIBMOD=$(BASEMOD)
@@ -63,6 +63,11 @@ basictest1: basictest1.o $(LIBNAME)
 	$(CL) -o basictest1 basictest1.o $(LIBNAME) -lm
 
 basictest1.o: basictest1.c $(LIBHDR)
+
+basictest2: basictest2.o $(LIBNAME)
+	$(CL) -o basictest2 basictest2.o $(LIBNAME) -lm
+
+basictest2.o: basictest2.c $(LIBHDR)
 
 testcomp1: testcomp1.o $(LIBNAME)
 	$(CL) -o testcomp1 testcomp1.o $(LIBNAME) -lrt -lm
@@ -104,6 +109,8 @@ bastok.o: bastok.c $(BASEHDR)
 basintp.o: basintp.c $(BASEHDR)
 
 bascomp.o: bascomp.c $(BASEHDR)
+
+nodetype.o: nodetype.c $(BASEHDR)
 
 codegen.o: codegen.c $(BASEHDR)
 

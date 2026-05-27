@@ -50,6 +50,8 @@
 
 static jmp_buf jmp_exit, jmp_loop;
 
+static void rt_halt( struct _runtime_t* rt, void* usrdata ) ATTR_NORETURN;
+
 static void rt_halt( struct _runtime_t* rt, void* usrdata ) {
     longjmp( jmp_exit, 1 );
 }
@@ -57,6 +59,8 @@ static void rt_halt( struct _runtime_t* rt, void* usrdata ) {
 static void rt_report( struct _runtime_t* rt, void* usrdata, const char* text ) {
     printf( RED "? %s" NRM "\n", text );
 }
+
+static void comp_halt( struct _compiler_t* comp, void* usrdata ) ATTR_NORETURN;
 
 static void comp_halt( struct _compiler_t* comp, void* usrdata ) {
     longjmp( jmp_loop, 1 );
@@ -70,9 +74,99 @@ static void pgm_printer( const char* text ) {
     printf( YEL "%s" NRM "\n", text );
 }
 
+static runtime_t rt;
+static compiler_t comp;
+
+static void dumpdataline( const uint8_t* ptr, uint16_t offs, uint16_t cnt, int indent ) {
+    // 00000000001111111111222222222233333333334444444444
+    // 01234567890123456789012345678901234567890123456789
+    // 0000:  00 00 00 00  00 00 00 00  .... ....
+    static char buf[43];
+    static const char hex[] = "0123456789ABCDEF";
+    memset( buf, ' ', 42 ); buf[42] = '\0';
+    buf[0] = hex[ ( offs >> UINT8_C(12) ) & 15U ];
+    buf[1] = hex[ ( offs >> UINT8_C( 8) ) & 15U ];
+    buf[2] = hex[ ( offs >> UINT8_C( 4) ) & 15U ];
+    buf[3] = hex[ ( offs                ) & 15U ];
+    for ( uint16_t i=0; i < cnt; ++i ) {
+        int pos1, pos2;
+        if ( i < UINT16_C(4) ) {
+            pos1 = 7 + i * 3;
+            pos2 = 33 + i;
+        } else {
+            pos1 = 20 + ( i - UINT16_C(4) ) * 3;
+            pos2 = 38 + ( i - UINT16_C(4) );
+        }
+        uint8_t b = ptr[offs+i];
+        buf[pos1++] = hex[ ( b >> UINT8_C(4) ) & 15U ];
+        buf[pos1  ] = hex[   b                 & 15U ];
+        buf[pos2  ] = b >= UINT8_C(32) && b <= UINT8_C(126) ? b : UINT8_C(46);
+    }
+    printf( "%-*.*s%s\n", indent, indent, "", buf );
+}
+
+static void dumpdata( const uint8_t* ptr, uint16_t len, int indent ) {
+    for ( uint16_t offs=0; offs < len; offs += UINT16_C(8) ) {
+        uint16_t rem = len - offs;
+        if ( rem > UINT8_C(8) ) {
+            rem = UINT8_C(8);
+        }
+        dumpdataline( ptr, offs, rem, indent );
+    }
+}
+
+typedef struct _printnodedata_t {
+    int indent;
+} printnodedata_t;
+
+static void printnode( uint16_t nodeoffs, int indent );
+
+static bool printbranch( void* userdata, uint16_t nodeoffs ) {
+    printnodedata_t* data = (printnodedata_t*) userdata;
+    printnode( nodeoffs, data->indent );
+    return true;
+}
+
+static void printnode( uint16_t nodeoffs, int indent ) {
+    if ( nodeoffs == NODEOFFS_NONE ) {
+        return;
+    }
+    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    uint8_t  nodetype = comp.tree[ nodeoffs ];
+    uint16_t datalen  = EXTRACT16( &comp, nodeoffs + 2U );
+    uint16_t dataoffs = nodeoffs + UINT16_C(8);
+    printf( "%-*.*s%s\n", indent, indent, "", nodename( nodetype ) );
+    if ( datalen ) {
+        dumpdata( &comp.tree[ dataoffs ], datalen, indent + 2 );
+    }
+    uint8_t numbranches = comp.tree[ nodeoffs + 1U ];
+    if ( numbranches ) {
+        printnodedata_t printdata; printdata.indent = indent + 2;
+        comp_node_iter_branches( &comp, nodeoffs, &printdata, printbranch );
+    }
+}
+
+static void printtree( void ) {
+    uint16_t rootnode = comp.syntree;
+    if ( rootnode != NODEOFFS_NONE ) {
+        printnode( rootnode, 0 );
+    } else {
+        printf( "no syntax tree\n" );
+    }
+}
+
 static bool directmode( program_t* pgm, const uint8_t* tokens ) {
     printf( "direct mode\n" );
-    return false;
+    pgmiter_t iter; memset( &iter, 0, sizeof(iter) );
+    iter.hdr.lineno = LINENO_DEL;
+    iter.tok = (uint8_t*) tokens;
+    init_compiler( &comp, &rt, 0, false );
+    comp.iter   = iter;
+    comp.halt   = comp_halt;
+    comp.report = comp_report;
+    run_compiler( &comp );
+    printtree();
+    return true;
 }
 
 int main( int argc, char** argv ) {
@@ -85,7 +179,6 @@ int main( int argc, char** argv ) {
         return EXIT_FAILURE;
     }
 
-    runtime_t rt;
     init_runtime( &rt );
     rt.halt = rt_halt;
     rt.report = rt_report;
@@ -138,7 +231,7 @@ int main( int argc, char** argv ) {
         }
         printf( CYA "%s" NRM "\n", buf );
 
-        if ( !enter_line( &pgm, &tokens[0] ) ) {
+        if ( !enter_line( &pgm, &tokens[0], directmode ) ) {
             printf( "? Enter failed\n" );
         }
 
