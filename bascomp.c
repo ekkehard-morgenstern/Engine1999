@@ -823,9 +823,9 @@ printf( "vartype=%02" PRIx8 ", typeind=%02" PRIx8 ", name='%s'\n", vartype, type
     data[2] = (uint8_t)  varoffs;
 
     if ( arrayindexnode != NODEOFFS_NONE ) {
-        ok = comp_create_node( comp, pnodeoffs, nodetype, UINT8_C(0), UINT8_C(3), data, (int) arrayindexnode );
+        ok = comp_create_node( comp, pnodeoffs, nodetype, UINT8_C(1), UINT8_C(3), data, (int) arrayindexnode );
     } else {
-        ok = comp_create_node( comp, pnodeoffs, NT_NUMVARREF, UINT8_C(0), UINT8_C(3), data );
+        ok = comp_create_node( comp, pnodeoffs, nodetype, UINT8_C(0), UINT8_C(3), data );
     }
     if ( !ok || *pnodeoffs == NODEOFFS_NONE ) {
         out_of_memory( comp );
@@ -2190,7 +2190,7 @@ bool comp_eat_strassign( compiler_t* comp, uint16_t* pnodeoffs ) {
         return false;
     }
     uint16_t strexpr = NODEOFFS_NONE;
-    if ( !comp_eat_numexpr( comp, &strexpr ) || strexpr == NODEOFFS_NONE ) {
+    if ( !comp_eat_strexpr( comp, &strexpr ) || strexpr == NODEOFFS_NONE ) {
         comp_error( comp, "String expression expected" );
         return false;
     }
