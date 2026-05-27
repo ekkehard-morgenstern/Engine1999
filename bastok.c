@@ -153,7 +153,6 @@ bool ri_sigil = false;
 bool read_ident( const uint8_t** pp, char target[256] ) {
     const uint8_t* p = *pp;
     uint8_t tok = *p++;
-printf( "tok=%02" PRIx8 "\n", tok );
     switch ( tok ) {
         case TOK_IDENT: case TOK_NUMIDENT: case TOK_STRIDENT: case TOK_INTIDENT:
             break;
@@ -161,7 +160,6 @@ printf( "tok=%02" PRIx8 "\n", tok );
             return false;
     }
     size_t len = *p++;
-printf( "len=%zu\n", len );
     if ( tok != TOK_IDENT && tok != TOK_NUMIDENT ) {
         if ( ri_sigil && len == UINT8_C(255) ) {
             --len;
@@ -179,7 +177,6 @@ printf( "len=%zu\n", len );
         }
     }
     target[ len ] = '\0';
-printf( "target='%s'\n", target );
     *pp = p;
     return true;
 }

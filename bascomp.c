@@ -766,7 +766,6 @@ NOSUB:      comp_error( comp, "Internal error (array subscript expected)" );
     // read variable reference
     //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
     uint16_t datalen  = EXTRACT16( comp, varnodeoffs + 2U );
-printf( "datalen=%04" PRIx16 "\n", datalen );
     uint16_t dataoffs = varnodeoffs + UINT16_C(8);
     static char name[256]; name[0] = '\0';
     uint8_t vartype = arraysubnode != NODEOFFS_NONE ? VARTYPEF_ARRAY : UINT8_C(0);
@@ -784,7 +783,6 @@ printf( "datalen=%04" PRIx16 "\n", datalen );
         }
         name[ namelen ] = '\0';
         vartype |= typeind & VARTYPEM_BASE;
-printf( "vartype=%02" PRIx8 ", typeind=%02" PRIx8 ", name='%s'\n", vartype, typeind, name );
     } else {
         comp_error( comp, "Internal error (base variable reference expected)" );
         return false;
