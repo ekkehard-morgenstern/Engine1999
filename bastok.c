@@ -148,6 +148,7 @@ bool emit_ident( uint8_t** pp, const char source[256], size_t* premain, uint8_t 
 bool read_ident( const uint8_t** pp, char target[256] ) {
     const uint8_t* p = *pp;
     uint8_t tok = *p++;
+printf( "tok=%02" PRIx8 "\n", tok );
     switch ( tok ) {
         case TOK_IDENT: case TOK_NUMIDENT: case TOK_STRIDENT: case TOK_INTIDENT:
             break;
@@ -155,6 +156,7 @@ bool read_ident( const uint8_t** pp, char target[256] ) {
             return false;
     }
     size_t len = *p++;
+printf( "len=%zu\n", len );
     if ( tok != TOK_IDENT && tok != TOK_NUMIDENT ) {
         if ( len == UINT8_C(255) ) {
             --len;
@@ -170,6 +172,7 @@ bool read_ident( const uint8_t** pp, char target[256] ) {
         target[ len++ ] = '%';
     }
     target[ len ] = '\0';
+printf( "target='%s'\n", target );
     *pp = p;
     return true;
 }

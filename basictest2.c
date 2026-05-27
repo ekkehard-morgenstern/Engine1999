@@ -57,7 +57,7 @@ static void rt_halt( struct _runtime_t* rt, void* usrdata ) {
 }
 
 static void rt_report( struct _runtime_t* rt, void* usrdata, const char* text ) {
-    printf( RED "? %s" NRM "\n", text );
+    printf( RED "%s" NRM "\n", text );
 }
 
 static void comp_halt( struct _compiler_t* comp, void* usrdata ) ATTR_NORETURN;
@@ -67,7 +67,7 @@ static void comp_halt( struct _compiler_t* comp, void* usrdata ) {
 }
 
 static void comp_report( struct _compiler_t* comp, void* usrdata, const char* text ) {
-    printf( MAG "? %s" NRM "\n", text );
+    printf( MAG "%s" NRM "\n", text );
 }
 
 static void pgm_printer( const char* text ) {

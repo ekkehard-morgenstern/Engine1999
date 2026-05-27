@@ -766,23 +766,25 @@ NOSUB:      comp_error( comp, "Internal error (array subscript expected)" );
     // read variable reference
     //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
     uint16_t datalen  = EXTRACT16( comp, varnodeoffs + 2U );
+printf( "datalen=%04" PRIx16 "\n", datalen );
     uint16_t dataoffs = varnodeoffs + UINT16_C(8);
     static char name[256]; name[0] = '\0';
     uint8_t vartype = arraysubnode != NODEOFFS_NONE ? VARTYPEF_ARRAY : UINT8_C(0);
     if ( comp->tree[ varnodeoffs ] == basetype ) {
-        if ( datalen < UINT16_C(2) ) {
+        if ( datalen < UINT16_C(2) || datalen >= UINT16_C(256) ) {
             comp_error( comp, "Internal error (fault in variable reference)" );
             return false;
         }
         // data:
         //    - 1 byte of type indicator, n bytes of name
         uint8_t typeind = comp->tree[ dataoffs++ ];
-        uint8_t namelen = comp->tree[ dataoffs++ ];
+        uint8_t namelen = datalen - UINT16_C(1);
         if ( namelen ) {
             memcpy( name, &comp->tree[ dataoffs ], namelen );
         }
         name[ namelen ] = '\0';
         vartype |= typeind & VARTYPEM_BASE;
+printf( "vartype=%02" PRIx8 ", typeind=%02" PRIx8 ", name='%s'\n", vartype, typeind, name );
     } else {
         comp_error( comp, "Internal error (base variable reference expected)" );
         return false;
@@ -2350,6 +2352,9 @@ bool comp_eat_erasestmt( compiler_t* comp, uint16_t* pnodeoffs ) {
 
 bool comp_eat_defstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
     // def-stmt := TOK_DEF usr-fn-decl .
+    if ( comp->currtok != TOK_DEF || !comp_fetchtok( comp ) ) {
+        return false;
+    }
     uint16_t fndecl = NODEOFFS_NONE;
     if ( !comp_eat_usrfndecl( comp, &fndecl ) || fndecl == NODEOFFS_NONE ) {
         comp_error( comp, "User function declaration expected" );
@@ -2974,6 +2979,7 @@ printf( "*** TOKEN: %02" PRIx8 "\n", tok );
     };
     for ( int i=0; littbl[i].tok; ++i ) {
         if ( littbl[i].tok == tok ) {
+            --comp->tokp;
             if ( !littbl[i].read_fn( (const uint8_t**)(&comp->tokp), comp->param ) ) {
                 return false;
             }
