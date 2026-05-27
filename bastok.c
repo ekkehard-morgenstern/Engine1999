@@ -148,6 +148,8 @@ bool emit_ident( uint8_t** pp, const char source[256], size_t* premain, uint8_t 
     return true;
 }
 
+bool ri_sigil = false;
+
 bool read_ident( const uint8_t** pp, char target[256] ) {
     const uint8_t* p = *pp;
     uint8_t tok = *p++;
@@ -161,7 +163,7 @@ printf( "tok=%02" PRIx8 "\n", tok );
     size_t len = *p++;
 printf( "len=%zu\n", len );
     if ( tok != TOK_IDENT && tok != TOK_NUMIDENT ) {
-        if ( len == UINT8_C(255) ) {
+        if ( ri_sigil && len == UINT8_C(255) ) {
             --len;
         }
     }
@@ -169,10 +171,12 @@ printf( "len=%zu\n", len );
         memcpy( target, p, len );
         p += len;
     }
-    if ( tok == TOK_STRIDENT ) {
-        target[ len++ ] = '$';
-    } else if ( tok == TOK_INTIDENT ) {
-        target[ len++ ] = '%';
+    if ( ri_sigil ) {
+        if ( tok == TOK_STRIDENT ) {
+            target[ len++ ] = '$';
+        } else if ( tok == TOK_INTIDENT ) {
+            target[ len++ ] = '%';
+        }
     }
     target[ len ] = '\0';
 printf( "target='%s'\n", target );
@@ -714,6 +718,7 @@ bool detokenize_line( char* buf, const uint8_t* wherefrom, size_t* premain, cons
             return false;
         }
     }
+    ri_sigil = true;    // for identifiers, we want the sigil to be returned
     while ( *s != TOK_EOL ) {
         uint8_t tok = *s; char item[256];
         static const struct {

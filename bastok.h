@@ -211,6 +211,7 @@ void read_uint16( const uint8_t** pp, uint16_t* target );
 bool eat_ident( const char** pp, char target[256] );
 bool print_ident( char** pp, size_t* premain, const char source[256] );
 bool emit_ident( uint8_t** pp, const char source[256], size_t* premain, uint8_t tok );
+extern bool ri_sigil;
 bool read_ident( const uint8_t** pp, char target[256] );
 
 // -- literals (general) ----------------------------------------------------

@@ -2983,6 +2983,7 @@ printf( "*** TOKEN: %02" PRIx8 "\n", tok );
         { TOK_QUALIT, read_qualit }, { TOK_BINLIT, read_binlit }, { TOK_SHLLIT, read_shllit }, { TOK_QUOLIT, read_quolit },
         { TOK_BRKLIT, read_brklit }, { TOK_BRCLIT, read_brclit }, { 0, 0 }
     };
+    ri_sigil = false;    // for identifiers, we DON'T want the sigil to be returned
     for ( int i=0; littbl[i].tok; ++i ) {
         if ( littbl[i].tok == tok ) {
             --comp->tokp;
