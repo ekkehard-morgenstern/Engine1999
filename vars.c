@@ -152,11 +152,12 @@ bool vmem_lookup_var( varmem_t* vmem, uint8_t vartype, const char* name, uint16_
         uint16_t offs = VEXTRACT16( vmem, indexpos );
         if ( offs == VAROFFS_NONE ) {
             // variable is unused; skip
+printf( "+++ unused\n" );
             continue;
         }
         // offset points to a variable header: check
         // <size.16> <type.8> <namelen.8> <name...> [ <numdims.8> <arraydims...> | <numargs> <argdesc...> ] <data...>
-        uint16_t var_type = VEXTRACT16( vmem, offs + 2U );
+        uint8_t var_type = vmem->vars[ offs + 2U ];
         /*
             +---+---+---+---++---+---+---+---+
             | . | . | f | s || e | e | e | e |
@@ -165,11 +166,13 @@ bool vmem_lookup_var( varmem_t* vmem, uint8_t vartype, const char* name, uint16_
         if ( var_type != vartype ) {
             // wrong variable type, skip ->
             // (in BASIC, it's permitted to have variables with same name but different type, like 'a$' and 'a' are distinct)
+printf( "+++ diff type\n" );
             continue;
         }
         uint8_t name_len = vmem->vars[ offs + 3U ];
         if ( name_len != namelen ) {
             // different name length, skip ->
+printf( "+++ diff name\n" );
             continue;
         }
         if ( memcmp( &vmem->vars[ offs + 4U ], name, name_len ) != 0 ) {
@@ -177,10 +180,12 @@ bool vmem_lookup_var( varmem_t* vmem, uint8_t vartype, const char* name, uint16_
             continue;
         }
         // exact match: return variable index offset
+printf( "*** VAR '%s' type %02" PRIx8 " found at %04" PRIx16 "\n", name, vartype, indexpos );
         *poutoffs = indexpos;
         return true;
     }
     // not found
+printf( "*** VAR '%s' type %02" PRIx8 " not found\n", name, vartype );
     *poutoffs = VAROFFS_NONE;
     return true;
 }
@@ -387,6 +392,8 @@ TOOLARGE:   vmem_error( vmem, "Array too large" );
 
     // set the variable index entry
     VWRITE16( vmem, indexpos, membeg );
+
+    printf( "*** VAR '%s' type %02" PRIx8 " created at %04" PRIx16 " (%04" PRIx16 ")\n", name, vartype, indexpos, membeg );
 
     // return the variable index position
     *poutoffs = indexpos;
