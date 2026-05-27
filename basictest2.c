@@ -157,11 +157,9 @@ static void printtree( void ) {
 
 static bool directmode( program_t* pgm, const uint8_t* tokens ) {
     printf( "direct mode\n" );
-    pgmiter_t iter; memset( &iter, 0, sizeof(iter) );
-    iter.hdr.lineno = LINENO_DEL;
-    iter.tok = (uint8_t*) tokens;
     init_compiler( &comp, &rt, 0, false );
-    comp.iter   = iter;
+    comp.iter.hdr.lineno = LINENO_NONE;
+    comp.tokp   = (uint8_t*) tokens;
     comp.halt   = comp_halt;
     comp.report = comp_report;
     run_compiler( &comp );

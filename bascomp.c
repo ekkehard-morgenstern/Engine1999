@@ -29,10 +29,10 @@
 void init_compiler( compiler_t* comp, runtime_t* rt, program_t* pgm, bool keepmemory ) {
     comp->rt = rt;
     clear_iter( &comp->iter, pgm );
-    comp->tokp = 0;
-    comp->currtok = TOK_EOL;
+    comp->tokp     = 0;
+    comp->currtok  = TOK_NONE;
     comp->treesize = UINT16_C(0);
-    comp->ctxstk = 0;
+    comp->ctxstk   = 0;
     // CAUTION: Set the "keepmemory" flag only if you know what you're doing!
     if ( keepmemory ) {
         return;
@@ -2935,7 +2935,7 @@ bool comp_nextline( compiler_t* comp ) {
         return false;
     }
     comp->tokp = comp->iter.tok;
-    comp->currtok = TOK_EOL;
+    comp->currtok = TOK_NONE;
     return true;
 }
 
@@ -2955,6 +2955,7 @@ NEXTTOK:
     }
 SKIPTOK:
     uint8_t tok = comp->currtok = *comp->tokp++;
+printf( "*** TOKEN: %02" PRIx8 "\n", tok );
     if ( tok == TOK_EOL ) {
         --comp->tokp;
         return true;
@@ -3006,11 +3007,13 @@ SKIPTOK:
 bool begin_comp( compiler_t* comp ) {
 
     if ( comp->syntree != NODEOFFS_NONE ) {
+        comp_error( comp, "Internal error (syntax tree already exists)" );
         return false;
     }
 
     // fetch first token
     if ( !comp_fetchtok( comp ) ) {
+printf( "*** empty line\n" );
         return false;
     }
 
