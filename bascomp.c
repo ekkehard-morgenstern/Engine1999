@@ -1766,6 +1766,9 @@ bool comp_eat_list2( compiler_t* comp, uint16_t* pnodeoffs, uint8_t nodetype, co
                 break;
             }
             mandatory = true;   // the following expression is mandatory
+        } else {
+            // operator not found: stop
+            break;
         }
         if ( !element_eater( comp, &expr2 ) || expr2 == NODEOFFS_NONE ) {
             if ( mandatory ) {  // mandatory expression missing: stop
@@ -1832,6 +1835,9 @@ bool comp_eat_numunaryex( compiler_t* comp, uint16_t* pnodeoffs ) {
         default:
             tok = TOK_EOL;
             break;
+    }
+    if ( tok != TOK_EOL && !comp_fetchtok( comp ) ) {
+        return false;
     }
     uint16_t baseexpr = NODEOFFS_NONE;
     if ( !comp_eat_numbaseexpr( comp, &baseexpr ) || baseexpr == NODEOFFS_NONE ) {

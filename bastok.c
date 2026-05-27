@@ -38,13 +38,16 @@ bool is_sngchrtok( char tok ) {
         case TOK_INTEGER:   // % integer type sigil
         case TOK_LPAREN:    // ( left parenthesis
         case TOK_RPAREN:    // ) right parenthesis
+        case TOK_MULT:      // * operator
         case TOK_PLUS:      // + operator
         case TOK_COMMA:     // , comma
         case TOK_MINUS:     // - operator
         case TOK_DIV:       // / operator
         case TOK_COLON:     // : colon
         case TOK_SEMIC:     // ; semicolon
+        case TOK_LT:        // < operator
         case TOK_EQ:        // = operator
+        case TOK_GT:        // > operator
         case TOK_ADDROF:    // @ address-of operator
         case TOK_BACKSL:    // \ operator (integer division)
         case TOK_POW:       // ^ operator (**)
@@ -597,9 +600,9 @@ bool tokenize_line( const char* buf, uint8_t* whereto, size_t* premain, struct _
     // main line
     while ( *s != '\0' ) {
         char item[256]; int base = 0; uint8_t tok;
-        if ( eat_sngchrtok( &s, &tok ) || eat_dblchrtok( &s, &tok, "<=", TOK_LE ) ||
-             eat_dblchrtok( &s, &tok, "<>", TOK_NE ) || eat_dblchrtok( &s, &tok, "><", TOK_NE ) ||
-             eat_dblchrtok( &s, &tok, ">=", TOK_GE ) ) {
+        if ( eat_dblchrtok( &s, &tok, "<=", TOK_LE ) || eat_dblchrtok( &s, &tok, "<>", TOK_NE ) ||
+             eat_dblchrtok( &s, &tok, "><", TOK_NE ) || eat_dblchrtok( &s, &tok, ">=", TOK_GE ) ||
+             eat_dblchrtok( &s, &tok, "**", TOK_POW ) || eat_sngchrtok( &s, &tok ) ) {
             if ( remain <= 1U ) {
                 return false;
             }

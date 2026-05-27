@@ -88,6 +88,7 @@ static void dumpdataline( const uint8_t* ptr, uint16_t offs, uint16_t cnt, int i
     buf[1] = hex[ ( offs >> UINT8_C( 8) ) & 15U ];
     buf[2] = hex[ ( offs >> UINT8_C( 4) ) & 15U ];
     buf[3] = hex[ ( offs                ) & 15U ];
+    buf[4] = ':';
     for ( uint16_t i=0; i < cnt; ++i ) {
         int pos1, pos2;
         if ( i < UINT16_C(4) ) {
@@ -102,7 +103,7 @@ static void dumpdataline( const uint8_t* ptr, uint16_t offs, uint16_t cnt, int i
         buf[pos1  ] = hex[   b                 & 15U ];
         buf[pos2  ] = b >= UINT8_C(32) && b <= UINT8_C(126) ? b : UINT8_C(46);
     }
-    printf( "%-*.*s%s\n", indent, indent, "", buf );
+    printf( "%-*.*s" YEL "%s" NRM "\n", indent, indent, "", buf );
 }
 
 static void dumpdata( const uint8_t* ptr, uint16_t len, int indent ) {
@@ -135,7 +136,7 @@ static void printnode( uint16_t nodeoffs, int indent ) {
     uint8_t  nodetype = comp.tree[ nodeoffs ];
     uint16_t datalen  = EXTRACT16( &comp, nodeoffs + 2U );
     uint16_t dataoffs = nodeoffs + UINT16_C(8);
-    printf( "%-*.*s%s\n", indent, indent, "", nodename( nodetype ) );
+    printf( "%-*.*s" CYA "%s" NRM "\n", indent, indent, "", nodename( nodetype ) );
     if ( datalen ) {
         dumpdata( &comp.tree[ dataoffs ], datalen, indent + 2 );
     }
