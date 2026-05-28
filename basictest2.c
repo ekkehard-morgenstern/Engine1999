@@ -168,9 +168,24 @@ static bool directmode( program_t* pgm, const uint8_t* tokens ) {
     return true;
 }
 
+static bool compile_program( program_t* pgm ) {
+    printf( "program mode\n" );
+    init_compiler( &comp, &rt, 0, false );
+    if ( !begin_iterate_program( &comp.iter, pgm ) ) {
+        printf( "failed to init iterator\n" );
+        return false;
+    }
+    comp.tokp   = comp.iter.tok;
+    comp.halt   = comp_halt;
+    comp.report = comp_report;
+    run_compiler( &comp );
+    printtree();
+    return true;
+}
+
 int main( int argc, char** argv ) {
 
-    program_t pgm;
+    static program_t pgm;
     init_program( &pgm );
 
     if ( setjmp( jmp_exit ) ) {
@@ -235,6 +250,9 @@ int main( int argc, char** argv ) {
         }
 
         list_program( &pgm, LINENO_NONE, LINENO_NONE, pgm_printer );
+        if ( !compile_program( &pgm ) ) {
+            printf( "failed to compile program\n" );
+        }
     }
 
     return 0;
