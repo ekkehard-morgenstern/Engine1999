@@ -43,12 +43,12 @@ bool cgen_alloc_code( codegen_t* cgen, uint16_t size, uint16_t* poffs ) {
     return true;
 }
 
-static bool cgen_gen_ins( codegen_t* cgen, uint8_t ins, uint8_t ext, uint16_t param ) {
+bool cgen_gen_ins( codegen_t* cgen, uint8_t ins, uint8_t ext, uint16_t param ) {
     uint8_t size = UINT8_C(1);
     if ( ins & INSF_E ) ++size;
     if ( ins & INSF_P ) size += 2U;
     uint16_t offs = INS_NODATA;
-    if ( !cgen_alloc_code( cgen, UINT16_C(1), &offs ) ) {
+    if ( !cgen_alloc_code( cgen, size, &offs ) ) {
         return false;
     }
     cgen->code[ offs++ ] = ins;
@@ -60,6 +60,33 @@ static bool cgen_gen_ins( codegen_t* cgen, uint8_t ins, uint8_t ext, uint16_t pa
         cgen->code[ offs++ ] = (uint8_t)  param;
     }
     return true;
+}
+
+bool cgen_gen_ins12( codegen_t* cgen, uint16_t ins12, bool code, bool hasparam, uint16_t param ) {
+    uint8_t ins = UINT8_C(0), ext = UINT8_C(0);
+    if ( ins12 < UINT16_C(16) ) {
+        ins =   (uint8_t)  ins12;
+    } else {
+        ins = ( (uint8_t)( ins12 >> UINT8_C(8) ) & INSM_I ) | INSF_E;
+        ext =   (uint8_t)  ins12;
+    }
+    if ( hasparam ) {
+        ins |= INSF_P;
+    }
+    if ( code ) {
+        ins |= INSF_C;
+    }
+    return cgen_gen_ins( cgen, ins, ext, param );
+}
+
+bool cgen_gen_ins12_imm17( codegen_t* cgen, uint16_t ins12, int32_t imm17 ) {
+    uint16_t param = (uint16_t) imm17;
+    bool     code  = imm17 & INT32_C(0X00010000) ? true : false;
+    return cgen_gen_ins12( cgen, ins12, code, true, param );
+}
+
+bool cgen_gen_ins4_imm17( codegen_t* cgen, uint8_t ins, int32_t imm ) {
+    return cgen_gen_ins12_imm17( cgen, ins & INSM_I, imm );
 }
 
 bool cgen_gen_brk( codegen_t* cgen ) {
@@ -78,22 +105,16 @@ bool cgen_gen_phpa_d( codegen_t* cgen, uint16_t offs ) {
     return cgen_gen_ins( cgen, INS_PHPA_D | INSF_P, UINT8_C(0), offs );
 }
 
-static bool cgen_gen_imm_ins( codegen_t* cgen, uint8_t ins, int32_t imm ) {
-    uint8_t  c = (uint8_t)( ( imm & INT32_C(0X00010000) ) >> UINT8_C(16) );
-    uint16_t o = (uint16_t) imm;
-    return cgen_gen_ins( cgen, ins | INSF_P | MKINS_C(c), UINT8_C(0), o );
-}
-
 bool cgen_gen_phim( codegen_t* cgen, int32_t imm ) {
-    return cgen_gen_imm_ins( cgen, INS_PHIM, imm );
+    return cgen_gen_ins4_imm17( cgen, INS_PHIM, imm );
 }
 
 bool cgen_gen_bria( codegen_t* cgen, int32_t abs_offs ) {
-    return cgen_gen_imm_ins( cgen, INS_BRIA, abs_offs );
+    return cgen_gen_ins4_imm17( cgen, INS_BRIA, abs_offs );
 }
 
 bool cgen_gen_brir( codegen_t* cgen, int32_t rel_offs ) {
-    return cgen_gen_imm_ins( cgen, INS_BRIR, rel_offs );
+    return cgen_gen_ins4_imm17( cgen, INS_BRIR, rel_offs );
 }
 
 bool cgen_gen_jpcc( codegen_t* cgen ) {
@@ -116,10 +137,4 @@ bool cgen_gen_drop( codegen_t* cgen, uint16_t cnt ) {
 
 bool cgen_gen_line( codegen_t* cgen, uint16_t line ) {
     return cgen_gen_ins( cgen, INS_LINE | INSF_P, UINT8_C(0), line );
-}
-
-bool cgen_gen_exp_ins( codegen_t* cgen, uint16_t ins ) {
-    uint8_t i = (uint8_t)( ( ins & UINT16_C(0X0F00) ) >> UINT8_C(8) );
-    uint8_t e = (uint8_t) ins;
-    return cgen_gen_ins( cgen, MKINS_I(i) | INSF_E, e, UINT16_C(0) );
 }

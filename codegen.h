@@ -58,6 +58,10 @@ typedef struct _codegen_t {
 
 void init_codegen( codegen_t* cgen );
 bool cgen_alloc_code( codegen_t* cgen, uint16_t size, uint16_t* poffs );
+bool cgen_gen_ins( codegen_t* cgen, uint8_t ins, uint8_t ext, uint16_t param );
+bool cgen_gen_ins12( codegen_t* cgen, uint16_t ins12, bool code, bool hasparam, uint16_t param );
+bool cgen_gen_ins12_imm17( codegen_t* cgen, uint16_t ins12, int32_t imm17 );
+bool cgen_gen_ins4_imm17( codegen_t* cgen, uint8_t ins, int32_t imm );
 
 bool cgen_gen_brk( codegen_t* cgen );
 bool cgen_gen_nop( codegen_t* cgen );
@@ -70,6 +74,5 @@ bool cgen_gen_jpcc( codegen_t* cgen );
 bool cgen_gen_jump( codegen_t* cgen );
 bool cgen_gen_drop( codegen_t* cgen, uint16_t cnt );
 bool cgen_gen_line( codegen_t* cgen, uint16_t line );
-bool cgen_gen_exp_ins( codegen_t* cgen, uint16_t ins );
 
 #endif
