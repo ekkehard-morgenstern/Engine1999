@@ -427,24 +427,18 @@ OOM:        out_of_memory( comp );
         return false;
     }
     comp->numdim = UINT8_C(0);
-    if ( comp->tree[ numexpr ] == NT_NUMLIT ) {
-        // single dimension
-        if ( !comp_gather_dims( comp, numexpr ) ) {
-            return false;
-        }
-    } else if ( comp->tree[ numexpr ] == NT_NUMEXLIST ) {
+    if ( comp->tree[ numexpr ] == NT_NUMEXLIST ) {
         // multiple dimensions
         if ( !comp_node_iter_branches( comp, numexpr, comp, comp_gather_dims ) ) {
             return false;
         }
-    } else {
-        // unexpected node type
-INTERR: comp_error( comp, "Internal error" );
+    } else if ( !comp_gather_dims( comp, numexpr ) ) { // single dimension
         return false;
     }
     // make sure we have at least one dimension
     if ( comp->numdim == UINT8_C(0) ) {
-        goto INTERR;
+        comp_error( comp, "Internal error (zero dimensions)" );
+        return false;
     }
     // finally, create the node
     uint16_t datalen2 = ( (uint16_t) comp->numdim ) * UINT16_C(2);
@@ -2989,21 +2983,22 @@ printf( "*** TOKEN: %02" PRIx8 "\n", tok );
             if ( !littbl[i].read_fn( (const uint8_t**)(&comp->tokp), comp->param ) ) {
                 return false;
             }
+            int base = 0;
+            switch ( tok ) {
+                case TOK_HEXLIT: base = 16; goto NONDEC;
+                case TOK_OCTLIT: base = 8; goto NONDEC;
+                case TOK_QUALIT: base = 4; goto NONDEC;
+                case TOK_BINLIT: base = 2; goto NONDEC;
+                default:
+                    break;
+                case TOK_DECLIT:
+                    comp->number = strtod( comp->param, 0 );
+                    break;
+                NONDEC:
+                    comp->number = (double)((int64_t)(strtoull( comp->param, 0, base )));
+                    break;
+            }
             return true;
-        }
-        int base = 0;
-        switch ( tok ) {
-            case TOK_HEXLIT: base = 16; goto NONDEC;
-            case TOK_OCTLIT: base = 8; goto NONDEC;
-            case TOK_QUALIT: base = 4; goto NONDEC;
-            case TOK_BINLIT: base = 2; goto NONDEC;
-            default:
-                break;
-            case TOK_DECLIT:
-                comp->number = strtod( comp->param, 0 );
-            NONDEC:
-                comp->number = (double)((int64_t)(strtoull( comp->param, 0, base )));
-                break;
         }
     }
     if ( is_sngchrtok( tok ) || ( tok >= TOK_DEC0 && tok <= TOK_DEC9 ) ) {
