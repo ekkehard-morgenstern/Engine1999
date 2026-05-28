@@ -1280,7 +1280,7 @@ UNEXP:      comp_error( comp, "Internal error (unexpected parameter node)" );
         params[i].paramtype = comp->tree[ datapos ];
         params[i].paramname = (char*)( &comp->tree[ datapos + 1U ] );
     }
-    return false;
+    return true;
 }
 
 bool comp_eat_usrfndecl( compiler_t* comp, uint16_t* pnodeoffs ) {
@@ -1315,7 +1315,6 @@ UNEXP:  comp_error( comp, "Internal error (unexpected name node)" );
     // get arguments
     uint16_t fnarglist = NODEOFFS_NONE;
     uint16_t paramoffs[MAXPARAM];
-    size_t numparams = 0U;
     if ( comp->currtok == TOK_LPAREN ) {
         if ( !comp_fetchtok( comp ) ) {
             comp_error( comp, "Function argument list expected" );
@@ -1328,10 +1327,11 @@ UNEXP:  comp_error( comp, "Internal error (unexpected name node)" );
         }
     }
     usrparam_t params[MAXPARAM];
+    size_t numparams = 0U;
+    if ( !comp_gather_branches( comp, fnarglist, NT_USERFNARGLIST, paramoffs, MAXPARAM, &numparams ) ) {
+        return false;
+    }
     if ( numparams ) {
-        if ( !comp_gather_branches( comp, fnarglist, NT_USERFNARGLIST, paramoffs, MAXPARAM, &numparams ) ) {
-            return false;
-        }
         if ( !comp_get_func_params( comp, paramoffs, numparams, params ) ) {
             return false;
         }
