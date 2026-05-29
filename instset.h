@@ -34,6 +34,26 @@
 #endif
 
 /*
+The runtime system has two stacks:
+
+    - a data stack for holding parameters and return values
+      every item is a 64 bit floating-point number
+
+    - a code stack for holding return addresses
+      every item is a 16 bit unsigned address offset
+
+An instruction removes its parameters from the stack.
+We're using FORTH notation here to indicate stack usage.
+For instance,
+    ( n1 n2 -- n )  means "parameters are n1 and n2, in that order" and
+                        "n" is the return value.
+    R( a -- )       means an address offset is pulled from the return stack.
+
+    n -- a 64-bit double (floating-point) value
+    a -- a 16-bit unsigned address offset
+    i -- a 16-bit signed integer
+    u -- a 16-bit unsigned integer
+
 Instructions are encoded as follows:
 
     <ins> [ <exp> ] [ <hi> <lo> ]
@@ -66,9 +86,13 @@ The 16 basic instructions are as follows:
 
     0000 - BRK          a breakpoint (bits C and P are ignored, and should be 0)
     0001 - NOP          no operation (bits C and P are ignored, and should be 0)
+
     0010 - PHPA         push parameter address onto stack
                         the C bit decides which stack (code or data)
+                        C=0 data stack, item is converted to floating-point
+                        C=1 return stack, item is stored as an integer
                         the P bit must be set (and a parameter field supplied)
+
     0011 - PHIM         push 17 bit immediate value on stack (from parameter field)
                         the C bit becomes the uppermost (17th) bit.
                         the P bit must be set (and a parameter field supplied)
@@ -76,32 +100,58 @@ The 16 basic instructions are as follows:
                         converted to a number before being pushed onto the stack.
                         this is to sacrifice code space over data space for small
                         integral numbers.
-    0100 - BRIA          branch to immediate 17-bit address
+
+    0100 - BRIA         branch to immediate 17-bit address
                         the C bit becomes the uppermost (17th) bit.
                         the P bit must be set (and a parameter field supplied)
-                        first, the value is sign-extended to 32 bits, and then
+                        first, the value is zero-extended to 32 bits, and then
                         used as an index into code memory (when in range).
+                        When out of range, a runtime exception occurs.
+
     0101 - BRIR         branch immediate relative, using 17-bit offset
                         the C bit becomes the uppermost (17th) bit.
                         the P bit must be set (and a parameter field supplied)
                         first, the value is sign-extended to 32 bits, and then
                         is added to the address of the following instruction.
                         if the result address is in range, a branch takes place.
+                        When out of range, a runtime exception occurs.
+
     0110 - JPCC         quick conditional jump ( n -- ) R( a -- )
                         pulls one data item (numeric) and one return address item.
-                        if the data item is nonzero, execution continues at the
-                        specified code address.
+                        if the data item cast to an integer is nonzero, execution
+                        continues at the specified code address.
                         the C bit must be set to 1, the P bit must be 0.
+                        When out of range, a runtime exception occurs.
+
     0111 - JUMP         quick jump R( a -- )
                         pulls one return address and jumps to it.
                         the C bit must be set to 1, the P bit must be 0.
+                        When out of range, a runtime exception occurs.
+
     1000 - DROP         drop stack item(s) ( n -- ) or R( a -- )
-                        depending on C, a code or data item is dropped from the stack.
+                        If C is 0, operates on the data stack.   (item size: 8 bytes)
+                        If C is 1, operates on the return stack. (item size: 2 bytes)
                         if a parameter field is also given, it specifies the number of
                         items to drop.
+
     1001 - LINE         set line number immediate
                         sets the current line number (must be the first instruction of a line)
                         C field must be 0, P must be set and a line number specified as parameter.
+
+    1010 - LAN          load as number ( n -- n )
+                        loads value pointed to by code or data address on stack (flag C)
+                        onto the stack
+                        note that the address must be given as a floating-point number
+
+    1011 - LIAN         load integer as number ( n -- n )
+                        loads value pointed to by code or data address on stack (flag C)
+                        onto the stack (after converting it to a number - signed)
+                        note that the address must be given as a floating-point number
+
+    1100 - LUAN         load unsigned as number ( n -- n )
+                        loads value pointed to by code or data address on stack (flag C)
+                        onto the stack (after converting it to a number - unsigned)
+                        note that the address must be given as a floating-point number
 
     1111 reserved
 
@@ -181,6 +231,9 @@ The 4096 extended instructions are as follows:
 #define INS_JUMP        MKINS_I(7)
 #define INS_DROP        MKINS_I(8)
 #define INS_LINE        MKINS_I(9)
+#define INS_LAN         MKINS_I(10)
+#define INS_LIAN        MKINS_I(11)
+#define INS_LUAN        MKINS_I(12)
 
 #define INS_NEG         UINT16_C(0X010)
 #define INS_NOT         UINT16_C(0X011)

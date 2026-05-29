@@ -34,18 +34,6 @@
 
 #define CODEOFFS_NONE   UINT16_C(0XFFFF)
 
-/*
-The runtime system has two stacks:
-
-    - a data stack for holding parameters and return values
-    - a code stack for holding return addresses
-
-An instruction removes its parameters from the stack.
-We're using FORTH notation here to indicate stack usage.
-For instance, ( n1 n2 -- n ) means "parameters are n1 and n2, in that order" and
-"n" is the return value.
-*/
-
 #define CODESIZE_MAX    65536U
 
 typedef struct _codegen_t {
@@ -74,5 +62,11 @@ bool cgen_gen_jpcc( codegen_t* cgen );
 bool cgen_gen_jump( codegen_t* cgen );
 bool cgen_gen_drop( codegen_t* cgen, uint16_t cnt );
 bool cgen_gen_line( codegen_t* cgen, uint16_t line );
+bool cgen_gen_lan_c( codegen_t* cgen );
+bool cgen_gen_lan_d( codegen_t* cgen );
+bool cgen_gen_lian_c( codegen_t* cgen );
+bool cgen_gen_lian_d( codegen_t* cgen );
+bool cgen_gen_luan_c( codegen_t* cgen );
+bool cgen_gen_luan_d( codegen_t* cgen );
 
 #endif

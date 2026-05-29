@@ -138,3 +138,27 @@ bool cgen_gen_drop( codegen_t* cgen, uint16_t cnt ) {
 bool cgen_gen_line( codegen_t* cgen, uint16_t line ) {
     return cgen_gen_ins( cgen, INS_LINE | INSF_P, UINT8_C(0), line );
 }
+
+bool cgen_gen_lan_c( codegen_t* cgen ) {
+    return cgen_gen_ins( cgen, INS_LAN | INSF_C, UINT8_C(0), UINT16_C(0) );
+}
+
+bool cgen_gen_lan_d( codegen_t* cgen ) {
+    return cgen_gen_ins( cgen, INS_LAN, UINT8_C(0), UINT16_C(0) );
+}
+
+bool cgen_gen_lian_c( codegen_t* cgen ) {
+    return cgen_gen_ins( cgen, INS_LIAN | INSF_C, UINT8_C(0), UINT16_C(0) );
+}
+
+bool cgen_gen_lian_d( codegen_t* cgen ) {
+    return cgen_gen_ins( cgen, INS_LIAN, UINT8_C(0), UINT16_C(0) );
+}
+
+bool cgen_gen_luan_c( codegen_t* cgen ) {
+    return cgen_gen_ins( cgen, INS_LUAN | INSF_C, UINT8_C(0), UINT16_C(0) );
+}
+
+bool cgen_gen_luan_d( codegen_t* cgen ) {
+    return cgen_gen_ins( cgen, INS_LUAN, UINT8_C(0), UINT16_C(0) );
+}
