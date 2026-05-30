@@ -162,3 +162,115 @@ bool cgen_gen_luan_c( codegen_t* cgen ) {
 bool cgen_gen_luan_d( codegen_t* cgen ) {
     return cgen_gen_ins( cgen, INS_LUAN, UINT8_C(0), UINT16_C(0) );
 }
+
+bool cgen_gen_neg( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_NEG, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_not( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_NOT, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_lsh( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_LSH, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_rsh( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_RSH, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_add( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_ADD, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_sub( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_SUB, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_mul( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_MUL, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_div( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_DIV, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_and( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_AND, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_nand( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_NAND, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_or( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_OR, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_nor( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_NOR, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_xor( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_XOR, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_xnor( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_XNOR, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_pow( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_POW, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_con( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_CON, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_cneq( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_CNEQ, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_cnne( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_CNNE, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_cnge( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_CNGE, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_cnle( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_CNLE, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_cngt( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_CNGT, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_cnlt( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_CNLT, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_cseq( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_CSEQ, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_csne( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_CSNE, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_csge( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_CSGE, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_csle( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_CSLE, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_csgt( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_CSGT, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_cslt( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_CSLT, false, false, UINT16_C(0) );
+}

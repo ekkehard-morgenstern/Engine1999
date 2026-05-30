@@ -49,10 +49,11 @@ For instance,
                         "n" is the return value.
     R( a -- )       means an address offset is pulled from the return stack.
 
-    n -- a 64-bit double (floating-point) value
-    a -- a 16-bit unsigned address offset
-    i -- a 16-bit signed integer
-    u -- a 16-bit unsigned integer
+    n -- a 64-bit double (floating-point) value (data stack)
+    a -- a 16-bit unsigned address offset (return stack only)
+    i -- a 16-bit signed integer (not on stack)
+    u -- a 16-bit unsigned integer (not on stack)
+    s -- a 64-bit double (floating-point) value which is a string offset (data stack)
 
 Instructions are encoded as follows:
 
