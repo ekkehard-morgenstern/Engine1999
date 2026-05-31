@@ -43,6 +43,124 @@ bool cgen_alloc_code( codegen_t* cgen, uint16_t size, uint16_t* poffs ) {
     return true;
 }
 
+static const char* opcode_to_string( uint16_t opcode ) {
+    switch ( opcode ) {
+        case INS_BRK:       return "BRK";
+        case INS_NOP:       return "NOP";
+        case INS_PHPA:      return "PHPA";
+        case INS_PHIM:      return "PHIM";
+        case INS_BRIA:      return "BRIA";
+        case INS_BRIR:      return "BRIR";
+        case INS_JPCC:      return "JPCC";
+        case INS_JUMP:      return "JUMP";
+        case INS_DROP:      return "DROP";
+        case INS_LINE:      return "LINE";
+        case INS_LAN:       return "LAN";
+        case INS_LIAN:      return "LIAN";
+        case INS_LUAN:      return "LUAN";
+        case INS_NEG:       return "NEG";
+        case INS_NOT:       return "NOT";
+        case INS_LSH:       return "LSH";
+        case INS_RSH:       return "RSH";
+        case INS_ADD:       return "ADD";
+        case INS_SUB:       return "SUB";
+        case INS_MUL:       return "MUL";
+        case INS_DIV:       return "DIV";
+        case INS_AND:       return "AND";
+        case INS_NAND:      return "NAND";
+        case INS_OR:        return "OR";
+        case INS_NOR:       return "NOR";
+        case INS_XOR:       return "XOR";
+        case INS_XNOR:      return "XNOR";
+        case INS_POW:       return "POW";
+        case INS_CON:       return "CON";
+        case INS_CNEQ:      return "CNEQ";
+        case INS_CNNE:      return "CNNE";
+        case INS_CNGE:      return "CNGE";
+        case INS_CNLE:      return "CNLE";
+        case INS_CNGT:      return "CNGT";
+        case INS_CNLT:      return "CNLT";
+        case INS_CSEQ:      return "CSEQ";
+        case INS_CSNE:      return "CSNE";
+        case INS_CSGE:      return "CSGE";
+        case INS_CSLE:      return "CSLE";
+        case INS_CSGT:      return "CSGT";
+        case INS_CSLT:      return "CSLT";
+        case INS_RRNV:      return "RRNV";
+        case INS_RRIV:      return "RRIV";
+        case INS_RRSV:      return "RRSV";
+        case INS_RNAE:      return "RNAE";
+        case INS_RIAE:      return "RIAE";
+        case INS_RSAE:      return "RSAE";
+        case INS_WRNV:      return "WRNV";
+        case INS_WRIV:      return "WRIV";
+        case INS_WRSV:      return "WRSV";
+        case INS_WNAE:      return "WNAE";
+        case INS_WIAE:      return "WIAE";
+        case INS_WSAE:      return "WSAE";
+        default:            break;
+    }
+    return "???";
+}
+
+bool cgen_has_cd( uint16_t opcode ) {
+    switch ( opcode ) {
+        case INS_PHPA: case INS_DROP: case INS_LAN: case INS_LIAN: case INS_LUAN:
+            return true;
+        default:
+            break;
+    }
+    return false;
+}
+
+void cgen_disasm_ins( const uint8_t* area, uint16_t* poffs, char linebuf[80] ) {
+    uint16_t offs = *poffs;       char offhex[5];
+    snprintf( offhex, 5U, "%04" PRIX16, offs );
+
+    uint8_t ins = area[ offs++ ]; char inshex[3];
+    snprintf( inshex, 3U, "%02" PRIX8, ins );
+
+    uint8_t ext = UINT8_C(0);     char exthex[3];
+    uint16_t param = UINT16_C(0); char parhex[5];
+    memset( exthex, ' ', 2U ); exthex[2] = '\0';
+    memset( parhex, ' ', 4U ); parhex[4] = '\0';
+
+    if ( ins & INSF_E ) {
+        ext = area[ offs++ ];
+        snprintf( exthex, 3U, "%02" PRIX8, ext );
+    }
+    if ( ins & INSF_P ) {
+        param = ( ( (uint16_t) area[ offs               ] ) << UINT8_C(8) ) |
+                               area[ offs + UINT16_C(1) ];
+        offs += UINT16_C(2);
+        snprintf( parhex, 5U, "%04" PRIX16, param );
+    }
+    bool code = ( ins & INSF_C ) ? true : false;
+    uint16_t opcode = ins & INSM_I;
+
+    if ( ins & INSF_E ) {
+        opcode = ( opcode << UINT8_C(8) ) | ext;
+    }
+    const char* opstr = opcode_to_string( opcode );
+    const char* option = "  ";
+    if ( cgen_has_cd( opcode ) ) {
+        option = code ? ".C" : ".D";
+    }
+
+    // 0000000000111111111122222222223333333333
+    // 0123456789012345678901234567890123456789
+    // 0000: 00 00 0000    AAAA.O  0000
+    snprintf( linebuf, 80U, "%s: %s %s %s    %s%s  %s", offhex, inshex, exthex, parhex, opstr, option, parhex );
+
+    *poffs = offs;
+}
+
+void cgen_print_ins( const uint8_t* area, uint16_t* poffs ) {
+    static char linebuf[80];
+    cgen_disasm_ins( area, poffs, linebuf );
+    printf( "%s\n", linebuf );
+}
+
 bool cgen_gen_ins( codegen_t* cgen, uint8_t ins, uint8_t ext, uint16_t param ) {
     uint8_t size = UINT8_C(1);
     if ( ins & INSF_E ) ++size;
@@ -51,6 +169,7 @@ bool cgen_gen_ins( codegen_t* cgen, uint8_t ins, uint8_t ext, uint16_t param ) {
     if ( !cgen_alloc_code( cgen, size, &offs ) ) {
         return false;
     }
+    uint16_t offs0 = offs;
     cgen->code[ offs++ ] = ins;
     if ( ins & INSF_E ) {
         cgen->code[ offs++ ] = ext;
@@ -59,6 +178,8 @@ bool cgen_gen_ins( codegen_t* cgen, uint8_t ins, uint8_t ext, uint16_t param ) {
         cgen->code[ offs++ ] = (uint8_t)( param >> UINT8_C(8) );
         cgen->code[ offs++ ] = (uint8_t)  param;
     }
+    offs = offs0;
+cgen_print_ins( cgen->code, &offs );
     return true;
 }
 
