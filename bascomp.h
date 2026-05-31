@@ -84,10 +84,6 @@ For every branch entry:
 #include "vars.h"
 #endif
 
-#ifndef RUNTIME_H
-#include "runtime.h"
-#endif
-
 #define TREESIZE_MAX    65535U
 
 typedef struct _comp_ctxstk_t {
@@ -101,8 +97,10 @@ typedef struct _comp_ctxstk_t {
     };
 } comp_ctxstk_t;
 
+struct _runtime_t;
+
 typedef struct _compiler_t {
-    runtime_t*      rt;
+    struct _runtime_t* rt;
     pgmiter_t       iter;
     uint8_t*        tokp;
     uint8_t         currtok;
@@ -121,7 +119,7 @@ typedef struct _compiler_t {
     uint16_t        syntree;
 } compiler_t;
 
-void init_compiler( compiler_t* comp, runtime_t* rt, program_t* pgm, bool keepmemory );
+void init_compiler( compiler_t* comp, struct _runtime_t* rt, program_t* pgm, bool keepmemory );
 void comp_error( compiler_t* comp, const char* text ) ATTR_NORETURN;
 void comp_push_context( compiler_t* comp );
 void comp_commit_context( compiler_t* comp );
@@ -133,6 +131,7 @@ bool comp_create_node( compiler_t* comp, uint16_t* pnodeoffs, uint8_t nodetype, 
     const void* pdata, ... );
 bool comp_add_branch( compiler_t* comp, uint16_t nodeoffs, uint16_t branchoffs );
 bool comp_node_iter_branches( compiler_t* comp, uint16_t nodeoffs, void* userdata, bool (*callback)( void*, uint16_t ) );
+double comp_extract_float( const uint8_t* mem, uint16_t offs );
 
 typedef bool (*comp_eatfn_t)( compiler_t*, uint16_t* );
 

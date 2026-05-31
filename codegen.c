@@ -32,6 +32,7 @@ void init_codegen( codegen_t* cgen ) {
     cgen->halt     = 0;
     cgen->userdata = 0;
     cgen->codesize = UINT16_C(0);
+    cgen->datasize = UINT16_C(0);
 }
 
 bool cgen_alloc_code( codegen_t* cgen, uint16_t size, uint16_t* poffs ) {
@@ -40,6 +41,15 @@ bool cgen_alloc_code( codegen_t* cgen, uint16_t size, uint16_t* poffs ) {
     }
     *poffs = (uint16_t) cgen->codesize;
     cgen->codesize += size;
+    return true;
+}
+
+bool cgen_alloc_data( codegen_t* cgen, uint16_t size, uint16_t* poffs ) {
+    if ( size > DATASIZE_MAX - cgen->datasize ) {
+        return false;
+    }
+    *poffs = (uint16_t) cgen->datasize;
+    cgen->datasize += size;
     return true;
 }
 
@@ -449,4 +459,96 @@ bool cgen_gen_wiae( codegen_t* cgen, uint16_t varoffs ) {
 
 bool cgen_gen_wsae( codegen_t* cgen, uint16_t varoffs ) {
     return cgen_gen_ins12_imm17( cgen, INS_WSAE, (int32_t) varoffs );
+}
+
+// generate code from syntax tree nodes
+
+static bool cgen_bad_node( compiler_t* comp ) {
+    comp_error( comp, "Internal error (bad node)" );
+    return false;
+}
+
+static bool cgen_unexpected_node( compiler_t* comp ) {
+    comp_error( comp, "Internal error (unexpected node)" );
+    return false;
+}
+
+static bool cgen_out_of_code_memory( compiler_t* comp ) {
+    comp_error( comp, "Out of code memory" );
+    return false;
+}
+
+static bool cgen_out_of_data_memory( compiler_t* comp ) {
+    comp_error( comp, "Out of data memory" );
+    return false;
+}
+
+static bool cgen_not_implemented_yet( compiler_t* comp ) {
+    comp_error( comp, "Internal error (feature not implemented yet)" );
+    return false;
+}
+
+bool cgen_from_numlit( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
+    /*
+        NT_NUMLIT       numeric literal
+            data:
+                - numeric value, 8 bytes in network byte order
+    */
+    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    if ( nodeoffs == NODEOFFS_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    uint8_t nodetype = comp->tree[ nodeoffs ];
+    if ( nodetype != NT_NUMLIT ) {
+UNEXP:  return cgen_unexpected_node( comp );
+    }
+    uint16_t datalen = EXTRACT16( comp, nodeoffs + 2U );
+    if ( datalen != UINT16_C(8) ) {
+        goto UNEXP;
+    }
+
+    uint16_t dataoffs = DATAOFFS_NONE;
+    if ( !cgen_alloc_data( cgen, UINT16_C(8), &dataoffs ) || dataoffs == DATAOFFS_NONE ) {
+        return cgen_out_of_data_memory( comp );
+    }
+    memcpy( &cgen->data[ dataoffs ], &comp->tree[ nodeoffs + 8U ], 8U );
+
+    if ( !cgen_gen_phpa_d( cgen, dataoffs ) || !cgen_gen_lan_d( cgen ) ) {
+        return cgen_out_of_code_memory( comp );
+    }
+    return true;
+}
+
+bool cgen_from_strlit( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
+    /*
+        NT_STRLIT       string literal
+            data:
+                - 1 byte of type indicator (can be string, shell, bracket or brace literal)
+                - n bytes of text
+            branches: none
+            note:
+                - note that shell/bracket/brace literals aren't evaluated here, just gathered.
+    */
+    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    if ( nodeoffs == NODEOFFS_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    uint8_t nodetype = comp->tree[ nodeoffs ];
+    if ( nodetype != NT_STRLIT ) {
+UNEXP:  return cgen_unexpected_node( comp );
+    }
+    uint16_t datalen = EXTRACT16( comp, nodeoffs + 2U );
+    if ( datalen < 1U ) {
+        goto UNEXP;
+    }
+    nodeoffs += 8U;
+    uint8_t datatype = comp->tree[ nodeoffs++ ]; --datalen;
+    switch ( datatype ) {
+        case TOK_STRLIT:
+
+            break;
+        default:
+            return cgen_not_implemented_yet( comp );
+    }
+    return true;
 }

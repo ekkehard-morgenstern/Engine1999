@@ -32,20 +32,27 @@
 #include "stdtypes.h"
 #endif
 
+#ifndef BASCOMP_H
+#include "bascomp.h"
+#endif
+
 #define CODEOFFS_NONE   UINT16_C(0XFFFF)
+#define DATAOFFS_NONE   UINT16_C(0XFFFF)
 
 #define CODESIZE_MAX    65536U
+#define DATASIZE_MAX    65536U
 
 typedef struct _codegen_t {
     void*           userdata;
     void            (*report)( struct _codegen_t*, void*, const char* );
     void            (*halt)( struct _codegen_t*, void* ) ATTR_NORETURN;
-    uint8_t         code[CODESIZE_MAX];
-    uint32_t        codesize;
+    uint8_t         code[CODESIZE_MAX], data[DATASIZE_MAX];
+    uint32_t        codesize, datasize;
 } codegen_t;
 
 void init_codegen( codegen_t* cgen );
 bool cgen_alloc_code( codegen_t* cgen, uint16_t size, uint16_t* poffs );
+bool cgen_alloc_data( codegen_t* cgen, uint16_t size, uint16_t* poffs );
 bool cgen_gen_ins( codegen_t* cgen, uint8_t ins, uint8_t ext, uint16_t param );
 bool cgen_gen_ins12( codegen_t* cgen, uint16_t ins12, bool code, bool hasparam, uint16_t param );
 bool cgen_gen_ins12_imm17( codegen_t* cgen, uint16_t ins12, int32_t imm17 );
@@ -113,5 +120,10 @@ bool cgen_gen_wrsv( codegen_t* cgen, uint16_t varoffs );
 bool cgen_gen_wnae( codegen_t* cgen, uint16_t varoffs );
 bool cgen_gen_wiae( codegen_t* cgen, uint16_t varoffs );
 bool cgen_gen_wsae( codegen_t* cgen, uint16_t varoffs );
+
+// generate code from syntax tree nodes
+
+bool cgen_from_numlit( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
+bool cgen_from_strlit( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
 
 #endif

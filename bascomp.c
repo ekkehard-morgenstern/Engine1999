@@ -25,8 +25,9 @@
 */
 
 #include "bascomp.h"
+#include "runtime.h"
 
-void init_compiler( compiler_t* comp, runtime_t* rt, program_t* pgm, bool keepmemory ) {
+void init_compiler( compiler_t* comp, struct _runtime_t* rt, program_t* pgm, bool keepmemory ) {
     comp->rt = rt;
     clear_iter( &comp->iter, pgm );
     comp->tokp     = 0;
@@ -331,7 +332,7 @@ bool comp_node_iter_branches( compiler_t* comp, uint16_t nodeoffs, void* userdat
     return true;
 }
 
-static double comp_extract_float( const uint8_t* mem, uint16_t offs ) {
+double comp_extract_float( const uint8_t* mem, uint16_t offs ) {
     uint64_t val =
         ( ( (uint64_t) mem[ offs      ] ) << UINT8_C(56) ) |
         ( ( (uint64_t) mem[ offs + 1U ] ) << UINT8_C(48) ) |
