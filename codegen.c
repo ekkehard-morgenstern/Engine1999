@@ -146,11 +146,12 @@ void cgen_disasm_ins( const uint8_t* area, uint16_t* poffs, char linebuf[80] ) {
     if ( cgen_has_cd( opcode ) ) {
         option = code ? ".C" : ".D";
     }
+    char opcstr[10]; snprintf( opcstr, 10U, "%s%s", opstr, option );
 
     // 0000000000111111111122222222223333333333
     // 0123456789012345678901234567890123456789
     // 0000: 00 00 0000    AAAA.O  0000
-    snprintf( linebuf, 80U, "%s: %s %s %s    %s%s  %s", offhex, inshex, exthex, parhex, opstr, option, parhex );
+    snprintf( linebuf, 80U, "%s: %s %s %s    %-7s %s", offhex, inshex, exthex, parhex, opcstr, parhex );
 
     *poffs = offs;
 }
