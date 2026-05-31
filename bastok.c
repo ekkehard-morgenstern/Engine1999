@@ -184,22 +184,31 @@ bool read_ident( const uint8_t** pp, char target[256] ) {
 // -- literals (general) ----------------------------------------------------
 
 bool eat_lit( const char** pp, char target[256], int beg, int end ) {
-    int n = 0; const char* p = *pp; char fmt[16]; int empn;
+    int n = 0; const char* p = *pp; char fmt[16];
     if ( end ) {
         snprintf( fmt, 16U, "%c%%255[^%c]%c%%n", beg, end, end );
-        empn = 2;
     } else {
         // NUL-terminated means read to end of string
         // we scan until the hopefully nonexistent character 255
         // this avoids having to guess whether the implementation supports [^\0]
         // this is hopefully enough for this tiny interpreter
         snprintf( fmt, 16U, "%c%%255[^\277]%%n", beg );
-        empn = 1;
     }
     while ( *p == ' ' ) ++p;
-    if ( sscanf( p, fmt, target, &n ) >= 1 || n >= empn ) {
+    if ( sscanf( p, fmt, target, &n ) >= 1 ) {
         p += n; *pp = p;
         return true;
+    }
+    if ( end ) {
+        if ( p[0] == beg && p[1] == end ) {
+            p += 2; *pp = p; target[0] = '\0';
+            return true;
+        }
+    } {
+        if ( *p == beg ) {
+            ++p; *pp = p; target[0] = '\0';
+            return true;
+        }
     }
     return false;
 }
