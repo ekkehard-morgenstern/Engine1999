@@ -89,6 +89,8 @@ bool cgen_gen_ins4_imm17( codegen_t* cgen, uint8_t ins, int32_t imm ) {
     return cgen_gen_ins12_imm17( cgen, ins & INSM_I, imm );
 }
 
+// special instructions
+
 bool cgen_gen_brk( codegen_t* cgen ) {
     return cgen_gen_ins( cgen, INS_BRK, UINT8_C(0), UINT16_C(0) );
 }
@@ -162,6 +164,8 @@ bool cgen_gen_luan_c( codegen_t* cgen ) {
 bool cgen_gen_luan_d( codegen_t* cgen ) {
     return cgen_gen_ins( cgen, INS_LUAN, UINT8_C(0), UINT16_C(0) );
 }
+
+// arithmetical / logical instructions
 
 bool cgen_gen_neg( codegen_t* cgen ) {
     return cgen_gen_ins12( cgen, INS_NEG, false, false, UINT16_C(0) );
@@ -273,4 +277,54 @@ bool cgen_gen_csgt( codegen_t* cgen ) {
 
 bool cgen_gen_cslt( codegen_t* cgen ) {
     return cgen_gen_ins12( cgen, INS_CSLT, false, false, UINT16_C(0) );
+}
+
+// variable access instructions
+
+bool cgen_gen_rrnv( codegen_t* cgen, uint16_t varoffs ) {
+    return cgen_gen_ins12_imm17( cgen, INS_RRNV, (int32_t) varoffs );
+}
+
+bool cgen_gen_rriv( codegen_t* cgen, uint16_t varoffs ) {
+    return cgen_gen_ins12_imm17( cgen, INS_RRIV, (int32_t) varoffs );
+}
+
+bool cgen_gen_rrsv( codegen_t* cgen, uint16_t varoffs ) {
+    return cgen_gen_ins12_imm17( cgen, INS_RRSV, (int32_t) varoffs );
+}
+
+bool cgen_gen_rnae( codegen_t* cgen, uint16_t varoffs ) {
+    return cgen_gen_ins12_imm17( cgen, INS_RNAE, (int32_t) varoffs );
+}
+
+bool cgen_gen_riae( codegen_t* cgen, uint16_t varoffs ) {
+    return cgen_gen_ins12_imm17( cgen, INS_RIAE, (int32_t) varoffs );
+}
+
+bool cgen_gen_rsae( codegen_t* cgen, uint16_t varoffs ) {
+    return cgen_gen_ins12_imm17( cgen, INS_RSAE, (int32_t) varoffs );
+}
+
+bool cgen_gen_wrnv( codegen_t* cgen, uint16_t varoffs ) {
+    return cgen_gen_ins12_imm17( cgen, INS_WRNV, (int32_t) varoffs );
+}
+
+bool cgen_gen_wriv( codegen_t* cgen, uint16_t varoffs ) {
+    return cgen_gen_ins12_imm17( cgen, INS_WRIV, (int32_t) varoffs );
+}
+
+bool cgen_gen_wrsv( codegen_t* cgen, uint16_t varoffs ) {
+    return cgen_gen_ins12_imm17( cgen, INS_WRSV, (int32_t) varoffs );
+}
+
+bool cgen_gen_wnae( codegen_t* cgen, uint16_t varoffs ) {
+    return cgen_gen_ins12_imm17( cgen, INS_WNAE, (int32_t) varoffs );
+}
+
+bool cgen_gen_wiae( codegen_t* cgen, uint16_t varoffs ) {
+    return cgen_gen_ins12_imm17( cgen, INS_WIAE, (int32_t) varoffs );
+}
+
+bool cgen_gen_wsae( codegen_t* cgen, uint16_t varoffs ) {
+    return cgen_gen_ins12_imm17( cgen, INS_WSAE, (int32_t) varoffs );
 }

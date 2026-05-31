@@ -51,6 +51,7 @@ bool cgen_gen_ins12( codegen_t* cgen, uint16_t ins12, bool code, bool hasparam, 
 bool cgen_gen_ins12_imm17( codegen_t* cgen, uint16_t ins12, int32_t imm17 );
 bool cgen_gen_ins4_imm17( codegen_t* cgen, uint8_t ins, int32_t imm );
 
+// special instructions
 bool cgen_gen_brk( codegen_t* cgen );
 bool cgen_gen_nop( codegen_t* cgen );
 bool cgen_gen_phpa_c( codegen_t* cgen, uint16_t offs );
@@ -69,6 +70,7 @@ bool cgen_gen_lian_d( codegen_t* cgen );
 bool cgen_gen_luan_c( codegen_t* cgen );
 bool cgen_gen_luan_d( codegen_t* cgen );
 
+// arithmetical / logical instructions
 bool cgen_gen_neg( codegen_t* cgen );
 bool cgen_gen_not( codegen_t* cgen );
 bool cgen_gen_lsh( codegen_t* cgen );
@@ -97,5 +99,19 @@ bool cgen_gen_csge( codegen_t* cgen );
 bool cgen_gen_csle( codegen_t* cgen );
 bool cgen_gen_csgt( codegen_t* cgen );
 bool cgen_gen_cslt( codegen_t* cgen );
+
+// variable access instructions
+bool cgen_gen_rrnv( codegen_t* cgen, uint16_t varoffs );
+bool cgen_gen_rriv( codegen_t* cgen, uint16_t varoffs );
+bool cgen_gen_rrsv( codegen_t* cgen, uint16_t varoffs );
+bool cgen_gen_rnae( codegen_t* cgen, uint16_t varoffs );
+bool cgen_gen_riae( codegen_t* cgen, uint16_t varoffs );
+bool cgen_gen_rsae( codegen_t* cgen, uint16_t varoffs );
+bool cgen_gen_wrnv( codegen_t* cgen, uint16_t varoffs );
+bool cgen_gen_wriv( codegen_t* cgen, uint16_t varoffs );
+bool cgen_gen_wrsv( codegen_t* cgen, uint16_t varoffs );
+bool cgen_gen_wnae( codegen_t* cgen, uint16_t varoffs );
+bool cgen_gen_wiae( codegen_t* cgen, uint16_t varoffs );
+bool cgen_gen_wsae( codegen_t* cgen, uint16_t varoffs );
 
 #endif
