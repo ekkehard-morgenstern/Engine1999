@@ -76,6 +76,9 @@ bool cgen_gen_lian_c( codegen_t* cgen );
 bool cgen_gen_lian_d( codegen_t* cgen );
 bool cgen_gen_luan_c( codegen_t* cgen );
 bool cgen_gen_luan_d( codegen_t* cgen );
+bool cgen_gen_las_c( codegen_t* cgen );
+bool cgen_gen_las_d( codegen_t* cgen );
+bool cgen_gen_fres( codegen_t* cgen );
 
 // arithmetical / logical instructions
 bool cgen_gen_neg( codegen_t* cgen );

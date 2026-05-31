@@ -68,6 +68,8 @@ static const char* opcode_to_string( uint16_t opcode ) {
         case INS_LAN:       return "LAN";
         case INS_LIAN:      return "LIAN";
         case INS_LUAN:      return "LUAN";
+        case INS_LAS:       return "LAS";
+        case INS_FRES:      return "FRES";
         case INS_NEG:       return "NEG";
         case INS_NOT:       return "NOT";
         case INS_LSH:       return "LSH";
@@ -115,7 +117,7 @@ static const char* opcode_to_string( uint16_t opcode ) {
 
 bool cgen_has_cd( uint16_t opcode ) {
     switch ( opcode ) {
-        case INS_PHPA: case INS_DROP: case INS_LAN: case INS_LIAN: case INS_LUAN:
+        case INS_PHPA: case INS_DROP: case INS_LAN: case INS_LIAN: case INS_LUAN: case INS_LAS:
             return true;
         default:
             break;
@@ -295,6 +297,18 @@ bool cgen_gen_luan_c( codegen_t* cgen ) {
 
 bool cgen_gen_luan_d( codegen_t* cgen ) {
     return cgen_gen_ins( cgen, INS_LUAN, UINT8_C(0), UINT16_C(0) );
+}
+
+bool cgen_gen_las_c( codegen_t* cgen ) {
+    return cgen_gen_ins( cgen, INS_LAS | INSF_C, UINT8_C(0), UINT16_C(0) );
+}
+
+bool cgen_gen_las_d( codegen_t* cgen ) {
+    return cgen_gen_ins( cgen, INS_LAS, UINT8_C(0), UINT16_C(0) );
+}
+
+bool cgen_gen_fres( codegen_t* cgen ) {
+    return cgen_gen_ins( cgen, INS_FRES, UINT8_C(0), UINT16_C(0) );
 }
 
 // arithmetical / logical instructions
@@ -513,6 +527,7 @@ UNEXP:  return cgen_unexpected_node( comp );
     }
     memcpy( &cgen->data[ dataoffs ], &comp->tree[ nodeoffs + 8U ], 8U );
 
+    // generate code to push the data address on the stack and then code to read the data field as a number
     if ( !cgen_gen_phpa_d( cgen, dataoffs ) || !cgen_gen_lan_d( cgen ) ) {
         return cgen_out_of_code_memory( comp );
     }
@@ -543,9 +558,20 @@ UNEXP:  return cgen_unexpected_node( comp );
     }
     nodeoffs += 8U;
     uint8_t datatype = comp->tree[ nodeoffs++ ]; --datalen;
+    uint16_t dataoffs = DATAOFFS_NONE;
+    if ( !cgen_alloc_data( cgen, datalen + UINT16_C(1), &dataoffs ) || dataoffs == DATAOFFS_NONE ) {
+        return cgen_out_of_data_memory( comp );
+    }
+    if ( datalen ) {
+        memcpy( &cgen->data[ dataoffs ], &comp->tree[ nodeoffs ], datalen );
+    }
+    cgen->data[ dataoffs + datalen ] = '\0';
     switch ( datatype ) {
         case TOK_STRLIT:
-
+            // generate code to push the data address on the stack then code to load it as string pointer
+            if ( !cgen_gen_phpa_d( cgen, dataoffs ) || !cgen_gen_las_d( cgen ) ) {
+                return cgen_out_of_code_memory( comp );
+            }
             break;
         default:
             return cgen_not_implemented_yet( comp );

@@ -53,7 +53,10 @@ For instance,
     a -- a 16-bit unsigned address offset (return stack only)
     i -- a 16-bit signed integer (not on stack)
     u -- a 16-bit unsigned integer (not on stack)
-    s -- a 64-bit double (floating-point) value which is a string offset (data stack)
+    s -- a 64-bit string pointer (data stack)
+
+ATTN: String pointers point to heap memory and must be freed after use.
+      Instructions with string arguments free their arguments automatically.
 
 Instructions are encoded as follows:
 
@@ -154,7 +157,15 @@ The 16 basic instructions are as follows:
                         onto the stack (after converting it to a number - unsigned)
                         note that the address must be given as a floating-point number
 
-    1111 reserved
+    1101 - LAS          load as string ( n -- s )
+                        loads value pointed to by code or data address on stack (flag C)
+                        onto the stack (after converting it to a string pointer)
+                        note that the address must be given as a floating-point number
+
+    1110 - FRES         free string ( s -- )
+                        frees string pointer from data stack (flag C must be 0)
+
+    1111 - reserved
 
 The 4096 extended instructions are as follows:
 
@@ -236,6 +247,8 @@ The 4096 extended instructions are as follows:
 #define INS_LAN         MKINS_I(10)
 #define INS_LIAN        MKINS_I(11)
 #define INS_LUAN        MKINS_I(12)
+#define INS_LAS         MKINS_I(13)
+#define INS_FRES        MKINS_I(14)
 
 #define INS_NEG         UINT16_C(0X010)
 #define INS_NOT         UINT16_C(0X011)
