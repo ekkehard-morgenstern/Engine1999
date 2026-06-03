@@ -480,6 +480,22 @@ bool cgen_gen_shex( codegen_t* cgen ) {
     return cgen_gen_ins12( cgen, INS_SHEX, false, false, UINT16_C(0) );
 }
 
+bool cgen_gen_calf( codegen_t* cgen, uint16_t varoffs ) {
+    return cgen_gen_ins12_imm17( cgen, INS_CALF, (int32_t) varoffs );
+}
+
+bool cgen_gen_retf( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_RETF, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_gadc( codegen_t* cgen, uint16_t varoffs ) {
+    return cgen_gen_ins12_imm17( cgen, INS_GADC, (int32_t) varoffs );
+}
+
+bool cgen_gen_gfac( codegen_t* cgen, uint16_t varoffs ) {
+    return cgen_gen_ins12_imm17( cgen, INS_GFAC, (int32_t) varoffs );
+}
+
 // generate code from syntax tree nodes
 
 static bool cgen_bad_node( compiler_t* comp ) {

@@ -126,7 +126,10 @@ bool cgen_gen_wsae( codegen_t* cgen, uint16_t varoffs );
 
 // other instructions
 bool cgen_gen_shex( codegen_t* cgen );
-
+bool cgen_gen_calf( codegen_t* cgen, uint16_t varoffs );
+bool cgen_gen_retf( codegen_t* cgen );
+bool cgen_gen_gadc( codegen_t* cgen, uint16_t varoffs );
+bool cgen_gen_gfac( codegen_t* cgen, uint16_t varoffs );
 
 // generate code from syntax tree nodes
 

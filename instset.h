@@ -221,7 +221,22 @@ The 4096 extended instructions are as follows:
     0001 00001111       (reserved)
 
     0001 00010000       SHEX - shell execute ( s -- s ) C=0 P=0
-    0001 00010001
+    0001 00010001       (reserved)
+    0001 00010010       CALF - call function (param=varoffs) ( ... args n -- ) R( -- retoffs context... ) C=0 P=1
+                        Operation:
+                            - the return address is put on the return stack
+                            - the arguments are pulled from the stack and written into a temporary space
+                            - the context for the call is created and pushed onto the return stack (pointer):
+                                - contains the varoffs and content of each regular parameter variable before the call
+                                  (saving array state isn't necessary)
+                            - each regular parameter variable is set to one of the values from the temporary space
+                            - code execution continues with the code of the function
+    0001 00010011       RETF - return from function call ( result -- result ) R( retoffs context... -- ) C=0 P=0
+                            - the context is pulled from the return stack, and variable contents are restored
+                            - execution resumes with the instruction after the CALF instruction.
+                            - the data stack is not affected (a result placed there will still exist afterwards)
+    0001 00010100       GADC - get array    dimension count (param=varoffs) ( -- n ) C=0 P=1
+    0001 00010101       GFAC - get function argument  count (param=varoffs) ( -- n ) C=0 P=1
 
 
 */
@@ -293,5 +308,9 @@ The 4096 extended instructions are as follows:
 #define INS_WIAE        UINT16_C(0X10D)
 #define INS_WSAE        UINT16_C(0X10E)
 #define INS_SHEX        UINT16_C(0X110)
+#define INS_CALF        UINT16_C(0X112)
+#define INS_RETF        UINT16_C(0X113)
+#define INS_GADC        UINT16_C(0X114)
+#define INS_GFAC        UINT16_C(0X115)
 
 #endif
