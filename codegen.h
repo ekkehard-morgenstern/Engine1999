@@ -124,6 +124,10 @@ bool cgen_gen_wnae( codegen_t* cgen, uint16_t varoffs );
 bool cgen_gen_wiae( codegen_t* cgen, uint16_t varoffs );
 bool cgen_gen_wsae( codegen_t* cgen, uint16_t varoffs );
 
+// other instructions
+bool cgen_gen_shex( codegen_t* cgen );
+
+
 // generate code from syntax tree nodes
 
 bool cgen_from_numlit( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );

@@ -110,6 +110,7 @@ static const char* opcode_to_string( uint16_t opcode ) {
         case INS_WNAE:      return "WNAE";
         case INS_WIAE:      return "WIAE";
         case INS_WSAE:      return "WSAE";
+        case INS_SHEX:      return "SHEX";
         default:            break;
     }
     return "???";
@@ -475,6 +476,10 @@ bool cgen_gen_wsae( codegen_t* cgen, uint16_t varoffs ) {
     return cgen_gen_ins12_imm17( cgen, INS_WSAE, (int32_t) varoffs );
 }
 
+bool cgen_gen_shex( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_SHEX, false, false, UINT16_C(0) );
+}
+
 // generate code from syntax tree nodes
 
 static bool cgen_bad_node( compiler_t* comp ) {
@@ -573,8 +578,43 @@ UNEXP:  return cgen_unexpected_node( comp );
                 return cgen_out_of_code_memory( comp );
             }
             break;
-        default:
+        case TOK_SHLLIT:
+            // generate code to push the data address on the stack then code to load it as string pointer and execute it
+            if ( !cgen_gen_phpa_d( cgen, dataoffs ) || !cgen_gen_las_d( cgen ) || !cgen_gen_shex( cgen ) ) {
+                return cgen_out_of_code_memory( comp );
+            }
+            break;
+        default: // TOK_BRKLIT TOK_BRCLIT
+            // NOTE: TOK_BRKLIT is supposed to be the inline assembler -- TODO make this work!
+            //       TOK_BRCLIT doesn't have any purpose yet -- TODO define!
             return cgen_not_implemented_yet( comp );
     }
     return true;
+}
+
+typedef struct _cbdata_t {
+    codegen_t*  cgen;
+    compiler_t* comp;
+    uint16_t    nodeoffs;   // effectively, the parent node
+    uint16_t    count;      // branch counter
+} cbdata_t;
+
+static bool from_strlits_cb( void* param, uint16_t nodeoffs ) {
+    cbdata_t* pdata = (cbdata_t*) param;
+    // put the current string literal on the data stack
+    if ( !cgen_from_strlit( pdata->cgen, pdata->comp, nodeoffs ) ) {
+        return false;
+    }
+    if ( ++pdata->count >= UINT16_C(2) ) {
+        // generate CON (concat) instructions after 2 string literals and every new string literal
+        if ( !cgen_gen_con( pdata->cgen ) ) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool cgen_from_strlits( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
+    cbdata_t cbdata = { cgen, comp, nodeoffs, UINT16_C(0) };
+    return comp_node_iter_branches( comp, nodeoffs, &cbdata, from_strlits_cb );
 }

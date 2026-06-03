@@ -220,6 +220,8 @@ The 4096 extended instructions are as follows:
     0001 00001110       WSAE - write string  array element (param=varoffs) ( inx ... ndim s -- ) C=0 P=1
     0001 00001111       (reserved)
 
+    0001 00010000       SHEX - shell execute ( s -- s ) C=0 P=0
+    0001 00010001
 
 
 */
@@ -290,5 +292,6 @@ The 4096 extended instructions are as follows:
 #define INS_WNAE        UINT16_C(0X10C)
 #define INS_WIAE        UINT16_C(0X10D)
 #define INS_WSAE        UINT16_C(0X10E)
+#define INS_SHEX        UINT16_C(0X110)
 
 #endif
