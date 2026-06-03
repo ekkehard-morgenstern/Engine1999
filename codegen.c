@@ -101,16 +101,22 @@ static const char* opcode_to_string( uint16_t opcode ) {
         case INS_RRNV:      return "RRNV";
         case INS_RRIV:      return "RRIV";
         case INS_RRSV:      return "RRSV";
+        case INS_RRLV:      return "RRLV";
         case INS_RNAE:      return "RNAE";
         case INS_RIAE:      return "RIAE";
         case INS_RSAE:      return "RSAE";
         case INS_WRNV:      return "WRNV";
         case INS_WRIV:      return "WRIV";
         case INS_WRSV:      return "WRSV";
+        case INS_WRLV:      return "WRLV";
         case INS_WNAE:      return "WNAE";
         case INS_WIAE:      return "WIAE";
         case INS_WSAE:      return "WSAE";
         case INS_SHEX:      return "SHEX";
+        case INS_CALF:      return "CALF";
+        case INS_RETF:      return "RETF";
+        case INS_GADC:      return "GADC";
+        case INS_GFAC:      return "GFAC";
         default:            break;
     }
     return "???";
@@ -255,11 +261,11 @@ bool cgen_gen_brir( codegen_t* cgen, int32_t rel_offs ) {
 }
 
 bool cgen_gen_jpcc( codegen_t* cgen ) {
-    return cgen_gen_ins( cgen, INS_JPCC, UINT8_C(0), UINT16_C(0) );
+    return cgen_gen_ins( cgen, INS_JPCC | INSF_C, UINT8_C(0), UINT16_C(0) );
 }
 
 bool cgen_gen_jump( codegen_t* cgen ) {
-    return cgen_gen_ins( cgen, INS_JUMP, UINT8_C(0), UINT16_C(0) );
+    return cgen_gen_ins( cgen, INS_JUMP | INSF_C, UINT8_C(0), UINT16_C(0) );
 }
 
 bool cgen_gen_drop( codegen_t* cgen, uint16_t cnt ) {
@@ -440,6 +446,10 @@ bool cgen_gen_rrsv( codegen_t* cgen, uint16_t varoffs ) {
     return cgen_gen_ins12_imm17( cgen, INS_RRSV, (int32_t) varoffs );
 }
 
+bool cgen_gen_rrlv( codegen_t* cgen, uint16_t varoffs ) {
+    return cgen_gen_ins12( cgen, INS_RRLV, true, true, varoffs );
+}
+
 bool cgen_gen_rnae( codegen_t* cgen, uint16_t varoffs ) {
     return cgen_gen_ins12_imm17( cgen, INS_RNAE, (int32_t) varoffs );
 }
@@ -462,6 +472,10 @@ bool cgen_gen_wriv( codegen_t* cgen, uint16_t varoffs ) {
 
 bool cgen_gen_wrsv( codegen_t* cgen, uint16_t varoffs ) {
     return cgen_gen_ins12_imm17( cgen, INS_WRSV, (int32_t) varoffs );
+}
+
+bool cgen_gen_wrlv( codegen_t* cgen, uint16_t varoffs ) {
+    return cgen_gen_ins12( cgen, INS_WRLV, true, true, varoffs );
 }
 
 bool cgen_gen_wnae( codegen_t* cgen, uint16_t varoffs ) {
@@ -619,12 +633,12 @@ static bool from_strlits_cb( void* param, uint16_t nodeoffs ) {
     cbdata_t* pdata = (cbdata_t*) param;
     // put the current string literal on the data stack
     if ( !cgen_from_strlit( pdata->cgen, pdata->comp, nodeoffs ) ) {
-        return false;
+        return cgen_out_of_code_memory( pdata->comp );
     }
     if ( ++pdata->count >= UINT16_C(2) ) {
         // generate CON (concat) instructions after 2 string literals and every new string literal
         if ( !cgen_gen_con( pdata->cgen ) ) {
-            return false;
+            return cgen_out_of_code_memory( pdata->comp );
         }
     }
     return true;
@@ -633,4 +647,185 @@ static bool from_strlits_cb( void* param, uint16_t nodeoffs ) {
 bool cgen_from_strlits( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
     cbdata_t cbdata = { cgen, comp, nodeoffs, UINT16_C(0) };
     return comp_node_iter_branches( comp, nodeoffs, &cbdata, from_strlits_cb );
+}
+
+static bool from_arraysub_or_fncall_cb( void* param, uint16_t nodeoffs ) {
+    cbdata_t* pdata = (cbdata_t*) param;
+    return cgen_from_numexpr( pdata->cgen, pdata->comp, nodeoffs );
+}
+
+static bool gen_from_arraysub( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
+    cbdata_t cbdata = { cgen, comp, nodeoffs, UINT16_C(0) };
+    // output code for index expressions
+    if ( !comp_node_iter_branches( comp, nodeoffs, &cbdata, from_arraysub_or_fncall_cb ) ) {
+        comp_error( comp, "Internal error (failed to generate code for array subscripts)" );
+        return false;
+    }
+    // output code to put number of expressions on stack
+    if ( !cgen_gen_phim( cgen, cbdata.count ) ) {
+        return cgen_out_of_code_memory( comp );
+    }
+    return true;
+}
+
+static bool gen_from_fncall( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
+    cbdata_t cbdata = { cgen, comp, nodeoffs, UINT16_C(0) };
+    // output code for parameter expressions
+    if ( !comp_node_iter_branches( comp, nodeoffs, &cbdata, from_arraysub_or_fncall_cb ) ) {
+        comp_error( comp, "Internal error (failed to generate code for function argument expressions)" );
+        return false;
+    }
+    // output code to put number of expressions on stack
+    if ( !cgen_gen_phim( cgen, cbdata.count ) ) {
+        return cgen_out_of_code_memory( comp );
+    }
+    return true;
+}
+
+bool cgen_from_varref_lvalue( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
+    // numeric or string variable reference in an lvalue context
+    /*
+        NT_NUMVARREF        numeric variable reference
+        NT_STRVARREF        string  variable reference
+            data:
+                - 1 byte of type indicator
+                - 2 bytes of variable offset
+            branches:
+                - list of array index expressions
+    */
+    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    if ( nodeoffs == NODEOFFS_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    uint8_t nodetype = comp->tree[ nodeoffs ];
+    if ( nodetype != NT_NUMVARREF && nodetype != NT_STRVARREF ) {
+UNEXP:  return cgen_unexpected_node( comp );
+    }
+    uint16_t datalen = EXTRACT16( comp, nodeoffs + 2U );
+    if ( datalen != UINT16_C(3) ) {
+        goto UNEXP;
+    }
+    uint16_t nodeoffs0 = nodeoffs;
+    nodeoffs += 8U;
+    uint8_t vartype = comp->tree[ nodeoffs++ ];
+    uint16_t varoffs = EXTRACT16( comp, nodeoffs );
+    nodeoffs = nodeoffs0;
+    uint8_t basetype = vartype & VARTYPEM_BASE;
+    if ( vartype & VARTYPEF_ARRAY ) {
+        bool (*generator)( codegen_t*, uint16_t ) = 0;
+        if ( !gen_from_arraysub( cgen, comp, nodeoffs ) ) {
+            return false;
+        }
+        switch ( basetype ) {
+            case VARTYPEV_FLOAT:
+                generator = cgen_gen_rnae;
+                break;
+            case VARTYPEV_INT:
+                generator = cgen_gen_riae;
+                break;
+            case VARTYPEV_STR:
+                generator = cgen_gen_rsae;
+                break;
+            default:
+                break;
+        }
+        if ( generator == 0 ) {
+            goto UNEXP;
+        }
+        if ( !generator( cgen, varoffs ) ) {
+            return cgen_out_of_code_memory( comp );
+        }
+    } else if ( vartype & VARTYPEF_FUNC ) {
+        goto UNEXP;
+    } else {
+        bool (*generator)( codegen_t*, uint16_t ) = 0;
+        switch ( basetype ) {
+            case VARTYPEV_FLOAT:
+                generator = cgen_gen_rrnv;
+                break;
+            case VARTYPEV_INT:
+                generator = cgen_gen_rriv;
+                break;
+            case VARTYPEV_STR:
+                generator = cgen_gen_rrsv;
+                break;
+            case VARTYPEV_LABEL:
+                generator = cgen_gen_rrlv;
+                break;
+            default:
+                break;
+        }
+        if ( generator == 0 ) {
+            goto UNEXP;
+        }
+        if ( !generator( cgen, varoffs ) ) {
+            return cgen_out_of_code_memory( comp );
+        }
+    }
+    return true;
+}
+
+bool cgen_from_usrfncall( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
+    // numeric or string user function call
+    /*
+        NT_NUMUSRFNCALL     numeric user function call
+        NT_STRUSRFNCALL     string user function call
+            data:
+                - 1 byte of type indicator
+                - 2 bytes of variable offset
+            branches:
+                - argument expression list (can be empty)
+    */
+    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    if ( nodeoffs == NODEOFFS_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    uint8_t nodetype = comp->tree[ nodeoffs ];
+    if ( nodetype != NT_NUMUSRFNCALL && nodetype != NT_STRUSRFNCALL ) {
+UNEXP:  return cgen_unexpected_node( comp );
+    }
+    uint16_t datalen = EXTRACT16( comp, nodeoffs + 2U );
+    if ( datalen != UINT16_C(3) ) {
+        goto UNEXP;
+    }
+    uint16_t nodeoffs0 = nodeoffs;
+    nodeoffs += 8U;
+    uint8_t vartype = comp->tree[ nodeoffs++ ];
+    uint16_t varoffs = EXTRACT16( comp, nodeoffs );
+    nodeoffs = nodeoffs0;
+    if ( ( vartype & VARTYPEF_FUNC ) == 0 ) {
+        goto UNEXP;
+    }
+    if ( !gen_from_fncall( cgen, comp, nodeoffs ) ) {
+        return false;
+    }
+    if ( !cgen_gen_calf( cgen, varoffs ) ) {
+        return cgen_out_of_code_memory( comp );
+    }
+    return true;
+}
+
+bool cgen_from_numbaseexpr( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
+    // num-base-expr := num-var-ref | num-lit | num-func-call | num-sub-expr .
+    // num-func-call := num-usr-fn-call | sys-num-fn-arg-call | sys-noarg-num-call .
+    if ( nodeoffs == NODEOFFS_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    uint8_t nodetype = comp->tree[ nodeoffs ];
+    switch ( nodetype ) {
+        case NT_NUMVARREF:
+            return cgen_from_varref_lvalue( cgen, comp, nodeoffs );
+        case NT_NUMLIT:
+            return cgen_from_numlit( cgen, comp, nodeoffs );
+        case NT_NUMUSRFNCALL:
+            return cgen_from_usrfncall( cgen, comp, nodeoffs );
+        // TBD ...
+        default:
+            break;
+    }
+    return cgen_from_numexpr( cgen, comp, nodeoffs );   // ???
+}
+
+bool cgen_from_numexpr( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
+    return false; // TBD
 }

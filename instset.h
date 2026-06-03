@@ -205,7 +205,7 @@ The 4096 extended instructions are as follows:
     0001 00000000       RRNV - read regular numeric variable (param=varoffs) ( -- n ) C=0 P=1
     0001 00000001       RRIV - read regular integer variable (param=varoffs) ( -- n ) C=0 P=1
     0001 00000010       RRSV - read regular string  variable (param=varoffs) ( -- s ) C=0 P=1
-    0001 00000011       (reserved)
+    0001 00000011       RRLV - read regular label   variable (param=varoffs) R( -- a ) C=1 P=1
     0001 00000100       RNAE - read numeric array element (param=varoffs) ( inx ... ndim -- n ) C=0 P=1
     0001 00000101       RIAE - read integer array element (param=varoffs) ( inx ... ndim -- n ) C=0 P=1
     0001 00000110       RSAE - read string  array element (param=varoffs) ( inx ... ndim -- s ) C=0 P=1
@@ -214,7 +214,7 @@ The 4096 extended instructions are as follows:
     0001 00001000       WRNV - write regular numeric variable (param=varoffs) ( n -- ) C=0 P=1
     0001 00001001       WRIV - write regular integer variable (param=varoffs) ( n -- ) C=0 P=1
     0001 00001010       WRSV - write regular string  variable (param=varoffs) ( s -- ) C=0 P=1
-    0001 00001011       (reserved)
+    0001 00001011       WRLV - write regular label   variable (param=varoffs) R( a -- ) C=1 P=1
     0001 00001100       WNAE - write numeric array element (param=varoffs) ( inx ... ndim n -- ) C=0 P=1
     0001 00001101       WIAE - write integer array element (param=varoffs) ( inx ... ndim n -- ) C=0 P=1
     0001 00001110       WSAE - write string  array element (param=varoffs) ( inx ... ndim s -- ) C=0 P=1
@@ -298,12 +298,14 @@ The 4096 extended instructions are as follows:
 #define INS_RRNV        UINT16_C(0X100)
 #define INS_RRIV        UINT16_C(0X101)
 #define INS_RRSV        UINT16_C(0X102)
+#define INS_RRLV        UINT16_C(0X103)
 #define INS_RNAE        UINT16_C(0X104)
 #define INS_RIAE        UINT16_C(0X105)
 #define INS_RSAE        UINT16_C(0X106)
 #define INS_WRNV        UINT16_C(0X108)
 #define INS_WRIV        UINT16_C(0X109)
 #define INS_WRSV        UINT16_C(0X10A)
+#define INS_WRLV        UINT16_C(0X10B)
 #define INS_WNAE        UINT16_C(0X10C)
 #define INS_WIAE        UINT16_C(0X10D)
 #define INS_WSAE        UINT16_C(0X10E)

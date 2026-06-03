@@ -187,8 +187,10 @@ Explanation of node types:
 
     NT_NUMUSRFNCALL     numeric user function call
     NT_STRUSRFNCALL     string user function call
+        data:
+            - 1 byte of type indicator
+            - 2 bytes of variable offset
         branches:
-            - name
             - argument expression list (can be empty)
 
     NT_SYSNUMFUNC       numeric system function
