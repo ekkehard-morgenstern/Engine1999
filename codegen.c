@@ -695,15 +695,24 @@ bool cgen_from_strlits( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
     return comp_node_iter_branches( comp, nodeoffs, &cbdata, from_strlits_cb );
 }
 
-static bool from_arraysub_or_fncall_cb( void* param, uint16_t nodeoffs ) {
+static bool from_arraysub_cb( void* param, uint16_t nodeoffs ) {
     cbdata_t* pdata = (cbdata_t*) param;
+    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    if ( nodeoffs == NODEOFFS_NONE ) {
+        return cgen_bad_node( pdata->comp );
+    }
+    uint8_t nodetype = pdata->comp->tree[ nodeoffs ];
+    if ( nodetype == NT_NUMEXLIST ) {
+        return comp_node_iter_branches( pdata->comp, nodeoffs, pdata, from_arraysub_cb );
+    }
+    ++pdata->count;
     return cgen_from_numexpr( pdata->cgen, pdata->comp, nodeoffs );
 }
 
 static bool gen_from_arraysub( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
     cbdata_t cbdata = { cgen, comp, nodeoffs, UINT16_C(0) };
     // output code for index expressions
-    if ( !comp_node_iter_branches( comp, nodeoffs, &cbdata, from_arraysub_or_fncall_cb ) ) {
+    if ( !comp_node_iter_branches( comp, nodeoffs, &cbdata, from_arraysub_cb ) ) {
         comp_error( comp, "Internal error (failed to generate code for array subscripts)" );
         return false;
     }
@@ -714,10 +723,24 @@ static bool gen_from_arraysub( codegen_t* cgen, compiler_t* comp, uint16_t nodeo
     return true;
 }
 
+static bool from_fncall_cb( void* param, uint16_t nodeoffs ) {
+    cbdata_t* pdata = (cbdata_t*) param;
+    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    if ( nodeoffs == NODEOFFS_NONE ) {
+        return cgen_bad_node( pdata->comp );
+    }
+    uint8_t nodetype = pdata->comp->tree[ nodeoffs ];
+    if ( nodetype == NT_EXPRLIST ) {
+        return comp_node_iter_branches( pdata->comp, nodeoffs, pdata, from_fncall_cb );
+    }
+    ++pdata->count;
+    return cgen_from_expr( pdata->cgen, pdata->comp, nodeoffs );
+}
+
 static bool gen_from_fncall( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
     cbdata_t cbdata = { cgen, comp, nodeoffs, UINT16_C(0) };
     // output code for parameter expressions
-    if ( !comp_node_iter_branches( comp, nodeoffs, &cbdata, from_arraysub_or_fncall_cb ) ) {
+    if ( !comp_node_iter_branches( comp, nodeoffs, &cbdata, from_fncall_cb ) ) {
         comp_error( comp, "Internal error (failed to generate code for function argument expressions)" );
         return false;
     }
@@ -851,6 +874,65 @@ UNEXP:  return cgen_unexpected_node( comp );
     return true;
 }
 
+bool cgen_from_sysfncall( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
+    /*
+        sys-num-func := TOK_ASC | TOK_VAL | TOK_FRE .
+        sys-str-func-name := TOK_LEFT | TOK_MID | TOK_RIGHT | TOK_STR | TOK_BIN | TOK_QUA | TOK_OCT | TOK_DEC | TOK_HEX .
+        sys-str-func := sys-str-func-name TOK_STRING .
+
+        sys-num-fn-arg-call := sys-num-func TOK_LPAREN expr-list TOK_RPAREN .
+        sys-str-fn-arg-call := sys-str-func TOK_LPAREN expr-list TOK_RPAREN .
+
+        sys-noarg-num-name := TOK_TI .
+        sys-noarg-num := sys-noarg-num-name .
+        sys-noarg-num-call := sys-no-arg-num .
+
+        sys-noarg-str-name := TOK_INKEY .
+        sys-noarg-str := sys-noarg-str-name TOK_STRING .
+        sys-noarg-str-call := sys-no-arg-str .
+
+        NT_SYSNUMFUNCARGCALL    numeric system function call with arguments
+        NT_SYSSTRFUNCARGCALL    string system function call with arguments
+            data:
+                - 1 byte of function token (like TOK_VAL)
+            branches:
+                - 1 branch of expression list
+
+        NT_SYSNOARGSTRCALL  system string function call without arguments
+        NT_SYSNOARGNUMCALL  system number function call without arguments
+            data:
+                - 1 byte of function token (like TOK_TI)
+    */
+    if ( nodeoffs == NODEOFFS_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    uint8_t nodetype = comp->tree[ nodeoffs ];
+    switch ( nodetype ) {
+        case NT_SYSNUMFUNCARGCALL:
+        case NT_SYSSTRFUNCARGCALL:
+        case NT_SYSNOARGNUMCALL:
+        case NT_SYSNOARGSTRCALL:
+            break;
+        default:
+UNEXP:      return cgen_unexpected_node( comp );
+    }
+    uint16_t datalen = EXTRACT16( comp, nodeoffs + 2U );
+    if ( datalen != UINT16_C(1) ) {
+        goto UNEXP;
+    }
+    uint8_t functok = comp->tree[ nodeoffs + 8U ];
+    switch ( functok ) {
+        case TOK_ASC: case TOK_VAL: case TOK_FRE: case TOK_STR:
+            break;
+        case TOK_BIN: case TOK_QUA: case TOK_OCT: case TOK_HEX: case TOK_DEC:
+            break;
+        default:
+            break;
+    }
+    return false;   // TBD
+}
+
 bool cgen_from_numbaseexpr( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
     // num-base-expr := num-var-ref | num-lit | num-func-call | num-sub-expr .
     // num-func-call := num-usr-fn-call | sys-num-fn-arg-call | sys-noarg-num-call .
@@ -873,5 +955,9 @@ bool cgen_from_numbaseexpr( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs
 }
 
 bool cgen_from_numexpr( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
+    return false; // TBD
+}
+
+bool cgen_from_expr( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
     return false; // TBD
 }

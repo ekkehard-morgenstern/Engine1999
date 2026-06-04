@@ -153,6 +153,9 @@ bool cgen_from_strlit( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
 bool cgen_from_strlits( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
 bool cgen_from_varref_lvalue( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
 bool cgen_from_usrfncall( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
+bool cgen_from_sysfncall( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
+
 bool cgen_from_numexpr( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
+bool cgen_from_expr( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
 
 #endif
