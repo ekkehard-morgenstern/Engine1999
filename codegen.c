@@ -510,6 +510,52 @@ bool cgen_gen_gfac( codegen_t* cgen, uint16_t varoffs ) {
     return cgen_gen_ins12_imm17( cgen, INS_GFAC, (int32_t) varoffs );
 }
 
+// BASIC system function implementations
+
+bool cgen_gen_ti( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_TI, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_inky( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_INKY, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_asc( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_ASC, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_val( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_VAL, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_fre( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_FRE, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_bins( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_BINS, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_quas( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_QUAS, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_octs( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_OCTS, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_hexs( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_HEXS, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_decs( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_DECS, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_strs( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_STRS, false, false, UINT16_C(0) );
+}
+
 // generate code from syntax tree nodes
 
 static bool cgen_bad_node( compiler_t* comp ) {

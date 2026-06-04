@@ -133,6 +133,19 @@ bool cgen_gen_retf( codegen_t* cgen );
 bool cgen_gen_gadc( codegen_t* cgen, uint16_t varoffs );
 bool cgen_gen_gfac( codegen_t* cgen, uint16_t varoffs );
 
+// BASIC system function implementations
+bool cgen_gen_ti( codegen_t* cgen );
+bool cgen_gen_inky( codegen_t* cgen );
+bool cgen_gen_asc( codegen_t* cgen );
+bool cgen_gen_val( codegen_t* cgen );
+bool cgen_gen_fre( codegen_t* cgen );
+bool cgen_gen_bins( codegen_t* cgen );
+bool cgen_gen_quas( codegen_t* cgen );
+bool cgen_gen_octs( codegen_t* cgen );
+bool cgen_gen_hexs( codegen_t* cgen );
+bool cgen_gen_decs( codegen_t* cgen );
+bool cgen_gen_strs( codegen_t* cgen );
+
 // generate code from syntax tree nodes
 
 bool cgen_from_numlit( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );

@@ -1478,10 +1478,10 @@ bool comp_eat_strusrfncall( compiler_t* comp, uint16_t* pnodeoffs ) {
 }
 
 bool comp_eat_sysnumfunc( compiler_t* comp, uint16_t* pnodeoffs ) {
-    // sys-num-func := TOK_ASC | TOK_BIN | TOK_QUA | TOK_OCT | TOK_DEC | TOK_HEX | TOK_VAL | TOK_FRE .
+    // sys-num-func := TOK_ASC | TOK_VAL | TOK_FRE .
 
     switch ( comp->currtok ) {
-        case TOK_ASC: case TOK_BIN: case TOK_QUA: case TOK_OCT: case TOK_DEC: case TOK_HEX: case TOK_VAL: case TOK_FRE:
+        case TOK_ASC: case TOK_VAL: case TOK_FRE:
             break;
         default:
             return false;
@@ -1506,10 +1506,11 @@ bool comp_eat_sysnumfunc( compiler_t* comp, uint16_t* pnodeoffs ) {
 }
 
 bool comp_eat_sysstrfunc( compiler_t* comp, uint16_t* pnodeoffs ) {
-    // sys-str-func-name := TOK_LEFT | TOK_MID | TOK_RIGHT | TOK_STR .
+    // sys-str-func-name := TOK_LEFT | TOK_MID | TOK_RIGHT | TOK_STR | TOK_BIN | TOK_QUA | TOK_OCT | TOK_DEC | TOK_HEX .
     // sys-str-func := sys-str-func-name TOK_DOLLAR .
     switch ( comp->currtok ) {
         case TOK_LEFT: case TOK_MID: case TOK_RIGHT: case TOK_STR:
+        case TOK_BIN: case TOK_QUA: case TOK_OCT: case TOK_DEC: case TOK_HEX:
             break;
         default:
             return false;

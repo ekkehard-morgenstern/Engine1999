@@ -68,8 +68,8 @@ usr-fn-decl := any-usr-fn-name [ TOK_LPAREN [ usr-fn-arg-list ] TOK_RPAREN ] usr
 num-usr-fn-call := num-usr-fn-name [ TOK_LPAREN [ expr-list ] TOK_RPAREN ] .
 str-usr-fn-call := str-usr-fn-name [ TOK_LPAREN [ expr-list ] TOK_RPAREN ] .
 
-sys-num-func := TOK_ASC | TOK_BIN | TOK_QUA | TOK_OCT | TOK_DEC | TOK_HEX | TOK_VAL | TOK_FRE .
-sys-str-func-name := TOK_LEFT | TOK_MID | TOK_RIGHT | TOK_STR .
+sys-num-func := TOK_ASC | TOK_VAL | TOK_FRE .
+sys-str-func-name := TOK_LEFT | TOK_MID | TOK_RIGHT | TOK_STR | TOK_BIN | TOK_QUA | TOK_OCT | TOK_DEC | TOK_HEX .
 sys-str-func := sys-str-func-name TOK_STRING .
 
 sys-num-fn-arg-call := sys-num-func TOK_LPAREN expr-list TOK_RPAREN .

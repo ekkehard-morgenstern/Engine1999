@@ -237,7 +237,22 @@ The 4096 extended instructions are as follows:
                             - the data stack is not affected (a result placed there will still exist afterwards)
     0001 00010100       GADC - get array    dimension count (param=varoffs) ( -- n ) C=0 P=1
     0001 00010101       GFAC - get function argument  count (param=varoffs) ( -- n ) C=0 P=1
-
+    0001 00010110       (reserved)
+    0001 00010111       (reserved)
+    0001 00011000       TI   - get system   timer ( -- n ) C=0 P=0
+    0001 00011001       INKY - get keyboard input ( -- s ) C=0 P=0
+    0001 00011010       ASC  - ASCII code of first character        ( s -- n ) C=0 P=0
+    0001 00011011       VAL  - numeric value of string              ( s -- n ) C=0 P=0
+    0001 00011100       FRE  - return amount of free memory         ( n -- n ) C=0 P=0
+    0001 00011101       (reserved)
+    0001 00011110       (reserved)
+    0001 00011111       (reserved)
+    0001 00100000       BINS - convert number to binary      string ( n n -- s ) C=0 P=0
+    0001 00100001       QUAS - convert number to quaternary  string ( n n -- s ) C=0 P=0
+    0001 00100010       OCTS - convert number to octal       string ( n n -- s ) C=0 P=0
+    0001 00100011       HEXS - convert number to hexadecimal string ( n n -- s ) C=0 P=0
+    0001 00100100       DECS - convert number to decimal     string ( n n -- s ) C=0 P=0
+    0001 00100101       STRS - convert number to             string ( n   -- s ) C=0 P=0
 
 */
 
@@ -314,5 +329,16 @@ The 4096 extended instructions are as follows:
 #define INS_RETF        UINT16_C(0X113)
 #define INS_GADC        UINT16_C(0X114)
 #define INS_GFAC        UINT16_C(0X115)
+#define INS_TI          UINT16_C(0X118)
+#define INS_INKY        UINT16_C(0X119)
+#define INS_ASC         UINT16_C(0X11A)
+#define INS_VAL         UINT16_C(0X11B)
+#define INS_FRE         UINT16_C(0X11C)
+#define INS_BINS        UINT16_C(0X120)
+#define INS_QUAS        UINT16_C(0X121)
+#define INS_OCTS        UINT16_C(0X122)
+#define INS_HEXS        UINT16_C(0X123)
+#define INS_DECS        UINT16_C(0X124)
+#define INS_STRS        UINT16_C(0X125)
 
 #endif
