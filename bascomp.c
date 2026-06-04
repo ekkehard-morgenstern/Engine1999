@@ -1477,129 +1477,236 @@ bool comp_eat_strusrfncall( compiler_t* comp, uint16_t* pnodeoffs ) {
     return comp_eat_usrfncall( comp, pnodeoffs, NT_STRUSRFNCALL, NT_STRUSRFNNAME, comp_eat_strusrfnname );
 }
 
-bool comp_eat_sysnumfunc( compiler_t* comp, uint16_t* pnodeoffs ) {
-    // sys-num-func := TOK_ASC | TOK_VAL | TOK_FRE .
-
-    switch ( comp->currtok ) {
-        case TOK_ASC: case TOK_VAL: case TOK_FRE:
-            break;
-        default:
-            return false;
-    }
+bool comp_eat_sysnumfn1argcall( compiler_t* comp, uint16_t* pnodeoffs ) {
+    // sys-num-fn-1-arg-call := ( TOK_ASC | TOK_VAL | TOK_LEN ) TOK_LPAREN str-expr TOK_RPAREN |
+    //                          TOK_FRE TOK_LPAREN num-expr TOK_RPAREN .
     uint8_t tok = comp->currtok;
-    if ( !comp_fetchtok( comp ) ) {
+    if ( tok == TOK_ASC || tok == TOK_VAL || tok == TOK_LEN ) {
+        if ( !comp_fetchtok( comp ) ) {
+            return false;
+        }
+        if ( comp->currtok != TOK_LPAREN || !comp_fetchtok( comp ) ) {
+OPEN:       comp_error( comp, "Opening parenthesis '(' expected" );
+            return false;
+        }
+        uint16_t arg1 = NODEOFFS_NONE;
+        if ( !comp_eat_strexpr( comp, &arg1 ) || arg1 == NODEOFFS_NONE ) {
+            comp_error( comp, "String expression expected" );
+            return false;
+        }
+        if ( comp->currtok != TOK_RPAREN || !comp_fetchtok( comp ) ) {
+CLOSE:      comp_error( comp, "Closing parenthesis ')' expected" );
+            return false;
+        }
+        if ( !comp_create_node( comp, pnodeoffs, NT_SYSNUMFUNCARGCALL, UINT8_C(1), UINT16_C(1), &tok, (int) arg1 ) ||
+            *pnodeoffs == NODEOFFS_NONE ) {
+OOM:        out_of_memory( comp );
+            return false;
+        }
+        return true;
+    } else if ( tok == TOK_FRE ) {
+        if ( !comp_fetchtok( comp ) ) {
+            return false;
+        }
+        if ( comp->currtok != TOK_LPAREN || !comp_fetchtok( comp ) ) {
+            goto OPEN;
+        }
+        uint16_t arg1 = NODEOFFS_NONE;
+        if ( !comp_eat_numexpr( comp, &arg1 ) || arg1 == NODEOFFS_NONE ) {
+            comp_error( comp, "Numeric expression expected" );
+            return false;
+        }
+        if ( comp->currtok != TOK_RPAREN || !comp_fetchtok( comp ) ) {
+            goto CLOSE;
+        }
+        if ( !comp_create_node( comp, pnodeoffs, NT_SYSNUMFUNCARGCALL, UINT8_C(1), UINT16_C(1), &tok, (int) arg1 ) ||
+            *pnodeoffs == NODEOFFS_NONE ) {
+            goto OOM;
+        }
+        return true;
+    } else {
         return false;
     }
-
-    /*
-        NT_SYSNUMFUNC       numeric system function
-            data:
-                - 1 byte of function token (like TOK_VAL)
-    */
-
-    if ( !comp_create_node( comp, pnodeoffs, NT_SYSNUMFUNC, UINT8_C(0), UINT16_C(1), &tok ) ) {
-        out_of_memory( comp );
-        return false;
-    }
-
-    return true;
 }
 
-bool comp_eat_sysstrfunc( compiler_t* comp, uint16_t* pnodeoffs ) {
-    // sys-str-func-name := TOK_LEFT | TOK_MID | TOK_RIGHT | TOK_STR | TOK_BIN | TOK_QUA | TOK_OCT | TOK_DEC | TOK_HEX .
-    // sys-str-func := sys-str-func-name TOK_DOLLAR .
-    switch ( comp->currtok ) {
-        case TOK_LEFT: case TOK_MID: case TOK_RIGHT: case TOK_STR:
-        case TOK_BIN: case TOK_QUA: case TOK_OCT: case TOK_DEC: case TOK_HEX:
-            break;
-        default:
-            return false;
-    }
+bool comp_eat_sysstrfn2argcall( compiler_t* comp, uint16_t* pnodeoffs ) {
+    /*
+        sys-str-fn-2-arg-call := ( TOK_BIN | TOK_QUA | TOK_OCT | TOK_DEC | TOK_HEX ) TOK_STRING TOK_LPAREN num-expr
+                                    [ TOK_COMMA num-expr ] TOK_RPAREN |
+                                 TOK_STR TOK_STRING TOK_LPAREN num-expr TOK_RPAREN |
+                                 ( TOK_LEFT | TOK_RIGHT ) TOK_STRING TOK_LPAREN str-expr TOK_COMMA num-expr TOK_RPAREN |
+                                 TOK_MID TOK_STRING TOK_LPAREN str-expr TOK_COMMA num-expr [ TOK_COMMA num-expr ] TOK_RPAREN .
+    */
     uint8_t tok = comp->currtok;
-    if ( !comp_fetchtok( comp ) ) {
-        return false;
+    if ( tok == TOK_BIN || tok == TOK_QUA || tok == TOK_OCT || tok == TOK_DEC || tok == TOK_HEX ) {
+        // ( TOK_BIN | TOK_QUA | TOK_OCT | TOK_DEC | TOK_HEX ) TOK_STRING TOK_LPAREN num-expr [ TOK_COMMA num-expr ] TOK_RPAREN
+        if ( !comp_fetchtok( comp ) ) {
+            return false;
+        }
+        if ( comp->currtok != TOK_STRING || !comp_fetchtok( comp ) ) {
+STRSIG:     comp_error( comp, "String sigil '$' expected" );
+            return false;
+        }
+        if ( comp->currtok != TOK_LPAREN || !comp_fetchtok( comp ) ) {
+OPEN:       comp_error( comp, "Opening parenthesis '(' expected" );
+            return false;
+        }
+        uint16_t arg1 = NODEOFFS_NONE, arg2 = NODEOFFS_NONE;
+        if ( !comp_eat_numexpr( comp, &arg1 ) || arg1 == NODEOFFS_NONE ) {
+NUMEX:      comp_error( comp, "Numeric expression expected" );
+            return false;
+        }
+        if ( comp->currtok == TOK_COMMA && comp_fetchtok( comp ) ) {
+            if ( !comp_eat_numexpr( comp, &arg2 ) || arg2 == NODEOFFS_NONE ) {
+                goto NUMEX;
+            }
+        } else {
+            union {
+                uint64_t    ui64;
+                double      dbl;
+            } u;
+            u.dbl = -1.0;
+            uint8_t data[8];
+            data[0] = (uint8_t)( u.ui64 >> UINT8_C(56) );
+            data[1] = (uint8_t)( u.ui64 >> UINT8_C(48) );
+            data[2] = (uint8_t)( u.ui64 >> UINT8_C(40) );
+            data[3] = (uint8_t)( u.ui64 >> UINT8_C(32) );
+            data[4] = (uint8_t)( u.ui64 >> UINT8_C(24) );
+            data[5] = (uint8_t)( u.ui64 >> UINT8_C(16) );
+            data[6] = (uint8_t)( u.ui64 >> UINT8_C( 8) );
+            data[7] = (uint8_t)( u.ui64                );
+            if ( !comp_create_node( comp, &arg2, NT_NUMLIT, UINT8_C(0), UINT16_C(8), data ) || arg2 == NODEOFFS_NONE ) {
+                goto OOM;
+            }
+        }
+        if ( comp->currtok != TOK_RPAREN || !comp_fetchtok( comp ) ) {
+CLOSE:      comp_error( comp, "Closing parenthesis ')' expected" );
+            return false;
+        }
+        if ( !comp_create_node( comp, pnodeoffs, NT_SYSSTRFUNCARGCALL, UINT8_C(2), UINT16_C(1), &tok, (int) arg1, (int) arg2 ) ||
+            *pnodeoffs == NODEOFFS_NONE ) {
+OOM:        out_of_memory( comp );
+            return false;
+        }
+        return true;
+    } else if ( tok == TOK_STR ) {
+        // TOK_STR TOK_STRING TOK_LPAREN num-expr TOK_RPAREN
+        if ( !comp_fetchtok( comp ) ) {
+            return false;
+        }
+        if ( comp->currtok != TOK_STRING || !comp_fetchtok( comp ) ) {
+            goto STRSIG;
+        }
+        if ( comp->currtok != TOK_LPAREN || !comp_fetchtok( comp ) ) {
+            goto OPEN;
+        }
+        uint16_t arg1 = NODEOFFS_NONE;
+        if ( !comp_eat_numexpr( comp, &arg1 ) || arg1 == NODEOFFS_NONE ) {
+            goto NUMEX;
+        }
+        if ( comp->currtok != TOK_RPAREN || !comp_fetchtok( comp ) ) {
+            goto CLOSE;
+        }
+        if ( !comp_create_node( comp, pnodeoffs, NT_SYSSTRFUNCARGCALL, UINT8_C(1), UINT16_C(1), &tok, (int) arg1 ) ||
+            *pnodeoffs == NODEOFFS_NONE ) {
+            goto OOM;
+        }
+        return true;
+    } else if ( tok == TOK_LEFT || tok == TOK_RIGHT ) {
+        // ( TOK_LEFT | TOK_RIGHT ) TOK_STRING TOK_LPAREN str-expr TOK_COMMA num-expr TOK_RPAREN |
+        if ( !comp_fetchtok( comp ) ) {
+            return false;
+        }
+        if ( comp->currtok != TOK_STRING || !comp_fetchtok( comp ) ) {
+            goto STRSIG;
+        }
+        if ( comp->currtok != TOK_LPAREN || !comp_fetchtok( comp ) ) {
+            goto OPEN;
+        }
+        uint16_t arg1 = NODEOFFS_NONE, arg2 = NODEOFFS_NONE;
+        if ( !comp_eat_strexpr( comp, &arg1 ) || arg1 == NODEOFFS_NONE ) {
+STREX:      comp_error( comp, "String expression expected" );
+            return false;
+        }
+        if ( comp->currtok != TOK_COMMA || !comp_fetchtok( comp ) ) {
+COMMA:      comp_error( comp, "Comma ',' expected" );
+            return false;
+        }
+        if ( !comp_eat_numexpr( comp, &arg2 ) || arg2 == NODEOFFS_NONE ) {
+            goto NUMEX;
+        }
+        if ( comp->currtok != TOK_RPAREN || !comp_fetchtok( comp ) ) {
+            goto CLOSE;
+        }
+        if ( !comp_create_node( comp, pnodeoffs, NT_SYSSTRFUNCARGCALL, UINT8_C(2), UINT16_C(1), &tok, (int) arg1, (int) arg2 ) ||
+            *pnodeoffs == NODEOFFS_NONE ) {
+            goto OOM;
+        }
+        return true;
+    } else if ( tok == TOK_MID ) {
+        // TOK_MID TOK_STRING TOK_LPAREN str-expr TOK_COMMA num-expr [ TOK_COMMA num-expr ] TOK_RPAREN .
+        if ( !comp_fetchtok( comp ) ) {
+            return false;
+        }
+        if ( comp->currtok != TOK_STRING || !comp_fetchtok( comp ) ) {
+            goto STRSIG;
+        }
+        if ( comp->currtok != TOK_LPAREN || !comp_fetchtok( comp ) ) {
+            goto OPEN;
+        }
+        uint16_t arg1 = NODEOFFS_NONE, arg2 = NODEOFFS_NONE, arg3 = NODEOFFS_NONE;
+        if ( !comp_eat_strexpr( comp, &arg1 ) || arg1 == NODEOFFS_NONE ) {
+            goto STREX;
+        }
+        if ( comp->currtok != TOK_COMMA || !comp_fetchtok( comp ) ) {
+            goto COMMA;
+        }
+        if ( !comp_eat_numexpr( comp, &arg2 ) || arg2 == NODEOFFS_NONE ) {
+            goto NUMEX;
+        }
+        if ( comp->currtok == TOK_COMMA && comp_fetchtok( comp ) ) {
+            if ( !comp_eat_numexpr( comp, &arg3 ) || arg3 == NODEOFFS_NONE ) {
+                goto NUMEX;
+            }
+        } else {
+            union {
+                uint64_t    ui64;
+                double      dbl;
+            } u;
+            u.dbl = -1.0;
+            uint8_t data[8];
+            data[0] = (uint8_t)( u.ui64 >> UINT8_C(56) );
+            data[1] = (uint8_t)( u.ui64 >> UINT8_C(48) );
+            data[2] = (uint8_t)( u.ui64 >> UINT8_C(40) );
+            data[3] = (uint8_t)( u.ui64 >> UINT8_C(32) );
+            data[4] = (uint8_t)( u.ui64 >> UINT8_C(24) );
+            data[5] = (uint8_t)( u.ui64 >> UINT8_C(16) );
+            data[6] = (uint8_t)( u.ui64 >> UINT8_C( 8) );
+            data[7] = (uint8_t)( u.ui64                );
+            if ( !comp_create_node( comp, &arg3, NT_NUMLIT, UINT8_C(0), UINT16_C(8), data ) || arg3 == NODEOFFS_NONE ) {
+                goto OOM;
+            }
+        }
+        if ( comp->currtok != TOK_RPAREN || !comp_fetchtok( comp ) ) {
+            goto CLOSE;
+        }
+        if ( !comp_create_node( comp, pnodeoffs, NT_SYSSTRFUNCARGCALL, UINT8_C(3), UINT16_C(1), &tok, (int) arg1, (int) arg2,
+            (int) arg3 ) || *pnodeoffs == NODEOFFS_NONE ) {
+            goto OOM;
+        }
+        return true;
     }
-    if ( comp->currtok != TOK_STRING || !comp_fetchtok( comp ) ) {
-        comp_error( comp, "String sigil '$' expected" );
-        return false;
-    }
-
-    /*
-        NT_SYSSTRFUNC       string system function
-            data:
-                - 1 byte of function token (like TOK_VAL)
-    */
-
-    if ( !comp_create_node( comp, pnodeoffs, NT_SYSSTRFUNC, UINT8_C(0), UINT16_C(1), &tok ) ) {
-        out_of_memory( comp );
-        return false;
-    }
-
-    return true;
-}
-
-static bool comp_eat_sysfuncargcall( compiler_t* comp, uint16_t* pnodeoffs, bool (*eater)( compiler_t*, uint16_t* ),
-    uint8_t nodetype, uint8_t eatentype ) {
-    // sys-num-fn-arg-call := sys-num-func TOK_LPAREN expr-list TOK_RPAREN .
-    // sys-str-fn-arg-call := sys-str-func TOK_LPAREN expr-list TOK_RPAREN .
-    uint16_t eatenoffs = NODEOFFS_NONE;
-    if ( !eater( comp, &eatenoffs ) || eatenoffs == NODEOFFS_NONE ) {
-        return false;
-    }
-    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
-    if ( comp->tree[ eatenoffs ] != eatentype ) {
-UNEXP:  comp_error( comp, "Internal error (unexpected argument)" );
-        return false;
-    }
-    uint16_t datalen = EXTRACT16( comp, eatenoffs + 2U );
-    if ( datalen != 1U ) {
-        goto UNEXP;
-    }
-    uint16_t dataoffs = eatenoffs + UINT16_C(8);
-    uint8_t tok = comp->tree[ dataoffs ];
-
-    // read argument list
-    if ( comp->currtok != TOK_LPAREN || !comp_fetchtok( comp ) ) {
-        comp_error( comp, "Opening parenthesis '(' expected" );
-        return false;
-    }
-    uint16_t exprlist = NODEOFFS_NONE;
-    if ( !comp_eat_exprlist( comp, &exprlist ) || exprlist == NODEOFFS_NONE ) {
-        comp_error( comp, "Expression list expected" );
-        return false;
-    }
-    if ( comp->currtok != TOK_RPAREN || !comp_fetchtok( comp ) ) {
-        comp_error( comp, "Closing parenthesis ')' expected" );
-        return false;
-    }
-
-    /*
-        NT_SYSNUMFUNCARGCALL    numeric system function call with arguments
-        NT_SYSSTRFUNCARGCALL    string system function call with arguments
-            data:
-                - 1 byte of function token (like TOK_VAL)
-            branches:
-                - 1 branch of expression list
-    */
-
-    // generate node
-    if ( !comp_create_node( comp, pnodeoffs, nodetype, UINT8_C(1), UINT16_C(1), &tok, (int) exprlist ) ||
-        *pnodeoffs == NODEOFFS_NONE ) {
-        out_of_memory( comp );
-        return false;
-    }
-
-    return true;
+    return false;
 }
 
 bool comp_eat_sysnumfuncargcall( compiler_t* comp, uint16_t* pnodeoffs ) {
-    // sys-num-fn-arg-call := sys-num-func TOK_LPAREN expr-list TOK_RPAREN .
-    return comp_eat_sysfuncargcall( comp, pnodeoffs, comp_eat_sysnumfunc, NT_SYSNUMFUNCARGCALL, NT_SYSNUMFUNC );
+    // sys-num-fn-arg-call := sys-num-fn-1-arg-call .
+    return comp_eat_sysnumfn1argcall( comp, pnodeoffs );
 }
 
 bool comp_eat_sysstrfuncargcall( compiler_t* comp, uint16_t* pnodeoffs ) {
-    // sys-str-fn-arg-call := sys-str-func TOK_LPAREN expr-list TOK_RPAREN .
-    return comp_eat_sysfuncargcall( comp, pnodeoffs, comp_eat_sysstrfunc, NT_SYSSTRFUNCARGCALL, NT_SYSSTRFUNC );
+    // sys-str-fn-arg-call := sys-str-fn-2-arg-call .
+    return comp_eat_sysstrfn2argcall( comp, pnodeoffs );
 }
 
 bool comp_eat_sysnoargnumcall( compiler_t* comp, uint16_t* pnodeoffs ) {

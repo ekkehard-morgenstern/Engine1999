@@ -192,6 +192,7 @@
 #define TOK_FRE         UINT8_C(141)        // FRE function
 #define TOK_TI          UINT8_C(142)        // TI function
 #define TOK_LABEL       UINT8_C(143)        // LABEL keyword
+#define TOK_LEN         UINT8_C(144)        // LEN function
 #define TOK_NONE        UINT8_C(255)        // no token (!)
 
 // -- single character tokens -----------------------------------------------
