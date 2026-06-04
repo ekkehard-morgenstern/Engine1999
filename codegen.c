@@ -710,7 +710,7 @@ static bool from_strlits_cb( void* param, uint16_t nodeoffs ) {
     cbdata_t* pdata = (cbdata_t*) param;
     // put the current string literal on the data stack
     if ( !cgen_from_strlit( pdata->cgen, pdata->comp, nodeoffs ) ) {
-        return cgen_out_of_code_memory( pdata->comp );
+        return false;
     }
     if ( ++pdata->count >= UINT16_C(2) ) {
         // generate CON (concat) instructions after 2 string literals and every new string literal
@@ -722,6 +722,14 @@ static bool from_strlits_cb( void* param, uint16_t nodeoffs ) {
 }
 
 bool cgen_from_strlits( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
+    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    if ( nodeoffs == NODEOFFS_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    uint8_t nodetype = comp->tree[ nodeoffs ];
+    if ( nodetype != NT_STRLITS ) {
+        return cgen_unexpected_node( comp );
+    }
     cbdata_t cbdata = { cgen, comp, nodeoffs, UINT16_C(0) };
     return comp_node_iter_branches( comp, nodeoffs, &cbdata, from_strlits_cb );
 }
@@ -1048,8 +1056,85 @@ bool cgen_from_strbaseexpr( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs
     return cgen_unexpected_node( comp );
 }
 
+static bool from_stradd_cb( void* param, uint16_t nodeoffs ) {
+    cbdata_t* pdata = (cbdata_t*) param;
+    // put the current string expression on the data stack
+    if ( !cgen_from_strbaseexpr( pdata->cgen, pdata->comp, nodeoffs ) ) {
+        return false;
+    }
+    if ( ++pdata->count >= UINT16_C(2) ) {
+        // generate CON (concat) instructions after 2 string literals and every new string literal
+        if ( !cgen_gen_con( pdata->cgen ) ) {
+            return cgen_out_of_code_memory( pdata->comp );
+        }
+    }
+    return true;
+}
+
+bool cgen_from_straddexpr( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
+    // str-add-expr := str-base-expr { TOK_PLUS str-base-expr } .
+    if ( nodeoffs == NODEOFFS_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    uint8_t nodetype = comp->tree[ nodeoffs ];
+    if ( nodetype != NT_STRADDEXPR ) {
+        return cgen_from_strbaseexpr( cgen, comp, nodeoffs );
+    }
+    cbdata_t cbdata = { cgen, comp, nodeoffs, UINT16_C(0) };
+    return comp_node_iter_branches( comp, nodeoffs, &cbdata, from_stradd_cb );
+}
+
 bool cgen_from_strexpr( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
-    return false; // TBD
+    // str-expr := str-add-expr .
+    return cgen_from_straddexpr( cgen, comp, nodeoffs );
+}
+
+static bool from_numunary_cb( void* param, uint16_t nodeoffs ) {
+    cbdata_t* pdata = (cbdata_t*) param;
+    if ( ++pdata->count >= UINT16_C(2) ) {  // not expected to have more than 1 branch
+        cgen_unexpected_node( pdata->comp );
+        return false;
+    }
+    // put the current numeric expression on the data stack
+    if ( !cgen_from_numbaseexpr( pdata->cgen, pdata->comp, nodeoffs ) ) {
+        return false;
+    }
+    return true;
+}
+
+bool cgen_from_numunaryex( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
+    // num-unary-ex := [ num-unary-op ] num-base-expr .
+    // num-unary-op := TOK_MINUS | TOK_PLUS | TOK_NOT .
+    if ( nodeoffs == NODEOFFS_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    uint8_t nodetype = comp->tree[ nodeoffs ];
+    if ( nodetype != NT_NUMUNARYEX ) {
+        return cgen_from_numbaseexpr( cgen, comp, nodeoffs );
+    }
+    uint16_t datalen = EXTRACT16( comp, nodeoffs + 2U );
+    if ( datalen != 1U ) {
+UNEXP:  return cgen_unexpected_node( comp );
+    }
+    uint8_t tok = comp->tree[ nodeoffs + 8U ];
+    if ( tok != TOK_MINUS && tok != TOK_PLUS && tok != TOK_NOT ) {
+        goto UNEXP;
+    }
+    cbdata_t cbdata = { cgen, comp, nodeoffs, UINT16_C(0) };
+    if ( !comp_node_iter_branches( comp, nodeoffs, &cbdata, from_numunary_cb ) ) {
+        return false;
+    }
+    bool (*generator)( codegen_t* ) = 0;
+    switch ( tok ) {
+        case TOK_MINUS:     generator = cgen_gen_neg; break;
+        case TOK_NOT:       generator = cgen_gen_not; break;
+        default:            break;
+    }
+    if ( generator && !generator( cgen ) ) {
+        return cgen_out_of_code_memory( comp );
+    }
+    return true;
 }
 
 bool cgen_from_numexpr( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {

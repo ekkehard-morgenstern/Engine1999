@@ -157,7 +157,7 @@ bool cgen_from_usrfncall( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs )
 bool cgen_from_sysfncall( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
 bool cgen_from_numbaseexpr( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
 bool cgen_from_strbaseexpr( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
-
+bool cgen_from_straddexpr( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
 bool cgen_from_strexpr( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
 
 bool cgen_from_numexpr( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
