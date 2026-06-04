@@ -244,7 +244,7 @@ The 4096 extended instructions are as follows:
     0001 00011010       ASC  - ASCII code of first character        ( s -- n ) C=0 P=0
     0001 00011011       VAL  - numeric value of string              ( s -- n ) C=0 P=0
     0001 00011100       FRE  - return amount of free memory         ( n -- n ) C=0 P=0
-    0001 00011101       (reserved)
+    0001 00011101       LEN  - return length of string              ( s -- n ) C=0 P=0
     0001 00011110       (reserved)
     0001 00011111       (reserved)
     0001 00100000       BINS - convert number to binary      string ( n n -- s ) C=0 P=0
@@ -253,6 +253,11 @@ The 4096 extended instructions are as follows:
     0001 00100011       HEXS - convert number to hexadecimal string ( n n -- s ) C=0 P=0
     0001 00100100       DECS - convert number to decimal     string ( n n -- s ) C=0 P=0
     0001 00100101       STRS - convert number to             string ( n   -- s ) C=0 P=0
+    0001 00100110       (reserved)
+    0001 00100111       (reserved)
+    0001 00101000       LFTS - get left part of string ( s n -- s ) C=0 P=0
+    0001 00101001       RGTS - get right part of string ( s n -- s ) C=0 P=0
+    0001 00101010       MIDS - get mid part of string ( s n -- s ) C=0 P=0
 
 */
 
@@ -334,11 +339,15 @@ The 4096 extended instructions are as follows:
 #define INS_ASC         UINT16_C(0X11A)
 #define INS_VAL         UINT16_C(0X11B)
 #define INS_FRE         UINT16_C(0X11C)
+#define INS_LEN         UINT16_C(0X11D)
 #define INS_BINS        UINT16_C(0X120)
 #define INS_QUAS        UINT16_C(0X121)
 #define INS_OCTS        UINT16_C(0X122)
 #define INS_HEXS        UINT16_C(0X123)
 #define INS_DECS        UINT16_C(0X124)
 #define INS_STRS        UINT16_C(0X125)
+#define INS_LFTS        UINT16_C(0X128)
+#define INS_RGTS        UINT16_C(0X129)
+#define INS_MIDS        UINT16_C(0X12A)
 
 #endif

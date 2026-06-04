@@ -139,6 +139,7 @@ bool cgen_gen_inky( codegen_t* cgen );
 bool cgen_gen_asc( codegen_t* cgen );
 bool cgen_gen_val( codegen_t* cgen );
 bool cgen_gen_fre( codegen_t* cgen );
+bool cgen_gen_len( codegen_t* cgen );
 bool cgen_gen_bins( codegen_t* cgen );
 bool cgen_gen_quas( codegen_t* cgen );
 bool cgen_gen_octs( codegen_t* cgen );
