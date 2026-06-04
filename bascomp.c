@@ -1478,8 +1478,15 @@ bool comp_eat_strusrfncall( compiler_t* comp, uint16_t* pnodeoffs ) {
 }
 
 bool comp_eat_sysnumfn1argcall( compiler_t* comp, uint16_t* pnodeoffs ) {
-    // sys-num-fn-1-arg-call := ( TOK_ASC | TOK_VAL | TOK_LEN ) TOK_LPAREN str-expr TOK_RPAREN |
-    //                          TOK_FRE TOK_LPAREN num-expr TOK_RPAREN .
+    /*
+        sys-num-fn-1-arg-call := ( TOK_ASC | TOK_VAL | TOK_LEN ) TOK_LPAREN str-expr TOK_RPAREN |
+                                 TOK_FRE TOK_LPAREN num-expr TOK_RPAREN .
+        NT_SYSNUMFUNCARGCALL    numeric system function call with arguments
+            data:
+                - 1 byte of function token (like TOK_VAL)
+            branches:
+                - 1 or more branches of expression list (depending on function)
+    */
     uint8_t tok = comp->currtok;
     if ( tok == TOK_ASC || tok == TOK_VAL || tok == TOK_LEN ) {
         if ( !comp_fetchtok( comp ) ) {
@@ -1536,6 +1543,12 @@ bool comp_eat_sysstrfn2argcall( compiler_t* comp, uint16_t* pnodeoffs ) {
                                  TOK_STR TOK_STRING TOK_LPAREN num-expr TOK_RPAREN |
                                  ( TOK_LEFT | TOK_RIGHT ) TOK_STRING TOK_LPAREN str-expr TOK_COMMA num-expr TOK_RPAREN |
                                  TOK_MID TOK_STRING TOK_LPAREN str-expr TOK_COMMA num-expr [ TOK_COMMA num-expr ] TOK_RPAREN .
+
+        NT_SYSSTRFUNCARGCALL    string system function call with arguments
+            data:
+                - 1 byte of function token (like TOK_VAL)
+            branches:
+                - 1 or more branches of expression list (depending on function)
     */
     uint8_t tok = comp->currtok;
     if ( tok == TOK_BIN || tok == TOK_QUA || tok == TOK_OCT || tok == TOK_DEC || tok == TOK_HEX ) {

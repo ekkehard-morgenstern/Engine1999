@@ -193,17 +193,12 @@ Explanation of node types:
         branches:
             - argument expression list (can be empty)
 
-    NT_SYSNUMFUNC       numeric system function
-    NT_SYSSTRFUNC       string system function
-        data:
-            - 1 byte of function token (like TOK_VAL)
-
     NT_SYSNUMFUNCARGCALL    numeric system function call with arguments
     NT_SYSSTRFUNCARGCALL    string system function call with arguments
         data:
             - 1 byte of function token (like TOK_VAL)
         branches:
-            - 1 branch of expression list
+            - 1 or more branches of expression list (depending on function)
 
     NT_SYSNOARGSTRCALL  system string function call without arguments
     NT_SYSNOARGNUMCALL  system number function call without arguments
