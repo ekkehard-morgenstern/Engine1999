@@ -1137,6 +1137,66 @@ UNEXP:  return cgen_unexpected_node( comp );
     return true;
 }
 
+static bool from_nummult_cb( void* param, uint16_t nodeoffs ) {
+    cbdata_t* pdata = (cbdata_t*) param;
+    ++pdata->count;
+    if ( pdata->count == UINT16_C(1) ) {
+        // put the first numeric expression on the data stack
+        if ( !cgen_from_numunaryex( pdata->cgen, pdata->comp, nodeoffs ) ) {
+            return false;
+        }
+    } else {    // NT_OPERATOR node
+        //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+        uint8_t nodetype = pdata->comp->tree[ nodeoffs ];
+        if ( nodetype != NT_OPERATOR ) {
+UNEXP:      return cgen_unexpected_node( pdata->comp );
+        }
+        uint16_t datalen = EXTRACT16( pdata->comp, nodeoffs + 2U );
+        if ( datalen != 1U ) {
+            goto UNEXP;
+        }
+        uint8_t tok = pdata->comp->tree[ nodeoffs + 8U ];
+        bool (*generator)( codegen_t* ) = 0;
+        // num-mult-op  := TOK_MULT | TOK_DIV | TOK_POW .
+        switch ( tok ) {
+            case TOK_MULT:  generator = cgen_gen_mul; break;
+            case TOK_DIV:   generator = cgen_gen_div; break;
+            case TOK_POW:   generator = cgen_gen_pow; break;
+            default:
+                break;
+        }
+        if ( generator == 0 ) {
+            goto UNEXP;
+        }
+        // can safely call myself here since NT_OPERATOR has only one branch
+        cbdata_t cbdata = { pdata->cgen, pdata->comp, nodeoffs, UINT16_C(0) };
+        if ( !comp_node_iter_branches( pdata->comp, nodeoffs, &cbdata, from_nummult_cb ) ) {
+            return false;
+        }
+        // generate the statement to handle the new value pair
+        if ( !generator( pdata->comp ) ) {
+            cgen_out_of_code_memory( pdata->comp );
+            return false;
+        }
+    }
+    return true;
+}
+
+bool cgen_from_nummultex( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
+    // num-mult-op  := TOK_MULT | TOK_DIV | TOK_POW .
+    // num-mult-ex  := num-unary-ex { num-mult-op num-unary-ex } .
+    if ( nodeoffs == NODEOFFS_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    uint8_t nodetype = comp->tree[ nodeoffs ];
+    if ( nodetype != NT_NUMMULTEX ) {
+        return cgen_from_numunaryex( cgen, comp, nodeoffs );
+    }
+    cbdata_t cbdata = { cgen, comp, nodeoffs, UINT16_C(0) };
+    return comp_node_iter_branches( comp, nodeoffs, &cbdata, from_nummult_cb ) ) {
+}
+
 bool cgen_from_numexpr( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
     return false; // TBD
 }
