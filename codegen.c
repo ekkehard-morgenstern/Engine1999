@@ -1023,6 +1023,35 @@ bool cgen_from_numbaseexpr( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs
     return cgen_from_numexpr( cgen, comp, nodeoffs );   // ???
 }
 
+bool cgen_from_strbaseexpr( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
+    // str-base-expr := str-var-ref | str-lits | str-func-call .
+    // str-func-call := str-usr-fn-call | sys-str-fn-arg-call | sys-noarg-str-call .
+    if ( nodeoffs == NODEOFFS_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    uint8_t nodetype = comp->tree[ nodeoffs ];
+    switch ( nodetype ) {
+        case NT_STRVARREF:
+            return cgen_from_varref_lvalue( cgen, comp, nodeoffs );
+        case NT_STRLIT:
+            return cgen_from_strlit( cgen, comp, nodeoffs );
+        case NT_STRLITS:
+            return cgen_from_strlits( cgen, comp, nodeoffs );
+        case NT_STRUSRFNCALL:
+            return cgen_from_usrfncall( cgen, comp, nodeoffs );
+        case NT_SYSSTRFUNCARGCALL:
+        case NT_SYSNOARGSTRCALL:
+            return cgen_from_sysfncall( cgen, comp, nodeoffs );
+        default:
+            break;
+    }
+    return cgen_unexpected_node( comp );
+}
+
+bool cgen_from_strexpr( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
+    return false; // TBD
+}
+
 bool cgen_from_numexpr( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
     return false; // TBD
 }
