@@ -1174,7 +1174,7 @@ UNEXP:      return cgen_unexpected_node( pdata->comp );
             return false;
         }
         // generate the statement to handle the new value pair
-        if ( !generator( pdata->comp ) ) {
+        if ( !generator( pdata->cgen ) ) {
             cgen_out_of_code_memory( pdata->comp );
             return false;
         }
@@ -1194,7 +1194,7 @@ bool cgen_from_nummultex( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs )
         return cgen_from_numunaryex( cgen, comp, nodeoffs );
     }
     cbdata_t cbdata = { cgen, comp, nodeoffs, UINT16_C(0) };
-    return comp_node_iter_branches( comp, nodeoffs, &cbdata, from_nummult_cb ) ) {
+    return comp_node_iter_branches( comp, nodeoffs, &cbdata, from_nummult_cb );
 }
 
 bool cgen_from_numexpr( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
