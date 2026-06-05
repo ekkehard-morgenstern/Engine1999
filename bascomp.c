@@ -1805,7 +1805,23 @@ bool comp_eat_straddexpr( compiler_t* comp, uint16_t* pnodeoffs ) {
 
 bool comp_eat_strexpr( compiler_t* comp, uint16_t* pnodeoffs ) {
     // str-expr := str-add-expr .
-    return comp_eat_straddexpr( comp, pnodeoffs );
+    /*
+        NT_STREXPR
+            branches:
+                - 1 branch of string expression
+            immediate processing:
+                - generated as a hint to the code generator
+    */
+    uint16_t straddex = NODEOFFS_NONE;
+    if ( !comp_eat_straddexpr( comp, &straddex ) || straddex == NODEOFFS_NONE ) {
+        return false;
+    }
+    if ( !comp_create_node( comp, pnodeoffs, NT_STREXPR, UINT8_C(1), UINT16_C(0), 0, (int) straddex ) ||
+        *pnodeoffs == NODEOFFS_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
 }
 
 bool comp_eat_numsubexpr( compiler_t* comp, uint16_t* pnodeoffs ) {
@@ -2010,7 +2026,7 @@ bool comp_eat_numaddex( compiler_t* comp, uint16_t* pnodeoffs ) {
                 - 1 branch of first operand
                 - at least 1 branch of NT_OPERATOR
             immediate processing:
-                - generated only if a multiplication operator was used
+                - generated only if an addition operator was used
     */
     return comp_eat_list2( comp, pnodeoffs, NT_NUMADDEX, comp_eat_nummultex, septoks, "Add expression expected",
         false, false );
@@ -2026,7 +2042,7 @@ bool comp_eat_numshiftex( compiler_t* comp, uint16_t* pnodeoffs ) {
                 - 1 branch of first operand
                 - at least 1 branch of NT_OPERATOR
             immediate processing:
-                - generated only if a multiplication operator was used
+                - generated only if a shift operator was used
     */
     return comp_eat_list2( comp, pnodeoffs, NT_NUMSHIFTEX, comp_eat_numaddex, septoks, "Shift expression expected",
         true, false );
@@ -2039,18 +2055,19 @@ bool comp_eat_numcmpex( compiler_t* comp, uint16_t* pnodeoffs ) {
     static const uint8_t septoks[] = { TOK_EQ, TOK_NE, TOK_LE, TOK_GE, TOK_LT, TOK_GT, 0 };
     // numeric version
     /*
-        NT_NUMCMPEX   numeric shift expression
+        NT_NUMCMPEX   numeric comparison expression
+        NT_STRCMPEX   string  comparison expression
             branches:
                 - 1 branch of first operand
                 - at least 1 branch of NT_OPERATOR
             immediate processing:
-                - generated only if a multiplication operator was used
+                - generated only if a comparison operator was used
     */
     if ( comp_eat_list2( comp, pnodeoffs, NT_NUMCMPEX, comp_eat_numshiftex, septoks, "Comparison expression expected",
         true, false ) && *pnodeoffs != NODEOFFS_NONE ) {
         return true;
     }
-    if ( comp_eat_list2( comp, pnodeoffs, NT_NUMCMPEX, comp_eat_strexpr, septoks, "Comparison expression expected",
+    if ( comp_eat_list2( comp, pnodeoffs, NT_STRCMPEX, comp_eat_strexpr, septoks, "Comparison expression expected",
         true, true ) && *pnodeoffs != NODEOFFS_NONE ) {
         return true;
     }
@@ -2091,8 +2108,23 @@ bool comp_eat_numorex( compiler_t* comp, uint16_t* pnodeoffs ) {
 
 bool comp_eat_numexpr( compiler_t* comp, uint16_t* pnodeoffs ) {
     // num-expr := num-or-ex .
-    // [ NT_NUMEXPR - not generated ]
-    return comp_eat_numorex( comp, pnodeoffs );
+    /*
+        NT_NUMEXPR
+            branches:
+                - 1 branch of numeric expression
+            immediate processing:
+                - generated as a hint to the code generator
+    */
+    uint16_t numorex = NODEOFFS_NONE;
+    if ( !comp_eat_numorex( comp, &numorex ) || numorex == NODEOFFS_NONE ) {
+        return false;
+    }
+    if ( !comp_create_node( comp, pnodeoffs, NT_NUMEXPR, UINT8_C(1), UINT16_C(0), 0, (int) numorex ) ||
+        *pnodeoffs == NODEOFFS_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
 }
 
 bool comp_eat_expr( compiler_t* comp, uint16_t* pnodeoffs ) {

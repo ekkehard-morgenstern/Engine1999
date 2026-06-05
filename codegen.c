@@ -1084,9 +1084,27 @@ bool cgen_from_straddexpr( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs 
     return comp_node_iter_branches( comp, nodeoffs, &cbdata, from_stradd_cb );
 }
 
+static bool from_strexpr_cb( void* param, uint16_t nodeoffs ) {
+    cbdata_t* pdata = (cbdata_t*) param;
+    // put the first string expression on the data stack
+    if ( !cgen_from_straddexpr( pdata->cgen, pdata->comp, nodeoffs ) ) {
+        return false;
+    }
+    return true;
+}
+
 bool cgen_from_strexpr( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
     // str-expr := str-add-expr .
-    return cgen_from_straddexpr( cgen, comp, nodeoffs );
+    if ( nodeoffs == NODEOFFS_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    uint8_t nodetype = comp->tree[ nodeoffs ];
+    if ( nodetype != NT_STREXPR ) {
+        return cgen_unexpected_node( comp );
+    }
+    cbdata_t cbdata = { cgen, comp, nodeoffs, UINT16_C(0) };
+    return comp_node_iter_branches( comp, nodeoffs, &cbdata, from_strexpr_cb );
 }
 
 static bool from_numunary_cb( void* param, uint16_t nodeoffs ) {
@@ -1319,26 +1337,6 @@ bool cgen_from_numshiftex( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs 
     return comp_node_iter_branches( comp, nodeoffs, &cbdata, from_numshift_cb );
 }
 
-static bool check_exprtype_cb( void* param, uint16_t nodeoffs ) {
-    cbdata_t* pdata = (cbdata_t*) param;
-    if ( nodeoffs == NODEOFFS_NONE ) {
-        return cgen_bad_node( pdata->comp );
-    }
-    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
-    uint8_t nodetype    = pdata->comp->tree[ nodeoffs      ];
-    uint8_t numbranches = pdata->comp->tree[ nodeoffs + 1U ];
-    switch ( nodetype ) {
-        case NT_STRLIT: case NT_STRVARREF: case NT_STRUSRFNCALL: case NT_SYSSTRFUNCARGCALL:
-        case NT_SYSNOARGSTRCALL: case NT_STRLITS:
-            ++pdata->count;
-            break;
-    }
-    if ( pdata->count == UINT16_C(0) && numbranches != UINT8_C(0) ) {
-        return comp_node_iter_branches( pdata->comp, nodeoffs, pdata, check_exprtype_cb );
-    }
-    return true;
-}
-
 static bool from_strcmp_cb( void* param, uint16_t nodeoffs ) {
     cbdata_t* pdata = (cbdata_t*) param;
     ++pdata->count;
@@ -1446,19 +1444,13 @@ bool cgen_from_numcmpex( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) 
     }
     //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
     uint8_t nodetype = comp->tree[ nodeoffs ];
-    if ( nodetype != NT_NUMCMPEX ) {
+    if ( nodetype != NT_NUMCMPEX && nodetype != NT_STRCMPEX ) {
         return cgen_from_numshiftex( cgen, comp, nodeoffs );
     }
-    // need to get expression type first
     cbdata_t cbdata = { cgen, comp, nodeoffs, UINT16_C(0) };
-    if ( !comp_node_iter_branches( comp, nodeoffs, &cbdata, check_exprtype_cb ) ) {
-        return false;
-    }
-    if ( cbdata.count ) {       // string comparison!
-        cbdata.count = UINT16_C(0);
+    if ( nodetype == NT_STRCMPEX ) {
         return comp_node_iter_branches( comp, nodeoffs, &cbdata, from_strcmp_cb );
     }
-    cbdata.count = UINT16_C(0);
     return comp_node_iter_branches( comp, nodeoffs, &cbdata, from_numcmp_cb );
 }
 
@@ -1586,30 +1578,27 @@ bool cgen_from_numorex( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
     return comp_node_iter_branches( comp, nodeoffs, &cbdata, from_numor_cb );
 }
 
-bool cgen_from_numexpr( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
-    // num-expr     := num-or-ex .
-    return cgen_from_numorex( cgen, comp, nodeoffs );
-}
-
-static bool check_exprtype2_cb( void* param, uint16_t nodeoffs ) {
+static bool from_numexpr_cb( void* param, uint16_t nodeoffs ) {
     cbdata_t* pdata = (cbdata_t*) param;
-    if ( nodeoffs == NODEOFFS_NONE ) {
-        return cgen_bad_node( pdata->comp );
-    }
-    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
-    uint8_t nodetype    = pdata->comp->tree[ nodeoffs      ];
-    uint8_t numbranches = pdata->comp->tree[ nodeoffs + 1U ];
-    switch ( nodetype ) {
-        case NT_NUMLIT: case NT_NUMVARREF: case NT_NUMUSRFNCALL: case NT_SYSNUMFUNCARGCALL:
-        case NT_SYSNOARGNUMCALL: case NT_NUMUNARYEX: case NT_NUMMULTEX: case NT_NUMADDEX:
-        case NT_NUMSHIFTEX: case NT_NUMCMPEX: case NT_NUMANDEX: case NT_NUMOREX:
-            ++pdata->count;
-            break;
-    }
-    if ( pdata->count == UINT16_C(0) && numbranches != UINT8_C(0) ) {
-        return comp_node_iter_branches( pdata->comp, nodeoffs, pdata, check_exprtype2_cb );
+    // put the first numeric expression on the data stack
+    if ( !cgen_from_numorex( pdata->cgen, pdata->comp, nodeoffs ) ) {
+        return false;
     }
     return true;
+}
+
+bool cgen_from_numexpr( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
+    // num-expr     := num-or-ex .
+    if ( nodeoffs == NODEOFFS_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    uint8_t nodetype = comp->tree[ nodeoffs ];
+    if ( nodetype != NT_NUMEXPR ) {
+        return cgen_unexpected_node( comp );
+    }
+    cbdata_t cbdata = { cgen, comp, nodeoffs, UINT16_C(0) };
+    return comp_node_iter_branches( comp, nodeoffs, &cbdata, from_numexpr_cb );
 }
 
 bool cgen_from_expr( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
@@ -1617,14 +1606,13 @@ bool cgen_from_expr( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
     if ( nodeoffs == NODEOFFS_NONE ) {
         return cgen_bad_node( comp );
     }
-    // need to get expression type first
-    cbdata_t cbdata = { cgen, comp, nodeoffs, UINT16_C(0) };
-    if ( !comp_node_iter_branches( comp, nodeoffs, &cbdata, check_exprtype2_cb ) ) {
-        return false;
+    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    uint8_t nodetype = comp->tree[ nodeoffs ];
+    if ( nodetype == NT_STREXPR ) {
+        return cgen_from_strexpr( cgen, comp, nodeoffs );
     }
-    if ( cbdata.count != UINT16_C(0) ) {    // numeric expression
+    if ( nodetype == NT_NUMEXPR ) {
         return cgen_from_numexpr( cgen, comp, nodeoffs );
     }
-    // string expression?
-    return cgen_from_strexpr( cgen, comp, nodeoffs );
+    return cgen_unexpected_node( comp );
 }

@@ -215,7 +215,12 @@ Explanation of node types:
         immediate processing:
             - generated only if there is 2 or more nodes
 
-    [ NT_STREXPR - not generated ]
+    NT_STREXPR
+        branches:
+            - 1 branch of numeric expression
+        immediate processing:
+            - generated as a hint to the code generator
+
     [ NT_NUMSUBEXPR - not generated ]
     [ NT_NUMBASEEXPR - not generated ]
 
@@ -245,21 +250,29 @@ Explanation of node types:
             - 1 branch of first operand
             - at least 1 branch of NT_OPERATOR
         immediate processing:
-            - generated only if a multiplication operator was used
+            - generated only if an addition operator was used
 
     NT_NUMSHIFTEX   numeric shift expression
         branches:
             - 1 branch of first operand
             - at least 1 branch of NT_OPERATOR
         immediate processing:
-            - generated only if a multiplication operator was used
+            - generated only if a shift operator was used
 
-    NT_NUMCMPEX   numeric shift expression
+    NT_NUMCMPEX   numeric comparison expression
         branches:
             - 1 branch of first operand
             - at least 1 branch of NT_OPERATOR
         immediate processing:
-            - generated only if a multiplication operator was used
+            - generated only if a comparison operator was used
+
+    NT_STRCMPEX  string comparison expression
+        branches:
+            - 1 branch of first operand
+            - at least 1 branch of NT_OPERATOR
+        immediate processing:
+            - generated as a hint to the code generator
+            - generated only if a comparison operator was used
 
     NT_NUMANDEX   numeric AND expression
         branches:
@@ -275,7 +288,12 @@ Explanation of node types:
         immediate processing:
             - generated only if a multiplication operator was used
 
-    [ NT_NUMEXPR - not generated ]
+    NT_NUMEXPR
+        branches:
+            - 1 branch of numeric expression
+        immediate processing:
+            - generated as a hint to the code generator
+
     [ NT_EXPR - not generated ]
 
     NT_SAVESTMT     SAVE statement
@@ -501,9 +519,9 @@ Explanation of node types:
 #define NT_SYSNOARGNUMCALL      UINT8_C(0X4A)   // system no-argument number function call
 #define NT_OPERATOR             UINT8_C(0X4B)   // operator token
 #define NT_NUMBASEVARREFLIST    UINT8_C(0X4C)   // numeric base variable reference list
-#define NT_ZZZZZZZZ1            UINT8_C(0X18)   //
-#define NT_ZZZZZZZZ2            UINT8_C(0X1A)   //
-#define NT_ZZZZZZZZ3            UINT8_C(0X1C)   //
+#define NT_NUMEXPR              UINT8_C(0X18)   // numeric expression
+#define NT_STREXPR              UINT8_C(0X1A)   // string expression
+#define NT_STRCMPEX             UINT8_C(0X1C)   // string comparison expression
 #define NT_ZZZZZZZZ4            UINT8_C(0X1E)   //
 #define NT_ZZZZZZZZ5            UINT8_C(0X20)   //
 #define NT_ZZZZZZZZ6            UINT8_C(0X22)   //

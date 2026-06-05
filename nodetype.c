@@ -97,6 +97,9 @@ const char* nodename( uint8_t nodetype ) {
         case NT_SYSNOARGNUMCALL:        return "NT_SYSNOARGNUMCALL";
         case NT_OPERATOR:               return "NT_OPERATOR";
         case NT_NUMBASEVARREFLIST:      return "NT_NUMBASEVARREFLIST";
+        case NT_NUMEXPR:                return "NT_NUMEXPR";
+        case NT_STREXPR:                return "NT_STREXPR";
+        case NT_STRCMPEX:               return "NT_STRCMPEX";
         default:
             break;
     }
