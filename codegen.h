@@ -161,7 +161,11 @@ bool cgen_from_straddexpr( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs 
 bool cgen_from_strexpr( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
 bool cgen_from_numunaryex( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
 bool cgen_from_nummultex( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
-
+bool cgen_from_numaddex( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
+bool cgen_from_numshiftex( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
+bool cgen_from_numcmpex( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
+bool cgen_from_numandex( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
+bool cgen_from_numorex( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
 bool cgen_from_numexpr( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
 bool cgen_from_expr( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
 
