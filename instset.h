@@ -258,6 +258,12 @@ The 4096 extended instructions are as follows:
     0001 00101000       LFTS - get left part of string ( s n -- s ) C=0 P=0
     0001 00101001       RGTS - get right part of string ( s n -- s ) C=0 P=0
     0001 00101010       MIDS - get mid part of string ( s n -- s ) C=0 P=0
+    0001 00101011       (reserved)
+    0001 00101100       (reserved)
+    0001 00101101       (reserved)
+    0001 00101110       (reserved)
+    0001 00101111       (reserved)
+    0001 00110000       SAVE - save program ( s s -- ) C=0 P=0
 
 */
 
@@ -349,5 +355,6 @@ The 4096 extended instructions are as follows:
 #define INS_LFTS        UINT16_C(0X128)
 #define INS_RGTS        UINT16_C(0X129)
 #define INS_MIDS        UINT16_C(0X12A)
+#define INS_SAVE        UINT16_C(0X130)
 
 #endif

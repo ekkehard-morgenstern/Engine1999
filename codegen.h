@@ -147,6 +147,9 @@ bool cgen_gen_hexs( codegen_t* cgen );
 bool cgen_gen_decs( codegen_t* cgen );
 bool cgen_gen_strs( codegen_t* cgen );
 
+// BASIC system command implementations
+bool cgen_gen_save( codegen_t* cgen );
+
 // generate code from syntax tree nodes
 
 bool cgen_from_numlit( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
@@ -168,5 +171,6 @@ bool cgen_from_numandex( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
 bool cgen_from_numorex( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
 bool cgen_from_numexpr( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
 bool cgen_from_expr( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
+bool cgen_from_savestmt( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
 
 #endif

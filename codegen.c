@@ -132,6 +132,7 @@ static const char* opcode_to_string( uint16_t opcode ) {
         case INS_LFTS:      return "LFTS";
         case INS_RGTS:      return "RGTS";
         case INS_MIDS:      return "MIDS";
+        case INS_SAVE:      return "SAVE";
         default:            break;
     }
     return "???";
@@ -585,6 +586,12 @@ bool cgen_gen_rgts( codegen_t* cgen ) {
 
 bool cgen_gen_mids( codegen_t* cgen ) {
     return cgen_gen_ins12( cgen, INS_MIDS, false, false, UINT16_C(0) );
+}
+
+// BASIC system command implementations
+
+bool cgen_gen_save( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_SAVE, false, false, UINT16_C(0) );
 }
 
 // generate code from syntax tree nodes
@@ -1615,4 +1622,60 @@ bool cgen_from_expr( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
         return cgen_from_numexpr( cgen, comp, nodeoffs );
     }
     return cgen_unexpected_node( comp );
+}
+
+static bool from_savestmt_cb( void* param, uint16_t nodeoffs ) {
+    cbdata_t* pdata = (cbdata_t*) param;
+    // put the first string expression on the data stack
+    if ( !cgen_from_strexpr( pdata->cgen, pdata->comp, nodeoffs ) ) {
+        return false;
+    }
+    return true;
+}
+
+bool cgen_from_savestmt( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
+    // save-stmt := SAVE str-expr [ TOK_COMMA TOK_NUMIDENT ] .
+    /*
+        NT_SAVESTMT     SAVE statement
+            data:
+                - n bytes of save mode (optional)
+            branches:
+                - 1 branch of string expression
+            immediate processing:
+                - the SAVE statement is special b/c it uses an identifier as optional second parameter
+                  denoting save mode (A for ASCII, B (default) for binary)
+                - the file name need not be a string literal
+    */
+    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    if ( nodeoffs == NODEOFFS_NONE ) {
+        return cgen_bad_node( comp );
+    }
+
+    // emit data field as an instruction to load a string to the stack
+    uint16_t datalen  = EXTRACT16( comp, nodeoffs + 2U );
+    uint16_t dataoffs = nodeoffs + 8U;
+    uint16_t optoffs  = DATAOFFS_NONE;
+    if ( !cgen_alloc_data( cgen, datalen + UINT16_C(1), &optoffs ) || optoffs == DATAOFFS_NONE ) {
+        return cgen_out_of_data_memory( comp );
+    }
+    if ( datalen ) {
+        memcpy( &cgen->data[ optoffs ], &comp->tree[ dataoffs ], datalen );
+        cgen->data[ optoffs + datalen ] = '\0';
+    }
+    if ( !cgen_gen_phim( cgen, (int32_t) optoffs ) || !cgen_gen_las_d( cgen ) ) {
+        return cgen_out_of_code_memory( comp );
+    }
+
+    // create code to push file name on stack as a string
+    cbdata_t cbdata = { cgen, comp, nodeoffs, UINT16_C(0) };
+    if ( !comp_node_iter_branches( comp, nodeoffs, &cbdata, from_savestmt_cb ) ) {
+        return false;
+    }
+
+    // create code to run the SAVE statement
+    if ( !cgen_gen_save( cgen ) ) {
+        return cgen_out_of_code_memory( comp );
+    }
+
+    return true;
 }
