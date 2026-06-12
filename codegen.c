@@ -133,6 +133,9 @@ static const char* opcode_to_string( uint16_t opcode ) {
         case INS_RGTS:      return "RGTS";
         case INS_MIDS:      return "MIDS";
         case INS_SAVE:      return "SAVE";
+        case INS_PCHN:      return "PCHN";
+        case INS_PNUM:      return "PNUM";
+        case INS_PSTR:      return "PSTR";
         default:            break;
     }
     return "???";
@@ -592,6 +595,18 @@ bool cgen_gen_mids( codegen_t* cgen ) {
 
 bool cgen_gen_save( codegen_t* cgen ) {
     return cgen_gen_ins12( cgen, INS_SAVE, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_pchn( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_PCHN, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_pnum( codegen_t* cgen, bool hasparam, uint16_t param ) {
+    return cgen_gen_ins12( cgen, INS_PNUM, false, hasparam, param );
+}
+
+bool cgen_gen_pstr( codegen_t* cgen, bool hasparam, uint16_t param ) {
+    return cgen_gen_ins12( cgen, INS_PSTR, false, hasparam, param );
 }
 
 // generate code from syntax tree nodes
@@ -1651,6 +1666,11 @@ bool cgen_from_savestmt( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) 
         return cgen_bad_node( comp );
     }
 
+    uint8_t nodetype = comp->tree[ nodeoffs ];
+    if ( nodetype != NT_SAVESTMT ) {
+        return cgen_unexpected_node( comp );
+    }
+
     // emit data field as an instruction to load a string to the stack
     uint16_t datalen  = EXTRACT16( comp, nodeoffs + 2U );
     uint16_t dataoffs = nodeoffs + 8U;
@@ -1677,5 +1697,268 @@ bool cgen_from_savestmt( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) 
         return cgen_out_of_code_memory( comp );
     }
 
+    return true;
+}
+
+static bool from_chanspec_cb( void* param, uint16_t nodeoffs ) {
+    cbdata_t* pdata = (cbdata_t*) param;
+    // put the first numeric expression on the data stack
+    if ( !cgen_from_numexpr( pdata->cgen, pdata->comp, nodeoffs ) ) {
+        return false;
+    }
+    return true;
+}
+
+bool cgen_from_chanspec( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs, bool (*generator)( codegen_t* ) ) {
+    /*
+        chan-spec := TOK_LATTICE num-expr .
+
+        NT_CHANSPEC     channel specifier
+            branches:
+                - 1 branch of numeric expression
+    */
+    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    if ( nodeoffs == NODEOFFS_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    uint8_t nodetype = comp->tree[ nodeoffs ];
+    if ( nodetype != NT_CHANSPEC ) {
+        return cgen_unexpected_node( comp );
+    }
+    // create code to push file number on stack
+    cbdata_t cbdata = { cgen, comp, nodeoffs, UINT16_C(0) };
+    if ( !comp_node_iter_branches( comp, nodeoffs, &cbdata, from_chanspec_cb ) ) {
+        return false;
+    }
+    // create instruction that uses the file number
+    if ( !generator( cgen ) ) {
+        return cgen_out_of_code_memory( comp );
+    }
+    return true;
+}
+
+#define PRTARGV_NUMEXPR UINT16_C(0X0001)
+#define PRTARGV_STREXPR UINT16_C(0X0002)
+#define PRTARGM_TYPE    UINT16_C(0X0003)
+#define PRTARGV_SEMIC   UINT16_C(0X0004)
+#define PRTARGV_COMMA   UINT16_C(0X0008)
+#define PRTARGM_SEP     UINT16_C(0X000C)
+
+static bool from_printarg_cb( void* param, uint16_t nodeoffs ) {
+    /*
+        NT_PRINTARG     print argument
+            branches:
+                - 1 branch of expression
+                - 1 optional branch of separator
+    */
+    cbdata_t* pdata = (cbdata_t*) param;
+    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    if ( nodeoffs == NODEOFFS_NONE ) {
+        return cgen_bad_node( pdata->comp );
+    }
+    uint8_t nodetype = pdata->comp->tree[ nodeoffs ]; uint16_t datalen, dataoffs;
+    switch ( nodetype ) {
+        case NT_STREXPR:
+            if ( !cgen_from_strexpr( pdata->cgen, pdata->comp, nodeoffs ) ) {
+                return false;
+            }
+            pdata->count |= PRTARGV_STREXPR;
+            return true;
+        case NT_NUMEXPR:
+            if ( !cgen_from_numexpr( pdata->cgen, pdata->comp, nodeoffs ) ) {
+                return false;
+            }
+            pdata->count |= PRTARGV_NUMEXPR;
+            return true;
+        case NT_PRINTSEP:
+            datalen = EXTRACT16( pdata->comp, nodeoffs + 2U );
+            if ( datalen == 1U ) {
+                dataoffs = nodeoffs + 8U;
+                if ( pdata->comp->tree[ dataoffs ] == ';' ) {
+                    pdata->count |= PRTARGV_SEMIC;
+                    return true;
+                } else if ( pdata->comp->tree[ dataoffs ] == ',' ) {
+                    pdata->count |= PRTARGV_COMMA;
+                    return true;
+                }
+            }
+            break;
+        default:
+            break;
+    }
+    return cgen_unexpected_node( pdata->comp );
+}
+
+bool cgen_from_printarg( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
+    // print-arg := expr [ print-sep ] .
+    /*
+        NT_PRINTSEP     print separator
+            data:
+                - 1 byte of separator token
+
+        NT_PRINTARG     print argument
+            branches:
+                - 1 branch of expression
+                - 1 optional branch of separator
+    */
+    if ( nodeoffs == NODEOFFS_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    uint8_t nodetype = comp->tree[ nodeoffs ];
+    if ( nodetype != NT_PRINTARG ) {
+UNEXP:  return cgen_unexpected_node( comp );
+    }
+    cbdata_t cbdata = { cgen, comp, nodeoffs, UINT16_C(0) };
+    if ( !comp_node_iter_branches( comp, nodeoffs, &cbdata, from_printarg_cb ) ) {
+        return false;
+    }
+    uint16_t param = cbdata.count & PRTARGM_SEP;
+    bool  hasparam = param ? true : false;
+    switch ( cbdata.count & PRTARGM_TYPE ) {
+        case PRTARGV_STREXPR:
+            if ( !cgen_gen_pstr( cgen, hasparam, param ) ) {
+                return cgen_out_of_code_memory( comp );
+            }
+            return true;
+        case PRTARGV_NUMEXPR:
+            if ( !cgen_gen_pnum( cgen, hasparam, param ) ) {
+                return cgen_out_of_code_memory( comp );
+            }
+            return true;
+        default:
+            break;
+    }
+    goto UNEXP;
+}
+
+static bool from_printarglist_cb( void* param, uint16_t nodeoffs ) {
+    cbdata_t* pdata = (cbdata_t*) param;
+    // evaluate all the print arguments
+    if ( !cgen_from_printarg( pdata->cgen, pdata->comp, nodeoffs ) ) {
+        return false;
+    }
+    return true;
+}
+
+bool cgen_from_printarglist( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
+    /*
+        print-arg := expr [ print-sep ] .
+        print-arg-list := print-arg { print-arg } .
+
+        NT_PRINTSEP     print separator
+            data:
+                - 1 byte of separator token
+
+        NT_PRINTARG     print argument
+            branches:
+                - 1 branch of expression
+                - 1 optional branch of separator
+
+        NT_PRINTARGLIST     print argument
+            branches:
+                - 2 or more branches of print arguments
+            immediate processing:
+                - generated only if there's more than one print argument
+    */
+    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    if ( nodeoffs == NODEOFFS_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    uint8_t nodetype = comp->tree[ nodeoffs ];
+    if ( nodetype != NT_PRINTARGLIST ) {
+        return cgen_unexpected_node( comp );
+    }
+    cbdata_t cbdata = { cgen, comp, nodeoffs, UINT16_C(0) };
+    if ( !comp_node_iter_branches( comp, nodeoffs, &cbdata, from_printarglist_cb ) ) {
+        return false;
+    }
+    return true;
+}
+
+static bool from_printstmt_cb( void* param, uint16_t nodeoffs ) {
+    cbdata_t* pdata = (cbdata_t*) param;
+    /*
+        NT_CHANSPEC     channel specifier
+            branches:
+                - 1 branch of numeric expression
+
+        NT_PRINTARG     print argument
+            branches:
+                - 1 branch of expression
+                - 1 optional branch of separator
+
+        NT_PRINTARGLIST     print argument
+            branches:
+                - 2 or more branches of print arguments
+            immediate processing:
+                - generated only if there's more than one print argument
+    */
+    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    if ( nodeoffs == NODEOFFS_NONE ) {
+        return cgen_bad_node( pdata->comp );
+    }
+    uint8_t nodetype = pdata->comp->tree[ nodeoffs ];
+    if ( nodetype == NT_CHANSPEC ) {
+        if ( !cgen_from_chanspec( pdata->cgen, pdata->comp, nodeoffs, cgen_gen_pchn ) ) {
+            return false;
+        }
+    } else if ( nodetype == NT_PRINTARG ) {
+        if ( !cgen_from_printarg( pdata->cgen, pdata->comp, nodeoffs ) ) {
+            return false;
+        }
+    } else if ( nodetype == NT_PRINTARGLIST ) {
+        if ( !cgen_from_printarglist( pdata->cgen, pdata->comp, nodeoffs ) ) {
+            return false;
+        }
+    } else {
+        return cgen_unexpected_node( pdata->comp );
+    }
+    return true;
+}
+
+bool cgen_from_printstmt( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
+    /*
+    chan-spec := TOK_LATTICE num-expr .
+    print-sep := TOK_COMMA | TOK_SEMIC .
+    print-arg := expr [ print-sep ] .
+    print-arg-list := print-arg { print-arg } .
+    print-stmt := TOK_PRINT [ chan-spec TOK_COMMA ] [ print-arg-list ] .
+
+        NT_CHANSPEC     channel specifier
+            branches:
+                - 1 branch of numeric expression
+
+        NT_PRINTSEP     print separator
+            data:
+                - 1 byte of separator token
+
+        NT_PRINTARG     print argument
+            branches:
+                - 1 branch of expression
+                - 1 optional branch of separator
+
+        NT_PRINTARGLIST     print argument
+            branches:
+                - 2 or more branches of print arguments
+            immediate processing:
+                - generated only if there's more than one print argument
+
+        NT_PRINTSTMT    print statement
+            branches:
+                - 1 optional branch of channel info
+                - 1 optional branch of print argument list
+    */
+    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    if ( nodeoffs == NODEOFFS_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    uint8_t nodetype = comp->tree[ nodeoffs ];
+    if ( nodetype != NT_PRINTSTMT ) {
+        return cgen_unexpected_node( comp );
+    }
+    cbdata_t cbdata = { cgen, comp, nodeoffs, UINT16_C(0) };
+    if ( !comp_node_iter_branches( comp, nodeoffs, &cbdata, from_printstmt_cb ) ) {
+        return false;
+    }
     return true;
 }

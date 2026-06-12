@@ -264,6 +264,9 @@ The 4096 extended instructions are as follows:
     0001 00101110       (reserved)
     0001 00101111       (reserved)
     0001 00110000       SAVE - save program ( s s -- ) C=0 P=0
+    0001 00110001       PCHN - print channel ( n -- ) C=0 P=0
+    0001 00110010       PNUM - print number (param=separator) ( n -- ) C=0 P=0/1
+    0001 00110011       PSTR - print string (param=separator) ( n -- ) C=0 P=0/1
 
 */
 
@@ -356,5 +359,8 @@ The 4096 extended instructions are as follows:
 #define INS_RGTS        UINT16_C(0X129)
 #define INS_MIDS        UINT16_C(0X12A)
 #define INS_SAVE        UINT16_C(0X130)
+#define INS_PCHN        UINT16_C(0X131)
+#define INS_PNUM        UINT16_C(0X132)
+#define INS_PSTR        UINT16_C(0X133)
 
 #endif

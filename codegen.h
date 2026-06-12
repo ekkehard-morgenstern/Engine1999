@@ -149,6 +149,9 @@ bool cgen_gen_strs( codegen_t* cgen );
 
 // BASIC system command implementations
 bool cgen_gen_save( codegen_t* cgen );
+bool cgen_gen_pchn( codegen_t* cgen );
+bool cgen_gen_pnum( codegen_t* cgen, bool hasparam, uint16_t param );
+bool cgen_gen_pstr( codegen_t* cgen, bool hasparam, uint16_t param );
 
 // generate code from syntax tree nodes
 
@@ -172,5 +175,9 @@ bool cgen_from_numorex( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
 bool cgen_from_numexpr( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
 bool cgen_from_expr( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
 bool cgen_from_savestmt( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
+bool cgen_from_chanspec( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs, bool (*generator)( codegen_t* ) );
+bool cgen_from_printarg( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
+bool cgen_from_printarglist( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
+bool cgen_from_printstmt( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
 
 #endif
