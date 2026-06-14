@@ -215,9 +215,9 @@ The 4096 extended instructions are as follows:
     0001 00001001       WRIV - write regular integer variable (param=varoffs) ( n -- ) C=0 P=1
     0001 00001010       WRSV - write regular string  variable (param=varoffs) ( s -- ) C=0 P=1
     0001 00001011       WRLV - write regular label   variable (param=varoffs) R( a -- ) C=1 P=1
-    0001 00001100       WNAE - write numeric array element (param=varoffs) ( inx ... ndim n -- ) C=0 P=1
-    0001 00001101       WIAE - write integer array element (param=varoffs) ( inx ... ndim n -- ) C=0 P=1
-    0001 00001110       WSAE - write string  array element (param=varoffs) ( inx ... ndim s -- ) C=0 P=1
+    0001 00001100       WNAE - write numeric array element (param=varoffs) ( n inx ... ndim -- ) C=0 P=1
+    0001 00001101       WIAE - write integer array element (param=varoffs) ( n inx ... ndim -- ) C=0 P=1
+    0001 00001110       WSAE - write string  array element (param=varoffs) ( s inx ... ndim -- ) C=0 P=1
     0001 00001111       (reserved)
 
     0001 00010000       SHEX - shell execute ( s -- s ) C=0 P=0

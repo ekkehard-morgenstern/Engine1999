@@ -158,7 +158,7 @@ bool cgen_gen_pstr( codegen_t* cgen, bool hasparam, uint16_t param );
 bool cgen_from_numlit( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
 bool cgen_from_strlit( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
 bool cgen_from_strlits( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
-bool cgen_from_varref_lvalue( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
+bool cgen_from_varref_rvalue( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
 bool cgen_from_usrfncall( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
 bool cgen_from_sysfncall( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
 bool cgen_from_numbaseexpr( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
@@ -179,5 +179,8 @@ bool cgen_from_chanspec( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs, b
 bool cgen_from_printarg( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
 bool cgen_from_printarglist( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
 bool cgen_from_printstmt( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
+bool cgen_from_varref_lvalue( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
+bool cgen_from_numassign( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
+bool cgen_from_strassign( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
 
 #endif

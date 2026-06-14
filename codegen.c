@@ -823,8 +823,8 @@ static bool gen_from_sysfncall( codegen_t* cgen, compiler_t* comp, uint16_t node
     return true;
 }
 
-bool cgen_from_varref_lvalue( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
-    // numeric or string variable reference in an lvalue context
+bool cgen_from_varref_rvalue( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
+    // numeric or string variable reference in an rvalue context
     /*
         NT_NUMVARREF        numeric variable reference
         NT_STRVARREF        string  variable reference
@@ -1039,7 +1039,7 @@ bool cgen_from_numbaseexpr( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs
     uint8_t nodetype = comp->tree[ nodeoffs ];
     switch ( nodetype ) {
         case NT_NUMVARREF:
-            return cgen_from_varref_lvalue( cgen, comp, nodeoffs );
+            return cgen_from_varref_rvalue( cgen, comp, nodeoffs );
         case NT_NUMLIT:
             return cgen_from_numlit( cgen, comp, nodeoffs );
         case NT_NUMUSRFNCALL:
@@ -1062,7 +1062,7 @@ bool cgen_from_strbaseexpr( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs
     uint8_t nodetype = comp->tree[ nodeoffs ];
     switch ( nodetype ) {
         case NT_STRVARREF:
-            return cgen_from_varref_lvalue( cgen, comp, nodeoffs );
+            return cgen_from_varref_rvalue( cgen, comp, nodeoffs );
         case NT_STRLIT:
             return cgen_from_strlit( cgen, comp, nodeoffs );
         case NT_STRLITS:
@@ -1958,6 +1958,201 @@ bool cgen_from_printstmt( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs )
     }
     cbdata_t cbdata = { cgen, comp, nodeoffs, UINT16_C(0) };
     if ( !comp_node_iter_branches( comp, nodeoffs, &cbdata, from_printstmt_cb ) ) {
+        return false;
+    }
+    return true;
+}
+
+bool cgen_from_varref_lvalue( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
+    // numeric or string variable reference in an lvalue context
+    /*
+        NT_NUMVARREF        numeric variable reference
+        NT_STRVARREF        string  variable reference
+            data:
+                - 1 byte of type indicator
+                - 2 bytes of variable offset
+            branches:
+                - list of array index expressions
+    */
+    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    if ( nodeoffs == NODEOFFS_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    uint8_t nodetype = comp->tree[ nodeoffs ];
+    if ( nodetype != NT_NUMVARREF && nodetype != NT_STRVARREF ) {
+UNEXP:  return cgen_unexpected_node( comp );
+    }
+    uint16_t datalen = EXTRACT16( comp, nodeoffs + 2U );
+    if ( datalen != UINT16_C(3) ) {
+        goto UNEXP;
+    }
+    uint16_t nodeoffs0 = nodeoffs;
+    nodeoffs += 8U;
+    uint8_t vartype = comp->tree[ nodeoffs++ ];
+    uint16_t varoffs = EXTRACT16( comp, nodeoffs );
+    nodeoffs = nodeoffs0;
+    uint8_t basetype = vartype & VARTYPEM_BASE;
+    if ( vartype & VARTYPEF_ARRAY ) {
+        bool (*generator)( codegen_t*, uint16_t ) = 0;
+        if ( !gen_from_arraysub( cgen, comp, nodeoffs ) ) {
+            return false;
+        }
+        switch ( basetype ) {
+            case VARTYPEV_FLOAT:
+                generator = cgen_gen_wnae;
+                break;
+            case VARTYPEV_INT:
+                generator = cgen_gen_wiae;
+                break;
+            case VARTYPEV_STR:
+                generator = cgen_gen_wsae;
+                break;
+            default:
+                break;
+        }
+        if ( generator == 0 ) {
+            goto UNEXP;
+        }
+        if ( !generator( cgen, varoffs ) ) {
+            return cgen_out_of_code_memory( comp );
+        }
+    } else if ( vartype & VARTYPEF_FUNC ) {
+        goto UNEXP;
+    } else {
+        bool (*generator)( codegen_t*, uint16_t ) = 0;
+        switch ( basetype ) {
+            case VARTYPEV_FLOAT:
+                generator = cgen_gen_wrnv;
+                break;
+            case VARTYPEV_INT:
+                generator = cgen_gen_wriv;
+                break;
+            case VARTYPEV_STR:
+                generator = cgen_gen_wrsv;
+                break;
+            case VARTYPEV_LABEL:
+                generator = cgen_gen_wrlv;
+                break;
+            default:
+                break;
+        }
+        if ( generator == 0 ) {
+            goto UNEXP;
+        }
+        if ( !generator( cgen, varoffs ) ) {
+            return cgen_out_of_code_memory( comp );
+        }
+    }
+    return true;
+}
+
+static bool from_numassign_cb( void* param, uint16_t nodeoffs ) {
+    cbdata_t* pdata = (cbdata_t*) param;
+    /*
+        NT_NUMASSIGN    numeric assignment
+            branches:
+                - 1 branch of numeric variable reference
+                - 1 branch of numeric expression
+    */
+    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    if ( nodeoffs == NODEOFFS_NONE ) {
+        return cgen_bad_node( pdata->comp );
+    }
+    uint8_t nodetype = pdata->comp->tree[ nodeoffs ];
+    if ( nodetype == NT_NUMVARREF ) {
+        // remember the numvarref node
+        pdata->count = nodeoffs;
+        return true;
+    } else if ( nodetype == NT_NUMEXPR ) {
+        // evaluate the numeric expression first
+        if ( !cgen_from_numexpr( pdata->cgen, pdata->comp, nodeoffs ) ) {
+            return false;
+        }
+    } else {
+        return cgen_unexpected_node( pdata->comp );
+    }
+    return true;
+}
+
+bool cgen_from_numassign( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
+    // num-assign := num-var-ref TOK_EQ num-expr .
+    /*
+        NT_NUMASSIGN    numeric assignment
+            branches:
+                - 1 branch of numeric variable reference
+                - 1 branch of numeric expression
+    */
+    if ( nodeoffs == NODEOFFS_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    uint8_t nodetype = comp->tree[ nodeoffs ];
+    if ( nodetype != NT_NUMASSIGN ) {
+UNEXP:  return cgen_unexpected_node( comp );
+    }
+    cbdata_t cbdata = { cgen, comp, nodeoffs, NODEOFFS_NONE };
+    if ( !comp_node_iter_branches( comp, nodeoffs, &cbdata, from_numassign_cb ) ) {
+        return false;
+    }
+    if ( cbdata.count == NODEOFFS_NONE ) {  // didn't have variable reference node?!
+        goto UNEXP;
+    }
+    if ( !cgen_from_varref_lvalue( cgen, comp, cbdata.count ) ) {
+        return false;
+    }
+    return true;
+}
+
+static bool from_strassign_cb( void* param, uint16_t nodeoffs ) {
+    cbdata_t* pdata = (cbdata_t*) param;
+    /*
+        NT_STRASSIGN    string assignment
+            branches:
+                - 1 branch of string variable reference
+                - 1 branch of string expression
+    */
+    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    if ( nodeoffs == NODEOFFS_NONE ) {
+        return cgen_bad_node( pdata->comp );
+    }
+    uint8_t nodetype = pdata->comp->tree[ nodeoffs ];
+    if ( nodetype == NT_STRVARREF ) {
+        // remember the strvarref node
+        pdata->count = nodeoffs;
+        return true;
+    } else if ( nodetype == NT_STREXPR ) {
+        // evaluate the string expression first
+        if ( !cgen_from_strexpr( pdata->cgen, pdata->comp, nodeoffs ) ) {
+            return false;
+        }
+    } else {
+        return cgen_unexpected_node( pdata->comp );
+    }
+    return true;
+}
+
+bool cgen_from_strassign( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
+    // str-assign := str-var-ref TOK_EQ num-expr .
+    /*
+        NT_STRASSIGN    string assignment
+            branches:
+                - 1 branch of string variable reference
+                - 1 branch of string expression
+    */
+    if ( nodeoffs == NODEOFFS_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    uint8_t nodetype = comp->tree[ nodeoffs ];
+    if ( nodetype != NT_STRASSIGN ) {
+UNEXP:  return cgen_unexpected_node( comp );
+    }
+    cbdata_t cbdata = { cgen, comp, nodeoffs, NODEOFFS_NONE };
+    if ( !comp_node_iter_branches( comp, nodeoffs, &cbdata, from_strassign_cb ) ) {
+        return false;
+    }
+    if ( cbdata.count == NODEOFFS_NONE ) {  // didn't have variable reference node?!
+        goto UNEXP;
+    }
+    if ( !cgen_from_varref_lvalue( cgen, comp, cbdata.count ) ) {
         return false;
     }
     return true;
