@@ -591,6 +591,18 @@ bool cgen_gen_mids( codegen_t* cgen ) {
     return cgen_gen_ins12( cgen, INS_MIDS, false, false, UINT16_C(0) );
 }
 
+bool cgen_gen_slft( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_SLFT, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_srgt( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_SRGT, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_smid( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_SMID, false, false, UINT16_C(0) );
+}
+
 // BASIC system command implementations
 
 bool cgen_gen_save( codegen_t* cgen ) {
@@ -1639,6 +1651,45 @@ bool cgen_from_expr( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
     return cgen_unexpected_node( comp );
 }
 
+static bool from_exprlist_cb( void* param, uint16_t nodeoffs ) {
+    cbdata_t* pdata = (cbdata_t*) param;
+    // put the expressions on the data stack in order
+    if ( nodeoffs == NODEOFFS_NONE ) {
+        return cgen_bad_node( pdata->comp );
+    }
+    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    uint8_t nodetype = pdata->comp->tree[ nodeoffs ];
+    if ( nodetype == NT_STREXPR ) {
+        return cgen_from_strexpr( pdata->cgen, pdata->comp, nodeoffs );
+    }
+    if ( nodetype == NT_NUMEXPR ) {
+        return cgen_from_numexpr( pdata->cgen, pdata->comp, nodeoffs );
+    }
+    return cgen_unexpected_node( pdata->comp );
+}
+
+bool cgen_from_exprlist( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
+    if ( nodeoffs == NODEOFFS_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    uint8_t nodetype = comp->tree[ nodeoffs ];
+    if ( nodetype == NT_STREXPR ) {
+        return cgen_from_strexpr( cgen, comp, nodeoffs );
+    }
+    if ( nodetype == NT_NUMEXPR ) {
+        return cgen_from_numexpr( cgen, comp, nodeoffs );
+    }
+    if ( nodetype == NT_EXPRLIST ) {
+        cbdata_t cbdata = { cgen, comp, nodeoffs, UINT16_C(0) };
+        if ( !comp_node_iter_branches( comp, nodeoffs, &cbdata, from_exprlist_cb ) ) {
+            return false;
+        }
+        return true;
+    }
+    return cgen_unexpected_node( comp );
+}
+
 static bool from_savestmt_cb( void* param, uint16_t nodeoffs ) {
     cbdata_t* pdata = (cbdata_t*) param;
     // put the first string expression on the data stack
@@ -2154,6 +2205,109 @@ UNEXP:  return cgen_unexpected_node( comp );
     }
     if ( !cgen_from_varref_lvalue( cgen, comp, cbdata.count ) ) {
         return false;
+    }
+    return true;
+}
+
+static bool from_substrassign1_cb( void* param, uint16_t nodeoffs ) {
+    cbdata_t* pdata = (cbdata_t*) param;
+    /*
+        NT_SUBSTRASSIGN     substring assignment
+            data:
+                - 1 byte of substring operator
+            branches:
+                - 1 branch of expression list
+                - 1 branch of string expression
+    */
+    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    if ( ++pdata->count != 2 ) {
+        return true;
+    }
+    if ( nodeoffs == NODEOFFS_NONE ) {
+        return cgen_bad_node( pdata->comp );
+    }
+    uint8_t nodetype = pdata->comp->tree[ nodeoffs ];
+    if ( nodetype == NT_STREXPR ) {
+        // evaluate the string expression first
+        if ( !cgen_from_strexpr( pdata->cgen, pdata->comp, nodeoffs ) ) {
+            return false;
+        }
+    } else {
+        return cgen_unexpected_node( pdata->comp );
+    }
+    return true;
+}
+
+static bool from_substrassign2_cb( void* param, uint16_t nodeoffs ) {
+    cbdata_t* pdata = (cbdata_t*) param;
+    /*
+        NT_SUBSTRASSIGN     substring assignment
+            data:
+                - 1 byte of substring operator
+            branches:
+                - 1 branch of expression list
+                - 1 branch of string expression
+    */
+    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    if ( ++pdata->count != 1 ) {
+        return true;
+    }
+    if ( nodeoffs == NODEOFFS_NONE ) {
+        return cgen_bad_node( pdata->comp );
+    }
+    uint8_t nodetype = pdata->comp->tree[ nodeoffs ];
+    if ( nodetype == NT_EXPRLIST || nodetype == NT_STREXPR || nodetype == NT_NUMEXPR ) {
+        // evaluate the expression list second
+        if ( !cgen_from_exprlist( pdata->cgen, pdata->comp, nodeoffs ) ) {
+            return false;
+        }
+    } else {
+        return cgen_unexpected_node( pdata->comp );
+    }
+    return true;
+}
+
+bool cgen_from_substrassign( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
+    // substr-assign := substr-op TOK_STRING TOK_LPAREN expr-list TOK_RPAREN TOK_EQ str-expr .
+    /*
+        T_SUBSTRASSIGN     substring assignment
+            data:
+                - 1 byte of substring operator
+            branches:
+                - 1 branch of expression list
+                - 1 branch of string expression
+    */
+    if ( nodeoffs == NODEOFFS_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    uint8_t nodetype = comp->tree[ nodeoffs ];
+    if ( nodetype != NT_SUBSTRASSIGN ) {
+UNEXP:  return cgen_unexpected_node( comp );
+    }
+    cbdata_t cbdata = { cgen, comp, nodeoffs, UINT16_C(0) };
+    if ( !comp_node_iter_branches( comp, nodeoffs, &cbdata, from_substrassign1_cb ) ) {
+        return false;
+    }
+    cbdata.count = UINT16_C(0);
+    if ( !comp_node_iter_branches( comp, nodeoffs, &cbdata, from_substrassign2_cb ) ) {
+        return false;
+    }
+    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    uint16_t datalen = EXTRACT16( comp, nodeoffs );
+    if ( datalen != 1U ) goto UNEXP;
+    uint8_t tok = comp->tree[ nodeoffs + 8U ];
+    bool (*generator)( codegen_t* ) = 0;
+    switch ( tok ) {
+        case TOK_LEFT:  generator = cgen_gen_slft; break;
+        case TOK_RIGHT: generator = cgen_gen_srgt; break;
+        case TOK_MID:   generator = cgen_gen_smid; break;
+        default:        goto UNEXP;
+    }
+    if ( generator == 0 ) {
+        goto UNEXP;
+    }
+    if ( !generator( cgen ) ) {
+        return cgen_out_of_code_memory( comp );
     }
     return true;
 }

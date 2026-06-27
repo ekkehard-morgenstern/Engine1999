@@ -146,6 +146,12 @@ bool cgen_gen_octs( codegen_t* cgen );
 bool cgen_gen_hexs( codegen_t* cgen );
 bool cgen_gen_decs( codegen_t* cgen );
 bool cgen_gen_strs( codegen_t* cgen );
+bool cgen_gen_lfts( codegen_t* cgen );
+bool cgen_gen_rgts( codegen_t* cgen );
+bool cgen_gen_mids( codegen_t* cgen );
+bool cgen_gen_slft( codegen_t* cgen );
+bool cgen_gen_srgt( codegen_t* cgen );
+bool cgen_gen_smid( codegen_t* cgen );
 
 // BASIC system command implementations
 bool cgen_gen_save( codegen_t* cgen );
@@ -174,6 +180,7 @@ bool cgen_from_numandex( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
 bool cgen_from_numorex( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
 bool cgen_from_numexpr( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
 bool cgen_from_expr( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
+bool cgen_from_exprlist( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
 bool cgen_from_savestmt( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
 bool cgen_from_chanspec( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs, bool (*generator)( codegen_t* ) );
 bool cgen_from_printarg( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
