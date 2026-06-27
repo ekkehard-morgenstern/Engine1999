@@ -2311,3 +2311,81 @@ UNEXP:  return cgen_unexpected_node( comp );
     }
     return true;
 }
+
+bool cgen_from_anyassign( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
+    // any-assign := num-assign | substr-assign | str-assign .
+    //  [ NT_ANYASSIGN - not generated ]
+    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    if ( nodeoffs == NODEOFFS_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    uint8_t nodetype = comp->tree[ nodeoffs ];
+    switch ( nodetype ) {
+        case NT_NUMASSIGN:      return cgen_from_numassign( cgen, comp, nodeoffs );
+        case NT_SUBSTRASSIGN:   return cgen_from_substrassign( cgen, comp, nodeoffs );
+        case NT_STRASSIGN:      return cgen_from_strassign( cgen, comp, nodeoffs );
+        default:                break;
+    }
+    return cgen_unexpected_node( comp );
+}
+
+static bool from_assignlist_cb( void* param, uint16_t nodeoffs ) {
+    cbdata_t* pdata = (cbdata_t*) param;
+    return cgen_from_anyassign( pdata->cgen, pdata->comp, nodeoffs );
+}
+
+bool cgen_from_assignlist( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
+    // assign-list := any-assign { TOK_COMMA any-assign } .
+    /*
+        NT_ASSIGNLIST       assignment list
+            branches:
+                - 2 or more branches of assignment expressions
+            immediate processing:
+                - not generated if there's only one assignment expression
+    */
+    if ( nodeoffs == NODEOFFS_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    uint8_t nodetype = comp->tree[ nodeoffs ];
+    switch ( nodetype ) {
+        case NT_NUMASSIGN: case NT_SUBSTRASSIGN: case NT_STRASSIGN:
+            return cgen_from_anyassign( cgen, comp, nodeoffs );
+        case NT_ASSIGNLIST:
+            cbdata_t cbdata = { cgen, comp, nodeoffs, UINT16_C(0) };
+            if ( !comp_node_iter_branches( comp, nodeoffs, &cbdata, from_assignlist_cb ) ) {
+                return false;
+            }
+            return true;
+        default:
+            break;
+    }
+    return cgen_unexpected_node( comp );
+}
+
+static bool from_letstmt_cb( void* param, uint16_t nodeoffs ) {
+    cbdata_t* pdata = (cbdata_t*) param;
+    return cgen_from_assignlist( pdata->cgen, pdata->comp, nodeoffs );
+}
+
+bool cgen_from_letstmt( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
+    // let-stmt := [ TOK_LET ] assign-list .
+    /*
+        NT_LETSTMT      LET statement
+            branches:
+                - 1 branch of assignment list
+    */
+    if ( nodeoffs == NODEOFFS_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    uint8_t nodetype = comp->tree[ nodeoffs ];
+    if ( nodetype != NT_LETSTMT ) {
+        return cgen_unexpected_node( comp );
+    }
+    cbdata_t cbdata = { cgen, comp, nodeoffs, UINT16_C(0) };
+    if ( !comp_node_iter_branches( comp, nodeoffs, &cbdata, from_letstmt_cb ) ) {
+        return false;
+    }
+    return true;
+}
