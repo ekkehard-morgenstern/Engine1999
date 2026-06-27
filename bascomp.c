@@ -2357,7 +2357,7 @@ bool comp_eat_strassign( compiler_t* comp, uint16_t* pnodeoffs ) {
 
 bool comp_eat_substrassign( compiler_t* comp, uint16_t* pnodeoffs ) {
     // substr-op := TOK_LEFT | TOK_MID | TOK_RIGHT .
-    // substr-assign := substr-op TOK_STRING TOK_LPAREN expr-list TOK_RPAREN .
+    // substr-assign := substr-op TOK_STRING TOK_LPAREN expr-list TOK_RPAREN TOK_EQ str-expr .
     uint8_t tok = comp->currtok;
     switch ( tok ) {
         case TOK_LEFT: case TOK_MID: case TOK_RIGHT:
@@ -2385,14 +2385,24 @@ bool comp_eat_substrassign( compiler_t* comp, uint16_t* pnodeoffs ) {
         comp_error( comp, "Closing parenthesis ')' expected" );
         return false;
     }
+    if ( comp->currtok != TOK_EQ || !comp_fetchtok( comp ) ) {
+        comp_error( comp, "Assignment operator '=' expected" );
+        return false;
+    }
+    uint16_t strexpr = NODEOFFS_NONE;
+    if ( !comp_eat_strexpr( comp, &strexpr ) || strexpr == NODEOFFS_NONE ) {
+        comp_error( comp, "String expression expected after '='" );
+        return false;
+    }
     /*
         NT_SUBSTRASSIGN     substring assignment
             data:
                 - 1 byte of substring operator
             branches:
                 - 1 branch of expression list
+                - 1 branch of string expression
     */
-    if ( !comp_create_node( comp, pnodeoffs, NT_SUBSTRASSIGN, UINT8_C(1), UINT16_C(1), &tok, (int) exprlist ) ||
+    if ( !comp_create_node( comp, pnodeoffs, NT_SUBSTRASSIGN, UINT8_C(2), UINT16_C(1), &tok, (int) exprlist, (int) strexpr ) ||
         *pnodeoffs == NODEOFFS_NONE ) {
         out_of_memory( comp );
         return false;

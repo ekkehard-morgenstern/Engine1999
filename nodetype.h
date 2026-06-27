@@ -347,6 +347,7 @@ Explanation of node types:
             - 1 byte of substring operator
         branches:
             - 1 branch of expression list
+            - 1 branch of string expression
 
     [ NT_ANYASSIGN - not generated ]
 
