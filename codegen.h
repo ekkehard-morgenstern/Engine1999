@@ -189,5 +189,9 @@ bool cgen_from_printstmt( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs )
 bool cgen_from_varref_lvalue( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
 bool cgen_from_numassign( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
 bool cgen_from_strassign( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
+bool cgen_from_substrassign( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
+bool cgen_from_anyassign( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
+bool cgen_from_assignlist( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
+bool cgen_from_letstmt( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs );
 
 #endif
