@@ -2389,3 +2389,8 @@ bool cgen_from_letstmt( codegen_t* cgen, compiler_t* comp, uint16_t nodeoffs ) {
     }
     return true;
 }
+
+// NOT necessary, b/c compiler already creates array variables
+// array-dim-decl := num-expr-list | TOK_DYNAMIC | TOK_ASSOC .
+// array-decl := any-base-var-ref TOK_LPAREN array-dim-decl TOK_RPAREN .
+// array-decl-list := array-decl { TOK_COMMA array-decl } .

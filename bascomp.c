@@ -377,6 +377,12 @@ static bool comp_gather_dims( void* userdata, uint16_t node ) {
     //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
     uint8_t nodetype = comp->tree[ node ];
     if ( nodetype != NT_NUMLIT ) {
+        if ( nodetype == NT_NUMEXPR ) {
+            if ( !comp_node_iter_branches( comp, node, comp, comp_gather_dims ) ) {
+                return false;
+            }
+            return true;
+        }
         comp_error( comp, "Number expected" );
         return false;
     }
