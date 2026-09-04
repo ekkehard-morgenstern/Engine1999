@@ -200,24 +200,53 @@
 bool is_sngchrtok( char tok );
 bool eat_sngchrtok( const char** pp, uint8_t* ptok );
 
-// -- uint16 ----------------------------------------------------------------
+// -- buffers ---------------------------------------------------------------
 
-bool eat_uint16( const char** pp, uint16_t* target );
-bool print_uint16( char** pp, size_t* premain, uint16_t source );
-void emit_uint16( uint8_t** pp, uint16_t source );
-void read_uint16( const uint8_t** pp, uint16_t* target );
+typedef struct _buf_t {
+      char*       buffer;
+      size_t      alloc;
+      size_t      fill;
+} buf_t;
+
+#define BUF_INIT_SIZE   65536U
+
+buf_t* create_buffer( void );
+void delete_buffer( buf_t* buf );
+bool grow_buffer( buf_t* buf, size_t suggestedSize );
+int printto_buffer( buf_t* buf, const char* fmt, ... );
+int writeto_buffer( buf_t* buf, const void* data, size_t size );
+int anticipate_buffer( buf_t* buf, size_t size );
+
+// -- read-only buffers -----------------------------------------------------
+
+typedef struct _rbuf_t {
+      const char* buffer;
+      size_t      size;
+      size_t      rpos;
+} rbuf_t;
+
+void init_rbuf( rbuf_t* rbuf, const void* data, size_t size );
+int readfrom_buffer( rbuf_t* rbuf, void* data, size_t size );
+int anticipate_rbuffer( rbuf_t* rbuf, size_t size );
+
+// -- uint32 ----------------------------------------------------------------
+
+bool eat_uint32( rbuf_t* rbuf, uint32_t* target );
+bool print_uint32( buf_t* buf, uint32_t source );
+bool emit_uint32( buf_t* buf, uint32_t source );
+bool read_uint32( rbuf_t* rbuf, uint32_t* target );
 
 // -- identifiers -----------------------------------------------------------
 
-bool eat_ident( const char** pp, char target[256] );
-bool print_ident( char** pp, size_t* premain, const char source[256] );
-bool emit_ident( uint8_t** pp, const char source[256], size_t* premain, uint8_t tok );
+bool eat_ident( rbuf_t* rbuf, char** ptarget );
+bool print_ident( buf_t* buf, const char* source );
+bool emit_ident( buf_t* buf, const char* source, uint8_t tok );
 extern bool ri_sigil;
-bool read_ident( const uint8_t** pp, char target[256] );
+bool read_ident( rbuf_t* rbuf, char** ptarget );
 
 // -- literals (general) ----------------------------------------------------
 
-bool eat_lit( const char** pp, char target[256], int beg, int end );
+bool eat_lit( rbuf_t* rbuf, char** ptarget, int beg, int end );
 bool print_lit( char** pp, size_t* premain, const char source[256], int beg, int end );
 bool emit_lit( uint8_t** pp, const char source[256], int tok, size_t* premain );
 bool read_lit( const uint8_t** pp, char target[256], int tok );

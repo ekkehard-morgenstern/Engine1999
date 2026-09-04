@@ -69,89 +69,271 @@ bool eat_sngchrtok( const char** pp, uint8_t* ptok ) {
     return true;
 }
 
-// -- uint16 ----------------------------------------------------------------
+// -- buffers ---------------------------------------------------------------
 
-bool eat_uint16( const char** pp, uint16_t* target ) {
+buf_t* create_buffer( void ) {
+    buf_t* buf = (buf_t*) malloc( sizeof( buf_t ) );
+    if ( buf == 0 ) {
+ERR1:   fprintf( stderr, "? out of memory\n" );
+        return 0;
+    }
+    buf->buffer = (char*) malloc( BUF_INIT_SIZE );
+    if ( buf->buffer == 0 ) {
+        free( buf );
+        goto ERR1;
+    }
+    buf->alloc = BUF_INIT_SIZE;
+    buf->fill  = 0;
+    return buf;
+}
+
+void delete_buffer( buf_t* buf ) {
+    if ( buf == 0 ) {
+        return;
+    }
+    free( buf->buffer ); buf->buffer = 0;
+    buf->alloc = 0; buf->fill = 0;
+    free( buf );
+}
+
+bool grow_buffer( buf_t* buf, size_t suggestedSize ) {
+    size_t remain = buf->alloc - buf->fill;
+    if ( remain >= suggestedSize ) {
+        return true;
+    }
+    if ( buf->alloc > SIZE_MAX / 2U || suggestedSize > SIZE_MAX ) {
+        fprintf( stderr, "? cannot grow buffer\n" );
+        return false;
+    }
+    size_t newSize = buf->alloc * 2U;
+    if ( newSize < suggestedSize ) {
+        newSize = suggestedSize;
+    }
+    char* newbuf = realloc( buf->buffer, newSize );
+    if ( newbuf == 0 ) {
+        fprintf( stderr, "? out of memory\n" );
+        return false;
+    }
+    buf->buffer = newbuf;
+    buf->alloc  = newSize;
+    return true;
+}
+
+int printto_buffer( buf_t* buf, const char* fmt, ... ) {
+
+    size_t oldFill = buf->fill;
+
+    for (;;) {
+        va_list ap;
+        va_start( ap, fmt );
+        size_t remain = buf->alloc - buf->fill;
+        int ret = snprintf( &buf->buffer[buf->fill], remain, fmt, ap );
+        va_end( ap );
+        if ( ret < 0 ) { // error
+            fprintf( stderr, "? buffer error\n" );
+            return ret;
+        }
+        if ( ret >= (int) remain ) {    // cut off
+            if ( ret >= (int)( SIZE_MAX - buf->fill - 1U ) ) {
+                fprintf( stderr, "? size request too large\n" );
+                return -1;
+            }
+            if ( !grow_buffer( buf, buf->fill + ret + 1U ) ) {
+                return -1;
+            }
+            continue;   // try again
+        }
+        // success
+        buf->fill += (size_t) ret;
+        break;
+    }
+
+    size_t numWritten = buf->fill - oldFill;
+
+    return (int) numWritten;
+}
+
+int writeto_buffer( buf_t* buf, const void* data, size_t size ) {
+
+    size_t oldFill = buf->fill;
+    size_t remain  = buf->alloc - buf->fill;
+
+    if ( size > remain ) {
+        if ( size > SIZE_MAX - buf->fill ) {
+            fprintf( stderr, "? size request too large\n" );
+            return -1;
+        }
+        if ( !grow_buffer( buf, buf->fill + size ) ) {
+            return -1;
+        }
+    }
+
+    if ( size ) {
+        memcpy( &buf->buffer[buf->fill], data, size );
+        buf->fill += size;
+    }
+
+    return (int) size;
+}
+
+int anticipate_buffer( buf_t* buf, size_t size ) {
+
+    size_t remain = buf->alloc - buf->fill;
+
+    if ( size > remain ) {
+        if ( size > SIZE_MAX - buf->fill ) {
+            fprintf( stderr, "? size request too large\n" );
+            return -1;
+        }
+        if ( !grow_buffer( buf, buf->fill + size ) ) {
+            return -1;
+        }
+    }
+
+    return (int) size;
+}
+
+// -- read-only buffers -----------------------------------------------------
+
+void init_rbuf( rbuf_t* rbuf, const void* data, size_t size ) {
+    rbuf->buffer = (const char*) data;
+    rbuf->size   = size;
+    rbuf->rpos   = 0;
+}
+
+int readfrom_buffer( rbuf_t* rbuf, void* data, size_t size ) {
+    size_t remain = rbuf->size - rbuf->rpos;
+    if ( remain < size ) {
+        return -1;
+    }
+    if ( size ) {
+        memcpy( data, &rbuf->buffer[ rbuf->rpos ], size );
+        rbuf->rpos += size;
+    }
+    return (int) size;
+}
+
+int anticipate_rbuffer( rbuf_t* rbuf, size_t size ) {
+    size_t remain = rbuf->size - rbuf->rpos;
+    if ( remain < size ) {
+        return -1;
+    }
+    return (int) size;
+}
+
+// -- uint32 ----------------------------------------------------------------
+
+bool eat_uint32( rbuf_t* rbuf, uint32_t* target ) {
     int n = 0;
-    if ( sscanf( *pp, "%" SCNu16 "%n", target, &n ) >= 1 ) {
-        *pp += n;
+    if ( sscanf( &rbuf->buffer[ rbuf->rpos ], "%" SCNu32 "%n", target, &n )
+        >= 1 ) {
+        rbuf->rpos += n;
         return true;
     }
     return false;
 }
 
-bool print_uint16( char** pp, size_t* premain, uint16_t source ) {
-    int rv = snprintf( *pp, *premain, "%" PRIu16, source );
+bool print_uint32( buf_t* buf, uint32_t source ) {
+    int rv = printto_buffer( buf, "%" PRIu32, source );
     if ( rv < 0 ) return false; // error
-    if ( rv >= (int) (*premain) ) return false; // cut off
-    *pp += rv; *premain -= rv;
     return true;
 }
 
-void emit_uint16( uint8_t** pp, uint16_t source ) {
-    uint8_t* p = *pp;
-    *p++ = (uint8_t)( source >> UINT8_C(8) );
-    *p++ = (uint8_t) source;
-    *pp = p;
+bool emit_uint32( buf_t* buf, uint32_t source ) {
+    uint8_t data[4];
+    data[0] = (uint8_t)( source >> UINT8_C(24) );
+    data[1] = (uint8_t)( source >> UINT8_C(16) );
+    data[2] = (uint8_t)( source >> UINT8_C( 8) );
+    data[3] = (uint8_t) source;
+    if ( writeto_buffer( buf, data, 4U ) < 0 ) {
+        return false;
+    }
+    return true;
 }
 
-void read_uint16( const uint8_t** pp, uint16_t* target ) {
-    const uint8_t* p = *pp;
-    *target = *p++;
-    *target = ( ( *target ) << UINT8_C(8) ) | *p++;
-    *pp = p;
+bool read_uint32( rbuf_t* rbuf, uint32_t* target ) {
+    uint8_t data[4];
+    if ( readfrom_buffer( rbuf, data, 4U ) < 0 ) {
+        return false;
+    }
+    *target =
+        ( ( (uint32_t) data[0] ) << UINT8_C(24) ) |
+        ( ( (uint32_t) data[1] ) << UINT8_C(16) ) |
+        ( ( (uint16_t) data[2] ) << UINT8_C( 8) ) |
+                       data[3];
+    return true;
 }
+
 // -- identifiers -----------------------------------------------------------
 
-bool eat_ident( const char** pp, char target[256] ) {
-    int n = 0; const char* p = *pp;
-    while ( *p == ' ' ) ++p;
-    if ( *p >= 'A' && *p <= 'Z' ) {
-        if ( sscanf( p, "%255[A-Z0-9_]%n", target, &n ) >= 1 ) {
-            p += n; *pp = p;
+static char tmp64k[65536];
+
+bool eat_ident( rbuf_t* rbuf, char** ptarget ) {
+    int n = 0;
+    while ( rbuf->buffer[ rbuf->rpos ] == ' ' ) ++rbuf->rpos;
+    char c = rbuf->buffer[ rbuf->rpos ];
+    if ( c >= 'A' && c <= 'Z' ) {
+        if ( sscanf( &rbuf->buffer[ rbuf->rpos ], "%65535[A-Z0-9_]%n", tmp64k,
+            &n ) >= 1 ) {
+            if ( *ptarget ) {
+                free( *ptarget );
+                *ptarget = 0;
+            }
+            *ptarget = strdup( tmp64k );
+            if ( *ptarget == 0 ) {
+                fprintf( stderr, "? out of memory\n" );
+                return false;
+            }
+            rbuf->rpos += n;
             return true;
         }
     }
     return false;
 }
 
-bool print_ident( char** pp, size_t* premain, const char source[256] ) {
-    int rv = snprintf( *pp, *premain, "%s", source );
-    if ( rv < 0 ) {
-        return false; // error
+bool print_ident( buf_t* buf, const char* source ) {
+    int len = (int) strlen( source );
+    int rv = writeto_buffer( buf, source, len );
+    if ( rv < len ) {
+        return false; // error or cut off
     }
-    if ( rv >= (int) (*premain) ) {
-        return false; // cut off
-    }
-    *pp += rv; *premain -= rv;
     return true;
 }
 
-bool emit_ident( uint8_t** pp, const char source[256], size_t* premain, uint8_t tok ) {
-    uint8_t* p = *pp; size_t len = strlen( source );
-    if ( *premain <= len + 2U ) {
+bool emit_ident( buf_t* buf, const char* source, uint8_t tok ) {
+    size_t len = strlen( source );
+    if ( len > 65535U ) {
+        len = 65535U;
+    }
+    if ( anticipate_buffer( buf, len + 3U ) < 0 ) {
         return false;
     }
     if ( tok == TOK_STRIDENT || tok == TOK_INTIDENT ) {
-        if ( len == UINT8_C(255) ) {
+        if ( len == 65535U ) {
             --len;
         }
     }
+    char* p0 = &buf->buffer[ buf->fill ];
+    char* p  = p0;
     *p++ = tok;
-    *p++ = (uint8_t) len;
+    *p++ = (uint8_t) ( len >> UINT8_C(8) );
+    *p++ = (uint8_t)   len;
     if ( len ) {
         memcpy( p, source, len );
         p += len;
     }
-    *premain -= p - *pp;
-    *pp = p;
+    buf->fill += p - p0;
     return true;
 }
 
 bool ri_sigil = false;
 
-bool read_ident( const uint8_t** pp, char target[256] ) {
-    const uint8_t* p = *pp;
+bool read_ident( rbuf_t* rbuf, char** ptarget ) {
+    if ( anticipate_rbuffer( rbuf, 3U ) < 0 ) {
+        return false;
+    }
+    const uint8_t* p0 = (const uint8_t*)( &rbuf->buffer[ rbuf->rpos ] );
+    const uint8_t* p  = p0;
     uint8_t tok = *p++;
     switch ( tok ) {
         case TOK_IDENT: case TOK_NUMIDENT: case TOK_STRIDENT: case TOK_INTIDENT:
@@ -159,61 +341,89 @@ bool read_ident( const uint8_t** pp, char target[256] ) {
         default:
             return false;
     }
-    size_t len = *p++;
+    size_t len = ( ( (uint16_t) p[0] ) << UINT8_C(8) ) | p[1];
     if ( tok != TOK_IDENT && tok != TOK_NUMIDENT ) {
-        if ( ri_sigil && len == UINT8_C(255) ) {
+        if ( ri_sigil && len == 65535U ) {
             --len;
         }
     }
+    p += 2;
+    if ( !anticipate_rbuffer( rbuf, 3U + len ) ) {
+        return false;
+    }
+    if ( *ptarget ) {
+        free( *ptarget );
+        *ptarget = 0;
+    }
+    size_t blksize = len + 1U;
+    if ( ri_sigil ) {
+        if ( tok == TOK_STRIDENT ) {
+            ++blksize;
+        } else if ( tok == TOK_INTIDENT ) {
+            ++blksize;
+        }
+    }
+    *ptarget = (char*) malloc( blksize );
+    if ( *ptarget == 0 ) {
+        fprintf( stderr, "? Out of memory\n" );
+        return false;
+    }
     if ( len ) {
-        memcpy( target, p, len );
+        memcpy( *ptarget, p, len );
         p += len;
     }
     if ( ri_sigil ) {
         if ( tok == TOK_STRIDENT ) {
-            target[ len++ ] = '$';
+            (*ptarget)[ len++ ] = '$';
         } else if ( tok == TOK_INTIDENT ) {
-            target[ len++ ] = '%';
+            (*ptarget)[ len++ ] = '%';
         }
     }
-    target[ len ] = '\0';
-    *pp = p;
+    (*ptarget)[ len ] = '\0';
+    rbuf->rpos += p - p0;
     return true;
 }
 
 // -- literals (general) ----------------------------------------------------
 
-bool eat_lit( const char** pp, char target[256], int beg, int end ) {
-    int n = 0; const char* p = *pp; char fmt[16];
+bool eat_lit( rbuf_t* rbuf, char** ptarget, int beg, int end ) {
+    int n = 0; char fmt[32];
     if ( end ) {
-        snprintf( fmt, 16U, "%c%%255[^%c]%c%%n", beg, end, end );
+        snprintf( fmt, 32U, "%c%%65535[^%c]%c%%n", beg, end, end );
     } else {
         // NUL-terminated means read to end of string
         // we scan until the hopefully nonexistent character 255
         // this avoids having to guess whether the implementation supports [^\0]
         // this is hopefully enough for this tiny interpreter
-        snprintf( fmt, 16U, "%c%%255[^\277]%%n", beg );
+        snprintf( fmt, 32U, "%c%%65535[^\277]%%n", beg );
     }
-    while ( *p == ' ' ) ++p;
-    if ( sscanf( p, fmt, target, &n ) >= 1 ) {
-        p += n; *pp = p;
+    while ( rbuf->buffer[ rbuf->rpos ] == ' ' ) ++rbuf->rpos;
+    if ( sscanf( &rbuf->buffer[ rbuf->rpos ], fmt, tmp64k, &n ) >= 1 ) {
+STORE:  buf->rpos += n; 
+        if ( *ptarget ) { free( *ptarget ); *ptarget = 0; }
+        *ptarget = strdup( tmp64k );
+        if ( *ptarget == 0 ) {
+            fprintf( stderr, "? out of memory\n" );
+            return false;
+        }
         return true;
     }
     if ( end ) {
-        if ( p[0] == beg && p[1] == end ) {
-            p += 2; *pp = p; target[0] = '\0';
-            return true;
+        if ( rbuf->buffer[ rbuf->rpos     ] == beg && 
+             rbuf->buffer[ rbuf->rpos + 1 ] == end ) {
+            n = 2; tmp64k[0] = '\0';
+            goto STORE;
         }
-    } {
-        if ( *p == beg ) {
-            ++p; *pp = p; target[0] = '\0';
-            return true;
+    } else {
+        if ( rbuf->buffer[ rbuf->rpos ] == beg ) {
+            n = 1; tmp64k[0] = '\0';
+            goto STORE;
         }
     }
     return false;
 }
 
-bool print_lit( char** pp, size_t* premain, const char source[256], int beg, int end ) {
+bool print_lit( buf_t* buf, const char* source, int beg, int end ) {
     char fmt[16];
     int fp = 0;
     fmt[fp++] = beg;
@@ -223,10 +433,8 @@ bool print_lit( char** pp, size_t* premain, const char source[256], int beg, int
         fmt[fp++] = end;
     }
     fmt[fp] = '\0';
-    int rv = snprintf( *pp, *premain, fmt, source );
+    int rv = printto_buffer( buf, fmt, source );
     if ( rv < 0 ) return false; // error
-    if ( rv >= (int) (*premain) ) return false; // cut off
-    *pp += rv; *premain -= rv;
     return true;
 }
 
