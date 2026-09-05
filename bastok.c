@@ -438,31 +438,52 @@ bool print_lit( buf_t* buf, const char* source, int beg, int end ) {
     return true;
 }
 
-bool emit_lit( uint8_t** pp, const char source[256], int tok, size_t* premain ) {
-    uint8_t* p = *pp; size_t len = strlen( source );
-    if ( *premain <= len + 2U ) {
-        return false;
+bool emit_lit( buf_t* buf, const char* source, int tok ) {
+    size_t len = strlen( source );
+    if ( len > 65535U ) len = 65535U;
+    if ( anticipate_buffer( buf, 3U + len ) < 0 ) {
+        return false; 
     }
-    *p++ = tok;
-    *p++ = (uint8_t) len;
+    buf->buffer[ buf->fill++ ] = tok;
+    buf->buffer[ buf->fill++ ] = (uint8_t)( len >> 8U );
+    buf->buffer[ buf->fill++ ] = (uint8_t)  len;
     if ( len ) {
-        memcpy( p, source, len );
-        p += len;
+        memcpy( &buf->buffer[ buf->fill ], source, len );
+        buf->fill += len;
     }
-    *pp = p;
     return true;
 }
 
-bool read_lit( const uint8_t** pp, char target[256], int tok ) {
-    const uint8_t* p = *pp;
-    if ( *p++ != tok ) return false;
-    size_t len = *p++;
-    if ( len ) {
-        memcpy( target, p, len );
-        p += len;
+bool read_lit( rbuf_t* rbuf, char** ptarget, int tok ) {
+    if ( anticipate_rbuffer( rbuf, 3U ) < 0 ) {
+FAIL:   return false;
     }
-    target[ len ] = '\0';
-    *pp = p;
+    size_t oldrpos = rbuf->rpos;
+    uint8_t t = rbuf->buffer[ rbuf->rpos++ ];
+    if ( t != tok ) {
+FAIL2:  rbuf->rpos = oldrpos;
+        goto FAIL;
+    }
+    uint8_t hi = rbuf->buffer[ rbuf->rpos++ ];
+    uint8_t lo = rbuf->buffer[ rbuf->rpos++ ];
+    size_t len = ( ( (size_t) hi ) << 8U ) | lo;
+    if ( anticipate_rbuffer( rbuf, len ) < 0 ) {
+        goto FAIL2;
+    }
+    if ( *ptarget ) { 
+        free( *ptarget ); 
+        *ptarget = 0; 
+    }
+    *ptarget = malloc( len + 1U );
+    if ( *ptarget == 0 ) {
+        fprintf( stderr, "? out of memory\n" );
+        goto FAIL2;
+    }
+    if ( len ) {
+        memcpy( *ptarget, &rbuf->buffer[ rbuf->rpos ], len );
+        rbuf->rpos += len;
+    }
+    (*ptarget)[ len ] = '\0';
     return true;
 }
 

@@ -247,9 +247,9 @@ bool read_ident( rbuf_t* rbuf, char** ptarget );
 // -- literals (general) ----------------------------------------------------
 
 bool eat_lit( rbuf_t* rbuf, char** ptarget, int beg, int end );
-bool print_lit( char** pp, size_t* premain, const char source[256], int beg, int end );
-bool emit_lit( uint8_t** pp, const char source[256], int tok, size_t* premain );
-bool read_lit( const uint8_t** pp, char target[256], int tok );
+bool print_lit( buf_t* buf, const char* source, int beg, int end );
+bool emit_lit( buf_t* buf, const char* source, int tok );
+bool read_lit( rbuf_t* rbuf, char** ptarget, int tok );
 
 // -- numeric literals (general) --------------------------------------------
 
