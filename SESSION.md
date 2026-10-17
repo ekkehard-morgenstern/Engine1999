@@ -7,7 +7,7 @@ Maintained by Claude; updated whenever work in a session changes something. Last
 
 ## Branch / repo state
 - Branch `feature/refactor-to-remove-some-limits`. The bastok refactor is complete and `make` builds everything cleanly.
-- Uncommitted changes made by Claude (for the user to review and commit): `bastok.[ch]`, `baspgm.[ch]`, `bascomp.[ch]`, `basintp.[ch]`, `basictest1.c`, `basictest2.c`, `stdtypes.h`, plus doc updates (`CLAUDE.md`, `SESSION.md`, `docs/*.md`).
+- All Claude's changes were committed by the user as `64b4f1d` ("Bastok refactoring by Claude Code"); the working tree is clean.
 - `make` also rebuilt git-ignored artifacts (`*.o`, binaries, `engine.lib`, `all`).
 
 ## Done this session
@@ -16,6 +16,5 @@ Maintained by Claude; updated whenever work in a session changes something. Last
 - Verified: clean build with `-Wall -Werror`; `basictest1`/`basictest2` round trips incl. 3000-byte identifiers, 5000-byte string literals; oversize and unterminated literals rejected; valgrind: no errors, no definite leaks.
 
 ## Open / next steps
-- User to review the diff and commit manually.
 - Remaining limits not touched: 64 KiB program/tree/code/data/var memories, variable names ≤ 255 (`vars.c`), `engine1999` 256-byte input line, `codegen` coverage (see `docs/compiler-and-vm.md`).
 - No automated tests exist; consider adding a round-trip test program if desired.
