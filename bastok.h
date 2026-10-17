@@ -195,12 +195,15 @@
 #define TOK_LEN         UINT8_C(144)        // LEN function
 #define TOK_NONE        UINT8_C(255)        // no token (!)
 
-// -- single character tokens -----------------------------------------------
-
-bool is_sngchrtok( char tok );
-bool eat_sngchrtok( const char** pp, uint8_t* ptok );
-
 // -- buffers ---------------------------------------------------------------
+
+/*
+   buf_t is a growable output buffer. "fill" is the number of bytes in use.
+   rbuf_t is a bounded read-only view. All eat_ functions scan text and rely on
+   the bytes up to "size" only; they never modify rpos when they fail.
+   Strings returned through "char**" parameters are heap allocated: the callee frees
+   the previous value (so initialize to 0), and the caller frees the final one.
+*/
 
 typedef struct _buf_t {
       char*       buffer;
@@ -212,10 +215,11 @@ typedef struct _buf_t {
 
 buf_t* create_buffer( void );
 void delete_buffer( buf_t* buf );
-bool grow_buffer( buf_t* buf, size_t suggestedSize );
+void clear_buffer( buf_t* buf );
+bool grow_buffer( buf_t* buf, size_t requiredSize );      // ensures alloc >= requiredSize
 int printto_buffer( buf_t* buf, const char* fmt, ... );
 int writeto_buffer( buf_t* buf, const void* data, size_t size );
-int anticipate_buffer( buf_t* buf, size_t size );
+int anticipate_buffer( buf_t* buf, size_t size );         // ensures room for size more bytes
 
 // -- read-only buffers -----------------------------------------------------
 
@@ -228,6 +232,16 @@ typedef struct _rbuf_t {
 void init_rbuf( rbuf_t* rbuf, const void* data, size_t size );
 int readfrom_buffer( rbuf_t* rbuf, void* data, size_t size );
 int anticipate_rbuffer( rbuf_t* rbuf, size_t size );
+
+// -- single character tokens -----------------------------------------------
+
+bool is_sngchrtok( char tok );
+bool eat_sngchrtok( rbuf_t* rbuf, uint8_t* ptok );
+
+// -- raw 16-bit values (used by line headers) ------------------------------
+
+void emit_uint16( uint8_t** pp, uint16_t source );
+void read_uint16( const uint8_t** pp, uint16_t* target );
 
 // -- uint32 ----------------------------------------------------------------
 
@@ -253,95 +267,105 @@ bool read_lit( rbuf_t* rbuf, char** ptarget, int tok );
 
 // -- numeric literals (general) --------------------------------------------
 
-bool eat_numlit( const char** pp, char target[256], int* pbase );
-bool print_numlit( char** pp, size_t* premain, const char source[256], int base );
-bool emit_numlit( uint8_t** pp, const char source[256], int tok, size_t* premain );
-bool read_numlit( const uint8_t** pp, char target[256], int tok );
+bool eat_numlit( rbuf_t* rbuf, char** ptarget, int* pbase );
+bool print_numlit( buf_t* buf, const char* source, int base );
+bool emit_numlit( buf_t* buf, const char* source, int tok );
+bool read_numlit( rbuf_t* rbuf, char** ptarget, int tok );
 
 // -- decimal literals ------------------------------------------------------
 
-bool print_declit( char** pp, size_t* premain, const char source[256] );
-bool emit_declit( uint8_t** pp, const char source[256], size_t* premain );
-bool read_declit( const uint8_t** pp, char target[256] );
+bool print_declit( buf_t* buf, const char* source );
+bool emit_declit( buf_t* buf, const char* source );
+bool read_declit( rbuf_t* rbuf, char** ptarget );
 
 // -- hexadecimal literals --------------------------------------------------
 
-bool print_hexlit( char** pp, size_t* premain, const char source[256] );
-bool emit_hexlit( uint8_t** pp, const char source[256], size_t* premain );
-bool read_hexlit( const uint8_t** pp, char target[256] );
+bool print_hexlit( buf_t* buf, const char* source );
+bool emit_hexlit( buf_t* buf, const char* source );
+bool read_hexlit( rbuf_t* rbuf, char** ptarget );
 
 // -- octal literals --------------------------------------------------------
 
-bool print_octlit( char** pp, size_t* premain, const char source[256] );
-bool emit_octlit( uint8_t** pp, const char source[256], size_t* premain );
-bool read_octlit( const uint8_t** pp, char target[256] );
+bool print_octlit( buf_t* buf, const char* source );
+bool emit_octlit( buf_t* buf, const char* source );
+bool read_octlit( rbuf_t* rbuf, char** ptarget );
 
 // -- quaternary literals ---------------------------------------------------
 
-bool print_qualit( char** pp, size_t* premain, const char source[256] );
-bool emit_qualit( uint8_t** pp, const char source[256], size_t* premain );
-bool read_qualit( const uint8_t** pp, char target[256] );
+bool print_qualit( buf_t* buf, const char* source );
+bool emit_qualit( buf_t* buf, const char* source );
+bool read_qualit( rbuf_t* rbuf, char** ptarget );
 
 // -- binary literals -------------------------------------------------------
 
-bool print_binlit( char** pp, size_t* premain, const char source[256] );
-bool emit_binlit( uint8_t** pp, const char source[256], size_t* premain );
-bool read_binlit( const uint8_t** pp, char target[256] );
+bool print_binlit( buf_t* buf, const char* source );
+bool emit_binlit( buf_t* buf, const char* source );
+bool read_binlit( rbuf_t* rbuf, char** ptarget );
 
 // -- string literals -------------------------------------------------------
 
-bool eat_strlit( const char** pp, char target[256] );
-bool print_strlit( char** pp, size_t* premain, const char source[256] );
-bool emit_strlit( uint8_t** pp, const char source[256], size_t* premain );
-bool read_strlit( const uint8_t** pp, char target[256] );
+bool eat_strlit( rbuf_t* rbuf, char** ptarget );
+bool print_strlit( buf_t* buf, const char* source );
+bool emit_strlit( buf_t* buf, const char* source );
+bool read_strlit( rbuf_t* rbuf, char** ptarget );
 
 // -- shell literals --------------------------------------------------------
 
-bool eat_shllit( const char** pp, char target[256] );
-bool print_shllit( char** pp, size_t* premain, const char source[256] );
-bool emit_shllit( uint8_t** pp, const char source[256], size_t* premain );
-bool read_shllit( const uint8_t** pp, char target[256] );
+bool eat_shllit( rbuf_t* rbuf, char** ptarget );
+bool print_shllit( buf_t* buf, const char* source );
+bool emit_shllit( buf_t* buf, const char* source );
+bool read_shllit( rbuf_t* rbuf, char** ptarget );
 
 // -- quote literals (comments) ---------------------------------------------
 
-bool eat_quolit( const char** pp, char target[256] );
-bool print_quolit( char** pp, size_t* premain, const char source[256] );
-bool emit_quolit( uint8_t** pp, const char source[256], size_t* premain );
-bool read_quolit( const uint8_t** pp, char target[256] );
+bool eat_quolit( rbuf_t* rbuf, char** ptarget );
+bool print_quolit( buf_t* buf, const char* source );
+bool emit_quolit( buf_t* buf, const char* source );
+bool read_quolit( rbuf_t* rbuf, char** ptarget );
 
 // -- bracket literals ------------------------------------------------------
 
-bool eat_brklit( const char** pp, char target[256] );
-bool print_brklit( char** pp, size_t* premain, const char source[256] );
-bool emit_brklit( uint8_t** pp, const char source[256], size_t* premain );
-bool read_brklit( const uint8_t** pp, char target[256] );
+bool eat_brklit( rbuf_t* rbuf, char** ptarget );
+bool print_brklit( buf_t* buf, const char* source );
+bool emit_brklit( buf_t* buf, const char* source );
+bool read_brklit( rbuf_t* rbuf, char** ptarget );
 
 // -- brace literals --------------------------------------------------------
 
-bool eat_brclit( const char** pp, char target[256] );
-bool print_brclit( char** pp, size_t* premain, const char source[256] );
-bool emit_brclit( uint8_t** pp, const char source[256], size_t* premain );
-bool read_brclit( const uint8_t** pp, char target[256] );
+bool eat_brclit( rbuf_t* rbuf, char** ptarget );
+bool print_brclit( buf_t* buf, const char* source );
+bool emit_brclit( buf_t* buf, const char* source );
+bool read_brclit( rbuf_t* rbuf, char** ptarget );
 
 // -- keywords --------------------------------------------------------------
 
 bool is_keyword( const char* name, uint8_t* ptok );
 bool is_keyword2( uint8_t tok );
-bool print_keyword( uint8_t tok, char** whereto, size_t* premain );
+bool print_keyword( uint8_t tok, buf_t* buf );
 
 // -- double-character tokens -----------------------------------------------
 
-bool eat_dblchrtok( const char** pp, uint8_t* ptok, const char* match, uint8_t tok );
+bool eat_dblchrtok( rbuf_t* rbuf, uint8_t* ptok, const char* match, uint8_t tok );
 
 // -- tokenization ----------------------------------------------------------
 
 struct _linehdr_t;
 
-bool tokenize_line( const char* buf, uint8_t* whereto, size_t* premain, struct _linehdr_t* phdr );
+/*
+   Appends one tokenized line (a linehdr_t followed by the tokens, terminated by TOK_EOL)
+   to "out". On failure, "out" is left unchanged. "text" must be NUL-terminated.
+   The line is limited to 65535 bytes in total (16-bit length field).
+*/
+bool tokenize_line( const char* text, buf_t* out, struct _linehdr_t* phdr );
 
 // -- detokenization --------------------------------------------------------
 
-bool detokenize_line( char* buf, const uint8_t* wherefrom, size_t* premain, const struct _linehdr_t* phdr );
+/*
+   Appends the source text of a tokenized line to "out". "wherefrom" points to the first
+   token (after the line header); the token count is taken from phdr->length.
+   The result is NUL-terminated, but the terminator is not counted in out->fill.
+*/
+bool detokenize_line( buf_t* out, const uint8_t* wherefrom, const struct _linehdr_t* phdr );
 
 // -- buffer preprocessing --------------------------------------------------
 

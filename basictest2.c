@@ -156,11 +156,12 @@ static void printtree( void ) {
     }
 }
 
-static bool directmode( program_t* pgm, const uint8_t* tokens ) {
+static bool directmode( program_t* pgm, const uint8_t* tokens, size_t size ) {
     printf( "direct mode\n" );
+    cleanup_compiler( &comp );
     init_compiler( &comp, &rt, 0, false );
     comp.iter.hdr.lineno = LINENO_NONE;
-    comp.tokp   = (uint8_t*) tokens;
+    comp_set_tokens( &comp, tokens, size );
     comp.halt   = comp_halt;
     comp.report = comp_report;
     run_compiler( &comp );
@@ -170,12 +171,13 @@ static bool directmode( program_t* pgm, const uint8_t* tokens ) {
 
 static bool compile_program( program_t* pgm ) {
     printf( "program mode\n" );
+    cleanup_compiler( &comp );
     init_compiler( &comp, &rt, 0, false );
     if ( !begin_iterate_program( &comp.iter, pgm ) ) {
         printf( "failed to init iterator\n" );
         return false;
     }
-    comp.tokp   = comp.iter.tok;
+    comp_set_tokens( &comp, comp.iter.tok, comp.iter.hdr.length - sizeof(linehdr_t) );
     comp.halt   = comp_halt;
     comp.report = comp_report;
     run_compiler( &comp );
@@ -187,6 +189,15 @@ int main( int argc, char** argv ) {
 
     static program_t pgm;
     init_program( &pgm );
+
+    static char*  buf = 0;
+    static size_t bufsize = 0;
+    static buf_t* tokbuf = 0;
+    static buf_t* txtbuf = 0;
+    tokbuf = create_buffer(); txtbuf = create_buffer();
+    if ( tokbuf == 0 || txtbuf == 0 ) {
+        return EXIT_FAILURE;
+    }
 
     if ( setjmp( jmp_exit ) ) {
         printf( RED "*** HALTED" NRM "\n" );
@@ -203,20 +214,19 @@ int main( int argc, char** argv ) {
             printf( MAG "*** ERROR" NRM "\n" );
         }
 
-        char buf[1024]; uint8_t tokens[1024];
-        buf[0] = '\0';
-        if ( fgets( buf, 1024, stdin ) == 0 ) {
+        ssize_t rd = getline( &buf, &bufsize, stdin );
+        if ( rd < 0 ) {
             break;
         }
-        size_t len = strlen( buf );
-        if ( buf[len-1U] == '\n' ) {    // remove LF
+        size_t len = (size_t) rd;
+        if ( len > 0 && buf[len-1U] == '\n' ) {    // remove LF
             buf[--len] = '\0';
         }
         preprocess_buffer( buf );
         printf( ">>%s<<\n", buf );
         linehdr_t hdr;
-        size_t remain = 1024U;
-        if ( !tokenize_line( buf, tokens, &remain, &hdr ) ) {
+        clear_buffer( tokbuf );
+        if ( !tokenize_line( buf, tokbuf, &hdr ) ) {
             printf( "? Syntax error\n" );
             continue;
         }
@@ -229,6 +239,7 @@ int main( int argc, char** argv ) {
             (unsigned) hdr.alloc
         );
 
+        const uint8_t* tokens = (const uint8_t*) tokbuf->buffer;
         len = hdr.length; const uint8_t* p = &tokens[sizeof(linehdr_t)];
         const uint8_t* e = &tokens[len];
         while ( p < e ) {
@@ -238,12 +249,12 @@ int main( int argc, char** argv ) {
         }
 
         printf( "\n" );
-        buf[0] = '\0'; remain = 1024U; p = &tokens[sizeof(linehdr_t)];
-        if ( !detokenize_line( buf, p, &remain, &hdr ) ) {
+        clear_buffer( txtbuf ); p = &tokens[sizeof(linehdr_t)];
+        if ( !detokenize_line( txtbuf, p, &hdr ) ) {
             printf( "? Detok error\n" );
             continue;
         }
-        printf( CYA "%s" NRM "\n", buf );
+        printf( CYA "%s" NRM "\n", txtbuf->buffer );
 
         if ( !enter_line( &pgm, &tokens[0], directmode ) ) {
             printf( "? Enter failed\n" );
@@ -254,6 +265,11 @@ int main( int argc, char** argv ) {
             printf( "failed to compile program\n" );
         }
     }
+
+    cleanup_compiler( &comp );
+    free( buf );
+    delete_buffer( tokbuf );
+    delete_buffer( txtbuf );
 
     return 0;
 }

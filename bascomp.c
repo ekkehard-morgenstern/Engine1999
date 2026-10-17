@@ -31,6 +31,9 @@ void init_compiler( compiler_t* comp, struct _runtime_t* rt, program_t* pgm, boo
     comp->rt = rt;
     clear_iter( &comp->iter, pgm );
     comp->tokp     = 0;
+    comp->tokend   = 0;
+    comp->param    = 0;
+    comp->number   = 0.0;
     comp->currtok  = TOK_NONE;
     comp->treesize = UINT16_C(0);
     comp->ctxstk   = 0;
@@ -43,6 +46,22 @@ void init_compiler( compiler_t* comp, struct _runtime_t* rt, program_t* pgm, boo
     comp->userdata = 0;
     comp->treesize = UINT16_C(0);
     comp->syntree  = NODEOFFS_NONE;
+}
+
+void cleanup_compiler( compiler_t* comp ) {
+    while ( comp->ctxstk ) {
+        comp_ctxstk_t* ctx = comp->ctxstk;
+        comp->ctxstk = ctx->prev;
+        free( ctx->param );
+        free( ctx );
+    }
+    free( comp->param );
+    comp->param = 0;
+}
+
+void comp_set_tokens( compiler_t* comp, const uint8_t* tokens, size_t size ) {
+    comp->tokp   = (uint8_t*) tokens;
+    comp->tokend = tokens + size;
 }
 
 void comp_error( compiler_t* comp, const char* text ) {
@@ -70,6 +89,37 @@ static void out_of_memory( compiler_t* comp ) {
     comp_error( comp, "Out of memory" );
 }
 
+static char* dup_param( compiler_t* comp, const char* text ) {
+    size_t len = strlen( text );
+    char* copy = (char*) malloc( len + 1U );
+    if ( copy == 0 ) {
+        out_of_memory( comp );
+    }
+    memcpy( copy, text, len + 1U );
+    return copy;
+}
+
+// builds node data from the current token's text: <type.8> <text...> (no terminator)
+// the caller frees the result.
+static uint8_t* comp_param_data( compiler_t* comp, uint8_t type, uint16_t* pdatalen ) {
+    size_t len = comp->param ? strlen( comp->param ) : 0;
+    if ( len > UINT16_MAX - 1U ) {
+        comp_error( comp, "Name or literal too long" );
+        return 0;
+    }
+    uint8_t* data = (uint8_t*) malloc( 1U + len );
+    if ( data == 0 ) {
+        out_of_memory( comp );
+        return 0;
+    }
+    data[0] = type;
+    if ( len ) {
+        memcpy( &data[1], comp->param, len );
+    }
+    *pdatalen = (uint16_t)( 1U + len );
+    return data;
+}
+
 void comp_push_context( compiler_t* comp ) {
     comp_ctxstk_t* ctx = (comp_ctxstk_t*) malloc( sizeof(comp_ctxstk_t) );
     if ( ctx == 0 ) {
@@ -78,14 +128,17 @@ void comp_push_context( compiler_t* comp ) {
     }
     ctx->prev = comp->ctxstk; comp->ctxstk = ctx;
     memcpy( &ctx->iter, &comp->iter, sizeof(pgmiter_t) );
-    ctx->tokp = comp->tokp; ctx->currtok = comp->currtok;
+    ctx->tokp = comp->tokp; ctx->tokend = comp->tokend; ctx->currtok = comp->currtok;
+    ctx->param = 0; ctx->number = comp->number;
     switch ( ctx->currtok ) {
         case TOK_HEXLIT: case TOK_DECLIT: case TOK_OCTLIT: case TOK_QUALIT: case TOK_BINLIT:
             ctx->number = comp->number;
             break;
         case TOK_IDENT: case TOK_NUMIDENT: case TOK_STRIDENT: case TOK_INTIDENT:
         case TOK_STRLIT: case TOK_SHLLIT: case TOK_QUOLIT: case TOK_BRKLIT: case TOK_BRCLIT:
-            snprintf( ctx->param, 256U, "%s", comp->param );
+            if ( comp->param ) {
+                ctx->param = dup_param( comp, comp->param );
+            }
             break;
     }
 }
@@ -96,6 +149,7 @@ void comp_commit_context( compiler_t* comp ) {
         return;
     }
     comp->ctxstk = ctx->prev;
+    free( ctx->param );
     free( ctx );
 }
 
@@ -106,16 +160,21 @@ void comp_pop_context( compiler_t* comp ) {
     }
     comp->ctxstk = ctx->prev;
     memcpy( &comp->iter, &ctx->iter, sizeof(pgmiter_t) );
-    comp->tokp = ctx->tokp; comp->currtok = ctx->currtok;
+    comp->tokp = ctx->tokp; comp->tokend = ctx->tokend; comp->currtok = ctx->currtok;
     switch ( comp->currtok ) {
         case TOK_HEXLIT: case TOK_DECLIT: case TOK_OCTLIT: case TOK_QUALIT: case TOK_BINLIT:
             comp->number = ctx->number;
             break;
         case TOK_IDENT: case TOK_NUMIDENT: case TOK_STRIDENT: case TOK_INTIDENT:
         case TOK_STRLIT: case TOK_SHLLIT: case TOK_QUOLIT: case TOK_BRKLIT: case TOK_BRCLIT:
-            snprintf( comp->param, 256U, "%s", ctx->param );
+            if ( ctx->param ) {
+                free( comp->param );
+                comp->param = ctx->param;   // ownership moves back to the compiler
+                ctx->param = 0;
+            }
             break;
     }
+    free( ctx->param );
     free( ctx );
 }
 
@@ -698,15 +757,19 @@ bool comp_eat_numbasevarref( compiler_t* comp, uint16_t* pnodeoffs ) {
     if ( comp->currtok != TOK_NUMIDENT && comp->currtok != TOK_INTIDENT ) {
         return false;
     }
-    static char data[257];
-    data[0] = comp->currtok == TOK_NUMIDENT ? VARTYPEV_FLOAT : VARTYPEV_INT;
-    snprintf( &data[1], 256U, "%s", comp->param );
-    uint16_t datalen = UINT16_C(1) + ( (uint16_t) strlen( &data[1] ) );
+    uint16_t datalen = 0;
+    uint8_t* data = comp_param_data( comp, comp->currtok == TOK_NUMIDENT ? VARTYPEV_FLOAT : VARTYPEV_INT, &datalen );
+    if ( data == 0 ) {
+        return false;
+    }
     if ( !comp_fetchtok( comp ) ) {
+        free( data );
         return false;
     }
 
-    if ( !comp_create_node( comp, pnodeoffs, NT_NUMBASEVARREF, UINT8_C(0), datalen, data ) || *pnodeoffs == NODEOFFS_NONE ) {
+    bool ok = comp_create_node( comp, pnodeoffs, NT_NUMBASEVARREF, UINT8_C(0), datalen, data ) && *pnodeoffs != NODEOFFS_NONE;
+    free( data );
+    if ( !ok ) {
         out_of_memory( comp );
         return false;
     }
@@ -854,15 +917,19 @@ bool comp_eat_strbasevarref( compiler_t* comp, uint16_t* pnodeoffs ) {
     if ( comp->currtok != TOK_STRIDENT ) {
         return false;
     }
-    static char data[257];
-    data[0] = VARTYPEV_STR;
-    snprintf( &data[1], 256U, "%s", comp->param );
-    uint16_t datalen = UINT16_C(1) + ( (uint16_t) strlen( &data[1] ) );
+    uint16_t datalen = 0;
+    uint8_t* data = comp_param_data( comp, VARTYPEV_STR, &datalen );
+    if ( data == 0 ) {
+        return false;
+    }
     if ( !comp_fetchtok( comp ) ) {
+        free( data );
         return false;
     }
 
-    if ( !comp_create_node( comp, pnodeoffs, NT_STRBASEVARREF, UINT8_C(0), datalen, data ) || *pnodeoffs == NODEOFFS_NONE ) {
+    bool ok = comp_create_node( comp, pnodeoffs, NT_STRBASEVARREF, UINT8_C(0), datalen, data ) && *pnodeoffs != NODEOFFS_NONE;
+    free( data );
+    if ( !ok ) {
         out_of_memory( comp );
         return false;
     }
@@ -891,22 +958,27 @@ bool comp_eat_anybasevarref( compiler_t* comp, uint16_t* pnodeoffs ) {
     if ( comp->currtok != TOK_NUMIDENT && comp->currtok != TOK_INTIDENT && comp->currtok != TOK_STRIDENT ) {
         return false;
     }
-    static char data[257];
-    data[0] = VARTYPEV_FLOAT;
+    uint8_t vartype = VARTYPEV_FLOAT;
     if ( comp->currtok == TOK_STRIDENT ) {
-        data[0] = VARTYPEV_STR;
+        vartype = VARTYPEV_STR;
     } else if ( comp->currtok == TOK_INTIDENT ) {
-        data[0] = VARTYPEV_INT;
+        vartype = VARTYPEV_INT;
     }
-    snprintf( &data[1], 256U, "%s", comp->param );
-    uint16_t datalen = UINT16_C(1) + ( (uint16_t) strlen( &data[1] ) );
+    uint16_t datalen = 0;
+    uint8_t* data = comp_param_data( comp, vartype, &datalen );
+    if ( data == 0 ) {
+        return false;
+    }
     if ( !comp_fetchtok( comp ) ) {
+        free( data );
         return false;
     }
 
-    uint8_t nodetype = data[0] == VARTYPEV_STR ? NT_STRBASEVARREF : NT_NUMBASEVARREF;
+    uint8_t nodetype = vartype == VARTYPEV_STR ? NT_STRBASEVARREF : NT_NUMBASEVARREF;
 
-    if ( !comp_create_node( comp, pnodeoffs, nodetype, UINT8_C(0), datalen, data ) || *pnodeoffs == NODEOFFS_NONE ) {
+    bool ok = comp_create_node( comp, pnodeoffs, nodetype, UINT8_C(0), datalen, data ) && *pnodeoffs != NODEOFFS_NONE;
+    free( data );
+    if ( !ok ) {
         out_of_memory( comp );
         return false;
     }
@@ -989,17 +1061,18 @@ bool comp_eat_strlit( compiler_t* comp, uint16_t* pnodeoffs ) {
         default:
             return false;
     }
-    static uint8_t data[257];
-    data[0] = comp->currtok;
-    size_t len = strlen( comp->param );
-    if ( len ) {
-        memcpy( &data[1], comp->param, len );
-    }
-    if ( !comp_fetchtok( comp ) ) {
+    uint16_t datalen = 0;
+    uint8_t* data = comp_param_data( comp, comp->currtok, &datalen );
+    if ( data == 0 ) {
         return false;
     }
-    if ( !comp_create_node( comp, pnodeoffs, NT_STRLIT, UINT8_C(0), (uint16_t)( 1U + len ), data ) ||
-        *pnodeoffs == NODEOFFS_NONE ) {
+    if ( !comp_fetchtok( comp ) ) {
+        free( data );
+        return false;
+    }
+    bool ok = comp_create_node( comp, pnodeoffs, NT_STRLIT, UINT8_C(0), datalen, data ) && *pnodeoffs != NODEOFFS_NONE;
+    free( data );
+    if ( !ok ) {
         out_of_memory( comp );
         return false;
     }
@@ -1037,12 +1110,15 @@ bool comp_eat_numusrfnname( compiler_t* comp, uint16_t* pnodeoffs ) {
                 - 1 byte of type indicator
                 - n bytes of name
     */
-    static char data[257];
-    data[0] = tok == TOK_NUMIDENT ? VARTYPEV_FLOAT : VARTYPEV_INT;
-    snprintf( &data[1], 256U, "%s", comp->param );
-    uint16_t datalen = (uint16_t)( 1U + strlen( &data[1] ) );
+    uint16_t datalen = 0;
+    uint8_t* data = comp_param_data( comp, tok == TOK_NUMIDENT ? VARTYPEV_FLOAT : VARTYPEV_INT, &datalen );
+    if ( data == 0 ) {
+        return false;
+    }
 
-    if ( !comp_create_node( comp, pnodeoffs, NT_NUMUSRFNNAME, UINT8_C(0), datalen, data ) || *pnodeoffs == NODEOFFS_NONE ) {
+    bool ok = comp_create_node( comp, pnodeoffs, NT_NUMUSRFNNAME, UINT8_C(0), datalen, data ) && *pnodeoffs != NODEOFFS_NONE;
+    free( data );
+    if ( !ok ) {
         out_of_memory( comp );
         return false;
     }
@@ -1070,12 +1146,15 @@ bool comp_eat_strusrfnname( compiler_t* comp, uint16_t* pnodeoffs ) {
                 - 1 byte of type indicator
                 - n bytes of name
     */
-    static char data[257];
-    data[0] = VARTYPEV_STR;
-    snprintf( &data[1], 256U, "%s", comp->param );
-    uint16_t datalen = (uint16_t)( 1U + strlen( &data[1] ) );
+    uint16_t datalen = 0;
+    uint8_t* data = comp_param_data( comp, VARTYPEV_STR, &datalen );
+    if ( data == 0 ) {
+        return false;
+    }
 
-    if ( !comp_create_node( comp, pnodeoffs, NT_STRUSRFNNAME, UINT8_C(0), datalen, data ) || *pnodeoffs == NODEOFFS_NONE ) {
+    bool ok = comp_create_node( comp, pnodeoffs, NT_STRUSRFNNAME, UINT8_C(0), datalen, data ) && *pnodeoffs != NODEOFFS_NONE;
+    free( data );
+    if ( !ok ) {
         out_of_memory( comp );
         return false;
     }
@@ -2155,15 +2234,24 @@ bool comp_eat_savestmt( compiler_t* comp, uint16_t* pnodeoffs ) {
         comp_error( comp, "String expression expected" );
         return false;
     }
-    static char saveopt[256];
+    char* saveopt = 0;
     if ( comp->currtok == TOK_COMMA && comp_fetchtok( comp ) ) {
-        if ( comp->currtok != TOK_NUMIDENT || !comp_fetchtok( comp ) ) {
+        if ( comp->currtok != TOK_NUMIDENT ) {
             comp_error( comp, "SAVE options expected" );
             return false;
         }
-        snprintf( saveopt, 256U, "%s", comp->param );
-    } else {
-        saveopt[0] = '\0';
+        saveopt = dup_param( comp, comp->param );   // copy before fetching the next token
+        if ( !comp_fetchtok( comp ) ) {
+            free( saveopt );
+            comp_error( comp, "SAVE options expected" );
+            return false;
+        }
+    }
+    size_t saveoptlen = saveopt ? strlen( saveopt ) : 0;
+    if ( saveoptlen > UINT16_MAX ) {
+        free( saveopt );
+        comp_error( comp, "SAVE options too long" );
+        return false;
     }
     /*
         NT_SAVESTMT     SAVE statement
@@ -2176,9 +2264,10 @@ bool comp_eat_savestmt( compiler_t* comp, uint16_t* pnodeoffs ) {
                   denoting save mode (A for ASCII, B (default) for binary)
                 - the file name need not be a string literal
     */
-    uint8_t saveoptlen = (uint8_t) strlen( saveopt );
-    if ( !comp_create_node( comp, pnodeoffs, NT_SAVESTMT, UINT8_C(1), saveoptlen, saveopt, (int) strexpr ) ||
-        *pnodeoffs == NODEOFFS_NONE ) {
+    bool ok = comp_create_node( comp, pnodeoffs, NT_SAVESTMT, UINT8_C(1), (uint16_t) saveoptlen,
+        saveopt ? saveopt : "", (int) strexpr ) && *pnodeoffs != NODEOFFS_NONE;
+    free( saveopt );
+    if ( !ok ) {
         out_of_memory( comp );
         return false;
     }
@@ -2640,7 +2729,7 @@ bool comp_eat_nextstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
 bool comp_eat_gototarget( compiler_t* comp, uint16_t* pnodeoffs ) {
     // dec-lit := TOK_DECLIT | TOK_DEC0 .. TOK_DEC9 .
     // goto-target := dec-lit | TOK_NUMIDENT .
-    double num = 0; static char label[256]; label[0] = '\0';
+    double num = 0; char* label = 0;
     uint8_t tok = comp->currtok;
     switch ( tok ) {
         case TOK_DECLIT:
@@ -2651,16 +2740,17 @@ bool comp_eat_gototarget( compiler_t* comp, uint16_t* pnodeoffs ) {
             num = tok - TOK_DEC0;
             break;
         case TOK_NUMIDENT:
-            snprintf( label, 256U, "%s", comp->param );
+            label = dup_param( comp, comp->param );
             break;
         default:
             return false;
     }
     if ( !comp_fetchtok( comp ) ) {
+        free( label );
         return false;
     }
     uint8_t data[3];
-    if ( label[0] == '\0' ) {
+    if ( label == 0 ) {
         // line number
         int64_t ival = (int64_t) num;
         if ( ival < (int64_t) LINENO_MIN || ival > (int64_t) LINENO_MAX ) {
@@ -2678,10 +2768,12 @@ bool comp_eat_gototarget( compiler_t* comp, uint16_t* pnodeoffs ) {
             lvar = VAROFFS_NONE;
             if ( !vmem_create_var( &comp->rt->varmem, VARTYPEV_LABEL, label, UINT8_C(0), 0, UINT8_C(0), 0, &lvar ) ||
                 lvar == VAROFFS_NONE ) {
+                free( label );
                 out_of_memory( comp );
                 return false;
             }
         }
+        free( label );
         // create node
         data[0] = VARTYPEV_LABEL;
         data[1] = (uint8_t)( lvar >> UINT8_C(8) );
@@ -2765,9 +2857,9 @@ bool comp_eat_labelstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
 UNEXP:  comp_error( comp, "Numeric identifier expected" );
         return false;
     }
-    static char label[256];
-    snprintf( label, 256U, "%s", comp->param );
+    char* label = dup_param( comp, comp->param );
     if ( !comp_fetchtok( comp ) ) {
+        free( label );
         goto UNEXP;
     }
     uint16_t labvar = VAROFFS_NONE;
@@ -2775,10 +2867,12 @@ UNEXP:  comp_error( comp, "Numeric identifier expected" );
         labvar = VAROFFS_NONE;
         if ( !vmem_create_var( &comp->rt->varmem, VARTYPEV_LABEL, label, UINT8_C(0), 0, UINT16_C(0), 0, &labvar ) ||
             labvar == VAROFFS_NONE ) {
+            free( label );
             out_of_memory( comp );
             return false;
         }
     }
+    free( label );
     /*
         NT_LABELSTMT    LABEL statement
             data:
@@ -3109,6 +3203,7 @@ bool comp_nextline( compiler_t* comp ) {
         return false;
     }
     comp->tokp = comp->iter.tok;
+    comp->tokend = comp->tokp + iter_remaining( &comp->iter, comp->tokp );
     comp->currtok = TOK_NONE;
     return true;
 }
@@ -3139,7 +3234,7 @@ printf( "*** TOKEN: %02" PRIx8 "\n", tok );
     }
     static const struct {
         uint8_t tok;
-        bool (*read_fn)( const uint8_t**, char [256] );
+        bool (*read_fn)( rbuf_t*, char** );
     } littbl[] = {
         { TOK_IDENT, read_ident }, { TOK_NUMIDENT, read_ident }, { TOK_STRIDENT, read_ident }, { TOK_INTIDENT, read_ident },
         { TOK_STRLIT, read_strlit }, { TOK_HEXLIT, read_hexlit }, { TOK_DECLIT, read_declit }, { TOK_OCTLIT, read_octlit },
@@ -3150,9 +3245,12 @@ printf( "*** TOKEN: %02" PRIx8 "\n", tok );
     for ( int i=0; littbl[i].tok; ++i ) {
         if ( littbl[i].tok == tok ) {
             --comp->tokp;
-            if ( !littbl[i].read_fn( (const uint8_t**)(&comp->tokp), comp->param ) ) {
+            rbuf_t rbuf;
+            init_rbuf( &rbuf, comp->tokp, comp->tokend > comp->tokp ? (size_t)( comp->tokend - comp->tokp ) : 0 );
+            if ( !littbl[i].read_fn( &rbuf, &comp->param ) ) {
                 return false;
             }
+            comp->tokp += rbuf.rpos;
             int base = 0;
             switch ( tok ) {
                 case TOK_HEXLIT: base = 16; goto NONDEC;

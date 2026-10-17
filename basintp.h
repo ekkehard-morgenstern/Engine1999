@@ -63,22 +63,22 @@ typedef struct _ipcalltbl_t {
 typedef struct _interpr_t {
     pgmiter_t   iter;
     uint8_t*    tokp;
+    const uint8_t* tokend;  // end of the current line's tokens
     uint8_t     currtok;
-    union {
-        char        param[256];
-        double      number;
-    };
+    char*       param;      // heap allocated text of the current literal/identifier token
+    double      number;     // value of the current numeric literal token
     jmp_buf     ready_jump, exit_jump;
     ipcalltbl_t calltable;
 } interpr_t;
 
 // -- direct mode -----------------------------------------------------------
 
-bool direct_mode( program_t* pgm, const uint8_t* tokens );
+bool direct_mode( program_t* pgm, const uint8_t* tokens, size_t size );
 
 // -- interpreter -----------------------------------------------------------
 
 void init_interpr( interpr_t* interp, program_t* pgm );
+void cleanup_interpr( interpr_t* interp );
 bool intp_fetchtok( interpr_t* interp );
 void run_interpr( interpr_t* interp );
 

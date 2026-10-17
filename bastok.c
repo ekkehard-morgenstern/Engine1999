@@ -58,14 +58,60 @@ bool is_sngchrtok( char tok ) {
     return false;
 }
 
-bool eat_sngchrtok( const char** pp, uint8_t* ptok ) {
-    const char* p = *pp;
-    if ( is_sngchrtok( *p ) ) {
-        *ptok = *p++;
-    } else {
+bool eat_sngchrtok( rbuf_t* rbuf, uint8_t* ptok ) {
+    if ( rbuf->rpos < rbuf->size && is_sngchrtok( rbuf->buffer[ rbuf->rpos ] ) ) {
+        *ptok = (uint8_t) rbuf->buffer[ rbuf->rpos++ ];
+        return true;
+    }
+    return false;
+}
+
+// -- helpers ---------------------------------------------------------------
+
+#define MAX_ITEMLEN     65535U      // maximum length of an identifier or literal
+
+// character at the read position + offset, or NUL when beyond the end
+static char rb_peek( const rbuf_t* rbuf, size_t offs ) {
+    size_t pos = rbuf->rpos + offs;
+    if ( pos >= rbuf->size ) {
+        return '\0';
+    }
+    return rbuf->buffer[ pos ];
+}
+
+// replaces *ptarget with a NUL-terminated copy of the given data
+static bool store_string( char** ptarget, const char* data, size_t len ) {
+    char* copy = (char*) malloc( len + 1U );
+    if ( copy == 0 ) {
+        fprintf( stderr, "? out of memory\n" );
         return false;
     }
-    *pp = p;
+    if ( len ) {
+        memcpy( copy, data, len );
+    }
+    copy[len] = '\0';
+    free( *ptarget );
+    *ptarget = copy;
+    return true;
+}
+
+static bool emit_byte( buf_t* buf, uint8_t value ) {
+    return writeto_buffer( buf, &value, 1U ) >= 0;
+}
+
+// emits <tok> <len.16> <data...>
+static bool emit_tagged( buf_t* buf, uint8_t tok, const char* source, size_t len ) {
+    uint8_t hdr[3];
+    hdr[0] = tok;
+    hdr[1] = (uint8_t)( len >> UINT8_C(8) );
+    hdr[2] = (uint8_t) len;
+    if ( anticipate_buffer( buf, 3U + len ) < 0 ) {
+        return false;
+    }
+    writeto_buffer( buf, hdr, 3U );
+    if ( len ) {
+        writeto_buffer( buf, source, len );
+    }
     return true;
 }
 
@@ -96,20 +142,23 @@ void delete_buffer( buf_t* buf ) {
     free( buf );
 }
 
-bool grow_buffer( buf_t* buf, size_t suggestedSize ) {
-    size_t remain = buf->alloc - buf->fill;
-    if ( remain >= suggestedSize ) {
+void clear_buffer( buf_t* buf ) {
+    buf->fill = 0;
+}
+
+bool grow_buffer( buf_t* buf, size_t requiredSize ) {
+    if ( buf->alloc >= requiredSize ) {
         return true;
     }
-    if ( buf->alloc > SIZE_MAX / 2U || suggestedSize > SIZE_MAX ) {
-        fprintf( stderr, "? cannot grow buffer\n" );
-        return false;
+    size_t newSize = buf->alloc ? buf->alloc : BUF_INIT_SIZE;
+    while ( newSize < requiredSize ) {
+        if ( newSize > SIZE_MAX / 2U ) {
+            fprintf( stderr, "? cannot grow buffer\n" );
+            return false;
+        }
+        newSize *= 2U;
     }
-    size_t newSize = buf->alloc * 2U;
-    if ( newSize < suggestedSize ) {
-        newSize = suggestedSize;
-    }
-    char* newbuf = realloc( buf->buffer, newSize );
+    char* newbuf = (char*) realloc( buf->buffer, newSize );
     if ( newbuf == 0 ) {
         fprintf( stderr, "? out of memory\n" );
         return false;
@@ -127,18 +176,18 @@ int printto_buffer( buf_t* buf, const char* fmt, ... ) {
         va_list ap;
         va_start( ap, fmt );
         size_t remain = buf->alloc - buf->fill;
-        int ret = snprintf( &buf->buffer[buf->fill], remain, fmt, ap );
+        int ret = vsnprintf( &buf->buffer[buf->fill], remain, fmt, ap );
         va_end( ap );
         if ( ret < 0 ) { // error
             fprintf( stderr, "? buffer error\n" );
             return ret;
         }
-        if ( ret >= (int) remain ) {    // cut off
-            if ( ret >= (int)( SIZE_MAX - buf->fill - 1U ) ) {
+        if ( (size_t) ret >= remain ) {    // cut off
+            if ( (size_t) ret >= SIZE_MAX - buf->fill ) {
                 fprintf( stderr, "? size request too large\n" );
                 return -1;
             }
-            if ( !grow_buffer( buf, buf->fill + ret + 1U ) ) {
+            if ( !grow_buffer( buf, buf->fill + (size_t) ret + 1U ) ) {
                 return -1;
             }
             continue;   // try again
@@ -155,17 +204,8 @@ int printto_buffer( buf_t* buf, const char* fmt, ... ) {
 
 int writeto_buffer( buf_t* buf, const void* data, size_t size ) {
 
-    size_t oldFill = buf->fill;
-    size_t remain  = buf->alloc - buf->fill;
-
-    if ( size > remain ) {
-        if ( size > SIZE_MAX - buf->fill ) {
-            fprintf( stderr, "? size request too large\n" );
-            return -1;
-        }
-        if ( !grow_buffer( buf, buf->fill + size ) ) {
-            return -1;
-        }
+    if ( size > (size_t) INT_MAX || anticipate_buffer( buf, size ) < 0 ) {
+        return -1;
     }
 
     if ( size ) {
@@ -178,16 +218,16 @@ int writeto_buffer( buf_t* buf, const void* data, size_t size ) {
 
 int anticipate_buffer( buf_t* buf, size_t size ) {
 
-    size_t remain = buf->alloc - buf->fill;
-
-    if ( size > remain ) {
-        if ( size > SIZE_MAX - buf->fill ) {
-            fprintf( stderr, "? size request too large\n" );
-            return -1;
-        }
-        if ( !grow_buffer( buf, buf->fill + size ) ) {
-            return -1;
-        }
+    if ( size > (size_t) INT_MAX ) {
+        fprintf( stderr, "? size request too large\n" );
+        return -1;
+    }
+    if ( size > SIZE_MAX - buf->fill ) {
+        fprintf( stderr, "? size request too large\n" );
+        return -1;
+    }
+    if ( !grow_buffer( buf, buf->fill + size ) ) {
+        return -1;
     }
 
     return (int) size;
@@ -203,7 +243,7 @@ void init_rbuf( rbuf_t* rbuf, const void* data, size_t size ) {
 
 int readfrom_buffer( rbuf_t* rbuf, void* data, size_t size ) {
     size_t remain = rbuf->size - rbuf->rpos;
-    if ( remain < size ) {
+    if ( remain < size || size > (size_t) INT_MAX ) {
         return -1;
     }
     if ( size ) {
@@ -215,22 +255,48 @@ int readfrom_buffer( rbuf_t* rbuf, void* data, size_t size ) {
 
 int anticipate_rbuffer( rbuf_t* rbuf, size_t size ) {
     size_t remain = rbuf->size - rbuf->rpos;
-    if ( remain < size ) {
+    if ( remain < size || size > (size_t) INT_MAX ) {
         return -1;
     }
     return (int) size;
 }
 
+// -- raw 16-bit values (used by line headers) ------------------------------
+
+void emit_uint16( uint8_t** pp, uint16_t source ) {
+    uint8_t* p = *pp;
+    *p++ = (uint8_t)( source >> UINT8_C(8) );
+    *p++ = (uint8_t) source;
+    *pp = p;
+}
+
+void read_uint16( const uint8_t** pp, uint16_t* target ) {
+    const uint8_t* p = *pp;
+    *target = *p++;
+    *target = ( ( *target ) << UINT8_C(8) ) | *p++;
+    *pp = p;
+}
+
 // -- uint32 ----------------------------------------------------------------
 
 bool eat_uint32( rbuf_t* rbuf, uint32_t* target ) {
-    int n = 0;
-    if ( sscanf( &rbuf->buffer[ rbuf->rpos ], "%" SCNu32 "%n", target, &n )
-        >= 1 ) {
-        rbuf->rpos += n;
-        return true;
+    size_t offs = 0;
+    while ( rb_peek( rbuf, offs ) == ' ' ) ++offs;
+    char c = rb_peek( rbuf, offs );
+    if ( c < '0' || c > '9' ) {
+        return false;
     }
-    return false;
+    uint64_t value = 0;
+    do {
+        value = value * 10U + (uint64_t)( c - '0' );
+        if ( value > UINT32_MAX ) {
+            return false;
+        }
+        c = rb_peek( rbuf, ++offs );
+    } while ( c >= '0' && c <= '9' );
+    *target = (uint32_t) value;
+    rbuf->rpos += offs;
+    return true;
 }
 
 bool print_uint32( buf_t* buf, uint32_t source ) {
@@ -259,71 +325,59 @@ bool read_uint32( rbuf_t* rbuf, uint32_t* target ) {
     *target =
         ( ( (uint32_t) data[0] ) << UINT8_C(24) ) |
         ( ( (uint32_t) data[1] ) << UINT8_C(16) ) |
-        ( ( (uint16_t) data[2] ) << UINT8_C( 8) ) |
+        ( ( (uint32_t) data[2] ) << UINT8_C( 8) ) |
                        data[3];
     return true;
 }
 
 // -- identifiers -----------------------------------------------------------
 
-static char tmp64k[65536];
-
 bool eat_ident( rbuf_t* rbuf, char** ptarget ) {
-    int n = 0;
-    while ( rbuf->buffer[ rbuf->rpos ] == ' ' ) ++rbuf->rpos;
-    char c = rbuf->buffer[ rbuf->rpos ];
-    if ( c >= 'A' && c <= 'Z' ) {
-        if ( sscanf( &rbuf->buffer[ rbuf->rpos ], "%65535[A-Z0-9_]%n", tmp64k,
-            &n ) >= 1 ) {
-            if ( *ptarget ) {
-                free( *ptarget );
-                *ptarget = 0;
-            }
-            *ptarget = strdup( tmp64k );
-            if ( *ptarget == 0 ) {
-                fprintf( stderr, "? out of memory\n" );
-                return false;
-            }
-            rbuf->rpos += n;
-            return true;
-        }
+    size_t offs = 0;
+    while ( rb_peek( rbuf, offs ) == ' ' ) ++offs;
+    char c = rb_peek( rbuf, offs );
+    if ( c < 'A' || c > 'Z' ) {
+        return false;
     }
-    return false;
+    size_t beg = offs;
+    do {
+        c = rb_peek( rbuf, ++offs );
+    } while ( ( c >= 'A' && c <= 'Z' ) || ( c >= '0' && c <= '9' ) || c == '_' );
+    size_t len = offs - beg;
+    if ( len > MAX_ITEMLEN ) {
+        fprintf( stderr, "? identifier too long\n" );
+        return false;
+    }
+    if ( !store_string( ptarget, &rbuf->buffer[ rbuf->rpos + beg ], len ) ) {
+        return false;
+    }
+    rbuf->rpos += offs;
+    return true;
 }
 
 bool print_ident( buf_t* buf, const char* source ) {
-    int len = (int) strlen( source );
+    size_t len = strlen( source );
+    if ( len > (size_t) INT_MAX ) {
+        return false;
+    }
     int rv = writeto_buffer( buf, source, len );
-    if ( rv < len ) {
-        return false; // error or cut off
+    if ( rv < (int) len ) {
+        return false; // error
     }
     return true;
 }
 
 bool emit_ident( buf_t* buf, const char* source, uint8_t tok ) {
     size_t len = strlen( source );
-    if ( len > 65535U ) {
-        len = 65535U;
-    }
-    if ( anticipate_buffer( buf, len + 3U ) < 0 ) {
-        return false;
+    if ( len > MAX_ITEMLEN ) {
+        len = MAX_ITEMLEN;
     }
     if ( tok == TOK_STRIDENT || tok == TOK_INTIDENT ) {
-        if ( len == 65535U ) {
-            --len;
+        if ( len == MAX_ITEMLEN ) {
+            --len;  // leave room for the sigil when reading back
         }
     }
-    char* p0 = &buf->buffer[ buf->fill ];
-    char* p  = p0;
-    *p++ = tok;
-    *p++ = (uint8_t) ( len >> UINT8_C(8) );
-    *p++ = (uint8_t)   len;
-    if ( len ) {
-        memcpy( p, source, len );
-        p += len;
-    }
-    buf->fill += p - p0;
-    return true;
+    return emit_tagged( buf, tok, source, len );
 }
 
 bool ri_sigil = false;
@@ -332,95 +386,80 @@ bool read_ident( rbuf_t* rbuf, char** ptarget ) {
     if ( anticipate_rbuffer( rbuf, 3U ) < 0 ) {
         return false;
     }
-    const uint8_t* p0 = (const uint8_t*)( &rbuf->buffer[ rbuf->rpos ] );
-    const uint8_t* p  = p0;
-    uint8_t tok = *p++;
+    const uint8_t* p = (const uint8_t*)( &rbuf->buffer[ rbuf->rpos ] );
+    uint8_t tok = p[0];
     switch ( tok ) {
         case TOK_IDENT: case TOK_NUMIDENT: case TOK_STRIDENT: case TOK_INTIDENT:
             break;
         default:
             return false;
     }
-    size_t len = ( ( (uint16_t) p[0] ) << UINT8_C(8) ) | p[1];
-    if ( tok != TOK_IDENT && tok != TOK_NUMIDENT ) {
-        if ( ri_sigil && len == 65535U ) {
-            --len;
-        }
-    }
-    p += 2;
-    if ( !anticipate_rbuffer( rbuf, 3U + len ) ) {
+    size_t len = ( ( (size_t) p[1] ) << UINT8_C(8) ) | p[2];
+    if ( anticipate_rbuffer( rbuf, 3U + len ) < 0 ) {
         return false;
     }
-    if ( *ptarget ) {
-        free( *ptarget );
-        *ptarget = 0;
-    }
-    size_t blksize = len + 1U;
+    char sigil = '\0';
     if ( ri_sigil ) {
         if ( tok == TOK_STRIDENT ) {
-            ++blksize;
+            sigil = '$';
         } else if ( tok == TOK_INTIDENT ) {
-            ++blksize;
+            sigil = '%';
         }
     }
-    *ptarget = (char*) malloc( blksize );
-    if ( *ptarget == 0 ) {
-        fprintf( stderr, "? Out of memory\n" );
+    char* name = (char*) malloc( len + 2U );
+    if ( name == 0 ) {
+        fprintf( stderr, "? out of memory\n" );
         return false;
     }
     if ( len ) {
-        memcpy( *ptarget, p, len );
-        p += len;
+        memcpy( name, &p[3], len );
     }
-    if ( ri_sigil ) {
-        if ( tok == TOK_STRIDENT ) {
-            (*ptarget)[ len++ ] = '$';
-        } else if ( tok == TOK_INTIDENT ) {
-            (*ptarget)[ len++ ] = '%';
-        }
+    if ( sigil ) {
+        name[ len++ ] = sigil;
     }
-    (*ptarget)[ len ] = '\0';
-    rbuf->rpos += p - p0;
+    name[ len ] = '\0';
+    free( *ptarget );
+    *ptarget = name;
+    rbuf->rpos += 3U + ( len - ( sigil ? 1U : 0U ) );
     return true;
 }
 
 // -- literals (general) ----------------------------------------------------
 
 bool eat_lit( rbuf_t* rbuf, char** ptarget, int beg, int end ) {
-    int n = 0; char fmt[32];
+    size_t offs = 0;
+    while ( rb_peek( rbuf, offs ) == ' ' ) ++offs;
+    if ( rbuf->rpos + offs >= rbuf->size || rbuf->buffer[ rbuf->rpos + offs ] != (char) beg ) {
+        return false;
+    }
+    ++offs;
+    size_t beg_content = offs;
+    for (;;) {
+        size_t pos = rbuf->rpos + offs;
+        if ( pos >= rbuf->size || rbuf->buffer[ pos ] == '\0' ) {
+            if ( end ) {
+                return false;   // unterminated
+            }
+            break;              // NUL-terminated means read to end of string
+        }
+        if ( end && rbuf->buffer[ pos ] == (char) end ) {
+            break;
+        }
+        ++offs;
+    }
+    size_t len = offs - beg_content;
+    if ( len > MAX_ITEMLEN ) {
+        fprintf( stderr, "? literal too long\n" );
+        return false;
+    }
+    if ( !store_string( ptarget, &rbuf->buffer[ rbuf->rpos + beg_content ], len ) ) {
+        return false;
+    }
     if ( end ) {
-        snprintf( fmt, 32U, "%c%%65535[^%c]%c%%n", beg, end, end );
-    } else {
-        // NUL-terminated means read to end of string
-        // we scan until the hopefully nonexistent character 255
-        // this avoids having to guess whether the implementation supports [^\0]
-        // this is hopefully enough for this tiny interpreter
-        snprintf( fmt, 32U, "%c%%65535[^\277]%%n", beg );
+        ++offs;     // closing delimiter
     }
-    while ( rbuf->buffer[ rbuf->rpos ] == ' ' ) ++rbuf->rpos;
-    if ( sscanf( &rbuf->buffer[ rbuf->rpos ], fmt, tmp64k, &n ) >= 1 ) {
-STORE:  buf->rpos += n; 
-        if ( *ptarget ) { free( *ptarget ); *ptarget = 0; }
-        *ptarget = strdup( tmp64k );
-        if ( *ptarget == 0 ) {
-            fprintf( stderr, "? out of memory\n" );
-            return false;
-        }
-        return true;
-    }
-    if ( end ) {
-        if ( rbuf->buffer[ rbuf->rpos     ] == beg && 
-             rbuf->buffer[ rbuf->rpos + 1 ] == end ) {
-            n = 2; tmp64k[0] = '\0';
-            goto STORE;
-        }
-    } else {
-        if ( rbuf->buffer[ rbuf->rpos ] == beg ) {
-            n = 1; tmp64k[0] = '\0';
-            goto STORE;
-        }
-    }
-    return false;
+    rbuf->rpos += offs;
+    return true;
 }
 
 bool print_lit( buf_t* buf, const char* source, int beg, int end ) {
@@ -440,62 +479,38 @@ bool print_lit( buf_t* buf, const char* source, int beg, int end ) {
 
 bool emit_lit( buf_t* buf, const char* source, int tok ) {
     size_t len = strlen( source );
-    if ( len > 65535U ) len = 65535U;
-    if ( anticipate_buffer( buf, 3U + len ) < 0 ) {
-        return false; 
-    }
-    buf->buffer[ buf->fill++ ] = tok;
-    buf->buffer[ buf->fill++ ] = (uint8_t)( len >> 8U );
-    buf->buffer[ buf->fill++ ] = (uint8_t)  len;
-    if ( len ) {
-        memcpy( &buf->buffer[ buf->fill ], source, len );
-        buf->fill += len;
-    }
-    return true;
+    if ( len > MAX_ITEMLEN ) len = MAX_ITEMLEN;
+    return emit_tagged( buf, (uint8_t) tok, source, len );
 }
 
 bool read_lit( rbuf_t* rbuf, char** ptarget, int tok ) {
     if ( anticipate_rbuffer( rbuf, 3U ) < 0 ) {
-FAIL:   return false;
+        return false;
     }
-    size_t oldrpos = rbuf->rpos;
-    uint8_t t = rbuf->buffer[ rbuf->rpos++ ];
-    if ( t != tok ) {
-FAIL2:  rbuf->rpos = oldrpos;
-        goto FAIL;
+    const uint8_t* p = (const uint8_t*)( &rbuf->buffer[ rbuf->rpos ] );
+    if ( p[0] != tok ) {
+        return false;
     }
-    uint8_t hi = rbuf->buffer[ rbuf->rpos++ ];
-    uint8_t lo = rbuf->buffer[ rbuf->rpos++ ];
-    size_t len = ( ( (size_t) hi ) << 8U ) | lo;
-    if ( anticipate_rbuffer( rbuf, len ) < 0 ) {
-        goto FAIL2;
+    size_t len = ( ( (size_t) p[1] ) << UINT8_C(8) ) | p[2];
+    if ( anticipate_rbuffer( rbuf, 3U + len ) < 0 ) {
+        return false;
     }
-    if ( *ptarget ) { 
-        free( *ptarget ); 
-        *ptarget = 0; 
+    if ( !store_string( ptarget, (const char*) &p[3], len ) ) {
+        return false;
     }
-    *ptarget = malloc( len + 1U );
-    if ( *ptarget == 0 ) {
-        fprintf( stderr, "? out of memory\n" );
-        goto FAIL2;
-    }
-    if ( len ) {
-        memcpy( *ptarget, &rbuf->buffer[ rbuf->rpos ], len );
-        rbuf->rpos += len;
-    }
-    (*ptarget)[ len ] = '\0';
+    rbuf->rpos += 3U + len;
     return true;
 }
 
 // -- numeric literals (general) --------------------------------------------
 
-bool eat_numlit( const char** pp, char target[256], int* pbase ) {
-    const char* p = *pp;
-    while ( *p == ' ' ) ++p;
+bool eat_numlit( rbuf_t* rbuf, char** ptarget, int* pbase ) {
+    size_t offs = 0;
+    while ( rb_peek( rbuf, offs ) == ' ' ) ++offs;
     int base = *pbase;
-    if ( base == 0 && *p == '&' ) {
-        ++p;
-        switch ( *p ) {
+    if ( base == 0 && rb_peek( rbuf, offs ) == '&' ) {
+        ++offs;
+        switch ( rb_peek( rbuf, offs ) ) {
             case 'H':   base = 16; break;
             case 'D':   base = 10; break;
             case 'O':   base = 8; break;
@@ -503,16 +518,16 @@ bool eat_numlit( const char** pp, char target[256], int* pbase ) {
             case 'B':   base = 2; break;
             default:    return false;
         }
-        ++p;
+        ++offs;
     }
     if ( base == 0 ) {
         base = 10;
     }
     if ( base < 2 || base > 36 ) return false;
-    const char* p0 = p;
-    int ndig = 0;
+    size_t beg = offs;
+    size_t ndig = 0;
     for (;;) {
-        char   c = *p;
+        char   c = rb_peek( rbuf, offs );
         int8_t v = INT8_C(-1);
         if ( c >= '0' && c <= '9' ) {
             v = c - '0';
@@ -523,46 +538,52 @@ bool eat_numlit( const char** pp, char target[256], int* pbase ) {
         } else {
             return false;
         }
-        if ( ++ndig > 255 ) {
+        if ( ++ndig > MAX_ITEMLEN ) {
             return false;
         }
         if ( v >= base ) {
             return false;
         }
-        ++p;
+        ++offs;
     }
     if ( base == 10 ) { // floating-point support (decimal only)
-        if ( *p == '.' ) {  // fraction
-            ++p;
-            if ( *p < '0' || *p > '9' ) {
+        if ( rb_peek( rbuf, offs ) == '.' ) {  // fraction
+            ++offs;
+            char c = rb_peek( rbuf, offs );
+            if ( c < '0' || c > '9' ) {
                 return false;
             }
             do {
-                ++p;
-            } while ( *p >= '0' && *p <= '9' );
+                c = rb_peek( rbuf, ++offs );
+            } while ( c >= '0' && c <= '9' );
         }
-        if ( *p == 'E' ) {  // exponent
-            ++p;
-            if ( *p == '+' || *p == '-' ) {
-                ++p;
+        if ( rb_peek( rbuf, offs ) == 'E' ) {  // exponent
+            ++offs;
+            char c = rb_peek( rbuf, offs );
+            if ( c == '+' || c == '-' ) {
+                c = rb_peek( rbuf, ++offs );
             }
-            if ( *p < '0' || *p > '9' ) {
+            if ( c < '0' || c > '9' ) {
                 return false;
             }
             do {
-                ++p;
-            } while ( *p >= '0' && *p <= '9' );
+                c = rb_peek( rbuf, ++offs );
+            } while ( c >= '0' && c <= '9' );
         }
     }
-    ndig = (int)( p - p0 );
-    memcpy( target, p0, ndig );
-    target[ndig] = '\0';
+    if ( offs - beg > MAX_ITEMLEN ) {
+        fprintf( stderr, "? numeric literal too long\n" );
+        return false;
+    }
+    if ( !store_string( ptarget, &rbuf->buffer[ rbuf->rpos + beg ], offs - beg ) ) {
+        return false;
+    }
     *pbase = base;
-    *pp = p;
+    rbuf->rpos += offs;
     return true;
 }
 
-bool print_numlit( char** pp, size_t* premain, const char source[256], int base ) {
+bool print_numlit( buf_t* buf, const char* source, int base ) {
     char fmt[16];
     int fp = 0;
     int bc = 0;
@@ -580,179 +601,177 @@ bool print_numlit( char** pp, size_t* premain, const char source[256], int base 
     fmt[fp++] = '%';
     fmt[fp++] = 's';
     fmt[fp] = '\0';
-    int rv = snprintf( *pp, *premain, fmt, source );
+    int rv = printto_buffer( buf, fmt, source );
     if ( rv < 0 ) return false; // error
-    if ( rv >= (int) (*premain) ) return false; // cut off
-    *pp += rv; *premain -= rv;
     return true;
 }
 
-bool emit_numlit( uint8_t** pp, const char source[256], int tok, size_t* premain ) {
-    return emit_lit( pp, source, tok, premain );
+bool emit_numlit( buf_t* buf, const char* source, int tok ) {
+    return emit_lit( buf, source, tok );
 }
 
-bool read_numlit( const uint8_t** pp, char target[256], int tok ) {
-    return read_lit( pp, target, tok );
+bool read_numlit( rbuf_t* rbuf, char** ptarget, int tok ) {
+    return read_lit( rbuf, ptarget, tok );
 }
 
 // -- decimal literals ------------------------------------------------------
 
-bool print_declit( char** pp, size_t* premain, const char source[256] ) {
-    return print_numlit( pp, premain, source, 10 );
+bool print_declit( buf_t* buf, const char* source ) {
+    return print_numlit( buf, source, 10 );
 }
 
-bool emit_declit( uint8_t** pp, const char source[256], size_t* premain ) {
-    return emit_numlit( pp, source, TOK_DECLIT, premain );
+bool emit_declit( buf_t* buf, const char* source ) {
+    return emit_numlit( buf, source, TOK_DECLIT );
 }
 
-bool read_declit( const uint8_t** pp, char target[256] ) {
-    return read_numlit( pp, target, TOK_DECLIT );
+bool read_declit( rbuf_t* rbuf, char** ptarget ) {
+    return read_numlit( rbuf, ptarget, TOK_DECLIT );
 }
 
 // -- hexadecimal literals --------------------------------------------------
 
-bool print_hexlit( char** pp, size_t* premain, const char source[256] ) {
-    return print_numlit( pp, premain, source, 16 );
+bool print_hexlit( buf_t* buf, const char* source ) {
+    return print_numlit( buf, source, 16 );
 }
 
-bool emit_hexlit( uint8_t** pp, const char source[256], size_t* premain ) {
-    return emit_numlit( pp, source, TOK_HEXLIT, premain );
+bool emit_hexlit( buf_t* buf, const char* source ) {
+    return emit_numlit( buf, source, TOK_HEXLIT );
 }
 
-bool read_hexlit( const uint8_t** pp, char target[256] ) {
-    return read_numlit( pp, target, TOK_HEXLIT );
+bool read_hexlit( rbuf_t* rbuf, char** ptarget ) {
+    return read_numlit( rbuf, ptarget, TOK_HEXLIT );
 }
 
 // -- octal literals --------------------------------------------------------
 
-bool print_octlit( char** pp, size_t* premain, const char source[256] ) {
-    return print_numlit( pp, premain, source, 8 );
+bool print_octlit( buf_t* buf, const char* source ) {
+    return print_numlit( buf, source, 8 );
 }
 
-bool emit_octlit( uint8_t** pp, const char source[256], size_t* premain ) {
-    return emit_numlit( pp, source, TOK_OCTLIT, premain );
+bool emit_octlit( buf_t* buf, const char* source ) {
+    return emit_numlit( buf, source, TOK_OCTLIT );
 }
 
-bool read_octlit( const uint8_t** pp, char target[256] ) {
-    return read_numlit( pp, target, TOK_OCTLIT );
+bool read_octlit( rbuf_t* rbuf, char** ptarget ) {
+    return read_numlit( rbuf, ptarget, TOK_OCTLIT );
 }
 
 // -- quaternary literals ---------------------------------------------------
 
-bool print_qualit( char** pp, size_t* premain, const char source[256] ) {
-    return print_numlit( pp, premain, source, 4 );
+bool print_qualit( buf_t* buf, const char* source ) {
+    return print_numlit( buf, source, 4 );
 }
 
-bool emit_qualit( uint8_t** pp, const char source[256], size_t* premain ) {
-    return emit_numlit( pp, source, TOK_QUALIT, premain );
+bool emit_qualit( buf_t* buf, const char* source ) {
+    return emit_numlit( buf, source, TOK_QUALIT );
 }
 
-bool read_qualit( const uint8_t** pp, char target[256] ) {
-    return read_numlit( pp, target, TOK_QUALIT );
+bool read_qualit( rbuf_t* rbuf, char** ptarget ) {
+    return read_numlit( rbuf, ptarget, TOK_QUALIT );
 }
 
 // -- binary literals -------------------------------------------------------
 
-bool print_binlit( char** pp, size_t* premain, const char source[256] ) {
-    return print_numlit( pp, premain, source, 2 );
+bool print_binlit( buf_t* buf, const char* source ) {
+    return print_numlit( buf, source, 2 );
 }
 
-bool emit_binlit( uint8_t** pp, const char source[256], size_t* premain ) {
-    return emit_numlit( pp, source, TOK_BINLIT, premain );
+bool emit_binlit( buf_t* buf, const char* source ) {
+    return emit_numlit( buf, source, TOK_BINLIT );
 }
 
-bool read_binlit( const uint8_t** pp, char target[256] ) {
-    return read_numlit( pp, target, TOK_BINLIT );
+bool read_binlit( rbuf_t* rbuf, char** ptarget ) {
+    return read_numlit( rbuf, ptarget, TOK_BINLIT );
 }
 
 // -- string literals -------------------------------------------------------
 
-bool eat_strlit( const char** pp, char target[256] ) {
-    return eat_lit( pp, target, '"', '"' );
+bool eat_strlit( rbuf_t* rbuf, char** ptarget ) {
+    return eat_lit( rbuf, ptarget, '"', '"' );
 }
 
-bool print_strlit( char** pp, size_t* premain, const char source[256] ) {
-    return print_lit( pp, premain, source, '"', '"' );
+bool print_strlit( buf_t* buf, const char* source ) {
+    return print_lit( buf, source, '"', '"' );
 }
 
-bool emit_strlit( uint8_t** pp, const char source[256], size_t* premain ) {
-    return emit_lit( pp, source, TOK_STRLIT, premain );
+bool emit_strlit( buf_t* buf, const char* source ) {
+    return emit_lit( buf, source, TOK_STRLIT );
 }
 
-bool read_strlit( const uint8_t** pp, char target[256] ) {
-    return read_lit( pp, target, TOK_STRLIT );
+bool read_strlit( rbuf_t* rbuf, char** ptarget ) {
+    return read_lit( rbuf, ptarget, TOK_STRLIT );
 }
 
 // -- shell literals --------------------------------------------------------
 
-bool eat_shllit( const char** pp, char target[256] ) {
-    return eat_lit( pp, target, '`', '`' );
+bool eat_shllit( rbuf_t* rbuf, char** ptarget ) {
+    return eat_lit( rbuf, ptarget, '`', '`' );
 }
 
-bool print_shllit( char** pp, size_t* premain, const char source[256] ) {
-    return print_lit( pp, premain, source, '`', '`' );
+bool print_shllit( buf_t* buf, const char* source ) {
+    return print_lit( buf, source, '`', '`' );
 }
 
-bool emit_shllit( uint8_t** pp, const char source[256], size_t* premain ) {
-    return emit_lit( pp, source, TOK_SHLLIT, premain );
+bool emit_shllit( buf_t* buf, const char* source ) {
+    return emit_lit( buf, source, TOK_SHLLIT );
 }
 
-bool read_shllit( const uint8_t** pp, char target[256] ) {
-    return read_lit( pp, target, TOK_SHLLIT );
+bool read_shllit( rbuf_t* rbuf, char** ptarget ) {
+    return read_lit( rbuf, ptarget, TOK_SHLLIT );
 }
 
 // -- quote literals (comments) ---------------------------------------------
 
-bool eat_quolit( const char** pp, char target[256] ) {
-    return eat_lit( pp, target, '\'', '\0' );
+bool eat_quolit( rbuf_t* rbuf, char** ptarget ) {
+    return eat_lit( rbuf, ptarget, '\'', '\0' );
 }
 
-bool print_quolit( char** pp, size_t* premain, const char source[256] ) {
-    return print_lit( pp, premain, source, '\'', '\0' );
+bool print_quolit( buf_t* buf, const char* source ) {
+    return print_lit( buf, source, '\'', '\0' );
 }
 
-bool emit_quolit( uint8_t** pp, const char source[256], size_t* premain ) {
-    return emit_lit( pp, source, TOK_QUOLIT, premain );
+bool emit_quolit( buf_t* buf, const char* source ) {
+    return emit_lit( buf, source, TOK_QUOLIT );
 }
 
-bool read_quolit( const uint8_t** pp, char target[256] ) {
-    return read_lit( pp, target, TOK_QUOLIT );
+bool read_quolit( rbuf_t* rbuf, char** ptarget ) {
+    return read_lit( rbuf, ptarget, TOK_QUOLIT );
 }
 
 // -- bracket literals ------------------------------------------------------
 
-bool eat_brklit( const char** pp, char target[256] ) {
-    return eat_lit( pp, target, '[', ']' );
+bool eat_brklit( rbuf_t* rbuf, char** ptarget ) {
+    return eat_lit( rbuf, ptarget, '[', ']' );
 }
 
-bool print_brklit( char** pp, size_t* premain, const char source[256] ) {
-    return print_lit( pp, premain, source, '[', ']' );
+bool print_brklit( buf_t* buf, const char* source ) {
+    return print_lit( buf, source, '[', ']' );
 }
 
-bool emit_brklit( uint8_t** pp, const char source[256], size_t* premain ) {
-    return emit_lit( pp, source, TOK_BRKLIT, premain );
+bool emit_brklit( buf_t* buf, const char* source ) {
+    return emit_lit( buf, source, TOK_BRKLIT );
 }
 
-bool read_brklit( const uint8_t** pp, char target[256] ) {
-    return read_lit( pp, target, TOK_BRKLIT );
+bool read_brklit( rbuf_t* rbuf, char** ptarget ) {
+    return read_lit( rbuf, ptarget, TOK_BRKLIT );
 }
 
 // -- brace literals --------------------------------------------------------
 
-bool eat_brclit( const char** pp, char target[256] ) {
-    return eat_lit( pp, target, '{', '}' );
+bool eat_brclit( rbuf_t* rbuf, char** ptarget ) {
+    return eat_lit( rbuf, ptarget, '{', '}' );
 }
 
-bool print_brclit( char** pp, size_t* premain, const char source[256] ) {
-    return print_lit( pp, premain, source, '{', '}' );
+bool print_brclit( buf_t* buf, const char* source ) {
+    return print_lit( buf, source, '{', '}' );
 }
 
-bool emit_brclit( uint8_t** pp, const char source[256], size_t* premain ) {
-    return emit_lit( pp, source, TOK_BRCLIT, premain );
+bool emit_brclit( buf_t* buf, const char* source ) {
+    return emit_lit( buf, source, TOK_BRCLIT );
 }
 
-bool read_brclit( const uint8_t** pp, char target[256] ) {
-    return read_lit( pp, target, TOK_BRCLIT );
+bool read_brclit( rbuf_t* rbuf, char** ptarget ) {
+    return read_lit( rbuf, ptarget, TOK_BRCLIT );
 }
 
 // -- keywords --------------------------------------------------------------
@@ -799,16 +818,11 @@ bool is_keyword2( uint8_t tok ) {
     return false;
 }
 
-bool print_keyword( uint8_t tok, char** whereto, size_t* premain ) {
+bool print_keyword( uint8_t tok, buf_t* buf ) {
     for ( int i=0; keywtbl[i].tok; ++i ) {
         if ( keywtbl[i].tok == tok ) {
             size_t len = strlen( keywtbl[i].name );
-            if ( *premain <= len ) {
-                return false;
-            }
-            memcpy( *whereto, keywtbl[i].name, len );
-            *whereto += len; *premain -= len;
-            return true;
+            return writeto_buffer( buf, keywtbl[i].name, len ) >= 0;
         }
     }
     return false;
@@ -816,10 +830,10 @@ bool print_keyword( uint8_t tok, char** whereto, size_t* premain ) {
 
 // -- double-character tokens -----------------------------------------------
 
-bool eat_dblchrtok( const char** pp, uint8_t* ptok, const char* match, uint8_t tok ) {
-    const char* p = *pp;
-    if ( p[0] == match[0] && p[1] == match[1] ) {
-        p += 2; *pp = p; *ptok = tok;
+bool eat_dblchrtok( rbuf_t* rbuf, uint8_t* ptok, const char* match, uint8_t tok ) {
+    if ( rb_peek( rbuf, 0 ) == match[0] && rb_peek( rbuf, 1 ) == match[1] ) {
+        rbuf->rpos += 2U;
+        *ptok = tok;
         return true;
     }
     return false;
@@ -827,40 +841,46 @@ bool eat_dblchrtok( const char** pp, uint8_t* ptok, const char* match, uint8_t t
 
 // -- tokenization ----------------------------------------------------------
 
-bool tokenize_line( const char* buf, uint8_t* whereto, size_t* premain, struct _linehdr_t* phdr ) {
-    const char* s = buf; uint8_t* d = whereto; size_t remain = *premain;
-    if ( remain < sizeof(linehdr_t) ) return 0;
+bool tokenize_line( const char* text, buf_t* out, struct _linehdr_t* phdr ) {
+    rbuf_t src; init_rbuf( &src, text, strlen( text ) );
+    size_t start = out->fill;
+    char*  item  = 0;
     linehdr_t hdr; clear_linehdr( &hdr );
-    remain -= sizeof(linehdr_t); d += sizeof(linehdr_t);
+    // reserve room for the header, it is filled in at the end
+    uint8_t zeros[sizeof(linehdr_t)];
+    memset( zeros, 0, sizeof(zeros) );
+    if ( writeto_buffer( out, zeros, sizeof(zeros) ) < 0 ) {
+        return false;
+    }
     // optional line number
-    if ( eat_uint16( &s, &hdr.lineno ) ) {
-        if ( hdr.lineno > LINENO_MAX ) {
-            return false;
+    uint32_t lineno = 0;
+    if ( eat_uint32( &src, &lineno ) ) {
+        if ( lineno > LINENO_MAX ) {
+            goto FAIL;
         }
+        hdr.lineno = (uint16_t) lineno;
     }
     // main line
-    while ( *s != '\0' ) {
-        char item[256]; int base = 0; uint8_t tok;
-        if ( eat_dblchrtok( &s, &tok, "<=", TOK_LE ) || eat_dblchrtok( &s, &tok, "<>", TOK_NE ) ||
-             eat_dblchrtok( &s, &tok, "><", TOK_NE ) || eat_dblchrtok( &s, &tok, ">=", TOK_GE ) ||
-             eat_dblchrtok( &s, &tok, "**", TOK_POW ) || eat_sngchrtok( &s, &tok ) ) {
-            if ( remain <= 1U ) {
-                return false;
+    while ( src.rpos < src.size && src.buffer[ src.rpos ] != '\0' ) {
+        int base = 0; uint8_t tok;
+        if ( eat_dblchrtok( &src, &tok, "<=", TOK_LE ) || eat_dblchrtok( &src, &tok, "<>", TOK_NE ) ||
+             eat_dblchrtok( &src, &tok, "><", TOK_NE ) || eat_dblchrtok( &src, &tok, ">=", TOK_GE ) ||
+             eat_dblchrtok( &src, &tok, "**", TOK_POW ) || eat_sngchrtok( &src, &tok ) ) {
+            if ( !emit_byte( out, tok ) ) {
+                goto FAIL;
             }
-            *d++ = tok;
             continue;
         }
-        if ( eat_numlit( &s, item, &base ) ) {
+        if ( eat_numlit( &src, &item, &base ) ) {
             if ( base == 10 && item[1] == '\0' ) {
-                if ( remain <= 1U ) {
-                    return false;
+                if ( !emit_byte( out, (uint8_t) item[0] ) ) { // '0'..'9' = TOK_DEC0..9
+                    goto FAIL;
                 }
-                *d++ = item[0]; // '0'..'9' = TOK_DEC0..9
                 continue;
             }
             static const struct {
                 int base;
-                bool (*emit_fn)( uint8_t**, const char [256], size_t* );
+                bool (*emit_fn)( buf_t*, const char* );
             } numemittbl[] = {
                 { 16, emit_hexlit }, { 10, emit_declit }, { 8, emit_octlit },
                 {  4, emit_qualit }, {  2, emit_binlit }, { 0, 0 }
@@ -868,40 +888,39 @@ bool tokenize_line( const char* buf, uint8_t* whereto, size_t* premain, struct _
             bool found = false;
             for ( int i=0; numemittbl[i].base; ++i ) {
                 if ( numemittbl[i].base == base ) {
-                    if ( !numemittbl[i].emit_fn( &d, item, &remain ) ) {
-                        return false;
+                    if ( !numemittbl[i].emit_fn( out, item ) ) {
+                        goto FAIL;
                     }
                     found = true;
                     break;
                 }
             }
             if ( !found ) {
-                return false;
+                goto FAIL;
             }
             continue;
         }
-        if ( eat_ident( &s, item ) ) {
+        if ( eat_ident( &src, &item ) ) {
             if ( is_keyword( item, &tok ) ) {
-                if ( remain <= 1U ) {
-                    return false;
+                if ( !emit_byte( out, tok ) ) {
+                    goto FAIL;
                 }
-                *d++ = tok;
                 continue;
             }
-            uint8_t tok = TOK_NUMIDENT;
-            if ( *s == '$' ) {
-                ++s; tok = TOK_STRIDENT;
-            } else if ( *s == '%' ) {
-                ++s; tok = TOK_INTIDENT;
+            uint8_t idtok = TOK_NUMIDENT;
+            if ( rb_peek( &src, 0 ) == '$' ) {
+                ++src.rpos; idtok = TOK_STRIDENT;
+            } else if ( rb_peek( &src, 0 ) == '%' ) {
+                ++src.rpos; idtok = TOK_INTIDENT;
             }
-            if ( !emit_ident( &d, item, &remain, tok ) ) {
-                return false;
+            if ( !emit_ident( out, item, idtok ) ) {
+                goto FAIL;
             }
             continue;
         }
         static const struct {
-            bool (*eat_fn)( const char**, char [256] );
-            bool (*emit_fn)( uint8_t**, const char [256], size_t* );
+            bool (*eat_fn)( rbuf_t*, char** );
+            bool (*emit_fn)( buf_t*, const char* );
         } littbl[] = {
             { eat_strlit, emit_strlit }, { eat_shllit, emit_shllit },
             { eat_quolit, emit_quolit }, { eat_brklit, emit_brklit }, { eat_brclit, emit_brclit },
@@ -909,59 +928,76 @@ bool tokenize_line( const char* buf, uint8_t* whereto, size_t* premain, struct _
         };
         bool found = false;
         for ( int i=0; littbl[i].eat_fn; ++i ) {
-            if ( littbl[i].eat_fn( &s, item ) ) {
-                if ( !littbl[i].emit_fn( &d, item, &remain ) ) {
-                    return false;
+            if ( littbl[i].eat_fn( &src, &item ) ) {
+                if ( !littbl[i].emit_fn( out, item ) ) {
+                    goto FAIL;
                 }
                 found = true;
                 break;
             }
         }
         if ( !found ) {
-            if ( *s == '&' ) {
-                if ( remain <= 1U ) {
-                    return false;
+            char c = rb_peek( &src, 0 );
+            if ( c == '&' ) {
+                if ( !emit_byte( out, TOK_AMP ) ) {
+                    goto FAIL;
                 }
-                *d++ = TOK_AMP; --remain; ++s;
+                ++src.rpos;
                 continue;
-            } else if ( *s == '?' ) {
-                if ( remain <= 2U ) {
-                    return false;
+            } else if ( c == '?' ) {
+                if ( !emit_byte( out, TOK_PRINT ) || !emit_byte( out, TOK_SPACE ) ) {
+                    goto FAIL;
                 }
-                *d++ = TOK_PRINT; *d++ = TOK_SPACE; remain -= 2; ++s;
+                ++src.rpos;
                 continue;
             }
-            return false;
+            goto FAIL;
         }
-        continue;
     }
-    *d++ = TOK_EOL;
-    *premain = --remain;
-    hdr.length = d - whereto;
-    hdr.alloc  = d - whereto;
-    d = whereto;
-    emit_linehdr_raw( &d, &hdr );
+    if ( !emit_byte( out, TOK_EOL ) ) {
+        goto FAIL;
+    }
+    size_t total = out->fill - start;
+    if ( total > UINT16_MAX ) {
+        fprintf( stderr, "? line too long\n" );
+        goto FAIL;
+    }
+    hdr.length = (uint16_t) total;
+    hdr.alloc  = (uint16_t) total;
+    uint8_t* hp = (uint8_t*)( &out->buffer[ start ] );
+    emit_linehdr_raw( &hp, &hdr );
     *phdr = hdr;
+    free( item );
     return true;
+
+FAIL:
+    free( item );
+    out->fill = start;
+    return false;
 }
 
 // -- detokenization --------------------------------------------------------
 
-bool detokenize_line( char* buf, const uint8_t* wherefrom, size_t* premain, const struct _linehdr_t* phdr ) {
-    const uint8_t* s = wherefrom; size_t remain = *premain;
-    char* d = buf;
+bool detokenize_line( buf_t* out, const uint8_t* wherefrom, const struct _linehdr_t* phdr ) {
+    if ( phdr->length < sizeof(linehdr_t) ) {
+        return false;
+    }
+    rbuf_t src; init_rbuf( &src, wherefrom, phdr->length - sizeof(linehdr_t) );
+    size_t start = out->fill;
+    char*  item  = 0;
+    bool   old_sigil = ri_sigil;
     if ( phdr->lineno != LINENO_NONE ) {
-        if ( !print_uint16( &d, &remain, phdr->lineno ) ) {
-            return false;
+        if ( !print_uint32( out, phdr->lineno ) ) {
+            goto FAIL;
         }
     }
     ri_sigil = true;    // for identifiers, we want the sigil to be returned
-    while ( *s != TOK_EOL ) {
-        uint8_t tok = *s; char item[256];
+    while ( src.rpos < src.size && (uint8_t) src.buffer[ src.rpos ] != TOK_EOL ) {
+        uint8_t tok = (uint8_t) src.buffer[ src.rpos];
         static const struct {
             uint8_t tok;
-            bool (*read_fn)( const uint8_t**, char [256] );
-            bool (*print_fn)( char**, size_t*, const char* );
+            bool (*read_fn)( rbuf_t*, char** );
+            bool (*print_fn)( buf_t*, const char* );
         } littbl[] = {
             { TOK_IDENT, read_ident, print_ident }, { TOK_NUMIDENT, read_ident, print_ident  },
             { TOK_STRIDENT, read_ident, print_ident }, { TOK_INTIDENT, read_ident, print_ident },
@@ -976,11 +1012,11 @@ bool detokenize_line( char* buf, const uint8_t* wherefrom, size_t* premain, cons
         bool found = false;
         for ( int i=0; littbl[i].tok; ++i ) {
             if ( littbl[i].tok == tok ) {
-                if ( !littbl[i].read_fn( &s, item ) ) {
-                    return false;
+                if ( !littbl[i].read_fn( &src, &item ) ) {
+                    goto FAIL;
                 }
-                if ( !littbl[i].print_fn( &d, &remain, item ) ) {
-                    return false;
+                if ( !littbl[i].print_fn( out, item ) ) {
+                    goto FAIL;
                 }
                 found = true;
                 break;
@@ -988,23 +1024,34 @@ bool detokenize_line( char* buf, const uint8_t* wherefrom, size_t* premain, cons
         }
         if ( !found ) {
             if ( is_sngchrtok( tok ) || ( tok >= TOK_DEC0 && tok <= TOK_DEC9 ) ) {
-                if ( remain <= 1U ) {
-                    return false;
+                if ( !emit_byte( out, tok ) ) {
+                    goto FAIL;
                 }
-                *d++ = tok; ++s; --remain;
+                ++src.rpos;
             } else if ( is_keyword2( tok ) ) {
-                if ( !print_keyword( tok, &d, &remain ) ) {
-                    return false;
+                if ( !print_keyword( tok, out ) ) {
+                    goto FAIL;
                 }
-                ++s;
+                ++src.rpos;
             } else {
-                return false;
+                goto FAIL;
             }
         }
     }
-    *d = '\0'; --remain;
-    *premain = remain;
+    // NUL-terminate, but don't count the terminator as content
+    if ( anticipate_buffer( out, 1U ) < 0 ) {
+        goto FAIL;
+    }
+    out->buffer[ out->fill ] = '\0';
+    ri_sigil = old_sigil;
+    free( item );
     return true;
+
+FAIL:
+    ri_sigil = old_sigil;
+    free( item );
+    out->fill = start;
+    return false;
 }
 
 // -- buffer preprocessing --------------------------------------------------

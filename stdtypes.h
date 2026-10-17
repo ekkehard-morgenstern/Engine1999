@@ -30,7 +30,7 @@
 #define STDTYPES_H  1
 
 #ifndef _POSIX_C_SOURCE
-#define _POSIX_C_SOURCE  200112L
+#define _POSIX_C_SOURCE  200809L
 #endif
 
 #include <stdlib.h>
@@ -44,6 +44,7 @@
 #include <time.h>
 #include <math.h>
 #include <setjmp.h>
+#include <limits.h>
 
 #ifdef __GNUC__
 #define ATTR_NORETURN __attribute__ ((noreturn))

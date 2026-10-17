@@ -1,4 +1,4 @@
-# In-progress refactor: removing size limits in the BASIC tokenizer
+# Refactor: removing size limits in the BASIC tokenizer (completed)
 
 Branch: `feature/refactor-to-remove-some-limits` (last commits `266c4bd`, `18a485c`, both titled "Refactor WIP (bastok)", 2026-09-05; base is the "Codegen WIP" series ending at `d608ca3`, 2026-06-27).
 Commit messages carry no description; the intent below is inferred from the diffs.
@@ -23,37 +23,33 @@ bool eat_lit   ( rbuf_t* rbuf, char** ptarget, int beg, int end );  bool print_l
 bool emit_lit  ( buf_t* buf, const char* source, int tok );       bool read_lit  ( rbuf_t* rbuf, char** ptarget, int tok );
 ```
 
-## Status checklist
+## Status: refactor complete (builds clean, valgrind clean)
 
-Done (in `bastok.[ch]`): buffers, rbuf, uint32 helpers, identifiers, generic literals (`eat/print/emit/read_lit`).
+Final API (all in `bastok.h`, documented there):
 
-Still on the old API (`const char** pp`, `char[256]`, `size_t* premain`) — these call the converted functions with the wrong arguments and are the immediate compile errors:
+- `tokenize_line( const char* text, buf_t* out, linehdr_t* phdr )` appends header + tokens to `out`; on failure `out` is unchanged. Lines are capped at 65535 bytes (16-bit header length).
+- `detokenize_line( buf_t* out, const uint8_t* tokens, const linehdr_t* hdr )` appends text and NUL-terminates (the NUL is not counted in `fill`); the token count comes from `hdr->length`.
+- `eat_*( rbuf_t*, char** )`, `print_*( buf_t*, const char* )`, `emit_*( buf_t*, const char* )`, `read_*( rbuf_t*, char** )` for identifiers and all literal kinds; `eat_sngchrtok/eat_dblchrtok` take an `rbuf_t*`; `print_keyword( tok, buf_t* )`.
+- `clear_buffer()` added. `grow_buffer( buf, requiredSize )` now means "ensure alloc >= requiredSize"; `anticipate_buffer( buf, n )` means "room for n more bytes".
+- `emit_uint16/read_uint16` (raw pointer variants) were kept for the 16-bit line header code in `baslin.c`. `eat/print/emit/read_uint32` are used for line numbers (`eat_uint32`, `print_uint32`).
 
-- `bastok.[ch]`: `eat_numlit/print_numlit/emit_numlit/read_numlit` and the per-base wrappers (`declit hexlit octlit qualit binlit`), `strlit shllit quolit brklit brclit` wrappers (all are thin shims over the `*_lit` generics), `print_keyword`, `eat_dblchrtok`, `eat_sngchrtok`, `tokenize_line`, `detokenize_line`, `preprocess_buffer` (the last needs no change unless buffers change).
-  `tokenize_line` also still declares `char item[256]` and a `numemittbl` of old-style function pointers, and calls `eat_uint16` (removed) for the line number.
-- `bascomp.[ch]`: `compiler_t.param[256]` and `comp_ctxstk_t.param[256]` (union with `double number`) and the literal read table at `bascomp.c` ≈ line 3144 (`{ TOK_IDENT, read_ident } …`).
-- `basintp.[ch]`: `interpr_t.param[256]` and the `littbl` of `read_*` function pointers.
-- `baspgm.c` line ≈453 (`list_program` → `detokenize_line( buf, iter.tok, &remain, &iter.hdr )`), `basictest1.c`, `basictest2.c` (fixed `char buf[1024]`, `uint8_t tokens[1024]`).
-- Interface decisions still open: how `tokenize_line` returns its token bytes (probably into a `buf_t`), whether `linehdr_t.length/alloc` (16 bit) must stay 16 bit, and what happens to the 64 KiB `program_t` once individual literals can be up to 65535 bytes (a single maximal literal nearly fills program memory).
+Callers adapted:
 
-Suggested order: finish `bastok.c` (numeric literal layer → keyword/dbl/sng tokens → `tokenize_line`/`detokenize_line`) → get `bastok.o` to compile → `basictest1` → `baspgm.c` → `bascomp` param handling → `basintp` → `basictest2`.
+- `baspgm`: `list_program` uses a `buf_t`; `enter_line`'s direct-mode callback is now `bool (*)( program_t*, const uint8_t* tokens, size_t size )`; new `iter_remaining()` gives the token bytes left in the loaded line.
+- `bascomp`: `compiler_t.param` is a heap `char*` (no longer a union with `number`; `number` is a separate field); new `tokend` marks the end of the token bytes (set by `comp_nextline` or by the new `comp_set_tokens()`); new `cleanup_compiler()` (call it before re-`init_compiler` on a reused compiler and at exit). Node data for names/string literals is heap built (`comp_param_data`) so names up to 65534 bytes fit the tree; context push/pop copies `param`.
+- `basintp`: same `param`/`tokend` change plus `cleanup_interpr()`; `intp_fetchtok` now backs up to the tag byte before calling `read_*` (the old code passed the position after the tag, which the readers reject). The numeric-conversion code below the `littbl` loop is still unreachable, as before.
+- `basictest1/2`: read input with `getline`, tokenize into `buf_t`. `stdtypes.h`: `_POSIX_C_SOURCE` raised to 200809L (needed for `getline`) and `<limits.h>` added.
 
-## Known defects in the already-converted code (`bastok.c`)
+Behavior changes worth knowing:
 
-Verified by compiling `gcc -c -Wall -Werror bastok.c` and by reading:
+- Token format: identifier/literal length prefix is now 2 bytes (was 1). Previously tokenized data is incompatible.
+- Unterminated string/shell/bracket/brace literals are now a syntax error (the old `sscanf` approach silently accepted them without advancing).
+- `eat_*` never move the read position when they fail (the WIP version swallowed leading blanks).
+- `SAVE a, B` option name is copied before fetching the next token (it used to rely on a stale `param`).
 
-1. `printto_buffer` passes a `va_list` (`ap`) to `snprintf` — must be `vsnprintf` (the per-retry `va_start`/`va_end` inside the loop is already correct). As written, formatted output is garbage and `-Wformat` may flag it.
-2. `eat_lit`: label `STORE:` uses `buf->rpos += n;` — `buf` does not exist; should be `rbuf->rpos`. (The label sits inside the `if` body and is also reached by `goto` from the empty-literal cases below.)
-3. `writeto_buffer`: unused variable `oldFill` (breaks the build under `-Werror`).
-4. `strdup` is used in `eat_ident`/`eat_lit`, but `stdtypes.h` defines `_POSIX_C_SOURCE 200112L`, which does not declare `strdup` (needs `200809L`). Either bump the macro in `stdtypes.h` or write a small `dup_string()` helper.
-5. `read_ident`: `if ( !anticipate_rbuffer( rbuf, 3U + len ) )` — `anticipate_rbuffer` returns `-1` on failure, which is truthy, so the failure is not detected (should be `< 0`).
-6. `grow_buffer( buf, suggestedSize )`: callers pass an *absolute* required size (`fill + n`) but the function compares it with the *remaining* space. Pick one meaning (absolute is what the callers assume: `if ( buf->alloc >= suggestedSize ) return true;`).
-   Also the overflow guard `suggestedSize > SIZE_MAX` is always false.
-7. `eat_uint32` / `eat_ident` / `eat_lit` call `sscanf` directly on `rbuf->buffer + rpos`, which assumes the read buffer is NUL-terminated; `rbuf_t` has a `size`, so this can read past the end. Also `eat_ident`/`eat_lit` use a **static 64 KiB scratch** (`tmp64k`) → not re-entrant, and the 65535 limit is the *new* limit.
-8. `read_uint32`: the third byte is cast to `uint16_t` before shifting by 8 (harmless, but should be `uint32_t` for consistency).
-9. `emit_ident`: the `len == 65535 → --len` adjustment (reserving room for the sigil) happens after the `anticipate_buffer` call and only for string/integer identifiers; `read_ident` mirrors it. Keep both sides in sync when changing the limit.
-10. The `rbuf`/`buf` error paths print to `stderr` directly instead of using a `report` callback like the rest of the BASIC system.
-11. `bastok.h` declares `is_sngchrtok` twice (harmless duplication).
+Bugs from the earlier WIP review (all resolved): `vsnprintf`, `rbuf` typo in `eat_lit`, `strdup` declaration, `read_ident` failure check, `grow_buffer` semantics, unbounded `sscanf`/static scratch buffer (replaced by manual scanning), `uint32` cast, unused variable.
+
+Verified by hand: tokenize/detokenize round trip of ordinary lines, 3000-byte identifiers and 5000-byte string literals, rejection of a 70000-byte literal and of an unterminated literal, and parse of PRINT/LET/GOTO/numeric literals through `basictest2` — valgrind reports no errors or definite leaks. There is no automated test suite.
 
 ## Limits (current values, for planning further "remove limits" work)
 
@@ -62,12 +58,13 @@ Verified by compiling `gcc -c -Wall -Werror bastok.c` and by reading:
 | Program memory | 64 KiB, 16-bit offsets | `baspgm.h` `MAX_PROGRAMSIZE`, `baslin.h` |
 | Line numbers | 0..65534 | `baslin.h` |
 | Line length / alloc | 16-bit | `linehdr_t` |
-| Identifier / literal length (old) | 255 (`char[256]`) | `bascomp.h`, `basintp.h`, old `bastok.c` |
-| Identifier / literal length (new) | 65535 (2-byte prefix) | converted `bastok.c` |
+| Identifier / literal length | 65535 (2-byte prefix); was 255 | `bastok.c` |
+| Variable / label name length | 255 (`namelen.8`) — a 256+ byte `LABEL` name ends in "Internal error (invalid parameter to vmem_create_var())" | `vars.c` |
+| Whole tokenized line | 65535 bytes | `linehdr_t.length` |
 | Syntax tree | 65535 bytes | `bascomp.h` `TREESIZE_MAX` |
 | Code / data segments | 64 KiB each | `codegen.h` |
 | Variable area / string area | 64 KiB each, ≤ 1024 variables | `vars.h` |
 | Array dimensions / UDF params | 6 / 8 | `MAXDIM`, `MAXPARAM` |
-| `engine1999` input line | 256 bytes | `engine1999.c` `char buf[256]` |
+| `engine1999` input line | 256 bytes | `engine1999.c` `char buf[256]` (not part of this refactor) |
 
 Most of these follow from using big-endian 16-bit offsets everywhere. Removing them for real means changing offset widths in the program store, tree, variable memory and ISA — a much larger change than the tokenizer work in this branch.

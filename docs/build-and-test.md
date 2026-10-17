@@ -31,7 +31,7 @@ There is no automated test runner or CI. Typical manual check of the BASIC front
 printf '10 PRINT "HI";A$:LET B=1+2*3\n20 GOTO 10\n' | ./basictest2
 ```
 
-(`basictest*` read until EOF.) These test programs include `basic.h` and therefore exercise `bastok.c`, which currently does not compile — see [refactoring.md](refactoring.md).
+(`basictest*` read until EOF.) These test programs include `basic.h` and exercise `bastok.c` and the compiler; they read arbitrary-length lines with `getline`. Run under `valgrind --leak-check=full` to check the buffer code.
 
 ## Font and colors
 

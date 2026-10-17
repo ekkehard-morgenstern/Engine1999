@@ -11,6 +11,8 @@ Identifiers and keywords are therefore case-insensitive; string and shell litera
 
 ## Tokenized line (`tokenize_line` / `detokenize_line`)
 
+`tokenize_line( text, buf_t* out, linehdr_t* )` appends the line to a growable buffer; `detokenize_line( buf_t* out, tokens, hdr )` rebuilds source text. Readers use the bounded `rbuf_t` and return heap strings through `char**`.
+
 ```
 linehdr_t (10 bytes, #pragma pack(2), all big endian)
     nextoffs.16 prevoffs.16   // linked-list node, offsets from start of program memory
@@ -34,8 +36,7 @@ tokens…  TOK_EOL (0)
 | `TOK_QUOLIT` | `'…` comment to end of line | text |
 | `TOK_BRKLIT` / `TOK_BRCLIT` | `[…]` / `{…}` | text |
 
-  Length prefix: **1 byte in the old format, 2 bytes (big endian) in the new format** that the refactor introduces for identifiers and
-  generic literals (`emit_ident`, `emit_lit`) — the on-disk/in-memory token format is changing; see [refactoring.md](refactoring.md).
+  Length prefix: **2 bytes, big endian** (max 65535). It was 1 byte before the refactor, so older tokenized data is not compatible; see [refactoring.md](refactoring.md).
 
 ## Keyword and operator groups (see `bastok.h` for all IDs)
 

@@ -90,11 +90,10 @@ typedef struct _comp_ctxstk_t {
     struct _comp_ctxstk_t*  prev;
     pgmiter_t               iter;
     uint8_t*                tokp;
+    const uint8_t*          tokend;
     uint8_t                 currtok;
-    union {
-        char                param[256];
-        double              number;
-    };
+    char*                   param;      // heap allocated, owned by the context
+    double                  number;
 } comp_ctxstk_t;
 
 struct _runtime_t;
@@ -103,11 +102,10 @@ typedef struct _compiler_t {
     struct _runtime_t* rt;
     pgmiter_t       iter;
     uint8_t*        tokp;
+    const uint8_t*  tokend;         // end of the current line's tokens (see comp_set_tokens)
     uint8_t         currtok;
-    union {
-        char        param[256];
-        double      number;
-    };
+    char*           param;          // heap allocated text of the current literal/identifier token
+    double          number;         // value of the current numeric literal token
     comp_ctxstk_t*  ctxstk;
     void*           userdata;
     void            (*report)( struct _compiler_t*, void*, const char* );
@@ -120,6 +118,8 @@ typedef struct _compiler_t {
 } compiler_t;
 
 void init_compiler( compiler_t* comp, struct _runtime_t* rt, program_t* pgm, bool keepmemory );
+void cleanup_compiler( compiler_t* comp );     // frees param and the context stack; call before init_compiler on a reused compiler
+void comp_set_tokens( compiler_t* comp, const uint8_t* tokens, size_t size );
 void comp_error( compiler_t* comp, const char* text ) ATTR_NORETURN;
 void comp_push_context( compiler_t* comp );
 void comp_commit_context( compiler_t* comp );

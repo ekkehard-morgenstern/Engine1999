@@ -12,14 +12,10 @@ Full documentation is in `docs/` — start with `docs/README.md`.
 
 ## Current state — read first
 
-Branch `feature/refactor-to-remove-some-limits` is **mid-refactor and does not compile**
-(`make bastok.o` fails). The goal is to remove fixed 255/256-byte limits in the BASIC tokenizer layer
-(`bastok.c/.h`) by replacing `char target[256]` + `char**/size_t* premain` cursors with heap strings
-(`char**`), growable output buffers (`buf_t`) and bounded read buffers (`rbuf_t`).
-Only `uint32`, buffers, identifiers and the generic literals (`eat/print/emit/read_lit`) are converted so far;
-everything below them in `bastok.c`, plus all callers, still uses the old API.
-Details, known bugs in the converted code, and the remaining checklist: `docs/refactoring.md`.
-Do not "fix" unrelated code to make the build pass; continue the conversion in the order given there.
+The branch `feature/refactor-to-remove-some-limits` has completed the tokenizer refactor: `bastok.[ch]` now uses heap strings (`char**`),
+growable output buffers (`buf_t`) and bounded read buffers (`rbuf_t`); identifiers/literals may be up to 65535 bytes (2-byte length prefix in the token stream).
+All callers were converted and `make` builds cleanly; `basictest1`/`basictest2` run clean under valgrind.
+Remaining fixed limits (program memory, tree, vars, code, variable *names* ≤ 255) are listed in `docs/refactoring.md`.
 
 ## Build
 

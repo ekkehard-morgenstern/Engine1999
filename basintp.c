@@ -28,7 +28,7 @@
 
 // -- direct mode -----------------------------------------------------------
 
-bool direct_mode( program_t* pgm, const uint8_t* tokens ) {
+bool direct_mode( program_t* pgm, const uint8_t* tokens, size_t size ) {
     fprintf( stderr, "direct mode called\n" );
     return false;
 }
@@ -38,7 +38,15 @@ bool direct_mode( program_t* pgm, const uint8_t* tokens ) {
 void init_interpr( interpr_t* interp, program_t* pgm ) {
     clear_iter( &interp->iter, pgm );
     interp->tokp = 0;
+    interp->tokend = 0;
+    interp->param = 0;
+    interp->number = 0.0;
     interp->currtok = TOK_EOL;
+}
+
+void cleanup_interpr( interpr_t* interp ) {
+    free( interp->param );
+    interp->param = 0;
 }
 
 bool intp_fetchtok( interpr_t* interp ) {
@@ -51,7 +59,7 @@ bool intp_fetchtok( interpr_t* interp ) {
     }
     static const struct {
         uint8_t tok;
-        bool (*read_fn)( const uint8_t**, char [256] );
+        bool (*read_fn)( rbuf_t*, char** );
     } littbl[] = {
         { TOK_IDENT , read_ident  }, { TOK_STRLIT, read_strlit },
         { TOK_HEXLIT, read_hexlit }, { TOK_DECLIT, read_declit },
@@ -62,9 +70,14 @@ bool intp_fetchtok( interpr_t* interp ) {
     };
     for ( int i=0; littbl[i].tok; ++i ) {
         if ( littbl[i].tok == tok ) {
-            if ( !littbl[i].read_fn( (const uint8_t**)(&interp->tokp), interp->param ) ) {
+            --interp->tokp;
+            rbuf_t rbuf;
+            init_rbuf( &rbuf, interp->tokp, interp->tokend > interp->tokp ? (size_t)( interp->tokend - interp->tokp ) : 0 );
+            if ( !littbl[i].read_fn( &rbuf, &interp->param ) ) {
+                ++interp->tokp;
                 return false;
             }
+            interp->tokp += rbuf.rpos;
             return true;
         }
         int base = 0;

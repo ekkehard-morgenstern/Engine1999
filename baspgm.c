@@ -61,6 +61,17 @@ bool iter_load_line( pgmiter_t* iter, uint16_t lineoffs ) {
     return true;
 }
 
+size_t iter_remaining( const pgmiter_t* iter, const uint8_t* tokp ) {
+    if ( iter->tok == 0 || tokp == 0 || iter->hdr.length < sizeof(linehdr_t) ) {
+        return 0;
+    }
+    const uint8_t* end = iter->tok + ( iter->hdr.length - sizeof(linehdr_t) );
+    if ( tokp < iter->tok || tokp > end ) {
+        return 0;
+    }
+    return (size_t)( end - tokp );
+}
+
 bool begin_iterate_program( pgmiter_t* iter, program_t* pgm ) {
     // starts iterating with the first line, if it exists.
     // returns true if a line was loaded
@@ -377,13 +388,16 @@ bool update_line( pgmiter_t* iter, const linehdr_t* newhdr, const uint8_t* newto
     return true;
 }
 
-bool enter_line( program_t* pgm, const uint8_t* tokline, bool (*directmode)( program_t*, const uint8_t* ) ) {
+bool enter_line( program_t* pgm, const uint8_t* tokline, bool (*directmode)( program_t*, const uint8_t*, size_t ) ) {
     linehdr_t hdr; const uint8_t* p = tokline;
     memset( &hdr, 0, sizeof(linehdr_t) );
     read_linehdr_raw( &p, &hdr );
     if ( hdr.lineno == LINENO_NONE ) {
         // direct mode
-        return directmode( pgm, p );
+        if ( hdr.length < sizeof(linehdr_t) ) {
+            return false;
+        }
+        return directmode( pgm, p, hdr.length - sizeof(linehdr_t) );
     }
     pgmiter_t iter; clear_iter( &iter, pgm ); uint16_t prevno = LINENO_NONE, nextno = LINENO_NONE;
     uint16_t newpos = LINEOFFS_NONE;
@@ -433,6 +447,11 @@ void list_program( program_t* pgm, uint16_t lineno_first, uint16_t lineno_last, 
         return;
     }
 
+    buf_t* buf = create_buffer();
+    if ( buf == 0 ) {
+        return;
+    }
+
     do {
         pgmiter_t iter; clear_iter( &iter, pgm );
         if ( !iter_load_line( &iter, line_pos ) ) {
@@ -449,12 +468,14 @@ void list_program( program_t* pgm, uint16_t lineno_first, uint16_t lineno_last, 
             continue;
         }
 
-        static char buf[1024]; size_t remain = 1024U;
-        if ( !detokenize_line( buf, iter.tok, &remain, &iter.hdr ) ) {
+        clear_buffer( buf );
+        if ( !detokenize_line( buf, iter.tok, &iter.hdr ) ) {
             break;
         }
 
-        printer( buf );
+        printer( buf->buffer );
 
     } while ( linelist_nextnode( pgm, line_pos, &line_pos, 0 ) && line_pos != LINEOFFS_NONE );
+
+    delete_buffer( buf );
 }

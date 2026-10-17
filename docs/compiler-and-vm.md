@@ -10,7 +10,7 @@ Key operations: `init_program`, `find_line` (returns `FOUND_EXACT/INSERT/BEYOND/
 
 ## Syntax tree (`bascomp.[ch]`, `nodetype.[ch]`)
 
-`compiler_t` holds token cursor state (`iter`, `tokp`, `currtok`, `param[256]`/`number`), a context stack for backtracking (`comp_push_context` / `comp_commit_context` / `comp_pop_context`) and the tree arena `tree[65535]`.
+`compiler_t` holds token cursor state (`iter`, `tokp`, `tokend`, `currtok`, heap `param`, `number`; set the token range with `comp_set_tokens()`, release with `cleanup_compiler()`), a context stack for backtracking (`comp_push_context` / `comp_commit_context` / `comp_pop_context`) and the tree arena `tree[65535]`.
 
 Node layout (big endian): `nodetype.8 numbranches.8 datalen.16 firstbranch.16 lastbranch.16 data…` (8-byte header, `NODEHDR_SIZE`); each branch entry is `nodepos.16 nextbranch.16` (4 bytes).
 Create with `comp_create_node(comp, &off, type, nbranches, datalen, data, …)`, link with `comp_add_branch`, iterate with `comp_node_iter_branches`.
@@ -53,4 +53,4 @@ There is no executor for this ISA in the repo yet.
 ## Runtime (`runtime.[ch]`) and interpreter stub (`basintp.[ch]`)
 
 `init_runtime` wires `varmem_t` and `codegen_t` to the runtime's `report`/`halt`. `basintp` is an earlier direct token interpreter skeleton
-(`direct_mode`, `init_interpr`, `intp_fetchtok`, `run_interpr`) with `setjmp` ready/exit jumps; it reads literals through the same `read_*` API and therefore also needs updating by the refactor.
+(`direct_mode`, `init_interpr`, `cleanup_interpr`, `intp_fetchtok`, `run_interpr`) with `setjmp` ready/exit jumps; it reads literals through the same `read_*` API.

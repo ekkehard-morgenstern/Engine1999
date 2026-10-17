@@ -52,7 +52,7 @@ static void pgm_printer( const char* text ) {
     printf( YEL "%s" NRM "\n", text );
 }
 
-static bool directmode( program_t* pgm, const uint8_t* tokens ) {
+static bool directmode( program_t* pgm, const uint8_t* tokens, size_t size ) {
     printf( "direct mode\n" );
     return false;
 }
@@ -62,21 +62,29 @@ int main( int argc, char** argv ) {
     program_t pgm;
     init_program( &pgm );
 
+    static char*  buf = 0;
+    static size_t bufsize = 0;
+    static buf_t* tokbuf = 0;
+    static buf_t* txtbuf = 0;
+    tokbuf = create_buffer(); txtbuf = create_buffer();
+    if ( tokbuf == 0 || txtbuf == 0 ) {
+        return EXIT_FAILURE;
+    }
+
     for (;;) {
-        char buf[1024]; uint8_t tokens[1024];
-        buf[0] = '\0';
-        if ( fgets( buf, 1024, stdin ) == 0 ) {
+        ssize_t rd = getline( &buf, &bufsize, stdin );
+        if ( rd < 0 ) {
             break;
         }
-        size_t len = strlen( buf );
-        if ( buf[len-1U] == '\n' ) {    // remove LF
+        size_t len = (size_t) rd;
+        if ( len > 0 && buf[len-1U] == '\n' ) {    // remove LF
             buf[--len] = '\0';
         }
         preprocess_buffer( buf );
         printf( ">>%s<<\n", buf );
         linehdr_t hdr;
-        size_t remain = 1024U;
-        if ( !tokenize_line( buf, tokens, &remain, &hdr ) ) {
+        clear_buffer( tokbuf );
+        if ( !tokenize_line( buf, tokbuf, &hdr ) ) {
             printf( "? Syntax error\n" );
             continue;
         }
@@ -89,6 +97,7 @@ int main( int argc, char** argv ) {
             (unsigned) hdr.alloc
         );
 
+        const uint8_t* tokens = (const uint8_t*) tokbuf->buffer;
         len = hdr.length; const uint8_t* p = &tokens[sizeof(linehdr_t)];
         const uint8_t* e = &tokens[len];
         while ( p < e ) {
@@ -98,12 +107,12 @@ int main( int argc, char** argv ) {
         }
 
         printf( "\n" );
-        buf[0] = '\0'; remain = 1024U; p = &tokens[sizeof(linehdr_t)];
-        if ( !detokenize_line( buf, p, &remain, &hdr ) ) {
+        clear_buffer( txtbuf ); p = &tokens[sizeof(linehdr_t)];
+        if ( !detokenize_line( txtbuf, p, &hdr ) ) {
             printf( "? Detok error\n" );
             continue;
         }
-        printf( CYA "%s" NRM "\n", buf );
+        printf( CYA "%s" NRM "\n", txtbuf->buffer );
 
         if ( !enter_line( &pgm, &tokens[0], directmode ) ) {
             fprintf( stderr, "enter failed\n" );
@@ -111,6 +120,10 @@ int main( int argc, char** argv ) {
 
         list_program( &pgm, LINENO_NONE, LINENO_NONE, pgm_printer );
     }
+
+    free( buf );
+    delete_buffer( tokbuf );
+    delete_buffer( txtbuf );
 
     return 0;
 }

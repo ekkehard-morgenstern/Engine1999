@@ -6,14 +6,16 @@ Maintained by Claude; updated whenever work in a session changes something. Last
 - **Never run git write commands** (commit, add, push, merge, rebase, reset, checkout of files, stash, tag, branch changes). The user does all of these manually, even if git access is authorized later. Read-only git (`status`, `log`, `diff`, `show`) is fine.
 
 ## Branch / repo state
-- Branch `feature/refactor-to-remove-some-limits`; mid-refactor in `bastok.[ch]`, build is broken (`make bastok.o` fails). See `docs/refactoring.md`.
-- Untracked files created this session (not committed): `CLAUDE.md`, `SESSION.md`, `docs/*.md`.
-- No source files have been modified by Claude.
+- Branch `feature/refactor-to-remove-some-limits`. The bastok refactor is complete and `make` builds everything cleanly.
+- Uncommitted changes made by Claude (for the user to review and commit): `bastok.[ch]`, `baspgm.[ch]`, `bascomp.[ch]`, `basintp.[ch]`, `basictest1.c`, `basictest2.c`, `stdtypes.h`, plus doc updates (`CLAUDE.md`, `SESSION.md`, `docs/*.md`).
+- `make` also rebuilt git-ignored artifacts (`*.o`, binaries, `engine.lib`, `all`).
 
 ## Done this session
-- Read git history (terse "WIP" messages) and the last two refactor commits; reviewed headers and main modules.
-- Wrote `CLAUDE.md` and `docs/` (README, architecture, display-engine, basic-language, compiler-and-vm, build-and-test, refactoring).
-- Documented the refactor goal, the remaining checklist and 11 known defects in the converted `bastok.c` code.
+- Documented the project (`CLAUDE.md`, `docs/`).
+- Completed the tokenizer refactor (see `docs/refactoring.md` for API, behavior changes, remaining limits).
+- Verified: clean build with `-Wall -Werror`; `basictest1`/`basictest2` round trips incl. 3000-byte identifiers, 5000-byte string literals; oversize and unterminated literals rejected; valgrind: no errors, no definite leaks.
 
 ## Open / next steps
-- Awaiting user direction. Likely next: continue the `bastok.c` conversion following the order in `docs/refactoring.md`, only if the user asks.
+- User to review the diff and commit manually.
+- Remaining limits not touched: 64 KiB program/tree/code/data/var memories, variable names ≤ 255 (`vars.c`), `engine1999` 256-byte input line, `codegen` coverage (see `docs/compiler-and-vm.md`).
+- No automated tests exist; consider adding a round-trip test program if desired.

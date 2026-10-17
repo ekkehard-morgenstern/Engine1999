@@ -58,6 +58,7 @@ typedef struct _pgmiter_t {
 void init_program( program_t* pgm );
 void clear_iter( pgmiter_t* iter, program_t* pgm );
 bool iter_load_line( pgmiter_t* iter, uint16_t lineoffs );
+size_t iter_remaining( const pgmiter_t* iter, const uint8_t* tokp );   // token bytes left in the loaded line
 bool begin_iterate_program( pgmiter_t* iter, program_t* pgm );
 bool step_iterate_program( pgmiter_t* iter );
 bool get_prev_next_linenos( const pgmiter_t* iter, uint16_t* pprevlineno, uint16_t* pnextlineno );
@@ -76,7 +77,7 @@ bool defrag_memory( program_t* pgm );
 bool create_line( program_t* pgm, linehdr_t* newhdr, const uint8_t* newtokens, uint16_t* poffs );
 bool emplace_line( program_t* pgm, uint16_t prevno, pgmiter_t* curr, uint16_t nextno );
 bool update_line( pgmiter_t* iter, const linehdr_t* newhdr, const uint8_t* newtokens, uint16_t prevno, uint16_t nextno );
-bool enter_line( program_t* pgm, const uint8_t* tokline, bool (*directmode)( program_t*, const uint8_t* ) );
+bool enter_line( program_t* pgm, const uint8_t* tokline, bool (*directmode)( program_t*, const uint8_t*, size_t ) );
 void list_program( program_t* pgm, uint16_t lineno_first, uint16_t lineno_last, void (*printer)( const char* ) );
 
 #endif
