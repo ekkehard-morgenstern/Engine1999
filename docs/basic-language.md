@@ -14,11 +14,9 @@ Identifiers and keywords are therefore case-insensitive; string and shell litera
 `tokenize_line( text, buf_t* out, linehdr_t* )` appends the line to a growable buffer; `detokenize_line( buf_t* out, tokens, hdr )` rebuilds source text. Readers use the bounded `rbuf_t` and return heap strings through `char**`.
 
 ```
-linehdr_t (13 bytes, #pragma pack(2), all big endian)
-    nextoffs.16 prevoffs.16   // linked-list node, offsets from start of program memory
+linehdr_t (5 bytes, all big endian)
     lineno.24                  // 0..999999; 16777215 (2^24-1) = no number (direct mode) / deleted / invalid
     length.16                  // total bytes incl. header
-    alloc.16                   // allocated bytes for the line
 tokens…  TOK_EOL (0)
 ```
 

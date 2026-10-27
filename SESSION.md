@@ -17,6 +17,8 @@ Maintained by Claude; updated whenever work in a session changes something. Last
 
 - Line numbers widened to 24 bit: `linehdr_t.lineno` is `uint32_t`, encoded in 3 bytes (`emit/read_uint24`), header encoded size `LINEHDR_SIZE` = 13 (use it instead of `sizeof(linehdr_t)`). `LINENO_MAX` = 999999, `LINENO_NONE`/`LINENO_DEL` = 16777215. `NT_GOTOTARGET` data is now 4 bytes, `NT_STMTLINE` data 3 bytes. Builds clean; basictest1 verified (999999 accepted, 1000000 rejected).
 
+- Program store (`baspgm`/`baslin`) rewritten as a pointer-linked list: `program_t{first,last}` of heap `line_t` nodes; the 64 KiB block, offset linked list, defrag and `linenode_t`/`linelist_t` are gone. `linehdr_t` is now just the encoded header `{lineno.24, length.16}` (`LINEHDR_SIZE` = 5; node and alloc fields dropped). New `free_program()`. `find_line` returns bool + prev/line pointers. Verified with basictest1 (insert/replace/delete/out-of-order) and basictest2 under valgrind: clean.
+
 ## Open / next steps
-- Remaining limits not touched: 64 KiB program/tree/code/data/var memories, variable names ≤ 255 (`vars.c`), `engine1999` 256-byte input line, `codegen` coverage (see `docs/compiler-and-vm.md`).
+- Remaining limits not touched: 64 KiB tree/code/data/var memories, variable names ≤ 255 (`vars.c`), `engine1999` 256-byte input line, `codegen` coverage (see `docs/compiler-and-vm.md`).
 - No automated tests exist; consider adding a round-trip test program if desired.

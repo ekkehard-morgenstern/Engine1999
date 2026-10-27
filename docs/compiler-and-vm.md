@@ -2,8 +2,8 @@
 
 ## Program memory (`baslin.[ch]`, `baspgm.[ch]`)
 
-`program_t` = `uint8_t memory[65536]` + `fillpos`. Offset 0 holds a `linelist_t` (head/tail `linenode_t`); lines are appended after it as `linehdr_t` + tokens.
-`linenode_t{nextoffs, prevoffs}` forms a doubly linked list sorted by line number; offset `0xFFFF` = none. All fields big endian; accessors `emit_/read_linenode`, `…_linelist`, `…_linehdr` have raw (pointer) and `program_t`-checked variants.
+`program_t` = `first`/`last` pointers of a doubly linked list of heap-allocated `line_t` nodes (`next`, `prev`, `lineno`, `toklen`, flexible `tokens[]`), sorted by line number. `init_program`/`free_program` manage it; `find_line`, `create_line`, `link_line`, `unlink_line`, `delete_line` and `enter_line` (insert/replace/delete) operate on it. `pgmiter_t` walks the list and exposes the current line as `tok` + `hdr`.
+`linehdr_t{lineno, length}` is only the *encoded* header of a tokenized line (`LINEHDR_SIZE` = 5 bytes: `lineno.24 length.16`, big endian), produced by `tokenize_line` and consumed by `enter_line`; it is not stored in the program.
 
 Key operations: `init_program`, `find_line` (returns `FOUND_EXACT/INSERT/BEYOND/NONE/ERROR` with neighbours), `create_line`, `emplace_line`, `update_line`, `unlink_line`, `quick_append_line`,
 `defrag_memory`, `enter_line` (the user-facing entry; empty line body deletes, no number → direct-mode callback), iteration via `pgmiter_t` (`begin_iterate_program`/`step_iterate_program`), and `list_program`.

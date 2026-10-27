@@ -89,12 +89,9 @@ int main( int argc, char** argv ) {
             continue;
         }
 
-        printf( YEL "[" BLU "%u %u %u %u %u" YEL "]" NRM,
-            (unsigned) hdr.node.nextoffs,
-            (unsigned) hdr.node.prevoffs,
+        printf( YEL "[" BLU "%u %u" YEL "]" NRM,
             (unsigned) hdr.lineno,
-            (unsigned) hdr.length,
-            (unsigned) hdr.alloc
+            (unsigned) hdr.length
         );
 
         const uint8_t* tokens = (const uint8_t*) tokbuf->buffer;
@@ -121,6 +118,7 @@ int main( int argc, char** argv ) {
         list_program( &pgm, LINENO_NONE, LINENO_NONE, pgm_printer );
     }
 
+    free_program( &pgm );
     free( buf );
     delete_buffer( tokbuf );
     delete_buffer( txtbuf );

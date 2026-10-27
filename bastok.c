@@ -982,7 +982,6 @@ bool tokenize_line( const char* text, buf_t* out, struct _linehdr_t* phdr ) {
         goto FAIL;
     }
     hdr.length = (uint16_t) total;
-    hdr.alloc  = (uint16_t) total;
     uint8_t* hp = (uint8_t*)( &out->buffer[ start ] );
     emit_linehdr_raw( &hp, &hdr );
     *phdr = hdr;

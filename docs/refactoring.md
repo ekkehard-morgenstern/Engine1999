@@ -55,9 +55,9 @@ Verified by hand: tokenize/detokenize round trip of ordinary lines, 3000-byte id
 
 | Limit | Value | Where |
 |---|---|---|
-| Program memory | 64 KiB, 16-bit offsets | `baspgm.h` `MAX_PROGRAMSIZE`, `baslin.h` |
+| Program memory | none (heap linked list of lines; a single line ≤ 65535 bytes) | `baspgm.h`, `baslin.h` |
 | Line numbers | 0..999999 (24 bit) | `baslin.h` |
-| Line length / alloc | 16-bit | `linehdr_t` |
+| Line length | 16-bit | `linehdr_t` |
 | Identifier / literal length | 65535 (2-byte prefix); was 255 | `bastok.c` |
 | Variable / label name length | 255 (`namelen.8`) — a 256+ byte `LABEL` name ends in "Internal error (invalid parameter to vmem_create_var())" | `vars.c` |
 | Whole tokenized line | 65535 bytes | `linehdr_t.length` |

@@ -22,7 +22,7 @@ All modules except `sdl*`/`*screen` use only the C library, so the BASIC system 
 1. **Preprocess + tokenize** (`bastok.c`): `preprocess_buffer()` upper-cases text outside quotes (per `ucase_buf` in `engine1999.c`/test programs);
    `tokenize_line()` turns a source line into a `linehdr_t` + token bytes.
 2. **Store** (`baspgm.c`, `baslin.c`): `enter_line()` inserts/replaces/deletes the line in `program_t`
-   (a single 64 KiB block holding a doubly linked list of lines, linked by 16-bit offsets). A line without number runs in *direct mode* (callback).
+   (a doubly linked list of heap-allocated `line_t` nodes linked by pointers). A line without number runs in *direct mode* (callback).
 3. **Parse** (`bascomp.c`): recursive-descent over the stored tokens (`comp_eat_*`, one function per grammar rule in `bascomp.ebnf`)
    builds a syntax tree in `compiler_t.tree` (a 64 KiB byte arena, nodes addressed by 16-bit offset). Some semantic work happens during parsing
    ("immediate processing" in `nodetype.h`: constant dimension evaluation, variable lookup/creation).

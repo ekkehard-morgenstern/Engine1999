@@ -38,62 +38,30 @@
 #define LINENO_DEL      UINT32_C(16777215)  // deleted line or no line number (2^24-1, invalid)
 #define LINENO_NONE     UINT32_C(16777215)
 
-#define LINEHDR_SIZE    13U                 // encoded size of linehdr_t (lineno takes 3 bytes)
-
-#define LINEOFFS_NONE   UINT16_C(65535)
-
-#pragma pack(2)
-typedef struct _linenode_t {
-    uint16_t    nextoffs;   // from beginning of memory
-    uint16_t    prevoffs;   // from beginning of memory
-} linenode_t;
-typedef struct _linelist_t {
-    linenode_t  head;
-    linenode_t  tail;
-} linelist_t;
-typedef struct _linehdr_t {
-    // all values in network byte order (big endian)
-    linenode_t  node;
-    uint32_t    lineno;     // 24 bits when encoded
-    uint16_t    length;
-    uint16_t    alloc;
-    // followed by tokenized line data
-} linehdr_t;
-#pragma pack()
-
-#define LINENODE_INIT { LINEOFFS_NONE, LINEOFFS_NONE }
-#define LINELIST_INIT { LINENODE_INIT, LINENODE_INIT }
-
-// -- linenode_t ------------------------------------------------------------
-
-struct _program_t;
-
-void init_linenode( linenode_t* node );
-void emit_linenode_raw( uint8_t** pp, const linenode_t* source );
-bool emit_linenode( struct _program_t* pgm, uint16_t offs, const linenode_t* source );
-void read_linenode_raw( const uint8_t** pp, linenode_t* target );
-bool read_linenode( struct _program_t* pgm, uint16_t offs, linenode_t* target );
-bool remove_linenode( struct _program_t* pgm, uint16_t pos, linenode_t* outnode );
-bool emplace_linenode( struct _program_t* pgm, uint16_t prevpos, uint16_t pos, uint16_t nextpos, linenode_t* outnode );
-
-// -- linelist_t ------------------------------------------------------------
-
-void init_linelist( linelist_t* list, uint16_t pos );
-bool emit_linelist( struct _program_t* pgm, uint16_t offs, const linelist_t* source );
-bool read_linelist( struct _program_t* pgm, uint16_t offs, linelist_t* target );
-bool linelist_empty( struct _program_t* pgm, uint16_t offs, bool* pempty );
-bool linelist_firstnode( struct _program_t* pgm, uint16_t listpos, uint16_t* pnodepos );
-bool linelist_lastnode( struct _program_t* pgm, uint16_t listpos, uint16_t* pnodepos, bool wanthead );
-bool linelist_nextnode( struct _program_t* pgm, uint16_t nodepos, uint16_t* pnextpos, linenode_t* outnode );
-bool linelist_prevnode( struct _program_t* pgm, uint16_t nodepos, uint16_t* pprevpos, linenode_t* outnode );
-bool linelist_addtail( struct _program_t* pgm, uint16_t listoffs, uint16_t nodeoffs, linenode_t* outnode );
+#define LINEHDR_SIZE    5U                  // encoded size of linehdr_t (lineno takes 3 bytes)
 
 // -- linehdr_t -------------------------------------------------------------
 
+// header of a tokenized line, as produced by tokenize_line() and consumed by enter_line()
+typedef struct _linehdr_t {
+    uint32_t    lineno;     // 24 bits when encoded
+    uint16_t    length;     // total encoded bytes incl. header
+    // followed by tokenized line data
+} linehdr_t;
+
 void clear_linehdr( linehdr_t* hdr );
-void emit_linehdr_raw( uint8_t** pp, const linehdr_t* source );
-bool emit_linehdr( struct _program_t* pgm, uint16_t pos, const linehdr_t* source, uint8_t** outp );
+void emit_linehdr_raw( uint8_t** pp, const linehdr_t* source );     // big endian, LINEHDR_SIZE bytes
 void read_linehdr_raw( const uint8_t** pp, linehdr_t* target );
-bool read_linehdr( struct _program_t* pgm, uint16_t pos, linehdr_t* target, const uint8_t** outp );
+
+// -- line_t ----------------------------------------------------------------
+
+// a stored program line; lines form a doubly linked list sorted by line number
+typedef struct _line_t {
+    struct _line_t* next;
+    struct _line_t* prev;
+    uint32_t        lineno;
+    uint16_t        toklen;     // number of token bytes (incl. TOK_EOL)
+    uint8_t         tokens[];   // tokenized line data
+} line_t;
 
 #endif
