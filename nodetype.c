@@ -98,6 +98,15 @@ const char* nodename( uint8_t nodetype ) {
         case NT_OPERATOR:               return "NT_OPERATOR";
         case NT_NUMBASEVARREFLIST:      return "NT_NUMBASEVARREFLIST";
         case NT_FNASSIGNSTMT:           return "NT_FNASSIGNSTMT";
+        case NT_ENDSTMT:                return "NT_ENDSTMT";
+        case NT_POPSTMT:                return "NT_POPSTMT";
+        case NT_AGAINSTMT:              return "NT_AGAINSTMT";
+        case NT_REPEATSTMT:             return "NT_REPEATSTMT";
+        case NT_UNTILSTMT:              return "NT_UNTILSTMT";
+        case NT_WHILESTMT:              return "NT_WHILESTMT";
+        case NT_WENDSTMT:               return "NT_WENDSTMT";
+        case NT_UENDSTMT:               return "NT_UENDSTMT";
+        case NT_ONSTMT:                 return "NT_ONSTMT";
         case NT_NUMEXPR:                return "NT_NUMEXPR";
         case NT_STREXPR:                return "NT_STREXPR";
         case NT_STRCMPEX:               return "NT_STRCMPEX";

@@ -3131,8 +3131,191 @@ bool comp_eat_multilineifstmt( compiler_t* comp, node_t** pnode ) {
     return true;
 }
 
+// goto-kw := TOK_GOTO | TOK_GOSUB | TOK_GO ( TOK_TO | TOK_SUB ) .
+static bool comp_eat_gotokw( compiler_t* comp, uint8_t* ptok ) {
+    if ( comp->currtok == TOK_GO && comp_fetchtok( comp ) ) {
+        if ( comp->currtok == TOK_TO ) {
+            *ptok = TOK_GOTO;
+        } else if ( comp->currtok == TOK_SUB ) {
+            *ptok = TOK_GOSUB;
+        } else {
+            comp_error( comp, "TO or SUB expected after GO" );
+            return false;
+        }
+        return comp_fetchtok( comp );
+    }
+    if ( comp->currtok == TOK_GOTO || comp->currtok == TOK_GOSUB ) {
+        *ptok = comp->currtok;
+        return comp_fetchtok( comp );
+    }
+    return false;
+}
+
+// creates a statement node without data and branches
+static bool comp_make_simple_stmt( compiler_t* comp, node_t** pnode, uint8_t nodetype ) {
+    if ( !comp_create_node( comp, pnode, nodetype, UINT8_C(0), UINT16_C(0), 0 ) || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
+// creates a statement node that has a numeric expression as its only branch
+static bool comp_make_expr_stmt( compiler_t* comp, node_t** pnode, uint8_t nodetype, node_t* expr ) {
+    if ( !comp_create_node( comp, pnode, nodetype, UINT8_C(1), UINT16_C(0), 0, expr ) || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
+bool comp_eat_endstmt( compiler_t* comp, node_t** pnode ) {
+    // end-stmt := TOK_END .  -- not followed by IF, UNLESS or FN (those end a block, see comp_get_endiftoken())
+    if ( comp->currtok != TOK_END ) {
+        return false;
+    }
+    comp_push_context( comp );
+    if ( !comp_fetchtok( comp ) || comp->currtok == TOK_IF || comp->currtok == TOK_UNLESS || comp->currtok == TOK_FN ) {
+        comp_pop_context( comp );
+        return false;
+    }
+    comp_commit_context( comp );
+    return comp_make_simple_stmt( comp, pnode, NT_ENDSTMT );
+}
+
+bool comp_eat_popstmt( compiler_t* comp, node_t** pnode ) {
+    // pop-stmt := TOK_POP .
+    if ( comp->currtok != TOK_POP || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    return comp_make_simple_stmt( comp, pnode, NT_POPSTMT );
+}
+
+bool comp_eat_againstmt( compiler_t* comp, node_t** pnode ) {
+    // again-stmt := TOK_AGAIN [ dec-lit ] .
+    if ( comp->currtok != TOK_AGAIN || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    double num = 1.0;
+    uint8_t tok = comp->currtok;
+    if ( tok == TOK_DECLIT || ( tok >= TOK_DEC0 && tok <= TOK_DEC9 ) ) {
+        num = tok == TOK_DECLIT ? comp->number : (double)( tok - TOK_DEC0 );
+        if ( !comp_fetchtok( comp ) ) {
+            return false;
+        }
+        if ( !( num >= 1.0 && num <= 65535.0 ) ) {
+            comp_error( comp, "Invalid loop number" );
+            return false;
+        }
+    }
+    /*
+        NT_AGAINSTMT        AGAIN statement
+            data:
+                - 2 bytes of loop number
+    */
+    uint16_t loopnum = (uint16_t) num;
+    uint8_t data[2];
+    data[0] = (uint8_t)( loopnum >> UINT8_C(8) );
+    data[1] = (uint8_t)  loopnum;
+    if ( !comp_create_node( comp, pnode, NT_AGAINSTMT, UINT8_C(0), UINT16_C(2), data ) || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
+bool comp_eat_repeatstmt( compiler_t* comp, node_t** pnode ) {
+    // repeat-stmt := TOK_REPEAT .
+    if ( comp->currtok != TOK_REPEAT || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    return comp_make_simple_stmt( comp, pnode, NT_REPEATSTMT );
+}
+
+// until-stmt := TOK_UNTIL num-expr .   while-stmt := TOK_WHILE num-expr .
+static bool comp_eat_condstmt( compiler_t* comp, node_t** pnode, uint8_t tok, uint8_t nodetype ) {
+    if ( comp->currtok != tok || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    node_t* expr = NODE_NONE;
+    if ( !comp_eat_numexpr( comp, &expr ) || expr == NODE_NONE ) {
+        comp_error( comp, "Numeric expression expected" );
+        return false;
+    }
+    return comp_make_expr_stmt( comp, pnode, nodetype, expr );
+}
+
+bool comp_eat_untilstmt( compiler_t* comp, node_t** pnode ) {
+    return comp_eat_condstmt( comp, pnode, TOK_UNTIL, NT_UNTILSTMT );
+}
+
+bool comp_eat_whilestmt( compiler_t* comp, node_t** pnode ) {
+    return comp_eat_condstmt( comp, pnode, TOK_WHILE, NT_WHILESTMT );
+}
+
+bool comp_eat_wendstmt( compiler_t* comp, node_t** pnode ) {
+    // wend-stmt := TOK_WEND .
+    if ( comp->currtok != TOK_WEND || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    return comp_make_simple_stmt( comp, pnode, NT_WENDSTMT );
+}
+
+bool comp_eat_uendstmt( compiler_t* comp, node_t** pnode ) {
+    // uend-stmt := TOK_UEND .
+    if ( comp->currtok != TOK_UEND || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    return comp_make_simple_stmt( comp, pnode, NT_UENDSTMT );
+}
+
+bool comp_eat_onstmt( compiler_t* comp, node_t** pnode ) {
+    // on-stmt := TOK_ON num-expr goto-kw goto-target { TOK_COMMA goto-target } .
+    if ( comp->currtok != TOK_ON || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    node_t* expr = NODE_NONE;
+    if ( !comp_eat_numexpr( comp, &expr ) || expr == NODE_NONE ) {
+        comp_error( comp, "Numeric expression expected" );
+        return false;
+    }
+    uint8_t gotok = TOK_EOL;
+    if ( !comp_eat_gotokw( comp, &gotok ) ) {
+        comp_error( comp, "GOTO or GOSUB expected" );
+        return false;
+    }
+    /*
+        NT_ONSTMT           ON statement
+            data:
+                - 1 byte of GOTO/GOSUB token
+            branches:
+                - 1 branch of numeric expression
+                - 1 or more branches of goto/gosub targets
+    */
+    if ( !comp_create_node( comp, pnode, NT_ONSTMT, UINT8_C(1), UINT16_C(1), &gotok, expr ) || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    for (;;) {
+        node_t* target = NODE_NONE;
+        if ( !comp_eat_gototarget( comp, &target ) || target == NODE_NONE ) {
+            comp_error( comp, "Jump target expected" );
+            return false;
+        }
+        if ( !comp_add_branch( comp, *pnode, target ) ) {
+            out_of_memory( comp );
+            return false;
+        }
+        if ( comp->currtok != TOK_COMMA || !comp_fetchtok( comp ) ) {
+            break;
+        }
+    }
+    return true;
+}
+
 bool comp_eat_controlflowstmt( compiler_t* comp, node_t** pnode ) {
-    // control-flow-stmt := for-stmt | next-stmt | goto-stmt | return-stmt | label-stmt |
+    // control-flow-stmt := for-stmt | next-stmt | goto-stmt | return-stmt | label-stmt | end-stmt | pop-stmt |
+    //                      again-stmt | repeat-stmt | until-stmt | while-stmt | wend-stmt | uend-stmt | on-stmt |
     //                      singleline-if-stmt | multiline-if-stmt .
     // [ NT_CONTROLFLOWSTMT - not generated ]
     if ( comp_eat_forstmt( comp, pnode ) && *pnode != NODE_NONE ) {
@@ -3148,6 +3331,33 @@ bool comp_eat_controlflowstmt( compiler_t* comp, node_t** pnode ) {
         return true;
     }
     if ( comp_eat_labelstmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_endstmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_popstmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_againstmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_repeatstmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_untilstmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_whilestmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_wendstmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_uendstmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_onstmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     if ( comp_eat_singlelineifstmt( comp, pnode ) && *pnode != NODE_NONE ) {

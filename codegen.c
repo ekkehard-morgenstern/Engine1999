@@ -35,17 +35,21 @@ void init_codegen( codegen_t* cgen ) {
     cgen->datasize = UINT16_C(0);
     cgen->lineaddrs = 0; cgen->numlineaddrs = cgen->maxlineaddrs = 0;
     cgen->fixups    = 0; cgen->numfixups    = cgen->maxfixups    = 0;
-    cgen->fors      = 0; cgen->numfors      = cgen->maxfors      = 0;
+    cgen->loops     = 0; cgen->numloops     = cgen->maxloops     = 0;
+    cgen->loopbase  = 0;
+    cgen->scratch   = 0; cgen->numscratch   = cgen->maxscratch   = 0;
     cgen->forserial = 0;
 }
 
 void cleanup_codegen( codegen_t* cgen ) {
     free( cgen->lineaddrs );
     free( cgen->fixups );
-    free( cgen->fors );
+    free( cgen->loops );
+    free( cgen->scratch );
     cgen->lineaddrs = 0; cgen->numlineaddrs = cgen->maxlineaddrs = 0;
     cgen->fixups    = 0; cgen->numfixups    = cgen->maxfixups    = 0;
-    cgen->fors      = 0; cgen->numfors      = cgen->maxfors      = 0;
+    cgen->loops     = 0; cgen->numloops     = cgen->maxloops     = 0;
+    cgen->scratch   = 0; cgen->numscratch   = cgen->maxscratch   = 0;
 }
 
 void cgen_reset( codegen_t* cgen ) {
@@ -318,6 +322,10 @@ bool cgen_gen_drop( codegen_t* cgen, uint16_t cnt ) {
         return cgen_gen_ins( cgen, INS_DROP, UINT8_C(0), UINT16_C(0) );
     }
     return cgen_gen_ins( cgen, INS_DROP | INSF_P, UINT8_C(0), cnt );
+}
+
+bool cgen_gen_drop_c( codegen_t* cgen ) {
+    return cgen_gen_ins( cgen, INS_DROP | INSF_C, UINT8_C(0), UINT16_C(0) );
 }
 
 bool cgen_gen_line( codegen_t* cgen, uint16_t line ) {
@@ -2459,6 +2467,15 @@ bool cgen_from_stmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         case NT_RETURNSTMT: return cgen_from_returnstmt( cgen, comp, node );
         case NT_LABELSTMT:  return cgen_from_labelstmt( cgen, comp, node );
         case NT_FORSTMT:    return cgen_from_forstmt( cgen, comp, node );
+        case NT_ENDSTMT:    return cgen_from_endstmt( cgen, comp, node );
+        case NT_POPSTMT:    return cgen_from_popstmt( cgen, comp, node );
+        case NT_AGAINSTMT:  return cgen_from_againstmt( cgen, comp, node );
+        case NT_REPEATSTMT: return cgen_from_repeatstmt( cgen, comp, node );
+        case NT_UNTILSTMT:  return cgen_from_untilstmt( cgen, comp, node );
+        case NT_WHILESTMT:  return cgen_from_whilestmt( cgen, comp, node );
+        case NT_WENDSTMT:   return cgen_from_wendstmt( cgen, comp, node );
+        case NT_UENDSTMT:   return cgen_from_uendstmt( cgen, comp, node );
+        case NT_ONSTMT:     return cgen_from_onstmt( cgen, comp, node );
         case NT_NEXTSTMT:   return cgen_from_nextstmt( cgen, comp, node );
         case NT_SINGLELINEIFSTMT:   return cgen_from_singlelineifstmt( cgen, comp, node );
         case NT_MULTILINEIFSTMT:    return cgen_from_multilineifstmt( cgen, comp, node );
@@ -2492,9 +2509,12 @@ bool cgen_from_stmtline( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     if ( node == NODE_NONE || node->type != NT_STMTLINE || node->numbranches != 1U ) {
         return cgen_bad_node( comp );
     }
+    // error messages (comp_error) and fixups refer to the line that is being generated, not the last one parsed
+    comp->iter.hdr.lineno = LINENO_NONE;
     if ( node->datalen == UINT16_C(3) ) {
         uint32_t lineno = ( ( (uint32_t) node->data[0] ) << UINT8_C(16) ) | ( ( (uint32_t) node->data[1] ) << UINT8_C(8) ) |
             node->data[2];
+        comp->iter.hdr.lineno = lineno;
         if ( !cgen_note_line( cgen, comp, lineno ) ) {
             return false;
         }

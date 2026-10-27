@@ -40,9 +40,18 @@ Layout of the generated code:
       label read the variable onto the return stack (RRLV) and JUMP to it.
     - IF/UNLESS:
             <condition>  PHPA.C then  JPCC  <else part>  BRIA end  then: <then part>  end:
-    - FOR/NEXT are matched at compile time (NEXT closes the innermost open FOR of the same variable). The limit
-      and the step live in hidden variables named "@FOR<n>L" and "@FOR<n>S"; the test is done before the first pass:
-            var=from  limit=to  step=step  top: <exit if past the limit>  <body>  NEXT: var=var+step  BRIA top  exit:
+    - Loops are matched at compile time, with a stack of the open loops (innermost last): FOR/NEXT, REPEAT/UNTIL,
+      WHILE/WEND and UNTIL/UEND. NEXT closes the innermost FOR of the same variable. An UNTIL closes the innermost
+      loop if that is a REPEAT, otherwise it opens an UNTIL loop. AGAIN [n] branches to the start of the body of the
+      n-th innermost loop. Loops inside a function body are separate from those around the function.
+      The limit and the step of a FOR live in hidden variables named "@FOR<n>L" and "@FOR<n>S"; the test is done
+      before the first pass:
+            var=from  limit=to  step=step  top: <exit if past the limit>  body: <body>  NEXT: var=var+step  BRIA top  exit:
+            WHILE:   top: <cond>  exit if zero   body: <body>  WEND: BRIA top  exit:
+            UNTIL:   top: <cond>  exit if not zero   body: <body>  UEND: BRIA top  exit:
+            REPEAT:  body: <body>  UNTIL: <cond>  branch to body if zero
+    - END branches to the end of the program (a fixup), POP drops the latest return address, and
+      ON n GOTO/GOSUB t1,t2,..: <n -> hidden variable "@ON<n>O">  tests  stubs  that jump (GOSUB: return address = end)
 */
 
 // -- bookkeeping -------------------------------------------------------------
@@ -50,7 +59,9 @@ Layout of the generated code:
 void cgen_begin_control( codegen_t* cgen ) {
     cgen->numlineaddrs = 0;
     cgen->numfixups    = 0;
-    cgen->numfors      = 0;
+    cgen->numloops     = 0;
+    cgen->loopbase     = 0;
+    cgen->numscratch   = 0;
     cgen->forserial    = 0;
 }
 
@@ -145,7 +156,9 @@ bool cgen_finish_control( codegen_t* cgen, compiler_t* comp ) {
     for ( size_t i=0; i < cgen->numfixups; ++i ) {
         const cgen_fixup_t* fx = &cgen->fixups[i];
         uint32_t addr = 0;
-        if ( !cc_find_line( cgen, fx->lineno, &addr ) ) {
+        if ( fx->lineno == CGEN_FIXUP_END ) {
+            addr = cgen->codesize;
+        } else if ( !cc_find_line( cgen, fx->lineno, &addr ) ) {
             char msg[64];
             snprintf( msg, sizeof(msg), "Undefined line number %u", (unsigned) fx->lineno );
             comp->iter.hdr.lineno = fx->srcline;    // for the error message
@@ -154,9 +167,16 @@ bool cgen_finish_control( codegen_t* cgen, compiler_t* comp ) {
         }
         cc_patch_bria( cgen, fx->insoffs, addr );
     }
-    if ( cgen->numfors ) {
-        comp->iter.hdr.lineno = cgen->fors[ cgen->numfors - 1U ].srcline;
-        comp_error( comp, "FOR without NEXT" );
+    return cgen_loops_closed( cgen, comp, 0 );
+}
+
+bool cgen_loops_closed( codegen_t* cgen, compiler_t* comp, size_t base ) {
+    if ( cgen->numloops > base ) {
+        const cgen_loopctx_t* lc = &cgen->loops[ cgen->numloops - 1U ];
+        const char* msg = lc->kind == CGEN_LOOP_FOR ? "FOR without NEXT" : lc->kind == CGEN_LOOP_REPEAT ? "REPEAT without UNTIL" :
+            lc->kind == CGEN_LOOP_WHILE ? "WHILE without WEND" : "UNTIL without UEND";
+        comp->iter.hdr.lineno = lc->srcline;
+        comp_error( comp, msg );
         return false;
     }
     return true;
@@ -185,7 +205,9 @@ bool cgen_from_block( codegen_t* cgen, compiler_t* comp, node_t* node ) {
 // -- GOTO, GOSUB, RETURN, LABEL ----------------------------------------------
 
 // a goto target node: <type.8> <value.24>
-static bool cc_jump_to_target( codegen_t* cgen, compiler_t* comp, node_t* target, bool gosub ) {
+// For a GOSUB the return address is the instruction after the jump, unless <pretins> is given: then the caller gets
+// the offset of the PHPA instruction and patches the return address itself.
+static bool cc_jump_to_target( codegen_t* cgen, compiler_t* comp, node_t* target, bool gosub, uint32_t* pretins ) {
     if ( target == NODE_NONE || target->type != NT_GOTOTARGET || target->datalen != UINT16_C(4) ) {
         return cgen_bad_node( comp );
     }
@@ -217,7 +239,9 @@ static bool cc_jump_to_target( codegen_t* cgen, compiler_t* comp, node_t* target
     } else {
         return cgen_unexpected_node( comp );
     }
-    if ( gosub ) {
+    if ( gosub && pretins ) {
+        *pretins = retins;
+    } else if ( gosub ) {
         uint16_t here = 0;
         if ( !cc_here16( cgen, comp, &here ) ) {
             return false;
@@ -245,7 +269,7 @@ bool cgen_from_gotostmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     if ( tok != TOK_GOTO && tok != TOK_GOSUB ) {
         return cgen_unexpected_node( comp );
     }
-    return cc_jump_to_target( cgen, comp, node->branches[0], tok == TOK_GOSUB );
+    return cc_jump_to_target( cgen, comp, node->branches[0], tok == TOK_GOSUB, 0 );
 }
 
 bool cgen_from_returnstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
@@ -313,7 +337,7 @@ static bool cc_if( codegen_t* cgen, compiler_t* comp, bool unless, node_t* cond,
     bool isgoto = thenpart->type == NT_GOTOTARGET;
     if ( elsepart != NODE_NONE ) {
         if ( isgoto ) {
-            if ( !cc_jump_to_target( cgen, comp, elsepart, gotok == TOK_GOSUB ) ) {
+            if ( !cc_jump_to_target( cgen, comp, elsepart, gotok == TOK_GOSUB, 0 ) ) {
                 return false;
             }
         } else if ( !( block ? cgen_from_block( cgen, comp, elsepart ) : cgen_from_stmt( cgen, comp, elsepart ) ) ) {
@@ -330,7 +354,7 @@ static bool cc_if( codegen_t* cgen, compiler_t* comp, bool unless, node_t* cond,
     }
     cc_patch_param( cgen, thenins, here );
     if ( isgoto ) {
-        if ( !cc_jump_to_target( cgen, comp, thenpart, gotok == TOK_GOSUB ) ) {
+        if ( !cc_jump_to_target( cgen, comp, thenpart, gotok == TOK_GOSUB, 0 ) ) {
             return false;
         }
     } else if ( !( block ? cgen_from_block( cgen, comp, thenpart ) : cgen_from_stmt( cgen, comp, thenpart ) ) ) {
@@ -387,6 +411,20 @@ bool cgen_from_multilineifstmt( codegen_t* cgen, compiler_t* comp, node_t* node 
     return cc_if( cgen, comp, unless, node->branches[0], node->branches[1], node->branches[2], TOK_THEN, true );
 }
 
+// -- loops -----------------------------------------------------------------------
+
+static cgen_loopctx_t* cc_push_loop( codegen_t* cgen, compiler_t* comp, uint8_t kind ) {
+    if ( !cc_grow( (void**) &cgen->loops, &cgen->numloops, &cgen->maxloops, sizeof(cgen_loopctx_t) ) ) {
+        cc_out_of_memory( comp );
+        return 0;
+    }
+    cgen_loopctx_t* lc = &cgen->loops[ cgen->numloops++ ];
+    memset( lc, 0, sizeof(*lc) );
+    lc->kind = kind;
+    lc->srcline = cc_srcline( comp );
+    return lc;
+}
+
 // -- FOR / NEXT ----------------------------------------------------------------
 
 // finds or creates the numeric variable named by a base variable reference node
@@ -412,9 +450,9 @@ static bool cc_base_var( compiler_t* comp, node_t* node, uint8_t* pvartype, uint
     return true;
 }
 
-static bool cc_hidden_var( compiler_t* comp, uint32_t serial, char which, uint16_t* pvaroffs ) {
+static bool cc_hidden_var( compiler_t* comp, const char* prefix, uint32_t serial, char which, uint16_t* pvaroffs ) {
     char name[32];
-    snprintf( name, sizeof(name), "@FOR%u%c", (unsigned) serial, which );
+    snprintf( name, sizeof(name), "@%s%u%c", prefix, (unsigned) serial, which );
     uint16_t varoffs = VAROFFS_NONE;
     if ( !vmem_lookup_var( &comp->rt->varmem, VARTYPEV_FLOAT, name, &varoffs ) || varoffs == VAROFFS_NONE ) {
         varoffs = VAROFFS_NONE;
@@ -456,7 +494,7 @@ bool cgen_from_forstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     }
     uint32_t serial = cgen->forserial++;
     uint16_t limvar = VAROFFS_NONE, stepvar = VAROFFS_NONE;
-    if ( !cc_hidden_var( comp, serial, 'L', &limvar ) || !cc_hidden_var( comp, serial, 'S', &stepvar ) ) {
+    if ( !cc_hidden_var( comp, "FOR", serial, 'L', &limvar ) || !cc_hidden_var( comp, "FOR", serial, 'S', &stepvar ) ) {
         return false;
     }
     // var = from, limit = to, step = step
@@ -502,26 +540,27 @@ bool cgen_from_forstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         return cgen_out_of_code_memory( comp );
     }
     // remember the loop for NEXT
-    if ( !cc_grow( (void**) &cgen->fors, &cgen->numfors, &cgen->maxfors, sizeof(cgen_forctx_t) ) ) {
-        return cc_out_of_memory( comp );
+    cgen_loopctx_t* fc = cc_push_loop( cgen, comp, CGEN_LOOP_FOR );
+    if ( fc == 0 ) {
+        return false;
     }
-    cgen_forctx_t* fc = &cgen->fors[ cgen->numfors++ ];
     fc->vartype = vartype;
     fc->varoffs = varoffs;
     fc->stepvar = stepvar;
     fc->topaddr = top;
+    fc->bodyaddr = cgen->codesize;
     fc->exitins = exitins;
-    fc->srcline = cc_srcline( comp );
     return true;
 }
 
 // closes the innermost FOR loop, which must use the given variable
 static bool cc_next( codegen_t* cgen, compiler_t* comp, bool anyvar, uint16_t varoffs ) {
-    if ( cgen->numfors == 0 || ( !anyvar && cgen->fors[ cgen->numfors - 1U ].varoffs != varoffs ) ) {
+    if ( cgen->numloops <= cgen->loopbase || cgen->loops[ cgen->numloops - 1U ].kind != CGEN_LOOP_FOR ||
+         ( !anyvar && cgen->loops[ cgen->numloops - 1U ].varoffs != varoffs ) ) {
         comp_error( comp, "NEXT without FOR" );
         return false;
     }
-    cgen_forctx_t fc = cgen->fors[ --cgen->numfors ];
+    cgen_loopctx_t fc = cgen->loops[ --cgen->numloops ];
     if ( !cc_read_var( cgen, fc.vartype, fc.varoffs ) || !cgen_gen_rrnv( cgen, fc.stepvar ) || !cgen_gen_add( cgen ) ||
          !cc_write_var( cgen, fc.vartype, fc.varoffs ) || !cgen_gen_bria( cgen, (int32_t) fc.topaddr ) ) {
         return cgen_out_of_code_memory( comp );
@@ -560,4 +599,248 @@ bool cgen_from_nextstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         return true;
     }
     return cc_base_var( comp, refs, &vartype, &varoffs ) && cc_next( cgen, comp, false, varoffs );
+}
+
+// -- REPEAT / UNTIL / WHILE / WEND / UEND ------------------------------------------
+
+static bool cc_check_simple( compiler_t* comp, node_t* node, uint8_t type ) {
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->type != type ) {
+        return cgen_unexpected_node( comp );
+    }
+    return true;
+}
+
+bool cgen_from_repeatstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    if ( !cc_check_simple( comp, node, NT_REPEATSTMT ) ) {
+        return false;
+    }
+    uint16_t here = 0;
+    if ( !cc_here16( cgen, comp, &here ) ) {
+        return false;
+    }
+    cgen_loopctx_t* lc = cc_push_loop( cgen, comp, CGEN_LOOP_REPEAT );
+    if ( lc == 0 ) {
+        return false;
+    }
+    lc->topaddr = lc->bodyaddr = here;
+    return true;
+}
+
+// opens a loop that is left when the condition is false (WHILE) or true (UNTIL)
+static bool cc_open_cond_loop( codegen_t* cgen, compiler_t* comp, node_t* cond, uint8_t kind ) {
+    uint16_t top = 0;
+    if ( !cc_here16( cgen, comp, &top ) || !cgen_from_numexpr( cgen, comp, cond ) ) {
+        return false;
+    }
+    if ( kind == CGEN_LOOP_WHILE && ( !cgen_gen_phim( cgen, 0 ) || !cgen_gen_cneq( cgen ) ) ) {
+        return cgen_out_of_code_memory( comp );
+    }
+    uint32_t exitins = 0;
+    if ( !cc_emit_phpa_c( cgen, comp, &exitins ) || !cgen_gen_jpcc( cgen ) ) {
+        return cgen_out_of_code_memory( comp );
+    }
+    cgen_loopctx_t* lc = cc_push_loop( cgen, comp, kind );
+    if ( lc == 0 ) {
+        return false;
+    }
+    lc->topaddr  = top;
+    lc->bodyaddr = cgen->codesize;
+    lc->exitins  = exitins;
+    return true;
+}
+
+bool cgen_from_whilestmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    if ( !cc_check_simple( comp, node, NT_WHILESTMT ) ) {
+        return false;
+    }
+    if ( node->numbranches != 1U ) {
+        return cgen_unexpected_node( comp );
+    }
+    return cc_open_cond_loop( cgen, comp, node->branches[0], CGEN_LOOP_WHILE );
+}
+
+bool cgen_from_untilstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    if ( !cc_check_simple( comp, node, NT_UNTILSTMT ) ) {
+        return false;
+    }
+    if ( node->numbranches != 1U ) {
+        return cgen_unexpected_node( comp );
+    }
+    if ( cgen->numloops > cgen->loopbase && cgen->loops[ cgen->numloops - 1U ].kind == CGEN_LOOP_REPEAT ) {
+        // closes the REPEAT loop: go back to the body while the condition is false
+        cgen_loopctx_t lc = cgen->loops[ --cgen->numloops ];
+        if ( !cgen_from_numexpr( cgen, comp, node->branches[0] ) ) {
+            return false;
+        }
+        if ( !cgen_gen_phim( cgen, 0 ) || !cgen_gen_cneq( cgen ) || !cgen_gen_phpa_c( cgen, (uint16_t) lc.bodyaddr ) ||
+             !cgen_gen_jpcc( cgen ) ) {
+            return cgen_out_of_code_memory( comp );
+        }
+        return true;
+    }
+    return cc_open_cond_loop( cgen, comp, node->branches[0], CGEN_LOOP_UNTIL );
+}
+
+// closes the innermost loop, which must be of the given kind
+static bool cc_close_cond_loop( codegen_t* cgen, compiler_t* comp, uint8_t kind, const char* errortext ) {
+    if ( cgen->numloops <= cgen->loopbase || cgen->loops[ cgen->numloops - 1U ].kind != kind ) {
+        comp_error( comp, errortext );
+        return false;
+    }
+    cgen_loopctx_t lc = cgen->loops[ --cgen->numloops ];
+    if ( !cgen_gen_bria( cgen, (int32_t) lc.topaddr ) ) {
+        return cgen_out_of_code_memory( comp );
+    }
+    uint16_t here = 0;
+    if ( !cc_here16( cgen, comp, &here ) ) {
+        return false;
+    }
+    cc_patch_param( cgen, lc.exitins, here );
+    return true;
+}
+
+bool cgen_from_wendstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    return cc_check_simple( comp, node, NT_WENDSTMT ) && cc_close_cond_loop( cgen, comp, CGEN_LOOP_WHILE, "WEND without WHILE" );
+}
+
+bool cgen_from_uendstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    return cc_check_simple( comp, node, NT_UENDSTMT ) && cc_close_cond_loop( cgen, comp, CGEN_LOOP_UNTIL, "UEND without UNTIL" );
+}
+
+bool cgen_from_againstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    /*
+        NT_AGAINSTMT        AGAIN statement
+            data:
+                - 2 bytes of loop number: 1 = innermost loop, 2 = the one around it, ...
+    */
+    if ( !cc_check_simple( comp, node, NT_AGAINSTMT ) ) {
+        return false;
+    }
+    if ( node->datalen != UINT16_C(2) ) {
+        return cgen_unexpected_node( comp );
+    }
+    size_t loopnum = ( ( (size_t) node->data[0] ) << UINT8_C(8) ) | node->data[1];
+    if ( loopnum == 0 || loopnum > cgen->numloops - cgen->loopbase ) {
+        comp_error( comp, "AGAIN without loop" );
+        return false;
+    }
+    const cgen_loopctx_t* lc = &cgen->loops[ cgen->numloops - loopnum ];
+    if ( !cgen_gen_bria( cgen, (int32_t) lc->bodyaddr ) ) {
+        return cgen_out_of_code_memory( comp );
+    }
+    return true;
+}
+
+// -- END, POP, ON --------------------------------------------------------------------
+
+bool cgen_from_endstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    if ( !cc_check_simple( comp, node, NT_ENDSTMT ) ) {
+        return false;
+    }
+    // branch to the end of the program; the address is known when everything has been generated
+    uint32_t ins = 0;
+    if ( !cc_emit_bria( cgen, comp, &ins ) ) {
+        return false;
+    }
+    if ( !cc_grow( (void**) &cgen->fixups, &cgen->numfixups, &cgen->maxfixups, sizeof(cgen_fixup_t) ) ) {
+        return cc_out_of_memory( comp );
+    }
+    cgen_fixup_t* fx = &cgen->fixups[ cgen->numfixups++ ];
+    fx->insoffs = ins;
+    fx->lineno  = CGEN_FIXUP_END;
+    fx->srcline = cc_srcline( comp );
+    return true;
+}
+
+bool cgen_from_popstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    if ( !cc_check_simple( comp, node, NT_POPSTMT ) ) {
+        return false;
+    }
+    if ( !cgen_gen_drop_c( cgen ) ) {
+        return cgen_out_of_code_memory( comp );
+    }
+    return true;
+}
+
+bool cgen_from_onstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    /*
+        NT_ONSTMT           ON statement
+            data:
+                - 1 byte of GOTO/GOSUB token
+            branches:
+                - 1 branch of numeric expression
+                - 1 or more branches of goto/gosub targets
+        Code:   <n> -> tmp   ( tmp >= i AND tmp < i+1 ) PHPA.C stub<i> JPCC   (for every target)   BRIA end
+                stub<i>: [ PHPA.C end ] <jump to target i>   (for every target)   end:
+    */
+    if ( !cc_check_simple( comp, node, NT_ONSTMT ) ) {
+        return false;
+    }
+    if ( node->datalen != UINT16_C(1) || node->numbranches < 2U ) {
+        return cgen_unexpected_node( comp );
+    }
+    bool gosub = node->data[0] == TOK_GOSUB;
+    if ( !gosub && node->data[0] != TOK_GOTO ) {
+        return cgen_unexpected_node( comp );
+    }
+    size_t numtargets = node->numbranches - 1U;
+    uint16_t tmp = VAROFFS_NONE;
+    if ( !cc_hidden_var( comp, "ON", cgen->forserial++, 'O', &tmp ) ) {
+        return false;
+    }
+    if ( !cgen_from_numexpr( cgen, comp, node->branches[0] ) || !cgen_gen_wrnv( cgen, tmp ) ) {
+        return cgen_out_of_code_memory( comp );
+    }
+    // the tests: the offsets of the PHPA instructions that get the stub addresses go to the scratch list
+    cgen->numscratch = 0;
+    for ( size_t i=1; i <= numtargets; ++i ) {
+        if ( !cc_grow( (void**) &cgen->scratch, &cgen->numscratch, &cgen->maxscratch, sizeof(uint32_t) ) ) {
+            return cc_out_of_memory( comp );
+        }
+        bool ok = cgen_gen_rrnv( cgen, tmp ) && cgen_gen_phim( cgen, (int32_t) i ) && cgen_gen_cnge( cgen ) &&
+            cgen_gen_rrnv( cgen, tmp ) && cgen_gen_phim( cgen, (int32_t)( i + 1U ) ) && cgen_gen_cnlt( cgen ) && cgen_gen_and( cgen );
+        if ( !ok ) {
+            return cgen_out_of_code_memory( comp );
+        }
+        uint32_t phpains = 0;
+        if ( !cc_emit_phpa_c( cgen, comp, &phpains ) || !cgen_gen_jpcc( cgen ) ) {
+            return cgen_out_of_code_memory( comp );
+        }
+        cgen->scratch[ cgen->numscratch++ ] = phpains;
+    }
+    uint32_t endins = 0;
+    if ( !cc_emit_bria( cgen, comp, &endins ) ) {
+        return false;
+    }
+    // the stubs; a GOSUB returns to the end of the statement, so these return addresses are patched at the end
+    size_t numtests = cgen->numscratch;
+    for ( size_t i=0; i < numtargets; ++i ) {
+        uint16_t here = 0;
+        if ( !cc_here16( cgen, comp, &here ) ) {
+            return false;
+        }
+        cc_patch_param( cgen, cgen->scratch[i], here );
+        uint32_t retins = 0;
+        if ( !cc_jump_to_target( cgen, comp, node->branches[ i + 1U ], gosub, gosub ? &retins : 0 ) ) {
+            return false;
+        }
+        if ( gosub ) {
+            if ( !cc_grow( (void**) &cgen->scratch, &cgen->numscratch, &cgen->maxscratch, sizeof(uint32_t) ) ) {
+                return cc_out_of_memory( comp );
+            }
+            cgen->scratch[ cgen->numscratch++ ] = retins;
+        }
+    }
+    uint16_t end = 0;
+    if ( !cc_here16( cgen, comp, &end ) ) {
+        return false;
+    }
+    cc_patch_bria( cgen, endins, end );
+    for ( size_t i = numtests; i < cgen->numscratch; ++i ) {
+        cc_patch_param( cgen, cgen->scratch[i], end );
+    }
+    return true;
 }

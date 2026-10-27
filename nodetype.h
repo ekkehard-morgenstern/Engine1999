@@ -443,6 +443,39 @@ Explanation of node types:
             - 1 branch of statement list
             - this is the root node for direct mode
 
+    NT_ENDSTMT          END statement (ends the program)
+
+    NT_POPSTMT          POP statement (discards the latest GOSUB return address)
+
+    NT_AGAINSTMT        AGAIN statement
+        data:
+            - 2 bytes of loop number: 1 = innermost loop, 2 = the one around it, ...
+
+    NT_REPEATSTMT       REPEAT statement (the loop is closed by UNTIL)
+
+    NT_UNTILSTMT        UNTIL statement
+        branches:
+            - 1 branch of numeric expression
+        immediate processing:
+            - none, the code generator decides: if the innermost open loop is a REPEAT, this statement
+              closes it (the loop repeats until the expression is true), otherwise it opens a loop that
+              runs until the expression is true and is closed by UEND
+
+    NT_WHILESTMT        WHILE statement (opens a loop that runs while the expression is true, closed by WEND)
+        branches:
+            - 1 branch of numeric expression
+
+    NT_WENDSTMT         WEND statement (closes a WHILE loop)
+
+    NT_UENDSTMT         UEND statement (closes an UNTIL loop)
+
+    NT_ONSTMT           ON statement
+        data:
+            - 1 byte of GOTO/GOSUB token
+        branches:
+            - 1 branch of numeric expression
+            - 1 or more branches of goto/gosub targets
+
     NT_FNASSIGNSTMT     Assignment of the result of a multi-line user function ("FN A = expr")
         data:
             - 1 byte of type indicator (VARTYPEV_FLOAT, VARTYPEV_INT or VARTYPEV_STR), n bytes of function name
@@ -530,6 +563,15 @@ Explanation of node types:
 #define NT_OPERATOR             UINT8_C(0X4B)   // operator token
 #define NT_NUMBASEVARREFLIST    UINT8_C(0X4C)   // numeric base variable reference list
 #define NT_FNASSIGNSTMT         UINT8_C(0X4D)   // assignment of the result of a multi-line user function
+#define NT_ENDSTMT              UINT8_C(0X4E)   // END statement
+#define NT_POPSTMT              UINT8_C(0X4F)   // POP statement
+#define NT_AGAINSTMT            UINT8_C(0X50)   // AGAIN statement
+#define NT_REPEATSTMT           UINT8_C(0X51)   // REPEAT statement
+#define NT_UNTILSTMT            UINT8_C(0X52)   // UNTIL statement
+#define NT_WHILESTMT            UINT8_C(0X53)   // WHILE statement
+#define NT_WENDSTMT             UINT8_C(0X54)   // WEND statement
+#define NT_UENDSTMT             UINT8_C(0X55)   // UEND statement
+#define NT_ONSTMT               UINT8_C(0X56)   // ON statement
 #define NT_NUMEXPR              UINT8_C(0X18)   // numeric expression
 #define NT_STREXPR              UINT8_C(0X1A)   // string expression
 #define NT_STRCMPEX             UINT8_C(0X1C)   // string comparison expression

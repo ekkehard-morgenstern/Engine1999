@@ -45,7 +45,13 @@ Maintained by Claude; updated whenever work in a session changes something. Last
 
 - The three parsed-but-ungenerated statements are done (every statement of `bascomp.ebnf` now has code generation): `ERASE` (new instruction `ERAS`, resets the array; `vmem_erase_array`), substring assignment (`SLFT/SRGT/SMID` now take the variable number as parameter and array subscripts + ndim from the stack; old `( s s n -- )` form dropped; `cgen_from_substrassign` rewritten), multi-line `DEF FN` (new parser statement `FN A = expr` → `NT_FNASSIGNSTMT`, `compiler_t.curfn`, hidden result variable `@FN<name>`; `cgen_from_block` exported from `cgenctl.c`). `vmtest1`: 197 cases, all pass, valgrind clean.
 - ISA changes made (instset.h updated): new `ERAS` (0x116); `SLFT/SRGT/SMID` changed as above.
-- Still no grammar for: INPUT, GET, PUT, READ/DATA/RESTORE, REPEAT/UNTIL, WHILE/WEND, UEND, POP, ON, OFF, AFTER, EVERY, RUN, NEW, LIST, LOAD, DELETE, RENUM, CLEAR, EDIT, MERGE, CHAIN, FILES, SYMBOL, OPTION BASE, INT/STR/FLT, END/STOP — each needs a language design (UEND, AFTER/EVERY/SYMBOL meanings are unclear).
+- Still no grammar for: INPUT, GET, PUT, READ/DATA/RESTORE, OFF, AFTER, EVERY, RUN, NEW, LIST, LOAD, DELETE, RENUM, CLEAR, EDIT, MERGE, CHAIN, FILES, SYMBOL, OPTION BASE, INT/STR/FLT, END/STOP — each needs a language design (UEND, AFTER/EVERY/SYMBOL meanings are unclear).
+
+- Loop and flow statements: new keyword `AGAIN` (`TOK_AGAIN` = 145), parser + codegen for `END`, `POP`, `AGAIN [n]`, `REPEAT`/`UNTIL`, `WHILE`/`WEND`, `UNTIL`/`UEND`, `ON n GOTO|GOSUB` (nodes 0x4E..0x56). The compile-time loop stack (`cgen_loopctx_t`, `codegen_t.loops`) replaces the FOR-only stack; `loopbase` isolates function bodies; `END` is a fixup to the end of the program; `ON .. GOSUB` uses the new `codegen_t.scratch` list. Codegen now sets `comp->iter.hdr.lineno` while generating each line, so codegen errors name the right line (they named the last parsed line before). `vmtest1`: 251 cases, all pass, valgrind clean.
+- Design decisions to confirm: `UNTIL` closes the innermost loop if it's a REPEAT, else opens an UNTIL..UEND loop (an UNTIL loop can't be opened directly inside a REPEAT body); `AGAIN` doesn't re-test/step; `ON` truncates the fraction and falls through when out of range; `END` inside a function ends the whole program.
+- Planned by the user for later (host callbacks): `AFTER` (one-shot timer), `EVERY` (recurring timer), `SYMBOL` (redefine one character of the character set).
+
+- `testcomp1` flaked in about 1 of 6 runs: its random variable names could be empty (length 0), which `vmem_create_var` rightly rejects; the test now always generates a non-empty name (0 failures in 14 runs afterwards; 7 of 40 before).
 
 ## Open / next steps
 - Remaining limits not touched: 64 KiB code/data segments (16-bit ISA addresses), 16-bit variable numbers, `engine1999` 256-byte input line, `codegen` coverage (see `docs/compiler-and-vm.md`).

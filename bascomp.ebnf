@@ -182,7 +182,21 @@ multiline-if-stmt := TOK_IF num-expr TOK_THEN TOK_EOL
                         [ TOK_ELSE stmt-lines ]
                         endunless-kw TOK_EOL .
 
-control-flow-stmt := for-stmt | next-stmt | goto-stmt | return-stmt | label-stmt |
+end-stmt := TOK_END .  -- not followed by IF, UNLESS or FN
+pop-stmt := TOK_POP .
+again-stmt := TOK_AGAIN [ dec-lit ] .
+repeat-stmt := TOK_REPEAT .
+until-stmt := TOK_UNTIL num-expr .
+while-stmt := TOK_WHILE num-expr .
+wend-stmt := TOK_WEND .
+uend-stmt := TOK_UEND .
+on-stmt := TOK_ON num-expr goto-kw goto-target { TOK_COMMA goto-target } .
+
+-- Loops are matched by the code generator, like FOR and NEXT: WHILE .. WEND, UNTIL .. UEND, REPEAT .. UNTIL.
+-- An UNTIL closes the innermost open loop if that is a REPEAT; otherwise it opens an UNTIL .. UEND loop.
+
+control-flow-stmt := for-stmt | next-stmt | goto-stmt | return-stmt | label-stmt | end-stmt | pop-stmt | again-stmt |
+                     repeat-stmt | until-stmt | while-stmt | wend-stmt | uend-stmt | on-stmt |
                      singleline-if-stmt | multiline-if-stmt .
 
 stmt := io-stmt | assign-stmt | control-flow-stmt .

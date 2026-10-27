@@ -187,6 +187,9 @@ bool cgen_from_defstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         return false;
     }
     uint16_t start = (uint16_t) cgen->codesize;
+    // loops opened outside of the function are not visible inside (AGAIN, NEXT, WEND ...) and vice versa
+    size_t savedbase = cgen->loopbase;
+    cgen->loopbase = cgen->numloops;
     if ( !multiline ) {
         if ( !cgen_from_expr( cgen, comp, body->branches[0] ) ) {
             return false;
@@ -223,6 +226,10 @@ bool cgen_from_defstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
             return cgen_out_of_code_memory( comp );
         }
     }
+    if ( !cgen_loops_closed( cgen, comp, cgen->loopbase ) ) {
+        return false;
+    }
+    cgen->loopbase = savedbase;
     if ( !cgen_gen_retf( cgen ) ) {
         return cgen_out_of_code_memory( comp );
     }

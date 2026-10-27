@@ -54,14 +54,23 @@ typedef struct _cgen_fixup_t {
     uint32_t    srcline;        // line number of the statement that refers to it (for error messages)
 } cgen_fixup_t;
 
-typedef struct _cgen_forctx_t {
-    uint8_t     vartype;        // type of the loop variable (VARTYPEV_FLOAT or VARTYPEV_INT)
-    uint16_t    varoffs;        // loop variable
-    uint16_t    stepvar;        // hidden variable holding the STEP value
-    uint32_t    topaddr;        // loop test code (NEXT branches here)
-    uint32_t    exitins;        // code offset of the PHPA instruction holding the loop exit address
-    uint32_t    srcline;        // line number of the FOR statement
-} cgen_forctx_t;
+#define CGEN_LOOP_FOR       UINT8_C(1)
+#define CGEN_LOOP_REPEAT    UINT8_C(2)
+#define CGEN_LOOP_WHILE     UINT8_C(3)
+#define CGEN_LOOP_UNTIL     UINT8_C(4)
+
+#define CGEN_FIXUP_END      UINT32_C(0XFFFFFFFF)    // fixup target: the end of the program
+
+typedef struct _cgen_loopctx_t {
+    uint8_t     kind;           // CGEN_LOOP_*
+    uint8_t     vartype;        // FOR: type of the loop variable (VARTYPEV_FLOAT or VARTYPEV_INT)
+    uint16_t    varoffs;        // FOR: loop variable
+    uint16_t    stepvar;        // FOR: hidden variable holding the STEP value
+    uint32_t    topaddr;        // where the closing statement branches to (the loop test, or the body for REPEAT)
+    uint32_t    bodyaddr;       // start of the body (AGAIN branches here)
+    uint32_t    exitins;        // code offset of the PHPA instruction holding the loop exit address (not REPEAT)
+    uint32_t    srcline;        // line number of the statement that opened the loop
+} cgen_loopctx_t;
 
 typedef struct _codegen_t {
     void*           userdata;
@@ -73,9 +82,12 @@ typedef struct _codegen_t {
     size_t              numlineaddrs, maxlineaddrs;
     cgen_fixup_t*       fixups;         // forward references to lines
     size_t              numfixups, maxfixups;
-    cgen_forctx_t*      fors;           // FOR loops that are currently open (compile time)
-    size_t              numfors, maxfors;
-    uint32_t            forserial;      // numbers the hidden variables of FOR loops
+    cgen_loopctx_t*     loops;          // loops that are currently open (compile time), innermost last
+    size_t              numloops, maxloops;
+    size_t              loopbase;       // loops below this number belong to code around the current function body
+    uint32_t*           scratch;        // temporary list of code offsets (ON .. GOSUB)
+    size_t              numscratch, maxscratch;
+    uint32_t            forserial;      // numbers the hidden variables of loops and ON statements
 } codegen_t;
 
 void init_codegen( codegen_t* cgen );
@@ -99,6 +111,7 @@ bool cgen_gen_brir( codegen_t* cgen, int32_t rel_offs );
 bool cgen_gen_jpcc( codegen_t* cgen );
 bool cgen_gen_jump( codegen_t* cgen );
 bool cgen_gen_drop( codegen_t* cgen, uint16_t cnt );
+bool cgen_gen_drop_c( codegen_t* cgen );    // drops the latest return address
 bool cgen_gen_line( codegen_t* cgen, uint16_t line );
 bool cgen_gen_lan_c( codegen_t* cgen );
 bool cgen_gen_lan_d( codegen_t* cgen );
@@ -252,11 +265,22 @@ bool cgen_finish_control( codegen_t* cgen, compiler_t* comp );              // r
 
 // code for a branch that is a statement, a statement list, a statement line, or statement lines
 bool cgen_from_block( codegen_t* cgen, compiler_t* comp, node_t* node );
+// checks that all loops opened since <base> have been closed (reports the innermost open one)
+bool cgen_loops_closed( codegen_t* cgen, compiler_t* comp, size_t base );
 bool cgen_from_gotostmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_returnstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_labelstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_forstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_nextstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_endstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_popstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_againstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_repeatstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_untilstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_whilestmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_wendstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_uendstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_onstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_singlelineifstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_multilineifstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 

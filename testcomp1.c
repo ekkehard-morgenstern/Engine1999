@@ -171,7 +171,9 @@ typedef struct _keepvar_t {
 static void init_keepvar( keepvar_t* var ) {
     memset( var, 0, sizeof(keepvar_t) );
     char buf[256];
-    getrandstr( buf, 0 );
+    do {
+        getrandstr( buf, 0 );
+    } while ( buf[0] == '\0' );     // a variable needs a name
     var->name = strdup( buf );
     if ( var->name == 0 ) {
         fprintf( stderr, "? out of memory\n" );
