@@ -277,6 +277,25 @@ void read_uint16( const uint8_t** pp, uint16_t* target ) {
     *pp = p;
 }
 
+// -- raw 24-bit values (used for line numbers) -----------------------------
+
+void emit_uint24( uint8_t** pp, uint32_t source ) {
+    uint8_t* p = *pp;
+    *p++ = (uint8_t)( source >> UINT8_C(16) );
+    *p++ = (uint8_t)( source >> UINT8_C(8) );
+    *p++ = (uint8_t) source;
+    *pp = p;
+}
+
+void read_uint24( const uint8_t** pp, uint32_t* target ) {
+    const uint8_t* p = *pp;
+    uint32_t v = *p++;
+    v = ( v << UINT8_C(8) ) | *p++;
+    v = ( v << UINT8_C(8) ) | *p++;
+    *target = v;
+    *pp = p;
+}
+
 // -- uint32 ----------------------------------------------------------------
 
 bool eat_uint32( rbuf_t* rbuf, uint32_t* target ) {
@@ -847,7 +866,7 @@ bool tokenize_line( const char* text, buf_t* out, struct _linehdr_t* phdr ) {
     char*  item  = 0;
     linehdr_t hdr; clear_linehdr( &hdr );
     // reserve room for the header, it is filled in at the end
-    uint8_t zeros[sizeof(linehdr_t)];
+    uint8_t zeros[LINEHDR_SIZE];
     memset( zeros, 0, sizeof(zeros) );
     if ( writeto_buffer( out, zeros, sizeof(zeros) ) < 0 ) {
         return false;
@@ -858,7 +877,7 @@ bool tokenize_line( const char* text, buf_t* out, struct _linehdr_t* phdr ) {
         if ( lineno > LINENO_MAX ) {
             goto FAIL;
         }
-        hdr.lineno = (uint16_t) lineno;
+        hdr.lineno = lineno;
     }
     // main line
     while ( src.rpos < src.size && src.buffer[ src.rpos ] != '\0' ) {
@@ -979,10 +998,10 @@ FAIL:
 // -- detokenization --------------------------------------------------------
 
 bool detokenize_line( buf_t* out, const uint8_t* wherefrom, const struct _linehdr_t* phdr ) {
-    if ( phdr->length < sizeof(linehdr_t) ) {
+    if ( phdr->length < LINEHDR_SIZE ) {
         return false;
     }
-    rbuf_t src; init_rbuf( &src, wherefrom, phdr->length - sizeof(linehdr_t) );
+    rbuf_t src; init_rbuf( &src, wherefrom, phdr->length - LINEHDR_SIZE );
     size_t start = out->fill;
     char*  item  = 0;
     bool   old_sigil = ri_sigil;

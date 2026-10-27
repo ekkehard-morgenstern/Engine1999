@@ -268,7 +268,7 @@ void clear_linehdr( linehdr_t* hdr ) {
 
 void emit_linehdr_raw( uint8_t** pp, const linehdr_t* source ) {
     emit_linenode_raw( pp, &source->node );
-    emit_uint16( pp, source->lineno );
+    emit_uint24( pp, source->lineno );
     emit_uint16( pp, source->length );
     emit_uint16( pp, source->alloc  );
 }
@@ -287,7 +287,7 @@ bool emit_linehdr( struct _program_t* pgm, uint16_t pos, const linehdr_t* source
 
 void read_linehdr_raw( const uint8_t** pp, linehdr_t* target ) {
     read_linenode_raw( pp, &target->node );
-    read_uint16( pp, &target->lineno );
+    read_uint24( pp, &target->lineno );
     read_uint16( pp, &target->length );
     read_uint16( pp, &target->alloc  );
 }

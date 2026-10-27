@@ -33,10 +33,12 @@
 #include "stdtypes.h"
 #endif
 
-#define LINENO_MIN      UINT16_C(0)         // minimum user-supplied line number
-#define LINENO_MAX      UINT16_C(65534)     // maximum user-supplied line number
-#define LINENO_DEL      UINT16_C(65535)     // deleted line or no line number
-#define LINENO_NONE     UINT16_C(65535)
+#define LINENO_MIN      UINT32_C(0)         // minimum user-supplied line number
+#define LINENO_MAX      UINT32_C(999999)    // maximum user-supplied line number
+#define LINENO_DEL      UINT32_C(16777215)  // deleted line or no line number (2^24-1, invalid)
+#define LINENO_NONE     UINT32_C(16777215)
+
+#define LINEHDR_SIZE    13U                 // encoded size of linehdr_t (lineno takes 3 bytes)
 
 #define LINEOFFS_NONE   UINT16_C(65535)
 
@@ -52,7 +54,7 @@ typedef struct _linelist_t {
 typedef struct _linehdr_t {
     // all values in network byte order (big endian)
     linenode_t  node;
-    uint16_t    lineno;
+    uint32_t    lineno;     // 24 bits when encoded
     uint16_t    length;
     uint16_t    alloc;
     // followed by tokenized line data

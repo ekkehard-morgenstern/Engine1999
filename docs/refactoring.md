@@ -31,7 +31,7 @@ Final API (all in `bastok.h`, documented there):
 - `detokenize_line( buf_t* out, const uint8_t* tokens, const linehdr_t* hdr )` appends text and NUL-terminates (the NUL is not counted in `fill`); the token count comes from `hdr->length`.
 - `eat_*( rbuf_t*, char** )`, `print_*( buf_t*, const char* )`, `emit_*( buf_t*, const char* )`, `read_*( rbuf_t*, char** )` for identifiers and all literal kinds; `eat_sngchrtok/eat_dblchrtok` take an `rbuf_t*`; `print_keyword( tok, buf_t* )`.
 - `clear_buffer()` added. `grow_buffer( buf, requiredSize )` now means "ensure alloc >= requiredSize"; `anticipate_buffer( buf, n )` means "room for n more bytes".
-- `emit_uint16/read_uint16` (raw pointer variants) were kept for the 16-bit line header code in `baslin.c`. `eat/print/emit/read_uint32` are used for line numbers (`eat_uint32`, `print_uint32`).
+- `emit_uint16/read_uint16` (raw pointer variants) were kept for the 16-bit fields of the line header in `baslin.c` (line numbers use `emit_uint24/read_uint24`). `eat/print/emit/read_uint32` are used for line numbers (`eat_uint32`, `print_uint32`).
 
 Callers adapted:
 
@@ -56,7 +56,7 @@ Verified by hand: tokenize/detokenize round trip of ordinary lines, 3000-byte id
 | Limit | Value | Where |
 |---|---|---|
 | Program memory | 64 KiB, 16-bit offsets | `baspgm.h` `MAX_PROGRAMSIZE`, `baslin.h` |
-| Line numbers | 0..65534 | `baslin.h` |
+| Line numbers | 0..999999 (24 bit) | `baslin.h` |
 | Line length / alloc | 16-bit | `linehdr_t` |
 | Identifier / literal length | 65535 (2-byte prefix); was 255 | `bastok.c` |
 | Variable / label name length | 255 (`namelen.8`) — a 256+ byte `LABEL` name ends in "Internal error (invalid parameter to vmem_create_var())" | `vars.c` |

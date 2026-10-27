@@ -243,6 +243,11 @@ bool eat_sngchrtok( rbuf_t* rbuf, uint8_t* ptok );
 void emit_uint16( uint8_t** pp, uint16_t source );
 void read_uint16( const uint8_t** pp, uint16_t* target );
 
+// -- raw 24-bit values (used for line numbers) -----------------------------
+
+void emit_uint24( uint8_t** pp, uint32_t source );
+void read_uint24( const uint8_t** pp, uint32_t* target );
+
 // -- uint32 ----------------------------------------------------------------
 
 bool eat_uint32( rbuf_t* rbuf, uint32_t* target );

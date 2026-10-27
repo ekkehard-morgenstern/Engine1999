@@ -389,7 +389,7 @@ Explanation of node types:
     NT_GOTOTARGET   GOTO/GOSUB target
         data:
             - 1 byte of type (integer or label)
-            - 2 bytes of line number or variable offset (label!)
+            - 3 bytes of line number or variable offset (label!, high byte zero)
 
     NT_GOTOSTMT     GOTO/GOSUB statement
         data:
@@ -437,7 +437,7 @@ Explanation of node types:
 
     NT_STMTLINE         Statement line
         data:
-            - 2 bytes of line number (not present in direct mode)
+            - 3 bytes of line number (not present in direct mode)
         branches:
             - 1 branch of statement list
             - this is the root node for direct mode

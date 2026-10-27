@@ -2749,7 +2749,7 @@ bool comp_eat_gototarget( compiler_t* comp, uint16_t* pnodeoffs ) {
         free( label );
         return false;
     }
-    uint8_t data[3];
+    uint8_t data[4];
     if ( label == 0 ) {
         // line number
         int64_t ival = (int64_t) num;
@@ -2757,10 +2757,11 @@ bool comp_eat_gototarget( compiler_t* comp, uint16_t* pnodeoffs ) {
             comp_error( comp, "Invalid line number" );
             return false;
         }
-        uint16_t lnum = (uint16_t) ival;
+        uint32_t lnum = (uint32_t) ival;
         data[0] = VARTYPEV_INT;
-        data[1] = (uint8_t)( lnum >> UINT8_C(8) );
-        data[2] = (uint8_t)  lnum;
+        data[1] = (uint8_t)( lnum >> UINT8_C(16) );
+        data[2] = (uint8_t)( lnum >> UINT8_C(8) );
+        data[3] = (uint8_t)  lnum;
     } else {
         // label: lookup or create
         uint16_t lvar = VAROFFS_NONE;
@@ -2776,16 +2777,17 @@ bool comp_eat_gototarget( compiler_t* comp, uint16_t* pnodeoffs ) {
         free( label );
         // create node
         data[0] = VARTYPEV_LABEL;
-        data[1] = (uint8_t)( lvar >> UINT8_C(8) );
-        data[2] = (uint8_t)  lvar;
+        data[1] = UINT8_C(0);
+        data[2] = (uint8_t)( lvar >> UINT8_C(8) );
+        data[3] = (uint8_t)  lvar;
     }
     /*
         NT_GOTOTARGET   GOTO/GOSUB target
             data:
                 - 1 byte of type (integer or label)
-                - 2 bytes of line number or variable offset (label!)
+                - 3 bytes of line number or variable offset (label!, high byte zero)
     */
-    if ( !comp_create_node( comp, pnodeoffs, NT_GOTOTARGET, UINT8_C(0), UINT16_C(3), data ) || *pnodeoffs == NODEOFFS_NONE ) {
+    if ( !comp_create_node( comp, pnodeoffs, NT_GOTOTARGET, UINT8_C(0), UINT16_C(4), data ) || *pnodeoffs == NODEOFFS_NONE ) {
         out_of_memory( comp );
         return false;
     }
@@ -3150,7 +3152,7 @@ bool comp_eat_stmtlist( compiler_t* comp, uint16_t* pnodeoffs ) {
 
 bool comp_eat_stmtline( compiler_t* comp, uint16_t* pnodeoffs ) {
     // stmt-line := stmt-list [ TOK_QUOLIT ] TOK_EOL .
-    uint16_t lnum = comp->iter.hdr.lineno;
+    uint32_t lnum = comp->iter.hdr.lineno;
     uint16_t stmtlist = NODEOFFS_NONE;
     if ( !comp_eat_stmtlist( comp, &stmtlist ) || stmtlist == NODEOFFS_NONE ) {
         return false;
@@ -3167,15 +3169,16 @@ bool comp_eat_stmtline( compiler_t* comp, uint16_t* pnodeoffs ) {
     /*
         NT_STMTLINE         Statement line
             data:
-                - 2 bytes of line number (not present in direct mode)
+                - 3 bytes of line number (not present in direct mode)
             branches:
                 - 1 branch of statement list
                 - this is the root node for direct mode
     */
-    uint8_t data[2];
-    data[0] = (uint8_t)( lnum >> UINT8_C(8) );
-    data[1] = (uint8_t)  lnum;
-    uint16_t datalen = lnum == LINENO_DEL ? UINT16_C(0) : UINT16_C(2);
+    uint8_t data[3];
+    data[0] = (uint8_t)( lnum >> UINT8_C(16) );
+    data[1] = (uint8_t)( lnum >> UINT8_C(8) );
+    data[2] = (uint8_t)  lnum;
+    uint16_t datalen = lnum == LINENO_DEL ? UINT16_C(0) : UINT16_C(3);
     // create node
     if ( !comp_create_node( comp, pnodeoffs, NT_STMTLINE, UINT8_C(1), datalen, data, (int) stmtlist ) ||
         *pnodeoffs == NODEOFFS_NONE ) {

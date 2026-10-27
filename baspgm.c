@@ -62,10 +62,10 @@ bool iter_load_line( pgmiter_t* iter, uint16_t lineoffs ) {
 }
 
 size_t iter_remaining( const pgmiter_t* iter, const uint8_t* tokp ) {
-    if ( iter->tok == 0 || tokp == 0 || iter->hdr.length < sizeof(linehdr_t) ) {
+    if ( iter->tok == 0 || tokp == 0 || iter->hdr.length < LINEHDR_SIZE ) {
         return 0;
     }
-    const uint8_t* end = iter->tok + ( iter->hdr.length - sizeof(linehdr_t) );
+    const uint8_t* end = iter->tok + ( iter->hdr.length - LINEHDR_SIZE );
     if ( tokp < iter->tok || tokp > end ) {
         return 0;
     }
@@ -108,7 +108,7 @@ bool step_iterate_program( pgmiter_t* iter ) {
     return false;
 }
 
-bool get_prev_next_linenos( const pgmiter_t* iter, uint16_t* pprevlineno, uint16_t* pnextlineno ) {
+bool get_prev_next_linenos( const pgmiter_t* iter, uint32_t* pprevlineno, uint32_t* pnextlineno ) {
 
     uint16_t prevpos = LINEOFFS_NONE, nextpos = LINEOFFS_NONE;
     if ( !linelist_prevnode( iter->pgm, iter->pos, &prevpos, 0 ) ) {
@@ -118,7 +118,7 @@ bool get_prev_next_linenos( const pgmiter_t* iter, uint16_t* pprevlineno, uint16
         return false;
     }
 
-    uint16_t prev_lineno, next_lineno;
+    uint32_t prev_lineno, next_lineno;
 
     if ( prevpos != LINEOFFS_NONE ) {
         pgmiter_t prev = *iter;
@@ -146,7 +146,7 @@ bool get_prev_next_linenos( const pgmiter_t* iter, uint16_t* pprevlineno, uint16
     return true;
 }
 
-short find_line( program_t* pgm, uint16_t lineno, pgmiter_t* piter, uint16_t* pprevno, uint16_t* pnextno ) {
+short find_line( program_t* pgm, uint32_t lineno, pgmiter_t* piter, uint32_t* pprevno, uint32_t* pnextno ) {
     if ( pgm == 0 || lineno == LINENO_NONE ) {
         return FOUND_ERROR;
     }
@@ -165,7 +165,7 @@ short find_line( program_t* pgm, uint16_t lineno, pgmiter_t* piter, uint16_t* pp
     do {
         if ( iter.hdr.lineno == lineno ) {
             // exact match
-            uint16_t prevno = LINENO_NONE, nextno = LINENO_NONE;
+            uint32_t prevno = LINENO_NONE, nextno = LINENO_NONE;
             if ( !get_prev_next_linenos( &iter, &prevno, &nextno ) ) {
                 return FOUND_ERROR;
             }
@@ -188,7 +188,7 @@ short find_line( program_t* pgm, uint16_t lineno, pgmiter_t* piter, uint16_t* pp
             if ( !linelist_prevnode( iter.pgm, iter.pos, &prevpos, 0 ) ) {
                 return FOUND_ERROR;
             }
-            uint16_t prevno = LINENO_NONE, nextno = LINENO_NONE;
+            uint32_t prevno = LINENO_NONE, nextno = LINENO_NONE;
             if ( prevpos != LINEOFFS_NONE ) {
                 if ( !iter_load_line( &iter, prevpos ) ) {
                     return FOUND_ERROR;
@@ -217,7 +217,7 @@ bool zero_line( pgmiter_t* iter ) {
     if ( iter->hdr.lineno == LINENO_NONE || iter->tok == 0 ) {
         return false;
     }
-    uint16_t toklen = iter->hdr.length - sizeof(linehdr_t);
+    uint16_t toklen = iter->hdr.length - LINEHDR_SIZE;
     clear_linehdr( &iter->hdr );
     iter->hdr.lineno = LINENO_NONE;
     if ( !emit_linehdr( iter->pgm, iter->pos, &iter->hdr, 0 ) ) {
@@ -248,7 +248,7 @@ bool quick_append_line( program_t* pgm, const linehdr_t* newhdr, const uint8_t* 
     uint16_t newpos = pgm->fillpos;
     uint8_t* p = &pgm->memory[ newpos ];
     emit_linehdr_raw( &p, &hdr );
-    uint16_t toklen = hdr.length - sizeof(linehdr_t);
+    uint16_t toklen = hdr.length - LINEHDR_SIZE;
     if ( toklen ) {
         memcpy( p, newtokens, toklen );
     }
@@ -298,7 +298,7 @@ bool create_line( program_t* pgm, linehdr_t* newhdr, const uint8_t* newtokens, u
     uint8_t* p = &pgm->memory[ newpos ];
     emit_linehdr_raw( &p, newhdr );
     // write tokens
-    uint16_t toklen = newhdr->length - sizeof(linehdr_t);
+    uint16_t toklen = newhdr->length - LINEHDR_SIZE;
     if ( toklen ) {
         memcpy( p, newtokens, toklen );
     }
@@ -308,7 +308,7 @@ bool create_line( program_t* pgm, linehdr_t* newhdr, const uint8_t* newtokens, u
     return true;
 }
 
-bool emplace_line( program_t* pgm, uint16_t prevno, pgmiter_t* curr, uint16_t nextno ) {
+bool emplace_line( program_t* pgm, uint32_t prevno, pgmiter_t* curr, uint32_t nextno ) {
     // NOTE that the line numbers provided must be accurate.
     // If prevno is LINENO_NONE, currno is regarded as the first line of the program.
     // If nextno is LINENO_NONE, currno is regarded as the last line of the program.
@@ -344,12 +344,12 @@ bool emplace_line( program_t* pgm, uint16_t prevno, pgmiter_t* curr, uint16_t ne
     return emplace_linenode( pgm, prevpos, curr->pos, nextpos, &curr->hdr.node );
 }
 
-bool update_line( pgmiter_t* iter, const linehdr_t* newhdr, const uint8_t* newtokens, uint16_t prevno, uint16_t nextno ) {
+bool update_line( pgmiter_t* iter, const linehdr_t* newhdr, const uint8_t* newtokens, uint32_t prevno, uint32_t nextno ) {
     if ( iter->hdr.lineno == LINENO_NONE || iter->tok == 0 || newhdr == 0 || newtokens == 0 ||
          newhdr->lineno != iter->hdr.lineno ) {
         return false;
     }
-    if ( newhdr->length == sizeof(linehdr_t) + 1U && *newtokens == TOK_EOL ) {
+    if ( newhdr->length == LINEHDR_SIZE + 1U && *newtokens == TOK_EOL ) {
         // new line only contains line number: delete line
         if ( !unlink_line( iter ) ) {
             return false;
@@ -381,7 +381,7 @@ bool update_line( pgmiter_t* iter, const linehdr_t* newhdr, const uint8_t* newto
     }
     // new line same length or shorter than allocated area: replace data
     iter->hdr.length = newhdr->length;
-    uint16_t toksize = newhdr->length - sizeof(linehdr_t);
+    uint16_t toksize = newhdr->length - LINEHDR_SIZE;
     if ( toksize ) {
         memcpy( iter->tok, newtokens, toksize );
     }
@@ -394,12 +394,12 @@ bool enter_line( program_t* pgm, const uint8_t* tokline, bool (*directmode)( pro
     read_linehdr_raw( &p, &hdr );
     if ( hdr.lineno == LINENO_NONE ) {
         // direct mode
-        if ( hdr.length < sizeof(linehdr_t) ) {
+        if ( hdr.length < LINEHDR_SIZE ) {
             return false;
         }
-        return directmode( pgm, p, hdr.length - sizeof(linehdr_t) );
+        return directmode( pgm, p, hdr.length - LINEHDR_SIZE );
     }
-    pgmiter_t iter; clear_iter( &iter, pgm ); uint16_t prevno = LINENO_NONE, nextno = LINENO_NONE;
+    pgmiter_t iter; clear_iter( &iter, pgm ); uint32_t prevno = LINENO_NONE, nextno = LINENO_NONE;
     uint16_t newpos = LINEOFFS_NONE;
     short res = find_line( pgm, hdr.lineno, &iter, &prevno, &nextno );
     switch ( res ) {
@@ -422,7 +422,7 @@ bool enter_line( program_t* pgm, const uint8_t* tokline, bool (*directmode)( pro
             return true;
         case FOUND_NONE:
         case FOUND_BEYOND:
-            if ( hdr.length == sizeof(linehdr_t) + 1U && *tokline == TOK_EOL ) {
+            if ( hdr.length == LINEHDR_SIZE + 1U && *tokline == TOK_EOL ) {
                 // deleting non-existent line: nothing happens
                 return true;
             }
@@ -435,7 +435,7 @@ bool enter_line( program_t* pgm, const uint8_t* tokline, bool (*directmode)( pro
     }
 }
 
-void list_program( program_t* pgm, uint16_t lineno_first, uint16_t lineno_last, void (*printer)( const char* ) ) {
+void list_program( program_t* pgm, uint32_t lineno_first, uint32_t lineno_last, void (*printer)( const char* ) ) {
 
     bool isEmpty = true;
     if ( !linelist_empty( pgm, LINELIST_POS, &isEmpty ) || isEmpty ) {
@@ -458,7 +458,7 @@ void list_program( program_t* pgm, uint16_t lineno_first, uint16_t lineno_last, 
             break;
         }
 
-        uint16_t lineno = iter.hdr.lineno; bool display = false;
+        uint32_t lineno = iter.hdr.lineno; bool display = false;
         if ( ( lineno_first == LINENO_NONE || lineno >= lineno_first ) &&
              ( lineno_last  == LINENO_NONE || lineno <= lineno_last  ) ) {
             display = true;

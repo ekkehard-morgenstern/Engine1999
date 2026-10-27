@@ -98,7 +98,7 @@ int main( int argc, char** argv ) {
         );
 
         const uint8_t* tokens = (const uint8_t*) tokbuf->buffer;
-        len = hdr.length; const uint8_t* p = &tokens[sizeof(linehdr_t)];
+        len = hdr.length; const uint8_t* p = &tokens[LINEHDR_SIZE];
         const uint8_t* e = &tokens[len];
         while ( p < e ) {
             uint8_t b = *p++;
@@ -107,7 +107,7 @@ int main( int argc, char** argv ) {
         }
 
         printf( "\n" );
-        clear_buffer( txtbuf ); p = &tokens[sizeof(linehdr_t)];
+        clear_buffer( txtbuf ); p = &tokens[LINEHDR_SIZE];
         if ( !detokenize_line( txtbuf, p, &hdr ) ) {
             printf( "? Detok error\n" );
             continue;
