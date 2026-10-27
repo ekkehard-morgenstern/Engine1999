@@ -8,7 +8,7 @@ Read this first when resuming; details are in `docs/` (start with `docs/README.m
 - Keep this file and `docs/` current when work changes the state.
 
 ## Repo state
-- Branch `feature/refactor-to-remove-some-limits`; latest commit `ff53541` ("Debug options"), preceded by `41e9ed4` (engine wiring), `8a98b3f` (CHR$), `5a7f6b3` (PRINT channel fix), `7e16a40` (INPUT/GET).
+- Branch `feature/refactor-to-remove-some-limits`; latest commit `761339e` ("the road ahead": docs/roadmap.md), preceded by `ff53541` (debug options), `41e9ed4` (engine wiring), `8a98b3f` (CHR$), `5a7f6b3` (PRINT channel fix), `7e16a40` (INPUT/GET).
 - Nothing uncommitted at the last update; the working tree is clean. `make` and all tests pass.
 - `make` builds `sdltest1 engine1999 basictest1 testcomp1 basictest2 vmtest1 repltest1` + `engine.lib` cleanly with `-Wall -Werror`.
 
