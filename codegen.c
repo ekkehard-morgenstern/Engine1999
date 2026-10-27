@@ -39,6 +39,10 @@ void init_codegen( codegen_t* cgen ) {
     cgen->loopbase  = 0;
     cgen->scratch   = 0; cgen->numscratch   = cgen->maxscratch   = 0;
     cgen->forserial = 0;
+    cgen->datafirst = cgen->datalast = DATAOFFS_NONE;
+    cgen->dataoffs  = 0; cgen->numdataitems = cgen->maxdataitems = 0;
+    cgen->restorefix = 0; cgen->numrestorefix = cgen->maxrestorefix = 0;
+    cgen->labeldata = 0; cgen->numlabeldata = cgen->maxlabeldata = 0;
 }
 
 void cleanup_codegen( codegen_t* cgen ) {
@@ -46,15 +50,23 @@ void cleanup_codegen( codegen_t* cgen ) {
     free( cgen->fixups );
     free( cgen->loops );
     free( cgen->scratch );
+    free( cgen->dataoffs );
+    free( cgen->restorefix );
+    free( cgen->labeldata );
     cgen->lineaddrs = 0; cgen->numlineaddrs = cgen->maxlineaddrs = 0;
     cgen->fixups    = 0; cgen->numfixups    = cgen->maxfixups    = 0;
     cgen->loops     = 0; cgen->numloops     = cgen->maxloops     = 0;
     cgen->scratch   = 0; cgen->numscratch   = cgen->maxscratch   = 0;
+    cgen->dataoffs  = 0; cgen->numdataitems = cgen->maxdataitems = 0;
+    cgen->restorefix = 0; cgen->numrestorefix = cgen->maxrestorefix = 0;
+    cgen->labeldata = 0; cgen->numlabeldata = cgen->maxlabeldata = 0;
 }
 
 void cgen_reset( codegen_t* cgen ) {
     cgen->codesize = UINT32_C(0);
     cgen->datasize = UINT32_C(0);
+    cgen->datafirst = cgen->datalast = DATAOFFS_NONE;
+    cgen->numdataitems = 0;
     cgen_begin_control( cgen );
 }
 
@@ -141,6 +153,9 @@ static const char* opcode_to_string( uint16_t opcode ) {
         case INS_GADC:      return "GADC";
         case INS_GFAC:      return "GFAC";
         case INS_ERAS:      return "ERAS";
+        case INS_RDNM:      return "RDNM";
+        case INS_RDST:      return "RDST";
+        case INS_RSTR:      return "RSTR";
         case INS_SLFT:      return "SLFT";
         case INS_SRGT:      return "SRGT";
         case INS_SMID:      return "SMID";
@@ -632,6 +647,18 @@ bool cgen_gen_srgt( codegen_t* cgen, uint16_t varoffs ) {
 
 bool cgen_gen_smid( codegen_t* cgen, uint16_t varoffs ) {
     return cgen_gen_ins12( cgen, INS_SMID, false, true, varoffs );
+}
+
+bool cgen_gen_rdnm( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_RDNM, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_rdst( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_RDST, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_rstr( codegen_t* cgen, bool hasparam, uint16_t dataoffs ) {
+    return cgen_gen_ins12( cgen, INS_RSTR, false, hasparam, dataoffs );
 }
 
 bool cgen_gen_eras( codegen_t* cgen, uint16_t varoffs ) {
@@ -2461,6 +2488,9 @@ bool cgen_from_stmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         case NT_STMTLIST:   return cgen_from_stmtlist( cgen, comp, node );
         case NT_DIMSTMT:    return cgen_from_dimstmt( cgen, comp, node );
         case NT_ERASESTMT:  return cgen_from_erasestmt( cgen, comp, node );
+        case NT_DATASTMT:   return cgen_from_datastmt( cgen, comp, node );
+        case NT_READSTMT:   return cgen_from_readstmt( cgen, comp, node );
+        case NT_RESTORESTMT:    return cgen_from_restorestmt( cgen, comp, node );
         case NT_DEFSTMT:    return cgen_from_defstmt( cgen, comp, node );
         case NT_FNASSIGNSTMT:   return cgen_from_fnassignstmt( cgen, comp, node );
         case NT_GOTOSTMT:   return cgen_from_gotostmt( cgen, comp, node );

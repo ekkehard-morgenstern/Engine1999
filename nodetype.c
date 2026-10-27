@@ -107,6 +107,9 @@ const char* nodename( uint8_t nodetype ) {
         case NT_WENDSTMT:               return "NT_WENDSTMT";
         case NT_UENDSTMT:               return "NT_UENDSTMT";
         case NT_ONSTMT:                 return "NT_ONSTMT";
+        case NT_DATASTMT:               return "NT_DATASTMT";
+        case NT_READSTMT:               return "NT_READSTMT";
+        case NT_RESTORESTMT:            return "NT_RESTORESTMT";
         case NT_NUMEXPR:                return "NT_NUMEXPR";
         case NT_STREXPR:                return "NT_STREXPR";
         case NT_STRCMPEX:               return "NT_STRCMPEX";

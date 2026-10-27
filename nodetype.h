@@ -476,6 +476,19 @@ Explanation of node types:
             - 1 branch of numeric expression
             - 1 or more branches of goto/gosub targets
 
+    NT_DATASTMT         DATA statement
+        branches:
+            - 1 or more branches of data items: NT_NUMLIT (a sign is folded into the value) or NT_STRLIT
+              (string literals only, not shell or bracket literals)
+
+    NT_READSTMT         READ statement
+        branches:
+            - 1 or more branches of variable references (NT_NUMVARREF or NT_STRVARREF, regular or array element)
+
+    NT_RESTORESTMT      RESTORE statement
+        branches:
+            - none, or 1 branch of goto target (a line number or a label)
+
     NT_FNASSIGNSTMT     Assignment of the result of a multi-line user function ("FN A = expr")
         data:
             - 1 byte of type indicator (VARTYPEV_FLOAT, VARTYPEV_INT or VARTYPEV_STR), n bytes of function name
@@ -572,6 +585,9 @@ Explanation of node types:
 #define NT_WENDSTMT             UINT8_C(0X54)   // WEND statement
 #define NT_UENDSTMT             UINT8_C(0X55)   // UEND statement
 #define NT_ONSTMT               UINT8_C(0X56)   // ON statement
+#define NT_DATASTMT             UINT8_C(0X57)   // DATA statement
+#define NT_READSTMT             UINT8_C(0X58)   // READ statement
+#define NT_RESTORESTMT          UINT8_C(0X59)   // RESTORE statement
 #define NT_NUMEXPR              UINT8_C(0X18)   // numeric expression
 #define NT_STREXPR              UINT8_C(0X1A)   // string expression
 #define NT_STRCMPEX             UINT8_C(0X1C)   // string comparison expression

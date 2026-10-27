@@ -2369,13 +2369,127 @@ bool comp_eat_printstmt( compiler_t* comp, node_t** pnode ) {
     return true;
 }
 
+// stores a number in the 8 data bytes of a NT_NUMLIT node (big endian)
+static void comp_set_numlit( uint8_t* data, double val ) {
+    union {
+        uint64_t    ui64;
+        double      dbl;
+    } u;
+    u.dbl = val;
+    for ( unsigned i=0; i < 8U; ++i ) {
+        data[i] = (uint8_t)( u.ui64 >> ( 8U * ( 7U - i ) ) );
+    }
+}
+
+// data-item := [ TOK_PLUS | TOK_MINUS ] num-lit | TOK_STRLIT .
+static bool comp_eat_dataitem( compiler_t* comp, node_t** pnode ) {
+    bool negate = false, signd = false;
+    if ( comp->currtok == TOK_PLUS || comp->currtok == TOK_MINUS ) {
+        negate = comp->currtok == TOK_MINUS;
+        signd = true;
+        if ( !comp_fetchtok( comp ) ) {
+            return false;
+        }
+    }
+    if ( comp_eat_numlit( comp, pnode ) && *pnode != NODE_NONE ) {
+        if ( negate ) {
+            comp_set_numlit( (*pnode)->data, -comp_extract_float( (*pnode)->data, 0 ) );
+        }
+        return true;
+    }
+    if ( signd ) {
+        comp_error( comp, "Number expected after sign" );
+        return false;
+    }
+    if ( comp->currtok != TOK_STRLIT ) {
+        return false;
+    }
+    return comp_eat_strlit( comp, pnode ) && *pnode != NODE_NONE;
+}
+
+bool comp_eat_datastmt( compiler_t* comp, node_t** pnode ) {
+    // data-stmt := TOK_DATA data-item { TOK_COMMA data-item } .
+    if ( comp->currtok != TOK_DATA || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    if ( !comp_create_node( comp, pnode, NT_DATASTMT, UINT8_C(0), UINT16_C(0), 0 ) || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    for (;;) {
+        node_t* item = NODE_NONE;
+        if ( !comp_eat_dataitem( comp, &item ) || item == NODE_NONE ) {
+            comp_error( comp, "Data item expected" );
+            return false;
+        }
+        if ( !comp_add_branch( comp, *pnode, item ) ) {
+            out_of_memory( comp );
+            return false;
+        }
+        if ( comp->currtok != TOK_COMMA || !comp_fetchtok( comp ) ) {
+            break;
+        }
+    }
+    return true;
+}
+
+bool comp_eat_readstmt( compiler_t* comp, node_t** pnode ) {
+    // read-stmt := TOK_READ ( num-var-ref | str-var-ref ) { TOK_COMMA ( num-var-ref | str-var-ref ) } .
+    if ( comp->currtok != TOK_READ || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    if ( !comp_create_node( comp, pnode, NT_READSTMT, UINT8_C(0), UINT16_C(0), 0 ) || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    for (;;) {
+        node_t* ref = NODE_NONE;
+        if ( !( comp_eat_numvarref( comp, &ref ) && ref != NODE_NONE ) && !( comp_eat_strvarref( comp, &ref ) && ref != NODE_NONE ) ) {
+            comp_error( comp, "Variable expected" );
+            return false;
+        }
+        if ( !comp_add_branch( comp, *pnode, ref ) ) {
+            out_of_memory( comp );
+            return false;
+        }
+        if ( comp->currtok != TOK_COMMA || !comp_fetchtok( comp ) ) {
+            break;
+        }
+    }
+    return true;
+}
+
+bool comp_eat_restorestmt( compiler_t* comp, node_t** pnode ) {
+    // restore-stmt := TOK_RESTORE [ goto-target ] .
+    if ( comp->currtok != TOK_RESTORE || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    node_t* target = NODE_NONE;
+    bool hastarget = comp_eat_gototarget( comp, &target ) && target != NODE_NONE;
+    if ( !( hastarget ? comp_create_node( comp, pnode, NT_RESTORESTMT, UINT8_C(1), UINT16_C(0), 0, target ) :
+            comp_create_node( comp, pnode, NT_RESTORESTMT, UINT8_C(0), UINT16_C(0), 0 ) ) || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
 bool comp_eat_iostmt( compiler_t* comp, node_t** pnode ) {
-    // io-stmt := save-stmt | print-stmt .
+    // io-stmt := save-stmt | print-stmt | data-stmt | read-stmt | restore-stmt .
     // [ NT_IOSTMT - not generated ]
     if ( comp_eat_savestmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     if ( comp_eat_printstmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_datastmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_readstmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_restorestmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     return false;

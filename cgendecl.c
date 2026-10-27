@@ -248,3 +248,200 @@ bool cgen_from_defstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     }
     return true;
 }
+
+// -- DATA, READ, RESTORE -------------------------------------------------------------
+
+/*
+DATA generates no code. Every item becomes a record in the data segment: <type.8> <next.16> <payload>, chained in
+program order (see instset.h, RDNM). READ is RDNM / RDST and the same store as an assignment; RESTORE is RSTR.
+The target of a RESTORE is the first item at or behind a line (or label), found when all items are known.
+*/
+
+static bool cd_add_data_item( codegen_t* cgen, compiler_t* comp, uint8_t type, const void* payload, size_t paylen ) {
+    if ( paylen > UINT16_MAX - 3U ) {
+        comp_error( comp, "Data item too long" );
+        return false;
+    }
+    uint16_t off = DATAOFFS_NONE;
+    if ( !cgen_alloc_data( cgen, (uint16_t)( 3U + paylen ), &off ) || off == DATAOFFS_NONE ) {
+        return cgen_out_of_data_memory( comp );
+    }
+    if ( !cgen_grow( (void**) &cgen->dataoffs, &cgen->numdataitems, &cgen->maxdataitems, sizeof(uint16_t) ) ) {
+        comp_error( comp, "Out of memory" );
+        return false;
+    }
+    cgen->data[ off ]      = type;
+    cgen->data[ off + 1U ] = (uint8_t)( DATAOFFS_NONE >> UINT8_C(8) );
+    cgen->data[ off + 2U ] = (uint8_t)  DATAOFFS_NONE;
+    memcpy( &cgen->data[ off + 3U ], payload, paylen );
+    if ( cgen->datalast != DATAOFFS_NONE ) {
+        cgen->data[ cgen->datalast + 1U ] = (uint8_t)( off >> UINT8_C(8) );
+        cgen->data[ cgen->datalast + 2U ] = (uint8_t)  off;
+    } else {
+        cgen->datafirst = off;
+    }
+    cgen->datalast = off;
+    cgen->dataoffs[ cgen->numdataitems++ ] = off;
+    return true;
+}
+
+bool cgen_from_datastmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    /*
+        NT_DATASTMT         DATA statement
+            branches:
+                - 1 or more branches of data items: NT_NUMLIT or NT_STRLIT
+    */
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->type != NT_DATASTMT ) {
+        return cgen_unexpected_node( comp );
+    }
+    for ( size_t i=0; i < node->numbranches; ++i ) {
+        node_t* item = node->branches[i];
+        if ( item == NODE_NONE ) {
+            return cgen_bad_node( comp );
+        }
+        if ( item->type == NT_NUMLIT && item->datalen == UINT16_C(8) ) {
+            if ( !cd_add_data_item( cgen, comp, UINT8_C(0), item->data, 8U ) ) {
+                return false;
+            }
+        } else if ( item->type == NT_STRLIT && item->datalen >= UINT16_C(1) && item->data[0] == TOK_STRLIT ) {
+            // the text and its NUL terminator
+            size_t len = (size_t) item->datalen - 1U;
+            uint8_t* text = (uint8_t*) malloc( len + 1U );
+            if ( text == 0 ) {
+                comp_error( comp, "Out of memory" );
+                return false;
+            }
+            memcpy( text, &item->data[1], len );
+            text[ len ] = '\0';
+            bool ok = cd_add_data_item( cgen, comp, UINT8_C(1), text, len + 1U );
+            free( text );
+            if ( !ok ) {
+                return false;
+            }
+        } else {
+            return cgen_unexpected_node( comp );
+        }
+    }
+    return true;
+}
+
+bool cgen_from_readstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    /*
+        NT_READSTMT         READ statement
+            branches:
+                - 1 or more branches of variable references (NT_NUMVARREF or NT_STRVARREF)
+    */
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->type != NT_READSTMT ) {
+        return cgen_unexpected_node( comp );
+    }
+    for ( size_t i=0; i < node->numbranches; ++i ) {
+        node_t* ref = node->branches[i];
+        if ( ref == NODE_NONE ) {
+            return cgen_bad_node( comp );
+        }
+        if ( ref->type != NT_NUMVARREF && ref->type != NT_STRVARREF ) {
+            return cgen_unexpected_node( comp );
+        }
+        // the item is read first, then it is stored like in an assignment
+        if ( !( ref->type == NT_STRVARREF ? cgen_gen_rdst( cgen ) : cgen_gen_rdnm( cgen ) ) ) {
+            return cgen_out_of_code_memory( comp );
+        }
+        if ( !cgen_from_varref_lvalue( cgen, comp, ref ) ) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void cgen_note_label_data( codegen_t* cgen, uint16_t varoffs ) {
+    if ( !cgen_grow( (void**) &cgen->labeldata, &cgen->numlabeldata, &cgen->maxlabeldata, sizeof(cgen_labeldata_t) ) ) {
+        return;     // RESTORE to this label will report an undefined label
+    }
+    cgen_labeldata_t* ld = &cgen->labeldata[ cgen->numlabeldata++ ];
+    ld->varoffs   = varoffs;
+    ld->dataindex = cgen->numdataitems;
+}
+
+bool cgen_from_restorestmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    /*
+        NT_RESTORESTMT      RESTORE statement
+            branches:
+                - none, or 1 branch of goto target (NT_GOTOTARGET: a line number or a label)
+    */
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->type != NT_RESTORESTMT || node->numbranches > 1U ) {
+        return cgen_unexpected_node( comp );
+    }
+    if ( node->numbranches == 0 ) {
+        if ( !cgen_gen_rstr( cgen, false, UINT16_C(0) ) ) {
+            return cgen_out_of_code_memory( comp );
+        }
+        return true;
+    }
+    node_t* target = node->branches[0];
+    if ( target == NODE_NONE || target->type != NT_GOTOTARGET || target->datalen != UINT16_C(4) ) {
+        return cgen_bad_node( comp );
+    }
+    uint32_t value = ( ( (uint32_t) target->data[1] ) << UINT8_C(16) ) | ( ( (uint32_t) target->data[2] ) << UINT8_C(8) ) |
+        target->data[3];
+    if ( target->data[0] != VARTYPEV_INT && target->data[0] != VARTYPEV_LABEL ) {
+        return cgen_unexpected_node( comp );
+    }
+    if ( !cgen_grow( (void**) &cgen->restorefix, &cgen->numrestorefix, &cgen->maxrestorefix, sizeof(cgen_restorefix_t) ) ) {
+        comp_error( comp, "Out of memory" );
+        return false;
+    }
+    cgen_restorefix_t* fx = &cgen->restorefix[ cgen->numrestorefix++ ];
+    fx->insoffs = cgen->codesize;
+    fx->islabel = target->data[0] == VARTYPEV_LABEL;
+    fx->lineno  = fx->islabel ? 0 : value;
+    fx->varoffs = fx->islabel ? (uint16_t) value : UINT16_C(0);
+    fx->srcline = comp->iter.hdr.lineno;
+    if ( !cgen_gen_rstr( cgen, true, UINT16_C(0) ) ) {      // the data offset is patched in cgen_finish_data()
+        return cgen_out_of_code_memory( comp );
+    }
+    return true;
+}
+
+bool cgen_finish_data( codegen_t* cgen, compiler_t* comp ) {
+    for ( size_t i=0; i < cgen->numrestorefix; ++i ) {
+        const cgen_restorefix_t* fx = &cgen->restorefix[i];
+        size_t index = cgen->numdataitems;      // default: behind the last item
+        if ( fx->islabel ) {
+            bool found = false;
+            for ( size_t j=0; j < cgen->numlabeldata; ++j ) {
+                if ( cgen->labeldata[j].varoffs == fx->varoffs ) {
+                    index = cgen->labeldata[j].dataindex;
+                    found = true;
+                    break;
+                }
+            }
+            if ( !found ) {
+                comp->iter.hdr.lineno = fx->srcline;
+                comp_error( comp, "Undefined label" );
+                return false;
+            }
+        } else {
+            // the first line at or behind the target line (the line table is in ascending order)
+            for ( size_t j=0; j < cgen->numlineaddrs; ++j ) {
+                if ( cgen->lineaddrs[j].lineno >= fx->lineno ) {
+                    index = cgen->lineaddrs[j].dataindex;
+                    break;
+                }
+            }
+        }
+        uint16_t off = index < cgen->numdataitems ? cgen->dataoffs[ index ] : DATAOFFS_NONE;
+        // RSTR is an extended instruction: <ins> <ext> <hi> <lo>
+        cgen->code[ fx->insoffs + 2U ] = (uint8_t)( off >> UINT8_C(8) );
+        cgen->code[ fx->insoffs + 3U ] = (uint8_t)  off;
+    }
+    return true;
+}

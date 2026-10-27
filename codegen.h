@@ -46,7 +46,21 @@
 typedef struct _cgen_lineaddr_t {
     uint32_t    lineno;
     uint32_t    addr;           // code offset of the line
+    size_t      dataindex;      // number of DATA items generated before the line (for RESTORE)
 } cgen_lineaddr_t;
+
+typedef struct _cgen_restorefix_t {
+    uint32_t    insoffs;        // code offset of the RSTR instruction to patch
+    bool        islabel;
+    uint32_t    lineno;         // target line number, or ...
+    uint16_t    varoffs;        // ... target label variable
+    uint32_t    srcline;
+} cgen_restorefix_t;
+
+typedef struct _cgen_labeldata_t {
+    uint16_t    varoffs;        // label variable
+    size_t      dataindex;      // number of DATA items generated before the label
+} cgen_labeldata_t;
 
 typedef struct _cgen_fixup_t {
     uint32_t    insoffs;        // code offset of the branch instruction to patch
@@ -88,6 +102,13 @@ typedef struct _codegen_t {
     uint32_t*           scratch;        // temporary list of code offsets (ON .. GOSUB)
     size_t              numscratch, maxscratch;
     uint32_t            forserial;      // numbers the hidden variables of loops and ON statements
+    uint16_t            datafirst, datalast;    // first and last DATA item in the data segment (DATAOFFS_NONE = none)
+    uint16_t*           dataoffs;       // the data offsets of all DATA items, in program order
+    size_t              numdataitems, maxdataitems;
+    cgen_restorefix_t*  restorefix;     // RESTORE statements with a target (patched at the end)
+    size_t              numrestorefix, maxrestorefix;
+    cgen_labeldata_t*   labeldata;      // where in the DATA items the labels are
+    size_t              numlabeldata, maxlabeldata;
 } codegen_t;
 
 void init_codegen( codegen_t* cgen );
@@ -196,6 +217,9 @@ bool cgen_gen_slft( codegen_t* cgen, uint16_t varoffs );
 bool cgen_gen_srgt( codegen_t* cgen, uint16_t varoffs );
 bool cgen_gen_smid( codegen_t* cgen, uint16_t varoffs );
 bool cgen_gen_eras( codegen_t* cgen, uint16_t varoffs );
+bool cgen_gen_rdnm( codegen_t* cgen );
+bool cgen_gen_rdst( codegen_t* cgen );
+bool cgen_gen_rstr( codegen_t* cgen, bool hasparam, uint16_t dataoffs );
 
 // BASIC system command implementations
 bool cgen_gen_save( codegen_t* cgen );
@@ -254,11 +278,18 @@ bool cgen_not_implemented_yet( compiler_t* comp );
 // -- declarations (cgendecl.c) -----------------------------------------------
 
 bool cgen_from_dimstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_datastmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_readstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_restorestmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_finish_data( codegen_t* cgen, compiler_t* comp );     // resolves the RESTORE targets
+void cgen_note_label_data( codegen_t* cgen, uint16_t varoffs ); // a LABEL statement is generated (see RESTORE)
 bool cgen_from_fnassignstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_defstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 
 // -- control flow (cgenctl.c) ------------------------------------------------
 
+// makes room for one more item in a growable table (items, number in use, allocated, item size)
+bool cgen_grow( void** pitems, size_t* pnum, size_t* pmax, size_t itemsize );
 void cgen_begin_control( codegen_t* cgen );     // clears the line table, fixups and FOR stack
 bool cgen_note_line( codegen_t* cgen, compiler_t* comp, uint32_t lineno );  // line starts at the current code offset
 bool cgen_finish_control( codegen_t* cgen, compiler_t* comp );              // resolves line references, checks FOR/NEXT

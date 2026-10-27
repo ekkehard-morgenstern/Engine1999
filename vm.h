@@ -51,6 +51,8 @@ The stacks are heap allocated and grow on demand.
 
 Not implemented yet (reported as errors at run time): BRK, WRLV, array parameters of functions.
 
+DATA: the VM keeps the data pointer (vm_t.datapos); vm_run() resets it to the first item (like RESTORE), vm_run_at() leaves it.
+
 Policies chosen by this implementation (the instruction set does not define them):
     - comparisons yield -1 (true) or 0 (false)
     - bitwise operations convert their operands to 32 bit signed integers
@@ -108,6 +110,7 @@ typedef struct _vm_t {
     vm_context_t*   ctxs;           // contexts of the function calls in progress
     size_t          nctx, maxctx;
     uint32_t        pc;             // offset of the next instruction
+    uint32_t        datapos;        // data offset of the next DATA item (DATAOFFS_NONE = behind the last one)
     uint32_t        line;           // current line number (LINE instruction)
     uint64_t        maxsteps;       // stop with an error after this many instructions (0 = unlimited)
     int             channel;        // output channel (PCHN)

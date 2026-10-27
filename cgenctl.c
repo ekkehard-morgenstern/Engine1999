@@ -62,10 +62,12 @@ void cgen_begin_control( codegen_t* cgen ) {
     cgen->numloops     = 0;
     cgen->loopbase     = 0;
     cgen->numscratch   = 0;
+    cgen->numrestorefix = 0;
+    cgen->numlabeldata = 0;
     cgen->forserial    = 0;
 }
 
-static bool cc_grow( void** pitems, size_t* pnum, size_t* pmax, size_t itemsize ) {
+bool cgen_grow( void** pitems, size_t* pnum, size_t* pmax, size_t itemsize ) {
     if ( *pnum < *pmax ) {
         return true;
     }
@@ -85,12 +87,13 @@ static bool cc_out_of_memory( compiler_t* comp ) {
 }
 
 bool cgen_note_line( codegen_t* cgen, compiler_t* comp, uint32_t lineno ) {
-    if ( !cc_grow( (void**) &cgen->lineaddrs, &cgen->numlineaddrs, &cgen->maxlineaddrs, sizeof(cgen_lineaddr_t) ) ) {
+    if ( !cgen_grow( (void**) &cgen->lineaddrs, &cgen->numlineaddrs, &cgen->maxlineaddrs, sizeof(cgen_lineaddr_t) ) ) {
         return cc_out_of_memory( comp );
     }
     cgen_lineaddr_t* la = &cgen->lineaddrs[ cgen->numlineaddrs++ ];
     la->lineno = lineno;
     la->addr   = cgen->codesize;
+    la->dataindex = cgen->numdataitems;
     return true;
 }
 
@@ -167,7 +170,7 @@ bool cgen_finish_control( codegen_t* cgen, compiler_t* comp ) {
         }
         cc_patch_bria( cgen, fx->insoffs, addr );
     }
-    return cgen_loops_closed( cgen, comp, 0 );
+    return cgen_loops_closed( cgen, comp, 0 ) && cgen_finish_data( cgen, comp );
 }
 
 bool cgen_loops_closed( codegen_t* cgen, compiler_t* comp, size_t base ) {
@@ -224,7 +227,7 @@ static bool cc_jump_to_target( codegen_t* cgen, compiler_t* comp, node_t* target
         if ( !cc_emit_bria( cgen, comp, &ins ) ) {
             return false;
         }
-        if ( !cc_grow( (void**) &cgen->fixups, &cgen->numfixups, &cgen->maxfixups, sizeof(cgen_fixup_t) ) ) {
+        if ( !cgen_grow( (void**) &cgen->fixups, &cgen->numfixups, &cgen->maxfixups, sizeof(cgen_fixup_t) ) ) {
             return cc_out_of_memory( comp );
         }
         cgen_fixup_t* fx = &cgen->fixups[ cgen->numfixups++ ];
@@ -302,6 +305,7 @@ bool cgen_from_labelstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     if ( !cc_here16( cgen, comp, &here ) ) {
         return false;
     }
+    cgen_note_label_data( cgen, varoffs );
     varvalue_t value;
     memset( &value, 0, sizeof(value) );
     value.lbloffs = here;
@@ -414,7 +418,7 @@ bool cgen_from_multilineifstmt( codegen_t* cgen, compiler_t* comp, node_t* node 
 // -- loops -----------------------------------------------------------------------
 
 static cgen_loopctx_t* cc_push_loop( codegen_t* cgen, compiler_t* comp, uint8_t kind ) {
-    if ( !cc_grow( (void**) &cgen->loops, &cgen->numloops, &cgen->maxloops, sizeof(cgen_loopctx_t) ) ) {
+    if ( !cgen_grow( (void**) &cgen->loops, &cgen->numloops, &cgen->maxloops, sizeof(cgen_loopctx_t) ) ) {
         cc_out_of_memory( comp );
         return 0;
     }
@@ -745,7 +749,7 @@ bool cgen_from_endstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     if ( !cc_emit_bria( cgen, comp, &ins ) ) {
         return false;
     }
-    if ( !cc_grow( (void**) &cgen->fixups, &cgen->numfixups, &cgen->maxfixups, sizeof(cgen_fixup_t) ) ) {
+    if ( !cgen_grow( (void**) &cgen->fixups, &cgen->numfixups, &cgen->maxfixups, sizeof(cgen_fixup_t) ) ) {
         return cc_out_of_memory( comp );
     }
     cgen_fixup_t* fx = &cgen->fixups[ cgen->numfixups++ ];
@@ -797,7 +801,7 @@ bool cgen_from_onstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     // the tests: the offsets of the PHPA instructions that get the stub addresses go to the scratch list
     cgen->numscratch = 0;
     for ( size_t i=1; i <= numtargets; ++i ) {
-        if ( !cc_grow( (void**) &cgen->scratch, &cgen->numscratch, &cgen->maxscratch, sizeof(uint32_t) ) ) {
+        if ( !cgen_grow( (void**) &cgen->scratch, &cgen->numscratch, &cgen->maxscratch, sizeof(uint32_t) ) ) {
             return cc_out_of_memory( comp );
         }
         bool ok = cgen_gen_rrnv( cgen, tmp ) && cgen_gen_phim( cgen, (int32_t) i ) && cgen_gen_cnge( cgen ) &&
@@ -828,7 +832,7 @@ bool cgen_from_onstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
             return false;
         }
         if ( gosub ) {
-            if ( !cc_grow( (void**) &cgen->scratch, &cgen->numscratch, &cgen->maxscratch, sizeof(uint32_t) ) ) {
+            if ( !cgen_grow( (void**) &cgen->scratch, &cgen->numscratch, &cgen->maxscratch, sizeof(uint32_t) ) ) {
                 return cc_out_of_memory( comp );
             }
             cgen->scratch[ cgen->numscratch++ ] = retins;

@@ -43,6 +43,7 @@ void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem ) {
     vm->nctx     = 0;
     vm->maxctx   = 0;
     vm->pc       = UINT32_C(0);
+    vm->datapos  = cgen->datafirst;
     vm->line     = LINENO_NONE;
     vm->maxsteps = UINT64_C(0);
     vm->channel  = 0;
@@ -481,6 +482,42 @@ static bool vm_set_substring( vm_t* vm, uint16_t opcode, uint16_t varoffs ) {
         return false;
     }
     return vm_set_value( vm, varoffs, vartype, numdims, diminx, target );
+}
+
+// -- DATA ----------------------------------------------------------------------
+
+// RDNM, RDST: ( -- n ) or ( -- s ): reads the next DATA item, see instset.h
+static bool vm_read_data( vm_t* vm, bool wantstr ) {
+    const codegen_t* cgen = vm->cgen;
+    uint32_t pos = vm->datapos;
+    if ( pos == DATAOFFS_NONE || pos + 3U > cgen->datasize ) {
+        return vm_error( vm, "Out of DATA" );
+    }
+    uint8_t type = cgen->data[ pos ];
+    uint16_t next = (uint16_t)( ( ( (uint16_t) cgen->data[ pos + 1U ] ) << UINT8_C(8) ) | cgen->data[ pos + 2U ] );
+    const uint8_t* payload = &cgen->data[ pos + 3U ];
+    if ( ( type != 0 && type != 1 ) || ( wantstr ? type != 1 : type != 0 ) ) {
+        return vm_error( vm, wantstr ? "Type mismatch (DATA item is not a string)" : "Type mismatch (DATA item is not a number)" );
+    }
+    if ( !wantstr ) {
+        if ( pos + 3U + 8U > cgen->datasize ) {
+            return vm_error( vm, "Bad DATA item" );
+        }
+        if ( !vm_dpush_num( vm, vm_extract_float( payload ) ) ) {
+            return false;
+        }
+    } else {
+        const uint8_t* end = memchr( payload, '\0', cgen->datasize - ( pos + 3U ) );
+        if ( end == 0 ) {
+            return vm_error( vm, "Bad DATA item" );
+        }
+        char* s = vm_new_string( vm, (const char*) payload, (size_t)( end - payload ) );
+        if ( s == 0 || !vm_push_string( vm, s ) ) {
+            return false;
+        }
+    }
+    vm->datapos = next;
+    return true;
 }
 
 // -- user function calls -----------------------------------------------------
@@ -1093,6 +1130,11 @@ static bool vm_step( vm_t* vm ) {
             return vm_set_substring( vm, opcode, param );
         case INS_ERAS:
             return vmem_erase_array( vm->vmem, param ) || vm_error( vm, "Not an array" );
+        case INS_RDNM: return vm_read_data( vm, false );
+        case INS_RDST: return vm_read_data( vm, true );
+        case INS_RSTR:
+            vm->datapos = hasp ? param : cgen->datafirst;
+            return true;
         case INS_CALF: return vm_call_function( vm, param, pc );
         case INS_RETF: return vm_return_function( vm );
         case INS_WRNV: return vm_write_var( vm, param, VARTYPEV_FLOAT );
@@ -1129,6 +1171,7 @@ static bool vm_step( vm_t* vm ) {
 }
 
 bool vm_run( vm_t* vm ) {
+    vm->datapos = vm->cgen->datafirst;      // like RESTORE: a program starts with the first DATA item
     return vm_run_at( vm, UINT32_C(0) );
 }
 

@@ -135,7 +135,12 @@ print-arg := expr [ print-sep ] .
 print-arg-list := print-arg { print-arg } .
 print-stmt := TOK_PRINT [ chan-spec TOK_COMMA ] [ print-arg-list ] .
 
-io-stmt := save-stmt | print-stmt .
+data-item := [ TOK_PLUS | TOK_MINUS ] num-lit | TOK_STRLIT .
+data-stmt := TOK_DATA data-item { TOK_COMMA data-item } .
+read-stmt := TOK_READ ( num-var-ref | str-var-ref ) { TOK_COMMA ( num-var-ref | str-var-ref ) } .
+restore-stmt := TOK_RESTORE [ goto-target ] .
+
+io-stmt := save-stmt | print-stmt | data-stmt | read-stmt | restore-stmt .
 
 num-assign := num-var-ref TOK_EQ num-expr .
 str-assign := str-var-ref TOK_EQ str-expr .

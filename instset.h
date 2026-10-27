@@ -239,6 +239,16 @@ The 4096 extended instructions are as follows:
     0001 00010101       GFAC - get function argument  count (param=varoffs) ( -- n ) C=0 P=1
     0001 00010110       ERAS - erase array (param=varoffs)   ( -- ) C=0 P=1
                             resets all elements of the array to their initial state (0 or the empty string)
+    0001 00010111       RDNM - read next DATA item as a number ( -- n ) C=0 P=0
+    0001 00011110       RDST - read next DATA item as a string ( -- s ) C=0 P=0
+    0001 00011111       RSTR - restore the DATA pointer (param=data offset) C=0 P=0/1
+                            P=0: the pointer goes back to the first item; P=1: to the item at the given data
+                            offset (0xFFFF = behind the last item).
+                            DATA items are records in the data segment, chained in program order:
+                            <type.8> <next.16> <payload>, type 0 = number (8 bytes, big endian IEEE double),
+                            type 1 = string (NUL-terminated text); <next> is the data offset of the next item or
+                            0xFFFF. The first item is found through codegen_t.datafirst (0xFFFF = no DATA).
+                            Reading behind the last item, or an item of the wrong type, is a run time error.
     0001 00010110       (reserved)
     0001 00010111       (reserved)
     0001 00011000       TI   - get system   timer ( -- n ) C=0 P=0
@@ -354,12 +364,15 @@ The 4096 extended instructions are as follows:
 #define INS_GADC        UINT16_C(0X114)
 #define INS_GFAC        UINT16_C(0X115)
 #define INS_ERAS        UINT16_C(0X116)
+#define INS_RDNM        UINT16_C(0X117)
 #define INS_TI          UINT16_C(0X118)
 #define INS_INKY        UINT16_C(0X119)
 #define INS_ASC         UINT16_C(0X11A)
 #define INS_VAL         UINT16_C(0X11B)
 #define INS_FRE         UINT16_C(0X11C)
 #define INS_LEN         UINT16_C(0X11D)
+#define INS_RDST        UINT16_C(0X11E)
+#define INS_RSTR        UINT16_C(0X11F)
 #define INS_BINS        UINT16_C(0X120)
 #define INS_QUAS        UINT16_C(0X121)
 #define INS_OCTS        UINT16_C(0X122)
