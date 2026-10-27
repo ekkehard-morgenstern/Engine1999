@@ -2049,6 +2049,19 @@ static bool from_printstmt_cb( void* param, node_t* node ) {
     return true;
 }
 
+bool cgen_gen_channel0( codegen_t* cgen, compiler_t* comp ) {
+    // PCHN is sticky in the VM, so statements without a channel specifier select channel 0 explicitly
+    uint16_t off = DATAOFFS_NONE;
+    if ( !cgen_alloc_data( cgen, UINT16_C(8), &off ) || off == DATAOFFS_NONE ) {
+        return cgen_out_of_data_memory( comp );
+    }
+    memset( &cgen->data[ off ], 0, 8U );        // the double 0.0
+    if ( !cgen_gen_phpa_d( cgen, off ) || !cgen_gen_lan_d( cgen ) || !cgen_gen_pchn( cgen ) ) {
+        return cgen_out_of_code_memory( comp );
+    }
+    return true;
+}
+
 bool cgen_from_printstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     /*
     chan-spec := TOK_LATTICE num-expr .
@@ -2088,6 +2101,9 @@ bool cgen_from_printstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     uint8_t nodetype = node->type;
     if ( nodetype != NT_PRINTSTMT ) {
         return cgen_unexpected_node( comp );
+    }
+    if ( ( node->numbranches < 1U || node->branches[0] == NODE_NONE ) && !cgen_gen_channel0( cgen, comp ) ) {
+        return false;
     }
     cbdata_t cbdata = { cgen, comp, node, UINT16_C(0) };
     if ( !comp_node_iter_branches( comp, node, &cbdata, from_printstmt_cb ) ) {

@@ -13,7 +13,7 @@ Read this first when resuming; details are in `docs/` (start with `docs/README.m
 - `make` builds `sdltest1 engine1999 basictest1 testcomp1 basictest2 vmtest1` + `engine.lib` cleanly with `-Wall -Werror`.
 
 ## Tests (run these after any change)
-- `./vmtest1` — automated end-to-end test (BASIC text → tokens → syntax tree → code → VM → output). **308 cases, all pass**; exit status = number of failures; `-v` shows compiler/codegen debug output. Add a case for every new statement/instruction. Also run it under `valgrind --leak-check=full -q` (clean).
+- `./vmtest1` — automated end-to-end test (BASIC text → tokens → syntax tree → code → VM → output). **309 cases, all pass**; exit status = number of failures; `-v` shows compiler/codegen debug output. Add a case for every new statement/instruction. Also run it under `valgrind --leak-check=full -q` (clean).
 - `./testcomp1` — randomized stress test of the variable store (5000 operations vs a shadow model), exit status 0 = passed; takes ~3 s. (Its random names used to be sometimes empty, which made it flake; fixed.)
 - `basictest1` / `basictest2` — interactive tokenizer / parser tools (pipe lines into them). `basictest2` prints the syntax tree.
 
@@ -39,7 +39,7 @@ Read this first when resuming; details are in `docs/` (start with `docs/README.m
 - The syntax tree stores the variable number (not a `var_t*`) in node data bytes.
 
 - INPUT: prompt must be plain string literal(s); `;` adds "? ", `,` doesn't. Bad/missing field → "?Redo from start" (fields already stored stay stored), extra fields → "?Extra ignored", empty numeric field = 0. GET waits for a key (numeric variable gets the key code). INPUT/GET without `#ch` emit `PCHN 0`.
-- **Found, not fixed:** `PRINT` without `#ch` doesn't reset the VM's output channel, so after `PRINT #1,…` later plain `PRINT`s keep going to channel 1 (the channel set by `PCHN` is sticky). Probably `PRINT` should also emit `PCHN 0` when there is no channel specifier.
+- `PRINT`, `INPUT` and `GET` all select their channel explicitly (`PCHN`, 0 when there is no `#ch`), because the VM's channel is sticky (`cgen_gen_channel0()` in `codegen.c`). Previously a plain `PRINT` after `PRINT #1,…` stayed on channel 1; fixed.
 
 ## Planned by the user for later (all through host callbacks)
 - `AFTER` (one-shot timer, like setTimeout), `EVERY` (recurring timer, like setInterval), `SYMBOL` (redefine one character of the character set).

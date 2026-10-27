@@ -77,6 +77,7 @@ static const testcase_t cases[] = {
     { "left associativity",     "PRINT 10-3-2",                     "5\n" },
     { "string self-append",     "A$=\"X\"\nA$=A$+A$\nPRINT A$",     "XX\n" },
     { "empty PRINT",            "PRINT",                            "\n" },
+    { "PRINT channel is not sticky", "PRINT #3,\"A\":PRINT \"B\"",              "[#3]A[#3]\nB\n" },
     { "PRINT with channel only","PRINT #0,",                         "\n" },
     // ERASE
     { "ERASE numeric array",    "DIM A(3):A(1)=5:ERASE A():PRINT A(1)",                 "0\n" },
@@ -392,6 +393,11 @@ static void out_reset( void ) {
 }
 
 static void vm_print( struct _vm_t* vm, void* usrdata, int channel, const char* text ) {
+    if ( channel != 0 ) {       // make output on other channels visible
+        char tag[24];
+        snprintf( tag, sizeof(tag), "[#%d]", channel );
+        out_append( tag );
+    }
     out_append( text );
 }
 

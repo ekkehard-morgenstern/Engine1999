@@ -285,6 +285,7 @@ bool cgen_not_implemented_yet( compiler_t* comp );
 bool cgen_from_dimstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_datastmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_readstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_gen_channel0( codegen_t* cgen, compiler_t* comp );    // PCHN 0
 bool cgen_from_restorestmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_inputstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_getstmt( codegen_t* cgen, compiler_t* comp, node_t* node );

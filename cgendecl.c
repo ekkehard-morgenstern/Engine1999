@@ -453,7 +453,7 @@ INPUT [#ch,] ["prompt" (;|,)] v1, v2, ...  becomes
     <channel> PCHN  INPL(prompt)  { INPN | INPS, store }...  INPE
 The prompt text (with "? " appended unless the prompt was followed by a comma) is a constant in the data segment.
 GET [#ch,] v1, v2, ...  becomes  <channel> PCHN  { GETK [ASC], store }...
-Without a channel specifier the statement uses channel 0 (the channel of PCHN is otherwise sticky).
+Without a channel specifier the statement uses channel 0 (the channel of PCHN is otherwise sticky; PRINT does the same).
 */
 
 // generates the channel selection: the channel expression of the optional first branch, or 0
@@ -464,15 +464,7 @@ static bool cd_gen_channel( codegen_t* cgen, compiler_t* comp, node_t* node, uin
         }
         return cgen_from_chanspec( cgen, comp, node->branches[0], cgen_gen_pchn );
     }
-    uint16_t off = DATAOFFS_NONE;
-    if ( !cgen_alloc_data( cgen, UINT16_C(8), &off ) || off == DATAOFFS_NONE ) {
-        return cgen_out_of_data_memory( comp );
-    }
-    memset( &cgen->data[ off ], 0, 8U );        // the double 0.0
-    if ( !cgen_gen_phpa_d( cgen, off ) || !cgen_gen_lan_d( cgen ) || !cgen_gen_pchn( cgen ) ) {
-        return cgen_out_of_code_memory( comp );
-    }
-    return true;
+    return cgen_gen_channel0( cgen, comp );
 }
 
 // appends the text of a string literal node to a heap buffer
