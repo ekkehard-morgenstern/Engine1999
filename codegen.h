@@ -193,5 +193,10 @@ bool cgen_from_substrassign( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_anyassign( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_assignlist( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_letstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_stmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_stmtlist( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_stmtline( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_stmtlines( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_program( codegen_t* cgen, compiler_t* comp );    // code for the whole syntax tree (comp->syntree)
 
 #endif

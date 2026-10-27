@@ -48,7 +48,15 @@ Extended: arithmetic/logic (`NEG NOT LSH RSH ADD SUB MUL DIV AND NAND OR NOR XOR
 variable access (`RRNV RRIV RRSV RRLV RNAE RIAE RSAE`, `WR*`/`W*AE`), calls (`CALF RETF`), and BASIC runtime primitives (`TI INKY ASC VAL FRE LEN BINS … MIDS SLFT SRGT SMID SAVE PCHN PNUM PSTR`). See `instset.h` for the full table and bit layouts.
 Immediates: 17-bit signed (`PHIM`, C bit = bit 16) so small integers need no data segment.
 
-There is no executor for this ISA in the repo yet.
+## VM (`vm.[ch]`)
+
+Minimal executor: `init_vm( vm, &codegen, &varmem )`, `vm_run( vm )` (runs from offset 0 to the end of the code, returns `false` after reporting an error), `cleanup_vm`. Stacks are heap arrays that grow on demand; data stack items are tagged number/string (heap, NUL-terminated), so type mismatches are run time errors and strings are freed on errors. Output goes through `vm->print( vm, userdata, channel, text )` (default stdout), errors through `vm->report` (default stderr). `vm->maxsteps` guards against endless loops.
+
+Implemented: control (`NOP PHPA PHIM BRIA BRIR JPCC JUMP DROP LINE`), loads (`LAN LIAN LUAN LAS FRES`), all arithmetic/logical/compare/concat instructions, scalar variable read/write (`RRNV RRIV RRSV WRNV WRIV WRSV`), `PCHN PNUM PSTR`. Not implemented (reported as "Instruction XXX not implemented"): arrays, labels, `CALF/RETF`, system functions, `SHEX`, `SAVE`, `BRK` (reports "Breakpoint").
+
+Policies the ISA leaves open (documented in `vm.h`): comparisons give -1/0; bitwise ops work on 32-bit signed integers; print separator parameter 0 = newline, 4 = `;`, 8 = `,` (next 10-column zone); numbers print with `%.15g`.
+
+Code generator driver: `cgen_from_program( cgen, comp )` handles `NT_STMTLINES` / `NT_STMTLINE` / `NT_STMTLIST` and the statements `LET`, `PRINT`, `SAVE`; other statements report "feature not implemented yet". `LINE` has a 16-bit parameter, so line numbers above 65535 are rejected by code generation for now.
 
 ## Runtime (`runtime.[ch]`)
 

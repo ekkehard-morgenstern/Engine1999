@@ -1797,9 +1797,8 @@ static bool from_printarg_cb( void* param, node_t* node ) {
                 - 1 optional branch of separator
     */
     cbdata_t* pdata = (cbdata_t*) param;
-    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
-    if ( node == NODE_NONE ) {
-        return cgen_bad_node( pdata->comp );
+    if ( node == NODE_NONE ) {  // optional separator not present
+        return true;
     }
     uint8_t nodetype = node->type; uint16_t datalen;
     switch ( nodetype ) {
@@ -1937,9 +1936,8 @@ static bool from_printstmt_cb( void* param, node_t* node ) {
             immediate processing:
                 - generated only if there's more than one print argument
     */
-    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
-    if ( node == NODE_NONE ) {
-        return cgen_bad_node( pdata->comp );
+    if ( node == NODE_NONE ) {  // optional channel and/or argument list not present
+        return true;
     }
     uint8_t nodetype = node->type;
     if ( nodetype == NT_CHANSPEC ) {
@@ -1947,10 +1945,12 @@ static bool from_printstmt_cb( void* param, node_t* node ) {
             return false;
         }
     } else if ( nodetype == NT_PRINTARG ) {
+        pdata->count = UINT16_C(1);
         if ( !cgen_from_printarg( pdata->cgen, pdata->comp, node ) ) {
             return false;
         }
     } else if ( nodetype == NT_PRINTARGLIST ) {
+        pdata->count = UINT16_C(1);
         if ( !cgen_from_printarglist( pdata->cgen, pdata->comp, node ) ) {
             return false;
         }
@@ -2003,6 +2003,17 @@ bool cgen_from_printstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     cbdata_t cbdata = { cgen, comp, node, UINT16_C(0) };
     if ( !comp_node_iter_branches( comp, node, &cbdata, from_printstmt_cb ) ) {
         return false;
+    }
+    if ( cbdata.count == UINT16_C(0) ) {
+        // no arguments: just print a newline, by printing an empty string
+        uint16_t dataoffs = DATAOFFS_NONE;
+        if ( !cgen_alloc_data( cgen, UINT16_C(1), &dataoffs ) || dataoffs == DATAOFFS_NONE ) {
+            return cgen_out_of_data_memory( comp );
+        }
+        cgen->data[ dataoffs ] = '\0';
+        if ( !cgen_gen_phpa_d( cgen, dataoffs ) || !cgen_gen_las_d( cgen ) || !cgen_gen_pstr( cgen, false, UINT16_C(0) ) ) {
+            return cgen_out_of_code_memory( comp );
+        }
     }
     return true;
 }
@@ -2384,3 +2395,87 @@ bool cgen_from_letstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
 // array-dim-decl := num-expr-list | TOK_DYNAMIC | TOK_ASSOC .
 // array-decl := any-base-var-ref TOK_LPAREN array-dim-decl TOK_RPAREN .
 // array-decl-list := array-decl { TOK_COMMA array-decl } .
+
+// -- statements and program --------------------------------------------------
+
+bool cgen_from_stmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    switch ( node->type ) {
+        case NT_LETSTMT:    return cgen_from_letstmt( cgen, comp, node );
+        case NT_PRINTSTMT:  return cgen_from_printstmt( cgen, comp, node );
+        case NT_SAVESTMT:   return cgen_from_savestmt( cgen, comp, node );
+        case NT_STMTLIST:   return cgen_from_stmtlist( cgen, comp, node );
+        default:
+            break;
+    }
+    return cgen_not_implemented_yet( comp );
+}
+
+bool cgen_from_stmtlist( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    // stmt-list := stmt { TOK_COLON stmt } .
+    if ( node == NODE_NONE || node->type != NT_STMTLIST ) {
+        return cgen_bad_node( comp );
+    }
+    for ( size_t i=0; i < node->numbranches; ++i ) {
+        if ( !cgen_from_stmt( cgen, comp, node->branches[i] ) ) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool cgen_from_stmtline( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    /*
+        NT_STMTLINE         Statement line
+            data:
+                - 3 bytes of line number (not present in direct mode)
+            branches:
+                - 1 branch of statement list (or a single statement)
+    */
+    if ( node == NODE_NONE || node->type != NT_STMTLINE || node->numbranches != 1U ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->datalen == UINT16_C(3) ) {
+        uint32_t lineno = ( ( (uint32_t) node->data[0] ) << UINT8_C(16) ) | ( ( (uint32_t) node->data[1] ) << UINT8_C(8) ) |
+            node->data[2];
+        if ( lineno > UINT16_MAX ) {
+            // the LINE instruction only has a 16 bit parameter
+            comp_error( comp, "Line number too large for code generation" );
+            return false;
+        }
+        if ( !cgen_gen_line( cgen, (uint16_t) lineno ) ) {
+            return cgen_out_of_code_memory( comp );
+        }
+    } else if ( node->datalen != UINT16_C(0) ) {
+        return cgen_unexpected_node( comp );
+    }
+    return cgen_from_stmt( cgen, comp, node->branches[0] );
+}
+
+bool cgen_from_stmtlines( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    // stmt-lines := stmt-line { stmt-line } .
+    if ( node == NODE_NONE || node->type != NT_STMTLINES ) {
+        return cgen_bad_node( comp );
+    }
+    for ( size_t i=0; i < node->numbranches; ++i ) {
+        if ( !cgen_from_stmtline( cgen, comp, node->branches[i] ) ) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool cgen_from_program( codegen_t* cgen, compiler_t* comp ) {
+    // generates code for the syntax tree root, which is either several statement lines, a single one,
+    // or the statement line of a direct mode line
+    node_t* root = comp->syntree;
+    if ( root == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( root->type == NT_STMTLINES ) {
+        return cgen_from_stmtlines( cgen, comp, root );
+    }
+    return cgen_from_stmtline( cgen, comp, root );
+}

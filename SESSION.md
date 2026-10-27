@@ -23,6 +23,9 @@ Maintained by Claude; updated whenever work in a session changes something. Last
 
 - Syntax tree (`bascomp`) converted from the 64 KiB byte arena to heap `node_t` nodes with a growable branch array (`NODE_NONE` = null, optional branches may be `NODE_NONE`); `compiler_t.nodes` chains all nodes, freed by `cleanup_compiler()`/`comp_free_tree()`. `codegen.c/h`, `basictest2.c` converted. Fixed latent bug: base var-ref node data is `<type> <name>` (no length byte); old code read the first name char as the length. `cgen_from_substrassign` datalen check read the wrong field (now `node->datalen`). Verified: basictest2 tree dumps identical to the previous build on a varied input; valgrind clean. codegen is not exercised by any test program (compile-only verified).
 
+- Added the minimal VM `vm.[ch]` (see `docs/compiler-and-vm.md`) and the automated end-to-end test `vmtest1.c` (32 cases, all passing, valgrind clean; exit status = number of failures). Codegen got a statement/line/program driver (`cgen_from_stmt/stmtlist/stmtline/stmtlines/program`) for LET/PRINT/SAVE, absent optional PRINT branches are skipped, and an empty PRINT now emits a newline. The harness found one bug in the VM itself (string concat over-read), fixed.
+- Known gaps: statements other than LET/PRINT/SAVE report "not implemented yet"; `LINE` takes a 16-bit parameter, so codegen rejects line numbers > 65535; VM policies (comparison = -1, number format `%.15g`, comma zones of 10) are placeholders chosen by me, see `vm.h`.
+
 ## Open / next steps
 - Remaining limits not touched: 64 KiB code/data/var memories, variable names ≤ 255 (`vars.c`), `engine1999` 256-byte input line, `codegen` coverage (see `docs/compiler-and-vm.md`).
-- No automated tests exist; consider adding a round-trip test program if desired.
+- Next (codegen strategy): GOTO/GOSUB/RETURN, IF, FOR/NEXT (line/label → address map with fix-ups), then DIM/ERASE/DEF FN and array/function instructions in the VM; whole-program compile with a line table; growable code/data segments.

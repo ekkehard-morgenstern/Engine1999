@@ -19,10 +19,10 @@ Remaining fixed limits (vars, code, variable *names* ≤ 255) are listed in `doc
 
 ## Build
 
-- `make` builds `sdltest1 engine1999 basictest1 testcomp1 basictest2` and `engine.lib` (static archive of all modules).
+- `make` builds `sdltest1 engine1999 basictest1 testcomp1 basictest2 vmtest1` and `engine.lib` (static archive of all modules).
 - `make DEBUG=1` → `-g` instead of `-O3`. Flags: `-Wall -Werror -p -march=native` (warnings are errors; `-p` writes `gmon.out`).
 - Needs `gcc`, SDL2 (`-lSDL2 -lrt -lm`). Only `sdltest1` and `engine1999` link SDL2.
-- No test framework; the `*test*` programs are interactive/manual (see `docs/build-and-test.md`).
+- `vmtest1` is the automated regression test (run `./vmtest1`, exit status = failures); the other `*test*` programs are interactive/manual (see `docs/build-and-test.md`).
 - The makefile has a stale `8x12font.o` rule (file is `8x12font1.c`) and every object depends on *all* headers.
 - Build artifacts (`*.o`, binaries, `engine.lib`, `gmon.out`, `all`) are git-ignored but present in the working tree.
 
@@ -44,6 +44,6 @@ Remaining fixed limits (vars, code, variable *names* ≤ 255) are listed in `doc
 | BASIC tokenizer | `bastok.[ch]` (token IDs, tokenize/detokenize, literal codecs) |
 | Program store | `baslin.[ch]` (`line_t` nodes, encoded `linehdr_t`), `baspgm.[ch]` (pointer-linked list of lines, insert/replace/delete/list) |
 | Compiler front end | `bascomp.[ch]` + `bascomp.ebnf` (recursive descent → syntax tree), `nodetype.[ch]` (node types) |
-| Back end | `codegen.[ch]`, `instset.h` (ISA spec), `vars.[ch]` (variable/string memory), `runtime.[ch]` |
-| Executables | `engine1999.c` (main app), `sdltest1.c`, `basictest1.c`, `basictest2.c`, `testcomp1.c` |
+| Back end | `codegen.[ch]`, `instset.h` (ISA spec), `vars.[ch]` (variable/string memory), `runtime.[ch]`, `vm.[ch]` (minimal VM executor) |
+| Executables | `engine1999.c` (main app), `sdltest1.c`, `basictest1.c`, `basictest2.c`, `testcomp1.c`, `vmtest1.c` (automated back-end test) |
 | Tools/data | `fontcomp.pl` (8x12font1.txt → 8x12font1.c), `colors-*.txt`, `concept.txt` (design notes) |
