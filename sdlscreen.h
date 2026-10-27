@@ -63,8 +63,17 @@ uint64_t sdlscr_getframecnt( void );
 sdlscr_inputmsg_t* sdlscr_dequeueinputmsg( void );
 void sdlscr_enableinput( bool enable );
 
+// keyboard access for running programs (INKEY$, GET); the calling thread is the main thread, the keys come from the
+// screen thread. ESC is not a key then: it is the break request.
+void sdlscr_pollkeys( bool enable );        // queue keys (without the cursor) while a program runs; clears the break request
+int sdlscr_pollkey( void );                 // the next key code, 0 = none
+int sdlscr_getkey( void );                  // waits for a key; -1 = screen closed or break requested
+bool sdlscr_breakrequested( void );         // ESC was pressed (or the screen was closed) since sdlscr_pollkeys( true )
+// key codes: printable ASCII as is, 13 = RETURN, 8 = BACKSPACE, 9 = TAB
+
 // text screen functions
 void sdlscr_printf( int y, int x, int bg, int fg, const char* fmt, ... );
+void sdlscr_puts( const char* text );        // prints text of any length at the cursor, in the current colors
 int sdlscr_lineinput( int stop_evtmsk, char* buf, size_t bufsz, void (*vblank_handler)( void* ), void* usrdata );
 void sdlscr_gettextscreensize( int* outsx, int* outsy );
 void sdlscr_gettextcursor( int* outx, int* outy );

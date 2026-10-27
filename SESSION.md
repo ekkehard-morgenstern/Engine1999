@@ -1,6 +1,6 @@
 # Session state
 
-Maintained by Claude; updated whenever work in a session changes something. Last update: 2026-10-27 (CHR$ added).
+Maintained by Claude; updated whenever work in a session changes something. Last update: 2026-10-27 (host wiring: REPL in engine1999).
 Read this first when resuming; details are in `docs/` (start with `docs/README.md`) and `CLAUDE.md`.
 
 ## Standing rules
@@ -8,12 +8,13 @@ Read this first when resuming; details are in `docs/` (start with `docs/README.m
 - Keep this file and `docs/` current when work changes the state.
 
 ## Repo state
-- Branch `feature/refactor-to-remove-some-limits`; latest commit `5a7f6b3` ("PRINT output channel fix"); the INPUT/GET work is in `7e16a40`.
-- **Uncommitted (for the user to commit):** `CHR$` — `bastok.[ch]`, `bascomp.c`, `bascomp.ebnf`, `codegen.[ch]`, `instset.h`, `vm.[ch]`, `vmtest1.c`, `docs/basic-language.md`, `docs/compiler-and-vm.md`, this file. `make` and all tests pass.
+- Branch `feature/refactor-to-remove-some-limits`; latest commit `8a98b3f` ("CHR$() function"); INPUT/GET are in `7e16a40`, the PRINT channel fix in `5a7f6b3`.
+- **Uncommitted (for the user to commit):** the host wiring — new `basrepl.[ch]`, `repltest1.c`; changed `engine1999.c`, `sdlscreen.[ch]`, `sdlevent.[ch]`, `vm.[ch]`, `makefile`, `CLAUDE.md`, `docs/architecture.md`, `docs/build-and-test.md`, `docs/compiler-and-vm.md`, this file. `make` builds cleanly, `vmtest1` (317), `repltest1` (36) and `testcomp1` pass, valgrind clean.
 - `make` builds `sdltest1 engine1999 basictest1 testcomp1 basictest2 vmtest1` + `engine.lib` cleanly with `-Wall -Werror`.
 
 ## Tests (run these after any change)
 - `./vmtest1` — automated end-to-end test (BASIC text → tokens → syntax tree → code → VM → output). **317 cases, all pass**; exit status = number of failures; `-v` shows compiler/codegen debug output. Add a case for every new statement/instruction. Also run it under `valgrind --leak-check=full -q` (clean).
+- `./repltest1` — automated test of the REPL (`basrepl.c`) without a screen: direct mode, stored lines, RUN/LIST/NEW, INPUT/GET, Break; **36 cases, all pass**; exit status = number of failures.
 - `./testcomp1` — randomized stress test of the variable store (5000 operations vs a shadow model), exit status 0 = passed; takes ~3 s. (Its random names used to be sometimes empty, which made it flake; fixed.)
 - `basictest1` / `basictest2` — interactive tokenizer / parser tools (pipe lines into them). `basictest2` prints the syntax tree.
 
@@ -29,6 +30,9 @@ Read this first when resuming; details are in `docs/` (start with `docs/README.m
 - **VM** (`vm.[ch]`, minimal executor): all instructions except `WRLV` and `BRK`; system functions (TI, INKEY$, FRE, ASC, LEN, VAL, STR$, BIN$/QUA$/OCT$/HEX$/DEC$, LEFT$/RIGHT$/MID$), SHEX (popen), SAVE (host callback `vm->save`), function calls with saved parameter contexts. Policies the ISA leaves open are documented in the comment at the top of `vm.h`.
 - **Every statement in `bascomp.ebnf` has code generation.** The removed `basintp` interpreter stub is gone (the system compiles, it doesn't interpret).
 
+- **Host wiring is done**: `engine1999` runs the REPL in the main thread (`basrepl.[ch]`; the SDL screen thread only renders and queues keys). Callbacks: print → `sdlscr_puts`, INPUT → `sdlscr_lineinput`, GET → `sdlscr_getkey`, INKEY$ → `sdlscr_pollkey`, interrupt → `sdlscr_breakrequested`, SAVE → `repl_save_program`. **ESC = break** (while a line runs). Verified on the real screen under `Xvfb` + `metacity` + XTest key injection (PRINT, INPUT with prompt, GET, INKEY$, RUN/LIST, Break in a loop and at INPUT/GET, errors); the scripts are in the session scratchpad only, not in the repo. Details: `docs/compiler-and-vm.md` ("Host wiring").
+- `RUN`, `NEW`, `LIST [first[-last]]` exist only as **host level commands in `repl_enter()`** (no grammar, can't be used inside programs); the real program commands are still to be designed.
+
 ## ISA changes made (instset.h is up to date)
 - New `RDNM` (0x117), `RDST` (0x11E), `RSTR` (0x11F) for DATA/READ/RESTORE (item records chained in the data segment). New `ERAS` (0x116): resets an array. `SLFT/SRGT/SMID` take the variable number as parameter and `( s n inx … ndim -- )` / `( s start len inx … ndim -- )` from the stack (ndim 0 = plain variable).
 
@@ -39,6 +43,7 @@ Read this first when resuming; details are in `docs/` (start with `docs/README.m
 - DATA items are numeric literals (signed) and string literals only; they live in the 64 KiB data segment; `RESTORE n` means the first item in line ≥ n; a program run (`vm_run`) starts at the first item, `vm_run_at` keeps the pointer (so a persistent REPL VM keeps its data pointer across lines).
 - The syntax tree stores the variable number (not a `var_t*`) in node data bytes.
 
+- ESC is the break key while a line runs (not delivered as a key code); Break ends the program with `? Break in line N`. Output on channels other than 0 is discarded by `engine1999` (no devices yet). Every direct mode line appends code (64 KiB limit) until NEW/RUN.
 - INPUT: prompt must be plain string literal(s); `;` adds "? ", `,` doesn't. Bad/missing field → "?Redo from start" (fields already stored stay stored), extra fields → "?Extra ignored", empty numeric field = 0. GET waits for a key (numeric variable gets the key code). INPUT/GET without `#ch` emit `PCHN 0`.
 - `PRINT`, `INPUT` and `GET` all select their channel explicitly (`PCHN`, 0 when there is no `#ch`), because the VM's channel is sticky (`cgen_gen_channel0()` in `codegen.c`). Previously a plain `PRINT` after `PRINT #1,…` stayed on channel 1; fixed.
 
@@ -48,5 +53,5 @@ Read this first when resuming; details are in `docs/` (start with `docs/README.m
 ## Open / next steps
 - No grammar/semantics yet (each needs a language design): `PUT`, `OFF`, `AFTER`, `EVERY`, `SYMBOL`, `OPTION BASE`, `INT`/`STR`/`FLT`, and the program commands `RUN`, `NEW`, `LIST`, `LOAD`, `DELETE`, `RENUM`, `CLEAR`, `EDIT`, `MERGE`, `CHAIN`, `FILES`. 
 - VM instructions not implemented: `WRLV`, `BRK`.
-- Host side: `engine1999.c` doesn't use the compiler/VM yet (nothing wires `vm->save`, `vm->inkey`, `vm->input`, `vm->getkey`, `vm->print` to the real screen/files); direct mode can't `GOTO` into a stored program and its code must persist between lines (the test harness appends direct lines and runs from the new start offset with `vm_run_at()`); a loader for the binary SAVE format (with a signature) doesn't exist.
+- Host side: the compiler's and code generator's debug output (`*** TOKEN:`, the disassembly) still goes to stdout (`vmtest1`/`repltest1` silence it by redirecting fd 1); `engine1999` doesn't. Direct mode can't `GOTO` into a stored program, and its code accumulates in the code segment until NEW/RUN. `vmtest1` still has its own copy of the compile-and-run logic (could use `basrepl`). No file channels (`#n` other than 0), no cursor/function keys for `GET`/`INKEY$`, column tracking for `PRINT ,` ignores screen wrap. A loader for the binary SAVE format (with a signature) doesn't exist.
 - Remaining limits: 64 KiB code/data segments (16-bit ISA addresses), 16-bit variable numbers, 16-bit `LINE` parameter (codegen rejects line numbers > 65535), `engine1999` 256-byte input line, VM strings ≤ 65535 bytes.

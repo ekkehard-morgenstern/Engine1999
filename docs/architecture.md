@@ -12,10 +12,16 @@
  +-----------------------------------------------------------------------------------+
 ```
 
-`engine1999.c` currently only wires up the display (`sdl_init`), prints the GPL notice, and runs a
-"Ready." line-input loop that understands `SHOW WARRANTY` / `SHOW COPYING` (paged via `pager()`).
-It does **not** yet call the BASIC pipeline. The pipeline is exercised by the separate test programs.
-All modules except `sdl*`/`*screen` use only the C library, so the BASIC system can be built and tested without SDL.
+`engine1999.c` wires up the display (`sdl_init`), prints the GPL notice and runs the REPL in the **main thread**:
+a "Ready." line-input loop (`sdlscr_lineinput`) that understands `SHOW WARRANTY` / `SHOW COPYING` (paged via `pager()`)
+and hands every other line to `repl_enter()` (`basrepl.[ch]`: direct mode, stored program lines, `RUN`/`LIST`/`NEW`).
+The **screen runs in its own worker thread** (`sdlscreen.c`): it renders the layers and collects the keyboard events into a
+queue; the main thread talks to it through `sdlscr_*` (output with `sdlscr_puts`, line input `sdlscr_lineinput`, single
+keys `sdlscr_pollkey` / `sdlscr_getkey`) and waits for events with `sdlev_wait`. The host callbacks of the VM
+(`vm->print`, `inkey`, `getkey`, `input`, `interrupt`, `save`) are implemented in `engine1999.c` on top of these
+(see "Host wiring" in `compiler-and-vm.md`).
+All modules except `sdl*`/`*screen` (and `engine1999.c`) use only the C library, so the BASIC system, including the REPL,
+can be built and tested without SDL.
 
 ## BASIC pipeline (data flow)
 

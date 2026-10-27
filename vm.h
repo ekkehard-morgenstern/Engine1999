@@ -69,6 +69,8 @@ Policies chosen by this implementation (the instruction set does not define them
         INPUT       the prompt goes through the print callback, the line comes from the input callback (without a
                     callback: stdin; the host is expected to echo the typed line, so the VM sets the column to 0);
                     end of input is an error. Missing/non-numeric fields: "?Redo from start", see instset.h (INPN)
+        interrupt   a running program is stopped with the error "Break" if the interrupt callback returns true; the
+                    callback is also asked when the input callback returns nothing, to tell "Break" from "End of input"
         GET         waits for a key from the getkey callback; without one the inkey callback is polled every
                     millisecond; without both the key is read from stdin (getchar). Key code <= 0 = end of input (error)
         CHR$(n)     the one-character string with code n; n must be 1..255 (no NUL in strings), else an error
@@ -85,6 +87,7 @@ Policies chosen by this implementation (the instruction set does not define them
 #define VM_PRINT_SEP_SEMIC  UINT16_C(4)
 #define VM_PRINT_SEP_COMMA  UINT16_C(8)
 #define VM_ZONE_WIDTH       10U
+#define VM_INTERRUPT_STEPS  4096U
 
 typedef struct _vmval_t {
     bool    isstr;          // item is a string pointer, otherwise a number
@@ -130,6 +133,7 @@ typedef struct _vm_t {
     int             (*inkey)( struct _vm_t*, void* );                              // INKEY$: key code, 0 = none
     char*           (*input)( struct _vm_t*, void*, int channel );                 // INPUT: a line (malloc'd, without newline), 0 = end of input
     int             (*getkey)( struct _vm_t*, void*, int channel );                // GET: waits for a key code (1..255), <= 0 = end of input
+    bool            (*interrupt)( struct _vm_t*, void* );                          // polled every VM_INTERRUPT_STEPS instructions and when INPUT/GET get no input: true = stop ("Break")
     bool            (*save)( struct _vm_t*, void*, const char* filename, bool ascii );  // SAVE: the host saves the program
     struct timespec started;        // for the system timer TI
 } vm_t;

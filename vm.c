@@ -54,6 +54,7 @@ void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem ) {
     vm->report   = 0;
     vm->inkey    = 0;
     vm->input    = 0;
+    vm->interrupt = 0;
     vm->getkey   = 0;
     vm->inbuf    = 0;
     vm->inlen    = vm->inpos = 0;
@@ -530,6 +531,10 @@ static bool vm_read_data( vm_t* vm, bool wantstr ) {
 
 // -- INPUT, GET ----------------------------------------------------------------
 
+static bool vm_interrupted( vm_t* vm ) {
+    return vm->interrupt && vm->interrupt( vm, vm->userdata );
+}
+
 // the line from the host (malloc'd, no newline), 0 = end of input
 static char* vm_get_line( vm_t* vm ) {
     if ( vm->input ) {
@@ -557,7 +562,7 @@ static bool vm_input_line( vm_t* vm, uint16_t promptoffs, uint32_t inspc ) {
     free( vm->inbuf );
     vm->inbuf = vm_get_line( vm );
     if ( vm->inbuf == 0 ) {
-        return vm_error( vm, "End of input" );
+        return vm_error( vm, vm_interrupted( vm ) ? "Break" : "End of input" );
     }
     vm->inlen  = strlen( vm->inbuf );
     vm->inpos  = 0;
@@ -691,7 +696,7 @@ static bool vm_get_key( vm_t* vm ) {
         key = getchar();
     }
     if ( key <= 0 || key > 255 ) {
-        return vm_error( vm, "End of input" );
+        return vm_error( vm, vm_interrupted( vm ) ? "Break" : "End of input" );
     }
     char buf[2] = { (char) key, '\0' };
     char* s = vm_new_string( vm, buf, 1U );
@@ -1378,8 +1383,12 @@ bool vm_run_at( vm_t* vm, uint32_t start ) {
     vm->column = 0;
     uint64_t steps = UINT64_C(0);
     while ( vm->pc < vm->cgen->codesize ) {
-        if ( vm->maxsteps && ++steps > vm->maxsteps ) {
+        ++steps;
+        if ( vm->maxsteps && steps > vm->maxsteps ) {
             return vm_error( vm, "Step limit exceeded" );
+        }
+        if ( vm->interrupt && steps % VM_INTERRUPT_STEPS == 0 && vm_interrupted( vm ) ) {
+            return vm_error( vm, "Break" );
         }
         if ( !vm_step( vm ) ) {
             return false;

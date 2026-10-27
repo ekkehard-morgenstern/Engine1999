@@ -27,6 +27,7 @@
 #include "sdlscreen.h"
 #include "sdlevent.h"
 #include "sdlaudio.h"
+#include "basrepl.h"
 
 static const char warranty[] =
 "  15. Disclaimer of Warranty.\n"
@@ -680,6 +681,79 @@ static void ucase_buf( char* buf ) {
 static usrdata_t usrdata;
 static jmp_buf ready_jump, exit_jump;
 
+// -- BASIC host callbacks ---------------------------------------------------------
+//
+// The screen runs in its own thread (sdlscreen.c); the REPL and the VM run in the main thread and talk to it through
+// the sdlscr_* functions: output is written to the text screen directly, keys are queued by the screen thread and
+// fetched here (sdlscr_pollkey, sdlscr_getkey, sdlscr_lineinput). ESC stops a running program.
+
+static repl_t repl;
+
+// channel 0 is the screen; there are no other devices yet, so output to other channels is discarded
+static void host_print( struct _vm_t* vm, void* usrdata, int channel, const char* text ) {
+    if ( channel == 0 ) {
+        sdlscr_puts( text );
+    }
+}
+
+// starts a new line unless the cursor is at the beginning of one
+static void host_newline( void ) {
+    int x = 0, y = 0;
+    sdlscr_gettextcursor( &x, &y );
+    if ( x != 0 ) {
+        sdlscr_puts( "\n" );
+    }
+}
+
+static void host_report( struct _repl_t* r, const char* text ) {
+    host_newline();
+    sdlscr_puts( text );
+}
+
+static int host_inkey( struct _vm_t* vm, void* usrdata ) {
+    return sdlscr_pollkey();
+}
+
+static int host_getkey( struct _vm_t* vm, void* usrdata, int channel ) {
+    return channel == 0 ? sdlscr_getkey() : -1;
+}
+
+// INPUT: the user types the line on the screen (the echo is done by the line editor)
+static char* host_input( struct _vm_t* vm, void* vmdata, int channel ) {
+    if ( channel != 0 ) {
+        return 0;
+    }
+    char buf[1024]; buf[0] = '\0';
+    int ev = sdlscr_lineinput( SDLEV_BREAK, buf, sizeof(buf), vblank_handler, &usrdata );
+    if ( ev & ( SDLEV_BREAK | SDLEV_SCREENWORKERFINISHED ) ) {
+        return 0;
+    }
+    return strdup( buf );
+}
+
+static bool host_interrupt( struct _vm_t* vm, void* usrdata ) {
+    return sdlscr_breakrequested();
+}
+
+static bool host_save( struct _vm_t* vm, void* usrdata, const char* filename, bool ascii ) {
+    return repl_save_program( (repl_t*) usrdata, filename, ascii );
+}
+
+static void init_host( void ) {
+    if ( !init_repl( &repl ) ) {
+        fprintf( stderr, "failed to initialize the BASIC system\n" );
+        exit( EXIT_FAILURE );
+    }
+    repl.report    = host_report;
+    repl.print     = host_print;
+    repl.inkey     = host_inkey;
+    repl.input     = host_input;
+    repl.getkey    = host_getkey;
+    repl.interrupt = host_interrupt;
+    repl.save      = host_save;
+}
+
+
 #define PAGER_TEXT_COLOR    22
 #define PAGER_QUERY_COLOR   51
 
@@ -740,18 +814,35 @@ static void pager( const char *text ) {
     longjmp( ready_jump, 1 );
 }
 
-static void handle_input( char* buf ) {
-    ucase_buf( buf );
-    // sdlscr_printf( -1, -1, -1, -1, "%s\n", buf );
-    if ( strcmp( buf, "SHOW WARRANTY" ) == 0 ) {
-        pager( warranty );
-        // does not return
+// returns false if the line was empty
+static bool handle_input( const char* buf ) {
+    const char* p = buf;
+    while ( *p == ' ' || *p == '\t' ) {
+        ++p;
     }
-    if ( strcmp( buf, "SHOW COPYING" ) == 0 ) {
-        pager( copying );
-        // does not return
+    if ( *p == '\0' ) {
+        return false;
     }
-    // ...
+    char* ucase = strdup( buf );
+    if ( ucase != 0 ) {
+        ucase_buf( ucase );
+        if ( strcmp( ucase, "SHOW WARRANTY" ) == 0 ) {
+            free( ucase );
+            pager( warranty );
+            // does not return
+        }
+        if ( strcmp( ucase, "SHOW COPYING" ) == 0 ) {
+            free( ucase );
+            pager( copying );
+            // does not return
+        }
+        free( ucase );
+    }
+    // everything else is BASIC: a numbered line is stored, anything else is run now
+    sdlscr_pollkeys( true );
+    repl_enter( &repl, buf );
+    sdlscr_pollkeys( false );
+    return true;
 }
 
 int main( int argc, char** argv ) {
@@ -761,6 +852,7 @@ int main( int argc, char** argv ) {
     srand( time(0) );
 
     init_usrdata( &usrdata );
+    init_host();
 
 #define TITLECOLOR  3
 #define INFOCOLOR   6
@@ -784,18 +876,23 @@ int main( int argc, char** argv ) {
         // uint64_t last = sdlscr_getnsec(0);
 
         setjmp( ready_jump );
+        host_newline();
         sdlscr_printf( -1, -1, -1, -1, "%s", "Ready.\n" );
 
         while ( !sdlscr_term() ) {
             char buf[256]; buf[0] = '\0';
             int ev = sdlscr_lineinput( 0, buf, 256U, vblank_handler, &usrdata );
             if ( ev & SDLEV_SCREENWORKERFINISHED ) break;
-            handle_input( buf );
+            if ( handle_input( buf ) ) {
+                host_newline();
+                sdlscr_printf( -1, -1, -1, -1, "%s", "Ready.\n" );
+            }
         }
 
         break;
     }
 
 EXIT:
+    cleanup_repl( &repl );
     return EXIT_SUCCESS;
 }

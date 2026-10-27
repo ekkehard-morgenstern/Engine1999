@@ -50,6 +50,12 @@ void sdlev_raise( int evtmsk ) {
     SDL_UnlockMutex( sdlev_mtx );
 }
 
+void sdlev_clear( int evtmsk ) {
+    SDL_LockMutex( sdlev_mtx );
+    sdlev_pending &= ~evtmsk;
+    SDL_UnlockMutex( sdlev_mtx );
+}
+
 #define SDLEV_WAIT_MIN_NSEC     UINT64_C(250000)
 #define SDLEV_WAIT_MAX_NSEC     UINT64_C(4000000)
 

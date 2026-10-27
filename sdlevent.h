@@ -39,10 +39,12 @@
 #define SDLEV_AUDIOWORKERINITDONE   (1 << 3)
 #define SDLEV_AUDIOWORKERFINISHED   (1 << 4)
 #define SDLEV_INPUT                 (1 << 5)
+#define SDLEV_BREAK                 (1 << 6)    // ESC pressed while a program is running (see sdlscr_pollkeys)
 
 bool sdlev_init( void );
 void sdlev_cleanup( void );
 void sdlev_raise( int evtmsk );
+void sdlev_clear( int evtmsk );
 int sdlev_wait( int evtmsk );
 
 #endif

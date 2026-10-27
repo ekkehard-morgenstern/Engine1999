@@ -81,7 +81,9 @@ static uint32_t sdlscr_bgcol = UINT32_C(0XFF708090); // SlateGray
 static SDL_Thread* sdlscr_workerthr = 0;
 
 static uint64_t sdlscr_framecnt = 0;
-static bool sdlscr_awaitinput = false;
+static volatile bool sdlscr_awaitinput = false;     // line input in progress: queue keys, show the cursor
+static volatile bool sdlscr_pollinput = false;      // a program is running: queue keys, ESC = break
+static volatile bool sdlscr_breakreq = false;
 static SDL_mutex* sdlscr_inputmtx = 0;
 
 #define SDLSCR_INPUTQUEUE_SIZE  16
@@ -162,14 +164,19 @@ uint64_t sdlscr_getframecnt( void ) {
 }
 
 static void sdlscr_handlekey( SDL_KeyCode key ) {
-    if ( !sdlscr_awaitinput ) return;
+    if ( !sdlscr_awaitinput && !sdlscr_pollinput ) return;
+    if ( key == SDLK_ESCAPE && sdlscr_pollinput ) {
+        sdlscr_breakreq = true;
+        sdlev_raise( SDLEV_BREAK );
+        return;
+    }
     if ( sdlscr_enqueuekeypress( key ) ) {
         sdlev_raise( SDLEV_INPUT );
     }
 }
 
 static void sdlscr_handletext( const char text[SDL_TEXTINPUTEVENT_TEXT_SIZE] ) {
-    if ( !sdlscr_awaitinput ) return;
+    if ( !sdlscr_awaitinput && !sdlscr_pollinput ) return;
     if ( sdlscr_enqueuetext( text ) ) {
         sdlev_raise( SDLEV_INPUT );
     }
@@ -246,7 +253,7 @@ static int sdlscr_worker( void* arg ) {
     struct timespec lts;
     uint64_t lastTick = sdlutil_getnsec( &lts );
 
-    bool oldawaitinput = false;
+    bool oldwantinput = false;
 
     // main loop
     for (;;) {
@@ -256,13 +263,14 @@ static int sdlscr_worker( void* arg ) {
 
         ++sdlscr_framecnt;
 
-        if ( sdlscr_awaitinput != oldawaitinput ) {
-            if ( sdlscr_awaitinput ) {
+        bool wantinput = sdlscr_awaitinput || sdlscr_pollinput;
+        if ( wantinput != oldwantinput ) {
+            if ( wantinput ) {
                 SDL_StartTextInput();
             } else {
                 SDL_StopTextInput();
             }
-            oldawaitinput = sdlscr_awaitinput;
+            oldwantinput = wantinput;
         }
 
         if ( sdlscr_awaitinput && ( txtscr_enablecursor( true ) || txtscr_blinkcursor() ) ) {
@@ -325,7 +333,7 @@ static int sdlscr_worker( void* arg ) {
         lastTick = now; lts = ts;
     }
 
-    if ( oldawaitinput ) {
+    if ( oldwantinput ) {
         SDL_StopTextInput();
     }
 
@@ -393,6 +401,86 @@ void sdlscr_printf( int y, int x, int bg, int fg, const char* fmt, ... ) {
       va_end( ap );
       txtscr_print( y, x, bg, fg, buf );
       sdllay_set_modified( &layers[LAY_TXT] );
+}
+
+void sdlscr_puts( const char* text ) {
+    txtscr_print( -1, -1, -1, -1, text );
+    sdllay_set_modified( &layers[LAY_TXT] );
+}
+
+// -- keyboard access for running programs ---------------------------------------------
+
+static void sdlscr_flushinput( void ) {
+    sdlscr_inputmsg_t* msg;
+    while ( ( msg = sdlscr_dequeueinputmsg() ) != 0 ) {
+        sdlscr_deleteinputmsg( msg );
+    }
+}
+
+void sdlscr_pollkeys( bool enable ) {
+    if ( enable ) {
+        sdlscr_flushinput();
+        sdlscr_breakreq = false;
+        sdlev_clear( SDLEV_BREAK );
+    }
+    sdlscr_pollinput = enable;
+    if ( !enable ) {
+        sdlscr_flushinput();
+    }
+}
+
+// the key code of an input message, 0 if it isn't a key we deliver
+static int sdlscr_msgtokey( const sdlscr_inputmsg_t* msg ) {
+    if ( msg->inputtype == SDLSCR_INPUT_KEYPRESS ) {
+        switch ( msg->symbol ) {
+            case SDLK_RETURN:       return 13;
+            case SDLK_BACKSPACE:    return 8;
+            case SDLK_TAB:          return 9;
+            default:                return 0;
+        }
+    }
+    if ( msg->inputtype == SDLSCR_INPUT_TEXT && msg->text[0] != '\0' && msg->text[1] == '\0' ) {
+        int chr = msg->text[0] & 255;
+        if ( chr >= 32 && chr < 127 ) {
+            return chr;
+        }
+    }
+    return 0;       // other keys and Unicode text: ignored for now
+}
+
+int sdlscr_pollkey( void ) {
+    sdlscr_inputmsg_t* msg;
+    while ( ( msg = sdlscr_dequeueinputmsg() ) != 0 ) {
+        int key = sdlscr_msgtokey( msg );
+        sdlscr_deleteinputmsg( msg );
+        if ( key ) {
+            return key;
+        }
+    }
+    return 0;
+}
+
+bool sdlscr_breakrequested( void ) {
+    return sdlscr_breakreq || sdlscr_term();
+}
+
+int sdlscr_getkey( void ) {
+    bool oldpoll = sdlscr_pollinput;
+    sdlscr_pollinput = true;
+    int key = 0;
+    for (;;) {
+        key = sdlscr_pollkey();
+        if ( key ) {
+            break;
+        }
+        int ev = sdlev_wait( SDLEV_INPUT | SDLEV_BREAK | SDLEV_SCREENWORKERFINISHED | SDLEV_VBLANK );
+        if ( ( ev & ( SDLEV_BREAK | SDLEV_SCREENWORKERFINISHED ) ) || sdlscr_breakrequested() ) {
+            key = -1;
+            break;
+        }
+    }
+    sdlscr_pollinput = oldpoll;
+    return key;
 }
 
 int sdlscr_lineinput( int stop_evtmsk, char* buf, size_t bufsz, void (*vblank_handler)( void* ), void* usrdata ) {
