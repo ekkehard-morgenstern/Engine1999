@@ -1,6 +1,6 @@
 # Session state
 
-Maintained by Claude; updated whenever work in a session changes something. Last update: 2026-10-28 (end of session; the user will resume later).
+Maintained by Claude; updated whenever work in a session changes something. Last update: 2026-10-27 (INPUT/GET added).
 Read this first when resuming; details are in `docs/` (start with `docs/README.md`) and `CLAUDE.md`.
 
 ## Standing rules
@@ -8,16 +8,17 @@ Read this first when resuming; details are in `docs/` (start with `docs/README.m
 - Keep this file and `docs/` current when work changes the state.
 
 ## Repo state
-- Branch `feature/refactor-to-remove-some-limits`; latest commit `d554d0d` ("Claude session state updated").
-- **Uncommitted at the last update (for the user to commit):** the DATA/READ/RESTORE work — `bascomp.[ch]`, `bascomp.ebnf`, `cgenctl.c`, `cgendecl.c`, `codegen.[ch]`, `instset.h`, `nodetype.[ch]`, `vm.[ch]`, `vmtest1.c`, `docs/basic-language.md`, `docs/compiler-and-vm.md`, this file. It builds cleanly and all tests pass.
+- Branch `feature/refactor-to-remove-some-limits`; latest commit `c5c2214` ("DATA/READ/RESTORE statements").
+- **Uncommitted (for the user to commit):** the INPUT/GET work — `bascomp.[ch]`, `bascomp.ebnf`, `cgendecl.c`, `codegen.[ch]`, `instset.h`, `nodetype.[ch]`, `vm.[ch]`, `vmtest1.c`, `docs/basic-language.md`, `docs/compiler-and-vm.md`, this file. It builds cleanly and all tests pass.
 - `make` builds `sdltest1 engine1999 basictest1 testcomp1 basictest2 vmtest1` + `engine.lib` cleanly with `-Wall -Werror`.
 
 ## Tests (run these after any change)
-- `./vmtest1` — automated end-to-end test (BASIC text → tokens → syntax tree → code → VM → output). **281 cases, all pass**; exit status = number of failures; `-v` shows compiler/codegen debug output. Add a case for every new statement/instruction. Also run it under `valgrind --leak-check=full -q` (clean).
+- `./vmtest1` — automated end-to-end test (BASIC text → tokens → syntax tree → code → VM → output). **308 cases, all pass**; exit status = number of failures; `-v` shows compiler/codegen debug output. Add a case for every new statement/instruction. Also run it under `valgrind --leak-check=full -q` (clean).
 - `./testcomp1` — randomized stress test of the variable store (5000 operations vs a shadow model), exit status 0 = passed; takes ~3 s. (Its random names used to be sometimes empty, which made it flake; fixed.)
 - `basictest1` / `basictest2` — interactive tokenizer / parser tools (pipe lines into them). `basictest2` prints the syntax tree.
 
 ## What exists (the whole pipeline works)
+- **INPUT and GET** are implemented (`INPUT [#ch,] ["prompt"(;|,)] vars`, `GET [#ch,] vars`; instructions `INPL 0x134, INPN 0x135, INPS 0x136, INPE 0x137, GETK 0x138`; host callbacks `vm->input` (line) and `vm->getkey`; see `docs/basic-language.md` and `docs/compiler-and-vm.md`).
 - **DATA/READ/RESTORE** are implemented (parser, `cgendecl.c`, instructions `RDNM` 0x117, `RDST` 0x11E, `RSTR` 0x11F; see `docs/compiler-and-vm.md`).
 - **Tokenizer** (`bastok`): heap strings, growable buffers, identifiers/literals ≤ 65535 bytes; line numbers 0..999999 (24 bit); `linehdr_t` = `{lineno.24, length.16}` (`LINEHDR_SIZE` = 5). Keyword `AGAIN` (token 145) was added.
 - **Program store** (`baspgm`/`baslin`): doubly linked list of heap `line_t` nodes; `save_program()` (ascii listing or binary encoded lines; no signature, no loader).
@@ -37,11 +38,14 @@ Read this first when resuming; details are in `docs/` (start with `docs/README.m
 - DATA items are numeric literals (signed) and string literals only; they live in the 64 KiB data segment; `RESTORE n` means the first item in line ≥ n; a program run (`vm_run`) starts at the first item, `vm_run_at` keeps the pointer (so a persistent REPL VM keeps its data pointer across lines).
 - The syntax tree stores the variable number (not a `var_t*`) in node data bytes.
 
+- INPUT: prompt must be plain string literal(s); `;` adds "? ", `,` doesn't. Bad/missing field → "?Redo from start" (fields already stored stay stored), extra fields → "?Extra ignored", empty numeric field = 0. GET waits for a key (numeric variable gets the key code). INPUT/GET without `#ch` emit `PCHN 0`.
+- **Found, not fixed:** `PRINT` without `#ch` doesn't reset the VM's output channel, so after `PRINT #1,…` later plain `PRINT`s keep going to channel 1 (the channel set by `PCHN` is sticky). Probably `PRINT` should also emit `PCHN 0` when there is no channel specifier.
+
 ## Planned by the user for later (all through host callbacks)
 - `AFTER` (one-shot timer, like setTimeout), `EVERY` (recurring timer, like setInterval), `SYMBOL` (redefine one character of the character set).
 
 ## Open / next steps
-- No grammar/semantics yet (each needs a language design): `INPUT`, `GET`, `PUT`, `OFF`, `AFTER`, `EVERY`, `SYMBOL`, `OPTION BASE`, `INT`/`STR`/`FLT`, and the program commands `RUN`, `NEW`, `LIST`, `LOAD`, `DELETE`, `RENUM`, `CLEAR`, `EDIT`, `MERGE`, `CHAIN`, `FILES`. I suggested `INPUT` (with `GET`) as the next group.
+- No grammar/semantics yet (each needs a language design): `PUT`, `OFF`, `AFTER`, `EVERY`, `SYMBOL`, `OPTION BASE`, `INT`/`STR`/`FLT`, and the program commands `RUN`, `NEW`, `LIST`, `LOAD`, `DELETE`, `RENUM`, `CLEAR`, `EDIT`, `MERGE`, `CHAIN`, `FILES`. 
 - VM instructions not implemented: `WRLV`, `BRK`.
-- Host side: `engine1999.c` doesn't use the compiler/VM yet (nothing wires `vm->save`, `vm->inkey`, `vm->print` to the real screen/files); direct mode can't `GOTO` into a stored program and its code must persist between lines (the test harness appends direct lines and runs from the new start offset with `vm_run_at()`); a loader for the binary SAVE format (with a signature) doesn't exist.
+- Host side: `engine1999.c` doesn't use the compiler/VM yet (nothing wires `vm->save`, `vm->inkey`, `vm->input`, `vm->getkey`, `vm->print` to the real screen/files); direct mode can't `GOTO` into a stored program and its code must persist between lines (the test harness appends direct lines and runs from the new start offset with `vm_run_at()`); a loader for the binary SAVE format (with a signature) doesn't exist.
 - Remaining limits: 64 KiB code/data segments (16-bit ISA addresses), 16-bit variable numbers, 16-bit `LINE` parameter (codegen rejects line numbers > 65535), `engine1999` 256-byte input line, VM strings ≤ 65535 bytes.

@@ -219,6 +219,11 @@ bool cgen_gen_smid( codegen_t* cgen, uint16_t varoffs );
 bool cgen_gen_eras( codegen_t* cgen, uint16_t varoffs );
 bool cgen_gen_rdnm( codegen_t* cgen );
 bool cgen_gen_rdst( codegen_t* cgen );
+bool cgen_gen_inpl( codegen_t* cgen, uint16_t promptoffs );
+bool cgen_gen_inpn( codegen_t* cgen );
+bool cgen_gen_inps( codegen_t* cgen );
+bool cgen_gen_inpe( codegen_t* cgen );
+bool cgen_gen_getk( codegen_t* cgen );
 bool cgen_gen_rstr( codegen_t* cgen, bool hasparam, uint16_t dataoffs );
 
 // BASIC system command implementations
@@ -281,6 +286,8 @@ bool cgen_from_dimstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_datastmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_readstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_restorestmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_inputstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_getstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_finish_data( codegen_t* cgen, compiler_t* comp );     // resolves the RESTORE targets
 void cgen_note_label_data( codegen_t* cgen, uint16_t varoffs ); // a LABEL statement is generated (see RESTORE)
 bool cgen_from_fnassignstmt( codegen_t* cgen, compiler_t* comp, node_t* node );

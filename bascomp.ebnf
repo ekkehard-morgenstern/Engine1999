@@ -140,7 +140,14 @@ data-stmt := TOK_DATA data-item { TOK_COMMA data-item } .
 read-stmt := TOK_READ ( num-var-ref | str-var-ref ) { TOK_COMMA ( num-var-ref | str-var-ref ) } .
 restore-stmt := TOK_RESTORE [ goto-target ] .
 
-io-stmt := save-stmt | print-stmt | data-stmt | read-stmt | restore-stmt .
+-- INPUT: the prompt is shown followed by "? " if it is followed by a semicolon (or if there is no prompt); a comma
+-- after the prompt suppresses the "? ". GET reads one key per variable (a string variable gets the character, a
+-- numeric variable its code).
+input-var := num-var-ref | str-var-ref .
+input-stmt := TOK_INPUT [ chan-spec TOK_COMMA ] [ str-lits ( TOK_SEMIC | TOK_COMMA ) ] input-var { TOK_COMMA input-var } .
+get-stmt := TOK_GET [ chan-spec TOK_COMMA ] input-var { TOK_COMMA input-var } .
+
+io-stmt := save-stmt | print-stmt | input-stmt | get-stmt | data-stmt | read-stmt | restore-stmt .
 
 num-assign := num-var-ref TOK_EQ num-expr .
 str-assign := str-var-ref TOK_EQ str-expr .

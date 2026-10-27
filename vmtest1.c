@@ -45,7 +45,7 @@ typedef struct _testcase_t {
     const char* name;
     const char* source;     // lines separated by '\n'
     const char* expected;
-    const char* input;      // keys for INKEY$ (optional)
+    const char* input;      // keys for INKEY$ and GET, lines (separated by '\n') for INPUT (optional)
 } testcase_t;
 
 static const testcase_t cases[] = {
@@ -230,6 +230,34 @@ static const testcase_t cases[] = {
     { "TI does not go back",    "A=TI:B=TI:PRINT B>=A",                           "-1\n" },
     { "FRE",                    "PRINT FRE(0)>0",                                 "-1\n" },
     { "INKEY$",                 "PRINT INKEY$;INKEY$;\"[\"+INKEY$+\"]\"",          "AB[]\n", "AB" },
+    // INPUT, GET
+    { "INPUT number",           "INPUT A:PRINT A*2",                              "? 21\n42\n", "21" },
+    { "INPUT string",           "INPUT A$:PRINT \"[\"+A$+\"]\"",                  "? HELLO WORLD\n[HELLO WORLD]\n", "HELLO WORLD" },
+    { "INPUT prompt",           "INPUT \"NAME\";N$:PRINT N$",                     "NAME? BOB\nBOB\n", "BOB" },
+    { "INPUT prompt, comma",    "INPUT \"AGE: \",A:PRINT A",                      "AGE: 7\n7\n", "7" },
+    { "INPUT several variables","INPUT A,B$,C%:PRINT A;B$;C%",                    "? 1.5,XY,3\n1.5XY3\n", "1.5,XY,3" },
+    { "INPUT quoted string",    "INPUT A$,B$:PRINT A$;\"|\";B$",                   "? \"A,B\",C\nA,B|C\n", "\"A,B\",C" },
+    { "INPUT blanks trimmed",   "INPUT A,B$:PRINT A;\"|\";B$;\"|\"",              "?  4 ,  XY  \n4|XY|\n", " 4 ,  XY  " },
+    { "INPUT empty line, string","INPUT A$:PRINT \"[\"+A$+\"]\"",                 "? \n[]\n", "\n" },
+    { "INPUT empty line, number","INPUT A:PRINT A",                               "? \n0\n", "\n" },
+    { "INPUT empty second field","INPUT A,B$:PRINT A;\"|\";B$;\"|\"",             "? 5,\n5||\n", "5," },
+    { "INPUT exponent, sign",   "INPUT A,B:PRINT A+B",                            "? -1E2,+.5\n-99.5\n", "-1E2,+.5" },
+    { "INPUT redo, not a number","INPUT A:PRINT A",                               "? X\n?Redo from start\n? 5\n5\n", "X\n5" },
+    { "INPUT redo, too few fields","INPUT A,B:PRINT A+B",                         "? 1\n?Redo from start\n? 1,2\n3\n", "1\n1,2" },
+    { "INPUT redo shows the prompt","INPUT \"N\";A:PRINT A",                      "N? Z\n?Redo from start\nN? 2\n2\n", "Z\n2" },
+    { "INPUT extra ignored",    "INPUT A:PRINT A",                                "? 1,2,3\n?Extra ignored\n1\n", "1,2,3" },
+    { "INPUT to array element", "DIM A(3),S$(2):INPUT A(2),S$(1):PRINT A(2);S$(1)", "? 9,Q\n9Q\n", "9,Q" },
+    { "INPUT in a loop",        "FOR I=1 TO 3:INPUT A:S=S+A:NEXT I:PRINT S",       "? 1\n? 2\n? 3\n6\n", "1\n2\n3" },
+    { "INPUT with channel",     "INPUT #0,A:PRINT A",                             "? 4\n4\n", "4" },
+    { "INPUT at end of input",  "INPUT A",                                        "? ? End of input\n" },
+    { "INPUT needs a variable", "INPUT \"X\";",                                    "? Variable expected\n" },
+    { "INPUT prompt needs separator", "INPUT \"X\" A",                             "? Semicolon ';' or comma ',' expected after prompt\n" },
+    { "GET string",             "GET A$:PRINT A$",                                "Q\n", "Q" },
+    { "GET number",             "GET A:PRINT A",                                  "65\n", "A" },
+    { "GET several",            "GET A$,B$,C:PRINT A$;B$;C",                      "XY48\n", "XY0" },
+    { "GET array element",      "DIM K$(2):GET K$(1):PRINT K$(1)",                "Z\n", "Z" },
+    { "GET with channel",       "GET #0,A$:PRINT A$",                             "K\n", "K" },
+    { "GET at end of input",    "GET A$",                                         "? End of input\n" },
     { "INKEY$ without input",   "PRINT LEN(INKEY$)",                              "0\n" },
     { "nested functions",       "PRINT LEFT$(STR$(12345),3)",                     "123\n" },
     { "function in expression", "PRINT LEN(HEX$(255,6))+ASC(\"A\")",               "71\n" },
@@ -404,6 +432,27 @@ static int vm_inkey( struct _vm_t* vm, void* usrdata ) {
     return keys && *keys ? (uint8_t) *keys++ : 0;
 }
 
+// INPUT: the next line of the test input; like a terminal, the typed line is echoed
+static char* vm_input( struct _vm_t* vm, void* usrdata, int channel ) {
+    if ( keys == 0 || *keys == '\0' ) {
+        return 0;
+    }
+    const char* nl = strchr( keys, '\n' );
+    size_t len = nl ? (size_t)( nl - keys ) : strlen( keys );
+    char* line = (char*) malloc( len + 1U );
+    memcpy( line, keys, len );
+    line[ len ] = '\0';
+    keys += nl ? len + 1U : len;
+    out_append( line );
+    out_append( "\n" );
+    return line;
+}
+
+// GET: the next character of the test input
+static int vm_getkey( struct _vm_t* vm, void* usrdata, int channel ) {
+    return keys && *keys ? (uint8_t) *keys++ : -1;
+}
+
 static void rt_report( struct _runtime_t* rt, void* usrdata, const char* text ) {
     out_append( text );
     if ( text[0] && text[ strlen( text ) - 1U ] != '\n' ) {
@@ -480,6 +529,8 @@ static bool compile_and_run( void ) {
     vm.print    = vm_print;
     vm.report   = vm_report;
     vm.inkey    = vm_inkey;
+    vm.input    = vm_input;
+    vm.getkey   = vm_getkey;
     vm.save     = vm_save;
     vm.maxsteps = UINT64_C(1000000);
     ok = vm_run_at( &vm, start );

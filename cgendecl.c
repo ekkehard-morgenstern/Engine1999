@@ -445,3 +445,182 @@ bool cgen_finish_data( codegen_t* cgen, compiler_t* comp ) {
     }
     return true;
 }
+
+// -- INPUT, GET --------------------------------------------------------------------
+
+/*
+INPUT [#ch,] ["prompt" (;|,)] v1, v2, ...  becomes
+    <channel> PCHN  INPL(prompt)  { INPN | INPS, store }...  INPE
+The prompt text (with "? " appended unless the prompt was followed by a comma) is a constant in the data segment.
+GET [#ch,] v1, v2, ...  becomes  <channel> PCHN  { GETK [ASC], store }...
+Without a channel specifier the statement uses channel 0 (the channel of PCHN is otherwise sticky).
+*/
+
+// generates the channel selection: the channel expression of the optional first branch, or 0
+static bool cd_gen_channel( codegen_t* cgen, compiler_t* comp, node_t* node, uint8_t flags ) {
+    if ( flags & INPUTF_CHAN ) {
+        if ( node->numbranches < 1U ) {
+            return cgen_bad_node( comp );
+        }
+        return cgen_from_chanspec( cgen, comp, node->branches[0], cgen_gen_pchn );
+    }
+    uint16_t off = DATAOFFS_NONE;
+    if ( !cgen_alloc_data( cgen, UINT16_C(8), &off ) || off == DATAOFFS_NONE ) {
+        return cgen_out_of_data_memory( comp );
+    }
+    memset( &cgen->data[ off ], 0, 8U );        // the double 0.0
+    if ( !cgen_gen_phpa_d( cgen, off ) || !cgen_gen_lan_d( cgen ) || !cgen_gen_pchn( cgen ) ) {
+        return cgen_out_of_code_memory( comp );
+    }
+    return true;
+}
+
+// appends the text of a string literal node to a heap buffer
+static bool cd_append_literal( compiler_t* comp, node_t* lit, char** ptext, size_t* plen ) {
+    if ( lit == NODE_NONE || lit->type != NT_STRLIT || lit->datalen < UINT16_C(1) ) {
+        return cgen_unexpected_node( comp );
+    }
+    if ( lit->data[0] != TOK_STRLIT ) {
+        comp_error( comp, "Plain string literal expected as prompt" );
+        return false;
+    }
+    size_t n = (size_t) lit->datalen - 1U;
+    char* p = (char*) realloc( *ptext, *plen + n + 1U );
+    if ( p == 0 ) {
+        comp_error( comp, "Out of memory" );
+        return false;
+    }
+    memcpy( p + *plen, &lit->data[1], n );
+    *plen += n;
+    p[ *plen ] = '\0';
+    *ptext = p;
+    return true;
+}
+
+bool cgen_from_inputstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    /*
+        NT_INPUTSTMT        INPUT statement
+            data:
+                - 1 byte of flags (INPUTF_*)
+            branches:
+                - optional channel info (NT_CHANSPEC), optional prompt (NT_STRLITS or NT_STRLIT)
+                - 1 or more branches of variable references (NT_NUMVARREF or NT_STRVARREF)
+    */
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->type != NT_INPUTSTMT || node->datalen != UINT16_C(1) ) {
+        return cgen_unexpected_node( comp );
+    }
+    uint8_t flags = node->data[0];
+    size_t first = ( ( flags & INPUTF_CHAN ) ? 1U : 0U ) + ( ( flags & INPUTF_PROMPT ) ? 1U : 0U );
+    if ( node->numbranches <= first ) {
+        return cgen_bad_node( comp );
+    }
+    // the prompt text
+    char* text = (char*) calloc( 1U, 1U );
+    size_t len = 0;
+    if ( text == 0 ) {
+        comp_error( comp, "Out of memory" );
+        return false;
+    }
+    if ( flags & INPUTF_PROMPT ) {
+        node_t* prompt = node->branches[ ( flags & INPUTF_CHAN ) ? 1U : 0U ];
+        bool ok = true;
+        if ( prompt != NODE_NONE && prompt->type == NT_STRLITS ) {
+            for ( size_t i=0; ok && i < prompt->numbranches; ++i ) {
+                ok = cd_append_literal( comp, prompt->branches[i], &text, &len );
+            }
+        } else {
+            ok = cd_append_literal( comp, prompt, &text, &len );
+        }
+        if ( !ok ) {
+            free( text );
+            return false;
+        }
+    }
+    if ( !( flags & INPUTF_NOQUEST ) ) {
+        char* p = (char*) realloc( text, len + 3U );
+        if ( p == 0 ) {
+            free( text );
+            comp_error( comp, "Out of memory" );
+            return false;
+        }
+        text = p;
+        memcpy( text + len, "? ", 3U );
+        len += 2U;
+    }
+    uint16_t promptoffs = DATAOFFS_NONE;
+    if ( len >= UINT16_MAX - 1U || !cgen_alloc_data( cgen, (uint16_t)( len + 1U ), &promptoffs ) || promptoffs == DATAOFFS_NONE ) {
+        free( text );
+        return cgen_out_of_data_memory( comp );
+    }
+    memcpy( &cgen->data[ promptoffs ], text, len + 1U );
+    free( text );
+    if ( !cd_gen_channel( cgen, comp, node, flags ) ) {
+        return false;
+    }
+    if ( !cgen_gen_inpl( cgen, promptoffs ) ) {
+        return cgen_out_of_code_memory( comp );
+    }
+    for ( size_t i=first; i < node->numbranches; ++i ) {
+        node_t* ref = node->branches[i];
+        if ( ref == NODE_NONE ) {
+            return cgen_bad_node( comp );
+        }
+        if ( ref->type != NT_NUMVARREF && ref->type != NT_STRVARREF ) {
+            return cgen_unexpected_node( comp );
+        }
+        if ( !( ref->type == NT_STRVARREF ? cgen_gen_inps( cgen ) : cgen_gen_inpn( cgen ) ) ) {
+            return cgen_out_of_code_memory( comp );
+        }
+        if ( !cgen_from_varref_lvalue( cgen, comp, ref ) ) {
+            return false;
+        }
+    }
+    if ( !cgen_gen_inpe( cgen ) ) {
+        return cgen_out_of_code_memory( comp );
+    }
+    return true;
+}
+
+bool cgen_from_getstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    /*
+        NT_GETSTMT          GET statement
+            data:
+                - 1 byte of flags (INPUTF_CHAN)
+            branches:
+                - optional channel info (NT_CHANSPEC)
+                - 1 or more branches of variable references (NT_NUMVARREF or NT_STRVARREF)
+    */
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->type != NT_GETSTMT || node->datalen != UINT16_C(1) ) {
+        return cgen_unexpected_node( comp );
+    }
+    uint8_t flags = node->data[0];
+    size_t first = ( flags & INPUTF_CHAN ) ? 1U : 0U;
+    if ( node->numbranches <= first ) {
+        return cgen_bad_node( comp );
+    }
+    if ( !cd_gen_channel( cgen, comp, node, flags ) ) {
+        return false;
+    }
+    for ( size_t i=first; i < node->numbranches; ++i ) {
+        node_t* ref = node->branches[i];
+        if ( ref == NODE_NONE ) {
+            return cgen_bad_node( comp );
+        }
+        if ( ref->type != NT_NUMVARREF && ref->type != NT_STRVARREF ) {
+            return cgen_unexpected_node( comp );
+        }
+        if ( !cgen_gen_getk( cgen ) || ( ref->type == NT_NUMVARREF && !cgen_gen_asc( cgen ) ) ) {
+            return cgen_out_of_code_memory( comp );
+        }
+        if ( !cgen_from_varref_lvalue( cgen, comp, ref ) ) {
+            return false;
+        }
+    }
+    return true;
+}

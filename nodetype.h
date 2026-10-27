@@ -489,6 +489,20 @@ Explanation of node types:
         branches:
             - none, or 1 branch of goto target (a line number or a label)
 
+    NT_INPUTSTMT        INPUT statement
+        data:
+            - 1 byte of flags (INPUTF_*): channel present, prompt present, no "? " after the prompt
+        branches:
+            - optional channel info (NT_CHANSPEC), optional prompt (NT_STRLITS or NT_STRLIT)
+            - 1 or more branches of variable references (NT_NUMVARREF or NT_STRVARREF)
+
+    NT_GETSTMT          GET statement
+        data:
+            - 1 byte of flags (INPUTF_CHAN)
+        branches:
+            - optional channel info (NT_CHANSPEC)
+            - 1 or more branches of variable references (NT_NUMVARREF or NT_STRVARREF)
+
     NT_FNASSIGNSTMT     Assignment of the result of a multi-line user function ("FN A = expr")
         data:
             - 1 byte of type indicator (VARTYPEV_FLOAT, VARTYPEV_INT or VARTYPEV_STR), n bytes of function name
@@ -588,6 +602,12 @@ Explanation of node types:
 #define NT_DATASTMT             UINT8_C(0X57)   // DATA statement
 #define NT_READSTMT             UINT8_C(0X58)   // READ statement
 #define NT_RESTORESTMT          UINT8_C(0X59)   // RESTORE statement
+#define NT_INPUTSTMT            UINT8_C(0X5A)   // INPUT statement
+#define NT_GETSTMT              UINT8_C(0X5B)   // GET statement
+
+#define INPUTF_CHAN             UINT8_C(0X01)   // INPUT / GET: channel info present
+#define INPUTF_PROMPT           UINT8_C(0X02)   // INPUT: prompt present
+#define INPUTF_NOQUEST          UINT8_C(0X04)   // INPUT: no "? " after the prompt
 #define NT_NUMEXPR              UINT8_C(0X18)   // numeric expression
 #define NT_STREXPR              UINT8_C(0X1A)   // string expression
 #define NT_STRCMPEX             UINT8_C(0X1C)   // string comparison expression

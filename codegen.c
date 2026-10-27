@@ -178,6 +178,11 @@ static const char* opcode_to_string( uint16_t opcode ) {
         case INS_PCHN:      return "PCHN";
         case INS_PNUM:      return "PNUM";
         case INS_PSTR:      return "PSTR";
+        case INS_INPL:      return "INPL";
+        case INS_INPN:      return "INPN";
+        case INS_INPS:      return "INPS";
+        case INS_INPE:      return "INPE";
+        case INS_GETK:      return "GETK";
         default:            break;
     }
     return "???";
@@ -681,6 +686,26 @@ bool cgen_gen_pnum( codegen_t* cgen, bool hasparam, uint16_t param ) {
 
 bool cgen_gen_pstr( codegen_t* cgen, bool hasparam, uint16_t param ) {
     return cgen_gen_ins12( cgen, INS_PSTR, false, hasparam, param );
+}
+
+bool cgen_gen_inpl( codegen_t* cgen, uint16_t promptoffs ) {
+    return cgen_gen_ins12( cgen, INS_INPL, false, true, promptoffs );
+}
+
+bool cgen_gen_inpn( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_INPN, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_inps( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_INPS, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_inpe( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_INPE, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_getk( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_GETK, false, false, UINT16_C(0) );
 }
 
 // generate code from syntax tree nodes
@@ -2491,6 +2516,8 @@ bool cgen_from_stmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         case NT_DATASTMT:   return cgen_from_datastmt( cgen, comp, node );
         case NT_READSTMT:   return cgen_from_readstmt( cgen, comp, node );
         case NT_RESTORESTMT:    return cgen_from_restorestmt( cgen, comp, node );
+        case NT_INPUTSTMT:  return cgen_from_inputstmt( cgen, comp, node );
+        case NT_GETSTMT:    return cgen_from_getstmt( cgen, comp, node );
         case NT_DEFSTMT:    return cgen_from_defstmt( cgen, comp, node );
         case NT_FNASSIGNSTMT:   return cgen_from_fnassignstmt( cgen, comp, node );
         case NT_GOTOSTMT:   return cgen_from_gotostmt( cgen, comp, node );

@@ -66,6 +66,11 @@ Policies chosen by this implementation (the instruction set does not define them
     - system functions:
         TI          1/60 second ticks since the VM was created
         INKEY$      the key from the inkey callback, "" if there is none (or no callback)
+        INPUT       the prompt goes through the print callback, the line comes from the input callback (without a
+                    callback: stdin; the host is expected to echo the typed line, so the VM sets the column to 0);
+                    end of input is an error. Missing/non-numeric fields: "?Redo from start", see instset.h (INPN)
+        GET         waits for a key from the getkey callback; without one the inkey callback is polled every
+                    millisecond; without both the key is read from stdin (getchar). Key code <= 0 = end of input (error)
         FRE(x)      free variable space + free string space in bytes (the argument is ignored)
         ASC("")     is an error; LEN, VAL (leading decimal number, else 0)
         LEFT$ RIGHT$ MID$   lengths beyond the string are clamped, a negative LEFT$/RIGHT$ length and a MID$ start < 1
@@ -115,10 +120,15 @@ typedef struct _vm_t {
     uint64_t        maxsteps;       // stop with an error after this many instructions (0 = unlimited)
     int             channel;        // output channel (PCHN)
     unsigned        column;         // output column
+    char*           inbuf;          // the line read by INPL, while the INPUT statement runs
+    size_t          inlen, inpos;   // its length; offset of the next field (inlen + 1 = no more fields)
+    uint32_t        inredo;         // code offset of the INPL instruction (restart point)
     void*           userdata;
     void            (*print)( struct _vm_t*, void*, int channel, const char* text );    // default: stdout
     void            (*report)( struct _vm_t*, void*, const char* );                     // default: stderr
     int             (*inkey)( struct _vm_t*, void* );                              // INKEY$: key code, 0 = none
+    char*           (*input)( struct _vm_t*, void*, int channel );                 // INPUT: a line (malloc'd, without newline), 0 = end of input
+    int             (*getkey)( struct _vm_t*, void*, int channel );                // GET: waits for a key code (1..255), <= 0 = end of input
     bool            (*save)( struct _vm_t*, void*, const char* filename, bool ascii );  // SAVE: the host saves the program
     struct timespec started;        // for the system timer TI
 } vm_t;

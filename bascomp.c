@@ -2474,13 +2474,120 @@ bool comp_eat_restorestmt( compiler_t* comp, node_t** pnode ) {
     return true;
 }
 
+// input-var := num-var-ref | str-var-ref .
+static bool comp_eat_inputvars( compiler_t* comp, node_t* stmt, const char* what ) {
+    for (;;) {
+        node_t* ref = NODE_NONE;
+        if ( !( comp_eat_numvarref( comp, &ref ) && ref != NODE_NONE ) && !( comp_eat_strvarref( comp, &ref ) && ref != NODE_NONE ) ) {
+            comp_error( comp, what );
+            return false;
+        }
+        if ( !comp_add_branch( comp, stmt, ref ) ) {
+            out_of_memory( comp );
+            return false;
+        }
+        if ( comp->currtok != TOK_COMMA || !comp_fetchtok( comp ) ) {
+            return true;
+        }
+    }
+}
+
+bool comp_eat_inputstmt( compiler_t* comp, node_t** pnode ) {
+    // input-stmt := TOK_INPUT [ chan-spec TOK_COMMA ] [ str-lits ( TOK_SEMIC | TOK_COMMA ) ] input-var { TOK_COMMA input-var } .
+    /*
+        NT_INPUTSTMT        INPUT statement
+            data:
+                - 1 byte of flags: INPUTF_CHAN (channel branch present), INPUTF_PROMPT (prompt branch present),
+                  INPUTF_NOQUEST (the prompt was followed by a comma: no "? " is shown)
+            branches:
+                - optional branch of channel info (NT_CHANSPEC)
+                - optional branch of prompt (NT_STRLITS or NT_STRLIT)
+                - 1 or more branches of variable references (NT_NUMVARREF or NT_STRVARREF)
+    */
+    if ( comp->currtok != TOK_INPUT || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    uint8_t flags = 0;
+    node_t* chan = NODE_NONE;
+    if ( comp_eat_chanspec( comp, &chan ) && chan != NODE_NONE ) {
+        if ( comp->currtok != TOK_COMMA || !comp_fetchtok( comp ) ) {
+            comp_error( comp, "Comma ',' expected" );
+            return false;
+        }
+        flags |= INPUTF_CHAN;
+    }
+    node_t* prompt = NODE_NONE;
+    if ( comp_eat_strlits( comp, &prompt ) && prompt != NODE_NONE ) {
+        if ( comp->currtok != TOK_SEMIC && comp->currtok != TOK_COMMA ) {
+            comp_error( comp, "Semicolon ';' or comma ',' expected after prompt" );
+            return false;
+        }
+        if ( comp->currtok == TOK_COMMA ) {
+            flags |= INPUTF_NOQUEST;
+        }
+        flags |= INPUTF_PROMPT;
+        if ( !comp_fetchtok( comp ) ) {
+            return false;
+        }
+    }
+    if ( !comp_create_node( comp, pnode, NT_INPUTSTMT, UINT8_C(0), UINT16_C(1), &flags ) || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    if ( ( chan != NODE_NONE && !comp_add_branch( comp, *pnode, chan ) ) ||
+         ( prompt != NODE_NONE && !comp_add_branch( comp, *pnode, prompt ) ) ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return comp_eat_inputvars( comp, *pnode, "Variable expected" );
+}
+
+bool comp_eat_getstmt( compiler_t* comp, node_t** pnode ) {
+    // get-stmt := TOK_GET [ chan-spec TOK_COMMA ] input-var { TOK_COMMA input-var } .
+    /*
+        NT_GETSTMT          GET statement
+            data:
+                - 1 byte of flags: INPUTF_CHAN (channel branch present)
+            branches:
+                - optional branch of channel info (NT_CHANSPEC)
+                - 1 or more branches of variable references (NT_NUMVARREF or NT_STRVARREF)
+    */
+    if ( comp->currtok != TOK_GET || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    uint8_t flags = 0;
+    node_t* chan = NODE_NONE;
+    if ( comp_eat_chanspec( comp, &chan ) && chan != NODE_NONE ) {
+        if ( comp->currtok != TOK_COMMA || !comp_fetchtok( comp ) ) {
+            comp_error( comp, "Comma ',' expected" );
+            return false;
+        }
+        flags |= INPUTF_CHAN;
+    }
+    if ( !comp_create_node( comp, pnode, NT_GETSTMT, UINT8_C(0), UINT16_C(1), &flags ) || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    if ( chan != NODE_NONE && !comp_add_branch( comp, *pnode, chan ) ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return comp_eat_inputvars( comp, *pnode, "Variable expected" );
+}
+
 bool comp_eat_iostmt( compiler_t* comp, node_t** pnode ) {
-    // io-stmt := save-stmt | print-stmt | data-stmt | read-stmt | restore-stmt .
+    // io-stmt := save-stmt | print-stmt | input-stmt | get-stmt | data-stmt | read-stmt | restore-stmt .
     // [ NT_IOSTMT - not generated ]
     if ( comp_eat_savestmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     if ( comp_eat_printstmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_inputstmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_getstmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     if ( comp_eat_datastmt( comp, pnode ) && *pnode != NODE_NONE ) {

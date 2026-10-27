@@ -25,6 +25,7 @@
               Germany, Europe
 */
 
+#include <ctype.h>
 #include "vm.h"
 #include "instset.h"
 
@@ -52,6 +53,11 @@ void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem ) {
     vm->print    = 0;
     vm->report   = 0;
     vm->inkey    = 0;
+    vm->input    = 0;
+    vm->getkey   = 0;
+    vm->inbuf    = 0;
+    vm->inlen    = vm->inpos = 0;
+    vm->inredo   = 0;
     vm->save     = 0;
     clock_gettime( CLOCK_MONOTONIC, &vm->started );
 }
@@ -64,6 +70,8 @@ static void vm_clear_stacks( vm_t* vm ) {
         }
     }
     vm->rsp = 0;
+    free( vm->inbuf );
+    vm->inbuf = 0;
     // function contexts still open (after an error): free the saved strings
     while ( vm->nctx ) {
         vm_context_t* ctx = &vm->ctxs[ --vm->nctx ];
@@ -518,6 +526,176 @@ static bool vm_read_data( vm_t* vm, bool wantstr ) {
     }
     vm->datapos = next;
     return true;
+}
+
+// -- INPUT, GET ----------------------------------------------------------------
+
+// the line from the host (malloc'd, no newline), 0 = end of input
+static char* vm_get_line( vm_t* vm ) {
+    if ( vm->input ) {
+        return vm->input( vm, vm->userdata, vm->channel );
+    }
+    char* line = 0; size_t cap = 0;
+    ssize_t n = getline( &line, &cap, stdin );
+    if ( n < 0 ) {
+        free( line );
+        return 0;
+    }
+    while ( n > 0 && ( line[ n - 1 ] == '\n' || line[ n - 1 ] == '\r' ) ) {
+        line[ --n ] = '\0';
+    }
+    return line;
+}
+
+// INPL: prints the prompt, reads the line
+static bool vm_input_line( vm_t* vm, uint16_t promptoffs, uint32_t inspc ) {
+    const codegen_t* cgen = vm->cgen;
+    if ( promptoffs >= cgen->datasize || memchr( &cgen->data[ promptoffs ], '\0', cgen->datasize - promptoffs ) == 0 ) {
+        return vm_error( vm, "Bad prompt" );
+    }
+    vm_out( vm, (const char*) &cgen->data[ promptoffs ] );
+    free( vm->inbuf );
+    vm->inbuf = vm_get_line( vm );
+    if ( vm->inbuf == 0 ) {
+        return vm_error( vm, "End of input" );
+    }
+    vm->inlen  = strlen( vm->inbuf );
+    vm->inpos  = 0;
+    vm->inredo = inspc;
+    vm->column = 0;
+    return true;
+}
+
+// is the whole text a decimal number: [+-] digits [. digits] [E [+-] digits], or empty?
+static bool vm_is_number( const char* s ) {
+    if ( *s == '+' || *s == '-' ) {
+        ++s;
+    }
+    unsigned digits = 0;
+    while ( isdigit( (unsigned char) *s ) ) { ++s; ++digits; }
+    if ( *s == '.' ) {
+        ++s;
+        while ( isdigit( (unsigned char) *s ) ) { ++s; ++digits; }
+    }
+    if ( digits == 0 ) {
+        return false;
+    }
+    if ( *s == 'E' || *s == 'e' ) {
+        ++s;
+        if ( *s == '+' || *s == '-' ) {
+            ++s;
+        }
+        if ( !isdigit( (unsigned char) *s ) ) {
+            return false;
+        }
+        while ( isdigit( (unsigned char) *s ) ) { ++s; }
+    }
+    return *s == '\0';
+}
+
+// INPN, INPS: ( -- n ) or ( -- s ): takes the next field of the input line, see instset.h
+static bool vm_input_field( vm_t* vm, bool wantstr ) {
+    if ( vm->inbuf == 0 ) {
+        return vm_error( vm, "INPUT field without INPUT" );
+    }
+    bool redo = vm->inpos > vm->inlen;      // no more fields
+    char* field = 0;
+    if ( !redo ) {
+        const char* p = vm->inbuf + vm->inpos;
+        const char* end;
+        while ( *p == ' ' || *p == '\t' ) {
+            ++p;
+        }
+        const char* text = p;
+        size_t tlen;
+        if ( *p == '"' ) {
+            text = ++p;
+            while ( *p && *p != '"' ) {
+                ++p;
+            }
+            tlen = (size_t)( p - text );
+            if ( *p == '"' ) {
+                ++p;
+            }
+            while ( *p && *p != ',' ) {     // ignore what follows the closing quote
+                ++p;
+            }
+            end = p;
+        } else {
+            while ( *p && *p != ',' ) {
+                ++p;
+            }
+            end = p;
+            while ( end > text && ( end[-1] == ' ' || end[-1] == '\t' ) ) {
+                --end;
+            }
+            tlen = (size_t)( end - text );
+            end = p;
+        }
+        field = vm_new_string( vm, text, tlen );
+        if ( field == 0 ) {
+            return false;
+        }
+        vm->inpos = *end == ',' ? (size_t)( end - vm->inbuf ) + 1U : vm->inlen + 1U;
+    }
+    if ( !redo && !wantstr ) {
+        char* q = field;
+        while ( *q == ' ' || *q == '\t' ) {
+            ++q;
+        }
+        size_t n = strlen( q );
+        while ( n > 0 && ( q[ n - 1 ] == ' ' || q[ n - 1 ] == '\t' ) ) {
+            q[ --n ] = '\0';
+        }
+        if ( n == 0 ) {
+            free( field );
+            return vm_dpush_num( vm, 0.0 );
+        }
+        redo = !vm_is_number( q );
+        if ( !redo ) {
+            double val = strtod( q, 0 );
+            free( field );
+            return vm_dpush_num( vm, val );
+        }
+    }
+    if ( redo ) {
+        free( field );
+        vm_out( vm, "?Redo from start\n" );
+        vm->pc = vm->inredo;
+        return true;
+    }
+    return vm_push_string( vm, field );
+}
+
+// INPE: reports leftover fields, releases the line
+static bool vm_input_end( vm_t* vm ) {
+    if ( vm->inbuf && vm->inpos <= vm->inlen ) {
+        vm_out( vm, "?Extra ignored\n" );
+    }
+    free( vm->inbuf );
+    vm->inbuf = 0;
+    return true;
+}
+
+// GETK: ( -- s ): waits for a key
+static bool vm_get_key( vm_t* vm ) {
+    int key;
+    if ( vm->getkey ) {
+        key = vm->getkey( vm, vm->userdata, vm->channel );
+    } else if ( vm->inkey ) {
+        struct timespec delay = { 0, 1000000L };
+        while ( ( key = vm->inkey( vm, vm->userdata ) ) == 0 ) {
+            nanosleep( &delay, 0 );
+        }
+    } else {
+        key = getchar();
+    }
+    if ( key <= 0 || key > 255 ) {
+        return vm_error( vm, "End of input" );
+    }
+    char buf[2] = { (char) key, '\0' };
+    char* s = vm_new_string( vm, buf, 1U );
+    return s && vm_push_string( vm, s );
 }
 
 // -- user function calls -----------------------------------------------------
@@ -1001,6 +1179,7 @@ static bool vm_branch_to( vm_t* vm, uint32_t target ) {
 static bool vm_step( vm_t* vm ) {
     const codegen_t* cgen = vm->cgen;
     uint32_t pc = vm->pc;
+    const uint32_t inspc = pc;
     // fetch and decode
     uint8_t ins = cgen->code[ pc++ ];
     uint8_t ext = 0; uint16_t param = 0;
@@ -1140,6 +1319,11 @@ static bool vm_step( vm_t* vm ) {
         case INS_WRNV: return vm_write_var( vm, param, VARTYPEV_FLOAT );
         case INS_WRIV: return vm_write_var( vm, param, VARTYPEV_INT );
         case INS_WRSV: return vm_write_var( vm, param, VARTYPEV_STR );
+        case INS_INPL: return vm_input_line( vm, param, inspc );
+        case INS_INPN: return vm_input_field( vm, false );
+        case INS_INPS: return vm_input_field( vm, true );
+        case INS_INPE: return vm_input_end( vm );
+        case INS_GETK: return vm_get_key( vm );
         case INS_PCHN:
             if ( !vm_dpop_num( vm, &num ) ) {
                 return false;

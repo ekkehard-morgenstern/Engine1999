@@ -195,6 +195,8 @@ bool comp_eat_printarg( compiler_t* comp, node_t** pnode );
 bool comp_eat_printarglist( compiler_t* comp, node_t** pnode );
 bool comp_eat_printstmt( compiler_t* comp, node_t** pnode );
 bool comp_eat_datastmt( compiler_t* comp, node_t** pnode );
+bool comp_eat_inputstmt( compiler_t* comp, node_t** pnode );
+bool comp_eat_getstmt( compiler_t* comp, node_t** pnode );
 bool comp_eat_readstmt( compiler_t* comp, node_t** pnode );
 bool comp_eat_restorestmt( compiler_t* comp, node_t** pnode );
 bool comp_eat_iostmt( compiler_t* comp, node_t** pnode );

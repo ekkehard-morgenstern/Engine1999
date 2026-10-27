@@ -287,6 +287,24 @@ The 4096 extended instructions are as follows:
     0001 00110001       PCHN - print channel ( n -- ) C=0 P=0
     0001 00110010       PNUM - print number (param=separator) ( n -- ) C=0 P=0/1
     0001 00110011       PSTR - print string (param=separator) ( n -- ) C=0 P=0/1
+    0001 00110100       INPL - input line (param=data offset of the prompt text) ( -- ) C=0 P=1
+                            Prints the prompt (NUL-terminated text in the data segment, to the current channel, see
+                            PCHN) and reads a line from the current channel into the VM's input buffer. The
+                            instruction is the restart point of the INPUT statement (see INPN).
+    0001 00110101       INPN - take the next input field as a number ( -- n ) C=0 P=0
+    0001 00110110       INPS - take the next input field as a string ( -- s ) C=0 P=0
+                            Fields of the input line are separated by commas; a field starting with a double quote
+                            extends to the closing quote (the quotes are removed). A numeric field is a decimal
+                            number with optional sign, fraction and exponent, surrounded by blanks; an empty field
+                            is 0. A string field that isn't quoted is trimmed of blanks at both ends.
+                            If the field is missing, or isn't a number for INPN, the VM prints "?Redo from start"
+                            and execution continues at the INPL instruction of the statement (fields already
+                            stored stay stored).
+    0001 00110111       INPE - end of INPUT ( -- ) C=0 P=0
+                            If the line has more fields than the statement has variables, prints "?Extra ignored".
+                            Releases the input buffer.
+    0001 00111000       GETK - wait for a key and push it as a one character string ( -- s ) C=0 P=0
+                            (GET stores it directly in a string variable, or converts it with ASC for a numeric one)
 
 */
 
@@ -389,5 +407,10 @@ The 4096 extended instructions are as follows:
 #define INS_PCHN        UINT16_C(0X131)
 #define INS_PNUM        UINT16_C(0X132)
 #define INS_PSTR        UINT16_C(0X133)
+#define INS_INPL        UINT16_C(0X134)
+#define INS_INPN        UINT16_C(0X135)
+#define INS_INPS        UINT16_C(0X136)
+#define INS_INPE        UINT16_C(0X137)
+#define INS_GETK        UINT16_C(0X138)
 
 #endif
