@@ -210,6 +210,7 @@ bool cgen_gen_octs( codegen_t* cgen );
 bool cgen_gen_hexs( codegen_t* cgen );
 bool cgen_gen_decs( codegen_t* cgen );
 bool cgen_gen_strs( codegen_t* cgen );
+bool cgen_gen_chrs( codegen_t* cgen );
 bool cgen_gen_lfts( codegen_t* cgen );
 bool cgen_gen_rgts( codegen_t* cgen );
 bool cgen_gen_mids( codegen_t* cgen );

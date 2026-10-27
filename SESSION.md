@@ -1,6 +1,6 @@
 # Session state
 
-Maintained by Claude; updated whenever work in a session changes something. Last update: 2026-10-27 (INPUT/GET added).
+Maintained by Claude; updated whenever work in a session changes something. Last update: 2026-10-27 (CHR$ added).
 Read this first when resuming; details are in `docs/` (start with `docs/README.md`) and `CLAUDE.md`.
 
 ## Standing rules
@@ -8,19 +8,20 @@ Read this first when resuming; details are in `docs/` (start with `docs/README.m
 - Keep this file and `docs/` current when work changes the state.
 
 ## Repo state
-- Branch `feature/refactor-to-remove-some-limits`; latest commit `c5c2214` ("DATA/READ/RESTORE statements").
-- **Uncommitted (for the user to commit):** the INPUT/GET work — `bascomp.[ch]`, `bascomp.ebnf`, `cgendecl.c`, `codegen.[ch]`, `instset.h`, `nodetype.[ch]`, `vm.[ch]`, `vmtest1.c`, `docs/basic-language.md`, `docs/compiler-and-vm.md`, this file. It builds cleanly and all tests pass.
+- Branch `feature/refactor-to-remove-some-limits`; latest commit `5a7f6b3` ("PRINT output channel fix"); the INPUT/GET work is in `7e16a40`.
+- **Uncommitted (for the user to commit):** `CHR$` — `bastok.[ch]`, `bascomp.c`, `bascomp.ebnf`, `codegen.[ch]`, `instset.h`, `vm.[ch]`, `vmtest1.c`, `docs/basic-language.md`, `docs/compiler-and-vm.md`, this file. `make` and all tests pass.
 - `make` builds `sdltest1 engine1999 basictest1 testcomp1 basictest2 vmtest1` + `engine.lib` cleanly with `-Wall -Werror`.
 
 ## Tests (run these after any change)
-- `./vmtest1` — automated end-to-end test (BASIC text → tokens → syntax tree → code → VM → output). **309 cases, all pass**; exit status = number of failures; `-v` shows compiler/codegen debug output. Add a case for every new statement/instruction. Also run it under `valgrind --leak-check=full -q` (clean).
+- `./vmtest1` — automated end-to-end test (BASIC text → tokens → syntax tree → code → VM → output). **317 cases, all pass**; exit status = number of failures; `-v` shows compiler/codegen debug output. Add a case for every new statement/instruction. Also run it under `valgrind --leak-check=full -q` (clean).
 - `./testcomp1` — randomized stress test of the variable store (5000 operations vs a shadow model), exit status 0 = passed; takes ~3 s. (Its random names used to be sometimes empty, which made it flake; fixed.)
 - `basictest1` / `basictest2` — interactive tokenizer / parser tools (pipe lines into them). `basictest2` prints the syntax tree.
 
 ## What exists (the whole pipeline works)
+- **CHR$(n)** is implemented (token `CHR` 146, instruction `CHRS` 0x126; n must be 1..255, else "Illegal argument", because strings are NUL-terminated).
 - **INPUT and GET** are implemented (`INPUT [#ch,] ["prompt"(;|,)] vars`, `GET [#ch,] vars`; instructions `INPL 0x134, INPN 0x135, INPS 0x136, INPE 0x137, GETK 0x138`; host callbacks `vm->input` (line) and `vm->getkey`; see `docs/basic-language.md` and `docs/compiler-and-vm.md`).
 - **DATA/READ/RESTORE** are implemented (parser, `cgendecl.c`, instructions `RDNM` 0x117, `RDST` 0x11E, `RSTR` 0x11F; see `docs/compiler-and-vm.md`).
-- **Tokenizer** (`bastok`): heap strings, growable buffers, identifiers/literals ≤ 65535 bytes; line numbers 0..999999 (24 bit); `linehdr_t` = `{lineno.24, length.16}` (`LINEHDR_SIZE` = 5). Keyword `AGAIN` (token 145) was added.
+- **Tokenizer** (`bastok`): heap strings, growable buffers, identifiers/literals ≤ 65535 bytes; line numbers 0..999999 (24 bit); `linehdr_t` = `{lineno.24, length.16}` (`LINEHDR_SIZE` = 5). Keywords `AGAIN` (token 145) and `CHR` (token 146) were added.
 - **Program store** (`baspgm`/`baslin`): doubly linked list of heap `line_t` nodes; `save_program()` (ascii listing or binary encoded lines; no signature, no loader).
 - **Compiler** (`bascomp`): recursive descent → heap syntax tree (`node_t`, growable branch arrays, `NODE_NONE`); all nodes freed by `cleanup_compiler()`. Names via `comp_node_name()` (no length limit).
 - **Variables** (`vars`): heap `var_t` per variable, found by 16-bit variable number (table) or by type+name (hash). No fixed areas or compaction; ≤ 65535 variables; arrays row-major, ≤ `MAXELEMS` elements, one dimension ≤ 65535, ≤ 6 dimensions; function variables hold params + code offset.

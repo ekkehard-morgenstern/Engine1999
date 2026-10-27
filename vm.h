@@ -71,6 +71,7 @@ Policies chosen by this implementation (the instruction set does not define them
                     end of input is an error. Missing/non-numeric fields: "?Redo from start", see instset.h (INPN)
         GET         waits for a key from the getkey callback; without one the inkey callback is polled every
                     millisecond; without both the key is read from stdin (getchar). Key code <= 0 = end of input (error)
+        CHR$(n)     the one-character string with code n; n must be 1..255 (no NUL in strings), else an error
         FRE(x)      free variable space + free string space in bytes (the argument is ignored)
         ASC("")     is an error; LEN, VAL (leading decimal number, else 0)
         LEFT$ RIGHT$ MID$   lengths beyond the string are clamped, a negative LEFT$/RIGHT$ length and a MID$ start < 1

@@ -1074,6 +1074,18 @@ static bool vm_system_function( vm_t* vm, uint16_t opcode ) {
             char* s = vm_new_string( vm, buf, strlen( buf ) );
             return s && vm_push_string( vm, s );
         }
+        case INS_CHRS: {
+            if ( !vm_dpop_num( vm, &num ) ) {
+                return false;
+            }
+            int32_t code = vm_to_int32( num );
+            if ( code < 1 || code > 255 ) {
+                return vm_error( vm, "Illegal argument" );
+            }
+            char c = (char) code;
+            char* s = vm_new_string( vm, &c, 1U );
+            return s && vm_push_string( vm, s );
+        }
         case INS_ASC: case INS_LEN: case INS_VAL:
             return vm_str_to_num( vm, opcode );
         case INS_BINS:  return vm_radix_string( vm, 2U, false );
@@ -1299,7 +1311,7 @@ static bool vm_step( vm_t* vm ) {
         case INS_WNAE: return vm_write_elem( vm, param, VARTYPEV_FLOAT );
         case INS_WIAE: return vm_write_elem( vm, param, VARTYPEV_INT );
         case INS_WSAE: return vm_write_elem( vm, param, VARTYPEV_STR );
-        case INS_TI: case INS_INKY: case INS_FRE: case INS_STRS: case INS_ASC: case INS_LEN: case INS_VAL:
+        case INS_TI: case INS_INKY: case INS_FRE: case INS_STRS: case INS_CHRS: case INS_ASC: case INS_LEN: case INS_VAL:
         case INS_BINS: case INS_QUAS: case INS_OCTS: case INS_HEXS: case INS_DECS:
         case INS_LFTS: case INS_RGTS: case INS_MIDS:
             return vm_system_function( vm, opcode );

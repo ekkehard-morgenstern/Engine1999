@@ -265,7 +265,8 @@ The 4096 extended instructions are as follows:
     0001 00100011       HEXS - convert number to hexadecimal string ( n n -- s ) C=0 P=0
     0001 00100100       DECS - convert number to decimal     string ( n n -- s ) C=0 P=0
     0001 00100101       STRS - convert number to             string ( n   -- s ) C=0 P=0
-    0001 00100110       (reserved)
+    0001 00100110       CHRS - convert character code to string ( n -- s ) C=0 P=0
+                            n must be 1..255 (a string can't hold a NUL character), else a run time error
     0001 00100111       (reserved)
     0001 00101000       LFTS - get left part of string ( s n -- s ) C=0 P=0
     0001 00101001       RGTS - get right part of string ( s n -- s ) C=0 P=0
@@ -397,6 +398,7 @@ The 4096 extended instructions are as follows:
 #define INS_HEXS        UINT16_C(0X123)
 #define INS_DECS        UINT16_C(0X124)
 #define INS_STRS        UINT16_C(0X125)
+#define INS_CHRS        UINT16_C(0X126)
 #define INS_LFTS        UINT16_C(0X128)
 #define INS_RGTS        UINT16_C(0X129)
 #define INS_MIDS        UINT16_C(0X12A)

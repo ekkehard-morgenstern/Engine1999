@@ -171,6 +171,7 @@ static const char* opcode_to_string( uint16_t opcode ) {
         case INS_DECS:      return "DECS";
         case INS_HEXS:      return "HEXS";
         case INS_STRS:      return "STRS";
+        case INS_CHRS:      return "CHRS";
         case INS_LFTS:      return "LFTS";
         case INS_RGTS:      return "RGTS";
         case INS_MIDS:      return "MIDS";
@@ -626,6 +627,10 @@ bool cgen_gen_decs( codegen_t* cgen ) {
     return cgen_gen_ins12( cgen, INS_DECS, false, false, UINT16_C(0) );
 }
 
+bool cgen_gen_chrs( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_CHRS, false, false, UINT16_C(0) );
+}
+
 bool cgen_gen_strs( codegen_t* cgen ) {
     return cgen_gen_ins12( cgen, INS_STRS, false, false, UINT16_C(0) );
 }
@@ -1046,7 +1051,7 @@ bool cgen_from_sysfncall( codegen_t* cgen, compiler_t* comp, node_t* node ) {
 
         sys-str-fn-2-arg-call := ( TOK_BIN | TOK_QUA | TOK_OCT | TOK_DEC | TOK_HEX ) TOK_STRING TOK_LPAREN num-expr
                                       [ TOK_COMMA num-expr ] TOK_RPAREN |
-                                 TOK_STR TOK_STRING TOK_LPAREN num-expr TOK_RPAREN |
+                                 ( TOK_STR | TOK_CHR ) TOK_STRING TOK_LPAREN num-expr TOK_RPAREN |
                                  ( TOK_LEFT | TOK_RIGHT ) TOK_STRING TOK_LPAREN str-expr TOK_COMMA num-expr TOK_RPAREN |
                                  TOK_MID TOK_STRING TOK_LPAREN str-expr TOK_COMMA num-expr [ TOK_COMMA num-expr ] TOK_RPAREN .
 
@@ -1111,6 +1116,7 @@ UNEXP:      return cgen_unexpected_node( comp );
         case TOK_HEX:   generator = cgen_gen_hexs; break;
         case TOK_DEC:   generator = cgen_gen_decs; break;
         case TOK_STR:   generator = cgen_gen_strs; break;
+        case TOK_CHR:   generator = cgen_gen_chrs; break;
         case TOK_LEFT:  generator = cgen_gen_lfts; break;
         case TOK_RIGHT: generator = cgen_gen_rgts; break;
         case TOK_MID:   generator = cgen_gen_mids; break;

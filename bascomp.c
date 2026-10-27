@@ -1614,7 +1614,7 @@ bool comp_eat_sysstrfn2argcall( compiler_t* comp, node_t** pnode ) {
     /*
         sys-str-fn-2-arg-call := ( TOK_BIN | TOK_QUA | TOK_OCT | TOK_DEC | TOK_HEX ) TOK_STRING TOK_LPAREN num-expr
                                     [ TOK_COMMA num-expr ] TOK_RPAREN |
-                                 TOK_STR TOK_STRING TOK_LPAREN num-expr TOK_RPAREN |
+                                 ( TOK_STR | TOK_CHR ) TOK_STRING TOK_LPAREN num-expr TOK_RPAREN |
                                  ( TOK_LEFT | TOK_RIGHT ) TOK_STRING TOK_LPAREN str-expr TOK_COMMA num-expr TOK_RPAREN |
                                  TOK_MID TOK_STRING TOK_LPAREN str-expr TOK_COMMA num-expr [ TOK_COMMA num-expr ] TOK_RPAREN .
 
@@ -1676,8 +1676,8 @@ OOM:        out_of_memory( comp );
             return false;
         }
         return true;
-    } else if ( tok == TOK_STR ) {
-        // TOK_STR TOK_STRING TOK_LPAREN num-expr TOK_RPAREN
+    } else if ( tok == TOK_STR || tok == TOK_CHR ) {
+        // ( TOK_STR | TOK_CHR ) TOK_STRING TOK_LPAREN num-expr TOK_RPAREN
         if ( !comp_fetchtok( comp ) ) {
             return false;
         }
