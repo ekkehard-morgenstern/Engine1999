@@ -271,12 +271,20 @@ static bool vm_print_sep( vm_t* vm, bool hassep, uint16_t sep ) {
 
 // -- variables -------------------------------------------------------------
 
+static bool vm_rpush( vm_t* vm, uint16_t addr );
+
 static bool vm_read_var( vm_t* vm, uint16_t varoffs, uint8_t vartype ) {
     varvalue_t value;
     if ( !vmem_get_var( vm->vmem, varoffs, vartype, 0, 0, &value ) ) {
         return vm_error( vm, "Undefined variable" );
     }
     switch ( vartype & VARTYPEM_BASE ) {
+        case VARTYPEV_LABEL:
+            // a label is a code address; it goes on the return stack
+            if ( value.lbloffs == CODEOFFS_NONE ) {
+                return vm_error( vm, "Undefined label" );
+            }
+            return vm_rpush( vm, value.lbloffs );
         case VARTYPEV_FLOAT:
             return vm_dpush_num( vm, value.dblval );
         case VARTYPEV_INT:
@@ -549,6 +557,7 @@ static bool vm_step( vm_t* vm ) {
         case INS_RRNV: return vm_read_var( vm, param, VARTYPEV_FLOAT );
         case INS_RRIV: return vm_read_var( vm, param, VARTYPEV_INT );
         case INS_RRSV: return vm_read_var( vm, param, VARTYPEV_STR );
+        case INS_RRLV: return vm_read_var( vm, param, VARTYPEV_LABEL );
         case INS_WRNV: return vm_write_var( vm, param, VARTYPEV_FLOAT );
         case INS_WRIV: return vm_write_var( vm, param, VARTYPEV_INT );
         case INS_WRSV: return vm_write_var( vm, param, VARTYPEV_STR );

@@ -2978,8 +2978,8 @@ POP:    comp_pop_context( comp );
     uint8_t data[2];
     data[0] = iftok;
     data[1] = gotok;
-    if ( !comp_create_node( comp, pnode, NT_SINGLELINEIFSTMT, UINT8_C(2), UINT16_C(2), data,
-        target1, target2 ) || *pnode == NODE_NONE ) {
+    if ( !comp_create_node( comp, pnode, NT_SINGLELINEIFSTMT, UINT8_C(3), UINT16_C(2), data,
+        numexpr, target1, target2 ) || *pnode == NODE_NONE ) {
         out_of_memory( comp );
         return false;
     }
@@ -3052,6 +3052,10 @@ bool comp_eat_multilineifstmt( compiler_t* comp, node_t** pnode ) {
         comp_error( comp, "Statement list expected" );
     }
     if ( comp->currtok == TOK_ELSE && comp_fetchtok( comp ) ) {
+        if ( comp->currtok != TOK_EOL || !comp_fetchtok( comp ) ) {
+            comp_error( comp, "End of line expected" );
+            return false;
+        }
         if ( !comp_eat_stmtlines( comp, &target2 ) || target2 == NODE_NONE ) {
             comp_error( comp, "Statement list expected" );
         }
@@ -3065,11 +3069,12 @@ bool comp_eat_multilineifstmt( compiler_t* comp, node_t** pnode ) {
             data:
                 - 1 byte of IF/UNLESS token
             branches:
+                - 1 branch of IF numeric expression
                 - 1 branch of statement lines
                 - 1 optional branch of ELSE statement lines
     */
-    if ( !comp_create_node( comp, pnode, NT_MULTILINEIFSTMT, UINT8_C(2), UINT16_C(1), &iftok,
-        target1, target2 ) || *pnode == NODE_NONE ) {
+    if ( !comp_create_node( comp, pnode, NT_MULTILINEIFSTMT, UINT8_C(3), UINT16_C(1), &iftok,
+        numexpr, target1, target2 ) || *pnode == NODE_NONE ) {
         out_of_memory( comp );
         return false;
     }

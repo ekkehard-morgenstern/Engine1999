@@ -33,6 +33,25 @@ void init_codegen( codegen_t* cgen ) {
     cgen->userdata = 0;
     cgen->codesize = UINT16_C(0);
     cgen->datasize = UINT16_C(0);
+    cgen->lineaddrs = 0; cgen->numlineaddrs = cgen->maxlineaddrs = 0;
+    cgen->fixups    = 0; cgen->numfixups    = cgen->maxfixups    = 0;
+    cgen->fors      = 0; cgen->numfors      = cgen->maxfors      = 0;
+    cgen->forserial = 0;
+}
+
+void cleanup_codegen( codegen_t* cgen ) {
+    free( cgen->lineaddrs );
+    free( cgen->fixups );
+    free( cgen->fors );
+    cgen->lineaddrs = 0; cgen->numlineaddrs = cgen->maxlineaddrs = 0;
+    cgen->fixups    = 0; cgen->numfixups    = cgen->maxfixups    = 0;
+    cgen->fors      = 0; cgen->numfors      = cgen->maxfors      = 0;
+}
+
+void cgen_reset( codegen_t* cgen ) {
+    cgen->codesize = UINT32_C(0);
+    cgen->datasize = UINT32_C(0);
+    cgen_begin_control( cgen );
 }
 
 bool cgen_alloc_code( codegen_t* cgen, uint16_t size, uint16_t* poffs ) {
@@ -623,27 +642,27 @@ bool cgen_gen_pstr( codegen_t* cgen, bool hasparam, uint16_t param ) {
 
 // generate code from syntax tree nodes
 
-static bool cgen_bad_node( compiler_t* comp ) {
+bool cgen_bad_node( compiler_t* comp ) {
     comp_error( comp, "Internal error (bad node)" );
     return false;
 }
 
-static bool cgen_unexpected_node( compiler_t* comp ) {
+bool cgen_unexpected_node( compiler_t* comp ) {
     comp_error( comp, "Internal error (unexpected node)" );
     return false;
 }
 
-static bool cgen_out_of_code_memory( compiler_t* comp ) {
+bool cgen_out_of_code_memory( compiler_t* comp ) {
     comp_error( comp, "Out of code memory" );
     return false;
 }
 
-static bool cgen_out_of_data_memory( compiler_t* comp ) {
+bool cgen_out_of_data_memory( compiler_t* comp ) {
     comp_error( comp, "Out of data memory" );
     return false;
 }
 
-static bool cgen_not_implemented_yet( compiler_t* comp ) {
+bool cgen_not_implemented_yet( compiler_t* comp ) {
     comp_error( comp, "Internal error (feature not implemented yet)" );
     return false;
 }
@@ -2407,6 +2426,13 @@ bool cgen_from_stmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         case NT_PRINTSTMT:  return cgen_from_printstmt( cgen, comp, node );
         case NT_SAVESTMT:   return cgen_from_savestmt( cgen, comp, node );
         case NT_STMTLIST:   return cgen_from_stmtlist( cgen, comp, node );
+        case NT_GOTOSTMT:   return cgen_from_gotostmt( cgen, comp, node );
+        case NT_RETURNSTMT: return cgen_from_returnstmt( cgen, comp, node );
+        case NT_LABELSTMT:  return cgen_from_labelstmt( cgen, comp, node );
+        case NT_FORSTMT:    return cgen_from_forstmt( cgen, comp, node );
+        case NT_NEXTSTMT:   return cgen_from_nextstmt( cgen, comp, node );
+        case NT_SINGLELINEIFSTMT:   return cgen_from_singlelineifstmt( cgen, comp, node );
+        case NT_MULTILINEIFSTMT:    return cgen_from_multilineifstmt( cgen, comp, node );
         default:
             break;
     }
@@ -2440,6 +2466,9 @@ bool cgen_from_stmtline( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     if ( node->datalen == UINT16_C(3) ) {
         uint32_t lineno = ( ( (uint32_t) node->data[0] ) << UINT8_C(16) ) | ( ( (uint32_t) node->data[1] ) << UINT8_C(8) ) |
             node->data[2];
+        if ( !cgen_note_line( cgen, comp, lineno ) ) {
+            return false;
+        }
         if ( lineno > UINT16_MAX ) {
             // the LINE instruction only has a 16 bit parameter
             comp_error( comp, "Line number too large for code generation" );
@@ -2474,8 +2503,7 @@ bool cgen_from_program( codegen_t* cgen, compiler_t* comp ) {
     if ( root == NODE_NONE ) {
         return cgen_bad_node( comp );
     }
-    if ( root->type == NT_STMTLINES ) {
-        return cgen_from_stmtlines( cgen, comp, root );
-    }
-    return cgen_from_stmtline( cgen, comp, root );
+    cgen_begin_control( cgen );
+    bool ok = root->type == NT_STMTLINES ? cgen_from_stmtlines( cgen, comp, root ) : cgen_from_stmtline( cgen, comp, root );
+    return ok && cgen_finish_control( cgen, comp );
 }

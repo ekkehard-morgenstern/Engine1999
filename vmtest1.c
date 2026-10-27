@@ -77,7 +77,46 @@ static const testcase_t cases[] = {
     { "string self-append",     "A$=\"X\"\nA$=A$+A$\nPRINT A$",     "XX\n" },
     { "empty PRINT",            "PRINT",                            "\n" },
     { "PRINT with channel only","PRINT #0,",                         "\n" },
-    { "unimplemented statement","10 GOTO 10",                       "? Internal error (feature not implemented yet) in line 10\n" },
+    { "unimplemented statement","10 DIM A(3)",                       "? Internal error (feature not implemented yet) in line 10\n" },
+    // control flow
+    { "GOTO forward",           "10 GOTO 30\n20 PRINT 1\n30 PRINT 2",                 "2\n" },
+    { "GOTO backward",          "10 A=0\n20 A=A+1\n30 PRINT A\n40 IF A<3 THEN 20\n50 PRINT 99", "1\n2\n3\n99\n" },
+    { "GOTO undefined line",    "10 GOTO 50",                       "? Undefined line number 50 in line 10\n" },
+    { "GOSUB and RETURN",       "10 GOSUB 100\n20 PRINT 2\n30 GOTO 200\n100 PRINT 1\n110 RETURN\n200 PRINT 3", "1\n2\n3\n" },
+    { "nested GOSUB",           "10 GOSUB 100\n20 PRINT \"D\"\n30 GOTO 900\n100 PRINT \"A\"\n110 GOSUB 200\n120 PRINT \"C\"\n130 RETURN\n200 PRINT \"B\"\n210 RETURN\n900 PRINT \"E\"", "A\nB\nC\nD\nE\n" },
+    { "RETURN without GOSUB",   "10 RETURN",                        "? Return stack underflow in line 10\n" },
+    { "label GOTO",             "10 GOTO FIN\n20 PRINT 1\n30 LABEL FIN\n40 PRINT 2", "2\n" },
+    { "label GOSUB",            "10 GOSUB SUBR\n20 PRINT 2\n30 GOTO 100\n40 LABEL SUBR\n50 PRINT 1\n60 RETURN\n100 PRINT 3", "1\n2\n3\n" },
+    { "IF then line",           "10 A=1\n20 IF A=1 THEN 40\n30 PRINT 0\n40 PRINT 1",  "1\n" },
+    { "IF false falls through", "10 A=2\n20 IF A=1 THEN 40\n30 PRINT 0\n40 PRINT 1",  "0\n1\n" },
+    { "IF else line",           "10 A=2\n20 IF A=1 THEN 50 ELSE 40\n30 PRINT \"N\"\n40 PRINT \"E\"\n45 GOTO 60\n50 PRINT \"T\"\n60 PRINT \"X\"", "E\nX\n" },
+    { "IF THEN statements",     "A=1\nIF A=1 THEN PRINT \"YES\":PRINT \"TWO\"",     "YES\nTWO\n" },
+    { "IF THEN false",          "A=0\nIF A THEN PRINT \"YES\"\nPRINT \"AFTER\"",    "AFTER\n" },
+    { "IF THEN ELSE statements","A=0\nIF A THEN PRINT \"T\" ELSE PRINT \"F\"",       "F\n" },
+    { "UNLESS",                 "A=0\nUNLESS A THEN PRINT \"U\"",                    "U\n" },
+    { "UNLESS true",            "A=5\nUNLESS A THEN PRINT \"U\" ELSE PRINT \"N\"",   "N\n" },
+    { "IF GOSUB",               "10 A=1\n20 IF A GOSUB 100\n30 PRINT 2\n40 GOTO 200\n100 PRINT 1\n110 RETURN\n200 PRINT 3", "1\n2\n3\n" },
+    { "multi-line IF",          "10 A=1\n20 IF A=1 THEN\n30 PRINT \"T\"\n40 PRINT \"U\"\n50 ENDIF\n60 PRINT \"END\"", "T\nU\nEND\n" },
+    { "multi-line IF else",     "10 A=0\n20 IF A THEN\n30 PRINT \"T\"\n40 ELSE\n50 PRINT \"F\"\n60 ENDIF\n70 PRINT \"END\"", "F\nEND\n" },
+    { "multi-line UNLESS",      "10 A=0\n20 UNLESS A THEN\n30 PRINT \"U\"\n40 ENDUNLESS\n50 PRINT \"END\"", "U\nEND\n" },
+    { "FOR",                    "10 FOR I=1 TO 3\n20 PRINT I\n30 NEXT I",           "1\n2\n3\n" },
+    { "FOR STEP",               "FOR I=10 TO 1 STEP -3:PRINT I:NEXT I",              "10\n7\n4\n1\n" },
+    { "FOR fractional step",    "FOR X=0 TO 1 STEP 0.5:PRINT X:NEXT X",              "0\n0.5\n1\n" },
+    { "FOR zero passes",        "FOR I=5 TO 1:PRINT I:NEXT I\nPRINT \"DONE\"",      "DONE\n" },
+    { "FOR variable after",     "FOR I=1 TO 3:NEXT I\nPRINT I",                     "4\n" },
+    { "nested FOR",             "FOR I=1 TO 2:FOR J=1 TO 2:PRINT I*10+J:NEXT J:NEXT I", "11\n12\n21\n22\n" },
+    { "NEXT with list",         "FOR I=1 TO 2:FOR J=1 TO 2:PRINT I*10+J:NEXT J,I",   "11\n12\n21\n22\n" },
+    { "NEXT without variable",  "FOR I=1 TO 2:PRINT I:NEXT",                         "1\n2\n" },
+    { "FOR integer variable",   "FOR I%=1 TO 3:PRINT I%:NEXT I%",                    "1\n2\n3\n" },
+    { "FOR with GOSUB",         "10 FOR I=1 TO 2\n20 GOSUB 100\n30 NEXT I\n40 GOTO 200\n100 PRINT I\n110 RETURN\n200 PRINT \"E\"", "1\n2\nE\n" },
+    { "NEXT without FOR",       "10 NEXT I",                         "? NEXT without FOR in line 10\n" },
+    { "FOR without NEXT",       "10 FOR I=1 TO 3",                   "? FOR without NEXT in line 10\n" },
+    { "loop with IF",           "10 FOR I=1 TO 5\n20 IF I=3 THEN 40\n30 PRINT I\n40 NEXT I", "1\n2\n4\n5\n" },
+    { "undefined label",        "10 GOTO NOWHERE",                  "? Undefined label in line 10\n" },
+    { "endless loop guard",     "10 GOTO 10",                       "? Step limit exceeded in line 10\n" },
+    { "nested multi-line IF",   "10 A=1:B=0\n20 IF A THEN\n30 IF B THEN\n40 PRINT \"AB\"\n50 ELSE\n60 PRINT \"A\"\n70 ENDIF\n80 ENDIF\n90 PRINT \"E\"", "A\nE\n" },
+    { "FOR inside IF",          "10 A=1\n20 IF A THEN\n30 FOR I=1 TO 2\n40 PRINT I\n50 NEXT I\n60 ENDIF\n70 PRINT \"E\"", "1\n2\nE\n" },
+    { "multi-line IF in loop",  "10 FOR I=1 TO 3\n20 IF I=2 THEN\n30 PRINT \"TWO\"\n40 ELSE\n50 PRINT I\n60 ENDIF\n70 NEXT I", "1\nTWO\n3\n" },
     { "division by zero",       "PRINT 1/0",                        "? Division by zero\n" },
     { "error line number",      "10 PRINT 1\n20 PRINT 1/0",         "1\n? Division by zero in line 20\n" },
 };
@@ -174,8 +213,7 @@ static void comp_halt( struct _compiler_t* comp, void* usrdata ) {
 // compiles the tokens set up in comp, generates the code and runs it; returns false if anything failed
 static bool compile_and_run( void ) {
     bool ok = false;
-    rt.codegen.codesize = 0;
-    rt.codegen.datasize = 0;
+    cgen_reset( &rt.codegen );
     quiet_begin();
     if ( setjmp( jmp_fail ) == 0 ) {
         run_compiler( &comp );
@@ -254,6 +292,7 @@ static bool enter_source( const char* source, program_t* pgm, buf_t* tokbuf, boo
 
 static bool run_case( const testcase_t* tc, buf_t* tokbuf ) {
     out_reset();
+    cleanup_runtime( &rt );
     init_runtime( &rt );
     rt.report = rt_report;
     rt.halt   = rt_halt;
@@ -296,6 +335,7 @@ int main( int argc, char** argv ) {
         }
     }
     cleanup_compiler( &comp );
+    cleanup_runtime( &rt );
     delete_buffer( tokbuf );
     free( outbuf );
     printf( "%zu of %zu passed\n", numcases - failed, numcases );

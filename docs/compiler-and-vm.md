@@ -52,11 +52,20 @@ Immediates: 17-bit signed (`PHIM`, C bit = bit 16) so small integers need no dat
 
 Minimal executor: `init_vm( vm, &codegen, &varmem )`, `vm_run( vm )` (runs from offset 0 to the end of the code, returns `false` after reporting an error), `cleanup_vm`. Stacks are heap arrays that grow on demand; data stack items are tagged number/string (heap, NUL-terminated), so type mismatches are run time errors and strings are freed on errors. Output goes through `vm->print( vm, userdata, channel, text )` (default stdout), errors through `vm->report` (default stderr). `vm->maxsteps` guards against endless loops.
 
-Implemented: control (`NOP PHPA PHIM BRIA BRIR JPCC JUMP DROP LINE`), loads (`LAN LIAN LUAN LAS FRES`), all arithmetic/logical/compare/concat instructions, scalar variable read/write (`RRNV RRIV RRSV WRNV WRIV WRSV`), `PCHN PNUM PSTR`. Not implemented (reported as "Instruction XXX not implemented"): arrays, labels, `CALF/RETF`, system functions, `SHEX`, `SAVE`, `BRK` (reports "Breakpoint").
+Implemented: control (`NOP PHPA PHIM BRIA BRIR JPCC JUMP DROP LINE`), loads (`LAN LIAN LUAN LAS FRES`), all arithmetic/logical/compare/concat instructions, scalar variable read/write (`RRNV RRIV RRSV RRLV WRNV WRIV WRSV`), `PCHN PNUM PSTR`. Not implemented (reported as "Instruction XXX not implemented"): arrays, `WRLV`, `CALF/RETF`, system functions, `SHEX`, `SAVE`, `BRK` (reports "Breakpoint").
 
 Policies the ISA leaves open (documented in `vm.h`): comparisons give -1/0; bitwise ops work on 32-bit signed integers; print separator parameter 0 = newline, 4 = `;`, 8 = `,` (next 10-column zone); numbers print with `%.15g`.
 
-Code generator driver: `cgen_from_program( cgen, comp )` handles `NT_STMTLINES` / `NT_STMTLINE` / `NT_STMTLIST` and the statements `LET`, `PRINT`, `SAVE`; other statements report "feature not implemented yet". `LINE` has a 16-bit parameter, so line numbers above 65535 are rejected by code generation for now.
+Code generator driver: `cgen_from_program( cgen, comp )` handles `NT_STMTLINES` / `NT_STMTLINE` / `NT_STMTLIST` and the statements `LET`, `PRINT`, `SAVE` (`codegen.c`) plus the control flow statements below (`cgenctl.c`); other statements (`DIM`, `ERASE`, `DEF`) report "feature not implemented yet". `LINE` has a 16-bit parameter, so line numbers above 65535 are rejected by code generation for now. Call `cgen_reset()` before generating into a reused `codegen_t` and `cleanup_codegen()` / `cleanup_runtime()` when done.
+
+### Control flow (`cgenctl.c`)
+
+- **Line table and fixups:** every numbered line is recorded (`cgen_note_line`, line number → code offset). `GOTO`/`GOSUB`/`IF … <line>` emit a `BRIA` that is patched by `cgen_finish_control()` when the whole program is known; an unknown target is the compile error "Undefined line number N in line M". Consequence: a line can only jump to lines of the same compilation (direct mode can't `GOTO` a stored program line yet).
+- **`GOSUB`/`RETURN`:** `GOSUB` pushes the return address (`PHPA.C`, patched) then branches; `RETURN` is `JUMP`.
+- **Labels:** a label is a variable holding a code offset, set at compile time by `LABEL`. `GOTO`/`GOSUB label` do `RRLV` (pushes the offset on the return stack) + `JUMP`; a label that is never defined fails at run time ("Undefined label").
+- **`IF`/`UNLESS`:** `<cond> PHPA.C then JPCC <else part> BRIA end then: <then part> end:`; used for the single-line forms (`THEN <line>`, `GOTO`/`GOSUB <line|label>`, `THEN <stmt-list> [ELSE <stmt-list>]`) and the multi-line form. `UNLESS` compares the condition with 0.
+- **`FOR`/`NEXT`:** matched at compile time (lexically): `NEXT` closes the innermost open `FOR`, which must use the named variable (`NEXT` alone, `NEXT I` and `NEXT J,I` are accepted; mismatches are "NEXT without FOR" / "FOR without NEXT"). Limit and step live in hidden variables `@FOR<n>L` / `@FOR<n>S`; the loop test happens *before* the first pass (a loop with `FROM` past `TO` runs zero times). The loop variable may be numeric or integer.
+- **Parser fixes made for this:** the `IF` nodes (single- and multi-line) now carry the condition expression as their first branch (it was dropped), and a multi-line `ELSE` now consumes the end of line after it.
 
 ## Runtime (`runtime.[ch]`)
 

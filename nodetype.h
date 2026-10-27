@@ -423,6 +423,7 @@ Explanation of node types:
         data:
             - 1 byte of IF/UNLESS token
         branches:
+            - 1 branch of IF numeric expression
             - 1 branch of statement lines
             - 1 optional branch of ELSE statement lines
 

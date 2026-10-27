@@ -82,3 +82,7 @@ void init_runtime( runtime_t* rt ) {
     rt->report   = 0;
     rt->halt     = 0;
 }
+
+void cleanup_runtime( runtime_t* rt ) {
+    cleanup_codegen( &rt->codegen );
+}

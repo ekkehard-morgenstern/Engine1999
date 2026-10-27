@@ -42,15 +42,45 @@
 #define CODESIZE_MAX    65536U
 #define DATASIZE_MAX    65536U
 
+// control flow bookkeeping (see cgenctl.c)
+typedef struct _cgen_lineaddr_t {
+    uint32_t    lineno;
+    uint32_t    addr;           // code offset of the line
+} cgen_lineaddr_t;
+
+typedef struct _cgen_fixup_t {
+    uint32_t    insoffs;        // code offset of the branch instruction to patch
+    uint32_t    lineno;         // target line number
+    uint32_t    srcline;        // line number of the statement that refers to it (for error messages)
+} cgen_fixup_t;
+
+typedef struct _cgen_forctx_t {
+    uint8_t     vartype;        // type of the loop variable (VARTYPEV_FLOAT or VARTYPEV_INT)
+    uint16_t    varoffs;        // loop variable
+    uint16_t    stepvar;        // hidden variable holding the STEP value
+    uint32_t    topaddr;        // loop test code (NEXT branches here)
+    uint32_t    exitins;        // code offset of the PHPA instruction holding the loop exit address
+    uint32_t    srcline;        // line number of the FOR statement
+} cgen_forctx_t;
+
 typedef struct _codegen_t {
     void*           userdata;
     void            (*report)( struct _codegen_t*, void*, const char* );
     void            (*halt)( struct _codegen_t*, void* ) ATTR_NORETURN;
     uint8_t         code[CODESIZE_MAX], data[DATASIZE_MAX];
     uint32_t        codesize, datasize;
+    cgen_lineaddr_t*    lineaddrs;      // line number -> code address, in ascending order
+    size_t              numlineaddrs, maxlineaddrs;
+    cgen_fixup_t*       fixups;         // forward references to lines
+    size_t              numfixups, maxfixups;
+    cgen_forctx_t*      fors;           // FOR loops that are currently open (compile time)
+    size_t              numfors, maxfors;
+    uint32_t            forserial;      // numbers the hidden variables of FOR loops
 } codegen_t;
 
 void init_codegen( codegen_t* cgen );
+void cleanup_codegen( codegen_t* cgen );    // frees the bookkeeping tables
+void cgen_reset( codegen_t* cgen );         // discards all code and data (keeps the callbacks)
 bool cgen_alloc_code( codegen_t* cgen, uint16_t size, uint16_t* poffs );
 bool cgen_alloc_data( codegen_t* cgen, uint16_t size, uint16_t* poffs );
 bool cgen_gen_ins( codegen_t* cgen, uint8_t ins, uint8_t ext, uint16_t param );
@@ -198,5 +228,26 @@ bool cgen_from_stmtlist( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_stmtline( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_stmtlines( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_program( codegen_t* cgen, compiler_t* comp );    // code for the whole syntax tree (comp->syntree)
+
+// internal errors (report through comp_error and return false)
+bool cgen_bad_node( compiler_t* comp );
+bool cgen_unexpected_node( compiler_t* comp );
+bool cgen_out_of_code_memory( compiler_t* comp );
+bool cgen_out_of_data_memory( compiler_t* comp );
+bool cgen_not_implemented_yet( compiler_t* comp );
+
+// -- control flow (cgenctl.c) ------------------------------------------------
+
+void cgen_begin_control( codegen_t* cgen );     // clears the line table, fixups and FOR stack
+bool cgen_note_line( codegen_t* cgen, compiler_t* comp, uint32_t lineno );  // line starts at the current code offset
+bool cgen_finish_control( codegen_t* cgen, compiler_t* comp );              // resolves line references, checks FOR/NEXT
+
+bool cgen_from_gotostmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_returnstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_labelstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_forstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_nextstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_singlelineifstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_multilineifstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 
 #endif
