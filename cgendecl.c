@@ -58,6 +58,57 @@ bool cgen_from_dimstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     return true;
 }
 
+// the hidden variable that holds the result of a multi-line function: "@FN" + the name of the function
+static bool cd_result_var( compiler_t* comp, uint8_t basetype, const char* prefixedname, uint16_t* pvaroffs ) {
+    uint16_t varoffs = VAROFFS_NONE;
+    if ( !vmem_lookup_var( &comp->rt->varmem, basetype, prefixedname, &varoffs ) || varoffs == VAROFFS_NONE ) {
+        varoffs = VAROFFS_NONE;
+        if ( !vmem_create_var( &comp->rt->varmem, basetype, prefixedname, UINT8_C(0), 0, UINT8_C(0), 0, &varoffs ) ||
+             varoffs == VAROFFS_NONE ) {
+            comp_error( comp, "Out of memory" );
+            return false;
+        }
+    }
+    *pvaroffs = varoffs;
+    return true;
+}
+
+static bool cd_write_var( codegen_t* cgen, uint8_t basetype, uint16_t varoffs ) {
+    switch ( basetype ) {
+        case VARTYPEV_INT:  return cgen_gen_wriv( cgen, varoffs );
+        case VARTYPEV_STR:  return cgen_gen_wrsv( cgen, varoffs );
+        default:            return cgen_gen_wrnv( cgen, varoffs );
+    }
+}
+
+bool cgen_from_fnassignstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    /*
+        NT_FNASSIGNSTMT     assignment of the result of a multi-line user function
+            data:
+                - 1 byte of type indicator, n bytes of function name
+            branches:
+                - 1 branch of expression
+    */
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->type != NT_FNASSIGNSTMT || node->datalen < UINT16_C(2) || node->numbranches != 1U ) {
+        return cgen_unexpected_node( comp );
+    }
+    uint8_t basetype = node->data[0] & VARTYPEM_BASE;
+    uint16_t varoffs = VAROFFS_NONE;
+    if ( !cd_result_var( comp, basetype, comp_prefixed_name( comp, "@FN", &node->data[1], node->datalen - 1U ), &varoffs ) ) {
+        return false;
+    }
+    if ( !cgen_from_expr( cgen, comp, node->branches[0] ) ) {
+        return false;
+    }
+    if ( !cd_write_var( cgen, basetype, varoffs ) ) {
+        return cgen_out_of_code_memory( comp );
+    }
+    return true;
+}
+
 static bool cd_ensure_param_vars( compiler_t* comp, uint16_t funcoffs, uint8_t numparams ) {
     for ( uint8_t i=0; i < numparams; ++i ) {
         uint8_t ptype = 0; const char* name = 0; uint16_t poffs = VAROFFS_NONE;
@@ -114,8 +165,9 @@ bool cgen_from_defstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     if ( body == NODE_NONE ) {
         return cgen_bad_node( comp );
     }
-    if ( body->type != NT_SINGLELINEUSERFNBODY || body->numbranches != 1U ) {
-        return cgen_not_implemented_yet( comp );    // multi-line bodies
+    bool multiline = body->type == NT_MULTILINEUSERFNBODY;
+    if ( ( !multiline && body->type != NT_SINGLELINEUSERFNBODY ) || body->numbranches != 1U ) {
+        return cgen_unexpected_node( comp );
     }
     uint8_t ftype = 0, numparams = 0; uint16_t oldcode = CODEOFFS_NONE;
     if ( !vmem_get_func_info( &comp->rt->varmem, funcoffs, &ftype, &numparams, &oldcode ) || ftype != functype ) {
@@ -135,8 +187,41 @@ bool cgen_from_defstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         return false;
     }
     uint16_t start = (uint16_t) cgen->codesize;
-    if ( !cgen_from_expr( cgen, comp, body->branches[0] ) ) {
-        return false;
+    if ( !multiline ) {
+        if ( !cgen_from_expr( cgen, comp, body->branches[0] ) ) {
+            return false;
+        }
+    } else {
+        // the result lives in a hidden variable; it starts as 0 or the empty string, the body assigns it
+        uint8_t basetype = functype & VARTYPEM_BASE;
+        uint16_t resoffs = VAROFFS_NONE;
+        var_t* fvar = vmem_var( &comp->rt->varmem, funcoffs );
+        if ( fvar == 0 || !cd_result_var( comp, basetype, comp_prefixed_name( comp, "@FN", fvar->name, strlen( fvar->name ) ), &resoffs ) ) {
+            return false;
+        }
+        if ( basetype == VARTYPEV_STR ) {
+            uint16_t emptyoffs = DATAOFFS_NONE;
+            if ( !cgen_alloc_data( cgen, UINT16_C(1), &emptyoffs ) || emptyoffs == DATAOFFS_NONE ) {
+                return cgen_out_of_data_memory( comp );
+            }
+            cgen->data[ emptyoffs ] = '\0';
+            if ( !cgen_gen_phpa_d( cgen, emptyoffs ) || !cgen_gen_las_d( cgen ) ) {
+                return cgen_out_of_code_memory( comp );
+            }
+        } else if ( !cgen_gen_phim( cgen, 0 ) ) {
+            return cgen_out_of_code_memory( comp );
+        }
+        if ( !cd_write_var( cgen, basetype, resoffs ) ) {
+            return cgen_out_of_code_memory( comp );
+        }
+        if ( !cgen_from_block( cgen, comp, body->branches[0] ) ) {
+            return false;
+        }
+        bool ok = basetype == VARTYPEV_INT ? cgen_gen_rriv( cgen, resoffs ) :
+            basetype == VARTYPEV_STR ? cgen_gen_rrsv( cgen, resoffs ) : cgen_gen_rrnv( cgen, resoffs );
+        if ( !ok ) {
+            return cgen_out_of_code_memory( comp );
+        }
     }
     if ( !cgen_gen_retf( cgen ) ) {
         return cgen_out_of_code_memory( comp );

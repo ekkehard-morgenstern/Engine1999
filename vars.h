@@ -156,6 +156,7 @@ bool vmem_lookup_var( varmem_t* vmem, uint8_t vartype, const char* name, uint16_
 bool vmem_create_var( varmem_t* vmem, uint8_t vartype, const char* name, uint8_t numdims, const uint16_t* dims,
     uint8_t numparams, const usrparam_t* params, uint16_t* poutoffs );
 bool vmem_delete_var( varmem_t* vmem, uint16_t varoffs );
+bool vmem_erase_array( varmem_t* vmem, uint16_t varoffs );     // resets all elements: 0 or the empty string
 bool vmem_get_var( varmem_t* vmem, uint16_t varoffs, uint8_t vartype, uint8_t numdims, const uint16_t* diminx,
     varvalue_t* pvalue );
 bool vmem_set_var( varmem_t* vmem, uint16_t varoffs, uint8_t vartype, uint8_t numdims, const uint16_t* diminx,

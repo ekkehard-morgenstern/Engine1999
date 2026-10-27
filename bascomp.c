@@ -37,6 +37,7 @@ void init_compiler( compiler_t* comp, struct _runtime_t* rt, program_t* pgm, boo
     comp->currtok  = TOK_NONE;
     comp->name     = 0;
     comp->namealloc = 0;
+    comp->curfn    = NODE_NONE;
     comp->ctxstk   = 0;
     // CAUTION: Set the "keepmemory" flag only if you know what you're doing!
     if ( keepmemory ) {
@@ -64,10 +65,10 @@ void cleanup_compiler( compiler_t* comp ) {
     comp_free_tree( comp );
 }
 
-const char* comp_node_name( compiler_t* comp, const node_t* node, size_t skip ) {
-    size_t len = node->datalen > skip ? node->datalen - skip : 0;
-    if ( len + 1U > comp->namealloc ) {
-        size_t alloc = len + 1U < 64U ? 64U : len + 1U;
+const char* comp_prefixed_name( compiler_t* comp, const char* prefix, const void* name, size_t len ) {
+    size_t plen = strlen( prefix );
+    if ( plen + len + 1U > comp->namealloc ) {
+        size_t alloc = plen + len + 1U < 64U ? 64U : plen + len + 1U;
         char* p = (char*) realloc( comp->name, alloc );
         if ( p == 0 ) {
             comp_error( comp, "Out of memory" );
@@ -75,11 +76,15 @@ const char* comp_node_name( compiler_t* comp, const node_t* node, size_t skip ) 
         comp->name = p;
         comp->namealloc = alloc;
     }
-    if ( len ) {
-        memcpy( comp->name, node->data + skip, len );
-    }
-    comp->name[ len ] = '\0';
+    memmove( comp->name + plen, name, len );    // the name may be in the buffer already
+    memcpy( comp->name, prefix, plen );
+    comp->name[ plen + len ] = '\0';
     return comp->name;
+}
+
+const char* comp_node_name( compiler_t* comp, const node_t* node, size_t skip ) {
+    size_t len = node->datalen > skip ? node->datalen - skip : 0;
+    return comp_prefixed_name( comp, "", node->data + skip, len );
 }
 
 void comp_set_tokens( compiler_t* comp, const uint8_t* tokens, size_t size ) {
@@ -1404,7 +1409,11 @@ UNEXP:  comp_error( comp, "Internal error (unexpected name node)" );
         }
     }
     node_t* fnbody = NODE_NONE;
-    if ( !comp_eat_usrfnbody( comp, &fnbody ) || fnbody == NODE_NONE ) {
+    node_t* outerfn = comp->curfn;
+    comp->curfn = fnname;       // the body may assign the result of a multi-line function
+    bool bodyok = comp_eat_usrfnbody( comp, &fnbody ) && fnbody != NODE_NONE;
+    comp->curfn = outerfn;
+    if ( !bodyok ) {
         comp_error( comp, "User function body expected" );
         return false;
     }
@@ -2611,8 +2620,47 @@ bool comp_eat_defstmt( compiler_t* comp, node_t** pnode ) {
     return true;
 }
 
+bool comp_eat_fnassignstmt( compiler_t* comp, node_t** pnode ) {
+    // fn-assign-stmt := any-usr-fn-name TOK_EQ expr .
+    /*
+        NT_FNASSIGNSTMT     assignment of the result of a multi-line user function
+            data:
+                - 1 byte of type indicator, n bytes of function name
+            branches:
+                - 1 branch of expression
+    */
+    if ( comp->currtok != TOK_FN || comp->curfn == NODE_NONE ) {
+        return false;
+    }
+    node_t* fnname = NODE_NONE;
+    if ( !comp_eat_anyusrfnname( comp, &fnname ) || fnname == NODE_NONE ) {
+        return false;
+    }
+    if ( fnname->type != comp->curfn->type || fnname->datalen != comp->curfn->datalen ||
+         memcmp( fnname->data, comp->curfn->data, fnname->datalen ) != 0 ) {
+        comp_error( comp, "Only the function being defined can be assigned" );
+        return false;
+    }
+    if ( comp->currtok != TOK_EQ || !comp_fetchtok( comp ) ) {
+        comp_error( comp, "Assignment operator '=' expected" );
+        return false;
+    }
+    node_t* expr = NODE_NONE;
+    bool isstr = ( fnname->data[0] & VARTYPEM_BASE ) == VARTYPEV_STR;
+    if ( !( isstr ? comp_eat_strexpr( comp, &expr ) : comp_eat_numexpr( comp, &expr ) ) || expr == NODE_NONE ) {
+        comp_error( comp, isstr ? "String expression expected" : "Numeric expression expected" );
+        return false;
+    }
+    if ( !comp_create_node( comp, pnode, NT_FNASSIGNSTMT, UINT8_C(1), fnname->datalen, fnname->data, expr ) ||
+        *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
 bool comp_eat_assignstmt( compiler_t* comp, node_t** pnode ) {
-    // assign-stmt := let-stmt | dim-stmt | erase-stmt | def-stmt .
+    // assign-stmt := let-stmt | dim-stmt | erase-stmt | def-stmt | fn-assign-stmt .
     // [ NT_ASSIGNSTMT - not generated ]
     if ( comp_eat_letstmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
@@ -2624,6 +2672,9 @@ bool comp_eat_assignstmt( compiler_t* comp, node_t** pnode ) {
         return true;
     }
     if ( comp_eat_defstmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_fnassignstmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     return false;

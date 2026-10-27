@@ -49,8 +49,7 @@ The data stack items are either a number or a string pointer (heap, NUL-terminat
 type mismatch is a run time error and strings never leak.
 The stacks are heap allocated and grow on demand.
 
-Not implemented yet (reported as errors at run time): BRK, WRLV, SLFT/SRGT/SMID (they can't
-change a variable, since strings on the stack are copies), array parameters of functions.
+Not implemented yet (reported as errors at run time): BRK, WRLV, array parameters of functions.
 
 Policies chosen by this implementation (the instruction set does not define them):
     - comparisons yield -1 (true) or 0 (false)

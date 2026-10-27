@@ -43,6 +43,10 @@ Maintained by Claude; updated whenever work in a session changes something. Last
 - Tests: `vmtest1` 158 cases (new dynamic ones: 3000-char name, 2000 variables, 300x300 array), `testcomp1` passes repeatedly, both valgrind clean.
 - Not done (deliberately): syntax tree nodes still carry the variable number in their data bytes (not a `var_t*`).
 
+- The three parsed-but-ungenerated statements are done (every statement of `bascomp.ebnf` now has code generation): `ERASE` (new instruction `ERAS`, resets the array; `vmem_erase_array`), substring assignment (`SLFT/SRGT/SMID` now take the variable number as parameter and array subscripts + ndim from the stack; old `( s s n -- )` form dropped; `cgen_from_substrassign` rewritten), multi-line `DEF FN` (new parser statement `FN A = expr` → `NT_FNASSIGNSTMT`, `compiler_t.curfn`, hidden result variable `@FN<name>`; `cgen_from_block` exported from `cgenctl.c`). `vmtest1`: 197 cases, all pass, valgrind clean.
+- ISA changes made (instset.h updated): new `ERAS` (0x116); `SLFT/SRGT/SMID` changed as above.
+- Still no grammar for: INPUT, GET, PUT, READ/DATA/RESTORE, REPEAT/UNTIL, WHILE/WEND, UEND, POP, ON, OFF, AFTER, EVERY, RUN, NEW, LIST, LOAD, DELETE, RENUM, CLEAR, EDIT, MERGE, CHAIN, FILES, SYMBOL, OPTION BASE, INT/STR/FLT, END/STOP — each needs a language design (UEND, AFTER/EVERY/SYMBOL meanings are unclear).
+
 ## Open / next steps
 - Remaining limits not touched: 64 KiB code/data segments (16-bit ISA addresses), 16-bit variable numbers, `engine1999` 256-byte input line, `codegen` coverage (see `docs/compiler-and-vm.md`).
-- Next (codegen strategy): the open decisions above; the remaining instructions (substring assignment, WRLV, BRK); direct mode access to a stored program; growable code/data segments; LINE with >16-bit line numbers.
+- Next (codegen strategy): the open decisions above; the remaining instructions (WRLV, BRK); direct mode access to a stored program; growable code/data segments; LINE with >16-bit line numbers.

@@ -392,13 +392,13 @@ static bool vm_write_var( vm_t* vm, uint16_t varoffs, uint8_t vartype ) {
     return vm_dpop( vm, &val ) && vm_set_value( vm, varoffs, vartype, 0, 0, val );
 }
 
-// pops the subscripts of an array element access: ( inx ... ndim -- )
+// pops the subscripts of an array element access: ( inx ... ndim -- ), ndim is 0 for a regular variable
 static bool vm_pop_subscripts( vm_t* vm, uint8_t* pnumdims, uint16_t diminx[MAXDIM] ) {
     double num;
     if ( !vm_dpop_num( vm, &num ) ) {
         return false;
     }
-    if ( !( num >= 1.0 && num <= (double) MAXDIM ) ) {
+    if ( !( num >= 0.0 && num <= (double) MAXDIM ) ) {
         return vm_error( vm, "Bad number of subscripts" );
     }
     uint8_t numdims = (uint8_t) num;
@@ -431,6 +431,56 @@ static bool vm_write_elem( vm_t* vm, uint16_t varoffs, uint8_t basetype ) {
         return false;
     }
     return vm_set_value( vm, varoffs, VARTYPEF_ARRAY | basetype, numdims, diminx, val );
+}
+
+// SLFT, SRGT, SMID: ( s n inx ... ndim -- ) or ( s start len inx ... ndim -- ), see instset.h
+static bool vm_set_substring( vm_t* vm, uint16_t opcode, uint16_t varoffs ) {
+    uint8_t numdims = 0; uint16_t diminx[MAXDIM];
+    double a = 0.0, b = 0.0; char* s = 0; vmval_t target;
+    if ( !vm_pop_subscripts( vm, &numdims, diminx ) ) {
+        return false;
+    }
+    if ( ( opcode == INS_SMID && !vm_dpop_num( vm, &b ) ) || !vm_dpop_num( vm, &a ) || !vm_dpop_str( vm, &s ) ) {
+        return false;
+    }
+    uint8_t vartype = VARTYPEV_STR | ( numdims ? VARTYPEF_ARRAY : UINT8_C(0) );
+    if ( !vm_get_value( vm, varoffs, vartype, numdims, diminx, &target ) ) {
+        free( s );
+        return false;
+    }
+    size_t tlen = strlen( target.str ), slen = strlen( s ), pos = 0, count = 0;
+    bool ok = true;
+    if ( opcode == INS_SMID ) {
+        if ( !( a >= 1.0 ) || a > (double) tlen ) {
+            ok = vm_error( vm, "Illegal argument" );
+        } else {
+            pos = (size_t) a - 1U;
+            size_t avail = tlen - pos;
+            count = b >= 0.0 && b < (double) avail ? (size_t) b : avail;
+        }
+    } else if ( a < 0.0 ) {
+        ok = vm_error( vm, "Illegal argument" );
+    } else {
+        count = a < (double) tlen ? (size_t) a : tlen;
+        if ( opcode == INS_SRGT ) {
+            pos = 0;    // set below, when the number of characters is known
+        }
+    }
+    if ( ok ) {
+        if ( count > slen ) {
+            count = slen;
+        }
+        if ( opcode == INS_SRGT ) {
+            pos = tlen - ( count < tlen ? count : tlen );
+        }
+        memcpy( target.str + pos, s, count );
+    }
+    free( s );
+    if ( !ok ) {
+        free( target.str );
+        return false;
+    }
+    return vm_set_value( vm, varoffs, vartype, numdims, diminx, target );
 }
 
 // -- user function calls -----------------------------------------------------
@@ -1039,6 +1089,10 @@ static bool vm_step( vm_t* vm ) {
             return vm_system_function( vm, opcode );
         case INS_SHEX: return vm_shell_execute( vm );
         case INS_SAVE: return vm_save_program( vm );
+        case INS_SLFT: case INS_SRGT: case INS_SMID:
+            return vm_set_substring( vm, opcode, param );
+        case INS_ERAS:
+            return vmem_erase_array( vm->vmem, param ) || vm_error( vm, "Not an array" );
         case INS_CALF: return vm_call_function( vm, param, pc );
         case INS_RETF: return vm_return_function( vm );
         case INS_WRNV: return vm_write_var( vm, param, VARTYPEV_FLOAT );

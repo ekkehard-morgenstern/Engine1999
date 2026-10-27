@@ -237,6 +237,8 @@ The 4096 extended instructions are as follows:
                             - the data stack is not affected (a result placed there will still exist afterwards)
     0001 00010100       GADC - get array    dimension count (param=varoffs) ( -- n ) C=0 P=1
     0001 00010101       GFAC - get function argument  count (param=varoffs) ( -- n ) C=0 P=1
+    0001 00010110       ERAS - erase array (param=varoffs)   ( -- ) C=0 P=1
+                            resets all elements of the array to their initial state (0 or the empty string)
     0001 00010110       (reserved)
     0001 00010111       (reserved)
     0001 00011000       TI   - get system   timer ( -- n ) C=0 P=0
@@ -259,9 +261,17 @@ The 4096 extended instructions are as follows:
     0001 00101001       RGTS - get right part of string ( s n -- s ) C=0 P=0
     0001 00101010       MIDS - get mid part of string ( s n n -- s ) C=0 P=0
     0001 00101011       (reserved)
-    0001 00101100       SLFT - set left part of string ( s s n -- ) C=0 P=0
-    0001 00101101       SRGT - set right part of string ( s s n -- ) C=0 P=0
-    0001 00101110       SMID - set mid part of string ( s s n n -- ) C=0 P=0
+    0001 00101100       SLFT - set left part of string variable   (param=varoffs) ( s n inx ... ndim -- ) C=0 P=1
+    0001 00101101       SRGT - set right part of string variable  (param=varoffs) ( s n inx ... ndim -- ) C=0 P=1
+    0001 00101110       SMID - set mid part of string variable    (param=varoffs) ( s start len inx ... ndim -- ) C=0 P=1
+                        The variable is a string variable (ndim = 0) or an element of a string array (the
+                        subscripts, as for WSAE). The string s replaces characters of the variable's value:
+                            SLFT: the first  min( n, LEN(s), LEN(var) ) characters
+                            SRGT: the last   min( n, LEN(s), LEN(var) ) characters
+                            SMID: min( len, LEN(s), LEN(var) - start + 1 ) characters beginning at <start> (counts
+                                  from 1); a negative <len> stands for the rest of the string
+                        The characters come from the beginning of s, the length of the variable doesn't change.
+                        n < 0, start < 1 or start > LEN(var) are errors.
     0001 00101111       (reserved)
     0001 00110000       SAVE - save program ( s s -- ) C=0 P=0
     0001 00110001       PCHN - print channel ( n -- ) C=0 P=0
@@ -343,6 +353,7 @@ The 4096 extended instructions are as follows:
 #define INS_RETF        UINT16_C(0X113)
 #define INS_GADC        UINT16_C(0X114)
 #define INS_GFAC        UINT16_C(0X115)
+#define INS_ERAS        UINT16_C(0X116)
 #define INS_TI          UINT16_C(0X118)
 #define INS_INKY        UINT16_C(0X119)
 #define INS_ASC         UINT16_C(0X11A)

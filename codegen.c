@@ -136,6 +136,10 @@ static const char* opcode_to_string( uint16_t opcode ) {
         case INS_RETF:      return "RETF";
         case INS_GADC:      return "GADC";
         case INS_GFAC:      return "GFAC";
+        case INS_ERAS:      return "ERAS";
+        case INS_SLFT:      return "SLFT";
+        case INS_SRGT:      return "SRGT";
+        case INS_SMID:      return "SMID";
         case INS_TI:        return "TI";
         case INS_INKY:      return "INKY";
         case INS_ASC:       return "ASC";
@@ -610,16 +614,20 @@ bool cgen_gen_mids( codegen_t* cgen ) {
     return cgen_gen_ins12( cgen, INS_MIDS, false, false, UINT16_C(0) );
 }
 
-bool cgen_gen_slft( codegen_t* cgen ) {
-    return cgen_gen_ins12( cgen, INS_SLFT, false, false, UINT16_C(0) );
+bool cgen_gen_slft( codegen_t* cgen, uint16_t varoffs ) {
+    return cgen_gen_ins12( cgen, INS_SLFT, false, true, varoffs );
 }
 
-bool cgen_gen_srgt( codegen_t* cgen ) {
-    return cgen_gen_ins12( cgen, INS_SRGT, false, false, UINT16_C(0) );
+bool cgen_gen_srgt( codegen_t* cgen, uint16_t varoffs ) {
+    return cgen_gen_ins12( cgen, INS_SRGT, false, true, varoffs );
 }
 
-bool cgen_gen_smid( codegen_t* cgen ) {
-    return cgen_gen_ins12( cgen, INS_SMID, false, false, UINT16_C(0) );
+bool cgen_gen_smid( codegen_t* cgen, uint16_t varoffs ) {
+    return cgen_gen_ins12( cgen, INS_SMID, false, true, varoffs );
+}
+
+bool cgen_gen_eras( codegen_t* cgen, uint16_t varoffs ) {
+    return cgen_gen_ins12( cgen, INS_ERAS, false, true, varoffs );
 }
 
 // BASIC system command implementations
@@ -2231,104 +2239,86 @@ UNEXP:  return cgen_unexpected_node( comp );
     return true;
 }
 
-static bool from_substrassign1_cb( void* param, node_t* node ) {
-    cbdata_t* pdata = (cbdata_t*) param;
-    /*
-        NT_SUBSTRASSIGN     substring assignment
-            data:
-                - 1 byte of substring operator
-            branches:
-                - 1 branch of expression list
-                - 1 branch of string expression
-    */
-    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
-    if ( ++pdata->count != 2 ) {
-        return true;
-    }
-    if ( node == NODE_NONE ) {
-        return cgen_bad_node( pdata->comp );
-    }
-    uint8_t nodetype = node->type;
-    if ( nodetype == NT_STREXPR ) {
-        // evaluate the string expression first
-        if ( !cgen_from_strexpr( pdata->cgen, pdata->comp, node ) ) {
-            return false;
-        }
-    } else {
-        return cgen_unexpected_node( pdata->comp );
-    }
-    return true;
-}
-
-static bool from_substrassign2_cb( void* param, node_t* node ) {
-    cbdata_t* pdata = (cbdata_t*) param;
-    /*
-        NT_SUBSTRASSIGN     substring assignment
-            data:
-                - 1 byte of substring operator
-            branches:
-                - 1 branch of expression list
-                - 1 branch of string expression
-    */
-    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
-    if ( ++pdata->count != 1 ) {
-        return true;
-    }
-    if ( node == NODE_NONE ) {
-        return cgen_bad_node( pdata->comp );
-    }
-    uint8_t nodetype = node->type;
-    if ( nodetype == NT_EXPRLIST || nodetype == NT_STREXPR || nodetype == NT_NUMEXPR ) {
-        // evaluate the expression list second
-        if ( !cgen_from_exprlist( pdata->cgen, pdata->comp, node ) ) {
-            return false;
-        }
-    } else {
-        return cgen_unexpected_node( pdata->comp );
-    }
-    return true;
-}
-
 bool cgen_from_substrassign( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     // substr-assign := substr-op TOK_STRING TOK_LPAREN expr-list TOK_RPAREN TOK_EQ str-expr .
     /*
-        T_SUBSTRASSIGN     substring assignment
+        NT_SUBSTRASSIGN     substring assignment
             data:
                 - 1 byte of substring operator
             branches:
-                - 1 branch of expression list
+                - 1 branch of expression list: the string variable (or array element), then the numeric arguments
                 - 1 branch of string expression
+        Code: <string expression> <arguments> [ <default length> ] <subscripts> <ndim>  SLFT/SRGT/SMID varoffs
     */
     if ( node == NODE_NONE ) {
         return cgen_bad_node( comp );
     }
-    uint8_t nodetype = node->type;
-    if ( nodetype != NT_SUBSTRASSIGN ) {
-UNEXP:  return cgen_unexpected_node( comp );
+    if ( node->type != NT_SUBSTRASSIGN || node->datalen != UINT16_C(1) || node->numbranches != 2U ) {
+        return cgen_unexpected_node( comp );
     }
-    cbdata_t cbdata = { cgen, comp, node, UINT16_C(0) };
-    if ( !comp_node_iter_branches( comp, node, &cbdata, from_substrassign1_cb ) ) {
-        return false;
-    }
-    cbdata.count = UINT16_C(0);
-    if ( !comp_node_iter_branches( comp, node, &cbdata, from_substrassign2_cb ) ) {
-        return false;
-    }
-    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
-    uint16_t datalen = node->datalen;
-    if ( datalen != 1U ) goto UNEXP;
     uint8_t tok = node->data[0];
-    bool (*generator)( codegen_t* ) = 0;
+    node_t* exprlist = node->branches[0];
+    node_t* strexpr  = node->branches[1];
+    if ( exprlist == NODE_NONE || strexpr == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    // the items of the expression list: the target and the arguments
+    node_t* single = exprlist;
+    node_t** items = exprlist->type == NT_EXPRLIST ? exprlist->branches : &single;
+    size_t numitems = exprlist->type == NT_EXPRLIST ? exprlist->numbranches : 1U;
+    bool (*generator)( codegen_t*, uint16_t ) = 0;
+    size_t minitems = 2U, maxitems = 2U;
     switch ( tok ) {
         case TOK_LEFT:  generator = cgen_gen_slft; break;
         case TOK_RIGHT: generator = cgen_gen_srgt; break;
-        case TOK_MID:   generator = cgen_gen_smid; break;
-        default:        goto UNEXP;
+        case TOK_MID:   generator = cgen_gen_smid; maxitems = 3U; break;
+        default:        return cgen_unexpected_node( comp );
     }
-    if ( generator == 0 ) {
-        goto UNEXP;
+    if ( numitems < minitems || numitems > maxitems ) {
+        comp_error( comp, "Wrong number of arguments for substring assignment" );
+        return false;
     }
-    if ( !generator( cgen ) ) {
+    // the target must be a string variable or an element of a string array
+    node_t* target = items[0];
+    if ( target == NODE_NONE || target->type != NT_STREXPR || target->numbranches != 1U ||
+         target->branches[0] == NODE_NONE || target->branches[0]->type != NT_STRVARREF ) {
+        comp_error( comp, "String variable expected in substring assignment" );
+        return false;
+    }
+    node_t* varref = target->branches[0];
+    if ( varref->datalen != UINT16_C(3) ) {
+        return cgen_unexpected_node( comp );
+    }
+    uint8_t  vartype = varref->data[0];
+    uint16_t varoffs = (uint16_t)( ( ( (uint16_t) varref->data[1] ) << UINT8_C(8) ) | varref->data[2] );
+    if ( ( vartype & VARTYPEF_FUNC ) != 0 ) {
+        return cgen_unexpected_node( comp );
+    }
+    // the new characters, then the numeric arguments
+    if ( !cgen_from_strexpr( cgen, comp, strexpr ) ) {
+        return false;
+    }
+    for ( size_t i=1; i < numitems; ++i ) {
+        if ( items[i] == NODE_NONE || items[i]->type != NT_NUMEXPR ) {
+            comp_error( comp, "Numeric expression expected in substring assignment" );
+            return false;
+        }
+        if ( !cgen_from_numexpr( cgen, comp, items[i] ) ) {
+            return false;
+        }
+    }
+    if ( tok == TOK_MID && numitems == 2U && !cgen_gen_phim( cgen, -1 ) ) {    // no length: the rest of the string
+        return cgen_out_of_code_memory( comp );
+    }
+    // the subscripts, if the target is an array element; the number of subscripts is 0 for a regular variable
+    if ( vartype & VARTYPEF_ARRAY ) {
+        if ( !gen_from_arraysub( cgen, comp, varref ) ) {
+            return false;
+        }
+    } else if ( !cgen_gen_phim( cgen, 0 ) ) {
+        return cgen_out_of_code_memory( comp );
+    }
+    if ( !generator( cgen, varoffs ) ) {
         return cgen_out_of_code_memory( comp );
     }
     return true;
@@ -2417,6 +2407,39 @@ bool cgen_from_letstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
 // array-decl := any-base-var-ref TOK_LPAREN array-dim-decl TOK_RPAREN .
 // array-decl-list := array-decl { TOK_COMMA array-decl } .
 
+bool cgen_from_erasestmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    /*
+        NT_ERASESTMT    ERASE statement
+            branches:
+                - 1 branch of empty array reference list (or a single reference)
+
+        NT_EMPTYARRAYREF    empty array reference, needed for ERASE statement
+            data:
+                - 1 byte of type indicator, 2 bytes of variable offset
+    */
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->type != NT_ERASESTMT || node->numbranches != 1U || node->branches[0] == NODE_NONE ) {
+        return cgen_unexpected_node( comp );
+    }
+    node_t* refs = node->branches[0];
+    node_t* single = refs;
+    node_t** items = refs->type == NT_EMPTYARRAYREFLIST ? refs->branches : &single;
+    size_t numitems = refs->type == NT_EMPTYARRAYREFLIST ? refs->numbranches : 1U;
+    for ( size_t i=0; i < numitems; ++i ) {
+        node_t* ref = items[i];
+        if ( ref == NODE_NONE || ref->type != NT_EMPTYARRAYREF || ref->datalen != UINT16_C(3) ) {
+            return cgen_unexpected_node( comp );
+        }
+        uint16_t varoffs = (uint16_t)( ( ( (uint16_t) ref->data[1] ) << UINT8_C(8) ) | ref->data[2] );
+        if ( !cgen_gen_eras( cgen, varoffs ) ) {
+            return cgen_out_of_code_memory( comp );
+        }
+    }
+    return true;
+}
+
 // -- statements and program --------------------------------------------------
 
 bool cgen_from_stmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
@@ -2429,7 +2452,9 @@ bool cgen_from_stmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         case NT_SAVESTMT:   return cgen_from_savestmt( cgen, comp, node );
         case NT_STMTLIST:   return cgen_from_stmtlist( cgen, comp, node );
         case NT_DIMSTMT:    return cgen_from_dimstmt( cgen, comp, node );
+        case NT_ERASESTMT:  return cgen_from_erasestmt( cgen, comp, node );
         case NT_DEFSTMT:    return cgen_from_defstmt( cgen, comp, node );
+        case NT_FNASSIGNSTMT:   return cgen_from_fnassignstmt( cgen, comp, node );
         case NT_GOTOSTMT:   return cgen_from_gotostmt( cgen, comp, node );
         case NT_RETURNSTMT: return cgen_from_returnstmt( cgen, comp, node );
         case NT_LABELSTMT:  return cgen_from_labelstmt( cgen, comp, node );

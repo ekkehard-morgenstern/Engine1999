@@ -443,6 +443,14 @@ Explanation of node types:
             - 1 branch of statement list
             - this is the root node for direct mode
 
+    NT_FNASSIGNSTMT     Assignment of the result of a multi-line user function ("FN A = expr")
+        data:
+            - 1 byte of type indicator (VARTYPEV_FLOAT, VARTYPEV_INT or VARTYPEV_STR), n bytes of function name
+        branches:
+            - 1 branch of expression (numeric or string, depending on the function)
+        immediate processing:
+            - only allowed in the body of the function with this name
+
     NT_STMTLINES        Statement lines
         branches:
             - 2 or more statement lines
@@ -521,6 +529,7 @@ Explanation of node types:
 #define NT_SYSNOARGNUMCALL      UINT8_C(0X4A)   // system no-argument number function call
 #define NT_OPERATOR             UINT8_C(0X4B)   // operator token
 #define NT_NUMBASEVARREFLIST    UINT8_C(0X4C)   // numeric base variable reference list
+#define NT_FNASSIGNSTMT         UINT8_C(0X4D)   // assignment of the result of a multi-line user function
 #define NT_NUMEXPR              UINT8_C(0X18)   // numeric expression
 #define NT_STREXPR              UINT8_C(0X1A)   // string expression
 #define NT_STRCMPEX             UINT8_C(0X1C)   // string comparison expression

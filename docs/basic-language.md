@@ -58,5 +58,5 @@ Variable kinds: float (64-bit), integer (`%`, 16-bit), string (`$`), label. Arra
 ## Implemented subset (as of the last commit)
 
 Parser has rules for everything in `bascomp.ebnf` above. Code generation (`cgen_from_*`) covers literals, variable r-/l-values, expressions, user-function and system-function
-calls, `PRINT`, `SAVE`, and assignment/`LET` — **not yet** `DIM/ERASE/DEF`, `FOR/NEXT`, `GOTO/GOSUB/RETURN/LABEL`, `IF/UNLESS`, statement lists (the `cgen_from_*` list in `codegen.h` ends at `cgen_from_letstmt`).
+calls, `PRINT`, `SAVE`, assignment/`LET`, substring assignment, `DIM`, `ERASE`, `DEF FN` (single- and multi-line), `FOR/NEXT`, `GOTO/GOSUB/RETURN/LABEL`, `IF/UNLESS` and statement lists. Keywords that have a token but no grammar yet (`INPUT`, `GET`, `READ/DATA/RESTORE`, `REPEAT/UNTIL`, `WHILE/WEND`, `POP`, `ON`, `RUN`, `NEW`, `LIST`, `LOAD`, …) are not statements of the language yet.
 Some grammar items are inconsistent in the EBNF (e.g. `sys-noarg-num-call := sys-no-arg-num`, a name that is not defined) — check the code before relying on it.

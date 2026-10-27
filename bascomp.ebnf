@@ -61,6 +61,8 @@ usr-fn-arg := any-base-var-ref [ TOK_LPAREN TOK_RPAREN ] .
 usr-fn-arg-list := usr-fn-arg { TOK_COMMA usr-fn-arg } .
 any-usr-fn-name := num-usr-fn-name | str-usr-fn-name .
 singleline-usr-fn-body := TOK_EQ expr .
+-- The value of a multi-line function is what the function name was last assigned (fn-assign-stmt) before
+-- the end of the body; the statement is only valid inside the body of that function.
 multiline-usr-fn-body := TOK_EOL stmt-lines TOK_END TOK_FN .
 usr-fn-body := singleline-usr-fn-body | multiline-usr-fn-body .
 usr-fn-decl := any-usr-fn-name [ TOK_LPAREN [ usr-fn-arg-list ] TOK_RPAREN ] usr-fn-body .
@@ -147,7 +149,9 @@ dim-stmt := TOK_DIM array-decl-list .
 erase-stmt := TOK_ERASE empty-array-ref-list .
 def-stmt := TOK_DEF usr-fn-decl .
 
-assign-stmt := let-stmt | dim-stmt | erase-stmt | def-stmt .
+fn-assign-stmt := any-usr-fn-name TOK_EQ expr .
+
+assign-stmt := let-stmt | dim-stmt | erase-stmt | def-stmt | fn-assign-stmt .
 
 for-stmt := TOK_FOR num-base-var-ref TOK_EQ num-expr TOK_TO num-expr [ TOK_STEP num-expr ] .
 next-stmt := TOK_NEXT [ num-base-var-ref { TOK_COMMA num-base-var-ref } ] .

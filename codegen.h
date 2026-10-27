@@ -179,9 +179,10 @@ bool cgen_gen_strs( codegen_t* cgen );
 bool cgen_gen_lfts( codegen_t* cgen );
 bool cgen_gen_rgts( codegen_t* cgen );
 bool cgen_gen_mids( codegen_t* cgen );
-bool cgen_gen_slft( codegen_t* cgen );
-bool cgen_gen_srgt( codegen_t* cgen );
-bool cgen_gen_smid( codegen_t* cgen );
+bool cgen_gen_slft( codegen_t* cgen, uint16_t varoffs );
+bool cgen_gen_srgt( codegen_t* cgen, uint16_t varoffs );
+bool cgen_gen_smid( codegen_t* cgen, uint16_t varoffs );
+bool cgen_gen_eras( codegen_t* cgen, uint16_t varoffs );
 
 // BASIC system command implementations
 bool cgen_gen_save( codegen_t* cgen );
@@ -223,6 +224,7 @@ bool cgen_from_substrassign( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_anyassign( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_assignlist( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_letstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_erasestmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_stmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_stmtlist( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_stmtline( codegen_t* cgen, compiler_t* comp, node_t* node );
@@ -239,6 +241,7 @@ bool cgen_not_implemented_yet( compiler_t* comp );
 // -- declarations (cgendecl.c) -----------------------------------------------
 
 bool cgen_from_dimstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_fnassignstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_defstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 
 // -- control flow (cgenctl.c) ------------------------------------------------
@@ -247,6 +250,8 @@ void cgen_begin_control( codegen_t* cgen );     // clears the line table, fixups
 bool cgen_note_line( codegen_t* cgen, compiler_t* comp, uint32_t lineno );  // line starts at the current code offset
 bool cgen_finish_control( codegen_t* cgen, compiler_t* comp );              // resolves line references, checks FOR/NEXT
 
+// code for a branch that is a statement, a statement list, a statement line, or statement lines
+bool cgen_from_block( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_gotostmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_returnstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_labelstmt( codegen_t* cgen, compiler_t* comp, node_t* node );

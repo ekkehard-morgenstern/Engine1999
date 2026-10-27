@@ -169,7 +169,7 @@ static uint32_t cc_srcline( const compiler_t* comp ) {
 }
 
 // emits code to evaluate a branch that may be a statement, a statement list, or statement lines
-static bool cc_block( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+bool cgen_from_block( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     if ( node == NODE_NONE ) {
         return cgen_bad_node( comp );
     }
@@ -316,7 +316,7 @@ static bool cc_if( codegen_t* cgen, compiler_t* comp, bool unless, node_t* cond,
             if ( !cc_jump_to_target( cgen, comp, elsepart, gotok == TOK_GOSUB ) ) {
                 return false;
             }
-        } else if ( !( block ? cc_block( cgen, comp, elsepart ) : cgen_from_stmt( cgen, comp, elsepart ) ) ) {
+        } else if ( !( block ? cgen_from_block( cgen, comp, elsepart ) : cgen_from_stmt( cgen, comp, elsepart ) ) ) {
             return false;
         }
     }
@@ -333,7 +333,7 @@ static bool cc_if( codegen_t* cgen, compiler_t* comp, bool unless, node_t* cond,
         if ( !cc_jump_to_target( cgen, comp, thenpart, gotok == TOK_GOSUB ) ) {
             return false;
         }
-    } else if ( !( block ? cc_block( cgen, comp, thenpart ) : cgen_from_stmt( cgen, comp, thenpart ) ) ) {
+    } else if ( !( block ? cgen_from_block( cgen, comp, thenpart ) : cgen_from_stmt( cgen, comp, thenpart ) ) ) {
         return false;
     }
     cc_patch_bria( cgen, endins, cgen->codesize );
