@@ -50,7 +50,6 @@ Immediates: 17-bit signed (`PHIM`, C bit = bit 16) so small integers need no dat
 
 There is no executor for this ISA in the repo yet.
 
-## Runtime (`runtime.[ch]`) and interpreter stub (`basintp.[ch]`)
+## Runtime (`runtime.[ch]`)
 
-`init_runtime` wires `varmem_t` and `codegen_t` to the runtime's `report`/`halt`. `basintp` is an earlier direct token interpreter skeleton
-(`direct_mode`, `init_interpr`, `cleanup_interpr`, `intp_fetchtok`, `run_interpr`) with `setjmp` ready/exit jumps; it reads literals through the same `read_*` API.
+`init_runtime` wires `varmem_t` and `codegen_t` to the runtime's `report`/`halt`. (The former `basintp` token interpreter stub was removed: the BASIC system compiles, it does not interpret.)

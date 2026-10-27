@@ -19,6 +19,8 @@ Maintained by Claude; updated whenever work in a session changes something. Last
 
 - Program store (`baspgm`/`baslin`) rewritten as a pointer-linked list: `program_t{first,last}` of heap `line_t` nodes; the 64 KiB block, offset linked list, defrag and `linenode_t`/`linelist_t` are gone. `linehdr_t` is now just the encoded header `{lineno.24, length.16}` (`LINEHDR_SIZE` = 5; node and alloc fields dropped). New `free_program()`. `find_line` returns bool + prev/line pointers. Verified with basictest1 (insert/replace/delete/out-of-order) and basictest2 under valgrind: clean.
 
+- Removed the `basintp` module (interpreter stub; the BASIC system compiles, not interprets): files, makefile rules/object/header, docs, CLAUDE.md table row. Clean rebuild OK.
+
 ## Open / next steps
 - Remaining limits not touched: 64 KiB tree/code/data/var memories, variable names ≤ 255 (`vars.c`), `engine1999` 256-byte input line, `codegen` coverage (see `docs/compiler-and-vm.md`).
 - No automated tests exist; consider adding a round-trip test program if desired.

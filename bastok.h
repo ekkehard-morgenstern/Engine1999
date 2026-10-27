@@ -35,15 +35,15 @@
 
 /*
 
-   The interpreter keeps only the tokenized form in special memory. Before running
-   a program, it may produce a transformed version to avoid repeated parsing of the
-   same text.
+   The program store keeps only the tokenized form of each line. Before running a
+   program, it is compiled (syntax tree, then stack-machine code), so the text is
+   parsed only once.
 
    Rationale behind the encoding of various literals:
     - Every literal should have a length byte, so it is easy to read back in.
     - Numbers should be encoded as strings, so when you save a program, it is saved
       in an architecture independent format (i.e. regardless of the numeric precision
-      of the host interpreter). Thus, a number conversion error is a runtime error
+      of the host machine). Thus, a number conversion error is a runtime error
       (which might be reported before actually running the program, see above).
     - Numerals 0..9 when appearing alone are encoded as separate tokens to speed up
       reading of one-digit numbers.

@@ -27,8 +27,7 @@ All modules except `sdl*`/`*screen` use only the C library, so the BASIC system 
    builds a syntax tree in `compiler_t.tree` (a 64 KiB byte arena, nodes addressed by 16-bit offset). Some semantic work happens during parsing
    ("immediate processing" in `nodetype.h`: constant dimension evaluation, variable lookup/creation).
 4. **Generate** (`codegen.c`): `cgen_from_*` walk the tree and emit instructions with `cgen_gen_*` into `codegen_t.code` / `.data`.
-5. **Run**: a stack VM defined in `instset.h` (data stack of doubles, return stack of 16-bit addresses). **The VM executor does not exist yet** —
-   `basintp.c` is an older token-walking interpreter stub, and `runtime_t` only bundles `varmem_t` + `codegen_t`.
+5. **Run**: a stack VM defined in `instset.h` (data stack of doubles, return stack of 16-bit addresses). **The VM executor does not exist yet** — `runtime_t` only bundles `varmem_t` + `codegen_t`.
 
 `runtime_t` (`runtime.h`) is the shared context: variable memory, code generator state, `report`/`halt` callbacks, user data.
 `compiler_t` keeps a pointer to it. Error handling pattern: callbacks `report(text)` and `halt()` (noreturn, caller does `longjmp`).

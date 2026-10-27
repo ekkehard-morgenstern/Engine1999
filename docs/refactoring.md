@@ -37,7 +37,6 @@ Callers adapted:
 
 - `baspgm`: `list_program` uses a `buf_t`; `enter_line`'s direct-mode callback is now `bool (*)( program_t*, const uint8_t* tokens, size_t size )`; new `iter_remaining()` gives the token bytes left in the loaded line.
 - `bascomp`: `compiler_t.param` is a heap `char*` (no longer a union with `number`; `number` is a separate field); new `tokend` marks the end of the token bytes (set by `comp_nextline` or by the new `comp_set_tokens()`); new `cleanup_compiler()` (call it before re-`init_compiler` on a reused compiler and at exit). Node data for names/string literals is heap built (`comp_param_data`) so names up to 65534 bytes fit the tree; context push/pop copies `param`.
-- `basintp`: same `param`/`tokend` change plus `cleanup_interpr()`; `intp_fetchtok` now backs up to the tag byte before calling `read_*` (the old code passed the position after the tag, which the readers reject). The numeric-conversion code below the `littbl` loop is still unreachable, as before.
 - `basictest1/2`: read input with `getline`, tokenize into `buf_t`. `stdtypes.h`: `_POSIX_C_SOURCE` raised to 200809L (needed for `getline`) and `<limits.h>` added.
 
 Behavior changes worth knowing:

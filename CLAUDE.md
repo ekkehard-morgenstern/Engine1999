@@ -15,7 +15,7 @@ Full documentation is in `docs/` — start with `docs/README.md`.
 The branch `feature/refactor-to-remove-some-limits` has completed the tokenizer refactor: `bastok.[ch]` now uses heap strings (`char**`),
 growable output buffers (`buf_t`) and bounded read buffers (`rbuf_t`); identifiers/literals may be up to 65535 bytes (2-byte length prefix in the token stream).
 All callers were converted and `make` builds cleanly; `basictest1`/`basictest2` run clean under valgrind.
-Remaining fixed limits (program memory, tree, vars, code, variable *names* ≤ 255) are listed in `docs/refactoring.md`.
+Remaining fixed limits (tree, vars, code, variable *names* ≤ 255) are listed in `docs/refactoring.md`.
 
 ## Build
 
@@ -42,9 +42,8 @@ Remaining fixed limits (program memory, tree, vars, code, variable *names* ≤ 2
 |---|---|
 | SDL display/audio engine | `sdlmain, sdlscreen, sdllayer, textscreen, tilescreen, sprscreen, sdlaudio, sdlevent, sdlutil, 8x12font1.c` |
 | BASIC tokenizer | `bastok.[ch]` (token IDs, tokenize/detokenize, literal codecs) |
-| Program store | `baslin.[ch]` (line list nodes/headers), `baspgm.[ch]` (64 KiB program memory, insert/update/list) |
+| Program store | `baslin.[ch]` (`line_t` nodes, encoded `linehdr_t`), `baspgm.[ch]` (pointer-linked list of lines, insert/replace/delete/list) |
 | Compiler front end | `bascomp.[ch]` + `bascomp.ebnf` (recursive descent → syntax tree), `nodetype.[ch]` (node types) |
 | Back end | `codegen.[ch]`, `instset.h` (ISA spec), `vars.[ch]` (variable/string memory), `runtime.[ch]` |
-| Interpreter (stub) | `basintp.[ch]` (direct mode / token fetch) |
 | Executables | `engine1999.c` (main app), `sdltest1.c`, `basictest1.c`, `basictest2.c`, `testcomp1.c` |
 | Tools/data | `fontcomp.pl` (8x12font1.txt → 8x12font1.c), `colors-*.txt`, `concept.txt` (design notes) |
