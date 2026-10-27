@@ -184,6 +184,8 @@ static bool compile_program( program_t* pgm ) {
 
 int main( int argc, char** argv ) {
 
+    basdbg_flags = BASDBG_PARSE;        // this tool has always shown the compiler's token stream
+
     static program_t pgm;
     init_program( &pgm );
 

@@ -57,4 +57,8 @@
 #include "bascomp.h"
 #endif
 
+#ifndef BASDEBUG_H
+#include "basdebug.h"
+#endif
+
 #endif

@@ -25,6 +25,7 @@
 */
 
 #include "basrepl.h"
+#include "basdebug.h"
 
 // -- helpers -------------------------------------------------------------------
 
@@ -159,6 +160,9 @@ static bool repl_execute( repl_t* repl, bool fromstart ) {
     repl_setup_vm( repl );
     if ( setjmp( repl->jmp ) == 0 ) {
         run_compiler( &repl->comp );
+        if ( basdbg_on( BASDBG_TREE ) ) {
+            basdbg_print_tree( &repl->comp );
+        }
         ok = cgen_from_program( cgen, &repl->comp );
         if ( ok && !fromstart && repl->vm.datapos == DATAOFFS_NONE && cgen->datalast != prevlast ) {
             // DATA items were added behind the last one that was read: the next READ gets the first new item
@@ -282,15 +286,23 @@ bool repl_enter( repl_t* repl, const char* text ) {
     } else if ( !tokenize_line( copy, repl->tokbuf, &hdr ) ) {
         repl_report( repl, "? Syntax error" );
         ok = false;
-    } else if ( hdr.lineno == LINENO_NONE ) {
-        const uint8_t* tokens = (const uint8_t*) repl->tokbuf->buffer;
-        if ( hdr.length > LINEHDR_SIZE + 1U ) {     // more than the end-of-line token
-            ok = repl_run_direct( repl, tokens + LINEHDR_SIZE, hdr.length - LINEHDR_SIZE );
-        }
     } else {
-        ok = enter_line( &repl->pgm, (const uint8_t*) repl->tokbuf->buffer, 0 );
-        if ( !ok ) {
-            repl_report( repl, "? Out of memory" );
+        const uint8_t* tokline = (const uint8_t*) repl->tokbuf->buffer;
+        if ( basdbg_on( BASDBG_TOKENIZE ) ) {
+            basdbg_print_tokens( tokline );
+        }
+        if ( basdbg_on( BASDBG_DETOKENIZE ) ) {
+            basdbg_print_detokenized( tokline );
+        }
+        if ( hdr.lineno == LINENO_NONE ) {
+            if ( hdr.length > LINEHDR_SIZE + 1U ) {     // more than the end-of-line token
+                ok = repl_run_direct( repl, tokline + LINEHDR_SIZE, hdr.length - LINEHDR_SIZE );
+            }
+        } else {
+            ok = enter_line( &repl->pgm, tokline, 0 );
+            if ( !ok ) {
+                repl_report( repl, "? Out of memory" );
+            }
         }
     }
     free( copy );

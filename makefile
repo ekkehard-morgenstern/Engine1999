@@ -42,8 +42,8 @@ all: sdltest1 engine1999 basictest1 testcomp1 basictest2 vmtest1 repltest1
 	echo ok >all
 
 BASEMOD=sdlevent.o sdllayer.o sdlmain.o sdlscreen.o textscreen.o tilescreen.o sprscreen.o 8x12font1.o sdlaudio.o sdlutil.o \
-		basic.o baspgm.o baslin.o bastok.o bascomp.o nodetype.o codegen.o cgenctl.o cgendecl.o vars.o runtime.o vm.o basrepl.o
-BASEHDR=sdlevent.h sdllayer.h sdlmain.h sdlscreen.h sdltypes.h textscreen.h tilescreen.h sprscreen.h unxtypes.h sdlaudio.h sdlutil.h basic.h baspgm.h baslin.h bastok.h bascomp.h nodetype.h codegen.h instset.h vars.h runtime.h vm.h basrepl.h
+		basic.o baspgm.o baslin.o bastok.o bascomp.o nodetype.o codegen.o cgenctl.o cgendecl.o vars.o runtime.o vm.o basrepl.o basdebug.o
+BASEHDR=sdlevent.h sdllayer.h sdlmain.h sdlscreen.h sdltypes.h textscreen.h tilescreen.h sprscreen.h unxtypes.h sdlaudio.h sdlutil.h basic.h baspgm.h baslin.h bastok.h bascomp.h nodetype.h codegen.h instset.h vars.h runtime.h vm.h basrepl.h basdebug.h
 
 LIBMOD=$(BASEMOD)
 LIBHDR=$(BASEHDR)
@@ -133,3 +133,5 @@ runtime.o: runtime.c $(BASEHDR)
 vm.o: vm.c $(BASEHDR)
 
 basrepl.o: basrepl.c $(BASEHDR)
+
+basdebug.o: basdebug.c $(BASEHDR)

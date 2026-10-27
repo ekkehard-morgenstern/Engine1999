@@ -45,3 +45,23 @@ printf '10 PRINT "HI";A$:LET B=1+2*3\n20 GOTO 10\n' | ./basictest2
 - `-p` makes every run write `gmon.out` (ignored by git).
 - Git-ignored stray files in the working tree: `head`, `main.o`, `all`.
 - `compiler_t`, `codegen_t`, `runtime_t` are huge: use `static`.
+
+## Debug output
+
+The BASIC system prints nothing by default. `basdebug.[ch]` holds a flag word (`basdbg_flags`); a host sets bits to get
+trace output on **stdout** (one line per item, prefixed with the stage):
+
+| `engine1999` option | Flag | Output |
+|---|---|---|
+| `--debug-tokenize` | `BASDBG_TOKENIZE` | `[tokenize]` the token bytes of every input line (hex, with the printable characters) |
+| `--debug-detokenize` | `BASDBG_DETOKENIZE` | `[detokenize]` the line rebuilt from its tokens (what the tokenizer understood) |
+| `--debug-parse` | `BASDBG_PARSE` | `[parse]` every token as the compiler fetches it |
+| `--debug-tree` | `BASDBG_TREE` | `[tree]` the syntax tree after parsing (node names, data bytes as hex) |
+| `--debug-code` | `BASDBG_CODE` | `[code]` every instruction as the code generator emits it |
+| `--debug-all` | `BASDBG_ALL` | all of the above |
+
+`engine1999 --help` lists them. The tokenize/detokenize/tree dumps are produced by hooks in `repl_enter()` / `repl_execute()`;
+the parse and code output comes from the compiler and the code generator themselves, so any host gets it by setting the flags.
+`vmtest1 -v` turns on parse + code output, `repltest1 -v` everything; `basictest2` always sets `BASDBG_PARSE` (it has its
+own, colored syntax tree printer).
+

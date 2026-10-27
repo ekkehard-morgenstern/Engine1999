@@ -25,10 +25,9 @@
               Germany, Europe
 */
 
-#include <unistd.h>
-#include <fcntl.h>
 #include "basic.h"
 #include "vm.h"
+#include "basdebug.h"
 
 /*
 Automated test of the whole back end: BASIC text -> tokens -> syntax tree -> code -> VM -> output.
@@ -38,7 +37,7 @@ compiled as a whole and run), or none is (direct mode: every line is compiled an
 variables persist from line to line). The text printed by the program, followed by any error messages,
 is compared with the expected text. The exit status is the number of failed cases.
 
-Usage: vmtest1 [-v]      -v: don't silence the compiler's and code generator's debug output
+Usage: vmtest1 [-v]      -v: show the debug output of the compiler and the code generator (see basdebug.h)
 */
 
 typedef struct _testcase_t {
@@ -478,34 +477,6 @@ static void comp_report( struct _compiler_t* comp, void* usrdata, const char* te
     out_append( text );
 }
 
-// -- silencing the debug output of the compiler and the code generator -------
-
-static bool verbose = false;
-static int  savedfd = -1;
-
-static void quiet_begin( void ) {
-    if ( verbose ) {
-        return;
-    }
-    fflush( stdout );
-    savedfd = dup( STDOUT_FILENO );
-    int nullfd = open( "/dev/null", O_WRONLY );
-    if ( nullfd >= 0 ) {
-        dup2( nullfd, STDOUT_FILENO );
-        close( nullfd );
-    }
-}
-
-static void quiet_end( void ) {
-    if ( verbose || savedfd < 0 ) {
-        return;
-    }
-    fflush( stdout );
-    dup2( savedfd, STDOUT_FILENO );
-    close( savedfd );
-    savedfd = -1;
-}
-
 // -- running ---------------------------------------------------------------
 
 static jmp_buf jmp_fail;
@@ -529,12 +500,10 @@ static bool compile_and_run( void ) {
     bool ok = false;
     // direct mode lines are appended to the code, so that functions defined by earlier lines stay valid
     uint32_t start = rt.codegen.codesize;
-    quiet_begin();
     if ( setjmp( jmp_fail ) == 0 ) {
         run_compiler( &comp );
         ok = cgen_from_program( &rt.codegen, &comp );
     }
-    quiet_end();
     if ( !ok ) {
         return false;
     }
@@ -684,7 +653,9 @@ static bool run_dynamic_cases( buf_t* tokbuf, size_t* pnum, size_t* pfailed ) {
 }
 
 int main( int argc, char** argv ) {
-    verbose = argc > 1 && strcmp( argv[1], "-v" ) == 0;
+    if ( argc > 1 && strcmp( argv[1], "-v" ) == 0 ) {
+        basdbg_flags = BASDBG_PARSE | BASDBG_CODE;
+    }
     buf_t* tokbuf = create_buffer();
     if ( tokbuf == 0 ) {
         return EXIT_FAILURE;

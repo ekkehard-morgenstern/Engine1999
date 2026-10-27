@@ -26,6 +26,7 @@
 
 #include "bascomp.h"
 #include "runtime.h"
+#include "basdebug.h"
 
 void init_compiler( compiler_t* comp, struct _runtime_t* rt, program_t* pgm, bool keepmemory ) {
     comp->rt = rt;
@@ -3694,7 +3695,9 @@ NEXTTOK:
     }
 SKIPTOK:
     uint8_t tok = comp->currtok = *comp->tokp++;
-printf( "*** TOKEN: %02" PRIx8 "\n", tok );
+if ( basdbg_on( BASDBG_PARSE ) ) {
+        printf( "[parse] token %02" PRIX8 "\n", tok );
+    }
     if ( tok == TOK_EOL ) {
         --comp->tokp;
         return true;
@@ -3758,7 +3761,9 @@ bool begin_comp( compiler_t* comp ) {
 
     // fetch first token
     if ( !comp_fetchtok( comp ) ) {
-printf( "*** empty line\n" );
+if ( basdbg_on( BASDBG_PARSE ) ) {
+            printf( "[parse] empty line\n" );
+        }
         return false;
     }
 

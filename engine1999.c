@@ -28,6 +28,7 @@
 #include "sdlevent.h"
 #include "sdlaudio.h"
 #include "basrepl.h"
+#include "basdebug.h"
 
 static const char warranty[] =
 "  15. Disclaimer of Warranty.\n"
@@ -845,7 +846,60 @@ static bool handle_input( const char* buf ) {
     return true;
 }
 
+// -- command line ----------------------------------------------------------------------
+
+static const struct {
+    const char* name;
+    uint32_t    flag;
+    const char* help;
+} debugopts[] = {
+    { "--debug-tokenize",   BASDBG_TOKENIZE,    "print the token bytes of every input line" },
+    { "--debug-detokenize", BASDBG_DETOKENIZE,  "print every input line rebuilt from its tokens" },
+    { "--debug-parse",      BASDBG_PARSE,       "print every token as the compiler fetches it" },
+    { "--debug-tree",       BASDBG_TREE,        "print the syntax tree after parsing" },
+    { "--debug-code",       BASDBG_CODE,        "print every instruction the code generator emits" },
+    { "--debug-all",        BASDBG_ALL,         "all of the above" },
+};
+
+static void usage( FILE* out, const char* prog ) {
+    fprintf( out, "Usage: %s [options]\n\nDebug output (to standard output, off by default):\n", prog );
+    for ( size_t i=0; i < sizeof(debugopts) / sizeof(debugopts[0]); ++i ) {
+        fprintf( out, "  %-20s %s\n", debugopts[i].name, debugopts[i].help );
+    }
+    fprintf( out, "\nOther:\n  %-20s %s\n", "-h, --help", "show this text" );
+}
+
+// returns false if the command line is invalid or help was requested (the reason has been printed)
+static bool parse_args( int argc, char** argv, bool* phelp ) {
+    for ( int i=1; i < argc; ++i ) {
+        const char* arg = argv[i];
+        if ( strcmp( arg, "-h" ) == 0 || strcmp( arg, "--help" ) == 0 ) {
+            *phelp = true;
+            return false;
+        }
+        bool found = false;
+        for ( size_t j=0; j < sizeof(debugopts) / sizeof(debugopts[0]); ++j ) {
+            if ( strcmp( arg, debugopts[j].name ) == 0 ) {
+                basdbg_flags |= debugopts[j].flag;
+                found = true;
+                break;
+            }
+        }
+        if ( !found ) {
+            fprintf( stderr, "%s: unknown option '%s'\n", argv[0], arg );
+            return false;
+        }
+    }
+    return true;
+}
+
 int main( int argc, char** argv ) {
+
+    bool help = false;
+    if ( !parse_args( argc, argv, &help ) ) {
+        usage( help ? stdout : stderr, argv[0] );
+        return help ? EXIT_SUCCESS : 2;
+    }
 
     sdl_init();
 

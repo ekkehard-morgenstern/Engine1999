@@ -24,9 +24,8 @@
               Germany, Europe
 */
 
-#include <unistd.h>
-#include <fcntl.h>
 #include "basrepl.h"
+#include "basdebug.h"
 
 /*
 Automated test of the REPL (basrepl.[ch]) without any host: lines are fed to repl_enter() like a user would type
@@ -34,7 +33,7 @@ them, the output and the error messages are captured and compared with the expec
 read from the "input" text of a case (INPUT takes lines, GET takes characters). The exit status is the number of
 failed cases.
 
-Usage: repltest1 [-v]       -v: don't silence the compiler's and code generator's debug output
+Usage: repltest1 [-v]       -v: show all debug output (see basdebug.h)
 */
 
 typedef struct _testcase_t {
@@ -147,34 +146,6 @@ static bool host_interrupt( struct _vm_t* vm, void* usrdata ) {
     return breakafter && ++polls >= breakafter;
 }
 
-// -- silencing the debug output of the compiler and the code generator -------
-
-static bool verbose = false;
-static int  savedfd = -1;
-
-static void quiet_begin( void ) {
-    if ( verbose ) {
-        return;
-    }
-    fflush( stdout );
-    savedfd = dup( STDOUT_FILENO );
-    int nullfd = open( "/dev/null", O_WRONLY );
-    if ( nullfd >= 0 ) {
-        dup2( nullfd, STDOUT_FILENO );
-        close( nullfd );
-    }
-}
-
-static void quiet_end( void ) {
-    if ( verbose || savedfd < 0 ) {
-        return;
-    }
-    fflush( stdout );
-    dup2( savedfd, STDOUT_FILENO );
-    close( savedfd );
-    savedfd = -1;
-}
-
 // -- running -----------------------------------------------------------------
 
 static bool run_case( const testcase_t* tc ) {
@@ -191,11 +162,9 @@ static bool run_case( const testcase_t* tc ) {
     repl.getkey    = host_getkey;
     repl.interrupt = host_interrupt;
     char* src = strdup( tc->source );
-    quiet_begin();
     for ( char* line = strtok( src, "\n" ); line; line = strtok( 0, "\n" ) ) {
         repl_enter( &repl, line );
     }
-    quiet_end();
     free( src );
     cleanup_repl( &repl );
     return strcmp( outbuf, tc->expected ) == 0;
@@ -214,7 +183,9 @@ static void show( const char* label, const char* text ) {
 }
 
 int main( int argc, char** argv ) {
-    verbose = argc > 1 && strcmp( argv[1], "-v" ) == 0;
+    if ( argc > 1 && strcmp( argv[1], "-v" ) == 0 ) {
+        basdbg_flags = BASDBG_ALL;
+    }
     size_t numcases = sizeof(cases) / sizeof(cases[0]), failed = 0;
     for ( size_t i=0; i < numcases; ++i ) {
         if ( run_case( &cases[i] ) ) {

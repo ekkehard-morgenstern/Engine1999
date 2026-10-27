@@ -26,6 +26,7 @@
 
 #include "codegen.h"
 #include "instset.h"
+#include "basdebug.h"
 
 void init_codegen( codegen_t* cgen ) {
     cgen->report   = 0;
@@ -245,7 +246,7 @@ void cgen_disasm_ins( const uint8_t* area, uint16_t* poffs, char linebuf[80] ) {
 void cgen_print_ins( const uint8_t* area, uint16_t* poffs ) {
     static char linebuf[80];
     cgen_disasm_ins( area, poffs, linebuf );
-    printf( "%s\n", linebuf );
+    printf( "[code] %s\n", linebuf );
 }
 
 bool cgen_gen_ins( codegen_t* cgen, uint8_t ins, uint8_t ext, uint16_t param ) {
@@ -266,7 +267,9 @@ bool cgen_gen_ins( codegen_t* cgen, uint8_t ins, uint8_t ext, uint16_t param ) {
         cgen->code[ offs++ ] = (uint8_t)  param;
     }
     offs = offs0;
-cgen_print_ins( cgen->code, &offs );
+if ( basdbg_on( BASDBG_CODE ) ) {
+        cgen_print_ins( cgen->code, &offs );
+    }
     return true;
 }
 
