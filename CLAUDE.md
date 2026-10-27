@@ -6,7 +6,7 @@ tokenized, compiled to a syntax tree, and code-generated into a stack-machine in
 GPLv3; programs written *in* the built-in language are explicitly exempt (see `LICENSE`, file headers).
 
 **Git: never commit or run any git write command in this repo — the user does all git writes manually.** Read-only git is fine.
-Session progress is tracked in `SESSION.md`; keep it updated when work changes the state.
+Session progress is tracked in `SESSION.md`; keep it updated when work changes the state. Open work is listed in `docs/roadmap.md`; keep that current too.
 
 Full documentation is in `docs/` — start with `docs/README.md`.
 

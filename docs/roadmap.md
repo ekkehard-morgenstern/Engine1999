@@ -1,0 +1,88 @@
+# Roadmap — what is still to do
+
+The list of open work, so that nothing is forgotten. `[ ]` = open, `[x]` = done (moved here when finished, then the entry can be
+dropped). **Status of what already works** is in `SESSION.md` (state, tests, design decisions taken); this file is only about
+what is **not** done. Items marked *needs design* wait for a language decision by the project owner before they can be implemented.
+Order = suggested order, not a commitment.
+
+## 1. Program commands as real language statements *(needs design — suggested next)*
+
+`RUN`, `NEW` and `LIST [first[-last]]` exist only as host-level commands in `repl_enter()` (`basrepl.c`): they can't be used inside a
+program and have no grammar, token handling or code generation. The rest of the family has nothing yet.
+
+- [ ] `RUN` (with line number / label?), `NEW`, `LIST` (ranges, output channel?) as statements in `bascomp.ebnf`
+- [ ] `LOAD` / `SAVE` conventions: file names, ascii vs. binary format; **a loader for the binary `SAVE` format** (it has no file
+      signature and no loader at all, see `docs/compiler-and-vm.md`)
+- [ ] `DELETE`, `RENUM` (must fix up `GOTO`/`GOSUB`/`ON`/`RESTORE`/`THEN` targets), `EDIT`, `MERGE`, `CHAIN`, `FILES`
+- [ ] `CLEAR` (variables only, keep the program?) — together with `NEW` this also cures the growth of the code segment caused by
+      direct mode lines (see section 4)
+
+Questions to decide: what `RUN`/`LIST` take as arguments; whether `NEW`/`CLEAR`/`LOAD` may appear inside a program; what `CHAIN`
+and `MERGE` do with variables and line numbers; where files live (current directory?); what `FILES` shows.
+
+## 2. Smaller language items *(each needs a short design decision)*
+
+- [ ] `OPTION BASE` — lowest array index (0 or 1); when is it allowed (before the first `DIM`?)
+- [ ] `INT` / `STR` / `FLT` — tokens exist; presumably default type declarations (like `DEFINT`/`DEFSTR`/`DEFSNG`): syntax and scope
+- [ ] `PUT` — token exists, probably the counterpart of `GET` for channels/files: meaning to be defined
+- [ ] `OFF` — token exists; only meaningful together with the timer statements below (`ON … OFF`?)
+
+## 3. Timers and `SYMBOL` *(planned by the project owner, all through host callbacks)*
+
+- [ ] `AFTER` — one-shot timer, like `setTimeout`
+- [ ] `EVERY` — recurring timer, like `setInterval`
+- [ ] `SYMBOL` — redefine one character of the character set
+
+Questions to decide: when timer handlers run (between VM instructions, then a call like `GOSUB`? what if one is already running?);
+how a handler is named (line number / label / `FN`?); how they are cancelled (`OFF`?); host callback signatures for timers
+(the screen thread already produces a vblank event per frame, see `docs/display-engine.md`) and for `SYMBOL` (`txtscr` font access).
+
+## 4. Host polish (`engine1999.c`, `basrepl.[ch]`, `sdlscreen.c`)
+
+- [ ] Cursor keys and function keys for `GET` / `INKEY$` (only printable ASCII, RETURN, BACKSPACE, TAB are delivered; ESC is the
+      break key; need a key-code convention, e.g. like the classic home computers)
+- [ ] File channels (`#n` with `n` ≠ 0): `PRINT #n`, `INPUT #n`, `GET #n` are accepted and passed to the callbacks, but the engine
+      discards output / reports end of input for every channel except 0
+- [ ] Direct mode lines accumulate in the 64 KiB code segment until `NEW` / `RUN` (every line appends its code; a long session ends
+      in "Out of code memory"). Options: roll back the code of a direct line that defined nothing persistent, or reset on `CLEAR`
+- [ ] Direct mode can't `GOTO` / `GOSUB` into a stored program (the line table belongs to the code of a `RUN`)
+- [ ] `PRINT` comma zones use the VM's own column count and ignore the screen wrap at column 80
+- [ ] `vmtest1` still has its own copy of the compile-and-run logic; it could use `basrepl` (`repltest1` already does)
+- [ ] Output on channel 0 only goes to the text screen: no graphics-layer / tile / sprite statements exist yet (the `sdlscr_*`
+      functions for tiles, sprites and the graphics layer have no BASIC statements)
+
+## 5. VM and instruction set leftovers
+
+- [ ] `WRLV` — write a label variable (instruction exists in `instset.h`, reported as "not implemented" at run time)
+- [ ] `BRK` — breakpoint (reports "Breakpoint"); could be the hook for a future debugger
+- [ ] Inline assembler: `TOK_BRKLIT` string literals (`[ … ]`) are tokenized but code generation says "not implemented yet";
+      `TOK_BRCLIT` (`{ … }`) has no defined purpose yet
+- [ ] Array parameters of user functions (`DEF FN A( B() )`) are parsed but not supported by the VM
+- [ ] Functions can't call themselves and must be defined before use in the text (design decision, revisit if recursion is wanted)
+
+## 6. Remaining fixed limits
+
+(also in `docs/refactoring.md`)
+
+- [ ] 64 KiB code and data segments (16-bit ISA addresses)
+- [ ] 16-bit variable numbers (≤ 65535 variables), 6 array dimensions, one dimension ≤ 65535
+- [ ] 16-bit `LINE` instruction parameter: the code generator rejects line numbers > 65535 (the tokenizer accepts up to 999999)
+- [ ] VM strings ≤ 65535 bytes
+- [ ] `engine1999`: the command prompt line editor is limited to 255 characters (`INPUT` lines to 1023)
+
+## 7. Design decisions taken that the owner may want to revisit
+
+Listed in full in `SESSION.md` ("Design decisions I took"). The ones most likely to matter:
+
+- [ ] `UNTIL` closes the innermost loop if it is a `REPEAT`, otherwise it opens an `UNTIL … UEND` loop (so such a loop can't be
+      opened directly inside a `REPEAT` body)
+- [ ] `INPUT`: the prompt is a string *literal* (not an expression); a missing or non-numeric field restarts the whole input
+      ("?Redo from start") instead of asking for the rest; an empty numeric field is 0
+- [ ] `GET` waits for a key (`INKEY$` is the non-waiting one); a numeric `GET` variable receives the key code
+- [ ] ESC is the break key while a program runs (not delivered as a key)
+- [ ] `CHR$(0)` is an error, because VM strings are NUL-terminated and can't contain a zero character
+- [ ] `RUN` clears all variables first; direct mode lines keep them
+
+## Not planned / explicitly out of scope for now
+
+- Interpreting source directly: the system compiles to the stack-machine code and runs that (the old interpreter stub was removed).

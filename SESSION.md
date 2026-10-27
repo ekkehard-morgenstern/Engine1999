@@ -8,8 +8,8 @@ Read this first when resuming; details are in `docs/` (start with `docs/README.m
 - Keep this file and `docs/` current when work changes the state.
 
 ## Repo state
-- Branch `feature/refactor-to-remove-some-limits`; latest commit `41e9ed4` ("Engine wiring"), preceded by `8a98b3f` (CHR$), `5a7f6b3` (PRINT channel fix), `7e16a40` (INPUT/GET).
-- **Uncommitted (for the user to commit):** the debug output options — new `basdebug.[ch]`; changed `bascomp.c`, `codegen.c`, `basrepl.c`, `basic.h`, `engine1999.c`, `vmtest1.c`, `repltest1.c`, `basictest2.c`, `makefile`, `CLAUDE.md`, `docs/build-and-test.md`, `docs/compiler-and-vm.md`, this file. The host wiring (`basrepl`, `repltest1`, `sdlscreen`, …) was committed before. `make` builds cleanly, `vmtest1` (317), `repltest1` (36), `testcomp1` pass.
+- Branch `feature/refactor-to-remove-some-limits`; latest commit `ff53541` ("Debug options"), preceded by `41e9ed4` (engine wiring), `8a98b3f` (CHR$), `5a7f6b3` (PRINT channel fix), `7e16a40` (INPUT/GET).
+- Nothing uncommitted at the last update; the working tree is clean. `make` and all tests pass.
 - `make` builds `sdltest1 engine1999 basictest1 testcomp1 basictest2 vmtest1 repltest1` + `engine.lib` cleanly with `-Wall -Werror`.
 
 ## Tests (run these after any change)
@@ -52,7 +52,4 @@ Read this first when resuming; details are in `docs/` (start with `docs/README.m
 - `AFTER` (one-shot timer, like setTimeout), `EVERY` (recurring timer, like setInterval), `SYMBOL` (redefine one character of the character set).
 
 ## Open / next steps
-- No grammar/semantics yet (each needs a language design): `PUT`, `OFF`, `AFTER`, `EVERY`, `SYMBOL`, `OPTION BASE`, `INT`/`STR`/`FLT`, and the program commands `RUN`, `NEW`, `LIST`, `LOAD`, `DELETE`, `RENUM`, `CLEAR`, `EDIT`, `MERGE`, `CHAIN`, `FILES`. 
-- VM instructions not implemented: `WRLV`, `BRK`.
-- Host side: Direct mode can't `GOTO` into a stored program, and its code accumulates in the code segment until NEW/RUN. `vmtest1` still has its own copy of the compile-and-run logic (could use `basrepl`). No file channels (`#n` other than 0), no cursor/function keys for `GET`/`INKEY$`, column tracking for `PRINT ,` ignores screen wrap. A loader for the binary SAVE format (with a signature) doesn't exist.
-- Remaining limits: 64 KiB code/data segments (16-bit ISA addresses), 16-bit variable numbers, 16-bit `LINE` parameter (codegen rejects line numbers > 65535), `engine1999` 256-byte input line, VM strings ≤ 65535 bytes.
+**The full list of open work is `docs/roadmap.md`** (program commands as language statements, smaller language items, timers/`SYMBOL`, host polish, VM leftovers, remaining limits, decisions to revisit). Keep it current: tick or remove entries when they are done, add new findings there. Suggested next item: the program commands (`RUN`, `NEW`, `LIST`, `LOAD`, `DELETE`, `RENUM`, `CLEAR`, …), which needs the owner's language decisions first.

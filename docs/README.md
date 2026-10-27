@@ -11,6 +11,7 @@ The display side is working; the BASIC side (tokenizer → compiler → code gen
 | [basic-language.md](basic-language.md) | Tokenized line format, token set, literals, grammar summary |
 | [compiler-and-vm.md](compiler-and-vm.md) | Program store, syntax tree, node types, code generator, instruction set, variable memory |
 | [build-and-test.md](build-and-test.md) | Building, executables, test programs, tooling |
+| [roadmap.md](roadmap.md) | **Open work**: everything that is still to do, with the design questions that are waiting for a decision |
 | [refactoring.md](refactoring.md) | **Current in-progress refactor**: goal, status, known bugs, remaining work, limits table |
 
 Primary sources of truth in the code: `concept.txt` (display design), `bascomp.ebnf` (grammar),
