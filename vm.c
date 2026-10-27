@@ -39,6 +39,9 @@ void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem ) {
     vm->rstack   = 0;
     vm->rsp      = 0;
     vm->rmax     = 0;
+    vm->ctxs     = 0;
+    vm->nctx     = 0;
+    vm->maxctx   = 0;
     vm->pc       = UINT32_C(0);
     vm->line     = LINENO_NONE;
     vm->maxsteps = UINT64_C(0);
@@ -57,12 +60,23 @@ static void vm_clear_stacks( vm_t* vm ) {
         }
     }
     vm->rsp = 0;
+    // function contexts still open (after an error): free the saved strings
+    while ( vm->nctx ) {
+        vm_context_t* ctx = &vm->ctxs[ --vm->nctx ];
+        for ( uint8_t i=0; i < ctx->numsaved; ++i ) {
+            if ( ctx->saved[i].value.isstr ) {
+                free( ctx->saved[i].value.str );
+            }
+        }
+    }
 }
 
 void cleanup_vm( vm_t* vm ) {
     vm_clear_stacks( vm );
     free( vm->dstack );
     free( vm->rstack );
+    free( vm->ctxs );
+    vm->ctxs = 0; vm->nctx = vm->maxctx = 0;
     vm->dstack = 0; vm->dsp = vm->dmax = 0;
     vm->rstack = 0; vm->rsp = vm->rmax = 0;
 }
@@ -269,79 +283,71 @@ static bool vm_print_sep( vm_t* vm, bool hassep, uint16_t sep ) {
     return true;
 }
 
+static bool vm_branch_to( vm_t* vm, uint32_t target );
+
 // -- variables -------------------------------------------------------------
 
-static bool vm_rpush( vm_t* vm, uint16_t addr );
-
-static bool vm_read_var( vm_t* vm, uint16_t varoffs, uint8_t vartype ) {
+// reads a regular variable or an array element into a value (a string is copied to the heap)
+static bool vm_get_value( vm_t* vm, uint16_t varoffs, uint8_t vartype, uint8_t numdims, const uint16_t* diminx, vmval_t* pval ) {
     varvalue_t value;
-    if ( !vmem_get_var( vm->vmem, varoffs, vartype, 0, 0, &value ) ) {
-        return vm_error( vm, "Undefined variable" );
+    if ( !vmem_get_var( vm->vmem, varoffs, vartype, numdims, diminx, &value ) ) {
+        return vm_error( vm, numdims ? "Subscript out of range" : "Undefined variable" );
     }
+    pval->isstr = false;
     switch ( vartype & VARTYPEM_BASE ) {
-        case VARTYPEV_LABEL:
-            // a label is a code address; it goes on the return stack
-            if ( value.lbloffs == CODEOFFS_NONE ) {
-                return vm_error( vm, "Undefined label" );
-            }
-            return vm_rpush( vm, value.lbloffs );
         case VARTYPEV_FLOAT:
-            return vm_dpush_num( vm, value.dblval );
+            pval->num = value.dblval;
+            return true;
         case VARTYPEV_INT:
-            return vm_dpush_num( vm, (double) value.intval );
-        case VARTYPEV_STR: {
-            if ( value.strsize == 0 || value.stroffs == STROFFS_NONE ) {
-                char* s = vm_new_string( vm, "", 0 );
-                return s && vm_push_string( vm, s );
-            }
-            if ( (uint32_t) value.stroffs + value.strsize > vm->vmem->strssize ) {
+            pval->num = (double) value.intval;
+            return true;
+        case VARTYPEV_STR:
+            if ( value.strsize != 0 && value.stroffs != STROFFS_NONE &&
+                 (uint32_t) value.stroffs + value.strsize > vm->vmem->strssize ) {
                 return vm_error( vm, "Bad string variable" );
             }
-            char* s = vm_new_string( vm, (const char*) &vm->vmem->strs[ value.stroffs ], value.strsize );
-            return s && vm_push_string( vm, s );
-        }
+            pval->isstr = true;
+            pval->str = vm_new_string( vm, value.strsize && value.stroffs != STROFFS_NONE ?
+                (const char*) &vm->vmem->strs[ value.stroffs ] : "", value.strsize && value.stroffs != STROFFS_NONE ? value.strsize : 0U );
+            return pval->str != 0;
         default:
             break;
     }
     return vm_error( vm, "Unsupported variable type" );
 }
 
-static bool vm_write_var( vm_t* vm, uint16_t varoffs, uint8_t vartype ) {
+// writes a value to a regular variable or an array element; takes ownership of a string value
+static bool vm_set_value( vm_t* vm, uint16_t varoffs, uint8_t vartype, uint8_t numdims, const uint16_t* diminx, vmval_t val ) {
     varvalue_t value;
     memset( &value, 0, sizeof(value) );
-    switch ( vartype & VARTYPEM_BASE ) {
-        case VARTYPEV_FLOAT: {
-            if ( !vm_dpop_num( vm, &value.dblval ) ) {
-                return false;
-            }
-            break;
+    bool wantstr = ( vartype & VARTYPEM_BASE ) == VARTYPEV_STR;
+    if ( val.isstr != wantstr ) {
+        if ( val.isstr ) {
+            free( val.str );
         }
-        case VARTYPEV_INT: {
-            double num;
-            if ( !vm_dpop_num( vm, &num ) ) {
-                return false;
-            }
-            if ( !( num > -32769.0 && num < 32768.0 ) ) {
+        return vm_error( vm, wantstr ? "Type mismatch (string expected)" : "Type mismatch (number expected)" );
+    }
+    switch ( vartype & VARTYPEM_BASE ) {
+        case VARTYPEV_FLOAT:
+            value.dblval = val.num;
+            break;
+        case VARTYPEV_INT:
+            if ( !( val.num > -32769.0 && val.num < 32768.0 ) ) {
                 return vm_error( vm, "Integer out of range" );
             }
-            value.intval = (int16_t) num;
+            value.intval = (int16_t) val.num;
             break;
-        }
         case VARTYPEV_STR: {
-            char* str;
-            if ( !vm_dpop_str( vm, &str ) ) {
-                return false;
-            }
-            size_t len = strlen( str );
+            size_t len = strlen( val.str );
             uint16_t offs = STROFFS_NONE;
             if ( len > UINT16_MAX || ( len && !vmem_alloc_strs( vm->vmem, (uint16_t) len, &offs ) ) ) {
-                free( str );
+                free( val.str );
                 return vm_error( vm, len > UINT16_MAX ? "String too long" : "Out of string space" );
             }
             if ( len ) {
-                memcpy( &vm->vmem->strs[ offs ], str, len );
+                memcpy( &vm->vmem->strs[ offs ], val.str, len );
             }
-            free( str );
+            free( val.str );
             value.stroffs = len ? offs : STROFFS_NONE;
             value.strsize = (uint16_t) len;
             break;
@@ -349,10 +355,192 @@ static bool vm_write_var( vm_t* vm, uint16_t varoffs, uint8_t vartype ) {
         default:
             return vm_error( vm, "Unsupported variable type" );
     }
-    if ( !vmem_set_var( vm->vmem, varoffs, vartype, 0, 0, &value ) ) {
-        return vm_error( vm, "Undefined variable" );
+    if ( !vmem_set_var( vm->vmem, varoffs, vartype, numdims, diminx, &value ) ) {
+        return vm_error( vm, numdims ? "Subscript out of range" : "Undefined variable" );
     }
     return true;
+}
+
+static bool vm_rpush( vm_t* vm, uint16_t addr );
+
+static bool vm_read_var( vm_t* vm, uint16_t varoffs, uint8_t vartype ) {
+    if ( ( vartype & VARTYPEM_BASE ) == VARTYPEV_LABEL ) {
+        // a label is a code address; it goes on the return stack
+        varvalue_t value;
+        if ( !vmem_get_var( vm->vmem, varoffs, vartype, 0, 0, &value ) ) {
+            return vm_error( vm, "Undefined variable" );
+        }
+        if ( value.lbloffs == CODEOFFS_NONE ) {
+            return vm_error( vm, "Undefined label" );
+        }
+        return vm_rpush( vm, value.lbloffs );
+    }
+    vmval_t val;
+    if ( !vm_get_value( vm, varoffs, vartype, 0, 0, &val ) ) {
+        return false;
+    }
+    return val.isstr ? vm_push_string( vm, val.str ) : vm_dpush_num( vm, val.num );
+}
+
+static bool vm_write_var( vm_t* vm, uint16_t varoffs, uint8_t vartype ) {
+    vmval_t val;
+    return vm_dpop( vm, &val ) && vm_set_value( vm, varoffs, vartype, 0, 0, val );
+}
+
+// pops the subscripts of an array element access: ( inx ... ndim -- )
+static bool vm_pop_subscripts( vm_t* vm, uint8_t* pnumdims, uint16_t diminx[MAXDIM] ) {
+    double num;
+    if ( !vm_dpop_num( vm, &num ) ) {
+        return false;
+    }
+    if ( !( num >= 1.0 && num <= (double) MAXDIM ) ) {
+        return vm_error( vm, "Bad number of subscripts" );
+    }
+    uint8_t numdims = (uint8_t) num;
+    for ( uint8_t i = numdims; i > 0; --i ) {
+        if ( !vm_dpop_num( vm, &num ) ) {
+            return false;
+        }
+        if ( !( num > -1.0 && num < 65536.0 ) ) {
+            return vm_error( vm, "Subscript out of range" );
+        }
+        diminx[ i - 1U ] = (uint16_t) num;
+    }
+    *pnumdims = numdims;
+    return true;
+}
+
+static bool vm_read_elem( vm_t* vm, uint16_t varoffs, uint8_t basetype ) {
+    uint8_t numdims = 0; uint16_t diminx[MAXDIM]; vmval_t val;
+    if ( !vm_pop_subscripts( vm, &numdims, diminx ) ||
+         !vm_get_value( vm, varoffs, VARTYPEF_ARRAY | basetype, numdims, diminx, &val ) ) {
+        return false;
+    }
+    return val.isstr ? vm_push_string( vm, val.str ) : vm_dpush_num( vm, val.num );
+}
+
+static bool vm_write_elem( vm_t* vm, uint16_t varoffs, uint8_t basetype ) {
+    // ( n inx ... ndim -- )
+    uint8_t numdims = 0; uint16_t diminx[MAXDIM]; vmval_t val;
+    if ( !vm_pop_subscripts( vm, &numdims, diminx ) || !vm_dpop( vm, &val ) ) {
+        return false;
+    }
+    return vm_set_value( vm, varoffs, VARTYPEF_ARRAY | basetype, numdims, diminx, val );
+}
+
+// -- user function calls -----------------------------------------------------
+
+// pushes a context for a call: the values of the parameter variables before the call are saved,
+// to be restored by RETF. The return stack gets <retoffs> <context index>.
+static bool vm_call_function( vm_t* vm, uint16_t funcoffs, uint32_t retaddr ) {
+    double num;
+    if ( !vm_dpop_num( vm, &num ) ) {
+        return false;
+    }
+    uint8_t functype = 0, numparams = 0; uint16_t codeoffs = CODEOFFS_NONE;
+    if ( !vmem_get_func_info( vm->vmem, funcoffs, &functype, &numparams, &codeoffs ) ) {
+        return vm_error( vm, "Undefined function" );
+    }
+    if ( codeoffs == CODEOFFS_NONE ) {
+        return vm_error( vm, "Undefined function" );
+    }
+    if ( num != (double) numparams ) {
+        return vm_error( vm, "Argument count mismatch" );
+    }
+    // the arguments, last one on top
+    vmval_t args[MAXPARAM];
+    for ( uint8_t i = numparams; i > 0; --i ) {
+        if ( !vm_dpop( vm, &args[ i - 1U ] ) ) {
+            for ( uint8_t j = i; j < numparams; ++j ) {
+                if ( args[j].isstr ) {
+                    free( args[j].str );
+                }
+            }
+            return false;
+        }
+    }
+    // make room for the context
+    if ( vm->nctx == vm->maxctx ) {
+        size_t newmax = vm->maxctx ? vm->maxctx * 2U : 16U;
+        if ( newmax > UINT16_MAX ) {
+            newmax = UINT16_MAX;
+        }
+        vm_context_t* p = vm->nctx < newmax ? (vm_context_t*) realloc( vm->ctxs, newmax * sizeof(vm_context_t) ) : 0;
+        if ( p == 0 ) {
+            goto FAIL;
+        }
+        vm->ctxs = p;
+        vm->maxctx = newmax;
+    }
+    vm_context_t* ctx = &vm->ctxs[ vm->nctx ];
+    ctx->numsaved = 0;
+    for ( uint8_t i=0; i < numparams; ++i ) {
+        uint8_t ptype = 0; char name[256]; uint16_t poffs = VAROFFS_NONE;
+        if ( !vmem_get_func_param( vm->vmem, funcoffs, i, &ptype, name ) ) {
+            vm_error( vm, "Bad function parameter" );
+            goto FAILCTX;
+        }
+        if ( ptype & VARTYPEF_ARRAY ) {
+            vm_error( vm, "Array parameters are not supported yet" );
+            goto FAILCTX;
+        }
+        if ( !vmem_lookup_var( vm->vmem, ptype, name, &poffs ) || poffs == VAROFFS_NONE ) {
+            vm_error( vm, "Undefined parameter variable" );
+            goto FAILCTX;
+        }
+        vm_savedvar_t* sv = &ctx->saved[ ctx->numsaved ];
+        sv->varoffs = poffs;
+        sv->vartype = ptype;
+        if ( !vm_get_value( vm, poffs, ptype, 0, 0, &sv->value ) ) {
+            goto FAILCTX;
+        }
+        ++ctx->numsaved;
+        // the argument is consumed by the assignment
+        vmval_t arg = args[i];
+        args[i].isstr = false;
+        args[i].num = 0.0;
+        if ( !vm_set_value( vm, poffs, ptype, 0, 0, arg ) ) {
+            goto FAILCTX;
+        }
+    }
+    if ( !vm_rpush( vm, (uint16_t) retaddr ) || !vm_rpush( vm, (uint16_t) vm->nctx ) ) {
+        goto FAILCTX;
+    }
+    ++vm->nctx;
+    return vm_branch_to( vm, codeoffs );
+
+FAILCTX:
+    for ( uint8_t i=0; i < ctx->numsaved; ++i ) {
+        if ( ctx->saved[i].value.isstr ) {
+            free( ctx->saved[i].value.str );
+        }
+    }
+FAIL:
+    for ( uint8_t i=0; i < numparams; ++i ) {
+        if ( args[i].isstr ) {
+            free( args[i].str );
+        }
+    }
+    return false;
+}
+
+static bool vm_return_function( vm_t* vm ) {
+    uint16_t ctxindex = 0, retaddr = 0;
+    if ( !vm_rpop( vm, &ctxindex ) || !vm_rpop( vm, &retaddr ) ) {
+        return false;
+    }
+    if ( vm->nctx == 0 || ctxindex != vm->nctx - 1U ) {
+        return vm_error( vm, "RETF without function call" );
+    }
+    vm_context_t* ctx = &vm->ctxs[ --vm->nctx ];
+    // the result stays on the data stack; restore the parameter variables in reverse order
+    bool ok = true;
+    for ( uint8_t i = ctx->numsaved; i > 0; --i ) {
+        vm_savedvar_t* sv = &ctx->saved[ i - 1U ];
+        ok = vm_set_value( vm, sv->varoffs, sv->vartype, 0, 0, sv->value ) && ok;
+    }
+    ctx->numsaved = 0;
+    return ok && vm_branch_to( vm, retaddr );
 }
 
 // -- execution -------------------------------------------------------------
@@ -434,7 +622,7 @@ static bool vm_binary_str( vm_t* vm, uint16_t opcode ) {
     return vm_dpush_num( vm, r != 0.0 ? -1.0 : 0.0 );
 }
 
-static bool vm_branch( vm_t* vm, uint32_t target ) {
+static bool vm_branch_to( vm_t* vm, uint32_t target ) {
     if ( target > vm->cgen->codesize ) {
         return vm_error( vm, "Branch out of range" );
     }
@@ -483,21 +671,21 @@ static bool vm_step( vm_t* vm ) {
         case INS_PHIM:
             return vm_dpush_num( vm, (double) simm17 );
         case INS_BRIA:
-            return vm_branch( vm, imm17 );
+            return vm_branch_to( vm, imm17 );
         case INS_BRIR: {
             int64_t target = (int64_t) pc + simm17;
             if ( target < 0 || target > (int64_t) cgen->codesize ) {
                 return vm_error( vm, "Branch out of range" );
             }
-            return vm_branch( vm, (uint32_t) target );
+            return vm_branch_to( vm, (uint32_t) target );
         }
         case INS_JPCC:
             if ( !vm_dpop_num( vm, &num ) || !vm_rpop( vm, &addr ) ) {
                 return false;
             }
-            return vm_to_int32( num ) != 0 ? vm_branch( vm, addr ) : true;
+            return vm_to_int32( num ) != 0 ? vm_branch_to( vm, addr ) : true;
         case INS_JUMP:
-            return vm_rpop( vm, &addr ) && vm_branch( vm, addr );
+            return vm_rpop( vm, &addr ) && vm_branch_to( vm, addr );
         case INS_DROP: {
             size_t cnt = hasp ? param : 1U;
             size_t* sp = code ? &vm->rsp : &vm->dsp;
@@ -558,6 +746,14 @@ static bool vm_step( vm_t* vm ) {
         case INS_RRIV: return vm_read_var( vm, param, VARTYPEV_INT );
         case INS_RRSV: return vm_read_var( vm, param, VARTYPEV_STR );
         case INS_RRLV: return vm_read_var( vm, param, VARTYPEV_LABEL );
+        case INS_RNAE: return vm_read_elem( vm, param, VARTYPEV_FLOAT );
+        case INS_RIAE: return vm_read_elem( vm, param, VARTYPEV_INT );
+        case INS_RSAE: return vm_read_elem( vm, param, VARTYPEV_STR );
+        case INS_WNAE: return vm_write_elem( vm, param, VARTYPEV_FLOAT );
+        case INS_WIAE: return vm_write_elem( vm, param, VARTYPEV_INT );
+        case INS_WSAE: return vm_write_elem( vm, param, VARTYPEV_STR );
+        case INS_CALF: return vm_call_function( vm, param, pc );
+        case INS_RETF: return vm_return_function( vm );
         case INS_WRNV: return vm_write_var( vm, param, VARTYPEV_FLOAT );
         case INS_WRIV: return vm_write_var( vm, param, VARTYPEV_INT );
         case INS_WRSV: return vm_write_var( vm, param, VARTYPEV_STR );
@@ -592,8 +788,12 @@ static bool vm_step( vm_t* vm ) {
 }
 
 bool vm_run( vm_t* vm ) {
+    return vm_run_at( vm, UINT32_C(0) );
+}
+
+bool vm_run_at( vm_t* vm, uint32_t start ) {
     vm_clear_stacks( vm );
-    vm->pc = UINT32_C(0);
+    vm->pc = start;
     vm->line = LINENO_NONE;
     vm->column = 0;
     uint64_t steps = UINT64_C(0);

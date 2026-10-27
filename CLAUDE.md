@@ -44,6 +44,6 @@ Remaining fixed limits (vars, code, variable *names* ≤ 255) are listed in `doc
 | BASIC tokenizer | `bastok.[ch]` (token IDs, tokenize/detokenize, literal codecs) |
 | Program store | `baslin.[ch]` (`line_t` nodes, encoded `linehdr_t`), `baspgm.[ch]` (pointer-linked list of lines, insert/replace/delete/list) |
 | Compiler front end | `bascomp.[ch]` + `bascomp.ebnf` (recursive descent → syntax tree), `nodetype.[ch]` (node types) |
-| Back end | `codegen.[ch]` (+ `cgenctl.c`: control flow), `instset.h` (ISA spec), `vars.[ch]` (variable/string memory), `runtime.[ch]`, `vm.[ch]` (minimal VM executor) |
+| Back end | `codegen.[ch]` (+ `cgenctl.c`: control flow, `cgendecl.c`: DIM/DEF), `instset.h` (ISA spec), `vars.[ch]` (variable/string memory), `runtime.[ch]`, `vm.[ch]` (minimal VM executor) |
 | Executables | `engine1999.c` (main app), `sdltest1.c`, `basictest1.c`, `basictest2.c`, `testcomp1.c`, `vmtest1.c` (automated back-end test) |
 | Tools/data | `fontcomp.pl` (8x12font1.txt → 8x12font1.c), `colors-*.txt`, `concept.txt` (design notes) |

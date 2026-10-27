@@ -77,7 +77,7 @@ static const testcase_t cases[] = {
     { "string self-append",     "A$=\"X\"\nA$=A$+A$\nPRINT A$",     "XX\n" },
     { "empty PRINT",            "PRINT",                            "\n" },
     { "PRINT with channel only","PRINT #0,",                         "\n" },
-    { "unimplemented statement","10 DIM A(3)",                       "? Internal error (feature not implemented yet) in line 10\n" },
+    { "unimplemented statement","10 DIM A(3)\n20 ERASE A()",                       "? Internal error (feature not implemented yet) in line 20\n" },
     // control flow
     { "GOTO forward",           "10 GOTO 30\n20 PRINT 1\n30 PRINT 2",                 "2\n" },
     { "GOTO backward",          "10 A=0\n20 A=A+1\n30 PRINT A\n40 IF A<3 THEN 20\n50 PRINT 99", "1\n2\n3\n99\n" },
@@ -117,6 +117,37 @@ static const testcase_t cases[] = {
     { "nested multi-line IF",   "10 A=1:B=0\n20 IF A THEN\n30 IF B THEN\n40 PRINT \"AB\"\n50 ELSE\n60 PRINT \"A\"\n70 ENDIF\n80 ENDIF\n90 PRINT \"E\"", "A\nE\n" },
     { "FOR inside IF",          "10 A=1\n20 IF A THEN\n30 FOR I=1 TO 2\n40 PRINT I\n50 NEXT I\n60 ENDIF\n70 PRINT \"E\"", "1\n2\nE\n" },
     { "multi-line IF in loop",  "10 FOR I=1 TO 3\n20 IF I=2 THEN\n30 PRINT \"TWO\"\n40 ELSE\n50 PRINT I\n60 ENDIF\n70 NEXT I", "1\nTWO\n3\n" },
+    // arrays
+    { "array write and read",   "DIM A(3):A(0)=5:A(1)=7:PRINT A(0)+A(1)",           "12\n" },
+    { "array initial value",    "DIM A(2):PRINT A(1)",                              "0\n" },
+    { "array without DIM",      "A(5)=1:PRINT A(5)",                                "1\n" },
+    { "two dimensions",         "DIM B(2,3):B(1,2)=9:B(0,0)=1:PRINT B(1,2)*10+B(0,0)", "91\n" },
+    { "string array",           "DIM S$(3):S$(1)=\"HI\":S$(2)=\"YOU\":PRINT S$(1)+S$(2)", "HIYOU\n" },
+    { "empty string element",   "DIM S$(2):PRINT \"[\"+S$(1)+\"]\"",                 "[]\n" },
+    { "integer array",          "DIM I%(2):I%(1)=300:PRINT I%(1)*2",                "600\n" },
+    { "array index expression", "DIM A(5):I=2:A(I+1)=4:PRINT A(3)",                 "4\n" },
+    { "array in loop",          "10 DIM A(4)\n20 FOR I=0 TO 3:A(I)=I*I:NEXT I\n30 FOR I=0 TO 3:PRINT A(I):NEXT I", "0\n1\n4\n9\n" },
+    { "subscript out of range", "DIM A(3):PRINT A(3)",                              "? Subscript out of range\n" },
+    { "negative subscript",     "DIM A(3):PRINT A(0-1)",                            "? Subscript out of range\n" },
+    { "array element as index", "DIM A(3),B(3):A(1)=2:B(2)=7:PRINT B(A(1))",        "7\n" },
+    // user functions
+    { "DEF FN",                 "DEF FN A(X)=X*2\nPRINT FN A(4)",                     "8\n" },
+    { "DEF FN two arguments",   "DEF FN A(X,Y)=X-Y\nPRINT FN A(10,3)",               "7\n" },
+    { "DEF FN no arguments",    "DEF FN P=3\nPRINT FN P+1",                          "4\n" },
+    { "DEF FN restores params", "X=1\nDEF FN A(X)=X*2\nPRINT FN A(5):PRINT X",       "10\n1\n" },
+    { "DEF FN string",          "DEF FN A$(S$)=S$+\"!\"\nPRINT FN A$(\"HI\")",        "HI!\n" },
+    { "DEF FN calls DEF FN",    "DEF FN A(X)=X*2\nDEF FN B(Y)=FN A(Y)+1\nPRINT FN B(5)", "11\n" },
+    { "DEF FN in expression",   "DEF FN A(X)=X+1\nPRINT FN A(1)*FN A(2)",              "6\n" },
+    { "DEF FN nested call",     "DEF FN A(X)=X+1\nPRINT FN A(FN A(1))",               "3\n" },
+    { "DEF FN in program",      "10 DEF FN A(X)=X*X\n20 PRINT FN A(3)",              "9\n" },
+    { "call before DEF",        "10 PRINT FN A(3)\n20 DEF FN A(X)=X*X",              "? Undefined function in line 10\n" },
+    { "DEF FN uses variable",   "K=10\nDEF FN A(X)=X+K\nK=20\nPRINT FN A(1)",       "21\n" },
+    { "DEF FN in loop",         "DEF FN A(X)=X*X\nFOR I=1 TO 3:PRINT FN A(I):NEXT I", "1\n4\n9\n" },
+    { "DEF FN with array",      "DIM A(3):A(2)=5\nDEF FN A(I)=A(I)*2\nPRINT FN A(2)", "10\n" },
+    { "error inside DEF FN",    "DEF FN A(X)=1/X\nPRINT FN A(0)",                  "? Division by zero\n" },
+    { "error inside DEF FN with string", "S$=\"KEEP\"\nDEF FN A(S$)=1/0\nPRINT FN A(\"X\")", "? Division by zero\n" },
+    { "string param restored",  "S$=\"KEEP\"\nDEF FN A$(S$)=S$+S$\nPRINT FN A$(\"AB\"):PRINT S$", "ABAB\nKEEP\n" },
+    { "DEF FN wrong argument count", "DEF FN A(X)=X\nPRINT FN A(1,2)",                "? Argument count mismatch\n" },
     { "division by zero",       "PRINT 1/0",                        "? Division by zero\n" },
     { "error line number",      "10 PRINT 1\n20 PRINT 1/0",         "1\n? Division by zero in line 20\n" },
 };
@@ -213,7 +244,8 @@ static void comp_halt( struct _compiler_t* comp, void* usrdata ) {
 // compiles the tokens set up in comp, generates the code and runs it; returns false if anything failed
 static bool compile_and_run( void ) {
     bool ok = false;
-    cgen_reset( &rt.codegen );
+    // direct mode lines are appended to the code, so that functions defined by earlier lines stay valid
+    uint32_t start = rt.codegen.codesize;
     quiet_begin();
     if ( setjmp( jmp_fail ) == 0 ) {
         run_compiler( &comp );
@@ -228,7 +260,7 @@ static bool compile_and_run( void ) {
     vm.print    = vm_print;
     vm.report   = vm_report;
     vm.maxsteps = UINT64_C(1000000);
-    ok = vm_run( &vm );
+    ok = vm_run_at( &vm, start );
     cleanup_vm( &vm );
     return ok;
 }

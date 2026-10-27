@@ -698,3 +698,61 @@ static void vmem_write_float( uint8_t* mem, uint16_t offs, double val ) {
     mem[ offs + 6U ] = (uint8_t)( u.ui64 >> UINT8_C( 8) );
     mem[ offs + 7U ] = (uint8_t)( u.ui64                );
 }
+
+// -- user-defined function variables -------------------------------------------
+
+// returns the offset of the function variable's data in vmem->vars, after its argument descriptors
+static bool vmem_func_header( varmem_t* vmem, uint16_t varoffs, uint16_t* pargs, uint16_t* pdata, uint8_t* pfunctype, uint8_t* pnumargs ) {
+    if ( varoffs >= MAXVARS * 2U ) {
+        return false;
+    }
+    uint16_t memoffs = VEXTRACT16( vmem, varoffs );
+    if ( memoffs == VAROFFS_NONE ) {
+        return false;
+    }
+    uint8_t vartype = vmem->vars[ memoffs + 2U ];
+    if ( ( vartype & VARTYPEF_FUNC ) == 0 || ( vartype & VARTYPEM_INVAL ) != 0 ) {
+        return false;
+    }
+    uint8_t namelen = vmem->vars[ memoffs + 3U ];
+    memoffs += UINT16_C(4) + namelen;
+    uint8_t numargs = vmem->vars[ memoffs++ ];
+    if ( numargs > MAXPARAM ) {
+        return false;
+    }
+    *pargs = memoffs;
+    for ( uint8_t i=0; i < numargs; ++i ) {
+        ++memoffs;                                  // argument type
+        memoffs += UINT16_C(1) + vmem->vars[ memoffs ];     // name length byte and name
+    }
+    *pdata = memoffs;
+    *pfunctype = vartype;
+    *pnumargs = numargs;
+    return true;
+}
+
+bool vmem_get_func_info( varmem_t* vmem, uint16_t varoffs, uint8_t* pfunctype, uint8_t* pnumparams, uint16_t* pcodeoffs ) {
+    uint16_t args = 0, data = 0;
+    if ( !vmem_func_header( vmem, varoffs, &args, &data, pfunctype, pnumparams ) ) {
+        return false;
+    }
+    *pcodeoffs = VEXTRACT16( vmem, data );
+    return true;
+}
+
+bool vmem_get_func_param( varmem_t* vmem, uint16_t varoffs, uint8_t index, uint8_t* pparamtype, char name[256] ) {
+    uint16_t args = 0, data = 0; uint8_t functype = 0, numargs = 0;
+    if ( !vmem_func_header( vmem, varoffs, &args, &data, &functype, &numargs ) || index >= numargs ) {
+        return false;
+    }
+    uint16_t memoffs = args;
+    for ( uint8_t i=0; i < index; ++i ) {
+        ++memoffs;
+        memoffs += UINT16_C(1) + vmem->vars[ memoffs ];
+    }
+    *pparamtype = vmem->vars[ memoffs++ ];
+    uint8_t namelen = vmem->vars[ memoffs++ ];
+    memcpy( name, &vmem->vars[ memoffs ], namelen );
+    name[ namelen ] = '\0';
+    return true;
+}

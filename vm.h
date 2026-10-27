@@ -49,8 +49,8 @@ The data stack items are either a number or a string pointer (heap, NUL-terminat
 type mismatch is a run time error and strings never leak.
 The stacks are heap allocated and grow on demand.
 
-Not implemented yet (reported as errors at run time): array element access, label variables,
-function calls (CALF/RETF), BRK, system functions, SHEX, SAVE.
+Not implemented yet (reported as errors at run time): BRK, system functions, SHEX, SAVE, WRLV,
+array parameters of functions.
 
 Policies chosen by this implementation (the instruction set does not define them):
     - comparisons yield -1 (true) or 0 (false)
@@ -72,6 +72,18 @@ typedef struct _vmval_t {
     };
 } vmval_t;
 
+// the value of a parameter variable before a function call, restored by RETF
+typedef struct _vm_savedvar_t {
+    uint16_t    varoffs;
+    uint8_t     vartype;
+    vmval_t     value;          // a string is a heap copy
+} vm_savedvar_t;
+
+typedef struct _vm_context_t {
+    uint8_t         numsaved;
+    vm_savedvar_t   saved[MAXPARAM];
+} vm_context_t;
+
 typedef struct _vm_t {
     codegen_t*      cgen;           // code and data segments
     varmem_t*       vmem;           // variables
@@ -79,6 +91,8 @@ typedef struct _vm_t {
     size_t          dsp, dmax;      // item count, allocated items
     uint16_t*       rstack;         // return stack
     size_t          rsp, rmax;
+    vm_context_t*   ctxs;           // contexts of the function calls in progress
+    size_t          nctx, maxctx;
     uint32_t        pc;             // offset of the next instruction
     uint32_t        line;           // current line number (LINE instruction)
     uint64_t        maxsteps;       // stop with an error after this many instructions (0 = unlimited)
@@ -92,5 +106,6 @@ typedef struct _vm_t {
 void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem );
 void cleanup_vm( vm_t* vm );        // frees the stacks and the strings still on the data stack
 bool vm_run( vm_t* vm );            // runs from offset 0 until the end of the code; false after reporting an error
+bool vm_run_at( vm_t* vm, uint32_t start );     // same, starting at the given code offset
 
 #endif

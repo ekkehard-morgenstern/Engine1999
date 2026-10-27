@@ -818,9 +818,8 @@ static bool gen_from_arraysub( codegen_t* cgen, compiler_t* comp, node_t* node )
 
 static bool from_fncall_cb( void* param, node_t* node ) {
     cbdata_t* pdata = (cbdata_t*) param;
-    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
-    if ( node == NODE_NONE ) {
-        return cgen_bad_node( pdata->comp );
+    if ( node == NODE_NONE ) {  // no arguments
+        return true;
     }
     uint8_t nodetype = node->type;
     if ( nodetype == NT_EXPRLIST ) {
@@ -2426,6 +2425,8 @@ bool cgen_from_stmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         case NT_PRINTSTMT:  return cgen_from_printstmt( cgen, comp, node );
         case NT_SAVESTMT:   return cgen_from_savestmt( cgen, comp, node );
         case NT_STMTLIST:   return cgen_from_stmtlist( cgen, comp, node );
+        case NT_DIMSTMT:    return cgen_from_dimstmt( cgen, comp, node );
+        case NT_DEFSTMT:    return cgen_from_defstmt( cgen, comp, node );
         case NT_GOTOSTMT:   return cgen_from_gotostmt( cgen, comp, node );
         case NT_RETURNSTMT: return cgen_from_returnstmt( cgen, comp, node );
         case NT_LABELSTMT:  return cgen_from_labelstmt( cgen, comp, node );

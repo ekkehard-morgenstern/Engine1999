@@ -1301,7 +1301,10 @@ static bool cgb_worker( void* userdata, node_t* nodepos ) {
 
 static bool comp_gather_branches( compiler_t* comp, node_t* node, uint8_t listtype, node_t** branches, size_t maxbranches,
     size_t* pnumbranches ) {
-    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
+    if ( node == NODE_NONE ) {  // no arguments at all
+        *pnumbranches = 0U;
+        return true;
+    }
     if ( node->type == listtype ) {
         cgbargs_t args = { comp, branches, maxbranches, 0 };
         if ( !comp_node_iter_branches( comp, node, &args, cgb_worker ) ) {

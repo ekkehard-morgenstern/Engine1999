@@ -42,7 +42,7 @@ all: sdltest1 engine1999 basictest1 testcomp1 basictest2 vmtest1
 	echo ok >all
 
 BASEMOD=sdlevent.o sdllayer.o sdlmain.o sdlscreen.o textscreen.o tilescreen.o sprscreen.o 8x12font1.o sdlaudio.o sdlutil.o \
-		basic.o baspgm.o baslin.o bastok.o bascomp.o nodetype.o codegen.o cgenctl.o vars.o runtime.o vm.o
+		basic.o baspgm.o baslin.o bastok.o bascomp.o nodetype.o codegen.o cgenctl.o cgendecl.o vars.o runtime.o vm.o
 BASEHDR=sdlevent.h sdllayer.h sdlmain.h sdlscreen.h sdltypes.h textscreen.h tilescreen.h sprscreen.h unxtypes.h sdlaudio.h sdlutil.h basic.h baspgm.h baslin.h bastok.h bascomp.h nodetype.h codegen.h instset.h vars.h runtime.h vm.h
 
 LIBMOD=$(BASEMOD)
@@ -118,6 +118,8 @@ nodetype.o: nodetype.c $(BASEHDR)
 codegen.o: codegen.c $(BASEHDR)
 
 cgenctl.o: cgenctl.c $(BASEHDR)
+
+cgendecl.o: cgendecl.c $(BASEHDR)
 
 vars.o: vars.c $(BASEHDR)
 

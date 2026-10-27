@@ -52,11 +52,20 @@ Immediates: 17-bit signed (`PHIM`, C bit = bit 16) so small integers need no dat
 
 Minimal executor: `init_vm( vm, &codegen, &varmem )`, `vm_run( vm )` (runs from offset 0 to the end of the code, returns `false` after reporting an error), `cleanup_vm`. Stacks are heap arrays that grow on demand; data stack items are tagged number/string (heap, NUL-terminated), so type mismatches are run time errors and strings are freed on errors. Output goes through `vm->print( vm, userdata, channel, text )` (default stdout), errors through `vm->report` (default stderr). `vm->maxsteps` guards against endless loops.
 
-Implemented: control (`NOP PHPA PHIM BRIA BRIR JPCC JUMP DROP LINE`), loads (`LAN LIAN LUAN LAS FRES`), all arithmetic/logical/compare/concat instructions, scalar variable read/write (`RRNV RRIV RRSV RRLV WRNV WRIV WRSV`), `PCHN PNUM PSTR`. Not implemented (reported as "Instruction XXX not implemented"): arrays, `WRLV`, `CALF/RETF`, system functions, `SHEX`, `SAVE`, `BRK` (reports "Breakpoint").
+Implemented: control (`NOP PHPA PHIM BRIA BRIR JPCC JUMP DROP LINE`), loads (`LAN LIAN LUAN LAS FRES`), all arithmetic/logical/compare/concat instructions, scalar variable read/write (`RRNV RRIV RRSV RRLV WRNV WRIV WRSV`), array element access (`RNAE RIAE RSAE WNAE WIAE WSAE`: subscripts must be in range, else "Subscript out of range"), user function calls (`CALF RETF`), `PCHN PNUM PSTR`. Not implemented (reported as "Instruction XXX not implemented"): `WRLV`, system functions, `SHEX`, `SAVE`, `BRK` (reports "Breakpoint").
+
+`CALF` pops the argument count and the arguments, saves the current values of the parameter variables (strings as heap copies) in a context kept by the VM (`vm_context_t`, indexed by a 16-bit number), assigns the arguments to the parameter variables, pushes `<return address> <context index>` on the return stack and branches to the function. `RETF` restores the variables and returns; the result stays on the data stack. `vm_run_at( vm, start )` runs from a given code offset (needed when direct mode lines are appended to the code).
 
 Policies the ISA leaves open (documented in `vm.h`): comparisons give -1/0; bitwise ops work on 32-bit signed integers; print separator parameter 0 = newline, 4 = `;`, 8 = `,` (next 10-column zone); numbers print with `%.15g`.
 
-Code generator driver: `cgen_from_program( cgen, comp )` handles `NT_STMTLINES` / `NT_STMTLINE` / `NT_STMTLIST` and the statements `LET`, `PRINT`, `SAVE` (`codegen.c`) plus the control flow statements below (`cgenctl.c`); other statements (`DIM`, `ERASE`, `DEF`) report "feature not implemented yet". `LINE` has a 16-bit parameter, so line numbers above 65535 are rejected by code generation for now. Call `cgen_reset()` before generating into a reused `codegen_t` and `cleanup_codegen()` / `cleanup_runtime()` when done.
+Code generator driver: `cgen_from_program( cgen, comp )` handles `NT_STMTLINES` / `NT_STMTLINE` / `NT_STMTLIST` and the statements `LET`, `PRINT`, `SAVE` (`codegen.c`) plus the control flow statements below (`cgenctl.c`); `ERASE` (and multi-line `DEF FN` bodies) report "feature not implemented yet". `LINE` has a 16-bit parameter, so line numbers above 65535 are rejected by code generation for now. Call `cgen_reset()` before generating into a reused `codegen_t` and `cleanup_codegen()` / `cleanup_runtime()` when done.
+
+### Declarations (`cgendecl.c`)
+
+- **`DIM`** generates nothing: the compiler creates the array when it parses the declaration (constant dimensions; `DIM A(n)` gives subscripts `0..n-1`), and an array used without `DIM` is created with 10 elements. A second `DIM` of the same array is a compile error ("Variable already exists"), so arrays can't be re-dimensioned.
+- **`ERASE`** is not implemented: the parser itself notes the unresolved design problem (the array variable already exists at compile time) and the ISA has no instruction for it.
+- **`DEF FN`**: the single-line body is generated inline, jumped over (`BRIA end  start: <expr>  RETF  end:`); the start offset is stored in the function variable at compile time. The function must be defined *before* the call in the program text (the parser looks it up while parsing the call), and a function can't call itself (it doesn't exist while its body is parsed). The parameter variables are created if needed. Array parameters and multi-line bodies aren't supported.
+- **Spelling:** the tokenizer reads `FNA` as one identifier, so a function is written `DEF FN A(X)=…` and called as `FN A(…)` (with a space).
 
 ### Control flow (`cgenctl.c`)
 

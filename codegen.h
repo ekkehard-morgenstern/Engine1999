@@ -236,6 +236,11 @@ bool cgen_out_of_code_memory( compiler_t* comp );
 bool cgen_out_of_data_memory( compiler_t* comp );
 bool cgen_not_implemented_yet( compiler_t* comp );
 
+// -- declarations (cgendecl.c) -----------------------------------------------
+
+bool cgen_from_dimstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_defstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+
 // -- control flow (cgenctl.c) ------------------------------------------------
 
 void cgen_begin_control( codegen_t* cgen );     // clears the line table, fixups and FOR stack
