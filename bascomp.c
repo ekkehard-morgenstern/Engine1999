@@ -35,6 +35,8 @@ void init_compiler( compiler_t* comp, struct _runtime_t* rt, program_t* pgm, boo
     comp->param    = 0;
     comp->number   = 0.0;
     comp->currtok  = TOK_NONE;
+    comp->name     = 0;
+    comp->namealloc = 0;
     comp->ctxstk   = 0;
     // CAUTION: Set the "keepmemory" flag only if you know what you're doing!
     if ( keepmemory ) {
@@ -56,7 +58,28 @@ void cleanup_compiler( compiler_t* comp ) {
     }
     free( comp->param );
     comp->param = 0;
+    free( comp->name );
+    comp->name = 0;
+    comp->namealloc = 0;
     comp_free_tree( comp );
+}
+
+const char* comp_node_name( compiler_t* comp, const node_t* node, size_t skip ) {
+    size_t len = node->datalen > skip ? node->datalen - skip : 0;
+    if ( len + 1U > comp->namealloc ) {
+        size_t alloc = len + 1U < 64U ? 64U : len + 1U;
+        char* p = (char*) realloc( comp->name, alloc );
+        if ( p == 0 ) {
+            comp_error( comp, "Out of memory" );
+        }
+        comp->name = p;
+        comp->namealloc = alloc;
+    }
+    if ( len ) {
+        memcpy( comp->name, node->data + skip, len );
+    }
+    comp->name[ len ] = '\0';
+    return comp->name;
 }
 
 void comp_set_tokens( compiler_t* comp, const uint8_t* tokens, size_t size ) {
@@ -497,7 +520,7 @@ LARGE:      comp_error( comp, "Array too large" );
         data2[ i * 2U      ] = (uint8_t)( comp->arraydim[i] >> UINT8_C(8) );
         data2[ i * 2U + 1U ] = (uint8_t)  comp->arraydim[i];
     }
-    if ( totalsize == 0 || totalsize > 65535U ) {
+    if ( totalsize == 0 || totalsize > MAXELEMS ) {
         goto LARGE;
     }
     if ( !comp_create_node( comp, pnode, NT_ARRAYDIMDECL, UINT8_C(0), datalen2, data2 ) || *pnode == NODE_NONE ) {
@@ -572,7 +595,7 @@ bool comp_eat_arraydecl( compiler_t* comp, node_t** pnode ) {
     //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
     datalen  = varnode->datalen;
     datap = varnode->data;
-    static char name[256]; name[0] = '\0';
+    const char* name = 0;
     uint8_t vartype = VARTYPEF_ARRAY;
     if ( varnode->type == NT_NUMBASEVARREF || varnode->type == NT_STRBASEVARREF ) {
         if ( datalen < UINT16_C(2) ) {
@@ -581,17 +604,8 @@ bool comp_eat_arraydecl( compiler_t* comp, node_t** pnode ) {
         }
         // data:
         //    - 1 byte of type indicator, n bytes of name
-        uint8_t typeind = *datap++;
-        if ( datalen > 256U ) {
-            comp_error( comp, "Variable name too long" );
-            return false;
-        }
-        uint8_t namelen = (uint8_t)( datalen - UINT16_C(1) );
-        if ( namelen ) {
-            memcpy( name, datap, namelen );
-        }
-        name[ namelen ] = '\0';
-        vartype |= typeind & VARTYPEM_BASE;
+        vartype |= datap[0] & VARTYPEM_BASE;
+        name = comp_node_name( comp, varnode, 1U );
     } else {
         comp_error( comp, "Internal error (base variable reference expected)" );
         return false;
@@ -664,7 +678,7 @@ bool comp_eat_emptyarrayref( compiler_t* comp, node_t** pnode ) {
     //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
     uint16_t datalen  = varnode->datalen;
     const uint8_t* datap = varnode->data;
-    static char name[256]; name[0] = '\0';
+    const char* name = 0;
     uint8_t vartype = VARTYPEF_ARRAY;
     if ( varnode->type == NT_NUMBASEVARREF || varnode->type == NT_STRBASEVARREF ) {
         if ( datalen < UINT16_C(2) ) {
@@ -673,17 +687,8 @@ bool comp_eat_emptyarrayref( compiler_t* comp, node_t** pnode ) {
         }
         // data:
         //    - 1 byte of type indicator, n bytes of name
-        uint8_t typeind = *datap++;
-        if ( datalen > 256U ) {
-            comp_error( comp, "Variable name too long" );
-            return false;
-        }
-        uint8_t namelen = (uint8_t)( datalen - UINT16_C(1) );
-        if ( namelen ) {
-            memcpy( name, datap, namelen );
-        }
-        name[ namelen ] = '\0';
-        vartype |= typeind & VARTYPEM_BASE;
+        vartype |= datap[0] & VARTYPEM_BASE;
+        name = comp_node_name( comp, varnode, 1U );
     } else {
         comp_error( comp, "Internal error (base variable reference expected)" );
         return false;
@@ -813,22 +818,17 @@ NOSUB:      comp_error( comp, "Internal error (array subscript expected)" );
     //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
     uint16_t datalen  = varnode->datalen;
     const uint8_t* datap = varnode->data;
-    static char name[256]; name[0] = '\0';
+    const char* name = 0;
     uint8_t vartype = arraysubnode != NODE_NONE ? VARTYPEF_ARRAY : UINT8_C(0);
     if ( varnode->type == basetype ) {
-        if ( datalen < UINT16_C(2) || datalen >= UINT16_C(256) ) {
+        if ( datalen < UINT16_C(2) ) {
             comp_error( comp, "Internal error (fault in variable reference)" );
             return false;
         }
         // data:
         //    - 1 byte of type indicator, n bytes of name
-        uint8_t typeind = *datap++;
-        uint8_t namelen = datalen - UINT16_C(1);
-        if ( namelen ) {
-            memcpy( name, datap, namelen );
-        }
-        name[ namelen ] = '\0';
-        vartype |= typeind & VARTYPEM_BASE;
+        vartype |= datap[0] & VARTYPEM_BASE;
+        name = comp_node_name( comp, varnode, 1U );
     } else {
         comp_error( comp, "Internal error (base variable reference expected)" );
         return false;
@@ -1176,19 +1176,25 @@ UNEXP:  comp_error( comp, "Internal error (unexpected node type)" );
         return false;
     }
     uint16_t datalen = namenode->datalen;
-    if ( datalen < 2U || datalen >= 256U ) {
+    if ( datalen < 2U || datalen == UINT16_MAX ) {
         goto UNEXP;
     }
     const uint8_t* datap = namenode->data;
-    static char name[257];
-    name[0] = datap[0] & VARTYPEM_BASE;
-    if ( is_array ) {
-        name[0] |= VARTYPEF_ARRAY;
+    // data is the type indicator, the name and a NUL terminator
+    uint8_t* data = (uint8_t*) malloc( (size_t) datalen + 1U );
+    if ( data == 0 ) {
+        out_of_memory( comp );
+        return false;
     }
-    memcpy( &name[1], &datap[1], datalen - 1U );
-    name[ 1U + ( datalen - 1U ) ] = '\0';
-    ++datalen;
-    if ( !comp_create_node( comp, pnode, NT_USRFNARG, UINT8_C(0), datalen, name ) || *pnode == NODE_NONE ) {
+    data[0] = datap[0] & VARTYPEM_BASE;
+    if ( is_array ) {
+        data[0] |= VARTYPEF_ARRAY;
+    }
+    memcpy( &data[1], &datap[1], datalen - 1U );
+    data[ datalen ] = '\0';
+    bool ok = comp_create_node( comp, pnode, NT_USRFNARG, UINT8_C(0), (uint16_t)( datalen + 1U ), data ) && *pnode != NODE_NONE;
+    free( data );
+    if ( !ok ) {
         out_of_memory( comp );
         return false;
     }
@@ -1367,14 +1373,11 @@ UNEXP:  comp_error( comp, "Internal error (unexpected name node)" );
         return false;
     }
     uint16_t datalen = fnname->datalen;
-    if ( datalen < 2U || datalen > 256U ) {
+    if ( datalen < 2U ) {
         goto UNEXP;
     }
     const uint8_t* datap = fnname->data;
     uint8_t functype = ( datap[0] & VARTYPEM_BASE ) | VARTYPEF_FUNC;
-    static char name[ 256U ];
-    memcpy( name, &datap[1], datalen - 1U );
-    name[ datalen - 1U ] = '\0';
 
     // get arguments
     node_t* fnarglist = NODE_NONE;
@@ -1408,7 +1411,8 @@ UNEXP:  comp_error( comp, "Internal error (unexpected name node)" );
 
     // create variable
     uint16_t varoffs = VAROFFS_NONE;
-    if ( !vmem_create_var( &comp->rt->varmem, functype, name, UINT8_C(0), 0, (uint8_t) numparams, params, &varoffs ) ||
+    // (the name is made only now, since parsing the body uses the name buffer)
+    if ( !vmem_create_var( &comp->rt->varmem, functype, comp_node_name( comp, fnname, 1U ), UINT8_C(0), 0, (uint8_t) numparams, params, &varoffs ) ||
         varoffs == VAROFFS_NONE ) {
         out_of_memory( comp );
         return false;
@@ -1461,14 +1465,12 @@ UNEXP:  comp_error( comp, "Internal error (unexpected name type)" );
     }
     uint16_t datalen  = fnname->datalen;
     const uint8_t* datap = fnname->data;
-    if ( datalen < 2U || datalen > 256U ) {
+    if ( datalen < 2U ) {
         goto UNEXP;
     }
     // data is type + name
     uint8_t functype = ( datap[0] & VARTYPEM_BASE ) | VARTYPEF_FUNC;
-    static char name[256];
-    memcpy( name, &datap[1], datalen - 1U );
-    name[ datalen - 1U ] = '\0';
+    const char* name = comp_node_name( comp, fnname, 1U );
 
     // lookup variable
     uint16_t varoffs = VAROFFS_NONE;
@@ -1477,16 +1479,10 @@ UNDEF:  comp_error( comp, "Undefined function" );
         return false;
     }
 
-    // read true variable offset from index
-    uint16_t varoffs2 = VEXTRACT16( &comp->rt->varmem, varoffs );
-    if ( varoffs2 == VAROFFS_NONE ) {
+    uint8_t ftype = 0, numargs = 0; uint16_t codeoffs = CODEOFFS_NONE;
+    if ( !vmem_get_func_info( &comp->rt->varmem, varoffs, &ftype, &numargs, &codeoffs ) ) {
         goto UNDEF;
     }
-
-    // <size.16> <type.8> <namelen.8> <name...> [ <numdims.8> <arraydims...> | <numargs> <argdesc...> ] <data...>
-    uint8_t  namelen = comp->rt->varmem.vars[ varoffs2 + 3U ];
-    uint16_t argoffs = varoffs2 + UINT16_C(4) + namelen;
-    uint8_t  numargs = comp->rt->varmem.vars[ argoffs++ ];
 
     // check argument count
     if ( numargs == UINT8_C(0) && exprlist == NODE_NONE ) {

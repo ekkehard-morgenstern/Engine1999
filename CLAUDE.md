@@ -15,7 +15,7 @@ Full documentation is in `docs/` — start with `docs/README.md`.
 The branch `feature/refactor-to-remove-some-limits` has completed the tokenizer refactor: `bastok.[ch]` now uses heap strings (`char**`),
 growable output buffers (`buf_t`) and bounded read buffers (`rbuf_t`); identifiers/literals may be up to 65535 bytes (2-byte length prefix in the token stream).
 All callers were converted and `make` builds cleanly; `basictest1`/`basictest2` run clean under valgrind.
-Remaining fixed limits (vars, code, variable *names* ≤ 255) are listed in `docs/refactoring.md`.
+The program store, the syntax tree and the variables are heap structures now; the remaining fixed limits (code/data segments, 16-bit variable numbers) are listed in `docs/refactoring.md`.
 
 ## Build
 
@@ -32,7 +32,7 @@ Remaining fixed limits (vars, code, variable *names* ≤ 255) are listed in `doc
 - Every header: GPL banner, `#pragma once` + classic `#ifndef X_H` guard, includes `stdtypes.h` (which defines `_POSIX_C_SOURCE 200112L` and pulls in the std headers).
 - Function naming is `<module>_<verb>`: `sdlscr_*`, `txtscr_*`, `comp_eat_*`, `cgen_gen_*`, `cgen_from_*`, `vmem_*`; tokenizer helpers come in `eat_/print_/emit_/read_` quadruples.
 - Booleans signal success; `bool` functions that can't continue report via the module's `report`/`halt` callbacks (`comp_error`, `rt->halt`, `vmem->halt`) — `halt` is `ATTR_NORETURN` and usually `longjmp`s.
-- All multi-byte values inside the tokenized program, syntax tree, variable memory and bytecode are **big endian**, read/written with explicit shifts (`EXTRACT16`, `VEXTRACT16`, `emit_*`/`read_*`), never by casting.
+- All multi-byte values inside the tokenized program, syntax tree node data and bytecode are **big endian**, read/written with explicit shifts (`EXTRACT16`, `VEXTRACT16`, `emit_*`/`read_*`), never by casting.
 - Section dividers in `.c`/`.h`: `// -- name ------…`.
 - Commit messages in this repo are terse ("Refactor WIP (bastok)", "Codegen WIP"); history carries little explanation, so keep `docs/` current instead.
 

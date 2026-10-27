@@ -394,13 +394,11 @@ static bool cc_base_var( compiler_t* comp, node_t* node, uint8_t* pvartype, uint
     if ( node == NODE_NONE ) {
         return cgen_bad_node( comp );
     }
-    if ( node->type != NT_NUMBASEVARREF || node->datalen < UINT16_C(2) || node->datalen > UINT16_C(256) ) {
+    if ( node->type != NT_NUMBASEVARREF || node->datalen < UINT16_C(2) ) {
         return cgen_unexpected_node( comp );
     }
     uint8_t vartype = node->data[0] & VARTYPEM_BASE;
-    static char name[256];
-    memcpy( name, &node->data[1], node->datalen - 1U );
-    name[ node->datalen - 1U ] = '\0';
+    const char* name = comp_node_name( comp, node, 1U );
     uint16_t varoffs = VAROFFS_NONE;
     if ( !vmem_lookup_var( &comp->rt->varmem, vartype, name, &varoffs ) || varoffs == VAROFFS_NONE ) {
         varoffs = VAROFFS_NONE;

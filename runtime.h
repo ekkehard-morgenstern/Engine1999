@@ -50,6 +50,6 @@ typedef struct _runtime_t {
 } runtime_t;
 
 void init_runtime( runtime_t* rt );
-void cleanup_runtime( runtime_t* rt );     // frees the code generator's tables; call before init_runtime on a reused runtime
+void cleanup_runtime( runtime_t* rt );     // frees the variables and the code generator's tables; call before init_runtime on a reused runtime
 
 #endif

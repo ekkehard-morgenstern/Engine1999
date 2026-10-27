@@ -34,7 +34,7 @@ All modules except `sdl*`/`*screen` use only the C library, so the BASIC system 
 
 ## Conventions that cross modules
 
-- Everything serialized (tokens, vars, code) is big endian with 16-bit offsets, so each arena is capped at 64 KiB (see [refactoring.md](refactoring.md#limits)).
+- Everything serialized (tokens, code, data) is big endian with 16-bit offsets, so the code and data segments are capped at 64 KiB (see [refactoring.md](refactoring.md#limits)); the program store, the syntax tree and the variables are heap structures.
 - Offsets `0xFFFF` mean "none" (`VAROFFS_NONE`, `CODEOFFS_NONE`…); syntax tree nodes and program lines are plain pointers (`NODE_NONE` = null).
-- Large structs (`program_t`, `compiler_t`, `varmem_t`, `codegen_t`) are 64–128+ KiB: declare them `static` or heap-allocate, never on the stack
+- Large structs (`compiler_t`, `codegen_t`, `runtime_t`) are 64–128+ KiB: declare them `static` or heap-allocate, never on the stack
   (the test programs use `static program_t pgm;`).

@@ -444,6 +444,51 @@ static void show( const char* label, const char* text ) {
     printf( "\"\n" );
 }
 
+// cases that are built at run time, because they are too big to write down: the limits that the variable
+// store used to have (name length 255, 1024 variables, 65535 array elements in total) are gone
+static bool run_dynamic_cases( buf_t* tokbuf, size_t* pnum, size_t* pfailed ) {
+    // 1. a variable with a 3000 character name
+    char* longname = (char*) malloc( 3001U );
+    char* src = (char*) malloc( 8000U );
+    char* src2 = (char*) malloc( 200000U );
+    if ( longname == 0 || src == 0 || src2 == 0 ) {
+        return false;
+    }
+    memset( longname, 'N', 3000U );
+    longname[3000] = '\0';
+    snprintf( src, 8000U, "%s=5\nPRINT %s*2", longname, longname );
+    testcase_t tc1 = { "variable with a 3000 character name", src, "10\n", 0 };
+    // 2. 2000 variables
+    size_t n = 0;
+    for ( int i=0; i < 2000; ++i ) {
+        char nm[8] = { 'V', (char)( 'A' + ( i / 17576 ) % 26 ), (char)( 'A' + ( i / 676 ) % 26 ), (char)( 'A' + ( i / 26 ) % 26 ),
+            (char)( 'A' + i % 26 ), '\0' };
+        n += (size_t) snprintf( src2 + n, 200000U - n, "%s%s=%d", i ? ":" : "", nm, i );
+    }
+    n += (size_t) snprintf( src2 + n, 200000U - n, "\nPRINT VAAAA;VABOC;VACYX" );
+    testcase_t tc2 = { "2000 variables", src2, "010421999\n", 0 };
+    // 3. the remaining limit: a dimension is a 16-bit value
+    testcase_t tc3 = { "one dimension is limited to 65535", "DIM A(70000)", "? Dimension out of range\n", 0 };
+    // 4. an array with several big dimensions
+    testcase_t tc4 = { "array of 300 x 300 elements", "DIM A(300,300):A(299,299)=3:A(1,0)=2:A(0,1)=5:PRINT A(299,299);A(1,0);A(0,1)", "325\n", 0 };
+    const testcase_t* dyn[] = { &tc1, &tc2, &tc3, &tc4 };
+    for ( size_t i=0; i < sizeof(dyn) / sizeof(dyn[0]); ++i ) {
+        ++*pnum;
+        if ( run_case( dyn[i], tokbuf ) ) {
+            printf( "PASS  %s\n", dyn[i]->name );
+        } else {
+            printf( "FAIL  %s\n", dyn[i]->name );
+            show( "expected", dyn[i]->expected );
+            show( "got     ", outbuf );
+            ++*pfailed;
+        }
+    }
+    free( longname );
+    free( src );
+    free( src2 );
+    return true;
+}
+
 int main( int argc, char** argv ) {
     verbose = argc > 1 && strcmp( argv[1], "-v" ) == 0;
     buf_t* tokbuf = create_buffer();
@@ -460,6 +505,9 @@ int main( int argc, char** argv ) {
             show( "got     ", outbuf );
             ++failed;
         }
+    }
+    if ( !run_dynamic_cases( tokbuf, &numcases, &failed ) ) {
+        ++failed;
     }
     cleanup_compiler( &comp );
     cleanup_runtime( &rt );

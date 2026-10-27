@@ -261,6 +261,7 @@ int main( int argc, char** argv ) {
     }
 
     cleanup_compiler( &comp );
+    cleanup_runtime( &rt );
     free_program( &pgm );
     free( buf );
     delete_buffer( tokbuf );

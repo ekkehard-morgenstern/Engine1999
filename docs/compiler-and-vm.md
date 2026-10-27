@@ -25,13 +25,11 @@ literals, user/system function names and calls, the expression-level nodes (`NT_
 
 ## Variable memory (`vars.[ch]`)
 
-`varmem_t`: 64 KiB variable area + 64 KiB string area, max 1024 variables. The first 2 KiB of variable memory is an index of 16-bit offsets (deleted = `0xFFFF`); variables are laid out sequentially; the area is compacted when full;
-strings live in a separate area that is also compacted on exhaustion.
+Every variable is its own heap allocation (`var_t`: type, name, value or array elements or function parameter list), found through a growable table of pointers by its **variable number** (`uint16_t`, `VAROFFS_NONE` = 0xFFFF reserved, so at most 65535 variables; numbers of deleted variables are reused) and through a hash table by (type, name). The variable number is what the syntax tree and the instructions (`RRNV`, `WRNV`, `CALF`, …) carry, so they stay valid while the variable exists. Strings, names and arrays are heap allocated; there are no fixed areas, no compaction, and no limit on names, strings (the VM still limits them to 65535 bytes) or the number of array elements other than `MAXELEMS` and available memory. One array dimension is still a 16-bit value (≤ 65535), at most `MAXDIM` = 6 dimensions, `MAXPARAM` = 8 function parameters.
 
-Variable record: `size.16 type.8 namelen.8 name… [numdims.8 (dim.16 slice.16)… | numargs argdesc…] data…`.
-Type byte: bit 5 = user function, bit 4 = array, low bits = element type (`0` float64, `1` int16, `2` string = 16-bit offset + 16-bit length, `3` label = 16-bit code offset).
+Type byte: bit 5 = user function, bit 4 = array, low bits = element type (`0` float64, `1` int16, `2` string = pointer + length, `3` label = 16-bit code offset). A and A% and A$ are three variables; so are A and A(…). New variables are zero / the empty string / `CODEOFFS_NONE` (labels and functions).
 
-API: `vmem_create_var / lookup_var / delete_var / get_var / set_var`, `vmem_alloc_vars / alloc_strs`. `testcomp1.c` is a randomized stress test of this subsystem.
+API: `init_varmem` / `cleanup_varmem` (frees every variable), `vmem_var( vmem, number )` (the `var_t*`), `vmem_create_var / lookup_var / delete_var / get_var / set_var`, `vmem_get_func_info / get_func_param`. `vmem_lookup_var` returns true with `VAROFFS_NONE` when the variable doesn't exist. `vmem_get_var` of a string returns a pointer into the variable (valid until it is modified), `vmem_set_var` copies the string. Arrays are indexed row-major with one index per dimension, each `0 .. dim-1`. Errors (`Variable already exists`, `Array too large`, `Too many variables`, `Out of memory`) go through the `report` / `halt` callbacks. `testcomp1.c` is a randomized stress test of this subsystem (create / delete / read / write against a shadow model).
 
 ## Code generator (`codegen.[ch]`)
 

@@ -60,8 +60,8 @@ bool cgen_from_dimstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
 
 static bool cd_ensure_param_vars( compiler_t* comp, uint16_t funcoffs, uint8_t numparams ) {
     for ( uint8_t i=0; i < numparams; ++i ) {
-        uint8_t ptype = 0; char name[256]; uint16_t poffs = VAROFFS_NONE;
-        if ( !vmem_get_func_param( &comp->rt->varmem, funcoffs, i, &ptype, name ) ) {
+        uint8_t ptype = 0; const char* name = 0; uint16_t poffs = VAROFFS_NONE;
+        if ( !vmem_get_func_param( &comp->rt->varmem, funcoffs, i, &ptype, &name ) ) {
             comp_error( comp, "Internal error (bad function parameter)" );
             return false;
         }

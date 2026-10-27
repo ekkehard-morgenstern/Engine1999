@@ -157,7 +157,7 @@ typedef struct _keepvar_t {
     keepval_t*  cells;
     uint8_t     numdims;
     uint16_t    dims[MAXDIM];
-    uint16_t    slices[MAXDIM];
+    size_t      slices[MAXDIM];
     uint8_t     numparams;
     usrparam_t  params[MAXPARAM];
     uint16_t    varoffs;
@@ -198,17 +198,10 @@ static void init_keepvar( keepvar_t* var ) {
             var->dims[i] = UINT16_C(2) + (uint16_t) getrand( maxmax[i] - UINT16_C(2) );
         }
         for ( uint8_t i=UINT8_C(0); i < var->numdims; ++i ) {
-            // compute slice size
-            uint16_t slice = UINT16_C(0);
+            // compute slice size: the number of cells for one step in this dimension (row major)
+            size_t slice = 1U;
             for ( uint8_t j=i+UINT8_C(1); j < var->numdims; ++j ) {
-                if ( j == UINT8_C(0) ) {
-                    slice += var->dims[j];
-                } else {
-                    slice *= var->dims[j];
-                }
-            }
-            if ( slice == UINT16_C(0) ) {
-                slice = UINT16_C(1);    // final dimension
+                slice *= var->dims[j];
             }
             var->slices[i] = slice;
         }
@@ -270,7 +263,7 @@ static void cleanup_keepvar( keepvar_t* var ) {
     free( var->name );
     if ( var->vartype & VARTYPEF_ARRAY ) {
         if ( ( var->vartype & VARTYPEM_BASE ) == VARTYPEV_STR ) {
-            for ( uint16_t i=0; i < var->numcells; ++i ) {
+            for ( size_t i=0; i < var->numcells; ++i ) {
                 if ( var->cells[i].sval ) {
                     free( var->cells[i].sval );
                 }
@@ -378,7 +371,7 @@ static tristate_t test_keepvar( varmem_t* vmem, keepvar_t* var ) {
     // check result against stored (kept) content
     const keepval_t* pval = 0;
     if ( var->vartype & VARTYPEF_ARRAY ) {
-        uint16_t offs = UINT16_C(0);
+        size_t offs = 0U;
         for ( uint8_t i=0; i < var->numdims; ++i ) {
             // add N x slice to the offset
             offs += diminx[i] * var->slices[i];
@@ -397,7 +390,7 @@ static tristate_t test_keepvar( varmem_t* vmem, keepvar_t* var ) {
     if ( pval == 0 ) {
         return tri_undecided;    // function variable: not checked
     }
-    const char* compstr = 0; char* tmp = 0; tristate_t tri;
+    const char* compstr = 0;
     switch ( var->vartype & VARTYPEM_BASE ) {
         case VARTYPEV_FLOAT:
             if ( value.dblval != pval->dval ) {
@@ -414,38 +407,20 @@ static tristate_t test_keepvar( varmem_t* vmem, keepvar_t* var ) {
             }
             return true;
         case VARTYPEV_STR:
-            if ( value.stroffs == STROFFS_NONE ) {
-                compstr = "";
-            } else {
-                tmp = (char*) malloc( value.strsize + 1U );
-                if ( tmp == 0 ) {
-                    fprintf( stderr, "? Out of memory\n" );
-                    dump_keepvar( var );
-                    return tri_false;
-                }
-                if ( ( (uint32_t) value.stroffs ) + ( (uint32_t) value.strsize ) > vmem->strssize ) {
-                    fprintf( stderr, "? Variable error, offset/size out of bounds (%" PRIu16 "/%" PRIu16 "//%" PRIu32 ")\n",
-                        value.stroffs, value.strsize, vmem->strssize );
-                    dump_keepvar( var );
-                    return tri_false;
-                }
-                if ( value.strsize ) {
-                    memcpy( tmp, &vmem->strs[ value.stroffs ], value.strsize );
-                }
-                tmp[ value.strsize ] = '\0';
-                compstr = tmp;
+            // the value points into the variable; NULL stands for the empty string
+            compstr = value.strptr ? value.strptr : "";
+            if ( value.strptr && strlen( value.strptr ) != value.strlen ) {
+                fprintf( stderr, "? Variable error, string length is %zu but the text has %zu bytes\n", value.strlen,
+                    strlen( value.strptr ) );
+                dump_keepvar( var );
+                return tri_false;
             }
             if ( strcmp( compstr, pval->sval ? pval->sval : "" ) != 0 ) {
                 fprintf( stderr, "? Variable error, expected '%s' but got '%s'\n", pval->sval, compstr );
                 dump_keepvar( var );
-                tri = tri_false;
-            } else {
-                tri = tri_true;
+                return tri_false;
             }
-            if ( compstr == tmp ) {
-                free( tmp );
-            }
-            return tri;
+            return tri_true;
         case VARTYPEV_LABEL:
             if ( value.lbloffs != (uint16_t) pval->ival ) {
                 fprintf( stderr, "? Variable error, expected %" PRIu16 " but got %" PRIu16 "\n", value.lbloffs,
@@ -477,7 +452,7 @@ static tristate_t modify_keepvar( varmem_t* vmem, keepvar_t* var ) {
     // compute cell address to be modified
     keepval_t* pval = 0;
     if ( var->vartype & VARTYPEF_ARRAY ) {
-        uint16_t offs = UINT16_C(0);
+        size_t offs = 0U;
         for ( uint8_t i=0; i < var->numdims; ++i ) {
             // add N x slice to the offset
             offs += diminx[i] * var->slices[i];
@@ -519,24 +494,9 @@ static tristate_t modify_keepvar( varmem_t* vmem, keepvar_t* var ) {
                     return tri_false;
                 }
             }
-            if ( len == UINT8_C(0) ) {
-                // special case empty string:
-                value.stroffs = STROFFS_NONE;
-                value.strsize = len;
-            } else {
-                value.stroffs = STROFFS_NONE;
-                value.strsize = UINT8_C(0);
-                ti0 = sdlutil_getnsec(0);
-                if ( vmem_alloc_strs( vmem, len, &value.stroffs ) && value.stroffs != STROFFS_NONE ) {
-                    value.strsize = len;
-                } else {
-                    fprintf( stderr, "vmem_alloc_strs() failed\n" );
-                    return tri_false;
-                }
-                memcpy( &vmem->strs[ value.stroffs ], pval->sval, value.strsize );
-                ti1 = sdlutil_getnsec(0);
-                var->cumul_nsec_write += ti1 - ti0;
-            }
+            // the variable makes its own copy of the string; the empty string is NULL and 0
+            value.strptr = pval->sval;
+            value.strlen = pval->sval ? strlen( pval->sval ) : 0U;
             break;
         case VARTYPEV_LABEL:
             value.lbloffs = pval->ival = CODEOFFS_NONE;
@@ -677,7 +637,7 @@ int main( int argc, char** argv ) {
         return 1;
     }
 
-    varmem_t vmem;
+    static varmem_t vmem;
     init_varmem( &vmem );
     vmem.halt = fatal_error;
     vmem.report = report_error;
@@ -691,6 +651,11 @@ int main( int argc, char** argv ) {
     }
 
     output_stats();
+
+    for ( int i=0; i < NKEEPVARS; ++i ) {
+        cleanup_keepvar( &keep.kv[i] );
+    }
+    cleanup_varmem( &vmem );
 
     return EXIT_SUCCESS;
 }

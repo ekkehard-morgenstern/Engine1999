@@ -96,6 +96,8 @@ typedef struct _compiler_t {
     uint8_t         currtok;
     char*           param;          // heap allocated text of the current literal/identifier token
     double          number;         // value of the current numeric literal token
+    char*           name;           // buffer for comp_node_name()
+    size_t          namealloc;
     comp_ctxstk_t*  ctxstk;
     void*           userdata;
     void            (*report)( struct _compiler_t*, void*, const char* );
@@ -108,6 +110,8 @@ typedef struct _compiler_t {
 
 void init_compiler( compiler_t* comp, struct _runtime_t* rt, program_t* pgm, bool keepmemory );
 void cleanup_compiler( compiler_t* comp );     // frees param and the context stack; call before init_compiler on a reused compiler
+// returns the name stored in a node (after <skip> bytes of data) as a NUL-terminated string; valid until the next call
+const char* comp_node_name( compiler_t* comp, const node_t* node, size_t skip );
 void comp_set_tokens( compiler_t* comp, const uint8_t* tokens, size_t size );
 void comp_error( compiler_t* comp, const char* text ) ATTR_NORETURN;
 void comp_push_context( compiler_t* comp );

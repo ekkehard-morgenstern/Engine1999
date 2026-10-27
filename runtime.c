@@ -85,4 +85,5 @@ void init_runtime( runtime_t* rt ) {
 
 void cleanup_runtime( runtime_t* rt ) {
     cleanup_codegen( &rt->codegen );
+    cleanup_varmem( &rt->varmem );
 }

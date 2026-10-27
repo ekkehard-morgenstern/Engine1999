@@ -309,13 +309,11 @@ static bool vm_get_value( vm_t* vm, uint16_t varoffs, uint8_t vartype, uint8_t n
             pval->num = (double) value.intval;
             return true;
         case VARTYPEV_STR:
-            if ( value.strsize != 0 && value.stroffs != STROFFS_NONE &&
-                 (uint32_t) value.stroffs + value.strsize > vm->vmem->strssize ) {
-                return vm_error( vm, "Bad string variable" );
+            if ( value.strlen > UINT16_MAX ) {
+                return vm_error( vm, "String too long" );
             }
             pval->isstr = true;
-            pval->str = vm_new_string( vm, value.strsize && value.stroffs != STROFFS_NONE ?
-                (const char*) &vm->vmem->strs[ value.stroffs ] : "", value.strsize && value.stroffs != STROFFS_NONE ? value.strsize : 0U );
+            pval->str = vm_new_string( vm, value.strptr ? value.strptr : "", value.strptr ? value.strlen : 0U );
             return pval->str != 0;
         default:
             break;
@@ -346,18 +344,18 @@ static bool vm_set_value( vm_t* vm, uint16_t varoffs, uint8_t vartype, uint8_t n
             break;
         case VARTYPEV_STR: {
             size_t len = strlen( val.str );
-            uint16_t offs = STROFFS_NONE;
-            if ( len > UINT16_MAX || ( len && !vmem_alloc_strs( vm->vmem, (uint16_t) len, &offs ) ) ) {
+            if ( len > UINT16_MAX ) {
                 free( val.str );
-                return vm_error( vm, len > UINT16_MAX ? "String too long" : "Out of string space" );
+                return vm_error( vm, "String too long" );
             }
-            if ( len ) {
-                memcpy( &vm->vmem->strs[ offs ], val.str, len );
+            value.strptr = val.str;     // the variable makes its own copy
+            value.strlen = len;
+            if ( !vmem_set_var( vm->vmem, varoffs, vartype, numdims, diminx, &value ) ) {
+                free( val.str );
+                return vm_error( vm, numdims ? "Subscript out of range" : "Undefined variable" );
             }
             free( val.str );
-            value.stroffs = len ? offs : STROFFS_NONE;
-            value.strsize = (uint16_t) len;
-            break;
+            return true;
         }
         default:
             return vm_error( vm, "Unsupported variable type" );
@@ -482,8 +480,8 @@ static bool vm_call_function( vm_t* vm, uint16_t funcoffs, uint32_t retaddr ) {
     vm_context_t* ctx = &vm->ctxs[ vm->nctx ];
     ctx->numsaved = 0;
     for ( uint8_t i=0; i < numparams; ++i ) {
-        uint8_t ptype = 0; char name[256]; uint16_t poffs = VAROFFS_NONE;
-        if ( !vmem_get_func_param( vm->vmem, funcoffs, i, &ptype, name ) ) {
+        uint8_t ptype = 0; const char* name = 0; uint16_t poffs = VAROFFS_NONE;
+        if ( !vmem_get_func_param( vm->vmem, funcoffs, i, &ptype, &name ) ) {
             vm_error( vm, "Bad function parameter" );
             goto FAILCTX;
         }
@@ -762,6 +760,24 @@ static bool vm_save_program( vm_t* vm ) {
     return ok;
 }
 
+// FRE: the memory that is available for allocation, in bytes (Linux: MemAvailable from /proc/meminfo, else 0)
+static double vm_free_memory( void ) {
+    FILE* f = fopen( "/proc/meminfo", "r" );
+    if ( f == 0 ) {
+        return 0.0;
+    }
+    char line[128]; double result = 0.0;
+    while ( fgets( line, sizeof(line), f ) ) {
+        unsigned long long kb = 0;
+        if ( sscanf( line, "MemAvailable: %llu kB", &kb ) == 1 ) {
+            result = (double) kb * 1024.0;
+            break;
+        }
+    }
+    fclose( f );
+    return result;
+}
+
 static bool vm_system_function( vm_t* vm, uint16_t opcode ) {
     double num; char buf[40];
     switch ( opcode ) {
@@ -780,11 +796,11 @@ static bool vm_system_function( vm_t* vm, uint16_t opcode ) {
             return s && vm_push_string( vm, s );
         }
         case INS_FRE:
-            // the argument is ignored; the result is the free variable and string space
+            // the argument is ignored; the result is the available physical memory
             if ( !vm_dpop_num( vm, &num ) ) {
                 return false;
             }
-            return vm_dpush_num( vm, (double)( ( VARSSIZE_MAX - vm->vmem->varssize ) + ( STRSSIZE_MAX - vm->vmem->strssize ) ) );
+            return vm_dpush_num( vm, vm_free_memory() );
         case INS_STRS: {
             if ( !vm_dpop_num( vm, &num ) ) {
                 return false;

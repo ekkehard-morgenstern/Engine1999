@@ -58,12 +58,12 @@ Verified by hand: tokenize/detokenize round trip of ordinary lines, 3000-byte id
 | Line numbers | 0..999999 (24 bit) | `baslin.h` |
 | Line length | 16-bit | `linehdr_t` |
 | Identifier / literal length | 65535 (2-byte prefix); was 255 | `bastok.c` |
-| Variable / label name length | 255 (`namelen.8`) — a 256+ byte `LABEL` name ends in "Internal error (invalid parameter to vmem_create_var())" | `vars.c` |
+| Variable / label name length | none (names are heap strings, up to the 65535 byte node data / identifier limit) | `vars.c`, `bascomp.c` (`comp_node_name`) |
 | Whole tokenized line | 65535 bytes | `linehdr_t.length` |
 | Syntax tree | none (heap nodes, unlimited branches); node data ≤ 65535 bytes | `bascomp.h` `node_t` |
 | Code / data segments | 64 KiB each | `codegen.h` |
-| Variable area / string area | 64 KiB each, ≤ 1024 variables | `vars.h` |
+| Variables | heap; ≤ 65535 variables (16-bit variable number), one array dimension ≤ 65535 | `vars.h` |
 | Array dimensions / UDF params | 6 / 8 | `MAXDIM`, `MAXPARAM` |
 | `engine1999` input line | 256 bytes | `engine1999.c` `char buf[256]` (not part of this refactor) |
 
-Most of these follow from using big-endian 16-bit offsets everywhere. Removing them for real means changing offset widths in the program store, tree, variable memory and ISA — a much larger change than the tokenizer work in this branch.
+The remaining ones follow from using big-endian 16-bit offsets in the code/data segments and the ISA; removing them means changing the instruction encoding. (The program store, the syntax tree and the variable memory no longer have such limits.)
