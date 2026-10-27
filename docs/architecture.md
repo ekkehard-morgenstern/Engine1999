@@ -24,7 +24,7 @@ All modules except `sdl*`/`*screen` use only the C library, so the BASIC system 
 2. **Store** (`baspgm.c`, `baslin.c`): `enter_line()` inserts/replaces/deletes the line in `program_t`
    (a doubly linked list of heap-allocated `line_t` nodes linked by pointers). A line without number runs in *direct mode* (callback).
 3. **Parse** (`bascomp.c`): recursive-descent over the stored tokens (`comp_eat_*`, one function per grammar rule in `bascomp.ebnf`)
-   builds a syntax tree in `compiler_t.tree` (a 64 KiB byte arena, nodes addressed by 16-bit offset). Some semantic work happens during parsing
+   builds a syntax tree from heap-allocated `node_t` nodes (each with a growable branch array; all nodes are chained in `compiler_t.nodes` and freed by `cleanup_compiler()`). Some semantic work happens during parsing
    ("immediate processing" in `nodetype.h`: constant dimension evaluation, variable lookup/creation).
 4. **Generate** (`codegen.c`): `cgen_from_*` walk the tree and emit instructions with `cgen_gen_*` into `codegen_t.code` / `.data`.
 5. **Run**: a stack VM defined in `instset.h` (data stack of doubles, return stack of 16-bit addresses). **The VM executor does not exist yet** — `runtime_t` only bundles `varmem_t` + `codegen_t`.
@@ -34,7 +34,7 @@ All modules except `sdl*`/`*screen` use only the C library, so the BASIC system 
 
 ## Conventions that cross modules
 
-- Everything serialized (tokens, tree, vars, code) is big endian with 16-bit offsets, so each arena is capped at 64 KiB (see [refactoring.md](refactoring.md#limits)).
-- Offsets `0xFFFF` mean "none" (`LINEOFFS_NONE`, `NODEOFFS_NONE`, `VAROFFS_NONE`, `CODEOFFS_NONE`…).
+- Everything serialized (tokens, vars, code) is big endian with 16-bit offsets, so each arena is capped at 64 KiB (see [refactoring.md](refactoring.md#limits)).
+- Offsets `0xFFFF` mean "none" (`VAROFFS_NONE`, `CODEOFFS_NONE`…); syntax tree nodes and program lines are plain pointers (`NODE_NONE` = null).
 - Large structs (`program_t`, `compiler_t`, `varmem_t`, `codegen_t`) are 64–128+ KiB: declare them `static` or heap-allocate, never on the stack
   (the test programs use `static program_t pgm;`).

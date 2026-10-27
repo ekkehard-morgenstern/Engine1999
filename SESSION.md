@@ -21,6 +21,8 @@ Maintained by Claude; updated whenever work in a session changes something. Last
 
 - Removed the `basintp` module (interpreter stub; the BASIC system compiles, not interprets): files, makefile rules/object/header, docs, CLAUDE.md table row. Clean rebuild OK.
 
+- Syntax tree (`bascomp`) converted from the 64 KiB byte arena to heap `node_t` nodes with a growable branch array (`NODE_NONE` = null, optional branches may be `NODE_NONE`); `compiler_t.nodes` chains all nodes, freed by `cleanup_compiler()`/`comp_free_tree()`. `codegen.c/h`, `basictest2.c` converted. Fixed latent bug: base var-ref node data is `<type> <name>` (no length byte); old code read the first name char as the length. `cgen_from_substrassign` datalen check read the wrong field (now `node->datalen`). Verified: basictest2 tree dumps identical to the previous build on a varied input; valgrind clean. codegen is not exercised by any test program (compile-only verified).
+
 ## Open / next steps
-- Remaining limits not touched: 64 KiB tree/code/data/var memories, variable names ≤ 255 (`vars.c`), `engine1999` 256-byte input line, `codegen` coverage (see `docs/compiler-and-vm.md`).
+- Remaining limits not touched: 64 KiB code/data/var memories, variable names ≤ 255 (`vars.c`), `engine1999` 256-byte input line, `codegen` coverage (see `docs/compiler-and-vm.md`).
 - No automated tests exist; consider adding a round-trip test program if desired.

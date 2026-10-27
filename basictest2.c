@@ -120,36 +120,33 @@ typedef struct _printnodedata_t {
     int indent;
 } printnodedata_t;
 
-static void printnode( uint16_t nodeoffs, int indent );
+static void printnode( node_t* node, int indent );
 
-static bool printbranch( void* userdata, uint16_t nodeoffs ) {
+static bool printbranch( void* userdata, node_t* node ) {
     printnodedata_t* data = (printnodedata_t*) userdata;
-    printnode( nodeoffs, data->indent );
+    printnode( node, data->indent );
     return true;
 }
 
-static void printnode( uint16_t nodeoffs, int indent ) {
-    if ( nodeoffs == NODEOFFS_NONE ) {
+static void printnode( node_t* node, int indent ) {
+    if ( node == NODE_NONE ) {
         return;
     }
-    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
-    uint8_t  nodetype = comp.tree[ nodeoffs ];
-    uint16_t datalen  = EXTRACT16( &comp, nodeoffs + 2U );
-    uint16_t dataoffs = nodeoffs + UINT16_C(8);
+    uint8_t  nodetype = node->type;
+    uint16_t datalen  = node->datalen;
     printf( "%-*.*s" CYA "%s" NRM "\n", indent, indent, "", nodename( nodetype ) );
     if ( datalen ) {
-        dumpdata( &comp.tree[ dataoffs ], datalen, indent + 2 );
+        dumpdata( node->data, datalen, indent + 2 );
     }
-    uint8_t numbranches = comp.tree[ nodeoffs + 1U ];
-    if ( numbranches ) {
+    if ( node->numbranches ) {
         printnodedata_t printdata; printdata.indent = indent + 2;
-        comp_node_iter_branches( &comp, nodeoffs, &printdata, printbranch );
+        comp_node_iter_branches( &comp, node, &printdata, printbranch );
     }
 }
 
 static void printtree( void ) {
-    uint16_t rootnode = comp.syntree;
-    if ( rootnode != NODEOFFS_NONE ) {
+    node_t* rootnode = comp.syntree;
+    if ( rootnode != NODE_NONE ) {
         printnode( rootnode, 0 );
     } else {
         printf( "no syntax tree\n" );

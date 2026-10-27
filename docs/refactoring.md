@@ -60,7 +60,7 @@ Verified by hand: tokenize/detokenize round trip of ordinary lines, 3000-byte id
 | Identifier / literal length | 65535 (2-byte prefix); was 255 | `bastok.c` |
 | Variable / label name length | 255 (`namelen.8`) — a 256+ byte `LABEL` name ends in "Internal error (invalid parameter to vmem_create_var())" | `vars.c` |
 | Whole tokenized line | 65535 bytes | `linehdr_t.length` |
-| Syntax tree | 65535 bytes | `bascomp.h` `TREESIZE_MAX` |
+| Syntax tree | none (heap nodes, unlimited branches); node data ≤ 65535 bytes | `bascomp.h` `node_t` |
 | Code / data segments | 64 KiB each | `codegen.h` |
 | Variable area / string area | 64 KiB each, ≤ 1024 variables | `vars.h` |
 | Array dimensions / UDF params | 6 / 8 | `MAXDIM`, `MAXPARAM` |

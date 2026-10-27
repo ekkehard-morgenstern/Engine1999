@@ -15,7 +15,7 @@ Full documentation is in `docs/` — start with `docs/README.md`.
 The branch `feature/refactor-to-remove-some-limits` has completed the tokenizer refactor: `bastok.[ch]` now uses heap strings (`char**`),
 growable output buffers (`buf_t`) and bounded read buffers (`rbuf_t`); identifiers/literals may be up to 65535 bytes (2-byte length prefix in the token stream).
 All callers were converted and `make` builds cleanly; `basictest1`/`basictest2` run clean under valgrind.
-Remaining fixed limits (tree, vars, code, variable *names* ≤ 255) are listed in `docs/refactoring.md`.
+Remaining fixed limits (vars, code, variable *names* ≤ 255) are listed in `docs/refactoring.md`.
 
 ## Build
 

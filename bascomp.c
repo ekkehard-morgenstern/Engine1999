@@ -35,7 +35,6 @@ void init_compiler( compiler_t* comp, struct _runtime_t* rt, program_t* pgm, boo
     comp->param    = 0;
     comp->number   = 0.0;
     comp->currtok  = TOK_NONE;
-    comp->treesize = UINT16_C(0);
     comp->ctxstk   = 0;
     // CAUTION: Set the "keepmemory" flag only if you know what you're doing!
     if ( keepmemory ) {
@@ -44,8 +43,8 @@ void init_compiler( compiler_t* comp, struct _runtime_t* rt, program_t* pgm, boo
     comp->report   = 0;
     comp->halt     = 0;
     comp->userdata = 0;
-    comp->treesize = UINT16_C(0);
-    comp->syntree  = NODEOFFS_NONE;
+    comp->nodes    = 0;
+    comp->syntree  = NODE_NONE;
 }
 
 void cleanup_compiler( compiler_t* comp ) {
@@ -57,6 +56,7 @@ void cleanup_compiler( compiler_t* comp ) {
     }
     free( comp->param );
     comp->param = 0;
+    comp_free_tree( comp );
 }
 
 void comp_set_tokens( compiler_t* comp, const uint8_t* tokens, size_t size ) {
@@ -178,105 +178,85 @@ void comp_pop_context( compiler_t* comp ) {
     free( ctx );
 }
 
-bool comp_alloc_tree( compiler_t* comp, uint16_t size, uint16_t* poffs ) {
-    if ( size > TREESIZE_MAX - comp->treesize ) {
-        return false;
+void comp_free_tree( compiler_t* comp ) {
+    node_t* node = comp->nodes;
+    while ( node ) {
+        node_t* next = node->chain;
+        free( node->branches );
+        free( node );
+        node = next;
     }
-    *poffs = (uint16_t) comp->treesize;
-    comp->treesize += size;
-    return true;
+    comp->nodes = 0;
+    comp->syntree = NODE_NONE;
 }
 
-bool comp_create_node( compiler_t* comp, uint16_t* pnodeoffs, uint8_t nodetype, uint8_t numbranches, uint16_t datalen,
+bool comp_create_node( compiler_t* comp, node_t** pnode, uint8_t nodetype, uint8_t numbranches, uint16_t datalen,
     const void* pdata, ... ) {
-    if ( comp == 0 || pnodeoffs == 0 || nodetype == NT_UNKNOWN || ( datalen != UINT16_C(0) && pdata == 0 ) ) {
+    if ( comp == 0 || pnode == 0 || nodetype == NT_UNKNOWN || ( datalen != UINT16_C(0) && pdata == 0 ) ) {
         return false;
     }
-    uint16_t size = NODEHDR_SIZE + datalen + BRANCHENT_SIZE * numbranches;
-    uint16_t nodepos = NODEOFFS_NONE;
-    if ( !comp_alloc_tree( comp, size, &nodepos ) || nodepos == NODEOFFS_NONE ) {
+    node_t* node = (node_t*) malloc( sizeof(node_t) + datalen );
+    if ( node == 0 ) {
         return false;
     }
-    // <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
-    uint16_t offs = nodepos;
-    comp->tree[ offs++ ] = nodetype;
-    comp->tree[ offs++ ] = numbranches;
-    WRITE16( comp, offs, datalen ); offs += UINT16_C(2);
-    uint16_t linkoffs = offs;
-    WRITE16( comp, offs, NODEOFFS_NONE ); offs += UINT16_C(2);
-    WRITE16( comp, offs, NODEOFFS_NONE ); offs += UINT16_C(2);
+    node->branches = 0;
+    node->numbranches = 0;
+    node->maxbranches = 0;
+    node->datalen = datalen;
+    node->type = nodetype;
     if ( datalen ) {
-        memcpy( &comp->tree[ offs ], pdata, datalen );
-        offs += datalen;
+        memcpy( node->data, pdata, datalen );
     }
+    // chain the node, so that it is freed with the tree even if it gets abandoned
+    node->chain = comp->nodes;
+    comp->nodes = node;
     if ( numbranches ) {
-        uint16_t firstbranch = NODEOFFS_NONE, lastbranch = NODEOFFS_NONE;
         va_list ap; va_start( ap, pdata );
+        bool ok = true;
         while ( numbranches-- ) {
-            uint16_t branchoffs = (uint16_t) va_arg( ap, int );
-            if ( firstbranch == NODEOFFS_NONE ) {
-                firstbranch = offs;
+            node_t* branch = va_arg( ap, node_t* );
+            if ( !comp_add_branch( comp, node, branch ) ) {
+                ok = false;
+                break;
             }
-            if ( lastbranch != NODEOFFS_NONE ) {
-                // <nodepos.16> <nextbranch.16>
-                WRITE16( comp, lastbranch + 2U, offs );
-            }
-            lastbranch = offs;
-            // <nodepos.16> <nextbranch.16>
-            WRITE16( comp, offs, branchoffs    ); offs += UINT16_C(2);
-            WRITE16( comp, offs, NODEOFFS_NONE ); offs += UINT16_C(2);
         }
         va_end( ap );
-        WRITE16( comp, linkoffs     , firstbranch );
-        WRITE16( comp, linkoffs + 2U, lastbranch  );
+        if ( !ok ) {
+            return false;
+        }
     }
-    *pnodeoffs = nodepos;
+    *pnode = node;
     return true;
 }
 
-bool comp_add_branch( compiler_t* comp, uint16_t nodeoffs, uint16_t branchoffs ) {
-    if ( nodeoffs == NODEOFFS_NONE || branchoffs == NODEOFFS_NONE ) {
+bool comp_add_branch( compiler_t* comp, node_t* node, node_t* branch ) {
+    // NOTE: a branch may be NODE_NONE, which stands for an optional branch that isn't present
+    if ( node == NODE_NONE ) {
         return false;
     }
-    // <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
-    if ( comp->tree[ nodeoffs + 1U ] == UINT8_C(255) ) {    // numbranches too big
-        return false;
+    if ( node->numbranches == node->maxbranches ) {
+        size_t newmax = node->maxbranches ? node->maxbranches * 2U : 4U;
+        node_t** newbranches = (node_t**) realloc( node->branches, newmax * sizeof(node_t*) );
+        if ( newbranches == 0 ) {
+            return false;
+        }
+        node->branches = newbranches;
+        node->maxbranches = newmax;
     }
-    // read last branch link from node
-    uint16_t lastbranch = EXTRACT16( comp, nodeoffs + 6U );
-    // allocate new branch entry
-    uint16_t offs = NODEOFFS_NONE;
-    if ( !comp_alloc_tree( comp, BRANCHENT_SIZE, &offs ) || offs == NODEOFFS_NONE ) {
-        return false;
-    }
-    if ( lastbranch != NODEOFFS_NONE ) {
-        // if there was a previous branch, link it to this one
-        // <nodepos.16> <nextbranch.16>
-        WRITE16( comp, lastbranch + 2U, offs );
-    }
-    lastbranch = offs;  // now this node is the last one in the list
-    // update lastbranch link in node
-    WRITE16( comp, nodeoffs + 6U, lastbranch );
-    // increment number of branches
-    comp->tree[ nodeoffs + 1U ] += UINT8_C(1);
-    // store new branch info
-    // <nodepos.16> <nextbranch.16>
-    WRITE16( comp, offs, branchoffs    ); offs += UINT16_C(2);
-    WRITE16( comp, offs, NODEOFFS_NONE );
-    // done
+    node->branches[ node->numbranches++ ] = branch;
     return true;
 }
 
-bool comp_eat_list( compiler_t* comp, uint16_t* pnodeoffs, uint8_t nodetype, comp_eatfn_t element_eater, uint8_t septok,
+bool comp_eat_list( compiler_t* comp, node_t** pnode, uint8_t nodetype, comp_eatfn_t element_eater, uint8_t septok,
     const char* errortext ) {
     // list := element { SEPTOK element } .  -- if SEPTOK is TOK_EOL, there's no separator token
-    uint16_t expr1 = NODEOFFS_NONE;
-    if ( !element_eater( comp, &expr1 ) || expr1 == NODEOFFS_NONE ) {
+    node_t* expr1 = NODE_NONE;
+    if ( !element_eater( comp, &expr1 ) || expr1 == NODE_NONE ) {
         return false;
     }
-    uint16_t nodeoffs = NODEOFFS_NONE;
+    node_t* node = NODE_NONE;
     for (;;) {
-        bool mandatory = false; uint16_t expr2 = NODEOFFS_NONE;
+        bool mandatory = false; node_t* expr2 = NODE_NONE;
         if ( septok != TOK_EOL && comp->currtok == septok ) {
             // read next token
             if ( !comp_fetchtok( comp ) ) {
@@ -288,7 +268,7 @@ bool comp_eat_list( compiler_t* comp, uint16_t* pnodeoffs, uint8_t nodetype, com
             // have a separator, but it's not present
             break;
         }
-        if ( !element_eater( comp, &expr2 ) || expr2 == NODEOFFS_NONE ) {
+        if ( !element_eater( comp, &expr2 ) || expr2 == NODE_NONE ) {
             if ( mandatory ) {  // mandatory expression missing: stop
                 comp_error( comp, errortext );
             }
@@ -296,16 +276,16 @@ bool comp_eat_list( compiler_t* comp, uint16_t* pnodeoffs, uint8_t nodetype, com
             break;
         }
         // we have now a new branch; first see if we already have a node or need to create one
-        if ( nodeoffs == NODEOFFS_NONE ) {
-            if ( !comp_create_node( comp, &nodeoffs, nodetype, UINT8_C(2), UINT16_C(0), 0, (int) expr1, (int) expr2 ) ||
-                 nodeoffs == NODEOFFS_NONE ) {
+        if ( node == NODE_NONE ) {
+            if ( !comp_create_node( comp, &node, nodetype, UINT8_C(2), UINT16_C(0), 0, expr1, expr2 ) ||
+                 node == NODE_NONE ) {
                 // failed to create node: cancel operation
 OOM:            out_of_memory( comp );
                 break;
             }
         } else {
             // the node already exists: add a new branch
-            if ( !comp_add_branch( comp, nodeoffs, expr2 ) ) {
+            if ( !comp_add_branch( comp, node, expr2 ) ) {
                 // something went wrong: cancel
                 goto OOM;
             }
@@ -313,37 +293,37 @@ OOM:            out_of_memory( comp );
         // successful, continue
     }
     // either return node with what we already have, or just the first branch
-    *pnodeoffs = nodeoffs != NODEOFFS_NONE ? nodeoffs : expr1;
+    *pnode = node != NODE_NONE ? node : expr1;
     return true;
 }
 
-bool comp_eat_numexlist( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_numexlist( compiler_t* comp, node_t** pnode ) {
     // num-ex-list := num-expr { TOK_COMMA num-expr } .
-    return comp_eat_list( comp, pnodeoffs, NT_NUMEXLIST, comp_eat_numexpr, TOK_COMMA, "Numeric expression expected" );
+    return comp_eat_list( comp, pnode, NT_NUMEXLIST, comp_eat_numexpr, TOK_COMMA, "Numeric expression expected" );
 }
 
-bool comp_eat_strexlist( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_strexlist( compiler_t* comp, node_t** pnode ) {
     // str-ex-list := str-expr { TOK_COMMA str-expr } .
-    return comp_eat_list( comp, pnodeoffs, NT_STREXLIST, comp_eat_strexpr, TOK_COMMA, "String expression expected" );
+    return comp_eat_list( comp, pnode, NT_STREXLIST, comp_eat_strexpr, TOK_COMMA, "String expression expected" );
 }
 
-bool comp_eat_exprlist( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_exprlist( compiler_t* comp, node_t** pnode ) {
     // expr-list := expr { TOK_COMMA expr } .
-    return comp_eat_list( comp, pnodeoffs, NT_EXPRLIST, comp_eat_expr, TOK_COMMA, "Expression expected" );
+    return comp_eat_list( comp, pnode, NT_EXPRLIST, comp_eat_expr, TOK_COMMA, "Expression expected" );
 }
 
-bool comp_eat_arrayindex( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_arrayindex( compiler_t* comp, node_t** pnode ) {
     // array-index := num-ex-list | str-expr .
-    if ( comp_eat_numexlist( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+    if ( comp_eat_numexlist( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
-    if ( comp_eat_strexpr( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+    if ( comp_eat_strexpr( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     return false;
 }
 
-bool comp_eat_arraysub( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_arraysub( compiler_t* comp, node_t** pnode ) {
     /*
         NT_ARRAYSUB     array subscript
             data: none
@@ -357,15 +337,15 @@ bool comp_eat_arraysub( compiler_t* comp, uint16_t* pnodeoffs ) {
 ERROR:      comp_error( comp, "Array index expected" );
             return false;
         }
-        uint16_t arrayindexnode = NODEOFFS_NONE;
-        if ( !comp_eat_arrayindex( comp, &arrayindexnode ) || arrayindexnode == NODEOFFS_NONE ) {
+        node_t* arrayindexnode = NODE_NONE;
+        if ( !comp_eat_arrayindex( comp, &arrayindexnode ) || arrayindexnode == NODE_NONE ) {
             goto ERROR;
         }
         if ( comp->currtok != TOK_RPAREN || !comp_fetchtok( comp ) ) {
             comp_error( comp, "Closing parenthesis ')' expected" );
             return false;
         }
-        if ( !comp_create_node( comp, pnodeoffs, NT_ARRAYSUB, UINT8_C(1), UINT16_C(0), 0, (int) arrayindexnode ) ) {
+        if ( !comp_create_node( comp, pnode, NT_ARRAYSUB, UINT8_C(1), UINT16_C(0), 0, arrayindexnode ) ) {
             out_of_memory( comp );
             return false;
         }
@@ -374,19 +354,14 @@ ERROR:      comp_error( comp, "Array index expected" );
     return false;
 }
 
-bool comp_node_iter_branches( compiler_t* comp, uint16_t nodeoffs, void* userdata, bool (*callback)( void*, uint16_t ) ) {
-    //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
-    //  <nodepos.16> <nextbranch.16>
-    if ( nodeoffs == NODEOFFS_NONE || comp->tree[ nodeoffs + 1U ] == UINT8_C(0) || callback == 0 ) {
+bool comp_node_iter_branches( compiler_t* comp, node_t* node, void* userdata, bool (*callback)( void*, node_t* ) ) {
+    if ( node == NODE_NONE || node->numbranches == 0 || callback == 0 ) {
         return false;
     }
-    uint16_t branch = EXTRACT16( comp, nodeoffs + 4U );
-    while ( branch != NODEOFFS_NONE ) {
-        uint16_t brnode = EXTRACT16( comp, branch );
-        if ( !callback( userdata, brnode ) ) {
+    for ( size_t i=0; i < node->numbranches; ++i ) {
+        if ( !callback( userdata, node->branches[i] ) ) {
             return false;
         }
-        branch = EXTRACT16( comp, branch + 2U );
     }
     return true;
 }
@@ -427,14 +402,14 @@ static void comp_write_float( uint8_t* mem, uint16_t offs, double val ) {
 }
 */
 
-static bool comp_gather_dims( void* userdata, uint16_t node ) {
+static bool comp_gather_dims( void* userdata, node_t* node ) {
     compiler_t* comp = (compiler_t*) userdata;
     if ( comp->numdim >= MAXDIM ) {
         comp_error( comp, "Too many dimensions" );
         return false;
     }
     //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
-    uint8_t nodetype = comp->tree[ node ];
+    uint8_t nodetype = node->type;
     if ( nodetype != NT_NUMLIT ) {
         if ( nodetype == NT_NUMEXPR ) {
             if ( !comp_node_iter_branches( comp, node, comp, comp_gather_dims ) ) {
@@ -445,12 +420,12 @@ static bool comp_gather_dims( void* userdata, uint16_t node ) {
         comp_error( comp, "Number expected" );
         return false;
     }
-    uint16_t datalen = EXTRACT16( comp, node + 2U );
+    uint16_t datalen = node->datalen;
     if ( datalen != UINT16_C(8) ) {
         comp_error( comp, "Bad number" );
         return false;
     }
-    double val = comp_extract_float( comp->tree, node + 8U );
+    double val = comp_extract_float( node->data, 0 );
     if ( val < 1.0 || val >= 65536.0 ) {
         comp_error( comp, "Dimension out of range" );
         return false;
@@ -460,7 +435,7 @@ static bool comp_gather_dims( void* userdata, uint16_t node ) {
     return true;
 }
 
-bool comp_eat_arraydimdecl( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_arraydimdecl( compiler_t* comp, node_t** pnode ) {
     /*
     NT_ARRAYDIMDECL array dimension declaration
         data:
@@ -481,19 +456,19 @@ bool comp_eat_arraydimdecl( compiler_t* comp, uint16_t* pnodeoffs ) {
         if ( !comp_fetchtok( comp ) ) {
             return false;
         }
-        if ( !comp_create_node( comp, pnodeoffs, NT_ARRAYDIMDECL, UINT8_C(0), datalen, &data ) || *pnodeoffs == NODEOFFS_NONE ) {
+        if ( !comp_create_node( comp, pnode, NT_ARRAYDIMDECL, UINT8_C(0), datalen, &data ) || *pnode == NODE_NONE ) {
 OOM:        out_of_memory( comp );
             return false;
         }
         return true;
     }
-    uint16_t numexpr = NODEOFFS_NONE;
-    if ( !comp_eat_numexlist( comp, &numexpr ) || numexpr == NODEOFFS_NONE ) {
+    node_t* numexpr = NODE_NONE;
+    if ( !comp_eat_numexlist( comp, &numexpr ) || numexpr == NODE_NONE ) {
         comp_error( comp, "Numeric expression expected" );
         return false;
     }
     comp->numdim = UINT8_C(0);
-    if ( comp->tree[ numexpr ] == NT_NUMEXLIST ) {
+    if ( numexpr->type == NT_NUMEXLIST ) {
         // multiple dimensions
         if ( !comp_node_iter_branches( comp, numexpr, comp, comp_gather_dims ) ) {
             return false;
@@ -525,13 +500,13 @@ LARGE:      comp_error( comp, "Array too large" );
     if ( totalsize == 0 || totalsize > 65535U ) {
         goto LARGE;
     }
-    if ( !comp_create_node( comp, pnodeoffs, NT_ARRAYDIMDECL, UINT8_C(0), datalen2, data2 ) || *pnodeoffs == NODEOFFS_NONE ) {
+    if ( !comp_create_node( comp, pnode, NT_ARRAYDIMDECL, UINT8_C(0), datalen2, data2 ) || *pnode == NODE_NONE ) {
         goto OOM;
     }
     return true;
 }
 
-bool comp_eat_arraydecl( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_arraydecl( compiler_t* comp, node_t** pnode ) {
     /*
      NT_ARRAYDECL    array declaration
         data:
@@ -544,16 +519,16 @@ bool comp_eat_arraydecl( compiler_t* comp, uint16_t* pnodeoffs ) {
               offset stored in the data field
     */
     // array-decl := any-base-var-ref TOK_LPAREN array-dim-decl TOK_RPAREN .
-    uint16_t varnodeoffs = NODEOFFS_NONE;
-    if ( !comp_eat_anybasevarref( comp, &varnodeoffs ) || varnodeoffs == NODEOFFS_NONE ) {
+    node_t* varnode = NODE_NONE;
+    if ( !comp_eat_anybasevarref( comp, &varnode ) || varnode == NODE_NONE ) {
         return false;
     }
     if ( comp->currtok != TOK_LPAREN || !comp_fetchtok( comp ) ) {
         comp_error( comp, "Opening parenthesis '(' expected" );
         return false;
     }
-    uint16_t declnodeoffs = NODEOFFS_NONE;
-    if ( !comp_eat_arraydimdecl( comp, &declnodeoffs ) || declnodeoffs == NODEOFFS_NONE ) {
+    node_t* declnode = NODE_NONE;
+    if ( !comp_eat_arraydimdecl( comp, &declnode ) || declnode == NODE_NONE ) {
         comp_error( comp, "Array dimension declaration expected" );
         return false;
     }
@@ -564,18 +539,18 @@ bool comp_eat_arraydecl( compiler_t* comp, uint16_t* pnodeoffs ) {
 
     // read dimension declaration
     //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
-    if ( comp->tree[ declnodeoffs ] != NT_ARRAYDIMDECL || comp->tree[ declnodeoffs + 1U ] != 0 ) {
+    if ( declnode->type != NT_ARRAYDIMDECL || declnode->numbranches != 0 ) {
         comp_error( comp, "Internal error (NT_ARRAYDIMDECL expected)" );
         return false;
     }
 
-    uint16_t datalen = EXTRACT16( comp, declnodeoffs + 2U );
+    uint16_t datalen = declnode->datalen;
     if ( datalen <= UINT16_C(1) ) { // DYNAMIC or ASSOC
         comp_error( comp, "Feature not supported yet" );
         return false;
     }
 
-    uint16_t dataoffs = declnodeoffs + UINT16_C(8);
+    const uint8_t* datap = declnode->data;
     uint16_t numdims = datalen / UINT16_C(2);
     if ( numdims > MAXDIM ) {
         comp_error( comp, "Internal error (unexpected number of dimensions)" );
@@ -583,8 +558,8 @@ bool comp_eat_arraydecl( compiler_t* comp, uint16_t* pnodeoffs ) {
     }
     uint16_t dims[MAXDIM];
     for ( uint16_t i=0; i < numdims; ++i ) {
-        dims[i] = EXTRACT16( comp, dataoffs );
-        dataoffs += UINT16_C(2);
+        dims[i] = (uint16_t)( ( ( (uint16_t) datap[0] ) << UINT8_C(8) ) | datap[1] );
+        datap += UINT16_C(2);
     }
 
     /*
@@ -595,21 +570,25 @@ bool comp_eat_arraydecl( compiler_t* comp, uint16_t* pnodeoffs ) {
     */
     // read variable reference
     //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
-    datalen  = EXTRACT16( comp, varnodeoffs + 2U );
-    dataoffs = varnodeoffs + UINT16_C(8);
+    datalen  = varnode->datalen;
+    datap = varnode->data;
     static char name[256]; name[0] = '\0';
     uint8_t vartype = VARTYPEF_ARRAY;
-    if ( comp->tree[ varnodeoffs ] == NT_NUMBASEVARREF || comp->tree[ varnodeoffs ] == NT_STRBASEVARREF ) {
+    if ( varnode->type == NT_NUMBASEVARREF || varnode->type == NT_STRBASEVARREF ) {
         if ( datalen < UINT16_C(2) ) {
             comp_error( comp, "Internal error (fault in variable reference)" );
             return false;
         }
         // data:
         //    - 1 byte of type indicator, n bytes of name
-        uint8_t typeind = comp->tree[ dataoffs++ ];
-        uint8_t namelen = comp->tree[ dataoffs++ ];
+        uint8_t typeind = *datap++;
+        if ( datalen > 256U ) {
+            comp_error( comp, "Variable name too long" );
+            return false;
+        }
+        uint8_t namelen = (uint8_t)( datalen - UINT16_C(1) );
         if ( namelen ) {
-            memcpy( name, &comp->tree[ dataoffs ], namelen );
+            memcpy( name, datap, namelen );
         }
         name[ namelen ] = '\0';
         vartype |= typeind & VARTYPEM_BASE;
@@ -630,7 +609,7 @@ bool comp_eat_arraydecl( compiler_t* comp, uint16_t* pnodeoffs ) {
     data[1] = (uint8_t)( varoffs >> UINT8_C(8) );
     data[2] = (uint8_t)  varoffs;
 
-    if ( !comp_create_node( comp, pnodeoffs, NT_ARRAYDECL, UINT8_C(0), UINT16_C(3), data ) || *pnodeoffs == NODEOFFS_NONE ) {
+    if ( !comp_create_node( comp, pnode, NT_ARRAYDECL, UINT8_C(0), UINT16_C(3), data ) || *pnode == NODE_NONE ) {
         out_of_memory( comp );
         return false;
     }
@@ -638,17 +617,17 @@ bool comp_eat_arraydecl( compiler_t* comp, uint16_t* pnodeoffs ) {
     return true;
 }
 
-bool comp_eat_arraydecllist( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_arraydecllist( compiler_t* comp, node_t** pnode ) {
     /*
         NT_ARRAYDECLLIST    array declaration list
             data: none
             branches: the NT_ARRAYDECL nodes
     */
     // array-decl-list := array-decl { TOK_COMMA array-decl } .
-    return comp_eat_list( comp, pnodeoffs, NT_ARRAYDECLLIST, comp_eat_arraydecl, TOK_COMMA, "Array declaration expected" );
+    return comp_eat_list( comp, pnode, NT_ARRAYDECLLIST, comp_eat_arraydecl, TOK_COMMA, "Array declaration expected" );
 }
 
-bool comp_eat_emptyarrayref( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_emptyarrayref( compiler_t* comp, node_t** pnode ) {
     /*
         NT_EMPTYARRAYREF    empty array reference, needed for ERASE statement
             data:
@@ -663,8 +642,8 @@ bool comp_eat_emptyarrayref( compiler_t* comp, uint16_t* pnodeoffs ) {
             - this needs to be solved TBD FIXME
     */
     // empty-array-ref := any-base-var-ref TOK_LPAREN TOK_RPAREN .
-    uint16_t varnodeoffs = NODEOFFS_NONE;
-    if ( !comp_eat_anybasevarref( comp, &varnodeoffs ) || varnodeoffs == NODEOFFS_NONE ) {
+    node_t* varnode = NODE_NONE;
+    if ( !comp_eat_anybasevarref( comp, &varnode ) || varnode == NODE_NONE ) {
         return false;
     }
     if ( comp->currtok != TOK_LPAREN || !comp_fetchtok( comp ) ) {
@@ -683,21 +662,25 @@ bool comp_eat_emptyarrayref( compiler_t* comp, uint16_t* pnodeoffs ) {
     */
     // read variable reference
     //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
-    uint16_t datalen  = EXTRACT16( comp, varnodeoffs + 2U );
-    uint16_t dataoffs = varnodeoffs + UINT16_C(8);
+    uint16_t datalen  = varnode->datalen;
+    const uint8_t* datap = varnode->data;
     static char name[256]; name[0] = '\0';
     uint8_t vartype = VARTYPEF_ARRAY;
-    if ( comp->tree[ varnodeoffs ] == NT_NUMBASEVARREF || comp->tree[ varnodeoffs ] == NT_STRBASEVARREF ) {
+    if ( varnode->type == NT_NUMBASEVARREF || varnode->type == NT_STRBASEVARREF ) {
         if ( datalen < UINT16_C(2) ) {
             comp_error( comp, "Internal error (fault in variable reference)" );
             return false;
         }
         // data:
         //    - 1 byte of type indicator, n bytes of name
-        uint8_t typeind = comp->tree[ dataoffs++ ];
-        uint8_t namelen = comp->tree[ dataoffs++ ];
+        uint8_t typeind = *datap++;
+        if ( datalen > 256U ) {
+            comp_error( comp, "Variable name too long" );
+            return false;
+        }
+        uint8_t namelen = (uint8_t)( datalen - UINT16_C(1) );
         if ( namelen ) {
-            memcpy( name, &comp->tree[ dataoffs ], namelen );
+            memcpy( name, datap, namelen );
         }
         name[ namelen ] = '\0';
         vartype |= typeind & VARTYPEM_BASE;
@@ -723,7 +706,7 @@ bool comp_eat_emptyarrayref( compiler_t* comp, uint16_t* pnodeoffs ) {
     data[0] = vartype;
     data[1] = (uint8_t)( varoffs >> UINT8_C(8) );
     data[2] = (uint8_t)  varoffs;
-    if ( !comp_create_node( comp, pnodeoffs, NT_EMPTYARRAYREF, UINT8_C(0), UINT16_C(3), data ) || *pnodeoffs == NODEOFFS_NONE ) {
+    if ( !comp_create_node( comp, pnode, NT_EMPTYARRAYREF, UINT8_C(0), UINT16_C(3), data ) || *pnode == NODE_NONE ) {
         out_of_memory( comp );
         return false;
     }
@@ -731,17 +714,17 @@ bool comp_eat_emptyarrayref( compiler_t* comp, uint16_t* pnodeoffs ) {
     return true;
 }
 
-bool comp_eat_emptyarrayreflist( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_emptyarrayreflist( compiler_t* comp, node_t** pnode ) {
     /*
         NT_EMPTYARRAYREFLIST    empty array reference list
             data: none
             branches: the NT_EMPTYARRAYREF nodes
     */
     // empty-array-ref-list := empty-array-ref { TOK_COMMA empty-array-ref } .
-    return comp_eat_list( comp, pnodeoffs, NT_EMPTYARRAYREFLIST, comp_eat_emptyarrayref, TOK_COMMA, "Array reference expected" );
+    return comp_eat_list( comp, pnode, NT_EMPTYARRAYREFLIST, comp_eat_emptyarrayref, TOK_COMMA, "Array reference expected" );
 }
 
-bool comp_eat_numbasevarref( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_numbasevarref( compiler_t* comp, node_t** pnode ) {
     /*
         NT_NUMBASEVARREF    numeric base variable reference
             data:
@@ -767,7 +750,7 @@ bool comp_eat_numbasevarref( compiler_t* comp, uint16_t* pnodeoffs ) {
         return false;
     }
 
-    bool ok = comp_create_node( comp, pnodeoffs, NT_NUMBASEVARREF, UINT8_C(0), datalen, data ) && *pnodeoffs != NODEOFFS_NONE;
+    bool ok = comp_create_node( comp, pnode, NT_NUMBASEVARREF, UINT8_C(0), datalen, data ) && *pnode != NODE_NONE;
     free( data );
     if ( !ok ) {
         out_of_memory( comp );
@@ -777,8 +760,8 @@ bool comp_eat_numbasevarref( compiler_t* comp, uint16_t* pnodeoffs ) {
     return true;
 }
 
-static bool comp_eat_varref( compiler_t* comp, uint16_t* pnodeoffs, uint8_t basetype,
-    bool (*baseeater)( compiler_t*, uint16_t* ), uint8_t nodetype ) {
+static bool comp_eat_varref( compiler_t* comp, node_t** pnode, uint8_t basetype,
+    bool (*baseeater)( compiler_t*, node_t** ), uint8_t nodetype ) {
 
     /*
         NT_NUMVARREF        numeric variable reference
@@ -790,13 +773,13 @@ static bool comp_eat_varref( compiler_t* comp, uint16_t* pnodeoffs, uint8_t base
                 - list of array index expressions
     */
     // num-var-ref      := num-base-var-ref [ array-sub ] .
-    uint16_t varnodeoffs = NODEOFFS_NONE;
-    if ( !baseeater( comp, &varnodeoffs ) || varnodeoffs == NODEOFFS_NONE ) {
+    node_t* varnode = NODE_NONE;
+    if ( !baseeater( comp, &varnode ) || varnode == NODE_NONE ) {
         return false;
     }
-    uint16_t arraysubnode = NODEOFFS_NONE, arrayindexnode;
-    if ( !comp_eat_arraysub( comp, &arraysubnode ) || varnodeoffs == NODEOFFS_NONE ) {
-        arrayindexnode = NODEOFFS_NONE;
+    node_t* arraysubnode = NODE_NONE; node_t* arrayindexnode = NODE_NONE;
+    if ( !comp_eat_arraysub( comp, &arraysubnode ) || varnode == NODE_NONE ) {
+        arrayindexnode = NODE_NONE;
     } else {    // NT_ARRAYSUB
         /*
             NT_ARRAYSUB     array subscript
@@ -807,16 +790,15 @@ static bool comp_eat_varref( compiler_t* comp, uint16_t* pnodeoffs, uint8_t base
         */
         //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
         //  <nodepos.16> <nextbranch.16>
-        if ( comp->tree[ arraysubnode ] != NT_ARRAYSUB ) {
+        if ( arraysubnode->type != NT_ARRAYSUB ) {
 NOSUB:      comp_error( comp, "Internal error (array subscript expected)" );
             return false;
         }
-        uint16_t branch = EXTRACT16( comp, arraysubnode + 4U );
-        if ( branch == NODEOFFS_NONE ) {
+        if ( arraysubnode->numbranches == 0 ) {
             goto NOSUB;
         }
-        arrayindexnode = EXTRACT16( comp, branch );
-        if ( arrayindexnode == NODEOFFS_NONE ) {
+        arrayindexnode = arraysubnode->branches[0];
+        if ( arrayindexnode == NODE_NONE ) {
             goto NOSUB;
         }
     }
@@ -829,21 +811,21 @@ NOSUB:      comp_error( comp, "Internal error (array subscript expected)" );
     */
     // read variable reference
     //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
-    uint16_t datalen  = EXTRACT16( comp, varnodeoffs + 2U );
-    uint16_t dataoffs = varnodeoffs + UINT16_C(8);
+    uint16_t datalen  = varnode->datalen;
+    const uint8_t* datap = varnode->data;
     static char name[256]; name[0] = '\0';
-    uint8_t vartype = arraysubnode != NODEOFFS_NONE ? VARTYPEF_ARRAY : UINT8_C(0);
-    if ( comp->tree[ varnodeoffs ] == basetype ) {
+    uint8_t vartype = arraysubnode != NODE_NONE ? VARTYPEF_ARRAY : UINT8_C(0);
+    if ( varnode->type == basetype ) {
         if ( datalen < UINT16_C(2) || datalen >= UINT16_C(256) ) {
             comp_error( comp, "Internal error (fault in variable reference)" );
             return false;
         }
         // data:
         //    - 1 byte of type indicator, n bytes of name
-        uint8_t typeind = comp->tree[ dataoffs++ ];
+        uint8_t typeind = *datap++;
         uint8_t namelen = datalen - UINT16_C(1);
         if ( namelen ) {
-            memcpy( name, &comp->tree[ dataoffs ], namelen );
+            memcpy( name, datap, namelen );
         }
         name[ namelen ] = '\0';
         vartype |= typeind & VARTYPEM_BASE;
@@ -884,12 +866,12 @@ NOSUB:      comp_error( comp, "Internal error (array subscript expected)" );
     data[1] = (uint8_t)( varoffs >> UINT8_C(8) );
     data[2] = (uint8_t)  varoffs;
 
-    if ( arrayindexnode != NODEOFFS_NONE ) {
-        ok = comp_create_node( comp, pnodeoffs, nodetype, UINT8_C(1), UINT8_C(3), data, (int) arrayindexnode );
+    if ( arrayindexnode != NODE_NONE ) {
+        ok = comp_create_node( comp, pnode, nodetype, UINT8_C(1), UINT8_C(3), data, arrayindexnode );
     } else {
-        ok = comp_create_node( comp, pnodeoffs, nodetype, UINT8_C(0), UINT8_C(3), data );
+        ok = comp_create_node( comp, pnode, nodetype, UINT8_C(0), UINT8_C(3), data );
     }
-    if ( !ok || *pnodeoffs == NODEOFFS_NONE ) {
+    if ( !ok || *pnode == NODE_NONE ) {
         out_of_memory( comp );
         return false;
     }
@@ -897,11 +879,11 @@ NOSUB:      comp_error( comp, "Internal error (array subscript expected)" );
     return true;
 }
 
-bool comp_eat_numvarref( compiler_t* comp, uint16_t* pnodeoffs ) {
-    return comp_eat_varref( comp, pnodeoffs, NT_NUMBASEVARREF, comp_eat_numbasevarref, NT_NUMVARREF );
+bool comp_eat_numvarref( compiler_t* comp, node_t** pnode ) {
+    return comp_eat_varref( comp, pnode, NT_NUMBASEVARREF, comp_eat_numbasevarref, NT_NUMVARREF );
 }
 
-bool comp_eat_strbasevarref( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_strbasevarref( compiler_t* comp, node_t** pnode ) {
     /*
         NT_STRBASEVARREF    string base variable reference
             data:
@@ -927,7 +909,7 @@ bool comp_eat_strbasevarref( compiler_t* comp, uint16_t* pnodeoffs ) {
         return false;
     }
 
-    bool ok = comp_create_node( comp, pnodeoffs, NT_STRBASEVARREF, UINT8_C(0), datalen, data ) && *pnodeoffs != NODEOFFS_NONE;
+    bool ok = comp_create_node( comp, pnode, NT_STRBASEVARREF, UINT8_C(0), datalen, data ) && *pnode != NODE_NONE;
     free( data );
     if ( !ok ) {
         out_of_memory( comp );
@@ -937,11 +919,11 @@ bool comp_eat_strbasevarref( compiler_t* comp, uint16_t* pnodeoffs ) {
     return true;
 }
 
-bool comp_eat_strvarref( compiler_t* comp, uint16_t* pnodeoffs ) {
-    return comp_eat_varref( comp, pnodeoffs, NT_STRBASEVARREF, comp_eat_strbasevarref, NT_STRVARREF );
+bool comp_eat_strvarref( compiler_t* comp, node_t** pnode ) {
+    return comp_eat_varref( comp, pnode, NT_STRBASEVARREF, comp_eat_strbasevarref, NT_STRVARREF );
 }
 
-bool comp_eat_anybasevarref( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_anybasevarref( compiler_t* comp, node_t** pnode ) {
     /*
         NT_NUMBASEVARREF    numeric base variable reference
         NT_STRBASEVARREF    string base variable reference
@@ -976,7 +958,7 @@ bool comp_eat_anybasevarref( compiler_t* comp, uint16_t* pnodeoffs ) {
 
     uint8_t nodetype = vartype == VARTYPEV_STR ? NT_STRBASEVARREF : NT_NUMBASEVARREF;
 
-    bool ok = comp_create_node( comp, pnodeoffs, nodetype, UINT8_C(0), datalen, data ) && *pnodeoffs != NODEOFFS_NONE;
+    bool ok = comp_create_node( comp, pnode, nodetype, UINT8_C(0), datalen, data ) && *pnode != NODE_NONE;
     free( data );
     if ( !ok ) {
         out_of_memory( comp );
@@ -986,7 +968,7 @@ bool comp_eat_anybasevarref( compiler_t* comp, uint16_t* pnodeoffs ) {
     return true;
 }
 
-bool comp_eat_numlit( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_numlit( compiler_t* comp, node_t** pnode ) {
     // dec-lit := TOK_DECLIT | TOK_DEC0 .. TOK_DEC9 .
     // num-lit := dec-lit | TOK_HEXLIT | TOK_OCTLIT | TOK_QUALIT | TOK_BINLIT .
     double num = 0;
@@ -1034,14 +1016,14 @@ bool comp_eat_numlit( compiler_t* comp, uint16_t* pnodeoffs ) {
     data[5] = (uint8_t)( u.ui64 >> UINT8_C(16) );
     data[6] = (uint8_t)( u.ui64 >> UINT8_C( 8) );
     data[7] = (uint8_t)( u.ui64                );
-    if ( !comp_create_node( comp, pnodeoffs, NT_NUMLIT, UINT8_C(0), UINT16_C(8), data ) || *pnodeoffs == NODEOFFS_NONE ) {
+    if ( !comp_create_node( comp, pnode, NT_NUMLIT, UINT8_C(0), UINT16_C(8), data ) || *pnode == NODE_NONE ) {
         out_of_memory( comp );
         return false;
     }
     return true;
 }
 
-bool comp_eat_strlit( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_strlit( compiler_t* comp, node_t** pnode ) {
     // str-lit := TOK_STRLIT | TOK_SHLLIT | TOK_BRKLIT | TOK_BRCLIT .
     /*
        NT_STRLIT       string literal
@@ -1070,7 +1052,7 @@ bool comp_eat_strlit( compiler_t* comp, uint16_t* pnodeoffs ) {
         free( data );
         return false;
     }
-    bool ok = comp_create_node( comp, pnodeoffs, NT_STRLIT, UINT8_C(0), datalen, data ) && *pnodeoffs != NODEOFFS_NONE;
+    bool ok = comp_create_node( comp, pnode, NT_STRLIT, UINT8_C(0), datalen, data ) && *pnode != NODE_NONE;
     free( data );
     if ( !ok ) {
         out_of_memory( comp );
@@ -1079,7 +1061,7 @@ bool comp_eat_strlit( compiler_t* comp, uint16_t* pnodeoffs ) {
     return true;
 }
 
-bool comp_eat_strlits( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_strlits( compiler_t* comp, node_t** pnode ) {
     // str-lits := str-lit { str-lit } .
     /*
         NT_STRLITS      string literals
@@ -1087,10 +1069,10 @@ bool comp_eat_strlits( compiler_t* comp, uint16_t* pnodeoffs ) {
             branches:
                 - list of string literals (NT_STRLIT)
     */
-    return comp_eat_list( comp, pnodeoffs, NT_STRLITS, comp_eat_strlit, TOK_EOL, "String literal expected" );
+    return comp_eat_list( comp, pnode, NT_STRLITS, comp_eat_strlit, TOK_EOL, "String literal expected" );
 }
 
-bool comp_eat_numusrfnname( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_numusrfnname( compiler_t* comp, node_t** pnode ) {
     // num-usr-fn-name := TOK_FN ( TOK_NUMIDENT | TOK_INTIDENT ) .
     if ( comp->currtok != TOK_FN ) {
         return false;
@@ -1116,7 +1098,7 @@ bool comp_eat_numusrfnname( compiler_t* comp, uint16_t* pnodeoffs ) {
         return false;
     }
 
-    bool ok = comp_create_node( comp, pnodeoffs, NT_NUMUSRFNNAME, UINT8_C(0), datalen, data ) && *pnodeoffs != NODEOFFS_NONE;
+    bool ok = comp_create_node( comp, pnode, NT_NUMUSRFNNAME, UINT8_C(0), datalen, data ) && *pnode != NODE_NONE;
     free( data );
     if ( !ok ) {
         out_of_memory( comp );
@@ -1126,7 +1108,7 @@ bool comp_eat_numusrfnname( compiler_t* comp, uint16_t* pnodeoffs ) {
     return true;
 }
 
-bool comp_eat_strusrfnname( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_strusrfnname( compiler_t* comp, node_t** pnode ) {
     // str-usr-fn-name := TOK_FN TOK_STRIDENT .
     if ( comp->currtok != TOK_FN ) {
         return false;
@@ -1152,7 +1134,7 @@ bool comp_eat_strusrfnname( compiler_t* comp, uint16_t* pnodeoffs ) {
         return false;
     }
 
-    bool ok = comp_create_node( comp, pnodeoffs, NT_STRUSRFNNAME, UINT8_C(0), datalen, data ) && *pnodeoffs != NODEOFFS_NONE;
+    bool ok = comp_create_node( comp, pnode, NT_STRUSRFNNAME, UINT8_C(0), datalen, data ) && *pnode != NODE_NONE;
     free( data );
     if ( !ok ) {
         out_of_memory( comp );
@@ -1162,7 +1144,7 @@ bool comp_eat_strusrfnname( compiler_t* comp, uint16_t* pnodeoffs ) {
     return true;
 }
 
-bool comp_eat_usrfnarg( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_usrfnarg( compiler_t* comp, node_t** pnode ) {
     // usr-fn-arg := any-base-var-ref [ TOK_LPAREN TOK_RPAREN ] .
     /*
         NT_USRFNARG         user function argument
@@ -1170,8 +1152,8 @@ bool comp_eat_usrfnarg( compiler_t* comp, uint16_t* pnodeoffs ) {
                 - 1 byte of type indicator
                 - n bytes of name (NUL-terminated)
     */
-    uint16_t namenode = NODEOFFS_NONE;
-    if ( !comp_eat_anybasevarref( comp, &namenode ) || namenode == NODEOFFS_NONE ) {
+    node_t* namenode = NODE_NONE;
+    if ( !comp_eat_anybasevarref( comp, &namenode ) || namenode == NODE_NONE ) {
         return false;
     }
     bool is_array = false;
@@ -1188,32 +1170,32 @@ bool comp_eat_usrfnarg( compiler_t* comp, uint16_t* pnodeoffs ) {
                 - 1 byte of type indicator, n bytes of name
     */
     //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
-    uint8_t nodetype = comp->tree[ namenode ];
+    uint8_t nodetype = namenode->type;
     if ( nodetype != NT_NUMBASEVARREF && nodetype != NT_STRBASEVARREF ) {
 UNEXP:  comp_error( comp, "Internal error (unexpected node type)" );
         return false;
     }
-    uint16_t datalen = EXTRACT16( comp, namenode + 2U );
+    uint16_t datalen = namenode->datalen;
     if ( datalen < 2U || datalen >= 256U ) {
         goto UNEXP;
     }
-    uint16_t dataoffs = namenode + UINT16_C(8);
+    const uint8_t* datap = namenode->data;
     static char name[257];
-    name[0] = comp->tree[ dataoffs ] & VARTYPEM_BASE;
+    name[0] = datap[0] & VARTYPEM_BASE;
     if ( is_array ) {
         name[0] |= VARTYPEF_ARRAY;
     }
-    memcpy( &name[1], &comp->tree[ dataoffs + 1U ], datalen - 1U );
+    memcpy( &name[1], &datap[1], datalen - 1U );
     name[ 1U + ( datalen - 1U ) ] = '\0';
     ++datalen;
-    if ( !comp_create_node( comp, pnodeoffs, NT_USRFNARG, UINT8_C(0), datalen, name ) || *pnodeoffs == NODEOFFS_NONE ) {
+    if ( !comp_create_node( comp, pnode, NT_USRFNARG, UINT8_C(0), datalen, name ) || *pnode == NODE_NONE ) {
         out_of_memory( comp );
         return false;
     }
     return true;
 }
 
-bool comp_eat_usrfnarglist( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_usrfnarglist( compiler_t* comp, node_t** pnode ) {
     // usr-fn-arg-list := usr-fn-arg { TOK_COMMA usr-fn-arg } .
     /*
     NT_USERFNARGLIST    user function argument list
@@ -1222,27 +1204,27 @@ bool comp_eat_usrfnarglist( compiler_t* comp, uint16_t* pnodeoffs ) {
         immediate processing:
             - generated only if there are more than 2 arguments
     */
-    return comp_eat_list( comp, pnodeoffs, NT_USERFNARGLIST, comp_eat_usrfnarg, TOK_COMMA, "User function argument expected" );
+    return comp_eat_list( comp, pnode, NT_USERFNARGLIST, comp_eat_usrfnarg, TOK_COMMA, "User function argument expected" );
 }
 
-bool comp_eat_anyusrfnname( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_anyusrfnname( compiler_t* comp, node_t** pnode ) {
     // any-usr-fn-name := num-usr-fn-name | str-usr-fn-name .
-    if ( comp_eat_numusrfnname( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+    if ( comp_eat_numusrfnname( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
-    if ( comp_eat_strusrfnname( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+    if ( comp_eat_strusrfnname( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     return false;
 }
 
-bool comp_eat_singlelineusrfnbody( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_singlelineusrfnbody( compiler_t* comp, node_t** pnode ) {
     // singleline-usr-fn-body := TOK_EQ expr .
     if ( comp->currtok != TOK_EQ ) {
         return false;
     }
-    uint16_t exprnode = NODEOFFS_NONE;
-    if ( !comp_fetchtok( comp ) || !comp_eat_expr( comp, &exprnode ) || exprnode == NODEOFFS_NONE ) {
+    node_t* exprnode = NODE_NONE;
+    if ( !comp_fetchtok( comp ) || !comp_eat_expr( comp, &exprnode ) || exprnode == NODE_NONE ) {
         comp_error( comp, "Expression expected" );
         return false;
     }
@@ -1251,20 +1233,20 @@ bool comp_eat_singlelineusrfnbody( compiler_t* comp, uint16_t* pnodeoffs ) {
             branches:
                 - 1 branch of expression
     */
-    if ( !comp_create_node( comp, pnodeoffs, NT_SINGLELINEUSERFNBODY, UINT8_C(1), UINT8_C(0), 0, (int) exprnode ) ) {
+    if ( !comp_create_node( comp, pnode, NT_SINGLELINEUSERFNBODY, UINT8_C(1), UINT8_C(0), 0, exprnode ) ) {
         out_of_memory( comp );
         return false;
     }
     return true;
 }
 
-bool comp_eat_multilineusrfnbody( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_multilineusrfnbody( compiler_t* comp, node_t** pnode ) {
     // multiline-usr-fn-body := TOK_EOL stmt-lines TOK_END TOK_FN .
     if ( comp->currtok != TOK_EOL ) {
         return false;
     }
-    uint16_t stmtlines = NODEOFFS_NONE;
-    if ( !comp_fetchtok( comp ) || !comp_eat_stmtlines( comp, &stmtlines ) || stmtlines == NODEOFFS_NONE ) {
+    node_t* stmtlines = NODE_NONE;
+    if ( !comp_fetchtok( comp ) || !comp_eat_stmtlines( comp, &stmtlines ) || stmtlines == NODE_NONE ) {
         comp_error( comp, "Function body expected" );
         return false;
     }
@@ -1281,20 +1263,20 @@ bool comp_eat_multilineusrfnbody( compiler_t* comp, uint16_t* pnodeoffs ) {
             branches:
                 - 0 or more branches of statement lines
     */
-    if ( !comp_create_node( comp, pnodeoffs, NT_MULTILINEUSERFNBODY, UINT8_C(1), UINT8_C(0), 0, (int) stmtlines ) ) {
+    if ( !comp_create_node( comp, pnode, NT_MULTILINEUSERFNBODY, UINT8_C(1), UINT8_C(0), 0, stmtlines ) ) {
         out_of_memory( comp );
         return false;
     }
     return true;
 }
 
-bool comp_eat_usrfnbody( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_usrfnbody( compiler_t* comp, node_t** pnode ) {
     // usr-fn-body := singleline-usr-fn-body | multiline-usr-fn-body .
     // [ NT_USRFNBODY - not generated ]
-    if ( comp_eat_singlelineusrfnbody( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+    if ( comp_eat_singlelineusrfnbody( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
-    if ( comp_eat_multilineusrfnbody( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+    if ( comp_eat_multilineusrfnbody( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     return false;
@@ -1302,12 +1284,12 @@ bool comp_eat_usrfnbody( compiler_t* comp, uint16_t* pnodeoffs ) {
 
 typedef struct _cgbargs_t {
     compiler_t* comp;
-    uint16_t*   branches;
+    node_t**    branches;
     size_t      maxbranches;
     size_t      numbranches;
 } cgbargs_t;
 
-static bool cgb_worker( void* userdata, uint16_t nodepos ) {
+static bool cgb_worker( void* userdata, node_t* nodepos ) {
     cgbargs_t* args = (cgbargs_t*) userdata;
     if ( args->numbranches >= args->maxbranches ) {
         comp_error( args->comp, "Too many arguments" );
@@ -1317,17 +1299,17 @@ static bool cgb_worker( void* userdata, uint16_t nodepos ) {
     return true;
 }
 
-static bool comp_gather_branches( compiler_t* comp, uint16_t nodeoffs, uint8_t listtype, uint16_t* branches, size_t maxbranches,
+static bool comp_gather_branches( compiler_t* comp, node_t* node, uint8_t listtype, node_t** branches, size_t maxbranches,
     size_t* pnumbranches ) {
     //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
-    if ( comp->tree[ nodeoffs ] == listtype ) {
+    if ( node->type == listtype ) {
         cgbargs_t args = { comp, branches, maxbranches, 0 };
-        if ( !comp_node_iter_branches( comp, nodeoffs, &args, cgb_worker ) ) {
+        if ( !comp_node_iter_branches( comp, node, &args, cgb_worker ) ) {
             return false;
         }
         *pnumbranches = args.numbranches;
     } else if ( maxbranches >= 1U ) {
-        branches[0] = nodeoffs;
+        branches[0] = node;
         *pnumbranches = 1U;
     } else {
         comp_error( comp, "Internal error (invalid argument)" );
@@ -1336,7 +1318,7 @@ static bool comp_gather_branches( compiler_t* comp, uint16_t nodeoffs, uint8_t l
     return true;
 }
 
-static bool comp_get_func_params( compiler_t* comp, uint16_t paramoffs[MAXPARAM], size_t numparams, usrparam_t params[MAXPARAM] ) {
+static bool comp_get_func_params( compiler_t* comp, node_t* paramoffs[MAXPARAM], size_t numparams, usrparam_t params[MAXPARAM] ) {
     // usr-fn-arg := any-base-var-ref [ TOK_LPAREN TOK_RPAREN ] .
     //
     /*
@@ -1347,26 +1329,25 @@ static bool comp_get_func_params( compiler_t* comp, uint16_t paramoffs[MAXPARAM]
     */
     //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
     for ( size_t i=0; i < numparams && i < MAXPARAM; ++i ) {
-        uint16_t nodepos = paramoffs[i];
-        if ( comp->tree[ nodepos ] != NT_USRFNARG ) {
+        node_t* nodepos = paramoffs[i];
+        if ( nodepos->type != NT_USRFNARG ) {
 UNEXP:      comp_error( comp, "Internal error (unexpected parameter node)" );
             return false;
         }
-        uint16_t datalen = EXTRACT16( comp, nodepos + 2U );
+        uint16_t datalen = nodepos->datalen;
         if ( datalen < 2U ) {
             goto UNEXP;
         }
-        uint16_t datapos = nodepos + UINT16_C(8);
-        params[i].paramtype = comp->tree[ datapos ];
-        params[i].paramname = (char*)( &comp->tree[ datapos + 1U ] );
+        params[i].paramtype = nodepos->data[0];
+        params[i].paramname = (char*)( &nodepos->data[1] );
     }
     return true;
 }
 
-bool comp_eat_usrfndecl( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_usrfndecl( compiler_t* comp, node_t** pnode ) {
     // usr-fn-decl := any-usr-fn-name [ TOK_LPAREN [ usr-fn-arg-list ] TOK_RPAREN ] usr-fn-body .
-    uint16_t fnname = NODEOFFS_NONE;
-    if ( !comp_eat_anyusrfnname( comp, &fnname ) || fnname == NODEOFFS_NONE ) {
+    node_t* fnname = NODE_NONE;
+    if ( !comp_eat_anyusrfnname( comp, &fnname ) || fnname == NODE_NONE ) {
         return false;
     }
     /*
@@ -1378,23 +1359,23 @@ bool comp_eat_usrfndecl( compiler_t* comp, uint16_t* pnodeoffs ) {
     */
     //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
     // get name
-    if ( comp->tree[ fnname ] != NT_NUMUSRFNNAME && comp->tree[ fnname ] != NT_STRUSRFNNAME ) {
+    if ( fnname->type != NT_NUMUSRFNNAME && fnname->type != NT_STRUSRFNNAME ) {
 UNEXP:  comp_error( comp, "Internal error (unexpected name node)" );
         return false;
     }
-    uint16_t datalen = EXTRACT16( comp, fnname + 2U );
+    uint16_t datalen = fnname->datalen;
     if ( datalen < 2U || datalen > 256U ) {
         goto UNEXP;
     }
-    uint16_t dataoffs = fnname + UINT16_C(8);
-    uint8_t functype = ( comp->tree[ dataoffs ] & VARTYPEM_BASE ) | VARTYPEF_FUNC;
+    const uint8_t* datap = fnname->data;
+    uint8_t functype = ( datap[0] & VARTYPEM_BASE ) | VARTYPEF_FUNC;
     static char name[ 256U ];
-    memcpy( name, &comp->tree[ dataoffs + 1U ], datalen - 1U );
+    memcpy( name, &datap[1], datalen - 1U );
     name[ datalen - 1U ] = '\0';
 
     // get arguments
-    uint16_t fnarglist = NODEOFFS_NONE;
-    uint16_t paramoffs[MAXPARAM];
+    node_t* fnarglist = NODE_NONE;
+    node_t* paramoffs[MAXPARAM];
     if ( comp->currtok == TOK_LPAREN ) {
         if ( !comp_fetchtok( comp ) ) {
             comp_error( comp, "Function argument list expected" );
@@ -1416,8 +1397,8 @@ UNEXP:  comp_error( comp, "Internal error (unexpected name node)" );
             return false;
         }
     }
-    uint16_t fnbody = NODEOFFS_NONE;
-    if ( !comp_eat_usrfnbody( comp, &fnbody ) || fnbody == NODEOFFS_NONE ) {
+    node_t* fnbody = NODE_NONE;
+    if ( !comp_eat_usrfnbody( comp, &fnbody ) || fnbody == NODE_NONE ) {
         comp_error( comp, "User function body expected" );
         return false;
     }
@@ -1445,23 +1426,23 @@ UNEXP:  comp_error( comp, "Internal error (unexpected name node)" );
     data[1] = (uint8_t)( varoffs >> UINT8_C(8) );
     data[2] = (uint8_t)  varoffs;
 
-    if ( !comp_create_node( comp, pnodeoffs, NT_USRFNDECL, UINT8_C(1), UINT16_C(3), data, (int) fnbody ) ||
-        *pnodeoffs == NODEOFFS_NONE ) {
+    if ( !comp_create_node( comp, pnode, NT_USRFNDECL, UINT8_C(1), UINT16_C(3), data, fnbody ) ||
+        *pnode == NODE_NONE ) {
         out_of_memory( comp );
         return false;
     }
     return true;
 }
 
-static bool comp_eat_usrfncall( compiler_t* comp, uint16_t* pnodeoffs, uint8_t nodetype,
-    uint8_t nametype, bool (*eater_func)( compiler_t*, uint16_t* ) ) {
+static bool comp_eat_usrfncall( compiler_t* comp, node_t** pnode, uint8_t nodetype,
+    uint8_t nametype, bool (*eater_func)( compiler_t*, node_t** ) ) {
     // num-usr-fn-call := num-usr-fn-name [ TOK_LPAREN [ expr-list ] TOK_RPAREN ] .
     // str-usr-fn-call := str-usr-fn-name [ TOK_LPAREN [ expr-list ] TOK_RPAREN ] .
-    uint16_t fnname = NODEOFFS_NONE;
-    if ( !eater_func( comp, &fnname ) || fnname == NODEOFFS_NONE ) {
+    node_t* fnname = NODE_NONE;
+    if ( !eater_func( comp, &fnname ) || fnname == NODE_NONE ) {
         return false;
     }
-    uint16_t exprlist = NODEOFFS_NONE;
+    node_t* exprlist = NODE_NONE;
     if ( comp->currtok == TOK_LPAREN && comp_fetchtok( comp ) ) {
         comp_eat_exprlist( comp, &exprlist );
         if ( comp->currtok != TOK_RPAREN || !comp_fetchtok( comp ) ) {
@@ -1470,20 +1451,20 @@ static bool comp_eat_usrfncall( compiler_t* comp, uint16_t* pnodeoffs, uint8_t n
     }
 
     //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
-    uint8_t nametype2 = comp->tree[ fnname ];
+    uint8_t nametype2 = fnname->type;
     if ( nametype2 != nametype ) {
 UNEXP:  comp_error( comp, "Internal error (unexpected name type)" );
         return false;
     }
-    uint16_t datalen  = EXTRACT16( comp, fnname + 2U );
-    uint16_t dataoffs = fnname + UINT16_C(8);
+    uint16_t datalen  = fnname->datalen;
+    const uint8_t* datap = fnname->data;
     if ( datalen < 2U || datalen > 256U ) {
         goto UNEXP;
     }
     // data is type + name
-    uint8_t functype = ( comp->tree[ dataoffs ] & VARTYPEM_BASE ) | VARTYPEF_FUNC;
+    uint8_t functype = ( datap[0] & VARTYPEM_BASE ) | VARTYPEF_FUNC;
     static char name[256];
-    memcpy( name, &comp->tree[ dataoffs + 1U ], datalen - 1U );
+    memcpy( name, &datap[1], datalen - 1U );
     name[ datalen - 1U ] = '\0';
 
     // lookup variable
@@ -1505,16 +1486,16 @@ UNDEF:  comp_error( comp, "Undefined function" );
     uint8_t  numargs = comp->rt->varmem.vars[ argoffs++ ];
 
     // check argument count
-    if ( numargs == UINT8_C(0) && exprlist == NODEOFFS_NONE ) {
+    if ( numargs == UINT8_C(0) && exprlist == NODE_NONE ) {
         // OK, no arguments
-    } else if ( numargs == UINT8_C(0) || exprlist == NODEOFFS_NONE ) {
+    } else if ( numargs == UINT8_C(0) || exprlist == NODE_NONE ) {
 MISM:   comp_error( comp, "Argument count mismatch" );
         return false;
     } else {
         //  <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
-        if ( comp->tree[ exprlist ] == NT_EXPRLIST ) {
+        if ( exprlist->type == NT_EXPRLIST ) {
             // several branches
-            uint8_t numbranches = comp->tree[ exprlist + 1U ];
+            size_t numbranches = exprlist->numbranches;
             if ( numbranches != numargs ) {
                 goto MISM;
             }
@@ -1544,25 +1525,25 @@ MISM:   comp_error( comp, "Argument count mismatch" );
     data[1] = (uint8_t)( varoffs >> UINT8_C(8) );
     data[2] = (uint8_t)  varoffs;
 
-    if ( !comp_create_node( comp, pnodeoffs, nodetype, UINT8_C(1), UINT16_C(3), data, (int) exprlist ) ||
-        *pnodeoffs == NODEOFFS_NONE ) {
+    if ( !comp_create_node( comp, pnode, nodetype, UINT8_C(1), UINT16_C(3), data, exprlist ) ||
+        *pnode == NODE_NONE ) {
         out_of_memory( comp );
         return false;
     }
     return true;
 }
 
-bool comp_eat_numusrfncall( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_numusrfncall( compiler_t* comp, node_t** pnode ) {
     // num-usr-fn-call := num-usr-fn-name TOK_LPAREN expr-list TOK_RPAREN .
-    return comp_eat_usrfncall( comp, pnodeoffs, NT_NUMUSRFNCALL, NT_NUMUSRFNNAME, comp_eat_numusrfnname );
+    return comp_eat_usrfncall( comp, pnode, NT_NUMUSRFNCALL, NT_NUMUSRFNNAME, comp_eat_numusrfnname );
 }
 
-bool comp_eat_strusrfncall( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_strusrfncall( compiler_t* comp, node_t** pnode ) {
     // str-usr-fn-call := str-usr-fn-name TOK_LPAREN expr-list TOK_RPAREN .
-    return comp_eat_usrfncall( comp, pnodeoffs, NT_STRUSRFNCALL, NT_STRUSRFNNAME, comp_eat_strusrfnname );
+    return comp_eat_usrfncall( comp, pnode, NT_STRUSRFNCALL, NT_STRUSRFNNAME, comp_eat_strusrfnname );
 }
 
-bool comp_eat_sysnumfn1argcall( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_sysnumfn1argcall( compiler_t* comp, node_t** pnode ) {
     /*
         sys-num-fn-1-arg-call := ( TOK_ASC | TOK_VAL | TOK_LEN ) TOK_LPAREN str-expr TOK_RPAREN |
                                  TOK_FRE TOK_LPAREN num-expr TOK_RPAREN .
@@ -1581,8 +1562,8 @@ bool comp_eat_sysnumfn1argcall( compiler_t* comp, uint16_t* pnodeoffs ) {
 OPEN:       comp_error( comp, "Opening parenthesis '(' expected" );
             return false;
         }
-        uint16_t arg1 = NODEOFFS_NONE;
-        if ( !comp_eat_strexpr( comp, &arg1 ) || arg1 == NODEOFFS_NONE ) {
+        node_t* arg1 = NODE_NONE;
+        if ( !comp_eat_strexpr( comp, &arg1 ) || arg1 == NODE_NONE ) {
             comp_error( comp, "String expression expected" );
             return false;
         }
@@ -1590,8 +1571,8 @@ OPEN:       comp_error( comp, "Opening parenthesis '(' expected" );
 CLOSE:      comp_error( comp, "Closing parenthesis ')' expected" );
             return false;
         }
-        if ( !comp_create_node( comp, pnodeoffs, NT_SYSNUMFUNCARGCALL, UINT8_C(1), UINT16_C(1), &tok, (int) arg1 ) ||
-            *pnodeoffs == NODEOFFS_NONE ) {
+        if ( !comp_create_node( comp, pnode, NT_SYSNUMFUNCARGCALL, UINT8_C(1), UINT16_C(1), &tok, arg1 ) ||
+            *pnode == NODE_NONE ) {
 OOM:        out_of_memory( comp );
             return false;
         }
@@ -1603,16 +1584,16 @@ OOM:        out_of_memory( comp );
         if ( comp->currtok != TOK_LPAREN || !comp_fetchtok( comp ) ) {
             goto OPEN;
         }
-        uint16_t arg1 = NODEOFFS_NONE;
-        if ( !comp_eat_numexpr( comp, &arg1 ) || arg1 == NODEOFFS_NONE ) {
+        node_t* arg1 = NODE_NONE;
+        if ( !comp_eat_numexpr( comp, &arg1 ) || arg1 == NODE_NONE ) {
             comp_error( comp, "Numeric expression expected" );
             return false;
         }
         if ( comp->currtok != TOK_RPAREN || !comp_fetchtok( comp ) ) {
             goto CLOSE;
         }
-        if ( !comp_create_node( comp, pnodeoffs, NT_SYSNUMFUNCARGCALL, UINT8_C(1), UINT16_C(1), &tok, (int) arg1 ) ||
-            *pnodeoffs == NODEOFFS_NONE ) {
+        if ( !comp_create_node( comp, pnode, NT_SYSNUMFUNCARGCALL, UINT8_C(1), UINT16_C(1), &tok, arg1 ) ||
+            *pnode == NODE_NONE ) {
             goto OOM;
         }
         return true;
@@ -1621,7 +1602,7 @@ OOM:        out_of_memory( comp );
     }
 }
 
-bool comp_eat_sysstrfn2argcall( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_sysstrfn2argcall( compiler_t* comp, node_t** pnode ) {
     /*
         sys-str-fn-2-arg-call := ( TOK_BIN | TOK_QUA | TOK_OCT | TOK_DEC | TOK_HEX ) TOK_STRING TOK_LPAREN num-expr
                                     [ TOK_COMMA num-expr ] TOK_RPAREN |
@@ -1649,13 +1630,13 @@ STRSIG:     comp_error( comp, "String sigil '$' expected" );
 OPEN:       comp_error( comp, "Opening parenthesis '(' expected" );
             return false;
         }
-        uint16_t arg1 = NODEOFFS_NONE, arg2 = NODEOFFS_NONE;
-        if ( !comp_eat_numexpr( comp, &arg1 ) || arg1 == NODEOFFS_NONE ) {
+        node_t* arg1 = NODE_NONE, *arg2 = NODE_NONE;
+        if ( !comp_eat_numexpr( comp, &arg1 ) || arg1 == NODE_NONE ) {
 NUMEX:      comp_error( comp, "Numeric expression expected" );
             return false;
         }
         if ( comp->currtok == TOK_COMMA && comp_fetchtok( comp ) ) {
-            if ( !comp_eat_numexpr( comp, &arg2 ) || arg2 == NODEOFFS_NONE ) {
+            if ( !comp_eat_numexpr( comp, &arg2 ) || arg2 == NODE_NONE ) {
                 goto NUMEX;
             }
         } else {
@@ -1673,7 +1654,7 @@ NUMEX:      comp_error( comp, "Numeric expression expected" );
             data[5] = (uint8_t)( u.ui64 >> UINT8_C(16) );
             data[6] = (uint8_t)( u.ui64 >> UINT8_C( 8) );
             data[7] = (uint8_t)( u.ui64                );
-            if ( !comp_create_node( comp, &arg2, NT_NUMLIT, UINT8_C(0), UINT16_C(8), data ) || arg2 == NODEOFFS_NONE ) {
+            if ( !comp_create_node( comp, &arg2, NT_NUMLIT, UINT8_C(0), UINT16_C(8), data ) || arg2 == NODE_NONE ) {
                 goto OOM;
             }
         }
@@ -1681,8 +1662,8 @@ NUMEX:      comp_error( comp, "Numeric expression expected" );
 CLOSE:      comp_error( comp, "Closing parenthesis ')' expected" );
             return false;
         }
-        if ( !comp_create_node( comp, pnodeoffs, NT_SYSSTRFUNCARGCALL, UINT8_C(2), UINT16_C(1), &tok, (int) arg1, (int) arg2 ) ||
-            *pnodeoffs == NODEOFFS_NONE ) {
+        if ( !comp_create_node( comp, pnode, NT_SYSSTRFUNCARGCALL, UINT8_C(2), UINT16_C(1), &tok, arg1, arg2 ) ||
+            *pnode == NODE_NONE ) {
 OOM:        out_of_memory( comp );
             return false;
         }
@@ -1698,15 +1679,15 @@ OOM:        out_of_memory( comp );
         if ( comp->currtok != TOK_LPAREN || !comp_fetchtok( comp ) ) {
             goto OPEN;
         }
-        uint16_t arg1 = NODEOFFS_NONE;
-        if ( !comp_eat_numexpr( comp, &arg1 ) || arg1 == NODEOFFS_NONE ) {
+        node_t* arg1 = NODE_NONE;
+        if ( !comp_eat_numexpr( comp, &arg1 ) || arg1 == NODE_NONE ) {
             goto NUMEX;
         }
         if ( comp->currtok != TOK_RPAREN || !comp_fetchtok( comp ) ) {
             goto CLOSE;
         }
-        if ( !comp_create_node( comp, pnodeoffs, NT_SYSSTRFUNCARGCALL, UINT8_C(1), UINT16_C(1), &tok, (int) arg1 ) ||
-            *pnodeoffs == NODEOFFS_NONE ) {
+        if ( !comp_create_node( comp, pnode, NT_SYSSTRFUNCARGCALL, UINT8_C(1), UINT16_C(1), &tok, arg1 ) ||
+            *pnode == NODE_NONE ) {
             goto OOM;
         }
         return true;
@@ -1721,8 +1702,8 @@ OOM:        out_of_memory( comp );
         if ( comp->currtok != TOK_LPAREN || !comp_fetchtok( comp ) ) {
             goto OPEN;
         }
-        uint16_t arg1 = NODEOFFS_NONE, arg2 = NODEOFFS_NONE;
-        if ( !comp_eat_strexpr( comp, &arg1 ) || arg1 == NODEOFFS_NONE ) {
+        node_t* arg1 = NODE_NONE, *arg2 = NODE_NONE;
+        if ( !comp_eat_strexpr( comp, &arg1 ) || arg1 == NODE_NONE ) {
 STREX:      comp_error( comp, "String expression expected" );
             return false;
         }
@@ -1730,14 +1711,14 @@ STREX:      comp_error( comp, "String expression expected" );
 COMMA:      comp_error( comp, "Comma ',' expected" );
             return false;
         }
-        if ( !comp_eat_numexpr( comp, &arg2 ) || arg2 == NODEOFFS_NONE ) {
+        if ( !comp_eat_numexpr( comp, &arg2 ) || arg2 == NODE_NONE ) {
             goto NUMEX;
         }
         if ( comp->currtok != TOK_RPAREN || !comp_fetchtok( comp ) ) {
             goto CLOSE;
         }
-        if ( !comp_create_node( comp, pnodeoffs, NT_SYSSTRFUNCARGCALL, UINT8_C(2), UINT16_C(1), &tok, (int) arg1, (int) arg2 ) ||
-            *pnodeoffs == NODEOFFS_NONE ) {
+        if ( !comp_create_node( comp, pnode, NT_SYSSTRFUNCARGCALL, UINT8_C(2), UINT16_C(1), &tok, arg1, arg2 ) ||
+            *pnode == NODE_NONE ) {
             goto OOM;
         }
         return true;
@@ -1752,18 +1733,18 @@ COMMA:      comp_error( comp, "Comma ',' expected" );
         if ( comp->currtok != TOK_LPAREN || !comp_fetchtok( comp ) ) {
             goto OPEN;
         }
-        uint16_t arg1 = NODEOFFS_NONE, arg2 = NODEOFFS_NONE, arg3 = NODEOFFS_NONE;
-        if ( !comp_eat_strexpr( comp, &arg1 ) || arg1 == NODEOFFS_NONE ) {
+        node_t* arg1 = NODE_NONE, *arg2 = NODE_NONE, *arg3 = NODE_NONE;
+        if ( !comp_eat_strexpr( comp, &arg1 ) || arg1 == NODE_NONE ) {
             goto STREX;
         }
         if ( comp->currtok != TOK_COMMA || !comp_fetchtok( comp ) ) {
             goto COMMA;
         }
-        if ( !comp_eat_numexpr( comp, &arg2 ) || arg2 == NODEOFFS_NONE ) {
+        if ( !comp_eat_numexpr( comp, &arg2 ) || arg2 == NODE_NONE ) {
             goto NUMEX;
         }
         if ( comp->currtok == TOK_COMMA && comp_fetchtok( comp ) ) {
-            if ( !comp_eat_numexpr( comp, &arg3 ) || arg3 == NODEOFFS_NONE ) {
+            if ( !comp_eat_numexpr( comp, &arg3 ) || arg3 == NODE_NONE ) {
                 goto NUMEX;
             }
         } else {
@@ -1781,15 +1762,15 @@ COMMA:      comp_error( comp, "Comma ',' expected" );
             data[5] = (uint8_t)( u.ui64 >> UINT8_C(16) );
             data[6] = (uint8_t)( u.ui64 >> UINT8_C( 8) );
             data[7] = (uint8_t)( u.ui64                );
-            if ( !comp_create_node( comp, &arg3, NT_NUMLIT, UINT8_C(0), UINT16_C(8), data ) || arg3 == NODEOFFS_NONE ) {
+            if ( !comp_create_node( comp, &arg3, NT_NUMLIT, UINT8_C(0), UINT16_C(8), data ) || arg3 == NODE_NONE ) {
                 goto OOM;
             }
         }
         if ( comp->currtok != TOK_RPAREN || !comp_fetchtok( comp ) ) {
             goto CLOSE;
         }
-        if ( !comp_create_node( comp, pnodeoffs, NT_SYSSTRFUNCARGCALL, UINT8_C(3), UINT16_C(1), &tok, (int) arg1, (int) arg2,
-            (int) arg3 ) || *pnodeoffs == NODEOFFS_NONE ) {
+        if ( !comp_create_node( comp, pnode, NT_SYSSTRFUNCARGCALL, UINT8_C(3), UINT16_C(1), &tok, arg1, arg2,
+            arg3 ) || *pnode == NODE_NONE ) {
             goto OOM;
         }
         return true;
@@ -1797,17 +1778,17 @@ COMMA:      comp_error( comp, "Comma ',' expected" );
     return false;
 }
 
-bool comp_eat_sysnumfuncargcall( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_sysnumfuncargcall( compiler_t* comp, node_t** pnode ) {
     // sys-num-fn-arg-call := sys-num-fn-1-arg-call .
-    return comp_eat_sysnumfn1argcall( comp, pnodeoffs );
+    return comp_eat_sysnumfn1argcall( comp, pnode );
 }
 
-bool comp_eat_sysstrfuncargcall( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_sysstrfuncargcall( compiler_t* comp, node_t** pnode ) {
     // sys-str-fn-arg-call := sys-str-fn-2-arg-call .
-    return comp_eat_sysstrfn2argcall( comp, pnodeoffs );
+    return comp_eat_sysstrfn2argcall( comp, pnode );
 }
 
-bool comp_eat_sysnoargnumcall( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_sysnoargnumcall( compiler_t* comp, node_t** pnode ) {
     // sys-noarg-num-name := TOK_TI .
     // sys-noarg-num := sys-noarg-num-name .
     // sys-noarg-num-call := sys-no-arg-num .
@@ -1815,14 +1796,14 @@ bool comp_eat_sysnoargnumcall( compiler_t* comp, uint16_t* pnodeoffs ) {
     if ( tok != TOK_TI || !comp_fetchtok( comp ) ) {
         return false;
     }
-    if ( !comp_create_node( comp, pnodeoffs, NT_SYSNOARGNUMCALL, UINT8_C(0), UINT16_C(1), &tok ) || *pnodeoffs == NODEOFFS_NONE ) {
+    if ( !comp_create_node( comp, pnode, NT_SYSNOARGNUMCALL, UINT8_C(0), UINT16_C(1), &tok ) || *pnode == NODE_NONE ) {
         out_of_memory( comp );
         return false;
     }
     return true;
 }
 
-bool comp_eat_sysnoargstrcall( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_sysnoargstrcall( compiler_t* comp, node_t** pnode ) {
     // sys-noarg-str-name := TOK_INKEY .
     // sys-noarg-str := sys-noarg-str-name TOK_STRING .
     // sys-noarg-str-call := sys-no-arg-str .
@@ -1834,61 +1815,61 @@ bool comp_eat_sysnoargstrcall( compiler_t* comp, uint16_t* pnodeoffs ) {
         comp_error( comp, "String sigil '$' expected" );
         return false;
     }
-    if ( !comp_create_node( comp, pnodeoffs, NT_SYSNOARGSTRCALL, UINT8_C(0), UINT16_C(1), &tok ) || *pnodeoffs == NODEOFFS_NONE ) {
+    if ( !comp_create_node( comp, pnode, NT_SYSNOARGSTRCALL, UINT8_C(0), UINT16_C(1), &tok ) || *pnode == NODE_NONE ) {
         out_of_memory( comp );
         return false;
     }
     return true;
 }
 
-bool comp_eat_numfunccall( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_numfunccall( compiler_t* comp, node_t** pnode ) {
     // num-func-call := num-usr-fn-call | sys-num-fn-arg-call | sys-noarg-num-call .
-    if ( comp_eat_numusrfncall( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+    if ( comp_eat_numusrfncall( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
-    if ( comp_eat_sysnumfuncargcall( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+    if ( comp_eat_sysnumfuncargcall( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
-    if ( comp_eat_sysnoargnumcall( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+    if ( comp_eat_sysnoargnumcall( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     return false;
 }
 
-bool comp_eat_strfunccall( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_strfunccall( compiler_t* comp, node_t** pnode ) {
     // str-func-call := str-usr-fn-call | sys-str-fn-arg-call | sys-noarg-str-call .
-    if ( comp_eat_strusrfncall( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+    if ( comp_eat_strusrfncall( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
-    if ( comp_eat_sysstrfuncargcall( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+    if ( comp_eat_sysstrfuncargcall( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
-    if ( comp_eat_sysnoargstrcall( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+    if ( comp_eat_sysnoargstrcall( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     return false;
 }
 
-bool comp_eat_strbaseexpr( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_strbaseexpr( compiler_t* comp, node_t** pnode ) {
     // str-base-expr := str-var-ref | str-lits | str-func-call .
-    if ( comp_eat_strvarref( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+    if ( comp_eat_strvarref( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
-    if ( comp_eat_strlits( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+    if ( comp_eat_strlits( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
-    if ( comp_eat_strfunccall( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+    if ( comp_eat_strfunccall( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     return false;
 }
 
-bool comp_eat_straddexpr( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_straddexpr( compiler_t* comp, node_t** pnode ) {
     // str-add-expr := str-base-expr { TOK_PLUS str-base-expr } .
-    return comp_eat_list( comp, pnodeoffs, NT_STRADDEXPR, comp_eat_strbaseexpr, TOK_PLUS, "String expression expected" );
+    return comp_eat_list( comp, pnode, NT_STRADDEXPR, comp_eat_strbaseexpr, TOK_PLUS, "String expression expected" );
 }
 
-bool comp_eat_strexpr( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_strexpr( compiler_t* comp, node_t** pnode ) {
     // str-expr := str-add-expr .
     /*
         NT_STREXPR
@@ -1897,25 +1878,25 @@ bool comp_eat_strexpr( compiler_t* comp, uint16_t* pnodeoffs ) {
             immediate processing:
                 - generated as a hint to the code generator
     */
-    uint16_t straddex = NODEOFFS_NONE;
-    if ( !comp_eat_straddexpr( comp, &straddex ) || straddex == NODEOFFS_NONE ) {
+    node_t* straddex = NODE_NONE;
+    if ( !comp_eat_straddexpr( comp, &straddex ) || straddex == NODE_NONE ) {
         return false;
     }
-    if ( !comp_create_node( comp, pnodeoffs, NT_STREXPR, UINT8_C(1), UINT16_C(0), 0, (int) straddex ) ||
-        *pnodeoffs == NODEOFFS_NONE ) {
+    if ( !comp_create_node( comp, pnode, NT_STREXPR, UINT8_C(1), UINT16_C(0), 0, straddex ) ||
+        *pnode == NODE_NONE ) {
         out_of_memory( comp );
         return false;
     }
     return true;
 }
 
-bool comp_eat_numsubexpr( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_numsubexpr( compiler_t* comp, node_t** pnode ) {
     // num-sub-expr := TOK_LPAREN num-expr TOK_RPAREN .
     if ( comp->currtok != TOK_LPAREN || !comp_fetchtok( comp ) ) {
         return false;
     }
-    uint16_t subexpr = NODEOFFS_NONE;
-    if ( !comp_eat_numexpr( comp, &subexpr ) || subexpr == NODEOFFS_NONE ) {
+    node_t* subexpr = NODE_NONE;
+    if ( !comp_eat_numexpr( comp, &subexpr ) || subexpr == NODE_NONE ) {
         comp_error( comp, "Numeric expression expected" );
         return false;
     }
@@ -1923,28 +1904,28 @@ bool comp_eat_numsubexpr( compiler_t* comp, uint16_t* pnodeoffs ) {
         comp_error( comp, "Closing parenthesis ')' expected" );
         return false;
     }
-    *pnodeoffs = subexpr;
+    *pnode = subexpr;
     return true;
 }
 
-bool comp_eat_numbaseexpr( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_numbaseexpr( compiler_t* comp, node_t** pnode ) {
     // num-base-expr := num-var-ref | num-lit | num-func-call | num-sub-expr .
-    if ( comp_eat_numvarref( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+    if ( comp_eat_numvarref( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
-    if ( comp_eat_numlit( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+    if ( comp_eat_numlit( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
-    if ( comp_eat_numfunccall( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+    if ( comp_eat_numfunccall( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
-    if ( comp_eat_numsubexpr( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+    if ( comp_eat_numsubexpr( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     return false;
 }
 
-bool comp_eat_list2( compiler_t* comp, uint16_t* pnodeoffs, uint8_t nodetype, comp_eatfn_t element_eater, const uint8_t* septoks,
+bool comp_eat_list2( compiler_t* comp, node_t** pnode, uint8_t nodetype, comp_eatfn_t element_eater, const uint8_t* septoks,
     const char* errortext, bool oneoperator, bool forceexpr ) {
     /*
         The meaning of the "oneoperator" flag: Sometimes we wish that no more than one NT_OPERATOR node is present.
@@ -1956,17 +1937,17 @@ bool comp_eat_list2( compiler_t* comp, uint16_t* pnodeoffs, uint8_t nodetype, co
         // push current context
         comp_push_context( comp );
     }
-    uint16_t expr1 = NODEOFFS_NONE;
-    if ( !element_eater( comp, &expr1 ) || expr1 == NODEOFFS_NONE ) {
+    node_t* expr1 = NODE_NONE;
+    if ( !element_eater( comp, &expr1 ) || expr1 == NODE_NONE ) {
         if ( forceexpr ) {
             // make sure first expression has not been read
             comp_pop_context( comp );
         }
         return false;
     }
-    uint16_t nodeoffs = NODEOFFS_NONE;
+    node_t* node = NODE_NONE;
     for (;;) {
-        bool mandatory = false; uint16_t expr2 = NODEOFFS_NONE;
+        bool mandatory = false; node_t* expr2 = NODE_NONE;
         const uint8_t* sep = septoks; uint8_t septok = TOK_EOL;
         while ( *sep ) {
             if ( comp->currtok == *sep ) {
@@ -1986,7 +1967,7 @@ bool comp_eat_list2( compiler_t* comp, uint16_t* pnodeoffs, uint8_t nodetype, co
             // operator not found: stop
             break;
         }
-        if ( !element_eater( comp, &expr2 ) || expr2 == NODEOFFS_NONE ) {
+        if ( !element_eater( comp, &expr2 ) || expr2 == NODE_NONE ) {
             if ( mandatory ) {  // mandatory expression missing: stop
                 if ( forceexpr ) {
                     // commit to changes before generating error
@@ -1999,9 +1980,9 @@ bool comp_eat_list2( compiler_t* comp, uint16_t* pnodeoffs, uint8_t nodetype, co
         }
         // expr2 does contain a new branch now, but we need a node to tell what operation is to be done to it
         // create a new node that contains that token as data
-        uint16_t operand = NODEOFFS_NONE;
-        if ( !comp_create_node( comp, &operand, NT_OPERATOR, UINT8_C(1), UINT16_C(1), &septok, (int) expr2 ) ||
-            operand == NODEOFFS_NONE ) {
+        node_t* operand = NODE_NONE;
+        if ( !comp_create_node( comp, &operand, NT_OPERATOR, UINT8_C(1), UINT16_C(1), &septok, expr2 ) ||
+            operand == NODE_NONE ) {
 OOM:        if ( forceexpr ) {
                 // commit to changes before generating error
                 comp_commit_context( comp );
@@ -2010,15 +1991,15 @@ OOM:        if ( forceexpr ) {
             return false;
         }
         // we have now a new branch; first see if we already have a node or need to create one
-        if ( nodeoffs == NODEOFFS_NONE ) {
-            if ( !comp_create_node( comp, &nodeoffs, nodetype, UINT8_C(2), UINT16_C(0), 0, (int) expr1, (int) operand ) ||
-                 nodeoffs == NODEOFFS_NONE ) {
+        if ( node == NODE_NONE ) {
+            if ( !comp_create_node( comp, &node, nodetype, UINT8_C(2), UINT16_C(0), 0, expr1, operand ) ||
+                 node == NODE_NONE ) {
                 // failed to create node: cancel operation
                 goto OOM;
             }
         } else {
             // the node already exists: add a new branch
-            if ( !comp_add_branch( comp, nodeoffs, operand ) ) {
+            if ( !comp_add_branch( comp, node, operand ) ) {
                 // something went wrong: cancel
                 goto OOM;
             }
@@ -2028,7 +2009,7 @@ OOM:        if ( forceexpr ) {
             break;
         }
     }
-    if ( nodeoffs == NODEOFFS_NONE && forceexpr ) {
+    if ( node == NODE_NONE && forceexpr ) {
         // rewind so that the first expression has not been read
         comp_pop_context( comp );
         return false;
@@ -2037,11 +2018,11 @@ OOM:        if ( forceexpr ) {
         comp_commit_context( comp );
     }
     // either return node with what we already have, or just the first branch
-    *pnodeoffs = nodeoffs != NODEOFFS_NONE ? nodeoffs : expr1;
+    *pnode = node != NODE_NONE ? node : expr1;
     return true;
 }
 
-bool comp_eat_numunaryex( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_numunaryex( compiler_t* comp, node_t** pnode ) {
     // num-unary-op := TOK_MINUS | TOK_PLUS | TOK_NOT .
     // num-unary-ex := [ num-unary-op ] num-base-expr .
     uint8_t tok = comp->currtok;
@@ -2055,8 +2036,8 @@ bool comp_eat_numunaryex( compiler_t* comp, uint16_t* pnodeoffs ) {
     if ( tok != TOK_EOL && !comp_fetchtok( comp ) ) {
         return false;
     }
-    uint16_t baseexpr = NODEOFFS_NONE;
-    if ( !comp_eat_numbaseexpr( comp, &baseexpr ) || baseexpr == NODEOFFS_NONE ) {
+    node_t* baseexpr = NODE_NONE;
+    if ( !comp_eat_numbaseexpr( comp, &baseexpr ) || baseexpr == NODE_NONE ) {
         if ( tok != TOK_EOL ) { // mandatory expression when operator present
             comp_error( comp, "Numeric expression expected" );
         }
@@ -2073,19 +2054,19 @@ bool comp_eat_numunaryex( compiler_t* comp, uint16_t* pnodeoffs ) {
     */
     if ( tok == TOK_EOL ) {
         // no operator present: return expression directly
-        *pnodeoffs = baseexpr;
+        *pnode = baseexpr;
         return true;
     }
     // operator present: create new node
-    if ( !comp_create_node( comp, pnodeoffs, NT_NUMUNARYEX, UINT8_C(1), UINT16_C(1), &tok, (int) baseexpr ) ||
-        *pnodeoffs == NODEOFFS_NONE ) {
+    if ( !comp_create_node( comp, pnode, NT_NUMUNARYEX, UINT8_C(1), UINT16_C(1), &tok, baseexpr ) ||
+        *pnode == NODE_NONE ) {
         out_of_memory( comp );
         return false;
     }
     return true;
 }
 
-bool comp_eat_nummultex( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_nummultex( compiler_t* comp, node_t** pnode ) {
     // num-mult-op := TOK_MULT | TOK_DIV | TOK_POW .
     // num-mult-ex := num-unary-ex { num-mult-op num-unary-ex } .
     static const uint8_t septoks[] = { TOK_MULT, TOK_DIV, TOK_POW, 0 };
@@ -2097,11 +2078,11 @@ bool comp_eat_nummultex( compiler_t* comp, uint16_t* pnodeoffs ) {
             immediate processing:
                 - generated only if a multiplication operator was used
     */
-    return comp_eat_list2( comp, pnodeoffs, NT_NUMMULTEX, comp_eat_numunaryex, septoks, "Multiplication expression expected",
+    return comp_eat_list2( comp, pnode, NT_NUMMULTEX, comp_eat_numunaryex, septoks, "Multiplication expression expected",
         false, false );
 }
 
-bool comp_eat_numaddex( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_numaddex( compiler_t* comp, node_t** pnode ) {
     // num-add-op := TOK_PLUS | TOK_MINUS .
     // num-add-ex := num-mult-ex { num-add-op num-mult-ex } .
     static const uint8_t septoks[] = { TOK_PLUS, TOK_MINUS, 0 };
@@ -2113,11 +2094,11 @@ bool comp_eat_numaddex( compiler_t* comp, uint16_t* pnodeoffs ) {
             immediate processing:
                 - generated only if an addition operator was used
     */
-    return comp_eat_list2( comp, pnodeoffs, NT_NUMADDEX, comp_eat_nummultex, septoks, "Add expression expected",
+    return comp_eat_list2( comp, pnode, NT_NUMADDEX, comp_eat_nummultex, septoks, "Add expression expected",
         false, false );
 }
 
-bool comp_eat_numshiftex( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_numshiftex( compiler_t* comp, node_t** pnode ) {
     // num-shift-op := TOK_LSHIFT | TOK_RSHIFT .
     // num-shift-ex := num-add-ex [ num-shift-op num-add-ex ] .
     static const uint8_t septoks[] = { TOK_LSHIFT, TOK_RSHIFT, 0 };
@@ -2129,11 +2110,11 @@ bool comp_eat_numshiftex( compiler_t* comp, uint16_t* pnodeoffs ) {
             immediate processing:
                 - generated only if a shift operator was used
     */
-    return comp_eat_list2( comp, pnodeoffs, NT_NUMSHIFTEX, comp_eat_numaddex, septoks, "Shift expression expected",
+    return comp_eat_list2( comp, pnode, NT_NUMSHIFTEX, comp_eat_numaddex, septoks, "Shift expression expected",
         true, false );
 }
 
-bool comp_eat_numcmpex( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_numcmpex( compiler_t* comp, node_t** pnode ) {
     // num-cmp-op := TOK_EQ | TOK_NE | TOK_LE | TOK_GE | TOK_LT | TOK_GT .
     // num-cmp-ex := num-shift-ex [ num-cmp-op num-shift-ex ] |
     //               str-expr num-cmp-op str-expr .
@@ -2148,18 +2129,18 @@ bool comp_eat_numcmpex( compiler_t* comp, uint16_t* pnodeoffs ) {
             immediate processing:
                 - generated only if a comparison operator was used
     */
-    if ( comp_eat_list2( comp, pnodeoffs, NT_NUMCMPEX, comp_eat_numshiftex, septoks, "Comparison expression expected",
-        true, false ) && *pnodeoffs != NODEOFFS_NONE ) {
+    if ( comp_eat_list2( comp, pnode, NT_NUMCMPEX, comp_eat_numshiftex, septoks, "Comparison expression expected",
+        true, false ) && *pnode != NODE_NONE ) {
         return true;
     }
-    if ( comp_eat_list2( comp, pnodeoffs, NT_STRCMPEX, comp_eat_strexpr, septoks, "Comparison expression expected",
-        true, true ) && *pnodeoffs != NODEOFFS_NONE ) {
+    if ( comp_eat_list2( comp, pnode, NT_STRCMPEX, comp_eat_strexpr, septoks, "Comparison expression expected",
+        true, true ) && *pnode != NODE_NONE ) {
         return true;
     }
     return false;
 }
 
-bool comp_eat_numandex( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_numandex( compiler_t* comp, node_t** pnode ) {
     // num-and-op := TOK_AND | TOK_NAND .
     // num-and-ex := num-cmp-ex { num-and-op num-cmp-ex } .
     static const uint8_t septoks[] = { TOK_AND, TOK_NAND, 0 };
@@ -2171,11 +2152,11 @@ bool comp_eat_numandex( compiler_t* comp, uint16_t* pnodeoffs ) {
             immediate processing:
                 - generated only if a multiplication operator was used
     */
-    return comp_eat_list2( comp, pnodeoffs, NT_NUMANDEX, comp_eat_numcmpex, septoks, "AND expression expected",
+    return comp_eat_list2( comp, pnode, NT_NUMANDEX, comp_eat_numcmpex, septoks, "AND expression expected",
         false, false );
 }
 
-bool comp_eat_numorex( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_numorex( compiler_t* comp, node_t** pnode ) {
     // num-or-op := TOK_OR | TOK_XOR | TOK_NOR | TOK_XNOR .
     // num-or-ex := num-and-ex { num-or-op num-and-ex } .
     static const uint8_t septoks[] = { TOK_OR, TOK_XOR, TOK_NOR, TOK_XNOR, 0 };
@@ -2187,11 +2168,11 @@ bool comp_eat_numorex( compiler_t* comp, uint16_t* pnodeoffs ) {
             immediate processing:
                 - generated only if a multiplication operator was used
     */
-    return comp_eat_list2( comp, pnodeoffs, NT_NUMOREX, comp_eat_numandex, septoks, "OR expression expected",
+    return comp_eat_list2( comp, pnode, NT_NUMOREX, comp_eat_numandex, septoks, "OR expression expected",
         false, false );
 }
 
-bool comp_eat_numexpr( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_numexpr( compiler_t* comp, node_t** pnode ) {
     // num-expr := num-or-ex .
     /*
         NT_NUMEXPR
@@ -2200,37 +2181,37 @@ bool comp_eat_numexpr( compiler_t* comp, uint16_t* pnodeoffs ) {
             immediate processing:
                 - generated as a hint to the code generator
     */
-    uint16_t numorex = NODEOFFS_NONE;
-    if ( !comp_eat_numorex( comp, &numorex ) || numorex == NODEOFFS_NONE ) {
+    node_t* numorex = NODE_NONE;
+    if ( !comp_eat_numorex( comp, &numorex ) || numorex == NODE_NONE ) {
         return false;
     }
-    if ( !comp_create_node( comp, pnodeoffs, NT_NUMEXPR, UINT8_C(1), UINT16_C(0), 0, (int) numorex ) ||
-        *pnodeoffs == NODEOFFS_NONE ) {
+    if ( !comp_create_node( comp, pnode, NT_NUMEXPR, UINT8_C(1), UINT16_C(0), 0, numorex ) ||
+        *pnode == NODE_NONE ) {
         out_of_memory( comp );
         return false;
     }
     return true;
 }
 
-bool comp_eat_expr( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_expr( compiler_t* comp, node_t** pnode ) {
     // expr := num-expr | str-expr .
     // [ NT_EXPR - not generated ]
-    if ( comp_eat_numexpr( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+    if ( comp_eat_numexpr( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
-    if ( comp_eat_strexpr( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+    if ( comp_eat_strexpr( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     return false;
 }
 
-bool comp_eat_savestmt( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_savestmt( compiler_t* comp, node_t** pnode ) {
     // save-stmt := SAVE str-expr [ TOK_COMMA TOK_NUMIDENT ] .
     if ( comp->currtok != TOK_SAVE || !comp_fetchtok( comp ) ) {
         return false;
     }
-    uint16_t strexpr = NODEOFFS_NONE;
-    if ( !comp_eat_strexpr( comp, &strexpr ) || strexpr == NODEOFFS_NONE ) {
+    node_t* strexpr = NODE_NONE;
+    if ( !comp_eat_strexpr( comp, &strexpr ) || strexpr == NODE_NONE ) {
         comp_error( comp, "String expression expected" );
         return false;
     }
@@ -2264,8 +2245,8 @@ bool comp_eat_savestmt( compiler_t* comp, uint16_t* pnodeoffs ) {
                   denoting save mode (A for ASCII, B (default) for binary)
                 - the file name need not be a string literal
     */
-    bool ok = comp_create_node( comp, pnodeoffs, NT_SAVESTMT, UINT8_C(1), (uint16_t) saveoptlen,
-        saveopt ? saveopt : "", (int) strexpr ) && *pnodeoffs != NODEOFFS_NONE;
+    bool ok = comp_create_node( comp, pnode, NT_SAVESTMT, UINT8_C(1), (uint16_t) saveoptlen,
+        saveopt ? saveopt : "", strexpr ) && *pnode != NODE_NONE;
     free( saveopt );
     if ( !ok ) {
         out_of_memory( comp );
@@ -2274,13 +2255,13 @@ bool comp_eat_savestmt( compiler_t* comp, uint16_t* pnodeoffs ) {
     return true;
 }
 
-bool comp_eat_chanspec( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_chanspec( compiler_t* comp, node_t** pnode ) {
     // chan-spec := TOK_LATTICE num-expr .
     if ( comp->currtok != TOK_LATTICE || !comp_fetchtok( comp ) ) {
         return false;
     }
-    uint16_t numexpr = NODEOFFS_NONE;
-    if ( !comp_eat_numexpr( comp, &numexpr ) || numexpr == NODEOFFS_NONE ) {
+    node_t* numexpr = NODE_NONE;
+    if ( !comp_eat_numexpr( comp, &numexpr ) || numexpr == NODE_NONE ) {
         comp_error( comp, "Numeric expression expected" );
         return false;
     }
@@ -2289,15 +2270,15 @@ bool comp_eat_chanspec( compiler_t* comp, uint16_t* pnodeoffs ) {
             branches:
                 - 1 branch of numeric expression
     */
-    if ( !comp_create_node( comp, pnodeoffs, NT_CHANSPEC, UINT8_C(1), UINT16_C(0), 0, (int) numexpr ) ||
-        *pnodeoffs == NODEOFFS_NONE ) {
+    if ( !comp_create_node( comp, pnode, NT_CHANSPEC, UINT8_C(1), UINT16_C(0), 0, numexpr ) ||
+        *pnode == NODE_NONE ) {
         out_of_memory( comp );
         return false;
     }
     return true;
 }
 
-bool comp_eat_printsep( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_printsep( compiler_t* comp, node_t** pnode ) {
     // print-sep := TOK_COMMA | TOK_SEMIC .
     uint8_t tok = comp->currtok;
     if ( tok != TOK_COMMA && tok != TOK_SEMIC ) {
@@ -2311,20 +2292,20 @@ bool comp_eat_printsep( compiler_t* comp, uint16_t* pnodeoffs ) {
             data:
                 - 1 byte of separator token
     */
-    if ( !comp_create_node( comp, pnodeoffs, NT_PRINTSEP, UINT8_C(0), UINT16_C(1), &tok ) || *pnodeoffs == NODEOFFS_NONE ) {
+    if ( !comp_create_node( comp, pnode, NT_PRINTSEP, UINT8_C(0), UINT16_C(1), &tok ) || *pnode == NODE_NONE ) {
         out_of_memory( comp );
         return false;
     }
     return true;
 }
 
-bool comp_eat_printarg( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_printarg( compiler_t* comp, node_t** pnode ) {
     // print-arg := expr [ print-sep ] .
-    uint16_t expr = NODEOFFS_NONE;
-    if ( !comp_eat_expr( comp, &expr ) || expr == NODEOFFS_NONE ) {
+    node_t* expr = NODE_NONE;
+    if ( !comp_eat_expr( comp, &expr ) || expr == NODE_NONE ) {
         return false;
     }
-    uint16_t sep = NODEOFFS_NONE;
+    node_t* sep = NODE_NONE;
     comp_eat_printsep( comp, &sep );
     /*
         NT_PRINTARG     print argument
@@ -2332,15 +2313,15 @@ bool comp_eat_printarg( compiler_t* comp, uint16_t* pnodeoffs ) {
                 - 1 branch of expression
                 - 1 optional branch of separator
     */
-    if ( !comp_create_node( comp, pnodeoffs, NT_PRINTARG, UINT8_C(2), UINT16_C(0), 0, (int) expr, (int) sep ) ||
-        *pnodeoffs == NODEOFFS_NONE ) {
+    if ( !comp_create_node( comp, pnode, NT_PRINTARG, UINT8_C(2), UINT16_C(0), 0, expr, sep ) ||
+        *pnode == NODE_NONE ) {
         out_of_memory( comp );
         return false;
     }
     return true;
 }
 
-bool comp_eat_printarglist( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_printarglist( compiler_t* comp, node_t** pnode ) {
     // print-arg-list := print-arg { print-arg } .
     /*
         NT_PRINTARGLIST     print argument
@@ -2349,22 +2330,22 @@ bool comp_eat_printarglist( compiler_t* comp, uint16_t* pnodeoffs ) {
             immediate processing:
                 - generated only if there's more than one print argument
     */
-    return comp_eat_list( comp, pnodeoffs, NT_PRINTARGLIST, comp_eat_printarg, TOK_EOL, "PRINT argument expected" );
+    return comp_eat_list( comp, pnode, NT_PRINTARGLIST, comp_eat_printarg, TOK_EOL, "PRINT argument expected" );
 }
 
-bool comp_eat_printstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_printstmt( compiler_t* comp, node_t** pnode ) {
     // print-stmt := TOK_PRINT [ chan-spec TOK_COMMA ] [ print-arg-list ] .
     if ( comp->currtok != TOK_PRINT || !comp_fetchtok( comp ) ) {
         return false;
     }
-    uint16_t chan = NODEOFFS_NONE;
-    if ( comp_eat_chanspec( comp, &chan ) && chan != NODEOFFS_NONE ) {
+    node_t* chan = NODE_NONE;
+    if ( comp_eat_chanspec( comp, &chan ) && chan != NODE_NONE ) {
         if ( comp->currtok != TOK_COMMA || !comp_fetchtok( comp ) ) {
             comp_error( comp, "Comma ',' expected" );
             return false;
         }
     }
-    uint16_t args = NODEOFFS_NONE;
+    node_t* args = NODE_NONE;
     comp_eat_printarglist( comp, &args );
     /*
         NT_PRINTSTMT    print statement
@@ -2372,38 +2353,38 @@ bool comp_eat_printstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
                 - 1 optional branch of channel info
                 - 1 optional branch of print argument list
     */
-    if ( !comp_create_node( comp, pnodeoffs, NT_PRINTSTMT, UINT8_C(2), UINT16_C(0), 0, (int) chan, (int) args ) ||
-        *pnodeoffs == NODEOFFS_NONE ) {
+    if ( !comp_create_node( comp, pnode, NT_PRINTSTMT, UINT8_C(2), UINT16_C(0), 0, chan, args ) ||
+        *pnode == NODE_NONE ) {
         out_of_memory( comp );
         return false;
     }
     return true;
 }
 
-bool comp_eat_iostmt( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_iostmt( compiler_t* comp, node_t** pnode ) {
     // io-stmt := save-stmt | print-stmt .
     // [ NT_IOSTMT - not generated ]
-    if ( comp_eat_savestmt( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+    if ( comp_eat_savestmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
-    if ( comp_eat_printstmt( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+    if ( comp_eat_printstmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     return false;
 }
 
-bool comp_eat_numassign( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_numassign( compiler_t* comp, node_t** pnode ) {
     // num-assign := num-var-ref TOK_EQ num-expr .
-    uint16_t varref = NODEOFFS_NONE;
-    if ( !comp_eat_numvarref( comp, &varref ) || varref == NODEOFFS_NONE ) {
+    node_t* varref = NODE_NONE;
+    if ( !comp_eat_numvarref( comp, &varref ) || varref == NODE_NONE ) {
         return false;
     }
     if ( comp->currtok != TOK_EQ || !comp_fetchtok( comp ) ) {
         comp_error( comp, "Assignment operator '=' expected" );
         return false;
     }
-    uint16_t numexpr = NODEOFFS_NONE;
-    if ( !comp_eat_numexpr( comp, &numexpr ) || numexpr == NODEOFFS_NONE ) {
+    node_t* numexpr = NODE_NONE;
+    if ( !comp_eat_numexpr( comp, &numexpr ) || numexpr == NODE_NONE ) {
         comp_error( comp, "Numeric expression expected" );
         return false;
     }
@@ -2413,26 +2394,26 @@ bool comp_eat_numassign( compiler_t* comp, uint16_t* pnodeoffs ) {
                 - 1 branch of numeric variable reference
                 - 1 branch of numeric expression
     */
-    if ( !comp_create_node( comp, pnodeoffs, NT_NUMASSIGN, UINT8_C(2), UINT16_C(0), 0, (int) varref, (int) numexpr ) ||
-        *pnodeoffs == NODEOFFS_NONE ) {
+    if ( !comp_create_node( comp, pnode, NT_NUMASSIGN, UINT8_C(2), UINT16_C(0), 0, varref, numexpr ) ||
+        *pnode == NODE_NONE ) {
         out_of_memory( comp );
         return false;
     }
     return true;
 }
 
-bool comp_eat_strassign( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_strassign( compiler_t* comp, node_t** pnode ) {
     // str-assign := str-var-ref TOK_EQ str-expr .
-    uint16_t varref = NODEOFFS_NONE;
-    if ( !comp_eat_strvarref( comp, &varref ) || varref == NODEOFFS_NONE ) {
+    node_t* varref = NODE_NONE;
+    if ( !comp_eat_strvarref( comp, &varref ) || varref == NODE_NONE ) {
         return false;
     }
     if ( comp->currtok != TOK_EQ || !comp_fetchtok( comp ) ) {
         comp_error( comp, "Assignment operator '=' expected" );
         return false;
     }
-    uint16_t strexpr = NODEOFFS_NONE;
-    if ( !comp_eat_strexpr( comp, &strexpr ) || strexpr == NODEOFFS_NONE ) {
+    node_t* strexpr = NODE_NONE;
+    if ( !comp_eat_strexpr( comp, &strexpr ) || strexpr == NODE_NONE ) {
         comp_error( comp, "String expression expected" );
         return false;
     }
@@ -2442,15 +2423,15 @@ bool comp_eat_strassign( compiler_t* comp, uint16_t* pnodeoffs ) {
                 - 1 branch of string variable reference
                 - 1 branch of string expression
     */
-    if ( !comp_create_node( comp, pnodeoffs, NT_STRASSIGN, UINT8_C(2), UINT16_C(0), 0, (int) varref, (int) strexpr ) ||
-        *pnodeoffs == NODEOFFS_NONE ) {
+    if ( !comp_create_node( comp, pnode, NT_STRASSIGN, UINT8_C(2), UINT16_C(0), 0, varref, strexpr ) ||
+        *pnode == NODE_NONE ) {
         out_of_memory( comp );
         return false;
     }
     return true;
 }
 
-bool comp_eat_substrassign( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_substrassign( compiler_t* comp, node_t** pnode ) {
     // substr-op := TOK_LEFT | TOK_MID | TOK_RIGHT .
     // substr-assign := substr-op TOK_STRING TOK_LPAREN expr-list TOK_RPAREN TOK_EQ str-expr .
     uint8_t tok = comp->currtok;
@@ -2471,8 +2452,8 @@ bool comp_eat_substrassign( compiler_t* comp, uint16_t* pnodeoffs ) {
         comp_error( comp, "Opening parenthesis '(' expected" );
         return false;
     }
-    uint16_t exprlist = NODEOFFS_NONE;
-    if ( !comp_eat_exprlist( comp, &exprlist ) || exprlist == NODEOFFS_NONE ) {
+    node_t* exprlist = NODE_NONE;
+    if ( !comp_eat_exprlist( comp, &exprlist ) || exprlist == NODE_NONE ) {
         comp_error( comp, "Expression list expected" );
         return false;
     }
@@ -2484,8 +2465,8 @@ bool comp_eat_substrassign( compiler_t* comp, uint16_t* pnodeoffs ) {
         comp_error( comp, "Assignment operator '=' expected" );
         return false;
     }
-    uint16_t strexpr = NODEOFFS_NONE;
-    if ( !comp_eat_strexpr( comp, &strexpr ) || strexpr == NODEOFFS_NONE ) {
+    node_t* strexpr = NODE_NONE;
+    if ( !comp_eat_strexpr( comp, &strexpr ) || strexpr == NODE_NONE ) {
         comp_error( comp, "String expression expected after '='" );
         return false;
     }
@@ -2497,30 +2478,30 @@ bool comp_eat_substrassign( compiler_t* comp, uint16_t* pnodeoffs ) {
                 - 1 branch of expression list
                 - 1 branch of string expression
     */
-    if ( !comp_create_node( comp, pnodeoffs, NT_SUBSTRASSIGN, UINT8_C(2), UINT16_C(1), &tok, (int) exprlist, (int) strexpr ) ||
-        *pnodeoffs == NODEOFFS_NONE ) {
+    if ( !comp_create_node( comp, pnode, NT_SUBSTRASSIGN, UINT8_C(2), UINT16_C(1), &tok, exprlist, strexpr ) ||
+        *pnode == NODE_NONE ) {
         out_of_memory( comp );
         return false;
     }
     return true;
 }
 
-bool comp_eat_anyassign( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_anyassign( compiler_t* comp, node_t** pnode ) {
     // any-assign := num-assign | substr-assign | str-assign .
     // [ NT_ANYASSIGN - not generated ]
-    if ( comp_eat_numassign( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+    if ( comp_eat_numassign( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
-    if ( comp_eat_substrassign( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+    if ( comp_eat_substrassign( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
-    if ( comp_eat_strassign( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+    if ( comp_eat_strassign( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     return false;
 }
 
-bool comp_eat_assignlist( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_assignlist( compiler_t* comp, node_t** pnode ) {
     // assign-list := any-assign { TOK_COMMA any-assign } .
     /*
         NT_ASSIGNLIST       assignment list
@@ -2529,10 +2510,10 @@ bool comp_eat_assignlist( compiler_t* comp, uint16_t* pnodeoffs ) {
             immediate processing:
                 - not generated if there's only one assignment expression
     */
-    return comp_eat_list( comp, pnodeoffs, NT_ASSIGNLIST, comp_eat_anyassign, TOK_COMMA, "Assignment expected" );
+    return comp_eat_list( comp, pnode, NT_ASSIGNLIST, comp_eat_anyassign, TOK_COMMA, "Assignment expected" );
 }
 
-bool comp_eat_letstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_letstmt( compiler_t* comp, node_t** pnode ) {
     // let-stmt := [ TOK_LET ] assign-list .
     bool mandatory = false;
     if ( comp->currtok == TOK_LET ) {
@@ -2542,8 +2523,8 @@ bool comp_eat_letstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
         // if LET is given, assignment list must be too.
         mandatory = true;
     }
-    uint16_t assignlist = NODEOFFS_NONE;
-    if ( !comp_eat_assignlist( comp, &assignlist ) || assignlist == NODEOFFS_NONE ) {
+    node_t* assignlist = NODE_NONE;
+    if ( !comp_eat_assignlist( comp, &assignlist ) || assignlist == NODE_NONE ) {
         if ( mandatory ) {
             comp_error( comp, "Assignment list expected after LET" );
         }
@@ -2554,21 +2535,21 @@ bool comp_eat_letstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
             branches:
                 - 1 branch of assignment list
     */
-    if ( !comp_create_node( comp, pnodeoffs, NT_LETSTMT, UINT8_C(1), UINT16_C(0), 0, (int) assignlist ) ||
-        *pnodeoffs == NODEOFFS_NONE ) {
+    if ( !comp_create_node( comp, pnode, NT_LETSTMT, UINT8_C(1), UINT16_C(0), 0, assignlist ) ||
+        *pnode == NODE_NONE ) {
         out_of_memory( comp );
         return false;
     }
     return true;
 }
 
-bool comp_eat_dimstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_dimstmt( compiler_t* comp, node_t** pnode ) {
     // dim-stmt := TOK_DIM array-decl-list .
     if ( comp->currtok != TOK_DIM || !comp_fetchtok( comp ) ) {
         return false;
     }
-    uint16_t decllist = NODEOFFS_NONE;
-    if ( !comp_eat_arraydecllist( comp, &decllist ) || decllist == NODEOFFS_NONE ) {
+    node_t* decllist = NODE_NONE;
+    if ( !comp_eat_arraydecllist( comp, &decllist ) || decllist == NODE_NONE ) {
         comp_error( comp, "Array declaration list expected" );
         return false;
     }
@@ -2577,21 +2558,21 @@ bool comp_eat_dimstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
             branches:
                 - 1 branch of array declarator list
     */
-    if ( !comp_create_node( comp, pnodeoffs, NT_DIMSTMT, UINT8_C(1), UINT16_C(0), 0, (int) decllist ) ||
-        *pnodeoffs == NODEOFFS_NONE ) {
+    if ( !comp_create_node( comp, pnode, NT_DIMSTMT, UINT8_C(1), UINT16_C(0), 0, decllist ) ||
+        *pnode == NODE_NONE ) {
         out_of_memory( comp );
         return false;
     }
     return true;
 }
 
-bool comp_eat_erasestmt( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_erasestmt( compiler_t* comp, node_t** pnode ) {
     // erase-stmt := TOK_ERASE empty-array-ref-list .
     if ( comp->currtok != TOK_ERASE || !comp_fetchtok( comp ) ) {
         return false;
     }
-    uint16_t reflist = NODEOFFS_NONE;
-    if ( !comp_eat_emptyarrayreflist( comp, &reflist ) || reflist == NODEOFFS_NONE ) {
+    node_t* reflist = NODE_NONE;
+    if ( !comp_eat_emptyarrayreflist( comp, &reflist ) || reflist == NODE_NONE ) {
         comp_error( comp, "Empty array reference list expected" );
         return false;
     }
@@ -2600,21 +2581,21 @@ bool comp_eat_erasestmt( compiler_t* comp, uint16_t* pnodeoffs ) {
             branches:
                 - 1 branch of empty array reference list
     */
-    if ( !comp_create_node( comp, pnodeoffs, NT_ERASESTMT, UINT8_C(1), UINT16_C(0), 0, (int) reflist ) ||
-        *pnodeoffs == NODEOFFS_NONE ) {
+    if ( !comp_create_node( comp, pnode, NT_ERASESTMT, UINT8_C(1), UINT16_C(0), 0, reflist ) ||
+        *pnode == NODE_NONE ) {
         out_of_memory( comp );
         return false;
     }
     return true;
 }
 
-bool comp_eat_defstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_defstmt( compiler_t* comp, node_t** pnode ) {
     // def-stmt := TOK_DEF usr-fn-decl .
     if ( comp->currtok != TOK_DEF || !comp_fetchtok( comp ) ) {
         return false;
     }
-    uint16_t fndecl = NODEOFFS_NONE;
-    if ( !comp_eat_usrfndecl( comp, &fndecl ) || fndecl == NODEOFFS_NONE ) {
+    node_t* fndecl = NODE_NONE;
+    if ( !comp_eat_usrfndecl( comp, &fndecl ) || fndecl == NODE_NONE ) {
         comp_error( comp, "User function declaration expected" );
         return false;
     }
@@ -2623,40 +2604,40 @@ bool comp_eat_defstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
             branches:
                 - 1 branch of user function declaration
     */
-    if ( !comp_create_node( comp, pnodeoffs, NT_DEFSTMT, UINT8_C(1), UINT16_C(0), 0, (int) fndecl ) ||
-        *pnodeoffs == NODEOFFS_NONE ) {
+    if ( !comp_create_node( comp, pnode, NT_DEFSTMT, UINT8_C(1), UINT16_C(0), 0, fndecl ) ||
+        *pnode == NODE_NONE ) {
         out_of_memory( comp );
         return false;
     }
     return true;
 }
 
-bool comp_eat_assignstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_assignstmt( compiler_t* comp, node_t** pnode ) {
     // assign-stmt := let-stmt | dim-stmt | erase-stmt | def-stmt .
     // [ NT_ASSIGNSTMT - not generated ]
-    if ( comp_eat_letstmt( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+    if ( comp_eat_letstmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
-    if ( comp_eat_dimstmt( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+    if ( comp_eat_dimstmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
-    if ( comp_eat_erasestmt( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+    if ( comp_eat_erasestmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
-    if ( comp_eat_defstmt( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+    if ( comp_eat_defstmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     return false;
 }
 
-bool comp_eat_forstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_forstmt( compiler_t* comp, node_t** pnode ) {
     // for-stmt := TOK_FOR num-base-var-ref TOK_EQ num-expr TOK_TO num-expr [ TOK_STEP num-expr ] .
     if ( comp->currtok != TOK_FOR || !comp_fetchtok( comp ) ) {
         return false;
     }
     // loop variable
-    uint16_t varref = NODEOFFS_NONE;
-    if ( !comp_eat_numbasevarref( comp, &varref ) || varref == NODEOFFS_NONE ) {
+    node_t* varref = NODE_NONE;
+    if ( !comp_eat_numbasevarref( comp, &varref ) || varref == NODE_NONE ) {
         comp_error( comp, "Numeric variable expected" );
         return false;
     }
@@ -2665,8 +2646,8 @@ bool comp_eat_forstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
         return false;
     }
     // from expression
-    uint16_t fromexp = NODEOFFS_NONE;
-    if ( !comp_eat_numexpr( comp, &fromexp ) || fromexp == NODEOFFS_NONE ) {
+    node_t* fromexp = NODE_NONE;
+    if ( !comp_eat_numexpr( comp, &fromexp ) || fromexp == NODE_NONE ) {
         comp_error( comp, "Numeric expression expected" );
         return false;
     }
@@ -2675,15 +2656,15 @@ bool comp_eat_forstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
         return false;
     }
     // TO expression
-    uint16_t toexp = NODEOFFS_NONE;
-    if ( !comp_eat_numexpr( comp, &toexp ) || toexp == NODEOFFS_NONE ) {
+    node_t* toexp = NODE_NONE;
+    if ( !comp_eat_numexpr( comp, &toexp ) || toexp == NODE_NONE ) {
         comp_error( comp, "Numeric expression expected" );
         return false;
     }
-    uint16_t stepexp = NODEOFFS_NONE;
+    node_t* stepexp = NODE_NONE;
     if ( comp->currtok == TOK_STEP && comp_fetchtok( comp ) ) {
         // STEP expression
-        if ( !comp_eat_numexpr( comp, &stepexp ) || stepexp == NODEOFFS_NONE ) {
+        if ( !comp_eat_numexpr( comp, &stepexp ) || stepexp == NODE_NONE ) {
             comp_error( comp, "Numeric expression expected" );
             return false;
         }
@@ -2697,20 +2678,20 @@ bool comp_eat_forstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
                 - 1 branch of STEP expression (may be empty)
     */
     // create node
-    if ( !comp_create_node( comp, pnodeoffs, NT_FORSTMT, UINT8_C(4), UINT16_C(0), 0,
-        (int) varref, (int) fromexp, (int) toexp, (int) stepexp ) || *pnodeoffs == NODEOFFS_NONE ) {
+    if ( !comp_create_node( comp, pnode, NT_FORSTMT, UINT8_C(4), UINT16_C(0), 0,
+        varref, fromexp, toexp, stepexp ) || *pnode == NODE_NONE ) {
         out_of_memory( comp );
         return false;
     }
     return true;
 }
 
-bool comp_eat_nextstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_nextstmt( compiler_t* comp, node_t** pnode ) {
     // next-stmt := TOK_NEXT [ num-base-var-ref { TOK_COMMA num-base-var-ref } ] .
     if ( comp->currtok != TOK_NEXT || !comp_fetchtok( comp ) ) {
         return false;
     }
-    uint16_t reflist = NODEOFFS_NONE;
+    node_t* reflist = NODE_NONE;
     comp_eat_list( comp, &reflist, NT_NUMBASEVARREFLIST, comp_eat_numbasevarref, TOK_COMMA, "Numeric variable reference expected" );
     /*
         NT_NEXTSTMT     NEXT statement
@@ -2718,15 +2699,15 @@ bool comp_eat_nextstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
                 - 1 branch of variable reference list
     */
     // create node
-    if ( !comp_create_node( comp, pnodeoffs, NT_NEXTSTMT, UINT8_C(1), UINT16_C(0), 0, (int) reflist ) ||
-        *pnodeoffs == NODEOFFS_NONE ) {
+    if ( !comp_create_node( comp, pnode, NT_NEXTSTMT, UINT8_C(1), UINT16_C(0), 0, reflist ) ||
+        *pnode == NODE_NONE ) {
         out_of_memory( comp );
         return false;
     }
     return true;
 }
 
-bool comp_eat_gototarget( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_gototarget( compiler_t* comp, node_t** pnode ) {
     // dec-lit := TOK_DECLIT | TOK_DEC0 .. TOK_DEC9 .
     // goto-target := dec-lit | TOK_NUMIDENT .
     double num = 0; char* label = 0;
@@ -2787,14 +2768,14 @@ bool comp_eat_gototarget( compiler_t* comp, uint16_t* pnodeoffs ) {
                 - 1 byte of type (integer or label)
                 - 3 bytes of line number or variable offset (label!, high byte zero)
     */
-    if ( !comp_create_node( comp, pnodeoffs, NT_GOTOTARGET, UINT8_C(0), UINT16_C(4), data ) || *pnodeoffs == NODEOFFS_NONE ) {
+    if ( !comp_create_node( comp, pnode, NT_GOTOTARGET, UINT8_C(0), UINT16_C(4), data ) || *pnode == NODE_NONE ) {
         out_of_memory( comp );
         return false;
     }
     return true;
 }
 
-bool comp_eat_gotostmt( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_gotostmt( compiler_t* comp, node_t** pnode ) {
     // goto-kw := TOK_GOTO | TOK_GOSUB | TOK_GO ( TOK_TO | TOK_SUB ) .
     // goto-stmt := goto-kw goto-target .
     uint8_t tok = TOK_EOL;
@@ -2818,8 +2799,8 @@ UNEXP:      comp_error( comp, "TO or SUB expected after GO" );
     } else {
         return false;
     }
-    uint16_t target = NODEOFFS_NONE;
-    if ( !comp_eat_gototarget( comp, &target ) || target == NODEOFFS_NONE ) {
+    node_t* target = NODE_NONE;
+    if ( !comp_eat_gototarget( comp, &target ) || target == NODE_NONE ) {
         comp_error( comp, "Jump target expected" );
         return false;
     }
@@ -2830,27 +2811,27 @@ UNEXP:      comp_error( comp, "TO or SUB expected after GO" );
             branches:
                 - 1 branch of goto/gosub target
     */
-    if ( !comp_create_node( comp, pnodeoffs, NT_GOTOSTMT, UINT8_C(1), UINT16_C(1), &tok, (int) target ) ||
-        *pnodeoffs == NODEOFFS_NONE ) {
+    if ( !comp_create_node( comp, pnode, NT_GOTOSTMT, UINT8_C(1), UINT16_C(1), &tok, target ) ||
+        *pnode == NODE_NONE ) {
         out_of_memory( comp );
         return false;
     }
     return true;
 }
 
-bool comp_eat_returnstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_returnstmt( compiler_t* comp, node_t** pnode ) {
     // return-stmt := TOK_RETURN .
     if ( comp->currtok != TOK_RETURN || !comp_fetchtok( comp ) ) {
         return false;
     }
-    if ( !comp_create_node( comp, pnodeoffs, NT_RETURNSTMT, UINT8_C(0), UINT16_C(0), 0 ) || *pnodeoffs == NODEOFFS_NONE ) {
+    if ( !comp_create_node( comp, pnode, NT_RETURNSTMT, UINT8_C(0), UINT16_C(0), 0 ) || *pnode == NODE_NONE ) {
         out_of_memory( comp );
         return false;
     }
     return true;
 }
 
-bool comp_eat_labelstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_labelstmt( compiler_t* comp, node_t** pnode ) {
     // label-stmt := TOK_LABEL TOK_NUMIDENT .
     if ( comp->currtok != TOK_LABEL || !comp_fetchtok( comp ) ) {
         return false;
@@ -2883,7 +2864,7 @@ UNEXP:  comp_error( comp, "Numeric identifier expected" );
     uint8_t data[2];
     data[0] = (uint8_t)( labvar >> UINT8_C(8) );
     data[1] = (uint8_t)  labvar;
-    if ( !comp_create_node( comp, pnodeoffs, NT_LABELSTMT, UINT8_C(0), UINT16_C(2), data ) || *pnodeoffs == NODEOFFS_NONE ) {
+    if ( !comp_create_node( comp, pnode, NT_LABELSTMT, UINT8_C(0), UINT16_C(2), data ) || *pnode == NODE_NONE ) {
         out_of_memory( comp );
         return false;
     }
@@ -2921,7 +2902,7 @@ UNEXP:      comp_error( comp, "TO or SUB expected after GO" );
     return true;
 }
 
-bool comp_eat_singlelineifstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_singlelineifstmt( compiler_t* comp, node_t** pnode ) {
     // singleline-if-stmt := ( TOK_IF | TOK_UNLESS ) num-expr
     //                       ( then-kw  goto-target [ TOK_ELSE goto-target ] |
     //                         TOK_THEN stmt-list   [ TOK_ELSE stmt-list   ] ) .
@@ -2935,8 +2916,8 @@ bool comp_eat_singlelineifstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
 POP:    comp_pop_context( comp );
         return false;
     }
-    uint16_t numexpr = NODEOFFS_NONE;
-    if ( !comp_eat_numexpr( comp, &numexpr ) || numexpr == NODEOFFS_NONE ) {
+    node_t* numexpr = NODE_NONE;
+    if ( !comp_eat_numexpr( comp, &numexpr ) || numexpr == NODE_NONE ) {
         goto POP;
     }
     uint8_t gotok = TOK_EOL;
@@ -2945,14 +2926,14 @@ POP:    comp_pop_context( comp );
     }
     // -- second marker: at THEN or GOTO keyword
     comp_push_context( comp );
-    uint16_t target1 = NODEOFFS_NONE, target2 = NODEOFFS_NONE;
-    if ( comp_eat_gototarget( comp, &target1 ) && target1 != NODEOFFS_NONE ) {
+    node_t* target1 = NODE_NONE, *target2 = NODE_NONE;
+    if ( comp_eat_gototarget( comp, &target1 ) && target1 != NODE_NONE ) {
         // 1st variant, using one or two goto targets
         comp_commit_context( comp );
         comp_commit_context( comp );
         if ( comp->currtok == TOK_ELSE && comp_fetchtok( comp ) ) {
             // ELSE branch on 1st variant: Must also be GOTO target
-            if ( !comp_eat_gototarget( comp, &target2 ) || target2 == NODEOFFS_NONE ) {
+            if ( !comp_eat_gototarget( comp, &target2 ) || target2 == NODE_NONE ) {
                 comp_error( comp, "Jump target expected" );
                 return false;
             }
@@ -2960,8 +2941,8 @@ POP:    comp_pop_context( comp );
     } else if ( gotok == TOK_THEN ) {
         // 2nd variant, using two statement lists: make sure we're at the right position
         comp_pop_context( comp );
-        target1 = NODEOFFS_NONE;
-        if ( !comp_eat_stmtlist( comp, &target1 ) || target1 == NODEOFFS_NONE ) {
+        target1 = NODE_NONE;
+        if ( !comp_eat_stmtlist( comp, &target1 ) || target1 == NODE_NONE ) {
             // doesn't satisfy statement list, could be multiline IF/UNLESS, rewind
             goto POP;
         }
@@ -2970,7 +2951,7 @@ POP:    comp_pop_context( comp );
         // check for ELSE branch
         if ( comp->currtok == TOK_ELSE && comp_fetchtok( comp ) ) {
             // ELSE branch on 1st variant: Must also be GOTO target
-            if ( !comp_eat_stmtlist( comp, &target2 ) || target2 == NODEOFFS_NONE ) {
+            if ( !comp_eat_stmtlist( comp, &target2 ) || target2 == NODE_NONE ) {
                 comp_error( comp, "Statement list expected" );
                 return false;
             }
@@ -2997,8 +2978,8 @@ POP:    comp_pop_context( comp );
     uint8_t data[2];
     data[0] = iftok;
     data[1] = gotok;
-    if ( !comp_create_node( comp, pnodeoffs, NT_SINGLELINEIFSTMT, UINT8_C(2), UINT16_C(2), data,
-        (int) target1, (int) target2 ) || *pnodeoffs == NODEOFFS_NONE ) {
+    if ( !comp_create_node( comp, pnode, NT_SINGLELINEIFSTMT, UINT8_C(2), UINT16_C(2), data,
+        target1, target2 ) || *pnode == NODE_NONE ) {
         out_of_memory( comp );
         return false;
     }
@@ -3033,7 +3014,7 @@ OK:     if ( pendiftok ) {
     return false;
 }
 
-bool comp_eat_multilineifstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_multilineifstmt( compiler_t* comp, node_t** pnode ) {
     /*
         endif-kw := TOK_END TOK_IF | TOK_ENDIF .
         endunless-kw := TOK_END TOK_UNLESS | TOK_ENDUNLESS .
@@ -3053,8 +3034,8 @@ bool comp_eat_multilineifstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
     if ( !comp_fetchtok( comp ) ) {
         return false;
     }
-    uint16_t numexpr = NODEOFFS_NONE;
-    if ( !comp_eat_numexpr( comp, &numexpr ) || numexpr == NODEOFFS_NONE ) {
+    node_t* numexpr = NODE_NONE;
+    if ( !comp_eat_numexpr( comp, &numexpr ) || numexpr == NODE_NONE ) {
         comp_error( comp, "Numeric expression expected" );
         return false;
     }
@@ -3066,12 +3047,12 @@ bool comp_eat_multilineifstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
         comp_error( comp, "End of line expected" );
         return false;
     }
-    uint16_t target1 = NODEOFFS_NONE, target2 = NODEOFFS_NONE;
-    if ( !comp_eat_stmtlines( comp, &target1 ) || target1 == NODEOFFS_NONE ) {
+    node_t* target1 = NODE_NONE, *target2 = NODE_NONE;
+    if ( !comp_eat_stmtlines( comp, &target1 ) || target1 == NODE_NONE ) {
         comp_error( comp, "Statement list expected" );
     }
     if ( comp->currtok == TOK_ELSE && comp_fetchtok( comp ) ) {
-        if ( !comp_eat_stmtlines( comp, &target2 ) || target2 == NODEOFFS_NONE ) {
+        if ( !comp_eat_stmtlines( comp, &target2 ) || target2 == NODE_NONE ) {
             comp_error( comp, "Statement list expected" );
         }
     }
@@ -3087,58 +3068,58 @@ bool comp_eat_multilineifstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
                 - 1 branch of statement lines
                 - 1 optional branch of ELSE statement lines
     */
-    if ( !comp_create_node( comp, pnodeoffs, NT_MULTILINEIFSTMT, UINT8_C(2), UINT16_C(1), &iftok,
-        (int) target1, (int) target2 ) || *pnodeoffs == NODEOFFS_NONE ) {
+    if ( !comp_create_node( comp, pnode, NT_MULTILINEIFSTMT, UINT8_C(2), UINT16_C(1), &iftok,
+        target1, target2 ) || *pnode == NODE_NONE ) {
         out_of_memory( comp );
         return false;
     }
     return true;
 }
 
-bool comp_eat_controlflowstmt( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_controlflowstmt( compiler_t* comp, node_t** pnode ) {
     // control-flow-stmt := for-stmt | next-stmt | goto-stmt | return-stmt | label-stmt |
     //                      singleline-if-stmt | multiline-if-stmt .
     // [ NT_CONTROLFLOWSTMT - not generated ]
-    if ( comp_eat_forstmt( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+    if ( comp_eat_forstmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
-    if ( comp_eat_nextstmt( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+    if ( comp_eat_nextstmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
-    if ( comp_eat_gotostmt( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+    if ( comp_eat_gotostmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
-    if ( comp_eat_returnstmt( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+    if ( comp_eat_returnstmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
-    if ( comp_eat_labelstmt( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+    if ( comp_eat_labelstmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
-    if ( comp_eat_singlelineifstmt( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+    if ( comp_eat_singlelineifstmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
-    if ( comp_eat_multilineifstmt( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+    if ( comp_eat_multilineifstmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     return false;
 }
 
-bool comp_eat_stmt( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_stmt( compiler_t* comp, node_t** pnode ) {
     // stmt := io-stmt | assign-stmt | control-flow-stmt .
     // [ NT_STMT - not generated ]
-    if ( comp_eat_iostmt( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+    if ( comp_eat_iostmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
-    if ( comp_eat_assignstmt( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+    if ( comp_eat_assignstmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
-    if ( comp_eat_controlflowstmt( comp, pnodeoffs ) && *pnodeoffs != NODEOFFS_NONE ) {
+    if ( comp_eat_controlflowstmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     return false;
 }
 
-bool comp_eat_stmtlist( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_stmtlist( compiler_t* comp, node_t** pnode ) {
     // stmt-list := stmt { TOK_COLON stmt } .
     /*
         NT_STMTLIST         Statement list
@@ -3147,14 +3128,14 @@ bool comp_eat_stmtlist( compiler_t* comp, uint16_t* pnodeoffs ) {
             immediate processing:
                 - generated only if more than 1 statement
     */
-    return comp_eat_list( comp, pnodeoffs, NT_STMTLIST, comp_eat_stmt, TOK_COLON, "Statement expected" );
+    return comp_eat_list( comp, pnode, NT_STMTLIST, comp_eat_stmt, TOK_COLON, "Statement expected" );
 }
 
-bool comp_eat_stmtline( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_stmtline( compiler_t* comp, node_t** pnode ) {
     // stmt-line := stmt-list [ TOK_QUOLIT ] TOK_EOL .
     uint32_t lnum = comp->iter.hdr.lineno;
-    uint16_t stmtlist = NODEOFFS_NONE;
-    if ( !comp_eat_stmtlist( comp, &stmtlist ) || stmtlist == NODEOFFS_NONE ) {
+    node_t* stmtlist = NODE_NONE;
+    if ( !comp_eat_stmtlist( comp, &stmtlist ) || stmtlist == NODE_NONE ) {
         return false;
     }
     if ( comp->currtok == TOK_QUOLIT ) {
@@ -3180,15 +3161,15 @@ bool comp_eat_stmtline( compiler_t* comp, uint16_t* pnodeoffs ) {
     data[2] = (uint8_t)  lnum;
     uint16_t datalen = lnum == LINENO_DEL ? UINT16_C(0) : UINT16_C(3);
     // create node
-    if ( !comp_create_node( comp, pnodeoffs, NT_STMTLINE, UINT8_C(1), datalen, data, (int) stmtlist ) ||
-        *pnodeoffs == NODEOFFS_NONE ) {
+    if ( !comp_create_node( comp, pnode, NT_STMTLINE, UINT8_C(1), datalen, data, stmtlist ) ||
+        *pnode == NODE_NONE ) {
         out_of_memory( comp );
         return false;
     }
     return true;
 }
 
-bool comp_eat_stmtlines( compiler_t* comp, uint16_t* pnodeoffs ) {
+bool comp_eat_stmtlines( compiler_t* comp, node_t** pnode ) {
     // stmt-lines := stmt-line { stmt-line } .
     /*
         NT_STMTLINES        Statement lines
@@ -3198,7 +3179,7 @@ bool comp_eat_stmtlines( compiler_t* comp, uint16_t* pnodeoffs ) {
                 - generated only if more than 1 statement
                 - this is the root node for program mode
     */
-    return comp_eat_list( comp, pnodeoffs, NT_STMTLINES, comp_eat_stmtline, TOK_EOL, "Statement line expected" );
+    return comp_eat_list( comp, pnode, NT_STMTLINES, comp_eat_stmtline, TOK_EOL, "Statement line expected" );
 }
 
 bool comp_nextline( compiler_t* comp ) {
@@ -3284,7 +3265,7 @@ printf( "*** TOKEN: %02" PRIx8 "\n", tok );
 
 bool begin_comp( compiler_t* comp ) {
 
-    if ( comp->syntree != NODEOFFS_NONE ) {
+    if ( comp->syntree != NODE_NONE ) {
         comp_error( comp, "Internal error (syntax tree already exists)" );
         return false;
     }
@@ -3306,7 +3287,7 @@ void run_compiler( compiler_t* comp ) {
     }
 
     // compile statement lines
-    if ( !comp_eat_stmtlines( comp, &comp->syntree ) || comp->syntree == NODEOFFS_NONE ) {
+    if ( !comp_eat_stmtlines( comp, &comp->syntree ) || comp->syntree == NODE_NONE ) {
         comp_error( comp, "Statement lines expected" );
         return;
     }

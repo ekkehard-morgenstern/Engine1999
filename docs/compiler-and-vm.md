@@ -10,13 +10,13 @@ Key operations: `init_program`, `find_line` (returns `FOUND_EXACT/INSERT/BEYOND/
 
 ## Syntax tree (`bascomp.[ch]`, `nodetype.[ch]`)
 
-`compiler_t` holds token cursor state (`iter`, `tokp`, `tokend`, `currtok`, heap `param`, `number`; set the token range with `comp_set_tokens()`, release with `cleanup_compiler()`), a context stack for backtracking (`comp_push_context` / `comp_commit_context` / `comp_pop_context`) and the tree arena `tree[65535]`.
+`compiler_t` holds token cursor state (`iter`, `tokp`, `tokend`, `currtok`, heap `param`, `number`; set the token range with `comp_set_tokens()`, release with `cleanup_compiler()`), a context stack for backtracking (`comp_push_context` / `comp_commit_context` / `comp_pop_context`) and the syntax tree (`syntree` root; `nodes` chains every allocated node).
 
-Node layout (big endian): `nodetype.8 numbranches.8 datalen.16 firstbranch.16 lastbranch.16 data…` (8-byte header, `NODEHDR_SIZE`); each branch entry is `nodepos.16 nextbranch.16` (4 bytes).
-Create with `comp_create_node(comp, &off, type, nbranches, datalen, data, …)`, link with `comp_add_branch`, iterate with `comp_node_iter_branches`.
+`node_t` = `{ chain, branches (growable array of node_t*), numbranches, maxbranches, datalen.16, type.8, data[] }`, one heap allocation per node (branch array separate). Branch count is unlimited; a branch may be `NODE_NONE`, standing for an optional branch that is absent. `chain` links all nodes of a compiler so abandoned parses are freed too (`comp_free_tree`, called by `cleanup_compiler`).
+Create with `comp_create_node(comp, &node, type, nbranches, datalen, data, branch…)` (variable arguments are `node_t*`), append branches with `comp_add_branch`, iterate with `comp_node_iter_branches`; consumers read `node->type`, `node->data`, `node->datalen`, `node->branches[i]`.
 Generic list parsing helpers: `comp_eat_list` / `comp_eat_list2` (separator tokens, operator-precedence flavour).
 
-`comp_eat_*( comp, uint16_t* pnodeoffs )` return `false` on hard failure; a successful call may leave `*pnodeoffs == NODEOFFS_NONE` meaning "this rule did not match" (callers test both).
+`comp_eat_*( comp, node_t** pnode )` return `false` on hard failure; a successful call may leave `*pnode == NODE_NONE` meaning "this rule did not match" (callers test both).
 `comp_error` reports and halts. `run_compiler` is the driver; `begin_comp` primes the first token.
 
 Node types (`NT_*`, documented per type in `nodetype.h` including the *immediate processing* each does): expression lists, array subscripts/declarations, variable refs (base vs full),

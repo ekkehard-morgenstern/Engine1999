@@ -49,32 +49,24 @@
 See bascomp.ebnf for syntax definition.
 */
 
-#define NODEOFFS_NONE       UINT16_C(0XFFFF)
-#define NODEHDR_SIZE        UINT8_C(8)
-#define BRANCHENT_SIZE      UINT8_C(4)
-
-#define EXTRACT16( comp, offs ) \
-    ( ( ((uint16_t)( (comp)->tree[ offs ] )) << UINT8_C(8) ) | \
-    ( (comp)->tree[ (offs) + 1U ] ) )
-
-#define WRITE16( comp, offs, value ) \
-    { \
-        (comp)->tree[ offs ] = (uint8_t)( (value) >> UINT8_C(8) ); \
-        (comp)->tree[ (offs) + 1U ] = (uint8_t) (value); \
-    }
-
+#define NODE_NONE           ((node_t*) 0)
 
 /*
-The syntax tree is temporary for the compiler run and organized as follows:
-
-    <nodetype.8> <numbranches.8> <datalen.16> <firstbranch.16> <lastbranch.16> <data...>
-
-For every branch entry:
-
-    <nodepos.16> <nextbranch.16>
-
-16-bit values are stored in network byte order (big endian).
+The syntax tree is temporary for the compiler run. Every node is a separate heap allocation
+with a variable number of branches (growable pointer array) and optional trailing data.
+All nodes created by a compiler are chained together (node_t.chain), so they can be freed at once
+(including nodes of abandoned parses) by cleanup_compiler().
 */
+
+typedef struct _node_t {
+    struct _node_t*     chain;          // next node allocated by the compiler (for freeing)
+    struct _node_t**    branches;       // growable array of branch nodes, 0 if none
+    size_t              numbranches;
+    size_t              maxbranches;    // allocated size of the branches array
+    uint16_t            datalen;
+    uint8_t             type;           // NT_*
+    uint8_t             data[];         // datalen bytes
+} node_t;
 
 #ifndef NODETYPE_H
 #include "nodetype.h"
@@ -83,8 +75,6 @@ For every branch entry:
 #ifndef VARS_H
 #include "vars.h"
 #endif
-
-#define TREESIZE_MAX    65535U
 
 typedef struct _comp_ctxstk_t {
     struct _comp_ctxstk_t*  prev;
@@ -110,11 +100,10 @@ typedef struct _compiler_t {
     void*           userdata;
     void            (*report)( struct _compiler_t*, void*, const char* );
     void            (*halt)( struct _compiler_t*, void* ) ATTR_NORETURN;
-    uint8_t         tree[TREESIZE_MAX];
-    uint32_t        treesize;
+    node_t*         nodes;          // chain of all nodes allocated so far
     uint16_t        arraydim[MAXDIM];
     uint8_t         numdim;
-    uint16_t        syntree;
+    node_t*         syntree;
 } compiler_t;
 
 void init_compiler( compiler_t* comp, struct _runtime_t* rt, program_t* pgm, bool keepmemory );
@@ -125,102 +114,103 @@ void comp_push_context( compiler_t* comp );
 void comp_commit_context( compiler_t* comp );
 void comp_pop_context( compiler_t* comp );
 
-bool comp_alloc_tree( compiler_t* comp, uint16_t size, uint16_t* poffs );
+void comp_free_tree( compiler_t* comp );       // frees all syntax tree nodes
 
-bool comp_create_node( compiler_t* comp, uint16_t* pnodeoffs, uint8_t nodetype, uint8_t numbranches, uint16_t datalen,
+// the variable arguments are numbranches node_t* pointers
+bool comp_create_node( compiler_t* comp, node_t** pnode, uint8_t nodetype, uint8_t numbranches, uint16_t datalen,
     const void* pdata, ... );
-bool comp_add_branch( compiler_t* comp, uint16_t nodeoffs, uint16_t branchoffs );
-bool comp_node_iter_branches( compiler_t* comp, uint16_t nodeoffs, void* userdata, bool (*callback)( void*, uint16_t ) );
+bool comp_add_branch( compiler_t* comp, node_t* node, node_t* branch );
+bool comp_node_iter_branches( compiler_t* comp, node_t* node, void* userdata, bool (*callback)( void*, node_t* ) );
 double comp_extract_float( const uint8_t* mem, uint16_t offs );
 
-typedef bool (*comp_eatfn_t)( compiler_t*, uint16_t* );
+typedef bool (*comp_eatfn_t)( compiler_t*, node_t** );
 
-bool comp_eat_list( compiler_t* comp, uint16_t* pnodeoffs, uint8_t nodetype, comp_eatfn_t element_eater, uint8_t septok,
+bool comp_eat_list( compiler_t* comp, node_t** pnode, uint8_t nodetype, comp_eatfn_t element_eater, uint8_t septok,
     const char* errortext );
-bool comp_eat_list2( compiler_t* comp, uint16_t* pnodeoffs, uint8_t nodetype, comp_eatfn_t element_eater, const uint8_t* septoks,
+bool comp_eat_list2( compiler_t* comp, node_t** pnode, uint8_t nodetype, comp_eatfn_t element_eater, const uint8_t* septoks,
     const char* errortext, bool oneoperator, bool forceexpr );
 
-bool comp_eat_numexlist( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_strexlist( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_exprlist( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_arrayindex( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_arraysub( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_arraydimdecl( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_arraydecl( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_arraydecllist( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_emptyarrayref( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_emptyarrayreflist( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_numbasevarref( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_numvarref( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_strbasevarref( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_strvarref( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_anybasevarref( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_numlit( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_strlit( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_strlits( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_numusrfnname( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_strusrfnname( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_usrfnarg( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_usrfnarglist( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_anyusrfnname( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_singlelineusrfnbody( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_multilineusrfnbody( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_usrfnbody( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_usrfndecl( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_numusrfncall( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_strusrfncall( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_sysnumfn1argcall( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_sysstrfn2argcall( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_sysnumfuncargcall( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_sysstrfuncargcall( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_sysnoargnumcall( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_sysnoargstrcall( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_numfunccall( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_strfunccall( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_strbaseexpr( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_straddexpr( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_strexpr( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_numsubexpr( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_numbaseexpr( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_numunaryex( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_nummultex( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_numaddex( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_numshiftex( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_numcmpex( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_numandex( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_numorex( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_numexpr( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_expr( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_savestmt( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_chanspec( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_printsep( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_printarg( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_printarglist( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_printstmt( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_iostmt( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_numassign( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_strassign( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_substrassign( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_anyassign( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_assignlist( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_letstmt( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_dimstmt( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_erasestmt( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_defstmt( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_assignstmt( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_forstmt( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_nextstmt( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_gototarget( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_gotostmt( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_returnstmt( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_labelstmt( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_singlelineifstmt( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_multilineifstmt( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_controlflowstmt( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_stmt( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_stmtlist( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_stmtline( compiler_t* comp, uint16_t* pnodeoffs );
-bool comp_eat_stmtlines( compiler_t* comp, uint16_t* pnodeoffs );
+bool comp_eat_numexlist( compiler_t* comp, node_t** pnode );
+bool comp_eat_strexlist( compiler_t* comp, node_t** pnode );
+bool comp_eat_exprlist( compiler_t* comp, node_t** pnode );
+bool comp_eat_arrayindex( compiler_t* comp, node_t** pnode );
+bool comp_eat_arraysub( compiler_t* comp, node_t** pnode );
+bool comp_eat_arraydimdecl( compiler_t* comp, node_t** pnode );
+bool comp_eat_arraydecl( compiler_t* comp, node_t** pnode );
+bool comp_eat_arraydecllist( compiler_t* comp, node_t** pnode );
+bool comp_eat_emptyarrayref( compiler_t* comp, node_t** pnode );
+bool comp_eat_emptyarrayreflist( compiler_t* comp, node_t** pnode );
+bool comp_eat_numbasevarref( compiler_t* comp, node_t** pnode );
+bool comp_eat_numvarref( compiler_t* comp, node_t** pnode );
+bool comp_eat_strbasevarref( compiler_t* comp, node_t** pnode );
+bool comp_eat_strvarref( compiler_t* comp, node_t** pnode );
+bool comp_eat_anybasevarref( compiler_t* comp, node_t** pnode );
+bool comp_eat_numlit( compiler_t* comp, node_t** pnode );
+bool comp_eat_strlit( compiler_t* comp, node_t** pnode );
+bool comp_eat_strlits( compiler_t* comp, node_t** pnode );
+bool comp_eat_numusrfnname( compiler_t* comp, node_t** pnode );
+bool comp_eat_strusrfnname( compiler_t* comp, node_t** pnode );
+bool comp_eat_usrfnarg( compiler_t* comp, node_t** pnode );
+bool comp_eat_usrfnarglist( compiler_t* comp, node_t** pnode );
+bool comp_eat_anyusrfnname( compiler_t* comp, node_t** pnode );
+bool comp_eat_singlelineusrfnbody( compiler_t* comp, node_t** pnode );
+bool comp_eat_multilineusrfnbody( compiler_t* comp, node_t** pnode );
+bool comp_eat_usrfnbody( compiler_t* comp, node_t** pnode );
+bool comp_eat_usrfndecl( compiler_t* comp, node_t** pnode );
+bool comp_eat_numusrfncall( compiler_t* comp, node_t** pnode );
+bool comp_eat_strusrfncall( compiler_t* comp, node_t** pnode );
+bool comp_eat_sysnumfn1argcall( compiler_t* comp, node_t** pnode );
+bool comp_eat_sysstrfn2argcall( compiler_t* comp, node_t** pnode );
+bool comp_eat_sysnumfuncargcall( compiler_t* comp, node_t** pnode );
+bool comp_eat_sysstrfuncargcall( compiler_t* comp, node_t** pnode );
+bool comp_eat_sysnoargnumcall( compiler_t* comp, node_t** pnode );
+bool comp_eat_sysnoargstrcall( compiler_t* comp, node_t** pnode );
+bool comp_eat_numfunccall( compiler_t* comp, node_t** pnode );
+bool comp_eat_strfunccall( compiler_t* comp, node_t** pnode );
+bool comp_eat_strbaseexpr( compiler_t* comp, node_t** pnode );
+bool comp_eat_straddexpr( compiler_t* comp, node_t** pnode );
+bool comp_eat_strexpr( compiler_t* comp, node_t** pnode );
+bool comp_eat_numsubexpr( compiler_t* comp, node_t** pnode );
+bool comp_eat_numbaseexpr( compiler_t* comp, node_t** pnode );
+bool comp_eat_numunaryex( compiler_t* comp, node_t** pnode );
+bool comp_eat_nummultex( compiler_t* comp, node_t** pnode );
+bool comp_eat_numaddex( compiler_t* comp, node_t** pnode );
+bool comp_eat_numshiftex( compiler_t* comp, node_t** pnode );
+bool comp_eat_numcmpex( compiler_t* comp, node_t** pnode );
+bool comp_eat_numandex( compiler_t* comp, node_t** pnode );
+bool comp_eat_numorex( compiler_t* comp, node_t** pnode );
+bool comp_eat_numexpr( compiler_t* comp, node_t** pnode );
+bool comp_eat_expr( compiler_t* comp, node_t** pnode );
+bool comp_eat_savestmt( compiler_t* comp, node_t** pnode );
+bool comp_eat_chanspec( compiler_t* comp, node_t** pnode );
+bool comp_eat_printsep( compiler_t* comp, node_t** pnode );
+bool comp_eat_printarg( compiler_t* comp, node_t** pnode );
+bool comp_eat_printarglist( compiler_t* comp, node_t** pnode );
+bool comp_eat_printstmt( compiler_t* comp, node_t** pnode );
+bool comp_eat_iostmt( compiler_t* comp, node_t** pnode );
+bool comp_eat_numassign( compiler_t* comp, node_t** pnode );
+bool comp_eat_strassign( compiler_t* comp, node_t** pnode );
+bool comp_eat_substrassign( compiler_t* comp, node_t** pnode );
+bool comp_eat_anyassign( compiler_t* comp, node_t** pnode );
+bool comp_eat_assignlist( compiler_t* comp, node_t** pnode );
+bool comp_eat_letstmt( compiler_t* comp, node_t** pnode );
+bool comp_eat_dimstmt( compiler_t* comp, node_t** pnode );
+bool comp_eat_erasestmt( compiler_t* comp, node_t** pnode );
+bool comp_eat_defstmt( compiler_t* comp, node_t** pnode );
+bool comp_eat_assignstmt( compiler_t* comp, node_t** pnode );
+bool comp_eat_forstmt( compiler_t* comp, node_t** pnode );
+bool comp_eat_nextstmt( compiler_t* comp, node_t** pnode );
+bool comp_eat_gototarget( compiler_t* comp, node_t** pnode );
+bool comp_eat_gotostmt( compiler_t* comp, node_t** pnode );
+bool comp_eat_returnstmt( compiler_t* comp, node_t** pnode );
+bool comp_eat_labelstmt( compiler_t* comp, node_t** pnode );
+bool comp_eat_singlelineifstmt( compiler_t* comp, node_t** pnode );
+bool comp_eat_multilineifstmt( compiler_t* comp, node_t** pnode );
+bool comp_eat_controlflowstmt( compiler_t* comp, node_t** pnode );
+bool comp_eat_stmt( compiler_t* comp, node_t** pnode );
+bool comp_eat_stmtlist( compiler_t* comp, node_t** pnode );
+bool comp_eat_stmtline( compiler_t* comp, node_t** pnode );
+bool comp_eat_stmtlines( compiler_t* comp, node_t** pnode );
 
 bool comp_nextline( compiler_t* comp );
 bool comp_fetchtok( compiler_t* comp );
