@@ -45,6 +45,7 @@ typedef struct _testcase_t {
     const char* name;
     const char* source;     // lines separated by '\n'
     const char* expected;
+    const char* input;      // keys for INKEY$ (optional)
 } testcase_t;
 
 static const testcase_t cases[] = {
@@ -148,6 +149,63 @@ static const testcase_t cases[] = {
     { "error inside DEF FN with string", "S$=\"KEEP\"\nDEF FN A(S$)=1/0\nPRINT FN A(\"X\")", "? Division by zero\n" },
     { "string param restored",  "S$=\"KEEP\"\nDEF FN A$(S$)=S$+S$\nPRINT FN A$(\"AB\"):PRINT S$", "ABAB\nKEEP\n" },
     { "DEF FN wrong argument count", "DEF FN A(X)=X\nPRINT FN A(1,2)",                "? Argument count mismatch\n" },
+    // system functions
+    { "LEN",                    "PRINT LEN(\"HELLO\")",                             "5\n" },
+    { "LEN of variable",        "A$=\"XYZ\":PRINT LEN(A$)",                        "3\n" },
+    { "LEN of empty string",    "PRINT LEN(\"\")",                                 "0\n" },
+    { "ASC",                    "PRINT ASC(\"A\")",                                "65\n" },
+    { "ASC of empty string",    "PRINT ASC(\"\")",                                 "? Illegal argument\n" },
+    { "VAL",                    "PRINT VAL(\"12.5ABC\")",                          "12.5\n" },
+    { "VAL without number",     "PRINT VAL(\"ABC\")",                              "0\n" },
+    { "VAL negative",           "PRINT VAL(\"-3\")+1",                             "-2\n" },
+    { "VAL exponent",           "PRINT VAL(\" 1E2X\")",                            "100\n" },
+    { "VAL incomplete exponent","PRINT VAL(\"5E\")",                               "5\n" },
+    { "STR$",                   "PRINT STR$(42)+\"!\"",                            "42!\n" },
+    { "STR$ fraction",          "PRINT STR$(1/4)",                                "0.25\n" },
+    { "LEFT$",                  "PRINT LEFT$(\"HELLO\",2)",                        "HE\n" },
+    { "LEFT$ beyond length",    "PRINT LEFT$(\"AB\",10)",                          "AB\n" },
+    { "LEFT$ zero",             "PRINT \"[\"+LEFT$(\"AB\",0)+\"]\"",              "[]\n" },
+    { "LEFT$ negative",         "PRINT LEFT$(\"A\",0-1)",                          "? Illegal argument\n" },
+    { "RIGHT$",                 "PRINT RIGHT$(\"HELLO\",3)",                       "LLO\n" },
+    { "RIGHT$ beyond length",   "PRINT RIGHT$(\"AB\",10)",                         "AB\n" },
+    { "MID$",                   "PRINT MID$(\"HELLO\",2,3)",                       "ELL\n" },
+    { "MID$ without length",    "PRINT MID$(\"HELLO\",3)",                         "LLO\n" },
+    { "MID$ length beyond end", "PRINT MID$(\"HELLO\",4,10)",                      "LO\n" },
+    { "MID$ start beyond end",  "PRINT \"[\"+MID$(\"HELLO\",9)+\"]\"",            "[]\n" },
+    { "MID$ start zero",        "PRINT MID$(\"HELLO\",0)",                         "? Illegal argument\n" },
+    { "HEX$",                   "PRINT HEX$(255)",                                "FF\n" },
+    { "HEX$ padded",            "PRINT HEX$(255,4)",                              "00FF\n" },
+    { "HEX$ negative",          "PRINT HEX$(0-1)",                                "FFFFFFFF\n" },
+    { "BIN$",                   "PRINT BIN$(5)",                                  "101\n" },
+    { "BIN$ padded",            "PRINT BIN$(5,8)",                                "00000101\n" },
+    { "BIN$ zero",              "PRINT BIN$(0)",                                  "0\n" },
+    { "OCT$",                   "PRINT OCT$(8)",                                  "10\n" },
+    { "QUA$",                   "PRINT QUA$(5)",                                  "11\n" },
+    { "DEC$ padded",            "PRINT DEC$(7,3)",                                "007\n" },
+    { "DEC$ negative",          "PRINT DEC$(0-5)",                                "-5\n" },
+    { "radix digits range",     "PRINT HEX$(1,300)",                              "? Illegal argument\n" },
+    { "TI",                     "PRINT TI>=0",                                    "-1\n" },
+    { "TI does not go back",    "A=TI:B=TI:PRINT B>=A",                           "-1\n" },
+    { "FRE",                    "PRINT FRE(0)>0",                                 "-1\n" },
+    { "INKEY$",                 "PRINT INKEY$;INKEY$;\"[\"+INKEY$+\"]\"",          "AB[]\n", "AB" },
+    { "INKEY$ without input",   "PRINT LEN(INKEY$)",                              "0\n" },
+    { "nested functions",       "PRINT LEFT$(STR$(12345),3)",                     "123\n" },
+    { "function in expression", "PRINT LEN(HEX$(255,6))+ASC(\"A\")",               "71\n" },
+    { "string function in DEF FN", "DEF FN A$(S$)=LEFT$(S$,1)\nPRINT FN A$(\"XYZ\")", "X\n" },
+    { "functions in a loop",    "FOR I=1 TO 3:PRINT MID$(\"ABC\",I,1):NEXT I",     "A\nB\nC\n" },
+    // SHEX and SAVE
+    { "shell literal",          "PRINT `echo hi`",                                "hi\n" },
+    { "shell result in variable", "A$=`printf abc`\nPRINT LEN(A$);A$",           "3abc\n" },
+    { "shell strips newlines",  "PRINT \"[\"+`printf 'x\\n\\n'`+\"]\"",          "[x]\n" },
+    { "shell no output",        "PRINT LEN(`true`)",                              "0\n" },
+    { "shell after assignment", "C$=\"echo \"+\"ok\"\nPRINT `echo ok`",       "ok\n" },
+    { "SAVE binary default",    "10 PRINT 1\n20 SAVE \"X\"",                       "1\n<save X binary>\n00 00 0A 00 0A 20 0B 20 31 00 00 00 14 00 0D 20 14 20 03 00 01 58 00 \n" },
+    { "SAVE ascii",             "10 PRINT 1\n20 SAVE \"X\",A",                     "1\n<save X ascii>\n10 PRINT 1\n20 SAVE \"X\",A\n" },
+    { "SAVE binary option",     "10 PRINT 1\n20 SAVE \"X\",B",                     "1\n<save X binary>\n00 00 0A 00 0A 20 0B 20 31 00 00 00 14 00 12 20 14 20 03 00 01 58 2C 8A 00 01 42 00 \n" },
+    { "SAVE of empty program",  "SAVE \"X\",A",                                    "<save X ascii>\n" },
+    { "SAVE with name expression", "N$=\"AB\"\nSAVE N$+\"C\",A",                   "<save ABC ascii>\n" },
+    { "SAVE bad mode",          "SAVE \"X\",Z",                                    "? Bad SAVE mode\n" },
+    { "SAVE empty name",        "SAVE \"\"",                                       "? Illegal argument\n" },
     { "division by zero",       "PRINT 1/0",                        "? Division by zero\n" },
     { "error line number",      "10 PRINT 1\n20 PRINT 1/0",         "1\n? Division by zero in line 20\n" },
 };
@@ -182,6 +240,39 @@ static void vm_print( struct _vm_t* vm, void* usrdata, int channel, const char* 
 
 static void vm_report( struct _vm_t* vm, void* usrdata, const char* text ) {
     out_append( text );
+}
+
+static const char* keys = 0;
+static program_t*  current_pgm = 0;
+
+// the host's part of SAVE: the "file" is described in the output, the program is written to memory
+static bool vm_save( struct _vm_t* vm, void* usrdata, const char* filename, bool ascii ) {
+    char* text = 0; size_t size = 0;
+    FILE* f = open_memstream( &text, &size );
+    if ( f == 0 ) {
+        return false;
+    }
+    bool ok = save_program( current_pgm, f, ascii );
+    fclose( f );
+    out_append( "<save " );
+    out_append( filename );
+    out_append( ascii ? " ascii>\n" : " binary>\n" );
+    if ( ascii ) {
+        out_append( text );
+    } else {
+        for ( size_t i=0; i < size; ++i ) {
+            char hex[4];
+            snprintf( hex, sizeof(hex), "%02X ", (unsigned)(uint8_t) text[i] );
+            out_append( hex );
+        }
+        out_append( "\n" );
+    }
+    free( text );
+    return ok;
+}
+
+static int vm_inkey( struct _vm_t* vm, void* usrdata ) {
+    return keys && *keys ? (uint8_t) *keys++ : 0;
 }
 
 static void rt_report( struct _runtime_t* rt, void* usrdata, const char* text ) {
@@ -259,6 +350,8 @@ static bool compile_and_run( void ) {
     init_vm( &vm, &rt.codegen, &rt.varmem );
     vm.print    = vm_print;
     vm.report   = vm_report;
+    vm.inkey    = vm_inkey;
+    vm.save     = vm_save;
     vm.maxsteps = UINT64_C(1000000);
     ok = vm_run_at( &vm, start );
     cleanup_vm( &vm );
@@ -324,11 +417,13 @@ static bool enter_source( const char* source, program_t* pgm, buf_t* tokbuf, boo
 
 static bool run_case( const testcase_t* tc, buf_t* tokbuf ) {
     out_reset();
+    keys = tc->input;
     cleanup_runtime( &rt );
     init_runtime( &rt );
     rt.report = rt_report;
     rt.halt   = rt_halt;
     program_t pgm; init_program( &pgm );
+    current_pgm = &pgm;
     bool isprogram = false;
     if ( enter_source( tc->source, &pgm, tokbuf, &isprogram ) && isprogram ) {
         run_program( &pgm );

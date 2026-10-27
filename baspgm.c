@@ -220,3 +220,28 @@ void list_program( program_t* pgm, uint32_t lineno_first, uint32_t lineno_last, 
     }
     delete_buffer( buf );
 }
+
+bool save_program( program_t* pgm, FILE* out, bool ascii ) {
+    buf_t* buf = ascii ? create_buffer() : 0;
+    if ( ascii && buf == 0 ) {
+        return false;
+    }
+    bool ok = true;
+    for ( line_t* line = pgm->first; line && ok; line = line->next ) {
+        pgmiter_t iter; clear_iter( &iter, pgm );
+        iter_load_line( &iter, line );
+        if ( ascii ) {
+            clear_buffer( buf );
+            ok = detokenize_line( buf, iter.tok, &iter.hdr ) && fputs( buf->buffer, out ) >= 0 && fputc( '\n', out ) != EOF;
+        } else {
+            uint8_t hdr[LINEHDR_SIZE]; uint8_t* p = hdr;
+            emit_linehdr_raw( &p, &iter.hdr );
+            ok = fwrite( hdr, 1U, LINEHDR_SIZE, out ) == LINEHDR_SIZE &&
+                ( line->toklen == 0 || fwrite( line->tokens, 1U, line->toklen, out ) == line->toklen );
+        }
+    }
+    if ( buf ) {
+        delete_buffer( buf );
+    }
+    return ok && !ferror( out );
+}

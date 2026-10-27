@@ -50,6 +50,9 @@ void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem ) {
     vm->userdata = 0;
     vm->print    = 0;
     vm->report   = 0;
+    vm->inkey    = 0;
+    vm->save     = 0;
+    clock_gettime( CLOCK_MONOTONIC, &vm->started );
 }
 
 static void vm_clear_stacks( vm_t* vm ) {
@@ -267,6 +270,10 @@ static bool vm_pop_address( vm_t* vm, bool code, uint32_t size, const uint8_t** 
 }
 
 // -- numbers and printing --------------------------------------------------
+
+static void vm_format_number( double num, char buf[40] ) {
+    snprintf( buf, 40U, "%.15g", num );
+}
 
 static bool vm_print_sep( vm_t* vm, bool hassep, uint16_t sep ) {
     if ( !hassep || sep == VM_PRINT_SEP_NONE ) {
@@ -543,6 +550,264 @@ static bool vm_return_function( vm_t* vm ) {
     return ok && vm_branch_to( vm, retaddr );
 }
 
+// -- system functions --------------------------------------------------------
+
+// ASC, LEN, VAL: ( s -- n )
+static bool vm_str_to_num( vm_t* vm, uint16_t opcode ) {
+    char* s;
+    if ( !vm_dpop_str( vm, &s ) ) {
+        return false;
+    }
+    double r = 0.0;
+    bool ok = true;
+    switch ( opcode ) {
+        case INS_LEN:
+            r = (double) strlen( s );
+            break;
+        case INS_ASC:
+            if ( s[0] == '\0' ) {
+                ok = vm_error( vm, "Illegal argument" );
+            } else {
+                r = (double)(uint8_t) s[0];
+            }
+            break;
+        default: {  // INS_VAL: the leading decimal number of the string, 0 if there is none
+            const char* p = s;
+            while ( *p == ' ' ) {
+                ++p;
+            }
+            const char* start = p;
+            if ( *p == '+' || *p == '-' ) {
+                ++p;
+            }
+            unsigned digits = 0;
+            while ( *p >= '0' && *p <= '9' ) {
+                ++p; ++digits;
+            }
+            if ( *p == '.' ) {
+                ++p;
+                while ( *p >= '0' && *p <= '9' ) {
+                    ++p; ++digits;
+                }
+            }
+            if ( digits && ( *p == 'e' || *p == 'E' ) ) {
+                const char* q = p + 1;
+                if ( *q == '+' || *q == '-' ) {
+                    ++q;
+                }
+                if ( *q >= '0' && *q <= '9' ) {
+                    while ( *q >= '0' && *q <= '9' ) {
+                        ++q;
+                    }
+                    p = q;
+                }
+            }
+            if ( digits ) {
+                char* tmp = vm_new_string( vm, start, (size_t)( p - start ) );
+                if ( tmp == 0 ) {
+                    free( s );
+                    return false;
+                }
+                r = strtod( tmp, 0 );
+                free( tmp );
+            }
+            break;
+        }
+    }
+    free( s );
+    return ok && vm_dpush_num( vm, r );
+}
+
+// BINS, QUAS, OCTS, HEXS, DECS: ( n digits -- s ), the number is converted as a 32 bit integer and padded with zeros
+// to at least <digits> digits (0 = no padding); DECS is signed, the others show negative numbers as 32 bit patterns
+static bool vm_radix_string( vm_t* vm, unsigned base, bool issigned ) {
+    double num, digits;
+    if ( !vm_dpop_num( vm, &digits ) || !vm_dpop_num( vm, &num ) ) {
+        return false;
+    }
+    if ( digits > 255.0 ) {
+        return vm_error( vm, "Illegal argument" );
+    }
+    unsigned pad = digits > 0.0 ? (unsigned) digits : 0U;     // negative: not given
+    int32_t ival = vm_to_int32( num );
+    bool neg = issigned && ival < 0;
+    uint32_t u = neg ? (uint32_t)( -(int64_t) ival ) : (uint32_t) ival;
+    char rev[40]; unsigned len = 0;
+    do {
+        rev[ len++ ] = "0123456789ABCDEF"[ u % base ];
+        u /= base;
+    } while ( u );
+    char out[ 1U + 255U + 40U ]; unsigned n = 0;
+    if ( neg ) {
+        out[ n++ ] = '-';
+    }
+    for ( unsigned i = len; i < pad; ++i ) {
+        out[ n++ ] = '0';
+    }
+    while ( len ) {
+        out[ n++ ] = rev[ --len ];
+    }
+    char* s = vm_new_string( vm, out, n );
+    return s && vm_push_string( vm, s );
+}
+
+// LFTS, RGTS: ( s n -- s ), MIDS: ( s start len -- s ), start counts from 1
+static bool vm_substring( vm_t* vm, uint16_t opcode ) {
+    double n, m = 0.0; char* s;
+    if ( opcode == INS_MIDS && !vm_dpop_num( vm, &m ) ) {
+        return false;
+    }
+    if ( !vm_dpop_num( vm, &n ) || !vm_dpop_str( vm, &s ) ) {
+        return false;
+    }
+    size_t len = strlen( s ), from = 0, count = 0;
+    bool ok = true;
+    if ( n < 0.0 || ( opcode == INS_MIDS && n < 1.0 ) ) {
+        ok = vm_error( vm, "Illegal argument" );
+    } else if ( opcode == INS_LFTS ) {
+        count = n < (double) len ? (size_t) n : len;
+    } else if ( opcode == INS_RGTS ) {
+        count = n < (double) len ? (size_t) n : len;
+        from = len - count;
+    } else {
+        from = n - 1.0 < (double) len ? (size_t)( n - 1.0 ) : len;
+        count = m >= 0.0 && m < (double)( len - from ) ? (size_t) m : len - from;     // negative: rest of the string
+    }
+    char* r = ok ? vm_new_string( vm, s + from, count ) : 0;
+    free( s );
+    return r && vm_push_string( vm, r );
+}
+
+// SHEX: ( s -- s ) runs the shell command and returns what it wrote to its standard output, without the
+// trailing newlines (like a shell command substitution); the exit status is ignored
+static bool vm_shell_execute( vm_t* vm ) {
+    char* cmd;
+    if ( !vm_dpop_str( vm, &cmd ) ) {
+        return false;
+    }
+    fflush( stdout );
+    FILE* pipe = popen( cmd, "r" );
+    free( cmd );
+    if ( pipe == 0 ) {
+        return vm_error( vm, "Failed to run shell command" );
+    }
+    size_t size = 0, alloc = 256;
+    char* text = (char*) malloc( alloc );
+    bool toolong = false;
+    while ( text ) {
+        if ( size + 128U > alloc ) {
+            alloc *= 2U;
+            char* p = (char*) realloc( text, alloc );
+            if ( p == 0 ) {
+                free( text );
+                text = 0;
+                break;
+            }
+            text = p;
+        }
+        size_t rd = fread( text + size, 1U, 128U, pipe );
+        size += rd;
+        if ( size > UINT16_MAX + 1024U ) {      // keep reading, but not storing, so the command can finish
+            toolong = true;
+            size = UINT16_MAX + 1U;
+        }
+        if ( rd < 128U ) {
+            break;
+        }
+    }
+    pclose( pipe );
+    if ( text == 0 ) {
+        return vm_error( vm, "Out of memory" );
+    }
+    while ( size && text[ size - 1U ] == '\n' ) {
+        --size;
+    }
+    char* s = toolong || size > UINT16_MAX ? 0 : vm_new_string( vm, text, strnlen( text, size ) );
+    bool tl = toolong || size > UINT16_MAX;
+    free( text );
+    if ( tl ) {
+        return vm_error( vm, "String too long" );
+    }
+    return s && vm_push_string( vm, s );
+}
+
+// SAVE: ( mode name -- ) the program belongs to the host, so it does the saving through the save callback
+static bool vm_save_program( vm_t* vm ) {
+    char* name; char* mode;
+    if ( !vm_dpop_str( vm, &name ) ) {
+        return false;
+    }
+    if ( !vm_dpop_str( vm, &mode ) ) {
+        free( name );
+        return false;
+    }
+    bool ok = true;
+    bool ascii = false;
+    if ( strcmp( mode, "A" ) == 0 ) {
+        ascii = true;
+    } else if ( mode[0] != '\0' && strcmp( mode, "B" ) != 0 ) {
+        ok = vm_error( vm, "Bad SAVE mode" );
+    }
+    if ( ok && name[0] == '\0' ) {
+        ok = vm_error( vm, "Illegal argument" );
+    }
+    if ( ok && vm->save == 0 ) {
+        ok = vm_error( vm, "SAVE is not available" );
+    }
+    if ( ok && !vm->save( vm, vm->userdata, name, ascii ) ) {
+        ok = vm_error( vm, "Save failed" );
+    }
+    free( name );
+    free( mode );
+    return ok;
+}
+
+static bool vm_system_function( vm_t* vm, uint16_t opcode ) {
+    double num; char buf[40];
+    switch ( opcode ) {
+        case INS_TI: {
+            // the system timer counts 1/60 second ticks since the VM was created
+            struct timespec now;
+            clock_gettime( CLOCK_MONOTONIC, &now );
+            double secs = (double)( now.tv_sec - vm->started.tv_sec ) + (double)( now.tv_nsec - vm->started.tv_nsec ) / 1e9;
+            return vm_dpush_num( vm, floor( secs * 60.0 ) );
+        }
+        case INS_INKY: {
+            int key = vm->inkey ? vm->inkey( vm, vm->userdata ) : 0;
+            buf[0] = (char) key;
+            buf[1] = '\0';
+            char* s = vm_new_string( vm, buf, key > 0 && key < 256 ? 1U : 0U );
+            return s && vm_push_string( vm, s );
+        }
+        case INS_FRE:
+            // the argument is ignored; the result is the free variable and string space
+            if ( !vm_dpop_num( vm, &num ) ) {
+                return false;
+            }
+            return vm_dpush_num( vm, (double)( ( VARSSIZE_MAX - vm->vmem->varssize ) + ( STRSSIZE_MAX - vm->vmem->strssize ) ) );
+        case INS_STRS: {
+            if ( !vm_dpop_num( vm, &num ) ) {
+                return false;
+            }
+            vm_format_number( num, buf );
+            char* s = vm_new_string( vm, buf, strlen( buf ) );
+            return s && vm_push_string( vm, s );
+        }
+        case INS_ASC: case INS_LEN: case INS_VAL:
+            return vm_str_to_num( vm, opcode );
+        case INS_BINS:  return vm_radix_string( vm, 2U, false );
+        case INS_QUAS:  return vm_radix_string( vm, 4U, false );
+        case INS_OCTS:  return vm_radix_string( vm, 8U, false );
+        case INS_HEXS:  return vm_radix_string( vm, 16U, false );
+        case INS_DECS:  return vm_radix_string( vm, 10U, true );
+        case INS_LFTS: case INS_RGTS: case INS_MIDS:
+            return vm_substring( vm, opcode );
+        default:
+            break;
+    }
+    return vm_error( vm, "Internal error (bad system function)" );
+}
+
 // -- execution -------------------------------------------------------------
 
 static bool vm_binary_num( vm_t* vm, uint16_t opcode ) {
@@ -752,6 +1017,12 @@ static bool vm_step( vm_t* vm ) {
         case INS_WNAE: return vm_write_elem( vm, param, VARTYPEV_FLOAT );
         case INS_WIAE: return vm_write_elem( vm, param, VARTYPEV_INT );
         case INS_WSAE: return vm_write_elem( vm, param, VARTYPEV_STR );
+        case INS_TI: case INS_INKY: case INS_FRE: case INS_STRS: case INS_ASC: case INS_LEN: case INS_VAL:
+        case INS_BINS: case INS_QUAS: case INS_OCTS: case INS_HEXS: case INS_DECS:
+        case INS_LFTS: case INS_RGTS: case INS_MIDS:
+            return vm_system_function( vm, opcode );
+        case INS_SHEX: return vm_shell_execute( vm );
+        case INS_SAVE: return vm_save_program( vm );
         case INS_CALF: return vm_call_function( vm, param, pc );
         case INS_RETF: return vm_return_function( vm );
         case INS_WRNV: return vm_write_var( vm, param, VARTYPEV_FLOAT );
@@ -768,7 +1039,7 @@ static bool vm_step( vm_t* vm ) {
             if ( !vm_dpop_num( vm, &num ) ) {
                 return false;
             }
-            snprintf( buf, sizeof(buf), "%.15g", num );
+            vm_format_number( num, buf );
             vm_out( vm, buf );
             return vm_print_sep( vm, hasp, param );
         }

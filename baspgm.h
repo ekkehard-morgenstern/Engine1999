@@ -69,6 +69,9 @@ void link_line( program_t* pgm, line_t* prev, line_t* line );   // inserts after
 void unlink_line( program_t* pgm, line_t* line );
 void delete_line( program_t* pgm, line_t* line );               // unlinks and frees
 bool enter_line( program_t* pgm, const uint8_t* tokline, bool (*directmode)( program_t*, const uint8_t*, size_t ) );
+// writes the program to a stream, either as text (one line per program line, as listed) or in binary form
+// (the encoded lines, each a linehdr_t of LINEHDR_SIZE bytes followed by its tokens)
+bool save_program( program_t* pgm, FILE* out, bool ascii );
 void list_program( program_t* pgm, uint32_t lineno_first, uint32_t lineno_last, void (*printer)( const char* ) );
 
 #endif

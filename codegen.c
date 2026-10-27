@@ -1028,8 +1028,8 @@ UNEXP:      return cgen_unexpected_node( comp );
     if ( hasargs && !gen_from_sysfncall( cgen, comp, node ) ) {
         return false;
     }
-    bool (*generator)( codegen_t* ) = 0;
     uint8_t functok = node->data[0];
+    bool (*generator)( codegen_t* ) = 0;
     switch ( functok ) {
         case TOK_TI:    generator = cgen_gen_ti; break;
         case TOK_INKEY: generator = cgen_gen_inky; break;
@@ -1661,6 +1661,9 @@ bool cgen_from_expr( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     if ( nodetype == NT_NUMEXPR ) {
         return cgen_from_numexpr( cgen, comp, node );
     }
+    if ( nodetype == NT_NUMLIT ) {  // the parser supplies the default of an optional argument as a literal
+        return cgen_from_numlit( cgen, comp, node );
+    }
     return cgen_unexpected_node( comp );
 }
 
@@ -1743,8 +1746,8 @@ bool cgen_from_savestmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     }
     if ( datalen ) {
         memcpy( &cgen->data[ optoffs ], node->data, datalen );
-        cgen->data[ optoffs + datalen ] = '\0';
     }
+    cgen->data[ optoffs + datalen ] = '\0';    // also for an empty option
     if ( !cgen_gen_phim( cgen, (int32_t) optoffs ) || !cgen_gen_las_d( cgen ) ) {
         return cgen_out_of_code_memory( comp );
     }

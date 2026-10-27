@@ -49,14 +49,29 @@ The data stack items are either a number or a string pointer (heap, NUL-terminat
 type mismatch is a run time error and strings never leak.
 The stacks are heap allocated and grow on demand.
 
-Not implemented yet (reported as errors at run time): BRK, system functions, SHEX, SAVE, WRLV,
-array parameters of functions.
+Not implemented yet (reported as errors at run time): BRK, WRLV, SLFT/SRGT/SMID (they can't
+change a variable, since strings on the stack are copies), array parameters of functions.
 
 Policies chosen by this implementation (the instruction set does not define them):
     - comparisons yield -1 (true) or 0 (false)
     - bitwise operations convert their operands to 32 bit signed integers
     - PNUM / PSTR separator parameter: 0 = none (newline follows), 4 = semicolon, 8 = comma (next 10 column zone)
-    - numbers are printed with "%.15g" and no padding
+    - numbers are printed (and converted by STR$) with "%.15g" and no padding
+    - SHEX runs the command with popen() and returns its standard output without the trailing newlines (like a shell
+      command substitution); the exit status is ignored; output longer than 65535 bytes is an error
+    - SAVE ( mode name -- ) needs the host: the VM doesn't know the program, it calls the save callback (name,
+      ascii) after checking the mode ("" or "B" = binary, "A" = ascii); without a callback it is an error.
+      baspgm.c offers save_program() for the host to use
+    - system functions:
+        TI          1/60 second ticks since the VM was created
+        INKEY$      the key from the inkey callback, "" if there is none (or no callback)
+        FRE(x)      free variable space + free string space in bytes (the argument is ignored)
+        ASC("")     is an error; LEN, VAL (leading decimal number, else 0)
+        LEFT$ RIGHT$ MID$   lengths beyond the string are clamped, a negative LEFT$/RIGHT$ length and a MID$ start < 1
+                            are errors; the parser supplies -1 for an omitted MID$ length (= the rest of the string)
+        BIN$ QUA$ OCT$ HEX$ DEC$   (n[,digits]) convert n as a 32 bit integer, zero padded to at least <digits>
+                            digits; the parser supplies -1 for omitted digits (= no padding); only DEC$ is signed,
+                            the others show negative numbers as 32 bit patterns
 */
 
 #define VM_PRINT_SEP_NONE   UINT16_C(0)
@@ -101,6 +116,9 @@ typedef struct _vm_t {
     void*           userdata;
     void            (*print)( struct _vm_t*, void*, int channel, const char* text );    // default: stdout
     void            (*report)( struct _vm_t*, void*, const char* );                     // default: stderr
+    int             (*inkey)( struct _vm_t*, void* );                              // INKEY$: key code, 0 = none
+    bool            (*save)( struct _vm_t*, void*, const char* filename, bool ascii );  // SAVE: the host saves the program
+    struct timespec started;        // for the system timer TI
 } vm_t;
 
 void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem );
