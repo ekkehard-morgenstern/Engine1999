@@ -13,9 +13,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-- `SESSION.md`: "Repo state" now names `3c0e106` as the latest commit (with `bcc157d` before it) and no longer mentions an uncommitted history-log entry; `HistoryLog-Claude.md`: logged `3c0e106`. No source changes, no tests run.
-- **No "Ready." after a program line; direct-mode `LOAD` no longer runs.** `handle_input()` (`engine1999.c`) returns false for lines starting with a digit, so the READY loop prints nothing after entering/deleting a program line. `repl_finish()` (`basrepl.c`) got a `direct` flag: a `LOAD` typed in direct mode loads, clears the runtime (`repl_reset_runtime()`) and stops; `LOAD` in a program still runs the loaded program. `repltest1`: 5 cases changed (added `RUN`/`PRINT A`), 1 added (113); `vmtest1`, `testcomp1` pass, `repltest1` valgrind clean. Docs: `basic-language.md`, `compiler-and-vm.md`, `SESSION.md`. Not tried on the real SDL screen.
-- **ANSI SGR output function for the text screen.** New `ansi.[ch]` (pure decoder: `ansi_init()`, `ansi_feed()` with an emit callback; SGR colors only, other sequences skipped, state kept across calls, runs ≤ 255 chars); `sdlscr_ansi_puts()` in `sdlscreen.[ch]` calls `sdlscr_printf()` per run (no lock, as decided); new visual test program `sdltest2.c` (colored text through `sdlscr_ansi_puts()`: standard colors, 256-palette strip, split sequence, colored echo of typed lines; `makefile`, `.gitignore`, `build-and-test.md`); `makefile` (module, `ansitest1` target), `.gitignore`. New `ansitest1` (26 cases, valgrind clean). Docs: `display-engine.md`, `build-and-test.md`, `SESSION.md`. Not wired into `engine1999`'s `host_print`; `sdltest2` was checked on the real screen by the user (screenshots: colors, backgrounds, palette strip, split sequence, colored echo all correct).
+(none)
 
 ## Log
 
@@ -221,3 +219,12 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 ### 3c0e106 — 2026-10-28 06:22:57 +0100 — "Claude History Log and session state update"
 2 files, +6/-2.
 - `HistoryLog-Claude.md`: logged `bcc157d`; `SESSION.md` updated. No source changes.
+
+### 8854d23 — 2026-10-28 20:26:55 +0100 — "Minor fixes, created using Claude Code"
+7 files, +34/-20.
+- **No "Ready." after a program line; direct-mode `LOAD` no longer runs.** `handle_input()` (`engine1999.c`) returns false for lines starting with a digit, so the READY loop prints nothing after entering/deleting a program line. `repl_finish()` (`basrepl.c`) got a `direct` flag: a `LOAD` typed in direct mode loads, clears the runtime (`repl_reset_runtime()`) and stops; `LOAD` in a program still runs the loaded program. `repltest1`: 5 cases changed (added `RUN`/`PRINT A`), 1 added (113); `vmtest1`, `testcomp1` pass, `repltest1` valgrind clean. Docs: `basic-language.md`, `compiler-and-vm.md`, `SESSION.md`. Not tried on the real SDL screen.
+- Also: `SESSION.md`: "Repo state" now names `3c0e106` as the latest commit (with `bcc157d` before it) and no longer mentions an uncommitted history-log entry; `HistoryLog-Claude.md`: logged `3c0e106`. No source changes, no tests run.
+
+### da35e56 — 2026-10-28 21:00:44 +0100 — "ANSI SGR sequence output, created using Claude Code"
+12 files, +491/-4.
+- **ANSI SGR output function for the text screen.** New `ansi.[ch]` (pure decoder: `ansi_init()`, `ansi_feed()` with an emit callback; SGR colors only, other sequences skipped, state kept across calls, runs ≤ 255 chars); `sdlscr_ansi_puts()` in `sdlscreen.[ch]` calls `sdlscr_printf()` per run (no lock, as decided); new visual test program `sdltest2.c` (colored text through `sdlscr_ansi_puts()`: standard colors, 256-palette strip, split sequence, colored echo of typed lines; `makefile`, `.gitignore`, `build-and-test.md`); `makefile` (module, `ansitest1` target), `.gitignore`. New `ansitest1` (26 cases, valgrind clean). Docs: `display-engine.md`, `build-and-test.md`, `SESSION.md`. Not wired into `engine1999`'s `host_print`; `sdltest2` was checked on the real screen by the user (screenshots: colors, backgrounds, palette strip, split sequence, colored echo all correct).
