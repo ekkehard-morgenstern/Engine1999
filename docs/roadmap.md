@@ -66,7 +66,12 @@ how a handler is named (line number / label / `FN`?); how they are cancelled (`O
 
 (also in `docs/refactoring.md`)
 
-- [ ] 64 KiB code and data segments (16-bit ISA addresses)
+- [ ] 64 KiB code and data segments (16-bit ISA addresses). Step 1 is done (the segments are growable heap buffers, identical
+      constants are shared, small integers are `PHIM` immediates); **step 2 lifts the limit**: a "wide" flag (reserved bit of the
+      instruction byte) for a 32-bit parameter on the address-bearing instructions, narrow when the target is known and fits, always
+      wide for patched forward references; `uint32_t` for the return stack, label/function code offsets, `CODEOFFS_NONE`,
+      `DATAOFFS_NONE`, the DATA item table and the `RSTR` parameter; `CODESIZE_MAX`/`DATASIZE_MAX` become a soft cap.
+      Measured with generated programs: 64 KiB of code hold only ~600 (FOR loops) to ~1500 (assignments) dense lines
 - [ ] 16-bit variable numbers (≤ 65535 variables), 6 array dimensions, one dimension ≤ 65535
 - [ ] 16-bit `LINE` instruction parameter: the code generator rejects line numbers > 65535 (the tokenizer accepts up to 999999)
 - [ ] VM strings ≤ 65535 bytes

@@ -204,10 +204,9 @@ bool cgen_from_defstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         }
         if ( basetype == VARTYPEV_STR ) {
             uint16_t emptyoffs = DATAOFFS_NONE;
-            if ( !cgen_alloc_data( cgen, UINT16_C(1), &emptyoffs ) || emptyoffs == DATAOFFS_NONE ) {
+            if ( !cgen_data_const( cgen, 0, 0, true, &emptyoffs ) || emptyoffs == DATAOFFS_NONE ) {
                 return cgen_out_of_data_memory( comp );
             }
-            cgen->data[ emptyoffs ] = '\0';
             if ( !cgen_gen_phpa_d( cgen, emptyoffs ) || !cgen_gen_las_d( cgen ) ) {
                 return cgen_out_of_code_memory( comp );
             }
@@ -543,11 +542,10 @@ bool cgen_from_inputstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         len += 2U;
     }
     uint16_t promptoffs = DATAOFFS_NONE;
-    if ( len >= UINT16_MAX - 1U || !cgen_alloc_data( cgen, (uint16_t)( len + 1U ), &promptoffs ) || promptoffs == DATAOFFS_NONE ) {
+    if ( len >= UINT16_MAX - 1U || !cgen_data_const( cgen, text, (uint16_t) len, true, &promptoffs ) || promptoffs == DATAOFFS_NONE ) {
         free( text );
         return cgen_out_of_data_memory( comp );
     }
-    memcpy( &cgen->data[ promptoffs ], text, len + 1U );
     free( text );
     if ( !cd_gen_channel( cgen, comp, node, flags ) ) {
         return false;

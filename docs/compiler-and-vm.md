@@ -44,7 +44,7 @@ Encoding: `<ins> [<ext>] [<hi><lo>]`. Instruction byte = `P C E r | iiii` (P: ha
 Basic opcodes: `BRK NOP PHPA PHIM BRIA BRIR JPCC JUMP DROP LINE LAN LIAN LUAN LAS FRES` (15 = reserved).
 Extended: arithmetic/logic (`NEG NOT LSH RSH ADD SUB MUL DIV AND NAND OR NOR XOR XNOR POW`), `CON` (string concat), numeric/string compares (`CNEQ…CSLT`),
 variable access (`RRNV RRIV RRSV RRLV RNAE RIAE RSAE`, `WR*`/`W*AE`), calls (`CALF RETF`), and BASIC runtime primitives (`TI INKY ASC VAL FRE LEN BINS … MIDS SLFT SRGT SMID SAVE PCHN PNUM PSTR`). See `instset.h` for the full table and bit layouts.
-Immediates: 17-bit signed (`PHIM`, C bit = bit 16) so small integers need no data segment.
+Immediates: 17-bit signed (`PHIM`, C bit = bit 16) so small integers need no data segment: number literals that are integers from -65536 to 65535 (not negative zero) are generated as `PHIM` (`cgen_push_number()`), others as a constant in the data segment (`PHPA.D`, `LAN`). The code and data segments are heap buffers that grow on demand (`cgen_alloc_code/data`, still limited to 64 KiB by the 16-bit ISA); identical read-only constants (number literals, string literals, SAVE options, INPUT prompts, the empty string, the `PCHN` channel number, label names and line numbers of LOAD/RUN/LIST/DELETE/RENUM) are stored once (`cgen_data_const()`, a hash table that is cleared with the segment). DATA item records are not shared (they are chained and carry state).
 
 ## VM (`vm.[ch]`)
 

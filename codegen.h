@@ -39,8 +39,19 @@
 #define CODEOFFS_NONE   UINT16_C(0XFFFF)
 #define DATAOFFS_NONE   UINT16_C(0XFFFF)
 
+// The code and data segments are heap buffers that grow on demand; these are the limits of the instruction set (16-bit
+// parameters, see docs/roadmap.md), not allocation sizes.
 #define CODESIZE_MAX    65536U
 #define DATASIZE_MAX    65536U
+
+// a constant in the data segment, for sharing identical constants (see cgen_data_const())
+typedef struct _cgen_const_t {
+    uint32_t    offs;           // offset in the data segment, CGEN_CONST_FREE = unused slot
+    uint32_t    size;           // bytes, including the terminating NUL of a string
+    uint32_t    hash;
+} cgen_const_t;
+
+#define CGEN_CONST_FREE     UINT32_C(0XFFFFFFFF)
 
 // control flow bookkeeping (see cgenctl.c)
 typedef struct _cgen_lineaddr_t {
@@ -90,8 +101,12 @@ typedef struct _codegen_t {
     void*           userdata;
     void            (*report)( struct _codegen_t*, void*, const char* );
     void            (*halt)( struct _codegen_t*, void* ) ATTR_NORETURN;
-    uint8_t         code[CODESIZE_MAX], data[DATASIZE_MAX];
+    uint8_t*        code;           // the code segment (heap; codesize bytes in use, codecap allocated)
+    uint8_t*        data;           // the data segment (heap)
     uint32_t        codesize, datasize;
+    size_t          codecap, datacap;
+    cgen_const_t*   consts;         // hash table of the shared constants in the data segment (size: power of two)
+    size_t          numconsts, maxconsts;
     cgen_lineaddr_t*    lineaddrs;      // line number -> code address, in ascending order
     size_t              numlineaddrs, maxlineaddrs;
     cgen_fixup_t*       fixups;         // forward references to lines
@@ -116,6 +131,11 @@ void cleanup_codegen( codegen_t* cgen );    // frees the bookkeeping tables
 void cgen_reset( codegen_t* cgen );         // discards all code and data (keeps the callbacks)
 bool cgen_alloc_code( codegen_t* cgen, uint16_t size, uint16_t* poffs );
 bool cgen_alloc_data( codegen_t* cgen, uint16_t size, uint16_t* poffs );
+// Offset of a read-only constant in the data segment: <len> bytes, followed by a NUL if <nul> is set (a string).
+// Identical constants are stored once. Don't use it for data that is changed later (DATA items).
+bool cgen_data_const( codegen_t* cgen, const void* bytes, uint16_t len, bool nul, uint16_t* poffs );
+// Pushes a number: a small integer with PHIM (3 bytes of code, no data), anything else as a shared constant (PHPA, LAN).
+bool cgen_push_number( codegen_t* cgen, compiler_t* comp, double value );
 bool cgen_gen_ins( codegen_t* cgen, uint8_t ins, uint8_t ext, uint16_t param );
 bool cgen_gen_ins12( codegen_t* cgen, uint16_t ins12, bool code, bool hasparam, uint16_t param );
 bool cgen_gen_ins12_imm17( codegen_t* cgen, uint16_t ins12, int32_t imm17 );

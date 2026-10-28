@@ -49,31 +49,10 @@ that line only (both ends are the same), "LIST a-" lists up to the end and "LIST
 static bool cp_push_string( codegen_t* cgen, compiler_t* comp, const char* text ) {
     size_t len = strlen( text );
     uint16_t off = DATAOFFS_NONE;
-    if ( len >= UINT16_MAX || !cgen_alloc_data( cgen, (uint16_t)( len + 1U ), &off ) || off == DATAOFFS_NONE ) {
+    if ( len >= UINT16_MAX || !cgen_data_const( cgen, text, (uint16_t) len, true, &off ) || off == DATAOFFS_NONE ) {
         return cgen_out_of_data_memory( comp );
     }
-    memcpy( &cgen->data[ off ], text, len + 1U );
     if ( !cgen_gen_phim( cgen, (int32_t) off ) || !cgen_gen_las_d( cgen ) ) {
-        return cgen_out_of_code_memory( comp );
-    }
-    return true;
-}
-
-// pushes a constant number as a double in the data segment (big endian, like the NT_NUMLIT node data)
-static bool cp_push_number( codegen_t* cgen, compiler_t* comp, double val ) {
-    union {
-        uint64_t    ui64;
-        double      dbl;
-    } u;
-    u.dbl = val;
-    uint16_t off = DATAOFFS_NONE;
-    if ( !cgen_alloc_data( cgen, UINT16_C(8), &off ) || off == DATAOFFS_NONE ) {
-        return cgen_out_of_data_memory( comp );
-    }
-    for ( unsigned i=0; i < 8U; ++i ) {
-        cgen->data[ off + i ] = (uint8_t)( u.ui64 >> ( 8U * ( 7U - i ) ) );
-    }
-    if ( !cgen_gen_phpa_d( cgen, off ) || !cgen_gen_lan_d( cgen ) ) {
         return cgen_out_of_code_memory( comp );
     }
     return true;
@@ -100,7 +79,7 @@ static bool cp_push_target( codegen_t* cgen, compiler_t* comp, node_t* target ) 
             return cgen_unexpected_node( comp );
         }
     }
-    return cp_push_string( cgen, comp, label ) && cp_push_number( cgen, comp, lineno );
+    return cp_push_string( cgen, comp, label ) && cgen_push_number( cgen, comp, lineno );
 }
 
 bool cgen_from_loadstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
@@ -258,7 +237,7 @@ bool cgen_from_renumstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
          !cp_push_target( cgen, comp, first ) || !cp_push_target( cgen, comp, last ) ) {
         return false;
     }
-    if ( step != NODE_NONE ? !cgen_from_numexpr( cgen, comp, step ) : !cp_push_number( cgen, comp, 10.0 ) ) {
+    if ( step != NODE_NONE ? !cgen_from_numexpr( cgen, comp, step ) : !cgen_push_number( cgen, comp, 10.0 ) ) {
         return false;
     }
     return cgen_gen_renm( cgen ) || cgen_out_of_code_memory( comp );

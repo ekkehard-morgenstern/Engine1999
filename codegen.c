@@ -32,8 +32,11 @@ void init_codegen( codegen_t* cgen ) {
     cgen->report   = 0;
     cgen->halt     = 0;
     cgen->userdata = 0;
-    cgen->codesize = UINT16_C(0);
-    cgen->datasize = UINT16_C(0);
+    cgen->code     = cgen->data = 0;
+    cgen->codesize = UINT32_C(0);
+    cgen->datasize = UINT32_C(0);
+    cgen->codecap  = cgen->datacap = 0;
+    cgen->consts   = 0; cgen->numconsts = cgen->maxconsts = 0;
     cgen->lineaddrs = 0; cgen->numlineaddrs = cgen->maxlineaddrs = 0;
     cgen->fixups    = 0; cgen->numfixups    = cgen->maxfixups    = 0;
     cgen->loops     = 0; cgen->numloops     = cgen->maxloops     = 0;
@@ -47,6 +50,9 @@ void init_codegen( codegen_t* cgen ) {
 }
 
 void cleanup_codegen( codegen_t* cgen ) {
+    free( cgen->code );
+    free( cgen->data );
+    free( cgen->consts );
     free( cgen->lineaddrs );
     free( cgen->fixups );
     free( cgen->loops );
@@ -54,6 +60,10 @@ void cleanup_codegen( codegen_t* cgen ) {
     free( cgen->dataoffs );
     free( cgen->restorefix );
     free( cgen->labeldata );
+    cgen->code      = cgen->data = 0;
+    cgen->codesize  = cgen->datasize = 0;
+    cgen->codecap   = cgen->datacap = 0;
+    cgen->consts    = 0; cgen->numconsts = cgen->maxconsts = 0;
     cgen->lineaddrs = 0; cgen->numlineaddrs = cgen->maxlineaddrs = 0;
     cgen->fixups    = 0; cgen->numfixups    = cgen->maxfixups    = 0;
     cgen->loops     = 0; cgen->numloops     = cgen->maxloops     = 0;
@@ -68,11 +78,34 @@ void cgen_reset( codegen_t* cgen ) {
     cgen->datasize = UINT32_C(0);
     cgen->datafirst = cgen->datalast = DATAOFFS_NONE;
     cgen->numdataitems = 0;
+    for ( size_t i=0; i < cgen->maxconsts; ++i ) {
+        cgen->consts[i].offs = CGEN_CONST_FREE;
+    }
+    cgen->numconsts = 0;
     cgen_begin_control( cgen );
 }
 
+// makes sure that the segment has room for <needed> bytes; new memory is zeroed
+static bool cgen_ensure_segment( uint8_t** pseg, size_t* pcap, size_t needed ) {
+    if ( needed <= *pcap ) {
+        return true;
+    }
+    size_t newcap = *pcap ? *pcap : 4096U;
+    while ( newcap < needed ) {
+        newcap *= 2U;
+    }
+    uint8_t* p = (uint8_t*) realloc( *pseg, newcap );
+    if ( p == 0 ) {
+        return false;
+    }
+    memset( p + *pcap, 0, newcap - *pcap );
+    *pseg = p;
+    *pcap = newcap;
+    return true;
+}
+
 bool cgen_alloc_code( codegen_t* cgen, uint16_t size, uint16_t* poffs ) {
-    if ( size > CODESIZE_MAX - cgen->codesize ) {
+    if ( size > CODESIZE_MAX - cgen->codesize || !cgen_ensure_segment( &cgen->code, &cgen->codecap, (size_t) cgen->codesize + size ) ) {
         return false;
     }
     *poffs = (uint16_t) cgen->codesize;
@@ -81,11 +114,120 @@ bool cgen_alloc_code( codegen_t* cgen, uint16_t size, uint16_t* poffs ) {
 }
 
 bool cgen_alloc_data( codegen_t* cgen, uint16_t size, uint16_t* poffs ) {
-    if ( size > DATASIZE_MAX - cgen->datasize ) {
+    if ( size > DATASIZE_MAX - cgen->datasize || !cgen_ensure_segment( &cgen->data, &cgen->datacap, (size_t) cgen->datasize + size ) ) {
         return false;
     }
     *poffs = (uint16_t) cgen->datasize;
     cgen->datasize += size;
+    return true;
+}
+
+// -- shared constants ----------------------------------------------------------
+
+static uint32_t cgen_const_hash( const uint8_t* bytes, size_t len, bool nul ) {
+    uint32_t h = UINT32_C(2166136261);          // FNV-1a
+    for ( size_t i=0; i < len; ++i ) {
+        h = ( h ^ bytes[i] ) * UINT32_C(16777619);
+    }
+    if ( nul ) {
+        h *= UINT32_C(16777619);
+    }
+    return h;
+}
+
+// makes the hash table twice as big (or creates it)
+static bool cgen_const_grow( codegen_t* cgen ) {
+    size_t newmax = cgen->maxconsts ? cgen->maxconsts * 2U : 256U;
+    cgen_const_t* table = (cgen_const_t*) malloc( newmax * sizeof(cgen_const_t) );
+    if ( table == 0 ) {
+        return false;
+    }
+    for ( size_t i=0; i < newmax; ++i ) {
+        table[i].offs = CGEN_CONST_FREE;
+    }
+    for ( size_t i=0; i < cgen->maxconsts; ++i ) {
+        if ( cgen->consts[i].offs != CGEN_CONST_FREE ) {
+            size_t slot = cgen->consts[i].hash & ( newmax - 1U );
+            while ( table[slot].offs != CGEN_CONST_FREE ) {
+                slot = ( slot + 1U ) & ( newmax - 1U );
+            }
+            table[slot] = cgen->consts[i];
+        }
+    }
+    free( cgen->consts );
+    cgen->consts    = table;
+    cgen->maxconsts = newmax;
+    return true;
+}
+
+bool cgen_data_const( codegen_t* cgen, const void* bytes, uint16_t len, bool nul, uint16_t* poffs ) {
+    const uint8_t* b = (const uint8_t*) bytes;
+    uint32_t size = (uint32_t) len + ( nul ? 1U : 0U );
+    uint32_t hash = cgen_const_hash( b, len, nul );
+    // find an identical constant
+    if ( cgen->maxconsts ) {
+        size_t slot = hash & ( cgen->maxconsts - 1U );
+        while ( cgen->consts[slot].offs != CGEN_CONST_FREE ) {
+            const cgen_const_t* c = &cgen->consts[slot];
+            if ( c->hash == hash && c->size == size && ( len == 0 || memcmp( &cgen->data[ c->offs ], b, len ) == 0 ) &&
+                 ( !nul || cgen->data[ c->offs + len ] == 0 ) ) {
+                *poffs = (uint16_t) c->offs;
+                return true;
+            }
+            slot = ( slot + 1U ) & ( cgen->maxconsts - 1U );
+        }
+    }
+    // a new one
+    uint16_t offs = DATAOFFS_NONE;
+    if ( size > UINT16_MAX || !cgen_alloc_data( cgen, (uint16_t) size, &offs ) ) {
+        return false;
+    }
+    if ( len ) {
+        memcpy( &cgen->data[ offs ], b, len );
+    }
+    if ( nul ) {
+        cgen->data[ offs + len ] = '\0';
+    }
+    // the table stays at most half full; if growing fails the constant is simply not shared
+    if ( ( cgen->numconsts + 1U ) * 2U > cgen->maxconsts && !cgen_const_grow( cgen ) && cgen->maxconsts == 0 ) {
+        *poffs = offs;
+        return true;
+    }
+    if ( ( cgen->numconsts + 1U ) * 2U <= cgen->maxconsts ) {
+        size_t slot = hash & ( cgen->maxconsts - 1U );
+        while ( cgen->consts[slot].offs != CGEN_CONST_FREE ) {
+            slot = ( slot + 1U ) & ( cgen->maxconsts - 1U );
+        }
+        cgen->consts[slot].offs = offs;
+        cgen->consts[slot].size = size;
+        cgen->consts[slot].hash = hash;
+        ++cgen->numconsts;
+    }
+    *poffs = offs;
+    return true;
+}
+
+bool cgen_push_number( codegen_t* cgen, compiler_t* comp, double value ) {
+    // integers from -65536 to 65535 fit the 17 bit immediate of PHIM (negative zero must stay a double)
+    if ( value >= -65536.0 && value <= 65535.0 && value == (double)(int32_t) value && !( value == 0.0 && signbit( value ) ) ) {
+        return cgen_gen_phim( cgen, (int32_t) value ) || cgen_out_of_code_memory( comp );
+    }
+    uint8_t bytes[8];
+    union {
+        uint64_t    ui64;
+        double      dbl;
+    } u;
+    u.dbl = value;
+    for ( unsigned i=0; i < 8U; ++i ) {      // big endian, like the NT_NUMLIT node data
+        bytes[i] = (uint8_t)( u.ui64 >> ( 8U * ( 7U - i ) ) );
+    }
+    uint16_t off = DATAOFFS_NONE;
+    if ( !cgen_data_const( cgen, bytes, 8U, false, &off ) || off == DATAOFFS_NONE ) {
+        return cgen_out_of_data_memory( comp );
+    }
+    if ( !cgen_gen_phpa_d( cgen, off ) || !cgen_gen_lan_d( cgen ) ) {
+        return cgen_out_of_code_memory( comp );
+    }
     return true;
 }
 
@@ -797,17 +939,8 @@ UNEXP:  return cgen_unexpected_node( comp );
         goto UNEXP;
     }
 
-    uint16_t dataoffs = DATAOFFS_NONE;
-    if ( !cgen_alloc_data( cgen, UINT16_C(8), &dataoffs ) || dataoffs == DATAOFFS_NONE ) {
-        return cgen_out_of_data_memory( comp );
-    }
-    memcpy( &cgen->data[ dataoffs ], node->data, 8U );
-
-    // generate code to push the data address on the stack and then code to read the data field as a number
-    if ( !cgen_gen_phpa_d( cgen, dataoffs ) || !cgen_gen_lan_d( cgen ) ) {
-        return cgen_out_of_code_memory( comp );
-    }
-    return true;
+    // a small integer becomes an immediate, anything else a shared constant in the data segment (PHPA, LAN)
+    return cgen_push_number( cgen, comp, comp_extract_float( node->data, 0 ) );
 }
 
 bool cgen_from_strlit( codegen_t* cgen, compiler_t* comp, node_t* node ) {
@@ -835,13 +968,9 @@ UNEXP:  return cgen_unexpected_node( comp );
     uint8_t datatype = node->data[0]; --datalen;
     const uint8_t* datap = &node->data[1];
     uint16_t dataoffs = DATAOFFS_NONE;
-    if ( !cgen_alloc_data( cgen, datalen + UINT16_C(1), &dataoffs ) || dataoffs == DATAOFFS_NONE ) {
+    if ( datalen == UINT16_MAX || !cgen_data_const( cgen, datap, datalen, true, &dataoffs ) || dataoffs == DATAOFFS_NONE ) {
         return cgen_out_of_data_memory( comp );
     }
-    if ( datalen ) {
-        memcpy( &cgen->data[ dataoffs ], datap, datalen );
-    }
-    cgen->data[ dataoffs + datalen ] = '\0';
     switch ( datatype ) {
         case TOK_STRLIT:
             // generate code to push the data address on the stack then code to load it as string pointer
@@ -1853,13 +1982,9 @@ bool cgen_from_savestmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     // emit data field as an instruction to load a string to the stack
     uint16_t datalen  = node->datalen;
     uint16_t optoffs  = DATAOFFS_NONE;
-    if ( !cgen_alloc_data( cgen, datalen + UINT16_C(1), &optoffs ) || optoffs == DATAOFFS_NONE ) {
+    if ( datalen == UINT16_MAX || !cgen_data_const( cgen, node->data, datalen, true, &optoffs ) || optoffs == DATAOFFS_NONE ) {
         return cgen_out_of_data_memory( comp );
     }
-    if ( datalen ) {
-        memcpy( &cgen->data[ optoffs ], node->data, datalen );
-    }
-    cgen->data[ optoffs + datalen ] = '\0';    // also for an empty option
     if ( !cgen_gen_phim( cgen, (int32_t) optoffs ) || !cgen_gen_las_d( cgen ) ) {
         return cgen_out_of_code_memory( comp );
     }
@@ -2095,15 +2220,10 @@ static bool from_printstmt_cb( void* param, node_t* node ) {
 
 bool cgen_gen_channel0( codegen_t* cgen, compiler_t* comp ) {
     // PCHN is sticky in the VM, so statements without a channel specifier select channel 0 explicitly
-    uint16_t off = DATAOFFS_NONE;
-    if ( !cgen_alloc_data( cgen, UINT16_C(8), &off ) || off == DATAOFFS_NONE ) {
-        return cgen_out_of_data_memory( comp );
+    if ( !cgen_push_number( cgen, comp, 0.0 ) ) {
+        return false;
     }
-    memset( &cgen->data[ off ], 0, 8U );        // the double 0.0
-    if ( !cgen_gen_phpa_d( cgen, off ) || !cgen_gen_lan_d( cgen ) || !cgen_gen_pchn( cgen ) ) {
-        return cgen_out_of_code_memory( comp );
-    }
-    return true;
+    return cgen_gen_pchn( cgen ) || cgen_out_of_code_memory( comp );
 }
 
 bool cgen_from_printstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
@@ -2156,10 +2276,9 @@ bool cgen_from_printstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     if ( cbdata.count == UINT16_C(0) ) {
         // no arguments: just print a newline, by printing an empty string
         uint16_t dataoffs = DATAOFFS_NONE;
-        if ( !cgen_alloc_data( cgen, UINT16_C(1), &dataoffs ) || dataoffs == DATAOFFS_NONE ) {
+        if ( !cgen_data_const( cgen, 0, 0, true, &dataoffs ) || dataoffs == DATAOFFS_NONE ) {
             return cgen_out_of_data_memory( comp );
         }
-        cgen->data[ dataoffs ] = '\0';
         if ( !cgen_gen_phpa_d( cgen, dataoffs ) || !cgen_gen_las_d( cgen ) || !cgen_gen_pstr( cgen, false, UINT16_C(0) ) ) {
             return cgen_out_of_code_memory( comp );
         }

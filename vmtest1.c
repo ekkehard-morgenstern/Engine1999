@@ -320,6 +320,9 @@ static const testcase_t cases[] = {
     { "RENUM ends the run",     "PRINT 1:RENUM:PRINT 2",                           "1\n<renumber * * step 10>\n" },
     { "RENUM step 0",           "RENUM ,0",                                        "? Illegal argument\n" },
     { "RENUM step missing",     "RENUM 10,",                                       "? Numeric expression expected\n" },
+    { "number immediates: limits", "PRINT 65535;-65536;65536;-65537;131071;0",       "65535-6553665536-655371310710\n" },
+    { "number immediates: fractions", "PRINT 1.5;-2.25;3",                          "1.5-2.253\n" },
+    { "same constants used twice", "A$=\"HELLO\":B$=\"HELLO\":C$=\"\":D$=\"\":PRINT A$+B$;LEN(C$+D$);1.5+1.5", "HELLOHELLO03\n" },
     { "LIST all",               "LIST",                                            "<list * * on channel 0>\n" },
     { "LIST one line",          "LIST 20",                                         "<list 20 20 on channel 0>\n" },
     { "LIST range",             "LIST 10-30",                                      "<list 10 30 on channel 0>\n" },
@@ -743,7 +746,20 @@ static bool run_dynamic_cases( buf_t* tokbuf, size_t* pnum, size_t* pfailed ) {
     testcase_t tc3 = { "one dimension is limited to 65535", "DIM A(70000)", "? Dimension out of range\n", 0 };
     // 4. an array with several big dimensions
     testcase_t tc4 = { "array of 300 x 300 elements", "DIM A(300,300):A(299,299)=3:A(1,0)=2:A(0,1)=5:PRINT A(299,299);A(1,0);A(0,1)", "325\n", 0 };
-    const testcase_t* dyn[] = { &tc1, &tc2, &tc3, &tc4 };
+    // 5. identical constants are stored once: 600 lines with the same 200 character string need 120000 bytes of data
+    //    without sharing (the data segment holds 65536), and the same for one decimal number
+    char* src5 = (char*) malloc( 400000U );
+    size_t n5 = 0;
+    for ( int i=1; i <= 600; ++i ) {
+        n5 += (size_t) snprintf( src5 + n5, 400000U - n5, "%d A$=\"", i * 10 );
+        for ( int j=0; j < 200; ++j ) {
+            src5[ n5++ ] = (char)( 'A' + j % 26 );
+        }
+        n5 += (size_t) snprintf( src5 + n5, 400000U - n5, "\":B=B+%d.5\n", 1 );
+    }
+    snprintf( src5 + n5, 400000U - n5, "6010 PRINT LEN(A$);B" );
+    testcase_t tc5 = { "constants are shared", src5, "200900\n", 0 };
+    const testcase_t* dyn[] = { &tc1, &tc2, &tc3, &tc4, &tc5 };
     for ( size_t i=0; i < sizeof(dyn) / sizeof(dyn[0]); ++i ) {
         ++*pnum;
         if ( run_case( dyn[i], tokbuf ) ) {
@@ -758,6 +774,7 @@ static bool run_dynamic_cases( buf_t* tokbuf, size_t* pnum, size_t* pfailed ) {
     free( longname );
     free( src );
     free( src2 );
+    free( src5 );
     return true;
 }
 

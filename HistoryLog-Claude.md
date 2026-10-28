@@ -13,7 +13,13 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-(none)
+- 2026-10-28: **Step 1 of lifting the 64 KiB code/data limits** (the limits themselves stay; they come from the 16-bit ISA, step 2 will lift them).
+  - `codegen_t`: `code` and `data` are heap buffers that grow on demand (zero-filled, doubling from 4 KiB) instead of 128 KiB arrays inside the struct; `cgen_reset()` keeps them, `cleanup_codegen()` frees them.
+  - Shared constants: new `cgen_data_const()` (hash table `consts` in `codegen_t`, FNV-1a, open addressing, cleared by `cgen_reset()`); used for number and string literals, SAVE options, INPUT prompts, the empty string, the channel-0 number, and the label names / line numbers pushed by LOAD/RUN/LIST/DELETE/RENUM. DATA item records are not shared.
+  - New `cgen_push_number()`: integer literals from -65536 to 65535 (not negative zero) are generated as `PHIM` (3 bytes, no data) instead of `PHPA.D` + `LAN` + an 8 byte constant.
+  - Effect, measured with generated programs of 1500..20000 lines before/after: data use fell from 40654 to 17 bytes (print/IF lines), 36757 to 13801 (assignments), 14176 to 8 (FOR loops); code only by ~5 % (the first "Out of code memory" moved from 830 to 874, 1457 to 1490 and 590 to 602 lines), so code stays the bottleneck and step 2 is still needed. The measuring program is a scratch file, not in the repo.
+  - Tests: `vmtest1` 378 cases (+4: `PHIM` limits, fractions, repeated constants, and a 600-line program with a 200 character string that needs 120 KB of data without sharing); `repltest1` 106; both pass, valgrind clean (builds without `-p`); `testcomp1` passes.
+  - Docs: `compiler-and-vm.md`, `roadmap.md` (step 2 described), `refactoring.md`, `SESSION.md`.
 
 ## Log
 
@@ -173,3 +179,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
   - Tests: `vmtest1` 374 cases (+18: parsing, callbacks, ends the run, errors), `repltest1` 106 cases (+32: ranges, labels, all reference kinds, strings/comments untouched, overlap, overflow, in a program, SAVE/LOAD after RENUM); both pass; valgrind clean (builds without `-p`); `testcomp1` passes. Not tried on the real SDL screen.
   - Docs: `basic-language.md`, `compiler-and-vm.md`, `roadmap.md`, `bascomp.ebnf`, `instset.h`, `CLAUDE.md`, `SESSION.md`.
 - Also in this commit: the log entry for `038f171` and the `SESSION.md` repo-state line.
+
+### 2d7f59f — 2026-10-28 05:42:25 +0100 — "Claude History Log and session state update"
+2 files, +13/-9.
+- `HistoryLog-Claude.md`: logged `fd7e324`; `SESSION.md`: latest-commit line. No source changes.
