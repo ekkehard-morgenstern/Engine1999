@@ -14,6 +14,10 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 ## Pending (not committed yet)
 
 - `HistoryLog-Claude.md`: logged `de09d9a` and `e09a0cc`. `SESSION.md` tidied: removed the duplicated `ansitest1` test line and the outdated second "ANSI colors" bullet, updated the latest-commit line and the `make` target list. No source changes.
+- **Redesigned lowercase font glyphs** `a`–`z` (0x61–0x7A) in `8x12font1.txt`, recompiled to `8x12font1.c` with `fontcomp.pl`. Original design from basic typographic rules (x-height rows 4–9, ascenders from row 2, descenders rows 10–11, 2px stems, 1px horizontals, rounded corners), not copied from any existing computer font.  `make`, `vmtest1`, `repltest1` pass; not yet checked on the real screen.
+- **Redesigned capitals, digits and ASCII symbols** (0x21–0x40, 0x41–0x5A, 0x5B–0x60, 0x7B–0x7E) in the same style (6-wide, 2px stems, cap height rows 2–9, `M`/`W` 7 wide, slashed-diagonal `0`). Glyphs 0x7F and above untouched. `make`, `vmtest1`, `repltest1` pass; not yet checked on the real screen.
+- **Font touch-up after a screenshot**: capitals `M` and `W` were tried 6 wide but read as `H` on screen and were reverted to the 7-wide forms; `%` and `&` redrawn. Lowercase `m`/`w` still 7 wide. `make`, `vmtest1`, `repltest1` pass.
+- **Font: taller brackets, cleaner slashes**: `( ) [ ] { }` now span rows 1–11 (11 rows, covering ascenders and descenders; braces have the point on row 6); `/` and `\` are a regular 2 px wide staircase (2 rows per column step, rows 1–10, cols 1–6) instead of the irregular stagger. `|` stretched to rows 1–11 to match. `make`, `vmtest1`, `repltest1` pass; not yet checked on the screen.
 
 ## Log
 
