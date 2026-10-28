@@ -83,6 +83,19 @@ bool save_program( program_t* pgm, FILE* out, bool ascii );
 bool read_program_header( FILE* in, uint8_t* pversion );
 // finds the line that holds "LABEL <label>" (the first one), by scanning the program text; false if there is none
 bool find_label_line( program_t* pgm, const char* label, uint32_t* plineno );
+// deletes the lines with first <= number <= last (LINENO_NONE = unbounded); returns how many were deleted
+size_t delete_lines( program_t* pgm, uint32_t first, uint32_t last );
+
+// RENUM: gives the lines in first..last (LINENO_NONE = unbounded) the numbers start, start+step, ...; the other lines keep
+// theirs. All line number references (GOTO, GOSUB, ON .. GOTO/GOSUB, THEN, ELSE, RESTORE, RUN, LIST, DELETE) to renumbered
+// lines are adjusted, in the whole program; references to other lines and labels are left alone. Nothing changes unless
+// the result is RENUM_OK.
+#define RENUM_OK        0
+#define RENUM_OVERLAP   1       // the new numbers would collide with, or pass, lines that are not renumbered
+#define RENUM_OVERFLOW  2       // a new number would be above LINENO_MAX
+#define RENUM_MEMORY    3
+#define RENUM_FAILED    4       // a changed line could not be tokenized again (internal error)
+int renumber_program( program_t* pgm, uint32_t first, uint32_t last, uint32_t start, uint32_t step );
 void list_program( program_t* pgm, uint32_t lineno_first, uint32_t lineno_last, void (*printer)( const char* ) );
 
 #endif

@@ -609,10 +609,13 @@ Explanation of node types:
 #define NT_LISTSTMT             UINT8_C(0X5E)   // LIST statement
 #define NT_NEWSTMT              UINT8_C(0X5F)   // NEW statement
 #define NT_CLEARSTMT            UINT8_C(0X60)   // CLEAR statement
+#define NT_DELETESTMT           UINT8_C(0X61)   // DELETE statement
+#define NT_RENUMSTMT            UINT8_C(0X62)   // RENUM statement
 
 #define LISTF_FIRST             UINT8_C(0X01)   // LIST: start target present (first branch)
 #define LISTF_LAST              UINT8_C(0X02)   // LIST: end target present (next branch)
 #define LISTF_RANGE             UINT8_C(0X04)   // LIST: a minus sign was given (otherwise a single target)
+#define LISTF_STEP              UINT8_C(0X08)   // RENUM: a step (numeric expression) is the last branch
 
 #define INPUTF_CHAN             UINT8_C(0X01)   // INPUT / GET: channel info present
 #define INPUTF_PROMPT           UINT8_C(0X02)   // INPUT: prompt present

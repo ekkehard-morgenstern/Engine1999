@@ -61,6 +61,8 @@ void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem ) {
     vm->inredo   = 0;
     vm->save     = 0;
     vm->list     = 0;
+    vm->deletelines = 0;
+    vm->renumber = 0;
     vm->request  = VMREQ_NONE;
     vm->reqname  = 0;
     vm->reqline  = -1;
@@ -1107,6 +1109,28 @@ static bool vm_list_program( vm_t* vm ) {
     return ok;
 }
 
+// DELE ( s1 n1 s2 n2 -- ) and RENM ( s1 n1 s2 n2 step -- )
+static bool vm_edit_program( vm_t* vm, bool renumber ) {
+    double step = 10.0, n1 = 0, n2 = 0; char* s1 = 0; char* s2 = 0;
+    bool ok = ( !renumber || vm_dpop_num( vm, &step ) ) &&
+        vm_dpop_num( vm, &n2 ) && vm_dpop_str( vm, &s2 ) && vm_dpop_num( vm, &n1 ) && vm_dpop_str( vm, &s1 );
+    if ( ok && ( n1 < -1.0 || n1 > (double) LINENO_MAX || n2 < -1.0 || n2 > (double) LINENO_MAX ||
+                 step < 1.0 || step > (double) LINENO_MAX ) ) {
+        ok = vm_error( vm, "Illegal argument" );
+    }
+    if ( ok && ( renumber ? vm->renumber == 0 : vm->deletelines == 0 ) ) {
+        ok = vm_error( vm, renumber ? "RENUM is not available" : "DELETE is not available" );
+    }
+    if ( ok ) {
+        ok = renumber ? vm->renumber( vm, vm->userdata, s1, (int32_t) n1, s2, (int32_t) n2, (int32_t) step ) :
+            vm->deletelines( vm, vm->userdata, s1, (int32_t) n1, s2, (int32_t) n2 );
+        vm->pc = vm->cgen->codesize;        // the program changed: the run ends
+    }
+    free( s1 );
+    free( s2 );
+    return ok;
+}
+
 // FRE: the memory that is available for allocation, in bytes (Linux: MemAvailable from /proc/meminfo, else 0)
 static double vm_free_memory( void ) {
     FILE* f = fopen( "/proc/meminfo", "r" );
@@ -1403,6 +1427,8 @@ static bool vm_step( vm_t* vm ) {
         case INS_RUNP: return vm_run_program( vm );
         case INS_LIST: return vm_list_program( vm );
         case INS_NEW: return vm_new_program( vm );
+        case INS_DELE: return vm_edit_program( vm, false );
+        case INS_RENM: return vm_edit_program( vm, true );
         case INS_CLR:
             vmem_clear_vars( vm->vmem );
             return true;

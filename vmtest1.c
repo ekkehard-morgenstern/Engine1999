@@ -302,6 +302,24 @@ static const testcase_t cases[] = {
     { "CLEAR keeps labels",     "10 K=1\n20 CLEAR\n30 GOTO M\n40 PRINT 4\n50 LABEL M\n60 PRINT K",  "0\n" },
     { "CLEAR goes on",          "A=1:CLEAR:PRINT 2",                               "2\n" },
     { "CLEAR in a FOR loop's body keeps the loop data", "FOR I=1 TO 3:S=S+1:NEXT:CLEAR:PRINT S;I", "00\n" },
+    { "DELETE line",            "DELETE 20",                                       "<delete 20 20>\n" },
+    { "DELETE range",           "DELETE 10-30",                                    "<delete 10 30>\n" },
+    { "DELETE up to",           "DELETE -30",                                      "<delete * 30>\n" },
+    { "DELETE from",            "DELETE 10-",                                      "<delete 10 *>\n" },
+    { "DELETE labels",          "DELETE A-B",                                      "<delete A B>\n" },
+    { "DELETE ends the run",    "PRINT 1:DELETE 5:PRINT 2",                        "1\n<delete 5 5>\n" },
+    { "DELETE needs a target",  "DELETE",                                          "? Line number or label expected\n" },
+    { "DELETE minus alone",     "DELETE -",                                        "? Line number or label expected\n" },
+    { "RENUM default",          "RENUM",                                           "<renumber * * step 10>\n" },
+    { "RENUM from a line",      "RENUM 100",                                       "<renumber 100 * step 10>\n" },
+    { "RENUM from a line, step","RENUM 100,5",                                     "<renumber 100 * step 5>\n" },
+    { "RENUM range",            "RENUM 10-50",                                     "<renumber 10 50 step 10>\n" },
+    { "RENUM up to",            "RENUM -50,20",                                    "<renumber * 50 step 20>\n" },
+    { "RENUM step only",        "RENUM ,5",                                        "<renumber * * step 5>\n" },
+    { "RENUM labels, expression", "RENUM A-B,2*3",                                 "<renumber A B step 6>\n" },
+    { "RENUM ends the run",     "PRINT 1:RENUM:PRINT 2",                           "1\n<renumber * * step 10>\n" },
+    { "RENUM step 0",           "RENUM ,0",                                        "? Illegal argument\n" },
+    { "RENUM step missing",     "RENUM 10,",                                       "? Numeric expression expected\n" },
     { "LIST all",               "LIST",                                            "<list * * on channel 0>\n" },
     { "LIST one line",          "LIST 20",                                         "<list 20 20 on channel 0>\n" },
     { "LIST range",             "LIST 10-30",                                      "<list 10 30 on channel 0>\n" },
@@ -497,6 +515,26 @@ static bool vm_list( struct _vm_t* vm, void* usrdata, const char* firstlabel, in
     return true;
 }
 
+static bool vm_delete( struct _vm_t* vm, void* usrdata, const char* firstlabel, int32_t firstline,
+    const char* lastlabel, int32_t lastline ) {
+    char a[80], b[80], text[200];
+    list_end( a, sizeof(a), firstlabel, firstline );
+    list_end( b, sizeof(b), lastlabel, lastline );
+    snprintf( text, sizeof(text), "<delete %s %s>\n", a, b );
+    out_append( text );
+    return true;
+}
+
+static bool vm_renumber( struct _vm_t* vm, void* usrdata, const char* firstlabel, int32_t firstline,
+    const char* lastlabel, int32_t lastline, int32_t step ) {
+    char a[80], b[80], text[200];
+    list_end( a, sizeof(a), firstlabel, firstline );
+    list_end( b, sizeof(b), lastlabel, lastline );
+    snprintf( text, sizeof(text), "<renumber %s %s step %d>\n", a, b, (int) step );
+    out_append( text );
+    return true;
+}
+
 static int vm_inkey( struct _vm_t* vm, void* usrdata ) {
     return keys && *keys ? (uint8_t) *keys++ : 0;
 }
@@ -572,6 +610,8 @@ static bool compile_and_run( void ) {
     vm.getkey   = vm_getkey;
     vm.save     = vm_save;
     vm.list     = vm_list;
+    vm.deletelines = vm_delete;
+    vm.renumber = vm_renumber;
     vm.maxsteps = UINT64_C(1000000);
     ok = vm_run_at( &vm, start );
     if ( ok && vm.request != VMREQ_NONE ) {

@@ -129,6 +129,10 @@ static void repl_setup_compiler( repl_t* repl ) {
 
 static bool repl_vm_list( struct _vm_t* vm, void* usrdata, const char* firstlabel, int32_t firstline,
     const char* lastlabel, int32_t lastline );
+static bool repl_vm_delete( struct _vm_t* vm, void* usrdata, const char* firstlabel, int32_t firstline,
+    const char* lastlabel, int32_t lastline );
+static bool repl_vm_renumber( struct _vm_t* vm, void* usrdata, const char* firstlabel, int32_t firstline,
+    const char* lastlabel, int32_t lastline, int32_t step );
 
 // hands the host callbacks to the VM
 static void repl_setup_vm( repl_t* repl ) {
@@ -142,6 +146,8 @@ static void repl_setup_vm( repl_t* repl ) {
     vm->interrupt = repl->interrupt;
     vm->save      = repl->save;
     vm->list      = repl_vm_list;
+    vm->deletelines = repl_vm_delete;
+    vm->renumber  = repl_vm_renumber;
 }
 
 // -- running -----------------------------------------------------------------------
@@ -435,6 +441,48 @@ static bool repl_vm_list( struct _vm_t* vm, void* usrdata, const char* firstlabe
     }
     repl_list( repl, first, last );
     return true;
+}
+
+// the DELETE statement
+static bool repl_vm_delete( struct _vm_t* vm, void* usrdata, const char* firstlabel, int32_t firstline,
+    const char* lastlabel, int32_t lastline ) {
+    repl_t* repl = (repl_t*) usrdata;
+    uint32_t first, last;
+    if ( !repl_list_end( repl, firstlabel, firstline, &first ) || !repl_list_end( repl, lastlabel, lastline, &last ) ) {
+        return false;
+    }
+    delete_lines( &repl->pgm, first, last );
+    return true;
+}
+
+// the RENUM statement: the new numbers start at the first line of the range (10 without a start)
+static bool repl_vm_renumber( struct _vm_t* vm, void* usrdata, const char* firstlabel, int32_t firstline,
+    const char* lastlabel, int32_t lastline, int32_t step ) {
+    repl_t* repl = (repl_t*) usrdata;
+    uint32_t first, last, start = 10;
+    if ( !repl_list_end( repl, firstlabel, firstline, &first ) || !repl_list_end( repl, lastlabel, lastline, &last ) ) {
+        return false;
+    }
+    if ( first != LINENO_NONE ) {
+        start = first;
+    }
+    switch ( renumber_program( &repl->pgm, first, last, start, (uint32_t) step ) ) {
+        case RENUM_OK:
+            return true;
+        case RENUM_OVERLAP:
+            repl_vm_error( repl, "Renumbering would overlap other lines", 0 );
+            break;
+        case RENUM_OVERFLOW:
+            repl_vm_error( repl, "Line number too large", 0 );
+            break;
+        case RENUM_MEMORY:
+            repl_vm_error( repl, "Out of memory", 0 );
+            break;
+        default:
+            repl_vm_error( repl, "Renumbering failed", 0 );
+            break;
+    }
+    return false;
 }
 
 bool repl_save_program( repl_t* repl, const char* filename, bool ascii ) {

@@ -222,7 +222,14 @@ list-stmt := TOK_LIST [ goto-target ] [ TOK_MINUS [ goto-target ] ] .
 -- labels and functions are not variables in this sense and stay.
 new-stmt := TOK_NEW .
 clear-stmt := TOK_CLEAR .
-prog-stmt := load-stmt | run-stmt | list-stmt | new-stmt | clear-stmt .
+-- DELETE removes the lines of a range (same syntax as LIST, but at least one end is required: use NEW to delete all).
+-- RENUM [a][-b][,step] renumbers the lines in the range (all lines without a range): the new numbers start at the first
+-- line of the range (a; 10 without a start) and advance by step (10 if omitted); a start alone means "from a to the end".
+-- References to renumbered lines (GOTO, GOSUB, ON, THEN, ELSE, RESTORE, RUN, LIST, DELETE) are adjusted, labels are not
+-- affected. Both change the stored program, so the running program ends (its code no longer matches the program).
+delete-stmt := TOK_DELETE ( goto-target [ TOK_MINUS [ goto-target ] ] | TOK_MINUS goto-target ) .
+renum-stmt := TOK_RENUM [ goto-target ] [ TOK_MINUS [ goto-target ] ] [ TOK_COMMA num-expr ] .
+prog-stmt := load-stmt | run-stmt | list-stmt | new-stmt | clear-stmt | delete-stmt | renum-stmt .
 
 stmt := io-stmt | prog-stmt | assign-stmt | control-flow-stmt .
 stmt-list := stmt { TOK_COLON stmt } .

@@ -30,10 +30,12 @@
 #include "runtime.h"
 
 /*
-Code generation for the program commands LOAD, RUN, LIST, NEW and CLEAR.
+Code generation for the program commands LOAD, RUN, LIST, NEW, CLEAR, DELETE and RENUM.
 
     LOAD name        <name>  LOAD
     RUN [target]     <label name or "">  <line number or -1>  RUNP
+    DELETE a[-[b]]   <label a or "">  <line a or -1>  <label b or "">  <line b or -1>  DELE
+    RENUM [a][-[b]][,step]   (the same four operands)  <step, 10 if omitted>  RENM
     NEW              NEW
     CLEAR            CLR
     LIST [a][-[b]]   <label a or "">  <line a or -1>  <label b or "">  <line b or -1>  LIST
@@ -196,4 +198,68 @@ bool cgen_from_clearstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         return cgen_unexpected_node( comp );
     }
     return cgen_gen_clr( cgen ) || cgen_out_of_code_memory( comp );
+}
+
+// the start and end targets of a range statement (LIST, DELETE, RENUM) from the node; <single> = what a single target means:
+// true: that line only (both ends), false: from there to the end
+static bool cp_range_targets( compiler_t* comp, node_t* node, bool single, node_t** pfirst, node_t** plast, node_t** pextra ) {
+    if ( node->datalen != UINT16_C(1) ) {
+        return cgen_unexpected_node( comp );
+    }
+    uint8_t flags = node->data[0];
+    size_t expected = ( ( flags & LISTF_FIRST ) ? 1U : 0U ) + ( ( flags & LISTF_LAST ) ? 1U : 0U ) +
+        ( ( flags & LISTF_STEP ) ? 1U : 0U );
+    if ( node->numbranches != expected ) {
+        return cgen_unexpected_node( comp );
+    }
+    size_t at = 0;
+    *pfirst = ( flags & LISTF_FIRST ) ? node->branches[ at++ ] : NODE_NONE;
+    *plast  = ( flags & LISTF_LAST )  ? node->branches[ at++ ] : NODE_NONE;
+    *pextra = ( flags & LISTF_STEP )  ? node->branches[ at++ ] : NODE_NONE;
+    if ( single && ( flags & LISTF_RANGE ) == 0 && *pfirst != NODE_NONE ) {
+        *plast = *pfirst;
+    }
+    return true;
+}
+
+bool cgen_from_deletestmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    // NT_DELETESTMT   DELETE statement, same layout as NT_LISTSTMT (at least one target)
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->type != NT_DELETESTMT ) {
+        return cgen_unexpected_node( comp );
+    }
+    node_t* first = NODE_NONE; node_t* last = NODE_NONE; node_t* extra = NODE_NONE;
+    if ( !cp_range_targets( comp, node, true, &first, &last, &extra ) ||
+         !cp_push_target( cgen, comp, first ) || !cp_push_target( cgen, comp, last ) ) {
+        return false;
+    }
+    return cgen_gen_dele( cgen ) || cgen_out_of_code_memory( comp );
+}
+
+bool cgen_from_renumstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    /*
+        NT_RENUMSTMT    RENUM statement
+            data:
+                - 1 byte of flags: LISTF_FIRST, LISTF_LAST, LISTF_RANGE as for LIST, LISTF_STEP
+            branches:
+                - the start target, the end target (as flagged), then the step (numeric expression)
+        A single target means "from there to the end" (renumbering one line is pointless).
+    */
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->type != NT_RENUMSTMT ) {
+        return cgen_unexpected_node( comp );
+    }
+    node_t* first = NODE_NONE; node_t* last = NODE_NONE; node_t* step = NODE_NONE;
+    if ( !cp_range_targets( comp, node, false, &first, &last, &step ) ||
+         !cp_push_target( cgen, comp, first ) || !cp_push_target( cgen, comp, last ) ) {
+        return false;
+    }
+    if ( step != NODE_NONE ? !cgen_from_numexpr( cgen, comp, step ) : !cp_push_number( cgen, comp, 10.0 ) ) {
+        return false;
+    }
+    return cgen_gen_renm( cgen ) || cgen_out_of_code_memory( comp );
 }

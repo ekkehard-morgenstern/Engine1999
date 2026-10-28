@@ -322,6 +322,13 @@ The 4096 extended instructions are as follows:
     0001 00111100       NEW  - new program ( -- ) C=0 P=0
                             Asks the host to delete the program and the variables; the VM stores the request and
                             stops (like LOAD), the program is not continued.
+    0001 00111110       DELE - delete program lines ( s1 n1 s2 n2 -- ) C=0 P=0
+                            Deletes the lines in the range (same operands as LIST) through the host (delete callback),
+                            then ends the run: the stored program no longer matches the code that is running.
+    0001 00111111       RENM - renumber program lines ( s1 n1 s2 n2 step -- ) C=0 P=0
+                            Renumbers the lines of the range (operands as for LIST) with the new numbers starting at the
+                            first line of the range (10 if the start is not given), through the host (renumber
+                            callback); then ends the run like DELE. step is a number >= 1.
     0001 00111101       CLR  - clear variables ( -- ) C=0 P=0
                             Numeric variables become 0, strings "", arrays are emptied (they keep their dimensions);
                             labels, functions and the compiler's hidden variables are kept.
@@ -438,5 +445,7 @@ The 4096 extended instructions are as follows:
 #define INS_LIST        UINT16_C(0X13B)
 #define INS_NEW         UINT16_C(0X13C)
 #define INS_CLR         UINT16_C(0X13D)
+#define INS_DELE        UINT16_C(0X13E)
+#define INS_RENM        UINT16_C(0X13F)
 
 #endif

@@ -234,6 +234,8 @@ bool cgen_gen_runp( codegen_t* cgen );
 bool cgen_gen_list( codegen_t* cgen );
 bool cgen_gen_new( codegen_t* cgen );
 bool cgen_gen_clr( codegen_t* cgen );
+bool cgen_gen_dele( codegen_t* cgen );
+bool cgen_gen_renm( codegen_t* cgen );
 bool cgen_gen_pchn( codegen_t* cgen );
 bool cgen_gen_pnum( codegen_t* cgen, bool hasparam, uint16_t param );
 bool cgen_gen_pstr( codegen_t* cgen, bool hasparam, uint16_t param );
@@ -307,6 +309,8 @@ bool cgen_from_runstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_liststmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_newstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_clearstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_deletestmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_renumstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 
 // finds the code offset of a numbered line of the program compiled last; false if it doesn't exist
 bool cgen_find_line( const codegen_t* cgen, uint32_t lineno, uint32_t* paddr );

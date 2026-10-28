@@ -2306,26 +2306,47 @@ bool comp_eat_runstmt( compiler_t* comp, node_t** pnode ) {
     return true;
 }
 
+// [ goto-target ] [ TOK_MINUS [ goto-target ] ]: the line range of LIST, DELETE and RENUM
+static bool comp_eat_linerange( compiler_t* comp, uint8_t* pflags, node_t** pfirst, node_t** plast ) {
+    *pflags = 0; *pfirst = NODE_NONE; *plast = NODE_NONE;
+    if ( comp_eat_gototarget( comp, pfirst ) && *pfirst != NODE_NONE ) {
+        *pflags |= LISTF_FIRST;
+    }
+    if ( comp->currtok == TOK_MINUS ) {
+        *pflags |= LISTF_RANGE;
+        if ( !comp_fetchtok( comp ) ) {
+            comp_error( comp, "Line number or label expected" );
+            return false;
+        }
+        if ( comp_eat_gototarget( comp, plast ) && *plast != NODE_NONE ) {
+            *pflags |= LISTF_LAST;
+        }
+    }
+    return true;
+}
+
+// creates a node with a flags byte and the range targets (and optionally one more branch) as branches
+static bool comp_make_rangenode( compiler_t* comp, node_t** pnode, uint8_t nodetype, uint8_t flags, node_t* first,
+    node_t* last, node_t* extra ) {
+    if ( !comp_create_node( comp, pnode, nodetype, UINT8_C(0), UINT16_C(1), &flags ) || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    if ( ( first != NODE_NONE && !comp_add_branch( comp, *pnode, first ) ) ||
+         ( last  != NODE_NONE && !comp_add_branch( comp, *pnode, last ) ) ||
+         ( extra != NODE_NONE && !comp_add_branch( comp, *pnode, extra ) ) ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
 bool comp_eat_liststmt( compiler_t* comp, node_t** pnode ) {
     // list-stmt := TOK_LIST [ goto-target ] [ TOK_MINUS [ goto-target ] ] .
     if ( comp->currtok != TOK_LIST || !comp_fetchtok( comp ) ) {
         return false;
     }
-    uint8_t flags = 0;
-    node_t* first = NODE_NONE; node_t* last = NODE_NONE;
-    if ( comp_eat_gototarget( comp, &first ) && first != NODE_NONE ) {
-        flags |= LISTF_FIRST;
-    }
-    if ( comp->currtok == TOK_MINUS ) {
-        flags |= LISTF_RANGE;
-        if ( !comp_fetchtok( comp ) ) {
-            comp_error( comp, "Line number or label expected" );
-            return false;
-        }
-        if ( comp_eat_gototarget( comp, &last ) && last != NODE_NONE ) {
-            flags |= LISTF_LAST;
-        }
-    }
+    uint8_t flags = 0; node_t* first = NODE_NONE; node_t* last = NODE_NONE;
     /*
         NT_LISTSTMT     LIST statement
             data:
@@ -2333,16 +2354,55 @@ bool comp_eat_liststmt( compiler_t* comp, node_t** pnode ) {
             branches:
                 - the start target if LISTF_FIRST, then the end target if LISTF_LAST (NT_GOTOTARGET)
     */
-    if ( !comp_create_node( comp, pnode, NT_LISTSTMT, UINT8_C(0), UINT16_C(1), &flags ) || *pnode == NODE_NONE ) {
-        out_of_memory( comp );
+    return comp_eat_linerange( comp, &flags, &first, &last ) &&
+        comp_make_rangenode( comp, pnode, NT_LISTSTMT, flags, first, last, NODE_NONE );
+}
+
+bool comp_eat_deletestmt( compiler_t* comp, node_t** pnode ) {
+    // delete-stmt := TOK_DELETE ( goto-target [ TOK_MINUS [ goto-target ] ] | TOK_MINUS goto-target ) .
+    if ( comp->currtok != TOK_DELETE || !comp_fetchtok( comp ) ) {
         return false;
     }
-    if ( ( first != NODE_NONE && !comp_add_branch( comp, *pnode, first ) ) ||
-         ( last  != NODE_NONE && !comp_add_branch( comp, *pnode, last ) ) ) {
-        out_of_memory( comp );
+    uint8_t flags = 0; node_t* first = NODE_NONE; node_t* last = NODE_NONE;
+    /*
+        NT_DELETESTMT   DELETE statement (same layout as NT_LISTSTMT; at least one target is present)
+    */
+    if ( !comp_eat_linerange( comp, &flags, &first, &last ) ) {
         return false;
     }
-    return true;
+    if ( ( flags & ( LISTF_FIRST | LISTF_LAST ) ) == 0 ) {
+        comp_error( comp, "Line number or label expected" );
+        return false;
+    }
+    return comp_make_rangenode( comp, pnode, NT_DELETESTMT, flags, first, last, NODE_NONE );
+}
+
+bool comp_eat_renumstmt( compiler_t* comp, node_t** pnode ) {
+    // renum-stmt := TOK_RENUM [ goto-target ] [ TOK_MINUS [ goto-target ] ] [ TOK_COMMA num-expr ] .
+    if ( comp->currtok != TOK_RENUM || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    uint8_t flags = 0; node_t* first = NODE_NONE; node_t* last = NODE_NONE;
+    if ( !comp_eat_linerange( comp, &flags, &first, &last ) ) {
+        return false;
+    }
+    node_t* step = NODE_NONE;
+    if ( comp->currtok == TOK_COMMA ) {
+        if ( !comp_fetchtok( comp ) || !comp_eat_numexpr( comp, &step ) || step == NODE_NONE ) {
+            comp_error( comp, "Numeric expression expected" );
+            return false;
+        }
+        flags |= LISTF_STEP;
+    }
+    /*
+        NT_RENUMSTMT    RENUM statement
+            data:
+                - 1 byte of flags: LISTF_FIRST, LISTF_LAST, LISTF_RANGE as for LIST, LISTF_STEP (step present)
+            branches:
+                - the start target if LISTF_FIRST, the end target if LISTF_LAST (NT_GOTOTARGET),
+                  then the step (numeric expression) if LISTF_STEP
+    */
+    return comp_make_rangenode( comp, pnode, NT_RENUMSTMT, flags, first, last, step );
 }
 
 bool comp_eat_newstmt( compiler_t* comp, node_t** pnode ) {
@@ -2372,7 +2432,7 @@ bool comp_eat_clearstmt( compiler_t* comp, node_t** pnode ) {
 }
 
 bool comp_eat_progstmt( compiler_t* comp, node_t** pnode ) {
-    // prog-stmt := load-stmt | run-stmt | list-stmt | new-stmt | clear-stmt .
+    // prog-stmt := load-stmt | run-stmt | list-stmt | new-stmt | clear-stmt | delete-stmt | renum-stmt .
     // [ NT_PROGSTMT - not generated ]
     if ( comp_eat_loadstmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
@@ -2387,6 +2447,12 @@ bool comp_eat_progstmt( compiler_t* comp, node_t** pnode ) {
         return true;
     }
     if ( comp_eat_clearstmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_deletestmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_renumstmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     return false;

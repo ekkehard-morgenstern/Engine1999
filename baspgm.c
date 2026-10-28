@@ -309,6 +309,254 @@ bool find_label_line( program_t* pgm, const char* label, uint32_t* plineno ) {
     return found;
 }
 
+size_t delete_lines( program_t* pgm, uint32_t first, uint32_t last ) {
+    size_t count = 0;
+    line_t* next;
+    for ( line_t* line = pgm->first; line; line = next ) {
+        next = line->next;
+        if ( ( first == LINENO_NONE || line->lineno >= first ) && ( last == LINENO_NONE || line->lineno <= last ) ) {
+            delete_line( pgm, line );
+            ++count;
+        }
+    }
+    return count;
+}
+
+// -- RENUM -------------------------------------------------------------------
+
+typedef struct _renummap_t {
+    const uint32_t* olds;       // ascending
+    const uint32_t* news;
+    size_t          count;
+} renummap_t;
+
+static uint32_t renum_map( const renummap_t* map, uint32_t lineno ) {
+    size_t lo = 0, hi = map->count;
+    while ( lo < hi ) {
+        size_t mid = lo + ( hi - lo ) / 2U;
+        if ( map->olds[mid] < lineno ) {
+            lo = mid + 1U;
+        } else {
+            hi = mid;
+        }
+    }
+    return lo < map->count && map->olds[lo] == lineno ? map->news[lo] : lineno;
+}
+
+// what the scanner expects next
+#define EXP_NONE    0
+#define EXP_NUM     1       // a line number (or a label) comes next
+#define EXP_RANGE   2       // like EXP_NUM; LIST/DELETE: a minus and a second number may follow
+
+// copies the program text after the line number to <out>, with the line number references mapped; sets *pchanged
+static bool renum_text( const char* text, const renummap_t* map, buf_t* out, bool* pchanged ) {
+    int expect = EXP_NONE;
+    bool commalist = false;     // GOTO/GOSUB: a comma continues the list
+    bool rangeopen = false;     // LIST/DELETE: a minus continues the range
+    bool pendingminus = false;  // a number of a range was mapped; a minus and the second number may follow
+    char prev[16] = "";
+    const char* p = text;
+    while ( *p ) {
+        if ( *p == '"' || *p == '`' ) {
+            char quote = *p;
+            const char* q = p + 1;
+            while ( *q && *q != quote ) {
+                ++q;
+            }
+            if ( *q ) {
+                ++q;
+            }
+            if ( writeto_buffer( out, p, (size_t)( q - p ) ) < 0 ) {
+                return false;
+            }
+            p = q;
+            expect = EXP_NONE;
+        } else if ( *p == '\'' ) {
+            return writeto_buffer( out, p, strlen( p ) ) >= 0;      // comment: the rest of the line
+        } else if ( *p >= '0' && *p <= '9' ) {
+            const char* q = p;
+            while ( *q >= '0' && *q <= '9' ) {
+                ++q;
+            }
+            bool plain = !is_word_char( *q ) && *q != '.' && ( p == text || !is_word_char( p[-1] ) );
+            if ( expect != EXP_NONE && plain && q - p < 10 ) {
+                char digits[16];
+                memcpy( digits, p, (size_t)( q - p ) );
+                digits[ q - p ] = '\0';
+                uint32_t oldno = (uint32_t) strtoul( digits, 0, 10 );
+                uint32_t newno = renum_map( map, oldno );
+                if ( newno != oldno ) {
+                    *pchanged = true;
+                }
+                if ( printto_buffer( out, "%u", (unsigned) newno ) < 0 ) {
+                    return false;
+                }
+                // what may follow the number
+                const char* r = q;
+                while ( *r == ' ' ) {
+                    ++r;
+                }
+                if ( commalist && *r == ',' ) {
+                    expect = EXP_NUM;
+                } else if ( rangeopen && expect == EXP_RANGE && *r == '-' ) {
+                    expect = EXP_NONE;
+                    pendingminus = true;
+                    rangeopen = false;
+                } else {
+                    expect = EXP_NONE;
+                }
+            } else {
+                if ( writeto_buffer( out, p, (size_t)( q - p ) ) < 0 ) {
+                    return false;
+                }
+                expect = EXP_NONE;
+            }
+            p = q;
+        } else if ( is_word_char( *p ) ) {
+            const char* q = p;
+            while ( is_word_char( *q ) ) {
+                ++q;
+            }
+            size_t len = (size_t)( q - p );
+            char word[16];
+            snprintf( word, sizeof(word), "%.*s", len < sizeof(word) ? (int) len : (int) sizeof(word) - 1, p );
+            bool gosub = strcmp( word, "GOTO" ) == 0 || strcmp( word, "GOSUB" ) == 0 ||
+                ( strcmp( prev, "GO" ) == 0 && ( strcmp( word, "TO" ) == 0 || strcmp( word, "SUB" ) == 0 ) );
+            bool range = strcmp( word, "LIST" ) == 0 || strcmp( word, "DELETE" ) == 0;
+            bool single = strcmp( word, "THEN" ) == 0 || strcmp( word, "ELSE" ) == 0 || strcmp( word, "RESTORE" ) == 0 ||
+                strcmp( word, "RUN" ) == 0;
+            expect = gosub || single ? EXP_NUM : range ? EXP_RANGE : EXP_NONE;
+            pendingminus = false;
+            commalist = gosub;
+            rangeopen = range;
+            snprintf( prev, sizeof(prev), "%s", word );
+            if ( writeto_buffer( out, p, len ) < 0 ) {
+                return false;
+            }
+            p = q;
+        } else {
+            if ( *p == '-' && ( expect == EXP_RANGE || pendingminus ) ) {
+                // "LIST -50" (the first number is missing) or the minus of "LIST 10-50"
+                expect = EXP_NUM;
+                rangeopen = false;
+                pendingminus = false;
+            } else if ( *p != ' ' && *p != ',' ) {
+                expect = EXP_NONE;
+                pendingminus = false;
+            } else if ( *p == ',' && !commalist ) {
+                expect = EXP_NONE;
+                pendingminus = false;
+            }
+            if ( writeto_buffer( out, p, 1U ) < 0 ) {
+                return false;
+            }
+            ++p;
+        }
+    }
+    return true;
+}
+
+int renumber_program( program_t* pgm, uint32_t first, uint32_t last, uint32_t start, uint32_t step ) {
+    // the selected lines form a contiguous part of the list
+    size_t count = 0;
+    line_t* firstsel = 0; line_t* lastsel = 0;
+    for ( line_t* line = pgm->first; line; line = line->next ) {
+        if ( ( first == LINENO_NONE || line->lineno >= first ) && ( last == LINENO_NONE || line->lineno <= last ) ) {
+            if ( firstsel == 0 ) {
+                firstsel = line;
+            }
+            lastsel = line;
+            ++count;
+        }
+    }
+    if ( count == 0 ) {
+        return RENUM_OK;
+    }
+    if ( step == 0 || (uint64_t) start + (uint64_t)( count - 1U ) * step > (uint64_t) LINENO_MAX ) {
+        return RENUM_OVERFLOW;
+    }
+    uint32_t lastnew = (uint32_t)( start + ( count - 1U ) * step );
+    if ( ( firstsel->prev && firstsel->prev->lineno >= start ) || ( lastsel->next && lastsel->next->lineno <= lastnew ) ) {
+        return RENUM_OVERLAP;
+    }
+    uint32_t* olds = (uint32_t*) malloc( 2U * count * sizeof(uint32_t) );
+    if ( olds == 0 ) {
+        return RENUM_MEMORY;
+    }
+    uint32_t* news = olds + count;
+    size_t n = 0;
+    for ( line_t* line = firstsel; n < count; line = line->next, ++n ) {
+        olds[n] = line->lineno;
+        news[n] = (uint32_t)( start + n * step );
+    }
+    renummap_t map = { olds, news, count };
+
+    program_t result; init_program( &result );
+    buf_t* text = create_buffer(); buf_t* rest = create_buffer(); buf_t* tokbuf = create_buffer();
+    int status = RENUM_OK;
+    if ( text == 0 || rest == 0 || tokbuf == 0 ) {
+        status = RENUM_MEMORY;
+    }
+    for ( line_t* line = pgm->first; line && status == RENUM_OK; line = line->next ) {
+        uint32_t newno = renum_map( &map, line->lineno );
+        pgmiter_t iter; clear_iter( &iter, pgm );
+        iter_load_line( &iter, line );
+        clear_buffer( text ); clear_buffer( rest );
+        bool changed = false;
+        line_t* copy = 0;
+        if ( !detokenize_line( text, iter.tok, &iter.hdr ) ) {
+            status = RENUM_FAILED;
+            break;
+        }
+        // the listing starts with the line number and a blank
+        const char* body = text->buffer;
+        while ( *body >= '0' && *body <= '9' ) {
+            ++body;
+        }
+        if ( !renum_text( body, &map, rest, &changed ) ) {
+            status = RENUM_MEMORY;
+            break;
+        }
+        if ( !changed ) {
+            copy = create_line( newno, line->tokens, line->toklen );        // the tokens stay as they are
+        } else {
+            char* full = (char*) malloc( rest->fill + 16U );
+            if ( full == 0 ) {
+                status = RENUM_MEMORY;
+                break;
+            }
+            snprintf( full, rest->fill + 16U, "%u%.*s", (unsigned) newno, (int) rest->fill, rest->buffer );     // rest is not NUL-terminated
+            preprocess_buffer( full );
+            linehdr_t hdr;
+            clear_buffer( tokbuf );
+            if ( !tokenize_line( full, tokbuf, &hdr ) || hdr.lineno != newno ) {
+                status = RENUM_FAILED;
+            } else {
+                copy = create_line( newno, (const uint8_t*) tokbuf->buffer + LINEHDR_SIZE, (uint16_t)( hdr.length - LINEHDR_SIZE ) );
+            }
+            free( full );
+        }
+        if ( status == RENUM_OK ) {
+            if ( copy == 0 ) {
+                status = RENUM_MEMORY;
+            } else {
+                link_line( &result, result.last, copy );
+            }
+        }
+    }
+    free( olds );
+    if ( text ) { delete_buffer( text ); }
+    if ( rest ) { delete_buffer( rest ); }
+    if ( tokbuf ) { delete_buffer( tokbuf ); }
+    if ( status != RENUM_OK ) {
+        free_program( &result );
+        return status;
+    }
+    free_program( pgm );
+    *pgm = result;
+    return RENUM_OK;
+}
+
 bool save_program( program_t* pgm, FILE* out, bool ascii ) {
     buf_t* buf = ascii ? create_buffer() : 0;
     if ( ascii && buf == 0 ) {

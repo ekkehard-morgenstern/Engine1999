@@ -60,6 +60,7 @@ Policies chosen by this implementation (the instruction set does not define them
     - numbers are printed (and converted by STR$) with "%.15g" and no padding
     - SHEX runs the command with popen() and returns its standard output without the trailing newlines (like a shell
       command substitution); the exit status is ignored; output longer than 65535 bytes is an error
+    - DELETE and RENUM (DELE, RENM) call the host (deletelines / renumber callbacks) and end the run afterwards
     - NEW (like LOAD and RUN) leaves a request; CLR (CLEAR) is done by the VM itself (vmem_clear_vars)
     - LOAD and RUN ( RUNP ) can't be carried out by the VM: it doesn't own the program, and the program being run would be
       replaced. The instruction stores a request (vm_t.request, reqname, reqline) and ends the run; vm_run()/vm_run_at()
@@ -150,6 +151,10 @@ typedef struct _vm_t {
     // LIST: the host lists the program to the VM's current channel; first/last are a label name ("" = none) or a line
     // number (-1 = none); a missing end is unbounded. Returns false after reporting an error.
     bool            (*list)( struct _vm_t*, void*, const char* firstlabel, int32_t firstline, const char* lastlabel, int32_t lastline );
+    // DELETE / RENUMBER: the host edits the stored program (ranges as for list); the VM ends the run afterwards, because the
+    // running code no longer matches the program. Return false after reporting an error.
+    bool            (*deletelines)( struct _vm_t*, void*, const char* firstlabel, int32_t firstline, const char* lastlabel, int32_t lastline );
+    bool            (*renumber)( struct _vm_t*, void*, const char* firstlabel, int32_t firstline, const char* lastlabel, int32_t lastline, int32_t step );
     int             request;        // VMREQ_*: LOAD / RUN stop the VM and leave a request for the host (see vm_run_at)
     char*           reqname;        // LOAD: the file name; RUN: the label name ("" = none); owned by the VM
     int32_t         reqline;        // RUN: the line number, -1 = none

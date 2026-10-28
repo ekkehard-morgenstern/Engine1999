@@ -7,12 +7,15 @@ Order = suggested order, not a commitment.
 
 ## 1. Program commands as real language statements *(needs design — suggested next)*
 
-`RUN [line|label]`, `LIST [a][-[b]]`, `LOAD name$`, `NEW` and `CLEAR` are language statements now (usable in programs, see
+`RUN [line|label]`, `LIST [a][-[b]]`, `LOAD name$`, `NEW`, `CLEAR`, `DELETE a[-[b]]` and `RENUM [a][-[b]][,step]` are language statements now (usable in programs, see
 `docs/basic-language.md`). The rest of the family has nothing yet.
 
 - [ ] `LIST` with an output channel (`LIST #1,10-20`; today always the VM's channel 0) and `RUN`/`LOAD` taking more arguments?
 - [ ] `LOAD`/`SAVE`: file names are plain paths relative to the current directory; no `.BAS` default extension, no directory handling
-- [ ] `DELETE`, `RENUM` (must fix up `GOTO`/`GOSUB`/`ON`/`RESTORE`/`THEN` targets), `EDIT`, `MERGE`, `CHAIN`, `FILES`
+- [ ] `EDIT`, `MERGE`, `CHAIN`, `FILES`
+- [ ] `RENUM` also adjusts targets in `RUN`/`LIST`/`DELETE`, but not the range of another `RENUM` statement in the program, and a changed line is
+      re-tokenized from the listing text (a round-trip through `detokenize_line`/`tokenize_line`; fine so far in all tests)
+- [ ] `DELETE`/`RENUM` end a running program; a "continue" (`CONT`) would need the code to be patched or recompiled while running
 - [ ] `CLEAR` empties variables but can't drop code, so it does not cure the growth of the code segment by direct mode lines (see
       section 4); arrays can't be un-dimensioned by `CLEAR` (arrays exist from parse time), only emptied
 
