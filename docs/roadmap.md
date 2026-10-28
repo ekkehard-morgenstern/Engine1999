@@ -88,3 +88,7 @@ Listed in full in `SESSION.md` ("Design decisions I took"). The ones most likely
 ## Not planned / explicitly out of scope for now
 
 - Interpreting source directly: the system compiles to the stack-machine code and runs that (the old interpreter stub was removed).
+
+## Later: look at again
+
+- [ ] Font: review the symbol glyphs again (`% & @ $ ~ # *` and the other punctuation in `8x12font1.txt`); they are the tightest on the 8x12 grid. Also maybe `N` (close to `H` at small size).

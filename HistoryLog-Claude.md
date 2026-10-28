@@ -13,7 +13,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-(none)
+- `HistoryLog-Claude.md`: logged `40748f3`. `SESSION.md`: latest commit line. `docs/roadmap.md`: new last section "Later: look at again" with a to-do to review the symbol glyphs (and maybe `N`) of the font. No source changes.
 
 ## Log
 
@@ -280,3 +280,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 - **Font redesign** of all printable ASCII glyphs (0x21–0x7E) in `8x12font1.txt`, recompiled to `8x12font1.c` with `fontcomp.pl`. Original design from basic typographic rules (not copied from any existing computer font): 2 px stems, 1 px horizontals, rounded corners; caps/digits rows 2–9, x-height rows 4–9, ascenders from row 2, descenders rows 10–11; slashed-diagonal `0`. Glyphs 0x7F and above untouched.
 - Refined after screenshots checked on the real screen by the user: `%` and `&` redrawn; 6-wide `M`/`W` tried but read as `H`, so both stay 7 wide; `( ) [ ] { }` and `|` are 11 rows tall (rows 1–11), `/` and `\` a regular 2 px wide staircase (rows 1–10).
 - `make`, `vmtest1`, `repltest1` pass. Docs: `SESSION.md`.
+
+### 40748f3 — 2026-10-28 23:51:14 +0100 — "Claude bookkeeping files updated"
+2 files, +13/-7.
+- `HistoryLog-Claude.md`: logged `ccf115c` and `839feb6`, Pending cleared. `SESSION.md`: latest commit line, font marked as checked on the real screen. No source changes.
