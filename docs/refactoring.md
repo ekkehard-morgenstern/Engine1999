@@ -1,6 +1,6 @@
 # Refactor: removing size limits in the BASIC tokenizer (completed)
 
-Branch: `feature/refactor-to-remove-some-limits` (last commits `266c4bd`, `18a485c`, both titled "Refactor WIP (bastok)", 2026-09-05; base is the "Codegen WIP" series ending at `d608ca3`, 2026-06-27).
+Branch: `feature/refactor-to-remove-some-limits`, merged into `main` on 2026-10-28 (last commits `266c4bd`, `18a485c`, both titled "Refactor WIP (bastok)", 2026-09-05; base is the "Codegen WIP" series ending at `d608ca3`, 2026-06-27).
 Commit messages carry no description; the intent below is inferred from the diffs.
 
 ## Goal
