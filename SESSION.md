@@ -9,7 +9,7 @@ Read this first when resuming; details are in `docs/` (start with `docs/README.m
 - Keep `HistoryLog-Claude.md` current: new work goes under its "Pending" section; after the user commits, move it into the log with the commit ID and timestamp (see `CLAUDE.md`).
 
 ## Repo state
-- Branch `main` (the feature branch `feature/refactor-to-remove-some-limits` was merged into it on 2026-10-28 and work continues on `main`); latest commit `7a6b4ae` (direct mode rollback), preceded by `c45e514` (history log), `28da093`/`01d467d` (segment limits), `fd7e324` (DELETE/RENUM), `05ca28f` (NEW/CLEAR), `f6d83bf` (binary SAVE header, LOAD/RUN/LIST statements).
+- Branch `main` (the feature branch `feature/refactor-to-remove-some-limits` was merged into it on 2026-10-28 and work continues on `main`); latest commit `bcc157d` (history log), preceded by `7a6b4ae` (direct mode rollback), `c45e514` (history log), `28da093`/`01d467d` (segment limits), `fd7e324` (DELETE/RENUM), `05ca28f` (NEW/CLEAR), `f6d83bf` (binary SAVE header, LOAD/RUN/LIST statements).
 - Everything is committed (except the newest HistoryLog-Claude.md entry). `make` and all tests pass.
 - `make` builds `sdltest1 engine1999 basictest1 testcomp1 basictest2 vmtest1 repltest1` + `engine.lib` cleanly with `-Wall -Werror`.
 

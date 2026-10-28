@@ -13,7 +13,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-- 2026-10-28: branch references in `CLAUDE.md`, `SESSION.md` and `docs/refactoring.md` updated (feature branch merged into `main`). No source changes.
+(none)
 
 ## Log
 
@@ -211,3 +211,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
   - Tests: `repltest1` 112 (+6, a new block that checks `codesize`/`datasize` directly: 3000 ordinary lines, 300 failing lines of three kinds, 1000 lines after a `DEF FN`, a failing line behind a `DEF`, `DATA` surviving 500 lines, `RUN` after a long session); `vmtest1` 380; `testcomp1`; all pass, valgrind clean (builds without `-p`). Not tried on the real SDL screen.
   - Docs: `basrepl.h`, `compiler-and-vm.md`, `roadmap.md`, `SESSION.md`.
 - Also in this commit: the log entry and latest-commit line for `c45e514`. The branch `feature/refactor-to-remove-some-limits` was merged into `main` after this commit (fast-forward); work continues on `main`.
+
+### bcc157d — 2026-10-28 06:22:13 +0100 — "Claude History Log and session state update"
+4 files, +13/-9.
+- Branch references in `CLAUDE.md`, `SESSION.md` and `docs/refactoring.md` updated (feature branch merged into `main`); `HistoryLog-Claude.md`: logged `7a6b4ae`. No source changes.
