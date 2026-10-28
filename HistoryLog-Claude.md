@@ -13,7 +13,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-- **`host_print` → `sdlscr_ansi_puts`; new `sdlscr_ansi_printf()`.** `engine1999.c`: program output on channel 0 now goes through the ANSI decoder (error messages via `host_report` and `Ready.` unchanged). `sdlscreen.[ch]`: `sdlscr_ansi_printf( fmt, … )` (1 KiB stack buffer, heap buffer for longer output, no truncation); `sdltest2.c` uses it for the colored echo. Docs: `display-engine.md`, `SESSION.md`. Tests: `repltest1`, `ansitest1` pass; build clean. Not tried on the real screen.
+(none)
 
 ## Log
 
@@ -228,3 +228,11 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 ### da35e56 — 2026-10-28 21:00:44 +0100 — "ANSI SGR sequence output, created using Claude Code"
 12 files, +491/-4.
 - **ANSI SGR output function for the text screen.** New `ansi.[ch]` (pure decoder: `ansi_init()`, `ansi_feed()` with an emit callback; SGR colors only, other sequences skipped, state kept across calls, runs ≤ 255 chars); `sdlscr_ansi_puts()` in `sdlscreen.[ch]` calls `sdlscr_printf()` per run (no lock, as decided); new visual test program `sdltest2.c` (colored text through `sdlscr_ansi_puts()`: standard colors, 256-palette strip, split sequence, colored echo of typed lines; `makefile`, `.gitignore`, `build-and-test.md`); `makefile` (module, `ansitest1` target), `.gitignore`. New `ansitest1` (26 cases, valgrind clean). Docs: `display-engine.md`, `build-and-test.md`, `SESSION.md`. Not wired into `engine1999`'s `host_print`; `sdltest2` was checked on the real screen by the user (screenshots: colors, backgrounds, palette strip, split sequence, colored echo all correct).
+
+### 8e9d6e2 — 2026-10-28 21:02:37 +0100 — "Claude Code history log and session update"
+2 files, +11/-4.
+- `HistoryLog-Claude.md`: logged `8854d23` and `da35e56`; `SESSION.md`: latest commit line. No source changes.
+
+### 944b4dc — 2026-10-28 21:11:38 +0100 — "BASIC PRINT using ANSI output, and sdlscr_ansi_printf() function (both created by Claude Code)"
+7 files, +33/-11.
+- **`host_print` → `sdlscr_ansi_puts`; new `sdlscr_ansi_printf()`.** `engine1999.c`: program output on channel 0 now goes through the ANSI decoder (error messages via `host_report` and `Ready.` unchanged). `sdlscreen.[ch]`: `sdlscr_ansi_printf( fmt, … )` (1 KiB stack buffer, heap buffer for longer output, no truncation); `sdltest2.c` uses it for the colored echo. Docs: `display-engine.md`, `SESSION.md`. Tests: `repltest1`, `ansitest1` pass; build clean. Checked on the real screen by the user (`engine1999`, `sdltest2` work as expected).
