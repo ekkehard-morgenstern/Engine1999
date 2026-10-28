@@ -25,6 +25,7 @@
 */
 
 #include "sdlscreen.h"
+#include "ansi.h"
 #include "sdllayer.h"
 #include "sdlevent.h"
 #include "textscreen.h"
@@ -406,6 +407,23 @@ void sdlscr_printf( int y, int x, int bg, int fg, const char* fmt, ... ) {
 void sdlscr_puts( const char* text ) {
     txtscr_print( -1, -1, -1, -1, text );
     sdllay_set_modified( &layers[LAY_TXT] );
+}
+
+// text with ANSI escape sequences (SGR colors only, see ansi.h). No locking, like the other text screen functions: the
+// screen thread may render while this writes, and the text screen tolerates that; rendering must never block.
+static ansi_t sdlscr_ansi;
+static bool   sdlscr_ansiok = false;
+
+static void sdlscr_ansi_emit( void* usrdata, int bg, int fg, const char* text ) {
+    sdlscr_printf( -1, -1, bg, fg, "%s", text );
+}
+
+void sdlscr_ansi_puts( const char* text ) {
+    if ( !sdlscr_ansiok ) {
+        ansi_init( &sdlscr_ansi, TXTSCR_FGCOL, TXTSCR_BGCOL );
+        sdlscr_ansiok = true;
+    }
+    ansi_feed( &sdlscr_ansi, text, sdlscr_ansi_emit, 0 );
 }
 
 // -- keyboard access for running programs ---------------------------------------------

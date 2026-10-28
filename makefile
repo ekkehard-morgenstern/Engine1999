@@ -38,12 +38,12 @@ CL=$(CCOMP) $(CFLAGS)
 .c.o:
 	$(CC) -o $@ $<
 
-all: sdltest1 engine1999 basictest1 testcomp1 basictest2 vmtest1 repltest1
+all: sdltest1 sdltest2 engine1999 basictest1 testcomp1 basictest2 vmtest1 repltest1 ansitest1
 	echo ok >all
 
 BASEMOD=sdlevent.o sdllayer.o sdlmain.o sdlscreen.o textscreen.o tilescreen.o sprscreen.o 8x12font1.o sdlaudio.o sdlutil.o \
-		basic.o baspgm.o baslin.o bastok.o bascomp.o nodetype.o codegen.o cgenctl.o cgendecl.o cgenprog.o vars.o runtime.o vm.o basrepl.o basdebug.o
-BASEHDR=sdlevent.h sdllayer.h sdlmain.h sdlscreen.h sdltypes.h textscreen.h tilescreen.h sprscreen.h unxtypes.h sdlaudio.h sdlutil.h basic.h baspgm.h baslin.h bastok.h bascomp.h nodetype.h codegen.h instset.h vars.h runtime.h vm.h basrepl.h basdebug.h
+		basic.o baspgm.o baslin.o bastok.o bascomp.o nodetype.o codegen.o cgenctl.o cgendecl.o cgenprog.o vars.o runtime.o vm.o basrepl.o basdebug.o ansi.o
+BASEHDR=sdlevent.h sdllayer.h sdlmain.h sdlscreen.h sdltypes.h textscreen.h tilescreen.h sprscreen.h unxtypes.h sdlaudio.h sdlutil.h basic.h baspgm.h baslin.h bastok.h bascomp.h nodetype.h codegen.h instset.h vars.h runtime.h vm.h basrepl.h basdebug.h ansi.h
 
 LIBMOD=$(BASEMOD)
 LIBHDR=$(BASEHDR)
@@ -53,6 +53,11 @@ sdltest1: sdltest1.o $(LIBNAME)
 	$(CL) -o sdltest1 sdltest1.o $(LIBNAME) -lSDL2 -lrt -lm
 
 sdltest1.o:	sdltest1.c $(LIBHDR)
+
+sdltest2: sdltest2.o $(LIBNAME)
+	$(CL) -o sdltest2 sdltest2.o $(LIBNAME) -lSDL2 -lrt -lm
+
+sdltest2.o:	sdltest2.c $(LIBHDR)
 
 engine1999: engine1999.o $(LIBNAME)
 	$(CL) -o engine1999 engine1999.o $(LIBNAME) -lSDL2 -lrt -lm
@@ -78,6 +83,11 @@ repltest1: repltest1.o $(LIBNAME)
 	$(CL) -o repltest1 repltest1.o $(LIBNAME) -lm
 
 repltest1.o: repltest1.c $(LIBHDR)
+
+ansitest1: ansitest1.o $(LIBNAME)
+	$(CL) -o ansitest1 ansitest1.o $(LIBNAME) -lm
+
+ansitest1.o: ansitest1.c $(LIBHDR)
 
 testcomp1: testcomp1.o $(LIBNAME)
 	$(CL) -o testcomp1 testcomp1.o $(LIBNAME) -lrt -lm
@@ -137,3 +147,5 @@ vm.o: vm.c $(BASEHDR)
 basrepl.o: basrepl.c $(BASEHDR)
 
 basdebug.o: basdebug.c $(BASEHDR)
+
+ansi.o: ansi.c $(BASEHDR)

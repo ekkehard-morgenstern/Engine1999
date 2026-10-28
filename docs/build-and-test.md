@@ -8,7 +8,7 @@ Linux, `gcc`, `make`, SDL2 development files (`libsdl2-dev`). Perl only to regen
 
 | Command | Result |
 |---|---|
-| `make` | `engine.lib` (all modules in `BASEMOD`) + `sdltest1 engine1999 basictest1 testcomp1 basictest2 vmtest1 repltest1`, then writes marker file `all` |
+| `make` | `engine.lib` (all modules in `BASEMOD`) + `sdltest1 sdltest2 engine1999 basictest1 testcomp1 basictest2 vmtest1 repltest1 ansitest1`, then writes marker file `all` |
 | `make DEBUG=1` | same with `-g` instead of `-O3` (do a `rm *.o engine.lib` first — objects do not track flags) |
 | `make <name>.o` | compile one module |
 
@@ -21,10 +21,12 @@ New modules must be added to both `BASEMOD` and `BASEHDR`. Known makefile wart: 
 |---|---|---|
 | `engine1999` | yes | Main app: opens window, GPL banner, `Ready.` prompt; only `SHOW WARRANTY` / `SHOW COPYING` are handled |
 | `sdltest1` | yes | Visual test of text, tiles, sprites, animation |
+| `sdltest2` | yes | Visual test of `sdlscr_ansi_puts()`: colored text through ANSI SGR sequences, then repeats typed lines in color |
 | `basictest1` | no | Reads lines from stdin, tokenizes + detokenizes and prints hex dump of tokens (tokenizer test) |
 | `basictest2` | no | Like 1, plus `enter_line` into a `program_t`, `list_program`, and its local `compile_program()` (parse → codegen) with colored output |
 | `vmtest1` | no | **Automated** end-to-end test (BASIC text → tokens → tree → code → VM → output); table of cases in the source, prints PASS/FAIL per case, exit status = number of failures; `-v` keeps the compiler/codegen debug output; run under valgrind to check leaks. Add a case for every new statement/instruction |
 | `repltest1` | no | **Automated** test of the REPL (`basrepl.c`): lines are fed like a user would type them (direct mode, stored lines, `RUN`/`LIST`/`LOAD`/`NEW`/`CLEAR` statements, `INPUT`/`GET`, Break); table of cases in the source, exit status = number of failures; `-v` keeps the compiler/codegen debug output |
+| `ansitest1` | no | **Automated** test of the ANSI/SGR decoder (`ansi.c`): feeds texts with escape sequences and compares the text runs and colors handed to the callback; exit status = number of failures |
 | `testcomp1` | no | Randomized stress test for `varmem_t` (despite the name, it tests variables/strings, not the compiler): 5000 random create/delete/read/write operations checked against a shadow model; exit status 0 = passed |
 
 There is no automated test runner or CI. Typical manual check of the BASIC front end:

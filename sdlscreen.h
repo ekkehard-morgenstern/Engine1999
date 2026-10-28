@@ -74,6 +74,7 @@ bool sdlscr_breakrequested( void );         // ESC was pressed (or the screen wa
 // text screen functions
 void sdlscr_printf( int y, int x, int bg, int fg, const char* fmt, ... );
 void sdlscr_puts( const char* text );        // prints text of any length at the cursor, in the current colors
+void sdlscr_ansi_puts( const char* text );   // like sdlscr_puts, but ESC [ ... m (SGR) sets the colors (see ansi.h); no lock
 int sdlscr_lineinput( int stop_evtmsk, char* buf, size_t bufsz, void (*vblank_handler)( void* ), void* usrdata );
 void sdlscr_gettextscreensize( int* outsx, int* outsy );
 void sdlscr_gettextcursor( int* outx, int* outy );

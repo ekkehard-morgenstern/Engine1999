@@ -22,6 +22,7 @@ Design intent is in `concept.txt`; this summarizes it together with the public A
 | `sdlmain.c` | `sdl_init()` — `SDL_Init`, then `sdlev_init`, `sdlscr_init` (spawns the screen worker thread `sdlscr_worker`), `sdlaud_init`; registers cleanup via `atexit`; exits on failure |
 | `sdlscreen.c` | Window/renderer, screen worker thread, input queue, public `sdlscr_*` API (text printf/lineinput/locate, tile and sprite calls) |
 | `sdllayer.c` | `sdllayer_t` (texture + 8-bit memory + palette + modified/disabled flags + priority + render callback), many-at-once helpers, priority swapping |
+| `ansi.[ch]` | ANSI escape sequence decoder (no SDL): SGR colors only (`0`, `30-37`, `40-47`, `90-97`, `100-107`, `38;5;n`, `48;5;n`, `39`, `49`); other sequences are skipped; hands text runs plus colors to a callback; state survives between calls. The 16 standard colors map to palette entries in `ansi.c` (`ansipal`). `sdlscr_ansi_puts()` in `sdlscreen.c` connects it to `sdlscr_printf()` |
 | `textscreen.c` | `txtscr_*`: cell grid, cursor, scrolling, backspace/rubout, `txtscr_render()` into a layer's 8-bit memory |
 | `tilescreen.c` | `tilescr_*`: tile map memory, scroll, render |
 | `sprscreen.c` | `sprscr_*`: sprite state, animation tables, periodic animation update, render |
@@ -36,6 +37,7 @@ Colour tables used while building the palette live in `colors-raw.txt` → `colo
 ## Usage notes
 
 - `sdlscr_printf( y, x, bg, fg, fmt, … )`: pass `-1` for "current cursor / colour".
+- `sdlscr_ansi_puts( text )`: like `sdlscr_puts`, but `ESC [ … m` sets the colors (see `ansi.h`). There is deliberately **no lock** around the text screen (nothing may block rendering; the text screen tolerates the screen thread reading while the main thread writes), and this function adds none.
 - `sdlscr_lineinput( stop_evtmsk, buf, size, vblank_handler, userdata )` blocks for a line and returns an event mask;
   test `ev & SDLEV_SCREENWORKERFINISHED` to detect window close.
 - `sdlscr_term()` is true once the screen worker has terminated.

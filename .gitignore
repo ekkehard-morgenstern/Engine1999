@@ -5,6 +5,7 @@ colors-cfrag.txt
 .vscode
 *.o
 sdltest1
+sdltest2
 gmon.out
 all
 engine.lib
@@ -16,3 +17,4 @@ vmtest1
 .obsidian
 docs/.obsidian
 repltest1
+ansitest1
