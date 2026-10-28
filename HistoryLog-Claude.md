@@ -13,14 +13,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-- 2026-10-28: `SESSION.md` and `HistoryLog-Claude.md` brought up to date for `038f171` (see the log entry).
-- 2026-10-28: **`DELETE` and `RENUM` are language statements.**
-  - Syntax: `DELETE a[-[b]]` (the `LIST` syntax, at least one end required) and `RENUM [a][-[b]][,step]` (range as for LIST, step a numeric expression, default 10; new numbers start at the first line of the range, 10 without a start; a single target means "to the end"). Shared parser helper `comp_eat_linerange()`; nodes `NT_DELETESTMT 0x61`, `NT_RENUMSTMT 0x62` (flag `LISTF_STEP`); code generation in `cgenprog.c`; instructions `DELE 0x13E`, `RENM 0x13F`.
-  - VM/REPL: new callbacks `vm->deletelines`, `vm->renumber` (implemented in `basrepl.c`); after the callback the VM ends the run (the program changed, the code didn't). Errors: "Renumbering would overlap other lines", "Line number too large", "Illegal argument" (step < 1), "Line number or label expected" (bare DELETE).
-  - `baspgm.c`: `delete_lines()` and `renumber_program()` (transactional: builds a new program; maps old to new numbers; `renum_text()` rewrites the line references in the detokenized text — GOTO/GOSUB/GO TO/GO SUB lists, THEN, ELSE, RESTORE, RUN, LIST/DELETE ranges — skipping strings, backtick literals and comments; unchanged lines keep their tokens, changed ones are tokenized again).
-  - Bug found by valgrind and fixed: the buffer with the rewritten line text is not NUL-terminated (was passed to `snprintf` as a string); the plain test run didn't show it.
-  - Tests: `vmtest1` 374 cases (+18: parsing, callbacks, ends the run, errors), `repltest1` 106 cases (+32: ranges, labels, all reference kinds, strings/comments untouched, overlap, overflow, in a program, SAVE/LOAD after RENUM); both pass; valgrind clean (builds without `-p`); `testcomp1` passes. Not tried on the real SDL screen.
-  - Docs: `basic-language.md`, `compiler-and-vm.md`, `roadmap.md`, `bascomp.ebnf`, `instset.h`, `CLAUDE.md`, `SESSION.md`.
+(none)
 
 ## Log
 
@@ -169,3 +162,14 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 ### 038f171 — 2026-10-28 05:24:14 +0100 — "Claude History Log and session state update"
 2 files, +9/-5.
 - `SESSION.md` brought up to date (latest commit, stale "no loader yet" remark, valgrind note: build without `-p`); `HistoryLog-Claude.md`: logged `01133de`. No source changes.
+
+### fd7e324 — 2026-10-28 05:41:22 +0100 — "DELETE and RENUM as language statements (implemented by Claude Code)"
+22 files, +640/-36.
+- **`DELETE` and `RENUM` are language statements.**
+  - Syntax: `DELETE a[-[b]]` (the `LIST` syntax, at least one end required) and `RENUM [a][-[b]][,step]` (range as for LIST, step a numeric expression, default 10; new numbers start at the first line of the range, 10 without a start; a single target means "to the end"). Shared parser helper `comp_eat_linerange()`; nodes `NT_DELETESTMT 0x61`, `NT_RENUMSTMT 0x62` (flag `LISTF_STEP`); code generation in `cgenprog.c`; instructions `DELE 0x13E`, `RENM 0x13F`.
+  - VM/REPL: new callbacks `vm->deletelines`, `vm->renumber` (implemented in `basrepl.c`); after the callback the VM ends the run (the program changed, the code didn't). Errors: "Renumbering would overlap other lines", "Line number too large", "Illegal argument" (step < 1), "Line number or label expected" (bare DELETE).
+  - `baspgm.c`: `delete_lines()` and `renumber_program()` (transactional: builds a new program; maps old to new numbers; `renum_text()` rewrites the line references in the detokenized text — GOTO/GOSUB/GO TO/GO SUB lists, THEN, ELSE, RESTORE, RUN, LIST/DELETE ranges — skipping strings, backtick literals and comments; unchanged lines keep their tokens, changed ones are tokenized again).
+  - Bug found by valgrind and fixed: the buffer with the rewritten line text is not NUL-terminated (was passed to `snprintf` as a string); the plain test run didn't show it.
+  - Tests: `vmtest1` 374 cases (+18: parsing, callbacks, ends the run, errors), `repltest1` 106 cases (+32: ranges, labels, all reference kinds, strings/comments untouched, overlap, overflow, in a program, SAVE/LOAD after RENUM); both pass; valgrind clean (builds without `-p`); `testcomp1` passes. Not tried on the real SDL screen.
+  - Docs: `basic-language.md`, `compiler-and-vm.md`, `roadmap.md`, `bascomp.ebnf`, `instset.h`, `CLAUDE.md`, `SESSION.md`.
+- Also in this commit: the log entry for `038f171` and the `SESSION.md` repo-state line.
