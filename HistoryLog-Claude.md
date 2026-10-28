@@ -13,7 +13,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-- **`EDIT` statement: simple line editor.** Language: `TOK_EDIT [ goto-target ]` (`bascomp.[ch]`, `bascomp.ebnf`), `NT_EDITSTMT 0x63` (`nodetype.[ch]`), `cgen_from_editstmt()` (`cgenprog.c`), instruction `EDIT 0x140` (`instset.h`, `codegen.[ch]`), `vm_edit_request()` and `VMREQ_EDIT` (`vm.[ch]`). REPL: `repl_t.edit` callback and `repl_t.pending`, `repl_edit_line()`, `repl_enter()` is now `repl_enter_line()` plus a pending loop (`repl_enter_pending()`, also after `repl_run()`); no target = "? Not implemented yet". Host: `sdlscr_lineedit()` (`sdlscreen.[ch]`; keys insert/LEFT/RIGHT/HOME/END/BACKSPACE/DELETE, RETURN accepts, ESC cancels; switches break-on-ESC off while it runs) and `host_edit()` in `engine1999.c`. Tests: `repltest1` +14 (135), `vmtest1` +5 (385), valgrind clean; drawing/scroll logic checked in a scratch program; the editor itself not tried on the screen. Docs: `basic-language.md`, `compiler-and-vm.md`, `display-engine.md`, `roadmap.md`, `CLAUDE.md`, `SESSION.md`.
+(none)
 
 ## Log
 
@@ -258,3 +258,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 ### 340a04c — 2026-10-28 21:37:01 +0100 — "Claude Code bookkeeping files updated"
 2 files, +7/-3.
 - `HistoryLog-Claude.md`: logged `b984b8b`; `SESSION.md`: latest commit line, highlighting marked as checked on the screen. No source changes.
+
+### ed9626c — 2026-10-28 21:51:36 +0100 — "EDIT single line editor, created using Claude Code"
+25 files, +417/-13.
+- **`EDIT` statement: simple line editor.** Language: `TOK_EDIT [ goto-target ]` (`bascomp.[ch]`, `bascomp.ebnf`), `NT_EDITSTMT 0x63` (`nodetype.[ch]`), `cgen_from_editstmt()` (`cgenprog.c`), instruction `EDIT 0x140` (`instset.h`, `codegen.[ch]`), `vm_edit_request()` and `VMREQ_EDIT` (`vm.[ch]`). REPL: `repl_t.edit` callback and `repl_t.pending`, `repl_edit_line()`, `repl_enter()` is now `repl_enter_line()` plus a pending loop (`repl_enter_pending()`, also after `repl_run()`); no target = "? Not implemented yet". Host: `sdlscr_lineedit()` (`sdlscreen.[ch]`; keys insert/LEFT/RIGHT/HOME/END/BACKSPACE/DELETE, RETURN accepts, ESC cancels; switches break-on-ESC off while it runs) and `host_edit()` in `engine1999.c`. Tests: `repltest1` +14 (135), `vmtest1` +5 (385), valgrind clean; drawing/scroll logic checked in a scratch program; checked on the real screen by the user (works as expected). Docs: `basic-language.md`, `compiler-and-vm.md`, `display-engine.md`, `roadmap.md`, `CLAUDE.md`, `SESSION.md`.
