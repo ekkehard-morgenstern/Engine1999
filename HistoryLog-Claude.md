@@ -13,7 +13,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-(none)
+- 2026-10-28: `SESSION.md` brought up to date (repo state/latest commit, stale "no loader yet" remark, valgrind note: build without `-p`). No source changes.
 
 ## Log
 
@@ -154,3 +154,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
   - `NEW`: third request kind `VMREQ_NEW`; the VM stops, `repl_finish()` calls `repl_new()` (program, variables, functions deleted) and starts nothing, so a program using `NEW` ends and the host returns to the prompt. `CLEAR`: done by the VM itself, `vmem_clear_vars()` in `vars.c`: numbers 0, strings "", arrays emptied (dimensions kept, because arrays exist from parse time); labels, functions and hidden compiler variables (`@…`, e.g. FOR limit/step) are skipped, so the program keeps running correctly; the DATA pointer is not touched. The control variable of a running FOR is a normal variable and is cleared (documented).
   - Tests: `vmtest1` 356 cases (+10), `repltest1` 74 cases (+9); both pass, valgrind clean (builds without `-p`, see the previous entry). Not tried on the real SDL screen.
   - Docs: `basic-language.md`, `compiler-and-vm.md`, `architecture.md`, `build-and-test.md`, `roadmap.md` (CLEAR can't cure the code growth of direct mode lines; noted), `CLAUDE.md`, `SESSION.md`, `basrepl.h`.
+
+### 01133de — 2026-10-28 05:19:57 +0100 — "Claude History Log update"
+1 file, +9/-5.
+- `HistoryLog-Claude.md`: moved the pending `NEW`/`CLEAR` entry into the log as `05ca28f`. No source changes.

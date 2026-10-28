@@ -9,12 +9,12 @@ Read this first when resuming; details are in `docs/` (start with `docs/README.m
 - Keep `HistoryLog-Claude.md` current: new work goes under its "Pending" section; after the user commits, move it into the log with the commit ID and timestamp (see `CLAUDE.md`).
 
 ## Repo state
-- Branch `feature/refactor-to-remove-some-limits`; latest commit `761339e` ("the road ahead": docs/roadmap.md), preceded by `ff53541` (debug options), `41e9ed4` (engine wiring), `8a98b3f` (CHR$), `5a7f6b3` (PRINT channel fix), `7e16a40` (INPUT/GET).
-- Nothing uncommitted at the last update; the working tree is clean. `make` and all tests pass.
+- Branch `feature/refactor-to-remove-some-limits`; latest commit `01133de` (history log update), preceded by `05ca28f` (NEW/CLEAR statements), `f6d83bf` (binary SAVE header, LOAD/RUN/LIST statements), `fa623a3`/`d951a9c` (HistoryLog-Claude.md).
+- Everything is committed except this file's repo-state fixes. `make` and all tests pass.
 - `make` builds `sdltest1 engine1999 basictest1 testcomp1 basictest2 vmtest1 repltest1` + `engine.lib` cleanly with `-Wall -Werror`.
 
 ## Tests (run these after any change)
-- `./vmtest1` — automated end-to-end test (BASIC text → tokens → syntax tree → code → VM → output). **356 cases, all pass**; exit status = number of failures; `-v` shows compiler/codegen debug output. Add a case for every new statement/instruction. Also run it under `valgrind --leak-check=full -q` (clean).
+- `./vmtest1` — automated end-to-end test (BASIC text → tokens → syntax tree → code → VM → output). **356 cases, all pass**; exit status = number of failures; `-v` shows compiler/codegen debug output. Add a case for every new statement/instruction. Also run it under `valgrind --leak-check=full -q` (clean) — but build a copy without `-p` for that (the makefile's profiling timer kills `vmtest1` under valgrind after ~2.4 s CPU), e.g. `gcc -g -O1 -I. -o /tmp/x vmtest1.c basic.c baspgm.c baslin.c bastok.c bascomp.c nodetype.c codegen.c cgenctl.c cgendecl.c cgenprog.c vars.c runtime.c vm.c basrepl.c basdebug.c -lm -lrt`.
 - `./repltest1` — automated test of the REPL (`basrepl.c`) without a screen: direct mode, stored lines, RUN/LIST/LOAD/NEW, INPUT/GET, Break; **74 cases, all pass**; exit status = number of failures.
 - `./testcomp1` — randomized stress test of the variable store (5000 operations vs a shadow model), exit status 0 = passed; takes ~3 s. (Its random names used to be sometimes empty, which made it flake; fixed.)
 - `basictest1` / `basictest2` — interactive tokenizer / parser tools (pipe lines into them). `basictest2` prints the syntax tree.
@@ -24,7 +24,7 @@ Read this first when resuming; details are in `docs/` (start with `docs/README.m
 - **INPUT and GET** are implemented (`INPUT [#ch,] ["prompt"(;|,)] vars`, `GET [#ch,] vars`; instructions `INPL 0x134, INPN 0x135, INPS 0x136, INPE 0x137, GETK 0x138`; host callbacks `vm->input` (line) and `vm->getkey`; see `docs/basic-language.md` and `docs/compiler-and-vm.md`).
 - **DATA/READ/RESTORE** are implemented (parser, `cgendecl.c`, instructions `RDNM` 0x117, `RDST` 0x11E, `RSTR` 0x11F; see `docs/compiler-and-vm.md`).
 - **Tokenizer** (`bastok`): heap strings, growable buffers, identifiers/literals ≤ 65535 bytes; line numbers 0..999999 (24 bit); `linehdr_t` = `{lineno.24, length.16}` (`LINEHDR_SIZE` = 5). Keywords `AGAIN` (token 145) and `CHR` (token 146) were added.
-- **Program store** (`baspgm`/`baslin`): doubly linked list of heap `line_t` nodes; `save_program()` (ascii listing or binary encoded lines preceded by a 5-byte header: magic `89 45 39 39` + version 1, see `PGMFILE_*` in `baspgm.h`; `read_program_header()` identifies it; no loader yet).
+- **Program store** (`baspgm`/`baslin`): doubly linked list of heap `line_t` nodes; `save_program()` (ascii listing or binary encoded lines preceded by a 5-byte header: magic `89 45 39 39` + version 1, see `PGMFILE_*` in `baspgm.h`; `read_program_header()` identifies it; the loader is `repl_load_program()` in `basrepl.c`, see the LOAD entry below).
 - **Compiler** (`bascomp`): recursive descent → heap syntax tree (`node_t`, growable branch arrays, `NODE_NONE`); all nodes freed by `cleanup_compiler()`. Names via `comp_node_name()` (no length limit).
 - **Variables** (`vars`): heap `var_t` per variable, found by 16-bit variable number (table) or by type+name (hash). No fixed areas or compaction; ≤ 65535 variables; arrays row-major, ≤ `MAXELEMS` elements, one dimension ≤ 65535, ≤ 6 dimensions; function variables hold params + code offset.
 - **Code generator**: `codegen.c` (expressions, LET, PRINT, SAVE, substring assignment, ERASE, program/line driver), `cgenctl.c` (GOTO/GOSUB/RETURN/LABEL, IF/UNLESS, FOR/NEXT, REPEAT/UNTIL, WHILE/WEND, UNTIL/UEND, AGAIN, END, POP, ON; line table + fixups; compile-time loop stack), `cgendecl.c` (DIM, DEF FN single- and multi-line, `FN A = expr`).
