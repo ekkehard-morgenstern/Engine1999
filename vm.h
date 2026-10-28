@@ -60,6 +60,7 @@ Policies chosen by this implementation (the instruction set does not define them
     - numbers are printed (and converted by STR$) with "%.15g" and no padding
     - SHEX runs the command with popen() and returns its standard output without the trailing newlines (like a shell
       command substitution); the exit status is ignored; output longer than 65535 bytes is an error
+    - NEW (like LOAD and RUN) leaves a request; CLR (CLEAR) is done by the VM itself (vmem_clear_vars)
     - LOAD and RUN ( RUNP ) can't be carried out by the VM: it doesn't own the program, and the program being run would be
       replaced. The instruction stores a request (vm_t.request, reqname, reqline) and ends the run; vm_run()/vm_run_at()
       return true and the host looks at vm->request: it then replaces/recompiles the program, clears the variables (as for
@@ -91,6 +92,7 @@ Policies chosen by this implementation (the instruction set does not define them
 
 #define VMREQ_NONE          0
 #define VMREQ_LOAD          1       // replace the program by the file reqname and run it from the beginning
+#define VMREQ_NEW           3       // delete the program and the variables; the run is not continued
 #define VMREQ_RUN           2       // clear the variables and run the program from reqname (label) / reqline, or the start
 
 #define VM_PRINT_SEP_NONE   UINT16_C(0)

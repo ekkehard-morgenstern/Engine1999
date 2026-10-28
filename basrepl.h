@@ -55,7 +55,8 @@ pointer survives from one direct mode line to the next). The host feeds it text 
       the file (binary or text, see baspgm.h) and runs that. These three are language statements, usable in programs
       too (cgenprog.c); the VM can't carry out RUN and LOAD itself, so it stops and leaves a request (vm.h) that the
       REPL carries out once the run has ended (repl_finish(), iteratively: a program may end with RUN).
-      NEW deletes the program and clears everything; it is the one host level command left.
+      NEW deletes the program and clears everything (a statement too: the VM stops and leaves a request); CLEAR empties
+      the variables inside the VM.
 
 The host sets the callbacks after init_repl(). Output, errors and keyboard access all go through them; the VM
 callbacks have the signatures of vm.h and receive the repl_t* as their user data parameter (use repl_t.userdata

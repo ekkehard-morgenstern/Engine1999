@@ -14,7 +14,7 @@
 
 `engine1999.c` wires up the display (`sdl_init`), prints the GPL notice and runs the REPL in the **main thread**:
 a "Ready." line-input loop (`sdlscr_lineinput`) that understands `SHOW WARRANTY` / `SHOW COPYING` (paged via `pager()`)
-and hands every other line to `repl_enter()` (`basrepl.[ch]`: direct mode, stored program lines, `NEW`; `RUN`/`LIST`/`LOAD` are language statements).
+and hands every other line to `repl_enter()` (`basrepl.[ch]`: direct mode, stored program lines; `RUN`/`LIST`/`LOAD`/`NEW`/`CLEAR` are language statements).
 The **screen runs in its own worker thread** (`sdlscreen.c`): it renders the layers and collects the keyboard events into a
 queue; the main thread talks to it through `sdlscr_*` (output with `sdlscr_puts`, line input `sdlscr_lineinput`, single
 keys `sdlscr_pollkey` / `sdlscr_getkey`) and waits for events with `sdlev_wait`. The host callbacks of the VM

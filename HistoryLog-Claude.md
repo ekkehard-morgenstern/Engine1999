@@ -13,16 +13,11 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-- 2026-10-28: Binary `SAVE` files now start with a 5-byte header: magic `89 45 39 39` (0x89 "E99") + format version 1 (`PGMFILE_*` in `baspgm.h`, written by `save_program()`). New `read_program_header( FILE*, &version )` in `baspgm.c` for a future `LOAD`: consumes the header, or rewinds the stream when the magic is missing (text file); unknown version / truncated header → false. `vmtest1`: the three binary SAVE expectations now include the header, 5 new header cases (322 total, all pass, valgrind clean); `repltest1` 36 pass. Docs (`compiler-and-vm.md`, `roadmap.md`), `SESSION.md` updated. The loader itself is not written yet.
-- 2026-10-28: **`LOAD`, `RUN` and `LIST` are language statements**, usable in direct mode and inside programs (the host level `RUN`/`LIST` in `repl_enter()` are gone; `NEW` stays).
-  - Grammar (`bascomp.ebnf`, `bascomp.c`): `load-stmt := LOAD str-expr`, `run-stmt := RUN [goto-target]`, `list-stmt := LIST [goto-target] [ - [goto-target] ]`; nodes `NT_LOADSTMT 0x5C`, `NT_RUNSTMT 0x5D`, `NT_LISTSTMT 0x5E` (flags `LISTF_*`). A target is a line number or a label. `LIST 20` lists that line only, `LIST a-b` a range, `a-` to the end, `-b` from the start.
-  - Code generation: new `cgenprog.c` (in the makefile); instructions `LOAD 0x139 ( s -- )`, `RUNP 0x13A ( s n -- )`, `LIST 0x13B ( s1 n1 s2 n2 -- )` in `instset.h`. Targets are passed as label *name* + line number (`""`/`-1` = none). `vmem_get_var_name()` added to `vars`; `cc_find_line` became the public `cgen_find_line()`.
-  - VM: `LOAD`/`RUNP` store a request (`vm->request`, `reqname`, `reqline`; `VMREQ_*`) and end the run, because the code being run must not be replaced from inside; `LIST` calls the new callback `vm->list`.
-  - REPL (`basrepl.c`): `repl_finish()` carries out the requests in a loop (so a program ending with `RUN` doesn't recurse): `repl_load_program()` reads a binary file (via `read_program_header()`) or a text listing into a scratch program that replaces the old one only on success; RUN/LOAD clear the runtime, recompile and start at the beginning, a line or a label. Break is polled before every chained restart (`10 RUN` is interruptible). `LIST` prints through `list_program()` to the VM's channel; labels are resolved to lines by the new `find_label_line()` in `baspgm.c` (text scan of the detokenized lines).
-  - Behavior changes: `LIST X` is now "? Undefined label X" instead of "? Syntax error"; errors of RUN targets after the restart carry no line number ("? Undefined line number 99").
-  - Tests: `vmtest1` 346 cases (harness prints requests and LIST calls), `repltest1` 65 cases (RUN targets, LIST labels/ranges, LOAD binary/text/missing/garbage/truncated/future version, LOAD from a program, endless RUN + Break); both pass and are valgrind clean. Note: valgrind only works on a build without `-p` (the makefile's profiling timer kills `vmtest1` under valgrind after ~2.4 s CPU); I built the two tests without `-p` in the scratchpad for that. Not tried on the real SDL screen.
-  - Docs: `basic-language.md` (new section), `compiler-and-vm.md`, `architecture.md`, `build-and-test.md`, `roadmap.md`, `CLAUDE.md` table, `SESSION.md`.
-
+- 2026-10-28: **`NEW` and `CLEAR` are language statements** (the last host level command, `NEW` in `repl_enter()`, is gone; `repl_command()` removed).
+  - Grammar/nodes: `new-stmt := NEW`, `clear-stmt := CLEAR`; `NT_NEWSTMT 0x5F`, `NT_CLEARSTMT 0x60`; code generation in `cgenprog.c`; instructions `NEW 0x13C`, `CLR 0x13D`.
+  - `NEW`: third request kind `VMREQ_NEW`; the VM stops, `repl_finish()` calls `repl_new()` (program, variables, functions deleted) and starts nothing, so a program using `NEW` ends and the host returns to the prompt. `CLEAR`: done by the VM itself, `vmem_clear_vars()` in `vars.c`: numbers 0, strings "", arrays emptied (dimensions kept, because arrays exist from parse time); labels, functions and hidden compiler variables (`@…`, e.g. FOR limit/step) are skipped, so the program keeps running correctly; the DATA pointer is not touched. The control variable of a running FOR is a normal variable and is cleared (documented).
+  - Tests: `vmtest1` 356 cases (+10), `repltest1` 74 cases (+9); both pass, valgrind clean (builds without `-p`, see the previous entry). Not tried on the real SDL screen.
+  - Docs: `basic-language.md`, `compiler-and-vm.md`, `architecture.md`, `build-and-test.md`, `roadmap.md` (CLEAR can't cure the code growth of direct mode lines; noted), `CLAUDE.md`, `SESSION.md`, `basrepl.h`.
 
 ## Log
 
@@ -149,3 +144,9 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 ### fa623a3 — 2026-10-28 04:47:10 +0100 — "Claude History Log updated"
 1 file, +7/-1.
 - `HistoryLog-Claude.md`: moved the pending entry for the history log itself into the log as `d951a9c`. No source changes.
+
+### f6d83bf — 2026-10-28 05:11:21 +0100 — "Binary SAVE with header, LOAD, RUN and LIST as true BASIC statements (created by Claude Code)"
+29 files, +983/-88.
+- Binary `SAVE` files start with a 5-byte header: magic `89 45 39 39` + format version 1 (`PGMFILE_*` in `baspgm.h`); `read_program_header()` detects it (rewinds on a text file, rejects unknown versions / truncated headers).
+- `LOAD name$`, `RUN [line|label]` and `LIST [a][-[b]]` became language statements usable in programs (new `cgenprog.c`; nodes `0x5C..0x5E`; instructions `LOAD 0x139`, `RUNP 0x13A`, `LIST 0x13B`). `LOAD`/`RUN` can't replace the running code, so the VM stores a request (`vm->request`) and ends the run; `repl_finish()` in `basrepl.c` carries it out in a loop (replace/recompile/restart; Break polled between chained restarts). `LIST` uses the new callback `vm->list`; labels resolved to lines by `find_label_line()`. `LOAD` reads binary files and text listings into a scratch program that replaces the old one only on success.
+- The host level `RUN`/`LIST` in `repl_enter()` were removed. `vmtest1` 346 and `repltest1` 65 cases; docs, `CLAUDE.md` and `SESSION.md` updated.

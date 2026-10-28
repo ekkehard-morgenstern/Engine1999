@@ -1080,6 +1080,14 @@ static bool vm_run_program( vm_t* vm ) {
     return true;
 }
 
+// NEW ( -- ): leaves a request for the host and ends the run
+static bool vm_new_program( vm_t* vm ) {
+    vm_clear_request( vm );
+    vm->request = VMREQ_NEW;
+    vm->pc = vm->cgen->codesize;
+    return true;
+}
+
 // LIST ( s1 n1 s2 n2 -- )
 static bool vm_list_program( vm_t* vm ) {
     double n1 = 0, n2 = 0; char* s1 = 0; char* s2 = 0;
@@ -1394,6 +1402,10 @@ static bool vm_step( vm_t* vm ) {
         case INS_LOAD: return vm_load_program( vm );
         case INS_RUNP: return vm_run_program( vm );
         case INS_LIST: return vm_list_program( vm );
+        case INS_NEW: return vm_new_program( vm );
+        case INS_CLR:
+            vmem_clear_vars( vm->vmem );
+            return true;
         case INS_SLFT: case INS_SRGT: case INS_SMID:
             return vm_set_substring( vm, opcode, param );
         case INS_ERAS:

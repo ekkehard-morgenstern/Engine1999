@@ -319,6 +319,12 @@ The 4096 extended instructions are as follows:
                             (s1,n1) is the first line, (s2,n2) the last one: a label name (empty = none) or a line
                             number (-1 = none). A side that is not given is unbounded; a label stands for the line it
                             is defined in. Both sides given = an inclusive range.
+    0001 00111100       NEW  - new program ( -- ) C=0 P=0
+                            Asks the host to delete the program and the variables; the VM stores the request and
+                            stops (like LOAD), the program is not continued.
+    0001 00111101       CLR  - clear variables ( -- ) C=0 P=0
+                            Numeric variables become 0, strings "", arrays are emptied (they keep their dimensions);
+                            labels, functions and the compiler's hidden variables are kept.
 
 */
 
@@ -430,5 +436,7 @@ The 4096 extended instructions are as follows:
 #define INS_LOAD        UINT16_C(0X139)
 #define INS_RUNP        UINT16_C(0X13A)
 #define INS_LIST        UINT16_C(0X13B)
+#define INS_NEW         UINT16_C(0X13C)
+#define INS_CLR         UINT16_C(0X13D)
 
 #endif

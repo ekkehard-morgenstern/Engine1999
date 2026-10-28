@@ -607,6 +607,8 @@ Explanation of node types:
 #define NT_LOADSTMT             UINT8_C(0X5C)   // LOAD statement
 #define NT_RUNSTMT              UINT8_C(0X5D)   // RUN statement
 #define NT_LISTSTMT             UINT8_C(0X5E)   // LIST statement
+#define NT_NEWSTMT              UINT8_C(0X5F)   // NEW statement
+#define NT_CLEARSTMT            UINT8_C(0X60)   // CLEAR statement
 
 #define LISTF_FIRST             UINT8_C(0X01)   // LIST: start target present (first branch)
 #define LISTF_LAST              UINT8_C(0X02)   // LIST: end target present (next branch)

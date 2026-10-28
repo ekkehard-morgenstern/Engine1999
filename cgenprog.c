@@ -30,10 +30,12 @@
 #include "runtime.h"
 
 /*
-Code generation for the program commands LOAD, RUN and LIST.
+Code generation for the program commands LOAD, RUN, LIST, NEW and CLEAR.
 
     LOAD name        <name>  LOAD
     RUN [target]     <label name or "">  <line number or -1>  RUNP
+    NEW              NEW
+    CLEAR            CLR
     LIST [a][-[b]]   <label a or "">  <line a or -1>  <label b or "">  <line b or -1>  LIST
 
 A target is a line number or a label. The label is passed by name, because the instruction is carried out by the host
@@ -172,4 +174,26 @@ bool cgen_from_liststmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         return cgen_out_of_code_memory( comp );
     }
     return true;
+}
+
+bool cgen_from_newstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    // NT_NEWSTMT      NEW statement (no data, no branches)
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->type != NT_NEWSTMT ) {
+        return cgen_unexpected_node( comp );
+    }
+    return cgen_gen_new( cgen ) || cgen_out_of_code_memory( comp );
+}
+
+bool cgen_from_clearstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    // NT_CLEARSTMT    CLEAR statement (no data, no branches)
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->type != NT_CLEARSTMT ) {
+        return cgen_unexpected_node( comp );
+    }
+    return cgen_gen_clr( cgen ) || cgen_out_of_code_memory( comp );
 }

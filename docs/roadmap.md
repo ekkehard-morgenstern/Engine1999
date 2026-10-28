@@ -7,17 +7,16 @@ Order = suggested order, not a commitment.
 
 ## 1. Program commands as real language statements *(needs design — suggested next)*
 
-`RUN [line|label]`, `LIST [a][-[b]]` and `LOAD name$` are language statements now (usable in programs, see `docs/basic-language.md`).
-`NEW` is still a host-level command in `repl_enter()` (`basrepl.c`); the rest of the family has nothing yet.
+`RUN [line|label]`, `LIST [a][-[b]]`, `LOAD name$`, `NEW` and `CLEAR` are language statements now (usable in programs, see
+`docs/basic-language.md`). The rest of the family has nothing yet.
 
-- [ ] `NEW` as a statement (what does it do inside a program? it would end the program) — decide with `CLEAR`
 - [ ] `LIST` with an output channel (`LIST #1,10-20`; today always the VM's channel 0) and `RUN`/`LOAD` taking more arguments?
 - [ ] `LOAD`/`SAVE`: file names are plain paths relative to the current directory; no `.BAS` default extension, no directory handling
 - [ ] `DELETE`, `RENUM` (must fix up `GOTO`/`GOSUB`/`ON`/`RESTORE`/`THEN` targets), `EDIT`, `MERGE`, `CHAIN`, `FILES`
-- [ ] `CLEAR` (variables only, keep the program?) — together with `NEW` this also cures the growth of the code segment caused by
-      direct mode lines (see section 4)
+- [ ] `CLEAR` empties variables but can't drop code, so it does not cure the growth of the code segment by direct mode lines (see
+      section 4); arrays can't be un-dimensioned by `CLEAR` (arrays exist from parse time), only emptied
 
-Questions to decide: whether `NEW`/`CLEAR` may appear inside a program; what `CHAIN`
+Questions to decide: what `CHAIN`
 and `MERGE` do with variables and line numbers; where files live (current directory?); what `FILES` shows.
 
 ## 2. Smaller language items *(each needs a short design decision)*
@@ -44,7 +43,7 @@ how a handler is named (line number / label / `FN`?); how they are cancelled (`O
 - [ ] File channels (`#n` with `n` ≠ 0): `PRINT #n`, `INPUT #n`, `GET #n` are accepted and passed to the callbacks, but the engine
       discards output / reports end of input for every channel except 0
 - [ ] Direct mode lines accumulate in the 64 KiB code segment until `NEW` / `RUN` (every line appends its code; a long session ends
-      in "Out of code memory"). Options: roll back the code of a direct line that defined nothing persistent, or reset on `CLEAR`
+      in "Out of code memory"). Options: roll back the code of a direct line that defined nothing persistent, or reset on `NEW`/`RUN` as today
 - [ ] Direct mode can't `GOTO` / `GOSUB` into a stored program (the line table belongs to the code of a `RUN`)
 - [ ] `PRINT` comma zones use the VM's own column count and ignore the screen wrap at column 80
 - [ ] `vmtest1` still has its own copy of the compile-and-run logic; it could use `basrepl` (`repltest1` already does)

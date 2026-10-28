@@ -478,6 +478,27 @@ bool vmem_get_var_name( varmem_t* vmem, uint16_t varoffs, const char** pname ) {
     return true;
 }
 
+void vmem_clear_vars( varmem_t* vmem ) {
+    for ( size_t i=0; i < vmem->numslots; ++i ) {
+        var_t* var = vmem->table[i];
+        if ( var == 0 || var->name[0] == '@' || ( var->type & VARTYPEF_FUNC ) != 0 ||
+             ( var->type & VARTYPEM_BASE ) == VARTYPEV_LABEL ) {
+            continue;
+        }
+        if ( var->type & VARTYPEF_ARRAY ) {
+            vmem_erase_array( vmem, var->num );
+        } else if ( ( var->type & VARTYPEM_BASE ) == VARTYPEV_STR ) {
+            free( var->v.str.ptr );
+            var->v.str.ptr = 0;
+            var->v.str.len = 0;
+        } else if ( ( var->type & VARTYPEM_BASE ) == VARTYPEV_INT ) {
+            var->v.intval = 0;
+        } else {
+            var->v.dbl = 0.0;
+        }
+    }
+}
+
 bool vmem_erase_array( varmem_t* vmem, uint16_t varoffs ) {
     var_t* var = vmem_var( vmem, varoffs );
     if ( var == 0 || ( var->type & VARTYPEF_ARRAY ) == 0 ) {

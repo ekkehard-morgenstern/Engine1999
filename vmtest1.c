@@ -292,6 +292,16 @@ static const testcase_t cases[] = {
     { "LOAD ends the run",      "PRINT 1:LOAD \"X\":PRINT 2",                      "1\n<request LOAD X>\n" },
     { "LOAD empty name",        "LOAD \"\"",                                       "? Illegal argument\n" },
     { "LOAD without name",      "LOAD",                                            "? String expression expected\n" },
+    { "NEW",                    "NEW",                                             "<request NEW>\n" },
+    { "NEW ends the run",       "PRINT 1:NEW:PRINT 2",                             "1\n<request NEW>\n" },
+    { "CLEAR numbers",          "A=5:N%=7:CLEAR:PRINT A;N%",                        "00\n" },
+    { "CLEAR strings",          "A$=\"X\":CLEAR:PRINT LEN(A$)",                     "0\n" },
+    { "CLEAR arrays",           "DIM B(2),S$(2):B(1)=7:S$(1)=\"Q\":CLEAR:PRINT B(1);LEN(S$(1))", "00\n" },
+    { "CLEAR keeps array dimensions", "DIM B(2):CLEAR:B(1)=4:PRINT B(1)",           "4\n" },
+    { "CLEAR keeps functions",  "DEF FN A(X)=X*2\nCLEAR\nPRINT FN A(4)",             "8\n" },
+    { "CLEAR keeps labels",     "10 K=1\n20 CLEAR\n30 GOTO M\n40 PRINT 4\n50 LABEL M\n60 PRINT K",  "0\n" },
+    { "CLEAR goes on",          "A=1:CLEAR:PRINT 2",                               "2\n" },
+    { "CLEAR in a FOR loop's body keeps the loop data", "FOR I=1 TO 3:S=S+1:NEXT:CLEAR:PRINT S;I", "00\n" },
     { "LIST all",               "LIST",                                            "<list * * on channel 0>\n" },
     { "LIST one line",          "LIST 20",                                         "<list 20 20 on channel 0>\n" },
     { "LIST range",             "LIST 10-30",                                      "<list 10 30 on channel 0>\n" },
@@ -569,6 +579,8 @@ static bool compile_and_run( void ) {
         char text[200];
         if ( vm.request == VMREQ_LOAD ) {
             snprintf( text, sizeof(text), "<request LOAD %s>\n", vm.reqname );
+        } else if ( vm.request == VMREQ_NEW ) {
+            snprintf( text, sizeof(text), "<request NEW>\n" );
         } else {
             snprintf( text, sizeof(text), "<request RUN \"%s\" %d>\n", vm.reqname, (int) vm.reqline );
         }

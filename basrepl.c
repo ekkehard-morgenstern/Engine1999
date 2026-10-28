@@ -356,6 +356,11 @@ static bool repl_finish( repl_t* repl, bool ok ) {
             free( name );
             return false;
         }
+        if ( kind == VMREQ_NEW ) {
+            repl_new( repl );       // back to the host: nothing runs afterwards
+            free( name );
+            return true;
+        }
         if ( kind == VMREQ_LOAD ) {
             ok = repl_load_program( repl, name );
             name[0] = '\0';        // the loaded program runs from its beginning
@@ -446,19 +451,6 @@ bool repl_save_program( repl_t* repl, const char* filename, bool ascii ) {
 
 // -- input lines ---------------------------------------------------------------------
 
-// NEW (the text is preprocessed: upper case, single blanks); false if it is not a host level command.
-// RUN, LOAD and LIST are language statements (see cgenprog.c); NEW is the only one left here.
-static bool repl_command( repl_t* repl, const char* text ) {
-    while ( *text == ' ' ) {
-        ++text;
-    }
-    if ( strcmp( text, "NEW" ) == 0 || strcmp( text, "NEW " ) == 0 ) {
-        repl_new( repl );
-        return true;
-    }
-    return false;
-}
-
 bool repl_enter( repl_t* repl, const char* text ) {
     char* copy = strdup( text );
     if ( copy == 0 ) {
@@ -469,9 +461,7 @@ bool repl_enter( repl_t* repl, const char* text ) {
     bool ok = true;
     linehdr_t hdr;
     clear_buffer( repl->tokbuf );
-    if ( repl_command( repl, copy ) ) {
-        // done
-    } else if ( !tokenize_line( copy, repl->tokbuf, &hdr ) ) {
+    if ( !tokenize_line( copy, repl->tokbuf, &hdr ) ) {
         repl_report( repl, "? Syntax error" );
         ok = false;
     } else {

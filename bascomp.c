@@ -2345,8 +2345,34 @@ bool comp_eat_liststmt( compiler_t* comp, node_t** pnode ) {
     return true;
 }
 
+bool comp_eat_newstmt( compiler_t* comp, node_t** pnode ) {
+    // new-stmt := TOK_NEW .
+    if ( comp->currtok != TOK_NEW || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    // NT_NEWSTMT      NEW statement (no data, no branches)
+    if ( !comp_create_node( comp, pnode, NT_NEWSTMT, UINT8_C(0), UINT16_C(0), 0 ) || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
+bool comp_eat_clearstmt( compiler_t* comp, node_t** pnode ) {
+    // clear-stmt := TOK_CLEAR .
+    if ( comp->currtok != TOK_CLEAR || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    // NT_CLEARSTMT    CLEAR statement (no data, no branches)
+    if ( !comp_create_node( comp, pnode, NT_CLEARSTMT, UINT8_C(0), UINT16_C(0), 0 ) || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
 bool comp_eat_progstmt( compiler_t* comp, node_t** pnode ) {
-    // prog-stmt := load-stmt | run-stmt | list-stmt .
+    // prog-stmt := load-stmt | run-stmt | list-stmt | new-stmt | clear-stmt .
     // [ NT_PROGSTMT - not generated ]
     if ( comp_eat_loadstmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
@@ -2355,6 +2381,12 @@ bool comp_eat_progstmt( compiler_t* comp, node_t** pnode ) {
         return true;
     }
     if ( comp_eat_liststmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_newstmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_clearstmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     return false;

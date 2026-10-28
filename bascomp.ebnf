@@ -217,7 +217,12 @@ control-flow-stmt := for-stmt | next-stmt | goto-stmt | return-stmt | label-stmt
 load-stmt := TOK_LOAD str-expr .
 run-stmt := TOK_RUN [ goto-target ] .
 list-stmt := TOK_LIST [ goto-target ] [ TOK_MINUS [ goto-target ] ] .
-prog-stmt := load-stmt | run-stmt | list-stmt .
+-- NEW deletes the program and all variables and returns to the host (READY prompt): the running program ends.
+-- CLEAR empties the variables (numbers 0, strings "", arrays emptied but kept dimensioned) and the program goes on;
+-- labels and functions are not variables in this sense and stay.
+new-stmt := TOK_NEW .
+clear-stmt := TOK_CLEAR .
+prog-stmt := load-stmt | run-stmt | list-stmt | new-stmt | clear-stmt .
 
 stmt := io-stmt | prog-stmt | assign-stmt | control-flow-stmt .
 stmt-list := stmt { TOK_COLON stmt } .
