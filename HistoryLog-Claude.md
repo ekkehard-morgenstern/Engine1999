@@ -13,7 +13,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-(none)
+- `CLAUDE.md`: added a "Residue" row to the "Where things are" table: `residue/` holds disposable leftovers and is to be ignored; also updated the stale rows/lists: `ansi.[ch]` in the display engine row, `sdltest2.c`/`ansitest1.c` in the executables row, the `make` target list and the automated tests in "Build". No source changes.
 
 ## Log
 
@@ -236,3 +236,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 ### 944b4dc — 2026-10-28 21:11:38 +0100 — "BASIC PRINT using ANSI output, and sdlscr_ansi_printf() function (both created by Claude Code)"
 7 files, +33/-11.
 - **`host_print` → `sdlscr_ansi_puts`; new `sdlscr_ansi_printf()`.** `engine1999.c`: program output on channel 0 now goes through the ANSI decoder (error messages via `host_report` and `Ready.` unchanged). `sdlscreen.[ch]`: `sdlscr_ansi_printf( fmt, … )` (1 KiB stack buffer, heap buffer for longer output, no truncation); `sdltest2.c` uses it for the colored echo. Docs: `display-engine.md`, `SESSION.md`. Tests: `repltest1`, `ansitest1` pass; build clean. Checked on the real screen by the user (`engine1999`, `sdltest2` work as expected).
+
+### ee0b676 — 2026-10-28 21:18:52 +0100 — "Created residue subfolder for some things; Updated Claude Code log and session info"
+5 files, +11/-3.
+- The user moved the two ANSI test screenshots and `foo.bas` (a binary `SAVE` test file) into `residue/` (kept, not needed). The commit also carried the log entries for `8e9d6e2`/`944b4dc` and the `SESSION.md` update that Claude wrote. No source changes.

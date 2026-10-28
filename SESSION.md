@@ -9,7 +9,7 @@ Read this first when resuming; details are in `docs/` (start with `docs/README.m
 - Keep `HistoryLog-Claude.md` current: new work goes under its "Pending" section; after the user commits, move it into the log with the commit ID and timestamp (see `CLAUDE.md`).
 
 ## Repo state
-- Branch `main` (the feature branch `feature/refactor-to-remove-some-limits` was merged into it on 2026-10-28 and work continues on `main`); latest commit `944b4dc` (`host_print` via ANSI, `sdlscr_ansi_printf()`), preceded by `8e9d6e2` (history log), `da35e56` (ANSI SGR output), `8854d23` (direct LOAD / no "Ready." after program lines), `3c0e106` (history log), `bcc157d` (history log), `7a6b4ae` (direct mode rollback), `c45e514` (history log), `28da093`/`01d467d` (segment limits), `fd7e324` (DELETE/RENUM), `05ca28f` (NEW/CLEAR), `f6d83bf` (binary SAVE header, LOAD/RUN/LIST statements).
+- Branch `main` (the feature branch `feature/refactor-to-remove-some-limits` was merged into it on 2026-10-28 and work continues on `main`); latest commit `ee0b676` (`residue/` folder, log update), preceded by `944b4dc` (`host_print` via ANSI, `sdlscr_ansi_printf()`), `8e9d6e2` (history log), `da35e56` (ANSI SGR output), `8854d23` (direct LOAD / no "Ready." after program lines), `3c0e106` (history log), `bcc157d` (history log), `7a6b4ae` (direct mode rollback), `c45e514` (history log), `28da093`/`01d467d` (segment limits), `fd7e324` (DELETE/RENUM), `05ca28f` (NEW/CLEAR), `f6d83bf` (binary SAVE header, LOAD/RUN/LIST statements).
 - Everything is committed. `make` and all tests pass.
 - `make` builds `sdltest1 engine1999 basictest1 testcomp1 basictest2 vmtest1 repltest1` + `engine.lib` cleanly with `-Wall -Werror`.
 

@@ -24,10 +24,10 @@ The program store, the syntax tree and the variables are heap structures now; th
 
 ## Build
 
-- `make` builds `sdltest1 engine1999 basictest1 testcomp1 basictest2 vmtest1 repltest1` and `engine.lib` (static archive of all modules).
+- `make` builds `sdltest1 sdltest2 engine1999 basictest1 testcomp1 basictest2 vmtest1 repltest1 ansitest1` and `engine.lib` (static archive of all modules).
 - `make DEBUG=1` → `-g` instead of `-O3`. Flags: `-Wall -Werror -p -march=native` (warnings are errors; `-p` writes `gmon.out`).
 - Needs `gcc`, SDL2 (`-lSDL2 -lrt -lm`). Only `sdltest1` and `engine1999` link SDL2.
-- `vmtest1` (back end) and `repltest1` (REPL) are the automated regression tests (run `./vmtest1`, `./repltest1`, exit status = failures); the other `*test*` programs are interactive/manual (see `docs/build-and-test.md`).
+- `vmtest1` (back end), `repltest1` (REPL) and `ansitest1` (ANSI decoder) are the automated regression tests (run `./vmtest1`, `./repltest1`, `./ansitest1`, exit status = failures); the other `*test*` programs are interactive/manual (see `docs/build-and-test.md`).
 - The makefile has a stale `8x12font.o` rule (file is `8x12font1.c`) and every object depends on *all* headers.
 - Build artifacts (`*.o`, binaries, `engine.lib`, `gmon.out`, `all`) are git-ignored but present in the working tree.
 
@@ -45,10 +45,11 @@ The program store, the syntax tree and the variables are heap structures now; th
 
 | Area | Files |
 |---|---|
-| SDL display/audio engine | `sdlmain, sdlscreen, sdllayer, textscreen, tilescreen, sprscreen, sdlaudio, sdlevent, sdlutil, 8x12font1.c` |
+| SDL display/audio engine | `sdlmain, sdlscreen, sdllayer, textscreen, tilescreen, sprscreen, sdlaudio, sdlevent, sdlutil, 8x12font1.c`; `ansi.[ch]`: ANSI SGR decoder (colors only) behind `sdlscr_ansi_puts/printf()`, no SDL dependency |
 | BASIC tokenizer | `bastok.[ch]` (token IDs, tokenize/detokenize, literal codecs) |
 | Program store | `baslin.[ch]` (`line_t` nodes, encoded `linehdr_t`), `baspgm.[ch]` (pointer-linked list of lines, insert/replace/delete/list) |
 | Compiler front end | `bascomp.[ch]` + `bascomp.ebnf` (recursive descent → syntax tree), `nodetype.[ch]` (node types) |
 | Back end | `codegen.[ch]` (+ `cgenctl.c`: control flow, `cgendecl.c`: DIM/DEF, `cgenprog.c`: LOAD/RUN/LIST/NEW/CLEAR/DELETE/RENUM), `instset.h` (ISA spec), `vars.[ch]` (variable/string memory), `runtime.[ch]`, `vm.[ch]` (minimal VM executor), `basrepl.[ch]` (host-independent REPL: direct mode, program lines; carries out the LOAD/RUN/NEW requests of a program run), `basdebug.[ch]` (debug output flags, token/tree dumps; off by default, `engine1999 --help`) |
-| Executables | `engine1999.c` (main app), `sdltest1.c`, `basictest1.c`, `basictest2.c`, `testcomp1.c`, `vmtest1.c` (automated back-end test), `repltest1.c` (automated REPL test) |
+| Executables | `engine1999.c` (main app), `sdltest1.c`, `sdltest2.c` (visual ANSI color test), `basictest1.c`, `basictest2.c`, `testcomp1.c`, `vmtest1.c` (automated back-end test), `repltest1.c` (automated REPL test), `ansitest1.c` (automated ANSI decoder test) |
 | Tools/data | `fontcomp.pl` (8x12font1.txt → 8x12font1.c), `colors-*.txt`, `concept.txt` (design notes) |
+| Residue | `residue/` — leftovers the user kept (test screenshots, a binary `SAVE` test file); disposable, not part of the project, ignore it |
