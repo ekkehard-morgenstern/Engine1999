@@ -8,6 +8,11 @@ GPLv3; programs written *in* the built-in language are explicitly exempt (see `L
 **Git: never commit or run any git write command in this repo — the user does all git writes manually.** Read-only git is fine.
 Session progress is tracked in `SESSION.md`; keep it updated when work changes the state. Open work is listed in `docs/roadmap.md`; keep that current too.
 
+**History log: `HistoryLog-Claude.md` records every change Claude made, per commit (ID, timestamp, details). Keep it updated:**
+- After each piece of work, add a short entry (what changed, why, tests run) under its **Pending** section — do this together with the `SESSION.md` update.
+- At the start of a session (and whenever the user says they committed), run `git log -i --grep=claude --format='%h|%ad|%s' --date=iso` plus `git show --shortstat`, move the pending entries into the **Log** as `### <id> — <timestamp> — "<subject>"` entries (chronological, oldest first, with file/line stats), and clear Pending. Commits whose message lacks "Claude" are not logged, but mention in the entry if the user bundled Claude's work into one.
+- Never commit it myself (git rule above); the user commits it with the rest.
+
 Full documentation is in `docs/` — start with `docs/README.md`.
 
 ## Current state — read first

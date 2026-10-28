@@ -6,6 +6,7 @@ Read this first when resuming; details are in `docs/` (start with `docs/README.m
 ## Standing rules
 - **Never run git write commands** (commit, add, push, merge, rebase, reset, checkout of files, stash, tag, branch changes). The user does all of these manually, even if git access is authorized later. Read-only git (`status`, `log`, `diff`, `show`) is fine.
 - Keep this file and `docs/` current when work changes the state.
+- Keep `HistoryLog-Claude.md` current: new work goes under its "Pending" section; after the user commits, move it into the log with the commit ID and timestamp (see `CLAUDE.md`).
 
 ## Repo state
 - Branch `feature/refactor-to-remove-some-limits`; latest commit `761339e` ("the road ahead": docs/roadmap.md), preceded by `ff53541` (debug options), `41e9ed4` (engine wiring), `8a98b3f` (CHR$), `5a7f6b3` (PRINT channel fix), `7e16a40` (INPUT/GET).
