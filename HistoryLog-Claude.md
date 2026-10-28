@@ -13,7 +13,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-- `CLAUDE.md`: added a "Residue" row to the "Where things are" table: `residue/` holds disposable leftovers and is to be ignored; also updated the stale rows/lists: `ansi.[ch]` in the display engine row, `sdltest2.c`/`ansitest1.c` in the executables row, the `make` target list and the automated tests in "Build". No source changes.
+- `SESSION.md`: the ANSI bullet rewritten (it had contradictory leftovers from earlier edits) and the xterm-palette question closed by the user's decision: `38;5;n` / `48;5;n` keep indexing the engine's own palette. No source changes.
 
 ## Log
 
@@ -240,3 +240,8 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 ### ee0b676 — 2026-10-28 21:18:52 +0100 — "Created residue subfolder for some things; Updated Claude Code log and session info"
 5 files, +11/-3.
 - The user moved the two ANSI test screenshots and `foo.bas` (a binary `SAVE` test file) into `residue/` (kept, not needed). The commit also carried the log entries for `8e9d6e2`/`944b4dc` and the `SESSION.md` update that Claude wrote. No source changes.
+
+### 4ca5c10 — 2026-10-28 21:22:32 +0100 — "Claude Code bookkeeping files updated"
+3 files, +11/-6.
+- `CLAUDE.md`: added a "Residue" row to the "Where things are" table: `residue/` holds disposable leftovers and is to be ignored; also updated the stale rows/lists: `ansi.[ch]` in the display engine row, `sdltest2.c`/`ansitest1.c` in the executables row, the `make` target list and the automated tests in "Build". No source changes.
+- Also: the entry for `ee0b676`; `SESSION.md`: latest commit line.
