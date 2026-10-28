@@ -292,6 +292,11 @@ static const testcase_t cases[] = {
     { "LOAD ends the run",      "PRINT 1:LOAD \"X\":PRINT 2",                      "1\n<request LOAD X>\n" },
     { "LOAD empty name",        "LOAD \"\"",                                       "? Illegal argument\n" },
     { "LOAD without name",      "LOAD",                                            "? String expression expected\n" },
+    { "EDIT line",              "EDIT 100",                                        "<request EDIT \"\" 100>\n" },
+    { "EDIT label",             "EDIT START",                                      "<request EDIT \"START\" -1>\n" },
+    { "EDIT without target",    "EDIT",                                            "<request EDIT \"\" -1>\n" },
+    { "EDIT ends the run",      "PRINT 1:EDIT 20:PRINT 2",                         "1\n<request EDIT \"\" 20>\n" },
+    { "EDIT bad line number",   "EDIT 1000000",                                    "? Invalid line number\n" },
     { "NEW",                    "NEW",                                             "<request NEW>\n" },
     { "NEW ends the run",       "PRINT 1:NEW:PRINT 2",                             "1\n<request NEW>\n" },
     { "CLEAR numbers",          "A=5:N%=7:CLEAR:PRINT A;N%",                        "00\n" },
@@ -625,6 +630,8 @@ static bool compile_and_run( void ) {
             snprintf( text, sizeof(text), "<request LOAD %s>\n", vm.reqname );
         } else if ( vm.request == VMREQ_NEW ) {
             snprintf( text, sizeof(text), "<request NEW>\n" );
+        } else if ( vm.request == VMREQ_EDIT ) {
+            snprintf( text, sizeof(text), "<request EDIT \"%s\" %d>\n", vm.reqname, (int) vm.reqline );
         } else {
             snprintf( text, sizeof(text), "<request RUN \"%s\" %d>\n", vm.reqname, (int) vm.reqline );
         }

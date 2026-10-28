@@ -339,6 +339,9 @@ The 4096 extended instructions are as follows:
     0001 00111101       CLR  - clear variables ( -- ) C=0 P=0
                             Numeric variables become 0, strings "", arrays are emptied (they keep their dimensions);
                             labels, functions and the compiler's hidden variables are kept.
+    0001 01000000       EDIT - edit a program line ( s n -- ) C=0 P=0
+                            Asks the host to let the user edit the line given by a line number (n >= 0) or a label
+                            (name s, if not empty); ( "" -1 ) = no target. Stores a request like RUNP and ends the run.
 
 */
 
@@ -454,5 +457,6 @@ The 4096 extended instructions are as follows:
 #define INS_CLR         UINT16_C(0X13D)
 #define INS_DELE        UINT16_C(0X13E)
 #define INS_RENM        UINT16_C(0X13F)
+#define INS_EDIT        UINT16_C(0X140)
 
 #endif

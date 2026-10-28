@@ -37,6 +37,7 @@ Colour tables used while building the palette live in `colors-raw.txt` → `colo
 ## Usage notes
 
 - `sdlscr_printf( y, x, bg, fg, fmt, … )`: pass `-1` for "current cursor / colour".
+- `sdlscr_lineedit( buf, bufsz, vblank_handler, usrdata )`: the one-line editor behind `EDIT` (insert, LEFT/RIGHT/HOME/END, BACKSPACE/DELETE, RETURN accepts, ESC cancels). It redraws the whole line after every key, follows the scrolling of the screen when the line wraps at the bottom, and suspends the break-on-ESC handling while it runs. Returns `SDLSCR_EDIT_ACCEPTED/CANCELLED/TOOLONG/CLOSED`.
 - `sdlscr_ansi_puts( text )`: like `sdlscr_puts`, but `ESC [ … m` sets the colors (see `ansi.h`). There is deliberately **no lock** around the text screen (nothing may block rendering; the text screen tolerates the screen thread reading while the main thread writes), and this function adds none. `sdlscr_ansi_printf( fmt, … )` is the printf form (any length). The BASIC `PRINT` output of `engine1999` (channel 0, `host_print`) goes through `sdlscr_ansi_puts`, so `PRINT CHR$(27);"[31m"` changes the color; the colors stay until reset with `ESC [ 0 m` (error messages and `Ready.` use their own colors).
 - `sdlscr_lineinput( stop_evtmsk, buf, size, vblank_handler, userdata )` blocks for a line and returns an event mask;
   test `ev & SDLEV_SCREENWORKERFINISHED` to detect window close.

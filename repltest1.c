@@ -431,6 +431,83 @@ static void run_highlight_tests( size_t* pnum, size_t* pfailed ) {
     }
 }
 
+// -- EDIT ------------------------------------------------------------------------------------------
+
+// the line editor callback shows the text it is given as "[text]" and answers with the next line of the case's reply
+// (lines separated by '\n'); no lines left = the user pressed ESC
+static const char* edit_reply = 0;
+
+static char* host_edit( struct _repl_t* repl, const char* text ) {
+    out_append( "[" );
+    out_append( text );
+    out_append( "]\n" );
+    if ( edit_reply == 0 || *edit_reply == '\0' ) {
+        return 0;
+    }
+    const char* nl = strchr( edit_reply, '\n' );
+    size_t len = nl ? (size_t)( nl - edit_reply ) : strlen( edit_reply );
+    char* line = (char*) malloc( len + 1U );
+    memcpy( line, edit_reply, len );
+    line[ len ] = '\0';
+    edit_reply += nl ? len + 1U : len;
+    return line;
+}
+
+typedef struct _editcase_t {
+    const char* name;
+    const char* source;
+    const char* reply;      // lines the editor returns, one per call (0 = ESC)
+    const char* expected;
+} editcase_t;
+
+static const editcase_t editcases[] = {
+    { "EDIT and ESC: no change",    "10 PRINT 1\nEDIT 10\nLIST",           0,            "[10 PRINT 1]\n10 PRINT 1\n" },
+    { "EDIT replaces the line",     "10 PRINT 1\nEDIT 10\nLIST\nRUN",      "10 PRINT 2", "[10 PRINT 1]\n10 PRINT 2\n2\n" },
+    { "EDIT with a label",          "10 LABEL L\n20 PRINT 1\nEDIT L\nLIST", "20 PRINT 3",  "[10 LABEL L]\n10 LABEL L\n20 PRINT 3\n" },
+    { "EDIT under a new number copies the line", "10 PRINT 1\nEDIT 10\nLIST", "20 PRINT 1", "[10 PRINT 1]\n10 PRINT 1\n20 PRINT 1\n" },
+    { "EDIT, line number alone deletes the line", "10 PRINT 1\nEDIT 10\nLIST", "10",       "[10 PRINT 1]\n" },
+    { "EDIT, a direct mode line is run", "10 PRINT 1\nEDIT 10",            "PRINT 42",   "[10 PRINT 1]\n42\n" },
+    { "EDIT without a target",      "EDIT",                              "X",          "? Not implemented yet\n" },
+    { "EDIT undefined line",        "10 PRINT 1\nEDIT 99",               "X",          "? Undefined line number 99\n" },
+    { "EDIT undefined label",       "10 PRINT 1\nEDIT X",                "X",          "? Undefined label X\n" },
+    { "EDIT in a program ends the run", "10 EDIT 20\n20 PRINT 1\n30 PRINT 3\nRUN", 0,     "[20 PRINT 1]\n" },
+    { "EDIT in a program, the edited line is entered", "10 EDIT 20\n20 PRINT 1\nRUN\nLIST", "20 PRINT 7", "[20 PRINT 1]\n10 EDIT 20\n20 PRINT 7\n" },
+    { "EDIT without a target in a program", "10 EDIT\nRUN",              "X",          "? Not implemented yet in line 10\n" },
+    { "an edited EDIT line edits again", "10 PRINT 1\nEDIT 10",          "EDIT 10\nPRINT 5", "[10 PRINT 1]\n[10 PRINT 1]\n5\n" },
+    { "EDIT in a program edits again, no nesting", "10 EDIT 10\nRUN",    "RUN\nRUN\n10 PRINT 9", "[10 EDIT 10]\n[10 EDIT 10]\n[10 EDIT 10]\n" },
+};
+
+static void run_edit_tests( size_t* pnum, size_t* pfailed ) {
+    for ( size_t i=0; i < sizeof(editcases) / sizeof(editcases[0]); ++i ) {
+        const editcase_t* tc = &editcases[i];
+        out_reset();
+        keys = 0; polls = 0; breakafter = 0;
+        edit_reply = tc->reply;
+        repl_t repl;
+        bool pass = false;
+        if ( init_repl( &repl ) ) {
+            repl.report = host_report;
+            repl.print  = host_print;
+            repl.edit   = host_edit;
+            char* src = strdup( tc->source );
+            for ( char* line = strtok( src, "\n" ); line; line = strtok( 0, "\n" ) ) {
+                repl_enter( &repl, line );
+            }
+            free( src );
+            cleanup_repl( &repl );
+            pass = strcmp( outbuf, tc->expected ) == 0;
+        }
+        printf( "%s  %s\n", pass ? "PASS" : "FAIL", tc->name );
+        if ( !pass ) {
+            show( "expected", tc->expected );
+            show( "got     ", outbuf );
+            ++*pfailed;
+        }
+        ++*pnum;
+    }
+    edit_reply = 0;
+}
+
 int main( int argc, char** argv ) {
     if ( argc > 1 && strcmp( argv[1], "-v" ) == 0 ) {
         basdbg_flags = BASDBG_ALL;
@@ -449,6 +526,7 @@ int main( int argc, char** argv ) {
     }
     run_growth_tests( &numcases, &failed );
     run_highlight_tests( &numcases, &failed );
+    run_edit_tests( &numcases, &failed );
     remove( TESTFILE );
     printf( "%u of %u passed\n", (unsigned)( numcases - failed ), (unsigned) numcases );
     free( outbuf );

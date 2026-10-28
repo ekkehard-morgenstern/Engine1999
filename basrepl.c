@@ -117,6 +117,8 @@ void cleanup_repl( repl_t* repl ) {
     free_program( &repl->pgm );
     delete_buffer( repl->tokbuf );
     repl->tokbuf = 0;
+    free( repl->pending );
+    repl->pending = 0;
 }
 
 static void repl_setup_compiler( repl_t* repl ) {
@@ -350,6 +352,48 @@ static bool repl_load_program( repl_t* repl, const char* filename ) {
     return true;
 }
 
+// -- EDIT ------------------------------------------------------------------------------
+
+static bool repl_list_end( repl_t* repl, const char* label, int32_t line, uint32_t* plineno );
+
+// EDIT [line|label]: lets the host edit the text of a stored line; the result is entered like a typed line afterwards
+// (repl->pending), not here, so that nothing nests. Cancelling is not an error.
+static bool repl_edit_line( repl_t* repl, const char* label, int32_t line ) {
+    uint32_t lineno = LINENO_NONE;
+    if ( label[0] == '\0' && line < 0 ) {
+        repl_vm_error( repl, "Not implemented yet", 0 );
+        return false;
+    }
+    if ( !repl_list_end( repl, label, line, &lineno ) ) {
+        return false;
+    }
+    line_t* found = 0; line_t* prev = 0;
+    if ( !find_line( &repl->pgm, lineno, &found, &prev ) ) {
+        char num[16];
+        snprintf( num, sizeof(num), "%u", (unsigned) lineno );
+        repl_vm_error( repl, "Undefined line number", num );
+        return false;
+    }
+    if ( repl->edit == 0 ) {
+        repl_vm_error( repl, "No line editor", 0 );
+        return false;
+    }
+    buf_t* text = create_buffer();
+    if ( text == 0 ) {
+        repl_report( repl, "? Out of memory" );
+        return false;
+    }
+    pgmiter_t iter; clear_iter( &iter, &repl->pgm );
+    bool ok = iter_load_line( &iter, found ) && detokenize_line( text, iter.tok, &iter.hdr );
+    if ( ok ) {
+        repl->pending = repl->edit( repl, text->buffer );
+    } else {
+        repl_report( repl, "? Out of memory" );
+    }
+    delete_buffer( text );
+    return ok;
+}
+
 // carries out the LOAD / RUN requests the program run left in the VM, until a run ends without one (iteratively:
 // a program that ends with RUN must not nest); a LOAD typed in direct mode only loads (direct = the run was a direct line)
 static bool repl_finish( repl_t* repl, bool ok, bool direct ) {
@@ -368,6 +412,11 @@ static bool repl_finish( repl_t* repl, bool ok, bool direct ) {
             repl_vm_error( repl, "Break", 0 );
             free( name );
             return false;
+        }
+        if ( kind == VMREQ_EDIT ) {
+            ok = repl_edit_line( repl, name, line );    // back to the host: nothing runs afterwards
+            free( name );
+            return ok;
         }
         if ( kind == VMREQ_NEW ) {
             repl_new( repl );       // back to the host: nothing runs afterwards
@@ -402,8 +451,11 @@ static bool repl_run_direct( repl_t* repl, const uint8_t* tokens, size_t size ) 
     return repl_finish( repl, repl_execute( repl, false, 0, -1 ), true );
 }
 
+static bool repl_enter_pending( repl_t* repl, bool ok );
+
 bool repl_run( repl_t* repl ) {
-    return repl_finish( repl, repl_start_program( repl, "", -1 ), false );
+    bool ok = repl_finish( repl, repl_start_program( repl, "", -1 ), false );
+    return repl->pending != 0 ? repl_enter_pending( repl, ok ) : ok;     // a program that ended in EDIT
 }
 
 void repl_new( repl_t* repl ) {
@@ -514,7 +566,7 @@ bool repl_save_program( repl_t* repl, const char* filename, bool ascii ) {
 
 // -- input lines ---------------------------------------------------------------------
 
-bool repl_enter( repl_t* repl, const char* text ) {
+static bool repl_enter_line( repl_t* repl, const char* text ) {
     char* copy = strdup( text );
     if ( copy == 0 ) {
         repl_report( repl, "? Out of memory" );
@@ -548,4 +600,20 @@ bool repl_enter( repl_t* repl, const char* text ) {
     }
     free( copy );
     return ok;
+}
+
+// enters the lines the line editor left behind (an edited line may be a direct mode line that runs EDIT again, which
+// leaves the next one: a loop, not a recursion)
+static bool repl_enter_pending( repl_t* repl, bool ok ) {
+    while ( repl->pending != 0 ) {
+        char* line = repl->pending;
+        repl->pending = 0;
+        ok = repl_enter_line( repl, line );
+        free( line );
+    }
+    return ok;
+}
+
+bool repl_enter( repl_t* repl, const char* text ) {
+    return repl_enter_pending( repl, repl_enter_line( repl, text ) );
 }

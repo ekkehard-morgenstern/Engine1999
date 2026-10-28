@@ -611,6 +611,7 @@ Explanation of node types:
 #define NT_CLEARSTMT            UINT8_C(0X60)   // CLEAR statement
 #define NT_DELETESTMT           UINT8_C(0X61)   // DELETE statement
 #define NT_RENUMSTMT            UINT8_C(0X62)   // RENUM statement
+#define NT_EDITSTMT             UINT8_C(0X63)   // EDIT statement
 
 #define LISTF_FIRST             UINT8_C(0X01)   // LIST: start target present (first branch)
 #define LISTF_LAST              UINT8_C(0X02)   // LIST: end target present (next branch)

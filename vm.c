@@ -1082,6 +1082,27 @@ static bool vm_run_program( vm_t* vm ) {
     return true;
 }
 
+// EDIT ( s n -- ): label name ("" = none) and line number (-1 = none)
+static bool vm_edit_request( vm_t* vm ) {
+    double num; char* name;
+    if ( !vm_dpop_num( vm, &num ) ) {
+        return false;
+    }
+    if ( !vm_dpop_str( vm, &name ) ) {
+        return false;
+    }
+    if ( num < -1.0 || num > (double) LINENO_MAX ) {
+        free( name );
+        return vm_error( vm, "Illegal argument" );
+    }
+    vm_clear_request( vm );
+    vm->request = VMREQ_EDIT;
+    vm->reqname = name;
+    vm->reqline = (int32_t) num;
+    vm->pc = vm->cgen->codesize;
+    return true;
+}
+
 // NEW ( -- ): leaves a request for the host and ends the run
 static bool vm_new_program( vm_t* vm ) {
     vm_clear_request( vm );
@@ -1439,6 +1460,7 @@ static bool vm_step( vm_t* vm ) {
         case INS_RUNP: return vm_run_program( vm );
         case INS_LIST: return vm_list_program( vm );
         case INS_NEW: return vm_new_program( vm );
+        case INS_EDIT: return vm_edit_request( vm );
         case INS_DELE: return vm_edit_program( vm, false );
         case INS_RENM: return vm_edit_program( vm, true );
         case INS_CLR:

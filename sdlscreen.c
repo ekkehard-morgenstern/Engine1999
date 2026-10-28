@@ -605,6 +605,131 @@ int sdlscr_lineinput( int stop_evtmsk, char* buf, size_t bufsz, void (*vblank_ha
     return outmsk;
 }
 
+// -- line editor -----------------------------------------------------------------------
+
+// draws the text of the editor from (startx, starty), wipes what a shorter text leaves behind, puts the cursor at pos
+// and returns the row the text starts at now (it moves up when printing scrolled the screen)
+static int sdlscr_editdraw( const char* text, size_t len, size_t pos, int startx, int starty ) {
+    int sx = TXTSCR_WIDTH, sy = TXTSCR_HEIGHT;
+    txtscr_print( starty, startx, -1, -1, text );
+    int ey = starty + (int)( ( (size_t) startx + len ) / (size_t) sx );
+    if ( ey > sy - 1 ) {
+        starty -= ey - ( sy - 1 );      // printing scrolled the screen
+    }
+    int cx = 0, cy = 0;
+    txtscr_getcursor( &cx, &cy );
+    txtscr_write( cy, cx, -1, -1, " ", 1 );
+    int row = starty + (int)( ( (size_t) startx + pos ) / (size_t) sx );
+    int col = (int)( ( (size_t) startx + pos ) % (size_t) sx );
+    txtscr_locate( col, row );
+    sdllay_set_modified( &layers[LAY_TXT] );
+    return starty;
+}
+
+int sdlscr_lineedit( char* buf, size_t bufsz, void (*vblank_handler)( void* ), void* usrdata ) {
+    if ( buf == 0 || bufsz < 2U ) {
+        return SDLSCR_EDIT_TOOLONG;
+    }
+    int startx = 0, starty = 0;
+    txtscr_getcursor( &startx, &starty );
+    // the line must leave at least one row free, so that scrolling can't push its start off the screen
+    size_t maxlen = (size_t) TXTSCR_WIDTH * (size_t)( TXTSCR_HEIGHT - 1 ) - (size_t) startx;
+    if ( maxlen > bufsz - 1U ) {
+        maxlen = bufsz - 1U;
+    }
+    size_t len = strlen( buf );
+    if ( len > maxlen ) {
+        return SDLSCR_EDIT_TOOLONG;
+    }
+    char* work = (char*) malloc( bufsz );
+    if ( work == 0 ) {
+        return SDLSCR_EDIT_TOOLONG;
+    }
+    memcpy( work, buf, len + 1U );
+    size_t pos = len;
+    int result = SDLSCR_EDIT_CLOSED;
+    bool oldpoll = sdlscr_pollinput;
+    sdlscr_pollinput = false;       // ESC is a key here, not the break request
+    sdlscr_awaitinput = true;
+    starty = sdlscr_editdraw( work, len, pos, startx, starty );
+    bool finished = false;
+    while ( !finished ) {
+        int ev = sdlev_wait( SDLEV_VBLANK | SDLEV_SCREENWORKERFINISHED | SDLEV_INPUT );
+        if ( ev & SDLEV_SCREENWORKERFINISHED ) {
+            break;
+        }
+        if ( ev & SDLEV_VBLANK ) {
+            if ( vblank_handler ) {
+                vblank_handler( usrdata );
+            }
+        }
+        if ( !( ev & SDLEV_INPUT ) ) {
+            continue;
+        }
+        bool changed = false;
+        sdlscr_inputmsg_t* msg;
+        while ( !finished && ( msg = sdlscr_dequeueinputmsg() ) != 0 ) {
+            if ( msg->inputtype == SDLSCR_INPUT_KEYPRESS ) {
+                switch ( msg->symbol ) {
+                    case SDLK_RETURN:
+                    case SDLK_KP_ENTER:
+                        result = SDLSCR_EDIT_ACCEPTED; finished = true;
+                        break;
+                    case SDLK_ESCAPE:
+                        result = SDLSCR_EDIT_CANCELLED; finished = true;
+                        break;
+                    case SDLK_LEFT:
+                        if ( pos > 0 ) { --pos; changed = true; }
+                        break;
+                    case SDLK_RIGHT:
+                        if ( pos < len ) { ++pos; changed = true; }
+                        break;
+                    case SDLK_HOME:
+                        if ( pos != 0 ) { pos = 0; changed = true; }
+                        break;
+                    case SDLK_END:
+                        if ( pos != len ) { pos = len; changed = true; }
+                        break;
+                    case SDLK_BACKSPACE:
+                        if ( pos > 0 ) {
+                            memmove( work + pos - 1U, work + pos, len - pos + 1U );
+                            --pos; --len; changed = true;
+                        }
+                        break;
+                    case SDLK_DELETE:
+                        if ( pos < len ) {
+                            memmove( work + pos, work + pos + 1U, len - pos );
+                            --len; changed = true;
+                        }
+                        break;
+                }
+            } else if ( msg->inputtype == SDLSCR_INPUT_TEXT ) {
+                // one printable ASCII character; Unicode and control characters are ignored for now
+                int chr = msg->text[0] & 255;
+                if ( msg->text[0] != '\0' && msg->text[1] == '\0' && chr >= 32 && chr < 127 && len < maxlen ) {
+                    memmove( work + pos + 1U, work + pos, len - pos + 1U );
+                    work[ pos++ ] = (char) chr; ++len; changed = true;
+                }
+            }
+            sdlscr_deleteinputmsg( msg );
+        }
+        if ( changed || finished ) {
+            starty = sdlscr_editdraw( work, len, finished ? len : pos, startx, starty );
+        }
+    }
+    if ( result == SDLSCR_EDIT_ACCEPTED ) {
+        memcpy( buf, work, len + 1U );
+    }
+    if ( result != SDLSCR_EDIT_CLOSED ) {
+        txtscr_print( -1, -1, -1, -1, "\n" );      // the cursor is at the end of the text now
+        sdllay_set_modified( &layers[LAY_TXT] );
+    }
+    sdlscr_awaitinput = false;
+    sdlscr_pollinput = oldpoll;
+    free( work );
+    return result;
+}
+
 void sdlscr_gettextscreensize( int* outsx, int* outsy ) {
     txtscr_getsize( outsx, outsy );
 }

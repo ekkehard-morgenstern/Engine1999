@@ -384,6 +384,7 @@ static const char* opcode_to_string( uint16_t opcode ) {
         case INS_CLR:       return "CLR";
         case INS_DELE:      return "DELE";
         case INS_RENM:      return "RENM";
+        case INS_EDIT:      return "EDIT";
         default:            break;
     }
     return "???";
@@ -947,6 +948,10 @@ bool cgen_gen_load( codegen_t* cgen ) {
 
 bool cgen_gen_runp( codegen_t* cgen ) {
     return cgen_gen_ins12( cgen, INS_RUNP, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_edit( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_EDIT, false, false, UINT16_C(0) );
 }
 
 bool cgen_gen_list( codegen_t* cgen ) {
@@ -2804,6 +2809,7 @@ bool cgen_from_stmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         case NT_CLEARSTMT:  return cgen_from_clearstmt( cgen, comp, node );
         case NT_DELETESTMT: return cgen_from_deletestmt( cgen, comp, node );
         case NT_RENUMSTMT:  return cgen_from_renumstmt( cgen, comp, node );
+        case NT_EDITSTMT:   return cgen_from_editstmt( cgen, comp, node );
         case NT_STMTLIST:   return cgen_from_stmtlist( cgen, comp, node );
         case NT_DIMSTMT:    return cgen_from_dimstmt( cgen, comp, node );
         case NT_ERASESTMT:  return cgen_from_erasestmt( cgen, comp, node );

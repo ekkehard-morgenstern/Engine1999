@@ -34,6 +34,7 @@ Code generation for the program commands LOAD, RUN, LIST, NEW, CLEAR, DELETE and
 
     LOAD name        <name>  LOAD
     RUN [target]     <label name or "">  <line number or -1>  RUNP
+    EDIT [target]    <label name or "">  <line number or -1>  EDIT
     DELETE a[-[b]]   <label a or "">  <line a or -1>  <label b or "">  <line b or -1>  DELE
     RENUM [a][-[b]][,step]   (the same four operands)  <step, 10 if omitted>  RENM
     NEW              NEW
@@ -119,6 +120,27 @@ bool cgen_from_runstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         return false;
     }
     if ( !cgen_gen_runp( cgen ) ) {
+        return cgen_out_of_code_memory( comp );
+    }
+    return true;
+}
+
+bool cgen_from_editstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    /*
+        NT_EDITSTMT     EDIT statement
+            branches:
+                - none, or 1 branch of goto target (NT_GOTOTARGET: a line number or a label)
+    */
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->type != NT_EDITSTMT || node->numbranches > 1U ) {
+        return cgen_unexpected_node( comp );
+    }
+    if ( !cp_push_target( cgen, comp, node->numbranches ? node->branches[0] : NODE_NONE ) ) {
+        return false;
+    }
+    if ( !cgen_gen_edit( cgen ) ) {
         return cgen_out_of_code_memory( comp );
     }
     return true;

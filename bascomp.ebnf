@@ -229,7 +229,10 @@ clear-stmt := TOK_CLEAR .
 -- affected. Both change the stored program, so the running program ends (its code no longer matches the program).
 delete-stmt := TOK_DELETE ( goto-target [ TOK_MINUS [ goto-target ] ] | TOK_MINUS goto-target ) .
 renum-stmt := TOK_RENUM [ goto-target ] [ TOK_MINUS [ goto-target ] ] [ TOK_COMMA num-expr ] .
-prog-stmt := load-stmt | run-stmt | list-stmt | new-stmt | clear-stmt | delete-stmt | renum-stmt .
+-- EDIT n / EDIT label: a simple line editor for that line (see docs/basic-language.md); the edited line is then entered
+-- like a typed one. It ends the running program (like NEW). EDIT alone is not implemented yet.
+edit-stmt := TOK_EDIT [ goto-target ] .
+prog-stmt := load-stmt | run-stmt | list-stmt | new-stmt | clear-stmt | delete-stmt | renum-stmt | edit-stmt .
 
 stmt := io-stmt | prog-stmt | assign-stmt | control-flow-stmt .
 stmt-list := stmt { TOK_COLON stmt } .

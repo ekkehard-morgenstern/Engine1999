@@ -76,6 +76,15 @@ void sdlscr_printf( int y, int x, int bg, int fg, const char* fmt, ... );
 void sdlscr_puts( const char* text );        // prints text of any length at the cursor, in the current colors
 void sdlscr_ansi_printf( const char* fmt, ... );     // printf-style sdlscr_ansi_puts (any length)
 void sdlscr_ansi_puts( const char* text );   // like sdlscr_puts, but ESC [ ... m (SGR) sets the colors (see ansi.h); no lock
+// simple line editor for one line (EDIT): buf holds the text to edit and receives the result (bufsz includes the
+// terminating NUL). The editor starts at the cursor and redraws the line (which may wrap over several screen rows) after
+// every change. Keys: printable characters (inserted), LEFT, RIGHT, HOME, END, BACKSPACE, DELETE; RETURN accepts, ESC
+// cancels (buf is then unchanged). The cursor is placed on a new line afterwards. No lock, like all text screen output.
+#define SDLSCR_EDIT_ACCEPTED    0
+#define SDLSCR_EDIT_CANCELLED   1
+#define SDLSCR_EDIT_TOOLONG     2       // the text doesn't fit on the screen: nothing was done
+#define SDLSCR_EDIT_CLOSED      3       // the screen was closed
+int sdlscr_lineedit( char* buf, size_t bufsz, void (*vblank_handler)( void* ), void* usrdata );
 int sdlscr_lineinput( int stop_evtmsk, char* buf, size_t bufsz, void (*vblank_handler)( void* ), void* usrdata );
 void sdlscr_gettextscreensize( int* outsx, int* outsy );
 void sdlscr_gettextcursor( int* outx, int* outy );

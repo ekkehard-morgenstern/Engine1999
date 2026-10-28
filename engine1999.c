@@ -740,6 +740,23 @@ static bool host_save( struct _vm_t* vm, void* usrdata, const char* filename, bo
     return repl_save_program( (repl_t*) usrdata, filename, ascii );
 }
 
+// the line editor of EDIT: ENTER returns the edited line, ESC (or a closed window) returns 0
+static char* host_edit( struct _repl_t* r, const char* text ) {
+    char buf[2048];         // more than the 80x25 screen holds
+    if ( strlen( text ) >= sizeof(buf) ) {
+        host_report( r, "? Line too long to edit" );
+        return 0;
+    }
+    strcpy( buf, text );
+    host_newline();
+    int status = sdlscr_lineedit( buf, sizeof(buf), vblank_handler, &usrdata );
+    if ( status == SDLSCR_EDIT_TOOLONG ) {
+        host_report( r, "? Line too long to edit" );
+        return 0;
+    }
+    return status == SDLSCR_EDIT_ACCEPTED ? strdup( buf ) : 0;
+}
+
 // syntax highlighting of LIST output: an ANSI SGR sequence per class of text (see hlclass_t in bastok.h); the colors
 // are palette entries via the standard color numbers (ansi.c), chosen to read well on a light and a dark background
 static const char* host_hlstyle( hlclass_t cls, void* usrdata ) {
@@ -774,6 +791,7 @@ static void init_host( void ) {
     repl.interrupt = host_interrupt;
     repl.save      = host_save;
     repl.hlstyle   = host_hlstyle;
+    repl.edit      = host_edit;
 }
 
 

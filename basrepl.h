@@ -89,6 +89,10 @@ typedef struct _repl_t {
     // syntax highlighting of LIST output (optional): returns the text (e.g. an escape sequence) to insert where text of
     // the class starts; HL_NONE = end of the line. Only used when LIST writes to channel 0, the screen (bastok.h)
     hlstyle_t   hlstyle;
+    // line editor for EDIT (optional): gets the text of the line (with its number), lets the user change it and returns the
+    // result in a malloc'ed string, or 0 if the user cancelled (the host reports its own problems, e.g. a line too long)
+    char*       (*edit)( struct _repl_t*, const char* text );
+    char*       pending;            // an edited line waiting to be entered (see repl_enter())
 } repl_t;
 
 bool init_repl( repl_t* repl );             // false if out of memory

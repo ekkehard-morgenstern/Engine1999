@@ -267,6 +267,7 @@ bool cgen_gen_rstr( codegen_t* cgen, bool hasparam, uint32_t dataoffs );     // 
 bool cgen_gen_save( codegen_t* cgen );
 bool cgen_gen_load( codegen_t* cgen );
 bool cgen_gen_runp( codegen_t* cgen );
+bool cgen_gen_edit( codegen_t* cgen );
 bool cgen_gen_list( codegen_t* cgen );
 bool cgen_gen_new( codegen_t* cgen );
 bool cgen_gen_clr( codegen_t* cgen );
@@ -342,6 +343,7 @@ bool cgen_from_defstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 
 bool cgen_from_loadstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_runstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_editstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_liststmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_newstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_clearstmt( codegen_t* cgen, compiler_t* comp, node_t* node );

@@ -2306,6 +2306,26 @@ bool comp_eat_runstmt( compiler_t* comp, node_t** pnode ) {
     return true;
 }
 
+bool comp_eat_editstmt( compiler_t* comp, node_t** pnode ) {
+    // edit-stmt := TOK_EDIT [ goto-target ] .
+    if ( comp->currtok != TOK_EDIT || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    node_t* target = NODE_NONE;
+    bool hastarget = comp_eat_gototarget( comp, &target ) && target != NODE_NONE;
+    /*
+        NT_EDITSTMT     EDIT statement
+            branches:
+                - none, or 1 branch of goto target (NT_GOTOTARGET: a line number or a label)
+    */
+    if ( !( hastarget ? comp_create_node( comp, pnode, NT_EDITSTMT, UINT8_C(1), UINT16_C(0), 0, target ) :
+            comp_create_node( comp, pnode, NT_EDITSTMT, UINT8_C(0), UINT16_C(0), 0 ) ) || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
 // [ goto-target ] [ TOK_MINUS [ goto-target ] ]: the line range of LIST, DELETE and RENUM
 static bool comp_eat_linerange( compiler_t* comp, uint8_t* pflags, node_t** pfirst, node_t** plast ) {
     *pflags = 0; *pfirst = NODE_NONE; *plast = NODE_NONE;
@@ -2432,7 +2452,7 @@ bool comp_eat_clearstmt( compiler_t* comp, node_t** pnode ) {
 }
 
 bool comp_eat_progstmt( compiler_t* comp, node_t** pnode ) {
-    // prog-stmt := load-stmt | run-stmt | list-stmt | new-stmt | clear-stmt | delete-stmt | renum-stmt .
+    // prog-stmt := load-stmt | run-stmt | list-stmt | new-stmt | clear-stmt | delete-stmt | renum-stmt | edit-stmt .
     // [ NT_PROGSTMT - not generated ]
     if ( comp_eat_loadstmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
@@ -2453,6 +2473,9 @@ bool comp_eat_progstmt( compiler_t* comp, node_t** pnode ) {
         return true;
     }
     if ( comp_eat_renumstmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_editstmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     return false;
