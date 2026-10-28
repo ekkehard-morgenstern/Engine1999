@@ -193,10 +193,10 @@ static bool vm_dpop_str( vm_t* vm, char** pstr ) {
     return true;
 }
 
-static bool vm_rpush( vm_t* vm, uint16_t addr ) {
+static bool vm_rpush( vm_t* vm, uint32_t addr ) {
     if ( vm->rsp == vm->rmax ) {
         size_t newmax = vm->rmax ? vm->rmax * 2U : 64U;
-        uint16_t* p = (uint16_t*) realloc( vm->rstack, newmax * sizeof(uint16_t) );
+        uint32_t* p = (uint32_t*) realloc( vm->rstack, newmax * sizeof(uint32_t) );
         if ( p == 0 ) {
             return vm_error( vm, "Out of memory" );
         }
@@ -207,7 +207,7 @@ static bool vm_rpush( vm_t* vm, uint16_t addr ) {
     return true;
 }
 
-static bool vm_rpop( vm_t* vm, uint16_t* paddr ) {
+static bool vm_rpop( vm_t* vm, uint32_t* paddr ) {
     if ( vm->rsp == 0 ) {
         return vm_error( vm, "Return stack underflow" );
     }
@@ -390,7 +390,7 @@ static bool vm_set_value( vm_t* vm, uint16_t varoffs, uint8_t vartype, uint8_t n
     return true;
 }
 
-static bool vm_rpush( vm_t* vm, uint16_t addr );
+static bool vm_rpush( vm_t* vm, uint32_t addr );
 
 static bool vm_read_var( vm_t* vm, uint16_t varoffs, uint8_t vartype ) {
     if ( ( vartype & VARTYPEM_BASE ) == VARTYPEV_LABEL ) {
@@ -513,24 +513,24 @@ static bool vm_set_substring( vm_t* vm, uint16_t opcode, uint16_t varoffs ) {
 static bool vm_read_data( vm_t* vm, bool wantstr ) {
     const codegen_t* cgen = vm->cgen;
     uint32_t pos = vm->datapos;
-    if ( pos == DATAOFFS_NONE || pos + 3U > cgen->datasize ) {
+    if ( pos == DATAOFFS_NONE || pos > cgen->datasize || DATAREC_HEADER > cgen->datasize - pos ) {
         return vm_error( vm, "Out of DATA" );
     }
     uint8_t type = cgen->data[ pos ];
-    uint16_t next = (uint16_t)( ( ( (uint16_t) cgen->data[ pos + 1U ] ) << UINT8_C(8) ) | cgen->data[ pos + 2U ] );
-    const uint8_t* payload = &cgen->data[ pos + 3U ];
+    uint32_t next = cgen_datarec_next( cgen->data, pos );
+    const uint8_t* payload = &cgen->data[ pos + DATAREC_HEADER ];
     if ( ( type != 0 && type != 1 ) || ( wantstr ? type != 1 : type != 0 ) ) {
         return vm_error( vm, wantstr ? "Type mismatch (DATA item is not a string)" : "Type mismatch (DATA item is not a number)" );
     }
     if ( !wantstr ) {
-        if ( pos + 3U + 8U > cgen->datasize ) {
+        if ( pos + DATAREC_HEADER + 8U > cgen->datasize ) {
             return vm_error( vm, "Bad DATA item" );
         }
         if ( !vm_dpush_num( vm, vm_extract_float( payload ) ) ) {
             return false;
         }
     } else {
-        const uint8_t* end = memchr( payload, '\0', cgen->datasize - ( pos + 3U ) );
+        const uint8_t* end = memchr( payload, '\0', cgen->datasize - ( pos + DATAREC_HEADER ) );
         if ( end == 0 ) {
             return vm_error( vm, "Bad DATA item" );
         }
@@ -567,7 +567,7 @@ static char* vm_get_line( vm_t* vm ) {
 }
 
 // INPL: prints the prompt, reads the line
-static bool vm_input_line( vm_t* vm, uint16_t promptoffs, uint32_t inspc ) {
+static bool vm_input_line( vm_t* vm, uint32_t promptoffs, uint32_t inspc ) {
     const codegen_t* cgen = vm->cgen;
     if ( promptoffs >= cgen->datasize || memchr( &cgen->data[ promptoffs ], '\0', cgen->datasize - promptoffs ) == 0 ) {
         return vm_error( vm, "Bad prompt" );
@@ -726,7 +726,7 @@ static bool vm_call_function( vm_t* vm, uint16_t funcoffs, uint32_t retaddr ) {
     if ( !vm_dpop_num( vm, &num ) ) {
         return false;
     }
-    uint8_t functype = 0, numparams = 0; uint16_t codeoffs = CODEOFFS_NONE;
+    uint8_t functype = 0, numparams = 0; uint32_t codeoffs = CODEOFFS_NONE;
     if ( !vmem_get_func_info( vm->vmem, funcoffs, &functype, &numparams, &codeoffs ) ) {
         return vm_error( vm, "Undefined function" );
     }
@@ -792,7 +792,7 @@ static bool vm_call_function( vm_t* vm, uint16_t funcoffs, uint32_t retaddr ) {
             goto FAILCTX;
         }
     }
-    if ( !vm_rpush( vm, (uint16_t) retaddr ) || !vm_rpush( vm, (uint16_t) vm->nctx ) ) {
+    if ( !vm_rpush( vm, retaddr ) || !vm_rpush( vm, (uint32_t) vm->nctx ) ) {
         goto FAILCTX;
     }
     ++vm->nctx;
@@ -814,7 +814,7 @@ FAIL:
 }
 
 static bool vm_return_function( vm_t* vm ) {
-    uint16_t ctxindex = 0, retaddr = 0;
+    uint32_t ctxindex = 0, retaddr = 0;
     if ( !vm_rpop( vm, &ctxindex ) || !vm_rpop( vm, &retaddr ) ) {
         return false;
     }
@@ -1300,16 +1300,21 @@ static bool vm_step( vm_t* vm ) {
     const uint32_t inspc = pc;
     // fetch and decode
     uint8_t ins = cgen->code[ pc++ ];
-    uint8_t ext = 0; uint16_t param = 0;
-    uint32_t need = ( ( ins & INSF_E ) ? 1U : 0U ) + ( ( ins & INSF_P ) ? 2U : 0U );
+    uint8_t ext = 0; uint32_t param = 0;
+    bool wide = ( ins & INSF_P ) != 0 && ( ins & INSF_W ) != 0;
+    uint32_t need = ( ( ins & INSF_E ) ? 1U : 0U ) + ( ( ins & INSF_P ) ? ( wide ? 4U : 2U ) : 0U );
     if ( need > cgen->codesize - pc ) {
         return vm_error( vm, "Truncated instruction" );
     }
     if ( ins & INSF_E ) {
         ext = cgen->code[ pc++ ];
     }
-    if ( ins & INSF_P ) {
-        param = (uint16_t)( ( ( (uint16_t) cgen->code[ pc ] ) << UINT8_C(8) ) | cgen->code[ pc + 1U ] );
+    if ( wide ) {
+        param = ( ( (uint32_t) cgen->code[ pc ] ) << UINT8_C(24) ) | ( ( (uint32_t) cgen->code[ pc + 1U ] ) << UINT8_C(16) ) |
+            ( ( (uint32_t) cgen->code[ pc + 2U ] ) << UINT8_C(8) ) | cgen->code[ pc + 3U ];
+        pc += 4U;
+    } else if ( ins & INSF_P ) {
+        param = (uint32_t)( ( ( (uint16_t) cgen->code[ pc ] ) << UINT8_C(8) ) | cgen->code[ pc + 1U ] );
         pc += 2U;
     }
     vm->pc = pc;    // address of the following instruction
@@ -1318,10 +1323,17 @@ static bool vm_step( vm_t* vm ) {
     if ( ins & INSF_E ) {
         opcode = (uint16_t)( ( opcode << UINT8_C(8) ) | ext );
     }
-    // 17 bit immediate: the C bit is the uppermost bit
-    uint32_t imm17 = ( (uint32_t) param ) | ( code ? UINT32_C(0x10000) : UINT32_C(0) );
-    int32_t  simm17 = imm17 & UINT32_C(0x10000) ? (int32_t)( imm17 | UINT32_C(0xFFFE0000) ) : (int32_t) imm17;
-    double num; const uint8_t* mem; uint32_t avail; uint16_t addr; char* str;
+    // immediate: 17 bit, the C bit is the uppermost bit; or the whole 32 bit parameter of a wide instruction
+    uint32_t imm17 = wide ? param : ( param | ( code ? UINT32_C(0x10000) : UINT32_C(0) ) );
+    int32_t  simm17 = wide ? (int32_t) param :
+        ( imm17 & UINT32_C(0x10000) ? (int32_t)( imm17 | UINT32_C(0xFFFE0000) ) : (int32_t) imm17 );
+    double num; const uint8_t* mem; uint32_t avail; uint32_t addr; char* str;
+    // only these take a parameter above 16 bits (the others have variable numbers, counts, ...)
+    if ( param > UINT16_MAX && opcode != INS_PHPA && opcode != INS_PHIM && opcode != INS_BRIA && opcode != INS_BRIR &&
+         opcode != INS_LINE && opcode != INS_RSTR && opcode != INS_INPL ) {
+        return vm_error( vm, "Parameter out of range" );
+    }
+    const uint16_t param16 = (uint16_t) param;
 
     switch ( opcode ) {
         case INS_BRK:
@@ -1407,16 +1419,16 @@ static bool vm_step( vm_t* vm ) {
             return vm_binary_num( vm, opcode );
         case INS_CON: case INS_CSEQ: case INS_CSNE: case INS_CSGE: case INS_CSLE: case INS_CSGT: case INS_CSLT:
             return vm_binary_str( vm, opcode );
-        case INS_RRNV: return vm_read_var( vm, param, VARTYPEV_FLOAT );
-        case INS_RRIV: return vm_read_var( vm, param, VARTYPEV_INT );
-        case INS_RRSV: return vm_read_var( vm, param, VARTYPEV_STR );
-        case INS_RRLV: return vm_read_var( vm, param, VARTYPEV_LABEL );
-        case INS_RNAE: return vm_read_elem( vm, param, VARTYPEV_FLOAT );
-        case INS_RIAE: return vm_read_elem( vm, param, VARTYPEV_INT );
-        case INS_RSAE: return vm_read_elem( vm, param, VARTYPEV_STR );
-        case INS_WNAE: return vm_write_elem( vm, param, VARTYPEV_FLOAT );
-        case INS_WIAE: return vm_write_elem( vm, param, VARTYPEV_INT );
-        case INS_WSAE: return vm_write_elem( vm, param, VARTYPEV_STR );
+        case INS_RRNV: return vm_read_var( vm, param16, VARTYPEV_FLOAT );
+        case INS_RRIV: return vm_read_var( vm, param16, VARTYPEV_INT );
+        case INS_RRSV: return vm_read_var( vm, param16, VARTYPEV_STR );
+        case INS_RRLV: return vm_read_var( vm, param16, VARTYPEV_LABEL );
+        case INS_RNAE: return vm_read_elem( vm, param16, VARTYPEV_FLOAT );
+        case INS_RIAE: return vm_read_elem( vm, param16, VARTYPEV_INT );
+        case INS_RSAE: return vm_read_elem( vm, param16, VARTYPEV_STR );
+        case INS_WNAE: return vm_write_elem( vm, param16, VARTYPEV_FLOAT );
+        case INS_WIAE: return vm_write_elem( vm, param16, VARTYPEV_INT );
+        case INS_WSAE: return vm_write_elem( vm, param16, VARTYPEV_STR );
         case INS_TI: case INS_INKY: case INS_FRE: case INS_STRS: case INS_CHRS: case INS_ASC: case INS_LEN: case INS_VAL:
         case INS_BINS: case INS_QUAS: case INS_OCTS: case INS_HEXS: case INS_DECS:
         case INS_LFTS: case INS_RGTS: case INS_MIDS:
@@ -1433,19 +1445,19 @@ static bool vm_step( vm_t* vm ) {
             vmem_clear_vars( vm->vmem );
             return true;
         case INS_SLFT: case INS_SRGT: case INS_SMID:
-            return vm_set_substring( vm, opcode, param );
+            return vm_set_substring( vm, opcode, param16 );
         case INS_ERAS:
-            return vmem_erase_array( vm->vmem, param ) || vm_error( vm, "Not an array" );
+            return vmem_erase_array( vm->vmem, param16 ) || vm_error( vm, "Not an array" );
         case INS_RDNM: return vm_read_data( vm, false );
         case INS_RDST: return vm_read_data( vm, true );
         case INS_RSTR:
             vm->datapos = hasp ? param : cgen->datafirst;
             return true;
-        case INS_CALF: return vm_call_function( vm, param, pc );
+        case INS_CALF: return vm_call_function( vm, param16, pc );
         case INS_RETF: return vm_return_function( vm );
-        case INS_WRNV: return vm_write_var( vm, param, VARTYPEV_FLOAT );
-        case INS_WRIV: return vm_write_var( vm, param, VARTYPEV_INT );
-        case INS_WRSV: return vm_write_var( vm, param, VARTYPEV_STR );
+        case INS_WRNV: return vm_write_var( vm, param16, VARTYPEV_FLOAT );
+        case INS_WRIV: return vm_write_var( vm, param16, VARTYPEV_INT );
+        case INS_WRSV: return vm_write_var( vm, param16, VARTYPEV_STR );
         case INS_INPL: return vm_input_line( vm, param, inspc );
         case INS_INPN: return vm_input_field( vm, false );
         case INS_INPS: return vm_input_field( vm, true );
@@ -1464,7 +1476,7 @@ static bool vm_step( vm_t* vm ) {
             }
             vm_format_number( num, buf );
             vm_out( vm, buf );
-            return vm_print_sep( vm, hasp, param );
+            return vm_print_sep( vm, hasp, param16 );
         }
         case INS_PSTR:
             if ( !vm_dpop_str( vm, &str ) ) {
@@ -1472,7 +1484,7 @@ static bool vm_step( vm_t* vm ) {
             }
             vm_out( vm, str );
             free( str );
-            return vm_print_sep( vm, hasp, param );
+            return vm_print_sep( vm, hasp, param16 );
         default:
             break;
     }

@@ -448,7 +448,7 @@ bool vmem_set_var( varmem_t* vmem, uint16_t varoffs, uint8_t vartype, uint8_t nu
 
 // -- user-defined function variables -------------------------------------------
 
-bool vmem_get_func_info( varmem_t* vmem, uint16_t varoffs, uint8_t* pfunctype, uint8_t* pnumparams, uint16_t* pcodeoffs ) {
+bool vmem_get_func_info( varmem_t* vmem, uint16_t varoffs, uint8_t* pfunctype, uint8_t* pnumparams, uint32_t* pcodeoffs ) {
     var_t* var = vmem_var( vmem, varoffs );
     if ( var == 0 || ( var->type & VARTYPEF_FUNC ) == 0 ) {
         return false;

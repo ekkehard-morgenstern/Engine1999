@@ -36,13 +36,14 @@
 #include "bascomp.h"
 #endif
 
-#define CODEOFFS_NONE   UINT16_C(0XFFFF)
-#define DATAOFFS_NONE   UINT16_C(0XFFFF)
+#define CODEOFFS_NONE   UINT32_C(0XFFFFFFFF)
+#define DATAOFFS_NONE   UINT32_C(0XFFFFFFFF)
 
-// The code and data segments are heap buffers that grow on demand; these are the limits of the instruction set (16-bit
-// parameters, see docs/roadmap.md), not allocation sizes.
-#define CODESIZE_MAX    65536U
-#define DATASIZE_MAX    65536U
+// The code and data segments are heap buffers that grow on demand. The offsets are 32 bit (wide instruction parameters,
+// see instset.h); these soft limits keep a runaway program from using all the memory. Code and data offsets must stay
+// below CODEOFFS_NONE / DATAOFFS_NONE.
+#define CODESIZE_MAX    UINT32_C(0X10000000)
+#define DATASIZE_MAX    UINT32_C(0X10000000)
 
 // a constant in the data segment, for sharing identical constants (see cgen_data_const())
 typedef struct _cgen_const_t {
@@ -117,8 +118,8 @@ typedef struct _codegen_t {
     uint32_t*           scratch;        // temporary list of code offsets (ON .. GOSUB)
     size_t              numscratch, maxscratch;
     uint32_t            forserial;      // numbers the hidden variables of loops and ON statements
-    uint16_t            datafirst, datalast;    // first and last DATA item in the data segment (DATAOFFS_NONE = none)
-    uint16_t*           dataoffs;       // the data offsets of all DATA items, in program order
+    uint32_t            datafirst, datalast;    // first and last DATA item in the data segment (DATAOFFS_NONE = none)
+    uint32_t*           dataoffs;       // the data offsets of all DATA items, in program order
     size_t              numdataitems, maxdataitems;
     cgen_restorefix_t*  restorefix;     // RESTORE statements with a target (patched at the end)
     size_t              numrestorefix, maxrestorefix;
@@ -129,31 +130,40 @@ typedef struct _codegen_t {
 void init_codegen( codegen_t* cgen );
 void cleanup_codegen( codegen_t* cgen );    // frees the bookkeeping tables
 void cgen_reset( codegen_t* cgen );         // discards all code and data (keeps the callbacks)
-bool cgen_alloc_code( codegen_t* cgen, uint16_t size, uint16_t* poffs );
-bool cgen_alloc_data( codegen_t* cgen, uint16_t size, uint16_t* poffs );
+bool cgen_alloc_code( codegen_t* cgen, uint32_t size, uint32_t* poffs );
+bool cgen_alloc_data( codegen_t* cgen, uint32_t size, uint32_t* poffs );
 // Offset of a read-only constant in the data segment: <len> bytes, followed by a NUL if <nul> is set (a string).
 // Identical constants are stored once. Don't use it for data that is changed later (DATA items).
-bool cgen_data_const( codegen_t* cgen, const void* bytes, uint16_t len, bool nul, uint16_t* poffs );
+bool cgen_data_const( codegen_t* cgen, const void* bytes, uint32_t len, bool nul, uint32_t* poffs );
 // Pushes a number: a small integer with PHIM (3 bytes of code, no data), anything else as a shared constant (PHPA, LAN).
 bool cgen_push_number( codegen_t* cgen, compiler_t* comp, double value );
-bool cgen_gen_ins( codegen_t* cgen, uint8_t ins, uint8_t ext, uint16_t param );
-bool cgen_gen_ins12( codegen_t* cgen, uint16_t ins12, bool code, bool hasparam, uint16_t param );
+// A parameter above 65535 makes the instruction wide (INSF_W) by itself; cgen_gen_ins12_wide() forces the wide form, for
+// instructions whose parameter is patched later (cgen_patch_param())
+bool cgen_gen_ins( codegen_t* cgen, uint8_t ins, uint8_t ext, uint32_t param );
+bool cgen_gen_ins12( codegen_t* cgen, uint16_t ins12, bool code, bool hasparam, uint32_t param );
+bool cgen_gen_ins12_wide( codegen_t* cgen, uint16_t ins12, bool code, uint32_t param );
+void cgen_patch_param( codegen_t* cgen, uint32_t insoffs, uint32_t value );   // sets the parameter of a wide instruction
 bool cgen_gen_ins12_imm17( codegen_t* cgen, uint16_t ins12, int32_t imm17 );
 bool cgen_gen_ins4_imm17( codegen_t* cgen, uint8_t ins, int32_t imm );
+
+// DATA item records in the data segment: <type.8> <next.32> <payload>, chained through "next" (DATAOFFS_NONE = last)
+#define DATAREC_HEADER      5U
+uint32_t cgen_datarec_next( const uint8_t* data, uint32_t pos );
+void cgen_datarec_set_next( uint8_t* data, uint32_t pos, uint32_t next );
 
 // special instructions
 bool cgen_gen_brk( codegen_t* cgen );
 bool cgen_gen_nop( codegen_t* cgen );
-bool cgen_gen_phpa_c( codegen_t* cgen, uint16_t offs );
-bool cgen_gen_phpa_d( codegen_t* cgen, uint16_t offs );
+bool cgen_gen_phpa_c( codegen_t* cgen, uint32_t offs );     // always wide (the address is usually patched later)
+bool cgen_gen_phpa_d( codegen_t* cgen, uint32_t offs );
 bool cgen_gen_phim( codegen_t* cgen, int32_t imm );
-bool cgen_gen_bria( codegen_t* cgen, int32_t abs_offs );
-bool cgen_gen_brir( codegen_t* cgen, int32_t rel_offs );
+bool cgen_gen_bria( codegen_t* cgen, int32_t abs_offs );    // always wide
+bool cgen_gen_brir( codegen_t* cgen, int32_t rel_offs );    // always wide
 bool cgen_gen_jpcc( codegen_t* cgen );
 bool cgen_gen_jump( codegen_t* cgen );
 bool cgen_gen_drop( codegen_t* cgen, uint16_t cnt );
 bool cgen_gen_drop_c( codegen_t* cgen );    // drops the latest return address
-bool cgen_gen_line( codegen_t* cgen, uint16_t line );
+bool cgen_gen_line( codegen_t* cgen, uint32_t line );
 bool cgen_gen_lan_c( codegen_t* cgen );
 bool cgen_gen_lan_d( codegen_t* cgen );
 bool cgen_gen_lian_c( codegen_t* cgen );
@@ -240,12 +250,12 @@ bool cgen_gen_smid( codegen_t* cgen, uint16_t varoffs );
 bool cgen_gen_eras( codegen_t* cgen, uint16_t varoffs );
 bool cgen_gen_rdnm( codegen_t* cgen );
 bool cgen_gen_rdst( codegen_t* cgen );
-bool cgen_gen_inpl( codegen_t* cgen, uint16_t promptoffs );
+bool cgen_gen_inpl( codegen_t* cgen, uint32_t promptoffs );
 bool cgen_gen_inpn( codegen_t* cgen );
 bool cgen_gen_inps( codegen_t* cgen );
 bool cgen_gen_inpe( codegen_t* cgen );
 bool cgen_gen_getk( codegen_t* cgen );
-bool cgen_gen_rstr( codegen_t* cgen, bool hasparam, uint16_t dataoffs );
+bool cgen_gen_rstr( codegen_t* cgen, bool hasparam, uint32_t dataoffs );     // with a parameter: wide, patched later
 
 // BASIC system command implementations
 bool cgen_gen_save( codegen_t* cgen );

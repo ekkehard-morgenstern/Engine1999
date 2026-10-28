@@ -195,7 +195,7 @@ static bool repl_execute( repl_t* repl, bool fromstart, const char* label, int32
     bool ok = false;
     codegen_t* cgen = &repl->rt.codegen;
     uint32_t start = fromstart ? UINT32_C(0) : cgen->codesize;
-    uint16_t prevlast = cgen->datalast;
+    uint32_t prevlast = cgen->datalast;
     repl_setup_vm( repl );
     if ( setjmp( repl->jmp ) == 0 ) {
         run_compiler( &repl->comp );
@@ -205,8 +205,7 @@ static bool repl_execute( repl_t* repl, bool fromstart, const char* label, int32
         ok = cgen_from_program( cgen, &repl->comp );
         if ( ok && !fromstart && repl->vm.datapos == DATAOFFS_NONE && cgen->datalast != prevlast ) {
             // DATA items were added behind the last one that was read: the next READ gets the first new item
-            repl->vm.datapos = prevlast == DATAOFFS_NONE ? cgen->datafirst :
-                (uint16_t)( ( ( (uint16_t) cgen->data[ prevlast + 1U ] ) << UINT8_C(8) ) | cgen->data[ prevlast + 2U ] );
+            repl->vm.datapos = prevlast == DATAOFFS_NONE ? cgen->datafirst : cgen_datarec_next( cgen->data, prevlast );
         }
         if ( ok && fromstart ) {
             uint32_t target = 0;

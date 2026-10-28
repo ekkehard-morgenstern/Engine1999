@@ -48,7 +48,7 @@ that line only (both ends are the same), "LIST a-" lists up to the end and "LIST
 // pushes a constant string (from the data segment)
 static bool cp_push_string( codegen_t* cgen, compiler_t* comp, const char* text ) {
     size_t len = strlen( text );
-    uint16_t off = DATAOFFS_NONE;
+    uint32_t off = DATAOFFS_NONE;
     if ( len >= UINT16_MAX || !cgen_data_const( cgen, text, (uint16_t) len, true, &off ) || off == DATAOFFS_NONE ) {
         return cgen_out_of_data_memory( comp );
     }

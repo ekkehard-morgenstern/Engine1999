@@ -104,20 +104,20 @@ static bool cgen_ensure_segment( uint8_t** pseg, size_t* pcap, size_t needed ) {
     return true;
 }
 
-bool cgen_alloc_code( codegen_t* cgen, uint16_t size, uint16_t* poffs ) {
+bool cgen_alloc_code( codegen_t* cgen, uint32_t size, uint32_t* poffs ) {
     if ( size > CODESIZE_MAX - cgen->codesize || !cgen_ensure_segment( &cgen->code, &cgen->codecap, (size_t) cgen->codesize + size ) ) {
         return false;
     }
-    *poffs = (uint16_t) cgen->codesize;
+    *poffs = cgen->codesize;
     cgen->codesize += size;
     return true;
 }
 
-bool cgen_alloc_data( codegen_t* cgen, uint16_t size, uint16_t* poffs ) {
+bool cgen_alloc_data( codegen_t* cgen, uint32_t size, uint32_t* poffs ) {
     if ( size > DATASIZE_MAX - cgen->datasize || !cgen_ensure_segment( &cgen->data, &cgen->datacap, (size_t) cgen->datasize + size ) ) {
         return false;
     }
-    *poffs = (uint16_t) cgen->datasize;
+    *poffs = cgen->datasize;
     cgen->datasize += size;
     return true;
 }
@@ -160,9 +160,12 @@ static bool cgen_const_grow( codegen_t* cgen ) {
     return true;
 }
 
-bool cgen_data_const( codegen_t* cgen, const void* bytes, uint16_t len, bool nul, uint16_t* poffs ) {
+bool cgen_data_const( codegen_t* cgen, const void* bytes, uint32_t len, bool nul, uint32_t* poffs ) {
     const uint8_t* b = (const uint8_t*) bytes;
-    uint32_t size = (uint32_t) len + ( nul ? 1U : 0U );
+    if ( len > DATASIZE_MAX ) {
+        return false;
+    }
+    uint32_t size = len + ( nul ? 1U : 0U );
     uint32_t hash = cgen_const_hash( b, len, nul );
     // find an identical constant
     if ( cgen->maxconsts ) {
@@ -171,15 +174,15 @@ bool cgen_data_const( codegen_t* cgen, const void* bytes, uint16_t len, bool nul
             const cgen_const_t* c = &cgen->consts[slot];
             if ( c->hash == hash && c->size == size && ( len == 0 || memcmp( &cgen->data[ c->offs ], b, len ) == 0 ) &&
                  ( !nul || cgen->data[ c->offs + len ] == 0 ) ) {
-                *poffs = (uint16_t) c->offs;
+                *poffs = c->offs;
                 return true;
             }
             slot = ( slot + 1U ) & ( cgen->maxconsts - 1U );
         }
     }
     // a new one
-    uint16_t offs = DATAOFFS_NONE;
-    if ( size > UINT16_MAX || !cgen_alloc_data( cgen, (uint16_t) size, &offs ) ) {
+    uint32_t offs = DATAOFFS_NONE;
+    if ( !cgen_alloc_data( cgen, size, &offs ) ) {
         return false;
     }
     if ( len ) {
@@ -208,8 +211,8 @@ bool cgen_data_const( codegen_t* cgen, const void* bytes, uint16_t len, bool nul
 }
 
 bool cgen_push_number( codegen_t* cgen, compiler_t* comp, double value ) {
-    // integers from -65536 to 65535 fit the 17 bit immediate of PHIM (negative zero must stay a double)
-    if ( value >= -65536.0 && value <= 65535.0 && value == (double)(int32_t) value && !( value == 0.0 && signbit( value ) ) ) {
+    // integers up to 32 bit fit the immediate of PHIM (17 bit, or wide: 5 bytes); negative zero must stay a double
+    if ( value >= -2147483648.0 && value <= 2147483647.0 && value == (double)(int32_t) value && !( value == 0.0 && signbit( value ) ) ) {
         return cgen_gen_phim( cgen, (int32_t) value ) || cgen_out_of_code_memory( comp );
     }
     uint8_t bytes[8];
@@ -221,7 +224,7 @@ bool cgen_push_number( codegen_t* cgen, compiler_t* comp, double value ) {
     for ( unsigned i=0; i < 8U; ++i ) {      // big endian, like the NT_NUMLIT node data
         bytes[i] = (uint8_t)( u.ui64 >> ( 8U * ( 7U - i ) ) );
     }
-    uint16_t off = DATAOFFS_NONE;
+    uint32_t off = DATAOFFS_NONE;
     if ( !cgen_data_const( cgen, bytes, 8U, false, &off ) || off == DATAOFFS_NONE ) {
         return cgen_out_of_data_memory( comp );
     }
@@ -349,15 +352,15 @@ bool cgen_has_cd( uint16_t opcode ) {
     return false;
 }
 
-void cgen_disasm_ins( const uint8_t* area, uint16_t* poffs, char linebuf[80] ) {
-    uint16_t offs = *poffs;       char offhex[5];
-    snprintf( offhex, 5U, "%04" PRIX16, offs );
+void cgen_disasm_ins( const uint8_t* area, uint32_t* poffs, char linebuf[96] ) {
+    uint32_t offs = *poffs;       char offhex[12];
+    snprintf( offhex, sizeof(offhex), "%04" PRIX32, offs );
 
     uint8_t ins = area[ offs++ ]; char inshex[3];
     snprintf( inshex, 3U, "%02" PRIX8, ins );
 
     uint8_t ext = UINT8_C(0);     char exthex[3];
-    uint16_t param = UINT16_C(0); char parhex[5];
+    uint32_t param = UINT32_C(0); char parhex[12];
     memset( exthex, ' ', 2U ); exthex[2] = '\0';
     memset( parhex, ' ', 4U ); parhex[4] = '\0';
 
@@ -366,10 +369,16 @@ void cgen_disasm_ins( const uint8_t* area, uint16_t* poffs, char linebuf[80] ) {
         snprintf( exthex, 3U, "%02" PRIX8, ext );
     }
     if ( ins & INSF_P ) {
-        param = ( ( (uint16_t) area[ offs               ] ) << UINT8_C(8) ) |
-                               area[ offs + UINT16_C(1) ];
-        offs += UINT16_C(2);
-        snprintf( parhex, 5U, "%04" PRIX16, param );
+        if ( ins & INSF_W ) {
+            param = ( ( (uint32_t) area[ offs ] ) << UINT8_C(24) ) | ( ( (uint32_t) area[ offs + 1U ] ) << UINT8_C(16) ) |
+                    ( ( (uint32_t) area[ offs + 2U ] ) << UINT8_C(8) ) | area[ offs + 3U ];
+            offs += 4U;
+            snprintf( parhex, sizeof(parhex), "%08" PRIX32, param );
+        } else {
+            param = ( ( (uint32_t) area[ offs ] ) << UINT8_C(8) ) | area[ offs + 1U ];
+            offs += 2U;
+            snprintf( parhex, sizeof(parhex), "%04" PRIX32, param );
+        }
     }
     bool code = ( ins & INSF_C ) ? true : false;
     uint16_t opcode = ins & INSM_I;
@@ -387,42 +396,73 @@ void cgen_disasm_ins( const uint8_t* area, uint16_t* poffs, char linebuf[80] ) {
     // 0000000000111111111122222222223333333333
     // 0123456789012345678901234567890123456789
     // 0000: 00 00 0000    AAAA.O  0000
-    snprintf( linebuf, 80U, "%s: %s %s %s    %-7s %s", offhex, inshex, exthex, parhex, opcstr, parhex );
+    snprintf( linebuf, 96U, "%s: %s %s %s    %-7s %s", offhex, inshex, exthex, parhex, opcstr, parhex );
 
     *poffs = offs;
 }
 
-void cgen_print_ins( const uint8_t* area, uint16_t* poffs ) {
-    static char linebuf[80];
+void cgen_print_ins( const uint8_t* area, uint32_t* poffs ) {
+    static char linebuf[96];
     cgen_disasm_ins( area, poffs, linebuf );
     printf( "[code] %s\n", linebuf );
 }
 
-bool cgen_gen_ins( codegen_t* cgen, uint8_t ins, uint8_t ext, uint16_t param ) {
-    uint8_t size = UINT8_C(1);
+bool cgen_gen_ins( codegen_t* cgen, uint8_t ins, uint8_t ext, uint32_t param ) {
+    if ( ( ins & INSF_P ) && param > UINT16_MAX ) {
+        ins |= INSF_W;
+    }
+    if ( ( ins & INSF_W ) && !( ins & INSF_P ) ) {
+        ins &= (uint8_t) ~INSF_W;
+    }
+    uint32_t size = UINT32_C(1);
     if ( ins & INSF_E ) ++size;
-    if ( ins & INSF_P ) size += 2U;
-    uint16_t offs = INS_NODATA;
+    if ( ins & INSF_P ) size += ( ins & INSF_W ) ? 4U : 2U;
+    uint32_t offs = INS_NODATA;
     if ( !cgen_alloc_code( cgen, size, &offs ) ) {
         return false;
     }
-    uint16_t offs0 = offs;
+    uint32_t offs0 = offs;
     cgen->code[ offs++ ] = ins;
     if ( ins & INSF_E ) {
         cgen->code[ offs++ ] = ext;
     }
     if ( ins & INSF_P ) {
+        if ( ins & INSF_W ) {
+            cgen->code[ offs++ ] = (uint8_t)( param >> UINT8_C(24) );
+            cgen->code[ offs++ ] = (uint8_t)( param >> UINT8_C(16) );
+        }
         cgen->code[ offs++ ] = (uint8_t)( param >> UINT8_C(8) );
         cgen->code[ offs++ ] = (uint8_t)  param;
     }
     offs = offs0;
-if ( basdbg_on( BASDBG_CODE ) ) {
+    if ( basdbg_on( BASDBG_CODE ) ) {
         cgen_print_ins( cgen->code, &offs );
     }
     return true;
 }
 
-bool cgen_gen_ins12( codegen_t* cgen, uint16_t ins12, bool code, bool hasparam, uint16_t param ) {
+uint32_t cgen_datarec_next( const uint8_t* data, uint32_t pos ) {
+    return ( ( (uint32_t) data[ pos + 1U ] ) << UINT8_C(24) ) | ( ( (uint32_t) data[ pos + 2U ] ) << UINT8_C(16) ) |
+        ( ( (uint32_t) data[ pos + 3U ] ) << UINT8_C(8) ) | data[ pos + 4U ];
+}
+
+void cgen_datarec_set_next( uint8_t* data, uint32_t pos, uint32_t next ) {
+    data[ pos + 1U ] = (uint8_t)( next >> UINT8_C(24) );
+    data[ pos + 2U ] = (uint8_t)( next >> UINT8_C(16) );
+    data[ pos + 3U ] = (uint8_t)( next >> UINT8_C(8) );
+    data[ pos + 4U ] = (uint8_t)  next;
+}
+
+void cgen_patch_param( codegen_t* cgen, uint32_t insoffs, uint32_t value ) {
+    // the instruction must have been generated wide: <ins> [<ext>] <b3> <b2> <b1> <b0>
+    uint32_t at = insoffs + 1U + ( ( cgen->code[ insoffs ] & INSF_E ) ? 1U : 0U );
+    cgen->code[ at     ] = (uint8_t)( value >> UINT8_C(24) );
+    cgen->code[ at + 1U ] = (uint8_t)( value >> UINT8_C(16) );
+    cgen->code[ at + 2U ] = (uint8_t)( value >> UINT8_C(8) );
+    cgen->code[ at + 3U ] = (uint8_t)  value;
+}
+
+bool cgen_gen_ins12( codegen_t* cgen, uint16_t ins12, bool code, bool hasparam, uint32_t param ) {
     uint8_t ins = UINT8_C(0), ext = UINT8_C(0);
     if ( ins12 < UINT16_C(16) ) {
         ins =   (uint8_t)  ins12;
@@ -433,6 +473,21 @@ bool cgen_gen_ins12( codegen_t* cgen, uint16_t ins12, bool code, bool hasparam, 
     if ( hasparam ) {
         ins |= INSF_P;
     }
+    if ( code ) {
+        ins |= INSF_C;
+    }
+    return cgen_gen_ins( cgen, ins, ext, param );
+}
+
+bool cgen_gen_ins12_wide( codegen_t* cgen, uint16_t ins12, bool code, uint32_t param ) {
+    uint8_t ins = UINT8_C(0), ext = UINT8_C(0);
+    if ( ins12 < UINT16_C(16) ) {
+        ins =   (uint8_t)  ins12;
+    } else {
+        ins = ( (uint8_t)( ins12 >> UINT8_C(8) ) & INSM_I ) | INSF_E;
+        ext =   (uint8_t)  ins12;
+    }
+    ins |= INSF_P | INSF_W;
     if ( code ) {
         ins |= INSF_C;
     }
@@ -459,24 +514,27 @@ bool cgen_gen_nop( codegen_t* cgen ) {
     return cgen_gen_ins( cgen, INS_NOP, UINT8_C(0), UINT16_C(0) );
 }
 
-bool cgen_gen_phpa_c( codegen_t* cgen, uint16_t offs ) {
-    return cgen_gen_ins( cgen, INS_PHPA_C | INSF_P, UINT8_C(0), offs );
+bool cgen_gen_phpa_c( codegen_t* cgen, uint32_t offs ) {
+    return cgen_gen_ins( cgen, INS_PHPA_C | INSF_P | INSF_W, UINT8_C(0), offs );
 }
 
-bool cgen_gen_phpa_d( codegen_t* cgen, uint16_t offs ) {
-    return cgen_gen_ins( cgen, INS_PHPA_D | INSF_P, UINT8_C(0), offs );
+bool cgen_gen_phpa_d( codegen_t* cgen, uint32_t offs ) {
+    return cgen_gen_ins( cgen, INS_PHPA_D | INSF_P, UINT8_C(0), offs );     // wide if the offset needs it
 }
 
 bool cgen_gen_phim( codegen_t* cgen, int32_t imm ) {
-    return cgen_gen_ins4_imm17( cgen, INS_PHIM, imm );
+    if ( imm >= -65536 && imm <= 65535 ) {
+        return cgen_gen_ins4_imm17( cgen, INS_PHIM, imm );
+    }
+    return cgen_gen_ins12_wide( cgen, INS_PHIM, false, (uint32_t) imm );
 }
 
 bool cgen_gen_bria( codegen_t* cgen, int32_t abs_offs ) {
-    return cgen_gen_ins4_imm17( cgen, INS_BRIA, abs_offs );
+    return cgen_gen_ins12_wide( cgen, INS_BRIA, false, (uint32_t) abs_offs );
 }
 
 bool cgen_gen_brir( codegen_t* cgen, int32_t rel_offs ) {
-    return cgen_gen_ins4_imm17( cgen, INS_BRIR, rel_offs );
+    return cgen_gen_ins12_wide( cgen, INS_BRIR, false, (uint32_t) rel_offs );
 }
 
 bool cgen_gen_jpcc( codegen_t* cgen ) {
@@ -501,7 +559,7 @@ bool cgen_gen_drop_c( codegen_t* cgen ) {
     return cgen_gen_ins( cgen, INS_DROP | INSF_C, UINT8_C(0), UINT16_C(0) );
 }
 
-bool cgen_gen_line( codegen_t* cgen, uint16_t line ) {
+bool cgen_gen_line( codegen_t* cgen, uint32_t line ) {
     return cgen_gen_ins( cgen, INS_LINE | INSF_P, UINT8_C(0), line );
 }
 
@@ -819,8 +877,11 @@ bool cgen_gen_rdst( codegen_t* cgen ) {
     return cgen_gen_ins12( cgen, INS_RDST, false, false, UINT16_C(0) );
 }
 
-bool cgen_gen_rstr( codegen_t* cgen, bool hasparam, uint16_t dataoffs ) {
-    return cgen_gen_ins12( cgen, INS_RSTR, false, hasparam, dataoffs );
+bool cgen_gen_rstr( codegen_t* cgen, bool hasparam, uint32_t dataoffs ) {
+    if ( hasparam ) {
+        return cgen_gen_ins12_wide( cgen, INS_RSTR, false, dataoffs );      // patched later
+    }
+    return cgen_gen_ins12( cgen, INS_RSTR, false, false, UINT32_C(0) );
 }
 
 bool cgen_gen_eras( codegen_t* cgen, uint16_t varoffs ) {
@@ -873,7 +934,7 @@ bool cgen_gen_pstr( codegen_t* cgen, bool hasparam, uint16_t param ) {
     return cgen_gen_ins12( cgen, INS_PSTR, false, hasparam, param );
 }
 
-bool cgen_gen_inpl( codegen_t* cgen, uint16_t promptoffs ) {
+bool cgen_gen_inpl( codegen_t* cgen, uint32_t promptoffs ) {
     return cgen_gen_ins12( cgen, INS_INPL, false, true, promptoffs );
 }
 
@@ -967,7 +1028,7 @@ UNEXP:  return cgen_unexpected_node( comp );
     }
     uint8_t datatype = node->data[0]; --datalen;
     const uint8_t* datap = &node->data[1];
-    uint16_t dataoffs = DATAOFFS_NONE;
+    uint32_t dataoffs = DATAOFFS_NONE;
     if ( datalen == UINT16_MAX || !cgen_data_const( cgen, datap, datalen, true, &dataoffs ) || dataoffs == DATAOFFS_NONE ) {
         return cgen_out_of_data_memory( comp );
     }
@@ -1981,7 +2042,7 @@ bool cgen_from_savestmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
 
     // emit data field as an instruction to load a string to the stack
     uint16_t datalen  = node->datalen;
-    uint16_t optoffs  = DATAOFFS_NONE;
+    uint32_t optoffs  = DATAOFFS_NONE;
     if ( datalen == UINT16_MAX || !cgen_data_const( cgen, node->data, datalen, true, &optoffs ) || optoffs == DATAOFFS_NONE ) {
         return cgen_out_of_data_memory( comp );
     }
@@ -2275,7 +2336,7 @@ bool cgen_from_printstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     }
     if ( cbdata.count == UINT16_C(0) ) {
         // no arguments: just print a newline, by printing an empty string
-        uint16_t dataoffs = DATAOFFS_NONE;
+        uint32_t dataoffs = DATAOFFS_NONE;
         if ( !cgen_data_const( cgen, 0, 0, true, &dataoffs ) || dataoffs == DATAOFFS_NONE ) {
             return cgen_out_of_data_memory( comp );
         }
@@ -2761,12 +2822,7 @@ bool cgen_from_stmtline( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         if ( !cgen_note_line( cgen, comp, lineno ) ) {
             return false;
         }
-        if ( lineno > UINT16_MAX ) {
-            // the LINE instruction only has a 16 bit parameter
-            comp_error( comp, "Line number too large for code generation" );
-            return false;
-        }
-        if ( !cgen_gen_line( cgen, (uint16_t) lineno ) ) {
+        if ( !cgen_gen_line( cgen, lineno ) ) {
             return cgen_out_of_code_memory( comp );
         }
     } else if ( node->datalen != UINT16_C(0) ) {

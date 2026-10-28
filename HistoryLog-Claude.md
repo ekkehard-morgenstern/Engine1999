@@ -13,13 +13,14 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-- 2026-10-28: **Step 1 of lifting the 64 KiB code/data limits** (the limits themselves stay; they come from the 16-bit ISA, step 2 will lift them).
-  - `codegen_t`: `code` and `data` are heap buffers that grow on demand (zero-filled, doubling from 4 KiB) instead of 128 KiB arrays inside the struct; `cgen_reset()` keeps them, `cleanup_codegen()` frees them.
-  - Shared constants: new `cgen_data_const()` (hash table `consts` in `codegen_t`, FNV-1a, open addressing, cleared by `cgen_reset()`); used for number and string literals, SAVE options, INPUT prompts, the empty string, the channel-0 number, and the label names / line numbers pushed by LOAD/RUN/LIST/DELETE/RENUM. DATA item records are not shared.
-  - New `cgen_push_number()`: integer literals from -65536 to 65535 (not negative zero) are generated as `PHIM` (3 bytes, no data) instead of `PHPA.D` + `LAN` + an 8 byte constant.
-  - Effect, measured with generated programs of 1500..20000 lines before/after: data use fell from 40654 to 17 bytes (print/IF lines), 36757 to 13801 (assignments), 14176 to 8 (FOR loops); code only by ~5 % (the first "Out of code memory" moved from 830 to 874, 1457 to 1490 and 590 to 602 lines), so code stays the bottleneck and step 2 is still needed. The measuring program is a scratch file, not in the repo.
-  - Tests: `vmtest1` 378 cases (+4: `PHIM` limits, fractions, repeated constants, and a 600-line program with a 200 character string that needs 120 KB of data without sharing); `repltest1` 106; both pass, valgrind clean (builds without `-p`); `testcomp1` passes.
-  - Docs: `compiler-and-vm.md`, `roadmap.md` (step 2 described), `refactoring.md`, `SESSION.md`.
+- 2026-10-28: `HistoryLog-Claude.md`/`SESSION.md`: the `01d467d` entry and the latest-commit line (committed together with the next change).
+- 2026-10-28: **Step 2 of lifting the 64 KiB code/data limits: 32-bit code and data addresses.**
+  - ISA (`instset.h`): the reserved bit 0x10 of the instruction byte is now the **W (wide) flag** (`INSF_W`): the parameter field has 32 bits instead of 16. Wide `PHIM` (32-bit signed immediate), `BRIA`/`BRIR` (32-bit address/offset); the return stack holds 32-bit addresses; `INS_NODATA`, `CODEOFFS_NONE`, `DATAOFFS_NONE` are 0xFFFFFFFF; DATA records are `type.8 next.32 payload` (`DATAREC_HEADER` = 5, `cgen_datarec_next/set_next`). The old `CODESIZE_MAX`/`DATASIZE_MAX` of 64 KiB became soft limits of 256 MiB.
+  - Code generator: `cgen_gen_ins` takes a 32-bit parameter and makes an instruction wide by itself above 65535; `cgen_gen_ins12_wide()` forces it. Code addresses (`PHPA.C`, `BRIA`, `BRIR`, `RSTR` with a target) are always generated wide because they are patched later: new `cgen_patch_param()` replaces the byte patching in `cgenctl.c` (`cc_patch_*`) and `cgendecl.c` (function skip jump, RESTORE fixups). `cgen_alloc_code/data`, `cgen_data_const`, offsets in `cgenctl.c`/`cgendecl.c`/`cgenprog.c`, the DATA item table and `datafirst/datalast` are 32 bit. `cgen_gen_phim` is wide outside the 17-bit range, and `cgen_push_number()` now uses `PHIM` for every integer in the int32 range. `LINE` is wide above 65535, so the "Line number too large for code generation" error is gone. Disassembler (`cgen_disasm_ins`) shows wide parameters.
+  - VM/vars: `vm_step` decodes wide parameters (`param` is 32 bit; instructions that carry variable numbers or counts reject a parameter above 65535 with "Parameter out of range"); return stack, `vm_rpush/rpop`, function call frames, `vmem_get_func_info`, `varvalue_t.lbloffs/codeoffs` and `var_t.v.codeoffs` are 32 bit; `testcomp1`'s shadow model adjusted (labels only ever hold "undefined").
+  - Effect: generated 20000-line programs (1.6 / 0.9 / 2.3 MB of code, the limit used to be 64 KiB, i.e. ~600–1500 lines) compile and run. Code size grew by about 3 % because code addresses are always 5 bytes instead of 3.
+  - Tests: `vmtest1` 380 cases (+2: 32-bit immediates, and a 2500-line program with 125 KB of code and 100 KB of data followed by far `GOTO`, `GOSUB`, `FOR`, `ON`, `DEF FN`, label, `DATA`/`RESTORE` and line numbers above 65535 incl. a run time error message); `repltest1` 106; `testcomp1`; all pass, valgrind clean (builds without `-p`). Not tried on the real SDL screen.
+  - Docs: `instset.h`, `compiler-and-vm.md`, `architecture.md`, `refactoring.md`, `roadmap.md` (the two limit items removed), `CLAUDE.md`, `SESSION.md`.
 
 ## Log
 
@@ -183,3 +184,13 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 ### 2d7f59f — 2026-10-28 05:42:25 +0100 — "Claude History Log and session state update"
 2 files, +13/-9.
 - `HistoryLog-Claude.md`: logged `fd7e324`; `SESSION.md`: latest-commit line. No source changes.
+
+### 01d467d — 2026-10-28 06:01:09 +0100 — "Code/Data size limit removal (step 1) (created by Claude Code)"
+10 files, +221/-72.
+- **Step 1 of lifting the 64 KiB code/data limits** (the limits themselves stay; they come from the 16-bit ISA, step 2 will lift them).
+  - `codegen_t`: `code` and `data` are heap buffers that grow on demand (zero-filled, doubling from 4 KiB) instead of 128 KiB arrays inside the struct; `cgen_reset()` keeps them, `cleanup_codegen()` frees them.
+  - Shared constants: new `cgen_data_const()` (hash table `consts` in `codegen_t`, FNV-1a, open addressing, cleared by `cgen_reset()`); used for number and string literals, SAVE options, INPUT prompts, the empty string, the channel-0 number, and the label names / line numbers pushed by LOAD/RUN/LIST/DELETE/RENUM. DATA item records are not shared.
+  - New `cgen_push_number()`: integer literals from -65536 to 65535 (not negative zero) are generated as `PHIM` (3 bytes, no data) instead of `PHPA.D` + `LAN` + an 8 byte constant.
+  - Effect, measured with generated programs of 1500..20000 lines before/after: data use fell from 40654 to 17 bytes (print/IF lines), 36757 to 13801 (assignments), 14176 to 8 (FOR loops); code only by ~5 % (the first "Out of code memory" moved from 830 to 874, 1457 to 1490 and 590 to 602 lines), so code stays the bottleneck and step 2 is still needed. The measuring program is a scratch file, not in the repo.
+  - Tests: `vmtest1` 378 cases (+4: `PHIM` limits, fractions, repeated constants, and a 600-line program with a 200 character string that needs 120 KB of data without sharing); `repltest1` 106; both pass, valgrind clean (builds without `-p`); `testcomp1` passes.
+  - Docs: `compiler-and-vm.md`, `roadmap.md` (step 2 described), `refactoring.md`, `SESSION.md`.

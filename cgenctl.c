@@ -117,21 +117,14 @@ bool cgen_find_line( const codegen_t* cgen, uint32_t lineno, uint32_t* paddr ) {
 
 // -- patching ----------------------------------------------------------------
 
-// instruction layout of BRIA and PHPA (basic opcode, with parameter): <ins> <hi> <lo>
+// BRIA and PHPA.C are generated wide (<ins> <b3> <b2> <b1> <b0>), so any code address can be patched in
 
-static void cc_patch_param( codegen_t* cgen, uint32_t insoffs, uint16_t value ) {
-    cgen->code[ insoffs + 1U ] = (uint8_t)( value >> UINT8_C(8) );
-    cgen->code[ insoffs + 2U ] = (uint8_t)  value;
+static void cc_patch_param( codegen_t* cgen, uint32_t insoffs, uint32_t value ) {
+    cgen_patch_param( cgen, insoffs, value );
 }
 
 static void cc_patch_bria( codegen_t* cgen, uint32_t insoffs, uint32_t addr ) {
-    // the C bit holds the uppermost (17th) bit of the address
-    uint8_t ins = cgen->code[ insoffs ] & (uint8_t) ~INSF_C;
-    if ( addr & UINT32_C(0x10000) ) {
-        ins |= INSF_C;
-    }
-    cgen->code[ insoffs ] = ins;
-    cc_patch_param( cgen, insoffs, (uint16_t) addr );
+    cgen_patch_param( cgen, insoffs, addr );
 }
 
 // emits a BRIA to be patched later; *pins receives its offset
@@ -146,12 +139,8 @@ static bool cc_emit_phpa_c( codegen_t* cgen, compiler_t* comp, uint32_t* pins ) 
     return cgen_gen_phpa_c( cgen, 0 ) || cgen_out_of_code_memory( comp );
 }
 
-static bool cc_here16( codegen_t* cgen, compiler_t* comp, uint16_t* paddr ) {
-    if ( cgen->codesize > UINT16_MAX ) {
-        comp_error( comp, "Program too large" );
-        return false;
-    }
-    *paddr = (uint16_t) cgen->codesize;
+static bool cc_here( codegen_t* cgen, compiler_t* comp, uint32_t* paddr ) {
+    *paddr = cgen->codesize;
     return true;
 }
 
@@ -245,8 +234,8 @@ static bool cc_jump_to_target( codegen_t* cgen, compiler_t* comp, node_t* target
     if ( gosub && pretins ) {
         *pretins = retins;
     } else if ( gosub ) {
-        uint16_t here = 0;
-        if ( !cc_here16( cgen, comp, &here ) ) {
+        uint32_t here = 0;
+        if ( !cc_here( cgen, comp, &here ) ) {
             return false;
         }
         cc_patch_param( cgen, retins, here );
@@ -301,8 +290,8 @@ bool cgen_from_labelstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         return cgen_unexpected_node( comp );
     }
     uint16_t varoffs = (uint16_t)( ( ( (uint16_t) node->data[0] ) << UINT8_C(8) ) | node->data[1] );
-    uint16_t here = 0;
-    if ( !cc_here16( cgen, comp, &here ) ) {
+    uint32_t here = 0;
+    if ( !cc_here( cgen, comp, &here ) ) {
         return false;
     }
     cgen_note_label_data( cgen, varoffs );
@@ -352,8 +341,8 @@ static bool cc_if( codegen_t* cgen, compiler_t* comp, bool unless, node_t* cond,
     if ( !cc_emit_bria( cgen, comp, &endins ) ) {
         return false;
     }
-    uint16_t here = 0;
-    if ( !cc_here16( cgen, comp, &here ) ) {
+    uint32_t here = 0;
+    if ( !cc_here( cgen, comp, &here ) ) {
         return false;
     }
     cc_patch_param( cgen, thenins, here );
@@ -525,8 +514,8 @@ bool cgen_from_forstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         return cgen_out_of_code_memory( comp );
     }
     // top: exit if ( step >= 0 AND var > limit ) OR ( step < 0 AND var < limit )
-    uint16_t top = 0;
-    if ( !cc_here16( cgen, comp, &top ) ) {
+    uint32_t top = 0;
+    if ( !cc_here( cgen, comp, &top ) ) {
         return false;
     }
     bool ok =
@@ -569,8 +558,8 @@ static bool cc_next( codegen_t* cgen, compiler_t* comp, bool anyvar, uint16_t va
          !cc_write_var( cgen, fc.vartype, fc.varoffs ) || !cgen_gen_bria( cgen, (int32_t) fc.topaddr ) ) {
         return cgen_out_of_code_memory( comp );
     }
-    uint16_t here = 0;
-    if ( !cc_here16( cgen, comp, &here ) ) {
+    uint32_t here = 0;
+    if ( !cc_here( cgen, comp, &here ) ) {
         return false;
     }
     cc_patch_param( cgen, fc.exitins, here );
@@ -621,8 +610,8 @@ bool cgen_from_repeatstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     if ( !cc_check_simple( comp, node, NT_REPEATSTMT ) ) {
         return false;
     }
-    uint16_t here = 0;
-    if ( !cc_here16( cgen, comp, &here ) ) {
+    uint32_t here = 0;
+    if ( !cc_here( cgen, comp, &here ) ) {
         return false;
     }
     cgen_loopctx_t* lc = cc_push_loop( cgen, comp, CGEN_LOOP_REPEAT );
@@ -635,8 +624,8 @@ bool cgen_from_repeatstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
 
 // opens a loop that is left when the condition is false (WHILE) or true (UNTIL)
 static bool cc_open_cond_loop( codegen_t* cgen, compiler_t* comp, node_t* cond, uint8_t kind ) {
-    uint16_t top = 0;
-    if ( !cc_here16( cgen, comp, &top ) || !cgen_from_numexpr( cgen, comp, cond ) ) {
+    uint32_t top = 0;
+    if ( !cc_here( cgen, comp, &top ) || !cgen_from_numexpr( cgen, comp, cond ) ) {
         return false;
     }
     if ( kind == CGEN_LOOP_WHILE && ( !cgen_gen_phim( cgen, 0 ) || !cgen_gen_cneq( cgen ) ) ) {
@@ -679,7 +668,7 @@ bool cgen_from_untilstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         if ( !cgen_from_numexpr( cgen, comp, node->branches[0] ) ) {
             return false;
         }
-        if ( !cgen_gen_phim( cgen, 0 ) || !cgen_gen_cneq( cgen ) || !cgen_gen_phpa_c( cgen, (uint16_t) lc.bodyaddr ) ||
+        if ( !cgen_gen_phim( cgen, 0 ) || !cgen_gen_cneq( cgen ) || !cgen_gen_phpa_c( cgen, lc.bodyaddr ) ||
              !cgen_gen_jpcc( cgen ) ) {
             return cgen_out_of_code_memory( comp );
         }
@@ -698,8 +687,8 @@ static bool cc_close_cond_loop( codegen_t* cgen, compiler_t* comp, uint8_t kind,
     if ( !cgen_gen_bria( cgen, (int32_t) lc.topaddr ) ) {
         return cgen_out_of_code_memory( comp );
     }
-    uint16_t here = 0;
-    if ( !cc_here16( cgen, comp, &here ) ) {
+    uint32_t here = 0;
+    if ( !cc_here( cgen, comp, &here ) ) {
         return false;
     }
     cc_patch_param( cgen, lc.exitins, here );
@@ -822,8 +811,8 @@ bool cgen_from_onstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     // the stubs; a GOSUB returns to the end of the statement, so these return addresses are patched at the end
     size_t numtests = cgen->numscratch;
     for ( size_t i=0; i < numtargets; ++i ) {
-        uint16_t here = 0;
-        if ( !cc_here16( cgen, comp, &here ) ) {
+        uint32_t here = 0;
+        if ( !cc_here( cgen, comp, &here ) ) {
             return false;
         }
         cc_patch_param( cgen, cgen->scratch[i], here );
@@ -838,8 +827,8 @@ bool cgen_from_onstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
             cgen->scratch[ cgen->numscratch++ ] = retins;
         }
     }
-    uint16_t end = 0;
-    if ( !cc_here16( cgen, comp, &end ) ) {
+    uint32_t end = 0;
+    if ( !cc_here( cgen, comp, &end ) ) {
         return false;
     }
     cc_patch_bria( cgen, endins, end );

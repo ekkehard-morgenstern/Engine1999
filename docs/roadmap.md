@@ -45,7 +45,7 @@ how a handler is named (line number / label / `FN`?); how they are cancelled (`O
       break key; need a key-code convention, e.g. like the classic home computers)
 - [ ] File channels (`#n` with `n` ≠ 0): `PRINT #n`, `INPUT #n`, `GET #n` are accepted and passed to the callbacks, but the engine
       discards output / reports end of input for every channel except 0
-- [ ] Direct mode lines accumulate in the 64 KiB code segment until `NEW` / `RUN` (every line appends its code; a long session ends
+- [ ] Direct mode lines accumulate in the code segment until `NEW` / `RUN` (every line appends its code; a long session ends
       in "Out of code memory"). Options: roll back the code of a direct line that defined nothing persistent, or reset on `NEW`/`RUN` as today
 - [ ] Direct mode can't `GOTO` / `GOSUB` into a stored program (the line table belongs to the code of a `RUN`)
 - [ ] `PRINT` comma zones use the VM's own column count and ignore the screen wrap at column 80
@@ -66,14 +66,7 @@ how a handler is named (line number / label / `FN`?); how they are cancelled (`O
 
 (also in `docs/refactoring.md`)
 
-- [ ] 64 KiB code and data segments (16-bit ISA addresses). Step 1 is done (the segments are growable heap buffers, identical
-      constants are shared, small integers are `PHIM` immediates); **step 2 lifts the limit**: a "wide" flag (reserved bit of the
-      instruction byte) for a 32-bit parameter on the address-bearing instructions, narrow when the target is known and fits, always
-      wide for patched forward references; `uint32_t` for the return stack, label/function code offsets, `CODEOFFS_NONE`,
-      `DATAOFFS_NONE`, the DATA item table and the `RSTR` parameter; `CODESIZE_MAX`/`DATASIZE_MAX` become a soft cap.
-      Measured with generated programs: 64 KiB of code hold only ~600 (FOR loops) to ~1500 (assignments) dense lines
 - [ ] 16-bit variable numbers (≤ 65535 variables), 6 array dimensions, one dimension ≤ 65535
-- [ ] 16-bit `LINE` instruction parameter: the code generator rejects line numbers > 65535 (the tokenizer accepts up to 999999)
 - [ ] VM strings ≤ 65535 bytes
 - [ ] `engine1999`: the command prompt line editor is limited to 255 characters (`INPUT` lines to 1023)
 

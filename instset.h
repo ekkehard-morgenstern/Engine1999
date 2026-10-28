@@ -40,7 +40,7 @@ The runtime system has two stacks:
       every item is a 64 bit floating-point number
 
     - a code stack for holding return addresses
-      every item is a 16 bit unsigned address offset
+      every item is a 32 bit unsigned address offset
 
 An instruction removes its parameters from the stack.
 We're using FORTH notation here to indicate stack usage.
@@ -50,7 +50,7 @@ For instance,
     R( a -- )       means an address offset is pulled from the return stack.
 
     n -- a 64-bit double (floating-point) value (data stack)
-    a -- a 16-bit unsigned address offset (return stack only)
+    a -- a 32-bit unsigned address offset (return stack only)
     i -- a 16-bit signed integer (not on stack)
     u -- a 16-bit unsigned integer (not on stack)
     s -- a 64-bit string pointer (data stack)
@@ -60,11 +60,14 @@ ATTN: String pointers point to heap memory and must be freed after use.
 
 Instructions are encoded as follows:
 
-    <ins> [ <exp> ] [ <hi> <lo> ]
+    <ins> [ <exp> ] [ <hi> <lo> ]           or, with the W flag:      <ins> [ <exp> ] [ <b3> <b2> <b1> <b0> ]
 
 First, an instruction byte.
 Followed by an optional 8-bit instruction extension.
-Followed by an optional 16-bit parameter field in network byte order (big endian).
+Followed by an optional parameter field in network byte order (big endian): 16 bits, or 32 bits if the W flag
+(wide) is set. The generator uses the short form where a value fits (variable numbers, small data offsets, small
+immediates) and the wide form for everything that can be above 65535: code addresses (always, because they are
+patched after the instruction was generated), data offsets, line numbers and large immediates.
 
 If the instruction extension is requested, an additional byte follows, expanding
 the instruction field from 4 bit to 12 bits, with the 4 bits from the instruction byte
@@ -77,13 +80,13 @@ the code segment, depending on a flag in the instruction code.
 the instruction code is organized as follows:
 
     +---+---+---+---++---+---+---+---+
-    | P | C | E | r || I | I | I | I |
+    | P | C | E | W || I | I | I | I |
     +---+---+---+---++---+---+---+---+
 
     P - parameter flag (parameter field is present)
     C - code flag (code, not data offset)
     E - extended instruction
-    r - reserved bits
+    W - wide parameter (the parameter field has 32 bits; only together with P)
     I - an instruction field
 
 The 16 basic instructions are as follows:
@@ -99,6 +102,7 @@ The 16 basic instructions are as follows:
 
     0011 - PHIM         push 17 bit immediate value on stack (from parameter field)
                         the C bit becomes the uppermost (17th) bit.
+                        With the W flag the 32-bit parameter is the (signed) value and the C bit is ignored.
                         the P bit must be set (and a parameter field supplied)
                         first, the value is sign-extended to 32 bits, and then
                         converted to a number before being pushed onto the stack.
@@ -107,13 +111,15 @@ The 16 basic instructions are as follows:
 
     0100 - BRIA         branch to immediate 17-bit address
                         the C bit becomes the uppermost (17th) bit.
+                        With the W flag the 32-bit parameter is the address and the C bit is ignored (the code
+                        generator always uses the wide form).
                         the P bit must be set (and a parameter field supplied)
                         first, the value is zero-extended to 32 bits, and then
                         used as an index into code memory (when in range).
                         When out of range, a runtime exception occurs.
 
     0101 - BRIR         branch immediate relative, using 17-bit offset
-                        the C bit becomes the uppermost (17th) bit.
+                        the C bit becomes the uppermost (17th) bit. With the W flag: a signed 32-bit offset.
                         the P bit must be set (and a parameter field supplied)
                         first, the value is sign-extended to 32 bits, and then
                         is added to the address of the following instruction.
@@ -243,11 +249,12 @@ The 4096 extended instructions are as follows:
     0001 00011110       RDST - read next DATA item as a string ( -- s ) C=0 P=0
     0001 00011111       RSTR - restore the DATA pointer (param=data offset) C=0 P=0/1
                             P=0: the pointer goes back to the first item; P=1: to the item at the given data
-                            offset (0xFFFF = behind the last item).
+                            offset (0xFFFFFFFF = behind the last item). With a parameter the instruction is wide
+                            (the offset is patched in when all DATA items are known).
                             DATA items are records in the data segment, chained in program order:
-                            <type.8> <next.16> <payload>, type 0 = number (8 bytes, big endian IEEE double),
+                            <type.8> <next.32> <payload>, type 0 = number (8 bytes, big endian IEEE double),
                             type 1 = string (NUL-terminated text); <next> is the data offset of the next item or
-                            0xFFFF. The first item is found through codegen_t.datafirst (0xFFFF = no DATA).
+                            0xFFFFFFFF. The first item is found through codegen_t.datafirst (0xFFFFFFFF = no DATA).
                             Reading behind the last item, or an item of the wrong type, is a run time error.
     0001 00010110       (reserved)
     0001 00010111       (reserved)
@@ -335,12 +342,12 @@ The 4096 extended instructions are as follows:
 
 */
 
-#define INS_NODATA      UINT16_C(0XFFFF)
+#define INS_NODATA      UINT32_C(0XFFFFFFFF)
 #define INSF_P          UINT8_C(0X80)
 #define INSF_C          UINT8_C(0X40)
 #define MKINS_C(x)      ( ((x) & UINT8_C(1)) << UINT8_C(6) )
 #define INSF_E          UINT8_C(0X20)
-#define INSF__r         UINT8_C(0X10)
+#define INSF_W          UINT8_C(0X10)
 #define INSM_I          UINT8_C(0X0F)
 #define MKINS_I(x)      ((x) & INSM_I)
 #define INS_BRK         MKINS_I(0)

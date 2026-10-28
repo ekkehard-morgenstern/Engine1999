@@ -169,7 +169,7 @@ bool cgen_from_defstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     if ( ( !multiline && body->type != NT_SINGLELINEUSERFNBODY ) || body->numbranches != 1U ) {
         return cgen_unexpected_node( comp );
     }
-    uint8_t ftype = 0, numparams = 0; uint16_t oldcode = CODEOFFS_NONE;
+    uint8_t ftype = 0, numparams = 0; uint32_t oldcode = CODEOFFS_NONE;
     if ( !vmem_get_func_info( &comp->rt->varmem, funcoffs, &ftype, &numparams, &oldcode ) || ftype != functype ) {
         comp_error( comp, "Internal error (function variable not found)" );
         return false;
@@ -182,11 +182,7 @@ bool cgen_from_defstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     if ( !cgen_gen_bria( cgen, 0 ) ) {
         return cgen_out_of_code_memory( comp );
     }
-    if ( cgen->codesize > UINT16_MAX ) {
-        comp_error( comp, "Program too large" );
-        return false;
-    }
-    uint16_t start = (uint16_t) cgen->codesize;
+    uint32_t start = cgen->codesize;
     // loops opened outside of the function are not visible inside (AGAIN, NEXT, WEND ...) and vice versa
     size_t savedbase = cgen->loopbase;
     cgen->loopbase = cgen->numloops;
@@ -203,7 +199,7 @@ bool cgen_from_defstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
             return false;
         }
         if ( basetype == VARTYPEV_STR ) {
-            uint16_t emptyoffs = DATAOFFS_NONE;
+            uint32_t emptyoffs = DATAOFFS_NONE;
             if ( !cgen_data_const( cgen, 0, 0, true, &emptyoffs ) || emptyoffs == DATAOFFS_NONE ) {
                 return cgen_out_of_data_memory( comp );
             }
@@ -232,11 +228,8 @@ bool cgen_from_defstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     if ( !cgen_gen_retf( cgen ) ) {
         return cgen_out_of_code_memory( comp );
     }
-    // patch the jump (BRIA <ins> <hi> <lo>, the C bit is bit 16 of the address)
-    uint32_t end = cgen->codesize;
-    cgen->code[ skipins ] = (uint8_t)( ( cgen->code[ skipins ] & (uint8_t) ~INSF_C ) | ( ( end & UINT32_C(0x10000) ) ? INSF_C : 0 ) );
-    cgen->code[ skipins + 1U ] = (uint8_t)( end >> UINT8_C(8) );
-    cgen->code[ skipins + 2U ] = (uint8_t)  end;
+    // patch the jump over the body (BRIA is wide)
+    cgen_patch_param( cgen, skipins, cgen->codesize );
     // store the code offset in the function variable
     varvalue_t value;
     memset( &value, 0, sizeof(value) );
@@ -261,21 +254,19 @@ static bool cd_add_data_item( codegen_t* cgen, compiler_t* comp, uint8_t type, c
         comp_error( comp, "Data item too long" );
         return false;
     }
-    uint16_t off = DATAOFFS_NONE;
-    if ( !cgen_alloc_data( cgen, (uint16_t)( 3U + paylen ), &off ) || off == DATAOFFS_NONE ) {
+    uint32_t off = DATAOFFS_NONE;
+    if ( !cgen_alloc_data( cgen, DATAREC_HEADER + (uint32_t) paylen, &off ) || off == DATAOFFS_NONE ) {
         return cgen_out_of_data_memory( comp );
     }
-    if ( !cgen_grow( (void**) &cgen->dataoffs, &cgen->numdataitems, &cgen->maxdataitems, sizeof(uint16_t) ) ) {
+    if ( !cgen_grow( (void**) &cgen->dataoffs, &cgen->numdataitems, &cgen->maxdataitems, sizeof(uint32_t) ) ) {
         comp_error( comp, "Out of memory" );
         return false;
     }
-    cgen->data[ off ]      = type;
-    cgen->data[ off + 1U ] = (uint8_t)( DATAOFFS_NONE >> UINT8_C(8) );
-    cgen->data[ off + 2U ] = (uint8_t)  DATAOFFS_NONE;
-    memcpy( &cgen->data[ off + 3U ], payload, paylen );
+    cgen->data[ off ] = type;
+    cgen_datarec_set_next( cgen->data, off, DATAOFFS_NONE );
+    memcpy( &cgen->data[ off + DATAREC_HEADER ], payload, paylen );
     if ( cgen->datalast != DATAOFFS_NONE ) {
-        cgen->data[ cgen->datalast + 1U ] = (uint8_t)( off >> UINT8_C(8) );
-        cgen->data[ cgen->datalast + 2U ] = (uint8_t)  off;
+        cgen_datarec_set_next( cgen->data, cgen->datalast, off );
     } else {
         cgen->datafirst = off;
     }
@@ -437,10 +428,8 @@ bool cgen_finish_data( codegen_t* cgen, compiler_t* comp ) {
                 }
             }
         }
-        uint16_t off = index < cgen->numdataitems ? cgen->dataoffs[ index ] : DATAOFFS_NONE;
-        // RSTR is an extended instruction: <ins> <ext> <hi> <lo>
-        cgen->code[ fx->insoffs + 2U ] = (uint8_t)( off >> UINT8_C(8) );
-        cgen->code[ fx->insoffs + 3U ] = (uint8_t)  off;
+        uint32_t off = index < cgen->numdataitems ? cgen->dataoffs[ index ] : DATAOFFS_NONE;
+        cgen_patch_param( cgen, fx->insoffs, off );     // RSTR was generated wide
     }
     return true;
 }
@@ -541,7 +530,7 @@ bool cgen_from_inputstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         memcpy( text + len, "? ", 3U );
         len += 2U;
     }
-    uint16_t promptoffs = DATAOFFS_NONE;
+    uint32_t promptoffs = DATAOFFS_NONE;
     if ( len >= UINT16_MAX - 1U || !cgen_data_const( cgen, text, (uint16_t) len, true, &promptoffs ) || promptoffs == DATAOFFS_NONE ) {
         free( text );
         return cgen_out_of_data_memory( comp );

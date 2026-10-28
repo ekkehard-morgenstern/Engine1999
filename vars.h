@@ -93,8 +93,8 @@ typedef union _varvalue_t {
     };
     double      dblval;
     int16_t     intval;
-    uint16_t    lbloffs;
-    uint16_t    codeoffs;
+    uint32_t    lbloffs;
+    uint32_t    codeoffs;
 } varvalue_t;
 
 typedef struct _vstr_t {
@@ -111,7 +111,7 @@ typedef struct _var_t {
         double      dbl;
         int16_t     intval;
         vstr_t      str;
-        uint16_t    codeoffs;   // label or function
+        uint32_t    codeoffs;   // label or function
     } v;
     uint8_t         numdims;    // array
     uint16_t        dims[MAXDIM];
@@ -166,7 +166,7 @@ bool vmem_set_var( varmem_t* vmem, uint16_t varoffs, uint8_t vartype, uint8_t nu
     const varvalue_t* pvalue );
 
 // user-defined function variables: type (incl. VARTYPEF_FUNC), number of parameters, code offset (CODEOFFS_NONE if undefined)
-bool vmem_get_func_info( varmem_t* vmem, uint16_t varoffs, uint8_t* pfunctype, uint8_t* pnumparams, uint16_t* pcodeoffs );
+bool vmem_get_func_info( varmem_t* vmem, uint16_t varoffs, uint8_t* pfunctype, uint8_t* pnumparams, uint32_t* pcodeoffs );
 // type and name of a parameter (the name belongs to the variable)
 bool vmem_get_var_name( varmem_t* vmem, uint16_t varoffs, const char** pname );   // the name is owned by the variable
 bool vmem_get_func_param( varmem_t* vmem, uint16_t varoffs, uint8_t index, uint8_t* pparamtype, const char** pname );

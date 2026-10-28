@@ -61,9 +61,9 @@ Verified by hand: tokenize/detokenize round trip of ordinary lines, 3000-byte id
 | Variable / label name length | none (names are heap strings, up to the 65535 byte node data / identifier limit) | `vars.c`, `bascomp.c` (`comp_node_name`) |
 | Whole tokenized line | 65535 bytes | `linehdr_t.length` |
 | Syntax tree | none (heap nodes, unlimited branches); node data ≤ 65535 bytes | `bascomp.h` `node_t` |
-| Code / data segments | 64 KiB each (limit of the 16-bit ISA; the buffers are heap and grow on demand) | `codegen.h` `CODESIZE_MAX`, `DATASIZE_MAX` |
+| Code / data segments | none in practice: heap buffers that grow on demand, 32-bit offsets (wide instruction parameters), soft limit 256 MiB each; was 64 KiB each | `codegen.h` `CODESIZE_MAX`, `DATASIZE_MAX` |
 | Variables | heap; ≤ 65535 variables (16-bit variable number), one array dimension ≤ 65535 | `vars.h` |
 | Array dimensions / UDF params | 6 / 8 | `MAXDIM`, `MAXPARAM` |
 | `engine1999` input line | 256 bytes | `engine1999.c` `char buf[256]` (not part of this refactor) |
 
-The remaining ones follow from using big-endian 16-bit offsets in the code/data segments and the ISA; removing them means changing the instruction encoding. (The program store, the syntax tree and the variable memory no longer have such limits.)
+The remaining ones are the 16-bit variable numbers, array dimensions and line length. (The program store, the syntax tree and the variable memory no longer have such limits.)

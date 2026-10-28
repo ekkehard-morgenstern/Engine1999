@@ -116,7 +116,7 @@ static void init_keepval( uint8_t vartype, keepval_t* val ) {
             val->sval = 0;
             break;
         default:
-            val->ival = CODEOFFS_NONE;
+            val->ival = -1;
             break;
     }
 }
@@ -424,9 +424,9 @@ static tristate_t test_keepvar( varmem_t* vmem, keepvar_t* var ) {
             }
             return tri_true;
         case VARTYPEV_LABEL:
-            if ( value.lbloffs != (uint16_t) pval->ival ) {
-                fprintf( stderr, "? Variable error, expected %" PRIu16 " but got %" PRIu16 "\n", value.lbloffs,
-                    (uint16_t) pval->ival );
+            if ( value.lbloffs != CODEOFFS_NONE ) {      // the test only ever stores "undefined" in labels
+                fprintf( stderr, "? Variable error, expected %" PRIu32 " but got %" PRIu32 "\n", CODEOFFS_NONE,
+                    value.lbloffs );
                 dump_keepvar( var );
                 return tri_false;
             }
@@ -501,7 +501,8 @@ static tristate_t modify_keepvar( varmem_t* vmem, keepvar_t* var ) {
             value.strlen = pval->sval ? strlen( pval->sval ) : 0U;
             break;
         case VARTYPEV_LABEL:
-            value.lbloffs = pval->ival = CODEOFFS_NONE;
+            value.lbloffs = CODEOFFS_NONE;
+            pval->ival = -1;
             break;
     }
 

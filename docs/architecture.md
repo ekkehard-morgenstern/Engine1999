@@ -33,14 +33,14 @@ can be built and tested without SDL.
    builds a syntax tree from heap-allocated `node_t` nodes (each with a growable branch array; all nodes are chained in `compiler_t.nodes` and freed by `cleanup_compiler()`). Some semantic work happens during parsing
    ("immediate processing" in `nodetype.h`: constant dimension evaluation, variable lookup/creation).
 4. **Generate** (`codegen.c`): `cgen_from_*` walk the tree and emit instructions with `cgen_gen_*` into `codegen_t.code` / `.data`.
-5. **Run**: a stack VM defined in `instset.h` (data stack of doubles, return stack of 16-bit addresses). `vm.[ch]` is a minimal executor for it (see [compiler-and-vm.md](compiler-and-vm.md)); `runtime_t` only bundles `varmem_t` + `codegen_t`, the VM is created by the caller.
+5. **Run**: a stack VM defined in `instset.h` (data stack of doubles, return stack of 32-bit addresses). `vm.[ch]` is a minimal executor for it (see [compiler-and-vm.md](compiler-and-vm.md)); `runtime_t` only bundles `varmem_t` + `codegen_t`, the VM is created by the caller.
 
 `runtime_t` (`runtime.h`) is the shared context: variable memory, code generator state, `report`/`halt` callbacks, user data.
 `compiler_t` keeps a pointer to it. Error handling pattern: callbacks `report(text)` and `halt()` (noreturn, caller does `longjmp`).
 
 ## Conventions that cross modules
 
-- Everything serialized (tokens, code, data) is big endian with 16-bit offsets, so the code and data segments are capped at 64 KiB (see [refactoring.md](refactoring.md#limits)); the program store, the syntax tree and the variables are heap structures.
+- Everything serialized (tokens, code, data) is big endian. Code and data offsets are 32 bit (instructions with a wide parameter, see `instset.h`), so the code and data segments are only capped by a soft limit of 256 MiB each (`CODESIZE_MAX`, `DATASIZE_MAX`; see [refactoring.md](refactoring.md#limits)); the program store, the syntax tree and the variables are heap structures.
 - Offsets `0xFFFF` mean "none" (`VAROFFS_NONE`, `CODEOFFS_NONE`…); syntax tree nodes and program lines are plain pointers (`NODE_NONE` = null).
 - Large structs (`compiler_t`, `codegen_t`, `runtime_t`) are 64–128+ KiB: declare them `static` or heap-allocate, never on the stack
   (the test programs use `static program_t pgm;`).

@@ -1489,7 +1489,7 @@ UNDEF:  comp_error( comp, "Undefined function" );
         return false;
     }
 
-    uint8_t ftype = 0, numargs = 0; uint16_t codeoffs = CODEOFFS_NONE;
+    uint8_t ftype = 0, numargs = 0; uint32_t codeoffs = CODEOFFS_NONE;
     if ( !vmem_get_func_info( &comp->rt->varmem, varoffs, &ftype, &numargs, &codeoffs ) ) {
         goto UNDEF;
     }

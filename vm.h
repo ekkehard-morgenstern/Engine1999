@@ -127,7 +127,7 @@ typedef struct _vm_t {
     varmem_t*       vmem;           // variables
     vmval_t*        dstack;         // data stack
     size_t          dsp, dmax;      // item count, allocated items
-    uint16_t*       rstack;         // return stack
+    uint32_t*       rstack;         // return stack (code addresses, function call frames)
     size_t          rsp, rmax;
     vm_context_t*   ctxs;           // contexts of the function calls in progress
     size_t          nctx, maxctx;

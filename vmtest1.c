@@ -321,6 +321,7 @@ static const testcase_t cases[] = {
     { "RENUM step 0",           "RENUM ,0",                                        "? Illegal argument\n" },
     { "RENUM step missing",     "RENUM 10,",                                       "? Numeric expression expected\n" },
     { "number immediates: limits", "PRINT 65535;-65536;65536;-65537;131071;0",       "65535-6553665536-655371310710\n" },
+    { "number immediates: 32 bit",  "PRINT -100000;100000;2147483647;-2147483648;2147483648", "-1000001000002147483647-21474836482147483648\n" },
     { "number immediates: fractions", "PRINT 1.5;-2.25;3",                          "1.5-2.253\n" },
     { "same constants used twice", "A$=\"HELLO\":B$=\"HELLO\":C$=\"\":D$=\"\":PRINT A$+B$;LEN(C$+D$);1.5+1.5", "HELLOHELLO03\n" },
     { "LIST all",               "LIST",                                            "<list * * on channel 0>\n" },
@@ -759,7 +760,22 @@ static bool run_dynamic_cases( buf_t* tokbuf, size_t* pnum, size_t* pfailed ) {
     }
     snprintf( src5 + n5, 400000U - n5, "6010 PRINT LEN(A$);B" );
     testcase_t tc5 = { "constants are shared", src5, "200900\n", 0 };
-    const testcase_t* dyn[] = { &tc1, &tc2, &tc3, &tc4, &tc5 };
+    // 6. code and data beyond 64 KiB: 2500 filler lines with distinct strings (about 125 KB of code, 100 KB of data) come
+    //    first, and then everything that needs a far address: jumps, GOSUB, FOR, ON, a function, a label, DATA with
+    //    RESTORE, and line numbers above 65535 (also in an error message)
+    char* src6 = (char*) malloc( 400000U );
+    size_t n6 = 0;
+    n6 += (size_t) snprintf( src6 + n6, 400000U - n6, "10 GOTO 50000\n" );
+    for ( int i=0; i < 2500; ++i ) {
+        n6 += (size_t) snprintf( src6 + n6, 400000U - n6, "%d A=A+1.5:B$=\"FILLER-LINE-%06d-0123456789ABCDEFGHIJ\":C=C*2+A\n", 100 + i, i );
+    }
+    n6 += (size_t) snprintf( src6 + n6, 400000U - n6,
+        "50000 PRINT \"FAR\"\n50010 GOSUB 60000\n50020 FOR I=1 TO 3:PRINT I;:NEXT:PRINT\n50030 RESTORE 55000\n"
+        "50040 READ X,Y$:PRINT X;Y$\n50050 DEF FN F(X)=X*2\n50060 PRINT FN F(21)\n50070 GOTO FARL\n50080 PRINT \"SKIPPED\"\n"
+        "50090 LABEL FARL\n50100 ON 2 GOTO 50110,50130\n50110 PRINT \"BAD\"\n50120 END\n50130 PRINT \"ON OK\"\n"
+        "50140 GOTO 70000\n55000 DATA 7,\"SEVEN\"\n60000 PRINT \"SUB\":RETURN\n70000 PRINT \"L70000\"\n70001 PRINT 1/0" );
+    testcase_t tc6 = { "code and data beyond 64 KiB", src6, "FAR\nSUB\n123\n7SEVEN\n42\nON OK\nL70000\n? Division by zero in line 70001\n", 0 };
+    const testcase_t* dyn[] = { &tc1, &tc2, &tc3, &tc4, &tc5, &tc6 };
     for ( size_t i=0; i < sizeof(dyn) / sizeof(dyn[0]); ++i ) {
         ++*pnum;
         if ( run_case( dyn[i], tokbuf ) ) {
@@ -775,6 +791,7 @@ static bool run_dynamic_cases( buf_t* tokbuf, size_t* pnum, size_t* pfailed ) {
     free( src );
     free( src2 );
     free( src5 );
+    free( src6 );
     return true;
 }
 
