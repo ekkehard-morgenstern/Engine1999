@@ -426,6 +426,32 @@ void sdlscr_ansi_puts( const char* text ) {
     ansi_feed( &sdlscr_ansi, text, sdlscr_ansi_emit, 0 );
 }
 
+void sdlscr_ansi_printf( const char* fmt, ... ) {
+    char buf[1024U];
+    va_list ap;
+    va_start( ap, fmt );
+    int n = vsnprintf( buf, sizeof(buf), fmt, ap );
+    va_end( ap );
+    if ( n < 0 ) {
+        return;
+    }
+    if ( (size_t) n < sizeof(buf) ) {
+        sdlscr_ansi_puts( buf );
+        return;
+    }
+    // longer than the buffer: format again into a heap buffer instead of truncating
+    char* big = (char*) malloc( (size_t) n + 1U );
+    if ( big == 0 ) {
+        sdlscr_ansi_puts( buf );        // truncated, but better than nothing
+        return;
+    }
+    va_start( ap, fmt );
+    vsnprintf( big, (size_t) n + 1U, fmt, ap );
+    va_end( ap );
+    sdlscr_ansi_puts( big );
+    free( big );
+}
+
 // -- keyboard access for running programs ---------------------------------------------
 
 static void sdlscr_flushinput( void ) {

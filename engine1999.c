@@ -693,7 +693,7 @@ static repl_t repl;
 // channel 0 is the screen; there are no other devices yet, so output to other channels is discarded
 static void host_print( struct _vm_t* vm, void* usrdata, int channel, const char* text ) {
     if ( channel == 0 ) {
-        sdlscr_puts( text );
+        sdlscr_ansi_puts( text );       // escape sequences (SGR colors) in program output are honored
     }
 }
 

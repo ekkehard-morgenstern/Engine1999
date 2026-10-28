@@ -85,19 +85,14 @@ int main( int argc, char** argv ) {
     );
     sdlscr_ansi_puts( "m cut in two calls\033[0m.\n\n" );
 
-    // echo the typed lines in a changing color
+    // repeat the typed lines in a changing color
     int color = 0;
     while ( !sdlscr_term() ) {
         char buf[128];
         int ev = sdlscr_lineinput( 0, buf, 128U, 0, 0 );
         if ( ev & SDLEV_SCREENWORKERFINISHED ) break;
-        char head[16];
-        snprintf( head, sizeof(head), "\033[%dm", 31 + color );
+        sdlscr_ansi_printf( "\033[%dmYou typed (%d characters): %s\033[0m\n", 31 + color, (int) strlen( buf ), buf );
         color = ( color + 1 ) % 7;
-        sdlscr_ansi_puts( head );
-        sdlscr_ansi_puts( "You typed: " );
-        sdlscr_ansi_puts( buf );
-        sdlscr_ansi_puts( "\033[0m\n" );
     }
 
     return EXIT_SUCCESS;

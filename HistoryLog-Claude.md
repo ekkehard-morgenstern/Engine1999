@@ -13,7 +13,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-(none)
+- **`host_print` → `sdlscr_ansi_puts`; new `sdlscr_ansi_printf()`.** `engine1999.c`: program output on channel 0 now goes through the ANSI decoder (error messages via `host_report` and `Ready.` unchanged). `sdlscreen.[ch]`: `sdlscr_ansi_printf( fmt, … )` (1 KiB stack buffer, heap buffer for longer output, no truncation); `sdltest2.c` uses it for the colored echo. Docs: `display-engine.md`, `SESSION.md`. Tests: `repltest1`, `ansitest1` pass; build clean. Not tried on the real screen.
 
 ## Log
 
