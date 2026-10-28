@@ -37,6 +37,10 @@
 #include "baslin.h"
 #endif
 
+#ifndef BASTOK_H
+#include "bastok.h"
+#endif
+
 // the program is a doubly linked list of heap-allocated lines, sorted by line number
 typedef struct _program_t {
     line_t*     first;
@@ -97,5 +101,8 @@ size_t delete_lines( program_t* pgm, uint32_t first, uint32_t last );
 #define RENUM_FAILED    4       // a changed line could not be tokenized again (internal error)
 int renumber_program( program_t* pgm, uint32_t first, uint32_t last, uint32_t start, uint32_t step );
 void list_program( program_t* pgm, uint32_t lineno_first, uint32_t lineno_last, void (*printer)( const char* ) );
+// the same with syntax highlighting (see detokenize_line_hl() in bastok.h); style == 0: plain
+void list_program_hl( program_t* pgm, uint32_t lineno_first, uint32_t lineno_last, void (*printer)( const char* ),
+    hlstyle_t style, void* usrdata );
 
 #endif

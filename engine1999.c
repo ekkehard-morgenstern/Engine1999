@@ -740,6 +740,27 @@ static bool host_save( struct _vm_t* vm, void* usrdata, const char* filename, bo
     return repl_save_program( (repl_t*) usrdata, filename, ascii );
 }
 
+// syntax highlighting of LIST output: an ANSI SGR sequence per class of text (see hlclass_t in bastok.h); the colors
+// are palette entries via the standard color numbers (ansi.c), chosen to read well on a light and a dark background
+static const char* host_hlstyle( hlclass_t cls, void* usrdata ) {
+    static const char* const styles[HL_COUNT] = {
+        "\033[0m",      // HL_NONE: end of the line, reset
+        "\033[33m",     // HL_LINENO: olive
+        "\033[34m",     // HL_STATEMENT: navy
+        "\033[35m",     // HL_CONTROL: purple
+        "\033[91m",     // HL_COMMAND: red
+        "\033[36m",     // HL_FUNCTION: teal
+        "\033[39m",     // HL_OPERATOR: default color
+        "\033[39m",     // HL_IDENT: default color
+        "\033[31m",     // HL_NUMBER: maroon
+        "\033[32m",     // HL_STRING: green
+        "\033[95m",     // HL_SHELL: magenta
+        "\033[37m",     // HL_COMMENT: silver
+        "\033[39m",     // HL_PUNCT: default color
+    };
+    return (unsigned) cls < HL_COUNT ? styles[cls] : 0;
+}
+
 static void init_host( void ) {
     if ( !init_repl( &repl ) ) {
         fprintf( stderr, "failed to initialize the BASIC system\n" );
@@ -752,6 +773,7 @@ static void init_host( void ) {
     repl.getkey    = host_getkey;
     repl.interrupt = host_interrupt;
     repl.save      = host_save;
+    repl.hlstyle   = host_hlstyle;
 }
 
 

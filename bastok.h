@@ -374,6 +374,36 @@ bool tokenize_line( const char* text, buf_t* out, struct _linehdr_t* phdr );
 */
 bool detokenize_line( buf_t* out, const uint8_t* wherefrom, const struct _linehdr_t* phdr );
 
+/*
+   Syntax highlighting (optional). detokenize_line_hl() does the same as detokenize_line(), but calls "style" every time
+   the class of the text changes and inserts the text it returns (an escape sequence, say) into the output before the
+   new text; "usrdata" is passed through. The first call of a line is for the line number, the last one (HL_NONE) comes
+   after the end of the line, if anything was written before it, so a host can put its "reset" there. Spaces keep the
+   class of what precedes them. "style" may return 0 for "nothing to insert". With style == 0 this is detokenize_line().
+   Colored text is for display only: the listings that are parsed again (labels, RENUM) and SAVE use the plain one.
+*/
+typedef enum _hlclass_t {
+    HL_NONE,            // not a class: end of the line (reset)
+    HL_LINENO,          // line number
+    HL_STATEMENT,       // statement keywords: PRINT INPUT DIM DEF LET DATA ...
+    HL_CONTROL,         // flow control: IF THEN ELSE FOR TO NEXT GOTO GOSUB RETURN REPEAT WHILE END ...
+    HL_COMMAND,         // program commands: LIST RUN NEW LOAD SAVE DELETE RENUM CLEAR ...
+    HL_FUNCTION,        // functions: LEN ASC VAL LEFT MID RIGHT CHR INKEY HEX BIN FN ...
+    HL_OPERATOR,        // + - * / ^ = < > ... and AND OR NOT XOR ...
+    HL_IDENT,           // variable names
+    HL_NUMBER,          // numeric literals (all bases)
+    HL_STRING,          // string literals (and bracket / brace literals)
+    HL_SHELL,           // shell literals (backticks)
+    HL_COMMENT,         // comment (' ...)
+    HL_PUNCT,           // ( ) , : ; # $ % [ ] { } |
+    HL_COUNT
+} hlclass_t;
+
+typedef const char* (*hlstyle_t)( hlclass_t cls, void* usrdata );
+
+bool detokenize_line_hl( buf_t* out, const uint8_t* wherefrom, const struct _linehdr_t* phdr,
+    hlstyle_t style, void* usrdata );
+
 // -- buffer preprocessing --------------------------------------------------
 
 void preprocess_buffer( char* buf );

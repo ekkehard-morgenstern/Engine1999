@@ -13,6 +13,8 @@ Identifiers and keywords are therefore case-insensitive; string and shell litera
 
 `tokenize_line( text, buf_t* out, linehdr_t* )` appends the line to a growable buffer; `detokenize_line( buf_t* out, tokens, hdr )` rebuilds source text. Readers use the bounded `rbuf_t` and return heap strings through `char**`.
 
+**Syntax highlighting (optional):** `detokenize_line_hl( out, tokens, hdr, style, usrdata )` calls `style( hlclass_t, usrdata )` whenever the class of the text changes and inserts the returned string (an escape sequence, say) before the new text; `HL_NONE` at the end of the line is the place for a reset. Classes (`hlclass_t`, `bastok.h`): line number, statement, control flow, command, function, operator, identifier, number, string, shell literal, comment, punctuation; spaces keep the class of the text before them. `style == 0` (and `detokenize_line()`) gives plain text. Only `LIST` output is colored: `list_program_hl()` (`baspgm.c`) takes the callback, the REPL passes `repl_t.hlstyle` when LIST writes to channel 0 (the screen). `SAVE`, `RENUM`, label search and the debug output always use the plain text. `engine1999` sets `host_hlstyle()` (a table of ANSI SGR sequences, one per class: easy to change); the sequences reach the screen through `host_print` → `sdlscr_ansi_puts()`.
+
 ```
 linehdr_t (5 bytes, all big endian)
     lineno.24                  // 0..999999; 16777215 (2^24-1) = no number (direct mode) / deleted / invalid

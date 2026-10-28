@@ -86,6 +86,9 @@ typedef struct _repl_t {
     int         (*getkey)( struct _vm_t*, void*, int channel );
     bool        (*interrupt)( struct _vm_t*, void* );
     bool        (*save)( struct _vm_t*, void*, const char* filename, bool ascii );
+    // syntax highlighting of LIST output (optional): returns the text (e.g. an escape sequence) to insert where text of
+    // the class starts; HL_NONE = end of the line. Only used when LIST writes to channel 0, the screen (bastok.h)
+    hlstyle_t   hlstyle;
 } repl_t;
 
 bool init_repl( repl_t* repl );             // false if out of memory

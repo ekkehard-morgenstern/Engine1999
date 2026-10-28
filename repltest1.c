@@ -376,6 +376,61 @@ static void show( const char* label, const char* text ) {
     printf( "\"\n" );
 }
 
+// -- syntax highlighting of LIST ---------------------------------------------------------------------
+
+// the style callback inserts a marker per class: <L>ine number <S>tatement <C>ontrol <M>command <F>unction <O>perator
+// <I>dentifier <N>umber s<T>ring shell(<H>) comment(<R>emark) <P>unctuation, <> = end of the line
+static const char* host_hlstyle( hlclass_t cls, void* usrdata ) {
+    static const char* const marks[HL_COUNT] = { "<>", "<L>", "<S>", "<C>", "<M>", "<F>", "<O>", "<I>", "<N>", "<T>", "<H>", "<R>", "<P>" };
+    return (unsigned) cls < HL_COUNT ? marks[cls] : 0;
+}
+
+static const testcase_t hlcases[] = {
+    { "highlight: statement, string, identifier, numbers", "10 PRINT \"HI\";A$;12;&H1F\nLIST",
+      "<L>10 <S>PRINT <T>\"HI\"<P>;<I>A$<P>;<N>12<P>;<N>&H1F<>\n" },
+    { "highlight: control flow and operators", "20 FOR I=1 TO 10 STEP 2:NEXT I\nLIST",
+      "<L>20 <C>FOR <I>I<O>=<N>1 <C>TO <N>10 <C>STEP <N>2<P>:<C>NEXT <I>I<>\n" },
+    { "highlight: word operators and functions", "30 IF X>1 AND Y THEN GOTO 10 ELSE A=LEN(B$)+CHR(65)\nLIST",
+      "<L>30 <C>IF <I>X<O>><N>1 <O>AND <I>Y <C>THEN GOTO <N>10 <C>ELSE <I>A<O>=<F>LEN<P>(<I>B$<P>)<O>+<F>CHR<P>(<N>65<P>)<>\n" },
+    { "highlight: comment", "40 'A COMMENT\nLIST", "<L>40 <R>'A COMMENT<>\n" },
+    { "highlight: label and shell literal", "50 LABEL L: A=`ls`\nLIST", "<L>50 <S>LABEL <I>L<P>: <I>A<O>=<H>`ls`<>\n" },
+    { "highlight: commands", "60 LOAD \"X\":RUN:NEW\nLIST", "<L>60 <M>LOAD <T>\"X\"<P>:<M>RUN<P>:<M>NEW<>\n" },
+    { "highlight: a range of lines", "10 A=1\n20 B=2\n30 C=3\nLIST 20-30",
+      "<L>20 <I>B<O>=<N>2<>\n<L>30 <I>C<O>=<N>3<>\n" },
+    { "highlight: only LIST is colored (SAVE ASCII is plain)", "10 PRINT 1\nSAVE \"" TESTFILE "\",A\nNEW\nLOAD \"" TESTFILE "\"\nLIST",
+      "<L>10 <S>PRINT <N>1<>\n" },
+};
+
+static void run_highlight_tests( size_t* pnum, size_t* pfailed ) {
+    for ( size_t i=0; i < sizeof(hlcases) / sizeof(hlcases[0]); ++i ) {
+        const testcase_t* tc = &hlcases[i];
+        out_reset();
+        keys = 0; polls = 0; breakafter = 0;
+        repl_t repl;
+        bool pass = false;
+        if ( init_repl( &repl ) ) {
+            repl.report  = host_report;
+            repl.print   = host_print;
+            repl.save    = host_save;
+            repl.hlstyle = host_hlstyle;
+            char* src = strdup( tc->source );
+            for ( char* line = strtok( src, "\n" ); line; line = strtok( 0, "\n" ) ) {
+                repl_enter( &repl, line );
+            }
+            free( src );
+            cleanup_repl( &repl );
+            pass = strcmp( outbuf, tc->expected ) == 0;
+        }
+        printf( "%s  %s\n", pass ? "PASS" : "FAIL", tc->name );
+        if ( !pass ) {
+            show( "expected", tc->expected );
+            show( "got     ", outbuf );
+            ++*pfailed;
+        }
+        ++*pnum;
+    }
+}
+
 int main( int argc, char** argv ) {
     if ( argc > 1 && strcmp( argv[1], "-v" ) == 0 ) {
         basdbg_flags = BASDBG_ALL;
@@ -393,6 +448,7 @@ int main( int argc, char** argv ) {
         }
     }
     run_growth_tests( &numcases, &failed );
+    run_highlight_tests( &numcases, &failed );
     remove( TESTFILE );
     printf( "%u of %u passed\n", (unsigned)( numcases - failed ), (unsigned) numcases );
     free( outbuf );

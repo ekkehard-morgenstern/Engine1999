@@ -996,7 +996,54 @@ FAIL:
 
 // -- detokenization --------------------------------------------------------
 
-bool detokenize_line( buf_t* out, const uint8_t* wherefrom, const struct _linehdr_t* phdr ) {
+// the highlight class of a keyword token
+static hlclass_t keyword_hlclass( uint8_t tok ) {
+    switch ( tok ) {
+        case TOK_LIST: case TOK_SAVE: case TOK_RUN: case TOK_AUTO: case TOK_RENUM: case TOK_DELETE: case TOK_MERGE:
+        case TOK_CHAIN: case TOK_FILES: case TOK_NEW: case TOK_CLEAR: case TOK_EDIT: case TOK_LOAD: case TOK_SHOW:
+        case TOK_WARRANTY: case TOK_COPYING:
+            return HL_COMMAND;
+        case TOK_GOTO: case TOK_GOSUB: case TOK_GO: case TOK_TO: case TOK_SUB: case TOK_RETURN: case TOK_IF:
+        case TOK_UNLESS: case TOK_THEN: case TOK_ELSE: case TOK_ENDIF: case TOK_ENDUNLESS: case TOK_END: case TOK_FOR:
+        case TOK_STEP: case TOK_NEXT: case TOK_REPEAT: case TOK_WHILE: case TOK_UNTIL: case TOK_WEND: case TOK_UEND:
+        case TOK_POP: case TOK_ON: case TOK_AGAIN:
+            return HL_CONTROL;
+        case TOK_ASC: case TOK_VAL: case TOK_LEFT: case TOK_MID: case TOK_RIGHT: case TOK_INKEY: case TOK_BIN:
+        case TOK_QUA: case TOK_OCT: case TOK_DEC: case TOK_HEX: case TOK_FRE: case TOK_TI: case TOK_LEN: case TOK_CHR:
+        case TOK_FN:
+            return HL_FUNCTION;
+        case TOK_NOT: case TOK_AND: case TOK_OR: case TOK_XOR: case TOK_NAND: case TOK_NOR: case TOK_XNOR:
+        case TOK_LSHIFT: case TOK_RSHIFT:
+            return HL_OPERATOR;
+    }
+    return HL_STATEMENT;
+}
+
+// the highlight class of a single character token
+static hlclass_t sngchr_hlclass( uint8_t tok ) {
+    switch ( tok ) {
+        case TOK_MULT: case TOK_PLUS: case TOK_MINUS: case TOK_DIV: case TOK_LT: case TOK_EQ: case TOK_GT:
+        case TOK_ADDROF: case TOK_BACKSL: case TOK_POW: case TOK_TILDE: case TOK_PLING:
+            return HL_OPERATOR;
+    }
+    if ( tok >= TOK_DEC0 && tok <= TOK_DEC9 ) {
+        return HL_NUMBER;
+    }
+    return HL_PUNCT;
+}
+
+// switches to the class "cls" of the next text (spaces: HL_NONE = keep the current one)
+static bool hl_switch( buf_t* out, hlstyle_t style, void* usrdata, hlclass_t* pcur, hlclass_t cls ) {
+    if ( style == 0 || cls == HL_NONE || cls == *pcur ) {
+        return true;
+    }
+    *pcur = cls;
+    const char* text = style( cls, usrdata );
+    return text == 0 || writeto_buffer( out, text, strlen( text ) ) >= 0;
+}
+
+bool detokenize_line_hl( buf_t* out, const uint8_t* wherefrom, const struct _linehdr_t* phdr,
+    hlstyle_t style, void* usrdata ) {
     if ( phdr->length < LINEHDR_SIZE ) {
         return false;
     }
@@ -1004,8 +1051,9 @@ bool detokenize_line( buf_t* out, const uint8_t* wherefrom, const struct _linehd
     size_t start = out->fill;
     char*  item  = 0;
     bool   old_sigil = ri_sigil;
+    hlclass_t cur = HL_NONE;
     if ( phdr->lineno != LINENO_NONE ) {
-        if ( !print_uint32( out, phdr->lineno ) ) {
+        if ( !hl_switch( out, style, usrdata, &cur, HL_LINENO ) || !print_uint32( out, phdr->lineno ) ) {
             goto FAIL;
         }
     }
@@ -1016,21 +1064,25 @@ bool detokenize_line( buf_t* out, const uint8_t* wherefrom, const struct _linehd
             uint8_t tok;
             bool (*read_fn)( rbuf_t*, char** );
             bool (*print_fn)( buf_t*, const char* );
+            hlclass_t cls;
         } littbl[] = {
-            { TOK_IDENT, read_ident, print_ident }, { TOK_NUMIDENT, read_ident, print_ident  },
-            { TOK_STRIDENT, read_ident, print_ident }, { TOK_INTIDENT, read_ident, print_ident },
-            { TOK_STRLIT, read_strlit, print_strlit },
-            { TOK_HEXLIT, read_hexlit, print_hexlit }, { TOK_DECLIT, read_declit, print_declit },
-            { TOK_OCTLIT, read_octlit, print_octlit }, { TOK_QUALIT, read_qualit, print_qualit },
-            { TOK_BINLIT, read_binlit, print_binlit }, { TOK_SHLLIT, read_shllit, print_shllit },
-            { TOK_QUOLIT, read_quolit, print_quolit }, { TOK_BRKLIT, read_brklit, print_brklit },
-            { TOK_BRCLIT, read_brclit, print_brclit },
-            { 0, 0, 0 }
+            { TOK_IDENT, read_ident, print_ident, HL_IDENT }, { TOK_NUMIDENT, read_ident, print_ident, HL_IDENT },
+            { TOK_STRIDENT, read_ident, print_ident, HL_IDENT }, { TOK_INTIDENT, read_ident, print_ident, HL_IDENT },
+            { TOK_STRLIT, read_strlit, print_strlit, HL_STRING },
+            { TOK_HEXLIT, read_hexlit, print_hexlit, HL_NUMBER }, { TOK_DECLIT, read_declit, print_declit, HL_NUMBER },
+            { TOK_OCTLIT, read_octlit, print_octlit, HL_NUMBER }, { TOK_QUALIT, read_qualit, print_qualit, HL_NUMBER },
+            { TOK_BINLIT, read_binlit, print_binlit, HL_NUMBER }, { TOK_SHLLIT, read_shllit, print_shllit, HL_SHELL },
+            { TOK_QUOLIT, read_quolit, print_quolit, HL_COMMENT }, { TOK_BRKLIT, read_brklit, print_brklit, HL_STRING },
+            { TOK_BRCLIT, read_brclit, print_brclit, HL_STRING },
+            { 0, 0, 0, HL_NONE }
         };
         bool found = false;
         for ( int i=0; littbl[i].tok; ++i ) {
             if ( littbl[i].tok == tok ) {
                 if ( !littbl[i].read_fn( &src, &item ) ) {
+                    goto FAIL;
+                }
+                if ( !hl_switch( out, style, usrdata, &cur, littbl[i].cls ) ) {
                     goto FAIL;
                 }
                 if ( !littbl[i].print_fn( out, item ) ) {
@@ -1042,18 +1094,25 @@ bool detokenize_line( buf_t* out, const uint8_t* wherefrom, const struct _linehd
         }
         if ( !found ) {
             if ( is_sngchrtok( tok ) || ( tok >= TOK_DEC0 && tok <= TOK_DEC9 ) ) {
-                if ( !emit_byte( out, tok ) ) {
+                if ( !hl_switch( out, style, usrdata, &cur, tok == TOK_SPACE ? HL_NONE : sngchr_hlclass( tok ) ) ||
+                     !emit_byte( out, tok ) ) {
                     goto FAIL;
                 }
                 ++src.rpos;
             } else if ( is_keyword2( tok ) ) {
-                if ( !print_keyword( tok, out ) ) {
+                if ( !hl_switch( out, style, usrdata, &cur, keyword_hlclass( tok ) ) || !print_keyword( tok, out ) ) {
                     goto FAIL;
                 }
                 ++src.rpos;
             } else {
                 goto FAIL;
             }
+        }
+    }
+    if ( cur != HL_NONE ) {
+        const char* text = style( HL_NONE, usrdata );
+        if ( text != 0 && writeto_buffer( out, text, strlen( text ) ) < 0 ) {
+            goto FAIL;
         }
     }
     // NUL-terminate, but don't count the terminator as content
@@ -1070,6 +1129,10 @@ FAIL:
     free( item );
     out->fill = start;
     return false;
+}
+
+bool detokenize_line( buf_t* out, const uint8_t* wherefrom, const struct _linehdr_t* phdr ) {
+    return detokenize_line_hl( out, wherefrom, phdr, 0, 0 );
 }
 
 // -- buffer preprocessing --------------------------------------------------

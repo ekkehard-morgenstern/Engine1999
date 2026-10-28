@@ -428,7 +428,8 @@ static void repl_list_printer( const char* text ) {
 
 void repl_list( repl_t* repl, uint32_t first, uint32_t last ) {
     listing_repl = repl;
-    list_program( &repl->pgm, first, last, repl_list_printer );
+    // colors only for the screen channel: other channels (files) get plain text
+    list_program_hl( &repl->pgm, first, last, repl_list_printer, repl->vm.channel == 0 ? repl->hlstyle : 0, repl );
 }
 
 // one end of a LIST range: a label name (the line it is in) or a line number; LINENO_NONE = unbounded

@@ -201,6 +201,11 @@ bool enter_line( program_t* pgm, const uint8_t* tokline, bool (*directmode)( pro
 }
 
 void list_program( program_t* pgm, uint32_t lineno_first, uint32_t lineno_last, void (*printer)( const char* ) ) {
+    list_program_hl( pgm, lineno_first, lineno_last, printer, 0, 0 );
+}
+
+void list_program_hl( program_t* pgm, uint32_t lineno_first, uint32_t lineno_last, void (*printer)( const char* ),
+    hlstyle_t style, void* usrdata ) {
     buf_t* buf = create_buffer();
     if ( buf == 0 ) {
         return;
@@ -213,7 +218,7 @@ void list_program( program_t* pgm, uint32_t lineno_first, uint32_t lineno_last, 
         pgmiter_t iter; clear_iter( &iter, pgm );
         iter_load_line( &iter, line );
         clear_buffer( buf );
-        if ( !detokenize_line( buf, iter.tok, &iter.hdr ) ) {
+        if ( !detokenize_line_hl( buf, iter.tok, &iter.hdr, style, usrdata ) ) {
             break;
         }
         printer( buf->buffer );
