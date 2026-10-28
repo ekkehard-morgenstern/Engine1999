@@ -16,8 +16,7 @@ Order = suggested order, not a commitment.
 - [ ] `RENUM` also adjusts targets in `RUN`/`LIST`/`DELETE`, but not the range of another `RENUM` statement in the program, and a changed line is
       re-tokenized from the listing text (a round-trip through `detokenize_line`/`tokenize_line`; fine so far in all tests)
 - [ ] `DELETE`/`RENUM` end a running program; a "continue" (`CONT`) would need the code to be patched or recompiled while running
-- [ ] `CLEAR` empties variables but can't drop code, so it does not cure the growth of the code segment by direct mode lines (see
-      section 4); arrays can't be un-dimensioned by `CLEAR` (arrays exist from parse time), only emptied
+- [ ] `CLEAR` empties the variables; arrays can't be un-dimensioned by it (arrays exist from parse time), only emptied
 
 Questions to decide: what `CHAIN`
 and `MERGE` do with variables and line numbers; where files live (current directory?); what `FILES` shows.
@@ -45,8 +44,9 @@ how a handler is named (line number / label / `FN`?); how they are cancelled (`O
       break key; need a key-code convention, e.g. like the classic home computers)
 - [ ] File channels (`#n` with `n` ≠ 0): `PRINT #n`, `INPUT #n`, `GET #n` are accepted and passed to the callbacks, but the engine
       discards output / reports end of input for every channel except 0
-- [ ] Direct mode lines accumulate in the code segment until `NEW` / `RUN` (every line appends its code; a long session ends
-      in "Out of code memory"). Options: roll back the code of a direct line that defined nothing persistent, or reset on `NEW`/`RUN` as today
+- [ ] Direct mode: ordinary lines are rolled back after they ran (done), but a line that defines a function, a label or DATA keeps
+      its code and data, and defining the same function again leaves the old code behind (dead) until `NEW` / `RUN`; a session that
+      redefines functions thousands of times grows (slowly) toward the 256 MiB limit
 - [ ] Direct mode can't `GOTO` / `GOSUB` into a stored program (the line table belongs to the code of a `RUN`)
 - [ ] `PRINT` comma zones use the VM's own column count and ignore the screen wrap at column 80
 - [ ] `vmtest1` still has its own copy of the compile-and-run logic; it could use `basrepl` (`repltest1` already does)

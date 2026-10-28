@@ -234,6 +234,7 @@ bool cgen_from_defstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     varvalue_t value;
     memset( &value, 0, sizeof(value) );
     value.codeoffs = start;
+    cgen_note_persistent( cgen );       // the function variable now points into the code
     if ( !vmem_set_var( &comp->rt->varmem, funcoffs, functype, 0, 0, &value ) ) {
         comp_error( comp, "Internal error (failed to store the function address)" );
         return false;
@@ -258,6 +259,7 @@ static bool cd_add_data_item( codegen_t* cgen, compiler_t* comp, uint8_t type, c
     if ( !cgen_alloc_data( cgen, DATAREC_HEADER + (uint32_t) paylen, &off ) || off == DATAOFFS_NONE ) {
         return cgen_out_of_data_memory( comp );
     }
+    cgen_note_persistent( cgen );       // the record is chained into the DATA items
     if ( !cgen_grow( (void**) &cgen->dataoffs, &cgen->numdataitems, &cgen->maxdataitems, sizeof(uint32_t) ) ) {
         comp_error( comp, "Out of memory" );
         return false;

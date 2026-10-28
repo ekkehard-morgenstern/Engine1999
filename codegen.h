@@ -106,6 +106,7 @@ typedef struct _codegen_t {
     uint8_t*        data;           // the data segment (heap)
     uint32_t        codesize, datasize;
     size_t          codecap, datacap;
+    uint32_t        persistent;     // counts what the code/data generated so far has stored that outlives it (see cgen_note_persistent)
     cgen_const_t*   consts;         // hash table of the shared constants in the data segment (size: power of two)
     size_t          numconsts, maxconsts;
     cgen_lineaddr_t*    lineaddrs;      // line number -> code address, in ascending order
@@ -130,6 +131,11 @@ typedef struct _codegen_t {
 void init_codegen( codegen_t* cgen );
 void cleanup_codegen( codegen_t* cgen );    // frees the bookkeeping tables
 void cgen_reset( codegen_t* cgen );         // discards all code and data (keeps the callbacks)
+// DEF FN (the function variable gets a code offset), LABEL (same) and DATA (records chained in the data segment) store
+// references to what they generate. A direct mode line that did none of this can be discarded after it has run:
+// compare <persistent> before and after, then cgen_rollback() to the code and data size from before the line.
+void cgen_note_persistent( codegen_t* cgen );
+void cgen_rollback( codegen_t* cgen, uint32_t codesize, uint32_t datasize );
 bool cgen_alloc_code( codegen_t* cgen, uint32_t size, uint32_t* poffs );
 bool cgen_alloc_data( codegen_t* cgen, uint32_t size, uint32_t* poffs );
 // Offset of a read-only constant in the data segment: <len> bytes, followed by a NUL if <nul> is set (a string).

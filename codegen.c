@@ -36,6 +36,7 @@ void init_codegen( codegen_t* cgen ) {
     cgen->codesize = UINT32_C(0);
     cgen->datasize = UINT32_C(0);
     cgen->codecap  = cgen->datacap = 0;
+    cgen->persistent = 0;
     cgen->consts   = 0; cgen->numconsts = cgen->maxconsts = 0;
     cgen->lineaddrs = 0; cgen->numlineaddrs = cgen->maxlineaddrs = 0;
     cgen->fixups    = 0; cgen->numfixups    = cgen->maxfixups    = 0;
@@ -83,6 +84,52 @@ void cgen_reset( codegen_t* cgen ) {
     }
     cgen->numconsts = 0;
     cgen_begin_control( cgen );
+}
+
+void cgen_note_persistent( codegen_t* cgen ) {
+    ++cgen->persistent;
+}
+
+void cgen_rollback( codegen_t* cgen, uint32_t codesize, uint32_t datasize ) {
+    if ( codesize < cgen->codesize ) {
+        memset( &cgen->code[ codesize ], 0, cgen->codesize - codesize );
+        cgen->codesize = codesize;
+    }
+    if ( datasize < cgen->datasize ) {
+        memset( &cgen->data[ datasize ], 0, cgen->datasize - datasize );
+        cgen->datasize = datasize;
+        // drop the shared constants that lived in the part that is gone (linear probing: rebuild the table)
+        if ( cgen->maxconsts ) {
+            cgen_const_t* old = cgen->consts;
+            size_t oldmax = cgen->maxconsts;
+            cgen_const_t* table = (cgen_const_t*) malloc( oldmax * sizeof(cgen_const_t) );
+            if ( table == 0 ) {
+                // cannot rebuild: forget all of them (they are only an optimization)
+                for ( size_t i=0; i < oldmax; ++i ) {
+                    old[i].offs = CGEN_CONST_FREE;
+                }
+                cgen->numconsts = 0;
+                return;
+            }
+            for ( size_t i=0; i < oldmax; ++i ) {
+                table[i].offs = CGEN_CONST_FREE;
+            }
+            size_t kept = 0;
+            for ( size_t i=0; i < oldmax; ++i ) {
+                if ( old[i].offs != CGEN_CONST_FREE && (uint64_t) old[i].offs + old[i].size <= datasize ) {
+                    size_t slot = old[i].hash & ( oldmax - 1U );
+                    while ( table[slot].offs != CGEN_CONST_FREE ) {
+                        slot = ( slot + 1U ) & ( oldmax - 1U );
+                    }
+                    table[slot] = old[i];
+                    ++kept;
+                }
+            }
+            free( old );
+            cgen->consts    = table;
+            cgen->numconsts = kept;
+        }
+    }
 }
 
 // makes sure that the segment has room for <needed> bytes; new memory is zeroed

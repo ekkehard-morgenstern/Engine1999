@@ -49,7 +49,9 @@ pointer survives from one direct mode line to the next). The host feeds it text 
 
     - a line with a line number is stored in the program (a line number alone deletes the line)
     - a line without one is compiled and run at once (direct mode); the code is appended to the code segment, so
-      the variables and the user functions defined by earlier lines stay valid
+      the variables and the user functions defined by earlier lines stay valid. Afterwards the code and the constants of
+      the line are discarded again (cgen_rollback()), unless the line defined a function, a label or DATA items: those
+      point into the code / data, so such a line stays. A long session of ordinary lines doesn't grow the segments.
     - RUN [line|label] compiles the stored program and runs it, with all variables cleared first (afterwards the
       variables stay available in direct mode); LIST [a][-[b]] lists it; LOAD "file" replaces it by the program in
       the file (binary or text, see baspgm.h) and runs that. These three are language statements, usable in programs
@@ -63,8 +65,8 @@ callbacks have the signatures of vm.h and receive the repl_t* as their user data
 for host data). Error messages (compiler, code generator, variables, VM) go to report() and always end in a
 newline.
 
-Known limitations: every direct mode line appends to the 64 KiB code segment until NEW or RUN; direct mode can't
-GOTO into the stored program.
+Known limitations: a line that defines a function, label or DATA keeps its code (a function that is defined again leaves
+the old code behind until NEW or RUN); direct mode can't GOTO into the stored program.
 */
 
 typedef struct _repl_t {

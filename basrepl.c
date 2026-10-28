@@ -195,6 +195,8 @@ static bool repl_execute( repl_t* repl, bool fromstart, const char* label, int32
     bool ok = false;
     codegen_t* cgen = &repl->rt.codegen;
     uint32_t start = fromstart ? UINT32_C(0) : cgen->codesize;
+    uint32_t datastart = cgen->datasize;
+    uint32_t persistent = cgen->persistent;
     uint32_t prevlast = cgen->datalast;
     repl_setup_vm( repl );
     if ( setjmp( repl->jmp ) == 0 ) {
@@ -219,6 +221,12 @@ static bool repl_execute( repl_t* repl, bool fromstart, const char* label, int32
         } else if ( ok ) {
             ok = vm_run_at( &repl->vm, start );
         }
+    }
+    // A direct mode line has done its job once it has run (or failed). Unless it defined something that points into its code
+    // or data (a function, a label, DATA items), the code and the constants of the line are discarded, so that a long
+    // session doesn't fill the segments.
+    if ( !fromstart && cgen->persistent == persistent ) {
+        cgen_rollback( cgen, start, datastart );
     }
     return ok;
 }

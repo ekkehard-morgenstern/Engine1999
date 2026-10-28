@@ -13,7 +13,12 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-(none)
+- 2026-10-28: `HistoryLog-Claude.md`/`SESSION.md`: the `c45e514` entry and latest-commit line (committed together with the next change).
+- 2026-10-28: **Direct mode code growth fixed: a direct line is rolled back after it ran.**
+  - `repl_execute()` (`basrepl.c`) remembers the code and data size before a direct line and, when the line has run or failed, calls the new `cgen_rollback( cgen, codesize, datasize )` (`codegen.c`): sizes are reset, the freed bytes zeroed, the table of shared constants rebuilt without the entries in the discarded part. Not done for lines that stored something pointing into their code/data: `cgen_note_persistent()` (counter `codegen_t.persistent`) is called by `LABEL` (`cgenctl.c`), the end of `DEF FN` (the function variable gets the code offset, `cgendecl.c`) and each `DATA` record (`cd_add_data_item`). The counter also protects a line that fails after such a statement (e.g. `DEF FN B(X)=X+1:GOTO 99`: the function stays defined and callable).
+  - Remaining growth (documented in `roadmap.md`): lines that define functions/labels/DATA keep their code, and a function defined again leaves its old code behind until `NEW`/`RUN`. The hidden loop variables (`@FOR1L`, ...) are looked up by name and reused, so they don't accumulate.
+  - Tests: `repltest1` 112 (+6, a new block that checks `codesize`/`datasize` directly: 3000 ordinary lines, 300 failing lines of three kinds, 1000 lines after a `DEF FN`, a failing line behind a `DEF`, `DATA` surviving 500 lines, `RUN` after a long session); `vmtest1` 380; `testcomp1`; all pass, valgrind clean (builds without `-p`). Not tried on the real SDL screen.
+  - Docs: `basrepl.h`, `compiler-and-vm.md`, `roadmap.md`, `SESSION.md`.
 
 ## Log
 
@@ -198,3 +203,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
   - Tests: `vmtest1` 380 cases (+2: 32-bit immediates, and a 2500-line program with 125 KB of code and 100 KB of data followed by far `GOTO`, `GOSUB`, `FOR`, `ON`, `DEF FN`, label, `DATA`/`RESTORE` and line numbers above 65535 incl. a run time error message); `repltest1` 106; `testcomp1`; all pass, valgrind clean (builds without `-p`). Not tried on the real SDL screen.
   - Docs: `instset.h`, `compiler-and-vm.md`, `architecture.md`, `refactoring.md`, `roadmap.md` (the two limit items removed), `CLAUDE.md`, `SESSION.md`.
 - Also in this commit: the log entry and latest-commit line for `01d467d`.
+
+### c45e514 — 2026-10-28 06:11:43 +0100 — "Claude History Log and session state update"
+2 files, +13/-9.
+- `HistoryLog-Claude.md`: logged `28da093`; `SESSION.md`: latest-commit line. No source changes.

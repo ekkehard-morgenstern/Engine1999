@@ -298,6 +298,7 @@ bool cgen_from_labelstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     varvalue_t value;
     memset( &value, 0, sizeof(value) );
     value.lbloffs = here;
+    cgen_note_persistent( cgen );       // the label variable now points into the code
     if ( !vmem_set_var( &comp->rt->varmem, varoffs, VARTYPEV_LABEL, 0, 0, &value ) ) {
         comp_error( comp, "Internal error (label variable not found)" );
         return false;

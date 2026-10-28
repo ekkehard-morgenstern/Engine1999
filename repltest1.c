@@ -254,6 +254,115 @@ static bool run_case( const testcase_t* tc ) {
     return strcmp( outbuf, tc->expected ) == 0;
 }
 
+// -- direct mode lines and the size of the code and data segments -----------------------------
+
+static bool setup_growth_repl( repl_t* repl ) {
+    out_reset();
+    keys = 0; polls = 0; breakafter = 0;
+    if ( !init_repl( repl ) ) {
+        return false;
+    }
+    repl->report = host_report;
+    repl->print  = host_print;
+    return true;
+}
+
+static bool growth_pass( const char* name, bool pass, const char* detail ) {
+    printf( "%s  %s\n", pass ? "PASS" : "FAIL", name );
+    if ( !pass ) {
+        printf( "    %s\n", detail );
+    }
+    return pass;
+}
+
+// every line of the text is entered <times> times
+static void enter_times( repl_t* repl, const char* line, unsigned times ) {
+    for ( unsigned i=0; i < times; ++i ) {
+        repl_enter( repl, line );
+    }
+}
+
+static void run_growth_tests( size_t* pnum, size_t* pfailed ) {
+    bool r[6]; size_t n = 0;
+    char detail[200];
+    repl_t repl;
+
+    // lines that define nothing leave nothing behind
+    if ( !setup_growth_repl( &repl ) ) { ++*pfailed; return; }
+    enter_times( &repl, "A=A+1:PRINT \"HELLO\";A;1.5;100000", 3000U );
+    repl_enter( &repl, "PRINT A" );
+    snprintf( detail, sizeof(detail), "code %u, data %u (expected 0 and 0), output ends \"%s\"", (unsigned) repl.rt.codegen.codesize,
+        (unsigned) repl.rt.codegen.datasize, strlen( outbuf ) > 6U ? outbuf + strlen( outbuf ) - 6U : outbuf );
+    r[n++] = growth_pass( "3000 direct lines leave no code or data", repl.rt.codegen.codesize == 0 && repl.rt.codegen.datasize == 0 &&
+        strstr( outbuf, "3000\n" ) != 0, detail );
+    cleanup_repl( &repl );
+
+    // errors, too (a parse error, a run time error, an error at the end of code generation)
+    if ( !setup_growth_repl( &repl ) ) { ++*pfailed; return; }
+    for ( unsigned i=0; i < 100U; ++i ) {
+        repl_enter( &repl, "PRINT )" );
+        repl_enter( &repl, "PRINT \"X\";1/0" );
+        repl_enter( &repl, "PRINT \"Y\":GOTO 99" );
+    }
+    snprintf( detail, sizeof(detail), "code %u, data %u (expected 0 and 0)", (unsigned) repl.rt.codegen.codesize,
+        (unsigned) repl.rt.codegen.datasize );
+    r[n++] = growth_pass( "failed direct lines leave no code or data", repl.rt.codegen.codesize == 0 && repl.rt.codegen.datasize == 0, detail );
+    cleanup_repl( &repl );
+
+    // a function stays, everything after it is discarded again
+    if ( !setup_growth_repl( &repl ) ) { ++*pfailed; return; }
+    repl_enter( &repl, "DEF FN A(X)=X*2" );
+    uint32_t c1 = repl.rt.codegen.codesize, d1 = repl.rt.codegen.datasize;
+    out_reset();
+    enter_times( &repl, "PRINT FN A(21)", 1000U );
+    bool same = repl.rt.codegen.codesize == c1 && repl.rt.codegen.datasize == d1;
+    bool right = true;
+    for ( unsigned i=0; i < 1000U && right; ++i ) {
+        right = strncmp( outbuf + 3U * i, "42\n", 3U ) == 0;
+    }
+    snprintf( detail, sizeof(detail), "code %u (was %u), data %u (was %u), all 1000 results right: %d", (unsigned) repl.rt.codegen.codesize,
+        (unsigned) c1, (unsigned) repl.rt.codegen.datasize, (unsigned) d1, (int) right );
+    r[n++] = growth_pass( "a function defined directly keeps its code, later lines don't add any", c1 > 0 && same && right && strlen( outbuf ) == 3000U, detail );
+    cleanup_repl( &repl );
+
+    // a line that fails behind a DEF keeps the function
+    if ( !setup_growth_repl( &repl ) ) { ++*pfailed; return; }
+    repl_enter( &repl, "DEF FN B(X)=X+1:GOTO 99" );
+    enter_times( &repl, "PRINT 5", 20U );
+    repl_enter( &repl, "PRINT FN B(1)" );
+    r[n++] = growth_pass( "a function stays when the line fails behind the DEF", strstr( outbuf, "Undefined line number 99" ) != 0 &&
+        strlen( outbuf ) > 2U && strcmp( outbuf + strlen( outbuf ) - 2U, "2\n" ) == 0, outbuf );
+    cleanup_repl( &repl );
+
+    // DATA items stay and can be read after many other lines
+    if ( !setup_growth_repl( &repl ) ) { ++*pfailed; return; }
+    repl_enter( &repl, "DATA 1,2,\"THREE\"" );
+    out_reset();
+    enter_times( &repl, "PRINT 7", 500U );
+    repl_enter( &repl, "READ A,B,C$:PRINT A;B;C$" );
+    r[n++] = growth_pass( "DATA items survive other direct lines", strlen( outbuf ) == 1000U + strlen( "12THREE\n" ) &&
+        strcmp( outbuf + 1000U, "12THREE\n" ) == 0, outbuf + ( strlen( outbuf ) > 40U ? strlen( outbuf ) - 40U : 0U ) );
+    cleanup_repl( &repl );
+
+    // a stored program works after a long session, and its data and code are not mixed up with the lines before
+    if ( !setup_growth_repl( &repl ) ) { ++*pfailed; return; }
+    enter_times( &repl, "PRINT \"SOME TEXT\";3.25", 200U );
+    repl_enter( &repl, "10 PRINT \"PROGRAM\";1.5:GOTO 30" );
+    repl_enter( &repl, "20 PRINT \"NOT HERE\"" );
+    repl_enter( &repl, "30 PRINT 2" );
+    out_reset();
+    repl_enter( &repl, "RUN" );
+    r[n++] = growth_pass( "RUN after a long session", strcmp( outbuf, "PROGRAM1.5\n2\n" ) == 0, outbuf );
+    cleanup_repl( &repl );
+
+    for ( size_t i=0; i < n; ++i ) {
+        ++*pnum;
+        if ( !r[i] ) {
+            ++*pfailed;
+        }
+    }
+}
+
 static void show( const char* label, const char* text ) {
     printf( "    %s: \"", label );
     for ( const char* p = text; *p; ++p ) {
@@ -282,6 +391,7 @@ int main( int argc, char** argv ) {
             ++failed;
         }
     }
+    run_growth_tests( &numcases, &failed );
     remove( TESTFILE );
     printf( "%u of %u passed\n", (unsigned)( numcases - failed ), (unsigned) numcases );
     free( outbuf );

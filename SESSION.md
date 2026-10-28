@@ -1,6 +1,6 @@
 # Session state
 
-Maintained by Claude; updated whenever work in a session changes something. Last update: 2026-10-28 (32-bit code/data addresses).
+Maintained by Claude; updated whenever work in a session changes something. Last update: 2026-10-28 (direct mode lines are rolled back).
 Read this first when resuming; details are in `docs/` (start with `docs/README.md`) and `CLAUDE.md`.
 
 ## Standing rules
@@ -9,13 +9,13 @@ Read this first when resuming; details are in `docs/` (start with `docs/README.m
 - Keep `HistoryLog-Claude.md` current: new work goes under its "Pending" section; after the user commits, move it into the log with the commit ID and timestamp (see `CLAUDE.md`).
 
 ## Repo state
-- Branch `feature/refactor-to-remove-some-limits`; latest commit `28da093` (step 2 of the segment limits), preceded by `01d467d`, `2d7f59f`, `fd7e324` (DELETE/RENUM statements), `038f171`, `01133de`, `05ca28f` (NEW/CLEAR statements), `f6d83bf` (binary SAVE header, LOAD/RUN/LIST statements), `fa623a3`/`d951a9c` (HistoryLog-Claude.md).
+- Branch `feature/refactor-to-remove-some-limits`; latest commit `c45e514` (history log), preceded by `28da093` (step 2 of the segment limits), `01d467d`, `2d7f59f`, `fd7e324` (DELETE/RENUM statements), `038f171`, `01133de`, `05ca28f` (NEW/CLEAR statements), `f6d83bf` (binary SAVE header, LOAD/RUN/LIST statements), `fa623a3`/`d951a9c` (HistoryLog-Claude.md).
 - Everything is committed (except the newest HistoryLog-Claude.md entry). `make` and all tests pass.
 - `make` builds `sdltest1 engine1999 basictest1 testcomp1 basictest2 vmtest1 repltest1` + `engine.lib` cleanly with `-Wall -Werror`.
 
 ## Tests (run these after any change)
 - `./vmtest1` — automated end-to-end test (BASIC text → tokens → syntax tree → code → VM → output). **380 cases, all pass**; exit status = number of failures; `-v` shows compiler/codegen debug output. Add a case for every new statement/instruction. Also run it under `valgrind --leak-check=full -q` (clean) — but build a copy without `-p` for that (the makefile's profiling timer kills `vmtest1` under valgrind after ~2.4 s CPU), e.g. `gcc -g -O1 -I. -o /tmp/x vmtest1.c basic.c baspgm.c baslin.c bastok.c bascomp.c nodetype.c codegen.c cgenctl.c cgendecl.c cgenprog.c vars.c runtime.c vm.c basrepl.c basdebug.c -lm -lrt`.
-- `./repltest1` — automated test of the REPL (`basrepl.c`) without a screen: direct mode, stored lines, RUN/LIST/LOAD/NEW/DELETE/RENUM, INPUT/GET, Break; **106 cases, all pass**; exit status = number of failures.
+- `./repltest1` — automated test of the REPL (`basrepl.c`) without a screen: direct mode, stored lines, RUN/LIST/LOAD/NEW/DELETE/RENUM, INPUT/GET, Break; **112 cases, all pass**; exit status = number of failures.
 - `./testcomp1` — randomized stress test of the variable store (5000 operations vs a shadow model), exit status 0 = passed; takes ~3 s. (Its random names used to be sometimes empty, which made it flake; fixed.)
 - `basictest1` / `basictest2` — interactive tokenizer / parser tools (pipe lines into them). `basictest2` prints the syntax tree.
 
@@ -46,7 +46,7 @@ Read this first when resuming; details are in `docs/` (start with `docs/README.m
 - DATA items are numeric literals (signed) and string literals only; they live in the data segment; `RESTORE n` means the first item in line ≥ n; a program run (`vm_run`) starts at the first item, `vm_run_at` keeps the pointer (so a persistent REPL VM keeps its data pointer across lines).
 - The syntax tree stores the variable number (not a `var_t*`) in node data bytes.
 
-- ESC is the break key while a line runs (not delivered as a key code); Break ends the program with `? Break in line N`. Output on channels other than 0 is discarded by `engine1999` (no devices yet). Every direct mode line appends code (64 KiB limit) until NEW/RUN.
+- ESC is the break key while a line runs (not delivered as a key code); Break ends the program with `? Break in line N`. Output on channels other than 0 is discarded by `engine1999` (no devices yet). A direct mode line is compiled into the end of the code segment, run, and then discarded again (`cgen_rollback()` in `repl_execute()`) unless it defined a function, a label or DATA (`cgen_note_persistent()`); redefining a function leaves its old code behind until NEW/RUN.
 - INPUT: prompt must be plain string literal(s); `;` adds "? ", `,` doesn't. Bad/missing field → "?Redo from start" (fields already stored stay stored), extra fields → "?Extra ignored", empty numeric field = 0. GET waits for a key (numeric variable gets the key code). INPUT/GET without `#ch` emit `PCHN 0`.
 - `PRINT`, `INPUT` and `GET` all select their channel explicitly (`PCHN`, 0 when there is no `#ch`), because the VM's channel is sticky (`cgen_gen_channel0()` in `codegen.c`). Previously a plain `PRINT` after `PRINT #1,…` stayed on channel 1; fixed.
 
