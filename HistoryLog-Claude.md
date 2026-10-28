@@ -13,7 +13,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-- **Optional syntax highlighting for LIST.** `bastok.[ch]`: `hlclass_t` (`HL_*`), `hlstyle_t`, `detokenize_line_hl()` (`detokenize_line()` is now a wrapper with no style); token → class tables `keyword_hlclass()` / `sngchr_hlclass()`; spaces keep the class. `baspgm.[ch]`: `list_program_hl()` (`baspgm.h` now includes `bastok.h`). `basrepl.[ch]`: `repl_t.hlstyle`, used by `repl_list()` only on channel 0. `engine1999.c`: `host_hlstyle()` with an ANSI SGR table. `repltest1`: 8 new cases with marker strings (121 total), valgrind clean; `vmtest1`, `testcomp1`, `ansitest1` pass. Docs: `basic-language.md`, `SESSION.md`. Not tried on the real screen.
+(none)
 
 ## Log
 
@@ -250,3 +250,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 2 files, +8/-3.
 - `SESSION.md`: the ANSI bullet rewritten (it had contradictory leftovers from earlier edits) and the xterm-palette question closed by the user's decision: `38;5;n` / `48;5;n` keep indexing the engine's own palette. No source changes.
 - Also: the entry for `4ca5c10`.
+
+### b984b8b — 2026-10-28 21:35:21 +0100 — "Syntax highlighting for LIST output, created using Claude Code"
+11 files, +213/-18.
+- **Optional syntax highlighting for LIST.** `bastok.[ch]`: `hlclass_t` (`HL_*`), `hlstyle_t`, `detokenize_line_hl()` (`detokenize_line()` is now a wrapper with no style); token → class tables `keyword_hlclass()` / `sngchr_hlclass()`; spaces keep the class. `baspgm.[ch]`: `list_program_hl()` (`baspgm.h` now includes `bastok.h`). `basrepl.[ch]`: `repl_t.hlstyle`, used by `repl_list()` only on channel 0. `engine1999.c`: `host_hlstyle()` with an ANSI SGR table. `repltest1`: 8 new cases with marker strings (121 total), valgrind clean; `vmtest1`, `testcomp1`, `ansitest1` pass. Docs: `basic-language.md`, `SESSION.md`. Checked on the real SDL screen by the user.
