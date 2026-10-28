@@ -41,6 +41,7 @@ how a handler is named (line number / label / `FN`?); how they are cancelled (`O
 
 ## 4. Host polish (`engine1999.c`, `basrepl.[ch]`, `sdlscreen.c`)
 
+- [ ] Typed lines are limited to 255 characters (input buffer in `engine1999.c`); fine for now, may be raised later
 - [ ] Cursor keys and function keys for `GET` / `INKEY$` (only printable ASCII, RETURN, BACKSPACE, TAB are delivered; ESC is the
       break key; need a key-code convention, e.g. like the classic home computers)
 - [ ] File channels (`#n` with `n` ≠ 0): `PRINT #n`, `INPUT #n`, `GET #n` are accepted and passed to the callbacks, but the engine
