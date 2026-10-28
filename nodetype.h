@@ -604,6 +604,13 @@ Explanation of node types:
 #define NT_RESTORESTMT          UINT8_C(0X59)   // RESTORE statement
 #define NT_INPUTSTMT            UINT8_C(0X5A)   // INPUT statement
 #define NT_GETSTMT              UINT8_C(0X5B)   // GET statement
+#define NT_LOADSTMT             UINT8_C(0X5C)   // LOAD statement
+#define NT_RUNSTMT              UINT8_C(0X5D)   // RUN statement
+#define NT_LISTSTMT             UINT8_C(0X5E)   // LIST statement
+
+#define LISTF_FIRST             UINT8_C(0X01)   // LIST: start target present (first branch)
+#define LISTF_LAST              UINT8_C(0X02)   // LIST: end target present (next branch)
+#define LISTF_RANGE             UINT8_C(0X04)   // LIST: a minus sign was given (otherwise a single target)
 
 #define INPUTF_CHAN             UINT8_C(0X01)   // INPUT / GET: channel info present
 #define INPUTF_PROMPT           UINT8_C(0X02)   // INPUT: prompt present

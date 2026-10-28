@@ -2264,6 +2264,102 @@ bool comp_eat_savestmt( compiler_t* comp, node_t** pnode ) {
     return true;
 }
 
+bool comp_eat_loadstmt( compiler_t* comp, node_t** pnode ) {
+    // load-stmt := TOK_LOAD str-expr .
+    if ( comp->currtok != TOK_LOAD || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    node_t* strexpr = NODE_NONE;
+    if ( !comp_eat_strexpr( comp, &strexpr ) || strexpr == NODE_NONE ) {
+        comp_error( comp, "String expression expected" );
+        return false;
+    }
+    /*
+        NT_LOADSTMT     LOAD statement
+            branches:
+                - 1 branch of string expression (file name)
+    */
+    if ( !comp_create_node( comp, pnode, NT_LOADSTMT, UINT8_C(1), UINT16_C(0), 0, strexpr ) || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
+bool comp_eat_runstmt( compiler_t* comp, node_t** pnode ) {
+    // run-stmt := TOK_RUN [ goto-target ] .
+    if ( comp->currtok != TOK_RUN || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    node_t* target = NODE_NONE;
+    bool hastarget = comp_eat_gototarget( comp, &target ) && target != NODE_NONE;
+    /*
+        NT_RUNSTMT      RUN statement
+            branches:
+                - none, or 1 branch of goto target (NT_GOTOTARGET: a line number or a label)
+    */
+    if ( !( hastarget ? comp_create_node( comp, pnode, NT_RUNSTMT, UINT8_C(1), UINT16_C(0), 0, target ) :
+            comp_create_node( comp, pnode, NT_RUNSTMT, UINT8_C(0), UINT16_C(0), 0 ) ) || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
+bool comp_eat_liststmt( compiler_t* comp, node_t** pnode ) {
+    // list-stmt := TOK_LIST [ goto-target ] [ TOK_MINUS [ goto-target ] ] .
+    if ( comp->currtok != TOK_LIST || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    uint8_t flags = 0;
+    node_t* first = NODE_NONE; node_t* last = NODE_NONE;
+    if ( comp_eat_gototarget( comp, &first ) && first != NODE_NONE ) {
+        flags |= LISTF_FIRST;
+    }
+    if ( comp->currtok == TOK_MINUS ) {
+        flags |= LISTF_RANGE;
+        if ( !comp_fetchtok( comp ) ) {
+            comp_error( comp, "Line number or label expected" );
+            return false;
+        }
+        if ( comp_eat_gototarget( comp, &last ) && last != NODE_NONE ) {
+            flags |= LISTF_LAST;
+        }
+    }
+    /*
+        NT_LISTSTMT     LIST statement
+            data:
+                - 1 byte of flags: LISTF_FIRST, LISTF_LAST (the targets that are present), LISTF_RANGE (minus given)
+            branches:
+                - the start target if LISTF_FIRST, then the end target if LISTF_LAST (NT_GOTOTARGET)
+    */
+    if ( !comp_create_node( comp, pnode, NT_LISTSTMT, UINT8_C(0), UINT16_C(1), &flags ) || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    if ( ( first != NODE_NONE && !comp_add_branch( comp, *pnode, first ) ) ||
+         ( last  != NODE_NONE && !comp_add_branch( comp, *pnode, last ) ) ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
+bool comp_eat_progstmt( compiler_t* comp, node_t** pnode ) {
+    // prog-stmt := load-stmt | run-stmt | list-stmt .
+    // [ NT_PROGSTMT - not generated ]
+    if ( comp_eat_loadstmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_runstmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_liststmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    return false;
+}
+
 bool comp_eat_chanspec( compiler_t* comp, node_t** pnode ) {
     // chan-spec := TOK_LATTICE num-expr .
     if ( comp->currtok != TOK_LATTICE || !comp_fetchtok( comp ) ) {
@@ -3592,9 +3688,12 @@ bool comp_eat_controlflowstmt( compiler_t* comp, node_t** pnode ) {
 }
 
 bool comp_eat_stmt( compiler_t* comp, node_t** pnode ) {
-    // stmt := io-stmt | assign-stmt | control-flow-stmt .
+    // stmt := io-stmt | prog-stmt | assign-stmt | control-flow-stmt .
     // [ NT_STMT - not generated ]
     if ( comp_eat_iostmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_progstmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     if ( comp_eat_assignstmt( comp, pnode ) && *pnode != NODE_NONE ) {

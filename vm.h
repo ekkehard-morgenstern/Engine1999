@@ -60,6 +60,12 @@ Policies chosen by this implementation (the instruction set does not define them
     - numbers are printed (and converted by STR$) with "%.15g" and no padding
     - SHEX runs the command with popen() and returns its standard output without the trailing newlines (like a shell
       command substitution); the exit status is ignored; output longer than 65535 bytes is an error
+    - LOAD and RUN ( RUNP ) can't be carried out by the VM: it doesn't own the program, and the program being run would be
+      replaced. The instruction stores a request (vm_t.request, reqname, reqline) and ends the run; vm_run()/vm_run_at()
+      return true and the host looks at vm->request: it then replaces/recompiles the program, clears the variables (as for
+      a new run) and starts the VM again. A host that ignores the request just sees the program end. The request is
+      cleared at the start of the next vm_run_at().
+    - LIST needs the host (list callback), which prints through the print callback to the channel vm->channel
     - SAVE ( mode name -- ) needs the host: the VM doesn't know the program, it calls the save callback (name,
       ascii) after checking the mode ("" or "B" = binary, "A" = ascii); without a callback it is an error.
       baspgm.c offers save_program() for the host to use
@@ -82,6 +88,10 @@ Policies chosen by this implementation (the instruction set does not define them
                             digits; the parser supplies -1 for omitted digits (= no padding); only DEC$ is signed,
                             the others show negative numbers as 32 bit patterns
 */
+
+#define VMREQ_NONE          0
+#define VMREQ_LOAD          1       // replace the program by the file reqname and run it from the beginning
+#define VMREQ_RUN           2       // clear the variables and run the program from reqname (label) / reqline, or the start
 
 #define VM_PRINT_SEP_NONE   UINT16_C(0)
 #define VM_PRINT_SEP_SEMIC  UINT16_C(4)
@@ -135,12 +145,19 @@ typedef struct _vm_t {
     int             (*getkey)( struct _vm_t*, void*, int channel );                // GET: waits for a key code (1..255), <= 0 = end of input
     bool            (*interrupt)( struct _vm_t*, void* );                          // polled every VM_INTERRUPT_STEPS instructions and when INPUT/GET get no input: true = stop ("Break")
     bool            (*save)( struct _vm_t*, void*, const char* filename, bool ascii );  // SAVE: the host saves the program
+    // LIST: the host lists the program to the VM's current channel; first/last are a label name ("" = none) or a line
+    // number (-1 = none); a missing end is unbounded. Returns false after reporting an error.
+    bool            (*list)( struct _vm_t*, void*, const char* firstlabel, int32_t firstline, const char* lastlabel, int32_t lastline );
+    int             request;        // VMREQ_*: LOAD / RUN stop the VM and leave a request for the host (see vm_run_at)
+    char*           reqname;        // LOAD: the file name; RUN: the label name ("" = none); owned by the VM
+    int32_t         reqline;        // RUN: the line number, -1 = none
     struct timespec started;        // for the system timer TI
 } vm_t;
 
 void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem );
 void cleanup_vm( vm_t* vm );        // frees the stacks and the strings still on the data stack
 bool vm_run( vm_t* vm );            // runs from offset 0 until the end of the code; false after reporting an error
+void vm_clear_request( vm_t* vm );    // forgets a pending request (frees the name)
 bool vm_run_at( vm_t* vm, uint32_t start );     // same, starting at the given code offset
 
 #endif

@@ -97,7 +97,7 @@ bool cgen_note_line( codegen_t* cgen, compiler_t* comp, uint32_t lineno ) {
     return true;
 }
 
-static bool cc_find_line( const codegen_t* cgen, uint32_t lineno, uint32_t* paddr ) {
+bool cgen_find_line( const codegen_t* cgen, uint32_t lineno, uint32_t* paddr ) {
     // the table is in ascending order
     size_t lo = 0, hi = cgen->numlineaddrs;
     while ( lo < hi ) {
@@ -161,7 +161,7 @@ bool cgen_finish_control( codegen_t* cgen, compiler_t* comp ) {
         uint32_t addr = 0;
         if ( fx->lineno == CGEN_FIXUP_END ) {
             addr = cgen->codesize;
-        } else if ( !cc_find_line( cgen, fx->lineno, &addr ) ) {
+        } else if ( !cgen_find_line( cgen, fx->lineno, &addr ) ) {
             char msg[64];
             snprintf( msg, sizeof(msg), "Undefined line number %u", (unsigned) fx->lineno );
             comp->iter.hdr.lineno = fx->srcline;    // for the error message

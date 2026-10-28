@@ -7,17 +7,17 @@ Order = suggested order, not a commitment.
 
 ## 1. Program commands as real language statements *(needs design — suggested next)*
 
-`RUN`, `NEW` and `LIST [first[-last]]` exist only as host-level commands in `repl_enter()` (`basrepl.c`): they can't be used inside a
-program and have no grammar, token handling or code generation. The rest of the family has nothing yet.
+`RUN [line|label]`, `LIST [a][-[b]]` and `LOAD name$` are language statements now (usable in programs, see `docs/basic-language.md`).
+`NEW` is still a host-level command in `repl_enter()` (`basrepl.c`); the rest of the family has nothing yet.
 
-- [ ] `RUN` (with line number / label?), `NEW`, `LIST` (ranges, output channel?) as statements in `bascomp.ebnf`
-- [ ] `LOAD` / `SAVE` conventions: file names, ascii vs. binary format; **a loader for the binary `SAVE` format** (it has no file
-      signature and no loader at all, see `docs/compiler-and-vm.md`)
+- [ ] `NEW` as a statement (what does it do inside a program? it would end the program) — decide with `CLEAR`
+- [ ] `LIST` with an output channel (`LIST #1,10-20`; today always the VM's channel 0) and `RUN`/`LOAD` taking more arguments?
+- [ ] `LOAD`/`SAVE`: file names are plain paths relative to the current directory; no `.BAS` default extension, no directory handling
 - [ ] `DELETE`, `RENUM` (must fix up `GOTO`/`GOSUB`/`ON`/`RESTORE`/`THEN` targets), `EDIT`, `MERGE`, `CHAIN`, `FILES`
 - [ ] `CLEAR` (variables only, keep the program?) — together with `NEW` this also cures the growth of the code segment caused by
       direct mode lines (see section 4)
 
-Questions to decide: what `RUN`/`LIST` take as arguments; whether `NEW`/`CLEAR`/`LOAD` may appear inside a program; what `CHAIN`
+Questions to decide: whether `NEW`/`CLEAR` may appear inside a program; what `CHAIN`
 and `MERGE` do with variables and line numbers; where files live (current directory?); what `FILES` shows.
 
 ## 2. Smaller language items *(each needs a short design decision)*

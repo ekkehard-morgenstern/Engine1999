@@ -60,6 +60,10 @@ void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem ) {
     vm->inlen    = vm->inpos = 0;
     vm->inredo   = 0;
     vm->save     = 0;
+    vm->list     = 0;
+    vm->request  = VMREQ_NONE;
+    vm->reqname  = 0;
+    vm->reqline  = -1;
     clock_gettime( CLOCK_MONOTONIC, &vm->started );
 }
 
@@ -84,7 +88,15 @@ static void vm_clear_stacks( vm_t* vm ) {
     }
 }
 
+void vm_clear_request( vm_t* vm ) {
+    vm->request = VMREQ_NONE;
+    free( vm->reqname );
+    vm->reqname = 0;
+    vm->reqline = -1;
+}
+
 void cleanup_vm( vm_t* vm ) {
+    vm_clear_request( vm );
     vm_clear_stacks( vm );
     free( vm->dstack );
     free( vm->rstack );
@@ -1030,6 +1042,63 @@ static bool vm_save_program( vm_t* vm ) {
     return ok;
 }
 
+// LOAD ( s -- ): leaves a request for the host and ends the run
+static bool vm_load_program( vm_t* vm ) {
+    char* name;
+    if ( !vm_dpop_str( vm, &name ) ) {
+        return false;
+    }
+    if ( name[0] == '\0' ) {
+        free( name );
+        return vm_error( vm, "Illegal argument" );
+    }
+    vm_clear_request( vm );
+    vm->request = VMREQ_LOAD;
+    vm->reqname = name;
+    vm->pc = vm->cgen->codesize;
+    return true;
+}
+
+// RUNP ( s n -- ): label name ("" = none) and line number (-1 = none)
+static bool vm_run_program( vm_t* vm ) {
+    double num; char* name;
+    if ( !vm_dpop_num( vm, &num ) ) {
+        return false;
+    }
+    if ( !vm_dpop_str( vm, &name ) ) {
+        return false;
+    }
+    if ( num < -1.0 || num > (double) LINENO_MAX ) {
+        free( name );
+        return vm_error( vm, "Illegal argument" );
+    }
+    vm_clear_request( vm );
+    vm->request = VMREQ_RUN;
+    vm->reqname = name;
+    vm->reqline = (int32_t) num;
+    vm->pc = vm->cgen->codesize;
+    return true;
+}
+
+// LIST ( s1 n1 s2 n2 -- )
+static bool vm_list_program( vm_t* vm ) {
+    double n1 = 0, n2 = 0; char* s1 = 0; char* s2 = 0;
+    bool ok = vm_dpop_num( vm, &n2 ) && vm_dpop_str( vm, &s2 ) && vm_dpop_num( vm, &n1 ) && vm_dpop_str( vm, &s1 );
+    if ( ok && ( n1 < -1.0 || n1 > (double) LINENO_MAX || n2 < -1.0 || n2 > (double) LINENO_MAX ) ) {
+        ok = vm_error( vm, "Illegal argument" );
+    }
+    if ( ok && vm->list == 0 ) {
+        ok = vm_error( vm, "LIST is not available" );
+    }
+    if ( ok ) {
+        ok = vm->list( vm, vm->userdata, s1, (int32_t) n1, s2, (int32_t) n2 );
+        vm->column = 0;
+    }
+    free( s1 );
+    free( s2 );
+    return ok;
+}
+
 // FRE: the memory that is available for allocation, in bytes (Linux: MemAvailable from /proc/meminfo, else 0)
 static double vm_free_memory( void ) {
     FILE* f = fopen( "/proc/meminfo", "r" );
@@ -1322,6 +1391,9 @@ static bool vm_step( vm_t* vm ) {
             return vm_system_function( vm, opcode );
         case INS_SHEX: return vm_shell_execute( vm );
         case INS_SAVE: return vm_save_program( vm );
+        case INS_LOAD: return vm_load_program( vm );
+        case INS_RUNP: return vm_run_program( vm );
+        case INS_LIST: return vm_list_program( vm );
         case INS_SLFT: case INS_SRGT: case INS_SMID:
             return vm_set_substring( vm, opcode, param );
         case INS_ERAS:
@@ -1378,6 +1450,7 @@ bool vm_run( vm_t* vm ) {
 
 bool vm_run_at( vm_t* vm, uint32_t start ) {
     vm_clear_stacks( vm );
+    vm_clear_request( vm );
     vm->pc = start;
     vm->line = LINENO_NONE;
     vm->column = 0;

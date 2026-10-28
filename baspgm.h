@@ -69,9 +69,20 @@ void link_line( program_t* pgm, line_t* prev, line_t* line );   // inserts after
 void unlink_line( program_t* pgm, line_t* line );
 void delete_line( program_t* pgm, line_t* line );               // unlinks and frees
 bool enter_line( program_t* pgm, const uint8_t* tokline, bool (*directmode)( program_t*, const uint8_t*, size_t ) );
+// binary program file: PGMFILE_HEADER_SIZE header bytes (magic 0x89 'E' '9' '9' + format version), then the encoded lines.
+// The first magic byte is not ASCII, so a text listing can never be mistaken for a binary file.
+#define PGMFILE_MAGIC_SIZE      4U
+#define PGMFILE_HEADER_SIZE     5U
+#define PGMFILE_VERSION         1U
 // writes the program to a stream, either as text (one line per program line, as listed) or in binary form
-// (the encoded lines, each a linehdr_t of LINEHDR_SIZE bytes followed by its tokens)
+// (the header, then the encoded lines, each a linehdr_t of LINEHDR_SIZE bytes followed by its tokens)
 bool save_program( program_t* pgm, FILE* out, bool ascii );
+// checks for the binary header at the current position of the stream and consumes it if present;
+// returns false if the magic is missing (then the stream is rewound to where it was, so a text loader can read it)
+// or the version is unknown; *pversion receives the version if the magic was found (0 otherwise)
+bool read_program_header( FILE* in, uint8_t* pversion );
+// finds the line that holds "LABEL <label>" (the first one), by scanning the program text; false if there is none
+bool find_label_line( program_t* pgm, const char* label, uint32_t* plineno );
 void list_program( program_t* pgm, uint32_t lineno_first, uint32_t lineno_last, void (*printer)( const char* ) );
 
 #endif

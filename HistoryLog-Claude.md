@@ -13,7 +13,16 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-(none)
+- 2026-10-28: Binary `SAVE` files now start with a 5-byte header: magic `89 45 39 39` (0x89 "E99") + format version 1 (`PGMFILE_*` in `baspgm.h`, written by `save_program()`). New `read_program_header( FILE*, &version )` in `baspgm.c` for a future `LOAD`: consumes the header, or rewinds the stream when the magic is missing (text file); unknown version / truncated header → false. `vmtest1`: the three binary SAVE expectations now include the header, 5 new header cases (322 total, all pass, valgrind clean); `repltest1` 36 pass. Docs (`compiler-and-vm.md`, `roadmap.md`), `SESSION.md` updated. The loader itself is not written yet.
+- 2026-10-28: **`LOAD`, `RUN` and `LIST` are language statements**, usable in direct mode and inside programs (the host level `RUN`/`LIST` in `repl_enter()` are gone; `NEW` stays).
+  - Grammar (`bascomp.ebnf`, `bascomp.c`): `load-stmt := LOAD str-expr`, `run-stmt := RUN [goto-target]`, `list-stmt := LIST [goto-target] [ - [goto-target] ]`; nodes `NT_LOADSTMT 0x5C`, `NT_RUNSTMT 0x5D`, `NT_LISTSTMT 0x5E` (flags `LISTF_*`). A target is a line number or a label. `LIST 20` lists that line only, `LIST a-b` a range, `a-` to the end, `-b` from the start.
+  - Code generation: new `cgenprog.c` (in the makefile); instructions `LOAD 0x139 ( s -- )`, `RUNP 0x13A ( s n -- )`, `LIST 0x13B ( s1 n1 s2 n2 -- )` in `instset.h`. Targets are passed as label *name* + line number (`""`/`-1` = none). `vmem_get_var_name()` added to `vars`; `cc_find_line` became the public `cgen_find_line()`.
+  - VM: `LOAD`/`RUNP` store a request (`vm->request`, `reqname`, `reqline`; `VMREQ_*`) and end the run, because the code being run must not be replaced from inside; `LIST` calls the new callback `vm->list`.
+  - REPL (`basrepl.c`): `repl_finish()` carries out the requests in a loop (so a program ending with `RUN` doesn't recurse): `repl_load_program()` reads a binary file (via `read_program_header()`) or a text listing into a scratch program that replaces the old one only on success; RUN/LOAD clear the runtime, recompile and start at the beginning, a line or a label. Break is polled before every chained restart (`10 RUN` is interruptible). `LIST` prints through `list_program()` to the VM's channel; labels are resolved to lines by the new `find_label_line()` in `baspgm.c` (text scan of the detokenized lines).
+  - Behavior changes: `LIST X` is now "? Undefined label X" instead of "? Syntax error"; errors of RUN targets after the restart carry no line number ("? Undefined line number 99").
+  - Tests: `vmtest1` 346 cases (harness prints requests and LIST calls), `repltest1` 65 cases (RUN targets, LIST labels/ranges, LOAD binary/text/missing/garbage/truncated/future version, LOAD from a program, endless RUN + Break); both pass and are valgrind clean. Note: valgrind only works on a build without `-p` (the makefile's profiling timer kills `vmtest1` under valgrind after ~2.4 s CPU); I built the two tests without `-p` in the scratchpad for that. Not tried on the real SDL screen.
+  - Docs: `basic-language.md` (new section), `compiler-and-vm.md`, `architecture.md`, `build-and-test.md`, `roadmap.md`, `CLAUDE.md` table, `SESSION.md`.
+
 
 ## Log
 
@@ -136,3 +145,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 - Created this file, reconstructed from git history (23 commits up to `f5301e2`), with a Pending section for uncommitted work.
 - `CLAUDE.md`: added the rule to keep the log updated (pending entries per change; move them into the log with commit ID and timestamp after the user commits).
 - `SESSION.md`: added the same rule to the standing rules. No source changes.
+
+### fa623a3 — 2026-10-28 04:47:10 +0100 — "Claude History Log updated"
+1 file, +7/-1.
+- `HistoryLog-Claude.md`: moved the pending entry for the history log itself into the log as `d951a9c`. No source changes.

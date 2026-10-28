@@ -306,6 +306,19 @@ The 4096 extended instructions are as follows:
                             Releases the input buffer.
     0001 00111000       GETK - wait for a key and push it as a one character string ( -- s ) C=0 P=0
                             (GET stores it directly in a string variable, or converts it with ASC for a numeric one)
+    0001 00111001       LOAD - load program ( s -- ) C=0 P=0
+                            Asks the host to replace the program by the one in file <s> and to run it from the
+                            beginning (all variables cleared). The VM stores the request (vm_t.request) and stops;
+                            the host that called vm_run() carries it out. An empty name is an error.
+    0001 00111010       RUNP - run program ( s n -- ) C=0 P=0
+                            Asks the host to run the stored program from a line number (n >= 0) or a label (name s,
+                            if not empty) after clearing all variables; ( "" -1 ) = from the beginning. Same
+                            mechanism as LOAD.
+    0001 00111011       LIST - list program ( s1 n1 s2 n2 -- ) C=0 P=0
+                            Lists the stored program through the host (list callback) to the current output channel.
+                            (s1,n1) is the first line, (s2,n2) the last one: a label name (empty = none) or a line
+                            number (-1 = none). A side that is not given is unbounded; a label stands for the line it
+                            is defined in. Both sides given = an inclusive range.
 
 */
 
@@ -414,5 +427,8 @@ The 4096 extended instructions are as follows:
 #define INS_INPS        UINT16_C(0X136)
 #define INS_INPE        UINT16_C(0X137)
 #define INS_GETK        UINT16_C(0X138)
+#define INS_LOAD        UINT16_C(0X139)
+#define INS_RUNP        UINT16_C(0X13A)
+#define INS_LIST        UINT16_C(0X13B)
 
 #endif

@@ -229,6 +229,9 @@ bool cgen_gen_rstr( codegen_t* cgen, bool hasparam, uint16_t dataoffs );
 
 // BASIC system command implementations
 bool cgen_gen_save( codegen_t* cgen );
+bool cgen_gen_load( codegen_t* cgen );
+bool cgen_gen_runp( codegen_t* cgen );
+bool cgen_gen_list( codegen_t* cgen );
 bool cgen_gen_pchn( codegen_t* cgen );
 bool cgen_gen_pnum( codegen_t* cgen, bool hasparam, uint16_t param );
 bool cgen_gen_pstr( codegen_t* cgen, bool hasparam, uint16_t param );
@@ -294,6 +297,15 @@ bool cgen_finish_data( codegen_t* cgen, compiler_t* comp );     // resolves the 
 void cgen_note_label_data( codegen_t* cgen, uint16_t varoffs ); // a LABEL statement is generated (see RESTORE)
 bool cgen_from_fnassignstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_defstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+
+// -- program commands (cgenprog.c) -------------------------------------------
+
+bool cgen_from_loadstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_runstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_liststmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+
+// finds the code offset of a numbered line of the program compiled last; false if it doesn't exist
+bool cgen_find_line( const codegen_t* cgen, uint32_t lineno, uint32_t* paddr );
 
 // -- control flow (cgenctl.c) ------------------------------------------------
 

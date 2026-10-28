@@ -277,9 +277,34 @@ static const testcase_t cases[] = {
     { "shell strips newlines",  "PRINT \"[\"+`printf 'x\\n\\n'`+\"]\"",          "[x]\n" },
     { "shell no output",        "PRINT LEN(`true`)",                              "0\n" },
     { "shell after assignment", "C$=\"echo \"+\"ok\"\nPRINT `echo ok`",       "ok\n" },
-    { "SAVE binary default",    "10 PRINT 1\n20 SAVE \"X\"",                       "1\n<save X binary>\n00 00 0A 00 0A 20 0B 20 31 00 00 00 14 00 0D 20 14 20 03 00 01 58 00 \n" },
+    { "SAVE binary default",    "10 PRINT 1\n20 SAVE \"X\"",                       "1\n<save X binary>\n89 45 39 39 01 00 00 0A 00 0A 20 0B 20 31 00 00 00 14 00 0D 20 14 20 03 00 01 58 00 \n" },
     { "SAVE ascii",             "10 PRINT 1\n20 SAVE \"X\",A",                     "1\n<save X ascii>\n10 PRINT 1\n20 SAVE \"X\",A\n" },
-    { "SAVE binary option",     "10 PRINT 1\n20 SAVE \"X\",B",                     "1\n<save X binary>\n00 00 0A 00 0A 20 0B 20 31 00 00 00 14 00 12 20 14 20 03 00 01 58 2C 8A 00 01 42 00 \n" },
+    { "SAVE binary option",     "10 PRINT 1\n20 SAVE \"X\",B",                     "1\n<save X binary>\n89 45 39 39 01 00 00 0A 00 0A 20 0B 20 31 00 00 00 14 00 12 20 14 20 03 00 01 58 2C 8A 00 01 42 00 \n" },
+    // LOAD, RUN, LIST (the VM only leaves requests / calls the host)
+    { "RUN",                    "RUN",                                             "<request RUN \"\" -1>\n" },
+    { "RUN line",               "RUN 100",                                         "<request RUN \"\" 100>\n" },
+    { "RUN label",              "RUN START",                                       "<request RUN \"START\" -1>\n" },
+    { "RUN ends the run",       "PRINT 1:RUN 20:PRINT 2",                          "1\n<request RUN \"\" 20>\n" },
+    { "RUN in IF",              "IF 1 THEN RUN 5",                                 "<request RUN \"\" 5>\n" },
+    { "RUN bad line number",    "RUN 1000000",                                     "? Invalid line number\n" },
+    { "LOAD",                   "LOAD \"PROG\"",                                   "<request LOAD PROG>\n" },
+    { "LOAD name expression",   "N$=\"AB\"\nLOAD N$+\"C\"",                          "<request LOAD ABC>\n" },
+    { "LOAD ends the run",      "PRINT 1:LOAD \"X\":PRINT 2",                      "1\n<request LOAD X>\n" },
+    { "LOAD empty name",        "LOAD \"\"",                                       "? Illegal argument\n" },
+    { "LOAD without name",      "LOAD",                                            "? String expression expected\n" },
+    { "LIST all",               "LIST",                                            "<list * * on channel 0>\n" },
+    { "LIST one line",          "LIST 20",                                         "<list 20 20 on channel 0>\n" },
+    { "LIST range",             "LIST 10-30",                                      "<list 10 30 on channel 0>\n" },
+    { "LIST from",              "LIST 10-",                                        "<list 10 * on channel 0>\n" },
+    { "LIST up to",             "LIST -30",                                        "<list * 30 on channel 0>\n" },
+    { "LIST label",             "LIST A",                                          "<list A A on channel 0>\n" },
+    { "LIST labels",            "LIST A-B",                                        "<list A B on channel 0>\n" },
+    { "LIST label to line",     "LIST A-99",                                       "<list A 99 on channel 0>\n" },
+    { "LIST line to label",     "LIST 5-B",                                        "<list 5 B on channel 0>\n" },
+    { "LIST then more",         "LIST 1-2:PRINT 3",                                "<list 1 2 on channel 0>\n3\n" },
+    { "LIST uses channel 0",    "PRINT #2,\"X\"\nLIST",                              "[#2]X[#2]\n<list * * on channel 0>\n" },
+    { "LIST bad line number",   "LIST 1000000",                                    "? Invalid line number\n" },
+    { "LIST minus alone",       "LIST -",                                          "<list * * on channel 0>\n" },
     { "SAVE of empty program",  "SAVE \"X\",A",                                    "<save X ascii>\n" },
     { "SAVE with name expression", "N$=\"AB\"\nSAVE N$+\"C\",A",                   "<save ABC ascii>\n" },
     { "SAVE bad mode",          "SAVE \"X\",Z",                                    "? Bad SAVE mode\n" },
@@ -441,6 +466,27 @@ static bool vm_save( struct _vm_t* vm, void* usrdata, const char* filename, bool
     return ok;
 }
 
+// LIST: the call is described in the output
+static void list_end( char* buf, size_t size, const char* label, int32_t line ) {
+    if ( label[0] ) {
+        snprintf( buf, size, "%s", label );
+    } else if ( line >= 0 ) {
+        snprintf( buf, size, "%d", (int) line );
+    } else {
+        snprintf( buf, size, "*" );
+    }
+}
+
+static bool vm_list( struct _vm_t* vm, void* usrdata, const char* firstlabel, int32_t firstline,
+    const char* lastlabel, int32_t lastline ) {
+    char a[80], b[80], text[200];
+    list_end( a, sizeof(a), firstlabel, firstline );
+    list_end( b, sizeof(b), lastlabel, lastline );
+    snprintf( text, sizeof(text), "<list %s %s on channel %d>\n", a, b, vm->channel );
+    out_append( text );
+    return true;
+}
+
 static int vm_inkey( struct _vm_t* vm, void* usrdata ) {
     return keys && *keys ? (uint8_t) *keys++ : 0;
 }
@@ -515,8 +561,19 @@ static bool compile_and_run( void ) {
     vm.input    = vm_input;
     vm.getkey   = vm_getkey;
     vm.save     = vm_save;
+    vm.list     = vm_list;
     vm.maxsteps = UINT64_C(1000000);
     ok = vm_run_at( &vm, start );
+    if ( ok && vm.request != VMREQ_NONE ) {
+        // LOAD / RUN end the run and leave a request; the host (here: the test) would carry it out
+        char text[200];
+        if ( vm.request == VMREQ_LOAD ) {
+            snprintf( text, sizeof(text), "<request LOAD %s>\n", vm.reqname );
+        } else {
+            snprintf( text, sizeof(text), "<request RUN \"%s\" %d>\n", vm.reqname, (int) vm.reqline );
+        }
+        out_append( text );
+    }
     cleanup_vm( &vm );
     return ok;
 }
@@ -652,6 +709,41 @@ static bool run_dynamic_cases( buf_t* tokbuf, size_t* pnum, size_t* pfailed ) {
     return true;
 }
 
+// read_program_header(): binary file accepted and consumed, text rewound, unknown version / truncated header rejected
+static bool check_one_header( const char* name, const uint8_t* data, size_t size, bool expect, uint8_t expectver, long expectpos ) {
+    FILE* f = fmemopen( (void*) data, size, "rb" );
+    if ( f == 0 ) {
+        return false;
+    }
+    uint8_t ver = 99;
+    bool ok = read_program_header( f, &ver );
+    long pos = ftell( f );
+    fclose( f );
+    bool pass = ok == expect && ver == expectver && pos == expectpos;
+    printf( "%s  %s\n", pass ? "PASS" : "FAIL", name );
+    return pass;
+}
+
+static void run_header_cases( size_t* pnum, size_t* pfailed ) {
+    static const uint8_t good[]   = { 0x89, 'E', '9', '9', 1, 0, 0, 10 };
+    static const uint8_t future[] = { 0x89, 'E', '9', '9', 7, 0, 0, 10 };
+    static const uint8_t cut[]    = { 0x89, 'E', '9', '9' };
+    static const uint8_t text[]   = { '1', '0', ' ', 'P', 'R', 'I', 'N', 'T' };
+    bool r[5] = {
+        check_one_header( "program header: binary file", good, sizeof(good), true, 1, 5 ),
+        check_one_header( "program header: unknown version", future, sizeof(future), false, 7, 5 ),
+        check_one_header( "program header: truncated", cut, sizeof(cut), false, 0, 4 ),
+        check_one_header( "program header: text file is rewound", text, sizeof(text), false, 0, 0 ),
+        check_one_header( "program header: empty file", text, 0, false, 0, 0 ),
+    };
+    for ( size_t i=0; i < 5; ++i ) {
+        ++*pnum;
+        if ( !r[i] ) {
+            ++*pfailed;
+        }
+    }
+}
+
 int main( int argc, char** argv ) {
     if ( argc > 1 && strcmp( argv[1], "-v" ) == 0 ) {
         basdbg_flags = BASDBG_PARSE | BASDBG_CODE;
@@ -674,6 +766,7 @@ int main( int argc, char** argv ) {
     if ( !run_dynamic_cases( tokbuf, &numcases, &failed ) ) {
         ++failed;
     }
+    run_header_cases( &numcases, &failed );
     cleanup_compiler( &comp );
     cleanup_runtime( &rt );
     delete_buffer( tokbuf );

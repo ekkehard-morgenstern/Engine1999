@@ -36,6 +36,9 @@ failed cases.
 Usage: repltest1 [-v]       -v: show all debug output (see basdebug.h)
 */
 
+// the program files of the LOAD cases (in the current directory; removed at the end)
+#define TESTFILE    "repltest1.tmp"
+
 typedef struct _testcase_t {
     const char* name;
     const char* source;     // lines separated by '\n'
@@ -68,9 +71,39 @@ static const testcase_t cases[] = {
     { "LIST range",             "10 A=1\n20 A=2\n30 A=3\nLIST 20-30",             "20 A=2\n30 A=3\n" },
     { "LIST one line",          "10 A=1\n20 A=2\nLIST 20",                        "20 A=2\n" },
     { "LIST up to",             "10 A=1\n20 A=2\nLIST -10",                       "10 A=1\n" },
-    { "LIST syntax error",      "LIST X",                                         "? Syntax error\n" },
+    { "LIST undefined label",   "LIST X",                                         "? Undefined label X\n" },
+    { "LIST syntax error",      "LIST 10 20",                                     "? End of line expected\n" },
     { "lower case",             "print 1+1\nlist",                                "2\n" },
     { "string keeps case",      "print \"Hello\"",                                "Hello\n" },
+    // RUN, LIST and LOAD as statements
+    { "RUN to a line",          "10 PRINT 1\n20 RUN 40\n30 PRINT 3\n40 PRINT 4\nRUN",     "1\n4\n" },
+    { "RUN to a label",         "10 PRINT 1\n20 RUN L\n30 PRINT 3\n40 LABEL L\n50 PRINT 5\nRUN", "1\n5\n" },
+    { "RUN in a program clears variables", "10 A=7\n20 RUN 40\n30 END\n40 PRINT A\nRUN",   "0\n" },
+    { "RUN line in direct mode","10 PRINT 1\n20 PRINT 2\nRUN 20",                      "2\n" },
+    { "RUN label in direct mode","10 PRINT 1\n20 LABEL X\n30 PRINT 3\nRUN X",         "3\n" },
+    { "RUN undefined line",     "10 PRINT 1\nRUN 99",                                   "? Undefined line number 99\n" },
+    { "RUN undefined label",    "10 PRINT 1\n20 RUN NOWHERE\nRUN",                      "1\n? Undefined label NOWHERE\n" },
+    { "RUN a counted loop",     "10 N=N+1\n20 PRINT N\n30 IF N<3 THEN GOTO 10\n40 PRINT \"E\"\nRUN 10", "1\n2\n3\nE\n" },
+    { "program restarts itself, Break stops it", "10 RUN\nRUN",                              "? Break in line 10\n", 0, 3 },
+    { "RUN then direct mode",   "10 A=4\n20 RUN 30\n30 A=A+1\nRUN\nPRINT A",            "1\n" },
+    { "LIST to a label",        "10 A=1\n20 LABEL L\n30 A=3\n40 A=4\nLIST -L",         "10 A=1\n20 LABEL L\n" },
+    { "LIST from a label",      "10 A=1\n20 LABEL L\n30 A=3\n40 A=4\nLIST L-",         "20 LABEL L\n30 A=3\n40 A=4\n" },
+    { "LIST a label",           "10 A=1\n20 LABEL L\n30 A=3\nLIST L",                  "20 LABEL L\n" },
+    { "LIST label range",       "10 LABEL A\n20 A=1\n30 LABEL B\n40 A=4\nLIST A-B",    "10 LABEL A\n20 A=1\n30 LABEL B\n" },
+    { "LIST label to line",     "10 LABEL A\n20 A=1\n30 A=3\nLIST A-20",               "10 LABEL A\n20 A=1\n" },
+    { "LIST skips LABEL in a string", "10 PRINT \"LABEL X\"\n20 LABEL X\nLIST X",      "20 LABEL X\n" },
+    { "LIST from a program",    "10 LIST 20\n20 PRINT 2\nRUN",                         "20 PRINT 2\n2\n" },
+    { "LIST all from a program","10 LIST\n20 PRINT 2\nRUN",                            "10 LIST\n20 PRINT 2\n2\n" },
+    { "LIST undefined label in a program", "10 LIST X\nRUN",                           "? Undefined label X in line 10\n" },
+    { "LOAD a binary file",     "10 PRINT \"B\"\nSAVE \"" TESTFILE "\"\nNEW\nLOAD \"" TESTFILE "\"\nLIST", "B\n10 PRINT \"B\"\n" },
+    { "LOAD a text file",       "10 PRINT \"B\"\n20 PRINT 2\nSAVE \"" TESTFILE "\",A\nNEW\nLOAD \"" TESTFILE "\"", "B\n2\n" },
+    { "LOAD in a program replaces it and runs it", "10 PRINT \"B\"\nSAVE \"" TESTFILE "\"\nNEW\n10 PRINT \"A\"\n20 LOAD \"" TESTFILE "\"\n30 PRINT \"C\"\nRUN\nLIST", "A\nB\n10 PRINT \"B\"\n" },
+    { "LOAD clears variables", "10 PRINT A\nSAVE \"" TESTFILE "\"\nNEW\nA=5\nLOAD \"" TESTFILE "\"", "0\n" },
+    { "LOAD missing file",      "10 PRINT 1\nLOAD \"no/such/file\"\nLIST",             "? File not found\n10 PRINT 1\n" },
+    { "LOAD keeps the program on a bad file", "10 PRINT 1\nA$=`printf 'garbage' >" TESTFILE "`\nLOAD \"" TESTFILE "\"\nLIST", "? Line number missing in program file\n10 PRINT 1\n" },
+    { "LOAD a truncated binary file", "10 PRINT 1\nSAVE \"" TESTFILE "\"\nA$=`truncate -s -2 " TESTFILE "`\nLOAD \"" TESTFILE "\"\nLIST", "? Bad program file\n10 PRINT 1\n" },
+    { "LOAD a future file version", "10 PRINT 1\nA$=`printf '\\211E99\\7' >" TESTFILE "`\nLOAD \"" TESTFILE "\"\nLIST", "? Unsupported program file version\n10 PRINT 1\n" },
+    { "LOAD at the end of a chain", "10 PRINT \"B\"\nSAVE \"" TESTFILE "\"\nNEW\n10 PRINT \"A\"\n20 LOAD \"" TESTFILE "\"\nRUN", "A\nB\n" },
     { "NEW",                    "10 PRINT 1\nA=3\nNEW\nRUN\nPRINT A",             "? Empty program\n0\n" },
     { "program then direct",    "10 DEF FN A(X)=X+1\nRUN\nPRINT FN A(1)",         "2\n" },
     { "INPUT in direct mode",   "INPUT \"N\";A:PRINT A*2",                        "N? 21\n42\n", "21\n" },
@@ -142,6 +175,10 @@ static char* host_input( struct _vm_t* vm, void* usrdata, int channel ) {
     return line;
 }
 
+static bool host_save( struct _vm_t* vm, void* usrdata, const char* filename, bool ascii ) {
+    return repl_save_program( (repl_t*) usrdata, filename, ascii );
+}
+
 static bool host_interrupt( struct _vm_t* vm, void* usrdata ) {
     return breakafter && ++polls >= breakafter;
 }
@@ -161,6 +198,7 @@ static bool run_case( const testcase_t* tc ) {
     repl.input     = host_input;
     repl.getkey    = host_getkey;
     repl.interrupt = host_interrupt;
+    repl.save      = host_save;
     char* src = strdup( tc->source );
     for ( char* line = strtok( src, "\n" ); line; line = strtok( 0, "\n" ) ) {
         repl_enter( &repl, line );
@@ -187,6 +225,7 @@ int main( int argc, char** argv ) {
         basdbg_flags = BASDBG_ALL;
     }
     size_t numcases = sizeof(cases) / sizeof(cases[0]), failed = 0;
+    remove( TESTFILE );
     for ( size_t i=0; i < numcases; ++i ) {
         if ( run_case( &cases[i] ) ) {
             printf( "PASS  %s\n", cases[i].name );
@@ -197,6 +236,7 @@ int main( int argc, char** argv ) {
             ++failed;
         }
     }
+    remove( TESTFILE );
     printf( "%u of %u passed\n", (unsigned)( numcases - failed ), (unsigned) numcases );
     free( outbuf );
     return (int) failed;

@@ -211,7 +211,15 @@ control-flow-stmt := for-stmt | next-stmt | goto-stmt | return-stmt | label-stmt
                      repeat-stmt | until-stmt | while-stmt | wend-stmt | uend-stmt | on-stmt |
                      singleline-if-stmt | multiline-if-stmt .
 
-stmt := io-stmt | assign-stmt | control-flow-stmt .
+-- Program commands. They work inside programs, too. RUN and LOAD restart the program (RUN: after clearing all
+-- variables, at the given line or label; LOAD: replace the program by the one in the file and run it from the
+-- beginning); LIST lists the program: a single target lists that line, "a-b" the range, "a-" to the end, "-b" from the start.
+load-stmt := TOK_LOAD str-expr .
+run-stmt := TOK_RUN [ goto-target ] .
+list-stmt := TOK_LIST [ goto-target ] [ TOK_MINUS [ goto-target ] ] .
+prog-stmt := load-stmt | run-stmt | list-stmt .
+
+stmt := io-stmt | prog-stmt | assign-stmt | control-flow-stmt .
 stmt-list := stmt { TOK_COLON stmt } .
 stmt-line := stmt-list [ TOK_QUOLIT ] TOK_EOL .
 stmt-lines := stmt-line { stmt-line } .

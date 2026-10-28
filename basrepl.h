@@ -50,9 +50,12 @@ pointer survives from one direct mode line to the next). The host feeds it text 
     - a line with a line number is stored in the program (a line number alone deletes the line)
     - a line without one is compiled and run at once (direct mode); the code is appended to the code segment, so
       the variables and the user functions defined by earlier lines stay valid
-    - RUN compiles the stored program and runs it, with all variables cleared first (afterwards the variables
-      stay available in direct mode); NEW deletes the program and clears everything; LIST [first[-last]] lists it.
-      These three are host level commands for now (the language has no grammar for the program commands yet)
+    - RUN [line|label] compiles the stored program and runs it, with all variables cleared first (afterwards the
+      variables stay available in direct mode); LIST [a][-[b]] lists it; LOAD "file" replaces it by the program in
+      the file (binary or text, see baspgm.h) and runs that. These three are language statements, usable in programs
+      too (cgenprog.c); the VM can't carry out RUN and LOAD itself, so it stops and leaves a request (vm.h) that the
+      REPL carries out once the run has ended (repl_finish(), iteratively: a program may end with RUN).
+      NEW deletes the program and clears everything; it is the one host level command left.
 
 The host sets the callbacks after init_repl(). Output, errors and keyboard access all go through them; the VM
 callbacks have the signatures of vm.h and receive the repl_t* as their user data parameter (use repl_t.userdata
@@ -86,7 +89,7 @@ bool init_repl( repl_t* repl );             // false if out of memory
 void cleanup_repl( repl_t* repl );
 
 bool repl_enter( repl_t* repl, const char* text );  // one line of input; false if it was rejected (already reported)
-bool repl_run( repl_t* repl );              // RUN
+bool repl_run( repl_t* repl );              // RUN (from the beginning)
 void repl_new( repl_t* repl );              // NEW
 void repl_list( repl_t* repl, uint32_t first, uint32_t last );  // LIST (LINENO_NONE = unbounded)
 bool repl_save_program( repl_t* repl, const char* filename, bool ascii );   // for the host's SAVE callback

@@ -185,6 +185,9 @@ static const char* opcode_to_string( uint16_t opcode ) {
         case INS_INPS:      return "INPS";
         case INS_INPE:      return "INPE";
         case INS_GETK:      return "GETK";
+        case INS_LOAD:      return "LOAD";
+        case INS_RUNP:      return "RUNP";
+        case INS_LIST:      return "LIST";
         default:            break;
     }
     return "???";
@@ -682,6 +685,18 @@ bool cgen_gen_eras( codegen_t* cgen, uint16_t varoffs ) {
 
 bool cgen_gen_save( codegen_t* cgen ) {
     return cgen_gen_ins12( cgen, INS_SAVE, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_load( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_LOAD, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_runp( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_RUNP, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_list( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_LIST, false, false, UINT16_C(0) );
 }
 
 bool cgen_gen_pchn( codegen_t* cgen ) {
@@ -2535,6 +2550,9 @@ bool cgen_from_stmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         case NT_LETSTMT:    return cgen_from_letstmt( cgen, comp, node );
         case NT_PRINTSTMT:  return cgen_from_printstmt( cgen, comp, node );
         case NT_SAVESTMT:   return cgen_from_savestmt( cgen, comp, node );
+        case NT_LOADSTMT:   return cgen_from_loadstmt( cgen, comp, node );
+        case NT_RUNSTMT:    return cgen_from_runstmt( cgen, comp, node );
+        case NT_LISTSTMT:   return cgen_from_liststmt( cgen, comp, node );
         case NT_STMTLIST:   return cgen_from_stmtlist( cgen, comp, node );
         case NT_DIMSTMT:    return cgen_from_dimstmt( cgen, comp, node );
         case NT_ERASESTMT:  return cgen_from_erasestmt( cgen, comp, node );

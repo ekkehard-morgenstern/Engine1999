@@ -221,12 +221,103 @@ void list_program( program_t* pgm, uint32_t lineno_first, uint32_t lineno_last, 
     delete_buffer( buf );
 }
 
+static const uint8_t pgmfile_header[PGMFILE_HEADER_SIZE] = { 0x89, 'E', '9', '9', PGMFILE_VERSION };
+
+bool read_program_header( FILE* in, uint8_t* pversion ) {
+    *pversion = 0;
+    long start = ftell( in );
+    uint8_t hdr[PGMFILE_HEADER_SIZE];
+    size_t got = fread( hdr, 1U, PGMFILE_HEADER_SIZE, in );
+    if ( got >= PGMFILE_MAGIC_SIZE && memcmp( hdr, pgmfile_header, PGMFILE_MAGIC_SIZE ) == 0 ) {
+        if ( got == PGMFILE_HEADER_SIZE ) {
+            *pversion = hdr[PGMFILE_MAGIC_SIZE];
+            if ( *pversion == PGMFILE_VERSION ) {
+                return true;
+            }
+        }
+        return false;
+    }
+    if ( start >= 0 ) {
+        fseek( in, start, SEEK_SET );
+    }
+    return false;
+}
+
+static bool is_word_char( char c ) {
+    return ( c >= 'A' && c <= 'Z' ) || ( c >= 'a' && c <= 'z' ) || ( c >= '0' && c <= '9' ) || c == '_' || c == '.' ||
+        c == '$' || c == '%' || c == '!';
+}
+
+// copies the word at *pp (after blanks) to the buffer; false if there is none
+static bool next_word( const char** pp, char* word, size_t size ) {
+    const char* p = *pp;
+    while ( *p == ' ' ) {
+        ++p;
+    }
+    size_t n = 0;
+    while ( is_word_char( *p ) ) {
+        if ( n + 1U < size ) {
+            word[ n++ ] = *p;
+        }
+        ++p;
+    }
+    word[ n ] = '\0';
+    *pp = p;
+    return n > 0;
+}
+
+bool find_label_line( program_t* pgm, const char* label, uint32_t* plineno ) {
+    buf_t* buf = create_buffer();
+    if ( buf == 0 ) {
+        return false;
+    }
+    bool found = false;
+    size_t labellen = strlen( label );
+    size_t wordsize = labellen + 2U < 8U ? 8U : labellen + 2U;      // longer words can't match: they are cut off behind the label
+    char* word = (char*) malloc( wordsize );
+    for ( line_t* line = pgm->first; line && word && !found; line = line->next ) {
+        pgmiter_t iter; clear_iter( &iter, pgm );
+        iter_load_line( &iter, line );
+        clear_buffer( buf );
+        if ( !detokenize_line( buf, iter.tok, &iter.hdr ) ) {
+            break;
+        }
+        // the listing text starts with the line number; skip strings, shell literals and comments
+        const char* p = buf->buffer;
+        while ( *p && *p != '\'' && !found ) {
+            if ( *p == '"' || *p == '`' ) {
+                char quote = *p++;
+                while ( *p && *p != quote ) {
+                    ++p;
+                }
+                if ( *p ) {
+                    ++p;
+                }
+            } else if ( is_word_char( *p ) ) {
+                next_word( &p, word, wordsize );
+                if ( strcmp( word, "LABEL" ) == 0 && next_word( &p, word, wordsize ) && strcmp( word, label ) == 0 ) {
+                    *plineno = line->lineno;
+                    found = true;
+                }
+            } else {
+                ++p;
+            }
+        }
+    }
+    free( word );
+    delete_buffer( buf );
+    return found;
+}
+
 bool save_program( program_t* pgm, FILE* out, bool ascii ) {
     buf_t* buf = ascii ? create_buffer() : 0;
     if ( ascii && buf == 0 ) {
         return false;
     }
     bool ok = true;
+    if ( !ascii ) {
+        ok = fwrite( pgmfile_header, 1U, PGMFILE_HEADER_SIZE, out ) == PGMFILE_HEADER_SIZE;
+    }
     for ( line_t* line = pgm->first; line && ok; line = line->next ) {
         pgmiter_t iter; clear_iter( &iter, pgm );
         iter_load_line( &iter, line );

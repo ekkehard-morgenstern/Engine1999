@@ -165,6 +165,7 @@ bool vmem_set_var( varmem_t* vmem, uint16_t varoffs, uint8_t vartype, uint8_t nu
 // user-defined function variables: type (incl. VARTYPEF_FUNC), number of parameters, code offset (CODEOFFS_NONE if undefined)
 bool vmem_get_func_info( varmem_t* vmem, uint16_t varoffs, uint8_t* pfunctype, uint8_t* pnumparams, uint16_t* pcodeoffs );
 // type and name of a parameter (the name belongs to the variable)
+bool vmem_get_var_name( varmem_t* vmem, uint16_t varoffs, const char** pname );   // the name is owned by the variable
 bool vmem_get_func_param( varmem_t* vmem, uint16_t varoffs, uint8_t index, uint8_t* pparamtype, const char** pname );
 
 #endif

@@ -469,6 +469,15 @@ bool vmem_get_func_param( varmem_t* vmem, uint16_t varoffs, uint8_t index, uint8
     return true;
 }
 
+bool vmem_get_var_name( varmem_t* vmem, uint16_t varoffs, const char** pname ) {
+    var_t* var = vmem_var( vmem, varoffs );
+    if ( var == 0 ) {
+        return false;
+    }
+    *pname = var->name;
+    return true;
+}
+
 bool vmem_erase_array( varmem_t* vmem, uint16_t varoffs ) {
     var_t* var = vmem_var( vmem, varoffs );
     if ( var == 0 || ( var->type & VARTYPEF_ARRAY ) == 0 ) {
