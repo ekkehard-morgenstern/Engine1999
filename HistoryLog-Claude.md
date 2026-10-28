@@ -13,11 +13,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-- 2026-10-28: **`NEW` and `CLEAR` are language statements** (the last host level command, `NEW` in `repl_enter()`, is gone; `repl_command()` removed).
-  - Grammar/nodes: `new-stmt := NEW`, `clear-stmt := CLEAR`; `NT_NEWSTMT 0x5F`, `NT_CLEARSTMT 0x60`; code generation in `cgenprog.c`; instructions `NEW 0x13C`, `CLR 0x13D`.
-  - `NEW`: third request kind `VMREQ_NEW`; the VM stops, `repl_finish()` calls `repl_new()` (program, variables, functions deleted) and starts nothing, so a program using `NEW` ends and the host returns to the prompt. `CLEAR`: done by the VM itself, `vmem_clear_vars()` in `vars.c`: numbers 0, strings "", arrays emptied (dimensions kept, because arrays exist from parse time); labels, functions and hidden compiler variables (`@…`, e.g. FOR limit/step) are skipped, so the program keeps running correctly; the DATA pointer is not touched. The control variable of a running FOR is a normal variable and is cleared (documented).
-  - Tests: `vmtest1` 356 cases (+10), `repltest1` 74 cases (+9); both pass, valgrind clean (builds without `-p`, see the previous entry). Not tried on the real SDL screen.
-  - Docs: `basic-language.md`, `compiler-and-vm.md`, `architecture.md`, `build-and-test.md`, `roadmap.md` (CLEAR can't cure the code growth of direct mode lines; noted), `CLAUDE.md`, `SESSION.md`, `basrepl.h`.
+(none)
 
 ## Log
 
@@ -150,3 +146,11 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 - Binary `SAVE` files start with a 5-byte header: magic `89 45 39 39` + format version 1 (`PGMFILE_*` in `baspgm.h`); `read_program_header()` detects it (rewinds on a text file, rejects unknown versions / truncated headers).
 - `LOAD name$`, `RUN [line|label]` and `LIST [a][-[b]]` became language statements usable in programs (new `cgenprog.c`; nodes `0x5C..0x5E`; instructions `LOAD 0x139`, `RUNP 0x13A`, `LIST 0x13B`). `LOAD`/`RUN` can't replace the running code, so the VM stores a request (`vm->request`) and ends the run; `repl_finish()` in `basrepl.c` carries it out in a loop (replace/recompile/restart; Break polled between chained restarts). `LIST` uses the new callback `vm->list`; labels resolved to lines by `find_label_line()`. `LOAD` reads binary files and text listings into a scratch program that replaces the old one only on success.
 - The host level `RUN`/`LIST` in `repl_enter()` were removed. `vmtest1` 346 and `repltest1` 65 cases; docs, `CLAUDE.md` and `SESSION.md` updated.
+
+### 05ca28f — 2026-10-28 05:18:49 +0100 — "NEW and CLEAR as host commands (implemented by Claude Code)"
+25 files, +193/-50.
+- **`NEW` and `CLEAR` are language statements** (the last host level command, `NEW` in `repl_enter()`, is gone; `repl_command()` removed).
+  - Grammar/nodes: `new-stmt := NEW`, `clear-stmt := CLEAR`; `NT_NEWSTMT 0x5F`, `NT_CLEARSTMT 0x60`; code generation in `cgenprog.c`; instructions `NEW 0x13C`, `CLR 0x13D`.
+  - `NEW`: third request kind `VMREQ_NEW`; the VM stops, `repl_finish()` calls `repl_new()` (program, variables, functions deleted) and starts nothing, so a program using `NEW` ends and the host returns to the prompt. `CLEAR`: done by the VM itself, `vmem_clear_vars()` in `vars.c`: numbers 0, strings "", arrays emptied (dimensions kept, because arrays exist from parse time); labels, functions and hidden compiler variables (`@…`, e.g. FOR limit/step) are skipped, so the program keeps running correctly; the DATA pointer is not touched. The control variable of a running FOR is a normal variable and is cleared (documented).
+  - Tests: `vmtest1` 356 cases (+10), `repltest1` 74 cases (+9); both pass, valgrind clean (builds without `-p`, see the previous entry). Not tried on the real SDL screen.
+  - Docs: `basic-language.md`, `compiler-and-vm.md`, `architecture.md`, `build-and-test.md`, `roadmap.md` (CLEAR can't cure the code growth of direct mode lines; noted), `CLAUDE.md`, `SESSION.md`, `basrepl.h`.
