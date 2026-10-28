@@ -13,7 +13,8 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-(none)
+- `SESSION.md`: "Repo state" now names `3c0e106` as the latest commit (with `bcc157d` before it) and no longer mentions an uncommitted history-log entry; `HistoryLog-Claude.md`: logged `3c0e106`. No source changes, no tests run.
+- **No "Ready." after a program line; direct-mode `LOAD` no longer runs.** `handle_input()` (`engine1999.c`) returns false for lines starting with a digit, so the READY loop prints nothing after entering/deleting a program line. `repl_finish()` (`basrepl.c`) got a `direct` flag: a `LOAD` typed in direct mode loads, clears the runtime (`repl_reset_runtime()`) and stops; `LOAD` in a program still runs the loaded program. `repltest1`: 5 cases changed (added `RUN`/`PRINT A`), 1 added (113); `vmtest1`, `testcomp1` pass, `repltest1` valgrind clean. Docs: `basic-language.md`, `compiler-and-vm.md`, `SESSION.md`. Not tried on the real SDL screen.
 
 ## Log
 
@@ -215,3 +216,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 ### bcc157d — 2026-10-28 06:22:13 +0100 — "Claude History Log and session state update"
 4 files, +13/-9.
 - Branch references in `CLAUDE.md`, `SESSION.md` and `docs/refactoring.md` updated (feature branch merged into `main`); `HistoryLog-Claude.md`: logged `7a6b4ae`. No source changes.
+
+### 3c0e106 — 2026-10-28 06:22:57 +0100 — "Claude History Log and session state update"
+2 files, +6/-2.
+- `HistoryLog-Claude.md`: logged `bcc157d`; `SESSION.md` updated. No source changes.

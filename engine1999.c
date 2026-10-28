@@ -815,7 +815,7 @@ static void pager( const char *text ) {
     longjmp( ready_jump, 1 );
 }
 
-// returns false if the line was empty
+// returns false if the line was empty or a program line (no "Ready." after it)
 static bool handle_input( const char* buf ) {
     const char* p = buf;
     while ( *p == ' ' || *p == '\t' ) {
@@ -840,10 +840,11 @@ static bool handle_input( const char* buf ) {
         free( ucase );
     }
     // everything else is BASIC: a numbered line is stored, anything else is run now
+    bool stored = *p >= '0' && *p <= '9';   // entering or deleting a program line: no "Ready." (keeps the editing flow)
     sdlscr_pollkeys( true );
     repl_enter( &repl, buf );
     sdlscr_pollkeys( false );
-    return true;
+    return !stored;
 }
 
 // -- command line ----------------------------------------------------------------------

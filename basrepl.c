@@ -351,8 +351,8 @@ static bool repl_load_program( repl_t* repl, const char* filename ) {
 }
 
 // carries out the LOAD / RUN requests the program run left in the VM, until a run ends without one (iteratively:
-// a program that ends with RUN must not nest)
-static bool repl_finish( repl_t* repl, bool ok ) {
+// a program that ends with RUN must not nest); a LOAD typed in direct mode only loads (direct = the run was a direct line)
+static bool repl_finish( repl_t* repl, bool ok, bool direct ) {
     bool chained = false;       // the run was started by a request, not by the host
     while ( ok && repl->vm.request != VMREQ_NONE ) {
         int kind = repl->vm.request;
@@ -376,6 +376,13 @@ static bool repl_finish( repl_t* repl, bool ok ) {
         }
         if ( kind == VMREQ_LOAD ) {
             ok = repl_load_program( repl, name );
+            if ( direct && !chained ) {
+                if ( ok ) {
+                    repl_reset_runtime( repl );     // variables are cleared, the program is compiled by RUN
+                }
+                free( name );
+                return ok;
+            }
             name[0] = '\0';        // the loaded program runs from its beginning
             line = -1;
         }
@@ -392,11 +399,11 @@ static bool repl_run_direct( repl_t* repl, const uint8_t* tokens, size_t size ) 
     repl_setup_compiler( repl );
     repl->comp.iter.hdr.lineno = LINENO_NONE;
     comp_set_tokens( &repl->comp, tokens, size );
-    return repl_finish( repl, repl_execute( repl, false, 0, -1 ) );
+    return repl_finish( repl, repl_execute( repl, false, 0, -1 ), true );
 }
 
 bool repl_run( repl_t* repl ) {
-    return repl_finish( repl, repl_start_program( repl, "", -1 ) );
+    return repl_finish( repl, repl_start_program( repl, "", -1 ), false );
 }
 
 void repl_new( repl_t* repl ) {
