@@ -13,7 +13,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-- 2026-10-28: Created this file, `HistoryLog-Claude.md`, and added the maintenance rule to `CLAUDE.md` (and a pointer in `SESSION.md`). No source changes.
+(none)
 
 ## Log
 
@@ -130,3 +130,9 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 ### f5301e2 — 2026-10-27 21:10:43 +0100 — "Claude session backup"
 1 file, +1/-1.
 - `SESSION.md`: repo state line updated to `761339e`.
+
+### d951a9c — 2026-10-28 04:45:30 +0100 — "Introduced history log for Claude Code changes (created by Claude Code)"
+3 files, +138/-0.
+- Created this file, reconstructed from git history (23 commits up to `f5301e2`), with a Pending section for uncommitted work.
+- `CLAUDE.md`: added the rule to keep the log updated (pending entries per change; move them into the log with commit ID and timestamp after the user commits).
+- `SESSION.md`: added the same rule to the standing rules. No source changes.
