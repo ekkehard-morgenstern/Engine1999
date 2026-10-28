@@ -13,11 +13,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-- `HistoryLog-Claude.md`: logged `de09d9a` and `e09a0cc`. `SESSION.md` tidied: removed the duplicated `ansitest1` test line and the outdated second "ANSI colors" bullet, updated the latest-commit line and the `make` target list. No source changes.
-- **Redesigned lowercase font glyphs** `a`–`z` (0x61–0x7A) in `8x12font1.txt`, recompiled to `8x12font1.c` with `fontcomp.pl`. Original design from basic typographic rules (x-height rows 4–9, ascenders from row 2, descenders rows 10–11, 2px stems, 1px horizontals, rounded corners), not copied from any existing computer font.  `make`, `vmtest1`, `repltest1` pass; not yet checked on the real screen.
-- **Redesigned capitals, digits and ASCII symbols** (0x21–0x40, 0x41–0x5A, 0x5B–0x60, 0x7B–0x7E) in the same style (6-wide, 2px stems, cap height rows 2–9, `M`/`W` 7 wide, slashed-diagonal `0`). Glyphs 0x7F and above untouched. `make`, `vmtest1`, `repltest1` pass; not yet checked on the real screen.
-- **Font touch-up after a screenshot**: capitals `M` and `W` were tried 6 wide but read as `H` on screen and were reverted to the 7-wide forms; `%` and `&` redrawn. Lowercase `m`/`w` still 7 wide. `make`, `vmtest1`, `repltest1` pass.
-- **Font: taller brackets, cleaner slashes**: `( ) [ ] { }` now span rows 1–11 (11 rows, covering ascenders and descenders; braces have the point on row 6); `/` and `\` are a regular 2 px wide staircase (2 rows per column step, rows 1–10, cols 1–6) instead of the irregular stagger. `|` stretched to rows 1–11 to match. `make`, `vmtest1`, `repltest1` pass; not yet checked on the screen.
+(none)
 
 ## Log
 
@@ -274,3 +270,13 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 ### e09a0cc — 2026-10-28 21:55:50 +0100 — "Claude Code bookkeeping files updated"
 1 file, +1/-0.
 - Small bookkeeping fix. No source changes.
+
+### ccf115c — 2026-10-28 23:12:37 +0100 — "Claude Code bookkeeping files updated"
+2 files, +12/-6.
+- `HistoryLog-Claude.md`: logged `de09d9a` and `e09a0cc`. `SESSION.md` tidied: removed the duplicated `ansitest1` test line and the outdated second "ANSI colors" bullet, updated the latest-commit line and the `make` target list. No source changes.
+
+### 839feb6 — 2026-10-28 23:49:38 +0100 — "Improved font, created by Claude Code"
+9 files, +316/-310.
+- **Font redesign** of all printable ASCII glyphs (0x21–0x7E) in `8x12font1.txt`, recompiled to `8x12font1.c` with `fontcomp.pl`. Original design from basic typographic rules (not copied from any existing computer font): 2 px stems, 1 px horizontals, rounded corners; caps/digits rows 2–9, x-height rows 4–9, ascenders from row 2, descenders rows 10–11; slashed-diagonal `0`. Glyphs 0x7F and above untouched.
+- Refined after screenshots checked on the real screen by the user: `%` and `&` redrawn; 6-wide `M`/`W` tried but read as `H`, so both stay 7 wide; `( ) [ ] { }` and `|` are 11 rows tall (rows 1–11), `/` and `\` a regular 2 px wide staircase (rows 1–10).
+- `make`, `vmtest1`, `repltest1` pass. Docs: `SESSION.md`.
