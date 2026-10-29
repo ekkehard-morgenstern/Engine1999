@@ -109,7 +109,8 @@ bool repl_run( repl_t* repl );              // RUN (from the beginning)
 void repl_new( repl_t* repl );              // NEW
 void repl_list( repl_t* repl, uint32_t first, uint32_t last );  // LIST (LINENO_NONE = unbounded)
 bool repl_compile( repl_t* repl );          // compiles the stored program without running it (variables are cleared); for the monitor
-bool repl_go( repl_t* repl, uint32_t addr );  // runs the code in the code segment from addr (monitor "g"); variables are kept
+bool repl_vm_start( repl_t* repl, uint32_t addr );    // monitor: suspend the VM at addr (code segment as it is, empty stacks, variables kept)
+bool repl_vm_resume( repl_t* repl, bool step, const uint32_t* breakpoints, size_t numbreakpoints );   // continue / single-step it; see repl_vm_resume()
 bool repl_save_program( repl_t* repl, const char* filename, bool ascii );   // for the host's SAVE callback
 
 #endif

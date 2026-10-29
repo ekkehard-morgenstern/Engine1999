@@ -49,7 +49,12 @@ The data stack items are either a number or a string pointer (heap, NUL-terminat
 type mismatch is a run time error and strings never leak.
 The stacks are heap allocated and grow on demand.
 
-Not implemented yet (reported as errors at run time): BRK, WRLV, array parameters of functions.
+Not implemented yet (reported as errors at run time): WRLV, array parameters of functions.
+
+BRK reports "Breakpoint" as an error, unless the host turned vm_t.debug on (the monitor does): then it stops the run
+(VMSTOP_BRK) and vm_resume() continues behind it. Debugging API: vm_begin() prepares a run, vm_resume() runs until the end,
+a breakpoint address (vm_t.breakpoints), BRK or, with singlestep, one instruction; the VM stays suspended (vm_t.suspended)
+with all its state until the run is resumed or begun again.
 
 DATA: the VM keeps the data pointer (vm_t.datapos); vm_run() resets it to the first item (like RESTORE), vm_run_at() leaves it.
 
@@ -100,6 +105,14 @@ Policies chosen by this implementation (the instruction set does not define them
 #define VMREQ_EDIT          4       // let the user edit the line reqline / the line of the label reqname; the run is not continued
 #define VMREQ_MONITOR       5       // open the machine monitor; the run is not continued
 
+// why vm_resume() returned (vm_t.stopreason): VMSTOP_NONE = the run is over (the code ended, an error was reported, or a
+// request was left), the others leave the VM suspended: the stacks, the pc and everything else stay as they are and
+// vm_resume() continues
+#define VMSTOP_NONE         0
+#define VMSTOP_STEP         1       // one instruction was run (single-step)
+#define VMSTOP_BREAKPOINT   2       // pc is at an address of vm_t.breakpoints; the instruction there has not run yet
+#define VMSTOP_BRK          3       // a BRK instruction ran (only with vm_t.debug; pc is behind it)
+
 #define VM_PRINT_SEP_NONE   UINT16_C(0)
 #define VM_PRINT_SEP_SEMIC  UINT16_C(4)
 #define VM_PRINT_SEP_COMMA  UINT16_C(8)
@@ -139,6 +152,13 @@ typedef struct _vm_t {
     uint32_t        datapos;        // data offset of the next DATA item (DATAOFFS_NONE = behind the last one)
     uint32_t        line;           // current line number (LINE instruction)
     uint64_t        maxsteps;       // stop with an error after this many instructions (0 = unlimited)
+    // debugging (set by the host before vm_resume(); the VM doesn't keep them across init_vm())
+    bool            debug;          // BRK stops the run (VMSTOP_BRK) instead of reporting "Breakpoint"
+    const uint32_t* breakpoints;    // code offsets where the run stops before the instruction; not owned
+    size_t          nbreakpoints;
+    int             stopreason;     // VMSTOP_*
+    bool            brkhit;         // (internal) a BRK instruction ran
+    bool            suspended;      // vm_begin() / a stop of vm_resume() left a run that vm_resume() can continue
     int             channel;        // output channel (PCHN)
     unsigned        column;         // output column
     char*           inbuf;          // the line read by INPL, while the INPUT statement runs
@@ -170,5 +190,9 @@ void cleanup_vm( vm_t* vm );        // frees the stacks and the strings still on
 bool vm_run( vm_t* vm );            // runs from offset 0 until the end of the code; false after reporting an error
 void vm_clear_request( vm_t* vm );    // forgets a pending request (frees the name)
 bool vm_run_at( vm_t* vm, uint32_t start );     // same, starting at the given code offset
+bool vm_begin( vm_t* vm, uint32_t start );      // prepares a run (clears the stacks and the request, pc = start) without running it
+// runs from pc until the end of the code, a breakpoint (the instruction at the very first pc always runs, so that a run
+// can leave a breakpoint) or BRK; with singlestep exactly one instruction. false after reporting an error. See VMSTOP_*.
+bool vm_resume( vm_t* vm, bool singlestep );
 
 #endif

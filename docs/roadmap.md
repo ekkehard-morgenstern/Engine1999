@@ -58,13 +58,13 @@ how a handler is named (line number / label / `FN`?); how they are cancelled (`O
 ## 5. VM and instruction set leftovers
 
 - [ ] `WRLV` — write a label variable (instruction exists in `instset.h`, reported as "not implemented" at run time)
-- [ ] `BRK` — breakpoint (reports "Breakpoint"); could be the hook for a future debugger
+- [x] `BRK` — stops the run when the monitor debugs (`vm_t.debug`); outside of it still the error "Breakpoint"
 - [ ] Inline assembler: `TOK_BRKLIT` string literals (`[ … ]`) are tokenized but code generation says "not implemented yet";
       `TOK_BRCLIT` (`{ … }`) has no defined purpose yet
 - [ ] Array parameters of user functions (`DEF FN A( B() )`) are parsed but not supported by the VM
 - [ ] Functions can't call themselves and must be defined before use in the text (design decision, revisit if recursion is wanted)
 
-- [ ] Machine monitor (`MONITOR`, first version): no single-step (`t`), breakpoints (`BRK` is not implemented in the VM), register/trace view or resumable `MONITOR` inside a program (it ends the run, like `EDIT`); the variables and the tokenized program text can't be inspected (only code, data and the two stacks); `a` has no labels or symbolic operands (variable names, line numbers); `e` takes hex bytes only (no strings); the monitor doesn't re-compile when the program changed (use `c`).
+- [ ] Machine monitor (`MONITOR`): no step-over (`t` steps into function calls), no conditional breakpoints or watches, no resumable `MONITOR` inside a program (it ends the run, like `EDIT`); the variables and the tokenized program text can't be inspected (only code, data and the two stacks); `a` has no labels or symbolic operands (variable names, line numbers); `e` takes hex bytes only (no strings); the monitor doesn't re-compile when the program changed (use `c`).
 
 ## 6. Remaining fixed limits
 

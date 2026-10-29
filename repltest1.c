@@ -26,6 +26,7 @@
 
 #include "basrepl.h"
 #include "basdebug.h"
+#include "instset.h"
 
 /*
 Automated test of the REPL (basrepl.[ch]) without any host: lines are fed to repl_enter() like a user would type
@@ -555,6 +556,68 @@ static void run_fulledit_tests( size_t* pnum, size_t* pfailed ) {
     }
 }
 
+// -- debugging: breakpoints, BRK, single-step ----------------------------------------------------
+
+static void run_debug_tests( size_t* pnum, size_t* pfailed ) {
+    repl_t repl;
+    bool pass;
+    size_t n = 0;
+#define DBGCHECK( name, cond ) do { pass = ( cond ); printf( "%s  %s\n", pass ? "PASS" : "FAIL", name ); if ( !pass ) ++*pfailed; ++*pnum; ++n; } while ( 0 )
+    out_reset();
+    keys = 0; polls = 0; breakafter = 0;
+    if ( !init_repl( &repl ) ) {
+        ++*pfailed; ++*pnum;
+        return;
+    }
+    repl.report = host_report;
+    repl.print  = host_print;
+    repl_enter( &repl, "10 PRINT 1" );
+    repl_enter( &repl, "20 PRINT 2" );
+    repl_enter( &repl, "30 PRINT 3" );
+    DBGCHECK( "debug: the program compiles", repl_compile( &repl ) );
+    uint32_t at20 = 0, at30 = 0;
+    DBGCHECK( "debug: line addresses", cgen_find_line( &repl.rt.codegen, 20, &at20 ) && cgen_find_line( &repl.rt.codegen, 30, &at30 ) && at20 < at30 );
+    uint32_t bps[2] = { at20, at30 };
+    DBGCHECK( "debug: start", repl_vm_start( &repl, 0 ) && repl.vm.suspended && repl.vm.pc == 0 );
+    DBGCHECK( "debug: runs to the first breakpoint", repl_vm_resume( &repl, false, bps, 2 ) && repl.vm.suspended &&
+        repl.vm.stopreason == VMSTOP_BREAKPOINT && repl.vm.pc == at20 && strcmp( outbuf, "1\n" ) == 0 );
+    DBGCHECK( "debug: leaves a breakpoint and stops at the next", repl_vm_resume( &repl, false, bps, 2 ) && repl.vm.suspended &&
+        repl.vm.pc == at30 && strcmp( outbuf, "1\n2\n" ) == 0 );
+    DBGCHECK( "debug: runs to the end", repl_vm_resume( &repl, false, bps, 2 ) && !repl.vm.suspended &&
+        repl.vm.stopreason == VMSTOP_NONE && strcmp( outbuf, "1\n2\n3\n" ) == 0 );
+    // single-step through the whole program
+    out_reset();
+    unsigned steps = 0;
+    bool ok = repl_vm_start( &repl, 0 );
+    while ( ok && repl.vm.suspended && steps < 1000 ) {
+        uint32_t before = repl.vm.pc;
+        ok = repl_vm_resume( &repl, true, 0, 0 );
+        if ( repl.vm.suspended && ( repl.vm.stopreason != VMSTOP_STEP || repl.vm.pc <= before ) ) {
+            ok = false;
+        }
+        ++steps;
+    }
+    DBGCHECK( "debug: single-step runs the program one instruction at a time", ok && !repl.vm.suspended && steps > 6 &&
+        strcmp( outbuf, "1\n2\n3\n" ) == 0 );
+    // BRK stops with the debugger and is an error without it
+    out_reset();
+    repl.rt.codegen.code[ at20 ] = INS_BRK;         // LINE 20 becomes BRK NOP NOP
+    repl.rt.codegen.code[ at20 + 1U ] = INS_NOP;
+    repl.rt.codegen.code[ at20 + 2U ] = INS_NOP;
+    DBGCHECK( "debug: start again", repl_vm_start( &repl, 0 ) );
+    DBGCHECK( "debug: BRK stops the run", repl_vm_resume( &repl, false, 0, 0 ) && repl.vm.suspended &&
+        repl.vm.stopreason == VMSTOP_BRK && repl.vm.pc == at20 + 1U && strcmp( outbuf, "1\n" ) == 0 );
+    DBGCHECK( "debug: and the run continues behind it", repl_vm_resume( &repl, false, 0, 0 ) && !repl.vm.suspended &&
+        strcmp( outbuf, "1\n2\n3\n" ) == 0 );
+    out_reset();
+    repl.vm.debug = false;
+    DBGCHECK( "BRK without the debugger is an error", !vm_run_at( &repl.vm, 0 ) && strstr( outbuf, "Breakpoint" ) != 0 );
+    DBGCHECK( "debug: a start address outside of the code is refused", !repl_vm_start( &repl, repl.rt.codegen.codesize ) );
+#undef DBGCHECK
+    cleanup_repl( &repl );
+    (void) n;
+}
+
 int main( int argc, char** argv ) {
     if ( argc > 1 && strcmp( argv[1], "-v" ) == 0 ) {
         basdbg_flags = BASDBG_ALL;
@@ -575,6 +638,7 @@ int main( int argc, char** argv ) {
     run_highlight_tests( &numcases, &failed );
     run_edit_tests( &numcases, &failed );
     run_fulledit_tests( &numcases, &failed );
+    run_debug_tests( &numcases, &failed );
     remove( TESTFILE );
     printf( "%u of %u passed\n", (unsigned)( numcases - failed ), (unsigned) numcases );
     free( outbuf );

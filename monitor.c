@@ -69,6 +69,8 @@
 #define C_TITLE_FG      C_WHITE
 #define C_HELP_BG       C_DARKSLATEGRAY
 
+#define MON_MAXBPS      32
+
 typedef enum _region_t { R_CODE, R_DATA, R_DSTACK, R_RSTACK, R_COUNT } region_t;
 
 static const char* const regionnames[R_COUNT] = { "code", "data", "dstack", "rstack" };
@@ -80,6 +82,8 @@ typedef struct _mon_t {
     region_t    region;
     uint32_t    memaddr[R_COUNT];       // where the next dump of the region continues
     uint32_t    disaddr;                // where the next disassembly / assembly continues
+    uint32_t    bps[MON_MAXBPS];        // breakpoints (code offsets)
+    size_t      nbps;
     bool        quit;
 } mon_t;
 
@@ -142,7 +146,11 @@ static void mon_title( const mon_t* m ) {
     x += txtscr_write( 0, x, C_TITLE_BG, C_YELLOW, buf, -1 );
     snprintf( buf, sizeof(buf), "   code $%X  data $%X  dstack %u  rstack %u", (unsigned) cg->codesize, (unsigned) cg->datasize,
         (unsigned) m->repl->vm.dsp, (unsigned) m->repl->vm.rsp );
-    txtscr_write( 0, x, C_TITLE_BG, C_TITLE_FG, buf, -1 );
+    x += txtscr_write( 0, x, C_TITLE_BG, C_TITLE_FG, buf, -1 );
+    if ( m->repl->vm.suspended ) {
+        snprintf( buf, sizeof(buf), "  pc $%X", (unsigned) m->repl->vm.pc );
+        txtscr_write( 0, x, C_TITLE_BG, C_YELLOW, buf, -1 );
+    }
     mon_setout( cx, cy );
     sdlscr_textchanged();
 }
@@ -152,8 +160,8 @@ static void mon_helpbar( void ) {
     txtscr_setblank( C_HELP_BG, C_TEXT );
     txtscr_clear();
     static const struct { const char* key; const char* what; } help[] = {
-        { "?", "help" }, { "M", "dump" }, { "U", "unasm" }, { "A", "asm" }, { "E", "edit" }, { "F", "fill" }, { "R", "region" },
-        { "L", "line" }, { "C", "compile" }, { "G", "go" }, { "Q", "quit" },
+        { "?", "help" }, { "M", "dump" }, { "U", "unasm" }, { "A", "asm" }, { "R", "region" }, { "G", "go" }, { "T", "step" },
+        { "B", "break" }, { "I", "info" }, { "Q", "quit" },
     };
     int x = 1;
     for ( size_t i=0; i < sizeof(help) / sizeof(help[0]); ++i ) {
@@ -271,7 +279,12 @@ static void cmd_help( void ) {
         { "F s e b",      "fill s..e with the byte b" },
         { "L n",          "find BASIC line n in the code" },
         { "C",            "compile the stored program again (discards patches)" },
-        { "G [s]",        "run the code from s (default 0) as it is; ESC breaks" },
+        { "G [s]",        "run from s or continue; stops at breakpoints and BRK; ESC breaks" },
+        { "S [s]",        "suspend the VM at s (default 0), ready to step" },
+        { "T [n]",        "run n instructions (default 1); '>' marks the pc" },
+        { "B [a]",        "set a breakpoint at a; none: list them" },
+        { "K a | *",      "remove the breakpoint at a / all" },
+        { "I",            "state of the VM and the breakpoints" },
         { "Q",            "leave the monitor" },
     };
     for ( size_t i=0; i < sizeof(help) / sizeof(help[0]); ++i ) {
@@ -279,7 +292,7 @@ static void cmd_help( void ) {
         out( C_TEXT, "%s\n", help[i].what );
     }
     out( C_GRAY, "Numbers are hex ($1F, 0x1F, 1F), #31 is decimal; assembler operands are decimal unless $ or 0x.\n" );
-    out( C_GRAY, "Patches to the code are kept for G only: RUN compiles the program again.\n" );
+    out( C_GRAY, "Patches to the code survive for G, S and T only: RUN compiles the program again.\n" );
 }
 
 static bool parse_region( const char* name, region_t* pr ) {
@@ -413,11 +426,30 @@ static void cmd_dump( mon_t* m, int argc, char** argv ) {
     m->memaddr[m->region] = a;
 }
 
-static void unasm_line( const uint8_t* code, uint32_t size, uint32_t offs, int width, uint32_t* pnext ) {
+static bool is_breakpoint( const mon_t* m, uint32_t addr ) {
+    for ( size_t i=0; i < m->nbps; ++i ) {
+        if ( m->bps[i] == addr ) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// one instruction: a marker (> the pc of a suspended run, * a breakpoint), the address, the bytes, the text
+static void unasm_line( const mon_t* m, uint32_t offs, int width, uint32_t* pnext ) {
+    const codegen_t* cg = mon_cgen( m );
+    const uint8_t* code = cg->code;
     vminsn_t in;
-    vmasm_decode( code, size, offs, &in );
+    vmasm_decode( code, cg->codesize, offs, &in );
     char mnem[24], oper[40], comment[40];
     vmasm_format( &in, mnem, sizeof(mnem), oper, sizeof(oper), comment, sizeof(comment) );
+    if ( m->repl->vm.suspended && m->repl->vm.pc == offs ) {
+        out( C_YELLOW, ">" );
+    } else if ( is_breakpoint( m, offs ) ) {
+        out( C_ERR, "*" );
+    } else {
+        out( C_TEXT, " " );
+    }
     mon_out_addr( offs, width );
     for ( uint32_t i=0; i < VMASM_MAXLEN; ++i ) {
         if ( i < in.size ) {
@@ -471,7 +503,7 @@ static void cmd_unasm( mon_t* m, int argc, char** argv ) {
     int width = addrwidth( cg->codesize );
     uint32_t a = start;
     for ( int lines = 0; a < cg->codesize && ( hasend ? a <= end : lines < 16 ); ++lines ) {
-        unasm_line( cg->code, cg->codesize, a, width, &a );
+        unasm_line( m, a, width, &a );
     }
     m->disaddr = a;
 }
@@ -621,21 +653,210 @@ static void cmd_compile( mon_t* m ) {
     }
     m->disaddr = 0;
     m->memaddr[R_CODE] = 0; m->memaddr[R_DATA] = 0;
+    m->nbps = 0;        // the old addresses mean nothing in new code
 }
 
-static void cmd_go( mon_t* m, int argc, char** argv ) {
-    uint32_t addr = 0;
-    if ( argc > 0 && !mon_arg_number( argv[0], &addr ) ) {
-        return;
+// -- running ---------------------------------------------------------------------------
+
+static void show_regs( const mon_t* m ) {
+    const vm_t* vm = &m->repl->vm;
+    out( C_GRAY, "pc=" );
+    out( C_YELLOW, "$%04X", (unsigned) vm->pc );
+    out( C_GRAY, "  line=" );
+    out( C_WHITE, "%s", vm->line == LINENO_NONE ? "-" : "" );
+    if ( vm->line != LINENO_NONE ) {
+        out( C_WHITE, "%u", (unsigned) vm->line );
     }
-    out( C_GRAY, "Running from $%X (ESC breaks)\n", (unsigned) addr );
+    out( C_GRAY, "  ds=" );
+    out( C_WHITE, "%u", (unsigned) vm->dsp );
+    out( C_GRAY, "  rs=" );
+    out( C_WHITE, "%u", (unsigned) vm->rsp );
+    if ( vm->dsp > 0 ) {
+        const vmval_t* top = &vm->dstack[ vm->dsp - 1U ];
+        out( C_GRAY, "  top=" );
+        if ( top->isstr ) {
+            out( C_ASCII, "\"%.30s\"", top->str ? top->str : "" );
+        } else {
+            out( C_OPER, "%.15g", top->num );
+        }
+    }
+    out( C_TEXT, "\n" );
+}
+
+// the state of a suspended run: the registers and the next instruction
+static void show_state( mon_t* m ) {
+    const codegen_t* cg = mon_cgen( m );
+    show_regs( m );
+    if ( m->repl->vm.pc < cg->codesize ) {
+        uint32_t next = 0;
+        unasm_line( m, m->repl->vm.pc, addrwidth( cg->codesize ), &next );
+    }
+    m->disaddr = m->repl->vm.pc;
+}
+
+static void run_vm( mon_t* m, bool step ) {
     sdlscr_pollkeys( true );
-    repl_go( m->repl, addr );
+    repl_vm_resume( m->repl, step, m->bps, m->nbps );
     sdlscr_pollkeys( false );
     newline_unless_at_start();
     if ( m->repl->fulledit || m->repl->monitor ) {      // the program ended in EDIT / MONITOR: not carried out from here
         m->repl->fulledit = false; m->repl->monitor = false;
         out( C_GRAY, "(the program ended in EDIT or MONITOR)\n" );
+    }
+}
+
+static bool start_vm( mon_t* m, uint32_t addr ) {
+    if ( !repl_vm_start( m->repl, addr ) ) {
+        return false;
+    }
+    return true;
+}
+
+static void report_stop( mon_t* m ) {
+    const vm_t* vm = &m->repl->vm;
+    if ( !vm->suspended ) {
+        out( C_GRAY, "(the program has ended)\n" );
+        return;
+    }
+    if ( vm->stopreason == VMSTOP_BREAKPOINT ) {
+        out( C_ERR, "Breakpoint at $%X\n", (unsigned) vm->pc );
+    } else if ( vm->stopreason == VMSTOP_BRK ) {
+        out( C_ERR, "BRK at $%X\n", (unsigned)( vm->pc - 1U ) );
+    }
+    show_state( m );
+}
+
+// S [addr]: suspends the VM at addr (default 0), ready to be stepped or continued
+static void cmd_start( mon_t* m, int argc, char** argv ) {
+    uint32_t addr = 0;
+    if ( argc > 0 && !mon_arg_number( argv[0], &addr ) ) {
+        return;
+    }
+    if ( start_vm( m, addr ) ) {
+        show_state( m );
+    }
+}
+
+// G [addr]: runs from addr, or continues the suspended run; stops at breakpoints and BRK; ESC breaks
+static void cmd_go( mon_t* m, int argc, char** argv ) {
+    uint32_t addr = 0;
+    if ( argc > 0 ) {
+        if ( !mon_arg_number( argv[0], &addr ) || !start_vm( m, addr ) ) {
+            return;
+        }
+    } else if ( !m->repl->vm.suspended && !start_vm( m, 0 ) ) {
+        return;
+    }
+    out( C_GRAY, "Running from $%X (ESC breaks)\n", (unsigned) m->repl->vm.pc );
+    run_vm( m, false );
+    report_stop( m );
+}
+
+// T [n]: runs n instructions (default 1), showing each; starts at 0 if nothing is suspended
+static void cmd_trace( mon_t* m, int argc, char** argv ) {
+    uint32_t n = 1;
+    if ( argc > 0 && ( !mon_arg_number( argv[0], &n ) || n == 0 ) ) {
+        return;
+    }
+    if ( !m->repl->vm.suspended && !start_vm( m, 0 ) ) {
+        return;
+    }
+    const codegen_t* cg = mon_cgen( m );
+    for ( uint32_t i=0; i < n && m->repl->vm.suspended; ++i ) {
+        uint32_t next = 0;
+        if ( m->repl->vm.pc < cg->codesize ) {
+            unasm_line( m, m->repl->vm.pc, addrwidth( cg->codesize ), &next );
+        }
+        run_vm( m, true );
+        if ( m->repl->vm.suspended && m->repl->vm.stopreason == VMSTOP_BRK ) {
+            break;
+        }
+    }
+    if ( m->repl->vm.suspended ) {
+        if ( m->repl->vm.stopreason == VMSTOP_BRK ) {
+            out( C_ERR, "BRK at $%X\n", (unsigned)( m->repl->vm.pc - 1U ) );
+        }
+        show_state( m );
+    } else {
+        out( C_GRAY, "(the program has ended)\n" );
+    }
+}
+
+// B [addr]: sets a breakpoint; without an address lists them
+static void cmd_break( mon_t* m, int argc, char** argv ) {
+    if ( argc == 0 ) {
+        if ( m->nbps == 0 ) {
+            out( C_GRAY, "(no breakpoints)\n" );
+        }
+        for ( size_t i=0; i < m->nbps; ++i ) {
+            out( C_ERR, "*" );
+            out( C_ADDR, "$%X\n", (unsigned) m->bps[i] );
+        }
+        return;
+    }
+    uint32_t addr = 0;
+    if ( !mon_arg_number( argv[0], &addr ) ) {
+        return;
+    }
+    if ( addr >= mon_cgen( m )->codesize ) {
+        outerr( "Address $%X is outside of the code segment", (unsigned) addr );
+        return;
+    }
+    if ( is_breakpoint( m, addr ) ) {
+        out( C_GRAY, "There is a breakpoint at $%X already\n", (unsigned) addr );
+        return;
+    }
+    if ( m->nbps >= MON_MAXBPS ) {
+        outerr( "At most %d breakpoints", MON_MAXBPS );
+        return;
+    }
+    m->bps[ m->nbps++ ] = addr;
+}
+
+// K addr / K *: removes a breakpoint / all
+static void cmd_kill( mon_t* m, int argc, char** argv ) {
+    if ( argc < 1 ) {
+        outerr( "Usage: K address, or K * for all" );
+        return;
+    }
+    if ( strcmp( argv[0], "*" ) == 0 ) {
+        m->nbps = 0;
+        return;
+    }
+    uint32_t addr = 0;
+    if ( !mon_arg_number( argv[0], &addr ) ) {
+        return;
+    }
+    for ( size_t i=0; i < m->nbps; ++i ) {
+        if ( m->bps[i] == addr ) {
+            m->bps[i] = m->bps[ --m->nbps ];
+            return;
+        }
+    }
+    outerr( "No breakpoint at $%X", (unsigned) addr );
+}
+
+// I: the state of the VM
+static void cmd_info( mon_t* m ) {
+    const vm_t* vm = &m->repl->vm;
+    if ( vm->suspended ) {
+        out( C_TEXT, "suspended" );
+        out( C_GRAY, " (%s)\n", vm->stopreason == VMSTOP_BREAKPOINT ? "breakpoint" : vm->stopreason == VMSTOP_BRK ? "BRK" :
+            vm->stopreason == VMSTOP_STEP ? "step" : "not run yet" );
+        show_state( m );
+    } else {
+        out( C_GRAY, "not running (S starts a run, G runs, T steps)\n" );
+    }
+    if ( vm->dsp > 0 ) {
+        out( C_TEXT, "data stack (top first):\n" );
+        list_stack( m, true, 0, 4U );
+    }
+    if ( m->nbps > 0 ) {
+        out( C_TEXT, "breakpoints:" );
+        for ( size_t i=0; i < m->nbps; ++i ) {
+            out( C_ERR, " $%X", (unsigned) m->bps[i] );
+        }
+        out( C_TEXT, "\n" );
     }
 }
 
@@ -661,6 +882,11 @@ static void execute( mon_t* m, char* line ) {
         case 'l': cmd_line( m, argc, argv ); break;
         case 'c': cmd_compile( m ); break;
         case 'g': cmd_go( m, argc, argv ); break;
+        case 's': cmd_start( m, argc, argv ); break;
+        case 't': cmd_trace( m, argc, argv ); break;
+        case 'b': cmd_break( m, argc, argv ); break;
+        case 'k': cmd_kill( m, argc, argv ); break;
+        case 'i': cmd_info( m ); break;
         case 'q': case 'x': m->quit = true; break;
         default:
             outerr( "Unknown command %c (? for help)", cmd );

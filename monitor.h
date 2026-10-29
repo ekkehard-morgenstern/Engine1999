@@ -57,11 +57,16 @@ they have $ or 0x.
     f s e b        fill s..e with byte b (code or data)
     l n            find BASIC line n in the code (address); sets the default address
     c              compile the stored program again (discards patches)
-    g [s]          run the code from s (default 0) as it is now; ESC breaks
+    g [s]          run the code from s as it is now, or continue the suspended run; stops at breakpoints and BRK; ESC breaks
+    s [s]          suspend the VM at s (default 0) without running: the start of a step-by-step run
+    t [n]          run n instructions (default 1), showing each; a '>' marks the pc, a '*' a breakpoint
+    b [a]          set a breakpoint at the instruction address a; without an address: list them
+    k a | *        remove the breakpoint at a / all of them
+    i              state of the VM: registers, top of the data stack, breakpoints
     q              leave the monitor
 
 Writing to the code is at the user's own risk: a wrong instruction can make the VM fail. RUN compiles the program again, so
-patches are only kept for g.
+patches are only kept for g, s and t. Breakpoints are cleared by c (the addresses mean nothing in new code).
 */
 
 // returns when the user leaves the monitor (or the screen is closed)

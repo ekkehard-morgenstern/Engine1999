@@ -47,6 +47,12 @@ void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem ) {
     vm->datapos  = cgen->datafirst;
     vm->line     = LINENO_NONE;
     vm->maxsteps = UINT64_C(0);
+    vm->debug = false;
+    vm->suspended = false;
+    vm->breakpoints = 0;
+    vm->nbreakpoints = 0;
+    vm->stopreason = VMSTOP_NONE;
+    vm->brkhit = false;
     vm->channel  = 0;
     vm->column   = 0;
     vm->userdata = 0;
@@ -1366,7 +1372,11 @@ static bool vm_step( vm_t* vm ) {
 
     switch ( opcode ) {
         case INS_BRK:
-            return vm_error( vm, "Breakpoint" );
+            if ( !vm->debug ) {
+                return vm_error( vm, "Breakpoint" );
+            }
+            vm->brkhit = true;
+            return true;
         case INS_NOP:
             return true;
         case INS_PHPA:
@@ -1529,14 +1539,38 @@ bool vm_run( vm_t* vm ) {
     return vm_run_at( vm, UINT32_C(0) );
 }
 
-bool vm_run_at( vm_t* vm, uint32_t start ) {
+bool vm_begin( vm_t* vm, uint32_t start ) {
     vm_clear_stacks( vm );
     vm_clear_request( vm );
     vm->pc = start;
     vm->line = LINENO_NONE;
     vm->column = 0;
+    vm->stopreason = VMSTOP_NONE;
+    vm->brkhit = false;
+    vm->suspended = true;
+    return true;
+}
+
+static bool vm_at_breakpoint( const vm_t* vm ) {
+    for ( size_t i=0; i < vm->nbreakpoints; ++i ) {
+        if ( vm->breakpoints[i] == vm->pc ) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool vm_resume( vm_t* vm, bool singlestep ) {
     uint64_t steps = UINT64_C(0);
+    vm->stopreason = VMSTOP_NONE;
+    vm->brkhit = false;
+    vm->suspended = false;
     while ( vm->pc < vm->cgen->codesize ) {
+        if ( steps > 0 && vm_at_breakpoint( vm ) ) {
+            vm->stopreason = VMSTOP_BREAKPOINT;
+            vm->suspended = true;
+            return true;
+        }
         ++steps;
         if ( vm->maxsteps && steps > vm->maxsteps ) {
             return vm_error( vm, "Step limit exceeded" );
@@ -1547,6 +1581,22 @@ bool vm_run_at( vm_t* vm, uint32_t start ) {
         if ( !vm_step( vm ) ) {
             return false;
         }
+        if ( vm->brkhit ) {
+            vm->brkhit = false;
+            vm->stopreason = VMSTOP_BRK;
+            vm->suspended = true;
+            return true;
+        }
+        if ( singlestep && vm->pc < vm->cgen->codesize ) {
+            vm->stopreason = VMSTOP_STEP;
+            vm->suspended = true;
+            return true;
+        }
     }
     return true;
+}
+
+bool vm_run_at( vm_t* vm, uint32_t start ) {
+    vm_begin( vm, start );
+    return vm_resume( vm, false );
 }

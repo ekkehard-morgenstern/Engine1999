@@ -492,17 +492,37 @@ bool repl_run( repl_t* repl ) {
     return repl->pending != 0 ? repl_enter_pending( repl, ok ) : ok;     // a program that ended in EDIT
 }
 
-// runs the code that is in the code segment as it is (it may have been patched by the monitor), from addr; a run
-// that ends with a request (LOAD, RUN, NEW, EDIT, MONITOR) is carried on by repl_finish() as after RUN
-bool repl_go( repl_t* repl, uint32_t addr ) {
-    repl_setup_vm( repl );
-    bool ok = false;
+// -- debugging (the monitor) ---------------------------------------------------------
+
+// prepares a run of the code segment as it is (it may have been patched by the monitor) at addr: the VM is suspended
+// there, with empty stacks; variables are kept
+bool repl_vm_start( repl_t* repl, uint32_t addr ) {
     if ( addr >= repl->rt.codegen.codesize ) {
         repl_report( repl, "? Address out of range" );
         return false;
     }
+    repl_setup_vm( repl );
+    return vm_begin( &repl->vm, addr );
+}
+
+// continues the suspended run (until the end of the code, a breakpoint, BRK) or executes one instruction. A run that
+// ended is finished like after RUN: a request (LOAD, RUN, NEW, EDIT, MONITOR) is carried on. false if an error was reported.
+// repl->vm.stopreason tells whether the VM is still suspended.
+bool repl_vm_resume( repl_t* repl, bool step, const uint32_t* breakpoints, size_t numbreakpoints ) {
+    repl_setup_vm( repl );
+    vm_t* vm = &repl->vm;
+    vm->debug = true;
+    vm->breakpoints = breakpoints;
+    vm->nbreakpoints = numbreakpoints;
+    bool ok = false;
     if ( setjmp( repl->jmp ) == 0 ) {
-        ok = vm_run_at( &repl->vm, addr );
+        ok = vm_resume( vm, step );
+    }
+    vm->debug = false;
+    vm->breakpoints = 0;
+    vm->nbreakpoints = 0;
+    if ( ok && vm->suspended ) {
+        return true;        // suspended: nothing to finish
     }
     ok = repl_finish( repl, ok, false );
     return repl->pending != 0 ? repl_enter_pending( repl, ok ) : ok;
