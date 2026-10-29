@@ -13,12 +13,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-### Monitor: single-step and breakpoints (2026-10-29)
-- **`vm.[ch]`**: the VM is resumable: `vm_begin()`, `vm_resume( singlestep )` (`vm_run_at()` is both now), `vm_t.suspended` / `stopreason` / `breakpoints` / `debug` / `brkhit`, `VMSTOP_*`. `BRK` stops the run when `vm_t.debug` is set, else it is still the error "Breakpoint". A breakpoint is checked before an instruction but never at the first one of a resume.
-- **`basrepl.[ch]`**: `repl_vm_start()` / `repl_vm_resume()` replace `repl_go()` (a run that ends is finished like after `RUN`, a suspended one is left alone).
-- **`monitor.c`**: commands `g` (continue a suspended run or start one), `s [a]`, `t [n]`, `b [a]`, `k a|*`, `i`; markers `>` (pc) and `*` (breakpoint) in the disassembly, `pc $…` in the title bar, register line (`pc line ds rs top`) and next instruction after a stop; breakpoints are cleared by `c`; help bar and help text updated.
-- Tests: `repltest1` +12 cases (163): breakpoints, leaving a breakpoint, single-step through a whole program, BRK with and without the debugger, refused start address. `vmtest1` 388/388, `asmtest1`, `txttest1`, `ansitest1` unchanged and passing. Checked on the real screen under Xvfb with XTest key injection.
-- Docs: `vm.h` header, `monitor.h`, `docs/display-engine.md`, `docs/compiler-and-vm.md`, `docs/roadmap.md` (BRK ticked, monitor item shortened), `SESSION.md`, `CLAUDE.md`.
+(none)
 
 ## Log
 
@@ -334,3 +329,11 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 - **`textscreen`/`sdlscreen`**: `TXTSCR_NSCREENS` 3, `txtscr_setcolors/getcolors`; one ANSI decoder per text screen with the screen's own default colors (program output shows on the dark monitor screen); `engine1999.c` opens the monitor after `repl_enter()`.
 - Tests: new `asmtest1.c` (56 checks incl. a decode → format → assemble round trip over a compiled program); `vmtest1` +3 cases (388), `repltest1` +3 cases (151), `txttest1` +3 checks (43); makefile (`vmasm.o`, `monitor.o`, `asmtest1`), `.gitignore`, `CLAUDE.md`, `SESSION.md`, `docs/` (display-engine, basic-language, compiler-and-vm, build-and-test, roadmap). Checked on the real screen under Xvfb with XTest key injection; the user tried it as well and found no problems.
 - Found while testing: scrolling filled with the title bar's colors until the output viewport restored its own blank colors (fixed before the commit).
+
+### a9a496a — 2026-10-29 21:12:03 +0100 — "Additional machine monitor features, created by Claude Code"
+13 files, +445/-45.
+- **`vm.[ch]`**: the VM is resumable: `vm_begin()`, `vm_resume( singlestep )` (`vm_run_at()` is both now), `vm_t.suspended` / `stopreason` / `breakpoints` / `debug` / `brkhit`, `VMSTOP_*`. `BRK` stops the run when `vm_t.debug` is set, else it is still the error "Breakpoint". A breakpoint is checked before an instruction but never at the first one of a resume.
+- **`basrepl.[ch]`**: `repl_vm_start()` / `repl_vm_resume()` replace `repl_go()` (a run that ends is finished like after `RUN`, a suspended one is left alone).
+- **`monitor.c`**: commands `g` (continue a suspended run or start one), `s [a]`, `t [n]`, `b [a]`, `k a|*`, `i`; markers `>` (pc) and `*` (breakpoint) in the disassembly, `pc $…` in the title bar, register line (`pc line ds rs top`) and next instruction after a stop; breakpoints are cleared by `c`; help bar and help text updated.
+- Tests: `repltest1` +12 cases (163): breakpoints, leaving a breakpoint, single-step through a whole program, BRK with and without the debugger, refused start address. `vmtest1` 388/388, `asmtest1`, `txttest1`, `ansitest1` unchanged and passing. Checked on the real screen under Xvfb with XTest key injection.
+- Docs: `vm.h` header, `monitor.h`, `docs/display-engine.md`, `docs/compiler-and-vm.md`, `docs/roadmap.md` (BRK ticked, monitor item shortened), `SESSION.md`, `CLAUDE.md`.
