@@ -299,6 +299,15 @@ static const testcase_t cases[] = {
     { "MONITOR",                "MONITOR",                                         "<request MONITOR>\n" },
     { "MONITOR ends the run",   "PRINT 1:MONITOR:PRINT 2",                         "1\n<request MONITOR>\n" },
     { "MONITOR lower case",     "monitor",                                         "<request MONITOR>\n" },
+    // WAIT
+    { "WAIT 0",                 "WAIT 0:PRINT \"ok\"",                             "ok\n" },
+    { "WAIT sleeps",            "T=TI:WAIT 6:PRINT TI-T>=5",                       "-1\n" },
+    { "WAIT with an expression", "N=2:WAIT N*3:PRINT \"ok\"",                      "ok\n" },
+    { "WAIT lower case",        "wait 1:print \"ok\"",                             "ok\n" },
+    { "WAIT negative",          "WAIT 0-1",                                        "? Illegal argument\n" },
+    { "WAIT too long",          "WAIT 216001",                                     "? Illegal argument\n" },
+    { "WAIT needs a number",    "WAIT",                                            "? Numeric expression expected\n" },
+    { "WAIT in a program",      "10 FOR I=1 TO 3\n20 WAIT 1\n30 PRINT I\n40 NEXT I", "1\n2\n3\n" },
     // sound (the test sound output logs: <tone chan freq vol beats>, channels 0..7 there)
     { "SOUND",                  "SOUND 1,440,2",                                   "<tone 0 440 0.5 2>\n" },
     { "SOUND with volume",      "SOUND 2,880,1,0.25",                              "<tone 1 880 0.25 1>\n" },

@@ -615,6 +615,8 @@ Explanation of node types:
 #define NT_MONITORSTMT          UINT8_C(0X64)   // MONITOR statement
 #define NT_SOUNDSTMT            UINT8_C(0X65)   // SOUND, PLAY, WAVE, TEMPO statements (data: 1 byte of SNDK_*)
 
+#define NT_WAITSTMT             UINT8_C(0X66)   // WAIT statement (1 numeric branch: the ticks)
+
 #define SNDK_SOUND              UINT8_C(1)      // SOUND ch, freq, beats [, vol [, endfreq]]: 3 to 5 numeric branches
 #define SNDK_PLAY               UINT8_C(2)      // PLAY a$ [, b$ ...]: 1..8 string branches
 #define SNDK_WAVE               UINT8_C(3)      // WAVE ch, wave: 2 numeric branches

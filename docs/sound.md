@@ -94,7 +94,7 @@ SFX n [, ch]                   plays effect n on channel ch; without ch on a fre
 
 - `PITCH`/`VOLUME` take effect immediately: no allocation, no queue (a lock and a few stores), so calling them every frame (60 per second,
   for instance from an `EVERY` timer once there is one) is cheap. Typical use: `SOUND 1,100,0` starts a tone without an end, then the
-  game loop does `PITCH 1,100+speed*3`. `VOLUME` changes the volume of the sounding note (smoothly, no click).
+  game loop does `PITCH 1,100+speed*3` (and `WAIT 1` for a frame without busy-waiting; see `demos/sfx.bas`). `VOLUME` changes the volume of the sounding note (smoothly, no click).
 - `ENVELOPE`, `VIBRATO`, `TREMOLO`, `WAVE` and the glide are events on the channel's time line, so they apply at the right place in a
   sequence. They stay in effect until changed. Without an `ENVELOPE` a note fades in and out within 2.5 ms (no click); with one the
   note rises in `a` seconds, falls to the sustain level in `d` seconds and holds it until its end, then falls to silence in `r` seconds

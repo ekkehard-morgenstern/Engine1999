@@ -818,7 +818,7 @@ static const struct {
     { TOK_LABEL, "LABEL" }, { TOK_AGAIN, "AGAIN" }, { TOK_CHR, "CHR" }, { TOK_MONITOR, "MONITOR" }, { TOK_SOUND, "SOUND" }, { TOK_PLAY, "PLAY" },
     { TOK_WAVE, "WAVE" }, { TOK_TEMPO, "TEMPO" }, { TOK_PLAYING, "PLAYING" }, { TOK_SYNC, "SYNC" },
     { TOK_PITCH, "PITCH" }, { TOK_VOLUME, "VOLUME" }, { TOK_ENVELOPE, "ENVELOPE" }, { TOK_VIBRATO, "VIBRATO" },
-    { TOK_TREMOLO, "TREMOLO" }, { TOK_SFX, "SFX" }, { TOK_AMP, "&" }, { TOK_LE, "<=" }, { TOK_GE, ">=" }, { TOK_NE, "<>" }, { 0, 0 }
+    { TOK_TREMOLO, "TREMOLO" }, { TOK_SFX, "SFX" }, { TOK_WAIT, "WAIT" }, { TOK_AMP, "&" }, { TOK_LE, "<=" }, { TOK_GE, ">=" }, { TOK_NE, "<>" }, { 0, 0 }
 };
 
 bool is_keyword( const char* name, uint8_t* ptok ) {

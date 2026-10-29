@@ -13,6 +13,8 @@ The demo files carry no license information: they are free for everybody to use,
 The music is public domain; the arrangements (note tables, bass lines, tempo, instrument settings) were written for these demos.
 Music demos play until the end or until a key is pressed (`SOUND OFF` is issued then); a program that ends leaves queued music playing.
 
+The demos use `WAIT` to pause (a busy loop on `TI` would keep the processor at 100 %).
+
 Conventions:
 - Programs are kept as **ASCII listings** with the extension `.bas` (`SAVE "name",A` writes them; `LOAD "name"` finds `name.bas`),
   so they can be read and diffed. Binary tokenized programs (`.e99`, the default of `SAVE "name"`) don't belong in this folder.

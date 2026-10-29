@@ -208,6 +208,7 @@
 #define TOK_VIBRATO     UINT8_C(157)        // VIBRATO keyword
 #define TOK_TREMOLO     UINT8_C(158)        // TREMOLO keyword
 #define TOK_SFX         UINT8_C(159)        // SFX keyword
+#define TOK_WAIT        UINT8_C(160)        // WAIT keyword
 #define TOK_NONE        UINT8_C(255)        // no token (!)
 
 // -- buffers ---------------------------------------------------------------

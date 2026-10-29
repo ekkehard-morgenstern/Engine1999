@@ -24,6 +24,9 @@ and `MERGE` do with variables and line numbers; where files live (current direct
 
 ## 2. Smaller language items *(each needs a short design decision)*
 
+- [ ] **Comments are converted to upper case** by the tokenizer (`' Ode to Joy` is listed as `' ODE TO JOY`; strings keep their case): decide whether comment text should keep its case (found while writing the demos)
+- [ ] `WAIT` is the only way to pause; `AFTER`/`EVERY` (section 3) will add timers; no `FRAME` (wait for the next screen refresh) yet
+
 - [ ] **`IF c THEN GOSUB n:stmt` / `IF c THEN GOTO n:stmt`** (found while writing the demos): the statement after the colon is *not* part of the THEN branch; it runs whether or not the condition is true (the target form takes only the line number/label). In classic BASIC the rest of the line belongs to the THEN. Decide whether to change the parser (it affects how a program reads) or document it. Workaround: `IF c THEN GOSUB n` then a separate `IF c THEN line`.
 
 - [ ] `OPTION BASE` — lowest array index (0 or 1); when is it allowed (before the first `DIM`?)

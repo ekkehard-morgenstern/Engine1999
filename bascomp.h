@@ -205,6 +205,7 @@ bool comp_eat_runstmt( compiler_t* comp, node_t** pnode );
 bool comp_eat_editstmt( compiler_t* comp, node_t** pnode );
 bool comp_eat_monitorstmt( compiler_t* comp, node_t** pnode );
 bool comp_eat_soundstmt( compiler_t* comp, node_t** pnode );
+bool comp_eat_waitstmt( compiler_t* comp, node_t** pnode );
 bool comp_eat_liststmt( compiler_t* comp, node_t** pnode );
 bool comp_eat_newstmt( compiler_t* comp, node_t** pnode );
 bool comp_eat_clearstmt( compiler_t* comp, node_t** pnode );

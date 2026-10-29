@@ -168,3 +168,9 @@ basrepl.o: basrepl.c $(BASEHDR)
 basdebug.o: basdebug.c $(BASEHDR)
 
 ansi.o: ansi.c $(BASEHDR)
+
+fulledit.o: fulledit.c $(BASEHDR)
+
+vmasm.o: vmasm.c $(BASEHDR)
+
+monitor.o: monitor.c $(BASEHDR)

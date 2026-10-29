@@ -13,13 +13,12 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-### Sound effects, default file extensions, demos folder (2026-10-29)
-- **Sound effects** (the approved proposal): `PITCH`, `VOLUME` (at once), glide as the fifth argument of `SOUND`, `ENVELOPE`, `VIBRATO`, `TREMOLO`, `SFX n,a$` / `SFX n[,ch]`; tokens 154..159, `SNDK_*` 7..13 (`nodetype.h`), `comp_eat_soundstmt` / `cgen_from_soundstmt` extended, `vm_sound()` / `vm_sfx_define()` / `vm_sfx_play()` / `vm_queue_voice()` in `vm.c`, `vm_t.sfx[]`, `vm_sound_t` extended (`tone` with freq2, `setenv`, `setvib`, `settrem`, `setpitch`, `setvolume`), `engine1999.c` host callbacks, `instset.h`.
-- **`synth.[ch]`**: glide, ADSR envelope, vibrato, tremolo, immediate pitch/volume, `synth_schedule_ev()`; **`sdlaudio.[ch]`**: `sdlaud_playsweep/setenvelope/setvibrato/settremolo/setpitch/setvolume`; **`mml.[ch]`**: effect commands `H S X XR ~ ^`.
-- **File extensions**: `SAVE` appends `.e99` (binary) / `.bas` (ASCII, `,A`) to names without an extension, `LOAD` finds `name`, `name.bas`, `name.e99`, `name.BAS`, `name.E99` (`basrepl.c`); owner decision `.BAS` / `.E99`, written in lower case.
-- **`demos/`** folder with `README.md`, `sfx.bas` (sound effect board, engine hum via `PITCH`/`VOLUME`), `ode.bas` (Ode to Joy), `prelude.bas` (Bach, Prelude in C, 8 bars); all free of license text; `CLAUDE.md` table. Found a language quirk: `IF c THEN GOSUB n:stmt` always runs `stmt` (roadmap).
-- **Tests**: `vmtest1` 469 cases (+38), `repltest1` 179 (+12: extensions, SFX persistence, listing), `asmtest1` 60, `synthtest1` 169 (+49: glide, envelope, LFOs, immediate control, effect commands); `vmtest1` and `synthtest1` are clean under valgrind. Real-time check on the engine (Xvfb + SDL disk audio driver): an `SFX` sweep with an envelope.
-- **Docs**: `docs/sound.md` (the proposal became the description), `basic-language.md` (sound, file extensions), `compiler-and-vm.md`, `roadmap.md`, `bascomp.ebnf`, `CLAUDE.md`, `SESSION.md`.
+### WAIT statement, makefile dependencies, demo fixes (2026-10-30)
+- **`WAIT n`**: new statement (token 160, `NT_WAITSTMT 0x66`, instruction `WAIT 0x144`; `bastok.[ch]`, `bascomp.[ch]` + `.ebnf`, `nodetype.[ch]`, `cgenprog.c`, `codegen.[ch]`, `instset.h`, `vm.c`): sleeps n/60 s without using the processor, Break works. Reason: the "engine" of `demos/sfx.bas` waited with `WHILE TI<T:WEND`, a busy loop (CPU at 100 % for 7 s).
+- **`makefile`**: dependency rules for `fulledit.o`, `monitor.o`, `vmasm.o` (they depended only on their `.c`): they were not rebuilt after `repl_t` / `vm_t` changed, so the full-screen editor read `hlstyle` at a stale offset (no syntax highlighting) and the monitor used a wrong layout.
+- **Demos**: `sfx.bas`, `ode.bas`, `prelude.bas` use `WAIT` instead of busy loops.
+- **Tests**: `vmtest1` 477 (+8 WAIT), `repltest1` 180 (+1: Break ends a WAIT), `asmtest1` 61; the editor highlighting and the monitor were checked on the real engine (Xvfb) after the rebuild.
+- **Docs**: `basic-language.md`, `compiler-and-vm.md`, `sound.md`, `roadmap.md` (comments are upper-cased by the tokenizer; no `FRAME`), `demos/README.md`, `SESSION.md`.
 
 ## Log
 
@@ -374,3 +373,16 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 - **Tests**: `vmtest1` +43 cases (431; a sound output that logs the calls), `repltest1` +4 (167), `asmtest1` +3 (59, incl. the round trip over sound instructions), `synthtest1` +43 checks (120: `mml`, busy, silencechan, queue order/tail/speed); valgrind clean. Real-time check on the engine under Xvfb with SDL's disk audio driver (`PLAY` voices: exact pitches and timing).
 - **Docs**: `docs/sound.md` (statements, music strings, cost of many short notes, **proposal for sound effects**: immediate `PITCH`/`VOLUME`, glide, `ENVELOPE`, `VIBRATO`/`TREMOLO`, stored `SFX n, "..."`, instruments), `basic-language.md`, `compiler-and-vm.md`, `roadmap.md`, `bascomp.ebnf`, `CLAUDE.md`, `SESSION.md`. Owner decisions recorded: effects proposal approved, queued music keeps playing after a program ends.
 - The commit also contained the user's rename of the `residue/` program files from `*.bas` to `*.e99` (not Claude's work).
+
+### 4ae1ef1 — 2026-10-29 23:02:16 +0100 — "Effects framework for audio subsystem and BASIC language, created by Claude Code"
+29 files, +1125/-140.
+- **Sound effects** (the approved proposal): `PITCH`, `VOLUME` (at once), glide as the fifth argument of `SOUND`, `ENVELOPE`, `VIBRATO`, `TREMOLO`, `SFX n,a$` / `SFX n[,ch]`; tokens 154..159, `SNDK_*` 7..13 (`nodetype.h`), `comp_eat_soundstmt` / `cgen_from_soundstmt` extended, `vm_sound()` / `vm_sfx_define()` / `vm_sfx_play()` / `vm_queue_voice()` in `vm.c`, `vm_t.sfx[]`, `vm_sound_t` extended (`tone` with freq2, `setenv`, `setvib`, `settrem`, `setpitch`, `setvolume`), `engine1999.c` host callbacks, `instset.h`.
+- **`synth.[ch]`**: glide, ADSR envelope, vibrato, tremolo, immediate pitch/volume, `synth_schedule_ev()`; **`sdlaudio.[ch]`**: `sdlaud_playsweep/setenvelope/setvibrato/settremolo/setpitch/setvolume`; **`mml.[ch]`**: effect commands `H S X XR ~ ^`.
+- **File extensions**: `SAVE` appends `.e99` (binary) / `.bas` (ASCII, `,A`) to names without an extension, `LOAD` finds `name`, `name.bas`, `name.e99`, `name.BAS`, `name.E99` (`basrepl.c`); owner decision `.BAS` / `.E99`, written in lower case.
+- **Tests**: `vmtest1` 469 cases (+38), `repltest1` 179 (+12: extensions, SFX persistence, listing), `asmtest1` 60, `synthtest1` 169 (+49: glide, envelope, LFOs, immediate control, effect commands); `vmtest1` and `synthtest1` are clean under valgrind. Real-time check on the engine (Xvfb + SDL disk audio driver): an `SFX` sweep with an envelope.
+- **Docs**: `docs/sound.md` (the proposal became the description), `basic-language.md` (sound, file extensions), `compiler-and-vm.md`, `roadmap.md`, `bascomp.ebnf`, `CLAUDE.md`, `SESSION.md`.
+
+### f587a1b — 2026-10-29 23:15:11 +0100 — "Audio demo files created by Claude Code and state update"
+8 files, +104/-6.
+- **`demos/`** folder with `README.md`, `sfx.bas` (sound effect board, engine hum via `PITCH`/`VOLUME`), `ode.bas` (Ode to Joy), `prelude.bas` (Bach, Prelude in C, 8 bars); all free of license text; `CLAUDE.md` table. Found a language quirk: `IF c THEN GOSUB n:stmt` always runs `stmt` (roadmap).
+- Also: `demos/README.md` (what the demos are, no license text), the roadmap finding about `IF c THEN GOSUB n:stmt`, `CLAUDE.md` / `SESSION.md`.

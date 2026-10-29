@@ -2545,6 +2545,24 @@ bool comp_eat_soundstmt( compiler_t* comp, node_t** pnode ) {
     return true;
 }
 
+bool comp_eat_waitstmt( compiler_t* comp, node_t** pnode ) {
+    // wait-stmt := TOK_WAIT num-expr .
+    if ( comp->currtok != TOK_WAIT || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    node_t* ticks = NODE_NONE;
+    if ( !comp_eat_numexpr( comp, &ticks ) || ticks == NODE_NONE ) {
+        comp_error( comp, "Numeric expression expected" );
+        return false;
+    }
+    // NT_WAITSTMT     WAIT statement (no data, 1 branch of numeric expression: the time in 1/60 seconds)
+    if ( !comp_create_node( comp, pnode, NT_WAITSTMT, UINT8_C(1), UINT16_C(0), 0, ticks ) || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
 bool comp_eat_clearstmt( compiler_t* comp, node_t** pnode ) {
     // clear-stmt := TOK_CLEAR .
     if ( comp->currtok != TOK_CLEAR || !comp_fetchtok( comp ) ) {
@@ -2560,7 +2578,7 @@ bool comp_eat_clearstmt( compiler_t* comp, node_t** pnode ) {
 
 bool comp_eat_progstmt( compiler_t* comp, node_t** pnode ) {
     // prog-stmt := load-stmt | run-stmt | list-stmt | new-stmt | clear-stmt | delete-stmt | renum-stmt | edit-stmt | monitor-stmt |
-    //              sound-stmt .
+    //              sound-stmt | wait-stmt .
     // [ NT_PROGSTMT - not generated ]
     if ( comp_eat_loadstmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
@@ -2590,6 +2608,9 @@ bool comp_eat_progstmt( compiler_t* comp, node_t** pnode ) {
         return true;
     }
     if ( comp_eat_soundstmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_waitstmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     return false;

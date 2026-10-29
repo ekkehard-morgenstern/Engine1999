@@ -189,6 +189,7 @@ static const testcase_t cases[] = {
     { "INKEY$ in direct mode",  "PRINT LEN(INKEY$)",                              "0\n" },
     { "end of input",           "INPUT A",                                        "? ? End of input\n" },
     { "Break stops a loop",     "10 GOTO 10\nRUN",                                "? Break in line 10\n", 0, 3 },
+    { "Break ends a WAIT",      "10 WAIT 3000\nRUN\nPRINT 5",                     "? Break in line 10\n5\n", 0, 3 },
     { "Break at INPUT",         "10 INPUT A\nRUN",                                "? ? Break in line 10\n", 0, 1 },
     { "session continues after Break", "10 GOTO 10\nRUN\nPRINT 5",                "? Break in line 10\n5\n", 0, 3 },
 };

@@ -1281,6 +1281,40 @@ static bool vm_sfx_play( vm_t* vm ) {
     return true;
 }
 
+// WAIT ( n -- ): sleeps n/60 s; asks the interrupt callback every 10 ms
+static bool vm_wait( vm_t* vm ) {
+    double ticks = 0;
+    if ( !vm_dpop_num( vm, &ticks ) ) {
+        return false;
+    }
+    if ( !( ticks >= 0.0 && ticks <= 216000.0 ) ) {
+        return vm_error( vm, "Illegal argument" );
+    }
+    struct timespec now, end;
+    clock_gettime( CLOCK_MONOTONIC, &now );
+    double secs = ticks / 60.0;
+    end.tv_sec = now.tv_sec + (time_t) secs;
+    end.tv_nsec = now.tv_nsec + (long)( ( secs - floor( secs ) ) * 1.0e9 );
+    if ( end.tv_nsec >= 1000000000L ) {
+        end.tv_nsec -= 1000000000L;
+        ++end.tv_sec;
+    }
+    for (;;) {
+        clock_gettime( CLOCK_MONOTONIC, &now );
+        long long left = (long long)( end.tv_sec - now.tv_sec ) * 1000000000LL + ( end.tv_nsec - now.tv_nsec );
+        if ( left <= 0 ) {
+            return true;
+        }
+        if ( vm_interrupted( vm ) ) {
+            return vm_error( vm, "Break" );
+        }
+        struct timespec nap;
+        long long slice = left < 10000000LL ? left : 10000000LL;
+        nap.tv_sec = 0; nap.tv_nsec = (long) slice;
+        nanosleep( &nap, 0 );
+    }
+}
+
 // SND ( args -- ), kind = SNDK_*
 static bool vm_sound( vm_t* vm, uint16_t kind ) {
     double a = 0, b = 0, c = 0, d = 0, e = 0; int chan = 0;
@@ -1762,6 +1796,7 @@ static bool vm_step( vm_t* vm ) {
         case INS_NEW: return vm_new_program( vm );
         case INS_MON: return vm_monitor_request( vm );
         case INS_SND: return vm_sound( vm, param16 );
+        case INS_WAIT: return vm_wait( vm );
         case INS_EDIT: return vm_edit_request( vm );
         case INS_DELE: return vm_edit_program( vm, false );
         case INS_RENM: return vm_edit_program( vm, true );

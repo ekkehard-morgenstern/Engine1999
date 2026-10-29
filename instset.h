@@ -367,6 +367,9 @@ The 4096 extended instructions are as follows:
     0001 01000011       PLNG - is the channel busy? ( ch -- n ) C=0 P=0
                             -1 while channel 1..8 sounds or has events queued or a sequence still running, else 0 (also
                             without sound callbacks). Other channels are "Illegal argument".
+    0001 01000100       WAIT - sleep ( n -- ) C=0 P=0
+                            Sleeps for n/60 seconds (n >= 0, at most 216000 = one hour; the unit of TI) without using the
+                            processor. The interrupt callback is asked every 10 ms, so Break ends the wait ("Break").
 
 */
 
@@ -486,5 +489,6 @@ The 4096 extended instructions are as follows:
 #define INS_MON         UINT16_C(0X141)
 #define INS_SND         UINT16_C(0X142)
 #define INS_PLNG        UINT16_C(0X143)
+#define INS_WAIT        UINT16_C(0X144)
 
 #endif
