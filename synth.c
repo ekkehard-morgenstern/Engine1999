@@ -98,6 +98,7 @@ void synth_init( synth_t* s, int rate ) {
     for ( int i=0; i < SYNTH_NCHAN; ++i ) {
         synth_osc_init( &s->chan[i].osc, 0x9E3779B9U * (uint32_t)( i + 1 ) );
         s->chan[i].osc.held = synth_noise( &s->chan[i].osc );
+        s->chan[i].env = 1.0f;
     }
 }
 
@@ -147,22 +148,41 @@ void synth_sync( synth_t* s, unsigned chanmask, uint64_t now ) {
     }
 }
 
-bool synth_schedule( synth_t* s, uint64_t when, synth_evtype_t type, int chan, float freq, float vol, synth_wave_t wave ) {
-    if ( chan < 0 || chan >= SYNTH_NCHAN || s->nevents >= SYNTH_MAXEVENTS ) {
+bool synth_schedule_ev( synth_t* s, uint64_t when, const synth_evspec_t* sp ) {
+    if ( sp->chan < 0 || sp->chan >= SYNTH_NCHAN || s->nevents >= SYNTH_MAXEVENTS ) {
         return false;
     }
-    switch ( type ) {
+    switch ( sp->type ) {
         case SYNTH_EV_PLAY:
-            if ( !( freq >= SYNTH_FREQ_MIN && freq <= SYNTH_FREQ_MAX ) || !( vol >= 0.0f && vol <= 1.0f ) ) {
+            if ( !( sp->freq >= SYNTH_FREQ_MIN && sp->freq <= SYNTH_FREQ_MAX ) || !( sp->vol >= 0.0f && sp->vol <= 1.0f ) ) {
+                return false;
+            }
+            if ( sp->freq2 != 0.0f && ( !( sp->freq2 >= SYNTH_FREQ_MIN && sp->freq2 <= SYNTH_FREQ_MAX ) || sp->dur == 0 ) ) {
                 return false;
             }
             break;
         case SYNTH_EV_WAVE:
-            if ( (int) wave < 0 || (int) wave >= SYNTH_NWAVES ) {
+            if ( (int) sp->wave < 0 || (int) sp->wave >= SYNTH_NWAVES ) {
                 return false;
             }
             break;
         case SYNTH_EV_STOP:
+            break;
+        case SYNTH_EV_ENV:
+            if ( !( sp->p[0] < 0.0f ) && !( sp->p[0] >= 0.0f && sp->p[0] <= 60.0f && sp->p[1] >= 0.0f && sp->p[1] <= 60.0f &&
+                    sp->p[2] >= 0.0f && sp->p[2] <= 1.0f && sp->p[3] >= 0.0f && sp->p[3] <= 60.0f ) ) {
+                return false;
+            }
+            break;
+        case SYNTH_EV_VIB:
+            if ( !( sp->p[0] >= 0.0f && sp->p[0] <= 100.0f && sp->p[1] >= 0.0f && sp->p[1] <= 24.0f ) ) {
+                return false;
+            }
+            break;
+        case SYNTH_EV_TREM:
+            if ( !( sp->p[0] >= 0.0f && sp->p[0] <= 100.0f && sp->p[1] >= 0.0f && sp->p[1] <= 1.0f ) ) {
+                return false;
+            }
             break;
         default:
             return false;
@@ -171,7 +191,8 @@ bool synth_schedule( synth_t* s, uint64_t when, synth_evtype_t type, int chan, f
     if ( ev == 0 ) {
         return false;
     }
-    ev->next = 0; ev->when = when; ev->type = type; ev->chan = chan; ev->freq = freq; ev->vol = vol; ev->wave = wave;
+    ev->next = 0; ev->when = when; ev->type = sp->type; ev->chan = sp->chan; ev->freq = sp->freq; ev->vol = sp->vol;
+    ev->wave = sp->wave; ev->freq2 = sp->freq2; ev->dur = sp->dur; memcpy( ev->p, sp->p, sizeof(ev->p) );
     if ( s->tail == 0 || s->tail->when <= when ) {     // the usual case: a sequence is queued in time order
         if ( s->tail == 0 ) s->events = ev; else s->tail->next = ev;
         s->tail = ev;
@@ -186,22 +207,105 @@ bool synth_schedule( synth_t* s, uint64_t when, synth_evtype_t type, int chan, f
     return true;
 }
 
+bool synth_schedule( synth_t* s, uint64_t when, synth_evtype_t type, int chan, float freq, float vol, synth_wave_t wave ) {
+    synth_evspec_t sp;
+    memset( &sp, 0, sizeof(sp) );
+    sp.type = type; sp.chan = chan; sp.freq = freq; sp.vol = vol; sp.wave = wave;
+    return synth_schedule_ev( s, when, &sp );
+}
+
+static void synth_release( synth_t* s, synth_chan_t* c ) {      // the note ends: the channel fades out (envelope: its release)
+    if ( c->env_on && c->on ) {
+        if ( c->envstate != SYNTH_ENV_RELEASE ) {
+            c->envstate = SYNTH_ENV_RELEASE;
+            c->env_rinc = c->env_r > 0.0f ? c->env / ( c->env_r * (float) s->rate ) : 2.0f;
+        }
+    } else {
+        c->on = false;
+        c->target = 0.0f;
+    }
+}
+
 static void synth_apply( synth_t* s, const synth_event_t* ev ) {
     synth_chan_t* c = &s->chan[ev->chan];
     switch ( ev->type ) {
-        case SYNTH_EV_PLAY:
-            if ( c->gain == 0.0f && c->target == 0.0f ) {
+        case SYNTH_EV_PLAY: {
+            bool wason = c->on;
+            if ( !wason && c->gain == 0.0f ) {
                 c->osc.phase = 0.0;             // a new note starts at the beginning of the cycle; a sounding one goes on
+                c->vib_phase = 0.0; c->trem_phase = 0.0;
             }
-            c->osc.step = (double) ev->freq / (double) s->rate;
+            c->basestep = (double) ev->freq / (double) s->rate;
+            c->osc.step = c->basestep;
+            c->glide_left = 0;
+            if ( ev->freq2 > 0.0f && ev->dur > 0 ) {
+                double samples = floor( (double) ev->dur * (double) s->rate / 1.0e9 );
+                if ( samples < 1.0 ) samples = 1.0;
+                c->glide_ratio = pow( (double) ev->freq2 / (double) ev->freq, 1.0 / samples );
+                c->glide_left = (int) samples;
+                c->glide_end = (double) ev->freq2 / (double) s->rate;
+            }
+            c->vol = ev->vol;
             c->target = ev->vol;
+            c->on = true;
+            if ( c->env_on && ( !wason || c->envstate == SYNTH_ENV_RELEASE || c->envstate == SYNTH_ENV_IDLE ) ) {
+                if ( !wason ) c->env = 0.0f;
+                c->envstate = SYNTH_ENV_ATTACK;
+            }
             break;
+        }
         case SYNTH_EV_STOP:
-            c->target = 0.0f;
+            synth_release( s, c );
             break;
         case SYNTH_EV_WAVE:
             c->osc.wave = ev->wave;
             break;
+        case SYNTH_EV_ENV:
+            if ( ev->p[0] < 0.0f ) {
+                if ( c->env_on && c->on && c->envstate == SYNTH_ENV_RELEASE ) {     // the release is cut short
+                    c->on = false; c->target = 0.0f;
+                }
+                c->env_on = false; c->env = 1.0f; c->envstate = SYNTH_ENV_IDLE;
+            } else {
+                bool wasenv = c->env_on;
+                c->env_on = true;
+                c->env_a = ev->p[0]; c->env_d = ev->p[1]; c->env_s = ev->p[2]; c->env_r = ev->p[3];
+                float rate = (float) s->rate;
+                c->env_ainc = c->env_a > 0.0f ? 1.0f / ( c->env_a * rate ) : 2.0f;
+                c->env_dinc = c->env_d > 0.0f ? ( 1.0f - c->env_s ) / ( c->env_d * rate ) : 2.0f;
+                if ( !wasenv ) {        // a note that is sounding already stays at its level
+                    c->env = 1.0f;
+                    c->envstate = c->on ? SYNTH_ENV_SUSTAIN : SYNTH_ENV_IDLE;
+                }
+            }
+            break;
+        case SYNTH_EV_VIB:
+            c->vib_rate = ev->p[0]; c->vib_depth = ev->p[1];
+            break;
+        case SYNTH_EV_TREM:
+            c->trem_rate = ev->p[0]; c->trem_depth = ev->p[1];
+            break;
+    }
+}
+
+void synth_setpitch( synth_t* s, int chan, float freq ) {
+    if ( chan < 0 || chan >= SYNTH_NCHAN || !( freq >= SYNTH_FREQ_MIN && freq <= SYNTH_FREQ_MAX ) ) {
+        return;
+    }
+    synth_chan_t* c = &s->chan[chan];
+    c->basestep = (double) freq / (double) s->rate;
+    c->osc.step = c->basestep;
+    c->glide_left = 0;
+}
+
+void synth_setvolume( synth_t* s, int chan, float vol ) {
+    if ( chan < 0 || chan >= SYNTH_NCHAN || !( vol >= 0.0f && vol <= 1.0f ) ) {
+        return;
+    }
+    synth_chan_t* c = &s->chan[chan];
+    c->vol = vol;
+    if ( c->on ) {
+        c->target = vol;
     }
 }
 
@@ -231,7 +335,7 @@ bool synth_busy( const synth_t* s, int chan, uint64_t now ) {
     if ( chan < 0 || chan >= SYNTH_NCHAN ) {
         return false;
     }
-    if ( s->chan[chan].target != 0.0f || s->chan[chan].gain != 0.0f || s->cursor[chan] > now ) {
+    if ( s->chan[chan].on || s->chan[chan].target != 0.0f || s->chan[chan].gain != 0.0f || s->cursor[chan] > now ) {
         return true;
     }
     for ( const synth_event_t* ev = s->events; ev != 0; ev = ev->next ) {
@@ -259,16 +363,52 @@ void synth_silencechan( synth_t* s, int chan, uint64_t now ) {
             pp = &ev->next;
         }
     }
+    s->chan[chan].on = false;
     s->chan[chan].target = 0.0f;
+    s->chan[chan].glide_left = 0;
+    s->chan[chan].envstate = SYNTH_ENV_IDLE;
     s->cursor[chan] = now;
 }
 
 void synth_silence( synth_t* s, uint64_t now ) {
     synth_dropevents( s );
     for ( int i=0; i < SYNTH_NCHAN; ++i ) {
+        s->chan[i].on = false;
         s->chan[i].target = 0.0f;
+        s->chan[i].glide_left = 0;
+        s->chan[i].envstate = SYNTH_ENV_IDLE;
         s->cursor[i] = now;
     }
+}
+
+// the envelope level for the next sample (only called with env_on)
+static float synth_env_next( synth_chan_t* c ) {
+    switch ( c->envstate ) {
+        case SYNTH_ENV_ATTACK:
+            c->env += c->env_ainc;
+            if ( c->env >= 1.0f ) {
+                c->env = 1.0f; c->envstate = SYNTH_ENV_DECAY;
+            }
+            break;
+        case SYNTH_ENV_DECAY:
+            c->env -= c->env_dinc;
+            if ( c->env <= c->env_s ) {
+                c->env = c->env_s; c->envstate = SYNTH_ENV_SUSTAIN;
+            }
+            break;
+        case SYNTH_ENV_RELEASE:
+            c->env -= c->env_rinc;
+            if ( c->env <= 0.0f ) {         // the note is over
+                c->env = 0.0f; c->envstate = SYNTH_ENV_IDLE;
+                c->on = false; c->target = 0.0f;
+            }
+            break;
+        case SYNTH_ENV_SUSTAIN:
+        case SYNTH_ENV_IDLE:
+        default:
+            break;
+    }
+    return c->env;
 }
 
 void synth_render( synth_t* s, float* buf, int count ) {
@@ -276,7 +416,7 @@ void synth_render( synth_t* s, float* buf, int count ) {
         float sum = 0.0f, sumgain = 0.0f;
         for ( int i=0; i < SYNTH_NCHAN; ++i ) {
             synth_chan_t* c = &s->chan[i];
-            if ( c->gain == 0.0f && c->target == 0.0f ) {
+            if ( !c->on && c->gain == 0.0f && c->target == 0.0f ) {
                 continue;
             }
             if ( c->gain < c->target ) {
@@ -286,7 +426,29 @@ void synth_render( synth_t* s, float* buf, int count ) {
                 c->gain -= s->slewstep;
                 if ( c->gain < c->target ) c->gain = c->target;
             }
-            sum += synth_osc_next( &c->osc ) * c->gain;
+            float level = c->gain;
+            if ( c->env_on ) {
+                level *= synth_env_next( c );
+            }
+            if ( c->glide_left > 0 ) {
+                c->basestep *= c->glide_ratio;
+                if ( --c->glide_left == 0 ) {
+                    c->basestep = c->glide_end;
+                }
+            }
+            if ( c->vib_depth > 0.0f ) {
+                c->osc.step = c->basestep * exp2( (double)( c->vib_depth / 12.0f ) * sin( TWOPI * c->vib_phase ) );
+                c->vib_phase += (double) c->vib_rate / (double) s->rate;
+                if ( c->vib_phase >= 1.0 ) c->vib_phase -= floor( c->vib_phase );
+            } else {
+                c->osc.step = c->basestep;
+            }
+            if ( c->trem_depth > 0.0f ) {
+                level *= 1.0f - c->trem_depth * 0.5f * (float)( 1.0 - cos( TWOPI * c->trem_phase ) );
+                c->trem_phase += (double) c->trem_rate / (double) s->rate;
+                if ( c->trem_phase >= 1.0 ) c->trem_phase -= floor( c->trem_phase );
+            }
+            sum += synth_osc_next( &c->osc ) * level;
             sumgain += c->gain;
         }
         buf[j] = sumgain > 1.0f ? sum / sumgain : sum;      // loud chords are scaled down, not clipped

@@ -95,6 +95,7 @@ static void test_encodings( void ) {
     asmcase( "SND 2", "A1 42 00 02" );
     asmcase( "snd 6", "A1 42 00 06" );
     asmcase( "PLNG", "21 43" );
+    asmcase( "SND 13", "A1 42 00 0D" );
 }
 
 static void test_errors( void ) {
@@ -143,6 +144,7 @@ static void test_roundtrip( void ) {
         "92 ON B GOTO 90,100",
         "94 WHILE B<3:B=B+1:WEND:REPEAT:B=B-1:UNTIL B<1",
         "95 LABEL L:END",
+        "97 PITCH 1,440:VOLUME 1,0.5:ENVELOPE 1:ENVELOPE 1,0,0.1,0.5,0.2:VIBRATO 1,5,0.5:TREMOLO 1,4,0.5:SFX 1,\"S100,200\":SFX 1:SFX 1,2:SOUND 1,440,1,0.5,880",
         "96 SOUND 1,440,1:SOUND 2,0,2,0.25:SOUND OFF:SOUND OFF 3:SOUND SYNC 1,2:WAVE 1,3:TEMPO 90:PLAY \"CDE\",\"R\":PRINT PLAYING(1)",
         "100 PRINT LEFT$(\"ABC\",2);MID$(\"ABC\",2,1);HEX$(255,4):RETURN",
         0 };

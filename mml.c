@@ -104,6 +104,41 @@ static bool mml_duration( mml_state_t* st, float* pseconds, char err[MML_ERRLEN]
     return true;
 }
 
+// a comma between values (blanks around it are skipped)
+static bool mml_comma( mml_state_t* st ) {
+    mml_skip( st );
+    if ( *st->p == ',' ) {
+        ++st->p;
+        return true;
+    }
+    return false;
+}
+
+// the length that may follow the frequencies of H and S: ", n" and dots, else the default length
+static bool mml_effect_duration( mml_state_t* st, float* pseconds, char err[MML_ERRLEN] ) {
+    if ( mml_comma( st ) ) {
+        mml_skip( st );
+        if ( !( *st->p >= '0' && *st->p <= '9' ) ) {
+            snprintf( err, MML_ERRLEN, "Note length expected" );
+            return false;
+        }
+    }
+    return mml_duration( st, pseconds, err );
+}
+
+// n numbers separated by commas, each within lo..hi; false (nothing set) if one is missing or out of range
+static bool mml_values( mml_state_t* st, int n, const double* lo, const double* hi, double* out ) {
+    for ( int i=0; i < n; ++i ) {
+        if ( i > 0 && !mml_comma( st ) ) {
+            return false;
+        }
+        if ( !mml_number( st, true, &out[i] ) || out[i] < lo[i] || out[i] > hi[i] ) {
+            return false;
+        }
+    }
+    return true;
+}
+
 bool mml_parse( const char* text, mml_t* mml, char err[MML_ERRLEN] ) {
     mml->events = 0; mml->count = 0;
     size_t alloc = 0;
@@ -175,6 +210,36 @@ bool mml_parse( const char* text, mml_t* mml, char err[MML_ERRLEN] ) {
                     if ( !mml_number( &st, false, &v ) || v > 3.0 ) goto RANGE;
                     ev.kind = MML_WAVE; ev.wave = (int) v;
                     break;
+                case 'H': case 'S': {       // a tone / a sweep in Hz
+                    static const double lo[2] = { 20.0, 20.0 }, hi[2] = { 20000.0, 20000.0 };
+                    double f[2];
+                    if ( !mml_values( &st, c == 'S' ? 2 : 1, lo, hi, f ) ) goto RANGE;
+                    if ( !mml_effect_duration( &st, &ev.seconds, err ) ) goto FAIL;
+                    ev.kind = MML_TONE; ev.freq = (float) f[0]; ev.freq2 = c == 'S' ? (float) f[1] : 0.0f; ev.vol = st.vol;
+                    ev.gap = ev.seconds * ( 1.0f - st.legato );
+                    ev.seconds -= ev.gap;
+                    break;
+                }
+                case 'X': {
+                    if ( *st.p == 'R' || *st.p == 'r' ) {
+                        ++st.p;
+                        ev.kind = MML_ENV; ev.p[0] = -1.0f;
+                        break;
+                    }
+                    static const double lo[4] = { 0, 0, 0, 0 }, hi[4] = { 60, 60, 1, 60 };
+                    double v4[4];
+                    if ( !mml_values( &st, 4, lo, hi, v4 ) ) goto RANGE;
+                    ev.kind = MML_ENV;
+                    for ( int k=0; k < 4; ++k ) ev.p[k] = (float) v4[k];
+                    break;
+                }
+                case '~': case '^': {
+                    static const double lo[2] = { 0, 0 }, hi_v[2] = { 100, 24 }, hi_t[2] = { 100, 1 };
+                    double v2[2];
+                    if ( !mml_values( &st, 2, lo, c == '~' ? hi_v : hi_t, v2 ) ) goto RANGE;
+                    ev.kind = c == '~' ? MML_VIB : MML_TREM; ev.p[0] = (float) v2[0]; ev.p[1] = (float) v2[1];
+                    break;
+                }
                 case 'M': {
                     char m = *st.p++;
                     if ( m >= 'a' && m <= 'z' ) m = (char)( m - 'a' + 'A' );

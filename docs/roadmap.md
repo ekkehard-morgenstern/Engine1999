@@ -11,7 +11,7 @@ Order = suggested order, not a commitment.
 `docs/basic-language.md`). The rest of the family has nothing yet.
 
 - [ ] `LIST` with an output channel (`LIST #1,10-20`; today always the VM's channel 0) and `RUN`/`LOAD` taking more arguments?
-- [ ] `LOAD`/`SAVE`: file names are plain paths relative to the current directory; no default extension (undecided; recommended: `.BAS` for ASCII listings, `.E99` for binary tokenized files; `LOAD` recognizes both by the header anyway), no directory handling
+- [ ] `LOAD`/`SAVE`: file names are plain paths relative to the current directory; no directory handling (default extensions are done: `.bas` ASCII / `.e99` binary, see `docs/basic-language.md`)
 - [ ] `MERGE`, `CHAIN`, `FILES`
 - [ ] Full-screen editor (`EDIT`, first version done): no mouse support (the scroll bar is informational), no search/replace, block or clipboard operations, no Unicode; lines over 1656 characters are read-only; the position memory is by line number only. `EDIT n` still uses the one-line editor.
 - [ ] `RENUM` also adjusts targets in `RUN`/`LIST`/`DELETE`, but not the range of another `RENUM` statement in the program, and a changed line is
@@ -33,7 +33,8 @@ and `MERGE` do with variables and line numbers; where files live (current direct
 
 `SOUND`, `PLAY`, `WAVE`, `TEMPO`, `SOUND OFF/SYNC` and `PLAYING()` work (`docs/sound.md`; `synth`, `mml`, `sdlaudio`; tested by `synthtest1`, `vmtest1`, `repltest1`, `asmtest1`).
 
-- [ ] Sound effects without note spam *(proposal in `docs/sound.md` approved by the owner, not implemented)*: `PITCH`/`VOLUME` (immediate), glide as an optional `SOUND` argument, `ENVELOPE`, `VIBRATO`/`TREMOLO`, stored `SFX n, "..."`
+- [x] Sound effects: `PITCH`/`VOLUME`, glide, `ENVELOPE`, `VIBRATO`/`TREMOLO`, stored `SFX` (done, `docs/sound.md`)
+- [ ] Sound effects, more: a pitch envelope, a pulse width for the square wave, a filter for the noise, `SFX` with parameters, `EVERY` timers to drive `PITCH`/`VOLUME` per frame
 - [ ] Instruments / FM synthesis (operators, envelopes, `INSTRUMENT`), band-limited square/triangle, stereo, a voice allocator
 - [ ] Sample-accurate event times (now ≈1 ms), mixing events into the audio callback
 - [ ] `PLAY`: no chords inside a string (use one string per voice), no `N` (note number) or `X` (run a string variable) commands, no repeat; `PLAY` doesn't wait (a program that ends while music is queued leaves it playing until `SOUND OFF`: decided)

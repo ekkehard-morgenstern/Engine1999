@@ -42,7 +42,11 @@ thread safe; the caller serializes the calls.
 Channels: SYNTH_NCHAN voices, each with a wave type, a frequency and a volume (0..1). Wave types are the basic ones
 (sine, square, triangle, noise); the structure is meant to grow into instruments / FM operators later: the oscillator
 (synth_osc_t) is separate from the channel (gain, envelope), so an instrument can use several oscillators per channel.
-Volume changes are slewed over a few milliseconds, so starting and stopping a note doesn't click. Noise is
+Volume changes are slewed over a few milliseconds, so starting and stopping a note doesn't click.
+Effects, all computed per sample in synth_render() (so an effect costs one event, not one per step): a glide (the pitch of
+a tone moves exponentially from one frequency to another during the tone), an ADSR envelope per channel (attack, decay, sustain
+level, release; off by default: then a note just fades in and out within SYNTH_SLEW_SEC), vibrato (pitch LFO, depth in semitones)
+and tremolo (volume LFO, depth 0..1). synth_setpitch() / synth_setvolume() change a sounding channel at once (no queue). Noise is
 sample-and-hold white noise that changes with the channel's frequency (low frequency = coarse, high = fine).
 
 Time: every channel has a cursor (the time its next event is due). synth_slot() hands out the start time of the next
@@ -71,8 +75,15 @@ typedef enum _synth_wave_t {
 typedef enum _synth_evtype_t {
     SYNTH_EV_PLAY,                      // start (or change) the tone: freq, vol
     SYNTH_EV_STOP,                      // fade the channel out
-    SYNTH_EV_WAVE                       // select the wave type (takes effect at once, also while sounding)
+    SYNTH_EV_WAVE,                      // select the wave type (takes effect at once, also while sounding)
+    SYNTH_EV_ENV,                       // envelope: p[0..3] = attack s, decay s, sustain level, release s; p[0] < 0 = off
+    SYNTH_EV_VIB,                       // vibrato: p[0] = rate Hz, p[1] = depth in semitones (0 = off)
+    SYNTH_EV_TREM                       // tremolo: p[0] = rate Hz, p[1] = depth 0..1 (0 = off)
 } synth_evtype_t;
+
+typedef enum _synth_envstate_t {
+    SYNTH_ENV_IDLE, SYNTH_ENV_ATTACK, SYNTH_ENV_DECAY, SYNTH_ENV_SUSTAIN, SYNTH_ENV_RELEASE
+} synth_envstate_t;
 
 typedef struct _synth_osc_t {           // one oscillator (the building block of future instruments)
     synth_wave_t    wave;
@@ -84,8 +95,21 @@ typedef struct _synth_osc_t {           // one oscillator (the building block of
 
 typedef struct _synth_chan_t {
     synth_osc_t     osc;
+    bool            on;                 // a note is on (with an envelope: until its release is over)
+    float           vol;                // the note's volume
     float           target;             // volume the channel is fading to (0 = stopped)
     float           gain;               // volume right now
+    double          basestep;           // phase step without vibrato (osc.step is the one in use)
+    double          glide_ratio;        // glide: the step is multiplied by this every sample ...
+    int             glide_left;         // ... for this many samples, ending at glide_end
+    double          glide_end;
+    bool            env_on;             // envelope: see SYNTH_EV_ENV
+    float           env_a, env_d, env_s, env_r;
+    synth_envstate_t envstate;
+    float           env;                // envelope level 0..1
+    float           env_ainc, env_dinc, env_rinc;   // level change per sample in the attack, decay and release
+    float           vib_rate, vib_depth, trem_rate, trem_depth;
+    double          vib_phase, trem_phase;
 } synth_chan_t;
 
 typedef struct _synth_event_t {
@@ -95,7 +119,19 @@ typedef struct _synth_event_t {
     int                     chan;
     float                   freq, vol;
     synth_wave_t            wave;
+    float                   freq2;      // PLAY: the glide ends at this frequency (0 = no glide) after dur ns
+    uint64_t                dur;
+    float                   p[4];       // ENV, VIB, TREM
 } synth_event_t;
+
+typedef struct _synth_evspec_t {        // what synth_schedule_ev() queues (unused fields 0)
+    synth_evtype_t          type;
+    int                     chan;
+    float                   freq, freq2, vol;
+    synth_wave_t            wave;
+    uint64_t                dur;
+    float                   p[4];
+} synth_evspec_t;
 
 typedef struct _synth_t {
     int             rate;               // samples per second
@@ -121,6 +157,10 @@ void synth_sync( synth_t* s, unsigned chanmask, uint64_t now );     // all curso
 
 // queues an event; false if the arguments are invalid (channel, frequency 20..20000, volume 0..1, wave) or the queue is full
 bool synth_schedule( synth_t* s, uint64_t when, synth_evtype_t type, int chan, float freq, float vol, synth_wave_t wave );
+bool synth_schedule_ev( synth_t* s, uint64_t when, const synth_evspec_t* spec );    // the same with all fields (glide, effects)
+// at once, no queue: the pitch of a channel (stops a glide) / the volume of its note (also 0: the note goes on silently)
+void synth_setpitch( synth_t* s, int chan, float freq );
+void synth_setvolume( synth_t* s, int chan, float vol );
 int synth_runevents( synth_t* s, uint64_t now );    // applies the events due at "now"; returns how many
 bool synth_nextevent( const synth_t* s, uint64_t* when );   // time of the earliest queued event; false if none
 bool synth_busy( const synth_t* s, int chan, uint64_t now );   // the channel sounds, fades, or has events queued / a sequence still running

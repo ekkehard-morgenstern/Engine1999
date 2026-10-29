@@ -50,8 +50,14 @@ bool sdlaud_init( void );
 void sdlaud_cleanup( void );
 void sdlaud_playnote( int chan, int note, float vol, float beats );     // note 0..71 (0 = 110 Hz), vol 0..1
 void sdlaud_playfreq( int chan, float freq, float vol, float beats );   // freq 20..20000 Hz
+void sdlaud_playsweep( int chan, float freq, float freq2, float vol, float beats );   // the pitch glides to freq2 during the tone
 void sdlaud_stopchan( int chan, float beats );                          // fades the channel out
 void sdlaud_setwave( int chan, int wave );                              // at the channel's cursor, takes no time
+void sdlaud_setenvelope( int chan, float attack, float decay, float sustain, float release );   // queued; attack < 0 = default
+void sdlaud_setvibrato( int chan, float rate, float depth );            // queued; depth 0 = off
+void sdlaud_settremolo( int chan, float rate, float depth );            // queued; depth 0 = off
+void sdlaud_setpitch( int chan, float freq );                           // at once (no queue)
+void sdlaud_setvolume( int chan, float vol );                           // at once (no queue)
 void sdlaud_setbpm( int bpm );                                          // tempo, default 60 (1 beat = 1 s)
 void sdlaud_syncchans( unsigned chanmask );                             // bit n = channel n; lines up their cursors
 bool sdlaud_busy( int chan );                                           // the channel sounds or has a sequence queued / running

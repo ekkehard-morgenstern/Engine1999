@@ -743,8 +743,10 @@ static bool host_save( struct _vm_t* vm, void* usrdata, const char* filename, bo
 }
 
 // sound output of SOUND, PLAY, ... : the audio engine (all calls are no-ops when there is no audio device)
-static void host_snd_tone( void* usrdata, int chan, float freq, float vol, float beats ) {
-    if ( freq > 0.0f ) {
+static void host_snd_tone( void* usrdata, int chan, float freq, float freq2, float vol, float beats ) {
+    if ( freq > 0.0f && freq2 > 0.0f ) {
+        sdlaud_playsweep( chan, freq, freq2, vol, beats );
+    } else if ( freq > 0.0f ) {
         sdlaud_playfreq( chan, freq, vol, beats );
     } else {
         sdlaud_stopchan( chan, beats );
@@ -753,6 +755,26 @@ static void host_snd_tone( void* usrdata, int chan, float freq, float vol, float
 
 static void host_snd_setwave( void* usrdata, int chan, int wave ) {
     sdlaud_setwave( chan, wave );
+}
+
+static void host_snd_setenv( void* usrdata, int chan, float a, float d, float s, float r ) {
+    sdlaud_setenvelope( chan, a, d, s, r );
+}
+
+static void host_snd_setvib( void* usrdata, int chan, float rate, float depth ) {
+    sdlaud_setvibrato( chan, rate, depth );
+}
+
+static void host_snd_settrem( void* usrdata, int chan, float rate, float depth ) {
+    sdlaud_settremolo( chan, rate, depth );
+}
+
+static void host_snd_setpitch( void* usrdata, int chan, float freq ) {
+    sdlaud_setpitch( chan, freq );
+}
+
+static void host_snd_setvolume( void* usrdata, int chan, float vol ) {
+    sdlaud_setvolume( chan, vol );
 }
 
 static void host_snd_setbpm( void* usrdata, int bpm ) {
@@ -780,7 +802,8 @@ static bool host_snd_busy( void* usrdata, int chan ) {
 }
 
 static const vm_sound_t host_sound = {
-    host_snd_tone, host_snd_setwave, host_snd_setbpm, host_snd_getbpm, host_snd_sync, host_snd_silence, host_snd_busy
+    host_snd_tone, host_snd_setwave, host_snd_setenv, host_snd_setvib, host_snd_settrem, host_snd_setpitch, host_snd_setvolume,
+    host_snd_setbpm, host_snd_getbpm, host_snd_sync, host_snd_silence, host_snd_busy
 };
 
 // the line editor of EDIT: ENTER returns the edited line, ESC (or a closed window) returns 0

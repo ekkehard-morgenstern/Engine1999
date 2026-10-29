@@ -28,7 +28,7 @@ Channels are numbered 1..8 in BASIC (0..7 in the host). Everything is queued and
 ```
 TEMPO bpm                        tempo of the beats of SOUND, 1..1000, default 60 (1 beat = 1 s)
 WAVE ch, w                       wave type: 0 sine, 1 square, 2 triangle, 3 noise; applies to the sounds queued after it
-SOUND ch, freq, beats [, vol]    a tone of freq Hz (20..20000) for "beats", volume 0..1 (default 0.5).
+SOUND ch, freq, beats [, vol [, f2]]  a tone of freq Hz (20..20000) for "beats", volume 0..1 (default 0.5), gliding to f2 (see effects).
                                  freq 0 = a rest of "beats". beats 0 = no end: the tone goes on until the next SOUND on the
                                  channel (or SOUND OFF); SOUND on a channel always follows what the channel has queued
 SOUND OFF [ch]                   silences the channel (no channel or 0 = all) now and forgets what is queued for it
@@ -59,9 +59,9 @@ ML MN MS   the note fills its length / sounds 7/8 of it (default) / 3/4 of it; t
 Example: `PLAY "T120 O4 L8 CDEF G4 G4", "T120 O2 L2 C G"` (melody and bass line), `PLAY "W3 V1 ML O1 C16"` (a drum-like noise burst).
 The duration in a music string is in seconds (from its `T`), converted to the host's beats with the tempo of `TEMPO`, so `TEMPO`
 doesn't change how fast a `PLAY` string plays. Notes below 20 Hz (octave 0 C..) are errors. A string may have 100000 events at most.
-Chords: use one string per note (`PLAY "C","E","G"`), voices of one `PLAY` start together.
+Chords: use one string per note (`PLAY "C","E","G"`), voices of one `PLAY` start together. The commands for sound effects (`H`, `S`, `X`, `~`, `^`) are described below.
 
-Instructions: `SND` (parameter = `SNDK_*`: 1 SOUND, 2 PLAY, 3 WAVE, 4 TEMPO, 5 OFF, 6 SYNC) and `PLNG`; see `instset.h`. The VM calls the
+Instructions: `SND` (parameter = `SNDK_*`: 1 SOUND, 2 PLAY, 3 WAVE, 4 TEMPO, 5 OFF, 6 SYNC, 7..13 effects) and `PLNG`; see `instset.h`. The VM calls the
 host through `vm_sound_t` (`vm.h`: tone, setwave, setbpm, getbpm, sync, silence, busy), `repl_t.sound` hands it to the VM,
 `engine1999.c` maps it to `sdlaud_*`. Tests: `vmtest1` (sound output that logs the calls), `repltest1` (no sound output),
 `synthtest1` (`mml`, queue, busy), `asmtest1` (encodings, round trip).
@@ -76,28 +76,44 @@ queue holds 262144 events. So thousands of events per second are fine for the ho
 loop per step pays the VM cost per call, and a rapid pitch sweep made of notes is a clumsy way to describe a smooth effect.
 Hence the proposal below: describe effects by a few parameters and let the synth do the per-sample work.
 
-## Proposal: sound effects *(needs the owner's decision, nothing of this exists yet)*
+## Sound effects (implemented)
 
-Effects like laser shots, explosions, engine hum or power-ups are continuous changes (glide, wobble, fade), not note sequences.
-They should cost one statement (one event), not hundreds, and the per-sample work belongs into the synth. Suggested, in this order:
+Effects like laser shots, explosions, engine hum or power-ups are continuous changes (glide, wobble, fade), not note sequences. They cost
+one statement (one event), and the synth does the per-sample work (`synth_render()`), so a smooth effect doesn't need thousands of notes.
 
-1. **Immediate control for game loops** — `PITCH ch, freq` and `VOLUME ch, vol` take effect now (no queue, no allocation; a few
-   atomic stores, so 60 calls per frame with `EVERY` are no problem): an engine sound that follows the car's speed.
-2. **Glide** — an optional fifth argument of `SOUND`: `SOUND ch, f1, beats, vol, f2`: the tone glides from f1 to f2 (exponentially, i.e.
-   evenly in musical terms) during the duration; the synth moves the frequency per sample. A laser is `SOUND 1,2000,0.15,0.6,200`.
-3. **Envelope** — `ENVELOPE ch, attack, decay, sustain, release` (seconds and a sustain level 0..1) shapes every following tone of
-   the channel (the fixed 2.5 ms fade is the default envelope). A plucked sound or a swell needs nothing else.
-4. **Modulation** — `VIBRATO ch, rate, depth` (Hz, semitones) and `TREMOLO ch, rate, depth` (Hz, 0..1): low frequency oscillators in the synth;
-   0 switches them off. `WAVE ch, 1, duty` could add a pulse width for the square wave (sweeping it gives the classic chorus effect).
-5. **Stored effects** — `SFX n, "W3 V1 E0,.01,0,.3 G8000,200,.4"` defines effect n with the music string language extended by
-   effect commands (`E` envelope, `G` glide, `~` vibrato, `^` tremolo); `SFX n` (or `SFX n, ch`) plays it on a channel: the host expands
-   it into a handful of events with parameters (not one per step) and queues them in one go. Effects can be defined once at the
-   start of a program and triggered by name-less numbers from the game, like `PLAY` without parsing at run time.
-6. **Instruments** (the FM plan below) generalize 3 and 4: an instrument = operators + envelopes + modulation; `PLAY`'s `I n` selects it,
-   `SFX` strings may use it.
+```
+PITCH ch, freq                 at once (no queue): the pitch of the channel (20..20000 Hz); stops a glide
+VOLUME ch, vol                 at once: the volume of the channel's note (0..1; 0 = silent, but the note goes on and can be raised again)
+SOUND ch, f1, beats, vol, f2   the pitch glides from f1 to f2 (exponentially: evenly in musical terms) during the tone; f2 20..20000, beats > 0
+ENVELOPE ch, a, d, s, r        attack, decay (seconds 0..60), sustain level 0..1, release (seconds) for the tones that follow; ENVELOPE ch = default
+VIBRATO ch, rate, depth        pitch LFO: rate 0..100 Hz, depth 0..24 semitones (0 = off)
+TREMOLO ch, rate, depth        volume LFO: rate 0..100 Hz, depth 0..1 (0 = off)
+SFX n, a$                      stores the music string a$ as effect n (1..64); it is parsed at once (a mistake is an error now)
+SFX n [, ch]                   plays effect n on channel ch; without ch on a free channel (the highest one that isn't busy, else 8)
+```
 
-Items 1 to 4 need small extensions of `synth_chan_t` (a target frequency and a glide rate, an envelope state, two LFO phases) and per-sample
-code in `synth_render()` only, plus the events/instructions to set them; 5 is a parser in the style of `mml.c`.
+- `PITCH`/`VOLUME` take effect immediately: no allocation, no queue (a lock and a few stores), so calling them every frame (60 per second,
+  for instance from an `EVERY` timer once there is one) is cheap. Typical use: `SOUND 1,100,0` starts a tone without an end, then the
+  game loop does `PITCH 1,100+speed*3`. `VOLUME` changes the volume of the sounding note (smoothly, no click).
+- `ENVELOPE`, `VIBRATO`, `TREMOLO`, `WAVE` and the glide are events on the channel's time line, so they apply at the right place in a
+  sequence. They stay in effect until changed. Without an `ENVELOPE` a note fades in and out within 2.5 ms (no click); with one the
+  note rises in `a` seconds, falls to the sustain level in `d` seconds and holds it until its end, then falls to silence in `r` seconds
+  (the channel counts as busy during the release; a new note during the release goes up from where the level is; times of 0 are instant).
+- **Music string commands** for effects (`mml.[ch]`): `H f[,n]` (a tone of f Hz, for noise), `S f1,f2[,n]` (sweep), `X a,d,s,r` / `XR`
+  (envelope / default), `~ rate,depth` (vibrato), `^ rate,depth` (tremolo). Numbers may have decimals, values are separated by
+  commas. So a laser is `SFX 1,"W1 ML S3000,200,8"`, an explosion `SFX 2,"W3 ML X0,0.02,0.4,0.5 S800,60,2"`, a power-up
+  `SFX 3,"W2 ML ~8,0.4 S300,1200,4"`.
+- **`SFX n, ch`** starts from a clean channel: it first resets wave (sine), envelope, vibrato and tremolo of the channel; the
+  effects the string sets stay afterwards (like for `WAVE`), so a following `SOUND` on that channel has them. Effects are stored in
+  the VM: they stay across direct mode lines, but `RUN`, `NEW` and `LOAD` clear them (define them at the start of the program).
+  The host receives the events like those of `PLAY`; the event count is small because sweeps and envelopes are single events.
+- Wrong arguments are "Illegal argument", an `SFX` that was never defined is "Undefined effect".
+
+Host interface: `vm_sound_t` has `tone( chan, freq, freq2, vol, beats )` (freq2 != 0: glide), `setenv`, `setvib`, `settrem`, `setpitch`,
+`setvolume`; `sdlaud_playsweep`, `sdlaud_setenvelope/setvibrato/settremolo` (queued) and `sdlaud_setpitch/setvolume` (at once);
+`synth_schedule_ev()` with `synth_evspec_t`, `synth_setpitch/setvolume`. Instructions: `SND` kinds 7..13 (see `instset.h`).
+
+Not done: noise filtering (the noise is white), a pulse width for the square wave, a pitch envelope, stereo, `SFX` with parameters.
 
 ## Instruments (planned)
 

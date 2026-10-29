@@ -339,10 +339,49 @@ static const testcase_t cases[] = {
     { "PLAY wave and volume",   "PLAY \"W1 V0.25 ML A\"",                          "<sync 1>\n<wave 0 1>\n<tone 0 440 0.25 0.5>\n<tone 0 0 0 0>\n" },
     { "PLAY follows TEMPO",     "TEMPO 120:PLAY \"ML R\"",                         "<bpm 120>\n<sync 1>\n<tone 0 0 0 1>\n<tone 0 0 0 0>\n" },
     { "PLAY string expression", "A$=\"ML R\":PLAY A$+\"4\"",                       "<sync 1>\n<tone 0 0 0 0.5>\n<tone 0 0 0 0>\n" },
-    { "PLAY error queues nothing", "PLAY \"C\",\"X\"",                              "? Unknown music command 'X'\n" },
+    { "PLAY error queues nothing", "PLAY \"C\",\"Z\"",                              "? Unknown music command 'Z'\n" },
     { "PLAY note out of range", "PLAY \"O0 C\"",                                   "? Note out of range\n" },
     { "PLAY too many voices",   "PLAY \"R\",\"R\",\"R\",\"R\",\"R\",\"R\",\"R\",\"R\",\"R\"", "? End of line expected\n" },
     { "PLAY needs a string",    "PLAY 5",                                          "? String expression expected\n" },
+    // sound effects
+    { "SOUND glide",            "SOUND 1,2000,0.5,0.6,200",                        "<tone 0 2000 0.6 0.5 glide 200>\n" },
+    { "SOUND glide, default volume", "SOUND 2,100,1,0.5,400",                      "<tone 1 100 0.5 1 glide 400>\n" },
+    { "SOUND glide needs a duration", "SOUND 1,2000,0,0.6,200",                    "? Illegal argument\n" },
+    { "SOUND glide end frequency", "SOUND 1,2000,1,0.5,10",                        "? Illegal argument\n" },
+    { "SOUND glide on a rest is ignored", "SOUND 1,0,1,0.5,200",                   "<tone 0 0 0 1>\n" },
+    { "PITCH",                  "PITCH 3,880",                                     "<pitch 2 880>\n" },
+    { "PITCH range",            "PITCH 3,19",                                      "? Illegal argument\n" },
+    { "PITCH channel",          "PITCH 0,440",                                     "? Illegal argument\n" },
+    { "VOLUME",                 "VOLUME 1,0.25",                                   "<volume 0 0.25>\n" },
+    { "VOLUME 0",               "VOLUME 8,0",                                      "<volume 7 0>\n" },
+    { "VOLUME range",           "VOLUME 1,1.1",                                    "? Illegal argument\n" },
+    { "PITCH and VOLUME in a loop", "10 FOR I=1 TO 3\n20 PITCH 1,100*I\n30 VOLUME 1,I/4\n40 NEXT I", "<pitch 0 100>\n<volume 0 0.25>\n<pitch 0 200>\n<volume 0 0.5>\n<pitch 0 300>\n<volume 0 0.75>\n" },
+    { "ENVELOPE",               "ENVELOPE 1,0.01,0.1,0.5,0.3",                     "<env 0 0.01 0.1 0.5 0.3>\n" },
+    { "ENVELOPE default",       "ENVELOPE 2",                                      "<env 1 off>\n" },
+    { "ENVELOPE sustain range", "ENVELOPE 1,0,0,1.5,0",                            "? Illegal argument\n" },
+    { "ENVELOPE time range",    "ENVELOPE 1,61,0,1,0",                             "? Illegal argument\n" },
+    { "ENVELOPE with 3 values", "ENVELOPE 1,0,0",                                  "? Comma ',' expected\n" },
+    { "VIBRATO",                "VIBRATO 1,5,0.5",                                 "<vib 0 5 0.5>\n" },
+    { "VIBRATO off",            "VIBRATO 4,0,0",                                   "<vib 3 0 0>\n" },
+    { "VIBRATO depth",          "VIBRATO 1,5,25",                                  "? Illegal argument\n" },
+    { "TREMOLO",                "TREMOLO 1,8,0.75",                                "<trem 0 8 0.75>\n" },
+    { "TREMOLO depth",          "TREMOLO 1,8,2",                                   "? Illegal argument\n" },
+    { "PLAY with H and S",      "PLAY \"ML H1000 S2000,200,2\"",                     "<sync 1>\n<tone 0 1000 0.5 0.5>\n<tone 0 2000 0.5 1 glide 200>\n<tone 0 0 0 0>\n" },
+    { "PLAY H with a length",   "PLAY \"ML H440,8\"",                              "<sync 1>\n<tone 0 440 0.5 0.25>\n<tone 0 0 0 0>\n" },
+    { "PLAY effect commands",   "PLAY \"X0.01,0.1,0.5,0.3 ~5,0.5 ^8,0.25 ML C XR ~0,0\"", "<sync 1>\n<env 0 0.01 0.1 0.5 0.3>\n<vib 0 5 0.5>\n<trem 0 8 0.25>\n<tone 0 261.626 0.5 0.5>\n<env 0 off>\n<vib 0 0 0>\n<tone 0 0 0 0>\n" },
+    { "PLAY effect command errors", "PLAY \"X1,2\"",                                "? Value missing or out of range after 'X'\n" },
+    { "PLAY H frequency range", "PLAY \"H10\"",                                    "? Value missing or out of range after 'H'\n" },
+    { "SFX define and play",    "SFX 1,\"ML S1000,100\":SFX 1,3",                  "<sync 4>\n<wave 2 0>\n<env 2 off>\n<vib 2 0 0>\n<trem 2 0 0>\n<tone 2 1000 0.5 0.5 glide 100>\n<tone 2 0 0 0>\n" },
+    { "SFX without a channel uses the highest free one", "SFX 2,\"ML R\":SFX 2", "<sync 128>\n<wave 7 0>\n<env 7 off>\n<vib 7 0 0>\n<trem 7 0 0>\n<tone 7 0 0 0.5>\n<tone 7 0 0 0>\n" },
+    { "SFX skips busy channels", "SOUND 8,440,1:SFX 2,\"ML R\":SFX 2", "<tone 7 440 0.5 1>\n<sync 64>\n<wave 6 0>\n<env 6 off>\n<vib 6 0 0>\n<trem 6 0 0>\n<tone 6 0 0 0.5>\n<tone 6 0 0 0>\n" },
+    { "SFX redefined",          "SFX 1,\"ML R\":SFX 1,\"ML R2\":SFX 1,1",         "<sync 1>\n<wave 0 0>\n<env 0 off>\n<vib 0 0 0>\n<trem 0 0 0>\n<tone 0 0 0 1>\n<tone 0 0 0 0>\n" },
+    { "SFX not defined",        "SFX 5,1",                                         "? Undefined effect\n" },
+    { "SFX number range",       "SFX 65,\"C\"",                                   "? Illegal argument\n" },
+    { "SFX number 0",           "SFX 0,\"C\"",                                    "? Illegal argument\n" },
+    { "SFX channel range",      "SFX 1,\"C\":SFX 1,9",                            "? Illegal argument\n" },
+    { "SFX string is checked when defined", "SFX 1,\"Z\"",                         "? Unknown music command 'Z'\n" },
+    { "SFX with a string expression", "A$=\"ML \":SFX 1,A$+\"R\":SFX 1,2",         "<sync 2>\n<wave 1 0>\n<env 1 off>\n<vib 1 0 0>\n<trem 1 0 0>\n<tone 1 0 0 0.5>\n<tone 1 0 0 0>\n" },
+    { "SFX empty string",       "SFX 1,\"\":SFX 1,1",                            "<sync 1>\n<wave 0 0>\n<env 0 off>\n<vib 0 0 0>\n<trem 0 0 0>\n<tone 0 0 0 0>\n" },
     { "EDIT bad line number",   "EDIT 1000000",                                    "? Invalid line number\n" },
     { "NEW",                    "NEW",                                             "<request NEW>\n" },
     { "NEW ends the run",       "PRINT 1:NEW:PRINT 2",                             "1\n<request NEW>\n" },
@@ -625,11 +664,49 @@ static void snd_reset( void ) {
     snd_bpm = 60;
 }
 
-static void snd_tone( void* usrdata, int chan, float freq, float vol, float beats ) {
+static void snd_tone( void* usrdata, int chan, float freq, float freq2, float vol, float beats ) {
     char text[100];
-    snprintf( text, sizeof(text), "<tone %d %g %g %g>\n", chan, (double) freq, (double) vol, (double) beats );
+    if ( freq2 != 0.0f ) {
+        snprintf( text, sizeof(text), "<tone %d %g %g %g glide %g>\n", chan, (double) freq, (double) vol, (double) beats, (double) freq2 );
+    } else {
+        snprintf( text, sizeof(text), "<tone %d %g %g %g>\n", chan, (double) freq, (double) vol, (double) beats );
+    }
     out_append( text );
     if ( freq > 0.0f ) snd_busy[chan] = true;
+}
+
+static void snd_setenv( void* usrdata, int chan, float a, float d, float s, float r ) {
+    char text[100];
+    if ( a < 0.0f ) {
+        snprintf( text, sizeof(text), "<env %d off>\n", chan );
+    } else {
+        snprintf( text, sizeof(text), "<env %d %g %g %g %g>\n", chan, (double) a, (double) d, (double) s, (double) r );
+    }
+    out_append( text );
+}
+
+static void snd_setvib( void* usrdata, int chan, float rate, float depth ) {
+    char text[60];
+    snprintf( text, sizeof(text), "<vib %d %g %g>\n", chan, (double) rate, (double) depth );
+    out_append( text );
+}
+
+static void snd_settrem( void* usrdata, int chan, float rate, float depth ) {
+    char text[60];
+    snprintf( text, sizeof(text), "<trem %d %g %g>\n", chan, (double) rate, (double) depth );
+    out_append( text );
+}
+
+static void snd_setpitch( void* usrdata, int chan, float freq ) {
+    char text[60];
+    snprintf( text, sizeof(text), "<pitch %d %g>\n", chan, (double) freq );
+    out_append( text );
+}
+
+static void snd_setvolume( void* usrdata, int chan, float vol ) {
+    char text[60];
+    snprintf( text, sizeof(text), "<volume %d %g>\n", chan, (double) vol );
+    out_append( text );
 }
 
 static void snd_setwave( void* usrdata, int chan, int wave ) {
@@ -668,7 +745,7 @@ static bool snd_isbusy( void* usrdata, int chan ) {
     return snd_busy[chan];
 }
 
-static const vm_sound_t test_sound = { snd_tone, snd_setwave, snd_setbpm, snd_getbpm, snd_sync, snd_silence, snd_isbusy };
+static const vm_sound_t test_sound = { snd_tone, snd_setwave, snd_setenv, snd_setvib, snd_settrem, snd_setpitch, snd_setvolume, snd_setbpm, snd_getbpm, snd_sync, snd_silence, snd_isbusy };
 
 static void rt_report( struct _runtime_t* rt, void* usrdata, const char* text ) {
     out_append( text );

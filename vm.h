@@ -41,6 +41,10 @@
 #include "codegen.h"
 #endif
 
+#ifndef MML_H
+#include "mml.h"
+#endif
+
 /*
 Minimal executor for the instruction set defined in instset.h.
 
@@ -146,8 +150,14 @@ typedef struct _vm_context_t {
 // The host's sound output (SOUND, PLAY, ... , PLAYING; all callbacks required when a vm_t.sound is given). Channels are 0..7
 // here. The calls only queue: they return at once. beats are in the unit of the host's tempo (see TEMPO).
 typedef struct _vm_sound_t {
-    void    (*tone)( void* usrdata, int chan, float freq, float vol, float beats );     // a tone for "beats" (freq 0 = a rest)
+    void    (*tone)( void* usrdata, int chan, float freq, float freq2, float vol, float beats );   // a tone for "beats" (freq 0 = a
+                                                                // rest; freq2 != 0: the pitch glides to it during the tone)
     void    (*setwave)( void* usrdata, int chan, int wave );
+    void    (*setenv)( void* usrdata, int chan, float attack, float decay, float sustain, float release );   // attack < 0 = default
+    void    (*setvib)( void* usrdata, int chan, float rate, float depth );
+    void    (*settrem)( void* usrdata, int chan, float rate, float depth );
+    void    (*setpitch)( void* usrdata, int chan, float freq );     // at once
+    void    (*setvolume)( void* usrdata, int chan, float vol );     // at once
     void    (*setbpm)( void* usrdata, int bpm );
     int     (*getbpm)( void* usrdata );                     // the tempo; 0 = unknown (60 is assumed)
     void    (*sync)( void* usrdata, unsigned chanmask );    // lines up the time of the channels in the mask
@@ -195,6 +205,8 @@ typedef struct _vm_t {
     // running code no longer matches the program. Return false after reporting an error.
     bool            (*deletelines)( struct _vm_t*, void*, const char* firstlabel, int32_t firstline, const char* lastlabel, int32_t lastline );
     bool            (*renumber)( struct _vm_t*, void*, const char* firstlabel, int32_t firstline, const char* lastlabel, int32_t lastline, int32_t step );
+    bool            sfx_defined[SND_MAXSFX];
+    mml_t           sfx[SND_MAXSFX];    // the stored sound effects (SFX n, a$), parsed; cleared with the VM
     const vm_sound_t* sound;        // SOUND / PLAY / ...: the host's sound output; 0 = none (arguments are checked, nothing plays)
     int             request;        // VMREQ_*: LOAD / RUN stop the VM and leave a request for the host (see vm_run_at)
     char*           reqname;        // LOAD: the file name; RUN: the label name ("" = none); owned by the VM

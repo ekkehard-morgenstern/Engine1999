@@ -356,8 +356,8 @@ static void test_mml( void ) {
     check( mml_one( "", &ev, &n ) && n == 0 && mml_one( "  ; ", &ev, &n ) && n == 0, "mml: an empty string is fine" );
     check( mml_one( "O8 B", &ev, &n ) && near( ev.freq, 7902.13, 0.1 ), "mml: highest octave" );
     check( mml_one( "O1 C", &ev, &n ) && near( ev.freq, 32.703, 0.01 ), "mml: low octave" );
-    check( mml_error( "X", "Unknown music command 'X'" ), "mml: unknown command" );
-    check( mml_error( "C D X", "'X'" ), "mml: error in the middle" );
+    check( mml_error( "Z", "Unknown music command 'Z'" ), "mml: unknown command" );
+    check( mml_error( "C D Z", "'Z'" ), "mml: error in the middle" );
     check( mml_error( "O9", "out of range" ) && mml_error( "O", "out of range" ), "mml: bad octave" );
     check( mml_error( "L0", "out of range" ) && mml_error( "L65", "out of range" ), "mml: bad default length" );
     check( mml_error( "T0", "out of range" ) && mml_error( "T1001", "out of range" ), "mml: bad tempo" );
@@ -429,6 +429,206 @@ static void test_queue_speed( void ) {
     synth_cleanup( &s );
 }
 
+// frequency in a window of samples (zero crossings, interpolated); 0 if there are fewer than 3 crossings
+static double measure_window( const float* buf, int from, int to ) {
+    int first = -1, last = -1, cnt = 0;
+    double pfirst = 0, plast = 0;
+    for ( int i=from; i < to-1; ++i ) {
+        if ( buf[i] < 0.0f && buf[i+1] >= 0.0f ) {
+            double pos = i + (double)( -buf[i] ) / (double)( buf[i+1] - buf[i] );
+            if ( first < 0 ) { first = i; pfirst = pos; }
+            last = i; plast = pos; ++cnt;
+        }
+    }
+    return cnt > 2 && last > first ? RATE * (double)( cnt - 1 ) / ( plast - pfirst ) : 0.0;
+}
+
+static synth_evspec_t spec( synth_evtype_t type, float freq, float vol ) {
+    synth_evspec_t sp;
+    memset( &sp, 0, sizeof(sp) );
+    sp.type = type; sp.freq = freq; sp.vol = vol;
+    return sp;
+}
+
+static void test_glide( void ) {
+    synth_t s; synth_init( &s, RATE );
+    synth_evspec_t sp = spec( SYNTH_EV_PLAY, 400.0f, 0.5f );
+    sp.freq2 = 800.0f; sp.dur = SEC;
+    check( synth_schedule_ev( &s, 0, &sp ), "glide: event accepted" );
+    synth_runevents( &s, 0 );
+    float* buf = (float*) malloc( sizeof(float) * 2 * RATE );
+    synth_render( &s, buf, 2 * RATE );
+    double f1 = measure_window( buf, 2000, 4000 ), fm = measure_window( buf, 20000, 24000 );
+    double f2 = measure_window( buf, 40000, 42000 ), f3 = measure_window( buf, 60000, 88000 );
+    check( near( f1, 400.0 * pow( 2.0, 0.07 ), 8.0 ), "glide: starts at the first frequency" );
+    check( near( fm, 400.0 * sqrt( 2.0 ), 8.0 ), "glide: exponential, the middle is the geometric mean" );
+    check( near( f2, 400.0 * pow( 2.0, 0.93 ), 12.0 ), "glide: nears the end frequency" );
+    check( near( f3, 800.0, 0.5 ), "glide: stays on the end frequency" );
+    free( buf );
+    sp.freq2 = 800.0f; sp.dur = 0;
+    check( !synth_schedule_ev( &s, 0, &sp ), "glide: needs a duration" );
+    sp.dur = SEC; sp.freq2 = 10.0f;
+    check( !synth_schedule_ev( &s, 0, &sp ), "glide: end frequency range" );
+    // a glide down, and silencing stops it
+    sp.freq2 = 100.0f; sp.freq = 1600.0f;
+    synth_schedule_ev( &s, 0, &sp );
+    synth_runevents( &s, 0 );
+    check( s.chan[0].glide_left > 0, "glide: running" );
+    synth_silence( &s, 0 );
+    check( s.chan[0].glide_left == 0 && !s.chan[0].on, "glide: synth_silence() stops it" );
+    synth_cleanup( &s );
+}
+
+static void test_envelope( void ) {
+    synth_t s; synth_init( &s, RATE );
+    synth_evspec_t env = spec( SYNTH_EV_ENV, 0, 0 );
+    env.p[0] = 0.1f; env.p[1] = 0.1f; env.p[2] = 0.5f; env.p[3] = 0.2f;
+    check( synth_schedule_ev( &s, 0, &env ), "envelope: event accepted" );
+    synth_schedule( &s, 0, SYNTH_EV_PLAY, 0, 441.0f, 1.0f, SYNTH_SINE );
+    synth_runevents( &s, 0 );
+    float* buf = (float*) malloc( sizeof(float) * RATE * 2 );
+    synth_render( &s, buf, RATE / 2 );          // 0.5 s: attack 0.1, decay 0.1, then sustain
+    check( peak( buf, 2000, 2400 ) > 0.4f && peak( buf, 2000, 2400 ) < 0.6f, "envelope: halfway up at half the attack" );
+    check( peak( buf, 4300, 4700 ) > 0.95f, "envelope: full level at the end of the attack" );
+    check( near( peak( buf, 13000, 13500 ), 0.5, 0.03 ) && near( peak( buf, 20000, 22000 ), 0.5, 0.01 ), "envelope: decays to the sustain level and holds it" );
+    synth_schedule( &s, 0, SYNTH_EV_STOP, 0, 0, 0, SYNTH_SINE );
+    synth_runevents( &s, 0 );
+    check( s.chan[0].on && synth_busy( &s, 0, 0 ), "envelope: during the release the channel is still on" );
+    synth_render( &s, buf + RATE / 2, RATE );
+    check( near( peak( buf, RATE / 2 + 4300, RATE / 2 + 4700 ), 0.25, 0.04 ), "envelope: halfway down at half the release" );
+    check( peak( buf, RATE / 2 + 10000, RATE / 2 + 20000 ) == 0.0f, "envelope: silent after the release" );
+    check( !s.chan[0].on && !synth_busy( &s, 0, 0 ), "envelope: the channel is idle after the release" );
+    // back to the default
+    env.p[0] = -1.0f;
+    synth_schedule_ev( &s, 0, &env );
+    synth_runevents( &s, 0 );
+    check( !s.chan[0].env_on, "envelope: off again" );
+    env.p[0] = 0.0f; env.p[2] = 1.5f;
+    check( !synth_schedule_ev( &s, 0, &env ), "envelope: sustain level range" );
+    env.p[2] = 0.5f; env.p[3] = 61.0f;
+    check( !synth_schedule_ev( &s, 0, &env ), "envelope: release time range" );
+    // zero times: the level jumps; a retriggered note during the release goes up from where it is
+    env.p[0] = 0.0f; env.p[1] = 0.0f; env.p[2] = 0.8f; env.p[3] = 0.0f;
+    synth_schedule_ev( &s, 0, &env );
+    synth_schedule( &s, 0, SYNTH_EV_PLAY, 0, 441.0f, 1.0f, SYNTH_SINE );
+    synth_runevents( &s, 0 );
+    synth_render( &s, buf, 5000 );
+    check( near( peak( buf, 1000, 5000 ), 0.8, 0.02 ), "envelope: attack and decay of 0 give the sustain level at once" );
+    synth_cleanup( &s );
+    free( buf );
+}
+
+static void test_lfos( void ) {
+    synth_t s; synth_init( &s, RATE );
+    synth_evspec_t sp = spec( SYNTH_EV_VIB, 0, 0 );
+    sp.p[0] = 5.0f; sp.p[1] = 1.0f;
+    check( synth_schedule_ev( &s, 0, &sp ), "vibrato: event accepted" );
+    synth_schedule( &s, 0, SYNTH_EV_PLAY, 0, 1000.0f, 1.0f, SYNTH_SINE );
+    synth_runevents( &s, 0 );
+    float* buf = (float*) malloc( sizeof(float) * RATE );
+    synth_render( &s, buf, RATE );
+    double lo = 1e9, hi = 0, sum = 0; int n = 0;
+    for ( int w=2000; w + 400 < RATE; w += 400 ) {
+        double f = measure_window( buf, w, w + 400 );
+        if ( f > 0 ) { if ( f < lo ) lo = f; if ( f > hi ) hi = f; sum += f; ++n; }
+    }
+    check( lo < 950.0 && lo > 930.0 && hi > 1050.0 && hi < 1070.0, "vibrato: the pitch swings by +-1 semitone" );
+    check( near( sum / n, 1000.0, 15.0 ), "vibrato: around the note's pitch" );
+    sp.p[1] = 0.0f;
+    synth_schedule_ev( &s, 0, &sp );
+    synth_runevents( &s, 0 );
+    synth_render( &s, buf, RATE / 2 );
+    check( near( measure_window( buf, 1000, 20000 ), 1000.0, 1.0 ), "vibrato: depth 0 = off" );
+    sp.p[0] = 5.0f; sp.p[1] = 25.0f;
+    check( !synth_schedule_ev( &s, 0, &sp ), "vibrato: depth range" );
+    sp.p[0] = 101.0f; sp.p[1] = 1.0f;
+    check( !synth_schedule_ev( &s, 0, &sp ), "vibrato: rate range" );
+    synth_cleanup( &s );
+    // tremolo
+    synth_init( &s, RATE );
+    synth_evspec_t tr = spec( SYNTH_EV_TREM, 0, 0 );
+    tr.p[0] = 4.0f; tr.p[1] = 0.5f;
+    check( synth_schedule_ev( &s, 0, &tr ), "tremolo: event accepted" );
+    synth_schedule( &s, 0, SYNTH_EV_PLAY, 0, 1000.0f, 1.0f, SYNTH_SINE );
+    synth_runevents( &s, 0 );
+    synth_render( &s, buf, RATE );
+    float mn = 9.0f, mx = 0.0f;
+    for ( int w=3000; w + 200 < RATE; w += 200 ) {
+        float pk = peak( buf, w, w + 200 );
+        if ( pk < mn ) mn = pk;
+        if ( pk > mx ) mx = pk;
+    }
+    check( mx > 0.97f && mn > 0.45f && mn < 0.56f, "tremolo: the volume swings between 1 and 1 - depth" );
+    tr.p[1] = 1.5f;
+    check( !synth_schedule_ev( &s, 0, &tr ), "tremolo: depth range" );
+    synth_cleanup( &s );
+    free( buf );
+}
+
+static void test_immediate( void ) {
+    synth_t s; synth_init( &s, RATE );
+    synth_schedule( &s, 0, SYNTH_EV_PLAY, 0, 441.0f, 0.5f, SYNTH_SINE );
+    synth_runevents( &s, 0 );
+    float* buf = (float*) malloc( sizeof(float) * RATE );
+    synth_render( &s, buf, 10000 );
+    synth_setpitch( &s, 0, 882.0f );
+    synth_render( &s, buf + 10000, 10000 );
+    check( near( measure_window( buf, 3000, 9000 ), 441.0, 1.0 ) && near( measure_window( buf, 12000, 19000 ), 882.0, 1.0 ), "setpitch: changes the pitch of a sounding channel at once" );
+    float maxstep = 0.0f;
+    for ( int i=9990; i < 10100; ++i ) {
+        if ( fabsf( buf[i] - buf[i-1] ) > maxstep ) maxstep = fabsf( buf[i] - buf[i-1] );
+    }
+    check( maxstep < 0.12f, "setpitch: no jump (the phase goes on)" );
+    synth_setpitch( &s, 0, 19.0f );
+    synth_setpitch( &s, 9, 440.0f );
+    check( s.chan[0].osc.step * RATE > 881.0, "setpitch: invalid values are ignored" );
+    synth_setvolume( &s, 0, 0.25f );
+    synth_render( &s, buf, 5000 );
+    check( near( peak( buf, 2000, 5000 ), 0.25, 0.005 ), "setvolume: changes the volume (faded in)" );
+    synth_setvolume( &s, 0, 0.0f );
+    synth_render( &s, buf, 5000 );
+    check( peak( buf, 1000, 5000 ) == 0.0f && s.chan[0].on && synth_busy( &s, 0, 0 ), "setvolume 0: silent, but the note is still on" );
+    synth_setvolume( &s, 0, 0.5f );
+    synth_render( &s, buf, 5000 );
+    check( near( peak( buf, 2000, 5000 ), 0.5, 0.01 ), "setvolume: the note can be made audible again" );
+    synth_setvolume( &s, 0, 2.0f );
+    check( s.chan[0].vol == 0.5f, "setvolume: invalid values are ignored" );
+    // an event then sets the volume again; a stopped channel isn't started by setvolume
+    synth_schedule( &s, 0, SYNTH_EV_STOP, 0, 0, 0, SYNTH_SINE );
+    synth_runevents( &s, 0 );
+    synth_render( &s, buf, 1000 );
+    synth_setvolume( &s, 0, 0.9f );
+    synth_render( &s, buf, 1000 );
+    check( peak( buf, 0, 1000 ) == 0.0f && !s.chan[0].on, "setvolume: doesn't start a stopped channel" );
+    synth_cleanup( &s );
+    free( buf );
+}
+
+static void test_mml_effects( void ) {
+    mml_t m; char err[MML_ERRLEN];
+    check( mml_parse( "ML H440", &m, err ) && m.count == 1 && m.events[0].kind == MML_TONE && near( m.events[0].freq, 440.0, 0.01 ) &&
+           m.events[0].freq2 == 0.0f && near( m.events[0].seconds, 0.5, 1e-6 ), "mml: H plays a frequency" );
+    mml_free( &m );
+    check( mml_parse( "ML H440.5,2.", &m, err ) && near( m.events[0].freq, 440.5, 0.01 ) && near( m.events[0].seconds, 1.5, 1e-6 ), "mml: H with decimals, a length and a dot" );
+    mml_free( &m );
+    check( mml_parse( "ML S200 , 3000 , 8", &m, err ) && m.count == 1 && near( m.events[0].freq, 200.0, 0.01 ) && near( m.events[0].freq2, 3000.0, 0.1 ) &&
+           near( m.events[0].seconds, 0.25, 1e-6 ), "mml: S sweeps, blanks around the commas" );
+    mml_free( &m );
+    check( mml_parse( "S100,200", &m, err ) && near( m.events[0].seconds + m.events[0].gap, 0.5, 1e-6 ) && m.events[0].gap > 0.0f, "mml: S has the articulation too" );
+    mml_free( &m );
+    check( mml_parse( "X0.01,0.1,0.5,0.3 XR xr", &m, err ) && m.count == 3 && m.events[0].kind == MML_ENV && near( m.events[0].p[0], 0.01, 1e-6 ) &&
+           near( m.events[0].p[3], 0.3, 1e-6 ) && m.events[1].p[0] < 0.0f && m.events[2].p[0] < 0.0f, "mml: X and XR" );
+    mml_free( &m );
+    check( mml_parse( "~5,0.5 ^8,0.25", &m, err ) && m.count == 2 && m.events[0].kind == MML_VIB && near( m.events[0].p[1], 0.5, 1e-6 ) &&
+           m.events[1].kind == MML_TREM && near( m.events[1].p[0], 8.0, 1e-6 ), "mml: vibrato and tremolo" );
+    mml_free( &m );
+    check( mml_error( "H10", "'H'" ) && mml_error( "H20001", "'H'" ) && mml_error( "H", "'H'" ), "mml: H frequency range" );
+    check( mml_error( "S100", "'S'" ) && mml_error( "S100,5", "'S'" ), "mml: S needs two frequencies" );
+    check( mml_error( "H440,", "length" ) && mml_error( "H440,x", "length" ), "mml: H length after the comma" );
+    check( mml_error( "X1,2,3", "'X'" ) && mml_error( "X61,0,1,0", "'X'" ) && mml_error( "X0,0,2,0", "'X'" ), "mml: X values" );
+    check( mml_error( "~5", "'~'" ) && mml_error( "~5,25", "'~'" ) && mml_error( "^5,1.5", "'^'" ) && mml_error( "^101,1", "'^'" ), "mml: vibrato and tremolo values" );
+}
+
 int main( void ) {
     test_notes();
     test_pitch();
@@ -443,6 +643,11 @@ int main( void ) {
     test_busy();
     test_silencechan();
     test_queue_speed();
+    test_glide();
+    test_envelope();
+    test_lfos();
+    test_immediate();
+    test_mml_effects();
     printf( "%d checks, %d failure(s)\n", total, failures );
     return failures;
 }

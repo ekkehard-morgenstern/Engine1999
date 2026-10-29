@@ -61,6 +61,8 @@ void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem ) {
     vm->report   = 0;
     vm->inkey    = 0;
     vm->sound    = 0;
+    memset( vm->sfx, 0, sizeof(vm->sfx) );
+    memset( vm->sfx_defined, 0, sizeof(vm->sfx_defined) );
     vm->input    = 0;
     vm->interrupt = 0;
     vm->getkey   = 0;
@@ -106,6 +108,10 @@ void vm_clear_request( vm_t* vm ) {
 }
 
 void cleanup_vm( vm_t* vm ) {
+    for ( int i=0; i < SND_MAXSFX; ++i ) {
+        mml_free( &vm->sfx[i] );
+        vm->sfx_defined[i] = false;
+    }
     vm_clear_request( vm );
     vm_clear_stacks( vm );
     free( vm->dstack );
@@ -1136,6 +1142,45 @@ static bool vm_sound_channel( vm_t* vm, double num, int* pchan ) {
     return true;
 }
 
+// the events of a music string on a channel (the caller has synced the channels); the voice ends with a stop
+static void vm_queue_voice( vm_t* vm, int chan, const mml_t* m, double tobeats ) {
+    const vm_sound_t* snd = vm->sound;
+    void* ud = vm->userdata;
+    for ( size_t k=0; k < m->count; ++k ) {
+        const mml_event_t* ev = &m->events[k];
+        switch ( ev->kind ) {
+            case MML_TONE:
+                snd->tone( ud, chan, ev->freq, ev->freq2, ev->vol, (float)( ev->seconds * tobeats ) );
+                if ( ev->gap > 0.0f ) {
+                    snd->tone( ud, chan, 0.0f, 0.0f, 0.0f, (float)( ev->gap * tobeats ) );
+                }
+                break;
+            case MML_REST:
+                snd->tone( ud, chan, 0.0f, 0.0f, 0.0f, (float)( ev->seconds * tobeats ) );
+                break;
+            case MML_WAVE:
+                snd->setwave( ud, chan, ev->wave );
+                break;
+            case MML_ENV:
+                snd->setenv( ud, chan, ev->p[0], ev->p[1], ev->p[2], ev->p[3] );
+                break;
+            case MML_VIB:
+                snd->setvib( ud, chan, ev->p[0], ev->p[1] );
+                break;
+            case MML_TREM:
+                snd->settrem( ud, chan, ev->p[0], ev->p[1] );
+                break;
+        }
+    }
+    snd->tone( ud, chan, 0.0f, 0.0f, 0.0f, 0.0f );      // the end of the voice: nothing goes on sounding
+}
+
+// the host's beats per second of music-string time
+static double vm_sound_tobeats( vm_t* vm ) {
+    int bpm = vm->sound->getbpm( vm->userdata );
+    return (double)( bpm > 0 ? bpm : 60 ) / 60.0;
+}
+
 // PLAY ( s1 .. sn n -- ): the voices are parsed first, then queued
 static bool vm_play( vm_t* vm ) {
     double count = 0; char* strs[SND_MAXVOICES]; mml_t mml[SND_MAXVOICES]; int n = 0, parsed = 0;
@@ -1164,29 +1209,10 @@ static bool vm_play( vm_t* vm ) {
         }
     }
     if ( ok && vm->sound != 0 ) {
-        const vm_sound_t* snd = vm->sound;
-        int bpm = snd->getbpm( vm->userdata );
-        double tobeats = (double)( bpm > 0 ? bpm : 60 ) / 60.0;
-        snd->sync( vm->userdata, ( 1U << n ) - 1U );
+        double tobeats = vm_sound_tobeats( vm );
+        vm->sound->sync( vm->userdata, ( 1U << n ) - 1U );
         for ( int v=0; v < n; ++v ) {
-            for ( size_t k=0; k < mml[v].count; ++k ) {
-                const mml_event_t* ev = &mml[v].events[k];
-                switch ( ev->kind ) {
-                    case MML_TONE:
-                        snd->tone( vm->userdata, v, ev->freq, ev->vol, (float)( ev->seconds * tobeats ) );
-                        if ( ev->gap > 0.0f ) {
-                            snd->tone( vm->userdata, v, 0.0f, 0.0f, (float)( ev->gap * tobeats ) );
-                        }
-                        break;
-                    case MML_REST:
-                        snd->tone( vm->userdata, v, 0.0f, 0.0f, (float)( ev->seconds * tobeats ) );
-                        break;
-                    case MML_WAVE:
-                        snd->setwave( vm->userdata, v, ev->wave );
-                        break;
-                }
-            }
-            snd->tone( vm->userdata, v, 0.0f, 0.0f, 0.0f );     // the end of the voice: nothing goes on sounding
+            vm_queue_voice( vm, v, &mml[v], tobeats );
         }
     }
     for ( int i=0; i < parsed; ++i ) mml_free( &mml[i] );
@@ -1194,23 +1220,89 @@ static bool vm_play( vm_t* vm ) {
     return ok;
 }
 
+// SFX n, a$ ( n s -- ): parses the string and stores it as effect n
+static bool vm_sfx_define( vm_t* vm ) {
+    double n = 0; char* str = 0;
+    if ( !vm_dpop_str( vm, &str ) ) {
+        return false;
+    }
+    if ( !vm_dpop_num( vm, &n ) ) {
+        free( str );
+        return false;
+    }
+    bool ok = true; mml_t m; char err[MML_ERRLEN];
+    if ( !( n >= 1.0 && n < (double)( SND_MAXSFX + 1 ) ) ) {
+        ok = vm_error( vm, "Illegal argument" );
+    } else if ( !mml_parse( str, &m, err ) ) {
+        ok = vm_error( vm, err );
+    } else {
+        mml_free( &vm->sfx[ (int) n - 1 ] );
+        vm->sfx[ (int) n - 1 ] = m;
+        vm->sfx_defined[ (int) n - 1 ] = true;
+    }
+    free( str );
+    return ok;
+}
+
+// SFX n [, ch] ( n ch -- ): plays the effect on the channel; 0 = a free one (the highest that isn't busy)
+static bool vm_sfx_play( vm_t* vm ) {
+    double n = 0, ch = 0;
+    if ( !vm_dpop_num( vm, &ch ) || !vm_dpop_num( vm, &n ) ) {
+        return false;
+    }
+    if ( !( n >= 1.0 && n < (double)( SND_MAXSFX + 1 ) ) || !( ch >= 0.0 && ch < 9.0 ) ) {
+        return vm_error( vm, "Illegal argument" );
+    }
+    const mml_t* m = &vm->sfx[ (int) n - 1 ];
+    if ( !vm->sfx_defined[ (int) n - 1 ] ) {
+        return vm_error( vm, "Undefined effect" );
+    }
+    if ( vm->sound == 0 ) {
+        return true;
+    }
+    const vm_sound_t* snd = vm->sound;
+    int chan = (int) ch - 1;
+    if ( chan < 0 ) {
+        chan = SND_MAXVOICES - 1;
+        for ( int c=SND_MAXVOICES-1; c >= 0; --c ) {
+            if ( !snd->busy( vm->userdata, c ) ) {
+                chan = c;
+                break;
+            }
+        }
+    }
+    double tobeats = vm_sound_tobeats( vm );
+    snd->sync( vm->userdata, 1U << chan );
+    snd->setwave( vm->userdata, chan, 0 );                  // an effect starts from a clean channel
+    snd->setenv( vm->userdata, chan, -1.0f, 0.0f, 0.0f, 0.0f );
+    snd->setvib( vm->userdata, chan, 0.0f, 0.0f );
+    snd->settrem( vm->userdata, chan, 0.0f, 0.0f );
+    vm_queue_voice( vm, chan, m, tobeats );
+    return true;
+}
+
 // SND ( args -- ), kind = SNDK_*
 static bool vm_sound( vm_t* vm, uint16_t kind ) {
-    double a = 0, b = 0, c = 0, d = 0; int chan = 0;
+    double a = 0, b = 0, c = 0, d = 0, e = 0; int chan = 0;
     const vm_sound_t* snd = vm->sound;
     switch ( kind ) {
         case SNDK_SOUND:
-            if ( !vm_dpop_num( vm, &d ) || !vm_dpop_num( vm, &c ) || !vm_dpop_num( vm, &b ) || !vm_dpop_num( vm, &a ) ||
-                 !vm_sound_channel( vm, a, &chan ) ) {
+            if ( !vm_dpop_num( vm, &e ) || !vm_dpop_num( vm, &d ) || !vm_dpop_num( vm, &c ) || !vm_dpop_num( vm, &b ) ||
+                 !vm_dpop_num( vm, &a ) || !vm_sound_channel( vm, a, &chan ) ) {
                 return false;
             }
-            if ( !( ( b == 0.0 || ( b >= 20.0 && b <= 20000.0 ) ) && c >= 0.0 && c <= 1.0e6 && d >= 0.0 && d <= 1.0 ) ) {
+            if ( !( ( b == 0.0 || ( b >= 20.0 && b <= 20000.0 ) ) && c >= 0.0 && c <= 1.0e6 && d >= 0.0 && d <= 1.0 &&
+                    ( e == 0.0 || ( e >= 20.0 && e <= 20000.0 && c > 0.0 ) ) ) ) {
                 return vm_error( vm, "Illegal argument" );
             }
-            if ( snd ) snd->tone( vm->userdata, chan, (float) b, b == 0.0 ? 0.0f : (float) d, (float) c );
+            if ( snd ) snd->tone( vm->userdata, chan, (float) b, b == 0.0 ? 0.0f : (float) e, b == 0.0 ? 0.0f : (float) d, (float) c );
             return true;
         case SNDK_PLAY:
             return vm_play( vm );
+        case SNDK_SFXDEF:
+            return vm_sfx_define( vm );
+        case SNDK_SFXPLAY:
+            return vm_sfx_play( vm );
         case SNDK_WAVE:
             if ( !vm_dpop_num( vm, &b ) || !vm_dpop_num( vm, &a ) || !vm_sound_channel( vm, a, &chan ) ) {
                 return false;
@@ -1219,6 +1311,45 @@ static bool vm_sound( vm_t* vm, uint16_t kind ) {
                 return vm_error( vm, "Illegal argument" );
             }
             if ( snd ) snd->setwave( vm->userdata, chan, (int) b );
+            return true;
+        case SNDK_PITCH:
+        case SNDK_VOLUME:
+            if ( !vm_dpop_num( vm, &b ) || !vm_dpop_num( vm, &a ) || !vm_sound_channel( vm, a, &chan ) ) {
+                return false;
+            }
+            if ( kind == SNDK_PITCH ? !( b >= 20.0 && b <= 20000.0 ) : !( b >= 0.0 && b <= 1.0 ) ) {
+                return vm_error( vm, "Illegal argument" );
+            }
+            if ( snd ) {
+                if ( kind == SNDK_PITCH ) snd->setpitch( vm->userdata, chan, (float) b );
+                else snd->setvolume( vm->userdata, chan, (float) b );
+            }
+            return true;
+        case SNDK_ENVELOPE:
+            if ( !vm_dpop_num( vm, &e ) || !vm_dpop_num( vm, &d ) || !vm_dpop_num( vm, &c ) || !vm_dpop_num( vm, &b ) ||
+                 !vm_dpop_num( vm, &a ) ) {
+                return false;
+            }
+            if ( !vm_sound_channel( vm, a, &chan ) ) {      // popped: release, sustain, decay, attack, channel
+                return false;
+            }
+            if ( b >= 0.0 && !( b <= 60.0 && c >= 0.0 && c <= 60.0 && d >= 0.0 && d <= 1.0 && e >= 0.0 && e <= 60.0 ) ) {
+                return vm_error( vm, "Illegal argument" );
+            }
+            if ( snd ) snd->setenv( vm->userdata, chan, b < 0.0 ? -1.0f : (float) b, (float) c, (float) d, (float) e );
+            return true;
+        case SNDK_VIBRATO:
+        case SNDK_TREMOLO:
+            if ( !vm_dpop_num( vm, &c ) || !vm_dpop_num( vm, &b ) || !vm_dpop_num( vm, &a ) || !vm_sound_channel( vm, a, &chan ) ) {
+                return false;
+            }
+            if ( !( b >= 0.0 && b <= 100.0 && c >= 0.0 && c <= ( kind == SNDK_VIBRATO ? 24.0 : 1.0 ) ) ) {
+                return vm_error( vm, "Illegal argument" );
+            }
+            if ( snd ) {
+                if ( kind == SNDK_VIBRATO ) snd->setvib( vm->userdata, chan, (float) b, (float) c );
+                else snd->settrem( vm->userdata, chan, (float) b, (float) c );
+            }
             return true;
         case SNDK_TEMPO:
             if ( !vm_dpop_num( vm, &a ) ) {

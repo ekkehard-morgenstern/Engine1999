@@ -615,13 +615,21 @@ Explanation of node types:
 #define NT_MONITORSTMT          UINT8_C(0X64)   // MONITOR statement
 #define NT_SOUNDSTMT            UINT8_C(0X65)   // SOUND, PLAY, WAVE, TEMPO statements (data: 1 byte of SNDK_*)
 
-#define SNDK_SOUND              UINT8_C(1)      // SOUND ch, freq, beats [, vol]: 3 or 4 numeric branches
+#define SNDK_SOUND              UINT8_C(1)      // SOUND ch, freq, beats [, vol [, endfreq]]: 3 to 5 numeric branches
 #define SNDK_PLAY               UINT8_C(2)      // PLAY a$ [, b$ ...]: 1..8 string branches
 #define SNDK_WAVE               UINT8_C(3)      // WAVE ch, wave: 2 numeric branches
 #define SNDK_TEMPO              UINT8_C(4)      // TEMPO bpm: 1 numeric branch
 #define SNDK_OFF                UINT8_C(5)      // SOUND OFF [ch]: 0 or 1 numeric branch
 #define SNDK_SYNC               UINT8_C(6)      // SOUND SYNC ch [, ch ...]: 1..8 numeric branches
+#define SNDK_PITCH              UINT8_C(7)      // PITCH ch, freq: 2 numeric branches
+#define SNDK_VOLUME             UINT8_C(8)      // VOLUME ch, vol: 2 numeric branches
+#define SNDK_ENVELOPE           UINT8_C(9)      // ENVELOPE ch [, attack, decay, sustain, release]: 1 or 5 numeric branches
+#define SNDK_VIBRATO            UINT8_C(10)     // VIBRATO ch, rate, depth: 3 numeric branches
+#define SNDK_TREMOLO            UINT8_C(11)     // TREMOLO ch, rate, depth: 3 numeric branches
+#define SNDK_SFXDEF             UINT8_C(12)     // SFX n, a$: a numeric and a string branch
+#define SNDK_SFXPLAY            UINT8_C(13)     // SFX n [, ch]: 1 or 2 numeric branches
 #define SND_MAXVOICES           8               // PLAY strings / SYNC channels per statement (= SYNTH_NCHAN)
+#define SND_MAXSFX              64              // stored effects (SFX 1..64)
 
 #define LISTF_FIRST             UINT8_C(0X01)   // LIST: start target present (first branch)
 #define LISTF_LAST              UINT8_C(0X02)   // LIST: end target present (next branch)

@@ -2453,37 +2453,51 @@ bool comp_eat_monitorstmt( compiler_t* comp, node_t** pnode ) {
 }
 
 bool comp_eat_soundstmt( compiler_t* comp, node_t** pnode ) {
-    // sound-stmt := TOK_SOUND num-expr TOK_COMMA num-expr TOK_COMMA num-expr [ TOK_COMMA num-expr ] |
+    // sound-stmt := TOK_SOUND num-expr TOK_COMMA num-expr TOK_COMMA num-expr [ TOK_COMMA num-expr [ TOK_COMMA num-expr ] ] |
     //               TOK_SOUND TOK_OFF [ num-expr ] | TOK_SOUND TOK_SYNC num-expr { TOK_COMMA num-expr } |
-    //               TOK_PLAY str-expr { TOK_COMMA str-expr } | TOK_WAVE num-expr TOK_COMMA num-expr | TOK_TEMPO num-expr .
+    //               TOK_PLAY str-expr { TOK_COMMA str-expr } | TOK_WAVE num-expr TOK_COMMA num-expr | TOK_TEMPO num-expr |
+    //               ( TOK_PITCH | TOK_VOLUME ) num-expr TOK_COMMA num-expr |
+    //               TOK_ENVELOPE num-expr [ TOK_COMMA num-expr TOK_COMMA num-expr TOK_COMMA num-expr TOK_COMMA num-expr ] |
+    //               ( TOK_VIBRATO | TOK_TREMOLO ) num-expr TOK_COMMA num-expr TOK_COMMA num-expr |
+    //               TOK_SFX num-expr TOK_COMMA str-expr | TOK_SFX num-expr [ TOK_COMMA num-expr ] .
     uint8_t tok = comp->currtok;
-    if ( tok != TOK_SOUND && tok != TOK_PLAY && tok != TOK_WAVE && tok != TOK_TEMPO ) {
+    if ( tok != TOK_SOUND && tok != TOK_PLAY && tok != TOK_WAVE && tok != TOK_TEMPO && tok != TOK_PITCH && tok != TOK_VOLUME &&
+         tok != TOK_ENVELOPE && tok != TOK_VIBRATO && tok != TOK_TREMOLO && tok != TOK_SFX ) {
         return false;
     }
     if ( !comp_fetchtok( comp ) ) {
         return false;
     }
-    uint8_t kind = SNDK_SOUND; int minargs = 3, maxargs = 4;
+    uint8_t kind = SNDK_SOUND; int minargs = 3, maxargs = 5;
     bool strargs = false, optional = false;
-    if ( tok == TOK_SOUND && comp->currtok == TOK_OFF ) {
-        kind = SNDK_OFF; minargs = 0; maxargs = 1; optional = true;
-        comp_fetchtok( comp );
-    } else if ( tok == TOK_SOUND && comp->currtok == TOK_SYNC ) {
-        kind = SNDK_SYNC; minargs = 1; maxargs = SND_MAXVOICES;
-        comp_fetchtok( comp );
-    } else if ( tok == TOK_PLAY ) {
-        kind = SNDK_PLAY; minargs = 1; maxargs = SND_MAXVOICES; strargs = true;
-    } else if ( tok == TOK_WAVE ) {
-        kind = SNDK_WAVE; minargs = 2; maxargs = 2;
-    } else if ( tok == TOK_TEMPO ) {
-        kind = SNDK_TEMPO; minargs = 1; maxargs = 1;
+    switch ( tok ) {
+        case TOK_SOUND:
+            if ( comp->currtok == TOK_OFF ) {
+                kind = SNDK_OFF; minargs = 0; maxargs = 1; optional = true;
+                comp_fetchtok( comp );
+            } else if ( comp->currtok == TOK_SYNC ) {
+                kind = SNDK_SYNC; minargs = 1; maxargs = SND_MAXVOICES;
+                comp_fetchtok( comp );
+            }
+            break;
+        case TOK_PLAY:      kind = SNDK_PLAY; minargs = 1; maxargs = SND_MAXVOICES; strargs = true; break;
+        case TOK_WAVE:      kind = SNDK_WAVE; minargs = maxargs = 2; break;
+        case TOK_TEMPO:     kind = SNDK_TEMPO; minargs = maxargs = 1; break;
+        case TOK_PITCH:     kind = SNDK_PITCH; minargs = maxargs = 2; break;
+        case TOK_VOLUME:    kind = SNDK_VOLUME; minargs = maxargs = 2; break;
+        case TOK_ENVELOPE:  kind = SNDK_ENVELOPE; minargs = 1; maxargs = 5; break;
+        case TOK_VIBRATO:   kind = SNDK_VIBRATO; minargs = maxargs = 3; break;
+        case TOK_TREMOLO:   kind = SNDK_TREMOLO; minargs = maxargs = 3; break;
+        case TOK_SFX:       kind = SNDK_SFXPLAY; minargs = 1; maxargs = 2; break;
+        default:            break;
     }
     /*
-        NT_SOUNDSTMT    SOUND / PLAY / WAVE / TEMPO statement
+        NT_SOUNDSTMT    SOUND / PLAY / WAVE / TEMPO / PITCH / ... / SFX statement
             data:
                 - 1 byte of SNDK_* (what the statement is)
             branches:
-                - the argument expressions (numeric, or string for PLAY): the number depends on the kind (see nodetype.h)
+                - the argument expressions (numeric, or string for PLAY and the second one of SFX n, a$): the number
+                  depends on the kind (see nodetype.h)
     */
     if ( !comp_create_node( comp, pnode, NT_SOUNDSTMT, UINT8_C(0), UINT16_C(1), &kind ) || *pnode == NODE_NONE ) {
         out_of_memory( comp );
@@ -2500,7 +2514,17 @@ bool comp_eat_soundstmt( compiler_t* comp, node_t** pnode ) {
             }
         }
         node_t* arg = NODE_NONE;
-        bool got = strargs ? comp_eat_strexpr( comp, &arg ) : comp_eat_numexpr( comp, &arg );
+        bool got = false;
+        if ( tok == TOK_SFX && n == 1 ) {       // SFX n, a$ defines an effect, SFX n, ch plays it
+            got = comp_eat_strexpr( comp, &arg ) && arg != NODE_NONE;
+            if ( got ) {
+                (*pnode)->data[0] = SNDK_SFXDEF;
+                kind = SNDK_SFXDEF;
+            }
+        }
+        if ( !got ) {
+            got = strargs ? comp_eat_strexpr( comp, &arg ) : comp_eat_numexpr( comp, &arg );
+        }
         if ( !got || arg == NODE_NONE ) {
             if ( optional && n == 0 ) {
                 break;
@@ -2514,7 +2538,7 @@ bool comp_eat_soundstmt( compiler_t* comp, node_t** pnode ) {
         }
         ++n;
     }
-    if ( n < minargs ) {
+    if ( n < minargs || ( kind == SNDK_ENVELOPE && n != 1 && n != 5 ) ) {
         comp_error( comp, "Comma ',' expected" );
         return false;
     }

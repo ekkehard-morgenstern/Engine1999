@@ -176,16 +176,26 @@ void sdlaud_cleanup( void ) {
 
 // -- the API: all of it does nothing when there is no audio device -----------------------
 
-static void sdlaud_event( int chan, float beats, synth_evtype_t type, float freq, float vol, synth_wave_t wave ) {
+// queues an event at the channel's time line; the cursor moves on by "beats"
+static void sdlaud_queue( int chan, float beats, synth_evspec_t* sp ) {
     if ( !sdlaud_initok ) return;
     uint64_t now = sdlutil_getnsec( 0 );
     SDL_LockMutex( sdlaud_mtx );
     uint64_t when = synth_slot( &sdlaud_synth, chan, beats, now );
     if ( when != ~UINT64_C(0) ) {
-        synth_schedule( &sdlaud_synth, when, type, chan, freq, vol, wave );
+        sp->chan = chan;
+        sp->dur = synth_beatsnsec( &sdlaud_synth, beats );
+        synth_schedule_ev( &sdlaud_synth, when, sp );
         SDL_CondSignal( sdlaud_cond );
     }
     SDL_UnlockMutex( sdlaud_mtx );
+}
+
+static void sdlaud_event( int chan, float beats, synth_evtype_t type, float freq, float vol, synth_wave_t wave ) {
+    synth_evspec_t sp;
+    memset( &sp, 0, sizeof(sp) );
+    sp.type = type; sp.freq = freq; sp.vol = vol; sp.wave = wave;
+    sdlaud_queue( chan, beats, &sp );
 }
 
 void sdlaud_playnote( int chan, int note, float vol, float beats ) {
@@ -199,12 +209,52 @@ void sdlaud_playfreq( int chan, float freq, float vol, float beats ) {
     sdlaud_event( chan, beats, SYNTH_EV_PLAY, freq, vol, SYNTH_SINE );
 }
 
+void sdlaud_playsweep( int chan, float freq, float freq2, float vol, float beats ) {
+    synth_evspec_t sp;
+    memset( &sp, 0, sizeof(sp) );
+    sp.type = SYNTH_EV_PLAY; sp.freq = freq; sp.freq2 = freq2; sp.vol = vol;
+    sdlaud_queue( chan, beats, &sp );
+}
+
 void sdlaud_stopchan( int chan, float beats ) {
     sdlaud_event( chan, beats, SYNTH_EV_STOP, 0.0f, 0.0f, SYNTH_SINE );
 }
 
 void sdlaud_setwave( int chan, int wave ) {
     sdlaud_event( chan, 0.0f, SYNTH_EV_WAVE, 0.0f, 0.0f, (synth_wave_t) wave );
+}
+
+static void sdlaud_setfx( int chan, synth_evtype_t type, float p0, float p1, float p2, float p3 ) {
+    synth_evspec_t sp;
+    memset( &sp, 0, sizeof(sp) );
+    sp.type = type; sp.p[0] = p0; sp.p[1] = p1; sp.p[2] = p2; sp.p[3] = p3;
+    sdlaud_queue( chan, 0.0f, &sp );
+}
+
+void sdlaud_setenvelope( int chan, float attack, float decay, float sustain, float release ) {
+    sdlaud_setfx( chan, SYNTH_EV_ENV, attack, decay, sustain, release );
+}
+
+void sdlaud_setvibrato( int chan, float rate, float depth ) {
+    sdlaud_setfx( chan, SYNTH_EV_VIB, rate, depth, 0.0f, 0.0f );
+}
+
+void sdlaud_settremolo( int chan, float rate, float depth ) {
+    sdlaud_setfx( chan, SYNTH_EV_TREM, rate, depth, 0.0f, 0.0f );
+}
+
+void sdlaud_setpitch( int chan, float freq ) {
+    if ( !sdlaud_initok ) return;
+    SDL_LockMutex( sdlaud_mtx );
+    synth_setpitch( &sdlaud_synth, chan, freq );
+    SDL_UnlockMutex( sdlaud_mtx );
+}
+
+void sdlaud_setvolume( int chan, float vol ) {
+    if ( !sdlaud_initok ) return;
+    SDL_LockMutex( sdlaud_mtx );
+    synth_setvolume( &sdlaud_synth, chan, vol );
+    SDL_UnlockMutex( sdlaud_mtx );
 }
 
 void sdlaud_setbpm( int bpm ) {

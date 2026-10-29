@@ -202,6 +202,12 @@
 #define TOK_TEMPO       UINT8_C(151)        // TEMPO keyword
 #define TOK_PLAYING     UINT8_C(152)        // PLAYING function
 #define TOK_SYNC        UINT8_C(153)        // SYNC keyword (SOUND SYNC)
+#define TOK_PITCH       UINT8_C(154)        // PITCH keyword
+#define TOK_VOLUME      UINT8_C(155)        // VOLUME keyword
+#define TOK_ENVELOPE    UINT8_C(156)        // ENVELOPE keyword
+#define TOK_VIBRATO     UINT8_C(157)        // VIBRATO keyword
+#define TOK_TREMOLO     UINT8_C(158)        // TREMOLO keyword
+#define TOK_SFX         UINT8_C(159)        // SFX keyword
 #define TOK_NONE        UINT8_C(255)        // no token (!)
 
 // -- buffers ---------------------------------------------------------------

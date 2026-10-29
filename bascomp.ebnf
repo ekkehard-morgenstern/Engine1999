@@ -239,9 +239,17 @@ monitor-stmt := TOK_MONITOR .
 -- one channel / all of them at once, SOUND SYNC lines up the time of the channels (to start them together). PLAY plays one
 -- music string per voice (voice n = channel n, all start together); both return at once, PLAYING(ch) is -1 while the channel
 -- still sounds or has music queued, else 0. WAVE ch, w: 0 sine, 1 square, 2 triangle, 3 noise. TEMPO bpm: beats per minute.
-sound-stmt := TOK_SOUND num-expr TOK_COMMA num-expr TOK_COMMA num-expr [ TOK_COMMA num-expr ] |
+sound-stmt := TOK_SOUND num-expr TOK_COMMA num-expr TOK_COMMA num-expr [ TOK_COMMA num-expr [ TOK_COMMA num-expr ] ] |
               TOK_SOUND TOK_OFF [ num-expr ] | TOK_SOUND TOK_SYNC num-expr { TOK_COMMA num-expr } |
-              TOK_PLAY str-expr { TOK_COMMA str-expr } | TOK_WAVE num-expr TOK_COMMA num-expr | TOK_TEMPO num-expr .
+              TOK_PLAY str-expr { TOK_COMMA str-expr } | TOK_WAVE num-expr TOK_COMMA num-expr | TOK_TEMPO num-expr |
+              ( TOK_PITCH | TOK_VOLUME ) num-expr TOK_COMMA num-expr |
+              TOK_ENVELOPE num-expr [ TOK_COMMA num-expr TOK_COMMA num-expr TOK_COMMA num-expr TOK_COMMA num-expr ] |
+              ( TOK_VIBRATO | TOK_TREMOLO ) num-expr TOK_COMMA num-expr TOK_COMMA num-expr |
+              TOK_SFX num-expr TOK_COMMA str-expr | TOK_SFX num-expr [ TOK_COMMA num-expr ] .
+-- Sound effects (docs/sound.md): SOUND ch, f1, beats, vol, f2 glides from f1 to f2 during the tone; PITCH ch, f and VOLUME ch, v
+-- change a sounding channel at once; ENVELOPE ch, attack, decay, sustain, release shapes the tones (ENVELOPE ch alone: back to the
+-- default); VIBRATO / TREMOLO ch, rate, depth; SFX n, a$ stores a music string as effect n (1..64), SFX n [, ch] plays it
+-- (no channel: a free one, the highest first).
 prog-stmt := load-stmt | run-stmt | list-stmt | new-stmt | clear-stmt | delete-stmt | renum-stmt | edit-stmt | monitor-stmt | sound-stmt .
 
 stmt := io-stmt | prog-stmt | assign-stmt | control-flow-stmt .

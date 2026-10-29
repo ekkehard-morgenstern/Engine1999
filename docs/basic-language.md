@@ -77,7 +77,7 @@ Some grammar items are inconsistent in the EBNF (e.g. `sys-noarg-num-call := sys
 
 They are ordinary statements (`bascomp.ebnf`, `cgenprog.c`), so they work in direct mode and inside programs.
 
-- `LOAD name$` — replaces the stored program entirely by the one in the file (variables cleared). **Typed in direct mode it only loads** (use `RUN` afterwards); inside a program it **runs the loaded program from the beginning**. The file may be a binary `SAVE` file (recognized by its magic, see `baspgm.h`) or a text listing (lines with line numbers, e.g. `SAVE "X",A`). If the file can't be read or is bad, an error is reported and the old program stays. When used inside a program, the running program ends and the loaded one starts.
+- `LOAD name$` — replaces the stored program entirely by the one in the file (variables cleared; a name **without an extension** is looked up as it is, then with `.bas`, `.e99`, `.BAS`, `.E99`, the first existing file wins). **Typed in direct mode it only loads** (use `RUN` afterwards); inside a program it **runs the loaded program from the beginning**. The file may be a binary `SAVE` file (recognized by its magic, see `baspgm.h`) or a text listing (lines with line numbers, e.g. `SAVE "X",A`). If the file can't be read or is bad, an error is reported and the old program stays. When used inside a program, the running program ends and the loaded one starts.
 - `RUN [target]` — clears all variables and runs the stored program from the beginning, from a line number (`RUN 100`) or from a label (`RUN START`). Inside a program it restarts the program (a program ending with `RUN` runs forever; Break stops it). The target must exist ("Undefined line number N", "Undefined label X").
 - `LIST [a][-[b]]` — lists the program to the output channel (always channel 0 for now): `LIST` all, `LIST 20` that line only, `LIST 20-50` a range, `LIST 20-` from line 20 to the end, `LIST -50` from the start up to line 50. Each of `a`/`b` is a line number or a label (a label stands for the line holding its `LABEL` statement); a label that doesn't exist is an error.
 - `NEW` — deletes the program **and** all variables (the runtime is reset, so user functions are gone, too) and returns to the host (the READY prompt). Inside a program it ends the run: nothing after it is executed.
@@ -90,6 +90,8 @@ They are ordinary statements (`bascomp.ebnf`, `cgenprog.c`), so they work in dir
 
 `RUN` and `LOAD` need a restart of the whole compiled program, so the VM doesn't do them itself (nor `NEW` and `EDIT`): it stops and leaves a request for the host (`docs/compiler-and-vm.md`).
 
+**File extensions:** `SAVE "name"` writes the binary (tokenized) form and appends `.e99` to a name without extension; `SAVE "name",A` writes the ASCII listing and appends `.bas`. A name with an extension is used as it is. `LOAD` recognizes both forms by the header, whatever the extension is.
+
 ## Sound: `SOUND`, `PLAY`, `WAVE`, `TEMPO`, `PLAYING()`
 
 Statements of the language (`bascomp.ebnf` `sound-stmt`, `cgenprog.c`); everything is queued and returns at once. Channels are 1..8.
@@ -97,5 +99,7 @@ Statements of the language (`bascomp.ebnf` `sound-stmt`, `cgenprog.c`); everythi
 `SOUND OFF [ch]`, `SOUND SYNC ch [, ch ...]`, `PLAY a$ [, b$ ...]` (a music string per voice, all start together; the music string language:
 notes `A`-`G`, `#`/`+`/`-`, lengths and dots, `R`, `O < >`, `L`, `T`, `V`, `W`, `ML MN MS`), `WAVE ch, w` (0 sine, 1 square, 2 triangle, 3 noise),
 `TEMPO bpm` (the unit of the beats of `SOUND`, default 60) and the function `PLAYING( ch )` (-1 while the channel sounds or has music queued, else 0).
-Full description, examples, the instruction/host interface and the proposal for effects: `docs/sound.md`. The words `SOUND PLAY WAVE TEMPO PLAYING SYNC`
-are keywords now (they can't be variable names).
+Sound effects: `PITCH ch, f` and `VOLUME ch, v` (at once), a glide as the fifth argument of `SOUND`, `ENVELOPE ch, a, d, s, r`, `VIBRATO ch, rate, depth`,
+`TREMOLO ch, rate, depth`, and stored effects `SFX n, a$` / `SFX n [, ch]` (music strings with the extra commands `H S X ~ ^`).
+Full description, examples, the instruction/host interface: `docs/sound.md`. The words `SOUND PLAY WAVE TEMPO PLAYING SYNC PITCH VOLUME
+ENVELOPE VIBRATO TREMOLO SFX` are keywords now (they can't be variable names).

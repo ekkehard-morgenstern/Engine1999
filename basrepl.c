@@ -24,6 +24,7 @@
               Germany, Europe
 */
 
+#include <sys/stat.h>
 #include "basrepl.h"
 #include "basdebug.h"
 
@@ -357,11 +358,58 @@ static bool repl_read_program( repl_t* repl, FILE* f, program_t* pgm ) {
     return ok;
 }
 
+// -- default file extensions ---------------------------------------------------------
+
+// does the last component of the path have an extension (a '.' that isn't its first character)?
+static bool repl_has_extension( const char* name ) {
+    const char* base = strrchr( name, '/' );
+    base = base != 0 ? base + 1 : name;
+    const char* dot = strrchr( base, '.' );
+    return dot != 0 && dot != base;
+}
+
+// the name with an extension appended (malloc'ed), 0 if out of memory
+static char* repl_add_extension( const char* name, const char* ext ) {
+    size_t len = strlen( name ) + strlen( ext ) + 1U;
+    char* full = (char*) malloc( len );
+    if ( full != 0 ) {
+        snprintf( full, len, "%s%s", name, ext );
+    }
+    return full;
+}
+
+static bool repl_is_file( const char* path ) {
+    struct stat st;
+    return stat( path, &st ) == 0 && S_ISREG( st.st_mode );
+}
+
+// LOAD name: a name without an extension is looked up as it is, then with .bas, .e99, .BAS and .E99 (the first that
+// exists wins); the result is malloc'ed (the name itself if nothing was found, so that the error is about what was typed)
+static char* repl_find_program_file( const char* name ) {
+    if ( !repl_has_extension( name ) && !repl_is_file( name ) ) {
+        static const char* const exts[] = { ".bas", ".e99", ".BAS", ".E99" };
+        for ( size_t i=0; i < sizeof(exts) / sizeof(exts[0]); ++i ) {
+            char* full = repl_add_extension( name, exts[i] );
+            if ( full != 0 && repl_is_file( full ) ) {
+                return full;
+            }
+            free( full );
+        }
+    }
+    return strdup( name );
+}
+
 // LOAD: replaces the stored program; the old one stays if anything goes wrong
-static bool repl_load_program( repl_t* repl, const char* filename ) {
+static bool repl_load_program( repl_t* repl, const char* name ) {
+    char* filename = repl_find_program_file( name );
+    if ( filename == 0 ) {
+        repl_report( repl, "? Out of memory" );
+        return false;
+    }
     FILE* f = fopen( filename, "rb" );
     if ( f == 0 ) {
         repl_report( repl, errno == ENOENT ? "? File not found" : "? Can't open file" );
+        free( filename );
         return false;
     }
     program_t loaded;
@@ -374,11 +422,13 @@ static bool repl_load_program( repl_t* repl, const char* filename ) {
     fclose( f );
     if ( !ok ) {
         free_program( &loaded );
+        free( filename );
         return false;
     }
     free_program( &repl->pgm );
     repl->pgm = loaded;
     repl_set_filename( repl, filename );
+    free( filename );
     return true;
 }
 
@@ -625,9 +675,15 @@ static bool repl_vm_renumber( struct _vm_t* vm, void* usrdata, const char* first
     return false;
 }
 
-bool repl_save_program( repl_t* repl, const char* filename, bool ascii ) {
+// SAVE name: a name without an extension gets .bas (ASCII listing) or .e99 (binary, tokenized)
+bool repl_save_program( repl_t* repl, const char* name, bool ascii ) {
+    char* filename = repl_has_extension( name ) ? strdup( name ) : repl_add_extension( name, ascii ? ".bas" : ".e99" );
+    if ( filename == 0 ) {
+        return false;
+    }
     FILE* f = fopen( filename, ascii ? "w" : "wb" );
     if ( f == 0 ) {
+        free( filename );
         return false;
     }
     bool ok = save_program( &repl->pgm, f, ascii );
@@ -637,6 +693,7 @@ bool repl_save_program( repl_t* repl, const char* filename, bool ascii ) {
     if ( ok ) {
         repl_set_filename( repl, filename );
     }
+    free( filename );
     return ok;
 }
 

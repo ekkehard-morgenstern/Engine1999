@@ -48,6 +48,17 @@ a list of events with times in seconds; the VM hands them to the host's sound ca
     ML, MN, MS             legato (the note fills its length), normal (7/8, then silence; the default) and staccato (3/4)
     blanks and ;           ignored; letters may be lower case
 
+Commands for sound effects (numbers may have decimals; the values are separated by commas, and frequencies are 20..20000 Hz):
+
+    H f [, n] [.]          a tone of f Hz (also for noise) with the length n (default L); articulation as for notes
+    S f1, f2 [, n] [.]     a sweep: the pitch glides from f1 to f2 during the length n
+    X a, d, s, r           envelope: attack, decay (seconds, 0..60), sustain level 0..1, release (seconds)
+    XR                     back to the default envelope (a short fade in and out)
+    ~ rate, depth          vibrato: rate in Hz 0..100, depth in semitones 0..24 (0 = off)
+    ^ rate, depth          tremolo: rate in Hz 0..100, depth 0..1 (0 = off)
+
+The effect commands stay in effect on the channel until changed (like W); stored effects (SFX) reset them first.
+
 The frequencies must be within 20..20000 Hz (an octave 0 C is too low).
 */
 
@@ -55,16 +66,20 @@ The frequencies must be within 20..20000 Hz (an octave 0 C is too low).
 #define MML_ERRLEN      64
 
 typedef enum _mml_kind_t {
-    MML_TONE,           // freq, vol for "seconds", then silence for "gap" seconds
+    MML_TONE,           // freq, vol for "seconds", then silence for "gap" seconds; with freq2 != 0 the pitch glides to it
     MML_REST,           // silence for "seconds"
-    MML_WAVE            // select the wave type
+    MML_WAVE,           // select the wave type
+    MML_ENV,            // envelope p[0..3] = attack, decay, sustain, release; p[0] < 0 = default
+    MML_VIB,            // vibrato p[0] = rate, p[1] = depth
+    MML_TREM            // tremolo p[0] = rate, p[1] = depth
 } mml_kind_t;
 
 typedef struct _mml_event_t {
     mml_kind_t  kind;
-    float       freq, vol;
+    float       freq, freq2, vol;
     float       seconds, gap;
     int         wave;
+    float       p[4];
 } mml_event_t;
 
 typedef struct _mml_t {

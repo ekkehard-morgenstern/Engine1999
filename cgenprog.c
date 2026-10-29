@@ -217,16 +217,30 @@ bool cgen_from_soundstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         return cgen_unexpected_node( comp );
     }
     uint8_t kind = node->data[0];
-    bool strargs = kind == SNDK_PLAY;
     for ( uint8_t i=0; i < node->numbranches; ++i ) {
-        if ( !( strargs ? cgen_from_strexpr( cgen, comp, node->branches[i] ) :
-                          cgen_from_numexpr( cgen, comp, node->branches[i] ) ) ) {
+        bool isstr = kind == SNDK_PLAY || ( kind == SNDK_SFXDEF && i == 1U );
+        if ( !( isstr ? cgen_from_strexpr( cgen, comp, node->branches[i] ) :
+                        cgen_from_numexpr( cgen, comp, node->branches[i] ) ) ) {
             return false;
         }
     }
     switch ( kind ) {
-        case SNDK_SOUND:
+        case SNDK_SOUND:        // ( ch freq beats vol endfreq ): the volume is 0.5 and no glide (0) if omitted
             if ( node->numbranches == 3U && !cgen_push_number( cgen, comp, 0.5 ) ) {
+                return false;
+            }
+            if ( node->numbranches <= 4U && !cgen_push_number( cgen, comp, 0.0 ) ) {
+                return false;
+            }
+            break;
+        case SNDK_ENVELOPE:     // ( ch attack decay sustain release ): attack -1 = back to the default
+            if ( node->numbranches == 1U && ( !cgen_push_number( cgen, comp, -1.0 ) || !cgen_push_number( cgen, comp, 0.0 ) ||
+                    !cgen_push_number( cgen, comp, 0.0 ) || !cgen_push_number( cgen, comp, 0.0 ) ) ) {
+                return false;
+            }
+            break;
+        case SNDK_SFXPLAY:      // ( n ch ): channel 0 = a free one
+            if ( node->numbranches == 1U && !cgen_push_number( cgen, comp, 0.0 ) ) {
                 return false;
             }
             break;
@@ -243,6 +257,11 @@ bool cgen_from_soundstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
             break;
         case SNDK_WAVE:
         case SNDK_TEMPO:
+        case SNDK_PITCH:
+        case SNDK_VOLUME:
+        case SNDK_VIBRATO:
+        case SNDK_TREMOLO:
+        case SNDK_SFXDEF:
             break;
         default:
             return cgen_unexpected_node( comp );

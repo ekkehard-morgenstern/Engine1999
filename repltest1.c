@@ -40,6 +40,13 @@ Usage: repltest1 [-v]       -v: show all debug output (see basdebug.h)
 // the program files of the LOAD cases (in the current directory; removed at the end)
 #define TESTFILE    "repltest1.tmp"
 
+static void cleanup_testfiles( void ) {
+    static const char* const names[] = { TESTFILE, "repltest1x", "repltest1x.bas", "repltest1x.e99", "repltest1x.dat", "repltest1x.zzz" };
+    for ( size_t i=0; i < sizeof(names) / sizeof(names[0]); ++i ) {
+        remove( names[i] );
+    }
+}
+
 typedef struct _testcase_t {
     const char* name;
     const char* source;     // lines separated by '\n'
@@ -51,8 +58,14 @@ typedef struct _testcase_t {
 static const testcase_t cases[] = {
     { "direct mode",            "PRINT 1+2",                                      "3\n" },
     { "SOUND without a sound output does nothing", "SOUND 1,440,1\nPRINT 1",     "1\n" },
+    { "SFX persists between direct mode lines", "SFX 1,\"C\"\nSFX 1,1\nSFX 2,1",   "? Undefined effect\n" },
+    { "SFX is checked when defined, without a sound output", "SFX 1,\"Z\"",         "? Unknown music command 'Z'\n" },
+    { "SFX is gone after RUN", "SFX 1,\"C\"\n10 SFX 1,1\nRUN",                     "? Undefined effect in line 10\n" },
+    { "SFX defined in a program", "10 SFX 1,\"C\"\n20 SFX 1,1\n30 PRINT \"OK\"\nRUN", "OK\n" },
+    { "effect statements without a sound output", "ENVELOPE 1,0,0,1,0:VIBRATO 1,5,1:TREMOLO 1,4,0.5:PITCH 1,440:VOLUME 1,0.5:SOUND 1,440,1,0.5,880:PRINT 1", "1\n" },
+    { "effect statements are listed", "10 PITCH 1,440\n20 VOLUME 1,0.5\n30 ENVELOPE 1\n40 ENVELOPE 1,0,0.1,0.5,0.2\n50 VIBRATO 1,5,0.5\n60 TREMOLO 1,4,0.5\n70 SFX 1,\"S100,200\"\n80 SFX 1\n90 SFX 1,2\n100 SOUND 1,440,1,0.5,880\nLIST", "10 PITCH 1,440\n20 VOLUME 1,0.5\n30 ENVELOPE 1\n40 ENVELOPE 1,0,0.1,0.5,0.2\n50 VIBRATO 1,5,0.5\n60 TREMOLO 1,4,0.5\n70 SFX 1,\"S100,200\"\n80 SFX 1\n90 SFX 1,2\n100 SOUND 1,440,1,0.5,880\n" },
     { "PLAYING without a sound output is 0", "PRINT PLAYING(1)",                  "0\n" },
-    { "PLAY checks its strings without a sound output", "PLAY \"X\"",               "? Unknown music command 'X'\n" },
+    { "PLAY checks its strings without a sound output", "PLAY \"Z\"",               "? Unknown music command 'Z'\n" },
     { "sound statements are listed", "10 SOUND OFF\n20 PLAY \"C\",\"E\"\n30 TEMPO 90\n40 SOUND SYNC 1,2\n50 WAVE 1,2\n60 SOUND 1,440,1,0.5\n70 PRINT PLAYING(1)\nLIST", "10 SOUND OFF\n20 PLAY \"C\",\"E\"\n30 TEMPO 90\n40 SOUND SYNC 1,2\n50 WAVE 1,2\n60 SOUND 1,440,1,0.5\n70 PRINT PLAYING(1)\n" },
     { "variables persist",      "A=5\nPRINT A*2",                                 "10\n" },
     { "empty line",             "\n\nPRINT 7",                                    "7\n" },
@@ -100,6 +113,12 @@ static const testcase_t cases[] = {
     { "LIST from a program",    "10 LIST 20\n20 PRINT 2\nRUN",                         "20 PRINT 2\n2\n" },
     { "LIST all from a program","10 LIST\n20 PRINT 2\nRUN",                            "10 LIST\n20 PRINT 2\n2\n" },
     { "LIST undefined label in a program", "10 LIST X\nRUN",                           "? Undefined label X in line 10\n" },
+    { "SAVE without extension makes .e99, LOAD finds it", "10 PRINT \"E\"\nSAVE \"repltest1x\"\nNEW\nLOAD \"repltest1x.e99\"\nRUN\nNEW\nLOAD \"repltest1x\"\nRUN", "E\nE\n" },
+    { "SAVE ,A without extension makes .bas, LOAD finds it", "10 PRINT \"A\"\nSAVE \"repltest1x\",A\nNEW\nLOAD \"repltest1x\"\nRUN", "A\n" },
+    { "LOAD without extension: .bas before .e99", "10 PRINT \"E\"\nSAVE \"repltest1x\"\nNEW\n10 PRINT \"A\"\nSAVE \"repltest1x\",A\nNEW\nLOAD \"repltest1x\"\nRUN", "A\n" },
+    { "LOAD without extension: the exact name wins", "10 PRINT \"X\"\nSAVE \"repltest1x\",A\nNEW\n10 PRINT \"N\"\nSAVE \"repltest1x.zzz\",A\nNEW\nA$=`mv repltest1x.zzz repltest1x`\nLOAD \"repltest1x\"\nRUN", "N\n" },
+    { "SAVE with an extension keeps the name", "10 PRINT 1\nSAVE \"repltest1x.dat\"\nNEW\nLOAD \"repltest1x.dat\"\nRUN", "1\n" },
+    { "LOAD a missing name without extension", "LOAD \"repltest1nothing\"", "? File not found\n" },
     { "LOAD a binary file",     "10 PRINT \"B\"\nSAVE \"" TESTFILE "\"\nNEW\nLOAD \"" TESTFILE "\"\nLIST", "10 PRINT \"B\"\n" },
     { "LOAD in direct mode does not run", "10 PRINT \"B\"\nSAVE \"" TESTFILE "\"\nNEW\nLOAD \"" TESTFILE "\"\nPRINT 7\nRUN", "7\nB\n" },
     { "LOAD a text file",       "10 PRINT \"B\"\n20 PRINT 2\nSAVE \"" TESTFILE "\",A\nNEW\nLOAD \"" TESTFILE "\"\nRUN", "B\n2\n" },
@@ -627,7 +646,7 @@ int main( int argc, char** argv ) {
         basdbg_flags = BASDBG_ALL;
     }
     size_t numcases = sizeof(cases) / sizeof(cases[0]), failed = 0;
-    remove( TESTFILE );
+    cleanup_testfiles();
     for ( size_t i=0; i < numcases; ++i ) {
         if ( run_case( &cases[i] ) ) {
             printf( "PASS  %s\n", cases[i].name );
@@ -643,7 +662,7 @@ int main( int argc, char** argv ) {
     run_edit_tests( &numcases, &failed );
     run_fulledit_tests( &numcases, &failed );
     run_debug_tests( &numcases, &failed );
-    remove( TESTFILE );
+    cleanup_testfiles();
     printf( "%u of %u passed\n", (unsigned)( numcases - failed ), (unsigned) numcases );
     free( outbuf );
     return (int) failed;

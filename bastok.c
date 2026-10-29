@@ -816,7 +816,9 @@ static const struct {
     { TOK_NOT, "NOT" }, { TOK_AND, "AND" }, { TOK_OR, "OR" }, { TOK_XOR, "XOR" }, { TOK_NAND, "NAND" }, { TOK_NOR, "NOR" },
     { TOK_XNOR, "XNOR" }, { TOK_LSHIFT, "LSHIFT" }, { TOK_RSHIFT, "RSHIFT" }, { TOK_DYNAMIC, "DYNAMIC" }, { TOK_ASSOC, "ASSOC" },
     { TOK_LABEL, "LABEL" }, { TOK_AGAIN, "AGAIN" }, { TOK_CHR, "CHR" }, { TOK_MONITOR, "MONITOR" }, { TOK_SOUND, "SOUND" }, { TOK_PLAY, "PLAY" },
-    { TOK_WAVE, "WAVE" }, { TOK_TEMPO, "TEMPO" }, { TOK_PLAYING, "PLAYING" }, { TOK_SYNC, "SYNC" }, { TOK_AMP, "&" }, { TOK_LE, "<=" }, { TOK_GE, ">=" }, { TOK_NE, "<>" }, { 0, 0 }
+    { TOK_WAVE, "WAVE" }, { TOK_TEMPO, "TEMPO" }, { TOK_PLAYING, "PLAYING" }, { TOK_SYNC, "SYNC" },
+    { TOK_PITCH, "PITCH" }, { TOK_VOLUME, "VOLUME" }, { TOK_ENVELOPE, "ENVELOPE" }, { TOK_VIBRATO, "VIBRATO" },
+    { TOK_TREMOLO, "TREMOLO" }, { TOK_SFX, "SFX" }, { TOK_AMP, "&" }, { TOK_LE, "<=" }, { TOK_GE, ">=" }, { TOK_NE, "<>" }, { 0, 0 }
 };
 
 bool is_keyword( const char* name, uint8_t* ptok ) {
