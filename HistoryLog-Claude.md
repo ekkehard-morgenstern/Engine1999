@@ -13,8 +13,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-- **Fix: comments stopped a program.** A line consisting only of a comment (`20 'text`) gave "Internal error (not at end of text)", and a comment after a colon (`PRINT 1: 'note`) gave "Statement expected". `comp_eat_stmtline()` (`bascomp.c`) now accepts a line without statement list (the `NT_STMTLINE` node then has no branch); `comp_eat_list()` doesn't complain when a `:` is followed by a comment; `cgen_from_stmtline()` (`codegen.c`) accepts 0 branches. `repltest1`: 6 new comment cases (141 total, all pass); `vmtest1`, `ansitest1` pass. Docs: `bascomp.ebnf` (stmt-line), `SESSION.md`.
-- `HistoryLog-Claude.md`: logged `b1eb173`; `SESSION.md`: latest commit line fixed.
+(none)
 
 ## Log
 
@@ -297,3 +296,8 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 ### b1eb173 — 2026-10-28 23:54:25 +0100 — "Claude bookkeeping files updated"
 2 files, +5/-1.
 - `HistoryLog-Claude.md`: logged `0acbb1f`. `SESSION.md`: latest commit line. No source changes.
+
+### 6d12ea9 — 2026-10-29 01:31:54 +0100 — "comment bug fixed by Claude Code"
+6 files, +29/-14.
+- **Fix: comments stopped a program.** A line consisting only of a comment (`20 'text`) gave "Internal error (not at end of text)", and a comment after a colon (`PRINT 1: 'note`) gave "Statement expected". `comp_eat_stmtline()` (`bascomp.c`) now accepts a line without statement list (the `NT_STMTLINE` node then has no branch); `comp_eat_list()` doesn't complain when a `:` is followed by a comment; `cgen_from_stmtline()` (`codegen.c`) accepts 0 branches. `repltest1`: 6 new comment cases (141 total, all pass); `vmtest1`, `ansitest1` pass. Docs: `bascomp.ebnf` (stmt-line), `SESSION.md`.
+- Checked on the real screen by the user (works). Also: logged `b1eb173`; `SESSION.md`: latest commit line fixed.
