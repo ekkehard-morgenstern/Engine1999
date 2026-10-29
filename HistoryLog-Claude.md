@@ -13,13 +13,9 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-### Full-screen editor for `EDIT` (written 2026-10-29)
-- `textscreen.[ch]`: state moved into a per-screen struct; two screens (`txtscr_select()`), per-screen viewport (`txtscr_setviewport/resetviewport/getviewport`; coordinates, cursor, wrapping and scrolling relative to it), `txtscr_clear/setblank/getcell`. Fixed along the way: cursor row was `uint8_t` (backspace at the top never scrolled), `txtscr_write` accepted `y == height`.
-- `fulledit.[ch]` (new): the editor on screen 1 (title bar, line number pane, text pane with highlighted lines, scroll bar, help bar, one viewport each); in-place editing of the current line, new-line insertion with number entry in the number pane / automatic number, CTRL+Y, ESC, remembered position.
-- `sdlscreen.[ch]`: shared `sdlscr_editkey()`, `sdlscr_editmode_begin/end()`, `sdlscr_textchanged()`, public `sdlscr_deleteinputmsg()`; key messages carry `mods`; `sdlscr_lineedit()` uses the viewport size.
-- `basrepl.[ch]`: `repl_t.fulledit` (EDIT without a target sets it instead of "Not implemented yet"), `repl_t.filename` (set by LOAD/SAVE, cleared by NEW). `engine1999.c` opens the editor after `repl_enter()`.
-- New `txttest1.c` (40 checks), 7 new `repltest1` cases (2 EDIT cases changed); makefile (`fulledit.o`, `txttest1`), `.gitignore`, `CLAUDE.md`, `SESSION.md`, `docs/` (display-engine, basic-language, build-and-test, roadmap).
-- Tests: `vmtest1` 385/385, `repltest1` 148/148, `ansitest1` 0 failures, `txttest1` 40/40; `make` clean with `-Wall -Werror`. The editor was checked on the real screen under Xvfb with XTest key injection.
+### Full-screen editor: cursor keys during an insertion (2026-10-29)
+- `fulledit.c`: UP/DOWN/PGUP/PGDN/CTRL+HOME/CTRL+END were ignored while a new line was being inserted. They now first end the insertion like RETURN (`ed_endins()`: the new line is entered, an empty one or one whose number isn't complete is dropped; if the REPL refuses it the insertion goes on with the message), then move. `docs/display-engine.md`, `SESSION.md` updated.
+- Tests: `make` clean; checked on the real screen (below).
 
 ## Log
 
@@ -307,3 +303,16 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 6 files, +29/-14.
 - **Fix: comments stopped a program.** A line consisting only of a comment (`20 'text`) gave "Internal error (not at end of text)", and a comment after a colon (`PRINT 1: 'note`) gave "Statement expected". `comp_eat_stmtline()` (`bascomp.c`) now accepts a line without statement list (the `NT_STMTLINE` node then has no branch); `comp_eat_list()` doesn't complain when a `:` is followed by a comment; `cgen_from_stmtline()` (`codegen.c`) accepts 0 branches. `repltest1`: 6 new comment cases (141 total, all pass); `vmtest1`, `ansitest1` pass. Docs: `bascomp.ebnf` (stmt-line), `SESSION.md`.
 - Checked on the real screen by the user (works). Also: logged `b1eb173`; `SESSION.md`: latest commit line fixed.
+
+### c0f5592 — 2026-10-29 01:32:58 +0100 — "Claude bookkeeping files updated"
+2 files, +9/-6.
+- `HistoryLog-Claude.md`: logged `6d12ea9`. `SESSION.md`: latest commit line. No source changes.
+
+### 33c03a1 — 2026-10-29 20:15:29 +0100 — "Full-screen text editor (created by Claude Code)"
+20 files, +1468/-141.
+- `textscreen.[ch]`: state moved into a per-screen struct; two screens (`txtscr_select()`), per-screen viewport (`txtscr_setviewport/resetviewport/getviewport`; coordinates, cursor, wrapping and scrolling relative to it), `txtscr_clear/setblank/getcell`. Fixed along the way: cursor row was `uint8_t` (backspace at the top never scrolled), `txtscr_write` accepted `y == height`.
+- `fulledit.[ch]` (new): the editor on screen 1 (title bar, line number pane, text pane with highlighted lines, scroll bar, help bar, one viewport each); in-place editing of the current line, new-line insertion with number entry in the number pane / automatic number, CTRL+Y, ESC, remembered position.
+- `sdlscreen.[ch]`: shared `sdlscr_editkey()`, `sdlscr_editmode_begin/end()`, `sdlscr_textchanged()`, public `sdlscr_deleteinputmsg()`; key messages carry `mods`; `sdlscr_lineedit()` uses the viewport size.
+- `basrepl.[ch]`: `repl_t.fulledit` (EDIT without a target sets it instead of "Not implemented yet"), `repl_t.filename` (set by LOAD/SAVE, cleared by NEW). `engine1999.c` opens the editor after `repl_enter()`.
+- New `txttest1.c` (40 checks), 7 new `repltest1` cases (2 EDIT cases changed); makefile (`fulledit.o`, `txttest1`), `.gitignore`, `CLAUDE.md`, `SESSION.md`, `docs/` (display-engine, basic-language, build-and-test, roadmap).
+- Tests: `vmtest1` 385/385, `repltest1` 148/148, `ansitest1` 0 failures, `txttest1` 40/40; `make` clean with `-Wall -Werror`. The editor was checked on the real screen under Xvfb with XTest key injection.

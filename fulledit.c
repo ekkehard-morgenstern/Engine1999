@@ -620,6 +620,20 @@ static void ed_finishins( ed_t* e, bool more ) {
     }
 }
 
+// leaves the insertion for a cursor movement, as if RETURN had been pressed: the new line is entered (an empty one is
+// dropped, as is one whose number hasn't been completed); false if the REPL refused it, the insertion goes on then
+static bool ed_endins( ed_t* e ) {
+    if ( !e->ins ) {
+        return true;
+    }
+    if ( e->numphase ) {
+        ed_cancelins( e );
+    } else {
+        ed_finishins( e, false );
+    }
+    return !e->ins;
+}
+
 static void ed_deleteline( ed_t* e ) {
     if ( e->ins ) {
         ed_cancelins( e );
@@ -732,26 +746,26 @@ static void ed_key( ed_t* e, const sdlscr_inputmsg_t* msg ) {
             }
             break;
         case SDLK_UP:
-            if ( !e->ins ) ed_move( e, -1 );
+            if ( ed_endins( e ) ) ed_move( e, -1 );
             return;
         case SDLK_DOWN:
-            if ( !e->ins ) ed_move( e, 1 );
+            if ( ed_endins( e ) ) ed_move( e, 1 );
             return;
         case SDLK_PAGEUP:
-            if ( !e->ins ) ed_move( e, -( ED_PANE_H - 1 ) );
+            if ( ed_endins( e ) ) ed_move( e, -( ED_PANE_H - 1 ) );
             return;
         case SDLK_PAGEDOWN:
-            if ( !e->ins ) ed_move( e, ED_PANE_H - 1 );
+            if ( ed_endins( e ) ) ed_move( e, ED_PANE_H - 1 );
             return;
         case SDLK_HOME:
             if ( ctrl ) {
-                if ( !e->ins ) ed_moveto( e, e->pgm->first );
+                if ( ed_endins( e ) ) ed_moveto( e, e->pgm->first );
                 return;
             }
             break;
         case SDLK_END:
             if ( ctrl ) {
-                if ( !e->ins ) ed_moveto( e, e->pgm->last );
+                if ( ed_endins( e ) ) ed_moveto( e, e->pgm->last );
                 return;
             }
             break;
