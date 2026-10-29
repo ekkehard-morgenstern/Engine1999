@@ -13,9 +13,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-### Full-screen editor with an empty program (2026-10-29)
-- `fulledit.c`: with no program lines the editor now opens straight in line number entry (`ed_idle()`, called on opening and after every key), stays there after an empty/cancelled new line, and ESC in the number phase leaves the editor (before: ESC cancelled the insertion and left a state where typed text was ignored). Same after deleting the last line.
-- `docs/display-engine.md`, `SESSION.md` updated. Tests: vmtest1, repltest1, txttest1, asmtest1, ansitest1 pass; checked on the real screen under Xvfb + XTest (open, empty RETURN, entering two lines, ESC, NEW then EDIT).
+(none)
 
 ## Log
 
@@ -339,3 +337,13 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 - **`monitor.c`**: commands `g` (continue a suspended run or start one), `s [a]`, `t [n]`, `b [a]`, `k a|*`, `i`; markers `>` (pc) and `*` (breakpoint) in the disassembly, `pc $…` in the title bar, register line (`pc line ds rs top`) and next instruction after a stop; breakpoints are cleared by `c`; help bar and help text updated.
 - Tests: `repltest1` +12 cases (163): breakpoints, leaving a breakpoint, single-step through a whole program, BRK with and without the debugger, refused start address. `vmtest1` 388/388, `asmtest1`, `txttest1`, `ansitest1` unchanged and passing. Checked on the real screen under Xvfb with XTest key injection.
 - Docs: `vm.h` header, `monitor.h`, `docs/display-engine.md`, `docs/compiler-and-vm.md`, `docs/roadmap.md` (BRK ticked, monitor item shortened), `SESSION.md`, `CLAUDE.md`.
+
+### 5bbf687 — 2026-10-29 21:15:22 +0100 — "Claude state file update"
+2 files, +11/-8.
+- Bookkeeping: `HistoryLog-Claude.md` (entry for `a9a496a` moved into the log) and `SESSION.md`. No source changes.
+
+### f509f04 — 2026-10-29 21:39:22 +0100 — "EDIT on empty program fixed by Claude Code"
+5 files, +18/-7.
+- **`fulledit.c`**: with no program lines the full-screen editor opens straight in line number entry (`ed_idle()`, called on opening and after every key), stays there after an empty or cancelled new line (and after the last line was deleted), and ESC in the number phase leaves the editor. Before, ESC cancelled the insertion and left a state with no current line where typed text was ignored.
+- `docs/display-engine.md`, `SESSION.md` updated. Tests: vmtest1, repltest1, txttest1, asmtest1, ansitest1 pass; checked on the real screen under Xvfb + XTest.
+- The user's commit also contained `residue/foo3.bas` (a binary file from the residue folder, not Claude's work).
