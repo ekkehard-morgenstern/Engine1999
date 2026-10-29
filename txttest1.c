@@ -137,11 +137,25 @@ static void test_clear_blank( void ) {
     check( TXTSCR_CELL_BG( txtscr_getcell( 3, 0 ) ) == 9, "scrolling fills with the blank colors" );
 }
 
+static void test_colors( void ) {
+    txtscr_init();
+    int bg, fg;
+    txtscr_getcolors( &bg, &fg );
+    check( bg == TXTSCR_BGCOL && fg == TXTSCR_FGCOL, "default colors" );
+    txtscr_select( 2 );
+    txtscr_setcolors( 7, 9 );
+    txtscr_write( 0, 0, -1, -1, "x", 1 );
+    check( TXTSCR_CELL_BG( txtscr_getcell( 0, 0 ) ) == 7 && TXTSCR_CELL_FG( txtscr_getcell( 0, 0 ) ) == 9, "write uses the screen's colors" );
+    txtscr_select( 0 );
+    txtscr_getcolors( &bg, &fg );
+    check( bg == TXTSCR_BGCOL && fg == TXTSCR_FGCOL, "colors belong to their screen" );
+}
+
 static void test_screens( void ) {
     txtscr_init();
     txtscr_print( 0, 0, -1, -1, "basic" );
     check( txtscr_selected() == 0, "screen 0 is selected first" );
-    check( !txtscr_select( 2 ) && !txtscr_select( -1 ), "no such screen" );
+    check( !txtscr_select( TXTSCR_NSCREENS ) && !txtscr_select( -1 ), "no such screen" );
     check( txtscr_select( 1 ), "select screen 1" );
     check( TXTSCR_CELL_CHR( txtscr_getcell( 0, 0 ) ) == ' ', "screen 1 starts empty" );
     txtscr_setviewport( 5, 5, 10, 3 );
@@ -192,6 +206,7 @@ int main( void ) {
     test_scroll();
     test_clear_blank();
     test_screens();
+    test_colors();
     test_render();
     printf( "%d of %d checks passed\n", total - failures, total );
     return failures;

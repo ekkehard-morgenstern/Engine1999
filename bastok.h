@@ -195,6 +195,7 @@
 #define TOK_LEN         UINT8_C(144)        // LEN function
 #define TOK_AGAIN       UINT8_C(145)        // AGAIN keyword
 #define TOK_CHR         UINT8_C(146)        // CHR keyword
+#define TOK_MONITOR     UINT8_C(147)        // MONITOR keyword
 #define TOK_NONE        UINT8_C(255)        // no token (!)
 
 // -- buffers ---------------------------------------------------------------

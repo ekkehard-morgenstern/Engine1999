@@ -296,6 +296,9 @@ static const testcase_t cases[] = {
     { "EDIT label",             "EDIT START",                                      "<request EDIT \"START\" -1>\n" },
     { "EDIT without target",    "EDIT",                                            "<request EDIT \"\" -1>\n" },
     { "EDIT ends the run",      "PRINT 1:EDIT 20:PRINT 2",                         "1\n<request EDIT \"\" 20>\n" },
+    { "MONITOR",                "MONITOR",                                         "<request MONITOR>\n" },
+    { "MONITOR ends the run",   "PRINT 1:MONITOR:PRINT 2",                         "1\n<request MONITOR>\n" },
+    { "MONITOR lower case",     "monitor",                                         "<request MONITOR>\n" },
     { "EDIT bad line number",   "EDIT 1000000",                                    "? Invalid line number\n" },
     { "NEW",                    "NEW",                                             "<request NEW>\n" },
     { "NEW ends the run",       "PRINT 1:NEW:PRINT 2",                             "1\n<request NEW>\n" },
@@ -630,6 +633,8 @@ static bool compile_and_run( void ) {
             snprintf( text, sizeof(text), "<request LOAD %s>\n", vm.reqname );
         } else if ( vm.request == VMREQ_NEW ) {
             snprintf( text, sizeof(text), "<request NEW>\n" );
+        } else if ( vm.request == VMREQ_MONITOR ) {
+            snprintf( text, sizeof(text), "<request MONITOR>\n" );
         } else if ( vm.request == VMREQ_EDIT ) {
             snprintf( text, sizeof(text), "<request EDIT \"%s\" %d>\n", vm.reqname, (int) vm.reqline );
         } else {

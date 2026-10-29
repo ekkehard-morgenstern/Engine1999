@@ -281,7 +281,7 @@ bool cgen_push_number( codegen_t* cgen, compiler_t* comp, double value ) {
     return true;
 }
 
-static const char* opcode_to_string( uint16_t opcode ) {
+const char* cgen_opcode_name( uint16_t opcode ) {
     switch ( opcode ) {
         case INS_BRK:       return "BRK";
         case INS_NOP:       return "NOP";
@@ -385,6 +385,7 @@ static const char* opcode_to_string( uint16_t opcode ) {
         case INS_DELE:      return "DELE";
         case INS_RENM:      return "RENM";
         case INS_EDIT:      return "EDIT";
+        case INS_MON:       return "MON";
         default:            break;
     }
     return "???";
@@ -434,7 +435,7 @@ void cgen_disasm_ins( const uint8_t* area, uint32_t* poffs, char linebuf[96] ) {
     if ( ins & INSF_E ) {
         opcode = ( opcode << UINT8_C(8) ) | ext;
     }
-    const char* opstr = opcode_to_string( opcode );
+    const char* opstr = cgen_opcode_name( opcode );
     const char* option = "  ";
     if ( cgen_has_cd( opcode ) ) {
         option = code ? ".C" : ".D";
@@ -956,6 +957,10 @@ bool cgen_gen_edit( codegen_t* cgen ) {
 
 bool cgen_gen_list( codegen_t* cgen ) {
     return cgen_gen_ins12( cgen, INS_LIST, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_mon( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_MON, false, false, UINT16_C(0) );
 }
 
 bool cgen_gen_new( codegen_t* cgen ) {
@@ -2810,6 +2815,7 @@ bool cgen_from_stmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         case NT_DELETESTMT: return cgen_from_deletestmt( cgen, comp, node );
         case NT_RENUMSTMT:  return cgen_from_renumstmt( cgen, comp, node );
         case NT_EDITSTMT:   return cgen_from_editstmt( cgen, comp, node );
+        case NT_MONITORSTMT: return cgen_from_monitorstmt( cgen, comp, node );
         case NT_STMTLIST:   return cgen_from_stmtlist( cgen, comp, node );
         case NT_DIMSTMT:    return cgen_from_dimstmt( cgen, comp, node );
         case NT_ERASESTMT:  return cgen_from_erasestmt( cgen, comp, node );

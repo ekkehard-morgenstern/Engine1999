@@ -135,6 +135,19 @@ void txtscr_getviewport( int* outx, int* outy, int* outw, int* outh ) {
       *outx = cur->vx; *outy = cur->vy; *outw = cur->vw; *outh = cur->vh;
 }
 
+void txtscr_setcolors( int bg, int fg ) {
+      if ( bg >= 0 && bg <= 255 ) {
+            cur->paper = bg;
+      }
+      if ( fg >= 0 && fg <= 255 ) {
+            cur->pen = fg;
+      }
+}
+
+void txtscr_getcolors( int* outbg, int* outfg ) {
+      *outbg = cur->paper; *outfg = cur->pen;
+}
+
 void txtscr_setblank( int bg, int fg ) {
       if ( bg >= 0 && bg <= 255 ) {
             cur->blankbg = bg;

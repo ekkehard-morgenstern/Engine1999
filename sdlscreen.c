@@ -412,19 +412,23 @@ void sdlscr_puts( const char* text ) {
 
 // text with ANSI escape sequences (SGR colors only, see ansi.h). No locking, like the other text screen functions: the
 // screen thread may render while this writes, and the text screen tolerates that; rendering must never block.
-static ansi_t sdlscr_ansi;
-static bool   sdlscr_ansiok = false;
+// one decoder per text screen: the default colors and the colors set by a sequence belong to the screen
+static ansi_t sdlscr_ansi[TXTSCR_NSCREENS];
+static bool   sdlscr_ansiok[TXTSCR_NSCREENS];
 
 static void sdlscr_ansi_emit( void* usrdata, int bg, int fg, const char* text ) {
     sdlscr_printf( -1, -1, bg, fg, "%s", text );
 }
 
 void sdlscr_ansi_puts( const char* text ) {
-    if ( !sdlscr_ansiok ) {
-        ansi_init( &sdlscr_ansi, TXTSCR_FGCOL, TXTSCR_BGCOL );
-        sdlscr_ansiok = true;
+    int n = txtscr_selected();
+    if ( !sdlscr_ansiok[n] ) {
+        int bg = TXTSCR_BGCOL, fg = TXTSCR_FGCOL;
+        txtscr_getcolors( &bg, &fg );
+        ansi_init( &sdlscr_ansi[n], fg, bg );
+        sdlscr_ansiok[n] = true;
     }
-    ansi_feed( &sdlscr_ansi, text, sdlscr_ansi_emit, 0 );
+    ansi_feed( &sdlscr_ansi[n], text, sdlscr_ansi_emit, 0 );
 }
 
 void sdlscr_ansi_printf( const char* fmt, ... ) {

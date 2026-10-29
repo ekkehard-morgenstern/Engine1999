@@ -96,6 +96,8 @@ typedef struct _repl_t {
     // EDIT without a target asks the host for the full-screen editor: the REPL sets this flag and returns; the host
     // checks it after repl_enter() (not inside a callback: the editor enters lines itself), clears it and opens the editor
     bool        fulledit;
+    // MONITOR asks the host for the machine monitor the same way (the run ends, the host checks the flag after repl_enter())
+    bool        monitor;
     char*       filename;           // name of the last file loaded or saved (malloc'ed), 0 = none or NEW; for the editor's title
 } repl_t;
 
@@ -106,6 +108,8 @@ bool repl_enter( repl_t* repl, const char* text );  // one line of input; false 
 bool repl_run( repl_t* repl );              // RUN (from the beginning)
 void repl_new( repl_t* repl );              // NEW
 void repl_list( repl_t* repl, uint32_t first, uint32_t last );  // LIST (LINENO_NONE = unbounded)
+bool repl_compile( repl_t* repl );          // compiles the stored program without running it (variables are cleared); for the monitor
+bool repl_go( repl_t* repl, uint32_t addr );  // runs the code in the code segment from addr (monitor "g"); variables are kept
 bool repl_save_program( repl_t* repl, const char* filename, bool ascii );   // for the host's SAVE callback
 
 #endif

@@ -61,6 +61,7 @@ Policies chosen by this implementation (the instruction set does not define them
     - SHEX runs the command with popen() and returns its standard output without the trailing newlines (like a shell
       command substitution); the exit status is ignored; output longer than 65535 bytes is an error
     - DELETE and RENUM (DELE, RENM) call the host (deletelines / renumber callbacks) and end the run afterwards
+    - MON (MONITOR) leaves a request (VMREQ_MONITOR) and ends the run, like NEW
     - EDIT leaves a request, too (VMREQ_EDIT: the host lets the user edit a line and enters the result like a typed line)
     - NEW (like LOAD and RUN) leaves a request; CLR (CLEAR) is done by the VM itself (vmem_clear_vars)
     - LOAD and RUN ( RUNP ) can't be carried out by the VM: it doesn't own the program, and the program being run would be
@@ -97,6 +98,7 @@ Policies chosen by this implementation (the instruction set does not define them
 #define VMREQ_NEW           3       // delete the program and the variables; the run is not continued
 #define VMREQ_RUN           2       // clear the variables and run the program from reqname (label) / reqline, or the start
 #define VMREQ_EDIT          4       // let the user edit the line reqline / the line of the label reqname; the run is not continued
+#define VMREQ_MONITOR       5       // open the machine monitor; the run is not continued
 
 #define VM_PRINT_SEP_NONE   UINT16_C(0)
 #define VM_PRINT_SEP_SEMIC  UINT16_C(4)

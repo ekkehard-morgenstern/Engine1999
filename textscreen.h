@@ -35,7 +35,7 @@
 
 #define TXTSCR_WIDTH    80
 #define TXTSCR_HEIGHT   25
-#define TXTSCR_NSCREENS 2       // screen 0: BASIC, screen 1: full-screen editor
+#define TXTSCR_NSCREENS 3       // screen 0: BASIC, screen 1: full-screen editor, screen 2: machine monitor
 
 #define TXTSCR_FGCOL    1
 #define TXTSCR_BGCOL    0
@@ -73,6 +73,8 @@ int txtscr_selected( void );
 bool txtscr_setviewport( int x, int y, int w, int h );      // false if it doesn't lie on the screen
 void txtscr_resetviewport( void );
 void txtscr_getviewport( int* outx, int* outy, int* outw, int* outh );
+void txtscr_setcolors( int bg, int fg );    // paper and pen of the selected screen (what -1 means in txtscr_write/print)
+void txtscr_getcolors( int* outbg, int* outfg );
 void txtscr_setblank( int bg, int fg );     // colors scrolling and txtscr_clear() fill with (default: TXTSCR_BGCOL/FGCOL)
 textcell_t txtscr_getcell( int y, int x );  // relative to the viewport; 0 outside of it
 void txtscr_clear( void );                  // fills the viewport with blanks, cursor to its top left

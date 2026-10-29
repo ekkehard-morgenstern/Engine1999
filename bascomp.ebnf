@@ -232,7 +232,9 @@ renum-stmt := TOK_RENUM [ goto-target ] [ TOK_MINUS [ goto-target ] ] [ TOK_COMM
 -- EDIT n / EDIT label: a simple line editor for that line (see docs/basic-language.md); the edited line is then entered
 -- like a typed one. It ends the running program (like NEW). EDIT alone is not implemented yet.
 edit-stmt := TOK_EDIT [ goto-target ] .
-prog-stmt := load-stmt | run-stmt | list-stmt | new-stmt | clear-stmt | delete-stmt | renum-stmt | edit-stmt .
+-- MONITOR opens the machine monitor (text screen 2). It ends the running program (like NEW).
+monitor-stmt := TOK_MONITOR .
+prog-stmt := load-stmt | run-stmt | list-stmt | new-stmt | clear-stmt | delete-stmt | renum-stmt | edit-stmt | monitor-stmt .
 
 stmt := io-stmt | prog-stmt | assign-stmt | control-flow-stmt .
 stmt-list := stmt { TOK_COLON stmt } .

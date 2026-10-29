@@ -190,6 +190,17 @@ bool cgen_from_newstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     return cgen_gen_new( cgen ) || cgen_out_of_code_memory( comp );
 }
 
+bool cgen_from_monitorstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    // NT_MONITORSTMT  MONITOR statement (no data, no branches)
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->type != NT_MONITORSTMT ) {
+        return cgen_unexpected_node( comp );
+    }
+    return cgen_gen_mon( cgen ) || cgen_out_of_code_memory( comp );
+}
+
 bool cgen_from_clearstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     // NT_CLEARSTMT    CLEAR statement (no data, no branches)
     if ( node == NODE_NONE ) {

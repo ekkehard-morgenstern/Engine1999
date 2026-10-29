@@ -342,6 +342,8 @@ The 4096 extended instructions are as follows:
     0001 01000000       EDIT - edit a program line ( s n -- ) C=0 P=0
                             Asks the host to let the user edit the line given by a line number (n >= 0) or a label
                             (name s, if not empty); ( "" -1 ) = no target. Stores a request like RUNP and ends the run.
+    0001 01000001       MON  - open the machine monitor ( -- ) C=0 P=0
+                            Stores a request for the host (like NEW) and ends the run.
 
 */
 
@@ -458,5 +460,6 @@ The 4096 extended instructions are as follows:
 #define INS_DELE        UINT16_C(0X13E)
 #define INS_RENM        UINT16_C(0X13F)
 #define INS_EDIT        UINT16_C(0X140)
+#define INS_MON         UINT16_C(0X141)
 
 #endif

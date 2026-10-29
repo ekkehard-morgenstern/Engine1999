@@ -64,6 +64,8 @@ how a handler is named (line number / label / `FN`?); how they are cancelled (`O
 - [ ] Array parameters of user functions (`DEF FN A( B() )`) are parsed but not supported by the VM
 - [ ] Functions can't call themselves and must be defined before use in the text (design decision, revisit if recursion is wanted)
 
+- [ ] Machine monitor (`MONITOR`, first version): no single-step (`t`), breakpoints (`BRK` is not implemented in the VM), register/trace view or resumable `MONITOR` inside a program (it ends the run, like `EDIT`); the variables and the tokenized program text can't be inspected (only code, data and the two stacks); `a` has no labels or symbolic operands (variable names, line numbers); `e` takes hex bytes only (no strings); the monitor doesn't re-compile when the program changed (use `c`).
+
 ## 6. Remaining fixed limits
 
 (also in `docs/refactoring.md`)

@@ -815,7 +815,7 @@ static const struct {
     { TOK_EVERY, "EVERY" }, { TOK_ON, "ON" }, { TOK_OFF, "OFF" }, { TOK_SYMBOL, "SYMBOL" }, { TOK_FN, "FN" }, { TOK_LET, "LET" },
     { TOK_NOT, "NOT" }, { TOK_AND, "AND" }, { TOK_OR, "OR" }, { TOK_XOR, "XOR" }, { TOK_NAND, "NAND" }, { TOK_NOR, "NOR" },
     { TOK_XNOR, "XNOR" }, { TOK_LSHIFT, "LSHIFT" }, { TOK_RSHIFT, "RSHIFT" }, { TOK_DYNAMIC, "DYNAMIC" }, { TOK_ASSOC, "ASSOC" },
-    { TOK_LABEL, "LABEL" }, { TOK_AGAIN, "AGAIN" }, { TOK_CHR, "CHR" }, { TOK_AMP, "&" }, { TOK_LE, "<=" }, { TOK_GE, ">=" }, { TOK_NE, "<>" }, { 0, 0 }
+    { TOK_LABEL, "LABEL" }, { TOK_AGAIN, "AGAIN" }, { TOK_CHR, "CHR" }, { TOK_MONITOR, "MONITOR" }, { TOK_AMP, "&" }, { TOK_LE, "<=" }, { TOK_GE, ">=" }, { TOK_NE, "<>" }, { 0, 0 }
 };
 
 bool is_keyword( const char* name, uint8_t* ptok ) {
@@ -1000,7 +1000,7 @@ FAIL:
 static hlclass_t keyword_hlclass( uint8_t tok ) {
     switch ( tok ) {
         case TOK_LIST: case TOK_SAVE: case TOK_RUN: case TOK_AUTO: case TOK_RENUM: case TOK_DELETE: case TOK_MERGE:
-        case TOK_CHAIN: case TOK_FILES: case TOK_NEW: case TOK_CLEAR: case TOK_EDIT: case TOK_LOAD: case TOK_SHOW:
+        case TOK_CHAIN: case TOK_FILES: case TOK_NEW: case TOK_CLEAR: case TOK_EDIT: case TOK_MONITOR: case TOK_LOAD: case TOK_SHOW:
         case TOK_WARRANTY: case TOK_COPYING:
             return HL_COMMAND;
         case TOK_GOTO: case TOK_GOSUB: case TOK_GO: case TOK_TO: case TOK_SUB: case TOK_RETURN: case TOK_IF:

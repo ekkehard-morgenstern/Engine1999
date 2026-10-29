@@ -243,6 +243,24 @@ static bool repl_execute( repl_t* repl, bool fromstart, const char* label, int32
     return ok;
 }
 
+// compiles the stored program into the code segment (the previous code is discarded) without running it
+bool repl_compile( repl_t* repl ) {
+    repl_reset_runtime( repl );
+    repl_setup_compiler( repl );
+    if ( !begin_iterate_program( &repl->comp.iter, &repl->pgm ) ) {
+        repl_report( repl, "? Empty program" );
+        return false;
+    }
+    comp_set_tokens( &repl->comp, repl->comp.iter.tok, repl->comp.iter.hdr.length - LINEHDR_SIZE );
+    repl_setup_vm( repl );
+    bool ok = false;
+    if ( setjmp( repl->jmp ) == 0 ) {
+        run_compiler( &repl->comp );
+        ok = cgen_from_program( &repl->rt.codegen, &repl->comp );
+    }
+    return ok;
+}
+
 // RUN [target]: starts the stored program with all variables cleared
 static bool repl_start_program( repl_t* repl, const char* label, int32_t line ) {
     repl_reset_runtime( repl );
@@ -429,6 +447,11 @@ static bool repl_finish( repl_t* repl, bool ok, bool direct ) {
             free( name );
             return ok;
         }
+        if ( kind == VMREQ_MONITOR ) {
+            repl->monitor = true;       // back to the host: nothing runs afterwards
+            free( name );
+            return true;
+        }
         if ( kind == VMREQ_NEW ) {
             repl_new( repl );       // back to the host: nothing runs afterwards
             free( name );
@@ -467,6 +490,22 @@ static bool repl_enter_pending( repl_t* repl, bool ok );
 bool repl_run( repl_t* repl ) {
     bool ok = repl_finish( repl, repl_start_program( repl, "", -1 ), false );
     return repl->pending != 0 ? repl_enter_pending( repl, ok ) : ok;     // a program that ended in EDIT
+}
+
+// runs the code that is in the code segment as it is (it may have been patched by the monitor), from addr; a run
+// that ends with a request (LOAD, RUN, NEW, EDIT, MONITOR) is carried on by repl_finish() as after RUN
+bool repl_go( repl_t* repl, uint32_t addr ) {
+    repl_setup_vm( repl );
+    bool ok = false;
+    if ( addr >= repl->rt.codegen.codesize ) {
+        repl_report( repl, "? Address out of range" );
+        return false;
+    }
+    if ( setjmp( repl->jmp ) == 0 ) {
+        ok = vm_run_at( &repl->vm, addr );
+    }
+    ok = repl_finish( repl, ok, false );
+    return repl->pending != 0 ? repl_enter_pending( repl, ok ) : ok;
 }
 
 void repl_new( repl_t* repl ) {

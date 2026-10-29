@@ -13,9 +13,14 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-### Full-screen editor: cursor keys during an insertion (2026-10-29)
-- `fulledit.c`: UP/DOWN/PGUP/PGDN/CTRL+HOME/CTRL+END were ignored while a new line was being inserted. They now first end the insertion like RETURN (`ed_endins()`: the new line is entered, an empty one or one whose number isn't complete is dropped; if the REPL refuses it the insertion goes on with the message), then move. `docs/display-engine.md`, `SESSION.md` updated.
-- Tests: `make` clean; checked on the real screen (below).
+### Machine monitor, `MONITOR` statement (written 2026-10-29)
+- **Language/VM**: keyword `MONITOR` (`TOK_MONITOR` 147, `bastok`), `NT_MONITORSTMT 0x64` (`nodetype`, `bascomp`, `bascomp.ebnf`), instruction `MON 0x141` (`instset.h`, `codegen`, `cgenprog.c`, `vm.c`), `VMREQ_MONITOR` (`vm.h`); `repl_t.monitor` flag set by `repl_finish()`.
+- **`basrepl.[ch]`**: `repl_compile()` (compile the stored program without running), `repl_go( addr )` (run the code segment as it is, then carry out requests).
+- **`vmasm.[ch]`** (new, no SDL): decoder, formatter and assembler for the VM's instruction set; `codegen.c`: `cgen_opcode_name()` / `cgen_has_cd()` are public now.
+- **`monitor.[ch]`** (new): the monitor on text screen 2; commands `? r m u/d a e f l c g q`; regions code, data, dstack, rstack; syntax-colored output; hex numbers by default.
+- **`textscreen`/`sdlscreen`**: `TXTSCR_NSCREENS` 3, `txtscr_setcolors/getcolors`; one ANSI decoder per text screen with the screen's own default colors (program output shows on the dark monitor screen); `engine1999.c` opens the monitor after `repl_enter()`.
+- Tests: new `asmtest1.c` (56 checks incl. a decode → format → assemble round trip over a compiled program); `vmtest1` +3 cases (388), `repltest1` +3 cases (151), `txttest1` +3 checks (43); makefile (`vmasm.o`, `monitor.o`, `asmtest1`), `.gitignore`, `CLAUDE.md`, `SESSION.md`, `docs/` (display-engine, basic-language, compiler-and-vm, build-and-test, roadmap). Checked on the real screen under Xvfb with XTest key injection.
+- Found while testing: scrolling filled with the title bar's colors until the output viewport restored its own blank colors (fixed before the commit).
 
 ## Log
 
@@ -316,3 +321,8 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 - `basrepl.[ch]`: `repl_t.fulledit` (EDIT without a target sets it instead of "Not implemented yet"), `repl_t.filename` (set by LOAD/SAVE, cleared by NEW). `engine1999.c` opens the editor after `repl_enter()`.
 - New `txttest1.c` (40 checks), 7 new `repltest1` cases (2 EDIT cases changed); makefile (`fulledit.o`, `txttest1`), `.gitignore`, `CLAUDE.md`, `SESSION.md`, `docs/` (display-engine, basic-language, build-and-test, roadmap).
 - Tests: `vmtest1` 385/385, `repltest1` 148/148, `ansitest1` 0 failures, `txttest1` 40/40; `make` clean with `-Wall -Werror`. The editor was checked on the real screen under Xvfb with XTest key injection.
+
+### 6b2d5ae — 2026-10-29 20:27:39 +0100 — "Full-screen editor fix, authored by Claude Code"
+5 files, +40/-17.
+- `fulledit.c`: UP/DOWN/PGUP/PGDN/CTRL+HOME/CTRL+END were ignored while a new line was being inserted. They now first end the insertion like RETURN (`ed_endins()`: the new line is entered, an empty one or one whose number isn't complete is dropped; if the REPL refuses it the insertion goes on with the message), then move. `docs/display-engine.md`, `SESSION.md` updated.
+- Tests: `make` clean, `repltest1` 148/148, `txttest1` 40/40; checked on the real screen under Xvfb (new line 25 entered by UP, cursor moved on).

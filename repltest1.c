@@ -517,14 +517,17 @@ static void run_edit_tests( size_t* pnum, size_t* pfailed ) {
 // -- full-screen editor request, file name -------------------------------------------------------
 
 static void run_fulledit_tests( size_t* pnum, size_t* pfailed ) {
-    static const struct { const char* name; const char* source; bool fulledit; const char* filename; } tests[] = {
-        { "EDIT without a target sets the full-screen editor flag", "EDIT",                         true,  0 },
-        { "EDIT with a target doesn't",            "10 PRINT 1\nEDIT 10",                         false, 0 },
-        { "EDIT in a program sets the flag",       "10 EDIT\n20 PRINT 1\nRUN",                    true,  0 },
-        { "no flag without EDIT",                  "10 PRINT 1\nRUN",                             false, 0 },
-        { "SAVE remembers the file name",          "10 PRINT 1\nSAVE \"" TESTFILE "\"",          false, TESTFILE },
-        { "LOAD remembers the file name",          "LOAD \"" TESTFILE "\"",                      false, TESTFILE },
-        { "NEW forgets the file name",             "LOAD \"" TESTFILE "\"\nNEW",                 false, 0 },
+    static const struct { const char* name; const char* source; bool fulledit; const char* filename; bool monitor; } tests[] = {
+        { "EDIT without a target sets the full-screen editor flag", "EDIT",                         true,  0, false },
+        { "MONITOR sets the monitor flag",         "MONITOR",                                      false, 0, true },
+        { "MONITOR in a program ends the run",     "10 MONITOR\n20 PRINT 1\nRUN",                  false, 0, true },
+        { "no monitor flag without MONITOR",       "10 PRINT 1\nRUN",                             false, 0, false },
+        { "EDIT with a target doesn't",            "10 PRINT 1\nEDIT 10",                         false, 0, false },
+        { "EDIT in a program sets the flag",       "10 EDIT\n20 PRINT 1\nRUN",                    true,  0, false },
+        { "no flag without EDIT",                  "10 PRINT 1\nRUN",                             false, 0, false },
+        { "SAVE remembers the file name",          "10 PRINT 1\nSAVE \"" TESTFILE "\"",          false, TESTFILE, false },
+        { "LOAD remembers the file name",          "LOAD \"" TESTFILE "\"",                      false, TESTFILE, false },
+        { "NEW forgets the file name",             "LOAD \"" TESTFILE "\"\nNEW",                 false, 0, false },
     };
     for ( size_t i=0; i < sizeof(tests) / sizeof(tests[0]); ++i ) {
         out_reset();
@@ -540,7 +543,7 @@ static void run_fulledit_tests( size_t* pnum, size_t* pfailed ) {
                 repl_enter( &repl, line );
             }
             free( src );
-            pass = repl.fulledit == tests[i].fulledit &&
+            pass = repl.fulledit == tests[i].fulledit && repl.monitor == tests[i].monitor &&
                 ( tests[i].filename == 0 ? repl.filename == 0 : repl.filename != 0 && strcmp( repl.filename, tests[i].filename ) == 0 );
             cleanup_repl( &repl );
         }
