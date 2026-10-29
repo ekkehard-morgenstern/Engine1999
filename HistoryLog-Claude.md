@@ -13,10 +13,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-### IF THEN GOSUB colon fix (2026-10-30)
-- **`bascomp.c`** (`comp_eat_singlelineifstmt`): `IF c THEN GOSUB 100 : PRINT "x"` (also `THEN 100`, `IF c GOTO 100`) kept only the jump in the IF; the statements after the colon ran whether or not the condition was true. Now a colon after the jump target turns the jump into a `GOTO`/`GOSUB` statement and the rest of the line becomes the rest of the THEN statement list (ELSE then takes a statement list); without a colon the grammar is unchanged. `bascomp.ebnf` updated.
-- `demos/sfx.bas` back to the natural form `IF K$="0" THEN GOSUB 500:GOTO 180`; `docs/roadmap.md` item removed.
-- **Tests**: `vmtest1` 490 (+13: false/true for GOSUB, GOTO, `THEN line`, `IF … GOSUB` without THEN, several statements, ELSE, UNLESS, comment after the colon, unchanged forms), `repltest1` 181 (+1: RENUM adjusts such a jump); all other tests pass; `sfx.bas` plays through the REPL harness.
+(none)
 
 ## Log
 
@@ -392,3 +389,9 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 - **Demos**: `sfx.bas`, `ode.bas`, `prelude.bas` use `WAIT` instead of busy loops.
 - **Tests**: `vmtest1` 477 (+8 WAIT), `repltest1` 180 (+1: Break ends a WAIT), `asmtest1` 61; the editor highlighting and the monitor were checked on the real engine (Xvfb) after the rebuild.
 - **Docs**: `basic-language.md`, `compiler-and-vm.md`, `sound.md`, `roadmap.md` (comments are upper-cased by the tokenizer; no `FRAME`), `demos/README.md`, `SESSION.md`.
+
+### b57d615 — 2026-10-29 23:39:02 +0100 — "IF ... THEN GOSUB ... STMT fixed by Claude Code"
+8 files, +68/-16.
+- **`bascomp.c`** (`comp_eat_singlelineifstmt`): `IF c THEN GOSUB 100 : PRINT "x"` (also `THEN 100`, `IF c GOTO 100`) kept only the jump in the IF; the statements after the colon ran whether or not the condition was true. Now a colon after the jump target turns the jump into a `GOTO`/`GOSUB` statement and the rest of the line becomes the rest of the THEN statement list (ELSE then takes a statement list); without a colon the grammar is unchanged. `bascomp.ebnf` updated.
+- `demos/sfx.bas` back to the natural form `IF K$="0" THEN GOSUB 500:GOTO 180`; `docs/roadmap.md` item removed.
+- **Tests**: `vmtest1` 490 (+13: false/true for GOSUB, GOTO, `THEN line`, `IF … GOSUB` without THEN, several statements, ELSE, UNLESS, comment after the colon, unchanged forms), `repltest1` 181 (+1: RENUM adjusts such a jump); all other tests pass; `sfx.bas` plays through the REPL harness.
