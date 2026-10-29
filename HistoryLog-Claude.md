@@ -13,7 +13,12 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-(none)
+### Sound rework: audio fixes, synth core, time-ordered events (2026-10-29)
+- **`synth.[ch]`** (new, no SDL): 8-channel synthesizer — phase-accumulator oscillators (sine, square, triangle, noise), 2.5 ms gain slew, scaling mixer, per-channel time cursors (`synth_slot`, `synth_sync`), time-sorted stable event queue (`synth_schedule/runevents/nextevent/silence`), note table by formula (0..71).
+- **`sdlaudio.[ch]`** rewritten on top of it: one mutex, worker thread applying due events (≥1 kHz), callback renders; new API `sdlaud_setwave/setbpm/syncchans/silenceall`. Fixed: init hang when the device can't be opened (worker raises INITDONE on failure), NULL `memset( userdata )` in the callback (now `stream`), pitch error up to 2.8 % on high notes, head-of-line blocking between channels, stale metronome making later sequences fire at once. Clicks removed by the gain slew.
+- **`sdlmain.c`**: a failed audio init is a warning, the engine runs without sound (ERR4 path gone).
+- Tests: new `synthtest1.c` (77 checks, valgrind clean); vmtest1, repltest1, txttest1, asmtest1, ansitest1 pass. Real-time check with SDL's disk audio driver: pitches exact, a rest-then-note on channel 0 queued before an immediate note on channel 1 plays in the right order, a 3-note sequence on channel 2 at the right times, open failure returns instead of hanging.
+- Docs: new `docs/sound.md` (architecture, API, proposal for `SOUND`/`WAVE`/`TEMPO`/`PLAY`, FM instrument plans), `docs/README.md`, `docs/display-engine.md`, `docs/roadmap.md` (section 2b), `CLAUDE.md`, `SESSION.md`; `makefile` (`synth.o`, `synthtest1`), `.gitignore`.
 
 ## Log
 

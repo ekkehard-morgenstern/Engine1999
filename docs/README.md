@@ -7,6 +7,7 @@ The display side is working; the BASIC side (tokenizer → compiler → code gen
 | Document | Contents |
 |---|---|
 | [architecture.md](architecture.md) | Module map, data flow, how the pieces fit together |
+| [sound.md](sound.md) | Software synthesizer (`synth`, `sdlaudio`): channels, wave types, timed events, proposal for `SOUND`/`PLAY`, FM plans |
 | [display-engine.md](display-engine.md) | Layers, text/tile/sprite screens, SDL threading/event model, audio |
 | [basic-language.md](basic-language.md) | Tokenized line format, token set, literals, grammar summary |
 | [compiler-and-vm.md](compiler-and-vm.md) | Program store, syntax tree, node types, code generator, instruction set, variable memory |

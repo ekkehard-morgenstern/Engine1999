@@ -28,7 +28,7 @@ Design intent is in `concept.txt`; this summarizes it together with the public A
 | `tilescreen.c` | `tilescr_*`: tile map memory, scroll, render |
 | `sprscreen.c` | `sprscr_*`: sprite state, animation tables, periodic animation update, render |
 | `8x12font1.c` | Generated font data. Edit `8x12font1.txt` (format `!!8x12`, `#XX` char header, pixel rows) and regenerate with `fontcomp.pl` |
-| `sdlaudio.c` | `sdlaud_playnote/playfreq/stopchan` — software synthesizer (sine-wave generator, SDL audio device callback) |
+| `sdlaudio.c` | `sdlaud_playnote/playfreq/stopchan/setwave/setbpm/syncchans/silenceall` — SDL audio device, worker thread that applies timed events; the synthesizer is `synth.[ch]` (no SDL). See [sound.md](sound.md) |
 | `sdlevent.c` | Event-flag helper (`sdlev_raise/wait`) used between threads. Flags: `SDLEV_SCREENWORKERINITDONE`, `SDLEV_SCREENWORKERFINISHED`, `SDLEV_VBLANK`, `SDLEV_AUDIOWORKERINITDONE`, `SDLEV_AUDIOWORKERFINISHED`, `SDLEV_INPUT` |
 | `sdlutil.c` | Nanosecond time helpers |
 | `sdltypes.h`, `unxtypes.h` | Shared SDL/unix type includes |

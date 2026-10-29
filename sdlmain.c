@@ -51,15 +51,12 @@ void sdl_init( void ) {
         fprintf( stderr, "sdl_init(): failed to initialize screen\n" );
         goto ERR3;
     }
-    if ( !sdlaud_init() ) {
-        fprintf( stderr, "sdl_init(): failed to initialize audio\n" );
-        goto ERR4;
+    if ( !sdlaud_init() ) {     // no sound device: go on without sound (the sdlaud_* calls do nothing then)
+        fprintf( stderr, "sdl_init(): failed to initialize audio, running without sound\n" );
     }
     atexit( sdl_cleanup );
     return;
 
-// ERR4:   sdlaud_cleanup();
-ERR4:   sdlscr_cleanup();
 ERR3:   SDL_Quit();
 ERR2:   sdlev_cleanup();
 ERR1:   exit( EXIT_FAILURE );

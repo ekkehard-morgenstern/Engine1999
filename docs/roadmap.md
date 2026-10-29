@@ -29,6 +29,14 @@ and `MERGE` do with variables and line numbers; where files live (current direct
 - [ ] `PUT` — token exists, probably the counterpart of `GET` for channels/files: meaning to be defined
 - [ ] `OFF` — token exists; only meaningful together with the timer statements below (`ON … OFF`?)
 
+## 2b. Sound *(needs design: the `SOUND`/`PLAY` proposal in `docs/sound.md`)*
+
+The synthesizer works (`synth.[ch]`, `sdlaudio.[ch]`, tested by `synthtest1`); BASIC has no statements for it yet.
+
+- [ ] `SOUND`, `WAVE`, `TEMPO`, `PLAY` (+ `PLAYING()`/`sdlaud_busy()`): decide the syntax (proposal in `docs/sound.md`), then parser, codegen, VM instructions, host callbacks
+- [ ] Instruments / FM synthesis (operators, envelopes, `INSTRUMENT`), band-limited square/triangle, stereo, a voice allocator
+- [ ] Sample-accurate event times (now ≈1 ms), mixing events into the audio callback
+
 ## 3. Timers and `SYMBOL` *(planned by the project owner, all through host callbacks)*
 
 - [ ] `AFTER` — one-shot timer, like `setTimeout`
