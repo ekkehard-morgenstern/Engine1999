@@ -56,6 +56,7 @@ typedef struct _testcase_t {
 } testcase_t;
 
 static const testcase_t cases[] = {
+    { "RENUM adjusts a jump with colon statements", "10 A=0\n20 IF A THEN GOSUB 100:PRINT \"x\"\n100 PRINT \"s\":RETURN\nRENUM\nLIST", "10 A=0\n20 IF A THEN GOSUB 30:PRINT \"x\"\n30 PRINT \"s\":RETURN\n" },
     { "direct mode",            "PRINT 1+2",                                      "3\n" },
     { "SOUND without a sound output does nothing", "SOUND 1,440,1\nPRINT 1",     "1\n" },
     { "SFX persists between direct mode lines", "SFX 1,\"C\"\nSFX 1,1\nSFX 2,1",   "? Undefined effect\n" },

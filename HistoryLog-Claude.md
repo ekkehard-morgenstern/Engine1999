@@ -13,12 +13,10 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-### WAIT statement, makefile dependencies, demo fixes (2026-10-30)
-- **`WAIT n`**: new statement (token 160, `NT_WAITSTMT 0x66`, instruction `WAIT 0x144`; `bastok.[ch]`, `bascomp.[ch]` + `.ebnf`, `nodetype.[ch]`, `cgenprog.c`, `codegen.[ch]`, `instset.h`, `vm.c`): sleeps n/60 s without using the processor, Break works. Reason: the "engine" of `demos/sfx.bas` waited with `WHILE TI<T:WEND`, a busy loop (CPU at 100 % for 7 s).
-- **`makefile`**: dependency rules for `fulledit.o`, `monitor.o`, `vmasm.o` (they depended only on their `.c`): they were not rebuilt after `repl_t` / `vm_t` changed, so the full-screen editor read `hlstyle` at a stale offset (no syntax highlighting) and the monitor used a wrong layout.
-- **Demos**: `sfx.bas`, `ode.bas`, `prelude.bas` use `WAIT` instead of busy loops.
-- **Tests**: `vmtest1` 477 (+8 WAIT), `repltest1` 180 (+1: Break ends a WAIT), `asmtest1` 61; the editor highlighting and the monitor were checked on the real engine (Xvfb) after the rebuild.
-- **Docs**: `basic-language.md`, `compiler-and-vm.md`, `sound.md`, `roadmap.md` (comments are upper-cased by the tokenizer; no `FRAME`), `demos/README.md`, `SESSION.md`.
+### IF THEN GOSUB colon fix (2026-10-30)
+- **`bascomp.c`** (`comp_eat_singlelineifstmt`): `IF c THEN GOSUB 100 : PRINT "x"` (also `THEN 100`, `IF c GOTO 100`) kept only the jump in the IF; the statements after the colon ran whether or not the condition was true. Now a colon after the jump target turns the jump into a `GOTO`/`GOSUB` statement and the rest of the line becomes the rest of the THEN statement list (ELSE then takes a statement list); without a colon the grammar is unchanged. `bascomp.ebnf` updated.
+- `demos/sfx.bas` back to the natural form `IF K$="0" THEN GOSUB 500:GOTO 180`; `docs/roadmap.md` item removed.
+- **Tests**: `vmtest1` 490 (+13: false/true for GOSUB, GOTO, `THEN line`, `IF … GOSUB` without THEN, several statements, ELSE, UNLESS, comment after the colon, unchanged forms), `repltest1` 181 (+1: RENUM adjusts such a jump); all other tests pass; `sfx.bas` plays through the REPL harness.
 
 ## Log
 
@@ -386,3 +384,11 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 8 files, +104/-6.
 - **`demos/`** folder with `README.md`, `sfx.bas` (sound effect board, engine hum via `PITCH`/`VOLUME`), `ode.bas` (Ode to Joy), `prelude.bas` (Bach, Prelude in C, 8 bars); all free of license text; `CLAUDE.md` table. Found a language quirk: `IF c THEN GOSUB n:stmt` always runs `stmt` (roadmap).
 - Also: `demos/README.md` (what the demos are, no license text), the roadmap finding about `IF c THEN GOSUB n:stmt`, `CLAUDE.md` / `SESSION.md`.
+
+### b1737df — 2026-10-29 23:32:49 +0100 — "WAIT statement and makefile fix, created by Claude Code"
+26 files, +148/-19.
+- **`WAIT n`**: new statement (token 160, `NT_WAITSTMT 0x66`, instruction `WAIT 0x144`; `bastok.[ch]`, `bascomp.[ch]` + `.ebnf`, `nodetype.[ch]`, `cgenprog.c`, `codegen.[ch]`, `instset.h`, `vm.c`): sleeps n/60 s without using the processor, Break works. Reason: the "engine" of `demos/sfx.bas` waited with `WHILE TI<T:WEND`, a busy loop (CPU at 100 % for 7 s).
+- **`makefile`**: dependency rules for `fulledit.o`, `monitor.o`, `vmasm.o` (they depended only on their `.c`): they were not rebuilt after `repl_t` / `vm_t` changed, so the full-screen editor read `hlstyle` at a stale offset (no syntax highlighting) and the monitor used a wrong layout.
+- **Demos**: `sfx.bas`, `ode.bas`, `prelude.bas` use `WAIT` instead of busy loops.
+- **Tests**: `vmtest1` 477 (+8 WAIT), `repltest1` 180 (+1: Break ends a WAIT), `asmtest1` 61; the editor highlighting and the monitor were checked on the real engine (Xvfb) after the rebuild.
+- **Docs**: `basic-language.md`, `compiler-and-vm.md`, `sound.md`, `roadmap.md` (comments are upper-cased by the tokenizer; no `FRAME`), `demos/README.md`, `SESSION.md`.

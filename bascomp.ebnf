@@ -181,8 +181,11 @@ endunless-kw := TOK_END TOK_UNLESS | TOK_ENDUNLESS .
 
 then-kw := TOK_THEN [ goto-kw ] .
 
+-- IF c THEN GOSUB 100 : PRINT "x" [ ELSE ... ]: a colon after the jump target continues the THEN branch, which then is a statement
+-- list (GOSUB 100 : PRINT "x"); the rest of the line is not run when the condition is false.
 singleline-if-stmt := ( TOK_IF | TOK_UNLESS ) num-expr
            ( then-kw  goto-target [ TOK_ELSE goto-target ] |
+             then-kw  goto-target TOK_COLON stmt-list [ TOK_ELSE stmt-list ] |
              TOK_THEN stmt-list   [ TOK_ELSE stmt-list   ] ) .
 
 multiline-if-stmt := TOK_IF num-expr TOK_THEN TOK_EOL

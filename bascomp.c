@@ -3529,6 +3529,7 @@ UNEXP:      comp_error( comp, "TO or SUB expected after GO" );
 bool comp_eat_singlelineifstmt( compiler_t* comp, node_t** pnode ) {
     // singleline-if-stmt := ( TOK_IF | TOK_UNLESS ) num-expr
     //                       ( then-kw  goto-target [ TOK_ELSE goto-target ] |
+    //                         then-kw  goto-target TOK_COLON stmt-list [ TOK_ELSE stmt-list ] |
     //                         TOK_THEN stmt-list   [ TOK_ELSE stmt-list   ] ) .
     if ( comp->currtok != TOK_IF && comp->currtok != TOK_UNLESS ) {
         return false;
@@ -3555,7 +3556,35 @@ POP:    comp_pop_context( comp );
         // 1st variant, using one or two goto targets
         comp_commit_context( comp );
         comp_commit_context( comp );
-        if ( comp->currtok == TOK_ELSE && comp_fetchtok( comp ) ) {
+        if ( comp->currtok == TOK_COLON ) {
+            // IF c THEN GOSUB 100 : PRINT "x" -- the rest of the line belongs to the THEN branch (it is not run when the
+            // condition is false): the jump becomes the first statement of a statement list (the 2nd variant)
+            uint8_t jumptok = gotok == TOK_THEN ? TOK_GOTO : gotok;
+            node_t* jump = NODE_NONE;
+            if ( !comp_create_node( comp, &jump, NT_GOTOSTMT, UINT8_C(1), UINT16_C(1), &jumptok, target1 ) || jump == NODE_NONE ) {
+                out_of_memory( comp );
+                return false;
+            }
+            node_t* rest = NODE_NONE;
+            if ( !comp_fetchtok( comp ) ) {
+                return false;
+            }
+            if ( comp_eat_stmtlist( comp, &rest ) && rest != NODE_NONE ) {
+                if ( !comp_create_node( comp, &target1, NT_STMTLIST, UINT8_C(2), UINT16_C(0), 0, jump, rest ) || target1 == NODE_NONE ) {
+                    out_of_memory( comp );
+                    return false;
+                }
+            } else {
+                target1 = jump;     // nothing but a comment follows the colon
+            }
+            gotok = TOK_THEN;
+            if ( comp->currtok == TOK_ELSE && comp_fetchtok( comp ) ) {
+                if ( !comp_eat_stmtlist( comp, &target2 ) || target2 == NODE_NONE ) {
+                    comp_error( comp, "Statement list expected" );
+                    return false;
+                }
+            }
+        } else if ( comp->currtok == TOK_ELSE && comp_fetchtok( comp ) ) {
             // ELSE branch on 1st variant: Must also be GOTO target
             if ( !comp_eat_gototarget( comp, &target2 ) || target2 == NODE_NONE ) {
                 comp_error( comp, "Jump target expected" );
