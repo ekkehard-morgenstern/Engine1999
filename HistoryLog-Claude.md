@@ -13,7 +13,9 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-(none)
+### Full-screen editor with an empty program (2026-10-29)
+- `fulledit.c`: with no program lines the editor now opens straight in line number entry (`ed_idle()`, called on opening and after every key), stays there after an empty/cancelled new line, and ESC in the number phase leaves the editor (before: ESC cancelled the insertion and left a state where typed text was ignored). Same after deleting the last line.
+- `docs/display-engine.md`, `SESSION.md` updated. Tests: vmtest1, repltest1, txttest1, asmtest1, ansitest1 pass; checked on the real screen under Xvfb + XTest (open, empty RETURN, entering two lines, ESC, NEW then EDIT).
 
 ## Log
 

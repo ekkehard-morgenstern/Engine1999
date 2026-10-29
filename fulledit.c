@@ -716,9 +716,9 @@ static void ed_key( ed_t* e, const sdlscr_inputmsg_t* msg ) {
     }
     switch ( key ) {
         case SDLK_ESCAPE:
-            if ( e->ins && e->numphase ) {
+            if ( e->ins && e->numphase && e->cur != 0 ) {
                 ed_cancelins( e );
-            } else {
+            } else {        // without any line there is nothing to go back to
                 ed_leave( e );
             }
             return;
@@ -778,6 +778,13 @@ static void ed_key( ed_t* e, const sdlscr_inputmsg_t* msg ) {
     }
 }
 
+// without any line the editor is always inserting: the cursor waits in the line number pane
+static void ed_idle( ed_t* e ) {
+    if ( !e->quit && !e->ins && e->cur == 0 ) {
+        ed_beginins( e );
+    }
+}
+
 // -- the editor ------------------------------------------------------------------------
 
 void fulledit_run( repl_t* repl, void (*vblank_handler)( void* ), void* usrdata ) {
@@ -792,6 +799,7 @@ void fulledit_run( repl_t* repl, void (*vblank_handler)( void* ), void* usrdata 
         e->top = 0;
     }
     ed_loadcur( e, 0 );
+    ed_idle( e );
     int oldscreen = txtscr_selected();
     txtscr_select( ED_SCREEN );
     bool oldpoll = sdlscr_editmode_begin();
@@ -816,6 +824,7 @@ void fulledit_run( repl_t* repl, void (*vblank_handler)( void* ), void* usrdata 
                 e->msg[0] = '\0';
             }
             ed_key( e, msg );
+            ed_idle( e );
             sdlscr_deleteinputmsg( msg );
             any = true;
         }
