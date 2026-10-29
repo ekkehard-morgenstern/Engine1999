@@ -13,12 +13,12 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-### Sound rework: audio fixes, synth core, time-ordered events (2026-10-29)
-- **`synth.[ch]`** (new, no SDL): 8-channel synthesizer — phase-accumulator oscillators (sine, square, triangle, noise), 2.5 ms gain slew, scaling mixer, per-channel time cursors (`synth_slot`, `synth_sync`), time-sorted stable event queue (`synth_schedule/runevents/nextevent/silence`), note table by formula (0..71).
-- **`sdlaudio.[ch]`** rewritten on top of it: one mutex, worker thread applying due events (≥1 kHz), callback renders; new API `sdlaud_setwave/setbpm/syncchans/silenceall`. Fixed: init hang when the device can't be opened (worker raises INITDONE on failure), NULL `memset( userdata )` in the callback (now `stream`), pitch error up to 2.8 % on high notes, head-of-line blocking between channels, stale metronome making later sequences fire at once. Clicks removed by the gain slew.
-- **`sdlmain.c`**: a failed audio init is a warning, the engine runs without sound (ERR4 path gone).
-- Tests: new `synthtest1.c` (77 checks, valgrind clean); vmtest1, repltest1, txttest1, asmtest1, ansitest1 pass. Real-time check with SDL's disk audio driver: pitches exact, a rest-then-note on channel 0 queued before an immediate note on channel 1 plays in the right order, a 3-note sequence on channel 2 at the right times, open failure returns instead of hanging.
-- Docs: new `docs/sound.md` (architecture, API, proposal for `SOUND`/`WAVE`/`TEMPO`/`PLAY`, FM instrument plans), `docs/README.md`, `docs/display-engine.md`, `docs/roadmap.md` (section 2b), `CLAUDE.md`, `SESSION.md`; `makefile` (`synth.o`, `synthtest1`), `.gitignore`.
+### Sound statements in BASIC (2026-10-29)
+- **Language**: `SOUND ch,freq,beats[,vol]`, `SOUND OFF [ch]`, `SOUND SYNC ch,…`, `PLAY a$[,b$…]`, `WAVE ch,w`, `TEMPO bpm`, function `PLAYING(ch)`; tokens 148..153 (`SOUND PLAY WAVE TEMPO PLAYING SYNC`), `NT_SOUNDSTMT 0x65` + `SNDK_*`, instructions `SND 0x142` / `PLNG 0x143`; `bastok.[ch]`, `bascomp.[ch]` + `.ebnf`, `nodetype.[ch]`, `cgenprog.c`, `codegen.[ch]`, `instset.h`, `vm.[ch]` (`vm_sound_t`, `vm_t.sound`), `basrepl.[ch]` (`repl_t.sound`), `engine1999.c` (host sound callbacks). Volume 0..1, channels 1..8, `PLAY` returns at once.
+- **`mml.[ch]`** (new, no SDL): parser of the `PLAY` music strings (notes, rests, O < >, L, T, V, W, ML/MN/MS), all strings are parsed before anything is queued.
+- **Audio**: `sdlaud_busy/getbpm/silencechan`, `synth_busy/synth_silencechan`; the event queue appends in O(1) (tail pointer; was linear per event), limit 262144; the audio worker waits on a condition variable while the queue is empty (idle CPU 0.06 → 0.009 s per 3 s); `makefile` (`mml.o`).
+- **Tests**: `vmtest1` +43 cases (431; a sound output that logs the calls), `repltest1` +4 (167), `asmtest1` +3 (59, incl. the round trip over sound instructions), `synthtest1` +43 checks (120: `mml`, busy, silencechan, queue order/tail/speed); valgrind clean. Real-time check on the engine under Xvfb with SDL's disk audio driver (`PLAY` voices: exact pitches and timing).
+- **Docs**: `docs/sound.md` (statements, music strings, cost of many short notes, **proposal for sound effects**: immediate `PITCH`/`VOLUME`, glide, `ENVELOPE`, `VIBRATO`/`TREMOLO`, stored `SFX n, "..."`, instruments), `basic-language.md`, `compiler-and-vm.md`, `roadmap.md`, `bascomp.ebnf`, `CLAUDE.md`, `SESSION.md`. Owner decisions recorded: effects proposal approved, queued music keeps playing after a program ends.
 
 ## Log
 
@@ -352,3 +352,15 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 - **`fulledit.c`**: with no program lines the full-screen editor opens straight in line number entry (`ed_idle()`, called on opening and after every key), stays there after an empty or cancelled new line (and after the last line was deleted), and ESC in the number phase leaves the editor. Before, ESC cancelled the insertion and left a state with no current line where typed text was ignored.
 - `docs/display-engine.md`, `SESSION.md` updated. Tests: vmtest1, repltest1, txttest1, asmtest1, ansitest1 pass; checked on the real screen under Xvfb + XTest.
 - The user's commit also contained `residue/foo3.bas` (a binary file from the residue folder, not Claude's work).
+
+### ba63ecb — 2026-10-29 21:41:44 +0100 — "Claude Code state file update"
+2 files, +13/-5.
+- Bookkeeping: `HistoryLog-Claude.md` (entry for `f509f04` moved into the log) and `SESSION.md`. No source changes.
+
+### b6a3dce — 2026-10-29 22:16:20 +0100 — "Audio subsystem rewritten by Claude Code"
+15 files, +909/-586.
+- **`synth.[ch]`** (new, no SDL): 8-channel synthesizer — phase-accumulator oscillators (sine, square, triangle, noise), 2.5 ms gain slew, scaling mixer, per-channel time cursors (`synth_slot`, `synth_sync`), time-sorted stable event queue (`synth_schedule/runevents/nextevent/silence`), note table by formula (0..71).
+- **`sdlaudio.[ch]`** rewritten on top of it: one mutex, worker thread applying due events (≥1 kHz), callback renders; new API `sdlaud_setwave/setbpm/syncchans/silenceall`. Fixed: init hang when the device can't be opened (worker raises INITDONE on failure), NULL `memset( userdata )` in the callback (now `stream`), pitch error up to 2.8 % on high notes, head-of-line blocking between channels, stale metronome making later sequences fire at once. Clicks removed by the gain slew.
+- **`sdlmain.c`**: a failed audio init is a warning, the engine runs without sound (ERR4 path gone).
+- Tests: new `synthtest1.c` (77 checks, valgrind clean); vmtest1, repltest1, txttest1, asmtest1, ansitest1 pass. Real-time check with SDL's disk audio driver: pitches exact, a rest-then-note on channel 0 queued before an immediate note on channel 1 plays in the right order, a 3-note sequence on channel 2 at the right times, open failure returns instead of hanging.
+- Docs: new `docs/sound.md` (architecture, API, proposal for `SOUND`/`WAVE`/`TEMPO`/`PLAY`, FM instrument plans), `docs/README.md`, `docs/display-engine.md`, `docs/roadmap.md` (section 2b), `CLAUDE.md`, `SESSION.md`; `makefile` (`synth.o`, `synthtest1`), `.gitignore`.

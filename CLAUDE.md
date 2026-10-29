@@ -27,7 +27,7 @@ The program store, the syntax tree and the variables are heap structures now; th
 - `make` builds `sdltest1 sdltest2 engine1999 basictest1 testcomp1 basictest2 vmtest1 repltest1 ansitest1 txttest1 asmtest1 synthtest1` and `engine.lib` (static archive of all modules).
 - `make DEBUG=1` → `-g` instead of `-O3`. Flags: `-Wall -Werror -p -march=native` (warnings are errors; `-p` writes `gmon.out`).
 - Needs `gcc`, SDL2 (`-lSDL2 -lrt -lm`). Only `sdltest1` and `engine1999` link SDL2.
-- `vmtest1` (back end), `repltest1` (REPL), `ansitest1` (ANSI decoder) and `txttest1` (text screen viewports), `asmtest1` (VM assembler/decoder) and `synthtest1` (synthesizer core) are the automated regression tests (run `./vmtest1`, `./repltest1`, `./ansitest1`, `./txttest1`, `./asmtest1`, `./synthtest1`, exit status = failures); the other `*test*` programs are interactive/manual (see `docs/build-and-test.md`).
+- `vmtest1` (back end), `repltest1` (REPL), `ansitest1` (ANSI decoder) and `txttest1` (text screen viewports), `asmtest1` (VM assembler/decoder) and `synthtest1` (synthesizer core and music string parser) are the automated regression tests (run `./vmtest1`, `./repltest1`, `./ansitest1`, `./txttest1`, `./asmtest1`, `./synthtest1`, exit status = failures); the other `*test*` programs are interactive/manual (see `docs/build-and-test.md`).
 - The makefile has a stale `8x12font.o` rule (file is `8x12font1.c`) and every object depends on *all* headers.
 - Build artifacts (`*.o`, binaries, `engine.lib`, `gmon.out`, `all`) are git-ignored but present in the working tree.
 
@@ -45,7 +45,7 @@ The program store, the syntax tree and the variables are heap structures now; th
 
 | Area | Files |
 |---|---|
-| SDL display/audio engine | `sdlmain, sdlscreen, sdllayer, textscreen (three screens + viewports), tilescreen, sprscreen, sdlaudio (audio device + timed events), sdlevent, sdlutil, 8x12font1.c`; `synth.[ch]`: synthesizer core (oscillators, mixer, event queue, no SDL; `docs/sound.md`); `ansi.[ch]`: ANSI SGR decoder (colors only) behind `sdlscr_ansi_puts/printf()`, no SDL dependency |
+| SDL display/audio engine | `sdlmain, sdlscreen, sdllayer, textscreen (three screens + viewports), tilescreen, sprscreen, sdlaudio (audio device + timed events), sdlevent, sdlutil, 8x12font1.c`; `synth.[ch]`: synthesizer core (oscillators, mixer, event queue, no SDL; `docs/sound.md`), `mml.[ch]`: parser of the `PLAY` music strings; `ansi.[ch]`: ANSI SGR decoder (colors only) behind `sdlscr_ansi_puts/printf()`, no SDL dependency |
 | BASIC tokenizer | `bastok.[ch]` (token IDs, tokenize/detokenize, literal codecs) |
 | Program store | `baslin.[ch]` (`line_t` nodes, encoded `linehdr_t`), `baspgm.[ch]` (pointer-linked list of lines, insert/replace/delete/list) |
 | Compiler front end | `bascomp.[ch]` + `bascomp.ebnf` (recursive descent → syntax tree), `nodetype.[ch]` (node types) |

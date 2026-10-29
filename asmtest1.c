@@ -92,6 +92,9 @@ static void test_encodings( void ) {
     asmcase( "LAN.C", "4A" );
     asmcase( "RRNV 5", "A1 00 00 05" );
     asmcase( "RRLV 5", "E1 03 00 05" );
+    asmcase( "SND 2", "A1 42 00 02" );
+    asmcase( "snd 6", "A1 42 00 06" );
+    asmcase( "PLNG", "21 43" );
 }
 
 static void test_errors( void ) {
@@ -140,6 +143,7 @@ static void test_roundtrip( void ) {
         "92 ON B GOTO 90,100",
         "94 WHILE B<3:B=B+1:WEND:REPEAT:B=B-1:UNTIL B<1",
         "95 LABEL L:END",
+        "96 SOUND 1,440,1:SOUND 2,0,2,0.25:SOUND OFF:SOUND OFF 3:SOUND SYNC 1,2:WAVE 1,3:TEMPO 90:PLAY \"CDE\",\"R\":PRINT PLAYING(1)",
         "100 PRINT LEFT$(\"ABC\",2);MID$(\"ABC\",2,1);HEX$(255,4):RETURN",
         0 };
     repl_t repl;

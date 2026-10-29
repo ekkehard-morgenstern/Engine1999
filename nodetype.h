@@ -613,6 +613,15 @@ Explanation of node types:
 #define NT_RENUMSTMT            UINT8_C(0X62)   // RENUM statement
 #define NT_EDITSTMT             UINT8_C(0X63)   // EDIT statement
 #define NT_MONITORSTMT          UINT8_C(0X64)   // MONITOR statement
+#define NT_SOUNDSTMT            UINT8_C(0X65)   // SOUND, PLAY, WAVE, TEMPO statements (data: 1 byte of SNDK_*)
+
+#define SNDK_SOUND              UINT8_C(1)      // SOUND ch, freq, beats [, vol]: 3 or 4 numeric branches
+#define SNDK_PLAY               UINT8_C(2)      // PLAY a$ [, b$ ...]: 1..8 string branches
+#define SNDK_WAVE               UINT8_C(3)      // WAVE ch, wave: 2 numeric branches
+#define SNDK_TEMPO              UINT8_C(4)      // TEMPO bpm: 1 numeric branch
+#define SNDK_OFF                UINT8_C(5)      // SOUND OFF [ch]: 0 or 1 numeric branch
+#define SNDK_SYNC               UINT8_C(6)      // SOUND SYNC ch [, ch ...]: 1..8 numeric branches
+#define SND_MAXVOICES           8               // PLAY strings / SYNC channels per statement (= SYNTH_NCHAN)
 
 #define LISTF_FIRST             UINT8_C(0X01)   // LIST: start target present (first branch)
 #define LISTF_LAST              UINT8_C(0X02)   // LIST: end target present (next branch)

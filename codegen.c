@@ -386,6 +386,8 @@ const char* cgen_opcode_name( uint16_t opcode ) {
         case INS_RENM:      return "RENM";
         case INS_EDIT:      return "EDIT";
         case INS_MON:       return "MON";
+        case INS_SND:       return "SND";
+        case INS_PLNG:      return "PLNG";
         default:            break;
     }
     return "???";
@@ -963,6 +965,14 @@ bool cgen_gen_mon( codegen_t* cgen ) {
     return cgen_gen_ins12( cgen, INS_MON, false, false, UINT16_C(0) );
 }
 
+bool cgen_gen_snd( codegen_t* cgen, uint16_t kind ) {
+    return cgen_gen_ins12( cgen, INS_SND, false, true, kind );
+}
+
+bool cgen_gen_plng( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_PLNG, false, false, UINT16_C(0) );
+}
+
 bool cgen_gen_new( codegen_t* cgen ) {
     return cgen_gen_ins12( cgen, INS_NEW, false, false, UINT16_C(0) );
 }
@@ -1332,7 +1342,7 @@ UNEXP:  return cgen_unexpected_node( comp );
 bool cgen_from_sysfncall( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     /*
         sys-num-fn-1-arg-call := ( TOK_ASC | TOK_VAL | TOK_LEN ) TOK_LPAREN str-expr TOK_RPAREN |
-                                   TOK_FRE TOK_LPAREN num-expr TOK_RPAREN .
+                                   ( TOK_FRE | TOK_PLAYING ) TOK_LPAREN num-expr TOK_RPAREN .
 
         sys-str-fn-2-arg-call := ( TOK_BIN | TOK_QUA | TOK_OCT | TOK_DEC | TOK_HEX ) TOK_STRING TOK_LPAREN num-expr
                                       [ TOK_COMMA num-expr ] TOK_RPAREN |
@@ -1405,6 +1415,7 @@ UNEXP:      return cgen_unexpected_node( comp );
         case TOK_LEFT:  generator = cgen_gen_lfts; break;
         case TOK_RIGHT: generator = cgen_gen_rgts; break;
         case TOK_MID:   generator = cgen_gen_mids; break;
+        case TOK_PLAYING: generator = cgen_gen_plng; break;
         default:
             goto UNEXP;
     }
@@ -2816,6 +2827,7 @@ bool cgen_from_stmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         case NT_RENUMSTMT:  return cgen_from_renumstmt( cgen, comp, node );
         case NT_EDITSTMT:   return cgen_from_editstmt( cgen, comp, node );
         case NT_MONITORSTMT: return cgen_from_monitorstmt( cgen, comp, node );
+        case NT_SOUNDSTMT:  return cgen_from_soundstmt( cgen, comp, node );
         case NT_STMTLIST:   return cgen_from_stmtlist( cgen, comp, node );
         case NT_DIMSTMT:    return cgen_from_dimstmt( cgen, comp, node );
         case NT_ERASESTMT:  return cgen_from_erasestmt( cgen, comp, node );

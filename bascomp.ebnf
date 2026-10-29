@@ -71,7 +71,7 @@ num-usr-fn-call := num-usr-fn-name [ TOK_LPAREN [ expr-list ] TOK_RPAREN ] .
 str-usr-fn-call := str-usr-fn-name [ TOK_LPAREN [ expr-list ] TOK_RPAREN ] .
 
 sys-num-fn-1-arg-call := ( TOK_ASC | TOK_VAL | TOK_LEN ) TOK_LPAREN str-expr TOK_RPAREN |
-                           TOK_FRE TOK_LPAREN num-expr TOK_RPAREN .
+                           ( TOK_FRE | TOK_PLAYING ) TOK_LPAREN num-expr TOK_RPAREN .
 
 sys-str-fn-2-arg-call := ( TOK_BIN | TOK_QUA | TOK_OCT | TOK_DEC | TOK_HEX ) TOK_STRING TOK_LPAREN num-expr
                               [ TOK_COMMA num-expr ] TOK_RPAREN |
@@ -234,7 +234,15 @@ renum-stmt := TOK_RENUM [ goto-target ] [ TOK_MINUS [ goto-target ] ] [ TOK_COMM
 edit-stmt := TOK_EDIT [ goto-target ] .
 -- MONITOR opens the machine monitor (text screen 2). It ends the running program (like NEW).
 monitor-stmt := TOK_MONITOR .
-prog-stmt := load-stmt | run-stmt | list-stmt | new-stmt | clear-stmt | delete-stmt | renum-stmt | edit-stmt | monitor-stmt .
+-- Sound (see docs/sound.md). Channels are 1..8. SOUND ch, freq, beats [, vol]: a tone of freq Hz (20..20000; 0 = a rest) for
+-- "beats" (the channel's next event follows after that; 0 = until the next SOUND), vol 0..1 (default 0.5). SOUND OFF silences
+-- one channel / all of them at once, SOUND SYNC lines up the time of the channels (to start them together). PLAY plays one
+-- music string per voice (voice n = channel n, all start together); both return at once, PLAYING(ch) is -1 while the channel
+-- still sounds or has music queued, else 0. WAVE ch, w: 0 sine, 1 square, 2 triangle, 3 noise. TEMPO bpm: beats per minute.
+sound-stmt := TOK_SOUND num-expr TOK_COMMA num-expr TOK_COMMA num-expr [ TOK_COMMA num-expr ] |
+              TOK_SOUND TOK_OFF [ num-expr ] | TOK_SOUND TOK_SYNC num-expr { TOK_COMMA num-expr } |
+              TOK_PLAY str-expr { TOK_COMMA str-expr } | TOK_WAVE num-expr TOK_COMMA num-expr | TOK_TEMPO num-expr .
+prog-stmt := load-stmt | run-stmt | list-stmt | new-stmt | clear-stmt | delete-stmt | renum-stmt | edit-stmt | monitor-stmt | sound-stmt .
 
 stmt := io-stmt | prog-stmt | assign-stmt | control-flow-stmt .
 stmt-list := stmt { TOK_COLON stmt } .

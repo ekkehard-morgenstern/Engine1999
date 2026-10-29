@@ -50,6 +50,10 @@ typedef struct _testcase_t {
 
 static const testcase_t cases[] = {
     { "direct mode",            "PRINT 1+2",                                      "3\n" },
+    { "SOUND without a sound output does nothing", "SOUND 1,440,1\nPRINT 1",     "1\n" },
+    { "PLAYING without a sound output is 0", "PRINT PLAYING(1)",                  "0\n" },
+    { "PLAY checks its strings without a sound output", "PLAY \"X\"",               "? Unknown music command 'X'\n" },
+    { "sound statements are listed", "10 SOUND OFF\n20 PLAY \"C\",\"E\"\n30 TEMPO 90\n40 SOUND SYNC 1,2\n50 WAVE 1,2\n60 SOUND 1,440,1,0.5\n70 PRINT PLAYING(1)\nLIST", "10 SOUND OFF\n20 PLAY \"C\",\"E\"\n30 TEMPO 90\n40 SOUND SYNC 1,2\n50 WAVE 1,2\n60 SOUND 1,440,1,0.5\n70 PRINT PLAYING(1)\n" },
     { "variables persist",      "A=5\nPRINT A*2",                                 "10\n" },
     { "empty line",             "\n\nPRINT 7",                                    "7\n" },
     { "parse error",            "PRINT )",                                        "? End of line expected\n" },

@@ -67,6 +67,10 @@ Policies chosen by this implementation (the instruction set does not define them
       command substitution); the exit status is ignored; output longer than 65535 bytes is an error
     - DELETE and RENUM (DELE, RENM) call the host (deletelines / renumber callbacks) and end the run afterwards
     - MON (MONITOR) leaves a request (VMREQ_MONITOR) and ends the run, like NEW
+    - SND (SOUND, PLAY, WAVE, TEMPO, SOUND OFF/SYNC) and PLNG (PLAYING) use vm_t.sound; channels are 1..8 in BASIC (0..7 in the
+      callbacks). PLAY parses all its strings (mml.h) before anything is queued: a wrong string is an error and queues nothing.
+      PLAY first syncs the voices' channels, so the voices start together (after what the channels still have queued); the
+      duration in the strings is in seconds (the T command), converted to the host's beats with getbpm()
     - EDIT leaves a request, too (VMREQ_EDIT: the host lets the user edit a line and enters the result like a typed line)
     - NEW (like LOAD and RUN) leaves a request; CLR (CLEAR) is done by the VM itself (vmem_clear_vars)
     - LOAD and RUN ( RUNP ) can't be carried out by the VM: it doesn't own the program, and the program being run would be
@@ -139,6 +143,18 @@ typedef struct _vm_context_t {
     vm_savedvar_t   saved[MAXPARAM];
 } vm_context_t;
 
+// The host's sound output (SOUND, PLAY, ... , PLAYING; all callbacks required when a vm_t.sound is given). Channels are 0..7
+// here. The calls only queue: they return at once. beats are in the unit of the host's tempo (see TEMPO).
+typedef struct _vm_sound_t {
+    void    (*tone)( void* usrdata, int chan, float freq, float vol, float beats );     // a tone for "beats" (freq 0 = a rest)
+    void    (*setwave)( void* usrdata, int chan, int wave );
+    void    (*setbpm)( void* usrdata, int bpm );
+    int     (*getbpm)( void* usrdata );                     // the tempo; 0 = unknown (60 is assumed)
+    void    (*sync)( void* usrdata, unsigned chanmask );    // lines up the time of the channels in the mask
+    void    (*silence)( void* usrdata, int chan );          // now: drops what is queued for the channel, fades it out; -1 = all
+    bool    (*busy)( void* usrdata, int chan );             // the channel sounds, or has events queued / a sequence running
+} vm_sound_t;
+
 typedef struct _vm_t {
     codegen_t*      cgen;           // code and data segments
     varmem_t*       vmem;           // variables
@@ -179,6 +195,7 @@ typedef struct _vm_t {
     // running code no longer matches the program. Return false after reporting an error.
     bool            (*deletelines)( struct _vm_t*, void*, const char* firstlabel, int32_t firstline, const char* lastlabel, int32_t lastline );
     bool            (*renumber)( struct _vm_t*, void*, const char* firstlabel, int32_t firstline, const char* lastlabel, int32_t lastline, int32_t step );
+    const vm_sound_t* sound;        // SOUND / PLAY / ...: the host's sound output; 0 = none (arguments are checked, nothing plays)
     int             request;        // VMREQ_*: LOAD / RUN stop the VM and leave a request for the host (see vm_run_at)
     char*           reqname;        // LOAD: the file name; RUN: the label name ("" = none); owned by the VM
     int32_t         reqline;        // RUN: the line number, -1 = none

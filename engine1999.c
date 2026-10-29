@@ -742,6 +742,47 @@ static bool host_save( struct _vm_t* vm, void* usrdata, const char* filename, bo
     return repl_save_program( (repl_t*) usrdata, filename, ascii );
 }
 
+// sound output of SOUND, PLAY, ... : the audio engine (all calls are no-ops when there is no audio device)
+static void host_snd_tone( void* usrdata, int chan, float freq, float vol, float beats ) {
+    if ( freq > 0.0f ) {
+        sdlaud_playfreq( chan, freq, vol, beats );
+    } else {
+        sdlaud_stopchan( chan, beats );
+    }
+}
+
+static void host_snd_setwave( void* usrdata, int chan, int wave ) {
+    sdlaud_setwave( chan, wave );
+}
+
+static void host_snd_setbpm( void* usrdata, int bpm ) {
+    sdlaud_setbpm( bpm );
+}
+
+static int host_snd_getbpm( void* usrdata ) {
+    return sdlaud_getbpm();
+}
+
+static void host_snd_sync( void* usrdata, unsigned chanmask ) {
+    sdlaud_syncchans( chanmask );
+}
+
+static void host_snd_silence( void* usrdata, int chan ) {
+    if ( chan < 0 ) {
+        sdlaud_silenceall();
+    } else {
+        sdlaud_silencechan( chan );
+    }
+}
+
+static bool host_snd_busy( void* usrdata, int chan ) {
+    return sdlaud_busy( chan );
+}
+
+static const vm_sound_t host_sound = {
+    host_snd_tone, host_snd_setwave, host_snd_setbpm, host_snd_getbpm, host_snd_sync, host_snd_silence, host_snd_busy
+};
+
 // the line editor of EDIT: ENTER returns the edited line, ESC (or a closed window) returns 0
 static char* host_edit( struct _repl_t* r, const char* text ) {
     char buf[2048];         // more than the 80x25 screen holds
@@ -792,6 +833,7 @@ static void init_host( void ) {
     repl.getkey    = host_getkey;
     repl.interrupt = host_interrupt;
     repl.save      = host_save;
+    repl.sound     = &host_sound;
     repl.hlstyle   = host_hlstyle;
     repl.edit      = host_edit;
 }

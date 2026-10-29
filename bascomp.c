@@ -1556,7 +1556,7 @@ bool comp_eat_strusrfncall( compiler_t* comp, node_t** pnode ) {
 bool comp_eat_sysnumfn1argcall( compiler_t* comp, node_t** pnode ) {
     /*
         sys-num-fn-1-arg-call := ( TOK_ASC | TOK_VAL | TOK_LEN ) TOK_LPAREN str-expr TOK_RPAREN |
-                                 TOK_FRE TOK_LPAREN num-expr TOK_RPAREN .
+                                 ( TOK_FRE | TOK_PLAYING ) TOK_LPAREN num-expr TOK_RPAREN .
         NT_SYSNUMFUNCARGCALL    numeric system function call with arguments
             data:
                 - 1 byte of function token (like TOK_VAL)
@@ -1587,7 +1587,7 @@ OOM:        out_of_memory( comp );
             return false;
         }
         return true;
-    } else if ( tok == TOK_FRE ) {
+    } else if ( tok == TOK_FRE || tok == TOK_PLAYING ) {
         if ( !comp_fetchtok( comp ) ) {
             return false;
         }
@@ -2452,6 +2452,75 @@ bool comp_eat_monitorstmt( compiler_t* comp, node_t** pnode ) {
     return true;
 }
 
+bool comp_eat_soundstmt( compiler_t* comp, node_t** pnode ) {
+    // sound-stmt := TOK_SOUND num-expr TOK_COMMA num-expr TOK_COMMA num-expr [ TOK_COMMA num-expr ] |
+    //               TOK_SOUND TOK_OFF [ num-expr ] | TOK_SOUND TOK_SYNC num-expr { TOK_COMMA num-expr } |
+    //               TOK_PLAY str-expr { TOK_COMMA str-expr } | TOK_WAVE num-expr TOK_COMMA num-expr | TOK_TEMPO num-expr .
+    uint8_t tok = comp->currtok;
+    if ( tok != TOK_SOUND && tok != TOK_PLAY && tok != TOK_WAVE && tok != TOK_TEMPO ) {
+        return false;
+    }
+    if ( !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    uint8_t kind = SNDK_SOUND; int minargs = 3, maxargs = 4;
+    bool strargs = false, optional = false;
+    if ( tok == TOK_SOUND && comp->currtok == TOK_OFF ) {
+        kind = SNDK_OFF; minargs = 0; maxargs = 1; optional = true;
+        comp_fetchtok( comp );
+    } else if ( tok == TOK_SOUND && comp->currtok == TOK_SYNC ) {
+        kind = SNDK_SYNC; minargs = 1; maxargs = SND_MAXVOICES;
+        comp_fetchtok( comp );
+    } else if ( tok == TOK_PLAY ) {
+        kind = SNDK_PLAY; minargs = 1; maxargs = SND_MAXVOICES; strargs = true;
+    } else if ( tok == TOK_WAVE ) {
+        kind = SNDK_WAVE; minargs = 2; maxargs = 2;
+    } else if ( tok == TOK_TEMPO ) {
+        kind = SNDK_TEMPO; minargs = 1; maxargs = 1;
+    }
+    /*
+        NT_SOUNDSTMT    SOUND / PLAY / WAVE / TEMPO statement
+            data:
+                - 1 byte of SNDK_* (what the statement is)
+            branches:
+                - the argument expressions (numeric, or string for PLAY): the number depends on the kind (see nodetype.h)
+    */
+    if ( !comp_create_node( comp, pnode, NT_SOUNDSTMT, UINT8_C(0), UINT16_C(1), &kind ) || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    int n = 0;
+    while ( n < maxargs ) {
+        if ( n > 0 ) {
+            if ( comp->currtok != TOK_COMMA ) {
+                break;
+            }
+            if ( !comp_fetchtok( comp ) ) {
+                return false;
+            }
+        }
+        node_t* arg = NODE_NONE;
+        bool got = strargs ? comp_eat_strexpr( comp, &arg ) : comp_eat_numexpr( comp, &arg );
+        if ( !got || arg == NODE_NONE ) {
+            if ( optional && n == 0 ) {
+                break;
+            }
+            comp_error( comp, strargs ? "String expression expected" : "Numeric expression expected" );
+            return false;
+        }
+        if ( !comp_add_branch( comp, *pnode, arg ) ) {
+            out_of_memory( comp );
+            return false;
+        }
+        ++n;
+    }
+    if ( n < minargs ) {
+        comp_error( comp, "Comma ',' expected" );
+        return false;
+    }
+    return true;
+}
+
 bool comp_eat_clearstmt( compiler_t* comp, node_t** pnode ) {
     // clear-stmt := TOK_CLEAR .
     if ( comp->currtok != TOK_CLEAR || !comp_fetchtok( comp ) ) {
@@ -2466,7 +2535,8 @@ bool comp_eat_clearstmt( compiler_t* comp, node_t** pnode ) {
 }
 
 bool comp_eat_progstmt( compiler_t* comp, node_t** pnode ) {
-    // prog-stmt := load-stmt | run-stmt | list-stmt | new-stmt | clear-stmt | delete-stmt | renum-stmt | edit-stmt | monitor-stmt .
+    // prog-stmt := load-stmt | run-stmt | list-stmt | new-stmt | clear-stmt | delete-stmt | renum-stmt | edit-stmt | monitor-stmt |
+    //              sound-stmt .
     // [ NT_PROGSTMT - not generated ]
     if ( comp_eat_loadstmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
@@ -2493,6 +2563,9 @@ bool comp_eat_progstmt( compiler_t* comp, node_t** pnode ) {
         return true;
     }
     if ( comp_eat_monitorstmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_soundstmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     return false;

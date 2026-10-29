@@ -33,12 +33,14 @@
 // The synthesizer itself is in synth.c (no SDL). Here: the audio device, whose callback renders the synth, and a worker
 // thread that applies the queued events when their time has come. One mutex guards the synth.
 
-#define SDLAUD_POLL_NSEC    UINT64_C(1000000)       // the worker looks at the queue at least this often (new events)
+#define SDLAUD_POLL_NSEC    UINT64_C(1000000)       // while events are queued the worker looks at the queue this often
+#define SDLAUD_IDLE_MSEC    50                      // with an empty queue it sleeps this long at most (or until an event is queued)
 
 static SDL_AudioSpec sdlaud_spec_in, sdlaud_spec_out;
 static SDL_AudioDeviceID sdlaud_id;
 static synth_t sdlaud_synth;
 static SDL_mutex* sdlaud_mtx = 0;
+static SDL_cond* sdlaud_cond = 0;       // signalled when an event is queued (the worker sleeps on it while the queue is empty)
 static bool sdlaud_cleanup_warning = false;
 static volatile bool sdlaud_initok = false;
 static volatile bool sdlaud_request_exit = false;
@@ -91,8 +93,13 @@ static int sdlaud_worker( void* arg ) {
         fprintf( stderr, "sdlaud_worker: failed to create mutex: %s\n", SDL_GetError() );
         goto FAIL;
     }
-    if ( !sdlaud_init_sdl() ) {
+    sdlaud_cond = SDL_CreateCond();
+    if ( sdlaud_cond == 0 ) {
+        fprintf( stderr, "sdlaud_worker: failed to create condition: %s\n", SDL_GetError() );
         goto ERR2;
+    }
+    if ( !sdlaud_init_sdl() ) {
+        goto ERR3;
     }
     sdlaud_initok = true;
     sdlev_raise( SDLEV_AUDIOWORKERINITDONE );
@@ -103,6 +110,11 @@ static int sdlaud_worker( void* arg ) {
         SDL_LockMutex( sdlaud_mtx );
         synth_runevents( &sdlaud_synth, now );
         queued = synth_nextevent( &sdlaud_synth, &next );
+        if ( !queued && !sdlaud_request_exit ) {
+            SDL_CondWaitTimeout( sdlaud_cond, sdlaud_mtx, SDLAUD_IDLE_MSEC );     // an event that is queued meanwhile wakes us
+            SDL_UnlockMutex( sdlaud_mtx );
+            continue;
+        }
         SDL_UnlockMutex( sdlaud_mtx );
         uint64_t wait = SDLAUD_POLL_NSEC;
         if ( queued && next > now && next - now < wait ) {
@@ -116,6 +128,7 @@ static int sdlaud_worker( void* arg ) {
 
     sdlaud_initok = false;
     sdlaud_cleanup_sdl();
+ERR3:   SDL_DestroyCond( sdlaud_cond ); sdlaud_cond = 0;
 ERR2:   SDL_DestroyMutex( sdlaud_mtx ); sdlaud_mtx = 0;
         // a failed start must not leave sdlaud_init() waiting: it gets the "init done" signal with sdlaud_initok false
 FAIL:   if ( !sdlaud_initok && !sdlaud_request_exit ) {
@@ -150,6 +163,9 @@ void sdlaud_cleanup( void ) {
     if ( sdlaud_initok ) {
         // the thread is running: set the exit flag and wait for the handshake (thread termination)
         sdlaud_request_exit = true;
+        SDL_LockMutex( sdlaud_mtx );
+        SDL_CondSignal( sdlaud_cond );
+        SDL_UnlockMutex( sdlaud_mtx );
         sdlev_wait( SDLEV_AUDIOWORKERFINISHED );
     }
 
@@ -167,6 +183,7 @@ static void sdlaud_event( int chan, float beats, synth_evtype_t type, float freq
     uint64_t when = synth_slot( &sdlaud_synth, chan, beats, now );
     if ( when != ~UINT64_C(0) ) {
         synth_schedule( &sdlaud_synth, when, type, chan, freq, vol, wave );
+        SDL_CondSignal( sdlaud_cond );
     }
     SDL_UnlockMutex( sdlaud_mtx );
 }
@@ -211,4 +228,29 @@ void sdlaud_silenceall( void ) {
     SDL_LockMutex( sdlaud_mtx );
     synth_silence( &sdlaud_synth, now );
     SDL_UnlockMutex( sdlaud_mtx );
+}
+
+void sdlaud_silencechan( int chan ) {
+    if ( !sdlaud_initok ) return;
+    uint64_t now = sdlutil_getnsec( 0 );
+    SDL_LockMutex( sdlaud_mtx );
+    synth_silencechan( &sdlaud_synth, chan, now );
+    SDL_UnlockMutex( sdlaud_mtx );
+}
+
+bool sdlaud_busy( int chan ) {
+    if ( !sdlaud_initok ) return false;
+    uint64_t now = sdlutil_getnsec( 0 );
+    SDL_LockMutex( sdlaud_mtx );
+    bool busy = synth_busy( &sdlaud_synth, chan, now );
+    SDL_UnlockMutex( sdlaud_mtx );
+    return busy;
+}
+
+int sdlaud_getbpm( void ) {
+    if ( !sdlaud_initok ) return 0;
+    SDL_LockMutex( sdlaud_mtx );
+    int bpm = sdlaud_synth.bpm;
+    SDL_UnlockMutex( sdlaud_mtx );
+    return bpm;
 }

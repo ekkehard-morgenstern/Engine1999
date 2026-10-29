@@ -26,6 +26,7 @@
 // Automated test of the synthesizer core (synth.c, no sound device): exit status = number of failures.
 
 #include "synth.h"
+#include "mml.h"
 
 #define RATE    44100
 #define MS      UINT64_C(1000000)
@@ -300,6 +301,134 @@ static void test_chord_sequence( void ) {
     synth_cleanup( &s );
 }
 
+static bool mml_one( const char* text, mml_event_t* ev0, size_t* pcount ) {
+    mml_t m; char err[MML_ERRLEN];
+    bool ok = mml_parse( text, &m, err );
+    if ( ok ) {
+        *pcount = m.count;
+        if ( m.count > 0 && ev0 ) *ev0 = m.events[0];
+        mml_free( &m );
+    }
+    return ok;
+}
+
+static bool mml_tone( const char* text, double freq, double seconds, double gap ) {
+    mml_event_t ev; size_t n = 0;
+    return mml_one( text, &ev, &n ) && n == 1 && ev.kind == MML_TONE && near( ev.freq, freq, freq * 0.0001 ) &&
+        near( ev.seconds, seconds, 1e-5 ) && near( ev.gap, gap, 1e-5 );
+}
+
+static bool mml_error( const char* text, const char* part ) {
+    mml_t m; char err[MML_ERRLEN];
+    bool ok = mml_parse( text, &m, err );
+    if ( ok ) {
+        mml_free( &m );
+        return false;
+    }
+    bool good = strstr( err, part ) != 0 && m.events == 0 && m.count == 0;
+    if ( !good ) printf( "  mml \"%s\": got \"%s\"\n", text, err );
+    return good;
+}
+
+static void test_mml( void ) {
+    check( mml_tone( "C", 261.626, 0.4375, 0.0625 ), "mml: C = middle C, quarter note at T120, normal articulation" );
+    check( mml_tone( "ML C", 261.626, 0.5, 0.0 ), "mml: legato fills the note" );
+    check( mml_tone( "MS C", 261.626, 0.375, 0.125 ), "mml: staccato" );
+    check( mml_tone( "ML A", 440.0, 0.5, 0.0 ), "mml: A in octave 4 = 440 Hz" );
+    check( mml_tone( "ML O5 A", 880.0, 0.5, 0.0 ) && mml_tone( "ML >A", 880.0, 0.5, 0.0 ) && mml_tone( "ML <A", 220.0, 0.5, 0.0 ),
+        "mml: O, > and <" );
+    check( mml_tone( "ML C#", 277.183, 0.5, 0.0 ) && mml_tone( "ML C+", 277.183, 0.5, 0.0 ) && mml_tone( "ML D-", 277.183, 0.5, 0.0 ),
+        "mml: sharps and flats" );
+    check( mml_tone( "ML B#", 523.251, 0.5, 0.0 ), "mml: B# is the C above" );
+    check( mml_tone( "ML C8", 261.626, 0.25, 0.0 ) && mml_tone( "ML C1", 261.626, 2.0, 0.0 ) && mml_tone( "ML C64", 261.626, 0.03125, 0.0 ),
+        "mml: note lengths" );
+    check( mml_tone( "ML C8.", 261.626, 0.375, 0.0 ) && mml_tone( "ML C4..", 261.626, 0.875, 0.0 ), "mml: dots" );
+    check( mml_tone( "ML L8 C", 261.626, 0.25, 0.0 ) && mml_tone( "ML L8 C4", 261.626, 0.5, 0.0 ), "mml: default length" );
+    check( mml_tone( "T60 ML C", 261.626, 1.0, 0.0 ) && mml_tone( "T240 ML C", 261.626, 0.25, 0.0 ), "mml: tempo" );
+    check( mml_tone( "ml c", 261.626, 0.5, 0.0 ), "mml: lower case" );
+    mml_event_t ev; size_t n = 0;
+    check( mml_one( "R2", &ev, &n ) && n == 1 && ev.kind == MML_REST && near( ev.seconds, 1.0, 1e-6 ), "mml: rest" );
+    check( mml_one( "P", &ev, &n ) && ev.kind == MML_REST && near( ev.seconds, 0.5, 1e-6 ), "mml: P is a rest too" );
+    check( mml_one( "V0.25 C", &ev, &n ) && near( ev.vol, 0.25, 1e-6 ) && mml_one( "V.5 C", &ev, &n ) && near( ev.vol, 0.5, 1e-6 ) &&
+           mml_one( "V1 C", &ev, &n ) && near( ev.vol, 1.0, 1e-6 ), "mml: volume with decimals" );
+    check( mml_one( "W2", &ev, &n ) && n == 1 && ev.kind == MML_WAVE && ev.wave == 2, "mml: wave" );
+    check( mml_one( "c ; d\n e", &ev, &n ) && n == 3, "mml: blanks, semicolons and newlines are ignored" );
+    check( mml_one( "", &ev, &n ) && n == 0 && mml_one( "  ; ", &ev, &n ) && n == 0, "mml: an empty string is fine" );
+    check( mml_one( "O8 B", &ev, &n ) && near( ev.freq, 7902.13, 0.1 ), "mml: highest octave" );
+    check( mml_one( "O1 C", &ev, &n ) && near( ev.freq, 32.703, 0.01 ), "mml: low octave" );
+    check( mml_error( "X", "Unknown music command 'X'" ), "mml: unknown command" );
+    check( mml_error( "C D X", "'X'" ), "mml: error in the middle" );
+    check( mml_error( "O9", "out of range" ) && mml_error( "O", "out of range" ), "mml: bad octave" );
+    check( mml_error( "L0", "out of range" ) && mml_error( "L65", "out of range" ), "mml: bad default length" );
+    check( mml_error( "T0", "out of range" ) && mml_error( "T1001", "out of range" ), "mml: bad tempo" );
+    check( mml_error( "V2", "out of range" ) && mml_error( "V", "out of range" ), "mml: bad volume" );
+    check( mml_error( "W4", "out of range" ), "mml: bad wave" );
+    check( mml_error( "C0", "length" ) && mml_error( "C65", "length" ) && mml_error( "R99", "length" ), "mml: bad note length" );
+    check( mml_error( "M", "ML, MN or MS" ) && mml_error( "MX", "ML, MN or MS" ), "mml: bad articulation" );
+    check( mml_error( "O0 C", "Note out of range" ), "mml: note below 20 Hz" );
+    char* big = (char*) malloc( MML_MAXEVENTS + 2U );
+    memset( big, 'R', MML_MAXEVENTS + 1U ); big[ MML_MAXEVENTS + 1U ] = '\0';
+    check( mml_error( big, "too long" ), "mml: more events than allowed" );
+    big[ MML_MAXEVENTS ] = '\0';
+    check( mml_one( big, &ev, &n ) && n == MML_MAXEVENTS, "mml: the allowed number of events" );
+    free( big );
+}
+
+static void test_busy( void ) {
+    synth_t s; synth_init( &s, RATE );
+    check( !synth_busy( &s, 0, 0 ) && !synth_busy( &s, -1, 0 ) && !synth_busy( &s, SYNTH_NCHAN, 0 ), "busy: a new synth is idle" );
+    synth_schedule( &s, 5 * SEC, SYNTH_EV_PLAY, 2, 440.0f, 0.5f, SYNTH_SINE );
+    check( synth_busy( &s, 2, 0 ) && !synth_busy( &s, 1, 0 ), "busy: a queued event keeps its channel busy" );
+    synth_runevents( &s, 5 * SEC );
+    check( synth_busy( &s, 2, 5 * SEC ), "busy: a sounding channel" );
+    synth_schedule( &s, 6 * SEC, SYNTH_EV_STOP, 2, 0, 0, SYNTH_SINE );
+    synth_runevents( &s, 6 * SEC );
+    float buf[500]; synth_render( &s, buf, 500 );
+    check( !synth_busy( &s, 2, 6 * SEC ), "busy: idle again after the stop faded out" );
+    synth_slot( &s, 3, 2.0f, 10 * SEC );
+    check( synth_busy( &s, 3, 11 * SEC ) && !synth_busy( &s, 3, 12 * SEC ), "busy: a sequence that still runs (a rest at the end)" );
+    synth_cleanup( &s );
+}
+
+static void test_silencechan( void ) {
+    synth_t s; synth_init( &s, RATE );
+    uint64_t when = 0;
+    synth_schedule( &s, 1 * SEC, SYNTH_EV_PLAY, 0, 440.0f, 0.5f, SYNTH_SINE );
+    synth_schedule( &s, 2 * SEC, SYNTH_EV_PLAY, 1, 440.0f, 0.5f, SYNTH_SINE );
+    synth_schedule( &s, 3 * SEC, SYNTH_EV_STOP, 0, 0, 0, SYNTH_SINE );
+    synth_slot( &s, 0, 10.0f, SEC );
+    synth_runevents( &s, 1 * SEC );
+    synth_silencechan( &s, 0, 1 * SEC );
+    check( s.nevents == 1 && s.chan[0].target == 0.0f && s.cursor[0] == 1 * SEC, "silencechan: removes the channel's events, stops it, resets its cursor" );
+    check( synth_nextevent( &s, &when ) && when == 2 * SEC, "silencechan: other channels keep theirs" );
+    synth_schedule( &s, 4 * SEC, SYNTH_EV_STOP, 1, 0, 0, SYNTH_SINE );        // the tail is the last remaining event
+    synth_schedule( &s, 1 * SEC, SYNTH_EV_WAVE, 2, 0, 0, SYNTH_SQUARE );
+    check( synth_runevents( &s, 3 * SEC ) == 2 && s.nevents == 1, "silencechan: the queue still works (order, tail)" );
+    synth_silencechan( &s, 1, 5 * SEC );
+    check( s.nevents == 0 && s.tail == 0 && s.events == 0, "silencechan: emptying the queue clears the tail" );
+    synth_silencechan( &s, 9, 0 );
+    // out-of-order queueing keeps the order; the tail stays the last
+    synth_schedule( &s, 5 * SEC, SYNTH_EV_STOP, 0, 0, 0, SYNTH_SINE );
+    synth_schedule( &s, 1 * SEC, SYNTH_EV_STOP, 1, 0, 0, SYNTH_SINE );
+    synth_schedule( &s, 3 * SEC, SYNTH_EV_STOP, 2, 0, 0, SYNTH_SINE );
+    synth_schedule( &s, 9 * SEC, SYNTH_EV_STOP, 3, 0, 0, SYNTH_SINE );
+    synth_schedule( &s, 9 * SEC, SYNTH_EV_STOP, 4, 0, 0, SYNTH_SINE );
+    check( s.tail->chan == 4 && s.events->chan == 1 && s.events->next->chan == 2 && s.events->next->next->chan == 0, "queue: sorted, appends go to the tail" );
+    synth_cleanup( &s );
+}
+
+static void test_queue_speed( void ) {
+    // a long sequence in time order must be cheap to queue (no search through the queue)
+    synth_t s; synth_init( &s, RATE );
+    clock_t t0 = clock();
+    for ( int i=0; i < 200000; ++i ) {
+        synth_schedule( &s, (uint64_t) i * MS, SYNTH_EV_PLAY, i % 8, 440.0f, 0.5f, SYNTH_SINE );
+    }
+    double secs = (double)( clock() - t0 ) / CLOCKS_PER_SEC;
+    check( s.nevents == 200000 && secs < 1.0, "queueing 200000 events in time order is fast" );
+    synth_cleanup( &s );
+}
+
 int main( void ) {
     test_notes();
     test_pitch();
@@ -310,6 +439,10 @@ int main( void ) {
     test_cursors();
     test_queue();
     test_chord_sequence();
+    test_mml();
+    test_busy();
+    test_silencechan();
+    test_queue_speed();
     printf( "%d checks, %d failure(s)\n", total, failures );
     return failures;
 }

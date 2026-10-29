@@ -41,9 +41,9 @@ CL=$(CCOMP) $(CFLAGS)
 all: sdltest1 sdltest2 engine1999 basictest1 testcomp1 basictest2 vmtest1 repltest1 ansitest1 txttest1 asmtest1 synthtest1
 	echo ok >all
 
-BASEMOD=sdlevent.o sdllayer.o sdlmain.o sdlscreen.o textscreen.o tilescreen.o sprscreen.o 8x12font1.o sdlaudio.o synth.o sdlutil.o \
+BASEMOD=sdlevent.o sdllayer.o sdlmain.o sdlscreen.o textscreen.o tilescreen.o sprscreen.o 8x12font1.o sdlaudio.o synth.o mml.o sdlutil.o \
 		basic.o baspgm.o baslin.o bastok.o bascomp.o nodetype.o codegen.o cgenctl.o cgendecl.o cgenprog.o vars.o runtime.o vm.o basrepl.o basdebug.o ansi.o fulledit.o vmasm.o monitor.o
-BASEHDR=sdlevent.h sdllayer.h sdlmain.h sdlscreen.h sdltypes.h textscreen.h tilescreen.h sprscreen.h unxtypes.h sdlaudio.h synth.h sdlutil.h basic.h baspgm.h baslin.h bastok.h bascomp.h nodetype.h codegen.h instset.h vars.h runtime.h vm.h basrepl.h basdebug.h ansi.h fulledit.h vmasm.h monitor.h
+BASEHDR=sdlevent.h sdllayer.h sdlmain.h sdlscreen.h sdltypes.h textscreen.h tilescreen.h sprscreen.h unxtypes.h sdlaudio.h synth.h mml.h sdlutil.h basic.h baspgm.h baslin.h bastok.h bascomp.h nodetype.h codegen.h instset.h vars.h runtime.h vm.h basrepl.h basdebug.h ansi.h fulledit.h vmasm.h monitor.h
 
 LIBMOD=$(BASEMOD)
 LIBHDR=$(BASEHDR)
@@ -132,6 +132,8 @@ sprscreen.o: sprscreen.c $(BASEHDR)
 sdlaudio.o: sdlaudio.c $(BASEHDR)
 
 synth.o: synth.c $(BASEHDR)
+
+mml.o: mml.c $(BASEHDR)
 
 sdlutil.o: sdlutil.c $(BASEHDR)
 

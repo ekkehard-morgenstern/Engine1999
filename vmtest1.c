@@ -299,6 +299,50 @@ static const testcase_t cases[] = {
     { "MONITOR",                "MONITOR",                                         "<request MONITOR>\n" },
     { "MONITOR ends the run",   "PRINT 1:MONITOR:PRINT 2",                         "1\n<request MONITOR>\n" },
     { "MONITOR lower case",     "monitor",                                         "<request MONITOR>\n" },
+    // sound (the test sound output logs: <tone chan freq vol beats>, channels 0..7 there)
+    { "SOUND",                  "SOUND 1,440,2",                                   "<tone 0 440 0.5 2>\n" },
+    { "SOUND with volume",      "SOUND 2,880,1,0.25",                              "<tone 1 880 0.25 1>\n" },
+    { "SOUND rest",             "SOUND 3,0,1.5",                                   "<tone 2 0 0 1.5>\n" },
+    { "SOUND without end",      "SOUND 1,440,0",                                   "<tone 0 440 0.5 0>\n" },
+    { "SOUND with expressions", "A=3:SOUND A,110*4,A-2",                           "<tone 2 440 0.5 1>\n" },
+    { "SOUND lower case",       "sound 8,20,1",                                    "<tone 7 20 0.5 1>\n" },
+    { "SOUND channel 0",        "SOUND 0,440,1",                                   "? Illegal argument\n" },
+    { "SOUND channel 9",        "SOUND 9,440,1",                                   "? Illegal argument\n" },
+    { "SOUND frequency low",    "SOUND 1,19,1",                                    "? Illegal argument\n" },
+    { "SOUND frequency high",   "SOUND 1,20001,1",                                 "? Illegal argument\n" },
+    { "SOUND volume",           "SOUND 1,440,1,1.5",                               "? Illegal argument\n" },
+    { "SOUND negative beats",   "SOUND 1,440,0-1",                                 "? Illegal argument\n" },
+    { "SOUND needs 3 arguments", "SOUND 1,440",                                    "? Comma ',' expected\n" },
+    { "SOUND in a program",     "10 FOR C=1 TO 2\n20 SOUND C,100*C,1\n30 NEXT C", "<tone 0 100 0.5 1>\n<tone 1 200 0.5 1>\n" },
+    { "WAVE",                   "WAVE 2,1",                                        "<wave 1 1>\n" },
+    { "WAVE noise",             "WAVE 1,3",                                        "<wave 0 3>\n" },
+    { "WAVE bad type",          "WAVE 1,4",                                        "? Illegal argument\n" },
+    { "WAVE bad channel",       "WAVE 0,1",                                        "? Illegal argument\n" },
+    { "TEMPO",                  "TEMPO 120",                                       "<bpm 120>\n" },
+    { "TEMPO 0",                "TEMPO 0",                                         "? Illegal argument\n" },
+    { "TEMPO 1001",             "TEMPO 1001",                                      "? Illegal argument\n" },
+    { "SOUND OFF",              "SOUND OFF",                                       "<silence -1>\n" },
+    { "SOUND OFF channel",      "SOUND OFF 3",                                     "<silence 2>\n" },
+    { "SOUND OFF 0 is all",     "SOUND OFF 0",                                     "<silence -1>\n" },
+    { "SOUND OFF bad channel",  "SOUND OFF 9",                                     "? Illegal argument\n" },
+    { "SOUND SYNC",             "SOUND SYNC 1,2,3",                                "<sync 7>\n" },
+    { "SOUND SYNC one",         "SOUND SYNC 4",                                    "<sync 8>\n" },
+    { "SOUND SYNC bad channel", "SOUND SYNC 1,9",                                  "? Illegal argument\n" },
+    { "PLAYING",                "SOUND 1,440,1:PRINT PLAYING(1):PRINT PLAYING(2)", "<tone 0 440 0.5 1>\n-1\n0\n" },
+    { "PLAYING after SOUND OFF", "SOUND 1,440,1:SOUND OFF:PRINT PLAYING(1)",       "<tone 0 440 0.5 1>\n<silence -1>\n0\n" },
+    { "PLAYING in a condition", "SOUND 5,440,1\nIF PLAYING(5) THEN PRINT \"BUSY\"", "<tone 4 440 0.5 1>\nBUSY\n" },
+    { "PLAYING bad channel",    "PRINT PLAYING(0)",                                "? Illegal argument\n" },
+    { "PLAYING lower case",     "print playing(3)",                                "0\n" },
+    { "PLAY",                   "PLAY \"C\"",                                      "<sync 1>\n<tone 0 261.626 0.5 0.4375>\n<tone 0 0 0 0.0625>\n<tone 0 0 0 0>\n" },
+    { "PLAY legato",            "PLAY \"ML C\"",                                   "<sync 1>\n<tone 0 261.626 0.5 0.5>\n<tone 0 0 0 0>\n" },
+    { "PLAY two voices",        "PLAY \"ML R\",\"ML R2\"",                         "<sync 3>\n<tone 0 0 0 0.5>\n<tone 0 0 0 0>\n<tone 1 0 0 1>\n<tone 1 0 0 0>\n" },
+    { "PLAY wave and volume",   "PLAY \"W1 V0.25 ML A\"",                          "<sync 1>\n<wave 0 1>\n<tone 0 440 0.25 0.5>\n<tone 0 0 0 0>\n" },
+    { "PLAY follows TEMPO",     "TEMPO 120:PLAY \"ML R\"",                         "<bpm 120>\n<sync 1>\n<tone 0 0 0 1>\n<tone 0 0 0 0>\n" },
+    { "PLAY string expression", "A$=\"ML R\":PLAY A$+\"4\"",                       "<sync 1>\n<tone 0 0 0 0.5>\n<tone 0 0 0 0>\n" },
+    { "PLAY error queues nothing", "PLAY \"C\",\"X\"",                              "? Unknown music command 'X'\n" },
+    { "PLAY note out of range", "PLAY \"O0 C\"",                                   "? Note out of range\n" },
+    { "PLAY too many voices",   "PLAY \"R\",\"R\",\"R\",\"R\",\"R\",\"R\",\"R\",\"R\",\"R\"", "? End of line expected\n" },
+    { "PLAY needs a string",    "PLAY 5",                                          "? String expression expected\n" },
     { "EDIT bad line number",   "EDIT 1000000",                                    "? Invalid line number\n" },
     { "NEW",                    "NEW",                                             "<request NEW>\n" },
     { "NEW ends the run",       "PRINT 1:NEW:PRINT 2",                             "1\n<request NEW>\n" },
@@ -572,6 +616,60 @@ static int vm_getkey( struct _vm_t* vm, void* usrdata, int channel ) {
     return keys && *keys ? (uint8_t) *keys++ : -1;
 }
 
+// the sound output: every call is logged as text; PLAYING( ch ) is true from a tone until SOUND OFF
+static bool snd_busy[8];
+static int snd_bpm = 60;
+
+static void snd_reset( void ) {
+    memset( snd_busy, 0, sizeof(snd_busy) );
+    snd_bpm = 60;
+}
+
+static void snd_tone( void* usrdata, int chan, float freq, float vol, float beats ) {
+    char text[100];
+    snprintf( text, sizeof(text), "<tone %d %g %g %g>\n", chan, (double) freq, (double) vol, (double) beats );
+    out_append( text );
+    if ( freq > 0.0f ) snd_busy[chan] = true;
+}
+
+static void snd_setwave( void* usrdata, int chan, int wave ) {
+    char text[40];
+    snprintf( text, sizeof(text), "<wave %d %d>\n", chan, wave );
+    out_append( text );
+}
+
+static void snd_setbpm( void* usrdata, int bpm ) {
+    char text[40];
+    snprintf( text, sizeof(text), "<bpm %d>\n", bpm );
+    out_append( text );
+    snd_bpm = bpm;
+}
+
+static int snd_getbpm( void* usrdata ) {
+    return snd_bpm;
+}
+
+static void snd_sync( void* usrdata, unsigned mask ) {
+    char text[40];
+    snprintf( text, sizeof(text), "<sync %u>\n", mask );
+    out_append( text );
+}
+
+static void snd_silence( void* usrdata, int chan ) {
+    char text[40];
+    snprintf( text, sizeof(text), "<silence %d>\n", chan );
+    out_append( text );
+    for ( int i=0; i < 8; ++i ) {
+        if ( chan < 0 || chan == i ) snd_busy[i] = false;
+    }
+}
+
+static bool snd_isbusy( void* usrdata, int chan ) {
+    return snd_busy[chan];
+}
+
+static const vm_sound_t test_sound = { snd_tone, snd_setwave, snd_setbpm, snd_getbpm, snd_sync, snd_silence, snd_isbusy };
+
 static void rt_report( struct _runtime_t* rt, void* usrdata, const char* text ) {
     out_append( text );
     if ( text[0] && text[ strlen( text ) - 1U ] != '\n' ) {
@@ -624,6 +722,7 @@ static bool compile_and_run( void ) {
     vm.list     = vm_list;
     vm.deletelines = vm_delete;
     vm.renumber = vm_renumber;
+    vm.sound    = &test_sound;
     vm.maxsteps = UINT64_C(1000000);
     ok = vm_run_at( &vm, start );
     if ( ok && vm.request != VMREQ_NONE ) {
@@ -705,6 +804,7 @@ static bool enter_source( const char* source, program_t* pgm, buf_t* tokbuf, boo
 
 static bool run_case( const testcase_t* tc, buf_t* tokbuf ) {
     out_reset();
+    snd_reset();
     keys = tc->input;
     cleanup_runtime( &rt );
     init_runtime( &rt );

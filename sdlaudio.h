@@ -54,6 +54,9 @@ void sdlaud_stopchan( int chan, float beats );                          // fades
 void sdlaud_setwave( int chan, int wave );                              // at the channel's cursor, takes no time
 void sdlaud_setbpm( int bpm );                                          // tempo, default 60 (1 beat = 1 s)
 void sdlaud_syncchans( unsigned chanmask );                             // bit n = channel n; lines up their cursors
+bool sdlaud_busy( int chan );                                           // the channel sounds or has a sequence queued / running
+int  sdlaud_getbpm( void );                                             // tempo set by sdlaud_setbpm() (0 without audio)
+void sdlaud_silencechan( int chan );                                    // now: drops the channel's queued events, fades it out
 void sdlaud_silenceall( void );                                         // now: drops everything queued, fades all out
 
 #endif

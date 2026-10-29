@@ -27,6 +27,7 @@
 
 #include <ctype.h>
 #include "vm.h"
+#include "mml.h"
 #include "instset.h"
 
 // -- helpers ---------------------------------------------------------------
@@ -59,6 +60,7 @@ void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem ) {
     vm->print    = 0;
     vm->report   = 0;
     vm->inkey    = 0;
+    vm->sound    = 0;
     vm->input    = 0;
     vm->interrupt = 0;
     vm->getkey   = 0;
@@ -1125,6 +1127,147 @@ static bool vm_monitor_request( vm_t* vm ) {
     return true;
 }
 
+// the channel number 1..8 -> 0..7; false after reporting an error
+static bool vm_sound_channel( vm_t* vm, double num, int* pchan ) {
+    if ( !( num >= 1.0 && num < 9.0 ) ) {
+        return vm_error( vm, "Illegal argument" );
+    }
+    *pchan = (int) num - 1;
+    return true;
+}
+
+// PLAY ( s1 .. sn n -- ): the voices are parsed first, then queued
+static bool vm_play( vm_t* vm ) {
+    double count = 0; char* strs[SND_MAXVOICES]; mml_t mml[SND_MAXVOICES]; int n = 0, parsed = 0;
+    bool ok = vm_dpop_num( vm, &count );
+    if ( ok && !( count >= 1.0 && count <= (double) SND_MAXVOICES ) ) {
+        ok = vm_error( vm, "Illegal argument" );
+    }
+    if ( ok ) {
+        n = (int) count;
+        int popped = 0;
+        for ( int i=n-1; ok && i >= 0; --i ) {      // the last string is on top
+            ok = vm_dpop_str( vm, &strs[i] );
+            if ( ok ) ++popped;
+        }
+        if ( !ok ) {        // the strings that were popped belong to the voices n-popped .. n-1
+            for ( int i=n-popped; i < n; ++i ) free( strs[i] );
+            n = 0;
+        }
+    }
+    for ( int i=0; ok && i < n; ++i ) {
+        char err[MML_ERRLEN];
+        if ( mml_parse( strs[i], &mml[i], err ) ) {
+            ++parsed;
+        } else {
+            ok = vm_error( vm, err );
+        }
+    }
+    if ( ok && vm->sound != 0 ) {
+        const vm_sound_t* snd = vm->sound;
+        int bpm = snd->getbpm( vm->userdata );
+        double tobeats = (double)( bpm > 0 ? bpm : 60 ) / 60.0;
+        snd->sync( vm->userdata, ( 1U << n ) - 1U );
+        for ( int v=0; v < n; ++v ) {
+            for ( size_t k=0; k < mml[v].count; ++k ) {
+                const mml_event_t* ev = &mml[v].events[k];
+                switch ( ev->kind ) {
+                    case MML_TONE:
+                        snd->tone( vm->userdata, v, ev->freq, ev->vol, (float)( ev->seconds * tobeats ) );
+                        if ( ev->gap > 0.0f ) {
+                            snd->tone( vm->userdata, v, 0.0f, 0.0f, (float)( ev->gap * tobeats ) );
+                        }
+                        break;
+                    case MML_REST:
+                        snd->tone( vm->userdata, v, 0.0f, 0.0f, (float)( ev->seconds * tobeats ) );
+                        break;
+                    case MML_WAVE:
+                        snd->setwave( vm->userdata, v, ev->wave );
+                        break;
+                }
+            }
+            snd->tone( vm->userdata, v, 0.0f, 0.0f, 0.0f );     // the end of the voice: nothing goes on sounding
+        }
+    }
+    for ( int i=0; i < parsed; ++i ) mml_free( &mml[i] );
+    for ( int i=0; i < n; ++i ) free( strs[i] );
+    return ok;
+}
+
+// SND ( args -- ), kind = SNDK_*
+static bool vm_sound( vm_t* vm, uint16_t kind ) {
+    double a = 0, b = 0, c = 0, d = 0; int chan = 0;
+    const vm_sound_t* snd = vm->sound;
+    switch ( kind ) {
+        case SNDK_SOUND:
+            if ( !vm_dpop_num( vm, &d ) || !vm_dpop_num( vm, &c ) || !vm_dpop_num( vm, &b ) || !vm_dpop_num( vm, &a ) ||
+                 !vm_sound_channel( vm, a, &chan ) ) {
+                return false;
+            }
+            if ( !( ( b == 0.0 || ( b >= 20.0 && b <= 20000.0 ) ) && c >= 0.0 && c <= 1.0e6 && d >= 0.0 && d <= 1.0 ) ) {
+                return vm_error( vm, "Illegal argument" );
+            }
+            if ( snd ) snd->tone( vm->userdata, chan, (float) b, b == 0.0 ? 0.0f : (float) d, (float) c );
+            return true;
+        case SNDK_PLAY:
+            return vm_play( vm );
+        case SNDK_WAVE:
+            if ( !vm_dpop_num( vm, &b ) || !vm_dpop_num( vm, &a ) || !vm_sound_channel( vm, a, &chan ) ) {
+                return false;
+            }
+            if ( !( b >= 0.0 && b < 4.0 ) ) {
+                return vm_error( vm, "Illegal argument" );
+            }
+            if ( snd ) snd->setwave( vm->userdata, chan, (int) b );
+            return true;
+        case SNDK_TEMPO:
+            if ( !vm_dpop_num( vm, &a ) ) {
+                return false;
+            }
+            if ( !( a >= 1.0 && a <= 1000.0 ) ) {
+                return vm_error( vm, "Illegal argument" );
+            }
+            if ( snd ) snd->setbpm( vm->userdata, (int) a );
+            return true;
+        case SNDK_OFF:
+            if ( !vm_dpop_num( vm, &a ) ) {
+                return false;
+            }
+            if ( a == 0.0 ) {
+                chan = -1;
+            } else if ( !vm_sound_channel( vm, a, &chan ) ) {
+                return false;
+            }
+            if ( snd ) snd->silence( vm->userdata, chan );
+            return true;
+        case SNDK_SYNC: {
+            if ( !vm_dpop_num( vm, &a ) ) {
+                return false;
+            }
+            if ( !( a >= 1.0 && a <= (double) SND_MAXVOICES ) ) {
+                return vm_error( vm, "Illegal argument" );
+            }
+            int n = (int) a; unsigned mask = 0; bool ok = true;
+            for ( int i=0; i < n; ++i ) {       // all are popped, even after an error
+                double ch = 0; int cn = 0;
+                if ( !vm_dpop_num( vm, &ch ) ) {
+                    return false;
+                }
+                if ( ok && !vm_sound_channel( vm, ch, &cn ) ) {
+                    ok = false;
+                } else if ( ok ) {
+                    mask |= 1U << cn;
+                }
+            }
+            if ( ok && snd ) snd->sync( vm->userdata, mask );
+            return ok;
+        }
+        default:
+            break;
+    }
+    return vm_error( vm, "Internal error (bad sound statement)" );
+}
+
 // LIST ( s1 n1 s2 n2 -- )
 static bool vm_list_program( vm_t* vm ) {
     double n1 = 0, n2 = 0; char* s1 = 0; char* s2 = 0;
@@ -1214,6 +1357,13 @@ static bool vm_system_function( vm_t* vm, uint16_t opcode ) {
             vm_format_number( num, buf );
             char* s = vm_new_string( vm, buf, strlen( buf ) );
             return s && vm_push_string( vm, s );
+        }
+        case INS_PLNG: {
+            int chan = 0;
+            if ( !vm_dpop_num( vm, &num ) || !vm_sound_channel( vm, num, &chan ) ) {
+                return false;
+            }
+            return vm_dpush_num( vm, vm->sound != 0 && vm->sound->busy( vm->userdata, chan ) ? -1.0 : 0.0 );
         }
         case INS_CHRS: {
             if ( !vm_dpop_num( vm, &num ) ) {
@@ -1469,6 +1619,7 @@ static bool vm_step( vm_t* vm ) {
         case INS_WIAE: return vm_write_elem( vm, param16, VARTYPEV_INT );
         case INS_WSAE: return vm_write_elem( vm, param16, VARTYPEV_STR );
         case INS_TI: case INS_INKY: case INS_FRE: case INS_STRS: case INS_CHRS: case INS_ASC: case INS_LEN: case INS_VAL:
+        case INS_PLNG:
         case INS_BINS: case INS_QUAS: case INS_OCTS: case INS_HEXS: case INS_DECS:
         case INS_LFTS: case INS_RGTS: case INS_MIDS:
             return vm_system_function( vm, opcode );
@@ -1479,6 +1630,7 @@ static bool vm_step( vm_t* vm ) {
         case INS_LIST: return vm_list_program( vm );
         case INS_NEW: return vm_new_program( vm );
         case INS_MON: return vm_monitor_request( vm );
+        case INS_SND: return vm_sound( vm, param16 );
         case INS_EDIT: return vm_edit_request( vm );
         case INS_DELE: return vm_edit_program( vm, false );
         case INS_RENM: return vm_edit_program( vm, true );

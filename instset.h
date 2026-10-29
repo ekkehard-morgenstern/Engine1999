@@ -344,6 +344,20 @@ The 4096 extended instructions are as follows:
                             (name s, if not empty); ( "" -1 ) = no target. Stores a request like RUNP and ends the run.
     0001 01000001       MON  - open the machine monitor ( -- ) C=0 P=0
                             Stores a request for the host (like NEW) and ends the run.
+    0001 01000010       SND  - sound statement ( args -- ) C=0 P=1; the parameter is the kind (SNDK_* in nodetype.h):
+                            1 SOUND ( ch freq beats vol -- )   a tone: channel 1..8, 20..20000 Hz (0 = a rest),
+                              beats >= 0 (the channel's next event follows after that), volume 0..1
+                            2 PLAY ( s1 .. sn n -- )           n music strings (1..8): string i plays on channel i, all
+                              voices start together (the strings are parsed first: a wrong one queues nothing, see mml.h)
+                            3 WAVE ( ch wave -- )              wave type 0..3 (sine, square, triangle, noise)
+                            4 TEMPO ( bpm -- )                 beats per minute 1..1000 (the unit of the beats of SOUND)
+                            5 OFF ( ch -- )                    silence the channel now and forget what is queued; 0 = all
+                            6 SYNC ( ch1 .. chn n -- )         line up the channels' time (so that they start together)
+                            Everything is queued by the host (sound callbacks, see vm.h) and returns at once; without
+                            sound callbacks the arguments are only checked. A bad argument is "Illegal argument".
+    0001 01000011       PLNG - is the channel busy? ( ch -- n ) C=0 P=0
+                            -1 while channel 1..8 sounds or has events queued or a sequence still running, else 0 (also
+                            without sound callbacks). Other channels are "Illegal argument".
 
 */
 
@@ -461,5 +475,7 @@ The 4096 extended instructions are as follows:
 #define INS_RENM        UINT16_C(0X13F)
 #define INS_EDIT        UINT16_C(0X140)
 #define INS_MON         UINT16_C(0X141)
+#define INS_SND         UINT16_C(0X142)
+#define INS_PLNG        UINT16_C(0X143)
 
 #endif

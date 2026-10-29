@@ -196,6 +196,12 @@
 #define TOK_AGAIN       UINT8_C(145)        // AGAIN keyword
 #define TOK_CHR         UINT8_C(146)        // CHR keyword
 #define TOK_MONITOR     UINT8_C(147)        // MONITOR keyword
+#define TOK_SOUND       UINT8_C(148)        // SOUND keyword
+#define TOK_PLAY        UINT8_C(149)        // PLAY keyword
+#define TOK_WAVE        UINT8_C(150)        // WAVE keyword
+#define TOK_TEMPO       UINT8_C(151)        // TEMPO keyword
+#define TOK_PLAYING     UINT8_C(152)        // PLAYING function
+#define TOK_SYNC        UINT8_C(153)        // SYNC keyword (SOUND SYNC)
 #define TOK_NONE        UINT8_C(255)        // no token (!)
 
 // -- buffers ---------------------------------------------------------------

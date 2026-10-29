@@ -89,3 +89,13 @@ They are ordinary statements (`bascomp.ebnf`, `cgenprog.c`), so they work in dir
 - `DELETE` and `RENUM` change the stored program, so a program that executes one **ends** right there (the code being run no longer matches the program); `RUN` starts the changed program.
 
 `RUN` and `LOAD` need a restart of the whole compiled program, so the VM doesn't do them itself (nor `NEW` and `EDIT`): it stops and leaves a request for the host (`docs/compiler-and-vm.md`).
+
+## Sound: `SOUND`, `PLAY`, `WAVE`, `TEMPO`, `PLAYING()`
+
+Statements of the language (`bascomp.ebnf` `sound-stmt`, `cgenprog.c`); everything is queued and returns at once. Channels are 1..8.
+`SOUND ch, freq, beats [, vol]` (a tone of 20..20000 Hz, 0 = a rest; beats 0 = until the next sound on the channel; volume 0..1, default 0.5),
+`SOUND OFF [ch]`, `SOUND SYNC ch [, ch ...]`, `PLAY a$ [, b$ ...]` (a music string per voice, all start together; the music string language:
+notes `A`-`G`, `#`/`+`/`-`, lengths and dots, `R`, `O < >`, `L`, `T`, `V`, `W`, `ML MN MS`), `WAVE ch, w` (0 sine, 1 square, 2 triangle, 3 noise),
+`TEMPO bpm` (the unit of the beats of `SOUND`, default 60) and the function `PLAYING( ch )` (-1 while the channel sounds or has music queued, else 0).
+Full description, examples, the instruction/host interface and the proposal for effects: `docs/sound.md`. The words `SOUND PLAY WAVE TEMPO PLAYING SYNC`
+are keywords now (they can't be variable names).

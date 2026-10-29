@@ -56,7 +56,7 @@ queued in, so one channel's far-ahead events don't hold up another channel's.
 #define SYNTH_NOTES         72          // note 0 = A at 110 Hz, 12 notes per octave, up to ~6.6 kHz
 #define SYNTH_FREQ_MIN      20.0f
 #define SYNTH_FREQ_MAX      20000.0f
-#define SYNTH_MAXEVENTS     16384
+#define SYNTH_MAXEVENTS     262144
 #define SYNTH_DEFAULT_BPM   60
 #define SYNTH_SLEW_SEC      0.0025f     // time a channel needs to fade between silence and full volume
 
@@ -104,6 +104,7 @@ typedef struct _synth_t {
     synth_chan_t    chan[SYNTH_NCHAN];
     uint64_t        cursor[SYNTH_NCHAN];
     synth_event_t*  events;             // sorted by time
+    synth_event_t*  tail;               // the last one (events queued in time order are appended without a search)
     int             nevents;
 } synth_t;
 
@@ -122,6 +123,8 @@ void synth_sync( synth_t* s, unsigned chanmask, uint64_t now );     // all curso
 bool synth_schedule( synth_t* s, uint64_t when, synth_evtype_t type, int chan, float freq, float vol, synth_wave_t wave );
 int synth_runevents( synth_t* s, uint64_t now );    // applies the events due at "now"; returns how many
 bool synth_nextevent( const synth_t* s, uint64_t* when );   // time of the earliest queued event; false if none
+bool synth_busy( const synth_t* s, int chan, uint64_t now );   // the channel sounds, fades, or has events queued / a sequence still running
+void synth_silencechan( synth_t* s, int chan, uint64_t now );   // the same for one channel
 void synth_silence( synth_t* s, uint64_t now );     // drops all queued events, fades all channels out, resets the cursors
 
 void synth_render( synth_t* s, float* buf, int count );     // mono, count samples

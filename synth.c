@@ -107,6 +107,7 @@ static void synth_dropevents( synth_t* s ) {
         s->events = ev->next;
         free( ev );
     }
+    s->tail = 0;
     s->nevents = 0;
 }
 
@@ -171,11 +172,16 @@ bool synth_schedule( synth_t* s, uint64_t when, synth_evtype_t type, int chan, f
         return false;
     }
     ev->next = 0; ev->when = when; ev->type = type; ev->chan = chan; ev->freq = freq; ev->vol = vol; ev->wave = wave;
-    synth_event_t** pp = &s->events;
-    while ( *pp != 0 && (*pp)->when <= when ) {     // after the events of the same time: they stay in the order queued
-        pp = &(*pp)->next;
+    if ( s->tail == 0 || s->tail->when <= when ) {     // the usual case: a sequence is queued in time order
+        if ( s->tail == 0 ) s->events = ev; else s->tail->next = ev;
+        s->tail = ev;
+    } else {
+        synth_event_t** pp = &s->events;
+        while ( *pp != 0 && (*pp)->when <= when ) {     // after the events of the same time: they stay in the order queued
+            pp = &(*pp)->next;
+        }
+        ev->next = *pp; *pp = ev;       // not the last one (the tail is later)
     }
-    ev->next = *pp; *pp = ev;
     ++s->nevents;
     return true;
 }
@@ -204,6 +210,7 @@ int synth_runevents( synth_t* s, uint64_t now ) {
     while ( s->events != 0 && s->events->when <= now ) {
         synth_event_t* ev = s->events;
         s->events = ev->next;
+        if ( s->events == 0 ) s->tail = 0;
         --s->nevents;
         synth_apply( s, ev );
         free( ev );
@@ -218,6 +225,42 @@ bool synth_nextevent( const synth_t* s, uint64_t* when ) {
     }
     *when = s->events->when;
     return true;
+}
+
+bool synth_busy( const synth_t* s, int chan, uint64_t now ) {
+    if ( chan < 0 || chan >= SYNTH_NCHAN ) {
+        return false;
+    }
+    if ( s->chan[chan].target != 0.0f || s->chan[chan].gain != 0.0f || s->cursor[chan] > now ) {
+        return true;
+    }
+    for ( const synth_event_t* ev = s->events; ev != 0; ev = ev->next ) {
+        if ( ev->chan == chan ) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void synth_silencechan( synth_t* s, int chan, uint64_t now ) {
+    if ( chan < 0 || chan >= SYNTH_NCHAN ) {
+        return;
+    }
+    synth_event_t** pp = &s->events;
+    s->tail = 0;
+    while ( *pp != 0 ) {
+        synth_event_t* ev = *pp;
+        if ( ev->chan == chan ) {
+            *pp = ev->next;
+            free( ev );
+            --s->nevents;
+        } else {
+            s->tail = ev;
+            pp = &ev->next;
+        }
+    }
+    s->chan[chan].target = 0.0f;
+    s->cursor[chan] = now;
 }
 
 void synth_silence( synth_t* s, uint64_t now ) {

@@ -201,6 +201,55 @@ bool cgen_from_monitorstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     return cgen_gen_mon( cgen ) || cgen_out_of_code_memory( comp );
 }
 
+bool cgen_from_soundstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    /*
+        NT_SOUNDSTMT    SOUND / PLAY / WAVE / TEMPO statement
+            data:
+                - 1 byte of SNDK_*
+            branches:
+                - the argument expressions (numeric, string for PLAY)
+        code:  <arguments>  [ <default volume 0.5> | <count> ]  SND <kind>
+    */
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->type != NT_SOUNDSTMT || node->datalen != UINT16_C(1) ) {
+        return cgen_unexpected_node( comp );
+    }
+    uint8_t kind = node->data[0];
+    bool strargs = kind == SNDK_PLAY;
+    for ( uint8_t i=0; i < node->numbranches; ++i ) {
+        if ( !( strargs ? cgen_from_strexpr( cgen, comp, node->branches[i] ) :
+                          cgen_from_numexpr( cgen, comp, node->branches[i] ) ) ) {
+            return false;
+        }
+    }
+    switch ( kind ) {
+        case SNDK_SOUND:
+            if ( node->numbranches == 3U && !cgen_push_number( cgen, comp, 0.5 ) ) {
+                return false;
+            }
+            break;
+        case SNDK_OFF:
+            if ( node->numbranches == 0U && !cgen_push_number( cgen, comp, 0.0 ) ) {      // all channels
+                return false;
+            }
+            break;
+        case SNDK_PLAY:
+        case SNDK_SYNC:
+            if ( !cgen_push_number( cgen, comp, (double) node->numbranches ) ) {
+                return false;
+            }
+            break;
+        case SNDK_WAVE:
+        case SNDK_TEMPO:
+            break;
+        default:
+            return cgen_unexpected_node( comp );
+    }
+    return cgen_gen_snd( cgen, kind ) || cgen_out_of_code_memory( comp );
+}
+
 bool cgen_from_clearstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     // NT_CLEARSTMT    CLEAR statement (no data, no branches)
     if ( node == NODE_NONE ) {
