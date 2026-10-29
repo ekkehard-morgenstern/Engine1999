@@ -35,6 +35,7 @@
 
 #define TXTSCR_WIDTH    80
 #define TXTSCR_HEIGHT   25
+#define TXTSCR_NSCREENS 2       // screen 0: BASIC, screen 1: full-screen editor
 
 #define TXTSCR_FGCOL    1
 #define TXTSCR_BGCOL    0
@@ -57,10 +58,24 @@ typedef uint32_t textcell_t;
 
 bool txtscr_enablecursor( bool enable );
 bool txtscr_blinkcursor( void );
-void txtscr_getsize( int* outsx, int* outsy );
+void txtscr_getsize( int* outsx, int* outsy );        // size of the viewport
 void txtscr_getcursor( int* outx, int* outy );
 
 void txtscr_init( void );
+
+// Two screens (cells, pen/paper, cursor, viewport each) exist; the selected one is drawn and written to.
+// The viewport is the rectangle in which output, the cursor and scrolling live: coordinates of txtscr_write(),
+// txtscr_print(), txtscr_locate() and the cursor are relative to it, text that runs over its right edge continues in the
+// next viewport row, and scrolling moves only the viewport. The default is the whole screen. Setting a viewport
+// puts the cursor at its top left corner.
+bool txtscr_select( int n );
+int txtscr_selected( void );
+bool txtscr_setviewport( int x, int y, int w, int h );      // false if it doesn't lie on the screen
+void txtscr_resetviewport( void );
+void txtscr_getviewport( int* outx, int* outy, int* outw, int* outh );
+void txtscr_setblank( int bg, int fg );     // colors scrolling and txtscr_clear() fill with (default: TXTSCR_BGCOL/FGCOL)
+textcell_t txtscr_getcell( int y, int x );  // relative to the viewport; 0 outside of it
+void txtscr_clear( void );                  // fills the viewport with blanks, cursor to its top left
 
 void txtscr_render( uint8_t* target );
 

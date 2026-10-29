@@ -93,6 +93,10 @@ typedef struct _repl_t {
     // result in a malloc'ed string, or 0 if the user cancelled (the host reports its own problems, e.g. a line too long)
     char*       (*edit)( struct _repl_t*, const char* text );
     char*       pending;            // an edited line waiting to be entered (see repl_enter())
+    // EDIT without a target asks the host for the full-screen editor: the REPL sets this flag and returns; the host
+    // checks it after repl_enter() (not inside a callback: the editor enters lines itself), clears it and opens the editor
+    bool        fulledit;
+    char*       filename;           // name of the last file loaded or saved (malloc'ed), 0 = none or NEW; for the editor's title
 } repl_t;
 
 bool init_repl( repl_t* repl );             // false if out of memory

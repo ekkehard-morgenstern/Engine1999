@@ -13,7 +13,13 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-(none)
+### Full-screen editor for `EDIT` (written 2026-10-29)
+- `textscreen.[ch]`: state moved into a per-screen struct; two screens (`txtscr_select()`), per-screen viewport (`txtscr_setviewport/resetviewport/getviewport`; coordinates, cursor, wrapping and scrolling relative to it), `txtscr_clear/setblank/getcell`. Fixed along the way: cursor row was `uint8_t` (backspace at the top never scrolled), `txtscr_write` accepted `y == height`.
+- `fulledit.[ch]` (new): the editor on screen 1 (title bar, line number pane, text pane with highlighted lines, scroll bar, help bar, one viewport each); in-place editing of the current line, new-line insertion with number entry in the number pane / automatic number, CTRL+Y, ESC, remembered position.
+- `sdlscreen.[ch]`: shared `sdlscr_editkey()`, `sdlscr_editmode_begin/end()`, `sdlscr_textchanged()`, public `sdlscr_deleteinputmsg()`; key messages carry `mods`; `sdlscr_lineedit()` uses the viewport size.
+- `basrepl.[ch]`: `repl_t.fulledit` (EDIT without a target sets it instead of "Not implemented yet"), `repl_t.filename` (set by LOAD/SAVE, cleared by NEW). `engine1999.c` opens the editor after `repl_enter()`.
+- New `txttest1.c` (40 checks), 7 new `repltest1` cases (2 EDIT cases changed); makefile (`fulledit.o`, `txttest1`), `.gitignore`, `CLAUDE.md`, `SESSION.md`, `docs/` (display-engine, basic-language, build-and-test, roadmap).
+- Tests: `vmtest1` 385/385, `repltest1` 148/148, `ansitest1` 0 failures, `txttest1` 40/40; `make` clean with `-Wall -Werror`. The editor was checked on the real screen under Xvfb with XTest key injection.
 
 ## Log
 

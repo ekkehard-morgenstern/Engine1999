@@ -13,7 +13,7 @@ Order = suggested order, not a commitment.
 - [ ] `LIST` with an output channel (`LIST #1,10-20`; today always the VM's channel 0) and `RUN`/`LOAD` taking more arguments?
 - [ ] `LOAD`/`SAVE`: file names are plain paths relative to the current directory; no `.BAS` default extension, no directory handling
 - [ ] `MERGE`, `CHAIN`, `FILES`
-- [ ] `EDIT` without a target is "not implemented yet" (the owner has not decided what it should do); a full-screen / multi-line editor is not planned yet. (`EDIT n` / `EDIT label`, the simple one-line editor, is done.)
+- [ ] Full-screen editor (`EDIT`, first version done): no mouse support (the scroll bar is informational), no search/replace, block or clipboard operations, no Unicode; lines over 1656 characters are read-only; the position memory is by line number only. `EDIT n` still uses the one-line editor.
 - [ ] `RENUM` also adjusts targets in `RUN`/`LIST`/`DELETE`, but not the range of another `RENUM` statement in the program, and a changed line is
       re-tokenized from the listing text (a round-trip through `detokenize_line`/`tokenize_line`; fine so far in all tests)
 - [ ] `DELETE`/`RENUM` end a running program; a "continue" (`CONT`) would need the code to be patched or recompiled while running

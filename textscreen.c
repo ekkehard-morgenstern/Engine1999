@@ -30,12 +30,25 @@
 #define BLINKCOUNTER_ON       45
 #define BLINKCOUNTER_OFF      15
 
-static textcell_t textscr[TXTSCR_WIDTH * TXTSCR_HEIGHT];
+// one text screen: the cells, the pen/paper, the cursor and the viewport. The cursor and all coordinates of the
+// txtscr_* functions are relative to the viewport, which is the whole screen unless set otherwise.
+typedef struct _txtscreen_t {
+      textcell_t  cells[TXTSCR_WIDTH * TXTSCR_HEIGHT];
+      int         pen, paper, blankbg, blankfg;
+      int         cursx, cursy;
+      int         vx, vy, vw, vh;
+} txtscreen_t;
+
+static txtscreen_t screens[TXTSCR_NSCREENS];
+static txtscreen_t* cur = &screens[0];      // the selected screen: the one drawn and written to
+static int        selected;
 static uint8_t    currfont[FONTSIZE];
-static uint8_t    pen, paper, cursx, cursy, blnkti;
+static uint8_t    blnkti;
 static bool       cursena, curson;
 
 extern const uint8_t fontdef1[FONTSIZE];
+
+// -- cursor ----------------------------------------------------------------------------
 
 bool txtscr_enablecursor( bool enable ) {
       bool old = cursena;
@@ -59,39 +72,118 @@ bool txtscr_blinkcursor( void ) {
 }
 
 void txtscr_getsize( int* outsx, int* outsy ) {
-      *outsx = TXTSCR_WIDTH; *outsy = TXTSCR_HEIGHT;
+      *outsx = cur->vw; *outsy = cur->vh;
 }
 
 void txtscr_getcursor( int* outx, int* outy ) {
-      *outx = cursx; *outy = cursy;
+      *outx = cur->cursx; *outy = cur->cursy;
+}
+
+// -- screens and viewport --------------------------------------------------------------
+
+static void txtscr_initscreen( txtscreen_t* sc ) {
+      sc->pen = sc->blankfg = TXTSCR_FGCOL;
+      sc->paper = sc->blankbg = TXTSCR_BGCOL;
+      sc->cursx = sc->cursy = 0;
+      sc->vx = sc->vy = 0;
+      sc->vw = TXTSCR_WIDTH; sc->vh = TXTSCR_HEIGHT;
+      textcell_t cell = TXTSCR_MAKECELL( 32, TXTSCR_BGCOL, TXTSCR_FGCOL );
+      for ( size_t i=0; i < TXTSCR_WIDTH * TXTSCR_HEIGHT; ++i ) {
+            sc->cells[i] = cell;
+      }
 }
 
 void txtscr_init( void ) {
       memcpy( currfont, fontdef1, FONTSIZE );
-      textcell_t cell = TXTSCR_MAKECELL( 32, TXTSCR_BGCOL, TXTSCR_FGCOL );
-      paper = TXTSCR_BGCOL;
-      pen = TXTSCR_FGCOL;
-      cursx = 0;
-      cursy = 0;
+      for ( int i=0; i < TXTSCR_NSCREENS; ++i ) {
+            txtscr_initscreen( &screens[i] );
+      }
+      selected = 0;
+      cur = &screens[0];
       blnkti = 0;
       cursena = true;
       curson = true;
-      for ( size_t i=0; i < TXTSCR_WIDTH * TXTSCR_HEIGHT; ++i ) {
-            textscr[i] = cell;
+}
+
+bool txtscr_select( int n ) {
+      if ( n < 0 || n >= TXTSCR_NSCREENS ) {
+            return false;
+      }
+      selected = n;
+      cur = &screens[n];
+      return true;
+}
+
+int txtscr_selected( void ) {
+      return selected;
+}
+
+bool txtscr_setviewport( int x, int y, int w, int h ) {
+      if ( x < 0 || y < 0 || w < 1 || h < 1 || x + w > TXTSCR_WIDTH || y + h > TXTSCR_HEIGHT ) {
+            return false;
+      }
+      cur->vx = x; cur->vy = y; cur->vw = w; cur->vh = h;
+      cur->cursx = cur->cursy = 0;
+      return true;
+}
+
+void txtscr_resetviewport( void ) {
+      txtscr_setviewport( 0, 0, TXTSCR_WIDTH, TXTSCR_HEIGHT );
+}
+
+void txtscr_getviewport( int* outx, int* outy, int* outw, int* outh ) {
+      *outx = cur->vx; *outy = cur->vy; *outw = cur->vw; *outh = cur->vh;
+}
+
+void txtscr_setblank( int bg, int fg ) {
+      if ( bg >= 0 && bg <= 255 ) {
+            cur->blankbg = bg;
+      }
+      if ( fg >= 0 && fg <= 255 ) {
+            cur->blankfg = fg;
       }
 }
 
+static textcell_t txtscr_blankcell( void ) {
+      return TXTSCR_MAKECELL( 32, cur->blankbg, cur->blankfg );
+}
+
+static textcell_t* txtscr_row( int y ) {      // first cell of row y of the viewport
+      return &cur->cells[ ( cur->vy + y ) * TXTSCR_WIDTH + cur->vx ];
+}
+
+textcell_t txtscr_getcell( int y, int x ) {
+      if ( x < 0 || y < 0 || x >= cur->vw || y >= cur->vh ) {
+            return 0;
+      }
+      return txtscr_row( y )[x];
+}
+
+void txtscr_clear( void ) {
+      textcell_t cell = txtscr_blankcell();
+      for ( int y=0; y < cur->vh; ++y ) {
+            textcell_t* d = txtscr_row( y );
+            for ( int x=0; x < cur->vw; ++x ) {
+                  *d++ = cell;
+            }
+      }
+      cur->cursx = cur->cursy = 0;
+}
+
+// -- rendering -------------------------------------------------------------------------
+
 void txtscr_render( uint8_t* target ) {
-      const textcell_t* s = &textscr[0];
+      const textcell_t* s = &cur->cells[0];
       uint8_t* d = target;
       int stride = TXTSCR_WIDTH * 8;
+      int ccx = cur->vx + cur->cursx, ccy = cur->vy + cur->cursy;
       for ( uint8_t y=0; y < (uint8_t) TXTSCR_HEIGHT; ++y ) {
             for ( uint8_t x=0; x < (uint8_t) TXTSCR_WIDTH; ++x ) {
                   textcell_t cell = *s++;
                   uint8_t bg = TXTSCR_CELL_BG(cell);
                   uint8_t fg = TXTSCR_CELL_FG(cell);
                   uint8_t ch = TXTSCR_CELL_CHR(cell);
-                  if ( cursena && curson && y == cursy && x == cursx ) {
+                  if ( cursena && curson && y == ccy && x == ccx ) {
                         uint8_t t = fg; fg = bg; bg = t;
                   }
                   const uint8_t* fontchar = &currfont[ ch * 12 ];
@@ -110,90 +202,100 @@ void txtscr_render( uint8_t* target ) {
       }
 }
 
+// -- output ----------------------------------------------------------------------------
+
+// writes at most the rest of the viewport row; returns the number of characters written
 int txtscr_write( int y, int x, int bg, int fg, const char* text, int len ) {
-      const char* s = text;
-      size_t n = len < 0 ? strlen( s ) : len;
-      if ( x <= (int)(-n) ) {
+      if ( text == 0 ) {
             return 0;
-      } else if ( x < 0 ) {
-            int skip = -x;
-            x = 0;
-            n -= skip; text += skip;
       }
-      if ( n > (size_t)( TXTSCR_WIDTH - x ) ) {
-            n = (size_t)( TXTSCR_WIDTH - x );
-      }
-      if ( x >= TXTSCR_WIDTH || y < 0 || y > TXTSCR_HEIGHT ) {
+      int n = len < 0 ? (int) strlen( text ) : len;
+      if ( y < 0 || y >= cur->vh || x >= cur->vw || n <= 0 ) {
             return 0;
+      }
+      if ( x < 0 ) {
+            if ( x <= -n ) {
+                  return 0;
+            }
+            n += x; text -= x; x = 0;
+      }
+      if ( n > cur->vw - x ) {
+            n = cur->vw - x;
       }
       if ( bg < 0 ) {
-            bg = paper;
+            bg = cur->paper;
       }
       if ( fg < 0 ) {
-            fg = pen;
+            fg = cur->pen;
       }
-      if ( bg < 0 || bg > 255 || fg < 0 || fg > 255 || text == 0 ) {
+      if ( bg > 255 || fg > 255 ) {
             return 0;
       }
-      textcell_t* d = &textscr[ y * TXTSCR_WIDTH + x ];
+      textcell_t* d = txtscr_row( y ) + x;
       int ret = n;
       while ( n-- ) {
-            *d++ = TXTSCR_MAKECELL( *s++, bg, fg );
+            *d++ = TXTSCR_MAKECELL( *text++, bg, fg );
       }
       return ret;
 }
 
 void txtscr_scrolldown( void ) {
-      size_t chunksz = TXTSCR_WIDTH * ( TXTSCR_HEIGHT - 1 );
-      memmove( &textscr[TXTSCR_WIDTH], &textscr[0], sizeof(textcell_t) * chunksz );
-      textcell_t cell = TXTSCR_MAKECELL( 32, TXTSCR_BGCOL, TXTSCR_FGCOL );
-      for ( size_t i=0; i < TXTSCR_WIDTH; ++i ) {
-            textscr[i] = cell;
+      for ( int y = cur->vh - 1; y > 0; --y ) {
+            memmove( txtscr_row( y ), txtscr_row( y - 1 ), sizeof(textcell_t) * cur->vw );
+      }
+      textcell_t cell = txtscr_blankcell();
+      textcell_t* d = txtscr_row( 0 );
+      for ( int x=0; x < cur->vw; ++x ) {
+            *d++ = cell;
+      }
+}
+
+void txtscr_scrollup( void ) {
+      for ( int y=0; y < cur->vh - 1; ++y ) {
+            memmove( txtscr_row( y ), txtscr_row( y + 1 ), sizeof(textcell_t) * cur->vw );
+      }
+      textcell_t cell = txtscr_blankcell();
+      textcell_t* d = txtscr_row( cur->vh - 1 );
+      for ( int x=0; x < cur->vw; ++x ) {
+            *d++ = cell;
       }
 }
 
 void txtscr_backspace( void ) {
-      if ( cursx == 0 ) {
-            cursx = TXTSCR_WIDTH - 1;
-            if ( --cursy < 0 ) {
-                  cursy = 0;
+      if ( cur->cursx == 0 ) {
+            cur->cursx = cur->vw - 1;
+            if ( cur->cursy > 0 ) {
+                  --cur->cursy;
+            } else {
                   txtscr_scrolldown();
             }
             return;
       }
-      --cursx;
+      --cur->cursx;
 }
 
 void txtscr_rubout( void ) {
       txtscr_backspace();
-      txtscr_write( cursy, cursx, -1, -1, " ", 1 );
+      txtscr_write( cur->cursy, cur->cursx, -1, -1, " ", 1 );
 }
 
 void txtscr_locate( int x, int y ) {
       if ( x < 0 ) {
-            x = cursx;
+            x = cur->cursx;
       }
       if ( y < 0 ) {
-            y = cursy;
+            y = cur->cursy;
       }
-      if ( x < 0 || x >= TXTSCR_WIDTH || y < 0 || y >= TXTSCR_HEIGHT ) {
+      if ( x >= cur->vw || y >= cur->vh ) {
             return;
       }
-      cursx = x; cursy = y;
+      cur->cursx = x; cur->cursy = y;
 }
 
-void txtscr_scrollup( void ) {
-      size_t chunksz = TXTSCR_WIDTH * ( TXTSCR_HEIGHT - 1 );
-      memmove( &textscr[0], &textscr[TXTSCR_WIDTH], sizeof(textcell_t) * chunksz );
-      textcell_t cell = TXTSCR_MAKECELL( 32, TXTSCR_BGCOL, TXTSCR_FGCOL );
-      for ( size_t i=0; i < TXTSCR_WIDTH; ++i ) {
-            textscr[chunksz + i] = cell;
-      }
-}
-
+// text that doesn't fit in the rest of a viewport row continues in the next one; below the last row the viewport scrolls
 void txtscr_print( int y, int x, int bg, int fg, const char* text ) {
       const char* s = text;
-      int cx = x >= 0 ? x : cursx, cy = y >= 0 ? y : cursy;
+      int cx = x >= 0 ? x : cur->cursx, cy = y >= 0 ? y : cur->cursy;
       while ( *s != '\0' ) {
             const char* s0 = s;
             while ( *s != '\n' && *s != '\0' ) {
@@ -206,11 +308,11 @@ void txtscr_print( int y, int x, int bg, int fg, const char* text ) {
                         break;
                   }
                   cx += n; len -= n; s0 += n;
-                  if ( cx >= TXTSCR_WIDTH ) {
+                  if ( cx >= cur->vw ) {
                         cx = 0;
                         ++cy;
-                        if ( cy >= TXTSCR_HEIGHT ) {
-                              cy = TXTSCR_HEIGHT - 1;
+                        if ( cy >= cur->vh ) {
+                              cy = cur->vh - 1;
                               txtscr_scrollup();
                         }
                   }
@@ -218,13 +320,13 @@ void txtscr_print( int y, int x, int bg, int fg, const char* text ) {
             if ( *s == '\n' ) {
                   ++s;
                   cx = 0;
-                  if ( ++cy >= TXTSCR_HEIGHT ) {
-                        cy = TXTSCR_HEIGHT - 1;
+                  if ( ++cy >= cur->vh ) {
+                        cy = cur->vh - 1;
                         txtscr_scrollup();
                   }
             }
       }
-      cursx = cx; cursy = cy;
+      cur->cursx = cx; cur->cursy = cy;
 }
 
 void txtscr_printf( int y, int x, int bg, int fg, const char* fmt, ... ) {

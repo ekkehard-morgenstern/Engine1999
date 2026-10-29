@@ -27,6 +27,7 @@
 #include "sdlscreen.h"
 #include "sdlevent.h"
 #include "sdlaudio.h"
+#include "fulledit.h"
 #include "basrepl.h"
 #include "basdebug.h"
 
@@ -884,6 +885,10 @@ static bool handle_input( const char* buf ) {
     sdlscr_pollkeys( true );
     repl_enter( &repl, buf );
     sdlscr_pollkeys( false );
+    if ( repl.fulledit ) {      // EDIT without a target (not run from inside the REPL: the editor enters lines itself)
+        repl.fulledit = false;
+        fulledit_run( &repl, vblank_handler, &usrdata );
+    }
     return !stored;
 }
 

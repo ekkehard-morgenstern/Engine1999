@@ -473,12 +473,12 @@ static const editcase_t editcases[] = {
     { "EDIT under a new number copies the line", "10 PRINT 1\nEDIT 10\nLIST", "20 PRINT 1", "[10 PRINT 1]\n10 PRINT 1\n20 PRINT 1\n" },
     { "EDIT, line number alone deletes the line", "10 PRINT 1\nEDIT 10\nLIST", "10",       "[10 PRINT 1]\n" },
     { "EDIT, a direct mode line is run", "10 PRINT 1\nEDIT 10",            "PRINT 42",   "[10 PRINT 1]\n42\n" },
-    { "EDIT without a target",      "EDIT",                              "X",          "? Not implemented yet\n" },
+    { "EDIT without a target asks for the full-screen editor", "EDIT",   "X",          "" },
     { "EDIT undefined line",        "10 PRINT 1\nEDIT 99",               "X",          "? Undefined line number 99\n" },
     { "EDIT undefined label",       "10 PRINT 1\nEDIT X",                "X",          "? Undefined label X\n" },
     { "EDIT in a program ends the run", "10 EDIT 20\n20 PRINT 1\n30 PRINT 3\nRUN", 0,     "[20 PRINT 1]\n" },
     { "EDIT in a program, the edited line is entered", "10 EDIT 20\n20 PRINT 1\nRUN\nLIST", "20 PRINT 7", "[20 PRINT 1]\n10 EDIT 20\n20 PRINT 7\n" },
-    { "EDIT without a target in a program", "10 EDIT\nRUN",              "X",          "? Not implemented yet in line 10\n" },
+    { "EDIT without a target in a program", "10 EDIT\n20 PRINT 1\nRUN",  "X",          "" },
     { "an edited EDIT line edits again", "10 PRINT 1\nEDIT 10",          "EDIT 10\nPRINT 5", "[10 PRINT 1]\n[10 PRINT 1]\n5\n" },
     { "EDIT in a program edits again, no nesting", "10 EDIT 10\nRUN",    "RUN\nRUN\n10 PRINT 9", "[10 EDIT 10]\n[10 EDIT 10]\n[10 EDIT 10]\n" },
 };
@@ -514,6 +514,44 @@ static void run_edit_tests( size_t* pnum, size_t* pfailed ) {
     edit_reply = 0;
 }
 
+// -- full-screen editor request, file name -------------------------------------------------------
+
+static void run_fulledit_tests( size_t* pnum, size_t* pfailed ) {
+    static const struct { const char* name; const char* source; bool fulledit; const char* filename; } tests[] = {
+        { "EDIT without a target sets the full-screen editor flag", "EDIT",                         true,  0 },
+        { "EDIT with a target doesn't",            "10 PRINT 1\nEDIT 10",                         false, 0 },
+        { "EDIT in a program sets the flag",       "10 EDIT\n20 PRINT 1\nRUN",                    true,  0 },
+        { "no flag without EDIT",                  "10 PRINT 1\nRUN",                             false, 0 },
+        { "SAVE remembers the file name",          "10 PRINT 1\nSAVE \"" TESTFILE "\"",          false, TESTFILE },
+        { "LOAD remembers the file name",          "LOAD \"" TESTFILE "\"",                      false, TESTFILE },
+        { "NEW forgets the file name",             "LOAD \"" TESTFILE "\"\nNEW",                 false, 0 },
+    };
+    for ( size_t i=0; i < sizeof(tests) / sizeof(tests[0]); ++i ) {
+        out_reset();
+        keys = 0; polls = 0; breakafter = 0;
+        repl_t repl;
+        bool pass = false;
+        if ( init_repl( &repl ) ) {
+            repl.report = host_report;
+            repl.print  = host_print;
+            repl.save   = host_save;
+            char* src = strdup( tests[i].source );
+            for ( char* line = strtok( src, "\n" ); line; line = strtok( 0, "\n" ) ) {
+                repl_enter( &repl, line );
+            }
+            free( src );
+            pass = repl.fulledit == tests[i].fulledit &&
+                ( tests[i].filename == 0 ? repl.filename == 0 : repl.filename != 0 && strcmp( repl.filename, tests[i].filename ) == 0 );
+            cleanup_repl( &repl );
+        }
+        printf( "%s  %s\n", pass ? "PASS" : "FAIL", tests[i].name );
+        if ( !pass ) {
+            ++*pfailed;
+        }
+        ++*pnum;
+    }
+}
+
 int main( int argc, char** argv ) {
     if ( argc > 1 && strcmp( argv[1], "-v" ) == 0 ) {
         basdbg_flags = BASDBG_ALL;
@@ -533,6 +571,7 @@ int main( int argc, char** argv ) {
     run_growth_tests( &numcases, &failed );
     run_highlight_tests( &numcases, &failed );
     run_edit_tests( &numcases, &failed );
+    run_fulledit_tests( &numcases, &failed );
     remove( TESTFILE );
     printf( "%u of %u passed\n", (unsigned)( numcases - failed ), (unsigned) numcases );
     free( outbuf );

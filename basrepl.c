@@ -119,6 +119,16 @@ void cleanup_repl( repl_t* repl ) {
     repl->tokbuf = 0;
     free( repl->pending );
     repl->pending = 0;
+    free( repl->filename );
+    repl->filename = 0;
+}
+
+static void repl_set_filename( repl_t* repl, const char* filename ) {
+    char* copy = strdup( filename );
+    if ( copy != 0 ) {      // out of memory: the name is just not shown
+        free( repl->filename );
+        repl->filename = copy;
+    }
 }
 
 static void repl_setup_compiler( repl_t* repl ) {
@@ -349,6 +359,7 @@ static bool repl_load_program( repl_t* repl, const char* filename ) {
     }
     free_program( &repl->pgm );
     repl->pgm = loaded;
+    repl_set_filename( repl, filename );
     return true;
 }
 
@@ -361,8 +372,8 @@ static bool repl_list_end( repl_t* repl, const char* label, int32_t line, uint32
 static bool repl_edit_line( repl_t* repl, const char* label, int32_t line ) {
     uint32_t lineno = LINENO_NONE;
     if ( label[0] == '\0' && line < 0 ) {
-        repl_vm_error( repl, "Not implemented yet", 0 );
-        return false;
+        repl->fulledit = true;      // the host opens the full-screen editor when repl_enter() has returned
+        return true;
     }
     if ( !repl_list_end( repl, label, line, &lineno ) ) {
         return false;
@@ -462,6 +473,8 @@ void repl_new( repl_t* repl ) {
     free_program( &repl->pgm );
     init_program( &repl->pgm );
     repl_reset_runtime( repl );
+    free( repl->filename );
+    repl->filename = 0;
 }
 
 // LIST output goes through the host print callback (list_program's printer has no user data parameter)
@@ -560,6 +573,9 @@ bool repl_save_program( repl_t* repl, const char* filename, bool ascii ) {
     bool ok = save_program( &repl->pgm, f, ascii );
     if ( fclose( f ) != 0 ) {
         ok = false;
+    }
+    if ( ok ) {
+        repl_set_filename( repl, filename );
     }
     return ok;
 }

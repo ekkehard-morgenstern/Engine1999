@@ -50,7 +50,10 @@
 typedef struct _sdlscr_inputmsg_t {
     int     inputtype;
     union {
-        SDL_Keycode     symbol;
+        struct {
+            SDL_Keycode symbol;
+            Uint16      mods;       // SDL_Keymod bits (KMOD_CTRL, ...) at the time of the key press
+        };
         char            text[SDL_TEXTINPUTEVENT_TEXT_SIZE];
     };
 } sdlscr_inputmsg_t;
@@ -61,6 +64,7 @@ bool sdlscr_term( void );
 uint64_t sdlscr_getnsec( struct timespec* pts );
 uint64_t sdlscr_getframecnt( void );
 sdlscr_inputmsg_t* sdlscr_dequeueinputmsg( void );
+void sdlscr_deleteinputmsg( sdlscr_inputmsg_t* msg );     // frees a message returned by sdlscr_dequeueinputmsg()
 void sdlscr_enableinput( bool enable );
 
 // keyboard access for running programs (INKEY$, GET); the calling thread is the main thread, the keys come from the
@@ -84,6 +88,16 @@ void sdlscr_ansi_puts( const char* text );   // like sdlscr_puts, but ESC [ ... 
 #define SDLSCR_EDIT_CANCELLED   1
 #define SDLSCR_EDIT_TOOLONG     2       // the text doesn't fit on the screen: nothing was done
 #define SDLSCR_EDIT_CLOSED      3       // the screen was closed
+// the editing state of a line (buf holds maxlen characters + NUL) and the keys shared by both editors: printable
+// characters (inserted), LEFT, RIGHT, HOME, END, BACKSPACE, DELETE; returns true if the text or the position changed
+typedef struct _sdlscr_edit_t {
+    char*   buf;
+    size_t  len, pos, maxlen;
+} sdlscr_edit_t;
+bool sdlscr_editkey( sdlscr_edit_t* ed, const sdlscr_inputmsg_t* msg );
+bool sdlscr_editmode_begin( void );             // keys are queued, ESC is a key; returns the state for _end
+void sdlscr_editmode_end( bool oldstate );
+void sdlscr_textchanged( void );                // the text screen was changed directly through txtscr_*: redraw it
 int sdlscr_lineedit( char* buf, size_t bufsz, void (*vblank_handler)( void* ), void* usrdata );
 int sdlscr_lineinput( int stop_evtmsk, char* buf, size_t bufsz, void (*vblank_handler)( void* ), void* usrdata );
 void sdlscr_gettextscreensize( int* outsx, int* outsy );
