@@ -2861,9 +2861,9 @@ bool cgen_from_stmtline( codegen_t* cgen, compiler_t* comp, node_t* node ) {
             data:
                 - 3 bytes of line number (not present in direct mode)
             branches:
-                - 1 branch of statement list (or a single statement)
+                - 1 branch of statement list (or a single statement); none for a line with only a comment
     */
-    if ( node == NODE_NONE || node->type != NT_STMTLINE || node->numbranches != 1U ) {
+    if ( node == NODE_NONE || node->type != NT_STMTLINE || node->numbranches > 1U ) {
         return cgen_bad_node( comp );
     }
     // error messages (comp_error) and fixups refer to the line that is being generated, not the last one parsed
@@ -2881,7 +2881,7 @@ bool cgen_from_stmtline( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     } else if ( node->datalen != UINT16_C(0) ) {
         return cgen_unexpected_node( comp );
     }
-    return cgen_from_stmt( cgen, comp, node->branches[0] );
+    return node->numbranches == 0U || cgen_from_stmt( cgen, comp, node->branches[0] );
 }
 
 bool cgen_from_stmtlines( codegen_t* cgen, compiler_t* comp, node_t* node ) {

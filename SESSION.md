@@ -1,6 +1,6 @@
 # Session state
 
-Maintained by Claude; updated whenever work in a session changes something. Last update: 2026-10-28 (tidied: duplicate test line and outdated ANSI bullet removed, repo state line updated).
+Maintained by Claude; updated whenever work in a session changes something. Last update: 2026-10-29 (latest-commit line fixed; comment-only lines / `: 'comment` fixed in the parser).
 Read this first when resuming; details are in `docs/` (start with `docs/README.md`) and `CLAUDE.md`.
 
 ## Standing rules
@@ -9,13 +9,14 @@ Read this first when resuming; details are in `docs/` (start with `docs/README.m
 - Keep `HistoryLog-Claude.md` current: new work goes under its "Pending" section; after the user commits, move it into the log with the commit ID and timestamp (see `CLAUDE.md`).
 
 ## Repo state
-- Branch `main` (the feature branch `feature/refactor-to-remove-some-limits` was merged into it on 2026-10-28 and work continues on `main`); latest commit `0acbb1f` (bookkeeping), preceded by `6e4ea7e` (bookkeeping), `40748f3` (bookkeeping), `839feb6` (font redesign), `ccf115c` (bookkeeping), `e09a0cc` (bookkeeping), `de09d9a` (bookkeeping), `ed9626c` (EDIT line editor), `340a04c` (bookkeeping), `b984b8b` (syntax highlighting for LIST), `7861f6b` (bookkeeping), `4ca5c10` (bookkeeping), `ee0b676` (`residue/` folder, log update), `944b4dc` (`host_print` via ANSI, `sdlscr_ansi_printf()`), `8e9d6e2` (history log), `da35e56` (ANSI SGR output), `8854d23` (direct LOAD / no "Ready." after program lines), `3c0e106` (history log), `bcc157d` (history log), `7a6b4ae` (direct mode rollback), `c45e514` (history log), `28da093`/`01d467d` (segment limits), `fd7e324` (DELETE/RENUM), `05ca28f` (NEW/CLEAR), `f6d83bf` (binary SAVE header, LOAD/RUN/LIST statements).
-- Everything is committed. `make` and all tests pass.
+- Branch `main` (the feature branch `feature/refactor-to-remove-some-limits` was merged into it on 2026-10-28 and work continues on `main`); latest commit `b1eb173` (bookkeeping), preceded by `0acbb1f` (bookkeeping), `6e4ea7e` (bookkeeping), `40748f3` (bookkeeping), `839feb6` (font redesign), `ccf115c` (bookkeeping), `e09a0cc` (bookkeeping), `de09d9a` (bookkeeping), `ed9626c` (EDIT line editor), `340a04c` (bookkeeping), `b984b8b` (syntax highlighting for LIST), `7861f6b` (bookkeeping), `4ca5c10` (bookkeeping), `ee0b676` (`residue/` folder, log update), `944b4dc` (`host_print` via ANSI, `sdlscr_ansi_printf()`), `8e9d6e2` (history log), `da35e56` (ANSI SGR output), `8854d23` (direct LOAD / no "Ready." after program lines), `3c0e106` (history log), `bcc157d` (history log), `7a6b4ae` (direct mode rollback), `c45e514` (history log), `28da093`/`01d467d` (segment limits), `fd7e324` (DELETE/RENUM), `05ca28f` (NEW/CLEAR), `f6d83bf` (binary SAVE header, LOAD/RUN/LIST statements).
+- Uncommitted: the comment fix (`bascomp.c`, `codegen.c`, `bascomp.ebnf`, `repltest1.c`); see the Pending section of `HistoryLog-Claude.md`.
+- Otherwise everything is committed. `make` and all tests pass.
 - `make` builds `sdltest1 sdltest2 engine1999 basictest1 testcomp1 basictest2 vmtest1 repltest1 ansitest1` + `engine.lib` cleanly with `-Wall -Werror`.
 
 ## Tests (run these after any change)
 - `./vmtest1` — automated end-to-end test (BASIC text → tokens → syntax tree → code → VM → output). **385 cases, all pass**; exit status = number of failures; `-v` shows compiler/codegen debug output. Add a case for every new statement/instruction. Also run it under `valgrind --leak-check=full -q` (clean) — but build a copy without `-p` for that (the makefile's profiling timer kills `vmtest1` under valgrind after ~2.4 s CPU), e.g. `gcc -g -O1 -I. -o /tmp/x vmtest1.c basic.c baspgm.c baslin.c bastok.c bascomp.c nodetype.c codegen.c cgenctl.c cgendecl.c cgenprog.c vars.c runtime.c vm.c basrepl.c basdebug.c -lm -lrt`.
-- `./repltest1` — automated test of the REPL (`basrepl.c`) without a screen: direct mode, stored lines, RUN/LIST/LOAD/NEW/DELETE/RENUM, INPUT/GET, Break; **135 cases, all pass**; exit status = number of failures.
+- `./repltest1` — automated test of the REPL (`basrepl.c`) without a screen: direct mode, stored lines, RUN/LIST/LOAD/NEW/DELETE/RENUM, INPUT/GET, Break; **141 cases, all pass**; exit status = number of failures.
 - `./ansitest1` — automated test of the ANSI/SGR decoder (`ansi.[ch]`, no screen); 26 cases, exit status = number of failures.
 - `./testcomp1` — randomized stress test of the variable store (5000 operations vs a shadow model), exit status 0 = passed; takes ~3 s. (Its random names used to be sometimes empty, which made it flake; fixed.)
 - `basictest1` / `basictest2` — interactive tokenizer / parser tools (pipe lines into them). `basictest2` prints the syntax tree.

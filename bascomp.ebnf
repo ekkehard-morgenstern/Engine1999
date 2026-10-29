@@ -236,5 +236,5 @@ prog-stmt := load-stmt | run-stmt | list-stmt | new-stmt | clear-stmt | delete-s
 
 stmt := io-stmt | prog-stmt | assign-stmt | control-flow-stmt .
 stmt-list := stmt { TOK_COLON stmt } .
-stmt-line := stmt-list [ TOK_QUOLIT ] TOK_EOL .
+stmt-line := [ stmt-list ] [ TOK_QUOLIT ] TOK_EOL .
 stmt-lines := stmt-line { stmt-line } .

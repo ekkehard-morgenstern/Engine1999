@@ -298,7 +298,8 @@ bool comp_eat_list( compiler_t* comp, node_t** pnode, uint8_t nodetype, comp_eat
             break;
         }
         if ( !element_eater( comp, &expr2 ) || expr2 == NODE_NONE ) {
-            if ( mandatory ) {  // mandatory expression missing: stop
+            // (a separator may also be followed by a comment: "PRINT 1: 'note")
+            if ( mandatory && !( septok == TOK_COLON && comp->currtok == TOK_QUOLIT ) ) {  // mandatory expression missing: stop
                 comp_error( comp, errortext );
             }
             // stop processing
@@ -3839,11 +3840,13 @@ bool comp_eat_stmtlist( compiler_t* comp, node_t** pnode ) {
 }
 
 bool comp_eat_stmtline( compiler_t* comp, node_t** pnode ) {
-    // stmt-line := stmt-list [ TOK_QUOLIT ] TOK_EOL .
+    // stmt-line := [ stmt-list ] [ TOK_QUOLIT ] TOK_EOL .   -- a line with nothing but a comment has no statement list
     uint32_t lnum = comp->iter.hdr.lineno;
     node_t* stmtlist = NODE_NONE;
     if ( !comp_eat_stmtlist( comp, &stmtlist ) || stmtlist == NODE_NONE ) {
-        return false;
+        if ( comp->currtok != TOK_QUOLIT ) {
+            return false;
+        }
     }
     if ( comp->currtok == TOK_QUOLIT ) {
         comp_fetchtok( comp );
@@ -3859,7 +3862,7 @@ bool comp_eat_stmtline( compiler_t* comp, node_t** pnode ) {
             data:
                 - 3 bytes of line number (not present in direct mode)
             branches:
-                - 1 branch of statement list
+                - 1 branch of statement list (none if the line contains only a comment)
                 - this is the root node for direct mode
     */
     uint8_t data[3];
@@ -3868,7 +3871,7 @@ bool comp_eat_stmtline( compiler_t* comp, node_t** pnode ) {
     data[2] = (uint8_t)  lnum;
     uint16_t datalen = lnum == LINENO_DEL ? UINT16_C(0) : UINT16_C(3);
     // create node
-    if ( !comp_create_node( comp, pnode, NT_STMTLINE, UINT8_C(1), datalen, data, stmtlist ) ||
+    if ( !comp_create_node( comp, pnode, NT_STMTLINE, stmtlist != NODE_NONE ? UINT8_C(1) : UINT8_C(0), datalen, data, stmtlist ) ||
         *pnode == NODE_NONE ) {
         out_of_memory( comp );
         return false;
