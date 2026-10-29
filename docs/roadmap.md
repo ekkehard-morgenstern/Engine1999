@@ -24,6 +24,8 @@ and `MERGE` do with variables and line numbers; where files live (current direct
 
 ## 2. Smaller language items *(each needs a short design decision)*
 
+- [ ] **`IF c THEN GOSUB n:stmt` / `IF c THEN GOTO n:stmt`** (found while writing the demos): the statement after the colon is *not* part of the THEN branch; it runs whether or not the condition is true (the target form takes only the line number/label). In classic BASIC the rest of the line belongs to the THEN. Decide whether to change the parser (it affects how a program reads) or document it. Workaround: `IF c THEN GOSUB n` then a separate `IF c THEN line`.
+
 - [ ] `OPTION BASE` — lowest array index (0 or 1); when is it allowed (before the first `DIM`?)
 - [ ] `INT` / `STR` / `FLT` — tokens exist; presumably default type declarations (like `DEFINT`/`DEFSTR`/`DEFSNG`): syntax and scope
 - [ ] `PUT` — token exists, probably the counterpart of `GET` for channels/files: meaning to be defined
