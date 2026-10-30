@@ -22,6 +22,8 @@
 220 IF K>=1 AND K<=9 THEN SFX K
 230 GOTO 180
 500 ' Engine: a tone without an end, then PITCH and VOLUME change it while it runs.
+505 ' Channel 8 is also the one SFX picks when the others are busy, and an effect leaves its envelope behind: start clean.
+506 SOUND OFF 8:ENVELOPE 8:TREMOLO 8,0,0
 510 WAVE 8,1:VIBRATO 8,14,0.25
 520 SOUND 8,50,0,0.3
 530 FOR I=0 TO 100
