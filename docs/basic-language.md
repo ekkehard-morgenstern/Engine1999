@@ -130,6 +130,24 @@ They are ordinary statements (`bascomp.ebnf`, `cgenprog.c`), so they work in dir
 
 `WAIT n` — sleeps for n/60 seconds (the unit of `TI`; n ≥ 0, at most 216000) without using the processor: use it instead of `T=TI+n:WHILE TI<T:WEND`, which keeps the processor 100 % busy. ESC breaks a wait ("Break"). `WAIT 0` returns at once. Instruction `WAIT 0x144`, `NT_WAITSTMT 0x66`, token `WAIT` 160.
 
+**Timers: `AFTER` and `EVERY`** (modelled on Locomotive BASIC; the unit is a tick of 1/60 s, like `TI` and `WAIT`):
+
+```
+AFTER delay [, timer] GOSUB target     run the handler once, delay ticks from now
+EVERY delay [, timer] GOSUB target     run it again and again, every delay ticks
+AFTER delay [, timer] GOTO target      the same, but jump to the target (no return)
+AFTER OFF [timer]                      clear all AFTER timers (or only that one)
+EVERY OFF [timer]                      clear all EVERY timers (or only that one)
+```
+
+- There are **four timers, 0 to 3** (default 0). A timer holds one `AFTER` or one `EVERY`; setting a timer again **replaces** what it held. `delay` is a number of ticks greater than 0 (fractions are fine); the target is a line number or a label, like `GOSUB`/`GOTO`. `OFF` removes the timers of its own kind only: `AFTER OFF` leaves the `EVERY` timers alone and the other way round; with a number it clears just that timer (and only if it is of that kind).
+- A handler entered by `GOSUB` ends with `RETURN` and the program goes on where it was interrupted (the interrupted line number is restored). The timer **numbers are priorities**: while a handler runs, only a timer with a *higher* number can interrupt it (a nested handler); due timers with the same or a lower number wait until the handler has returned. A handler entered by `GOTO` just jumps (`POP`, `END` and so on work as usual); it keeps nothing running, so timers are not held back.
+- **When a handler runs:** between two statements, and during `WAIT` (which gives way to the handler and then sleeps for the rest of its time). Not while a statement is under way inside an expression (a `DEF FN` call), and not during `INPUT` or `GET` (they wait for the keyboard; use `INKEY$` loops for timed input). A timer that comes due meanwhile runs right after.
+- An `EVERY` timer keeps its rhythm (the next tick is one interval after the previous *due* time); if the program was too busy to run it in time, the missed ticks are dropped instead of being run in a burst.
+- **Timers end with the run** that set them: when the program (or the direct mode line) ends, is stopped by Break or an error, or a new run starts, all timers are gone. A program that ends while a timer is pending never runs the handler. (So `AFTER` typed alone at the prompt does nothing; put it in a line with the statements that should be interrupted, or in the program.)
+- `AFTER 0`, a negative delay, or a timer number other than 0..3 is "Illegal argument". `REMAIN()` of Locomotive BASIC does not exist.
+- A line number target typed in a **direct mode line** is not found (an existing limitation of direct mode: `GOSUB 100` typed at the prompt reports "Undefined line number"); labels work.
+
 **File extensions:** `SAVE "name"` writes the binary (tokenized) form and appends `.e99` to a name without extension; `SAVE "name",A` writes the ASCII listing and appends `.bas`. A name with an extension is used as it is. `LOAD` recognizes both forms by the header, whatever the extension is.
 
 ## Sound: `SOUND`, `PLAY`, `WAVE`, `TEMPO`, `PLAYING()`

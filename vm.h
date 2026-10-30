@@ -166,6 +166,23 @@ typedef struct _vm_sound_t {
     bool    (*busy)( void* usrdata, int chan );             // the channel sounds, or has events queued / a sequence running
 } vm_sound_t;
 
+#define VM_NTIMERS          4
+
+typedef struct _vm_timer_t {
+    bool        active;
+    bool        every;          // repeats (EVERY), else once (AFTER)
+    bool        gosub;          // the handler is called (GOSUB), else jumped to (GOTO)
+    uint64_t    due;            // monotonic nanoseconds
+    uint64_t    interval;       // nanoseconds
+    uint32_t    target;         // code address of the handler
+} vm_timer_t;
+
+typedef struct _vm_irq_t {      // a handler that is running: where the return stack was and what the line was
+    int         timer;
+    size_t      rsp;
+    uint32_t    line;
+} vm_irq_t;
+
 typedef struct _vm_t {
     codegen_t*      cgen;           // code and data segments
     varmem_t*       vmem;           // variables
@@ -214,6 +231,13 @@ typedef struct _vm_t {
     bool            sfx_defined[SND_MAXSFX];
     mml_t           sfx[SND_MAXSFX];    // the stored sound effects (SFX n, a$), parsed; cleared with the VM
     const vm_sound_t* sound;        // SOUND / PLAY / ...: the host's sound output; 0 = none (arguments are checked, nothing plays)
+    // AFTER / EVERY: four timers (the numbers are priorities: a handler can only be interrupted by a higher number)
+    vm_timer_t      timers[VM_NTIMERS];
+    int             numtimers;      // active timers
+    vm_irq_t        irq[VM_NTIMERS];    // the GOSUB handlers that are running, innermost last
+    int             irqdepth;
+    bool            irqpending;     // (internal) a timer is due but the program is not between two statements yet
+    bool            irqsafe;        // (internal) a handler may be entered although the stack isn't empty (WAIT gave way to it)
     int             request;        // VMREQ_*: LOAD / RUN stop the VM and leave a request for the host (see vm_run_at)
     char*           reqname;        // LOAD: the file name; RUN: the label name ("" = none); owned by the VM
     int32_t         reqline;        // RUN: the line number, -1 = none

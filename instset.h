@@ -381,6 +381,14 @@ The 4096 extended instructions are as follows:
     0001 01000111       FILS - list files ( s -- ) C=0 P=0
                             Lists the files named by <s> ("" = the current directory) through the host (files callback) to
                             the current output channel: size, time and name, oldest first. The run goes on.
+    0001 01001000       TMR  - set a timer ( delay timer -- ) ( r: target -- ) C=0 P=1
+                            AFTER / EVERY: arms timer 0..3 to run the handler at the code address on the return stack after
+                            delay ticks (1/60 s; delay > 0). Parameter bit 0 = EVERY (repeats), bit 1 = GOTO (the handler is
+                            jumped to; else it is called like GOSUB with the interrupted address as return address and
+                            only timers with a higher number can interrupt it). A timer that is set again is replaced.
+    0001 01001001       TMRO - clear timers ( timer -- ) C=0 P=1
+                            AFTER OFF / EVERY OFF: clears timer 0..3 if it is of the kind in parameter bit 0 (1 = EVERY), or
+                            all timers of that kind if the operand is -1.
 
 */
 
@@ -504,5 +512,7 @@ The 4096 extended instructions are as follows:
 #define INS_MRG         UINT16_C(0X145)
 #define INS_CHN         UINT16_C(0X146)
 #define INS_FILS        UINT16_C(0X147)
+#define INS_TMR         UINT16_C(0X148)
+#define INS_TMRO        UINT16_C(0X149)
 
 #endif

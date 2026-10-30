@@ -1009,7 +1009,7 @@ static hlclass_t keyword_hlclass( uint8_t tok ) {
         case TOK_GOTO: case TOK_GOSUB: case TOK_GO: case TOK_TO: case TOK_SUB: case TOK_RETURN: case TOK_IF:
         case TOK_UNLESS: case TOK_THEN: case TOK_ELSE: case TOK_ENDIF: case TOK_ENDUNLESS: case TOK_END: case TOK_FOR:
         case TOK_STEP: case TOK_NEXT: case TOK_REPEAT: case TOK_WHILE: case TOK_UNTIL: case TOK_WEND: case TOK_UEND:
-        case TOK_POP: case TOK_ON: case TOK_AGAIN:
+        case TOK_POP: case TOK_ON: case TOK_AGAIN: case TOK_AFTER: case TOK_EVERY:
             return HL_CONTROL;
         case TOK_ASC: case TOK_VAL: case TOK_LEFT: case TOK_MID: case TOK_RIGHT: case TOK_INKEY: case TOK_BIN:
         case TOK_QUA: case TOK_OCT: case TOK_DEC: case TOK_HEX: case TOK_FRE: case TOK_TI: case TOK_LEN: case TOK_CHR:

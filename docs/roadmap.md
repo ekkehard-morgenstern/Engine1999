@@ -24,7 +24,7 @@ Open: directory handling for `LOAD`/`SAVE` beyond plain paths (there is no `CD`;
 ## 2. Smaller language items *(each needs a short design decision)*
 
 - [ ] **Comments are converted to upper case** by the tokenizer (`' Ode to Joy` is listed as `' ODE TO JOY`; strings keep their case): decide whether comment text should keep its case (found while writing the demos)
-- [ ] `WAIT` is the only way to pause; `AFTER`/`EVERY` (section 3) will add timers; no `FRAME` (wait for the next screen refresh) yet
+- [ ] `WAIT`, `AFTER` and `EVERY` exist; no `FRAME` (wait for the next screen refresh) yet, no `REMAIN()`, handlers do not run during `INPUT`/`GET`
 
 
 - [ ] `OPTION BASE` — lowest array index (0 or 1); when is it allowed (before the first `DIM`?)
@@ -37,7 +37,7 @@ Open: directory handling for `LOAD`/`SAVE` beyond plain paths (there is no `CD`;
 `SOUND`, `PLAY`, `WAVE`, `TEMPO`, `SOUND OFF/SYNC` and `PLAYING()` work (`docs/sound.md`; `synth`, `mml`, `sdlaudio`; tested by `synthtest1`, `vmtest1`, `repltest1`, `asmtest1`).
 
 - [x] Sound effects: `PITCH`/`VOLUME`, glide, `ENVELOPE`, `VIBRATO`/`TREMOLO`, stored `SFX` (done, `docs/sound.md`)
-- [ ] Sound effects, more: a pitch envelope, a pulse width for the square wave, a filter for the noise, `SFX` with parameters, `EVERY` timers to drive `PITCH`/`VOLUME` per frame
+- [ ] Sound effects, more: a pitch envelope, a pulse width for the square wave, a filter for the noise, `SFX` with parameters, `EVERY` timers can now drive `PITCH`/`VOLUME` (try it in the engine demo)
 - [ ] Instruments / FM synthesis (operators, envelopes, `INSTRUMENT`), band-limited square/triangle, stereo, a voice allocator
 - [ ] Sample-accurate event times (now ≈1 ms), mixing events into the audio callback
 - [ ] `PLAY`: no chords inside a string (use one string per voice), no `N` (note number) or `X` (run a string variable) commands, no repeat; `PLAY` doesn't wait (a program that ends while music is queued leaves it playing until `SOUND OFF`: decided)
@@ -45,9 +45,10 @@ Open: directory handling for `LOAD`/`SAVE` beyond plain paths (there is no `CD`;
 
 ## 3. Timers and `SYMBOL` *(planned by the project owner, all through host callbacks)*
 
-- [ ] `AFTER` — one-shot timer, like `setTimeout`
-- [ ] `EVERY` — recurring timer, like `setInterval`
+- [x] `AFTER` — one-shot timer, like `setTimeout` (done, in the VM: `docs/basic-language.md`)
+- [x] `EVERY` — recurring timer, like `setInterval` (done)
 - [ ] `SYMBOL` — redefine one character of the character set
+- [ ] Direct mode: `GOTO`/`GOSUB` to a program *line number* typed at the prompt reports "Undefined line number" (labels work); found while testing `AFTER`
 
 Questions to decide: when timer handlers run (between VM instructions, then a call like `GOSUB`? what if one is already running?);
 how a handler is named (line number / label / `FN`?); how they are cancelled (`OFF`?); host callback signatures for timers

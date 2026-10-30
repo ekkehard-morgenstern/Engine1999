@@ -243,6 +243,77 @@ static bool cc_jump_to_target( codegen_t* cgen, compiler_t* comp, node_t* target
     return true;
 }
 
+// pushes the code address of a goto target on the return stack (a line: PHPA.C patched when the lines are known; a label: the
+// label variable is read onto the return stack)
+static bool cc_push_target_address( codegen_t* cgen, compiler_t* comp, node_t* target ) {
+    if ( target == NODE_NONE || target->type != NT_GOTOTARGET || target->datalen != UINT16_C(4) ) {
+        return cgen_bad_node( comp );
+    }
+    uint8_t  type  = target->data[0];
+    uint32_t value = ( ( (uint32_t) target->data[1] ) << UINT8_C(16) ) | ( ( (uint32_t) target->data[2] ) << UINT8_C(8) ) |
+        target->data[3];
+    if ( type == VARTYPEV_INT ) {
+        uint32_t ins = 0;
+        if ( !cc_emit_phpa_c( cgen, comp, &ins ) ) {
+            return false;
+        }
+        if ( !cgen_grow( (void**) &cgen->fixups, &cgen->numfixups, &cgen->maxfixups, sizeof(cgen_fixup_t) ) ) {
+            return cc_out_of_memory( comp );
+        }
+        cgen_fixup_t* fx = &cgen->fixups[ cgen->numfixups++ ];
+        fx->insoffs = ins;
+        fx->lineno  = value;
+        fx->srcline = cc_srcline( comp );
+        return true;
+    }
+    if ( type == VARTYPEV_LABEL ) {
+        return cgen_gen_rrlv( cgen, (uint16_t) value ) || cgen_out_of_code_memory( comp );
+    }
+    return cgen_unexpected_node( comp );
+}
+
+bool cgen_from_timerstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    /*
+        NT_TIMERSTMT    AFTER / EVERY statement
+            data: 1 byte of TMRF_* flags
+            branches: delay (not with TMRF_OFF), timer number (with TMRF_TIMER), goto target (not with TMRF_OFF)
+        code: <delay> <timer> <target address on the return stack> TMR     (parameter: bit 0 EVERY, bit 1 GOTO)
+              <timer or -1> TMRO                                           (parameter: bit 0 EVERY)
+    */
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->type != NT_TIMERSTMT || node->datalen != UINT16_C(1) ) {
+        return cgen_unexpected_node( comp );
+    }
+    uint8_t flags = node->data[0];
+    bool every = ( flags & TMRF_EVERY ) != 0;
+    bool off = ( flags & TMRF_OFF ) != 0;
+    bool hastimer = ( flags & TMRF_TIMER ) != 0;
+    size_t expected = off ? ( hastimer ? 1U : 0U ) : ( hastimer ? 3U : 2U );
+    if ( node->numbranches != expected ) {
+        return cgen_unexpected_node( comp );
+    }
+    size_t k = 0;
+    if ( off ) {
+        if ( hastimer ? !cgen_from_numexpr( cgen, comp, node->branches[0] ) : !cgen_push_number( cgen, comp, -1.0 ) ) {
+            return false;
+        }
+        return cgen_gen_tmro( cgen, every ? UINT16_C(1) : UINT16_C(0) ) || cgen_out_of_code_memory( comp );
+    }
+    if ( !cgen_from_numexpr( cgen, comp, node->branches[k++] ) ) {
+        return false;
+    }
+    if ( hastimer ? !cgen_from_numexpr( cgen, comp, node->branches[k++] ) : !cgen_push_number( cgen, comp, 0.0 ) ) {
+        return false;
+    }
+    if ( !cc_push_target_address( cgen, comp, node->branches[k] ) ) {
+        return false;
+    }
+    uint16_t param = ( every ? UINT16_C(1) : UINT16_C(0) ) | ( ( flags & TMRF_GOTO ) ? UINT16_C(2) : UINT16_C(0) );
+    return cgen_gen_tmr( cgen, param ) || cgen_out_of_code_memory( comp );
+}
+
 bool cgen_from_gotostmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     /*
         NT_GOTOSTMT     GOTO/GOSUB statement

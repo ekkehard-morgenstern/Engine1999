@@ -2385,6 +2385,80 @@ bool comp_eat_chainstmt( compiler_t* comp, node_t** pnode ) {
     return true;
 }
 
+static bool comp_eat_gotokw( compiler_t* comp, uint8_t* ptok );
+
+bool comp_eat_timerstmt( compiler_t* comp, node_t** pnode ) {
+    // timer-stmt := ( TOK_AFTER | TOK_EVERY ) ( TOK_OFF [ num-expr ] | num-expr [ TOK_COMMA num-expr ] goto-kw goto-target ) .
+    uint8_t flags = 0;
+    if ( comp->currtok == TOK_EVERY ) {
+        flags |= TMRF_EVERY;
+    } else if ( comp->currtok != TOK_AFTER ) {
+        return false;
+    }
+    if ( !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    node_t* delay = NODE_NONE; node_t* timer = NODE_NONE; node_t* target = NODE_NONE;
+    if ( comp->currtok == TOK_OFF ) {
+        flags |= TMRF_OFF;
+        if ( !comp_fetchtok( comp ) ) {
+            return false;
+        }
+        if ( comp->currtok != TOK_EOL && comp->currtok != TOK_COLON && comp->currtok != TOK_ELSE ) {
+            if ( !comp_eat_numexpr( comp, &timer ) || timer == NODE_NONE ) {
+                comp_error( comp, "Numeric expression expected" );
+                return false;
+            }
+            flags |= TMRF_TIMER;
+        }
+    } else {
+        if ( !comp_eat_numexpr( comp, &delay ) || delay == NODE_NONE ) {
+            comp_error( comp, "Numeric expression expected" );
+            return false;
+        }
+        if ( comp->currtok == TOK_COMMA ) {
+            if ( !comp_fetchtok( comp ) || !comp_eat_numexpr( comp, &timer ) || timer == NODE_NONE ) {
+                comp_error( comp, "Numeric expression expected" );
+                return false;
+            }
+            flags |= TMRF_TIMER;
+        }
+        uint8_t gotok = TOK_EOL;
+        if ( !comp_eat_gotokw( comp, &gotok ) ) {
+            comp_error( comp, "GOTO or GOSUB expected" );
+            return false;
+        }
+        if ( gotok == TOK_GOTO ) {
+            flags |= TMRF_GOTO;
+        }
+        if ( !comp_eat_gototarget( comp, &target ) || target == NODE_NONE ) {
+            comp_error( comp, "Jump target expected" );
+            return false;
+        }
+    }
+    /*
+        NT_TIMERSTMT    AFTER / EVERY statement
+            data:
+                - 1 byte of TMRF_* flags
+            branches:
+                - the delay (numeric expression; not with TMRF_OFF)
+                - the timer number (numeric expression; only with TMRF_TIMER)
+                - the handler's goto target (not with TMRF_OFF)
+    */
+    if ( !comp_create_node( comp, pnode, NT_TIMERSTMT, UINT8_C(0), UINT16_C(1), &flags ) || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    node_t* parts[3] = { delay, timer, target };
+    for ( int i=0; i < 3; ++i ) {
+        if ( parts[i] != NODE_NONE && !comp_add_branch( comp, *pnode, parts[i] ) ) {
+            out_of_memory( comp );
+            return false;
+        }
+    }
+    return true;
+}
+
 bool comp_eat_filesstmt( compiler_t* comp, node_t** pnode ) {
     // files-stmt := TOK_FILES [ str-expr ] .
     if ( comp->currtok != TOK_FILES || !comp_fetchtok( comp ) ) {
@@ -2680,7 +2754,7 @@ bool comp_eat_clearstmt( compiler_t* comp, node_t** pnode ) {
 }
 
 bool comp_eat_progstmt( compiler_t* comp, node_t** pnode ) {
-    // prog-stmt := load-stmt | run-stmt | merge-stmt | chain-stmt | files-stmt | list-stmt | new-stmt | clear-stmt | delete-stmt | renum-stmt | edit-stmt | monitor-stmt |
+    // prog-stmt := load-stmt | run-stmt | merge-stmt | chain-stmt | files-stmt | timer-stmt | list-stmt | new-stmt | clear-stmt | delete-stmt | renum-stmt | edit-stmt | monitor-stmt |
     //              sound-stmt | wait-stmt .
     // [ NT_PROGSTMT - not generated ]
     if ( comp_eat_loadstmt( comp, pnode ) && *pnode != NODE_NONE ) {
@@ -2696,6 +2770,9 @@ bool comp_eat_progstmt( compiler_t* comp, node_t** pnode ) {
         return true;
     }
     if ( comp_eat_filesstmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_timerstmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     if ( comp_eat_liststmt( comp, pnode ) && *pnode != NODE_NONE ) {

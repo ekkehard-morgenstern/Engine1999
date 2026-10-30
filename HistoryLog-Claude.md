@@ -13,7 +13,11 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-- Documentation only: `docs/basic-language.md` got a section "Binary program files (`.e99`)" (header, line layout, a byte-by-byte example dumped from a real `SAVE`, reading rules, compatibility note); `docs/README.md` index line updated. No code changed, no tests needed.
+- **`AFTER` and `EVERY` statements** (Locomotive-style, per the owner: `AFTER n GOSUB|GOTO target`, `AFTER OFF`, `EVERY OFF` clear the handlers of that statement type).
+  - **Language**: `AFTER|EVERY delay [, timer] GOSUB|GOTO target`, `AFTER OFF [timer]`, `EVERY OFF [timer]` (`NT_TIMERSTMT 0x6A` with `TMRF_*` flags; `comp_eat_timerstmt()` in `bascomp.c`, `cgen_from_timerstmt()` in `cgenctl.c`, instructions `TMR 0x148 ( delay timer -- )` with the handler address on the return stack, and `TMRO 0x149 ( timer -- )`; `bascomp.ebnf`, `instset.h`, `nodetype`, `codegen`). The tokens `AFTER`/`EVERY` existed already (116/117, highlighted as control flow now).
+  - **VM** (`vm.[ch]`): four timers (`vm_timer_t`, `CLOCK_MONOTONIC` nanoseconds, unit 1/60 s), `vm_irq_poll()` called by `vm_resume()` before each instruction while a timer is active: ends returned handlers (return stack at or below the entry value: `RETURN` and `POP`; the interrupted line is restored), enters the highest due timer above the running handler's number between two statements (data stack empty, no function call); `GOSUB` handlers push the interrupted `pc`, `GOTO` handlers jump. `WAIT` gives way: with a timer due it puts the remaining ticks back, rewinds to itself and sets `irqsafe`. `vm_begin()` clears the timers (timers end with the run). Fixed on the way: valgrind found `irqpending` uninitialized.
+  - **Tests**: `vmtest1` 542 (+28: fires during WAIT, once, in a busy loop, WAIT time kept, EVERY, both OFF kinds and their independence, timer numbers, GOTO, GO SUB and labels, replacing, priorities in both directions, return to the interrupted place, expressions, timers end with the program, illegal arguments, parse errors, ELSE), `repltest1` 239 (+4: direct mode lines, timers do not outlive the run, listing); the timing cases also pass six at a time on four cores; all other tests pass; `vmtest1` and `repltest1` clean under valgrind.
+  - **Docs**: `docs/basic-language.md` ("Timers"), `docs/compiler-and-vm.md`, `docs/roadmap.md` (AFTER/EVERY done; new finding: `GOTO`/`GOSUB` to a line number typed in direct mode is "Undefined line number", labels work), `bascomp.ebnf`, `SESSION.md`.
 
 ## Log
 
@@ -436,3 +440,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
   - **Host** (`engine1999.c`): `host_pause()` ("-- more: any key continues, Q stops --" on the last line, erased afterwards; `sdlscr_getkey()`), `repl.pagesize` = screen height - 1.
   - **Tests**: `vmtest1` 514 (+6: operands, expressions, run goes on, before ELSE/colon), `repltest1` 235 (+14: a fixture directory with fixed times (TZ=UTC) and sizes: ordering, alignment, hidden names, link/directory/executable indicators, single file, no match, expression, in a program, highlighting of each class, paging asked/stopped/not needed); all other tests pass; `repltest1` clean under valgrind. Not seen on the real screen by me; the owner checked it and reports that it works.
   - **Docs**: `docs/basic-language.md`, `docs/compiler-and-vm.md`, `docs/roadmap.md` (`MERGE`, `CHAIN`, `FILES` done), `CLAUDE.md` (module table), `bascomp.ebnf`, `SESSION.md`.
+
+### cf10477 — 2026-10-30 20:59:37 +0100 — "Documentation and Claude session updates"
+4 files, +50/-11.
+- Documentation only: `docs/basic-language.md` got a section "Binary program files (`.e99`)" (header, line layout, a byte-by-byte example dumped from a real `SAVE`, reading rules, compatibility note); `docs/README.md` index line updated. No code changed, no tests needed.

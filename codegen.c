@@ -392,6 +392,8 @@ const char* cgen_opcode_name( uint16_t opcode ) {
         case INS_MRG:       return "MRG";
         case INS_CHN:       return "CHN";
         case INS_FILS:      return "FILS";
+        case INS_TMR:       return "TMR";
+        case INS_TMRO:      return "TMRO";
         default:            break;
     }
     return "???";
@@ -979,6 +981,14 @@ bool cgen_gen_mrg( codegen_t* cgen, bool append ) {
 
 bool cgen_gen_chn( codegen_t* cgen, bool merge ) {
     return cgen_gen_ins12( cgen, INS_CHN, false, true, merge ? UINT16_C(1) : UINT16_C(0) );
+}
+
+bool cgen_gen_tmr( codegen_t* cgen, uint16_t flags ) {
+    return cgen_gen_ins12( cgen, INS_TMR, false, true, flags );
+}
+
+bool cgen_gen_tmro( codegen_t* cgen, uint16_t flags ) {
+    return cgen_gen_ins12( cgen, INS_TMRO, false, true, flags );
 }
 
 bool cgen_gen_fils( codegen_t* cgen ) {
@@ -2852,6 +2862,7 @@ bool cgen_from_stmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         case NT_MERGESTMT:  return cgen_from_mergestmt( cgen, comp, node );
         case NT_CHAINSTMT:  return cgen_from_chainstmt( cgen, comp, node );
         case NT_FILESSTMT:  return cgen_from_filesstmt( cgen, comp, node );
+        case NT_TIMERSTMT:  return cgen_from_timerstmt( cgen, comp, node );
         case NT_STMTLIST:   return cgen_from_stmtlist( cgen, comp, node );
         case NT_DIMSTMT:    return cgen_from_dimstmt( cgen, comp, node );
         case NT_ERASESTMT:  return cgen_from_erasestmt( cgen, comp, node );

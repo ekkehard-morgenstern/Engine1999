@@ -270,7 +270,14 @@ chain-stmt := TOK_CHAIN [ TOK_MERGE ] str-expr [ TOK_COMMA goto-target ] .
 -- indicator. No spec = the current directory (hidden names left out); a directory lists its entries; a pattern with * ? [ ]
 -- lists the matches. The screen listing is colored and stops after each page (any key goes on, Q or ESC stops).
 files-stmt := TOK_FILES [ str-expr ] .
-prog-stmt := load-stmt | run-stmt | merge-stmt | chain-stmt | files-stmt | list-stmt | new-stmt | clear-stmt | delete-stmt | renum-stmt | edit-stmt | monitor-stmt | sound-stmt |
+-- AFTER delay [, timer] GOSUB|GOTO target runs the handler once after "delay" ticks (1/60 s, the unit of TI and WAIT), EVERY
+-- delay [, timer] GOSUB|GOTO target runs it again and again at that interval. Four timers 0..3 (default 0); a timer holds one
+-- AFTER or EVERY, setting it again replaces it. A handler entered by GOSUB returns to where the program was interrupted with
+-- RETURN; while it runs, only a timer with a higher number may interrupt it. A handler is entered between two statements
+-- (also during WAIT), not during INPUT or GET. AFTER OFF [timer] / EVERY OFF [timer] clear all timers (or that timer) of
+-- that kind. Timers end with the run.
+timer-stmt := ( TOK_AFTER | TOK_EVERY ) ( TOK_OFF [ num-expr ] | num-expr [ TOK_COMMA num-expr ] goto-kw goto-target ) .
+prog-stmt := load-stmt | run-stmt | merge-stmt | chain-stmt | files-stmt | timer-stmt | list-stmt | new-stmt | clear-stmt | delete-stmt | renum-stmt | edit-stmt | monitor-stmt | sound-stmt |
              wait-stmt .
 
 stmt := io-stmt | prog-stmt | assign-stmt | control-flow-stmt .

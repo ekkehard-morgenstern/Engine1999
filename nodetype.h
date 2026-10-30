@@ -617,6 +617,11 @@ Explanation of node types:
 
 #define NT_WAITSTMT             UINT8_C(0X66)   // WAIT statement (1 numeric branch: the ticks)
 #define NT_MERGESTMT            UINT8_C(0X67)   // MERGE statement (data: 1 byte, 1 = APPEND; 1 string branch: the file name)
+#define NT_TIMERSTMT            UINT8_C(0X6A)   // AFTER / EVERY statement (data: 1 byte of TMRF_* flags; branches: see bascomp.c)
+#define TMRF_EVERY              UINT8_C(1)      // EVERY (else AFTER)
+#define TMRF_GOTO               UINT8_C(2)      // the handler is entered by GOTO (else GOSUB)
+#define TMRF_OFF                UINT8_C(4)      // AFTER OFF / EVERY OFF
+#define TMRF_TIMER              UINT8_C(8)      // a timer number is given
 #define NT_FILESSTMT            UINT8_C(0X69)   // FILES statement (0 or 1 string branch: the file name pattern)
 #define NT_CHAINSTMT            UINT8_C(0X68)   // CHAIN statement (data: 1 byte, 1 = MERGE; the file name, then an optional goto target)
 

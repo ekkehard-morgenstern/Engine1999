@@ -74,6 +74,11 @@ void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem ) {
     vm->deletelines = 0;
     vm->renumber = 0;
     vm->merge    = 0;
+    memset( vm->timers, 0, sizeof(vm->timers) );
+    vm->numtimers = 0;
+    vm->irqdepth = 0;
+    vm->irqsafe = false;
+    vm->irqpending = false;
     vm->files    = 0;
     vm->request  = VMREQ_NONE;
     vm->reqname  = 0;
@@ -1378,8 +1383,134 @@ static bool vm_sfx_play( vm_t* vm ) {
     return true;
 }
 
+// -- AFTER, EVERY ----------------------------------------------------------------------
+
+static uint64_t vm_now_ns( void ) {
+    struct timespec ts;
+    clock_gettime( CLOCK_MONOTONIC, &ts );
+    return (uint64_t) ts.tv_sec * UINT64_C(1000000000) + (uint64_t) ts.tv_nsec;
+}
+
+static void vm_count_timers( vm_t* vm ) {
+    vm->numtimers = 0;
+    for ( int i=0; i < VM_NTIMERS; ++i ) {
+        if ( vm->timers[i].active ) {
+            ++vm->numtimers;
+        }
+    }
+}
+
+// TMR ( delay timer -- ) ( r: target -- ), param bit 0 = EVERY, bit 1 = GOTO
+static bool vm_set_timer( vm_t* vm, uint16_t param ) {
+    double timer = 0, delay = 0; uint32_t target = 0;
+    if ( !vm_dpop_num( vm, &timer ) || !vm_dpop_num( vm, &delay ) || !vm_rpop( vm, &target ) ) {
+        return false;
+    }
+    if ( !( timer >= 0.0 && timer < (double) VM_NTIMERS ) || !( delay > 0.0 && delay <= 16777216.0 ) ) {
+        return vm_error( vm, "Illegal argument" );
+    }
+    vm_timer_t* tm = &vm->timers[ (int) timer ];
+    tm->active = true;
+    tm->every = ( param & 1U ) != 0;
+    tm->gosub = ( param & 2U ) == 0;
+    tm->interval = (uint64_t)( delay * 1.0e9 / 60.0 );
+    tm->due = vm_now_ns() + tm->interval;
+    tm->target = target;
+    vm_count_timers( vm );
+    return true;
+}
+
+// TMRO ( timer -- ), param bit 0 = EVERY; -1 = all timers of the kind
+static bool vm_clear_timers( vm_t* vm, uint16_t param ) {
+    double timer = 0;
+    if ( !vm_dpop_num( vm, &timer ) ) {
+        return false;
+    }
+    if ( !( timer >= -1.0 && timer < (double) VM_NTIMERS ) ) {
+        return vm_error( vm, "Illegal argument" );
+    }
+    bool every = ( param & 1U ) != 0;
+    for ( int i=0; i < VM_NTIMERS; ++i ) {
+        if ( ( timer < 0.0 || i == (int) timer ) && vm->timers[i].active && vm->timers[i].every == every ) {
+            vm->timers[i].active = false;
+        }
+    }
+    vm_count_timers( vm );
+    return true;
+}
+
+// the number of the highest timer that is due and may interrupt what runs now (higher than the running handler), or -1
+static int vm_irq_find( const vm_t* vm, uint64_t now ) {
+    int level = vm->irqdepth > 0 ? vm->irq[ vm->irqdepth - 1 ].timer : -1;
+    for ( int i=VM_NTIMERS-1; i > level; --i ) {
+        if ( vm->timers[i].active && vm->timers[i].due <= now ) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+// enters the handler of timer t (between two statements): the interrupted address is the return address
+static bool vm_irq_fire( vm_t* vm, int t ) {
+    vm_timer_t* tm = &vm->timers[t];
+    uint32_t target = tm->target;
+    if ( tm->every ) {
+        uint64_t now = vm_now_ns();
+        tm->due += tm->interval;
+        if ( tm->due <= now ) {
+            tm->due = now + tm->interval;       // behind: the missed ticks are dropped
+        }
+    } else {
+        tm->active = false;
+        vm_count_timers( vm );
+    }
+    if ( target >= vm->cgen->codesize ) {
+        return vm_error( vm, "Branch out of range" );
+    }
+    if ( tm->gosub ) {
+        if ( vm->irqdepth >= VM_NTIMERS ) {
+            return vm_error( vm, "Too many interrupts" );
+        }
+        vm_irq_t* ir = &vm->irq[ vm->irqdepth++ ];
+        ir->timer = t;
+        ir->rsp = vm->rsp;
+        ir->line = vm->line;
+        if ( !vm_rpush( vm, vm->pc ) ) {
+            --vm->irqdepth;
+            return false;
+        }
+    }
+    vm->pc = target;
+    return true;
+}
+
+// called before each instruction while timers are active: ends handlers that have returned and enters a due one when the
+// program is between two statements (nothing on the data stack, no function call under way), or when WAIT gave way
+static bool vm_irq_poll( vm_t* vm, uint64_t steps ) {
+    bool safe = vm->irqsafe;
+    vm->irqsafe = false;
+    while ( vm->irqdepth > 0 && vm->rsp <= vm->irq[ vm->irqdepth - 1 ].rsp ) {      // RETURN (or POP) ended the handler
+        --vm->irqdepth;
+        vm->line = vm->irq[ vm->irqdepth ].line;
+    }
+    if ( !safe && ( steps & 31U ) != 0 && !vm->irqpending ) {
+        return true;
+    }
+    int t = vm_irq_find( vm, vm_now_ns() );
+    if ( t < 0 ) {
+        vm->irqpending = false;
+        return true;
+    }
+    if ( !safe && ( vm->dsp != 0 || vm->nctx != 0 ) ) {
+        vm->irqpending = true;      // look again after the next instruction
+        return true;
+    }
+    vm->irqpending = false;
+    return vm_irq_fire( vm, t );
+}
+
 // WAIT ( n -- ): sleeps n/60 s; asks the interrupt callback every 10 ms
-static bool vm_wait( vm_t* vm ) {
+static bool vm_wait( vm_t* vm, uint32_t inspc ) {
     double ticks = 0;
     if ( !vm_dpop_num( vm, &ticks ) ) {
         return false;
@@ -1404,6 +1535,15 @@ static bool vm_wait( vm_t* vm ) {
         }
         if ( vm_interrupted( vm ) ) {
             return vm_error( vm, "Break" );
+        }
+        if ( vm->numtimers > 0 && vm_irq_find( vm, vm_now_ns() ) >= 0 ) {
+            // a timer is due: the handler runs now and the rest of the wait is done afterwards (WAIT starts again)
+            if ( !vm_dpush_num( vm, (double) left / ( 1.0e9 / 60.0 ) ) ) {
+                return false;
+            }
+            vm->pc = inspc;
+            vm->irqsafe = true;
+            return true;
         }
         struct timespec nap;
         long long slice = left < 10000000LL ? left : 10000000LL;
@@ -1893,7 +2033,9 @@ static bool vm_step( vm_t* vm ) {
         case INS_NEW: return vm_new_program( vm );
         case INS_MON: return vm_monitor_request( vm );
         case INS_SND: return vm_sound( vm, param16 );
-        case INS_WAIT: return vm_wait( vm );
+        case INS_WAIT: return vm_wait( vm, inspc );
+        case INS_TMR: return vm_set_timer( vm, param16 );
+        case INS_TMRO: return vm_clear_timers( vm, param16 );
         case INS_MRG: return vm_merge_program( vm, param16 != 0 );
         case INS_CHN: return vm_chain_program( vm, param16 != 0 );
         case INS_FILS: return vm_list_files( vm );
@@ -1960,6 +2102,11 @@ bool vm_run( vm_t* vm ) {
 bool vm_begin( vm_t* vm, uint32_t start ) {
     vm_clear_stacks( vm );
     vm_clear_request( vm );
+    memset( vm->timers, 0, sizeof(vm->timers) );        // timers end with the run: their handlers are in this program's code
+    vm->numtimers = 0;
+    vm->irqdepth = 0;
+    vm->irqsafe = false;
+    vm->irqpending = false;
     vm->pc = start;
     vm->line = LINENO_NONE;
     vm->column = 0;
@@ -1995,6 +2142,9 @@ bool vm_resume( vm_t* vm, bool singlestep ) {
         }
         if ( vm->interrupt && steps % VM_INTERRUPT_STEPS == 0 && vm_interrupted( vm ) ) {
             return vm_error( vm, "Break" );
+        }
+        if ( vm->numtimers > 0 && !vm_irq_poll( vm, steps ) ) {
+            return false;
         }
         if ( !vm_step( vm ) ) {
             return false;
