@@ -104,7 +104,7 @@ SFX n [, ch]                   plays effect n on channel ch; without ch on a fre
   commas. So a laser is `SFX 1,"W1 ML S3000,200,8"`, an explosion `SFX 2,"W3 ML X0,0.02,0.4,0.5 S800,60,2"`, a power-up
   `SFX 3,"W2 ML ~8,0.4 S300,1200,4"`.
 - **`SFX n, ch`** starts from a clean channel: it first resets wave (sine), envelope, vibrato and tremolo of the channel; the
-  effects the string sets stay afterwards (like for `WAVE`), so a following `SOUND` on that channel has them. This includes an envelope that fades the note out: a program that uses a channel for `SOUND` after `SFX` without a channel (which takes the highest free one, often 8) should reset it first (`SOUND OFF ch:ENVELOPE ch:TREMOLO ch,0,0`), as the engine of `demos/sfx.bas` does. Effects are stored in
+  when the effect is over (after the release of its envelope) it takes back what the string set (wave, envelope, vibrato, tremolo), so a following `SOUND` on that channel starts clean; the channel counts as busy until then. (`PLAY` leaves its settings, like `WAVE`.) Effects are stored in
   the VM: they stay across direct mode lines, but `RUN`, `NEW` and `LOAD` clear them (define them at the start of the program).
   The host receives the events like those of `PLAY`; the event count is small because sweeps and envelopes are single events.
 - Wrong arguments are "Illegal argument", an `SFX` that was never defined is "Undefined effect".

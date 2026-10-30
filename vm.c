@@ -1175,6 +1175,35 @@ static void vm_queue_voice( vm_t* vm, int chan, const mml_t* m, double tobeats )
     snd->tone( ud, chan, 0.0f, 0.0f, 0.0f, 0.0f );      // the end of the voice: nothing goes on sounding
 }
 
+// an effect that has set wave, envelope, vibrato or tremolo takes them back when it is over, so that the next note on the
+// channel is not affected (an envelope with sustain 0 would silence it); the envelope's release is awaited first
+static void vm_sfx_cleanup( vm_t* vm, int chan, const mml_t* m, double tobeats ) {
+    const vm_sound_t* snd = vm->sound;
+    void* ud = vm->userdata;
+    bool wave = false, env = false, vib = false, trem = false;
+    double release = 0.0;
+    for ( size_t k=0; k < m->count; ++k ) {
+        const mml_event_t* ev = &m->events[k];
+        switch ( ev->kind ) {
+            case MML_WAVE: wave = true; break;
+            case MML_ENV:  env = true; release = ev->p[0] < 0.0f ? 0.0 : (double) ev->p[3]; break;
+            case MML_VIB:  vib = true; break;
+            case MML_TREM: trem = true; break;
+            default: break;
+        }
+    }
+    if ( !wave && !env && !vib && !trem ) {
+        return;
+    }
+    if ( env && release > 0.0 ) {
+        snd->tone( ud, chan, 0.0f, 0.0f, 0.0f, (float)( release * tobeats ) );      // the channel is busy until the release is over
+    }
+    if ( wave ) snd->setwave( ud, chan, 0 );
+    if ( env  ) snd->setenv( ud, chan, -1.0f, 0.0f, 0.0f, 0.0f );
+    if ( vib  ) snd->setvib( ud, chan, 0.0f, 0.0f );
+    if ( trem ) snd->settrem( ud, chan, 0.0f, 0.0f );
+}
+
 // the host's beats per second of music-string time
 static double vm_sound_tobeats( vm_t* vm ) {
     int bpm = vm->sound->getbpm( vm->userdata );
@@ -1278,6 +1307,7 @@ static bool vm_sfx_play( vm_t* vm ) {
     snd->setvib( vm->userdata, chan, 0.0f, 0.0f );
     snd->settrem( vm->userdata, chan, 0.0f, 0.0f );
     vm_queue_voice( vm, chan, m, tobeats );
+    vm_sfx_cleanup( vm, chan, m, tobeats );
     return true;
 }
 
