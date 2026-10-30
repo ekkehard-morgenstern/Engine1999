@@ -389,6 +389,13 @@ The 4096 extended instructions are as follows:
     0001 01001001       TMRO - clear timers ( timer -- ) C=0 P=1
                             AFTER OFF / EVERY OFF: clears timer 0..3 if it is of the kind in parameter bit 0 (1 = EVERY), or
                             all timers of that kind if the operand is -1.
+    0001 01001010       RMN  - remaining time of a timer ( timer -- n ) C=0 P=0
+                            REMAIN(): the ticks (1/60 s, rounded up) until timer 0..3 is due, 0 if it is not active. The
+                            timer is cleared (AFTER and EVERY alike). Other numbers are "Illegal argument".
+    0001 01001011       HLT  - end of the run ( -- ) C=0 P=0
+                            Ends the run (pc = end of the code). The compiler puts one at the end of a program: END and the
+                            end of the last line branch to it, so the code of a direct mode line, which is placed behind the
+                            program, is not entered by running off the end of the program.
 
 */
 
@@ -514,5 +521,7 @@ The 4096 extended instructions are as follows:
 #define INS_FILS        UINT16_C(0X147)
 #define INS_TMR         UINT16_C(0X148)
 #define INS_TMRO        UINT16_C(0X149)
+#define INS_RMN         UINT16_C(0X14A)
+#define INS_HLT         UINT16_C(0X14B)
 
 #endif

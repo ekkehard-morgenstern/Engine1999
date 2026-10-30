@@ -104,6 +104,7 @@ typedef struct _repl_t {
     // MONITOR asks the host for the machine monitor the same way (the run ends, the host checks the flag after repl_enter())
     bool        monitor;
     bool        started;            // internal: repl_execute() got as far as running the program (CHAIN keeps the old runtime if not)
+    bool        linesstale;         // internal: the stored program was changed since it was compiled (its line table is out of date)
     runtime_t*  keeprt;             // internal (CHAIN): the previous runtime, whose variables the program being started takes over
     char*       filename;           // name of the last file loaded or saved (malloc'ed), 0 = none or NEW; for the editor's title
 } repl_t;

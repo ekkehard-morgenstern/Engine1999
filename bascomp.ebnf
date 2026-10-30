@@ -71,7 +71,7 @@ num-usr-fn-call := num-usr-fn-name [ TOK_LPAREN [ expr-list ] TOK_RPAREN ] .
 str-usr-fn-call := str-usr-fn-name [ TOK_LPAREN [ expr-list ] TOK_RPAREN ] .
 
 sys-num-fn-1-arg-call := ( TOK_ASC | TOK_VAL | TOK_LEN ) TOK_LPAREN str-expr TOK_RPAREN |
-                           ( TOK_FRE | TOK_PLAYING ) TOK_LPAREN num-expr TOK_RPAREN .
+                           ( TOK_FRE | TOK_PLAYING | TOK_REMAIN ) TOK_LPAREN num-expr TOK_RPAREN .
 
 sys-str-fn-2-arg-call := ( TOK_BIN | TOK_QUA | TOK_OCT | TOK_DEC | TOK_HEX ) TOK_STRING TOK_LPAREN num-expr
                               [ TOK_COMMA num-expr ] TOK_RPAREN |

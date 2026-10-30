@@ -258,12 +258,18 @@ static bool repl_execute( repl_t* repl, bool fromstart, const char* label, int32
     uint32_t persistent = cgen->persistent;
     uint32_t prevlast = cgen->datalast;
     repl_setup_vm( repl );
+    if ( !fromstart && repl->linesstale ) {
+        cgen->numlineaddrs = 0;     // the program changed since it was compiled: a direct line must not jump into the old code by line number
+    }
     if ( setjmp( repl->jmp ) == 0 ) {
         run_compiler( &repl->comp );
         if ( basdbg_on( BASDBG_TREE ) ) {
             basdbg_print_tree( &repl->comp );
         }
         ok = cgen_from_program( cgen, &repl->comp );
+        if ( ok && fromstart ) {
+            repl->linesstale = false;       // the line table is that of the stored program now
+        }
         if ( ok && repl->keeprt != 0 ) {
             vmem_copy_vars( &repl->rt.varmem, &repl->keeprt->varmem );      // CHAIN
         }
@@ -308,6 +314,9 @@ bool repl_compile( repl_t* repl ) {
     if ( setjmp( repl->jmp ) == 0 ) {
         run_compiler( &repl->comp );
         ok = cgen_from_program( &repl->rt.codegen, &repl->comp );
+    }
+    if ( ok ) {
+        repl->linesstale = false;
     }
     return ok;
 }
@@ -498,6 +507,7 @@ static bool repl_load_program( repl_t* repl, const char* name ) {
     }
     free_program( &repl->pgm );
     repl->pgm = loaded;
+    repl->linesstale = true;
     repl_set_filename( repl, filename );
     free( filename );
     return true;
@@ -542,6 +552,7 @@ static bool repl_merge_program( repl_t* repl, const char* name, bool append ) {
     }
     if ( ok ) {
         merge_programs( &repl->pgm, &loaded );
+        repl->linesstale = true;
     }
     free_program( &loaded );
     return ok;
@@ -822,6 +833,7 @@ static bool repl_vm_delete( struct _vm_t* vm, void* usrdata, const char* firstla
         return false;
     }
     delete_lines( &repl->pgm, first, last );
+    repl->linesstale = true;
     return true;
 }
 
@@ -836,6 +848,7 @@ static bool repl_vm_renumber( struct _vm_t* vm, void* usrdata, const char* first
     if ( first != LINENO_NONE ) {
         start = first;
     }
+    repl->linesstale = true;
     switch ( renumber_program( &repl->pgm, first, last, start, (uint32_t) step ) ) {
         case RENUM_OK:
             return true;
@@ -906,6 +919,7 @@ static bool repl_enter_line( repl_t* repl, const char* text ) {
             }
         } else {
             ok = enter_line( &repl->pgm, tokline, 0 );
+            repl->linesstale = true;
             if ( !ok ) {
                 repl_report( repl, "? Out of memory" );
             }

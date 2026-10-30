@@ -1760,6 +1760,23 @@ static bool vm_system_function( vm_t* vm, uint16_t opcode ) {
             char* s = vm_new_string( vm, buf, strlen( buf ) );
             return s && vm_push_string( vm, s );
         }
+        case INS_RMN: {
+            if ( !vm_dpop_num( vm, &num ) ) {
+                return false;
+            }
+            if ( !( num >= 0.0 && num < (double) VM_NTIMERS ) ) {
+                return vm_error( vm, "Illegal argument" );
+            }
+            vm_timer_t* tm = &vm->timers[ (int) num ];
+            double left = 0.0;
+            if ( tm->active ) {
+                uint64_t now = vm_now_ns();
+                left = tm->due > now ? ceil( (double)( tm->due - now ) * 60.0 / 1.0e9 ) : 0.0;
+                tm->active = false;
+                vm_count_timers( vm );
+            }
+            return vm_dpush_num( vm, left );
+        }
         case INS_PLNG: {
             int chan = 0;
             if ( !vm_dpop_num( vm, &num ) || !vm_sound_channel( vm, num, &chan ) ) {
@@ -2021,7 +2038,7 @@ static bool vm_step( vm_t* vm ) {
         case INS_WIAE: return vm_write_elem( vm, param16, VARTYPEV_INT );
         case INS_WSAE: return vm_write_elem( vm, param16, VARTYPEV_STR );
         case INS_TI: case INS_INKY: case INS_FRE: case INS_STRS: case INS_CHRS: case INS_ASC: case INS_LEN: case INS_VAL:
-        case INS_PLNG:
+        case INS_PLNG: case INS_RMN:
         case INS_BINS: case INS_QUAS: case INS_OCTS: case INS_HEXS: case INS_DECS:
         case INS_LFTS: case INS_RGTS: case INS_MIDS:
             return vm_system_function( vm, opcode );
@@ -2034,6 +2051,7 @@ static bool vm_step( vm_t* vm ) {
         case INS_MON: return vm_monitor_request( vm );
         case INS_SND: return vm_sound( vm, param16 );
         case INS_WAIT: return vm_wait( vm, inspc );
+        case INS_HLT: vm->pc = vm->cgen->codesize; return true;
         case INS_TMR: return vm_set_timer( vm, param16 );
         case INS_TMRO: return vm_clear_timers( vm, param16 );
         case INS_MRG: return vm_merge_program( vm, param16 != 0 );

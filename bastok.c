@@ -818,7 +818,7 @@ static const struct {
     { TOK_LABEL, "LABEL" }, { TOK_AGAIN, "AGAIN" }, { TOK_CHR, "CHR" }, { TOK_MONITOR, "MONITOR" }, { TOK_SOUND, "SOUND" }, { TOK_PLAY, "PLAY" },
     { TOK_WAVE, "WAVE" }, { TOK_TEMPO, "TEMPO" }, { TOK_PLAYING, "PLAYING" }, { TOK_SYNC, "SYNC" },
     { TOK_PITCH, "PITCH" }, { TOK_VOLUME, "VOLUME" }, { TOK_ENVELOPE, "ENVELOPE" }, { TOK_VIBRATO, "VIBRATO" },
-    { TOK_TREMOLO, "TREMOLO" }, { TOK_SFX, "SFX" }, { TOK_WAIT, "WAIT" }, { TOK_AMP, "&" }, { TOK_LE, "<=" }, { TOK_GE, ">=" }, { TOK_NE, "<>" }, { 0, 0 }
+    { TOK_TREMOLO, "TREMOLO" }, { TOK_SFX, "SFX" }, { TOK_WAIT, "WAIT" }, { TOK_REMAIN, "REMAIN" }, { TOK_AMP, "&" }, { TOK_LE, "<=" }, { TOK_GE, ">=" }, { TOK_NE, "<>" }, { 0, 0 }
 };
 
 bool is_keyword( const char* name, uint8_t* ptok ) {
@@ -1013,7 +1013,7 @@ static hlclass_t keyword_hlclass( uint8_t tok ) {
             return HL_CONTROL;
         case TOK_ASC: case TOK_VAL: case TOK_LEFT: case TOK_MID: case TOK_RIGHT: case TOK_INKEY: case TOK_BIN:
         case TOK_QUA: case TOK_OCT: case TOK_DEC: case TOK_HEX: case TOK_FRE: case TOK_TI: case TOK_LEN: case TOK_CHR:
-        case TOK_PLAYING: case TOK_FN:
+        case TOK_PLAYING: case TOK_REMAIN: case TOK_FN:
             return HL_FUNCTION;
         case TOK_NOT: case TOK_AND: case TOK_OR: case TOK_XOR: case TOK_NAND: case TOK_NOR: case TOK_XNOR:
         case TOK_LSHIFT: case TOK_RSHIFT:

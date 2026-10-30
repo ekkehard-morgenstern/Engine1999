@@ -1556,7 +1556,7 @@ bool comp_eat_strusrfncall( compiler_t* comp, node_t** pnode ) {
 bool comp_eat_sysnumfn1argcall( compiler_t* comp, node_t** pnode ) {
     /*
         sys-num-fn-1-arg-call := ( TOK_ASC | TOK_VAL | TOK_LEN ) TOK_LPAREN str-expr TOK_RPAREN |
-                                 ( TOK_FRE | TOK_PLAYING ) TOK_LPAREN num-expr TOK_RPAREN .
+                                 ( TOK_FRE | TOK_PLAYING | TOK_REMAIN ) TOK_LPAREN num-expr TOK_RPAREN .
         NT_SYSNUMFUNCARGCALL    numeric system function call with arguments
             data:
                 - 1 byte of function token (like TOK_VAL)
@@ -1587,7 +1587,7 @@ OOM:        out_of_memory( comp );
             return false;
         }
         return true;
-    } else if ( tok == TOK_FRE || tok == TOK_PLAYING ) {
+    } else if ( tok == TOK_FRE || tok == TOK_PLAYING || tok == TOK_REMAIN ) {
         if ( !comp_fetchtok( comp ) ) {
             return false;
         }

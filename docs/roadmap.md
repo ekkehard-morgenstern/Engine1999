@@ -24,7 +24,7 @@ Open: directory handling for `LOAD`/`SAVE` beyond plain paths (there is no `CD`;
 ## 2. Smaller language items *(each needs a short design decision)*
 
 - [ ] **Comments are converted to upper case** by the tokenizer (`' Ode to Joy` is listed as `' ODE TO JOY`; strings keep their case): decide whether comment text should keep its case (found while writing the demos)
-- [ ] `WAIT`, `AFTER` and `EVERY` exist; no `FRAME` (wait for the next screen refresh) yet, no `REMAIN()`, handlers do not run during `INPUT`/`GET`
+- [ ] `WAIT`, `AFTER` and `EVERY` exist; no `FRAME` (wait for the next screen refresh) yet, handlers do not run during `INPUT`/`GET`
 
 
 - [ ] `OPTION BASE` — lowest array index (0 or 1); when is it allowed (before the first `DIM`?)
@@ -48,7 +48,6 @@ Open: directory handling for `LOAD`/`SAVE` beyond plain paths (there is no `CD`;
 - [x] `AFTER` — one-shot timer, like `setTimeout` (done, in the VM: `docs/basic-language.md`)
 - [x] `EVERY` — recurring timer, like `setInterval` (done)
 - [ ] `SYMBOL` — redefine one character of the character set
-- [ ] Direct mode: `GOTO`/`GOSUB` to a program *line number* typed at the prompt reports "Undefined line number" (labels work); found while testing `AFTER`
 
 Questions to decide: when timer handlers run (between VM instructions, then a call like `GOSUB`? what if one is already running?);
 how a handler is named (line number / label / `FN`?); how they are cancelled (`OFF`?); host callback signatures for timers

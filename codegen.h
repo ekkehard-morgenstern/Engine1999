@@ -106,6 +106,7 @@ typedef struct _codegen_t {
     uint8_t*        data;           // the data segment (heap)
     uint32_t        codesize, datasize;
     size_t          codecap, datacap;
+    uint32_t        endaddr;        // where END and running off the end of a program go: its HLT instruction (CODEOFFS_NONE: the end of the code)
     uint32_t        persistent;     // counts what the code/data generated so far has stored that outlives it (see cgen_note_persistent)
     cgen_const_t*   consts;         // hash table of the shared constants in the data segment (size: power of two)
     size_t          numconsts, maxconsts;
@@ -276,6 +277,8 @@ bool cgen_gen_tmro( codegen_t* cgen, uint16_t flags );
 bool cgen_gen_mon( codegen_t* cgen );
 bool cgen_gen_snd( codegen_t* cgen, uint16_t kind );
 bool cgen_gen_plng( codegen_t* cgen );
+bool cgen_gen_rmn( codegen_t* cgen );
+bool cgen_gen_hlt( codegen_t* cgen );
 bool cgen_gen_wait( codegen_t* cgen );
 bool cgen_gen_list( codegen_t* cgen );
 bool cgen_gen_new( codegen_t* cgen );

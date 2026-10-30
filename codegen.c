@@ -37,6 +37,7 @@ void init_codegen( codegen_t* cgen ) {
     cgen->datasize = UINT32_C(0);
     cgen->codecap  = cgen->datacap = 0;
     cgen->persistent = 0;
+    cgen->endaddr = CODEOFFS_NONE;
     cgen->consts   = 0; cgen->numconsts = cgen->maxconsts = 0;
     cgen->lineaddrs = 0; cgen->numlineaddrs = cgen->maxlineaddrs = 0;
     cgen->fixups    = 0; cgen->numfixups    = cgen->maxfixups    = 0;
@@ -388,6 +389,8 @@ const char* cgen_opcode_name( uint16_t opcode ) {
         case INS_MON:       return "MON";
         case INS_SND:       return "SND";
         case INS_PLNG:      return "PLNG";
+        case INS_RMN:       return "RMN";
+        case INS_HLT:       return "HLT";
         case INS_WAIT:      return "WAIT";
         case INS_MRG:       return "MRG";
         case INS_CHN:       return "CHN";
@@ -999,6 +1002,14 @@ bool cgen_gen_wait( codegen_t* cgen ) {
     return cgen_gen_ins12( cgen, INS_WAIT, false, false, UINT16_C(0) );
 }
 
+bool cgen_gen_hlt( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_HLT, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_rmn( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_RMN, false, false, UINT16_C(0) );
+}
+
 bool cgen_gen_plng( codegen_t* cgen ) {
     return cgen_gen_ins12( cgen, INS_PLNG, false, false, UINT16_C(0) );
 }
@@ -1372,7 +1383,7 @@ UNEXP:  return cgen_unexpected_node( comp );
 bool cgen_from_sysfncall( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     /*
         sys-num-fn-1-arg-call := ( TOK_ASC | TOK_VAL | TOK_LEN ) TOK_LPAREN str-expr TOK_RPAREN |
-                                   ( TOK_FRE | TOK_PLAYING ) TOK_LPAREN num-expr TOK_RPAREN .
+                                   ( TOK_FRE | TOK_PLAYING | TOK_REMAIN ) TOK_LPAREN num-expr TOK_RPAREN .
 
         sys-str-fn-2-arg-call := ( TOK_BIN | TOK_QUA | TOK_OCT | TOK_DEC | TOK_HEX ) TOK_STRING TOK_LPAREN num-expr
                                       [ TOK_COMMA num-expr ] TOK_RPAREN |
@@ -1446,6 +1457,7 @@ UNEXP:      return cgen_unexpected_node( comp );
         case TOK_RIGHT: generator = cgen_gen_rgts; break;
         case TOK_MID:   generator = cgen_gen_mids; break;
         case TOK_PLAYING: generator = cgen_gen_plng; break;
+        case TOK_REMAIN: generator = cgen_gen_rmn; break;
         default:
             goto UNEXP;
     }
@@ -2957,7 +2969,21 @@ bool cgen_from_program( codegen_t* cgen, compiler_t* comp ) {
     if ( root == NODE_NONE ) {
         return cgen_bad_node( comp );
     }
+    // a direct mode line (a statement line without a line number) can jump to the lines of the program that was compiled last:
+    // the line table stays
+    bool direct = root->type == NT_STMTLINE && root->datalen != UINT16_C(3);
+    size_t numlines = cgen->numlineaddrs;
     cgen_begin_control( cgen );
+    if ( direct ) {
+        cgen->numlineaddrs = numlines;
+    }
     bool ok = root->type == NT_STMTLINES ? cgen_from_stmtlines( cgen, comp, root ) : cgen_from_stmtline( cgen, comp, root );
+    cgen->endaddr = CODEOFFS_NONE;
+    if ( ok && !direct ) {
+        // The program ends in a HLT. END and the end of the last line lead there; the code of the direct mode lines that
+        // follow starts behind it, so a jump from such a line into the program can't run on into the line itself.
+        cgen->endaddr = cgen->codesize;
+        ok = cgen_gen_hlt( cgen ) || cgen_out_of_code_memory( comp );
+    }
     return ok && cgen_finish_control( cgen, comp );
 }

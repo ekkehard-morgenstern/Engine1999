@@ -149,7 +149,7 @@ bool cgen_finish_control( codegen_t* cgen, compiler_t* comp ) {
         const cgen_fixup_t* fx = &cgen->fixups[i];
         uint32_t addr = 0;
         if ( fx->lineno == CGEN_FIXUP_END ) {
-            addr = cgen->codesize;
+            addr = cgen->endaddr != CODEOFFS_NONE ? cgen->endaddr : cgen->codesize;
         } else if ( !cgen_find_line( cgen, fx->lineno, &addr ) ) {
             char msg[64];
             snprintf( msg, sizeof(msg), "Undefined line number %u", (unsigned) fx->lineno );
