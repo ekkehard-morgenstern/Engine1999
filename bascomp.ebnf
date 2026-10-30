@@ -255,7 +255,18 @@ sound-stmt := TOK_SOUND num-expr TOK_COMMA num-expr TOK_COMMA num-expr [ TOK_COM
 -- (no channel: a free one, the highest first).
 -- WAIT n sleeps for n/60 seconds (the unit of TI) without using the processor; ESC breaks it. WAIT 0 returns at once.
 wait-stmt := TOK_WAIT num-expr .
-prog-stmt := load-stmt | run-stmt | list-stmt | new-stmt | clear-stmt | delete-stmt | renum-stmt | edit-stmt | monitor-stmt | sound-stmt |
+-- MERGE name enters the lines of a program file into the stored program: a line with the number of a stored line replaces it,
+-- the others are inserted. Variables stay; the stored program changes, so the running program ends (like RENUM). With APPEND
+-- (an identifier, not a keyword) the file's lines are numbered in steps of 10 behind the last stored line (the first free
+-- multiple of 10; 10 for an empty program) and the line numbers they refer to are adjusted; the stored program is not
+-- renumbered. A label that both programs define (in lines that are not replaced) is an error and nothing changes.
+-- CHAIN name replaces the program by the file and runs it, like LOAD followed by RUN, but the variables of the old program that
+-- the new one also uses keep their values (same name and type; arrays only with the same dimensions). CHAIN MERGE name merges
+-- the file into the stored program (as MERGE) and runs the result. The optional target is where the run starts (default:
+-- the first line). Functions, labels and DATA are those of the new program; SFX definitions are kept.
+merge-stmt := TOK_MERGE str-expr [ TOK_COMMA APPEND ] .
+chain-stmt := TOK_CHAIN [ TOK_MERGE ] str-expr [ TOK_COMMA goto-target ] .
+prog-stmt := load-stmt | run-stmt | merge-stmt | chain-stmt | list-stmt | new-stmt | clear-stmt | delete-stmt | renum-stmt | edit-stmt | monitor-stmt | sound-stmt |
              wait-stmt .
 
 stmt := io-stmt | prog-stmt | assign-stmt | control-flow-stmt .

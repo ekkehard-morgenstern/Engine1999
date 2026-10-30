@@ -112,6 +112,7 @@ Policies chosen by this implementation (the instruction set does not define them
 #define VMREQ_RUN           2       // clear the variables and run the program from reqname (label) / reqline, or the start
 #define VMREQ_EDIT          4       // let the user edit the line reqline / the line of the label reqname; the run is not continued
 #define VMREQ_MONITOR       5       // open the machine monitor; the run is not continued
+#define VMREQ_CHAIN         6       // load (reqmerge: merge) the file reqname and run the program from reqlabel / reqline, keeping variables
 
 // why vm_resume() returned (vm_t.stopreason): VMSTOP_NONE = the run is over (the code ended, an error was reported, or a
 // request was left), the others leave the VM suspended: the stacks, the pc and everything else stay as they are and
@@ -204,6 +205,9 @@ typedef struct _vm_t {
     // DELETE / RENUMBER: the host edits the stored program (ranges as for list); the VM ends the run afterwards, because the
     // running code no longer matches the program. Return false after reporting an error.
     bool            (*deletelines)( struct _vm_t*, void*, const char* firstlabel, int32_t firstline, const char* lastlabel, int32_t lastline );
+    // MERGE: merges the program file <name> into the stored program (append: behind its last line, renumbered). Return false after
+    // reporting an error. The run ends afterwards.
+    bool            (*merge)( struct _vm_t*, void*, const char* name, bool append );
     bool            (*renumber)( struct _vm_t*, void*, const char* firstlabel, int32_t firstline, const char* lastlabel, int32_t lastline, int32_t step );
     bool            sfx_defined[SND_MAXSFX];
     mml_t           sfx[SND_MAXSFX];    // the stored sound effects (SFX n, a$), parsed; cleared with the VM
@@ -211,6 +215,8 @@ typedef struct _vm_t {
     int             request;        // VMREQ_*: LOAD / RUN stop the VM and leave a request for the host (see vm_run_at)
     char*           reqname;        // LOAD: the file name; RUN: the label name ("" = none); owned by the VM
     int32_t         reqline;        // RUN: the line number, -1 = none
+    char*           reqlabel;       // CHAIN: the label to start at ("" = none); owned by the VM
+    bool            reqmerge;       // CHAIN: merge the file instead of replacing the program
     struct timespec started;        // for the system timer TI
 } vm_t;
 

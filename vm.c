@@ -73,9 +73,12 @@ void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem ) {
     vm->list     = 0;
     vm->deletelines = 0;
     vm->renumber = 0;
+    vm->merge    = 0;
     vm->request  = VMREQ_NONE;
     vm->reqname  = 0;
     vm->reqline  = -1;
+    vm->reqlabel = 0;
+    vm->reqmerge = false;
     clock_gettime( CLOCK_MONOTONIC, &vm->started );
 }
 
@@ -105,6 +108,9 @@ void vm_clear_request( vm_t* vm ) {
     free( vm->reqname );
     vm->reqname = 0;
     vm->reqline = -1;
+    free( vm->reqlabel );
+    vm->reqlabel = 0;
+    vm->reqmerge = false;
 }
 
 void cleanup_vm( vm_t* vm ) {
@@ -1096,6 +1102,50 @@ static bool vm_run_program( vm_t* vm ) {
     return true;
 }
 
+// MRG ( s -- ): merges a program file into the stored program through the host; the program changed: the run ends
+static bool vm_merge_program( vm_t* vm, bool append ) {
+    char* name;
+    if ( !vm_dpop_str( vm, &name ) ) {
+        return false;
+    }
+    bool ok = true;
+    if ( name[0] == '\0' ) {
+        ok = vm_error( vm, "Illegal argument" );
+    } else if ( vm->merge == 0 ) {
+        ok = vm_error( vm, "MERGE is not available" );
+    } else {
+        ok = vm->merge( vm, vm->userdata, name, append );
+        vm->pc = vm->cgen->codesize;
+    }
+    free( name );
+    return ok;
+}
+
+// CHN ( s1 s2 n -- ): file name, label name ("" = none) and line number (-1 = none); leaves a request for the host and ends the run
+static bool vm_chain_program( vm_t* vm, bool merge ) {
+    double num; char* label; char* name;
+    if ( !vm_dpop_num( vm, &num ) || !vm_dpop_str( vm, &label ) ) {
+        return false;
+    }
+    if ( !vm_dpop_str( vm, &name ) ) {
+        free( label );
+        return false;
+    }
+    if ( name[0] == '\0' || num < -1.0 || num > (double) LINENO_MAX ) {
+        free( label );
+        free( name );
+        return vm_error( vm, "Illegal argument" );
+    }
+    vm_clear_request( vm );
+    vm->request = VMREQ_CHAIN;
+    vm->reqname = name;
+    vm->reqlabel = label;
+    vm->reqline = (int32_t) num;
+    vm->reqmerge = merge;
+    vm->pc = vm->cgen->codesize;
+    return true;
+}
+
 // EDIT ( s n -- ): label name ("" = none) and line number (-1 = none)
 static bool vm_edit_request( vm_t* vm ) {
     double num; char* name;
@@ -1707,7 +1757,7 @@ static bool vm_step( vm_t* vm ) {
     uint32_t imm17 = wide ? param : ( param | ( code ? UINT32_C(0x10000) : UINT32_C(0) ) );
     int32_t  simm17 = wide ? (int32_t) param :
         ( imm17 & UINT32_C(0x10000) ? (int32_t)( imm17 | UINT32_C(0xFFFE0000) ) : (int32_t) imm17 );
-    double num; const uint8_t* mem; uint32_t avail; uint32_t addr; char* str;
+    double num; const uint8_t* mem; uint32_t avail; uint32_t addr = 0; char* str;
     // only these take a parameter above 16 bits (the others have variable numbers, counts, ...)
     if ( param > UINT16_MAX && opcode != INS_PHPA && opcode != INS_PHIM && opcode != INS_BRIA && opcode != INS_BRIR &&
          opcode != INS_LINE && opcode != INS_RSTR && opcode != INS_INPL ) {
@@ -1827,6 +1877,8 @@ static bool vm_step( vm_t* vm ) {
         case INS_MON: return vm_monitor_request( vm );
         case INS_SND: return vm_sound( vm, param16 );
         case INS_WAIT: return vm_wait( vm );
+        case INS_MRG: return vm_merge_program( vm, param16 != 0 );
+        case INS_CHN: return vm_chain_program( vm, param16 != 0 );
         case INS_EDIT: return vm_edit_request( vm );
         case INS_DELE: return vm_edit_program( vm, false );
         case INS_RENM: return vm_edit_program( vm, true );

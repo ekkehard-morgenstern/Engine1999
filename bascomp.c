@@ -2307,6 +2307,84 @@ bool comp_eat_runstmt( compiler_t* comp, node_t** pnode ) {
     return true;
 }
 
+bool comp_eat_mergestmt( compiler_t* comp, node_t** pnode ) {
+    // merge-stmt := TOK_MERGE str-expr [ TOK_COMMA identifier ] .      (the identifier must be APPEND)
+    if ( comp->currtok != TOK_MERGE || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    node_t* strexpr = NODE_NONE;
+    if ( !comp_eat_strexpr( comp, &strexpr ) || strexpr == NODE_NONE ) {
+        comp_error( comp, "String expression expected" );
+        return false;
+    }
+    uint8_t append = 0;
+    if ( comp->currtok == TOK_COMMA ) {
+        if ( !comp_fetchtok( comp ) || comp->currtok != TOK_NUMIDENT || strcmp( comp->param, "APPEND" ) != 0 ) {
+            comp_error( comp, "APPEND expected" );
+            return false;
+        }
+        append = 1;
+        if ( !comp_fetchtok( comp ) ) {
+            comp_error( comp, "Unexpected end of statement" );
+            return false;
+        }
+    }
+    /*
+        NT_MERGESTMT    MERGE statement
+            data:
+                - 1 byte: 1 = APPEND given
+            branches:
+                - 1 branch of string expression (file name)
+            immediate processing:
+                - APPEND is an identifier that is recognized here, not a keyword (like the SAVE options)
+    */
+    if ( !comp_create_node( comp, pnode, NT_MERGESTMT, UINT8_C(1), UINT16_C(1), &append, strexpr ) || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
+bool comp_eat_chainstmt( compiler_t* comp, node_t** pnode ) {
+    // chain-stmt := TOK_CHAIN [ TOK_MERGE ] str-expr [ TOK_COMMA goto-target ] .
+    if ( comp->currtok != TOK_CHAIN || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    uint8_t merge = 0;
+    if ( comp->currtok == TOK_MERGE ) {
+        merge = 1;
+        if ( !comp_fetchtok( comp ) ) {
+            comp_error( comp, "String expression expected" );
+            return false;
+        }
+    }
+    node_t* strexpr = NODE_NONE;
+    if ( !comp_eat_strexpr( comp, &strexpr ) || strexpr == NODE_NONE ) {
+        comp_error( comp, "String expression expected" );
+        return false;
+    }
+    node_t* target = NODE_NONE;
+    if ( comp->currtok == TOK_COMMA ) {
+        if ( !comp_fetchtok( comp ) || !comp_eat_gototarget( comp, &target ) || target == NODE_NONE ) {
+            comp_error( comp, "Line number or label expected" );
+            return false;
+        }
+    }
+    /*
+        NT_CHAINSTMT    CHAIN statement
+            data:
+                - 1 byte: 1 = MERGE given
+            branches:
+                - 1 branch of string expression (file name), then optionally 1 goto target (where the program starts)
+    */
+    if ( !( target != NODE_NONE ? comp_create_node( comp, pnode, NT_CHAINSTMT, UINT8_C(2), UINT16_C(1), &merge, strexpr, target ) :
+            comp_create_node( comp, pnode, NT_CHAINSTMT, UINT8_C(1), UINT16_C(1), &merge, strexpr ) ) || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
 bool comp_eat_editstmt( compiler_t* comp, node_t** pnode ) {
     // edit-stmt := TOK_EDIT [ goto-target ] .
     if ( comp->currtok != TOK_EDIT || !comp_fetchtok( comp ) ) {
@@ -2577,13 +2655,19 @@ bool comp_eat_clearstmt( compiler_t* comp, node_t** pnode ) {
 }
 
 bool comp_eat_progstmt( compiler_t* comp, node_t** pnode ) {
-    // prog-stmt := load-stmt | run-stmt | list-stmt | new-stmt | clear-stmt | delete-stmt | renum-stmt | edit-stmt | monitor-stmt |
+    // prog-stmt := load-stmt | run-stmt | merge-stmt | chain-stmt | list-stmt | new-stmt | clear-stmt | delete-stmt | renum-stmt | edit-stmt | monitor-stmt |
     //              sound-stmt | wait-stmt .
     // [ NT_PROGSTMT - not generated ]
     if ( comp_eat_loadstmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     if ( comp_eat_runstmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_mergestmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_chainstmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     if ( comp_eat_liststmt( comp, pnode ) && *pnode != NODE_NONE ) {

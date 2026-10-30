@@ -34,6 +34,8 @@ Code generation for the program commands LOAD, RUN, LIST, NEW, CLEAR, DELETE and
 
     LOAD name        <name>  LOAD
     RUN [target]     <label name or "">  <line number or -1>  RUNP
+    MERGE name[,APPEND]   <name>  MRG (parameter 1 = APPEND)
+    CHAIN [MERGE] name[,target]   <name>  <label name or "">  <line number or -1>  CHN (parameter 1 = MERGE)
     EDIT [target]    <label name or "">  <line number or -1>  EDIT
     DELETE a[-[b]]   <label a or "">  <line a or -1>  <label b or "">  <line b or -1>  DELE
     RENUM [a][-[b]][,step]   (the same four operands)  <step, 10 if omitted>  RENM
@@ -102,6 +104,42 @@ bool cgen_from_loadstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         return cgen_out_of_code_memory( comp );
     }
     return true;
+}
+
+bool cgen_from_mergestmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    /*
+        NT_MERGESTMT    MERGE statement
+            data: 1 byte, 1 = APPEND
+            branches: 1 string expression (file name)
+    */
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->type != NT_MERGESTMT || node->numbranches != 1U || node->datalen != UINT16_C(1) ) {
+        return cgen_unexpected_node( comp );
+    }
+    return cgen_from_strexpr( cgen, comp, node->branches[0] ) &&
+        ( cgen_gen_mrg( cgen, node->data[0] != 0 ) || cgen_out_of_code_memory( comp ) );
+}
+
+bool cgen_from_chainstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    /*
+        NT_CHAINSTMT    CHAIN statement
+            data: 1 byte, 1 = MERGE
+            branches: 1 string expression (file name), optionally 1 goto target
+        code: <name> <label name or ""> <line number or -1> CHN
+    */
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->type != NT_CHAINSTMT || node->numbranches < 1U || node->numbranches > 2U || node->datalen != UINT16_C(1) ) {
+        return cgen_unexpected_node( comp );
+    }
+    if ( !cgen_from_strexpr( cgen, comp, node->branches[0] ) ||
+         !cp_push_target( cgen, comp, node->numbranches == 2U ? node->branches[1] : NODE_NONE ) ) {
+        return false;
+    }
+    return cgen_gen_chn( cgen, node->data[0] != 0 ) || cgen_out_of_code_memory( comp );
 }
 
 bool cgen_from_runstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {

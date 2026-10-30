@@ -12,15 +12,14 @@ Order = suggested order, not a commitment.
 
 - [ ] `LIST` with an output channel (`LIST #1,10-20`; today always the VM's channel 0) and `RUN`/`LOAD` taking more arguments?
 - [ ] `LOAD`/`SAVE`: file names are plain paths relative to the current directory; no directory handling (default extensions are done: `.bas` ASCII / `.e99` binary, see `docs/basic-language.md`)
-- [ ] `MERGE`, `CHAIN`, `FILES`
+- [ ] `FILES` (`MERGE` and `CHAIN` are done: see `docs/basic-language.md`; no `COMMON`, no `CHAIN … DELETE`; `MERGE` has no line-range option)
 - [ ] Full-screen editor (`EDIT`, first version done): no mouse support (the scroll bar is informational), no search/replace, block or clipboard operations, no Unicode; lines over 1656 characters are read-only; the position memory is by line number only. `EDIT n` still uses the one-line editor.
 - [ ] `RENUM` also adjusts targets in `RUN`/`LIST`/`DELETE`, but not the range of another `RENUM` statement in the program, and a changed line is
       re-tokenized from the listing text (a round-trip through `detokenize_line`/`tokenize_line`; fine so far in all tests)
 - [ ] `DELETE`/`RENUM` end a running program; a "continue" (`CONT`) would need the code to be patched or recompiled while running
 - [ ] `CLEAR` empties the variables; arrays can't be un-dimensioned by it (arrays exist from parse time), only emptied
 
-Questions to decide: what `CHAIN`
-and `MERGE` do with variables and line numbers; where files live (current directory?); what `FILES` shows.
+Questions to decide: where files live (current directory?); what `FILES` shows.
 
 ## 2. Smaller language items *(each needs a short design decision)*
 

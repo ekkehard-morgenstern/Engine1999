@@ -389,6 +389,8 @@ const char* cgen_opcode_name( uint16_t opcode ) {
         case INS_SND:       return "SND";
         case INS_PLNG:      return "PLNG";
         case INS_WAIT:      return "WAIT";
+        case INS_MRG:       return "MRG";
+        case INS_CHN:       return "CHN";
         default:            break;
     }
     return "???";
@@ -968,6 +970,14 @@ bool cgen_gen_mon( codegen_t* cgen ) {
 
 bool cgen_gen_snd( codegen_t* cgen, uint16_t kind ) {
     return cgen_gen_ins12( cgen, INS_SND, false, true, kind );
+}
+
+bool cgen_gen_mrg( codegen_t* cgen, bool append ) {
+    return cgen_gen_ins12( cgen, INS_MRG, false, true, append ? UINT16_C(1) : UINT16_C(0) );
+}
+
+bool cgen_gen_chn( codegen_t* cgen, bool merge ) {
+    return cgen_gen_ins12( cgen, INS_CHN, false, true, merge ? UINT16_C(1) : UINT16_C(0) );
 }
 
 bool cgen_gen_wait( codegen_t* cgen ) {
@@ -2834,6 +2844,8 @@ bool cgen_from_stmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         case NT_MONITORSTMT: return cgen_from_monitorstmt( cgen, comp, node );
         case NT_SOUNDSTMT:  return cgen_from_soundstmt( cgen, comp, node );
         case NT_WAITSTMT:   return cgen_from_waitstmt( cgen, comp, node );
+        case NT_MERGESTMT:  return cgen_from_mergestmt( cgen, comp, node );
+        case NT_CHAINSTMT:  return cgen_from_chainstmt( cgen, comp, node );
         case NT_STMTLIST:   return cgen_from_stmtlist( cgen, comp, node );
         case NT_DIMSTMT:    return cgen_from_dimstmt( cgen, comp, node );
         case NT_ERASESTMT:  return cgen_from_erasestmt( cgen, comp, node );

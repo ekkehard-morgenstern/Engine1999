@@ -370,6 +370,14 @@ The 4096 extended instructions are as follows:
     0001 01000100       WAIT - sleep ( n -- ) C=0 P=0
                             Sleeps for n/60 seconds (n >= 0, at most 216000 = one hour; the unit of TI) without using the
                             processor. The interrupt callback is asked every 10 ms, so Break ends the wait ("Break").
+    0001 01000101       MRG  - merge a program file ( s -- ) C=0 P=1
+                            Merges the program file <s> into the stored program through the host (merge callback); the
+                            parameter is 1 for APPEND (the file's lines are numbered behind the last stored line). Then ends the
+                            run: the stored program no longer matches the code that is running. An empty name is an error.
+    0001 01000110       CHN  - chain to a program ( s1 s2 n -- ) C=0 P=1
+                            Asks the host to load the file <s1> (parameter 1: merge it into the stored program) and to run the
+                            result from the label s2 ("" = none) or the line n (-1 = none), or from the beginning; the values of
+                            the variables that both programs have are kept. Request VMREQ_CHAIN, like LOAD.
 
 */
 
@@ -490,5 +498,7 @@ The 4096 extended instructions are as follows:
 #define INS_SND         UINT16_C(0X142)
 #define INS_PLNG        UINT16_C(0X143)
 #define INS_WAIT        UINT16_C(0X144)
+#define INS_MRG         UINT16_C(0X145)
+#define INS_CHN         UINT16_C(0X146)
 
 #endif

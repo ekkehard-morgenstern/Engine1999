@@ -314,6 +314,72 @@ bool find_label_line( program_t* pgm, const char* label, uint32_t* plineno ) {
     return found;
 }
 
+void merge_programs( program_t* dst, program_t* src ) {
+    line_t* prev = 0;           // the last line of dst before the position of the line being moved
+    line_t* cur = dst->first;   // the first line of dst that is not before it
+    while ( src->first != 0 ) {
+        line_t* line = src->first;
+        unlink_line( src, line );
+        while ( cur != 0 && cur->lineno < line->lineno ) {
+            prev = cur;
+            cur = cur->next;
+        }
+        if ( cur != 0 && cur->lineno == line->lineno ) {
+            line_t* next = cur->next;
+            delete_line( dst, cur );
+            cur = next;
+        }
+        link_line( dst, prev, line );
+        prev = line;
+    }
+}
+
+bool find_label_clash( program_t* a, program_t* b, char* name, size_t namesize ) {
+    buf_t* buf = create_buffer();
+    size_t wordsize = 65600U;
+    char* word = (char*) malloc( wordsize );
+    bool clash = false;
+    if ( buf == 0 || word == 0 ) {
+        delete_buffer( buf );
+        free( word );
+        return false;
+    }
+    for ( line_t* line = b->first; line && !clash; line = line->next ) {
+        pgmiter_t iter; clear_iter( &iter, b );
+        iter_load_line( &iter, line );
+        clear_buffer( buf );
+        if ( !detokenize_line( buf, iter.tok, &iter.hdr ) ) {
+            break;
+        }
+        const char* p = buf->buffer;        // as in find_label_line()
+        while ( *p && *p != '\'' && !clash ) {
+            if ( *p == '"' || *p == '`' ) {
+                char quote = *p++;
+                while ( *p && *p != quote ) {
+                    ++p;
+                }
+                if ( *p ) {
+                    ++p;
+                }
+            } else if ( is_word_char( *p ) ) {
+                next_word( &p, word, wordsize );
+                if ( strcmp( word, "LABEL" ) == 0 && next_word( &p, word, wordsize ) ) {
+                    uint32_t lineno = 0; line_t* found = 0;
+                    if ( find_label_line( a, word, &lineno ) && !find_line( b, lineno, &found, 0 ) ) {
+                        snprintf( name, namesize, "%s", word );
+                        clash = true;
+                    }
+                }
+            } else {
+                ++p;
+            }
+        }
+    }
+    free( word );
+    delete_buffer( buf );
+    return clash;
+}
+
 size_t delete_lines( program_t* pgm, uint32_t first, uint32_t last ) {
     size_t count = 0;
     line_t* next;

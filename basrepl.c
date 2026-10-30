@@ -81,17 +81,57 @@ static void repl_vm_report( struct _vm_t* vm, void* usrdata, const char* text ) 
 // -- setup -----------------------------------------------------------------------
 
 // (re)initializes the runtime and the VM; the program is not touched
-static void repl_reset_runtime( repl_t* repl ) {
+// keep != 0 (CHAIN): the old runtime is not cleaned up but moved to *keep (the caller cleans it up), and the stored sound
+// effects stay
+static void repl_reset_runtime_ex( repl_t* repl, runtime_t* keep ) {
+    mml_t sfx[SND_MAXSFX];
+    bool sfxdef[SND_MAXSFX];
+    memset( sfx, 0, sizeof(sfx) );
+    memset( sfxdef, 0, sizeof(sfxdef) );
     if ( repl->vmready ) {
+        if ( keep != 0 ) {
+            memcpy( sfx, repl->vm.sfx, sizeof(sfx) );
+            memcpy( sfxdef, repl->vm.sfx_defined, sizeof(sfxdef) );
+            memset( repl->vm.sfx, 0, sizeof(repl->vm.sfx) );
+            memset( repl->vm.sfx_defined, 0, sizeof(repl->vm.sfx_defined) );
+        }
         cleanup_vm( &repl->vm );
     }
-    cleanup_runtime( &repl->rt );
+    if ( keep != 0 ) {
+        *keep = repl->rt;
+    } else {
+        cleanup_runtime( &repl->rt );
+    }
     init_runtime( &repl->rt );
     repl->rt.userdata = repl;
     repl->rt.report   = repl_rt_report;
     repl->rt.halt     = repl_rt_halt;
     init_vm( &repl->vm, &repl->rt.codegen, &repl->rt.varmem );
     repl->vmready = true;
+    if ( keep != 0 ) {
+        memcpy( repl->vm.sfx, sfx, sizeof(sfx) );
+        memcpy( repl->vm.sfx_defined, sfxdef, sizeof(sfxdef) );
+    }
+}
+
+static void repl_reset_runtime( repl_t* repl ) {
+    repl_reset_runtime_ex( repl, 0 );
+}
+
+// puts the runtime that repl_reset_runtime_ex() moved to *old back (the new one is discarded); the stored sound effects stay
+static void repl_restore_runtime( repl_t* repl, runtime_t* old ) {
+    mml_t sfx[SND_MAXSFX];
+    bool sfxdef[SND_MAXSFX];
+    memcpy( sfx, repl->vm.sfx, sizeof(sfx) );
+    memcpy( sfxdef, repl->vm.sfx_defined, sizeof(sfxdef) );
+    memset( repl->vm.sfx, 0, sizeof(repl->vm.sfx) );
+    memset( repl->vm.sfx_defined, 0, sizeof(repl->vm.sfx_defined) );
+    cleanup_vm( &repl->vm );
+    cleanup_runtime( &repl->rt );
+    repl->rt = *old;
+    init_vm( &repl->vm, &repl->rt.codegen, &repl->rt.varmem );
+    memcpy( repl->vm.sfx, sfx, sizeof(sfx) );
+    memcpy( repl->vm.sfx_defined, sfxdef, sizeof(sfxdef) );
 }
 
 bool init_repl( repl_t* repl ) {
@@ -146,6 +186,7 @@ static bool repl_vm_delete( struct _vm_t* vm, void* usrdata, const char* firstla
     const char* lastlabel, int32_t lastline );
 static bool repl_vm_renumber( struct _vm_t* vm, void* usrdata, const char* firstlabel, int32_t firstline,
     const char* lastlabel, int32_t lastline, int32_t step );
+static bool repl_vm_merge( struct _vm_t* vm, void* usrdata, const char* name, bool append );
 
 // hands the host callbacks to the VM
 static void repl_setup_vm( repl_t* repl ) {
@@ -162,6 +203,7 @@ static void repl_setup_vm( repl_t* repl ) {
     vm->list      = repl_vm_list;
     vm->deletelines = repl_vm_delete;
     vm->renumber  = repl_vm_renumber;
+    vm->merge     = repl_vm_merge;
 }
 
 // -- running -----------------------------------------------------------------------
@@ -219,6 +261,9 @@ static bool repl_execute( repl_t* repl, bool fromstart, const char* label, int32
             basdbg_print_tree( &repl->comp );
         }
         ok = cgen_from_program( cgen, &repl->comp );
+        if ( ok && repl->keeprt != 0 ) {
+            vmem_copy_vars( &repl->rt.varmem, &repl->keeprt->varmem );      // CHAIN
+        }
         if ( ok && !fromstart && repl->vm.datapos == DATAOFFS_NONE && cgen->datalast != prevlast ) {
             // DATA items were added behind the last one that was read: the next READ gets the first new item
             repl->vm.datapos = prevlast == DATAOFFS_NONE ? cgen->datafirst : cgen_datarec_next( cgen->data, prevlast );
@@ -226,6 +271,7 @@ static bool repl_execute( repl_t* repl, bool fromstart, const char* label, int32
         if ( ok && fromstart ) {
             uint32_t target = 0;
             ok = repl_find_start( repl, label, line, &target );
+            repl->started = ok;
             if ( ok && target == 0 ) {
                 ok = vm_run( &repl->vm );
             } else if ( ok ) {
@@ -263,16 +309,38 @@ bool repl_compile( repl_t* repl ) {
     return ok;
 }
 
-// RUN [target]: starts the stored program with all variables cleared
-static bool repl_start_program( repl_t* repl, const char* label, int32_t line ) {
-    repl_reset_runtime( repl );
+// RUN [target]: starts the stored program with all variables cleared; keepvars (CHAIN): the variables that the program
+// has in common with the previous one (same name and type) keep their values
+static bool repl_start_program_ex( repl_t* repl, const char* label, int32_t line, bool keepvars ) {
+    runtime_t old;
+    if ( keepvars ) {
+        repl_reset_runtime_ex( repl, &old );
+    } else {
+        repl_reset_runtime( repl );
+    }
+    bool ok = false;
+    repl->started = false;
     repl_setup_compiler( repl );
     if ( !begin_iterate_program( &repl->comp.iter, &repl->pgm ) ) {
         repl_report( repl, "? Empty program" );
-        return false;
+    } else {
+        comp_set_tokens( &repl->comp, repl->comp.iter.tok, repl->comp.iter.hdr.length - LINEHDR_SIZE );
+        repl->keeprt = keepvars ? &old : 0;
+        ok = repl_execute( repl, true, label, line );
+        repl->keeprt = 0;
     }
-    comp_set_tokens( &repl->comp, repl->comp.iter.tok, repl->comp.iter.hdr.length - LINEHDR_SIZE );
-    return repl_execute( repl, true, label, line );
+    if ( keepvars ) {
+        if ( !ok && !repl->started ) {
+            repl_restore_runtime( repl, &old );     // the program didn't compile (or the target is missing): the variables stay
+        } else {
+            cleanup_runtime( &old );
+        }
+    }
+    return ok;
+}
+
+static bool repl_start_program( repl_t* repl, const char* label, int32_t line ) {
+    return repl_start_program_ex( repl, label, line, false );
 }
 
 // -- LOAD ------------------------------------------------------------------------------
@@ -432,6 +500,54 @@ static bool repl_load_program( repl_t* repl, const char* name ) {
     return true;
 }
 
+// MERGE name [, APPEND]: enters the lines of the file into the stored program; the stored program changes only if everything
+// is fine. append: the file's lines are numbered 10 apart behind the last stored line (the stored program is not renumbered).
+static bool repl_merge_program( repl_t* repl, const char* name, bool append ) {
+    char* filename = repl_find_program_file( name );
+    if ( filename == 0 ) {
+        repl_report( repl, "? Out of memory" );
+        return false;
+    }
+    FILE* f = fopen( filename, "rb" );
+    if ( f == 0 ) {
+        repl_report( repl, errno == ENOENT ? "? File not found" : "? Can't open file" );
+        free( filename );
+        return false;
+    }
+    free( filename );
+    program_t loaded;
+    init_program( &loaded );
+    bool ok = repl_read_program( repl, f, &loaded );
+    if ( ok && ferror( f ) ) {
+        repl_report( repl, "? Read error" );
+        ok = false;
+    }
+    fclose( f );
+    if ( ok && append && loaded.first != 0 ) {
+        uint32_t start = repl->pgm.last != 0 ? ( repl->pgm.last->lineno / 10U + 1U ) * 10U : 10U;
+        int status = start > LINENO_MAX ? RENUM_OVERFLOW : renumber_program( &loaded, LINENO_NONE, LINENO_NONE, start, 10U );
+        if ( status != RENUM_OK ) {
+            repl_vm_error( repl, status == RENUM_OVERFLOW ? "Line number too large" : status == RENUM_MEMORY ? "Out of memory" :
+                "Renumbering failed", 0 );
+            ok = false;
+        }
+    }
+    char label[80];
+    if ( ok && find_label_clash( &repl->pgm, &loaded, label, sizeof(label) ) ) {
+        repl_vm_error( repl, "Duplicate label", label );
+        ok = false;
+    }
+    if ( ok ) {
+        merge_programs( &repl->pgm, &loaded );
+    }
+    free_program( &loaded );
+    return ok;
+}
+
+static bool repl_vm_merge( struct _vm_t* vm, void* usrdata, const char* name, bool append ) {
+    return repl_merge_program( (repl_t*) usrdata, name, append );
+}
+
 // -- EDIT ------------------------------------------------------------------------------
 
 static bool repl_list_end( repl_t* repl, const char* label, int32_t line, uint32_t* plineno );
@@ -482,8 +598,12 @@ static bool repl_finish( repl_t* repl, bool ok, bool direct ) {
         int kind = repl->vm.request;
         char* name = strdup( repl->vm.reqname ? repl->vm.reqname : "" );
         int32_t line = repl->vm.reqline;
+        char* chainlabel = kind == VMREQ_CHAIN ? strdup( repl->vm.reqlabel ? repl->vm.reqlabel : "" ) : 0;
+        bool chainmerge = repl->vm.reqmerge;
         vm_clear_request( &repl->vm );
-        if ( name == 0 ) {
+        if ( name == 0 || ( kind == VMREQ_CHAIN && chainlabel == 0 ) ) {
+            free( name );
+            free( chainlabel );
             repl_report( repl, "? Out of memory" );
             return false;
         }
@@ -520,8 +640,15 @@ static bool repl_finish( repl_t* repl, bool ok, bool direct ) {
             name[0] = '\0';        // the loaded program runs from its beginning
             line = -1;
         }
+        bool keepvars = false;
+        if ( kind == VMREQ_CHAIN ) {
+            ok = chainmerge ? repl_merge_program( repl, name, false ) : repl_load_program( repl, name );
+            free( name );
+            name = chainlabel;      // the program starts at the chain target
+            keepvars = true;
+        }
         if ( ok ) {
-            ok = repl_start_program( repl, name, line );
+            ok = repl_start_program_ex( repl, name, line, keepvars );
         }
         chained = true;
         free( name );

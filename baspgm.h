@@ -87,6 +87,11 @@ bool save_program( program_t* pgm, FILE* out, bool ascii );
 bool read_program_header( FILE* in, uint8_t* pversion );
 // finds the line that holds "LABEL <label>" (the first one), by scanning the program text; false if there is none
 bool find_label_line( program_t* pgm, const char* label, uint32_t* plineno );
+// moves all lines of <src> into <dst> (src is empty afterwards); a line with the number of a line of <dst> replaces it. Cannot fail.
+void merge_programs( program_t* dst, program_t* src );
+// MERGE check: a label that <b> defines in a line that <a> also has, but where a defines it in a line <b> does not have, would be
+// defined twice. true (with the label in name, cut to namesize) if there is such a label
+bool find_label_clash( program_t* a, program_t* b, char* name, size_t namesize );
 // deletes the lines with first <= number <= last (LINENO_NONE = unbounded); returns how many were deleted
 size_t delete_lines( program_t* pgm, uint32_t first, uint32_t last );
 

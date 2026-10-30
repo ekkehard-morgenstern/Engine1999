@@ -427,6 +427,21 @@ static const testcase_t cases[] = {
     { "DELETE ends the run",    "PRINT 1:DELETE 5:PRINT 2",                        "1\n<delete 5 5>\n" },
     { "DELETE needs a target",  "DELETE",                                          "? Line number or label expected\n" },
     { "DELETE minus alone",     "DELETE -",                                        "? Line number or label expected\n" },
+    { "MERGE",                  "MERGE \"PROG\"",                                  "<merge PROG>\n" },
+    { "MERGE APPEND",           "MERGE \"PROG\",APPEND",                           "<merge PROG append>\n" },
+    { "MERGE name expression",  "N$=\"AB\"\nMERGE N$+\"C\"",                        "<merge ABC>\n" },
+    { "MERGE ends the run",     "PRINT 1:MERGE \"X\":PRINT 2",                     "1\n<merge X>\n" },
+    { "MERGE empty name",       "MERGE \"\"",                                      "? Illegal argument\n" },
+    { "MERGE only APPEND is an option", "MERGE \"X\",FOO",                         "? APPEND expected\n" },
+    { "MERGE without name",     "MERGE",                                           "? String expression expected\n" },
+    { "CHAIN",                  "CHAIN \"PROG\"",                                  "<request CHAIN PROG \"\" -1>\n" },
+    { "CHAIN to a line",        "CHAIN \"PROG\",100",                              "<request CHAIN PROG \"\" 100>\n" },
+    { "CHAIN to a label",       "CHAIN \"PROG\",START",                            "<request CHAIN PROG \"START\" -1>\n" },
+    { "CHAIN MERGE",            "CHAIN MERGE \"PROG\",100",                        "<request CHAIN MERGE PROG \"\" 100>\n" },
+    { "CHAIN ends the run",     "PRINT 1:CHAIN \"X\":PRINT 2",                     "1\n<request CHAIN X \"\" -1>\n" },
+    { "CHAIN empty name",       "CHAIN \"\"",                                      "? Illegal argument\n" },
+    { "CHAIN without name",     "CHAIN",                                           "? String expression expected\n" },
+    { "CHAIN with a comma and no target", "CHAIN \"X\",",                          "? Line number or label expected\n" },
     { "RENUM default",          "RENUM",                                           "<renumber * * step 10>\n" },
     { "RENUM from a line",      "RENUM 100",                                       "<renumber 100 * step 10>\n" },
     { "RENUM from a line, step","RENUM 100,5",                                     "<renumber 100 * step 5>\n" },
@@ -656,6 +671,13 @@ static bool vm_renumber( struct _vm_t* vm, void* usrdata, const char* firstlabel
     return true;
 }
 
+static bool vm_merge( struct _vm_t* vm, void* usrdata, const char* name, bool append ) {
+    char text[200];
+    snprintf( text, sizeof(text), "<merge %s%s>\n", name, append ? " append" : "" );
+    out_append( text );
+    return true;
+}
+
 static int vm_inkey( struct _vm_t* vm, void* usrdata ) {
     return keys && *keys ? (uint8_t) *keys++ : 0;
 }
@@ -825,6 +847,7 @@ static bool compile_and_run( void ) {
     vm.list     = vm_list;
     vm.deletelines = vm_delete;
     vm.renumber = vm_renumber;
+    vm.merge    = vm_merge;
     vm.sound    = &test_sound;
     vm.maxsteps = UINT64_C(1000000);
     ok = vm_run_at( &vm, start );
@@ -837,6 +860,9 @@ static bool compile_and_run( void ) {
             snprintf( text, sizeof(text), "<request NEW>\n" );
         } else if ( vm.request == VMREQ_MONITOR ) {
             snprintf( text, sizeof(text), "<request MONITOR>\n" );
+        } else if ( vm.request == VMREQ_CHAIN ) {
+            snprintf( text, sizeof(text), "<request CHAIN%s %s \"%s\" %d>\n", vm.reqmerge ? " MERGE" : "", vm.reqname,
+                vm.reqlabel, (int) vm.reqline );
         } else if ( vm.request == VMREQ_EDIT ) {
             snprintf( text, sizeof(text), "<request EDIT \"%s\" %d>\n", vm.reqname, (int) vm.reqline );
         } else {

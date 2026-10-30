@@ -512,3 +512,61 @@ bool vmem_erase_array( varmem_t* vmem, uint16_t varoffs ) {
     memset( var->elems.any, 0, var->numelems * get_elemsize( var->type ) );
     return true;
 }
+
+// copies a string value (the empty string is NULL / 0); false if out of memory
+static bool vmem_copy_vstr( vstr_t* dst, const vstr_t* src ) {
+    char* copy = 0;
+    if ( src->ptr != 0 ) {
+        copy = (char*) malloc( src->len + 1U );
+        if ( copy == 0 ) {
+            return false;
+        }
+        memcpy( copy, src->ptr, src->len );
+        copy[ src->len ] = '\0';
+    }
+    free( dst->ptr );
+    dst->ptr = copy;
+    dst->len = copy ? src->len : 0U;
+    return true;
+}
+
+void vmem_copy_vars( varmem_t* dst, varmem_t* src ) {
+    for ( size_t i=0; i < src->numslots; ++i ) {
+        const var_t* s = src->table[i];
+        if ( s == 0 || ( s->type & VARTYPEF_FUNC ) != 0 || ( s->type & VARTYPEM_BASE ) == VARTYPEV_LABEL ||
+             s->name == 0 || s->name[0] == '@' ) {
+            continue;
+        }
+        uint16_t offs = VAROFFS_NONE;
+        if ( !vmem_lookup_var( dst, s->type, s->name, &offs ) || offs == VAROFFS_NONE ) {
+            continue;
+        }
+        var_t* d = vmem_var( dst, offs );
+        if ( d == 0 ) {
+            continue;
+        }
+        uint8_t base = s->type & VARTYPEM_BASE;
+        if ( ( s->type & VARTYPEF_ARRAY ) == 0 ) {
+            switch ( base ) {
+                case VARTYPEV_FLOAT: d->v.dbl = s->v.dbl; break;
+                case VARTYPEV_INT:   d->v.intval = s->v.intval; break;
+                case VARTYPEV_STR:   vmem_copy_vstr( &d->v.str, &s->v.str ); break;
+                default: break;
+            }
+            continue;
+        }
+        if ( d->numdims != s->numdims || d->numelems != s->numelems || memcmp( d->dims, s->dims, sizeof(d->dims) ) != 0 ) {
+            continue;
+        }
+        switch ( base ) {
+            case VARTYPEV_FLOAT: memcpy( d->elems.dbls, s->elems.dbls, s->numelems * sizeof(double) ); break;
+            case VARTYPEV_INT:   memcpy( d->elems.ints, s->elems.ints, s->numelems * sizeof(int16_t) ); break;
+            case VARTYPEV_STR:
+                for ( size_t k=0; k < s->numelems; ++k ) {
+                    vmem_copy_vstr( &d->elems.strs[k], &s->elems.strs[k] );
+                }
+                break;
+            default: break;
+        }
+    }
+}

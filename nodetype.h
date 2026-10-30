@@ -616,6 +616,8 @@ Explanation of node types:
 #define NT_SOUNDSTMT            UINT8_C(0X65)   // SOUND, PLAY, WAVE, TEMPO statements (data: 1 byte of SNDK_*)
 
 #define NT_WAITSTMT             UINT8_C(0X66)   // WAIT statement (1 numeric branch: the ticks)
+#define NT_MERGESTMT            UINT8_C(0X67)   // MERGE statement (data: 1 byte, 1 = APPEND; 1 string branch: the file name)
+#define NT_CHAINSTMT            UINT8_C(0X68)   // CHAIN statement (data: 1 byte, 1 = MERGE; the file name, then an optional goto target)
 
 #define SNDK_SOUND              UINT8_C(1)      // SOUND ch, freq, beats [, vol [, endfreq]]: 3 to 5 numeric branches
 #define SNDK_PLAY               UINT8_C(2)      // PLAY a$ [, b$ ...]: 1..8 string branches

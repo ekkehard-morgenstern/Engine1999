@@ -159,6 +159,9 @@ bool vmem_delete_var( varmem_t* vmem, uint16_t varoffs );
 // CLEAR: sets all numeric variables to 0, all strings to "" and empties all arrays (they keep their dimensions);
 // labels, functions and the hidden compiler variables (names starting with '@') are left alone
 void vmem_clear_vars( varmem_t* vmem );
+// CHAIN: copies the values of the variables of <src> to the variables of <dst> that have the same type and name (arrays only
+// if they have the same dimensions); everything else in <dst> stays as it is. Labels, functions and hidden variables are skipped.
+void vmem_copy_vars( varmem_t* dst, varmem_t* src );
 bool vmem_erase_array( varmem_t* vmem, uint16_t varoffs );     // resets all elements: 0 or the empty string
 bool vmem_get_var( varmem_t* vmem, uint16_t varoffs, uint8_t vartype, uint8_t numdims, const uint16_t* diminx,
     varvalue_t* pvalue );
