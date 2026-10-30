@@ -35,6 +35,7 @@ Code generation for the program commands LOAD, RUN, LIST, NEW, CLEAR, DELETE and
     LOAD name        <name>  LOAD
     RUN [target]     <label name or "">  <line number or -1>  RUNP
     MERGE name[,APPEND]   <name>  MRG (parameter 1 = APPEND)
+    FILES [spec]     <spec or "">  FILS
     CHAIN [MERGE] name[,target]   <name>  <label name or "">  <line number or -1>  CHN (parameter 1 = MERGE)
     EDIT [target]    <label name or "">  <line number or -1>  EDIT
     DELETE a[-[b]]   <label a or "">  <line a or -1>  <label b or "">  <line b or -1>  DELE
@@ -140,6 +141,24 @@ bool cgen_from_chainstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         return false;
     }
     return cgen_gen_chn( cgen, node->data[0] != 0 ) || cgen_out_of_code_memory( comp );
+}
+
+bool cgen_from_filesstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    /*
+        NT_FILESSTMT    FILES statement
+            branches: none, or 1 string expression (without it the empty string is pushed: the current directory)
+        code: <spec or ""> FILS
+    */
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->type != NT_FILESSTMT || node->numbranches > 1U ) {
+        return cgen_unexpected_node( comp );
+    }
+    if ( node->numbranches == 1U ? !cgen_from_strexpr( cgen, comp, node->branches[0] ) : !cp_push_string( cgen, comp, "" ) ) {
+        return false;
+    }
+    return cgen_gen_fils( cgen ) || cgen_out_of_code_memory( comp );
 }
 
 bool cgen_from_runstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {

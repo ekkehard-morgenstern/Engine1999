@@ -27,6 +27,7 @@
 #include <sys/stat.h>
 #include "basrepl.h"
 #include "basdebug.h"
+#include "basfiles.h"
 
 // -- helpers -------------------------------------------------------------------
 
@@ -187,6 +188,7 @@ static bool repl_vm_delete( struct _vm_t* vm, void* usrdata, const char* firstla
 static bool repl_vm_renumber( struct _vm_t* vm, void* usrdata, const char* firstlabel, int32_t firstline,
     const char* lastlabel, int32_t lastline, int32_t step );
 static bool repl_vm_merge( struct _vm_t* vm, void* usrdata, const char* name, bool append );
+static bool repl_vm_files( struct _vm_t* vm, void* usrdata, const char* spec );
 
 // hands the host callbacks to the VM
 static void repl_setup_vm( repl_t* repl ) {
@@ -204,6 +206,7 @@ static void repl_setup_vm( repl_t* repl ) {
     vm->deletelines = repl_vm_delete;
     vm->renumber  = repl_vm_renumber;
     vm->merge     = repl_vm_merge;
+    vm->files     = repl_vm_files;
 }
 
 // -- running -----------------------------------------------------------------------
@@ -546,6 +549,56 @@ static bool repl_merge_program( repl_t* repl, const char* name, bool append ) {
 
 static bool repl_vm_merge( struct _vm_t* vm, void* usrdata, const char* name, bool append ) {
     return repl_merge_program( (repl_t*) usrdata, name, append );
+}
+
+// -- FILES -----------------------------------------------------------------------------
+
+typedef struct _filesout_t {
+    repl_t*     repl;
+    int         lines;      // on the current page
+    bool        stopped;    // the user stopped the listing (not an error)
+    bool        broken;     // Break
+} filesout_t;
+
+static bool repl_files_emit( void* usrdata, const char* line ) {
+    filesout_t* out = (filesout_t*) usrdata;
+    repl_t* repl = out->repl;
+    if ( repl->interrupt && repl->interrupt( &repl->vm, repl ) ) {
+        out->broken = true;
+        return false;
+    }
+    if ( repl->vm.channel == 0 && repl->pagesize > 1 && repl->pause != 0 && out->lines >= repl->pagesize - 1 ) {
+        out->lines = 0;
+        if ( !repl->pause( repl ) ) {
+            out->stopped = true;
+            out->broken = repl->interrupt && repl->interrupt( &repl->vm, repl );
+            return false;
+        }
+    }
+    ++out->lines;
+    if ( repl->print ) {
+        repl->print( &repl->vm, repl, repl->vm.channel, line );
+        repl->print( &repl->vm, repl, repl->vm.channel, "\n" );
+    } else {
+        puts( line );
+    }
+    return true;
+}
+
+// FILES [spec]: oldest first like "ls -ltr" (basfiles.c); colored on the screen channel only
+static bool repl_vm_files( struct _vm_t* vm, void* usrdata, const char* spec ) {
+    repl_t* repl = (repl_t*) usrdata;
+    filesout_t out = { repl, 0, false, false };
+    char err[100];
+    err[0] = '\0';
+    bool ok = files_list( spec, repl->vm.channel == 0 ? repl->hlstyle : 0, repl, repl_files_emit, &out, err, sizeof(err) );
+    if ( !ok ) {
+        repl_vm_error( repl, err, 0 );
+    } else if ( out.broken ) {
+        repl_vm_error( repl, "Break", 0 );
+        ok = false;
+    }
+    return ok;
 }
 
 // -- EDIT ------------------------------------------------------------------------------

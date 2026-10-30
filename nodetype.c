@@ -125,6 +125,7 @@ const char* nodename( uint8_t nodetype ) {
         case NT_WAITSTMT:               return "NT_WAITSTMT";
         case NT_MERGESTMT:              return "NT_MERGESTMT";
         case NT_CHAINSTMT:              return "NT_CHAINSTMT";
+        case NT_FILESSTMT:              return "NT_FILESSTMT";
         case NT_NUMEXPR:                return "NT_NUMEXPR";
         case NT_STREXPR:                return "NT_STREXPR";
         case NT_STRCMPEX:               return "NT_STRCMPEX";

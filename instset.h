@@ -378,6 +378,9 @@ The 4096 extended instructions are as follows:
                             Asks the host to load the file <s1> (parameter 1: merge it into the stored program) and to run the
                             result from the label s2 ("" = none) or the line n (-1 = none), or from the beginning; the values of
                             the variables that both programs have are kept. Request VMREQ_CHAIN, like LOAD.
+    0001 01000111       FILS - list files ( s -- ) C=0 P=0
+                            Lists the files named by <s> ("" = the current directory) through the host (files callback) to
+                            the current output channel: size, time and name, oldest first. The run goes on.
 
 */
 
@@ -500,5 +503,6 @@ The 4096 extended instructions are as follows:
 #define INS_WAIT        UINT16_C(0X144)
 #define INS_MRG         UINT16_C(0X145)
 #define INS_CHN         UINT16_C(0X146)
+#define INS_FILS        UINT16_C(0X147)
 
 #endif

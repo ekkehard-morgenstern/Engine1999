@@ -2385,6 +2385,31 @@ bool comp_eat_chainstmt( compiler_t* comp, node_t** pnode ) {
     return true;
 }
 
+bool comp_eat_filesstmt( compiler_t* comp, node_t** pnode ) {
+    // files-stmt := TOK_FILES [ str-expr ] .
+    if ( comp->currtok != TOK_FILES || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    node_t* strexpr = NODE_NONE;
+    if ( comp->currtok != TOK_EOL && comp->currtok != TOK_COLON && comp->currtok != TOK_ELSE ) {
+        if ( !comp_eat_strexpr( comp, &strexpr ) || strexpr == NODE_NONE ) {
+            comp_error( comp, "String expression expected" );
+            return false;
+        }
+    }
+    /*
+        NT_FILESSTMT    FILES statement
+            branches:
+                - none, or 1 branch of string expression (a directory, a file name or a pattern)
+    */
+    if ( !( strexpr != NODE_NONE ? comp_create_node( comp, pnode, NT_FILESSTMT, UINT8_C(1), UINT16_C(0), 0, strexpr ) :
+            comp_create_node( comp, pnode, NT_FILESSTMT, UINT8_C(0), UINT16_C(0), 0 ) ) || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
 bool comp_eat_editstmt( compiler_t* comp, node_t** pnode ) {
     // edit-stmt := TOK_EDIT [ goto-target ] .
     if ( comp->currtok != TOK_EDIT || !comp_fetchtok( comp ) ) {
@@ -2655,7 +2680,7 @@ bool comp_eat_clearstmt( compiler_t* comp, node_t** pnode ) {
 }
 
 bool comp_eat_progstmt( compiler_t* comp, node_t** pnode ) {
-    // prog-stmt := load-stmt | run-stmt | merge-stmt | chain-stmt | list-stmt | new-stmt | clear-stmt | delete-stmt | renum-stmt | edit-stmt | monitor-stmt |
+    // prog-stmt := load-stmt | run-stmt | merge-stmt | chain-stmt | files-stmt | list-stmt | new-stmt | clear-stmt | delete-stmt | renum-stmt | edit-stmt | monitor-stmt |
     //              sound-stmt | wait-stmt .
     // [ NT_PROGSTMT - not generated ]
     if ( comp_eat_loadstmt( comp, pnode ) && *pnode != NODE_NONE ) {
@@ -2668,6 +2693,9 @@ bool comp_eat_progstmt( compiler_t* comp, node_t** pnode ) {
         return true;
     }
     if ( comp_eat_chainstmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_filesstmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     if ( comp_eat_liststmt( comp, pnode ) && *pnode != NODE_NONE ) {

@@ -410,6 +410,10 @@ typedef enum _hlclass_t {
     HL_SHELL,           // shell literals (backticks)
     HL_COMMENT,         // comment (' ...)
     HL_PUNCT,           // ( ) , : ; # $ % [ ] { } |
+    HL_FILEDIR,         // FILES: directory
+    HL_FILELINK,        // FILES: symbolic link
+    HL_FILEEXEC,        // FILES: executable file
+    HL_FILEPROG,        // FILES: BASIC program file (.bas, .e99)
     HL_COUNT
 } hlclass_t;
 

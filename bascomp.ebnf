@@ -266,7 +266,11 @@ wait-stmt := TOK_WAIT num-expr .
 -- the first line). Functions, labels and DATA are those of the new program; SFX definitions are kept.
 merge-stmt := TOK_MERGE str-expr [ TOK_COMMA APPEND ] .
 chain-stmt := TOK_CHAIN [ TOK_MERGE ] str-expr [ TOK_COMMA goto-target ] .
-prog-stmt := load-stmt | run-stmt | merge-stmt | chain-stmt | list-stmt | new-stmt | clear-stmt | delete-stmt | renum-stmt | edit-stmt | monitor-stmt | sound-stmt |
+-- FILES [spec] lists files like "ls -ltr" (oldest first) without mode bits and owners: size, time, name with the "ls -F"
+-- indicator. No spec = the current directory (hidden names left out); a directory lists its entries; a pattern with * ? [ ]
+-- lists the matches. The screen listing is colored and stops after each page (any key goes on, Q or ESC stops).
+files-stmt := TOK_FILES [ str-expr ] .
+prog-stmt := load-stmt | run-stmt | merge-stmt | chain-stmt | files-stmt | list-stmt | new-stmt | clear-stmt | delete-stmt | renum-stmt | edit-stmt | monitor-stmt | sound-stmt |
              wait-stmt .
 
 stmt := io-stmt | prog-stmt | assign-stmt | control-flow-stmt .

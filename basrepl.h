@@ -93,6 +93,10 @@ typedef struct _repl_t {
     // line editor for EDIT (optional): gets the text of the line (with its number), lets the user change it and returns the
     // result in a malloc'ed string, or 0 if the user cancelled (the host reports its own problems, e.g. a line too long)
     char*       (*edit)( struct _repl_t*, const char* text );
+    // FILES listings to the screen channel stop after pagesize - 1 lines (0 = never) and ask the host to continue: pause()
+    // returns false when the user wants to stop (a stop by the Break key is reported as "Break" afterwards)
+    int         pagesize;
+    bool        (*pause)( struct _repl_t* );
     char*       pending;            // an edited line waiting to be entered (see repl_enter())
     // EDIT without a target asks the host for the full-screen editor: the REPL sets this flag and returns; the host
     // checks it after repl_enter() (not inside a callback: the editor enters lines itself), clears it and opens the editor

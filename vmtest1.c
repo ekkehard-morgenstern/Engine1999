@@ -434,6 +434,12 @@ static const testcase_t cases[] = {
     { "MERGE empty name",       "MERGE \"\"",                                      "? Illegal argument\n" },
     { "MERGE only APPEND is an option", "MERGE \"X\",FOO",                         "? APPEND expected\n" },
     { "MERGE without name",     "MERGE",                                           "? String expression expected\n" },
+    { "FILES",                  "FILES",                                           "<files \"\">\n" },
+    { "FILES pattern",          "FILES \"*.BAS\"",                                 "<files \"*.BAS\">\n" },
+    { "FILES name expression",  "A$=\"X\"\nFILES A$+\"*\"",                         "<files \"X*\">\n" },
+    { "FILES goes on",          "PRINT 1:FILES:PRINT 2",                           "1\n<files \"\">\n2\n" },
+    { "FILES before ELSE",      "IF 0 THEN FILES ELSE PRINT 3",                    "3\n" },
+    { "FILES after a colon",    "FILES:PRINT 5",                                   "<files \"\">\n5\n" },
     { "CHAIN",                  "CHAIN \"PROG\"",                                  "<request CHAIN PROG \"\" -1>\n" },
     { "CHAIN to a line",        "CHAIN \"PROG\",100",                              "<request CHAIN PROG \"\" 100>\n" },
     { "CHAIN to a label",       "CHAIN \"PROG\",START",                            "<request CHAIN PROG \"START\" -1>\n" },
@@ -678,6 +684,13 @@ static bool vm_merge( struct _vm_t* vm, void* usrdata, const char* name, bool ap
     return true;
 }
 
+static bool vm_files( struct _vm_t* vm, void* usrdata, const char* spec ) {
+    char text[200];
+    snprintf( text, sizeof(text), "<files \"%s\">\n", spec );
+    out_append( text );
+    return true;
+}
+
 static int vm_inkey( struct _vm_t* vm, void* usrdata ) {
     return keys && *keys ? (uint8_t) *keys++ : 0;
 }
@@ -848,6 +861,7 @@ static bool compile_and_run( void ) {
     vm.deletelines = vm_delete;
     vm.renumber = vm_renumber;
     vm.merge    = vm_merge;
+    vm.files    = vm_files;
     vm.sound    = &test_sound;
     vm.maxsteps = UINT64_C(1000000);
     ok = vm_run_at( &vm, start );

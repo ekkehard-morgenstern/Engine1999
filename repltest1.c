@@ -24,6 +24,7 @@
               Germany, Europe
 */
 
+#include <unistd.h>
 #include "basrepl.h"
 #include "basdebug.h"
 #include "instset.h"
@@ -454,7 +455,7 @@ static void show( const char* label, const char* text ) {
 // the style callback inserts a marker per class: <L>ine number <S>tatement <C>ontrol <M>command <F>unction <O>perator
 // <I>dentifier <N>umber s<T>ring shell(<H>) comment(<R>emark) <P>unctuation, <> = end of the line
 static const char* host_hlstyle( hlclass_t cls, void* usrdata ) {
-    static const char* const marks[HL_COUNT] = { "<>", "<L>", "<S>", "<C>", "<M>", "<F>", "<O>", "<I>", "<N>", "<T>", "<H>", "<R>", "<P>" };
+    static const char* const marks[HL_COUNT] = { "<>", "<L>", "<S>", "<C>", "<M>", "<F>", "<O>", "<I>", "<N>", "<T>", "<H>", "<R>", "<P>", "<D>", "<K>", "<X>", "<B>" };
     return (unsigned) cls < HL_COUNT ? marks[cls] : 0;
 }
 
@@ -502,6 +503,126 @@ static void run_highlight_tests( size_t* pnum, size_t* pfailed ) {
         }
         ++*pnum;
     }
+}
+
+// -- FILES -----------------------------------------------------------------------------------------
+
+#define FILESDIR    "repltest1.d"
+
+// the files FILES lists: ages and sizes are fixed (the time zone is UTC); the directory has a size of its own, so cases that
+// list it strip the size column
+static void make_files_fixture( void ) {
+    int rv = system(
+        "rm -rf " FILESDIR " && mkdir " FILESDIR " " FILESDIR "/sub && "
+        "printf abc > " FILESDIR "/old.txt && touch -d '2020-01-02 03:04:05' " FILESDIR "/old.txt && "
+        "printf 0123456789 > " FILESDIR "/prog.bas && touch -d '2021-05-06 07:08:09' " FILESDIR "/prog.bas && "
+        "printf echo > " FILESDIR "/run.sh && chmod +x " FILESDIR "/run.sh && touch -d '2022-01-01 00:00:00' " FILESDIR "/run.sh && "
+        "ln -s old.txt " FILESDIR "/link && touch -h -d '2022-06-07 08:09:10' " FILESDIR "/link && "
+        "printf x > " FILESDIR "/.hidden && "
+        "touch -d '2023-03-03 12:00:00' " FILESDIR "/sub " FILESDIR );
+    (void) rv;
+}
+
+static int files_pauses = 0, files_yes = 0;
+
+static bool host_pause( struct _repl_t* repl ) {
+    ++files_pauses;
+    return files_yes < 0 || files_pauses <= files_yes;
+}
+
+typedef struct _filescase_t {
+    const char* name;
+    const char* source;
+    bool        hl;             // colored (the marks of host_hlstyle())
+    bool        inside;         // run in the fixture directory
+    bool        strip;          // remove the size column of every line (the size of a directory depends on the file system)
+    int         pagesize;       // 0 = no paging
+    int         yes;            // number of pauses that are answered with "go on" (-1 = all)
+    const char* expected;
+    int         pauses;         // expected number of pauses
+} filescase_t;
+
+static const filescase_t filescases[] = {
+    { "FILES a pattern: oldest first, sizes aligned, executable marked", "FILES \"" FILESDIR "/*.*\"", false, false, false, 0, 0,
+      " 3 2020-01-02 03:04 " FILESDIR "/old.txt\n10 2021-05-06 07:08 " FILESDIR "/prog.bas\n 4 2022-01-01 00:00 " FILESDIR "/run.sh*\n", 0 },
+    { "FILES a directory: links, directories, hidden names left out", "FILES \"" FILESDIR "\"", false, false, true, 0, 0,
+      "2020-01-02 03:04 old.txt\n2021-05-06 07:08 prog.bas\n2022-01-01 00:00 run.sh*\n2022-06-07 08:09 link@ -> old.txt\n2023-03-03 12:00 sub/\n", 0 },
+    { "FILES one file", "FILES \"" FILESDIR "/old.txt\"", false, false, false, 0, 0, "3 2020-01-02 03:04 " FILESDIR "/old.txt\n", 0 },
+    { "FILES without a name lists the current directory", "FILES", false, true, true, 0, 0,
+      "2020-01-02 03:04 old.txt\n2021-05-06 07:08 prog.bas\n2022-01-01 00:00 run.sh*\n2022-06-07 08:09 link@ -> old.txt\n2023-03-03 12:00 sub/\n", 0 },
+    { "FILES a pattern without a match", "FILES \"" FILESDIR "/nothing*\"", false, false, false, 0, 0, "? File not found\n", 0 },
+    { "FILES a missing name", "FILES \"repltest1nothing\"", false, false, false, 0, 0, "? File not found\n", 0 },
+    { "FILES a name expression", "A$=\"" FILESDIR "/\"\nFILES A$+\"o*\"", false, false, false, 0, 0, "3 2020-01-02 03:04 " FILESDIR "/old.txt\n", 0 },
+    { "FILES in a program", "10 PRINT 1:FILES \"" FILESDIR "/o*\":PRINT 2\nRUN", false, false, false, 0, 0, "1\n3 2020-01-02 03:04 " FILESDIR "/old.txt\n2\n", 0 },
+    { "FILES highlighting: names by type, size, time", "FILES \"" FILESDIR "/[opr]*\"", true, false, false, 0, 0,
+      "<N> 3 <R>2020-01-02 03:04 <I>" FILESDIR "/old.txt<>\n<N>10 <R>2021-05-06 07:08 <B>" FILESDIR "/prog.bas<>\n"
+      "<N> 4 <R>2022-01-01 00:00 <X>" FILESDIR "/run.sh*<>\n", 0 },
+    { "FILES highlighting: link", "FILES \"" FILESDIR "/li*\"", true, false, false, 0, 0,
+      "<N>7 <R>2022-06-07 08:09 <K>" FILESDIR "/link@ -> old.txt<>\n", 0 },
+    { "FILES highlighting: directory", "FILES \"" FILESDIR "/su?\"", true, false, true, 0, 0, "<R>2023-03-03 12:00 <D>" FILESDIR "/sub/<>\n", 0 },
+    { "FILES pages: the host is asked after each page", "FILES \"" FILESDIR "\"", false, false, true, 3, -1,
+      "2020-01-02 03:04 old.txt\n2021-05-06 07:08 prog.bas\n2022-01-01 00:00 run.sh*\n2022-06-07 08:09 link@ -> old.txt\n2023-03-03 12:00 sub/\n", 2 },
+    { "FILES stops when the host says so", "FILES \"" FILESDIR "\"\nPRINT \"X\"", false, false, true, 3, 1,
+      "2020-01-02 03:04 old.txt\n2021-05-06 07:08 prog.bas\n2022-01-01 00:00 run.sh*\n2022-06-07 08:09 link@ -> old.txt\nX\n", 2 },
+    { "FILES does not ask when everything fits on a page", "FILES \"" FILESDIR "/o*\"", false, false, false, 24, -1, "3 2020-01-02 03:04 " FILESDIR "/old.txt\n", 0 },
+};
+
+// removes the size column (leading spaces, then digits) of every line, in place
+static void strip_sizes( char* text ) {
+    char* out = text;
+    const char* p = text;
+    while ( *p ) {
+        while ( *p == ' ' ) ++p;
+        if ( strncmp( p, "<N>", 3 ) == 0 ) p += 3;
+        while ( *p >= '0' && *p <= '9' ) ++p;
+        if ( *p == ' ' ) ++p;
+        while ( *p && *p != '\n' ) *out++ = *p++;
+        if ( *p == '\n' ) *out++ = *p++;
+    }
+    *out = '\0';
+}
+
+static void run_files_tests( size_t* pnum, size_t* pfailed ) {
+    setenv( "TZ", "UTC", 1 );
+    tzset();
+    make_files_fixture();
+    for ( size_t i=0; i < sizeof(filescases) / sizeof(filescases[0]); ++i ) {
+        const filescase_t* tc = &filescases[i];
+        out_reset();
+        keys = 0; polls = 0; breakafter = 0;
+        files_pauses = 0; files_yes = tc->yes;
+        repl_t repl;
+        bool pass = false;
+        char cwd[1024];
+        bool moved = tc->inside && getcwd( cwd, sizeof(cwd) ) != 0 && chdir( FILESDIR ) == 0;
+        if ( init_repl( &repl ) ) {
+            repl.report   = host_report;
+            repl.print    = host_print;
+            repl.save     = host_save;
+            repl.pagesize = tc->pagesize;
+            repl.pause    = host_pause;
+            if ( tc->hl ) repl.hlstyle = host_hlstyle;
+            char* src = strdup( tc->source );
+            for ( char* line = strtok( src, "\n" ); line; line = strtok( 0, "\n" ) ) {
+                repl_enter( &repl, line );
+            }
+            free( src );
+            cleanup_repl( &repl );
+            if ( moved && chdir( cwd ) != 0 ) printf( "cannot go back\n" );
+            if ( tc->strip ) strip_sizes( outbuf );
+            pass = strcmp( outbuf, tc->expected ) == 0 && files_pauses == tc->pauses;
+        }
+        printf( "%s  %s\n", pass ? "PASS" : "FAIL", tc->name );
+        if ( !pass ) {
+            show( "expected", tc->expected );
+            show( "got     ", outbuf );
+            printf( "    pauses %d, expected %d\n", files_pauses, tc->pauses );
+            ++*pfailed;
+        }
+        ++*pnum;
+    }
+    int rv = system( "rm -rf " FILESDIR );
+    (void) rv;
 }
 
 // -- EDIT ------------------------------------------------------------------------------------------
@@ -702,6 +823,7 @@ int main( int argc, char** argv ) {
     }
     run_growth_tests( &numcases, &failed );
     run_highlight_tests( &numcases, &failed );
+    run_files_tests( &numcases, &failed );
     run_edit_tests( &numcases, &failed );
     run_fulledit_tests( &numcases, &failed );
     run_debug_tests( &numcases, &failed );

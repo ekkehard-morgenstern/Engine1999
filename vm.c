@@ -74,6 +74,7 @@ void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem ) {
     vm->deletelines = 0;
     vm->renumber = 0;
     vm->merge    = 0;
+    vm->files    = 0;
     vm->request  = VMREQ_NONE;
     vm->reqname  = 0;
     vm->reqline  = -1;
@@ -1121,6 +1122,22 @@ static bool vm_merge_program( vm_t* vm, bool append ) {
     return ok;
 }
 
+// FILS ( s -- ): lists files through the host
+static bool vm_list_files( vm_t* vm ) {
+    char* spec;
+    if ( !vm_dpop_str( vm, &spec ) ) {
+        return false;
+    }
+    bool ok = true;
+    if ( vm->files == 0 ) {
+        ok = vm_error( vm, "FILES is not available" );
+    } else {
+        ok = vm->files( vm, vm->userdata, spec );
+    }
+    free( spec );
+    return ok;
+}
+
 // CHN ( s1 s2 n -- ): file name, label name ("" = none) and line number (-1 = none); leaves a request for the host and ends the run
 static bool vm_chain_program( vm_t* vm, bool merge ) {
     double num; char* label; char* name;
@@ -1879,6 +1896,7 @@ static bool vm_step( vm_t* vm ) {
         case INS_WAIT: return vm_wait( vm );
         case INS_MRG: return vm_merge_program( vm, param16 != 0 );
         case INS_CHN: return vm_chain_program( vm, param16 != 0 );
+        case INS_FILS: return vm_list_files( vm );
         case INS_EDIT: return vm_edit_request( vm );
         case INS_DELE: return vm_edit_program( vm, false );
         case INS_RENM: return vm_edit_program( vm, true );

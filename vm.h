@@ -207,6 +207,8 @@ typedef struct _vm_t {
     bool            (*deletelines)( struct _vm_t*, void*, const char* firstlabel, int32_t firstline, const char* lastlabel, int32_t lastline );
     // MERGE: merges the program file <name> into the stored program (append: behind its last line, renumbered). Return false after
     // reporting an error. The run ends afterwards.
+    // FILES: lists the files of spec ("" = the current directory) to the current output channel. Return false after reporting an error.
+    bool            (*files)( struct _vm_t*, void*, const char* spec );
     bool            (*merge)( struct _vm_t*, void*, const char* name, bool append );
     bool            (*renumber)( struct _vm_t*, void*, const char* firstlabel, int32_t firstline, const char* lastlabel, int32_t lastline, int32_t step );
     bool            sfx_defined[SND_MAXSFX];

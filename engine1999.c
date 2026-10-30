@@ -840,8 +840,26 @@ static const char* host_hlstyle( hlclass_t cls, void* usrdata ) {
         "\033[95m",     // HL_SHELL: magenta
         "\033[37m",     // HL_COMMENT: silver
         "\033[39m",     // HL_PUNCT: default color
+        "\033[34m",     // HL_FILEDIR: navy
+        "\033[36m",     // HL_FILELINK: teal
+        "\033[32m",     // HL_FILEEXEC: green
+        "\033[35m",     // HL_FILEPROG: purple
     };
     return (unsigned) cls < HL_COUNT ? styles[cls] : 0;
+}
+
+// FILES: a screenful was listed; any key goes on, Q or ESC stops
+static bool host_pause( struct _repl_t* r ) {
+    static const char msg[] = "-- more: any key continues, Q stops --";
+    host_newline();
+    int x = 0, y = 0;
+    sdlscr_gettextcursor( &x, &y );
+    sdlscr_puts( msg );
+    int key = sdlscr_getkey();
+    sdlscr_locate( 0, y );
+    sdlscr_printf( -1, -1, -1, -1, "%*s", (int) sizeof(msg) - 1, "" );
+    sdlscr_locate( 0, y );
+    return key != -1 && key != 'q' && key != 'Q';
 }
 
 static void init_host( void ) {
@@ -859,6 +877,10 @@ static void init_host( void ) {
     repl.sound     = &host_sound;
     repl.hlstyle   = host_hlstyle;
     repl.edit      = host_edit;
+    int width = 0, height = 0;
+    sdlscr_gettextscreensize( &width, &height );
+    repl.pagesize  = height > 2 ? height - 1 : 0;       // one line stays for the prompt of the pause
+    repl.pause     = host_pause;
 }
 
 
