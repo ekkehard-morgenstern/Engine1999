@@ -13,7 +13,8 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-(none)
+- **Frame pacing fixed** (`sdlscreen.c`, `sdlscr_worker`): the refresh rate was irregular. The old code measured the time after `SDL_RenderPresent`, slept until the *previous measurement* + 1/60 s and then stored the pre-sleep time as the new reference, so the next frame's elapsed time was short by the sleep and frame periods alternated; it also sleeped for a full period when a frame was merely fast. Now each frame has an absolute due time (`lastTick`/`lts`, previous due time + 16 666 667 ns, no drift); after presenting, the thread sleeps until it with `sdlutil_nanosleep( 0, &lts )`, and if it is more than one frame late it resynchronizes instead of trying to catch up. Also paces displays faster than 60 Hz (vsync alone gave their rate). `make` builds cleanly; not verified on a real display (no timing harness), please check on the other computer.
+- **`sdlutil.c`: `CLOCK_REALTIME` → `CLOCK_MONOTONIC`** (`sdlutil_getnsec/projecttime/nanosleep`), so a system clock change can't disturb frame pacing, audio worker or other waits. All callers (`sdlscreen`, `sdlaudio`, `sdlevent`, `testcomp1`) only use relative times; `vm.c` already used `CLOCK_MONOTONIC`.
 
 ## Log
 
@@ -395,3 +396,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 - **`bascomp.c`** (`comp_eat_singlelineifstmt`): `IF c THEN GOSUB 100 : PRINT "x"` (also `THEN 100`, `IF c GOTO 100`) kept only the jump in the IF; the statements after the colon ran whether or not the condition was true. Now a colon after the jump target turns the jump into a `GOTO`/`GOSUB` statement and the rest of the line becomes the rest of the THEN statement list (ELSE then takes a statement list); without a colon the grammar is unchanged. `bascomp.ebnf` updated.
 - `demos/sfx.bas` back to the natural form `IF K$="0" THEN GOSUB 500:GOTO 180`; `docs/roadmap.md` item removed.
 - **Tests**: `vmtest1` 490 (+13: false/true for GOSUB, GOTO, `THEN line`, `IF … GOSUB` without THEN, several statements, ELSE, UNLESS, comment after the colon, unchanged forms), `repltest1` 181 (+1: RENUM adjusts such a jump); all other tests pass; `sfx.bas` plays through the REPL harness.
+
+### 991b5d7 — 2026-10-29 23:40:53 +0100 — "Claude Code state update"
+2 files, +9/-6.
+- Bookkeeping only: `HistoryLog-Claude.md` (entries for `b1737df` and `b57d615` moved from Pending into the Log) and `SESSION.md` (repo state: latest commit `b57d615`, everything committed). No code changes, no tests needed.

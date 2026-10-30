@@ -252,6 +252,8 @@ static int sdlscr_worker( void* arg ) {
     sdlscr_initok = true;
     sdlev_raise( SDLEV_SCREENWORKERINITDONE );
 
+    // 1/60 s; lts/lastTick: due time of the current frame
+    const uint64_t FRAME_NSEC = UINT64_C(16666667);
     struct timespec lts;
     uint64_t lastTick = sdlutil_getnsec( &lts );
 
@@ -323,16 +325,19 @@ static int sdlscr_worker( void* arg ) {
         sdlev_raise( SDLEV_VBLANK );
         SDL_RenderPresent( renderer );
 
-        // get current time
+        // pace the frames: each one is due exactly one period after the previous one's due time
+        // (not after the time it was actually finished, so jitter and the work done in a frame don't
+        // accumulate into a lower or irregular rate); sleeping covers the display's own rate if it is faster
+        lastTick += FRAME_NSEC;
+        sdlutil_projecttime( FRAME_NSEC, &lts, &lts );
         struct timespec ts;
-        uint64_t now  = sdlutil_getnsec( &ts );
-        uint64_t nsec = now - lastTick;
-        if ( nsec < UINT64_C(16666667) ) {
-            // make sure at least a 1/60th sec will have passed
-            uint64_t toWait = UINT64_C(16666667);
-            sdlutil_nanosleep( toWait, &lts );
+        uint64_t now = sdlutil_getnsec( &ts );
+        if ( now < lastTick ) {
+            sdlutil_nanosleep( 0, &lts );
+        } else if ( now - lastTick > FRAME_NSEC ) {
+            // more than a frame late (slow machine, suspended, clock set): don't try to catch up
+            lastTick = now; lts = ts;
         }
-        lastTick = now; lts = ts;
     }
 
     if ( oldwantinput ) {

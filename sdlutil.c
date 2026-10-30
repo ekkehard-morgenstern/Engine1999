@@ -29,7 +29,7 @@
 uint64_t sdlutil_getnsec( struct timespec* pts ) {
     struct timespec ts;
     memset( &ts, 0, sizeof(ts) );
-    clock_gettime( CLOCK_REALTIME, &ts );
+    clock_gettime( CLOCK_MONOTONIC, &ts );
     if ( pts ) {
         *pts = ts;
     }
@@ -55,7 +55,7 @@ void sdlutil_projecttime( uint64_t nsec, const struct timespec* from, struct tim
         ts = *from;
     } else {
         memset( &ts, 0, sizeof(ts) );
-        clock_gettime( CLOCK_REALTIME, &ts );
+        clock_gettime( CLOCK_MONOTONIC, &ts );
     }
     long secs  = nsec / UINT64_C(1000000000);
     long nsecs = nsec % UINT64_C(1000000000);
@@ -72,10 +72,10 @@ void sdlutil_nanosleep( uint64_t nsec, const struct timespec* pts ) {
     struct timespec ts;
     sdlutil_projecttime( nsec, pts, &ts );
 RETRY:
-    int rv = clock_nanosleep( CLOCK_REALTIME, TIMER_ABSTIME, &ts, 0 );
+    int rv = clock_nanosleep( CLOCK_MONOTONIC, TIMER_ABSTIME, &ts, 0 );
     if ( rv == EINTR ) {
         struct timespec now;
-        clock_gettime( CLOCK_REALTIME, &now );
+        clock_gettime( CLOCK_MONOTONIC, &now );
         int cmp = sdlutil_comparetime( &now, &ts );
         if ( cmp < 0 ) {
             goto RETRY;

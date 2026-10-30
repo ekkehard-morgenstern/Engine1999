@@ -6,7 +6,7 @@ tokenized, compiled to a syntax tree, and code-generated into a stack-machine in
 GPLv3; programs written *in* the built-in language are explicitly exempt (see `LICENSE`, file headers).
 
 **Git: never commit or run any git write command in this repo — the user does all git writes manually.** Read-only git is fine.
-Session progress is tracked in `SESSION.md`; keep it updated when work changes the state. Open work is listed in `docs/roadmap.md`; keep that current too.
+Session progress is tracked in `SESSION.md` (imported below, so it is loaded at startup); keep it updated when work changes the state. Open work is listed in `docs/roadmap.md`; keep that current too.
 
 **History log: `HistoryLog-Claude.md` records every change Claude made, per commit (ID, timestamp, details). Keep it updated:**
 - After each piece of work, add a short entry (what changed, why, tests run) under its **Pending** section — do this together with the `SESSION.md` update.
@@ -14,6 +14,8 @@ Session progress is tracked in `SESSION.md`; keep it updated when work changes t
 - Never commit it myself (git rule above); the user commits it with the rest.
 
 Full documentation is in `docs/` — start with `docs/README.md`.
+
+@SESSION.md
 
 ## Current state — read first
 
