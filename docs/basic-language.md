@@ -38,6 +38,41 @@ tokens…  TOK_EOL (0)
 
   Length prefix: **2 bytes, big endian** (max 65535). It was 1 byte before the refactor, so older tokenized data is not compatible; see [refactoring.md](refactoring.md).
 
+## Binary program files (`.e99`)
+
+`SAVE "name"` (without the `A` option) writes the program in its stored, tokenized form; `LOAD`, `MERGE` and `CHAIN` read it back (`save_program()` in `baspgm.c`, `read_program_header()` there and `repl_read_program()` in `basrepl.c`). The file is a 5-byte header followed by the lines:
+
+```
+header (5 bytes)
+    89 45 39 39                // magic: 0x89, then "E99"; the first byte is not ASCII, so a text listing can't be mistaken for it
+    01                         // format version (PGMFILE_VERSION); any other version is "Unsupported program file version"
+line, repeated until the end of the file (no line count, no trailer)
+    lineno.24                  // big endian, 0..999999
+    length.16                  // big endian, total size of this line including these 5 bytes
+    tokens…  00 (TOK_EOL)      // exactly the tokenized line of the program store, see above
+```
+
+Example, `10 PRINT "HI";A$` and `20 GOTO 10` (the space after a line number is a token, too):
+
+```
+89 45 39 39 01                        header, version 1
+00 00 0A  00 13                       line 10, 19 bytes in total
+   20  0B  20                         space, PRINT, space
+   03 00 02 48 49                     TOK_STRLIT, length 2, "HI"
+   3B                                 ;
+   8B 00 01 41                        TOK_STRIDENT, length 1, "A" (the $ is implied by the token)
+   00                                 TOK_EOL
+00 00 14  00 0E                       line 20, 14 bytes
+   20  59  20                         space, GOTO, space
+   0A 00 02 31 30                     TOK_DECLIT, length 2, "10"
+   00                                 TOK_EOL
+```
+
+- Only the source is saved: no variables, no compiled code, no checksum. `RUN` compiles the program again, so the file does not depend on the instruction set or on variable numbers.
+- The loader reads into a scratch program and replaces (or, for `MERGE`, merges into) the stored one only when the whole file is fine. A line with a length of 5 or less, a line number above 999999, a line that is cut off or doesn't end in `00`, and bytes left over at the end are "Bad program file".
+- Compatibility: the tokens are only valid for the token set of the same build (`TOK_*` in `bastok.h`; the literal length prefix is 2 bytes since the tokenizer refactor, see [refactoring.md](refactoring.md)), which is what the version byte is for: a change of the token set or the line layout must bump `PGMFILE_VERSION`.
+- The ASCII form (`SAVE "name",A`, `.bas`) is the listing text as `LIST` prints it, one line per program line; `LOAD` tells the two apart by the magic number.
+
 ## Keyword and operator groups (see `bastok.h` for all IDs)
 
 - Immediate/system: `LIST SAVE LOAD RUN AUTO RENUM DELETE MERGE CHAIN FILES NEW CLEAR EDIT SHOW WARRANTY COPYING`
