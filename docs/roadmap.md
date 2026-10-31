@@ -43,6 +43,9 @@ Open: directory handling for `LOAD`/`SAVE` beyond plain paths (there is no `CD`;
 - [ ] `PLAY`: no chords inside a string (use one string per voice), no `N` (note number) or `X` (run a string variable) commands, no repeat; `PLAY` doesn't wait (a program that ends while music is queued leaves it playing until `SOUND OFF`: decided)
 - [ ] Sound output channels other than the BASIC channels (`PRINT #n`) are not involved; no `SOUND` queue inspection beyond `PLAYING()`
 
+- [ ] **Numeric functions and operators** (found while writing `demos/fruit.bas`): there are no `RND`, `INT`, `ABS`, `SGN`, `SQR`, `SIN`, `COS`, `TAN`, `ATN`, `EXP`, `LOG`, `RANDOMIZE`, no `MOD` and no `\` (the token exists, the parser does not use it). The demo works around it with an integer variable (`Q%=A/B` truncates) and its own random number generator. High priority for any game or math program.
+- [ ] Keyboard for games: `INKEY$` delivers text input only (letters, digits, space, RETURN, BACKSPACE, TAB): no cursor keys, no key-up events, no held-key state, so games use latched controls. A key state function (`KEY(n)` / `KEYDOWN("LEFT")`) through SDL scancodes would fix it.
+
 ## 3. Timers and `SYMBOL` *(planned by the project owner, all through host callbacks)*
 
 - [x] `AFTER` — one-shot timer, like `setTimeout` (done, in the VM: `docs/basic-language.md`)

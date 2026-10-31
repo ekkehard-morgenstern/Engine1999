@@ -4514,7 +4514,13 @@ POP:    comp_pop_context( comp );
     // -- second marker: at THEN or GOTO keyword
     comp_push_context( comp );
     node_t* target1 = NODE_NONE, *target2 = NODE_NONE;
-    if ( comp_eat_gototarget( comp, &target1 ) && target1 != NODE_NONE ) {
+    bool istarget = comp_eat_gototarget( comp, &target1 ) && target1 != NODE_NONE;
+    if ( istarget && gotok == TOK_THEN && comp->currtok != TOK_EOL && comp->currtok != TOK_COLON && comp->currtok != TOK_ELSE ) {
+        // THEN A=1 or THEN A(1)=2: the identifier looked like a label, but something else follows it, so it is an assignment
+        istarget = false;
+        target1 = NODE_NONE;
+    }
+    if ( istarget ) {
         // 1st variant, using one or two goto targets
         comp_commit_context( comp );
         comp_commit_context( comp );

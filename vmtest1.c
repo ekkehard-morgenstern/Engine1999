@@ -365,6 +365,13 @@ static const testcase_t cases[] = {
     { "ON COLLISION GOSUB",     "10 ON COLLISION GOSUB 100\n20 FOR I=1 TO 3000:NEXT I\n30 PRINT \"done\";C\n40 END\n100 C=C+1:RETURN", "done1\n" },
     { "ON COLLISION OFF",       "10 ON COLLISION GOSUB 100\n15 ON COLLISION OFF\n20 FOR I=1 TO 3000:NEXT I\n30 PRINT \"done\";C\n40 END\n100 C=C+1:RETURN", "done0\n" },
     { "ON COLLISION needs GOTO, GOSUB or OFF", "ON COLLISION", "? GOTO, GOSUB or OFF expected\n" },
+    // IF ... THEN with an assignment (an identifier after THEN is a label only if nothing else follows it)
+    { "IF THEN assignment",     "IF 1 THEN A=2:PRINT A",                          "2\n" },
+    { "IF THEN assignment, ELSE assignment", "IF 0 THEN A=1 ELSE A=7:PRINT A",    "7\n" },
+    { "IF THEN array assignment", "DIM A(3):IF 1 THEN A(2)=5:PRINT A(2)",         "5\n" },
+    { "IF THEN assignment is skipped when false", "A=1:IF 0 THEN A=2:PRINT 9\nPRINT A", "1\n" },
+    { "IF THEN label is still a jump", "10 IF 1 THEN FIN\n20 PRINT 1\n30 LABEL FIN\n40 PRINT 2", "2\n" },
+    { "IF THEN label ELSE label", "10 IF 0 THEN ONE ELSE TWO\n20 LABEL ONE\n30 PRINT 1:END\n40 LABEL TWO\n50 PRINT 2", "2\n" },
     // number packing (big endian)
     { "MKI$ is two bytes, big endian", "A$=MKI$(258):PRINT LEN(A$);ASC(A$);ASC(MID$(A$,2,1))", "212\n" },
     { "MKL$ is four bytes, big endian", "A$=MKL$(16909060):PRINT LEN(A$);ASC(A$);ASC(MID$(A$,2,1));ASC(MID$(A$,3,1));ASC(RIGHT$(A$,1))", "41234\n" },
