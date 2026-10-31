@@ -27,6 +27,7 @@
 
 #include <ctype.h>
 #include "vm.h"
+#include "gfxops.h"
 #include "mml.h"
 #include "instset.h"
 
@@ -81,6 +82,9 @@ void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem ) {
     vm->errlastline = vm->errtextline = 0;
     vm->fields = 0;
     vm->numfields = vm->capfields = 0;
+    vm->gfx = 0;
+    vm->colpending = false;
+    vm->design.active = false;
     snprintf( vm->addrcur, sizeof(vm->addrcur), "file" );
     snprintf( vm->addrprev, sizeof(vm->addrprev), "file" );
     vm->iofail = 0;
@@ -1966,7 +1970,7 @@ static bool vm_set_timer( vm_t* vm, uint16_t param ) {
     if ( !vm_dpop_num( vm, &timer ) || !vm_dpop_num( vm, &delay ) || !vm_rpop( vm, &target ) ) {
         return false;
     }
-    if ( !( timer >= 0.0 && timer < (double) VM_NTIMERS ) || !( delay > 0.0 && delay <= 16777216.0 ) ) {
+    if ( !( timer >= 0.0 && timer < (double) VM_NUSERTIMERS ) || !( delay > 0.0 && delay <= 16777216.0 ) ) {
         return vm_error( vm, "Illegal argument" );
     }
     vm_timer_t* tm = &vm->timers[ (int) timer ];
@@ -1986,11 +1990,11 @@ static bool vm_clear_timers( vm_t* vm, uint16_t param ) {
     if ( !vm_dpop_num( vm, &timer ) ) {
         return false;
     }
-    if ( !( timer >= -1.0 && timer < (double) VM_NTIMERS ) ) {
+    if ( !( timer >= -1.0 && timer < (double) VM_NUSERTIMERS ) ) {
         return vm_error( vm, "Illegal argument" );
     }
     bool every = ( param & 1U ) != 0;
-    for ( int i=0; i < VM_NTIMERS; ++i ) {
+    for ( int i=0; i < VM_NUSERTIMERS; ++i ) {
         if ( ( timer < 0.0 || i == (int) timer ) && vm->timers[i].active && vm->timers[i].every == every ) {
             vm->timers[i].active = false;
         }
@@ -2003,7 +2007,7 @@ static bool vm_clear_timers( vm_t* vm, uint16_t param ) {
 static int vm_irq_find( const vm_t* vm, uint64_t now ) {
     int level = vm->irqdepth > 0 ? vm->irq[ vm->irqdepth - 1 ].timer : -1;
     for ( int i=VM_NTIMERS-1; i > level; --i ) {
-        if ( vm->timers[i].active && vm->timers[i].due <= now ) {
+        if ( i == VM_COLSLOT ? vm->timers[i].active && vm->colpending : vm->timers[i].active && vm->timers[i].due <= now ) {
             return i;
         }
     }
@@ -2014,7 +2018,9 @@ static int vm_irq_find( const vm_t* vm, uint64_t now ) {
 static bool vm_irq_fire( vm_t* vm, int t ) {
     vm_timer_t* tm = &vm->timers[t];
     uint32_t target = tm->target;
-    if ( tm->every ) {
+    if ( t == VM_COLSLOT ) {
+        vm->colpending = false;         // the collision handler stays set
+    } else if ( tm->every ) {
         uint64_t now = vm_now_ns();
         tm->due += tm->interval;
         if ( tm->due <= now ) {
@@ -2056,6 +2062,12 @@ static bool vm_irq_poll( vm_t* vm, uint64_t steps ) {
     if ( !safe && ( steps & 31U ) != 0 && !vm->irqpending ) {
         return true;
     }
+    if ( vm->timers[VM_COLSLOT].active && !vm->colpending && vm->gfx && vm->gfx->query && ( safe || ( steps & 31U ) == 0 ) ) {
+        double ev = -1.0;
+        if ( vm->gfx->query( vm->userdata, GFXQ_EVENT, 0, 0, &ev ) && ev >= 0.0 ) {
+            vm->colpending = true;
+        }
+    }
     int t = vm_irq_find( vm, vm_now_ns() );
     if ( t < 0 ) {
         vm->irqpending = false;
@@ -2067,6 +2079,273 @@ static bool vm_irq_poll( vm_t* vm, uint64_t steps ) {
     }
     vm->irqpending = false;
     return vm_irq_fire( vm, t );
+}
+
+// -- graphics (gfxops.h) --------------------------------------------------------------------
+
+#define GFX_ISNONE(v)   ( (v) < -1.0e8 )
+
+// the argument ranges of the operations; false after the error was reported
+static bool vm_gfx_check( vm_t* vm, int op, const double* a, int na, size_t slen ) {
+    #define IN(i,lo,hi)     ( (i) < na && a[i] >= (lo) && a[i] <= (hi) )
+    #define OPT(i,lo,hi)    ( (i) >= na || GFX_ISNONE( a[i] ) || ( a[i] >= (lo) && a[i] <= (hi) ) )
+    for ( int i=0; i < na; ++i ) {
+        if ( !GFX_ISNONE( a[i] ) && !( a[i] > -4.4e9 && a[i] < 4.4e9 ) ) {      // (also refuses NaN)
+            return vm_error( vm, "Illegal argument" );
+        }
+    }
+    bool ok = true;
+    switch ( op ) {
+        case GFXOP_LAYER:       ok = IN( 0, 0, 4 ) && IN( 1, 0, 1 ); break;
+        case GFXOP_PRIORITY:    ok = IN( 0, 0, 4 ) && IN( 1, 0, 4 ); break;
+        case GFXOP_PALETTE:     ok = IN( 0, 0, 4 ) && IN( 1, 0, 255 ) && IN( 2, -2147483648.0, 4294967295.0 ); break;
+        case GFXOP_PALNAME:     ok = IN( 0, 0, 4 ) && IN( 1, 0, 255 ); break;
+        case GFXOP_PALRESET:    ok = OPT( 0, 0, 4 ); break;
+        case GFXOP_BACKDROP:    ok = IN( 0, -2147483648.0, 4294967295.0 ); break;
+        case GFXOP_TARGET:      ok = IN( 0, 0, 3 ) && ( a[0] == 0.0 || a[0] == 3.0 ); break;
+        case GFXOP_PEN:         ok = IN( 0, 0, 255 ); break;
+        case GFXOP_MODE:        ok = IN( 0, 0, 4 ); break;
+        case GFXOP_CLEAR:       ok = OPT( 0, 0, 255 ); break;
+        case GFXOP_PSET:        ok = OPT( 2, 0, 255 ); break;
+        case GFXOP_LINE:        ok = OPT( 4, 0, 255 ); break;
+        case GFXOP_CIRCLE:      ok = IN( 2, 0, 20000 ) && OPT( 3, 0, 255 ) && OPT( 6, 0.0, 1000.0 ); break;
+        case GFXOP_PAINT:       ok = IN( 2, 0, 255 ) && OPT( 3, 0, 255 ); break;
+        case GFXOP_RADIUS:      ok = IN( 2, 0, 20000 ) && OPT( 4, 0, 255 ); break;
+        case GFXOP_BLIT:        ok = slen >= 4U; break;
+        case GFXOP_TEXT:        ok = OPT( 2, 0, 255 ) && OPT( 3, 1, 32 ) && OPT( 4, 1, 32 ); break;
+        case GFXOP_TXTFILL:     ok = OPT( 4, 0, 255 ) && OPT( 5, 0, 255 ) && OPT( 6, 0, 255 ); break;
+        case GFXOP_TXTLOAD:     ok = slen == 8000U; break;
+        case GFXOP_LOCATE:      ok = IN( 0, 0, 79 ) && IN( 1, 0, 24 ); break;
+        case GFXOP_COLOR:       ok = IN( 0, 0, 255 ) && OPT( 1, 0, 255 ); break;
+        case GFXOP_SYMBOL:      ok = IN( 0, 0, 255 ) && slen == 12U; break;
+        case GFXOP_TILEDEF:     ok = IN( 0, 0, 255 ) && slen == 384U; break;
+        case GFXOP_TILEGET:     ok = IN( 0, 0, 255 ); break;
+        case GFXOP_TILESET:     ok = IN( 0, 0, 40 ) && IN( 1, 0, 12 ) && IN( 2, 0, 255 ); break;
+        case GFXOP_TILEFILL:    ok = slen == 533U; break;
+        case GFXOP_SPRDEF:      ok = IN( 0, 0, 255 ) && slen == 384U; break;
+        case GFXOP_SPRGET:      ok = IN( 0, 0, 255 ); break;
+        case GFXOP_SPRSEQ:      ok = IN( 0, 0, 255 ) && slen >= 1U && slen <= 15U; break;
+        case GFXOP_SPRON: case GFXOP_SPROFF:
+                                ok = IN( 0, 0, 255 ); break;
+        case GFXOP_SPRPRIO:     ok = IN( 0, 0, 255 ) && IN( 1, 0, 7 ); break;
+        case GFXOP_SPRIMAGE:    ok = IN( 0, 0, 255 ) && IN( 1, 0, 255 ); break;
+        case GFXOP_SPRANIM:     ok = IN( 0, 0, 255 ) && IN( 1, 0, 255 ) && IN( 2, 0, 15 ) && IN( 3, 0, 31 ); break;
+        case GFXOP_SPRMOVETO:   ok = IN( 0, 0, 255 ) && IN( 1, -1024, 1023 ) && IN( 2, -1024, 1023 ) && IN( 3, 0, 65535 ); break;
+        case GFXOP_SPRCOLL:     ok = IN( 0, 0, 255 ) && IN( 1, 0, 1 ) && OPT( 2, 0, 0 ); break;
+        case GFXOP_SPRMOVE:     ok = IN( 0, 0, 255 ) && IN( 1, -1024, 1023 ) && IN( 2, -1024, 1023 ) && OPT( 3, 0, 255 ); break;
+        default:                break;
+    }
+    #undef IN
+    #undef OPT
+    return ok || vm_error( vm, "Illegal argument" );
+}
+
+// GFXC ( args -- [s] ): the statements of gfxops.h
+static bool vm_gfx_command( vm_t* vm, uint16_t op ) {
+    const gfxcmd_t* cmd = gfxops_byop( op );
+    if ( cmd == 0 ) {
+        return vm_error( vm, "Internal error (bad graphics operation)" );
+    }
+    double a[GFX_MAXARGS];
+    int na = 0, total = (int) strlen( cmd->sig );
+    char* s = 0; size_t slen = 0;
+    bool hasresult = false, hasstr = false;
+    int nnum = 0;
+    for ( int i=0; i < total; ++i ) {
+        char k = cmd->sig[i];
+        if ( k == 'v' ) hasresult = true; else if ( k == 's' ) hasstr = true; else ++nnum;
+    }
+    na = nnum;
+    // pop in reverse order of the signature
+    int ni = nnum;
+    for ( int i = total - 1; i >= 0; --i ) {
+        char k = cmd->sig[i];
+        if ( k == 'v' ) {
+            continue;
+        }
+        if ( k == 's' ) {
+            if ( !vm_dpop_bstr( vm, &s, &slen ) ) {
+                free( s );
+                return false;
+            }
+        } else if ( !vm_dpop_num( vm, &a[--ni] ) ) {
+            free( s );
+            return false;
+        }
+    }
+    bool ok = vm_gfx_check( vm, op, a, na, slen );
+    uint8_t* out = 0; size_t outlen = 0;
+    if ( ok && hasresult ) {
+        out = (uint8_t*) malloc( 65536U );
+        if ( out == 0 ) {
+            ok = vm_error( vm, "Out of memory" );
+        }
+    }
+    if ( ok && op == GFXOP_VSYNC && vm_interrupted( vm ) ) {
+        ok = vm_error( vm, "Break" );
+    }
+    if ( ok && vm->gfx != 0 && vm->gfx->op != 0 ) {
+        const char* err = 0;
+        if ( !vm->gfx->op( vm->userdata, op, a, na, s, slen, out, 65536U, &outlen, &err ) ) {
+            ok = vm_error( vm, err ? err : "Illegal argument" );
+        } else if ( hasresult && outlen > 65535U ) {
+            ok = vm_error( vm, "String too long" );
+        }
+    }
+    (void) hasstr;
+    free( s );
+    if ( ok && hasresult ) {
+        ok = vm_push_bytes( vm, (const char*) out, outlen );
+    }
+    free( out );
+    return ok;
+}
+
+// GFXQ ( args -- n ): the functions of the graphics system
+static bool vm_gfx_query( vm_t* vm, uint16_t q ) {
+    const gfxquery_t* qd = gfxops_queryby( q );
+    if ( qd == 0 ) {
+        return vm_error( vm, "Internal error (bad graphics query)" );
+    }
+    double a[GFX_MAXARGS];
+    int na = q == GFXQ_RGB ? 4 : qd->maxargs;
+    for ( int i = na - 1; i >= 0; --i ) {
+        if ( !vm_dpop_num( vm, &a[i] ) ) {
+            return false;
+        }
+    }
+    if ( q == GFXQ_RGB ) {
+        for ( int i=0; i < 4; ++i ) {
+            if ( !( a[i] >= 0.0 && a[i] <= 255.0 ) ) {
+                return vm_error( vm, "Illegal argument" );
+            }
+        }
+        uint32_t argb = ( (uint32_t) a[3] << 24 ) | ( (uint32_t) a[0] << 16 ) | ( (uint32_t) a[1] << 8 ) | (uint32_t) a[2];
+        return vm_dpush_num( vm, (double) argb );
+    }
+    for ( int i=0; i < na; ++i ) {
+        if ( !( a[i] > -4.4e9 && a[i] < 4.4e9 ) ) {
+            return vm_error( vm, "Illegal argument" );
+        }
+    }
+    if ( q == GFXQ_SPRX || q == GFXQ_SPRY || q == GFXQ_SPRIMAGE || q == GFXQ_SPRON || q == GFXQ_SPRHITS || q == GFXQ_SPRCOLLIDE ||
+         q == GFXQ_SPRMOVING ) {
+        if ( !( a[0] >= 0.0 && a[0] <= 255.0 ) ) {
+            return vm_error( vm, "Illegal argument" );
+        }
+    }
+    if ( ( q == GFXQ_LAYER || q == GFXQ_PRIORITY ) && !( a[0] >= 0.0 && a[0] <= 4.0 ) ) {
+        return vm_error( vm, "Illegal argument" );
+    }
+    if ( q == GFXQ_PALETTE && !( a[0] >= 0.0 && a[0] <= 4.0 && a[1] >= 0.0 && a[1] <= 255.0 ) ) {
+        return vm_error( vm, "Illegal argument" );
+    }
+    double result = 0.0;
+    if ( vm->gfx != 0 && vm->gfx->query != 0 && !vm->gfx->query( vm->userdata, q, a, na, &result ) ) {
+        return vm_error( vm, "Illegal argument" );
+    }
+    return vm_dpush_num( vm, result );
+}
+
+// DSGN ( n [base] -- ): DESIGN SPRITE (1) / TILE (2) / CHAR (3), +4 when there is a base
+static bool vm_design_start( vm_t* vm, uint16_t param ) {
+    double num = 0, base = 0;
+    if ( ( ( param & 4U ) != 0 && !vm_dpop_num( vm, &base ) ) || !vm_dpop_num( vm, &num ) ) {
+        return false;
+    }
+    int kind = (int)( param & 3U );
+    if ( kind < 1 || kind > 3 || !( num >= 0.0 && num <= 255.0 ) || !( base >= 0.0 && base <= 255.0 ) ) {
+        return vm_error( vm, "Illegal argument" );
+    }
+    vm->design.active = true;
+    vm->design.kind = kind;
+    vm->design.num = (int) num;
+    vm->design.base = (int) base;
+    vm->design.rows = 0;
+    memset( vm->design.pix, 0, sizeof(vm->design.pix) );
+    return true;
+}
+
+// DROW ( s -- ): one row of the picture
+static bool vm_design_row( vm_t* vm ) {
+    char* s = 0; size_t len = 0;
+    if ( !vm_dpop_bstr( vm, &s, &len ) ) {
+        return false;
+    }
+    bool ok = true;
+    if ( !vm->design.active ) {
+        ok = vm_error( vm, "Design without DESIGN" );
+    } else {
+        bool chr = vm->design.kind == DESK_CHAR;
+        size_t width = chr ? 8U : 16U;
+        int row = vm->design.rows;
+        if ( len != width ) {
+            ok = vm_error( vm, "Bad design row" );
+        }
+        uint8_t bits = 0;
+        for ( size_t i=0; ok && i < width; ++i ) {
+            int v = -1;
+            char c = s[i];
+            if ( c == '.' || c == ' ' ) v = 0;
+            else if ( c >= '1' && c <= '9' ) v = c - '0';
+            else if ( c >= 'A' && c <= 'F' ) v = c - 'A' + 10;
+            else if ( c >= 'a' && c <= 'f' ) v = c - 'a' + 10;
+            else if ( c == 'o' || c == 'O' ) v = 1;
+            if ( v < 0 || ( v != 0 && v + vm->design.base > 255 ) ) {
+                ok = vm_error( vm, "Bad design row" );
+                break;
+            }
+            if ( chr ) {
+                if ( v != 0 ) {
+                    bits = (uint8_t)( bits | ( 0x80U >> i ) );
+                }
+            } else {
+                vm->design.pix[ (size_t) row * 16U + i ] = (uint8_t)( v != 0 ? v + vm->design.base : 0 );
+            }
+        }
+        if ( ok && chr ) {
+            vm->design.pix[row] = bits;
+        }
+        if ( ok ) {
+            ++vm->design.rows;
+            int height = chr ? 12 : 24;
+            if ( vm->design.rows == height ) {
+                // complete: define the image through the host
+                vm->design.active = false;
+                int op = vm->design.kind == DESK_SPRITE ? GFXOP_SPRDEF : vm->design.kind == DESK_TILE ? GFXOP_TILEDEF : GFXOP_SYMBOL;
+                double a[1] = { (double) vm->design.num };
+                const char* err = 0;
+                if ( vm->gfx != 0 && vm->gfx->op != 0 &&
+                     !vm->gfx->op( vm->userdata, op, a, 1, (const char*) vm->design.pix, chr ? 12U : 384U, 0, 0, 0, &err ) ) {
+                    ok = vm_error( vm, err ? err : "Illegal argument" );
+                }
+            }
+        }
+    }
+    free( s );
+    return ok;
+}
+
+// COLT ( -- ) ( r: target -- ): ON COLLISION GOSUB (1) / GOTO (2), OFF (0)
+static bool vm_set_collision( vm_t* vm, uint16_t param ) {
+    vm_timer_t* tm = &vm->timers[VM_COLSLOT];
+    if ( param == 0 ) {
+        tm->active = false;
+        vm->colpending = false;
+        vm_count_timers( vm );
+        return true;
+    }
+    uint32_t target = 0;
+    if ( !vm_rpop( vm, &target ) ) {
+        return false;
+    }
+    tm->active = true;
+    tm->every = false;
+    tm->gosub = param == 1;
+    tm->target = target;
+    vm->colpending = false;
+    vm_count_timers( vm );
+    return true;
 }
 
 // WAIT ( n -- ): sleeps n/60 s; asks the interrupt callback every 10 ms
@@ -2395,7 +2674,7 @@ static bool vm_system_function( vm_t* vm, uint16_t opcode ) {
             if ( !vm_dpop_num( vm, &num ) ) {
                 return false;
             }
-            if ( !( num >= 0.0 && num < (double) VM_NTIMERS ) ) {
+            if ( !( num >= 0.0 && num < (double) VM_NUSERTIMERS ) ) {
                 return vm_error( vm, "Illegal argument" );
             }
             vm_timer_t* tm = &vm->timers[ (int) num ];
@@ -2695,6 +2974,11 @@ static bool vm_step( vm_t* vm ) {
         case INS_FOP: return vm_file_operation( vm, param16 );
         case INS_ERRT: return vm_set_errtrap( vm, param16 );
         case INS_PACK: return vm_pack( vm, param16 );
+        case INS_GFXC: return vm_gfx_command( vm, param16 );
+        case INS_GFXQ: return vm_gfx_query( vm, param16 );
+        case INS_DSGN: return vm_design_start( vm, param16 );
+        case INS_DROW: return vm_design_row( vm );
+        case INS_COLT: return vm_set_collision( vm, param16 );
         case INS_UNPK: return vm_unpack( vm, param16 );
         case INS_FLD: return vm_field( vm, param16 );
         case INS_LRS: return vm_lset( vm, param16 );
@@ -2846,6 +3130,8 @@ bool vm_begin( vm_t* vm, uint32_t start ) {
     vm->irqdepth = 0;
     vm->irqsafe = false;
     vm->irqpending = false;
+    vm->colpending = false;
+    vm->design.active = false;
     vm->errset = vm->errgosub = vm->errinhandler = vm->errcaught = false;      // the error handler ends with the run, too
     vm->errlast[0] = '\0';
     vm->errlastline = 0;

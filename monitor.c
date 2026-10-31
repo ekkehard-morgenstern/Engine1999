@@ -25,7 +25,7 @@
 */
 #include "monitor.h"
 #include "sdlscreen.h"
-#include "textscreen.h"
+#include "textscreen.h"      // (only the TXTSCR_* constants; every call goes through sdlscreen)
 #include "vmasm.h"
 #include "codegen.h"
 #include <strings.h>
@@ -125,48 +125,48 @@ static const codegen_t* mon_cgen( const mon_t* m ) {
 }
 
 static void mon_setout( int x, int y ) {
-    txtscr_setviewport( 0, MON_OUT_Y, TXTSCR_WIDTH, MON_OUT_H );
-    txtscr_setblank( C_BG, C_TEXT );        // what scrolling fills with (the bars changed it)
-    txtscr_locate( x, y );
+    sdlscr_text_setviewport( 0, MON_OUT_Y, TXTSCR_WIDTH, MON_OUT_H );
+    sdlscr_text_setblank( C_BG, C_TEXT );        // what scrolling fills with (the bars changed it)
+    sdlscr_locate( x, y );
 }
 
 // title bar: the region and the sizes; the output cursor is kept
 static void mon_title( const mon_t* m ) {
     int cx = 0, cy = 0;
-    txtscr_getcursor( &cx, &cy );
-    txtscr_setviewport( 0, 0, TXTSCR_WIDTH, 1 );
-    txtscr_setblank( C_TITLE_BG, C_TITLE_FG );
-    txtscr_clear();
+    sdlscr_text_getcursor( &cx, &cy );
+    sdlscr_text_setviewport( 0, 0, TXTSCR_WIDTH, 1 );
+    sdlscr_text_setblank( C_TITLE_BG, C_TITLE_FG );
+    sdlscr_text_clear();
     const codegen_t* cg = mon_cgen( m );
     char buf[100];
-    txtscr_write( 0, 1, C_TITLE_BG, C_TITLE_FG, "Machine Monitor", -1 );
+    sdlscr_text_write( 0, 1, C_TITLE_BG, C_TITLE_FG, "Machine Monitor", -1 );
     snprintf( buf, sizeof(buf), "%s", regionnames[m->region] );
     int x = 19;
-    x += txtscr_write( 0, x, C_TITLE_BG, C_GRAY, "region ", -1 );
-    x += txtscr_write( 0, x, C_TITLE_BG, C_YELLOW, buf, -1 );
+    x += sdlscr_text_write( 0, x, C_TITLE_BG, C_GRAY, "region ", -1 );
+    x += sdlscr_text_write( 0, x, C_TITLE_BG, C_YELLOW, buf, -1 );
     snprintf( buf, sizeof(buf), "   code $%X  data $%X  dstack %u  rstack %u", (unsigned) cg->codesize, (unsigned) cg->datasize,
         (unsigned) m->repl->vm.dsp, (unsigned) m->repl->vm.rsp );
-    x += txtscr_write( 0, x, C_TITLE_BG, C_TITLE_FG, buf, -1 );
+    x += sdlscr_text_write( 0, x, C_TITLE_BG, C_TITLE_FG, buf, -1 );
     if ( m->repl->vm.suspended ) {
         snprintf( buf, sizeof(buf), "  pc $%X", (unsigned) m->repl->vm.pc );
-        txtscr_write( 0, x, C_TITLE_BG, C_YELLOW, buf, -1 );
+        sdlscr_text_write( 0, x, C_TITLE_BG, C_YELLOW, buf, -1 );
     }
     mon_setout( cx, cy );
     sdlscr_textchanged();
 }
 
 static void mon_helpbar( void ) {
-    txtscr_setviewport( 0, MON_BAR_Y, TXTSCR_WIDTH, 1 );
-    txtscr_setblank( C_HELP_BG, C_TEXT );
-    txtscr_clear();
+    sdlscr_text_setviewport( 0, MON_BAR_Y, TXTSCR_WIDTH, 1 );
+    sdlscr_text_setblank( C_HELP_BG, C_TEXT );
+    sdlscr_text_clear();
     static const struct { const char* key; const char* what; } help[] = {
         { "?", "help" }, { "M", "dump" }, { "U", "unasm" }, { "A", "asm" }, { "R", "region" }, { "G", "go" }, { "T", "step" },
         { "B", "break" }, { "I", "info" }, { "Q", "quit" },
     };
     int x = 1;
     for ( size_t i=0; i < sizeof(help) / sizeof(help[0]); ++i ) {
-        x += txtscr_write( 0, x, C_HELP_BG, C_KEY, help[i].key, -1 );
-        x += txtscr_write( 0, x, C_HELP_BG, C_WHITE, help[i].what, -1 );
+        x += sdlscr_text_write( 0, x, C_HELP_BG, C_KEY, help[i].key, -1 );
+        x += sdlscr_text_write( 0, x, C_HELP_BG, C_WHITE, help[i].what, -1 );
         x += 2;
     }
 }
@@ -898,19 +898,19 @@ static void execute( mon_t* m, char* line ) {
 
 static void mon_firstuse( mon_t* m ) {
     memset( m, 0, sizeof(*m) );
-    txtscr_setcolors( C_BG, C_TEXT );
-    txtscr_setblank( C_BG, C_TEXT );
-    txtscr_resetviewport();
-    txtscr_clear();
+    sdlscr_text_setcolors( C_BG, C_TEXT );
+    sdlscr_text_setblank( C_BG, C_TEXT );
+    sdlscr_text_resetviewport();
+    sdlscr_text_clear();
     mon_helpbar();
     mon_setout( 0, 0 );
-    txtscr_clear();
+    sdlscr_text_clear();
     mon_inited = true;
 }
 
 void monitor_run( repl_t* repl, void (*vblank_handler)( void* ), void* usrdata ) {
-    int oldscreen = txtscr_selected();
-    txtscr_select( MON_SCREEN );
+    int oldscreen = sdlscr_text_selected();
+    sdlscr_text_select( MON_SCREEN );
     if ( !mon_inited ) {
         mon_firstuse( &mon );
         out( C_TITLE_FG, "Machine monitor" );
@@ -935,6 +935,6 @@ void monitor_run( repl_t* repl, void (*vblank_handler)( void* ), void* usrdata )
             execute( &mon, line );
         }
     }
-    txtscr_select( oldscreen );
+    sdlscr_text_select( oldscreen );
     sdlscr_textchanged();
 }

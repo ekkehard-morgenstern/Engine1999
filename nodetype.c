@@ -133,6 +133,11 @@ const char* nodename( uint8_t nodetype ) {
         case NT_FILEOPSTMT:             return "NT_FILEOPSTMT";
         case NT_RECORDSTMT:             return "NT_RECORDSTMT";
         case NT_ERRTRAPSTMT:            return "NT_ERRTRAPSTMT";
+        case NT_GFXSTMT:                return "NT_GFXSTMT";
+        case NT_GFXQUERY:               return "NT_GFXQUERY";
+        case NT_DESIGNSTMT:             return "NT_DESIGNSTMT";
+        case NT_DESIGNROW:              return "NT_DESIGNROW";
+        case NT_ONCOLLSTMT:             return "NT_ONCOLLSTMT";
         case NT_NUMEXPR:                return "NT_NUMEXPR";
         case NT_STREXPR:                return "NT_STREXPR";
         case NT_STRCMPEX:               return "NT_STRCMPEX";

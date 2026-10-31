@@ -183,6 +183,114 @@ void txtscr_clear( void ) {
       cur->cursx = cur->cursy = 0;
 }
 
+// -- areas, save, font -----------------------------------------------------------------
+
+static bool txtscr_area( int* x1, int* y1, int* x2, int* y2 ) {
+      if ( *x1 > *x2 ) { int t = *x1; *x1 = *x2; *x2 = t; }
+      if ( *y1 > *y2 ) { int t = *y1; *y1 = *y2; *y2 = t; }
+      if ( *x2 < 0 || *y2 < 0 || *x1 >= cur->vw || *y1 >= cur->vh ) {
+            return false;
+      }
+      if ( *x1 < 0 ) *x1 = 0;
+      if ( *y1 < 0 ) *y1 = 0;
+      if ( *x2 >= cur->vw ) *x2 = cur->vw - 1;
+      if ( *y2 >= cur->vh ) *y2 = cur->vh - 1;
+      return true;
+}
+
+void txtscr_fill( int x1, int y1, int x2, int y2, int ch, int fg, int bg ) {
+      if ( !txtscr_area( &x1, &y1, &x2, &y2 ) ) {
+            return;
+      }
+      for ( int y = y1; y <= y2; ++y ) {
+            textcell_t* d = txtscr_row( y );
+            for ( int x = x1; x <= x2; ++x ) {
+                  textcell_t c = d[x];
+                  uint8_t nch = ch >= 0 ? (uint8_t) ch : TXTSCR_CELL_CHR( c );
+                  uint8_t nfg = fg >= 0 ? (uint8_t) fg : TXTSCR_CELL_FG( c );
+                  uint8_t nbg = bg >= 0 ? (uint8_t) bg : TXTSCR_CELL_BG( c );
+                  d[x] = TXTSCR_MAKECELL( nch, nbg, nfg );
+            }
+      }
+}
+
+void txtscr_copy( int x1, int y1, int x2, int y2, int tx, int ty ) {
+      if ( !txtscr_area( &x1, &y1, &x2, &y2 ) ) {
+            return;
+      }
+      int w = x2 - x1 + 1, h = y2 - y1 + 1;
+      textcell_t* tmp = (textcell_t*) malloc( (size_t) w * (size_t) h * sizeof(textcell_t) );
+      if ( tmp == 0 ) {
+            return;
+      }
+      for ( int y = 0; y < h; ++y ) {
+            memcpy( tmp + (size_t) y * (size_t) w, txtscr_row( y1 + y ) + x1, (size_t) w * sizeof(textcell_t) );
+      }
+      for ( int y = 0; y < h; ++y ) {
+            int dy = ty + y;
+            if ( dy < 0 || dy >= cur->vh ) {
+                  continue;
+            }
+            textcell_t* d = txtscr_row( dy );
+            for ( int x = 0; x < w; ++x ) {
+                  int dx = tx + x;
+                  if ( dx >= 0 && dx < cur->vw ) {
+                        d[dx] = tmp[ (size_t) y * (size_t) w + (size_t) x ];
+                  }
+            }
+      }
+      free( tmp );
+}
+
+void txtscr_invert( int x1, int y1, int x2, int y2 ) {
+      if ( !txtscr_area( &x1, &y1, &x2, &y2 ) ) {
+            return;
+      }
+      for ( int y = y1; y <= y2; ++y ) {
+            textcell_t* d = txtscr_row( y );
+            for ( int x = x1; x <= x2; ++x ) {
+                  textcell_t c = d[x];
+                  d[x] = TXTSCR_MAKECELL( TXTSCR_CELL_CHR( c ), TXTSCR_CELL_FG( c ), TXTSCR_CELL_BG( c ) );
+            }
+      }
+}
+
+size_t txtscr_save( uint8_t* out, size_t outsize ) {
+      size_t size = (size_t) TXTSCR_WIDTH * TXTSCR_HEIGHT * 4U;
+      if ( out == 0 || outsize < size ) {
+            return size;
+      }
+      for ( size_t i=0; i < (size_t) TXTSCR_WIDTH * TXTSCR_HEIGHT; ++i ) {
+            textcell_t c = cur->cells[i];
+            out[ i * 4U ]      = TXTSCR_CELL_CHR( c );
+            out[ i * 4U + 1U ] = TXTSCR_CELL_FG( c );
+            out[ i * 4U + 2U ] = TXTSCR_CELL_BG( c );
+            out[ i * 4U + 3U ] = 0;
+      }
+      return size;
+}
+
+bool txtscr_restore( const uint8_t* data, size_t size ) {
+      if ( data == 0 || size != (size_t) TXTSCR_WIDTH * TXTSCR_HEIGHT * 4U ) {
+            return false;
+      }
+      for ( size_t i=0; i < (size_t) TXTSCR_WIDTH * TXTSCR_HEIGHT; ++i ) {
+            cur->cells[i] = TXTSCR_MAKECELL( data[ i * 4U ], data[ i * 4U + 2U ], data[ i * 4U + 1U ] );
+      }
+      return true;
+}
+
+void txtscr_defchar( int code, const uint8_t rows[12] ) {
+      if ( code < 0 || code > 255 || rows == 0 ) {
+            return;
+      }
+      memcpy( &currfont[ (size_t) code * 12U ], rows, 12U );
+}
+
+const uint8_t* txtscr_font( void ) {
+      return currfont;
+}
+
 // -- rendering -------------------------------------------------------------------------
 
 void txtscr_render( uint8_t* target ) {
@@ -247,7 +355,7 @@ int txtscr_write( int y, int x, int bg, int fg, const char* text, int len ) {
       textcell_t* d = txtscr_row( y ) + x;
       int ret = n;
       while ( n-- ) {
-            *d++ = TXTSCR_MAKECELL( *text++, bg, fg );
+            *d++ = TXTSCR_MAKECELL( (uint8_t) *text++, bg, fg );     // (unsigned: codes >= 128 must not spill into the colors)
       }
       return ret;
 }

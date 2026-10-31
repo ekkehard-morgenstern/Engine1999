@@ -1,335 +1,174 @@
-# Graphics subsystem for BASIC (proposal)
+# Graphics subsystem
 
-Status: **proposal, nothing implemented** (2026-10-31). It follows a look at `sdllayer`, `sdlscreen`, `textscreen`, `tilescreen` and
-`sprscreen`. The decisions it needs from the project owner are at the end.
+Status: **implemented** (2026-10-31): layers, palettes, the graphics layer, tiles, sprites with `DESIGN` pictures, collisions, text screen
+areas, and the internal `sdlscr_*` API. The design decisions of the project owner are in "Decisions". The demo is `demos/gfx.bas`.
 
 ## What exists
 
 The screen is 640 x 300 logical pixels, drawn as five layers from bottom to top (`sdlscreen.c`):
 
-| # | Layer | Content | Renderer |
+| # | Layer | Content | Drawn by |
 |---|---|---|---|
-| 0 | background | plain bitmap, **no API** | none |
+| 0 | background | plain bitmap (`GFX TARGET 0`) | `gfxcore` through `sdlscreen` |
 | 1 | tiles | 41 x 13 cells of 16 x 24 px from a 256-tile map, scrolled by 0..15 px | `tilescr_render` |
 | 2 | text | 80 x 25 cells of 8 x 12 px, colors per cell | `txtscr_render` |
-| 3 | graphics | plain bitmap, **no API** | none |
-| 4 | sprites | 256 sprites of 16 x 24 px, priority, animation sequences | `sprscr_render` |
+| 3 | graphics | plain bitmap (`GFX TARGET 3`, the default) | `gfxcore` through `sdlscreen` |
+| 4 | sprites | 256 sprites of 16 x 24 px, priority, animation sequences, collisions | `sprscr_render` |
 
-Behind them is one clear color (`sdlscr_bgcol`, a static with no setter). **Every layer is 640 x 300 bytes of palette indices with its
-own 256-entry ARGB palette** (`sdllayer_t.palette`, index 0 = transparent by default; the table in `sdllayer.c` also has names such as
-"Gold" that are not used yet). A layer is redrawn when its `modified` flag is set: the renderer callback fills `memory`, `sdllay_to_texture`
-converts it through the palette to an ARGB texture. `sdllay_enable/disable/switch_priority` exist; the only user of `sdllayer` is
-`sdlscreen.c` (and through it `engine1999.c`, `sdltest1.c`), and BASIC reaches **none** of it except the text screen through `PRINT` and
-ANSI sequences and the sound.
+Behind them is the backdrop color (`GFX BACKDROP`). **Every layer is 640 x 300 bytes of palette indices with its own 256 entry ARGB palette**
+(`sdllayer_t.palette`, index 0 = transparent by default; the names of the color table, such as "Gold", can be used by `GFX PALNAME`).
+Colors in all statements are palette indices of the layer that is drawn on.
 
-Gaps found in the backends (not only missing BASIC words):
+## Principles
 
-- **The tile screen cannot be filled**: `tilescr[]` (the 41 x 13 cell contents) is never written; only the tile *images* (`tilescr_writetile`)
-  and the scroll offset exist. A setter is needed first.
-- No palette access above `sdllayer` (`sdlscr_*` has no palette, layer enable or priority function), no setter for the clear color.
-- No drawing code at all for the two bitmap layers (background, graphics).
-- Sprites: `concept.txt` plans collision flags (sprite-sprite, sprite-tile); `sprscreen.c` has none. No way to read positions back.
-- The font can be redefined only inside `textscreen.c` (`currfont`); `SYMBOL` is on the roadmap.
-- The layers are modified from the main thread while the screen thread converts them (no lock, by decision; tearing is possible for a
-  frame, never a crash).
+1. **All calls into the graphics modules go through `sdlscreen`** (owner's requirement). Nothing outside `sdlscreen.c` calls `sdllayer`, `textscreen`,
+   `tilescreen`, `sprscreen` or `gfxcore`: the host (`engine1999.c`), the editors (`fulledit.c`, `monitor.c`, converted to `sdlscr_text_*`) and the tests
+   use `sdlscr_*` (declared at the end of `sdlscreen.h`). Every function validates its arguments, marks the layer it changed as modified, and hands out no
+   pointers into layer memory, so a lock or a command queue can be added in this one place later (there is none today, by decision: the screen thread
+   may convert a layer while the main thread draws, which shows at worst one torn frame).
+2. **Few reserved words.** Only ten words are new: `GFX SPRITE TILE TXT DESIGN RGB POINT CLS LOCATE COLOR`. Everything else is a *sub-keyword* after
+   `GFX`, `TXT`, `TILE` or `SPRITE` (recognized in context, not reserved: `GFX LINE`, `TILE SET`, `SPRITE n,MOVETO`, `ON COLLISION`), and the functions
+   take the name of the value as a string literal (`SPRITE("X",3)`). `SYMBOL` was reserved already. `@` at the start of a statement is a picture row.
+3. **The statements are a table** (`gfxops.c`): group, name, operation number, a signature string (`n` number, `o` optional number, `s` string,
+   `v` string variable that receives the result, `w`/`W` a word out of a list). The parser, the code generator, the VM and the hosts all read it, so a new
+   statement is one line of the table plus a case in the host. Optional trailing arguments are `GFX_NONE` (-1e9) in the host call.
+4. **The VM talks to the screen through `vm_gfx_t`** (`op` and `query` callbacks, like `vm_sound_t`; `repl_t.gfx`); `engine1999.c` maps them to `sdlscr_*`
+   (`host_gfx_op`, `host_gfx_query`). The VM checks the argument types and ranges, so the host can rely on them. Without a host the statements check their
+   arguments and do nothing, the functions return 0.
+5. **Drawing algorithms live in `gfxcore.[ch]`** (no SDL), tested on a plain buffer (`gfxtest1`); the backends `tilescreen`, `sprscreen`, `textscreen` have no SDL either.
+6. **Images are binary strings**: a tile or sprite image is 384 bytes (16 x 24 palette indices, row by row), a graphics block `MKI$(w)+MKI$(h)+pixels`, the
+   text screen 8000 bytes (4 per cell: character, pen, paper, 0). Files come in through `OPEN`/`INPUT$` (from `res:`) and go out through `PRINT #`.
 
-## Principles of the proposal
+## Statements
 
-1. **Few new reserved words, sub-keywords where possible.** Words that are already reserved or that fit common BASIC (GW-BASIC, AmigaBASIC, Locomotive) are preferred.
-2. **Colors are palette indices (0..255) of the layer being drawn on**, as in the 1980s machines; `PALETTE` changes what an index means.
-   `RGB(r,g,b[,a])` builds the 32 bit ARGB number for `PALETTE`.
-3. **All calls into the graphics modules go through `sdlscreen`** (owner's requirement, 2026-10-31). No caller outside
-   `sdlscreen` (`engine1999.c`, the VM host mapping, the editors `fulledit.c` and `monitor.c`, tests of the engine) calls `sdllayer`, `tilescreen`,
-   `sprscreen`, `textscreen` or `gfxcore` directly, only `sdlscr_*`. Today `engine1999.c` already obeys this, but `fulledit.c` and `monitor.c`
-   call `txtscr_*` directly (about 60 calls: viewports, screen select, colors, write, clear), so they must be converted. `sdlscreen`
-   is the single place where a lock, a command queue or a frame handshake can be added later (today there is none, by decision), without touching
-   any caller. **So the internal `sdlscr_*` API is specified first** (next section), before any BASIC statement is built on it.
-4. **The VM talks to the screen through a host interface** (`vm_gfx_t`, like `vm_sound_t`), which `engine1999` maps to that `sdlscr_*` API.
-   The drawing algorithms live in a module without SDL (`gfxcore.[ch]`, working on a plain `uint8_t[640*300]` buffer) so that they are tested
-   headless like `synth.c`; only `sdlscreen` calls it, on the buffers of the layers it owns. The tests use a plain buffer and compare pixels.
-5. **Images are binary strings** (now possible): a tile or sprite image is a 384 byte string (16 x 24, one palette index per byte, row by row),
-   a graphics block is `4 + w*h` bytes (`MKI$(w)+MKI$(h)+pixels`). Files come in through `OPEN ... FOR INPUT` and `INPUT$`, from `res:`.
-
-## The internal API of `sdlscreen` (to be specified first)
-
-Today `sdlscreen.h` has the text functions (`sdlscr_printf`, `sdlscr_puts`, `sdlscr_ansi_*`, `sdlscr_locate`, ...), tile functions
-(`sdlscr_writetile`, `sdlscr_scrolltiles`) and sprite functions (`sdlscr_showsprite`, ... `sdlscr_writesprite`); the layer array
-(`layers[]`, `sdlscr_bgcol`) is `static` in `sdlscreen.c`, which is why this is the right choke point. Rules for the API:
-
-- Every function is `sdlscr_<noun>_<verb>`-style like the existing ones, takes plain C types (no `sdllayer_t*` or SDL types leak out), validates
-  its arguments (out of range = ignored or `false`, never a crash) and **marks the layer it changed as modified** itself, so callers never
-  call `sdllay_set_modified`.
-- Whatever synchronization is needed later (a mutex around layer memory, a command queue drained once per frame, double buffering) is added inside
-  these functions; the signatures must therefore not hand out pointers into layer memory. Reads copy.
-- The functions are also the test seam: a headless build of `sdlscreen` is not planned, but `vm_gfx_t` (VM side) is implemented by thin wrappers
-  over exactly these functions, so the API listed here is everything the VM can ask for.
-
-Proposed set (new unless an existing name is given; `layer` is 0..4 as in the table above):
+`n` = numeric expression, `[ ]` = optional (an empty place between commas is allowed: `GFX LINE 1,2,3,4,,BF`). Coordinates are pixels, 0..639 by 0..299, origin top left;
+drawing is clipped, never an error. `c` is a palette index (omitted: the pen). Out of range arguments are "Illegal argument".
 
 ```
-// layers and palette
-void     sdlscr_layer_enable( int layer, bool enable );
-bool     sdlscr_layer_enabled( int layer );
-void     sdlscr_layer_setpriority( int layer, int prio );     // swaps with the layer that has prio (sdllay_switch_priority)
-int      sdlscr_layer_getpriority( int layer );
-void     sdlscr_palette_set( int layer, int index, uint32_t argb );
-uint32_t sdlscr_palette_get( int layer, int index );
-void     sdlscr_palette_reset( int layer );                   // layer -1 = all
-bool     sdlscr_palette_setbyname( int layer, int index, const char* name );   // the names of colinittab; false if unknown
-void     sdlscr_setbackdrop( uint32_t argb );                 // replaces the static sdlscr_bgcol
-
-// bitmap layers (0 background, 3 graphics): the drawing statements, all clipped to 640 x 300
-void     sdlscr_gfx_clear( int layer, int color );
-void     sdlscr_gfx_pset( int layer, int x, int y, int color );
-int      sdlscr_gfx_point( int layer, int x, int y );         // -1 outside
-void     sdlscr_gfx_line( int layer, int x1, int y1, int x2, int y2, int color );
-void     sdlscr_gfx_box( int layer, int x1, int y1, int x2, int y2, int color, bool fill );
-void     sdlscr_gfx_circle( int layer, int x, int y, int r, int color, int a1, int a2, double ratio );
-void     sdlscr_gfx_paint( int layer, int x, int y, int color, int border );   // border -1 = the color at x,y
-size_t   sdlscr_gfx_grab( int layer, int x1, int y1, int x2, int y2, uint8_t* out, size_t outsize );   // copy out; returns the size needed
-void     sdlscr_gfx_blit( int layer, const uint8_t* block, size_t size, int x, int y, int mode );
-void     sdlscr_gfx_setmode( int mode );                      // how pixels are combined: SET (default), CLEAR, XOR, OR, AND (Simons' BASIC: PLOT's third parameter)
-void     sdlscr_gfx_radius( int layer, int x, int y, int r, double angle, int color );   // a line from the centre at an angle (ANGL)
-void     sdlscr_gfx_text( int layer, int x, int y, const char* text, size_t len, int color, int sx, int sy );  // TEXT / CHAR: the 8x12 font, scaled
-
-// text screen (existing: sdlscr_locate, sdlscr_gettextcursor, sdlscr_gettextscreensize, sdlscr_printf/puts/ansi_*)
-// the functions fulledit.c and monitor.c use today through txtscr_*: screens (0 BASIC, 1 editor, 2 monitor), viewports, cells
-int      sdlscr_text_select( int screen );                    // returns the previously selected screen
-int      sdlscr_text_selected( void );
-bool     sdlscr_text_setviewport( int x, int y, int w, int h );
-void     sdlscr_text_resetviewport( void );
-void     sdlscr_text_getviewport( int* x, int* y, int* w, int* h );
-void     sdlscr_text_setblank( int bg, int fg );
-int      sdlscr_text_write( int y, int x, int bg, int fg, const char* text, int len );   // no wrap; returns the characters written
-uint32_t sdlscr_text_getcell( int y, int x );                 // a textcell_t (character, colors)
-void     sdlscr_text_getcursor( int* x, int* y );
-void     sdlscr_text_clear( void );
-void     sdlscr_text_setcolors( int bg, int fg );
-void     sdlscr_text_getcolors( int* bg, int* fg );
-void     sdlscr_text_defchar( int code, const uint8_t rows[12] );              // SYMBOL, DESIGN CHAR
-void     sdlscr_text_fill( int x1, int y1, int x2, int y2, int ch, int fg, int bg );   // FILL / FCHR / FCOL: -1 = leave that part alone
-void     sdlscr_text_copy( int x1, int y1, int x2, int y2, int tx, int ty );            // MOVE: overlap-safe
-void     sdlscr_text_invert( int x1, int y1, int x2, int y2 );                          // INV: swaps pen and paper
-size_t   sdlscr_text_save( uint8_t* out, size_t outsize );                              // SCRSV: the whole screen as 4 bytes per cell; returns the size needed
-bool     sdlscr_text_restore( const uint8_t* data, size_t size );
-
-// tiles (existing: sdlscr_writetile, sdlscr_scrolltiles)
-void     sdlscr_tile_setcell( int x, int y, int tile );       // new backend: tilescr_setcell
-int      sdlscr_tile_getcell( int x, int y );
-void     sdlscr_tile_setcells( const uint8_t* cells, size_t count );   // 41 * 13
-bool     sdlscr_tile_getimage( int tile, uint8_t out[384] );   // read back (TILE$)
-
-// sprites (existing: sdlscr_showsprite, sdlscr_spriteprio, sdlscr_movesprite, sdlscr_spriteanimdata, sdlscr_spriteanimcfg, sdlscr_writesprite)
-void     sdlscr_sprite_setimage( int sprno, int image );
-bool     sdlscr_sprite_getpos( int sprno, int* x, int* y );
-bool     sdlscr_sprite_getimage( int image, uint8_t out[384] );   // read back (SPRITE$)
-void     sdlscr_sprite_moveto( int sprno, int x, int y, int ticks );   // RLOCMOB: the screen thread moves it by itself in ticks/60 s (sprscr_periodicals)
-bool     sdlscr_sprite_moving( int sprno );
-void     sdlscr_sprite_setcollide( int sprno, bool sprites, bool tiles );   // DETECT: the flags of concept.txt
-uint32_t sdlscr_sprite_hits( int sprno );                     // CHECK: bit 0 sprite hit, bit 1 tile hit, then cleared (the indicator bits of concept.txt)
-int      sdlscr_sprite_collide( int sprno );                  // another sprite's number, -1 none (new backend)
-int      sdlscr_sprite_collide_tiles( int sprno );            // tile number or 0 (new backend)
-
-// timing
-void     sdlscr_vsync( void );                                // waits for the next frame; false/early return when the screen closed
-uint64_t sdlscr_getframecnt( void );                          // existing
+-- layers, palettes
+GFX LAYER n, ON | OFF                 layer 0..4 shown / hidden
+GFX PRIORITY n, p                     the layer n takes place p (0 = bottom) and swaps with the one that had it
+GFX PALETTE n, i, argb                color i (0..255) of layer n; argb as RGB() gives it
+GFX PALNAME n, i, a$                  the same by a name of the color table: GFX PALNAME 1,5,"Gold" (an unknown name is an error)
+GFX PALRESET [n]                      the palette of layer n (or all) back to the table
+GFX BACKDROP argb                     the color behind all layers
+-- the graphics layer (and the background layer)
+GFX TARGET 0 | 3                      where the statements below draw (stays until changed, RUN does not reset it)
+GFX PEN c                             the color used when a statement gives none
+GFX MODE SET|CLEAR|XOR|OR|AND         how pixels combine (all drawing statements)
+GFX CLEAR [c]                         fills the target layer (default 0 = transparent)
+GFX PSET x, y [, c]                   a pixel                      POINT(x, y) reads one back (-1 outside)
+GFX LINE x1,y1,x2,y2 [, c [, B|BF]]   a line, a box (B) or a filled box (BF)
+GFX CIRCLE x,y,r [, c [, a1, a2 [, ratio]]]   circle, arc (angles in degrees, 0 = right, counterclockwise) or ellipse (vertical radius r * ratio)
+GFX PAINT x, y, c [, border]          flood fill from x,y: without border it replaces the area of the color at x,y, else it fills up to the border color
+GFX RADIUS x, y, r, angle [, c]       a line from the center at an angle in degrees
+GFX GRAB x1,y1,x2,y2, a$              the block into a string variable (MKI$(w) MKI$(h) w*h bytes, at most 65531 pixels)
+GFX BLIT a$, x, y [, TRANS]           the block from a string; TRANS skips index 0
+GFX TEXT x, y, a$ [, c [, sx [, sy]]] the 8 x 12 font at pixel position, each pixel as sx * sy pixels (1..32)
+GFX DRAW a$                           the GW-BASIC drawing language: U D L R E F G H n, M x,y (a sign makes it relative), B, N, C n, S n (quarters), A n (0..3)
+GFX VSYNC                             waits for the next frame (60 Hz); a break key still works
+-- the text screen
+CLS                                   clears the text screen
+LOCATE x, y                           cursor to column x (0..79), row y (0..24)
+COLOR fg [, bg]                       pen and paper for the following output
+SYMBOL c, a$                          redefines character c with 12 row bytes (bit 7 = left); DESIGN CHAR does the same by picture
+TXT FILL x1,y1,x2,y2 [, chr [, fg [, bg]]]   fills an area; an omitted part is left as it is (Simons' BASIC: FILL, FCHR, FCOL)
+TXT COPY x1,y1,x2,y2, tx, ty          copies an area (may overlap)                 (MOVE)
+TXT INVERT x1,y1,x2,y2                swaps pen and paper in an area              (INV)
+TXT SAVE a$   /   TXT LOAD a$         the whole text screen as an 8000 byte string / back   (SCRSV, SCRLD)
+-- tiles
+TILE DEF n, a$                        tile image n (0..255) from 384 bytes;  TILE GET n, a$ reads it back
+TILE SET x, y, n                      the cell (0..40, 0..12) of the visible tile screen shows tile n
+TILE FILL a$                          all 41 * 13 = 533 cells from a string (row by row)
+TILE SCROLL sx, sy                    scroll offset in pixels (taken modulo 16 and 24)
+-- sprites
+SPRITE DEF n, a$   SPRITE GET n, a$   sprite image n (0..255) from / to 384 bytes
+SPRITE SEQ a, a$                      animation sequence a (0..255): the string holds 1..15 image numbers
+SPRITE n, x, y [, image]              places sprite n (0..255) at x, y (-1024..1023), optionally with an image
+SPRITE n, ON | OFF                    shows / hides it
+SPRITE n, PRIORITY p                  0..7 (higher is in front)
+SPRITE n, IMAGE i                     a fixed image
+SPRITE n, ANIM a, length, speed       plays sequence a (length 0..15 images, speed 0..31 frames per image); IMAGE ends the animation and the other way round
+SPRITE n, MOVETO x, y, ticks          the engine moves the sprite by itself in ticks/60 s (Simons' BASIC: RLOCMOB); a new position or MOVETO replaces it
+SPRITE n, COLLISION OFF | ON [, TILES]  collision detection with other sprites (and, with TILES, with solid tile pixels)
+-- pictures
+DESIGN SPRITE n [, base]              see below
+DESIGN TILE n [, base]
+DESIGN CHAR c
+@ "row"
+-- events
+ON COLLISION GOSUB|GOTO target        a handler for any new collision; ON COLLISION OFF clears it (like ON ERROR and AFTER/EVERY)
 ```
 
-The existing functions keep their names (they are used by `sdltest1`, `engine1999`, the editor and the monitor); the new ones follow
-the same style. `fulledit.c` and `monitor.c` use `txtscr_*` directly today (and `sdlscr_textchanged()` to get the layer redrawn); they are converted
-to the `sdlscr_text_*` functions above when this API is built, which also makes `sdlscr_textchanged()` unnecessary (each function marks the layer
-modified), so that the rule holds without exceptions. `textscreen.c` itself stays free of SDL and keeps its own tests (`txttest1`).
-
-## Ideas from Simons' BASIC
-
-Simons' BASIC (David Simons, 1983, a 114 command extension of Commodore BASIC V2 for the C64) is the model for the *definition* statements and a
-list of further graphics commands worth considering. **Source and limits:** I could read the keyword list and the one-line description of each
-command (c64-wiki and Wikipedia), not the user manual; the argument syntax below is **our own design in the spirit of those commands**,
-not a copy, and where a Simons' BASIC command is mentioned only its purpose is taken from the sources.
-
-### Definitions by picture: `DESIGN` and `@` rows
-
-In Simons' BASIC `DESIGN` defines a sprite or a character from `@` lines that follow it, so the picture is visible in the listing. The same here:
+Functions (the name of the value is a string literal, so the compiler checks it; a wrong one is a compile error):
 
 ```
-100 DESIGN SPRITE 3              ' a 16 x 24 sprite image: exactly 24 rows of exactly 16 characters follow
+RGB(r, g, b [, a])                    0..255 each (a defaults to 255): the ARGB value for GFX PALETTE / BACKDROP
+POINT(x, y)                           the palette index at x, y of the target layer, -1 outside
+GFX("FRAME")  GFX("LAYER", n)  GFX("PRIORITY", n)  GFX("PALETTE", layer, i)  GFX("TARGET")      frame counter, -1/0 shown, priority, ARGB, target layer
+TXT("X") TXT("Y") TXT("FG") TXT("BG") TXT("WIDTH") TXT("HEIGHT") TXT("CHAR",x,y) TXT("FGAT",x,y) TXT("BGAT",x,y)   cursor, colors, size, cell contents
+TILE(x, y)                            the tile in a cell of the tile screen
+SPRITE("X",n) ("Y",n) ("IMAGE",n) ("ON",n) ("MOVING",n) ("HITS",n) ("COLLIDE",n)   position, image, shown, moving, collision bits, the other sprite
+```
+
+`SPRITE("HITS", n)` returns the indicator bits since it was last asked and clears them (1 = hit another sprite, 2 = hit a tile). `SPRITE("COLLIDE", n)` is the number
+of the sprite it overlapped at the last frame (-1 none). A collision means an overlap of **opaque pixels** (index not 0); a sprite is checked only with the flags set by
+`SPRITE n,COLLISION ON`. The check runs once per frame in the screen thread (`sprscr_periodicals`) while the sprite layer is enabled.
+`ON COLLISION`: the VM asks the host for a new collision about every 32 instructions (and while `WAIT`ing) and runs the handler between two statements, like a timer
+handler (it has the highest priority); the program finds out which sprite with `SPRITE("HITS",n)`.
+
+### Pictures: `DESIGN` and `@` rows
+
+```
+100 DESIGN SPRITE 3              ' 24 rows of exactly 16 characters follow
 110 @ "......1111......"
-120 @ "....11111111...."
-  ...                            ' (24 rows)
-340 @ "......1111......"
-400 DESIGN TILE 7, 32            ' a tile image, 24 rows of 16; 32 is added to every non-zero color (palette window 32..47)
-  ...
-500 DESIGN CHAR 200              ' a character, 12 rows of 8 characters (the notation of 8x12font1.txt: . and o)
-510 @ "..oooo.."
-  ...
+ ...
+400 DESIGN TILE 7, 32            ' a tile; 32 is added to every non-zero value (palette window 32..47)
+500 DESIGN CHAR 200              ' a character: 12 rows of 8 characters
 ```
 
-- `@ "row"` is a statement of its own (the token `@` is today only the address-of operator in expressions; at the start of a statement it is free).
-  It is an *executed* statement, not DATA: `DESIGN` starts collecting, every `@` row adds one row, and when the last row has arrived the image is installed
-  (tile, sprite image or font character). This needs no compile time knowledge of neighbouring lines, works with `LIST`, `RENUM`, `MERGE` and `AUTO`,
-  and a row of the wrong length or with a bad character is a run time error ("Bad design row") with the line number of that row.
-- Row characters: `.` (or a space) = 0 = transparent, `1`..`9` = 1..9, `A`..`F` (also lower case) = 10..15, `o` = 1. The optional second number of `DESIGN`
-  is added to every non-zero value, so one picture can use any 16 colors of the 256 of the layer's palette. For all 256 values use the string forms
-  (`SPRDEF n, a$`, `TILE n, a$`), which are the same images as binary strings.
-- Unrelated statements between the rows are allowed (so a loop can generate rows). A second `DESIGN` or the end of the run drops a picture that is not
-  finished; an `@` row without an open `DESIGN` is "Design without DESIGN".
-- Reading back: `a$ = TILE$(n)` and `a$ = SPRITE$(n)` return the 384 byte image (to save it with `PRINT #`, or to copy it).
+- `@ "row"` is an *executed* statement: `DESIGN` starts collecting, every `@` row adds one, and when the last row has arrived the image is installed (through the same
+  host operation as `SPRITE DEF`, `TILE DEF`, `SYMBOL`). Other statements, loops included, may stand between the rows (`FOR R=0 TO 11:@ "1111111122222222":NEXT R`).
+  A second `DESIGN`, or the end of the run, drops a picture that is not finished. It works with `LIST`, `RENUM`, `MERGE` and `AUTO`.
+- Row characters: `.` or space = 0 (transparent), `1`..`9` = 1..9, `A`..`F` (also lower case) = 10..15, `o` = 1. The base is added to every non-zero value (the sum may not
+  exceed 255). For all 256 values use the string forms, which are the same images as binary strings.
+- Errors: "Bad design row" (wrong length, a bad character, base overflow), "Design without DESIGN".
 
-### Sprites by Simons' BASIC's model
+## Differences from Simons' BASIC
 
-| Simons' BASIC (purpose) | Proposed here |
-|---|---|
-| `MOB SET` (enable a sprite, set attributes) | `SPRITE n, ON` and `SPRITE n, x, y, image` / `PRIORITY` / `ANIM` as in phase 3 |
-| `MMOB` (place a sprite) | `SPRITE n, x, y` |
-| `RLOCMOB` (move a sprite smoothly from one place to another) | **`SPRITE n, MOVETO x, y, ticks`**: the engine moves the sprite by itself over ticks/60 s (`sprscr_periodicals`, which already runs once per frame); `MOVING(n)` tells whether it is still on its way. Needs the new backend function; very useful because the program can do other things meanwhile |
-| `CMOB` (the two global multicolor colors) | not needed: every layer has a 256 color palette (`PALETTE`) |
-| `MOB OFF` | `SPRITE n, OFF` |
-| `DETECT` / `CHECK` (collision detection / test) | `SPRITE n, COLLISION ON|OFF` sets the flags of `concept.txt`, `HITS(n)` returns and clears the indicator bits (1 sprite, 2 tile) and `COLLIDE(n)` names the other sprite; plus an event form **`ON COLLISION GOSUB target`** built on the machinery of `ON ERROR` and `AFTER`/`EVERY` (checked between statements; `ON COLLISION OFF`) |
+Simons' BASIC (1983) is the model of `DESIGN` and of the command groups; only the keyword list and one-line descriptions were available, so the syntax is our own.
+`HIRES`/`MULTI`/`NRM`/`GRAPHICS` are layers here; `LOW COL`/`HI COL`/`CMOB`/`BCKGNDS` are palettes; `PLOT t` is `GFX PSET` with `GFX MODE`; `REC`/`BLOCK` are `GFX LINE ...,B|BF`;
+`ANGL` is `GFX RADIUS`; `CHAR`/`TEXT` are `GFX TEXT`; `FILL`/`FCHR`/`FCOL`/`MOVE`/`INV`/`SCRSV`/`SCRLD` are the `TXT` statements; `MOB SET`/`MMOB`/`MOB OFF` are the `SPRITE` forms,
+`RLOCMOB` is `MOVETO`, `DETECT`/`CHECK` are `COLLISION` and `HITS` (plus the `ON COLLISION` event). Not taken: `FLASH` (use `EVERY` and `GFX PALETTE`), `CSET` (a second font set
+would need backend work), `JOY`/`POT`/`PENX`/`PENY` (input, not graphics: a separate small proposal for joystick and mouse), and the structure commands (`PROC`, `LOOP`, `ON KEY`: roadmap).
 
-### Other graphics commands of Simons' BASIC worth taking (mapped to our words)
+## The internal API of `sdlscreen`
 
-| Simons' BASIC (purpose) | Here |
-|---|---|
-| `HIRES`, `MULTI`, `NRM`, `GRAPHICS` (select graphics or text screen) | not modes here: `LAYER 3, ON|OFF` and `LAYER 2, ON|OFF` |
-| `LOW COL` / `HI COL` (change the plotting colors) | `PALETTE` |
-| `PLOT x,y,t` (set, clear or invert a pixel) | `PSET` plus **`GMODE SET|CLEAR|XOR|OR|AND`**, which applies to all drawing statements (also `LINE`, `CIRCLE`, `BLIT`): XOR drawing is how games erase without a background copy |
-| `LINE`, `CIRCLE`, `ARC`, `PAINT`, `TEST` | `LINE`, `CIRCLE` (arc parameters), `PAINT`, `POINT()` as in phase 2 |
-| `ANGL x,y,angle,radius` (a line from the center at an angle) | **`RADIUS x, y, r, angle [, c]`** (angle in degrees) |
-| `REC` (hollow rectangle), `BLOCK` (solid rectangle) | `LINE ..., B` and `BF` as in phase 2 |
-| `DRAW`, `ROT` (a drawing language with scale and rotation) | `DRAW a$` (GW-BASIC language, which has `S` scale and `A`/`TA` angle) |
-| `CHAR`, `TEXT` (plot text on the high resolution screen, with size) | **`GTEXT x, y, a$ [, c [, sx [, sy]]]`**: the 8 x 12 font on the graphics layer at pixel positions, scaled by whole factors, so a game can mix text and graphics without cell alignment |
-| `FCHR`, `FCOL`, `FILL` (fill an area of the text screen with a character and / or color) | **`TFILL x1,y1,x2,y2 [, chr [, fg [, bg]]]`** (an omitted part is left as it is) |
-| `MOVE` (copy a section of the screen) | **`TCOPY x1,y1,x2,y2, tx,ty`** (text screen) |
-| `INV` (reverse an area) | **`TINVERT x1,y1,x2,y2`** |
-| `SCRSV` / `SCRLD` (save / load the text screen) | **`a$ = TSAVE$`** and **`TLOAD a$`**: the text screen as a binary string (4 bytes per cell), so it can be written to a file, kept in a variable or sent over `tcp:` |
-| `CSET` (select a character set), `DESIGN` for characters | `DESIGN CHAR`, `SYMBOL`; a second font set would need backend work (not proposed now) |
-| `FLASH` / `OFF` (flashing screen color) | not as such: `EVERY 30 GOSUB` + `PALETTE` does it; a cycling palette entry could be added later (`PALETTE CYCLE`) |
-| `BCKGNDS` (extended background colors) | not needed: every text cell has its own pen and paper from 256 |
-| `JOY`, `POT`, `PENX`/`PENY` (joystick, paddle, light pen) | input, not graphics: `JOY(n)`, `MOUSEX`, `MOUSEY`, `MOUSEB` through SDL (joysticks and the mouse are not used yet); a separate small proposal |
-| `SPLIT`-style modes | not in the sources I read; no equivalent needed (layers are independent) |
+At the end of `sdlscreen.h` (`sdlscr_layer_*`, `sdlscr_palette_*`, `sdlscr_setbackdrop`, `sdlscr_gfx_*`, `sdlscr_text_*`, `sdlscr_tile_*`, `sdlscr_sprite_*`, `sdlscr_vsync`),
+next to the older text, tile and sprite functions. The drawing functions take the layer (0 or 3) as a parameter; the BASIC statements use `sdlscr_gfx_target()`, `sdlscr_gfx_setpen()`
+and `sdlscr_gfx_setmode()`, kept in `sdlscreen.c`. The text functions cover what the editors need (screens, viewports, cells), so `fulledit.c` and `monitor.c` call no `txtscr_*`
+any more (they include `textscreen.h` for the `TXTSCR_*` constants only).
 
-Not graphics, only mentioned because the command list has them: `PROC`/`END PROC`/`CALL`/`EXEC`/`LOCAL`/`GLOBAL`, `LOOP`/`EXIT IF`/`END LOOP`,
-`ON KEY` (a key event handler: it would fit next to `AFTER`/`EVERY` and `ON ERROR`), `PAUSE`, `TRACE`, `MEM`, `PLACE` (`INSTR`), `DIV`/`MOD`. They belong on the
-roadmap as separate items, not in this subsystem.
+## Backends and what was added
 
-## Phase 1: layers, palette, text screen
+- `gfxcore.[ch]` (new): `gfx_pset/point/line/box/circle/radius/paint/grab/blit/text/draw` on a `uint8_t` bitmap with a mode, a pen and the DRAW state; modes `GFXM_*`.
+- `gfxops.[ch]` (new): the statement and query tables, the `GFXOP_*` and `GFXQ_*` numbers.
+- `tilescreen`: `tilescr_setcell/getcell/setcells/readtile/pixel` (the cell contents could not be set before; `tilescr_pixel` is what `tilescr_render` draws, for tile collisions).
+- `sprscreen`: a fixed image per sprite (`sprscr_setimage`, ends with `sprscr_animcfg`), position and image read-back, `sprscr_moveto` (16.16 fixed point, one step per frame), collision flags,
+  per-pixel sprite-sprite and sprite-tile checks per frame, latched indicator bits (`sprscr_hits`), `sprscr_collidewith`, `sprscr_nextevent` for `ON COLLISION`.
+- `textscreen`: `txtscr_fill/copy/invert/save/restore/defchar/font`; a **bug fixed**: `txtscr_write` sign-extended characters >= 128 into the cell's colors.
+- `sdllayer`: `sdllay_findcolor` (names), `sdllay_reset_palette`.
+- VM: `vm_gfx_t`, instructions `GFXC` (statement, parameter = operation), `GFXQ` (function), `DSGN`, `DROW`, `COLT`; the collision handler lives in timer slot 4 (`VM_COLSLOT`); `RGB()` is computed by the VM.
 
-```
-LAYER n, ON | OFF              n = 0 background, 1 tiles, 2 text, 3 graphics, 4 sprites
-LAYER n, PRIORITY p            the drawing order (0 = bottom); the layer that has p is swapped with it (sdllay_switch_priority)
-BACKDROP c                     the color behind all layers: a palette index of layer 0, or RGB(): decided below
-PALETTE n, i, argb             the color i (0..255) of layer n; argb is a number such as RGB(255,128,0) or a name: PALETTE 1,5,"Gold"
-PALETTE n                      resets the palette of layer n;  PALETTE alone resets all
-x = RGB(r,g,b)  RGB(r,g,b,a)   0..255 each, a default 255; returns the ARGB number (a double holds it exactly)
-y = PALETTE(n, i)              reads a color back
-```
+## Decisions (project owner, 2026-10-31)
 
-The text screen has the words every BASIC has and BASIC still lacks (today only `PRINT` and ANSI escapes):
+0. The internal `sdlscr_*` API as specified: accepted. 1. GW-BASIC style names, `GRAB`/`BLIT` instead of `GET`/`PUT`. 2. Palette indices per layer. 3. `GFX TARGET` 0 and 3 only.
+4. As few reserved words as possible (hence the umbrella words). 5. The order of the phases is fine. 6. Own asset formats (raw strings); standalone conversion tools are to be written later
+   (roadmap), and **built-in sprite and tile editors are planned**: they will use this API (`DESIGN`'s rows, `TILE GET`/`SPRITE GET`, the string forms) and need a way to save images, which is
+   why every image can be read back as a string. 7. Implement the Simons' BASIC ideas, all of them if possible.
 
-```
-CLS                            clears the text screen, cursor to 0,0
-LOCATE x, y                    cursor to column x (0..79), row y (0..24)        (existing: txtscr_locate)
-COLOR fg [, bg]                the pen and paper for the following output        (existing: txtscr_setcolors)
-x = POS(0)   y = CSRLIN        cursor column and row
-SYMBOL c, r0, r1, ... r11      redefine character c (12 row bytes), already planned; or SYMBOL c, a$ (12 bytes); or DESIGN CHAR c with @ rows
-TFILL x1,y1,x2,y2 [,chr[,fg[,bg]]]    TCOPY x1,y1,x2,y2,tx,ty    TINVERT x1,y1,x2,y2    a$=TSAVE$   TLOAD a$     (Simons' BASIC's FILL/MOVE/INV/SCRSV/SCRLD)
-```
+## Open
 
-`COLOR` and `PALETTE 2, ...` affect the ANSI colors, which are palette indices of layer 2 (`ansi.c`), so a program can re-theme the text screen.
-
-## Phase 2: the graphics layer (and the background layer)
-
-Drawing goes to a **target layer**, the graphics layer (3) unless `GTARGET 0` selects the background layer; the choice is per program run.
-Coordinates are pixels 0..639 / 0..299, origin top left; drawing is clipped, never an error. `c` is a palette index; omitted, the
-current pen from `GCOLOR c` is used.
-
-```
-GCOLOR c                       the pen of the graphics statements          (GTARGET layer: 0 or 3)
-GCLS [c]                       fills the target layer with c (default 0 = transparent)
-PSET x, y [, c]                a pixel                              c = POINT(x, y) reads one back
-LINE x1, y1, x2, y2 [, c [, B | BF]]      a line, a box (B) or a filled box (BF); GW-BASIC's form
-CIRCLE x, y, r [, c [, a1, a2 [, ratio]]] a circle, arc or ellipse
-PAINT x, y, c [, border]       flood fill from x,y with c up to the color border (default: the color at x,y)
-GRAB x1, y1, x2, y2, a$        block to a binary string:  a$ = MKI$(w)+MKI$(h)+w*h bytes   (GW-BASIC: GET)
-BLIT a$, x, y [, mode]         block from a string back (GW-BASIC: PUT); mode PSET (default), TRANS (index 0 skipped), AND, OR, XOR
-GMODE m                        how pixels combine: SET (default), CLEAR, XOR, OR, AND (applies to PSET, LINE, CIRCLE, PAINT, BLIT, GTEXT)
-RADIUS x, y, r, angle [, c]    a line from the centre at an angle in degrees (Simons' BASIC: ANGL)
-GTEXT x, y, a$ [, c [, sx [, sy]]]   text from the 8 x 12 font at pixel position x,y, scaled by sx, sy (default 1)
-DRAW a$                        the GW-BASIC drawing language (U D L R E F G H M B N C S A TA), optional, later
-```
-
-`LINE` already is a reserved word (`LINE INPUT`); the parser chooses by what follows `LINE`. GW-BASIC's `GET`/`PUT` for blocks are
-not used because `GET #` / `PUT` have other meanings here (`GRAB`/`BLIT` instead, in line with the choice of `GETREC`/`PUTREC`).
-`VSYNC` (below) belongs to this phase: animation without it flickers.
-
-## Phase 3: tiles and sprites
-
-```
-TILE n, a$                     define tile image n (0..255) from 384 bytes (16 x 24)       (tilescr_writetile)
-TILEMAP x, y, n                set the cell (0..40, 0..12) of the visible tile screen to tile n   (needs the new setter)
-TILEMAP a$                     fill all 41*13 cells from a 533 byte string
-TILESCROLL sx, sy              scroll offset 0..15 pixels                                  (tilescr_scroll; larger map windows are the program's business)
-n = TILEAT(x, y)               the tile in a cell
-
-DESIGN TILE n [, base]         define tile n from 24 following  @ "16 characters"  rows (see "Ideas from Simons' BASIC")
-DESIGN SPRITE n [, base]       the same for sprite image n;  DESIGN CHAR c  for a character (12 rows of 8)
-a$ = TILE$(n)   a$ = SPRITE$(n)    the 384 byte image back
-
-SPRDEF n, a$                   define sprite image n (0..255) from 384 bytes               (sprscr_writemap)
-SPRITE n, x, y [, image]       place sprite n (0..255) at x,y (-1024..1023), optionally set its image
-SPRITE n, ON | OFF             show / hide
-SPRITE n, PRIORITY p           0..7
-ANIM a, a$                     animation sequence a (0..255): the string holds up to 15 image numbers   (sprscr_animdata)
-SPRITE n, ANIM a, length, speed  attach it (sprscr_animcfg)
-SPRITE n, MOVETO x, y, ticks   the engine moves the sprite to x,y in ticks/60 s (Simons' BASIC: RLOCMOB);  MOVING(n) = -1 while it is on its way
-SPRITE n, COLLISION ON | OFF   collision detection for sprite n (DETECT)
-h = HITS(n)                    the collision indicator bits (1 = a sprite, 2 = a tile) and clears them (CHECK)
-ON COLLISION GOSUB target      an event handler for any detected collision, ON COLLISION OFF (like ON ERROR / AFTER)
-x = SPRX(n)   y = SPRY(n)      position back
-c = COLLIDE(n)                 the number of another sprite that overlaps sprite n (-1 = none), by opaque pixels; needs the collision backend
-c = COLLIDE(n, TILES)          0 or the tile number sprite n touches (index 0 pixels ignored)
-```
-
-To keep the words few, `SPRITE` is a statement whose second item may be a sub-keyword (`ON`, `OFF`, `PRIORITY`, `ANIM`) and `LAYER`/`PALETTE`/
-`TILE` likewise; they are recognized in context like `RANDOM`/`UPDATE` in `OPEN` and are not reserved themselves. New reserved words
-would be: `LAYER`, `PALETTE`, `BACKDROP`, `RGB`, `CLS`, `LOCATE`, `COLOR`, `POS`, `CSRLIN`, `GCOLOR`, `GTARGET`, `GCLS`, `PSET`, `POINT`,
-`CIRCLE`, `PAINT`, `GRAB`, `BLIT`, `GMODE`, `RADIUS`, `GTEXT`, `TFILL`, `TCOPY`, `TINVERT`, `TSAVE$`, `TLOAD`, `DESIGN`, `TILE`, `TILE$`, `SPRITE$`, `TILEMAP`, `TILESCROLL`, `TILEAT`, `SPRDEF`, `SPRITE`, `ANIM`, `SPRX`, `SPRY`, `COLLIDE`, `HITS`, `MOVING`, `VSYNC`, `SYMBOL` (`COLLISION`, `MOVETO`, `SET`, `CLEAR`, `XOR` are recognized in context)
-(about 40 now, comparable to what the sound statements and the I/O subsystem added). Whether a few should be avoided by a prefix form
-(`GFX LINE ...`) is a decision for the owner.
-
-## Timing
-
-```
-VSYNC                          waits for the next frame (60 Hz, SDLEV_VBLANK); a break key still works
-n = FRAME                      the frame counter (sdlscr_getframecnt), for animation without TI
-```
-
-`WAIT n` (1/60 s units) and the timers `AFTER`/`EVERY` already exist; `VSYNC` is the one that is locked to the display and the sprite animation.
-A sprite or tile change is visible with the next frame.
-
-## Backend work (in order)
-
-1. **Specify the internal `sdlscreen` API** (previous section) and review it with the owner; then add the declarations to `sdlscreen.h` with stub
-   bodies that do the validation and modified-flag handling, and convert the direct `txtscr_*` calls of the host to it.
-2. `gfxcore.[ch]` (no SDL): `PSET/LINE/CIRCLE/PAINT/GRAB/BLIT` on a buffer; tests with pixel comparisons (`gfxtest1`); called only from `sdlscreen`.
-3. Fill in the `sdlscreen` functions: palette, layer enable/priority, backdrop, vsync, the tile cell setter in `tilescreen.c`, position getters in
-   `sprscreen.c`, sprite collision.
-4. `vm_gfx_t` in `vm.h`, `repl_t.gfx`, instructions (one per group with a kind parameter, like `SND` / `FOP`: e.g. `GFX`, `SPR`, `PAL`), parser and code generator.
-5. Docs, tests (`vmtest1` with a logging gfx host like the sound host), a demo (`demos/`), checked on the real screen.
-
-## Decisions for the project owner
-
-0. **The `sdlscr_*` API** of the section above: complete and named as you want it? (It is the first thing to be built.)
-1. **Names**: GW-BASIC style (`PSET`, `LINE`, `CIRCLE`, `PAINT`; `GRAB`/`BLIT` instead of `GET`/`PUT`) as above, or something else?
-2. **Colors**: palette indices per layer (proposal) or one global 256-color table for all layers? (The layers have separate palettes today.)
-   `BACKDROP` takes an RGB value in the proposal because layer 0 is a bitmap, not a single color.
-3. **Target layer**: only the graphics layer is drawn on, plus layer 0 by `GTARGET`, or a general `TARGET n` that could also draw into the text
-   layer's pixels (not meaningful) -- the proposal says only 0 and 3.
-4. **Reserved words**: ~30 new words as listed, or sub-keyword forms (`GFX LINE`, `SPR ...`) with fewer?
-5. **Order**: phase 1 (layers, palette, text screen words) first, then 2, then 3, with the collision backend last?
-6. **Asset formats**: raw strings only (proposal), or also an image loader (PNG needs a library; a small own format `.spr` with palette and
-   frames could be added later)?
-7. **Simons' BASIC ideas** (previous section): `DESIGN` with `@ "row"` statements (executed, not DATA) and the row alphabet `. 1-9 A-F o`
-   plus a color base; engine-driven `MOVETO`; `ON COLLISION GOSUB`; `GMODE`; `GTEXT`; the text area commands `TFILL`/`TCOPY`/`TINVERT`/`TSAVE$`/`TLOAD`.
-   Which of them do you want in, and is the `@ "row"` form right (alternatives: a `DATA`-style row list read by `DESIGN`, or one `DESIGN` statement with the
-   rows as string arguments)? Also: should I fetch the real manual (archive.org, a PDF I could not read here) and align the argument orders with it where that makes sense?
+- Asset tools (images to `DESIGN` rows or image strings), the sprite and tile editors; an image file format with palette and frames (an own format, `.spr`).
+- Joystick and mouse input (`JOY`, `MOUSEX`...); `ON KEY`; `PALETTE CYCLE` (flashing); a second font set; sprite scaling or flipping; more than one tile map (the map selection of `concept.txt`).
+- Synchronization of the layer memory between the main and the screen thread (all calls are already funneled through `sdlscreen`).

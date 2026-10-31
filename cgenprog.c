@@ -26,6 +26,7 @@
 */
 
 #include "codegen.h"
+#include "gfxops.h"
 #include "instset.h"
 #include "runtime.h"
 
@@ -323,6 +324,106 @@ bool cgen_from_recordstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
             break;
     }
     return cgen_unexpected_node( comp );
+}
+
+bool cgen_from_gfxstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    /*
+        NT_GFXSTMT      graphics, tile, sprite and text screen statements (gfxops.h)
+            data: 2 bytes, the GFXOP_* number
+            branches: the arguments in the order of the signature
+        code: <arguments> GFXC(op)  [ WRSV var ]       (omitted optional arguments: GFX_NONE)
+    */
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->type != NT_GFXSTMT || node->datalen != UINT16_C(2) ) {
+        return cgen_unexpected_node( comp );
+    }
+    uint16_t op = (uint16_t)( ( ( (uint16_t) node->data[0] ) << UINT8_C(8) ) | node->data[1] );
+    const gfxcmd_t* cmd = gfxops_byop( op );
+    if ( cmd == 0 ) {
+        return cgen_unexpected_node( comp );
+    }
+    const char* sig = cmd->sig;
+    size_t bi = 0;
+    uint16_t varoffs = 0;
+    bool havevar = false;
+    for ( const char* p = sig + ( cmd->lead ? 0 : 0 ); *p; ++p ) {
+        if ( *p == 'v' ) {
+            if ( bi >= node->numbranches || !cp_plain_stringvar( comp, node->branches[bi], &varoffs ) ) {
+                return cgen_unexpected_node( comp );
+            }
+            havevar = true;
+            ++bi;
+            continue;
+        }
+        if ( bi < node->numbranches ) {
+            if ( !cgen_from_expr( cgen, comp, node->branches[bi++] ) ) {
+                return false;
+            }
+        } else if ( *p == 'o' || *p == 'W' ) {
+            if ( !cgen_push_number( cgen, comp, GFX_NONE ) ) {
+                return false;
+            }
+        } else {
+            return cgen_unexpected_node( comp );
+        }
+    }
+    if ( !cgen_gen_gfxc( cgen, op ) ) {
+        return cgen_out_of_code_memory( comp );
+    }
+    return !havevar || cgen_gen_wrsv( cgen, varoffs ) || cgen_out_of_code_memory( comp );
+}
+
+bool cgen_from_gfxquery( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    // NT_GFXQUERY: <arguments> GFXQ(q)
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->type != NT_GFXQUERY || node->datalen != UINT16_C(2) ) {
+        return cgen_unexpected_node( comp );
+    }
+    uint16_t q = (uint16_t)( ( ( (uint16_t) node->data[0] ) << UINT8_C(8) ) | node->data[1] );
+    const gfxquery_t* qd = gfxops_queryby( q );
+    if ( qd == 0 ) {
+        return cgen_unexpected_node( comp );
+    }
+    for ( size_t i=0; i < node->numbranches; ++i ) {
+        if ( !cgen_from_expr( cgen, comp, node->branches[i] ) ) {
+            return false;
+        }
+    }
+    if ( q == GFXQ_RGB && node->numbranches == 3U && !cgen_push_number( cgen, comp, 255.0 ) ) {
+        return false;
+    }
+    return cgen_gen_gfxq( cgen, q ) || cgen_out_of_code_memory( comp );
+}
+
+bool cgen_from_designstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    // NT_DESIGNSTMT: <number> [<base>] DSGN(kind | 4 if there is a base)
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->type != NT_DESIGNSTMT || node->datalen != UINT16_C(1) || node->numbranches < 1U || node->numbranches > 2U ) {
+        return cgen_unexpected_node( comp );
+    }
+    for ( size_t i=0; i < node->numbranches; ++i ) {
+        if ( !cgen_from_numexpr( cgen, comp, node->branches[i] ) ) {
+            return false;
+        }
+    }
+    uint16_t param = (uint16_t)( node->data[0] | ( node->numbranches == 2U ? 4U : 0U ) );
+    return cgen_gen_dsgn( cgen, param ) || cgen_out_of_code_memory( comp );
+}
+
+bool cgen_from_designrow( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->type != NT_DESIGNROW || node->numbranches != 1U ) {
+        return cgen_unexpected_node( comp );
+    }
+    return cgen_from_strexpr( cgen, comp, node->branches[0] ) && ( cgen_gen_drow( cgen ) || cgen_out_of_code_memory( comp ) );
 }
 
 bool cgen_from_fileopstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {

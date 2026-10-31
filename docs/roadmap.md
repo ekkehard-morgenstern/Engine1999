@@ -129,12 +129,12 @@ Listed in full in `SESSION.md` ("Design decisions I took"). The ones most likely
 - [x] **Number packing** (done, 2026-10-31): `MKI$`/`MKL$`/`MKS$`/`MKD$` and `CVI`/`CVL`/`CVS`/`CVD`, big endian (network byte order; owner decision)
 - [ ] Helpers for binary data: `STRING$(n,c)`, `SPACE$`, `HEX` to bytes / bytes to `HEX$` dump, unsigned `CVI`/`CVL` variants, 24 bit and 64 bit integers; byte-wise `ANDS`/`ORS`
 
-## 10. Graphics subsystem *(proposal: `docs/graphics-subsystem.md`)*
+## 10. Graphics subsystem *(implemented: `docs/graphics-subsystem.md`)*
 
-- [ ] **First: specify the internal `sdlscr_*` API** in `docs/graphics-subsystem.md` (all graphics calls go through `sdlscreen`, owner's requirement), then build it with stub bodies
-- [ ] Awaiting the owner's decisions (names, colors, target layer, reserved words, order, asset formats)
-- [ ] Phase 1: `LAYER`, `PALETTE`, `RGB()`, `BACKDROP`; text screen words `CLS`, `LOCATE`, `COLOR`, `POS`, `CSRLIN`, `SYMBOL`
-- [ ] Phase 2: graphics layer: `GCOLOR`, `GCLS`, `PSET`, `POINT`, `LINE`, `CIRCLE`, `PAINT`, `GRAB`, `BLIT` (module `gfxcore`, no SDL), `VSYNC`, `FRAME`
-- [ ] Simons' BASIC ideas (see the proposal): `DESIGN` rows, `SPRITE n,MOVETO`, `ON COLLISION`, `GMODE`, `GTEXT`, `TFILL`/`TCOPY`/`TINVERT`/`TSAVE$`/`TLOAD`; other items noted there: `ON KEY`, `PROC`, `LOOP`/`EXIT IF`, joystick and mouse input
-- [ ] Phase 3: `TILE`, `TILEMAP`, `TILESCROLL`, `SPRDEF`, `SPRITE`, `ANIM`, `COLLIDE`; backend gaps: tile cell setter (`tilescr[]` can't be written today), sprite collision, position getters
-
+- [x] **Done (2026-10-31)**: the internal `sdlscr_*` API; `GFX` (layers, palettes, backdrop, drawing, `GRAB`/`BLIT`, `TEXT`, `DRAW`, `VSYNC`), `TXT`, `CLS`/`LOCATE`/`COLOR`/`SYMBOL`, `TILE`, `SPRITE` (`MOVETO`, collisions), `DESIGN` with `@` rows,
+  `ON COLLISION`, the functions `RGB`, `POINT`, `GFX()`, `TXT()`, `TILE()`, `SPRITE()`; modules `gfxcore`, `gfxops`; test `gfxtest1`; demo `demos/gfx.bas`
+- [ ] Standalone conversion tools (images to `DESIGN` rows / image strings / palettes), an own image file format (`.spr`: palette and frames) -- owner's wish, later
+- [ ] **Built-in sprite and tile editors** (owner's plan): based on `SPRITE GET`/`TILE GET`, `DESIGN` rows and the `sdlscr_*` API; keep image read-back and saving in mind
+- [ ] Joystick and mouse input (`JOY`, `MOUSEX`, `MOUSEY`, `MOUSEB`), `ON KEY`, `PALETTE CYCLE` (flashing colors), a second font set (`CSET`), sprite flipping/scaling, several tile maps
+- [ ] Synchronization of layer memory between the main thread and the screen thread (add it inside `sdlscreen.c`; every call goes through it)
+- [ ] Not graphics, from the Simons' BASIC list: `PROC`/`END PROC`/`CALL`/`EXEC`/`LOCAL`/`GLOBAL`, `LOOP`/`EXIT IF`/`END LOOP`, `PAUSE`, `TRACE`, `PLACE` (`INSTR`), `DIV`/`MOD`

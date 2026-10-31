@@ -25,8 +25,12 @@
 */
 
 #include "bascomp.h"
+#include "gfxops.h"
 #include "runtime.h"
 #include "basdebug.h"
+#include <ctype.h>
+
+static void comp_set_numlit( uint8_t* data, double val );
 
 void init_compiler( compiler_t* comp, struct _runtime_t* rt, program_t* pgm, bool keepmemory ) {
     comp->rt = rt;
@@ -1870,7 +1874,10 @@ bool comp_eat_sysnoargstrcall( compiler_t* comp, node_t** pnode ) {
 }
 
 bool comp_eat_numfunccall( compiler_t* comp, node_t** pnode ) {
-    // num-func-call := num-usr-fn-call | sys-num-fn-arg-call | sys-noarg-num-call .
+    // num-func-call := num-usr-fn-call | sys-num-fn-arg-call | sys-noarg-num-call | gfx-query-call .
+    if ( comp_eat_gfxquerycall( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
     if ( comp_eat_numusrfncall( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
@@ -2649,6 +2656,352 @@ bool comp_eat_recordstmt( compiler_t* comp, node_t** pnode ) {
     return true;
 }
 
+// -- graphics statements and functions (table driven, see gfxops.h) --------------------------------
+
+// the current token as an upper case word: an identifier or a keyword
+static bool comp_word( compiler_t* comp, char* buf, size_t sz ) {
+    const char* t = 0;
+    switch ( comp->currtok ) {
+        case TOK_IDENT: case TOK_NUMIDENT:
+            t = comp->param;
+            break;
+        default:
+            t = keyword_name( comp->currtok );
+            break;
+    }
+    if ( t == 0 || strlen( t ) >= sz ) {
+        return false;
+    }
+    size_t i = 0;
+    for ( ; t[i]; ++i ) {
+        buf[i] = (char) toupper( (unsigned char) t[i] );
+    }
+    buf[i] = '\0';
+    return true;
+}
+
+static bool comp_at_stmt_end( compiler_t* comp ) {
+    return comp->currtok == TOK_EOL || comp->currtok == TOK_COLON || comp->currtok == TOK_ELSE;
+}
+
+static bool comp_add_numlit( compiler_t* comp, node_t* stmt, double val ) {
+    uint8_t data[8];
+    comp_set_numlit( data, val );
+    node_t* lit = NODE_NONE;
+    if ( !comp_create_node( comp, &lit, NT_NUMLIT, UINT8_C(0), UINT16_C(8), data ) || lit == NODE_NONE || !comp_add_branch( comp, stmt, lit ) ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
+// the arguments of a statement according to a signature (the first one follows the word at once, the others a comma)
+static bool comp_gfx_args( compiler_t* comp, const gfxcmd_t* cmd, const char* sig, node_t* stmt ) {
+    int slot = 0;
+    bool first = true;
+    for ( const char* p = sig; *p; ++p ) {
+        char kind = *p;
+        bool optional = kind == 'o' || kind == 'W';
+        if ( first ) {
+            if ( optional && comp_at_stmt_end( comp ) ) {
+                break;
+            }
+        } else if ( comp->currtok == TOK_COMMA ) {
+            if ( !comp_fetchtok( comp ) ) {
+                return false;
+            }
+        } else if ( optional ) {
+            break;
+        } else {
+            comp_error( comp, "Comma ',' expected" );
+            return false;
+        }
+        first = false;
+        node_t* arg = NODE_NONE;
+        switch ( kind ) {
+            case 'o':
+            case 'W':
+                if ( comp->currtok == TOK_COMMA || comp_at_stmt_end( comp ) ) {
+                    if ( !comp_add_numlit( comp, stmt, GFX_NONE ) ) {
+                        return false;
+                    }
+                    if ( kind == 'W' ) {
+                        ++slot;
+                    }
+                    continue;
+                }
+                if ( kind == 'o' ) {
+                    goto NUM;
+                }
+                goto WORD;
+            case 'n':
+NUM:            if ( !comp_eat_numexpr( comp, &arg ) || arg == NODE_NONE ) {
+                    comp_error( comp, "Numeric expression expected" );
+                    return false;
+                }
+                break;
+            case 's':
+                if ( !comp_eat_strexpr( comp, &arg ) || arg == NODE_NONE ) {
+                    comp_error( comp, "String expression expected" );
+                    return false;
+                }
+                break;
+            case 'v':
+                if ( !comp_eat_strvarref( comp, &arg ) || arg == NODE_NONE ) {
+                    comp_error( comp, "String variable expected" );
+                    return false;
+                }
+                break;
+            case 'w':
+WORD:       {
+                char w[32];
+                if ( !comp_word( comp, w, sizeof(w) ) ) {
+                    comp_error( comp, "Keyword expected" );
+                    return false;
+                }
+                int v = gfxops_word( cmd->words, slot++, w );
+                if ( v < 0 ) {
+                    char msg[96];
+                    snprintf( msg, sizeof(msg), "Unknown word '%s' in %s %s", w, cmd->group, cmd->name );
+                    comp_error( comp, msg );
+                    return false;
+                }
+                if ( !comp_fetchtok( comp ) || !comp_add_numlit( comp, stmt, (double) v ) ) {
+                    return false;
+                }
+                continue;
+            }
+            default:
+                comp_error( comp, "Internal error (bad graphics signature)" );
+                return false;
+        }
+        if ( !comp_add_branch( comp, stmt, arg ) ) {
+            out_of_memory( comp );
+            return false;
+        }
+    }
+    return true;
+}
+
+bool comp_eat_gfxstmt( compiler_t* comp, node_t** pnode ) {
+    // gfx-stmt := ( TOK_GFX | TOK_TXT | TOK_TILE ) word args | TOK_SPRITE ( word args | num-expr TOK_COMMA ( word args | args ) ) |
+    //             ( TOK_CLS | TOK_LOCATE | TOK_COLOR | TOK_SYMBOL ) args .
+    uint8_t tok = comp->currtok;
+    const char* group = "";
+    switch ( tok ) {
+        case TOK_GFX:       group = "GFX"; break;
+        case TOK_TXT:       group = "TXT"; break;
+        case TOK_TILE:      group = "TILE"; break;
+        case TOK_SPRITE:    group = "SPRITE"; break;
+        case TOK_CLS: case TOK_LOCATE: case TOK_COLOR: case TOK_SYMBOL:
+            break;
+        default:
+            return false;
+    }
+    if ( !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    const gfxcmd_t* cmd = 0;
+    node_t* lead = NODE_NONE;
+    char w[32];
+    if ( group[0] == '\0' ) {
+        cmd = gfxops_find( "", keyword_name( tok ) );
+    } else if ( tok == TOK_SPRITE ) {
+        if ( comp_word( comp, w, sizeof(w) ) && ( cmd = gfxops_find( "SPRITE", w ) ) != 0 && !cmd->lead && cmd->name[0] != '\0' ) {
+            if ( !comp_fetchtok( comp ) ) {
+                return false;
+            }
+        } else {
+            cmd = 0;
+            if ( !comp_eat_numexpr( comp, &lead ) || lead == NODE_NONE ) {
+                comp_error( comp, "SPRITE DEF, GET, SEQ or a sprite number expected" );
+                return false;
+            }
+            if ( comp->currtok != TOK_COMMA || !comp_fetchtok( comp ) ) {
+                comp_error( comp, "Comma ',' expected" );
+                return false;
+            }
+            if ( comp_word( comp, w, sizeof(w) ) && ( cmd = gfxops_find( "SPRITE", w ) ) != 0 && cmd->lead && cmd->name[0] != '\0' ) {
+                if ( !comp_fetchtok( comp ) ) {
+                    return false;
+                }
+            } else {
+                cmd = gfxops_find( "SPRITE", "" );      // SPRITE n, x, y [, image]
+            }
+        }
+    } else {
+        if ( !comp_word( comp, w, sizeof(w) ) || ( cmd = gfxops_find( group, w ) ) == 0 ) {
+            char msg[80];
+            snprintf( msg, sizeof(msg), "Unknown %s command", group );
+            comp_error( comp, msg );
+            return false;
+        }
+        if ( !comp_fetchtok( comp ) ) {
+            return false;
+        }
+    }
+    if ( cmd == 0 ) {
+        comp_error( comp, "Unknown statement" );
+        return false;
+    }
+    uint8_t data[2] = { (uint8_t)( cmd->op >> UINT8_C(8) ), (uint8_t) cmd->op };
+    /*
+        NT_GFXSTMT      graphics, tile, sprite and text screen statements
+            data: 2 bytes, the GFXOP_* number
+            branches: the arguments in the order of the signature in gfxops.c (words as numeric literals, a leading sprite number first)
+    */
+    if ( !comp_create_node( comp, pnode, NT_GFXSTMT, UINT8_C(0), UINT16_C(2), data ) || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    if ( lead != NODE_NONE && !comp_add_branch( comp, *pnode, lead ) ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return comp_gfx_args( comp, cmd, lead != NODE_NONE ? cmd->sig + 1 : cmd->sig, *pnode );
+}
+
+bool comp_eat_gfxquerycall( compiler_t* comp, node_t** pnode ) {
+    // gfx-query-call := ( TOK_RGB | TOK_POINT | TOK_TILE ) TOK_LPAREN num-expr { TOK_COMMA num-expr } TOK_RPAREN |
+    //                   ( TOK_GFX | TOK_TXT | TOK_SPRITE ) TOK_LPAREN TOK_STRLIT { TOK_COMMA num-expr } TOK_RPAREN .
+    uint8_t tok = comp->currtok;
+    const char* group = "";
+    switch ( tok ) {
+        case TOK_RGB: case TOK_POINT: case TOK_TILE: break;
+        case TOK_GFX:       group = "GFX"; break;
+        case TOK_TXT:       group = "TXT"; break;
+        case TOK_SPRITE:    group = "SPRITE"; break;
+        default:            return false;
+    }
+    if ( !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    if ( comp->currtok != TOK_LPAREN || !comp_fetchtok( comp ) ) {
+        comp_error( comp, "Opening parenthesis '(' expected" );
+        return false;
+    }
+    const gfxquery_t* q = 0;
+    bool needcomma = false;
+    if ( group[0] == '\0' ) {
+        q = gfxops_findquery( "", keyword_name( tok ) );
+    } else {
+        if ( comp->currtok != TOK_STRLIT ) {
+            comp_error( comp, "String literal expected (the name of the value)" );
+            return false;
+        }
+        q = gfxops_findquery( group, comp->param );
+        if ( q == 0 ) {
+            char msg[96];
+            snprintf( msg, sizeof(msg), "Unknown %s value '%s'", group, comp->param );
+            comp_error( comp, msg );
+            return false;
+        }
+        if ( !comp_fetchtok( comp ) ) {
+            return false;
+        }
+        needcomma = true;
+    }
+    uint8_t data[2] = { (uint8_t)( q->q >> UINT8_C(8) ), (uint8_t) q->q };
+    if ( !comp_create_node( comp, pnode, NT_GFXQUERY, UINT8_C(0), UINT16_C(2), data ) || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    int count = 0;
+    for (;;) {
+        if ( needcomma ) {
+            if ( comp->currtok != TOK_COMMA ) {
+                break;
+            }
+            if ( !comp_fetchtok( comp ) ) {
+                return false;
+            }
+        }
+        needcomma = true;
+        if ( count == 0 && group[0] != '\0' && q->maxargs == 0 ) {
+            break;
+        }
+        node_t* arg = NODE_NONE;
+        if ( !comp_eat_numexpr( comp, &arg ) || arg == NODE_NONE ) {
+            comp_error( comp, "Numeric expression expected" );
+            return false;
+        }
+        if ( !comp_add_branch( comp, *pnode, arg ) ) {
+            out_of_memory( comp );
+            return false;
+        }
+        ++count;
+        if ( count > q->maxargs ) {
+            comp_error( comp, "Too many arguments" );
+            return false;
+        }
+        if ( group[0] == '\0' && comp->currtok != TOK_COMMA ) {
+            break;
+        }
+    }
+    if ( count < q->minargs ) {
+        comp_error( comp, "Too few arguments" );
+        return false;
+    }
+    if ( comp->currtok != TOK_RPAREN || !comp_fetchtok( comp ) ) {
+        comp_error( comp, "Closing parenthesis ')' expected" );
+        return false;
+    }
+    return true;
+}
+
+bool comp_eat_designstmt( compiler_t* comp, node_t** pnode ) {
+    // design-stmt := TOK_DESIGN ( TOK_SPRITE | TOK_TILE | CHAR ) num-expr [ TOK_COMMA num-expr ] .
+    // design-row  := TOK_ADDROF str-expr .
+    if ( comp->currtok == TOK_ADDROF ) {
+        if ( !comp_fetchtok( comp ) ) {
+            return false;
+        }
+        node_t* row = NODE_NONE;
+        if ( !comp_eat_strexpr( comp, &row ) || row == NODE_NONE ) {
+            comp_error( comp, "String expression expected" );
+            return false;
+        }
+        if ( !comp_create_node( comp, pnode, NT_DESIGNROW, UINT8_C(1), UINT16_C(0), 0, row ) || *pnode == NODE_NONE ) {
+            out_of_memory( comp );
+            return false;
+        }
+        return true;
+    }
+    if ( comp->currtok != TOK_DESIGN || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    char w[32];
+    uint8_t kind = 0;
+    if ( comp_word( comp, w, sizeof(w) ) ) {
+        kind = strcmp( w, "SPRITE" ) == 0 ? DESK_SPRITE : strcmp( w, "TILE" ) == 0 ? DESK_TILE : strcmp( w, "CHAR" ) == 0 ? DESK_CHAR : 0;
+    }
+    if ( kind == 0 || !comp_fetchtok( comp ) ) {
+        comp_error( comp, "SPRITE, TILE or CHAR expected" );
+        return false;
+    }
+    node_t* num = NODE_NONE; node_t* base = NODE_NONE;
+    if ( !comp_eat_numexpr( comp, &num ) || num == NODE_NONE ) {
+        comp_error( comp, "Numeric expression expected" );
+        return false;
+    }
+    if ( comp->currtok == TOK_COMMA ) {
+        if ( !comp_fetchtok( comp ) || !comp_eat_numexpr( comp, &base ) || base == NODE_NONE ) {
+            comp_error( comp, "Numeric expression expected" );
+            return false;
+        }
+    }
+    /*
+        NT_DESIGNSTMT   DESIGN statement
+            data: 1 byte, DESK_* kind       branches: the number, optionally the color base
+    */
+    if ( !( base == NODE_NONE ? comp_create_node( comp, pnode, NT_DESIGNSTMT, UINT8_C(1), UINT16_C(1), &kind, num ) :
+            comp_create_node( comp, pnode, NT_DESIGNSTMT, UINT8_C(2), UINT16_C(1), &kind, num, base ) ) || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
 bool comp_eat_fileopstmt( compiler_t* comp, node_t** pnode ) {
     // fileop-stmt := ( TOK_KILL | TOK_MKDIR | TOK_CHDIR ) str-expr | TOK_RENAME str-expr TOK_TO str-expr |
     //                TOK_SEEK chan-spec TOK_COMMA num-expr .
@@ -3161,6 +3514,12 @@ bool comp_eat_progstmt( compiler_t* comp, node_t** pnode ) {
         return true;
     }
     if ( comp_eat_recordstmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_gfxstmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_designstmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     if ( comp_eat_timerstmt( comp, pnode ) && *pnode != NODE_NONE ) {
@@ -4510,6 +4869,36 @@ bool comp_eat_onstmt( compiler_t* comp, node_t** pnode ) {
         */
         if ( !( target == NODE_NONE ? comp_create_node( comp, pnode, NT_ERRTRAPSTMT, UINT8_C(0), UINT16_C(1), &kind ) :
                 comp_create_node( comp, pnode, NT_ERRTRAPSTMT, UINT8_C(1), UINT16_C(1), &kind, target ) ) || *pnode == NODE_NONE ) {
+            out_of_memory( comp );
+            return false;
+        }
+        return true;
+    }
+    if ( comp->currtok == TOK_NUMIDENT && strcmp( comp->param, "COLLISION" ) == 0 ) {
+        // ON COLLISION GOTO target | ON COLLISION GOSUB target | ON COLLISION OFF
+        if ( !comp_fetchtok( comp ) ) {
+            return false;
+        }
+        uint8_t kind = ERRT_OFF;
+        node_t* target = NODE_NONE;
+        if ( comp->currtok == TOK_OFF ) {
+            if ( !comp_fetchtok( comp ) ) {
+                return false;
+            }
+        } else {
+            uint8_t gotok = TOK_EOL;
+            if ( !comp_eat_gotokw( comp, &gotok ) ) {
+                comp_error( comp, "GOTO, GOSUB or OFF expected" );
+                return false;
+            }
+            kind = gotok == TOK_GOTO ? ERRT_GOTO : ERRT_GOSUB;
+            if ( !comp_eat_gototarget( comp, &target ) || target == NODE_NONE ) {
+                comp_error( comp, "Jump target expected" );
+                return false;
+            }
+        }
+        if ( !( target == NODE_NONE ? comp_create_node( comp, pnode, NT_ONCOLLSTMT, UINT8_C(0), UINT16_C(1), &kind ) :
+                comp_create_node( comp, pnode, NT_ONCOLLSTMT, UINT8_C(1), UINT16_C(1), &kind, target ) ) || *pnode == NODE_NONE ) {
             out_of_memory( comp );
             return false;
         }

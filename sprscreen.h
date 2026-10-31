@@ -57,6 +57,17 @@ void sprscr_animdata( int animno, const uint8_t* seq, size_t size );
 void sprscr_animcfg( int sprno, int animno, int length, int speed );
 void sprscr_writemap( int imgno, const uint8_t data[SPRITE_WIDTH * SPRITE_HEIGHT]);
 bool sprscr_changed( void );
+void sprscr_setimage( int sprno, int image );               // a fixed image (until sprscr_animcfg)
+int  sprscr_getimage( int sprno );                          // the image shown now, -1 for a bad sprite number
+bool sprscr_getpos( int sprno, int* x, int* y );
+bool sprscr_isactive( int sprno );
+bool sprscr_readmap( int imgno, uint8_t out[SPRITE_WIDTH * SPRITE_HEIGHT] );
+void sprscr_moveto( int sprno, int x, int y, int ticks );  // moves by itself, one step per sprscr_periodicals() call
+bool sprscr_moving( int sprno );
+void sprscr_setcollide( int sprno, bool sprites, bool tiles );
+uint32_t sprscr_hits( int sprno );                          // indicator bits (1 sprite, 2 tile), cleared by reading
+int  sprscr_collidewith( int sprno );                       // the other sprite of the last overlap found, -1 none
+int  sprscr_nextevent( void );                              // a sprite with a new collision since the last call, -1 none
 void sprscr_periodicals( void );
 void sprscr_render( uint8_t* target );
 

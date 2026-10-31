@@ -238,6 +238,16 @@
 #define TOK_CVL         UINT8_C(187)        // CVL function
 #define TOK_CVS         UINT8_C(188)        // CVS function
 #define TOK_CVD         UINT8_C(189)        // CVD function
+#define TOK_GFX         UINT8_C(190)        // GFX keyword (drawing, layers, palettes)
+#define TOK_SPRITE      UINT8_C(191)        // SPRITE keyword
+#define TOK_TILE        UINT8_C(192)        // TILE keyword
+#define TOK_TXT         UINT8_C(193)        // TXT keyword (text screen areas)
+#define TOK_DESIGN      UINT8_C(194)        // DESIGN keyword
+#define TOK_RGB         UINT8_C(195)        // RGB function
+#define TOK_POINT       UINT8_C(196)        // POINT function
+#define TOK_CLS         UINT8_C(197)        // CLS keyword
+#define TOK_LOCATE      UINT8_C(198)        // LOCATE keyword
+#define TOK_COLOR       UINT8_C(199)        // COLOR keyword
 #define TOK_NONE        UINT8_C(255)        // no token (!)
 
 // -- buffers ---------------------------------------------------------------
@@ -391,6 +401,7 @@ bool read_brclit( rbuf_t* rbuf, char** ptarget );
 
 bool is_keyword( const char* name, uint8_t* ptok );
 bool is_keyword2( uint8_t tok );
+const char* keyword_name( uint8_t tok );        // the keyword text of a token, 0 if it is none
 bool print_keyword( uint8_t tok, buf_t* buf );
 
 // -- double-character tokens -----------------------------------------------

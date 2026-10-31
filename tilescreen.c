@@ -187,6 +187,55 @@ void tilescr_writetile( int tileno, const uint8_t data[TILE_WIDTH * TILE_HEIGHT]
     }
 }
 
+void tilescr_setcell( int x, int y, int tile ) {
+    if ( x < 0 || y < 0 || x >= TILESCR_WIDTH || y >= TILESCR_HEIGHT || tile < 0 || tile > 255 ) {
+        return;
+    }
+    tilescr[ y * TILESCR_WIDTH + x ] = (uint8_t) tile;
+}
+
+int tilescr_getcell( int x, int y ) {
+    if ( x < 0 || y < 0 || x >= TILESCR_WIDTH || y >= TILESCR_HEIGHT ) {
+        return -1;
+    }
+    return tilescr[ y * TILESCR_WIDTH + x ];
+}
+
+void tilescr_setcells( const uint8_t* cells, size_t count ) {
+    if ( count > (size_t)( TILESCR_WIDTH * TILESCR_HEIGHT ) ) {
+        count = (size_t)( TILESCR_WIDTH * TILESCR_HEIGHT );
+    }
+    memcpy( tilescr, cells, count );
+}
+
+bool tilescr_readtile( int tileno, uint8_t out[TILE_WIDTH * TILE_HEIGHT] ) {
+    if ( tileno < 0 || tileno > 255 ) {
+        return false;
+    }
+    uint16_t mapcx = (uint16_t)( ( tileno % TILEMAP_CELLSX ) * TILE_WIDTH );
+    uint16_t mapcy = (uint16_t)( ( tileno / TILEMAP_CELLSX ) * TILE_HEIGHT );
+    for ( int y=0; y < TILE_HEIGHT; ++y ) {
+        memcpy( &out[ y * TILE_WIDTH ], &tilemap[ ( mapcy + y ) * TILEMAP_WIDTH + mapcx ], TILE_WIDTH );
+    }
+    return true;
+}
+
+int tilescr_pixel( int x, int y ) {
+    if ( x < 0 || y < 0 || x >= TILETGT_WIDTH || y >= TILETGT_HEIGHT ) {
+        return -1;
+    }
+    // the tile (tx,ty) is drawn shifted by the scroll offsets; what lies before the first tile comes from the last column / row (as in init_tilerect)
+    int px = x - tileoffsx % TILE_WIDTH, py = y - tileoffsy % TILE_HEIGHT;
+    int cx = px >= 0 ? px / TILE_WIDTH : -1, cy = py >= 0 ? py / TILE_HEIGHT : -1;
+    int ix = px >= 0 ? px % TILE_WIDTH : px + TILE_WIDTH, iy = py >= 0 ? py % TILE_HEIGHT : py + TILE_HEIGHT;
+    if ( cx < 0 ) cx = TILESCR_WIDTH - 1;
+    if ( cy < 0 ) cy = TILESCR_HEIGHT - 1;
+    if ( cx >= TILESCR_WIDTH ) cx = TILESCR_WIDTH - 1;
+    if ( cy >= TILESCR_HEIGHT ) cy = TILESCR_HEIGHT - 1;
+    int tile = tilescr[ cy * TILESCR_WIDTH + cx ];
+    return tilemap[ ( ( tile / TILEMAP_CELLSX ) * TILE_HEIGHT + iy ) * TILEMAP_WIDTH + ( tile % TILEMAP_CELLSX ) * TILE_WIDTH + ix ];
+}
+
 void tilescr_scroll( int sx, int sy ) {
     if ( sx < 0 || sy < 0 ) return;
     tileoffsx = (uint8_t)( sx % TILE_WIDTH );

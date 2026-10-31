@@ -27,6 +27,7 @@
 
 #include "basic.h"
 #include "vm.h"
+#include "gfxops.h"
 #include "basdebug.h"
 
 /*
@@ -263,6 +264,104 @@ static const testcase_t cases[] = {
     { "CHR$ length",            "PRINT LEN(CHR$(255))",                           "1\n" },
     { "CHR$ in assignment",     "A$=CHR$(72)+\"I\":PRINT A$",                    "HI\n" },
     { "CHR$ zero",              "PRINT CHR$(0)",                                  "<0>\n" },
+    // graphics: the statements and functions of gfxops.h (the test host logs the operations)
+    { "GFX PSET",               "GFX PSET 10,20",                                 "<gfx GFX PSET 10 20 ->\n" },
+    { "GFX PSET with a color",  "GFX PSET 10,20,5",                               "<gfx GFX PSET 10 20 5>\n" },
+    { "GFX LINE",               "GFX LINE 1,2,3,4",                               "<gfx GFX LINE 1 2 3 4 - ->\n" },
+    { "GFX LINE box",           "GFX LINE 1,2,3,4,7,B",                           "<gfx GFX LINE 1 2 3 4 7 0>\n" },
+    { "GFX LINE filled box without a color", "GFX LINE 1,2,3,4,,BF",              "<gfx GFX LINE 1 2 3 4 - 1>\n" },
+    { "GFX CIRCLE",             "GFX CIRCLE 5,6,7",                               "<gfx GFX CIRCLE 5 6 7 - - - ->\n" },
+    { "GFX CIRCLE arc ellipse", "GFX CIRCLE 5,6,7,2,0,90,0.5",                    "<gfx GFX CIRCLE 5 6 7 2 0 90 0.5>\n" },
+    { "GFX PAINT",              "GFX PAINT 1,2,3",                                "<gfx GFX PAINT 1 2 3 ->\n" },
+    { "GFX PAINT with a border", "GFX PAINT 1,2,3,4",                             "<gfx GFX PAINT 1 2 3 4>\n" },
+    { "GFX RADIUS",             "GFX RADIUS 100,100,50,45",                       "<gfx GFX RADIUS 100 100 50 45 ->\n" },
+    { "GFX CLEAR",              "GFX CLEAR",                                      "<gfx GFX CLEAR ->\n" },
+    { "GFX CLEAR with a color", "GFX CLEAR 4",                                    "<gfx GFX CLEAR 4>\n" },
+    { "GFX LAYER ON",           "GFX LAYER 3,ON",                                 "<gfx GFX LAYER 3 1>\n" },
+    { "GFX LAYER OFF",          "GFX LAYER 3,OFF",                                "<gfx GFX LAYER 3 0>\n" },
+    { "GFX LAYER bad word",     "GFX LAYER 3,MAYBE",                              "? Unknown word 'MAYBE' in GFX LAYER\n" },
+    { "GFX LAYER bad number",   "GFX LAYER 5,ON",                                 "? Illegal argument\n" },
+    { "GFX PRIORITY",           "GFX PRIORITY 2,4",                               "<gfx GFX PRIORITY 2 4>\n" },
+    { "GFX PALETTE with RGB",   "GFX PALETTE 1,5,RGB(255,128,0)",                 "<gfx GFX PALETTE 1 5 4.29493e+09>\n" },
+    { "GFX PALNAME",            "GFX PALNAME 1,5,\"Gold\"",                       "<gfx GFX PALNAME 1 5 s(4)=71,111,108,100>\n" },
+    { "GFX PALRESET",           "GFX PALRESET",                                   "<gfx GFX PALRESET ->\n" },
+    { "GFX PALRESET one layer", "GFX PALRESET 2",                                 "<gfx GFX PALRESET 2>\n" },
+    { "GFX BACKDROP",           "GFX BACKDROP RGB(1,2,3)",                        "<gfx GFX BACKDROP 4.27826e+09>\n" },
+    { "GFX TARGET",             "GFX TARGET 0",                                   "<gfx GFX TARGET 0>\n" },
+    { "GFX TARGET bad layer",   "GFX TARGET 2",                                   "? Illegal argument\n" },
+    { "GFX PEN",                "GFX PEN 12",                                     "<gfx GFX PEN 12>\n" },
+    { "GFX MODE XOR",           "GFX MODE XOR",                                   "<gfx GFX MODE 2>\n" },
+    { "GFX MODE AND",           "GFX MODE and",                                   "<gfx GFX MODE 4>\n" },
+    { "GFX GRAB into a string", "GFX GRAB 1,2,3,4,A$:PRINT A$",                   "<gfx GFX GRAB 1 2 3 4>\nabcd\n" },
+    { "GFX BLIT",               "GFX BLIT \"abcd\",1,2",                          "<gfx GFX BLIT 1 2 - s(4)=97,98,99,100>\n" },
+    { "GFX BLIT transparent",   "GFX BLIT \"abcd\",1,2,TRANS",                    "<gfx GFX BLIT 1 2 0 s(4)=97,98,99,100>\n" },
+    { "GFX BLIT too short",     "GFX BLIT \"ab\",1,2",                            "? Illegal argument\n" },
+    { "GFX TEXT",               "GFX TEXT 10,20,\"Hi\",3,2,2",                    "<gfx GFX TEXT 10 20 3 2 2 s(2)=72,105>\n" },
+    { "GFX TEXT defaults",      "GFX TEXT 10,20,\"Hi\"",                          "<gfx GFX TEXT 10 20 - - - s(2)=72,105>\n" },
+    { "GFX DRAW",               "GFX DRAW \"U10R5\"",                             "<gfx GFX DRAW s(5)=85,49,48,82,53>\n" },
+    { "GFX VSYNC",              "GFX VSYNC",                                      "<gfx GFX VSYNC>\n" },
+    { "GFX unknown command",    "GFX FROB 1",                                     "? Unknown GFX command\n" },
+    { "TXT FILL",               "TXT FILL 0,0,79,24",                             "<gfx TXT FILL 0 0 79 24 - - ->\n" },
+    { "TXT FILL with all",      "TXT FILL 0,0,9,9,32,7,1",                        "<gfx TXT FILL 0 0 9 9 32 7 1>\n" },
+    { "TXT COPY",               "TXT COPY 0,0,10,10,5,5",                         "<gfx TXT COPY 0 0 10 10 5 5>\n" },
+    { "TXT INVERT",             "TXT INVERT 1,2,3,4",                             "<gfx TXT INVERT 1 2 3 4>\n" },
+    { "TXT SAVE",               "TXT SAVE A$:PRINT LEN(A$)",                      "<gfx TXT SAVE>\n4\n" },
+    { "TXT LOAD of a wrong size", "TXT LOAD \"x\"",                               "? Illegal argument\n" },
+    { "CLS",                    "CLS",                                            "<gfx CLS>\n" },
+    { "LOCATE",                 "LOCATE 5,6",                                     "<gfx LOCATE 5 6>\n" },
+    { "LOCATE out of range",    "LOCATE 80,0",                                    "? Illegal argument\n" },
+    { "COLOR",                  "COLOR 3",                                        "<gfx COLOR 3 ->\n" },
+    { "COLOR with paper",       "COLOR 3,4",                                      "<gfx COLOR 3 4>\n" },
+    { "SYMBOL",                 "SYMBOL 65,\"123456789012\"",                     "<gfx SYMBOL 65 s(12)=49,50,51,52,53,54,55,56,57,48,49,50>\n" },
+    { "SYMBOL needs 12 bytes",  "SYMBOL 65,\"123\"",                              "? Illegal argument\n" },
+    { "TILE DEF",               "A$=\"\":FOR I=1 TO 384:A$=A$+CHR$(I AND 255):NEXT I:TILE DEF 7,A$", "<gfx TILE DEF 7 s(384)=1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16>\n" },
+    { "TILE DEF needs 384 bytes", "TILE DEF 7,\"abc\"",                           "? Illegal argument\n" },
+    { "TILE GET",               "TILE GET 3,A$:PRINT LEN(A$)",                    "<gfx TILE GET 3>\n4\n" },
+    { "TILE SET",               "TILE SET 1,2,3",                                 "<gfx TILE SET 1 2 3>\n" },
+    { "TILE SET out of range",  "TILE SET 41,0,0",                                "? Illegal argument\n" },
+    { "TILE FILL of a wrong size", "TILE FILL \"x\"",                             "? Illegal argument\n" },
+    { "TILE SCROLL",            "TILE SCROLL 3,4",                                "<gfx TILE SCROLL 3 4>\n" },
+    { "SPRITE ON",              "SPRITE 1,ON",                                    "<gfx SPRITE ON 1>\n" },
+    { "SPRITE OFF",             "SPRITE 1,OFF",                                   "<gfx SPRITE OFF 1>\n" },
+    { "SPRITE move",            "SPRITE 1,10,20",                                 "<gfx SPRITE MOVE 1 10 20 ->\n" },
+    { "SPRITE move with an image", "SPRITE 1,10,20,5",                            "<gfx SPRITE MOVE 1 10 20 5>\n" },
+    { "SPRITE number is an expression", "S=2:SPRITE S+1,-5,300",                  "<gfx SPRITE MOVE 3 -5 300 ->\n" },
+    { "SPRITE PRIORITY",        "SPRITE 1,PRIORITY 3",                            "<gfx SPRITE PRIORITY 1 3>\n" },
+    { "SPRITE IMAGE",           "SPRITE 1,IMAGE 9",                               "<gfx SPRITE IMAGE 1 9>\n" },
+    { "SPRITE ANIM",            "SPRITE 1,ANIM 2,4,6",                            "<gfx SPRITE ANIM 1 2 4 6>\n" },
+    { "SPRITE MOVETO",          "SPRITE 1,MOVETO 100,50,30",                      "<gfx SPRITE MOVETO 1 100 50 30>\n" },
+    { "SPRITE COLLISION ON",    "SPRITE 1,COLLISION ON",                          "<gfx SPRITE COLLISION 1 1 ->\n" },
+    { "SPRITE COLLISION ON, TILES", "SPRITE 1,COLLISION ON,TILES",                "<gfx SPRITE COLLISION 1 1 0>\n" },
+    { "SPRITE COLLISION OFF",   "SPRITE 1,COLLISION OFF",                         "<gfx SPRITE COLLISION 1 0 ->\n" },
+    { "SPRITE DEF",             "A$=\"\":FOR I=1 TO 384:A$=A$+\"x\":NEXT I:SPRITE DEF 2,A$", "<gfx SPRITE DEF 2 s(384)=120,120,120,120,120,120,120,120,120,120,120,120,120,120,120,120>\n" },
+    { "SPRITE GET",             "SPRITE GET 2,A$:PRINT LEN(A$)",                  "<gfx SPRITE GET 2>\n4\n" },
+    { "SPRITE SEQ",             "SPRITE SEQ 1,CHR$(1)+CHR$(2)",                   "<gfx SPRITE SEQ 1 s(2)=1,2>\n" },
+    { "SPRITE SEQ is empty",    "SPRITE SEQ 1,\"\"",                              "? Illegal argument\n" },
+    { "SPRITE number out of range", "SPRITE 300,ON",                              "? Illegal argument\n" },
+    { "POINT",                  "PRINT POINT(3,4)",                               "7\n" },
+    { "RGB",                    "PRINT RGB(1,2,3)",                               "4278256131\n" },
+    { "RGB with alpha",         "PRINT RGB(1,2,3,4)",                             "67174915\n" },
+    { "RGB out of range",       "PRINT RGB(256,0,0)",                             "? Illegal argument\n" },
+    { "GFX() values",           "PRINT GFX(\"FRAME\");GFX(\"LAYER\",3);GFX(\"PALETTE\",1,5)", "036\n" },
+    { "TXT() values",           "PRINT TXT(\"CHAR\",2,3);TXT(\"X\")",             "50\n" },
+    { "SPRITE() values",        "PRINT SPRITE(\"X\",9);SPRITE(\"HITS\",2)",       "92\n" },
+    { "TILE() value",           "PRINT TILE(4,5)",                                "9\n" },
+    { "unknown value name",     "PRINT SPRITE(\"NOPE\",1)",                       "? Unknown SPRITE value 'NOPE'\n" },
+    { "too few arguments",      "PRINT GFX(\"LAYER\")",                           "? Too few arguments\n" },
+    { "sprite query out of range", "PRINT SPRITE(\"HITS\",300)",                  "? Illegal argument\n" },
+    { "DESIGN CHAR",            "10 DESIGN CHAR 65\n20 FOR I=1 TO 12:@ \"o......o\":NEXT I", "<gfx SYMBOL 65 s(12)=129,129,129,129,129,129,129,129,129,129,129,129>\n" },
+    { "DESIGN SPRITE",          "10 DESIGN SPRITE 3\n20 FOR I=1 TO 24:@ \"1.2.3.4.5.6.7.8.\":NEXT I", "<gfx SPRITE DEF 3 s(384)=1,0,2,0,3,0,4,0,5,0,6,0,7,0,8,0>\n" },
+    { "DESIGN TILE with a base", "10 DESIGN TILE 7,32\n20 FOR I=1 TO 24:@ \"o.A.F...........\":NEXT I", "<gfx TILE DEF 7 s(384)=33,0,42,0,47,0,0,0,0,0,0,0,0,0,0,0>\n" },
+    { "DESIGN rows come one by one", "10 DESIGN CHAR 1\n20 @ \"oooooooo\"\n30 PRINT \"mid\"\n40 FOR I=1 TO 11:@ \"........\":NEXT I", "mid\n<gfx SYMBOL 1 s(12)=255,0,0,0,0,0,0,0,0,0,0,0>\n" },
+    { "DESIGN row of the wrong length", "10 DESIGN CHAR 1\n20 @ \"abc\"",             "? Bad design row in line 20\n" },
+    { "DESIGN row with a bad character", "10 DESIGN CHAR 1\n20 @ \"ooooooox\"",     "? Bad design row in line 20\n" },
+    { "DESIGN base overflow",   "10 DESIGN SPRITE 1,250\n20 @ \"9...............\"", "? Bad design row in line 20\n" },
+    { "@ row without DESIGN",   "@ \"........\"",                                 "? Design without DESIGN\n" },
+    { "DESIGN needs a kind",    "DESIGN FROB 1",                                  "? SPRITE, TILE or CHAR expected\n" },
+    { "an unfinished DESIGN does nothing", "10 DESIGN CHAR 1\n20 @ \"oooooooo\"\n30 PRINT \"x\"", "x\n" },
+    { "ON COLLISION GOSUB",     "10 ON COLLISION GOSUB 100\n20 FOR I=1 TO 3000:NEXT I\n30 PRINT \"done\";C\n40 END\n100 C=C+1:RETURN", "done1\n" },
+    { "ON COLLISION OFF",       "10 ON COLLISION GOSUB 100\n15 ON COLLISION OFF\n20 FOR I=1 TO 3000:NEXT I\n30 PRINT \"done\";C\n40 END\n100 C=C+1:RETURN", "done0\n" },
+    { "ON COLLISION needs GOTO, GOSUB or OFF", "ON COLLISION", "? GOTO, GOSUB or OFF expected\n" },
     // number packing (big endian)
     { "MKI$ is two bytes, big endian", "A$=MKI$(258):PRINT LEN(A$);ASC(A$);ASC(MID$(A$,2,1))", "212\n" },
     { "MKL$ is four bytes, big endian", "A$=MKL$(16909060):PRINT LEN(A$);ASC(A$);ASC(MID$(A$,2,1));ASC(MID$(A$,3,1));ASC(RIGHT$(A$,1))", "41234\n" },
@@ -1026,6 +1125,55 @@ static bool snd_isbusy( void* usrdata, int chan ) {
 
 static const vm_sound_t test_sound = { snd_tone, snd_setwave, snd_setenv, snd_setvib, snd_settrem, snd_setpitch, snd_setvolume, snd_setbpm, snd_getbpm, snd_sync, snd_silence, snd_isbusy };
 
+// a graphics host that logs every operation as "<gfx NAME args>" (an omitted argument is -); queries return the sum of their arguments
+static int gfx_polls = 0;
+
+static bool gfx_op( void* usrdata, int op, const double* a, int na, const char* s, size_t slen, uint8_t* out, size_t outsz, size_t* outlen,
+    const char** err ) {
+    (void) usrdata; (void) outsz; (void) err;
+    char buf[64];
+    out_append( "<gfx " );
+    out_append( gfxops_opname( (uint16_t) op ) );
+    for ( int i=0; i < na; ++i ) {
+        if ( a[i] < -1.0e8 ) {
+            out_append( " -" );
+        } else {
+            snprintf( buf, sizeof(buf), " %g", a[i] );
+            out_append( buf );
+        }
+    }
+    if ( s != 0 ) {
+        snprintf( buf, sizeof(buf), " s(%zu)=", slen );
+        out_append( buf );
+        for ( size_t i=0; i < slen && i < 16U; ++i ) {
+            snprintf( buf, sizeof(buf), "%s%u", i ? "," : "", (unsigned)(uint8_t) s[i] );
+            out_append( buf );
+        }
+    }
+    out_append( ">\n" );
+    if ( out != 0 ) {
+        memcpy( out, "abcd", 4 );
+        *outlen = 4;
+    }
+    return true;
+}
+
+static bool gfx_query( void* usrdata, int q, const double* a, int na, double* result ) {
+    (void) usrdata;
+    if ( q == GFXQ_EVENT ) {
+        *result = ++gfx_polls == 3 ? 3.0 : -1.0;        // a collision is reported at the third look
+        return true;
+    }
+    double sum = 0.0;
+    for ( int i=0; i < na; ++i ) {
+        sum += a[i];
+    }
+    *result = sum;
+    return true;
+}
+
+static const vm_gfx_t test_gfx = { gfx_op, gfx_query };
+
 static void rt_report( struct _runtime_t* rt, void* usrdata, const char* text ) {
     out_append( text );
     if ( text[0] && text[ strlen( text ) - 1U ] != '\n' ) {
@@ -1082,6 +1230,8 @@ static bool compile_and_run( void ) {
     vm.merge    = vm_merge;
     vm.files    = vm_files;
     vm.sound    = &test_sound;
+    vm.gfx      = &test_gfx;
+    gfx_polls   = 0;
     vm.maxsteps = UINT64_C(1000000);
     ok = vm_run_at( &vm, start );
     if ( ok && vm.request != VMREQ_NONE ) {

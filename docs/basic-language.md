@@ -261,6 +261,19 @@ All of them are **big endian** (network byte order, unlike GW-BASIC, which is li
 `CVI(a$) AND 65535`, `CVL(a$) AND 4294967295`. A value outside the range of `MKI$`/`MKL$` is "Illegal argument" (GW-BASIC: Overflow).
 `MKI`, `MKL`, `MKS`, `MKD`, `CVI`, `CVL`, `CVS`, `CVD` are reserved words now.
 
+## Graphics: `GFX`, `TXT`, `TILE`, `SPRITE`, `DESIGN`, `CLS`, `LOCATE`, `COLOR`
+
+```
+GFX LINE 10,10,200,100,5            GFX CIRCLE 320,150,50,15            GFX PAINT 320,150,3
+SPRITE 0,ON:SPRITE 0,100,50         SPRITE 0,MOVETO 500,50,120          DESIGN SPRITE 0 / @ "....11...." ...
+GFX PALETTE 3,16,RGB(255,128,0)     TILE SET 1,2,3                      TXT FILL 0,24,79,24,32,1,46
+PRINT POINT(3,4);SPRITE("X",0);GFX("FRAME")       ON COLLISION GOSUB 1000
+```
+
+Ten new reserved words (`GFX SPRITE TILE TXT DESIGN RGB POINT CLS LOCATE COLOR`); everything else is a sub-keyword. The complete reference, the `DESIGN`
+picture rows, the functions, the collision rules and the internals are in [graphics-subsystem.md](graphics-subsystem.md); the example is `demos/gfx.bas`.
+`CHR$(0)`..`CHR$(31)` are drawn as two letter glyphs on the text screen (see "Binary strings").
+
 ## Sound: `SOUND`, `PLAY`, `WAVE`, `TEMPO`, `PLAYING()`
 
 Statements of the language (`bascomp.ebnf` `sound-stmt`, `cgenprog.c`); everything is queued and returns at once. Channels are 1..8.

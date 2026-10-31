@@ -404,6 +404,11 @@ const char* cgen_opcode_name( uint16_t opcode ) {
         case INS_ERRT:      return "ERRT";
         case INS_ERL:       return "ERL";
         case INS_ERRS:      return "ERRS";
+        case INS_GFXC:      return "GFXC";
+        case INS_GFXQ:      return "GFXQ";
+        case INS_DSGN:      return "DSGN";
+        case INS_DROW:      return "DROW";
+        case INS_COLT:      return "COLT";
         case INS_PACK:      return "PACK";
         case INS_UNPK:      return "UNPK";
         case INS_FLD:       return "FLD";
@@ -1089,6 +1094,12 @@ bool cgen_gen_cvl( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_UNPK, fa
 bool cgen_gen_cvs( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_UNPK, false, true, UINT16_C(3) ); }
 bool cgen_gen_cvd( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_UNPK, false, true, UINT16_C(4) ); }
 
+bool cgen_gen_gfxc( codegen_t* cgen, uint16_t op ) { return cgen_gen_ins12( cgen, INS_GFXC, false, true, op ); }
+bool cgen_gen_gfxq( codegen_t* cgen, uint16_t q ) { return cgen_gen_ins12( cgen, INS_GFXQ, false, true, q ); }
+bool cgen_gen_dsgn( codegen_t* cgen, uint16_t param ) { return cgen_gen_ins12( cgen, INS_DSGN, false, true, param ); }
+bool cgen_gen_drow( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_DROW, false, false, UINT16_C(0) ); }
+bool cgen_gen_colt( codegen_t* cgen, uint16_t param ) { return cgen_gen_ins12( cgen, INS_COLT, false, true, param ); }
+
 bool cgen_gen_adrs( codegen_t* cgen ) {
     return cgen_gen_ins12( cgen, INS_ADRS, false, false, UINT16_C(0) );
 }
@@ -1590,6 +1601,8 @@ bool cgen_from_numbaseexpr( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         case NT_SYSNUMFUNCARGCALL:
         case NT_SYSNOARGNUMCALL:
             return cgen_from_sysfncall( cgen, comp, node );
+        case NT_GFXQUERY:
+            return cgen_from_gfxquery( cgen, comp, node );
         default:
             break;
     }
@@ -2988,6 +3001,10 @@ bool cgen_from_stmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         case NT_FILESSTMT:  return cgen_from_filesstmt( cgen, comp, node );
         case NT_TIMERSTMT:  return cgen_from_timerstmt( cgen, comp, node );
         case NT_ERRTRAPSTMT: return cgen_from_errtrapstmt( cgen, comp, node );
+        case NT_ONCOLLSTMT: return cgen_from_oncollstmt( cgen, comp, node );
+        case NT_GFXSTMT:    return cgen_from_gfxstmt( cgen, comp, node );
+        case NT_DESIGNSTMT: return cgen_from_designstmt( cgen, comp, node );
+        case NT_DESIGNROW:  return cgen_from_designrow( cgen, comp, node );
         case NT_OPENSTMT:   return cgen_from_openstmt( cgen, comp, node );
         case NT_CLOSESTMT:  return cgen_from_closestmt( cgen, comp, node );
         case NT_ADDRESSSTMT: return cgen_from_addressstmt( cgen, comp, node );

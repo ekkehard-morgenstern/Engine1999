@@ -147,6 +147,19 @@ typedef struct _vmval_t {
     };
 } vmval_t;
 
+// The host's graphics output (GFX, TXT, TILE, SPRITE, CLS, LOCATE, COLOR, SYMBOL, DESIGN, the functions POINT/GFX()/TXT()/TILE()/SPRITE()).
+// All operations are described in gfxops.h; the VM checks the argument types and ranges, so the host may rely on them (and clamp pixels
+// itself). 0 = no graphics output: arguments are checked, nothing is drawn, the functions return 0.
+typedef struct _vm_gfx_t {
+    // op: GFXOP_*. a[0..na-1]: the numeric arguments in source order (an omitted optional one is GFX_NONE; a word is its number),
+    // s / slen: the string argument if the operation has one. An operation with a result string writes up to outsz bytes to out and
+    // sets *outlen. Returns false with a message in *err (a static text) to make the statement fail.
+    bool    (*op)( void* usrdata, int op, const double* a, int na, const char* s, size_t slen, uint8_t* out, size_t outsz, size_t* outlen,
+                const char** err );
+    // query: GFXQ_*; returns the value (RGB is computed by the VM, never asked)
+    bool    (*query)( void* usrdata, int q, const double* a, int na, double* result );
+} vm_gfx_t;
+
 // the value of a parameter variable before a function call, restored by RETF
 typedef struct _vm_savedvar_t {
     uint16_t    varoffs;
@@ -178,7 +191,9 @@ typedef struct _vm_sound_t {
     bool    (*busy)( void* usrdata, int chan );             // the channel sounds, or has events queued / a sequence running
 } vm_sound_t;
 
-#define VM_NTIMERS          4
+#define VM_NUSERTIMERS      4           // AFTER / EVERY timers 0..3
+#define VM_COLSLOT          4           // the ON COLLISION handler lives in the slot behind them
+#define VM_NTIMERS          5
 
 #define VM_ADDRLEN          20
 
@@ -248,6 +263,15 @@ typedef struct _vm_t {
     bool            sfx_defined[SND_MAXSFX];
     mml_t           sfx[SND_MAXSFX];    // the stored sound effects (SFX n, a$), parsed; cleared with the VM
     const vm_sound_t* sound;        // SOUND / PLAY / ...: the host's sound output; 0 = none (arguments are checked, nothing plays)
+    const vm_gfx_t*   gfx;          // GFX / SPRITE / ...: the host's graphics output; 0 = none
+    bool            colpending;     // (internal) the host reported a sprite collision that the ON COLLISION handler has not seen yet
+    struct {                        // (internal) DESIGN: the picture being collected
+        bool        active;
+        int         kind;           // DESK_*
+        int         num, base;
+        int         rows;
+        uint8_t     pix[16 * 24];   // 16 x 24 palette indices (a character: 8 x 12 bits, as 12 bytes)
+    } design;
     // AFTER / EVERY: four timers (the numbers are priorities: a handler can only be interrupted by a higher number)
     vm_timer_t      timers[VM_NTIMERS];
     int             numtimers;      // active timers

@@ -66,6 +66,8 @@ void sdllay_draw_texture( const sdllayer_t* lay, SDL_Renderer* renderer  );
 void sdllay_draw_texture_many( const sdllayer_t* lay, size_t cnt, SDL_Renderer* renderer  );
 
 void sdllay_set_modified( sdllayer_t* lay );
+bool sdllay_findcolor( const char* name, uint32_t* pargb );     // by the name in the color table ("Gold"), without regard to case
+void sdllay_reset_palette( sdllayer_t* lay );                    // back to the color table
 void sdllay_enable( sdllayer_t* lay );
 void sdllay_disable( sdllayer_t* lay );
 bool sdllay_enabled( const sdllayer_t* lay );

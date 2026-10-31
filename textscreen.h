@@ -81,6 +81,17 @@ void txtscr_clear( void );                  // fills the viewport with blanks, c
 
 void txtscr_render( uint8_t* target );
 
+// areas of the viewport (coordinates relative to it, corners in any order, clipped); -1 leaves a part of a cell as it is
+void txtscr_fill( int x1, int y1, int x2, int y2, int ch, int fg, int bg );
+void txtscr_copy( int x1, int y1, int x2, int y2, int tx, int ty );        // the area to tx,ty; may overlap
+void txtscr_invert( int x1, int y1, int x2, int y2 );                       // pen and paper of the cells swapped
+// the whole selected screen (not the viewport) as 4 bytes per cell (character, pen, paper, 0); returns the size needed
+size_t txtscr_save( uint8_t* out, size_t outsize );
+bool txtscr_restore( const uint8_t* data, size_t size );
+// redefines a character of the font (12 rows, bit 7 = left); the font is shared by all screens
+void txtscr_defchar( int code, const uint8_t rows[12] );
+const uint8_t* txtscr_font( void );                                         // 256 * 12 bytes
+
 int txtscr_write( int y, int x, int bg, int fg, const char* text, int len );
 void txtscr_locate( int x, int y );
 void txtscr_scrolldown( void );

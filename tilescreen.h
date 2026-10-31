@@ -54,4 +54,12 @@ void tilescr_render( uint8_t* target );
 void tilescr_writetile( int tileno, const uint8_t data[TILE_WIDTH * TILE_HEIGHT]);
 void tilescr_scroll( int sx, int sy );
 
+// the 41 x 13 cells of the visible tile screen
+void tilescr_setcell( int x, int y, int tile );
+int  tilescr_getcell( int x, int y );                       // -1 outside
+void tilescr_setcells( const uint8_t* cells, size_t count );   // from the top left, row by row
+bool tilescr_readtile( int tileno, uint8_t out[TILE_WIDTH * TILE_HEIGHT] );
+// the palette index of the tile layer at a screen pixel as tilescr_render() draws it (scroll offsets included), -1 outside
+int  tilescr_pixel( int x, int y );
+
 #endif

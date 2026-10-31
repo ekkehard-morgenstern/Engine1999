@@ -52,6 +52,10 @@ Colour tables used while building the palette live in `colors-raw.txt` → `colo
 
 The **viewport** (`txtscr_setviewport( x, y, w, h )`, `txtscr_resetviewport()`) is the rectangle in which output happens. Everything is relative to it: the coordinates of `txtscr_write/print/locate/getcell`, the cursor, `txtscr_getsize()`. `txtscr_write()` clips at the right edge and below, `txtscr_print()` continues text that runs over the right edge in the next viewport row, and scrolling (`txtscr_scrollup/scrolldown`, printing below the last row, backspace at the corner) moves only the viewport. `txtscr_clear()` and scrolling fill with the blank colors (`txtscr_setblank()`, default `TXTSCR_BGCOL/FGCOL`). Setting a viewport puts the cursor at its corner; the default viewport is the whole screen, so BASIC output behaves as before. `sdlscr_lineedit()` works inside a viewport. Tested by `txttest1`.
 
+## Graphics layers
+
+Layers, palettes, the graphics layer, tiles, sprites and the text screen areas are reachable from BASIC; all of it through the `sdlscr_*` API at the end of `sdlscreen.h` (`docs/graphics-subsystem.md`).
+
 ## Control code glyphs
 
 The font has glyphs for the codes 0..31 (`8x12font1.txt`, section `#00`): two letters (3x5 pixels each, the mnemonics `NU`, `SH`, ... `US`) between

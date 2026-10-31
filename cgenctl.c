@@ -337,6 +337,25 @@ bool cgen_from_errtrapstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         ( cgen_gen_errt( cgen, kind == ERRT_GOTO ? UINT16_C(2) : UINT16_C(1) ) || cgen_out_of_code_memory( comp ) );
 }
 
+bool cgen_from_oncollstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    // NT_ONCOLLSTMT: like ON ERROR; code: <target address on the return stack> COLT(1 GOSUB / 2 GOTO)      COLT(0)
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->type != NT_ONCOLLSTMT || node->datalen != UINT16_C(1) ) {
+        return cgen_unexpected_node( comp );
+    }
+    uint8_t kind = node->data[0];
+    if ( kind == ERRT_OFF ) {
+        return node->numbranches == 0U ? ( cgen_gen_colt( cgen, UINT16_C(0) ) || cgen_out_of_code_memory( comp ) ) : cgen_unexpected_node( comp );
+    }
+    if ( ( kind != ERRT_GOSUB && kind != ERRT_GOTO ) || node->numbranches != 1U ) {
+        return cgen_unexpected_node( comp );
+    }
+    return cc_push_target_address( cgen, comp, node->branches[0] ) &&
+        ( cgen_gen_colt( cgen, kind == ERRT_GOTO ? UINT16_C(2) : UINT16_C(1) ) || cgen_out_of_code_memory( comp ) );
+}
+
 bool cgen_from_gotostmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     /*
         NT_GOTOSTMT     GOTO/GOSUB statement

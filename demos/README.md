@@ -7,6 +7,7 @@ The demo files carry no license information: they are free for everybody to use,
 | File | What it is |
 |---|---|
 | `sfx.bas` | A sound effect board: press 1-9 for laser, explosion, power-up, coin, jump, siren, alarm, laser burst and footsteps, 0 for an engine whose pitch and volume are driven from the program (`PITCH`, `VOLUME`), Q to quit. The effects are stored with `SFX` and use glides, envelopes, vibrato and the noise wave. |
+| `gfx.bas` | Graphics: palettes, the graphics layer (lines, circle, arc, paint, text, `DRAW`), a tile screen, a sprite defined with `DESIGN` rows that moves by itself with `MOVETO`, text screen areas. |
 | `ode.bas` | "Ode to Joy" from Beethoven's 9th symphony (1824, public domain): melody and a simple bass line, one `PLAY` per four bars. |
 | `prelude.bas` | The first eight bars of Bach's "Prelude in C major" (BWV 846, public domain), built from a table of notes, played over a held bass note; a chord ends it. |
 

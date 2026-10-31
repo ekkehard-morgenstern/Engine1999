@@ -88,6 +88,7 @@ typedef struct _repl_t {
     bool        (*interrupt)( struct _vm_t*, void* );
     bool        (*save)( struct _vm_t*, void*, const char* filename, bool ascii );
     const vm_sound_t* sound;        // SOUND, PLAY, ...: the host's sound output (optional, see vm.h)
+    const vm_gfx_t*   gfx;          // GFX, SPRITE, ...: the host's graphics output (optional, see vm.h)
     // syntax highlighting of LIST output (optional): returns the text (e.g. an escape sequence) to insert where text of
     // the class starts; HL_NONE = end of the line. Only used when LIST writes to channel 0, the screen (bastok.h)
     hlstyle_t   hlstyle;

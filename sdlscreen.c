@@ -32,6 +32,7 @@
 #include "tilescreen.h"
 #include "sprscreen.h"
 #include "sdlutil.h"
+#include "gfxcore.h"
 
 #define NLAYERS 5
 #define LAY_BG          0
@@ -818,4 +819,373 @@ void sdlscr_spriteanimcfg( int sprno, int animno, int length, int speed ) {
 
 void sdlscr_writesprite( int sprno, const uint8_t data[SPRITE_WIDTH * SPRITE_HEIGHT]) {
     sprscr_writemap( sprno, data );
+}
+
+// -- the internal API (see sdlscreen.h) ------------------------------------------------------
+
+static bool sdlscr_goodlayer( int layer ) {
+    return layer >= 0 && layer < NLAYERS;
+}
+
+void sdlscr_layer_enable( int layer, bool enable ) {
+    if ( !sdlscr_goodlayer( layer ) ) {
+        return;
+    }
+    if ( enable ) {
+        sdllay_enable( &layers[layer] );
+    } else {
+        sdllay_disable( &layers[layer] );
+    }
+    sdllay_set_modified( &layers[layer] );
+    sdllay_set_modified( &layers[LAY_BG] );     // (something has to make the screen redraw when a layer vanishes)
+}
+
+bool sdlscr_layer_enabled( int layer ) {
+    return sdlscr_goodlayer( layer ) && sdllay_enabled( &layers[layer] );
+}
+
+void sdlscr_layer_setpriority( int layer, int prio ) {
+    if ( !sdlscr_goodlayer( layer ) || prio < 0 || prio >= NLAYERS ) {
+        return;
+    }
+    for ( int i=0; i < NLAYERS; ++i ) {
+        if ( layers[i].priority == (uint8_t) prio ) {
+            sdllay_switch_priority( &layers[0], NLAYERS, (uint8_t) layer, (uint8_t) i );
+            break;
+        }
+    }
+    sdllay_set_modified( &layers[LAY_BG] );
+}
+
+int sdlscr_layer_getpriority( int layer ) {
+    return sdlscr_goodlayer( layer ) ? (int) layers[layer].priority : -1;
+}
+
+void sdlscr_palette_set( int layer, int index, uint32_t argb ) {
+    if ( !sdlscr_goodlayer( layer ) || index < 0 || index > 255 ) {
+        return;
+    }
+    layers[layer].palette[index] = argb;
+    sdllay_set_modified( &layers[layer] );
+}
+
+uint32_t sdlscr_palette_get( int layer, int index ) {
+    if ( !sdlscr_goodlayer( layer ) || index < 0 || index > 255 ) {
+        return 0;
+    }
+    return layers[layer].palette[index];
+}
+
+void sdlscr_palette_reset( int layer ) {
+    for ( int i=0; i < NLAYERS; ++i ) {
+        if ( layer < 0 || layer == i ) {
+            sdllay_reset_palette( &layers[i] );
+        }
+    }
+}
+
+bool sdlscr_palette_setbyname( int layer, int index, const char* name ) {
+    uint32_t argb = 0;
+    if ( !sdlscr_goodlayer( layer ) || index < 0 || index > 255 || !sdllay_findcolor( name, &argb ) ) {
+        return false;
+    }
+    sdlscr_palette_set( layer, index, argb );
+    return true;
+}
+
+void sdlscr_setbackdrop( uint32_t argb ) {
+    sdlscr_bgcol = argb;
+    sdllay_set_modified( &layers[LAY_BG] );
+}
+
+// the drawing contexts of the two bitmap layers
+static gfx_t sdlscr_gfxctx[2];
+static bool  sdlscr_gfxok = false;
+static int   sdlscr_gfxtgt = LAY_GFX;
+static int   sdlscr_gfxpen = 1, sdlscr_gfxmode = GFXM_SET;
+
+static gfx_t* sdlscr_gfxof( int layer ) {
+    if ( layer != LAY_BG && layer != LAY_GFX ) {
+        return 0;
+    }
+    if ( !sdlscr_gfxok ) {
+        if ( layers[LAY_BG].memory == 0 || layers[LAY_GFX].memory == 0 ) {
+            return 0;
+        }
+        gfx_init( &sdlscr_gfxctx[0], layers[LAY_BG].memory, SDL_SCREENWIDTH, SDL_SCREENHEIGHT );
+        gfx_init( &sdlscr_gfxctx[1], layers[LAY_GFX].memory, SDL_SCREENWIDTH, SDL_SCREENHEIGHT );
+        sdlscr_gfxok = true;
+    }
+    gfx_t* g = &sdlscr_gfxctx[ layer == LAY_BG ? 0 : 1 ];
+    g->pen = sdlscr_gfxpen;
+    g->mode = sdlscr_gfxmode;
+    return g;
+}
+
+void sdlscr_gfx_settarget( int layer ) {
+    if ( layer == LAY_BG || layer == LAY_GFX ) {
+        sdlscr_gfxtgt = layer;
+    }
+}
+
+int sdlscr_gfx_target( void ) {
+    return sdlscr_gfxtgt;
+}
+
+void sdlscr_gfx_setpen( int color ) {
+    if ( color >= 0 && color <= 255 ) {
+        sdlscr_gfxpen = color;
+    }
+}
+
+void sdlscr_gfx_setmode( int mode ) {
+    if ( mode >= GFXM_SET && mode <= GFXM_AND ) {
+        sdlscr_gfxmode = mode;
+    }
+}
+
+#define SDLSCR_GFX(layer) gfx_t* g = sdlscr_gfxof( layer ); if ( g == 0 ) return
+
+void sdlscr_gfx_clear( int layer, int color ) {
+    SDLSCR_GFX( layer );
+    gfx_clear( g, color );
+    sdllay_set_modified( &layers[layer] );
+}
+
+void sdlscr_gfx_pset( int layer, int x, int y, int color ) {
+    SDLSCR_GFX( layer );
+    gfx_pset( g, x, y, color );
+    sdllay_set_modified( &layers[layer] );
+}
+
+int sdlscr_gfx_point( int layer, int x, int y ) {
+    gfx_t* g = sdlscr_gfxof( layer );
+    return g ? gfx_point( g, x, y ) : -1;
+}
+
+void sdlscr_gfx_line( int layer, int x1, int y1, int x2, int y2, int color ) {
+    SDLSCR_GFX( layer );
+    gfx_line( g, x1, y1, x2, y2, color );
+    sdllay_set_modified( &layers[layer] );
+}
+
+void sdlscr_gfx_box( int layer, int x1, int y1, int x2, int y2, int color, bool fill ) {
+    SDLSCR_GFX( layer );
+    gfx_box( g, x1, y1, x2, y2, color, fill );
+    sdllay_set_modified( &layers[layer] );
+}
+
+void sdlscr_gfx_circle( int layer, int x, int y, int r, int color, int a1, int a2, double ratio ) {
+    SDLSCR_GFX( layer );
+    gfx_circle( g, x, y, r, color, a1, a2, ratio );
+    sdllay_set_modified( &layers[layer] );
+}
+
+void sdlscr_gfx_radius( int layer, int x, int y, int r, double angle, int color ) {
+    SDLSCR_GFX( layer );
+    gfx_radius( g, x, y, r, angle, color );
+    sdllay_set_modified( &layers[layer] );
+}
+
+void sdlscr_gfx_paint( int layer, int x, int y, int color, int border ) {
+    SDLSCR_GFX( layer );
+    gfx_paint( g, x, y, color, border );
+    sdllay_set_modified( &layers[layer] );
+}
+
+size_t sdlscr_gfx_grab( int layer, int x1, int y1, int x2, int y2, uint8_t* out, size_t outsize ) {
+    gfx_t* g = sdlscr_gfxof( layer );
+    return g ? gfx_grab( g, x1, y1, x2, y2, out, outsize ) : 0;
+}
+
+bool sdlscr_gfx_blit( int layer, const uint8_t* block, size_t size, int x, int y, bool transparent ) {
+    gfx_t* g = sdlscr_gfxof( layer );
+    if ( g == 0 ) {
+        return false;
+    }
+    bool ok = gfx_blit( g, block, size, x, y, transparent );
+    sdllay_set_modified( &layers[layer] );
+    return ok;
+}
+
+void sdlscr_gfx_text( int layer, int x, int y, const char* text, size_t len, int color, int sx, int sy ) {
+    SDLSCR_GFX( layer );
+    gfx_text( g, x, y, text, len, color, sx, sy, txtscr_font() );
+    sdllay_set_modified( &layers[layer] );
+}
+
+bool sdlscr_gfx_draw( int layer, const char* cmd, size_t len, char* err, size_t errsz ) {
+    gfx_t* g = sdlscr_gfxof( layer );
+    if ( g == 0 ) {
+        return false;
+    }
+    bool ok = gfx_draw( g, cmd, len, err, errsz );
+    sdllay_set_modified( &layers[layer] );
+    return ok;
+}
+
+// text screen
+
+int sdlscr_text_select( int screen ) {
+    int old = txtscr_selected();
+    if ( !txtscr_select( screen ) ) {
+        return -1;
+    }
+    sdllay_set_modified( &layers[LAY_TXT] );
+    return old;
+}
+
+int sdlscr_text_selected( void ) {
+    return txtscr_selected();
+}
+
+bool sdlscr_text_setviewport( int x, int y, int w, int h ) {
+    return txtscr_setviewport( x, y, w, h );
+}
+
+void sdlscr_text_resetviewport( void ) {
+    txtscr_resetviewport();
+}
+
+void sdlscr_text_getviewport( int* x, int* y, int* w, int* h ) {
+    txtscr_getviewport( x, y, w, h );
+}
+
+void sdlscr_text_setblank( int bg, int fg ) {
+    txtscr_setblank( bg, fg );
+}
+
+void sdlscr_text_setcolors( int bg, int fg ) {
+    txtscr_setcolors( bg, fg );
+}
+
+void sdlscr_text_getcolors( int* bg, int* fg ) {
+    txtscr_getcolors( bg, fg );
+}
+
+int sdlscr_text_write( int y, int x, int bg, int fg, const char* text, int len ) {
+    int n = txtscr_write( y, x, bg, fg, text, len );
+    sdllay_set_modified( &layers[LAY_TXT] );
+    return n;
+}
+
+uint32_t sdlscr_text_getcell( int y, int x ) {
+    return txtscr_getcell( y, x );
+}
+
+void sdlscr_text_getcursor( int* x, int* y ) {
+    txtscr_getcursor( x, y );
+}
+
+void sdlscr_text_clear( void ) {
+    txtscr_clear();
+    sdllay_set_modified( &layers[LAY_TXT] );
+}
+
+void sdlscr_text_fill( int x1, int y1, int x2, int y2, int ch, int fg, int bg ) {
+    txtscr_fill( x1, y1, x2, y2, ch, fg, bg );
+    sdllay_set_modified( &layers[LAY_TXT] );
+}
+
+void sdlscr_text_copy( int x1, int y1, int x2, int y2, int tx, int ty ) {
+    txtscr_copy( x1, y1, x2, y2, tx, ty );
+    sdllay_set_modified( &layers[LAY_TXT] );
+}
+
+void sdlscr_text_invert( int x1, int y1, int x2, int y2 ) {
+    txtscr_invert( x1, y1, x2, y2 );
+    sdllay_set_modified( &layers[LAY_TXT] );
+}
+
+size_t sdlscr_text_save( uint8_t* out, size_t outsize ) {
+    return txtscr_save( out, outsize );
+}
+
+bool sdlscr_text_restore( const uint8_t* data, size_t size ) {
+    bool ok = txtscr_restore( data, size );
+    sdllay_set_modified( &layers[LAY_TXT] );
+    return ok;
+}
+
+void sdlscr_text_defchar( int code, const uint8_t rows[12] ) {
+    txtscr_defchar( code, rows );
+    sdllay_set_modified( &layers[LAY_TXT] );
+}
+
+// tiles
+
+void sdlscr_tile_setcell( int x, int y, int tile ) {
+    tilescr_setcell( x, y, tile );
+    sdllay_set_modified( &layers[LAY_TIL] );
+}
+
+int sdlscr_tile_getcell( int x, int y ) {
+    return tilescr_getcell( x, y );
+}
+
+void sdlscr_tile_setcells( const uint8_t* cells, size_t count ) {
+    tilescr_setcells( cells, count );
+    sdllay_set_modified( &layers[LAY_TIL] );
+}
+
+bool sdlscr_tile_getimage( int tile, uint8_t out[TILE_WIDTH * TILE_HEIGHT] ) {
+    return tilescr_readtile( tile, out );
+}
+
+// sprites
+
+void sdlscr_sprite_setimage( int sprno, int image ) {
+    sprscr_setimage( sprno, image );
+    sdllay_set_modified( &layers[LAY_SPR] );
+}
+
+int sdlscr_sprite_getimage( int sprno ) {
+    return sprscr_getimage( sprno );
+}
+
+bool sdlscr_sprite_getpos( int sprno, int* x, int* y ) {
+    return sprscr_getpos( sprno, x, y );
+}
+
+bool sdlscr_sprite_active( int sprno ) {
+    return sprscr_isactive( sprno );
+}
+
+bool sdlscr_sprite_getmap( int image, uint8_t out[SPRITE_WIDTH * SPRITE_HEIGHT] ) {
+    return sprscr_readmap( image, out );
+}
+
+void sdlscr_sprite_moveto( int sprno, int x, int y, int ticks ) {
+    sprscr_moveto( sprno, x, y, ticks );
+    sdllay_set_modified( &layers[LAY_SPR] );
+}
+
+bool sdlscr_sprite_moving( int sprno ) {
+    return sprscr_moving( sprno );
+}
+
+void sdlscr_sprite_setcollide( int sprno, bool sprites, bool tiles ) {
+    sprscr_setcollide( sprno, sprites, tiles );
+}
+
+uint32_t sdlscr_sprite_hits( int sprno ) {
+    return sprscr_hits( sprno );
+}
+
+int sdlscr_sprite_collide( int sprno ) {
+    return sprscr_collidewith( sprno );
+}
+
+int sdlscr_sprite_nextevent( void ) {
+    return sprscr_nextevent();
+}
+
+// timing
+
+void sdlscr_vsync( void ) {
+    uint64_t f = sdlscr_framecnt;
+    struct timespec nap = { 0, 1000000L };
+    while ( sdlscr_framecnt == f && !sdlscr_doexit && sdlscr_initok ) {
+        nanosleep( &nap, 0 );
+    }
 }

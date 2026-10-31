@@ -454,6 +454,21 @@ The 4096 extended instructions are as follows:
     0001 01011101       UNPK - binary string to a number ( s -- n ) C=0 P=1
                             CVI / CVL / CVS / CVD (parameter 1..4): reads the first 2, 4, 4 or 8 bytes of the string (more are
                             ignored, fewer are "Illegal argument"). CVI and CVL are signed (use "AND 65535" for the unsigned value).
+    0001 01011110       GFXC - graphics / sprite / tile / text screen statement ( args... -- [s] ) C=0 P=1
+                            Parameter = the GFXOP_* number of gfxops.h. The arguments are on the stack in source order (numbers and
+                            strings as the signature of the operation says; omitted optional ones are GFX_NONE = -1e9). The VM
+                            checks the types and calls the host (vm_t.gfx); an operation with a result string (GRAB, TILE GET,
+                            SPRITE GET, TXT SAVE) leaves it on the stack, the code that follows stores it in the variable.
+    0001 01011111       GFXQ - value of the graphics system ( args... -- n ) C=0 P=1
+                            Parameter = the GFXQ_* number: RGB (computed by the VM), POINT, TILE(x,y) and the selector functions of
+                            GFX(), TXT(), SPRITE() (docs/graphics-subsystem.md). The host answers all but RGB.
+    0001 01100000       DSGN - start a picture ( n [base] -- ) C=0 P=1
+                            DESIGN SPRITE (1) / TILE (2) / CHAR (3): pops the number and, for the parameter 1 + 4, the color base;
+                            the following DROW rows are collected until the picture is complete (24 rows of 16, or 12 of 8).
+    0001 01100001       DROW - add a row ( s -- ) C=0 P=0
+                            @ "row": 16 (8 for CHAR) characters of . 1-9 A-F o; when the last row has arrived the image is defined.
+    0001 01100010       COLT - set the collision handler ( -- ) C=0 P=1
+                            ON COLLISION: parameter 0 = OFF; 1 = GOSUB, 2 = GOTO with the handler's address on the return stack.
 
 */
 
@@ -600,5 +615,10 @@ The 4096 extended instructions are as follows:
 #define INS_ERRS        UINT16_C(0X15B)
 #define INS_PACK        UINT16_C(0X15C)
 #define INS_UNPK        UINT16_C(0X15D)
+#define INS_GFXC        UINT16_C(0X15E)
+#define INS_GFXQ        UINT16_C(0X15F)
+#define INS_DSGN        UINT16_C(0X160)
+#define INS_DROW        UINT16_C(0X161)
+#define INS_COLT        UINT16_C(0X162)
 
 #endif

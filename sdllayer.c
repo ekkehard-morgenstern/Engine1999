@@ -24,6 +24,7 @@
               Germany, Europe
 */
 
+#include <strings.h>
 #include "sdllayer.h"
 #include "sdlscreen.h"
 
@@ -440,6 +441,23 @@ void sdllay_draw_texture_many( const sdllayer_t* lay, size_t cnt, SDL_Renderer* 
             sdllay_draw_texture( l, renderer );
         }
     }
+}
+
+bool sdllay_findcolor( const char* name, uint32_t* pargb ) {
+    for ( int i=0; i < 256; ++i ) {
+        if ( strcasecmp( colinittab[i].title, name ) == 0 ) {
+            *pargb = colinittab[i].argb;
+            return true;
+        }
+    }
+    return false;
+}
+
+void sdllay_reset_palette( sdllayer_t* lay ) {
+    for ( int i=0; i < 256; ++i ) {
+        lay->palette[i] = colinittab[i].argb;
+    }
+    lay->modified = true;
 }
 
 void sdllay_set_modified( sdllayer_t* lay ) {

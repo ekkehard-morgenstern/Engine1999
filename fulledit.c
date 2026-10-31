@@ -27,7 +27,7 @@
 #include "fulledit.h"
 #include "sdlscreen.h"
 #include "sdlevent.h"
-#include "textscreen.h"
+#include "textscreen.h"      // (only the TXTSCR_* constants; every call goes through sdlscreen)
 #include "ansi.h"
 #include "baspgm.h"
 
@@ -228,7 +228,7 @@ static void ed_put( void* usrdata, int bg, int fg, const char* text, size_t len 
         if ( (size_t) n > len ) {
             n = (int) len;
         }
-        txtscr_write( p->y0 + row, col, bg, fg, text, n );
+        sdlscr_text_write( p->y0 + row, col, bg, fg, text, n );
         p->pos += n; text += n; len -= (size_t) n;
     }
 }
@@ -281,46 +281,46 @@ static int ed_countlines( ed_t* e, line_t* upto ) {      // number of lines befo
 }
 
 static void ed_drawbars( ed_t* e ) {
-    txtscr_setviewport( 0, 0, TXTSCR_WIDTH, 1 );
-    txtscr_setblank( C_BAR_BG, C_BAR_FG );
-    txtscr_clear();
-    txtscr_write( 0, 1, C_BAR_BG, C_BAR_FG, "Text Editor", -1 );
+    sdlscr_text_setviewport( 0, 0, TXTSCR_WIDTH, 1 );
+    sdlscr_text_setblank( C_BAR_BG, C_BAR_FG );
+    sdlscr_text_clear();
+    sdlscr_text_write( 0, 1, C_BAR_BG, C_BAR_FG, "Text Editor", -1 );
     if ( e->repl->filename != 0 ) {
         const char* name = e->repl->filename;
         int len = (int) strlen( name );
         if ( len > 40 ) {
             name += len - 40; len = 40;     // the end of a long name is the telling part
         }
-        txtscr_write( 0, TXTSCR_WIDTH - 1 - len, C_BAR_BG, C_YELLOW, name, len );
+        sdlscr_text_write( 0, TXTSCR_WIDTH - 1 - len, C_BAR_BG, C_YELLOW, name, len );
     }
-    txtscr_setviewport( 0, ED_BAR_Y, TXTSCR_WIDTH, 1 );
+    sdlscr_text_setviewport( 0, ED_BAR_Y, TXTSCR_WIDTH, 1 );
     if ( e->msg[0] != '\0' ) {
-        txtscr_setblank( C_MSG_BG, C_MSG_FG );
-        txtscr_clear();
-        txtscr_write( 0, 1, C_MSG_BG, C_MSG_FG, e->msg, -1 );
+        sdlscr_text_setblank( C_MSG_BG, C_MSG_FG );
+        sdlscr_text_clear();
+        sdlscr_text_write( 0, 1, C_MSG_BG, C_MSG_FG, e->msg, -1 );
         return;
     }
-    txtscr_setblank( C_HELP_BG, C_HELP_FG );
-    txtscr_clear();
+    sdlscr_text_setblank( C_HELP_BG, C_HELP_FG );
+    sdlscr_text_clear();
     static const struct { const char* key; const char* what; } help[] = {
         { "ESC", "Close" }, { "^Y", "Del line" }, { "RET", "New line" }, { "PgUp/PgDn", "Scroll" },
         { "^Home/^End", "First/last" },
     };
     int x = 1;
     for ( size_t i=0; i < sizeof(help) / sizeof(help[0]); ++i ) {
-        x += txtscr_write( 0, x, C_HELP_BG, C_HELPKEY_FG, help[i].key, -1 );
-        x += txtscr_write( 0, x, C_HELP_BG, C_HELP_FG, " ", 1 );
-        x += txtscr_write( 0, x, C_HELP_BG, C_HELP_FG, help[i].what, -1 );
+        x += sdlscr_text_write( 0, x, C_HELP_BG, C_HELPKEY_FG, help[i].key, -1 );
+        x += sdlscr_text_write( 0, x, C_HELP_BG, C_HELP_FG, " ", 1 );
+        x += sdlscr_text_write( 0, x, C_HELP_BG, C_HELP_FG, help[i].what, -1 );
         x += 2;
     }
 }
 
 static void ed_drawscrollbar( ed_t* e, int shown ) {
-    txtscr_setviewport( ED_SB_X, ED_PANE_Y, 1, ED_PANE_H );
-    txtscr_setblank( C_SBTRACK_BG, C_BLACK );
-    txtscr_clear();
-    txtscr_write( 0, 0, C_SBTHUMB_BG, C_WHITE, "^", 1 );
-    txtscr_write( ED_PANE_H - 1, 0, C_SBTHUMB_BG, C_WHITE, "v", 1 );
+    sdlscr_text_setviewport( ED_SB_X, ED_PANE_Y, 1, ED_PANE_H );
+    sdlscr_text_setblank( C_SBTRACK_BG, C_BLACK );
+    sdlscr_text_clear();
+    sdlscr_text_write( 0, 0, C_SBTHUMB_BG, C_WHITE, "^", 1 );
+    sdlscr_text_write( ED_PANE_H - 1, 0, C_SBTHUMB_BG, C_WHITE, "v", 1 );
     int track = ED_PANE_H - 2;
     int total = ed_countlines( e, 0 );
     int size = track, pos = 0;
@@ -336,7 +336,7 @@ static void ed_drawscrollbar( ed_t* e, int shown ) {
         }
     }
     for ( int i=0; i < size; ++i ) {
-        txtscr_write( 1 + pos + i, 0, C_SBTHUMB_BG, C_WHITE, " ", 1 );
+        sdlscr_text_write( 1 + pos + i, 0, C_SBTHUMB_BG, C_WHITE, " ", 1 );
     }
 }
 
@@ -388,9 +388,9 @@ static void ed_draw( ed_t* e ) {
     }
     char numtext[ED_NUM_W + 1];
     // line number pane
-    txtscr_setviewport( 0, ED_PANE_Y, ED_NUM_W, ED_PANE_H );
-    txtscr_setblank( C_NUMEMPTY_BG, C_NUM_FG );
-    txtscr_clear();
+    sdlscr_text_setviewport( 0, ED_PANE_Y, ED_NUM_W, ED_PANE_H );
+    sdlscr_text_setblank( C_NUMEMPTY_BG, C_NUM_FG );
+    sdlscr_text_clear();
     for ( int i=0; i < nslots; ++i ) {
         const slot_t* s = &slots[i];
         int bg = s->edited ? C_CURNUM_BG : C_NUM_BG, fg = s->edited ? C_CURNUM_FG : C_NUM_FG;
@@ -400,13 +400,13 @@ static void ed_draw( ed_t* e ) {
             } else {
                 strcpy( numtext, "       " );
             }
-            txtscr_write( s->y + r, 0, bg, fg, numtext, ED_NUM_W );
+            sdlscr_text_write( s->y + r, 0, bg, fg, numtext, ED_NUM_W );
         }
     }
     // text pane
-    txtscr_setviewport( ED_TEXT_X, ED_PANE_Y, ED_TEXT_W, ED_PANE_H );
-    txtscr_setblank( C_EMPTY_BG, C_DIMGRAY );
-    txtscr_clear();
+    sdlscr_text_setviewport( ED_TEXT_X, ED_PANE_Y, ED_TEXT_W, ED_PANE_H );
+    sdlscr_text_setblank( C_EMPTY_BG, C_DIMGRAY );
+    sdlscr_text_clear();
     char blanks[ED_TEXT_W];
     memset( blanks, ' ', sizeof(blanks) );
     int curx = 0, cury = 0;
@@ -414,7 +414,7 @@ static void ed_draw( ed_t* e ) {
         const slot_t* s = &slots[i];
         int bg = s->edited ? C_CUR_BG : C_TEXT_BG;
         for ( int r=0; r < s->rows; ++r ) {
-            txtscr_write( s->y + r, 0, bg, C_TEXT_FG, blanks, ED_TEXT_W );
+            sdlscr_text_write( s->y + r, 0, bg, C_TEXT_FG, blanks, ED_TEXT_W );
         }
         put_t p = { s->y, 0, 0 };
         if ( s->edited ) {
@@ -454,13 +454,13 @@ static void ed_draw( ed_t* e ) {
     if ( e->ins && e->numphase ) {
         for ( int i=0; i < nslots; ++i ) {
             if ( slots[i].line == 0 ) {
-                txtscr_setviewport( 0, ED_PANE_Y, ED_NUM_W, ED_PANE_H );
-                txtscr_locate( e->numlen, slots[i].y );
+                sdlscr_text_setviewport( 0, ED_PANE_Y, ED_NUM_W, ED_PANE_H );
+                sdlscr_locate( e->numlen, slots[i].y );
             }
         }
     } else {
-        txtscr_setviewport( ED_TEXT_X, ED_PANE_Y, ED_TEXT_W, ED_PANE_H );
-        txtscr_locate( curx, cury );
+        sdlscr_text_setviewport( ED_TEXT_X, ED_PANE_Y, ED_TEXT_W, ED_PANE_H );
+        sdlscr_locate( curx, cury );
     }
     sdlscr_textchanged();
 }
@@ -799,8 +799,8 @@ void fulledit_run( repl_t* repl, void (*vblank_handler)( void* ), void* usrdata 
     }
     ed_loadcur( e, 0 );
     ed_idle( e );
-    int oldscreen = txtscr_selected();
-    txtscr_select( ED_SCREEN );
+    int oldscreen = sdlscr_text_selected();
+    sdlscr_text_select( ED_SCREEN );
     bool oldpoll = sdlscr_editmode_begin();
     ed_draw( e );
     while ( !e->quit ) {
@@ -834,8 +834,8 @@ void fulledit_run( repl_t* repl, void (*vblank_handler)( void* ), void* usrdata 
     sdlscr_editmode_end( oldpoll );
     ed_memcur = e->cur != 0 ? e->cur->lineno : LINENO_NONE;
     ed_memtop = e->top != 0 ? e->top->lineno : LINENO_NONE;
-    txtscr_resetviewport();
-    txtscr_select( oldscreen );
+    sdlscr_text_resetviewport();
+    sdlscr_text_select( oldscreen );
     sdlscr_textchanged();
     free( e );
 }

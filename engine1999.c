@@ -31,6 +31,8 @@
 #include "monitor.h"
 #include "basrepl.h"
 #include "basdebug.h"
+#include "gfxops.h"
+#include "gfxcore.h"
 
 static const char warranty[] =
 "  15. Disclaimer of Warranty.\n"
@@ -808,6 +810,163 @@ static bool host_snd_busy( void* usrdata, int chan ) {
     return sdlaud_busy( chan );
 }
 
+// -- graphics: the VM's statements and functions (gfxops.h) mapped to the sdlscr_* API ----------------
+
+// an integer from an argument (an omitted one, GFX_NONE, is def)
+static int gi( double v, int def ) {
+    if ( v < -1.0e8 ) {
+        return def;
+    }
+    return v > 1.0e6 ? 1000000 : v < -1.0e6 ? -1000000 : (int) v;
+}
+
+static bool host_gfx_op( void* usrdata, int op, const double* a, int na, const char* s, size_t slen, uint8_t* out, size_t outsz,
+    size_t* outlen, const char** err ) {
+    (void) usrdata; (void) na;
+    int t = sdlscr_gfx_target();
+    switch ( op ) {
+        case GFXOP_LAYER:       sdlscr_layer_enable( gi( a[0], 0 ), a[1] != 0.0 ); break;
+        case GFXOP_PRIORITY:    sdlscr_layer_setpriority( gi( a[0], 0 ), gi( a[1], 0 ) ); break;
+        case GFXOP_PALETTE:     sdlscr_palette_set( gi( a[0], 0 ), gi( a[1], 0 ), (uint32_t)(int64_t) a[2] ); break;
+        case GFXOP_PALNAME:
+            if ( !sdlscr_palette_setbyname( gi( a[0], 0 ), gi( a[1], 0 ), s ) ) {
+                *err = "Unknown color name";
+                return false;
+            }
+            break;
+        case GFXOP_PALRESET:    sdlscr_palette_reset( gi( a[0], -1 ) ); break;
+        case GFXOP_BACKDROP:    sdlscr_setbackdrop( (uint32_t)(int64_t) a[0] ); break;
+        case GFXOP_TARGET:      sdlscr_gfx_settarget( gi( a[0], 3 ) ); break;
+        case GFXOP_PEN:         sdlscr_gfx_setpen( gi( a[0], 1 ) ); break;
+        case GFXOP_MODE:        sdlscr_gfx_setmode( gi( a[0], GFXM_SET ) ); break;
+        case GFXOP_CLEAR:       sdlscr_gfx_clear( t, gi( a[0], 0 ) ); break;
+        case GFXOP_PSET:        sdlscr_gfx_pset( t, gi( a[0], 0 ), gi( a[1], 0 ), gi( a[2], -1 ) ); break;
+        case GFXOP_LINE: {
+            int style = gi( a[5], 0 ) + ( a[5] < -1.0e8 ? 0 : 1 );      // none 0, B 1, BF 2
+            if ( style == 0 ) {
+                sdlscr_gfx_line( t, gi( a[0], 0 ), gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 0 ), gi( a[4], -1 ) );
+            } else {
+                sdlscr_gfx_box( t, gi( a[0], 0 ), gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 0 ), gi( a[4], -1 ), style == 2 );
+            }
+            break;
+        }
+        case GFXOP_CIRCLE:
+            sdlscr_gfx_circle( t, gi( a[0], 0 ), gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], -1 ), gi( a[4], -1 ), gi( a[5], -1 ),
+                a[6] < -1.0e8 ? 1.0 : a[6] );
+            break;
+        case GFXOP_PAINT:       sdlscr_gfx_paint( t, gi( a[0], 0 ), gi( a[1], 0 ), gi( a[2], -1 ), gi( a[3], -1 ) ); break;
+        case GFXOP_RADIUS:      sdlscr_gfx_radius( t, gi( a[0], 0 ), gi( a[1], 0 ), gi( a[2], 0 ), a[3], gi( a[4], -1 ) ); break;
+        case GFXOP_GRAB: {
+            size_t need = sdlscr_gfx_grab( t, gi( a[0], 0 ), gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 0 ), out, outsz );
+            if ( need == 0 || need > outsz ) {
+                *err = "String too long";
+                return false;
+            }
+            *outlen = need;
+            break;
+        }
+        case GFXOP_BLIT:
+            if ( !sdlscr_gfx_blit( t, (const uint8_t*) s, slen, gi( a[0], 0 ), gi( a[1], 0 ), a[2] > -1.0e8 ) ) {
+                *err = "Bad block";
+                return false;
+            }
+            break;
+        case GFXOP_TEXT:        sdlscr_gfx_text( t, gi( a[0], 0 ), gi( a[1], 0 ), s, slen, gi( a[2], -1 ), gi( a[3], 1 ), gi( a[4], 1 ) ); break;
+        case GFXOP_DRAW: {
+            static char msg[96];
+            if ( !sdlscr_gfx_draw( t, s, slen, msg, sizeof(msg) ) ) {
+                *err = msg;
+                return false;
+            }
+            break;
+        }
+        case GFXOP_VSYNC:       sdlscr_vsync(); break;
+        case GFXOP_TXTFILL:     sdlscr_text_fill( gi( a[0], 0 ), gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 0 ), gi( a[4], -1 ), gi( a[5], -1 ), gi( a[6], -1 ) ); break;
+        case GFXOP_TXTCOPY:     sdlscr_text_copy( gi( a[0], 0 ), gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 0 ), gi( a[4], 0 ), gi( a[5], 0 ) ); break;
+        case GFXOP_TXTINVERT:   sdlscr_text_invert( gi( a[0], 0 ), gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 0 ) ); break;
+        case GFXOP_TXTSAVE:
+            *outlen = sdlscr_text_save( out, outsz );
+            break;
+        case GFXOP_TXTLOAD:     sdlscr_text_restore( (const uint8_t*) s, slen ); break;
+        case GFXOP_CLS:         sdlscr_text_clear(); break;
+        case GFXOP_LOCATE:      sdlscr_locate( gi( a[0], 0 ), gi( a[1], 0 ) ); break;
+        case GFXOP_COLOR:       sdlscr_text_setcolors( gi( a[1], -1 ), gi( a[0], -1 ) ); break;
+        case GFXOP_SYMBOL:      sdlscr_text_defchar( gi( a[0], 0 ), (const uint8_t*) s ); break;
+        case GFXOP_TILEDEF:     sdlscr_writetile( gi( a[0], 0 ), (const uint8_t*) s ); break;
+        case GFXOP_TILEGET:
+            sdlscr_tile_getimage( gi( a[0], 0 ), out );
+            *outlen = TILE_WIDTH * TILE_HEIGHT;
+            break;
+        case GFXOP_TILESET:     sdlscr_tile_setcell( gi( a[0], 0 ), gi( a[1], 0 ), gi( a[2], 0 ) ); break;
+        case GFXOP_TILEFILL:    sdlscr_tile_setcells( (const uint8_t*) s, slen ); break;
+        case GFXOP_TILESCROLL:  sdlscr_scrolltiles( ( gi( a[0], 0 ) % TILE_WIDTH + TILE_WIDTH ) % TILE_WIDTH,
+                                    ( gi( a[1], 0 ) % TILE_HEIGHT + TILE_HEIGHT ) % TILE_HEIGHT ); break;
+        case GFXOP_SPRDEF:      sdlscr_writesprite( gi( a[0], 0 ), (const uint8_t*) s ); break;
+        case GFXOP_SPRGET:
+            sdlscr_sprite_getmap( gi( a[0], 0 ), out );
+            *outlen = SPRITE_WIDTH * SPRITE_HEIGHT;
+            break;
+        case GFXOP_SPRSEQ:      sdlscr_spriteanimdata( gi( a[0], 0 ), (const uint8_t*) s, slen ); break;
+        case GFXOP_SPRON:       sdlscr_showsprite( gi( a[0], 0 ), true ); break;
+        case GFXOP_SPROFF:      sdlscr_showsprite( gi( a[0], 0 ), false ); break;
+        case GFXOP_SPRPRIO:     sdlscr_spriteprio( gi( a[0], 0 ), gi( a[1], 0 ) ); break;
+        case GFXOP_SPRIMAGE:    sdlscr_sprite_setimage( gi( a[0], 0 ), gi( a[1], 0 ) ); break;
+        case GFXOP_SPRANIM:     sdlscr_spriteanimcfg( gi( a[0], 0 ), gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 0 ) ); break;
+        case GFXOP_SPRMOVETO:   sdlscr_sprite_moveto( gi( a[0], 0 ), gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 0 ) ); break;
+        case GFXOP_SPRCOLL: {
+            bool on = a[1] != 0.0;
+            sdlscr_sprite_setcollide( gi( a[0], 0 ), on, on && a[2] > -1.0e8 );
+            break;
+        }
+        case GFXOP_SPRMOVE:
+            sdlscr_movesprite( gi( a[0], 0 ), gi( a[1], 0 ), gi( a[2], 0 ) );
+            if ( a[3] > -1.0e8 ) {
+                sdlscr_sprite_setimage( gi( a[0], 0 ), gi( a[3], 0 ) );
+            }
+            break;
+        default:
+            *err = "Unknown graphics operation";
+            return false;
+    }
+    return true;
+}
+
+static bool host_gfx_query( void* usrdata, int q, const double* a, int na, double* result ) {
+    (void) usrdata; (void) na;
+    int x = 0, y = 0, w = 0, h = 0, bg = 0, fg = 0;
+    *result = 0.0;
+    switch ( q ) {
+        case GFXQ_POINT:        *result = sdlscr_gfx_point( sdlscr_gfx_target(), gi( a[0], 0 ), gi( a[1], 0 ) ); break;
+        case GFXQ_FRAME:        *result = (double) sdlscr_getframecnt(); break;
+        case GFXQ_LAYER:        *result = sdlscr_layer_enabled( gi( a[0], 0 ) ) ? -1.0 : 0.0; break;
+        case GFXQ_PRIORITY:     *result = sdlscr_layer_getpriority( gi( a[0], 0 ) ); break;
+        case GFXQ_PALETTE:      *result = (double) sdlscr_palette_get( gi( a[0], 0 ), gi( a[1], 0 ) ); break;
+        case GFXQ_TARGET:       *result = sdlscr_gfx_target(); break;
+        case GFXQ_TXTX:         sdlscr_text_getcursor( &x, &y ); *result = x; break;
+        case GFXQ_TXTY:         sdlscr_text_getcursor( &x, &y ); *result = y; break;
+        case GFXQ_TXTFG:        sdlscr_text_getcolors( &bg, &fg ); *result = fg; break;
+        case GFXQ_TXTBG:        sdlscr_text_getcolors( &bg, &fg ); *result = bg; break;
+        case GFXQ_TXTCHAR:      *result = sdlscr_text_getcell( gi( a[1], 0 ), gi( a[0], 0 ) ) & 0xFFU; break;
+        case GFXQ_TXTFGAT:      *result = ( sdlscr_text_getcell( gi( a[1], 0 ), gi( a[0], 0 ) ) >> 8 ) & 0xFFU; break;
+        case GFXQ_TXTBGAT:      *result = ( sdlscr_text_getcell( gi( a[1], 0 ), gi( a[0], 0 ) ) >> 16 ) & 0xFFU; break;
+        case GFXQ_TXTWIDTH:     sdlscr_text_getviewport( &x, &y, &w, &h ); *result = w; break;
+        case GFXQ_TXTHEIGHT:    sdlscr_text_getviewport( &x, &y, &w, &h ); *result = h; break;
+        case GFXQ_TILECELL:     *result = sdlscr_tile_getcell( gi( a[0], 0 ), gi( a[1], 0 ) ); break;
+        case GFXQ_SPRX:         sdlscr_sprite_getpos( gi( a[0], 0 ), &x, &y ); *result = x; break;
+        case GFXQ_SPRY:         sdlscr_sprite_getpos( gi( a[0], 0 ), &x, &y ); *result = y; break;
+        case GFXQ_SPRIMAGE:     *result = sdlscr_sprite_getimage( gi( a[0], 0 ) ); break;
+        case GFXQ_SPRON:        *result = sdlscr_sprite_active( gi( a[0], 0 ) ) ? -1.0 : 0.0; break;
+        case GFXQ_SPRHITS:      *result = (double) sdlscr_sprite_hits( gi( a[0], 0 ) ); break;
+        case GFXQ_SPRCOLLIDE:   *result = sdlscr_sprite_collide( gi( a[0], 0 ) ); break;
+        case GFXQ_SPRMOVING:    *result = sdlscr_sprite_moving( gi( a[0], 0 ) ) ? -1.0 : 0.0; break;
+        case GFXQ_EVENT:        *result = sdlscr_sprite_nextevent(); break;
+        default:                return false;
+    }
+    return true;
+}
+
+static const vm_gfx_t host_gfx = { host_gfx_op, host_gfx_query };
+
 static const vm_sound_t host_sound = {
     host_snd_tone, host_snd_setwave, host_snd_setenv, host_snd_setvib, host_snd_settrem, host_snd_setpitch, host_snd_setvolume,
     host_snd_setbpm, host_snd_getbpm, host_snd_sync, host_snd_silence, host_snd_busy
@@ -883,6 +1042,7 @@ static void init_host( void ) {
     repl.interrupt = host_interrupt;
     repl.save      = host_save;
     repl.sound     = &host_sound;
+    repl.gfx       = &host_gfx;
     repl.hlstyle   = host_hlstyle;
     repl.edit      = host_edit;
     int width = 0, height = 0;

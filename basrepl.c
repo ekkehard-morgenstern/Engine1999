@@ -204,6 +204,7 @@ static void repl_setup_vm( repl_t* repl ) {
     vm->interrupt = repl->interrupt;
     vm->save      = repl->save;
     vm->sound     = repl->sound;
+    vm->gfx       = repl->gfx;
     vm->list      = repl_vm_list;
     vm->deletelines = repl_vm_delete;
     vm->renumber  = repl_vm_renumber;

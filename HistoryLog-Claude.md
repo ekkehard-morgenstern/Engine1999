@@ -13,9 +13,15 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-- **Graphics subsystem proposal** (owner's request: look at `sdllayer` and its users, suggest BASIC statements and functions; no code changed)
-  - Read `sdllayer`, `sdlscreen`, `textscreen`, `tilescreen`, `sprscreen`, `concept.txt`; found the gaps (tile screen cells can't be written, no palette/layer/backdrop access above `sdllayer`, no drawing code for the background and graphics layers, no sprite collision, no BASIC access to any of it besides text output).
-  - New `docs/graphics-subsystem.md` (layers, principles, three phases: layers/palette/text words; graphics layer; tiles and sprites; timing; backend work; six decisions for the owner), linked from `docs/README.md`; `docs/roadmap.md` section 10. Then, on the owner's requirement that all graphics calls go through `sdlscreen`: a principle, a section specifying the internal `sdlscr_*` API (layers/palette, bitmap drawing, text, tiles, sprites, timing) and the changed build order; checked with grep that `fulledit.c` and `monitor.c` (not `engine1999.c`) are the callers that bypass `sdlscreen` today, and added the text viewport/screen functions to the specified API. Then, on the owner's request, the proposal was amended with sprite and tile definitions modelled on Simons' BASIC (`DESIGN` with `@ "row"` statements, row alphabet, color base, read-back `TILE$`/`SPRITE$`) and a table of further Simons' BASIC commands mapped to our words (sources: c64-wiki and Wikipedia, which give only one-line descriptions; the manual PDF could not be read, so the argument syntax is our own design); the `sdlscr_*` API got the matching functions.
+- **Graphics subsystem implemented** (owner's decisions: palette indices per layer, `GFX TARGET` 0/3, few reserved words, own asset formats, conversion tools and sprite/tile editors later, "implement it all")
+  - **Rule**: every call into the graphics modules goes through `sdlscreen`: the internal `sdlscr_*` API (layers, palettes, backdrop, bitmap drawing, text screen incl. viewports, tiles, sprites, `sdlscr_vsync`) at the end of `sdlscreen.h`; `fulledit.c` and `monitor.c` converted from `txtscr_*` to `sdlscr_text_*`.
+  - **New modules**: `gfxcore.[ch]` (pixels with modes, line, box, circle/arc/ellipse, paint, radius, grab/blit, text, GW-style DRAW; no SDL), `gfxops.[ch]` (the table of statements and functions, `GFXOP_*`, `GFXQ_*`).
+  - **Backends**: `tilescreen` (cell setter, `tilescr_pixel`, `readtile`), `sprscreen` (fixed image, position/image read-back, `moveto`, collision flags, per-pixel sprite-sprite and sprite-tile collisions, latched hits, events), `textscreen` (`fill/copy/invert/save/restore/defchar/font`; **fixed**: `txtscr_write` sign-extended characters >= 128 into the colors), `sdllayer` (color names, palette reset).
+  - **Language**: tokens 190..199 (`GFX SPRITE TILE TXT DESIGN RGB POINT CLS LOCATE COLOR`; `keyword_name()` in `bastok`), `comp_eat_gfxstmt`/`comp_eat_gfxquerycall`/`comp_eat_designstmt` (table driven; `ON COLLISION` in `comp_eat_onstmt`), nodes `0x71..0x75`, `cgen_from_gfxstmt/gfxquery/designstmt/designrow/oncollstmt`, instructions `GFXC 0x15E`, `GFXQ 0x15F`, `DSGN 0x160`, `DROW 0x161`, `COLT 0x162`, `bascomp.ebnf`.
+  - **VM**: `vm_gfx_t` (`op`/`query`, `vm_t.gfx`, `repl_t.gfx`), `vm_gfx_command/check/query`, `vm_design_start/row`, `vm_set_collision`; the collision handler is timer slot 4 (`VM_COLSLOT`, user timers `VM_NUSERTIMERS`); `RGB()` computed in the VM.
+  - **Host** (`engine1999.c`): `host_gfx_op`/`host_gfx_query` map every operation to `sdlscr_*`.
+  - **Tests**: new `gfxtest1` (104 checks; also valgrind clean), `vmtest1` 710 -> 807 (a logging gfx test host: every statement, word, default, range error, `DESIGN`, `ON COLLISION`), `repltest1` 279 -> 281; `makefile` and `.gitignore` have `gfxtest1`. Verified on the real screen under Xvfb with XTest key injection: `demos/gfx.bas` (backdrop, tile checker with its own palette, lines, circle, arc, painted box, scaled text, `DRAW`, DESIGN sprite moving by `MOVETO`, text bar), and the control code glyphs, binary strings and `MKS$` on the text screen.
+  - **Demo and docs**: `demos/gfx.bas` (+ `demos/README.md`), `docs/graphics-subsystem.md` rewritten from the proposal to the implemented design (statement reference, functions, `DESIGN`, collision rules, Simons' BASIC mapping, decisions, open items), `docs/basic-language.md`, `docs/compiler-and-vm.md`, `docs/display-engine.md`, `docs/roadmap.md` (section 10: tools, editors, input, synchronization), `instset.h`, `CLAUDE.md`, `SESSION.md`.
 
 ## Log
 
@@ -520,3 +526,16 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
   - **VM**: `vm_pack()` / `vm_unpack()` assemble the bytes by shifts (big endian on any host), floats via `memcpy`, built on `vm_push_bytes()`; ranges: `MKI$` -32768..65535, `MKL$` -2^31..2^32-1, else "Illegal argument"; `CVI`/`CVL` signed; short strings refused, extra bytes ignored.
   - **Tests**: `vmtest1` 691 -> 710 (+19: byte order of each width, round trips, ranges, errors, records, files, a loop), `repltest1` 278 -> 279; all suites pass, `vmtest1`/`repltest1` clean under valgrind.
   - **Docs**: `docs/basic-language.md` ("Number packing"), `docs/compiler-and-vm.md`, `docs/io-subsystem.md`, `docs/roadmap.md` (done; binary helpers listed as next), `instset.h`, `SESSION.md`.
+
+### 3a23508 — 2026-10-31 03:55:01 +0100 — "Graphics subsystem proposal by Claude Code"
+5 files, +172/-8.
+- Owner's request: look at `sdllayer` and its users and suggest BASIC statements and functions (no code changed). Read `sdllayer`, `sdlscreen`, `textscreen`, `tilescreen`, `sprscreen`, `concept.txt`; found the gaps (the tile screen cells can't be written, no palette/layer/backdrop access above `sdllayer`, no drawing code for the background and graphics layers, no sprite collision, no BASIC access to any of it besides text output).
+- New `docs/graphics-subsystem.md` (layers, principles, three phases, timing, backend work, decisions for the owner), `docs/README.md` index, `docs/roadmap.md` section 10.
+
+### 6120896 — 2026-10-31 04:01:58 +0100 — "Graphics subsystem proposal by Claude Code"
+4 files, +97/-11.
+- On the owner's requirement that all graphics calls go through `sdlscreen`: a principle, a section specifying the internal `sdlscr_*` API (layers/palettes, bitmap drawing, text incl. viewports, tiles, sprites, timing) and the changed build order; checked with grep that `fulledit.c` and `monitor.c` (not `engine1999.c`) bypass `sdlscreen` today.
+
+### 37d8dde — 2026-10-31 04:24:26 +0100 — "Graphics subsystem proposal by Claude Code"
+4 files, +109/-6.
+- On the owner's request, the proposal was amended with sprite and tile definitions modelled on Simons' BASIC (`DESIGN` with `@ "row"` statements, row alphabet, color base, read-back) and a table of further Simons' BASIC commands mapped to our words (sources: c64-wiki and Wikipedia, one-line descriptions only; the manual PDF could not be read, so the argument syntax is our own design); the `sdlscr_*` API got the matching functions.

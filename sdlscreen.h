@@ -117,4 +117,81 @@ void sdlscr_spriteanimdata( int animno, const uint8_t* seq, size_t size );
 void sdlscr_spriteanimcfg( int sprno, int animno, int length, int speed );
 void sdlscr_writesprite( int sprno, const uint8_t data[SPRITE_WIDTH * SPRITE_HEIGHT]);
 
+
+// -- the internal API for everything that draws (docs/graphics-subsystem.md) --------------------------------
+// Nothing outside of sdlscreen.c calls sdllayer, textscreen, tilescreen, sprscreen or gfxcore. Every function validates its arguments
+// (out of range = ignored), marks the layer it changed as modified itself, and hands out no pointers into layer memory, so that a lock
+// or a command queue can be added here later without changing any caller. Layers: 0 background, 1 tiles, 2 text, 3 graphics, 4 sprites.
+
+// layers, palettes, the color behind everything
+void     sdlscr_layer_enable( int layer, bool enable );
+bool     sdlscr_layer_enabled( int layer );
+void     sdlscr_layer_setpriority( int layer, int prio );       // swaps places with the layer that has prio
+int      sdlscr_layer_getpriority( int layer );                 // -1 for a bad layer
+void     sdlscr_palette_set( int layer, int index, uint32_t argb );
+uint32_t sdlscr_palette_get( int layer, int index );
+void     sdlscr_palette_reset( int layer );                     // -1 = all layers
+bool     sdlscr_palette_setbyname( int layer, int index, const char* name );    // false if the name is unknown
+void     sdlscr_setbackdrop( uint32_t argb );
+
+// the bitmap layers 0 (background) and 3 (graphics); color -1 = the pen; everything is clipped to 640 x 300
+void     sdlscr_gfx_settarget( int layer );                     // 0 or 3: where the BASIC statements draw
+int      sdlscr_gfx_target( void );
+void     sdlscr_gfx_setpen( int color );
+void     sdlscr_gfx_setmode( int mode );                        // GFXM_* of gfxcore.h
+void     sdlscr_gfx_clear( int layer, int color );
+void     sdlscr_gfx_pset( int layer, int x, int y, int color );
+int      sdlscr_gfx_point( int layer, int x, int y );           // -1 outside
+void     sdlscr_gfx_line( int layer, int x1, int y1, int x2, int y2, int color );
+void     sdlscr_gfx_box( int layer, int x1, int y1, int x2, int y2, int color, bool fill );
+void     sdlscr_gfx_circle( int layer, int x, int y, int r, int color, int a1, int a2, double ratio );
+void     sdlscr_gfx_radius( int layer, int x, int y, int r, double angle, int color );
+void     sdlscr_gfx_paint( int layer, int x, int y, int color, int border );
+size_t   sdlscr_gfx_grab( int layer, int x1, int y1, int x2, int y2, uint8_t* out, size_t outsize );   // returns the size needed
+bool     sdlscr_gfx_blit( int layer, const uint8_t* block, size_t size, int x, int y, bool transparent );
+void     sdlscr_gfx_text( int layer, int x, int y, const char* text, size_t len, int color, int sx, int sy );
+bool     sdlscr_gfx_draw( int layer, const char* cmd, size_t len, char* err, size_t errsz );
+
+// the text screen (more above: sdlscr_printf, sdlscr_puts, sdlscr_ansi_*, sdlscr_locate, sdlscr_gettextcursor)
+int      sdlscr_text_select( int screen );                      // returns the previously selected screen, -1 if the number is bad
+int      sdlscr_text_selected( void );
+bool     sdlscr_text_setviewport( int x, int y, int w, int h );
+void     sdlscr_text_resetviewport( void );
+void     sdlscr_text_getviewport( int* x, int* y, int* w, int* h );
+void     sdlscr_text_setblank( int bg, int fg );
+void     sdlscr_text_setcolors( int bg, int fg );
+void     sdlscr_text_getcolors( int* bg, int* fg );
+int      sdlscr_text_write( int y, int x, int bg, int fg, const char* text, int len );   // no wrapping; returns the characters written
+uint32_t sdlscr_text_getcell( int y, int x );                   // character | paper << 16 | pen << 8, 0 outside
+void     sdlscr_text_getcursor( int* x, int* y );
+void     sdlscr_text_clear( void );
+void     sdlscr_text_fill( int x1, int y1, int x2, int y2, int ch, int fg, int bg );     // -1 leaves that part alone
+void     sdlscr_text_copy( int x1, int y1, int x2, int y2, int tx, int ty );
+void     sdlscr_text_invert( int x1, int y1, int x2, int y2 );
+size_t   sdlscr_text_save( uint8_t* out, size_t outsize );      // 4 bytes per cell; returns the size needed
+bool     sdlscr_text_restore( const uint8_t* data, size_t size );
+void     sdlscr_text_defchar( int code, const uint8_t rows[12] );
+
+// tiles (more above: sdlscr_writetile, sdlscr_scrolltiles)
+void     sdlscr_tile_setcell( int x, int y, int tile );
+int      sdlscr_tile_getcell( int x, int y );
+void     sdlscr_tile_setcells( const uint8_t* cells, size_t count );
+bool     sdlscr_tile_getimage( int tile, uint8_t out[TILE_WIDTH * TILE_HEIGHT] );
+
+// sprites (more above: sdlscr_showsprite, sdlscr_spriteprio, sdlscr_movesprite, sdlscr_spriteanimdata, sdlscr_spriteanimcfg, sdlscr_writesprite)
+void     sdlscr_sprite_setimage( int sprno, int image );
+int      sdlscr_sprite_getimage( int sprno );
+bool     sdlscr_sprite_getpos( int sprno, int* x, int* y );
+bool     sdlscr_sprite_active( int sprno );
+bool     sdlscr_sprite_getmap( int image, uint8_t out[SPRITE_WIDTH * SPRITE_HEIGHT] );
+void     sdlscr_sprite_moveto( int sprno, int x, int y, int ticks );
+bool     sdlscr_sprite_moving( int sprno );
+void     sdlscr_sprite_setcollide( int sprno, bool sprites, bool tiles );
+uint32_t sdlscr_sprite_hits( int sprno );
+int      sdlscr_sprite_collide( int sprno );
+int      sdlscr_sprite_nextevent( void );
+
+// timing (sdlscr_getframecnt() is above)
+void     sdlscr_vsync( void );                                  // waits for the next frame (or until the screen is closed)
+
 #endif
