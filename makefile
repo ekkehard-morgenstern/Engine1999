@@ -38,6 +38,9 @@ CL=$(CCOMP) $(CFLAGS)
 .c.o:
 	$(CC) -o $@ $<
 
+all: sdltest1 sdltest2 engine1999 basictest1 testcomp1 basictest2 vmtest1 repltest1 ansitest1 txttest1 asmtest1 synthtest1 iotest1 gfxtest1
+	echo ok >all
+
 .PHONY: grammar grammar-check
 
 # the quick reference of the language (docs/grammar.md and docs/grammar.html) from bascomp.ebnf; needs perl
@@ -47,9 +50,6 @@ grammar:
 # fails if a rule is used but not defined, or if the quick reference is out of date
 grammar-check:
 	perl grammar.pl --check
-
-all: sdltest1 sdltest2 engine1999 basictest1 testcomp1 basictest2 vmtest1 repltest1 ansitest1 txttest1 asmtest1 synthtest1 iotest1 gfxtest1
-	echo ok >all
 
 BASEMOD=sdlevent.o sdllayer.o sdlmain.o sdlscreen.o textscreen.o tilescreen.o sprscreen.o 8x12font1.o sdlaudio.o synth.o mml.o sdlutil.o \
 		basic.o baspgm.o baslin.o bastok.o bascomp.o nodetype.o codegen.o cgenctl.o cgendecl.o cgenprog.o vars.o runtime.o vm.o basfiles.o iodev.o gfxcore.o gfxops.o basrepl.o basdebug.o ansi.o fulledit.o vmasm.o monitor.o

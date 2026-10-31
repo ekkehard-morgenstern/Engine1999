@@ -3627,7 +3627,8 @@ static bool vm_resume_error( vm_t* vm, uint16_t kind ) {
     if ( vm->resumestate == 0 ) {
         return vm_error( vm, "RESUME without error" );
     }
-    if ( vm->resumestate == 2 ) {
+    if ( vm->resumestate == 2 && kind != 2 ) {
+        // the call was unwound by the trap: only a jump to a place outside of it is possible
         return vm_error( vm, "Cannot RESUME (the error was in a PROC or FUNC)" );
     }
     vm->resumestate = 0;

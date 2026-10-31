@@ -356,7 +356,7 @@ handler runs.
   innermost one: in `IF c THEN a ELSE b` it is `a` or `b`, and `RESUME NEXT` continues behind the whole `IF`; in `A=1:B=1/0:C=3` it is `B=1/0`. A `GOSUB`
   handler drops its return address (no `RETURN` after `RESUME`), a `GOTO` handler is armed again. Errors: "RESUME without error" (no error pending, or already
   resumed); **"Cannot RESUME" when the error happened inside a `PROC` / `FUNC` call** (its frame was unwound when the handler was entered; resume from the
-  caller is not possible, use `RESUME target`). `ERL` is the line of the failed statement also after the resume; the stacks are not cleaned up
+  caller is not possible; `RESUME target` works, if the target lies outside the procedure: a jump into its body would find no call frame). `ERL` is the line of the failed statement also after the resume; the stacks are not cleaned up
   further than for the handler itself (the data stack is empty, `GOSUB` return addresses stay).
 - `ERROR` is recognized after `ON` only (so a variable named `ERROR` still works elsewhere); `ERR` and `ERL` are reserved words now.
 

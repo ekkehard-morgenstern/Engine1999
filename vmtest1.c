@@ -970,6 +970,8 @@ static const testcase_t cases[] = {
     { "RESUME without an error", "10 RESUME",                                                  "? RESUME without error in line 10\n" },
     { "RESUME twice",           "10 ON ERROR GOTO 100\n20 PRINT 1/0\n30 ON ERROR OFF:GOTO 110\n100 RESUME NEXT\n110 RESUME", "? RESUME without error in line 110\n" },
     { "RESUME after an error in a PROC", "10 PROC P\n20 PRINT 1/0\n30 END PROC\n40 ON ERROR GOTO 100\n50 CALL P\n60 END\n100 RESUME", "? Cannot RESUME (the error was in a PROC or FUNC) in line 100\n" },
+    { "RESUME target after an error in a PROC", "10 PROC P\n20 PRINT 1/0\n30 END PROC\n40 ON ERROR GOTO 100\n50 CALL P\n60 PRINT \"after\"\n70 END\n100 PRINT \"h\":RESUME 60", "h\nafter\n" },
+    { "RESUME NEXT after an error in a FUNC", "10 FUNC F(X)\n20 RETURN 1/X\n30 END FUNC\n40 ON ERROR GOTO 100\n50 PRINT FN F(0)\n60 END\n100 RESUME NEXT", "? Cannot RESUME (the error was in a PROC or FUNC) in line 100\n" },
     // PROC / FUNC / CALL / LOCAL
     { "PROC and CALL",          "10 CALL HI\n20 CALL HI\n30 END\n40 PROC HI\n50 PRINT \"hi\"\n60 END PROC",   "hi\nhi\n" },
     { "PROC with parameters",   "10 CALL ADD(2,3)\n20 CALL ADD(10,20)\n30 END\n40 PROC ADD(A,B)\n50 PRINT A+B\n60 END PROC", "5\n30\n" },

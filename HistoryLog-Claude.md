@@ -13,9 +13,12 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-(not committed yet) **EBNF brought up to date** (2026-10-31)
-- **History log**: the entry of `90500ef` (array parameters, STOP/CONT/TRACE/AUTO, PEEK/POKE) moved into the log.
-- `bascomp.ebnf`: added everything the parser has learned since the last update: the operators (`\`, `MOD`, `SHL SHR ASL ASR`, `IMP NIMP EQV NEQV`), the numeric and string functions (`INT`..`LOG10`, `RND`, `PI`, `CV*`, `MK*$`, `PEEK`, `PEEK$`, `TIME$ DATE$ DATETIME$`), the graphics functions and statements (written out from the table in `gfxops.c`: `GFX`, `TXT`, `TILE`, `SPRITE`, `DESIGN`, `@`, `CLS`, `LOCATE`, `COLOR`, `SYMBOL`, `ON COLLISION`), call arguments with array arguments, `PROC`/`FUNC`/`CALL`/`LOCAL`, `RETURN expr`, `EXIT PROC`, `RESUME`, `STOP`/`CONT`/`TRACE`/`AUTO`, `POKE`; the orphan rules (`OPEN`, `CLOSE`, `ADDRESS`, `FIELD`.., `ON ERROR`, `RANDOMIZE`, `DEG`.., file operations) are reachable from `stmt` now. Fixed three undefined names (`num-expr-list`, `sys-no-arg-num/str`) and defined `identifier`. Checked with a script: every production is defined. Ends with a list of what a grammar cannot say (words recognized in context, lookahead, the code generator's checks). `docs/basic-language.md`: the remark about inconsistent grammar items replaced. No code changes.
+(not committed yet) **Fruit Invaders II, two fixes** (2026-10-31)
+- **History log**: the entries of `b1c9e18` (EBNF update) and `1e853e3` (grammar documentation) moved into the log (the grammar entry had been lost in the pending list and was rewritten).
+- **New**: `demos/fruit2.bas` (Fruit Invaders II, see `SESSION.md`), a line in `demos/README.md`, `fruit2.hi` in `.gitignore`.
+- **Fix**: `RESUME <target>` after an error inside a `PROC`/`FUNC` call works (`vm.c`, `vm_resume_error()`: only `RESUME` and `RESUME NEXT` are refused there, as the docs said); 2 tests in `vmtest1` (1013).
+- **Fix**: the `grammar` / `grammar-check` targets were the first rules of the `makefile`, so `make` without arguments built only the grammar files; they come after `all` now (found when `vmtest1` was not rebuilt).
+- Tests: `vmtest1` 1013 all pass; the demo ran headless for 100000 interrupt polls without an error and was looked at on the real screen (title, play, pause, quit).
 
 ## Log
 
@@ -613,3 +616,14 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 - **STOP / CONT / TRACE / AUTO**: tokens 240..242, nodes 0x7E..0x81, instructions 0x170..0x173, `vm_stopstate_t` (stacks moved on STOP/Break), `codegen_t.progsize`, `repl_program_changed()`, `repl_t.trace/autoline/autostep`, `VMREQ_AUTO`; the AUTO prompting in `engine1999.c` (tried on the real screen under Xvfb).
 - **PEEK / POKE / PEEK$**: tokens 243/244, `NT_POKESTMT 0x82`, instructions 0x174..0x176, `vm_t.ram` (1 MiB).
 - Tests: `vmtest1` 969 -> 1011 (+17 arrays, +5 STOP/TRACE, +20 PEEK/POKE), `repltest1` 286 -> 302 (STOP/CONT/TRACE/AUTO); both clean under ASAN/UBSAN; the other test programs pass. Docs: `basic-language.md`, `compiler-and-vm.md`, `roadmap.md`, `instset.h`, `SESSION.md`.
+
+### b1c9e18 — 2026-10-31 10:47:55 +0100 — "EBNF update by Claude Code"
+4 files, +158/-31.
+- **History log**: the entry of `90500ef` (array parameters, STOP/CONT/TRACE/AUTO, PEEK/POKE) moved into the log.
+- `bascomp.ebnf`: added everything the parser has learned since the last update: the operators (`\`, `MOD`, `SHL SHR ASL ASR`, `IMP NIMP EQV NEQV`), the numeric and string functions (`INT`..`LOG10`, `RND`, `PI`, `CV*`, `MK*$`, `PEEK`, `PEEK$`, `TIME$ DATE$ DATETIME$`), the graphics functions and statements (written out from the table in `gfxops.c`: `GFX`, `TXT`, `TILE`, `SPRITE`, `DESIGN`, `@`, `CLS`, `LOCATE`, `COLOR`, `SYMBOL`, `ON COLLISION`), call arguments with array arguments, `PROC`/`FUNC`/`CALL`/`LOCAL`, `RETURN expr`, `EXIT PROC`, `RESUME`, `STOP`/`CONT`/`TRACE`/`AUTO`, `POKE`; the orphan rules (`OPEN`, `CLOSE`, `ADDRESS`, `FIELD`.., `ON ERROR`, `RANDOMIZE`, `DEG`.., file operations) are reachable from `stmt` now. Fixed three undefined names (`num-expr-list`, `sys-no-arg-num/str`) and defined `identifier`. Checked with a script: every production is defined. Ends with a list of what a grammar cannot say (words recognized in context, lookahead, the code generator's checks). `docs/basic-language.md`: the remark about inconsistent grammar items replaced. No code changes.
+
+### 1e853e3 — 2026-10-31 10:57:50 +0100 — "Grammar documentation, created by Claude Code"
+9 files, +1493/-31.
+- **Grammar quick reference**: `grammar.pl` (reads `bascomp.ebnf`; `--check` verifies), `docs/grammar.md` (generated: sections, fenced `ebnf` rules with the tokens shown as written, the comments as prose, contents list) and `docs/grammar.html` (generated: colors, light/dark, links from each rule name to its definition); `makefile` targets `grammar` and `grammar-check`.
+- `bascomp.ebnf`: `--# Title` section markers, the tail regrouped by topic, a statement-groups summary, `identifier-AS` / `identifier-ERROR` -> `AS` / `ERROR`, notes reworded.
+- Rule kept: `CLAUDE.md` and `SESSION.md` say to update the EBNF and run `make grammar` when the language changes; `docs/README.md` and `docs/build-and-test.md` list the new files. No code changes; `make grammar-check` and `vmtest1` pass.

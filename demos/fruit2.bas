@@ -1,0 +1,1440 @@
+10 ' FRUIT INVADERS II - a Space Invaders style game for Engine1999, written with procedures.
+20 ' Keys: A or Z = move left, D or X = move right (the cannon keeps moving), S = stop, SPACE = fire, P = pause, Q = quit.
+30 ' Shoot the invading fruit before it lands. Cherries are worth 50 points, strawberries 40, apples 30, oranges 20, lemons 10, the flying
+40 ' pineapple 50 to 300. Now and then a banana falls out of a fruit: catch it with the cannon for rapid fire (two bullets at a time).
+50 ' What is new compared to Fruit Invaders (fruit.bas):
+60 '   * PROC / FUNC / CALL / LOCAL instead of GOSUB (the names of the procedures say what the game does); EXIT PROC, FOR EACH, ITERATE, EXIT,
+70 '     DOWNTO, a LOCAL array and an array parameter (the music), RESUME NEXT / RESUME <label> with ON ERROR (the high score file)
+80 '   * shaded sprites with faces and two animation frames, engine-driven animations (SPRITE SEQ / ANIM), explosions with flying bits
+90 '     (MOVETO), the formation glides from step to step (MOVETO), the starfield scrolls and twinkles (palette changes), a planet,
+100 '     a moon and mountains on the background layer, a pulsing title, shaded shields
+110 '   * music while you play (two voices on their own channels, timed by EVERY, getting faster with every wave), more sound effects
+120 '   * AFTER timer for the pineapple, a high score that is kept in the file fruit2.hi
+130 '
+140 ' --- global variables -----------------------------------------------------------------------------------------------------------------
+150 ' SC score, HI high score, LV lives, WV wave, NX score of the next extra life, OV game over, QT quit, LANDED the fruit has landed
+160 ' PX,PY cannon, PD its direction, FQ fire request, RAPID frames of rapid fire left, GA/GX/GY the bullets, BO/BX/BY the bombs
+170 ' FX,FY the formation, DX its direction, SD step width, SP steps per move, NA fruits alive, IV(row,column) 1 = alive
+180 ' UA,UX,UY,UD pineapple, UFOREADY set by the AFTER timer, PU,PUX,PUY banana, EP() explosion timers, PL() particle lives
+190 ' --------------------------------------------------------------------------------------------------------------------------------------
+200 ' (a FUNC has to be defined before the lines that call it)
+210 FUNC RN(M)
+220 RETURN INT(RND(1)*M)
+230 END FUNC
+240 FUNC CLAMP(V,LO,HI2)
+250 IF V<LO THEN RETURN LO
+260 IF V>HI2 THEN RETURN HI2
+270 RETURN V
+280 END FUNC
+290 FUNC PAD$(N,W)
+300 RETURN RIGHT$("00000000"+STR$(N),W)
+310 END FUNC
+320 ' the number of fruits that are still alive (FOR EACH goes over the whole array, a row after the other)
+330 FUNC COUNTALIVE(G())
+340 LOCAL N,V
+350 FOR EACH V IN G()
+360 IF V>0 THEN N=N+1
+370 NEXT
+380 RETURN N
+390 END FUNC
+400 ' ====================================================================== main program
+410 CALL INIT
+420 HI=0
+430 ON ERROR GOTO HIERR
+440 OPEN "fruit2.hi" FOR INPUT AS #1
+450 INPUT #1,HI
+460 CLOSE #1
+470 LABEL HIDONE
+480 ON ERROR OFF
+490 QT=0
+500 REPEAT
+510 CALL TITLE
+520 IF QT=0 THEN CALL PLAYGAME
+530 IF SC>=HI AND SC>0 THEN
+540 HI=SC
+550 ON ERROR GOTO HIERR2
+560 OPEN "fruit2.hi" FOR OUTPUT AS #1
+570 PRINT #1,HI
+580 CLOSE #1
+590 LABEL HIDONE2
+600 ON ERROR OFF
+610 END IF
+620 UNTIL QT=1
+630 CALL SHUTDOWN
+640 END
+650 ' the high score file does not exist (yet): start with 0 and go on behind the file statements; a file that can't be written is ignored
+660 LABEL HIERR
+670 HI=0
+680 RESUME HIDONE
+690 LABEL HIERR2
+700 RESUME HIDONE2
+710 ' the AFTER and EVERY handlers: they only call a procedure (the procedure uses LOCAL variables, so it can interrupt anything)
+720 LABEL BARTIMER
+730 CALL BAR
+740 RETURN
+750 LABEL UFOTIMER
+760 UFOREADY=1
+770 RETURN
+780 ' ====================================================================== set up (once)
+790 PROC INIT
+800 LOCAL I
+810 RANDOMIZE
+820 GFX RESET ALL
+830 ' (DIM n makes n elements, 0 to n-1)
+840 DIM IV(6,8),GA(2),GX(2),GY(2),BO(4),BX(4),BY(4),EP(4),PL(64),FW(6),RP(6),IMG(6),MF(4),BASSF(4),CH3(12),PAT(8),SV(4)
+850 FOR I=1 TO 5
+860 READ FW(I),IMG(I),RP(I)
+870 NEXT I
+880 FOR I=0 TO 3
+890 READ MF(I),BASSF(I),SV(I)
+900 NEXT I
+910 FOR I=0 TO 11
+920 READ CH3(I)
+930 NEXT I
+940 FOR I=0 TO 7
+950 READ PAT(I)
+960 NEXT I
+970 SX=36:SY=26:SHY=216:PY=262:UY=14
+980 CALL SOUNDS
+990 CALL PALETTES
+1000 CALL DEFSPRITES
+1010 CALL DEFTILES
+1020 CALL BACKGROUND
+1030 SPRITE SEQ 1,CHR$(10)+CHR$(11)+CHR$(12)+CHR$(11)
+1040 SPRITE SEQ 2,CHR$(19)+CHR$(20)+CHR$(21)+CHR$(20)
+1050 SPRITE SEQ 3,CHR$(22)+CHR$(23)
+1060 SPRITE SEQ 4,CHR$(14)+CHR$(15)+CHR$(16)+CHR$(15)
+1070 SPRITE SEQ 5,CHR$(24)+CHR$(25)+CHR$(26)+CHR$(27)
+1080 END PROC
+1090 PROC SOUNDS
+1100 SFX 1,"W1 V0.28 ML X0,0.01,0.4,0.05 S1900,260,12"
+1110 SFX 2,"W3 V0.55 ML X0,0.01,0.25,0.08 S1500,120,16"
+1120 SFX 3,"W3 V1 ML X0,0.02,0.5,0.6 S900,30,3"
+1130 SFX 4,"W1 V0.4 ML X0,0.01,0.3,0.05 H988,16 H1319,6"
+1140 SFX 5,"W1 V0.4 ML H523,10 H659,10 H784,10 H1047,6"
+1150 SFX 6,"W3 V0.35 ML X0,0.005,0.2,0.04 S500,90,32"
+1160 SFX 7,"W2 V0.15 ML S800,420,10"
+1170 SFX 8,"W1 V0.35 ML ~10,0.4 S300,1800,6"
+1180 SFX 9,"W2 V0.4 ML H784,12 H988,12 H1319,6"
+1190 SFX 10,"W1 V0.2 ML H1568,10 H2093,10"
+1200 SFX 11,"W3 V0.3 ML X0.1,0.2,0.3,0.3 S200,1200,2"
+1210 END PROC
+1220 ' ====================================================================== colors
+1230 ' the sprite colors are in windows of 16 palette entries: the pictures use the digits 1..9 and A..C, and DESIGN adds the base of the window
+1240 PROC LOADPAL
+1250 LOCAL B,I,R,GG,BL
+1260 READ B
+1270 FOR I=1 TO 12
+1280 READ R,GG,BL
+1290 GFX PALETTE 4,B+I,RGB(R,GG,BL)
+1300 NEXT I
+1310 END PROC
+1320 PROC PALETTES
+1330 LOCAL I
+1340 RESTORE PALDATA
+1350 FOR I=1 TO 11
+1360 CALL LOADPAL
+1370 NEXT I
+1380 ' the stars (twinkle: PROC TWINKLE)
+1390 GFX PALETTE 1,1,RGB(110,110,180):GFX PALETTE 1,2,RGB(190,190,255):GFX PALETTE 1,3,RGB(255,255,255):GFX PALETTE 1,4,RGB(150,150,220)
+1400 ' graphics layer: shields, ground, title
+1410 GFX PALETTE 3,1,RGB(30,120,50):GFX PALETTE 3,2,RGB(60,180,70):GFX PALETTE 3,3,RGB(140,235,110)
+1420 GFX PALETTE 3,4,RGB(70,60,90):GFX PALETTE 3,5,RGB(150,140,190)
+1430 GFX PALETTE 3,10,RGB(255,255,255):GFX PALETTE 3,11,RGB(20,10,50):GFX PALETTE 3,12,RGB(255,215,60):GFX PALETTE 3,13,RGB(255,255,255)
+1440 ' text layer: the colors of the text lines
+1450 GFX PALETTE 2,200,RGB(255,255,255):GFX PALETTE 2,201,RGB(255,215,60):GFX PALETTE 2,202,RGB(110,220,255):GFX PALETTE 2,203,RGB(255,90,90)
+1460 GFX PALETTE 2,204,RGB(130,255,130):GFX PALETTE 2,205,RGB(160,170,220):GFX PALETTE 2,206,RGB(255,150,210):GFX PALETTE 2,207,RGB(255,160,30)
+1470 GFX BACKDROP RGB(0,0,20)
+1480 END PROC
+1490 ' ====================================================================== background layer: sky, planet, moon, mountains
+1500 ' the sky: 24 bands, T = 0 normal, 1 = a red flash (the cannon was hit)
+1510 PROC SKY(T)
+1520 LOCAL I
+1530 FOR I=1 TO 24
+1540 GFX PALETTE 0,I,RGB(FN CLAMP(I*2+T*150,0,255),FN CLAMP(I\2+T*20,0,255),FN CLAMP(30+I*3+T*10,0,255))
+1550 NEXT I
+1560 END PROC
+1570 ' a filled disk on the graphics or background layer (horizontal lines)
+1580 PROC DISK(CX,CY,R,C)
+1590 LOCAL Y,W
+1600 FOR Y=-R TO R
+1610 W=INT(SQR(R*R-Y*Y))
+1620 GFX LINE CX-W,CY+Y,CX+W,CY+Y,C
+1630 NEXT Y
+1640 END PROC
+1650 PROC BACKGROUND
+1660 LOCAL I,X,H
+1670 GFX TARGET 0
+1680 GFX CLEAR
+1690 CALL SKY(0)
+1700 FOR I=0 TO 23
+1710 GFX LINE 0,I*13,639,I*13+12,I+1,BF
+1720 NEXT I
+1730 ' the planet, lit from the upper left: disks that get smaller, lighter and move towards the light
+1740 GFX PALETTE 0,40,RGB(40,25,90):GFX PALETTE 0,41,RGB(70,45,140):GFX PALETTE 0,42,RGB(105,70,180):GFX PALETTE 0,43,RGB(145,100,215)
+1750 GFX PALETTE 0,44,RGB(185,140,240):GFX PALETTE 0,45,RGB(225,190,255)
+1760 FOR I=0 TO 5
+1770 CALL DISK(520-I*3,104-I*3,62-I*9,40+I)
+1780 NEXT I
+1790 ' a ring: an ellipse in front of the planet
+1800 GFX PALETTE 0,46,RGB(200,170,255)
+1810 GFX CIRCLE 520,104,92,46,200,340,0.16
+1820 GFX CIRCLE 520,104,92,46,20,160,0.16
+1830 GFX CIRCLE 520,104,91,46,200,340,0.16
+1840 GFX CIRCLE 520,104,91,46,20,160,0.16
+1850 ' the moon with craters
+1860 GFX PALETTE 0,50,RGB(150,150,170):GFX PALETTE 0,51,RGB(205,205,225):GFX PALETTE 0,52,RGB(110,110,135)
+1870 CALL DISK(96,70,17,50)
+1880 CALL DISK(94,68,14,51)
+1890 CALL DISK(100,74,4,52):CALL DISK(88,64,3,52):CALL DISK(103,63,2,52)
+1900 ' mountains: two ridges made from sine waves
+1910 GFX PALETTE 0,60,RGB(40,25,70):GFX PALETTE 0,61,RGB(25,15,50)
+1920 FOR X=0 TO 638 STEP 2
+1930 H=INT(26+12*SIN(X/41)+7*SIN(X/13+1))
+1940 GFX LINE X,299-H,X+1,299,60,BF
+1950 NEXT X
+1960 FOR X=0 TO 638 STEP 2
+1970 H=INT(12+8*SIN(X/29+2)+4*SIN(X/9))
+1980 GFX LINE X,299-H,X+1,299,61,BF
+1990 NEXT X
+2000 GFX TARGET 3
+2010 END PROC
+2020 ' ====================================================================== the starfield on the tile layer
+2030 PROC DEFSPRITES
+2040 LOCAL R
+2050 DESIGN SPRITE 0,16
+2060 @ "................"
+2070 @ "................"
+2080 @ ".......6666....."
+2090 @ "......67.7.8...."
+2100 @ ".....67....78..."
+2110 @ "....67......78.."
+2120 @ "...67........8.."
+2130 @ "................"
+2140 @ "...67..........."
+2150 @ "...6.......8...."
+2160 @ "..11111....78..."
+2170 @ ".1555441.11111.."
+2180 @ "155444331555441."
+2190 @ "1599433155444331"
+2200 @ "14A9333159943331"
+2210 @ "143332214A933321"
+2220 @ ".133222143332221"
+2230 @ "..11111.1332221."
+2240 @ ".........11111.."
+2250 FOR R=1 TO 5:@ "................":NEXT R
+2260 DESIGN SPRITE 1,16
+2270 @ "................"
+2280 @ "................"
+2290 @ ".......6666....."
+2300 @ "......67.7.8...."
+2310 @ ".....67....78..."
+2320 @ "....67......78.."
+2330 @ "...67........8.."
+2340 @ "................"
+2350 @ "...........8...."
+2360 @ "...67......78..."
+2370 @ "...6.....11111.."
+2380 @ "..11111.1555441."
+2390 @ ".155544155444331"
+2400 @ "1554443159943331"
+2410 @ "1599433149A33321"
+2420 @ "149A333143332221"
+2430 @ "143332221332221."
+2440 @ ".1332221.11111.."
+2450 @ "..11111........."
+2460 FOR R=1 TO 5:@ "................":NEXT R
+2470 DESIGN SPRITE 2,32
+2480 FOR R=1 TO 4:@ "................":NEXT R
+2490 @ "......6.8..6...."
+2500 @ ".....6788.8786.."
+2510 @ "......67878876.."
+2520 @ ".11111116786111."
+2530 @ ".15555555544441."
+2540 @ ".15555554444431."
+2550 @ ".1555994C99C331."
+2560 @ ".1555A944A93331."
+2570 @ "..154A944A9331.."
+2580 @ "..1444C33C3321.."
+2590 @ "..1444A33A3221.."
+2600 @ "...1333AA3221..."
+2610 @ "...1333C22C21..."
+2620 @ "....13322221...."
+2630 @ ".....122221....."
+2640 @ "......11C1......"
+2650 FOR R=1 TO 4:@ "................":NEXT R
+2660 DESIGN SPRITE 3,32
+2670 FOR R=1 TO 3:@ "................":NEXT R
+2680 @ "......6.8..6...."
+2690 @ ".....6788.8786.."
+2700 @ "......67878876.."
+2710 @ ".11111116786111."
+2720 @ ".15555555544441."
+2730 @ ".15555554444431."
+2740 @ ".1555994C99C331."
+2750 @ ".15559A449A3331."
+2760 @ "..1549A449A331.."
+2770 @ "..1444C33C3321.."
+2780 @ "..14443AA33221.."
+2790 @ "...133AAAA221..."
+2800 @ "...1333C22C21..."
+2810 @ "....13322221...."
+2820 @ ".....122221....."
+2830 @ "......11C1......"
+2840 FOR R=1 TO 5:@ "................":NEXT R
+2850 DESIGN SPRITE 4,48
+2860 FOR R=1 TO 3:@ "................":NEXT R
+2870 @ ".......6.7788..."
+2880 @ ".......6.8888..."
+2890 @ ".......6..88...."
+2900 @ "................"
+2910 @ ".....1....1....."
+2920 @ "...1151..1411..."
+2930 @ "..155551144441.."
+2940 @ ".15559944994331."
+2950 @ ".1555A944A93331."
+2960 @ ".1554A944A93331."
+2970 @ ".14444433333221."
+2980 @ ".14444333332221."
+2990 @ ".14433A33A22221."
+3000 @ ".143333AA222221."
+3010 @ "..133332222221.."
+3020 @ "...1122222211..."
+3030 @ ".....111111....."
+3040 FOR R=1 TO 4:@ "................":NEXT R
+3050 DESIGN SPRITE 5,48
+3060 @ "................"
+3070 @ "................"
+3080 @ ".......6.7788..."
+3090 @ ".......6.8888..."
+3100 @ ".......6..88...."
+3110 @ "................"
+3120 @ ".....1....1....."
+3130 @ "...1151..1411..."
+3140 @ "..155551144441.."
+3150 @ ".15559944994331."
+3160 @ ".15559A449A3331."
+3170 @ ".15549A449A3331."
+3180 @ ".14444433333221."
+3190 @ ".14444333332221."
+3200 @ ".144333AA322221."
+3210 @ ".14333AAAA22221."
+3220 @ "..133332222221.."
+3230 @ "...1122222211..."
+3240 @ ".....111111....."
+3250 FOR R=1 TO 5:@ "................":NEXT R
+3260 DESIGN SPRITE 6,64
+3270 FOR R=1 TO 3:@ "................":NEXT R
+3280 @ ".......6788....."
+3290 @ ".......6........"
+3300 @ "................"
+3310 @ "......1111......"
+3320 @ "....11C55511...."
+3330 @ "...15555544C1..."
+3340 @ "..15C554444431.."
+3350 @ ".15559944993331."
+3360 @ ".1555A944A93331."
+3370 @ ".1554A944A93331."
+3380 @ ".14444433333C21."
+3390 @ ".14C44333332221."
+3400 @ ".14443A33A22221."
+3410 @ ".144333AA222221."
+3420 @ "..13333222C221.."
+3430 @ "...1332C22221..."
+3440 @ "....11222211...."
+3450 @ "......1111......"
+3460 FOR R=1 TO 3:@ "................":NEXT R
+3470 DESIGN SPRITE 7,64
+3480 @ "................"
+3490 @ "................"
+3500 @ ".......6788....."
+3510 @ ".......6........"
+3520 @ "................"
+3530 @ "......1111......"
+3540 @ "....11C55511...."
+3550 @ "...15555544C1..."
+3560 @ "..15C554444431.."
+3570 @ ".15559944993331."
+3580 @ ".15559A449A3331."
+3590 @ ".15549A449A3331."
+3600 @ ".14444433333C21."
+3610 @ ".14C44333332221."
+3620 @ ".144433AA322221."
+3630 @ ".14433AAAA22221."
+3640 @ "..13333222C221.."
+3650 @ "...1332C22221..."
+3660 @ "....11222211...."
+3670 @ "......1111......"
+3680 FOR R=1 TO 4:@ "................":NEXT R
+3690 DESIGN SPRITE 8,80
+3700 FOR R=1 TO 3:@ "................":NEXT R
+3710 @ ".......6788....."
+3720 @ ".......6.88....."
+3730 FOR R=1 TO 3:@ "................":NEXT R
+3740 @ "....11111111...."
+3750 @ "...1555554441..."
+3760 @ "..155994499441.."
+3770 @ ".1555A944A93331."
+3780 @ ".1544A944A93331."
+3790 @ "1444444333333221"
+3800 @ ".14443333332221."
+3810 @ ".14333A33A22221."
+3820 @ "..13333AA22221.."
+3830 @ "...1322222221..."
+3840 @ "....11111111...."
+3850 FOR R=1 TO 5:@ "................":NEXT R
+3860 DESIGN SPRITE 9,80
+3870 @ "................"
+3880 @ "................"
+3890 @ ".......6788....."
+3900 @ ".......6.88....."
+3910 FOR R=1 TO 3:@ "................":NEXT R
+3920 @ "....11111111...."
+3930 @ "...1555554441..."
+3940 @ "..155994499441.."
+3950 @ ".15559A449A3331."
+3960 @ ".15449A449A3331."
+3970 @ "1444444333333221"
+3980 @ ".14443333332221."
+3990 @ ".143333AA222221."
+4000 @ "..1333AAAA2221.."
+4010 @ "...1322222221..."
+4020 @ "....11111111...."
+4030 FOR R=1 TO 6:@ "................":NEXT R
+4040 DESIGN SPRITE 10,96
+4050 @ "1111111111111111"
+4060 @ ".......11......."
+4070 @ ".......11......."
+4080 @ "..6...7..7...6.."
+4090 @ "..67.78..87.76.."
+4100 @ "...6788..8876..."
+4110 @ "....678..876...."
+4120 @ ".....68..86....."
+4130 @ "................"
+4140 @ "......1111......"
+4150 @ "....11C55511...."
+4160 @ "...15C5C4C4C1..."
+4170 @ "...1C554C4441..."
+4180 @ "..1C599C499C31.."
+4190 @ "..155A944A9331.."
+4200 @ "..1C4A9C3A9C21.."
+4210 @ "..14C443C332C1.."
+4220 @ "..1C4C3C3C2C21.."
+4230 @ "..1443CAA2C221.."
+4240 @ "...13CAAAA2C1..."
+4250 @ "...1C332C2221..."
+4260 @ "....112C2C11...."
+4270 @ "......1111......"
+4280 @ "................"
+4290 DESIGN SPRITE 11,96
+4300 @ "...1111111111..."
+4310 @ ".......11......."
+4320 @ ".......11......."
+4330 @ "..6...7..7...6.."
+4340 @ "..67.78..87.76.."
+4350 @ "...6788..8876..."
+4360 @ "....678..876...."
+4370 @ ".....68..86....."
+4380 @ "................"
+4390 @ "......1111......"
+4400 @ "....11C55511...."
+4410 @ "...15C5C4C4C1..."
+4420 @ "...1C554C4441..."
+4430 @ "..1C599C499C31.."
+4440 @ "..155A944A9331.."
+4450 @ "..1C4A9C3A9C21.."
+4460 @ "..14C443C332C1.."
+4470 @ "..1C4C3C3C2C21.."
+4480 @ "..1443CAA2C221.."
+4490 @ "...13CAAAA2C1..."
+4500 @ "...1C332C2221..."
+4510 @ "....112C2C11...."
+4520 @ "......1111......"
+4530 @ "................"
+4540 DESIGN SPRITE 12,96
+4550 @ "11...11111111.11"
+4560 @ ".......11......."
+4570 @ ".......11......."
+4580 @ "..6...7..7...6.."
+4590 @ "..67.78..87.76.."
+4600 @ "...6788..8876..."
+4610 @ "....678..876...."
+4620 @ ".....68..86....."
+4630 @ "................"
+4640 @ "......1111......"
+4650 @ "....11C55511...."
+4660 @ "...15C5C4C4C1..."
+4670 @ "...1C554C4441..."
+4680 @ "..1C599C499C31.."
+4690 @ "..1559A449A331.."
+4700 @ "..1C49AC39AC21.."
+4710 @ "..14C443C332C1.."
+4720 @ "..1C4C3C3C2C21.."
+4730 @ "..1443CAA2C221.."
+4740 @ "...13CAAAA2C1..."
+4750 @ "...1C332C2221..."
+4760 @ "....112C2C11...."
+4770 @ "......1111......"
+4780 @ "................"
+4790 DESIGN SPRITE 13,112
+4800 FOR R=1 TO 3:@ "................":NEXT R
+4810 @ "......1111......"
+4820 @ "......1551......"
+4830 @ "......1441......"
+4840 @ "......1441......"
+4850 @ ".....114411....."
+4860 @ ".....134431....."
+4870 @ "....13444431...."
+4880 @ "....13499431...."
+4890 @ "...1348888431..."
+4900 @ "..134488884431.."
+4910 @ ".11344888844311."
+4920 @ "1333344444433331"
+4930 @ "1332233333322331"
+4940 @ "1666222222226661"
+4950 @ "1777111111117771"
+4960 @ "11111......11111"
+4970 FOR R=1 TO 5:@ "................":NEXT R
+4980 DESIGN SPRITE 14,112
+4990 @ ".......BB......."
+5000 @ ".......BCB......"
+5010 @ "........CC......"
+5020 @ "........C......."
+5030 FOR R=1 TO 20:@ "................":NEXT R
+5040 DESIGN SPRITE 15,112
+5050 @ ".......BB......."
+5060 @ "......BCCB......"
+5070 @ ".......BC......."
+5080 @ "........B......."
+5090 FOR R=1 TO 20:@ "................":NEXT R
+5100 DESIGN SPRITE 16,112
+5110 @ "......BCCB......"
+5120 @ "......BCCB......"
+5130 @ ".......CC......."
+5140 @ ".......C........"
+5150 FOR R=1 TO 20:@ "................":NEXT R
+5160 DESIGN SPRITE 17,128
+5170 FOR R=1 TO 6:@ "................":NEXT R
+5180 @ ".......33......."
+5190 @ ".......55......."
+5200 @ ".......55......."
+5210 FOR R=1 TO 7:@ "......3553......":NEXT R
+5220 @ ".......55......."
+5230 @ ".......33......."
+5240 FOR R=1 TO 6:@ "................":NEXT R
+5250 DESIGN SPRITE 18,128
+5260 FOR R=1 TO 5:@ "................":NEXT R
+5270 FOR R=1 TO 5:@ "......7997......":NEXT R
+5280 @ ".....679976....."
+5290 @ ".....679976....."
+5300 FOR R=1 TO 7:@ "......7997......":NEXT R
+5310 FOR R=1 TO 5:@ "................":NEXT R
+5320 DESIGN SPRITE 19,144
+5330 FOR R=1 TO 5:@ "................":NEXT R
+5340 @ ".......6........"
+5350 @ ".......66......."
+5360 @ "................"
+5370 @ ".......11......."
+5380 @ "......1441......"
+5390 @ ".....143341....."
+5400 @ ".....132231....."
+5410 @ ".....132211....."
+5420 @ "......1221......"
+5430 @ ".......11......."
+5440 FOR R=1 TO 9:@ "................":NEXT R
+5450 DESIGN SPRITE 20,144
+5460 FOR R=1 TO 5:@ "................":NEXT R
+5470 @ ".......6........"
+5480 @ ".......66......."
+5490 @ "................"
+5500 @ "........1......."
+5510 @ ".......141......"
+5520 @ "......14431....."
+5530 @ "......13221....."
+5540 @ ".......121......"
+5550 @ "........1......."
+5560 FOR R=1 TO 10:@ "................":NEXT R
+5570 DESIGN SPRITE 21,144
+5580 FOR R=1 TO 5:@ "................":NEXT R
+5590 @ ".......6........"
+5600 @ ".......66......."
+5610 @ "................"
+5620 @ ".......11......."
+5630 @ "......1441......"
+5640 @ ".....143341....."
+5650 @ ".....132231....."
+5660 @ ".....132231....."
+5670 @ "......1221......"
+5680 @ ".......11......."
+5690 FOR R=1 TO 9:@ "................":NEXT R
+5700 DESIGN SPRITE 22,160
+5710 FOR R=1 TO 3:@ "................":NEXT R
+5720 @ ".............5.."
+5730 @ "..1111111111555."
+5740 @ ".14644444433351."
+5750 @ ".14444443333331."
+5760 @ "1444443333333331"
+5770 @ "1444333333333331"
+5780 @ "1433311111133321"
+5790 @ "13331......12221"
+5800 @ "1331........1221"
+5810 @ "131..........121"
+5820 @ ".11..........11."
+5830 @ ".11..........11."
+5840 @ "..1..........1.."
+5850 FOR R=1 TO 8:@ "................":NEXT R
+5860 DESIGN SPRITE 23,160
+5870 FOR R=1 TO 4:@ "................":NEXT R
+5880 @ "..111111111111.."
+5890 @ ".14644444433361."
+5900 @ ".14444443333331."
+5910 @ "1444443333333331"
+5920 @ "1444333333333331"
+5930 @ "1433311111133321"
+5940 @ "13331......12221"
+5950 @ "1331........1221"
+5960 @ "1315.........121"
+5970 @ ".1555........11."
+5980 @ ".115.........11."
+5990 @ "..1..........1.."
+6000 FOR R=1 TO 8:@ "................":NEXT R
+6010 DESIGN SPRITE 24,176
+6020 FOR R=1 TO 9:@ "................":NEXT R
+6030 @ ".......33......."
+6040 @ "......3553......"
+6050 @ ".....355443....."
+6060 @ ".....354443....."
+6070 @ "......3443......"
+6080 @ ".......33......."
+6090 FOR R=1 TO 9:@ "................":NEXT R
+6100 DESIGN SPRITE 25,176
+6110 FOR R=1 TO 5:@ "................":NEXT R
+6120 @ "........4......."
+6130 @ "................"
+6140 @ "...4.222222..4.."
+6150 @ "....25555442...."
+6160 @ "...2555444432..."
+6170 @ "...2554444332..."
+6180 @ "...2544433332..."
+6190 @ ".4.2444333332..4"
+6200 @ "...2443333332..."
+6210 @ "...2333333332..."
+6220 @ "....23333332...."
+6230 @ ".....222222....."
+6240 @ "...4.........4.."
+6250 @ "................"
+6260 @ "........4......."
+6270 FOR R=1 TO 4:@ "................":NEXT R
+6280 DESIGN SPRITE 26,176
+6290 FOR R=1 TO 3:@ "................":NEXT R
+6300 @ "......5........."
+6310 @ ".......22......."
+6320 @ "....22222222...."
+6330 @ "...2223333222..5"
+6340 @ "..223333333322.."
+6350 @ ".22334444443322."
+6360 @ "522344444444322."
+6370 @ ".23344....44332."
+6380 @ "223344....443322"
+6390 @ "223344....443322"
+6400 @ ".23344....44332."
+6410 @ ".22344444444322."
+6420 @ ".22334444443322."
+6430 @ "..223333333322.."
+6440 @ "...2223333222..."
+6450 @ ".5..22222222...."
+6460 @ ".......22......."
+6470 @ "................"
+6480 @ "..........5....."
+6490 @ "................"
+6500 @ "................"
+6510 DESIGN SPRITE 27,176
+6520 FOR R=1 TO 4:@ "................":NEXT R
+6530 @ ".........78....."
+6540 @ ".........8......"
+6550 @ "....78.........."
+6560 @ "....8..........."
+6570 @ ".........8......"
+6580 @ "................"
+6590 @ "................"
+6600 @ "....8..........."
+6610 @ "...............7"
+6620 @ "............8..8"
+6630 @ "................"
+6640 @ "78.............."
+6650 @ "8......8........"
+6660 @ "................"
+6670 @ ".....78........7"
+6680 @ ".....8.........8"
+6690 @ "................"
+6700 @ "................"
+6710 @ "..........78...."
+6720 @ "..........8....."
+6730 DESIGN SPRITE 28,16
+6740 FOR R=1 TO 11:@ "................":NEXT R
+6750 @ "........5......."
+6760 @ ".......534......"
+6770 @ "........3......."
+6780 FOR R=1 TO 10:@ "................":NEXT R
+6790 DESIGN SPRITE 29,32
+6800 FOR R=1 TO 11:@ "................":NEXT R
+6810 @ "........5......."
+6820 @ ".......534......"
+6830 @ "........3......."
+6840 FOR R=1 TO 10:@ "................":NEXT R
+6850 DESIGN SPRITE 30,48
+6860 FOR R=1 TO 11:@ "................":NEXT R
+6870 @ "........5......."
+6880 @ ".......534......"
+6890 @ "........3......."
+6900 FOR R=1 TO 10:@ "................":NEXT R
+6910 DESIGN SPRITE 31,64
+6920 FOR R=1 TO 11:@ "................":NEXT R
+6930 @ "........5......."
+6940 @ ".......534......"
+6950 @ "........3......."
+6960 FOR R=1 TO 10:@ "................":NEXT R
+6970 DESIGN SPRITE 32,80
+6980 FOR R=1 TO 11:@ "................":NEXT R
+6990 @ "........5......."
+7000 @ ".......534......"
+7010 @ "........3......."
+7020 FOR R=1 TO 10:@ "................":NEXT R
+7030 DESIGN SPRITE 33,176
+7040 FOR R=1 TO 11:@ "................":NEXT R
+7050 @ "........6......."
+7060 @ ".......656......"
+7070 @ "........6......."
+7080 FOR R=1 TO 10:@ "................":NEXT R
+7090 END PROC
+7100 PROC DEFTILES
+7110 LOCAL R
+7120 DESIGN TILE 1
+7130 FOR R=1 TO 4:@ "................":NEXT R
+7140 @ "...1............"
+7150 FOR R=1 TO 11:@ "................":NEXT R
+7160 @ "............1..."
+7170 FOR R=1 TO 7:@ "................":NEXT R
+7180 DESIGN TILE 2
+7190 FOR R=1 TO 8:@ "................":NEXT R
+7200 @ ".........2......"
+7210 FOR R=1 TO 10:@ "................":NEXT R
+7220 @ "....1..........."
+7230 FOR R=1 TO 4:@ "................":NEXT R
+7240 DESIGN TILE 3
+7250 FOR R=1 TO 9:@ "................":NEXT R
+7260 @ ".......1........"
+7270 @ "......131......."
+7280 @ ".......1........"
+7290 FOR R=1 TO 12:@ "................":NEXT R
+7300 DESIGN TILE 4
+7310 FOR R=1 TO 5:@ "................":NEXT R
+7320 @ ".............4.."
+7330 FOR R=1 TO 9:@ "................":NEXT R
+7340 @ "..2............."
+7350 FOR R=1 TO 5:@ "................":NEXT R
+7360 @ "........1......."
+7370 @ "................"
+7380 @ "................"
+7390 END PROC
+7400 ' a row of 41 random tiles (0 = empty, 1 .. 4 = stars)
+7410 FUNC STARROW$()
+7420 LOCAL I,R$,K
+7430 FOR I=1 TO 41
+7440 K=FN RN(14)
+7450 IF K>4 THEN K=0
+7460 R$=R$+CHR$(K)
+7470 NEXT I
+7480 RETURN R$
+7490 END FUNC
+7500 PROC STARFIELD
+7510 LOCAL I
+7520 SF=0:SM$=""
+7530 FOR I=1 TO 13
+7540 SM$=SM$+FN STARROW$()
+7550 NEXT I
+7560 TILE FILL SM$
+7570 TILE SCROLL 0,0
+7580 END PROC
+7590 ' the stars drift down: the map moves a pixel per frame and gets a new row on top after 24 pixels; four palette entries twinkle
+7600 PROC STARS
+7610 SF=SF+1
+7620 IF SF>=24 THEN
+7630 SF=0
+7640 SM$=FN STARROW$()+LEFT$(SM$,492)
+7650 TILE FILL SM$
+7660 END IF
+7670 TILE SCROLL 0,SF
+7680 STW=STW+1
+7690 IF STW MOD 3=0 THEN
+7700 GFX PALETTE 1,1,RGB(INT(90+60*SIN(STW/9)),INT(90+60*SIN(STW/9)),INT(170+60*SIN(STW/9)))
+7710 GFX PALETTE 1,2,RGB(INT(190+60*SIN(STW/7+1)),INT(190+60*SIN(STW/7+1)),255)
+7720 GFX PALETTE 1,4,RGB(INT(120+90*SIN(STW/5+2)),INT(120+90*SIN(STW/5+2)),INT(200+50*SIN(STW/5+2)))
+7730 END IF
+7740 END PROC
+7750 ' ====================================================================== the screen
+7760 PROC CLEARALL
+7770 LOCAL I
+7780 EVERY OFF
+7790 AFTER OFF
+7800 SOUND OFF
+7810 CLS
+7820 GFX CLEAR
+7830 FOR I=0 TO 127
+7840 SPRITE I,OFF
+7850 NEXT I
+7860 FOR I=0 TO 3
+7870 EP(I)=0
+7880 NEXT I
+7890 FOR I=0 TO 63
+7900 PL(I)=0
+7910 NEXT I
+7920 CALL SKY(0)
+7930 CALL STARFIELD
+7940 END PROC
+7950 ' the four shields and the ground, on the graphics layer: rows from the bottom to the top, lighter towards the top
+7960 PROC SHIELDS
+7970 LOCAL I,X,R,C,Z,XX,YY
+7980 GFX LINE 0,288,639,288,5
+7990 GFX LINE 0,289,639,291,4,BF
+8000 FOR I=0 TO 3
+8010 X=70+I*140
+8020 FOR R=21 DOWNTO 0
+8030 C=1
+8040 IF R<14 THEN C=2
+8050 IF R<4 THEN C=3
+8060 GFX LINE X,SHY+R,X+39,SHY+R,C
+8070 NEXT R
+8080 GFX LINE X,SHY,X+5,SHY+5,0,BF
+8090 GFX LINE X+34,SHY,X+39,SHY+5,0,BF
+8100 GFX LINE X+13,SHY+13,X+26,SHY+21,0,BF
+8110 ' a little texture: light and dark specks on the shield
+8120 FOR Z=1 TO 40
+8130 XX=X+FN RN(40):YY=SHY+FN RN(22)
+8140 IF POINT(XX,YY)>0 THEN GFX PSET XX,YY,1+FN RN(3)
+8150 NEXT Z
+8160 NEXT I
+8170 END PROC
+8180 ' ====================================================================== text helpers
+8190 PROC TXTAT(X,Y,T$,C)
+8200 LOCATE X,Y
+8210 COLOR C
+8220 PRINT T$;
+8230 END PROC
+8240 ' centered text on the graphics layer with a shadow
+8250 PROC BIGTEXT(Y,T$,C,S)
+8260 LOCAL X
+8270 X=(640-LEN(T$)*8*S)\2
+8280 GFX TEXT X+S\2+1,Y+S\2+1,T$,11,S,S
+8290 GFX TEXT X,Y,T$,C,S,S
+8300 END PROC
+8310 ' the score line and the lives (small cannons)
+8320 PROC HUD
+8330 LOCAL I
+8340 CALL TXTAT(1,0,"SCORE",205)
+8350 CALL TXTAT(7,0,FN PAD$(SC,6),201)
+8360 CALL TXTAT(22,0,"HI",205)
+8370 CALL TXTAT(25,0,FN PAD$(HI,6),200)
+8380 CALL TXTAT(38,0,"WAVE",205)
+8390 CALL TXTAT(43,0,STR$(WV)+"  ",202)
+8400 CALL TXTAT(58,0,"LIVES",205)
+8410 FOR I=0 TO 4
+8420 IF I<LV THEN
+8430 SPRITE 54+I,524+I*20,-3,13
+8440 SPRITE 54+I,ON
+8450 ELSE
+8460 SPRITE 54+I,OFF
+8470 END IF
+8480 NEXT I
+8490 IF RAPID>0 THEN
+8500 CALL TXTAT(1,1,"RAPID FIRE",203)
+8510 ELSE
+8520 CALL TXTAT(1,1,"          ",200)
+8530 END IF
+8540 HF=0
+8550 END PROC
+8560 ' ====================================================================== keys
+8570 PROC KEYS
+8580 LOCAL K$,K,N
+8590 REPEAT
+8600 K$=INKEY$
+8610 IF K$<>"" THEN
+8620 K=ASC(K$)
+8630 IF K>=97 AND K<=122 THEN K=K-32
+8640 IF K=65 OR K=90 THEN PD=-1
+8650 IF K=68 OR K=88 THEN PD=1
+8660 IF K=83 THEN PD=0
+8670 IF K=32 THEN FQ=1
+8680 IF K=81 THEN QT=1
+8690 IF K=80 THEN CALL PAUSE
+8700 END IF
+8710 N=N+1
+8720 UNTIL K$="" OR N>=6
+8730 END PROC
+8740 PROC PAUSE
+8750 LOCAL K$
+8760 CALL TXTAT(36,17,"PAUSED",201)
+8770 REPEAT
+8780 GFX VSYNC
+8790 K$=INKEY$
+8800 UNTIL K$="p" OR K$="P" OR K$="q" OR K$="Q"
+8810 IF K$="q" OR K$="Q" THEN QT=1
+8820 TXT FILL 36,17,41,17,32
+8830 END PROC
+8840 ' ====================================================================== the cannon and its bullets
+8850 PROC MOVECANNON
+8860 IF RAPID>0 THEN
+8870 RAPID=RAPID-1
+8880 IF RAPID=0 THEN HF=1
+8890 END IF
+8900 IF PD=0 THEN EXIT PROC
+8910 PX=FN CLAMP(PX+PD*3,4,620)
+8920 IF PX=4 OR PX=620 THEN PD=0
+8930 SPRITE 40,PX,PY
+8940 SPRITE 41,PX,PY+16
+8950 END PROC
+8960 PROC BULLETS
+8970 LOCAL I
+8980 IF FQ=1 THEN CALL FIRE
+8990 FOR I=0 TO 1
+9000 IF GA(I)=1 THEN CALL BULLETMOVE(I)
+9010 NEXT I
+9020 END PROC
+9030 PROC FIRE
+9040 LOCAL I,M
+9050 FQ=0
+9060 M=1
+9070 IF RAPID>0 THEN M=2
+9080 FOR I=0 TO M-1
+9090 IF GA(I)=0 THEN
+9100 GA(I)=1:GX(I)=PX:GY(I)=PY-8
+9110 SPRITE 42+I,GX(I),GY(I),17
+9120 IF RAPID>0 THEN SPRITE 42+I,IMAGE 18
+9130 SPRITE 42+I,ON
+9140 SFX 1
+9150 EXIT PROC
+9160 END IF
+9170 NEXT I
+9180 END PROC
+9190 PROC BULLETMOVE(I)
+9200 LOCAL TX,TY
+9210 GY(I)=GY(I)-7
+9220 IF GY(I)<8 THEN
+9230 CALL KILLBULLET(I)
+9240 EXIT PROC
+9250 END IF
+9260 SPRITE 42+I,GX(I),GY(I)
+9270 TX=GX(I)+7:TY=GY(I)+6
+9280 IF POINT(TX,TY)>0 THEN
+9290 CALL SHIELDHIT(TX,TY)
+9300 CALL KILLBULLET(I)
+9310 EXIT PROC
+9320 END IF
+9330 IF UA=1 AND TX>=UX AND TX<UX+16 AND TY>=UY+2 AND TY<UY+22 THEN
+9340 CALL UFOHIT(I)
+9350 EXIT PROC
+9360 END IF
+9370 IF TX>=FX AND TY>=FY THEN CALL INVADERHIT(I,TX,TY)
+9380 END PROC
+9390 PROC KILLBULLET(I)
+9400 GA(I)=0
+9410 SPRITE 42+I,OFF
+9420 END PROC
+9430 ' did the bullet at (TX,TY) hit a fruit of the formation?
+9440 PROC INVADERHIT(I,TX,TY)
+9450 LOCAL C,RW,RX,RY
+9460 C=(TX-FX)\SX
+9470 RX=TX-FX-C*SX
+9480 RW=(TY-FY)\SY+1
+9490 RY=TY-FY-(RW-1)*SY
+9500 IF C<=7 AND RW<=5 AND RX<16 AND RY>=3 AND RY<21 THEN
+9510 IF IV(RW,C)=1 THEN CALL ZAP(I,RW,C)
+9520 END IF
+9530 END PROC
+9540 PROC ZAP(I,RW,C)
+9550 LOCAL X,Y
+9560 IV(RW,C)=0
+9570 NA=NA-1
+9580 SC=SC+RP(RW)
+9590 SPRITE (RW-1)*8+C,OFF
+9600 X=FX+C*SX+8:Y=FY+(RW-1)*SY+12
+9610 CALL BOOM(X,Y,RW-1)
+9620 SFX 2
+9630 CALL KILLBULLET(I)
+9640 CALL SCORED
+9650 SP=NA\2+2-WV
+9660 IF SP<2 THEN SP=2
+9670 ' now and then a banana falls out
+9680 IF PU=0 AND FN RN(9)=0 THEN CALL BANANA(X,Y)
+9690 END PROC
+9700 ' score changed: an extra life every 1500 points, the high score, the score line needs to be drawn again
+9710 PROC SCORED
+9720 IF SC>=NX THEN
+9730 LV=LV+1:NX=NX+1500
+9740 SFX 5
+9750 END IF
+9760 IF SC>HI THEN HI=SC
+9770 HF=1
+9780 END PROC
+9790 ' ====================================================================== the bananas
+9800 PROC BANANA(X,Y)
+9810 PU=1:PUX=X-8:PUY=Y-12
+9820 SPRITE 49,PUX,PUY,22
+9830 SPRITE 49,ANIM 3,2,8
+9840 SPRITE 49,ON
+9850 SFX 10
+9860 END PROC
+9870 PROC POWERUP
+9880 IF PU=0 THEN EXIT PROC
+9890 PUY=PUY+2
+9900 SPRITE 49,PUX,PUY
+9910 IF PUY>PY-14 AND PUY<PY+16 AND PUX>PX-12 AND PUX<PX+12 THEN
+9920 PU=0
+9930 SPRITE 49,OFF
+9940 RAPID=600
+9950 SC=SC+100
+9960 SFX 9
+9970 CALL BOOM(PX+8,PY+8,-1)
+9980 CALL SCORED
+9990 EXIT PROC
+10000 END IF
+10010 IF PUY>284 THEN
+10020 PU=0
+10030 SPRITE 49,OFF
+10040 END IF
+10050 END PROC
+10060 ' ====================================================================== the bombs of the fruit
+10070 PROC BOMBS
+10080 LOCAL I
+10090 FOR I=0 TO 3
+10100 IF BO(I)=1 THEN CALL BOMBMOVE(I)
+10110 NEXT I
+10120 IF FN RN(BR)=0 THEN CALL SPAWN
+10130 END PROC
+10140 PROC BOMBMOVE(I)
+10150 LOCAL TX,TY,J
+10160 BY(I)=BY(I)+BS
+10170 IF BY(I)>288 THEN
+10180 CALL KILLBOMB(I)
+10190 EXIT PROC
+10200 END IF
+10210 SPRITE 44+I,BX(I),BY(I)
+10220 TX=BX(I)+7:TY=BY(I)+15
+10230 IF TY<286 AND POINT(TX,TY)>0 THEN
+10240 CALL SHIELDHIT(TX,TY)
+10250 CALL KILLBOMB(I)
+10260 EXIT PROC
+10270 END IF
+10280 IF TY>=PY+14 AND TX>=PX+1 AND TX<=PX+15 THEN
+10290 CALL CANNONHIT
+10300 EXIT PROC
+10310 END IF
+10320 ' a bullet that meets a bomb destroys it
+10330 FOR J=0 TO 1
+10340 IF GA(J)=1 AND TX>=GX(J)+4 AND TX<=GX(J)+11 AND TY>=GY(J)+6 AND TY<=GY(J)+18 THEN
+10350 CALL KILLBOMB(I)
+10360 CALL KILLBULLET(J)
+10370 CALL BOOM(TX,TY,-1)
+10380 SFX 6
+10390 EXIT PROC
+10400 END IF
+10410 NEXT J
+10420 END PROC
+10430 PROC KILLBOMB(I)
+10440 BO(I)=0
+10450 SPRITE 44+I,OFF
+10460 END PROC
+10470 ' a new bomb from the lowest fruit of a random column that still has one
+10480 PROC SPAWN
+10490 LOCAL J,Z,C,RW
+10500 J=-1
+10510 FOR Z=0 TO 3
+10520 IF BO(Z)=0 THEN J=Z
+10530 NEXT Z
+10540 IF J<0 THEN EXIT PROC
+10550 C=FN RN(8)
+10560 FOR Z=1 TO 8
+10570 RW=5
+10580 WHILE IV(RW,C)=0 AND RW>0
+10590 RW=RW-1
+10600 WEND
+10610 IF RW>0 THEN
+10620 BO(J)=1:BX(J)=FX+C*SX:BY(J)=FY+(RW-1)*SY+12
+10630 SPRITE 44+J,BX(J),BY(J),19
+10640 SPRITE 44+J,ANIM 2,4,4
+10650 SPRITE 44+J,ON
+10660 SFX 7
+10670 EXIT PROC
+10680 END IF
+10690 C=C+1
+10700 IF C>7 THEN C=0
+10710 NEXT Z
+10720 END PROC
+10730 ' a hit on a shield at (TX,TY): a crumbly hole
+10740 PROC SHIELDHIT(TX,TY)
+10750 LOCAL Z,XX,YY
+10760 GFX LINE TX-4,TY-5,TX+3,TY+4,0,BF
+10770 FOR Z=1 TO 6
+10780 XX=TX-7+FN RN(14)
+10790 YY=TY-7+FN RN(14)
+10800 GFX PSET XX,YY,0
+10810 NEXT Z
+10820 SFX 6
+10830 END PROC
+10840 ' ====================================================================== the pineapple
+10850 PROC UFO
+10860 IF UA=1 THEN
+10870 UX=UX+UD*2
+10880 UY=14+INT(5*SIN(UX/22))
+10890 SPRITE 48,UX,UY
+10900 IF UX<-20 OR UX>640 THEN CALL UFOGONE
+10910 EXIT PROC
+10920 END IF
+10930 IF UFOREADY=1 AND NA>6 THEN CALL UFOSTART
+10940 END PROC
+10950 PROC UFOSTART
+10960 UFOREADY=0
+10970 UA=1
+10980 IF FN RN(2)=0 THEN
+10990 UX=-16:UD=1
+11000 ELSE
+11010 UX=640:UD=-1
+11020 END IF
+11030 SPRITE 48,UX,UY,10
+11040 SPRITE 48,ANIM 1,4,2
+11050 SPRITE 48,ON
+11060 WAVE 2,0:VIBRATO 2,7,4:SOUND 2,600,0,0.12
+11070 END PROC
+11080 PROC UFOGONE
+11090 UA=0
+11100 SPRITE 48,OFF
+11110 SOUND OFF 2
+11120 AFTER 700+FN RN(600),2 GOSUB UFOTIMER
+11130 END PROC
+11140 PROC UFOHIT(I)
+11150 LOCAL P
+11160 P=SV(FN RN(4))
+11170 SC=SC+P
+11180 CALL BOOM(UX+8,UY+12,4)
+11190 CALL BOOM(UX+8,UY+12,-1)
+11200 CALL KILLBULLET(I)
+11210 UA=0
+11220 SPRITE 48,OFF
+11230 SOUND OFF 2
+11240 SFX 4
+11250 AFTER 700+FN RN(600),2 GOSUB UFOTIMER
+11260 CALL SCORED
+11270 END PROC
+11280 ' ====================================================================== the formation
+11290 PROC FORM
+11300 ST=ST+1
+11310 IF ST<SP THEN EXIT PROC
+11320 ST=0
+11330 CALL MARCH
+11340 END PROC
+11350 PROC MARCH
+11360 LOCAL C,RW,MN,MX,LR,N
+11370 MN=8:MX=-1:LR=0
+11380 FOR C=0 TO 7
+11390 FOR RW=1 TO 5
+11400 IF IV(RW,C)=1 THEN
+11410 IF MN=8 THEN MN=C
+11420 MX=C
+11430 IF RW>LR THEN LR=RW
+11440 END IF
+11450 NEXT RW
+11460 NEXT C
+11470 IF (DX=1 AND FX+MX*SX+16+SD>630) OR (DX=-1 AND FX+MN*SX-SD<8) THEN
+11480 DX=0-DX:FY=FY+10
+11490 ELSE
+11500 FX=FX+DX*SD
+11510 END IF
+11520 FA=1-FA
+11530 SOUND 1,MF(MI),0.08,0.3
+11540 MI=MI+1
+11550 IF MI>3 THEN MI=0
+11560 ' the fruit slide to the new place in 3 frames and show the other picture
+11570 FOR RW=1 TO 5
+11580 FOR C=0 TO 7
+11590 IF IV(RW,C)=1 THEN
+11600 N=(RW-1)*8+C
+11610 SPRITE N,IMAGE IMG(RW)+FA
+11620 SPRITE N,MOVETO FX+C*SX,FY+(RW-1)*SY,3
+11630 END IF
+11640 NEXT C
+11650 NEXT RW
+11660 IF FY+(LR-1)*SY+20>=SHY-2 THEN
+11670 OV=1:LANDED=1
+11680 END IF
+11690 END PROC
+11700 ' ====================================================================== explosions and flying bits
+11710 ' an explosion with 10 flying bits at (X,Y); K = the fruit (0..4, the bits get its colors) or -1 for sparks
+11720 PROC BOOM(X,Y,K)
+11730 LOCAL I,A,D,S,E,M
+11740 E=-1
+11750 FOR I=0 TO 3
+11760 IF EP(I)=0 THEN
+11770 E=I
+11780 EXIT
+11790 END IF
+11800 NEXT I
+11810 IF E>=0 THEN
+11820 EP(E)=14
+11830 SPRITE 50+E,X-8,Y-12,24
+11840 SPRITE 50+E,ANIM 5,4,3
+11850 SPRITE 50+E,ON
+11860 END IF
+11870 FOR I=0 TO 9
+11880 S=NP
+11890 NP=(NP+1) MOD 64
+11900 A=I*0.628+FN RN(100)/160
+11910 D=14+FN RN(26)
+11920 M=28+K
+11930 IF K<0 THEN M=33
+11940 SPRITE 64+S,X-8,Y-12,M
+11950 SPRITE 64+S,ON
+11960 SPRITE 64+S,MOVETO INT(X-8+COS(A)*D),INT(Y-12+SIN(A)*D),18
+11970 PL(S)=26
+11980 NEXT I
+11990 END PROC
+12000 ' counts the explosions and the bits down and hides them when they are over
+12010 PROC EFFECTS
+12020 LOCAL K,V
+12030 FOR EACH K,V IN EP()
+12040 IF V=0 THEN ITERATE
+12050 EP(K)=V-1
+12060 IF V=1 THEN SPRITE 50+K,OFF
+12070 NEXT
+12080 FOR EACH K,V IN PL()
+12090 IF V=0 THEN ITERATE
+12100 PL(K)=V-1
+12110 IF V=1 THEN SPRITE 64+K,OFF
+12120 NEXT
+12130 END PROC
+12140 ' the cannon was hit: a big blast, the sky flashes, the screen shakes
+12150 PROC CANNONHIT
+12160 LOCAL Z
+12170 LV=LV-1
+12180 SFX 3
+12190 CALL KILLBULLET(0):CALL KILLBULLET(1)
+12200 FOR Z=0 TO 3
+12210 CALL KILLBOMB(Z)
+12220 NEXT Z
+12230 SPRITE 40,OFF:SPRITE 41,OFF
+12240 CALL BOOM(PX+8,PY+12,-1)
+12250 CALL BOOM(PX+2,PY+8,-1)
+12260 CALL BOOM(PX+14,PY+8,-1)
+12270 CALL SKY(1)
+12280 FOR Z=1 TO 70
+12290 IF Z=6 THEN CALL SKY(0)
+12300 TILE SCROLL FN RN(7)-3,FN RN(7)-3+SF
+12310 IF Z=30 THEN CALL BOOM(PX+8,PY+12,-1)
+12320 CALL EFFECTS
+12330 GFX VSYNC
+12340 NEXT Z
+12350 TILE SCROLL 0,SF
+12360 IF LV<=0 THEN
+12370 OV=1
+12380 EXIT PROC
+12390 END IF
+12400 PX=312:PD=0:RAPID=0
+12410 SPRITE 40,PX,PY,13:SPRITE 40,ON
+12420 SPRITE 41,PX,PY+16,14:SPRITE 41,ANIM 4,4,2:SPRITE 41,ON
+12430 HF=1
+12440 END PROC
+12450 ' ====================================================================== waves
+12460 PROC NEWWAVE
+12470 LOCAL RW,C,Q,N,I
+12480 FOR RW=1 TO 5
+12490 FOR C=0 TO 7
+12500 IV(RW,C)=1
+12510 NEXT C
+12520 NEXT RW
+12530 NA=FN COUNTALIVE(IV())
+12540 Q=FN CLAMP(WV-1,0,4)
+12550 FX=40:FY=34+Q*8:DX=1:SD=6
+12560 SP=FN CLAMP(22-WV,10,22)
+12570 ST=0:MI=0:FA=0
+12580 BS=FN CLAMP(2+WV\2,2,5)
+12590 BR=FN CLAMP(50-WV*5,14,50)
+12600 GFX CLEAR
+12610 CALL SHIELDS
+12620 FOR I=0 TO 3
+12630 BO(I)=0:SPRITE 44+I,OFF
+12640 NEXT I
+12650 FOR I=0 TO 1
+12660 GA(I)=0:SPRITE 42+I,OFF
+12670 NEXT I
+12680 UA=0:UFOREADY=0:SPRITE 48,OFF:SOUND OFF 2
+12690 PU=0:SPRITE 49,OFF
+12700 AFTER 500+FN RN(600),2 GOSUB UFOTIMER
+12710 ' the fruit fly in from above
+12720 SFX 11
+12730 FOR RW=1 TO 5
+12740 FOR C=0 TO 7
+12750 N=(RW-1)*8+C
+12760 SPRITE N,FX+C*SX,FY+(RW-1)*SY-190,IMG(RW)
+12770 SPRITE N,ON
+12780 SPRITE N,MOVETO FX+C*SX,FY+(RW-1)*SY,70
+12790 NEXT C
+12800 NEXT RW
+12810 PX=312:PD=0:FQ=0:RAPID=0
+12820 SPRITE 40,PX,PY,13:SPRITE 40,ON
+12830 SPRITE 41,PX,PY+16,14:SPRITE 41,ANIM 4,4,2:SPRITE 41,ON
+12840 CALL HUD
+12850 CALL BIGTEXT(120,"WAVE "+STR$(WV),12,5)
+12860 CALL WAITFRAMES(80)
+12870 GFX LINE 60,112,580,190,0,BF
+12880 CALL STARTMUSIC
+12890 END PROC
+12900 PROC WAITFRAMES(N)
+12910 LOCAL Z
+12920 FOR Z=1 TO N
+12930 GFX VSYNC
+12940 CALL STARS
+12950 CALL EFFECTS
+12960 NEXT Z
+12970 END PROC
+12980 PROC WAVEDONE
+12990 EVERY OFF
+13000 SOUND OFF
+13010 PLAY "T200 W1 V0.3 O5 C8 E8 G8 >C4","T200 W2 V0.25 O4 C8 E8 G8 >C4","T200 W1 V0.15 O3 C4 G4"
+13020 SC=SC+100
+13030 CALL SCORED
+13040 CALL BIGTEXT(110,"WAVE CLEARED",13,4)
+13050 CALL BIGTEXT(160,"BONUS 100",12,3)
+13060 CALL WAITFRAMES(100)
+13070 GFX LINE 60,100,580,200,0,BF
+13080 WV=WV+1
+13090 CALL NEWWAVE
+13100 END PROC
+13110 ' ====================================================================== the music: two voices on the channels 3 and 4, a bar after the other
+13120 ' the notes of the array NT(), N of them, one after the other on channel CH, BT beats each, volume VL
+13130 PROC PLAYSEQ(NT(),N,CH,BT,VL)
+13140 LOCAL I
+13150 FOR I=0 TO N-1
+13160 SOUND CH,NT(I),BT,VL
+13170 NEXT I
+13180 END PROC
+13190 ' one bar (4 beats): an arpeggio of the chord on channel 3 and two half notes of bass on channel 4
+13200 PROC BAR
+13210 LOCAL I,TA(8)
+13220 FOR I=0 TO 7
+13230 TA(I)=CH3(BI*3+PAT(I))
+13240 NEXT I
+13250 CALL PLAYSEQ(TA(),8,3,0.5,0.07)
+13260 SOUND 4,BASSF(BI),2,0.2
+13270 SOUND 4,BASSF(BI),2,0.2
+13280 BI=(BI+1) MOD 4
+13290 END PROC
+13300 ' starts the music for the wave: the tempo goes up with the wave, the bars are timed by EVERY (a little longer than a bar)
+13310 PROC STARTMUSIC
+13320 LOCAL TB
+13330 TB=FN CLAMP(112+WV*6,112,176)
+13340 TEMPO TB
+13350 WAVE 3,1:WAVE 4,2
+13360 BI=0
+13370 CALL BAR
+13380 EVERY INT(14400/TB)+2,1 GOSUB BARTIMER
+13390 END PROC
+13400 ' ====================================================================== title and game over
+13410 PROC TITLE
+13420 LOCAL I,T,K$,F
+13430 CALL CLEARALL
+13440 CALL BIGTEXT(14,"FRUIT",10,8)
+13450 CALL BIGTEXT(112,"INVADERS II",12,4)
+13460 FOR I=0 TO 5
+13470 SPRITE I,ON
+13480 NEXT I
+13490 FOR I=0 TO 5
+13500 CALL TXTAT(12+I*11,17,MID$("50  40  30  20  10  50+",I*4+1,4),205)
+13510 NEXT I
+13520 CALL TXTAT(18,19,"HIGH SCORE "+FN PAD$(HI,6),201)
+13530 CALL TXTAT(10,21,"A / D move   S stop   SPACE fire   P pause   Q quit",200)
+13540 CALL TXTAT(10,22,"Catch the banana for rapid fire!",202)
+13550 CALL TXTAT(19,24,"Press SPACE to start",203)
+13560 PLAY "T150 W1 V0.3 O4 E8 G8 >C8 E4 D8 C8 <B8 >C4","T150 W2 V0.25 O3 C4 G4 C4 G4","T150 W1 V0.12 O5 C16 E16 G16 >C16 C16 E16 G16 >C16"
+13570 QT=0
+13580 REPEAT
+13590 GFX VSYNC
+13600 T=T+1
+13610 IF T MOD 20=0 THEN F=1-F
+13620 ' the title shimmers through the colors, the fruit bob up and down and dance
+13630 GFX PALETTE 3,10,RGB(INT(180+75*SIN(T/10)),INT(180+75*SIN(T/10+2.1)),INT(180+75*SIN(T/10+4.2)))
+13640 FOR I=0 TO 4
+13650 SPRITE I,96+I*88,166+INT(7*SIN(T/9+I)),IMG(I+1)+F
+13660 NEXT I
+13670 SPRITE 5,96+5*88,166+INT(7*SIN(T/9+5)),10+F
+13680 CALL STARS
+13690 K$=INKEY$
+13700 UNTIL K$=" " OR K$="q" OR K$="Q"
+13710 IF K$="q" OR K$="Q" THEN QT=1
+13720 END PROC
+13730 PROC PLAYGAME
+13740 SC=0:LV=3:WV=1:NX=1500:OV=0:LANDED=0:QT=0
+13750 BI=0:NP=0
+13760 CALL CLEARALL
+13770 CALL NEWWAVE
+13780 WHILE OV=0
+13790 CALL KEYS
+13800 IF QT=1 THEN OV=1
+13810 CALL MOVECANNON
+13820 CALL BULLETS
+13830 CALL BOMBS
+13840 CALL UFO
+13850 CALL POWERUP
+13860 CALL FORM
+13870 CALL EFFECTS
+13880 CALL STARS
+13890 IF HF=1 THEN CALL HUD
+13900 IF NA=0 AND OV=0 THEN CALL WAVEDONE
+13910 GFX VSYNC
+13920 WEND
+13930 EVERY OFF
+13940 AFTER OFF
+13950 CALL OVER
+13960 END PROC
+13970 PROC OVER
+13980 LOCAL I,Z,K$
+13990 SOUND OFF
+14000 IF QT=1 THEN EXIT PROC
+14010 FOR I=0 TO 127
+14020 SPRITE I,OFF
+14030 NEXT I
+14040 CALL BIGTEXT(100,"GAME OVER",12,5)
+14050 IF LANDED=1 THEN CALL TXTAT(29,16,"The fruit has landed!",207)
+14060 CALL TXTAT(31,18,"Score "+STR$(SC),200)
+14070 IF SC>=HI AND SC>0 THEN CALL TXTAT(29,20,"A NEW HIGH SCORE!",201)
+14080 PLAY "T100 W2 V0.5 O4 C4 <B4 A4 G2","T100 W1 V0.2 O3 C4 G4 E4 C2"
+14090 FOR Z=1 TO 170
+14100 GFX VSYNC
+14110 CALL STARS
+14120 CALL EFFECTS
+14130 K$=INKEY$
+14140 NEXT Z
+14150 END PROC
+14160 PROC SHUTDOWN
+14170 SOUND OFF
+14180 GFX RESET
+14190 CLS
+14200 PRINT "Thanks for playing FRUIT INVADERS II!"
+14210 END PROC
+14220 ' ====================================================================== the data
+14230 ' fruit window, first image, points for the rows 1 to 5; the notes of the march, the bass of the music, the points of the pineapple
+14240 DATA 16,0,50, 32,2,40, 48,4,30, 64,6,20, 80,8,10
+14250 DATA 110,110,50, 98,87,100, 87,131,150, 82,98,300
+14260 ' the chords (Am, F, C, G) as three notes each, and the order of an arpeggio
+14270 DATA 220,262,330, 175,220,262, 262,330,392, 196,247,294
+14280 DATA 0,1,2,1,0,1,2,1
+14290 LABEL PALDATA
+14300 DATA 16,60,0,15,150,10,30,215,25,45,245,70,80,255,160,160,40,90,20,70,150,40,120,200,70,255,255,255,20,20,40,255,120,140,255,230,230
+14310 DATA 32,70,0,20,170,15,40,230,40,55,255,90,90,255,175,175,30,100,30,60,160,50,130,210,80,255,255,255,20,20,40,255,150,150,255,235,120
+14320 DATA 48,20,60,15,50,130,40,90,190,50,150,225,80,225,255,170,90,55,25,50,140,40,110,200,70,255,255,255,20,30,20,240,120,120,200,255,120
+14330 DATA 64,110,45,0,210,100,0,255,150,10,255,190,60,255,235,170,30,90,20,60,150,40,110,200,60,255,255,255,40,20,0,255,110,90,190,80,0
+14340 DATA 80,110,90,0,210,180,0,255,230,20,255,245,100,255,255,200,30,100,30,60,160,50,130,210,80,255,255,255,40,30,0,255,150,100,190,150,0
+14350 DATA 96,90,50,0,190,120,0,240,180,20,255,215,70,255,240,160,20,100,40,50,160,60,110,210,80,255,255,255,30,15,0,255,100,80,150,90,10
+14360 DATA 112,15,15,40,70,80,115,140,150,185,200,210,240,255,255,255,200,30,30,255,90,60,40,110,230,150,215,255,255,200,0,255,120,0,255,245,150
+14370 DATA 128,10,40,60,0,150,200,80,210,255,190,240,255,255,255,255,140,0,140,230,40,230,255,150,255,255,255,255,255,255,255,255,255,255,255,255,255
+14380 DATA 144,40,20,0,110,60,10,190,120,40,240,200,100,255,255,255,255,60,60,255,120,60,255,200,120,255,255,255,255,255,255,255,255,255,255,255,255
+14390 DATA 160,100,70,0,210,170,0,255,225,30,255,245,120,255,255,255,90,50,10,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255,255
+14400 DATA 176,90,10,0,200,50,0,255,120,0,255,190,30,255,240,150,255,255,255,150,150,150,90,90,90,255,255,255,255,255,255,255,255,255,255,255,255
