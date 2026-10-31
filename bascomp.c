@@ -4277,6 +4277,45 @@ bool comp_eat_assignstmt( compiler_t* comp, node_t** pnode ) {
     return false;
 }
 
+// for-each-stmt := TOK_FOR EACH any-base-var-ref [ TOK_COMMA any-base-var-ref ] IN empty-array-ref .
+// (called with FOR EACH read; EACH and IN are identifiers that are recognized here)
+static bool comp_eat_foreach( compiler_t* comp, node_t** pnode ) {
+    node_t* first = NODE_NONE;
+    if ( !comp_eat_anybasevarref( comp, &first ) || first == NODE_NONE ) {
+        comp_error( comp, "Variable expected" );
+        return false;
+    }
+    node_t* second = NODE_NONE;
+    if ( comp->currtok == TOK_COMMA ) {
+        if ( !comp_fetchtok( comp ) || !comp_eat_anybasevarref( comp, &second ) || second == NODE_NONE ) {
+            comp_error( comp, "Variable expected" );
+            return false;
+        }
+    }
+    if ( comp->currtok != TOK_NUMIDENT || strcmp( comp->param, "IN" ) != 0 || !comp_fetchtok( comp ) ) {
+        comp_error( comp, "IN expected" );
+        return false;
+    }
+    node_t* arr = NODE_NONE;
+    if ( !comp_eat_emptyarrayref( comp, &arr ) || arr == NODE_NONE ) {
+        return false;
+    }
+    /*
+        NT_FOREACHSTMT      FOR EACH [key,] value IN array() statement
+            branches:
+                - 1 branch of the value variable reference (the last variable before IN)
+                - 1 branch of the key variable reference (may be empty)
+                - 1 branch of the array reference (NT_EMPTYARRAYREF)
+    */
+    node_t* value = second != NODE_NONE ? second : first;
+    node_t* key   = second != NODE_NONE ? first : NODE_NONE;
+    if ( !comp_create_node( comp, pnode, NT_FOREACHSTMT, UINT8_C(3), UINT16_C(0), 0, value, key, arr ) || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
 bool comp_eat_forstmt( compiler_t* comp, node_t** pnode ) {
     // for-stmt := TOK_FOR num-base-var-ref TOK_EQ num-expr TOK_TO num-expr [ TOK_STEP num-expr ] .
     if ( comp->currtok != TOK_FOR || !comp_fetchtok( comp ) ) {
@@ -4288,6 +4327,11 @@ bool comp_eat_forstmt( compiler_t* comp, node_t** pnode ) {
         comp_error( comp, "Numeric variable expected" );
         return false;
     }
+    if ( comp->currtok != TOK_EQ && varref->type == NT_NUMBASEVARREF && ( varref->data[0] & VARTYPEM_BASE ) == VARTYPEV_FLOAT &&
+         strcmp( comp_node_name( comp, varref, 1U ), "EACH" ) == 0 ) {
+        // FOR EACH: EACH is recognized here, it is not a keyword (FOR EACH = 1 TO 3 still works)
+        return comp_eat_foreach( comp, pnode );
+    }
     if ( comp->currtok != TOK_EQ || !comp_fetchtok( comp ) ) {
         comp_error( comp, "Assignment operator '=' expected" );
         return false;
@@ -4298,7 +4342,14 @@ bool comp_eat_forstmt( compiler_t* comp, node_t** pnode ) {
         comp_error( comp, "Numeric expression expected" );
         return false;
     }
-    if ( comp->currtok != TOK_TO || !comp_fetchtok( comp ) ) {
+    // TO, or DOWNTO (an identifier that is recognized here)
+    uint8_t downto = 0;
+    if ( comp->currtok == TOK_NUMIDENT && strcmp( comp->param, "DOWNTO" ) == 0 ) {
+        downto = 1;
+        if ( !comp_fetchtok( comp ) ) {
+            return false;
+        }
+    } else if ( comp->currtok != TOK_TO || !comp_fetchtok( comp ) ) {
         comp_error( comp, "TO keyword expected" );
         return false;
     }
@@ -4323,9 +4374,11 @@ bool comp_eat_forstmt( compiler_t* comp, node_t** pnode ) {
                 - 1 branch of FROM expression
                 - 1 branch of TO expression
                 - 1 branch of STEP expression (may be empty)
+            data (optional):
+                - 1 byte: 1 = DOWNTO (counts down by the STEP value, default 1)
     */
     // create node
-    if ( !comp_create_node( comp, pnode, NT_FORSTMT, UINT8_C(4), UINT16_C(0), 0,
+    if ( !comp_create_node( comp, pnode, NT_FORSTMT, UINT8_C(4), downto ? UINT16_C(1) : UINT16_C(0), &downto,
         varref, fromexp, toexp, stepexp ) || *pnode == NODE_NONE ) {
         out_of_memory( comp );
         return false;
@@ -4856,6 +4909,41 @@ bool comp_eat_againstmt( compiler_t* comp, node_t** pnode ) {
     return true;
 }
 
+bool comp_eat_exitstmt( compiler_t* comp, node_t** pnode ) {
+    // exit-stmt := ( TOK_EXIT | TOK_LEAVE | TOK_ITERATE ) [ dec-lit ] .
+    uint8_t kind = comp->currtok == TOK_ITERATE ? 2 : ( comp->currtok == TOK_EXIT || comp->currtok == TOK_LEAVE ) ? 1 : 0;
+    if ( kind == 0 || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    double num = 1.0;
+    uint8_t tok = comp->currtok;
+    if ( tok == TOK_DECLIT || ( tok >= TOK_DEC0 && tok <= TOK_DEC9 ) ) {
+        num = tok == TOK_DECLIT ? comp->number : (double)( tok - TOK_DEC0 );
+        if ( !comp_fetchtok( comp ) ) {
+            return false;
+        }
+        if ( !( num >= 1.0 && num <= 65535.0 ) ) {
+            comp_error( comp, "Invalid loop number" );
+            return false;
+        }
+    }
+    /*
+        NT_EXITSTMT         EXIT / LEAVE / ITERATE statement
+            data:
+                - 1 byte of kind (1 = EXIT or LEAVE, 2 = ITERATE), 2 bytes of loop number
+    */
+    uint16_t loopnum = (uint16_t) num;
+    uint8_t data[3];
+    data[0] = kind;
+    data[1] = (uint8_t)( loopnum >> UINT8_C(8) );
+    data[2] = (uint8_t)  loopnum;
+    if ( !comp_create_node( comp, pnode, NT_EXITSTMT, UINT8_C(0), UINT16_C(3), data ) || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
 bool comp_eat_repeatstmt( compiler_t* comp, node_t** pnode ) {
     // repeat-stmt := TOK_REPEAT .
     if ( comp->currtok != TOK_REPEAT || !comp_fetchtok( comp ) ) {
@@ -5037,6 +5125,9 @@ bool comp_eat_controlflowstmt( compiler_t* comp, node_t** pnode ) {
         return true;
     }
     if ( comp_eat_againstmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_exitstmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     if ( comp_eat_repeatstmt( comp, pnode ) && *pnode != NODE_NONE ) {

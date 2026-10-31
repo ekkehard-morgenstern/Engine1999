@@ -651,6 +651,8 @@ Explanation of node types:
 #define NT_ONCOLLSTMT           UINT8_C(0X75)   // ON COLLISION GOSUB|GOTO target | OFF (data: 1 byte, ERRT_* kind; the target branch unless OFF)
 #define NT_RANDOMIZESTMT        UINT8_C(0X76)   // RANDOMIZE [seed] (0 or 1 numeric branch)
 #define NT_ANGLESTMT            UINT8_C(0X77)   // DEG / RAD / GRAD (data: 1 byte, 1 = degrees, 2 = radians, 3 = gradians)
+#define NT_FOREACHSTMT          UINT8_C(0X78)   // FOR EACH [key,] value IN array() (3 branches: value variable, key variable or empty, array reference)
+#define NT_EXITSTMT             UINT8_C(0X79)   // EXIT / LEAVE / ITERATE (data: 1 byte kind, 1 = leave, 2 = iterate; 2 bytes loop number)
 #define NT_FILESSTMT            UINT8_C(0X69)   // FILES statement (0 or 1 string branch: the file name pattern)
 #define NT_CHAINSTMT            UINT8_C(0X68)   // CHAIN statement (data: 1 byte, 1 = MERGE; the file name, then an optional goto target)
 

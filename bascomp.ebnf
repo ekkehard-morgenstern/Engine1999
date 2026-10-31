@@ -168,7 +168,10 @@ fn-assign-stmt := any-usr-fn-name TOK_EQ expr .
 
 assign-stmt := let-stmt | dim-stmt | erase-stmt | def-stmt | fn-assign-stmt .
 
-for-stmt := TOK_FOR num-base-var-ref TOK_EQ num-expr TOK_TO num-expr [ TOK_STEP num-expr ] .
+for-stmt := TOK_FOR num-base-var-ref TOK_EQ num-expr ( TOK_TO | DOWNTO ) num-expr [ TOK_STEP num-expr ] | for-each-stmt .
+-- FOR EACH [ key, ] value IN array() loops over all elements of an array (flat row-major order; key = the flat index).
+-- EACH, IN and DOWNTO are identifiers that are recognized in this place, not keywords. DOWNTO counts down by the STEP value (default 1).
+for-each-stmt := TOK_FOR EACH any-base-var-ref [ TOK_COMMA any-base-var-ref ] IN empty-array-ref .
 next-stmt := TOK_NEXT [ num-base-var-ref { TOK_COMMA num-base-var-ref } ] .
 
 goto-kw := TOK_GOTO | TOK_GOSUB | TOK_GO ( TOK_TO | TOK_SUB ) .
@@ -203,6 +206,7 @@ multiline-if-stmt := TOK_IF num-expr TOK_THEN TOK_EOL
 end-stmt := TOK_END .  -- not followed by IF, UNLESS or FN
 pop-stmt := TOK_POP .
 again-stmt := TOK_AGAIN [ dec-lit ] .
+exit-stmt := ( TOK_EXIT | TOK_LEAVE | TOK_ITERATE ) [ dec-lit ] .
 repeat-stmt := TOK_REPEAT .
 until-stmt := TOK_UNTIL num-expr .
 while-stmt := TOK_WHILE num-expr .
@@ -213,7 +217,7 @@ on-stmt := TOK_ON num-expr goto-kw goto-target { TOK_COMMA goto-target } .
 -- Loops are matched by the code generator, like FOR and NEXT: WHILE .. WEND, UNTIL .. UEND, REPEAT .. UNTIL.
 -- An UNTIL closes the innermost open loop if that is a REPEAT; otherwise it opens an UNTIL .. UEND loop.
 
-control-flow-stmt := for-stmt | next-stmt | goto-stmt | return-stmt | label-stmt | end-stmt | pop-stmt | again-stmt |
+control-flow-stmt := for-stmt | next-stmt | goto-stmt | return-stmt | label-stmt | end-stmt | pop-stmt | again-stmt | exit-stmt |
                      repeat-stmt | until-stmt | while-stmt | wend-stmt | uend-stmt | on-stmt |
                      singleline-if-stmt | multiline-if-stmt .
 

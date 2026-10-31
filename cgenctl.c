@@ -43,7 +43,10 @@ Layout of the generated code:
     - Loops are matched at compile time, with a stack of the open loops (innermost last): FOR/NEXT, REPEAT/UNTIL,
       WHILE/WEND and UNTIL/UEND. NEXT closes the innermost FOR of the same variable. An UNTIL closes the innermost
       loop if that is a REPEAT, otherwise it opens an UNTIL loop. AGAIN [n] branches to the start of the body of the
-      n-th innermost loop. Loops inside a function body are separate from those around the function.
+      n-th innermost loop. EXIT [n] / LEAVE [n] branch to the end of the n-th innermost loop, ITERATE [n] to its next pass
+      (FOR: the NEXT step, WHILE/UNTIL: the test, REPEAT: the UNTIL test); both are BRIAs that wait in cgen->loopjumps until
+      the loop is closed. FOR EACH [key,] v IN a() is a FOR over a hidden counter 0 .. ACNT(a)-1 with v = AFLT(a, counter)
+      at the top of the body. Loops inside a function body are separate from those around the function.
       The limit and the step of a FOR live in hidden variables named "@FOR<n>L" and "@FOR<n>S"; the test is done
       before the first pass:
             var=from  limit=to  step=step  top: <exit if past the limit>  body: <body>  NEXT: var=var+step  BRIA top  exit:
@@ -60,6 +63,7 @@ void cgen_begin_control( codegen_t* cgen ) {
     cgen->numlineaddrs = 0;
     cgen->numfixups    = 0;
     cgen->numloops     = 0;
+    cgen->numloopjumps = 0;
     cgen->loopbase     = 0;
     cgen->numscratch   = 0;
     cgen->numrestorefix = 0;
@@ -539,7 +543,7 @@ static bool cc_base_var( compiler_t* comp, node_t* node, uint8_t* pvartype, uint
     if ( node == NODE_NONE ) {
         return cgen_bad_node( comp );
     }
-    if ( node->type != NT_NUMBASEVARREF || node->datalen < UINT16_C(2) ) {
+    if ( ( node->type != NT_NUMBASEVARREF && node->type != NT_STRBASEVARREF ) || node->datalen < UINT16_C(2) ) {
         return cgen_unexpected_node( comp );
     }
     uint8_t vartype = node->data[0] & VARTYPEM_BASE;
@@ -577,7 +581,22 @@ static bool cc_read_var( codegen_t* cgen, uint8_t vartype, uint16_t varoffs ) {
 }
 
 static bool cc_write_var( codegen_t* cgen, uint8_t vartype, uint16_t varoffs ) {
-    return vartype == VARTYPEV_INT ? cgen_gen_wriv( cgen, varoffs ) : cgen_gen_wrnv( cgen, varoffs );
+    return vartype == VARTYPEV_INT ? cgen_gen_wriv( cgen, varoffs ) :
+        vartype == VARTYPEV_STR ? cgen_gen_wrsv( cgen, varoffs ) : cgen_gen_wrnv( cgen, varoffs );
+}
+
+// patches the EXIT / ITERATE jumps of the loop with the index "level" (just closed): ITERATE to contaddr, EXIT to exitaddr
+static void cc_resolve_loopjumps( codegen_t* cgen, size_t level, uint32_t contaddr, uint32_t exitaddr ) {
+    size_t keep = 0;
+    for ( size_t i=0; i < cgen->numloopjumps; ++i ) {
+        cgen_loopjump_t lj = cgen->loopjumps[i];
+        if ( lj.level == level ) {
+            cc_patch_bria( cgen, lj.insoffs, lj.iterate ? contaddr : exitaddr );
+        } else {
+            cgen->loopjumps[ keep++ ] = lj;
+        }
+    }
+    cgen->numloopjumps = keep;
 }
 
 bool cgen_from_forstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
@@ -617,11 +636,16 @@ bool cgen_from_forstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     if ( !cgen_gen_wrnv( cgen, limvar ) ) {
         return cgen_out_of_code_memory( comp );
     }
+    // DOWNTO (data byte 1) counts down by the STEP value (default 1)
+    bool downto = node->datalen == UINT16_C(1) && node->data[0] == UINT8_C(1);
     if ( node->branches[3] != NODE_NONE ) {
         if ( !cgen_from_numexpr( cgen, comp, node->branches[3] ) ) {
             return false;
         }
-    } else if ( !cgen_gen_phim( cgen, 1 ) ) {
+        if ( downto && !cgen_gen_neg( cgen ) ) {
+            return cgen_out_of_code_memory( comp );
+        }
+    } else if ( !cgen_gen_phim( cgen, downto ? -1 : 1 ) ) {
         return cgen_out_of_code_memory( comp );
     }
     if ( !cgen_gen_wrnv( cgen, stepvar ) ) {
@@ -653,6 +677,8 @@ bool cgen_from_forstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     }
     fc->vartype = vartype;
     fc->varoffs = varoffs;
+    fc->matchvar = varoffs;
+    fc->matchvar2 = VAROFFS_NONE;
     fc->stepvar = stepvar;
     fc->topaddr = top;
     fc->bodyaddr = cgen->codesize;
@@ -663,11 +689,12 @@ bool cgen_from_forstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
 // closes the innermost FOR loop, which must use the given variable
 static bool cc_next( codegen_t* cgen, compiler_t* comp, bool anyvar, uint16_t varoffs ) {
     if ( cgen->numloops <= cgen->loopbase || cgen->loops[ cgen->numloops - 1U ].kind != CGEN_LOOP_FOR ||
-         ( !anyvar && cgen->loops[ cgen->numloops - 1U ].varoffs != varoffs ) ) {
+         ( !anyvar && cgen->loops[ cgen->numloops - 1U ].matchvar != varoffs && cgen->loops[ cgen->numloops - 1U ].matchvar2 != varoffs ) ) {
         comp_error( comp, "NEXT without FOR" );
         return false;
     }
     cgen_loopctx_t fc = cgen->loops[ --cgen->numloops ];
+    uint32_t contaddr = cgen->codesize;
     if ( !cc_read_var( cgen, fc.vartype, fc.varoffs ) || !cgen_gen_rrnv( cgen, fc.stepvar ) || !cgen_gen_add( cgen ) ||
          !cc_write_var( cgen, fc.vartype, fc.varoffs ) || !cgen_gen_bria( cgen, (int32_t) fc.topaddr ) ) {
         return cgen_out_of_code_memory( comp );
@@ -677,6 +704,7 @@ static bool cc_next( codegen_t* cgen, compiler_t* comp, bool anyvar, uint16_t va
         return false;
     }
     cc_patch_param( cgen, fc.exitins, here );
+    cc_resolve_loopjumps( cgen, cgen->numloops, contaddr, here );
     return true;
 }
 
@@ -779,6 +807,7 @@ bool cgen_from_untilstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     if ( cgen->numloops > cgen->loopbase && cgen->loops[ cgen->numloops - 1U ].kind == CGEN_LOOP_REPEAT ) {
         // closes the REPEAT loop: go back to the body while the condition is false
         cgen_loopctx_t lc = cgen->loops[ --cgen->numloops ];
+        uint32_t contaddr = cgen->codesize;
         if ( !cgen_from_numexpr( cgen, comp, node->branches[0] ) ) {
             return false;
         }
@@ -786,6 +815,7 @@ bool cgen_from_untilstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
              !cgen_gen_jpcc( cgen ) ) {
             return cgen_out_of_code_memory( comp );
         }
+        cc_resolve_loopjumps( cgen, cgen->numloops, contaddr, cgen->codesize );
         return true;
     }
     return cc_open_cond_loop( cgen, comp, node->branches[0], CGEN_LOOP_UNTIL );
@@ -806,6 +836,7 @@ static bool cc_close_cond_loop( codegen_t* cgen, compiler_t* comp, uint8_t kind,
         return false;
     }
     cc_patch_param( cgen, lc.exitins, here );
+    cc_resolve_loopjumps( cgen, cgen->numloops, lc.topaddr, here );
     return true;
 }
 
@@ -838,6 +869,121 @@ bool cgen_from_againstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     if ( !cgen_gen_bria( cgen, (int32_t) lc->bodyaddr ) ) {
         return cgen_out_of_code_memory( comp );
     }
+    return true;
+}
+
+bool cgen_from_exitstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    /*
+        NT_EXITSTMT         EXIT / LEAVE / ITERATE statement
+            data:
+                - 1 byte of kind: 1 = EXIT or LEAVE, 2 = ITERATE
+                - 2 bytes of loop number: 1 = innermost loop, 2 = the one around it, ...
+    */
+    if ( !cc_check_simple( comp, node, NT_EXITSTMT ) ) {
+        return false;
+    }
+    if ( node->datalen != UINT16_C(3) || ( node->data[0] != 1 && node->data[0] != 2 ) ) {
+        return cgen_unexpected_node( comp );
+    }
+    bool iterate = node->data[0] == 2;
+    size_t loopnum = ( ( (size_t) node->data[1] ) << UINT8_C(8) ) | node->data[2];
+    if ( loopnum == 0 || loopnum > cgen->numloops - cgen->loopbase ) {
+        comp_error( comp, iterate ? "ITERATE without loop" : "EXIT without loop" );
+        return false;
+    }
+    uint32_t ins = 0;
+    if ( !cc_emit_bria( cgen, comp, &ins ) ) {
+        return false;
+    }
+    if ( !cgen_grow( (void**) &cgen->loopjumps, &cgen->numloopjumps, &cgen->maxloopjumps, sizeof(cgen_loopjump_t) ) ) {
+        return cc_out_of_memory( comp );
+    }
+    cgen_loopjump_t* lj = &cgen->loopjumps[ cgen->numloopjumps++ ];
+    lj->insoffs = ins;
+    lj->level   = cgen->numloops - loopnum;
+    lj->iterate = iterate;
+    return true;
+}
+
+bool cgen_from_foreachstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    /*
+        NT_FOREACHSTMT      FOR EACH statement
+            branches:
+                - 1 branch of the value variable reference
+                - 1 branch of the key variable reference (may be empty)
+                - 1 branch of the array reference (NT_EMPTYARRAYREF)
+        Code:   counter = 0  step = 1  top: ( counter >= ACNT(a) ) exit   value = AFLT(a, counter)  [ key = counter ]  body
+                NEXT: counter = counter + step  BRIA top  exit:
+    */
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->type != NT_FOREACHSTMT || node->numbranches != 3U || node->branches[2] == NODE_NONE ) {
+        return cgen_unexpected_node( comp );
+    }
+    const node_t* aref = node->branches[2];
+    if ( aref->type != NT_EMPTYARRAYREF || aref->datalen != UINT16_C(3) ) {
+        return cgen_unexpected_node( comp );
+    }
+    uint8_t arrtype = aref->data[0] & VARTYPEM_BASE;
+    uint16_t arroffs = (uint16_t)( ( ( (uint16_t) aref->data[1] ) << UINT8_C(8) ) | aref->data[2] );
+    uint8_t vartype = 0; uint16_t varoffs = VAROFFS_NONE;
+    if ( !cc_base_var( comp, node->branches[0], &vartype, &varoffs ) ) {
+        return false;
+    }
+    if ( ( vartype == VARTYPEV_STR ) != ( arrtype == VARTYPEV_STR ) ) {
+        comp_error( comp, "Type mismatch (FOR EACH variable and array)" );
+        return false;
+    }
+    uint8_t keytype = 0; uint16_t keyoffs = VAROFFS_NONE;
+    if ( node->branches[1] != NODE_NONE ) {
+        if ( !cc_base_var( comp, node->branches[1], &keytype, &keyoffs ) ) {
+            return false;
+        }
+        if ( keytype == VARTYPEV_STR ) {
+            comp_error( comp, "Numeric variable expected" );
+            return false;
+        }
+    }
+    uint32_t serial = cgen->forserial++;
+    uint16_t cntvar = VAROFFS_NONE, stepvar = VAROFFS_NONE;
+    if ( !cc_hidden_var( comp, "FOR", serial, 'L', &cntvar ) || !cc_hidden_var( comp, "FOR", serial, 'S', &stepvar ) ) {
+        return false;
+    }
+    if ( !cgen_gen_phim( cgen, 0 ) || !cgen_gen_wrnv( cgen, cntvar ) || !cgen_gen_phim( cgen, 1 ) ||
+         !cgen_gen_wrnv( cgen, stepvar ) ) {
+        return cgen_out_of_code_memory( comp );
+    }
+    uint32_t top = 0;
+    if ( !cc_here( cgen, comp, &top ) ) {
+        return false;
+    }
+    if ( !cgen_gen_rrnv( cgen, cntvar ) || !cgen_gen_acnt( cgen, arroffs ) || !cgen_gen_cnge( cgen ) ) {
+        return cgen_out_of_code_memory( comp );
+    }
+    uint32_t exitins = 0;
+    if ( !cc_emit_phpa_c( cgen, comp, &exitins ) || !cgen_gen_jpcc( cgen ) ) {
+        return cgen_out_of_code_memory( comp );
+    }
+    bool ok = cgen_gen_rrnv( cgen, cntvar ) && cgen_gen_aflt( cgen, arroffs ) && cc_write_var( cgen, vartype, varoffs );
+    if ( ok && keyoffs != VAROFFS_NONE ) {
+        ok = cgen_gen_rrnv( cgen, cntvar ) && cc_write_var( cgen, keytype, keyoffs );
+    }
+    if ( !ok ) {
+        return cgen_out_of_code_memory( comp );
+    }
+    cgen_loopctx_t* fc = cc_push_loop( cgen, comp, CGEN_LOOP_FOR );
+    if ( fc == 0 ) {
+        return false;
+    }
+    fc->vartype = VARTYPEV_FLOAT;
+    fc->varoffs = cntvar;
+    fc->matchvar = vartype == VARTYPEV_STR ? VAROFFS_NONE : varoffs;
+    fc->matchvar2 = keyoffs;
+    fc->stepvar = stepvar;
+    fc->topaddr = top;
+    fc->bodyaddr = cgen->codesize;
+    fc->exitins = exitins;
     return true;
 }
 

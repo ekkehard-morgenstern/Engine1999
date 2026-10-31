@@ -484,6 +484,9 @@ The 4096 extended instructions are as follows:
                             DEG (1), RAD (2), GRAD (3): the unit of the angles of SIN, COS, TAN and ATN (a property of the runtime: RUN
                             and NEW return to RAD). In degrees and gradians the multiples of a quarter turn are exact (SIN(90) = 1,
                             COS(90) = 0); TAN of an odd multiple of a quarter turn is "Overflow".
+    0001 01101000       ACNT - number of elements of an array (param=varoffs) ( -- n ) C=0 P=1
+    0001 01101001       AFLT - read an array element by its flat (row-major) index (param=varoffs) ( inx -- n|s ) C=0 P=1
+                            FOR EACH uses the two. An index outside 0 .. n-1 is "Subscript out of range".
 
 */
 
@@ -640,5 +643,7 @@ The 4096 extended instructions are as follows:
 #define INS_MATH        UINT16_C(0X165)
 #define INS_RAND        UINT16_C(0X166)
 #define INS_ANGM        UINT16_C(0X167)
+#define INS_ACNT        UINT16_C(0X168)
+#define INS_AFLT        UINT16_C(0X169)
 
 #endif

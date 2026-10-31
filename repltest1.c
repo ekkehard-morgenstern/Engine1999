@@ -258,6 +258,7 @@ static const testcase_t cases[] = {
     { "SAVE to an unknown device", "10 PRINT 1\nSAVE \"nodev:p\"", "? Device not found\n? Save failed\n" },
     { "SAVE to null:", "10 PRINT 1\nSAVE \"null:p\"\nPRINT \"ok\"", "ok\n" },
     { "LOAD from null: is an empty program", "10 PRINT 1\nLOAD \"null:p\"\nLIST", "" },
+    { "EXIT and FOR EACH in direct mode lines", "FOR I=1 TO 9:IF I<3 THEN PRINT I;:NEXT ELSE EXIT\nPRINT I\nDIM A(2):A(0)=4:A(1)=5\nFOR EACH V IN A():PRINT V;:NEXT:PRINT", "123\n45\n" },
     { "files stay open between direct mode lines", "OPEN \"mem:s\" FOR OUTPUT AS #1\nPRINT #1,\"x\"\nCLOSE #1\nOPEN \"mem:s\" FOR INPUT AS #1\nLINE INPUT #1,A$\nPRINT A$", "x\n" },
     { "RUN closes all channels", "OPEN \"mem:s\" FOR OUTPUT AS #1\n10 PRINT #1,\"x\"\nRUN", "? File not open in line 10\n" },
     { "NEW closes all channels", "OPEN \"mem:s\" FOR OUTPUT AS #1\nNEW\nPRINT #1,\"x\"", "? File not open\n" },

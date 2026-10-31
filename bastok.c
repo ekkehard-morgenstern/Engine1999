@@ -826,7 +826,7 @@ static const struct {
     { TOK_CVI, "CVI" }, { TOK_CVL, "CVL" }, { TOK_CVS, "CVS" }, { TOK_CVD, "CVD" },
     { TOK_MOD, "MOD" }, { TOK_ABS, "ABS" }, { TOK_SGN, "SGN" }, { TOK_SQR, "SQR" }, { TOK_SIN, "SIN" }, { TOK_COS, "COS" },
     { TOK_TAN, "TAN" }, { TOK_ATN, "ATN" }, { TOK_EXP, "EXP" }, { TOK_LOG, "LOG" }, { TOK_RND, "RND" }, { TOK_FIX, "FIX" },
-    { TOK_PI, "PI" }, { TOK_RANDOMIZE, "RANDOMIZE" }, { TOK_DEG, "DEG" }, { TOK_RAD, "RAD" }, { TOK_GRAD, "GRAD" },
+    { TOK_PI, "PI" }, { TOK_RANDOMIZE, "RANDOMIZE" }, { TOK_DEG, "DEG" }, { TOK_RAD, "RAD" }, { TOK_GRAD, "GRAD" }, { TOK_EXIT, "EXIT" }, { TOK_LEAVE, "LEAVE" }, { TOK_ITERATE, "ITERATE" },
     { TOK_GFX, "GFX" }, { TOK_SPRITE, "SPRITE" }, { TOK_TILE, "TILE" }, { TOK_TXT, "TXT" }, { TOK_DESIGN, "DESIGN" },
     { TOK_RGB, "RGB" }, { TOK_POINT, "POINT" }, { TOK_CLS, "CLS" }, { TOK_LOCATE, "LOCATE" }, { TOK_COLOR, "COLOR" }, { TOK_AMP, "&" }, { TOK_LE, "<=" }, { TOK_GE, ">=" }, { TOK_NE, "<>" }, { 0, 0 }
 };
@@ -1028,7 +1028,7 @@ static hlclass_t keyword_hlclass( uint8_t tok ) {
         case TOK_GOTO: case TOK_GOSUB: case TOK_GO: case TOK_TO: case TOK_SUB: case TOK_RETURN: case TOK_IF:
         case TOK_UNLESS: case TOK_THEN: case TOK_ELSE: case TOK_ENDIF: case TOK_ENDUNLESS: case TOK_END: case TOK_FOR:
         case TOK_STEP: case TOK_NEXT: case TOK_REPEAT: case TOK_WHILE: case TOK_UNTIL: case TOK_WEND: case TOK_UEND:
-        case TOK_POP: case TOK_ON: case TOK_AGAIN: case TOK_AFTER: case TOK_EVERY:
+        case TOK_POP: case TOK_ON: case TOK_AGAIN: case TOK_AFTER: case TOK_EVERY: case TOK_EXIT: case TOK_LEAVE: case TOK_ITERATE:
             return HL_CONTROL;
         case TOK_ASC: case TOK_VAL: case TOK_LEFT: case TOK_MID: case TOK_RIGHT: case TOK_INKEY: case TOK_BIN:
         case TOK_QUA: case TOK_OCT: case TOK_DEC: case TOK_HEX: case TOK_FRE: case TOK_TI: case TOK_LEN: case TOK_CHR:

@@ -570,6 +570,37 @@ static bool vm_pop_subscripts( vm_t* vm, uint8_t* pnumdims, uint16_t diminx[MAXD
     return true;
 }
 
+// ACNT ( -- n ): the number of elements of an array; AFLT ( inx -- value ): the element with the flat (row-major) index
+static bool vm_array_flat( vm_t* vm, uint16_t opcode, uint16_t varoffs ) {
+    var_t* var = vmem_var( vm->vmem, varoffs );
+    if ( var == 0 || !( var->type & VARTYPEF_ARRAY ) ) {
+        return vm_error( vm, "Not an array" );
+    }
+    if ( opcode == INS_ACNT ) {
+        return vm_dpush_num( vm, (double) var->numelems );
+    }
+    double inx;
+    if ( !vm_dpop_num( vm, &inx ) ) {
+        return false;
+    }
+    if ( !( inx >= 0.0 && inx < (double) var->numelems ) ) {
+        return vm_error( vm, "Subscript out of range" );
+    }
+    size_t i = (size_t) inx;
+    switch ( var->type & VARTYPEM_BASE ) {
+        case VARTYPEV_FLOAT: return vm_dpush_num( vm, var->elems.dbls[i] );
+        case VARTYPEV_INT:   return vm_dpush_num( vm, (double) var->elems.ints[i] );
+        case VARTYPEV_STR: {
+            const vstr_t* s = &var->elems.strs[i];
+            if ( s->len > UINT16_MAX ) {
+                return vm_error( vm, "String too long" );
+            }
+            return vm_push_bytes( vm, s->ptr ? s->ptr : "", s->ptr ? s->len : 0U );
+        }
+    }
+    return vm_error( vm, "Unsupported variable type" );
+}
+
 static bool vm_read_elem( vm_t* vm, uint16_t varoffs, uint8_t basetype ) {
     uint8_t numdims = 0; uint16_t diminx[MAXDIM]; vmval_t val;
     if ( !vm_pop_subscripts( vm, &numdims, diminx ) ||
@@ -3125,6 +3156,7 @@ static bool vm_step( vm_t* vm ) {
             }
             vm->angmode = (int) param16;
             return true;
+        case INS_ACNT: case INS_AFLT: return vm_array_flat( vm, opcode, param16 );
         case INS_GFXC: return vm_gfx_command( vm, param16 );
         case INS_GFXQ: return vm_gfx_query( vm, param16 );
         case INS_DSGN: return vm_design_start( vm, param16 );

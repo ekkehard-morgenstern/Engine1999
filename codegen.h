@@ -96,7 +96,16 @@ typedef struct _cgen_loopctx_t {
     uint32_t    bodyaddr;       // start of the body (AGAIN branches here)
     uint32_t    exitins;        // code offset of the PHPA instruction holding the loop exit address (not REPEAT)
     uint32_t    srcline;        // line number of the statement that opened the loop
+    uint16_t    matchvar;       // FOR: the variable a NEXT may name (FOR EACH: the value variable); VAROFFS_NONE = none
+    uint16_t    matchvar2;      // FOR EACH: the key variable, which NEXT may name as well
 } cgen_loopctx_t;
+
+// a jump out of a loop (EXIT) or to its next pass (ITERATE) whose target is patched when the loop is closed
+typedef struct _cgen_loopjump_t {
+    uint32_t    insoffs;        // code offset of the BRIA instruction to patch
+    size_t      level;          // index of the loop in cgen->loops
+    bool        iterate;        // false: to the end of the loop
+} cgen_loopjump_t;
 
 typedef struct _codegen_t {
     void*           userdata;
@@ -117,6 +126,8 @@ typedef struct _codegen_t {
     size_t              numfixups, maxfixups;
     cgen_loopctx_t*     loops;          // loops that are currently open (compile time), innermost last
     size_t              numloops, maxloops;
+    cgen_loopjump_t*    loopjumps;      // EXIT / ITERATE jumps that wait for their loop to be closed
+    size_t              numloopjumps, maxloopjumps;
     size_t              loopbase;       // loops below this number belong to code around the current function body
     uint32_t*           scratch;        // temporary list of code offsets (ON .. GOSUB)
     size_t              numscratch, maxscratch;
@@ -297,6 +308,8 @@ bool cgen_gen_mod( codegen_t* cgen );
 bool cgen_gen_math( codegen_t* cgen, uint16_t kind );
 bool cgen_gen_rand( codegen_t* cgen, uint16_t hasseed );
 bool cgen_gen_angm( codegen_t* cgen, uint16_t kind );
+bool cgen_gen_acnt( codegen_t* cgen, uint16_t varoffs );
+bool cgen_gen_aflt( codegen_t* cgen, uint16_t varoffs );
 bool cgen_gen_gfxc( codegen_t* cgen, uint16_t op );
 bool cgen_gen_gfxq( codegen_t* cgen, uint16_t q );
 bool cgen_gen_dsgn( codegen_t* cgen, uint16_t param );
@@ -402,6 +415,8 @@ bool cgen_from_oncollstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_gfxstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_randomizestmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_anglestmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_foreachstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_exitstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_gfxquery( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_designstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_designrow( codegen_t* cgen, compiler_t* comp, node_t* node );

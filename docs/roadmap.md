@@ -141,3 +141,22 @@ Listed in full in `SESSION.md` ("Design decisions I took"). The ones most likely
 - [ ] Joystick and mouse input (`JOY`, `MOUSEX`, `MOUSEY`, `MOUSEB`), `ON KEY`, `PALETTE CYCLE` (flashing colors), a second font set (`CSET`), sprite flipping/scaling, several tile maps
 - [ ] Synchronization of layer memory between the main thread and the screen thread (add it inside `sdlscreen.c`; every call goes through it)
 - [ ] Not graphics, from the Simons' BASIC list: `PROC`/`END PROC`/`CALL`/`EXEC`/`LOCAL`/`GLOBAL`, `LOOP`/`EXIT IF`/`END LOOP`, `PAUSE`, `TRACE`, `PLACE` (`INSTR`), `DIV`/`MOD`
+
+## 11. Ideas from the AsmBASIC project *(`../asmbasic`: grammar `defaultsyntax.ebnf`, `docs/language.md`; 2026-10-31)*
+
+AsmBASIC (the owner's earlier x86-64 assembly BASIC) only got as far as the tokenizer and parser, so nothing there can be reused as code; what is
+useful is the language it planned. The items below are in the order I would suggest.
+
+- [x] **Loop control** (done, 2026-10-31): `EXIT [n]` / `LEAVE [n]`, `ITERATE [n]`, `FOR … DOWNTO …`, `FOR EACH [key,] v IN a()` (`docs/basic-language.md`, "Loop control")
+- [ ] `DO … LOOP [WHILE|UNTIL cond]` (test at the end) and `FOR EVER`; `END IF` / `END UNLESS` exist already (`ENDIF`, `ENDUNLESS`). Low priority: `REPEAT/UNTIL`, `WHILE/WEND` and `UNTIL/UEND` cover it
+- [ ] **Procedures with local variables**: `SUB`/`PROC`/`FUNC name(args) … END`, `LOCAL`, `GLOBAL`, `CALL` (and Simons' `EXEC`); AsmBASIC's frame design (`BEGINFRAME`, `LOCAL`, `REFLOCAL`, `REFGLOBAL`, `ENDFRAME`)
+      fits the saved parameter contexts of `DEF FN`: save the locals on the return stack on entry, restore on return. `DEF FN` can't recurse or take arrays today. The biggest gap of this list
+- [ ] `RESUME` / `RESUME NEXT` / `RESUME line` (also in section 9): needs statement boundaries in the code
+- [ ] `STOP [n]` and `CONT` (continue after a stop or Break; build on the resumable VM of the monitor), `TRACE ON|OFF` (print the line numbers while running, from the `LINE` instructions), `AUTO [start[,step]]` (line number prompts; the token `AUTO` exists, there is no meaning yet)
+- [ ] **Operators**: the logical operators `IMP NIMP EQV NEQV` (`NAND NOR XNOR` are tokens; check they work), the shifts as keywords `SHL SHR ASL ASR` (`LSHIFT`/`RSHIFT` tokens exist)
+- [ ] Math functions: `FLOOR`, `CEIL`, `LOG2`, `LOG10`, `LOGN(base,x)`, `LG`, `LN` (small additions to `vm_math`; cf. the `ASN`/`ACS`/`ATAN2`/hyperbolic item in section 2)
+- [ ] `PEEK`/`POKE` (byte, word, long, quad, float variants) and `SYS addr[,args]`: address the VM's data segment or a RAM area; a natural fit for a memory view in the monitor. Needs a decision which memory is addressable
+- [ ] `PRINT USING fmt$` (formatted output); `AT(row[,col])`, `HTAB`, `VTAB` in `PRINT` (`LOCATE` covers the placement)
+- [ ] `TIME$`, `DATE$`, `DATETIME$` (and setting them?); there is `TI` only
+- [ ] Small aliases: `OLD` for `LOAD`, `CATALOG` for `FILES`, `RENUMBER`, `FUNCTION`/`PROCEDURE` spellings; `YIELD` (give the host a time slice) and `SAFETY ON|OFF` (the sandbox switch; see section 8) are AsmBASIC's ideas, too
+- [ ] To think about (the owner decides): `DYNAMIC`/`ASSOC` arrays (parsed since the start, no meaning: `DIM a(n, DYNAMIC, ASSOC)`), `RECORD`/`TYPE`, number tokens that keep their base (check that `&H1F` lists back as hex), AsmBASIC's "undimensioned arrays are 0..10" rule

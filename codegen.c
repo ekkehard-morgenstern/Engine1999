@@ -42,6 +42,7 @@ void init_codegen( codegen_t* cgen ) {
     cgen->lineaddrs = 0; cgen->numlineaddrs = cgen->maxlineaddrs = 0;
     cgen->fixups    = 0; cgen->numfixups    = cgen->maxfixups    = 0;
     cgen->loops     = 0; cgen->numloops     = cgen->maxloops     = 0;
+    cgen->loopjumps = 0; cgen->numloopjumps = cgen->maxloopjumps = 0;
     cgen->loopbase  = 0;
     cgen->scratch   = 0; cgen->numscratch   = cgen->maxscratch   = 0;
     cgen->forserial = 0;
@@ -58,6 +59,7 @@ void cleanup_codegen( codegen_t* cgen ) {
     free( cgen->lineaddrs );
     free( cgen->fixups );
     free( cgen->loops );
+    free( cgen->loopjumps );
     free( cgen->scratch );
     free( cgen->dataoffs );
     free( cgen->restorefix );
@@ -69,6 +71,7 @@ void cleanup_codegen( codegen_t* cgen ) {
     cgen->lineaddrs = 0; cgen->numlineaddrs = cgen->maxlineaddrs = 0;
     cgen->fixups    = 0; cgen->numfixups    = cgen->maxfixups    = 0;
     cgen->loops     = 0; cgen->numloops     = cgen->maxloops     = 0;
+    cgen->loopjumps = 0; cgen->numloopjumps = cgen->maxloopjumps = 0;
     cgen->scratch   = 0; cgen->numscratch   = cgen->maxscratch   = 0;
     cgen->dataoffs  = 0; cgen->numdataitems = cgen->maxdataitems = 0;
     cgen->restorefix = 0; cgen->numrestorefix = cgen->maxrestorefix = 0;
@@ -409,6 +412,8 @@ const char* cgen_opcode_name( uint16_t opcode ) {
         case INS_MATH:      return "MATH";
         case INS_RAND:      return "RAND";
         case INS_ANGM:      return "ANGM";
+        case INS_ACNT:      return "ACNT";
+        case INS_AFLT:      return "AFLT";
         case INS_GFXC:      return "GFXC";
         case INS_GFXQ:      return "GFXQ";
         case INS_DSGN:      return "DSGN";
@@ -1109,6 +1114,8 @@ bool cgen_gen_idiv( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_IDIV, f
 bool cgen_gen_mod( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_MOD, false, false, UINT16_C(0) ); }
 bool cgen_gen_math( codegen_t* cgen, uint16_t kind ) { return cgen_gen_ins12( cgen, INS_MATH, false, true, kind ); }
 bool cgen_gen_angm( codegen_t* cgen, uint16_t kind ) { return cgen_gen_ins12( cgen, INS_ANGM, false, true, kind ); }
+bool cgen_gen_acnt( codegen_t* cgen, uint16_t varoffs ) { return cgen_gen_ins12_imm17( cgen, INS_ACNT, (int32_t) varoffs ); }
+bool cgen_gen_aflt( codegen_t* cgen, uint16_t varoffs ) { return cgen_gen_ins12_imm17( cgen, INS_AFLT, (int32_t) varoffs ); }
 bool cgen_gen_rand( codegen_t* cgen, uint16_t hasseed ) { return cgen_gen_ins12( cgen, INS_RAND, false, true, hasseed ); }
 
 bool cgen_gen_adrs( codegen_t* cgen ) {
@@ -3031,6 +3038,8 @@ bool cgen_from_stmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         case NT_GFXSTMT:    return cgen_from_gfxstmt( cgen, comp, node );
         case NT_RANDOMIZESTMT: return cgen_from_randomizestmt( cgen, comp, node );
         case NT_ANGLESTMT:  return cgen_from_anglestmt( cgen, comp, node );
+        case NT_FOREACHSTMT: return cgen_from_foreachstmt( cgen, comp, node );
+        case NT_EXITSTMT:   return cgen_from_exitstmt( cgen, comp, node );
         case NT_DESIGNSTMT: return cgen_from_designstmt( cgen, comp, node );
         case NT_DESIGNROW:  return cgen_from_designrow( cgen, comp, node );
         case NT_OPENSTMT:   return cgen_from_openstmt( cgen, comp, node );

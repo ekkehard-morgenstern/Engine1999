@@ -140,6 +140,8 @@ const char* nodename( uint8_t nodetype ) {
         case NT_ONCOLLSTMT:             return "NT_ONCOLLSTMT";
         case NT_RANDOMIZESTMT:          return "NT_RANDOMIZESTMT";
         case NT_ANGLESTMT:              return "NT_ANGLESTMT";
+        case NT_FOREACHSTMT:            return "NT_FOREACHSTMT";
+        case NT_EXITSTMT:               return "NT_EXITSTMT";
         case NT_NUMEXPR:                return "NT_NUMEXPR";
         case NT_STREXPR:                return "NT_STREXPR";
         case NT_STRCMPEX:               return "NT_STRCMPEX";

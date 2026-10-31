@@ -248,6 +248,7 @@ bool comp_eat_multilineifstmt( compiler_t* comp, node_t** pnode );
 bool comp_eat_endstmt( compiler_t* comp, node_t** pnode );
 bool comp_eat_popstmt( compiler_t* comp, node_t** pnode );
 bool comp_eat_againstmt( compiler_t* comp, node_t** pnode );
+bool comp_eat_exitstmt( compiler_t* comp, node_t** pnode );
 bool comp_eat_repeatstmt( compiler_t* comp, node_t** pnode );
 bool comp_eat_untilstmt( compiler_t* comp, node_t** pnode );
 bool comp_eat_whilestmt( compiler_t* comp, node_t** pnode );

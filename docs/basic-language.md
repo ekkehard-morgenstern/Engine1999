@@ -78,7 +78,7 @@ Example, `10 PRINT "HI";A$` and `20 GOTO 10` (the space after a line number is a
 - Immediate/system: `LIST SAVE LOAD RUN AUTO RENUM DELETE MERGE CHAIN FILES NEW CLEAR EDIT SHOW WARRANTY COPYING`
 - I/O: `PRINT INPUT PUT GET READ DATA RESTORE INKEY`
 - Declarations: `DIM DEF FN INT STR FLT OPTION BASE DYNAMIC ASSOC LET ERASE LABEL SYMBOL`
-- Control flow: `GOTO GOSUB GO TO SUB RETURN IF UNLESS THEN ELSE ENDIF ENDUNLESS END FOR STEP NEXT REPEAT WHILE UNTIL WEND UEND POP AFTER EVERY ON OFF`
+- Control flow: `GOTO GOSUB GO TO SUB RETURN IF UNLESS THEN ELSE ENDIF ENDUNLESS END FOR STEP NEXT REPEAT WHILE UNTIL WEND UEND POP EXIT LEAVE ITERATE AFTER EVERY ON OFF`
 - Functions: `ASC CHR VAL LEFT MID RIGHT BIN QUA OCT DEC HEX FRE TI LEN`
 - Operators: `+ - * / \ ^ ** NOT AND OR XOR NAND NOR XNOR LSHIFT RSHIFT = <> < > <= >=`, `@` (address-of), `!`, `#` (channel), `~`, `|`.
 
@@ -192,6 +192,31 @@ in BASIC: [io-subsystem.md](io-subsystem.md).
 Channel 0 is the screen and keyboard; channels 1 to 255 are opened by `OPEN`. `LOAD`, `SAVE`, `MERGE`, `CHAIN` and `FILES` take driver names too (`SAVE "mem:game"`, `FILES "mem:"`); the default extensions apply to the path. `WRITE` is `PRINT` with strings in double quotes and commas between the items; `LINE INPUT` takes the whole line; `INPUT #n` splits it into fields and goes on with the next line when it runs out. Lines are written with a newline and read with a newline or a carriage return and a newline. A restart (`RUN`, `NEW`, `LOAD`, `CHAIN`) closes all channels. See io-subsystem.md for the exact rules, the error messages and what comes next (`KILL`, `RENAME`, `SEEK`, more drivers, random access records, the open sandboxing question).
 
 **File extensions:** `SAVE "name"` writes the binary (tokenized) form and appends `.e99` to a name without extension; `SAVE "name",A` writes the ASCII listing and appends `.bas`. A name with an extension is used as it is. `LOAD` recognizes both forms by the header, whatever the extension is.
+
+## Loop control: `EXIT`, `LEAVE`, `ITERATE`, `FOR … DOWNTO`, `FOR EACH`
+
+```
+FOR I=1 TO 9: IF I=4 THEN EXIT: NEXT I     ' EXIT [n] leaves the n-th innermost loop (default 1); LEAVE is the same word
+FOR I=1 TO 5: IF I=3 THEN ITERATE: PRINT I: NEXT    ' ITERATE [n] goes on with the next pass of the n-th innermost loop
+FOR I=10 DOWNTO 1 STEP 3 ... NEXT I        ' 10 7 4 1; DOWNTO counts down by the STEP value (default 1, give it positive)
+DIM A(3): A(0)=5: A(1)=6: A(2)=7
+FOR EACH V IN A(): PRINT V;: NEXT          ' value of every element
+FOR EACH K,V IN A(): PRINT K;V;: NEXT V    ' key (the index) and value
+```
+
+- `EXIT`/`LEAVE`/`ITERATE` work in every loop (`FOR`, `FOR EACH`, `REPEAT`, `WHILE`, `UNTIL … UEND`). They are resolved at compile time like `AGAIN [n]`: the number counts the open loops
+  around the statement, loops outside a function body are not visible, and "EXIT without loop" / "ITERATE without loop" is an error otherwise. `EXIT` jumps behind the end of the loop (the loop variable
+  keeps its value), `ITERATE` to the step of a `FOR` (`NEXT`), the test of a `WHILE` / `UNTIL`, or the `UNTIL` test of a `REPEAT`.
+- `EXIT`, `LEAVE` and `ITERATE` are new reserved words (tokens 217..219). `DOWNTO`, `EACH` and `IN` are **not** keywords: they are identifiers recognized in the place of `TO` / after `FOR`
+  (`FOR EACH = 1 TO 3` still works, the variable is called EACH).
+- `FOR EACH` goes over **all elements of an array in flat row-major order** (a 2-dimensional `A(2,2)` has 4 elements; the key is the flat index 0..3). The array must have been named by a `DIM`
+  earlier in the text and is written with empty parentheses, like in `ERASE`. The value variable must match the array (numeric/integer array: numeric or integer variable, string array: string variable;
+  else "Type mismatch"); the element is *copied* into the variable, changing the variable does not change the array. The element count is read once per pass, so the loop notices a `CLEAR`/`ERASE`.
+  The loop is closed by `NEXT`, `NEXT value` or `NEXT key` (a string value variable can't be named: use plain `NEXT`).
+- Known quirk: the code generator compiles the `ELSE` part of an `IF` before the `THEN` part, so `IF c THEN EXIT ELSE … : NEXT` (the `NEXT` that closes the loop in the `ELSE` part) is
+  "EXIT without loop"; write the `NEXT` outside the `IF` or in the `THEN` part. (`AGAIN` has the same quirk.)
+- Design decisions I took (revisit if unwanted): `DOWNTO` with a `STEP` counts down by that amount (the step is negated, so `STEP -1` would count *up*); the key of `FOR EACH` is the flat index and not
+  the subscripts; `AGAIN` in a `FOR EACH` restarts after the element was fetched (does not re-fetch); `DYNAMIC`/`ASSOC` arrays do not exist yet, so only plain arrays can be traversed.
 
 ## Numeric functions, `\`, `MOD`, `RND`
 

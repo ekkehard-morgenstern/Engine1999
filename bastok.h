@@ -265,6 +265,9 @@
 #define TOK_DEG         UINT8_C(214)        // DEG keyword (angles in degrees)
 #define TOK_RAD         UINT8_C(215)        // RAD keyword (angles in radians, the default)
 #define TOK_GRAD        UINT8_C(216)        // GRAD keyword (angles in gradians)
+#define TOK_EXIT        UINT8_C(217)        // EXIT keyword (leave a loop)
+#define TOK_LEAVE       UINT8_C(218)        // LEAVE keyword (the same as EXIT)
+#define TOK_ITERATE     UINT8_C(219)        // ITERATE keyword (go on with the next pass of a loop)
 #define TOK_NONE        UINT8_C(255)        // no token (!)
 
 // -- buffers ---------------------------------------------------------------

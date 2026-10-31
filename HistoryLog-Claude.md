@@ -13,7 +13,10 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-(nothing pending)
+(not committed yet) **Loop control, roadmap from the AsmBASIC review** (2026-10-31)
+- Read `../asmbasic` and its docs; `docs/roadmap.md` got section 11 with everything worth taking over (procedures with `LOCAL`, `RESUME`, `STOP`/`CONT`/`TRACE`/`AUTO`, logical operators and shifts, more math functions, `PEEK`/`POKE`/`SYS`, `PRINT USING`, `TIME$`/`DATE$`, aliases, open questions).
+- Implemented `EXIT [n]`, `LEAVE [n]`, `ITERATE [n]`, `FOR … DOWNTO … [STEP]`, `FOR EACH [key,] v IN a()`: tokens 217..219, nodes `NT_FOREACHSTMT 0x78` / `NT_EXITSTMT 0x79`, instructions `ACNT 0x168` / `AFLT 0x169`; `bastok`, `bascomp` (+ `.ebnf`), `cgenctl.c` (loop jump list, `cc_resolve_loopjumps`), `codegen`, `vm.c`, `instset.h`; docs (`basic-language.md`, `compiler-and-vm.md`, `roadmap.md`), `SESSION.md`.
+- Tests: `vmtest1` 908 cases (41 new; also under ASAN, which caught a double free in my first `AFLT`: fixed), all other test programs pass.
 
 ## Log
 
