@@ -1453,7 +1453,7 @@ static bool vm_merge_program( vm_t* vm, bool append ) {
 }
 
 // BLD ( s -- ): the host builds an executable from the stored program
-static bool vm_build_program( vm_t* vm ) {
+static bool vm_build_program( vm_t* vm, uint16_t kind ) {
     char* name;
     if ( !vm_dpop_str( vm, &name ) ) {
         return false;
@@ -1464,7 +1464,7 @@ static bool vm_build_program( vm_t* vm ) {
     } else if ( vm->build == 0 ) {
         ok = vm_error( vm, "BUILD is not available" );
     } else {
-        ok = vm->build( vm, vm->userdata, name );
+        ok = vm->build( vm, vm->userdata, name, (int) kind );
     }
     free( name );
     return ok;
@@ -3612,7 +3612,7 @@ static bool vm_step( vm_t* vm ) {
         case INS_MRG: return vm_merge_program( vm, param16 != 0 );
         case INS_CHN: return vm_chain_program( vm, param16 != 0 );
         case INS_FILS: return vm_list_files( vm );
-        case INS_BLD: return vm_build_program( vm );
+        case INS_BLD: return vm_build_program( vm, param16 );
         case INS_BYE: return vm_quit_request( vm );
         case INS_EDIT: return vm_edit_request( vm );
         case INS_DELE: return vm_edit_program( vm, false );

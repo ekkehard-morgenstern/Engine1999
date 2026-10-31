@@ -66,7 +66,9 @@ typedef struct _build_opts_t {
     const char*         kitdir;         // directory searched first for the runtime files (0 = only the usual places)
 } build_opts_t;
 
-void build_default_opts( build_opts_t* opts );
+void build_default_opts( build_opts_t* opts );          // the window kit: engine1999.o, SDL2
+// the kit for programs without a window (engine1999c.o, no SDL2: the executable needs only the C and math libraries)
+void build_console_opts( build_opts_t* opts );
 
 // Links the program image <prog> (the binary program file) into the executable <outname>. opts may be 0 (the defaults).
 // false after a message in err (one line, no newline at the end).

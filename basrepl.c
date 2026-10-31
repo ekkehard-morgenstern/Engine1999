@@ -203,7 +203,7 @@ static bool repl_vm_renumber( struct _vm_t* vm, void* usrdata, const char* first
     const char* lastlabel, int32_t lastline, int32_t step );
 static bool repl_vm_merge( struct _vm_t* vm, void* usrdata, const char* name, bool append );
 static bool repl_vm_files( struct _vm_t* vm, void* usrdata, const char* spec );
-static bool repl_vm_build( struct _vm_t* vm, void* usrdata, const char* name );
+static bool repl_vm_build( struct _vm_t* vm, void* usrdata, const char* name, int kind );
 
 // hands the host callbacks to the VM
 static void repl_setup_vm( repl_t* repl ) {
@@ -717,7 +717,7 @@ static bool repl_is_program_name( const char* name ) {
 }
 
 // BUILD name: the stored program becomes the executable <name> (basbuild.c: the system linker binds it to the Engine)
-static bool repl_vm_build( struct _vm_t* vm, void* usrdata, const char* name ) {
+static bool repl_vm_build( struct _vm_t* vm, void* usrdata, const char* name, int kind ) {
     repl_t* repl = (repl_t*) usrdata;
     iodrv_t* drv = 0; const char* path = 0; const char* derr = 0;
     if ( !iodev_resolve( name, "file", &drv, &path, &derr ) ) {
@@ -735,7 +735,13 @@ static bool repl_vm_build( struct _vm_t* vm, void* usrdata, const char* name ) {
     }
     char err[300];
     err[0] = '\0';
-    bool ok = build_executable( path, image, imagelen, 0, err, sizeof(err) );
+    build_opts_t opts;
+    if ( kind == 2 || ( kind == 0 && repl->buildconsole ) ) {
+        build_console_opts( &opts );
+    } else {
+        build_default_opts( &opts );
+    }
+    bool ok = build_executable( path, image, imagelen, &opts, err, sizeof(err) );
     free( image );
     if ( !ok ) {
         repl_vm_error( repl, "Build failed:", err[0] != '\0' ? err : "unknown reason" );

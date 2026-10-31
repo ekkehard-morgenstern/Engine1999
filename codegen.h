@@ -336,7 +336,7 @@ bool cgen_gen_auto( codegen_t* cgen );
 bool cgen_gen_peek( codegen_t* cgen );
 bool cgen_gen_peks( codegen_t* cgen );
 bool cgen_gen_poke( codegen_t* cgen );
-bool cgen_gen_bld( codegen_t* cgen );
+bool cgen_gen_bld( codegen_t* cgen, uint16_t kind );     // kind: 0 default, 1 WINDOW, 2 CONSOLE
 bool cgen_gen_bye( codegen_t* cgen );
 bool cgen_gen_argc( codegen_t* cgen );
 bool cgen_gen_args( codegen_t* cgen );

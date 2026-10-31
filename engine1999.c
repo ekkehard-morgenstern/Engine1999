@@ -37,6 +37,7 @@
 #include "gfxcore.h"
 #include "sdlutil.h"
 #include "version.h"
+#include "ansi.h"
 
 static const char warranty[] =
 "  15. Disclaimer of Warranty.\n"
@@ -1092,31 +1093,6 @@ static char* host_edit( struct _repl_t* r, const char* text ) {
     return status == SDLSCR_EDIT_ACCEPTED ? strdup( buf ) : 0;
 }
 
-// syntax highlighting of LIST output: an ANSI SGR sequence per class of text (see hlclass_t in bastok.h); the colors
-// are palette entries via the standard color numbers (ansi.c), chosen to read well on a light and a dark background
-static const char* host_hlstyle( hlclass_t cls, void* usrdata ) {
-    static const char* const styles[HL_COUNT] = {
-        "\033[0m",      // HL_NONE: end of the line, reset
-        "\033[33m",     // HL_LINENO: olive
-        "\033[34m",     // HL_STATEMENT: navy
-        "\033[35m",     // HL_CONTROL: purple
-        "\033[91m",     // HL_COMMAND: red
-        "\033[36m",     // HL_FUNCTION: teal
-        "\033[39m",     // HL_OPERATOR: default color
-        "\033[39m",     // HL_IDENT: default color
-        "\033[31m",     // HL_NUMBER: maroon
-        "\033[32m",     // HL_STRING: green
-        "\033[95m",     // HL_SHELL: magenta
-        "\033[37m",     // HL_COMMENT: silver
-        "\033[39m",     // HL_PUNCT: default color
-        "\033[34m",     // HL_FILEDIR: navy
-        "\033[36m",     // HL_FILELINK: teal
-        "\033[32m",     // HL_FILEEXEC: green
-        "\033[35m",     // HL_FILEPROG: purple
-    };
-    return (unsigned) cls < HL_COUNT ? styles[cls] : 0;
-}
-
 // FILES: a screenful was listed; any key goes on, Q or ESC stops
 static bool host_pause( struct _repl_t* r ) {
     static const char msg[] = "-- more: any key continues, Q stops --";
@@ -1146,7 +1122,7 @@ static void init_host( void ) {
     repl.save      = host_save;
     repl.sound     = &host_sound;
     repl.gfx       = &host_gfx;
-    repl.hlstyle   = host_hlstyle;
+    repl.hlstyle   = ansi_hlstyle;
     repl.edit      = host_edit;
     int width = 0, height = 0;
     sdlscr_gettextscreensize( &width, &height );

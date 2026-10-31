@@ -844,6 +844,12 @@ static const testcase_t cases[] = {
     { "BYE with a string",      "BYE \"A\"",                                       "? Numeric expression expected\n" },
     { "BYE in a program",       "10 PRINT 1\n20 BYE 4\n30 PRINT 5",                "1\n<request QUIT 4>\n" },
     { "BUILD",                  "BUILD \"GAME\"",                                  "<build \"GAME\">\n" },
+    { "BUILD CONSOLE",          "BUILD \"G\",CONSOLE",                              "<build \"G\" console>\n" },
+    { "BUILD WINDOW",           "BUILD \"G\", WINDOW",                              "<build \"G\" window>\n" },
+    { "BUILD kind lower case",  "build \"G\",console",                             "<build \"G\" console>\n" },
+    { "BUILD kind before ELSE", "IF 0 THEN BUILD \"X\",CONSOLE ELSE PRINT 3",       "3\n" },
+    { "BUILD with a bad kind",  "BUILD \"G\",LINUX",                                "? Bad BUILD option (WINDOW or CONSOLE)\n" },
+    { "BUILD with a number as kind", "BUILD \"G\",5",                               "? WINDOW or CONSOLE expected\n" },
     { "BUILD name expression",  "A$=\"G\"\nBUILD A$+\"2\"",                        "<build \"G2\">\n" },
     { "BUILD goes on",          "PRINT 1:BUILD \"X\":PRINT 2",                     "1\n<build \"X\">\n2\n" },
     { "BUILD before ELSE",      "IF 0 THEN BUILD \"X\" ELSE PRINT 3",              "3\n" },
@@ -1269,9 +1275,9 @@ static bool vm_merge( struct _vm_t* vm, void* usrdata, const char* name, bool ap
 // the program arguments of the test runs: ARGC is 2, ARG$(0) the name
 static const char* const test_argv[] = { "prog", "a", "b c" };
 
-static bool vm_build( struct _vm_t* vm, void* usrdata, const char* name ) {
+static bool vm_build( struct _vm_t* vm, void* usrdata, const char* name, int kind ) {
     char text[200];
-    snprintf( text, sizeof(text), "<build \"%s\">\n", name );
+    snprintf( text, sizeof(text), "<build \"%s\"%s>\n", name, kind == 1 ? " window" : kind == 2 ? " console" : "" );
     out_append( text );
     return true;
 }

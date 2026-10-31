@@ -35,6 +35,10 @@
 #include "stdtypes.h"
 #endif
 
+#ifndef BASTOK_H
+#include "bastok.h"
+#endif
+
 /*
 Decoder for ANSI escape sequences in output text. Only SGR ("set graphic rendition", ESC [ params m) is acted upon,
 and only the color parts of it; every other escape sequence is skipped. The decoder keeps the current colors and the
@@ -70,5 +74,9 @@ typedef struct _ansi_t {
 void ansi_init( ansi_t* a, int deffg, int defbg );
 void ansi_feed( ansi_t* a, const char* text, ansi_emit_t emit, void* usrdata );                    // text ends at the first zero byte
 void ansi_feed_n( ansi_t* a, const char* text, size_t n, ansi_emit_t emit, void* usrdata );       // n bytes, zero bytes included
+
+// The hlstyle_t callback (bastok.h) of both hosts: the SGR sequence for each class of text of a LIST or FILES line (HL_NONE = reset). The
+// window feeds the text through the decoder above, a terminal understands the sequences itself.
+const char* ansi_hlstyle( hlclass_t cls, void* usrdata );
 
 #endif

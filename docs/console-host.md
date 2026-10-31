@@ -38,16 +38,24 @@ Everything after the file name is for the program: `engine1999c prog.bas a "b c"
 
 - **Sound** statements (`SOUND`, `PLAY`, `SFX`, `ENVELOPE` ...) have no sound device: their arguments are checked and nothing plays, `PLAYING(n)` is 0.
 - **`CLS` and `LOCATE`** write ANSI escape sequences when standard output is a terminal (and nothing when it is not). `COLOR` is accepted and ignored: the Engine's palette is not the terminal's; `PRINT CHR$(27);"[31m";...` passes through to terminals as it is.
-- **Everything else** that needs a screen (`GFX`, `SPRITE`, `TILE`, `TXT`, `DESIGN`, `SYMBOL`, and the graphics functions) fails with `? Not available in the console host`. `EDIT`, `MONITOR`, `AUTO`, `LIST`'s syntax colors and the pager of `FILES` are window-only.
+- **Everything else** that needs a screen (`GFX`, `SPRITE`, `TILE`, `TXT`, `DESIGN`, `SYMBOL`, and the graphics functions) fails with `? Not available in the console host`. `EDIT`, `MONITOR`, `AUTO`, and the pager of `FILES` are window-only.
 - The functions that ask for the text screen size answer with the size of the terminal (80 x 25 without one).
+
+## Syntax colors
+
+`LIST` (and `FILES`) are colored like in the window (`ansi_hlstyle()` in `ansi.c`, shared by both hosts: ANSI SGR sequences) when standard output is a terminal and `NO_COLOR` is not set (no-color.org). `--color=always` forces them (also into a pipe, e.g. for `less -R`), `--color=never` or `NO_COLOR` switch them off, `--color=auto` is the default. `PRINT` output is never colored by the host.
+
+## Executables without a window
+
+`BUILD "name"` in `engine1999c` makes a console executable (and `BUILD "name", WINDOW` a window one); `engine1999` makes window executables by default and `BUILD "name", CONSOLE` the console kind. A console executable is this host with the program inside: same input, output, exit status and arguments, no options except `--engine1999-about`; it needs only the C and math libraries. The kit is `engine1999c.o` + `engine.lib` (`docs/basic-language.md`, "BUILD").
 
 ## Options
 
-`-i` (go on with standard input after the file), `-` (read the lines from standard input), `--version`, `-h`/`--help`, and the `--debug-*` options of `engine1999` (`--help` lists them).
+`-i` (go on with standard input after the file), `-` (read the lines from standard input), `--color[=always|never|auto]`, `--version`, `-h`/`--help`, and the `--debug-*` options of `engine1999` (`--help` lists them).
 
 ## Not done yet (roadmap section 12)
 
-A `BUILD` that makes executables without `libSDL2` (**high priority**), syntax colors in `LIST` on a terminal (**high priority**), a full-screen `EDIT` and `MONITOR` for interactive console use, a line editor for the interactive mode (it uses the terminal's own), audio without a window. See roadmap section 12.
+A full-screen `EDIT` and `MONITOR` for interactive console use, a line editor for the interactive mode (it uses the terminal's own), audio without a window. See roadmap section 12.
 
 ## Design decisions I took (revisit if unwanted)
 
@@ -55,4 +63,4 @@ A `BUILD` that makes executables without `libSDL2` (**high priority**), syntax c
 - Standard input is unbuffered (`getline` and the key reads both go to the file descriptor), so lines and single keys stay in step in a pipe; for very large scripts on standard input a file argument is faster.
 - A line error in the pipe mode doesn't change the exit status; run mode returns 1.
 - Ctrl-C only catches while a program runs (the handler is installed around each line), so an idle prompt ends on Ctrl-C.
-- Tests: `contest1` (59 checks through the shell: pipes, exit codes, the `#!` line, `INPUT`/`GET` from a pipe, SIGINT; run it in the build directory).
+- Tests: `contest1` (71 checks through the shell: pipes, exit codes, the `#!` line, `INPUT`/`GET` from a pipe, SIGINT; run it in the build directory).

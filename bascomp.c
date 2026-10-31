@@ -3385,7 +3385,7 @@ bool comp_eat_filesstmt( compiler_t* comp, node_t** pnode ) {
 }
 
 bool comp_eat_buildstmt( compiler_t* comp, node_t** pnode ) {
-    // build-stmt := TOK_BUILD str-expr .
+    // build-stmt := TOK_BUILD str-expr [ TOK_COMMA TOK_NUMIDENT ] .       (the identifier is WINDOW or CONSOLE)
     if ( comp->currtok != TOK_BUILD || !comp_fetchtok( comp ) ) {
         return false;
     }
@@ -3394,12 +3394,35 @@ bool comp_eat_buildstmt( compiler_t* comp, node_t** pnode ) {
         comp_error( comp, "String expression expected" );
         return false;
     }
+    char* kind = 0;
+    if ( comp->currtok == TOK_COMMA && comp_fetchtok( comp ) ) {
+        if ( comp->currtok != TOK_NUMIDENT ) {
+            comp_error( comp, "WINDOW or CONSOLE expected" );
+            return false;
+        }
+        kind = dup_param( comp, comp->param );      // copy before fetching the next token
+        if ( !comp_fetchtok( comp ) ) {
+            free( kind );
+            comp_error( comp, "WINDOW or CONSOLE expected" );
+            return false;
+        }
+    }
+    size_t kindlen = kind ? strlen( kind ) : 0;
+    if ( kindlen > UINT16_MAX ) {
+        free( kind );
+        comp_error( comp, "Bad BUILD option" );
+        return false;
+    }
     /*
         NT_BUILDSTMT    BUILD statement
+            data:
+                - n bytes of the kind of runtime (optional): WINDOW or CONSOLE (an identifier, not a keyword)
             branches:
                 - 1 branch of string expression (the name of the executable)
     */
-    if ( !comp_create_node( comp, pnode, NT_BUILDSTMT, UINT8_C(1), UINT16_C(0), 0, strexpr ) || *pnode == NODE_NONE ) {
+    bool ok = comp_create_node( comp, pnode, NT_BUILDSTMT, UINT8_C(1), (uint16_t) kindlen, kind ? kind : "", strexpr ) && *pnode != NODE_NONE;
+    free( kind );
+    if ( !ok ) {
         out_of_memory( comp );
         return false;
     }

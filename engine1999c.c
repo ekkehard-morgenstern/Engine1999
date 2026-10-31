@@ -34,6 +34,7 @@
 #include "basrepl.h"
 #include "basdebug.h"
 #include "gfxops.h"
+#include "ansi.h"
 #include "version.h"
 
 /*
@@ -104,6 +105,7 @@ static void con_restore_tty( void ) {
 // -- host callbacks -----------------------------------------------------------------------
 
 static bool con_stdout_tty = false;
+static bool con_color = false;
 static bool con_midline = false;        // the last character written to standard output was not a newline
 
 static void con_print( struct _vm_t* vm, void* usrdata, int channel, const char* text ) {
@@ -257,6 +259,18 @@ static bool con_gfx_query( void* usrdata, int q, const double* a, int na, double
 
 static const vm_gfx_t con_gfx = { con_gfx_op, con_gfx_query };
 
+// --color=always|never|auto: syntax colors in LIST and FILES on standard output. auto = on a terminal, unless NO_COLOR is set (no-color.org)
+static bool con_want_color( const char* mode ) {
+    if ( strcmp( mode, "always" ) == 0 ) {
+        return true;
+    }
+    if ( strcmp( mode, "never" ) == 0 ) {
+        return false;
+    }
+    const char* nc = getenv( "NO_COLOR" );
+    return con_stdout_tty && ( nc == 0 || nc[0] == '\0' );
+}
+
 static bool con_init( repl_t* repl ) {
     if ( !init_repl( repl ) ) {
         fprintf( stderr, "failed to initialize the BASIC system\n" );
@@ -271,6 +285,7 @@ static bool con_init( repl_t* repl ) {
     repl->interrupt = con_interrupt;
     repl->save      = con_save;
     repl->gfx       = &con_gfx;
+    repl->hlstyle   = con_color ? ansi_hlstyle : 0;     // syntax colors for LIST / FILES (channel 0 only, see the REPL)
     repl->userdata  = repl;
     // no sound, no editor, no pager (a listing is not paged), no syntax colors
     return true;
@@ -327,6 +342,67 @@ static void con_repl( repl_t* repl, bool interactive ) {
     free( line );
 }
 
+// -- built executables without a window (BUILD ... , CONSOLE; basbuild.c) ---------------------------------
+//
+// BUILD links this object file with the program, which ld -r -b binary turns into an object that defines the symbols below. In the console host
+// itself they are not defined (weak: their address is 0) and main() is the console host.
+
+extern const unsigned char embedded_program_start[] __asm__( "_binary_program_e99_start" ) __attribute__((weak));
+extern const unsigned char embedded_program_end[] __asm__( "_binary_program_e99_end" ) __attribute__((weak));
+
+// the license notice of the runtime (the text of engine1999.c's about_text: keep them in sync, see LICENSE-EXCEPTION section 3 b)
+static const char about_text[] =
+    "Engine 1999 " ENGINE_VERSION " (c) Copyright 2026 Ekkehard Morgenstern.\n"
+    "\n"
+    "This program contains the console runtime of Engine 1999, free software that is licensed under the GNU General\n"
+    "Public License, version 3 or later, with the Engine1999 Runtime Exception (file LICENSE-EXCEPTION of\n"
+    "Engine 1999). The program that it runs is not covered by that license; it has its own terms.\n"
+    "\n"
+    "In short, the exception allows this executable to be distributed under terms of the author's choice if:\n"
+    "  - the runtime in it is the unmodified runtime of Engine 1999 (if Engine 1999 code was modified, the GPL\n"
+    "    applies to the whole executable),\n"
+    "  - this notice stays in the executable and keeps showing with --engine1999-about,\n"
+    "  - the runtime itself stays under the GPL: parts taken out of the executable, or the Engine on its own,\n"
+    "    may not be conveyed under other terms.\n"
+    "The C library (LGPL) is linked dynamically and keeps its own license.\n"
+    "\n"
+    "The runtime comes with ABSOLUTELY NO WARRANTY.\n"
+    "Contact: ekkehard@ekkehardmorgenstern.de\n";
+
+// runs the embedded program and ends, with the exit status of the console host (0, BYE n, 1 after an error); the whole command line is the program's
+// (ARG$(0) is the executable), except for --engine1999-about as the first argument
+static int con_run_embedded( int argc, char** argv ) {
+    if ( argc > 1 && strcmp( argv[1], "--engine1999-about" ) == 0 ) {
+        fputs( about_text, stdout );
+        return EXIT_SUCCESS;
+    }
+    con_stdout_tty = isatty( 1 );
+    con_color = con_want_color( "auto" );
+    atexit( con_restore_tty );
+    setvbuf( stdin, 0, _IONBF, 0 );
+    static repl_t repl;
+    if ( !con_init( &repl ) ) {
+        return 2;
+    }
+    repl.buildconsole = true;
+    repl.argc = argc;
+    repl.argv = (const char* const*) argv;
+    int status = EXIT_SUCCESS;
+    if ( repl_load_image( &repl, embedded_program_start, (size_t)( embedded_program_end - embedded_program_start ) ) ) {
+        con_catch_break( true );
+        bool ok = repl_run( &repl );
+        con_catch_break( false );
+        con_refuse_windows( &repl );
+        fflush( stdout );
+        status = repl.quit ? repl.exitcode : ok ? EXIT_SUCCESS : 1;
+    } else {
+        status = 2;
+    }
+    fflush( stdout );
+    cleanup_repl( &repl );
+    return status;
+}
+
 static void usage( FILE* out, const char* prog ) {
     fprintf( out,
         "Usage: %s [options] [file | - [arguments]]\n"
@@ -339,6 +415,7 @@ static void usage( FILE* out, const char* prog ) {
         "\n"
         "Options:\n"
         "  -i           after running the file, go on with the lines from standard input\n"
+        "  --color[=when]  syntax colors in LIST and FILES: always, never or auto (the default: on a terminal, unless NO_COLOR is set)\n"
         "  --version    show the version\n"
         "  -h, --help   show this text\n"
         "\n"
@@ -347,7 +424,11 @@ static void usage( FILE* out, const char* prog ) {
 }
 
 int main( int argc, char** argv ) {
+    if ( embedded_program_start != 0 ) {
+        return con_run_embedded( argc, argv );
+    }
     bool interact = false;
+    const char* colormode = "auto";
     const char* file = 0;
     int i = 1;
     for ( ; i < argc; ++i ) {
@@ -362,6 +443,14 @@ int main( int argc, char** argv ) {
         }
         if ( strcmp( arg, "-i" ) == 0 ) {
             interact = true;
+        } else if ( strcmp( arg, "--color" ) == 0 ) {
+            colormode = "always";
+        } else if ( strncmp( arg, "--color=", 8U ) == 0 ) {
+            colormode = arg + 8;
+            if ( strcmp( colormode, "always" ) != 0 && strcmp( colormode, "never" ) != 0 && strcmp( colormode, "auto" ) != 0 ) {
+                fprintf( stderr, "%s: bad value '%s' for --color (always, never or auto)\n", argv[0], colormode );
+                return 2;
+            }
         } else if ( strcmp( arg, "-" ) == 0 ) {
             file = 0;
             ++i;
@@ -393,6 +482,7 @@ int main( int argc, char** argv ) {
         }
     }
     con_stdout_tty = isatty( 1 );
+    con_color = con_want_color( colormode );
     atexit( con_restore_tty );
     // lines (getline) and single keys (read) both come from standard input: without a buffer of ours in between they stay in step
     setvbuf( stdin, 0, _IONBF, 0 );
@@ -401,6 +491,7 @@ int main( int argc, char** argv ) {
     if ( !con_init( &repl ) ) {
         return 2;
     }
+    repl.buildconsole = true;       // BUILD makes executables without a window here (BUILD "x", WINDOW makes the other kind)
     repl.argc = numprogargs;
     repl.argv = progargs;
     int status = EXIT_SUCCESS;

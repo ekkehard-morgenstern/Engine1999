@@ -77,6 +77,13 @@ static const testcase_t cases[] = {
     { "sound arguments are still checked", 0, "", "SOUND 9,440,1\n",                    "", "? Illegal argument\n", 0, false },
     { "a graphics statement fails", 0, "", "GFX LAYER 1,ON\nPRINT 2\n",                 "2\n", "? Not available in the console host\n", 0, false },
     { "a graphics statement in a program", 0, "", "10 PRINT 1\n20 SPRITE 1,ON\nRUN\n", "1\n", "? Not available in the console host in line 20\n", 0, true },
+    { "LIST is plain in a pipe",    0, "", "10 PRINT 1\nLIST\n",                         "10 PRINT 1\n", "", 0, false },
+    { "--color=auto is plain in a pipe", 0, "--color=auto", "10 PRINT 1\nLIST\n",       "10 PRINT 1\n", "", 0, false },
+    { "--color=never",              0, "--color=never", "10 PRINT 1\nLIST\n",          "10 PRINT 1\n", "", 0, false },
+    { "--color=always colors LIST", 0, "--color=always", "10 PRINT 1\nLIST\n",         "\033[33m10 \033[34mPRINT \033[31m1\033[0m\n", "", 0, false },
+    { "--color colors LIST",        0, "--color", "10 PRINT 1\nLIST\n",                "\033[33m10 \033[34mPRINT \033[31m1\033[0m\n", "", 0, false },
+    { "colors don't touch PRINT",   0, "--color=always", "PRINT \"x\"\n",              "x\n", "", 0, false },
+    { "a bad --color value",        0, "--color=blue", "",                               "", "bad value 'blue' for --color", 2, true },
     { "EDIT and MONITOR need a screen", 0, "", "EDIT\nMONITOR\nPRINT 3\n",            "3\n", "? Not available in the console host\n? Not available in the console host\n", 0, false },
     // run mode
     { "run a file",                 "10 PRINT \"RUN MODE\"\n", "prog.bas", "", "RUN MODE\n", "", 0, false },
@@ -230,6 +237,40 @@ int main( void ) {
         if ( !ok ) { printf( "    status %d out \"%s\" err \"%s\"\n", st, out, err ); }
         failed += !ok;
         free( out ); free( err );
+
+        // BUILD: console executables run without SDL, WINDOW ones link it
+        put( "prog.bas", "10 PRINT \"from built \";ARGC;ARG$(1)\n20 BYE 4\n" );
+        char cmd0[3000];
+        snprintf( cmd0, sizeof(cmd0), "rm -f %s/built %s/builtc %s/builtw", workdir, workdir, workdir );
+        if ( system( cmd0 ) != 0 ) { }
+        st = run( "-", "LOAD \"prog.bas\"\nBUILD \"built\"\nBUILD \"builtc\", CONSOLE\nBUILD \"builtw\", WINDOW\n", &out, &outlen, &err );
+        ok = st == 0 && err[0] == '\0';
+        printf( "%s  BUILD in the console host\n", ok ? "PASS" : "FAIL" );
+        if ( !ok ) { printf( "    status %d err \"%s\"\n", st, err ); }
+        failed += !ok;
+        free( out ); free( err );
+        for ( int k = 0; k < 2; ++k ) {
+            char cmdk[3000];
+            snprintf( cmdk, sizeof(cmdk), "cd %s && ./%s x < /dev/null > out.txt 2> err.txt", workdir, k == 0 ? "built" : "builtc" );
+            st = system( cmdk );
+            size_t ol;
+            char* o = slurp( "out.txt", &ol );
+            ok = WIFEXITED( st ) && WEXITSTATUS( st ) == 4 && strcmp( o, "from built 1x\n" ) == 0;
+            printf( "%s  a built console executable runs (%s)\n", ok ? "PASS" : "FAIL", k == 0 ? "default" : "CONSOLE" );
+            if ( !ok ) { printf( "    status %d out \"%s\"\n", st, o ); }
+            failed += !ok;
+            free( o );
+        }
+        char cmdg[3000];
+        snprintf( cmdg, sizeof(cmdg), "grep -c libSDL2 %s/built %s/builtc %s/builtw > %s/g.txt", workdir, workdir, workdir, workdir );
+        if ( system( cmdg ) != 0 ) { }
+        size_t gl;
+        char* g = slurp( "g.txt", &gl );
+        ok = strstr( g, "builtw:1" ) != 0 && strstr( g, "built:0" ) != 0 && strstr( g, "builtc:0" ) != 0;
+        printf( "%s  the console executables don't need libSDL2, the WINDOW one does\n", ok ? "PASS" : "FAIL" );
+        if ( !ok ) { printf( "    grep: %s\n", g ); }
+        failed += !ok;
+        free( g );
 
         // Ctrl-C is Break: SIGINT to a program in an endless loop
         put( "prog.bas", "10 GOTO 10\n" );

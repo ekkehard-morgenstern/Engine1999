@@ -27,6 +27,7 @@
               Germany, Europe
 */
 
+#include <strings.h>
 #include "codegen.h"
 #include "gfxops.h"
 #include "instset.h"
@@ -150,7 +151,8 @@ bool cgen_from_buildstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     /*
         NT_BUILDSTMT    BUILD statement
             branches: 1 string expression (the name of the executable)
-        code: <name> BLD
+            data: the kind of runtime as text (empty, WINDOW or CONSOLE)
+        code: <name> BLD kind
     */
     if ( node == NODE_NONE ) {
         return cgen_bad_node( comp );
@@ -158,10 +160,25 @@ bool cgen_from_buildstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     if ( node->type != NT_BUILDSTMT || node->numbranches != 1U ) {
         return cgen_unexpected_node( comp );
     }
+    uint16_t kind = 0;
+    if ( node->datalen > 0 ) {
+        char text[16];
+        size_t n = node->datalen < sizeof(text) - 1U ? node->datalen : sizeof(text) - 1U;
+        memcpy( text, node->data, n );
+        text[n] = '\0';
+        if ( strcasecmp( text, "WINDOW" ) == 0 ) {
+            kind = 1;
+        } else if ( strcasecmp( text, "CONSOLE" ) == 0 ) {
+            kind = 2;
+        } else {
+            comp_error( comp, "Bad BUILD option (WINDOW or CONSOLE)" );
+            return false;
+        }
+    }
     if ( !cgen_from_strexpr( cgen, comp, node->branches[0] ) ) {
         return false;
     }
-    return cgen_gen_bld( cgen ) || cgen_out_of_code_memory( comp );
+    return cgen_gen_bld( cgen, kind ) || cgen_out_of_code_memory( comp );
 }
 
 bool cgen_from_filesstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {

@@ -31,6 +31,7 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include "basbuild.h"
+#include "basrepl.h"
 
 /*
 Automated test of the BUILD machinery (basbuild.c): finding the linker and the system files, embedding a program with ld -r -b binary,
@@ -238,6 +239,45 @@ int main( void ) {
         unlink( "buildtest1.full" );
     } else {
         printf( "(no engine1999.o / engine.lib here: the real runtime was not tried)\n" );
+    }
+
+    // -- the console kit: a real program built into an executable that needs no SDL, and run
+    if ( access( "engine1999c.o", R_OK ) == 0 && access( "engine.lib", R_OK ) == 0 ) {
+        static repl_t repl;
+        check( init_repl( &repl ), "a REPL for the program" );
+        repl_enter( &repl, "10 PRINT \"built \";ARGC;ARG$(1);ARG$(2)" );
+        repl_enter( &repl, "20 INPUT N$:PRINT \"hi \";N$" );
+        repl_enter( &repl, "30 BYE 3" );
+        uint8_t* image = 0; size_t imagelen = 0;
+        check( repl_program_image( &repl, &image, &imagelen ), "the program as a file image" );
+        build_opts_t con;
+        build_console_opts( &con );
+        con.kitdir = ".";
+        unlink( "buildtest1.con" );
+        ok = image != 0 && build_executable( "buildtest1.con", image, imagelen, &con, err, sizeof(err) );
+        checkf( ok, "build with the console runtime", err );
+        if ( ok ) {
+            FILE* f = fopen( "buildtest1.in", "wb" );
+            if ( f ) { fputs( "bob\n", f ); fclose( f ); }
+            out = run_capture( "./buildtest1.con x 'y z' < buildtest1.in", &len, &status );
+            check( status == 3, "the console executable ends with the code of BYE" );
+            check( out != 0 && contains( out, len, "built 2xy z\n" ) && contains( out, len, "hi bob\n" ),
+                "the console executable runs the program with its arguments and its input" );
+            free( out );
+            unlink( "buildtest1.in" );
+            out = run_capture( "./buildtest1.con --engine1999-about", &len, &status );
+            check( status == 0 && out != 0 && contains( out, len, "Runtime Exception" ) && contains( out, len, "console runtime" ), "the console notice" );
+            free( out );
+            size_t clen = 0;
+            unsigned char* cexe = read_file( "buildtest1.con", &clen );
+            check( cexe != 0 && !contains( cexe, clen, "libSDL2" ) && contains( cexe, clen, "libm.so" ), "no SDL2 in the console executable" );
+            free( cexe );
+        }
+        unlink( "buildtest1.con" );
+        free( image );
+        cleanup_repl( &repl );
+    } else {
+        printf( "(no engine1999c.o here: the console runtime was not tried)\n" );
     }
 
     rmdir( tmpdir );

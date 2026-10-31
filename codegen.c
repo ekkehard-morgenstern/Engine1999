@@ -1155,7 +1155,7 @@ bool cgen_gen_auto( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_AUTO, f
 bool cgen_gen_peek( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_PEEK, false, false, UINT16_C(0) ); }
 bool cgen_gen_peks( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_PEKS, false, false, UINT16_C(0) ); }
 bool cgen_gen_poke( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_POKE, false, false, UINT16_C(0) ); }
-bool cgen_gen_bld( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_BLD, false, false, UINT16_C(0) ); }
+bool cgen_gen_bld( codegen_t* cgen, uint16_t kind ) { return cgen_gen_ins12( cgen, INS_BLD, false, true, kind ); }
 bool cgen_gen_bye( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_BYE, false, false, UINT16_C(0) ); }
 bool cgen_gen_argc( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_ARGC, false, false, UINT16_C(0) ); }
 bool cgen_gen_args( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_ARGS, false, false, UINT16_C(0) ); }

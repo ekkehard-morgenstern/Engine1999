@@ -474,6 +474,13 @@ void build_default_opts( build_opts_t* opts ) {
     opts->optlibs = optlibs;
 }
 
+void build_console_opts( build_opts_t* opts ) {
+    static const char* const libs[] = { "m", 0 };
+    build_default_opts( opts );
+    opts->runtime_obj = "engine1999c.o";
+    opts->libs = libs;
+}
+
 bool build_executable( const char* outname, const void* prog, size_t len, const build_opts_t* userop, char* err, size_t errsize ) {
     build_opts_t opts;
     if ( userop != 0 ) {

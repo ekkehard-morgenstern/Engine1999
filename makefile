@@ -131,7 +131,7 @@ gfxtest1.o: gfxtest1.c $(LIBHDR)
 buildstub.o: buildstub.c $(LIBHDR)
 
 # buildtest1 needs engine1999.o next to it (the real runtime kit: engine1999.o + engine.lib) and runs its tests in this directory
-buildtest1: buildtest1.o buildstub.o engine1999.o $(LIBNAME)
+buildtest1: buildtest1.o buildstub.o engine1999.o engine1999c.o $(LIBNAME)
 	$(CL) -o buildtest1 buildtest1.o $(LIBNAME) -lm
 
 buildtest1.o: buildtest1.c $(LIBHDR)
@@ -139,7 +139,7 @@ buildtest1.o: buildtest1.c $(LIBHDR)
 basbuild.o: basbuild.c $(BASEHDR)
 
 # the test of the console host runs ./engine1999c in the build directory
-contest1: contest1.o engine1999c
+contest1: contest1.o engine1999c engine1999.o
 	$(CL) -o contest1 contest1.o
 
 contest1.o: contest1.c $(LIBHDR)

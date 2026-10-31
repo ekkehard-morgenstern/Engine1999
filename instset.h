@@ -522,10 +522,11 @@ The 4096 extended instructions are as follows:
                             long, -4: single, -8: double precision float (an other size is "Illegal argument", a block that is not inside the RAM
                             "Illegal address"). POKE of a string value writes its bytes (size is ignored); POKE of a number accepts the range of
                             its size (signed or unsigned: the low bits are stored).
-    0001 01110111       BLD - build an executable ( name -- ) C=0 P=0
+    0001 01110111       BLD - build an executable ( name -- ) C=0 P=1
                             BUILD: asks the host (build callback) to create the executable file <name> from the stored program (the run goes
                             on). "Illegal argument" for an empty name, "BUILD is not available" without the callback; the host reports why a build
-                            failed ("Build failed").
+                            failed ("Build failed"). The parameter is the kind of runtime: 0 = the host's own (default), 1 = WINDOW (SDL2), 2 = CONSOLE
+                            (no SDL: the executable runs without a window).
     0001 01111000       BYE - quit ( code -- ) C=0 P=0
                             BYE [code] / QUIT [code]: leaves a request for the host (VMREQ_QUIT, the exit code in reqline) and ends the run. The host ends the
                             Engine (or the built program) with the code. "Illegal argument" unless the code is an integer 0..255.

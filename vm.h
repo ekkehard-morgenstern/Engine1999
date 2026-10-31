@@ -284,7 +284,8 @@ typedef struct _vm_t {
     // FILES: lists the files of spec ("" = the current directory) to the current output channel. Return false after reporting an error.
     bool            (*files)( struct _vm_t*, void*, const char* spec );
     // BUILD: creates the executable file <name> from the stored program. Return false after reporting an error.
-    bool            (*build)( struct _vm_t*, void*, const char* name );
+    // kind: 0 = the host's own kind of runtime, 1 = WINDOW, 2 = CONSOLE
+    bool            (*build)( struct _vm_t*, void*, const char* name, int kind );
     bool            (*merge)( struct _vm_t*, void*, const char* name, bool append );
     bool            (*renumber)( struct _vm_t*, void*, const char* firstlabel, int32_t firstline, const char* lastlabel, int32_t lastline, int32_t step );
     bool            sfx_defined[SND_MAXSFX];

@@ -337,8 +337,11 @@ files-stmt := TOK_FILES [ str-expr ] .
 -- BUILD name makes a standalone executable (a file called name, no extension is added) from the stored program: the system linker
 -- binds the program to the Engine's runtime (engine1999.o + engine.lib); SDL2 and the C library are linked dynamically. The
 -- executable starts the program at once, without banner and REPL (--engine1999-about shows the license notice). The run goes on.
+-- WINDOW and CONSOLE (identifiers, not keywords) choose the kind of runtime: a window with SDL2, or no window and no SDL2 (the executable then
+-- needs only the C and math libraries; engine1999c.o is its kit). Without it the kind of the host that runs BUILD is made: engine1999 makes
+-- window executables, engine1999c console ones.
 -- Names of BASIC program files (.bas, .e99) and names with a driver prefix are refused. See LICENSE-EXCEPTION.
-build-stmt := TOK_BUILD str-expr .
+build-stmt := TOK_BUILD str-expr [ TOK_COMMA ( WINDOW | CONSOLE ) ] .
 -- BYE [code] and QUIT [code] (two words for one statement) end the program and the Engine (or the built executable) with the exit code
 -- of the process: an integer 0..255, 0 without it. Anything after it is not executed. (EXIT is the loop word, see exit-stmt.)
 bye-stmt := ( TOK_BYE | TOK_QUIT ) [ num-expr ] .
