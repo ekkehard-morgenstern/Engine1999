@@ -13,10 +13,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-(not committed yet) **Timer handlers run inside PROC/FUNC** (2026-10-31)
-- **History log**: the entries of `e7ba7c5` (The Long Climb) and `edd42c7` (documentation) moved into the log.
-- **Fix** (`vm.c`, `vm_irq_poll()`): an `EVERY`/`AFTER` handler was only entered when no function call was open; since procedures exist that meant never, in programs whose main loop is a `PROC` (the music of `climb.bas` stopped after one bar, the music and the pineapple of `fruit2.bas` too). A handler is held back only while a statement is unfinished (data stack not empty).
-- Tests: 4 new cases in `vmtest1` (1017; three failed before the fix); `repltest1` 302 and the other test programs pass. Docs: `docs/basic-language.md` (Timers), `SESSION.md`.
+(nothing pending)
 
 ## Log
 
@@ -643,3 +640,8 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 1 file, +14.
 - `docs/graphics-subsystem.md`: a section on scrolling a world bigger than the screen with `TILE SCROLL` (the cell mapping that gives exact pixel positions, the top strip, the cost of a changed layer). (Part of the same work as `e7ba7c5`; committed separately.)
 
+### a75599f — 2026-10-31 13:45:32 +0100 — "EVERY/AFTER handler triggering fixed by Claude Code"
+5 files, +26/-11.
+- **History log**: the entries of `e7ba7c5` (The Long Climb) and `edd42c7` (documentation) moved into the log.
+- **Fix** (`vm.c`, `vm_irq_poll()`): an `EVERY`/`AFTER` handler was only entered when no function call was open; since procedures exist that meant never, in programs whose main loop is a `PROC` (the music of `climb.bas` stopped after one bar, the music and the pineapple of `fruit2.bas` too). A handler is held back only while a statement is unfinished (data stack not empty).
+- Tests: 4 new cases in `vmtest1` (1017; three failed before the fix); `repltest1` 302 and the other test programs pass. Docs: `docs/basic-language.md` (Timers), `SESSION.md`.
