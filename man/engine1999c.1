@@ -1,0 +1,197 @@
+.\" Engine1999 - A 2D games engine written in C
+.\" Copyright (C) 2026  Ekkehard Morgenstern
+.\"
+.\" This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published
+.\" by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It is distributed WITHOUT ANY
+.\" WARRANTY. ADDITIONAL PERMISSION (GPLv3 section 7): the Engine1999 Runtime Exception applies, see the file LICENSE-EXCEPTION.
+.\"
+.\" Keep this page current (CLAUDE.md): "make man-check" compares the options with `engine1999c --help`.
+.TH ENGINE1999C 1 "October 2026" "Engine 1999 @VERSION@" "Engine1999 Manual"
+.SH NAME
+engine1999c \- the BASIC system of Engine1999 for the command line (no window)
+.SH SYNOPSIS
+.B engine1999c
+[\fIoption\fR ...]
+.RI [ file " | " \- " [" argument " ...]]"
+.SH DESCRIPTION
+.B engine1999c
+is the console host of Engine1999: the same BASIC system as
+.BR engine1999 (1),
+without a window and without SDL, for shell scripts, pipes and servers.
+.PP
+With a
+.I file
+(a program as a text listing, \fI.bas\fR, or in the binary form, \fI.e99\fR; a name without extension is found as with
+.BR LOAD )
+it loads the program, runs it and ends.
+Without a file, or with
+.BR \- ,
+it reads BASIC lines from standard input: a line with a line number is stored, any other line runs at once; on a terminal it shows a banner
+and the
+.B Ready.
+prompt.
+The input of a running program
+.RB ( INPUT ", " "LINE INPUT" ", " GET ", " INKEY$ )
+comes from the same standard input, in order.
+.PP
+A script can start with a line
+.BR #!/usr/bin/env\ engine1999c ;
+the loader skips a first line that begins with
+.BR #! .
+.SH OPTIONS
+Options come before the file. Everything after the file (or after
+.BR \- )
+belongs to the program.
+.TP
+.B \-i
+After running the file, go on with the lines from standard input.
+.TP
+.BR \-
+Read the program lines from standard input (the default without a file).
+.TP
+.BR \-\-color [ =\fIwhen\fR ]
+Syntax colors in
+.B LIST
+and
+.BR FILES :
+.BR always ,
+.B never
+or
+.B auto
+(the default: on a terminal, unless the environment variable
+.B NO_COLOR
+is set).
+.B \-\-color
+alone means
+.BR always .
+.TP
+.B \-\-list\-keywords
+Print the reserved words of the language, one per line.
+.TP
+.B \-\-version
+Print the version and exit.
+.TP
+.BR \-h ", " \-\-help
+Print a short help text and exit.
+.TP
+.B \-\-debug\-tokenize
+Print the token bytes of every input line (to standard output).
+.TP
+.B \-\-debug\-detokenize
+Print every input line rebuilt from its tokens.
+.TP
+.B \-\-debug\-parse
+Print every token as the compiler fetches it.
+.TP
+.B \-\-debug\-tree
+Print the syntax tree after parsing.
+.TP
+.B \-\-debug\-code
+Print every instruction the code generator emits.
+.TP
+.B \-\-debug\-all
+All of the debug outputs.
+.SH PROGRAM ARGUMENTS AND ENVIRONMENT
+The words after the file are the program's: with
+.B engine1999c prog.bas a "b c"
+the BASIC function
+.B ARGC
+is 2,
+.B ARG$(1)
+is
+.BR a ,
+.B ARG$(2)
+is
+.B b c
+and
+.B ARG$(0)
+is
+.B prog.bas
+(\fB\-\fR for standard input).
+.B ENV$("NAME")
+reads an environment variable.
+.SH INPUT AND OUTPUT
+Program output goes to standard output (binary safe), messages and errors to standard error (\fB? Division by zero in line 20\fR).
+The BASIC drivers
+.BR stdin: ,
+.B stdout:
+and
+.B stderr:
+open the process's streams as channels:
+.B OPEN "stderr:" FOR OUTPUT AS #1.
+Ctrl\-C is Break while a program runs.
+On a terminal
+.B GET
+and
+.B INKEY$
+take single keys without echo; in a pipe they read the next byte (a line end is RETURN, 13).
+.PP
+Sound statements do nothing (their arguments are still checked).
+.B CLS
+and
+.B LOCATE
+write ANSI escape sequences when standard output is a terminal.
+All other graphics statements fail with
+.BR "? Not available in the console host" .
+.B EDIT
+without a target and
+.B MONITOR
+need a window.
+.SH EXIT STATUS
+.TP
+.B 0
+The program ended, or the input ended.
+.TP
+.I n
+The program executed
+.B BYE n
+or
+.B QUIT n
+(0 to 255).
+.TP
+.B 1
+A program run from a file ended with an error.
+.TP
+.B 2
+The file could not be loaded, or the command line is wrong.
+.SH BUILDING EXECUTABLES
+.B BUILD "name"
+in this host makes an executable without a window, which needs only the C and the math library
+.RB ( "BUILD ""name"", WINDOW" " makes the other kind)."
+It has the same input, output, arguments and exit status as described here, and takes one option of its own,
+.BR \-\-engine1999\-about ,
+as the first argument: it prints the license notice of the runtime.
+See
+.BR engine1999\-basic (7).
+.SH EXAMPLES
+.nf
+engine1999c report.bas 2026 > report.txt
+echo 'PRINT 2^10' | engine1999c
+printf '10 INPUT A$\\n20 PRINT "hello ";A$\\nRUN\\nworld\\n' | engine1999c
+engine1999c \-\-color=always prog.bas | less \-R
+.fi
+.PP
+A script:
+.PP
+.nf
+#!/usr/bin/env engine1999c
+10 IF ARGC < 1 THEN PRINT "usage: greet NAME": BYE 2
+20 PRINT "Hello, "; ARG$(1)
+.fi
+.SH ENVIRONMENT
+.TP
+.B NO_COLOR
+Switches the syntax colors of \fB\-\-color=auto\fR off.
+.TP
+.BR ENGINE1999_HOME ", " ENGINE1999_LD ", " ENGINE1999_BUILD_TRACE ", " LIBRARY_PATH ", " TMPDIR
+As for
+.BR BUILD ;
+see
+.BR engine1999 (1).
+.SH SEE ALSO
+.BR engine1999 (1),
+.BR engine1999\-basic (7)
+.SH AUTHORS
+Ekkehard Morgenstern, together with Claude (Claude Code, an AI assistant by Anthropic); see HistoryLog\-Claude.md.
+.SH LICENSE
+GNU General Public License, version 3 or later, with the Engine1999 Runtime Exception; see the files LICENSE and LICENSE\-EXCEPTION.

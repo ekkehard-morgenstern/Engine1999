@@ -42,6 +42,22 @@ printf '10 PRINT "HI";A$:LET B=1+2*3\n20 GOTO 10\n' | ./basictest2
 
 (`basictest*` read until EOF.) These test programs include `basic.h` and exercise `bastok.c` and the compiler; they read arbitrary-length lines with `getline`. Run under `valgrind --leak-check=full` to check the buffer code.
 
+## Installing, the kit, the man pages
+
+`make install` installs into `PREFIX` (`/usr/local` by default; `make install PREFIX=$HOME/.local`, `DESTDIR=/tmp/pkg` for packagers) and builds first what it needs: `make kit` compiles everything again into `kit/` **without `-march=native` and without the profiling hook `-p`** (so the installed programs and the executables that `BUILD` makes from the installed kit run on other CPUs and carry no profiling code; the development build in the source directory keeps its flags). Installed:
+
+| Where | What |
+|---|---|
+| `$(PREFIX)/bin` | `engine1999`, `engine1999c` |
+| `$(PREFIX)/lib/engine1999` | the kit of `BUILD`: `engine1999.o`, `engine1999c.o`, `engine.lib` |
+| `$(PREFIX)/share/engine1999/demos` | the demo programs |
+| `$(PREFIX)/share/doc/engine1999` | README, LICENSE, LICENSE-EXCEPTION, `docs/` (with `grammar.html`) |
+| `$(PREFIX)/share/man/man1`, `man7` | `engine1999(1)`, `engine1999c(1)`, `engine1999-basic(7)` (the `@VERSION@` of the sources is filled in) |
+
+`make uninstall` removes them again. `BUILD` finds an installed kit on its own: it looks in `../lib/engine1999` next to the running program, so any prefix works (`~/.local/bin/engine1999` finds `~/.local/lib/engine1999`); a copied kit goes into `ENGINE1999_HOME`. The kit needs the system linker (`ld`, binutils) and the development files of the C library on the machine that runs `BUILD`, and SDL2 for window executables.
+
+**Man pages** (`man/engine1999.1`, `man/engine1999c.1`, `man/engine1999-basic.7`) are written by hand and kept current by `make man-check` (`mancheck.sh`): it fails when an option that `engine1999 --help` or `engine1999c --help` lists is missing from the page of that program, when the list of reserved words in the language page is not `engine1999c --list-keywords` (`sh mancheck.sh --update` rewrites that list), and when groff finds a mistake. Read an uninstalled page with `man -l man/engine1999.1`.
+
 ## Version
 
 The version is the newest git tag of the form `vMAJOR.MINOR.BUILD` (`./bump_version.sh` makes it; `--show` prints the current one, `--dry-run` shows what would happen; it only creates a local tag, push it yourself). `make` runs `tagtoverstr.sh`, which writes `version.h` (`#define ENGINE_VERSION "..."`, git-ignored, only `engine1999.o` includes it): `v0.5.0` when HEAD is the tagged commit, `v0.5.0-3-g1a2b3c4` three commits after it, `untagged-1a2b3c4` before the first tag, `unknown` outside a git repository (an existing `version.h` is kept then, so a source archive can ship one). The header is regenerated when `.git/HEAD`, `.git/logs/HEAD`, the tags or `packed-refs` change and only rewritten if the string differs; since a commit changes the version, the next `make` recompiles `engine1999.o` and links `engine1999` again (nothing else). The version shows in the start banner, in `engine1999 --version` and in `--engine1999-about` of a built program (the version of its runtime). Shell instead of perl on purpose: perl is not needed to build.

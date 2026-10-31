@@ -416,6 +416,7 @@ static void usage( FILE* out, const char* prog ) {
         "Options:\n"
         "  -i           after running the file, go on with the lines from standard input\n"
         "  --color[=when]  syntax colors in LIST and FILES: always, never or auto (the default: on a terminal, unless NO_COLOR is set)\n"
+        "  --list-keywords  print the reserved words of the language, one per line\n"
         "  --version    show the version\n"
         "  -h, --help   show this text\n"
         "\n"
@@ -439,6 +440,15 @@ int main( int argc, char** argv ) {
         }
         if ( strcmp( arg, "--version" ) == 0 ) {
             printf( "Engine 1999 %s (console host)\n", ENGINE_VERSION );
+            return EXIT_SUCCESS;
+        }
+        if ( strcmp( arg, "--list-keywords" ) == 0 ) {      // the reserved words, one per line (the test of the man page uses it)
+            for ( int tok = 1; tok < 255; ++tok ) {
+                const char* kw = keyword_name( (uint8_t) tok );
+                if ( kw != 0 && ( ( kw[0] >= 'A' && kw[0] <= 'Z' ) ) ) {
+                    puts( kw );
+                }
+            }
             return EXIT_SUCCESS;
         }
         if ( strcmp( arg, "-i" ) == 0 ) {

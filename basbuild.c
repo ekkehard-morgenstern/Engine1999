@@ -357,6 +357,8 @@ static bool find_kitdirs( const build_opts_t* opts, strlist_t* dirs ) {
         if ( slash != 0 ) {
             *slash = '\0';
             ok = sl_add( dirs, slash == exe ? "/" : exe );
+            // an installed Engine: bin/engine1999 with the kit in ../lib/engine1999 (whatever the prefix is)
+            ok = ok && sl_addf( dirs, "%s/../lib/engine1999", slash == exe ? "" : exe );
         }
     }
     static const char* const fixed[] = { ".", "/usr/local/lib/engine1999", "/usr/lib/engine1999", "/usr/local/share/engine1999",

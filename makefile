@@ -43,7 +43,7 @@ CL=$(CCOMP) $(CFLAGS)
 all: sdltest1 sdltest2 engine1999 basictest1 testcomp1 basictest2 vmtest1 repltest1 ansitest1 txttest1 asmtest1 synthtest1 iotest1 gfxtest1 buildtest1 engine1999c contest1
 	echo ok >all
 
-.PHONY: grammar grammar-check
+.PHONY: grammar grammar-check kit install uninstall man-check
 
 # the quick reference of the language (docs/grammar.md and docs/grammar.html) from bascomp.ebnf; needs perl
 grammar:
@@ -162,6 +162,63 @@ testcomp1.o: testcomp1.c $(LIBHDR)
 $(LIBNAME): $(LIBMOD)
 	-rm $(LIBNAME)
 	ar q $(LIBNAME) $(LIBMOD)
+
+# -- the installed kit (make install) ---------------------------------------------------------
+#
+# What BUILD needs (engine1999.o, engine1999c.o, engine.lib) and the two programs, compiled for installing: portable (no -march=native, which would make
+# the executables run only on CPUs like this one) and without the profiling hooks (-p) of the development build. They go to kit/, the development
+# objects stay as they are. Everything is made with "make kit"; "make install" copies it (PREFIX=/usr/local by default, DESTDIR for packagers).
+
+PREFIX?=/usr/local
+BINDIR=$(PREFIX)/bin
+LIBDIR=$(PREFIX)/lib/engine1999
+SHAREDIR=$(PREFIX)/share/engine1999
+DOCDIR=$(PREFIX)/share/doc/engine1999
+MANDIR=$(PREFIX)/share/man
+KITFLAGS=-Wall -Werror -O2
+KITOBJ=$(addprefix kit/,$(BASEMOD))
+
+kit: kit/engine1999 kit/engine1999c kit/engine1999.o kit/engine1999c.o kit/engine.lib
+
+$(KITOBJ) kit/engine1999.o kit/engine1999c.o: kit/%.o: %.c $(BASEHDR)
+	@mkdir -p kit
+	$(CCOMP) -c $(KITFLAGS) -o $@ $<
+
+kit/engine1999.o kit/engine1999c.o: version.h
+
+kit/engine.lib: $(KITOBJ)
+	-rm -f kit/engine.lib
+	ar q kit/engine.lib $(KITOBJ)
+
+kit/engine1999: kit/engine1999.o kit/engine.lib
+	$(CCOMP) $(KITFLAGS) -o $@ kit/engine1999.o kit/engine.lib -lSDL2 -lrt -lm
+
+kit/engine1999c: kit/engine1999c.o kit/engine.lib
+	$(CCOMP) $(KITFLAGS) -o $@ kit/engine1999c.o kit/engine.lib -lrt -lm
+
+install: kit version.h
+	install -d $(DESTDIR)$(BINDIR) $(DESTDIR)$(LIBDIR) $(DESTDIR)$(SHAREDIR)/demos $(DESTDIR)$(DOCDIR)/docs/images \
+		$(DESTDIR)$(MANDIR)/man1 $(DESTDIR)$(MANDIR)/man7
+	install -m 755 kit/engine1999 kit/engine1999c $(DESTDIR)$(BINDIR)
+	install -m 644 kit/engine1999.o kit/engine1999c.o kit/engine.lib $(DESTDIR)$(LIBDIR)
+	install -m 644 demos/*.bas demos/README.md $(DESTDIR)$(SHAREDIR)/demos
+	install -m 644 README.md LICENSE LICENSE-EXCEPTION $(DESTDIR)$(DOCDIR)
+	install -m 644 docs/*.md docs/grammar.html $(DESTDIR)$(DOCDIR)/docs
+	install -m 644 docs/images/*.png $(DESTDIR)$(DOCDIR)/docs/images
+	@v=$$(sed -n 's/.*ENGINE_VERSION *"\(.*\)".*/\1/p' version.h); \
+	for p in man/*.1; do sed "s/@VERSION@/$$v/" $$p > $(DESTDIR)$(MANDIR)/man1/$$(basename $$p); chmod 644 $(DESTDIR)$(MANDIR)/man1/$$(basename $$p); done; \
+	for p in man/*.7; do sed "s/@VERSION@/$$v/" $$p > $(DESTDIR)$(MANDIR)/man7/$$(basename $$p); chmod 644 $(DESTDIR)$(MANDIR)/man7/$$(basename $$p); done
+	@echo "installed in $(DESTDIR)$(PREFIX): engine1999, engine1999c, the BUILD kit in $(DESTDIR)$(LIBDIR), man pages (man engine1999)"
+
+uninstall:
+	rm -f $(DESTDIR)$(BINDIR)/engine1999 $(DESTDIR)$(BINDIR)/engine1999c
+	rm -rf $(DESTDIR)$(LIBDIR) $(DESTDIR)$(SHAREDIR) $(DESTDIR)$(DOCDIR)
+	for p in man/*.1; do rm -f $(DESTDIR)$(MANDIR)/man1/$$(basename $$p); done
+	for p in man/*.7; do rm -f $(DESTDIR)$(MANDIR)/man7/$$(basename $$p); done
+
+# the man pages (man/) must say what the programs do: options, reserved words (needs ./engine1999 and ./engine1999c)
+man-check: engine1999 engine1999c
+	sh mancheck.sh
 
 sdlevent.o: sdlevent.c $(BASEHDR)
 

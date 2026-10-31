@@ -49,7 +49,7 @@ The files are looked for in the usual places (build_find_* below); nothing has t
 ENGINE1999_HOME (where the runtime kit is: engine1999.o and engine.lib), ENGINE1999_LD (the linker) and LIBRARY_PATH (more
 library directories) take precedence; ENGINE1999_BUILD_TRACE=1 prints the commands to the standard error output.
 
-The runtime kit is the directory of the running executable, the current directory, $ENGINE1999_HOME, /usr/local/lib/engine1999,
+The runtime kit is the directory of the running executable, its sibling ../lib/engine1999 (an installed Engine: `make install`), the current directory, $ENGINE1999_HOME, /usr/local/lib/engine1999,
 /usr/lib/engine1999, /usr/local/share/engine1999 and /usr/share/engine1999 (first match wins).
 */
 

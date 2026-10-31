@@ -179,5 +179,5 @@ What is still missing:
 - [ ] **Audio without a window** (optional): the audio device could be opened alone (`SDL_INIT_AUDIO`) for scripts that `PLAY` music; `SDL_VIDEODRIVER=dummy` runs the *current* GUI host without a window, but its input and output still go to the invisible screen, so it is no substitute.
 - [ ] A **line editor** for the interactive prompt of `engine1999c` (history, cursor keys: today the terminal's own cooked mode), cursor keys and function keys for `GET`/`INKEY$` on a terminal.
 - [ ] Setting the environment (`ENV` as a statement?) and `ARG$` for the command line of the window version: nothing planned yet.
-- [ ] **A kit that installs** (`make install` for `engine1999.o`, `engine1999c.o`, `engine.lib` into `/usr/local/lib/engine1999`, so that `BUILD` works away from the build directory): the next step for both kinds of `BUILD`.
+- [x] ~~**A kit that installs**~~ done (2026-10-31): `make install` (`PREFIX=/usr/local`, portable kit without `-march=native` and `-p`, programs, demos, docs, man pages) and `make uninstall`; `BUILD` finds the kit through `../lib/engine1999`. Not done: distribution packages (`.deb`, `.rpm`), man pages in other languages, shell completions.
 - [ ] More tests: `contest1` runs through pipes only; a pseudo terminal test for the raw keys of `GET`/`INKEY$` and for `CLS`/`LOCATE` escape sequences.

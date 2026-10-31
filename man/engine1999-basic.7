@@ -1,0 +1,232 @@
+.\" Engine1999 - A 2D games engine written in C
+.\" Copyright (C) 2026  Ekkehard Morgenstern
+.\"
+.\" This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published
+.\" by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It is distributed WITHOUT ANY
+.\" WARRANTY. ADDITIONAL PERMISSION (GPLv3 section 7): the Engine1999 Runtime Exception applies, see the file LICENSE-EXCEPTION.
+.\"
+.\" Keep this page current (CLAUDE.md). "make man-check" compares the list of reserved words below with `engine1999c --list-keywords`;
+.\" "sh mancheck.sh --update" rewrites that list. The rest is written by hand: new statements, functions and drivers belong in it.
+.TH ENGINE1999-BASIC 7 "October 2026" "Engine 1999 @VERSION@" "Engine1999 Manual"
+.SH NAME
+engine1999\-basic \- the BASIC language of Engine1999
+.SH DESCRIPTION
+The BASIC of
+.BR engine1999 (1)
+and
+.BR engine1999c (1)
+is a classic line\-numbered BASIC with the structure of a modern one.
+Programs are tokenized, compiled to the instructions of a stack machine and run by it.
+This page is a summary; the complete reference is
+.I basic\-language.md
+in /usr/local/share/doc/engine1999/ (docs/ in the source tree), and the whole syntax is on one page in
+.IR grammar.html .
+.SH PROGRAMS
+.TP
+.B Lines
+A line with a number from 0 to 999999 is stored in the program; a line without one runs at once (direct mode).
+Several statements on a line are separated by a colon.
+A comment starts with an apostrophe.
+Words are not case sensitive; strings keep their case.
+.TP
+.B Targets
+GOTO, GOSUB and the other jumps take a line number or a label
+.RB ( LABEL
+.IR name ).
+.TP
+.B Files
+.B SAVE "name"
+writes the binary form (\fIname.e99\fR),
+.B SAVE "name",A
+a text listing (\fIname.bas\fR);
+.B LOAD "name"
+finds either, and
+.B MERGE
+and
+.B CHAIN
+combine programs.
+A text file may start with a
+.B #!
+line.
+.TP
+.B Ending
+.B BYE [code]
+or
+.B QUIT [code]
+ends the program and the Engine (or the built executable) with the exit status
+.I code
+(0 to 255).
+.B EXIT
+is the loop word, not a way to quit.
+.SH DATA
+Numbers are floating point; an integer variable has a
+.B %
+suffix; a string variable a
+.B $
+suffix (strings are binary safe, up to 65535 bytes).
+Arrays have up to six dimensions
+.RB ( DIM ).
+.B LET
+is optional.
+Operators:
+.B + \- * / \e MOD **
+(\fB\e\fR and
+.B MOD
+are integer division and remainder),
+the comparisons
+.BR "= <> < > <= >=" ,
+.BR "AND OR XOR NOT NAND NOR XNOR IMP NIMP EQV NEQV" ,
+the shifts
+.BR "SHL SHR ASL ASR LSHIFT RSHIFT" ,
+and
+.B +
+for strings.
+.SH STATEMENTS
+.TP
+.B Output and input
+PRINT, INPUT, LINE INPUT, GET, WRITE, DATA, READ, RESTORE, CLS, LOCATE, COLOR
+.TP
+.B Control flow
+IF ... THEN ... ELSE, UNLESS, FOR ... NEXT (also DOWNTO, FOR EACH), WHILE ... WEND, REPEAT ... UNTIL, UNTIL ... UEND,
+EXIT, LEAVE, ITERATE, AGAIN, GOTO, GOSUB, RETURN, ON ... GOTO/GOSUB, POP, END
+.TP
+.B Procedures and functions
+PROC ... END PROC and CALL, FUNC ... END FUNC, DEF FN, LOCAL, RETURN value, EXIT PROC
+.TP
+.B Errors
+ON ERROR GOTO/GOSUB/OFF, RESUME, and the functions ERR$ and ERL
+.TP
+.B Timers
+AFTER, EVERY, WAIT, and the function REMAIN
+.TP
+.B Files and devices
+OPEN, CLOSE, PRINT #, INPUT #, LINE INPUT #, GET #, SEEK, FIELD, LSET, RSET, GETREC, PUTREC, KILL, RENAME, MKDIR, CHDIR, ADDRESS, FILES
+.TP
+.B Sound
+SOUND, PLAY, SFX, WAVE, TEMPO, PITCH, VOLUME, ENVELOPE, VIBRATO, TREMOLO
+.TP
+.B Graphics
+GFX, TXT, TILE, SPRITE and DESIGN, with their own sub\-words (layers, palettes, drawing, tiles, sprites with collisions, text areas), and ON COLLISION
+.TP
+.B Program commands
+LIST, LOAD, SAVE, RUN, NEW, CLEAR, DELETE, RENUM, MERGE, CHAIN, AUTO, EDIT, MONITOR, STOP, CONT, TRACE, BUILD, BYE, QUIT
+.TP
+.B Other
+DIM, ERASE, RANDOMIZE, DEG, RAD, GRAD, POKE, SYMBOL
+.SH FUNCTIONS
+.TP
+.B Numbers
+INT, FIX, FLOOR, CEIL, ABS, SGN, SQR, SIN, COS, TAN, ATN, EXP, LOG, LOG2, LOG10, RND, PI, VAL, ASC, LEN, CVI, CVL, CVS, CVD, PEEK, TI, REMAIN, PLAYING,
+EOF, LOF, LOC, FRE, ARGC, RGB, POINT, ERL
+.TP
+.B Strings
+CHR$, STR$, LEFT$, RIGHT$, MID$, BIN$, QUA$, OCT$, DEC$, HEX$, INPUT$, INKEY$, MKI$, MKL$, MKS$, MKD$, TIME$, DATE$, DATETIME$, PEEK$, ARG$, ENV$, ERR$, ADDRESS$
+.SH PROGRAM ARGUMENTS AND THE ENVIRONMENT
+.B ARGC
+is the number of program arguments,
+.B ARG$(n)
+the n\-th (0 is the program), and
+.B ENV$(name$)
+an environment variable.
+Arguments come from the command line of
+.BR engine1999c (1)
+and of built executables.
+.SH FILES AND DEVICES
+A file name may start with a driver and a colon.
+.TP
+.B file:
+Disk files (the default).
+.TP
+.B mem:
+A RAM disk.
+.TP
+.B null:
+Swallows output, reads nothing.
+.TP
+.B sh:
+A shell command as a file:
+.BR "OPEN ""sh:ls -l"" FOR INPUT AS #1" .
+.TP
+.B res:
+Read\-only game assets in the directory
+.IR res/ .
+.TP
+.B con:
+The screen and keyboard as a channel.
+.TP
+.B play:
+Lines written are music strings.
+.TP
+.B tcp:
+A network connection (client).
+.TP
+.BR stdin: ", " stdout: ", " stderr:
+The standard streams of the process.
+.SH BUILDING EXECUTABLES
+.B BUILD "name" [, WINDOW | CONSOLE]
+makes a standalone executable from the program in memory, using only the system linker
+.BR ld (1).
+A
+.B WINDOW
+executable has the runtime of
+.BR engine1999 (1)
+and needs libSDL2 to run; a
+.B CONSOLE
+executable has the runtime of
+.BR engine1999c (1)
+and needs only the C and the math library.
+Without the option the kind of the host is made.
+Names that end in
+.I .bas
+or
+.I .e99
+are refused.
+.PP
+.B BUILD
+needs the runtime kit, the files \fIengine1999.o\fR, \fIengine1999c.o\fR and \fIengine.lib\fR.
+It looks for them, in this order, in the directory of the running program,
+.IR ../lib/engine1999
+beside it,
+.BR $ENGINE1999_HOME ,
+the current directory,
+.IR /usr/local/lib/engine1999 ,
+.I /usr/lib/engine1999
+and
+.IR /usr/local/share/engine1999 ;
+the linker, the startup files and the libraries it finds by itself.
+.B make install
+puts the kit into
+.IR /usr/local/lib/engine1999 .
+.PP
+The executable starts the program at once.
+The command line is the program's (\fBARGC\fR, \fBARG$\fR), except
+.B \-\-engine1999\-about
+as the first argument, which prints the license notice of the runtime.
+.PP
+The runtime in an executable is covered by the Engine1999 Runtime Exception: the executable may be distributed under terms of the author's
+choice if the runtime in it is the unmodified one and its notice stays.
+See LICENSE\-EXCEPTION.
+.SH RESERVED WORDS
+All words that can't be used as names of variables (the list is made by
+.BR "engine1999c \-\-list\-keywords" ):
+.PP
+.\" KEYWORDS-BEGIN
+ABS ADDRESS AFTER AGAIN AND ARG ARGC ASC ASL ASR ASSOC ATN AUTO BASE BIN BUILD BYE CALL CEIL CHAIN 
+CHDIR CHR CLEAR CLOSE CLS COLOR CONT COPYING COS CVD CVI CVL CVS DATA DATE DATETIME DEC DEF DEG 
+DELETE DESIGN DIM DYNAMIC EDIT ELSE END ENDIF ENDUNLESS ENV ENVELOPE EOF EQV ERASE ERL ERR EVERY 
+EXIT EXP FIELD FILES FIX FLOOR FLT FN FOR FRE FUNC GET GETREC GFX GO GOSUB GOTO GRAD HEX IF IMP 
+INKEY INPUT INT ITERATE KILL LABEL LEAVE LEFT LEN LET LINE LIST LOAD LOC LOCAL LOCATE LOF LOG LOG10 
+LOG2 LSET LSHIFT MERGE MID MKD MKDIR MKI MKL MKS MOD MONITOR NAND NEQV NEW NEXT NIMP NOR NOT OCT 
+OFF ON OPEN OPTION OR PEEK PI PITCH PLAY PLAYING POINT POKE POP PRINT PROC PUT PUTREC QUA QUIT RAD 
+RANDOMIZE READ REMAIN RENAME RENUM REPEAT RESTORE RESUME RETURN RGB RIGHT RND RSET RSHIFT RUN SAVE 
+SEEK SFX SGN SHL SHOW SHR SIN SOUND SPRITE SQR STEP STOP STR SUB SYMBOL SYNC TAN TEMPO THEN TI TILE 
+TIME TO TRACE TREMOLO TXT UEND UNLESS UNTIL VAL VIBRATO VOLUME WAIT WARRANTY WAVE WEND WHILE WRITE 
+XNOR XOR 
+.\" KEYWORDS-END
+.SH SEE ALSO
+.BR engine1999 (1),
+.BR engine1999c (1)
+.SH AUTHORS
+Ekkehard Morgenstern, together with Claude (Claude Code, an AI assistant by Anthropic); see HistoryLog\-Claude.md.
+.SH LICENSE
+GNU General Public License, version 3 or later, with the Engine1999 Runtime Exception; see the files LICENSE and LICENSE\-EXCEPTION.

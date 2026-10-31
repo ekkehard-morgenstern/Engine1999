@@ -34,6 +34,8 @@ make
 ./engine1999
 ```
 
+`sudo make install` puts the programs, the demos, the documentation and the man pages (`man engine1999`, `man engine1999c`, `man engine1999-basic`) under `/usr/local`; with it, `BUILD` works from any directory.
+
 You get a `Ready.` prompt, like a home computer of old. Type a program (ESC stops a running one):
 
 ```

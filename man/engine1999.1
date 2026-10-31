@@ -1,0 +1,168 @@
+.\" Engine1999 - A 2D games engine written in C
+.\" Copyright (C) 2026  Ekkehard Morgenstern
+.\"
+.\" This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published
+.\" by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It is distributed WITHOUT ANY
+.\" WARRANTY. ADDITIONAL PERMISSION (GPLv3 section 7): the Engine1999 Runtime Exception applies, see the file LICENSE-EXCEPTION.
+.\"
+.\" Keep this page current (CLAUDE.md): "make man-check" compares the options with `engine1999 --help`.
+.TH ENGINE1999 1 "October 2026" "Engine 1999 @VERSION@" "Engine1999 Manual"
+.SH NAME
+engine1999 \- a retro home computer with a built\-in BASIC, in a window
+.SH SYNOPSIS
+.B engine1999
+[\fIoption\fR ...]
+.SH DESCRIPTION
+.B engine1999
+opens a window that behaves like a home computer of the late 1980s and early 1990s: an 80x25 text screen, a tile layer, sprites, a free\-drawing
+graphics layer and a software synthesizer, and a BASIC to program them.
+It shows the
+.B Ready.
+prompt of the BASIC system.
+A line that starts with a line number is stored in the program, any other line runs at once (direct mode).
+.PP
+Type a program and
+.BR RUN
+it, or load one:
+.PP
+.RS
+.nf
+LOAD "/usr/local/share/engine1999/demos/fruit2"
+RUN
+.fi
+.RE
+.PP
+The language is described in
+.BR engine1999\-basic (7).
+A program can be turned into a standalone executable with the BASIC statement
+.BR BUILD ;
+see that page.
+For scripts and servers without a window use
+.BR engine1999c (1).
+.SH OPTIONS
+.TP
+.B \-\-version
+Print the version and exit.
+.TP
+.BR \-h ", " \-\-help
+Print a short help text and exit.
+.TP
+.B \-\-debug\-tokenize
+Print the token bytes of every input line (to standard output).
+.TP
+.B \-\-debug\-detokenize
+Print every input line rebuilt from its tokens.
+.TP
+.B \-\-debug\-parse
+Print every token as the compiler fetches it.
+.TP
+.B \-\-debug\-tree
+Print the syntax tree after parsing.
+.TP
+.B \-\-debug\-code
+Print every instruction the code generator emits.
+.TP
+.B \-\-debug\-all
+All of the debug outputs.
+.SH AT THE PROMPT
+.TP
+.B ESC
+Stops a running program ("Break").
+Closing the window ends the program and the Engine.
+.TP
+.B LIST, SAVE, LOAD, RUN, NEW, RENUM, DELETE, MERGE, CHAIN, FILES
+Program commands; they are ordinary BASIC statements and work inside programs, too.
+.TP
+.B EDIT
+Without a target: a full\-screen editor for the program (ESC leaves it).
+.B EDIT 100
+edits one line.
+.TP
+.B MONITOR
+A machine monitor: disassembler, memory, single step and breakpoints of the program's virtual machine.
+.TP
+.B BYE [code]
+.TQ
+.B QUIT [code]
+End the Engine; the process exits with the code (0 to 255, default 0).
+.TP
+.B SHOW WARRANTY
+.TQ
+.B SHOW COPYING
+Show the terms of the license (the GNU General Public License and the Engine1999 Runtime Exception).
+.SH ENVIRONMENT
+.TP
+.BR SDL_VIDEODRIVER ", " SDL_AUDIODRIVER
+Chosen as for any SDL2 program (for example
+.B SDL_AUDIODRIVER=disk
+to write the sound to a file).
+.TP
+.B ENGINE1999_HOME
+The directory with the runtime kit (\fIengine1999.o\fR, \fIengine1999c.o\fR, \fIengine.lib\fR) that
+.B BUILD
+uses; see
+.BR engine1999\-basic (7).
+.TP
+.B ENGINE1999_LD
+The linker that
+.B BUILD
+uses (default: the first
+.BR ld (1)
+in the PATH).
+.TP
+.B ENGINE1999_BUILD_TRACE
+If set to something other than 0,
+.B BUILD
+prints the commands it runs to standard error.
+.TP
+.BR LIBRARY_PATH ", " TMPDIR
+Extra library directories for
+.BR BUILD ;
+the directory for its temporary files.
+.PP
+A program can read any variable with the BASIC function
+.BR ENV$ .
+.SH FILES
+.TP
+.I *.bas
+Programs as text listings (what
+.B SAVE "name",A
+writes).
+.TP
+.I *.e99
+Programs in the binary tokenized form (what
+.B SAVE "name"
+writes).
+.B LOAD "name"
+finds either.
+.TP
+.I res/
+The directory read by the BASIC driver
+.BR res: ,
+below the current directory.
+.TP
+.I /usr/local/lib/engine1999/
+The runtime kit that
+.B BUILD
+needs, and
+.TP
+.I /usr/local/share/engine1999/demos/
+the demo programs, after
+.BR "make install" .
+.SH EXIT STATUS
+0 when the Engine ends normally, the code of
+.B BYE
+or
+.BR QUIT ,
+2 for a bad command line, 1 if the display can't be opened.
+.SH SEE ALSO
+.BR engine1999c (1),
+.BR engine1999\-basic (7)
+.PP
+The full documentation is in /usr/local/share/doc/engine1999/ (docs/ in the source tree); the whole syntax is on one page in grammar.html there.
+.SH AUTHORS
+Ekkehard Morgenstern, together with Claude (Claude Code, an AI assistant by Anthropic); every change Claude made is listed in HistoryLog\-Claude.md.
+.SH LICENSE
+GNU General Public License, version 3 or later, with the Engine1999 Runtime Exception (programs written in the built\-in BASIC, and executables
+made from them with BUILD, are not covered by the GPL if the runtime in them is the unmodified one and its notice stays).
+See the files LICENSE and LICENSE\-EXCEPTION.
