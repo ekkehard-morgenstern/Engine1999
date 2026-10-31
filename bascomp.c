@@ -3022,6 +3022,20 @@ bool comp_eat_designstmt( compiler_t* comp, node_t** pnode ) {
     return true;
 }
 
+bool comp_eat_anglestmt( compiler_t* comp, node_t** pnode ) {
+    // angle-stmt := TOK_DEG | TOK_RAD | TOK_GRAD .
+    uint8_t kind = comp->currtok == TOK_DEG ? 1 : comp->currtok == TOK_RAD ? 2 : comp->currtok == TOK_GRAD ? 3 : 0;
+    if ( kind == 0 || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    // NT_ANGLESTMT: data 1 byte (1 degrees, 2 radians, 3 gradians), no branches
+    if ( !comp_create_node( comp, pnode, NT_ANGLESTMT, UINT8_C(0), UINT16_C(1), &kind ) || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
 bool comp_eat_randomizestmt( compiler_t* comp, node_t** pnode ) {
     // randomize-stmt := TOK_RANDOMIZE [ num-expr ] .
     if ( comp->currtok != TOK_RANDOMIZE || !comp_fetchtok( comp ) ) {
@@ -3561,6 +3575,9 @@ bool comp_eat_progstmt( compiler_t* comp, node_t** pnode ) {
         return true;
     }
     if ( comp_eat_randomizestmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_anglestmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     if ( comp_eat_designstmt( comp, pnode ) && *pnode != NODE_NONE ) {

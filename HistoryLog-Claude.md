@@ -13,11 +13,10 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-- **Numeric functions** (owner's request: RND, INT, ABS, SIN and the other numeric functions)
-  - **Functions and operators**: `INT FIX ABS SGN SQR SIN COS TAN ATN EXP LOG RND PI`, `RANDOMIZE [seed]`, `\` (integer division) and `MOD`. Tokens 200..213 (`bastok.[ch]`, highlighted as functions / operator), the functions parse in `comp_eat_sysnumfn1argcall()` (`RND` alone is `RND(1)`) and `PI` as a no-argument call, `\` and `MOD` join `*`, `/`, `^` in `comp_eat_nummultex()`, `comp_eat_randomizestmt()` (`NT_RANDOMIZESTMT 0x76`); code generator: one instruction `MATH 0x165` with the kind as parameter, `RAND 0x166`, `IDIV 0x163`, `MOD 0x164`, `cgen_from_randomizestmt()`.
-  - **VM**: `vm_math()` (errors "Illegal argument" for `SQR`/`LOG`, "Overflow" for non-finite results), `vm_randomize()`, xorshift64* seeded from the clock in `init_vm()` and by `RND(-n)` / `RANDOMIZE n`; `\`/`MOD` in `vm_binary_num()` (truncate both operands, "Division by zero").
-  - **Tests**: `vmtest1` 816 -> 854 (+38: every function, domains, `RND` range/repeat/reseed/spread, `RANDOMIZE`, `\`, `MOD`, precedence), `repltest1` 281 -> 282 (listing); `demos/fruit.bas` now uses `RND`/`INT`/`\`/`RANDOMIZE` instead of its workaround and was run again on the real screen.
-  - **Docs**: `docs/basic-language.md` ("Numeric functions"), `docs/compiler-and-vm.md`, `docs/roadmap.md` (done; further functions listed), `instset.h`, `bascomp.ebnf`, `demos/README.md`, `SESSION.md`.
+- **`DEG`, `RAD`, `GRAD`** (owner's suggestion: choose how angles are represented, default radians)
+  - Tokens 214..216, `comp_eat_anglestmt()`, `NT_ANGLESTMT 0x77`, `cgen_from_anglestmt()`, instruction `ANGM 0x167`, `vm_t.angmode` (2 = radians in `init_vm()`), `vm_trig()` (SIN/COS/TAN of degrees and gradians, quarter turns exact, `TAN(90)` "Overflow"), `ATN` converts its result; the graphics angles stay in degrees.
+  - Tests: `vmtest1` 854 -> 867 (every function in each unit, big/negative angles, the unit inside a program, graphics angles unchanged), `repltest1` 282 -> 285 (listing, unit over direct lines, `RUN` back to radians).
+  - Docs: `docs/basic-language.md` ("Angle units"), `docs/compiler-and-vm.md`, `instset.h`, `bascomp.ebnf`, `SESSION.md`.
 
 ## Log
 
@@ -575,3 +574,11 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 - **`COLOR` fix** (owner's report: the description text on the entry screen of `fruit.bas` was black)
   - Not the demo's color: `PRINT` goes through the ANSI decoder of the text screen (`sdlscr_ansi_write`), which keeps its own current colors from the time of its first use, so `COLOR` (only the text screen's pen) did nothing for `PRINT` once something had been printed; a fresh start hid it. Reproduced on the real screen (`print`, `color 140`, `print`: black).
   - `sdlscr_text_setcolors()` (`sdlscreen.c`) restarts the screen's decoder from the new colors (like `sdlscr_gfx_reset`); ANSI sequences still work. Verified on the real screen (white, yellow, an ANSI red, and the demo's entry screen after a warm-up `print`). SDL-bound, so no automated test. `docs/graphics-subsystem.md`, `SESSION.md`.
+
+### b45a968 — 2026-10-31 06:08:37 +0100 — "Numeric BASIC statements, implemented by Claude Code"
+22 files, +899/-581.
+- **Numeric functions** (owner's request: RND, INT, ABS, SIN and the other numeric functions)
+  - **Functions and operators**: `INT FIX ABS SGN SQR SIN COS TAN ATN EXP LOG RND PI`, `RANDOMIZE [seed]`, `\` (integer division) and `MOD`. Tokens 200..213 (`bastok.[ch]`, highlighted as functions / operator), the functions parse in `comp_eat_sysnumfn1argcall()` (`RND` alone is `RND(1)`) and `PI` as a no-argument call, `\` and `MOD` join `*`, `/`, `^` in `comp_eat_nummultex()`, `comp_eat_randomizestmt()` (`NT_RANDOMIZESTMT 0x76`); code generator: one instruction `MATH 0x165` with the kind as parameter, `RAND 0x166`, `IDIV 0x163`, `MOD 0x164`, `cgen_from_randomizestmt()`.
+  - **VM**: `vm_math()` (errors "Illegal argument" for `SQR`/`LOG`, "Overflow" for non-finite results), `vm_randomize()`, xorshift64* seeded from the clock in `init_vm()` and by `RND(-n)` / `RANDOMIZE n`; `\`/`MOD` in `vm_binary_num()` (truncate both operands, "Division by zero").
+  - **Tests**: `vmtest1` 816 -> 854 (+38: every function, domains, `RND` range/repeat/reseed/spread, `RANDOMIZE`, `\`, `MOD`, precedence), `repltest1` 281 -> 282 (listing); `demos/fruit.bas` now uses `RND`/`INT`/`\`/`RANDOMIZE` instead of its workaround and was run again on the real screen.
+  - **Docs**: `docs/basic-language.md` ("Numeric functions"), `docs/compiler-and-vm.md`, `docs/roadmap.md` (done; further functions listed), `instset.h`, `bascomp.ebnf`, `demos/README.md`, `SESSION.md`.

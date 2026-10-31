@@ -262,6 +262,9 @@
 #define TOK_FIX         UINT8_C(211)        // FIX function
 #define TOK_PI          UINT8_C(212)        // PI function
 #define TOK_RANDOMIZE   UINT8_C(213)        // RANDOMIZE keyword
+#define TOK_DEG         UINT8_C(214)        // DEG keyword (angles in degrees)
+#define TOK_RAD         UINT8_C(215)        // RAD keyword (angles in radians, the default)
+#define TOK_GRAD        UINT8_C(216)        // GRAD keyword (angles in gradians)
 #define TOK_NONE        UINT8_C(255)        // no token (!)
 
 // -- buffers ---------------------------------------------------------------

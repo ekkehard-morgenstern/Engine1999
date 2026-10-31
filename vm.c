@@ -85,6 +85,7 @@ void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem ) {
     vm->fields = 0;
     vm->numfields = vm->capfields = 0;
     vm->rndlast = 0.0;
+    vm->angmode = 2;
     vm_randomize( vm, false );          // RND is different every time unless the program seeds it
     vm->gfx = 0;
     vm->colpending = false;
@@ -1850,6 +1851,31 @@ static bool vm_randomize( vm_t* vm, bool hasseed ) {
     return true;
 }
 
+// SIN, COS, TAN of x in the unit chosen by DEG / RAD / GRAD; the multiples of a quarter turn are exact in degrees and gradians
+static bool vm_trig( vm_t* vm, uint16_t kind, double x, double* pr ) {
+    double turn = vm->angmode == 1 ? 360.0 : vm->angmode == 3 ? 400.0 : 0.0;
+    if ( turn == 0.0 ) {
+        *pr = kind == 6 ? sin( x ) : kind == 7 ? cos( x ) : tan( x );
+        return true;
+    }
+    double q = turn / 4.0, a = fmod( x, turn );
+    if ( a < 0.0 ) {
+        a += turn;
+    }
+    if ( fmod( a, q ) == 0.0 ) {
+        int quarter = (int)( a / q );                          // 0..3
+        static const double sins[4] = { 0.0, 1.0, 0.0, -1.0 }, coss[4] = { 1.0, 0.0, -1.0, 0.0 };
+        if ( kind == 8 && ( quarter & 1 ) != 0 ) {
+            return vm_error( vm, "Overflow" );                 // TAN of 90, 270 degrees
+        }
+        *pr = kind == 6 ? sins[quarter] : kind == 7 ? coss[quarter] : 0.0;
+        return true;
+    }
+    double rad = a * ( 2.0 * 3.14159265358979323846 / turn );
+    *pr = kind == 6 ? sin( rad ) : kind == 7 ? cos( rad ) : tan( rad );
+    return true;
+}
+
 // MATH ( x -- y ): INT FIX ABS SGN SQR SIN COS TAN ATN EXP LOG RND, PI ( -- pi )
 static bool vm_math( vm_t* vm, uint16_t kind ) {
     double x = 0.0, r = 0.0;
@@ -1870,10 +1896,19 @@ static bool vm_math( vm_t* vm, uint16_t kind ) {
             }
             r = sqrt( x );
             break;
-        case 6:  r = sin( x ); break;
-        case 7:  r = cos( x ); break;
-        case 8:  r = tan( x ); break;
-        case 9:  r = atan( x ); break;
+        case 6: case 7: case 8:
+            if ( !vm_trig( vm, kind, x, &r ) ) {
+                return false;
+            }
+            break;
+        case 9:
+            r = atan( x );
+            if ( vm->angmode == 1 ) {
+                r *= 180.0 / 3.14159265358979323846;
+            } else if ( vm->angmode == 3 ) {
+                r *= 200.0 / 3.14159265358979323846;
+            }
+            break;
         case 10: r = exp( x ); break;
         case 11:
             if ( !( x > 0.0 ) ) {
@@ -3084,6 +3119,12 @@ static bool vm_step( vm_t* vm ) {
         case INS_PACK: return vm_pack( vm, param16 );
         case INS_MATH: return vm_math( vm, param16 );
         case INS_RAND: return vm_randomize( vm, param16 != 0 );
+        case INS_ANGM:
+            if ( param16 < 1 || param16 > 3 ) {
+                return vm_error( vm, "Internal error (bad angle unit)" );
+            }
+            vm->angmode = (int) param16;
+            return true;
         case INS_GFXC: return vm_gfx_command( vm, param16 );
         case INS_GFXQ: return vm_gfx_query( vm, param16 );
         case INS_DSGN: return vm_design_start( vm, param16 );

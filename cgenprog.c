@@ -440,6 +440,17 @@ bool cgen_from_randomizestmt( codegen_t* cgen, compiler_t* comp, node_t* node ) 
     return cgen_gen_rand( cgen, node->numbranches == 1U ? UINT16_C(1) : UINT16_C(0) ) || cgen_out_of_code_memory( comp );
 }
 
+bool cgen_from_anglestmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    // NT_ANGLESTMT: ANGM(kind)
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->type != NT_ANGLESTMT || node->datalen != UINT16_C(1) || node->data[0] < 1 || node->data[0] > 3 ) {
+        return cgen_unexpected_node( comp );
+    }
+    return cgen_gen_angm( cgen, node->data[0] ) || cgen_out_of_code_memory( comp );
+}
+
 bool cgen_from_fileopstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     /*
         NT_FILEOPSTMT   KILL / RENAME / MKDIR / CHDIR / SEEK statement

@@ -264,6 +264,7 @@ typedef struct _vm_t {
     mml_t           sfx[SND_MAXSFX];    // the stored sound effects (SFX n, a$), parsed; cleared with the VM
     const vm_sound_t* sound;        // SOUND / PLAY / ...: the host's sound output; 0 = none (arguments are checked, nothing plays)
     const vm_gfx_t*   gfx;          // GFX / SPRITE / ...: the host's graphics output; 0 = none
+    int             angmode;        // DEG (1), RAD (2, the default), GRAD (3): the unit of SIN COS TAN ATN
     uint64_t        rndstate;       // RND: the state of the random number generator (xorshift64*)
     double          rndlast;        // the last number RND returned (RND(0) gives it again)
     bool            colpending;     // (internal) the host reported a sprite collision that the ON COLLISION handler has not seen yet

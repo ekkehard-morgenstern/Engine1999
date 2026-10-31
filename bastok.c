@@ -826,7 +826,7 @@ static const struct {
     { TOK_CVI, "CVI" }, { TOK_CVL, "CVL" }, { TOK_CVS, "CVS" }, { TOK_CVD, "CVD" },
     { TOK_MOD, "MOD" }, { TOK_ABS, "ABS" }, { TOK_SGN, "SGN" }, { TOK_SQR, "SQR" }, { TOK_SIN, "SIN" }, { TOK_COS, "COS" },
     { TOK_TAN, "TAN" }, { TOK_ATN, "ATN" }, { TOK_EXP, "EXP" }, { TOK_LOG, "LOG" }, { TOK_RND, "RND" }, { TOK_FIX, "FIX" },
-    { TOK_PI, "PI" }, { TOK_RANDOMIZE, "RANDOMIZE" },
+    { TOK_PI, "PI" }, { TOK_RANDOMIZE, "RANDOMIZE" }, { TOK_DEG, "DEG" }, { TOK_RAD, "RAD" }, { TOK_GRAD, "GRAD" },
     { TOK_GFX, "GFX" }, { TOK_SPRITE, "SPRITE" }, { TOK_TILE, "TILE" }, { TOK_TXT, "TXT" }, { TOK_DESIGN, "DESIGN" },
     { TOK_RGB, "RGB" }, { TOK_POINT, "POINT" }, { TOK_CLS, "CLS" }, { TOK_LOCATE, "LOCATE" }, { TOK_COLOR, "COLOR" }, { TOK_AMP, "&" }, { TOK_LE, "<=" }, { TOK_GE, ">=" }, { TOK_NE, "<>" }, { 0, 0 }
 };

@@ -301,6 +301,8 @@ on-error-stmt := TOK_ON identifier-ERROR ( goto-kw goto-target | TOK_OFF ) .
 -- Numeric functions: INT FIX ABS SGN SQR SIN COS TAN ATN EXP LOG RND ( num-expr ) (RND alone is RND(1)); PI. \ (integer division) and MOD
 -- are at the level of * and /. RANDOMIZE [ seed ] seeds RND.
 randomize-stmt := TOK_RANDOMIZE [ num-expr ] .
+-- DEG, RAD (the default) and GRAD choose the unit of the angles of SIN COS TAN ATN.
+angle-stmt := TOK_DEG | TOK_RAD | TOK_GRAD .
 fileop-stmt := ( TOK_KILL | TOK_MKDIR | TOK_CHDIR ) str-expr | TOK_RENAME str-expr TOK_TO str-expr | TOK_SEEK chan-spec TOK_COMMA num-expr .
 timer-stmt := ( TOK_AFTER | TOK_EVERY ) ( TOK_OFF [ num-expr ] | num-expr [ TOK_COMMA num-expr ] goto-kw goto-target ) .
 prog-stmt := load-stmt | run-stmt | merge-stmt | chain-stmt | files-stmt | timer-stmt | list-stmt | new-stmt | clear-stmt | delete-stmt | renum-stmt | edit-stmt | monitor-stmt | sound-stmt |

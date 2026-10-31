@@ -214,10 +214,16 @@ PRINT 17\5;17 MOD 5                             ' 3 2   (integer division and re
 | `PI` | 3.14159265358979 (no parentheses) |
 | `RND(x)` / `RND` | x > 0 or no argument: the next random number, 0 <= r < 1; `RND(0)`: the last number again; `RND(-n)`: starts the sequence over from the seed n and returns its first number |
 
+**Angle units.** `RAD` (the default), `DEG` and `GRAD` choose the unit of the angles of `SIN`, `COS`, `TAN` (arguments) and `ATN` (result): radians, degrees (360 to
+the turn) or gradians (400 to the turn). After `DEG`, `SIN(30)` is 0.5 and `ATN(1)` is 45. The multiples of a quarter turn are exact in degrees and gradians (`SIN(90)` is
+exactly 1, `COS(90)` exactly 0); `TAN` of an odd multiple of a quarter turn (`TAN(90)`) is "Overflow". The unit is a property of the runtime: it stays over direct mode lines
+(`DEG` typed at the prompt is in effect for the next line), and `RUN`, `NEW` and `LOAD` return to radians, so a program that does not choose a unit always starts in radians.
+The angles of the **graphics statements** (`GFX CIRCLE`, `GFX RADIUS`) stay in degrees whatever the unit is: they are not affected by `DEG`/`RAD`/`GRAD`.
+
 `RANDOMIZE` seeds the generator from the clock, `RANDOMIZE n` from the number n (the same n gives the same sequence). Without either, the sequence of each
 run is different. `x \ y` divides after cutting both operands to integers and cuts the quotient; `x MOD y` is the remainder, with the sign of x; a divisor of 0 is
 "Division by zero". Both stand at the level of `*` and `/` (evaluated left to right with them). A negative `SQR`/`LOG` argument is "Illegal argument", a result
-that does not fit a number (`EXP(1000)`) is "Overflow". `ABS SGN SQR SIN COS TAN ATN EXP LOG RND FIX PI MOD RANDOMIZE` are reserved words now
+that does not fit a number (`EXP(1000)`) is "Overflow". `ABS SGN SQR SIN COS TAN ATN EXP LOG RND FIX PI MOD RANDOMIZE DEG RAD GRAD` are reserved words now
 (`INT` was one already).
 
 ## Error handling: `ON ERROR GOTO|GOSUB`, `ON ERROR OFF`, `ERR$`, `ERL`

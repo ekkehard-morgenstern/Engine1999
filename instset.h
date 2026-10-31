@@ -480,6 +480,10 @@ The 4096 extended instructions are as follows:
                             number 0 <= r < 1; x = 0 the last one again; x < 0 starts the sequence over from the seed x.
     0001 01100110       RAND - RANDOMIZE ( [seed] -- ) C=0 P=1
                             Parameter 1: seed popped, the sequence is the same for the same seed; 0: seeded from the clock.
+    0001 01100111       ANGM - angle unit ( -- ) C=0 P=1
+                            DEG (1), RAD (2), GRAD (3): the unit of the angles of SIN, COS, TAN and ATN (a property of the runtime: RUN
+                            and NEW return to RAD). In degrees and gradians the multiples of a quarter turn are exact (SIN(90) = 1,
+                            COS(90) = 0); TAN of an odd multiple of a quarter turn is "Overflow".
 
 */
 
@@ -635,5 +639,6 @@ The 4096 extended instructions are as follows:
 #define INS_MOD         UINT16_C(0X164)
 #define INS_MATH        UINT16_C(0X165)
 #define INS_RAND        UINT16_C(0X166)
+#define INS_ANGM        UINT16_C(0X167)
 
 #endif
