@@ -29,7 +29,7 @@ Open: directory handling for `LOAD`/`SAVE` beyond plain paths (there is no `CD`;
 
 
 - [ ] `OPTION BASE` — lowest array index (0 or 1); when is it allowed (before the first `DIM`?)
-- [ ] `INT` / `STR` / `FLT` — tokens exist; presumably default type declarations (like `DEFINT`/`DEFSTR`/`DEFSNG`): syntax and scope
+- [ ] `INT` / `STR` / `FLT` — tokens exist; presumably default type declarations (like `DEFINT`/`DEFSTR`/`DEFSNG`): syntax and scope (the owner's `../basic1` has `DEF type range`, see section 13)
 - [ ] `PUT` — token exists; random access records will use `FIELD`, `GETREC`, `PUTREC` instead (decision of 2026-10-30, `docs/io-subsystem.md`); the token `PUT` stays unused for now
 - [ ] `OFF` — token exists; only meaningful together with the timer statements below (`ON … OFF`?)
 
@@ -181,3 +181,12 @@ What is still missing:
 - [ ] Setting the environment (`ENV` as a statement?) and `ARG$` for the command line of the window version: nothing planned yet.
 - [x] ~~**A kit that installs**~~ done (2026-10-31): `make install` (`PREFIX=/usr/local`, portable kit without `-march=native` and `-p`, programs, demos, docs, man pages) and `make uninstall`; `BUILD` finds the kit through `../lib/engine1999`. Not done: distribution packages (`.deb`, `.rpm`), man pages in other languages, shell completions.
 - [ ] More tests: `contest1` runs through pipes only; a pseudo terminal test for the raw keys of `GET`/`INKEY$` and for `CLS`/`LOCATE` escape sequences.
+
+## 13. Ideas from the BASIC 1 concept *(`../basic1/concept.txt`; found 2026-10-31, nothing decided or started)*
+
+- [ ] `SWITCH expr` / `CASE value[,value…]` / `DEFAULT` / `END SWITCH` — multi-way branch (the engine only has `ON … GOTO/GOSUB`); `AGAIN` inside a `SWITCH` jumps back to the evaluation of the `SWITCH`, `EXIT` leaves it; to decide: fall-through or not, string and range cases, interplay with the compile-time loop stack (`AGAIN`/`EXIT` count it as a level?)
+- [ ] `TAB [a[,b…]]` and `TABMODE n` — programmable tab stops for screen and file output; modes 0 TABs become spaces at arbitrary stops, 1 hard tabs (kept in files, cursor jumps on screen), 2 all stops equal the first value, 3 = 2 with hard tabs, 4 one space, 5 TABs ignored; to decide: the clash with the existing `TAB(n)` print function (if any), where the stops live (per channel?), the effect on the `PRINT` comma zones
+- [ ] `DEF type range` — default variable type by first letter (`DEF STR a-c`, types `STR`, `INT`, `FLT`, …); this is the likely meaning of the unused `INT`/`STR`/`FLT` tokens (section 2); to decide: syntax (`DEF` is taken by `DEF FN`), scope (affects variables created after the statement), interplay with the `$`/`%` suffixes
+- [ ] `DISPLAY(x)` — display properties: 0 horizontal resolution, 1 vertical resolution, 2 vertical frequency (Hz), 3 vertical blanking interrupt info; fits next to the `GFX` queries (`vm_gfx_t` query host callback; the console host would return its own values or an error)
+- [ ] `BREAKPOINT` — a statement that opens the machine monitor at that point (the VM and the monitor have `BRK` and breakpoints already, but there is no BASIC word); to decide: behavior in `engine1999c` and built executables (ignore?), name versus the monitor's `b` command
+- Not taken over from that file (already done or differently): `AGAIN`, `PEEK`/`POKE` (one word with a size argument), `RND`, `FLOOR`/`CEIL`, `PRINT USING` and `AT()` (open, section 11), `OPEN … FOR …`, `RANDOMIZE`.
