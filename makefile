@@ -32,7 +32,12 @@ else
 DBGFLG=-O3
 endif
 
-CFLAGS=-Wall -Werror -p $(DBGFLG) -march=native -mtune=native
+# PROFILE=1 adds -p (every run writes gmon.out); off by default.
+ifdef PROFILE
+PRFFLG=-p
+endif
+
+CFLAGS=-Wall -Werror $(PRFFLG) $(DBGFLG) -march=native -mtune=native
 
 CC=$(CCOMP) -c $(CFLAGS)
 CL=$(CCOMP) $(CFLAGS)

@@ -31,7 +31,7 @@ The program store, the syntax tree and the variables are heap structures now; th
 ## Build
 
 - `make` builds `sdltest1 sdltest2 engine1999 basictest1 testcomp1 basictest2 vmtest1 repltest1 ansitest1 txttest1 asmtest1 synthtest1 iotest1 gfxtest1 buildtest1 engine1999c contest1` and `engine.lib` (static archive of all modules).
-- `make DEBUG=1` → `-g` instead of `-O3`. Flags: `-Wall -Werror -p -march=native` (warnings are errors; `-p` writes `gmon.out`).
+- `make DEBUG=1` → `-g` instead of `-O3`. `make PROFILE=1` adds `-p` (every run writes `gmon.out`). Flags: `-Wall -Werror -march=native` (warnings are errors).
 - Needs `gcc`, SDL2 (`-lSDL2 -lrt -lm`). Only `sdltest1` and `engine1999` link SDL2; `engine1999c` (the console host, no window) does not.
 - `make kit` builds the portable, profiling-free kit in `kit/` (git-ignored) and `make install` [`PREFIX=/usr/local`, `DESTDIR=`] installs the programs, the `BUILD` kit (`$(PREFIX)/lib/engine1999`), demos, docs and man pages; `make uninstall` removes them. `BUILD` finds an installed kit through `../lib/engine1999` relative to the running program.
 - The version (banner, `--version`, `--engine1999-about`) is the newest `vX.Y.Z` git tag: `bump_version.sh` tags (local only), `tagtoverstr.sh` writes the git-ignored `version.h` during `make` (`docs/build-and-test.md`, "Version").

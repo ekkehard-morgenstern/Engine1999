@@ -13,7 +13,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-(nothing pending)
+- `makefile`: profiling (`-p`) is optional now, `make PROFILE=1` (off by default; the user's question whether it was needed: it wasn't). `CLAUDE.md`, `docs/build-and-test.md`, `SESSION.md` updated. Rebuilt without `-p`; all automated tests (vmtest1, repltest1, ansitest1, txttest1, asmtest1, synthtest1, iotest1, gfxtest1, buildtest1, contest1, testcomp1) and `make man-check` pass.
 
 ## Log
 

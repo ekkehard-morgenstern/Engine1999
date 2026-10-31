@@ -71,7 +71,7 @@ The version is the newest git tag of the form `vMAJOR.MINOR.BUILD` (`./bump_vers
 
 ## Gotchas
 
-- `-p` makes every run write `gmon.out` (ignored by git).
+- Profiling is optional: `make PROFILE=1` adds `-p`, and every run then writes `gmon.out` (ignored by git). Without it no `gmon.out` appears and `vmtest1` can run under valgrind directly.
 - Git-ignored stray files in the working tree: `head`, `main.o`, `all`.
 - `compiler_t`, `codegen_t`, `runtime_t` are huge: use `static`.
 
