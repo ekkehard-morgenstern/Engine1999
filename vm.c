@@ -29,6 +29,7 @@
 
 #include <ctype.h>
 #include "vm.h"
+#include "keyseq.h"
 #include "gfxops.h"
 #include "mml.h"
 #include "instset.h"
@@ -66,6 +67,7 @@ void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem ) {
     vm->printn   = 0;
     vm->report   = 0;
     vm->inkey    = 0;
+    vm->keyback  = 0;
     vm->sound    = 0;
     memset( vm->sfx, 0, sizeof(vm->sfx) );
     memset( vm->sfx_defined, 0, sizeof(vm->sfx_defined) );
@@ -982,6 +984,11 @@ static bool vm_input_whole( vm_t* vm ) {
 // a key from the keyboard (channel 0); <= 0 = none / interrupted
 static int vm_console_key( vm_t* vm ) {
     int key;
+    if ( vm->keyback != 0 ) {
+        key = vm->keyback;
+        vm->keyback = 0;
+        return key;
+    }
     if ( vm->getkey ) {
         key = vm->getkey( vm, vm->userdata, 0 );
     } else if ( vm->inkey ) {
@@ -993,6 +1000,35 @@ static int vm_console_key( vm_t* vm ) {
         key = getchar();
     }
     return key;
+}
+
+// a key that is a sequence: after an ESC the host's following keys are taken as long as they continue an escape sequence (keyseq_parse(): the
+// cursor and function keys), up to its end. The first byte that does not continue it is kept for the next read (keyback). A lone ESC stays one.
+// first is the key just read; buf (KEYSEQ_MAXLEN bytes) gets the bytes, the length is returned.
+static size_t vm_key_sequence( vm_t* vm, int first, char* buf ) {
+    size_t n = 0;
+    buf[n++] = (char) first;
+    if ( first != 27 || vm->inkey == 0 ) {
+        return n;
+    }
+    while ( n + 1U < KEYSEQ_MAXLEN ) {
+        int c = vm->inkey( vm, vm->userdata );
+        if ( c <= 0 || c > 255 ) {
+            break;
+        }
+        buf[n++] = (char) c;
+        int key, mods;
+        int r = keyseq_parse( buf, n, &key, &mods );
+        if ( r > 0 ) {
+            break;
+        }
+        if ( r == 0 ) {
+            vm->keyback = c;
+            --n;
+            break;
+        }
+    }
+    return n;
 }
 
 static bool vm_con_write( void* usrdata, const char* text, size_t len ) {
@@ -1025,9 +1061,9 @@ static bool vm_get_key( vm_t* vm ) {
     if ( key <= 0 || key > 255 ) {
         return vm_error( vm, vm_interrupted( vm ) ? "Break" : "End of input" );
     }
-    char buf[2] = { (char) key, '\0' };
-    char* s = vm_new_string( vm, buf, 1U );
-    return s && vm_push_string( vm, s );
+    char buf[KEYSEQ_MAXLEN];
+    size_t n = vm_key_sequence( vm, key, buf );
+    return vm_push_bytes( vm, buf, n );
 }
 
 // -- user function calls -----------------------------------------------------
@@ -3143,11 +3179,15 @@ static bool vm_system_function( vm_t* vm, uint16_t opcode ) {
             return vm_dpush_num( vm, floor( secs * 60.0 ) );
         }
         case INS_INKY: {
-            int key = vm->inkey ? vm->inkey( vm, vm->userdata ) : 0;
-            buf[0] = (char) key;
-            buf[1] = '\0';
-            char* s = vm_new_string( vm, buf, key > 0 && key < 256 ? 1U : 0U );
-            return s && vm_push_string( vm, s );
+            int key = vm->keyback != 0 ? vm->keyback : vm->inkey ? vm->inkey( vm, vm->userdata ) : 0;
+            vm->keyback = 0;
+            if ( key <= 0 || key > 255 ) {
+                char* s = vm_new_string( vm, "", 0U );
+                return s && vm_push_string( vm, s );
+            }
+            char seq[KEYSEQ_MAXLEN];
+            size_t n = vm_key_sequence( vm, key, seq );
+            return vm_push_bytes( vm, seq, n );
         }
         case INS_FRE:
             // the argument is ignored; the result is the available physical memory
@@ -3210,7 +3250,7 @@ static bool vm_system_function( vm_t* vm, uint16_t opcode ) {
                         return vm_error( vm, key == -1 ? "Input past end" : err ? err : "Device I/O error" );
                     }
                 } else if ( vm->getkey ) {
-                    key = vm->getkey( vm, vm->userdata, 0 );
+                    key = vm_console_key( vm );
                     if ( key <= 0 || key > 255 ) {
                         free( text );
                         return vm_error( vm, vm_interrupted( vm ) ? "Break" : "End of input" );

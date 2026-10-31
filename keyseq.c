@@ -45,6 +45,7 @@ static const keyseq_def_t defs[KS_COUNT] = {
     { "F1",       'P', 0 }, { "F2",       'Q', 0 }, { "F3",       'R', 0 }, { "F4",       'S', 0 },
     { "F5",       0,  15 }, { "F6",       0,  17 }, { "F7",       0,  18 }, { "F8",       0,  19 },
     { "F9",       0,  20 }, { "F10",      0,  21 }, { "F11",      0,  23 }, { "F12",      0,  24 },
+    { "BackTab",  'Z', 0 },
 };
 
 const char* keyseq_keyname( int key ) {
@@ -253,4 +254,83 @@ void keyseq_escape( const char* s, size_t len, char* out, size_t cap ) {
         }
     }
     out[n] = '\0';
+}
+
+// -- the character set ---------------------------------------------------------------------
+
+static const struct { uint32_t cp; int code; } latin9_diff[] = {
+    { 0x20AC, 0xA4 }, { 0x0160, 0xA6 }, { 0x0161, 0xA8 }, { 0x017D, 0xB4 }, { 0x017E, 0xB8 }, { 0x0152, 0xBC }, { 0x0153, 0xBD }, { 0x0178, 0xBE } };
+
+int keyseq_latin9( uint32_t cp ) {
+    if ( cp < 0x80 ) {
+        return (int) cp;
+    }
+    for ( size_t i = 0; i < sizeof(latin9_diff) / sizeof(latin9_diff[0]); ++i ) {
+        if ( latin9_diff[i].cp == cp ) {
+            return latin9_diff[i].code;
+        }
+        if ( cp == latin9_diff[i].code ) {
+            return -1;                  // ISO-8859-1 has this character at the place where ISO-8859-15 has another one
+        }
+    }
+    return cp >= 0xA0 && cp <= 0xFF ? (int) cp : -1;
+}
+
+uint32_t keyseq_unicode( int code ) {
+    if ( code < 0x80 ) {
+        return (uint32_t) code;
+    }
+    if ( code < 0xA0 ) {
+        return 0xFFFD;
+    }
+    for ( size_t i = 0; i < sizeof(latin9_diff) / sizeof(latin9_diff[0]); ++i ) {
+        if ( latin9_diff[i].code == code ) {
+            return latin9_diff[i].cp;
+        }
+    }
+    return (uint32_t) code;
+}
+
+size_t keyseq_utf8_to_latin9( const char* in, size_t len, char* out ) {
+    size_t n = 0;
+    const unsigned char* s = (const unsigned char*) in;
+    size_t pos = 0;
+    while ( pos < len ) {
+        unsigned char c = s[pos];
+        uint32_t cp;
+        size_t need;
+        if ( c < 0x80 )         { cp = c;        need = 1U; }
+        else if ( c >= 0xF0 )   { cp = c & 7U;   need = 4U; }
+        else if ( c >= 0xE0 )   { cp = c & 15U;  need = 3U; }
+        else if ( c >= 0xC0 )   { cp = c & 31U;  need = 2U; }
+        else                    { ++pos; continue; }        // a stray continuation byte
+        size_t i = 1U;
+        for ( ; i < need && pos + i < len && ( s[pos + i] & 0xC0 ) == 0x80; ++i ) {
+            cp = ( cp << 6 ) | ( s[pos + i] & 63U );
+        }
+        pos += i;
+        int code = i == need ? keyseq_latin9( cp ) : -1;
+        if ( code >= 0 ) {
+            out[n++] = (char) code;
+        }
+    }
+    return n;
+}
+
+size_t keyseq_latin9_to_utf8( const char* in, size_t len, char* out ) {
+    size_t n = 0;
+    for ( size_t i = 0; i < len; ++i ) {
+        uint32_t cp = keyseq_unicode( (unsigned char) in[i] );
+        if ( cp < 0x80 ) {
+            out[n++] = (char) cp;
+        } else if ( cp < 0x800 ) {
+            out[n++] = (char) ( 0xC0 | ( cp >> 6 ) );
+            out[n++] = (char) ( 0x80 | ( cp & 63U ) );
+        } else {
+            out[n++] = (char) ( 0xE0 | ( cp >> 12 ) );
+            out[n++] = (char) ( 0x80 | ( ( cp >> 6 ) & 63U ) );
+            out[n++] = (char) ( 0x80 | ( cp & 63U ) );
+        }
+    }
+    return n;
 }

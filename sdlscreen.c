@@ -233,9 +233,32 @@ static void sdlscr_handlekey( SDL_KeyCode key ) {
     }
 }
 
+// text from the keyboard (UTF-8, as the layout makes it) as the printable ISO-8859-15 characters in it; the others are dropped. Returns the length.
+static size_t sdlscr_textlatin9( const char* utf8, char* out, size_t cap ) {
+    char tmp[ SDL_TEXTINPUTEVENT_TEXT_SIZE ];
+    size_t len = strlen( utf8 );
+    if ( len >= sizeof(tmp) ) {
+        len = sizeof(tmp) - 1U;
+    }
+    size_t m = keyseq_utf8_to_latin9( utf8, len, tmp ), n = 0;
+    for ( size_t i = 0; i < m && n + 1U < cap; ++i ) {
+        int c = (unsigned char) tmp[i];
+        if ( ( c >= 32 && c < 127 ) || c >= 160 ) {
+            out[n++] = (char) c;
+        }
+    }
+    out[n] = '\0';
+    return n;
+}
+
+// a printable character of the character set (not a control code, not DEL)
+#define SDLSCR_PRINTABLE(c)     ( ( (c) >= 32 && (c) < 127 ) || ( (c) >= 160 && (c) <= 255 ) )
+
 static void sdlscr_handletext( const char text[SDL_TEXTINPUTEVENT_TEXT_SIZE] ) {
     if ( !sdlscr_awaitinput && !sdlscr_pollinput ) return;
-    if ( sdlscr_enqueuetext( text ) ) {
+    char latin[SDL_TEXTINPUTEVENT_TEXT_SIZE];
+    if ( sdlscr_textlatin9( text, latin, sizeof(latin) ) == 0 ) return;
+    if ( sdlscr_enqueuetext( latin ) ) {
         sdlev_raise( SDLEV_INPUT );
     }
 }
@@ -536,7 +559,12 @@ void sdlscr_ansi_printf( const char* fmt, ... ) {
 
 // -- keyboard access for running programs ---------------------------------------------
 
+// Keys that are not one byte arrive as ANSI escape sequences (keyseq.h): the host hands out one byte per call, the rest of the sequence waits here.
+static char sdlscr_pend[ KEYSEQ_MAXLEN > SDL_TEXTINPUTEVENT_TEXT_SIZE ? KEYSEQ_MAXLEN : SDL_TEXTINPUTEVENT_TEXT_SIZE ];
+static size_t sdlscr_pendpos = 0, sdlscr_pendlen = 0;
+
 static void sdlscr_flushinput( void ) {
+    sdlscr_pendpos = sdlscr_pendlen = 0;
     sdlscr_inputmsg_t* msg;
     while ( ( msg = sdlscr_dequeueinputmsg() ) != 0 ) {
         sdlscr_deleteinputmsg( msg );
@@ -555,32 +583,48 @@ void sdlscr_pollkeys( bool enable ) {
     }
 }
 
-// the key code of an input message, 0 if it isn't a key we deliver
-static int sdlscr_msgtokey( const sdlscr_inputmsg_t* msg ) {
+// the bytes a message stands for (0 = it isn't a key we deliver): RETURN 13, BACKSPACE 8, TAB 9, the escape sequence of a cursor / function key
+// with its modifiers, the characters of ISO-8859-15
+static size_t sdlscr_msgbytes( const sdlscr_inputmsg_t* msg, char* out ) {
     if ( msg->inputtype == SDLSCR_INPUT_KEYPRESS ) {
         switch ( msg->symbol ) {
-            case SDLK_RETURN:       return 13;
-            case SDLK_BACKSPACE:    return 8;
-            case SDLK_TAB:          return 9;
-            default:                return 0;
+            case SDLK_RETURN:       out[0] = 13; return 1U;
+            case SDLK_BACKSPACE:    out[0] = 8;  return 1U;
+            case SDLK_TAB:
+                if ( ( msg->mods & KMOD_SHIFT ) == 0 ) {
+                    out[0] = 9;
+                    return 1U;
+                }
+                break;                  // Shift+Tab is a sequence (BackTab)
+            default:                break;
         }
+        return sdlkeys_sequence( msg->symbol, msg->mods, out );
     }
-    if ( msg->inputtype == SDLSCR_INPUT_TEXT && msg->text[0] != '\0' && msg->text[1] == '\0' ) {
-        int chr = msg->text[0] & 255;
-        if ( chr >= 32 && chr < 127 ) {
-            return chr;
+    if ( msg->inputtype == SDLSCR_INPUT_TEXT ) {
+        size_t n = 0;
+        for ( const char* p = msg->text; *p != '\0' && n < sizeof(sdlscr_pend); ++p ) {
+            int chr = *p & 255;
+            if ( SDLSCR_PRINTABLE( chr ) ) {
+                out[n++] = (char) chr;
+            }
         }
+        return n;
     }
-    return 0;       // other keys and Unicode text: ignored for now
+    return 0;
 }
 
 int sdlscr_pollkey( void ) {
+    if ( sdlscr_pendpos < sdlscr_pendlen ) {
+        return (unsigned char) sdlscr_pend[ sdlscr_pendpos++ ];
+    }
     sdlscr_inputmsg_t* msg;
     while ( ( msg = sdlscr_dequeueinputmsg() ) != 0 ) {
-        int key = sdlscr_msgtokey( msg );
+        size_t n = sdlscr_msgbytes( msg, sdlscr_pend );
         sdlscr_deleteinputmsg( msg );
-        if ( key ) {
-            return key;
+        if ( n > 0 ) {
+            sdlscr_pendlen = n;
+            sdlscr_pendpos = 1U;
+            return (unsigned char) sdlscr_pend[0];
         }
     }
     return 0;
@@ -656,12 +700,11 @@ int sdlscr_lineinput( int stop_evtmsk, char* buf, size_t bufsz, void (*vblank_ha
                     {
                         size_t len = strlen( msg->text );
                         if ( len > 1U ) {
-                            // Unicode: Ignore for now
+                            // more than one character at once (an input method): ignored
                             break;
                         }
                         int chr = msg->text[0] & 255;
-                        if ( chr < 32 || chr > 127 ) {
-                            // Non-printable character: Ignore for now
+                        if ( !SDLSCR_PRINTABLE( chr ) ) {
                             break;
                         }
                         if ( remain < 1 ) {
@@ -722,9 +765,9 @@ bool sdlscr_editkey( sdlscr_edit_t* ed, const sdlscr_inputmsg_t* msg ) {
                 break;
         }
     } else if ( msg->inputtype == SDLSCR_INPUT_TEXT ) {
-        // one printable ASCII character; Unicode and control characters are ignored for now
+        // one printable character of ISO-8859-15 (the text was converted when it arrived)
         int chr = msg->text[0] & 255;
-        if ( msg->text[0] != '\0' && msg->text[1] == '\0' && chr >= 32 && chr < 127 && ed->len < ed->maxlen ) {
+        if ( msg->text[0] != '\0' && msg->text[1] == '\0' && SDLSCR_PRINTABLE( chr ) && ed->len < ed->maxlen ) {
             memmove( work + ed->pos + 1U, work + ed->pos, ed->len - ed->pos + 1U );
             work[ ed->pos++ ] = (char) chr; ++ed->len;
             return true;

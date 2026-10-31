@@ -95,7 +95,8 @@ Policies chosen by this implementation (the instruction set does not define them
       baspgm.c offers save_program() for the host to use
     - system functions:
         TI          1/60 second ticks since the VM was created
-        INKEY$      the key from the inkey callback, "" if there is none (or no callback)
+        INKEY$      the key from the inkey callback, "" if there is none (or no callback); a key that starts an escape sequence (ESC) is
+                    followed by the keys that continue it (keyseq_parse(): cursor and function keys), so INKEY$ and GET return the whole sequence
         INPUT       the prompt goes through the print callback, the line comes from the input callback (without a
                     callback: stdin; the host is expected to echo the typed line, so the VM sets the column to 0);
                     end of input is an error. Missing/non-numeric fields: "?Redo from start", see instset.h (INPN)
@@ -268,6 +269,7 @@ typedef struct _vm_t {
     // handed to print() in pieces and the zero bytes are left out
     void            (*printn)( struct _vm_t*, void*, int channel, const char* text, size_t len );
     void            (*report)( struct _vm_t*, void*, const char* );                     // default: stderr
+    int             keyback;        // a key that was read but did not belong to the escape sequence before it (0 = none): the next key read returns it
     int             (*inkey)( struct _vm_t*, void* );                              // INKEY$: key code, 0 = none
     char*           (*input)( struct _vm_t*, void*, int channel );                 // INPUT: a line (malloc'd, without newline), 0 = end of input
     int             (*getkey)( struct _vm_t*, void*, int channel );                // GET: waits for a key code (1..255), <= 0 = end of input

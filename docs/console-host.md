@@ -22,7 +22,7 @@ Everything after the file name is for the program: `engine1999c prog.bas a "b c"
 - **Output** of the program (channel 0) goes to standard output, binary-safe (`CHR$(0)` is written as a zero byte). **Messages and errors** go to standard error (`? Division by zero in line 20`); on a terminal an error message starts on a line of its own.
 - **Lines on standard input** are entered like typed lines: a numbered line is stored, any other runs at once; an error in a line is reported and the next line is read (the exit status of this mode is 0, or the code of `BYE`/`QUIT`).
 - **`INPUT`, `LINE INPUT`, `GET` and `INKEY$`** of a running program read the same standard input, in order, so `printf '10 INPUT A$\nRUN\nbob\n' | engine1999c` works. `INPUT` at the end of the input is the error "End of input"; `GET` too; `INKEY$` simply returns "" then.
-  Keys are the same as in the window: the printable characters, `RETURN` (13, also for a line end in a pipe), `BACKSPACE` (8) and `TAB` (9). On a terminal `GET` and `INKEY$` take single keys without echo (the terminal is put back at the end).
+  Keys are the same as in the window: the printable characters, `RETURN` (13, also for a line end in a pipe), `BACKSPACE` (8), `TAB` (9), and the cursor and function keys as escape sequences in the canonical form (`ESC [ A`, `ESC O P`, `ESC [ 1 ; 5 D`, ...: see `docs/basic-language.md`, "Keyboard"); the dialects of other terminals are turned into it, unknown sequences are skipped. `engine1999c --debug-keys` shows what a terminal sends. On a terminal the text is ISO-8859-15 inside and UTF-8 outside: typed characters (keys, `INPUT`, program lines) are converted to it and output from code 128 up is converted back; in a pipe or a file the bytes are not touched. On a terminal `GET` and `INKEY$` take single keys without echo (the terminal is put back at the end).
 - **Ctrl-C is Break** while something runs (`? Break in line 10`, exit status 1 in run mode). Between lines it has its usual effect and ends the process.
 
 ## Exit status
@@ -63,4 +63,4 @@ A full-screen `EDIT` and `MONITOR` for interactive console use, a line editor fo
 - Standard input is unbuffered (`getline` and the key reads both go to the file descriptor), so lines and single keys stay in step in a pipe; for very large scripts on standard input a file argument is faster.
 - A line error in the pipe mode doesn't change the exit status; run mode returns 1.
 - Ctrl-C only catches while a program runs (the handler is installed around each line), so an idle prompt ends on Ctrl-C.
-- Tests: `contest1` (71 checks through the shell: pipes, exit codes, the `#!` line, `INPUT`/`GET` from a pipe, SIGINT; run it in the build directory).
+- Tests: `contest1` (now more than 90 checks through the shell: pipes, exit codes, the `#!` line, `INPUT`/`GET` from a pipe, SIGINT; run it in the build directory).

@@ -109,11 +109,40 @@ static bool con_stdout_tty = false;
 static bool con_color = false;
 static bool con_midline = false;        // the last character written to standard output was not a newline
 
+// Text is ISO-8859-15 inside the Engine. On a terminal (which speaks UTF-8) the characters from 128 up are converted; in a pipe or a file the bytes
+// go out as they are (binary output must stay intact), and so they come in: see con_utf8_input().
+static void con_write( const char* text, size_t len ) {
+    bool high = false;
+    for ( size_t i = 0; i < len && con_stdout_tty && !high; ++i ) {
+        high = (unsigned char) text[i] >= 0x80;
+    }
+    if ( high ) {
+        char* u = (char*) malloc( 3U * len );
+        if ( u != 0 ) {
+            fwrite( u, 1U, keyseq_latin9_to_utf8( text, len, u ), stdout );
+            free( u );
+            return;
+        }
+    }
+    fwrite( text, 1U, len, stdout );
+}
+
+// a line typed on a terminal comes in as UTF-8 and is converted (in place) to ISO-8859-15; from a pipe it stays as it is
+static size_t con_utf8_input( char* line, size_t len ) {
+    if ( !isatty( 0 ) ) {
+        return len;
+    }
+    len = keyseq_utf8_to_latin9( line, len, line );
+    line[len] = '\0';
+    return len;
+}
+
 static void con_print( struct _vm_t* vm, void* usrdata, int channel, const char* text ) {
     (void) vm; (void) usrdata;
     if ( channel == 0 && text[0] != '\0' ) {
-        fputs( text, stdout );
-        con_midline = text[ strlen( text ) - 1U ] != '\n';
+        size_t len = strlen( text );
+        con_write( text, len );
+        con_midline = text[ len - 1U ] != '\n';
     }
 }
 
@@ -121,7 +150,7 @@ static void con_print( struct _vm_t* vm, void* usrdata, int channel, const char*
 static void con_printn( struct _vm_t* vm, void* usrdata, int channel, const char* text, size_t len ) {
     (void) vm; (void) usrdata;
     if ( channel == 0 && len > 0 ) {
-        fwrite( text, 1U, len, stdout );
+        con_write( text, len );
         con_midline = text[ len - 1U ] != '\n';
     }
 }
@@ -154,20 +183,30 @@ static char* con_input( struct _vm_t* vm, void* usrdata, int channel ) {
     while ( n > 0 && ( line[ n - 1 ] == '\n' || line[ n - 1 ] == '\r' ) ) {
         line[ --n ] = '\0';
     }
+    con_utf8_input( line, (size_t) n );
     return line;
 }
 
-// a key code (RETURN 13, BACKSPACE 8, TAB 9 and the printable characters, as in the window), 0 = none yet, -1 = end of input / Break.
-// wait: block until there is one. Other keys (escape sequences of the cursor keys, control codes) are skipped.
-static int con_readkey( bool wait ) {
-    fflush( stdout );
-    con_set_raw( true );
+// Keys from the terminal, as the window delivers them: RETURN 13, BACKSPACE 8, TAB 9, the printable characters (UTF-8 from a terminal becomes
+// ISO-8859-15; from a pipe the bytes stay as they are), and the cursor and function keys as the canonical escape sequence (keyseq.h), whatever
+// dialect the terminal speaks: the bytes after an ESC are collected until they make a known sequence (keyseq_parse()), which is delivered in its
+// canonical form, byte by byte. Unknown CSI / SS3 sequences (mouse reports, ...) are skipped. An ESC that is not followed by more bytes within
+// 50 ms, or by something that is no sequence, is a plain ESC (the bytes behind it are delivered as they are).
+// 0 = none yet (INKEY$), -1 = end of input / Break; wait: block until there is a key.
+
+#define CON_ESCWAIT     50      // ms to wait for the rest of an escape sequence
+
+static char con_pend[ KEYSEQ_MAXLEN * 2 ];
+static size_t con_pendpos = 0, con_pendlen = 0;
+
+// one byte of the terminal: >= 0 the byte, -1 end of input / error, -2 timeout (timeout in ms; negative = wait)
+static int con_rawbyte( int timeout ) {
     for (;;) {
         if ( con_break ) {
             return -1;
         }
         struct pollfd pfd = { 0, POLLIN, 0 };
-        int rv = poll( &pfd, 1, wait ? 100 : 0 );
+        int rv = poll( &pfd, 1, timeout < 0 ? 100 : timeout );
         if ( rv < 0 ) {
             if ( errno == EINTR ) {
                 continue;
@@ -175,15 +214,15 @@ static int con_readkey( bool wait ) {
             return -1;
         }
         if ( rv == 0 ) {
-            if ( wait ) {
+            if ( timeout < 0 ) {
                 continue;
             }
-            return 0;
+            return -2;
         }
         unsigned char c;
         ssize_t n = read( 0, &c, 1U );
         if ( n == 0 ) {
-            return wait ? -1 : 0;           // end of input: INKEY$ sees "no key", GET ends
+            return -1;
         }
         if ( n < 0 ) {
             if ( errno == EINTR ) {
@@ -191,11 +230,106 @@ static int con_readkey( bool wait ) {
             }
             return -1;
         }
+        return c;
+    }
+}
+
+static int con_readkey( bool wait ) {
+    fflush( stdout );
+    con_set_raw( true );
+    for (;;) {
+        if ( con_pendpos < con_pendlen ) {
+            return (unsigned char) con_pend[ con_pendpos++ ];
+        }
+        int c = con_rawbyte( wait ? -1 : 0 );
+        if ( c == -1 ) {
+            return wait ? -1 : ( con_break ? -1 : 0 );      // end of input: INKEY$ sees "no key", GET ends
+        }
+        if ( c == -2 ) {
+            return 0;
+        }
         if ( c == '\n' || c == '\r' ) return 13;
         if ( c == 8 || c == 127 ) return 8;
         if ( c == '\t' ) return 9;
         if ( c >= 0x20 && c < 0x7F ) return c;
-        // anything else is skipped
+        if ( c == 033 ) {
+            char buf[KEYSEQ_MAXLEN];
+            size_t n = 0;
+            buf[n++] = (char) c;
+            bool skip = false;
+            for ( ;; ) {
+                int key, mods;
+                int r = keyseq_parse( buf, n, &key, &mods );
+                if ( r > 0 ) {
+                    con_pendlen = keyseq_make( key, mods, con_pend );       // the canonical form, whatever the terminal sent
+                    con_pendpos = 1U;
+                    return (unsigned char) con_pend[0];
+                }
+                if ( r == 0 ) {
+                    // no known sequence: an unknown CSI / SS3 sequence is skipped, anything else is an ESC and the bytes behind it
+                    if ( n >= 2U && ( buf[1] == '[' || buf[1] == 'O' ) ) {
+                        skip = true;
+                    } else {
+                        memcpy( con_pend, buf + 1, n - 1U );
+                        con_pendlen = n - 1U;
+                        con_pendpos = 0;
+                        return 033;
+                    }
+                    break;
+                }
+                int d = con_rawbyte( CON_ESCWAIT );
+                if ( d < 0 ) {
+                    memcpy( con_pend, buf + 1, n - 1U );     // cut off: a plain ESC, the rest as it is
+                    con_pendlen = n - 1U;
+                    con_pendpos = 0;
+                    return 033;
+                }
+                if ( n < sizeof(buf) ) {
+                    buf[n++] = (char) d;
+                } else {
+                    skip = true;
+                    break;
+                }
+            }
+            if ( skip ) {
+                // an unknown sequence: drop it up to its final byte (0x40..0x7E, behind at least "ESC [" and one more byte)
+                unsigned char last = (unsigned char) buf[n - 1U];
+                size_t count = n;
+                while ( count < 3U || last < 0x40 || last > 0x7E ) {
+                    int d = con_rawbyte( CON_ESCWAIT );
+                    if ( d < 0 ) {
+                        break;
+                    }
+                    last = (unsigned char) d;
+                    ++count;
+                }
+            }
+            if ( !wait ) {
+                return 0;
+            }
+            continue;
+        }
+        if ( c >= 0x80 ) {
+            if ( !isatty( 0 ) ) {
+                return c;                       // from a pipe: the byte as it is
+            }
+            char u[4];
+            size_t need = c >= 0xF0 ? 4U : c >= 0xE0 ? 3U : c >= 0xC0 ? 2U : 1U;
+            u[0] = (char) c;
+            size_t got = 1U;
+            while ( got < need ) {
+                int d = con_rawbyte( CON_ESCWAIT );
+                if ( d < 0 ) {
+                    break;
+                }
+                u[got++] = (char) d;
+            }
+            char out[4];
+            if ( need > 1U && keyseq_utf8_to_latin9( u, got, out ) == 1U ) {
+                return (unsigned char) out[0];
+            }
+        }
+        // anything else (control codes, characters the set doesn't have) is skipped
         if ( !wait ) {
             return 0;
         }
@@ -321,6 +455,7 @@ static void con_repl( repl_t* repl, bool interactive ) {
         while ( n > 0 && ( line[ n - 1 ] == '\n' || line[ n - 1 ] == '\r' ) ) {
             line[ --n ] = '\0';
         }
+        con_utf8_input( line, (size_t) n );
         const char* p = line;
         while ( *p == ' ' || *p == '\t' ) {
             ++p;

@@ -49,6 +49,7 @@ canonical one.
     F1 .. F4                 ESC O P  Q  R  S                       ESC [ 1 ; m P ...
     INSERT DELETE PGUP PGDN  ESC [ 2 ~  3 ~  5 ~  6 ~               ESC [ 2 ; m ~ ...
     F5 .. F12                ESC [ 15 ~  17 ~  18 ~  19 ~  20 ~  21 ~  23 ~  24 ~
+    BACKTAB (Shift+Tab)      ESC [ Z
 */
 
 typedef enum _keyseq_key_t {
@@ -56,6 +57,7 @@ typedef enum _keyseq_key_t {
     KS_UP, KS_DOWN, KS_RIGHT, KS_LEFT,
     KS_HOME, KS_END, KS_INSERT, KS_DELETE, KS_PGUP, KS_PGDN,
     KS_F1, KS_F2, KS_F3, KS_F4, KS_F5, KS_F6, KS_F7, KS_F8, KS_F9, KS_F10, KS_F11, KS_F12,
+    KS_BACKTAB,                 // Shift+Tab
     KS_COUNT
 } keyseq_key_t;
 
@@ -91,5 +93,20 @@ void keyseq_name( int key, int mods, char* buf );
 // for the key dump (--debug-keys): len bytes of s as hex ("1b 5b 41") and as a C style string with \e for ESC ("\e[A"); out gets at most cap bytes
 void keyseq_hex( const char* s, size_t len, char* out, size_t cap );
 void keyseq_escape( const char* s, size_t len, char* out, size_t cap );
+
+// -- the character set: ISO-8859-15 <-> Unicode / UTF-8 (the terminal side of the console host, the keyboard text of the window) --------------------
+
+// the ISO-8859-15 code of a Unicode character: ASCII as it is, 160..255 as in ISO-8859-1 except the eight changes (the euro sign and Š š Ž ž Œ œ Ÿ
+// instead of ¤ ¦ ¨ ´ ¸ ¼ ½ ¾); -1 if the character set has none (this includes the C1 controls 128..159)
+int keyseq_latin9( uint32_t cp );
+
+// the Unicode character of an ISO-8859-15 code; the C1 control codes 128..159 give U+FFFD (they are not sent to a terminal)
+uint32_t keyseq_unicode( int code );
+
+// UTF-8 text as ISO-8859-15 bytes: characters the set doesn't have, and malformed UTF-8, are dropped. out has room for len bytes; returns the length.
+size_t keyseq_utf8_to_latin9( const char* in, size_t len, char* out );
+
+// ISO-8859-15 text as UTF-8; out has room for 3 * len bytes; returns the length
+size_t keyseq_latin9_to_utf8( const char* in, size_t len, char* out );
 
 #endif

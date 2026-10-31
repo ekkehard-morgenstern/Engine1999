@@ -56,6 +56,7 @@ bool sdlkeys_map( SDL_Keycode sym, Uint16 sdlmods, int* key, int* mods ) {
         case SDLK_F10:          k = KS_F10;     break;
         case SDLK_F11:          k = KS_F11;     break;
         case SDLK_F12:          k = KS_F12;     break;
+        case SDLK_TAB:          k = ( sdlmods & KMOD_SHIFT ) != 0 ? KS_BACKTAB : KS_NONE; break;      // Tab itself is the one byte 9
         case SDLK_KP_8:         k = numlock ? KS_NONE : KS_UP;      break;
         case SDLK_KP_2:         k = numlock ? KS_NONE : KS_DOWN;    break;
         case SDLK_KP_6:         k = numlock ? KS_NONE : KS_RIGHT;   break;
@@ -73,7 +74,7 @@ bool sdlkeys_map( SDL_Keycode sym, Uint16 sdlmods, int* key, int* mods ) {
         return false;
     }
     int m = 0;
-    if ( ( sdlmods & KMOD_SHIFT ) != 0 ) m |= KSMOD_SHIFT;
+    if ( ( sdlmods & KMOD_SHIFT ) != 0 && k != KS_BACKTAB ) m |= KSMOD_SHIFT;       // (the Shift is in the key)
     if ( ( sdlmods & KMOD_ALT ) != 0 )   m |= KSMOD_ALT;
     if ( ( sdlmods & KMOD_CTRL ) != 0 )  m |= KSMOD_CTRL;
     if ( ( sdlmods & KMOD_GUI ) != 0 )   m |= KSMOD_META;

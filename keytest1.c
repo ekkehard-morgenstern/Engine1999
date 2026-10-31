@@ -67,6 +67,7 @@ static void test_make( void ) {
         { KS_END, KSMOD_ALL, "\033[1;16F" }, { KS_F1, KSMOD_SHIFT, "\033[1;2P" }, { KS_F4, KSMOD_CTRL, "\033[1;5S" },
         { KS_DELETE, KSMOD_CTRL, "\033[3;5~" }, { KS_PGUP, KSMOD_SHIFT, "\033[5;2~" }, { KS_F5, KSMOD_ALT, "\033[15;3~" },
         { KS_F12, KSMOD_SHIFT | KSMOD_ALT | KSMOD_CTRL | KSMOD_META, "\033[24;16~" },
+        { KS_BACKTAB, 0, "\033[Z" }, { KS_BACKTAB, KSMOD_CTRL, "\033[1;5Z" },
     };
     bool ok = true;
     for ( size_t i = 0; i < sizeof(t) / sizeof(t[0]); ++i ) {
@@ -125,13 +126,43 @@ static void test_rejects( void ) {
     int k, m;
     check( keyseq_parse( "", 0, &k, &m ) == 0 && keyseq_parse( "a", 1U, &k, &m ) == 0 && keyseq_parse( "\033", 1U, &k, &m ) == -1, "plain text is no sequence, a lone ESC may continue" );
     check( keyseq_parse( "\033\033", 2U, &k, &m ) == 0, "ESC ESC is no sequence (it is the break key)" );
-    check( keyseq_parse( "\033x", 2U, &k, &m ) == 0 && keyseq_parse( "\033[Z", 3U, &k, &m ) == 0 && keyseq_parse( "\033[99~", 6U, &k, &m ) == 0,
+    check( keyseq_parse( "\033x", 2U, &k, &m ) == 0 && keyseq_parse( "\033[Y", 3U, &k, &m ) == 0 && keyseq_parse( "\033[99~", 6U, &k, &m ) == 0,
         "unknown sequences" );
     check( keyseq_parse( "\033[1;0A", 7U, &k, &m ) == 0 && keyseq_parse( "\033[1;17A", 8U, &k, &m ) == 0, "bad modifier numbers" );
     check( keyseq_parse( "\033[1;;A", 7U, &k, &m ) == 0 && keyseq_parse( "\033[1;2;3A", 9U, &k, &m ) == 0, "bad parameter lists" );
     check( keyseq_parse( "\033[2A", 4U, &k, &m ) == 0, "a repeat count is no key" );
     check( keyseq_parse( "\033[111111111111111111~", 20U, &k, &m ) == 0, "long numbers are refused" );
     check( keyseq_parse( "\033[M", 3U, &k, &m ) == 0, "mouse reports are not keys" );
+}
+
+static void test_charset( void ) {
+    check( keyseq_latin9( 'a' ) == 'a' && keyseq_latin9( 0xE4 ) == 0xE4 && keyseq_latin9( 0xFF ) == 0xFF && keyseq_latin9( 0xA0 ) == 0xA0, "Unicode -> ISO-8859-15: ASCII and the common Latin-1 letters are the same" );
+    check( keyseq_latin9( 0x20AC ) == 0xA4 && keyseq_latin9( 0x160 ) == 0xA6 && keyseq_latin9( 0x161 ) == 0xA8 && keyseq_latin9( 0x17D ) == 0xB4 &&
+        keyseq_latin9( 0x17E ) == 0xB8 && keyseq_latin9( 0x152 ) == 0xBC && keyseq_latin9( 0x153 ) == 0xBD && keyseq_latin9( 0x178 ) == 0xBE, "the eight changes of ISO-8859-15" );
+    check( keyseq_latin9( 0xA4 ) == -1 && keyseq_latin9( 0xBC ) == -1 && keyseq_latin9( 0x85 ) == -1 && keyseq_latin9( 0x3042 ) == -1 && keyseq_latin9( 0x100 ) == -1,
+        "characters the set doesn't have (the Latin-1 signs it replaced, C1 controls, other scripts)" );
+    int bad = 0;
+    for ( int c = 0; c < 256; ++c ) {
+        if ( c >= 0x80 && c < 0xA0 ) {
+            continue;
+        }
+        if ( keyseq_latin9( keyseq_unicode( c ) ) != c ) {
+            ++bad;
+        }
+    }
+    check( bad == 0 && keyseq_unicode( 0x90 ) == 0xFFFD, "ISO-8859-15 -> Unicode -> ISO-8859-15 for all printable codes; C1 gives U+FFFD" );
+    char in[256], u[3 * 256], back[256];
+    size_t n = 0;
+    for ( int c = 1; c < 256; ++c ) {
+        if ( c < 0x80 || c >= 0xA0 ) {
+            in[n++] = (char) c;
+        }
+    }
+    size_t un = keyseq_latin9_to_utf8( in, n, u );
+    check( keyseq_utf8_to_latin9( u, un, back ) == n && memcmp( in, back, n ) == 0, "text round trip through UTF-8" );
+    check( keyseq_latin9_to_utf8( "\xe4\xa4", 2U, u ) == 5U && memcmp( u, "\xc3\xa4\xe2\x82\xac", 5U ) == 0, "UTF-8 of ä and the euro sign" );
+    n = keyseq_utf8_to_latin9( "a\xc3\xa4\xe3\x81\x82\x80z\xc3", 8U, back );
+    check( n == 3U && memcmp( back, "a\xe4z", 3U ) == 0, "UTF-8 -> ISO-8859-15 drops other scripts, stray bytes and cut-off characters" );
 }
 
 static void test_names( void ) {
@@ -170,6 +201,7 @@ static void test_sdl( void ) {
     check( sdlkeys_sequence( SDLK_KP_8, 0, b ) > 0 && strcmp( b, "\033[A" ) == 0 && sdlkeys_sequence( SDLK_KP_3, 0, b ) > 0 && strcmp( b, "\033[6~" ) == 0,
         "SDL: keypad keys without Num Lock are the cursor block" );
     check( sdlkeys_sequence( SDLK_KP_8, KMOD_NUM, b ) == 0 && b[0] == '\0', "SDL: keypad digits with Num Lock are not sequences" );
+    check( sdlkeys_sequence( SDLK_TAB, 0, b ) == 0 && sdlkeys_sequence( SDLK_TAB, KMOD_LSHIFT, b ) > 0 && strcmp( b, "\033[Z" ) == 0, "SDL: Tab is one byte, Shift+Tab is a sequence" );
     check( sdlkeys_sequence( SDLK_a, 0, b ) == 0 && sdlkeys_sequence( SDLK_RETURN, 0, b ) == 0 && sdlkeys_sequence( SDLK_ESCAPE, 0, b ) == 0 &&
         sdlkeys_sequence( SDLK_PAUSE, 0, b ) == 0, "SDL: letters, Return, Escape and Pause have no sequence" );
 }
@@ -180,6 +212,7 @@ int main( void ) {
     test_dialects();
     test_rejects();
     test_names();
+    test_charset();
     test_format();
     test_sdl();
     printf( "%d of %d checks passed\n", total - failures, total );

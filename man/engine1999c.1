@@ -131,6 +131,9 @@ On a terminal
 and
 .B INKEY$
 take single keys without echo; in a pipe they read the next byte (a line end is RETURN, 13).
+Cursor and function keys arrive as ANSI escape sequences in the xterm form (\fBESC [ A\fR for Up, \fBESC [ 1 ; 5 D\fR for Ctrl+Left, \fBESC O P\fR for F1), whatever dialect the terminal sends; see
+.BR engine1999\-basic (7).
+On a terminal the text is ISO\-8859\-15 inside the Engine and UTF\-8 outside: typed characters are converted to it and output from code 128 up is converted back; in a pipe or a file the bytes are not changed.
 .PP
 Sound statements do nothing (their arguments are still checked).
 .B CLS
