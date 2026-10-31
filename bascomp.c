@@ -2434,7 +2434,7 @@ bool comp_eat_openstmt( compiler_t* comp, node_t** pnode ) {
         return false;
     }
     uint8_t data[2] = { 0, 0 };
-    node_t* chan = NODE_NONE; node_t* name = NODE_NONE;
+    node_t* chan = NODE_NONE; node_t* name = NODE_NONE; node_t* reclen = NODE_NONE;
     if ( comp->currtok == TOK_FOR ) {
         if ( !comp_fetchtok( comp ) ) {
             return false;
@@ -2445,8 +2445,12 @@ bool comp_eat_openstmt( compiler_t* comp, node_t** pnode ) {
             data[1] = 'O';
         } else if ( comp->currtok == TOK_NUMIDENT && strcmp( comp->param, "APPEND" ) == 0 ) {
             data[1] = 'A';
+        } else if ( comp->currtok == TOK_NUMIDENT && strcmp( comp->param, "RANDOM" ) == 0 ) {
+            data[1] = 'R';
+        } else if ( comp->currtok == TOK_NUMIDENT && strcmp( comp->param, "UPDATE" ) == 0 ) {
+            data[1] = 'U';
         } else {
-            comp_error( comp, "INPUT, OUTPUT or APPEND expected" );
+            comp_error( comp, "INPUT, OUTPUT, APPEND, RANDOM or UPDATE expected" );
             return false;
         }
         if ( !comp_fetchtok( comp ) ) {
@@ -2459,6 +2463,16 @@ bool comp_eat_openstmt( compiler_t* comp, node_t** pnode ) {
         if ( !comp_eat_chanspec( comp, &chan ) || chan == NODE_NONE ) {
             comp_error( comp, "Channel '#n' expected" );
             return false;
+        }
+        if ( comp->currtok == TOK_LEN ) {           // LEN = record length
+            if ( !comp_fetchtok( comp ) || comp->currtok != TOK_EQ || !comp_fetchtok( comp ) ) {
+                comp_error( comp, "'=' expected" );
+                return false;
+            }
+            if ( !comp_eat_numexpr( comp, &reclen ) || reclen == NODE_NONE ) {
+                comp_error( comp, "Numeric expression expected" );
+                return false;
+            }
         }
     } else if ( comp->currtok == TOK_COMMA ) {
         data[0] = 1;
@@ -2474,6 +2488,12 @@ bool comp_eat_openstmt( compiler_t* comp, node_t** pnode ) {
             comp_error( comp, "String expression expected" );
             return false;
         }
+        if ( comp->currtok == TOK_COMMA ) {         // the record length
+            if ( !comp_fetchtok( comp ) || !comp_eat_numexpr( comp, &reclen ) || reclen == NODE_NONE ) {
+                comp_error( comp, "Numeric expression expected" );
+                return false;
+            }
+        }
     } else {
         comp_error( comp, "FOR or comma expected" );
         return false;
@@ -2485,10 +2505,15 @@ bool comp_eat_openstmt( compiler_t* comp, node_t** pnode ) {
             branches:
                 - form 0: the name (string expression), the channel specifier
                 - form 1: the mode (string expression), the channel specifier, the name (string expression)
+                - then, if given, the record length (numeric expression)
     */
     bool ok = data[0] == 0 ? comp_create_node( comp, pnode, NT_OPENSTMT, UINT8_C(2), UINT16_C(2), data, first, chan ) :
         comp_create_node( comp, pnode, NT_OPENSTMT, UINT8_C(3), UINT16_C(2), data, first, chan, name );
     if ( !ok || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    if ( reclen != NODE_NONE && !comp_add_branch( comp, *pnode, reclen ) ) {
         out_of_memory( comp );
         return false;
     }
@@ -2518,6 +2543,107 @@ bool comp_eat_closestmt( compiler_t* comp, node_t** pnode ) {
             if ( comp->currtok != TOK_COMMA || !comp_fetchtok( comp ) ) {
                 break;
             }
+        }
+    }
+    return true;
+}
+
+bool comp_eat_recordstmt( compiler_t* comp, node_t** pnode ) {
+    // record-stmt := see bascomp.ebnf
+    uint8_t kind = 0;
+    switch ( comp->currtok ) {
+        case TOK_FIELD:     kind = RECK_FIELD; break;
+        case TOK_LSET:      kind = RECK_LSET; break;
+        case TOK_RSET:      kind = RECK_RSET; break;
+        case TOK_GETREC:    kind = RECK_GETREC; break;
+        case TOK_PUTREC:    kind = RECK_PUTREC; break;
+        default:            return false;
+    }
+    if ( !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    /*
+        NT_RECORDSTMT   FIELD / LSET / RSET / GETREC / PUTREC statement
+            data: 1 byte, RECK_* kind
+            branches: FIELD: the channel specifier, then pairs (numeric expression, string variable reference)
+                      LSET, RSET: the string variable reference, the string expression
+                      GETREC, PUTREC: the channel specifier, optionally a numeric expression (the record number)
+    */
+    if ( !comp_create_node( comp, pnode, NT_RECORDSTMT, UINT8_C(0), UINT16_C(1), &kind ) || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    node_t* b = NODE_NONE;
+    if ( kind == RECK_LSET || kind == RECK_RSET ) {
+        if ( !comp_eat_strvarref( comp, &b ) || b == NODE_NONE ) {
+            comp_error( comp, "String variable expected" );
+            return false;
+        }
+        if ( !comp_add_branch( comp, *pnode, b ) ) {
+            out_of_memory( comp );
+            return false;
+        }
+        if ( comp->currtok != TOK_EQ || !comp_fetchtok( comp ) ) {
+            comp_error( comp, "Assignment operator '=' expected" );
+            return false;
+        }
+        b = NODE_NONE;
+        if ( !comp_eat_strexpr( comp, &b ) || b == NODE_NONE ) {
+            comp_error( comp, "String expression expected" );
+            return false;
+        }
+        if ( !comp_add_branch( comp, *pnode, b ) ) {
+            out_of_memory( comp );
+            return false;
+        }
+        return true;
+    }
+    if ( !comp_eat_chanspec( comp, &b ) || b == NODE_NONE ) {
+        comp_error( comp, "Channel '#n' expected" );
+        return false;
+    }
+    if ( !comp_add_branch( comp, *pnode, b ) ) {
+        out_of_memory( comp );
+        return false;
+    }
+    if ( kind == RECK_FIELD ) {
+        for (;;) {
+            if ( comp->currtok != TOK_COMMA || !comp_fetchtok( comp ) ) {
+                comp_error( comp, "Comma ',' expected" );
+                return false;
+            }
+            node_t* len = NODE_NONE; node_t* var = NODE_NONE;
+            if ( !comp_eat_numexpr( comp, &len ) || len == NODE_NONE ) {
+                comp_error( comp, "Numeric expression expected" );
+                return false;
+            }
+            if ( comp->currtok != TOK_NUMIDENT || strcmp( comp->param, "AS" ) != 0 || !comp_fetchtok( comp ) ) {
+                comp_error( comp, "AS expected" );
+                return false;
+            }
+            if ( !comp_eat_strvarref( comp, &var ) || var == NODE_NONE ) {
+                comp_error( comp, "String variable expected" );
+                return false;
+            }
+            if ( !comp_add_branch( comp, *pnode, len ) || !comp_add_branch( comp, *pnode, var ) ) {
+                out_of_memory( comp );
+                return false;
+            }
+            if ( comp->currtok != TOK_COMMA ) {
+                break;
+            }
+        }
+        return true;
+    }
+    if ( comp->currtok == TOK_COMMA ) {
+        b = NODE_NONE;
+        if ( !comp_fetchtok( comp ) || !comp_eat_numexpr( comp, &b ) || b == NODE_NONE ) {
+            comp_error( comp, "Numeric expression expected" );
+            return false;
+        }
+        if ( !comp_add_branch( comp, *pnode, b ) ) {
+            out_of_memory( comp );
+            return false;
         }
     }
     return true;
@@ -3032,6 +3158,9 @@ bool comp_eat_progstmt( compiler_t* comp, node_t** pnode ) {
         return true;
     }
     if ( comp_eat_fileopstmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_recordstmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     if ( comp_eat_timerstmt( comp, pnode ) && *pnode != NODE_NONE ) {

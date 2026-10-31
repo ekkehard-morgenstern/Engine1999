@@ -74,6 +74,8 @@ void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem ) {
     vm->deletelines = 0;
     vm->renumber = 0;
     iotab_init( &vm->io );
+    vm->fields = 0;
+    vm->numfields = vm->capfields = 0;
     snprintf( vm->addrcur, sizeof(vm->addrcur), "file" );
     snprintf( vm->addrprev, sizeof(vm->addrprev), "file" );
     vm->iofail = 0;
@@ -126,6 +128,9 @@ void vm_clear_request( vm_t* vm ) {
 
 void cleanup_vm( vm_t* vm ) {
     iotab_closeall( &vm->io );
+    free( vm->fields );
+    vm->fields = 0;
+    vm->numfields = vm->capfields = 0;
     for ( int i=0; i < SND_MAXSFX; ++i ) {
         mml_free( &vm->sfx[i] );
         vm->sfx_defined[i] = false;
@@ -1237,9 +1242,26 @@ static bool vm_list_files( vm_t* vm ) {
     return ok;
 }
 
-// OPEN ( name mode n -- ) or, short form, ( mode n name -- )
+static bool vm_music_play( void* usrdata, int voice, const char* text, char* err, size_t errsz );
+static bool vm_interrupt_hook( void* usrdata );
+
+// forgets the FIELD bindings of a channel (-1 = all)
+static void vm_drop_fields( vm_t* vm, int chan ) {
+    size_t n = 0;
+    for ( size_t i=0; i < vm->numfields; ++i ) {
+        if ( chan >= 0 && vm->fields[i].chan != chan ) {
+            vm->fields[n++] = vm->fields[i];
+        }
+    }
+    vm->numfields = n;
+}
+
+// OPEN ( name mode n reclen -- ) or, short form, ( mode n name reclen -- )
 static bool vm_open_channel( vm_t* vm, bool shortform ) {
-    double chan = 0; char* name = 0; char* mode = 0;
+    double chan = 0, reclen = 0; char* name = 0; char* mode = 0;
+    if ( !vm_dpop_num( vm, &reclen ) ) {
+        return false;
+    }
     bool ok = shortform ? ( vm_dpop_str( vm, &name ) && vm_dpop_num( vm, &chan ) && vm_dpop_str( vm, &mode ) ) :
         ( vm_dpop_num( vm, &chan ) && vm_dpop_str( vm, &mode ) && vm_dpop_str( vm, &name ) );
     if ( !ok ) {
@@ -1252,18 +1274,25 @@ static bool vm_open_channel( vm_t* vm, bool shortform ) {
         case 'I': case 'i': m = IOMODE_READ; break;
         case 'O': case 'o': m = IOMODE_WRITE; break;
         case 'A': case 'a': m = IOMODE_WRITE | IOMODE_APPEND; break;
+        case 'U': case 'u': m = IOMODE_READ | IOMODE_WRITE; break;
+        case 'R': case 'r': m = IOMODE_READ | IOMODE_WRITE | IOMODE_RANDOM; break;
         default: break;
     }
     const char* err = 0;
     iocon_t con = { vm_con_write, vm_con_getkey, vm };
     iodev_set_console( &con );          // the "con" driver talks to this VM's host callbacks
+    iomusic_t music = { vm_music_play, vm };
+    iodev_set_music( &music );          // the "play" driver plays on this VM's sound output
+    iodev_set_interrupt( vm_interrupt_hook, vm );       // the "tcp" driver stops waiting on Break
     if ( m == 0 || mode[1] != '\0' ) {
         ok = vm_error( vm, "Bad file mode" );
+    } else if ( !( reclen == 0.0 || ( reclen >= 1.0 && reclen <= (double) IOREC_MAX ) ) || ( reclen != 0.0 && ( m & IOMODE_RANDOM ) == 0 ) ) {
+        ok = vm_error( vm, "Illegal argument" );
     } else if ( name[0] == '\0' ) {
         ok = vm_error( vm, "Bad file name" );
     } else if ( !( chan >= 1.0 && chan <= (double) IOCHAN_MAX ) ) {
         ok = vm_error( vm, "Bad file number" );
-    } else if ( !iotab_open( &vm->io, (int) chan, name, vm->addrcur, m, &err ) ) {
+    } else if ( !iotab_open_ex( &vm->io, (int) chan, name, vm->addrcur, m, (size_t) reclen, &err ) ) {
         ok = vm_error( vm, err ? err : "Device I/O error" );
     }
     free( name );
@@ -1279,12 +1308,14 @@ static bool vm_close_channel( vm_t* vm ) {
     }
     if ( chan == -1.0 ) {
         iotab_closeall( &vm->io );
+        vm_drop_fields( vm, -1 );
         return true;
     }
     const char* err = 0;
     if ( !( chan >= 1.0 && chan <= (double) IOCHAN_MAX ) ) {
         return vm_error( vm, "Bad file number" );
     }
+    vm_drop_fields( vm, (int) chan );
     return iotab_close( &vm->io, (int) chan, &err ) || vm_error( vm, err ? err : "Device I/O error" );
 }
 
@@ -1532,6 +1563,167 @@ static bool vm_play( vm_t* vm ) {
     for ( int i=0; i < parsed; ++i ) mml_free( &mml[i] );
     for ( int i=0; i < n; ++i ) free( strs[i] );
     return ok;
+}
+
+// the "play" driver: a line of music is played on one voice
+static bool vm_music_play( void* usrdata, int voice, const char* text, char* err, size_t errsz ) {
+    vm_t* vm = (vm_t*) usrdata;
+    mml_t m; char e[MML_ERRLEN];
+    if ( !mml_parse( text, &m, e ) ) {
+        snprintf( err, errsz, "%s", e );
+        return false;
+    }
+    if ( vm->sound != 0 && voice >= 1 && voice <= SND_MAXVOICES ) {
+        vm->sound->sync( vm->userdata, 1U << ( voice - 1 ) );
+        vm_queue_voice( vm, voice - 1, &m, vm_sound_tobeats( vm ) );
+    }
+    mml_free( &m );
+    return true;
+}
+
+static bool vm_interrupt_hook( void* usrdata ) {
+    return vm_interrupted( (vm_t*) usrdata );
+}
+
+// FLD ( n len first -- ): FIELD binds a string variable to the next len bytes of the record of random file n
+static bool vm_field( vm_t* vm, uint16_t var ) {
+    double chan, len, first;
+    if ( !vm_dpop_num( vm, &first ) || !vm_dpop_num( vm, &len ) || !vm_dpop_num( vm, &chan ) ) {
+        return false;
+    }
+    if ( !( chan >= 1.0 && chan <= (double) IOCHAN_MAX ) ) {
+        return vm_error( vm, "Bad file number" );
+    }
+    size_t reclen = 0;
+    if ( iotab_recbuf( &vm->io, (int) chan, &reclen ) == 0 ) {
+        return vm_error( vm, iotab_isopen( &vm->io, (int) chan ) ? "Bad file mode" : "File not open" );
+    }
+    if ( !( len >= 0.0 && len <= (double) IOREC_MAX ) ) {
+        return vm_error( vm, "Illegal argument" );
+    }
+    if ( first != 0.0 ) {
+        vm_drop_fields( vm, (int) chan );
+    }
+    uint32_t off = 0;
+    for ( size_t i=0; i < vm->numfields; ++i ) {
+        if ( vm->fields[i].chan == (int) chan && vm->fields[i].off + vm->fields[i].len > off ) {
+            off = vm->fields[i].off + vm->fields[i].len;
+        }
+        if ( vm->fields[i].var == var ) {       // a variable belongs to one slice only
+            vm->fields[i].chan = -2;
+        }
+    }
+    {
+        size_t n = 0;
+        for ( size_t i=0; i < vm->numfields; ++i ) {
+            if ( vm->fields[i].chan != -2 ) {
+                vm->fields[n++] = vm->fields[i];
+            }
+        }
+        vm->numfields = n;
+    }
+    if ( (size_t) off + (size_t) len > reclen ) {
+        return vm_error( vm, "Field overflow" );
+    }
+    if ( vm->numfields == vm->capfields ) {
+        size_t cap = vm->capfields ? vm->capfields * 2U : 16U;
+        vm_field_t* f = (vm_field_t*) realloc( vm->fields, cap * sizeof(*f) );
+        if ( f == 0 ) {
+            return vm_error( vm, "Out of memory" );
+        }
+        vm->fields = f; vm->capfields = cap;
+    }
+    vm_field_t* f = &vm->fields[ vm->numfields++ ];
+    f->chan = (int) chan; f->var = var; f->off = off; f->len = (uint32_t) len;
+    return true;
+}
+
+// sets a plain string variable
+static bool vm_set_string_var( vm_t* vm, uint16_t var, const char* text, size_t len ) {
+    char* s = vm_new_string( vm, text, len );
+    if ( s == 0 ) {
+        return false;
+    }
+    vmval_t val; val.isstr = true; val.str = s;
+    return vm_set_value( vm, var, VARTYPEV_STR, 0, 0, val );
+}
+
+// LRS ( s right -- ): LSET / RSET
+static bool vm_lset( vm_t* vm, uint16_t var ) {
+    double right; char* s = 0;
+    if ( !vm_dpop_num( vm, &right ) || !vm_dpop_str( vm, &s ) ) {
+        return false;
+    }
+    vm_field_t* f = 0;
+    for ( size_t i=0; i < vm->numfields && f == 0; ++i ) {
+        if ( vm->fields[i].var == var && iotab_recbuf( &vm->io, vm->fields[i].chan, 0 ) != 0 ) {
+            f = &vm->fields[i];
+        }
+    }
+    size_t width = 0;
+    if ( f != 0 ) {
+        width = f->len;
+    } else {
+        vmval_t cur;
+        if ( !vm_get_value( vm, var, VARTYPEV_STR, 0, 0, &cur ) ) {
+            free( s );
+            return false;
+        }
+        width = strlen( cur.str );
+        free( cur.str );
+    }
+    char* out = (char*) malloc( width + 1U );
+    if ( out == 0 ) {
+        free( s );
+        return vm_error( vm, "Out of memory" );
+    }
+    size_t slen = strlen( s ), n = slen < width ? slen : width;
+    memset( out, ' ', width );
+    memcpy( out + ( right != 0.0 ? width - n : 0U ), s, n );
+    out[width] = '\0';
+    if ( f != 0 ) {
+        memcpy( iotab_recbuf( &vm->io, f->chan, 0 ) + f->off, out, width );
+    }
+    bool ok = vm_set_string_var( vm, var, out, width );
+    free( out );
+    free( s );
+    return ok;
+}
+
+// REC ( n rec -- ): GETREC (parameter 0) / PUTREC (1)
+static bool vm_record( vm_t* vm, bool put ) {
+    double chan, rec;
+    if ( !vm_dpop_num( vm, &rec ) || !vm_dpop_num( vm, &chan ) ) {
+        return false;
+    }
+    if ( !( chan >= 1.0 && chan <= (double) IOCHAN_MAX ) ) {
+        return vm_error( vm, "Bad file number" );
+    }
+    if ( !( rec >= 0.0 && rec < 1073741824.0 ) ) {
+        return vm_error( vm, "Bad record number" );
+    }
+    const char* err = 0;
+    if ( put ) {
+        return iotab_putrec( &vm->io, (int) chan, (uint32_t) rec, &err ) || vm_error( vm, err ? err : "Device I/O error" );
+    }
+    if ( !iotab_getrec( &vm->io, (int) chan, (uint32_t) rec, &err ) ) {
+        return vm_error( vm, err ? err : "Device I/O error" );
+    }
+    size_t reclen = 0;
+    const uint8_t* buf = iotab_recbuf( &vm->io, (int) chan, &reclen );
+    for ( size_t i=0; i < vm->numfields; ++i ) {
+        if ( vm->fields[i].chan == (int) chan ) {
+            const char* p = (const char*) buf + vm->fields[i].off;
+            size_t n = 0;
+            while ( n < vm->fields[i].len && p[n] != '\0' ) {
+                ++n;
+            }
+            if ( !vm_set_string_var( vm, vm->fields[i].var, p, n ) ) {
+                return false;
+            }
+        }
+    }
+    return true;
 }
 
 // SFX n, a$ ( n s -- ): parses the string and stores it as effect n
@@ -2335,6 +2527,9 @@ static bool vm_step( vm_t* vm ) {
         case INS_INPW: return vm_input_whole( vm );
         case INS_ADDR: return vm_set_address( vm, param16 != 0 );
         case INS_FOP: return vm_file_operation( vm, param16 );
+        case INS_FLD: return vm_field( vm, param16 );
+        case INS_LRS: return vm_lset( vm, param16 );
+        case INS_REC: return vm_record( vm, param16 != 0 );
         case INS_TMR: return vm_set_timer( vm, param16 );
         case INS_TMRO: return vm_clear_timers( vm, param16 );
         case INS_MRG: return vm_merge_program( vm, param16 != 0 );

@@ -631,6 +631,12 @@ Explanation of node types:
 #define FOPK_MKDIR              UINT8_C(3)      // MKDIR name$: 1 string branch
 #define FOPK_CHDIR              UINT8_C(4)      // CHDIR name$: 1 string branch
 #define FOPK_SEEK               UINT8_C(5)      // SEEK #n, pos: a channel specifier and a numeric branch
+#define NT_RECORDSTMT           UINT8_C(0X6F)   // FIELD / LSET / RSET / GETREC / PUTREC (data: 1 byte of RECK_* kind; see bascomp.c)
+#define RECK_FIELD              UINT8_C(1)      // FIELD #n, len AS a$ {, len AS b$}: the channel, then pairs of a length and a string variable
+#define RECK_LSET               UINT8_C(2)      // LSET a$ = expr: the string variable, the string expression
+#define RECK_RSET               UINT8_C(3)      // RSET a$ = expr
+#define RECK_GETREC             UINT8_C(4)      // GETREC #n [, rec]: the channel specifier, an optional numeric expression
+#define RECK_PUTREC             UINT8_C(5)      // PUTREC #n [, rec]
 #define NT_FILESSTMT            UINT8_C(0X69)   // FILES statement (0 or 1 string branch: the file name pattern)
 #define NT_CHAINSTMT            UINT8_C(0X68)   // CHAIN statement (data: 1 byte, 1 = MERGE; the file name, then an optional goto target)
 

@@ -820,7 +820,8 @@ static const struct {
     { TOK_PITCH, "PITCH" }, { TOK_VOLUME, "VOLUME" }, { TOK_ENVELOPE, "ENVELOPE" }, { TOK_VIBRATO, "VIBRATO" },
     { TOK_TREMOLO, "TREMOLO" }, { TOK_SFX, "SFX" }, { TOK_WAIT, "WAIT" }, { TOK_REMAIN, "REMAIN" }, { TOK_OPEN, "OPEN" }, { TOK_CLOSE, "CLOSE" }, { TOK_LINE, "LINE" }, { TOK_WRITE, "WRITE" },
     { TOK_ADDRESS, "ADDRESS" }, { TOK_EOF, "EOF" }, { TOK_LOF, "LOF" }, { TOK_LOC, "LOC" },
-    { TOK_KILL, "KILL" }, { TOK_RENAME, "RENAME" }, { TOK_MKDIR, "MKDIR" }, { TOK_CHDIR, "CHDIR" }, { TOK_SEEK, "SEEK" }, { TOK_AMP, "&" }, { TOK_LE, "<=" }, { TOK_GE, ">=" }, { TOK_NE, "<>" }, { 0, 0 }
+    { TOK_KILL, "KILL" }, { TOK_RENAME, "RENAME" }, { TOK_MKDIR, "MKDIR" }, { TOK_CHDIR, "CHDIR" }, { TOK_SEEK, "SEEK" },
+    { TOK_FIELD, "FIELD" }, { TOK_LSET, "LSET" }, { TOK_RSET, "RSET" }, { TOK_GETREC, "GETREC" }, { TOK_PUTREC, "PUTREC" }, { TOK_AMP, "&" }, { TOK_LE, "<=" }, { TOK_GE, ">=" }, { TOK_NE, "<>" }, { 0, 0 }
 };
 
 bool is_keyword( const char* name, uint8_t* ptok ) {

@@ -1,6 +1,6 @@
 # I/O subsystem with virtual device drivers
 
-Status: **design agreed 2026-10-30; phases 1 and 2 are implemented** (`iodev.[ch]`, tests `iotest1`, `vmtest1`, `repltest1`); phases 2 and 3 are
+Status: **design agreed 2026-10-30; phases 1, 2 and 3 are implemented (BASIC-written drivers are a proposal)** (`iodev.[ch]`, tests `iotest1`, `vmtest1`, `repltest1`); phases 2 and 3 are
 open. The decisions of the project owner are listed under "Decisions"; the rest is the design as proposed. "What phase 1 does,
 exactly" at the end of "Statements and functions" lists the details that the proposal left open.
 
@@ -107,8 +107,8 @@ ADDRESS [driver]     ADDRESS$                     chooses / returns the default 
   `sh`, `con` likewise. All five are one node (`NT_FILEOPSTMT`, kind `FOPK_*`) and one instruction (`FOP 0x155`, parameter = kind).
   The statements go through `iodev_allowed()` ("write"; `CHDIR`: "read"), the future sandbox hook.
 - **`SEEK #n, pos`**: moves the next read or write of an open channel to byte `pos` (counted from 0); `LOC` follows. It drops the read
-  buffer. `file` seeks anywhere (a file opened FOR APPEND still writes at the end, as `fopen("a")` does); `mem` only within the
-  file ("Bad position": a RAM file has no holes); `null` accepts everything; `sh` and `con` can't seek ("Not supported by device").
+  buffer. `file` seeks anywhere (a file opened FOR APPEND still writes at the end, as `fopen("a")` does); `mem` within the
+  file for reading ("Bad position" behind the end; a writable channel may seek behind it, the gap is zero-filled); `null` accepts everything; `sh` and `con` can't seek ("Not supported by device").
   A negative position is "Bad position". `SEEK` is a statement only (GW-BASIC's `SEEK` function is not provided; use `LOC`).
 - **`sh:`**: `OPEN "sh:ls -l" FOR INPUT AS #1` runs the command through `popen()` and reads its standard output; FOR OUTPUT feeds its
   standard input; APPEND is "Bad file mode". Closing waits for the command; its exit status is ignored. `LOF` and `SEEK` are not
@@ -124,6 +124,96 @@ ADDRESS [driver]     ADDRESS$                     chooses / returns the default 
   "Not supported by device". APPEND is not supported.
 - New errors: "File already exists", "Not a directory", "Not the same device", "Bad position".
 - Not done: `SEEK` as a function, `res:` from an archive, an `EXEC`-style statement for `sh` without a channel.
+
+## What phase 3 does, exactly
+
+- **Open modes**: `OPEN name FOR UPDATE AS #n` (short form `"U"`) opens for reading *and* writing without truncating (creates the file
+  if it is missing). `OPEN name FOR RANDOM AS #n [LEN = reclen]` (short form `OPEN "R", #n, name [, reclen]`) is UPDATE with
+  records of `reclen` bytes (default 128, at most 32767). A record length with any other mode is "Illegal argument". `RANDOM`
+  and `UPDATE` are recognized in context like `OUTPUT`; the only new reserved words are `FIELD LSET RSET GETREC PUTREC`.
+  A driver must be able to `seek` to hold a random file (`file` and `mem` can).
+- **`FIELD #n, len AS a$ [, len AS b$ ...]`** binds plain string variables (no array elements) to consecutive parts of the record
+  buffer of channel n; each `FIELD` statement starts again at offset 0 and drops the old bindings of that channel ("Field overflow"
+  if the parts do not fit the record). A variable belongs to one part only.
+- **`LSET a$ = expr`, `RSET a$ = expr`** put the text into the part of the record that `a$` is bound to (left / right justified,
+  padded with spaces, cut to the width) and set `a$` to the padded text. On a variable that is not bound they justify within its
+  current length (GW-BASIC does the same).
+- **`PUTREC #n [, rec]`** writes the record buffer as record `rec` (numbered from 1; none or 0 = the record behind the last one read
+  or written); **`GETREC #n [, rec]`** reads it ("Input past end" behind the last record) and assigns the parts to the bound
+  variables. The buffer starts filled with spaces. A short last record is filled up with spaces. Writing behind the end of the
+  file leaves a gap of zero bytes. `LOC(n)` of a random file is the number of the last record, `LOF(n)` the length in bytes,
+  `SEEK` is in bytes. Records are independent of `PRINT #`, which is not meant for random files.
+- Assigning to a bound variable with plain `A$ = ...` changes only the variable (the link is not GW-BASIC's pointer into the
+  buffer): use `LSET`/`RSET` for what `PUTREC` should write. A string cannot hold a zero byte: a part is cut at the first zero byte when
+  it is read, so binary fields (`MKI$`/`CVI` and friends) are not provided; store numbers as text (`STR$`, `VAL`).
+- **`play:`**: `OPEN "play:" FOR OUTPUT AS #1` (or `"play:3"` for voice 3; voices 1..8, default 1). Every line written to the channel (ended by a
+  newline, or by `CLOSE`) is a `PLAY` music string and is queued on that voice at once, exactly like `PLAY a$` with one voice, so
+  `PRINT #1,"T120 O4 C D E"` plays. A bad string is an error with the music parser's message ("Unknown music command 'Z'"). Voices
+  started by separate lines are not synchronized with each other (use `PLAY a$,b$` for chords). It is output only.
+  Without a sound output (tests) the strings are checked and dropped.
+- **`tcp:`**: `OPEN "tcp:host:port" FOR UPDATE AS #1` (`"tcp:[::1]:8080"` for IPv6 literals) connects (10 s limit; "Host not found",
+  "Connection refused", "Timed out") and gives a duplex channel: `PRINT #1`, `LINE INPUT #1`, `INPUT$(n,#1)`, `EOF(1)` (waits until a byte
+  arrives or the other side closes). Waiting is done in 100 ms slices that look at the Break key, so a stuck connection can be
+  interrupted ("Break"); a reset connection is "Connection reset". Client side only (no listening sockets yet), no `LOF`/`SEEK`.
+  It asks `iodev_allowed( "net", ... )`, so the sandbox can switch it off.
+- New errors: "Field overflow", "Bad record number", "Host not found", "Connection refused", "Timed out", "Connection reset".
+- Instructions: `FLD 0x156` (`FIELD`), `LRS 0x157` (`LSET`/`RSET`), `REC 0x158` (`GETREC`/`PUTREC`); `OPEN` takes the record length as an
+  extra operand (0 = none). `mem` seeks behind its end when the channel is writable (the gap is zero-filled), so `PUTREC` can
+  write any record.
+
+## Drivers written in BASIC (proposal, not implemented)
+
+**Goal**: a program can add its own device, for example `upcase:` (a filter), `pipe:` (a queue between two channels), `rot13:` that wraps
+another driver, a driver for an in-memory database, or a protocol client on top of `tcp:`. Everything that takes a file name
+(`OPEN`, `LOAD`, `SAVE`, `FILES`, `KILL`, ...) then works with it, and `ADDRESS` can select it.
+
+**Registration by convention** (smallest possible syntax, labels already exist in the language):
+
+```
+DRIVER "upcase", "UPC"        ' registers upcase:, its handlers are the labels UPC_OPEN, UPC_READ, UPC_WRITE, UPC_CLOSE, ...
+DRIVER OFF "upcase"           ' removes it (open channels of it are closed first)
+```
+
+A missing handler means "Not supported by device" for that operation. Handlers: `_OPEN _READ _WRITE _CLOSE _SIZE _SEEK _REMOVE _RENAME
+_MKDIR _CHDIR _LIST`. They are ordinary subroutines (`LABEL UPC_READ: ... RETURN`).
+
+**Calling convention**: the VM sets predefined variables, runs the handler as a `GOSUB`, and finishes the I/O statement with what the
+handler left in them (the mechanism is the one `AFTER`/`EVERY` handlers and `WAIT` already use: the statement is suspended, the handler
+runs between statements, then the statement is completed):
+
+| Variable | Meaning |
+|---|---|
+| `DPATH$` | the part of the name behind `upcase:` (`_OPEN`, `_REMOVE`, `_RENAME` (also `DPATH2$`), `_LIST`) |
+| `DMODE` | the open mode flags (1 read, 2 write, 4 append, 8 random) |
+| `DH` | the handle: `_OPEN` assigns any number it likes, every later call gets it back (index into the driver's own arrays) |
+| `DBUF$` | `_WRITE`: the data; `_READ`: the handler puts up to `DCOUNT` bytes here, `""` = end of the data |
+| `DCOUNT` | `_READ`: how many bytes are wanted; `_SEEK`: unused |
+| `DPOS` | `_SEEK`: the new position; `_SIZE`: the handler returns the length here (-1 = unknown) |
+| `DERR$` | the handler sets an error text to make the statement fail (`DERR$="Disk full"`) |
+
+Rules: a handler must not use its own driver's channels (the call is "Driver busy"; other drivers are fine, which is what makes
+filters and wrappers possible: a handler of `rot13:` opens `file:` itself); timers may interrupt a handler only by the usual priority
+rule; an error in the handler ends the program with the line of the handler and the operation (`? Type mismatch in line 1210 (driver upcase READ)`);
+`RUN`, `NEW`, `LOAD` and `CHAIN` unregister BASIC drivers because their code goes away, after the channels were closed.
+
+**Support for developing them** (the part that makes it practical):
+
+1. `DRIVERS` (like `FILES`): lists the registered drivers, built-in or BASIC, and which handlers a BASIC driver has, so a missing label shows up at once.
+2. `DRIVER TRACE "upcase", ON`: prints every call into the driver with its variables (`upcase OPEN path="x" mode=1 -> DH=1`), so the
+   conversation between the VM and the handlers can be read without writing `PRINT`s into the driver.
+3. Test doubles are built in: `mem:` as a backing store, `null:` as a sink, `con:` to see output, plus `sh:echo ...` for input. Together with
+   `iotest1`-style checks written in BASIC this lets a driver be tried in direct mode.
+4. Examples in `demos/`: `upcase` (a filter on `mem:`), `pipe` (a ring buffer between two channels), `rot13` (wrapping `file:`).
+5. Binary data: handlers get strings, which end at a zero byte. If drivers for binary protocols matter, `DBUF` should become a byte
+   array instead (`DIM DBUF(…)` with `DCOUNT`); decide before building the stream drivers.
+6. Sandboxing needs nothing special: a handler is a BASIC program, its `OPEN`/`SHELL` go through `iodev_allowed()` like any other.
+
+**Alternatives considered**: (a) a *server loop* in BASIC that waits for requests (`ACCEPT`/`REPLY`), which suits network daemons but needs
+coroutines (a second stack) the VM does not have; (b) drivers as separate program files loaded on demand (clean isolation, but
+heavy and hard to debug); (c) registering handlers one by one (`DRIVER "x", OPEN 100, READ 200, ...`), which is flexible but long. The
+labelled-subroutine form (the proposal) needs the least new syntax and the least new VM machinery. **Open for your decision**: the
+convention (labels with a prefix vs. explicit list), the variable names, whether to start with the byte-array interface, and whether
+`DRIVERS` and `DRIVER TRACE` belong in the first version.
 
 ## Existing commands through the drivers (phase 1)
 
@@ -142,9 +232,9 @@ disk. The `file` driver uses the current directory of the process.
 | `sh` | 2 (done) | `OPEN "sh:ls -l" FOR INPUT AS #1` reads the output of a command, `FOR OUTPUT` feeds its input (see Sandboxing) |
 | `res` | 2 (done) | read-only game assets (a directory or an archive next to the program) |
 | `con` | 2 (done) | the screen / keyboard as an ordinary channel, so generic routines can write to `#n` |
-| `play` | 3 | writing a music string to the channel plays it (`PLAY` voices) |
-| `tcp` | 3 | network connections (see Sandboxing) |
-| programmable | 3 | a driver written in BASIC (open/read/write/close as subroutines) |
+| `play` | 3 (done) | writing a music string to the channel plays it (`PLAY` voices) |
+| `tcp` | 3 (done) | network connections (see Sandboxing) |
+| programmable | proposal (below) | a driver written in BASIC (open/read/write/close as subroutines) |
 
 ## Phases
 
@@ -152,7 +242,7 @@ disk. The `file` driver uses the current directory of the process.
    `OPEN`, `CLOSE`, `LINE INPUT`, `WRITE`, `EOF`, `LOF`, `LOC`, `INPUT$`, `ADDRESS`, `ADDRESS$`; `PRINT #`, `INPUT #`, `GET #` on
    files; `LOAD`, `SAVE`, `MERGE`, `CHAIN` and `FILES` through the drivers. Tests use `mem:`.
 2. **Phase 2** (done): `KILL`, `RENAME ... TO`, `MKDIR`, `CHDIR`, `SEEK`; the `sh`, `res`, `con` drivers (next section).
-3. **Phase 3**: random access records: `FIELD #n, len AS a$ ...`, `LSET`, `RSET`, `GETREC #n [, rec]`, `PUTREC #n [, rec]` (new words,
+3. **Phase 3** (done, except drivers in BASIC, see "Drivers written in BASIC"): random access records: `FIELD #n, len AS a$ ...`, `LSET`, `RSET`, `GETREC #n [, rec]`, `PUTREC #n [, rec]` (new words,
    because `GET #n, v` already reads one character or byte, which clashes with GW-BASIC's `GET #n, record`); engine drivers
    (`play`, `tcp`); drivers written in BASIC.
 

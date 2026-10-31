@@ -287,6 +287,12 @@ close-stmt := TOK_CLOSE [ chan-spec { TOK_COMMA chan-spec } ] .
 address-stmt := TOK_ADDRESS [ identifier | str-expr ] .
 -- KILL deletes a file, RENAME renames it (both names on the same driver), MKDIR makes and CHDIR enters a directory, SEEK #n, pos
 -- moves the position of an open channel (bytes from the start).
+-- Random access: OPEN ... FOR RANDOM AS #n [LEN = reclen] (or OPEN "R", #n, name [, reclen]; FOR UPDATE / "U" = read and write
+-- without records). FIELD binds string variables to slices of the record buffer, LSET / RSET fill a slice (padded with spaces),
+-- GETREC / PUTREC read / write record rec (1.., none = the next one). AS is an identifier recognized in context.
+record-stmt := TOK_FIELD chan-spec TOK_COMMA num-expr identifier-AS str-var-ref { TOK_COMMA num-expr identifier-AS str-var-ref }
+             | ( TOK_LSET | TOK_RSET ) str-var-ref TOK_EQ str-expr
+             | ( TOK_GETREC | TOK_PUTREC ) chan-spec [ TOK_COMMA num-expr ] .
 fileop-stmt := ( TOK_KILL | TOK_MKDIR | TOK_CHDIR ) str-expr | TOK_RENAME str-expr TOK_TO str-expr | TOK_SEEK chan-spec TOK_COMMA num-expr .
 timer-stmt := ( TOK_AFTER | TOK_EVERY ) ( TOK_OFF [ num-expr ] | num-expr [ TOK_COMMA num-expr ] goto-kw goto-target ) .
 prog-stmt := load-stmt | run-stmt | merge-stmt | chain-stmt | files-stmt | timer-stmt | list-stmt | new-stmt | clear-stmt | delete-stmt | renum-stmt | edit-stmt | monitor-stmt | sound-stmt |

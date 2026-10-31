@@ -174,7 +174,7 @@ bool cgen_from_openstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         NT_OPENSTMT     OPEN statement
             data: form (0 long, 1 short), mode letter (form 0)
             branches: form 0: name, channel; form 1: mode, channel, name
-        code: form 0: <name> <mode as a string> <channel> OPEN(0)      form 1: <mode> <channel> <name> OPEN(1)
+        code: form 0: <name> <mode as a string> <channel> <reclen> OPEN(0)      form 1: <mode> <channel> <name> <reclen> OPEN(1)
     */
     if ( node == NODE_NONE ) {
         return cgen_bad_node( comp );
@@ -183,7 +183,8 @@ bool cgen_from_openstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         return cgen_unexpected_node( comp );
     }
     bool shortform = node->data[0] == 1;
-    if ( node->numbranches != ( shortform ? 3U : 2U ) ) {
+    size_t base = shortform ? 3U : 2U;
+    if ( node->numbranches != base && node->numbranches != base + 1U ) {
         return cgen_unexpected_node( comp );
     }
     if ( shortform ) {
@@ -197,6 +198,10 @@ bool cgen_from_openstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
              !cp_push_chanspec( cgen, comp, node->branches[1] ) ) {
             return false;
         }
+    }
+    // the record length (0 = the default)
+    if ( node->numbranches == base + 1U ? !cgen_from_numexpr( cgen, comp, node->branches[base] ) : !cgen_push_number( cgen, comp, 0.0 ) ) {
+        return false;
     }
     return cgen_gen_open( cgen, shortform ? UINT16_C(1) : UINT16_C(0) ) || cgen_out_of_code_memory( comp );
 }
@@ -250,6 +255,70 @@ bool cgen_from_addressstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
             name[len] = '\0';
             return cp_push_string( cgen, comp, name ) && ( cgen_gen_addr( cgen, UINT16_C(0) ) || cgen_out_of_code_memory( comp ) );
         }
+        default:
+            break;
+    }
+    return cgen_unexpected_node( comp );
+}
+
+// the variable number of a plain string variable reference
+static bool cp_plain_stringvar( compiler_t* comp, node_t* varref, uint16_t* pvaroffs ) {
+    if ( varref == NODE_NONE || varref->type != NT_STRVARREF || varref->datalen != UINT16_C(3) ) {
+        return cgen_unexpected_node( comp );
+    }
+    uint8_t vartype = varref->data[0];
+    if ( ( vartype & ( VARTYPEF_FUNC | VARTYPEF_ARRAY ) ) != 0 ) {
+        comp_error( comp, "Plain string variable expected" );
+        return false;
+    }
+    *pvaroffs = (uint16_t)( ( ( (uint16_t) varref->data[1] ) << UINT8_C(8) ) | varref->data[2] );
+    return true;
+}
+
+bool cgen_from_recordstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    /*
+        NT_RECORDSTMT   FIELD / LSET / RSET / GETREC / PUTREC statement
+            data: RECK_* kind
+        code: FIELD: per pair <channel> <len> <first> FLD(var)      LSET / RSET: <string> <right> LRS(var)
+              GETREC / PUTREC: <channel> <record or 0> REC(0 / 1)
+    */
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->type != NT_RECORDSTMT || node->datalen != UINT16_C(1) ) {
+        return cgen_unexpected_node( comp );
+    }
+    uint8_t kind = node->data[0];
+    uint16_t varoffs = 0;
+    switch ( kind ) {
+        case RECK_FIELD:
+            if ( node->numbranches < 3U || node->numbranches % 2U != 1U ) {
+                return cgen_unexpected_node( comp );
+            }
+            for ( size_t i=1; i < node->numbranches; i += 2U ) {
+                if ( !cp_plain_stringvar( comp, node->branches[ i + 1U ], &varoffs ) || !cp_push_chanspec( cgen, comp, node->branches[0] ) ||
+                     !cgen_from_numexpr( cgen, comp, node->branches[i] ) || !cgen_push_number( cgen, comp, i == 1U ? 1.0 : 0.0 ) ||
+                     !( cgen_gen_fld( cgen, varoffs ) || cgen_out_of_code_memory( comp ) ) ) {
+                    return false;
+                }
+            }
+            return true;
+        case RECK_LSET:
+        case RECK_RSET:
+            if ( node->numbranches != 2U || !cp_plain_stringvar( comp, node->branches[0], &varoffs ) ) {
+                return cgen_unexpected_node( comp );
+            }
+            return cgen_from_strexpr( cgen, comp, node->branches[1] ) && cgen_push_number( cgen, comp, kind == RECK_RSET ? 1.0 : 0.0 ) &&
+                ( cgen_gen_lrs( cgen, varoffs ) || cgen_out_of_code_memory( comp ) );
+        case RECK_GETREC:
+        case RECK_PUTREC:
+            if ( node->numbranches < 1U || node->numbranches > 2U || !cp_push_chanspec( cgen, comp, node->branches[0] ) ) {
+                return cgen_unexpected_node( comp );
+            }
+            if ( node->numbranches == 2U ? !cgen_from_numexpr( cgen, comp, node->branches[1] ) : !cgen_push_number( cgen, comp, 0.0 ) ) {
+                return false;
+            }
+            return cgen_gen_rec( cgen, kind == RECK_PUTREC ? UINT16_C(1) : UINT16_C(0) ) || cgen_out_of_code_memory( comp );
         default:
             break;
     }

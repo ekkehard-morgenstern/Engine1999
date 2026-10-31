@@ -223,6 +223,11 @@
 #define TOK_MKDIR       UINT8_C(172)        // MKDIR keyword
 #define TOK_CHDIR       UINT8_C(173)        // CHDIR keyword
 #define TOK_SEEK        UINT8_C(174)        // SEEK keyword
+#define TOK_FIELD       UINT8_C(175)        // FIELD keyword
+#define TOK_LSET        UINT8_C(176)        // LSET keyword
+#define TOK_RSET        UINT8_C(177)        // RSET keyword
+#define TOK_GETREC      UINT8_C(178)        // GETREC keyword
+#define TOK_PUTREC      UINT8_C(179)        // PUTREC keyword
 #define TOK_NONE        UINT8_C(255)        // no token (!)
 
 // -- buffers ---------------------------------------------------------------

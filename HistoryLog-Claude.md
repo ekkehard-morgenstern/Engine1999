@@ -13,12 +13,14 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-- **I/O subsystem, phase 2** (owner's request: "proceed with phase 2"; scope as in `docs/io-subsystem.md`)
-  - **Drivers** (`iodev.[ch]`): `iodrv_t` got `rename`, `mkdir`, `chdir`, `seek`; `file` implements all four (`RENAME` refuses an existing target), `mem` has `rename` and `seek` (no holes), `null` seeks; new drivers `sh` (`popen`, asks `iodev_allowed( "shell" )`), `res` (read-only `./res`, absolute names and `..` refused, `list` through `files_list`), `con` (screen/keyboard through `iodev_set_console()` / `iocon_t` hooks); `iodev_remove/rename/mkdir/chdir()` (default driver, `iodev_allowed`, "Not the same device" across drivers), `iotab_seek()`; new errors "File already exists", "Not a directory", "Bad position".
-  - **Language**: tokens `KILL RENAME MKDIR CHDIR SEEK` 170..174 (reserved words), one node `NT_FILEOPSTMT 0x6E` (`FOPK_*`), parser `comp_eat_fileopstmt()` (`bascomp.[ch]`, `.ebnf`), `cgen_from_fileopstmt()` (`cgenprog.c`), `cgen_gen_fop()`, instruction `FOP 0x155` (`instset.h`, `cgen_opcode_name`).
-  - **VM** (`vm.c`): `vm_file_operation()`; `vm_console_key()` factored out of `vm_get_key()`; `vm_con_write/getkey` hand the host callbacks to the `con` driver (registered in `vm_open_channel()`).
-  - **Tests**: `iotest1` 81 -> 128 (mem rename/kill/seek, file mkdir/chdir/rename/kill/seek in a scratch directory, sh read and write, res, con with hooks), `vmtest1` 612 -> 633 (+21), `repltest1` 273 -> 275; all other tests unchanged and passing; `iotest1`, `vmtest1`, `repltest1` clean under valgrind.
-  - **Docs**: `docs/io-subsystem.md` ("What phase 2 does, exactly", driver table, phases), `docs/basic-language.md`, `docs/compiler-and-vm.md`, `docs/roadmap.md`, `bascomp.ebnf`, `CLAUDE.md`, `SESSION.md`.
+- **I/O subsystem, phase 3 and a proposal for drivers in BASIC** (owner's request: "proceed with phase 3, add the play and tcp drivers, make a suggestion about driver development support in BASIC")
+  - **Random access and update** (`iodev.[ch]`): `IOMODE_RANDOM`, `iotab_open_ex()` (record length, buffer of spaces), `iotab_getrec/putrec/recbuf`, `LOC` of a random file = last record; the `file` driver opens READ|WRITE as `r+b`/`w+b`, `mem` does not truncate for update and `mem_seek` extends a writable file with zeros.
+  - **Drivers**: `play` (line buffered, `iodev_set_music()` hook, the parser's message is passed on), `tcp` (client: `getaddrinfo`, non-blocking connect with a 10 s limit, `poll` slices that call the `iodev_set_interrupt()` hook for Break, `MSG_NOSIGNAL`); `iodev_fail()` carries a driver's own message ("Break", "Connection reset") to the channel functions; `iodev_known_error()` shared by open and the file operations.
+  - **Language**: tokens `FIELD LSET RSET GETREC PUTREC` 175..179, `NT_RECORDSTMT 0x6F` (`RECK_*`), `comp_eat_recordstmt()`, `cgen_from_recordstmt()`, instructions `FLD 0x156`, `LRS 0x157`, `REC 0x158`; `OPEN` parses `FOR RANDOM|UPDATE`, `LEN = n` and a record length in the short form (extra branch, 4th operand of `OPEN`).
+  - **VM** (`vm.[ch]`): `vm_field_t` bindings (`vm_t.fields`, dropped by `CLOSE`), `vm_field/vm_lset/vm_record`, `vm_music_play`, `vm_interrupt_hook`; a stale `fields` pointer crashed `vmtest1` once (not initialized in `init_vm`), fixed.
+  - **Tests**: `iotest1` 128 -> 172 (records on mem and disk, play hook, a real loopback TCP connection with a listening socket in the test, refused/unknown host), `vmtest1` 633 -> 656, `repltest1` 275 -> 277; one old expectation changed (the OPEN mode error text); all suites pass, `iotest1`/`vmtest1`/`repltest1` clean under valgrind.
+  - **Proposal** (not implemented): `docs/io-subsystem.md`, "Drivers written in BASIC": `DRIVER "name","PREFIX"` with labelled handlers, predefined `D*` variables, `DRIVERS`, `DRIVER TRACE`, examples, open questions; roadmap entry.
+  - **Docs**: `docs/io-subsystem.md`, `docs/basic-language.md`, `docs/compiler-and-vm.md`, `docs/roadmap.md`, `instset.h`, `bascomp.ebnf`, `CLAUDE.md`, `SESSION.md`.
 
 ## Log
 
@@ -476,3 +478,12 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 ### bf1a6f6 — 2026-10-31 02:10:08 +0100 — "BASIC demos fixed by Claude Code"
 3 files, +17/-13.
 - **Demos fixed** (`demos/ode.bas`): it used `LINE` as its loop variable, which is a reserved word since the I/O subsystem (`LINE INPUT`), so it stopped with "Numeric variable expected in line 70"; renamed to `V`. Checked all three demos by parsing (`basictest2`) and by running them through the REPL with a scratch harness (no errors; `sfx.bas` with keys 1 and Q). `prelude.bas` and `sfx.bas` needed no change.
+
+### 3d35279 — 2026-10-31 02:20:05 +0100 — "I/O subsystem (phase 2) created by Claude Code"
+24 files, +812/-33.
+- **I/O subsystem, phase 2** (owner's request: "proceed with phase 2"; scope as in `docs/io-subsystem.md`)
+  - **Drivers** (`iodev.[ch]`): `iodrv_t` got `rename`, `mkdir`, `chdir`, `seek`; `file` implements all four (`RENAME` refuses an existing target), `mem` has `rename` and `seek` (no holes), `null` seeks; new drivers `sh` (`popen`, asks `iodev_allowed( "shell" )`), `res` (read-only `./res`, absolute names and `..` refused, `list` through `files_list`), `con` (screen/keyboard through `iodev_set_console()` / `iocon_t` hooks); `iodev_remove/rename/mkdir/chdir()` (default driver, `iodev_allowed`, "Not the same device" across drivers), `iotab_seek()`; new errors "File already exists", "Not a directory", "Bad position".
+  - **Language**: tokens `KILL RENAME MKDIR CHDIR SEEK` 170..174 (reserved words), one node `NT_FILEOPSTMT 0x6E` (`FOPK_*`), parser `comp_eat_fileopstmt()` (`bascomp.[ch]`, `.ebnf`), `cgen_from_fileopstmt()` (`cgenprog.c`), `cgen_gen_fop()`, instruction `FOP 0x155` (`instset.h`, `cgen_opcode_name`).
+  - **VM** (`vm.c`): `vm_file_operation()`; `vm_console_key()` factored out of `vm_get_key()`; `vm_con_write/getkey` hand the host callbacks to the `con` driver (registered in `vm_open_channel()`).
+  - **Tests**: `iotest1` 81 -> 128 (mem rename/kill/seek, file mkdir/chdir/rename/kill/seek in a scratch directory, sh read and write, res, con with hooks), `vmtest1` 612 -> 633 (+21), `repltest1` 273 -> 275; all other tests unchanged and passing; `iotest1`, `vmtest1`, `repltest1` clean under valgrind.
+  - **Docs**: `docs/io-subsystem.md` ("What phase 2 does, exactly", driver table, phases), `docs/basic-language.md`, `docs/compiler-and-vm.md`, `docs/roadmap.md`, `bascomp.ebnf`, `CLAUDE.md`, `SESSION.md`.

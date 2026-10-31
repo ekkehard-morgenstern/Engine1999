@@ -396,9 +396,10 @@ The 4096 extended instructions are as follows:
                             Ends the run (pc = end of the code). The compiler puts one at the end of a program: END and the
                             end of the last line branch to it, so the code of a direct mode line, which is placed behind the
                             program, is not entered by running off the end of the program.
-    0001 01001100       OPEN - open a channel ( name$ mode$ n -- ) or, with parameter 1, ( mode$ n name$ -- ) C=0 P=1
+    0001 01001100       OPEN - open a channel ( name$ mode$ n reclen -- ) or, with parameter 1, ( mode$ n name$ reclen -- ) C=0 P=1
                             Opens file <name$> (with an optional "driver:" prefix, else the ADDRESS driver) as channel n
-                            (1..255): mode "I" = input, "O" = output (truncates), "A" = append (case does not matter).
+                            (1..255): mode "I" = input, "O" = output (truncates), "A" = append, "U" = update (read and write, no truncation), "R" = random
+                            file with records of reclen bytes (0 = 128; reclen must be 0 for the other modes); case does not matter.
                             Errors: "File already open", "Bad file number", "Bad file mode", "Device not found", "File not
                             found", "Permission denied", ... (docs/io-subsystem.md).
     0001 01001101       CLOS - close channels ( n -- ) C=0 P=0
@@ -425,6 +426,18 @@ The 4096 extended instructions are as follows:
                             4 CHDIR ( name$ -- ), 5 SEEK ( n pos -- ): bytes from the start of channel n. Names may have a
                             "driver:" prefix. Errors: "File not found", "Permission denied", "File already exists",
                             "Not the same device", "Not supported by device", "Bad position", ...
+    0001 01010110       FLD  - bind a string variable to a part of the record ( n len first -- ) C=0 P=1
+                            FIELD: the parameter is the variable number of a plain string variable. Channel n must be a
+                            random file. first = 1 starts a new FIELD statement: the old bindings of the channel are dropped and
+                            the offset is 0; every binding takes the next len bytes ("Field overflow" behind the record).
+    0001 01010111       LRS  - LSET / RSET ( s right -- ) C=0 P=1
+                            The parameter is the variable number. Puts s into the variable's slice of the record buffer, padded
+                            with spaces (right = 0: left justified, 1: right justified), cut to the width, and into the variable.
+                            A variable that is not bound keeps its length: s is justified within it.
+    0001 01011000       REC  - read / write a record ( n rec -- ) C=0 P=1
+                            Parameter 0 = GETREC, 1 = PUTREC. rec = 0: the record behind the last one. GETREC then assigns the
+                            slices to the bound variables (up to the first zero byte). Errors: "Input past end", "Bad record
+                            number", "Bad file mode" (not a random file).
 
 */
 
@@ -563,5 +576,8 @@ The 4096 extended instructions are as follows:
 #define INS_ADDR        UINT16_C(0X153)
 #define INS_ADRS        UINT16_C(0X154)
 #define INS_FOP         UINT16_C(0X155)
+#define INS_FLD         UINT16_C(0X156)
+#define INS_LRS         UINT16_C(0X157)
+#define INS_REC         UINT16_C(0X158)
 
 #endif

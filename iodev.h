@@ -45,6 +45,11 @@ All functions that can fail report a short message in "const char** perr" (a sta
 #define IOMODE_READ     1U          // OPEN FOR INPUT
 #define IOMODE_WRITE    2U          // OPEN FOR OUTPUT (truncates)
 #define IOMODE_APPEND   4U          // OPEN FOR APPEND (with IOMODE_WRITE)
+                                    // READ | WRITE = OPEN FOR UPDATE: both directions, nothing is truncated
+#define IOMODE_RANDOM   8U          // OPEN FOR RANDOM (with READ | WRITE): records of a fixed length (GETREC / PUTREC)
+
+#define IOREC_DEFAULT   128U        // the default record length
+#define IOREC_MAX       32767U
 
 #define IOCHAN_MAX      255         // channels 1 .. IOCHAN_MAX can be opened; channel 0 is the console
 
@@ -104,6 +109,16 @@ typedef struct _iocon_t {
 } iocon_t;
 void iodev_set_console( const iocon_t* con );   // 0 = none ("Not supported by device")
 
+// hooks of the "play" driver: writing a line of music (PLAY syntax) to channel "play:n" plays it on voice n (1..8)
+typedef struct _iomusic_t {
+    bool        (*play)( void* usrdata, int voice, const char* mml, char* err, size_t errsz );
+    void*       usrdata;
+} iomusic_t;
+void iodev_set_music( const iomusic_t* music);  // 0 = none ("Not supported by device")
+
+// the "tcp" driver waits for the network in slices and asks this function whether the user pressed Break (true = stop)
+void iodev_set_interrupt( bool (*func)( void* usrdata ), void* usrdata );
+
 // the RAM disk, for the tests: deletes all files of the mem driver
 void iodev_mem_clear( void );
 
@@ -116,6 +131,9 @@ typedef struct _iochan_t {
     uint8_t*    rbuf;                       // read buffer
     size_t      rpos, rlen;
     int64_t     pos;                        // bytes read / written so far (LOC)
+    size_t      reclen;                     // random files: the record length, the record buffer and the number of the last record
+    uint8_t*    recbuf;
+    uint32_t    recno;
 } iochan_t;
 
 typedef struct _iotab_t {
@@ -126,7 +144,14 @@ void iotab_init( iotab_t* tab );
 void iotab_closeall( iotab_t* tab );
 bool iotab_isopen( const iotab_t* tab, int chan );
 bool iotab_open( iotab_t* tab, int chan, const char* name, const char* defaultdriver, unsigned mode, const char** perr );
+// reclen: the record length of a random file (0 = IOREC_DEFAULT); ignored for other modes
+bool iotab_open_ex( iotab_t* tab, int chan, const char* name, const char* defaultdriver, unsigned mode, size_t reclen, const char** perr );
 bool iotab_close( iotab_t* tab, int chan, const char** perr );
+
+// random files: records are numbered from 1; rec 0 = the record behind the last one read / written
+bool iotab_getrec( iotab_t* tab, int chan, uint32_t rec, const char** perr );   // file -> record buffer ("Input past end" behind the last record)
+bool iotab_putrec( iotab_t* tab, int chan, uint32_t rec, const char** perr );   // record buffer -> file
+uint8_t* iotab_recbuf( iotab_t* tab, int chan, size_t* plen );                  // 0 if the channel is no open random file
 
 // input: for channels opened FOR INPUT; output: for OUTPUT / APPEND
 int iotab_getc( iotab_t* tab, int chan, const char** perr );                    // 0..255, -1 at the end, -2 on an error

@@ -26,6 +26,9 @@
 
 #include <unistd.h>
 #include <sys/stat.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 #include "iodev.h"
 
 /*
@@ -336,6 +339,108 @@ static void test_phase2( void ) {
     iodev_mem_clear();
 }
 
+static char playlog[256];
+static bool play_hook( void* ud, int voice, const char* mml, char* err, size_t n ) {
+    (void) ud;
+    if ( strchr( mml, 'Z' ) != 0 ) { snprintf( err, n, "Unknown music command 'Z'" ); return false; }
+    size_t l = strlen( playlog );
+    snprintf( playlog + l, sizeof(playlog) - l, "[%d:%s]", voice, mml );
+    return true;
+}
+
+static void test_phase3( void ) {
+    const char* e = 0;
+    iotab_t t; iotab_init( &t );
+    iodev_mem_clear();
+    // random files on mem:
+    check( "random open", iotab_open_ex( &t, 1, "mem:r", "file", IOMODE_READ | IOMODE_WRITE | IOMODE_RANDOM, 8U, &e ) );
+    size_t rl = 0;
+    uint8_t* rb = iotab_recbuf( &t, 1, &rl );
+    check( "record buffer", rb != 0 && rl == 8U && rb[0] == ' ' );
+    memcpy( rb, "record-1", 8 );
+    check( "putrec 1", iotab_putrec( &t, 1, 1, &e ) );
+    memcpy( rb, "record-3", 8 );
+    check( "putrec 3 leaves a gap", iotab_putrec( &t, 1, 3, &e ) );
+    int64_t n = 0;
+    check( "LOF is 3 records, LOC is the record number", iotab_lof( &t, 1, &n, &e ) && n == 24 && iotab_loc( &t, 1, &n, &e ) && n == 3 );
+    check( "getrec 1", iotab_getrec( &t, 1, 1, &e ) && memcmp( rb, "record-1", 8 ) == 0 );
+    check( "getrec 0 = the next record (the gap)", iotab_getrec( &t, 1, 0, &e ) && rb[0] == 0 );
+    check( "getrec behind the end", !iotab_getrec( &t, 1, 4, &e ) && strcmp( e, "Input past end" ) == 0 );
+    check( "record 0 is next, record numbers are bounded", iotab_getrec( &t, 1, 3, &e ) && memcmp( rb, "record-3", 8 ) == 0 );
+    check( "a sequential channel is no random file", iotab_open( &t, 2, "mem:r", "file", IOMODE_READ, &e ) && !iotab_getrec( &t, 2, 1, &e ) && strcmp( e, "Bad file mode" ) == 0 );
+    check( "recbuf of a sequential channel", iotab_recbuf( &t, 2, 0 ) == 0 );
+    check( "record length limit", !iotab_open_ex( &t, 3, "mem:r2", "file", IOMODE_READ | IOMODE_WRITE | IOMODE_RANDOM, 40000U, &e ) );
+    iotab_closeall( &t );
+    check( "UPDATE does not truncate", iotab_open( &t, 1, "mem:r", "file", IOMODE_READ | IOMODE_WRITE, &e ) && iotab_lof( &t, 1, &n, &e ) && n == 24 );
+    iotab_closeall( &t );
+    // random files on disk
+    char cwd[512];
+    check( "getcwd", getcwd( cwd, sizeof(cwd) ) != 0 );
+    system( "rm -rf iotest1.d3; mkdir iotest1.d3" );
+    check( "chdir", chdir( "iotest1.d3" ) == 0 );
+    check( "file random open (creates)", iotab_open_ex( &t, 1, "rec.dat", "file", IOMODE_READ | IOMODE_WRITE | IOMODE_RANDOM, 4U, &e ) );
+    rb = iotab_recbuf( &t, 1, 0 );
+    memcpy( rb, "aaaa", 4 ); check( "file putrec 2", iotab_putrec( &t, 1, 2, &e ) );
+    memcpy( rb, "bbbb", 4 ); check( "file putrec 1", iotab_putrec( &t, 1, 1, &e ) );
+    check( "file getrec 2", iotab_getrec( &t, 1, 2, &e ) && memcmp( rb, "aaaa", 4 ) == 0 );
+    check( "file getrec 1", iotab_getrec( &t, 1, 1, &e ) && memcmp( rb, "bbbb", 4 ) == 0 );
+    check( "file LOF", iotab_lof( &t, 1, &n, &e ) && n == 8 );
+    iotab_closeall( &t );
+    check( "file random open again keeps the data", iotab_open_ex( &t, 1, "rec.dat", "file", IOMODE_READ | IOMODE_WRITE | IOMODE_RANDOM, 4U, &e ) &&
+        iotab_getrec( &t, 1, 2, &e ) && memcmp( iotab_recbuf( &t, 1, 0 ), "aaaa", 4 ) == 0 );
+    iotab_closeall( &t );
+    check( "chdir back", chdir( cwd ) == 0 );
+    system( "rm -rf iotest1.d3" );
+
+    // play: lines are played when complete
+    check( "play without a host", !iotab_open( &t, 1, "play:", "file", IOMODE_WRITE, &e ) && strcmp( e, "Not supported by device" ) == 0 );
+    iomusic_t mus = { play_hook, 0 };
+    iodev_set_music( &mus );
+    playlog[0] = '\0';
+    check( "play open", iotab_open( &t, 1, "play:3", "file", IOMODE_WRITE, &e ) );
+    check( "play: half a line is not played", iotab_write( &t, 1, "C D", 3, &e ) && playlog[0] == '\0' );
+    check( "play: the end of the line plays it", iotab_write( &t, 1, " E\nG\n", 5, &e ) && strcmp( playlog, "[3:C D E][3:G]" ) == 0 );
+    check( "play: close plays the rest", iotab_write( &t, 1, "A", 1, &e ) && iotab_close( &t, 1, &e ) && strcmp( playlog, "[3:C D E][3:G][3:A]" ) == 0 );
+    check( "play: a bad line is an error with the parser's message", iotab_open( &t, 1, "play:", "file", IOMODE_WRITE, &e ) &&
+        !iotab_write( &t, 1, "Z\n", 2, &e ) && strcmp( e, "Unknown music command 'Z'" ) == 0 );
+    iotab_closeall( &t );
+    check( "play: voice 9", !iotab_open( &t, 1, "play:9", "file", IOMODE_WRITE, &e ) && strcmp( e, "Bad file name" ) == 0 );
+    check( "play: not readable", !iotab_open( &t, 1, "play:", "file", IOMODE_READ, &e ) && strcmp( e, "Bad file mode" ) == 0 );
+    iodev_set_music( 0 );
+
+    // tcp on the loopback interface
+    int ls = socket( AF_INET, SOCK_STREAM, 0 );
+    struct sockaddr_in sa;
+    memset( &sa, 0, sizeof(sa) );
+    sa.sin_family = AF_INET; sa.sin_addr.s_addr = htonl( INADDR_LOOPBACK ); sa.sin_port = 0;
+    socklen_t sl = sizeof(sa);
+    check( "listen", ls >= 0 && bind( ls, (struct sockaddr*) &sa, sizeof(sa) ) == 0 && listen( ls, 2 ) == 0 && getsockname( ls, (struct sockaddr*) &sa, &sl ) == 0 );
+    char name[64];
+    snprintf( name, sizeof(name), "tcp:127.0.0.1:%d", (int) ntohs( sa.sin_port ) );
+    check( "tcp open", iotab_open( &t, 1, name, "file", IOMODE_READ | IOMODE_WRITE, &e ) );
+    int cs = accept( ls, 0, 0 );
+    check( "accept", cs >= 0 );
+    check( "tcp write", iotab_write( &t, 1, "ping\n", 5, &e ) );
+    char buf[16];
+    ssize_t got = recv( cs, buf, sizeof(buf), 0 );
+    check( "the server got it", got == 5 && memcmp( buf, "ping\n", 5 ) == 0 );
+    check( "server answers", send( cs, "pong\nrest", 9, 0 ) == 9 );
+    char* line = 0;
+    check( "tcp readline", iotab_readline( &t, 1, &line, &e ) && strcmp( line, "pong" ) == 0 );
+    free( line );
+    check( "tcp getc", iotab_getc( &t, 1, &e ) == 'r' );
+    close( cs );
+    check( "tcp: the rest, then the end of the connection", iotab_getc( &t, 1, &e ) == 'e' && iotab_getc( &t, 1, &e ) == 's' && iotab_getc( &t, 1, &e ) == 't' &&
+        iotab_getc( &t, 1, &e ) == -1 );
+    check( "tcp: no LOF", !iotab_lof( &t, 1, &n, &e ) );
+    iotab_closeall( &t );
+    close( ls );
+    check( "tcp: connection refused", !iotab_open( &t, 1, name, "file", IOMODE_READ | IOMODE_WRITE, &e ) && strcmp( e, "Connection refused" ) == 0 );
+    check( "tcp: bad name", !iotab_open( &t, 1, "tcp:nohost", "file", IOMODE_READ | IOMODE_WRITE, &e ) && strcmp( e, "Bad file name" ) == 0 );
+    check( "tcp: unknown host", !iotab_open( &t, 1, "tcp:no-such-host.invalid:80", "file", IOMODE_READ | IOMODE_WRITE, &e ) && strcmp( e, "Host not found" ) == 0 );
+    iodev_mem_clear();
+}
+
 static bool user_ok = false;
 static void* user_open( iodrv_t* d, const char* p, unsigned m, char* e, size_t n ) { (void) d; (void) p; (void) m; (void) e; (void) n; user_ok = true; return malloc( 1 ); }
 static ssize_t user_read( void* h, void* b, size_t n ) { (void) h; (void) b; (void) n; return 0; }
@@ -367,6 +472,7 @@ int main( void ) {
     test_list();
     test_register();
     test_phase2();
+    test_phase3();
     printf( "%d checks, %d failure(s)\n", checks, failures );
     return failures;
 }

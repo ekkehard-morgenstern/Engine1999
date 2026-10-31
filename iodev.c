@@ -26,6 +26,10 @@
 
 #include <ctype.h>
 #include <fnmatch.h>
+#include <fcntl.h>
+#include <poll.h>
+#include <netdb.h>
+#include <sys/socket.h>
 #include <strings.h>
 #include <unistd.h>
 #include <sys/stat.h>
@@ -122,6 +126,25 @@ static void iodev_set_err( char* err, size_t errsz, const char* text ) {
     snprintf( err, errsz, "%s", text );
 }
 
+// a driver that fails in read / write can leave a better message than "Device I/O error" here
+static const char* iodev_pending = 0;
+
+static const char* iodev_fail( const char* fallback ) {
+    const char* e = iodev_pending != 0 ? iodev_pending : fallback;
+    iodev_pending = 0;
+    return e;
+}
+
+static bool (*iodev_intr)( void* ) = 0;
+static void* iodev_intrud = 0;
+
+void iodev_set_interrupt( bool (*func)( void* usrdata ), void* usrdata ) {
+    iodev_intr = func;
+    iodev_intrud = usrdata;
+}
+
+static const char* iodev_known_error( const char* err );
+
 // -- the file driver -------------------------------------------------------------------
 
 typedef struct _filehandle_t {
@@ -140,6 +163,9 @@ static void* file_open( iodrv_t* drv, const char* path, unsigned mode, char* err
         return 0;
     }
     const char* fmode = ( mode & IOMODE_APPEND ) ? "ab" : ( mode & IOMODE_WRITE ) ? "wb" : "rb";
+    if ( ( mode & IOMODE_READ ) != 0 && ( mode & IOMODE_WRITE ) != 0 && ( mode & IOMODE_APPEND ) == 0 ) {
+        fmode = stat( path, &st ) == 0 ? "r+b" : "w+b";         // UPDATE / RANDOM: keep what is there
+    }
     FILE* f = fopen( path, fmode );
     if ( f == 0 ) {
         iodev_set_err( err, errsz, iodev_errno_text( errno ) );
@@ -343,6 +369,7 @@ static void* mem_open( iodrv_t* drv, const char* path, unsigned mode, char* err,
         iodev_set_err( err, errsz, "File not found" );
         return 0;
     }
+    bool update = ( mode & IOMODE_READ ) != 0 && ( mode & IOMODE_WRITE ) != 0;
     if ( f == 0 ) {
         if ( mem_count == mem_cap ) {
             size_t cap = mem_cap ? mem_cap * 2U : 16U;
@@ -361,8 +388,8 @@ static void* mem_open( iodrv_t* drv, const char* path, unsigned mode, char* err,
         }
         f->mtime = time( 0 );
         mem_files[ mem_count++ ] = f;
-    } else if ( ( mode & IOMODE_WRITE ) != 0 && ( mode & IOMODE_APPEND ) == 0 ) {
-        f->len = 0;             // OUTPUT truncates
+    } else if ( ( mode & IOMODE_WRITE ) != 0 && ( mode & IOMODE_APPEND ) == 0 && !update ) {
+        f->len = 0;             // OUTPUT truncates (UPDATE and RANDOM do not)
         f->mtime = time( 0 );
     }
     memhandle_t* h = (memhandle_t*) calloc( 1U, sizeof(*h) );
@@ -467,8 +494,23 @@ static bool mem_rename( iodrv_t* drv, const char* from, const char* to, char* er
 
 static bool mem_seek( void* handle, int64_t pos ) {
     memhandle_t* h = (memhandle_t*) handle;
-    if ( pos < 0 || (uint64_t) pos > (uint64_t) h->file->len ) {
-        return false;           // no holes in a RAM file
+    memfile_t* f = h->file;
+    if ( pos < 0 || pos > 0x7FFFFFFF ) {
+        return false;
+    }
+    if ( (uint64_t) pos > (uint64_t) f->len ) {
+        if ( ( h->mode & IOMODE_WRITE ) == 0 ) {
+            return false;       // reading behind the end
+        }
+        if ( (size_t) pos > f->cap ) {      // writing behind the end: the gap is filled with zeros
+            uint8_t* data = (uint8_t*) realloc( f->data, (size_t) pos );
+            if ( data == 0 ) {
+                return false;
+            }
+            f->data = data; f->cap = (size_t) pos;
+        }
+        memset( f->data + f->len, 0, (size_t) pos - f->len );
+        f->len = (size_t) pos;
     }
     h->pos = (size_t) pos;
     return true;
@@ -672,6 +714,261 @@ static bool con_close( void* handle ) {
 
 static iodrv_t con_driver = { "con", con_open, con_read, con_write, con_size, con_close, 0, 0, 0, 0, 0, 0, 0 };
 
+// -- the play driver (lines of music) ---------------------------------------------------------------
+
+static iomusic_t iodev_music;
+static bool iodev_music_set = false;
+
+void iodev_set_music( const iomusic_t* music ) {
+    if ( music != 0 ) {
+        iodev_music = *music;
+    }
+    iodev_music_set = music != 0;
+}
+
+typedef struct _playhandle_t {
+    int         voice;
+    char*       line;
+    size_t      len, cap;
+} playhandle_t;
+
+static void* play_open( iodrv_t* drv, const char* path, unsigned mode, char* err, size_t errsz ) {
+    if ( ( mode & IOMODE_READ ) != 0 ) {
+        iodev_set_err( err, errsz, "Bad file mode" );
+        return 0;
+    }
+    int voice = 1;
+    if ( path[0] != '\0' ) {
+        if ( path[1] != '\0' || path[0] < '1' || path[0] > '8' ) {
+            iodev_set_err( err, errsz, "Bad file name" );       // "play:" or "play:1" .. "play:8"
+            return 0;
+        }
+        voice = path[0] - '0';
+    }
+    if ( !iodev_music_set ) {
+        iodev_set_err( err, errsz, "Not supported by device" );
+        return 0;
+    }
+    if ( !iodev_allowed( "sound", drv, path ) ) {
+        iodev_set_err( err, errsz, "Permission denied" );
+        return 0;
+    }
+    playhandle_t* h = (playhandle_t*) calloc( 1U, sizeof(*h) );
+    if ( h == 0 ) {
+        iodev_set_err( err, errsz, "Out of memory" );
+        return 0;
+    }
+    h->voice = voice;
+    return h;
+}
+
+static bool play_flush( playhandle_t* h ) {
+    if ( h->len == 0 ) {
+        return true;
+    }
+    h->line[ h->len ] = '\0';
+    char err[80];
+    err[0] = '\0';
+    bool ok = iodev_music_set && iodev_music.play( iodev_music.usrdata, h->voice, h->line, err, sizeof(err) );
+    h->len = 0;
+    if ( !ok ) {
+        static char msg[80];            // the parser's message ("Unknown music command 'Z'") is passed on
+        snprintf( msg, sizeof(msg), "%s", err[0] ? err : "Device I/O error" );
+        iodev_pending = msg;
+    }
+    return ok;
+}
+
+static ssize_t play_write( void* handle, const void* buf, size_t count ) {
+    playhandle_t* h = (playhandle_t*) handle;
+    const char* p = (const char*) buf;
+    for ( size_t i=0; i < count; ++i ) {
+        if ( p[i] == '\n' || p[i] == '\r' ) {
+            if ( !play_flush( h ) ) {
+                return -1;
+            }
+            continue;
+        }
+        if ( h->len + 2U > h->cap ) {
+            size_t cap = h->cap ? h->cap * 2U : 128U;
+            char* line = (char*) realloc( h->line, cap );
+            if ( line == 0 ) {
+                return -1;
+            }
+            h->line = line; h->cap = cap;
+        }
+        h->line[ h->len++ ] = p[i];
+    }
+    return (ssize_t) count;
+}
+
+static bool play_close( void* handle ) {
+    playhandle_t* h = (playhandle_t*) handle;
+    bool ok = play_flush( h );          // a last line without a newline is played, too
+    free( h->line );
+    free( h );
+    return ok;
+}
+
+static ssize_t play_read( void* handle, void* buf, size_t count ) {
+    (void) handle; (void) buf; (void) count;
+    return -1;
+}
+
+static iodrv_t play_driver = { "play", play_open, play_read, play_write, 0, play_close, 0, 0, 0, 0, 0, 0, 0 };
+
+// -- the tcp driver (a network connection) ------------------------------------------------------------
+
+typedef struct _tcphandle_t {
+    int         fd;
+} tcphandle_t;
+
+#define TCP_SLICE_MS        100
+#define TCP_CONNECT_MS      10000
+
+// waits for the socket; 1 = ready, 0 = timed out (timeout < 0: no limit), -1 = error or Break (iodev_pending is set)
+static int tcp_wait( int fd, short events, int timeout ) {
+    int waited = 0;
+    for (;;) {
+        struct pollfd pfd = { fd, events, 0 };
+        int r = poll( &pfd, 1U, TCP_SLICE_MS );
+        if ( r > 0 ) {
+            return 1;
+        }
+        if ( r < 0 && errno != EINTR ) {
+            return -1;
+        }
+        if ( iodev_intr != 0 && iodev_intr( iodev_intrud ) ) {
+            iodev_pending = "Break";
+            return -1;
+        }
+        waited += TCP_SLICE_MS;
+        if ( timeout >= 0 && waited >= timeout ) {
+            return 0;
+        }
+    }
+}
+
+static void* tcp_open( iodrv_t* drv, const char* path, unsigned mode, char* err, size_t errsz ) {
+    (void) mode;
+    char host[256], port[16];
+    const char* colon = strrchr( path, ':' );
+    if ( colon == 0 || colon == path || colon[1] == '\0' || (size_t)( colon - path ) >= sizeof(host) || strlen( colon + 1 ) >= sizeof(port) ) {
+        iodev_set_err( err, errsz, "Bad file name" );           // "tcp:host:port", "tcp:[::1]:port"
+        return 0;
+    }
+    size_t hl = (size_t)( colon - path );
+    const char* hs = path;
+    if ( hl >= 2U && path[0] == '[' && path[hl - 1U] == ']' ) {
+        ++hs; hl -= 2U;
+    }
+    memcpy( host, hs, hl );
+    host[hl] = '\0';
+    snprintf( port, sizeof(port), "%s", colon + 1 );
+    if ( !iodev_allowed( "net", drv, path ) ) {
+        iodev_set_err( err, errsz, "Permission denied" );
+        return 0;
+    }
+    struct addrinfo hints, *res = 0;
+    memset( &hints, 0, sizeof(hints) );
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    if ( getaddrinfo( host, port, &hints, &res ) != 0 || res == 0 ) {
+        iodev_set_err( err, errsz, "Host not found" );
+        return 0;
+    }
+    const char* fail = "Connection refused";
+    int fd = -1;
+    for ( struct addrinfo* ai = res; ai != 0 && fd < 0; ai = ai->ai_next ) {
+        int s = socket( ai->ai_family, ai->ai_socktype, ai->ai_protocol );
+        if ( s < 0 ) {
+            continue;
+        }
+        fcntl( s, F_SETFL, fcntl( s, F_GETFL, 0 ) | O_NONBLOCK );
+        bool ok = connect( s, ai->ai_addr, ai->ai_addrlen ) == 0;
+        if ( !ok && errno == EINPROGRESS ) {
+            int w = tcp_wait( s, POLLOUT, TCP_CONNECT_MS );
+            int soerr = 0;
+            socklen_t sl = sizeof(soerr);
+            if ( w > 0 && getsockopt( s, SOL_SOCKET, SO_ERROR, &soerr, &sl ) == 0 && soerr == 0 ) {
+                ok = true;
+            } else if ( w == 0 ) {
+                fail = "Timed out";
+            } else if ( w < 0 ) {
+                fail = iodev_fail( "Device I/O error" );
+            }
+        }
+        if ( ok ) {
+            fd = s;
+        } else {
+            close( s );
+        }
+    }
+    freeaddrinfo( res );
+    if ( fd < 0 ) {
+        iodev_set_err( err, errsz, fail );
+        return 0;
+    }
+    tcphandle_t* h = (tcphandle_t*) malloc( sizeof(*h) );
+    if ( h == 0 ) {
+        close( fd );
+        iodev_set_err( err, errsz, "Out of memory" );
+        return 0;
+    }
+    h->fd = fd;
+    return h;
+}
+
+static ssize_t tcp_read( void* handle, void* buf, size_t count ) {
+    tcphandle_t* h = (tcphandle_t*) handle;
+    for (;;) {
+        ssize_t n = recv( h->fd, buf, count, MSG_DONTWAIT );
+        if ( n >= 0 ) {
+            return n;               // 0 = the other side closed the connection
+        }
+        if ( errno == ECONNRESET ) {
+            iodev_pending = "Connection reset";
+            return -1;
+        }
+        if ( errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR ) {
+            return -1;
+        }
+        if ( tcp_wait( h->fd, POLLIN, -1 ) < 0 ) {
+            return -1;
+        }
+    }
+}
+
+static ssize_t tcp_write( void* handle, const void* buf, size_t count ) {
+    tcphandle_t* h = (tcphandle_t*) handle;
+    size_t done = 0;
+    while ( done < count ) {
+        ssize_t n = send( h->fd, (const char*) buf + done, count - done, MSG_NOSIGNAL | MSG_DONTWAIT );
+        if ( n > 0 ) {
+            done += (size_t) n;
+        } else if ( n < 0 && ( errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR ) ) {
+            if ( tcp_wait( h->fd, POLLOUT, -1 ) < 0 ) {
+                return -1;
+            }
+        } else {
+            if ( errno == EPIPE || errno == ECONNRESET ) {
+                iodev_pending = "Connection reset";
+            }
+            return -1;
+        }
+    }
+    return (ssize_t) count;
+}
+
+static bool tcp_close( void* handle ) {
+    tcphandle_t* h = (tcphandle_t*) handle;
+    close( h->fd );
+    free( h );
+    return true;
+}
+
+static iodrv_t tcp_driver = { "tcp", tcp_open, tcp_read, tcp_write, 0, tcp_close, 0, 0, 0, 0, 0, 0, 0 };
+
 void iodev_init( void ) {
     if ( !iodev_ready ) {
         iodev_ready = true;
@@ -681,6 +978,8 @@ void iodev_init( void ) {
         iodev_register( &sh_driver );
         iodev_register( &res_driver );
         iodev_register( &con_driver );
+        iodev_register( &play_driver );
+        iodev_register( &tcp_driver );
     }
 }
 
@@ -803,7 +1102,8 @@ bool iodev_list( const char* spec, const char* defaultdriver, hlstyle_t style, v
 
 static const char* iodev_known_error( const char* err ) {
     static const char* const known[] = { "File not found", "Permission denied", "Is a directory", "Not a directory", "Disk full",
-        "Bad file name", "Out of memory", "File already exists", "Bad file mode", "Not supported by device" };
+        "Bad file name", "Out of memory", "File already exists", "Bad file mode", "Not supported by device", "Host not found",
+        "Connection refused", "Timed out", "Break" };
     for ( size_t i=0; i < sizeof(known) / sizeof(known[0]); ++i ) {
         if ( strcmp( err, known[i] ) == 0 ) {
             return known[i];
@@ -918,6 +1218,7 @@ static void iochan_free( iochan_t* c ) {
         c->drv->close( c->handle );
     }
     free( c->rbuf );
+    free( c->recbuf );
     free( c );
 }
 
@@ -935,6 +1236,10 @@ bool iotab_isopen( const iotab_t* tab, int chan ) {
 }
 
 bool iotab_open( iotab_t* tab, int chan, const char* name, const char* defaultdriver, unsigned mode, const char** perr ) {
+    return iotab_open_ex( tab, chan, name, defaultdriver, mode, 0U, perr );
+}
+
+bool iotab_open_ex( iotab_t* tab, int chan, const char* name, const char* defaultdriver, unsigned mode, size_t reclen, const char** perr ) {
     *perr = 0;
     if ( chan < 1 || chan > IOCHAN_MAX ) {
         *perr = "Bad file number";
@@ -956,14 +1261,7 @@ bool iotab_open( iotab_t* tab, int chan, const char* name, const char* defaultdr
     err[0] = '\0';
     void* h = drv->open( drv, path, mode, err, sizeof(err) );
     if ( h == 0 ) {
-        static const char* const known[] = { "File not found", "Permission denied", "Is a directory", "Disk full", "Bad file name",
-            "Out of memory", "Not supported by device", "Bad file mode" };
-        *perr = "Device I/O error";
-        for ( size_t i=0; i < sizeof(known) / sizeof(known[0]); ++i ) {
-            if ( strcmp( err, known[i] ) == 0 ) {
-                *perr = known[i];
-            }
-        }
+        *perr = iodev_known_error( err );
         return false;
     }
     iochan_t* c = (iochan_t*) calloc( 1U, sizeof(*c) );
@@ -973,6 +1271,18 @@ bool iotab_open( iotab_t* tab, int chan, const char* name, const char* defaultdr
         return false;
     }
     c->drv = drv; c->handle = h; c->mode = mode;
+    if ( mode & IOMODE_RANDOM ) {
+        c->reclen = reclen ? reclen : IOREC_DEFAULT;
+        c->recbuf = (uint8_t*) malloc( c->reclen );
+        if ( c->recbuf == 0 || c->reclen > IOREC_MAX || drv->seek == 0 ) {
+            *perr = c->recbuf == 0 ? "Out of memory" : c->reclen > IOREC_MAX ? "Illegal argument" : "Not supported by device";
+            drv->close( h );
+            free( c->recbuf );
+            free( c );
+            return false;
+        }
+        memset( c->recbuf, ' ', c->reclen );
+    }
     if ( ( mode & IOMODE_APPEND ) && drv->size != 0 ) {
         int64_t size = drv->size( h );
         c->pos = size > 0 ? size : 0;
@@ -996,7 +1306,7 @@ bool iotab_close( iotab_t* tab, int chan, const char** perr ) {
     c->handle = 0;
     iochan_free( c );
     if ( !ok ) {
-        *perr = "Device I/O error";
+        *perr = iodev_fail( "Device I/O error" );
     }
     return ok;
 }
@@ -1045,7 +1355,7 @@ int iotab_getc( iotab_t* tab, int chan, const char** perr ) {
     if ( c->rpos >= c->rlen ) {
         int r = iochan_fill( c );
         if ( r < 0 ) {
-            *perr = "Device I/O error";
+            *perr = iodev_fail( "Device I/O error" );
             return -2;
         }
         if ( r == 0 ) {
@@ -1108,7 +1418,7 @@ bool iotab_write( iotab_t* tab, int chan, const char* data, size_t len, const ch
         return false;
     }
     if ( len > 0 && ( c->drv->write == 0 || c->drv->write( c->handle, data, len ) != (ssize_t) len ) ) {
-        *perr = "Device I/O error";
+        *perr = iodev_fail( "Device I/O error" );
         return false;
     }
     c->pos += (int64_t) len;
@@ -1126,7 +1436,7 @@ bool iotab_eof( iotab_t* tab, int chan, bool* peof, const char** perr ) {
     }
     int r = iochan_fill( c );
     if ( r < 0 ) {
-        *perr = "Device I/O error";
+        *perr = iodev_fail( "Device I/O error" );
         return false;
     }
     *peof = r == 0;
@@ -1164,7 +1474,7 @@ bool iotab_loc( iotab_t* tab, int chan, int64_t* ppos, const char** perr ) {
         *perr = "File not open";
         return false;
     }
-    *ppos = c->pos;
+    *ppos = ( c->mode & IOMODE_RANDOM ) != 0 ? (int64_t) c->recno : c->pos;     // random files: the number of the last record
     return true;
 }
 
@@ -1193,5 +1503,108 @@ bool iotab_seek( iotab_t* tab, int chan, int64_t pos, const char** perr ) {
     }
     c->rpos = c->rlen = 0;      // the read buffer is stale
     c->pos = pos;
+    return true;
+}
+
+// -- random files ----------------------------------------------------------------------------------------
+
+static iochan_t* iotab_get_random( iotab_t* tab, int chan, const char** perr ) {
+    *perr = 0;
+    if ( chan < 1 || chan > IOCHAN_MAX ) {
+        *perr = "Bad file number";
+        return 0;
+    }
+    iochan_t* c = tab->chan[chan];
+    if ( c == 0 ) {
+        *perr = "File not open";
+        return 0;
+    }
+    if ( ( c->mode & IOMODE_RANDOM ) == 0 ) {
+        *perr = "Bad file mode";
+        return 0;
+    }
+    return c;
+}
+
+uint8_t* iotab_recbuf( iotab_t* tab, int chan, size_t* plen ) {
+    const char* e = 0;
+    iochan_t* c = iotab_get_random( tab, chan, &e );
+    if ( c == 0 ) {
+        return 0;
+    }
+    if ( plen != 0 ) {
+        *plen = c->reclen;
+    }
+    return c->recbuf;
+}
+
+// the record number to use: 0 = the next one
+static bool iochan_recnum( iochan_t* c, uint32_t rec, uint32_t* pnum, const char** perr ) {
+    uint32_t num = rec != 0 ? rec : c->recno + 1U;
+    if ( num == 0 || num > 0x7FFFFFFFU / 2U ) {
+        *perr = "Bad record number";
+        return false;
+    }
+    *pnum = num;
+    return true;
+}
+
+bool iotab_getrec( iotab_t* tab, int chan, uint32_t rec, const char** perr ) {
+    iochan_t* c = iotab_get_random( tab, chan, perr );
+    uint32_t num = 0;
+    if ( c == 0 || !iochan_recnum( c, rec, &num, perr ) ) {
+        return false;
+    }
+    int64_t at = (int64_t)( num - 1U ) * (int64_t) c->reclen;
+    int64_t size = c->drv->size != 0 ? c->drv->size( c->handle ) : -1;
+    if ( size >= 0 && at >= size ) {
+        *perr = "Input past end";
+        return false;
+    }
+    if ( !c->drv->seek( c->handle, at ) ) {
+        *perr = "Bad position";
+        return false;
+    }
+    size_t got = 0;
+    while ( got < c->reclen ) {
+        ssize_t n = c->drv->read( c->handle, c->recbuf + got, c->reclen - got );
+        if ( n < 0 ) {
+            *perr = iodev_fail( "Device I/O error" );
+            return false;
+        }
+        if ( n == 0 ) {
+            break;
+        }
+        got += (size_t) n;
+    }
+    if ( got == 0 ) {
+        *perr = "Input past end";
+        return false;
+    }
+    memset( c->recbuf + got, ' ', c->reclen - got );        // a short last record is filled up
+    c->recno = num;
+    c->rpos = c->rlen = 0;
+    c->pos = at + (int64_t) c->reclen;
+    return true;
+}
+
+bool iotab_putrec( iotab_t* tab, int chan, uint32_t rec, const char** perr ) {
+    iochan_t* c = iotab_get_random( tab, chan, perr );
+    uint32_t num = 0;
+    if ( c == 0 || !iochan_recnum( c, rec, &num, perr ) ) {
+        return false;
+    }
+    int64_t at = (int64_t)( num - 1U ) * (int64_t) c->reclen;
+    if ( !c->drv->seek( c->handle, at ) ) {
+        *perr = "Bad position";
+        return false;
+    }
+    if ( c->drv->write == 0 || c->drv->write( c->handle, c->recbuf, c->reclen ) != (ssize_t) c->reclen ) {
+        *perr = iodev_fail( "Device I/O error" );
+        return false;
+    }
+    c->recno = num;
+    c->rpos = c->rlen = 0;
+    c->pos = at + (int64_t) c->reclen;
     return true;
 }

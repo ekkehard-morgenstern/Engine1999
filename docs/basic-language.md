@@ -174,6 +174,21 @@ OPEN "con:" FOR OUTPUT AS #2: PRINT #2,"hi"      (con: the screen / the keyboard
 `RENAME` never replaces an existing file ("File already exists") and both names must be on one driver. `mem:` has no directories.
 `CHDIR` changes the directory of the whole program, so it affects `LOAD`, `SAVE` and `FILES`. Details: [io-subsystem.md](io-subsystem.md).
 
+Phase 3 adds random access files, read/write files, and two more drivers:
+
+```
+OPEN "people.dat" FOR RANDOM AS #1 LEN=32        OPEN "R",#1,"people.dat",32         (records of 32 bytes; default 128)
+FIELD #1, 20 AS N$, 12 AS C$                     (binds N$ and C$ to parts of the record)
+LSET N$="Bob":RSET C$="Paris":PUTREC #1,3        (fill the parts, padded with spaces; write record 3)
+GETREC #1,3:PRINT N$;C$        GETREC #1         (read record 3; no number = the next one; LOC(1) = last record)
+OPEN "x.dat" FOR UPDATE AS #2                    (read and write, nothing truncated; short form "U")
+OPEN "play:2" FOR OUTPUT AS #3: PRINT #3,"T120 C D E"      (every line is a PLAY string on voice 2)
+OPEN "tcp:example.com:80" FOR UPDATE AS #4: PRINT #4,"GET /": LINE INPUT #4,A$     (a network connection)
+```
+
+Strings cannot hold a zero byte, so records are text (store numbers with `STR$`/`VAL`). Details, errors and a proposal for drivers written
+in BASIC: [io-subsystem.md](io-subsystem.md).
+
 Channel 0 is the screen and keyboard; channels 1 to 255 are opened by `OPEN`. `LOAD`, `SAVE`, `MERGE`, `CHAIN` and `FILES` take driver names too (`SAVE "mem:game"`, `FILES "mem:"`); the default extensions apply to the path. `WRITE` is `PRINT` with strings in double quotes and commas between the items; `LINE INPUT` takes the whole line; `INPUT #n` splits it into fields and goes on with the next line when it runs out. Lines are written with a newline and read with a newline or a carriage return and a newline. A restart (`RUN`, `NEW`, `LOAD`, `CHAIN`) closes all channels. See io-subsystem.md for the exact rules, the error messages and what comes next (`KILL`, `RENAME`, `SEEK`, more drivers, random access records, the open sandboxing question).
 
 **File extensions:** `SAVE "name"` writes the binary (tokenized) form and appends `.e99` to a name without extension; `SAVE "name",A` writes the ASCII listing and appends `.bas`. A name with an extension is used as it is. `LOAD` recognizes both forms by the header, whatever the extension is.

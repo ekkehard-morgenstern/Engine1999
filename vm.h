@@ -132,6 +132,12 @@ Policies chosen by this implementation (the instruction set does not define them
 #define VM_ZONE_WIDTH       10U
 #define VM_INTERRUPT_STEPS  4096U
 
+typedef struct _vm_field_t {
+    int             chan;           // the random file
+    uint16_t        var;            // the variable number of the string variable
+    uint32_t        off, len;       // the part of the record
+} vm_field_t;
+
 typedef struct _vmval_t {
     bool    isstr;          // item is a string pointer, otherwise a number
     union {
@@ -246,6 +252,8 @@ typedef struct _vm_t {
     bool            irqsafe;        // (internal) a handler may be entered although the stack isn't empty (WAIT gave way to it)
     // I/O subsystem (docs/io-subsystem.md): the channels opened with OPEN, and the default driver of ADDRESS
     iotab_t         io;
+    struct _vm_field_t* fields;     // FIELD: the string variables bound to parts of the record buffers of random files
+    size_t          numfields, capfields;
     char            addrcur[VM_ADDRLEN], addrprev[VM_ADDRLEN];
     const char*     iofail;         // (internal) a message of an I/O error that happened where it can't be reported at once
     const char*     inerr;          // (internal) why vm_get_line() returned nothing (a file channel)
