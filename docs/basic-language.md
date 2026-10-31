@@ -237,10 +237,17 @@ FOR EACH K,V IN A(): PRINT K;V;: NEXT V    ' key (the index) and value
   on its line; the body is jumped over where it stands (a definition can be anywhere in the program). A `FUNC` has to be **defined before the line that calls it** (the call is checked
   when the line is parsed, like `DEF FN`); a `CALL` is checked when the code is generated, so a `PROC` may follow its calls (the main program on top, the procedures below).
 - Parameters are numeric, integer or string **variables passed by value**. They are ordinary global variables that get the arguments for the time of the call and their old values
-  back afterwards (that is what makes recursion work: every call saves the values of the previous one). Array parameters are not supported.
-- **`LOCAL a, b$, n%`** (in the body of a `PROC`, `FUNC` or multi-line `DEF FN` only) makes variables local to the call: their values are saved when `LOCAL` runs, they start as 0 / `""`,
+  back afterwards (that is what makes recursion work: every call saves the values of the previous one).
+- **Array parameters** are written with empty parentheses in the header (`PROC FILL(A(), N)`) and get an array of the same type as the argument: `CALL FILL(V(), 5)`. They are
+  **by reference** (no copy: the procedure sees and changes the elements of `V`; the dimensions and the bounds checks are those of the argument, any number of dimensions). Technically
+  the parameter array `A` becomes the same storage as `V` for the time of the call and gets its own one-element placeholder back afterwards. The code generator checks that an array
+  parameter gets an array (`A()`) of the same base type and a scalar parameter no array. Arrays may be passed on (`CALL UP(A(), N-1)`).
+- **`LOCAL a, b$, n%, T(10), D()`** (in the body of a `PROC`, `FUNC` or multi-line `DEF FN` only) makes variables local to the call: their values are saved when `LOCAL` runs, they start as 0 / `""`,
   and the old values return at the end of the call (also if an error unwinds it). Without `LOCAL` a variable is the global one (there is no `GLOBAL`, everything else *is* global).
-  `LOCAL` takes effect when it is executed, so put it first. Arrays can't be `LOCAL`.
+  `LOCAL` takes effect when it is executed, so put it first.
+- **Local arrays**: `LOCAL T(10)` declares a new array (like `DIM`: the dimensions are constants, it is an error if `T` exists) whose elements are new and zeroed for every call (a recursive
+  procedure gets one per level) and go away at the end of the call; `LOCAL D()` gives a call its own zeroed copy, with the shape, of an array `D` that exists (also an array parameter). The
+  array variable itself is still one global name: outside the call it is the original again (for `LOCAL T(10)` the array declared at parse time, a one-time declaration).
 - A `FUNC` returns what `RETURN expr` or `FN name = expr` last set (0 / `""` if none); `RETURN expr` also leaves at once. `EXIT PROC` / `EXIT FUNC` (also `EXIT FN` in a multi-line `DEF FN`)
   leave at once (a `FUNC` returns the value set so far). A plain `RETURN` is still the `RETURN` of `GOSUB` (a `GOSUB` inside a procedure to a line of that procedure is fine). `RETURN expr` also works in
   a multi-line `DEF FN`.
@@ -248,6 +255,36 @@ FOR EACH K,V IN A(): PRINT K;V;: NEXT V    ' key (the index) and value
 - Design decisions I took (revisit if unwanted): `PROC` is a function variable of the label type (own name space: a `PROC A` and a `FUNC A` may both exist); redefining a name with the same number of
   parameters reuses it; a `PROC` or `FUNC` can't be defined inside another one; a `GOTO` out of a body leaves the call frame open (as with `DEF FN`; `POP` doesn't know about it).
 - New reserved words: `PROC FUNC CALL LOCAL RESUME` (tokens 235..239).
+
+## `STOP`, `CONT`, `TRACE`, `AUTO`
+
+- **`STOP`** ends the run like the Break key ("Break in line n"), but keeps the state of the program for **`CONT`**: the next instruction, the data stack, the `GOSUB` return stack and
+  the `PROC`/`FUNC` calls in progress (with their `LOCAL` variables, so you can `PRINT` them in between). The **Break key (ESC)** is continuable, too, when it hits between two
+  instructions (not while the program waits in `INPUT`, `GET`, `WAIT`). Direct mode lines can be run in between (`PRINT A`, `A=5`, `GOSUB`...) and the program goes on with the changed variables.
+- `CONT` says "Cannot continue" if nothing is stopped, if the **stored program was changed** since (a line entered, `DELETE`, `RENUM`, `MERGE`, `LOAD`: the code no longer matches), after a new
+  run (`RUN`, `NEW`, `CHAIN`), and after a `STOP` or Break in a *direct mode line*. Timers (`AFTER`/`EVERY`) and the `ON ERROR` handler end with a run and are not restored by `CONT`.
+  `STOP [n]` (AsmBASIC) has no argument here.
+- **`TRACE ON` / `TRACE OFF`**: while on, every program line that starts prints its number in brackets (`[10]`), before the output of the line. It lasts until `TRACE OFF` (also over `RUN`).
+- **`AUTO [start[,step]]`** (direct mode, both default 10) lets the host prompt with line numbers: type the rest of the line and RETURN to enter it, an empty line (or a number above
+  999999) ends it. An existing line number is replaced. In `engine1999` the main loop does this (`repl_t.autoline`/`autostep`); other hosts have to prompt themselves.
+- New reserved words: `STOP CONT TRACE` (tokens 240..242; `AUTO` was a token already).
+
+## `PEEK` and `POKE`: a RAM area
+
+```
+POKE 100,65                      ' a byte (0..255; the low bits of -128..255 are stored)
+POKE 100,1000,2 : PRINT PEEK(100,2)   ' size 2 = word, 4 = long: big endian; -4 = single, -8 = double precision float
+PRINT PEEK(100)                  ' a byte, unsigned; PEEK(a,2) unsigned word, PEEK(a,4) signed long
+POKE 200,"HELLO"                 ' a string value writes its bytes (any byte values)
+PRINT PEEK$(200,5)               ' a string of 5 bytes from the RAM
+```
+
+- The RAM is **1 MiB (`VM_RAMSIZE`)**, addressed from 0, zeroed, allocated by the first `POKE`, **kept over direct mode lines** and cleared by `RUN`/`NEW`/`LOAD`. It is a block of its own: it does
+  not show variables, the program or the screen (a window into the data segment or the graphics layers could be added later; `SYS addr` is not implemented: there is no machine code).
+- Errors: "Illegal address" (outside the 1 MiB), "Illegal argument" (a size other than 1, 2, 4, -4, -8; a number that does not fit its size; a negative or too long `PEEK$` length). `PEEK$` needs both arguments.
+- Multi-byte values are big endian like the other binary values (`MKI$`, `CVI`).
+- Design decisions I took (revisit if unwanted): one `PEEK` / `POKE` word with a size argument instead of `PEEKB/W/L/F`; negative sizes for floats; only the RAM is addressable; byte and word reads are unsigned, long reads signed.
+- New reserved words: `PEEK POKE` (tokens 243, 244).
 
 ## More operators and functions (2026-10-31)
 

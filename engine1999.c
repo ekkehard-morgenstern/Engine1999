@@ -1242,6 +1242,36 @@ int main( int argc, char** argv ) {
 
         while ( !sdlscr_term() ) {
             char buf[256]; buf[0] = '\0';
+            if ( repl.autoline != LINENO_NONE ) {
+                // AUTO: the host prompts with the next line number; an empty line ends it
+                if ( repl.autoline > LINENO_MAX ) {
+                    repl.autoline = LINENO_NONE;
+                    host_newline();
+                    sdlscr_printf( -1, -1, -1, -1, "%s", "Ready.\n" );
+                    continue;
+                }
+                char text[200]; text[0] = '\0';
+                sdlscr_printf( -1, -1, -1, -1, "%u ", (unsigned) repl.autoline );
+                int aev = sdlscr_lineinput( 0, text, sizeof(text), vblank_handler, &usrdata );
+                if ( aev & SDLEV_SCREENWORKERFINISHED ) break;
+                const char* t = text;
+                while ( *t == ' ' || *t == '\t' ) {
+                    ++t;
+                }
+                if ( *t == '\0' ) {
+                    repl.autoline = LINENO_NONE;
+                    host_newline();
+                    sdlscr_printf( -1, -1, -1, -1, "%s", "Ready.\n" );
+                    continue;
+                }
+                snprintf( buf, sizeof(buf), "%u %s", (unsigned) repl.autoline, t );
+                uint32_t entered = repl.autoline;
+                handle_input( buf );
+                if ( repl.autoline == entered ) {       // (the line may have been an AUTO of its own)
+                    repl.autoline += repl.autostep;
+                }
+                continue;
+            }
             int ev = sdlscr_lineinput( 0, buf, 256U, vblank_handler, &usrdata );
             if ( ev & SDLEV_SCREENWORKERFINISHED ) break;
             if ( handle_input( buf ) ) {

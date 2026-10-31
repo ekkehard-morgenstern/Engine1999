@@ -110,12 +110,15 @@ Policies chosen by this implementation (the instruction set does not define them
                             the others show negative numbers as 32 bit patterns
 */
 
+#define VM_RAMSIZE          UINT32_C(1048576)       // the bytes PEEK and POKE can address
+
 #define VMREQ_NONE          0
 #define VMREQ_LOAD          1       // replace the program by the file reqname and run it from the beginning
 #define VMREQ_NEW           3       // delete the program and the variables; the run is not continued
 #define VMREQ_RUN           2       // clear the variables and run the program from reqname (label) / reqline, or the start
 #define VMREQ_EDIT          4       // let the user edit the line reqline / the line of the label reqname; the run is not continued
 #define VMREQ_MONITOR       5       // open the machine monitor; the run is not continued
+#define VMREQ_AUTO          7       // start AUTO line numbering at reqline (-1 = 10) with the step reqstep (-1 = 10); the run is not continued
 #define VMREQ_CHAIN         6       // load (reqmerge: merge) the file reqname and run the program from reqlabel / reqline, keeping variables
 
 // why vm_resume() returned (vm_t.stopreason): VMSTOP_NONE = the run is over (the code ended, an error was reported, or a
@@ -165,6 +168,8 @@ typedef struct _vm_savedvar_t {
     uint16_t    varoffs;
     uint8_t     vartype;
     vmval_t     value;          // a string is a heap copy
+    bool        isarray;        // an array parameter or LOCAL array: the storage is saved in arr, value is not used
+    vmem_arraystate_t   arr;
 } vm_savedvar_t;
 
 typedef struct _vm_context_t {
@@ -211,6 +216,19 @@ typedef struct _vm_irq_t {      // a handler that is running: where the return s
     size_t      rsp;
     uint32_t    line;
 } vm_irq_t;
+
+// The state of a stopped program (STOP, the Break key) that CONT takes back: the stacks are moved here, the VM itself starts the next
+// run with empty ones.
+typedef struct _vm_stopstate_t {
+    bool            valid;
+    uint32_t        pc, line;
+    vmval_t*        dstack;
+    size_t          dsp, dmax;
+    uint32_t*       rstack;
+    size_t          rsp, rmax;
+    vm_context_t*   ctxs;
+    size_t          nctx, maxctx;
+} vm_stopstate_t;
 
 typedef struct _vm_t {
     codegen_t*      cgen;           // code and data segments
@@ -307,6 +325,10 @@ typedef struct _vm_t {
     int             request;        // VMREQ_*: LOAD / RUN stop the VM and leave a request for the host (see vm_run_at)
     char*           reqname;        // LOAD: the file name; RUN: the label name ("" = none); owned by the VM
     int32_t         reqline;        // RUN: the line number, -1 = none
+    int32_t         reqstep;        // AUTO: the step, -1 = none
+    vm_stopstate_t  stopped;        // see CONT
+    uint8_t*        ram;            // PEEK / POKE: VM_RAMSIZE bytes, allocated by the first POKE
+    bool            trace;          // TRACE ON: every LINE instruction prints [n]
     char*           reqlabel;       // CHAIN: the label to start at ("" = none); owned by the VM
     bool            reqmerge;       // CHAIN: merge the file instead of replacing the program
     struct timespec started;        // for the system timer TI
@@ -315,6 +337,7 @@ typedef struct _vm_t {
 void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem );
 void cleanup_vm( vm_t* vm );        // frees the stacks and the strings still on the data stack
 bool vm_run( vm_t* vm );            // runs from offset 0 until the end of the code; false after reporting an error
+void vm_discard_stop( vm_t* vm );            // forgets the state CONT would continue with (the program changed, a program starts)
 void vm_clear_request( vm_t* vm );    // forgets a pending request (frees the name)
 bool vm_run_at( vm_t* vm, uint32_t start );     // same, starting at the given code offset
 bool vm_begin( vm_t* vm, uint32_t start );      // prepares a run (clears the stacks and the request, pc = start) without running it

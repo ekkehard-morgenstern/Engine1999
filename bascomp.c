@@ -1364,6 +1364,27 @@ UNEXP:      comp_error( comp, "Internal error (unexpected parameter node)" );
     return true;
 }
 
+// an array parameter needs an array to exist while the body is parsed: it is a one element placeholder that becomes the array
+// of the argument during a call (an array of that name that exists already is used as it is)
+static bool comp_make_param_arrays( compiler_t* comp, const usrparam_t* params, size_t numparams ) {
+    for ( size_t i=0; i < numparams; ++i ) {
+        if ( !( params[i].paramtype & VARTYPEF_ARRAY ) ) {
+            continue;
+        }
+        uint16_t offs = VAROFFS_NONE;
+        if ( vmem_lookup_var( &comp->rt->varmem, params[i].paramtype, params[i].paramname, &offs ) && offs != VAROFFS_NONE ) {
+            continue;
+        }
+        uint16_t dims[1] = { 1 };
+        if ( !vmem_create_var( &comp->rt->varmem, params[i].paramtype, params[i].paramname, UINT8_C(1), dims, UINT8_C(0), 0, &offs ) ||
+             offs == VAROFFS_NONE ) {
+            out_of_memory( comp );
+            return false;
+        }
+    }
+    return true;
+}
+
 bool comp_eat_usrfndecl( compiler_t* comp, node_t** pnode ) {
     // usr-fn-decl := any-usr-fn-name [ TOK_LPAREN [ usr-fn-arg-list ] TOK_RPAREN ] usr-fn-body .
     node_t* fnname = NODE_NONE;
@@ -1414,6 +1435,9 @@ UNEXP:  comp_error( comp, "Internal error (unexpected name node)" );
             return false;
         }
     }
+    if ( !comp_make_param_arrays( comp, params, numparams ) ) {
+        return false;
+    }
     node_t* fnbody = NODE_NONE;
     node_t* outerfn = comp->curfn;
     comp->curfn = fnname;       // the body may assign the result of a multi-line function
@@ -1456,6 +1480,30 @@ UNEXP:  comp_error( comp, "Internal error (unexpected name node)" );
     return true;
 }
 
+// call-arg := empty-array-ref | expr .     (the array form passes an array to an array parameter: A())
+static bool comp_at_emptyarray( compiler_t* comp ) {
+    uint8_t t = comp->currtok;
+    if ( t != TOK_NUMIDENT && t != TOK_INTIDENT && t != TOK_STRIDENT ) {
+        return false;
+    }
+    comp_push_context( comp );
+    bool r = comp_fetchtok( comp ) && comp->currtok == TOK_LPAREN && comp_fetchtok( comp ) && comp->currtok == TOK_RPAREN;
+    comp_pop_context( comp );
+    return r;
+}
+
+static bool comp_eat_callarg( compiler_t* comp, node_t** pnode ) {
+    if ( comp_at_emptyarray( comp ) ) {
+        return comp_eat_emptyarrayref( comp, pnode );
+    }
+    return comp_eat_expr( comp, pnode );
+}
+
+bool comp_eat_callargs( compiler_t* comp, node_t** pnode ) {
+    // call-args := call-arg { TOK_COMMA call-arg } .
+    return comp_eat_list( comp, pnode, NT_EXPRLIST, comp_eat_callarg, TOK_COMMA, "Expression expected" );
+}
+
 static bool comp_eat_usrfncall( compiler_t* comp, node_t** pnode, uint8_t nodetype,
     uint8_t nametype, bool (*eater_func)( compiler_t*, node_t** ) ) {
     // num-usr-fn-call := num-usr-fn-name [ TOK_LPAREN [ expr-list ] TOK_RPAREN ] .
@@ -1466,7 +1514,7 @@ static bool comp_eat_usrfncall( compiler_t* comp, node_t** pnode, uint8_t nodety
     }
     node_t* exprlist = NODE_NONE;
     if ( comp->currtok == TOK_LPAREN && comp_fetchtok( comp ) ) {
-        comp_eat_exprlist( comp, &exprlist );
+        comp_eat_callargs( comp, &exprlist );
         if ( comp->currtok != TOK_RPAREN || !comp_fetchtok( comp ) ) {
             comp_error( comp, "Closing parenthesis ')' expected" );
         }
@@ -1568,6 +1616,46 @@ bool comp_eat_sysnumfn1argcall( compiler_t* comp, node_t** pnode ) {
                 - 1 or more branches of expression list (depending on function)
     */
     uint8_t tok = comp->currtok;
+    if ( tok == TOK_PEEK ) {
+        // TOK_PEEK TOK_LPAREN num-expr [ TOK_COMMA num-expr ] TOK_RPAREN      (PEEK(addr [, size]), size 1 by default)
+        comp_push_context( comp );
+        if ( !comp_fetchtok( comp ) || comp->currtok == TOK_STRING ) {
+            comp_pop_context( comp );       // PEEK$ is a string function: back to the word
+            return false;
+        }
+        comp_commit_context( comp );
+        if ( comp->currtok != TOK_LPAREN || !comp_fetchtok( comp ) ) {
+            comp_error( comp, "Opening parenthesis '(' expected" );
+            return false;
+        }
+        node_t* addr = NODE_NONE, *size = NODE_NONE;
+        if ( !comp_eat_numexpr( comp, &addr ) || addr == NODE_NONE ) {
+            comp_error( comp, "Numeric expression expected" );
+            return false;
+        }
+        if ( comp->currtok == TOK_COMMA && comp_fetchtok( comp ) ) {
+            if ( !comp_eat_numexpr( comp, &size ) || size == NODE_NONE ) {
+                comp_error( comp, "Numeric expression expected" );
+                return false;
+            }
+        } else {
+            uint8_t one[8];
+            comp_set_numlit( one, 1.0 );
+            if ( !comp_create_node( comp, &size, NT_NUMLIT, UINT8_C(0), UINT16_C(8), one ) || size == NODE_NONE ) {
+                out_of_memory( comp );
+                return false;
+            }
+        }
+        if ( comp->currtok != TOK_RPAREN || !comp_fetchtok( comp ) ) {
+            comp_error( comp, "Closing parenthesis ')' expected" );
+            return false;
+        }
+        if ( !comp_create_node( comp, pnode, NT_SYSNUMFUNCARGCALL, UINT8_C(2), UINT16_C(1), &tok, addr, size ) || *pnode == NODE_NONE ) {
+            out_of_memory( comp );
+            return false;
+        }
+        return true;
+    }
     if ( tok == TOK_ASC || tok == TOK_VAL || tok == TOK_LEN || tok == TOK_CVI || tok == TOK_CVL || tok == TOK_CVS || tok == TOK_CVD ) {
         if ( !comp_fetchtok( comp ) ) {
             return false;
@@ -1652,8 +1740,8 @@ bool comp_eat_sysstrfn2argcall( compiler_t* comp, node_t** pnode ) {
                 - 1 or more branches of expression list (depending on function)
     */
     uint8_t tok = comp->currtok;
-    if ( tok == TOK_BIN || tok == TOK_QUA || tok == TOK_OCT || tok == TOK_DEC || tok == TOK_HEX ) {
-        // ( TOK_BIN | TOK_QUA | TOK_OCT | TOK_DEC | TOK_HEX ) TOK_STRING TOK_LPAREN num-expr [ TOK_COMMA num-expr ] TOK_RPAREN
+    if ( tok == TOK_BIN || tok == TOK_QUA || tok == TOK_OCT || tok == TOK_DEC || tok == TOK_HEX || tok == TOK_PEEK ) {
+        // ( TOK_PEEK ( addr, length: both needed ) | TOK_BIN | TOK_QUA | TOK_OCT | TOK_DEC | TOK_HEX ) TOK_STRING TOK_LPAREN num-expr [ TOK_COMMA num-expr ] TOK_RPAREN
         if ( !comp_fetchtok( comp ) ) {
             return false;
         }
@@ -4929,6 +5017,88 @@ bool comp_eat_againstmt( compiler_t* comp, node_t** pnode ) {
 // func-stmt := TOK_FUNC any-ident [ TOK_LPAREN [ usr-fn-arg-list ] TOK_RPAREN ] TOK_EOL stmt-lines TOK_END TOK_FUNC .
 // The function variable is created before the body is parsed, so that the body can call itself (FN name). A FUNC is called
 // like a user function (FN name(...)), a PROC with CALL; the value of a FUNC is what "FN name = expr" or "RETURN expr" last set.
+bool comp_eat_pokestmt( compiler_t* comp, node_t** pnode ) {
+    // poke-stmt := TOK_POKE num-expr TOK_COMMA expr [ TOK_COMMA num-expr ] .     (the value is a number or a string)
+    if ( comp->currtok != TOK_POKE || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    node_t* addr = NODE_NONE, *value = NODE_NONE, *size = NODE_NONE;
+    if ( !comp_eat_numexpr( comp, &addr ) || addr == NODE_NONE ) {
+        comp_error( comp, "Numeric expression expected" );
+        return false;
+    }
+    if ( comp->currtok != TOK_COMMA || !comp_fetchtok( comp ) ) {
+        comp_error( comp, "Comma expected" );
+        return false;
+    }
+    if ( !comp_eat_expr( comp, &value ) || value == NODE_NONE ) {
+        comp_error( comp, "Expression expected" );
+        return false;
+    }
+    bool hassize = false;
+    if ( comp->currtok == TOK_COMMA && comp_fetchtok( comp ) ) {
+        if ( !comp_eat_numexpr( comp, &size ) || size == NODE_NONE ) {
+            comp_error( comp, "Numeric expression expected" );
+            return false;
+        }
+        hassize = true;
+    }
+    if ( !( hassize ? comp_create_node( comp, pnode, NT_POKESTMT, UINT8_C(3), UINT16_C(0), 0, addr, value, size ) :
+                      comp_create_node( comp, pnode, NT_POKESTMT, UINT8_C(2), UINT16_C(0), 0, addr, value ) ) || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
+bool comp_eat_debugstmt( compiler_t* comp, node_t** pnode ) {
+    // stop-stmt := TOK_STOP .   cont-stmt := TOK_CONT .   trace-stmt := TOK_TRACE ( TOK_ON | TOK_OFF ) .
+    // auto-stmt := TOK_AUTO [ num-expr [ TOK_COMMA num-expr ] ] .
+    uint8_t tok = comp->currtok;
+    if ( ( tok != TOK_STOP && tok != TOK_CONT && tok != TOK_TRACE && tok != TOK_AUTO ) || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    if ( tok == TOK_STOP || tok == TOK_CONT ) {
+        return comp_make_simple_stmt( comp, pnode, tok == TOK_STOP ? NT_STOPSTMT : NT_CONTSTMT );
+    }
+    if ( tok == TOK_TRACE ) {
+        uint8_t on = 0;
+        if ( comp->currtok == TOK_ON ) {
+            on = 1;
+        } else if ( comp->currtok != TOK_OFF ) {
+            comp_error( comp, "ON or OFF expected" );
+            return false;
+        }
+        if ( !comp_fetchtok( comp ) ) {
+            return false;
+        }
+        if ( !comp_create_node( comp, pnode, NT_TRACESTMT, UINT8_C(0), UINT16_C(1), &on ) || *pnode == NODE_NONE ) {
+            out_of_memory( comp );
+            return false;
+        }
+        return true;
+    }
+    if ( !comp_create_node( comp, pnode, NT_AUTOSTMT, UINT8_C(0), UINT16_C(0), 0 ) || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    for ( int n=0; n < 2 && !comp_at_stmt_end( comp ); ++n ) {
+        if ( n == 1 && ( comp->currtok != TOK_COMMA || !comp_fetchtok( comp ) ) ) {
+            break;
+        }
+        node_t* arg = NODE_NONE;
+        if ( !comp_eat_numexpr( comp, &arg ) || arg == NODE_NONE ) {
+            comp_error( comp, "Numeric expression expected" );
+            return false;
+        }
+        if ( !comp_add_branch( comp, *pnode, arg ) ) {
+            out_of_memory( comp );
+            return false;
+        }
+    }
+    return true;
+}
+
 bool comp_eat_resumestmt( compiler_t* comp, node_t** pnode ) {
     // resume-stmt := TOK_RESUME [ TOK_NEXT | goto-target ] .
     if ( comp->currtok != TOK_RESUME || !comp_fetchtok( comp ) ) {
@@ -5003,6 +5173,9 @@ bool comp_eat_procstmt( compiler_t* comp, node_t** pnode ) {
         return false;
     }
     if ( numparams && !comp_get_func_params( comp, paramoffs, numparams, params ) ) {
+        return false;
+    }
+    if ( !comp_make_param_arrays( comp, params, numparams ) ) {
         return false;
     }
     // the function variable (a PROC is a function of the label type, so that it has a name of its own)
@@ -5088,7 +5261,7 @@ bool comp_eat_callstmt( compiler_t* comp, node_t** pnode ) {
     node_t* exprlist = NODE_NONE;
     if ( comp->currtok == TOK_LPAREN && comp_fetchtok( comp ) ) {
         if ( comp->currtok != TOK_RPAREN ) {
-            comp_eat_exprlist( comp, &exprlist );
+            comp_eat_callargs( comp, &exprlist );
         }
         if ( comp->currtok != TOK_RPAREN || !comp_fetchtok( comp ) ) {
             free( namedata );
@@ -5112,13 +5285,30 @@ bool comp_eat_callstmt( compiler_t* comp, node_t** pnode ) {
     return true;
 }
 
+// local-item := any-base-var-ref | empty-array-ref | array-decl .
+static bool comp_eat_localitem( compiler_t* comp, node_t** pnode ) {
+    if ( comp_at_emptyarray( comp ) ) {
+        return comp_eat_emptyarrayref( comp, pnode );        // LOCAL A(): a local copy of the array A, same shape, zeroed
+    }
+    uint8_t t = comp->currtok;
+    if ( t == TOK_NUMIDENT || t == TOK_INTIDENT || t == TOK_STRIDENT ) {
+        comp_push_context( comp );
+        bool decl = comp_fetchtok( comp ) && comp->currtok == TOK_LPAREN;
+        comp_pop_context( comp );
+        if ( decl ) {
+            return comp_eat_arraydecl( comp, pnode );        // LOCAL A(10): a new array
+        }
+    }
+    return comp_eat_anybasevarref( comp, pnode );
+}
+
 bool comp_eat_localstmt( compiler_t* comp, node_t** pnode ) {
-    // local-stmt := TOK_LOCAL any-base-var-ref { TOK_COMMA any-base-var-ref } .
+    // local-stmt := TOK_LOCAL local-item { TOK_COMMA local-item } .
     if ( comp->currtok != TOK_LOCAL || !comp_fetchtok( comp ) ) {
         return false;
     }
     node_t* var = NODE_NONE;
-    if ( !comp_eat_anybasevarref( comp, &var ) || var == NODE_NONE ) {
+    if ( !comp_eat_localitem( comp, &var ) || var == NODE_NONE ) {
         comp_error( comp, "Variable expected" );
         return false;
     }
@@ -5128,7 +5318,7 @@ bool comp_eat_localstmt( compiler_t* comp, node_t** pnode ) {
     }
     while ( comp->currtok == TOK_COMMA ) {
         var = NODE_NONE;
-        if ( !comp_fetchtok( comp ) || !comp_eat_anybasevarref( comp, &var ) || var == NODE_NONE ) {
+        if ( !comp_fetchtok( comp ) || !comp_eat_localitem( comp, &var ) || var == NODE_NONE ) {
             comp_error( comp, "Variable expected" );
             return false;
         }
@@ -5377,6 +5567,12 @@ bool comp_eat_controlflowstmt( compiler_t* comp, node_t** pnode ) {
         return true;
     }
     if ( comp_eat_resumestmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_debugstmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_pokestmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     if ( comp_eat_callstmt( comp, pnode ) && *pnode != NODE_NONE ) {

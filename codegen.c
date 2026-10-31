@@ -38,6 +38,7 @@ void init_codegen( codegen_t* cgen ) {
     cgen->codecap  = cgen->datacap = 0;
     cgen->persistent = 0;
     cgen->endaddr = CODEOFFS_NONE;
+    cgen->progsize = 0;
     cgen->consts   = 0; cgen->numconsts = cgen->maxconsts = 0;
     cgen->lineaddrs = 0; cgen->numlineaddrs = cgen->maxlineaddrs = 0;
     cgen->fixups    = 0; cgen->numfixups    = cgen->maxfixups    = 0;
@@ -426,6 +427,13 @@ const char* cgen_opcode_name( uint16_t opcode ) {
         case INS_DTIM:      return "DTIM";
         case INS_LOCL:      return "LOCL";
         case INS_RSM:       return "RSM";
+        case INS_STOP:      return "STOP";
+        case INS_CONT:      return "CONT";
+        case INS_TRON:      return "TRON";
+        case INS_AUTO:      return "AUTO";
+        case INS_PEEK:      return "PEEK";
+        case INS_PEKS:      return "PEKS";
+        case INS_POKE:      return "POKE";
         case INS_AFLT:      return "AFLT";
         case INS_GFXC:      return "GFXC";
         case INS_GFXQ:      return "GFXQ";
@@ -1133,6 +1141,13 @@ bool cgen_gen_nimp( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_NIMP, f
 bool cgen_gen_dtim( codegen_t* cgen, uint16_t kind ) { return cgen_gen_ins12( cgen, INS_DTIM, false, true, kind ); }
 bool cgen_gen_locl( codegen_t* cgen, uint16_t varoffs ) { return cgen_gen_ins12_imm17( cgen, INS_LOCL, (int32_t) varoffs ); }
 bool cgen_gen_rsm( codegen_t* cgen, uint16_t kind ) { return cgen_gen_ins12( cgen, INS_RSM, false, true, kind ); }
+bool cgen_gen_stop( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_STOP, false, false, UINT16_C(0) ); }
+bool cgen_gen_cont( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_CONT, false, false, UINT16_C(0) ); }
+bool cgen_gen_tron( codegen_t* cgen, uint16_t on ) { return cgen_gen_ins12( cgen, INS_TRON, false, true, on ); }
+bool cgen_gen_auto( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_AUTO, false, false, UINT16_C(0) ); }
+bool cgen_gen_peek( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_PEEK, false, false, UINT16_C(0) ); }
+bool cgen_gen_peks( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_PEKS, false, false, UINT16_C(0) ); }
+bool cgen_gen_poke( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_POKE, false, false, UINT16_C(0) ); }
 bool cgen_gen_acnt( codegen_t* cgen, uint16_t varoffs ) { return cgen_gen_ins12_imm17( cgen, INS_ACNT, (int32_t) varoffs ); }
 bool cgen_gen_aflt( codegen_t* cgen, uint16_t varoffs ) { return cgen_gen_ins12_imm17( cgen, INS_AFLT, (int32_t) varoffs ); }
 bool cgen_gen_rand( codegen_t* cgen, uint16_t hasseed ) { return cgen_gen_ins12( cgen, INS_RAND, false, true, hasseed ); }
@@ -1374,6 +1389,14 @@ static bool from_fncall_cb( void* param, node_t* node ) {
         return comp_node_iter_branches( pdata->comp, node, pdata, from_fncall_cb );
     }
     ++pdata->count;
+    if ( nodetype == NT_EMPTYARRAYREF ) {
+        // an array argument: the variable number of the array (the call makes the parameter that array)
+        if ( node->datalen != UINT16_C(3) ) {
+            return cgen_unexpected_node( pdata->comp );
+        }
+        int32_t varoffs = (int32_t)( ( ( (uint16_t) node->data[1] ) << UINT8_C(8) ) | node->data[2] );
+        return cgen_gen_phim( pdata->cgen, varoffs ) || cgen_out_of_code_memory( pdata->comp );
+    }
     return cgen_from_expr( pdata->cgen, pdata->comp, node );
 }
 
@@ -1510,7 +1533,7 @@ UNEXP:  return cgen_unexpected_node( comp );
     if ( ( vartype & VARTYPEF_FUNC ) == 0 ) {
         goto UNEXP;
     }
-    if ( !cgen_gen_call_args( cgen, comp, node ) ) {
+    if ( !cgen_check_call_args( comp, varoffs, node ) || !cgen_gen_call_args( cgen, comp, node ) ) {
         return false;
     }
     if ( !cgen_gen_calf( cgen, varoffs ) ) {
@@ -1621,6 +1644,7 @@ UNEXP:      return cgen_unexpected_node( comp );
         case TOK_ADDRESS: generator = cgen_gen_adrs; break;
         case TOK_ERR:   generator = cgen_gen_errs; break;
         case TOK_ERL:   generator = cgen_gen_erl; break;
+        case TOK_PEEK:  generator = nodetype == NT_SYSSTRFUNCARGCALL ? cgen_gen_peks : cgen_gen_peek; break;
         case TOK_MKI:   generator = cgen_gen_mki; break;
         case TOK_MKL:   generator = cgen_gen_mkl; break;
         case TOK_MKS:   generator = cgen_gen_mks; break;
@@ -3107,6 +3131,8 @@ static bool cgen_from_stmt_node( codegen_t* cgen, compiler_t* comp, node_t* node
         case NT_CALLSTMT:   return cgen_from_callstmt( cgen, comp, node );
         case NT_LOCALSTMT:  return cgen_from_localstmt( cgen, comp, node );
         case NT_RESUMESTMT: return cgen_from_resumestmt( cgen, comp, node );
+        case NT_POKESTMT:   return cgen_from_pokestmt( cgen, comp, node );
+        case NT_STOPSTMT: case NT_CONTSTMT: case NT_TRACESTMT: case NT_AUTOSTMT: return cgen_from_debugstmt( cgen, comp, node );
         case NT_EXITSTMT:   return cgen_from_exitstmt( cgen, comp, node );
         case NT_DESIGNSTMT: return cgen_from_designstmt( cgen, comp, node );
         case NT_DESIGNROW:  return cgen_from_designrow( cgen, comp, node );
@@ -3225,6 +3251,7 @@ bool cgen_from_program( codegen_t* cgen, compiler_t* comp ) {
         // follow starts behind it, so a jump from such a line into the program can't run on into the line itself.
         cgen->endaddr = cgen->codesize;
         ok = cgen_gen_hlt( cgen ) || cgen_out_of_code_memory( comp );
+        cgen->progsize = cgen->codesize;
     }
     return ok && cgen_finish_control( cgen, comp );
 }

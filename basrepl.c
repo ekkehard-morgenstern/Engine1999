@@ -80,6 +80,14 @@ static void repl_vm_report( struct _vm_t* vm, void* usrdata, const char* text ) 
     repl_report( (repl_t*) usrdata, text );
 }
 
+// the stored program was changed: its line table is out of date and a stopped run can't be continued (the code no longer matches)
+static void repl_program_changed( repl_t* repl ) {
+    repl->linesstale = true;
+    if ( repl->vmready ) {
+        vm_discard_stop( &repl->vm );
+    }
+}
+
 // -- setup -----------------------------------------------------------------------
 
 // (re)initializes the runtime and the VM; the program is not touched
@@ -138,6 +146,7 @@ static void repl_restore_runtime( repl_t* repl, runtime_t* old ) {
 
 bool init_repl( repl_t* repl ) {
     memset( repl, 0, sizeof(*repl) );
+    repl->autoline = LINENO_NONE;
     init_program( &repl->pgm );
     init_runtime( &repl->rt );      // so that cleanup_runtime() in repl_reset_runtime() has something to free
     repl->tokbuf = create_buffer();
@@ -210,6 +219,7 @@ static void repl_setup_vm( repl_t* repl ) {
     vm->renumber  = repl_vm_renumber;
     vm->merge     = repl_vm_merge;
     vm->files     = repl_vm_files;
+    vm->trace     = repl->trace;       // TRACE ON lasts until TRACE OFF, over RUN, too
 }
 
 // -- running -----------------------------------------------------------------------
@@ -294,6 +304,7 @@ static bool repl_execute( repl_t* repl, bool fromstart, const char* label, int32
             ok = vm_run_at( &repl->vm, start );
         }
     }
+    repl->trace = repl->vm.trace;
     // A direct mode line has done its job once it has run (or failed). Unless it defined something that points into its code
     // or data (a function, a label, DATA items), the code and the constants of the line are discarded, so that a long
     // session doesn't fill the segments.
@@ -530,7 +541,7 @@ static bool repl_load_program( repl_t* repl, const char* name ) {
     }
     free_program( &repl->pgm );
     repl->pgm = loaded;
-    repl->linesstale = true;
+    repl_program_changed( repl );
     repl_set_filename( repl, filename );
     free( filename );
     return true;
@@ -570,7 +581,7 @@ static bool repl_merge_program( repl_t* repl, const char* name, bool append ) {
     }
     if ( ok ) {
         merge_programs( &repl->pgm, &loaded );
-        repl->linesstale = true;
+        repl_program_changed( repl );
     }
     free_program( &loaded );
     return ok;
@@ -699,6 +710,12 @@ static bool repl_finish( repl_t* repl, bool ok, bool direct ) {
             ok = repl_edit_line( repl, name, line );    // back to the host: nothing runs afterwards
             free( name );
             return ok;
+        }
+        if ( kind == VMREQ_AUTO ) {
+            repl->autoline = line >= 0 ? (uint32_t) line : 10U;     // back to the host, which prompts with the line numbers
+            repl->autostep = repl->vm.reqstep > 0 ? (uint32_t) repl->vm.reqstep : 10U;
+            free( name );
+            return true;
         }
         if ( kind == VMREQ_MONITOR ) {
             repl->monitor = true;       // back to the host: nothing runs afterwards
@@ -851,7 +868,7 @@ static bool repl_vm_delete( struct _vm_t* vm, void* usrdata, const char* firstla
         return false;
     }
     delete_lines( &repl->pgm, first, last );
-    repl->linesstale = true;
+    repl_program_changed( repl );
     return true;
 }
 
@@ -866,7 +883,7 @@ static bool repl_vm_renumber( struct _vm_t* vm, void* usrdata, const char* first
     if ( first != LINENO_NONE ) {
         start = first;
     }
-    repl->linesstale = true;
+    repl_program_changed( repl );
     switch ( renumber_program( &repl->pgm, first, last, start, (uint32_t) step ) ) {
         case RENUM_OK:
             return true;
@@ -946,7 +963,7 @@ static bool repl_enter_line( repl_t* repl, const char* text ) {
             }
         } else {
             ok = enter_line( &repl->pgm, tokline, 0 );
-            repl->linesstale = true;
+            repl_program_changed( repl );
             if ( !ok ) {
                 repl_report( repl, "? Out of memory" );
             }

@@ -13,11 +13,12 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-(not committed yet) **Small additions, PROC/FUNC/LOCAL, RESUME** (2026-10-31)
-- **Small additions**: `FLOOR CEIL LOG2 LOG10`, `IMP NIMP EQV NEQV`, `SHL SHR ASL ASR`, `TIME$ DATE$ DATETIME$` (tokens 220..234, instructions `URSH 0x16A`, `IMP 0x16B`, `NIMP 0x16C`, `DTIM 0x16D`, `MATH` kinds 14..16).
-- **`PROC` / `FUNC` / `CALL` / `LOCAL`**: tokens 235..238, nodes 0x7A..0x7C, `LOCL 0x16E`; `RETURN expr`, `EXIT PROC|FUNC|FN`; recursion; `vm_context_t.saved` became a heap list; `bascomp.c` (`comp_eat_procstmt/callstmt/localstmt`), `cgendecl.c` (`cgen_from_procstmt/callstmt`), `cgenctl.c` (`LOCAL`, proc exits), `vm.c` (`vm_local`).
-- **`RESUME`**: token 239, `NT_RESUMESTMT 0x7D`, `RSM 0x16F`; table of statement addresses in the code generator (`cgen_find_stmt`), `vm->steppc`/`errpc`/`resume*`, `vm_resume_error()`.
-- Tests: `vmtest1` 908 -> 969 (+18 small additions, +25 PROC/FUNC, +15 RESUME; clean under ASAN/UBSAN), `repltest1` 286, the other test programs pass. Docs: `basic-language.md`, `compiler-and-vm.md`, `roadmap.md`, `instset.h`, `SESSION.md`.
+(not committed yet) **Array parameters, local arrays, STOP/CONT/TRACE/AUTO, PEEK/POKE** (2026-10-31)
+- **History log**: the entry of `bcf5b5e` (small additions, PROC/FUNC, RESUME) moved into the log.
+- **Array parameters and local arrays**: `vars.[ch]` (`vmem_array_alias/fresh/restore`, `var_t.aliased`), `vm.c` (`vm_savedvar_t.isarray`, call/local/unwind), `bascomp.c` (`comp_eat_callargs`, `comp_make_param_arrays`, `LOCAL` items), `cgendecl.c` (`cgen_check_call_args`), `codegen.c`.
+- **STOP / CONT / TRACE / AUTO**: tokens 240..242, nodes 0x7E..0x81, instructions 0x170..0x173, `vm_stopstate_t` (stacks moved on STOP/Break), `codegen_t.progsize`, `repl_program_changed()`, `repl_t.trace/autoline/autostep`, `VMREQ_AUTO`; the AUTO prompting in `engine1999.c` (tried on the real screen under Xvfb).
+- **PEEK / POKE / PEEK$**: tokens 243/244, `NT_POKESTMT 0x82`, instructions 0x174..0x176, `vm_t.ram` (1 MiB).
+- Tests: `vmtest1` 969 -> 1011 (+17 arrays, +5 STOP/TRACE, +20 PEEK/POKE), `repltest1` 286 -> 302 (STOP/CONT/TRACE/AUTO); both clean under ASAN/UBSAN; the other test programs pass. Docs: `basic-language.md`, `compiler-and-vm.md`, `roadmap.md`, `instset.h`, `SESSION.md`.
 
 ## Log
 
@@ -600,3 +601,10 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 - Read `../asmbasic` and its docs; `docs/roadmap.md` got section 11 with everything worth taking over (procedures with `LOCAL`, `RESUME`, `STOP`/`CONT`/`TRACE`/`AUTO`, logical operators and shifts, more math functions, `PEEK`/`POKE`/`SYS`, `PRINT USING`, `TIME$`/`DATE$`, aliases, open questions).
 - Implemented `EXIT [n]`, `LEAVE [n]`, `ITERATE [n]`, `FOR … DOWNTO … [STEP]`, `FOR EACH [key,] v IN a()`: tokens 217..219, nodes `NT_FOREACHSTMT 0x78` / `NT_EXITSTMT 0x79`, instructions `ACNT 0x168` / `AFLT 0x169`; `bastok`, `bascomp` (+ `.ebnf`), `cgenctl.c` (loop jump list, `cc_resolve_loopjumps`), `codegen`, `vm.c`, `instset.h`; docs (`basic-language.md`, `compiler-and-vm.md`, `roadmap.md`), `SESSION.md`.
 - Tests: `vmtest1` 908 cases (41 new; also under ASAN, which caught a double free in my first `AFLT`: fixed), all other test programs pass.
+
+### bcf5b5e — 2026-10-31 10:16:07 +0100 — "Various additions (check documentation), implemented by Claude Code"
+19 files, +946/-43.
+- **Small additions**: `FLOOR CEIL LOG2 LOG10`, `IMP NIMP EQV NEQV`, `SHL SHR ASL ASR`, `TIME$ DATE$ DATETIME$` (tokens 220..234, instructions `URSH 0x16A`, `IMP 0x16B`, `NIMP 0x16C`, `DTIM 0x16D`, `MATH` kinds 14..16).
+- **`PROC` / `FUNC` / `CALL` / `LOCAL`**: tokens 235..238, nodes 0x7A..0x7C, `LOCL 0x16E`; `RETURN expr`, `EXIT PROC|FUNC|FN`; recursion; `vm_context_t.saved` became a heap list; `bascomp.c` (`comp_eat_procstmt/callstmt/localstmt`), `cgendecl.c` (`cgen_from_procstmt/callstmt`), `cgenctl.c` (`LOCAL`, proc exits), `vm.c` (`vm_local`).
+- **`RESUME`**: token 239, `NT_RESUMESTMT 0x7D`, `RSM 0x16F`; table of statement addresses in the code generator (`cgen_find_stmt`), `vm->steppc`/`errpc`/`resume*`, `vm_resume_error()`.
+- Tests: `vmtest1` 908 -> 969 (+18 small additions, +25 PROC/FUNC, +15 RESUME; clean under ASAN/UBSAN), `repltest1` 286, the other test programs pass. Docs: `basic-language.md`, `compiler-and-vm.md`, `roadmap.md`, `instset.h`, `SESSION.md`.

@@ -107,6 +107,10 @@ void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem ) {
     vm->reqline  = -1;
     vm->reqlabel = 0;
     vm->reqmerge = false;
+    vm->reqstep  = -1;
+    memset( &vm->stopped, 0, sizeof(vm->stopped) );
+    vm->trace    = false;
+    vm->ram      = 0;
     clock_gettime( CLOCK_MONOTONIC, &vm->started );
 }
 
@@ -123,13 +127,71 @@ static void vm_clear_stacks( vm_t* vm ) {
     // function contexts still open (after an error): free the saved strings
     while ( vm->nctx ) {
         vm_context_t* ctx = &vm->ctxs[ --vm->nctx ];
-        for ( size_t i=0; i < ctx->numsaved; ++i ) {
-            if ( ctx->saved[i].value.isstr ) {
-                free( ctx->saved[i].value.str );
+        for ( size_t i = ctx->numsaved; i > 0; --i ) {
+            vm_savedvar_t* sv = &ctx->saved[ i - 1U ];
+            if ( sv->isarray ) {
+                vmem_array_restore( vm->vmem, sv->varoffs, &sv->arr );
+            } else if ( sv->value.isstr ) {
+                free( sv->value.str );
             }
         }
         ctx->numsaved = 0;
     }
+}
+
+// -- STOP / CONT -------------------------------------------------------------
+
+// gives back what the open calls of a context list hold (array parameters, strings) and frees the list
+static void vm_free_contexts( vm_t* vm, vm_context_t* ctxs, size_t nctx, size_t maxctx ) {
+    for ( size_t c = nctx; c > 0; --c ) {
+        vm_context_t* ctx = &ctxs[ c - 1U ];
+        for ( size_t i = ctx->numsaved; i > 0; --i ) {
+            vm_savedvar_t* sv = &ctx->saved[ i - 1U ];
+            if ( sv->isarray ) {
+                vmem_array_restore( vm->vmem, sv->varoffs, &sv->arr );
+            } else if ( sv->value.isstr ) {
+                free( sv->value.str );
+            }
+        }
+    }
+    for ( size_t c=0; c < maxctx; ++c ) {
+        free( ctxs[c].saved );
+    }
+    free( ctxs );
+}
+
+void vm_discard_stop( vm_t* vm ) {
+    vm_stopstate_t* st = &vm->stopped;
+    if ( !st->valid ) {
+        return;
+    }
+    for ( size_t i=0; i < st->dsp; ++i ) {
+        if ( st->dstack[i].isstr ) {
+            free( st->dstack[i].str );
+        }
+    }
+    free( st->dstack );
+    free( st->rstack );
+    vm_free_contexts( vm, st->ctxs, st->nctx, st->maxctx );
+    memset( st, 0, sizeof(*st) );
+}
+
+// STOP and the Break key: keep the stacks and the next instruction for CONT (only for the code of the program, not of a direct line)
+static void vm_save_stop( vm_t* vm, uint32_t pc ) {
+    if ( pc >= vm->cgen->progsize ) {
+        return;
+    }
+    vm_discard_stop( vm );
+    vm_stopstate_t* st = &vm->stopped;
+    st->valid = true;
+    st->pc = pc;
+    st->line = vm->line;
+    st->dstack = vm->dstack; st->dsp = vm->dsp; st->dmax = vm->dmax;
+    st->rstack = vm->rstack; st->rsp = vm->rsp; st->rmax = vm->rmax;
+    st->ctxs = vm->ctxs; st->nctx = vm->nctx; st->maxctx = vm->maxctx;
+    vm->dstack = 0; vm->dsp = vm->dmax = 0;
+    vm->rstack = 0; vm->rsp = vm->rmax = 0;
+    vm->ctxs = 0; vm->nctx = vm->maxctx = 0;
 }
 
 void vm_clear_request( vm_t* vm ) {
@@ -143,6 +205,9 @@ void vm_clear_request( vm_t* vm ) {
 }
 
 void cleanup_vm( vm_t* vm ) {
+    vm_discard_stop( vm );
+    free( vm->ram );
+    vm->ram = 0;
     iotab_closeall( &vm->io );
     free( vm->fields );
     vm->fields = 0;
@@ -1028,10 +1093,6 @@ static bool vm_call_function( vm_t* vm, uint16_t funcoffs, uint32_t retaddr ) {
             vm_error( vm, "Bad function parameter" );
             goto FAILCTX;
         }
-        if ( ptype & VARTYPEF_ARRAY ) {
-            vm_error( vm, "Array parameters are not supported yet" );
-            goto FAILCTX;
-        }
         if ( !vmem_lookup_var( vm->vmem, ptype, name, &poffs ) || poffs == VAROFFS_NONE ) {
             vm_error( vm, "Undefined parameter variable" );
             goto FAILCTX;
@@ -1043,6 +1104,19 @@ static bool vm_call_function( vm_t* vm, uint16_t funcoffs, uint32_t retaddr ) {
         }
         sv->varoffs = poffs;
         sv->vartype = ptype;
+        sv->isarray = false;
+        sv->value.isstr = false;
+        if ( ptype & VARTYPEF_ARRAY ) {
+            // an array parameter: the argument is the variable number of an array; the parameter becomes that array
+            const var_t* src = args[i].isstr ? 0 : vmem_var( vm->vmem, (uint16_t) args[i].num );
+            if ( src == 0 || src->type != ptype || !vmem_array_alias( vm->vmem, poffs, src->num, &sv->arr ) ) {
+                --ctx->numsaved;
+                vm_error( vm, "Array expected as argument" );
+                goto FAILCTX;
+            }
+            sv->isarray = true;
+            continue;
+        }
         --ctx->numsaved;        // (counted again when the value was fetched)
         if ( !vm_get_value( vm, poffs, ptype, 0, 0, &sv->value ) ) {
             goto FAILCTX;
@@ -1063,9 +1137,12 @@ static bool vm_call_function( vm_t* vm, uint16_t funcoffs, uint32_t retaddr ) {
     return vm_branch_to( vm, codeoffs );
 
 FAILCTX:
-    for ( size_t i=0; i < ctx->numsaved; ++i ) {
-        if ( ctx->saved[i].value.isstr ) {
-            free( ctx->saved[i].value.str );
+    for ( size_t i = ctx->numsaved; i > 0; --i ) {
+        vm_savedvar_t* sv = &ctx->saved[ i - 1U ];
+        if ( sv->isarray ) {
+            vmem_array_restore( vm->vmem, sv->varoffs, &sv->arr );
+        } else if ( sv->value.isstr ) {
+            free( sv->value.str );
         }
     }
 FAIL:
@@ -1090,7 +1167,11 @@ static bool vm_return_function( vm_t* vm ) {
     bool ok = true;
     for ( size_t i = ctx->numsaved; i > 0; --i ) {
         vm_savedvar_t* sv = &ctx->saved[ i - 1U ];
-        ok = vm_set_value( vm, sv->varoffs, sv->vartype, 0, 0, sv->value ) && ok;
+        if ( sv->isarray ) {
+            vmem_array_restore( vm->vmem, sv->varoffs, &sv->arr );
+        } else {
+            ok = vm_set_value( vm, sv->varoffs, sv->vartype, 0, 0, sv->value ) && ok;
+        }
     }
     ctx->numsaved = 0;
     return ok && vm_branch_to( vm, retaddr );
@@ -1580,6 +1661,190 @@ static bool vm_edit_request( vm_t* vm ) {
 static bool vm_new_program( vm_t* vm ) {
     vm_clear_request( vm );
     vm->request = VMREQ_NEW;
+    vm->pc = vm->cgen->codesize;
+    return true;
+}
+
+// STOP ( -- ): ends the run like the Break key, but keeps the state for CONT
+static bool vm_stop_program( vm_t* vm ) {
+    vm_save_stop( vm, vm->pc );
+    return vm_error( vm, "Break" );
+}
+
+// CONT ( -- ): goes on where STOP / Break left the program: its stacks come back, the stacks of this (direct mode) run are given up
+static bool vm_continue_program( vm_t* vm ) {
+    vm_stopstate_t* st = &vm->stopped;
+    if ( !st->valid ) {
+        return vm_error( vm, "Cannot continue" );
+    }
+    vm_clear_stacks( vm );
+    free( vm->dstack );
+    free( vm->rstack );
+    vm_free_contexts( vm, vm->ctxs, vm->nctx, vm->maxctx );
+    vm->dstack = st->dstack; vm->dsp = st->dsp; vm->dmax = st->dmax;
+    vm->rstack = st->rstack; vm->rsp = st->rsp; vm->rmax = st->rmax;
+    vm->ctxs = st->ctxs; vm->nctx = st->nctx; vm->maxctx = st->maxctx;
+    vm->line = st->line;
+    vm->pc = st->pc;
+    memset( st, 0, sizeof(*st) );
+    return true;
+}
+
+// the block addr .. addr+len-1 of the RAM: false (after the error) if it is not inside
+static bool vm_ram_range( vm_t* vm, double addr, size_t len ) {
+    if ( !( addr >= 0.0 && addr < (double) VM_RAMSIZE ) || len > VM_RAMSIZE - (size_t) addr ) {
+        return vm_error( vm, "Illegal address" );
+    }
+    return true;
+}
+
+static int vm_ram_size( double size ) {
+    return size == 1.0 ? 1 : size == 2.0 ? 2 : size == 4.0 ? 4 : size == -4.0 ? -4 : size == -8.0 ? -8 : 0;
+}
+
+// PEEK ( addr size -- n )
+static bool vm_peek( vm_t* vm ) {
+    double addr, size;
+    if ( !vm_dpop_num( vm, &size ) || !vm_dpop_num( vm, &addr ) ) {
+        return false;
+    }
+    int n = vm_ram_size( size );
+    if ( n == 0 ) {
+        return vm_error( vm, "Illegal argument" );
+    }
+    size_t len = (size_t)( n < 0 ? -n : n );
+    if ( !vm_ram_range( vm, addr, len ) ) {
+        return false;
+    }
+    uint8_t b[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+    if ( vm->ram != 0 ) {
+        memcpy( b, &vm->ram[ (size_t) addr ], len );
+    }
+    uint32_t b32 = ( (uint32_t) b[0] << 24 ) | ( (uint32_t) b[1] << 16 ) | ( (uint32_t) b[2] << 8 ) | b[3];
+    double r = 0.0;
+    switch ( n ) {
+        case 1: r = b[0]; break;
+        case 2: r = (double)( ( (unsigned) b[0] << 8 ) | b[1] ); break;
+        case 4: r = (double)(int32_t) b32; break;
+        case -4: {
+            float f;
+            memcpy( &f, &b32, sizeof(f) );
+            r = (double) f;
+            break;
+        }
+        default: {
+            uint64_t bits = 0;
+            for ( int i=0; i < 8; ++i ) {
+                bits = ( bits << 8 ) | b[i];
+            }
+            memcpy( &r, &bits, sizeof(r) );
+            break;
+        }
+    }
+    return vm_dpush_num( vm, isfinite( r ) ? r : 0.0 );
+}
+
+// PEKS ( addr len -- s )
+static bool vm_peek_string( vm_t* vm ) {
+    double addr, len;
+    if ( !vm_dpop_num( vm, &len ) || !vm_dpop_num( vm, &addr ) ) {
+        return false;
+    }
+    if ( !( len >= 0.0 && len <= 65535.0 ) ) {
+        return vm_error( vm, "Illegal argument" );
+    }
+    size_t n = (size_t) len;
+    if ( !vm_ram_range( vm, addr, n ) ) {
+        return false;
+    }
+    char* s = (char*) calloc( n + 1U, 1U );
+    if ( s == 0 ) {
+        return vm_error( vm, "Out of memory" );
+    }
+    if ( vm->ram != 0 && n > 0 ) {
+        memcpy( s, &vm->ram[ (size_t) addr ], n );
+    }
+    return vm_push_string_n( vm, s, n );
+}
+
+// POKE ( addr value size -- )
+static bool vm_poke( vm_t* vm ) {
+    double addr, size; vmval_t val;
+    if ( !vm_dpop_num( vm, &size ) || !vm_dpop( vm, &val ) ) {
+        return false;
+    }
+    if ( !vm_dpop_num( vm, &addr ) ) {
+        if ( val.isstr ) {
+            free( val.str );
+        }
+        return false;
+    }
+    size_t len = 0;
+    int n = 0;
+    const char* why = 0;
+    if ( val.isstr ) {
+        len = val.len;
+    } else {
+        n = vm_ram_size( size );
+        len = (size_t)( n < 0 ? -n : n );
+        if ( n == 0 || ( n > 0 && !( val.num > -2147483649.0 && val.num < 4294967296.0 ) ) ) {
+            why = "Illegal argument";
+        }
+    }
+    if ( why == 0 && !( addr >= 0.0 && addr < (double) VM_RAMSIZE && len <= VM_RAMSIZE - (size_t) addr ) ) {
+        why = "Illegal address";
+    }
+    if ( why == 0 && len > 0 && vm->ram == 0 ) {
+        vm->ram = (uint8_t*) calloc( VM_RAMSIZE, 1U );
+        if ( vm->ram == 0 ) {
+            why = "Out of memory";
+        }
+    }
+    if ( why != 0 ) {
+        if ( val.isstr ) {
+            free( val.str );
+        }
+        return vm_error( vm, why );
+    }
+    uint8_t* dst = vm->ram ? &vm->ram[ (size_t) addr ] : 0;
+    if ( val.isstr ) {
+        if ( len > 0 ) {
+            memcpy( dst, val.str, len );
+        }
+        free( val.str );
+        return true;
+    }
+    uint64_t bits = 0;
+    if ( n > 0 ) {
+        bits = (uint64_t)(uint32_t)( val.num < 0.0 ? (uint32_t)(int32_t) val.num : (uint32_t) val.num );
+    } else if ( n == -4 ) {
+        float f = (float) val.num;
+        uint32_t b32;
+        memcpy( &b32, &f, sizeof(b32) );
+        bits = b32;
+    } else {
+        memcpy( &bits, &val.num, sizeof(bits) );
+    }
+    for ( size_t i = len; i > 0; --i ) {
+        dst[ i - 1U ] = (uint8_t) bits;
+        bits >>= 8;
+    }
+    return true;
+}
+
+// AUTO ( start step -- ): leaves a request for the host and ends the run
+static bool vm_auto_request( vm_t* vm ) {
+    double start, step;
+    if ( !vm_dpop_num( vm, &step ) || !vm_dpop_num( vm, &start ) ) {
+        return false;
+    }
+    if ( start < -1.0 || start > (double) LINENO_MAX || step < -1.0 || step > (double) LINENO_MAX ) {
+        return vm_error( vm, "Illegal argument" );
+    }
+    vm_clear_request( vm );
+    vm->request = VMREQ_AUTO;
+    vm->reqline = (int32_t) start;
+    vm->reqstep = (int32_t) step;
     vm->pc = vm->cgen->codesize;
     return true;
 }
@@ -2785,7 +3050,7 @@ static bool vm_date_time( vm_t* vm, uint16_t kind ) {
 // LOCL: the variable is local to the running PROC / FUNC: save its value in the context, start from 0 or ""
 static bool vm_local( vm_t* vm, uint16_t varoffs ) {
     var_t* var = vmem_var( vm->vmem, varoffs );
-    if ( var == 0 || ( var->type & ( VARTYPEF_ARRAY | VARTYPEF_FUNC ) ) || ( var->type & VARTYPEM_BASE ) == VARTYPEV_LABEL ) {
+    if ( var == 0 || ( var->type & VARTYPEF_FUNC ) || ( var->type & VARTYPEM_BASE ) == VARTYPEV_LABEL ) {
         return vm_error( vm, "Illegal LOCAL variable" );
     }
     if ( vm->nctx == 0 ) {
@@ -2799,6 +3064,17 @@ static bool vm_local( vm_t* vm, uint16_t varoffs ) {
     }
     sv->varoffs = varoffs;
     sv->vartype = vartype;
+    sv->isarray = false;
+    sv->value.isstr = false;
+    if ( vartype & VARTYPEF_ARRAY ) {
+        // a LOCAL array: new zeroed elements of the same shape, the old ones come back at the end of the call
+        if ( !vmem_array_fresh( vm->vmem, varoffs, &sv->arr ) ) {
+            --ctx->numsaved;
+            return vm_error( vm, "Out of memory" );
+        }
+        sv->isarray = true;
+        return true;
+    }
     --ctx->numsaved;
     if ( !vm_get_value( vm, varoffs, vartype, 0, 0, &sv->value ) ) {
         return false;
@@ -3165,6 +3441,11 @@ static bool vm_step( vm_t* vm ) {
         }
         case INS_LINE:
             vm->line = param;
+            if ( vm->trace ) {
+                char tr[24];
+                snprintf( tr, sizeof(tr), "[%u]", (unsigned) param );
+                vm_out( vm, tr );
+            }
             return true;
         case INS_LAN:
             return vm_pop_address( vm, code, 8U, &mem, &avail ) && vm_dpush_num( vm, vm_extract_float( mem ) );
@@ -3247,6 +3528,13 @@ static bool vm_step( vm_t* vm ) {
         case INS_DTIM: return vm_date_time( vm, param16 );
         case INS_LOCL: return vm_local( vm, param16 );
         case INS_RSM: return vm_resume_error( vm, param16 );
+        case INS_STOP: return vm_stop_program( vm );
+        case INS_CONT: return vm_continue_program( vm );
+        case INS_TRON: vm->trace = param16 != 0; return true;
+        case INS_AUTO: return vm_auto_request( vm );
+        case INS_PEEK: return vm_peek( vm );
+        case INS_PEKS: return vm_peek_string( vm );
+        case INS_POKE: return vm_poke( vm );
         case INS_ACNT: case INS_AFLT: return vm_array_flat( vm, opcode, param16 );
         case INS_GFXC: return vm_gfx_command( vm, param16 );
         case INS_GFXQ: return vm_gfx_query( vm, param16 );
@@ -3405,7 +3693,11 @@ static bool vm_trap_error( vm_t* vm ) {
             vm_context_t* ctx = &vm->ctxs[ --vm->nctx ];
             for ( size_t i = ctx->numsaved; i > 0; --i ) {
                 vm_savedvar_t* sv = &ctx->saved[ i - 1U ];
-                vm_set_value( vm, sv->varoffs, sv->vartype, 0, 0, sv->value );
+                if ( sv->isarray ) {
+                    vmem_array_restore( vm->vmem, sv->varoffs, &sv->arr );
+                } else {
+                    vm_set_value( vm, sv->varoffs, sv->vartype, 0, 0, sv->value );
+                }
             }
             ctx->numsaved = 0;
         }
@@ -3472,6 +3764,7 @@ bool vm_resume( vm_t* vm, bool singlestep ) {
             return vm_error( vm, "Step limit exceeded" );
         }
         if ( vm->interrupt && steps % VM_INTERRUPT_STEPS == 0 && vm_interrupted( vm ) ) {
+            vm_save_stop( vm, vm->pc );
             return vm_error( vm, "Break" );
         }
         if ( vm->errinhandler && vm->rsp <= vm->errrsp ) {

@@ -105,6 +105,10 @@ typedef struct _repl_t {
     bool        fulledit;
     // MONITOR asks the host for the machine monitor the same way (the run ends, the host checks the flag after repl_enter())
     bool        monitor;
+    // AUTO [start[,step]]: the host prompts with line numbers while autoline != LINENO_NONE (see AUTO in docs/basic-language.md);
+    // it enters the lines itself and calls repl_auto_next() after each one
+    uint32_t    autoline, autostep;
+    bool        trace;              // TRACE ON: the VM prints [n] for every line, also in the next runs
     bool        started;            // internal: repl_execute() got as far as running the program (CHAIN keeps the old runtime if not)
     bool        linesstale;         // internal: the stored program was changed since it was compiled (its line table is out of date)
     runtime_t*  keeprt;             // internal (CHAIN): the previous runtime, whose variables the program being started takes over

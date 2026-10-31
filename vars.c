@@ -59,12 +59,14 @@ static void vmem_error( varmem_t* vmem, const char* text ) {
 
 static void vmem_free_var( var_t* var ) {
     if ( var->type & VARTYPEF_ARRAY ) {
-        if ( ( var->type & VARTYPEM_BASE ) == VARTYPEV_STR && var->elems.strs ) {
-            for ( size_t i=0; i < var->numelems; ++i ) {
-                free( var->elems.strs[i].ptr );
+        if ( !var->aliased ) {
+            if ( ( var->type & VARTYPEM_BASE ) == VARTYPEV_STR && var->elems.strs ) {
+                for ( size_t i=0; i < var->numelems; ++i ) {
+                    free( var->elems.strs[i].ptr );
+                }
             }
+            free( var->elems.any );
         }
-        free( var->elems.any );
     } else if ( var->type & VARTYPEF_FUNC ) {
         for ( uint8_t i=0; i < var->numparams; ++i ) {
             free( var->params[i].name );
@@ -511,6 +513,69 @@ bool vmem_erase_array( varmem_t* vmem, uint16_t varoffs ) {
     }
     memset( var->elems.any, 0, var->numelems * get_elemsize( var->type ) );
     return true;
+}
+
+static void vmem_array_save( const var_t* var, vmem_arraystate_t* st ) {
+    st->numdims = var->numdims;
+    memcpy( st->dims, var->dims, sizeof(st->dims) );
+    memcpy( st->slice, var->slice, sizeof(st->slice) );
+    st->numelems = var->numelems;
+    st->elems = var->elems.any;
+    st->aliased = var->aliased;
+}
+
+static void vmem_array_load( var_t* var, const vmem_arraystate_t* st ) {
+    var->numdims = st->numdims;
+    memcpy( var->dims, st->dims, sizeof(var->dims) );
+    memcpy( var->slice, st->slice, sizeof(var->slice) );
+    var->numelems = st->numelems;
+    var->elems.any = st->elems;
+    var->aliased = st->aliased;
+}
+
+bool vmem_array_alias( varmem_t* vmem, uint16_t dstoffs, uint16_t srcoffs, vmem_arraystate_t* saved ) {
+    var_t* dst = vmem_var( vmem, dstoffs );
+    var_t* src = vmem_var( vmem, srcoffs );
+    if ( dst == 0 || src == 0 || !( dst->type & VARTYPEF_ARRAY ) || dst->type != src->type ) {
+        return false;
+    }
+    vmem_arraystate_t from;
+    vmem_array_save( src, &from );      // (first: dst may be src)
+    vmem_array_save( dst, saved );
+    vmem_array_load( dst, &from );
+    dst->aliased = true;
+    return true;
+}
+
+bool vmem_array_fresh( varmem_t* vmem, uint16_t dstoffs, vmem_arraystate_t* saved ) {
+    var_t* dst = vmem_var( vmem, dstoffs );
+    if ( dst == 0 || !( dst->type & VARTYPEF_ARRAY ) ) {
+        return false;
+    }
+    void* elems = calloc( dst->numelems ? dst->numelems : 1U, get_elemsize( dst->type ) );
+    if ( elems == 0 ) {
+        return false;
+    }
+    vmem_array_save( dst, saved );
+    dst->elems.any = elems;
+    dst->aliased = false;
+    return true;
+}
+
+void vmem_array_restore( varmem_t* vmem, uint16_t varoffs, vmem_arraystate_t* saved ) {
+    var_t* var = vmem_var( vmem, varoffs );
+    if ( var == 0 ) {
+        return;
+    }
+    if ( !var->aliased && var->elems.any != saved->elems ) {
+        if ( ( var->type & VARTYPEM_BASE ) == VARTYPEV_STR ) {
+            for ( size_t i=0; i < var->numelems; ++i ) {
+                free( var->elems.strs[i].ptr );
+            }
+        }
+        free( var->elems.any );
+    }
+    vmem_array_load( var, saved );
 }
 
 // copies a string value (the empty string is NULL / 0); false if out of memory

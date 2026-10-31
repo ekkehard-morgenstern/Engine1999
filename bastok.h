@@ -288,6 +288,11 @@
 #define TOK_CALL        UINT8_C(237)        // CALL keyword (procedure call)
 #define TOK_LOCAL       UINT8_C(238)        // LOCAL keyword (local variables of a PROC / FUNC)
 #define TOK_RESUME      UINT8_C(239)        // RESUME keyword (continue after an error)
+#define TOK_STOP        UINT8_C(240)        // STOP keyword
+#define TOK_CONT        UINT8_C(241)        // CONT keyword
+#define TOK_TRACE       UINT8_C(242)        // TRACE keyword
+#define TOK_PEEK        UINT8_C(243)        // PEEK function, PEEK$ function
+#define TOK_POKE        UINT8_C(244)        // POKE keyword
 #define TOK_NONE        UINT8_C(255)        // no token (!)
 
 // -- buffers ---------------------------------------------------------------

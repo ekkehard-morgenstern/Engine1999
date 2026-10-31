@@ -501,6 +501,25 @@ The 4096 extended instructions are as follows:
                             of the statement that failed (the innermost one: the code generator keeps a table of the statements), 1 to the
                             first instruction behind it, 2 to the code address on the return stack. Then the handler is over: a GOSUB handler
                             drops its return address, a GOTO handler is armed again. "RESUME without error" otherwise.
+    0001 01110000       STOP - stop the program ( -- ) C=0 P=0
+                            Like the Break key: the run ends with "Break in line n", but the state of the VM (data stack, return stack, calls in
+                            progress, the next instruction) is kept for CONT. STOP inside the code of a direct mode line is a plain Break.
+    0001 01110001       CONT - continue a stopped program ( -- ) C=0 P=0
+                            Takes the state STOP (or the Break key) kept and goes on there; "Can't continue" if there is none. The state is lost when the
+                            stored program changes and when a program starts (RUN, NEW, LOAD, CHAIN). Timers and the ON ERROR handler end with the run
+                            and are not restored.
+    0001 01110010       TRON - trace on / off (param 1 / 0) ( -- ) C=0 P=1
+                            While on, every LINE instruction prints "[n]".
+    0001 01110011       AUTO - AUTO request ( start step -- ) C=0 P=0
+                            Leaves a request for the host (VMREQ_AUTO) and ends the run; -1 = default (10).
+    0001 01110100       PEEK - read RAM ( addr size -- n ) C=0 P=0
+    0001 01110101       PEKS - read RAM as a string ( addr len -- s ) C=0 P=0
+    0001 01110110       POKE - write RAM ( addr value size -- ) C=0 P=0
+                            The RAM is a block of VM_RAMSIZE bytes (1 MiB, zero, allocated at the first POKE, kept over direct mode lines, cleared by
+                            RUN/NEW/LOAD), addressed from 0; multi-byte values are big endian. size 1, 2: unsigned byte / word, 4: signed
+                            long, -4: single, -8: double precision float (an other size is "Illegal argument", a block that is not inside the RAM
+                            "Illegal address"). POKE of a string value writes its bytes (size is ignored); POKE of a number accepts the range of
+                            its size (signed or unsigned: the low bits are stored).
     MATH kinds 14..16: CEIL, LOG2, LOG10 (kind 1, INT, is FLOOR as well).
 
 */
@@ -666,5 +685,12 @@ The 4096 extended instructions are as follows:
 #define INS_DTIM        UINT16_C(0X16D)
 #define INS_LOCL        UINT16_C(0X16E)
 #define INS_RSM         UINT16_C(0X16F)
+#define INS_STOP        UINT16_C(0X170)
+#define INS_CONT        UINT16_C(0X171)
+#define INS_TRON        UINT16_C(0X172)
+#define INS_AUTO        UINT16_C(0X173)
+#define INS_PEEK        UINT16_C(0X174)
+#define INS_PEKS        UINT16_C(0X175)
+#define INS_POKE        UINT16_C(0X176)
 
 #endif

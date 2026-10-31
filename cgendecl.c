@@ -116,17 +116,47 @@ static bool cd_ensure_param_vars( compiler_t* comp, uint16_t funcoffs, uint8_t n
             comp_error( comp, "Internal error (bad function parameter)" );
             return false;
         }
-        if ( ptype & VARTYPEF_ARRAY ) {
-            comp_error( comp, "Array parameters are not supported yet" );
-            return false;
-        }
         if ( !vmem_lookup_var( &comp->rt->varmem, ptype, name, &poffs ) || poffs == VAROFFS_NONE ) {
             poffs = VAROFFS_NONE;
-            if ( !vmem_create_var( &comp->rt->varmem, ptype, name, UINT8_C(0), 0, UINT8_C(0), 0, &poffs ) ||
+            uint16_t onedim[1] = { 1 };      // an array parameter: a placeholder until a call makes it the array of the argument
+            bool isarr = ( ptype & VARTYPEF_ARRAY ) != 0;
+            if ( !vmem_create_var( &comp->rt->varmem, ptype, name, isarr ? UINT8_C(1) : UINT8_C(0), isarr ? onedim : 0, UINT8_C(0), 0, &poffs ) ||
                  poffs == VAROFFS_NONE ) {
                 comp_error( comp, "Out of memory" );
                 return false;
             }
+        }
+    }
+    return true;
+}
+
+// checks the arguments against the parameters: an array parameter takes an array (A()) of the same type, the others no array
+bool cgen_check_call_args( compiler_t* comp, uint16_t funcoffs, node_t* node ) {
+    uint8_t ftype = 0, numparams = 0; uint32_t codeoffs = CODEOFFS_NONE;
+    if ( node->numbranches != 1U || !vmem_get_func_info( &comp->rt->varmem, funcoffs, &ftype, &numparams, &codeoffs ) ) {
+        return cgen_unexpected_node( comp );
+    }
+    node_t* args = node->branches[0];
+    node_t* single = args;
+    node_t** items = args != NODE_NONE && args->type == NT_EXPRLIST ? args->branches : &single;
+    size_t numitems = args == NODE_NONE ? 0U : args->type == NT_EXPRLIST ? args->numbranches : 1U;
+    if ( numitems != numparams ) {
+        comp_error( comp, "Argument count mismatch" );
+        return false;
+    }
+    for ( size_t i=0; i < numitems; ++i ) {
+        uint8_t ptype = 0; const char* pname = 0;
+        if ( !vmem_get_func_param( &comp->rt->varmem, funcoffs, (uint8_t) i, &ptype, &pname ) ) {
+            return cgen_unexpected_node( comp );
+        }
+        bool isarr = items[i]->type == NT_EMPTYARRAYREF;
+        if ( isarr != ( ( ptype & VARTYPEF_ARRAY ) != 0 ) ) {
+            comp_error( comp, isarr ? "Array not allowed as this argument" : "Array expected as argument" );
+            return false;
+        }
+        if ( isarr && ( items[i]->data[0] & VARTYPEM_BASE ) != ( ptype & VARTYPEM_BASE ) ) {
+            comp_error( comp, "Type mismatch (array argument)" );
+            return false;
         }
     }
     return true;
@@ -242,13 +272,7 @@ bool cgen_from_callstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         comp_error( comp, "Undefined procedure" );
         return false;
     }
-    node_t* args = node->branches[0];
-    size_t numargs = args == NODE_NONE ? 0U : args->type == NT_EXPRLIST ? args->numbranches : 1U;
-    if ( numargs != numparams ) {
-        comp_error( comp, "Argument count mismatch" );
-        return false;
-    }
-    if ( !cgen_gen_call_args( cgen, comp, node ) ) {
+    if ( !cgen_check_call_args( comp, funcoffs, node ) || !cgen_gen_call_args( cgen, comp, node ) ) {
         return false;
     }
     if ( !cgen_gen_calf( cgen, funcoffs ) ) {

@@ -656,6 +656,11 @@ Explanation of node types:
 #define NT_CALLSTMT             UINT8_C(0X7B)   // CALL statement (data: name with type byte; 1 optional branch of the argument expressions)
 #define NT_LOCALSTMT            UINT8_C(0X7C)   // LOCAL statement (branches: variable references)
 #define NT_RESUMESTMT           UINT8_C(0X7D)   // RESUME [NEXT | target] (data: 1 byte kind, 0 = retry, 1 = NEXT, 2 = target; 1 branch of the target for kind 2)
+#define NT_STOPSTMT             UINT8_C(0X7E)   // STOP
+#define NT_CONTSTMT             UINT8_C(0X7F)   // CONT
+#define NT_TRACESTMT            UINT8_C(0X80)   // TRACE ON / OFF (data: 1 byte, 1 = ON, 0 = OFF)
+#define NT_AUTOSTMT             UINT8_C(0X81)   // AUTO [start[,step]] (0..2 numeric branches)
+#define NT_POKESTMT             UINT8_C(0X82)   // POKE addr, value [, size] (2 or 3 branches; the value is a number or a string)
 #define NT_EXITSTMT             UINT8_C(0X79)   // EXIT / LEAVE / ITERATE (data: 1 byte kind, 1 = leave, 2 = iterate; 2 bytes loop number)
 #define NT_FILESSTMT            UINT8_C(0X69)   // FILES statement (0 or 1 string branch: the file name pattern)
 #define NT_CHAINSTMT            UINT8_C(0X68)   // CHAIN statement (data: 1 byte, 1 = MERGE; the file name, then an optional goto target)

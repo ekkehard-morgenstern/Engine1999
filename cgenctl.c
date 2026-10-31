@@ -323,6 +323,60 @@ bool cgen_from_timerstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     return cgen_gen_tmr( cgen, param ) || cgen_out_of_code_memory( comp );
 }
 
+bool cgen_from_pokestmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    // NT_POKESTMT: branches address, value (number or string), size (optional, 1): <address> <value> <size> POKE
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->type != NT_POKESTMT || node->numbranches < 2U || node->numbranches > 3U ) {
+        return cgen_unexpected_node( comp );
+    }
+    if ( !cgen_from_expr( cgen, comp, node->branches[0] ) || !cgen_from_expr( cgen, comp, node->branches[1] ) ) {
+        return false;
+    }
+    if ( node->numbranches == 3U ? !cgen_from_expr( cgen, comp, node->branches[2] ) : !cgen_gen_phim( cgen, 1 ) ) {
+        return node->numbranches == 3U ? false : cgen_out_of_code_memory( comp );
+    }
+    return cgen_gen_poke( cgen ) || cgen_out_of_code_memory( comp );
+}
+
+bool cgen_from_debugstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    /*
+        NT_STOPSTMT / NT_CONTSTMT      STOP, CONT:  one instruction each
+        NT_TRACESTMT                   data: 1 = ON, 0 = OFF:  TRON(on)
+        NT_AUTOSTMT                    0..2 numeric branches (start, step):  <start or -1> <step or -1> AUTO
+    */
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    switch ( node->type ) {
+        case NT_STOPSTMT: return cgen_gen_stop( cgen ) || cgen_out_of_code_memory( comp );
+        case NT_CONTSTMT: return cgen_gen_cont( cgen ) || cgen_out_of_code_memory( comp );
+        case NT_TRACESTMT:
+            if ( node->datalen != UINT16_C(1) ) {
+                return cgen_unexpected_node( comp );
+            }
+            return cgen_gen_tron( cgen, node->data[0] ? UINT16_C(1) : UINT16_C(0) ) || cgen_out_of_code_memory( comp );
+        case NT_AUTOSTMT:
+            if ( node->numbranches > 2U ) {
+                return cgen_unexpected_node( comp );
+            }
+            for ( size_t i=0; i < 2U; ++i ) {
+                if ( i < node->numbranches ) {
+                    if ( !cgen_from_numexpr( cgen, comp, node->branches[i] ) ) {
+                        return false;
+                    }
+                } else if ( !cgen_gen_phim( cgen, -1 ) ) {
+                    return cgen_out_of_code_memory( comp );
+                }
+            }
+            return cgen_gen_auto( cgen ) || cgen_out_of_code_memory( comp );
+        default:
+            break;
+    }
+    return cgen_unexpected_node( comp );
+}
+
 bool cgen_from_resumestmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     /*
         NT_RESUMESTMT   RESUME statement
@@ -612,7 +666,11 @@ bool cgen_from_localstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     }
     for ( size_t i=0; i < node->numbranches; ++i ) {
         uint8_t vartype = 0; uint16_t varoffs = VAROFFS_NONE;
-        if ( !cc_base_var( comp, node->branches[i], &vartype, &varoffs ) ) {
+        const node_t* item = node->branches[i];
+        if ( item != NODE_NONE && ( item->type == NT_EMPTYARRAYREF || item->type == NT_ARRAYDECL ) && item->datalen == UINT16_C(3) ) {
+            // a local array: LOCAL A() (an array that exists) or LOCAL A(10) (declared here)
+            varoffs = (uint16_t)( ( ( (uint16_t) item->data[1] ) << UINT8_C(8) ) | item->data[2] );
+        } else if ( !cc_base_var( comp, node->branches[i], &vartype, &varoffs ) ) {
             return false;
         }
         if ( !cgen_gen_locl( cgen, varoffs ) ) {

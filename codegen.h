@@ -121,6 +121,7 @@ typedef struct _codegen_t {
     uint8_t*        data;           // the data segment (heap)
     uint32_t        codesize, datasize;
     size_t          codecap, datacap;
+    uint32_t        progsize;       // the size of the code of the last compiled program including its HLT (direct mode code lies behind it)
     uint32_t        endaddr;        // where END and running off the end of a program go: its HLT instruction (CODEOFFS_NONE: the end of the code)
     bool            writemode;      // (internal) generating the arguments of a WRITE statement
     uint32_t        persistent;     // counts what the code/data generated so far has stored that outlives it (see cgen_note_persistent)
@@ -326,6 +327,13 @@ bool cgen_gen_nimp( codegen_t* cgen );
 bool cgen_gen_dtim( codegen_t* cgen, uint16_t kind );
 bool cgen_gen_locl( codegen_t* cgen, uint16_t varoffs );
 bool cgen_gen_rsm( codegen_t* cgen, uint16_t kind );
+bool cgen_gen_stop( codegen_t* cgen );
+bool cgen_gen_cont( codegen_t* cgen );
+bool cgen_gen_tron( codegen_t* cgen, uint16_t on );
+bool cgen_gen_auto( codegen_t* cgen );
+bool cgen_gen_peek( codegen_t* cgen );
+bool cgen_gen_peks( codegen_t* cgen );
+bool cgen_gen_poke( codegen_t* cgen );
 bool cgen_gen_acnt( codegen_t* cgen, uint16_t varoffs );
 bool cgen_gen_aflt( codegen_t* cgen, uint16_t varoffs );
 bool cgen_gen_gfxc( codegen_t* cgen, uint16_t op );
@@ -437,7 +445,10 @@ bool cgen_from_anglestmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_procstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_callstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_resumestmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_debugstmt( codegen_t* cgen, compiler_t* comp, node_t* node );    // STOP, CONT, TRACE, AUTO
+bool cgen_from_pokestmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_localstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_check_call_args( compiler_t* comp, uint16_t funcoffs, node_t* node );
 bool cgen_gen_call_args( codegen_t* cgen, compiler_t* comp, node_t* node );     // the arguments of a call and their count
 void cgen_resolve_procexits( codegen_t* cgen, uint32_t addr );                  // EXIT PROC / RETURN value jumps go to addr
 bool cgen_from_foreachstmt( codegen_t* cgen, compiler_t* comp, node_t* node );

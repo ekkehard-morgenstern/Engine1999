@@ -144,6 +144,11 @@ const char* nodename( uint8_t nodetype ) {
         case NT_EXITSTMT:               return "NT_EXITSTMT";
         case NT_PROCSTMT:               return "NT_PROCSTMT";
         case NT_RESUMESTMT:             return "NT_RESUMESTMT";
+        case NT_STOPSTMT:               return "NT_STOPSTMT";
+        case NT_CONTSTMT:               return "NT_CONTSTMT";
+        case NT_TRACESTMT:              return "NT_TRACESTMT";
+        case NT_AUTOSTMT:               return "NT_AUTOSTMT";
+        case NT_POKESTMT:               return "NT_POKESTMT";
         case NT_CALLSTMT:               return "NT_CALLSTMT";
         case NT_LOCALSTMT:              return "NT_LOCALSTMT";
         case NT_NUMEXPR:                return "NT_NUMEXPR";

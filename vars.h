@@ -123,6 +123,7 @@ typedef struct _var_t {
         vstr_t*     strs;
         void*       any;
     } elems;
+    bool            aliased;    // array: the elements belong to another array (an array parameter during a call)
     uint8_t         numparams;  // function
     struct {
         uint8_t     type;
@@ -162,7 +163,24 @@ void vmem_clear_vars( varmem_t* vmem );
 // CHAIN: copies the values of the variables of <src> to the variables of <dst> that have the same type and name (arrays only
 // if they have the same dimensions); everything else in <dst> stays as it is. Labels, functions and hidden variables are skipped.
 void vmem_copy_vars( varmem_t* dst, varmem_t* src );
-bool vmem_erase_array( varmem_t* vmem, uint16_t varoffs );     // resets all elements: 0 or the empty string
+bool vmem_erase_array( varmem_t* vmem, uint16_t varoffs );
+
+// The storage of an array, as saved while a PROC / FUNC call has the array as its parameter or as a LOCAL variable.
+typedef struct _vmem_arraystate_t {
+    uint8_t     numdims;
+    uint16_t    dims[MAXDIM];
+    size_t      slice[MAXDIM];
+    size_t      numelems;
+    void*       elems;
+    bool        aliased;
+} vmem_arraystate_t;
+
+// dst becomes the same array as src (an array parameter: no copy, both names see the same elements); the old state of dst is saved
+bool vmem_array_alias( varmem_t* vmem, uint16_t dstoffs, uint16_t srcoffs, vmem_arraystate_t* saved );
+// a LOCAL array: dst gets new zeroed elements of its current shape; the old state is saved
+bool vmem_array_fresh( varmem_t* vmem, uint16_t dstoffs, vmem_arraystate_t* saved );
+// puts the saved state back and frees the elements that the variable owned meanwhile (a fresh array)
+void vmem_array_restore( varmem_t* vmem, uint16_t varoffs, vmem_arraystate_t* saved );     // resets all elements: 0 or the empty string
 bool vmem_get_var( varmem_t* vmem, uint16_t varoffs, uint8_t vartype, uint8_t numdims, const uint16_t* diminx,
     varvalue_t* pvalue );
 bool vmem_set_var( varmem_t* vmem, uint16_t varoffs, uint8_t vartype, uint8_t numdims, const uint16_t* diminx,

@@ -150,12 +150,12 @@ useful is the language it planned. The items below are in the order I would sugg
 
 - [x] **Loop control** (done, 2026-10-31): `EXIT [n]` / `LEAVE [n]`, `ITERATE [n]`, `FOR … DOWNTO …`, `FOR EACH [key,] v IN a()` (`docs/basic-language.md`, "Loop control")
 - [ ] `DO … LOOP [WHILE|UNTIL cond]` (test at the end) and `FOR EVER`; `END IF` / `END UNLESS` exist already (`ENDIF`, `ENDUNLESS`). Low priority: `REPEAT/UNTIL`, `WHILE/WEND` and `UNTIL/UEND` cover it
-- [x] **Procedures with local variables** (done, 2026-10-31: `PROC`/`FUNC`/`CALL`/`LOCAL`/`RETURN value`/`EXIT PROC`, recursion; not done: array parameters and local arrays, `GLOBAL`, passing by reference, `EXEC`, a forward call of a `FUNC` (a `PROC` can be called before it is defined); see "Procedures" in `docs/basic-language.md`)
+- [x] **Procedures with local variables** (done, 2026-10-31: `PROC`/`FUNC`/`CALL`/`LOCAL`/`RETURN value`/`EXIT PROC`, recursion, array parameters by reference, local arrays; not done: `GLOBAL`, passing by reference, `EXEC`, a forward call of a `FUNC` (a `PROC` can be called before it is defined); see "Procedures" in `docs/basic-language.md`)
 - [x] `RESUME` (done, see section 9)
-- [ ] `STOP [n]` and `CONT` (continue after a stop or Break; build on the resumable VM of the monitor), `TRACE ON|OFF` (print the line numbers while running, from the `LINE` instructions), `AUTO [start[,step]]` (line number prompts; the token `AUTO` exists, there is no meaning yet)
+- [x] `STOP`, `CONT`, `TRACE ON|OFF`, `AUTO` (done, 2026-10-31; `STOP [n]`: no argument; not continuable: Break inside `INPUT`/`GET`/`WAIT`; no `AUTO` prompt outside `engine1999.c`)
 - [x] **Operators** (done, 2026-10-31): the logical operators `IMP NIMP EQV NEQV` the shifts as keywords `SHL SHR ASL ASR` (`LSHIFT`/`RSHIFT` tokens exist)
 - [x] Math functions `FLOOR CEIL LOG2 LOG10` (done, 2026-10-31; `LN`/`LG`/`LOGN` not added; cf. the `ASN`/`ACS`/`ATAN2`/hyperbolic item in section 2)
-- [ ] `PEEK`/`POKE` (byte, word, long, quad, float variants) and `SYS addr[,args]`: address the VM's data segment or a RAM area; a natural fit for a memory view in the monitor. Needs a decision which memory is addressable
+- [x] `PEEK`/`POKE`/`PEEK$` on a 1 MiB RAM area (done, 2026-10-31); not done: `SYS addr[,args]`, a window into the data segment / code / screen memory, `PEEKB/W/L/F` spellings
 - [ ] `PRINT USING fmt$` (formatted output); `AT(row[,col])`, `HTAB`, `VTAB` in `PRINT` (`LOCATE` covers the placement)
 - [x] `TIME$`, `DATE$`, `DATETIME$` (done, 2026-10-31; read only: no setting of the clock)
 - [ ] Small aliases: `OLD` for `LOAD`, `CATALOG` for `FILES`, `RENUMBER`, `FUNCTION`/`PROCEDURE` spellings; `YIELD` (give the host a time slice) and `SAFETY ON|OFF` (the sandbox switch; see section 8) are AsmBASIC's ideas, too

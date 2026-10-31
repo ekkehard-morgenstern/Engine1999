@@ -259,6 +259,18 @@ static const testcase_t cases[] = {
     { "SAVE to null:", "10 PRINT 1\nSAVE \"null:p\"\nPRINT \"ok\"", "ok\n" },
     { "LOAD from null: is an empty program", "10 PRINT 1\nLOAD \"null:p\"\nLIST", "" },
     { "EXIT and FOR EACH in direct mode lines", "FOR I=1 TO 9:IF I<3 THEN PRINT I;:NEXT ELSE EXIT\nPRINT I\nDIM A(2):A(0)=4:A(1)=5\nFOR EACH V IN A():PRINT V;:NEXT:PRINT", "123\n45\n" },
+    { "STOP and CONT", "10 PRINT \"a\"\n20 STOP\n30 PRINT \"b\"\nRUN\nPRINT \"x\"\nCONT", "a\n? Break in line 20\nx\nb\n" },
+    { "CONT goes on in a loop with a GOSUB", "10 FOR I=1 TO 3\n20 GOSUB 100\n30 NEXT I\n40 END\n100 PRINT I;\n110 IF I=2 THEN STOP\n120 RETURN\nRUN\nCONT", "12? Break in line 110\n3" },
+    { "CONT inside a PROC keeps its LOCAL variables", "10 PROC P(N)\n20 LOCAL K:K=N*2\n30 STOP\n40 PRINT K;N\n50 END PROC\n60 CALL P(4)\n70 PRINT \"end\"\nRUN\nPRINT K\nCONT\nPRINT K", "? Break in line 30\n8\n84\nend\n0\n" },
+    { "CONT without STOP",     "CONT",                                                      "? Cannot continue\n" },
+    { "CONT after a change of the program", "10 STOP\n20 PRINT 1\nRUN\n30 PRINT 2\nCONT", "? Break in line 10\n? Cannot continue\n" },
+    { "CONT after RUN again",  "10 STOP\n20 PRINT 1\nRUN\nRUN\nCONT\nCONT", "? Break in line 10\n? Break in line 10\n1\n? Cannot continue\n" },
+    { "CONT twice",            "10 PRINT 1\n20 STOP\n30 PRINT 2\nRUN\nCONT\nCONT", "1\n? Break in line 20\n2\n? Cannot continue\n" },
+    { "STOP in a direct mode line cannot be continued", "STOP\nCONT", "? Break\n? Cannot continue\n" },
+    { "Break can be continued", "10 FOR I=1 TO 100000:NEXT I:PRINT \"done\"\nRUN\nCONT", "? Break in line 10\n? Break in line 10\n", 0, 3 },
+    { "TRACE",                 "10 TRACE ON\n20 PRINT 1\n30 TRACE OFF\n40 PRINT 2\nRUN",     "[20]1\n[30]2\n" },
+    { "TRACE lasts over RUN",  "10 PRINT 5\nTRACE ON\nRUN\nTRACE OFF\nRUN",                  "[10]5\n5\n" },
+    { "STOP CONT TRACE AUTO are listed", "10 STOP\n20 CONT\n30 TRACE ON\n40 TRACE OFF\n50 AUTO\n60 AUTO 100\n70 AUTO 100,5\nLIST", "10 STOP\n20 CONT\n30 TRACE ON\n40 TRACE OFF\n50 AUTO\n60 AUTO 100\n70 AUTO 100,5\n" },
     { "files stay open between direct mode lines", "OPEN \"mem:s\" FOR OUTPUT AS #1\nPRINT #1,\"x\"\nCLOSE #1\nOPEN \"mem:s\" FOR INPUT AS #1\nLINE INPUT #1,A$\nPRINT A$", "x\n" },
     { "RUN closes all channels", "OPEN \"mem:s\" FOR OUTPUT AS #1\n10 PRINT #1,\"x\"\nRUN", "? File not open in line 10\n" },
     { "NEW closes all channels", "OPEN \"mem:s\" FOR OUTPUT AS #1\nNEW\nPRINT #1,\"x\"", "? File not open\n" },
@@ -877,6 +889,26 @@ static void run_debug_tests( size_t* pnum, size_t* pfailed ) {
     (void) n;
 }
 
+// AUTO leaves its start and step in the REPL for the host, which prompts with the line numbers
+static void run_auto_tests( size_t* pnum, size_t* pfailed ) {
+    static const struct { const char* line; uint32_t start, step; } t[] = {
+        { "AUTO", 10U, 10U }, { "AUTO 100", 100U, 10U }, { "AUTO 100,5", 100U, 5U }, { "AUTO 7,3", 7U, 3U },
+    };
+    for ( size_t i=0; i < sizeof(t) / sizeof(t[0]); ++i ) {
+        repl_t repl;
+        ++*pnum;
+        if ( !setup_growth_repl( &repl ) ) { ++*pfailed; continue; }
+        repl_enter( &repl, t[i].line );
+        bool ok = repl.autoline == t[i].start && repl.autostep == t[i].step;
+        printf( "%s  %s\n", ok ? "PASS" : "FAIL", t[i].line );
+        if ( !ok ) {
+            ++*pfailed;
+            printf( "    autoline %u, autostep %u\n", (unsigned) repl.autoline, (unsigned) repl.autostep );
+        }
+        cleanup_repl( &repl );
+    }
+}
+
 int main( int argc, char** argv ) {
     if ( argc > 1 && strcmp( argv[1], "-v" ) == 0 ) {
         basdbg_flags = BASDBG_ALL;
@@ -899,6 +931,7 @@ int main( int argc, char** argv ) {
     run_edit_tests( &numcases, &failed );
     run_fulledit_tests( &numcases, &failed );
     run_debug_tests( &numcases, &failed );
+    run_auto_tests( &numcases, &failed );
     cleanup_testfiles();
     printf( "%u of %u passed\n", (unsigned)( numcases - failed ), (unsigned) numcases );
     free( outbuf );
