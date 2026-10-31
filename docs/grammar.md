@@ -338,6 +338,12 @@ control-flow-stmt := for-stmt | next-stmt | goto-stmt | return-stmt | label-stmt
 stop-stmt := STOP .
 cont-stmt := CONT .
 trace-stmt := TRACE ( ON | OFF ) .
+```
+
+> BREAK OFF makes ESC an ordinary key for INKEY$ / GET (a game can use it); Ctrl+C (and PAUSE/BREAK in the window) always stop the program. A new run starts with BREAK ON.
+
+```ebnf
+break-stmt := BREAK ( ON | OFF ) .
 auto-stmt := AUTO [ num-expr [ "," num-expr ] ] .
 ```
 
@@ -597,7 +603,7 @@ gfx-all-stmt := gfx-stmt | txt-stmt | tile-stmt | sprite-stmt | cls-stmt | locat
 ```ebnf
 prog-stmt := gfx-all-stmt | load-stmt | run-stmt | merge-stmt | chain-stmt | files-stmt | build-stmt | bye-stmt | timer-stmt | list-stmt | new-stmt | clear-stmt |
              delete-stmt | renum-stmt | edit-stmt | monitor-stmt | sound-stmt | wait-stmt | on-error-stmt | randomize-stmt | angle-stmt |
-             cont-stmt | trace-stmt | auto-stmt | poke-stmt .
+             cont-stmt | trace-stmt | break-stmt | auto-stmt | poke-stmt .
 stmt := io-stmt | prog-stmt | assign-stmt | control-flow-stmt .
 stmt-list := stmt { ":" stmt } .
 stmt-line := [ stmt-list ] [ <'comment> ] <end-of-line> .

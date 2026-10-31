@@ -5154,16 +5154,16 @@ bool comp_eat_pokestmt( compiler_t* comp, node_t** pnode ) {
 }
 
 bool comp_eat_debugstmt( compiler_t* comp, node_t** pnode ) {
-    // stop-stmt := TOK_STOP .   cont-stmt := TOK_CONT .   trace-stmt := TOK_TRACE ( TOK_ON | TOK_OFF ) .
+    // stop-stmt := TOK_STOP .   cont-stmt := TOK_CONT .   trace-stmt := TOK_TRACE ( TOK_ON | TOK_OFF ) .   break-stmt := TOK_BREAK ( TOK_ON | TOK_OFF ) .
     // auto-stmt := TOK_AUTO [ num-expr [ TOK_COMMA num-expr ] ] .
     uint8_t tok = comp->currtok;
-    if ( ( tok != TOK_STOP && tok != TOK_CONT && tok != TOK_TRACE && tok != TOK_AUTO ) || !comp_fetchtok( comp ) ) {
+    if ( ( tok != TOK_STOP && tok != TOK_CONT && tok != TOK_TRACE && tok != TOK_BREAK && tok != TOK_AUTO ) || !comp_fetchtok( comp ) ) {
         return false;
     }
     if ( tok == TOK_STOP || tok == TOK_CONT ) {
         return comp_make_simple_stmt( comp, pnode, tok == TOK_STOP ? NT_STOPSTMT : NT_CONTSTMT );
     }
-    if ( tok == TOK_TRACE ) {
+    if ( tok == TOK_TRACE || tok == TOK_BREAK ) {
         uint8_t on = 0;
         if ( comp->currtok == TOK_ON ) {
             on = 1;
@@ -5174,7 +5174,7 @@ bool comp_eat_debugstmt( compiler_t* comp, node_t** pnode ) {
         if ( !comp_fetchtok( comp ) ) {
             return false;
         }
-        if ( !comp_create_node( comp, pnode, NT_TRACESTMT, UINT8_C(0), UINT16_C(1), &on ) || *pnode == NODE_NONE ) {
+        if ( !comp_create_node( comp, pnode, tok == TOK_TRACE ? NT_TRACESTMT : NT_BREAKSTMT, UINT8_C(0), UINT16_C(1), &on ) || *pnode == NODE_NONE ) {
             out_of_memory( comp );
             return false;
         }

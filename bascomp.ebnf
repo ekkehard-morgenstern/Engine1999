@@ -291,6 +291,8 @@ control-flow-stmt := for-stmt | next-stmt | goto-stmt | return-stmt | label-stmt
 stop-stmt := TOK_STOP .
 cont-stmt := TOK_CONT .
 trace-stmt := TOK_TRACE ( TOK_ON | TOK_OFF ) .
+-- BREAK OFF makes ESC an ordinary key for INKEY$ / GET (a game can use it); Ctrl+C (and PAUSE/BREAK in the window) always stop the program. A new run starts with BREAK ON.
+break-stmt := TOK_BREAK ( TOK_ON | TOK_OFF ) .
 auto-stmt := TOK_AUTO [ num-expr [ TOK_COMMA num-expr ] ] .
 -- POKE writes the RAM (1 MiB, big endian): size 1 (default), 2, 4 integers, -4 single, -8 double; a string value writes its bytes.
 poke-stmt := TOK_POKE num-expr TOK_COMMA expr [ TOK_COMMA num-expr ] .
@@ -453,7 +455,7 @@ gfx-all-stmt := gfx-stmt | txt-stmt | tile-stmt | sprite-stmt | cls-stmt | locat
 -- Several statements on a line are separated by a colon; a line may end with a comment (an apostrophe).
 prog-stmt := gfx-all-stmt | load-stmt | run-stmt | merge-stmt | chain-stmt | files-stmt | build-stmt | bye-stmt | timer-stmt | list-stmt | new-stmt | clear-stmt |
              delete-stmt | renum-stmt | edit-stmt | monitor-stmt | sound-stmt | wait-stmt | on-error-stmt | randomize-stmt | angle-stmt |
-             cont-stmt | trace-stmt | auto-stmt | poke-stmt .
+             cont-stmt | trace-stmt | break-stmt | auto-stmt | poke-stmt .
 
 stmt := io-stmt | prog-stmt | assign-stmt | control-flow-stmt .
 stmt-list := stmt { TOK_COLON stmt } .

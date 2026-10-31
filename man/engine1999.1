@@ -72,8 +72,11 @@ Show what the keyboard delivers: every SDL key event (key code, name, scan code,
 Run it from a terminal, or redirect the output to a file.
 .SH AT THE PROMPT
 .TP
-.B ESC
-Stops a running program ("Break").
+.B ESC, Ctrl+C, PAUSE/BREAK
+Stop a running program ("Break"), also one that waits for a key or a line.
+A program can take ESC for itself with
+.BR "BREAK OFF" ;
+Ctrl+C and PAUSE/BREAK still stop it.
 Closing the window ends the program and the Engine.
 .TP
 .B LIST, SAVE, LOAD, RUN, NEW, RENUM, DELETE, MERGE, CHAIN, FILES

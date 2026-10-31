@@ -270,6 +270,8 @@ typedef struct _vm_t {
     void            (*printn)( struct _vm_t*, void*, int channel, const char* text, size_t len );
     void            (*report)( struct _vm_t*, void*, const char* );                     // default: stderr
     int             keyback;        // a key that was read but did not belong to the escape sequence before it (0 = none): the next key read returns it
+    bool            escbreak;       // BREAK ON / OFF: ESC is the break key (the default) or an ordinary key; Ctrl+C always breaks
+    void            (*breakesc)( struct _vm_t*, void*, bool on );                  // the host is told when BREAK ON / OFF is executed (0 = nobody)
     int             (*inkey)( struct _vm_t*, void* );                              // INKEY$: key code, 0 = none
     char*           (*input)( struct _vm_t*, void*, int channel );                 // INPUT: a line (malloc'd, without newline), 0 = end of input
     int             (*getkey)( struct _vm_t*, void*, int channel );                // GET: waits for a key code (1..255), <= 0 = end of input

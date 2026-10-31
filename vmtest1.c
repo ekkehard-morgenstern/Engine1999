@@ -472,6 +472,12 @@ static const testcase_t cases[] = {
     { "CHR$ too large",         "PRINT CHR$(256)",                                "? Illegal argument\n" },
     { "CHR$ negative",          "PRINT CHR$(0-1)",                                "? Illegal argument\n" },
     { "CHR$ needs a sigil",     "PRINT CHR(65)",                                  "? String sigil '$' expected\n" },
+    { "BREAK OFF tells the host",   "BREAK OFF\nPRINT 1\nBREAK ON", "[ESC is a key]1\n[ESC breaks]" },
+    { "BREAK in a line with other statements", "10 BREAK OFF:PRINT 2:BREAK ON\n20 PRINT 3", "[ESC is a key]2\n[ESC breaks]3\n" },
+    { "BREAK needs ON or OFF",      "BREAK 1", "? ON or OFF expected\n" },
+    { "BREAK alone",                "BREAK", "? ON or OFF expected\n" },
+    { "BREAK in a THEN branch",     "10 IF 1 THEN BREAK OFF\n20 PRINT 4", "[ESC is a key]4\n" },
+    { "a run starts with BREAK ON", "10 BREAK OFF\n20 PRINT 5\n30 END", "[ESC is a key]5\n" },
     { "INKEY$ without input",   "PRINT LEN(INKEY$)",                              "0\n" },
     { "INKEY$ returns a whole escape sequence", "A$=INKEY$:PRINT LEN(A$);\",\";ASC(A$);\",\";ASC(MID$(A$,3))", "3,27,65\n", "\033[A" },
     { "INKEY$: a sequence with modifiers", "A$=INKEY$:PRINT LEN(A$);\",\";MID$(A$,3)", "6,1;5D\n", "\033[1;5D" },
@@ -1302,6 +1308,11 @@ static bool vm_files( struct _vm_t* vm, void* usrdata, const char* spec ) {
     return true;
 }
 
+static void vm_breakesc( struct _vm_t* vm, void* usrdata, bool on ) {
+    (void) vm; (void) usrdata;
+    out_append( on ? "[ESC breaks]" : "[ESC is a key]" );
+}
+
 static int vm_inkey( struct _vm_t* vm, void* usrdata ) {
     return keys && *keys ? (uint8_t) *keys++ : 0;
 }
@@ -1515,6 +1526,7 @@ static bool compile_and_run( void ) {
     vm.printn   = vm_printn;
     vm.report   = vm_report;
     vm.inkey    = vm_inkey;
+    vm.breakesc = vm_breakesc;
     vm.input    = vm_input;
     vm.getkey   = vm_getkey;
     vm.save     = vm_save;

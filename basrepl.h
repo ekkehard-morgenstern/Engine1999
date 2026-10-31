@@ -84,6 +84,7 @@ typedef struct _repl_t {
     void        (*report)( struct _repl_t*, const char* text );
     void        (*print)( struct _vm_t*, void*, int channel, const char* text );
     void        (*printn)( struct _vm_t*, void*, int channel, const char* text, size_t len );   // optional, see vm.h
+    void        (*breakesc)( struct _vm_t*, void*, bool on );   // BREAK ON / OFF was executed: ESC is the break key / an ordinary key (optional)
     int         (*inkey)( struct _vm_t*, void* );
     char*       (*input)( struct _vm_t*, void*, int channel );
     int         (*getkey)( struct _vm_t*, void*, int channel );

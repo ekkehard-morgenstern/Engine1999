@@ -870,6 +870,9 @@ void fulledit_run( repl_t* repl, const scrdrv_t* drv ) {
         }
         bool any = false;
         for ( ;; ) {
+            if ( k.kind == SK_BREAK ) {
+                k.kind = SK_ESCAPE;         // (the break key leaves the editor like ESC)
+            }
             if ( k.kind == SK_RESIZE ) {
                 ed_layout( e );
                 any = true;

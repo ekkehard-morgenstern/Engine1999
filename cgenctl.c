@@ -346,6 +346,7 @@ bool cgen_from_debugstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     /*
         NT_STOPSTMT / NT_CONTSTMT      STOP, CONT:  one instruction each
         NT_TRACESTMT                   data: 1 = ON, 0 = OFF:  TRON(on)
+        NT_BREAKSTMT                   data: 1 = ON, 0 = OFF:  BRKM(on)
         NT_AUTOSTMT                    0..2 numeric branches (start, step):  <start or -1> <step or -1> AUTO
     */
     if ( node == NODE_NONE ) {
@@ -359,6 +360,11 @@ bool cgen_from_debugstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
                 return cgen_unexpected_node( comp );
             }
             return cgen_gen_tron( cgen, node->data[0] ? UINT16_C(1) : UINT16_C(0) ) || cgen_out_of_code_memory( comp );
+        case NT_BREAKSTMT:
+            if ( node->datalen != UINT16_C(1) ) {
+                return cgen_unexpected_node( comp );
+            }
+            return cgen_gen_brkm( cgen, node->data[0] ? UINT16_C(1) : UINT16_C(0) ) || cgen_out_of_code_memory( comp );
         case NT_AUTOSTMT:
             if ( node->numbranches > 2U ) {
                 return cgen_unexpected_node( comp );

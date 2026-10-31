@@ -152,6 +152,8 @@ int scr_lineedit( const scrdrv_t* drv, char* buf, size_t bufsz, void (*onresize)
                 result = ed.len > 0 ? SCREDIT_ACCEPTED : SCREDIT_EOF; finished = true;
             } else if ( key.kind == SK_ESCAPE ) {
                 result = SCREDIT_CANCELLED; finished = true;
+            } else if ( key.kind == SK_BREAK ) {
+                result = SCREDIT_BREAK; finished = true;
             } else if ( key.kind == SK_CHAR && key.ch == 'd' && ( key.mods & KSMOD_CTRL ) != 0 && ed.len == 0 ) {
                 result = SCREDIT_EOF; finished = true;
             } else if ( key.kind == SK_RESIZE ) {

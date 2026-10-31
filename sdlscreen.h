@@ -71,6 +71,7 @@ void sdlscr_enableinput( bool enable );
 
 // keyboard access for running programs (INKEY$, GET); the calling thread is the main thread, the keys come from the
 // screen thread. ESC is not a key then: it is the break request.
+void sdlscr_setescbreak( bool on );         // BREAK ON / OFF: ESC is the break key / an ordinary key (Ctrl+C and PAUSE/BREAK always break); reset by sdlscr_pollkeys()
 void sdlscr_pollkeys( bool enable );        // queue keys (without the cursor) while a program runs; clears the break request
 int sdlscr_pollkey( void );                 // the next key code, 0 = none
 int sdlscr_getkey( void );                  // waits for a key; -1 = screen closed or break requested

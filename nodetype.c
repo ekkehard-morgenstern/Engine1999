@@ -149,6 +149,7 @@ const char* nodename( uint8_t nodetype ) {
         case NT_STOPSTMT:               return "NT_STOPSTMT";
         case NT_CONTSTMT:               return "NT_CONTSTMT";
         case NT_TRACESTMT:              return "NT_TRACESTMT";
+        case NT_BREAKSTMT:              return "NT_BREAKSTMT";
         case NT_AUTOSTMT:               return "NT_AUTOSTMT";
         case NT_POKESTMT:               return "NT_POKESTMT";
         case NT_BUILDSTMT:              return "NT_BUILDSTMT";

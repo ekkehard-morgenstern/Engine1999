@@ -213,6 +213,7 @@ static void repl_setup_vm( repl_t* repl ) {
     vm->print     = repl->print;
     vm->printn    = repl->printn;
     vm->inkey     = repl->inkey;
+    vm->breakesc  = repl->breakesc;
     vm->input     = repl->input;
     vm->getkey    = repl->getkey;
     vm->interrupt = repl->interrupt;

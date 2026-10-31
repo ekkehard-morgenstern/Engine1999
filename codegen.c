@@ -441,6 +441,7 @@ const char* cgen_opcode_name( uint16_t opcode ) {
         case INS_ARGC:      return "ARGC";
         case INS_ARGS:      return "ARGS";
         case INS_ENVS:      return "ENVS";
+        case INS_BRKM:      return "BRKM";
         case INS_AFLT:      return "AFLT";
         case INS_GFXC:      return "GFXC";
         case INS_GFXQ:      return "GFXQ";
@@ -1159,6 +1160,7 @@ bool cgen_gen_bld( codegen_t* cgen, uint16_t kind ) { return cgen_gen_ins12( cge
 bool cgen_gen_bye( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_BYE, false, false, UINT16_C(0) ); }
 bool cgen_gen_argc( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_ARGC, false, false, UINT16_C(0) ); }
 bool cgen_gen_args( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_ARGS, false, false, UINT16_C(0) ); }
+bool cgen_gen_brkm( codegen_t* cgen, uint16_t on ) { return cgen_gen_ins12( cgen, INS_BRKM, false, true, on ); }
 bool cgen_gen_envs( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_ENVS, false, false, UINT16_C(0) ); }
 bool cgen_gen_acnt( codegen_t* cgen, uint16_t varoffs ) { return cgen_gen_ins12_imm17( cgen, INS_ACNT, (int32_t) varoffs ); }
 bool cgen_gen_aflt( codegen_t* cgen, uint16_t varoffs ) { return cgen_gen_ins12_imm17( cgen, INS_AFLT, (int32_t) varoffs ); }
@@ -3149,7 +3151,7 @@ static bool cgen_from_stmt_node( codegen_t* cgen, compiler_t* comp, node_t* node
         case NT_LOCALSTMT:  return cgen_from_localstmt( cgen, comp, node );
         case NT_RESUMESTMT: return cgen_from_resumestmt( cgen, comp, node );
         case NT_POKESTMT:   return cgen_from_pokestmt( cgen, comp, node );
-        case NT_STOPSTMT: case NT_CONTSTMT: case NT_TRACESTMT: case NT_AUTOSTMT: return cgen_from_debugstmt( cgen, comp, node );
+        case NT_STOPSTMT: case NT_CONTSTMT: case NT_TRACESTMT: case NT_BREAKSTMT: case NT_AUTOSTMT: return cgen_from_debugstmt( cgen, comp, node );
         case NT_EXITSTMT:   return cgen_from_exitstmt( cgen, comp, node );
         case NT_DESIGNSTMT: return cgen_from_designstmt( cgen, comp, node );
         case NT_DESIGNROW:  return cgen_from_designrow( cgen, comp, node );

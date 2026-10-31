@@ -825,6 +825,10 @@ static void host_report( struct _repl_t* r, const char* text ) {
     sdlscr_puts( text );
 }
 
+static void host_breakesc( struct _vm_t* vm, void* usrdata, bool on ) {
+    sdlscr_setescbreak( on );
+}
+
 static int host_inkey( struct _vm_t* vm, void* usrdata ) {
     return sdlscr_pollkey();
 }
@@ -1116,6 +1120,7 @@ static void init_host( void ) {
     repl.print     = host_print;
     repl.printn    = host_printn;
     repl.inkey     = host_inkey;
+    repl.breakesc  = host_breakesc;
     repl.input     = host_input;
     repl.getkey    = host_getkey;
     repl.interrupt = host_interrupt;

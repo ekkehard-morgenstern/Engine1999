@@ -157,7 +157,10 @@ without a target (the full-screen program editor) and
 A terminal smaller than 24 x 6 shows "Too small".
 Without a terminal both fail with
 .BR "? EDIT and MONITOR need a terminal" .
-On a terminal a lone ESC breaks a running program, like Ctrl\-C.
+On a terminal a lone ESC breaks a running program, like Ctrl\-C (a terminal has no PAUSE/BREAK key).
+A program that uses ESC itself says
+.B BREAK OFF
+and is then still stopped by Ctrl\-C.
 .SH EXIT STATUS
 .TP
 .B 0

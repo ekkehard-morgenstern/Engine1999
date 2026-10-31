@@ -222,9 +222,26 @@ static void sdlscr_debugtextevent( const SDL_TextInputEvent* t ) {
     fflush( stdout );
 }
 
+static volatile bool sdlscr_escbreak = true;         // ESC is the break key (BREAK ON); with BREAK OFF it is an ordinary key
+
+void sdlscr_setescbreak( bool on ) {
+    sdlscr_escbreak = on;
+}
+
+// the break keys while a program runs: ESC (unless BREAK OFF), Ctrl+C, PAUSE/BREAK (also with Ctrl)
+static bool sdlscr_isbreakkey( SDL_KeyCode key ) {
+    if ( key == SDLK_PAUSE || key == SDLK_CANCEL ) {
+        return true;
+    }
+    if ( key == SDLK_c && ( SDL_GetModState() & KMOD_CTRL ) != 0 ) {
+        return true;
+    }
+    return key == SDLK_ESCAPE && sdlscr_escbreak;
+}
+
 static void sdlscr_handlekey( SDL_KeyCode key ) {
     if ( !sdlscr_awaitinput && !sdlscr_pollinput ) return;
-    if ( key == SDLK_ESCAPE && sdlscr_pollinput ) {
+    if ( sdlscr_pollinput && sdlscr_isbreakkey( key ) ) {
         sdlscr_breakreq = true;
         sdlev_raise( SDLEV_BREAK );
         return;
@@ -573,6 +590,7 @@ static void sdlscr_flushinput( void ) {
 }
 
 void sdlscr_pollkeys( bool enable ) {
+    sdlscr_escbreak = true;                 // (a run starts, and ends, with BREAK ON)
     if ( enable ) {
         sdlscr_flushinput();
         sdlscr_breakreq = false;
@@ -591,6 +609,7 @@ static size_t sdlscr_msgbytes( const sdlscr_inputmsg_t* msg, char* out ) {
         switch ( msg->symbol ) {
             case SDLK_RETURN:       out[0] = 13; return 1U;
             case SDLK_BACKSPACE:    out[0] = 8;  return 1U;
+            case SDLK_ESCAPE:       out[0] = 27; return 1U;     // (only reaches here after BREAK OFF)
             case SDLK_TAB:
                 if ( ( msg->mods & KMOD_SHIFT ) == 0 ) {
                     out[0] = 9;
@@ -667,13 +686,20 @@ int sdlscr_lineinput( int stop_evtmsk, char* buf, size_t bufsz, void (*vblank_ha
     switch ( r ) {
         case SCREDIT_CLOSED:
             return SDLEV_SCREENWORKERFINISHED;
-        case SCREDIT_CANCELLED:
-        case SCREDIT_EOF:
+        case SCREDIT_BREAK:
             if ( ( stop_evtmsk & SDLEV_BREAK ) != 0 ) {
                 sdlscr_setbreak();
                 return SDLEV_BREAK;
             }
             buf[0] = '\0';
+            return 0;
+        case SCREDIT_CANCELLED:
+        case SCREDIT_EOF:
+            if ( ( stop_evtmsk & SDLEV_BREAK ) != 0 && sdlscr_escbreak ) {
+                sdlscr_setbreak();
+                return SDLEV_BREAK;
+            }
+            buf[0] = '\0';         // (after BREAK OFF ESC at INPUT is an empty line)
             return 0;
         case SCREDIT_TOOLONG:
             buf[0] = '\0';
@@ -728,6 +754,10 @@ static bool sdlscr_msgtoscrkey( const sdlscr_inputmsg_t* msg, scrkey_t* k ) {
         return false;
     }
     int key, mods;
+    if ( msg->symbol == SDLK_PAUSE || msg->symbol == SDLK_CANCEL || ( msg->symbol == SDLK_c && ( msg->mods & KMOD_CTRL ) != 0 ) ) {
+        k->kind = SK_BREAK;
+        return true;
+    }
     switch ( msg->symbol ) {
         case SDLK_RETURN:
         case SDLK_KP_ENTER:     k->kind = SK_RETURN;    return true;

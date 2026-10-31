@@ -332,6 +332,7 @@ bool cgen_gen_rsm( codegen_t* cgen, uint16_t kind );
 bool cgen_gen_stop( codegen_t* cgen );
 bool cgen_gen_cont( codegen_t* cgen );
 bool cgen_gen_tron( codegen_t* cgen, uint16_t on );
+bool cgen_gen_brkm( codegen_t* cgen, uint16_t on );
 bool cgen_gen_auto( codegen_t* cgen );
 bool cgen_gen_peek( codegen_t* cgen );
 bool cgen_gen_peks( codegen_t* cgen );

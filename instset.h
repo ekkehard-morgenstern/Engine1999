@@ -535,6 +535,7 @@ The 4096 extended instructions are as follows:
     0001 01111010       ARGS - a program argument ( n -- s ) C=0 P=0
                             n = 0 is the program name, 1..ARGC the arguments; "" for a larger n; "Illegal argument" for a negative or fractional one.
     0001 01111011       ENVS - an environment variable ( name -- s ) C=0 P=0
+    0001 01111100       BRKM - BREAK ON / OFF: ESC breaks / is a key (param 1 / 0) ( -- ) C=0 P=1
                             The value of the variable of the process (getenv), "" if it is not set. A name with a zero byte is "Illegal argument".
     MATH kinds 14..16: CEIL, LOG2, LOG10 (kind 1, INT, is FLOOR as well).
 
@@ -713,5 +714,6 @@ The 4096 extended instructions are as follows:
 #define INS_ARGC        UINT16_C(0X179)
 #define INS_ARGS        UINT16_C(0X17A)
 #define INS_ENVS        UINT16_C(0X17B)
+#define INS_BRKM        UINT16_C(0X17C)
 
 #endif

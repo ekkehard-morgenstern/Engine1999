@@ -68,6 +68,8 @@ void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem ) {
     vm->report   = 0;
     vm->inkey    = 0;
     vm->keyback  = 0;
+    vm->escbreak = true;
+    vm->breakesc = 0;
     vm->sound    = 0;
     memset( vm->sfx, 0, sizeof(vm->sfx) );
     memset( vm->sfx_defined, 0, sizeof(vm->sfx_defined) );
@@ -3633,6 +3635,12 @@ static bool vm_step( vm_t* vm ) {
         case INS_STOP: return vm_stop_program( vm );
         case INS_CONT: return vm_continue_program( vm );
         case INS_TRON: vm->trace = param16 != 0; return true;
+        case INS_BRKM:
+            vm->escbreak = param16 != 0;
+            if ( vm->breakesc != 0 ) {
+                vm->breakesc( vm, vm->userdata, vm->escbreak );
+            }
+            return true;
         case INS_AUTO: return vm_auto_request( vm );
         case INS_PEEK: return vm_peek( vm );
         case INS_PEKS: return vm_peek_string( vm );
@@ -3822,6 +3830,12 @@ static bool vm_trap_error( vm_t* vm ) {
 }
 
 bool vm_begin( vm_t* vm, uint32_t start ) {
+    if ( !vm->escbreak ) {                  // every run starts with BREAK ON
+        vm->escbreak = true;
+        if ( vm->breakesc != 0 ) {
+            vm->breakesc( vm, vm->userdata, true );
+        }
+    }
     vm_clear_stacks( vm );
     vm_clear_request( vm );
     memset( vm->timers, 0, sizeof(vm->timers) );        // timers end with the run: their handlers are in this program's code

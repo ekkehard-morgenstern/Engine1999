@@ -69,6 +69,7 @@ static void con_sigint( int sig ) {
 
 static bool con_fullscreen = false;             // the full-screen editor or the monitor is open: program output and messages go to the text screen
 static bool con_pumping = false;                // a program is running on a terminal: look for keys (see con_pump())
+static bool con_escbreak = true;                // ESC is the break key (BREAK ON); with BREAK OFF it is an ordinary key (Ctrl-C always breaks)
 static size_t con_inqpos = 0, con_inqlen = 0;   // the keys that arrived while it ran (see con_pump())
 static void con_set_raw( bool raw );
 
@@ -84,6 +85,7 @@ static void con_catch_break( bool on ) {
     if ( on ) {
         con_break = 0;
     }
+    con_escbreak = true;                        // a run starts and ends with BREAK ON
     if ( !on ) {
         con_inqpos = con_inqlen = 0;            // the keys typed ahead during the run are dropped, as in the window
     }
@@ -249,7 +251,7 @@ static void con_pump( void ) {
         if ( n <= 0 ) {
             break;
         }
-        if ( n == 1 && chunk[0] == 033 ) {
+        if ( n == 1 && chunk[0] == 033 && con_escbreak ) {
             con_break = 1;                      // a lone ESC
             continue;
         }
@@ -362,7 +364,7 @@ static int con_readkey( bool wait ) {
                 }
                 int d = con_rawbyte( CON_ESCWAIT );
                 if ( d < 0 ) {
-                    if ( n == 1U && con_pumping ) {
+                    if ( n == 1U && con_pumping && con_escbreak ) {
                         con_break = 1;                       // a lone ESC while a program runs is Break (as in the window), also for GET and INKEY$
                         return -1;
                     }
@@ -446,6 +448,11 @@ static bool con_interrupt( struct _vm_t* vm, void* usrdata ) {
     return con_break != 0;
 }
 
+static void con_breakesc( struct _vm_t* vm, void* usrdata, bool on ) {
+    (void) vm; (void) usrdata;
+    con_escbreak = on;
+}
+
 static bool con_save( struct _vm_t* vm, void* usrdata, const char* filename, bool ascii ) {
     (void) vm;
     return repl_save_program( (repl_t*) usrdata, filename, ascii );
@@ -512,6 +519,7 @@ static bool con_init( repl_t* repl ) {
     repl->input     = con_input;
     repl->getkey    = con_getkey;
     repl->interrupt = con_interrupt;
+    repl->breakesc  = con_breakesc;
     repl->save      = con_save;
     repl->edit      = con_edit;
     repl->gfx       = &con_gfx;
@@ -593,10 +601,10 @@ static bool con_drv_nextkey( scrkey_t* k ) {
             continue;
         }
         if ( c < 0 ) {
-            if ( con_break ) {                  // Ctrl-C (or the break key while a program ran) is ESC to the editors
+            if ( con_break ) {                  // Ctrl-C (or the break key while a program ran)
                 con_break = 0;
                 memset( k, 0, sizeof(*k) );
-                k->kind = SK_ESCAPE;
+                k->kind = SK_BREAK;
                 return true;
             }
             memset( k, 0, sizeof(*k) );
@@ -635,6 +643,7 @@ static void con_drv_end( int state ) {
 
 // the monitor runs programs: keys are looked at while they run, and the lone ESC / Ctrl-C then break them (see con_pump())
 static void con_drv_pollkeys( bool enable ) {
+    con_escbreak = true;                        // (a run starts, and ends, with BREAK ON)
     con_pumping = enable && isatty( 0 );
     if ( enable ) {
         con_break = 0;
@@ -752,9 +761,9 @@ static bool con_line_nextkey( scrkey_t* k ) {
         }
         if ( c < 0 ) {
             memset( k, 0, sizeof(*k) );
-            if ( con_break ) {                       // Ctrl-C is ESC to the editor
+            if ( con_break ) {                       // Ctrl-C
                 con_break = 0;
-                k->kind = SK_ESCAPE;
+                k->kind = SK_BREAK;
                 return true;
             }
             k->kind = SK_EOF;                        // the end of the input (a redirected one, or the terminal's)
@@ -815,7 +824,9 @@ static ssize_t con_getline( char** line, size_t* cap, size_t maxlen, bool input 
     work[0] = '\0';
     int r = con_runedit( work, maxlen + 1U );
     ssize_t n = -1;
-    if ( r == SCREDIT_ACCEPTED || ( r == SCREDIT_CANCELLED && !input ) || r == SCREDIT_TOOLONG ) {
+    // ESC at INPUT is Break unless BREAK OFF made it an ordinary key (then the line is empty); Ctrl-C always is Break; at the prompt both drop the line
+    bool empty = r == SCREDIT_CANCELLED && input && !con_escbreak;
+    if ( r == SCREDIT_ACCEPTED || ( ( r == SCREDIT_CANCELLED || r == SCREDIT_BREAK ) && !input ) || r == SCREDIT_TOOLONG || empty ) {
         if ( r != SCREDIT_ACCEPTED ) {
             work[0] = '\0';
         }
@@ -829,8 +840,8 @@ static ssize_t con_getline( char** line, size_t* cap, size_t maxlen, bool input 
             *line = p; *cap = (size_t) n + 2U;
         }
         memcpy( *line, work, (size_t) n + 1U );
-    } else if ( r == SCREDIT_CANCELLED ) {
-        con_break = 1;                           // ESC at INPUT is Break
+    } else if ( r == SCREDIT_CANCELLED || r == SCREDIT_BREAK ) {
+        con_break = 1;                           // ESC (BREAK ON) and Ctrl-C at INPUT are Break
     }
     free( work );
     return n;

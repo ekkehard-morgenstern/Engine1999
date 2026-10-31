@@ -463,6 +463,18 @@ int main( void ) {
         static const char* const stepsB6[] = { "10 GET A$:PRINT ASC(A$)\r", "RUN\r", "\033[A", "\004" };
         static const char* const expB6[] = { "\r\n27\r\n" };
         failed += !pty_case( "terminal: a cursor key (ESC sequence) is a key for GET, not a break", stepsB6, 4U, expB6, 1U );
+        static const char* const stepsK1[] = { "10 BREAK OFF\r", "20 A$=INKEY$:IF A$=\"\" THEN GOTO 20\r", "30 PRINT ASC(A$)\r", "RUN\r", "\033", "\004" };
+        static const char* const expK1[] = { "\r\n27\r\n" };
+        failed += !pty_case( "terminal: BREAK OFF makes ESC an ordinary key (INKEY$ gets 27)", stepsK1, 6U, expK1, 1U );
+        static const char* const stepsK2[] = { "10 BREAK OFF:GOTO 10\r", "RUN\r", "\033", "\003", "PRINT 8\r", "\004" };
+        static const char* const expK2[] = { "? Break in line 10", "\r\n8\r\n" };
+        failed += !pty_case( "terminal: with BREAK OFF ESC does not stop the program, Ctrl-C does", stepsK2, 6U, expK2, 2U );
+        static const char* const stepsK3[] = { "10 BREAK OFF:INPUT A$:PRINT LEN(A$)\r", "RUN\r", "ab\033", "\r", "\004" };
+        static const char* const expK3[] = { "\r\n0\r\n" };
+        failed += !pty_case( "terminal: with BREAK OFF ESC at INPUT is an empty line", stepsK3, 5U, expK3, 1U );
+        static const char* const stepsK4[] = { "10 BREAK OFF:GOTO 10\r", "RUN\r", "\003", "20 GOTO 20\r", "10 PRINT 1\r", "RUN\r", "\033", "PRINT 9\r", "\004" };
+        static const char* const expK4[] = { "? Break in line 20", "\r\n9\r\n" };
+        failed += !pty_case( "terminal: the next run has BREAK ON again", stepsK4, 9U, expK4, 2U );
         static const char* const steps8[] = { "PRINT 1", "\033", "PRINT 5\r", "\004" };
         static const char* const exp8[] = { "\r\n5\r\n" };
         failed += !pty_case( "terminal: a lone ESC at the prompt cancels the line", steps8, 4U, exp8, 1U );

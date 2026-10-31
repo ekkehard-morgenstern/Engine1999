@@ -62,6 +62,7 @@ typedef enum _scrkind_t {
     SK_KEY,             // a cursor, editing or function key: key (KS_*), mods (KSMOD_*)
     SK_RESIZE,          // the screen has a new size
     SK_CLOSED,          // the screen is gone: the editor must return
+    SK_BREAK,           // Ctrl+C or PAUSE/BREAK: the break key (the editors treat it like ESC; INPUT is stopped by it even after BREAK OFF)
     SK_EOF              // the end of the input (a redirected input, Ctrl-D on a terminal is a key of its own): a line typed so far is complete
 } scrkind_t;
 
@@ -106,6 +107,7 @@ typedef struct _scrdrv_t {
 #define SCREDIT_CANCELLED   1
 #define SCREDIT_TOOLONG     2       // the text doesn't fit on the screen: nothing was done
 #define SCREDIT_CLOSED      3       // the screen was closed
+#define SCREDIT_BREAK       5       // Ctrl+C / PAUSE/BREAK: the host stops what it runs (INPUT: Break; the prompt: the line is dropped)
 #define SCREDIT_EOF         4       // the end of the input: Ctrl-D on an empty line, or the end of a redirected input (the console host ends; the window ignores it)
 
 // the editing state of a line (buf holds maxlen characters + NUL)
