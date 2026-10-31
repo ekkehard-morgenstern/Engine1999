@@ -13,10 +13,10 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-(not committed yet) **The Long Climb** (2026-10-31)
-- **History log**: the entry of `9af4054` (Fruit Invaders II) was already moved in.
-- **New**: `demos/climb.bas` (the jump and run demo, see `SESSION.md`), a line in `demos/README.md`; `docs/graphics-subsystem.md`: a section on scrolling a world bigger than the screen with `TILE SCROLL` (the cell mapping that gives exact pixel positions, the top strip, the cost of a changed layer).
-- Tests: no code changed; the demo was run headless (position traces for jump, ladder, drilling, a monster trapped and crushed, respawn; random keys 3 x 40000 polls without an error) and looked at on the real screen under Xvfb (title, level start, walking, jumping, climbing, the summit with the stand, the win screen, a death by a car and the game over screen, back to the title).
+(not committed yet) **Timer handlers run inside PROC/FUNC** (2026-10-31)
+- **History log**: the entries of `e7ba7c5` (The Long Climb) and `edd42c7` (documentation) moved into the log.
+- **Fix** (`vm.c`, `vm_irq_poll()`): an `EVERY`/`AFTER` handler was only entered when no function call was open; since procedures exist that meant never, in programs whose main loop is a `PROC` (the music of `climb.bas` stopped after one bar, the music and the pineapple of `fruit2.bas` too). A handler is held back only while a statement is unfinished (data stack not empty).
+- Tests: 4 new cases in `vmtest1` (1017; three failed before the fix); `repltest1` 302 and the other test programs pass. Docs: `docs/basic-language.md` (Timers), `SESSION.md`.
 
 ## Log
 
@@ -633,3 +633,13 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 - **Fix**: `RESUME <target>` after an error inside a `PROC`/`FUNC` call works (`vm.c`, `vm_resume_error()`: only `RESUME` and `RESUME NEXT` are refused there, as the docs said); 2 tests in `vmtest1` (1013).
 - **Fix**: the `grammar` / `grammar-check` targets were the first rules of the `makefile`, so `make` without arguments built only the grammar files; they come after `all` now (found when `vmtest1` was not rebuilt).
 - Tests: `vmtest1` 1013 all pass; the demo ran headless for 100000 interrupt polls without an error and was looked at on the real screen (title, play, pause, quit).
+
+### e7ba7c5 — 2026-10-31 12:27:43 +0100 — "The Long Climb demo game, created by Claude Code"
+5 files, +2178/-9.
+- **New**: `demos/climb.bas` (the jump and run demo "The Long Climb", see `SESSION.md`), a line in `demos/README.md`, `climb.hi` in `.gitignore`.
+- Tests: no code changed; the demo was run headless (position traces for jump, ladder, drilling, a monster trapped and crushed, respawn; random keys 3 x 40000 polls without an error) and looked at on the real screen under Xvfb (title, level start, walking, jumping, climbing, the summit with the stand, the win screen, a death by a car and the game over screen, back to the title).
+
+### edd42c7 — 2026-10-31 12:28:05 +0100 — "Documentation change, by Claude Code"
+1 file, +14.
+- `docs/graphics-subsystem.md`: a section on scrolling a world bigger than the screen with `TILE SCROLL` (the cell mapping that gives exact pixel positions, the top strip, the cost of a changed layer). (Part of the same work as `e7ba7c5`; committed separately.)
+

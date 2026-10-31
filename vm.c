@@ -2538,8 +2538,8 @@ static bool vm_irq_poll( vm_t* vm, uint64_t steps ) {
         vm->irqpending = false;
         return true;
     }
-    if ( !safe && ( vm->dsp != 0 || vm->nctx != 0 ) ) {
-        vm->irqpending = true;      // look again after the next instruction
+    if ( !safe && vm->dsp != 0 ) {
+        vm->irqpending = true;      // in the middle of a statement: look again after the next instruction
         return true;
     }
     vm->irqpending = false;

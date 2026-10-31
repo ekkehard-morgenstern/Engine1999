@@ -910,6 +910,10 @@ static const testcase_t cases[] = {
     { "FOR EACH without IN",    "10 DIM A(2)\n20 FOR EACH V A()\n30 NEXT",                    "? IN expected in line 20\n" },
     { "FOR EACH of an unknown array", "10 FOR EACH V IN Q()\n20 NEXT",                          "? Undefined variable in line 10\n" },
     { "FOR EACH without NEXT",  "10 DIM A(2)\n20 FOR EACH V IN A()",                           "? FOR without NEXT in line 20\n" },
+    { "EVERY handler runs inside a PROC", "10 PROC P\n20 FOR I=1 TO 15000:X=X+1:NEXT I\n25 PRINT C>=1\n30 END PROC\n40 EVERY 1,0 GOSUB 100\n50 CALL P\n60 EVERY OFF\n70 END\n100 C=C+1:RETURN", "-1\n" },
+    { "AFTER handler runs inside a PROC", "10 PROC P\n20 FOR I=1 TO 15000:X=X+1:NEXT I\n25 PRINT D\n30 END PROC\n40 AFTER 1,0 GOSUB 100\n50 CALL P\n70 END\n100 D=1:RETURN", "1\n" },
+    { "a handler runs between the statements of a FUNC, not in the middle of an expression", "10 FUNC F(X)\n20 FOR I=1 TO 15000:Y=Y+1:NEXT I\n25 E=D\n30 RETURN X\n40 END FUNC\n50 AFTER 1,0 GOSUB 100\n60 A=1+FN F(5)\n70 PRINT A;E;D\n80 END\n100 D=1:RETURN", "601\n" },
+    { "a handler runs inside a FUNC called as a statement-level value", "10 FUNC F(X)\n20 FOR I=1 TO 15000:Y=Y+1:NEXT I\n25 E=D\n30 RETURN X\n40 END FUNC\n50 AFTER 1,0 GOSUB 100\n60 A=FN F(5)\n70 PRINT A;E;D\n80 END\n100 D=1:RETURN", "511\n" },
     // PEEK / POKE, STOP / CONT / TRACE
     { "POKE and PEEK a byte",   "10 POKE 100,65\n20 PRINT PEEK(100);PEEK(101)",              "650\n" },
     { "PEEK is unsigned for bytes and words", "10 POKE 0,-1,1\n20 POKE 10,-1,2\n30 PRINT PEEK(0);PEEK(10,2)", "25565535\n" },
