@@ -118,6 +118,20 @@ of the sprite it overlapped at the last frame (-1 none). A collision means an ov
 `ON COLLISION`: the VM asks the host for a new collision about every 32 instructions (and while `WAIT`ing) and runs the handler between two statements, like a timer
 handler (it has the highest priority); the program finds out which sprite with `SPRITE("HITS",n)`.
 
+### Scrolling a world that is bigger than the screen (`TILE SCROLL`)
+
+The tile screen is a window of 41 x 13 cells (40.00 x 12.5 visible). `TILE SCROLL sx, sy` (both >= 0, taken modulo 16 / 24) moves the picture right / down by that
+many pixels; **what is pushed in at the left or at the top comes from the last cell of the row or column** (the cells wrap). A big world therefore lives in the program
+(an array, strings, or the RAM with `POKE`/`PEEK$`: `demos/climb.bas` keeps its 120 x 40 tiles in the RAM, one byte per tile) and the program copies the visible part into
+the cells with `TILE FILL` when the camera crosses a tile boundary, and scrolls by the remainder. To get exact pixel positions (the world tile in column W at x = W * 16 - CX):
+
+    cell I holds the world column  (CX-1)\16 + 1 + I        for I = 0 .. 39,  the cell 40 (off the screen) holds (CX-1)\16
+    TILE SCROLL 15 - (CX-1) MOD 16, 23 - (CY-1) MOD 24   (the rows the same way, cell J holds the row (CY-1)\24 + 1 + J)
+
+(CX, CY >= 1.) The strip pushed in at the top shows the wrong row for up to 23 pixels, so keep the top two text lines opaque (a score bar); the left strip is right because
+of the cell 40. Sprites are placed at world position minus camera. Any frame in which a layer changes costs the screen thread a rendering pass: on a software renderer (a test
+under Xvfb) a program that scrolls the tiles every frame ran at about a third of 60 frames per second; on a normal desktop it is fine.
+
 ### `GFX RESET`
 
 `GFX RESET` puts the graphics system back to its start state, so that nothing a program left behind stays on the screen:
