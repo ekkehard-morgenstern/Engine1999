@@ -12,6 +12,7 @@ The display side is working; the BASIC side (tokenizer → compiler → code gen
 | [basic-language.md](basic-language.md) | Tokenized line format, binary program file (`.e99`) format, token set, literals, grammar summary |
 | [compiler-and-vm.md](compiler-and-vm.md) | Program store, syntax tree, node types, code generator, instruction set, variable memory |
 | [build-and-test.md](build-and-test.md) | Building, executables, test programs, tooling |
+| [graphics-subsystem.md](graphics-subsystem.md) | Proposal: BASIC statements for the layers, palettes, text screen, graphics layer, tiles and sprites (nothing implemented yet) |
 | [io-subsystem.md](io-subsystem.md) | I/O subsystem: virtual device drivers (`file:`, `mem:`, ...), `driver:name` prefixes, `OPEN`/`CLOSE`, `ADDRESS`; phases and the open sandboxing issue |
 | [roadmap.md](roadmap.md) | **Open work**: everything that is still to do, with the design questions that are waiting for a decision |
 | [refactoring.md](refactoring.md) | **Current in-progress refactor**: goal, status, known bugs, remaining work, limits table |

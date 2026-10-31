@@ -128,3 +128,11 @@ Listed in full in `SESSION.md` ("Design decisions I took"). The ones most likely
 - [x] **Binary-safe strings** (done, 2026-10-31; see `docs/basic-language.md` "Binary strings"): zero bytes in strings, control code glyphs 0..31 in the font, length based print path
 - [x] **Number packing** (done, 2026-10-31): `MKI$`/`MKL$`/`MKS$`/`MKD$` and `CVI`/`CVL`/`CVS`/`CVD`, big endian (network byte order; owner decision)
 - [ ] Helpers for binary data: `STRING$(n,c)`, `SPACE$`, `HEX` to bytes / bytes to `HEX$` dump, unsigned `CVI`/`CVL` variants, 24 bit and 64 bit integers; byte-wise `ANDS`/`ORS`
+
+## 10. Graphics subsystem *(proposal: `docs/graphics-subsystem.md`)*
+
+- [ ] Awaiting the owner's decisions (names, colors, target layer, reserved words, order, asset formats)
+- [ ] Phase 1: `LAYER`, `PALETTE`, `RGB()`, `BACKDROP`; text screen words `CLS`, `LOCATE`, `COLOR`, `POS`, `CSRLIN`, `SYMBOL`
+- [ ] Phase 2: graphics layer: `GCOLOR`, `GCLS`, `PSET`, `POINT`, `LINE`, `CIRCLE`, `PAINT`, `GRAB`, `BLIT` (module `gfxcore`, no SDL), `VSYNC`, `FRAME`
+- [ ] Phase 3: `TILE`, `TILEMAP`, `TILESCROLL`, `SPRDEF`, `SPRITE`, `ANIM`, `COLLIDE`; backend gaps: tile cell setter (`tilescr[]` can't be written today), sprite collision, position getters
+

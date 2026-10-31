@@ -13,11 +13,9 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-- **Number packing `MKI$ MKL$ MKS$ MKD$` / `CVI CVL CVS CVD`, big endian** (owner's request: network byte order)
-  - **Language**: tokens 182..189 (`bastok.[ch]`, highlighted as functions), parsed in the existing `STR$`/`CHR$` branch (`comp_eat_sysstrfn2argcall`, needs `$`) and the `ASC`/`VAL`/`LEN` branch (`comp_eat_sysnumfn1argcall`), `cgen_gen_mki` ... `cgen_gen_cvd`, instructions `PACK 0x15C` / `UNPK 0x15D` (parameter 1..4 = I/L/S/D), `bascomp.ebnf`.
-  - **VM**: `vm_pack()` / `vm_unpack()` assemble the bytes by shifts (big endian on any host), floats via `memcpy`, built on `vm_push_bytes()`; ranges: `MKI$` -32768..65535, `MKL$` -2^31..2^32-1, else "Illegal argument"; `CVI`/`CVL` signed; short strings refused, extra bytes ignored.
-  - **Tests**: `vmtest1` 691 -> 710 (+19: byte order of each width, round trips, ranges, errors, records, files, a loop), `repltest1` 278 -> 279; all suites pass, `vmtest1`/`repltest1` clean under valgrind.
-  - **Docs**: `docs/basic-language.md` ("Number packing"), `docs/compiler-and-vm.md`, `docs/io-subsystem.md`, `docs/roadmap.md` (done; binary helpers listed as next), `instset.h`, `SESSION.md`.
+- **Graphics subsystem proposal** (owner's request: look at `sdllayer` and its users, suggest BASIC statements and functions; no code changed)
+  - Read `sdllayer`, `sdlscreen`, `textscreen`, `tilescreen`, `sprscreen`, `concept.txt`; found the gaps (tile screen cells can't be written, no palette/layer/backdrop access above `sdllayer`, no drawing code for the background and graphics layers, no sprite collision, no BASIC access to any of it besides text output).
+  - New `docs/graphics-subsystem.md` (layers, principles, three phases: layers/palette/text words; graphics layer; tiles and sprites; timing; backend work; six decisions for the owner), linked from `docs/README.md`; `docs/roadmap.md` section 10.
 
 ## Log
 
@@ -514,3 +512,11 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
   - **VM** (`vm.[ch]`): `vmval_t.len`; `vm_dpop_bstr()`, `vm_dpop_str()` refuses embedded zero bytes ("Illegal argument (zero byte in string)"), `vm_push_string_n()`, `vm_push_bytes()` (for the number packing step), `vm_out_bytes()`; length based: concatenation, comparison (`memcmp`, unsigned, prefix is smaller), `LEN`, `ASC`, `LEFT$`/`MID$`/`RIGHT$`, substring assignment, `LSET`/`RSET`, `FIELD`/`GETREC`, `INPUT`/`INPUT #` (rewritten with bounds)/`LINE INPUT`/`GET`/`INPUT$`, `PRINT`/`WRITE`, the `con:` driver; `CHR$(0)` allowed; `iotab_readline_n()` (`iodev.[ch]`).
   - **Tests**: `vmtest1` 670 -> 691 (zero byte cases in strings, comparisons, substrings, arrays, functions, files, `INPUT #`, records; the `CHR$ zero` case changed from an error to `<0>`; the test host got a `printn` that shows `<0>`), `txttest1` 43 -> 46, `ansitest1` +1; all pass, `vmtest1`/`repltest1`/`iotest1` clean under valgrind.
   - **Docs**: `docs/basic-language.md` ("Binary strings"), `docs/display-engine.md` ("Control code glyphs"), `docs/compiler-and-vm.md`, `docs/io-subsystem.md`, `docs/roadmap.md` (number packing is the next item), `instset.h`, `vm.h`, `SESSION.md`.
+
+### daff040 — 2026-10-31 03:46:22 +0100 — "Number packing/unpacking for strings implemented by Claude Code"
+16 files, +216/-27.
+- **Number packing `MKI$ MKL$ MKS$ MKD$` / `CVI CVL CVS CVD`, big endian** (owner's request: network byte order)
+  - **Language**: tokens 182..189 (`bastok.[ch]`, highlighted as functions), parsed in the existing `STR$`/`CHR$` branch (`comp_eat_sysstrfn2argcall`, needs `$`) and the `ASC`/`VAL`/`LEN` branch (`comp_eat_sysnumfn1argcall`), `cgen_gen_mki` ... `cgen_gen_cvd`, instructions `PACK 0x15C` / `UNPK 0x15D` (parameter 1..4 = I/L/S/D), `bascomp.ebnf`.
+  - **VM**: `vm_pack()` / `vm_unpack()` assemble the bytes by shifts (big endian on any host), floats via `memcpy`, built on `vm_push_bytes()`; ranges: `MKI$` -32768..65535, `MKL$` -2^31..2^32-1, else "Illegal argument"; `CVI`/`CVL` signed; short strings refused, extra bytes ignored.
+  - **Tests**: `vmtest1` 691 -> 710 (+19: byte order of each width, round trips, ranges, errors, records, files, a loop), `repltest1` 278 -> 279; all suites pass, `vmtest1`/`repltest1` clean under valgrind.
+  - **Docs**: `docs/basic-language.md` ("Number packing"), `docs/compiler-and-vm.md`, `docs/io-subsystem.md`, `docs/roadmap.md` (done; binary helpers listed as next), `instset.h`, `SESSION.md`.
