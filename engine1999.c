@@ -1257,24 +1257,9 @@ static bool handle_input( const char* buf ) {
 
 // -- command line ----------------------------------------------------------------------
 
-static const struct {
-    const char* name;
-    uint32_t    flag;
-    const char* help;
-} debugopts[] = {
-    { "--debug-tokenize",   BASDBG_TOKENIZE,    "print the token bytes of every input line" },
-    { "--debug-detokenize", BASDBG_DETOKENIZE,  "print every input line rebuilt from its tokens" },
-    { "--debug-parse",      BASDBG_PARSE,       "print every token as the compiler fetches it" },
-    { "--debug-tree",       BASDBG_TREE,        "print the syntax tree after parsing" },
-    { "--debug-code",       BASDBG_CODE,        "print every instruction the code generator emits" },
-    { "--debug-all",        BASDBG_ALL,         "all of the above" },
-};
-
 static void usage( FILE* out, const char* prog ) {
     fprintf( out, "Usage: %s [options]\n\nDebug output (to standard output, off by default):\n", prog );
-    for ( size_t i=0; i < sizeof(debugopts) / sizeof(debugopts[0]); ++i ) {
-        fprintf( out, "  %-20s %s\n", debugopts[i].name, debugopts[i].help );
-    }
+    basdbg_usage( out );
     fprintf( out, "\nOther:\n  %-20s %s\n  %-20s %s\n", "--version", "show the version", "-h, --help", "show this text" );
 }
 
@@ -1290,14 +1275,7 @@ static bool parse_args( int argc, char** argv, bool* phelp ) {
             printf( "Engine 1999 %s\n", ENGINE_VERSION );
             exit( EXIT_SUCCESS );
         }
-        bool found = false;
-        for ( size_t j=0; j < sizeof(debugopts) / sizeof(debugopts[0]); ++j ) {
-            if ( strcmp( arg, debugopts[j].name ) == 0 ) {
-                basdbg_flags |= debugopts[j].flag;
-                found = true;
-                break;
-            }
-        }
+        bool found = basdbg_option( arg );
         if ( !found ) {
             fprintf( stderr, "%s: unknown option '%s'\n", argv[0], arg );
             return false;

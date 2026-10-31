@@ -77,4 +77,8 @@ void basdbg_print_tokens( const uint8_t* tokline );
 void basdbg_print_detokenized( const uint8_t* tokline );
 void basdbg_print_tree( compiler_t* comp );
 
+// the command line options --debug-tokenize ... --debug-all that every host accepts: sets the flags and returns true if arg is one of them
+bool basdbg_option( const char* arg );
+void basdbg_usage( FILE* out );             // lists them (for a host's --help)
+
 #endif

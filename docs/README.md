@@ -15,6 +15,7 @@ Players and BASIC programmers: start with the [README](../README.md). Engine con
 | [grammar.md](grammar.md) | **The language at a glance**: the whole syntax as a quick reference card, generated from `bascomp.ebnf` (also [grammar.html](grammar.html), with colors and links) |
 | [build-and-test.md](build-and-test.md) | Building, executables, test programs, tooling |
 | [graphics-subsystem.md](graphics-subsystem.md) | BASIC statements for layers, palettes, the graphics layer, tiles, sprites, `DESIGN` pictures, collisions and text screen areas; the `sdlscr_*` API (implemented) |
+| [console-host.md](console-host.md) | The console host `engine1999c`: the BASIC system without a window for scripts and pipes (input, output, exit status, what the display statements do) |
 | [io-subsystem.md](io-subsystem.md) | I/O subsystem: virtual device drivers (`file:`, `mem:`, ...), `driver:name` prefixes, `OPEN`/`CLOSE`, `ADDRESS`; phases and the open sandboxing issue |
 | [contributing.md](contributing.md) | **For contributors**: who contributed, how to build and test, how a new statement goes in, conventions, the license of contributions |
 | [roadmap.md](roadmap.md) | **Open work**: everything that is still to do, with the design questions that are waiting for a decision |

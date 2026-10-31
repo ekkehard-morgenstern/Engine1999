@@ -427,11 +427,17 @@ static bool repl_read_program( repl_t* repl, FILE* f, program_t* pgm ) {
         return false;
     }
     bool ok = true;
+    bool firstline = true;
     char* text = 0; size_t cap = 0; ssize_t len;
     while ( ok && ( len = getline( &text, &cap, f ) ) >= 0 ) {
         while ( len > 0 && ( text[ len - 1 ] == '\n' || text[ len - 1 ] == '\r' ) ) {
             text[ --len ] = '\0';
         }
+        if ( firstline && text[0] == '#' && text[1] == '!' ) {      // a script's first line (#!/usr/bin/env engine1999c)
+            firstline = false;
+            continue;
+        }
+        firstline = false;
         preprocess_buffer( text );
         const char* q = text;
         while ( *q == ' ' ) {
@@ -551,6 +557,10 @@ static bool repl_load_program( repl_t* repl, const char* name ) {
     repl_set_filename( repl, filename );
     free( filename );
     return true;
+}
+
+bool repl_load_file( repl_t* repl, const char* name ) {
+    return repl_load_program( repl, name );
 }
 
 // replaces the stored program by the program file image in memory (the program of a built executable, see BUILD)

@@ -138,3 +138,34 @@ void basdbg_print_tree( compiler_t* comp ) {
     }
     fflush( stdout );
 }
+
+// -- command line options -----------------------------------------------------------------
+
+static const struct {
+    const char* name;
+    uint32_t    flag;
+    const char* help;
+} basdbg_options[] = {
+    { "--debug-tokenize",   BASDBG_TOKENIZE,    "print the token bytes of every input line" },
+    { "--debug-detokenize", BASDBG_DETOKENIZE,  "print every input line rebuilt from its tokens" },
+    { "--debug-parse",      BASDBG_PARSE,       "print every token as the compiler fetches it" },
+    { "--debug-tree",       BASDBG_TREE,        "print the syntax tree after parsing" },
+    { "--debug-code",       BASDBG_CODE,        "print every instruction the code generator emits" },
+    { "--debug-all",        BASDBG_ALL,         "all of the above" },
+};
+
+bool basdbg_option( const char* arg ) {
+    for ( size_t i=0; i < sizeof(basdbg_options) / sizeof(basdbg_options[0]); ++i ) {
+        if ( strcmp( arg, basdbg_options[i].name ) == 0 ) {
+            basdbg_flags |= basdbg_options[i].flag;
+            return true;
+        }
+    }
+    return false;
+}
+
+void basdbg_usage( FILE* out ) {
+    for ( size_t i=0; i < sizeof(basdbg_options) / sizeof(basdbg_options[0]); ++i ) {
+        fprintf( out, "  %-20s %s\n", basdbg_options[i].name, basdbg_options[i].help );
+    }
+}

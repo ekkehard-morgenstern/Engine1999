@@ -132,6 +132,7 @@ bool repl_vm_start( repl_t* repl, uint32_t addr );    // monitor: suspend the VM
 bool repl_vm_resume( repl_t* repl, bool step, const uint32_t* breakpoints, size_t numbreakpoints );   // continue / single-step it; see repl_vm_resume()
 bool repl_save_program( repl_t* repl, const char* filename, bool ascii );   // for the host's SAVE callback
 bool repl_program_image( repl_t* repl, uint8_t** pdata, size_t* plen );     // the stored program as a binary program file (malloc'ed); BUILD
+bool repl_load_file( repl_t* repl, const char* name );                    // LOAD without running (the extension search, drivers); reports errors
 bool repl_load_image( repl_t* repl, const void* data, size_t len );         // replaces the stored program by a program file in memory
 
 #endif

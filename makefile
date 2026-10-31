@@ -40,7 +40,7 @@ CL=$(CCOMP) $(CFLAGS)
 .c.o:
 	$(CC) -o $@ $<
 
-all: sdltest1 sdltest2 engine1999 basictest1 testcomp1 basictest2 vmtest1 repltest1 ansitest1 txttest1 asmtest1 synthtest1 iotest1 gfxtest1 buildtest1
+all: sdltest1 sdltest2 engine1999 basictest1 testcomp1 basictest2 vmtest1 repltest1 ansitest1 txttest1 asmtest1 synthtest1 iotest1 gfxtest1 buildtest1 engine1999c contest1
 	echo ok >all
 
 .PHONY: grammar grammar-check
@@ -75,6 +75,12 @@ engine1999: engine1999.o $(LIBNAME)
 	$(CL) -o engine1999 engine1999.o $(LIBNAME) -lSDL2 -lrt -lm
 
 engine1999.o: engine1999.c $(LIBHDR) version.h
+
+# the console host: the same BASIC system without a window, no SDL (docs/console-host.md)
+engine1999c: engine1999c.o $(LIBNAME)
+	$(CL) -o engine1999c engine1999c.o $(LIBNAME) -lrt -lm
+
+engine1999c.o: engine1999c.c $(LIBHDR) version.h
 
 # the version string comes from the newest version tag of git (bump_version.sh makes the tags); the header is regenerated when HEAD,
 # the log of commits or the tags change (and only rewritten if the string differs). Only engine1999.o includes it.
@@ -131,6 +137,12 @@ buildtest1: buildtest1.o buildstub.o engine1999.o $(LIBNAME)
 buildtest1.o: buildtest1.c $(LIBHDR)
 
 basbuild.o: basbuild.c $(BASEHDR)
+
+# the test of the console host runs ./engine1999c in the build directory
+contest1: contest1.o engine1999c
+	$(CL) -o contest1 contest1.o
+
+contest1.o: contest1.c $(LIBHDR)
 
 asmtest1: asmtest1.o $(LIBNAME)
 	$(CL) -o asmtest1 asmtest1.o $(LIBNAME) -lm

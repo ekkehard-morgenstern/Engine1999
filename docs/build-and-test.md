@@ -8,7 +8,7 @@ Linux, `gcc`, `make`, SDL2 development files (`libsdl2-dev`). Perl only to regen
 
 | Command | Result |
 |---|---|
-| `make` | `engine.lib` (all modules in `BASEMOD`) + `sdltest1 sdltest2 engine1999 basictest1 testcomp1 basictest2 vmtest1 repltest1 ansitest1 txttest1 asmtest1 synthtest1 iotest1 gfxtest1 buildtest1`, then writes marker file `all` |
+| `make` | `engine.lib` (all modules in `BASEMOD`) + `sdltest1 sdltest2 engine1999 basictest1 testcomp1 basictest2 vmtest1 repltest1 ansitest1 txttest1 asmtest1 synthtest1 iotest1 gfxtest1 buildtest1 engine1999c contest1`, then writes marker file `all` |
 | `make DEBUG=1` | same with `-g` instead of `-O3` (do a `rm *.o engine.lib` first — objects do not track flags) |
 | `make <name>.o` | compile one module |
 
@@ -27,6 +27,8 @@ New modules must be added to both `BASEMOD` and `BASEHDR`. Known makefile wart: 
 | `vmtest1` | no | **Automated** end-to-end test (BASIC text → tokens → tree → code → VM → output); table of cases in the source, prints PASS/FAIL per case, exit status = number of failures; `-v` keeps the compiler/codegen debug output; run under valgrind to check leaks. Add a case for every new statement/instruction |
 | `repltest1` | no | **Automated** test of the REPL (`basrepl.c`): lines are fed like a user would type them (direct mode, stored lines, `RUN`/`LIST`/`LOAD`/`NEW`/`CLEAR` statements, `INPUT`/`GET`, Break); table of cases in the source, exit status = number of failures; `-v` keeps the compiler/codegen debug output |
 | `asmtest1` | no | **Automated** test of the VM assembler / decoder (`vmasm.c`): encodings, error messages, decoding, and a round trip (decode → format → assemble gives the same bytes) over every instruction of a compiled program; exit status = number of failures |
+| `engine1999c` | no | The console host (`engine1999c.c`, see [console-host.md](console-host.md)): no window, no SDL, links with `-lrt -lm` only |
+| `contest1` | no | **Automated** test of the console host: runs `./engine1999c` in a temporary directory through the shell (pipes, files, exit codes, the `#!` line, `INPUT`/`GET`/`INKEY$` from a pipe, sound and graphics statements, SIGINT as Break); exit status = number of failures; run it in the build directory |
 | `buildtest1` | no | **Automated** test of `BUILD` (`basbuild.c`): links a dynamic executable with the system linker only, using the stand-in runtime `buildstub.o` (its `main()` writes the embedded program out) and checks the program is intact (all byte values), the ELF file, the dynamic linker and libc, error messages (missing runtime files, libraries, linker, unwritable output), that no work files are left behind, and (when `engine1999.o` and `engine.lib` are there) links the real runtime with SDL2 and asks it for `--engine1999-about`; exit status = number of failures. Needs `ld` and the C library development files. |
 | `txttest1` | no | **Automated** test of the text screen (`textscreen.c`): viewports (write clipping, wrapping, scrolling), the two screens, blank colors, rendering at the viewport position; exit status = number of failures |
 | `ansitest1` | no | **Automated** test of the ANSI/SGR decoder (`ansi.c`): feeds texts with escape sequences and compares the text runs and colors handed to the callback; exit status = number of failures |
