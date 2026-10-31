@@ -1,6 +1,6 @@
 # I/O subsystem with virtual device drivers
 
-Status: **design agreed 2026-10-30; phase 1 is implemented** (`iodev.[ch]`, tests `iotest1`, `vmtest1`, `repltest1`); phases 2 and 3 are
+Status: **design agreed 2026-10-30; phases 1 and 2 are implemented** (`iodev.[ch]`, tests `iotest1`, `vmtest1`, `repltest1`); phases 2 and 3 are
 open. The decisions of the project owner are listed under "Decisions"; the rest is the design as proposed. "What phase 1 does,
 exactly" at the end of "Statements and functions" lists the details that the proposal left open.
 
@@ -28,7 +28,8 @@ exactly" at the end of "Statements and functions" lists the details that the pro
 | `seek( h, pos )`, `size( h )` | random access and the length (for `SEEK`, `LOF`, `LOC`, `EOF`) |
 | `close( h )` | |
 | `list( drv, spec, style, emit )` | the lines of `FILES` |
-| `remove`, `rename`, `mkdir`, `chdir` | phase 2 |
+| `remove`, `rename`, `mkdir`, `chdir` | `KILL`, `RENAME`, `MKDIR`, `CHDIR` (0 = "Not supported by device") |
+| `seek( h, pos )` | `SEEK #n, pos` (0 = not seekable) |
 
 **Channel**: `#n`. Channel 0 is the screen and the keyboard (the host callbacks `print`, `input`, `getkey`); it is always open and
 cannot be opened or closed. Channels 1 to 255 are opened by `OPEN`. The VM keeps a table of them: driver, handle, mode, a read
@@ -96,6 +97,34 @@ ADDRESS [driver]     ADDRESS$                     chooses / returns the default 
   `engine1999`), `FILES "mem:"` lists them (oldest first, like `FILES`), a file that is open when the driver deletes it stays
   readable until it is closed.
 
+## What phase 2 does, exactly
+
+- **`KILL name$`**, **`RENAME from$ TO to$`**, **`MKDIR name$`**, **`CHDIR name$`**: names may carry a `driver:` prefix, else the `ADDRESS`
+  driver is used. `RENAME` needs both names on the same driver ("Not the same device") and **never replaces** an existing target
+  ("File already exists"; `rename(2)` would do so silently). `MKDIR` of an existing name is "File already exists", `CHDIR` into a
+  file "Not a directory". `CHDIR` changes the current directory of the whole process, so it also changes what `LOAD`, `SAVE` and
+  `FILES` see. A driver without directories (`mem`, `null`, `sh`, `res`, `con`) answers "Not supported by device"; `KILL` on `res`,
+  `sh`, `con` likewise. All five are one node (`NT_FILEOPSTMT`, kind `FOPK_*`) and one instruction (`FOP 0x155`, parameter = kind).
+  The statements go through `iodev_allowed()` ("write"; `CHDIR`: "read"), the future sandbox hook.
+- **`SEEK #n, pos`**: moves the next read or write of an open channel to byte `pos` (counted from 0); `LOC` follows. It drops the read
+  buffer. `file` seeks anywhere (a file opened FOR APPEND still writes at the end, as `fopen("a")` does); `mem` only within the
+  file ("Bad position": a RAM file has no holes); `null` accepts everything; `sh` and `con` can't seek ("Not supported by device").
+  A negative position is "Bad position". `SEEK` is a statement only (GW-BASIC's `SEEK` function is not provided; use `LOC`).
+- **`sh:`**: `OPEN "sh:ls -l" FOR INPUT AS #1` runs the command through `popen()` and reads its standard output; FOR OUTPUT feeds its
+  standard input; APPEND is "Bad file mode". Closing waits for the command; its exit status is ignored. `LOF` and `SEEK` are not
+  supported. It asks `iodev_allowed( "shell", ... )` first, so the sandbox can forbid it together with the shell literals. Anything
+  the command writes to its standard error goes to the terminal that started `engine1999`, not to the BASIC screen.
+- **`res:`**: read-only files below the directory `res` of the current directory (`OPEN "res:sprites/ship.dat" FOR INPUT`). Absolute
+  names and names with a `..` component are "Permission denied", as is any attempt to write. `FILES "res:"` lists it (the names
+  then show the `res/` prefix, because the listing is the `file` driver's). `res` is a directory, not yet an archive.
+- **`con:`**: the screen (FOR OUTPUT) and the keyboard (FOR INPUT) as an ordinary channel, so generic routines can write to `#n`
+  wherever it points. Output goes to the host's print callback exactly like channel 0 (the screen column is updated), input reads
+  keys one at a time through the host's `getkey`/`inkey` (no echo, no line editing: use `INPUT$(1,#n)` or `GET #n,k$`). The VM
+  hands its callbacks to the driver with `iodev_set_console()` when a channel is opened; without a host the open fails with
+  "Not supported by device". APPEND is not supported.
+- New errors: "File already exists", "Not a directory", "Not the same device", "Bad position".
+- Not done: `SEEK` as a function, `res:` from an archive, an `EXEC`-style statement for `sh` without a channel.
+
 ## Existing commands through the drivers (phase 1)
 
 `LOAD`, `MERGE`, `CHAIN` read the program with `iodev` (a whole file is read into memory, then parsed from a memory stream),
@@ -110,9 +139,9 @@ disk. The `file` driver uses the current directory of the process.
 | `file` | 1 | the disk (default); `list` is the `ls -ltr`-like listing of `FILES` |
 | `null` | 1 | accepts everything, always at the end |
 | `mem` | 1 | a RAM disk, one namespace for the whole process (survives `RUN`); files are created by OUTPUT/APPEND; `FILES "mem:"` lists them |
-| `sh` | 2 | `OPEN "sh:ls -l" FOR INPUT AS #1` reads the output of a command, `FOR OUTPUT` feeds its input (see Sandboxing) |
-| `res` | 2 | read-only game assets (a directory or an archive next to the program) |
-| `con` | 2 | the screen / keyboard as an ordinary channel, so generic routines can write to `#n` |
+| `sh` | 2 (done) | `OPEN "sh:ls -l" FOR INPUT AS #1` reads the output of a command, `FOR OUTPUT` feeds its input (see Sandboxing) |
+| `res` | 2 (done) | read-only game assets (a directory or an archive next to the program) |
+| `con` | 2 (done) | the screen / keyboard as an ordinary channel, so generic routines can write to `#n` |
 | `play` | 3 | writing a music string to the channel plays it (`PLAY` voices) |
 | `tcp` | 3 | network connections (see Sandboxing) |
 | programmable | 3 | a driver written in BASIC (open/read/write/close as subroutines) |
@@ -122,7 +151,7 @@ disk. The `file` driver uses the current directory of the process.
 1. **Phase 1** (done): `iodev.[ch]` with the registry and `file`, `null`, `mem`; the channel table in the VM;
    `OPEN`, `CLOSE`, `LINE INPUT`, `WRITE`, `EOF`, `LOF`, `LOC`, `INPUT$`, `ADDRESS`, `ADDRESS$`; `PRINT #`, `INPUT #`, `GET #` on
    files; `LOAD`, `SAVE`, `MERGE`, `CHAIN` and `FILES` through the drivers. Tests use `mem:`.
-2. **Phase 2**: `KILL`, `RENAME ... TO`, `MKDIR`, `CHDIR`, `SEEK`; the `sh`, `res`, `con` drivers.
+2. **Phase 2** (done): `KILL`, `RENAME ... TO`, `MKDIR`, `CHDIR`, `SEEK`; the `sh`, `res`, `con` drivers (next section).
 3. **Phase 3**: random access records: `FIELD #n, len AS a$ ...`, `LSET`, `RSET`, `GETREC #n [, rec]`, `PUTREC #n [, rec]` (new words,
    because `GET #n, v` already reads one character or byte, which clashes with GW-BASIC's `GET #n, record`); engine drivers
    (`play`, `tcp`); drivers written in BASIC.

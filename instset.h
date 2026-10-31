@@ -420,6 +420,11 @@ The 4096 extended instructions are as follows:
                             current and the previous default (ADDRESS alone).
     0001 01010100       ADRS - the default driver ( -- s ) C=0 P=0
                             ADDRESS$.
+    0001 01010101       FOP  - file system operation ( ... -- ) C=0 P=1
+                            Parameter = kind: 1 KILL ( name$ -- ), 2 RENAME ( from$ to$ -- ), 3 MKDIR ( name$ -- ),
+                            4 CHDIR ( name$ -- ), 5 SEEK ( n pos -- ): bytes from the start of channel n. Names may have a
+                            "driver:" prefix. Errors: "File not found", "Permission denied", "File already exists",
+                            "Not the same device", "Not supported by device", "Bad position", ...
 
 */
 
@@ -557,5 +562,6 @@ The 4096 extended instructions are as follows:
 #define INS_INPD        UINT16_C(0X152)
 #define INS_ADDR        UINT16_C(0X153)
 #define INS_ADRS        UINT16_C(0X154)
+#define INS_FOP         UINT16_C(0X155)
 
 #endif

@@ -112,7 +112,7 @@ Listed in full in `SESSION.md` ("Design decisions I took"). The ones most likely
 ## 8. I/O subsystem with virtual device drivers *(designed: `docs/io-subsystem.md`)*
 
 - [x] **Phase 1** (done, 2026-10-30): `iodev.[ch]` with `file`, `null`, `mem` drivers and `driver:name` prefixes; channel table in the VM; `OPEN`, `CLOSE`, `LINE INPUT`, `WRITE`, `EOF`, `LOF`, `LOC`, `INPUT$`, `ADDRESS`, `ADDRESS$`; `PRINT #` / `INPUT #` / `GET #` on files; `LOAD`, `SAVE`, `MERGE`, `CHAIN`, `FILES` through the drivers
-- [ ] Phase 2: `KILL`, `RENAME … TO`, `MKDIR`, `CHDIR`, `SEEK`; drivers `sh`, `res`, `con`
+- [x] **Phase 2** (done, 2026-10-31): `KILL`, `RENAME … TO`, `MKDIR`, `CHDIR`, `SEEK` (`FOP 0x155`); drivers `sh` (popen), `res` (read-only `res/` directory), `con` (screen/keyboard channel). Open: `res:` from an archive
 - [ ] Phase 3: random access records (`FIELD`, `LSET`, `RSET`, `GETREC`, `PUTREC`); drivers `play`, `tcp`; drivers written in BASIC
 - [ ] **Sandboxing (open issue)**: permissions for shell literals, `sh:`, writing/reading outside the program directory, the network; how a policy is configured (command line switch, trust level per program, permission file) is undecided; `iodev_allowed()` is the single place for the decision
 - [ ] Files stay open across `CHAIN` in GW-BASIC; here a restart (`RUN`, `NEW`, `LOAD`, `CHAIN`) closes all channels

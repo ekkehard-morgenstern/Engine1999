@@ -59,8 +59,14 @@ typedef struct _iodrv_t {
     // FILES: lines about the entries that match spec ("" = all); same contract as files_list()
     bool        (*list)( struct _iodrv_t* drv, const char* spec, hlstyle_t style, void* styleud, files_emit_t emit, void* emitud,
                     char* err, size_t errsz );
-    // deletes a file (KILL, phase 2; also used by the tests)
+    // deletes a file (KILL; also used by the tests)
     bool        (*remove)( struct _iodrv_t* drv, const char* path, char* err, size_t errsz );
+    // RENAME from TO to; MKDIR; CHDIR (0 = the driver has no such thing: "Not supported by device")
+    bool        (*rename)( struct _iodrv_t* drv, const char* from, const char* to, char* err, size_t errsz );
+    bool        (*mkdir)( struct _iodrv_t* drv, const char* path, char* err, size_t errsz );
+    bool        (*chdir)( struct _iodrv_t* drv, const char* path, char* err, size_t errsz );
+    // SEEK: the next read / write is at byte position pos from the start (0 = not seekable)
+    bool        (*seek)( void* handle, int64_t pos );
     void*       userdata;
 } iodrv_t;
 
@@ -83,6 +89,20 @@ bool iodev_write_all( const char* name, const char* defaultdriver, const void* d
 bool iodev_exists( const char* name, const char* defaultdriver );
 bool iodev_list( const char* spec, const char* defaultdriver, hlstyle_t style, void* styleud, files_emit_t emit, void* emitud,
     char* err, size_t errsz );
+
+// KILL, RENAME ... TO, MKDIR, CHDIR; RENAME needs both names on the same driver ("Not the same device")
+bool iodev_remove( const char* name, const char* defaultdriver, const char** perr );
+bool iodev_rename( const char* from, const char* to, const char* defaultdriver, const char** perr );
+bool iodev_mkdir( const char* name, const char* defaultdriver, const char** perr );
+bool iodev_chdir( const char* name, const char* defaultdriver, const char** perr );
+
+// hooks of the "con" driver (the screen and the keyboard as a channel): the host sets them; the VM does it for its host callbacks
+typedef struct _iocon_t {
+    bool        (*write)( void* usrdata, const char* text, size_t len );        // false = error
+    int         (*getkey)( void* usrdata );                                     // a key code, 0 = end of input, < 0 = interrupted
+    void*       usrdata;
+} iocon_t;
+void iodev_set_console( const iocon_t* con );   // 0 = none ("Not supported by device")
 
 // the RAM disk, for the tests: deletes all files of the mem driver
 void iodev_mem_clear( void );
@@ -115,5 +135,6 @@ bool iotab_write( iotab_t* tab, int chan, const char* data, size_t len, const ch
 bool iotab_eof( iotab_t* tab, int chan, bool* peof, const char** perr );
 bool iotab_lof( iotab_t* tab, int chan, int64_t* plen, const char** perr );
 bool iotab_loc( iotab_t* tab, int chan, int64_t* ppos, const char** perr );
+bool iotab_seek( iotab_t* tab, int chan, int64_t pos, const char** perr );      // SEEK #n, pos
 
 #endif

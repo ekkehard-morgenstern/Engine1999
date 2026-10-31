@@ -66,6 +66,8 @@ static const testcase_t cases[] = {
     { "SFX defined in a program", "10 SFX 1,\"C\"\n20 SFX 1,1\n30 PRINT \"OK\"\nRUN", "OK\n" },
     { "effect statements without a sound output", "ENVELOPE 1,0,0,1,0:VIBRATO 1,5,1:TREMOLO 1,4,0.5:PITCH 1,440:VOLUME 1,0.5:SOUND 1,440,1,0.5,880:PRINT 1", "1\n" },
     { "effect statements are listed", "10 PITCH 1,440\n20 VOLUME 1,0.5\n30 ENVELOPE 1\n40 ENVELOPE 1,0,0.1,0.5,0.2\n50 VIBRATO 1,5,0.5\n60 TREMOLO 1,4,0.5\n70 SFX 1,\"S100,200\"\n80 SFX 1\n90 SFX 1,2\n100 SOUND 1,440,1,0.5,880\nLIST", "10 PITCH 1,440\n20 VOLUME 1,0.5\n30 ENVELOPE 1\n40 ENVELOPE 1,0,0.1,0.5,0.2\n50 VIBRATO 1,5,0.5\n60 TREMOLO 1,4,0.5\n70 SFX 1,\"S100,200\"\n80 SFX 1\n90 SFX 1,2\n100 SOUND 1,440,1,0.5,880\n" },
+    { "file system statements are listed", "10 KILL \"a\"\n20 RENAME \"a\" TO \"b\"\n30 MKDIR \"d\"\n40 CHDIR \"d\"\n50 SEEK #1,2\nLIST", "10 KILL \"a\"\n20 RENAME \"a\" TO \"b\"\n30 MKDIR \"d\"\n40 CHDIR \"d\"\n50 SEEK #1,2\n" },
+    { "RENAME and KILL on mem: in direct mode", "OPEN \"mem:q\" FOR OUTPUT AS #1:PRINT #1,\"ab\":CLOSE\nRENAME \"mem:q\" TO \"mem:r\"\nOPEN \"mem:r\" FOR INPUT AS #2:PRINT LOF(2):CLOSE\nKILL \"mem:r\"\nOPEN \"mem:r\" FOR INPUT AS #2", "3\n? File not found\n" },
     { "PLAYING without a sound output is 0", "PRINT PLAYING(1)",                  "0\n" },
     { "PLAY checks its strings without a sound output", "PLAY \"Z\"",               "? Unknown music command 'Z'\n" },
     { "sound statements are listed", "10 SOUND OFF\n20 PLAY \"C\",\"E\"\n30 TEMPO 90\n40 SOUND SYNC 1,2\n50 WAVE 1,2\n60 SOUND 1,440,1,0.5\n70 PRINT PLAYING(1)\nLIST", "10 SOUND OFF\n20 PLAY \"C\",\"E\"\n30 TEMPO 90\n40 SOUND SYNC 1,2\n50 WAVE 1,2\n60 SOUND 1,440,1,0.5\n70 PRINT PLAYING(1)\n" },

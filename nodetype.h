@@ -625,6 +625,12 @@ Explanation of node types:
 #define NT_OPENSTMT             UINT8_C(0X6B)   // OPEN statement (data: form 0 = long / 1 = short, mode letter; see bascomp.c)
 #define NT_CLOSESTMT            UINT8_C(0X6C)   // CLOSE statement (0 or more channel specifiers)
 #define NT_ADDRESSSTMT          UINT8_C(0X6D)   // ADDRESS statement (data: 1 byte, 1 = a name branch is present; the name is a string expression)
+#define NT_FILEOPSTMT           UINT8_C(0X6E)   // KILL / RENAME / MKDIR / CHDIR / SEEK (data: 1 byte of FOPK_* kind; see bascomp.c)
+#define FOPK_KILL               UINT8_C(1)      // KILL name$: 1 string branch
+#define FOPK_RENAME             UINT8_C(2)      // RENAME from$ TO to$: 2 string branches
+#define FOPK_MKDIR              UINT8_C(3)      // MKDIR name$: 1 string branch
+#define FOPK_CHDIR              UINT8_C(4)      // CHDIR name$: 1 string branch
+#define FOPK_SEEK               UINT8_C(5)      // SEEK #n, pos: a channel specifier and a numeric branch
 #define NT_FILESSTMT            UINT8_C(0X69)   // FILES statement (0 or 1 string branch: the file name pattern)
 #define NT_CHAINSTMT            UINT8_C(0X68)   // CHAIN statement (data: 1 byte, 1 = MERGE; the file name, then an optional goto target)
 

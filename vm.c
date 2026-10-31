@@ -778,6 +778,44 @@ static bool vm_input_whole( vm_t* vm ) {
 }
 
 // GETK: ( -- s ): waits for a key
+// a key from the keyboard (channel 0); <= 0 = none / interrupted
+static int vm_console_key( vm_t* vm ) {
+    int key;
+    if ( vm->getkey ) {
+        key = vm->getkey( vm, vm->userdata, 0 );
+    } else if ( vm->inkey ) {
+        struct timespec delay = { 0, 1000000L };
+        while ( ( key = vm->inkey( vm, vm->userdata ) ) == 0 ) {
+            nanosleep( &delay, 0 );
+        }
+    } else {
+        key = getchar();
+    }
+    return key;
+}
+
+static bool vm_con_write( void* usrdata, const char* text, size_t len ) {
+    vm_t* vm = (vm_t*) usrdata;
+    char* copy = (char*) malloc( len + 1U );
+    if ( copy == 0 ) {
+        return false;
+    }
+    memcpy( copy, text, len );
+    copy[len] = '\0';
+    int saved = vm->channel;
+    vm->channel = 0;
+    vm_out( vm, copy );
+    vm->channel = saved;
+    free( copy );
+    return true;
+}
+
+static int vm_con_getkey( void* usrdata ) {
+    vm_t* vm = (vm_t*) usrdata;
+    int key = vm_console_key( vm );
+    return key > 0 && key <= 255 ? key : vm_interrupted( vm ) ? -1 : 0;
+}
+
 static bool vm_get_key( vm_t* vm ) {
     int key;
     if ( vm->channel > 0 ) {
@@ -790,16 +828,7 @@ static bool vm_get_key( vm_t* vm ) {
         char* s = vm_new_string( vm, buf, 1U );
         return s && vm_push_string( vm, s );
     }
-    if ( vm->getkey ) {
-        key = vm->getkey( vm, vm->userdata, vm->channel );
-    } else if ( vm->inkey ) {
-        struct timespec delay = { 0, 1000000L };
-        while ( ( key = vm->inkey( vm, vm->userdata ) ) == 0 ) {
-            nanosleep( &delay, 0 );
-        }
-    } else {
-        key = getchar();
-    }
+    key = vm_console_key( vm );
     if ( key <= 0 || key > 255 ) {
         return vm_error( vm, vm_interrupted( vm ) ? "Break" : "End of input" );
     }
@@ -1226,6 +1255,8 @@ static bool vm_open_channel( vm_t* vm, bool shortform ) {
         default: break;
     }
     const char* err = 0;
+    iocon_t con = { vm_con_write, vm_con_getkey, vm };
+    iodev_set_console( &con );          // the "con" driver talks to this VM's host callbacks
     if ( m == 0 || mode[1] != '\0' ) {
         ok = vm_error( vm, "Bad file mode" );
     } else if ( name[0] == '\0' ) {
@@ -1255,6 +1286,43 @@ static bool vm_close_channel( vm_t* vm ) {
         return vm_error( vm, "Bad file number" );
     }
     return iotab_close( &vm->io, (int) chan, &err ) || vm_error( vm, err ? err : "Device I/O error" );
+}
+
+// FOP: KILL ( s -- ), RENAME ( s s -- ), MKDIR ( s -- ), CHDIR ( s -- ), SEEK ( n pos -- )
+static bool vm_file_operation( vm_t* vm, uint16_t kind ) {
+    const char* err = 0;
+    bool ok = true;
+    if ( kind == FOPK_SEEK ) {
+        double chan, pos;
+        if ( !vm_dpop_num( vm, &pos ) || !vm_dpop_num( vm, &chan ) ) {
+            return false;
+        }
+        if ( !( chan >= 1.0 && chan <= (double) IOCHAN_MAX ) ) {
+            return vm_error( vm, "Bad file number" );
+        }
+        if ( !( pos >= 0.0 && pos < 9007199254740992.0 ) ) {
+            return vm_error( vm, "Bad position" );
+        }
+        return iotab_seek( &vm->io, (int) chan, (int64_t) pos, &err ) || vm_error( vm, err ? err : "Device I/O error" );
+    }
+    char* name = 0; char* name2 = 0;
+    if ( kind == FOPK_RENAME && !vm_dpop_str( vm, &name2 ) ) {
+        return false;
+    }
+    if ( !vm_dpop_str( vm, &name ) ) {
+        free( name2 );
+        return false;
+    }
+    switch ( kind ) {
+        case FOPK_KILL:     ok = iodev_remove( name, vm->addrcur, &err ); break;
+        case FOPK_RENAME:   ok = iodev_rename( name, name2, vm->addrcur, &err ); break;
+        case FOPK_MKDIR:    ok = iodev_mkdir( name, vm->addrcur, &err ); break;
+        case FOPK_CHDIR:    ok = iodev_chdir( name, vm->addrcur, &err ); break;
+        default:            ok = false; err = "Illegal argument"; break;
+    }
+    free( name );
+    free( name2 );
+    return ok || vm_error( vm, err ? err : "Device I/O error" );
 }
 
 // ADDR ( s -- ) or, with parameter 1, ( -- ): the default driver
@@ -2266,6 +2334,7 @@ static bool vm_step( vm_t* vm ) {
         case INS_CLOS: return vm_close_channel( vm );
         case INS_INPW: return vm_input_whole( vm );
         case INS_ADDR: return vm_set_address( vm, param16 != 0 );
+        case INS_FOP: return vm_file_operation( vm, param16 );
         case INS_TMR: return vm_set_timer( vm, param16 );
         case INS_TMRO: return vm_clear_timers( vm, param16 );
         case INS_MRG: return vm_merge_program( vm, param16 != 0 );

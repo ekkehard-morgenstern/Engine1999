@@ -161,6 +161,19 @@ CLOSE #1,#2     CLOSE                      (no argument: all channels)
 ADDRESS MEM     ADDRESS "mem"     ADDRESS      (swap with the previous driver)     PRINT ADDRESS$
 ```
 
+Phase 2 adds file system statements and three more drivers:
+
+```
+KILL "old.dat"     RENAME "a.txt" TO "b.txt"     MKDIR "saves"     CHDIR "saves"     (all take a "driver:" prefix, else ADDRESS)
+SEEK #1,100                                       (byte position from the start of the open channel; LOC follows)
+OPEN "sh:ls -l" FOR INPUT AS #1                  (sh: the output of a shell command; FOR OUTPUT feeds its input)
+OPEN "res:ship.dat" FOR INPUT AS #1              (res: read-only game assets in the directory ./res)
+OPEN "con:" FOR OUTPUT AS #2: PRINT #2,"hi"      (con: the screen / the keyboard as an ordinary channel)
+```
+
+`RENAME` never replaces an existing file ("File already exists") and both names must be on one driver. `mem:` has no directories.
+`CHDIR` changes the directory of the whole program, so it affects `LOAD`, `SAVE` and `FILES`. Details: [io-subsystem.md](io-subsystem.md).
+
 Channel 0 is the screen and keyboard; channels 1 to 255 are opened by `OPEN`. `LOAD`, `SAVE`, `MERGE`, `CHAIN` and `FILES` take driver names too (`SAVE "mem:game"`, `FILES "mem:"`); the default extensions apply to the path. `WRITE` is `PRINT` with strings in double quotes and commas between the items; `LINE INPUT` takes the whole line; `INPUT #n` splits it into fields and goes on with the next line when it runs out. Lines are written with a newline and read with a newline or a carriage return and a newline. A restart (`RUN`, `NEW`, `LOAD`, `CHAIN`) closes all channels. See io-subsystem.md for the exact rules, the error messages and what comes next (`KILL`, `RENAME`, `SEEK`, more drivers, random access records, the open sandboxing question).
 
 **File extensions:** `SAVE "name"` writes the binary (tokenized) form and appends `.e99` to a name without extension; `SAVE "name",A` writes the ASCII listing and appends `.bas`. A name with an extension is used as it is. `LOAD` recognizes both forms by the header, whatever the extension is.

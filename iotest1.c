@@ -24,6 +24,8 @@
               Germany, Europe
 */
 
+#include <unistd.h>
+#include <sys/stat.h>
 #include "iodev.h"
 
 /*
@@ -229,6 +231,111 @@ static void test_list( void ) {
     iodev_mem_clear();
 }
 
+static char conout[256];
+static size_t conlen = 0;
+static const char* conkeys = "ab";
+static bool con_write_hook( void* ud, const char* text, size_t len ) { (void) ud; memcpy( conout + conlen, text, len ); conlen += len; conout[conlen] = '\0'; return true; }
+static int con_key_hook( void* ud ) { (void) ud; return *conkeys ? (unsigned char) *conkeys++ : 0; }
+
+static void test_phase2( void ) {
+    const char* e = 0;
+    iotab_t t; iotab_init( &t );
+    // mem: rename, kill, seek
+    iodev_mem_clear();
+    iodev_write_all( "mem:a", "file", "0123456789", 10, &e );
+    check( "rename a mem file", iodev_rename( "mem:a", "mem:b", "file", &e ) && iodev_exists( "mem:b", "file" ) && !iodev_exists( "mem:a", "file" ) );
+    iodev_write_all( "mem:c", "file", "x", 1, &e );
+    check( "rename onto an existing file fails", !iodev_rename( "mem:b", "mem:c", "file", &e ) && strcmp( e, "File already exists" ) == 0 );
+    check( "rename a missing file", !iodev_rename( "mem:zz", "mem:y", "file", &e ) && strcmp( e, "File not found" ) == 0 );
+    check( "rename across devices", !iodev_rename( "mem:b", "file:b", "file", &e ) && strcmp( e, "Not the same device" ) == 0 );
+    check( "rename uses the default driver", iodev_rename( "b", "d", "mem", &e ) && iodev_exists( "mem:d", "file" ) );
+    check( "kill a mem file", iodev_remove( "mem:d", "file", &e ) && !iodev_exists( "mem:d", "file" ) );
+    check( "kill a missing file", !iodev_remove( "mem:d", "file", &e ) && strcmp( e, "File not found" ) == 0 );
+    iodev_write_all( "mem:s", "file", "0123456789", 10, &e );
+    check( "seek and read", iotab_open( &t, 1, "mem:s", "file", IOMODE_READ, &e ) && iotab_seek( &t, 1, 7, &e ) && iotab_getc( &t, 1, &e ) == '7' );
+    int64_t n = 0;
+    check( "seek sets LOC", iotab_loc( &t, 1, &n, &e ) && n == 8 );
+    check( "seek back after buffering", iotab_seek( &t, 1, 2, &e ) && iotab_getc( &t, 1, &e ) == '2' );
+    check( "seek past the end of a mem file", !iotab_seek( &t, 1, 11, &e ) && strcmp( e, "Bad position" ) == 0 );
+    check( "seek to the very end", iotab_seek( &t, 1, 10, &e ) && iotab_getc( &t, 1, &e ) == -1 );
+    check( "negative seek", !iotab_seek( &t, 1, -1, &e ) && strcmp( e, "Bad position" ) == 0 );
+    check( "seek on a closed channel", !iotab_seek( &t, 2, 0, &e ) && strcmp( e, "File not open" ) == 0 );
+    iotab_close( &t, 1, &e );
+    check( "overwrite in the middle", iotab_open( &t, 1, "mem:s", "file", IOMODE_WRITE | IOMODE_APPEND, &e ) && iotab_seek( &t, 1, 3, &e ) &&
+        iotab_write( &t, 1, "ab", 2, &e ) );
+    iotab_close( &t, 1, &e );
+    uint8_t* data = 0; size_t len = 0;
+    check( "the file was changed in place", iodev_read_all( "mem:s", "file", &data, &len, &e ) && len == 10 && memcmp( data, "012ab56789", 10 ) == 0 );
+    free( data );
+    check( "mem has no directories", !iodev_mkdir( "mem:d", "file", &e ) && strcmp( e, "Not supported by device" ) == 0 &&
+        !iodev_chdir( "mem:d", "file", &e ) && strcmp( e, "Not supported by device" ) == 0 );
+    check( "null seeks", iotab_open( &t, 1, "null:", "file", IOMODE_READ, &e ) && iotab_seek( &t, 1, 100, &e ) );
+    iotab_closeall( &t );
+
+    // file: mkdir, chdir, rename, kill, seek in a scratch directory
+    char cwd[512];
+    check( "getcwd", getcwd( cwd, sizeof(cwd) ) != 0 );
+    const char* dir = "iotest1.d2";
+    system( "rm -rf iotest1.d2" );
+    check( "mkdir", iodev_mkdir( dir, "file", &e ) );
+    check( "mkdir again", !iodev_mkdir( dir, "file", &e ) && strcmp( e, "File already exists" ) == 0 );
+    check( "chdir", iodev_chdir( dir, "file", &e ) );
+    check( "chdir into a missing directory", !iodev_chdir( "nowhere", "file", &e ) && strcmp( e, "File not found" ) == 0 );
+    iodev_write_all( "f.txt", "file", "hello world", 11, &e );
+    iodev_write_all( "g.txt", "file", "x", 1, &e );
+    check( "chdir into a file", !iodev_chdir( "f.txt", "file", &e ) && strcmp( e, "Not a directory" ) == 0 );
+    check( "file rename", iodev_rename( "f.txt", "h.txt", "file", &e ) && iodev_exists( "h.txt", "file" ) && !iodev_exists( "f.txt", "file" ) );
+    check( "file rename keeps an existing target", !iodev_rename( "h.txt", "g.txt", "file", &e ) && strcmp( e, "File already exists" ) == 0 );
+    check( "file seek", iotab_open( &t, 1, "h.txt", "file", IOMODE_READ, &e ) && iotab_seek( &t, 1, 6, &e ) && iotab_getc( &t, 1, &e ) == 'w' );
+    iotab_closeall( &t );
+    check( "kill", iodev_remove( "g.txt", "file", &e ) && !iodev_exists( "g.txt", "file" ) );
+    check( "kill a missing file", !iodev_remove( "g.txt", "file", &e ) && strcmp( e, "File not found" ) == 0 );
+
+    // sh: a command as a file
+    check( "sh input", iotab_open( &t, 1, "sh:echo hi; echo there", "file", IOMODE_READ, &e ) );
+    char* line = 0;
+    check( "sh reads the output", iotab_readline( &t, 1, &line, &e ) && strcmp( line, "hi" ) == 0 );
+    free( line );
+    check( "sh second line", iotab_readline( &t, 1, &line, &e ) && strcmp( line, "there" ) == 0 );
+    free( line );
+    check( "sh end", !iotab_readline( &t, 1, &line, &e ) && e == 0 );
+    iotab_close( &t, 1, &e );
+    check( "sh output feeds the command", iotab_open( &t, 1, "sh:cat > sh.out", "file", IOMODE_WRITE, &e ) && iotab_write( &t, 1, "piped\n", 6, &e ) );
+    iotab_close( &t, 1, &e );
+    check( "sh output arrived", iodev_read_all( "sh.out", "file", &data, &len, &e ) && len == 6 && memcmp( data, "piped\n", 6 ) == 0 );
+    free( data );
+    check( "sh can't append", !iotab_open( &t, 1, "sh:cat", "file", IOMODE_WRITE | IOMODE_APPEND, &e ) && strcmp( e, "Bad file mode" ) == 0 );
+    check( "sh without LOF", iotab_open( &t, 1, "sh:true", "file", IOMODE_READ, &e ) && !iotab_lof( &t, 1, &n, &e ) );
+    iotab_closeall( &t );
+
+    // res: read-only assets in ./res
+    check( "res: mkdir", mkdir( "res", 0777 ) == 0 );
+    iodev_write_all( "res/snd.txt", "file", "asset\n", 6, &e );
+    check( "res read", iodev_read_all( "res:snd.txt", "file", &data, &len, &e ) && len == 6 );
+    free( data );
+    check( "res can't write", !iotab_open( &t, 1, "res:new.txt", "file", IOMODE_WRITE, &e ) && strcmp( e, "Permission denied" ) == 0 );
+    check( "res stays inside its directory", !iotab_open( &t, 1, "res:../h.txt", "file", IOMODE_READ, &e ) && strcmp( e, "Permission denied" ) == 0 &&
+        !iotab_open( &t, 1, "res:/etc/passwd", "file", IOMODE_READ, &e ) && strcmp( e, "Permission denied" ) == 0 );
+    check( "res missing", !iotab_open( &t, 1, "res:none", "file", IOMODE_READ, &e ) && strcmp( e, "File not found" ) == 0 );
+    check( "res can't kill", !iodev_remove( "res:snd.txt", "file", &e ) && strcmp( e, "Not supported by device" ) == 0 );
+
+    // con: the screen and the keyboard
+    check( "con without a host", !iotab_open( &t, 1, "con:", "file", IOMODE_WRITE, &e ) && strcmp( e, "Not supported by device" ) == 0 );
+    iocon_t con = { con_write_hook, con_key_hook, 0 };
+    iodev_set_console( &con );
+    conout[0] = '\0';
+    check( "con output", iotab_open( &t, 1, "con:", "file", IOMODE_WRITE, &e ) && iotab_write( &t, 1, "screen", 6, &e ) && strcmp( conout, "screen" ) == 0 );
+    check( "con input", iotab_open( &t, 2, "con:", "file", IOMODE_READ, &e ) && iotab_getc( &t, 2, &e ) == 'a' && iotab_getc( &t, 2, &e ) == 'b' &&
+        iotab_getc( &t, 2, &e ) == -1 );
+    iotab_closeall( &t );
+    iodev_set_console( 0 );
+
+    system( "rm -f sh.out; rm -rf res" );
+    check( "chdir back", chdir( cwd ) == 0 );
+    system( "rm -rf iotest1.d2" );
+    iodev_mem_clear();
+}
+
 static bool user_ok = false;
 static void* user_open( iodrv_t* d, const char* p, unsigned m, char* e, size_t n ) { (void) d; (void) p; (void) m; (void) e; (void) n; user_ok = true; return malloc( 1 ); }
 static ssize_t user_read( void* h, void* b, size_t n ) { (void) h; (void) b; (void) n; return 0; }
@@ -259,6 +366,7 @@ int main( void ) {
     test_file();
     test_list();
     test_register();
+    test_phase2();
     printf( "%d checks, %d failure(s)\n", checks, failures );
     return failures;
 }

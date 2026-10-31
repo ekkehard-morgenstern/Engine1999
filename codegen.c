@@ -400,6 +400,7 @@ const char* cgen_opcode_name( uint16_t opcode ) {
         case INS_INPD:      return "INPD";
         case INS_ADDR:      return "ADDR";
         case INS_ADRS:      return "ADRS";
+        case INS_FOP:       return "FOP";
         case INS_WAIT:      return "WAIT";
         case INS_MRG:       return "MRG";
         case INS_CHN:       return "CHN";
@@ -1041,6 +1042,10 @@ bool cgen_gen_inpd( codegen_t* cgen ) {
 
 bool cgen_gen_addr( codegen_t* cgen, uint16_t swap ) {
     return cgen_gen_ins12( cgen, INS_ADDR, false, true, swap );
+}
+
+bool cgen_gen_fop( codegen_t* cgen, uint16_t kind ) {
+    return cgen_gen_ins12( cgen, INS_FOP, false, true, kind );
 }
 
 bool cgen_gen_adrs( codegen_t* cgen ) {
@@ -2934,6 +2939,7 @@ bool cgen_from_stmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         case NT_OPENSTMT:   return cgen_from_openstmt( cgen, comp, node );
         case NT_CLOSESTMT:  return cgen_from_closestmt( cgen, comp, node );
         case NT_ADDRESSSTMT: return cgen_from_addressstmt( cgen, comp, node );
+        case NT_FILEOPSTMT: return cgen_from_fileopstmt( cgen, comp, node );
         case NT_STMTLIST:   return cgen_from_stmtlist( cgen, comp, node );
         case NT_DIMSTMT:    return cgen_from_dimstmt( cgen, comp, node );
         case NT_ERASESTMT:  return cgen_from_erasestmt( cgen, comp, node );

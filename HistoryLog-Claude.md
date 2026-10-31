@@ -13,7 +13,12 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-- **Demos fixed** (`demos/ode.bas`): it used `LINE` as its loop variable, which is a reserved word since the I/O subsystem (`LINE INPUT`), so it stopped with "Numeric variable expected in line 70"; renamed to `V`. Checked all three demos by parsing (`basictest2`) and by running them through the REPL with a scratch harness (no errors; `sfx.bas` with keys 1 and Q). `prelude.bas` and `sfx.bas` needed no change.
+- **I/O subsystem, phase 2** (owner's request: "proceed with phase 2"; scope as in `docs/io-subsystem.md`)
+  - **Drivers** (`iodev.[ch]`): `iodrv_t` got `rename`, `mkdir`, `chdir`, `seek`; `file` implements all four (`RENAME` refuses an existing target), `mem` has `rename` and `seek` (no holes), `null` seeks; new drivers `sh` (`popen`, asks `iodev_allowed( "shell" )`), `res` (read-only `./res`, absolute names and `..` refused, `list` through `files_list`), `con` (screen/keyboard through `iodev_set_console()` / `iocon_t` hooks); `iodev_remove/rename/mkdir/chdir()` (default driver, `iodev_allowed`, "Not the same device" across drivers), `iotab_seek()`; new errors "File already exists", "Not a directory", "Bad position".
+  - **Language**: tokens `KILL RENAME MKDIR CHDIR SEEK` 170..174 (reserved words), one node `NT_FILEOPSTMT 0x6E` (`FOPK_*`), parser `comp_eat_fileopstmt()` (`bascomp.[ch]`, `.ebnf`), `cgen_from_fileopstmt()` (`cgenprog.c`), `cgen_gen_fop()`, instruction `FOP 0x155` (`instset.h`, `cgen_opcode_name`).
+  - **VM** (`vm.c`): `vm_file_operation()`; `vm_console_key()` factored out of `vm_get_key()`; `vm_con_write/getkey` hand the host callbacks to the `con` driver (registered in `vm_open_channel()`).
+  - **Tests**: `iotest1` 81 -> 128 (mem rename/kill/seek, file mkdir/chdir/rename/kill/seek in a scratch directory, sh read and write, res, con with hooks), `vmtest1` 612 -> 633 (+21), `repltest1` 273 -> 275; all other tests unchanged and passing; `iotest1`, `vmtest1`, `repltest1` clean under valgrind.
+  - **Docs**: `docs/io-subsystem.md` ("What phase 2 does, exactly", driver table, phases), `docs/basic-language.md`, `docs/compiler-and-vm.md`, `docs/roadmap.md`, `bascomp.ebnf`, `CLAUDE.md`, `SESSION.md`.
 
 ## Log
 
@@ -467,3 +472,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
   - **REPL** (`basrepl.c`): `LOAD`, `MERGE`, `CHAIN` read through `iodev_read_all()` + `fmemopen()` (`repl_open_program()`), the extension search uses `iodev_exists()`, `SAVE` writes through `open_memstream()` + `iodev_write_all()` (and prints the reason), `FILES` calls `iodev_list()`; the old `repl_is_file()` is gone.
   - **Tests**: new `iotest1` (81 checks, in `make` and `.gitignore`), `vmtest1` 612 (+62: both `OPEN` forms, append, `INPUT #`, `LINE INPUT`, `WRITE`, `EOF`/`LOF`/`LOC`, `GET #`, `INPUT$`, all the errors, `CLOSE` forms, `ADDRESS`, parse errors; two old tests changed from the host's channel callback to `null:`), `repltest1` 273 (+26: `SAVE`/`LOAD`/`MERGE`/`CHAIN`/`FILES` through `mem:`, `ADDRESS`, channels over direct lines, `RUN`/`NEW` closing channels); `vmtest1`, `repltest1` and `iotest1` are clean under valgrind. `mem:` is cleared per test (`iodev_mem_clear()`).
   - **Docs**: `docs/io-subsystem.md` (status, "What phase 1 does, exactly"), `docs/basic-language.md` (new section), `docs/compiler-and-vm.md`, `docs/roadmap.md`, `bascomp.ebnf`, `CLAUDE.md`, `SESSION.md`.
+
+### bf1a6f6 — 2026-10-31 02:10:08 +0100 — "BASIC demos fixed by Claude Code"
+3 files, +17/-13.
+- **Demos fixed** (`demos/ode.bas`): it used `LINE` as its loop variable, which is a reserved word since the I/O subsystem (`LINE INPUT`), so it stopped with "Numeric variable expected in line 70"; renamed to `V`. Checked all three demos by parsing (`basictest2`) and by running them through the REPL with a scratch harness (no errors; `sfx.bas` with keys 1 and Q). `prelude.bas` and `sfx.bas` needed no change.

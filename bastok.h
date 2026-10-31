@@ -218,6 +218,11 @@
 #define TOK_EOF         UINT8_C(167)        // EOF function
 #define TOK_LOF         UINT8_C(168)        // LOF function
 #define TOK_LOC         UINT8_C(169)        // LOC function
+#define TOK_KILL        UINT8_C(170)        // KILL keyword
+#define TOK_RENAME      UINT8_C(171)        // RENAME keyword
+#define TOK_MKDIR       UINT8_C(172)        // MKDIR keyword
+#define TOK_CHDIR       UINT8_C(173)        // CHDIR keyword
+#define TOK_SEEK        UINT8_C(174)        // SEEK keyword
 #define TOK_NONE        UINT8_C(255)        // no token (!)
 
 // -- buffers ---------------------------------------------------------------

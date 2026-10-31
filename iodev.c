@@ -195,7 +195,57 @@ static bool file_remove( iodrv_t* drv, const char* path, char* err, size_t errsz
     return true;
 }
 
-static iodrv_t file_driver = { "file", file_open, file_read, file_write, file_size, file_close, file_list, file_remove, 0 };
+static bool file_rename( iodrv_t* drv, const char* from, const char* to, char* err, size_t errsz ) {
+    (void) drv;
+    if ( from[0] == '\0' || to[0] == '\0' ) {
+        iodev_set_err( err, errsz, "Bad file name" );
+        return false;
+    }
+    struct stat st;
+    if ( lstat( to, &st ) == 0 ) {
+        iodev_set_err( err, errsz, "File already exists" );     // rename() would replace it silently
+        return false;
+    }
+    if ( rename( from, to ) != 0 ) {
+        iodev_set_err( err, errsz, errno == EEXIST ? "File already exists" : iodev_errno_text( errno ) );
+        return false;
+    }
+    return true;
+}
+
+static bool file_mkdir( iodrv_t* drv, const char* path, char* err, size_t errsz ) {
+    (void) drv;
+    if ( path[0] == '\0' ) {
+        iodev_set_err( err, errsz, "Bad file name" );
+        return false;
+    }
+    if ( mkdir( path, 0777 ) != 0 ) {
+        iodev_set_err( err, errsz, errno == EEXIST ? "File already exists" : iodev_errno_text( errno ) );
+        return false;
+    }
+    return true;
+}
+
+static bool file_chdir( iodrv_t* drv, const char* path, char* err, size_t errsz ) {
+    (void) drv;
+    if ( path[0] == '\0' ) {
+        iodev_set_err( err, errsz, "Bad file name" );
+        return false;
+    }
+    if ( chdir( path ) != 0 ) {
+        iodev_set_err( err, errsz, errno == ENOTDIR ? "Not a directory" : iodev_errno_text( errno ) );
+        return false;
+    }
+    return true;
+}
+
+static bool file_seek( void* handle, int64_t pos ) {
+    filehandle_t* h = (filehandle_t*) handle;
+    return fseeko( h->f, (off_t) pos, SEEK_SET ) == 0;
+}
+
+static iodrv_t file_driver = { "file", file_open, file_read, file_write, file_size, file_close, file_list, file_remove, file_rename,
+    file_mkdir, file_chdir, file_seek, 0 };
 
 // -- the null driver ---------------------------------------------------------------------
 
@@ -224,7 +274,12 @@ static bool null_close( void* handle ) {
     return true;
 }
 
-static iodrv_t null_driver = { "null", null_open, null_read, null_write, null_size, null_close, 0, 0, 0 };
+static bool null_seek( void* handle, int64_t pos ) {
+    (void) handle; (void) pos;
+    return true;
+}
+
+static iodrv_t null_driver = { "null", null_open, null_read, null_write, null_size, null_close, 0, 0, 0, 0, 0, null_seek, 0 };
 
 // -- the mem driver (a RAM disk) ----------------------------------------------------------
 
@@ -384,6 +439,41 @@ static bool mem_remove( iodrv_t* drv, const char* path, char* err, size_t errsz 
     return true;
 }
 
+static bool mem_rename( iodrv_t* drv, const char* from, const char* to, char* err, size_t errsz ) {
+    (void) drv;
+    size_t index = 0;
+    memfile_t* f = mem_lookup( from, &index );
+    if ( f == 0 ) {
+        iodev_set_err( err, errsz, "File not found" );
+        return false;
+    }
+    if ( to[0] == '\0' ) {
+        iodev_set_err( err, errsz, "Bad file name" );
+        return false;
+    }
+    if ( mem_lookup( to, 0 ) != 0 ) {
+        iodev_set_err( err, errsz, "File already exists" );
+        return false;
+    }
+    char* name = strdup( to );
+    if ( name == 0 ) {
+        iodev_set_err( err, errsz, "Out of memory" );
+        return false;
+    }
+    free( f->name );
+    f->name = name;
+    return true;
+}
+
+static bool mem_seek( void* handle, int64_t pos ) {
+    memhandle_t* h = (memhandle_t*) handle;
+    if ( pos < 0 || (uint64_t) pos > (uint64_t) h->file->len ) {
+        return false;           // no holes in a RAM file
+    }
+    h->pos = (size_t) pos;
+    return true;
+}
+
 static int mem_compare( const void* pa, const void* pb ) {
     const memfile_t* a = *(memfile_t* const*) pa;
     const memfile_t* b = *(memfile_t* const*) pb;
@@ -428,7 +518,159 @@ static bool mem_list( iodrv_t* drv, const char* spec, hlstyle_t style, void* sty
     return ok;
 }
 
-static iodrv_t mem_driver = { "mem", mem_open, mem_read, mem_write, mem_size, mem_close, mem_list, mem_remove, 0 };
+static iodrv_t mem_driver = { "mem", mem_open, mem_read, mem_write, mem_size, mem_close, mem_list, mem_remove, mem_rename, 0, 0,
+    mem_seek, 0 };
+
+// -- the sh driver (a shell command as a file) --------------------------------------------------------
+
+static void* sh_open( iodrv_t* drv, const char* path, unsigned mode, char* err, size_t errsz ) {
+    if ( path[0] == '\0' ) {
+        iodev_set_err( err, errsz, "Bad file name" );
+        return 0;
+    }
+    if ( ( mode & IOMODE_APPEND ) != 0 ) {
+        iodev_set_err( err, errsz, "Bad file mode" );
+        return 0;
+    }
+    if ( !iodev_allowed( "shell", drv, path ) ) {
+        iodev_set_err( err, errsz, "Permission denied" );
+        return 0;
+    }
+    fflush( stdout );
+    FILE* f = popen( path, ( mode & IOMODE_WRITE ) ? "w" : "r" );
+    if ( f == 0 ) {
+        iodev_set_err( err, errsz, "Device I/O error" );
+        return 0;
+    }
+    filehandle_t* h = (filehandle_t*) malloc( sizeof(*h) );
+    if ( h == 0 ) {
+        pclose( f );
+        iodev_set_err( err, errsz, "Out of memory" );
+        return 0;
+    }
+    h->f = f;
+    return h;
+}
+
+static bool sh_close( void* handle ) {
+    filehandle_t* h = (filehandle_t*) handle;
+    pclose( h->f );             // the exit status of the command is not an I/O error
+    free( h );
+    return true;
+}
+
+static iodrv_t sh_driver = { "sh", sh_open, file_read, file_write, 0, sh_close, 0, 0, 0, 0, 0, 0, 0 };
+
+// -- the res driver (read-only game assets in the directory "res" of the current directory) ---------
+
+#define RES_DIR     "res/"
+
+// "res/" + path, or 0 for a path that leaves the directory (absolute, or with a ".." component)
+static char* res_path( const char* path ) {
+    if ( path[0] == '/' ) {
+        return 0;
+    }
+    for ( const char* p = path; *p; ) {
+        const char* e = strchr( p, '/' );
+        size_t n = e ? (size_t)( e - p ) : strlen( p );
+        if ( n == 2U && p[0] == '.' && p[1] == '.' ) {
+            return 0;
+        }
+        p += n;
+        if ( *p == '/' ) {
+            ++p;
+        }
+    }
+    size_t n = strlen( RES_DIR ) + strlen( path ) + 1U;
+    char* full = (char*) malloc( n );
+    if ( full != 0 ) {
+        snprintf( full, n, "%s%s", RES_DIR, path );
+    }
+    return full;
+}
+
+static void* res_open( iodrv_t* drv, const char* path, unsigned mode, char* err, size_t errsz ) {
+    if ( mode & IOMODE_WRITE ) {
+        iodev_set_err( err, errsz, "Permission denied" );
+        return 0;
+    }
+    char* full = res_path( path );
+    if ( full == 0 ) {
+        iodev_set_err( err, errsz, "Permission denied" );
+        return 0;
+    }
+    void* h = file_open( drv, full, mode, err, errsz );
+    free( full );
+    return h;
+}
+
+static bool res_list( iodrv_t* drv, const char* spec, hlstyle_t style, void* styleud, files_emit_t emit, void* emitud, char* err,
+    size_t errsz ) {
+    char* full = res_path( spec );
+    if ( full == 0 ) {
+        iodev_set_err( err, errsz, "Permission denied" );
+        return false;
+    }
+    bool ok = file_list( drv, full, style, styleud, emit, emitud, err, errsz );
+    free( full );
+    return ok;
+}
+
+static iodrv_t res_driver = { "res", res_open, file_read, 0, file_size, file_close, res_list, 0, 0, 0, 0, file_seek, 0 };
+
+// -- the con driver (the screen and the keyboard as a channel) -------------------------------------------
+
+static iocon_t iodev_con;
+static bool iodev_con_set = false;
+
+void iodev_set_console( const iocon_t* con ) {
+    if ( con != 0 ) {
+        iodev_con = *con;
+    }
+    iodev_con_set = con != 0;
+}
+
+static void* con_open( iodrv_t* drv, const char* path, unsigned mode, char* err, size_t errsz ) {
+    (void) drv; (void) path;
+    if ( !iodev_con_set || ( mode & IOMODE_APPEND ) != 0 ) {
+        iodev_set_err( err, errsz, "Not supported by device" );
+        return 0;
+    }
+    return (void*)( (uintptr_t) 1U + ( ( mode & IOMODE_WRITE ) ? 1U : 0U ) );     // a non-null tag: 1 = input, 2 = output
+}
+
+static ssize_t con_read( void* handle, void* buf, size_t count ) {
+    (void) handle;
+    if ( !iodev_con_set || iodev_con.getkey == 0 || count == 0 ) {
+        return -1;
+    }
+    int key = iodev_con.getkey( iodev_con.usrdata );        // one key per call: keys are not buffered, so INPUT$ waits for each
+    if ( key <= 0 || key > 255 ) {
+        return key < 0 ? -1 : 0;
+    }
+    *(uint8_t*) buf = (uint8_t) key;
+    return 1;
+}
+
+static ssize_t con_write( void* handle, const void* buf, size_t count ) {
+    (void) handle;
+    if ( !iodev_con_set || iodev_con.write == 0 ) {
+        return -1;
+    }
+    return iodev_con.write( iodev_con.usrdata, (const char*) buf, count ) ? (ssize_t) count : -1;
+}
+
+static int64_t con_size( void* handle ) {
+    (void) handle;
+    return -1;
+}
+
+static bool con_close( void* handle ) {
+    (void) handle;
+    return true;
+}
+
+static iodrv_t con_driver = { "con", con_open, con_read, con_write, con_size, con_close, 0, 0, 0, 0, 0, 0, 0 };
 
 void iodev_init( void ) {
     if ( !iodev_ready ) {
@@ -436,6 +678,9 @@ void iodev_init( void ) {
         iodev_register( &file_driver );
         iodev_register( &null_driver );
         iodev_register( &mem_driver );
+        iodev_register( &sh_driver );
+        iodev_register( &res_driver );
+        iodev_register( &con_driver );
     }
 }
 
@@ -554,6 +799,112 @@ bool iodev_list( const char* spec, const char* defaultdriver, hlstyle_t style, v
     return drv->list( drv, path, style, styleud, emit, emitud, err, errsz );
 }
 
+// -- KILL, RENAME, MKDIR, CHDIR ---------------------------------------------------------------------
+
+static const char* iodev_known_error( const char* err ) {
+    static const char* const known[] = { "File not found", "Permission denied", "Is a directory", "Not a directory", "Disk full",
+        "Bad file name", "Out of memory", "File already exists", "Bad file mode", "Not supported by device" };
+    for ( size_t i=0; i < sizeof(known) / sizeof(known[0]); ++i ) {
+        if ( strcmp( err, known[i] ) == 0 ) {
+            return known[i];
+        }
+    }
+    return "Device I/O error";
+}
+
+bool iodev_remove( const char* name, const char* defaultdriver, const char** perr ) {
+    iodrv_t* drv = 0; const char* path = 0;
+    if ( !iodev_resolve( name, defaultdriver, &drv, &path, perr ) ) {
+        return false;
+    }
+    if ( !iodev_allowed( "write", drv, path ) ) {
+        *perr = "Permission denied";
+        return false;
+    }
+    char err[80];
+    err[0] = '\0';
+    if ( drv->remove == 0 ) {
+        *perr = "Not supported by device";
+        return false;
+    }
+    if ( !drv->remove( drv, path, err, sizeof(err) ) ) {
+        *perr = iodev_known_error( err );
+        return false;
+    }
+    return true;
+}
+
+bool iodev_rename( const char* from, const char* to, const char* defaultdriver, const char** perr ) {
+    iodrv_t* drv = 0; const char* path = 0;
+    iodrv_t* drv2 = 0; const char* path2 = 0;
+    if ( !iodev_resolve( from, defaultdriver, &drv, &path, perr ) || !iodev_resolve( to, defaultdriver, &drv2, &path2, perr ) ) {
+        return false;
+    }
+    if ( drv != drv2 ) {
+        *perr = "Not the same device";
+        return false;
+    }
+    if ( !iodev_allowed( "write", drv, path ) || !iodev_allowed( "write", drv, path2 ) ) {
+        *perr = "Permission denied";
+        return false;
+    }
+    char err[80];
+    err[0] = '\0';
+    if ( drv->rename == 0 ) {
+        *perr = "Not supported by device";
+        return false;
+    }
+    if ( !drv->rename( drv, path, path2, err, sizeof(err) ) ) {
+        *perr = iodev_known_error( err );
+        return false;
+    }
+    return true;
+}
+
+bool iodev_mkdir( const char* name, const char* defaultdriver, const char** perr ) {
+    iodrv_t* drv = 0; const char* path = 0;
+    if ( !iodev_resolve( name, defaultdriver, &drv, &path, perr ) ) {
+        return false;
+    }
+    if ( !iodev_allowed( "write", drv, path ) ) {
+        *perr = "Permission denied";
+        return false;
+    }
+    char err[80];
+    err[0] = '\0';
+    if ( drv->mkdir == 0 ) {
+        *perr = "Not supported by device";
+        return false;
+    }
+    if ( !drv->mkdir( drv, path, err, sizeof(err) ) ) {
+        *perr = iodev_known_error( err );
+        return false;
+    }
+    return true;
+}
+
+bool iodev_chdir( const char* name, const char* defaultdriver, const char** perr ) {
+    iodrv_t* drv = 0; const char* path = 0;
+    if ( !iodev_resolve( name, defaultdriver, &drv, &path, perr ) ) {
+        return false;
+    }
+    if ( !iodev_allowed( "read", drv, path ) ) {
+        *perr = "Permission denied";
+        return false;
+    }
+    char err[80];
+    err[0] = '\0';
+    if ( drv->chdir == 0 ) {
+        *perr = "Not supported by device";
+        return false;
+    }
+    if ( !drv->chdir( drv, path, err, sizeof(err) ) ) {
+        *perr = iodev_known_error( err );
+        return false;
+    }
+    return true;
+}
+
 // -- channels ------------------------------------------------------------------------------------
 
 #define IOCHAN_BUFSIZE  4096U
@@ -606,7 +957,7 @@ bool iotab_open( iotab_t* tab, int chan, const char* name, const char* defaultdr
     void* h = drv->open( drv, path, mode, err, sizeof(err) );
     if ( h == 0 ) {
         static const char* const known[] = { "File not found", "Permission denied", "Is a directory", "Disk full", "Bad file name",
-            "Out of memory", "Not supported by device" };
+            "Out of memory", "Not supported by device", "Bad file mode" };
         *perr = "Device I/O error";
         for ( size_t i=0; i < sizeof(known) / sizeof(known[0]); ++i ) {
             if ( strcmp( err, known[i] ) == 0 ) {
@@ -814,5 +1165,33 @@ bool iotab_loc( iotab_t* tab, int chan, int64_t* ppos, const char** perr ) {
         return false;
     }
     *ppos = c->pos;
+    return true;
+}
+
+bool iotab_seek( iotab_t* tab, int chan, int64_t pos, const char** perr ) {
+    *perr = 0;
+    if ( chan < 1 || chan > IOCHAN_MAX ) {
+        *perr = "Bad file number";
+        return false;
+    }
+    iochan_t* c = tab->chan[chan];
+    if ( c == 0 ) {
+        *perr = "File not open";
+        return false;
+    }
+    if ( pos < 0 ) {
+        *perr = "Bad position";
+        return false;
+    }
+    if ( c->drv->seek == 0 ) {
+        *perr = "Not supported by device";
+        return false;
+    }
+    if ( !c->drv->seek( c->handle, pos ) ) {
+        *perr = "Bad position";
+        return false;
+    }
+    c->rpos = c->rlen = 0;      // the read buffer is stale
+    c->pos = pos;
     return true;
 }

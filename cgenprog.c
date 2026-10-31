@@ -256,6 +256,38 @@ bool cgen_from_addressstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     return cgen_unexpected_node( comp );
 }
 
+bool cgen_from_fileopstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    /*
+        NT_FILEOPSTMT   KILL / RENAME / MKDIR / CHDIR / SEEK statement
+            data: FOPK_* kind
+            branches: the name (two for RENAME), or the channel specifier and the position (SEEK)
+        code: <name> FOP(kind)      <from> <to> FOP(kind)      <channel> <position> FOP(kind)
+    */
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->type != NT_FILEOPSTMT || node->datalen != UINT16_C(1) ) {
+        return cgen_unexpected_node( comp );
+    }
+    uint8_t kind = node->data[0];
+    bool two = kind == FOPK_RENAME || kind == FOPK_SEEK;
+    if ( kind < FOPK_KILL || kind > FOPK_SEEK || node->numbranches != ( two ? 2U : 1U ) ) {
+        return cgen_unexpected_node( comp );
+    }
+    if ( kind == FOPK_SEEK ) {
+        if ( !cp_push_chanspec( cgen, comp, node->branches[0] ) || !cgen_from_numexpr( cgen, comp, node->branches[1] ) ) {
+            return false;
+        }
+    } else {
+        for ( size_t i=0; i < node->numbranches; ++i ) {
+            if ( !cgen_from_strexpr( cgen, comp, node->branches[i] ) ) {
+                return false;
+            }
+        }
+    }
+    return cgen_gen_fop( cgen, kind ) || cgen_out_of_code_memory( comp );
+}
+
 bool cgen_from_runstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     /*
         NT_RUNSTMT      RUN statement

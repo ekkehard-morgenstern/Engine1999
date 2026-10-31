@@ -2523,6 +2523,66 @@ bool comp_eat_closestmt( compiler_t* comp, node_t** pnode ) {
     return true;
 }
 
+bool comp_eat_fileopstmt( compiler_t* comp, node_t** pnode ) {
+    // fileop-stmt := ( TOK_KILL | TOK_MKDIR | TOK_CHDIR ) str-expr | TOK_RENAME str-expr TOK_TO str-expr |
+    //                TOK_SEEK chan-spec TOK_COMMA num-expr .
+    uint8_t kind = 0;
+    switch ( comp->currtok ) {
+        case TOK_KILL:      kind = FOPK_KILL; break;
+        case TOK_RENAME:    kind = FOPK_RENAME; break;
+        case TOK_MKDIR:     kind = FOPK_MKDIR; break;
+        case TOK_CHDIR:     kind = FOPK_CHDIR; break;
+        case TOK_SEEK:      kind = FOPK_SEEK; break;
+        default:            return false;
+    }
+    if ( !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    node_t* first = NODE_NONE;
+    node_t* second = NODE_NONE;
+    if ( kind == FOPK_SEEK ) {
+        if ( !comp_eat_chanspec( comp, &first ) || first == NODE_NONE ) {
+            comp_error( comp, "Channel '#n' expected" );
+            return false;
+        }
+        if ( comp->currtok != TOK_COMMA || !comp_fetchtok( comp ) ) {
+            comp_error( comp, "Comma ',' expected" );
+            return false;
+        }
+        if ( !comp_eat_numexpr( comp, &second ) || second == NODE_NONE ) {
+            comp_error( comp, "Numeric expression expected" );
+            return false;
+        }
+    } else {
+        if ( !comp_eat_strexpr( comp, &first ) || first == NODE_NONE ) {
+            comp_error( comp, "String expression expected" );
+            return false;
+        }
+        if ( kind == FOPK_RENAME ) {
+            if ( comp->currtok != TOK_TO || !comp_fetchtok( comp ) ) {
+                comp_error( comp, "TO expected" );
+                return false;
+            }
+            if ( !comp_eat_strexpr( comp, &second ) || second == NODE_NONE ) {
+                comp_error( comp, "String expression expected" );
+                return false;
+            }
+        }
+    }
+    /*
+        NT_FILEOPSTMT   KILL / RENAME / MKDIR / CHDIR / SEEK statement
+            data: 1 byte, FOPK_* kind
+            branches: KILL, MKDIR, CHDIR: the name; RENAME: the old and the new name; SEEK: the channel specifier, the position
+    */
+    bool ok = second == NODE_NONE ? comp_create_node( comp, pnode, NT_FILEOPSTMT, UINT8_C(1), UINT16_C(1), &kind, first ) :
+        comp_create_node( comp, pnode, NT_FILEOPSTMT, UINT8_C(2), UINT16_C(1), &kind, first, second );
+    if ( !ok || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
 bool comp_eat_addressstmt( compiler_t* comp, node_t** pnode ) {
     // address-stmt := TOK_ADDRESS [ identifier | str-expr ] .
     if ( comp->currtok != TOK_ADDRESS || !comp_fetchtok( comp ) ) {
@@ -2969,6 +3029,9 @@ bool comp_eat_progstmt( compiler_t* comp, node_t** pnode ) {
         return true;
     }
     if ( comp_eat_addressstmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_fileopstmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     if ( comp_eat_timerstmt( comp, pnode ) && *pnode != NODE_NONE ) {
