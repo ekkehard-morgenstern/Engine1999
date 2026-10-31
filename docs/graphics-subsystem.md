@@ -71,7 +71,7 @@ GFX RESET [ALL]                       back to the defaults, to wipe the screen o
 -- the text screen
 CLS                                   clears the text screen
 LOCATE x, y                           cursor to column x (0..79), row y (0..24)
-COLOR fg [, bg]                       pen and paper for the following output
+COLOR fg [, bg]                       pen and paper for the following output (PRINT too, whatever was printed before)
 SYMBOL c, a$                          redefines character c with 12 row bytes (bit 7 = left); DESIGN CHAR does the same by picture
 TXT FILL x1,y1,x2,y2 [, chr [, fg [, bg]]]   fills an area; an omitted part is left as it is (Simons' BASIC: FILL, FCHR, FCOL)
 TXT COPY x1,y1,x2,y2, tx, ty          copies an area (may overlap)                 (MOVE)

@@ -1058,6 +1058,8 @@ void sdlscr_text_setblank( int bg, int fg ) {
 
 void sdlscr_text_setcolors( int bg, int fg ) {
     txtscr_setcolors( bg, fg );
+    // PRINT goes through the ANSI decoder of the screen, which holds its own current colors: it starts again from the new ones
+    sdlscr_ansiok[ txtscr_selected() ] = false;
 }
 
 void sdlscr_text_getcolors( int* bg, int* fg ) {
