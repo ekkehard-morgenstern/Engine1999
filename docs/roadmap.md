@@ -135,5 +135,6 @@ Listed in full in `SESSION.md` ("Design decisions I took"). The ones most likely
 - [ ] Awaiting the owner's decisions (names, colors, target layer, reserved words, order, asset formats)
 - [ ] Phase 1: `LAYER`, `PALETTE`, `RGB()`, `BACKDROP`; text screen words `CLS`, `LOCATE`, `COLOR`, `POS`, `CSRLIN`, `SYMBOL`
 - [ ] Phase 2: graphics layer: `GCOLOR`, `GCLS`, `PSET`, `POINT`, `LINE`, `CIRCLE`, `PAINT`, `GRAB`, `BLIT` (module `gfxcore`, no SDL), `VSYNC`, `FRAME`
+- [ ] Simons' BASIC ideas (see the proposal): `DESIGN` rows, `SPRITE n,MOVETO`, `ON COLLISION`, `GMODE`, `GTEXT`, `TFILL`/`TCOPY`/`TINVERT`/`TSAVE$`/`TLOAD`; other items noted there: `ON KEY`, `PROC`, `LOOP`/`EXIT IF`, joystick and mouse input
 - [ ] Phase 3: `TILE`, `TILEMAP`, `TILESCROLL`, `SPRDEF`, `SPRITE`, `ANIM`, `COLLIDE`; backend gaps: tile cell setter (`tilescr[]` can't be written today), sprite collision, position getters
 
