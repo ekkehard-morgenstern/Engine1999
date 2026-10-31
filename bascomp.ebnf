@@ -26,6 +26,7 @@
 Language syntax (using tokens)
 ------------------------------
 
+--# Lists, variables and literals
 num-ex-list := num-expr { TOK_COMMA num-expr } .
 str-ex-list := str-expr { TOK_COMMA str-expr } .
 expr-list   := expr { TOK_COMMA expr } .
@@ -56,6 +57,7 @@ num-lit := dec-lit | TOK_HEXLIT | TOK_OCTLIT | TOK_QUALIT | TOK_BINLIT .
 str-lit := TOK_STRLIT | TOK_SHLLIT | TOK_BRKLIT | TOK_BRCLIT .
 str-lits := str-lit { str-lit } .
 
+--# User-defined functions (DEF FN)
 num-usr-fn-name := TOK_FN ( TOK_NUMIDENT | TOK_INTIDENT ) .
 str-usr-fn-name := TOK_FN TOK_STRIDENT .
 
@@ -78,6 +80,7 @@ call-args := call-arg { TOK_COMMA call-arg } .
 num-usr-fn-call := num-usr-fn-name [ TOK_LPAREN [ call-args ] TOK_RPAREN ] .
 str-usr-fn-call := str-usr-fn-name [ TOK_LPAREN [ call-args ] TOK_RPAREN ] .
 
+--# Built-in functions
 -- INT FIX ABS SGN SQR SIN COS TAN ATN EXP LOG FLOOR CEIL LOG2 LOG10: the usual meaning (FLOOR is INT; angles in the unit of DEG/RAD/GRAD, radians
 -- by default). RND is RND(1) without an argument. PEEK(addr [, size]) reads the RAM (size 1 by default: see poke-stmt).
 -- CVI CVL CVS CVD unpack a number from a binary string (big endian).
@@ -121,6 +124,7 @@ gfx-query-call := ( TOK_RGB | TOK_POINT | TOK_TILE ) TOK_LPAREN num-expr { TOK_C
 num-func-call := num-usr-fn-call | sys-num-fn-arg-call | sys-noarg-num-call | gfx-query-call .
 str-func-call := str-usr-fn-call | sys-str-fn-arg-call | sys-noarg-str-call .
 
+--# Expressions
 str-base-expr := str-var-ref | str-lits | str-func-call .
 str-add-expr := str-base-expr { TOK_PLUS str-base-expr } .
 str-expr := str-add-expr .
@@ -158,6 +162,7 @@ num-expr     := num-or-ex .
 
 expr         := num-expr | str-expr .
 
+--# Input and output
 save-stmt := SAVE str-expr [ TOK_COMMA TOK_NUMIDENT ] .
 
 chan-spec := TOK_LATTICE num-expr .
@@ -182,6 +187,7 @@ get-stmt := TOK_GET [ chan-spec TOK_COMMA ] input-var { TOK_COMMA input-var } .
 io-stmt := save-stmt | print-stmt | input-stmt | get-stmt | data-stmt | read-stmt | restore-stmt |
            open-stmt | close-stmt | address-stmt | record-stmt | fileop-stmt .
 
+--# Assignment and declarations
 num-assign := num-var-ref TOK_EQ num-expr .
 str-assign := str-var-ref TOK_EQ str-expr .
 substr-op := TOK_LEFT | TOK_MID | TOK_RIGHT .
@@ -198,6 +204,7 @@ fn-assign-stmt := any-usr-fn-name TOK_EQ expr .
 
 assign-stmt := let-stmt | dim-stmt | erase-stmt | def-stmt | fn-assign-stmt .
 
+--# Control flow, procedures
 for-stmt := TOK_FOR num-base-var-ref TOK_EQ num-expr ( TOK_TO | DOWNTO ) num-expr [ TOK_STEP num-expr ] | for-each-stmt .
 -- FOR EACH [ key, ] value IN array() loops over all elements of an array (flat row-major order; key = the flat index).
 -- EACH, IN and DOWNTO are identifiers that are recognized in this place, not keywords. DOWNTO counts down by the STEP value (default 1).
@@ -266,6 +273,13 @@ local-stmt := TOK_LOCAL local-item { TOK_COMMA local-item } .
 -- RESUME (in an ON ERROR handler) runs the statement that failed again, RESUME NEXT continues behind it, RESUME target jumps there. The
 -- statement is the innermost one (inside IF .. THEN: the statement of the branch). Not possible after an error inside a PROC / FUNC call.
 resume-stmt := TOK_RESUME [ TOK_NEXT | goto-target ] .
+
+control-flow-stmt := for-stmt | next-stmt | goto-stmt | return-stmt | label-stmt | end-stmt | pop-stmt | again-stmt | exit-stmt |
+                     repeat-stmt | until-stmt | while-stmt | wend-stmt | uend-stmt | on-stmt |
+                     proc-stmt | func-stmt | call-stmt | local-stmt | resume-stmt | stop-stmt |
+                     singleline-if-stmt | multiline-if-stmt .
+
+--# Debugging and memory: STOP, CONT, TRACE, AUTO, POKE
 -- STOP ends the run like Break but keeps its state for CONT; TRACE ON prints [line] for every program line; AUTO prompts for line numbers
 -- (the host does that: engine1999.c); start and step default to 10.
 stop-stmt := TOK_STOP .
@@ -275,11 +289,7 @@ auto-stmt := TOK_AUTO [ num-expr [ TOK_COMMA num-expr ] ] .
 -- POKE writes the RAM (1 MiB, big endian): size 1 (default), 2, 4 integers, -4 single, -8 double; a string value writes its bytes.
 poke-stmt := TOK_POKE num-expr TOK_COMMA expr [ TOK_COMMA num-expr ] .
 
-control-flow-stmt := for-stmt | next-stmt | goto-stmt | return-stmt | label-stmt | end-stmt | pop-stmt | again-stmt | exit-stmt |
-                     repeat-stmt | until-stmt | while-stmt | wend-stmt | uend-stmt | on-stmt |
-                     proc-stmt | func-stmt | call-stmt | local-stmt | resume-stmt | stop-stmt |
-                     singleline-if-stmt | multiline-if-stmt .
-
+--# Program commands
 -- Program commands. They work inside programs, too. RUN and LOAD restart the program (RUN: after clearing all
 -- variables, at the given line or label; LOAD: replace the program by the one in the file and run it from the
 -- beginning); LIST lists the program: a single target lists that line, "a-b" the range, "a-" to the end, "-b" from the start.
@@ -303,6 +313,23 @@ renum-stmt := TOK_RENUM [ goto-target ] [ TOK_MINUS [ goto-target ] ] [ TOK_COMM
 edit-stmt := TOK_EDIT [ goto-target ] .
 -- MONITOR opens the machine monitor (text screen 2). It ends the running program (like NEW).
 monitor-stmt := TOK_MONITOR .
+-- MERGE name enters the lines of a program file into the stored program: a line with the number of a stored line replaces it,
+-- the others are inserted. Variables stay; the stored program changes, so the running program ends (like RENUM). With APPEND
+-- (an identifier, not a keyword) the file's lines are numbered in steps of 10 behind the last stored line (the first free
+-- multiple of 10; 10 for an empty program) and the line numbers they refer to are adjusted; the stored program is not
+-- renumbered. A label that both programs define (in lines that are not replaced) is an error and nothing changes.
+-- CHAIN name replaces the program by the file and runs it, like LOAD followed by RUN, but the variables of the old program that
+-- the new one also uses keep their values (same name and type; arrays only with the same dimensions). CHAIN MERGE name merges
+-- the file into the stored program (as MERGE) and runs the result. The optional target is where the run starts (default:
+-- the first line). Functions, labels and DATA are those of the new program; SFX definitions are kept.
+merge-stmt := TOK_MERGE str-expr [ TOK_COMMA APPEND ] .
+chain-stmt := TOK_CHAIN [ TOK_MERGE ] str-expr [ TOK_COMMA goto-target ] .
+-- FILES [spec] lists files like "ls -ltr" (oldest first) without mode bits and owners: size, time, name with the "ls -F"
+-- indicator. No spec = the current directory (hidden names left out); a directory lists its entries; a pattern with * ? [ ]
+-- lists the matches. The screen listing is colored and stops after each page (any key goes on, Q or ESC stops).
+files-stmt := TOK_FILES [ str-expr ] .
+
+--# Sound
 -- Sound (see docs/sound.md). Channels are 1..8. SOUND ch, freq, beats [, vol]: a tone of freq Hz (20..20000; 0 = a rest) for
 -- "beats" (the channel's next event follows after that; 0 = until the next SOUND), vol 0..1 (default 0.5). SOUND OFF silences
 -- one channel / all of them at once, SOUND SYNC lines up the time of the channels (to start them together). PLAY plays one
@@ -319,29 +346,19 @@ sound-stmt := TOK_SOUND num-expr TOK_COMMA num-expr TOK_COMMA num-expr [ TOK_COM
 -- change a sounding channel at once; ENVELOPE ch, attack, decay, sustain, release shapes the tones (ENVELOPE ch alone: back to the
 -- default); VIBRATO / TREMOLO ch, rate, depth; SFX n, a$ stores a music string as effect n (1..64), SFX n [, ch] plays it
 -- (no channel: a free one, the highest first).
+
+--# Timing: WAIT, AFTER, EVERY
 -- WAIT n sleeps for n/60 seconds (the unit of TI) without using the processor; ESC breaks it. WAIT 0 returns at once.
 wait-stmt := TOK_WAIT num-expr .
--- MERGE name enters the lines of a program file into the stored program: a line with the number of a stored line replaces it,
--- the others are inserted. Variables stay; the stored program changes, so the running program ends (like RENUM). With APPEND
--- (an identifier, not a keyword) the file's lines are numbered in steps of 10 behind the last stored line (the first free
--- multiple of 10; 10 for an empty program) and the line numbers they refer to are adjusted; the stored program is not
--- renumbered. A label that both programs define (in lines that are not replaced) is an error and nothing changes.
--- CHAIN name replaces the program by the file and runs it, like LOAD followed by RUN, but the variables of the old program that
--- the new one also uses keep their values (same name and type; arrays only with the same dimensions). CHAIN MERGE name merges
--- the file into the stored program (as MERGE) and runs the result. The optional target is where the run starts (default:
--- the first line). Functions, labels and DATA are those of the new program; SFX definitions are kept.
-merge-stmt := TOK_MERGE str-expr [ TOK_COMMA APPEND ] .
-chain-stmt := TOK_CHAIN [ TOK_MERGE ] str-expr [ TOK_COMMA goto-target ] .
--- FILES [spec] lists files like "ls -ltr" (oldest first) without mode bits and owners: size, time, name with the "ls -F"
--- indicator. No spec = the current directory (hidden names left out); a directory lists its entries; a pattern with * ? [ ]
--- lists the matches. The screen listing is colored and stops after each page (any key goes on, Q or ESC stops).
-files-stmt := TOK_FILES [ str-expr ] .
 -- AFTER delay [, timer] GOSUB|GOTO target runs the handler once after "delay" ticks (1/60 s, the unit of TI and WAIT), EVERY
 -- delay [, timer] GOSUB|GOTO target runs it again and again at that interval. Four timers 0..3 (default 0); a timer holds one
 -- AFTER or EVERY, setting it again replaces it. A handler entered by GOSUB returns to where the program was interrupted with
 -- RETURN; while it runs, only a timer with a higher number may interrupt it. A handler is entered between two statements
 -- (also during WAIT), not during INPUT or GET. AFTER OFF [timer] / EVERY OFF [timer] clear all timers (or that timer) of
 -- that kind. Timers end with the run.
+timer-stmt := ( TOK_AFTER | TOK_EVERY ) ( TOK_OFF [ num-expr ] | num-expr [ TOK_COMMA num-expr ] goto-kw goto-target ) .
+
+--# Files and devices
 -- Files and devices (docs/io-subsystem.md). A file name may start with "driver:" (file, null, mem); names without a prefix belong to
 -- the ADDRESS driver. OPEN name FOR INPUT|OUTPUT|APPEND AS #n, or OPEN "I"|"O"|"A", #n, name; CLOSE closes the channels given (all
 -- of them without any). OUTPUT, APPEND and AS are identifiers recognized in context. ADDRESS name (a bare identifier or a string
@@ -350,24 +367,27 @@ files-stmt := TOK_FILES [ str-expr ] .
 open-stmt := TOK_OPEN str-expr ( TOK_FOR ( TOK_INPUT | OUTPUT | APPEND ) AS chan-spec | TOK_COMMA chan-spec TOK_COMMA str-expr ) .
 close-stmt := TOK_CLOSE [ chan-spec { TOK_COMMA chan-spec } ] .
 address-stmt := TOK_ADDRESS [ identifier | str-expr ] .
--- KILL deletes a file, RENAME renames it (both names on the same driver), MKDIR makes and CHDIR enters a directory, SEEK #n, pos
--- moves the position of an open channel (bytes from the start).
 -- Random access: OPEN ... FOR RANDOM AS #n [LEN = reclen] (or OPEN "R", #n, name [, reclen]; FOR UPDATE / "U" = read and write
 -- without records). FIELD binds string variables to slices of the record buffer, LSET / RSET fill a slice (padded with spaces),
 -- GETREC / PUTREC read / write record rec (1.., none = the next one). AS is an identifier recognized in context.
-record-stmt := TOK_FIELD chan-spec TOK_COMMA num-expr identifier-AS str-var-ref { TOK_COMMA num-expr identifier-AS str-var-ref }
+record-stmt := TOK_FIELD chan-spec TOK_COMMA num-expr AS str-var-ref { TOK_COMMA num-expr AS str-var-ref }
              | ( TOK_LSET | TOK_RSET ) str-var-ref TOK_EQ str-expr
              | ( TOK_GETREC | TOK_PUTREC ) chan-spec [ TOK_COMMA num-expr ] .
+-- KILL deletes a file, RENAME renames it (both names on the same driver), MKDIR makes and CHDIR enters a directory, SEEK #n, pos
+-- moves the position of an open channel (bytes from the start).
+fileop-stmt := ( TOK_KILL | TOK_MKDIR | TOK_CHDIR ) str-expr | TOK_RENAME str-expr TOK_TO str-expr | TOK_SEEK chan-spec TOK_COMMA num-expr .
+
+--# Errors, random numbers, angles
 -- ON ERROR GOTO / GOSUB sets a handler for run time errors, ON ERROR OFF clears it (ERROR is an identifier recognized after ON).
 -- ERR$ is the text of the last error, ERL its line number.
-on-error-stmt := TOK_ON identifier-ERROR ( goto-kw goto-target | TOK_OFF ) .
+on-error-stmt := TOK_ON ERROR ( goto-kw goto-target | TOK_OFF ) .
 -- Numeric functions: INT FIX ABS SGN SQR SIN COS TAN ATN EXP LOG RND ( num-expr ) (RND alone is RND(1)); PI. \ (integer division) and MOD
 -- are at the level of * and /. RANDOMIZE [ seed ] seeds RND.
 randomize-stmt := TOK_RANDOMIZE [ num-expr ] .
 -- DEG, RAD (the default) and GRAD choose the unit of the angles of SIN COS TAN ATN.
 angle-stmt := TOK_DEG | TOK_RAD | TOK_GRAD .
-fileop-stmt := ( TOK_KILL | TOK_MKDIR | TOK_CHDIR ) str-expr | TOK_RENAME str-expr TOK_TO str-expr | TOK_SEEK chan-spec TOK_COMMA num-expr .
-timer-stmt := ( TOK_AFTER | TOK_EVERY ) ( TOK_OFF [ num-expr ] | num-expr [ TOK_COMMA num-expr ] goto-kw goto-target ) .
+
+--# Graphics, sprites and the text screen
 -- Graphics, tiles, sprites, text screen areas (docs/graphics-subsystem.md). The statements are a table in gfxops.c, the parser, the code
 -- generator and the VM read it: group word, name word, and the arguments from a signature. GFX, TXT, TILE, SPRITE, DESIGN, CLS, LOCATE, COLOR
 -- are keywords; the second words (LAYER, PSET, ...) are identifiers recognized after the group word, so they stay free as variable names.
@@ -410,6 +430,10 @@ design-row := TOK_ADDROF str-expr .
 on-collision-stmt := TOK_ON COLLISION ( goto-kw goto-target | TOK_OFF ) .
 gfx-all-stmt := gfx-stmt | txt-stmt | tile-stmt | sprite-stmt | cls-stmt | locate-stmt | color-stmt | symbol-stmt | design-stmt | design-row | on-collision-stmt .
 
+--# Statements and lines
+-- The statements by group: io-stmt (PRINT, INPUT, GET, DATA, READ, OPEN, CLOSE, ...), prog-stmt (program commands, sound, graphics, timers, error
+-- handling, debugging; they work inside programs, too), assign-stmt (LET, DIM, ERASE, DEF FN) and control-flow-stmt (loops, IF, GOTO, PROC ...).
+-- Several statements on a line are separated by a colon; a line may end with a comment (an apostrophe).
 prog-stmt := gfx-all-stmt | load-stmt | run-stmt | merge-stmt | chain-stmt | files-stmt | timer-stmt | list-stmt | new-stmt | clear-stmt |
              delete-stmt | renum-stmt | edit-stmt | monitor-stmt | sound-stmt | wait-stmt | on-error-stmt | randomize-stmt | angle-stmt |
              cont-stmt | trace-stmt | auto-stmt | poke-stmt .
@@ -420,7 +444,7 @@ stmt-line := [ stmt-list ] [ TOK_QUOLIT ] TOK_EOL .
 stmt-lines := stmt-line { stmt-line } .
 
 -- What this grammar does not say (the parser, bascomp.c, and the code generator are the authority):
---  * Words written in capitals without TOK_ (OUTPUT, APPEND, AS, ERROR, COLLISION, EACH, IN, DOWNTO, LAYER, PSET, ...) are identifiers that are
+--  * Capital words that are not reserved words (OUTPUT, APPEND, AS, ERROR, COLLISION, EACH, IN, DOWNTO, LAYER, PSET, ...) are identifiers that are
 --    recognized in that place, not keywords; "identifier" stands for any identifier.
 --  * Several rules are decided by one or two tokens of lookahead (FOR EACH against FOR v = ..., "name ( )" as an array argument, THEN <name>
 --    as a label or as the start of an assignment, END followed by IF / UNLESS / FN / PROC / FUNC) and by trying alternatives in the order
@@ -433,7 +457,7 @@ stmt-lines := stmt-line { stmt-line } .
 --    called before its definition.
 --  * Line numbers belong to the stored program (a line "10 PRINT" is stmt-line with a number in front); direct mode lines are stmt-line
 --    without one, and a body with END PROC / END FUNC / END FN / multi-line IF needs numbered lines (the header ends with TOK_EOL).
---  * Numbers are tokens (TOK_DEC0 .. TOK_DEC9 for single digits, TOK_DECLIT, hex, octal, quaternary, binary); strings and shell literals
---    are tokens, too: see docs/basic-language.md for the characters. Case does not matter (the preprocessor upper-cases everything outside quotes).
+--  * Numbers (decimal, hex, octal, quaternary, binary), strings and shell literals are tokens made by the tokenizer, not described here: see
+--    docs/basic-language.md ("Tokenized line") for the characters. Case does not matter (the preprocessor upper-cases everything outside quotes).
 --  * Precedence is as the nesting above says (unary, * / \ ^ MOD, + -, shifts, comparisons, AND NAND, OR XOR NOR XNOR EQV NEQV IMP NIMP): ^ is on
 --    the level of *; a comparison or shift takes at most one operator; the logical operators work on 32 bit integers (true is -1).

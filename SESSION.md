@@ -1,11 +1,12 @@
 # Session state
 
-Maintained by Claude; updated whenever work in a session changes something. Last update: 2026-10-31 (EBNF brought up to date).
+Maintained by Claude; updated whenever work in a session changes something. Last update: 2026-10-31 (grammar quick reference).
 Read this first when resuming; details are in `docs/` (start with `docs/README.md`) and `CLAUDE.md`.
 
 ## Standing rules
 - **Never run git write commands** (commit, add, push, merge, rebase, reset, checkout of files, stash, tag, branch changes). The user does all of these manually, even if git access is authorized later. Read-only git (`status`, `log`, `diff`, `show`) is fine.
 - Keep this file and `docs/` current when work changes the state.
+- Keep the grammar current: a new statement, function or operator gets its rule in `bascomp.ebnf`, then `make grammar` regenerates the quick reference `docs/grammar.md` / `docs/grammar.html` (`make grammar-check` verifies it).
 - Keep `HistoryLog-Claude.md` current: new work goes under its "Pending" section; after the user commits, move it into the log with the commit ID and timestamp (see `CLAUDE.md`).
 
 ## Repo state
@@ -96,6 +97,7 @@ Read this first when resuming; details are in `docs/` (start with `docs/README.m
 - **`STOP` / `CONT` / `TRACE` / `AUTO`** (2026-10-31; `docs/basic-language.md`): `STOP` and the Break key keep the VM state (stacks and calls are *moved* into `vm_t.stopped`) for `CONT`; lost when the stored program changes (`repl_program_changed()`) or a program starts; not for direct mode lines; Break inside `INPUT`/`GET`/`WAIT` can't be continued. `TRACE ON|OFF` prints `[n]` per line (`repl_t.trace`, survives `RUN`). `AUTO [start[,step]]` is a `VMREQ_AUTO` request; the prompting is in the main loop of `engine1999.c` (checked on the real screen under Xvfb: AUTO 100,5 and ESC / CONT / "Cannot continue" after an edit). Tokens 240..242, nodes 0x7E..0x81, `STOP 0x170`, `CONT 0x171`, `TRON 0x172`, `AUTO 0x173`. `STOP [n]` has no argument.
 - **`PEEK` / `POKE` / `PEEK$`** (2026-10-31): a 1 MiB RAM block (`vm_t.ram`), `PEEK(a[,size])`, `POKE a,value[,size]`, `PEEK$(a,len)`, sizes 1/2/4 (byte/word unsigned, long signed), -4/-8 floats, big endian, a string value is written as bytes. Tokens 243, 244, `NT_POKESTMT 0x82`, `PEEK 0x174`, `PEKS 0x175`, `POKE 0x176`. Design decisions I took (revisit if unwanted): one word with a size argument instead of `PEEKB/W/L/F`; only the RAM is addressable (no window into code, data or screen), no `SYS`; the RAM is cleared by `RUN` and kept over direct lines.
 - **`bascomp.ebnf` is current** (2026-10-31): all statements and functions are in it (the graphics statements written out from the `gfxops.c` table), every production is defined (checked with a script), and the end of the file lists what a grammar cannot express. It is documentation (nothing reads it); when a statement is added, add its rule there.
+- **Grammar quick reference** (2026-10-31): `grammar.pl` turns `bascomp.ebnf` into `docs/grammar.md` (fenced `ebnf` blocks, tokens shown as the programmer writes them: `PRINT`, `","`, `<name$>`; prose from the comments; a table of contents) and `docs/grammar.html` (colors for keywords, rules, punctuation and literals, light/dark, every rule name links to its definition). The EBNF got `--# Title` section markers (comments to the parser), its tail was regrouped by topic, and the odd `identifier-AS` names became `AS`. `make grammar` regenerates, `make grammar-check` fails on undefined rules or stale output. Not part of `make all` (needs perl).
 - **Correction** (2026-10-30): `stdtypes.h` defines `_POSIX_C_SOURCE 200809L` (CLAUDE.md and my earlier note said 200112L), so `st_mtim`, `fmemopen` and `open_memstream` are available; `FILES` sorts with nanosecond resolution now.
 
 ## ISA changes made (instset.h is up to date)

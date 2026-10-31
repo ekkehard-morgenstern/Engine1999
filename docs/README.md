@@ -11,6 +11,7 @@ The display side is working; the BASIC side (tokenizer → compiler → code gen
 | [display-engine.md](display-engine.md) | Layers, text/tile/sprite screens, SDL threading/event model, audio |
 | [basic-language.md](basic-language.md) | Tokenized line format, binary program file (`.e99`) format, token set, literals, grammar summary |
 | [compiler-and-vm.md](compiler-and-vm.md) | Program store, syntax tree, node types, code generator, instruction set, variable memory |
+| [grammar.md](grammar.md) | **The language at a glance**: the whole syntax as a quick reference card, generated from `bascomp.ebnf` (also [grammar.html](grammar.html), with colors and links) |
 | [build-and-test.md](build-and-test.md) | Building, executables, test programs, tooling |
 | [graphics-subsystem.md](graphics-subsystem.md) | BASIC statements for layers, palettes, the graphics layer, tiles, sprites, `DESIGN` pictures, collisions and text screen areas; the `sdlscr_*` API (implemented) |
 | [io-subsystem.md](io-subsystem.md) | I/O subsystem: virtual device drivers (`file:`, `mem:`, ...), `driver:name` prefixes, `OPEN`/`CLOSE`, `ADDRESS`; phases and the open sandboxing issue |

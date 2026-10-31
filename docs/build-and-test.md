@@ -41,6 +41,8 @@ printf '10 PRINT "HI";A$:LET B=1+2*3\n20 GOTO 10\n' | ./basictest2
 
 ## Font and colors
 
+`perl grammar.pl` (or `make grammar`) reads `bascomp.ebnf` and writes the quick reference `docs/grammar.md` and `docs/grammar.html`; `make grammar-check` (`perl grammar.pl --check`) fails if a grammar rule is used but not defined or if the two files are out of date. Not part of `make all` (it needs perl); run it whenever `bascomp.ebnf` changes.
+
 `perl fontcomp.pl` reads `8x12font1.txt` and writes `8x12font1.c` (it is not wired into `make`; output is written directly to `8x12font1.c`, overwriting it).
 `colors-*.txt` are git-ignored scratch/generated data for the palette.
 

@@ -38,6 +38,16 @@ CL=$(CCOMP) $(CFLAGS)
 .c.o:
 	$(CC) -o $@ $<
 
+.PHONY: grammar grammar-check
+
+# the quick reference of the language (docs/grammar.md and docs/grammar.html) from bascomp.ebnf; needs perl
+grammar:
+	perl grammar.pl
+
+# fails if a rule is used but not defined, or if the quick reference is out of date
+grammar-check:
+	perl grammar.pl --check
+
 all: sdltest1 sdltest2 engine1999 basictest1 testcomp1 basictest2 vmtest1 repltest1 ansitest1 txttest1 asmtest1 synthtest1 iotest1 gfxtest1
 	echo ok >all
 
