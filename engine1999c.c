@@ -127,7 +127,7 @@ static void con_write( const char* text, size_t len ) {
     fwrite( text, 1U, len, stdout );
 }
 
-// a line typed on a terminal comes in as UTF-8 and is converted (in place) to ISO-8859-15; from a pipe it stays as it is
+// a line typed on a terminal comes in as UTF-8 and is converted (in place) to ISO-8859-15; from a pipe it stays as it is (con_getline() does it)
 static size_t con_utf8_input( char* line, size_t len ) {
     if ( !isatty( 0 ) ) {
         return len;
@@ -165,6 +165,8 @@ static void con_report( struct _repl_t* repl, const char* text ) {
     fputs( text, stderr );
 }
 
+static ssize_t con_getline( char** line, size_t* cap, size_t maxlen );
+
 // INPUT: a line from standard input; the prompt has been printed already, so it is flushed first
 static char* con_input( struct _vm_t* vm, void* usrdata, int channel ) {
     (void) vm; (void) usrdata;
@@ -174,7 +176,7 @@ static char* con_input( struct _vm_t* vm, void* usrdata, int channel ) {
     fflush( stdout );
     con_set_raw( false );
     char* line = 0; size_t cap = 0;
-    ssize_t n = getline( &line, &cap, stdin );
+    ssize_t n = con_getline( &line, &cap, 1023U );
     if ( n < 0 ) {
         free( line );
         clearerr( stdin );
@@ -183,7 +185,6 @@ static char* con_input( struct _vm_t* vm, void* usrdata, int channel ) {
     while ( n > 0 && ( line[ n - 1 ] == '\n' || line[ n - 1 ] == '\r' ) ) {
         line[ --n ] = '\0';
     }
-    con_utf8_input( line, (size_t) n );
     return line;
 }
 
@@ -196,6 +197,7 @@ static char* con_input( struct _vm_t* vm, void* usrdata, int channel ) {
 
 #define CON_ESCWAIT     50      // ms to wait for the rest of an escape sequence
 
+static bool con_wantctrl = false;       // the line editor wants the control codes (Ctrl-A, Ctrl-E, ...), too
 static char con_pend[ KEYSEQ_MAXLEN * 2 ];
 static size_t con_pendpos = 0, con_pendlen = 0;
 
@@ -309,6 +311,9 @@ static int con_readkey( bool wait ) {
             }
             continue;
         }
+        if ( c < 0x20 && con_wantctrl ) {
+            return c;
+        }
         if ( c >= 0x80 ) {
             if ( !isatty( 0 ) ) {
                 return c;                       // from a pipe: the byte as it is
@@ -334,6 +339,103 @@ static int con_readkey( bool wait ) {
             return 0;
         }
     }
+}
+
+// -- the line editor ---------------------------------------------------------------------------
+//
+// On a terminal the BASIC prompt and INPUT read their lines here instead of letting the terminal do it (its line mode echoes a cursor key as
+// "^[[A"). It does what the window's line input (sdlscr_lineinput() in sdlscreen.c) does, nothing more: the printable characters are typed at the
+// end of the line, BACKSPACE takes the last one back, RETURN accepts the line; every other key (cursor keys, DELETE, function keys, control codes,
+// TAB, ESC) is ignored, and the line has a limit (255 characters at the prompt, 1023 for INPUT). The one addition is Ctrl-D on an empty line: the
+// end of the input, as on any terminal (the window has a close button instead). Assumes one column per character and a line that does not wrap.
+
+#define CON_PROMPTMAX   255U        // the window's prompt buffer (engine1999.c)
+#define CON_INPUTMAX    1023U       // the window's INPUT buffer (host_input() in engine1999.c)
+
+// a line (ISO-8859-15, without the line end) or 0 at the end of the input / Break
+static char* con_readline( size_t maxlen ) {
+    char* buf = (char*) malloc( maxlen + 1U );
+    size_t len = 0;
+    if ( buf == 0 ) {
+        return 0;
+    }
+    con_wantctrl = true;
+    for (;;) {
+        fflush( stdout );
+        int k = con_readkey( true );
+        if ( k < 0 || ( k == 4 && len == 0 ) ) {
+            con_wantctrl = false;
+            free( buf );
+            fputc( '\n', stdout );
+            return 0;
+        }
+        if ( k == 13 ) {
+            break;
+        }
+        if ( k == 033 ) {
+            // a cursor / function key: the rest of its sequence is waiting in con_pend (see con_readkey): it is dropped with it
+            char seq[KEYSEQ_MAXLEN];
+            size_t n = 1U;
+            seq[0] = 033;
+            while ( con_pendpos + n - 1U < con_pendlen && n + 1U < sizeof(seq) ) {
+                seq[n] = con_pend[ con_pendpos + n - 1U ];
+                ++n;
+            }
+            int key, mods;
+            int r = keyseq_parse( seq, n, &key, &mods );
+            if ( r > 0 ) {
+                con_pendpos += (size_t) r - 1U;
+            }
+            continue;
+        }
+        if ( k == 8 ) {
+            if ( len > 0 ) {
+                --len;
+                fputs( "\b \b", stdout );
+            }
+            continue;
+        }
+        if ( ( k >= 32 && k < 127 ) || k >= 160 ) {
+            if ( len < maxlen ) {
+                buf[len++] = (char) k;
+                con_write( buf + len - 1U, 1U );
+            }
+        }
+    }
+    con_wantctrl = false;
+    fputc( '\n', stdout );
+    buf[len] = '\0';
+    return buf;
+}
+
+// getline() for the lines from standard input: on a terminal (both ways) through the line editor (at most maxlen characters), otherwise the lines
+// as they come (from a terminal's input converted from UTF-8 to ISO-8859-15, from a pipe unchanged). Returns the length, -1 at the end of the input.
+static ssize_t con_getline( char** line, size_t* cap, size_t maxlen ) {
+    if ( isatty( 0 ) && isatty( 1 ) ) {
+        con_set_raw( true );
+        char* l = con_readline( maxlen );
+        con_set_raw( false );
+        if ( l == 0 ) {
+            return -1;
+        }
+        size_t n = strlen( l );
+        if ( *cap < n + 2U ) {
+            char* p = (char*) realloc( *line, n + 2U );
+            if ( p == 0 ) {
+                free( l );
+                return -1;
+            }
+            *line = p; *cap = n + 2U;
+        }
+        memcpy( *line, l, n + 1U );
+        free( l );
+        return (ssize_t) n;
+    }
+    ssize_t n = getline( line, cap, stdin );
+    if ( n > 0 ) {
+        n = (ssize_t) con_utf8_input( *line, (size_t) n );
+    }
+    return n;
 }
 
 static int con_getkey( struct _vm_t* vm, void* usrdata, int channel ) {
@@ -448,14 +550,13 @@ static void con_repl( repl_t* repl, bool interactive ) {
     for (;;) {
         fflush( stdout );
         con_set_raw( false );
-        ssize_t n = getline( &line, &cap, stdin );
+        ssize_t n = con_getline( &line, &cap, 255U );
         if ( n < 0 ) {
             break;
         }
         while ( n > 0 && ( line[ n - 1 ] == '\n' || line[ n - 1 ] == '\r' ) ) {
             line[ --n ] = '\0';
         }
-        con_utf8_input( line, (size_t) n );
         const char* p = line;
         while ( *p == ' ' || *p == '\t' ) {
             ++p;

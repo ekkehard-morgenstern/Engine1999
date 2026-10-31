@@ -26,10 +26,16 @@
               Germany, Europe
 */
 
+#define _XOPEN_SOURCE 700           // posix_openpt() and friends for the terminal tests
 #include "stdtypes.h"
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <poll.h>
+#include <signal.h>
+#include <sys/ioctl.h>
+#include <time.h>
 
 /*
 Automated test of the console host (engine1999c.c): runs ./engine1999c in a temporary directory with a program file and / or text on
@@ -201,6 +207,99 @@ static void clean( void ) {
     }
 }
 
+
+// -- the line editor on a terminal: engine1999c runs on a pseudo terminal, keys are sent one step at a time -----------------------------------------
+
+// runs engine1999c on a pty, writes the steps (with a pause behind each), collects everything it writes; returns the exit status (-1: it did not end)
+static int run_pty( const char* const* steps, size_t nsteps, char* out, size_t outcap ) {
+    int master = posix_openpt( O_RDWR | O_NOCTTY );
+    if ( master < 0 || grantpt( master ) != 0 || unlockpt( master ) != 0 ) {
+        return -2;
+    }
+    const char* slave = ptsname( master );
+    pid_t pid = fork();
+    if ( pid < 0 || slave == 0 ) {
+        return -2;
+    }
+    if ( pid == 0 ) {
+        setsid();
+        int fd = open( slave, O_RDWR );
+        if ( fd < 0 ) {
+            _exit( 127 );
+        }
+        ioctl( fd, TIOCSCTTY, 0 );
+        dup2( fd, 0 ); dup2( fd, 1 ); dup2( fd, 2 );
+        if ( chdir( workdir ) != 0 ) {
+            _exit( 127 );
+        }
+        execl( exe, exe, (char*) 0 );
+        _exit( 127 );
+    }
+    size_t n = 0;
+    out[0] = '\0';
+    for ( size_t i = 0; i <= nsteps + 1U; ++i ) {       // (step 0 is the start: wait for the banner, the terminal must be in its raw mode before keys arrive)
+        if ( i >= 1U && i <= nsteps ) {
+            if ( write( master, steps[i - 1U], strlen( steps[i - 1U] ) ) < 0 ) { }
+        }
+        int quiet = 0;
+        for ( int ms = 0; ms < 5000 && quiet < 200; ms += 20 ) {       // collect until it has been quiet for 200 ms
+            struct pollfd pfd = { master, POLLIN, 0 };
+            int timeout = 20;
+            bool got_any = false;
+            while ( poll( &pfd, 1, timeout ) > 0 ) {                    // everything that is there
+                timeout = 0;
+                ssize_t got = read( master, out + n, outcap - 1U - n );
+                if ( got <= 0 ) {
+                    break;
+                }
+                got_any = true;
+                n += (size_t) got;
+                out[n] = '\0';
+            }
+            quiet = got_any ? 0 : quiet + 20;
+        }
+    }
+    int st = -1;
+    for ( int tries = 0; tries < 50; ++tries ) {
+        int w;
+        if ( waitpid( pid, &w, WNOHANG ) == pid ) {
+            st = WIFEXITED( w ) ? WEXITSTATUS( w ) : -1;
+            break;
+        }
+        struct timespec ts = { 0, 20000000L };
+        nanosleep( &ts, 0 );
+    }
+    if ( st == -1 ) {
+        kill( pid, SIGKILL );
+        waitpid( pid, 0, 0 );
+    }
+    close( master );
+    return st;
+}
+
+static bool pty_case( const char* name, const char* const* steps, size_t nsteps, const char* const* expect, size_t nexpect ) {
+    static char out[8192];
+    int st = run_pty( steps, nsteps, out, sizeof(out) );
+    bool ok = st == 0;
+    for ( size_t i = 0; i < nexpect && ok; ++i ) {
+        ok = strstr( out, expect[i] ) != 0;
+    }
+    ok = ok && strstr( out, "^[" ) == 0;        // no echo of an escape sequence by the terminal
+    printf( "%s  %s\n", ok ? "PASS" : "FAIL", name );
+    if ( !ok ) {
+        printf( "    status %d, output:\n", st );
+        for ( const char* p = out; *p; ++p ) {
+            if ( *p == 033 ) printf( "\\e" ); else if ( *p == '\r' ) printf( "\\r" ); else if ( *p == '\n' ) printf( "\\n\n" ); else putchar( *p );
+        }
+        printf( "\n    expected parts:" );
+        for ( size_t i = 0; i < nexpect; ++i ) {
+            printf( " [%s]", expect[i] );
+        }
+        printf( "\n" );
+    }
+    return ok;
+}
+
 int main( void ) {
     char cwd[900];
     if ( getcwd( cwd, sizeof(cwd) ) == 0 ) {
@@ -242,6 +341,34 @@ int main( void ) {
     }
 
     // cases that need more than a table row
+
+    // the line editor on a terminal (a pty): the same as the window's line input: typing, BACKSPACE and RETURN, every other key ignored (and no
+    // echo of an escape sequence by the terminal)
+    {
+        static const char* const steps1[] = { "PRINT 1", "\033[D", "\033[H", "\033[A", "\033[3~", "\033OP", "2", "\r", "\004" };
+        static const char* const exp1[] = { "\r\n12\r\nReady.\r\n" };
+        failed += !pty_case( "terminal: cursor and function keys are ignored", steps1, 9U, exp1, 1U );
+        static const char* const steps2[] = { "PRINT 15", "\177", "2", "\r", "\004" };
+        static const char* const exp2[] = { "\b \b", "\r\n12\r\n" };
+        failed += !pty_case( "terminal: BACKSPACE takes the last character back", steps2, 5U, exp2, 2U );
+        static const char* const steps3[] = { "PRINT \"\xc3\xa4\";LEN(\"\xc3\xa4\")", "\r", "\004" };
+        static const char* const exp3[] = { "\r\n\xc3\xa4" "1\r\n" };
+        failed += !pty_case( "terminal: ä is typed, echoed and one character long", steps3, 3U, exp3, 1U );
+        static const char* const steps4[] = { "PRINT 7\001\013\025\t\033", "8\r", "\004" };
+        static const char* const exp4[] = { "\r\n78\r\n" };
+        failed += !pty_case( "terminal: control codes, TAB and a lone ESC are ignored; Ctrl-D ends on an empty line", steps4, 3U, exp4, 1U );
+        static const char* const steps5[] = { "PRINT 5\004", "\r", "\004" };
+        static const char* const exp5[] = { "\r\n5\r\n" };
+        failed += !pty_case( "terminal: Ctrl-D does nothing in the middle of a line", steps5, 3U, exp5, 1U );
+        static char longline[400];
+        snprintf( longline, sizeof(longline), "PRINT 1%*s+2", 300, "" );
+        static const char* const steps6[] = { longline, "\r", "\004" };
+        static const char* const exp6[] = { "\r\n1\r\n" };
+        failed += !pty_case( "terminal: a line at the prompt is cut at 255 characters", steps6, 3U, exp6, 1U );
+        static const char* const steps7[] = { "10 INPUT A$\r", "RUN\r", "ab\033[D\xc3\xb6", "\r", "PRINT A$;LEN(A$)\r", "\004" };
+        static const char* const exp7[] = { "ab\xc3\xb6" "3\r\n" };
+        failed += !pty_case( "terminal: INPUT uses the editor", steps7, 6U, exp7, 1U );
+    }
     {
         char *out, *err; size_t outlen;
         // binary-safe output
