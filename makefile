@@ -74,7 +74,12 @@ sdltest2.o:	sdltest2.c $(LIBHDR)
 engine1999: engine1999.o $(LIBNAME)
 	$(CL) -o engine1999 engine1999.o $(LIBNAME) -lSDL2 -lrt -lm
 
-engine1999.o: engine1999.c $(LIBHDR)
+engine1999.o: engine1999.c $(LIBHDR) version.h
+
+# the version string comes from the newest version tag of git (bump_version.sh makes the tags); the header is regenerated when HEAD,
+# the log of commits or the tags change (and only rewritten if the string differs). Only engine1999.o includes it.
+version.h: tagtoverstr.sh $(wildcard .git/HEAD .git/logs/HEAD .git/refs/tags .git/packed-refs)
+	sh tagtoverstr.sh version.h
 
 basictest1: basictest1.o $(LIBNAME)
 	$(CL) -o basictest1 basictest1.o $(LIBNAME) -lm

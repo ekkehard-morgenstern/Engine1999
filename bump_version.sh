@@ -3,7 +3,8 @@
 #
 # Versions have the form vMAJOR.MINOR.BUILD (e.g. v0.0.8). The current version is the highest
 # such tag (version order). The tag is created on HEAD, so commit your work first.
-# (The build does not use the tag yet: the version is only the tag in git.)
+# The build picks the tag up automatically (tagtoverstr.sh -> version.h, see the makefile): the banner of engine1999,
+# "engine1999 --version" and "--engine1999-about" of built programs show it.
 #
 # Usage: ./bump_version.sh [options]
 #   (no option), --build   increase BUILD by one                      v0.0.8 -> v0.0.9

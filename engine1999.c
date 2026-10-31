@@ -36,6 +36,7 @@
 #include "gfxops.h"
 #include "gfxcore.h"
 #include "sdlutil.h"
+#include "version.h"
 
 static const char warranty[] =
 "  15. Disclaimer of Warranty.\n"
@@ -1274,7 +1275,7 @@ static void usage( FILE* out, const char* prog ) {
     for ( size_t i=0; i < sizeof(debugopts) / sizeof(debugopts[0]); ++i ) {
         fprintf( out, "  %-20s %s\n", debugopts[i].name, debugopts[i].help );
     }
-    fprintf( out, "\nOther:\n  %-20s %s\n", "-h, --help", "show this text" );
+    fprintf( out, "\nOther:\n  %-20s %s\n  %-20s %s\n", "--version", "show the version", "-h, --help", "show this text" );
 }
 
 // returns false if the command line is invalid or help was requested (the reason has been printed)
@@ -1284,6 +1285,10 @@ static bool parse_args( int argc, char** argv, bool* phelp ) {
         if ( strcmp( arg, "-h" ) == 0 || strcmp( arg, "--help" ) == 0 ) {
             *phelp = true;
             return false;
+        }
+        if ( strcmp( arg, "--version" ) == 0 ) {
+            printf( "Engine 1999 %s\n", ENGINE_VERSION );
+            exit( EXIT_SUCCESS );
         }
         bool found = false;
         for ( size_t j=0; j < sizeof(debugopts) / sizeof(debugopts[0]); ++j ) {
@@ -1313,7 +1318,7 @@ extern const unsigned char embedded_program_end[] __asm__( "_binary_program_e99_
 #define INFOCOLOR   6
 
 static const char about_text[] =
-    "Engine 1999 (c) Copyright 2026 Ekkehard Morgenstern.\n"
+    "Engine 1999 " ENGINE_VERSION " (c) Copyright 2026 Ekkehard Morgenstern.\n"
     "\n"
     "This program contains the runtime of Engine 1999, free software that is licensed under the GNU General\n"
     "Public License, version 3 or later, with the Engine1999 Runtime Exception (file LICENSE-EXCEPTION of\n"
@@ -1391,7 +1396,7 @@ int main( int argc, char** argv ) {
     init_host();
 
     sdlscr_printf( -1, -1, -1, TITLECOLOR, "%s",
-        "Engine 1999 (c) Copyright 2026 Ekkehard Morgenstern.\n"
+        "Engine 1999 " ENGINE_VERSION " (c) Copyright 2026 Ekkehard Morgenstern.\n"
     );
     sdlscr_printf( -1, -1, -1, INFOCOLOR, "%s",
         "This program comes with ABSOLUTELY NO WARRANTY; for details type 'SHOW WARRANTY'"

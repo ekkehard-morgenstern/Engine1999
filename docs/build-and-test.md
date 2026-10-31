@@ -40,6 +40,10 @@ printf '10 PRINT "HI";A$:LET B=1+2*3\n20 GOTO 10\n' | ./basictest2
 
 (`basictest*` read until EOF.) These test programs include `basic.h` and exercise `bastok.c` and the compiler; they read arbitrary-length lines with `getline`. Run under `valgrind --leak-check=full` to check the buffer code.
 
+## Version
+
+The version is the newest git tag of the form `vMAJOR.MINOR.BUILD` (`./bump_version.sh` makes it; `--show` prints the current one, `--dry-run` shows what would happen; it only creates a local tag, push it yourself). `make` runs `tagtoverstr.sh`, which writes `version.h` (`#define ENGINE_VERSION "..."`, git-ignored, only `engine1999.o` includes it): `v0.5.0` when HEAD is the tagged commit, `v0.5.0-3-g1a2b3c4` three commits after it, `untagged-1a2b3c4` before the first tag, `unknown` outside a git repository (an existing `version.h` is kept then, so a source archive can ship one). The header is regenerated when `.git/HEAD`, `.git/logs/HEAD`, the tags or `packed-refs` change and only rewritten if the string differs; since a commit changes the version, the next `make` recompiles `engine1999.o` and links `engine1999` again (nothing else). The version shows in the start banner, in `engine1999 --version` and in `--engine1999-about` of a built program (the version of its runtime). Shell instead of perl on purpose: perl is not needed to build.
+
 ## Font and colors
 
 `perl grammar.pl` (or `make grammar`) reads `bascomp.ebnf` and writes the quick reference `docs/grammar.md` and `docs/grammar.html`; `make grammar-check` (`perl grammar.pl --check`) fails if a grammar rule is used but not defined or if the two files are out of date. Not part of `make all` (it needs perl); run it whenever `bascomp.ebnf` changes.
