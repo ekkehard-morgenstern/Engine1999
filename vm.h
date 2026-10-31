@@ -154,6 +154,7 @@ typedef struct _vm_savedvar_t {
 } vm_savedvar_t;
 
 typedef struct _vm_context_t {
+    size_t          rsp;            // the return stack depth before the call (to unwind after an error)
     uint8_t         numsaved;
     vm_savedvar_t   saved[MAXPARAM];
 } vm_context_t;
@@ -251,6 +252,17 @@ typedef struct _vm_t {
     bool            irqpending;     // (internal) a timer is due but the program is not between two statements yet
     bool            irqsafe;        // (internal) a handler may be entered although the stack isn't empty (WAIT gave way to it)
     // I/O subsystem (docs/io-subsystem.md): the channels opened with OPEN, and the default driver of ADDRESS
+    // ON ERROR
+    bool            errset;         // a handler is set (and not running)
+    bool            errgosub;       // the handler was set with GOSUB
+    uint32_t        errtarget;      // its code address
+    bool            errinhandler;   // a GOSUB handler is running: errors are not caught
+    size_t          errrsp;         // the return stack depth below the handler's return address
+    bool            errcaught;      // (internal) vm_error() kept an error for the handler
+    char            errtext[160];   // (internal) that error
+    uint32_t        errtextline;
+    char            errlast[160];   // ERR$ and ERL: the last caught error
+    uint32_t        errlastline;
     iotab_t         io;
     struct _vm_field_t* fields;     // FIELD: the string variables bound to parts of the record buffers of random files
     size_t          numfields, capfields;

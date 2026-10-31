@@ -228,6 +228,8 @@
 #define TOK_RSET        UINT8_C(177)        // RSET keyword
 #define TOK_GETREC      UINT8_C(178)        // GETREC keyword
 #define TOK_PUTREC      UINT8_C(179)        // PUTREC keyword
+#define TOK_ERR         UINT8_C(180)        // ERR$ function
+#define TOK_ERL         UINT8_C(181)        // ERL function
 #define TOK_NONE        UINT8_C(255)        // no token (!)
 
 // -- buffers ---------------------------------------------------------------

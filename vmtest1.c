@@ -532,6 +532,21 @@ static const testcase_t cases[] = {
     { "file: forces a disk file", "10 ADDRESS MEM\n20 OPEN \"file:/nonexistent/x\" FOR INPUT AS #1", "? File not found in line 20\n" },
     { "ADDRESS before ELSE", "IF 0 THEN ADDRESS MEM ELSE PRINT 3", "3\n" },
     // phase 2: KILL, RENAME, MKDIR, CHDIR, SEEK and the sh / res / con drivers
+    // ON ERROR, ERR$, ERL
+    { "ON ERROR GOTO", "10 ON ERROR GOTO 100\n20 PRINT 1/0\n30 PRINT \"not here\"\n100 PRINT ERR$;ERL", "Division by zero20\n" },
+    { "ON ERROR GOSUB resumes behind the line", "10 ON ERROR GOSUB 100\n20 PRINT 1/0\n30 PRINT \"after\"\n40 END\n100 PRINT ERR$:RETURN", "Division by zero\nafter\n" },
+    { "ON ERROR OFF", "10 ON ERROR GOTO 100\n20 ON ERROR OFF\n30 PRINT 1/0\n100 PRINT \"caught\"", "? Division by zero in line 30\n" },
+    { "the GOTO trap is off inside the handler", "10 ON ERROR GOTO 100\n20 PRINT 1/0\n100 PRINT \"h\":PRINT 1/0", "h\n? Division by zero in line 100\n" },
+    { "the GOSUB trap is on again after RETURN", "10 ON ERROR GOSUB 100\n20 PRINT 1/0\n30 PRINT 1/0\n40 END\n100 PRINT ERR$;ERL:RETURN", "Division by zero20\nDivision by zero30\n" },
+    { "an error in a GOSUB handler is not caught", "10 ON ERROR GOSUB 100\n20 PRINT 1/0\n30 END\n100 PRINT 1/0:RETURN", "? Division by zero in line 100\n" },
+    { "the data stack is cleaned up", "10 ON ERROR GOSUB 100\n20 A=5+(1/0)\n30 PRINT A;\"ok\"\n40 END\n100 RETURN", "0ok\n" },
+    { "an error inside a function gives the parameters back", "10 DEF FN F(X)=1/X\n20 X=7\n30 ON ERROR GOSUB 100\n40 PRINT FN F(0)\n50 PRINT X\n60 END\n100 PRINT ERR$:RETURN", "Division by zero\n7\n" },
+    { "ERR$ and ERL without an error", "PRINT ERR$;ERL", "0\n" },
+    { "ERL in an expression", "PRINT ERL+1", "1\n" },
+    { "other errors are caught, too", "10 ON ERROR GOTO 100\n20 OPEN \"mem:nope\" FOR INPUT AS #1\n100 PRINT ERR$;ERL", "File not found20\n" },
+    { "ON ERROR needs GOTO, GOSUB or OFF", "ON ERROR", "? GOTO, GOSUB or OFF expected\n" },
+    { "ON ERROR in a loop of handlers", "10 ON ERROR GOSUB 100\n20 FOR I=1 TO 3\n30 PRINT 1/0\n40 NEXT I\n50 PRINT N\n60 END\n100 N=N+1:RETURN", "3\n" },
+    { "ON x GOTO still works", "10 X=2:ON X GOTO 100,200\n100 PRINT \"a\":END\n200 PRINT \"b\"", "b\n" },
     // phase 3: random access, FOR UPDATE, the play and tcp drivers
     { "random file: PUTREC and GETREC", "10 OPEN \"mem:r\" FOR RANDOM AS #1 LEN=10\n20 FIELD #1,4 AS N$,6 AS C$\n30 LSET N$=\"Bob\":LSET C$=\"Paris\"\n40 PUTREC #1,1\n50 LSET N$=\"Eve\":RSET C$=\"Rome\"\n60 PUTREC #1,2\n70 GETREC #1,1:PRINT N$;\"|\";C$;\"|\"\n80 GETREC #1,2:PRINT N$;\"|\";C$;\"|\"\n90 PRINT LOF(1);LOC(1)", "Bob |Paris |\nEve |  Rome|\n202\n" },
     { "random file: records in any order", "10 OPEN \"R\",#1,\"mem:r\",4\n20 FIELD #1,4 AS A$\n30 LSET A$=\"c\":PUTREC #1,3\n40 LSET A$=\"a\":PUTREC #1,1\n50 GETREC #1,3:PRINT A$;\"|\":GETREC #1,1:PRINT A$;\"|\":PRINT LOF(1)", "c   |\na   |\n12\n" },

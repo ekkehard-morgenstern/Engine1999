@@ -401,6 +401,9 @@ const char* cgen_opcode_name( uint16_t opcode ) {
         case INS_ADDR:      return "ADDR";
         case INS_ADRS:      return "ADRS";
         case INS_FOP:       return "FOP";
+        case INS_ERRT:      return "ERRT";
+        case INS_ERL:       return "ERL";
+        case INS_ERRS:      return "ERRS";
         case INS_FLD:       return "FLD";
         case INS_LRS:       return "LRS";
         case INS_REC:       return "REC";
@@ -1063,6 +1066,18 @@ bool cgen_gen_rec( codegen_t* cgen, uint16_t put ) {
     return cgen_gen_ins12( cgen, INS_REC, false, true, put );
 }
 
+bool cgen_gen_errt( codegen_t* cgen, uint16_t param ) {
+    return cgen_gen_ins12( cgen, INS_ERRT, false, true, param );
+}
+
+bool cgen_gen_erl( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_ERL, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_errs( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_ERRS, false, false, UINT16_C(0) );
+}
+
 bool cgen_gen_adrs( codegen_t* cgen ) {
     return cgen_gen_ins12( cgen, INS_ADRS, false, false, UINT16_C(0) );
 }
@@ -1528,6 +1543,8 @@ UNEXP:      return cgen_unexpected_node( comp );
         case TOK_LOC:   generator = cgen_gen_locn; break;
         case TOK_INPUT: generator = cgen_gen_inpd; break;
         case TOK_ADDRESS: generator = cgen_gen_adrs; break;
+        case TOK_ERR:   generator = cgen_gen_errs; break;
+        case TOK_ERL:   generator = cgen_gen_erl; break;
         default:
             goto UNEXP;
     }
@@ -2951,6 +2968,7 @@ bool cgen_from_stmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         case NT_CHAINSTMT:  return cgen_from_chainstmt( cgen, comp, node );
         case NT_FILESSTMT:  return cgen_from_filesstmt( cgen, comp, node );
         case NT_TIMERSTMT:  return cgen_from_timerstmt( cgen, comp, node );
+        case NT_ERRTRAPSTMT: return cgen_from_errtrapstmt( cgen, comp, node );
         case NT_OPENSTMT:   return cgen_from_openstmt( cgen, comp, node );
         case NT_CLOSESTMT:  return cgen_from_closestmt( cgen, comp, node );
         case NT_ADDRESSSTMT: return cgen_from_addressstmt( cgen, comp, node );

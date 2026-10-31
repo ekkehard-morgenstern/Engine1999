@@ -74,6 +74,10 @@ void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem ) {
     vm->deletelines = 0;
     vm->renumber = 0;
     iotab_init( &vm->io );
+    vm->errset = vm->errgosub = vm->errinhandler = vm->errcaught = false;
+    vm->errtarget = 0; vm->errrsp = 0;
+    vm->errlast[0] = vm->errtext[0] = '\0';
+    vm->errlastline = vm->errtextline = 0;
     vm->fields = 0;
     vm->numfields = vm->capfields = 0;
     snprintf( vm->addrcur, sizeof(vm->addrcur), "file" );
@@ -145,7 +149,16 @@ void cleanup_vm( vm_t* vm ) {
     vm->rstack = 0; vm->rsp = vm->rmax = 0;
 }
 
-static bool vm_error( vm_t* vm, const char* text ) {
+static void vm_report_error( vm_t* vm, const char* text ) {
+    if ( vm->errcaught ) {
+        return;                 // the first error of a failing statement counts
+    }
+    if ( vm->errset && !vm->errinhandler && strcmp( text, "Break" ) != 0 && strcmp( text, "Step limit exceeded" ) != 0 ) {
+        snprintf( vm->errtext, sizeof(vm->errtext), "%s", text );       // ON ERROR: kept for the handler, not reported
+        vm->errtextline = vm->line != LINENO_NONE ? (uint32_t) vm->line : 0U;
+        vm->errcaught = true;
+        return;
+    }
     char buf[160];
     if ( vm->line != LINENO_NONE ) {
         snprintf( buf, sizeof(buf), "? %s in line %u\n", text, (unsigned) vm->line );
@@ -157,6 +170,11 @@ static bool vm_error( vm_t* vm, const char* text ) {
     } else {
         fputs( buf, stderr );
     }
+}
+
+// always false, so that callers can write "return vm_error( ... )" (the compiler knows the value)
+static bool vm_error( vm_t* vm, const char* text ) {
+    vm_report_error( vm, text );
     return false;
 }
 
@@ -206,6 +224,8 @@ static bool vm_dpush_num( vm_t* vm, double num ) {
 
 static bool vm_dpop( vm_t* vm, vmval_t* pval ) {
     if ( vm->dsp == 0 ) {
+        pval->isstr = false;        // (a defined value for the callers that look at it anyway)
+        pval->num = 0.0;
         return vm_error( vm, "Data stack underflow" );
     }
     *pval = vm->dstack[ --vm->dsp ];
@@ -214,6 +234,7 @@ static bool vm_dpop( vm_t* vm, vmval_t* pval ) {
 
 static bool vm_dpop_num( vm_t* vm, double* pnum ) {
     vmval_t v;
+    *pnum = 0.0;
     if ( !vm_dpop( vm, &v ) ) {
         return false;
     }
@@ -227,7 +248,7 @@ static bool vm_dpop_num( vm_t* vm, double* pnum ) {
 
 // pops a string; the caller owns the result
 static bool vm_dpop_str( vm_t* vm, char** pstr ) {
-    vmval_t v;
+    vmval_t v; v.isstr = false; v.num = 0.0;
     if ( !vm_dpop( vm, &v ) ) {
         return false;
     }
@@ -324,7 +345,7 @@ static const uint8_t* vm_segment( const vm_t* vm, bool code, uint32_t* psize ) {
 
 // pops an address from the data stack and checks that <size> bytes are available there
 static bool vm_pop_address( vm_t* vm, bool code, uint32_t size, const uint8_t** pmem, uint32_t* pavail ) {
-    double addr;
+    double addr = 0.0;
     if ( !vm_dpop_num( vm, &addr ) ) {
         return false;
     }
@@ -888,6 +909,7 @@ static bool vm_call_function( vm_t* vm, uint16_t funcoffs, uint32_t retaddr ) {
     }
     vm_context_t* ctx = &vm->ctxs[ vm->nctx ];
     ctx->numsaved = 0;
+    ctx->rsp = vm->rsp;
     for ( uint8_t i=0; i < numparams; ++i ) {
         uint8_t ptype = 0; const char* name = 0; uint16_t poffs = VAROFFS_NONE;
         if ( !vmem_get_func_param( vm->vmem, funcoffs, i, &ptype, &name ) ) {
@@ -1243,6 +1265,7 @@ static bool vm_list_files( vm_t* vm ) {
 }
 
 static bool vm_music_play( void* usrdata, int voice, const char* text, char* err, size_t errsz );
+static bool vm_set_errtrap( vm_t* vm, uint16_t param );
 static bool vm_interrupt_hook( void* usrdata );
 
 // forgets the FIELD bindings of a channel (-1 = all)
@@ -2226,6 +2249,12 @@ static bool vm_system_function( vm_t* vm, uint16_t opcode ) {
             text[n] = '\0';
             return vm_push_string( vm, text );
         }
+        case INS_ERL:
+            return vm_dpush_num( vm, (double) vm->errlastline );
+        case INS_ERRS: {
+            char* s = vm_new_string( vm, vm->errlast, strlen( vm->errlast ) );
+            return s && vm_push_string( vm, s );
+        }
         case INS_ADRS: {
             char* s = vm_new_string( vm, vm->addrcur, strlen( vm->addrcur ) );
             return s && vm_push_string( vm, s );
@@ -2508,7 +2537,7 @@ static bool vm_step( vm_t* vm ) {
         case INS_WIAE: return vm_write_elem( vm, param16, VARTYPEV_INT );
         case INS_WSAE: return vm_write_elem( vm, param16, VARTYPEV_STR );
         case INS_TI: case INS_INKY: case INS_FRE: case INS_STRS: case INS_CHRS: case INS_ASC: case INS_LEN: case INS_VAL:
-        case INS_PLNG: case INS_RMN: case INS_EOFN: case INS_LOFN: case INS_LOCN: case INS_INPD: case INS_ADRS:
+        case INS_PLNG: case INS_RMN: case INS_EOFN: case INS_LOFN: case INS_LOCN: case INS_INPD: case INS_ADRS: case INS_ERL: case INS_ERRS:
         case INS_BINS: case INS_QUAS: case INS_OCTS: case INS_HEXS: case INS_DECS:
         case INS_LFTS: case INS_RGTS: case INS_MIDS:
             return vm_system_function( vm, opcode );
@@ -2527,6 +2556,7 @@ static bool vm_step( vm_t* vm ) {
         case INS_INPW: return vm_input_whole( vm );
         case INS_ADDR: return vm_set_address( vm, param16 != 0 );
         case INS_FOP: return vm_file_operation( vm, param16 );
+        case INS_ERRT: return vm_set_errtrap( vm, param16 );
         case INS_FLD: return vm_field( vm, param16 );
         case INS_LRS: return vm_lset( vm, param16 );
         case INS_REC: return vm_record( vm, param16 != 0 );
@@ -2601,6 +2631,72 @@ bool vm_run( vm_t* vm ) {
     return vm_run_at( vm, UINT32_C(0) );
 }
 
+// ERRT: ON ERROR GOSUB (1) / GOTO (2) with the handler's address on the return stack, or OFF (0)
+static bool vm_set_errtrap( vm_t* vm, uint16_t param ) {
+    if ( param == 0 ) {
+        vm->errset = false;
+        return true;
+    }
+    uint32_t target = 0;
+    if ( !vm_rpop( vm, &target ) ) {
+        return false;
+    }
+    vm->errset = true;
+    vm->errgosub = param == 1;
+    vm->errtarget = target;
+    vm->errinhandler = false;
+    return true;
+}
+
+// the first code address of the line after the current one (the end of the code if there is none)
+static uint32_t vm_next_line_addr( const vm_t* vm ) {
+    const codegen_t* cg = vm->cgen;
+    if ( vm->line != LINENO_NONE ) {
+        for ( size_t i=0; i < cg->numlineaddrs; ++i ) {
+            if ( cg->lineaddrs[i].lineno > (uint32_t) vm->line ) {
+                return cg->lineaddrs[i].addr;
+            }
+        }
+    }
+    return cg->codesize;
+}
+
+// an error was caught by vm_error(): forget what the failing statement left, set ERR$ / ERL and enter the handler
+static bool vm_trap_error( vm_t* vm ) {
+    vm->errcaught = false;
+    memcpy( vm->errlast, vm->errtext, sizeof(vm->errlast) );
+    vm->errlastline = vm->errtextline;
+    while ( vm->dsp ) {
+        vmval_t* v = &vm->dstack[ --vm->dsp ];
+        if ( v->isstr ) {
+            free( v->str );
+        }
+    }
+    if ( vm->nctx ) {       // the error happened inside a function: give the parameter variables back
+        size_t rsp = vm->ctxs[0].rsp;
+        while ( vm->nctx ) {
+            vm_context_t* ctx = &vm->ctxs[ --vm->nctx ];
+            for ( uint8_t i = ctx->numsaved; i > 0; --i ) {
+                vm_savedvar_t* sv = &ctx->saved[ i - 1U ];
+                vm_set_value( vm, sv->varoffs, sv->vartype, 0, 0, sv->value );
+            }
+            ctx->numsaved = 0;
+        }
+        vm->rsp = rsp;
+    }
+    vm->errinhandler = true;        // an error in the handler's first instruction is an ordinary error
+    if ( vm->errgosub ) {
+        vm->errrsp = vm->rsp;
+        if ( !vm_rpush( vm, vm_next_line_addr( vm ) ) ) {
+            return false;
+        }
+    } else {
+        vm->errset = false;         // GOTO: the trap is off until ON ERROR is executed again
+        vm->errinhandler = false;
+    }
+    return vm_branch_to( vm, vm->errtarget );
+}
+
 bool vm_begin( vm_t* vm, uint32_t start ) {
     vm_clear_stacks( vm );
     vm_clear_request( vm );
@@ -2609,6 +2705,9 @@ bool vm_begin( vm_t* vm, uint32_t start ) {
     vm->irqdepth = 0;
     vm->irqsafe = false;
     vm->irqpending = false;
+    vm->errset = vm->errgosub = vm->errinhandler = vm->errcaught = false;      // the error handler ends with the run, too
+    vm->errlast[0] = '\0';
+    vm->errlastline = 0;
     vm->pc = start;
     vm->line = LINENO_NONE;
     vm->column = 0;
@@ -2645,16 +2744,29 @@ bool vm_resume( vm_t* vm, bool singlestep ) {
         if ( vm->interrupt && steps % VM_INTERRUPT_STEPS == 0 && vm_interrupted( vm ) ) {
             return vm_error( vm, "Break" );
         }
+        if ( vm->errinhandler && vm->rsp <= vm->errrsp ) {
+            vm->errinhandler = false;       // the GOSUB handler has returned: the trap is on again
+        }
         if ( vm->numtimers > 0 && !vm_irq_poll( vm, steps ) ) {
+            if ( vm->errcaught && vm_trap_error( vm ) ) {
+                continue;
+            }
             return false;
         }
-        if ( !vm_step( vm ) ) {
-            return false;
-        }
-        if ( vm->iofail != 0 ) {
+        bool stepok = vm_step( vm );
+        if ( stepok && vm->iofail != 0 ) {
             const char* text = vm->iofail;
             vm->iofail = 0;
-            return vm_error( vm, text );
+            stepok = vm_error( vm, text );
+        }
+        if ( vm->errcaught ) {
+            if ( !vm_trap_error( vm ) ) {
+                return false;
+            }
+            continue;
+        }
+        if ( !stepok ) {
+            return false;
         }
         if ( vm->brkhit ) {
             vm->brkhit = false;

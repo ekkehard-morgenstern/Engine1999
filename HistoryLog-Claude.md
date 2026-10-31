@@ -13,14 +13,11 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-- **I/O subsystem, phase 3 and a proposal for drivers in BASIC** (owner's request: "proceed with phase 3, add the play and tcp drivers, make a suggestion about driver development support in BASIC")
-  - **Random access and update** (`iodev.[ch]`): `IOMODE_RANDOM`, `iotab_open_ex()` (record length, buffer of spaces), `iotab_getrec/putrec/recbuf`, `LOC` of a random file = last record; the `file` driver opens READ|WRITE as `r+b`/`w+b`, `mem` does not truncate for update and `mem_seek` extends a writable file with zeros.
-  - **Drivers**: `play` (line buffered, `iodev_set_music()` hook, the parser's message is passed on), `tcp` (client: `getaddrinfo`, non-blocking connect with a 10 s limit, `poll` slices that call the `iodev_set_interrupt()` hook for Break, `MSG_NOSIGNAL`); `iodev_fail()` carries a driver's own message ("Break", "Connection reset") to the channel functions; `iodev_known_error()` shared by open and the file operations.
-  - **Language**: tokens `FIELD LSET RSET GETREC PUTREC` 175..179, `NT_RECORDSTMT 0x6F` (`RECK_*`), `comp_eat_recordstmt()`, `cgen_from_recordstmt()`, instructions `FLD 0x156`, `LRS 0x157`, `REC 0x158`; `OPEN` parses `FOR RANDOM|UPDATE`, `LEN = n` and a record length in the short form (extra branch, 4th operand of `OPEN`).
-  - **VM** (`vm.[ch]`): `vm_field_t` bindings (`vm_t.fields`, dropped by `CLOSE`), `vm_field/vm_lset/vm_record`, `vm_music_play`, `vm_interrupt_hook`; a stale `fields` pointer crashed `vmtest1` once (not initialized in `init_vm`), fixed.
-  - **Tests**: `iotest1` 128 -> 172 (records on mem and disk, play hook, a real loopback TCP connection with a listening socket in the test, refused/unknown host), `vmtest1` 633 -> 656, `repltest1` 275 -> 277; one old expectation changed (the OPEN mode error text); all suites pass, `iotest1`/`vmtest1`/`repltest1` clean under valgrind.
-  - **Proposal** (not implemented): `docs/io-subsystem.md`, "Drivers written in BASIC": `DRIVER "name","PREFIX"` with labelled handlers, predefined `D*` variables, `DRIVERS`, `DRIVER TRACE`, examples, open questions; roadmap entry.
-  - **Docs**: `docs/io-subsystem.md`, `docs/basic-language.md`, `docs/compiler-and-vm.md`, `docs/roadmap.md`, `instset.h`, `bascomp.ebnf`, `CLAUDE.md`, `SESSION.md`.
+- **`ON ERROR GOTO|GOSUB`, `ON ERROR OFF`, `ERR$`, `ERL`** (owner's request; the owner corrected "ERL$" to the numeric `ERL`; drivers written in BASIC were put on the roadmap as postponed)
+  - **Language**: tokens `ERR` 180 / `ERL` 181 (`bastok.[ch]`, highlighted as functions), `ON ERROR` parsed in `comp_eat_onstmt()` (`ERROR` is an identifier recognized after `ON`), `NT_ERRTRAPSTMT 0x70` (`ERRT_*`), `cgen_from_errtrapstmt()` (`cgenctl.c`, the target address goes on the return stack like `AFTER`), instructions `ERRT 0x159`, `ERL 0x15A`, `ERRS 0x15B`, `bascomp.ebnf`.
+  - **VM** (`vm.[ch]`): `vm_error()` split into `vm_report_error()` (keeps the error for the handler instead of printing it when a handler is set; Break and the step limit excluded) and a one-line `vm_error()` that returns `false` (needed: gcc otherwise reports dozens of "maybe uninitialized" errors); `vm_resume()` checks `errcaught` after each step; `vm_trap_error()` empties the data stack, unwinds function contexts (`vm_context_t.rsp`), sets ERR$/ERL and enters the handler; GOSUB handlers return to the next line (`vm_next_line_addr()`) and re-arm the trap after `RETURN`; `vm_dpop*` initialize their outputs.
+  - **Tests**: `vmtest1` 656 -> 670 (+13), `repltest1` 277 -> 278; all other suites pass; `vmtest1`/`repltest1` clean under valgrind.
+  - **Docs**: `docs/basic-language.md` ("Error handling"), `docs/compiler-and-vm.md`, `docs/roadmap.md` (new section 9: `RESUME` etc.; drivers in BASIC marked postponed), `instset.h`, `SESSION.md`.
 
 ## Log
 
@@ -487,3 +484,16 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
   - **VM** (`vm.c`): `vm_file_operation()`; `vm_console_key()` factored out of `vm_get_key()`; `vm_con_write/getkey` hand the host callbacks to the `con` driver (registered in `vm_open_channel()`).
   - **Tests**: `iotest1` 81 -> 128 (mem rename/kill/seek, file mkdir/chdir/rename/kill/seek in a scratch directory, sh read and write, res, con with hooks), `vmtest1` 612 -> 633 (+21), `repltest1` 273 -> 275; all other tests unchanged and passing; `iotest1`, `vmtest1`, `repltest1` clean under valgrind.
   - **Docs**: `docs/io-subsystem.md` ("What phase 2 does, exactly", driver table, phases), `docs/basic-language.md`, `docs/compiler-and-vm.md`, `docs/roadmap.md`, `bascomp.ebnf`, `CLAUDE.md`, `SESSION.md`.
+
+### b5e747c — 2026-10-31 02:37:09 +0100 — "I/O subsystem (phase 3, additional drivers) created by Claude Code"
+25 files, +1198/-52.
+- **I/O subsystem, phase 3 and a proposal for drivers in BASIC** (owner's request: "proceed with phase 3, add the play and tcp drivers, make a suggestion about driver development support in BASIC")
+  - **Random access and update** (`iodev.[ch]`): `IOMODE_RANDOM`, `iotab_open_ex()` (record length, buffer of spaces), `iotab_getrec/putrec/recbuf`, `LOC` of a random file = last record; the `file` driver opens READ|WRITE as `r+b`/`w+b`, `mem` does not truncate for update and `mem_seek` extends a writable file with zeros.
+  - **Drivers**: `play` (line buffered, `iodev_set_music()` hook, the parser's message is passed on), `tcp` (client: `getaddrinfo`, non-blocking connect with a 10 s limit, `poll` slices that call the `iodev_set_interrupt()` hook for Break, `MSG_NOSIGNAL`); `iodev_fail()` carries a driver's own message ("Break", "Connection reset") to the channel functions; `iodev_known_error()` shared by open and the file operations.
+  - **Language**: tokens `FIELD LSET RSET GETREC PUTREC` 175..179, `NT_RECORDSTMT 0x6F` (`RECK_*`), `comp_eat_recordstmt()`, `cgen_from_recordstmt()`, instructions `FLD 0x156`, `LRS 0x157`, `REC 0x158`; `OPEN` parses `FOR RANDOM|UPDATE`, `LEN = n` and a record length in the short form (extra branch, 4th operand of `OPEN`).
+  - **VM** (`vm.[ch]`): `vm_field_t` bindings (`vm_t.fields`, dropped by `CLOSE`), `vm_field/vm_lset/vm_record`, `vm_music_play`, `vm_interrupt_hook`; a stale `fields` pointer crashed `vmtest1` once (not initialized in `init_vm`), fixed.
+  - **Tests**: `iotest1` 128 -> 172 (records on mem and disk, play hook, a real loopback TCP connection with a listening socket in the test, refused/unknown host), `vmtest1` 633 -> 656, `repltest1` 275 -> 277; one old expectation changed (the OPEN mode error text); all suites pass, `iotest1`/`vmtest1`/`repltest1` clean under valgrind.
+  - **Proposal** (not implemented): `docs/io-subsystem.md`, "Drivers written in BASIC": `DRIVER "name","PREFIX"` with labelled handlers, predefined `D*` variables, `DRIVERS`, `DRIVER TRACE`, examples, open questions; roadmap entry.
+  - **Docs**: `docs/io-subsystem.md`, `docs/basic-language.md`, `docs/compiler-and-vm.md`, `docs/roadmap.md`, `instset.h`, `bascomp.ebnf`, `CLAUDE.md`, `SESSION.md`.
+
+(The later commit `5bee279`, "added a simple file test in BASIC", is the owner's own: `residue/filetest1.e99`.)

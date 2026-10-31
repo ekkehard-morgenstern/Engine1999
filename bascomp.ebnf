@@ -83,11 +83,11 @@ sys-str-fn-2-arg-call := ( TOK_BIN | TOK_QUA | TOK_OCT | TOK_DEC | TOK_HEX ) TOK
 sys-num-fn-arg-call := sys-num-fn-1-arg-call .
 sys-str-fn-arg-call := sys-str-fn-2-arg-call .
 
-sys-noarg-num-name := TOK_TI .
+sys-noarg-num-name := TOK_TI | TOK_ERL .
 sys-noarg-num := sys-noarg-num-name .
 sys-noarg-num-call := sys-no-arg-num .
 
-sys-noarg-str-name := TOK_INKEY | TOK_ADDRESS .
+sys-noarg-str-name := TOK_INKEY | TOK_ADDRESS | TOK_ERR .
 sys-noarg-str := sys-noarg-str-name TOK_STRING .
 sys-noarg-str-call := sys-no-arg-str .
 
@@ -293,6 +293,9 @@ address-stmt := TOK_ADDRESS [ identifier | str-expr ] .
 record-stmt := TOK_FIELD chan-spec TOK_COMMA num-expr identifier-AS str-var-ref { TOK_COMMA num-expr identifier-AS str-var-ref }
              | ( TOK_LSET | TOK_RSET ) str-var-ref TOK_EQ str-expr
              | ( TOK_GETREC | TOK_PUTREC ) chan-spec [ TOK_COMMA num-expr ] .
+-- ON ERROR GOTO / GOSUB sets a handler for run time errors, ON ERROR OFF clears it (ERROR is an identifier recognized after ON).
+-- ERR$ is the text of the last error, ERL its line number.
+on-error-stmt := TOK_ON identifier-ERROR ( goto-kw goto-target | TOK_OFF ) .
 fileop-stmt := ( TOK_KILL | TOK_MKDIR | TOK_CHDIR ) str-expr | TOK_RENAME str-expr TOK_TO str-expr | TOK_SEEK chan-spec TOK_COMMA num-expr .
 timer-stmt := ( TOK_AFTER | TOK_EVERY ) ( TOK_OFF [ num-expr ] | num-expr [ TOK_COMMA num-expr ] goto-kw goto-target ) .
 prog-stmt := load-stmt | run-stmt | merge-stmt | chain-stmt | files-stmt | timer-stmt | list-stmt | new-stmt | clear-stmt | delete-stmt | renum-stmt | edit-stmt | monitor-stmt | sound-stmt |

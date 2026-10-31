@@ -438,6 +438,15 @@ The 4096 extended instructions are as follows:
                             Parameter 0 = GETREC, 1 = PUTREC. rec = 0: the record behind the last one. GETREC then assigns the
                             slices to the bound variables (up to the first zero byte). Errors: "Input past end", "Bad record
                             number", "Bad file mode" (not a random file).
+    0001 01011001       ERRT - set the error handler ( -- ) C=0 P=1
+                            ON ERROR. Parameter 0 = OFF; 1 = GOSUB, 2 = GOTO: the handler's code address is on the return stack
+                            (like TMR). A run time error then does not end the run: the data stack and open function calls are
+                            dropped, ERR$ / ERL are set and the handler runs. GOTO: the handler is entered and the trap is off
+                            until ON ERROR is executed again; GOSUB: the return address is the start of the next program line,
+                            the trap is off while the handler runs and on again after its RETURN. Not caught: Break.
+    0001 01011010       ERL  - line number of the last error ( -- n ) C=0 P=0
+    0001 01011011       ERRS - text of the last error ( -- s ) C=0 P=0
+                            ERR$: e.g. "Division by zero" (without "?" and the line).
 
 */
 
@@ -579,5 +588,8 @@ The 4096 extended instructions are as follows:
 #define INS_FLD         UINT16_C(0X156)
 #define INS_LRS         UINT16_C(0X157)
 #define INS_REC         UINT16_C(0X158)
+#define INS_ERRT        UINT16_C(0X159)
+#define INS_ERL         UINT16_C(0X15A)
+#define INS_ERRS        UINT16_C(0X15B)
 
 #endif

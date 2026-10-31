@@ -637,6 +637,10 @@ Explanation of node types:
 #define RECK_RSET               UINT8_C(3)      // RSET a$ = expr
 #define RECK_GETREC             UINT8_C(4)      // GETREC #n [, rec]: the channel specifier, an optional numeric expression
 #define RECK_PUTREC             UINT8_C(5)      // PUTREC #n [, rec]
+#define NT_ERRTRAPSTMT          UINT8_C(0X70)   // ON ERROR GOTO / GOSUB / OFF (data: 1 byte, ERRT_*; 1 branch, the goto target, unless OFF)
+#define ERRT_OFF                UINT8_C(0)
+#define ERRT_GOSUB              UINT8_C(1)
+#define ERRT_GOTO               UINT8_C(2)
 #define NT_FILESSTMT            UINT8_C(0X69)   // FILES statement (0 or 1 string branch: the file name pattern)
 #define NT_CHAINSTMT            UINT8_C(0X68)   // CHAIN statement (data: 1 byte, 1 = MERGE; the file name, then an optional goto target)
 

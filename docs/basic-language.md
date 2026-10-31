@@ -193,6 +193,31 @@ Channel 0 is the screen and keyboard; channels 1 to 255 are opened by `OPEN`. `L
 
 **File extensions:** `SAVE "name"` writes the binary (tokenized) form and appends `.e99` to a name without extension; `SAVE "name",A` writes the ASCII listing and appends `.bas`. A name with an extension is used as it is. `LOAD` recognizes both forms by the header, whatever the extension is.
 
+## Error handling: `ON ERROR GOTO|GOSUB`, `ON ERROR OFF`, `ERR$`, `ERL`
+
+```
+10 ON ERROR GOTO 900           ' or ON ERROR GOSUB 900 / a label; ON ERROR OFF clears the handler
+20 OPEN "data.txt" FOR INPUT AS #1
+...
+900 PRINT "Error: ";ERR$;" in line ";ERL
+```
+
+A run time error does not end the program while a handler is set: the data stack and open function calls are dropped (the parameter
+variables of a function that failed get their old values back), `ERR$` becomes the error text without the `?` and the line
+("Division by zero", "File not found", ...), `ERL` the number of the line (0 if the error happened in a direct mode line), and the
+handler runs.
+
+- **`ON ERROR GOTO target`**: the program continues at the target. The trap is then **off** (an error in the handler is an ordinary,
+  fatal error, which prevents endless loops); execute `ON ERROR GOTO` again to set it anew.
+- **`ON ERROR GOSUB target`**: the handler is a subroutine. `RETURN` continues with **the first line after the line that failed**
+  (not the failed statement: the rest of that line is skipped; there is no `RESUME` yet). The trap is off while the handler runs and
+  on again after its `RETURN`. In a direct mode line there is no next line: the run ends after the handler.
+- **`ON ERROR OFF`**: errors are fatal again. The handler is also cleared when the program ends (`RUN`, `NEW`, `LOAD`, `CHAIN`, and after
+  every direct mode line).
+- `ERR$` and `ERL` keep the last error until the run ends. Not caught: Break (ESC) and the step limit of the tests. Syntax errors
+  are found before the program runs and are not run time errors.
+- `ERROR` is recognized after `ON` only (so a variable named `ERROR` still works elsewhere); `ERR` and `ERL` are reserved words now.
+
 ## Sound: `SOUND`, `PLAY`, `WAVE`, `TEMPO`, `PLAYING()`
 
 Statements of the language (`bascomp.ebnf` `sound-stmt`, `cgenprog.c`); everything is queued and returns at once. Channels are 1..8.

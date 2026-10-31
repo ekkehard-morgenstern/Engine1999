@@ -1840,7 +1840,7 @@ bool comp_eat_sysnoargnumcall( compiler_t* comp, node_t** pnode ) {
     // sys-noarg-num := sys-noarg-num-name .
     // sys-noarg-num-call := sys-no-arg-num .
     uint8_t tok = comp->currtok;
-    if ( tok != TOK_TI || !comp_fetchtok( comp ) ) {
+    if ( ( tok != TOK_TI && tok != TOK_ERL ) || !comp_fetchtok( comp ) ) {
         return false;
     }
     if ( !comp_create_node( comp, pnode, NT_SYSNOARGNUMCALL, UINT8_C(0), UINT16_C(1), &tok ) || *pnode == NODE_NONE ) {
@@ -1855,7 +1855,7 @@ bool comp_eat_sysnoargstrcall( compiler_t* comp, node_t** pnode ) {
     // sys-noarg-str := sys-noarg-str-name TOK_STRING .
     // sys-noarg-str-call := sys-no-arg-str .
     uint8_t tok = comp->currtok;
-    if ( ( tok != TOK_INKEY && tok != TOK_ADDRESS ) || !comp_fetchtok( comp ) ) {
+    if ( ( tok != TOK_INKEY && tok != TOK_ADDRESS && tok != TOK_ERR ) || !comp_fetchtok( comp ) ) {
         return false;
     }
     if ( comp->currtok != TOK_STRING || !comp_fetchtok( comp ) ) {
@@ -4479,6 +4479,41 @@ bool comp_eat_onstmt( compiler_t* comp, node_t** pnode ) {
     // on-stmt := TOK_ON num-expr goto-kw goto-target { TOK_COMMA goto-target } .
     if ( comp->currtok != TOK_ON || !comp_fetchtok( comp ) ) {
         return false;
+    }
+    if ( comp->currtok == TOK_NUMIDENT && strcmp( comp->param, "ERROR" ) == 0 ) {
+        // ON ERROR GOTO target | ON ERROR GOSUB target | ON ERROR OFF  (ERROR is recognized here, it is not a reserved word)
+        if ( !comp_fetchtok( comp ) ) {
+            return false;
+        }
+        uint8_t kind = ERRT_OFF;
+        node_t* target = NODE_NONE;
+        if ( comp->currtok == TOK_OFF ) {
+            if ( !comp_fetchtok( comp ) ) {
+                return false;
+            }
+        } else {
+            uint8_t gotok = TOK_EOL;
+            if ( !comp_eat_gotokw( comp, &gotok ) ) {
+                comp_error( comp, "GOTO, GOSUB or OFF expected" );
+                return false;
+            }
+            kind = gotok == TOK_GOTO ? ERRT_GOTO : ERRT_GOSUB;
+            if ( !comp_eat_gototarget( comp, &target ) || target == NODE_NONE ) {
+                comp_error( comp, "Jump target expected" );
+                return false;
+            }
+        }
+        /*
+            NT_ERRTRAPSTMT  ON ERROR statement
+                data: 1 byte, ERRT_* kind
+                branches: the goto target (not with ERRT_OFF)
+        */
+        if ( !( target == NODE_NONE ? comp_create_node( comp, pnode, NT_ERRTRAPSTMT, UINT8_C(0), UINT16_C(1), &kind ) :
+                comp_create_node( comp, pnode, NT_ERRTRAPSTMT, UINT8_C(1), UINT16_C(1), &kind, target ) ) || *pnode == NODE_NONE ) {
+            out_of_memory( comp );
+            return false;
+        }
+        return true;
     }
     node_t* expr = NODE_NONE;
     if ( !comp_eat_numexpr( comp, &expr ) || expr == NODE_NONE ) {
