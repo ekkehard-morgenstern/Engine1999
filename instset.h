@@ -447,6 +447,13 @@ The 4096 extended instructions are as follows:
     0001 01011010       ERL  - line number of the last error ( -- n ) C=0 P=0
     0001 01011011       ERRS - text of the last error ( -- s ) C=0 P=0
                             ERR$: e.g. "Division by zero" (without "?" and the line).
+    0001 01011100       PACK - number to a binary string ( n -- s ) C=0 P=1
+                            MKI$ / MKL$ / MKS$ / MKD$, parameter 1 / 2 / 3 / 4: 2, 4, 4 or 8 bytes, big endian (network byte
+                            order). 1 = 16 bit integer (n in -32768..65535, the low 16 bits), 2 = 32 bit integer (n in
+                            -2147483648..4294967295), 3 = IEEE 754 single, 4 = IEEE 754 double. Else "Illegal argument" (Overflow).
+    0001 01011101       UNPK - binary string to a number ( s -- n ) C=0 P=1
+                            CVI / CVL / CVS / CVD (parameter 1..4): reads the first 2, 4, 4 or 8 bytes of the string (more are
+                            ignored, fewer are "Illegal argument"). CVI and CVL are signed (use "AND 65535" for the unsigned value).
 
 */
 
@@ -591,5 +598,7 @@ The 4096 extended instructions are as follows:
 #define INS_ERRT        UINT16_C(0X159)
 #define INS_ERL         UINT16_C(0X15A)
 #define INS_ERRS        UINT16_C(0X15B)
+#define INS_PACK        UINT16_C(0X15C)
+#define INS_UNPK        UINT16_C(0X15D)
 
 #endif

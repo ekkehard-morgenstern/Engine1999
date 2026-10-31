@@ -1797,6 +1797,90 @@ static bool vm_record( vm_t* vm, bool put ) {
     return true;
 }
 
+// PACK ( n -- s ): MKI$ (1), MKL$ (2), MKS$ (3), MKD$ (4): big endian (network byte order)
+static bool vm_pack( vm_t* vm, uint16_t kind ) {
+    double num;
+    if ( !vm_dpop_num( vm, &num ) ) {
+        return false;
+    }
+    uint64_t bits = 0;
+    size_t size = 0;
+    switch ( kind ) {
+        case 1:
+            if ( !( num > -32769.0 && num < 65536.0 ) ) {
+                return vm_error( vm, "Illegal argument" );
+            }
+            size = 2U;
+            bits = (uint64_t)(uint16_t)( num < 0.0 ? (int32_t) num : (int32_t)(uint32_t) num );
+            break;
+        case 2:
+            if ( !( num > -2147483649.0 && num < 4294967296.0 ) ) {
+                return vm_error( vm, "Illegal argument" );
+            }
+            size = 4U;
+            bits = (uint64_t)(uint32_t)( num < 0.0 ? (int64_t) num : (int64_t) num );
+            break;
+        case 3: {
+            float f = (float) num;
+            uint32_t u;
+            memcpy( &u, &f, sizeof(u) );
+            size = 4U;
+            bits = u;
+            break;
+        }
+        case 4:
+            memcpy( &bits, &num, sizeof(bits) );
+            size = 8U;
+            break;
+        default:
+            return vm_error( vm, "Internal error (bad PACK kind)" );
+    }
+    char buf[8];
+    for ( size_t i=0; i < size; ++i ) {
+        buf[i] = (char)( bits >> ( 8U * ( size - 1U - i ) ) );
+    }
+    return vm_push_bytes( vm, buf, size );
+}
+
+// UNPK ( s -- n ): CVI (1), CVL (2), CVS (3), CVD (4)
+static bool vm_unpack( vm_t* vm, uint16_t kind ) {
+    char* s = 0; size_t len = 0;
+    if ( !vm_dpop_bstr( vm, &s, &len ) ) {
+        return false;
+    }
+    static const size_t sizes[5] = { 0, 2, 4, 4, 8 };
+    if ( kind < 1 || kind > 4 ) {
+        free( s );
+        return vm_error( vm, "Internal error (bad UNPK kind)" );
+    }
+    size_t size = sizes[kind];
+    if ( len < size ) {
+        free( s );
+        return vm_error( vm, "Illegal argument" );
+    }
+    uint64_t bits = 0;
+    for ( size_t i=0; i < size; ++i ) {
+        bits = ( bits << 8U ) | (uint8_t) s[i];
+    }
+    free( s );
+    double r = 0.0;
+    switch ( kind ) {
+        case 1: r = (double)(int16_t)(uint16_t) bits; break;
+        case 2: r = (double)(int32_t)(uint32_t) bits; break;
+        case 3: {
+            uint32_t u = (uint32_t) bits;
+            float f;
+            memcpy( &f, &u, sizeof(f) );
+            r = (double) f;
+            break;
+        }
+        default:
+            memcpy( &r, &bits, sizeof(r) );
+            break;
+    }
+    return vm_dpush_num( vm, r );
+}
+
 // SFX n, a$ ( n s -- ): parses the string and stores it as effect n
 static bool vm_sfx_define( vm_t* vm ) {
     double n = 0; char* str = 0;
@@ -2610,6 +2694,8 @@ static bool vm_step( vm_t* vm ) {
         case INS_ADDR: return vm_set_address( vm, param16 != 0 );
         case INS_FOP: return vm_file_operation( vm, param16 );
         case INS_ERRT: return vm_set_errtrap( vm, param16 );
+        case INS_PACK: return vm_pack( vm, param16 );
+        case INS_UNPK: return vm_unpack( vm, param16 );
         case INS_FLD: return vm_field( vm, param16 );
         case INS_LRS: return vm_lset( vm, param16 );
         case INS_REC: return vm_record( vm, param16 != 0 );

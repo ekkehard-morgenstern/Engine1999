@@ -230,6 +230,14 @@
 #define TOK_PUTREC      UINT8_C(179)        // PUTREC keyword
 #define TOK_ERR         UINT8_C(180)        // ERR$ function
 #define TOK_ERL         UINT8_C(181)        // ERL function
+#define TOK_MKI         UINT8_C(182)        // MKI$ function (16 bit integer to a 2 byte string)
+#define TOK_MKL         UINT8_C(183)        // MKL$ function (32 bit integer, 4 bytes)
+#define TOK_MKS         UINT8_C(184)        // MKS$ function (single precision float, 4 bytes)
+#define TOK_MKD         UINT8_C(185)        // MKD$ function (double precision float, 8 bytes)
+#define TOK_CVI         UINT8_C(186)        // CVI function (2 byte string to a number)
+#define TOK_CVL         UINT8_C(187)        // CVL function
+#define TOK_CVS         UINT8_C(188)        // CVS function
+#define TOK_CVD         UINT8_C(189)        // CVD function
 #define TOK_NONE        UINT8_C(255)        // no token (!)
 
 // -- buffers ---------------------------------------------------------------

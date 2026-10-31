@@ -404,6 +404,8 @@ const char* cgen_opcode_name( uint16_t opcode ) {
         case INS_ERRT:      return "ERRT";
         case INS_ERL:       return "ERL";
         case INS_ERRS:      return "ERRS";
+        case INS_PACK:      return "PACK";
+        case INS_UNPK:      return "UNPK";
         case INS_FLD:       return "FLD";
         case INS_LRS:       return "LRS";
         case INS_REC:       return "REC";
@@ -1078,6 +1080,15 @@ bool cgen_gen_errs( codegen_t* cgen ) {
     return cgen_gen_ins12( cgen, INS_ERRS, false, false, UINT16_C(0) );
 }
 
+bool cgen_gen_mki( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_PACK, false, true, UINT16_C(1) ); }
+bool cgen_gen_mkl( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_PACK, false, true, UINT16_C(2) ); }
+bool cgen_gen_mks( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_PACK, false, true, UINT16_C(3) ); }
+bool cgen_gen_mkd( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_PACK, false, true, UINT16_C(4) ); }
+bool cgen_gen_cvi( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_UNPK, false, true, UINT16_C(1) ); }
+bool cgen_gen_cvl( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_UNPK, false, true, UINT16_C(2) ); }
+bool cgen_gen_cvs( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_UNPK, false, true, UINT16_C(3) ); }
+bool cgen_gen_cvd( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_UNPK, false, true, UINT16_C(4) ); }
+
 bool cgen_gen_adrs( codegen_t* cgen ) {
     return cgen_gen_ins12( cgen, INS_ADRS, false, false, UINT16_C(0) );
 }
@@ -1462,12 +1473,12 @@ UNEXP:  return cgen_unexpected_node( comp );
 
 bool cgen_from_sysfncall( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     /*
-        sys-num-fn-1-arg-call := ( TOK_ASC | TOK_VAL | TOK_LEN ) TOK_LPAREN str-expr TOK_RPAREN |
+        sys-num-fn-1-arg-call := ( TOK_ASC | TOK_VAL | TOK_LEN | TOK_CVI | TOK_CVL | TOK_CVS | TOK_CVD ) TOK_LPAREN str-expr TOK_RPAREN |
                                    ( TOK_FRE | TOK_PLAYING | TOK_REMAIN | TOK_EOF | TOK_LOF | TOK_LOC ) TOK_LPAREN num-expr TOK_RPAREN .
 
         sys-str-fn-2-arg-call := ( TOK_BIN | TOK_QUA | TOK_OCT | TOK_DEC | TOK_HEX ) TOK_STRING TOK_LPAREN num-expr
                                       [ TOK_COMMA num-expr ] TOK_RPAREN |
-                                 ( TOK_STR | TOK_CHR ) TOK_STRING TOK_LPAREN num-expr TOK_RPAREN |
+                                 ( TOK_STR | TOK_CHR | TOK_MKI | TOK_MKL | TOK_MKS | TOK_MKD ) TOK_STRING TOK_LPAREN num-expr TOK_RPAREN |
                                  ( TOK_LEFT | TOK_RIGHT ) TOK_STRING TOK_LPAREN str-expr TOK_COMMA num-expr TOK_RPAREN |
                                  TOK_MID TOK_STRING TOK_LPAREN str-expr TOK_COMMA num-expr [ TOK_COMMA num-expr ] TOK_RPAREN .
 
@@ -1545,6 +1556,14 @@ UNEXP:      return cgen_unexpected_node( comp );
         case TOK_ADDRESS: generator = cgen_gen_adrs; break;
         case TOK_ERR:   generator = cgen_gen_errs; break;
         case TOK_ERL:   generator = cgen_gen_erl; break;
+        case TOK_MKI:   generator = cgen_gen_mki; break;
+        case TOK_MKL:   generator = cgen_gen_mkl; break;
+        case TOK_MKS:   generator = cgen_gen_mks; break;
+        case TOK_MKD:   generator = cgen_gen_mkd; break;
+        case TOK_CVI:   generator = cgen_gen_cvi; break;
+        case TOK_CVL:   generator = cgen_gen_cvl; break;
+        case TOK_CVS:   generator = cgen_gen_cvs; break;
+        case TOK_CVD:   generator = cgen_gen_cvd; break;
         default:
             goto UNEXP;
     }

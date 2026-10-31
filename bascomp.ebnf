@@ -84,6 +84,8 @@ sys-num-fn-arg-call := sys-num-fn-1-arg-call .
 sys-str-fn-arg-call := sys-str-fn-2-arg-call .
 
 sys-noarg-num-name := TOK_TI | TOK_ERL .
+-- MKI$ MKL$ MKS$ MKD$ pack a number into a binary string (2, 4, 4, 8 bytes, big endian), CVI CVL CVS CVD unpack it again
+-- (the grammar is that of STR$/CHR$ resp. ASC/VAL/LEN, see sys-str-fn-2-arg-call and sys-num-fn-1-arg-call).
 sys-noarg-num := sys-noarg-num-name .
 sys-noarg-num-call := sys-no-arg-num .
 

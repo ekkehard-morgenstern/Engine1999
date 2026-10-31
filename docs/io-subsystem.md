@@ -145,8 +145,8 @@ ADDRESS [driver]     ADDRESS$                     chooses / returns the default 
   `SEEK` is in bytes. Records are independent of `PRINT #`, which is not meant for random files.
 - Assigning to a bound variable with plain `A$ = ...` changes only the variable (the link is not GW-BASIC's pointer into the
   buffer): use `LSET`/`RSET` for what `PUTREC` should write. A part keeps its full width with
-  any bytes in it (strings are binary-safe); packing numbers into a part (`MKI$`/`CVI` and friends) is the next step, until then
-  store numbers as text (`STR$`, `VAL`).
+  any bytes in it (strings are binary-safe); numbers go into a part with `MKI$`/`MKL$`/`MKS$`/`MKD$` and come out with
+  `CVI`/`CVL`/`CVS`/`CVD` (big endian).
 - **`play:`**: `OPEN "play:" FOR OUTPUT AS #1` (or `"play:3"` for voice 3; voices 1..8, default 1). Every line written to the channel (ended by a
   newline, or by `CLOSE`) is a `PLAY` music string and is queued on that voice at once, exactly like `PLAY a$` with one voice, so
   `PRINT #1,"T120 O4 C D E"` plays. A bad string is an error with the music parser's message ("Unknown music command 'Z'"). Voices

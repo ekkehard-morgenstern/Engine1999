@@ -1555,7 +1555,7 @@ bool comp_eat_strusrfncall( compiler_t* comp, node_t** pnode ) {
 
 bool comp_eat_sysnumfn1argcall( compiler_t* comp, node_t** pnode ) {
     /*
-        sys-num-fn-1-arg-call := ( TOK_ASC | TOK_VAL | TOK_LEN ) TOK_LPAREN str-expr TOK_RPAREN |
+        sys-num-fn-1-arg-call := ( TOK_ASC | TOK_VAL | TOK_LEN | TOK_CVI | TOK_CVL | TOK_CVS | TOK_CVD ) TOK_LPAREN str-expr TOK_RPAREN |
                                  ( TOK_FRE | TOK_PLAYING | TOK_REMAIN | TOK_EOF | TOK_LOF | TOK_LOC ) TOK_LPAREN num-expr TOK_RPAREN .
         NT_SYSNUMFUNCARGCALL    numeric system function call with arguments
             data:
@@ -1564,7 +1564,7 @@ bool comp_eat_sysnumfn1argcall( compiler_t* comp, node_t** pnode ) {
                 - 1 or more branches of expression list (depending on function)
     */
     uint8_t tok = comp->currtok;
-    if ( tok == TOK_ASC || tok == TOK_VAL || tok == TOK_LEN ) {
+    if ( tok == TOK_ASC || tok == TOK_VAL || tok == TOK_LEN || tok == TOK_CVI || tok == TOK_CVL || tok == TOK_CVS || tok == TOK_CVD ) {
         if ( !comp_fetchtok( comp ) ) {
             return false;
         }
@@ -1616,7 +1616,7 @@ bool comp_eat_sysstrfn2argcall( compiler_t* comp, node_t** pnode ) {
     /*
         sys-str-fn-2-arg-call := ( TOK_BIN | TOK_QUA | TOK_OCT | TOK_DEC | TOK_HEX ) TOK_STRING TOK_LPAREN num-expr
                                     [ TOK_COMMA num-expr ] TOK_RPAREN |
-                                 ( TOK_STR | TOK_CHR ) TOK_STRING TOK_LPAREN num-expr TOK_RPAREN |
+                                 ( TOK_STR | TOK_CHR | TOK_MKI | TOK_MKL | TOK_MKS | TOK_MKD ) TOK_STRING TOK_LPAREN num-expr TOK_RPAREN |
                                  ( TOK_LEFT | TOK_RIGHT ) TOK_STRING TOK_LPAREN str-expr TOK_COMMA num-expr TOK_RPAREN |
                                  TOK_MID TOK_STRING TOK_LPAREN str-expr TOK_COMMA num-expr [ TOK_COMMA num-expr ] TOK_RPAREN .
 
@@ -1678,8 +1678,8 @@ OOM:        out_of_memory( comp );
             return false;
         }
         return true;
-    } else if ( tok == TOK_STR || tok == TOK_CHR ) {
-        // ( TOK_STR | TOK_CHR ) TOK_STRING TOK_LPAREN num-expr TOK_RPAREN
+    } else if ( tok == TOK_STR || tok == TOK_CHR || tok == TOK_MKI || tok == TOK_MKL || tok == TOK_MKS || tok == TOK_MKD ) {
+        // ( TOK_STR | TOK_CHR | TOK_MKI | TOK_MKL | TOK_MKS | TOK_MKD ) TOK_STRING TOK_LPAREN num-expr TOK_RPAREN
         if ( !comp_fetchtok( comp ) ) {
             return false;
         }

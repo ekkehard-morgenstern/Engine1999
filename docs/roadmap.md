@@ -126,4 +126,5 @@ Listed in full in `SESSION.md` ("Design decisions I took"). The ones most likely
 - [x] `ON ERROR GOTO|GOSUB`, `ON ERROR OFF`, `ERR$`, `ERL` (done, 2026-10-31)
 - [ ] `RESUME` / `RESUME NEXT` / `RESUME line` (retry or skip the failed *statement*; needs statement boundaries in the code), `ERR` as a number, `ON ERROR GOTO 0`, `ERROR n` (raise an error by hand)
 - [x] **Binary-safe strings** (done, 2026-10-31; see `docs/basic-language.md` "Binary strings"): zero bytes in strings, control code glyphs 0..31 in the font, length based print path
-- [ ] **Number packing for binary strings and records**: `MKI$`/`MKL$`/`MKS$`/`MKD$` and `CVI`/`CVL`/`CVS`/`CVD` (big endian like the rest of the system? or GW-BASIC's little endian: to decide), built on `vm_push_bytes()`; possibly `SPC`-style `STRING$(n,c)` and `SWAP`-free helpers
+- [x] **Number packing** (done, 2026-10-31): `MKI$`/`MKL$`/`MKS$`/`MKD$` and `CVI`/`CVL`/`CVS`/`CVD`, big endian (network byte order; owner decision)
+- [ ] Helpers for binary data: `STRING$(n,c)`, `SPACE$`, `HEX` to bytes / bytes to `HEX$` dump, unsigned `CVI`/`CVL` variants, 24 bit and 64 bit integers; byte-wise `ANDS`/`ORS`

@@ -186,7 +186,7 @@ OPEN "play:2" FOR OUTPUT AS #3: PRINT #3,"T120 C D E"      (every line is a PLAY
 OPEN "tcp:example.com:80" FOR UPDATE AS #4: PRINT #4,"GET /": LINE INPUT #4,A$     (a network connection)
 ```
 
-Strings are binary-safe (see "Binary strings"); until the number packing functions exist, store numbers in records with `STR$`/`VAL`. Details, errors and a proposal for drivers written
+Strings are binary-safe (see "Binary strings"); put numbers into records with `MKI$`/`MKD$` and friends (or `STR$`/`VAL` for text records). Details, errors and a proposal for drivers written
 in BASIC: [io-subsystem.md](io-subsystem.md).
 
 Channel 0 is the screen and keyboard; channels 1 to 255 are opened by `OPEN`. `LOAD`, `SAVE`, `MERGE`, `CHAIN` and `FILES` take driver names too (`SAVE "mem:game"`, `FILES "mem:"`); the default extensions apply to the path. `WRITE` is `PRINT` with strings in double quotes and commas between the items; `LINE INPUT` takes the whole line; `INPUT #n` splits it into fields and goes on with the next line when it runs out. Lines are written with a newline and read with a newline or a carriage return and a newline. A restart (`RUN`, `NEW`, `LOAD`, `CHAIN`) closes all channels. See io-subsystem.md for the exact rules, the error messages and what comes next (`KILL`, `RENAME`, `SEEK`, more drivers, random access records, the open sandboxing question).
@@ -237,8 +237,29 @@ A string may contain any bytes, zero included (`CHR$(0)` .. `CHR$(255)`); its le
   arguments) a zero byte is refused: "Illegal argument (zero byte in string)".
 - Host callbacks: `vm_t.printn` / `repl_t.printn` (optional) receive output with zero bytes; without it the zero bytes are left out of
   what `print` gets.
-- Number packing (`MKI$`, `CVI`, ... to put numbers into binary strings and records) is the planned next step; the VM has the helper
-  `vm_push_bytes()` for it.
+- Number packing: see below.
+
+### Number packing: `MKI$ MKL$ MKS$ MKD$`, `CVI CVL CVS CVD`
+
+```
+A$=MKI$(300)                  ' 2 bytes: 1, 44
+PRINT CVI(A$)                 ' 300
+LSET F$=MKD$(2.5):PUTREC #1   ' a number in a random file record
+PRINT #1,MKL$(IP);MKI$(PORT); ' a binary message for a tcp: channel (the final ; avoids the line feed)
+```
+
+| Function | Result | Range of the argument |
+|---|---|---|
+| `MKI$(n)` | 2 bytes, 16 bit integer | -32768 .. 65535 (the low 16 bits are stored) |
+| `MKL$(n)` | 4 bytes, 32 bit integer | -2147483648 .. 4294967295 |
+| `MKS$(x)` | 4 bytes, IEEE 754 single | any (rounded to single precision) |
+| `MKD$(x)` | 8 bytes, IEEE 754 double | any |
+| `CVI(a$)` `CVL(a$)` `CVS(a$)` `CVD(a$)` | the number | the string needs at least 2 / 4 / 4 / 8 bytes; more are ignored, fewer are "Illegal argument" |
+
+All of them are **big endian** (network byte order, unlike GW-BASIC, which is little endian), so a packed value can go straight into a
+`tcp:` message or be read from one. `CVI` and `CVL` return signed values; for the unsigned one use `AND`:
+`CVI(a$) AND 65535`, `CVL(a$) AND 4294967295`. A value outside the range of `MKI$`/`MKL$` is "Illegal argument" (GW-BASIC: Overflow).
+`MKI`, `MKL`, `MKS`, `MKD`, `CVI`, `CVL`, `CVS`, `CVD` are reserved words now.
 
 ## Sound: `SOUND`, `PLAY`, `WAVE`, `TEMPO`, `PLAYING()`
 
