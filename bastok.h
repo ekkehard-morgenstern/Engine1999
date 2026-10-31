@@ -268,6 +268,26 @@
 #define TOK_EXIT        UINT8_C(217)        // EXIT keyword (leave a loop)
 #define TOK_LEAVE       UINT8_C(218)        // LEAVE keyword (the same as EXIT)
 #define TOK_ITERATE     UINT8_C(219)        // ITERATE keyword (go on with the next pass of a loop)
+#define TOK_FLOOR       UINT8_C(220)        // FLOOR function (the same as INT)
+#define TOK_CEIL        UINT8_C(221)        // CEIL function
+#define TOK_LOG2        UINT8_C(222)        // LOG2 function
+#define TOK_LOG10       UINT8_C(223)        // LOG10 function
+#define TOK_TIME        UINT8_C(224)        // TIME$ function
+#define TOK_DATE        UINT8_C(225)        // DATE$ function
+#define TOK_DATETIME    UINT8_C(226)        // DATETIME$ function
+#define TOK_IMP         UINT8_C(227)        // IMP operator
+#define TOK_NIMP        UINT8_C(228)        // NIMP operator
+#define TOK_EQV         UINT8_C(229)        // EQV operator (the same as XNOR)
+#define TOK_NEQV        UINT8_C(230)        // NEQV operator (the same as XOR)
+#define TOK_SHL         UINT8_C(231)        // SHL operator (the same as LSHIFT)
+#define TOK_SHR         UINT8_C(232)        // SHR operator (logical shift right)
+#define TOK_ASL         UINT8_C(233)        // ASL operator (the same as LSHIFT)
+#define TOK_ASR         UINT8_C(234)        // ASR operator (arithmetic shift right, the same as RSHIFT)
+#define TOK_PROC        UINT8_C(235)        // PROC keyword (procedure definition)
+#define TOK_FUNC        UINT8_C(236)        // FUNC keyword (function definition)
+#define TOK_CALL        UINT8_C(237)        // CALL keyword (procedure call)
+#define TOK_LOCAL       UINT8_C(238)        // LOCAL keyword (local variables of a PROC / FUNC)
+#define TOK_RESUME      UINT8_C(239)        // RESUME keyword (continue after an error)
 #define TOK_NONE        UINT8_C(255)        // no token (!)
 
 // -- buffers ---------------------------------------------------------------

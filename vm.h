@@ -169,8 +169,8 @@ typedef struct _vm_savedvar_t {
 
 typedef struct _vm_context_t {
     size_t          rsp;            // the return stack depth before the call (to unwind after an error)
-    uint8_t         numsaved;
-    vm_savedvar_t   saved[MAXPARAM];
+    vm_savedvar_t*  saved;          // the parameters and LOCAL variables of the call, in the order they were saved (heap, reused)
+    size_t          numsaved, maxsaved;
 } vm_context_t;
 
 // The host's sound output (SOUND, PLAY, ... , PLAYING; all callbacks required when a vm_t.sound is given). Channels are 0..7
@@ -289,6 +289,10 @@ typedef struct _vm_t {
     uint32_t        errtarget;      // its code address
     bool            errinhandler;   // a GOSUB handler is running: errors are not caught
     size_t          errrsp;         // the return stack depth below the handler's return address
+    uint32_t        steppc;         // (internal) the address of the instruction vm_step() is executing
+    uint32_t        errpc;          // (internal) ... when the error was caught
+    int             resumestate;    // RESUME: 0 = no error pending, 1 = the failed statement can be continued, 2 = it can't (error in a call)
+    uint32_t        resumestart, resumeend;     // the code addresses RESUME and RESUME NEXT go to
     bool            errcaught;      // (internal) vm_error() kept an error for the handler
     char            errtext[160];   // (internal) that error
     uint32_t        errtextline;

@@ -1593,7 +1593,8 @@ OOM:        out_of_memory( comp );
         return true;
     } else if ( tok == TOK_FRE || tok == TOK_PLAYING || tok == TOK_REMAIN || tok == TOK_EOF || tok == TOK_LOF || tok == TOK_LOC ||
                 tok == TOK_INT || tok == TOK_FIX || tok == TOK_ABS || tok == TOK_SGN || tok == TOK_SQR || tok == TOK_SIN || tok == TOK_COS ||
-                tok == TOK_TAN || tok == TOK_ATN || tok == TOK_EXP || tok == TOK_LOG || tok == TOK_RND ) {
+                tok == TOK_TAN || tok == TOK_ATN || tok == TOK_EXP || tok == TOK_LOG || tok == TOK_RND || tok == TOK_FLOOR || tok == TOK_CEIL ||
+                tok == TOK_LOG2 || tok == TOK_LOG10 ) {
         bool fetched = false;
         if ( tok == TOK_RND ) {
             // RND, RND(x): without an argument it is RND(1)
@@ -1879,7 +1880,8 @@ bool comp_eat_sysnoargstrcall( compiler_t* comp, node_t** pnode ) {
     // sys-noarg-str := sys-noarg-str-name TOK_STRING .
     // sys-noarg-str-call := sys-no-arg-str .
     uint8_t tok = comp->currtok;
-    if ( ( tok != TOK_INKEY && tok != TOK_ADDRESS && tok != TOK_ERR ) || !comp_fetchtok( comp ) ) {
+    if ( ( tok != TOK_INKEY && tok != TOK_ADDRESS && tok != TOK_ERR && tok != TOK_TIME && tok != TOK_DATE && tok != TOK_DATETIME ) ||
+         !comp_fetchtok( comp ) ) {
         return false;
     }
     if ( comp->currtok != TOK_STRING || !comp_fetchtok( comp ) ) {
@@ -2175,7 +2177,7 @@ bool comp_eat_numaddex( compiler_t* comp, node_t** pnode ) {
 bool comp_eat_numshiftex( compiler_t* comp, node_t** pnode ) {
     // num-shift-op := TOK_LSHIFT | TOK_RSHIFT .
     // num-shift-ex := num-add-ex [ num-shift-op num-add-ex ] .
-    static const uint8_t septoks[] = { TOK_LSHIFT, TOK_RSHIFT, 0 };
+    static const uint8_t septoks[] = { TOK_LSHIFT, TOK_RSHIFT, TOK_SHL, TOK_SHR, TOK_ASL, TOK_ASR, 0 };
     /*
         NT_NUMSHIFTEX   numeric shift expression
             branches:
@@ -2233,7 +2235,7 @@ bool comp_eat_numandex( compiler_t* comp, node_t** pnode ) {
 bool comp_eat_numorex( compiler_t* comp, node_t** pnode ) {
     // num-or-op := TOK_OR | TOK_XOR | TOK_NOR | TOK_XNOR .
     // num-or-ex := num-and-ex { num-or-op num-and-ex } .
-    static const uint8_t septoks[] = { TOK_OR, TOK_XOR, TOK_NOR, TOK_XNOR, 0 };
+    static const uint8_t septoks[] = { TOK_OR, TOK_XOR, TOK_NOR, TOK_XNOR, TOK_EQV, TOK_NEQV, TOK_IMP, TOK_NIMP, 0 };
     /*
         NT_NUMOREX   numeric OR expression
             branches:
@@ -4520,11 +4522,24 @@ UNEXP:      comp_error( comp, "TO or SUB expected after GO" );
 }
 
 bool comp_eat_returnstmt( compiler_t* comp, node_t** pnode ) {
-    // return-stmt := TOK_RETURN .
+    // return-stmt := TOK_RETURN [ expr ] .       (with a value only in the body of a FUNC or a multi-line DEF FN)
     if ( comp->currtok != TOK_RETURN || !comp_fetchtok( comp ) ) {
         return false;
     }
-    if ( !comp_create_node( comp, pnode, NT_RETURNSTMT, UINT8_C(0), UINT16_C(0), 0 ) || *pnode == NODE_NONE ) {
+    node_t* value = NODE_NONE;
+    if ( !comp_at_stmt_end( comp ) ) {
+        if ( comp->curfn == NODE_NONE ) {
+            comp_error( comp, "RETURN with a value outside a FUNC" );
+            return false;
+        }
+        bool isstr = ( comp->curfn->data[0] & VARTYPEM_BASE ) == VARTYPEV_STR;
+        if ( !( isstr ? comp_eat_strexpr( comp, &value ) : comp_eat_numexpr( comp, &value ) ) || value == NODE_NONE ) {
+            comp_error( comp, isstr ? "String expression expected" : "Numeric expression expected" );
+            return false;
+        }
+    }
+    if ( !( value == NODE_NONE ? comp_create_node( comp, pnode, NT_RETURNSTMT, UINT8_C(0), UINT16_C(0), 0 ) :
+            comp_create_node( comp, pnode, NT_RETURNSTMT, UINT8_C(1), UINT16_C(0), 0, value ) ) || *pnode == NODE_NONE ) {
         out_of_memory( comp );
         return false;
     }
@@ -4860,7 +4875,8 @@ bool comp_eat_endstmt( compiler_t* comp, node_t** pnode ) {
         return false;
     }
     comp_push_context( comp );
-    if ( !comp_fetchtok( comp ) || comp->currtok == TOK_IF || comp->currtok == TOK_UNLESS || comp->currtok == TOK_FN ) {
+    if ( !comp_fetchtok( comp ) || comp->currtok == TOK_IF || comp->currtok == TOK_UNLESS || comp->currtok == TOK_FN ||
+         comp->currtok == TOK_PROC || comp->currtok == TOK_FUNC ) {
         comp_pop_context( comp );
         return false;
     }
@@ -4909,6 +4925,221 @@ bool comp_eat_againstmt( compiler_t* comp, node_t** pnode ) {
     return true;
 }
 
+// proc-stmt := TOK_PROC ident [ TOK_LPAREN [ usr-fn-arg-list ] TOK_RPAREN ] TOK_EOL stmt-lines TOK_END TOK_PROC .
+// func-stmt := TOK_FUNC any-ident [ TOK_LPAREN [ usr-fn-arg-list ] TOK_RPAREN ] TOK_EOL stmt-lines TOK_END TOK_FUNC .
+// The function variable is created before the body is parsed, so that the body can call itself (FN name). A FUNC is called
+// like a user function (FN name(...)), a PROC with CALL; the value of a FUNC is what "FN name = expr" or "RETURN expr" last set.
+bool comp_eat_resumestmt( compiler_t* comp, node_t** pnode ) {
+    // resume-stmt := TOK_RESUME [ TOK_NEXT | goto-target ] .
+    if ( comp->currtok != TOK_RESUME || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    uint8_t kind = 0;
+    node_t* target = NODE_NONE;
+    if ( comp->currtok == TOK_NEXT ) {
+        kind = 1;
+        if ( !comp_fetchtok( comp ) ) {
+            return false;
+        }
+    } else if ( !comp_at_stmt_end( comp ) ) {
+        kind = 2;
+        if ( !comp_eat_gototarget( comp, &target ) || target == NODE_NONE ) {
+            comp_error( comp, "NEXT or a jump target expected" );
+            return false;
+        }
+    }
+    if ( !( target == NODE_NONE ? comp_create_node( comp, pnode, NT_RESUMESTMT, UINT8_C(0), UINT16_C(1), &kind ) :
+            comp_create_node( comp, pnode, NT_RESUMESTMT, UINT8_C(1), UINT16_C(1), &kind, target ) ) || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
+bool comp_eat_procstmt( compiler_t* comp, node_t** pnode ) {
+    uint8_t keyword = comp->currtok;
+    bool isfunc = keyword == TOK_FUNC;
+    if ( ( keyword != TOK_PROC && !isfunc ) || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    uint8_t tok = comp->currtok;
+    if ( tok != TOK_NUMIDENT && !( isfunc && ( tok == TOK_INTIDENT || tok == TOK_STRIDENT ) ) ) {
+        comp_error( comp, isfunc ? "Function name expected" : "Procedure name expected" );
+        return false;
+    }
+    uint8_t basetype = tok == TOK_NUMIDENT ? VARTYPEV_FLOAT : tok == TOK_INTIDENT ? VARTYPEV_INT : VARTYPEV_STR;
+    uint16_t namelen = 0;
+    uint8_t* namedata = comp_param_data( comp, basetype, &namelen );
+    if ( namedata == 0 ) {
+        return false;
+    }
+    node_t* fnname = NODE_NONE;
+    bool ok = comp_create_node( comp, &fnname, basetype == VARTYPEV_STR ? NT_STRUSRFNNAME : NT_NUMUSRFNNAME, UINT8_C(0), namelen, namedata ) &&
+              fnname != NODE_NONE;
+    free( namedata );
+    if ( !ok ) {
+        out_of_memory( comp );
+        return false;
+    }
+    if ( !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    node_t* fnarglist = NODE_NONE;
+    node_t* paramoffs[MAXPARAM];
+    if ( comp->currtok == TOK_LPAREN ) {
+        if ( !comp_fetchtok( comp ) ) {
+            comp_error( comp, "Parameter list expected" );
+            return false;
+        }
+        comp_eat_usrfnarglist( comp, &fnarglist );
+        if ( comp->currtok != TOK_RPAREN || !comp_fetchtok( comp ) ) {
+            comp_error( comp, "Closing parenthesis ')' expected" );
+            return false;
+        }
+    }
+    usrparam_t params[MAXPARAM];
+    size_t numparams = 0U;
+    if ( !comp_gather_branches( comp, fnarglist, NT_USERFNARGLIST, paramoffs, MAXPARAM, &numparams ) ) {
+        return false;
+    }
+    if ( numparams && !comp_get_func_params( comp, paramoffs, numparams, params ) ) {
+        return false;
+    }
+    // the function variable (a PROC is a function of the label type, so that it has a name of its own)
+    uint8_t functype = isfunc ? (uint8_t)( basetype | VARTYPEF_FUNC ) : (uint8_t)( VARTYPEV_LABEL | VARTYPEF_FUNC );
+    uint16_t varoffs = VAROFFS_NONE;
+    const char* name = comp_node_name( comp, fnname, 1U );
+    if ( vmem_lookup_var( &comp->rt->varmem, functype, name, &varoffs ) && varoffs != VAROFFS_NONE ) {
+        uint8_t ftype = 0, nparams = 0; uint32_t codeoffs = CODEOFFS_NONE;
+        if ( !vmem_get_func_info( &comp->rt->varmem, varoffs, &ftype, &nparams, &codeoffs ) || nparams != numparams ) {
+            comp_error( comp, "Already defined with other parameters" );
+            return false;
+        }
+    } else if ( !vmem_create_var( &comp->rt->varmem, functype, name, UINT8_C(0), 0, (uint8_t) numparams, params, &varoffs ) ||
+                varoffs == VAROFFS_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    if ( comp->currtok != TOK_EOL ) {
+        comp_error( comp, "End of line expected after the header" );
+        return false;
+    }
+    node_t* stmtlines = NODE_NONE;
+    node_t* outerfn = comp->curfn;
+    comp->curfn = isfunc ? fnname : NODE_NONE;
+    bool bodyok = comp_fetchtok( comp );
+    if ( bodyok && comp->currtok == TOK_END ) {
+        // END PROC / END FUNC at once: an empty body
+        comp_push_context( comp );
+        bool empty = comp_fetchtok( comp ) && comp->currtok == keyword;
+        comp_pop_context( comp );
+        if ( empty ) {
+            goto ENDKW;
+        }
+    }
+    bodyok = bodyok && comp_eat_stmtlines( comp, &stmtlines ) && stmtlines != NODE_NONE;
+ENDKW:
+    comp->curfn = outerfn;
+    if ( !bodyok ) {
+        comp_error( comp, "Body expected" );
+        return false;
+    }
+    if ( comp->currtok != TOK_END || !comp_fetchtok( comp ) || comp->currtok != keyword || !comp_fetchtok( comp ) ) {
+        comp_error( comp, isfunc ? "END FUNC expected" : "END PROC expected" );
+        return false;
+    }
+    /*
+        NT_PROCSTMT     PROC / FUNC definition
+            data:
+                - 1 byte of function type (VARTYPEF_FUNC | VARTYPEV_LABEL for a PROC, VARTYPEF_FUNC | the value type for a FUNC)
+                - 2 bytes of variable offset
+            branches:
+                - 1 branch of statement lines
+    */
+    uint8_t data[3];
+    data[0] = functype;
+    data[1] = (uint8_t)( varoffs >> UINT8_C(8) );
+    data[2] = (uint8_t)  varoffs;
+    if ( !comp_create_node( comp, pnode, NT_PROCSTMT, UINT8_C(1), UINT16_C(3), data, stmtlines ) || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
+bool comp_eat_callstmt( compiler_t* comp, node_t** pnode ) {
+    // call-stmt := TOK_CALL ident [ TOK_LPAREN [ expr-list ] TOK_RPAREN ] .
+    if ( comp->currtok != TOK_CALL || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    if ( comp->currtok != TOK_NUMIDENT ) {
+        comp_error( comp, "Procedure name expected" );
+        return false;
+    }
+    uint16_t namelen = 0;
+    uint8_t* namedata = comp_param_data( comp, VARTYPEV_FLOAT, &namelen );
+    if ( namedata == 0 ) {
+        return false;
+    }
+    if ( !comp_fetchtok( comp ) ) {
+        free( namedata );
+        return false;
+    }
+    node_t* exprlist = NODE_NONE;
+    if ( comp->currtok == TOK_LPAREN && comp_fetchtok( comp ) ) {
+        if ( comp->currtok != TOK_RPAREN ) {
+            comp_eat_exprlist( comp, &exprlist );
+        }
+        if ( comp->currtok != TOK_RPAREN || !comp_fetchtok( comp ) ) {
+            free( namedata );
+            comp_error( comp, "Closing parenthesis ')' expected" );
+            return false;
+        }
+    }
+    /*
+        NT_CALLSTMT     CALL statement
+            data:
+                - 1 byte of type indicator, n bytes of the procedure name (resolved by the code generator: the PROC may follow)
+            branches:
+                - argument expression list (can be empty)
+    */
+    bool ok = comp_create_node( comp, pnode, NT_CALLSTMT, UINT8_C(1), namelen, namedata, exprlist ) && *pnode != NODE_NONE;
+    free( namedata );
+    if ( !ok ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
+bool comp_eat_localstmt( compiler_t* comp, node_t** pnode ) {
+    // local-stmt := TOK_LOCAL any-base-var-ref { TOK_COMMA any-base-var-ref } .
+    if ( comp->currtok != TOK_LOCAL || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    node_t* var = NODE_NONE;
+    if ( !comp_eat_anybasevarref( comp, &var ) || var == NODE_NONE ) {
+        comp_error( comp, "Variable expected" );
+        return false;
+    }
+    if ( !comp_create_node( comp, pnode, NT_LOCALSTMT, UINT8_C(1), UINT16_C(0), 0, var ) || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    while ( comp->currtok == TOK_COMMA ) {
+        var = NODE_NONE;
+        if ( !comp_fetchtok( comp ) || !comp_eat_anybasevarref( comp, &var ) || var == NODE_NONE ) {
+            comp_error( comp, "Variable expected" );
+            return false;
+        }
+        if ( !comp_add_branch( comp, *pnode, var ) ) {
+            out_of_memory( comp );
+            return false;
+        }
+    }
+    return true;
+}
+
 bool comp_eat_exitstmt( compiler_t* comp, node_t** pnode ) {
     // exit-stmt := ( TOK_EXIT | TOK_LEAVE | TOK_ITERATE ) [ dec-lit ] .
     uint8_t kind = comp->currtok == TOK_ITERATE ? 2 : ( comp->currtok == TOK_EXIT || comp->currtok == TOK_LEAVE ) ? 1 : 0;
@@ -4917,6 +5148,18 @@ bool comp_eat_exitstmt( compiler_t* comp, node_t** pnode ) {
     }
     double num = 1.0;
     uint8_t tok = comp->currtok;
+    if ( kind == 1 && ( tok == TOK_PROC || tok == TOK_FUNC || tok == TOK_FN ) ) {
+        // EXIT PROC, EXIT FUNC, EXIT FN: leave the procedure / function (kind 3)
+        if ( !comp_fetchtok( comp ) ) {
+            return false;
+        }
+        uint8_t data3[3] = { 3, 0, 0 };
+        if ( !comp_create_node( comp, pnode, NT_EXITSTMT, UINT8_C(0), UINT16_C(3), data3 ) || *pnode == NODE_NONE ) {
+            out_of_memory( comp );
+            return false;
+        }
+        return true;
+    }
     if ( tok == TOK_DECLIT || ( tok >= TOK_DEC0 && tok <= TOK_DEC9 ) ) {
         num = tok == TOK_DECLIT ? comp->number : (double)( tok - TOK_DEC0 );
         if ( !comp_fetchtok( comp ) ) {
@@ -4930,7 +5173,7 @@ bool comp_eat_exitstmt( compiler_t* comp, node_t** pnode ) {
     /*
         NT_EXITSTMT         EXIT / LEAVE / ITERATE statement
             data:
-                - 1 byte of kind (1 = EXIT or LEAVE, 2 = ITERATE), 2 bytes of loop number
+                - 1 byte of kind (1 = EXIT or LEAVE, 2 = ITERATE, 3 = EXIT PROC / FUNC / FN), 2 bytes of loop number (0 for kind 3)
     */
     uint16_t loopnum = (uint16_t) num;
     uint8_t data[3];
@@ -5128,6 +5371,18 @@ bool comp_eat_controlflowstmt( compiler_t* comp, node_t** pnode ) {
         return true;
     }
     if ( comp_eat_exitstmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_procstmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_resumestmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_callstmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_localstmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     if ( comp_eat_repeatstmt( comp, pnode ) && *pnode != NODE_NONE ) {

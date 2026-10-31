@@ -41,9 +41,11 @@ void init_codegen( codegen_t* cgen ) {
     cgen->consts   = 0; cgen->numconsts = cgen->maxconsts = 0;
     cgen->lineaddrs = 0; cgen->numlineaddrs = cgen->maxlineaddrs = 0;
     cgen->fixups    = 0; cgen->numfixups    = cgen->maxfixups    = 0;
+    cgen->stmts     = 0; cgen->numstmts     = cgen->maxstmts     = 0;
     cgen->loops     = 0; cgen->numloops     = cgen->maxloops     = 0;
     cgen->loopjumps = 0; cgen->numloopjumps = cgen->maxloopjumps = 0;
     cgen->loopbase  = 0;
+    cgen->inproc    = false;
     cgen->scratch   = 0; cgen->numscratch   = cgen->maxscratch   = 0;
     cgen->forserial = 0;
     cgen->datafirst = cgen->datalast = DATAOFFS_NONE;
@@ -58,6 +60,7 @@ void cleanup_codegen( codegen_t* cgen ) {
     free( cgen->consts );
     free( cgen->lineaddrs );
     free( cgen->fixups );
+    free( cgen->stmts );
     free( cgen->loops );
     free( cgen->loopjumps );
     free( cgen->scratch );
@@ -70,6 +73,7 @@ void cleanup_codegen( codegen_t* cgen ) {
     cgen->consts    = 0; cgen->numconsts = cgen->maxconsts = 0;
     cgen->lineaddrs = 0; cgen->numlineaddrs = cgen->maxlineaddrs = 0;
     cgen->fixups    = 0; cgen->numfixups    = cgen->maxfixups    = 0;
+    cgen->stmts     = 0; cgen->numstmts     = cgen->maxstmts     = 0;
     cgen->loops     = 0; cgen->numloops     = cgen->maxloops     = 0;
     cgen->loopjumps = 0; cgen->numloopjumps = cgen->maxloopjumps = 0;
     cgen->scratch   = 0; cgen->numscratch   = cgen->maxscratch   = 0;
@@ -95,6 +99,9 @@ void cgen_note_persistent( codegen_t* cgen ) {
 }
 
 void cgen_rollback( codegen_t* cgen, uint32_t codesize, uint32_t datasize ) {
+    while ( cgen->numstmts > 0 && cgen->stmts[ cgen->numstmts - 1U ].start >= codesize ) {
+        --cgen->numstmts;
+    }
     if ( codesize < cgen->codesize ) {
         memset( &cgen->code[ codesize ], 0, cgen->codesize - codesize );
         cgen->codesize = codesize;
@@ -413,6 +420,12 @@ const char* cgen_opcode_name( uint16_t opcode ) {
         case INS_RAND:      return "RAND";
         case INS_ANGM:      return "ANGM";
         case INS_ACNT:      return "ACNT";
+        case INS_URSH:      return "URSH";
+        case INS_IMP:       return "IMP";
+        case INS_NIMP:      return "NIMP";
+        case INS_DTIM:      return "DTIM";
+        case INS_LOCL:      return "LOCL";
+        case INS_RSM:       return "RSM";
         case INS_AFLT:      return "AFLT";
         case INS_GFXC:      return "GFXC";
         case INS_GFXQ:      return "GFXQ";
@@ -1114,6 +1127,12 @@ bool cgen_gen_idiv( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_IDIV, f
 bool cgen_gen_mod( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_MOD, false, false, UINT16_C(0) ); }
 bool cgen_gen_math( codegen_t* cgen, uint16_t kind ) { return cgen_gen_ins12( cgen, INS_MATH, false, true, kind ); }
 bool cgen_gen_angm( codegen_t* cgen, uint16_t kind ) { return cgen_gen_ins12( cgen, INS_ANGM, false, true, kind ); }
+bool cgen_gen_ursh( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_URSH, false, false, UINT16_C(0) ); }
+bool cgen_gen_imp( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_IMP, false, false, UINT16_C(0) ); }
+bool cgen_gen_nimp( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_NIMP, false, false, UINT16_C(0) ); }
+bool cgen_gen_dtim( codegen_t* cgen, uint16_t kind ) { return cgen_gen_ins12( cgen, INS_DTIM, false, true, kind ); }
+bool cgen_gen_locl( codegen_t* cgen, uint16_t varoffs ) { return cgen_gen_ins12_imm17( cgen, INS_LOCL, (int32_t) varoffs ); }
+bool cgen_gen_rsm( codegen_t* cgen, uint16_t kind ) { return cgen_gen_ins12( cgen, INS_RSM, false, true, kind ); }
 bool cgen_gen_acnt( codegen_t* cgen, uint16_t varoffs ) { return cgen_gen_ins12_imm17( cgen, INS_ACNT, (int32_t) varoffs ); }
 bool cgen_gen_aflt( codegen_t* cgen, uint16_t varoffs ) { return cgen_gen_ins12_imm17( cgen, INS_AFLT, (int32_t) varoffs ); }
 bool cgen_gen_rand( codegen_t* cgen, uint16_t hasseed ) { return cgen_gen_ins12( cgen, INS_RAND, false, true, hasseed ); }
@@ -1358,7 +1377,7 @@ static bool from_fncall_cb( void* param, node_t* node ) {
     return cgen_from_expr( pdata->cgen, pdata->comp, node );
 }
 
-static bool gen_from_usrfncall( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+bool cgen_gen_call_args( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     cbdata_t cbdata = { cgen, comp, node, UINT16_C(0) };
     // output code for parameter expressions
     if ( !comp_node_iter_branches( comp, node, &cbdata, from_fncall_cb ) ) {
@@ -1491,7 +1510,7 @@ UNEXP:  return cgen_unexpected_node( comp );
     if ( ( vartype & VARTYPEF_FUNC ) == 0 ) {
         goto UNEXP;
     }
-    if ( !gen_from_usrfncall( cgen, comp, node ) ) {
+    if ( !cgen_gen_call_args( cgen, comp, node ) ) {
         return false;
     }
     if ( !cgen_gen_calf( cgen, varoffs ) ) {
@@ -1564,7 +1583,8 @@ UNEXP:      return cgen_unexpected_node( comp );
             case TOK_INT: kind = 1; break;   case TOK_FIX: kind = 2; break;   case TOK_ABS: kind = 3; break;   case TOK_SGN: kind = 4; break;
             case TOK_SQR: kind = 5; break;   case TOK_SIN: kind = 6; break;   case TOK_COS: kind = 7; break;   case TOK_TAN: kind = 8; break;
             case TOK_ATN: kind = 9; break;   case TOK_EXP: kind = 10; break;  case TOK_LOG: kind = 11; break;  case TOK_RND: kind = 12; break;
-            case TOK_PI: kind = 13; break;
+            case TOK_PI: kind = 13; break;   case TOK_FLOOR: kind = 1; break;  case TOK_CEIL: kind = 14; break;  case TOK_LOG2: kind = 15; break;
+            case TOK_LOG10: kind = 16; break;
             default: break;
         }
         if ( kind != 0 ) {
@@ -1575,6 +1595,9 @@ UNEXP:      return cgen_unexpected_node( comp );
     switch ( functok ) {
         case TOK_TI:    generator = cgen_gen_ti; break;
         case TOK_INKEY: generator = cgen_gen_inky; break;
+        case TOK_TIME:  return cgen_gen_dtim( cgen, 1 ) || cgen_out_of_code_memory( comp );
+        case TOK_DATE:  return cgen_gen_dtim( cgen, 2 ) || cgen_out_of_code_memory( comp );
+        case TOK_DATETIME: return cgen_gen_dtim( cgen, 3 ) || cgen_out_of_code_memory( comp );
         case TOK_ASC:   generator = cgen_gen_asc; break;
         case TOK_VAL:   generator = cgen_gen_val; break;
         case TOK_FRE:   generator = cgen_gen_fre; break;
@@ -1909,8 +1932,9 @@ UNEXP:      return cgen_unexpected_node( pdata->comp );
         bool (*generator)( codegen_t* ) = 0;
         // num-shift-op := TOK_LSHIFT | TOK_RSHIFT .
         switch ( tok ) {
-            case TOK_LSHIFT:    generator = cgen_gen_lsh; break;
-            case TOK_RSHIFT:    generator = cgen_gen_rsh; break;
+            case TOK_LSHIFT: case TOK_SHL: case TOK_ASL:    generator = cgen_gen_lsh; break;
+            case TOK_RSHIFT: case TOK_ASR:                  generator = cgen_gen_rsh; break;
+            case TOK_SHR:       generator = cgen_gen_ursh; break;
             default:
                 break;
         }
@@ -2149,9 +2173,11 @@ UNEXP:      return cgen_unexpected_node( pdata->comp );
         // num-or-op := TOK_OR | TOK_XOR | TOK_NOR | TOK_XNOR .
         switch ( tok ) {
             case TOK_OR:   generator = cgen_gen_or; break;
-            case TOK_XOR:  generator = cgen_gen_xor; break;
+            case TOK_XOR: case TOK_NEQV:  generator = cgen_gen_xor; break;
             case TOK_NOR:  generator = cgen_gen_nor; break;
-            case TOK_XNOR: generator = cgen_gen_xnor; break;
+            case TOK_XNOR: case TOK_EQV:  generator = cgen_gen_xnor; break;
+            case TOK_IMP:  generator = cgen_gen_imp; break;
+            case TOK_NIMP: generator = cgen_gen_nimp; break;
             default:
                 break;
         }
@@ -3010,7 +3036,45 @@ bool cgen_from_erasestmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
 
 // -- statements and program --------------------------------------------------
 
+static bool cgen_from_stmt_node( codegen_t* cgen, compiler_t* comp, node_t* node );
+
+bool cgen_find_stmt( const codegen_t* cgen, uint32_t pc, uint32_t* pstart, uint32_t* pend ) {
+    // the last entry that starts at or before pc, then back to one that contains it
+    size_t lo = 0, hi = cgen->numstmts;
+    while ( lo < hi ) {
+        size_t mid = lo + ( hi - lo ) / 2U;
+        if ( cgen->stmts[mid].start <= pc ) {
+            lo = mid + 1U;
+        } else {
+            hi = mid;
+        }
+    }
+    while ( lo > 0 ) {
+        const cgen_stmtaddr_t* st = &cgen->stmts[ --lo ];
+        if ( pc < st->end ) {
+            *pstart = st->start;
+            *pend   = st->end;
+            return true;
+        }
+    }
+    return false;
+}
+
 bool cgen_from_stmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    // every statement gets an entry in the table of statement addresses (RESUME)
+    if ( !cgen_grow( (void**) &cgen->stmts, &cgen->numstmts, &cgen->maxstmts, sizeof(cgen_stmtaddr_t) ) ) {
+        comp_error( comp, "Out of memory" );
+        return false;
+    }
+    size_t index = cgen->numstmts++;
+    cgen->stmts[index].start = cgen->codesize;
+    cgen->stmts[index].end   = UINT32_MAX;
+    bool ok = cgen_from_stmt_node( cgen, comp, node );
+    cgen->stmts[index].end = cgen->codesize;
+    return ok;
+}
+
+static bool cgen_from_stmt_node( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     if ( node == NODE_NONE ) {
         return cgen_bad_node( comp );
     }
@@ -3039,6 +3103,10 @@ bool cgen_from_stmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         case NT_RANDOMIZESTMT: return cgen_from_randomizestmt( cgen, comp, node );
         case NT_ANGLESTMT:  return cgen_from_anglestmt( cgen, comp, node );
         case NT_FOREACHSTMT: return cgen_from_foreachstmt( cgen, comp, node );
+        case NT_PROCSTMT:   return cgen_from_procstmt( cgen, comp, node );
+        case NT_CALLSTMT:   return cgen_from_callstmt( cgen, comp, node );
+        case NT_LOCALSTMT:  return cgen_from_localstmt( cgen, comp, node );
+        case NT_RESUMESTMT: return cgen_from_resumestmt( cgen, comp, node );
         case NT_EXITSTMT:   return cgen_from_exitstmt( cgen, comp, node );
         case NT_DESIGNSTMT: return cgen_from_designstmt( cgen, comp, node );
         case NT_DESIGNROW:  return cgen_from_designrow( cgen, comp, node );
@@ -3144,10 +3212,11 @@ bool cgen_from_program( codegen_t* cgen, compiler_t* comp ) {
     // a direct mode line (a statement line without a line number) can jump to the lines of the program that was compiled last:
     // the line table stays
     bool direct = root->type == NT_STMTLINE && root->datalen != UINT16_C(3);
-    size_t numlines = cgen->numlineaddrs;
+    size_t numlines = cgen->numlineaddrs, numstmts = cgen->numstmts;
     cgen_begin_control( cgen );
     if ( direct ) {
         cgen->numlineaddrs = numlines;
+        cgen->numstmts = numstmts;
     }
     bool ok = root->type == NT_STMTLINES ? cgen_from_stmtlines( cgen, comp, root ) : cgen_from_stmtline( cgen, comp, root );
     cgen->endaddr = CODEOFFS_NONE;

@@ -127,7 +127,8 @@ Listed in full in `SESSION.md` ("Design decisions I took"). The ones most likely
 ## 9. Error handling
 
 - [x] `ON ERROR GOTO|GOSUB`, `ON ERROR OFF`, `ERR$`, `ERL` (done, 2026-10-31)
-- [ ] `RESUME` / `RESUME NEXT` / `RESUME line` (retry or skip the failed *statement*; needs statement boundaries in the code), `ERR` as a number, `ON ERROR GOTO 0`, `ERROR n` (raise an error by hand)
+- [x] `RESUME` / `RESUME NEXT` / `RESUME target` (done, 2026-10-31; not possible after an error inside a `PROC`/`FUNC` call: the frame is unwound by the trap)
+- [ ] `ERR` as a number, `ON ERROR GOTO 0`, `ERROR n` (raise an error by hand)
 - [x] **Binary-safe strings** (done, 2026-10-31; see `docs/basic-language.md` "Binary strings"): zero bytes in strings, control code glyphs 0..31 in the font, length based print path
 - [x] **Number packing** (done, 2026-10-31): `MKI$`/`MKL$`/`MKS$`/`MKD$` and `CVI`/`CVL`/`CVS`/`CVD`, big endian (network byte order; owner decision)
 - [ ] Helpers for binary data: `STRING$(n,c)`, `SPACE$`, `HEX` to bytes / bytes to `HEX$` dump, unsigned `CVI`/`CVL` variants, 24 bit and 64 bit integers; byte-wise `ANDS`/`ORS`
@@ -149,14 +150,13 @@ useful is the language it planned. The items below are in the order I would sugg
 
 - [x] **Loop control** (done, 2026-10-31): `EXIT [n]` / `LEAVE [n]`, `ITERATE [n]`, `FOR … DOWNTO …`, `FOR EACH [key,] v IN a()` (`docs/basic-language.md`, "Loop control")
 - [ ] `DO … LOOP [WHILE|UNTIL cond]` (test at the end) and `FOR EVER`; `END IF` / `END UNLESS` exist already (`ENDIF`, `ENDUNLESS`). Low priority: `REPEAT/UNTIL`, `WHILE/WEND` and `UNTIL/UEND` cover it
-- [ ] **Procedures with local variables**: `SUB`/`PROC`/`FUNC name(args) … END`, `LOCAL`, `GLOBAL`, `CALL` (and Simons' `EXEC`); AsmBASIC's frame design (`BEGINFRAME`, `LOCAL`, `REFLOCAL`, `REFGLOBAL`, `ENDFRAME`)
-      fits the saved parameter contexts of `DEF FN`: save the locals on the return stack on entry, restore on return. `DEF FN` can't recurse or take arrays today. The biggest gap of this list
-- [ ] `RESUME` / `RESUME NEXT` / `RESUME line` (also in section 9): needs statement boundaries in the code
+- [x] **Procedures with local variables** (done, 2026-10-31: `PROC`/`FUNC`/`CALL`/`LOCAL`/`RETURN value`/`EXIT PROC`, recursion; not done: array parameters and local arrays, `GLOBAL`, passing by reference, `EXEC`, a forward call of a `FUNC` (a `PROC` can be called before it is defined); see "Procedures" in `docs/basic-language.md`)
+- [x] `RESUME` (done, see section 9)
 - [ ] `STOP [n]` and `CONT` (continue after a stop or Break; build on the resumable VM of the monitor), `TRACE ON|OFF` (print the line numbers while running, from the `LINE` instructions), `AUTO [start[,step]]` (line number prompts; the token `AUTO` exists, there is no meaning yet)
-- [ ] **Operators**: the logical operators `IMP NIMP EQV NEQV` (`NAND NOR XNOR` are tokens; check they work), the shifts as keywords `SHL SHR ASL ASR` (`LSHIFT`/`RSHIFT` tokens exist)
-- [ ] Math functions: `FLOOR`, `CEIL`, `LOG2`, `LOG10`, `LOGN(base,x)`, `LG`, `LN` (small additions to `vm_math`; cf. the `ASN`/`ACS`/`ATAN2`/hyperbolic item in section 2)
+- [x] **Operators** (done, 2026-10-31): the logical operators `IMP NIMP EQV NEQV` the shifts as keywords `SHL SHR ASL ASR` (`LSHIFT`/`RSHIFT` tokens exist)
+- [x] Math functions `FLOOR CEIL LOG2 LOG10` (done, 2026-10-31; `LN`/`LG`/`LOGN` not added; cf. the `ASN`/`ACS`/`ATAN2`/hyperbolic item in section 2)
 - [ ] `PEEK`/`POKE` (byte, word, long, quad, float variants) and `SYS addr[,args]`: address the VM's data segment or a RAM area; a natural fit for a memory view in the monitor. Needs a decision which memory is addressable
 - [ ] `PRINT USING fmt$` (formatted output); `AT(row[,col])`, `HTAB`, `VTAB` in `PRINT` (`LOCATE` covers the placement)
-- [ ] `TIME$`, `DATE$`, `DATETIME$` (and setting them?); there is `TI` only
+- [x] `TIME$`, `DATE$`, `DATETIME$` (done, 2026-10-31; read only: no setting of the clock)
 - [ ] Small aliases: `OLD` for `LOAD`, `CATALOG` for `FILES`, `RENUMBER`, `FUNCTION`/`PROCEDURE` spellings; `YIELD` (give the host a time slice) and `SAFETY ON|OFF` (the sandbox switch; see section 8) are AsmBASIC's ideas, too
 - [ ] To think about (the owner decides): `DYNAMIC`/`ASSOC` arrays (parsed since the start, no meaning: `DIM a(n, DYNAMIC, ASSOC)`), `RECORD`/`TYPE`, number tokens that keep their base (check that `&H1F` lists back as hex), AsmBASIC's "undimensioned arrays are 0..10" rule

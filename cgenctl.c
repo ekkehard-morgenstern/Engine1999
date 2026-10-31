@@ -64,6 +64,7 @@ void cgen_begin_control( codegen_t* cgen ) {
     cgen->numfixups    = 0;
     cgen->numloops     = 0;
     cgen->numloopjumps = 0;
+    cgen->numstmts     = 0;
     cgen->loopbase     = 0;
     cgen->numscratch   = 0;
     cgen->numrestorefix = 0;
@@ -136,6 +137,10 @@ static bool cc_emit_bria( codegen_t* cgen, compiler_t* comp, uint32_t* pins ) {
     *pins = cgen->codesize;
     return cgen_gen_bria( cgen, 0 ) || cgen_out_of_code_memory( comp );
 }
+
+static bool cc_write_var( codegen_t* cgen, uint8_t vartype, uint16_t varoffs );
+static bool cc_add_procexit( codegen_t* cgen, compiler_t* comp, uint32_t* pins );
+static bool cc_base_var( compiler_t* comp, node_t* node, uint8_t* pvartype, uint16_t* pvaroffs );
 
 // emits a PHPA.C to be patched later; *pins receives its offset
 static bool cc_emit_phpa_c( codegen_t* cgen, compiler_t* comp, uint32_t* pins ) {
@@ -318,6 +323,25 @@ bool cgen_from_timerstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     return cgen_gen_tmr( cgen, param ) || cgen_out_of_code_memory( comp );
 }
 
+bool cgen_from_resumestmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    /*
+        NT_RESUMESTMT   RESUME statement
+            data: 1 byte, 0 = RESUME, 1 = RESUME NEXT, 2 = RESUME target     branches: the goto target (kind 2)
+        code: [ <target address on the return stack> ] RSM(kind)
+    */
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->type != NT_RESUMESTMT || node->datalen != UINT16_C(1) || node->data[0] > 2 ||
+         node->numbranches != ( node->data[0] == 2 ? 1U : 0U ) ) {
+        return cgen_unexpected_node( comp );
+    }
+    if ( node->data[0] == 2 && !cc_push_target_address( cgen, comp, node->branches[0] ) ) {
+        return false;
+    }
+    return cgen_gen_rsm( cgen, node->data[0] ) || cgen_out_of_code_memory( comp );
+}
+
 bool cgen_from_errtrapstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     /*
         NT_ERRTRAPSTMT  ON ERROR statement
@@ -385,8 +409,23 @@ bool cgen_from_returnstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     if ( node == NODE_NONE ) {
         return cgen_bad_node( comp );
     }
-    if ( node->type != NT_RETURNSTMT ) {
+    if ( node->type != NT_RETURNSTMT || node->numbranches > 1U ) {
         return cgen_unexpected_node( comp );
+    }
+    if ( node->numbranches == 1U ) {
+        // RETURN value: set the result of the FUNC and leave it
+        if ( !cgen->inproc || !cgen->procresult ) {
+            comp_error( comp, "RETURN with a value outside a FUNC" );
+            return false;
+        }
+        uint32_t ins = 0;
+        if ( !cgen_from_expr( cgen, comp, node->branches[0] ) ) {
+            return false;
+        }
+        if ( !cc_write_var( cgen, cgen->procbase, cgen->procresvar ) ) {
+            return cgen_out_of_code_memory( comp );
+        }
+        return cc_add_procexit( cgen, comp, &ins );
     }
     if ( !cgen_gen_jump( cgen ) ) {     // the return address is on the return stack
         return cgen_out_of_code_memory( comp );
@@ -520,6 +559,67 @@ bool cgen_from_multilineifstmt( codegen_t* cgen, compiler_t* comp, node_t* node 
     }
     bool unless = node->data[0] == TOK_UNLESS;
     return cc_if( cgen, comp, unless, node->branches[0], node->branches[1], node->branches[2], TOK_THEN, true );
+}
+
+// -- exits from a PROC / FUNC ---------------------------------------------------------
+
+#define CGEN_PROCLEVEL  ((size_t) -1)       // the "loop level" of the jumps to the end of the procedure
+
+// a jump to the end of the PROC / FUNC being generated; it waits in cgen->loopjumps until the end is known
+static bool cc_add_procexit( codegen_t* cgen, compiler_t* comp, uint32_t* pins ) {
+    if ( !cc_emit_bria( cgen, comp, pins ) ) {
+        return false;
+    }
+    if ( !cgen_grow( (void**) &cgen->loopjumps, &cgen->numloopjumps, &cgen->maxloopjumps, sizeof(cgen_loopjump_t) ) ) {
+        return cc_out_of_memory( comp );
+    }
+    cgen_loopjump_t* lj = &cgen->loopjumps[ cgen->numloopjumps++ ];
+    lj->insoffs = *pins;
+    lj->level   = CGEN_PROCLEVEL;
+    lj->iterate = false;
+    return true;
+}
+
+void cgen_resolve_procexits( codegen_t* cgen, uint32_t addr ) {
+    size_t keep = 0;
+    for ( size_t i=0; i < cgen->numloopjumps; ++i ) {
+        cgen_loopjump_t lj = cgen->loopjumps[i];
+        if ( lj.level == CGEN_PROCLEVEL ) {
+            cc_patch_bria( cgen, lj.insoffs, addr );
+        } else {
+            cgen->loopjumps[ keep++ ] = lj;
+        }
+    }
+    cgen->numloopjumps = keep;
+}
+
+bool cgen_from_localstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    /*
+        NT_LOCALSTMT        LOCAL statement
+            branches:
+                - 1 or more variable references (numeric, integer or string base variables)
+        Code:   LOCL(variable) for every variable: its value is saved and given back when the PROC / FUNC returns.
+    */
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->type != NT_LOCALSTMT || node->numbranches < 1U ) {
+        return cgen_unexpected_node( comp );
+    }
+    if ( !cgen->inproc ) {
+        comp_error( comp, "LOCAL outside a PROC or FUNC" );
+        return false;
+    }
+    for ( size_t i=0; i < node->numbranches; ++i ) {
+        uint8_t vartype = 0; uint16_t varoffs = VAROFFS_NONE;
+        if ( !cc_base_var( comp, node->branches[i], &vartype, &varoffs ) ) {
+            return false;
+        }
+        if ( !cgen_gen_locl( cgen, varoffs ) ) {
+            return cgen_out_of_code_memory( comp );
+        }
+    }
+    return true;
 }
 
 // -- loops -----------------------------------------------------------------------
@@ -882,8 +982,17 @@ bool cgen_from_exitstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     if ( !cc_check_simple( comp, node, NT_EXITSTMT ) ) {
         return false;
     }
-    if ( node->datalen != UINT16_C(3) || ( node->data[0] != 1 && node->data[0] != 2 ) ) {
+    if ( node->datalen != UINT16_C(3) || node->data[0] < 1 || node->data[0] > 3 ) {
         return cgen_unexpected_node( comp );
+    }
+    if ( node->data[0] == 3 ) {
+        // EXIT PROC / FUNC / FN
+        if ( !cgen->inproc ) {
+            comp_error( comp, "EXIT outside a PROC, FUNC or DEF FN" );
+            return false;
+        }
+        uint32_t pins = 0;
+        return cc_add_procexit( cgen, comp, &pins );
     }
     bool iterate = node->data[0] == 2;
     size_t loopnum = ( ( (size_t) node->data[1] ) << UINT8_C(8) ) | node->data[2];

@@ -132,6 +132,131 @@ static bool cd_ensure_param_vars( compiler_t* comp, uint16_t funcoffs, uint8_t n
     return true;
 }
 
+bool cgen_from_procstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    /*
+        NT_PROCSTMT     PROC / FUNC definition
+            data:
+                - 1 byte of function type, 2 bytes of variable offset
+            branches:
+                - 1 branch of statement lines
+        Code:   BRIA end   start: [ LOCL result ]  <body>  exits:  [ result ]  RETF   end:
+        A FUNC keeps its value in the hidden variable "@FN<name>", which is local to the call (saved by LOCL, so a call of the
+        function inside its own body doesn't clobber it); RETF leaves the value on the data stack and then gives the variable back.
+    */
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->type != NT_PROCSTMT || node->datalen != UINT16_C(3) || node->numbranches != 1U ) {
+        return cgen_unexpected_node( comp );
+    }
+    uint8_t  functype = node->data[0];
+    uint16_t funcoffs = (uint16_t)( ( ( (uint16_t) node->data[1] ) << UINT8_C(8) ) | node->data[2] );
+    uint8_t  basetype = functype & VARTYPEM_BASE;
+    bool     isfunc   = basetype != VARTYPEV_LABEL;
+    if ( cgen->inproc ) {
+        comp_error( comp, isfunc ? "FUNC inside a PROC or FUNC" : "PROC inside a PROC or FUNC" );
+        return false;
+    }
+    uint8_t ftype = 0, numparams = 0; uint32_t oldcode = CODEOFFS_NONE;
+    if ( !vmem_get_func_info( &comp->rt->varmem, funcoffs, &ftype, &numparams, &oldcode ) || ftype != functype ) {
+        comp_error( comp, "Internal error (function variable not found)" );
+        return false;
+    }
+    if ( !cd_ensure_param_vars( comp, funcoffs, numparams ) ) {
+        return false;
+    }
+    uint16_t resoffs = VAROFFS_NONE;
+    if ( isfunc ) {
+        var_t* fvar = vmem_var( &comp->rt->varmem, funcoffs );
+        if ( fvar == 0 || !cd_result_var( comp, basetype, comp_prefixed_name( comp, "@FN", fvar->name, strlen( fvar->name ) ), &resoffs ) ) {
+            return false;
+        }
+    }
+    uint32_t skipins = cgen->codesize;
+    if ( !cgen_gen_bria( cgen, 0 ) ) {
+        return cgen_out_of_code_memory( comp );
+    }
+    uint32_t start = cgen->codesize;
+    size_t savedbase = cgen->loopbase;
+    cgen->loopbase = cgen->numloops;
+    cgen->inproc = true;
+    cgen->procresult = isfunc;
+    cgen->procbase = basetype;
+    cgen->procresvar = resoffs;
+    if ( isfunc && !cgen_gen_locl( cgen, resoffs ) ) {
+        return cgen_out_of_code_memory( comp );
+    }
+    if ( node->branches[0] != NODE_NONE && !cgen_from_block( cgen, comp, node->branches[0] ) ) {
+        return false;
+    }
+    if ( !cgen_loops_closed( cgen, comp, cgen->loopbase ) ) {
+        return false;
+    }
+    cgen_resolve_procexits( cgen, cgen->codesize );
+    cgen->inproc = false;
+    cgen->procresult = false;
+    cgen->loopbase = savedbase;
+    if ( isfunc ) {
+        bool ok = basetype == VARTYPEV_INT ? cgen_gen_rriv( cgen, resoffs ) :
+            basetype == VARTYPEV_STR ? cgen_gen_rrsv( cgen, resoffs ) : cgen_gen_rrnv( cgen, resoffs );
+        if ( !ok ) {
+            return cgen_out_of_code_memory( comp );
+        }
+    }
+    if ( !cgen_gen_retf( cgen ) ) {
+        return cgen_out_of_code_memory( comp );
+    }
+    cgen_patch_param( cgen, skipins, cgen->codesize );
+    varvalue_t value;
+    memset( &value, 0, sizeof(value) );
+    value.codeoffs = start;
+    cgen_note_persistent( cgen );
+    if ( !vmem_set_var( &comp->rt->varmem, funcoffs, functype, 0, 0, &value ) ) {
+        comp_error( comp, "Internal error (failed to store the function address)" );
+        return false;
+    }
+    return true;
+}
+
+bool cgen_from_callstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    /*
+        NT_CALLSTMT     CALL statement
+            data: 1 byte of type indicator, n bytes of the procedure name
+            branches: the argument expression list (can be empty)
+        Code:   <arguments> <count> CALF(proc)
+    */
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->type != NT_CALLSTMT || node->datalen < UINT16_C(2) || node->numbranches != 1U ) {
+        return cgen_unexpected_node( comp );
+    }
+    uint16_t funcoffs = VAROFFS_NONE;
+    const char* name = comp_node_name( comp, node, 1U );
+    if ( !vmem_lookup_var( &comp->rt->varmem, VARTYPEV_LABEL | VARTYPEF_FUNC, name, &funcoffs ) || funcoffs == VAROFFS_NONE ) {
+        comp_error( comp, "Undefined procedure" );
+        return false;
+    }
+    uint8_t ftype = 0, numparams = 0; uint32_t codeoffs = CODEOFFS_NONE;
+    if ( !vmem_get_func_info( &comp->rt->varmem, funcoffs, &ftype, &numparams, &codeoffs ) ) {
+        comp_error( comp, "Undefined procedure" );
+        return false;
+    }
+    node_t* args = node->branches[0];
+    size_t numargs = args == NODE_NONE ? 0U : args->type == NT_EXPRLIST ? args->numbranches : 1U;
+    if ( numargs != numparams ) {
+        comp_error( comp, "Argument count mismatch" );
+        return false;
+    }
+    if ( !cgen_gen_call_args( cgen, comp, node ) ) {
+        return false;
+    }
+    if ( !cgen_gen_calf( cgen, funcoffs ) ) {
+        return cgen_out_of_code_memory( comp );
+    }
+    return true;
+}
+
 bool cgen_from_defstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     /*
         NT_DEFSTMT      DEF statement
@@ -212,9 +337,17 @@ bool cgen_from_defstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         if ( !cd_write_var( cgen, basetype, resoffs ) ) {
             return cgen_out_of_code_memory( comp );
         }
+        // RETURN value, EXIT FN and LOCAL work in the body
+        cgen->inproc = true;
+        cgen->procresult = true;
+        cgen->procbase = basetype;
+        cgen->procresvar = resoffs;
         if ( !cgen_from_block( cgen, comp, body->branches[0] ) ) {
             return false;
         }
+        cgen_resolve_procexits( cgen, cgen->codesize );
+        cgen->inproc = false;
+        cgen->procresult = false;
         bool ok = basetype == VARTYPEV_INT ? cgen_gen_rriv( cgen, resoffs ) :
             basetype == VARTYPEV_STR ? cgen_gen_rrsv( cgen, resoffs ) : cgen_gen_rrnv( cgen, resoffs );
         if ( !ok ) {

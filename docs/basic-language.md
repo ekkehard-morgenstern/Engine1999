@@ -218,6 +218,46 @@ FOR EACH K,V IN A(): PRINT K;V;: NEXT V    ' key (the index) and value
 - Design decisions I took (revisit if unwanted): `DOWNTO` with a `STEP` counts down by that amount (the step is negated, so `STEP -1` would count *up*); the key of `FOR EACH` is the flat index and not
   the subscripts; `AGAIN` in a `FOR EACH` restarts after the element was fetched (does not re-fetch); `DYNAMIC`/`ASSOC` arrays do not exist yet, so only plain arrays can be traversed.
 
+## Procedures and functions: `PROC`, `FUNC`, `CALL`, `LOCAL`, `RETURN value`, `EXIT PROC`
+
+```
+10 PROC STARS(N)                  ' a procedure: called with CALL, no value
+20 LOCAL I
+30 FOR I=1 TO N: PRINT "*";: NEXT I
+40 PRINT
+50 END PROC
+60 FUNC FACT(N)                   ' a function: called like DEF FN, FN name(args)
+70 IF N<=1 THEN RETURN 1
+80 RETURN N*FN FACT(N-1)          ' recursion works
+90 END FUNC
+100 CALL STARS(5): PRINT FN FACT(6)
+```
+
+- `PROC name[(params)] … END PROC` is called with `CALL name[(args)]`; `FUNC name[$|%][(params)] … END FUNC` is called like a user function: `FN name(args)`. The header must be alone
+  on its line; the body is jumped over where it stands (a definition can be anywhere in the program). A `FUNC` has to be **defined before the line that calls it** (the call is checked
+  when the line is parsed, like `DEF FN`); a `CALL` is checked when the code is generated, so a `PROC` may follow its calls (the main program on top, the procedures below).
+- Parameters are numeric, integer or string **variables passed by value**. They are ordinary global variables that get the arguments for the time of the call and their old values
+  back afterwards (that is what makes recursion work: every call saves the values of the previous one). Array parameters are not supported.
+- **`LOCAL a, b$, n%`** (in the body of a `PROC`, `FUNC` or multi-line `DEF FN` only) makes variables local to the call: their values are saved when `LOCAL` runs, they start as 0 / `""`,
+  and the old values return at the end of the call (also if an error unwinds it). Without `LOCAL` a variable is the global one (there is no `GLOBAL`, everything else *is* global).
+  `LOCAL` takes effect when it is executed, so put it first. Arrays can't be `LOCAL`.
+- A `FUNC` returns what `RETURN expr` or `FN name = expr` last set (0 / `""` if none); `RETURN expr` also leaves at once. `EXIT PROC` / `EXIT FUNC` (also `EXIT FN` in a multi-line `DEF FN`)
+  leave at once (a `FUNC` returns the value set so far). A plain `RETURN` is still the `RETURN` of `GOSUB` (a `GOSUB` inside a procedure to a line of that procedure is fine). `RETURN expr` also works in
+  a multi-line `DEF FN`.
+- The result of a `FUNC` lives in the hidden variable `@FN<name>`, which is saved like a `LOCAL`, so a recursive call does not disturb the result of its caller.
+- Design decisions I took (revisit if unwanted): `PROC` is a function variable of the label type (own name space: a `PROC A` and a `FUNC A` may both exist); redefining a name with the same number of
+  parameters reuses it; a `PROC` or `FUNC` can't be defined inside another one; a `GOTO` out of a body leaves the call frame open (as with `DEF FN`; `POP` doesn't know about it).
+- New reserved words: `PROC FUNC CALL LOCAL RESUME` (tokens 235..239).
+
+## More operators and functions (2026-10-31)
+
+- `IMP`, `NIMP` (`a IMP b` = `(NOT a) OR b`, `a NIMP b` = `a AND NOT b`), `EQV` (= `XNOR`) and `NEQV` (= `XOR`), bitwise on 32 bit integers like the other logical operators. **They share the precedence of `OR`/`XOR`**
+  (left to right, below `AND`); AsmBASIC puts `IMP`/`EQV` on a level of their own below `OR`: use parentheses when mixing.
+- Shifts: `SHL` and `ASL` (= `LSHIFT`), `ASR` (= `RSHIFT`, arithmetic: keeps the sign), `SHR` (logical: fills with zeros; instruction `URSH`). Shift counts outside 0..31 give 0 (`SHL`, `SHR`) or the sign fill (`ASR`).
+- `FLOOR(x)` (= `INT`), `CEIL(x)`, `LOG2(x)`, `LOG10(x)` (`LOG2`/`LOG10` of a number <= 0 is "Illegal argument"). Not added: `LN`/`LG` (= `LOG`/`LOG10`) and `LOGN(b,x)` (= `LOG(x)/LOG(b)`: write it with `LOG`).
+- `TIME$` (`HH:MM:SS`), `DATE$` (`YYYY-MM-DD`), `DATETIME$` (both, with a blank), the local time (instruction `DTIM`). They can't be assigned (no setting of the clock).
+- New reserved words: `FLOOR CEIL LOG2 LOG10 TIME DATE DATETIME IMP NIMP EQV NEQV SHL SHR ASL ASR` (tokens 220..234).
+
 ## Numeric functions, `\`, `MOD`, `RND`
 
 ```
@@ -268,12 +308,19 @@ handler runs.
 - **`ON ERROR GOTO target`**: the program continues at the target. The trap is then **off** (an error in the handler is an ordinary,
   fatal error, which prevents endless loops); execute `ON ERROR GOTO` again to set it anew.
 - **`ON ERROR GOSUB target`**: the handler is a subroutine. `RETURN` continues with **the first line after the line that failed**
-  (not the failed statement: the rest of that line is skipped; there is no `RESUME` yet). The trap is off while the handler runs and
+  (not the failed statement: the rest of that line is skipped; use `RESUME` to go on in a finer way). The trap is off while the handler runs and
   on again after its `RETURN`. In a direct mode line there is no next line: the run ends after the handler.
 - **`ON ERROR OFF`**: errors are fatal again. The handler is also cleared when the program ends (`RUN`, `NEW`, `LOAD`, `CHAIN`, and after
   every direct mode line).
 - `ERR$` and `ERL` keep the last error until the run ends. Not caught: Break (ESC) and the step limit of the tests. Syntax errors
   are found before the program runs and are not run time errors.
+- **`RESUME`**, **`RESUME NEXT`**, **`RESUME target`** (line number or label) end the handler and go on: `RESUME` runs the statement that failed again
+  (after the handler has fixed the cause), `RESUME NEXT` continues behind that statement, `RESUME target` jumps (like `GOTO`). The "statement" is the
+  innermost one: in `IF c THEN a ELSE b` it is `a` or `b`, and `RESUME NEXT` continues behind the whole `IF`; in `A=1:B=1/0:C=3` it is `B=1/0`. A `GOSUB`
+  handler drops its return address (no `RETURN` after `RESUME`), a `GOTO` handler is armed again. Errors: "RESUME without error" (no error pending, or already
+  resumed); **"Cannot RESUME" when the error happened inside a `PROC` / `FUNC` call** (its frame was unwound when the handler was entered; resume from the
+  caller is not possible, use `RESUME target`). `ERL` is the line of the failed statement also after the resume; the stacks are not cleaned up
+  further than for the handler itself (the data stack is empty, `GOSUB` return addresses stay).
 - `ERROR` is recognized after `ON` only (so a variable named `ERROR` still works elsewhere); `ERR` and `ERL` are reserved words now.
 
 ## Binary strings

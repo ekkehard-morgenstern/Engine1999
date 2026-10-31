@@ -74,6 +74,12 @@ typedef struct _cgen_labeldata_t {
     size_t      dataindex;      // number of DATA items generated before the label
 } cgen_labeldata_t;
 
+// where the code of a statement starts and ends (RESUME): in the order of the starts; a statement inside another one (IF .. THEN)
+// has its own entry
+typedef struct _cgen_stmtaddr_t {
+    uint32_t    start, end;
+} cgen_stmtaddr_t;
+
 typedef struct _cgen_fixup_t {
     uint32_t    insoffs;        // code offset of the branch instruction to patch
     uint32_t    lineno;         // target line number
@@ -122,12 +128,18 @@ typedef struct _codegen_t {
     size_t          numconsts, maxconsts;
     cgen_lineaddr_t*    lineaddrs;      // line number -> code address, in ascending order
     size_t              numlineaddrs, maxlineaddrs;
+    cgen_stmtaddr_t*    stmts;          // the statements generated so far
+    size_t              numstmts, maxstmts;
     cgen_fixup_t*       fixups;         // forward references to lines
     size_t              numfixups, maxfixups;
     cgen_loopctx_t*     loops;          // loops that are currently open (compile time), innermost last
     size_t              numloops, maxloops;
     cgen_loopjump_t*    loopjumps;      // EXIT / ITERATE jumps that wait for their loop to be closed
     size_t              numloopjumps, maxloopjumps;
+    bool                inproc;         // generating the body of a PROC, FUNC or multi-line DEF FN
+    bool                procresult;     // ... one that has a value (the hidden variable procresvar, of the type procbase)
+    uint8_t             procbase;
+    uint16_t            procresvar;
     size_t              loopbase;       // loops below this number belong to code around the current function body
     uint32_t*           scratch;        // temporary list of code offsets (ON .. GOSUB)
     size_t              numscratch, maxscratch;
@@ -308,6 +320,12 @@ bool cgen_gen_mod( codegen_t* cgen );
 bool cgen_gen_math( codegen_t* cgen, uint16_t kind );
 bool cgen_gen_rand( codegen_t* cgen, uint16_t hasseed );
 bool cgen_gen_angm( codegen_t* cgen, uint16_t kind );
+bool cgen_gen_ursh( codegen_t* cgen );
+bool cgen_gen_imp( codegen_t* cgen );
+bool cgen_gen_nimp( codegen_t* cgen );
+bool cgen_gen_dtim( codegen_t* cgen, uint16_t kind );
+bool cgen_gen_locl( codegen_t* cgen, uint16_t varoffs );
+bool cgen_gen_rsm( codegen_t* cgen, uint16_t kind );
 bool cgen_gen_acnt( codegen_t* cgen, uint16_t varoffs );
 bool cgen_gen_aflt( codegen_t* cgen, uint16_t varoffs );
 bool cgen_gen_gfxc( codegen_t* cgen, uint16_t op );
@@ -373,6 +391,7 @@ bool cgen_from_assignlist( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_letstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_erasestmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_stmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_find_stmt( const codegen_t* cgen, uint32_t pc, uint32_t* pstart, uint32_t* pend );   // the innermost statement containing the instruction at pc
 bool cgen_from_stmtlist( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_stmtline( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_stmtlines( codegen_t* cgen, compiler_t* comp, node_t* node );
@@ -415,6 +434,12 @@ bool cgen_from_oncollstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_gfxstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_randomizestmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_anglestmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_procstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_callstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_resumestmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_localstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_gen_call_args( codegen_t* cgen, compiler_t* comp, node_t* node );     // the arguments of a call and their count
+void cgen_resolve_procexits( codegen_t* cgen, uint32_t addr );                  // EXIT PROC / RETURN value jumps go to addr
 bool cgen_from_foreachstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_exitstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_gfxquery( codegen_t* cgen, compiler_t* comp, node_t* node );

@@ -13,10 +13,11 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-(not committed yet) **Loop control, roadmap from the AsmBASIC review** (2026-10-31)
-- Read `../asmbasic` and its docs; `docs/roadmap.md` got section 11 with everything worth taking over (procedures with `LOCAL`, `RESUME`, `STOP`/`CONT`/`TRACE`/`AUTO`, logical operators and shifts, more math functions, `PEEK`/`POKE`/`SYS`, `PRINT USING`, `TIME$`/`DATE$`, aliases, open questions).
-- Implemented `EXIT [n]`, `LEAVE [n]`, `ITERATE [n]`, `FOR … DOWNTO … [STEP]`, `FOR EACH [key,] v IN a()`: tokens 217..219, nodes `NT_FOREACHSTMT 0x78` / `NT_EXITSTMT 0x79`, instructions `ACNT 0x168` / `AFLT 0x169`; `bastok`, `bascomp` (+ `.ebnf`), `cgenctl.c` (loop jump list, `cc_resolve_loopjumps`), `codegen`, `vm.c`, `instset.h`; docs (`basic-language.md`, `compiler-and-vm.md`, `roadmap.md`), `SESSION.md`.
-- Tests: `vmtest1` 908 cases (41 new; also under ASAN, which caught a double free in my first `AFLT`: fixed), all other test programs pass.
+(not committed yet) **Small additions, PROC/FUNC/LOCAL, RESUME** (2026-10-31)
+- **Small additions**: `FLOOR CEIL LOG2 LOG10`, `IMP NIMP EQV NEQV`, `SHL SHR ASL ASR`, `TIME$ DATE$ DATETIME$` (tokens 220..234, instructions `URSH 0x16A`, `IMP 0x16B`, `NIMP 0x16C`, `DTIM 0x16D`, `MATH` kinds 14..16).
+- **`PROC` / `FUNC` / `CALL` / `LOCAL`**: tokens 235..238, nodes 0x7A..0x7C, `LOCL 0x16E`; `RETURN expr`, `EXIT PROC|FUNC|FN`; recursion; `vm_context_t.saved` became a heap list; `bascomp.c` (`comp_eat_procstmt/callstmt/localstmt`), `cgendecl.c` (`cgen_from_procstmt/callstmt`), `cgenctl.c` (`LOCAL`, proc exits), `vm.c` (`vm_local`).
+- **`RESUME`**: token 239, `NT_RESUMESTMT 0x7D`, `RSM 0x16F`; table of statement addresses in the code generator (`cgen_find_stmt`), `vm->steppc`/`errpc`/`resume*`, `vm_resume_error()`.
+- Tests: `vmtest1` 908 -> 969 (+18 small additions, +25 PROC/FUNC, +15 RESUME; clean under ASAN/UBSAN), `repltest1` 286, the other test programs pass. Docs: `basic-language.md`, `compiler-and-vm.md`, `roadmap.md`, `instset.h`, `SESSION.md`.
 
 ## Log
 
@@ -589,3 +590,13 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
   - Tokens 214..216, `comp_eat_anglestmt()`, `NT_ANGLESTMT 0x77`, `cgen_from_anglestmt()`, instruction `ANGM 0x167`, `vm_t.angmode` (2 = radians in `init_vm()`), `vm_trig()` (SIN/COS/TAN of degrees and gradians, quarter turns exact, `TAN(90)` "Overflow"), `ATN` converts its result; the graphics angles stay in degrees.
   - Tests: `vmtest1` 854 -> 867 (every function in each unit, big/negative angles, the unit inside a program, graphics angles unchanged), `repltest1` 282 -> 285 (listing, unit over direct lines, `RUN` back to radians).
   - Docs: `docs/basic-language.md` ("Angle units"), `docs/compiler-and-vm.md`, `instset.h`, `bascomp.ebnf`, `SESSION.md`.
+
+### 953e2b3 — 2026-10-31 06:16:38 +0100 — "Claude state update"
+2 files, +10/-6.
+- `HistoryLog-Claude.md` (moved the DEG/RAD/GRAD entry into the log) and `SESSION.md` (repo state, test counts). No source changes.
+
+### 4b1cedd — 2026-10-31 09:46:29 +0100 — "Implemented some ideas from AsmBASIC, implemented by Claude Code"
+19 files, +418/-16.
+- Read `../asmbasic` and its docs; `docs/roadmap.md` got section 11 with everything worth taking over (procedures with `LOCAL`, `RESUME`, `STOP`/`CONT`/`TRACE`/`AUTO`, logical operators and shifts, more math functions, `PEEK`/`POKE`/`SYS`, `PRINT USING`, `TIME$`/`DATE$`, aliases, open questions).
+- Implemented `EXIT [n]`, `LEAVE [n]`, `ITERATE [n]`, `FOR … DOWNTO … [STEP]`, `FOR EACH [key,] v IN a()`: tokens 217..219, nodes `NT_FOREACHSTMT 0x78` / `NT_EXITSTMT 0x79`, instructions `ACNT 0x168` / `AFLT 0x169`; `bastok`, `bascomp` (+ `.ebnf`), `cgenctl.c` (loop jump list, `cc_resolve_loopjumps`), `codegen`, `vm.c`, `instset.h`; docs (`basic-language.md`, `compiler-and-vm.md`, `roadmap.md`), `SESSION.md`.
+- Tests: `vmtest1` 908 cases (41 new; also under ASAN, which caught a double free in my first `AFLT`: fixed), all other test programs pass.

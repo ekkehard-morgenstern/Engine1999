@@ -827,6 +827,9 @@ static const struct {
     { TOK_MOD, "MOD" }, { TOK_ABS, "ABS" }, { TOK_SGN, "SGN" }, { TOK_SQR, "SQR" }, { TOK_SIN, "SIN" }, { TOK_COS, "COS" },
     { TOK_TAN, "TAN" }, { TOK_ATN, "ATN" }, { TOK_EXP, "EXP" }, { TOK_LOG, "LOG" }, { TOK_RND, "RND" }, { TOK_FIX, "FIX" },
     { TOK_PI, "PI" }, { TOK_RANDOMIZE, "RANDOMIZE" }, { TOK_DEG, "DEG" }, { TOK_RAD, "RAD" }, { TOK_GRAD, "GRAD" }, { TOK_EXIT, "EXIT" }, { TOK_LEAVE, "LEAVE" }, { TOK_ITERATE, "ITERATE" },
+    { TOK_FLOOR, "FLOOR" }, { TOK_CEIL, "CEIL" }, { TOK_LOG2, "LOG2" }, { TOK_LOG10, "LOG10" }, { TOK_TIME, "TIME" }, { TOK_DATE, "DATE" },
+    { TOK_DATETIME, "DATETIME" }, { TOK_IMP, "IMP" }, { TOK_NIMP, "NIMP" }, { TOK_EQV, "EQV" }, { TOK_NEQV, "NEQV" }, { TOK_SHL, "SHL" },
+    { TOK_SHR, "SHR" }, { TOK_ASL, "ASL" }, { TOK_ASR, "ASR" }, { TOK_PROC, "PROC" }, { TOK_FUNC, "FUNC" }, { TOK_CALL, "CALL" }, { TOK_LOCAL, "LOCAL" }, { TOK_RESUME, "RESUME" },
     { TOK_GFX, "GFX" }, { TOK_SPRITE, "SPRITE" }, { TOK_TILE, "TILE" }, { TOK_TXT, "TXT" }, { TOK_DESIGN, "DESIGN" },
     { TOK_RGB, "RGB" }, { TOK_POINT, "POINT" }, { TOK_CLS, "CLS" }, { TOK_LOCATE, "LOCATE" }, { TOK_COLOR, "COLOR" }, { TOK_AMP, "&" }, { TOK_LE, "<=" }, { TOK_GE, ">=" }, { TOK_NE, "<>" }, { 0, 0 }
 };
@@ -1029,16 +1032,19 @@ static hlclass_t keyword_hlclass( uint8_t tok ) {
         case TOK_UNLESS: case TOK_THEN: case TOK_ELSE: case TOK_ENDIF: case TOK_ENDUNLESS: case TOK_END: case TOK_FOR:
         case TOK_STEP: case TOK_NEXT: case TOK_REPEAT: case TOK_WHILE: case TOK_UNTIL: case TOK_WEND: case TOK_UEND:
         case TOK_POP: case TOK_ON: case TOK_AGAIN: case TOK_AFTER: case TOK_EVERY: case TOK_EXIT: case TOK_LEAVE: case TOK_ITERATE:
+        case TOK_PROC: case TOK_FUNC: case TOK_CALL: case TOK_LOCAL: case TOK_RESUME:
             return HL_CONTROL;
         case TOK_ASC: case TOK_VAL: case TOK_LEFT: case TOK_MID: case TOK_RIGHT: case TOK_INKEY: case TOK_BIN:
         case TOK_QUA: case TOK_OCT: case TOK_DEC: case TOK_HEX: case TOK_FRE: case TOK_TI: case TOK_LEN: case TOK_CHR:
         case TOK_PLAYING: case TOK_REMAIN: case TOK_EOF: case TOK_LOF: case TOK_LOC: case TOK_ERR: case TOK_ERL: case TOK_MKI: case TOK_MKL: case TOK_MKS: case TOK_MKD:
         case TOK_CVI: case TOK_CVL: case TOK_CVS: case TOK_CVD: case TOK_RGB: case TOK_POINT: case TOK_FN:
         case TOK_INT: case TOK_ABS: case TOK_SGN: case TOK_SQR: case TOK_SIN: case TOK_COS: case TOK_TAN: case TOK_ATN: case TOK_EXP:
-        case TOK_LOG: case TOK_RND: case TOK_FIX: case TOK_PI:
+        case TOK_LOG: case TOK_RND: case TOK_FIX: case TOK_PI: case TOK_FLOOR: case TOK_CEIL: case TOK_LOG2: case TOK_LOG10:
+        case TOK_TIME: case TOK_DATE: case TOK_DATETIME:
             return HL_FUNCTION;
         case TOK_NOT: case TOK_AND: case TOK_OR: case TOK_XOR: case TOK_NAND: case TOK_NOR: case TOK_XNOR:
-        case TOK_LSHIFT: case TOK_RSHIFT: case TOK_MOD:
+        case TOK_LSHIFT: case TOK_RSHIFT: case TOK_MOD: case TOK_IMP: case TOK_NIMP: case TOK_EQV: case TOK_NEQV: case TOK_SHL: case TOK_SHR:
+        case TOK_ASL: case TOK_ASR:
             return HL_OPERATOR;
     }
     return HL_STATEMENT;

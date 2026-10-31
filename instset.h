@@ -487,6 +487,21 @@ The 4096 extended instructions are as follows:
     0001 01101000       ACNT - number of elements of an array (param=varoffs) ( -- n ) C=0 P=1
     0001 01101001       AFLT - read an array element by its flat (row-major) index (param=varoffs) ( inx -- n|s ) C=0 P=1
                             FOR EACH uses the two. An index outside 0 .. n-1 is "Subscript out of range".
+    0001 01101010       URSH - logical shift right (zero fill)       ( n1 n2 -- n )  C=0 P=0
+    0001 01101011       IMP - bitwise implication (NOT n1) OR n2     ( n1 n2 -- n )  C=0 P=0
+    0001 01101100       NIMP - bitwise NOT implication n1 AND NOT n2 ( n1 n2 -- n )  C=0 P=0
+    0001 01101101       DTIM - current local time as a string        ( -- s ) C=0 P=1
+                            Parameter 1: "HH:MM:SS", 2: "YYYY-MM-DD", 3: "YYYY-MM-DD HH:MM:SS".
+    0001 01101110       LOCL - declare a local variable of the running PROC / FUNC (param=varoffs) ( -- ) C=0 P=1
+                            The value of the (numeric, integer or string) variable is saved in the context of the call and given back when
+                            the call ends (RETF, or an error that unwinds the call); the variable starts as 0 or "". Outside a call it is
+                            the error "LOCAL outside a procedure".
+    0001 01101111       RSM - RESUME after an error (param 0 = retry the statement, 1 = NEXT, 2 = target) ( [addr R] -- ) C=0 P=1
+                            Only in an error handler (ON ERROR) and only if the error happened outside a function call. 0 goes to the start
+                            of the statement that failed (the innermost one: the code generator keeps a table of the statements), 1 to the
+                            first instruction behind it, 2 to the code address on the return stack. Then the handler is over: a GOSUB handler
+                            drops its return address, a GOTO handler is armed again. "RESUME without error" otherwise.
+    MATH kinds 14..16: CEIL, LOG2, LOG10 (kind 1, INT, is FLOOR as well).
 
 */
 
@@ -645,5 +660,11 @@ The 4096 extended instructions are as follows:
 #define INS_ANGM        UINT16_C(0X167)
 #define INS_ACNT        UINT16_C(0X168)
 #define INS_AFLT        UINT16_C(0X169)
+#define INS_URSH        UINT16_C(0X16A)
+#define INS_IMP         UINT16_C(0X16B)
+#define INS_NIMP        UINT16_C(0X16C)
+#define INS_DTIM        UINT16_C(0X16D)
+#define INS_LOCL        UINT16_C(0X16E)
+#define INS_RSM         UINT16_C(0X16F)
 
 #endif

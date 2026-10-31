@@ -79,6 +79,7 @@ void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem ) {
     vm->renumber = 0;
     iotab_init( &vm->io );
     vm->errset = vm->errgosub = vm->errinhandler = vm->errcaught = false;
+    vm->resumestate = 0;
     vm->errtarget = 0; vm->errrsp = 0;
     vm->errlast[0] = vm->errtext[0] = '\0';
     vm->errlastline = vm->errtextline = 0;
@@ -122,11 +123,12 @@ static void vm_clear_stacks( vm_t* vm ) {
     // function contexts still open (after an error): free the saved strings
     while ( vm->nctx ) {
         vm_context_t* ctx = &vm->ctxs[ --vm->nctx ];
-        for ( uint8_t i=0; i < ctx->numsaved; ++i ) {
+        for ( size_t i=0; i < ctx->numsaved; ++i ) {
             if ( ctx->saved[i].value.isstr ) {
                 free( ctx->saved[i].value.str );
             }
         }
+        ctx->numsaved = 0;
     }
 }
 
@@ -153,6 +155,9 @@ void cleanup_vm( vm_t* vm ) {
     vm_clear_stacks( vm );
     free( vm->dstack );
     free( vm->rstack );
+    for ( size_t i=0; i < vm->maxctx; ++i ) {
+        free( vm->ctxs[i].saved );
+    }
     free( vm->ctxs );
     vm->ctxs = 0; vm->nctx = vm->maxctx = 0;
     vm->dstack = 0; vm->dsp = vm->dmax = 0;
@@ -167,6 +172,7 @@ static void vm_report_error( vm_t* vm, const char* text ) {
         snprintf( vm->errtext, sizeof(vm->errtext), "%s", text );       // ON ERROR: kept for the handler, not reported
         vm->errtextline = vm->line != LINENO_NONE ? (uint32_t) vm->line : 0U;
         vm->errcaught = true;
+        vm->errpc = vm->steppc;
         return;
     }
     char buf[160];
@@ -958,6 +964,20 @@ static bool vm_get_key( vm_t* vm ) {
 
 // pushes a context for a call: the values of the parameter variables before the call are saved,
 // to be restored by RETF. The return stack gets <retoffs> <context index>.
+// adds an entry to the saved variables of a context (numsaved counts it at once; NULL if out of memory)
+static vm_savedvar_t* vm_ctx_add( vm_context_t* ctx ) {
+    if ( ctx->numsaved == ctx->maxsaved ) {
+        size_t newmax = ctx->maxsaved ? ctx->maxsaved * 2U : 8U;
+        vm_savedvar_t* p = (vm_savedvar_t*) realloc( ctx->saved, newmax * sizeof(vm_savedvar_t) );
+        if ( p == 0 ) {
+            return 0;
+        }
+        ctx->saved = p;
+        ctx->maxsaved = newmax;
+    }
+    return &ctx->saved[ ctx->numsaved++ ];
+}
+
 static bool vm_call_function( vm_t* vm, uint16_t funcoffs, uint32_t retaddr ) {
     double num;
     if ( !vm_dpop_num( vm, &num ) ) {
@@ -995,6 +1015,7 @@ static bool vm_call_function( vm_t* vm, uint16_t funcoffs, uint32_t retaddr ) {
         if ( p == 0 ) {
             goto FAIL;
         }
+        memset( p + vm->maxctx, 0, ( newmax - vm->maxctx ) * sizeof(vm_context_t) );
         vm->ctxs = p;
         vm->maxctx = newmax;
     }
@@ -1015,9 +1036,14 @@ static bool vm_call_function( vm_t* vm, uint16_t funcoffs, uint32_t retaddr ) {
             vm_error( vm, "Undefined parameter variable" );
             goto FAILCTX;
         }
-        vm_savedvar_t* sv = &ctx->saved[ ctx->numsaved ];
+        vm_savedvar_t* sv = vm_ctx_add( ctx );
+        if ( sv == 0 ) {
+            vm_error( vm, "Out of memory" );
+            goto FAILCTX;
+        }
         sv->varoffs = poffs;
         sv->vartype = ptype;
+        --ctx->numsaved;        // (counted again when the value was fetched)
         if ( !vm_get_value( vm, poffs, ptype, 0, 0, &sv->value ) ) {
             goto FAILCTX;
         }
@@ -1037,7 +1063,7 @@ static bool vm_call_function( vm_t* vm, uint16_t funcoffs, uint32_t retaddr ) {
     return vm_branch_to( vm, codeoffs );
 
 FAILCTX:
-    for ( uint8_t i=0; i < ctx->numsaved; ++i ) {
+    for ( size_t i=0; i < ctx->numsaved; ++i ) {
         if ( ctx->saved[i].value.isstr ) {
             free( ctx->saved[i].value.str );
         }
@@ -1062,7 +1088,7 @@ static bool vm_return_function( vm_t* vm ) {
     vm_context_t* ctx = &vm->ctxs[ --vm->nctx ];
     // the result stays on the data stack; restore the parameter variables in reverse order
     bool ok = true;
-    for ( uint8_t i = ctx->numsaved; i > 0; --i ) {
+    for ( size_t i = ctx->numsaved; i > 0; --i ) {
         vm_savedvar_t* sv = &ctx->saved[ i - 1U ];
         ok = vm_set_value( vm, sv->varoffs, sv->vartype, 0, 0, sv->value ) && ok;
     }
@@ -1357,6 +1383,7 @@ static bool vm_list_files( vm_t* vm ) {
 }
 
 static bool vm_music_play( void* usrdata, int voice, const char* text, char* err, size_t errsz );
+static bool vm_resume_error( vm_t* vm, uint16_t kind );
 static bool vm_randomize( vm_t* vm, bool hasseed );
 static bool vm_set_errtrap( vm_t* vm, uint16_t param );
 static bool vm_interrupt_hook( void* usrdata );
@@ -1941,6 +1968,13 @@ static bool vm_math( vm_t* vm, uint16_t kind ) {
             }
             break;
         case 10: r = exp( x ); break;
+        case 14: r = ceil( x ); break;
+        case 15: case 16:
+            if ( !( x > 0.0 ) ) {
+                return vm_error( vm, "Illegal argument" );
+            }
+            r = kind == 15 ? log2( x ) : log10( x );
+            break;
         case 11:
             if ( !( x > 0.0 ) ) {
                 return vm_error( vm, "Illegal argument" );
@@ -2734,6 +2768,55 @@ static double vm_free_memory( void ) {
     return result;
 }
 
+// DTIM ( -- s ): the local time as text, kind 1 "HH:MM:SS", 2 "YYYY-MM-DD", 3 both
+static bool vm_date_time( vm_t* vm, uint16_t kind ) {
+    time_t now = time( 0 );
+    struct tm lt;
+    char text[32];
+    if ( kind < 1 || kind > 3 || localtime_r( &now, &lt ) == 0 ) {
+        return vm_error( vm, "Time not available" );
+    }
+    const char* fmt = kind == 1 ? "%H:%M:%S" : kind == 2 ? "%Y-%m-%d" : "%Y-%m-%d %H:%M:%S";
+    size_t n = strftime( text, sizeof(text), fmt, &lt );
+    char* str = vm_new_string( vm, text, n );
+    return str && vm_push_string_n( vm, str, n );
+}
+
+// LOCL: the variable is local to the running PROC / FUNC: save its value in the context, start from 0 or ""
+static bool vm_local( vm_t* vm, uint16_t varoffs ) {
+    var_t* var = vmem_var( vm->vmem, varoffs );
+    if ( var == 0 || ( var->type & ( VARTYPEF_ARRAY | VARTYPEF_FUNC ) ) || ( var->type & VARTYPEM_BASE ) == VARTYPEV_LABEL ) {
+        return vm_error( vm, "Illegal LOCAL variable" );
+    }
+    if ( vm->nctx == 0 ) {
+        return vm_error( vm, "LOCAL outside a procedure" );
+    }
+    uint8_t vartype = var->type;
+    vm_context_t* ctx = &vm->ctxs[ vm->nctx - 1U ];
+    vm_savedvar_t* sv = vm_ctx_add( ctx );
+    if ( sv == 0 ) {
+        return vm_error( vm, "Out of memory" );
+    }
+    sv->varoffs = varoffs;
+    sv->vartype = vartype;
+    --ctx->numsaved;
+    if ( !vm_get_value( vm, varoffs, vartype, 0, 0, &sv->value ) ) {
+        return false;
+    }
+    ++ctx->numsaved;
+    vmval_t fresh;
+    fresh.isstr = ( vartype & VARTYPEM_BASE ) == VARTYPEV_STR;
+    fresh.num = 0.0;
+    if ( fresh.isstr ) {
+        fresh.len = 0;
+        fresh.str = vm_new_string( vm, "", 0 );
+        if ( fresh.str == 0 ) {
+            return false;
+        }
+    }
+    return vm_set_value( vm, varoffs, vartype, 0, 0, fresh );
+}
+
 static bool vm_system_function( vm_t* vm, uint16_t opcode ) {
     double num; char buf[40];
     switch ( opcode ) {
@@ -2897,6 +2980,9 @@ static bool vm_binary_num( vm_t* vm, uint16_t opcode ) {
     switch ( opcode ) {
         case INS_LSH:   r = ib >= 0 && ib < 32 ? (double)(int32_t)( (uint32_t) ia << ib ) : 0.0; break;
         case INS_RSH:   r = (double)( ib >= 0 && ib < 32 ? ia >> ib : ( ia < 0 ? -1 : 0 ) ); break;
+        case INS_URSH:  r = (double)(int32_t)( ib >= 0 && ib < 32 ? (uint32_t) ia >> ib : 0U ); break;
+        case INS_IMP:   r = (double)( ~ia | ib ); break;
+        case INS_NIMP:  r = (double)( ia & ~ib ); break;
         case INS_ADD:   r = a + b; break;
         case INS_SUB:   r = a - b; break;
         case INS_MUL:   r = a * b; break;
@@ -2989,6 +3075,7 @@ static bool vm_step( vm_t* vm ) {
     const codegen_t* cgen = vm->cgen;
     uint32_t pc = vm->pc;
     const uint32_t inspc = pc;
+    vm->steppc = pc;
     // fetch and decode
     uint8_t ins = cgen->code[ pc++ ];
     uint8_t ext = 0; uint32_t param = 0;
@@ -3113,6 +3200,7 @@ static bool vm_step( vm_t* vm ) {
         case INS_LSH: case INS_RSH: case INS_ADD: case INS_SUB: case INS_MUL: case INS_DIV: case INS_AND: case INS_NAND:
         case INS_OR: case INS_NOR: case INS_XOR: case INS_XNOR: case INS_POW: case INS_CNEQ: case INS_CNNE:
         case INS_CNGE: case INS_CNLE: case INS_CNGT: case INS_CNLT: case INS_IDIV: case INS_MOD:
+        case INS_URSH: case INS_IMP: case INS_NIMP:
             return vm_binary_num( vm, opcode );
         case INS_CON: case INS_CSEQ: case INS_CSNE: case INS_CSGE: case INS_CSLE: case INS_CSGT: case INS_CSLT:
             return vm_binary_str( vm, opcode );
@@ -3156,6 +3244,9 @@ static bool vm_step( vm_t* vm ) {
             }
             vm->angmode = (int) param16;
             return true;
+        case INS_DTIM: return vm_date_time( vm, param16 );
+        case INS_LOCL: return vm_local( vm, param16 );
+        case INS_RSM: return vm_resume_error( vm, param16 );
         case INS_ACNT: case INS_AFLT: return vm_array_flat( vm, opcode, param16 );
         case INS_GFXC: return vm_gfx_command( vm, param16 );
         case INS_GFXQ: return vm_gfx_query( vm, param16 );
@@ -3239,6 +3330,32 @@ bool vm_run( vm_t* vm ) {
     return vm_run_at( vm, UINT32_C(0) );
 }
 
+// RSM: RESUME (kind 0), RESUME NEXT (1), RESUME target (2, the address is on the return stack)
+static bool vm_resume_error( vm_t* vm, uint16_t kind ) {
+    uint32_t dest = 0;
+    if ( kind == 2 && !vm_rpop( vm, &dest ) ) {
+        return false;
+    }
+    if ( vm->resumestate == 0 ) {
+        return vm_error( vm, "RESUME without error" );
+    }
+    if ( vm->resumestate == 2 ) {
+        return vm_error( vm, "Cannot RESUME (the error was in a PROC or FUNC)" );
+    }
+    vm->resumestate = 0;
+    if ( vm->errgosub ) {
+        vm->rsp = vm->errrsp;           // the handler's return address goes
+        vm->errinhandler = false;
+    } else {
+        vm->errset = true;              // the handler is over: the trap is armed again
+    }
+    if ( kind < 2 ) {
+        dest = kind == 0 ? vm->resumestart : vm->resumeend;
+        vm->line = vm->errlastline != 0 ? vm->errlastline : LINENO_NONE;
+    }
+    return vm_branch_to( vm, dest );
+}
+
 // ERRT: ON ERROR GOSUB (1) / GOTO (2) with the handler's address on the return stack, or OFF (0)
 static bool vm_set_errtrap( vm_t* vm, uint16_t param ) {
     if ( param == 0 ) {
@@ -3272,6 +3389,8 @@ static uint32_t vm_next_line_addr( const vm_t* vm ) {
 // an error was caught by vm_error(): forget what the failing statement left, set ERR$ / ERL and enter the handler
 static bool vm_trap_error( vm_t* vm ) {
     vm->errcaught = false;
+    // where RESUME may go: the statement that failed (not possible inside a PROC / FUNC call, whose frame is unwound below)
+    vm->resumestate = vm->nctx != 0 ? 2 : cgen_find_stmt( vm->cgen, vm->errpc, &vm->resumestart, &vm->resumeend ) ? 1 : 2;
     memcpy( vm->errlast, vm->errtext, sizeof(vm->errlast) );
     vm->errlastline = vm->errtextline;
     while ( vm->dsp ) {
@@ -3284,7 +3403,7 @@ static bool vm_trap_error( vm_t* vm ) {
         size_t rsp = vm->ctxs[0].rsp;
         while ( vm->nctx ) {
             vm_context_t* ctx = &vm->ctxs[ --vm->nctx ];
-            for ( uint8_t i = ctx->numsaved; i > 0; --i ) {
+            for ( size_t i = ctx->numsaved; i > 0; --i ) {
                 vm_savedvar_t* sv = &ctx->saved[ i - 1U ];
                 vm_set_value( vm, sv->varoffs, sv->vartype, 0, 0, sv->value );
             }
@@ -3316,6 +3435,7 @@ bool vm_begin( vm_t* vm, uint32_t start ) {
     vm->colpending = false;
     vm->design.active = false;
     vm->errset = vm->errgosub = vm->errinhandler = vm->errcaught = false;      // the error handler ends with the run, too
+    vm->resumestate = 0;
     vm->errlast[0] = '\0';
     vm->errlastline = 0;
     vm->pc = start;
