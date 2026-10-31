@@ -224,6 +224,8 @@ static void repl_setup_vm( repl_t* repl ) {
     vm->renumber  = repl_vm_renumber;
     vm->merge     = repl_vm_merge;
     vm->files     = repl_vm_files;
+    vm->argc      = repl->argc;
+    vm->argv      = repl->argv;
     vm->build     = repl_vm_build;
     vm->trace     = repl->trace;       // TRACE ON lasts until TRACE OFF, over RUN, too
 }

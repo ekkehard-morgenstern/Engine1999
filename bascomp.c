@@ -1793,8 +1793,8 @@ OOM:        out_of_memory( comp );
             return false;
         }
         return true;
-    } else if ( tok == TOK_STR || tok == TOK_CHR || tok == TOK_MKI || tok == TOK_MKL || tok == TOK_MKS || tok == TOK_MKD ) {
-        // ( TOK_STR | TOK_CHR | TOK_MKI | TOK_MKL | TOK_MKS | TOK_MKD ) TOK_STRING TOK_LPAREN num-expr TOK_RPAREN
+    } else if ( tok == TOK_STR || tok == TOK_CHR || tok == TOK_MKI || tok == TOK_MKL || tok == TOK_MKS || tok == TOK_MKD || tok == TOK_ARG ) {
+        // ( TOK_ARG | TOK_STR | TOK_CHR | TOK_MKI | TOK_MKL | TOK_MKS | TOK_MKD ) TOK_STRING TOK_LPAREN num-expr TOK_RPAREN
         if ( !comp_fetchtok( comp ) ) {
             return false;
         }
@@ -1807,6 +1807,30 @@ OOM:        out_of_memory( comp );
         node_t* arg1 = NODE_NONE;
         if ( !comp_eat_numexpr( comp, &arg1 ) || arg1 == NODE_NONE ) {
             goto NUMEX;
+        }
+        if ( comp->currtok != TOK_RPAREN || !comp_fetchtok( comp ) ) {
+            goto CLOSE;
+        }
+        if ( !comp_create_node( comp, pnode, NT_SYSSTRFUNCARGCALL, UINT8_C(1), UINT16_C(1), &tok, arg1 ) ||
+            *pnode == NODE_NONE ) {
+            goto OOM;
+        }
+        return true;
+    } else if ( tok == TOK_ENV ) {
+        // TOK_ENV TOK_STRING TOK_LPAREN str-expr TOK_RPAREN .      (ENV$(name$): an environment variable)
+        if ( !comp_fetchtok( comp ) ) {
+            return false;
+        }
+        if ( comp->currtok != TOK_STRING || !comp_fetchtok( comp ) ) {
+            goto STRSIG;
+        }
+        if ( comp->currtok != TOK_LPAREN || !comp_fetchtok( comp ) ) {
+            goto OPEN;
+        }
+        node_t* arg1 = NODE_NONE;
+        if ( !comp_eat_strexpr( comp, &arg1 ) || arg1 == NODE_NONE ) {
+            comp_error( comp, "String expression expected" );
+            return false;
         }
         if ( comp->currtok != TOK_RPAREN || !comp_fetchtok( comp ) ) {
             goto CLOSE;
@@ -1955,7 +1979,7 @@ bool comp_eat_sysnoargnumcall( compiler_t* comp, node_t** pnode ) {
     // sys-noarg-num := sys-noarg-num-name .
     // sys-noarg-num-call := sys-no-arg-num .
     uint8_t tok = comp->currtok;
-    if ( ( tok != TOK_TI && tok != TOK_ERL && tok != TOK_PI ) || !comp_fetchtok( comp ) ) {
+    if ( ( tok != TOK_TI && tok != TOK_ERL && tok != TOK_PI && tok != TOK_ARGC ) || !comp_fetchtok( comp ) ) {
         return false;
     }
     if ( !comp_create_node( comp, pnode, NT_SYSNOARGNUMCALL, UINT8_C(0), UINT16_C(1), &tok ) || *pnode == NODE_NONE ) {

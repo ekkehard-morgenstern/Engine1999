@@ -42,7 +42,7 @@ The console host of the Engine: the BASIC system without a window, for shell scr
     engine1999c [options] file [arguments]     loads the program file (.bas listing, .e99 binary; a first line #! is skipped), runs it
                                                and ends; the exit status is the code of BYE / QUIT, 0 when the program just ends, 1 after
                                                an error, 2 if the file can't be loaded
-    engine1999c [options] -                    reads BASIC lines from standard input (see below)
+    engine1999c [options] - [arguments]        reads BASIC lines from standard input (see below)
     engine1999c [options]                      the same, interactively when standard input is a terminal: a banner and "Ready."
 
 Lines from standard input are entered like typed lines: numbered lines are stored, the others run at once; the INPUT, GET and INKEY$
@@ -278,6 +278,15 @@ static bool con_init( repl_t* repl ) {
 
 // -- the two modes ---------------------------------------------------------------------------
 
+// EDIT without a target and MONITOR need a screen: the REPL only sets flags for the host, which has no such thing (roadmap: full-screen versions)
+static void con_refuse_windows( repl_t* repl ) {
+    if ( repl->fulledit || repl->monitor ) {
+        con_report( repl, "? Not available in the console host\n" );
+        repl->fulledit = false;
+        repl->monitor = false;
+    }
+}
+
 // reads lines from standard input and enters them; returns when the input ends or BYE / QUIT asks for the end
 static void con_repl( repl_t* repl, bool interactive ) {
     char* line = 0; size_t cap = 0;
@@ -307,6 +316,7 @@ static void con_repl( repl_t* repl, bool interactive ) {
         con_catch_break( true );
         repl_enter( repl, line );
         con_catch_break( false );
+        con_refuse_windows( repl );
         if ( repl->quit ) {
             break;
         }
@@ -319,11 +329,13 @@ static void con_repl( repl_t* repl, bool interactive ) {
 
 static void usage( FILE* out, const char* prog ) {
     fprintf( out,
-        "Usage: %s [options] [file [arguments]]\n"
+        "Usage: %s [options] [file | - [arguments]]\n"
         "\n"
         "  file         a BASIC program (.bas listing or .e99 file): it is loaded, run, and the exit status is\n"
         "               that of BYE / QUIT (0 if the program just ends, 1 after an error, 2 if it can't be loaded)\n"
         "  -            read BASIC lines from standard input (the default; interactive on a terminal)\n"
+        "  arguments    for the program: ARGC is their number, ARG$(n) is the n-th (ARG$(0) is the file), ENV$(\"NAME\") an\n"
+        "               environment variable\n"
         "\n"
         "Options:\n"
         "  -i           after running the file, go on with the lines from standard input\n"
@@ -366,7 +378,20 @@ int main( int argc, char** argv ) {
             break;
         }
     }
-    // the rest of the command line is for the program (not used yet: see the roadmap)
+    // the rest of the command line is for the program: ARGC, ARG$(n); ARG$(0) is the file ("-" for standard input)
+    const char** progargs = 0;
+    int numprogargs = 0;
+    if ( file != 0 || i > 1 ) {
+        progargs = (const char**) calloc( (size_t)( argc - i ) + 2U, sizeof(char*) );
+        if ( progargs == 0 ) {
+            fprintf( stderr, "out of memory\n" );
+            return 2;
+        }
+        progargs[ numprogargs++ ] = file != 0 ? file : "-";
+        for ( ; i < argc; ++i ) {
+            progargs[ numprogargs++ ] = argv[i];
+        }
+    }
     con_stdout_tty = isatty( 1 );
     atexit( con_restore_tty );
     // lines (getline) and single keys (read) both come from standard input: without a buffer of ours in between they stay in step
@@ -376,6 +401,8 @@ int main( int argc, char** argv ) {
     if ( !con_init( &repl ) ) {
         return 2;
     }
+    repl.argc = numprogargs;
+    repl.argv = progargs;
     int status = EXIT_SUCCESS;
     if ( file != 0 ) {
         if ( !repl_load_file( &repl, file ) ) {
@@ -385,6 +412,7 @@ int main( int argc, char** argv ) {
         con_catch_break( true );
         bool ok = repl_run( &repl );
         con_catch_break( false );
+        con_refuse_windows( &repl );
         fflush( stdout );
         if ( repl.quit ) {
             status = repl.exitcode;
@@ -405,5 +433,6 @@ int main( int argc, char** argv ) {
     }
     fflush( stdout );
     cleanup_repl( &repl );
+    free( progargs );
     return status;
 }

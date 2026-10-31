@@ -259,6 +259,9 @@ typedef struct _vm_t {
     char*           inbuf;          // the line read by INPL, while the INPUT statement runs
     size_t          inlen, inpos;   // its length; offset of the next field (inlen + 1 = no more fields)
     uint32_t        inredo;         // code offset of the INPL instruction (restart point)
+    // the program's arguments for ARGC / ARG$: argv[0] is the program name, argv[1 .. argc-1] the arguments (argc 0 = none; the host owns them)
+    int             argc;
+    const char* const* argv;
     void*           userdata;
     void            (*print)( struct _vm_t*, void*, int channel, const char* text );    // default: stdout
     // optional: the same for text with zero bytes (they are characters: the glyphs of the control codes); without it the text is

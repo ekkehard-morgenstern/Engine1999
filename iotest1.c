@@ -186,6 +186,23 @@ static void test_null( void ) {
     iotab_closeall( &t );
 }
 
+// the standard streams as channels: the modes and names are checked here; what they read and write is checked through the console host (contest1)
+static void test_std( void ) {
+    iotab_t t; iotab_init( &t );
+    const char* e = 0;
+    check( "the three drivers exist", iodev_find( "stdin" ) != 0 && iodev_find( "stdout" ) != 0 && iodev_find( "stderr" ) != 0 );
+    check( "stdout: can't be read", !iotab_open( &t, 1, "stdout:", "file", IOMODE_READ, &e ) && strcmp( e, "Bad file mode" ) == 0 );
+    check( "stderr: can't be read", !iotab_open( &t, 1, "stderr:", "file", IOMODE_READ, &e ) && strcmp( e, "Bad file mode" ) == 0 );
+    check( "stdin: can't be written", !iotab_open( &t, 1, "stdin:", "file", IOMODE_WRITE, &e ) && strcmp( e, "Bad file mode" ) == 0 );
+    check( "stdin: can't be a random file", !iotab_open( &t, 1, "stdin:", "file", IOMODE_READ | IOMODE_WRITE | IOMODE_RANDOM, &e ) );
+    check( "no name behind the colon", !iotab_open( &t, 1, "stdout:x", "file", IOMODE_WRITE, &e ) && strcmp( e, "Bad file name" ) == 0 );
+    check( "stdout: opens for output", iotab_open( &t, 1, "stdout:", "file", IOMODE_WRITE, &e ) && iotab_write( &t, 1, "", 0, &e ) && iotab_close( &t, 1, &e ) );
+    check( "stderr: opens for output", iotab_open( &t, 2, "stderr:", "file", IOMODE_WRITE, &e ) && iotab_close( &t, 2, &e ) );
+    check( "stdout: opens for append, too", iotab_open( &t, 3, "stdout:", "file", IOMODE_WRITE | IOMODE_APPEND, &e ) && iotab_close( &t, 3, &e ) );
+    check( "stdin: opens for input", iotab_open( &t, 4, "stdin:", "file", IOMODE_READ, &e ) && iotab_close( &t, 4, &e ) );
+    iotab_closeall( &t );
+}
+
 static void test_file( void ) {
     iotab_t t; iotab_init( &t );
     const char* e = 0;
@@ -470,6 +487,7 @@ int main( void ) {
     test_mem_whole();
     test_channels_mem();
     test_null();
+    test_std();
     test_file();
     test_list();
     test_register();

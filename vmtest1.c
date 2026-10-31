@@ -807,6 +807,23 @@ static const testcase_t cases[] = {
     { "FILES goes on",          "PRINT 1:FILES:PRINT 2",                           "1\n<files \"\">\n2\n" },
     { "FILES before ELSE",      "IF 0 THEN FILES ELSE PRINT 3",                    "3\n" },
     { "FILES after a colon",    "FILES:PRINT 5",                                   "<files \"\">\n5\n" },
+    { "ARGC",                   "PRINT ARGC",                                      "2\n" },
+    { "ARGC in an expression",  "PRINT ARGC*2+1",                                  "5\n" },
+    { "ARG$(0) is the program", "PRINT ARG$(0)",                                   "prog\n" },
+    { "ARG$(1), ARG$(2)",       "PRINT ARG$(1);\"|\";ARG$(2)",                     "a|b c\n" },
+    { "ARG$ beyond the arguments is empty", "PRINT \"[\";ARG$(3);\"][\";ARG$(99);\"]\"", "[][]\n" },
+    { "ARG$ with a negative number", "PRINT ARG$(-1)",                             "? Illegal argument\n" },
+    { "ARG$ with a fraction",   "PRINT ARG$(1.5)",                                 "? Illegal argument\n" },
+    { "ARG$ in a loop",         "FOR I=0 TO ARGC:PRINT ARG$(I);\",\";:NEXT:PRINT", "prog,a,b c,\n" },
+    { "ARG$ with an expression", "N=1:PRINT ARG$(N+1)",                            "b c\n" },
+    { "ARG$ lower case",        "print arg$(1);argc",                              "a2\n" },
+    { "ARG$ in a string expression", "A$=\"<\"+ARG$(1)+\">\":PRINT A$",            "<a>\n" },
+    { "ENV$",                   "PRINT ENV$(\"E1999_TEST\")",                       "hello\n" },
+    { "ENV$ of an unset variable", "PRINT \"[\";ENV$(\"E1999_NOPE\");\"]\"",       "[]\n" },
+    { "ENV$ of an empty name",  "PRINT \"[\";ENV$(\"\");\"]\"",                    "[]\n" },
+    { "ENV$ with an expression", "A$=\"E1999\":PRINT ENV$(A$+\"_TEST\")",          "hello\n" },
+    { "ENV$ with a number",     "PRINT ENV$(5)",                                   "? String expression expected\n" },
+    { "ARG$ needs the dollar sign", "PRINT ARG(1)",                                "? String sigil '$' expected\n" },
     { "BYE",                    "BYE",                                             "<request QUIT 0>\n" },
     { "BYE with a code",        "BYE 3",                                           "<request QUIT 3>\n" },
     { "BYE expression",         "A=2:BYE A*3",                                     "<request QUIT 6>\n" },
@@ -1249,6 +1266,9 @@ static bool vm_merge( struct _vm_t* vm, void* usrdata, const char* name, bool ap
     return true;
 }
 
+// the program arguments of the test runs: ARGC is 2, ARG$(0) the name
+static const char* const test_argv[] = { "prog", "a", "b c" };
+
 static bool vm_build( struct _vm_t* vm, void* usrdata, const char* name ) {
     char text[200];
     snprintf( text, sizeof(text), "<build \"%s\">\n", name );
@@ -1485,6 +1505,8 @@ static bool compile_and_run( void ) {
     vm.merge    = vm_merge;
     vm.files    = vm_files;
     vm.build    = vm_build;
+    vm.argc     = 3;
+    vm.argv     = test_argv;
     vm.sound    = &test_sound;
     vm.gfx      = &test_gfx;
     gfx_polls   = 0;
@@ -1716,6 +1738,8 @@ int main( int argc, char** argv ) {
     if ( argc > 1 && strcmp( argv[1], "-v" ) == 0 ) {
         basdbg_flags = BASDBG_PARSE | BASDBG_CODE;
     }
+    setenv( "E1999_TEST", "hello", 1 );
+    unsetenv( "E1999_NOPE" );
     buf_t* tokbuf = create_buffer();
     if ( tokbuf == 0 ) {
         return EXIT_FAILURE;

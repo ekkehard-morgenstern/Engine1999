@@ -1316,16 +1316,16 @@ static const char about_text[] =
 // runs the embedded program and ends: no banner, no REPL. A program that ends normally is left at once (after its sound has
 // finished, but 10 s at most); one that ends with an error keeps the screen until a key is pressed.
 static int run_embedded( int argc, char** argv ) {
-    for ( int i=1; i < argc; ++i ) {
-        if ( strcmp( argv[i], "--engine1999-about" ) == 0 ) {
-            fputs( about_text, stdout );
-            return EXIT_SUCCESS;
-        }
+    if ( argc > 1 && strcmp( argv[1], "--engine1999-about" ) == 0 ) {      // the only option the runtime takes; the rest is for the program
+        fputs( about_text, stdout );
+        return EXIT_SUCCESS;
     }
     sdl_init();
     srand( time(0) );
     init_usrdata( &usrdata );
     init_host();
+    repl.argc = argc;                       // ARGC, ARG$(n): argv[0] is the executable
+    repl.argv = (const char* const*) argv;
     bool ok = repl_load_image( &repl, embedded_program_start, (size_t)( embedded_program_end - embedded_program_start ) );
     if ( ok ) {
         sdlscr_pollkeys( true );

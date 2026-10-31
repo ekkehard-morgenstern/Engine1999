@@ -298,6 +298,9 @@
 #define TOK_BUILD       UINT8_C(245)        // BUILD keyword
 #define TOK_BYE         UINT8_C(246)        // BYE keyword (quit the program / the Engine)
 #define TOK_QUIT        UINT8_C(247)        // QUIT keyword (the same as BYE)
+#define TOK_ARGC        UINT8_C(248)        // ARGC function (the number of program arguments)
+#define TOK_ARG         UINT8_C(249)        // ARG$ function (a program argument)
+#define TOK_ENV         UINT8_C(250)        // ENV$ function (an environment variable)
 #define TOK_NONE        UINT8_C(255)        // no token (!)
 
 // -- buffers ---------------------------------------------------------------

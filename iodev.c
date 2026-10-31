@@ -716,6 +716,76 @@ static bool con_close( void* handle ) {
 
 static iodrv_t con_driver = { "con", con_open, con_read, con_write, con_size, con_close, 0, 0, 0, 0, 0, 0, 0 };
 
+// -- the stdin, stdout and stderr drivers (the process's standard streams as channels) -------------------
+
+// `OPEN "stdout:" FOR OUTPUT AS #1`, `OPEN "stderr:" ...`, `OPEN "stdin:" FOR INPUT AS #2`: for scripts (docs/console-host.md). The name
+// has nothing behind the colon. stdout is the C library's stdout, so it stays in order with what a host prints through it.
+
+static void* std_open( iodrv_t* drv, const char* path, unsigned mode, char* err, size_t errsz ) {
+    int fd = (int)(intptr_t) drv->userdata;
+    if ( path[0] != '\0' ) {
+        iodev_set_err( err, errsz, "Bad file name" );
+        return 0;
+    }
+    bool wr = ( mode & IOMODE_WRITE ) != 0, rd = ( mode & IOMODE_READ ) != 0;
+    if ( ( mode & IOMODE_RANDOM ) != 0 || ( fd == 0 ? wr : rd ) ) {
+        iodev_set_err( err, errsz, "Bad file mode" );
+        return 0;
+    }
+    return (void*)( (uintptr_t) fd + 1U );     // a non-null tag
+}
+
+// at most one line per call, byte by byte, so that nothing behind the line is taken away from INPUT, GET and the host's own reads
+static ssize_t stdin_read( void* handle, void* buf, size_t count ) {
+    (void) handle;
+    uint8_t* p = (uint8_t*) buf;
+    size_t n = 0;
+    fflush( stdout );
+    while ( n < count ) {
+        uint8_t c;
+        ssize_t r = read( 0, &c, 1U );
+        if ( r < 0 ) {
+            if ( errno == EINTR ) {
+                continue;
+            }
+            return n > 0 ? (ssize_t) n : -1;
+        }
+        if ( r == 0 ) {
+            break;
+        }
+        p[ n++ ] = c;
+        if ( c == '\n' ) {
+            break;
+        }
+    }
+    return (ssize_t) n;
+}
+
+static ssize_t stdout_write( void* handle, const void* buf, size_t count ) {
+    (void) handle;
+    return fwrite( buf, 1U, count, stdout ) == count ? (ssize_t) count : -1;
+}
+
+static ssize_t stderr_write( void* handle, const void* buf, size_t count ) {
+    (void) handle;
+    fflush( stdout );           // errors appear in order with the output before them
+    return fwrite( buf, 1U, count, stderr ) == count ? (ssize_t) count : -1;
+}
+
+static int64_t std_size( void* handle ) {
+    (void) handle;
+    return -1;
+}
+
+static bool std_close( void* handle ) {
+    (void) handle;
+    return true;                // the process's streams stay open
+}
+
+static iodrv_t stdin_driver  = { "stdin",  std_open, stdin_read, 0, std_size, std_close, 0, 0, 0, 0, 0, 0, (void*)(intptr_t) 0 };
+static iodrv_t stdout_driver = { "stdout", std_open, 0, stdout_write, std_size, std_close, 0, 0, 0, 0, 0, 0, (void*)(intptr_t) 1 };
+static iodrv_t stderr_driver = { "stderr", std_open, 0, stderr_write, std_size, std_close, 0, 0, 0, 0, 0, 0, (void*)(intptr_t) 2 };
+
 // -- the play driver (lines of music) ---------------------------------------------------------------
 
 static iomusic_t iodev_music;
@@ -982,6 +1052,9 @@ void iodev_init( void ) {
         iodev_register( &con_driver );
         iodev_register( &play_driver );
         iodev_register( &tcp_driver );
+        iodev_register( &stdin_driver );
+        iodev_register( &stdout_driver );
+        iodev_register( &stderr_driver );
     }
 }
 

@@ -13,6 +13,10 @@ engine1999c                       on a terminal: a banner and "Ready." prompts, 
 A script can start with a `#!` line (`#!/usr/bin/env engine1999c`): the loader skips a first line that begins with `#!` in text listings (also for `LOAD` and `MERGE` in the window version).
 The file is a `.bas` listing or a binary `.e99` file, found the way `LOAD` finds it (`engine1999c prog` finds `prog.bas`).
 
+## Arguments, environment, standard channels
+
+Everything after the file name is for the program: `engine1999c prog.bas a "b c"` gives `ARGC` = 2, `ARG$(1)` = `a`, `ARG$(2)` = `b c`, `ARG$(0)` = `prog.bas`; `ENV$("HOME")` reads the environment; `OPEN "stderr:" FOR OUTPUT AS #1` writes to standard error, `OPEN "stdin:" FOR INPUT AS #2` reads standard input (`docs/basic-language.md`, "Program arguments and the environment"). With standard input as the program (`engine1999c - a b`) `ARG$(0)` is `-`.
+
 ## Input and output
 
 - **Output** of the program (channel 0) goes to standard output, binary-safe (`CHR$(0)` is written as a zero byte). **Messages and errors** go to standard error (`? Division by zero in line 20`); on a terminal an error message starts on a line of its own.
@@ -43,7 +47,7 @@ The file is a `.bas` listing or a binary `.e99` file, found the way `LOAD` finds
 
 ## Not done yet (roadmap section 12)
 
-Program arguments and environment (`engine1999c prog.bas a b` ignores `a b` so far), the `stdin:` / `stdout:` / `stderr:` channels, a `BUILD` that makes executables without `libSDL2`, a line editor for the interactive mode (it uses the terminal's own), audio without a window.
+A `BUILD` that makes executables without `libSDL2` (**high priority**), syntax colors in `LIST` on a terminal (**high priority**), a full-screen `EDIT` and `MONITOR` for interactive console use, a line editor for the interactive mode (it uses the terminal's own), audio without a window. See roadmap section 12.
 
 ## Design decisions I took (revisit if unwanted)
 
@@ -51,4 +55,4 @@ Program arguments and environment (`engine1999c prog.bas a b` ignores `a b` so f
 - Standard input is unbuffered (`getline` and the key reads both go to the file descriptor), so lines and single keys stay in step in a pipe; for very large scripts on standard input a file argument is faster.
 - A line error in the pipe mode doesn't change the exit status; run mode returns 1.
 - Ctrl-C only catches while a program runs (the handler is installed around each line), so an idle prompt ends on Ctrl-C.
-- Tests: `contest1` (44 checks through the shell: pipes, exit codes, the `#!` line, `INPUT`/`GET` from a pipe, SIGINT; run it in the build directory).
+- Tests: `contest1` (59 checks through the shell: pipes, exit codes, the `#!` line, `INPUT`/`GET` from a pipe, SIGINT; run it in the build directory).

@@ -96,6 +96,10 @@ sys-num-fn-1-arg-call := ( TOK_ASC | TOK_VAL | TOK_LEN | TOK_CVI | TOK_CVL | TOK
 sys-str-fn-2-arg-call := ( TOK_BIN | TOK_QUA | TOK_OCT | TOK_DEC | TOK_HEX ) TOK_STRING TOK_LPAREN num-expr
                               [ TOK_COMMA num-expr ] TOK_RPAREN |
                          ( TOK_STR | TOK_CHR | TOK_MKI | TOK_MKL | TOK_MKS | TOK_MKD ) TOK_STRING TOK_LPAREN num-expr TOK_RPAREN |
+                         -- ARG$(n) is a program argument (0 = the program name, 1..ARGC the arguments, "" beyond them), ENV$(name$) the value of
+                         -- an environment variable ("" if it is not set); the arguments come from the command line of engine1999c or of a built program
+                         TOK_ARG TOK_STRING TOK_LPAREN num-expr TOK_RPAREN |
+                         TOK_ENV TOK_STRING TOK_LPAREN str-expr TOK_RPAREN |
                          -- PEEK$(addr, length) is read like BIN$ (the length is mandatory: "Illegal argument" without it)
                          TOK_PEEK TOK_STRING TOK_LPAREN num-expr [ TOK_COMMA num-expr ] TOK_RPAREN |
                          ( TOK_LEFT | TOK_RIGHT ) TOK_STRING TOK_LPAREN str-expr TOK_COMMA num-expr TOK_RPAREN |
@@ -105,7 +109,7 @@ sys-str-fn-2-arg-call := ( TOK_BIN | TOK_QUA | TOK_OCT | TOK_DEC | TOK_HEX ) TOK
 sys-num-fn-arg-call := sys-num-fn-1-arg-call .
 sys-str-fn-arg-call := sys-str-fn-2-arg-call .
 
-sys-noarg-num-name := TOK_TI | TOK_ERL | TOK_PI .
+sys-noarg-num-name := TOK_TI | TOK_ERL | TOK_PI | TOK_ARGC .
 -- MKI$ MKL$ MKS$ MKD$ pack a number into a binary string (2, 4, 4, 8 bytes, big endian), CVI CVL CVS CVD unpack it again
 -- (the grammar is that of STR$/CHR$ resp. ASC/VAL/LEN, see sys-str-fn-2-arg-call and sys-num-fn-1-arg-call).
 sys-noarg-num := sys-noarg-num-name .

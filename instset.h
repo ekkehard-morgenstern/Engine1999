@@ -529,6 +529,12 @@ The 4096 extended instructions are as follows:
     0001 01111000       BYE - quit ( code -- ) C=0 P=0
                             BYE [code] / QUIT [code]: leaves a request for the host (VMREQ_QUIT, the exit code in reqline) and ends the run. The host ends the
                             Engine (or the built program) with the code. "Illegal argument" unless the code is an integer 0..255.
+    0001 01111001       ARGC - number of program arguments ( -- n ) C=0 P=0
+                            The arguments the host gave the program (vm_t.argv without its first element, the program name); 0 if there are none.
+    0001 01111010       ARGS - a program argument ( n -- s ) C=0 P=0
+                            n = 0 is the program name, 1..ARGC the arguments; "" for a larger n; "Illegal argument" for a negative or fractional one.
+    0001 01111011       ENVS - an environment variable ( name -- s ) C=0 P=0
+                            The value of the variable of the process (getenv), "" if it is not set. A name with a zero byte is "Illegal argument".
     MATH kinds 14..16: CEIL, LOG2, LOG10 (kind 1, INT, is FLOOR as well).
 
 */
@@ -703,5 +709,8 @@ The 4096 extended instructions are as follows:
 #define INS_POKE        UINT16_C(0X176)
 #define INS_BLD         UINT16_C(0X177)
 #define INS_BYE         UINT16_C(0X178)
+#define INS_ARGC        UINT16_C(0X179)
+#define INS_ARGS        UINT16_C(0X17A)
+#define INS_ENVS        UINT16_C(0X17B)
 
 #endif

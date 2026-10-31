@@ -831,7 +831,7 @@ static const struct {
     { TOK_PI, "PI" }, { TOK_RANDOMIZE, "RANDOMIZE" }, { TOK_DEG, "DEG" }, { TOK_RAD, "RAD" }, { TOK_GRAD, "GRAD" }, { TOK_EXIT, "EXIT" }, { TOK_LEAVE, "LEAVE" }, { TOK_ITERATE, "ITERATE" },
     { TOK_FLOOR, "FLOOR" }, { TOK_CEIL, "CEIL" }, { TOK_LOG2, "LOG2" }, { TOK_LOG10, "LOG10" }, { TOK_TIME, "TIME" }, { TOK_DATE, "DATE" },
     { TOK_DATETIME, "DATETIME" }, { TOK_IMP, "IMP" }, { TOK_NIMP, "NIMP" }, { TOK_EQV, "EQV" }, { TOK_NEQV, "NEQV" }, { TOK_SHL, "SHL" },
-    { TOK_SHR, "SHR" }, { TOK_ASL, "ASL" }, { TOK_ASR, "ASR" }, { TOK_PROC, "PROC" }, { TOK_FUNC, "FUNC" }, { TOK_CALL, "CALL" }, { TOK_LOCAL, "LOCAL" }, { TOK_RESUME, "RESUME" }, { TOK_STOP, "STOP" }, { TOK_CONT, "CONT" }, { TOK_TRACE, "TRACE" }, { TOK_PEEK, "PEEK" }, { TOK_POKE, "POKE" }, { TOK_BUILD, "BUILD" }, { TOK_BYE, "BYE" }, { TOK_QUIT, "QUIT" },
+    { TOK_SHR, "SHR" }, { TOK_ASL, "ASL" }, { TOK_ASR, "ASR" }, { TOK_PROC, "PROC" }, { TOK_FUNC, "FUNC" }, { TOK_CALL, "CALL" }, { TOK_LOCAL, "LOCAL" }, { TOK_RESUME, "RESUME" }, { TOK_STOP, "STOP" }, { TOK_CONT, "CONT" }, { TOK_TRACE, "TRACE" }, { TOK_PEEK, "PEEK" }, { TOK_POKE, "POKE" }, { TOK_BUILD, "BUILD" }, { TOK_BYE, "BYE" }, { TOK_QUIT, "QUIT" }, { TOK_ARGC, "ARGC" }, { TOK_ARG, "ARG" }, { TOK_ENV, "ENV" },
     { TOK_GFX, "GFX" }, { TOK_SPRITE, "SPRITE" }, { TOK_TILE, "TILE" }, { TOK_TXT, "TXT" }, { TOK_DESIGN, "DESIGN" },
     { TOK_RGB, "RGB" }, { TOK_POINT, "POINT" }, { TOK_CLS, "CLS" }, { TOK_LOCATE, "LOCATE" }, { TOK_COLOR, "COLOR" }, { TOK_AMP, "&" }, { TOK_LE, "<=" }, { TOK_GE, ">=" }, { TOK_NE, "<>" }, { 0, 0 }
 };
@@ -1042,7 +1042,7 @@ static hlclass_t keyword_hlclass( uint8_t tok ) {
         case TOK_CVI: case TOK_CVL: case TOK_CVS: case TOK_CVD: case TOK_RGB: case TOK_POINT: case TOK_FN:
         case TOK_INT: case TOK_ABS: case TOK_SGN: case TOK_SQR: case TOK_SIN: case TOK_COS: case TOK_TAN: case TOK_ATN: case TOK_EXP:
         case TOK_LOG: case TOK_RND: case TOK_FIX: case TOK_PI: case TOK_FLOOR: case TOK_CEIL: case TOK_LOG2: case TOK_LOG10:
-        case TOK_TIME: case TOK_DATE: case TOK_DATETIME: case TOK_PEEK:
+        case TOK_TIME: case TOK_DATE: case TOK_DATETIME: case TOK_PEEK: case TOK_ARGC: case TOK_ARG: case TOK_ENV:
             return HL_FUNCTION;
         case TOK_NOT: case TOK_AND: case TOK_OR: case TOK_XOR: case TOK_NAND: case TOK_NOR: case TOK_XNOR:
         case TOK_LSHIFT: case TOK_RSHIFT: case TOK_MOD: case TOK_IMP: case TOK_NIMP: case TOK_EQV: case TOK_NEQV: case TOK_SHL: case TOK_SHR:

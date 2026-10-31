@@ -110,6 +110,9 @@ typedef struct _repl_t {
     // BYE [code] (or QUIT [code]) asks the host to end the process: quit is set, exitcode (0..255) is the code
     bool        quit;
     int         exitcode;
+    // the arguments of the program for ARGC / ARG$ (argv[0] = the program name; the host owns the strings, which must stay valid)
+    int         argc;
+    const char* const* argv;
     // AUTO [start[,step]]: the host prompts with line numbers while autoline != LINENO_NONE (see AUTO in docs/basic-language.md);
     // it enters the lines itself and calls repl_auto_next() after each one
     uint32_t    autoline, autostep;

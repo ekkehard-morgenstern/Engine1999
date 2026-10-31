@@ -77,6 +77,7 @@ static const testcase_t cases[] = {
     { "sound arguments are still checked", 0, "", "SOUND 9,440,1\n",                    "", "? Illegal argument\n", 0, false },
     { "a graphics statement fails", 0, "", "GFX LAYER 1,ON\nPRINT 2\n",                 "2\n", "? Not available in the console host\n", 0, false },
     { "a graphics statement in a program", 0, "", "10 PRINT 1\n20 SPRITE 1,ON\nRUN\n", "1\n", "? Not available in the console host in line 20\n", 0, true },
+    { "EDIT and MONITOR need a screen", 0, "", "EDIT\nMONITOR\nPRINT 3\n",            "3\n", "? Not available in the console host\n? Not available in the console host\n", 0, false },
     // run mode
     { "run a file",                 "10 PRINT \"RUN MODE\"\n", "prog.bas", "", "RUN MODE\n", "", 0, false },
     { "a #! first line is skipped", "#!/usr/bin/env engine1999c\n10 PRINT 1\n20 PRINT 2\n", "prog.bas", "", "1\n2\n", "", 0, false },
@@ -89,6 +90,22 @@ static const testcase_t cases[] = {
     { "-i goes on with standard input", "10 PRINT 1\n", "-i prog.bas", "PRINT 7\n", "1\n7\n", "", 0, false },
     { "-i and BYE in the input",    "10 PRINT 1\n", "-i prog.bas", "BYE 3\n", "1\n", "", 3, false },
     { "- reads the lines from standard input", 0, "-", "PRINT 8\n",                      "8\n", "", 0, false },
+    // program arguments, the environment, the standard channels
+    { "ARGC and ARG$ of a file",    "10 PRINT ARGC;\"|\";ARG$(0);\"|\";ARG$(1);\"|\";ARG$(2)\n", "prog.bas x \"y z\"", "", "2|prog.bas|x|y z\n", "", 0, false },
+    { "no arguments",               "10 PRINT ARGC\n", "prog.bas", "", "0\n", "", 0, false },
+    { "options behind the file are the program's", "10 PRINT ARG$(1);ARG$(2)\n", "prog.bas --version -i", "", "--version-i\n", "", 0, false },
+    { "ARGC with standard input",   0, "- a b", "PRINT ARGC;ARG$(0);ARG$(2)\n", "2-b\n", "", 0, false },
+    { "ARGC without any",           0, "", "PRINT ARGC;\"[\";ARG$(0);\"]\"\n", "0[]\n", "", 0, false },
+    { "ENV$",                       0, "", "PRINT ENV$(\"E1999_CON\")\n", "from the shell\n", "", 0, false },
+    { "ENV$ of a variable that is not set", 0, "", "PRINT \"[\";ENV$(\"E1999_NOT_SET\");\"]\"\n", "[]\n", "", 0, false },
+    { "a program that takes an argument", "10 IF ARGC<1 THEN PRINT \"usage\":BYE 2\n20 PRINT \"hello \";ARG$(1)\n", "prog.bas world", "", "hello world\n", "", 0, false },
+    { "the same without the argument", "10 IF ARGC<1 THEN PRINT \"usage\":BYE 2\n20 PRINT \"hello \";ARG$(1)\n", "prog.bas", "", "usage\n", "", 2, false },
+    { "stdout: and stderr: as channels", "10 PRINT \"a\"\n20 OPEN \"stdout:\" FOR OUTPUT AS #1:PRINT #1,\"b\"\n30 OPEN \"stderr:\" FOR OUTPUT AS #2:PRINT #2,\"e\":CLOSE\n40 PRINT \"c\"\n", "prog.bas", "", "a\nb\nc\n", "e\n", 0, false },
+    { "OPEN \"I\", \"O\" forms",     "10 OPEN \"O\",#1,\"stderr:\":PRINT #1,\"warning\":CLOSE #1\n20 PRINT \"done\"\n", "prog.bas", "", "done\n", "warning\n", 0, false },
+    { "stdin: as a channel",        "10 OPEN \"stdin:\" FOR INPUT AS #1\n20 LINE INPUT #1,A$:PRINT \"<\";A$;\">\"\n30 IF NOT EOF(1) THEN 20\n40 CLOSE #1\n", "prog.bas", "one\ntwo\nthree\n", "<one>\n<two>\n<three>\n", "", 0, false },
+    { "stdin: and INPUT take turns", "10 OPEN \"stdin:\" FOR INPUT AS #1:LINE INPUT #1,A$:CLOSE #1\n20 INPUT B$\n30 PRINT A$;\"+\";B$\n", "prog.bas", "first\nsecond\n", "? first+second\n", "", 0, false },
+    { "stdin: can't be opened for output", "10 OPEN \"stdin:\" FOR OUTPUT AS #1\n", "prog.bas", "", "", "? Bad file mode in line 10\n", 1, false },
+    { "a name behind stdout: is refused", "10 OPEN \"stdout:x\" FOR OUTPUT AS #1\n", "prog.bas", "", "", "? Bad file name in line 10\n", 1, false },
     // the command line
     { "--version",                  0, "--version", "", "Engine 1999 v", 0, 0, false },
     { "--help",                     0, "--help", "", "Usage:", 0, 0, false },
@@ -161,6 +178,8 @@ int main( void ) {
         return 1;
     }
     snprintf( exe, sizeof(exe), "%s/engine1999c", cwd );
+    setenv( "E1999_CON", "from the shell", 1 );
+    unsetenv( "E1999_NOT_SET" );
     if ( access( exe, X_OK ) != 0 ) {
         printf( "engine1999c is not here: run this test in the build directory\n" );
         return 1;

@@ -109,6 +109,10 @@ sys-num-fn-1-arg-call := ( ASC | VAL | LEN | CVI | CVL | CVS | CVD ) "(" str-exp
 sys-str-fn-2-arg-call := ( BIN | QUA | OCT | DEC | HEX ) "$" "(" num-expr
                               [ "," num-expr ] ")" |
                          ( STR | CHR | MKI | MKL | MKS | MKD ) "$" "(" num-expr ")" |
+    (* ARG$(n) is a program argument (0 = the program name, 1..ARGC the arguments, "" beyond them), ENV$(name$) the value of *)
+    (* an environment variable ("" if it is not set); the arguments come from the command line of engine1999c or of a built program *)
+                         ARG "$" "(" num-expr ")" |
+                         ENV "$" "(" str-expr ")" |
     (* PEEK$(addr, length) is read like BIN$ (the length is mandatory: "Illegal argument" without it) *)
                          PEEK "$" "(" num-expr [ "," num-expr ] ")" |
                          ( LEFT | RIGHT ) "$" "(" str-expr "," num-expr ")" |
@@ -116,7 +120,7 @@ sys-str-fn-2-arg-call := ( BIN | QUA | OCT | DEC | HEX ) "$" "(" num-expr
                          INPUT "$" "(" num-expr [ "," chan-spec ] ")" .
 sys-num-fn-arg-call := sys-num-fn-1-arg-call .
 sys-str-fn-arg-call := sys-str-fn-2-arg-call .
-sys-noarg-num-name := TI | ERL | PI .
+sys-noarg-num-name := TI | ERL | PI | ARGC .
 ```
 
 > MKI$ MKL$ MKS$ MKD$ pack a number into a binary string (2, 4, 4, 8 bytes, big endian), CVI CVL CVS CVD unpack it again

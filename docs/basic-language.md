@@ -212,6 +212,22 @@ Channel 0 is the screen and keyboard; channels 1 to 255 are opened by `OPEN`. `L
 
 **File extensions:** `SAVE "name"` writes the binary (tokenized) form and appends `.e99` to a name without extension; `SAVE "name",A` writes the ASCII listing and appends `.bas`. A name with an extension is used as it is. `LOAD` recognizes both forms by the header, whatever the extension is.
 
+## Program arguments and the environment: `ARGC`, `ARG$`, `ENV$`; the standard streams
+
+For programs that run as commands (`engine1999c prog.bas a b`, or an executable made with `BUILD`: `./prog a b`):
+
+- `ARGC` — the number of arguments (0 if there are none).
+- `ARG$(n)` — argument `n`: `ARG$(0)` is the program (the file given to `engine1999c`, `-` for standard input, the executable's own name in a built program), `ARG$(1)` ... `ARG$(ARGC)` the arguments as the shell split them. A larger `n` gives `""` (so a missing argument needs no test of `ARGC`), a negative or fractional one is "Illegal argument". In the window version `engine1999` there are no arguments (`ARGC` is 0, `ARG$(0)` is `""`).
+- `ENV$(name$)` — the value of the environment variable of the process, `""` if it is not set (or the name is empty). Reading only: there is no way to set one yet. Works in every version.
+- The words behind the program file are the program's, even if they look like options: `engine1999c prog.bas --version` hands `--version` to the program. A built program takes only one option of its own, `--engine1999-about`, and only as its first argument.
+
+```
+10 IF ARGC < 1 THEN PRINT "usage: greet NAME": BYE 2
+20 PRINT "Hello, "; ARG$(1); " from "; ENV$("USER")
+```
+
+The **standard streams** are drivers like `mem:`: `OPEN "stdout:" FOR OUTPUT AS #1`, `OPEN "stderr:" FOR OUTPUT AS #2`, `OPEN "stdin:" FOR INPUT AS #3` (the short forms work too: `OPEN "O",#2,"stderr:"`). Nothing may follow the colon ("Bad file name"); `stdin:` can only be read and the other two only written or appended ("Bad file mode"). `PRINT #2,"warning"` goes to the standard error output, `LINE INPUT #3,A$` reads a line of standard input. They are the real streams of the process in every version, so a window program started from a shell can write to its terminal. `stdin:` reads at most one line per read and never ahead, so `INPUT`, `GET` and a channel on `stdin:` can take turns in a pipe; `stderr:` flushes `stdout` first, so both stay in order. Channel 0 is still the screen (the console host: standard output). New reserved words: `ARGC ARG ENV` (tokens 248..250; `ARG$` and `ENV$` are written with the dollar sign like `CHR$`); instructions `ARGC 0x179`, `ARGS 0x17A`, `ENVS 0x17B`; `repl_t.argc/argv` → `vm_t.argc/argv`. Design decisions I took (revisit if unwanted): `ARG$` beyond the arguments is `""` rather than an error; the arguments are strings as the shell gave them (no splitting of `a=b`); read-only environment; the program name counts as `ARG$(0)`, not in `ARGC`.
+
 ## Loop control: `EXIT`, `LEAVE`, `ITERATE`, `FOR … DOWNTO`, `FOR EACH`
 
 ```

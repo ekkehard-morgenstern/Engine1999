@@ -104,6 +104,8 @@ void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem ) {
     vm->irqsafe = false;
     vm->irqpending = false;
     vm->files    = 0;
+    vm->argc     = 0;
+    vm->argv     = 0;
     vm->build    = 0;
     vm->request  = VMREQ_NONE;
     vm->reqname  = 0;
@@ -3222,6 +3224,29 @@ static bool vm_system_function( vm_t* vm, uint16_t opcode ) {
             text[n] = '\0';
             return vm_push_string_n( vm, text, n );
         }
+        case INS_ARGC:
+            return vm_dpush_num( vm, vm->argc > 1 ? (double)( vm->argc - 1 ) : 0.0 );
+        case INS_ARGS: {
+            if ( !vm_dpop_num( vm, &num ) ) {
+                return false;
+            }
+            if ( !( num >= 0.0 && num <= 65535.0 ) || num != floor( num ) ) {
+                return vm_error( vm, "Illegal argument" );
+            }
+            const char* a = vm->argv != 0 && (int) num < vm->argc ? vm->argv[ (int) num ] : "";
+            char* s = vm_new_string( vm, a, strlen( a ) );
+            return s && vm_push_string( vm, s );
+        }
+        case INS_ENVS: {
+            char* name;
+            if ( !vm_dpop_str( vm, &name ) ) {
+                return false;
+            }
+            const char* v = name[0] != '\0' ? getenv( name ) : 0;
+            free( name );
+            char* s = vm_new_string( vm, v ? v : "", v ? strlen( v ) : 0U );
+            return s && vm_push_string( vm, s );
+        }
         case INS_ERL:
             return vm_dpush_num( vm, (double) vm->errlastline );
         case INS_ERRS: {
@@ -3533,7 +3558,7 @@ static bool vm_step( vm_t* vm ) {
         case INS_WIAE: return vm_write_elem( vm, param16, VARTYPEV_INT );
         case INS_WSAE: return vm_write_elem( vm, param16, VARTYPEV_STR );
         case INS_TI: case INS_INKY: case INS_FRE: case INS_STRS: case INS_CHRS: case INS_ASC: case INS_LEN: case INS_VAL:
-        case INS_PLNG: case INS_RMN: case INS_EOFN: case INS_LOFN: case INS_LOCN: case INS_INPD: case INS_ADRS: case INS_ERL: case INS_ERRS:
+        case INS_PLNG: case INS_RMN: case INS_EOFN: case INS_LOFN: case INS_LOCN: case INS_INPD: case INS_ADRS: case INS_ERL: case INS_ERRS: case INS_ARGC: case INS_ARGS: case INS_ENVS:
         case INS_BINS: case INS_QUAS: case INS_OCTS: case INS_HEXS: case INS_DECS:
         case INS_LFTS: case INS_RGTS: case INS_MIDS:
             return vm_system_function( vm, opcode );
