@@ -126,10 +126,12 @@ handler (it has the highest priority); the program finds out which sprite with `
 - **all palettes** and the backdrop color are back to the color table (a changed palette would otherwise leave the next program with strange colors);
 - the background and graphics bitmaps are cleared; target 3, pen 1, mode `SET`, and the `DRAW` position, color, scale and angle start again;
 - the tile screen: all cells 0 and no scrolling;
-- all 256 sprites: hidden, at 0,0, default image and animation, no movement, no collision flags, pending collision events dropped.
+- all 256 sprites: hidden, at 0,0, default image and animation, no movement, no collision flags, pending collision events dropped;
+- the **text colors**: pen, paper and the blank colors of the text screen go back to their defaults (pen 1 = black), and so do the colors an ANSI sequence in `PRINT` set;
+  a `COLOR 140` of the program does not outlive `GFX RESET` (an earlier version left them, so text stayed white).
 
 Kept: the **definitions**, because they are assets, not clutter: tile images, sprite images and animation sequences, redefined characters. `GFX RESET ALL` clears these too
-(images to 0, sequences to image 0, the font back to the built-in one). **Not touched**: the text screen (use `CLS`; its colors stay), the `ON COLLISION` handler (it ends with
+(images to 0, sequences to image 0, the font back to the built-in one). **Not touched**: the contents of the text screen (use `CLS`), the `ON COLLISION` handler (it ends with
 the run like all handlers), the contents of variables. A program that wants a clean start typically begins with `GFX RESET:CLS`.
 
 ### Pictures: `DESIGN` and `@` rows

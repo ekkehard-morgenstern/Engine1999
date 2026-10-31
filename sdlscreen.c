@@ -1198,6 +1198,10 @@ void sdlscr_gfx_reset( bool images ) {
         memset( layers[LAY_GFX].memory, 0, (size_t) SDL_SCREENWIDTH * SDL_SCREENHEIGHT );
     }
     sdlscr_gfxok = false;           // the contexts (the DRAW position, color and scale) start again
+    txtscr_resetcolors();           // the pen and paper of the text screen (what COLOR and ANSI sequences set), not its contents
+    for ( int i=0; i < TXTSCR_NSCREENS; ++i ) {
+        sdlscr_ansiok[i] = false;   // the ANSI decoders start from the default colors again
+    }
     tilescr_reset( images );
     sprscr_reset( images );
     if ( images ) {

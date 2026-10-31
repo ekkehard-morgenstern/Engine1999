@@ -287,6 +287,11 @@ void txtscr_defchar( int code, const uint8_t rows[12] ) {
       memcpy( &currfont[ (size_t) code * 12U ], rows, 12U );
 }
 
+void txtscr_resetcolors( void ) {
+      cur->pen = cur->blankfg = TXTSCR_FGCOL;
+      cur->paper = cur->blankbg = TXTSCR_BGCOL;
+}
+
 void txtscr_resetfont( void ) {
       memcpy( currfont, fontdef1, FONTSIZE );
 }

@@ -13,11 +13,9 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-- **`GFX RESET [ALL]`** (owner's request: reset the graphics subsystem to its defaults, wipe the screen of clutter; palettes too)
-  - `GFXOP_RESET 21` (`gfxops.[ch]`, signature `W` with the word `ALL`), host case in `engine1999.c`, `sdlscr_gfx_reset( images )` (`sdlscreen.[ch]`): layers shown in the original order, all palettes and the backdrop back to the table (`SDLSCR_DEFAULT_BGCOL`), background and graphics bitmaps cleared, target/pen/mode/DRAW state, tiles and sprites reset; `ALL` also clears tile and sprite images, animation sequences and restores the font.
-  - Backends: `tilescr_reset`, `sprscr_reset`, `txtscr_resetfont`. The text screen is not touched.
-  - Tests: `gfxtest1` 104 -> 111, `vmtest1` 807 -> 810 (`GFX RESET`, `GFX RESET ALL`, a bad word); checked on the real screen under Xvfb after `demos/gfx.bas` (backdrop, tiles, graphics and sprite gone, text kept).
-  - Docs: `docs/graphics-subsystem.md` ("GFX RESET"), `SESSION.md`.
+- **`GFX RESET` fix: the text pen** (owner's report: after `GFX RESET` the text pen was white, not black)
+  - Cause: the text screen was deliberately left out of the reset, so the colors a program set with `COLOR` (the demo uses `COLOR 140`) or an ANSI sequence survived. Reproduced on the real screen (fresh start: black; after `color 140` and `gfx reset`: white).
+  - `txtscr_resetcolors()` (`textscreen.[ch]`: pen, paper and the blank colors of the selected screen to `TXTSCR_FGCOL`/`TXTSCR_BGCOL`, contents stay), called by `sdlscr_gfx_reset()` which also restarts the ANSI decoders (`sdlscr_ansiok`); `gfxtest1` 111 -> 113; docs: `docs/graphics-subsystem.md`, `sdlscreen.h`, `SESSION.md`.
 
 ## Log
 
@@ -547,3 +545,11 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
   - **Host** (`engine1999.c`): `host_gfx_op`/`host_gfx_query` map every operation to `sdlscr_*`.
   - **Tests**: new `gfxtest1` (104 checks; also valgrind clean), `vmtest1` 710 -> 807 (a logging gfx test host: every statement, word, default, range error, `DESIGN`, `ON COLLISION`), `repltest1` 279 -> 281; `makefile` and `.gitignore` have `gfxtest1`. Verified on the real screen under Xvfb with XTest key injection: `demos/gfx.bas` (backdrop, tile checker with its own palette, lines, circle, arc, painted box, scaled text, `DRAW`, DESIGN sprite moving by `MOVETO`, text bar), and the control code glyphs, binary strings and `MKS$` on the text screen.
   - **Demo and docs**: `demos/gfx.bas` (+ `demos/README.md`), `docs/graphics-subsystem.md` rewritten from the proposal to the implemented design (statement reference, functions, `DESIGN`, collision rules, Simons' BASIC mapping, decisions, open items), `docs/basic-language.md`, `docs/compiler-and-vm.md`, `docs/display-engine.md`, `docs/roadmap.md` (section 10: tools, editors, input, synchronization), `instset.h`, `CLAUDE.md`, `SESSION.md`.
+
+### 8b0009f — 2026-10-31 05:15:10 +0100 — "GFX RESET statement, implemented by Claude Code"
+16 files, +139/-14.
+- **`GFX RESET [ALL]`** (owner's request: reset the graphics subsystem to its defaults, wipe the screen of clutter; palettes too)
+  - `GFXOP_RESET 21` (`gfxops.[ch]`, signature `W` with the word `ALL`), host case in `engine1999.c`, `sdlscr_gfx_reset( images )` (`sdlscreen.[ch]`): layers shown in the original order, all palettes and the backdrop back to the table (`SDLSCR_DEFAULT_BGCOL`), background and graphics bitmaps cleared, target/pen/mode/DRAW state, tiles and sprites reset; `ALL` also clears tile and sprite images, animation sequences and restores the font.
+  - Backends: `tilescr_reset`, `sprscr_reset`, `txtscr_resetfont`. The text screen is not touched.
+  - Tests: `gfxtest1` 104 -> 111, `vmtest1` 807 -> 810 (`GFX RESET`, `GFX RESET ALL`, a bad word); checked on the real screen under Xvfb after `demos/gfx.bas` (backdrop, tiles, graphics and sprite gone, text kept).
+  - Docs: `docs/graphics-subsystem.md` ("GFX RESET"), `SESSION.md`.

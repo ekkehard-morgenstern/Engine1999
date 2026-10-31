@@ -468,6 +468,16 @@ static void test_reset( void ) {
     sprscr_reset( true );
     sprscr_readmap( 3, back );
     check( back[0] == 0, "sprite reset of everything clears the images" );
+    txtscr_setcolors( 7, 140 ); txtscr_setblank( 7, 140 );
+    txtscr_write( 0, 0, -1, -1, "k", 1 );
+    txtscr_resetcolors();
+    int bg = -1, fg = -1;
+    txtscr_getcolors( &bg, &fg );
+    txtscr_clear();
+    check( bg == TXTSCR_BGCOL && fg == TXTSCR_FGCOL && TXTSCR_CELL_FG( txtscr_getcell( 0, 0 ) ) == TXTSCR_FGCOL, "the text colors are back to the defaults (pen black, not what COLOR set)" );
+    txtscr_write( 0, 0, 2, 3, "k", 1 );
+    txtscr_resetcolors();
+    check( TXTSCR_CELL_CHR( txtscr_getcell( 0, 0 ) ) == 'k' && TXTSCR_CELL_FG( txtscr_getcell( 0, 0 ) ) == 3, "the contents of the text screen stay" );
     const uint8_t rows[12] = { 9,9,9,9,9,9,9,9,9,9,9,9 };
     txtscr_defchar( 65, rows );
     txtscr_resetfont();
