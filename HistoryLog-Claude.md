@@ -13,10 +13,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-- **`DEG`, `RAD`, `GRAD`** (owner's suggestion: choose how angles are represented, default radians)
-  - Tokens 214..216, `comp_eat_anglestmt()`, `NT_ANGLESTMT 0x77`, `cgen_from_anglestmt()`, instruction `ANGM 0x167`, `vm_t.angmode` (2 = radians in `init_vm()`), `vm_trig()` (SIN/COS/TAN of degrees and gradians, quarter turns exact, `TAN(90)` "Overflow"), `ATN` converts its result; the graphics angles stay in degrees.
-  - Tests: `vmtest1` 854 -> 867 (every function in each unit, big/negative angles, the unit inside a program, graphics angles unchanged), `repltest1` 282 -> 285 (listing, unit over direct lines, `RUN` back to radians).
-  - Docs: `docs/basic-language.md` ("Angle units"), `docs/compiler-and-vm.md`, `instset.h`, `bascomp.ebnf`, `SESSION.md`.
+(nothing pending)
 
 ## Log
 
@@ -582,3 +579,10 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
   - **VM**: `vm_math()` (errors "Illegal argument" for `SQR`/`LOG`, "Overflow" for non-finite results), `vm_randomize()`, xorshift64* seeded from the clock in `init_vm()` and by `RND(-n)` / `RANDOMIZE n`; `\`/`MOD` in `vm_binary_num()` (truncate both operands, "Division by zero").
   - **Tests**: `vmtest1` 816 -> 854 (+38: every function, domains, `RND` range/repeat/reseed/spread, `RANDOMIZE`, `\`, `MOD`, precedence), `repltest1` 281 -> 282 (listing); `demos/fruit.bas` now uses `RND`/`INT`/`\`/`RANDOMIZE` instead of its workaround and was run again on the real screen.
   - **Docs**: `docs/basic-language.md` ("Numeric functions"), `docs/compiler-and-vm.md`, `docs/roadmap.md` (done; further functions listed), `instset.h`, `bascomp.ebnf`, `demos/README.md`, `SESSION.md`.
+
+### dd3fac4 — 2026-10-31 06:15:20 +0100 — "DEG/RAD/GRAD, implemented by Claude Code"
+19 files, +136/-15.
+- **`DEG`, `RAD`, `GRAD`** (owner's suggestion: choose how angles are represented, default radians)
+  - Tokens 214..216, `comp_eat_anglestmt()`, `NT_ANGLESTMT 0x77`, `cgen_from_anglestmt()`, instruction `ANGM 0x167`, `vm_t.angmode` (2 = radians in `init_vm()`), `vm_trig()` (SIN/COS/TAN of degrees and gradians, quarter turns exact, `TAN(90)` "Overflow"), `ATN` converts its result; the graphics angles stay in degrees.
+  - Tests: `vmtest1` 854 -> 867 (every function in each unit, big/negative angles, the unit inside a program, graphics angles unchanged), `repltest1` 282 -> 285 (listing, unit over direct lines, `RUN` back to radians).
+  - Docs: `docs/basic-language.md` ("Angle units"), `docs/compiler-and-vm.md`, `instset.h`, `bascomp.ebnf`, `SESSION.md`.
