@@ -52,6 +52,7 @@ static const gfxcmd_t cmds[] = {
     { "GFX", "TEXT",     GFXOP_TEXT,     "nnsooo",   0, false },
     { "GFX", "DRAW",     GFXOP_DRAW,     "s",        0, false },
     { "GFX", "VSYNC",    GFXOP_VSYNC,    "",         0, false },
+    { "GFX", "RESET",    GFXOP_RESET,    "W",        "ALL", false },
     { "TXT", "FILL",     GFXOP_TXTFILL,  "nnnnooo",  0, false },
     { "TXT", "COPY",     GFXOP_TXTCOPY,  "nnnnnn",   0, false },
     { "TXT", "INVERT",   GFXOP_TXTINVERT,"nnnn",     0, false },

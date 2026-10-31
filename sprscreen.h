@@ -57,6 +57,7 @@ void sprscr_animdata( int animno, const uint8_t* seq, size_t size );
 void sprscr_animcfg( int sprno, int animno, int length, int speed );
 void sprscr_writemap( int imgno, const uint8_t data[SPRITE_WIDTH * SPRITE_HEIGHT]);
 bool sprscr_changed( void );
+void sprscr_reset( bool images );          // all sprites hidden, in the default state and at 0,0, no movement, no collision flags; images: the images and animation sequences are cleared as well
 void sprscr_setimage( int sprno, int image );               // a fixed image (until sprscr_animcfg)
 int  sprscr_getimage( int sprno );                          // the image shown now, -1 for a bad sprite number
 bool sprscr_getpos( int sprno, int* x, int* y );

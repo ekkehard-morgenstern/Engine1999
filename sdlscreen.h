@@ -191,6 +191,11 @@ uint32_t sdlscr_sprite_hits( int sprno );
 int      sdlscr_sprite_collide( int sprno );
 int      sdlscr_sprite_nextevent( void );
 
+// back to the defaults (GFX RESET): all layers shown in the original order, all palettes and the backdrop back to the table, the background and
+// graphics bitmaps cleared, target 3, pen 1, mode SET, DRAW state; the tile cells and scrolling cleared; all sprites hidden and reset. The text
+// screen is not touched (CLS). images = true also clears the tile images, sprite images and animation sequences and restores the built-in font.
+void     sdlscr_gfx_reset( bool images );
+
 // timing (sdlscr_getframecnt() is above)
 void     sdlscr_vsync( void );                                  // waits for the next frame (or until the screen is closed)
 

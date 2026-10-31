@@ -445,6 +445,38 @@ static void test_textscreen( void ) {
     check( nonempty == 32, "all 32 control code glyphs have pixels" );
 }
 
+static void test_reset( void ) {
+    uint8_t img[16 * 24], back[16 * 24];
+    memset( img, 7, sizeof(img) );
+    tilescr_writetile( 4, img ); tilescr_setcell( 2, 2, 4 ); tilescr_scroll( 5, 6 );
+    tilescr_reset( false );
+    check( tilescr_getcell( 2, 2 ) == 0 && tilescr_readtile( 4, back ) && back[0] == 7, "tile reset keeps the images" );
+    static uint8_t scr[TILETGT_WIDTH * TILETGT_HEIGHT];
+    tilescr_setcell( 0, 0, 4 );
+    tilescr_scroll( 5, 6 ); tilescr_reset( false ); tilescr_setcell( 0, 0, 4 );
+    tilescr_render( scr );
+    check( scr[0] == 7, "tile reset ends the scrolling (the first tile starts at 0,0)" );
+    tilescr_reset( true );
+    check( tilescr_readtile( 4, back ) && back[0] == 0 && tilescr_getcell( 0, 0 ) == 0, "tile reset of everything clears the images" );
+    sprscr_writemap( 3, img );
+    sprscr_show( 5, true ); sprscr_move( 5, 40, 50 ); sprscr_setimage( 5, 3 ); sprscr_setcollide( 5, true, true ); sprscr_moveto( 5, 100, 100, 50 );
+    sprscr_reset( false );
+    int x = -1, y = -1;
+    check( !sprscr_isactive( 5 ) && sprscr_getpos( 5, &x, &y ) && x == 0 && y == 0 && !sprscr_moving( 5 ) && sprscr_hits( 5 ) == 0 && sprscr_nextevent() == -1, "sprite reset hides and resets all sprites" );
+    sprscr_readmap( 3, back );
+    check( back[0] == 7, "sprite reset keeps the images" );
+    sprscr_reset( true );
+    sprscr_readmap( 3, back );
+    check( back[0] == 0, "sprite reset of everything clears the images" );
+    const uint8_t rows[12] = { 9,9,9,9,9,9,9,9,9,9,9,9 };
+    txtscr_defchar( 65, rows );
+    txtscr_resetfont();
+    const uint8_t* f = txtscr_font();
+    bool same = true;
+    for ( int r = 0; r < 12; ++r ) same = same && f[65 * 12 + r] != 9;
+    check( same, "the font is back to the built-in one" );
+}
+
 int main( void ) {
     txtscr_init();
     test_pixels();
@@ -457,6 +489,7 @@ int main( void ) {
     test_tiles();
     test_sprites();
     test_textscreen();
+    test_reset();
     printf( "%d checks, %d failure(s)\n", checks, failures );
     return failures;
 }

@@ -53,6 +53,7 @@ void tilescr_render( uint8_t* target );
 
 void tilescr_writetile( int tileno, const uint8_t data[TILE_WIDTH * TILE_HEIGHT]);
 void tilescr_scroll( int sx, int sy );
+void tilescr_reset( bool images );         // all cells 0, no scrolling; images: the tile images are cleared as well
 
 // the 41 x 13 cells of the visible tile screen
 void tilescr_setcell( int x, int y, int tile );

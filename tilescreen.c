@@ -187,6 +187,14 @@ void tilescr_writetile( int tileno, const uint8_t data[TILE_WIDTH * TILE_HEIGHT]
     }
 }
 
+void tilescr_reset( bool images ) {
+    memset( &tilescr[0], 0, TILESCR_WIDTH * TILESCR_HEIGHT );
+    tileoffsx = tileoffsy = 0;
+    if ( images ) {
+        memset( &tilemap[0], 0, TILEMAP_WIDTH * TILEMAP_HEIGHT );
+    }
+}
+
 void tilescr_setcell( int x, int y, int tile ) {
     if ( x < 0 || y < 0 || x >= TILESCR_WIDTH || y >= TILESCR_HEIGHT || tile < 0 || tile > 255 ) {
         return;

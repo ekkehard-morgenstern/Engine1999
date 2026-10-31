@@ -67,6 +67,7 @@ GFX BLIT a$, x, y [, TRANS]           the block from a string; TRANS skips index
 GFX TEXT x, y, a$ [, c [, sx [, sy]]] the 8 x 12 font at pixel position, each pixel as sx * sy pixels (1..32)
 GFX DRAW a$                           the GW-BASIC drawing language: U D L R E F G H n, M x,y (a sign makes it relative), B, N, C n, S n (quarters), A n (0..3)
 GFX VSYNC                             waits for the next frame (60 Hz); a break key still works
+GFX RESET [ALL]                       back to the defaults, to wipe the screen of everything a program drew (see below)
 -- the text screen
 CLS                                   clears the text screen
 LOCATE x, y                           cursor to column x (0..79), row y (0..24)
@@ -116,6 +117,20 @@ of the sprite it overlapped at the last frame (-1 none). A collision means an ov
 `SPRITE n,COLLISION ON`. The check runs once per frame in the screen thread (`sprscr_periodicals`) while the sprite layer is enabled.
 `ON COLLISION`: the VM asks the host for a new collision about every 32 instructions (and while `WAIT`ing) and runs the handler between two statements, like a timer
 handler (it has the highest priority); the program finds out which sprite with `SPRITE("HITS",n)`.
+
+### `GFX RESET`
+
+`GFX RESET` puts the graphics system back to its start state, so that nothing a program left behind stays on the screen:
+
+- all five layers are shown again, in the original order (0 background .. 4 sprites);
+- **all palettes** and the backdrop color are back to the color table (a changed palette would otherwise leave the next program with strange colors);
+- the background and graphics bitmaps are cleared; target 3, pen 1, mode `SET`, and the `DRAW` position, color, scale and angle start again;
+- the tile screen: all cells 0 and no scrolling;
+- all 256 sprites: hidden, at 0,0, default image and animation, no movement, no collision flags, pending collision events dropped.
+
+Kept: the **definitions**, because they are assets, not clutter: tile images, sprite images and animation sequences, redefined characters. `GFX RESET ALL` clears these too
+(images to 0, sequences to image 0, the font back to the built-in one). **Not touched**: the text screen (use `CLS`; its colors stay), the `ON COLLISION` handler (it ends with
+the run like all handlers), the contents of variables. A program that wants a clean start typically begins with `GFX RESET:CLS`.
 
 ### Pictures: `DESIGN` and `@` rows
 

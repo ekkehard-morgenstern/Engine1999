@@ -881,6 +881,7 @@ static bool host_gfx_op( void* usrdata, int op, const double* a, int na, const c
             break;
         }
         case GFXOP_VSYNC:       sdlscr_vsync(); break;
+        case GFXOP_RESET:       sdlscr_gfx_reset( a[0] > -1.0e8 ); break;
         case GFXOP_TXTFILL:     sdlscr_text_fill( gi( a[0], 0 ), gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 0 ), gi( a[4], -1 ), gi( a[5], -1 ), gi( a[6], -1 ) ); break;
         case GFXOP_TXTCOPY:     sdlscr_text_copy( gi( a[0], 0 ), gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 0 ), gi( a[4], 0 ), gi( a[5], 0 ) ); break;
         case GFXOP_TXTINVERT:   sdlscr_text_invert( gi( a[0], 0 ), gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 0 ) ); break;

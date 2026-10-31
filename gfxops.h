@@ -70,6 +70,7 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXOP_TEXT      18              // GFX TEXT x, y, a$ [, c [, sx [, sy]]]
 #define GFXOP_DRAW      19              // GFX DRAW a$
 #define GFXOP_VSYNC     20              // GFX VSYNC
+#define GFXOP_RESET     21              // GFX RESET [ALL]
 #define GFXOP_TXTFILL   30              // TXT FILL x1, y1, x2, y2 [, chr [, fg [, bg]]]
 #define GFXOP_TXTCOPY   31              // TXT COPY x1, y1, x2, y2, tx, ty
 #define GFXOP_TXTINVERT 32              // TXT INVERT x1, y1, x2, y2

@@ -90,6 +90,7 @@ size_t txtscr_save( uint8_t* out, size_t outsize );
 bool txtscr_restore( const uint8_t* data, size_t size );
 // redefines a character of the font (12 rows, bit 7 = left); the font is shared by all screens
 void txtscr_defchar( int code, const uint8_t rows[12] );
+void txtscr_resetfont( void );                                              // all characters back to the built-in font
 const uint8_t* txtscr_font( void );                                         // 256 * 12 bytes
 
 int txtscr_write( int y, int x, int bg, int fg, const char* text, int len );

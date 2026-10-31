@@ -154,6 +154,20 @@ void sprscr_writemap( int imgno, const uint8_t data[SPRITE_WIDTH * SPRITE_HEIGHT
     sprchg = true;
 }
 
+void sprscr_reset( bool images ) {
+    memset( &sprctrl[0], 0, sizeof(sprctrl) );
+    memset( &sprmove[0], 0, sizeof(sprmove) );
+    for ( int i=0; i < MAX_SPRITES; ++i ) {
+        sprcollwith[i] = -1;
+    }
+    sprevent = -1;
+    if ( images ) {
+        memset( &spranim[0][0], 0, MAX_ANIMSEQ * MAX_SPRANIM );
+        memset( &sprmap[0], 0, sizeof(sprmap) );
+    }
+    sprchg = true;
+}
+
 bool sprscr_changed( void ) {
     return sprchg;
 }

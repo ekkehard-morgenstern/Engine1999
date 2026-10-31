@@ -78,7 +78,8 @@ static void render_sprites( struct _sdllayer_t* lay, void* usrdata ) {
 static bool sdlscr_initok = false;
 static bool sdlscr_doexit = false;
 
-static uint32_t sdlscr_bgcol = UINT32_C(0XFF708090); // SlateGray
+#define SDLSCR_DEFAULT_BGCOL    UINT32_C(0XFF708090)        // SlateGray
+static uint32_t sdlscr_bgcol = SDLSCR_DEFAULT_BGCOL;
 
 static SDL_Thread* sdlscr_workerthr = 0;
 
@@ -1178,6 +1179,33 @@ int sdlscr_sprite_collide( int sprno ) {
 
 int sdlscr_sprite_nextevent( void ) {
     return sprscr_nextevent();
+}
+
+// back to the defaults
+
+void sdlscr_gfx_reset( bool images ) {
+    for ( int i=0; i < NLAYERS; ++i ) {
+        sdllay_enable( &layers[i] );
+        layers[i].priority = (uint8_t) i;
+        sdllay_reset_palette( &layers[i] );
+    }
+    sdlscr_bgcol = SDLSCR_DEFAULT_BGCOL;
+    sdlscr_gfxtgt = LAY_GFX;
+    sdlscr_gfxpen = 1;
+    sdlscr_gfxmode = GFXM_SET;
+    if ( layers[LAY_BG].memory != 0 && layers[LAY_GFX].memory != 0 ) {
+        memset( layers[LAY_BG].memory, 0, (size_t) SDL_SCREENWIDTH * SDL_SCREENHEIGHT );
+        memset( layers[LAY_GFX].memory, 0, (size_t) SDL_SCREENWIDTH * SDL_SCREENHEIGHT );
+    }
+    sdlscr_gfxok = false;           // the contexts (the DRAW position, color and scale) start again
+    tilescr_reset( images );
+    sprscr_reset( images );
+    if ( images ) {
+        txtscr_resetfont();
+    }
+    for ( int i=0; i < NLAYERS; ++i ) {
+        sdllay_set_modified( &layers[i] );
+    }
 }
 
 // timing
