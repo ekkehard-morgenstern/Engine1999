@@ -13,7 +13,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-- **Exception shown by `SHOW COPYING`** (2026-10-31, owner's request): `engine1999.c`: the `copying` text now ends with the full text of `LICENSE-EXCEPTION` (embedded; keep in sync); the start banner says that programs and `BUILD` executables are covered by the Engine1999 Runtime Exception (the owner's earlier wording "do not fall under this license" replaced); `--engine1999-about` lists the conditions in short. `make` and `buildtest1` pass; not looked at on the screen.
+(nothing pending)
 
 ## Log
 
@@ -659,3 +659,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
   - **Host**: `engine1999.c` `main()` runs the embedded program when the weak symbol `_binary_program_e99_start` exists (`run_embedded()`: no banner/REPL, ends when the program ends after queued sound (10 s at most), waits for a key after an error that was not a Break, `--engine1999-about` prints the notice and exits); `basrepl.c` got `repl_program_image()` and `repl_load_image()`.
   - **Tests**: new `buildtest1` (27 checks; stand-in runtime `buildstub.c`; also links the real runtime with SDL2; clean under ASAN/UBSAN), `vmtest1` 1025 (8 new), `repltest1` 308 (6 new); all other tests pass. Verified on the real screen under Xvfb + metacity: a small program (text, color, `PLAY`, `WAIT`), an error program ("Press any key to end the program."), and `fruit2.bas` built and started as an executable (title screen); `ldd` shows only the shared libraries; the real build links in a few hundred milliseconds. Makefile: `basbuild.o`, `buildstub.o`, `buildtest1` (needs `engine1999.o`, which stays outside the library), `.gitignore` got `buildtest1`.
   - **Docs**: `docs/basic-language.md` (section "`BUILD`"), `docs/compiler-and-vm.md`, `docs/build-and-test.md`, `docs/roadmap.md`, `docs/grammar.*`, `instset.h`, `SESSION.md`.
+
+### b9787cb — 2026-10-31 17:14:28 +0100 — "SHOW COPYING statement and --engine1999-about modified by Claude Code"
+4 files, +119/-13.
+- **Exception shown by `SHOW COPYING`** (2026-10-31, owner's request): `engine1999.c`: the `copying` text now ends with the full text of `LICENSE-EXCEPTION` (embedded; keep in sync); the start banner says that programs and `BUILD` executables are covered by the Engine1999 Runtime Exception (the owner's earlier wording "do not fall under this license" replaced); `--engine1999-about` lists the conditions in short. `make` and `buildtest1` pass; not looked at on the screen.
