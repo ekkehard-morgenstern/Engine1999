@@ -1591,8 +1591,28 @@ OOM:        out_of_memory( comp );
             return false;
         }
         return true;
-    } else if ( tok == TOK_FRE || tok == TOK_PLAYING || tok == TOK_REMAIN || tok == TOK_EOF || tok == TOK_LOF || tok == TOK_LOC ) {
-        if ( !comp_fetchtok( comp ) ) {
+    } else if ( tok == TOK_FRE || tok == TOK_PLAYING || tok == TOK_REMAIN || tok == TOK_EOF || tok == TOK_LOF || tok == TOK_LOC ||
+                tok == TOK_INT || tok == TOK_FIX || tok == TOK_ABS || tok == TOK_SGN || tok == TOK_SQR || tok == TOK_SIN || tok == TOK_COS ||
+                tok == TOK_TAN || tok == TOK_ATN || tok == TOK_EXP || tok == TOK_LOG || tok == TOK_RND ) {
+        bool fetched = false;
+        if ( tok == TOK_RND ) {
+            // RND, RND(x): without an argument it is RND(1)
+            if ( !comp_fetchtok( comp ) ) {
+                return false;
+            }
+            if ( comp->currtok != TOK_LPAREN ) {
+                uint8_t one[8];
+                comp_set_numlit( one, 1.0 );
+                node_t* lit = NODE_NONE;
+                if ( !comp_create_node( comp, &lit, NT_NUMLIT, UINT8_C(0), UINT16_C(8), one ) || lit == NODE_NONE ||
+                     !comp_create_node( comp, pnode, NT_SYSNUMFUNCARGCALL, UINT8_C(1), UINT16_C(1), &tok, lit ) || *pnode == NODE_NONE ) {
+                    goto OOM;
+                }
+                return true;
+            }
+            fetched = true;
+        }
+        if ( !fetched && !comp_fetchtok( comp ) ) {
             return false;
         }
         if ( comp->currtok != TOK_LPAREN || !comp_fetchtok( comp ) ) {
@@ -1844,7 +1864,7 @@ bool comp_eat_sysnoargnumcall( compiler_t* comp, node_t** pnode ) {
     // sys-noarg-num := sys-noarg-num-name .
     // sys-noarg-num-call := sys-no-arg-num .
     uint8_t tok = comp->currtok;
-    if ( ( tok != TOK_TI && tok != TOK_ERL ) || !comp_fetchtok( comp ) ) {
+    if ( ( tok != TOK_TI && tok != TOK_ERL && tok != TOK_PI ) || !comp_fetchtok( comp ) ) {
         return false;
     }
     if ( !comp_create_node( comp, pnode, NT_SYSNOARGNUMCALL, UINT8_C(0), UINT16_C(1), &tok ) || *pnode == NODE_NONE ) {
@@ -2121,9 +2141,9 @@ bool comp_eat_numunaryex( compiler_t* comp, node_t** pnode ) {
 }
 
 bool comp_eat_nummultex( compiler_t* comp, node_t** pnode ) {
-    // num-mult-op := TOK_MULT | TOK_DIV | TOK_POW .
+    // num-mult-op := TOK_MULT | TOK_DIV | TOK_POW | TOK_BACKSL | TOK_MOD .
     // num-mult-ex := num-unary-ex { num-mult-op num-unary-ex } .
-    static const uint8_t septoks[] = { TOK_MULT, TOK_DIV, TOK_POW, 0 };
+    static const uint8_t septoks[] = { TOK_MULT, TOK_DIV, TOK_POW, TOK_BACKSL, TOK_MOD, 0 };
     /*
         NT_NUMMULTEX   numeric multiplication expression
             branches:
@@ -3002,6 +3022,27 @@ bool comp_eat_designstmt( compiler_t* comp, node_t** pnode ) {
     return true;
 }
 
+bool comp_eat_randomizestmt( compiler_t* comp, node_t** pnode ) {
+    // randomize-stmt := TOK_RANDOMIZE [ num-expr ] .
+    if ( comp->currtok != TOK_RANDOMIZE || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    node_t* seed = NODE_NONE;
+    if ( !comp_at_stmt_end( comp ) ) {
+        if ( !comp_eat_numexpr( comp, &seed ) || seed == NODE_NONE ) {
+            comp_error( comp, "Numeric expression expected" );
+            return false;
+        }
+    }
+    // NT_RANDOMIZESTMT: 0 or 1 branch of numeric expression (the seed)
+    if ( !( seed == NODE_NONE ? comp_create_node( comp, pnode, NT_RANDOMIZESTMT, UINT8_C(0), UINT16_C(0), 0 ) :
+            comp_create_node( comp, pnode, NT_RANDOMIZESTMT, UINT8_C(1), UINT16_C(0), 0, seed ) ) || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
 bool comp_eat_fileopstmt( compiler_t* comp, node_t** pnode ) {
     // fileop-stmt := ( TOK_KILL | TOK_MKDIR | TOK_CHDIR ) str-expr | TOK_RENAME str-expr TOK_TO str-expr |
     //                TOK_SEEK chan-spec TOK_COMMA num-expr .
@@ -3517,6 +3558,9 @@ bool comp_eat_progstmt( compiler_t* comp, node_t** pnode ) {
         return true;
     }
     if ( comp_eat_gfxstmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_randomizestmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     if ( comp_eat_designstmt( comp, pnode ) && *pnode != NODE_NONE ) {

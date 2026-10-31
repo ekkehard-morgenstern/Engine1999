@@ -218,6 +218,7 @@ bool comp_eat_recordstmt( compiler_t* comp, node_t** pnode );
 bool comp_eat_gfxstmt( compiler_t* comp, node_t** pnode );
 bool comp_eat_gfxquerycall( compiler_t* comp, node_t** pnode );
 bool comp_eat_designstmt( compiler_t* comp, node_t** pnode );
+bool comp_eat_randomizestmt( compiler_t* comp, node_t** pnode );
 bool comp_eat_liststmt( compiler_t* comp, node_t** pnode );
 bool comp_eat_newstmt( compiler_t* comp, node_t** pnode );
 bool comp_eat_clearstmt( compiler_t* comp, node_t** pnode );

@@ -824,6 +824,9 @@ static const struct {
     { TOK_FIELD, "FIELD" }, { TOK_LSET, "LSET" }, { TOK_RSET, "RSET" }, { TOK_GETREC, "GETREC" }, { TOK_PUTREC, "PUTREC" }, { TOK_ERR, "ERR" }, { TOK_ERL, "ERL" },
     { TOK_MKI, "MKI" }, { TOK_MKL, "MKL" }, { TOK_MKS, "MKS" }, { TOK_MKD, "MKD" },
     { TOK_CVI, "CVI" }, { TOK_CVL, "CVL" }, { TOK_CVS, "CVS" }, { TOK_CVD, "CVD" },
+    { TOK_MOD, "MOD" }, { TOK_ABS, "ABS" }, { TOK_SGN, "SGN" }, { TOK_SQR, "SQR" }, { TOK_SIN, "SIN" }, { TOK_COS, "COS" },
+    { TOK_TAN, "TAN" }, { TOK_ATN, "ATN" }, { TOK_EXP, "EXP" }, { TOK_LOG, "LOG" }, { TOK_RND, "RND" }, { TOK_FIX, "FIX" },
+    { TOK_PI, "PI" }, { TOK_RANDOMIZE, "RANDOMIZE" },
     { TOK_GFX, "GFX" }, { TOK_SPRITE, "SPRITE" }, { TOK_TILE, "TILE" }, { TOK_TXT, "TXT" }, { TOK_DESIGN, "DESIGN" },
     { TOK_RGB, "RGB" }, { TOK_POINT, "POINT" }, { TOK_CLS, "CLS" }, { TOK_LOCATE, "LOCATE" }, { TOK_COLOR, "COLOR" }, { TOK_AMP, "&" }, { TOK_LE, "<=" }, { TOK_GE, ">=" }, { TOK_NE, "<>" }, { 0, 0 }
 };
@@ -1031,9 +1034,11 @@ static hlclass_t keyword_hlclass( uint8_t tok ) {
         case TOK_QUA: case TOK_OCT: case TOK_DEC: case TOK_HEX: case TOK_FRE: case TOK_TI: case TOK_LEN: case TOK_CHR:
         case TOK_PLAYING: case TOK_REMAIN: case TOK_EOF: case TOK_LOF: case TOK_LOC: case TOK_ERR: case TOK_ERL: case TOK_MKI: case TOK_MKL: case TOK_MKS: case TOK_MKD:
         case TOK_CVI: case TOK_CVL: case TOK_CVS: case TOK_CVD: case TOK_RGB: case TOK_POINT: case TOK_FN:
+        case TOK_INT: case TOK_ABS: case TOK_SGN: case TOK_SQR: case TOK_SIN: case TOK_COS: case TOK_TAN: case TOK_ATN: case TOK_EXP:
+        case TOK_LOG: case TOK_RND: case TOK_FIX: case TOK_PI:
             return HL_FUNCTION;
         case TOK_NOT: case TOK_AND: case TOK_OR: case TOK_XOR: case TOK_NAND: case TOK_NOR: case TOK_XNOR:
-        case TOK_LSHIFT: case TOK_RSHIFT:
+        case TOK_LSHIFT: case TOK_RSHIFT: case TOK_MOD:
             return HL_OPERATOR;
     }
     return HL_STATEMENT;

@@ -404,6 +404,10 @@ const char* cgen_opcode_name( uint16_t opcode ) {
         case INS_ERRT:      return "ERRT";
         case INS_ERL:       return "ERL";
         case INS_ERRS:      return "ERRS";
+        case INS_IDIV:      return "IDIV";
+        case INS_MOD:       return "MOD";
+        case INS_MATH:      return "MATH";
+        case INS_RAND:      return "RAND";
         case INS_GFXC:      return "GFXC";
         case INS_GFXQ:      return "GFXQ";
         case INS_DSGN:      return "DSGN";
@@ -1100,6 +1104,11 @@ bool cgen_gen_dsgn( codegen_t* cgen, uint16_t param ) { return cgen_gen_ins12( c
 bool cgen_gen_drow( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_DROW, false, false, UINT16_C(0) ); }
 bool cgen_gen_colt( codegen_t* cgen, uint16_t param ) { return cgen_gen_ins12( cgen, INS_COLT, false, true, param ); }
 
+bool cgen_gen_idiv( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_IDIV, false, false, UINT16_C(0) ); }
+bool cgen_gen_mod( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_MOD, false, false, UINT16_C(0) ); }
+bool cgen_gen_math( codegen_t* cgen, uint16_t kind ) { return cgen_gen_ins12( cgen, INS_MATH, false, true, kind ); }
+bool cgen_gen_rand( codegen_t* cgen, uint16_t hasseed ) { return cgen_gen_ins12( cgen, INS_RAND, false, true, hasseed ); }
+
 bool cgen_gen_adrs( codegen_t* cgen ) {
     return cgen_gen_ins12( cgen, INS_ADRS, false, false, UINT16_C(0) );
 }
@@ -1540,6 +1549,19 @@ UNEXP:      return cgen_unexpected_node( comp );
         return false;
     }
     uint8_t functok = node->data[0];
+    {   // the numeric functions are one instruction with the kind as parameter (its argument is on the stack already)
+        uint16_t kind = 0;
+        switch ( functok ) {
+            case TOK_INT: kind = 1; break;   case TOK_FIX: kind = 2; break;   case TOK_ABS: kind = 3; break;   case TOK_SGN: kind = 4; break;
+            case TOK_SQR: kind = 5; break;   case TOK_SIN: kind = 6; break;   case TOK_COS: kind = 7; break;   case TOK_TAN: kind = 8; break;
+            case TOK_ATN: kind = 9; break;   case TOK_EXP: kind = 10; break;  case TOK_LOG: kind = 11; break;  case TOK_RND: kind = 12; break;
+            case TOK_PI: kind = 13; break;
+            default: break;
+        }
+        if ( kind != 0 ) {
+            return cgen_gen_math( cgen, kind ) || cgen_out_of_code_memory( comp );
+        }
+    }
     bool (*generator)( codegen_t* ) = 0;
     switch ( functok ) {
         case TOK_TI:    generator = cgen_gen_ti; break;
@@ -1758,6 +1780,8 @@ UNEXP:      return cgen_unexpected_node( pdata->comp );
             case TOK_MULT:  generator = cgen_gen_mul; break;
             case TOK_DIV:   generator = cgen_gen_div; break;
             case TOK_POW:   generator = cgen_gen_pow; break;
+            case TOK_BACKSL: generator = cgen_gen_idiv; break;
+            case TOK_MOD:   generator = cgen_gen_mod; break;
             default:
                 break;
         }
@@ -3003,6 +3027,7 @@ bool cgen_from_stmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         case NT_ERRTRAPSTMT: return cgen_from_errtrapstmt( cgen, comp, node );
         case NT_ONCOLLSTMT: return cgen_from_oncollstmt( cgen, comp, node );
         case NT_GFXSTMT:    return cgen_from_gfxstmt( cgen, comp, node );
+        case NT_RANDOMIZESTMT: return cgen_from_randomizestmt( cgen, comp, node );
         case NT_DESIGNSTMT: return cgen_from_designstmt( cgen, comp, node );
         case NT_DESIGNROW:  return cgen_from_designrow( cgen, comp, node );
         case NT_OPENSTMT:   return cgen_from_openstmt( cgen, comp, node );

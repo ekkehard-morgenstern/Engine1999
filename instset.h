@@ -469,6 +469,17 @@ The 4096 extended instructions are as follows:
                             @ "row": 16 (8 for CHAR) characters of . 1-9 A-F o; when the last row has arrived the image is defined.
     0001 01100010       COLT - set the collision handler ( -- ) C=0 P=1
                             ON COLLISION: parameter 0 = OFF; 1 = GOSUB, 2 = GOTO with the handler's address on the return stack.
+    0001 01100011       IDIV - integer division ( a b -- n ) C=0 P=0
+                            a \ b: both operands are truncated toward zero, the quotient too; b = 0 (after truncating) is "Division by zero".
+    0001 01100100       MOD  - remainder ( a b -- n ) C=0 P=0
+                            a MOD b: both truncated toward zero, the result has the sign of a; b = 0 is "Division by zero".
+    0001 01100101       MATH - numeric function ( x -- y ) C=0 P=1
+                            Parameter: 1 INT (floor), 2 FIX (toward zero), 3 ABS, 4 SGN, 5 SQR, 6 SIN, 7 COS, 8 TAN, 9 ATN (arc tangent),
+                            10 EXP, 11 LOG (natural), 12 RND, 13 PI ( -- pi ). Angles in radians. SQR of a negative number, LOG of a number
+                            <= 0 are "Illegal argument", a result that is not finite is "Overflow". RND(x): x > 0 the next random
+                            number 0 <= r < 1; x = 0 the last one again; x < 0 starts the sequence over from the seed x.
+    0001 01100110       RAND - RANDOMIZE ( [seed] -- ) C=0 P=1
+                            Parameter 1: seed popped, the sequence is the same for the same seed; 0: seeded from the clock.
 
 */
 
@@ -620,5 +631,9 @@ The 4096 extended instructions are as follows:
 #define INS_DSGN        UINT16_C(0X160)
 #define INS_DROW        UINT16_C(0X161)
 #define INS_COLT        UINT16_C(0X162)
+#define INS_IDIV        UINT16_C(0X163)
+#define INS_MOD         UINT16_C(0X164)
+#define INS_MATH        UINT16_C(0X165)
+#define INS_RAND        UINT16_C(0X166)
 
 #endif

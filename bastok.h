@@ -248,6 +248,20 @@
 #define TOK_CLS         UINT8_C(197)        // CLS keyword
 #define TOK_LOCATE      UINT8_C(198)        // LOCATE keyword
 #define TOK_COLOR       UINT8_C(199)        // COLOR keyword
+#define TOK_MOD         UINT8_C(200)        // MOD operator
+#define TOK_ABS         UINT8_C(201)        // ABS function
+#define TOK_SGN         UINT8_C(202)        // SGN function
+#define TOK_SQR         UINT8_C(203)        // SQR function
+#define TOK_SIN         UINT8_C(204)        // SIN function
+#define TOK_COS         UINT8_C(205)        // COS function
+#define TOK_TAN         UINT8_C(206)        // TAN function
+#define TOK_ATN         UINT8_C(207)        // ATN function
+#define TOK_EXP         UINT8_C(208)        // EXP function
+#define TOK_LOG         UINT8_C(209)        // LOG function
+#define TOK_RND         UINT8_C(210)        // RND function
+#define TOK_FIX         UINT8_C(211)        // FIX function
+#define TOK_PI          UINT8_C(212)        // PI function
+#define TOK_RANDOMIZE   UINT8_C(213)        // RANDOMIZE keyword
 #define TOK_NONE        UINT8_C(255)        // no token (!)
 
 // -- buffers ---------------------------------------------------------------

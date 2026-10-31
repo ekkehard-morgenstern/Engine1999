@@ -649,6 +649,7 @@ Explanation of node types:
 #define DESK_CHAR               UINT8_C(3)
 #define NT_DESIGNROW            UINT8_C(0X74)   // @ "row": one row of the picture (1 branch: a string expression)
 #define NT_ONCOLLSTMT           UINT8_C(0X75)   // ON COLLISION GOSUB|GOTO target | OFF (data: 1 byte, ERRT_* kind; the target branch unless OFF)
+#define NT_RANDOMIZESTMT        UINT8_C(0X76)   // RANDOMIZE [seed] (0 or 1 numeric branch)
 #define NT_FILESSTMT            UINT8_C(0X69)   // FILES statement (0 or 1 string branch: the file name pattern)
 #define NT_CHAINSTMT            UINT8_C(0X68)   // CHAIN statement (data: 1 byte, 1 = MERGE; the file name, then an optional goto target)
 

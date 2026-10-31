@@ -193,6 +193,33 @@ Channel 0 is the screen and keyboard; channels 1 to 255 are opened by `OPEN`. `L
 
 **File extensions:** `SAVE "name"` writes the binary (tokenized) form and appends `.e99` to a name without extension; `SAVE "name",A` writes the ASCII listing and appends `.bas`. A name with an extension is used as it is. `LOAD` recognizes both forms by the header, whatever the extension is.
 
+## Numeric functions, `\`, `MOD`, `RND`
+
+```
+PRINT INT(3.7);FIX(-3.7);ABS(-2);SGN(-9)        ' 3 -3 2 -1
+PRINT SQR(2);EXP(1);LOG(10);PI                  ' square root, e^x, natural logarithm, 3.14159265358979
+PRINT SIN(PI/2);COS(0);TAN(0);ATN(1)*4          ' angles in radians; ATN is the arc tangent
+D=INT(RND(1)*6)+1                               ' a die
+PRINT 17\5;17 MOD 5                             ' 3 2   (integer division and remainder)
+```
+
+| Function | Result |
+|---|---|
+| `INT(x)` | the largest integer not above x (rounds down: `INT(-3.2)` is -4) |
+| `FIX(x)` | x with the fraction cut off (toward zero: `FIX(-3.7)` is -3) |
+| `ABS(x)` `SGN(x)` | the absolute value, the sign (-1, 0, 1) |
+| `SQR(x)` | the square root (x >= 0) |
+| `SIN(x)` `COS(x)` `TAN(x)` `ATN(x)` | trigonometry in radians; `ATN` is the arc tangent |
+| `EXP(x)` `LOG(x)` | e to the power x; the natural logarithm (x > 0) |
+| `PI` | 3.14159265358979 (no parentheses) |
+| `RND(x)` / `RND` | x > 0 or no argument: the next random number, 0 <= r < 1; `RND(0)`: the last number again; `RND(-n)`: starts the sequence over from the seed n and returns its first number |
+
+`RANDOMIZE` seeds the generator from the clock, `RANDOMIZE n` from the number n (the same n gives the same sequence). Without either, the sequence of each
+run is different. `x \ y` divides after cutting both operands to integers and cuts the quotient; `x MOD y` is the remainder, with the sign of x; a divisor of 0 is
+"Division by zero". Both stand at the level of `*` and `/` (evaluated left to right with them). A negative `SQR`/`LOG` argument is "Illegal argument", a result
+that does not fit a number (`EXP(1000)`) is "Overflow". `ABS SGN SQR SIN COS TAN ATN EXP LOG RND FIX PI MOD RANDOMIZE` are reserved words now
+(`INT` was one already).
+
 ## Error handling: `ON ERROR GOTO|GOSUB`, `ON ERROR OFF`, `ERR$`, `ERL`
 
 ```

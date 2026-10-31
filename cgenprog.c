@@ -426,6 +426,20 @@ bool cgen_from_designrow( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     return cgen_from_strexpr( cgen, comp, node->branches[0] ) && ( cgen_gen_drow( cgen ) || cgen_out_of_code_memory( comp ) );
 }
 
+bool cgen_from_randomizestmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    // NT_RANDOMIZESTMT: [<seed>] RAND(1 with a seed, 0 without)
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->type != NT_RANDOMIZESTMT || node->numbranches > 1U ) {
+        return cgen_unexpected_node( comp );
+    }
+    if ( node->numbranches == 1U && !cgen_from_numexpr( cgen, comp, node->branches[0] ) ) {
+        return false;
+    }
+    return cgen_gen_rand( cgen, node->numbranches == 1U ? UINT16_C(1) : UINT16_C(0) ) || cgen_out_of_code_memory( comp );
+}
+
 bool cgen_from_fileopstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     /*
         NT_FILEOPSTMT   KILL / RENAME / MKDIR / CHDIR / SEEK statement

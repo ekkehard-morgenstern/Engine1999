@@ -33,6 +33,8 @@
 
 // -- helpers ---------------------------------------------------------------
 
+static bool vm_randomize( vm_t* vm, bool hasseed );
+
 void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem ) {
     vm->cgen     = cgen;
     vm->vmem     = vmem;
@@ -82,6 +84,8 @@ void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem ) {
     vm->errlastline = vm->errtextline = 0;
     vm->fields = 0;
     vm->numfields = vm->capfields = 0;
+    vm->rndlast = 0.0;
+    vm_randomize( vm, false );          // RND is different every time unless the program seeds it
     vm->gfx = 0;
     vm->colpending = false;
     vm->design.active = false;
@@ -1321,6 +1325,7 @@ static bool vm_list_files( vm_t* vm ) {
 }
 
 static bool vm_music_play( void* usrdata, int voice, const char* text, char* err, size_t errsz );
+static bool vm_randomize( vm_t* vm, bool hasseed );
 static bool vm_set_errtrap( vm_t* vm, uint16_t param );
 static bool vm_interrupt_hook( void* usrdata );
 
@@ -1799,6 +1804,101 @@ static bool vm_record( vm_t* vm, bool put ) {
         }
     }
     return true;
+}
+
+// -- numeric functions and random numbers -----------------------------------------------------
+
+static uint64_t vm_splitmix( uint64_t* z ) {
+    uint64_t x = ( *z += UINT64_C(0X9E3779B97F4A7C15) );
+    x = ( x ^ ( x >> 30 ) ) * UINT64_C(0XBF58476D1CE4E5B9);
+    x = ( x ^ ( x >> 27 ) ) * UINT64_C(0X94D049BB133111EB);
+    return x ^ ( x >> 31 );
+}
+
+static void vm_seed_rnd( vm_t* vm, uint64_t seed ) {
+    uint64_t z = seed;
+    vm->rndstate = vm_splitmix( &z );
+    if ( vm->rndstate == 0 ) {
+        vm->rndstate = UINT64_C(0X2545F4914F6CDD1D);
+    }
+}
+
+// the next random number, 0 <= r < 1
+static double vm_next_rnd( vm_t* vm ) {
+    uint64_t x = vm->rndstate;
+    x ^= x >> 12; x ^= x << 25; x ^= x >> 27;
+    vm->rndstate = x;
+    uint64_t r = x * UINT64_C(0X2545F4914F6CDD1D);
+    return (double)( r >> 11 ) * ( 1.0 / 9007199254740992.0 );
+}
+
+// RAND ( [seed] -- ): RANDOMIZE
+static bool vm_randomize( vm_t* vm, bool hasseed ) {
+    double seed = 0;
+    if ( hasseed && !vm_dpop_num( vm, &seed ) ) {
+        return false;
+    }
+    if ( hasseed ) {
+        uint64_t bits;
+        memcpy( &bits, &seed, sizeof(bits) );
+        vm_seed_rnd( vm, bits );
+    } else {
+        struct timespec ts;
+        clock_gettime( CLOCK_MONOTONIC, &ts );
+        vm_seed_rnd( vm, (uint64_t) ts.tv_nsec ^ ( (uint64_t) ts.tv_sec << 30 ) ^ (uint64_t) time( 0 ) );
+    }
+    return true;
+}
+
+// MATH ( x -- y ): INT FIX ABS SGN SQR SIN COS TAN ATN EXP LOG RND, PI ( -- pi )
+static bool vm_math( vm_t* vm, uint16_t kind ) {
+    double x = 0.0, r = 0.0;
+    if ( kind == 13 ) {
+        return vm_dpush_num( vm, 3.14159265358979323846 );
+    }
+    if ( !vm_dpop_num( vm, &x ) ) {
+        return false;
+    }
+    switch ( kind ) {
+        case 1:  r = floor( x ); break;
+        case 2:  r = trunc( x ); break;
+        case 3:  r = fabs( x ); break;
+        case 4:  r = x > 0.0 ? 1.0 : x < 0.0 ? -1.0 : 0.0; break;
+        case 5:
+            if ( x < 0.0 ) {
+                return vm_error( vm, "Illegal argument" );
+            }
+            r = sqrt( x );
+            break;
+        case 6:  r = sin( x ); break;
+        case 7:  r = cos( x ); break;
+        case 8:  r = tan( x ); break;
+        case 9:  r = atan( x ); break;
+        case 10: r = exp( x ); break;
+        case 11:
+            if ( !( x > 0.0 ) ) {
+                return vm_error( vm, "Illegal argument" );
+            }
+            r = log( x );
+            break;
+        case 12:
+            if ( x < 0.0 ) {
+                uint64_t bits;
+                memcpy( &bits, &x, sizeof(bits) );
+                vm_seed_rnd( vm, bits );
+                vm->rndlast = vm_next_rnd( vm );
+            } else if ( x > 0.0 ) {
+                vm->rndlast = vm_next_rnd( vm );
+            }
+            r = vm->rndlast;
+            break;
+        default:
+            return vm_error( vm, "Internal error (bad numeric function)" );
+    }
+    if ( !isfinite( r ) ) {
+        return vm_error( vm, "Overflow" );
+    }
+    return vm_dpush_num( vm, r );
 }
 
 // PACK ( n -- s ): MKI$ (1), MKL$ (2), MKS$ (3), MKD$ (4): big endian (network byte order)
@@ -2747,6 +2847,14 @@ static bool vm_binary_num( vm_t* vm, uint16_t opcode ) {
         case INS_XOR:   r = (double)( ia ^ ib ); break;
         case INS_XNOR:  r = (double)( ~( ia ^ ib ) ); break;
         case INS_POW:   r = pow( a, b ); break;
+        case INS_IDIV:
+        case INS_MOD:
+            a = trunc( a ); b = trunc( b );
+            if ( b == 0.0 ) {
+                return vm_error( vm, "Division by zero" );
+            }
+            r = opcode == INS_IDIV ? trunc( a / b ) : fmod( a, b );
+            break;
         case INS_CNEQ:  r = a == b ? -1.0 : 0.0; break;
         case INS_CNNE:  r = a != b ? -1.0 : 0.0; break;
         case INS_CNGE:  r = a >= b ? -1.0 : 0.0; break;
@@ -2938,7 +3046,7 @@ static bool vm_step( vm_t* vm ) {
             return vm_dpop_num( vm, &num ) && vm_dpush_num( vm, (double)( ~vm_to_int32( num ) ) );
         case INS_LSH: case INS_RSH: case INS_ADD: case INS_SUB: case INS_MUL: case INS_DIV: case INS_AND: case INS_NAND:
         case INS_OR: case INS_NOR: case INS_XOR: case INS_XNOR: case INS_POW: case INS_CNEQ: case INS_CNNE:
-        case INS_CNGE: case INS_CNLE: case INS_CNGT: case INS_CNLT:
+        case INS_CNGE: case INS_CNLE: case INS_CNGT: case INS_CNLT: case INS_IDIV: case INS_MOD:
             return vm_binary_num( vm, opcode );
         case INS_CON: case INS_CSEQ: case INS_CSNE: case INS_CSGE: case INS_CSLE: case INS_CSGT: case INS_CSLT:
             return vm_binary_str( vm, opcode );
@@ -2974,6 +3082,8 @@ static bool vm_step( vm_t* vm ) {
         case INS_FOP: return vm_file_operation( vm, param16 );
         case INS_ERRT: return vm_set_errtrap( vm, param16 );
         case INS_PACK: return vm_pack( vm, param16 );
+        case INS_MATH: return vm_math( vm, param16 );
+        case INS_RAND: return vm_randomize( vm, param16 != 0 );
         case INS_GFXC: return vm_gfx_command( vm, param16 );
         case INS_GFXQ: return vm_gfx_query( vm, param16 );
         case INS_DSGN: return vm_design_start( vm, param16 );
