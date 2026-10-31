@@ -13,12 +13,9 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-(not committed yet) **Array parameters, local arrays, STOP/CONT/TRACE/AUTO, PEEK/POKE** (2026-10-31)
-- **History log**: the entry of `bcf5b5e` (small additions, PROC/FUNC, RESUME) moved into the log.
-- **Array parameters and local arrays**: `vars.[ch]` (`vmem_array_alias/fresh/restore`, `var_t.aliased`), `vm.c` (`vm_savedvar_t.isarray`, call/local/unwind), `bascomp.c` (`comp_eat_callargs`, `comp_make_param_arrays`, `LOCAL` items), `cgendecl.c` (`cgen_check_call_args`), `codegen.c`.
-- **STOP / CONT / TRACE / AUTO**: tokens 240..242, nodes 0x7E..0x81, instructions 0x170..0x173, `vm_stopstate_t` (stacks moved on STOP/Break), `codegen_t.progsize`, `repl_program_changed()`, `repl_t.trace/autoline/autostep`, `VMREQ_AUTO`; the AUTO prompting in `engine1999.c` (tried on the real screen under Xvfb).
-- **PEEK / POKE / PEEK$**: tokens 243/244, `NT_POKESTMT 0x82`, instructions 0x174..0x176, `vm_t.ram` (1 MiB).
-- Tests: `vmtest1` 969 -> 1011 (+17 arrays, +5 STOP/TRACE, +20 PEEK/POKE), `repltest1` 286 -> 302 (STOP/CONT/TRACE/AUTO); both clean under ASAN/UBSAN; the other test programs pass. Docs: `basic-language.md`, `compiler-and-vm.md`, `roadmap.md`, `instset.h`, `SESSION.md`.
+(not committed yet) **EBNF brought up to date** (2026-10-31)
+- **History log**: the entry of `90500ef` (array parameters, STOP/CONT/TRACE/AUTO, PEEK/POKE) moved into the log.
+- `bascomp.ebnf`: added everything the parser has learned since the last update: the operators (`\`, `MOD`, `SHL SHR ASL ASR`, `IMP NIMP EQV NEQV`), the numeric and string functions (`INT`..`LOG10`, `RND`, `PI`, `CV*`, `MK*$`, `PEEK`, `PEEK$`, `TIME$ DATE$ DATETIME$`), the graphics functions and statements (written out from the table in `gfxops.c`: `GFX`, `TXT`, `TILE`, `SPRITE`, `DESIGN`, `@`, `CLS`, `LOCATE`, `COLOR`, `SYMBOL`, `ON COLLISION`), call arguments with array arguments, `PROC`/`FUNC`/`CALL`/`LOCAL`, `RETURN expr`, `EXIT PROC`, `RESUME`, `STOP`/`CONT`/`TRACE`/`AUTO`, `POKE`; the orphan rules (`OPEN`, `CLOSE`, `ADDRESS`, `FIELD`.., `ON ERROR`, `RANDOMIZE`, `DEG`.., file operations) are reachable from `stmt` now. Fixed three undefined names (`num-expr-list`, `sys-no-arg-num/str`) and defined `identifier`. Checked with a script: every production is defined. Ends with a list of what a grammar cannot say (words recognized in context, lookahead, the code generator's checks). `docs/basic-language.md`: the remark about inconsistent grammar items replaced. No code changes.
 
 ## Log
 
@@ -608,3 +605,11 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 - **`PROC` / `FUNC` / `CALL` / `LOCAL`**: tokens 235..238, nodes 0x7A..0x7C, `LOCL 0x16E`; `RETURN expr`, `EXIT PROC|FUNC|FN`; recursion; `vm_context_t.saved` became a heap list; `bascomp.c` (`comp_eat_procstmt/callstmt/localstmt`), `cgendecl.c` (`cgen_from_procstmt/callstmt`), `cgenctl.c` (`LOCAL`, proc exits), `vm.c` (`vm_local`).
 - **`RESUME`**: token 239, `NT_RESUMESTMT 0x7D`, `RSM 0x16F`; table of statement addresses in the code generator (`cgen_find_stmt`), `vm->steppc`/`errpc`/`resume*`, `vm_resume_error()`.
 - Tests: `vmtest1` 908 -> 969 (+18 small additions, +25 PROC/FUNC, +15 RESUME; clean under ASAN/UBSAN), `repltest1` 286, the other test programs pass. Docs: `basic-language.md`, `compiler-and-vm.md`, `roadmap.md`, `instset.h`, `SESSION.md`.
+
+### 90500ef — 2026-10-31 10:40:54 +0100 — "Various additions (check documentation), implemented by Claude Code"
+25 files, +1003/-64.
+- **History log**: the entry of `bcf5b5e` (small additions, PROC/FUNC, RESUME) moved into the log.
+- **Array parameters and local arrays**: `vars.[ch]` (`vmem_array_alias/fresh/restore`, `var_t.aliased`), `vm.c` (`vm_savedvar_t.isarray`, call/local/unwind), `bascomp.c` (`comp_eat_callargs`, `comp_make_param_arrays`, `LOCAL` items), `cgendecl.c` (`cgen_check_call_args`), `codegen.c`.
+- **STOP / CONT / TRACE / AUTO**: tokens 240..242, nodes 0x7E..0x81, instructions 0x170..0x173, `vm_stopstate_t` (stacks moved on STOP/Break), `codegen_t.progsize`, `repl_program_changed()`, `repl_t.trace/autoline/autostep`, `VMREQ_AUTO`; the AUTO prompting in `engine1999.c` (tried on the real screen under Xvfb).
+- **PEEK / POKE / PEEK$**: tokens 243/244, `NT_POKESTMT 0x82`, instructions 0x174..0x176, `vm_t.ram` (1 MiB).
+- Tests: `vmtest1` 969 -> 1011 (+17 arrays, +5 STOP/TRACE, +20 PEEK/POKE), `repltest1` 286 -> 302 (STOP/CONT/TRACE/AUTO); both clean under ASAN/UBSAN; the other test programs pass. Docs: `basic-language.md`, `compiler-and-vm.md`, `roadmap.md`, `instset.h`, `SESSION.md`.

@@ -96,7 +96,7 @@ Variable kinds: float (64-bit), integer (`%`, 16-bit), string (`$`), label. Arra
 
 Parser has rules for everything in `bascomp.ebnf` above. Code generation (`cgen_from_*`) covers literals, variable r-/l-values, expressions, user-function and system-function
 calls, `PRINT`, `SAVE`, assignment/`LET`, substring assignment, `DIM`, `ERASE`, `DEF FN` (single- and multi-line), `FOR/NEXT`, `GOTO/GOSUB/RETURN/LABEL`, `IF/UNLESS` and statement lists. `RUN`, `LIST`, `LOAD`, `NEW`, `CLEAR`, `DELETE` and `RENUM` are statements too (below). `REPEAT/UNTIL`, `WHILE/WEND`, `UNTIL/UEND`, `AGAIN [n]`, `END`, `POP` and `ON n GOTO/GOSUB` are implemented too (see compiler-and-vm.md for the loop rules), and so are `DATA`, `READ` and `RESTORE [line|label]` (data items are signed numeric literals and string literals; no unquoted text), `INPUT` and `GET` (below). Keywords that have a token but no grammar yet (`PUT`, `AFTER`, `EVERY`, `ON`/`OFF` for timers, `SYMBOL`, `RUN`, `NEW`, `LIST`, `LOAD`, …) are not statements of the language yet; `AFTER`, `EVERY` and `SYMBOL` are planned to work through host callbacks.
-Some grammar items are inconsistent in the EBNF (e.g. `sys-noarg-num-call := sys-no-arg-num`, a name that is not defined) — check the code before relying on it.
+`bascomp.ebnf` was brought up to date on 2026-10-31 (all statements and functions up to `PEEK`/`POKE`; every production is defined, checked with a script); it ends with a list of what a grammar cannot say (words recognized in context, lookahead, checks of the code generator, the table-driven graphics statements are written out from `gfxops.c`). The parser and code generator remain the authority.
 
 ### INPUT and GET
 
