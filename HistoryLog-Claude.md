@@ -663,3 +663,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 ### b9787cb — 2026-10-31 17:14:28 +0100 — "SHOW COPYING statement and --engine1999-about modified by Claude Code"
 4 files, +119/-13.
 - **Exception shown by `SHOW COPYING`** (2026-10-31, owner's request): `engine1999.c`: the `copying` text now ends with the full text of `LICENSE-EXCEPTION` (embedded; keep in sync); the start banner says that programs and `BUILD` executables are covered by the Engine1999 Runtime Exception (the owner's earlier wording "do not fall under this license" replaced); `--engine1999-about` lists the conditions in short. `make` and `buildtest1` pass; not looked at on the screen.
+
+### 7f94f47 — 2026-10-31 17:15:51 +0100 — "Claude Code state update"
+2 files, +6/-2.
+- Bookkeeping only: `HistoryLog-Claude.md` (the entry of `b9787cb` moved into the log) and `SESSION.md` (latest commit line `b9787cb`). No source changes.
