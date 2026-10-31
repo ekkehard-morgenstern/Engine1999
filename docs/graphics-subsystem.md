@@ -38,11 +38,93 @@ Gaps found in the backends (not only missing BASIC words):
 1. **Few new reserved words, sub-keywords where possible.** Words that are already reserved or that fit common BASIC (GW-BASIC, AmigaBASIC, Locomotive) are preferred.
 2. **Colors are palette indices (0..255) of the layer being drawn on**, as in the 1980s machines; `PALETTE` changes what an index means.
    `RGB(r,g,b[,a])` builds the 32 bit ARGB number for `PALETTE`.
-3. **The VM talks to the screen through a host interface** (`vm_gfx_t`, like `vm_sound_t`), and the drawing algorithms live in a module
-   without SDL (`gfxcore.[ch]`, working on a plain `uint8_t[640*300]` buffer) so that they are tested headless like `synth.c`. `engine1999`
-   maps the interface to `sdlscr_*`; the tests use a plain buffer and compare pixels.
-4. **Images are binary strings** (now possible): a tile or sprite image is a 384 byte string (16 x 24, one palette index per byte, row by row),
+3. **All calls into the graphics modules go through `sdlscreen`** (owner's requirement, 2026-10-31). No caller outside
+   `sdlscreen` (`engine1999.c`, the VM host mapping, the editors `fulledit.c` and `monitor.c`, tests of the engine) calls `sdllayer`, `tilescreen`,
+   `sprscreen`, `textscreen` or `gfxcore` directly, only `sdlscr_*`. Today `engine1999.c` already obeys this, but `fulledit.c` and `monitor.c`
+   call `txtscr_*` directly (about 60 calls: viewports, screen select, colors, write, clear), so they must be converted. `sdlscreen`
+   is the single place where a lock, a command queue or a frame handshake can be added later (today there is none, by decision), without touching
+   any caller. **So the internal `sdlscr_*` API is specified first** (next section), before any BASIC statement is built on it.
+4. **The VM talks to the screen through a host interface** (`vm_gfx_t`, like `vm_sound_t`), which `engine1999` maps to that `sdlscr_*` API.
+   The drawing algorithms live in a module without SDL (`gfxcore.[ch]`, working on a plain `uint8_t[640*300]` buffer) so that they are tested
+   headless like `synth.c`; only `sdlscreen` calls it, on the buffers of the layers it owns. The tests use a plain buffer and compare pixels.
+5. **Images are binary strings** (now possible): a tile or sprite image is a 384 byte string (16 x 24, one palette index per byte, row by row),
    a graphics block is `4 + w*h` bytes (`MKI$(w)+MKI$(h)+pixels`). Files come in through `OPEN ... FOR INPUT` and `INPUT$`, from `res:`.
+
+## The internal API of `sdlscreen` (to be specified first)
+
+Today `sdlscreen.h` has the text functions (`sdlscr_printf`, `sdlscr_puts`, `sdlscr_ansi_*`, `sdlscr_locate`, ...), tile functions
+(`sdlscr_writetile`, `sdlscr_scrolltiles`) and sprite functions (`sdlscr_showsprite`, ... `sdlscr_writesprite`); the layer array
+(`layers[]`, `sdlscr_bgcol`) is `static` in `sdlscreen.c`, which is why this is the right choke point. Rules for the API:
+
+- Every function is `sdlscr_<noun>_<verb>`-style like the existing ones, takes plain C types (no `sdllayer_t*` or SDL types leak out), validates
+  its arguments (out of range = ignored or `false`, never a crash) and **marks the layer it changed as modified** itself, so callers never
+  call `sdllay_set_modified`.
+- Whatever synchronization is needed later (a mutex around layer memory, a command queue drained once per frame, double buffering) is added inside
+  these functions; the signatures must therefore not hand out pointers into layer memory. Reads copy.
+- The functions are also the test seam: a headless build of `sdlscreen` is not planned, but `vm_gfx_t` (VM side) is implemented by thin wrappers
+  over exactly these functions, so the API listed here is everything the VM can ask for.
+
+Proposed set (new unless an existing name is given; `layer` is 0..4 as in the table above):
+
+```
+// layers and palette
+void     sdlscr_layer_enable( int layer, bool enable );
+bool     sdlscr_layer_enabled( int layer );
+void     sdlscr_layer_setpriority( int layer, int prio );     // swaps with the layer that has prio (sdllay_switch_priority)
+int      sdlscr_layer_getpriority( int layer );
+void     sdlscr_palette_set( int layer, int index, uint32_t argb );
+uint32_t sdlscr_palette_get( int layer, int index );
+void     sdlscr_palette_reset( int layer );                   // layer -1 = all
+bool     sdlscr_palette_setbyname( int layer, int index, const char* name );   // the names of colinittab; false if unknown
+void     sdlscr_setbackdrop( uint32_t argb );                 // replaces the static sdlscr_bgcol
+
+// bitmap layers (0 background, 3 graphics): the drawing statements, all clipped to 640 x 300
+void     sdlscr_gfx_clear( int layer, int color );
+void     sdlscr_gfx_pset( int layer, int x, int y, int color );
+int      sdlscr_gfx_point( int layer, int x, int y );         // -1 outside
+void     sdlscr_gfx_line( int layer, int x1, int y1, int x2, int y2, int color );
+void     sdlscr_gfx_box( int layer, int x1, int y1, int x2, int y2, int color, bool fill );
+void     sdlscr_gfx_circle( int layer, int x, int y, int r, int color, int a1, int a2, double ratio );
+void     sdlscr_gfx_paint( int layer, int x, int y, int color, int border );   // border -1 = the color at x,y
+size_t   sdlscr_gfx_grab( int layer, int x1, int y1, int x2, int y2, uint8_t* out, size_t outsize );   // copy out; returns the size needed
+void     sdlscr_gfx_blit( int layer, const uint8_t* block, size_t size, int x, int y, int mode );
+
+// text screen (existing: sdlscr_locate, sdlscr_gettextcursor, sdlscr_gettextscreensize, sdlscr_printf/puts/ansi_*)
+// the functions fulledit.c and monitor.c use today through txtscr_*: screens (0 BASIC, 1 editor, 2 monitor), viewports, cells
+int      sdlscr_text_select( int screen );                    // returns the previously selected screen
+int      sdlscr_text_selected( void );
+bool     sdlscr_text_setviewport( int x, int y, int w, int h );
+void     sdlscr_text_resetviewport( void );
+void     sdlscr_text_getviewport( int* x, int* y, int* w, int* h );
+void     sdlscr_text_setblank( int bg, int fg );
+int      sdlscr_text_write( int y, int x, int bg, int fg, const char* text, int len );   // no wrap; returns the characters written
+uint32_t sdlscr_text_getcell( int y, int x );                 // a textcell_t (character, colors)
+void     sdlscr_text_getcursor( int* x, int* y );
+void     sdlscr_text_clear( void );
+void     sdlscr_text_setcolors( int bg, int fg );
+void     sdlscr_text_getcolors( int* bg, int* fg );
+void     sdlscr_text_defchar( int code, const uint8_t rows[12] );              // SYMBOL
+
+// tiles (existing: sdlscr_writetile, sdlscr_scrolltiles)
+void     sdlscr_tile_setcell( int x, int y, int tile );       // new backend: tilescr_setcell
+int      sdlscr_tile_getcell( int x, int y );
+void     sdlscr_tile_setcells( const uint8_t* cells, size_t count );   // 41 * 13
+
+// sprites (existing: sdlscr_showsprite, sdlscr_spriteprio, sdlscr_movesprite, sdlscr_spriteanimdata, sdlscr_spriteanimcfg, sdlscr_writesprite)
+void     sdlscr_sprite_setimage( int sprno, int image );
+bool     sdlscr_sprite_getpos( int sprno, int* x, int* y );
+int      sdlscr_sprite_collide( int sprno );                  // another sprite's number, -1 none (new backend)
+int      sdlscr_sprite_collide_tiles( int sprno );            // tile number or 0 (new backend)
+
+// timing
+void     sdlscr_vsync( void );                                // waits for the next frame; false/early return when the screen closed
+uint64_t sdlscr_getframecnt( void );                          // existing
+```
+
+The existing functions keep their names (they are used by `sdltest1`, `engine1999`, the editor and the monitor); the new ones follow
+the same style. `fulledit.c` and `monitor.c` use `txtscr_*` directly today (and `sdlscr_textchanged()` to get the layer redrawn); they are converted
+to the `sdlscr_text_*` functions above when this API is built, which also makes `sdlscr_textchanged()` unnecessary (each function marks the layer
+modified), so that the rule holds without exceptions. `textscreen.c` itself stays free of SDL and keeps its own tests (`txttest1`).
 
 ## Phase 1: layers, palette, text screen
 
@@ -129,14 +211,17 @@ A sprite or tile change is visible with the next frame.
 
 ## Backend work (in order)
 
-1. `gfxcore.[ch]` (no SDL): `PSET/LINE/CIRCLE/PAINT/GRAB/BLIT` on a buffer; tests with pixel comparisons (`gfxtest1`).
-2. `sdlscreen`: `sdlscr_palette/setpalette`, `sdlscr_layer_enable/priority`, `sdlscr_setbackdrop`, `sdlscr_gfx()` (the buffer of layer 3 / 0), `sdlscr_vsync`,
-   the tile cell setter in `tilescreen.c`, position getters in `sprscreen.c`, sprite collision.
-3. `vm_gfx_t` in `vm.h`, `repl_t.gfx`, instructions (one per group with a kind parameter, like `SND` / `FOP`: e.g. `GFX`, `SPR`, `PAL`), parser and code generator.
-4. Docs, tests (`vmtest1` with a logging gfx host like the sound host), a demo (`demos/`), checked on the real screen.
+1. **Specify the internal `sdlscreen` API** (previous section) and review it with the owner; then add the declarations to `sdlscreen.h` with stub
+   bodies that do the validation and modified-flag handling, and convert the direct `txtscr_*` calls of the host to it.
+2. `gfxcore.[ch]` (no SDL): `PSET/LINE/CIRCLE/PAINT/GRAB/BLIT` on a buffer; tests with pixel comparisons (`gfxtest1`); called only from `sdlscreen`.
+3. Fill in the `sdlscreen` functions: palette, layer enable/priority, backdrop, vsync, the tile cell setter in `tilescreen.c`, position getters in
+   `sprscreen.c`, sprite collision.
+4. `vm_gfx_t` in `vm.h`, `repl_t.gfx`, instructions (one per group with a kind parameter, like `SND` / `FOP`: e.g. `GFX`, `SPR`, `PAL`), parser and code generator.
+5. Docs, tests (`vmtest1` with a logging gfx host like the sound host), a demo (`demos/`), checked on the real screen.
 
 ## Decisions for the project owner
 
+0. **The `sdlscr_*` API** of the section above: complete and named as you want it? (It is the first thing to be built.)
 1. **Names**: GW-BASIC style (`PSET`, `LINE`, `CIRCLE`, `PAINT`; `GRAB`/`BLIT` instead of `GET`/`PUT`) as above, or something else?
 2. **Colors**: palette indices per layer (proposal) or one global 256-color table for all layers? (The layers have separate palettes today.)
    `BACKDROP` takes an RGB value in the proposal because layer 0 is a bitmap, not a single color.

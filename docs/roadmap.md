@@ -131,6 +131,7 @@ Listed in full in `SESSION.md` ("Design decisions I took"). The ones most likely
 
 ## 10. Graphics subsystem *(proposal: `docs/graphics-subsystem.md`)*
 
+- [ ] **First: specify the internal `sdlscr_*` API** in `docs/graphics-subsystem.md` (all graphics calls go through `sdlscreen`, owner's requirement), then build it with stub bodies
 - [ ] Awaiting the owner's decisions (names, colors, target layer, reserved words, order, asset formats)
 - [ ] Phase 1: `LAYER`, `PALETTE`, `RGB()`, `BACKDROP`; text screen words `CLS`, `LOCATE`, `COLOR`, `POS`, `CSRLIN`, `SYMBOL`
 - [ ] Phase 2: graphics layer: `GCOLOR`, `GCLS`, `PSET`, `POINT`, `LINE`, `CIRCLE`, `PAINT`, `GRAB`, `BLIT` (module `gfxcore`, no SDL), `VSYNC`, `FRAME`

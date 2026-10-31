@@ -15,7 +15,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 - **Graphics subsystem proposal** (owner's request: look at `sdllayer` and its users, suggest BASIC statements and functions; no code changed)
   - Read `sdllayer`, `sdlscreen`, `textscreen`, `tilescreen`, `sprscreen`, `concept.txt`; found the gaps (tile screen cells can't be written, no palette/layer/backdrop access above `sdllayer`, no drawing code for the background and graphics layers, no sprite collision, no BASIC access to any of it besides text output).
-  - New `docs/graphics-subsystem.md` (layers, principles, three phases: layers/palette/text words; graphics layer; tiles and sprites; timing; backend work; six decisions for the owner), linked from `docs/README.md`; `docs/roadmap.md` section 10.
+  - New `docs/graphics-subsystem.md` (layers, principles, three phases: layers/palette/text words; graphics layer; tiles and sprites; timing; backend work; six decisions for the owner), linked from `docs/README.md`; `docs/roadmap.md` section 10. Then, on the owner's requirement that all graphics calls go through `sdlscreen`: a principle, a section specifying the internal `sdlscr_*` API (layers/palette, bitmap drawing, text, tiles, sprites, timing) and the changed build order; checked with grep that `fulledit.c` and `monitor.c` (not `engine1999.c`) are the callers that bypass `sdlscreen` today, and added the text viewport/screen functions to the specified API.
 
 ## Log
 
