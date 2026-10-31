@@ -210,6 +210,14 @@
 #define TOK_SFX         UINT8_C(159)        // SFX keyword
 #define TOK_WAIT        UINT8_C(160)        // WAIT keyword
 #define TOK_REMAIN      UINT8_C(161)        // REMAIN function
+#define TOK_OPEN        UINT8_C(162)        // OPEN keyword
+#define TOK_CLOSE       UINT8_C(163)        // CLOSE keyword
+#define TOK_LINE        UINT8_C(164)        // LINE keyword (LINE INPUT)
+#define TOK_WRITE       UINT8_C(165)        // WRITE keyword
+#define TOK_ADDRESS     UINT8_C(166)        // ADDRESS keyword and ADDRESS$ function
+#define TOK_EOF         UINT8_C(167)        // EOF function
+#define TOK_LOF         UINT8_C(168)        // LOF function
+#define TOK_LOC         UINT8_C(169)        // LOC function
 #define TOK_NONE        UINT8_C(255)        // no token (!)
 
 // -- buffers ---------------------------------------------------------------

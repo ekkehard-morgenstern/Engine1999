@@ -107,6 +107,7 @@ typedef struct _codegen_t {
     uint32_t        codesize, datasize;
     size_t          codecap, datacap;
     uint32_t        endaddr;        // where END and running off the end of a program go: its HLT instruction (CODEOFFS_NONE: the end of the code)
+    bool            writemode;      // (internal) generating the arguments of a WRITE statement
     uint32_t        persistent;     // counts what the code/data generated so far has stored that outlives it (see cgen_note_persistent)
     cgen_const_t*   consts;         // hash table of the shared constants in the data segment (size: power of two)
     size_t          numconsts, maxconsts;
@@ -279,6 +280,15 @@ bool cgen_gen_snd( codegen_t* cgen, uint16_t kind );
 bool cgen_gen_plng( codegen_t* cgen );
 bool cgen_gen_rmn( codegen_t* cgen );
 bool cgen_gen_hlt( codegen_t* cgen );
+bool cgen_gen_open( codegen_t* cgen, uint16_t form );
+bool cgen_gen_clos( codegen_t* cgen );
+bool cgen_gen_inpw( codegen_t* cgen );
+bool cgen_gen_eofn( codegen_t* cgen );
+bool cgen_gen_lofn( codegen_t* cgen );
+bool cgen_gen_locn( codegen_t* cgen );
+bool cgen_gen_inpd( codegen_t* cgen );
+bool cgen_gen_addr( codegen_t* cgen, uint16_t swap );
+bool cgen_gen_adrs( codegen_t* cgen );
 bool cgen_gen_wait( codegen_t* cgen );
 bool cgen_gen_list( codegen_t* cgen );
 bool cgen_gen_new( codegen_t* cgen );
@@ -363,6 +373,9 @@ bool cgen_from_mergestmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_chainstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_filesstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_timerstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_openstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_closestmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_addressstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_liststmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_newstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_clearstmt( codegen_t* cgen, compiler_t* comp, node_t* node );

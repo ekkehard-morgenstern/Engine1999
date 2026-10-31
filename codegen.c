@@ -391,6 +391,15 @@ const char* cgen_opcode_name( uint16_t opcode ) {
         case INS_PLNG:      return "PLNG";
         case INS_RMN:       return "RMN";
         case INS_HLT:       return "HLT";
+        case INS_OPEN:      return "OPEN";
+        case INS_CLOS:      return "CLOS";
+        case INS_INPW:      return "INPW";
+        case INS_EOFN:      return "EOFN";
+        case INS_LOFN:      return "LOFN";
+        case INS_LOCN:      return "LOCN";
+        case INS_INPD:      return "INPD";
+        case INS_ADDR:      return "ADDR";
+        case INS_ADRS:      return "ADRS";
         case INS_WAIT:      return "WAIT";
         case INS_MRG:       return "MRG";
         case INS_CHN:       return "CHN";
@@ -1002,6 +1011,42 @@ bool cgen_gen_wait( codegen_t* cgen ) {
     return cgen_gen_ins12( cgen, INS_WAIT, false, false, UINT16_C(0) );
 }
 
+bool cgen_gen_open( codegen_t* cgen, uint16_t form ) {
+    return cgen_gen_ins12( cgen, INS_OPEN, false, true, form );
+}
+
+bool cgen_gen_clos( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_CLOS, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_inpw( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_INPW, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_eofn( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_EOFN, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_lofn( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_LOFN, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_locn( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_LOCN, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_inpd( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_INPD, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_addr( codegen_t* cgen, uint16_t swap ) {
+    return cgen_gen_ins12( cgen, INS_ADDR, false, true, swap );
+}
+
+bool cgen_gen_adrs( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_ADRS, false, false, UINT16_C(0) );
+}
+
 bool cgen_gen_hlt( codegen_t* cgen ) {
     return cgen_gen_ins12( cgen, INS_HLT, false, false, UINT16_C(0) );
 }
@@ -1383,7 +1428,7 @@ UNEXP:  return cgen_unexpected_node( comp );
 bool cgen_from_sysfncall( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     /*
         sys-num-fn-1-arg-call := ( TOK_ASC | TOK_VAL | TOK_LEN ) TOK_LPAREN str-expr TOK_RPAREN |
-                                   ( TOK_FRE | TOK_PLAYING | TOK_REMAIN ) TOK_LPAREN num-expr TOK_RPAREN .
+                                   ( TOK_FRE | TOK_PLAYING | TOK_REMAIN | TOK_EOF | TOK_LOF | TOK_LOC ) TOK_LPAREN num-expr TOK_RPAREN .
 
         sys-str-fn-2-arg-call := ( TOK_BIN | TOK_QUA | TOK_OCT | TOK_DEC | TOK_HEX ) TOK_STRING TOK_LPAREN num-expr
                                       [ TOK_COMMA num-expr ] TOK_RPAREN |
@@ -1458,6 +1503,11 @@ UNEXP:      return cgen_unexpected_node( comp );
         case TOK_MID:   generator = cgen_gen_mids; break;
         case TOK_PLAYING: generator = cgen_gen_plng; break;
         case TOK_REMAIN: generator = cgen_gen_rmn; break;
+        case TOK_EOF:   generator = cgen_gen_eofn; break;
+        case TOK_LOF:   generator = cgen_gen_lofn; break;
+        case TOK_LOC:   generator = cgen_gen_locn; break;
+        case TOK_INPUT: generator = cgen_gen_inpd; break;
+        case TOK_ADDRESS: generator = cgen_gen_adrs; break;
         default:
             goto UNEXP;
     }
@@ -2285,6 +2335,9 @@ UNEXP:  return cgen_unexpected_node( comp );
         return false;
     }
     uint16_t param = cbdata.count & PRTARGM_SEP;
+    if ( cgen->writemode ) {
+        param |= PRTARG_WRITE;
+    }
     bool  hasparam = param ? true : false;
     switch ( cbdata.count & PRTARGM_TYPE ) {
         case PRTARGV_STREXPR:
@@ -2441,7 +2494,10 @@ bool cgen_from_printstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         return false;
     }
     cbdata_t cbdata = { cgen, comp, node, UINT16_C(0) };
-    if ( !comp_node_iter_branches( comp, node, &cbdata, from_printstmt_cb ) ) {
+    cgen->writemode = node->datalen == UINT16_C(1) && node->data[0] == 1;
+    bool argsok = comp_node_iter_branches( comp, node, &cbdata, from_printstmt_cb );
+    cgen->writemode = false;
+    if ( !argsok ) {
         return false;
     }
     if ( cbdata.count == UINT16_C(0) ) {
@@ -2875,6 +2931,9 @@ bool cgen_from_stmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         case NT_CHAINSTMT:  return cgen_from_chainstmt( cgen, comp, node );
         case NT_FILESSTMT:  return cgen_from_filesstmt( cgen, comp, node );
         case NT_TIMERSTMT:  return cgen_from_timerstmt( cgen, comp, node );
+        case NT_OPENSTMT:   return cgen_from_openstmt( cgen, comp, node );
+        case NT_CLOSESTMT:  return cgen_from_closestmt( cgen, comp, node );
+        case NT_ADDRESSSTMT: return cgen_from_addressstmt( cgen, comp, node );
         case NT_STMTLIST:   return cgen_from_stmtlist( cgen, comp, node );
         case NT_DIMSTMT:    return cgen_from_dimstmt( cgen, comp, node );
         case NT_ERASESTMT:  return cgen_from_erasestmt( cgen, comp, node );

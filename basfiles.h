@@ -54,6 +54,11 @@ file; a pattern with * ? [ ] = the matching names (as they are written in the pa
 Returns false with a message in err if the spec matches nothing or something fails; a listing that was stopped by the
 callback is a success.
 */
+// formats one entry as files_list() does (size right-aligned to sizewidth, time, name with its indicator and the target of a
+// link, colored through style) and hands the line to emit; *pstop is set when emit asked to stop. false: out of memory (err).
+bool files_format_entry( int sizewidth, long long size, time_t mtime, hlclass_t nameclass, const char* name, const char* indicator,
+    const char* target, hlstyle_t style, void* styleud, files_emit_t emit, void* emitud, bool* pstop, char* err, size_t errsz );
+
 bool files_list( const char* spec, hlstyle_t style, void* styleud, files_emit_t emit, void* emitud, char* err, size_t errsz );
 
 #endif

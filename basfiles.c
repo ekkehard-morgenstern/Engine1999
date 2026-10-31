@@ -98,6 +98,9 @@ static int filelist_compare( const void* pa, const void* pb ) {
     if ( a->st.st_mtime != b->st.st_mtime ) {
         return a->st.st_mtime < b->st.st_mtime ? -1 : 1;
     }
+    if ( a->st.st_mtim.tv_nsec != b->st.st_mtim.tv_nsec ) {
+        return a->st.st_mtim.tv_nsec < b->st.st_mtim.tv_nsec ? -1 : 1;
+    }
     return strcmp( a->shown, b->shown );
 }
 
@@ -209,6 +212,40 @@ static bool has_extension_ci( const char* name, const char* ext ) {
     return ln > le && strcasecmp( name + ln - le, ext ) == 0;
 }
 
+bool files_format_entry( int sizewidth, long long size, time_t mtime, hlclass_t nameclass, const char* name, const char* indicator,
+    const char* target, hlstyle_t style, void* styleud, files_emit_t emit, void* emitud, bool* pstop, char* err, size_t errsz ) {
+    char sizetext[48], timetext[32];
+    snprintf( sizetext, sizeof(sizetext), "%*lld", sizewidth, size );
+    struct tm tmv;
+    if ( localtime_r( &mtime, &tmv ) == 0 || strftime( timetext, sizeof(timetext), "%Y-%m-%d %H:%M", &tmv ) == 0 ) {
+        snprintf( timetext, sizeof(timetext), "unknown         " );
+    }
+    text_t t;
+    memset( &t, 0, sizeof(t) );
+    text_add( &t, style ? style( HL_NUMBER, styleud ) : 0 );
+    text_add( &t, sizetext );
+    text_add( &t, " " );
+    text_add( &t, style ? style( HL_COMMENT, styleud ) : 0 );
+    text_add( &t, timetext );
+    text_add( &t, " " );
+    text_add( &t, style ? style( nameclass, styleud ) : 0 );
+    text_add( &t, name );
+    text_add( &t, indicator );
+    if ( target != 0 ) {
+        text_add( &t, " -> " );
+        text_add( &t, target );
+    }
+    text_add( &t, style ? style( HL_NONE, styleud ) : 0 );
+    if ( t.oom ) {
+        free( t.s );
+        snprintf( err, errsz, "Out of memory" );
+        return false;
+    }
+    *pstop = !emit( emitud, t.s );
+    free( t.s );
+    return true;
+}
+
 bool files_list( const char* spec, hlstyle_t style, void* styleud, files_emit_t emit, void* emitud, char* err, size_t errsz ) {
     filelist_t fl;
     memset( &fl, 0, sizeof(fl) );
@@ -225,10 +262,8 @@ bool files_list( const char* spec, hlstyle_t style, void* styleud, files_emit_t 
             sizewidth = w;
         }
     }
-    bool ok = true;
-    text_t t;
-    memset( &t, 0, sizeof(t) );
-    for ( size_t i=0; i < fl.count && ok; ++i ) {
+    bool ok = true, stop = false;
+    for ( size_t i=0; i < fl.count && ok && !stop; ++i ) {
         const fileent_t* e = &fl.ents[i];
         mode_t m = e->st.st_mode;
         char indicator[2] = { '\0', '\0' };
@@ -246,39 +281,9 @@ bool files_list( const char* spec, hlstyle_t style, void* styleud, files_emit_t 
         } else if ( has_extension_ci( e->shown, ".bas" ) || has_extension_ci( e->shown, ".e99" ) ) {
             nameclass = HL_FILEPROG;
         }
-        char sizetext[48], timetext[32];
-        snprintf( sizetext, sizeof(sizetext), "%*lld", sizewidth, (long long) e->st.st_size );
-        struct tm tmv;
-        time_t when = e->st.st_mtime;
-        if ( localtime_r( &when, &tmv ) == 0 || strftime( timetext, sizeof(timetext), "%Y-%m-%d %H:%M", &tmv ) == 0 ) {
-            snprintf( timetext, sizeof(timetext), "unknown         " );
-        }
-        t.len = 0;
-        if ( t.s ) t.s[0] = '\0';
-        text_add( &t, style ? style( HL_NUMBER, styleud ) : 0 );
-        text_add( &t, sizetext );
-        text_add( &t, " " );
-        text_add( &t, style ? style( HL_COMMENT, styleud ) : 0 );
-        text_add( &t, timetext );
-        text_add( &t, " " );
-        text_add( &t, style ? style( nameclass, styleud ) : 0 );
-        text_add( &t, e->shown );
-        text_add( &t, indicator );
-        if ( e->target != 0 ) {
-            text_add( &t, " -> " );
-            text_add( &t, e->target );
-        }
-        text_add( &t, style ? style( HL_NONE, styleud ) : 0 );
-        if ( t.oom ) {
-            snprintf( err, errsz, "Out of memory" );
-            ok = false;
-            break;
-        }
-        if ( !emit( emitud, t.s ) ) {
-            break;      // stopped by the caller
-        }
+        ok = files_format_entry( sizewidth, (long long) e->st.st_size, e->st.st_mtime, nameclass, e->shown, indicator, e->target,
+            style, styleud, emit, emitud, &stop, err, errsz );
     }
-    free( t.s );
     filelist_free( &fl );
     return ok;
 }

@@ -73,6 +73,11 @@ void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem ) {
     vm->list     = 0;
     vm->deletelines = 0;
     vm->renumber = 0;
+    iotab_init( &vm->io );
+    snprintf( vm->addrcur, sizeof(vm->addrcur), "file" );
+    snprintf( vm->addrprev, sizeof(vm->addrprev), "file" );
+    vm->iofail = 0;
+    vm->inerr = 0;
     vm->merge    = 0;
     memset( vm->timers, 0, sizeof(vm->timers) );
     vm->numtimers = 0;
@@ -120,6 +125,7 @@ void vm_clear_request( vm_t* vm ) {
 }
 
 void cleanup_vm( vm_t* vm ) {
+    iotab_closeall( &vm->io );
     for ( int i=0; i < SND_MAXSFX; ++i ) {
         mml_free( &vm->sfx[i] );
         vm->sfx_defined[i] = false;
@@ -150,6 +156,14 @@ static bool vm_error( vm_t* vm, const char* text ) {
 }
 
 static void vm_out( vm_t* vm, const char* text ) {
+    if ( vm->channel > 0 ) {
+        // a file or device opened with OPEN
+        const char* err = 0;
+        if ( !iotab_write( &vm->io, vm->channel, text, strlen( text ), &err ) && vm->iofail == 0 ) {
+            vm->iofail = err ? err : "Device I/O error";
+        }
+        return;
+    }
     if ( vm->print ) {
         vm->print( vm, vm->userdata, vm->channel, text );
     } else {
@@ -326,6 +340,10 @@ static void vm_format_number( double num, char buf[40] ) {
 }
 
 static bool vm_print_sep( vm_t* vm, bool hassep, uint16_t sep ) {
+    if ( hassep && ( sep & PRTARG_WRITE ) != 0 ) {
+        vm_out( vm, ( sep & ( VM_PRINT_SEP_SEMIC | VM_PRINT_SEP_COMMA ) ) != 0 ? "," : "\n" );      // WRITE
+        return true;
+    }
     if ( !hassep || sep == VM_PRINT_SEP_NONE ) {
         vm_out( vm, "\n" );
     } else if ( sep == VM_PRINT_SEP_COMMA ) {
@@ -577,6 +595,16 @@ static bool vm_interrupted( vm_t* vm ) {
 
 // the line from the host (malloc'd, no newline), 0 = end of input
 static char* vm_get_line( vm_t* vm ) {
+    vm->inerr = 0;
+    if ( vm->channel > 0 ) {
+        const char* err = 0;
+        char* line = 0;
+        if ( !iotab_readline( &vm->io, vm->channel, &line, &err ) ) {
+            vm->inerr = err ? err : "Input past end";
+            return 0;
+        }
+        return line;
+    }
     if ( vm->input ) {
         return vm->input( vm, vm->userdata, vm->channel );
     }
@@ -598,11 +626,13 @@ static bool vm_input_line( vm_t* vm, uint32_t promptoffs, uint32_t inspc ) {
     if ( promptoffs >= cgen->datasize || memchr( &cgen->data[ promptoffs ], '\0', cgen->datasize - promptoffs ) == 0 ) {
         return vm_error( vm, "Bad prompt" );
     }
-    vm_out( vm, (const char*) &cgen->data[ promptoffs ] );
+    if ( vm->channel == 0 ) {
+        vm_out( vm, (const char*) &cgen->data[ promptoffs ] );       // a file gets no prompt
+    }
     free( vm->inbuf );
     vm->inbuf = vm_get_line( vm );
     if ( vm->inbuf == 0 ) {
-        return vm_error( vm, vm_interrupted( vm ) ? "Break" : "End of input" );
+        return vm_error( vm, vm->inerr ? vm->inerr : vm_interrupted( vm ) ? "Break" : "End of input" );
     }
     vm->inlen  = strlen( vm->inbuf );
     vm->inpos  = 0;
@@ -642,6 +672,17 @@ static bool vm_is_number( const char* s ) {
 static bool vm_input_field( vm_t* vm, bool wantstr ) {
     if ( vm->inbuf == 0 ) {
         return vm_error( vm, "INPUT field without INPUT" );
+    }
+    if ( vm->channel > 0 && vm->inpos > vm->inlen ) {
+        // a file: the next line goes on with the fields (a line end separates fields like a comma)
+        char* line = vm_get_line( vm );
+        if ( line == 0 ) {
+            return vm_error( vm, vm->inerr ? vm->inerr : "Input past end" );
+        }
+        free( vm->inbuf );
+        vm->inbuf = line;
+        vm->inlen = strlen( line );
+        vm->inpos = 0;
     }
     bool redo = vm->inpos > vm->inlen;      // no more fields
     char* field = 0;
@@ -703,6 +744,10 @@ static bool vm_input_field( vm_t* vm, bool wantstr ) {
             return vm_dpush_num( vm, val );
         }
     }
+    if ( redo && vm->channel > 0 ) {
+        free( field );
+        return vm_error( vm, "Bad data in file" );
+    }
     if ( redo ) {
         free( field );
         vm_out( vm, "?Redo from start\n" );
@@ -714,7 +759,7 @@ static bool vm_input_field( vm_t* vm, bool wantstr ) {
 
 // INPE: reports leftover fields, releases the line
 static bool vm_input_end( vm_t* vm ) {
-    if ( vm->inbuf && vm->inpos <= vm->inlen ) {
+    if ( vm->inbuf && vm->inpos <= vm->inlen && vm->channel == 0 ) {
         vm_out( vm, "?Extra ignored\n" );
     }
     free( vm->inbuf );
@@ -722,9 +767,29 @@ static bool vm_input_end( vm_t* vm ) {
     return true;
 }
 
+// INPW ( -- s ): LINE INPUT: the whole line
+static bool vm_input_whole( vm_t* vm ) {
+    if ( vm->inbuf == 0 ) {
+        return vm_error( vm, "INPUT field without INPUT" );
+    }
+    char* s = vm_new_string( vm, vm->inbuf, vm->inlen );
+    vm->inpos = vm->inlen + 1U;
+    return s && vm_push_string( vm, s );
+}
+
 // GETK: ( -- s ): waits for a key
 static bool vm_get_key( vm_t* vm ) {
     int key;
+    if ( vm->channel > 0 ) {
+        const char* err = 0;
+        key = iotab_getc( &vm->io, vm->channel, &err );
+        if ( key < 0 ) {
+            return vm_error( vm, key == -1 ? "Input past end" : err ? err : "Device I/O error" );
+        }
+        char buf[2] = { (char) key, '\0' };
+        char* s = vm_new_string( vm, buf, 1U );
+        return s && vm_push_string( vm, s );
+    }
     if ( vm->getkey ) {
         key = vm->getkey( vm, vm->userdata, vm->channel );
     } else if ( vm->inkey ) {
@@ -1140,6 +1205,86 @@ static bool vm_list_files( vm_t* vm ) {
         ok = vm->files( vm, vm->userdata, spec );
     }
     free( spec );
+    return ok;
+}
+
+// OPEN ( name mode n -- ) or, short form, ( mode n name -- )
+static bool vm_open_channel( vm_t* vm, bool shortform ) {
+    double chan = 0; char* name = 0; char* mode = 0;
+    bool ok = shortform ? ( vm_dpop_str( vm, &name ) && vm_dpop_num( vm, &chan ) && vm_dpop_str( vm, &mode ) ) :
+        ( vm_dpop_num( vm, &chan ) && vm_dpop_str( vm, &mode ) && vm_dpop_str( vm, &name ) );
+    if ( !ok ) {
+        free( name );
+        free( mode );
+        return false;
+    }
+    unsigned m = 0;
+    switch ( mode[0] ) {
+        case 'I': case 'i': m = IOMODE_READ; break;
+        case 'O': case 'o': m = IOMODE_WRITE; break;
+        case 'A': case 'a': m = IOMODE_WRITE | IOMODE_APPEND; break;
+        default: break;
+    }
+    const char* err = 0;
+    if ( m == 0 || mode[1] != '\0' ) {
+        ok = vm_error( vm, "Bad file mode" );
+    } else if ( name[0] == '\0' ) {
+        ok = vm_error( vm, "Bad file name" );
+    } else if ( !( chan >= 1.0 && chan <= (double) IOCHAN_MAX ) ) {
+        ok = vm_error( vm, "Bad file number" );
+    } else if ( !iotab_open( &vm->io, (int) chan, name, vm->addrcur, m, &err ) ) {
+        ok = vm_error( vm, err ? err : "Device I/O error" );
+    }
+    free( name );
+    free( mode );
+    return ok;
+}
+
+// CLOS ( n -- ): -1 = all
+static bool vm_close_channel( vm_t* vm ) {
+    double chan = 0;
+    if ( !vm_dpop_num( vm, &chan ) ) {
+        return false;
+    }
+    if ( chan == -1.0 ) {
+        iotab_closeall( &vm->io );
+        return true;
+    }
+    const char* err = 0;
+    if ( !( chan >= 1.0 && chan <= (double) IOCHAN_MAX ) ) {
+        return vm_error( vm, "Bad file number" );
+    }
+    return iotab_close( &vm->io, (int) chan, &err ) || vm_error( vm, err ? err : "Device I/O error" );
+}
+
+// ADDR ( s -- ) or, with parameter 1, ( -- ): the default driver
+static bool vm_set_address( vm_t* vm, bool swap ) {
+    if ( swap ) {
+        char tmp[VM_ADDRLEN];
+        memcpy( tmp, vm->addrcur, sizeof(tmp) );
+        memcpy( vm->addrcur, vm->addrprev, sizeof(tmp) );
+        memcpy( vm->addrprev, tmp, sizeof(tmp) );
+        return true;
+    }
+    char* name = 0;
+    if ( !vm_dpop_str( vm, &name ) ) {
+        return false;
+    }
+    size_t len = strlen( name );
+    if ( len > 0 && name[ len - 1U ] == ':' ) {
+        name[ --len ] = '\0';          // "mem:" is accepted as well as "mem"
+    }
+    iodev_init();
+    bool ok = true;
+    if ( len == 0 || len >= VM_ADDRLEN || iodev_find( name ) == 0 ) {
+        ok = vm_error( vm, "Device not found" );
+    } else {
+        memcpy( vm->addrprev, vm->addrcur, sizeof(vm->addrprev) );
+        for ( size_t i=0; i <= len; ++i ) {
+            vm->addrcur[i] = (char) tolower( (unsigned char) name[i] );
+        }
+    }
+    free( name );
     return ok;
 }
 
@@ -1760,6 +1905,71 @@ static bool vm_system_function( vm_t* vm, uint16_t opcode ) {
             char* s = vm_new_string( vm, buf, strlen( buf ) );
             return s && vm_push_string( vm, s );
         }
+        case INS_EOFN:
+        case INS_LOFN:
+        case INS_LOCN: {
+            const char* err = 0;
+            if ( !vm_dpop_num( vm, &num ) ) {
+                return false;
+            }
+            int chan = num >= 0.0 && num <= (double) IOCHAN_MAX ? (int) num : 0;
+            int64_t value = 0;
+            bool ok;
+            if ( opcode == INS_EOFN ) {
+                bool eof = false;
+                ok = iotab_eof( &vm->io, chan, &eof, &err );
+                value = eof ? -1 : 0;
+            } else if ( opcode == INS_LOFN ) {
+                ok = iotab_lof( &vm->io, chan, &value, &err );
+            } else {
+                ok = iotab_loc( &vm->io, chan, &value, &err );
+            }
+            if ( !ok ) {
+                return vm_error( vm, err ? err : "Device I/O error" );
+            }
+            return vm_dpush_num( vm, (double) value );
+        }
+        case INS_INPD: {
+            double count = 0, chan = 0;
+            if ( !vm_dpop_num( vm, &chan ) || !vm_dpop_num( vm, &count ) ) {
+                return false;
+            }
+            if ( !( count >= 0.0 && count <= 65535.0 ) || !( chan >= 0.0 && chan <= (double) IOCHAN_MAX ) ) {
+                return vm_error( vm, "Illegal argument" );
+            }
+            size_t n = (size_t) count;
+            char* text = (char*) malloc( n + 1U );
+            if ( text == 0 ) {
+                return vm_error( vm, "Out of memory" );
+            }
+            for ( size_t i=0; i < n; ++i ) {
+                int key;
+                const char* err = 0;
+                if ( chan > 0.0 ) {
+                    key = iotab_getc( &vm->io, (int) chan, &err );
+                    if ( key < 0 ) {
+                        free( text );
+                        return vm_error( vm, key == -1 ? "Input past end" : err ? err : "Device I/O error" );
+                    }
+                } else if ( vm->getkey ) {
+                    key = vm->getkey( vm, vm->userdata, 0 );
+                    if ( key <= 0 || key > 255 ) {
+                        free( text );
+                        return vm_error( vm, vm_interrupted( vm ) ? "Break" : "End of input" );
+                    }
+                } else {
+                    free( text );
+                    return vm_error( vm, "End of input" );
+                }
+                text[i] = (char) key;
+            }
+            text[n] = '\0';
+            return vm_push_string( vm, text );
+        }
+        case INS_ADRS: {
+            char* s = vm_new_string( vm, vm->addrcur, strlen( vm->addrcur ) );
+            return s && vm_push_string( vm, s );
+        }
         case INS_RMN: {
             if ( !vm_dpop_num( vm, &num ) ) {
                 return false;
@@ -2038,7 +2248,7 @@ static bool vm_step( vm_t* vm ) {
         case INS_WIAE: return vm_write_elem( vm, param16, VARTYPEV_INT );
         case INS_WSAE: return vm_write_elem( vm, param16, VARTYPEV_STR );
         case INS_TI: case INS_INKY: case INS_FRE: case INS_STRS: case INS_CHRS: case INS_ASC: case INS_LEN: case INS_VAL:
-        case INS_PLNG: case INS_RMN:
+        case INS_PLNG: case INS_RMN: case INS_EOFN: case INS_LOFN: case INS_LOCN: case INS_INPD: case INS_ADRS:
         case INS_BINS: case INS_QUAS: case INS_OCTS: case INS_HEXS: case INS_DECS:
         case INS_LFTS: case INS_RGTS: case INS_MIDS:
             return vm_system_function( vm, opcode );
@@ -2052,6 +2262,10 @@ static bool vm_step( vm_t* vm ) {
         case INS_SND: return vm_sound( vm, param16 );
         case INS_WAIT: return vm_wait( vm, inspc );
         case INS_HLT: vm->pc = vm->cgen->codesize; return true;
+        case INS_OPEN: return vm_open_channel( vm, param16 != 0 );
+        case INS_CLOS: return vm_close_channel( vm );
+        case INS_INPW: return vm_input_whole( vm );
+        case INS_ADDR: return vm_set_address( vm, param16 != 0 );
         case INS_TMR: return vm_set_timer( vm, param16 );
         case INS_TMRO: return vm_clear_timers( vm, param16 );
         case INS_MRG: return vm_merge_program( vm, param16 != 0 );
@@ -2101,7 +2315,13 @@ static bool vm_step( vm_t* vm ) {
             if ( !vm_dpop_str( vm, &str ) ) {
                 return false;
             }
-            vm_out( vm, str );
+            if ( hasp && ( param16 & PRTARG_WRITE ) != 0 ) {
+                vm_out( vm, "\"" );
+                vm_out( vm, str );
+                vm_out( vm, "\"" );
+            } else {
+                vm_out( vm, str );
+            }
             free( str );
             return vm_print_sep( vm, hasp, param16 );
         default:
@@ -2166,6 +2386,11 @@ bool vm_resume( vm_t* vm, bool singlestep ) {
         }
         if ( !vm_step( vm ) ) {
             return false;
+        }
+        if ( vm->iofail != 0 ) {
+            const char* text = vm->iofail;
+            vm->iofail = 0;
+            return vm_error( vm, text );
         }
         if ( vm->brkhit ) {
             vm->brkhit = false;

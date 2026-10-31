@@ -622,6 +622,9 @@ Explanation of node types:
 #define TMRF_GOTO               UINT8_C(2)      // the handler is entered by GOTO (else GOSUB)
 #define TMRF_OFF                UINT8_C(4)      // AFTER OFF / EVERY OFF
 #define TMRF_TIMER              UINT8_C(8)      // a timer number is given
+#define NT_OPENSTMT             UINT8_C(0X6B)   // OPEN statement (data: form 0 = long / 1 = short, mode letter; see bascomp.c)
+#define NT_CLOSESTMT            UINT8_C(0X6C)   // CLOSE statement (0 or more channel specifiers)
+#define NT_ADDRESSSTMT          UINT8_C(0X6D)   // ADDRESS statement (data: 1 byte, 1 = a name branch is present; the name is a string expression)
 #define NT_FILESSTMT            UINT8_C(0X69)   // FILES statement (0 or 1 string branch: the file name pattern)
 #define NT_CHAINSTMT            UINT8_C(0X68)   // CHAIN statement (data: 1 byte, 1 = MERGE; the file name, then an optional goto target)
 
@@ -649,6 +652,7 @@ Explanation of node types:
 #define INPUTF_CHAN             UINT8_C(0X01)   // INPUT / GET: channel info present
 #define INPUTF_PROMPT           UINT8_C(0X02)   // INPUT: prompt present
 #define INPUTF_NOQUEST          UINT8_C(0X04)   // INPUT: no "? " after the prompt
+#define INPUTF_LINE             UINT8_C(0X08)   // LINE INPUT: the whole line goes into one string variable
 #define NT_NUMEXPR              UINT8_C(0X18)   // numeric expression
 #define NT_STREXPR              UINT8_C(0X1A)   // string expression
 #define NT_STRCMPEX             UINT8_C(0X1C)   // string comparison expression

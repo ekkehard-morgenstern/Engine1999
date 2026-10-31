@@ -71,13 +71,14 @@ num-usr-fn-call := num-usr-fn-name [ TOK_LPAREN [ expr-list ] TOK_RPAREN ] .
 str-usr-fn-call := str-usr-fn-name [ TOK_LPAREN [ expr-list ] TOK_RPAREN ] .
 
 sys-num-fn-1-arg-call := ( TOK_ASC | TOK_VAL | TOK_LEN ) TOK_LPAREN str-expr TOK_RPAREN |
-                           ( TOK_FRE | TOK_PLAYING | TOK_REMAIN ) TOK_LPAREN num-expr TOK_RPAREN .
+                           ( TOK_FRE | TOK_PLAYING | TOK_REMAIN | TOK_EOF | TOK_LOF | TOK_LOC ) TOK_LPAREN num-expr TOK_RPAREN .
 
 sys-str-fn-2-arg-call := ( TOK_BIN | TOK_QUA | TOK_OCT | TOK_DEC | TOK_HEX ) TOK_STRING TOK_LPAREN num-expr
                               [ TOK_COMMA num-expr ] TOK_RPAREN |
                          ( TOK_STR | TOK_CHR ) TOK_STRING TOK_LPAREN num-expr TOK_RPAREN |
                          ( TOK_LEFT | TOK_RIGHT ) TOK_STRING TOK_LPAREN str-expr TOK_COMMA num-expr TOK_RPAREN |
-                         TOK_MID TOK_STRING TOK_LPAREN str-expr TOK_COMMA num-expr [ TOK_COMMA num-expr ] TOK_RPAREN .
+                         TOK_MID TOK_STRING TOK_LPAREN str-expr TOK_COMMA num-expr [ TOK_COMMA num-expr ] TOK_RPAREN |
+                         TOK_INPUT TOK_STRING TOK_LPAREN num-expr [ TOK_COMMA chan-spec ] TOK_RPAREN .
 
 sys-num-fn-arg-call := sys-num-fn-1-arg-call .
 sys-str-fn-arg-call := sys-str-fn-2-arg-call .
@@ -86,7 +87,7 @@ sys-noarg-num-name := TOK_TI .
 sys-noarg-num := sys-noarg-num-name .
 sys-noarg-num-call := sys-no-arg-num .
 
-sys-noarg-str-name := TOK_INKEY .
+sys-noarg-str-name := TOK_INKEY | TOK_ADDRESS .
 sys-noarg-str := sys-noarg-str-name TOK_STRING .
 sys-noarg-str-call := sys-no-arg-str .
 
@@ -133,7 +134,7 @@ chan-spec := TOK_LATTICE num-expr .
 print-sep := TOK_COMMA | TOK_SEMIC .
 print-arg := expr [ print-sep ] .
 print-arg-list := print-arg { print-arg } .
-print-stmt := TOK_PRINT [ chan-spec TOK_COMMA ] [ print-arg-list ] .
+print-stmt := ( TOK_PRINT | TOK_WRITE ) [ chan-spec [ TOK_COMMA ] ] [ print-arg-list ] .
 
 data-item := [ TOK_PLUS | TOK_MINUS ] num-lit | TOK_STRLIT .
 data-stmt := TOK_DATA data-item { TOK_COMMA data-item } .
@@ -144,7 +145,7 @@ restore-stmt := TOK_RESTORE [ goto-target ] .
 -- after the prompt suppresses the "? ". GET reads one key per variable (a string variable gets the character, a
 -- numeric variable its code).
 input-var := num-var-ref | str-var-ref .
-input-stmt := TOK_INPUT [ chan-spec TOK_COMMA ] [ str-lits ( TOK_SEMIC | TOK_COMMA ) ] input-var { TOK_COMMA input-var } .
+input-stmt := [ TOK_LINE ] TOK_INPUT [ chan-spec TOK_COMMA ] [ str-lits ( TOK_SEMIC | TOK_COMMA ) ] input-var { TOK_COMMA input-var } .
 get-stmt := TOK_GET [ chan-spec TOK_COMMA ] input-var { TOK_COMMA input-var } .
 
 io-stmt := save-stmt | print-stmt | input-stmt | get-stmt | data-stmt | read-stmt | restore-stmt .
@@ -276,6 +277,14 @@ files-stmt := TOK_FILES [ str-expr ] .
 -- RETURN; while it runs, only a timer with a higher number may interrupt it. A handler is entered between two statements
 -- (also during WAIT), not during INPUT or GET. AFTER OFF [timer] / EVERY OFF [timer] clear all timers (or that timer) of
 -- that kind. Timers end with the run.
+-- Files and devices (docs/io-subsystem.md). A file name may start with "driver:" (file, null, mem); names without a prefix belong to
+-- the ADDRESS driver. OPEN name FOR INPUT|OUTPUT|APPEND AS #n, or OPEN "I"|"O"|"A", #n, name; CLOSE closes the channels given (all
+-- of them without any). OUTPUT, APPEND and AS are identifiers recognized in context. ADDRESS name (a bare identifier or a string
+-- expression) chooses the default driver, ADDRESS alone swaps with the previous one; RUN resets it. WRITE is PRINT with quoted
+-- strings and commas between the items. LINE INPUT reads a whole line into one string variable.
+open-stmt := TOK_OPEN str-expr ( TOK_FOR ( TOK_INPUT | OUTPUT | APPEND ) AS chan-spec | TOK_COMMA chan-spec TOK_COMMA str-expr ) .
+close-stmt := TOK_CLOSE [ chan-spec { TOK_COMMA chan-spec } ] .
+address-stmt := TOK_ADDRESS [ identifier | str-expr ] .
 timer-stmt := ( TOK_AFTER | TOK_EVERY ) ( TOK_OFF [ num-expr ] | num-expr [ TOK_COMMA num-expr ] goto-kw goto-target ) .
 prog-stmt := load-stmt | run-stmt | merge-stmt | chain-stmt | files-stmt | timer-stmt | list-stmt | new-stmt | clear-stmt | delete-stmt | renum-stmt | edit-stmt | monitor-stmt | sound-stmt |
              wait-stmt .

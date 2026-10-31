@@ -149,6 +149,20 @@ EVERY OFF [timer]                      clear all EVERY timers (or only that one)
 - **`REMAIN(timer)`** returns the ticks (1/60 s, rounded up) until timer 0..3 is due, **0 if the timer is not set** (or has already fired), and **clears the timer** — as in Locomotive BASIC, where it is the way to cancel one timer and see how much time was left. It works for `AFTER` and `EVERY` timers alike (an `EVERY` timer is cleared, too). `REMAIN(4)` and `REMAIN(-1)` are "Illegal argument". `REMAIN` is a reserved word now.
 - A **direct mode line** may use line numbers as targets (`GOTO 100`, `GOSUB 100`, `AFTER 60 GOSUB 100`, `RESTORE 20`): they refer to the program as it was when it was last compiled (by `RUN`, `CHAIN`, ...). After the stored program was changed (a line entered or deleted, `DELETE`, `RENUM`, `MERGE`, `LOAD`) the old line table no longer fits, and a line number in a direct line is "Undefined line number" until the next `RUN`; labels always work.
 
+## Files and devices: `OPEN`, `CLOSE`, `PRINT #`, `INPUT #`, `LINE INPUT`, `WRITE`, `ADDRESS` ...
+
+Design and details: [io-subsystem.md](io-subsystem.md). A file name may start with a **driver and a colon**: `file:` (the disk, the default), `null:` (accepts everything, always at the end), `mem:` (a RAM disk). An unknown driver is "Device not found". Names without a prefix belong to the `ADDRESS` driver; `RUN` resets it to `file`.
+
+```
+OPEN "mem:scores" FOR OUTPUT AS #1        OPEN "O",#1,"mem:scores"       (INPUT / OUTPUT / APPEND, or "I" / "O" / "A")
+PRINT #1,"hello";1+2   WRITE #1,"a",5     LINE INPUT #1,A$    INPUT #1,A,B$    GET #1,K$
+IF NOT EOF(1) THEN ...    PRINT LOF(1);LOC(1)    A$=INPUT$(10,#1)
+CLOSE #1,#2     CLOSE                      (no argument: all channels)
+ADDRESS MEM     ADDRESS "mem"     ADDRESS      (swap with the previous driver)     PRINT ADDRESS$
+```
+
+Channel 0 is the screen and keyboard; channels 1 to 255 are opened by `OPEN`. `LOAD`, `SAVE`, `MERGE`, `CHAIN` and `FILES` take driver names too (`SAVE "mem:game"`, `FILES "mem:"`); the default extensions apply to the path. `WRITE` is `PRINT` with strings in double quotes and commas between the items; `LINE INPUT` takes the whole line; `INPUT #n` splits it into fields and goes on with the next line when it runs out. Lines are written with a newline and read with a newline or a carriage return and a newline. A restart (`RUN`, `NEW`, `LOAD`, `CHAIN`) closes all channels. See io-subsystem.md for the exact rules, the error messages and what comes next (`KILL`, `RENAME`, `SEEK`, more drivers, random access records, the open sandboxing question).
+
 **File extensions:** `SAVE "name"` writes the binary (tokenized) form and appends `.e99` to a name without extension; `SAVE "name",A` writes the ASCII listing and appends `.bas`. A name with an extension is used as it is. `LOAD` recognizes both forms by the header, whatever the extension is.
 
 ## Sound: `SOUND`, `PLAY`, `WAVE`, `TEMPO`, `PLAYING()`

@@ -28,6 +28,7 @@
 #include "basrepl.h"
 #include "basdebug.h"
 #include "basfiles.h"
+#include "iodev.h"
 
 // -- helpers -------------------------------------------------------------------
 
@@ -458,19 +459,15 @@ static char* repl_add_extension( const char* name, const char* ext ) {
     return full;
 }
 
-static bool repl_is_file( const char* path ) {
-    struct stat st;
-    return stat( path, &st ) == 0 && S_ISREG( st.st_mode );
-}
-
 // LOAD name: a name without an extension is looked up as it is, then with .bas, .e99, .BAS and .E99 (the first that
 // exists wins); the result is malloc'ed (the name itself if nothing was found, so that the error is about what was typed)
-static char* repl_find_program_file( const char* name ) {
-    if ( !repl_has_extension( name ) && !repl_is_file( name ) ) {
+static char* repl_find_program_file( const repl_t* repl, const char* name ) {
+    const char* def = repl->vm.addrcur;
+    if ( !repl_has_extension( name ) && !iodev_exists( name, def ) ) {
         static const char* const exts[] = { ".bas", ".e99", ".BAS", ".E99" };
         for ( size_t i=0; i < sizeof(exts) / sizeof(exts[0]); ++i ) {
             char* full = repl_add_extension( name, exts[i] );
-            if ( full != 0 && repl_is_file( full ) ) {
+            if ( full != 0 && iodev_exists( full, def ) ) {
                 return full;
             }
             free( full );
@@ -479,17 +476,40 @@ static char* repl_find_program_file( const char* name ) {
     return strdup( name );
 }
 
-// LOAD: replaces the stored program; the old one stays if anything goes wrong
-static bool repl_load_program( repl_t* repl, const char* name ) {
-    char* filename = repl_find_program_file( name );
+// reads the program file (through the drivers; the part of the name behind a "driver:" prefix is what the extension search is about)
+// into a memory stream for repl_read_program(); 0 after a message. *pfilename receives the name that was found (malloc'ed).
+static FILE* repl_open_program( repl_t* repl, const char* name, char** pfilename, uint8_t** pdata ) {
+    char* filename = repl_find_program_file( repl, name );
     if ( filename == 0 ) {
         repl_report( repl, "? Out of memory" );
-        return false;
+        return 0;
     }
-    FILE* f = fopen( filename, "rb" );
-    if ( f == 0 ) {
-        repl_report( repl, errno == ENOENT ? "? File not found" : "? Can't open file" );
+    const char* err = 0;
+    uint8_t* data = 0; size_t len = 0;
+    if ( !iodev_read_all( filename, repl->vm.addrcur, &data, &len, &err ) ) {
+        char msg[100];
+        snprintf( msg, sizeof(msg), "? %s", err ? err : "Can't open file" );
+        repl_report( repl, msg );
         free( filename );
+        return 0;
+    }
+    FILE* f = len > 0 ? fmemopen( data, len, "rb" ) : fopen( "/dev/null", "rb" );
+    if ( f == 0 ) {
+        repl_report( repl, "? Out of memory" );
+        free( data );
+        free( filename );
+        return 0;
+    }
+    *pfilename = filename;
+    *pdata = data;
+    return f;
+}
+
+// LOAD: replaces the stored program; the old one stays if anything goes wrong
+static bool repl_load_program( repl_t* repl, const char* name ) {
+    char* filename = 0; uint8_t* data = 0;
+    FILE* f = repl_open_program( repl, name, &filename, &data );
+    if ( f == 0 ) {
         return false;
     }
     program_t loaded;
@@ -500,6 +520,7 @@ static bool repl_load_program( repl_t* repl, const char* name ) {
         ok = false;
     }
     fclose( f );
+    free( data );
     if ( !ok ) {
         free_program( &loaded );
         free( filename );
@@ -516,15 +537,9 @@ static bool repl_load_program( repl_t* repl, const char* name ) {
 // MERGE name [, APPEND]: enters the lines of the file into the stored program; the stored program changes only if everything
 // is fine. append: the file's lines are numbered 10 apart behind the last stored line (the stored program is not renumbered).
 static bool repl_merge_program( repl_t* repl, const char* name, bool append ) {
-    char* filename = repl_find_program_file( name );
-    if ( filename == 0 ) {
-        repl_report( repl, "? Out of memory" );
-        return false;
-    }
-    FILE* f = fopen( filename, "rb" );
+    char* filename = 0; uint8_t* data = 0;
+    FILE* f = repl_open_program( repl, name, &filename, &data );
     if ( f == 0 ) {
-        repl_report( repl, errno == ENOENT ? "? File not found" : "? Can't open file" );
-        free( filename );
         return false;
     }
     free( filename );
@@ -536,6 +551,7 @@ static bool repl_merge_program( repl_t* repl, const char* name, bool append ) {
         ok = false;
     }
     fclose( f );
+    free( data );
     if ( ok && append && loaded.first != 0 ) {
         uint32_t start = repl->pgm.last != 0 ? ( repl->pgm.last->lineno / 10U + 1U ) * 10U : 10U;
         int status = start > LINENO_MAX ? RENUM_OVERFLOW : renumber_program( &loaded, LINENO_NONE, LINENO_NONE, start, 10U );
@@ -602,7 +618,7 @@ static bool repl_vm_files( struct _vm_t* vm, void* usrdata, const char* spec ) {
     filesout_t out = { repl, 0, false, false };
     char err[100];
     err[0] = '\0';
-    bool ok = files_list( spec, repl->vm.channel == 0 ? repl->hlstyle : 0, repl, repl_files_emit, &out, err, sizeof(err) );
+    bool ok = iodev_list( spec, repl->vm.addrcur, repl->vm.channel == 0 ? repl->hlstyle : 0, repl, repl_files_emit, &out, err, sizeof(err) );
     if ( !ok ) {
         repl_vm_error( repl, err, 0 );
     } else if ( out.broken ) {
@@ -874,7 +890,8 @@ bool repl_save_program( repl_t* repl, const char* name, bool ascii ) {
     if ( filename == 0 ) {
         return false;
     }
-    FILE* f = fopen( filename, ascii ? "w" : "wb" );
+    char* buf = 0; size_t size = 0;
+    FILE* f = open_memstream( &buf, &size );
     if ( f == 0 ) {
         free( filename );
         return false;
@@ -883,6 +900,14 @@ bool repl_save_program( repl_t* repl, const char* name, bool ascii ) {
     if ( fclose( f ) != 0 ) {
         ok = false;
     }
+    const char* err = 0;
+    if ( ok && !iodev_write_all( filename, repl->vm.addrcur, buf, size, &err ) ) {
+        char msg[100];
+        snprintf( msg, sizeof(msg), "? %s", err ? err : "Write error" );
+        repl_report( repl, msg );
+        ok = false;
+    }
+    free( buf );
     if ( ok ) {
         repl_set_filename( repl, filename );
     }

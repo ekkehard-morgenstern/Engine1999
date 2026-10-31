@@ -37,6 +37,10 @@
 #include "vars.h"
 #endif
 
+#ifndef IODEV_H
+#include "iodev.h"
+#endif
+
 #ifndef CODEGEN_H
 #include "codegen.h"
 #endif
@@ -168,6 +172,8 @@ typedef struct _vm_sound_t {
 
 #define VM_NTIMERS          4
 
+#define VM_ADDRLEN          20
+
 typedef struct _vm_timer_t {
     bool        active;
     bool        every;          // repeats (EVERY), else once (AFTER)
@@ -238,6 +244,11 @@ typedef struct _vm_t {
     int             irqdepth;
     bool            irqpending;     // (internal) a timer is due but the program is not between two statements yet
     bool            irqsafe;        // (internal) a handler may be entered although the stack isn't empty (WAIT gave way to it)
+    // I/O subsystem (docs/io-subsystem.md): the channels opened with OPEN, and the default driver of ADDRESS
+    iotab_t         io;
+    char            addrcur[VM_ADDRLEN], addrprev[VM_ADDRLEN];
+    const char*     iofail;         // (internal) a message of an I/O error that happened where it can't be reported at once
+    const char*     inerr;          // (internal) why vm_get_line() returned nothing (a file channel)
     int             request;        // VMREQ_*: LOAD / RUN stop the VM and leave a request for the host (see vm_run_at)
     char*           reqname;        // LOAD: the file name; RUN: the label name ("" = none); owned by the VM
     int32_t         reqline;        // RUN: the line number, -1 = none

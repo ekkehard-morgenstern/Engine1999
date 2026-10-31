@@ -1556,7 +1556,7 @@ bool comp_eat_strusrfncall( compiler_t* comp, node_t** pnode ) {
 bool comp_eat_sysnumfn1argcall( compiler_t* comp, node_t** pnode ) {
     /*
         sys-num-fn-1-arg-call := ( TOK_ASC | TOK_VAL | TOK_LEN ) TOK_LPAREN str-expr TOK_RPAREN |
-                                 ( TOK_FRE | TOK_PLAYING | TOK_REMAIN ) TOK_LPAREN num-expr TOK_RPAREN .
+                                 ( TOK_FRE | TOK_PLAYING | TOK_REMAIN | TOK_EOF | TOK_LOF | TOK_LOC ) TOK_LPAREN num-expr TOK_RPAREN .
         NT_SYSNUMFUNCARGCALL    numeric system function call with arguments
             data:
                 - 1 byte of function token (like TOK_VAL)
@@ -1587,7 +1587,7 @@ OOM:        out_of_memory( comp );
             return false;
         }
         return true;
-    } else if ( tok == TOK_FRE || tok == TOK_PLAYING || tok == TOK_REMAIN ) {
+    } else if ( tok == TOK_FRE || tok == TOK_PLAYING || tok == TOK_REMAIN || tok == TOK_EOF || tok == TOK_LOF || tok == TOK_LOC ) {
         if ( !comp_fetchtok( comp ) ) {
             return false;
         }
@@ -1697,6 +1697,43 @@ OOM:        out_of_memory( comp );
             goto CLOSE;
         }
         if ( !comp_create_node( comp, pnode, NT_SYSSTRFUNCARGCALL, UINT8_C(1), UINT16_C(1), &tok, arg1 ) ||
+            *pnode == NODE_NONE ) {
+            goto OOM;
+        }
+        return true;
+    } else if ( tok == TOK_INPUT ) {
+        // TOK_INPUT TOK_STRING TOK_LPAREN num-expr [ TOK_COMMA chan-spec ] TOK_RPAREN .      (INPUT$(count [, #n]))
+        if ( !comp_fetchtok( comp ) ) {
+            return false;
+        }
+        if ( comp->currtok != TOK_STRING || !comp_fetchtok( comp ) ) {
+            goto STRSIG;
+        }
+        if ( comp->currtok != TOK_LPAREN || !comp_fetchtok( comp ) ) {
+            goto OPEN;
+        }
+        node_t* arg1 = NODE_NONE, *arg2 = NODE_NONE;
+        if ( !comp_eat_numexpr( comp, &arg1 ) || arg1 == NODE_NONE ) {
+            goto NUMEX;
+        }
+        if ( comp->currtok == TOK_COMMA && comp_fetchtok( comp ) ) {
+            if ( comp->currtok != TOK_LATTICE || !comp_fetchtok( comp ) ) {
+                comp_error( comp, "Channel '#n' expected" );
+                return false;
+            }
+            if ( !comp_eat_numexpr( comp, &arg2 ) || arg2 == NODE_NONE ) {
+                goto NUMEX;
+            }
+        } else {
+            uint8_t zero[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+            if ( !comp_create_node( comp, &arg2, NT_NUMLIT, UINT8_C(0), UINT16_C(8), zero ) || arg2 == NODE_NONE ) {
+                goto OOM;
+            }
+        }
+        if ( comp->currtok != TOK_RPAREN || !comp_fetchtok( comp ) ) {
+            goto CLOSE;
+        }
+        if ( !comp_create_node( comp, pnode, NT_SYSSTRFUNCARGCALL, UINT8_C(2), UINT16_C(1), &tok, arg1, arg2 ) ||
             *pnode == NODE_NONE ) {
             goto OOM;
         }
@@ -1818,7 +1855,7 @@ bool comp_eat_sysnoargstrcall( compiler_t* comp, node_t** pnode ) {
     // sys-noarg-str := sys-noarg-str-name TOK_STRING .
     // sys-noarg-str-call := sys-no-arg-str .
     uint8_t tok = comp->currtok;
-    if ( tok != TOK_INKEY || !comp_fetchtok( comp ) ) {
+    if ( ( tok != TOK_INKEY && tok != TOK_ADDRESS ) || !comp_fetchtok( comp ) ) {
         return false;
     }
     if ( comp->currtok != TOK_STRING || !comp_fetchtok( comp ) ) {
@@ -2385,6 +2422,159 @@ bool comp_eat_chainstmt( compiler_t* comp, node_t** pnode ) {
     return true;
 }
 
+bool comp_eat_openstmt( compiler_t* comp, node_t** pnode ) {
+    // open-stmt := TOK_OPEN str-expr ( TOK_FOR open-mode identifier-AS chan-spec | TOK_COMMA chan-spec TOK_COMMA str-expr ) .
+    // open-mode := TOK_INPUT | OUTPUT | APPEND .       (OUTPUT, APPEND and AS are identifiers recognized here)
+    if ( comp->currtok != TOK_OPEN || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    node_t* first = NODE_NONE;
+    if ( !comp_eat_strexpr( comp, &first ) || first == NODE_NONE ) {
+        comp_error( comp, "String expression expected" );
+        return false;
+    }
+    uint8_t data[2] = { 0, 0 };
+    node_t* chan = NODE_NONE; node_t* name = NODE_NONE;
+    if ( comp->currtok == TOK_FOR ) {
+        if ( !comp_fetchtok( comp ) ) {
+            return false;
+        }
+        if ( comp->currtok == TOK_INPUT ) {
+            data[1] = 'I';
+        } else if ( comp->currtok == TOK_NUMIDENT && strcmp( comp->param, "OUTPUT" ) == 0 ) {
+            data[1] = 'O';
+        } else if ( comp->currtok == TOK_NUMIDENT && strcmp( comp->param, "APPEND" ) == 0 ) {
+            data[1] = 'A';
+        } else {
+            comp_error( comp, "INPUT, OUTPUT or APPEND expected" );
+            return false;
+        }
+        if ( !comp_fetchtok( comp ) ) {
+            return false;
+        }
+        if ( comp->currtok != TOK_NUMIDENT || strcmp( comp->param, "AS" ) != 0 || !comp_fetchtok( comp ) ) {
+            comp_error( comp, "AS expected" );
+            return false;
+        }
+        if ( !comp_eat_chanspec( comp, &chan ) || chan == NODE_NONE ) {
+            comp_error( comp, "Channel '#n' expected" );
+            return false;
+        }
+    } else if ( comp->currtok == TOK_COMMA ) {
+        data[0] = 1;
+        if ( !comp_fetchtok( comp ) || !comp_eat_chanspec( comp, &chan ) || chan == NODE_NONE ) {
+            comp_error( comp, "Channel '#n' expected" );
+            return false;
+        }
+        if ( comp->currtok != TOK_COMMA || !comp_fetchtok( comp ) ) {
+            comp_error( comp, "Comma ',' expected" );
+            return false;
+        }
+        if ( !comp_eat_strexpr( comp, &name ) || name == NODE_NONE ) {
+            comp_error( comp, "String expression expected" );
+            return false;
+        }
+    } else {
+        comp_error( comp, "FOR or comma expected" );
+        return false;
+    }
+    /*
+        NT_OPENSTMT     OPEN statement
+            data:
+                - 1 byte of form (0: OPEN name FOR mode AS #n, 1: OPEN mode, #n, name) and 1 byte of mode letter I / O / A (form 0)
+            branches:
+                - form 0: the name (string expression), the channel specifier
+                - form 1: the mode (string expression), the channel specifier, the name (string expression)
+    */
+    bool ok = data[0] == 0 ? comp_create_node( comp, pnode, NT_OPENSTMT, UINT8_C(2), UINT16_C(2), data, first, chan ) :
+        comp_create_node( comp, pnode, NT_OPENSTMT, UINT8_C(3), UINT16_C(2), data, first, chan, name );
+    if ( !ok || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
+bool comp_eat_closestmt( compiler_t* comp, node_t** pnode ) {
+    // close-stmt := TOK_CLOSE [ chan-spec { TOK_COMMA chan-spec } ] .
+    if ( comp->currtok != TOK_CLOSE || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    if ( !comp_create_node( comp, pnode, NT_CLOSESTMT, UINT8_C(0), UINT16_C(0), 0 ) || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    if ( comp->currtok == TOK_LATTICE ) {
+        for (;;) {
+            node_t* chan = NODE_NONE;
+            if ( !comp_eat_chanspec( comp, &chan ) || chan == NODE_NONE ) {
+                comp_error( comp, "Channel '#n' expected" );
+                return false;
+            }
+            if ( !comp_add_branch( comp, *pnode, chan ) ) {
+                out_of_memory( comp );
+                return false;
+            }
+            if ( comp->currtok != TOK_COMMA || !comp_fetchtok( comp ) ) {
+                break;
+            }
+        }
+    }
+    return true;
+}
+
+bool comp_eat_addressstmt( compiler_t* comp, node_t** pnode ) {
+    // address-stmt := TOK_ADDRESS [ identifier | str-expr ] .
+    if ( comp->currtok != TOK_ADDRESS || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    /*
+        NT_ADDRESSSTMT  ADDRESS statement
+            data:
+                - 1 byte: 0 = no operand (swap with the previous driver), 1 = a string expression branch, 2 = a bare name
+                  (the name follows in the data)
+            branches:
+                - none, or 1 string expression
+    */
+    node_t* expr = NODE_NONE;
+    if ( comp->currtok == TOK_EOL || comp->currtok == TOK_COLON || comp->currtok == TOK_ELSE ) {
+        uint8_t kind = 0;
+        if ( !comp_create_node( comp, pnode, NT_ADDRESSSTMT, UINT8_C(0), UINT16_C(1), &kind ) || *pnode == NODE_NONE ) {
+            out_of_memory( comp );
+            return false;
+        }
+        return true;
+    }
+    if ( comp->currtok == TOK_NUMIDENT ) {
+        size_t len = strlen( comp->param );
+        if ( len == 0 || len > 60U ) {
+            comp_error( comp, "Driver name expected" );
+            return false;
+        }
+        uint8_t data[64];
+        data[0] = 2;
+        memcpy( &data[1], comp->param, len );
+        if ( !comp_fetchtok( comp ) ) {
+            return false;
+        }
+        if ( !comp_create_node( comp, pnode, NT_ADDRESSSTMT, UINT8_C(0), (uint16_t)( len + 1U ), data ) || *pnode == NODE_NONE ) {
+            out_of_memory( comp );
+            return false;
+        }
+        return true;
+    }
+    if ( !comp_eat_strexpr( comp, &expr ) || expr == NODE_NONE ) {
+        comp_error( comp, "Driver name expected" );
+        return false;
+    }
+    uint8_t kind = 1;
+    if ( !comp_create_node( comp, pnode, NT_ADDRESSSTMT, UINT8_C(1), UINT16_C(1), &kind, expr ) || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
 static bool comp_eat_gotokw( compiler_t* comp, uint8_t* ptok );
 
 bool comp_eat_timerstmt( compiler_t* comp, node_t** pnode ) {
@@ -2754,7 +2944,7 @@ bool comp_eat_clearstmt( compiler_t* comp, node_t** pnode ) {
 }
 
 bool comp_eat_progstmt( compiler_t* comp, node_t** pnode ) {
-    // prog-stmt := load-stmt | run-stmt | merge-stmt | chain-stmt | files-stmt | timer-stmt | list-stmt | new-stmt | clear-stmt | delete-stmt | renum-stmt | edit-stmt | monitor-stmt |
+    // prog-stmt := load-stmt | run-stmt | merge-stmt | chain-stmt | files-stmt | open-stmt | close-stmt | address-stmt | timer-stmt | list-stmt | new-stmt | clear-stmt | delete-stmt | renum-stmt | edit-stmt | monitor-stmt |
     //              sound-stmt | wait-stmt .
     // [ NT_PROGSTMT - not generated ]
     if ( comp_eat_loadstmt( comp, pnode ) && *pnode != NODE_NONE ) {
@@ -2770,6 +2960,15 @@ bool comp_eat_progstmt( compiler_t* comp, node_t** pnode ) {
         return true;
     }
     if ( comp_eat_filesstmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_openstmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_closestmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_addressstmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     if ( comp_eat_timerstmt( comp, pnode ) && *pnode != NODE_NONE ) {
@@ -2884,13 +3083,16 @@ bool comp_eat_printarglist( compiler_t* comp, node_t** pnode ) {
 }
 
 bool comp_eat_printstmt( compiler_t* comp, node_t** pnode ) {
-    // print-stmt := TOK_PRINT [ chan-spec TOK_COMMA ] [ print-arg-list ] .
-    if ( comp->currtok != TOK_PRINT || !comp_fetchtok( comp ) ) {
+    // print-stmt := ( TOK_PRINT | TOK_WRITE ) [ chan-spec TOK_COMMA ] [ print-arg-list ] .
+    uint8_t writemode = comp->currtok == TOK_WRITE ? 1 : 0;       // WRITE: strings in quotes, items separated by commas
+    if ( ( comp->currtok != TOK_PRINT && comp->currtok != TOK_WRITE ) || !comp_fetchtok( comp ) ) {
         return false;
     }
     node_t* chan = NODE_NONE;
     if ( comp_eat_chanspec( comp, &chan ) && chan != NODE_NONE ) {
-        if ( comp->currtok != TOK_COMMA || !comp_fetchtok( comp ) ) {
+        if ( comp->currtok == TOK_EOL || comp->currtok == TOK_COLON || comp->currtok == TOK_ELSE ) {
+            // PRINT #n alone: just a newline
+        } else if ( comp->currtok != TOK_COMMA || !comp_fetchtok( comp ) ) {
             comp_error( comp, "Comma ',' expected" );
             return false;
         }
@@ -2899,11 +3101,13 @@ bool comp_eat_printstmt( compiler_t* comp, node_t** pnode ) {
     comp_eat_printarglist( comp, &args );
     /*
         NT_PRINTSTMT    print statement
+            data:
+                - none, or (for WRITE) 1 byte with the value 1
             branches:
                 - 1 optional branch of channel info
                 - 1 optional branch of print argument list
     */
-    if ( !comp_create_node( comp, pnode, NT_PRINTSTMT, UINT8_C(2), UINT16_C(0), 0, chan, args ) ||
+    if ( !comp_create_node( comp, pnode, NT_PRINTSTMT, UINT8_C(2), writemode ? UINT16_C(1) : UINT16_C(0), &writemode, chan, args ) ||
         *pnode == NODE_NONE ) {
         out_of_memory( comp );
         return false;
@@ -3035,7 +3239,7 @@ static bool comp_eat_inputvars( compiler_t* comp, node_t* stmt, const char* what
 }
 
 bool comp_eat_inputstmt( compiler_t* comp, node_t** pnode ) {
-    // input-stmt := TOK_INPUT [ chan-spec TOK_COMMA ] [ str-lits ( TOK_SEMIC | TOK_COMMA ) ] input-var { TOK_COMMA input-var } .
+    // input-stmt := [ TOK_LINE ] TOK_INPUT [ chan-spec TOK_COMMA ] [ str-lits ( TOK_SEMIC | TOK_COMMA ) ] input-var { TOK_COMMA input-var } .
     /*
         NT_INPUTSTMT        INPUT statement
             data:
@@ -3046,10 +3250,17 @@ bool comp_eat_inputstmt( compiler_t* comp, node_t** pnode ) {
                 - optional branch of prompt (NT_STRLITS or NT_STRLIT)
                 - 1 or more branches of variable references (NT_NUMVARREF or NT_STRVARREF)
     */
+    uint8_t flags = 0;
+    if ( comp->currtok == TOK_LINE ) {          // LINE INPUT [#n,] ["prompt";] string-variable
+        if ( !comp_fetchtok( comp ) || comp->currtok != TOK_INPUT ) {
+            comp_error( comp, "INPUT expected after LINE" );
+            return false;
+        }
+        flags |= INPUTF_LINE | INPUTF_NOQUEST;
+    }
     if ( comp->currtok != TOK_INPUT || !comp_fetchtok( comp ) ) {
         return false;
     }
-    uint8_t flags = 0;
     node_t* chan = NODE_NONE;
     if ( comp_eat_chanspec( comp, &chan ) && chan != NODE_NONE ) {
         if ( comp->currtok != TOK_COMMA || !comp_fetchtok( comp ) ) {
@@ -3081,7 +3292,18 @@ bool comp_eat_inputstmt( compiler_t* comp, node_t** pnode ) {
         out_of_memory( comp );
         return false;
     }
-    return comp_eat_inputvars( comp, *pnode, "Variable expected" );
+    if ( !comp_eat_inputvars( comp, *pnode, "Variable expected" ) ) {
+        return false;
+    }
+    if ( flags & INPUTF_LINE ) {
+        size_t first = ( ( flags & INPUTF_CHAN ) ? 1U : 0U ) + ( ( flags & INPUTF_PROMPT ) ? 1U : 0U );
+        node_t* var = (*pnode)->numbranches == first + 1U ? (*pnode)->branches[first] : NODE_NONE;
+        if ( var == NODE_NONE || var->type != NT_STRVARREF ) {
+            comp_error( comp, "LINE INPUT needs one string variable" );
+            return false;
+        }
+    }
+    return true;
 }
 
 bool comp_eat_getstmt( compiler_t* comp, node_t** pnode ) {

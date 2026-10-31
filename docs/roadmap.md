@@ -29,7 +29,7 @@ Open: directory handling for `LOAD`/`SAVE` beyond plain paths (there is no `CD`;
 
 - [ ] `OPTION BASE` — lowest array index (0 or 1); when is it allowed (before the first `DIM`?)
 - [ ] `INT` / `STR` / `FLT` — tokens exist; presumably default type declarations (like `DEFINT`/`DEFSTR`/`DEFSNG`): syntax and scope
-- [ ] `PUT` — token exists, probably the counterpart of `GET` for channels/files: meaning to be defined
+- [ ] `PUT` — token exists; random access records will use `FIELD`, `GETREC`, `PUTREC` instead (decision of 2026-10-30, `docs/io-subsystem.md`); the token `PUT` stays unused for now
 - [ ] `OFF` — token exists; only meaningful together with the timer statements below (`ON … OFF`?)
 
 ## 2b. Sound
@@ -58,12 +58,12 @@ how a handler is named (line number / label / `FN`?); how they are cancelled (`O
 - [ ] Typed lines are limited to 255 characters (input buffer in `engine1999.c`); fine for now, may be raised later
 - [ ] Cursor keys and function keys for `GET` / `INKEY$` (only printable ASCII, RETURN, BACKSPACE, TAB are delivered; ESC is the
       break key; need a key-code convention, e.g. like the classic home computers)
-- [ ] File channels (`#n` with `n` ≠ 0): `PRINT #n`, `INPUT #n`, `GET #n` are accepted and passed to the callbacks, but the engine
+- [ ] File channels (`#n` with `n` ≠ 0): being done by the I/O subsystem, see section 8 and `docs/io-subsystem.md`
       discards output / reports end of input for every channel except 0
 - [ ] Direct mode: ordinary lines are rolled back after they ran (done), but a line that defines a function, a label or DATA keeps
       its code and data, and defining the same function again leaves the old code behind (dead) until `NEW` / `RUN`; a session that
       redefines functions thousands of times grows (slowly) toward the 256 MiB limit
-- [ ] Direct mode can't `GOTO` / `GOSUB` into a stored program (the line table belongs to the code of a `RUN`)
+- [x] Direct mode can `GOTO` / `GOSUB` / `AFTER ... GOSUB` / `RESTORE` to a program line number (the table of the last compile; empty when the program changed since, then `RUN` first)
 - [ ] `PRINT` comma zones use the VM's own column count and ignore the screen wrap at column 80
 - [ ] `vmtest1` still has its own copy of the compile-and-run logic; it could use `basrepl` (`repltest1` already does)
 - [ ] Output on channel 0 only goes to the text screen: no graphics-layer / tile / sprite statements exist yet (the `sdlscr_*`
@@ -108,3 +108,13 @@ Listed in full in `SESSION.md` ("Design decisions I took"). The ones most likely
 ## Later: look at again
 
 - [ ] Font: review the symbol glyphs again (`% & @ $ ~ # *` and the other punctuation in `8x12font1.txt`); they are the tightest on the 8x12 grid. Also maybe `N` (close to `H` at small size).
+
+## 8. I/O subsystem with virtual device drivers *(designed: `docs/io-subsystem.md`)*
+
+- [x] **Phase 1** (done, 2026-10-30): `iodev.[ch]` with `file`, `null`, `mem` drivers and `driver:name` prefixes; channel table in the VM; `OPEN`, `CLOSE`, `LINE INPUT`, `WRITE`, `EOF`, `LOF`, `LOC`, `INPUT$`, `ADDRESS`, `ADDRESS$`; `PRINT #` / `INPUT #` / `GET #` on files; `LOAD`, `SAVE`, `MERGE`, `CHAIN`, `FILES` through the drivers
+- [ ] Phase 2: `KILL`, `RENAME … TO`, `MKDIR`, `CHDIR`, `SEEK`; drivers `sh`, `res`, `con`
+- [ ] Phase 3: random access records (`FIELD`, `LSET`, `RSET`, `GETREC`, `PUTREC`); drivers `play`, `tcp`; drivers written in BASIC
+- [ ] **Sandboxing (open issue)**: permissions for shell literals, `sh:`, writing/reading outside the program directory, the network; how a policy is configured (command line switch, trust level per program, permission file) is undecided; `iodev_allowed()` is the single place for the decision
+- [ ] Files stay open across `CHAIN` in GW-BASIC; here a restart (`RUN`, `NEW`, `LOAD`, `CHAIN`) closes all channels
+- [ ] `LIST #n` / `LIST` to a file channel (`LIST` still writes to channel 0 only; with the drivers it could write a listing to `mem:` or a file); `PRINT` comma zones on a file channel use the screen column
+- [ ] Binary data in files: a zero byte can't be held in a string (`GET #n`, `INPUT$`); text files only until random access / binary records exist

@@ -231,6 +231,27 @@ static const testcase_t cases[] = {
     { "a line number in a direct line after DELETE", "10 PRINT 1\n20 END\n100 PRINT 7:RETURN\nRUN\nDELETE 10\nGOSUB 100\nRUN\nGOSUB 100", "1\n? Undefined line number 100\n7\n" },
     { "RESTORE a line from direct mode", "10 DATA 1,2\n20 DATA 3,4\n30 END\nRUN\nRESTORE 20:READ A:PRINT A", "3\n" },
     { "AFTER in a direct line reaches program line numbers", "10 PRINT \"p\":END\n100 PRINT \"h\":RETURN\nRUN\nAFTER 3 GOSUB 100:WAIT 12", "p\nh\n" },
+    // files and devices through the drivers
+    { "SAVE and LOAD through mem:", "10 PRINT 1\nSAVE \"mem:p\"\nNEW\nLOAD \"mem:p\"\nRUN", "1\n" },
+    { "SAVE ,A and LOAD through mem:", "10 PRINT 2\nSAVE \"mem:q\",A\nNEW\nLOAD \"mem:q\"\nRUN", "2\n" },
+    { "LOAD with the extension search on mem:", "10 PRINT 5\nSAVE \"mem:r\"\nNEW\nLOAD \"mem:r.e99\"\nRUN\nNEW\nLOAD \"mem:r\"\nRUN", "5\n5\n" },
+    { "LOAD uses the ADDRESS driver", "10 PRINT 3\nSAVE \"mem:p\"\nNEW\nADDRESS MEM\nLOAD \"p\"\nRUN", "3\n" },
+    { "SAVE uses the ADDRESS driver", "10 PRINT 4\nADDRESS MEM\nSAVE \"p\"\nNEW\nLOAD \"mem:p\"\nRUN", "4\n" },
+    { "MERGE through mem:", "10 PRINT 1\nSAVE \"mem:m\",A\nNEW\n20 PRINT 2\nMERGE \"mem:m\"\nRUN", "1\n2\n" },
+    { "MERGE APPEND through mem:", "10 PRINT 1\nSAVE \"mem:m\"\nNEW\n10 PRINT 0\nMERGE \"mem:m\",APPEND\nLIST", "10 PRINT 0\n20 PRINT 1\n" },
+    { "CHAIN through mem:", "10 PRINT A\nSAVE \"mem:c\"\nNEW\n10 A=4:CHAIN \"mem:c\"\nRUN", "4\n" },
+    { "LOAD a missing file on mem:", "LOAD \"mem:nothing\"", "? File not found\n" },
+    { "LOAD from an unknown device", "LOAD \"nodev:p\"", "? Device not found\n" },
+    { "MERGE from an unknown device", "MERGE \"nodev:p\"", "? Device not found\n" },
+    { "SAVE to an unknown device", "10 PRINT 1\nSAVE \"nodev:p\"", "? Device not found\n? Save failed\n" },
+    { "SAVE to null:", "10 PRINT 1\nSAVE \"null:p\"\nPRINT \"ok\"", "ok\n" },
+    { "LOAD from null: is an empty program", "10 PRINT 1\nLOAD \"null:p\"\nLIST", "" },
+    { "files stay open between direct mode lines", "OPEN \"mem:s\" FOR OUTPUT AS #1\nPRINT #1,\"x\"\nCLOSE #1\nOPEN \"mem:s\" FOR INPUT AS #1\nLINE INPUT #1,A$\nPRINT A$", "x\n" },
+    { "RUN closes all channels", "OPEN \"mem:s\" FOR OUTPUT AS #1\n10 PRINT #1,\"x\"\nRUN", "? File not open in line 10\n" },
+    { "NEW closes all channels", "OPEN \"mem:s\" FOR OUTPUT AS #1\nNEW\nPRINT #1,\"x\"", "? File not open\n" },
+    { "RUN resets ADDRESS", "ADDRESS MEM\n10 PRINT ADDRESS$\nRUN\nPRINT ADDRESS$", "file\nfile\n" },
+    { "ADDRESS survives direct mode lines", "ADDRESS MEM\nPRINT ADDRESS$\nPRINT ADDRESS$", "mem\nmem\n" },
+    { "a program may read a file written by an earlier program", "10 OPEN \"mem:d\" FOR OUTPUT AS #1:PRINT #1,\"data\":CLOSE\nRUN\n10 OPEN \"mem:d\" FOR INPUT AS #1:LINE INPUT #1,A$:PRINT A$\nRUN", "data\n" },
     { "CLEAR in direct mode",   "A=5\nB$=\"X\"\nCLEAR\nPRINT A;LEN(B$)",               "00\n" },
     { "CLEAR keeps the program","10 PRINT 1\nCLEAR\nRUN",                              "1\n" },
     { "CLEAR in a program",     "10 A=5:B$=\"X\"\n20 CLEAR\n30 PRINT A;LEN(B$)\nRUN", "00\n" },
@@ -269,6 +290,7 @@ static void out_append( const char* text ) {
 }
 
 static void out_reset( void ) {
+    iodev_mem_clear();
     outsize = 0;
     out_append( "" );
 }
@@ -552,6 +574,7 @@ typedef struct _filescase_t {
     int         yes;            // number of pauses that are answered with "go on" (-1 = all)
     const char* expected;
     int         pauses;         // expected number of pauses
+    bool        masktime;       // replace the time of every line by "T" (files that were just made)
 } filescase_t;
 
 static const filescase_t filescases[] = {
@@ -576,6 +599,12 @@ static const filescase_t filescases[] = {
       "2020-01-02 03:04 old.txt\n2021-05-06 07:08 prog.bas\n2022-01-01 00:00 run.sh*\n2022-06-07 08:09 link@ -> old.txt\n2023-03-03 12:00 sub/\n", 2 },
     { "FILES stops when the host says so", "FILES \"" FILESDIR "\"\nPRINT \"X\"", false, false, true, 3, 1,
       "2020-01-02 03:04 old.txt\n2021-05-06 07:08 prog.bas\n2022-01-01 00:00 run.sh*\n2022-06-07 08:09 link@ -> old.txt\nX\n", 2 },
+    { "FILES on mem: lists the RAM disk", "10 END\nSAVE \"mem:z\"\nFILES \"mem:\"", false, false, true, 0, 0, "T z.e99\n", 0, true },
+    { "FILES on mem: with a pattern", "10 END\nSAVE \"mem:z\"\nSAVE \"mem:y\",A\nFILES \"mem:*.bas\"", false, false, true, 0, 0, "T y.bas\n", 0, true },
+    { "FILES uses the ADDRESS driver", "10 END\nSAVE \"mem:z\"\nADDRESS MEM\nFILES", false, false, true, 0, 0, "T z.e99\n", 0, true },
+    { "FILES on mem: without a match", "FILES \"mem:*.zzz\"", false, false, false, 0, 0, "? File not found\n", 0 },
+    { "FILES on an unknown device", "FILES \"nodev:\"", false, false, false, 0, 0, "? Device not found\n", 0 },
+    { "FILES on null:", "FILES \"null:\"", false, false, false, 0, 0, "? Not supported by device\n", 0 },
     { "FILES does not ask when everything fits on a page", "FILES \"" FILESDIR "/o*\"", false, false, false, 24, -1, "3 2020-01-02 03:04 " FILESDIR "/old.txt\n", 0 },
 };
 
@@ -590,6 +619,23 @@ static void strip_sizes( char* text ) {
         if ( *p == ' ' ) ++p;
         while ( *p && *p != '\n' ) *out++ = *p++;
         if ( *p == '\n' ) *out++ = *p++;
+    }
+    *out = '\0';
+}
+
+// replaces "YYYY-MM-DD HH:MM" by "T" (after the size column has been taken away)
+static void mask_times( char* text ) {
+    char* out = text;
+    const char* p = text;
+    while ( *p ) {
+        const char* q = p;
+        while ( *q >= '0' && *q <= '9' ) ++q;      // a possible marker like "<R>" is not handled: the cases that mask are plain
+        if ( q - p == 4 && q[0] == '-' && q[3] == '-' && q[6] == ' ' && q[9] == ':' ) {
+            *out++ = 'T';
+            p += 16;
+        } else {
+            *out++ = *p++;
+        }
     }
     *out = '\0';
 }
@@ -622,6 +668,7 @@ static void run_files_tests( size_t* pnum, size_t* pfailed ) {
             cleanup_repl( &repl );
             if ( moved && chdir( cwd ) != 0 ) printf( "cannot go back\n" );
             if ( tc->strip ) strip_sizes( outbuf );
+            if ( tc->masktime ) mask_times( outbuf );
             pass = strcmp( outbuf, tc->expected ) == 0 && files_pauses == tc->pauses;
         }
         printf( "%s  %s\n", pass ? "PASS" : "FAIL", tc->name );

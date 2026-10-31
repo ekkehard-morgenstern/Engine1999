@@ -161,6 +161,101 @@ bool cgen_from_filesstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     return cgen_gen_fils( cgen ) || cgen_out_of_code_memory( comp );
 }
 
+// pushes the channel number of a channel specifier node
+static bool cp_push_chanspec( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    if ( node == NODE_NONE || node->type != NT_CHANSPEC || node->numbranches != 1U ) {
+        return cgen_unexpected_node( comp );
+    }
+    return cgen_from_numexpr( cgen, comp, node->branches[0] );
+}
+
+bool cgen_from_openstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    /*
+        NT_OPENSTMT     OPEN statement
+            data: form (0 long, 1 short), mode letter (form 0)
+            branches: form 0: name, channel; form 1: mode, channel, name
+        code: form 0: <name> <mode as a string> <channel> OPEN(0)      form 1: <mode> <channel> <name> OPEN(1)
+    */
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->type != NT_OPENSTMT || node->datalen != UINT16_C(2) ) {
+        return cgen_unexpected_node( comp );
+    }
+    bool shortform = node->data[0] == 1;
+    if ( node->numbranches != ( shortform ? 3U : 2U ) ) {
+        return cgen_unexpected_node( comp );
+    }
+    if ( shortform ) {
+        if ( !cgen_from_strexpr( cgen, comp, node->branches[0] ) || !cp_push_chanspec( cgen, comp, node->branches[1] ) ||
+             !cgen_from_strexpr( cgen, comp, node->branches[2] ) ) {
+            return false;
+        }
+    } else {
+        char mode[2] = { (char) node->data[1], '\0' };
+        if ( !cgen_from_strexpr( cgen, comp, node->branches[0] ) || !cp_push_string( cgen, comp, mode ) ||
+             !cp_push_chanspec( cgen, comp, node->branches[1] ) ) {
+            return false;
+        }
+    }
+    return cgen_gen_open( cgen, shortform ? UINT16_C(1) : UINT16_C(0) ) || cgen_out_of_code_memory( comp );
+}
+
+bool cgen_from_closestmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    // NT_CLOSESTMT: 0 or more channel specifiers; code per channel: <channel> CLOS; without any: -1 CLOS
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->type != NT_CLOSESTMT ) {
+        return cgen_unexpected_node( comp );
+    }
+    if ( node->numbranches == 0U ) {
+        return cgen_push_number( cgen, comp, -1.0 ) && ( cgen_gen_clos( cgen ) || cgen_out_of_code_memory( comp ) );
+    }
+    for ( size_t i=0; i < node->numbranches; ++i ) {
+        if ( !cgen_from_chanspec( cgen, comp, node->branches[i], cgen_gen_clos ) ) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool cgen_from_addressstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    /*
+        NT_ADDRESSSTMT  ADDRESS statement
+            data: 0 = no operand, 1 = a string expression branch, 2 = a bare name (the name follows)
+        code: <name> ADDR(0)      or      ADDR(1) (swap)
+    */
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->type != NT_ADDRESSSTMT || node->datalen < UINT16_C(1) ) {
+        return cgen_unexpected_node( comp );
+    }
+    switch ( node->data[0] ) {
+        case 0:
+            return cgen_gen_addr( cgen, UINT16_C(1) ) || cgen_out_of_code_memory( comp );
+        case 1:
+            if ( node->numbranches != 1U ) {
+                return cgen_unexpected_node( comp );
+            }
+            return cgen_from_strexpr( cgen, comp, node->branches[0] ) && ( cgen_gen_addr( cgen, UINT16_C(0) ) || cgen_out_of_code_memory( comp ) );
+        case 2: {
+            char name[64];
+            size_t len = (size_t) node->datalen - 1U;
+            if ( len == 0 || len >= sizeof(name) ) {
+                return cgen_unexpected_node( comp );
+            }
+            memcpy( name, &node->data[1], len );
+            name[len] = '\0';
+            return cp_push_string( cgen, comp, name ) && ( cgen_gen_addr( cgen, UINT16_C(0) ) || cgen_out_of_code_memory( comp ) );
+        }
+        default:
+            break;
+    }
+    return cgen_unexpected_node( comp );
+}
+
 bool cgen_from_runstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     /*
         NT_RUNSTMT      RUN statement

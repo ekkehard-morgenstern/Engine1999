@@ -396,6 +396,30 @@ The 4096 extended instructions are as follows:
                             Ends the run (pc = end of the code). The compiler puts one at the end of a program: END and the
                             end of the last line branch to it, so the code of a direct mode line, which is placed behind the
                             program, is not entered by running off the end of the program.
+    0001 01001100       OPEN - open a channel ( name$ mode$ n -- ) or, with parameter 1, ( mode$ n name$ -- ) C=0 P=1
+                            Opens file <name$> (with an optional "driver:" prefix, else the ADDRESS driver) as channel n
+                            (1..255): mode "I" = input, "O" = output (truncates), "A" = append (case does not matter).
+                            Errors: "File already open", "Bad file number", "Bad file mode", "Device not found", "File not
+                            found", "Permission denied", ... (docs/io-subsystem.md).
+    0001 01001101       CLOS - close channels ( n -- ) C=0 P=0
+                            Closes channel n (1..255; closing one that is not open is not an error), or all channels (not
+                            channel 0) for n = -1.
+    0001 01001110       INPW - the whole input line as a string ( -- s ) C=0 P=0
+                            LINE INPUT: after INPL, pushes the rest of the line that was read (commas are not separators).
+    0001 01001111       EOFN - end of file? ( n -- n ) C=0 P=0
+                            EOF(n): -1 at the end of the data of input channel n, else 0.
+    0001 01010000       LOFN - length of a channel ( n -- n ) C=0 P=0
+                            LOF(n): the length in bytes.
+    0001 01010001       LOCN - position in a channel ( n -- n ) C=0 P=0
+                            LOC(n): the number of bytes read or written so far.
+    0001 01010010       INPD - read characters ( count n -- s ) C=0 P=0
+                            INPUT$(count, #n): count characters from channel n (channel 0 = the keyboard, waits for keys);
+                            fewer than count at the end of a file is "Input past end".
+    0001 01010011       ADDR - set the default driver ( s -- ) C=0 P=1
+                            ADDRESS name: the default driver for names without a prefix. Parameter 1 = no operand: swap the
+                            current and the previous default (ADDRESS alone).
+    0001 01010100       ADRS - the default driver ( -- s ) C=0 P=0
+                            ADDRESS$.
 
 */
 
@@ -523,5 +547,15 @@ The 4096 extended instructions are as follows:
 #define INS_TMRO        UINT16_C(0X149)
 #define INS_RMN         UINT16_C(0X14A)
 #define INS_HLT         UINT16_C(0X14B)
+#define PRTARG_WRITE    UINT16_C(0X0010)    // parameter bit of PNUM / PSTR: WRITE format (quoted strings, "," for a separator)
+#define INS_OPEN        UINT16_C(0X14C)
+#define INS_CLOS        UINT16_C(0X14D)
+#define INS_INPW        UINT16_C(0X14E)
+#define INS_EOFN        UINT16_C(0X14F)
+#define INS_LOFN        UINT16_C(0X150)
+#define INS_LOCN        UINT16_C(0X151)
+#define INS_INPD        UINT16_C(0X152)
+#define INS_ADDR        UINT16_C(0X153)
+#define INS_ADRS        UINT16_C(0X154)
 
 #endif

@@ -521,7 +521,7 @@ bool cgen_from_inputstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
             return false;
         }
     }
-    if ( !( flags & INPUTF_NOQUEST ) ) {
+    if ( !( flags & ( INPUTF_NOQUEST | INPUTF_LINE ) ) ) {
         char* p = (char*) realloc( text, len + 3U );
         if ( p == 0 ) {
             free( text );
@@ -552,7 +552,7 @@ bool cgen_from_inputstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         if ( ref->type != NT_NUMVARREF && ref->type != NT_STRVARREF ) {
             return cgen_unexpected_node( comp );
         }
-        if ( !( ref->type == NT_STRVARREF ? cgen_gen_inps( cgen ) : cgen_gen_inpn( cgen ) ) ) {
+        if ( !( ( flags & INPUTF_LINE ) ? cgen_gen_inpw( cgen ) : ref->type == NT_STRVARREF ? cgen_gen_inps( cgen ) : cgen_gen_inpn( cgen ) ) ) {
             return cgen_out_of_code_memory( comp );
         }
         if ( !cgen_from_varref_lvalue( cgen, comp, ref ) ) {
