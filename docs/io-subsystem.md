@@ -81,8 +81,8 @@ ADDRESS [driver]     ADDRESS$                     chooses / returns the default 
   separates fields like a comma). Fields are numbers or strings as on the keyboard (a quoted string may contain commas); a field
   that is not a number is "Bad data in file". `INPUT #n` shows no prompt and never prints "?Extra ignored" (the rest of the line is
   dropped). Reading past the end is "Input past end".
-- `GET #n, a$` reads **one byte** (a numeric variable gets its code); `INPUT$(count, #n)` reads count bytes. A zero byte cannot be
-  held in a string (strings end at NUL), so text files are the target for now.
+- `GET #n, a$` reads **one byte** (a numeric variable gets its code); `INPUT$(count, #n)` reads count bytes. Strings may
+  contain zero bytes (binary strings, see `basic-language.md`), so `GET #`, `INPUT$`, `LINE INPUT #` and `PRINT #` work on binary files.
 - `LINE INPUT #n, a$` and `LINE INPUT "prompt"; a$` (keyboard) put the whole line into a string variable; there is no `? ` and no
   splitting at commas. The prompt must be a string literal, as for `INPUT`.
 - `WRITE`: strings are put in double quotes (an embedded quote is not escaped), numbers are written as `PRINT` writes them but
@@ -144,8 +144,9 @@ ADDRESS [driver]     ADDRESS$                     chooses / returns the default 
   file leaves a gap of zero bytes. `LOC(n)` of a random file is the number of the last record, `LOF(n)` the length in bytes,
   `SEEK` is in bytes. Records are independent of `PRINT #`, which is not meant for random files.
 - Assigning to a bound variable with plain `A$ = ...` changes only the variable (the link is not GW-BASIC's pointer into the
-  buffer): use `LSET`/`RSET` for what `PUTREC` should write. A string cannot hold a zero byte: a part is cut at the first zero byte when
-  it is read, so binary fields (`MKI$`/`CVI` and friends) are not provided; store numbers as text (`STR$`, `VAL`).
+  buffer): use `LSET`/`RSET` for what `PUTREC` should write. A part keeps its full width with
+  any bytes in it (strings are binary-safe); packing numbers into a part (`MKI$`/`CVI` and friends) is the next step, until then
+  store numbers as text (`STR$`, `VAL`).
 - **`play:`**: `OPEN "play:" FOR OUTPUT AS #1` (or `"play:3"` for voice 3; voices 1..8, default 1). Every line written to the channel (ended by a
   newline, or by `CLOSE`) is a `PLAY` music string and is queued on that voice at once, exactly like `PLAY a$` with one voice, so
   `PRINT #1,"T120 O4 C D E"` plays. A bad string is an error with the music parser's message ("Unknown music command 'Z'"). Voices
@@ -204,8 +205,8 @@ rule; an error in the handler ends the program with the line of the handler and 
 3. Test doubles are built in: `mem:` as a backing store, `null:` as a sink, `con:` to see output, plus `sh:echo ...` for input. Together with
    `iotest1`-style checks written in BASIC this lets a driver be tried in direct mode.
 4. Examples in `demos/`: `upcase` (a filter on `mem:`), `pipe` (a ring buffer between two channels), `rot13` (wrapping `file:`).
-5. Binary data: handlers get strings, which end at a zero byte. If drivers for binary protocols matter, `DBUF` should become a byte
-   array instead (`DIM DBUF(…)` with `DCOUNT`); decide before building the stream drivers.
+5. Binary data: strings are binary-safe now (zero bytes allowed), so `DBUF$` can carry any bytes; a byte array is no longer needed
+   for that.
 6. Sandboxing needs nothing special: a handler is a BASIC program, its `OPEN`/`SHELL` go through `iodev_allowed()` like any other.
 
 **Alternatives considered**: (a) a *server loop* in BASIC that waits for requests (`ACCEPT`/`REPLY`), which suits network daemons but needs

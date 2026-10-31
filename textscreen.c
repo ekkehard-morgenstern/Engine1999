@@ -307,11 +307,17 @@ void txtscr_locate( int x, int y ) {
 
 // text that doesn't fit in the rest of a viewport row continues in the next one; below the last row the viewport scrolls
 void txtscr_print( int y, int x, int bg, int fg, const char* text ) {
+      txtscr_print_n( y, x, bg, fg, text, strlen( text ) );
+}
+
+// the same for len bytes: zero bytes are characters (the glyph of code 0), only '\n' is a line feed
+void txtscr_print_n( int y, int x, int bg, int fg, const char* text, size_t textlen ) {
       const char* s = text;
+      const char* end = text + textlen;
       int cx = x >= 0 ? x : cur->cursx, cy = y >= 0 ? y : cur->cursy;
-      while ( *s != '\0' ) {
+      while ( s < end ) {
             const char* s0 = s;
-            while ( *s != '\n' && *s != '\0' ) {
+            while ( s < end && *s != '\n' ) {
                   ++s;
             }
             size_t len = s - s0;
@@ -330,7 +336,7 @@ void txtscr_print( int y, int x, int bg, int fg, const char* text ) {
                         }
                   }
             }
-            if ( *s == '\n' ) {
+            if ( s < end && *s == '\n' ) {
                   ++s;
                   cx = 0;
                   if ( ++cy >= cur->vh ) {

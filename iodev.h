@@ -155,7 +155,8 @@ uint8_t* iotab_recbuf( iotab_t* tab, int chan, size_t* plen );                  
 
 // input: for channels opened FOR INPUT; output: for OUTPUT / APPEND
 int iotab_getc( iotab_t* tab, int chan, const char** perr );                    // 0..255, -1 at the end, -2 on an error
-bool iotab_readline( iotab_t* tab, int chan, char** pline, const char** perr);  // malloc'd line without "\n" / "\r\n"; false at the end or on an error (*perr == 0 at the end)
+bool iotab_readline( iotab_t* tab, int chan, char** pline, const char** perr);
+bool iotab_readline_n( iotab_t* tab, int chan, char** pline, size_t* plen, const char** perr );   // also the length (the line may contain zero bytes)  // malloc'd line without "\n" / "\r\n"; false at the end or on an error (*perr == 0 at the end)
 bool iotab_write( iotab_t* tab, int chan, const char* data, size_t len, const char** perr );
 bool iotab_eof( iotab_t* tab, int chan, bool* peof, const char** perr );
 bool iotab_lof( iotab_t* tab, int chan, int64_t* plen, const char** perr );

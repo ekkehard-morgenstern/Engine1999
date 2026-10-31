@@ -58,6 +58,7 @@ void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem ) {
     vm->column   = 0;
     vm->userdata = 0;
     vm->print    = 0;
+    vm->printn   = 0;
     vm->report   = 0;
     vm->inkey    = 0;
     vm->sound    = 0;
@@ -178,27 +179,50 @@ static bool vm_error( vm_t* vm, const char* text ) {
     return false;
 }
 
-static void vm_out( vm_t* vm, const char* text ) {
+// writes len bytes (zero bytes included) to the current channel
+static void vm_out_bytes( vm_t* vm, const char* text, size_t len ) {
     if ( vm->channel > 0 ) {
         // a file or device opened with OPEN
         const char* err = 0;
-        if ( !iotab_write( &vm->io, vm->channel, text, strlen( text ), &err ) && vm->iofail == 0 ) {
+        if ( !iotab_write( &vm->io, vm->channel, text, len, &err ) && vm->iofail == 0 ) {
             vm->iofail = err ? err : "Device I/O error";
         }
         return;
     }
-    if ( vm->print ) {
-        vm->print( vm, vm->userdata, vm->channel, text );
+    if ( vm->printn ) {
+        vm->printn( vm, vm->userdata, vm->channel, text, len );
     } else {
-        fputs( text, stdout );
+        // a host without zero byte support: the pieces between the zero bytes
+        for ( size_t i=0; i < len; ) {
+            size_t n = strnlen( text + i, len - i );
+            if ( n > 0 ) {
+                char* piece = (char*) malloc( n + 1U );
+                if ( piece == 0 ) {
+                    return;
+                }
+                memcpy( piece, text + i, n );
+                piece[n] = '\0';
+                if ( vm->print ) {
+                    vm->print( vm, vm->userdata, vm->channel, piece );
+                } else {
+                    fputs( piece, stdout );
+                }
+                free( piece );
+            }
+            i += n + 1U;        // (the zero byte is left out)
+        }
     }
-    for ( const char* p = text; *p; ++p ) {
-        if ( *p == '\n' ) {
+    for ( size_t i=0; i < len; ++i ) {
+        if ( text[i] == '\n' ) {
             vm->column = 0;
         } else {
             ++vm->column;
         }
     }
+}
+
+static void vm_out( vm_t* vm, const char* text ) {
+    vm_out_bytes( vm, text, strlen( text ) );
 }
 
 // -- stacks ----------------------------------------------------------------
@@ -247,8 +271,9 @@ static bool vm_dpop_num( vm_t* vm, double* pnum ) {
 }
 
 // pops a string; the caller owns the result
-static bool vm_dpop_str( vm_t* vm, char** pstr ) {
-    vmval_t v; v.isstr = false; v.num = 0.0;
+static bool vm_dpop_bstr( vm_t* vm, char** pstr, size_t* plen ) {
+    vmval_t v; v.isstr = false; v.len = 0; v.num = 0.0;
+    *pstr = 0; *plen = 0;
     if ( !vm_dpop( vm, &v ) ) {
         return false;
     }
@@ -256,6 +281,21 @@ static bool vm_dpop_str( vm_t* vm, char** pstr ) {
         return vm_error( vm, "Type mismatch (string expected)" );
     }
     *pstr = v.str;
+    *plen = v.len;
+    return true;
+}
+
+// pops a string that is used as a C string (a name, a command, music): a zero byte in it is refused
+static bool vm_dpop_str( vm_t* vm, char** pstr ) {
+    size_t len = 0;
+    if ( !vm_dpop_bstr( vm, pstr, &len ) ) {
+        return false;
+    }
+    if ( strlen( *pstr ) != len ) {
+        free( *pstr );
+        *pstr = 0;
+        return vm_error( vm, "Illegal argument (zero byte in string)" );
+    }
     return true;
 }
 
@@ -313,14 +353,25 @@ static char* vm_new_string( vm_t* vm, const char* text, size_t len ) {
     return s;
 }
 
-static bool vm_push_string( vm_t* vm, char* s ) {
-    // takes ownership of s
-    vmval_t v; v.isstr = true; v.str = s;
+static bool vm_push_string_n( vm_t* vm, char* s, size_t len ) {
+    // takes ownership of s (len bytes, followed by a zero byte)
+    vmval_t v; v.isstr = true; v.len = (uint32_t) len; v.str = s;
     if ( !vm_dpush( vm, v ) ) {
         free( s );
         return false;
     }
     return true;
+}
+
+// ... of a C string
+static bool vm_push_string( vm_t* vm, char* s ) {
+    return vm_push_string_n( vm, s, strlen( s ) );
+}
+
+// pushes a copy of len bytes (zero bytes included): the way to make a binary string (the number packing functions use it)
+static bool vm_push_bytes( vm_t* vm, const char* text, size_t len ) {
+    char* s = vm_new_string( vm, text, len );
+    return s && vm_push_string_n( vm, s, len );
 }
 
 static double vm_extract_float( const uint8_t* mem ) {
@@ -407,6 +458,7 @@ static bool vm_get_value( vm_t* vm, uint16_t varoffs, uint8_t vartype, uint8_t n
                 return vm_error( vm, "String too long" );
             }
             pval->isstr = true;
+            pval->len = value.strptr ? (uint32_t) value.strlen : 0U;
             pval->str = vm_new_string( vm, value.strptr ? value.strptr : "", value.strptr ? value.strlen : 0U );
             return pval->str != 0;
         default:
@@ -437,7 +489,7 @@ static bool vm_set_value( vm_t* vm, uint16_t varoffs, uint8_t vartype, uint8_t n
             value.intval = (int16_t) val.num;
             break;
         case VARTYPEV_STR: {
-            size_t len = strlen( val.str );
+            size_t len = val.len;
             if ( len > UINT16_MAX ) {
                 free( val.str );
                 return vm_error( vm, "String too long" );
@@ -478,7 +530,7 @@ static bool vm_read_var( vm_t* vm, uint16_t varoffs, uint8_t vartype ) {
     if ( !vm_get_value( vm, varoffs, vartype, 0, 0, &val ) ) {
         return false;
     }
-    return val.isstr ? vm_push_string( vm, val.str ) : vm_dpush_num( vm, val.num );
+    return val.isstr ? vm_push_string_n( vm, val.str, val.len ) : vm_dpush_num( vm, val.num );
 }
 
 static bool vm_write_var( vm_t* vm, uint16_t varoffs, uint8_t vartype ) {
@@ -515,7 +567,7 @@ static bool vm_read_elem( vm_t* vm, uint16_t varoffs, uint8_t basetype ) {
          !vm_get_value( vm, varoffs, VARTYPEF_ARRAY | basetype, numdims, diminx, &val ) ) {
         return false;
     }
-    return val.isstr ? vm_push_string( vm, val.str ) : vm_dpush_num( vm, val.num );
+    return val.isstr ? vm_push_string_n( vm, val.str, val.len ) : vm_dpush_num( vm, val.num );
 }
 
 static bool vm_write_elem( vm_t* vm, uint16_t varoffs, uint8_t basetype ) {
@@ -530,11 +582,11 @@ static bool vm_write_elem( vm_t* vm, uint16_t varoffs, uint8_t basetype ) {
 // SLFT, SRGT, SMID: ( s n inx ... ndim -- ) or ( s start len inx ... ndim -- ), see instset.h
 static bool vm_set_substring( vm_t* vm, uint16_t opcode, uint16_t varoffs ) {
     uint8_t numdims = 0; uint16_t diminx[MAXDIM];
-    double a = 0.0, b = 0.0; char* s = 0; vmval_t target;
+    double a = 0.0, b = 0.0; char* s = 0; size_t slen = 0; vmval_t target;
     if ( !vm_pop_subscripts( vm, &numdims, diminx ) ) {
         return false;
     }
-    if ( ( opcode == INS_SMID && !vm_dpop_num( vm, &b ) ) || !vm_dpop_num( vm, &a ) || !vm_dpop_str( vm, &s ) ) {
+    if ( ( opcode == INS_SMID && !vm_dpop_num( vm, &b ) ) || !vm_dpop_num( vm, &a ) || !vm_dpop_bstr( vm, &s, &slen ) ) {
         return false;
     }
     uint8_t vartype = VARTYPEV_STR | ( numdims ? VARTYPEF_ARRAY : UINT8_C(0) );
@@ -542,7 +594,7 @@ static bool vm_set_substring( vm_t* vm, uint16_t opcode, uint16_t varoffs ) {
         free( s );
         return false;
     }
-    size_t tlen = strlen( target.str ), slen = strlen( s ), pos = 0, count = 0;
+    size_t tlen = target.len, pos = 0, count = 0;
     bool ok = true;
     if ( opcode == INS_SMID ) {
         if ( !( a >= 1.0 ) || a > (double) tlen ) {
@@ -620,19 +672,21 @@ static bool vm_interrupted( vm_t* vm ) {
 }
 
 // the line from the host (malloc'd, no newline), 0 = end of input
-static char* vm_get_line( vm_t* vm ) {
+static char* vm_get_line( vm_t* vm, size_t* plen ) {
     vm->inerr = 0;
     if ( vm->channel > 0 ) {
         const char* err = 0;
         char* line = 0;
-        if ( !iotab_readline( &vm->io, vm->channel, &line, &err ) ) {
+        if ( !iotab_readline_n( &vm->io, vm->channel, &line, plen, &err ) ) {
             vm->inerr = err ? err : "Input past end";
             return 0;
         }
         return line;
     }
     if ( vm->input ) {
-        return vm->input( vm, vm->userdata, vm->channel );
+        char* line = vm->input( vm, vm->userdata, vm->channel );
+        *plen = line ? strlen( line ) : 0U;
+        return line;
     }
     char* line = 0; size_t cap = 0;
     ssize_t n = getline( &line, &cap, stdin );
@@ -643,6 +697,7 @@ static char* vm_get_line( vm_t* vm ) {
     while ( n > 0 && ( line[ n - 1 ] == '\n' || line[ n - 1 ] == '\r' ) ) {
         line[ --n ] = '\0';
     }
+    *plen = (size_t) n;
     return line;
 }
 
@@ -656,11 +711,11 @@ static bool vm_input_line( vm_t* vm, uint32_t promptoffs, uint32_t inspc ) {
         vm_out( vm, (const char*) &cgen->data[ promptoffs ] );       // a file gets no prompt
     }
     free( vm->inbuf );
-    vm->inbuf = vm_get_line( vm );
+    vm->inlen = 0;
+    vm->inbuf = vm_get_line( vm, &vm->inlen );
     if ( vm->inbuf == 0 ) {
         return vm_error( vm, vm->inerr ? vm->inerr : vm_interrupted( vm ) ? "Break" : "End of input" );
     }
-    vm->inlen  = strlen( vm->inbuf );
     vm->inpos  = 0;
     vm->inredo = inspc;
     vm->column = 0;
@@ -701,40 +756,44 @@ static bool vm_input_field( vm_t* vm, bool wantstr ) {
     }
     if ( vm->channel > 0 && vm->inpos > vm->inlen ) {
         // a file: the next line goes on with the fields (a line end separates fields like a comma)
-        char* line = vm_get_line( vm );
+        size_t linelen = 0;
+        char* line = vm_get_line( vm, &linelen );
         if ( line == 0 ) {
             return vm_error( vm, vm->inerr ? vm->inerr : "Input past end" );
         }
         free( vm->inbuf );
         vm->inbuf = line;
-        vm->inlen = strlen( line );
+        vm->inlen = linelen;
         vm->inpos = 0;
     }
     bool redo = vm->inpos > vm->inlen;      // no more fields
     char* field = 0;
+    size_t flen = 0;
     if ( !redo ) {
-        const char* p = vm->inbuf + vm->inpos;
+        const char* base = vm->inbuf;
+        const char* lend = base + vm->inlen;
+        const char* p = base + vm->inpos;
         const char* end;
-        while ( *p == ' ' || *p == '\t' ) {
+        while ( p < lend && ( *p == ' ' || *p == '\t' ) ) {
             ++p;
         }
         const char* text = p;
         size_t tlen;
-        if ( *p == '"' ) {
+        if ( p < lend && *p == '"' ) {
             text = ++p;
-            while ( *p && *p != '"' ) {
+            while ( p < lend && *p != '"' ) {
                 ++p;
             }
             tlen = (size_t)( p - text );
-            if ( *p == '"' ) {
+            if ( p < lend && *p == '"' ) {
                 ++p;
             }
-            while ( *p && *p != ',' ) {     // ignore what follows the closing quote
+            while ( p < lend && *p != ',' ) {     // ignore what follows the closing quote
                 ++p;
             }
             end = p;
         } else {
-            while ( *p && *p != ',' ) {
+            while ( p < lend && *p != ',' ) {
                 ++p;
             }
             end = p;
@@ -748,7 +807,8 @@ static bool vm_input_field( vm_t* vm, bool wantstr ) {
         if ( field == 0 ) {
             return false;
         }
-        vm->inpos = *end == ',' ? (size_t)( end - vm->inbuf ) + 1U : vm->inlen + 1U;
+        flen = tlen;
+        vm->inpos = end < lend && *end == ',' ? (size_t)( end - vm->inbuf ) + 1U : vm->inlen + 1U;
     }
     if ( !redo && !wantstr ) {
         char* q = field;
@@ -759,11 +819,11 @@ static bool vm_input_field( vm_t* vm, bool wantstr ) {
         while ( n > 0 && ( q[ n - 1 ] == ' ' || q[ n - 1 ] == '\t' ) ) {
             q[ --n ] = '\0';
         }
-        if ( n == 0 ) {
+        if ( n == 0 && strlen( field ) == flen ) {
             free( field );
             return vm_dpush_num( vm, 0.0 );
         }
-        redo = !vm_is_number( q );
+        redo = strlen( field ) != flen || !vm_is_number( q );     // (a zero byte in a number is bad data)
         if ( !redo ) {
             double val = strtod( q, 0 );
             free( field );
@@ -780,7 +840,7 @@ static bool vm_input_field( vm_t* vm, bool wantstr ) {
         vm->pc = vm->inredo;
         return true;
     }
-    return vm_push_string( vm, field );
+    return vm_push_string_n( vm, field, flen );
 }
 
 // INPE: reports leftover fields, releases the line
@@ -798,9 +858,8 @@ static bool vm_input_whole( vm_t* vm ) {
     if ( vm->inbuf == 0 ) {
         return vm_error( vm, "INPUT field without INPUT" );
     }
-    char* s = vm_new_string( vm, vm->inbuf, vm->inlen );
     vm->inpos = vm->inlen + 1U;
-    return s && vm_push_string( vm, s );
+    return vm_push_bytes( vm, vm->inbuf, vm->inlen );
 }
 
 // GETK: ( -- s ): waits for a key
@@ -822,17 +881,10 @@ static int vm_console_key( vm_t* vm ) {
 
 static bool vm_con_write( void* usrdata, const char* text, size_t len ) {
     vm_t* vm = (vm_t*) usrdata;
-    char* copy = (char*) malloc( len + 1U );
-    if ( copy == 0 ) {
-        return false;
-    }
-    memcpy( copy, text, len );
-    copy[len] = '\0';
     int saved = vm->channel;
     vm->channel = 0;
-    vm_out( vm, copy );
+    vm_out_bytes( vm, text, len );
     vm->channel = saved;
-    free( copy );
     return true;
 }
 
@@ -850,9 +902,8 @@ static bool vm_get_key( vm_t* vm ) {
         if ( key < 0 ) {
             return vm_error( vm, key == -1 ? "Input past end" : err ? err : "Device I/O error" );
         }
-        char buf[2] = { (char) key, '\0' };
-        char* s = vm_new_string( vm, buf, 1U );
-        return s && vm_push_string( vm, s );
+        char c = (char) key;        // (a zero byte from a file is a one character string)
+        return vm_push_bytes( vm, &c, 1U );
     }
     key = vm_console_key( vm );
     if ( key <= 0 || key > 255 ) {
@@ -983,18 +1034,18 @@ static bool vm_return_function( vm_t* vm ) {
 
 // ASC, LEN, VAL: ( s -- n )
 static bool vm_str_to_num( vm_t* vm, uint16_t opcode ) {
-    char* s;
-    if ( !vm_dpop_str( vm, &s ) ) {
+    char* s; size_t slen = 0;
+    if ( !vm_dpop_bstr( vm, &s, &slen ) ) {
         return false;
     }
     double r = 0.0;
     bool ok = true;
     switch ( opcode ) {
         case INS_LEN:
-            r = (double) strlen( s );
+            r = (double) slen;
             break;
         case INS_ASC:
-            if ( s[0] == '\0' ) {
+            if ( slen == 0 ) {
                 ok = vm_error( vm, "Illegal argument" );
             } else {
                 r = (double)(uint8_t) s[0];
@@ -1086,10 +1137,11 @@ static bool vm_substring( vm_t* vm, uint16_t opcode ) {
     if ( opcode == INS_MIDS && !vm_dpop_num( vm, &m ) ) {
         return false;
     }
-    if ( !vm_dpop_num( vm, &n ) || !vm_dpop_str( vm, &s ) ) {
+    size_t len = 0;
+    if ( !vm_dpop_num( vm, &n ) || !vm_dpop_bstr( vm, &s, &len ) ) {
         return false;
     }
-    size_t len = strlen( s ), from = 0, count = 0;
+    size_t from = 0, count = 0;
     bool ok = true;
     if ( n < 0.0 || ( opcode == INS_MIDS && n < 1.0 ) ) {
         ok = vm_error( vm, "Illegal argument" );
@@ -1102,9 +1154,9 @@ static bool vm_substring( vm_t* vm, uint16_t opcode ) {
         from = n - 1.0 < (double) len ? (size_t)( n - 1.0 ) : len;
         count = m >= 0.0 && m < (double)( len - from ) ? (size_t) m : len - from;     // negative: rest of the string
     }
-    char* r = ok ? vm_new_string( vm, s + from, count ) : 0;
+    bool pushed = ok && vm_push_bytes( vm, s + from, count );
     free( s );
-    return r && vm_push_string( vm, r );
+    return pushed;
 }
 
 // SHEX: ( s -- s ) runs the shell command and returns what it wrote to its standard output, without the
@@ -1667,14 +1719,14 @@ static bool vm_set_string_var( vm_t* vm, uint16_t var, const char* text, size_t 
     if ( s == 0 ) {
         return false;
     }
-    vmval_t val; val.isstr = true; val.str = s;
+    vmval_t val; val.isstr = true; val.len = (uint32_t) len; val.str = s;
     return vm_set_value( vm, var, VARTYPEV_STR, 0, 0, val );
 }
 
 // LRS ( s right -- ): LSET / RSET
 static bool vm_lset( vm_t* vm, uint16_t var ) {
-    double right; char* s = 0;
-    if ( !vm_dpop_num( vm, &right ) || !vm_dpop_str( vm, &s ) ) {
+    double right; char* s = 0; size_t slen = 0;
+    if ( !vm_dpop_num( vm, &right ) || !vm_dpop_bstr( vm, &s, &slen ) ) {
         return false;
     }
     vm_field_t* f = 0;
@@ -1692,7 +1744,7 @@ static bool vm_lset( vm_t* vm, uint16_t var ) {
             free( s );
             return false;
         }
-        width = strlen( cur.str );
+        width = cur.len;
         free( cur.str );
     }
     char* out = (char*) malloc( width + 1U );
@@ -1700,7 +1752,7 @@ static bool vm_lset( vm_t* vm, uint16_t var ) {
         free( s );
         return vm_error( vm, "Out of memory" );
     }
-    size_t slen = strlen( s ), n = slen < width ? slen : width;
+    size_t n = slen < width ? slen : width;
     memset( out, ' ', width );
     memcpy( out + ( right != 0.0 ? width - n : 0U ), s, n );
     out[width] = '\0';
@@ -1737,11 +1789,7 @@ static bool vm_record( vm_t* vm, bool put ) {
     for ( size_t i=0; i < vm->numfields; ++i ) {
         if ( vm->fields[i].chan == (int) chan ) {
             const char* p = (const char*) buf + vm->fields[i].off;
-            size_t n = 0;
-            while ( n < vm->fields[i].len && p[n] != '\0' ) {
-                ++n;
-            }
-            if ( !vm_set_string_var( vm, vm->fields[i].var, p, n ) ) {
+            if ( !vm_set_string_var( vm, vm->fields[i].var, p, vm->fields[i].len ) ) {
                 return false;
             }
         }
@@ -2247,7 +2295,7 @@ static bool vm_system_function( vm_t* vm, uint16_t opcode ) {
                 text[i] = (char) key;
             }
             text[n] = '\0';
-            return vm_push_string( vm, text );
+            return vm_push_string_n( vm, text, n );
         }
         case INS_ERL:
             return vm_dpush_num( vm, (double) vm->errlastline );
@@ -2288,12 +2336,11 @@ static bool vm_system_function( vm_t* vm, uint16_t opcode ) {
                 return false;
             }
             int32_t code = vm_to_int32( num );
-            if ( code < 1 || code > 255 ) {
+            if ( code < 0 || code > 255 ) {
                 return vm_error( vm, "Illegal argument" );
             }
             char c = (char) code;
-            char* s = vm_new_string( vm, &c, 1U );
-            return s && vm_push_string( vm, s );
+            return vm_push_bytes( vm, &c, 1U );
         }
         case INS_ASC: case INS_LEN: case INS_VAL:
             return vm_str_to_num( vm, opcode );
@@ -2349,17 +2396,16 @@ static bool vm_binary_num( vm_t* vm, uint16_t opcode ) {
 }
 
 static bool vm_binary_str( vm_t* vm, uint16_t opcode ) {
-    char* a; char* b;
-    if ( !vm_dpop_str( vm, &b ) ) {
+    char* a; char* b; size_t la = 0, lb = 0;
+    if ( !vm_dpop_bstr( vm, &b, &lb ) ) {
         return false;
     }
-    if ( !vm_dpop_str( vm, &a ) ) {
+    if ( !vm_dpop_bstr( vm, &a, &la ) ) {
         free( b );
         return false;
     }
     bool ok = true;
     if ( opcode == INS_CON ) {
-        size_t la = strlen( a ), lb = strlen( b );
         char* s = 0;
         if ( la + lb > UINT16_MAX ) {
             ok = vm_error( vm, "String too long" );
@@ -2367,13 +2413,18 @@ static bool vm_binary_str( vm_t* vm, uint16_t opcode ) {
             ok = vm_error( vm, "Out of memory" );
         } else {
             memcpy( s, a, la );
-            memcpy( s + la, b, lb + 1U );
+            memcpy( s + la, b, lb );
+            s[ la + lb ] = '\0';
         }
         free( a );
         free( b );
-        return ok && vm_push_string( vm, s );
+        return ok && vm_push_string_n( vm, s, la + lb );
     }
-    int cmp = strcmp( a, b );
+    size_t common = la < lb ? la : lb;
+    int cmp = memcmp( a, b, common );        // bytes as unsigned values; the shorter string is the smaller if it is a prefix
+    if ( cmp == 0 ) {
+        cmp = la < lb ? -1 : la > lb ? 1 : 0;
+    }
     free( a );
     free( b );
     double r = 0.0;
@@ -2510,12 +2561,14 @@ static bool vm_step( vm_t* vm ) {
             char* s = vm_new_string( vm, (const char*) mem, (size_t)( end - mem ) );
             return s && vm_push_string( vm, s );
         }
-        case INS_FRES:
-            if ( !vm_dpop_str( vm, &str ) ) {
+        case INS_FRES: {
+            size_t slen = 0;
+            if ( !vm_dpop_bstr( vm, &str, &slen ) ) {
                 return false;
             }
             free( str );
             return true;
+        }
         case INS_NEG:
             return vm_dpop_num( vm, &num ) && vm_dpush_num( vm, -num );
         case INS_NOT:
@@ -2605,19 +2658,21 @@ static bool vm_step( vm_t* vm ) {
             vm_out( vm, buf );
             return vm_print_sep( vm, hasp, param16 );
         }
-        case INS_PSTR:
-            if ( !vm_dpop_str( vm, &str ) ) {
+        case INS_PSTR: {
+            size_t slen = 0;
+            if ( !vm_dpop_bstr( vm, &str, &slen ) ) {
                 return false;
             }
             if ( hasp && ( param16 & PRTARG_WRITE ) != 0 ) {
                 vm_out( vm, "\"" );
-                vm_out( vm, str );
+                vm_out_bytes( vm, str, slen );
                 vm_out( vm, "\"" );
             } else {
-                vm_out( vm, str );
+                vm_out_bytes( vm, str, slen );
             }
             free( str );
             return vm_print_sep( vm, hasp, param16 );
+        }
         default:
             break;
     }

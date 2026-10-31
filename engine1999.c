@@ -699,6 +699,13 @@ static void host_print( struct _vm_t* vm, void* usrdata, int channel, const char
     }
 }
 
+// the same for text with zero bytes (the glyphs of the control codes)
+static void host_printn( struct _vm_t* vm, void* usrdata, int channel, const char* text, size_t len ) {
+    if ( channel == 0 ) {
+        sdlscr_ansi_write( text, len );
+    }
+}
+
 // starts a new line unless the cursor is at the beginning of one
 static void host_newline( void ) {
     int x = 0, y = 0;
@@ -869,6 +876,7 @@ static void init_host( void ) {
     }
     repl.report    = host_report;
     repl.print     = host_print;
+    repl.printn    = host_printn;
     repl.inkey     = host_inkey;
     repl.input     = host_input;
     repl.getkey    = host_getkey;

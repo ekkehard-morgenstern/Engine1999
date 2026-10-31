@@ -262,7 +262,29 @@ static const testcase_t cases[] = {
     { "CHR$ and ASC",           "PRINT ASC(CHR$(200))",                           "200\n" },
     { "CHR$ length",            "PRINT LEN(CHR$(255))",                           "1\n" },
     { "CHR$ in assignment",     "A$=CHR$(72)+\"I\":PRINT A$",                    "HI\n" },
-    { "CHR$ zero",              "PRINT CHR$(0)",                                  "? Illegal argument\n" },
+    { "CHR$ zero",              "PRINT CHR$(0)",                                  "<0>\n" },
+    // binary strings: zero bytes are characters
+    { "LEN of a zero byte",     "PRINT LEN(CHR$(0))",                             "1\n" },
+    { "ASC of a zero byte",     "PRINT ASC(CHR$(0))",                             "0\n" },
+    { "zero bytes in a string", "A$=\"a\"+CHR$(0)+\"b\":PRINT LEN(A$);ASC(MID$(A$,2,1));ASC(RIGHT$(A$,1))", "3098\n" },
+    { "zero bytes are printed", "PRINT \"a\";CHR$(0);\"b\"",                        "a<0>b\n" },
+    { "a zero byte sorts first", "PRINT (\"a\"+CHR$(0)>\"a\");(\"a\"<\"a\"+CHR$(0));(\"a\"+CHR$(0)=\"a\")", "-1-10\n" },
+    { "compare behind a zero byte", "PRINT (\"a\"+CHR$(0)+\"b\"<\"a\"+CHR$(0)+\"c\");(\"a\"+CHR$(0)+\"b\"=\"a\"+CHR$(0)+\"b\")", "-1-1\n" },
+    { "bytes above 127 compare as unsigned", "PRINT (CHR$(200)>CHR$(100))", "-1\n" },
+    { "substrings across a zero byte", "A$=\"x\"+CHR$(0)+\"y\"+CHR$(0)+\"z\":PRINT LEN(LEFT$(A$,4));LEN(MID$(A$,3));ASC(MID$(A$,4,1))", "430\n" },
+    { "substring assignment with a zero byte", "A$=\"abcde\":MID$(A$,2,2)=CHR$(0)+CHR$(1):PRINT LEN(A$);ASC(MID$(A$,2,1));ASC(MID$(A$,3,1))", "501\n" },
+    { "LEFT$ assignment from a binary string", "A$=\"abcde\":LEFT$(A$,3)=\"x\"+CHR$(0)+\"y\":PRINT LEN(A$);ASC(MID$(A$,2,1));MID$(A$,3,1)", "50y\n" },
+    { "zero bytes in an array element", "DIM A$(2):A$(1)=\"p\"+CHR$(0)+\"q\":PRINT LEN(A$(1));ASC(MID$(A$(1),2,1))", "30\n" },
+    { "zero bytes through a function", "DEF FN L(S$)=LEN(S$)\nPRINT FN L(\"a\"+CHR$(0)+\"b\"+CHR$(0))", "4\n" },
+    { "STR$ and VAL still work", "PRINT VAL(\"12\"+CHR$(0)+\"34\");LEN(STR$(5)+CHR$(0))", "122\n" },
+    { "a zero byte in a name is refused", "OPEN \"mem:a\"+CHR$(0)+\"b\" FOR OUTPUT AS #1", "? Illegal argument (zero byte in string)\n" },
+    { "a zero byte in a PLAY string is refused", "PLAY \"C\"+CHR$(0)", "? Illegal argument (zero byte in string)\n" },
+    { "a binary file round trip: LINE INPUT", "10 OPEN \"mem:b\" FOR OUTPUT AS #1:PRINT #1,\"x\";CHR$(0);\"y\":CLOSE\n20 OPEN \"mem:b\" FOR INPUT AS #1:LINE INPUT #1,A$:PRINT LEN(A$);ASC(MID$(A$,2,1))\n30 PRINT LOF(1)", "30\n4\n" },
+    { "a binary file round trip: INPUT$ and GET", "10 OPEN \"mem:b\" FOR OUTPUT AS #1:PRINT #1,CHR$(0);CHR$(1);CHR$(0);:CLOSE\n20 OPEN \"mem:b\" FOR INPUT AS #1:A$=INPUT$(2,#1):GET #1,B$:PRINT LEN(A$);ASC(A$);ASC(MID$(A$,2,1));LEN(B$);ASC(B$)", "20110\n" },
+    { "INPUT # reads a binary field", "10 OPEN \"mem:b\" FOR OUTPUT AS #1:PRINT #1,CHR$(34);\"a\";CHR$(0);\"b\";CHR$(34);\",7\":CLOSE\n20 OPEN \"mem:b\" FOR INPUT AS #1:INPUT #1,A$,N:PRINT LEN(A$);N", "37\n" },
+    { "a zero byte in a number field is bad data", "10 OPEN \"mem:b\" FOR OUTPUT AS #1:PRINT #1,\"1\";CHR$(0);\"2\":CLOSE\n20 OPEN \"mem:b\" FOR INPUT AS #1:INPUT #1,N", "? Bad data in file in line 20\n" },
+    { "WRITE with a binary string", "10 OPEN \"mem:b\" FOR OUTPUT AS #1:WRITE #1,\"a\"+CHR$(0):CLOSE\n20 OPEN \"mem:b\" FOR INPUT AS #1:PRINT LOF(1)", "5\n" },
+    { "random record with zero bytes", "10 OPEN \"mem:r\" FOR RANDOM AS #1 LEN=5\n20 FIELD #1,5 AS A$\n30 LSET A$=\"a\"+CHR$(0)+\"b\":PUTREC #1,1\n40 LSET A$=\"zzzzz\":GETREC #1,1\n50 PRINT LEN(A$);ASC(MID$(A$,2,1));ASC(MID$(A$,3,1));ASC(MID$(A$,4,1))", "509832\n" },
     { "CHR$ too large",         "PRINT CHR$(256)",                                "? Illegal argument\n" },
     { "CHR$ negative",          "PRINT CHR$(0-1)",                                "? Illegal argument\n" },
     { "CHR$ needs a sigil",     "PRINT CHR(65)",                                  "? String sigil '$' expected\n" },
@@ -765,6 +787,20 @@ static void vm_print( struct _vm_t* vm, void* usrdata, int channel, const char* 
     out_append( text );
 }
 
+// text with zero bytes: they are shown as <0>
+static void vm_printn( struct _vm_t* vm, void* usrdata, int channel, const char* text, size_t len ) {
+    (void) vm; (void) usrdata; (void) channel;
+    for ( size_t i=0; i < len; ++i ) {
+        char one[8];
+        if ( text[i] == '\0' ) {
+            snprintf( one, sizeof(one), "<0>" );
+        } else {
+            one[0] = text[i]; one[1] = '\0';
+        }
+        out_append( one );
+    }
+}
+
 static void vm_report( struct _vm_t* vm, void* usrdata, const char* text ) {
     out_append( text );
 }
@@ -1014,6 +1050,7 @@ static bool compile_and_run( void ) {
     vm_t vm;
     init_vm( &vm, &rt.codegen, &rt.varmem );
     vm.print    = vm_print;
+    vm.printn   = vm_printn;
     vm.report   = vm_report;
     vm.inkey    = vm_inkey;
     vm.input    = vm_input;

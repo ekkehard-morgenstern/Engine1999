@@ -421,11 +421,16 @@ void sdlscr_puts( const char* text ) {
 static ansi_t sdlscr_ansi[TXTSCR_NSCREENS];
 static bool   sdlscr_ansiok[TXTSCR_NSCREENS];
 
-static void sdlscr_ansi_emit( void* usrdata, int bg, int fg, const char* text ) {
-    sdlscr_printf( -1, -1, bg, fg, "%s", text );
+static void sdlscr_ansi_emit( void* usrdata, int bg, int fg, const char* text, size_t len ) {
+    txtscr_print_n( -1, -1, bg, fg, text, len );
+    sdllay_set_modified( &layers[LAY_TXT] );
 }
 
 void sdlscr_ansi_puts( const char* text ) {
+    sdlscr_ansi_write( text, strlen( text ) );
+}
+
+void sdlscr_ansi_write( const char* text, size_t len ) {
     int n = txtscr_selected();
     if ( !sdlscr_ansiok[n] ) {
         int bg = TXTSCR_BGCOL, fg = TXTSCR_FGCOL;
@@ -433,7 +438,7 @@ void sdlscr_ansi_puts( const char* text ) {
         ansi_init( &sdlscr_ansi[n], fg, bg );
         sdlscr_ansiok[n] = true;
     }
-    ansi_feed( &sdlscr_ansi[n], text, sdlscr_ansi_emit, 0 );
+    ansi_feed_n( &sdlscr_ansi[n], text, len, sdlscr_ansi_emit, 0 );
 }
 
 void sdlscr_ansi_printf( const char* fmt, ... ) {

@@ -88,6 +88,7 @@ void txtscr_backspace( void );
 void txtscr_rubout( void );
 void txtscr_scrollup( void );
 void txtscr_print( int y, int x, int bg, int fg, const char* text );
+void txtscr_print_n( int y, int x, int bg, int fg, const char* text, size_t len );     // zero bytes are characters
 void txtscr_printf( int y, int x, int bg, int fg, const char* fmt, ... );
 
 #endif

@@ -13,11 +13,12 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-- **`ON ERROR GOTO|GOSUB`, `ON ERROR OFF`, `ERR$`, `ERL`** (owner's request; the owner corrected "ERL$" to the numeric `ERL`; drivers written in BASIC were put on the roadmap as postponed)
-  - **Language**: tokens `ERR` 180 / `ERL` 181 (`bastok.[ch]`, highlighted as functions), `ON ERROR` parsed in `comp_eat_onstmt()` (`ERROR` is an identifier recognized after `ON`), `NT_ERRTRAPSTMT 0x70` (`ERRT_*`), `cgen_from_errtrapstmt()` (`cgenctl.c`, the target address goes on the return stack like `AFTER`), instructions `ERRT 0x159`, `ERL 0x15A`, `ERRS 0x15B`, `bascomp.ebnf`.
-  - **VM** (`vm.[ch]`): `vm_error()` split into `vm_report_error()` (keeps the error for the handler instead of printing it when a handler is set; Break and the step limit excluded) and a one-line `vm_error()` that returns `false` (needed: gcc otherwise reports dozens of "maybe uninitialized" errors); `vm_resume()` checks `errcaught` after each step; `vm_trap_error()` empties the data stack, unwinds function contexts (`vm_context_t.rsp`), sets ERR$/ERL and enters the handler; GOSUB handlers return to the next line (`vm_next_line_addr()`) and re-arm the trap after `RETURN`; `vm_dpop*` initialize their outputs.
-  - **Tests**: `vmtest1` 656 -> 670 (+13), `repltest1` 277 -> 278; all other suites pass; `vmtest1`/`repltest1` clean under valgrind.
-  - **Docs**: `docs/basic-language.md` ("Error handling"), `docs/compiler-and-vm.md`, `docs/roadmap.md` (new section 9: `RESUME` etc.; drivers in BASIC marked postponed), `instset.h`, `SESSION.md`.
+- **Binary strings and control code glyphs** (owner: "go ahead ... before that, add the control code glyphs to the font (0..31 first) ... prepare for the number packing functions")
+  - **Font**: 32 new glyphs for the codes 0..31 in `8x12font1.txt` (section `#00`; two-letter mnemonics in a 3x5 pixel font between an overline and an underline), `8x12font1.c` regenerated with `fontcomp.pl`.
+  - **Screen path** (length based, zero bytes are characters): `ansi_emit_t` got a `len` parameter and `ansi_feed_n()` (`ansi.[ch]`, also fixed the re-read of an aborting byte), `txtscr_print_n()` (`textscreen.[ch]`), `sdlscr_ansi_write()` (`sdlscreen.[ch]`), `ed_put()` in `fulledit.c`, `host_printn()` in `engine1999.c`; `vm_t.printn` / `repl_t.printn` (optional; without it `vm_out_bytes()` hands the pieces between the zero bytes to `print`).
+  - **VM** (`vm.[ch]`): `vmval_t.len`; `vm_dpop_bstr()`, `vm_dpop_str()` refuses embedded zero bytes ("Illegal argument (zero byte in string)"), `vm_push_string_n()`, `vm_push_bytes()` (for the number packing step), `vm_out_bytes()`; length based: concatenation, comparison (`memcmp`, unsigned, prefix is smaller), `LEN`, `ASC`, `LEFT$`/`MID$`/`RIGHT$`, substring assignment, `LSET`/`RSET`, `FIELD`/`GETREC`, `INPUT`/`INPUT #` (rewritten with bounds)/`LINE INPUT`/`GET`/`INPUT$`, `PRINT`/`WRITE`, the `con:` driver; `CHR$(0)` allowed; `iotab_readline_n()` (`iodev.[ch]`).
+  - **Tests**: `vmtest1` 670 -> 691 (zero byte cases in strings, comparisons, substrings, arrays, functions, files, `INPUT #`, records; the `CHR$ zero` case changed from an error to `<0>`; the test host got a `printn` that shows `<0>`), `txttest1` 43 -> 46, `ansitest1` +1; all pass, `vmtest1`/`repltest1`/`iotest1` clean under valgrind.
+  - **Docs**: `docs/basic-language.md` ("Binary strings"), `docs/display-engine.md` ("Control code glyphs"), `docs/compiler-and-vm.md`, `docs/io-subsystem.md`, `docs/roadmap.md` (number packing is the next item), `instset.h`, `vm.h`, `SESSION.md`.
 
 ## Log
 
@@ -497,3 +498,11 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
   - **Docs**: `docs/io-subsystem.md`, `docs/basic-language.md`, `docs/compiler-and-vm.md`, `docs/roadmap.md`, `instset.h`, `bascomp.ebnf`, `CLAUDE.md`, `SESSION.md`.
 
 (The later commit `5bee279`, "added a simple file test in BASIC", is the owner's own: `residue/filetest1.e99`.)
+
+### d65c408 — 2026-10-31 03:04:25 +0100 — "ON ERROR statements implemented by Claude Code"
+19 files, +316/-30.
+- **`ON ERROR GOTO|GOSUB`, `ON ERROR OFF`, `ERR$`, `ERL`** (owner's request; the owner corrected "ERL$" to the numeric `ERL`; drivers written in BASIC were put on the roadmap as postponed)
+  - **Language**: tokens `ERR` 180 / `ERL` 181 (`bastok.[ch]`, highlighted as functions), `ON ERROR` parsed in `comp_eat_onstmt()` (`ERROR` is an identifier recognized after `ON`), `NT_ERRTRAPSTMT 0x70` (`ERRT_*`), `cgen_from_errtrapstmt()` (`cgenctl.c`, the target address goes on the return stack like `AFTER`), instructions `ERRT 0x159`, `ERL 0x15A`, `ERRS 0x15B`, `bascomp.ebnf`.
+  - **VM** (`vm.[ch]`): `vm_error()` split into `vm_report_error()` (keeps the error for the handler instead of printing it when a handler is set; Break and the step limit excluded) and a one-line `vm_error()` that returns `false` (needed: gcc otherwise reports dozens of "maybe uninitialized" errors); `vm_resume()` checks `errcaught` after each step; `vm_trap_error()` empties the data stack, unwinds function contexts (`vm_context_t.rsp`), sets ERR$/ERL and enters the handler; GOSUB handlers return to the next line (`vm_next_line_addr()`) and re-arm the trap after `RETURN`; `vm_dpop*` initialize their outputs.
+  - **Tests**: `vmtest1` 656 -> 670 (+13), `repltest1` 277 -> 278; all other suites pass; `vmtest1`/`repltest1` clean under valgrind.
+  - **Docs**: `docs/basic-language.md` ("Error handling"), `docs/compiler-and-vm.md`, `docs/roadmap.md` (new section 9: `RESUME` etc.; drivers in BASIC marked postponed), `instset.h`, `SESSION.md`.

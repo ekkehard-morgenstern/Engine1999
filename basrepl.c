@@ -197,6 +197,7 @@ static void repl_setup_vm( repl_t* repl ) {
     vm->userdata  = repl;
     vm->report    = repl_vm_report;
     vm->print     = repl->print;
+    vm->printn    = repl->printn;
     vm->inkey     = repl->inkey;
     vm->input     = repl->input;
     vm->getkey    = repl->getkey;

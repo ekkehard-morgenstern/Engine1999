@@ -94,6 +94,18 @@ static void test_wrap( void ) {
     check( abschr( 10, 7 ) == 'x' && abschr( 10, 8 ) == 'y' && cx == 1 && cy == 3, "newline in a viewport" );
 }
 
+static void test_zero_bytes( void ) {
+    txtscr_init();
+    txtscr_setviewport( 10, 5, 20, 4 );
+    txtscr_print_n( 0, 0, -1, -1, "a\0b\0\nc", 6U );
+    int cx, cy;
+    txtscr_getcursor( &cx, &cy );
+    check( abschr( 10, 5 ) == 'a' && abschr( 11, 5 ) == 0 && abschr( 12, 5 ) == 'b' && abschr( 13, 5 ) == 0, "zero bytes are characters (code 0)" );
+    check( abschr( 14, 5 ) == ' ' && abschr( 10, 6 ) == 'c' && cx == 1 && cy == 1, "text goes on after zero bytes" );
+    txtscr_print_n( 0, 18, -1, -1, "\0\0\0", 3U );
+    check( abschr( 28, 5 ) == 0 && abschr( 29, 5 ) == 0 && abschr( 10, 6 ) == 0, "zero bytes wrap like other characters" );
+}
+
 static void test_scroll( void ) {
     txtscr_init();
     for ( int y=0; y < TXTSCR_HEIGHT; ++y ) {       // marks outside: column 9 and 30
@@ -203,6 +215,7 @@ int main( void ) {
     test_basics();
     test_write();
     test_wrap();
+    test_zero_bytes();
     test_scroll();
     test_clear_blank();
     test_screens();

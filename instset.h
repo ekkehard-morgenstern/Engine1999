@@ -273,7 +273,7 @@ The 4096 extended instructions are as follows:
     0001 00100100       DECS - convert number to decimal     string ( n n -- s ) C=0 P=0
     0001 00100101       STRS - convert number to             string ( n   -- s ) C=0 P=0
     0001 00100110       CHRS - convert character code to string ( n -- s ) C=0 P=0
-                            n must be 1..255 (a string can't hold a NUL character), else a run time error
+                            n must be 0..255, else a run time error (strings are binary-safe: they have a length)
     0001 00100111       (reserved)
     0001 00101000       LFTS - get left part of string ( s n -- s ) C=0 P=0
     0001 00101001       RGTS - get right part of string ( s n -- s ) C=0 P=0
@@ -436,7 +436,7 @@ The 4096 extended instructions are as follows:
                             A variable that is not bound keeps its length: s is justified within it.
     0001 01011000       REC  - read / write a record ( n rec -- ) C=0 P=1
                             Parameter 0 = GETREC, 1 = PUTREC. rec = 0: the record behind the last one. GETREC then assigns the
-                            slices to the bound variables (up to the first zero byte). Errors: "Input past end", "Bad record
+                            slices to the bound variables (their whole width). Errors: "Input past end", "Bad record
                             number", "Bad file mode" (not a random file).
     0001 01011001       ERRT - set the error handler ( -- ) C=0 P=1
                             ON ERROR. Parameter 0 = OFF; 1 = GOSUB, 2 = GOTO: the handler's code address is on the return stack

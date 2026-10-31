@@ -72,10 +72,20 @@ typedef struct _collect_t {
     char text[2048];
 } collect_t;
 
-static void collect( void* usrdata, int bg, int fg, const char* text ) {
+static void collect( void* usrdata, int bg, int fg, const char* text, size_t len ) {
     collect_t* c = (collect_t*) usrdata;
     size_t n = strlen( c->text );
-    snprintf( c->text + n, sizeof(c->text) - n, "[%d,%d]%s", bg, fg, text );
+    snprintf( c->text + n, sizeof(c->text) - n, "[%d,%d]%.*s", bg, fg, (int) len, text );
+}
+
+// like collect(), but a zero byte is shown as <0>
+static void collect_esc( void* usrdata, int bg, int fg, const char* text, size_t len ) {
+    collect_t* c = (collect_t*) usrdata;
+    size_t n = strlen( c->text );
+    n += (size_t) snprintf( c->text + n, sizeof(c->text) - n, "[%d,%d]", bg, fg );
+    for ( size_t i=0; i < len && n + 4U < sizeof(c->text); ++i ) {
+        n += (size_t) snprintf( c->text + n, sizeof(c->text) - n, text[i] == '\0' ? "<0>" : "%c", text[i] );
+    }
 }
 
 int main( void ) {
@@ -105,6 +115,15 @@ int main( void ) {
         ansi_feed( &a, text, collect, &c );
         bool pass = strcmp( c.text, expected ) == 0;
         printf( "%s  long text is split\n", pass ? "PASS" : "FAIL" );
+        failures += pass ? 0 : 1;
+    }
+    // zero bytes are text: they reach the callback inside the run
+    {
+        ansi_t a; collect_t c; c.text[0] = '\0';
+        ansi_init( &a, 1, 0 );
+        ansi_feed_n( &a, "A\0B\033[31mC", 9, collect_esc, &c );
+        bool pass = strcmp( c.text, "[0,1]A<0>B[0,44]C" ) == 0;
+        printf( "%s  zero bytes in a run (length based)\n", pass ? "PASS" : "FAIL" );
         failures += pass ? 0 : 1;
     }
     printf( "%d failure(s)\n", failures );

@@ -93,9 +93,13 @@ static void ansi_start_csi( ansi_t* a ) {
 }
 
 void ansi_feed( ansi_t* a, const char* text, ansi_emit_t emit, void* usrdata ) {
+    ansi_feed_n( a, text, strlen( text ), emit, usrdata );
+}
+
+void ansi_feed_n( ansi_t* a, const char* text, size_t n, ansi_emit_t emit, void* usrdata ) {
     char run[ANSI_RUNMAX + 1U];
     size_t len = 0;
-    for ( const unsigned char* s = (const unsigned char*) text; *s != '\0'; ++s ) {
+    for ( const unsigned char* s = (const unsigned char*) text; n > 0; ++s, --n ) {
         unsigned char c = *s;
         if ( a->state == ANSI_ST_TEXT ) {
             if ( c == 0x1B ) {
@@ -105,7 +109,7 @@ void ansi_feed( ansi_t* a, const char* text, ansi_emit_t emit, void* usrdata ) {
             run[len++] = (char) c;
             if ( len == ANSI_RUNMAX ) {
                 run[len] = '\0';
-                emit( usrdata, a->bg, a->fg, run );
+                emit( usrdata, a->bg, a->fg, run, len );
                 len = 0;
             }
             continue;
@@ -113,7 +117,7 @@ void ansi_feed( ansi_t* a, const char* text, ansi_emit_t emit, void* usrdata ) {
         // the colors may change here: hand over the text before the sequence first
         if ( len > 0 && a->state == ANSI_ST_ESC && c == '[' ) {
             run[len] = '\0';
-            emit( usrdata, a->bg, a->fg, run );
+            emit( usrdata, a->bg, a->fg, run, len );
             len = 0;
         }
         if ( a->state == ANSI_ST_ESC ) {
@@ -149,11 +153,11 @@ void ansi_feed( ansi_t* a, const char* text, ansi_emit_t emit, void* usrdata ) {
             a->state = ANSI_ST_TEXT;
         } else {
             a->state = ANSI_ST_TEXT;    // a control character or a byte >= 0x7F aborts the sequence ...
-            --s;                        // ... and is text again
+            --s; ++n;                   // ... and is text again
         }
     }
     if ( len > 0 ) {
         run[len] = '\0';
-        emit( usrdata, a->bg, a->fg, run );
+        emit( usrdata, a->bg, a->fg, run, len );
     }
 }

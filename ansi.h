@@ -53,7 +53,8 @@ The 16 standard colors are mapped to entries of the engine palette (colinittab i
 #define ANSI_MAXPARAMS  16          // more parameters of one sequence are ignored
 #define ANSI_RUNMAX     255         // the longest text run handed to the callback
 
-typedef void (*ansi_emit_t)( void* usrdata, int bg, int fg, const char* text );
+// a run of text (len bytes; it may contain zero bytes, which are glyphs, too) in the colors bg / fg
+typedef void (*ansi_emit_t)( void* usrdata, int bg, int fg, const char* text, size_t len );
 
 typedef struct _ansi_t {
     int         deffg, defbg;       // colors of "default" (palette entries)
@@ -65,6 +66,7 @@ typedef struct _ansi_t {
 } ansi_t;
 
 void ansi_init( ansi_t* a, int deffg, int defbg );
-void ansi_feed( ansi_t* a, const char* text, ansi_emit_t emit, void* usrdata );
+void ansi_feed( ansi_t* a, const char* text, ansi_emit_t emit, void* usrdata );                    // text ends at the first zero byte
+void ansi_feed_n( ansi_t* a, const char* text, size_t n, ansi_emit_t emit, void* usrdata );       // n bytes, zero bytes included
 
 #endif

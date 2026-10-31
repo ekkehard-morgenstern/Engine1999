@@ -81,6 +81,7 @@ typedef struct _repl_t {
     // host callbacks (all optional; see vm.h for the VM ones)
     void        (*report)( struct _repl_t*, const char* text );
     void        (*print)( struct _vm_t*, void*, int channel, const char* text );
+    void        (*printn)( struct _vm_t*, void*, int channel, const char* text, size_t len );   // optional, see vm.h
     int         (*inkey)( struct _vm_t*, void* );
     char*       (*input)( struct _vm_t*, void*, int channel );
     int         (*getkey)( struct _vm_t*, void*, int channel );

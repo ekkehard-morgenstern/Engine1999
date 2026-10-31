@@ -186,7 +186,7 @@ OPEN "play:2" FOR OUTPUT AS #3: PRINT #3,"T120 C D E"      (every line is a PLAY
 OPEN "tcp:example.com:80" FOR UPDATE AS #4: PRINT #4,"GET /": LINE INPUT #4,A$     (a network connection)
 ```
 
-Strings cannot hold a zero byte, so records are text (store numbers with `STR$`/`VAL`). Details, errors and a proposal for drivers written
+Strings are binary-safe (see "Binary strings"); until the number packing functions exist, store numbers in records with `STR$`/`VAL`. Details, errors and a proposal for drivers written
 in BASIC: [io-subsystem.md](io-subsystem.md).
 
 Channel 0 is the screen and keyboard; channels 1 to 255 are opened by `OPEN`. `LOAD`, `SAVE`, `MERGE`, `CHAIN` and `FILES` take driver names too (`SAVE "mem:game"`, `FILES "mem:"`); the default extensions apply to the path. `WRITE` is `PRINT` with strings in double quotes and commas between the items; `LINE INPUT` takes the whole line; `INPUT #n` splits it into fields and goes on with the next line when it runs out. Lines are written with a newline and read with a newline or a carriage return and a newline. A restart (`RUN`, `NEW`, `LOAD`, `CHAIN`) closes all channels. See io-subsystem.md for the exact rules, the error messages and what comes next (`KILL`, `RENAME`, `SEEK`, more drivers, random access records, the open sandboxing question).
@@ -217,6 +217,28 @@ handler runs.
 - `ERR$` and `ERL` keep the last error until the run ends. Not caught: Break (ESC) and the step limit of the tests. Syntax errors
   are found before the program runs and are not run time errors.
 - `ERROR` is recognized after `ON` only (so a variable named `ERROR` still works elsewhere); `ERR` and `ERL` are reserved words now.
+
+## Binary strings
+
+A string may contain any bytes, zero included (`CHR$(0)` .. `CHR$(255)`); its length is kept with it, up to 65535 bytes as before.
+
+- Everything works on the real length: `LEN`, `+`, `LEFT$`/`MID$`/`RIGHT$`, substring assignment, `LSET`/`RSET`, `FIELD`/`GETREC`
+  (a part keeps its whole width), string variables and arrays, function parameters. `ASC(CHR$(0))` is 0. Comparison is byte by byte
+  as unsigned values; a string that is a prefix of another one is the smaller. `STR$` and `VAL` read and write text: `VAL` stops
+  at a zero byte (like at any non-digit).
+- Files and devices carry them unchanged: `PRINT #n,a$` writes all bytes (a `;` at the end of the statement avoids the line feed),
+  `LINE INPUT #n` reads a line up to `"\n"` with zero bytes in it, `INPUT$(n,#m)` and `GET #n` return zero bytes. `INPUT #n` accepts them
+  inside string fields; a zero byte in a *numeric* field is "Bad data in file".
+- **On the screen** a zero byte (and every control code 0..31 except line feed and ESC sequences) is drawn as a small glyph made of
+  two letters between lines: `NU` for code 0, `SH`, `SX`, `EX`, `ET`, `EQ`, `AK`, `BL`, `BS`, `HT`, `LF` (code 10 is a line feed and not
+  drawn), `VT`, `FF`, `CR`, `SO`, `SI`, `DL`, `D1`..`D4`, `NK`, `SY`, `EB`, `CN`, `EM`, `SB`, `EC` (27 starts an ANSI sequence), `FS`, `GS`,
+  `RS`, `US`. The glyphs are part of the font (`8x12font1.txt`, section `#00`).
+- Where a string is used as a **C string** (file and driver names, the command of a shell literal, `PLAY`/`SFX` strings, `LIST`/`RENUM`/...
+  arguments) a zero byte is refused: "Illegal argument (zero byte in string)".
+- Host callbacks: `vm_t.printn` / `repl_t.printn` (optional) receive output with zero bytes; without it the zero bytes are left out of
+  what `print` gets.
+- Number packing (`MKI$`, `CVI`, ... to put numbers into binary strings and records) is the planned next step; the VM has the helper
+  `vm_push_bytes()` for it.
 
 ## Sound: `SOUND`, `PLAY`, `WAVE`, `TEMPO`, `PLAYING()`
 

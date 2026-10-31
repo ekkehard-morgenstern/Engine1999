@@ -1367,6 +1367,11 @@ int iotab_getc( iotab_t* tab, int chan, const char** perr ) {
 }
 
 bool iotab_readline( iotab_t* tab, int chan, char** pline, const char** perr ) {
+    size_t len = 0;
+    return iotab_readline_n( tab, chan, pline, &len, perr );
+}
+
+bool iotab_readline_n( iotab_t* tab, int chan, char** pline, size_t* plen, const char** perr ) {
     size_t cap = 128U, len = 0;
     char* line = (char*) malloc( cap );
     if ( line == 0 ) {
@@ -1408,6 +1413,7 @@ bool iotab_readline( iotab_t* tab, int chan, char** pline, const char** perr ) {
     }
     line[len] = '\0';
     *pline = line;
+    *plen = len;
     *perr = 0;
     return true;
 }

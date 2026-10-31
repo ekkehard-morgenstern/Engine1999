@@ -98,7 +98,7 @@ Listed in full in `SESSION.md` ("Design decisions I took"). The ones most likely
       ("?Redo from start") instead of asking for the rest; an empty numeric field is 0
 - [ ] `GET` waits for a key (`INKEY$` is the non-waiting one); a numeric `GET` variable receives the key code
 - [ ] ESC is the break key while a program runs (not delivered as a key)
-- [ ] `CHR$(0)` is an error, because VM strings are NUL-terminated and can't contain a zero character
+- [x] `CHR$(0)` works (binary strings, 2026-10-31)
 - [ ] `RUN` clears all variables first; direct mode lines keep them
 
 ## Not planned / explicitly out of scope for now
@@ -119,9 +119,11 @@ Listed in full in `SESSION.md` ("Design decisions I took"). The ones most likely
 - [ ] **Sandboxing (open issue)**: permissions for shell literals, `sh:`, writing/reading outside the program directory, the network; how a policy is configured (command line switch, trust level per program, permission file) is undecided; `iodev_allowed()` is the single place for the decision
 - [ ] Files stay open across `CHAIN` in GW-BASIC; here a restart (`RUN`, `NEW`, `LOAD`, `CHAIN`) closes all channels
 - [ ] `LIST #n` / `LIST` to a file channel (`LIST` still writes to channel 0 only; with the drivers it could write a listing to `mem:` or a file); `PRINT` comma zones on a file channel use the screen column
-- [ ] Binary data in files: a zero byte can't be held in a string (`GET #n`, `INPUT$`); text files only until random access / binary records exist
+- [x] Binary data in files (done with binary strings, 2026-10-31)
 
 ## 9. Error handling
 
 - [x] `ON ERROR GOTO|GOSUB`, `ON ERROR OFF`, `ERR$`, `ERL` (done, 2026-10-31)
 - [ ] `RESUME` / `RESUME NEXT` / `RESUME line` (retry or skip the failed *statement*; needs statement boundaries in the code), `ERR` as a number, `ON ERROR GOTO 0`, `ERROR n` (raise an error by hand)
+- [x] **Binary-safe strings** (done, 2026-10-31; see `docs/basic-language.md` "Binary strings"): zero bytes in strings, control code glyphs 0..31 in the font, length based print path
+- [ ] **Number packing for binary strings and records**: `MKI$`/`MKL$`/`MKS$`/`MKD$` and `CVI`/`CVL`/`CVS`/`CVD` (big endian like the rest of the system? or GW-BASIC's little endian: to decide), built on `vm_push_bytes()`; possibly `SPC`-style `STRING$(n,c)` and `SWAP`-free helpers

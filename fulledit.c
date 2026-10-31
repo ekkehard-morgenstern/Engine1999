@@ -216,9 +216,8 @@ typedef struct _put_t {
 } put_t;
 
 // puts text into the text pane, wrapping at its right edge (the pane clips at the bottom)
-static void ed_put( void* usrdata, int bg, int fg, const char* text ) {
+static void ed_put( void* usrdata, int bg, int fg, const char* text, size_t len ) {
     put_t* p = (put_t*) usrdata;
-    size_t len = strlen( text );
     if ( p->skip > 0 ) {
         size_t n = len < p->skip ? len : p->skip;
         p->skip -= n; text += n; len -= n;
@@ -419,7 +418,7 @@ static void ed_draw( ed_t* e ) {
         }
         put_t p = { s->y, 0, 0 };
         if ( s->edited ) {
-            ed_put( &p, bg, C_TEXT_FG, e->buf );
+            ed_put( &p, bg, C_TEXT_FG, e->buf, strlen( e->buf ) );
             curx = (int)( e->ed.pos % ED_TEXT_W ); cury = s->y + (int)( e->ed.pos / ED_TEXT_W );
         } else {
             size_t pfx = 0;
@@ -437,7 +436,7 @@ static void ed_draw( ed_t* e ) {
                     free( hl );
                 }
             } else {
-                ed_put( &p, bg, C_TEXT_FG, plain );
+                ed_put( &p, bg, C_TEXT_FG, plain, strlen( plain ) );
             }
             free( plain );
         }
