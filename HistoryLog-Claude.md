@@ -13,7 +13,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-(nothing pending)
+- **README and contributor page** (2026-10-31, owner's request): `README.md` rewritten for players and BASIC programmers (what it is, status "work in progress but possibly useful", features, quick start, demos, `BUILD`, the license with the exception in plain words, links, credits naming Ekkehard Morgenstern and Claude with a link to this log); new `docs/contributing.md` (who contributed, build and tests, the checklist for a new statement, conventions, the license of contributions: the author must agree before code is accepted, because he grants the exception); `docs/README.md` intro brought up to date and linked to it. Four screenshots in `docs/images/` (`fruit2-game.png`, `climb.png`, `graphics.png`, `listing.png`), made under Xvfb + metacity from executables built with `BUILD` (key presses by an XTest helper in the scratchpad: not in the repo). No source changes. **The statement about contributions needing the author's agreement is my proposal**, to be confirmed.
 
 ## Log
 

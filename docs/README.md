@@ -1,8 +1,9 @@
 # Engine1999 documentation
 
 Engine1999 is a 2D game engine in C on top of SDL2. It emulates a retro computer — a layered
-80x25 text / tile / graphics / sprite display — and is meant to host a built-in BASIC dialect for writing games.
-The display side is working; the BASIC side (tokenizer → compiler → code generator → VM) is under construction.
+80x25 text / tile / graphics / sprite display, a synthesizer, files and devices — and has a built-in BASIC dialect (tokenizer → compiler → code generator → VM)
+for writing games; `BUILD` makes standalone executables. It is a work in progress: see [roadmap.md](roadmap.md) for what is open.
+Players and BASIC programmers: start with the [README](../README.md). Engine contributors: [contributing.md](contributing.md).
 
 | Document | Contents |
 |---|---|
@@ -15,6 +16,7 @@ The display side is working; the BASIC side (tokenizer → compiler → code gen
 | [build-and-test.md](build-and-test.md) | Building, executables, test programs, tooling |
 | [graphics-subsystem.md](graphics-subsystem.md) | BASIC statements for layers, palettes, the graphics layer, tiles, sprites, `DESIGN` pictures, collisions and text screen areas; the `sdlscr_*` API (implemented) |
 | [io-subsystem.md](io-subsystem.md) | I/O subsystem: virtual device drivers (`file:`, `mem:`, ...), `driver:name` prefixes, `OPEN`/`CLOSE`, `ADDRESS`; phases and the open sandboxing issue |
+| [contributing.md](contributing.md) | **For contributors**: who contributed, how to build and test, how a new statement goes in, conventions, the license of contributions |
 | [roadmap.md](roadmap.md) | **Open work**: everything that is still to do, with the design questions that are waiting for a decision |
 | [refactoring.md](refactoring.md) | **Current in-progress refactor**: goal, status, known bugs, remaining work, limits table |
 
