@@ -108,6 +108,32 @@ static void test_zero_bytes( void ) {
     check( abschr( 28, 5 ) == 0 && abschr( 29, 5 ) == 0 && abschr( 10, 6 ) == 0, "zero bytes wrap like other characters" );
 }
 
+// the font: every code except space and NBSP has a glyph (printable ISO-8859-15 or a control code glyph), and no two glyphs are equal
+extern const uint8_t fontdef1[3072];
+
+static void test_font( void ) {
+    int empty = 0, same = 0;
+    for ( int c = 0; c < 256; ++c ) {
+        bool blank = true;
+        for ( int r = 0; r < 12; ++r ) {
+            blank = blank && fontdef1[ c * 12 + r ] == 0;
+        }
+        if ( blank && c != 0x20 && c != 0xA0 ) {
+            ++empty;
+        }
+        for ( int d = c + 1; d < 256; ++d ) {
+            if ( memcmp( fontdef1 + c * 12, fontdef1 + d * 12, 12U ) == 0 && !( c == 0x20 && d == 0xA0 ) && !( c == '-' && d == 0xAD ) ) {
+                ++same;
+            }
+        }
+    }
+    check( empty == 0, "the font has a glyph for every code except space and NBSP" );
+    check( same == 0, "no two glyphs of the font are equal (but NBSP = space, soft hyphen = hyphen)" );
+    txtscr_init();
+    txtscr_print_n( 0, 0, -1, -1, "\xe4\x80\xff", 3U );
+    check( abschr( 0, 0 ) == 0xE4 && abschr( 1, 0 ) == 0x80 && abschr( 2, 0 ) == 0xFF, "codes >= 128 are stored as they are" );
+}
+
 static void test_scroll( void ) {
     txtscr_init();
     for ( int y=0; y < TXTSCR_HEIGHT; ++y ) {       // marks outside: column 9 and 30
@@ -218,6 +244,7 @@ int main( void ) {
     test_write();
     test_wrap();
     test_zero_bytes();
+    test_font();
     test_scroll();
     test_clear_blank();
     test_screens();

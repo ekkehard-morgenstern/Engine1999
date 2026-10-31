@@ -35,6 +35,7 @@
 #include "sprscreen.h"
 #include "sdlutil.h"
 #include "gfxcore.h"
+#include "sdlkeys.h"
 
 #define NLAYERS 5
 #define LAY_BG          0
@@ -167,6 +168,57 @@ static bool sdlscr_enqueuetext( const char text[SDL_TEXTINPUTEVENT_TEXT_SIZE] ) 
 
 uint64_t sdlscr_getframecnt( void ) {
     return sdlscr_framecnt;
+}
+
+// -- key debugging (--debug-keys) ---------------------------------------------------------------
+
+static volatile bool sdlscr_keydebug = false;
+
+void sdlscr_setkeydebug( bool on ) {
+    sdlscr_keydebug = on;
+}
+
+static void sdlscr_modnames( Uint16 mods, char* out, size_t cap ) {
+    static const struct { Uint16 bit; const char* name; } names[] = {
+        { KMOD_LSHIFT, "LShift" }, { KMOD_RSHIFT, "RShift" }, { KMOD_LCTRL, "LCtrl" }, { KMOD_RCTRL, "RCtrl" }, { KMOD_LALT, "LAlt" }, { KMOD_RALT, "RAlt" },
+        { KMOD_LGUI, "LGui" }, { KMOD_RGUI, "RGui" }, { KMOD_NUM, "Num" }, { KMOD_CAPS, "Caps" }, { KMOD_MODE, "Mode" } };
+    size_t n = 0;
+    out[0] = '\0';
+    for ( size_t i = 0; i < sizeof(names) / sizeof(names[0]); ++i ) {
+        if ( ( mods & names[i].bit ) != 0 && n + 12U < cap ) {
+            n += (size_t) snprintf( out + n, cap - n, "%s%s", n ? "+" : "", names[i].name );
+        }
+    }
+}
+
+// one line per event on standard output: what SDL says and the sequence made from it (the same code that feeds GET / INKEY$)
+static void sdlscr_debugkeyevent( const SDL_KeyboardEvent* k ) {
+    char mods[96], seq[KEYSEQ_MAXLEN], hex[64], esc[64], name[KEYSEQ_NAMELEN];
+    sdlscr_modnames( k->keysym.mod, mods, sizeof(mods) );
+    size_t n = sdlkeys_sequence( k->keysym.sym, k->keysym.mod, seq );
+    printf( "[keys] %8u ms  SDL key %-4s sym=0x%08x \"%s\" scancode=%d mods=0x%04x(%s)%s", (unsigned) k->timestamp, k->type == SDL_KEYDOWN ? "down" : "up",
+        (unsigned) k->keysym.sym, SDL_GetKeyName( k->keysym.sym ), (int) k->keysym.scancode, (unsigned) k->keysym.mod, mods, k->repeat ? " repeat" : "" );
+    if ( n > 0 && k->type == SDL_KEYDOWN ) {
+        int key, km;
+        sdlkeys_map( k->keysym.sym, k->keysym.mod, &key, &km );
+        keyseq_name( key, km, name );
+        keyseq_hex( seq, n, hex, sizeof(hex) );
+        keyseq_escape( seq, n, esc, sizeof(esc) );
+        printf( "  ->  %s  \"%s\"  = %s", hex, esc, name );
+    } else if ( k->type == SDL_KEYDOWN ) {
+        printf( "  ->  (no sequence)" );
+    }
+    printf( "\n" );
+    fflush( stdout );
+}
+
+static void sdlscr_debugtextevent( const SDL_TextInputEvent* t ) {
+    char hex[64], esc[64];
+    size_t len = strlen( t->text );
+    keyseq_hex( t->text, len, hex, sizeof(hex) );
+    keyseq_escape( t->text, len, esc, sizeof(esc) );
+    printf( "[keys] %8u ms  SDL text input  %s  \"%s\"  (UTF-8, as the keyboard layout and the shift state make it)\n", (unsigned) t->timestamp, hex, esc );
+    fflush( stdout );
 }
 
 static void sdlscr_handlekey( SDL_KeyCode key ) {
@@ -303,9 +355,20 @@ static int sdlscr_worker( void* arg ) {
                     sdlscr_doexit = true;
                     break;
                 case SDL_KEYDOWN:
+                    if ( sdlscr_keydebug ) {
+                        sdlscr_debugkeyevent( &ev.key );
+                    }
                     sdlscr_handlekey( ev.key.keysym.sym );
                     break;
+                case SDL_KEYUP:
+                    if ( sdlscr_keydebug ) {
+                        sdlscr_debugkeyevent( &ev.key );
+                    }
+                    break;
                 case SDL_TEXTINPUT:
+                    if ( sdlscr_keydebug ) {
+                        sdlscr_debugtextevent( &ev.text );
+                    }
                     sdlscr_handletext( ev.text.text );
                     break;
             }

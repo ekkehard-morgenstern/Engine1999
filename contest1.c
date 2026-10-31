@@ -54,6 +54,18 @@ static const testcase_t cases[] = {
     { "a stored program and RUN",   0, "", "10 PRINT \"HI\"\nRUN\n",                  "HI\n", "", 0, false },
     { "empty lines are skipped",    0, "", "\n  \nPRINT 1\n",                          "1\n", "", 0, false },
     { "LIST",                       0, "", "10 PRINT 1\n20 PRINT 2\nLIST\n",           "10 PRINT 1\n20 PRINT 2\n", "", 0, false },
+    // the key dump (--debug-keys): the bytes of standard input item by item ("[keys]" in the expected output: a part of it)
+    { "key dump: a cursor key with modifiers",  0, "--debug-keys", "\033[1;2A",      "[keys]Shift+Up (canonical)\n", "", 0, false },
+    { "key dump: a function key",               0, "--debug-keys", "\033[15~",       "[keys]F5 (canonical)\n", "", 0, false },
+    { "key dump: another form of a key",        0, "--debug-keys", "\033[7~",        "[keys]Home (other form", "", 0, false },
+    { "key dump: an unknown sequence",          0, "--debug-keys", "\033[Z",         "[keys]unknown escape sequence\n", "", 0, false },
+    { "key dump: ESC alone",                    0, "--debug-keys", "\033",           "[keys]ESC alone", "", 0, false },
+    { "key dump: Alt+x",                        0, "--debug-keys", "\033x",          "[keys]ESC + 'x' (Alt+x", "", 0, false },
+    { "key dump: UTF-8",                        0, "--debug-keys", "\xc3\xa4",       "[keys]U+00E4 (UTF-8)\n", "", 0, false },
+    { "key dump: a byte that is no UTF-8",      0, "--debug-keys", "\xe4",           "[keys]byte >= 0x80", "", 0, false },
+    { "key dump: control codes and DEL",        0, "--debug-keys", "\r\177\t",       "[keys]Enter (Ctrl-M, CR)\n    7f                       \"\\x7f\"                 DEL", "", 0, false },
+    { "key dump: Ctrl-D stops it",              0, "--debug-keys", "a\004b",         "[keys]'a' (U+0061)\n    04                       \"\\x04\"                 Ctrl-D\n\nEnd of the key dump.\n", "", 0, false },
+    { "key dump: the end of the input stops it", 0, "--debug-keys", "",              "[keys]End of the key dump.\n", "", 0, false },
     { "BYE ends the input",         0, "", "PRINT 1\nBYE\nPRINT 2\n",                  "1\n", "", 0, false },
     { "BYE with a code",            0, "", "PRINT 1\nBYE 4\nPRINT 2\n",                "1\n", "", 4, false },
     { "QUIT with a code",           0, "", "QUIT 9\n",                                  "", "", 9, false },
@@ -207,7 +219,8 @@ int main( void ) {
         char *out, *err; size_t outlen;
         int status = run( tc->args, tc->input, &out, &outlen, &err );
         bool okout = tc->out == 0 ? true : ( strncmp( tc->out, "Engine 1999 v", 13 ) == 0 || strcmp( tc->out, "Usage:" ) == 0 ||
-            strcmp( tc->out, "[tokenize]" ) == 0 ) ? strstr( out, tc->out ) == out || strstr( out, tc->out ) != 0 : strcmp( out, tc->out ) == 0;
+            strcmp( tc->out, "[tokenize]" ) == 0 ) ? strstr( out, tc->out ) == out || strstr( out, tc->out ) != 0 :
+            strncmp( tc->out, "[keys]", 6U ) == 0 ? strstr( out, tc->out + 6 ) != 0 : strcmp( out, tc->out ) == 0;
         bool okerr = tc->err == 0 ? true : tc->errpart ? strstr( err, tc->err ) != 0 : strcmp( err, tc->err ) == 0;
         bool ok = okout && okerr && status == tc->status;
         printf( "%s  %s\n", ok ? "PASS" : "FAIL", tc->name );

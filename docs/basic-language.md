@@ -108,6 +108,30 @@ calls, `PRINT`, `SAVE`, assignment/`LET`, substring assignment, `DIM`, `ERASE`, 
 - `GET` waits for a key for every variable: a string variable gets the one-character string, a numeric variable the key code. (`INKEY$` is the non-waiting variant.)
 - Without `#ch` both use channel 0. The channel is passed to the host callbacks (`vm->input`, `vm->getkey`); the VM's output channel (`PCHN`) is set to it too, so the prompt goes to the same channel.
 
+## Keyboard: cursor keys, function keys, the character set *(owner's design of 2026-10-31; the font, the sequence tables and `--debug-keys` are done, `GET` / `INKEY$` are not yet)*
+
+**Status:** decided in outline by the owner. **Done (2026-10-31):** the font for 128..255 (`docs/display-engine.md`, "The character set"), the sequences module `keyseq.[ch]` (canonical sequences of all keys with modifiers, a parser for the dialects terminals send) with the SDL mapping `sdlkeys.[ch]`, and `--debug-keys` for both hosts (`docs/build-and-test.md`). **Not done:** feeding the sequences to `GET` / `INKEY$`, the double ESC and PAUSE, the console host's key input (to be decided from real terminal dumps), typed non-ASCII text, the UTF-8 conversion of the console host. Today only printable ASCII, `RETURN` (13), `BACKSPACE` (8) and `TAB` (9) reach `GET` / `INKEY$`; every other key is dropped, and `ESC` is the break key.
+
+**Character set.** Strings are bytes (see "Binary strings"); the character set is **ISO-8859-15** (Latin-9, ISO-8859-1 with `€ Š š Ž ž Œ œ Ÿ` in place of eight rarely used signs). Codes 0..31 and 127..159 are control codes, the rest is printable. Control codes are drawn as glyphs on the text screen (a convenience for the programmer: output that should not be a control code is visible as one; the glyphs are also free for user-defined characters, but users mostly redefine characters they can type). `DEL` (127) keeps the glyph it has now. The font gets the missing printable glyphs 160..255 (`8x12font1.txt`, `perl fontcomp.pl`), so every non-control character can be printed; 128..159 get control glyphs like 0..31. Typed text that is not ASCII (`ä ö ü ß €`...) is mapped from the Unicode the keyboard delivers to ISO-8859-15 (today it is ignored); characters outside the set are dropped. The console host converts between the terminal's UTF-8 and ISO-8859-15 on input and output (to decide: option for a raw/Latin-1 terminal).
+
+**Keys that are not one byte arrive as ANSI escape sequences** (the xterm forms), as one string:
+
+| Key | Sequence | Key | Sequence |
+|---|---|---|---|
+| UP / DOWN | `ESC [ A` / `ESC [ B` | F1 (= HELP, reserved for a later help system) | `ESC O P` |
+| RIGHT / LEFT | `ESC [ C` / `ESC [ D` | F2 .. F4 | `ESC O Q`, `ESC O R`, `ESC O S` |
+| HOME / END | `ESC [ H` / `ESC [ F` | F5 .. F8 | `ESC [ 15 ~`, `17 ~`, `18 ~`, `19 ~` |
+| INSERT / DELETE | `ESC [ 2 ~` / `ESC [ 3 ~` | F9 .. F12 | `ESC [ 20 ~`, `21 ~`, `23 ~`, `24 ~` |
+| PAGE UP / DOWN | `ESC [ 5 ~` / `ESC [ 6 ~` | with modifiers | `ESC [ 1 ; m A` etc., m = 2 Shift, 3 Alt, 5 Ctrl, 4/6/7/8 combined |
+
+`INKEY$` returns the whole sequence (or `""` when no key is waiting), `GET a$` waits for one key and stores the whole sequence; a program compares with `CHR$(27)+"[A"`. `GET n` (numeric) stores the first byte, 27 for every sequence (use a string to tell the keys apart). The sequence is complete when it is delivered: the window host builds it from the key event; the console host reads the bytes of the terminal and aborts a sequence that does not continue within a short time (about 50 ms), so an `ESC` pressed once and forgotten does not wait for more characters.
+
+**Break.** `ESC` pressed **twice** (within about 0.4 s) is the break key, since `ESC ESC` is no valid sequence; `PAUSE/BREAK` breaks at once (window host; the console host keeps Ctrl-C). A single `ESC` is delivered as the one-byte string `CHR$(27)` when the double-press time has passed. (Inside `INPUT`, `LINE INPUT`, the line editor and the full-screen editor, which read the key events themselves, a single `ESC` keeps its present meaning.)
+
+**Implementation notes.** The host callbacks `inkey` / `getkey` keep returning one byte per call; the VM groups a sequence (after a first byte 27 it takes the continuation bytes the host has ready), so `vm.h` does not change; `sdlscr_msgtokey()` (`sdlscreen.c`) maps the SDL key symbols, `con_readkey()` (`engine1999c.c`) parses the terminal's sequences (the same table, plus the SS3/CSI variants terminals send), the double-ESC logic lives in `sdlscr_handlekey()` / `con_readkey()`. Tests: `contest1` (sequences through a pipe, a lone ESC, a half sequence), `vmtest1` (a test input with sequences), `gfxtest1` / `txttest1` (the new glyphs).
+
+**Open points for the owner:** whether `GET n` should rather return a code outside 0..255 for sequences (it would need the `GETK` result as a number), the double-press time, whether the Windows-style `Ctrl` + letter control codes (1..26) are delivered as bytes (proposal: yes).
+
 ## Program commands: `LOAD`, `RUN`, `MERGE`, `CHAIN`, `FILES`, `LIST`, `NEW`, `CLEAR`, `DELETE`, `RENUM`, `EDIT`, `MONITOR`, `BYE`, `QUIT`
 
 They are ordinary statements (`bascomp.ebnf`, `cgenprog.c`), so they work in direct mode and inside programs.

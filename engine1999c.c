@@ -35,6 +35,7 @@
 #include "basdebug.h"
 #include "gfxops.h"
 #include "ansi.h"
+#include "keyseq.h"
 #include "version.h"
 
 /*
@@ -403,6 +404,165 @@ static int con_run_embedded( int argc, char** argv ) {
     return status;
 }
 
+// -- key dump (--debug-keys) -------------------------------------------------------------------
+//
+// Shows what the terminal sends for each key, byte by byte, so the sequences of a terminal can be compared with the canonical ones
+// (keyseq.h): the bytes of a key press that arrive within 30 ms are one burst; each item of a burst is shown as hex, as a C string and
+// with what it is. No BASIC runs. Works with a pipe as well (the bytes of the pipe). Ctrl-D (or the end of the input) stops.
+
+static bool con_dump_getbyte( unsigned char* c, int timeout ) {
+    for (;;) {
+        struct pollfd pfd = { 0, POLLIN, 0 };
+        int rv = poll( &pfd, 1, timeout );
+        if ( rv < 0 && errno == EINTR ) {
+            continue;
+        }
+        if ( rv <= 0 ) {
+            return false;
+        }
+        ssize_t n = read( 0, c, 1U );
+        if ( n < 0 && errno == EINTR ) {
+            continue;
+        }
+        return n == 1;
+    }
+}
+
+static const char* const con_ctrlnames[32] = {
+    "Ctrl-@ (NUL)", "Ctrl-A", "Ctrl-B", "Ctrl-C", "Ctrl-D", "Ctrl-E", "Ctrl-F", "Ctrl-G (BEL)", "Ctrl-H (BS)", "Tab (Ctrl-I)", "Ctrl-J (LF)", "Ctrl-K",
+    "Ctrl-L", "Enter (Ctrl-M, CR)", "Ctrl-N", "Ctrl-O", "Ctrl-P", "Ctrl-Q", "Ctrl-R", "Ctrl-S", "Ctrl-T", "Ctrl-U", "Ctrl-V", "Ctrl-W", "Ctrl-X", "Ctrl-Y", "Ctrl-Z",
+    "ESC (Ctrl-[)", "Ctrl-\\", "Ctrl-]", "Ctrl-^", "Ctrl-_" };
+
+static void con_dump_item( const char* s, size_t len, const char* what ) {
+    char hex[64], esc[64];
+    keyseq_hex( s, len, hex, sizeof(hex) );
+    keyseq_escape( s, len, esc, sizeof(esc) );
+    char q[72];
+    snprintf( q, sizeof(q), "\"%s\"", esc );
+    printf( "    %-24s %-22s %s\n", hex, q, what );
+}
+
+// the items of one burst
+static void con_dump_burst( const char* b, size_t n, bool* stop ) {
+    size_t pos = 0;
+    while ( pos < n ) {
+        unsigned char c = (unsigned char) b[pos];
+        char what[96];
+        if ( c == 033 ) {
+            int key, mods;
+            int used = keyseq_parse( b + pos, n - pos, &key, &mods );
+            if ( used > 0 ) {
+                char name[KEYSEQ_NAMELEN];
+                keyseq_name( key, mods, name );
+                char canon[KEYSEQ_MAXLEN];
+                keyseq_make( key, mods, canon );
+                snprintf( what, sizeof(what), "%s%s", name, strncmp( canon, b + pos, (size_t) used ) == 0 && canon[used] == '\0' ? " (canonical)" : " (other form; canonical is not this)" );
+                con_dump_item( b + pos, (size_t) used, what );
+                pos += (size_t) used;
+                continue;
+            }
+            size_t end = pos + 1U;
+            if ( used == 0 && end < n && ( b[end] == '[' || b[end] == 'O' ) ) {
+                // an unknown CSI / SS3 sequence: up to the final byte
+                ++end;
+                while ( end < n && ( ( (unsigned char) b[end] >= 0x20 && (unsigned char) b[end] <= 0x3F ) ) ) {
+                    ++end;
+                }
+                if ( end < n ) {
+                    ++end;
+                }
+                con_dump_item( b + pos, end - pos, "unknown escape sequence" );
+            } else if ( used == -1 ) {
+                con_dump_item( b + pos, n - pos, n - pos == 1U ? "ESC alone (or the start of a sequence cut off)" : "incomplete escape sequence" );
+                end = n;
+            } else if ( end < n && (unsigned char) b[end] >= 0x20 && (unsigned char) b[end] < 0x7F ) {
+                ++end;
+                snprintf( what, sizeof(what), "ESC + '%c' (Alt+%c on many terminals)", b[end - 1U], b[end - 1U] );
+                con_dump_item( b + pos, end - pos, what );
+            } else {
+                con_dump_item( b + pos, 1U, "ESC" );
+            }
+            pos = end;
+            continue;
+        }
+        if ( c < 0x20 ) {
+            con_dump_item( b + pos, 1U, con_ctrlnames[c] );
+            if ( c == 4 ) {
+                *stop = true;
+                return;             // what follows in the same burst is not shown
+            }
+            ++pos;
+        } else if ( c == 0x7F ) {
+            con_dump_item( b + pos, 1U, "DEL (Backspace on many terminals)" );
+            ++pos;
+        } else if ( c < 0x80 ) {
+            snprintf( what, sizeof(what), "'%c' (U+%04X)", c, (unsigned) c );
+            con_dump_item( b + pos, 1U, what );
+            ++pos;
+        } else {
+            // UTF-8
+            size_t need = c >= 0xF0 ? 4U : c >= 0xE0 ? 3U : c >= 0xC0 ? 2U : 1U;
+            if ( pos + need > n ) {
+                need = n - pos;
+            }
+            unsigned cp = need == 4U ? c & 7U : need == 3U ? c & 15U : need == 2U ? c & 31U : c;
+            for ( size_t i = 1; i < need; ++i ) {
+                cp = ( cp << 6 ) | ( (unsigned char) b[pos + i] & 63U );
+            }
+            snprintf( what, sizeof(what), need > 1U ? "U+%04X (UTF-8)" : "byte >= 0x80 (not UTF-8: Latin-1 or a lone byte?)", cp );
+            con_dump_item( b + pos, need, what );
+            pos += need;
+        }
+    }
+}
+
+static int con_keydump( void ) {
+    const char* term = getenv( "TERM" );
+    printf( "Key dump: the bytes this terminal sends. TERM=%s, standard input is %s.\n"
+            "Press keys; bytes within 30 ms count as one key press. Ctrl-D (or the end of the input) stops.\n\n",
+            term != 0 ? term : "(unset)", isatty( 0 ) ? "a terminal" : "not a terminal" );
+    fflush( stdout );
+    atexit( con_restore_tty );
+    if ( isatty( 0 ) ) {
+        struct termios t;
+        if ( tcgetattr( 0, &con_saved_tio ) == 0 ) {
+            con_tio_saved = true;
+            t = con_saved_tio;
+            t.c_lflag &= ~( (tcflag_t) ( ICANON | ECHO | ISIG | IEXTEN ) );
+            t.c_iflag &= ~( (tcflag_t) ( ICRNL | INLCR | IGNCR | IXON | ISTRIP | BRKINT | PARMRK | INPCK ) );
+            t.c_cc[VMIN] = 1;
+            t.c_cc[VTIME] = 0;
+            if ( tcsetattr( 0, TCSANOW, &t ) == 0 ) {
+                con_raw = true;
+            }
+        }
+    }
+    struct timespec last;
+    clock_gettime( CLOCK_MONOTONIC, &last );
+    bool stop = false;
+    while ( !stop ) {
+        char b[256];
+        size_t n = 0;
+        unsigned char c;
+        if ( !con_dump_getbyte( &c, -1 ) ) {
+            break;
+        }
+        struct timespec now;
+        clock_gettime( CLOCK_MONOTONIC, &now );
+        long ms = (long)( now.tv_sec - last.tv_sec ) * 1000L + ( now.tv_nsec - last.tv_nsec ) / 1000000L;
+        b[n++] = (char) c;
+        while ( n < sizeof(b) && con_dump_getbyte( &c, 30 ) ) {
+            b[n++] = (char) c;
+        }
+        printf( "%zu byte%s, %ld ms after the previous key press\n", n, n == 1U ? "" : "s", ms );
+        con_dump_burst( b, n, &stop );
+        fflush( stdout );
+        clock_gettime( CLOCK_MONOTONIC, &last );
+    }
+    printf( "\nEnd of the key dump.\n" );
+    return EXIT_SUCCESS;
+}
+
 static void usage( FILE* out, const char* prog ) {
     fprintf( out,
         "Usage: %s [options] [file | - [arguments]]\n"
@@ -476,6 +636,9 @@ int main( int argc, char** argv ) {
             ++i;
             break;
         }
+    }
+    if ( basdbg_on( BASDBG_KEYS ) ) {
+        return con_keydump();
     }
     // the rest of the command line is for the program: ARGC, ARG$(n); ARG$(0) is the file ("-" for standard input)
     const char** progargs = 0;

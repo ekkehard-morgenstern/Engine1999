@@ -56,11 +56,11 @@ The **viewport** (`txtscr_setviewport( x, y, w, h )`, `txtscr_resetviewport()`) 
 
 Layers, palettes, the graphics layer, tiles, sprites and the text screen areas are reachable from BASIC; all of it through the `sdlscr_*` API at the end of `sdlscreen.h` (`docs/graphics-subsystem.md`).
 
-## Control code glyphs
+## The character set and the control code glyphs
 
-The font has glyphs for the codes 0..31 (`8x12font1.txt`, section `#00`): two letters (3x5 pixels each, the mnemonics `NU`, `SH`, ... `US`) between
-an overline and an underline, so binary data on the screen is visible. `txtscr_print_n()` and `sdlscr_ansi_write()` take a length and draw zero bytes; only
-`\n` is a line feed in the text screen, and ESC starts a sequence in the ANSI decoder (`ansi_feed_n()`). Regenerate `8x12font1.c` with `perl fontcomp.pl`.
+Strings are bytes and the screen shows a byte as the glyph of that code; the character set is **ISO-8859-15** (Latin-9): 32..126 ASCII, 127 DEL (the old hatched glyph), 128..159 control codes, 160..255 printable (NBSP is blank; `¡¢£€¥Š§š©ª«¬­®¯°±²³Ž µ¶·ž¹º»ŒœŸ¿`, the letters `À`..`ÿ` and `×`, `÷`; 173 is the soft hyphen, drawn as a hyphen). The font (`8x12font1.txt`, 8x12, the glyphs from 128 up are in a generated style: accented letters are the base letter with an accent drawn in the rows above it; capitals with an accent are one row shorter so the accent fits; `ß æ œ ð þ Þ Æ Œ Ð ø Ø` are drawn by hand) covers every code.
+
+The control codes are drawn as glyphs, so binary data on the screen is visible: 0..31 and 128..159 are two letters (3x5 pixels each, the mnemonics `NU`, `SH`, ... `US` for the C0 codes, `PA` `HO` `BP` `NB` `IN` `NL` `SA` `EA` `HS` `HJ` `VS` `PD` `PU` `RI` `S2` `S3` `DC` `P1` `P2` `TS` `CC` `MW` `SP` `EP` `SS` `GC` `SC` `CS` `ST` `OS` `PM` `AP` for 128..159, the abbreviations of the C1 set made unique) between an overline and an underline. `txtscr_print_n()` and `sdlscr_ansi_write()` take a length and draw zero bytes; only `\n` is a line feed in the text screen, and ESC starts a sequence in the ANSI decoder (`ansi_feed_n()`; a byte >= 0x7F inside a sequence aborts it, but 0x9B is *not* a CSI introducer: the decoder only knows `ESC [`). Regenerate `8x12font1.c` with `perl fontcomp.pl`. `txttest1` checks that every code but space and NBSP has a glyph and that no two glyphs are equal.
 
 ## Full-screen editor (`fulledit.c`)
 

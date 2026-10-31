@@ -56,6 +56,8 @@ bits in basdbg_flags. The output goes to stdout, one line per item, prefixed wit
     BASDBG_PARSE        [parse]       every token as the compiler fetches it
     BASDBG_TREE         [tree]        the syntax tree after parsing
     BASDBG_CODE         [code]        every instruction as the code generator emits it (offset, bytes, mnemonic)
+    BASDBG_KEYS         [keys]        the keys the host receives: engine1999 prints every SDL key event and text input with the escape
+                                      sequence made from it; engine1999c turns into a dump of the bytes the terminal sends (no BASIC)
 
 The tokenize / detokenize / tree dumps are produced by the hooks the REPL (basrepl.c) calls; the parse and code
 output come from the compiler and the code generator themselves.
@@ -67,6 +69,7 @@ output come from the compiler and the code generator themselves.
 #define BASDBG_TREE         UINT32_C(0X08)
 #define BASDBG_CODE         UINT32_C(0X10)
 #define BASDBG_ALL          UINT32_C(0X1F)
+#define BASDBG_KEYS         UINT32_C(0X20)      // not part of BASDBG_ALL: shows what the keyboard delivers (see below)
 
 extern uint32_t basdbg_flags;
 

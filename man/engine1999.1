@@ -63,7 +63,13 @@ Print the syntax tree after parsing.
 Print every instruction the code generator emits.
 .TP
 .B \-\-debug\-all
-All of the debug outputs.
+All of the debug outputs (not
+.BR \-\-debug\-keys ).
+.TP
+.B \-\-debug\-keys
+Show what the keyboard delivers: every SDL key event (key code, name, scan code, modifiers) and every text input is printed to standard output, with the escape sequence the program would receive for the key (\fBESC [ 1 ; 2 A\fR for Shift+Up, see
+.BR engine1999\-basic (7)).
+Run it from a terminal, or redirect the output to a file.
 .SH AT THE PROMPT
 .TP
 .B ESC

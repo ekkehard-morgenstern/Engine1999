@@ -30,12 +30,12 @@ The program store, the syntax tree and the variables are heap structures now; th
 
 ## Build
 
-- `make` builds `sdltest1 sdltest2 engine1999 basictest1 testcomp1 basictest2 vmtest1 repltest1 ansitest1 txttest1 asmtest1 synthtest1 iotest1 gfxtest1 buildtest1 engine1999c contest1` and `engine.lib` (static archive of all modules).
+- `make` builds `sdltest1 sdltest2 engine1999 basictest1 testcomp1 basictest2 vmtest1 repltest1 ansitest1 txttest1 asmtest1 synthtest1 iotest1 gfxtest1 buildtest1 engine1999c contest1 keytest1` and `engine.lib` (static archive of all modules).
 - `make DEBUG=1` → `-g` instead of `-O3`. `make PROFILE=1` adds `-p` (every run writes `gmon.out`). Flags: `-Wall -Werror -march=native` (warnings are errors).
 - Needs `gcc`, SDL2 (`-lSDL2 -lrt -lm`). Only `sdltest1` and `engine1999` link SDL2; `engine1999c` (the console host, no window) does not.
 - `make kit` builds the portable, profiling-free kit in `kit/` (git-ignored) and `make install` [`PREFIX=/usr/local`, `DESTDIR=`] installs the programs, the `BUILD` kit (`$(PREFIX)/lib/engine1999`), demos, docs and man pages; `make uninstall` removes them. `BUILD` finds an installed kit through `../lib/engine1999` relative to the running program.
 - The version (banner, `--version`, `--engine1999-about`) is the newest `vX.Y.Z` git tag: `bump_version.sh` tags (local only), `tagtoverstr.sh` writes the git-ignored `version.h` during `make` (`docs/build-and-test.md`, "Version").
-- `vmtest1` (back end), `repltest1` (REPL), `ansitest1` (ANSI decoder) and `txttest1` (text screen viewports), `asmtest1` (VM assembler/decoder), `synthtest1` (synthesizer core and music string parser) and `iotest1` (I/O drivers and channels) and `gfxtest1` (drawing core, tiles, sprites, text areas) `buildtest1` (the `BUILD` linking, run in the build directory) and `contest1` (the console host `engine1999c`, run in the build directory) are the automated regression tests (run `./vmtest1`, `./repltest1`, `./ansitest1`, `./txttest1`, `./asmtest1`, `./synthtest1`, `./iotest1`, `./gfxtest1`, `./buildtest1`, `./contest1`, exit status = failures); the other `*test*` programs are interactive/manual (see `docs/build-and-test.md`).
+- `vmtest1` (back end), `repltest1` (REPL), `ansitest1` (ANSI decoder) and `txttest1` (text screen viewports), `asmtest1` (VM assembler/decoder), `synthtest1` (synthesizer core and music string parser) and `iotest1` (I/O drivers and channels) and `gfxtest1` (drawing core, tiles, sprites, text areas) `buildtest1` (the `BUILD` linking, run in the build directory) and `contest1` (the console host `engine1999c`, run in the build directory) and `keytest1` (key sequences) are the automated regression tests (run `./vmtest1`, `./repltest1`, `./ansitest1`, `./txttest1`, `./asmtest1`, `./synthtest1`, `./iotest1`, `./gfxtest1`, `./buildtest1`, `./contest1`, `./keytest1`, exit status = failures); the other `*test*` programs are interactive/manual (see `docs/build-and-test.md`).
 - The makefile has a stale `8x12font.o` rule (file is `8x12font1.c`) and every object depends on *all* headers.
 - Build artifacts (`*.o`, binaries, `engine.lib`, `gmon.out`, `all`) are git-ignored but present in the working tree.
 
@@ -53,7 +53,7 @@ The program store, the syntax tree and the variables are heap structures now; th
 
 | Area | Files |
 |---|---|
-| SDL display/audio engine | `sdlmain, sdlscreen, sdllayer, textscreen (three screens + viewports), tilescreen, sprscreen, sdlaudio (audio device + timed events), sdlevent, sdlutil, 8x12font1.c`; `synth.[ch]`: synthesizer core (oscillators, mixer, event queue, no SDL; `docs/sound.md`), `mml.[ch]`: parser of the `PLAY` music strings; `ansi.[ch]`: ANSI SGR decoder (colors only) behind `sdlscr_ansi_puts/printf()`, no SDL dependency |
+| SDL display/audio engine | `sdlmain, sdlscreen, sdllayer, textscreen (three screens + viewports), tilescreen, sprscreen, sdlaudio (audio device + timed events), sdlevent, sdlutil, 8x12font1.c`; `synth.[ch]`: synthesizer core (oscillators, mixer, event queue, no SDL; `docs/sound.md`), `mml.[ch]`: parser of the `PLAY` music strings; `ansi.[ch]`: ANSI SGR decoder (colors only) behind `sdlscr_ansi_puts/printf()`, no SDL dependency; `keyseq.[ch]`: the escape sequences of cursor/function keys (canonical forms, parser of terminal dialects, no dependencies), `sdlkeys.[ch]`: SDL key code -> sequence (SDL headers only) |
 | BASIC tokenizer | `bastok.[ch]` (token IDs, tokenize/detokenize, literal codecs) |
 | Program store | `baslin.[ch]` (`line_t` nodes, encoded `linehdr_t`), `baspgm.[ch]` (pointer-linked list of lines, insert/replace/delete/list) |
 | Compiler front end | `bascomp.[ch]` + `bascomp.ebnf` (recursive descent → syntax tree), `nodetype.[ch]` (node types) |

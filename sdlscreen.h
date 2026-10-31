@@ -74,6 +74,7 @@ void sdlscr_enableinput( bool enable );
 void sdlscr_pollkeys( bool enable );        // queue keys (without the cursor) while a program runs; clears the break request
 int sdlscr_pollkey( void );                 // the next key code, 0 = none
 int sdlscr_getkey( void );                  // waits for a key; -1 = screen closed or break requested
+void sdlscr_setkeydebug( bool on );          // --debug-keys: print every SDL key event and text input (with the escape sequence made from it) to standard output
 bool sdlscr_breakrequested( void );         // ESC was pressed (or the screen was closed) since sdlscr_pollkeys( true )
 // key codes: printable ASCII as is, 13 = RETURN, 8 = BACKSPACE, 9 = TAB
 

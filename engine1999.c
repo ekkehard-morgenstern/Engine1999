@@ -1347,6 +1347,7 @@ int main( int argc, char** argv ) {
         return help ? EXIT_SUCCESS : 2;
     }
 
+    sdlscr_setkeydebug( basdbg_on( BASDBG_KEYS ) );
     sdl_init();
 
     srand( time(0) );

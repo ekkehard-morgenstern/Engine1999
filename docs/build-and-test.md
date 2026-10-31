@@ -8,7 +8,7 @@ Linux, `gcc`, `make`, SDL2 development files (`libsdl2-dev`). Perl only to regen
 
 | Command | Result |
 |---|---|
-| `make` | `engine.lib` (all modules in `BASEMOD`) + `sdltest1 sdltest2 engine1999 basictest1 testcomp1 basictest2 vmtest1 repltest1 ansitest1 txttest1 asmtest1 synthtest1 iotest1 gfxtest1 buildtest1 engine1999c contest1`, then writes marker file `all` |
+| `make` | `engine.lib` (all modules in `BASEMOD`) + `sdltest1 sdltest2 engine1999 basictest1 testcomp1 basictest2 vmtest1 repltest1 ansitest1 txttest1 asmtest1 synthtest1 iotest1 gfxtest1 buildtest1 engine1999c contest1 keytest1`, then writes marker file `all` |
 | `make DEBUG=1` | same with `-g` instead of `-O3` (do a `rm *.o engine.lib` first — objects do not track flags) |
 | `make <name>.o` | compile one module |
 
@@ -31,6 +31,7 @@ New modules must be added to both `BASEMOD` and `BASEHDR`. Known makefile wart: 
 | `contest1` | no | **Automated** test of the console host (and of `BUILD` from it, the console and window kits): runs `./engine1999c` in a temporary directory through the shell (pipes, files, exit codes, the `#!` line, `INPUT`/`GET`/`INKEY$` from a pipe, sound and graphics statements, SIGINT as Break); exit status = number of failures; run it in the build directory |
 | `buildtest1` | no | **Automated** test of `BUILD` (`basbuild.c`): links a dynamic executable with the system linker only, using the stand-in runtime `buildstub.o` (its `main()` writes the embedded program out) and checks the program is intact (all byte values), the ELF file, the dynamic linker and libc, error messages (missing runtime files, libraries, linker, unwritable output), that no work files are left behind, and (when `engine1999.o` and `engine.lib` are there) links the real runtime with SDL2 and asks it for `--engine1999-about`; and (with `engine1999c.o`) builds a real program into a console executable without SDL2 and runs it (arguments, input, exit status); exit status = number of failures. Needs `ld` and the C library development files. |
 | `txttest1` | no | **Automated** test of the text screen (`textscreen.c`): viewports (write clipping, wrapping, scrolling), the two screens, blank colors, rendering at the viewport position; exit status = number of failures |
+| `keytest1` | no | **Automated** test of the key sequences (`keyseq.c`, `sdlkeys.c`): the canonical sequences of the cursor and function keys with all modifiers, make -> parse round trip, the dialects terminals send, prefixes, garbage, names, the mapping of SDL key codes (no display needed); exit status = number of failures |
 | `ansitest1` | no | **Automated** test of the ANSI/SGR decoder (`ansi.c`): feeds texts with escape sequences and compares the text runs and colors handed to the callback; exit status = number of failures |
 | `testcomp1` | no | Randomized stress test for `varmem_t` (despite the name, it tests variables/strings, not the compiler): 5000 random create/delete/read/write operations checked against a shadow model; exit status 0 = passed |
 
@@ -88,6 +89,9 @@ trace output on **stdout** (one line per item, prefixed with the stage):
 | `--debug-tree` | `BASDBG_TREE` | `[tree]` the syntax tree after parsing (node names, data bytes as hex) |
 | `--debug-code` | `BASDBG_CODE` | `[code]` every instruction as the code generator emits it |
 | `--debug-all` | `BASDBG_ALL` | all of the above |
+| `--debug-keys` | `BASDBG_KEYS` | `[keys]` what the keyboard delivers (not part of `--debug-all`): see below |
+
+**`--debug-keys`** (the keyboard): `engine1999` prints one line per SDL event to stdout, e.g. `[keys]     3216 ms  SDL key down sym=0x40000052 "Up" scancode=82 mods=0x0001(LShift)  ->  1b 5b 31 3b 32 41  "\e[1;2A"  = Shift+Up` (the sequence is the one `sdlkeys_sequence()` makes, so it shows what a program will receive; modifier keys alone have none), key releases, and the text the keyboard layout makes (`SDL text input  c3 a4  "\xc3\xa4"` for `ä`). `engine1999c --debug-keys` runs no BASIC but dumps the bytes of the terminal: after each key press `N bytes, T ms after the previous key press` and one line per item (hex, C string, what it is, e.g. `Shift+Up (canonical)` or `unknown escape sequence`); Ctrl-D or the end of the input stops it; a pipe works, too (`printf '\033[1;2A' | engine1999c --debug-keys`). It is for finding out what a terminal sends before the console host's key input is written (roadmap section 4).
 
 `engine1999 --help` lists them. The tokenize/detokenize/tree dumps are produced by hooks in `repl_enter()` / `repl_execute()`;
 the parse and code output comes from the compiler and the code generator themselves, so any host gets it by setting the flags.

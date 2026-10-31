@@ -90,7 +90,13 @@ Print the syntax tree after parsing.
 Print every instruction the code generator emits.
 .TP
 .B \-\-debug\-all
-All of the debug outputs.
+All of the debug outputs (not
+.BR \-\-debug\-keys ).
+.TP
+.B \-\-debug\-keys
+Show what the terminal sends for each key instead of running BASIC: the bytes of every key press (those arriving within 30 ms belong together) as hex and as a C string, with what they are (a cursor or function key with its modifiers, a control code, a UTF-8 character, an unknown escape sequence).
+Ctrl-D or the end of the input stops it.
+This is for comparing the sequences of a terminal with the ones the Engine uses.
 .SH PROGRAM ARGUMENTS AND ENVIRONMENT
 The words after the file are the program's: with
 .B engine1999c prog.bas a "b c"
