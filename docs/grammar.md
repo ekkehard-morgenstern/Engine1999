@@ -420,6 +420,13 @@ files-stmt := FILES [ str-expr ] .
 build-stmt := BUILD str-expr .
 ```
 
+> BYE [code] and QUIT [code] (two words for one statement) end the program and the Engine (or the built executable) with the exit code
+> of the process: an integer 0..255, 0 without it. Anything after it is not executed. (EXIT is the loop word, see exit-stmt.)
+
+```ebnf
+bye-stmt := ( BYE | QUIT ) [ num-expr ] .
+```
+
 ## Sound
 
 > Sound (see docs/sound.md). Channels are 1..8. SOUND ch, freq, beats [, vol]: a tone of freq Hz (20..20000; 0 = a rest) for
@@ -581,7 +588,7 @@ gfx-all-stmt := gfx-stmt | txt-stmt | tile-stmt | sprite-stmt | cls-stmt | locat
 > Several statements on a line are separated by a colon; a line may end with a comment (an apostrophe).
 
 ```ebnf
-prog-stmt := gfx-all-stmt | load-stmt | run-stmt | merge-stmt | chain-stmt | files-stmt | build-stmt | timer-stmt | list-stmt | new-stmt | clear-stmt |
+prog-stmt := gfx-all-stmt | load-stmt | run-stmt | merge-stmt | chain-stmt | files-stmt | build-stmt | bye-stmt | timer-stmt | list-stmt | new-stmt | clear-stmt |
              delete-stmt | renum-stmt | edit-stmt | monitor-stmt | sound-stmt | wait-stmt | on-error-stmt | randomize-stmt | angle-stmt |
              cont-stmt | trace-stmt | auto-stmt | poke-stmt .
 stmt := io-stmt | prog-stmt | assign-stmt | control-flow-stmt .

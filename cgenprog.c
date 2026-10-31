@@ -589,6 +589,24 @@ bool cgen_from_newstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     return cgen_gen_new( cgen ) || cgen_out_of_code_memory( comp );
 }
 
+bool cgen_from_byestmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    /*
+        NT_BYESTMT      BYE statement
+            branches: none, or 1 numeric expression (the exit code; 0 without it)
+        code: <code or 0> BYE
+    */
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->type != NT_BYESTMT || node->numbranches > 1U ) {
+        return cgen_unexpected_node( comp );
+    }
+    if ( node->numbranches == 1U ? !cgen_from_numexpr( cgen, comp, node->branches[0] ) : !cgen_gen_phim( cgen, 0 ) ) {
+        return node->numbranches == 1U ? false : cgen_out_of_code_memory( comp );
+    }
+    return cgen_gen_bye( cgen ) || cgen_out_of_code_memory( comp );
+}
+
 bool cgen_from_monitorstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     // NT_MONITORSTMT  MONITOR statement (no data, no branches)
     if ( node == NODE_NONE ) {

@@ -807,6 +807,12 @@ static bool repl_finish( repl_t* repl, bool ok, bool direct ) {
             free( name );
             return true;
         }
+        if ( kind == VMREQ_QUIT ) {
+            repl->quit = true;          // back to the host, which ends the process; nothing runs afterwards
+            repl->exitcode = line;
+            free( name );
+            return true;
+        }
         if ( kind == VMREQ_MONITOR ) {
             repl->monitor = true;       // back to the host: nothing runs afterwards
             free( name );

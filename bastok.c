@@ -831,7 +831,7 @@ static const struct {
     { TOK_PI, "PI" }, { TOK_RANDOMIZE, "RANDOMIZE" }, { TOK_DEG, "DEG" }, { TOK_RAD, "RAD" }, { TOK_GRAD, "GRAD" }, { TOK_EXIT, "EXIT" }, { TOK_LEAVE, "LEAVE" }, { TOK_ITERATE, "ITERATE" },
     { TOK_FLOOR, "FLOOR" }, { TOK_CEIL, "CEIL" }, { TOK_LOG2, "LOG2" }, { TOK_LOG10, "LOG10" }, { TOK_TIME, "TIME" }, { TOK_DATE, "DATE" },
     { TOK_DATETIME, "DATETIME" }, { TOK_IMP, "IMP" }, { TOK_NIMP, "NIMP" }, { TOK_EQV, "EQV" }, { TOK_NEQV, "NEQV" }, { TOK_SHL, "SHL" },
-    { TOK_SHR, "SHR" }, { TOK_ASL, "ASL" }, { TOK_ASR, "ASR" }, { TOK_PROC, "PROC" }, { TOK_FUNC, "FUNC" }, { TOK_CALL, "CALL" }, { TOK_LOCAL, "LOCAL" }, { TOK_RESUME, "RESUME" }, { TOK_STOP, "STOP" }, { TOK_CONT, "CONT" }, { TOK_TRACE, "TRACE" }, { TOK_PEEK, "PEEK" }, { TOK_POKE, "POKE" }, { TOK_BUILD, "BUILD" },
+    { TOK_SHR, "SHR" }, { TOK_ASL, "ASL" }, { TOK_ASR, "ASR" }, { TOK_PROC, "PROC" }, { TOK_FUNC, "FUNC" }, { TOK_CALL, "CALL" }, { TOK_LOCAL, "LOCAL" }, { TOK_RESUME, "RESUME" }, { TOK_STOP, "STOP" }, { TOK_CONT, "CONT" }, { TOK_TRACE, "TRACE" }, { TOK_PEEK, "PEEK" }, { TOK_POKE, "POKE" }, { TOK_BUILD, "BUILD" }, { TOK_BYE, "BYE" }, { TOK_QUIT, "QUIT" },
     { TOK_GFX, "GFX" }, { TOK_SPRITE, "SPRITE" }, { TOK_TILE, "TILE" }, { TOK_TXT, "TXT" }, { TOK_DESIGN, "DESIGN" },
     { TOK_RGB, "RGB" }, { TOK_POINT, "POINT" }, { TOK_CLS, "CLS" }, { TOK_LOCATE, "LOCATE" }, { TOK_COLOR, "COLOR" }, { TOK_AMP, "&" }, { TOK_LE, "<=" }, { TOK_GE, ">=" }, { TOK_NE, "<>" }, { 0, 0 }
 };
@@ -1027,7 +1027,7 @@ FAIL:
 static hlclass_t keyword_hlclass( uint8_t tok ) {
     switch ( tok ) {
         case TOK_LIST: case TOK_SAVE: case TOK_RUN: case TOK_AUTO: case TOK_CONT: case TOK_TRACE: case TOK_RENUM: case TOK_DELETE: case TOK_MERGE:
-        case TOK_CHAIN: case TOK_FILES: case TOK_BUILD: case TOK_NEW: case TOK_CLEAR: case TOK_EDIT: case TOK_MONITOR: case TOK_LOAD: case TOK_SHOW:
+        case TOK_CHAIN: case TOK_FILES: case TOK_BUILD: case TOK_BYE: case TOK_QUIT: case TOK_NEW: case TOK_CLEAR: case TOK_EDIT: case TOK_MONITOR: case TOK_LOAD: case TOK_SHOW:
         case TOK_WARRANTY: case TOK_COPYING:
             return HL_COMMAND;
         case TOK_GOTO: case TOK_GOSUB: case TOK_GO: case TOK_TO: case TOK_SUB: case TOK_RETURN: case TOK_IF:

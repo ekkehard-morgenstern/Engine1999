@@ -1878,6 +1878,22 @@ static bool vm_monitor_request( vm_t* vm ) {
     return true;
 }
 
+// BYE ( code -- ): leaves a request for the host and ends the run
+static bool vm_quit_request( vm_t* vm ) {
+    double code;
+    if ( !vm_dpop_num( vm, &code ) ) {
+        return false;
+    }
+    if ( !( code >= 0.0 && code <= 255.0 ) || code != floor( code ) ) {
+        return vm_error( vm, "Illegal argument" );
+    }
+    vm_clear_request( vm );
+    vm->request = VMREQ_QUIT;
+    vm->reqline = (int32_t) code;
+    vm->pc = vm->cgen->codesize;
+    return true;
+}
+
 // the channel number 1..8 -> 0..7; false after reporting an error
 static bool vm_sound_channel( vm_t* vm, double num, int* pchan ) {
     if ( !( num >= 1.0 && num < 9.0 ) ) {
@@ -3572,6 +3588,7 @@ static bool vm_step( vm_t* vm ) {
         case INS_CHN: return vm_chain_program( vm, param16 != 0 );
         case INS_FILS: return vm_list_files( vm );
         case INS_BLD: return vm_build_program( vm );
+        case INS_BYE: return vm_quit_request( vm );
         case INS_EDIT: return vm_edit_request( vm );
         case INS_DELE: return vm_edit_program( vm, false );
         case INS_RENM: return vm_edit_program( vm, true );

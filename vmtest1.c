@@ -807,6 +807,25 @@ static const testcase_t cases[] = {
     { "FILES goes on",          "PRINT 1:FILES:PRINT 2",                           "1\n<files \"\">\n2\n" },
     { "FILES before ELSE",      "IF 0 THEN FILES ELSE PRINT 3",                    "3\n" },
     { "FILES after a colon",    "FILES:PRINT 5",                                   "<files \"\">\n5\n" },
+    { "BYE",                    "BYE",                                             "<request QUIT 0>\n" },
+    { "BYE with a code",        "BYE 3",                                           "<request QUIT 3>\n" },
+    { "BYE expression",         "A=2:BYE A*3",                                     "<request QUIT 6>\n" },
+    { "BYE ends the run",       "PRINT 1:BYE 2:PRINT 3",                           "1\n<request QUIT 2>\n" },
+    { "QUIT",                   "QUIT",                                            "<request QUIT 0>\n" },
+    { "QUIT with a code",       "QUIT 12",                                         "<request QUIT 12>\n" },
+    { "QUIT ends the run",      "PRINT 1:QUIT 2:PRINT 3",                          "1\n<request QUIT 2>\n" },
+    { "QUIT before ELSE",       "IF 1 THEN QUIT ELSE PRINT 1",                     "<request QUIT 0>\n" },
+    { "QUIT 256",               "QUIT 256",                                        "? Illegal argument\n" },
+    { "QUIT in a program",      "10 PRINT 1\n20 QUIT 6\n30 PRINT 5",               "1\n<request QUIT 6>\n" },
+    { "BYE lower case",         "bye 8",                                           "<request QUIT 8>\n" },
+    { "BYE before ELSE",        "IF 1 THEN BYE ELSE PRINT 1",                      "<request QUIT 0>\n" },
+    { "BYE in the ELSE branch", "IF 0 THEN PRINT 1 ELSE BYE 4",                    "<request QUIT 4>\n" },
+    { "BYE 255",                "BYE 255",                                         "<request QUIT 255>\n" },
+    { "BYE 256",                "BYE 256",                                         "? Illegal argument\n" },
+    { "BYE -1",                 "BYE -1",                                          "? Illegal argument\n" },
+    { "BYE 1.5",                "BYE 1.5",                                         "? Illegal argument\n" },
+    { "BYE with a string",      "BYE \"A\"",                                       "? Numeric expression expected\n" },
+    { "BYE in a program",       "10 PRINT 1\n20 BYE 4\n30 PRINT 5",                "1\n<request QUIT 4>\n" },
     { "BUILD",                  "BUILD \"GAME\"",                                  "<build \"GAME\">\n" },
     { "BUILD name expression",  "A$=\"G\"\nBUILD A$+\"2\"",                        "<build \"G2\">\n" },
     { "BUILD goes on",          "PRINT 1:BUILD \"X\":PRINT 2",                     "1\n<build \"X\">\n2\n" },
@@ -1478,6 +1497,8 @@ static bool compile_and_run( void ) {
             snprintf( text, sizeof(text), "<request LOAD %s>\n", vm.reqname );
         } else if ( vm.request == VMREQ_NEW ) {
             snprintf( text, sizeof(text), "<request NEW>\n" );
+        } else if ( vm.request == VMREQ_QUIT ) {
+            snprintf( text, sizeof(text), "<request QUIT %d>\n", (int) vm.reqline );
         } else if ( vm.request == VMREQ_MONITOR ) {
             snprintf( text, sizeof(text), "<request MONITOR>\n" );
         } else if ( vm.request == VMREQ_CHAIN ) {

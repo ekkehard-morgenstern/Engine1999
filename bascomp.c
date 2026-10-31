@@ -3382,6 +3382,31 @@ bool comp_eat_buildstmt( compiler_t* comp, node_t** pnode ) {
     return true;
 }
 
+bool comp_eat_byestmt( compiler_t* comp, node_t** pnode ) {
+    // bye-stmt := ( TOK_BYE | TOK_QUIT ) [ num-expr ] .
+    if ( ( comp->currtok != TOK_BYE && comp->currtok != TOK_QUIT ) || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    node_t* code = NODE_NONE;
+    if ( comp->currtok != TOK_EOL && comp->currtok != TOK_COLON && comp->currtok != TOK_ELSE ) {
+        if ( !comp_eat_numexpr( comp, &code ) || code == NODE_NONE ) {
+            comp_error( comp, "Numeric expression expected" );
+            return false;
+        }
+    }
+    /*
+        NT_BYESTMT      BYE statement
+            branches:
+                - none, or 1 branch of numeric expression (the exit code of the process)
+    */
+    if ( !( code != NODE_NONE ? comp_create_node( comp, pnode, NT_BYESTMT, UINT8_C(1), UINT16_C(0), 0, code ) :
+            comp_create_node( comp, pnode, NT_BYESTMT, UINT8_C(0), UINT16_C(0), 0 ) ) || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
 bool comp_eat_editstmt( compiler_t* comp, node_t** pnode ) {
     // edit-stmt := TOK_EDIT [ goto-target ] .
     if ( comp->currtok != TOK_EDIT || !comp_fetchtok( comp ) ) {
@@ -3652,7 +3677,7 @@ bool comp_eat_clearstmt( compiler_t* comp, node_t** pnode ) {
 }
 
 bool comp_eat_progstmt( compiler_t* comp, node_t** pnode ) {
-    // prog-stmt := load-stmt | run-stmt | merge-stmt | chain-stmt | files-stmt | build-stmt | open-stmt | close-stmt | address-stmt | timer-stmt | list-stmt | new-stmt | clear-stmt | delete-stmt | renum-stmt | edit-stmt | monitor-stmt |
+    // prog-stmt := load-stmt | run-stmt | merge-stmt | chain-stmt | files-stmt | build-stmt | bye-stmt | open-stmt | close-stmt | address-stmt | timer-stmt | list-stmt | new-stmt | clear-stmt | delete-stmt | renum-stmt | edit-stmt | monitor-stmt |
     //              sound-stmt | wait-stmt .
     // [ NT_PROGSTMT - not generated ]
     if ( comp_eat_loadstmt( comp, pnode ) && *pnode != NODE_NONE ) {
@@ -3671,6 +3696,9 @@ bool comp_eat_progstmt( compiler_t* comp, node_t** pnode ) {
         return true;
     }
     if ( comp_eat_buildstmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_byestmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     if ( comp_eat_openstmt( comp, pnode ) && *pnode != NODE_NONE ) {

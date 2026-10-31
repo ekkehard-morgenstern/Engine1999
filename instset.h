@@ -526,6 +526,9 @@ The 4096 extended instructions are as follows:
                             BUILD: asks the host (build callback) to create the executable file <name> from the stored program (the run goes
                             on). "Illegal argument" for an empty name, "BUILD is not available" without the callback; the host reports why a build
                             failed ("Build failed").
+    0001 01111000       BYE - quit ( code -- ) C=0 P=0
+                            BYE [code] / QUIT [code]: leaves a request for the host (VMREQ_QUIT, the exit code in reqline) and ends the run. The host ends the
+                            Engine (or the built program) with the code. "Illegal argument" unless the code is an integer 0..255.
     MATH kinds 14..16: CEIL, LOG2, LOG10 (kind 1, INT, is FLOOR as well).
 
 */
@@ -699,5 +702,6 @@ The 4096 extended instructions are as follows:
 #define INS_PEKS        UINT16_C(0X175)
 #define INS_POKE        UINT16_C(0X176)
 #define INS_BLD         UINT16_C(0X177)
+#define INS_BYE         UINT16_C(0X178)
 
 #endif

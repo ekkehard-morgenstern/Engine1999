@@ -1354,6 +1354,11 @@ static int run_embedded( int argc, char** argv ) {
         ok = repl_run( &repl );
         sdlscr_pollkeys( false );
     }
+    if ( repl.quit ) {      // BYE [code]: the program ends the process at once, with its code
+        int code = repl.exitcode;
+        cleanup_repl( &repl );
+        return code;
+    }
     if ( !sdlscr_term() ) {
         if ( !ok && !break_reported ) {
             host_newline();
@@ -1444,6 +1449,7 @@ int main( int argc, char** argv ) {
                 snprintf( buf, sizeof(buf), "%u %s", (unsigned) repl.autoline, t );
                 uint32_t entered = repl.autoline;
                 handle_input( buf );
+                if ( repl.quit ) break;
                 if ( repl.autoline == entered ) {       // (the line may have been an AUTO of its own)
                     repl.autoline += repl.autostep;
                 }
@@ -1451,7 +1457,9 @@ int main( int argc, char** argv ) {
             }
             int ev = sdlscr_lineinput( 0, buf, 256U, vblank_handler, &usrdata );
             if ( ev & SDLEV_SCREENWORKERFINISHED ) break;
-            if ( handle_input( buf ) ) {
+            bool ready = handle_input( buf );
+            if ( repl.quit ) break;         // BYE / EXIT
+            if ( ready ) {
                 host_newline();
                 sdlscr_printf( -1, -1, -1, -1, "%s", "Ready.\n" );
             }
@@ -1461,6 +1469,9 @@ int main( int argc, char** argv ) {
     }
 
 EXIT:
-    cleanup_repl( &repl );
-    return EXIT_SUCCESS;
+    {
+        int code = repl.quit ? repl.exitcode : EXIT_SUCCESS;     // BYE [code]
+        cleanup_repl( &repl );
+        return code;
+    }
 }

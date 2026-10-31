@@ -77,6 +77,7 @@ Policies chosen by this implementation (the instruction set does not define them
       command substitution); the exit status is ignored; output longer than 65535 bytes is an error
     - DELETE and RENUM (DELE, RENM) call the host (deletelines / renumber callbacks) and end the run afterwards
     - MON (MONITOR) leaves a request (VMREQ_MONITOR) and ends the run, like NEW
+    - BYE leaves a request, too (VMREQ_QUIT, the exit code 0..255 in reqline): the host ends the process
     - SND (SOUND, PLAY, WAVE, TEMPO, SOUND OFF/SYNC) and PLNG (PLAYING) use vm_t.sound; channels are 1..8 in BASIC (0..7 in the
       callbacks). PLAY parses all its strings (mml.h) before anything is queued: a wrong string is an error and queues nothing.
       PLAY first syncs the voices' channels, so the voices start together (after what the channels still have queued); the
@@ -120,6 +121,7 @@ Policies chosen by this implementation (the instruction set does not define them
 #define VMREQ_RUN           2       // clear the variables and run the program from reqname (label) / reqline, or the start
 #define VMREQ_EDIT          4       // let the user edit the line reqline / the line of the label reqname; the run is not continued
 #define VMREQ_MONITOR       5       // open the machine monitor; the run is not continued
+#define VMREQ_QUIT          8       // end the Engine / the built program with the exit code reqline; the run is not continued
 #define VMREQ_AUTO          7       // start AUTO line numbering at reqline (-1 = 10) with the step reqstep (-1 = 10); the run is not continued
 #define VMREQ_CHAIN         6       // load (reqmerge: merge) the file reqname and run the program from reqlabel / reqline, keeping variables
 

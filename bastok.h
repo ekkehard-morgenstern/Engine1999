@@ -296,6 +296,8 @@
 #define TOK_PEEK        UINT8_C(243)        // PEEK function, PEEK$ function
 #define TOK_POKE        UINT8_C(244)        // POKE keyword
 #define TOK_BUILD       UINT8_C(245)        // BUILD keyword
+#define TOK_BYE         UINT8_C(246)        // BYE keyword (quit the program / the Engine)
+#define TOK_QUIT        UINT8_C(247)        // QUIT keyword (the same as BYE)
 #define TOK_NONE        UINT8_C(255)        // no token (!)
 
 // -- buffers ---------------------------------------------------------------

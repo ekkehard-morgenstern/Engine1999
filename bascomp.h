@@ -253,6 +253,7 @@ bool comp_eat_againstmt( compiler_t* comp, node_t** pnode );
 bool comp_eat_exitstmt( compiler_t* comp, node_t** pnode );
 bool comp_eat_pokestmt( compiler_t* comp, node_t** pnode );
 bool comp_eat_buildstmt( compiler_t* comp, node_t** pnode );
+bool comp_eat_byestmt( compiler_t* comp, node_t** pnode );
 bool comp_eat_debugstmt( compiler_t* comp, node_t** pnode );
 bool comp_eat_resumestmt( compiler_t* comp, node_t** pnode );
 bool comp_eat_callargs( compiler_t* comp, node_t** pnode );

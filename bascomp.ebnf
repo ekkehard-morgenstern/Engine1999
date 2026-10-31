@@ -335,6 +335,9 @@ files-stmt := TOK_FILES [ str-expr ] .
 -- executable starts the program at once, without banner and REPL (--engine1999-about shows the license notice). The run goes on.
 -- Names of BASIC program files (.bas, .e99) and names with a driver prefix are refused. See LICENSE-EXCEPTION.
 build-stmt := TOK_BUILD str-expr .
+-- BYE [code] and QUIT [code] (two words for one statement) end the program and the Engine (or the built executable) with the exit code
+-- of the process: an integer 0..255, 0 without it. Anything after it is not executed. (EXIT is the loop word, see exit-stmt.)
+bye-stmt := ( TOK_BYE | TOK_QUIT ) [ num-expr ] .
 
 --# Sound
 -- Sound (see docs/sound.md). Channels are 1..8. SOUND ch, freq, beats [, vol]: a tone of freq Hz (20..20000; 0 = a rest) for
@@ -441,7 +444,7 @@ gfx-all-stmt := gfx-stmt | txt-stmt | tile-stmt | sprite-stmt | cls-stmt | locat
 -- The statements by group: io-stmt (PRINT, INPUT, GET, DATA, READ, OPEN, CLOSE, ...), prog-stmt (program commands, sound, graphics, timers, error
 -- handling, debugging; they work inside programs, too), assign-stmt (LET, DIM, ERASE, DEF FN) and control-flow-stmt (loops, IF, GOTO, PROC ...).
 -- Several statements on a line are separated by a colon; a line may end with a comment (an apostrophe).
-prog-stmt := gfx-all-stmt | load-stmt | run-stmt | merge-stmt | chain-stmt | files-stmt | build-stmt | timer-stmt | list-stmt | new-stmt | clear-stmt |
+prog-stmt := gfx-all-stmt | load-stmt | run-stmt | merge-stmt | chain-stmt | files-stmt | build-stmt | bye-stmt | timer-stmt | list-stmt | new-stmt | clear-stmt |
              delete-stmt | renum-stmt | edit-stmt | monitor-stmt | sound-stmt | wait-stmt | on-error-stmt | randomize-stmt | angle-stmt |
              cont-stmt | trace-stmt | auto-stmt | poke-stmt .
 

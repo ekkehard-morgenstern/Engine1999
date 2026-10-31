@@ -188,6 +188,20 @@ static const testcase_t cases[] = {
     { "RENUM empty program",    "RENUM",                                              "" },
     { "RENUM in a program ends the run", "10 PRINT 1\n20 RENUM\n30 PRINT 3\n5 PRINT 0\nRUN\nLIST", "0\n1\n10 PRINT 0\n20 PRINT 1\n30 RENUM\n40 PRINT 3\n" },
     { "RENUM then SAVE and LOAD", "1 PRINT 1\n2 GOTO 4\n3 PRINT 3\n4 PRINT 4\nRENUM\nSAVE \"" TESTFILE "\",A\nNEW\nLOAD \"" TESTFILE "\"\nRUN", "1\n4\n" },
+    { "BYE",                    "PRINT 1\nBYE\nPRINT 2",                           "1\n<quit 0>\n" },
+    { "BYE with a code",        "BYE 7",                                           "<quit 7>\n" },
+    { "QUIT",                   "PRINT 1\nQUIT\nPRINT 2",                          "1\n<quit 0>\n" },
+    { "QUIT with a code",       "QUIT 3",                                          "<quit 3>\n" },
+    { "quit lower case with leading blanks", "  quit 4",                           "<quit 4>\n" },
+    { "QUIT expression",        "A=5\nQUIT A+1",                                   "<quit 6>\n" },
+    { "BYE ends a program",     "10 PRINT 1\n20 BYE 2\n30 PRINT 3\nRUN\nPRINT 9",  "1\n<quit 2>\n" },
+    { "BYE in a loop",          "10 FOR I=1 TO 5\n20 PRINT I\n30 IF I=2 THEN BYE 9\n40 NEXT\nRUN", "1\n2\n<quit 9>\n" },
+    { "BYE in a procedure",     "10 CALL P\n20 PRINT 2\n30 PROC P\n40 PRINT 1:BYE 5\n50 END PROC\nRUN", "1\n<quit 5>\n" },
+    { "BYE code out of range",  "BYE 256",                                         "? Illegal argument\n" },
+    { "BYE negative code",      "BYE -1",                                          "? Illegal argument\n" },
+    { "BYE fractional code",    "BYE 1.5",                                         "? Illegal argument\n" },
+    { "EXIT is a loop word in a program", "10 FOR I=1 TO 3\n20 PRINT I\n30 EXIT\n40 NEXT\n50 PRINT 9\nRUN", "1\n9\n" },
+    { "EXIT outside a loop in a program", "10 EXIT\nRUN",                        "? EXIT without loop in line 10\n" },
     { "BUILD without a program", "BUILD \"repltest1b\"",                             "? No program\n" },
     { "BUILD refuses a program file name", "10 PRINT 1\nBUILD \"repltest1b.BAS\"",  "? Bad name for an executable\n" },
     { "BUILD refuses .e99",     "10 PRINT 1\nBUILD \"repltest1b.e99\"",             "? Bad name for an executable\n" },
@@ -390,6 +404,12 @@ static bool run_case( const testcase_t* tc ) {
     char* src = strdup( tc->source );
     for ( char* line = strtok( src, "\n" ); line; line = strtok( 0, "\n" ) ) {
         repl_enter( &repl, line );
+        if ( repl.quit ) {      // BYE: like the host, stop entering lines; the exit code is part of the output
+            char text[40];
+            snprintf( text, sizeof(text), "<quit %d>\n", repl.exitcode );
+            out_append( text );
+            break;
+        }
     }
     free( src );
     cleanup_repl( &repl );
