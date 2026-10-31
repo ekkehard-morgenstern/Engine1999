@@ -15,8 +15,10 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-    NOTE: Programs created with a built-in programming language (if any),
-          do not fall under this license.
+    ADDITIONAL PERMISSION (GPLv3 section 7): the Engine1999 Runtime Exception
+        applies. Programs written in the built-in programming language, and
+        executables made from them with BUILD, do not fall under this license
+        as the exception describes (see the file LICENSE-EXCEPTION).
 
     CONTACT INFO:
         E-Mail: ekkehard@ekkehardmorgenstern.de
@@ -186,6 +188,12 @@ static const testcase_t cases[] = {
     { "RENUM empty program",    "RENUM",                                              "" },
     { "RENUM in a program ends the run", "10 PRINT 1\n20 RENUM\n30 PRINT 3\n5 PRINT 0\nRUN\nLIST", "0\n1\n10 PRINT 0\n20 PRINT 1\n30 RENUM\n40 PRINT 3\n" },
     { "RENUM then SAVE and LOAD", "1 PRINT 1\n2 GOTO 4\n3 PRINT 3\n4 PRINT 4\nRENUM\nSAVE \"" TESTFILE "\",A\nNEW\nLOAD \"" TESTFILE "\"\nRUN", "1\n4\n" },
+    { "BUILD without a program", "BUILD \"repltest1b\"",                             "? No program\n" },
+    { "BUILD refuses a program file name", "10 PRINT 1\nBUILD \"repltest1b.BAS\"",  "? Bad name for an executable\n" },
+    { "BUILD refuses .e99",     "10 PRINT 1\nBUILD \"repltest1b.e99\"",             "? Bad name for an executable\n" },
+    { "BUILD refuses other drivers", "10 PRINT 1\nBUILD \"mem:b\"",                 "? Bad name for an executable\n" },
+    { "BUILD unknown driver",   "10 PRINT 1\nBUILD \"zzz:b\"",                      "? Device not found\n" },
+    { "BUILD error in a program", "10 PRINT 1\n20 BUILD \"b.e99\"\nRUN",           "1\n? Bad name for an executable in line 20\n" },
     { "NEW in a program",       "10 PRINT 1\n20 NEW\n30 PRINT 3\nRUN\nLIST\nRUN",        "1\n? Empty program\n" },
     { "NEW clears variables",   "A=4\nNEW\nPRINT A",                                   "0\n" },
     { "NEW then a new program", "10 PRINT 1\nNEW\n10 PRINT 2\nRUN",                    "2\n" },

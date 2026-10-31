@@ -17,8 +17,10 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-    NOTE: Programs created with a built-in programming language (if any),
-          do not fall under this license.
+    ADDITIONAL PERMISSION (GPLv3 section 7): the Engine1999 Runtime Exception
+        applies. Programs written in the built-in programming language, and
+        executables made from them with BUILD, do not fall under this license
+        as the exception describes (see the file LICENSE-EXCEPTION).
 
     CONTACT INFO:
         E-Mail: ekkehard@ekkehardmorgenstern.de
@@ -126,5 +128,7 @@ bool repl_compile( repl_t* repl );          // compiles the stored program witho
 bool repl_vm_start( repl_t* repl, uint32_t addr );    // monitor: suspend the VM at addr (code segment as it is, empty stacks, variables kept)
 bool repl_vm_resume( repl_t* repl, bool step, const uint32_t* breakpoints, size_t numbreakpoints );   // continue / single-step it; see repl_vm_resume()
 bool repl_save_program( repl_t* repl, const char* filename, bool ascii );   // for the host's SAVE callback
+bool repl_program_image( repl_t* repl, uint8_t** pdata, size_t* plen );     // the stored program as a binary program file (malloc'ed); BUILD
+bool repl_load_image( repl_t* repl, const void* data, size_t len );         // replaces the stored program by a program file in memory
 
 #endif

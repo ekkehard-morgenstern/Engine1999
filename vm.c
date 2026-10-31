@@ -16,8 +16,10 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-    NOTE: Programs created with a built-in programming language (if any),
-          do not fall under this license.
+    ADDITIONAL PERMISSION (GPLv3 section 7): the Engine1999 Runtime Exception
+        applies. Programs written in the built-in programming language, and
+        executables made from them with BUILD, do not fall under this license
+        as the exception describes (see the file LICENSE-EXCEPTION).
 
     CONTACT INFO:
         E-Mail: ekkehard@ekkehardmorgenstern.de
@@ -102,6 +104,7 @@ void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem ) {
     vm->irqsafe = false;
     vm->irqpending = false;
     vm->files    = 0;
+    vm->build    = 0;
     vm->request  = VMREQ_NONE;
     vm->reqname  = 0;
     vm->reqline  = -1;
@@ -1442,6 +1445,24 @@ static bool vm_merge_program( vm_t* vm, bool append ) {
     } else {
         ok = vm->merge( vm, vm->userdata, name, append );
         vm->pc = vm->cgen->codesize;
+    }
+    free( name );
+    return ok;
+}
+
+// BLD ( s -- ): the host builds an executable from the stored program
+static bool vm_build_program( vm_t* vm ) {
+    char* name;
+    if ( !vm_dpop_str( vm, &name ) ) {
+        return false;
+    }
+    bool ok = true;
+    if ( name[0] == '\0' ) {
+        ok = vm_error( vm, "Illegal argument" );
+    } else if ( vm->build == 0 ) {
+        ok = vm_error( vm, "BUILD is not available" );
+    } else {
+        ok = vm->build( vm, vm->userdata, name );
     }
     free( name );
     return ok;
@@ -3550,6 +3571,7 @@ static bool vm_step( vm_t* vm ) {
         case INS_MRG: return vm_merge_program( vm, param16 != 0 );
         case INS_CHN: return vm_chain_program( vm, param16 != 0 );
         case INS_FILS: return vm_list_files( vm );
+        case INS_BLD: return vm_build_program( vm );
         case INS_EDIT: return vm_edit_request( vm );
         case INS_DELE: return vm_edit_program( vm, false );
         case INS_RENM: return vm_edit_program( vm, true );

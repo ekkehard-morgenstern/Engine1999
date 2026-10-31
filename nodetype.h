@@ -16,8 +16,10 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-    NOTE: Programs created with a built-in programming language (if any),
-          do not fall under this license.
+    ADDITIONAL PERMISSION (GPLv3 section 7): the Engine1999 Runtime Exception
+        applies. Programs written in the built-in programming language, and
+        executables made from them with BUILD, do not fall under this license
+        as the exception describes (see the file LICENSE-EXCEPTION).
 
     CONTACT INFO:
         E-Mail: ekkehard@ekkehardmorgenstern.de
@@ -661,6 +663,7 @@ Explanation of node types:
 #define NT_TRACESTMT            UINT8_C(0X80)   // TRACE ON / OFF (data: 1 byte, 1 = ON, 0 = OFF)
 #define NT_AUTOSTMT             UINT8_C(0X81)   // AUTO [start[,step]] (0..2 numeric branches)
 #define NT_POKESTMT             UINT8_C(0X82)   // POKE addr, value [, size] (2 or 3 branches; the value is a number or a string)
+#define NT_BUILDSTMT            UINT8_C(0X83)   // BUILD name (1 branch: a string expression, the name of the executable)
 #define NT_EXITSTMT             UINT8_C(0X79)   // EXIT / LEAVE / ITERATE (data: 1 byte kind, 1 = leave, 2 = iterate; 2 bytes loop number)
 #define NT_FILESSTMT            UINT8_C(0X69)   // FILES statement (0 or 1 string branch: the file name pattern)
 #define NT_CHAINSTMT            UINT8_C(0X68)   // CHAIN statement (data: 1 byte, 1 = MERGE; the file name, then an optional goto target)

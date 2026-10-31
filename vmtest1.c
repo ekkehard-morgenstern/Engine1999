@@ -16,8 +16,10 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-    NOTE: Programs created with a built-in programming language (if any),
-          do not fall under this license.
+    ADDITIONAL PERMISSION (GPLv3 section 7): the Engine1999 Runtime Exception
+        applies. Programs written in the built-in programming language, and
+        executables made from them with BUILD, do not fall under this license
+        as the exception describes (see the file LICENSE-EXCEPTION).
 
     CONTACT INFO:
         E-Mail: ekkehard@ekkehardmorgenstern.de
@@ -805,6 +807,14 @@ static const testcase_t cases[] = {
     { "FILES goes on",          "PRINT 1:FILES:PRINT 2",                           "1\n<files \"\">\n2\n" },
     { "FILES before ELSE",      "IF 0 THEN FILES ELSE PRINT 3",                    "3\n" },
     { "FILES after a colon",    "FILES:PRINT 5",                                   "<files \"\">\n5\n" },
+    { "BUILD",                  "BUILD \"GAME\"",                                  "<build \"GAME\">\n" },
+    { "BUILD name expression",  "A$=\"G\"\nBUILD A$+\"2\"",                        "<build \"G2\">\n" },
+    { "BUILD goes on",          "PRINT 1:BUILD \"X\":PRINT 2",                     "1\n<build \"X\">\n2\n" },
+    { "BUILD before ELSE",      "IF 0 THEN BUILD \"X\" ELSE PRINT 3",              "3\n" },
+    { "BUILD in a program",     "10 PRINT 1\n20 BUILD \"P\"\n30 PRINT 3",          "1\n<build \"P\">\n3\n" },
+    { "BUILD empty name",       "BUILD \"\"",                                      "? Illegal argument\n" },
+    { "BUILD needs a name",     "BUILD",                                           "? String expression expected\n" },
+    { "BUILD with a number",    "BUILD 5",                                         "? String expression expected\n" },
     { "CHAIN",                  "CHAIN \"PROG\"",                                  "<request CHAIN PROG \"\" -1>\n" },
     { "CHAIN to a line",        "CHAIN \"PROG\",100",                              "<request CHAIN PROG \"\" 100>\n" },
     { "CHAIN to a label",       "CHAIN \"PROG\",START",                            "<request CHAIN PROG \"START\" -1>\n" },
@@ -1220,6 +1230,13 @@ static bool vm_merge( struct _vm_t* vm, void* usrdata, const char* name, bool ap
     return true;
 }
 
+static bool vm_build( struct _vm_t* vm, void* usrdata, const char* name ) {
+    char text[200];
+    snprintf( text, sizeof(text), "<build \"%s\">\n", name );
+    out_append( text );
+    return true;
+}
+
 static bool vm_files( struct _vm_t* vm, void* usrdata, const char* spec ) {
     char text[200];
     snprintf( text, sizeof(text), "<files \"%s\">\n", spec );
@@ -1448,6 +1465,7 @@ static bool compile_and_run( void ) {
     vm.renumber = vm_renumber;
     vm.merge    = vm_merge;
     vm.files    = vm_files;
+    vm.build    = vm_build;
     vm.sound    = &test_sound;
     vm.gfx      = &test_gfx;
     gfx_polls   = 0;

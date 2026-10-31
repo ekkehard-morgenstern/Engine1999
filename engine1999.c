@@ -15,8 +15,10 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-    NOTE: Programs created with a built-in programming language (if any),
-          do not fall under this license.
+    ADDITIONAL PERMISSION (GPLv3 section 7): the Engine1999 Runtime Exception
+        applies. Programs written in the built-in programming language, and
+        executables made from them with BUILD, do not fall under this license
+        as the exception describes (see the file LICENSE-EXCEPTION).
 
     CONTACT INFO:
         E-Mail: ekkehard@ekkehardmorgenstern.de
@@ -33,6 +35,7 @@
 #include "basdebug.h"
 #include "gfxops.h"
 #include "gfxcore.h"
+#include "sdlutil.h"
 
 static const char warranty[] =
 "  15. Disclaimer of Warranty.\n"
@@ -717,7 +720,12 @@ static void host_newline( void ) {
     }
 }
 
+static bool break_reported = false;     // a "? Break" message was shown (a built program ends without asking after one)
+
 static void host_report( struct _repl_t* r, const char* text ) {
+    if ( strncmp( text, "? Break", 7U ) == 0 ) {
+        break_reported = true;
+    }
     host_newline();
     sdlscr_puts( text );
 }
@@ -1200,7 +1208,73 @@ static bool parse_args( int argc, char** argv, bool* phelp ) {
     return true;
 }
 
+// -- built executables (the BUILD statement, basbuild.c) -----------------------------------------
+//
+// BUILD links this object file with the program, which ld -r -b binary turns into an object that defines the symbols below. In
+// the engine itself they are not defined (weak: their address is 0) and main() starts the REPL.
+
+extern const unsigned char embedded_program_start[] __asm__( "_binary_program_e99_start" ) __attribute__((weak));
+extern const unsigned char embedded_program_end[] __asm__( "_binary_program_e99_end" ) __attribute__((weak));
+
+#define TITLECOLOR  3
+#define INFOCOLOR   6
+
+static const char about_text[] =
+    "Engine 1999 (c) Copyright 2026 Ekkehard Morgenstern.\n"
+    "\n"
+    "This program contains the runtime of Engine 1999, free software that is licensed under the GNU General\n"
+    "Public License, version 3 or later, with the Engine1999 Runtime Exception (see the file LICENSE-EXCEPTION\n"
+    "of Engine 1999). The program that it runs is not covered by that license; it has its own terms.\n"
+    "\n"
+    "The runtime comes with ABSOLUTELY NO WARRANTY.\n"
+    "Contact: ekkehard@ekkehardmorgenstern.de\n";
+
+// runs the embedded program and ends: no banner, no REPL. A program that ends normally is left at once (after its sound has
+// finished, but 10 s at most); one that ends with an error keeps the screen until a key is pressed.
+static int run_embedded( int argc, char** argv ) {
+    for ( int i=1; i < argc; ++i ) {
+        if ( strcmp( argv[i], "--engine1999-about" ) == 0 ) {
+            fputs( about_text, stdout );
+            return EXIT_SUCCESS;
+        }
+    }
+    sdl_init();
+    srand( time(0) );
+    init_usrdata( &usrdata );
+    init_host();
+    bool ok = repl_load_image( &repl, embedded_program_start, (size_t)( embedded_program_end - embedded_program_start ) );
+    if ( ok ) {
+        sdlscr_pollkeys( true );
+        ok = repl_run( &repl );
+        sdlscr_pollkeys( false );
+    }
+    if ( !sdlscr_term() ) {
+        if ( !ok && !break_reported ) {
+            host_newline();
+            sdlscr_printf( -1, -1, -1, INFOCOLOR, "%s", "Press any key to end the program." );
+            sdlscr_getkey();
+        } else if ( ok ) {
+            for ( int waited = 0; waited < 500 && !sdlscr_term() && sdlscr_pollkey() == 0; ++waited ) {
+                bool busy = false;
+                for ( int ch = 0; ch < 8; ++ch ) {
+                    busy = busy || sdlaud_busy( ch );
+                }
+                if ( !busy ) {
+                    break;
+                }
+                sdlutil_nanosleep( 20000000ULL, 0 );
+            }
+        }
+    }
+    cleanup_repl( &repl );
+    return ok ? EXIT_SUCCESS : EXIT_FAILURE;
+}
+
 int main( int argc, char** argv ) {
+
+    if ( embedded_program_start != 0 ) {
+        return run_embedded( argc, argv );
+    }
 
     bool help = false;
     if ( !parse_args( argc, argv, &help ) ) {
@@ -1214,9 +1288,6 @@ int main( int argc, char** argv ) {
 
     init_usrdata( &usrdata );
     init_host();
-
-#define TITLECOLOR  3
-#define INFOCOLOR   6
 
     sdlscr_printf( -1, -1, -1, TITLECOLOR, "%s",
         "Engine 1999 (c) Copyright 2026 Ekkehard Morgenstern.\n"

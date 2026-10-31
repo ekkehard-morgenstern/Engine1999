@@ -1,8 +1,11 @@
 # Demos
 
 Example programs written in the built-in BASIC of Engine1999. They show what the engine can do and serve as manual tests.
-The demo files carry no license information: they are free for everybody to use, copy and change, without conditions.
-(The engine's own license does not apply to programs written in the built-in language, see `LICENSE`.)
+The demos are free for everybody to use, copy, change and build into executables. Each file starts with four comment lines (lines 1 to 4) that say so
+and carry the one condition: **an executable made from a demo with `BUILD` contains the Engine1999 runtime**, so the Engine1999 Runtime Exception
+(`LICENSE-EXCEPTION`) applies to it: the runtime must be the unmodified one and its notice must stay in the executable (it shows with the command line
+option `--engine1999-about`). The program text itself is not under the GPL (see `LICENSE-EXCEPTION`, section 1). Keep these four lines (or an equivalent
+statement) when you copy a demo and pass an executable of it on.
 
 | File | What it is |
 |---|---|
@@ -22,4 +25,5 @@ The demos use `WAIT` to pause (a busy loop on `TI` would keep the processor at 1
 Conventions:
 - Programs are kept as **ASCII listings** with the extension `.bas` (`SAVE "name",A` writes them; `LOAD "name"` finds `name.bas`),
   so they can be read and diffed. Binary tokenized programs (`.e99`, the default of `SAVE "name"`) don't belong in this folder.
-- Run one with `engine1999`, then `LOAD "demos/name"` and `RUN`.
+- Run one with `engine1999`, then `LOAD "demos/name"` and `RUN`; make a standalone executable with `BUILD "name"` (`./name` starts it).
+- The first four lines (1..4) are the license comment: new demos get the same four lines.

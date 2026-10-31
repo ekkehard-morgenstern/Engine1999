@@ -1,3 +1,7 @@
+1 ' License: free for everybody to use, copy, change and build into executables (BUILD).
+2 ' An executable made with BUILD contains the Engine1999 runtime: the Engine1999 Runtime Exception
+3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
+4 ' in the executable (it shows with the command line option --engine1999-about).
 10 ' Sound effect board. Press 1-9 for an effect, 0 for an engine, Q to quit.
 20 SFX 1,"W1 ML S3000,200,8"
 30 SFX 2,"W3 V1 ML X0,0.02,0.4,0.5 S1200,40,2"

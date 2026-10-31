@@ -10,6 +10,7 @@ Order = suggested order, not a commitment.
 `RUN [line|label]`, `LIST [a][-[b]]`, `LOAD name$`, `NEW`, `CLEAR`, `DELETE a[-[b]]` and `RENUM [a][-[b]][,step]` are language statements now (usable in programs, see
 `docs/basic-language.md`). The rest of the family has nothing yet.
 
+- [x] `BUILD name$` is done (2026-10-31, `docs/basic-language.md`): a standalone executable made with the system linker only. Not done: a `make install` that puts `engine1999.o` / `engine.lib` into a kit directory (today they are found next to `engine1999`), a compile check before linking, static linking of SDL2 on request, other systems than Linux/ELF, a build for another CPU than the building one (the kit is compiled with `-march=native`), an icon / window title for built programs, command line arguments for the program (`--engine1999-about` is the only option), bundling the program's data files (`res/`) into the executable
 - [ ] `LIST` with an output channel (`LIST #1,10-20`; today always the VM's channel 0) and `RUN`/`LOAD` taking more arguments?
 - [ ] `LOAD`/`SAVE`: file names are plain paths relative to the current directory; no directory handling (default extensions are done: `.bas` ASCII / `.e99` binary, see `docs/basic-language.md`)
 - [x] `MERGE`, `CHAIN`, `FILES` are done (see `docs/basic-language.md`); not done: `COMMON`, `CHAIN … DELETE`, a line range for `MERGE`, paging for `LIST`

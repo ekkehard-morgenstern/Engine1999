@@ -1,3 +1,7 @@
+1 ' License: free for everybody to use, copy, change and build into executables (BUILD).
+2 ' An executable made with BUILD contains the Engine1999 runtime: the Engine1999 Runtime Exception
+3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
+4 ' in the executable (it shows with the command line option --engine1999-about).
 10 ' Prelude in C major (BWV 846), from the Well-Tempered Clavier by Johann Sebastian Bach.
 20 ' Public domain; the first eight bars. Each bar is five notes, played in a pattern of
 30 ' sixteenth notes, twice (voice 1), over a held bass note (voice 2).

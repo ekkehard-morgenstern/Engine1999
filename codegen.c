@@ -15,8 +15,10 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-    NOTE: Programs created with a built-in programming language (if any),
-          do not fall under this license.
+    ADDITIONAL PERMISSION (GPLv3 section 7): the Engine1999 Runtime Exception
+        applies. Programs written in the built-in programming language, and
+        executables made from them with BUILD, do not fall under this license
+        as the exception describes (see the file LICENSE-EXCEPTION).
 
     CONTACT INFO:
         E-Mail: ekkehard@ekkehardmorgenstern.de
@@ -434,6 +436,7 @@ const char* cgen_opcode_name( uint16_t opcode ) {
         case INS_PEEK:      return "PEEK";
         case INS_PEKS:      return "PEKS";
         case INS_POKE:      return "POKE";
+        case INS_BLD:       return "BLD";
         case INS_AFLT:      return "AFLT";
         case INS_GFXC:      return "GFXC";
         case INS_GFXQ:      return "GFXQ";
@@ -1148,6 +1151,7 @@ bool cgen_gen_auto( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_AUTO, f
 bool cgen_gen_peek( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_PEEK, false, false, UINT16_C(0) ); }
 bool cgen_gen_peks( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_PEKS, false, false, UINT16_C(0) ); }
 bool cgen_gen_poke( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_POKE, false, false, UINT16_C(0) ); }
+bool cgen_gen_bld( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_BLD, false, false, UINT16_C(0) ); }
 bool cgen_gen_acnt( codegen_t* cgen, uint16_t varoffs ) { return cgen_gen_ins12_imm17( cgen, INS_ACNT, (int32_t) varoffs ); }
 bool cgen_gen_aflt( codegen_t* cgen, uint16_t varoffs ) { return cgen_gen_ins12_imm17( cgen, INS_AFLT, (int32_t) varoffs ); }
 bool cgen_gen_rand( codegen_t* cgen, uint16_t hasseed ) { return cgen_gen_ins12( cgen, INS_RAND, false, true, hasseed ); }
@@ -3120,6 +3124,7 @@ static bool cgen_from_stmt_node( codegen_t* cgen, compiler_t* comp, node_t* node
         case NT_MERGESTMT:  return cgen_from_mergestmt( cgen, comp, node );
         case NT_CHAINSTMT:  return cgen_from_chainstmt( cgen, comp, node );
         case NT_FILESSTMT:  return cgen_from_filesstmt( cgen, comp, node );
+        case NT_BUILDSTMT:  return cgen_from_buildstmt( cgen, comp, node );
         case NT_TIMERSTMT:  return cgen_from_timerstmt( cgen, comp, node );
         case NT_ERRTRAPSTMT: return cgen_from_errtrapstmt( cgen, comp, node );
         case NT_ONCOLLSTMT: return cgen_from_oncollstmt( cgen, comp, node );

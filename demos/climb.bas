@@ -1,3 +1,7 @@
+1 ' License: free for everybody to use, copy, change and build into executables (BUILD).
+2 ' An executable made with BUILD contains the Engine1999 runtime: the Engine1999 Runtime Exception
+3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
+4 ' in the executable (it shows with the command line option --engine1999-about).
 10 ' THE LONG CLIMB - a jump and run game for Engine1999.
 20 ' You are a construction worker and the ice cream stand is on the roof of the unfinished steel tower, 960 pixels above the street. Climb the ladders,
 30 ' jump the gaps, hurdles, cars and birds, and use your drill to make holes in the girders: a rust ball or slime that walks into a hole is trapped,

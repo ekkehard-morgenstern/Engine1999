@@ -14,8 +14,10 @@
 --  You should have received a copy of the GNU General Public License
 --  along with this program.  If not, see <https://www.gnu.org/licenses/>.
 --
---  NOTE: Programs created with a built-in programming language (if any),
---        do not fall under this license.
+--  ADDITIONAL PERMISSION (GPLv3 section 7): the Engine1999 Runtime Exception
+--      applies. Programs written in the built-in programming language, and
+--      executables made from them with BUILD, do not fall under this license
+--      as the exception describes (see the file LICENSE-EXCEPTION).
 --
 --  CONTACT INFO:
 --      E-Mail: ekkehard@ekkehardmorgenstern.de
@@ -328,6 +330,11 @@ chain-stmt := TOK_CHAIN [ TOK_MERGE ] str-expr [ TOK_COMMA goto-target ] .
 -- indicator. No spec = the current directory (hidden names left out); a directory lists its entries; a pattern with * ? [ ]
 -- lists the matches. The screen listing is colored and stops after each page (any key goes on, Q or ESC stops).
 files-stmt := TOK_FILES [ str-expr ] .
+-- BUILD name makes a standalone executable (a file called name, no extension is added) from the stored program: the system linker
+-- binds the program to the Engine's runtime (engine1999.o + engine.lib); SDL2 and the C library are linked dynamically. The
+-- executable starts the program at once, without banner and REPL (--engine1999-about shows the license notice). The run goes on.
+-- Names of BASIC program files (.bas, .e99) and names with a driver prefix are refused. See LICENSE-EXCEPTION.
+build-stmt := TOK_BUILD str-expr .
 
 --# Sound
 -- Sound (see docs/sound.md). Channels are 1..8. SOUND ch, freq, beats [, vol]: a tone of freq Hz (20..20000; 0 = a rest) for
@@ -434,7 +441,7 @@ gfx-all-stmt := gfx-stmt | txt-stmt | tile-stmt | sprite-stmt | cls-stmt | locat
 -- The statements by group: io-stmt (PRINT, INPUT, GET, DATA, READ, OPEN, CLOSE, ...), prog-stmt (program commands, sound, graphics, timers, error
 -- handling, debugging; they work inside programs, too), assign-stmt (LET, DIM, ERASE, DEF FN) and control-flow-stmt (loops, IF, GOTO, PROC ...).
 -- Several statements on a line are separated by a colon; a line may end with a comment (an apostrophe).
-prog-stmt := gfx-all-stmt | load-stmt | run-stmt | merge-stmt | chain-stmt | files-stmt | timer-stmt | list-stmt | new-stmt | clear-stmt |
+prog-stmt := gfx-all-stmt | load-stmt | run-stmt | merge-stmt | chain-stmt | files-stmt | build-stmt | timer-stmt | list-stmt | new-stmt | clear-stmt |
              delete-stmt | renum-stmt | edit-stmt | monitor-stmt | sound-stmt | wait-stmt | on-error-stmt | randomize-stmt | angle-stmt |
              cont-stmt | trace-stmt | auto-stmt | poke-stmt .
 

@@ -17,8 +17,10 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-    NOTE: Programs created with a built-in programming language (if any),
-          do not fall under this license.
+    ADDITIONAL PERMISSION (GPLv3 section 7): the Engine1999 Runtime Exception
+        applies. Programs written in the built-in programming language, and
+        executables made from them with BUILD, do not fall under this license
+        as the exception describes (see the file LICENSE-EXCEPTION).
 
     CONTACT INFO:
         E-Mail: ekkehard@ekkehardmorgenstern.de
@@ -276,6 +278,8 @@ typedef struct _vm_t {
     // reporting an error. The run ends afterwards.
     // FILES: lists the files of spec ("" = the current directory) to the current output channel. Return false after reporting an error.
     bool            (*files)( struct _vm_t*, void*, const char* spec );
+    // BUILD: creates the executable file <name> from the stored program. Return false after reporting an error.
+    bool            (*build)( struct _vm_t*, void*, const char* name );
     bool            (*merge)( struct _vm_t*, void*, const char* name, bool append );
     bool            (*renumber)( struct _vm_t*, void*, const char* firstlabel, int32_t firstline, const char* lastlabel, int32_t lastline, int32_t step );
     bool            sfx_defined[SND_MAXSFX];

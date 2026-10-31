@@ -17,8 +17,10 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-    NOTE: Programs created with a built-in programming language (if any),
-          do not fall under this license.
+    ADDITIONAL PERMISSION (GPLv3 section 7): the Engine1999 Runtime Exception
+        applies. Programs written in the built-in programming language, and
+        executables made from them with BUILD, do not fall under this license
+        as the exception describes (see the file LICENSE-EXCEPTION).
 
     CONTACT INFO:
         E-Mail: ekkehard@ekkehardmorgenstern.de
@@ -520,6 +522,10 @@ The 4096 extended instructions are as follows:
                             long, -4: single, -8: double precision float (an other size is "Illegal argument", a block that is not inside the RAM
                             "Illegal address"). POKE of a string value writes its bytes (size is ignored); POKE of a number accepts the range of
                             its size (signed or unsigned: the low bits are stored).
+    0001 01110111       BLD - build an executable ( name -- ) C=0 P=0
+                            BUILD: asks the host (build callback) to create the executable file <name> from the stored program (the run goes
+                            on). "Illegal argument" for an empty name, "BUILD is not available" without the callback; the host reports why a build
+                            failed ("Build failed").
     MATH kinds 14..16: CEIL, LOG2, LOG10 (kind 1, INT, is FLOOR as well).
 
 */
@@ -692,5 +698,6 @@ The 4096 extended instructions are as follows:
 #define INS_PEEK        UINT16_C(0X174)
 #define INS_PEKS        UINT16_C(0X175)
 #define INS_POKE        UINT16_C(0X176)
+#define INS_BLD         UINT16_C(0X177)
 
 #endif

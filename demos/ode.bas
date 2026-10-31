@@ -1,3 +1,7 @@
+1 ' License: free for everybody to use, copy, change and build into executables (BUILD).
+2 ' An executable made with BUILD contains the Engine1999 runtime: the Engine1999 Runtime Exception
+3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
+4 ' in the executable (it shows with the command line option --engine1999-about).
 10 ' Ode to Joy, from the 9th symphony by Ludwig van Beethoven (1824, public domain).
 20 ' The melody is in voice 1, a simple bass line in voice 2.
 30 PRINT "ODE TO JOY - Beethoven"

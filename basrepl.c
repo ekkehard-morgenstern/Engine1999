@@ -15,8 +15,10 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-    NOTE: Programs created with a built-in programming language (if any),
-          do not fall under this license.
+    ADDITIONAL PERMISSION (GPLv3 section 7): the Engine1999 Runtime Exception
+        applies. Programs written in the built-in programming language, and
+        executables made from them with BUILD, do not fall under this license
+        as the exception describes (see the file LICENSE-EXCEPTION).
 
     CONTACT INFO:
         E-Mail: ekkehard@ekkehardmorgenstern.de
@@ -25,10 +27,12 @@
 */
 
 #include <sys/stat.h>
+#include <strings.h>
 #include "basrepl.h"
 #include "basdebug.h"
 #include "basfiles.h"
 #include "iodev.h"
+#include "basbuild.h"
 
 // -- helpers -------------------------------------------------------------------
 
@@ -199,6 +203,7 @@ static bool repl_vm_renumber( struct _vm_t* vm, void* usrdata, const char* first
     const char* lastlabel, int32_t lastline, int32_t step );
 static bool repl_vm_merge( struct _vm_t* vm, void* usrdata, const char* name, bool append );
 static bool repl_vm_files( struct _vm_t* vm, void* usrdata, const char* spec );
+static bool repl_vm_build( struct _vm_t* vm, void* usrdata, const char* name );
 
 // hands the host callbacks to the VM
 static void repl_setup_vm( repl_t* repl ) {
@@ -219,6 +224,7 @@ static void repl_setup_vm( repl_t* repl ) {
     vm->renumber  = repl_vm_renumber;
     vm->merge     = repl_vm_merge;
     vm->files     = repl_vm_files;
+    vm->build     = repl_vm_build;
     vm->trace     = repl->trace;       // TRACE ON lasts until TRACE OFF, over RUN, too
 }
 
@@ -547,6 +553,31 @@ static bool repl_load_program( repl_t* repl, const char* name ) {
     return true;
 }
 
+// replaces the stored program by the program file image in memory (the program of a built executable, see BUILD)
+bool repl_load_image( repl_t* repl, const void* data, size_t len ) {
+    FILE* f = len > 0 ? fmemopen( (void*) data, len, "rb" ) : 0;
+    if ( f == 0 ) {
+        repl_report( repl, "? Bad program file" );
+        return false;
+    }
+    program_t loaded;
+    init_program( &loaded );
+    bool ok = repl_read_program( repl, f, &loaded );
+    if ( ok && ferror( f ) ) {
+        repl_report( repl, "? Read error" );
+        ok = false;
+    }
+    fclose( f );
+    if ( !ok ) {
+        free_program( &loaded );
+        return false;
+    }
+    free_program( &repl->pgm );
+    repl->pgm = loaded;
+    repl_program_changed( repl );
+    return true;
+}
+
 // MERGE name [, APPEND]: enters the lines of the file into the stored program; the stored program changes only if everything
 // is fine. append: the file's lines are numbered 10 apart behind the last stored line (the stored program is not renumbered).
 static bool repl_merge_program( repl_t* repl, const char* name, bool append ) {
@@ -637,6 +668,65 @@ static bool repl_vm_files( struct _vm_t* vm, void* usrdata, const char* spec ) {
     } else if ( out.broken ) {
         repl_vm_error( repl, "Break", 0 );
         ok = false;
+    }
+    return ok;
+}
+
+// -- BUILD -----------------------------------------------------------------------------
+
+// the stored program in the form of a binary program file (what SAVE writes); malloc'ed. false if there is none or out of memory
+bool repl_program_image( repl_t* repl, uint8_t** pdata, size_t* plen ) {
+    *pdata = 0; *plen = 0;
+    if ( repl->pgm.first == 0 ) {
+        return false;
+    }
+    char* buf = 0; size_t size = 0;
+    FILE* f = open_memstream( &buf, &size );
+    if ( f == 0 ) {
+        return false;
+    }
+    bool ok = save_program( &repl->pgm, f, false );
+    if ( fclose( f ) != 0 ) {
+        ok = false;
+    }
+    if ( !ok ) {
+        free( buf );
+        return false;
+    }
+    *pdata = (uint8_t*) buf;
+    *plen = size;
+    return true;
+}
+
+// the name of a BASIC program file (.bas, .e99): BUILD refuses to overwrite one with an executable
+static bool repl_is_program_name( const char* name ) {
+    const char* dot = strrchr( name, '.' );
+    return dot != 0 && strchr( dot, '/' ) == 0 && ( strcasecmp( dot, ".bas" ) == 0 || strcasecmp( dot, ".e99" ) == 0 );
+}
+
+// BUILD name: the stored program becomes the executable <name> (basbuild.c: the system linker binds it to the Engine)
+static bool repl_vm_build( struct _vm_t* vm, void* usrdata, const char* name ) {
+    repl_t* repl = (repl_t*) usrdata;
+    iodrv_t* drv = 0; const char* path = 0; const char* derr = 0;
+    if ( !iodev_resolve( name, "file", &drv, &path, &derr ) ) {
+        repl_vm_error( repl, derr ? derr : "Device not found", 0 );
+        return false;
+    }
+    if ( strcmp( drv->name, "file" ) != 0 || path[0] == '\0' || repl_is_program_name( path ) ) {
+        repl_vm_error( repl, "Bad name for an executable", 0 );
+        return false;
+    }
+    uint8_t* image = 0; size_t imagelen = 0;
+    if ( !repl_program_image( repl, &image, &imagelen ) ) {
+        repl_vm_error( repl, repl->pgm.first == 0 ? "No program" : "Out of memory", 0 );
+        return false;
+    }
+    char err[300];
+    err[0] = '\0';
+    bool ok = build_executable( path, image, imagelen, 0, err, sizeof(err) );
+    free( image );
+    if ( !ok ) {
+        repl_vm_error( repl, "Build failed:", err[0] != '\0' ? err : "unknown reason" );
     }
     return ok;
 }

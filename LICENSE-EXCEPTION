@@ -1,0 +1,87 @@
+                      ENGINE1999 RUNTIME EXCEPTION
+                            Version 1
+
+   Additional permission under section 7 of the GNU General Public
+   License, version 3 ("GPLv3"), granted by the copyright holder of
+   Engine1999, Ekkehard Morgenstern.
+
+Engine1999 (the "Engine") is licensed under the GPLv3 or later (see the
+file LICENSE). In addition to that license you have the permissions
+below. They apply to every file of the Engine that carries a reference
+to this document in its license banner.
+
+This document is an additional permission as GPLv3 section 7 describes
+it: you may remove it from a copy or modified version of the Engine that
+you convey (see section 7 of the GPLv3), but then the permission is gone
+from that copy, and the executables made with it are not covered.
+
+
+0. Definitions
+
+   "Program" is a program written in the built-in programming language
+   of the Engine (the BASIC dialect that the Engine tokenizes, compiles
+   and runs), in any form: as a text listing (.bas), as a tokenized file
+   (.e99), or embedded in an executable, together with the data files
+   that it uses.
+
+   "Runtime" is the part of the Engine that the BUILD statement binds
+   into an executable: the object file engine1999.o and the library
+   engine.lib, built from the source code of the Engine, together with
+   the data they contain (for example the fonts).
+
+   "Standalone Executable" is an executable file that the BUILD statement
+   of the Engine created from a Program, or that an equivalent process
+   created, if that process does no more than link the Program and the
+   Runtime with the system libraries.
+
+
+1. Programs
+
+   A Program is not a work based on the Engine. The GPLv3 does not apply
+   to it, and its author may license it under any terms, including terms
+   that do not give anybody access to its source. This also holds for the
+   demo programs of the Engine, which are free for everybody to use,
+   copy, change and build into executables.
+
+
+2. Standalone Executables
+
+   You may propagate and convey a Standalone Executable under terms of
+   your choice, including terms that do not require you to provide the
+   source code of the Program or of the Runtime, even though the
+   Standalone Executable contains the Runtime, provided that you meet the
+   conditions of section 3.
+
+
+3. Conditions
+
+   a) The Runtime is the unmodified Runtime of the Engine as published by
+      its copyright holder. If you modified Engine code that ends up in
+      the Standalone Executable, section 2 does not apply to the
+      modified parts: then the GPLv3 applies to the Standalone Executable
+      as a whole, as if this exception did not exist.
+
+   b) The Standalone Executable keeps the notices of the Runtime intact:
+      the copyright notice and the license notice that it shows when it
+      is started with the command line option --engine1999-about. You
+      must not remove or change them, and you must not claim that the
+      Runtime is your work. Documentation that comes with the Standalone
+      Executable should say that it was made with Engine1999.
+
+   c) The Runtime remains under the GPLv3. This exception lets you convey
+      the Standalone Executable as a whole; it does not give you the right
+      to convey the Engine or the Runtime on their own, or any part of
+      them taken out of the Standalone Executable, under other terms.
+
+
+4. Other components
+
+   This exception covers the code of the Engine only. The libraries that a
+   Standalone Executable uses keep their own licenses (SDL2: zlib license;
+   the C library and the math library: LGPL). BUILD links them
+   dynamically, so that they can be replaced by the user.
+
+
+5. No warranty
+
+   Like the Engine, this permission is given without any warranty.

@@ -16,8 +16,10 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-    NOTE: Programs created with a built-in programming language (if any),
-          do not fall under this license.
+    ADDITIONAL PERMISSION (GPLv3 section 7): the Engine1999 Runtime Exception
+        applies. Programs written in the built-in programming language, and
+        executables made from them with BUILD, do not fall under this license
+        as the exception describes (see the file LICENSE-EXCEPTION).
 
     CONTACT INFO:
         E-Mail: ekkehard@ekkehardmorgenstern.de
@@ -334,6 +336,7 @@ bool cgen_gen_auto( codegen_t* cgen );
 bool cgen_gen_peek( codegen_t* cgen );
 bool cgen_gen_peks( codegen_t* cgen );
 bool cgen_gen_poke( codegen_t* cgen );
+bool cgen_gen_bld( codegen_t* cgen );
 bool cgen_gen_acnt( codegen_t* cgen, uint16_t varoffs );
 bool cgen_gen_aflt( codegen_t* cgen, uint16_t varoffs );
 bool cgen_gen_gfxc( codegen_t* cgen, uint16_t op );
@@ -447,6 +450,7 @@ bool cgen_from_callstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_resumestmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_debugstmt( codegen_t* cgen, compiler_t* comp, node_t* node );    // STOP, CONT, TRACE, AUTO
 bool cgen_from_pokestmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_buildstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_localstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_check_call_args( compiler_t* comp, uint16_t funcoffs, node_t* node );
 bool cgen_gen_call_args( codegen_t* cgen, compiler_t* comp, node_t* node );     // the arguments of a call and their count

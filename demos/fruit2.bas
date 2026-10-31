@@ -1,3 +1,7 @@
+1 ' License: free for everybody to use, copy, change and build into executables (BUILD).
+2 ' An executable made with BUILD contains the Engine1999 runtime: the Engine1999 Runtime Exception
+3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
+4 ' in the executable (it shows with the command line option --engine1999-about).
 10 ' FRUIT INVADERS II - a Space Invaders style game for Engine1999, written with procedures.
 20 ' Keys: A or Z = move left, D or X = move right (the cannon keeps moving), S = stop, SPACE = fire, P = pause, Q = quit.
 30 ' Shoot the invading fruit before it lands. Cherries are worth 50 points, strawberries 40, apples 30, oranges 20, lemons 10, the flying

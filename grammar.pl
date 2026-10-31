@@ -16,6 +16,9 @@
 #   You should have received a copy of the GNU General Public License
 #   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #
+#   ADDITIONAL PERMISSION (GPLv3 section 7): the Engine1999 Runtime Exception
+#       applies, see the file LICENSE-EXCEPTION.
+#
 # Makes the quick reference of the language from bascomp.ebnf:
 #
 #   perl grammar.pl            writes docs/grammar.md and docs/grammar.html

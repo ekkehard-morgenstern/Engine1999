@@ -411,6 +411,15 @@ chain-stmt := CHAIN [ MERGE ] str-expr [ "," goto-target ] .
 files-stmt := FILES [ str-expr ] .
 ```
 
+> BUILD name makes a standalone executable (a file called name, no extension is added) from the stored program: the system linker
+> binds the program to the Engine's runtime (engine1999.o + engine.lib); SDL2 and the C library are linked dynamically. The
+> executable starts the program at once, without banner and REPL (--engine1999-about shows the license notice). The run goes on.
+> Names of BASIC program files (.bas, .e99) and names with a driver prefix are refused. See LICENSE-EXCEPTION.
+
+```ebnf
+build-stmt := BUILD str-expr .
+```
+
 ## Sound
 
 > Sound (see docs/sound.md). Channels are 1..8. SOUND ch, freq, beats [, vol]: a tone of freq Hz (20..20000; 0 = a rest) for
@@ -572,7 +581,7 @@ gfx-all-stmt := gfx-stmt | txt-stmt | tile-stmt | sprite-stmt | cls-stmt | locat
 > Several statements on a line are separated by a colon; a line may end with a comment (an apostrophe).
 
 ```ebnf
-prog-stmt := gfx-all-stmt | load-stmt | run-stmt | merge-stmt | chain-stmt | files-stmt | timer-stmt | list-stmt | new-stmt | clear-stmt |
+prog-stmt := gfx-all-stmt | load-stmt | run-stmt | merge-stmt | chain-stmt | files-stmt | build-stmt | timer-stmt | list-stmt | new-stmt | clear-stmt |
              delete-stmt | renum-stmt | edit-stmt | monitor-stmt | sound-stmt | wait-stmt | on-error-stmt | randomize-stmt | angle-stmt |
              cont-stmt | trace-stmt | auto-stmt | poke-stmt .
 stmt := io-stmt | prog-stmt | assign-stmt | control-flow-stmt .

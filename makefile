@@ -14,8 +14,10 @@
 #   You should have received a copy of the GNU General Public License
 #   along with this program.  If not, see <https://www.gnu.org/licenses/>.
 #
-#   NOTE: Programs created with a built-in programming language (if any),
-#         do not fall under this license.
+#   ADDITIONAL PERMISSION (GPLv3 section 7): the Engine1999 Runtime Exception
+#       applies. Programs written in the built-in programming language, and
+#       executables made from them with BUILD, do not fall under this license
+#       as the exception describes (see the file LICENSE-EXCEPTION).
 #
 #   CONTACT INFO:
 #       E-Mail: ekkehard@ekkehardmorgenstern.de
@@ -38,7 +40,7 @@ CL=$(CCOMP) $(CFLAGS)
 .c.o:
 	$(CC) -o $@ $<
 
-all: sdltest1 sdltest2 engine1999 basictest1 testcomp1 basictest2 vmtest1 repltest1 ansitest1 txttest1 asmtest1 synthtest1 iotest1 gfxtest1
+all: sdltest1 sdltest2 engine1999 basictest1 testcomp1 basictest2 vmtest1 repltest1 ansitest1 txttest1 asmtest1 synthtest1 iotest1 gfxtest1 buildtest1
 	echo ok >all
 
 .PHONY: grammar grammar-check
@@ -52,8 +54,8 @@ grammar-check:
 	perl grammar.pl --check
 
 BASEMOD=sdlevent.o sdllayer.o sdlmain.o sdlscreen.o textscreen.o tilescreen.o sprscreen.o 8x12font1.o sdlaudio.o synth.o mml.o sdlutil.o \
-		basic.o baspgm.o baslin.o bastok.o bascomp.o nodetype.o codegen.o cgenctl.o cgendecl.o cgenprog.o vars.o runtime.o vm.o basfiles.o iodev.o gfxcore.o gfxops.o basrepl.o basdebug.o ansi.o fulledit.o vmasm.o monitor.o
-BASEHDR=sdlevent.h sdllayer.h sdlmain.h sdlscreen.h sdltypes.h textscreen.h tilescreen.h sprscreen.h unxtypes.h sdlaudio.h synth.h mml.h sdlutil.h basfiles.h iodev.h gfxcore.h gfxops.h basic.h baspgm.h baslin.h bastok.h bascomp.h nodetype.h codegen.h instset.h vars.h runtime.h vm.h basrepl.h basdebug.h ansi.h fulledit.h vmasm.h monitor.h
+		basic.o baspgm.o baslin.o bastok.o bascomp.o nodetype.o codegen.o cgenctl.o cgendecl.o cgenprog.o vars.o runtime.o vm.o basfiles.o iodev.o gfxcore.o gfxops.o basbuild.o basrepl.o basdebug.o ansi.o fulledit.o vmasm.o monitor.o
+BASEHDR=sdlevent.h sdllayer.h sdlmain.h sdlscreen.h sdltypes.h textscreen.h tilescreen.h sprscreen.h unxtypes.h sdlaudio.h synth.h mml.h sdlutil.h basfiles.h iodev.h gfxcore.h gfxops.h basbuild.h basic.h baspgm.h baslin.h bastok.h bascomp.h nodetype.h codegen.h instset.h vars.h runtime.h vm.h basrepl.h basdebug.h ansi.h fulledit.h vmasm.h monitor.h
 
 LIBMOD=$(BASEMOD)
 LIBHDR=$(BASEHDR)
@@ -113,6 +115,17 @@ gfxtest1: gfxtest1.o $(LIBNAME)
 	$(CL) -o gfxtest1 gfxtest1.o $(LIBNAME) -lm
 
 gfxtest1.o: gfxtest1.c $(LIBHDR)
+
+# the stand-in runtime of buildtest1 (a main() that writes out the embedded program); not part of the library
+buildstub.o: buildstub.c $(LIBHDR)
+
+# buildtest1 needs engine1999.o next to it (the real runtime kit: engine1999.o + engine.lib) and runs its tests in this directory
+buildtest1: buildtest1.o buildstub.o engine1999.o $(LIBNAME)
+	$(CL) -o buildtest1 buildtest1.o $(LIBNAME) -lm
+
+buildtest1.o: buildtest1.c $(LIBHDR)
+
+basbuild.o: basbuild.c $(BASEHDR)
 
 asmtest1: asmtest1.o $(LIBNAME)
 	$(CL) -o asmtest1 asmtest1.o $(LIBNAME) -lm

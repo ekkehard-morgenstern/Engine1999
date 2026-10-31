@@ -1,3 +1,7 @@
+1 ' License: free for everybody to use, copy, change and build into executables (BUILD).
+2 ' An executable made with BUILD contains the Engine1999 runtime: the Engine1999 Runtime Exception
+3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
+4 ' in the executable (it shows with the command line option --engine1999-about).
 10 ' Graphics demo: palettes, the graphics layer, tiles, DESIGN pictures, sprites and the text screen.
 20 CLS:GFX LAYER 3,ON:GFX LAYER 1,ON
 30 GFX BACKDROP RGB(0,0,48)

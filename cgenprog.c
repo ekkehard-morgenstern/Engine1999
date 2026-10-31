@@ -16,8 +16,10 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-    NOTE: Programs created with a built-in programming language (if any),
-          do not fall under this license.
+    ADDITIONAL PERMISSION (GPLv3 section 7): the Engine1999 Runtime Exception
+        applies. Programs written in the built-in programming language, and
+        executables made from them with BUILD, do not fall under this license
+        as the exception describes (see the file LICENSE-EXCEPTION).
 
     CONTACT INFO:
         E-Mail: ekkehard@ekkehardmorgenstern.de
@@ -142,6 +144,24 @@ bool cgen_from_chainstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         return false;
     }
     return cgen_gen_chn( cgen, node->data[0] != 0 ) || cgen_out_of_code_memory( comp );
+}
+
+bool cgen_from_buildstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    /*
+        NT_BUILDSTMT    BUILD statement
+            branches: 1 string expression (the name of the executable)
+        code: <name> BLD
+    */
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->type != NT_BUILDSTMT || node->numbranches != 1U ) {
+        return cgen_unexpected_node( comp );
+    }
+    if ( !cgen_from_strexpr( cgen, comp, node->branches[0] ) ) {
+        return false;
+    }
+    return cgen_gen_bld( cgen ) || cgen_out_of_code_memory( comp );
 }
 
 bool cgen_from_filesstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
