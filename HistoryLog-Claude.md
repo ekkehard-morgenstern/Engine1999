@@ -13,12 +13,10 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-(not committed yet) **Fruit Invaders II, two fixes** (2026-10-31)
-- **History log**: the entries of `b1c9e18` (EBNF update) and `1e853e3` (grammar documentation) moved into the log (the grammar entry had been lost in the pending list and was rewritten).
-- **New**: `demos/fruit2.bas` (Fruit Invaders II, see `SESSION.md`), a line in `demos/README.md`, `fruit2.hi` in `.gitignore`.
-- **Fix**: `RESUME <target>` after an error inside a `PROC`/`FUNC` call works (`vm.c`, `vm_resume_error()`: only `RESUME` and `RESUME NEXT` are refused there, as the docs said); 2 tests in `vmtest1` (1013).
-- **Fix**: the `grammar` / `grammar-check` targets were the first rules of the `makefile`, so `make` without arguments built only the grammar files; they come after `all` now (found when `vmtest1` was not rebuilt).
-- Tests: `vmtest1` 1013 all pass; the demo ran headless for 100000 interrupt polls without an error and was looked at on the real screen (title, play, pause, quit).
+(not committed yet) **The Long Climb** (2026-10-31)
+- **History log**: the entry of `9af4054` (Fruit Invaders II) was already moved in.
+- **New**: `demos/climb.bas` (the jump and run demo, see `SESSION.md`), a line in `demos/README.md`; `docs/graphics-subsystem.md`: a section on scrolling a world bigger than the screen with `TILE SCROLL` (the cell mapping that gives exact pixel positions, the top strip, the cost of a changed layer).
+- Tests: no code changed; the demo was run headless (position traces for jump, ladder, drilling, a monster trapped and crushed, respawn; random keys 3 x 40000 polls without an error) and looked at on the real screen under Xvfb (title, level start, walking, jumping, climbing, the summit with the stand, the win screen, a death by a car and the game over screen, back to the title).
 
 ## Log
 
@@ -627,3 +625,11 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 - **Grammar quick reference**: `grammar.pl` (reads `bascomp.ebnf`; `--check` verifies), `docs/grammar.md` (generated: sections, fenced `ebnf` rules with the tokens shown as written, the comments as prose, contents list) and `docs/grammar.html` (generated: colors, light/dark, links from each rule name to its definition); `makefile` targets `grammar` and `grammar-check`.
 - `bascomp.ebnf`: `--# Title` section markers, the tail regrouped by topic, a statement-groups summary, `identifier-AS` / `identifier-ERROR` -> `AS` / `ERROR`, notes reworded.
 - Rule kept: `CLAUDE.md` and `SESSION.md` say to update the EBNF and run `make grammar` when the language changes; `docs/README.md` and `docs/build-and-test.md` list the new files. No code changes; `make grammar-check` and `vmtest1` pass.
+
+### 9af4054 — 2026-10-31 11:34:08 +0100 — "Fruit Invaders II demo, created by Claude Code"
+9 files, +1472/-12.
+- **History log**: the entries of `b1c9e18` (EBNF update) and `1e853e3` (grammar documentation) moved into the log (the grammar entry had been lost in the pending list and was rewritten).
+- **New**: `demos/fruit2.bas` (Fruit Invaders II, see `SESSION.md`), a line in `demos/README.md`, `fruit2.hi` in `.gitignore`.
+- **Fix**: `RESUME <target>` after an error inside a `PROC`/`FUNC` call works (`vm.c`, `vm_resume_error()`: only `RESUME` and `RESUME NEXT` are refused there, as the docs said); 2 tests in `vmtest1` (1013).
+- **Fix**: the `grammar` / `grammar-check` targets were the first rules of the `makefile`, so `make` without arguments built only the grammar files; they come after `all` now (found when `vmtest1` was not rebuilt).
+- Tests: `vmtest1` 1013 all pass; the demo ran headless for 100000 interrupt polls without an error and was looked at on the real screen (title, play, pause, quit).
