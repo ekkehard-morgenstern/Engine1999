@@ -26,18 +26,19 @@
               Germany, Europe
 */
 #include "monitor.h"
-#include "sdlscreen.h"
-#include "textscreen.h"      // (only the TXTSCR_* constants; every call goes through sdlscreen)
+#include "scrdrv.h"
+#include "textscreen.h"      // (only the TXTSCR_* constants; every call goes through the screen driver)
 #include "vmasm.h"
 #include "codegen.h"
 #include <strings.h>
+#include <ctype.h>
 
 // -- layout and colors -----------------------------------------------------------------
 
 #define MON_SCREEN      2
-#define MON_OUT_Y       1               // the output area: rows 1..23 (row 0: title bar, row 24: help bar)
-#define MON_OUT_H       23
-#define MON_BAR_Y       ( MON_OUT_Y + MON_OUT_H )
+#define MON_OUT_Y       1               // the output area: rows 1 to rows - 2 (row 0: title bar, the last row: help bar)
+#define MON_MINCOLS     24              // smaller screens (a terminal) get a message only
+#define MON_MINROWS     6
 
 // palette entries (colinittab in sdllayer.c)
 #define C_BLACK         1
@@ -79,8 +80,6 @@ static const char* const regionnames[R_COUNT] = { "code", "data", "dstack", "rst
 
 typedef struct _mon_t {
     repl_t*     repl;
-    void        (*vblank)( void* );
-    void*       usrdata;
     region_t    region;
     uint32_t    memaddr[R_COUNT];       // where the next dump of the region continues
     uint32_t    disaddr;                // where the next disassembly / assembly continues
@@ -92,6 +91,13 @@ typedef struct _mon_t {
 static bool mon_inited = false;
 static mon_t mon;
 
+// the screen: driver and size (the window's is 80 x 25; a terminal's follows its size, see mon_layout())
+static const scrdrv_t* drv;
+static int mon_cols = 80, mon_rows = 25;
+#define MON_OUT_H       ( mon_rows - 2 )
+#define MON_BAR_Y       ( mon_rows - 1 )
+
+
 // -- output ----------------------------------------------------------------------------
 
 static void out( int fg, const char* fmt, ... ) {
@@ -100,7 +106,7 @@ static void out( int fg, const char* fmt, ... ) {
     va_start( ap, fmt );
     vsnprintf( buf, sizeof(buf), fmt, ap );
     va_end( ap );
-    sdlscr_printf( -1, -1, -1, fg, "%s", buf );
+    drv->print( -1, -1, -1, fg, buf );
 }
 
 static void outerr( const char* fmt, ... ) {
@@ -109,16 +115,19 @@ static void outerr( const char* fmt, ... ) {
     va_start( ap, fmt );
     vsnprintf( buf, sizeof(buf), fmt, ap );
     va_end( ap );
-    sdlscr_printf( -1, -1, -1, C_ERR, "%s\n", buf );
+    drv->print( -1, -1, -1, C_ERR, buf );
+    drv->print( -1, -1, -1, C_ERR, "\n" );
 }
 
 static void newline_unless_at_start( void ) {
     int x = 0, y = 0;
-    sdlscr_gettextcursor( &x, &y );
+    drv->getcursor( &x, &y );
     if ( x != 0 ) {
         out( C_TEXT, "\n" );
     }
 }
+
+static void mon_onresize( void* usrdata );
 
 // -- the panels ------------------------------------------------------------------------
 
@@ -127,48 +136,48 @@ static const codegen_t* mon_cgen( const mon_t* m ) {
 }
 
 static void mon_setout( int x, int y ) {
-    sdlscr_text_setviewport( 0, MON_OUT_Y, TXTSCR_WIDTH, MON_OUT_H );
-    sdlscr_text_setblank( C_BG, C_TEXT );        // what scrolling fills with (the bars changed it)
-    sdlscr_locate( x, y );
+    drv->setviewport( 0, MON_OUT_Y, mon_cols, MON_OUT_H );
+    drv->setblank( C_BG, C_TEXT );        // what scrolling fills with (the bars changed it)
+    drv->locate( x, y );
 }
 
 // title bar: the region and the sizes; the output cursor is kept
 static void mon_title( const mon_t* m ) {
     int cx = 0, cy = 0;
-    sdlscr_text_getcursor( &cx, &cy );
-    sdlscr_text_setviewport( 0, 0, TXTSCR_WIDTH, 1 );
-    sdlscr_text_setblank( C_TITLE_BG, C_TITLE_FG );
-    sdlscr_text_clear();
+    drv->getcursor( &cx, &cy );
+    drv->setviewport( 0, 0, mon_cols, 1 );
+    drv->setblank( C_TITLE_BG, C_TITLE_FG );
+    drv->clear();
     const codegen_t* cg = mon_cgen( m );
     char buf[100];
-    sdlscr_text_write( 0, 1, C_TITLE_BG, C_TITLE_FG, "Machine Monitor", -1 );
+    drv->write( 0, 1, C_TITLE_BG, C_TITLE_FG, "Machine Monitor", -1 );
     snprintf( buf, sizeof(buf), "%s", regionnames[m->region] );
     int x = 19;
-    x += sdlscr_text_write( 0, x, C_TITLE_BG, C_GRAY, "region ", -1 );
-    x += sdlscr_text_write( 0, x, C_TITLE_BG, C_YELLOW, buf, -1 );
+    x += drv->write( 0, x, C_TITLE_BG, C_GRAY, "region ", -1 );
+    x += drv->write( 0, x, C_TITLE_BG, C_YELLOW, buf, -1 );
     snprintf( buf, sizeof(buf), "   code $%X  data $%X  dstack %u  rstack %u", (unsigned) cg->codesize, (unsigned) cg->datasize,
         (unsigned) m->repl->vm.dsp, (unsigned) m->repl->vm.rsp );
-    x += sdlscr_text_write( 0, x, C_TITLE_BG, C_TITLE_FG, buf, -1 );
+    x += drv->write( 0, x, C_TITLE_BG, C_TITLE_FG, buf, -1 );
     if ( m->repl->vm.suspended ) {
         snprintf( buf, sizeof(buf), "  pc $%X", (unsigned) m->repl->vm.pc );
-        sdlscr_text_write( 0, x, C_TITLE_BG, C_YELLOW, buf, -1 );
+        drv->write( 0, x, C_TITLE_BG, C_YELLOW, buf, -1 );
     }
     mon_setout( cx, cy );
-    sdlscr_textchanged();
+    drv->changed();
 }
 
 static void mon_helpbar( void ) {
-    sdlscr_text_setviewport( 0, MON_BAR_Y, TXTSCR_WIDTH, 1 );
-    sdlscr_text_setblank( C_HELP_BG, C_TEXT );
-    sdlscr_text_clear();
+    drv->setviewport( 0, MON_BAR_Y, mon_cols, 1 );
+    drv->setblank( C_HELP_BG, C_TEXT );
+    drv->clear();
     static const struct { const char* key; const char* what; } help[] = {
         { "?", "help" }, { "M", "dump" }, { "U", "unasm" }, { "A", "asm" }, { "R", "region" }, { "G", "go" }, { "T", "step" },
         { "B", "break" }, { "I", "info" }, { "Q", "quit" },
     };
     int x = 1;
     for ( size_t i=0; i < sizeof(help) / sizeof(help[0]); ++i ) {
-        x += sdlscr_text_write( 0, x, C_HELP_BG, C_KEY, help[i].key, -1 );
-        x += sdlscr_text_write( 0, x, C_HELP_BG, C_WHITE, help[i].what, -1 );
+        x += drv->write( 0, x, C_HELP_BG, C_KEY, help[i].key, -1 );
+        x += drv->write( 0, x, C_HELP_BG, C_WHITE, help[i].what, -1 );
         x += 2;
     }
 }
@@ -548,8 +557,8 @@ static void cmd_asm( mon_t* m, int argc, char** argv ) {
         out( C_ADDR, "%0*X", width, (unsigned) addr );
         out( C_PROMPT, "  " );
         char line[100]; line[0] = '\0';
-        int r = sdlscr_lineedit( line, sizeof(line), m->vblank, m->usrdata );
-        if ( r == SDLSCR_EDIT_CLOSED ) {
+        int r = scr_lineedit( drv, line, sizeof(line), mon_onresize, 0 );
+        if ( r == SCREDIT_CLOSED ) {
             m->quit = true;
             return;
         }
@@ -557,7 +566,7 @@ static void cmd_asm( mon_t* m, int argc, char** argv ) {
         while ( *p == ' ' ) {
             ++p;
         }
-        if ( r != SDLSCR_EDIT_ACCEPTED || *p == '\0' ) {
+        if ( r != SCREDIT_ACCEPTED || *p == '\0' ) {
             break;
         }
         uint8_t bytes[VMASM_MAXLEN]; uint32_t len = 0; char err[80];
@@ -697,9 +706,9 @@ static void show_state( mon_t* m ) {
 }
 
 static void run_vm( mon_t* m, bool step ) {
-    sdlscr_pollkeys( true );
+    drv->pollkeys( true );
     repl_vm_resume( m->repl, step, m->bps, m->nbps );
-    sdlscr_pollkeys( false );
+    drv->pollkeys( false );
     newline_unless_at_start();
     if ( m->repl->fulledit || m->repl->monitor ) {      // the program ended in EDIT / MONITOR: not carried out from here
         m->repl->fulledit = false; m->repl->monitor = false;
@@ -900,43 +909,100 @@ static void execute( mon_t* m, char* line ) {
 
 static void mon_firstuse( mon_t* m ) {
     memset( m, 0, sizeof(*m) );
-    sdlscr_text_setcolors( C_BG, C_TEXT );
-    sdlscr_text_setblank( C_BG, C_TEXT );
-    sdlscr_text_resetviewport();
-    sdlscr_text_clear();
+    drv->reserve( 1 );                  // a terminal resize keeps the prompt above the help bar
+    drv->setcolors( C_BG, C_TEXT );
+    drv->setblank( C_BG, C_TEXT );
+    drv->resetviewport();
+    drv->clear();
     mon_helpbar();
     mon_setout( 0, 0 );
-    sdlscr_text_clear();
+    drv->clear();
     mon_inited = true;
 }
 
-void monitor_run( repl_t* repl, void (*vblank_handler)( void* ), void* usrdata ) {
-    int oldscreen = sdlscr_text_selected();
-    sdlscr_text_select( MON_SCREEN );
+static int mon_lastcols = 0, mon_lastrows = 0;       // the size the bars were drawn for
+
+// the size of the screen now; false if it is too small for the monitor
+static bool mon_layout( void ) {
+    drv->screensize( &mon_cols, &mon_rows );
+    return mon_cols >= MON_MINCOLS && mon_rows >= MON_MINROWS;
+}
+
+// waits (a message on the whole screen) until the screen is big enough again; false if the screen was closed meanwhile
+static bool mon_bigenough( void ) {
+    while ( !mon_layout() ) {
+        drv->resetviewport();
+        drv->setblank( C_BG, C_TEXT );
+        drv->clear();
+        drv->write( 0, 0, C_BG, C_ERR, "Too small", mon_cols < 9 ? mon_cols : 9 );
+        drv->changed();
+        scrkey_t k;
+        if ( !drv->nextkey( &k ) || k.kind == SK_CLOSED ) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// the bars and the output area for the size the screen has now; the output cursor is kept (it was moved with the contents)
+static void mon_relayout( void ) {
+    int cx = 0, cy = 0;
+    drv->resetviewport();
+    drv->getcursor( &cx, &cy );
+    cy -= MON_OUT_Y;
+    if ( cy < 0 ) cy = 0;
+    if ( cy > MON_OUT_H - 1 ) cy = MON_OUT_H - 1;
+    if ( cx > mon_cols - 1 ) cx = mon_cols - 1;
+    mon_helpbar();
+    mon_setout( cx, cy );
+    mon_title( &mon );
+    mon_lastcols = mon_cols; mon_lastrows = mon_rows;
+}
+
+// the screen was resized while a line was edited (scredit.c calls this before it draws the line again)
+static void mon_onresize( void* usrdata ) {
+    (void) usrdata;
+    if ( mon_bigenough() ) {
+        mon_relayout();
+    }
+}
+
+void monitor_run( repl_t* repl, const scrdrv_t* driver ) {
+    drv = driver;
+    int oldscreen = drv->selected();
+    drv->select( MON_SCREEN );
+    if ( !mon_bigenough() ) {
+        drv->select( oldscreen );
+        drv->changed();
+        return;
+    }
     if ( !mon_inited ) {
         mon_firstuse( &mon );
         out( C_TITLE_FG, "Machine monitor" );
         out( C_GRAY, " - ? for help, Q to leave\n" );
+        mon_lastcols = mon_cols; mon_lastrows = mon_rows;
+    } else if ( mon_cols != mon_lastcols || mon_rows != mon_lastrows ) {
+        mon_relayout();             // the terminal was resized while the monitor was not shown
     }
-    mon.repl = repl; mon.vblank = vblank_handler; mon.usrdata = usrdata;
+    mon.repl = repl;
     mon.quit = false;
     if ( mon_cgen( &mon )->codesize == 0 && repl->pgm.first != 0 ) {
         out( C_GRAY, "Compiling the program...\n" );
         cmd_compile( &mon );
     }
-    sdlscr_textchanged();
+    drv->changed();
     while ( !mon.quit ) {
         mon_title( &mon );
         out( C_PROMPT, "%s> ", regionnames[mon.region] );
         char line[200]; line[0] = '\0';
-        int r = sdlscr_lineedit( line, sizeof(line), vblank_handler, usrdata );
-        if ( r == SDLSCR_EDIT_CLOSED ) {
+        int r = scr_lineedit( drv, line, sizeof(line), mon_onresize, 0 );
+        if ( r == SCREDIT_CLOSED ) {
             break;
         }
-        if ( r == SDLSCR_EDIT_ACCEPTED ) {
+        if ( r == SCREDIT_ACCEPTED ) {
             execute( &mon, line );
         }
     }
-    sdlscr_text_select( oldscreen );
-    sdlscr_textchanged();
+    drv->select( oldscreen );
+    drv->changed();
 }

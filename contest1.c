@@ -112,7 +112,7 @@ static const testcase_t cases[] = {
     { "--color colors LIST",        0, "--color", "10 PRINT 1\nLIST\n",                "\033[33m10 \033[34mPRINT \033[31m1\033[0m\n", "", 0, false },
     { "colors don't touch PRINT",   0, "--color=always", "PRINT \"x\"\n",              "x\n", "", 0, false },
     { "a bad --color value",        0, "--color=blue", "",                               "", "bad value 'blue' for --color", 2, true },
-    { "EDIT and MONITOR need a screen", 0, "", "EDIT\nMONITOR\nPRINT 3\n",            "3\n", "? Not available in the console host\n? Not available in the console host\n", 0, false },
+    { "EDIT and MONITOR need a terminal", 0, "", "EDIT\nMONITOR\nPRINT 3\n",            "3\n", "? EDIT and MONITOR need a terminal\n? EDIT and MONITOR need a terminal\n", 0, false },
     // run mode
     { "run a file",                 "10 PRINT \"RUN MODE\"\n", "prog.bas", "", "RUN MODE\n", "", 0, false },
     { "a #! first line is skipped", "#!/usr/bin/env engine1999c\n10 PRINT 1\n20 PRINT 2\n", "prog.bas", "", "1\n2\n", "", 0, false },
@@ -217,6 +217,8 @@ static int run_pty( const char* const* steps, size_t nsteps, char* out, size_t o
         return -2;
     }
     const char* slave = ptsname( master );
+    struct winsize ws = { 24, 80, 0, 0 };
+    ioctl( master, TIOCSWINSZ, &ws );
     pid_t pid = fork();
     if ( pid < 0 || slave == 0 ) {
         return -2;
@@ -239,7 +241,12 @@ static int run_pty( const char* const* steps, size_t nsteps, char* out, size_t o
     out[0] = '\0';
     for ( size_t i = 0; i <= nsteps + 1U; ++i ) {       // (step 0 is the start: wait for the banner, the terminal must be in its raw mode before keys arrive)
         if ( i >= 1U && i <= nsteps ) {
-            if ( write( master, steps[i - 1U], strlen( steps[i - 1U] ) ) < 0 ) { }
+            const char* st = steps[i - 1U];
+            unsigned rows, cols;
+            if ( strncmp( st, "@size ", 6U ) == 0 && sscanf( st + 6, "%u %u", &rows, &cols ) == 2 ) {      // the terminal is resized (the process gets SIGWINCH)
+                struct winsize nws = { (unsigned short) rows, (unsigned short) cols, 0, 0 };
+                ioctl( master, TIOCSWINSZ, &nws );
+            } else if ( write( master, st, strlen( st ) ) < 0 ) { }
         }
         int quiet = 0;
         for ( int ms = 0; ms < 5000 && quiet < 200; ms += 20 ) {       // collect until it has been quiet for 200 ms
@@ -263,7 +270,7 @@ static int run_pty( const char* const* steps, size_t nsteps, char* out, size_t o
     for ( int tries = 0; tries < 50; ++tries ) {
         int w;
         if ( waitpid( pid, &w, WNOHANG ) == pid ) {
-            st = WIFEXITED( w ) ? WEXITSTATUS( w ) : -1;
+            st = WIFEXITED( w ) ? WEXITSTATUS( w ) : WIFSIGNALED( w ) ? 128 + WTERMSIG( w ) : -1;
             break;
         }
         struct timespec ts = { 0, 20000000L };
@@ -277,18 +284,41 @@ static int run_pty( const char* const* steps, size_t nsteps, char* out, size_t o
     return st;
 }
 
-static bool pty_case( const char* name, const char* const* steps, size_t nsteps, const char* const* expect, size_t nexpect ) {
-    static char out[8192];
+// the output without the escape sequences (CSI ... final byte): the text the user sees, to look for parts in
+static void strip_csi( const char* in, char* out ) {
+    while ( *in ) {
+        if ( in[0] == 033 && in[1] == '[' ) {
+            in += 2;
+            while ( *in && !( *in >= 0x40 && *in <= 0x7E ) ) {
+                ++in;
+            }
+            if ( *in ) {
+                ++in;
+            }
+        } else if ( in[0] == 033 ) {
+            ++in;
+        } else {
+            *out++ = *in++;
+        }
+    }
+    *out = '\0';
+}
+
+// each expected part must be in the output, either as it was written (escape sequences included) or in the text without them
+static bool pty_case_st( const char* name, const char* const* steps, size_t nsteps, const char* const* expect, size_t nexpect, int status ) {
+    static char out[262144], plain[262144];
     int st = run_pty( steps, nsteps, out, sizeof(out) );
-    bool ok = st == 0;
+    strip_csi( out, plain );
+    bool ok = st == status;
     for ( size_t i = 0; i < nexpect && ok; ++i ) {
-        ok = strstr( out, expect[i] ) != 0;
+        ok = strstr( out, expect[i] ) != 0 || strstr( plain, expect[i] ) != 0;
     }
     ok = ok && strstr( out, "^[" ) == 0;        // no echo of an escape sequence by the terminal
     printf( "%s  %s\n", ok ? "PASS" : "FAIL", name );
     if ( !ok ) {
-        printf( "    status %d, output:\n", st );
-        for ( const char* p = out; *p; ++p ) {
+        printf( "    status %d (expected %d), text without escape sequences:\n", st, status );
+        size_t len = strlen( plain );
+        for ( const char* p = len > 1500U ? plain + len - 1500U : plain; *p; ++p ) {
             if ( *p == 033 ) printf( "\\e" ); else if ( *p == '\r' ) printf( "\\r" ); else if ( *p == '\n' ) printf( "\\n\n" ); else putchar( *p );
         }
         printf( "\n    expected parts:" );
@@ -298,6 +328,10 @@ static bool pty_case( const char* name, const char* const* steps, size_t nsteps,
         printf( "\n" );
     }
     return ok;
+}
+
+static bool pty_case( const char* name, const char* const* steps, size_t nsteps, const char* const* expect, size_t nexpect ) {
+    return pty_case_st( name, steps, nsteps, expect, nexpect, 0 );
 }
 
 int main( void ) {
@@ -354,9 +388,9 @@ int main( void ) {
         static const char* const steps3[] = { "PRINT \"\xc3\xa4\";LEN(\"\xc3\xa4\")", "\r", "\004" };
         static const char* const exp3[] = { "\r\n\xc3\xa4" "1\r\n" };
         failed += !pty_case( "terminal: ä is typed, echoed and one character long", steps3, 3U, exp3, 1U );
-        static const char* const steps4[] = { "PRINT 7\001\013\025\t\033", "8\r", "\004" };
+        static const char* const steps4[] = { "PRINT 7\001\013\025\t", "8\r", "\004" };
         static const char* const exp4[] = { "\r\n78\r\n" };
-        failed += !pty_case( "terminal: control codes, TAB and a lone ESC are ignored; Ctrl-D ends on an empty line", steps4, 3U, exp4, 1U );
+        failed += !pty_case( "terminal: control codes and TAB are ignored; Ctrl-D ends on an empty line", steps4, 3U, exp4, 1U );
         static const char* const steps5[] = { "PRINT 5\004", "\r", "\004" };
         static const char* const exp5[] = { "\r\n5\r\n" };
         failed += !pty_case( "terminal: Ctrl-D does nothing in the middle of a line", steps5, 3U, exp5, 1U );
@@ -365,6 +399,41 @@ int main( void ) {
         static const char* const steps6[] = { longline, "\r", "\004" };
         static const char* const exp6[] = { "\r\n1\r\n" };
         failed += !pty_case( "terminal: a line at the prompt is cut at 255 characters", steps6, 3U, exp6, 1U );
+        // the full-screen editor and the monitor on the terminal (the same code as in the window; the escape sequences of the painter are what we see)
+        static const char* const stepsE1[] = { "10 PRINT 1\r", "EDIT\r", "\033[F", "\r", "20 PRINT 2\r", "\033", "\033", "LIST\r", "\004" };
+        static const char* const expE1[] = { "\033[?1049h", "Text Editor", "ESC Close", "\033[?1049l", "\r\n10 PRINT 1\r\n20 PRINT 2\r\n" };
+        failed += !pty_case( "terminal: EDIT opens the editor on the alternate screen, a line is added, ESC leaves", stepsE1, 9U, expE1, 5U );
+        static const char* const stepsE2[] = { "10 PRINT 1\r", "EDIT\r", "@size 12 50", "\033", "\004" };
+        static const char* const expE2[] = { "\033[12;1H", "ESC Close" };
+        failed += !pty_case( "terminal: EDIT follows a resize of the terminal (the help bar moves to row 12)", stepsE2, 5U, expE2, 2U );
+        static const char* const stepsE3[] = { "10 PRINT 1\r", "EDIT\r", "@size 4 20", "\033", "\004" };
+        static const char* const expE3[] = { "Too small" };
+        failed += !pty_case( "terminal: EDIT on a terminal that is too small shows a message, ESC leaves", stepsE3, 5U, expE3, 1U );
+        static const char* const stepsM1[] = { "10 PRINT 1\r", "MONITOR\r", "u\r", "q\r", "PRINT 5\r", "\004" };
+        static const char* const expM1[] = { "\033[?1049h", "Machine Monitor", "LINE     10", "Qquit", "\033[?1049l", "\r\n5\r\n" };
+        failed += !pty_case( "terminal: MONITOR shows a disassembly, Q leaves, BASIC goes on", stepsM1, 6U, expM1, 6U );
+        static const char* const stepsM2[] = { "10 PRINT 1\r", "MONITOR\r", "@size 10 40", "g\r", "q\r", "\004" };
+        static const char* const expM2[] = { "\033[10;1H", "Running from $0", "the program has ended" };
+        failed += !pty_case( "terminal: MONITOR follows a resize and runs the program on its screen", stepsM2, 6U, expM2, 3U );
+
+        static const char* const stepsB1[] = { "10 GOTO 10\r", "RUN\r", "\033", "PRINT 5\r", "\004" };
+        static const char* const expB1[] = { "? Break in line 10", "\r\n5\r\n" };
+        failed += !pty_case( "terminal: a lone ESC breaks a running program (as in the window)", stepsB1, 5U, expB1, 2U );
+        static const char* const stepsB2[] = { "10 GOTO 10\r", "RUN\r", "ab", "\003", "10 GET A$:PRINT A$\r", "RUN\r", "x", "\004" };
+        static const char* const expB2[] = { "? Break in line 10", "Ready.\r\n10 GET A$:PRINT A$\r\n", "\r\nx\r\n" };
+        failed += !pty_case( "terminal: Ctrl-C breaks a running program; keys typed meanwhile are dropped at its end", stepsB2, 8U, expB2, 3U );
+        static const char* const stepsB3[] = { "10 GOTO 10\r", "MONITOR\r", "g\r", "\033", "q\r", "\004" };
+        static const char* const expB3[] = { "Running from $0", "Break" };
+        failed += !pty_case( "terminal: a lone ESC breaks the program the monitor runs", stepsB3, 6U, expB3, 2U );
+        static const char* const steps8[] = { "PRINT 1", "\033" };
+        static const char* const exp8[] = { "PRINT 1" };
+        failed += !pty_case_st( "terminal: a lone ESC at the prompt is a break (the process ends, like Ctrl-C)", steps8, 2U, exp8, 1U, 128 + SIGINT );
+        static const char* const steps9[] = { "10 INPUT A$\r", "RUN\r", "ab\033", "PRINT 5\r", "\004" };
+        static const char* const exp9[] = { "? Break in line 10", "\r\n5\r\n" };
+        failed += !pty_case( "terminal: a lone ESC at INPUT is a break (Break in line 10)", steps9, 5U, exp9, 2U );
+        static const char* const steps10[] = { "PRINT 1", "\003" };
+        static const char* const exp10[] = { "PRINT 1" };
+        failed += !pty_case_st( "terminal: Ctrl-C at the prompt ends the process", steps10, 2U, exp10, 1U, 128 + SIGINT );
         static const char* const steps7[] = { "10 INPUT A$\r", "RUN\r", "ab\033[D\xc3\xb6", "\r", "PRINT A$;LEN(A$)\r", "\004" };
         static const char* const exp7[] = { "ab\xc3\xb6" "3\r\n" };
         failed += !pty_case( "terminal: INPUT uses the editor", steps7, 6U, exp7, 1U );

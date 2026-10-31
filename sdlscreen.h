@@ -88,21 +88,14 @@ void sdlscr_ansi_puts( const char* text );   // like sdlscr_puts, but ESC [ ... 
 // terminating NUL). The editor starts at the cursor and redraws the line (which may wrap over several screen rows) after
 // every change. Keys: printable characters (inserted), LEFT, RIGHT, HOME, END, BACKSPACE, DELETE; RETURN accepts, ESC
 // cancels (buf is then unchanged). The cursor is placed on a new line afterwards. No lock, like all text screen output.
-#define SDLSCR_EDIT_ACCEPTED    0
+#define SDLSCR_EDIT_ACCEPTED    0       // (the same values as SCREDIT_* in scrdrv.h: this is that editor on the window's screen)
 #define SDLSCR_EDIT_CANCELLED   1
 #define SDLSCR_EDIT_TOOLONG     2       // the text doesn't fit on the screen: nothing was done
 #define SDLSCR_EDIT_CLOSED      3       // the screen was closed
-// the editing state of a line (buf holds maxlen characters + NUL) and the keys shared by both editors: printable
-// characters (inserted), LEFT, RIGHT, HOME, END, BACKSPACE, DELETE; returns true if the text or the position changed
-typedef struct _sdlscr_edit_t {
-    char*   buf;
-    size_t  len, pos, maxlen;
-} sdlscr_edit_t;
-bool sdlscr_editkey( sdlscr_edit_t* ed, const sdlscr_inputmsg_t* msg );
-bool sdlscr_editmode_begin( void );             // keys are queued, ESC is a key; returns the state for _end
-void sdlscr_editmode_end( bool oldstate );
 void sdlscr_textchanged( void );                // the text screen was changed directly through txtscr_*: redraw it
 int sdlscr_lineedit( char* buf, size_t bufsz, void (*vblank_handler)( void* ), void* usrdata );
+// the screen driver of the full-screen editor, the monitor and the one-line editor (scrdrv.h); vblank_handler is called while it waits for keys
+const struct _scrdrv_t* sdlscr_driver( void (*vblank_handler)( void* ), void* usrdata );
 int sdlscr_lineinput( int stop_evtmsk, char* buf, size_t bufsz, void (*vblank_handler)( void* ), void* usrdata );
 void sdlscr_gettextscreensize( int* outsx, int* outsy );
 void sdlscr_gettextcursor( int* outx, int* outy );

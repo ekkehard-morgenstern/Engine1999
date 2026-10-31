@@ -1222,11 +1222,11 @@ static bool handle_input( const char* buf ) {
     sdlscr_pollkeys( false );
     if ( repl.fulledit ) {      // EDIT without a target (not run from inside the REPL: the editor enters lines itself)
         repl.fulledit = false;
-        fulledit_run( &repl, vblank_handler, &usrdata );
+        fulledit_run( &repl, sdlscr_driver( vblank_handler, &usrdata ) );
     }
     if ( repl.monitor ) {       // MONITOR: same, the monitor runs REPL functions itself
         repl.monitor = false;
-        monitor_run( &repl, vblank_handler, &usrdata );
+        monitor_run( &repl, sdlscr_driver( vblank_handler, &usrdata ) );
     }
     return !stored;
 }

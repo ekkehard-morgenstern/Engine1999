@@ -36,6 +36,7 @@
 #include "sdlutil.h"
 #include "gfxcore.h"
 #include "sdlkeys.h"
+#include "scrdrv.h"
 
 #define NLAYERS 5
 #define LAY_BG          0
@@ -730,60 +731,18 @@ int sdlscr_lineinput( int stop_evtmsk, char* buf, size_t bufsz, void (*vblank_ha
     return outmsk;
 }
 
-// -- line editor -----------------------------------------------------------------------
+// -- the screen driver of the editors (scrdrv.h) --------------------------------------------------------
+//
+// The full-screen editor, the monitor and the one-line editor draw and read keys through scrdrv_t, so that the console host runs the same code.
 
-// the editing keys shared by the one-line editor and the full-screen editor
-bool sdlscr_editkey( sdlscr_edit_t* ed, const sdlscr_inputmsg_t* msg ) {
-    char* work = ed->buf;
-    if ( msg->inputtype == SDLSCR_INPUT_KEYPRESS ) {
-        switch ( msg->symbol ) {
-            case SDLK_LEFT:
-                if ( ed->pos > 0 ) { --ed->pos; return true; }
-                break;
-            case SDLK_RIGHT:
-                if ( ed->pos < ed->len ) { ++ed->pos; return true; }
-                break;
-            case SDLK_HOME:
-                if ( ed->pos != 0 ) { ed->pos = 0; return true; }
-                break;
-            case SDLK_END:
-                if ( ed->pos != ed->len ) { ed->pos = ed->len; return true; }
-                break;
-            case SDLK_BACKSPACE:
-                if ( ed->pos > 0 ) {
-                    memmove( work + ed->pos - 1U, work + ed->pos, ed->len - ed->pos + 1U );
-                    --ed->pos; --ed->len;
-                    return true;
-                }
-                break;
-            case SDLK_DELETE:
-                if ( ed->pos < ed->len ) {
-                    memmove( work + ed->pos, work + ed->pos + 1U, ed->len - ed->pos );
-                    --ed->len;
-                    return true;
-                }
-                break;
-        }
-    } else if ( msg->inputtype == SDLSCR_INPUT_TEXT ) {
-        // one printable character of ISO-8859-15 (the text was converted when it arrived)
-        int chr = msg->text[0] & 255;
-        if ( msg->text[0] != '\0' && msg->text[1] == '\0' && SDLSCR_PRINTABLE( chr ) && ed->len < ed->maxlen ) {
-            memmove( work + ed->pos + 1U, work + ed->pos, ed->len - ed->pos + 1U );
-            work[ ed->pos++ ] = (char) chr; ++ed->len;
-            return true;
-        }
-    }
-    return false;
-}
-
-bool sdlscr_editmode_begin( void ) {
+static bool sdlscr_editmode_begin( void ) {
     bool oldpoll = sdlscr_pollinput;
     sdlscr_pollinput = false;       // ESC is a key here, not the break request
     sdlscr_awaitinput = true;
     return oldpoll;
 }
 
-void sdlscr_editmode_end( bool oldpoll ) {
+static void sdlscr_editmode_end( bool oldpoll ) {
     sdlscr_awaitinput = false;
     sdlscr_pollinput = oldpoll;
 }
@@ -792,92 +751,102 @@ void sdlscr_textchanged( void ) {
     sdllay_set_modified( &layers[LAY_TXT] );
 }
 
-// draws the text of the editor from (startx, starty) in the viewport, wipes what a shorter text leaves behind, puts the
-// cursor at pos and returns the row the text starts at now (it moves up when printing scrolled the screen)
-static int sdlscr_editdraw( const char* text, size_t len, size_t pos, int startx, int starty ) {
-    int sx = 0, sy = 0;
-    txtscr_getsize( &sx, &sy );
-    txtscr_print( starty, startx, -1, -1, text );
-    int ey = starty + (int)( ( (size_t) startx + len ) / (size_t) sx );
-    if ( ey > sy - 1 ) {
-        starty -= ey - ( sy - 1 );      // printing scrolled the screen
+static void (*sdlscr_drv_vblank)( void* ) = 0;
+static void* sdlscr_drv_usrdata = 0;
+
+static bool sdlscr_inputpending( void ) {
+    SDL_LockMutex( sdlscr_inputmtx );
+    bool pending = sdlscr_iqr != sdlscr_iqw;
+    SDL_UnlockMutex( sdlscr_inputmtx );
+    return pending;
+}
+
+// the key an input message stands for; false for keys the editors don't use
+static bool sdlscr_msgtoscrkey( const sdlscr_inputmsg_t* msg, scrkey_t* k ) {
+    memset( k, 0, sizeof(*k) );
+    if ( msg->inputtype == SDLSCR_INPUT_TEXT ) {
+        int chr = msg->text[0] & 255;
+        if ( msg->text[0] != '\0' && msg->text[1] == '\0' && SDLSCR_PRINTABLE( chr ) ) {
+            k->kind = SK_CHAR; k->ch = chr;
+            return true;
+        }
+        return false;
     }
-    int cx = 0, cy = 0;
-    txtscr_getcursor( &cx, &cy );
-    txtscr_write( cy, cx, -1, -1, " ", 1 );
-    int row = starty + (int)( ( (size_t) startx + pos ) / (size_t) sx );
-    int col = (int)( ( (size_t) startx + pos ) % (size_t) sx );
-    txtscr_locate( col, row );
-    sdllay_set_modified( &layers[LAY_TXT] );
-    return starty;
+    if ( msg->inputtype != SDLSCR_INPUT_KEYPRESS ) {
+        return false;
+    }
+    int key, mods;
+    switch ( msg->symbol ) {
+        case SDLK_RETURN:
+        case SDLK_KP_ENTER:     k->kind = SK_RETURN;    return true;
+        case SDLK_ESCAPE:       k->kind = SK_ESCAPE;    return true;
+        case SDLK_BACKSPACE:    k->kind = SK_BACKSPACE; return true;
+        default:
+            break;
+    }
+    if ( sdlkeys_map( msg->symbol, msg->mods, &key, &mods ) ) {
+        k->kind = SK_KEY; k->key = key; k->mods = mods;
+        return true;
+    }
+    if ( msg->symbol == SDLK_TAB ) {
+        k->kind = SK_TAB;
+        return true;
+    }
+    if ( ( msg->mods & KMOD_CTRL ) != 0 && msg->symbol >= 'a' && msg->symbol <= 'z' ) {
+        k->kind = SK_CHAR; k->ch = (int) msg->symbol; k->mods = KSMOD_CTRL;
+        return true;
+    }
+    return false;
+}
+
+static bool sdlscr_drv_nextkey( scrkey_t* k ) {
+    for (;;) {
+        sdlscr_inputmsg_t* msg;
+        while ( ( msg = sdlscr_dequeueinputmsg() ) != 0 ) {
+            bool got = sdlscr_msgtoscrkey( msg, k );
+            sdlscr_deleteinputmsg( msg );
+            if ( got ) {
+                return true;
+            }
+        }
+        int ev = sdlev_wait( SDLEV_VBLANK | SDLEV_SCREENWORKERFINISHED | SDLEV_INPUT );
+        if ( ev & SDLEV_SCREENWORKERFINISHED ) {
+            memset( k, 0, sizeof(*k) );
+            k->kind = SK_CLOSED;
+            return false;
+        }
+        if ( ( ev & SDLEV_VBLANK ) != 0 && sdlscr_drv_vblank != 0 ) {
+            sdlscr_drv_vblank( sdlscr_drv_usrdata );
+        }
+    }
+}
+
+static void sdlscr_drv_screensize( int* cols, int* rows ) { txtscr_getscreensize( cols, rows ); }
+static void sdlscr_drv_getsize( int* cols, int* rows ) { txtscr_getsize( cols, rows ); }
+static void sdlscr_drv_print( int y, int x, int bg, int fg, const char* text ) { sdlscr_printf( y, x, bg, fg, "%s", text ); }
+static int sdlscr_drv_begin( void ) { return sdlscr_editmode_begin() ? 1 : 0; }
+static void sdlscr_drv_end( int state ) { sdlscr_editmode_end( state != 0 ); }
+static int sdlscr_drv_resizeshift( void ) { return 0; }
+static void sdlscr_drv_reserve( int rows ) { (void) rows; }
+static void sdlscr_drv_getviewport( int* x, int* y, int* w, int* h ) { sdlscr_text_getviewport( x, y, w, h ); }
+static void sdlscr_drv_getcursor( int* x, int* y ) { sdlscr_text_getcursor( x, y ); }
+
+static const scrdrv_t sdlscr_drv = {
+    sdlscr_drv_screensize, sdlscr_drv_getsize,
+    sdlscr_text_select, sdlscr_text_selected, sdlscr_text_setviewport, sdlscr_text_resetviewport, sdlscr_drv_getviewport,
+    sdlscr_text_setcolors, sdlscr_text_setblank, sdlscr_text_clear, sdlscr_text_write, sdlscr_drv_print, sdlscr_locate, sdlscr_drv_getcursor,
+    sdlscr_textchanged, sdlscr_drv_reserve, sdlscr_drv_resizeshift,
+    sdlscr_drv_begin, sdlscr_drv_end, sdlscr_drv_nextkey, sdlscr_inputpending, sdlscr_pollkeys
+};
+
+const scrdrv_t* sdlscr_driver( void (*vblank_handler)( void* ), void* usrdata ) {
+    sdlscr_drv_vblank = vblank_handler;
+    sdlscr_drv_usrdata = usrdata;
+    return &sdlscr_drv;
 }
 
 int sdlscr_lineedit( char* buf, size_t bufsz, void (*vblank_handler)( void* ), void* usrdata ) {
-    if ( buf == 0 || bufsz < 2U ) {
-        return SDLSCR_EDIT_TOOLONG;
-    }
-    int sx = 0, sy = 0;
-    txtscr_getsize( &sx, &sy );
-    int startx = 0, starty = 0;
-    txtscr_getcursor( &startx, &starty );
-    // the line must leave at least one row free, so that scrolling can't push its start off the screen
-    size_t maxlen = (size_t) sx * (size_t)( sy - 1 ) - (size_t) startx;
-    if ( maxlen > bufsz - 1U ) {
-        maxlen = bufsz - 1U;
-    }
-    size_t len = strlen( buf );
-    if ( len > maxlen ) {
-        return SDLSCR_EDIT_TOOLONG;
-    }
-    char* work = (char*) malloc( bufsz );
-    if ( work == 0 ) {
-        return SDLSCR_EDIT_TOOLONG;
-    }
-    memcpy( work, buf, len + 1U );
-    sdlscr_edit_t ed = { work, len, len, maxlen };
-    int result = SDLSCR_EDIT_CLOSED;
-    bool oldpoll = sdlscr_editmode_begin();
-    starty = sdlscr_editdraw( work, ed.len, ed.pos, startx, starty );
-    bool finished = false;
-    while ( !finished ) {
-        int ev = sdlev_wait( SDLEV_VBLANK | SDLEV_SCREENWORKERFINISHED | SDLEV_INPUT );
-        if ( ev & SDLEV_SCREENWORKERFINISHED ) {
-            break;
-        }
-        if ( ev & SDLEV_VBLANK ) {
-            if ( vblank_handler ) {
-                vblank_handler( usrdata );
-            }
-        }
-        if ( !( ev & SDLEV_INPUT ) ) {
-            continue;
-        }
-        bool changed = false;
-        sdlscr_inputmsg_t* msg;
-        while ( !finished && ( msg = sdlscr_dequeueinputmsg() ) != 0 ) {
-            if ( msg->inputtype == SDLSCR_INPUT_KEYPRESS && ( msg->symbol == SDLK_RETURN || msg->symbol == SDLK_KP_ENTER ) ) {
-                result = SDLSCR_EDIT_ACCEPTED; finished = true;
-            } else if ( msg->inputtype == SDLSCR_INPUT_KEYPRESS && msg->symbol == SDLK_ESCAPE ) {
-                result = SDLSCR_EDIT_CANCELLED; finished = true;
-            } else if ( sdlscr_editkey( &ed, msg ) ) {
-                changed = true;
-            }
-            sdlscr_deleteinputmsg( msg );
-        }
-        if ( changed || finished ) {
-            starty = sdlscr_editdraw( work, ed.len, finished ? ed.len : ed.pos, startx, starty );
-        }
-    }
-    if ( result == SDLSCR_EDIT_ACCEPTED ) {
-        memcpy( buf, work, ed.len + 1U );
-    }
-    if ( result != SDLSCR_EDIT_CLOSED ) {
-        txtscr_print( -1, -1, -1, -1, "\n" );      // the cursor is at the end of the text now
-        sdllay_set_modified( &layers[LAY_TXT] );
-    }
-    sdlscr_editmode_end( oldpoll );
-    free( work );
-    return result;
+    return scr_lineedit( sdlscr_driver( vblank_handler, usrdata ), buf, bufsz, 0, 0 );
 }
 
 void sdlscr_gettextscreensize( int* outsx, int* outsy ) {

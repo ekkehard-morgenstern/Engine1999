@@ -146,9 +146,15 @@ write ANSI escape sequences when standard output is a terminal.
 All other graphics statements fail with
 .BR "? Not available in the console host" .
 .B EDIT
-without a target and
+without a target (the full-screen program editor) and
 .B MONITOR
-need a window.
+(the machine monitor) run on a terminal, with the same keys as in the window: the terminal's alternate screen is used (the shell's text comes back when they end), colors are exact with
+.B COLORTERM=truecolor
+(else the nearest of 256), and they follow the size of the terminal when it is resized.
+A terminal smaller than 24 x 6 shows "Too small".
+Without a terminal both fail with
+.BR "? EDIT and MONITOR need a terminal" .
+On a terminal a lone ESC breaks a running program, like Ctrl\-C.
 .SH EXIT STATUS
 .TP
 .B 0

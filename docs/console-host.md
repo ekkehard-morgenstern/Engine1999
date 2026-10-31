@@ -39,7 +39,7 @@ Everything after the file name is for the program: `engine1999c prog.bas a "b c"
 
 - **Sound** statements (`SOUND`, `PLAY`, `SFX`, `ENVELOPE` ...) have no sound device: their arguments are checked and nothing plays, `PLAYING(n)` is 0.
 - **`CLS` and `LOCATE`** write ANSI escape sequences when standard output is a terminal (and nothing when it is not). `COLOR` is accepted and ignored: the Engine's palette is not the terminal's; `PRINT CHR$(27);"[31m";...` passes through to terminals as it is.
-- **Everything else** that needs a screen (`GFX`, `SPRITE`, `TILE`, `TXT`, `DESIGN`, `SYMBOL`, and the graphics functions) fails with `? Not available in the console host`. `EDIT`, `MONITOR`, `AUTO`, and the pager of `FILES` are window-only.
+- **Everything else** that needs a screen (`GFX`, `SPRITE`, `TILE`, `TXT`, `DESIGN`, `SYMBOL`, and the graphics functions) fails with `? Not available in the console host`. `AUTO` and the pager of `FILES` are window-only; `EDIT` without a target and `MONITOR` work on a terminal (next section).
 - The functions that ask for the text screen size answer with the size of the terminal (80 x 25 without one).
 
 ## Syntax colors
@@ -54,9 +54,21 @@ Everything after the file name is for the program: `engine1999c prog.bas a "b c"
 
 `-i` (go on with standard input after the file), `-` (read the lines from standard input), `--color[=always|never|auto]`, `--version`, `-h`/`--help`, and the `--debug-*` options of `engine1999` (`--help` lists them).
 
+## The full-screen editor and the monitor on a terminal
+
+`EDIT` without a target and `MONITOR` open the same editors as the window version (`fulledit.c`, `monitor.c`), because both hosts hand them a *screen driver* (`scrdrv.h`): the window's (`sdlscr_driver()` in `sdlscreen.c`) or the terminal's (`con_drv` in `engine1999c.c`). Editing is therefore the same in both (the owner's rule): the same keys, the same layout, the same break keys.
+
+- **The screen buffers** are the text screens of `textscreen.c` (screen 1: the editor, screen 2: the monitor, as in the window); the program's own screen is the terminal's normal screen. The size of the screens is the terminal's size (`txtscr_resize()`; the window's is fixed at 80 x 25).
+- **Painting** (`conscr.[ch]`, no curses, no library): the terminal is switched to its *alternate screen* (`ESC [ ? 1049 h`, back with `l`, so the shell's text returns), autowrap and the cursor are controlled by us, and only the cells that changed since the last paint are written (a copy of what the terminal shows is kept). Colors are the Engine's palette entries (`palette.[ch]`): exact with `COLORTERM=truecolor` or `24bit`, else the nearest of the 256 xterm colors. Characters are ISO-8859-15, written as UTF-8; control codes are drawn as `?`.
+- **Keys** are those of `GET` / `INKEY$`: the canonical escape sequences (`keyseq.h`), mapped to the editors' keys; Ctrl-C is ESC there (it leaves the editor, cancels a line in the monitor), a lone ESC is ESC.
+- **Resizing the terminal** (`SIGWINCH`): the screens are resized (the top left parts of their contents are kept; a screen whose cursor row would fall off moves up, like a terminal does), the editors get a resize event and lay themselves out again: the panes, the scroll bar and the bars of the editor follow, the monitor's bars and output area too, and a line being typed in the monitor is drawn again at its place. A terminal smaller than 24 x 6 shows `Too small` until it is big enough again (ESC leaves the editor).
+- **Programs run by the monitor** (`g`, `t`) print on the monitor's screen (the ANSI colors of the program work there); ESC (a lone ESC) and Ctrl-C break them.
+- **Without a terminal** (standard input or output is not one) both fail with `? EDIT and MONITOR need a terminal`.
+- **ESC breaks a running program** on a terminal now (like the window): while a program runs the terminal is in raw mode, the keys typed meanwhile are queued for `GET` / `INKEY$` / `INPUT` (and dropped when the program ends, like the window does), and a lone ESC is Break, like Ctrl-C.
+
 ## Not done yet (roadmap section 12)
 
-A full-screen `EDIT` and `MONITOR` for interactive console use, a line editor for the interactive mode (it uses the terminal's own), audio without a window. See roadmap section 12.
+Audio without a window. `EDIT n` (the one-line editor) and `AUTO` in the console host. See roadmap section 12.
 
 ## Design decisions I took (revisit if unwanted)
 

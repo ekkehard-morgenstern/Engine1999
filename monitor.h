@@ -38,10 +38,15 @@
 #include "basrepl.h"
 #endif
 
+#ifndef SCRDRV_H
+#include "scrdrv.h"
+#endif
+
 /*
-Machine monitor (MONITOR statement), host side: it needs the SDL screen and the REPL. It runs on text screen 2 (BASIC
+Machine monitor (MONITOR statement), host side: it needs a screen driver (scrdrv.h: the window's or the terminal's) and the REPL. It runs on text screen 2 (BASIC
 keeps screen 0, the full-screen editor screen 1), with a title bar, a scrolling output area where commands are typed
-and answered (syntax colored), and a help bar. The screen keeps its contents between calls.
+and answered (syntax colored), and a help bar. The screen keeps its contents between calls. The layout follows the size of the screen (80 x 25 in the window; in the
+console host the terminal's size, laid out again when the terminal is resized; below 24 x 6 only a message is shown).
 
 It looks at the code and data segments of the REPL's code generator and at the VM's stacks, and uses the instruction set
 of the VM (instset.h, vmasm.h) for assembling and disassembling. When it opens and nothing is compiled yet, the stored
@@ -72,6 +77,6 @@ patches are only kept for g, s and t. Breakpoints are cleared by c (the addresse
 */
 
 // returns when the user leaves the monitor (or the screen is closed)
-void monitor_run( repl_t* repl, void (*vblank_handler)( void* ), void* usrdata );
+void monitor_run( repl_t* repl, const scrdrv_t* drv );
 
 #endif

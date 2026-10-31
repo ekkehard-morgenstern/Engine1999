@@ -35,8 +35,10 @@
 #include "stdtypes.h"
 #endif
 
-#define TXTSCR_WIDTH    80
+#define TXTSCR_WIDTH    80      // the size of the screens of the window (and the default of txtscr_init())
 #define TXTSCR_HEIGHT   25
+#define TXTSCR_MAXW     400     // the largest screen the console host can follow
+#define TXTSCR_MAXH     200
 #define TXTSCR_NSCREENS 3       // screen 0: BASIC, screen 1: full-screen editor, screen 2: machine monitor
 
 #define TXTSCR_FGCOL    1
@@ -61,6 +63,10 @@ typedef uint32_t textcell_t;
 bool txtscr_enablecursor( bool enable );
 bool txtscr_blinkcursor( void );
 void txtscr_getsize( int* outsx, int* outsy );        // size of the viewport
+void txtscr_getscreensize( int* outw, int* outh );     // size of the screens (TXTSCR_WIDTH x TXTSCR_HEIGHT unless txtscr_resize() changed it)
+void txtscr_setresizereserve( int rows );              // the selected screen: a resize keeps its cursor row above the last 'rows' rows (the monitor's help bar)
+int txtscr_resizeshift( void );                        // how many rows the contents of the selected screen moved up at the last resize (the cursor row stays on the screen)
+void txtscr_resize( int w, int h );                    // console host: the screens follow the terminal (see textscreen.c); not used by the window
 void txtscr_getcursor( int* outx, int* outy );
 
 void txtscr_init( void );
@@ -79,6 +85,8 @@ void txtscr_setcolors( int bg, int fg );    // paper and pen of the selected scr
 void txtscr_getcolors( int* outbg, int* outfg );
 void txtscr_setblank( int bg, int fg );     // colors scrolling and txtscr_clear() fill with (default: TXTSCR_BGCOL/FGCOL)
 textcell_t txtscr_getcell( int y, int x );  // relative to the viewport; 0 outside of it
+textcell_t txtscr_getrawcell( int y, int x ); // relative to the screen (for painters); 0 outside
+void txtscr_getabscursor( int* outx, int* outy );    // the cursor relative to the screen
 void txtscr_clear( void );                  // fills the viewport with blanks, cursor to its top left
 
 void txtscr_render( uint8_t* target );

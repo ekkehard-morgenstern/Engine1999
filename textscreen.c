@@ -35,12 +35,15 @@
 // one text screen: the cells, the pen/paper, the cursor and the viewport. The cursor and all coordinates of the
 // txtscr_* functions are relative to the viewport, which is the whole screen unless set otherwise.
 typedef struct _txtscreen_t {
-      textcell_t  cells[TXTSCR_WIDTH * TXTSCR_HEIGHT];
+      textcell_t  cells[TXTSCR_MAXW * TXTSCR_MAXH];       // (the first tw * th are in use)
       int         pen, paper, blankbg, blankfg;
       int         cursx, cursy;
       int         vx, vy, vw, vh;
+      int         reserve;        // rows at the bottom that a resize keeps free below the cursor (a bar of the editor)
+      int         lastshift;      // rows the contents were moved up by the last txtscr_resize()
 } txtscreen_t;
 
+static int        tw = TXTSCR_WIDTH, th = TXTSCR_HEIGHT;       // the size of the screens (the window's is fixed, the console host's follows the terminal)
 static txtscreen_t screens[TXTSCR_NSCREENS];
 static txtscreen_t* cur = &screens[0];      // the selected screen: the one drawn and written to
 static int        selected;
@@ -88,14 +91,15 @@ static void txtscr_initscreen( txtscreen_t* sc ) {
       sc->paper = sc->blankbg = TXTSCR_BGCOL;
       sc->cursx = sc->cursy = 0;
       sc->vx = sc->vy = 0;
-      sc->vw = TXTSCR_WIDTH; sc->vh = TXTSCR_HEIGHT;
+      sc->vw = tw; sc->vh = th;
       textcell_t cell = TXTSCR_MAKECELL( 32, TXTSCR_BGCOL, TXTSCR_FGCOL );
-      for ( size_t i=0; i < TXTSCR_WIDTH * TXTSCR_HEIGHT; ++i ) {
+      for ( size_t i=0; i < tw * th; ++i ) {
             sc->cells[i] = cell;
       }
 }
 
 void txtscr_init( void ) {
+      tw = TXTSCR_WIDTH; th = TXTSCR_HEIGHT;
       memcpy( currfont, fontdef1, FONTSIZE );
       for ( int i=0; i < TXTSCR_NSCREENS; ++i ) {
             txtscr_initscreen( &screens[i] );
@@ -121,7 +125,7 @@ int txtscr_selected( void ) {
 }
 
 bool txtscr_setviewport( int x, int y, int w, int h ) {
-      if ( x < 0 || y < 0 || w < 1 || h < 1 || x + w > TXTSCR_WIDTH || y + h > TXTSCR_HEIGHT ) {
+      if ( x < 0 || y < 0 || w < 1 || h < 1 || x + w > tw || y + h > th ) {
             return false;
       }
       cur->vx = x; cur->vy = y; cur->vw = w; cur->vh = h;
@@ -130,11 +134,57 @@ bool txtscr_setviewport( int x, int y, int w, int h ) {
 }
 
 void txtscr_resetviewport( void ) {
-      txtscr_setviewport( 0, 0, TXTSCR_WIDTH, TXTSCR_HEIGHT );
+      txtscr_setviewport( 0, 0, tw, th );
 }
 
 void txtscr_getviewport( int* outx, int* outy, int* outw, int* outh ) {
       *outx = cur->vx; *outy = cur->vy; *outw = cur->vw; *outh = cur->vh;
+}
+
+void txtscr_setresizereserve( int rows ) {
+      cur->reserve = rows < 0 ? 0 : rows;
+}
+
+int txtscr_resizeshift( void ) {
+      return cur->lastshift;
+}
+
+void txtscr_getscreensize( int* outw, int* outh ) {
+      *outw = tw; *outh = th;
+}
+
+// Changes the size of all screens (the window's is fixed at the default; the console host follows its terminal). The top left part of the
+// contents is kept, but a screen whose cursor would fall off the bottom is shifted up so that the cursor row stays on it (like a terminal
+// does). Viewports are reset to the whole screen; new cells are blank.
+void txtscr_resize( int w, int h ) {
+      if ( w < 1 ) w = 1;
+      if ( h < 1 ) h = 1;
+      if ( w > TXTSCR_MAXW ) w = TXTSCR_MAXW;
+      if ( h > TXTSCR_MAXH ) h = TXTSCR_MAXH;
+      if ( w == tw && h == th ) {
+            return;
+      }
+      static textcell_t tmp[TXTSCR_MAXW * TXTSCR_MAXH];
+      for ( int i=0; i < TXTSCR_NSCREENS; ++i ) {
+            txtscreen_t* sc = &screens[i];
+            textcell_t blank = TXTSCR_MAKECELL( 32, sc->blankbg, sc->blankfg );
+            int cy = sc->vy + sc->cursy, cx = sc->vx + sc->cursx;
+            int keep = h - sc->reserve < 1 ? 1 : h - sc->reserve;       // the cursor row must stay in the first 'keep' rows
+            int shift = cy >= keep ? cy - ( keep - 1 ) : 0;
+            sc->lastshift = shift;
+            for ( int y=0; y < h; ++y ) {
+                  for ( int x=0; x < w; ++x ) {
+                        int sy = y + shift;
+                        tmp[ y * w + x ] = sy < th && x < tw ? sc->cells[ sy * tw + x ] : blank;
+                  }
+            }
+            memcpy( sc->cells, tmp, (size_t) w * (size_t) h * sizeof(textcell_t) );
+            sc->vx = sc->vy = 0; sc->vw = w; sc->vh = h;
+            sc->cursx = cx < w ? cx : w - 1;
+            sc->cursy = cy - shift < h ? cy - shift : h - 1;
+            if ( sc->cursy < 0 ) sc->cursy = 0;
+      }
+      tw = w; th = h;
 }
 
 void txtscr_setcolors( int bg, int fg ) {
@@ -164,7 +214,18 @@ static textcell_t txtscr_blankcell( void ) {
 }
 
 static textcell_t* txtscr_row( int y ) {      // first cell of row y of the viewport
-      return &cur->cells[ ( cur->vy + y ) * TXTSCR_WIDTH + cur->vx ];
+      return &cur->cells[ ( cur->vy + y ) * tw + cur->vx ];
+}
+
+textcell_t txtscr_getrawcell( int y, int x ) {
+      if ( x < 0 || y < 0 || x >= tw || y >= th ) {
+            return 0;
+      }
+      return cur->cells[ y * tw + x ];
+}
+
+void txtscr_getabscursor( int* outx, int* outy ) {
+      *outx = cur->vx + cur->cursx; *outy = cur->vy + cur->cursy;
 }
 
 textcell_t txtscr_getcell( int y, int x ) {
@@ -258,11 +319,11 @@ void txtscr_invert( int x1, int y1, int x2, int y2 ) {
 }
 
 size_t txtscr_save( uint8_t* out, size_t outsize ) {
-      size_t size = (size_t) TXTSCR_WIDTH * TXTSCR_HEIGHT * 4U;
+      size_t size = (size_t) tw * th * 4U;
       if ( out == 0 || outsize < size ) {
             return size;
       }
-      for ( size_t i=0; i < (size_t) TXTSCR_WIDTH * TXTSCR_HEIGHT; ++i ) {
+      for ( size_t i=0; i < (size_t) tw * th; ++i ) {
             textcell_t c = cur->cells[i];
             out[ i * 4U ]      = TXTSCR_CELL_CHR( c );
             out[ i * 4U + 1U ] = TXTSCR_CELL_FG( c );
@@ -273,10 +334,10 @@ size_t txtscr_save( uint8_t* out, size_t outsize ) {
 }
 
 bool txtscr_restore( const uint8_t* data, size_t size ) {
-      if ( data == 0 || size != (size_t) TXTSCR_WIDTH * TXTSCR_HEIGHT * 4U ) {
+      if ( data == 0 || size != (size_t) tw * th * 4U ) {
             return false;
       }
-      for ( size_t i=0; i < (size_t) TXTSCR_WIDTH * TXTSCR_HEIGHT; ++i ) {
+      for ( size_t i=0; i < (size_t) tw * th; ++i ) {
             cur->cells[i] = TXTSCR_MAKECELL( data[ i * 4U ], data[ i * 4U + 2U ], data[ i * 4U + 1U ] );
       }
       return true;
@@ -307,10 +368,10 @@ const uint8_t* txtscr_font( void ) {
 void txtscr_render( uint8_t* target ) {
       const textcell_t* s = &cur->cells[0];
       uint8_t* d = target;
-      int stride = TXTSCR_WIDTH * 8;
+      int stride = tw * 8;
       int ccx = cur->vx + cur->cursx, ccy = cur->vy + cur->cursy;
-      for ( uint8_t y=0; y < (uint8_t) TXTSCR_HEIGHT; ++y ) {
-            for ( uint8_t x=0; x < (uint8_t) TXTSCR_WIDTH; ++x ) {
+      for ( uint8_t y=0; y < (uint8_t) th; ++y ) {
+            for ( uint8_t x=0; x < (uint8_t) tw; ++x ) {
                   textcell_t cell = *s++;
                   uint8_t bg = TXTSCR_CELL_BG(cell);
                   uint8_t fg = TXTSCR_CELL_FG(cell);

@@ -27,9 +27,8 @@
 */
 
 #include "fulledit.h"
-#include "sdlscreen.h"
-#include "sdlevent.h"
-#include "textscreen.h"      // (only the TXTSCR_* constants; every call goes through sdlscreen)
+#include "scrdrv.h"
+#include "textscreen.h"      // (only the TXTSCR_* constants; every call goes through the screen driver)
 #include "ansi.h"
 #include "baspgm.h"
 
@@ -37,14 +36,12 @@
 
 #define ED_SCREEN       1               // text screen of the editor
 #define ED_PANE_Y       1               // first row of the panes (row 0: title bar)
-#define ED_PANE_H       23              // rows of the panes (row 24: help bar)
 #define ED_NUM_W        7               // line number pane: 6 digits and a space
 #define ED_TEXT_X       ED_NUM_W
-#define ED_TEXT_W       72
-#define ED_SB_X         ( ED_TEXT_X + ED_TEXT_W )
-#define ED_BAR_Y        ( ED_PANE_Y + ED_PANE_H )
-#define ED_BUFMAX       ( ED_TEXT_W * ( ED_PANE_H - 1 ) )   // longest line that can be edited (the rest of the pane is free)
 #define ED_NUMDIGITS    6
+#define ED_MINCOLS      24              // smaller screens only show a message
+#define ED_MINROWS      6
+// The rest follows the size of the screen (the window's is 80 x 25: 23 pane rows, 72 text columns, the scroll bar in column 79): see ed_layout().
 
 // palette entries (colinittab in sdllayer.c)
 #define C_BLACK         1
@@ -83,6 +80,12 @@
 // -- state -----------------------------------------------------------------------------
 
 typedef struct _ed_t {
+    const scrdrv_t* drv;
+    int         cols, rows;             // the screen
+    int         pane_h;                 // rows of the panes (the row below them is the help bar)
+    int         text_w;                 // columns of the text pane (the scroll bar follows)
+    size_t      bufmax;                 // longest line that can be edited (the rest of the pane is free)
+    bool        toosmall;               // the screen is too small for the panes
     repl_t*     repl;
     program_t*  pgm;
     line_t*     top;                    // first line shown
@@ -92,8 +95,8 @@ typedef struct _ed_t {
     char        num[ED_NUMDIGITS + 1];
     int         numlen;
     uint32_t    newno;                  // inserting, text phase: the number of the new line
-    char        buf[ED_BUFMAX + 1];     // text of the current / new line, without its number
-    sdlscr_edit_t ed;
+    char*       buf;                    // text of the current / new line, without its number (room for the largest screen)
+    scredit_t   ed;
     bool        dirty;                  // the text was changed
     bool        readonly;               // the line is too long to edit
     bool        escwarn;                // ESC failed once because of an error: the next one discards
@@ -168,33 +171,33 @@ static char* ed_bodytext( ed_t* e, line_t* ln ) {
     return text;
 }
 
-static int ed_rowsfor( size_t len ) {
-    return len == 0 ? 1 : (int)( ( len + ED_TEXT_W - 1U ) / ED_TEXT_W );
+static int ed_rowsfor( ed_t* e, size_t len ) {
+    return len == 0 ? 1 : (int)( ( len + (size_t) e->text_w - 1U ) / (size_t) e->text_w );
 }
 
 static int ed_linerows( ed_t* e, line_t* ln ) {
     char* text = ed_bodytext( e, ln );
-    int rows = text != 0 ? ed_rowsfor( strlen( text ) ) : 1;
+    int rows = text != 0 ? ed_rowsfor( e, strlen( text ) ) : 1;
     free( text );
     return rows;
 }
 
 // rows of the edited text (the cursor may sit behind the last character, on a row of its own)
 static int ed_editrows( ed_t* e ) {
-    return (int)( e->ed.len / ED_TEXT_W ) + 1;
+    return (int)( e->ed.len / (size_t) e->text_w ) + 1;
 }
 
 // -- the edited text -------------------------------------------------------------------
 
 static void ed_settext( ed_t* e, const char* text, size_t pos ) {
     size_t len = strlen( text );
-    e->readonly = len > ED_BUFMAX;
+    e->readonly = len > e->bufmax;
     if ( e->readonly ) {
         len = 0;
         text = "";
     }
     memcpy( e->buf, text, len + 1U );
-    e->ed.buf = e->buf; e->ed.len = len; e->ed.maxlen = ED_BUFMAX;
+    e->ed.buf = e->buf; e->ed.len = len; e->ed.maxlen = e->bufmax;
     e->ed.pos = pos < len ? pos : len;
     e->dirty = false;
 }
@@ -203,7 +206,7 @@ static void ed_settext( ed_t* e, const char* text, size_t pos ) {
 static void ed_loadcur( ed_t* e, size_t pos ) {
     char* text = e->cur != 0 ? ed_bodytext( e, e->cur ) : 0;
     ed_settext( e, text != 0 ? text : "", pos );
-    if ( e->cur != 0 && text != 0 && strlen( text ) > ED_BUFMAX ) {
+    if ( e->cur != 0 && text != 0 && strlen( text ) > e->bufmax ) {
         ed_setmsg( e, "Line too long to edit here" );
     }
     free( text );
@@ -212,6 +215,7 @@ static void ed_loadcur( ed_t* e, size_t pos ) {
 // -- drawing ---------------------------------------------------------------------------
 
 typedef struct _put_t {
+    ed_t*   e;
     int     y0;         // first row of the entry in the text pane
     int     pos;        // characters put so far
     size_t  skip;       // characters of the line number prefix still to skip
@@ -225,12 +229,12 @@ static void ed_put( void* usrdata, int bg, int fg, const char* text, size_t len 
         p->skip -= n; text += n; len -= n;
     }
     while ( len > 0 ) {
-        int row = p->pos / ED_TEXT_W, col = p->pos % ED_TEXT_W;
-        int n = ED_TEXT_W - col;
+        int row = p->pos / p->e->text_w, col = p->pos % p->e->text_w;
+        int n = p->e->text_w - col;
         if ( (size_t) n > len ) {
             n = (int) len;
         }
-        sdlscr_text_write( p->y0 + row, col, bg, fg, text, n );
+        p->e->drv->write( p->y0 + row, col, bg, fg, text, n );
         p->pos += n; text += n; len -= (size_t) n;
     }
 }
@@ -268,7 +272,7 @@ static void ed_scroll( ed_t* e ) {
     if ( e->ins ) {
         rows += ed_editrows( e );
     }
-    while ( rows > ED_PANE_H && e->top != e->cur ) {
+    while ( rows > e->pane_h && e->top != e->cur ) {
         rows -= ed_linerows( e, e->top );
         e->top = e->top->next;
     }
@@ -283,47 +287,53 @@ static int ed_countlines( ed_t* e, line_t* upto ) {      // number of lines befo
 }
 
 static void ed_drawbars( ed_t* e ) {
-    sdlscr_text_setviewport( 0, 0, TXTSCR_WIDTH, 1 );
-    sdlscr_text_setblank( C_BAR_BG, C_BAR_FG );
-    sdlscr_text_clear();
-    sdlscr_text_write( 0, 1, C_BAR_BG, C_BAR_FG, "Text Editor", -1 );
+    const scrdrv_t* d = e->drv;
+    d->setviewport( 0, 0, e->cols, 1 );
+    d->setblank( C_BAR_BG, C_BAR_FG );
+    d->clear();
+    d->write( 0, 1, C_BAR_BG, C_BAR_FG, "Text Editor", -1 );
     if ( e->repl->filename != 0 ) {
         const char* name = e->repl->filename;
         int len = (int) strlen( name );
-        if ( len > 40 ) {
-            name += len - 40; len = 40;     // the end of a long name is the telling part
+        int maxname = e->cols - 16 < 40 ? e->cols - 16 : 40;
+        if ( maxname < 0 ) {
+            maxname = 0;
         }
-        sdlscr_text_write( 0, TXTSCR_WIDTH - 1 - len, C_BAR_BG, C_YELLOW, name, len );
+        if ( len > maxname ) {
+            name += len - maxname; len = maxname;     // the end of a long name is the telling part
+        }
+        d->write( 0, e->cols - 1 - len, C_BAR_BG, C_YELLOW, name, len );
     }
-    sdlscr_text_setviewport( 0, ED_BAR_Y, TXTSCR_WIDTH, 1 );
+    d->setviewport( 0, ED_PANE_Y + e->pane_h, e->cols, 1 );
     if ( e->msg[0] != '\0' ) {
-        sdlscr_text_setblank( C_MSG_BG, C_MSG_FG );
-        sdlscr_text_clear();
-        sdlscr_text_write( 0, 1, C_MSG_BG, C_MSG_FG, e->msg, -1 );
+        d->setblank( C_MSG_BG, C_MSG_FG );
+        d->clear();
+        d->write( 0, 1, C_MSG_BG, C_MSG_FG, e->msg, -1 );
         return;
     }
-    sdlscr_text_setblank( C_HELP_BG, C_HELP_FG );
-    sdlscr_text_clear();
+    d->setblank( C_HELP_BG, C_HELP_FG );
+    d->clear();
     static const struct { const char* key; const char* what; } help[] = {
         { "ESC", "Close" }, { "^Y", "Del line" }, { "RET", "New line" }, { "PgUp/PgDn", "Scroll" },
         { "^Home/^End", "First/last" },
     };
     int x = 1;
     for ( size_t i=0; i < sizeof(help) / sizeof(help[0]); ++i ) {
-        x += sdlscr_text_write( 0, x, C_HELP_BG, C_HELPKEY_FG, help[i].key, -1 );
-        x += sdlscr_text_write( 0, x, C_HELP_BG, C_HELP_FG, " ", 1 );
-        x += sdlscr_text_write( 0, x, C_HELP_BG, C_HELP_FG, help[i].what, -1 );
+        x += d->write( 0, x, C_HELP_BG, C_HELPKEY_FG, help[i].key, -1 );
+        x += d->write( 0, x, C_HELP_BG, C_HELP_FG, " ", 1 );
+        x += d->write( 0, x, C_HELP_BG, C_HELP_FG, help[i].what, -1 );
         x += 2;
     }
 }
 
 static void ed_drawscrollbar( ed_t* e, int shown ) {
-    sdlscr_text_setviewport( ED_SB_X, ED_PANE_Y, 1, ED_PANE_H );
-    sdlscr_text_setblank( C_SBTRACK_BG, C_BLACK );
-    sdlscr_text_clear();
-    sdlscr_text_write( 0, 0, C_SBTHUMB_BG, C_WHITE, "^", 1 );
-    sdlscr_text_write( ED_PANE_H - 1, 0, C_SBTHUMB_BG, C_WHITE, "v", 1 );
-    int track = ED_PANE_H - 2;
+    const scrdrv_t* d = e->drv;
+    d->setviewport( ED_TEXT_X + e->text_w, ED_PANE_Y, 1, e->pane_h );
+    d->setblank( C_SBTRACK_BG, C_BLACK );
+    d->clear();
+    d->write( 0, 0, C_SBTHUMB_BG, C_WHITE, "^", 1 );
+    d->write( e->pane_h - 1, 0, C_SBTHUMB_BG, C_WHITE, "v", 1 );
+    int track = e->pane_h - 2;
     int total = ed_countlines( e, 0 );
     int size = track, pos = 0;
     if ( total > shown && total > 0 ) {
@@ -338,7 +348,7 @@ static void ed_drawscrollbar( ed_t* e, int shown ) {
         }
     }
     for ( int i=0; i < size; ++i ) {
-        sdlscr_text_write( 1 + pos + i, 0, C_SBTHUMB_BG, C_WHITE, " ", 1 );
+        d->write( 1 + pos + i, 0, C_SBTHUMB_BG, C_WHITE, " ", 1 );
     }
 }
 
@@ -358,9 +368,21 @@ static void ed_numtext( ed_t* e, const slot_t* s, char* out ) {      // 7 charac
 
 // redraws everything and places the cursor
 static void ed_draw( ed_t* e ) {
+    const scrdrv_t* d = e->drv;
+    if ( e->toosmall ) {
+        d->resetviewport();
+        d->setblank( C_MSG_BG, C_MSG_FG );
+        d->clear();
+        d->write( 0, 0, C_MSG_BG, C_MSG_FG, "Too small", e->cols < 9 ? e->cols : 9 );
+        d->changed();
+        return;
+    }
     ed_scroll( e );
     // layout: the entries from top on (the new line follows cur)
-    slot_t slots[ED_PANE_H + 1];
+    slot_t* slots = (slot_t*) malloc( ( (size_t) e->pane_h + 1U ) * sizeof(slot_t) );
+    if ( slots == 0 ) {
+        return;
+    }
     int nslots = 0, y = 0;
     line_t* ln = e->top;
     bool pendingnew = e->ins && e->cur == 0;
@@ -379,20 +401,20 @@ static void ed_draw( ed_t* e ) {
         } else {
             break;
         }
-        if ( y >= ED_PANE_H ) {
+        if ( y >= e->pane_h ) {
             break;
         }
         s.y = y; y += s.rows;
         slots[nslots++] = s;
-        if ( nslots > ED_PANE_H ) {
+        if ( nslots > e->pane_h ) {
             break;
         }
     }
     char numtext[ED_NUM_W + 1];
     // line number pane
-    sdlscr_text_setviewport( 0, ED_PANE_Y, ED_NUM_W, ED_PANE_H );
-    sdlscr_text_setblank( C_NUMEMPTY_BG, C_NUM_FG );
-    sdlscr_text_clear();
+    d->setviewport( 0, ED_PANE_Y, ED_NUM_W, e->pane_h );
+    d->setblank( C_NUMEMPTY_BG, C_NUM_FG );
+    d->clear();
     for ( int i=0; i < nslots; ++i ) {
         const slot_t* s = &slots[i];
         int bg = s->edited ? C_CURNUM_BG : C_NUM_BG, fg = s->edited ? C_CURNUM_FG : C_NUM_FG;
@@ -402,26 +424,30 @@ static void ed_draw( ed_t* e ) {
             } else {
                 strcpy( numtext, "       " );
             }
-            sdlscr_text_write( s->y + r, 0, bg, fg, numtext, ED_NUM_W );
+            d->write( s->y + r, 0, bg, fg, numtext, ED_NUM_W );
         }
     }
     // text pane
-    sdlscr_text_setviewport( ED_TEXT_X, ED_PANE_Y, ED_TEXT_W, ED_PANE_H );
-    sdlscr_text_setblank( C_EMPTY_BG, C_DIMGRAY );
-    sdlscr_text_clear();
-    char blanks[ED_TEXT_W];
-    memset( blanks, ' ', sizeof(blanks) );
+    d->setviewport( ED_TEXT_X, ED_PANE_Y, e->text_w, e->pane_h );
+    d->setblank( C_EMPTY_BG, C_DIMGRAY );
+    d->clear();
+    char* blanks = (char*) malloc( (size_t) e->text_w );
+    if ( blanks == 0 ) {
+        free( slots );
+        return;
+    }
+    memset( blanks, ' ', (size_t) e->text_w );
     int curx = 0, cury = 0;
     for ( int i=0; i < nslots; ++i ) {
         const slot_t* s = &slots[i];
         int bg = s->edited ? C_CUR_BG : C_TEXT_BG;
         for ( int r=0; r < s->rows; ++r ) {
-            sdlscr_text_write( s->y + r, 0, bg, C_TEXT_FG, blanks, ED_TEXT_W );
+            d->write( s->y + r, 0, bg, C_TEXT_FG, blanks, e->text_w );
         }
-        put_t p = { s->y, 0, 0 };
+        put_t p = { e, s->y, 0, 0 };
         if ( s->edited ) {
             ed_put( &p, bg, C_TEXT_FG, e->buf, strlen( e->buf ) );
-            curx = (int)( e->ed.pos % ED_TEXT_W ); cury = s->y + (int)( e->ed.pos / ED_TEXT_W );
+            curx = (int)( e->ed.pos % (size_t) e->text_w ); cury = s->y + (int)( e->ed.pos / (size_t) e->text_w );
         } else {
             size_t pfx = 0;
             char* plain = ed_linetext( e, s->line, false, &pfx );
@@ -456,15 +482,17 @@ static void ed_draw( ed_t* e ) {
     if ( e->ins && e->numphase ) {
         for ( int i=0; i < nslots; ++i ) {
             if ( slots[i].line == 0 ) {
-                sdlscr_text_setviewport( 0, ED_PANE_Y, ED_NUM_W, ED_PANE_H );
-                sdlscr_locate( e->numlen, slots[i].y );
+                d->setviewport( 0, ED_PANE_Y, ED_NUM_W, e->pane_h );
+                d->locate( e->numlen, slots[i].y );
             }
         }
     } else {
-        sdlscr_text_setviewport( ED_TEXT_X, ED_PANE_Y, ED_TEXT_W, ED_PANE_H );
-        sdlscr_locate( curx, cury );
+        d->setviewport( ED_TEXT_X, ED_PANE_Y, e->text_w, e->pane_h );
+        d->locate( curx, cury );
     }
-    sdlscr_textchanged();
+    free( blanks );
+    free( slots );
+    d->changed();
 }
 
 // -- changing the program --------------------------------------------------------------
@@ -678,57 +706,51 @@ static void ed_leave( ed_t* e ) {
 }
 
 // editing keys on the text; the line counts as changed when its length does (cursor keys don't change it)
-static void ed_edit( ed_t* e, const sdlscr_inputmsg_t* msg ) {
+static void ed_edit( ed_t* e, const scrkey_t* k ) {
     if ( e->readonly ) {
         return;
     }
     size_t oldlen = e->ed.len;
-    sdlscr_editkey( &e->ed, msg );
+    scr_editkey( &e->ed, k );
     if ( e->ed.len != oldlen ) {
         e->dirty = true;
     }
 }
 
-static void ed_key( ed_t* e, const sdlscr_inputmsg_t* msg ) {
-    if ( msg->inputtype == SDLSCR_INPUT_TEXT ) {
+static void ed_key( ed_t* e, const scrkey_t* k ) {
+    bool ctrl = ( k->mods & KSMOD_CTRL ) != 0;
+    if ( k->kind != SK_ESCAPE ) {
+        e->escwarn = false;
+    }
+    if ( k->kind == SK_CHAR && !ctrl ) {
         if ( e->ins && e->numphase ) {
-            char c = msg->text[0];
-            if ( c >= '0' && c <= '9' && msg->text[1] == '\0' && e->numlen < ED_NUMDIGITS ) {
-                e->num[e->numlen++] = c; e->num[e->numlen] = '\0';
-            } else if ( c == ' ' ) {
+            if ( k->ch >= '0' && k->ch <= '9' && e->numlen < ED_NUMDIGITS ) {
+                e->num[e->numlen++] = (char) k->ch; e->num[e->numlen] = '\0';
+            } else if ( k->ch == ' ' ) {
                 ed_endnumber( e );
             }
         } else if ( e->ins || e->cur != 0 ) {
-            ed_edit( e, msg );
+            ed_edit( e, k );
         }
         return;
     }
-    if ( msg->inputtype != SDLSCR_INPUT_KEYPRESS ) {
-        return;
-    }
-    SDL_Keycode key = msg->symbol;
-    bool ctrl = ( msg->mods & KMOD_CTRL ) != 0;
-    if ( key != SDLK_ESCAPE ) {
-        e->escwarn = false;
-    }
-    if ( ctrl && key == SDLK_y ) {
+    if ( k->kind == SK_CHAR && ctrl && k->ch == 'y' ) {
         ed_deleteline( e );
         return;
     }
-    switch ( key ) {
-        case SDLK_ESCAPE:
+    switch ( k->kind ) {
+        case SK_ESCAPE:
             if ( e->ins && e->numphase && e->cur != 0 ) {
                 ed_cancelins( e );
             } else {        // without any line there is nothing to go back to
                 ed_leave( e );
             }
             return;
-        case SDLK_RETURN:
-        case SDLK_KP_ENTER:
-        case SDLK_TAB:
+        case SK_RETURN:
+        case SK_TAB:
             if ( e->ins && e->numphase ) {
                 ed_endnumber( e );
-            } else if ( key == SDLK_TAB ) {
+            } else if ( k->kind == SK_TAB ) {
                 // nothing: TAB only ends the line number
             } else if ( e->ins ) {
                 ed_finishins( e, e->ed.pos == e->ed.len );
@@ -738,7 +760,7 @@ static void ed_key( ed_t* e, const sdlscr_inputmsg_t* msg ) {
                 ed_move( e, 1 );
             }
             return;
-        case SDLK_BACKSPACE:
+        case SK_BACKSPACE:
             if ( e->ins && e->numphase ) {
                 if ( e->numlen > 0 ) {
                     e->num[--e->numlen] = '\0';
@@ -746,36 +768,49 @@ static void ed_key( ed_t* e, const sdlscr_inputmsg_t* msg ) {
                 return;
             }
             break;
-        case SDLK_UP:
-            if ( ed_endins( e ) ) ed_move( e, -1 );
-            return;
-        case SDLK_DOWN:
-            if ( ed_endins( e ) ) ed_move( e, 1 );
-            return;
-        case SDLK_PAGEUP:
-            if ( ed_endins( e ) ) ed_move( e, -( ED_PANE_H - 1 ) );
-            return;
-        case SDLK_PAGEDOWN:
-            if ( ed_endins( e ) ) ed_move( e, ED_PANE_H - 1 );
-            return;
-        case SDLK_HOME:
-            if ( ctrl ) {
-                if ( ed_endins( e ) ) ed_moveto( e, e->pgm->first );
-                return;
+        case SK_KEY:
+            switch ( k->key ) {
+                case KS_BACKTAB:        // like TAB
+                    if ( e->ins && e->numphase ) {
+                        ed_endnumber( e );
+                    }
+                    return;
+                case KS_UP:
+                    if ( ed_endins( e ) ) ed_move( e, -1 );
+                    return;
+                case KS_DOWN:
+                    if ( ed_endins( e ) ) ed_move( e, 1 );
+                    return;
+                case KS_PGUP:
+                    if ( ed_endins( e ) ) ed_move( e, -( e->pane_h - 1 ) );
+                    return;
+                case KS_PGDN:
+                    if ( ed_endins( e ) ) ed_move( e, e->pane_h - 1 );
+                    return;
+                case KS_HOME:
+                    if ( ctrl ) {
+                        if ( ed_endins( e ) ) ed_moveto( e, e->pgm->first );
+                        return;
+                    }
+                    break;
+                case KS_END:
+                    if ( ctrl ) {
+                        if ( ed_endins( e ) ) ed_moveto( e, e->pgm->last );
+                        return;
+                    }
+                    break;
+                default:
+                    break;
             }
             break;
-        case SDLK_END:
-            if ( ctrl ) {
-                if ( ed_endins( e ) ) ed_moveto( e, e->pgm->last );
-                return;
-            }
-            break;
+        default:
+            return;
     }
     if ( e->ins && e->numphase ) {
         return;
     }
     if ( e->ins || e->cur != 0 ) {
-        ed_edit( e, msg );
+        ed_edit( e, k );
     }
 }
 
@@ -788,12 +823,37 @@ static void ed_idle( ed_t* e ) {
 
 // -- the editor ------------------------------------------------------------------------
 
-void fulledit_run( repl_t* repl, void (*vblank_handler)( void* ), void* usrdata ) {
+// the layout for the size of the screen: the panes, the text width, the longest line that can be edited
+static void ed_layout( ed_t* e ) {
+    e->drv->screensize( &e->cols, &e->rows );
+    e->toosmall = e->cols < ED_MINCOLS || e->rows < ED_MINROWS;
+    e->pane_h = e->rows - 2;
+    e->text_w = e->cols - ED_NUM_W - 1;
+    if ( e->toosmall ) {
+        e->pane_h = 1; e->text_w = 1;
+    }
+    e->bufmax = (size_t) e->text_w * (size_t)( e->pane_h - 1 );
+    if ( e->bufmax > (size_t) TXTSCR_MAXW * TXTSCR_MAXH ) {
+        e->bufmax = (size_t) TXTSCR_MAXW * TXTSCR_MAXH;
+    }
+    e->ed.maxlen = e->bufmax;
+}
+
+void fulledit_run( repl_t* repl, const scrdrv_t* drv ) {
     ed_t* e = (ed_t*) calloc( 1, sizeof(ed_t) );
     if ( e == 0 ) {
         return;
     }
+    e->buf = (char*) malloc( (size_t) TXTSCR_MAXW * TXTSCR_MAXH + 1U );
+    if ( e->buf == 0 ) {
+        free( e );
+        return;
+    }
+    e->drv = drv;
     e->repl = repl; e->pgm = &repl->pgm;
+    int oldscreen = drv->selected();
+    drv->select( ED_SCREEN );
+    ed_layout( e );
     e->top = ed_memtop != LINENO_NONE ? ed_at( e, ed_memtop ) : e->pgm->first;
     e->cur = ed_memcur != LINENO_NONE ? ed_at( e, ed_memcur ) : e->pgm->first;
     if ( e->cur == 0 ) {
@@ -801,43 +861,44 @@ void fulledit_run( repl_t* repl, void (*vblank_handler)( void* ), void* usrdata 
     }
     ed_loadcur( e, 0 );
     ed_idle( e );
-    int oldscreen = sdlscr_text_selected();
-    sdlscr_text_select( ED_SCREEN );
-    bool oldpoll = sdlscr_editmode_begin();
+    int state = drv->begin();
     ed_draw( e );
     while ( !e->quit ) {
-        int ev = sdlev_wait( SDLEV_VBLANK | SDLEV_SCREENWORKERFINISHED | SDLEV_INPUT );
-        if ( ev & SDLEV_SCREENWORKERFINISHED ) {
+        scrkey_t k;
+        if ( !drv->nextkey( &k ) ) {
             break;
         }
-        if ( ev & SDLEV_VBLANK ) {
-            if ( vblank_handler ) {
-                vblank_handler( usrdata );
-            }
-        }
-        if ( !( ev & SDLEV_INPUT ) ) {
-            continue;
-        }
-        sdlscr_inputmsg_t* msg;
         bool any = false;
-        while ( !e->quit && ( msg = sdlscr_dequeueinputmsg() ) != 0 ) {
-            if ( msg->inputtype == SDLSCR_INPUT_KEYPRESS ) {
+        for ( ;; ) {
+            if ( k.kind == SK_RESIZE ) {
+                ed_layout( e );
+                any = true;
+            } else if ( k.kind == SK_CLOSED ) {
+                e->quit = true;
+            } else if ( e->toosmall ) {
+                if ( k.kind == SK_ESCAPE ) {
+                    e->quit = true;
+                }
+            } else {
                 e->msg[0] = '\0';
+                ed_key( e, &k );
+                ed_idle( e );
+                any = true;
             }
-            ed_key( e, msg );
-            ed_idle( e );
-            sdlscr_deleteinputmsg( msg );
-            any = true;
+            if ( e->quit || !drv->pending() || !drv->nextkey( &k ) ) {
+                break;
+            }
         }
         if ( any ) {
             ed_draw( e );
         }
     }
-    sdlscr_editmode_end( oldpoll );
+    drv->end( state );
     ed_memcur = e->cur != 0 ? e->cur->lineno : LINENO_NONE;
     ed_memtop = e->top != 0 ? e->top->lineno : LINENO_NONE;
-    sdlscr_text_resetviewport();
-    sdlscr_text_select( oldscreen );
-    sdlscr_textchanged();
+    drv->resetviewport();
+    drv->select( oldscreen );
+    drv->changed();
+    free( e->buf );
     free( e );
 }

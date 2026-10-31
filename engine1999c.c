@@ -35,6 +35,11 @@
 #include "basdebug.h"
 #include "gfxops.h"
 #include "ansi.h"
+#include "scrdrv.h"
+#include "conscr.h"
+#include "textscreen.h"
+#include "fulledit.h"
+#include "monitor.h"
 #include "keyseq.h"
 #include "version.h"
 
@@ -62,7 +67,14 @@ static void con_sigint( int sig ) {
     con_break = 1;
 }
 
-// Ctrl-C is Break while the BASIC system runs something; between lines the default action (end the process) is in effect
+static bool con_fullscreen = false;             // the full-screen editor or the monitor is open: program output and messages go to the text screen
+static bool con_pumping = false;                // a program is running on a terminal: look for keys (see con_pump())
+static size_t con_inqpos = 0, con_inqlen = 0;   // the keys that arrived while it ran (see con_pump())
+static void con_set_raw( bool raw );
+
+// Ctrl-C is Break while the BASIC system runs something; between lines the default action (end the process) is in effect. On a terminal a lone ESC
+// is Break as well (as in the window), which needs the keys to arrive without the Return of the line mode: the terminal is in raw mode while a
+// program runs, and the keys typed meanwhile are queued for it (con_pump())
 static void con_catch_break( bool on ) {
     struct sigaction sa;
     memset( &sa, 0, sizeof(sa) );
@@ -71,6 +83,13 @@ static void con_catch_break( bool on ) {
     sigaction( SIGINT, &sa, 0 );
     if ( on ) {
         con_break = 0;
+    }
+    if ( !on ) {
+        con_inqpos = con_inqlen = 0;            // the keys typed ahead during the run are dropped, as in the window
+    }
+    con_pumping = on && isatty( 0 ) && isatty( 1 );
+    if ( con_pumping ) {
+        con_set_raw( true );
     }
 }
 
@@ -112,6 +131,11 @@ static bool con_midline = false;        // the last character written to standar
 // Text is ISO-8859-15 inside the Engine. On a terminal (which speaks UTF-8) the characters from 128 up are converted; in a pipe or a file the bytes
 // go out as they are (binary output must stay intact), and so they come in: see con_utf8_input().
 static void con_write( const char* text, size_t len ) {
+    if ( con_fullscreen ) {
+        conscr_write( text, len );
+        conscr_paint();
+        return;
+    }
     bool high = false;
     for ( size_t i = 0; i < len && con_stdout_tty && !high; ++i ) {
         high = (unsigned char) text[i] >= 0x80;
@@ -157,6 +181,11 @@ static void con_printn( struct _vm_t* vm, void* usrdata, int channel, const char
 
 static void con_report( struct _repl_t* repl, const char* text ) {
     (void) repl;
+    if ( con_fullscreen ) {
+        conscr_write( text, strlen( text ) );
+        conscr_paint();
+        return;
+    }
     if ( con_midline && con_stdout_tty ) {      // on a terminal the message starts on a line of its own (not in a pipe: that is data)
         fputc( '\n', stdout );
         con_midline = false;
@@ -197,15 +226,59 @@ static char* con_input( struct _vm_t* vm, void* usrdata, int channel ) {
 
 #define CON_ESCWAIT     50      // ms to wait for the rest of an escape sequence
 
+static bool con_esc_break = false;      // the line editor saw a lone ESC: a break, like Ctrl-C
 static bool con_wantctrl = false;       // the line editor wants the control codes (Ctrl-A, Ctrl-E, ...), too
 static char con_pend[ KEYSEQ_MAXLEN * 2 ];
 static size_t con_pendpos = 0, con_pendlen = 0;
+
+// Keys that arrived while the program was running (the window queues them the same way): the terminal is looked at from time to time
+// (con_pump(), called by the interrupt check) and the bytes wait here until a program reads a key. A lone ESC is not queued: it is the
+// break key (like Ctrl-C), as in the window.
+static unsigned char con_inq[1024];
+static volatile sig_atomic_t con_winch = 0;     // the terminal was resized (SIGWINCH)
+static bool con_wantresize = false;             // a full-screen session is waiting for keys: a resize is reported as -3
+
+static void con_sigwinch( int sig ) {
+    (void) sig;
+    con_winch = 1;
+}
+
+static void con_pump( void ) {
+    if ( !con_pumping ) {
+        return;
+    }
+    unsigned char chunk[256];
+    struct pollfd pfd = { 0, POLLIN, 0 };
+    while ( poll( &pfd, 1, 0 ) > 0 && ( pfd.revents & POLLIN ) != 0 ) {
+        ssize_t n = read( 0, chunk, sizeof(chunk) );
+        if ( n <= 0 ) {
+            break;
+        }
+        if ( n == 1 && chunk[0] == 033 ) {
+            con_break = 1;                      // a lone ESC
+            continue;
+        }
+        for ( ssize_t i = 0; i < n && con_inqlen < sizeof(con_inq); ++i ) {
+            con_inq[ con_inqlen++ ] = chunk[i];
+        }
+    }
+}
 
 // one byte of the terminal: >= 0 the byte, -1 end of input / error, -2 timeout (timeout in ms; negative = wait)
 static int con_rawbyte( int timeout ) {
     for (;;) {
         if ( con_break ) {
             return -1;
+        }
+        if ( con_inqpos < con_inqlen ) {
+            unsigned char q = con_inq[ con_inqpos++ ];
+            if ( con_inqpos == con_inqlen ) {
+                con_inqpos = con_inqlen = 0;
+            }
+            return q;
+        }
+        if ( con_wantresize && con_winch ) {
+            return -3;
         }
         struct pollfd pfd = { 0, POLLIN, 0 };
         int rv = poll( &pfd, 1, timeout < 0 ? 100 : timeout );
@@ -244,6 +317,9 @@ static int con_readkey( bool wait ) {
             return (unsigned char) con_pend[ con_pendpos++ ];
         }
         int c = con_rawbyte( wait ? -1 : 0 );
+        if ( c == -3 ) {
+            return -3;                  // (only while a full-screen session asks for it)
+        }
         if ( c == -1 ) {
             return wait ? -1 : ( con_break ? -1 : 0 );      // end of input: INKEY$ sees "no key", GET ends
         }
@@ -346,7 +422,7 @@ static int con_readkey( bool wait ) {
 // On a terminal the BASIC prompt and INPUT read their lines here instead of letting the terminal do it (its line mode echoes a cursor key as
 // "^[[A"). It does what the window's line input (sdlscr_lineinput() in sdlscreen.c) does, nothing more: the printable characters are typed at the
 // end of the line, BACKSPACE takes the last one back, RETURN accepts the line; every other key (cursor keys, DELETE, function keys, control codes,
-// TAB, ESC) is ignored, and the line has a limit (255 characters at the prompt, 1023 for INPUT). The one addition is Ctrl-D on an empty line: the
+// TAB) is ignored, a lone ESC is a break (like Ctrl-C), and the line has a limit (255 characters at the prompt, 1023 for INPUT). The one addition is Ctrl-D on an empty line: the
 // end of the input, as on any terminal (the window has a close button instead). Assumes one column per character and a line that does not wrap.
 
 #define CON_PROMPTMAX   255U        // the window's prompt buffer (engine1999.c)
@@ -385,6 +461,13 @@ static char* con_readline( size_t maxlen ) {
             int r = keyseq_parse( seq, n, &key, &mods );
             if ( r > 0 ) {
                 con_pendpos += (size_t) r - 1U;
+            } else if ( n == 1U ) {
+                // a lone ESC is a break, like Ctrl-C (and like ESC in the window while INPUT waits)
+                con_esc_break = true;
+                con_wantctrl = false;
+                free( buf );
+                fputc( '\n', stdout );
+                return 0;
             }
             continue;
         }
@@ -412,10 +495,27 @@ static char* con_readline( size_t maxlen ) {
 // as they come (from a terminal's input converted from UTF-8 to ISO-8859-15, from a pipe unchanged). Returns the length, -1 at the end of the input.
 static ssize_t con_getline( char** line, size_t* cap, size_t maxlen ) {
     if ( isatty( 0 ) && isatty( 1 ) ) {
+        // Ctrl-C (and a lone ESC) must leave the terminal in order: a handler of ours is in effect while the line is typed; what the signal
+        // does afterwards is what it did before (the process ends at the prompt, a running program sees Break at INPUT)
+        struct sigaction mine, old;
+        memset( &mine, 0, sizeof(mine) );
+        mine.sa_handler = con_sigint;
+        sigemptyset( &mine.sa_mask );
+        sigaction( SIGINT, &mine, &old );
+        con_break = 0;
         con_set_raw( true );
         char* l = con_readline( maxlen );
         con_set_raw( false );
+        sigaction( SIGINT, &old, 0 );
         if ( l == 0 ) {
+            if ( con_esc_break ) {
+                con_esc_break = false;
+                con_break = 1;
+            }
+            if ( con_break && old.sa_handler == SIG_DFL ) {
+                con_break = 0;
+                raise( SIGINT );        // at the prompt: the process ends, as with Ctrl-C anywhere else
+            }
             return -1;
         }
         size_t n = strlen( l );
@@ -451,6 +551,10 @@ static int con_inkey( struct _vm_t* vm, void* usrdata ) {
 
 static bool con_interrupt( struct _vm_t* vm, void* usrdata ) {
     (void) vm; (void) usrdata;
+    static unsigned counter = 0;
+    if ( con_pumping && ( ++counter & 63U ) == 0 ) {
+        con_pump();
+    }
     return con_break != 0;
 }
 
@@ -530,13 +634,176 @@ static bool con_init( repl_t* repl ) {
 
 // -- the two modes ---------------------------------------------------------------------------
 
-// EDIT without a target and MONITOR need a screen: the REPL only sets flags for the host, which has no such thing (roadmap: full-screen versions)
-static void con_refuse_windows( repl_t* repl ) {
-    if ( repl->fulledit || repl->monitor ) {
-        con_report( repl, "? Not available in the console host\n" );
-        repl->fulledit = false;
-        repl->monitor = false;
+// -- the full-screen editor and the monitor on the terminal ---------------------------------------------------
+//
+// EDIT without a target and MONITOR run the same code as in the window (fulledit.c, monitor.c) through the screen driver below: the screens are
+// the text screens of textscreen.c, painted on the terminal by conscr.c (the alternate screen, no curses), the keys are those of GET and
+// INKEY$ (the canonical escape sequences), and a resize of the terminal (SIGWINCH) is reported to the editors, which lay themselves out again.
+
+// the bytes of one key press -> a key of the editors; false if it is not one (the caller reads on)
+static bool con_scrkey( int c, scrkey_t* k ) {
+    memset( k, 0, sizeof(*k) );
+    if ( c == 13 ) { k->kind = SK_RETURN; return true; }
+    if ( c == 8 )  { k->kind = SK_BACKSPACE; return true; }
+    if ( c == 9 )  { k->kind = SK_TAB; return true; }
+    if ( c == 033 ) {
+        char seq[KEYSEQ_MAXLEN];
+        size_t n = 1U;
+        seq[0] = 033;
+        while ( con_pendpos + n - 1U < con_pendlen && n + 1U < sizeof(seq) ) {
+            seq[n] = con_pend[ con_pendpos + n - 1U ];
+            ++n;
+        }
+        int key, mods;
+        int r = keyseq_parse( seq, n, &key, &mods );
+        if ( r > 0 ) {
+            con_pendpos += (size_t) r - 1U;
+            k->kind = SK_KEY; k->key = key; k->mods = mods;
+            return true;
+        }
+        if ( n == 1U ) {
+            k->kind = SK_ESCAPE;                // a lone ESC
+            return true;
+        }
+        return false;                           // ESC and a character: the ESC is dropped
     }
+    if ( c >= 1 && c <= 26 ) {                  // Ctrl+letter
+        k->kind = SK_CHAR; k->ch = 'a' + c - 1; k->mods = KSMOD_CTRL;
+        return true;
+    }
+    if ( SCR_PRINTABLE( c ) ) {
+        k->kind = SK_CHAR; k->ch = c;
+        return true;
+    }
+    return false;
+}
+
+static bool con_drv_pending( void ) {
+    if ( con_pendpos < con_pendlen || con_inqpos < con_inqlen || con_winch ) {
+        return true;
+    }
+    struct pollfd pfd = { 0, POLLIN, 0 };
+    return poll( &pfd, 1, 0 ) > 0 && ( pfd.revents & POLLIN ) != 0;
+}
+
+static bool con_drv_nextkey( scrkey_t* k ) {
+    for (;;) {
+        if ( con_winch ) {
+            con_winch = 0;
+            if ( conscr_syncsize() ) {
+                memset( k, 0, sizeof(*k) );
+                k->kind = SK_RESIZE;
+                return true;
+            }
+        }
+        if ( !con_drv_pending() ) {
+            conscr_paint();                     // (a burst of keys is drawn once)
+        }
+        int c = con_readkey( true );
+        if ( c == -3 ) {
+            continue;
+        }
+        if ( c < 0 ) {
+            if ( con_break ) {                  // Ctrl-C (or the break key while a program ran) is ESC to the editors
+                con_break = 0;
+                memset( k, 0, sizeof(*k) );
+                k->kind = SK_ESCAPE;
+                return true;
+            }
+            memset( k, 0, sizeof(*k) );
+            k->kind = SK_CLOSED;                // the end of the input
+            return false;
+        }
+        if ( c == 0 ) {
+            continue;
+        }
+        if ( con_scrkey( c, k ) ) {
+            return true;
+        }
+    }
+}
+
+static int con_drv_select( int n ) { return txtscr_select( n ) ? n : txtscr_selected(); }
+static void con_drv_screensize( int* cols, int* rows ) { txtscr_getscreensize( cols, rows ); }
+static void con_drv_getsize( int* cols, int* rows ) { txtscr_getsize( cols, rows ); }
+static void con_drv_getviewport( int* x, int* y, int* w, int* h ) { txtscr_getviewport( x, y, w, h ); }
+static void con_drv_getcursor( int* x, int* y ) { txtscr_getcursor( x, y ); }
+static void con_drv_print( int y, int x, int bg, int fg, const char* text ) { txtscr_print( y, x, bg, fg, text ); }
+static void con_drv_changed( void ) { conscr_paint(); }
+static int con_drv_resizeshift( void ) { return txtscr_resizeshift(); }
+
+static int con_drv_begin( void ) {
+    int state = ( con_wantctrl ? 1 : 0 ) | ( con_wantresize ? 2 : 0 );
+    con_wantctrl = true;                        // Ctrl+letter keys are keys here
+    con_wantresize = true;
+    return state;
+}
+
+static void con_drv_end( int state ) {
+    con_wantctrl = ( state & 1 ) != 0;
+    con_wantresize = ( state & 2 ) != 0;
+}
+
+// the monitor runs programs: keys are looked at while they run, and the lone ESC / Ctrl-C then break them (see con_pump())
+static void con_drv_pollkeys( bool enable ) {
+    con_pumping = enable && isatty( 0 );
+    if ( enable ) {
+        con_break = 0;
+    }
+}
+
+static const scrdrv_t con_drv = {
+    con_drv_screensize, con_drv_getsize,
+    con_drv_select, txtscr_selected, txtscr_setviewport, txtscr_resetviewport, con_drv_getviewport,
+    txtscr_setcolors, txtscr_setblank, txtscr_clear, txtscr_write, con_drv_print, txtscr_locate, con_drv_getcursor,
+    con_drv_changed, txtscr_setresizereserve, con_drv_resizeshift,
+    con_drv_begin, con_drv_end, con_drv_nextkey, con_drv_pending, con_drv_pollkeys
+};
+
+// EDIT / MONITOR: the REPL only sets flags for the host; this opens the screens. Without a terminal there is nothing to show.
+static void con_run_windows( repl_t* repl ) {
+    if ( !repl->fulledit && !repl->monitor ) {
+        return;
+    }
+    bool ed = repl->fulledit, mon = repl->monitor;
+    repl->fulledit = false;
+    repl->monitor = false;
+    if ( !isatty( 0 ) || !isatty( 1 ) ) {
+        con_report( repl, "? EDIT and MONITOR need a terminal\n" );
+        return;
+    }
+    fflush( stdout );
+    struct sigaction winch, oldwinch;
+    memset( &winch, 0, sizeof(winch) );
+    winch.sa_handler = con_sigwinch;
+    sigemptyset( &winch.sa_mask );
+    sigaction( SIGWINCH, &winch, &oldwinch );
+    con_catch_break( true );                    // Ctrl-C does not kill the process while the terminal is changed
+    con_pumping = false;                        // (the monitor asks for it while it runs a program)
+    con_set_raw( true );
+    con_inqpos = con_inqlen = 0;
+    con_pendpos = con_pendlen = 0;
+    con_winch = 1;                              // the first thing is to look at the size
+    if ( conscr_begin() ) {
+        con_fullscreen = true;
+        if ( ed ) {
+            fulledit_run( repl, &con_drv );
+        }
+        if ( mon ) {
+            monitor_run( repl, &con_drv );
+        }
+        con_fullscreen = false;
+        conscr_end();
+    } else {
+        con_report( repl, "? EDIT and MONITOR need a terminal\n" );
+    }
+    con_wantctrl = false;
+    con_wantresize = false;
+    con_set_raw( false );
+    con_catch_break( false );
+    sigaction( SIGWINCH, &oldwinch, 0 );
+    repl->fulledit = false;
+    repl->monitor = false;
 }
 
 // reads lines from standard input and enters them; returns when the input ends or BYE / QUIT asks for the end
@@ -568,7 +835,7 @@ static void con_repl( repl_t* repl, bool interactive ) {
         con_catch_break( true );
         repl_enter( repl, line );
         con_catch_break( false );
-        con_refuse_windows( repl );
+        con_run_windows( repl );
         if ( repl->quit ) {
             break;
         }
@@ -629,7 +896,7 @@ static int con_run_embedded( int argc, char** argv ) {
         con_catch_break( true );
         bool ok = repl_run( &repl );
         con_catch_break( false );
-        con_refuse_windows( &repl );
+        con_run_windows( &repl );
         fflush( stdout );
         status = repl.quit ? repl.exitcode : ok ? EXIT_SUCCESS : 1;
     } else {
@@ -912,7 +1179,7 @@ int main( int argc, char** argv ) {
         con_catch_break( true );
         bool ok = repl_run( &repl );
         con_catch_break( false );
-        con_refuse_windows( &repl );
+        con_run_windows( &repl );
         fflush( stdout );
         if ( repl.quit ) {
             status = repl.exitcode;

@@ -39,12 +39,17 @@
 #include "basrepl.h"
 #endif
 
+#ifndef SCRDRV_H
+#include "scrdrv.h"
+#endif
+
 /*
-Full-screen program editor (EDIT without a target), host side: it needs the SDL screen and the REPL. It runs on text
+Full-screen program editor (EDIT without a target), host side: it needs a screen driver (scrdrv.h: the window's or the terminal's) and the REPL. It runs on text
 screen 1 (BASIC keeps screen 0, which is left untouched) and is built from viewports: a title bar at the top, a line
 number pane, the text pane, a scroll bar (informational only, there is no mouse support yet) and a key help bar at the
 bottom. The program lines are shown with the syntax highlighting of repl->hlstyle; the current line is edited in
-place (plain text) with the keys of the one-line editor. Changes are made by entering lines through repl_enter(), like
+place (plain text) with the keys of the one-line editor. The layout follows the size of the screen (80 x 25 in the window; in the console host the
+terminal's size, and it is laid out again when the terminal is resized; below 24 x 6 only a message is shown). Changes are made by entering lines through repl_enter(), like
 typed lines, so the editor must not be called from inside a REPL callback (see repl_t.fulledit).
 
 Keys: UP/DOWN/PGUP/PGDN/CTRL+HOME/CTRL+END change the line (an edited line is entered first), LEFT/RIGHT/HOME/END/
@@ -55,6 +60,6 @@ existing line deletes it, as in BASIC. The position is remembered for the next c
 */
 
 // returns when the user leaves the editor (or the screen is closed)
-void fulledit_run( repl_t* repl, void (*vblank_handler)( void* ), void* usrdata );
+void fulledit_run( repl_t* repl, const scrdrv_t* drv );
 
 #endif
