@@ -58,4 +58,22 @@ void conscr_write( const char* text, size_t len );      // output of a running p
 // the palette entry nearest to an xterm 256 color number's RGB, and the other way: used by the painter (exposed for the test)
 int conscr_rgb_to_256( int r, int g, int b );
 
+// -- line mode: the normal terminal as one screen for the one-line editor ---------------------------------
+//
+// The one-line editor (scredit.c) of the prompt and of INPUT needs absolute positions on a screen. On the normal, scrolling terminal the host asks where
+// the cursor is when a line starts (ESC [ 6 n) and the functions below keep a model of it (autowrap, scrolling at the bottom), so that the editor draws and
+// wipes with absolute cursor addressing and the line behaves as it does on the window's text screen. The screen's contents and colors are not touched.
+
+void conscr_line_init( int cols, int rows, int cx, int cy );        // the size and the cursor position (0-based) now
+void conscr_line_setsilent( bool silent );                          // write nothing (the input or the output is redirected): the editor still runs, on the model only
+void conscr_line_getsize( int* cols, int* rows );
+void conscr_line_getviewport( int* x, int* y, int* w, int* h );
+void conscr_line_getcursor( int* x, int* y );
+void conscr_line_locate( int x, int y );
+int conscr_line_write( int y, int x, int bg, int fg, const char* text, int len );   // blanks and the like: positioned, clipped at the right edge, no wrap
+void conscr_line_print( int y, int x, int bg, int fg, const char* text );           // text at the cursor (or at x, y): wraps, scrolls at the bottom
+void conscr_line_changed( void );
+int conscr_line_restart( int absy, int startx, size_t pos );        // after a resize (the new size and cursor are set by conscr_line_init()): the row the line starts at
+void conscr_termsize( int* cols, int* rows );                       // the terminal's size now
+
 #endif

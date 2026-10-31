@@ -82,6 +82,18 @@ static const testcase_t cases[] = {
     { "key dump: control codes and DEL",        0, "--debug-keys", "\r\177\t",       "[keys]Enter (Ctrl-M, CR)\n    7f                       \"\\x7f\"                 DEL", "", 0, false },
     { "key dump: Ctrl-D stops it",              0, "--debug-keys", "a\004b",         "[keys]'a' (U+0061)\n    04                       \"\\x04\"                 Ctrl-D\n\nEnd of the key dump.\n", "", 0, false },
     { "key dump: the end of the input stops it", 0, "--debug-keys", "",              "[keys]End of the key dump.\n", "", 0, false },
+    // the lines come through the same editor as the ones typed on a terminal (the keys are the bytes of the input)
+    { "CR LF line ends in the input",               0, "", "PRINT 1\r\nPRINT 2\r\n",           "1\n2\n", "", 0, false },
+    { "the last line without a line end",           0, "", "PRINT 1\nPRINT 2",                 "1\n2\n", "", 0, false },
+    { "an empty input",                             0, "", "",                                   "", "", 0, false },
+    { "INPUT reads the next line of the input",     0, "", "10 INPUT A$\n20 PRINT A$;LEN(A$)\nRUN\nhello\n", "? hello5\n", "", 0, false },
+    { "INPUT at the end of the input",              0, "", "10 INPUT A$\nRUN\n",              "? ", "? End of input in line 10\n", 0, true },
+    { "an escape sequence in the input is a key, not text", 0, "", "PRINT 1\033[A\n",         "1\n", "", 0, false },
+    // EDIT n: the one-line editor on the keys of the input (the text of the line is there to be edited)
+    { "EDIT n: the line is edited with keys from the input (End, a character, RETURN)", 0, "", "10 PRINT 1\nEDIT 10\n\033[F0\nLIST\n", "10 PRINT 10\n", "", 0, false },
+    { "EDIT n: ESC cancels, the line stays",        0, "", "10 PRINT 1\nEDIT 10\n\033\nLIST\n", "10 PRINT 1\n", "", 0, false },
+    { "EDIT n: Home and DELETE edit the number's line", 0, "", "10 PRINT 1\nEDIT 10\n\033[H\033[3~\033[3~\033[3~\033[3~2 \n", "", "", 0, false },
+    { "EDIT of a line that does not exist",         0, "", "EDIT 99\nPRINT 5\n",             "5\n", "? Undefined line number 99\n", 0, false },
     { "BYE ends the input",         0, "", "PRINT 1\nBYE\nPRINT 2\n",                  "1\n", "", 0, false },
     { "BYE with a code",            0, "", "PRINT 1\nBYE 4\nPRINT 2\n",                "1\n", "", 4, false },
     { "QUIT with a code",           0, "", "QUIT 9\n",                                  "", "", 9, false },
@@ -237,7 +249,7 @@ static int run_pty( const char* const* steps, size_t nsteps, char* out, size_t o
         execl( exe, exe, (char*) 0 );
         _exit( 127 );
     }
-    size_t n = 0;
+    size_t n = 0, answered = 0;
     out[0] = '\0';
     for ( size_t i = 0; i <= nsteps + 1U; ++i ) {       // (step 0 is the start: wait for the banner, the terminal must be in its raw mode before keys arrive)
         if ( i >= 1U && i <= nsteps ) {
@@ -262,6 +274,11 @@ static int run_pty( const char* const* steps, size_t nsteps, char* out, size_t o
                 got_any = true;
                 n += (size_t) got;
                 out[n] = '\0';
+                // the terminal answers "where is the cursor?" (ESC [ 6 n) like a real one: row 20, column 1
+                for ( const char* q = out + answered; ( q = strstr( q, "\033[6n" ) ) != 0; q += 4 ) {
+                    if ( write( master, "\033[20;1R", 8U ) < 0 ) { }
+                }
+                answered = n >= 3U ? n - 3U : 0;
             }
             quiet = got_any ? 0 : quiet + 20;
         }
@@ -376,15 +393,18 @@ int main( void ) {
 
     // cases that need more than a table row
 
-    // the line editor on a terminal (a pty): the same as the window's line input: typing, BACKSPACE and RETURN, every other key ignored (and no
-    // echo of an escape sequence by the terminal)
+    // the line editor on a terminal (a pty): the one-line editor of EDIT n and the monitor, the same as in the window (scredit.c); the terminal answers
+    // ESC [ 6 n; the terminal's own echo of an escape sequence ("^[[A") must not be seen
     {
-        static const char* const steps1[] = { "PRINT 1", "\033[D", "\033[H", "\033[A", "\033[3~", "\033OP", "2", "\r", "\004" };
-        static const char* const exp1[] = { "\r\n12\r\nReady.\r\n" };
-        failed += !pty_case( "terminal: cursor and function keys are ignored", steps1, 9U, exp1, 1U );
-        static const char* const steps2[] = { "PRINT 15", "\177", "2", "\r", "\004" };
-        static const char* const exp2[] = { "\b \b", "\r\n12\r\n" };
-        failed += !pty_case( "terminal: BACKSPACE takes the last character back", steps2, 5U, exp2, 2U );
+        static const char* const steps1[] = { "RINT 5", "\033[H", "P", "\r", "\004" };
+        static const char* const exp1[] = { "\r\n5\r\nReady.\r\n" };
+        failed += !pty_case( "terminal: Home, a character in front, RETURN", steps1, 5U, exp1, 1U );
+        static const char* const steps2[] = { "PRINT 1X5", "\033[D", "\177", "\r", "PRINT 3Z", "\033[D", "\033[3~", "\r", "\004" };
+        static const char* const exp2[] = { "\r\n15\r\n", "\r\n3\r\n" };
+        failed += !pty_case( "terminal: Left, Backspace and Delete edit in the middle of the line", steps2, 9U, exp2, 2U );
+        static const char* const steps2b[] = { "PRINT 1", "\033OP", "\033[A", "2", "\r", "\004" };
+        static const char* const exp2b[] = { "\r\n12\r\n" };
+        failed += !pty_case( "terminal: function keys and Up / Down are ignored", steps2b, 6U, exp2b, 1U );
         static const char* const steps3[] = { "PRINT \"\xc3\xa4\";LEN(\"\xc3\xa4\")", "\r", "\004" };
         static const char* const exp3[] = { "\r\n\xc3\xa4" "1\r\n" };
         failed += !pty_case( "terminal: ä is typed, echoed and one character long", steps3, 3U, exp3, 1U );
@@ -399,6 +419,9 @@ int main( void ) {
         static const char* const steps6[] = { longline, "\r", "\004" };
         static const char* const exp6[] = { "\r\n1\r\n" };
         failed += !pty_case( "terminal: a line at the prompt is cut at 255 characters", steps6, 3U, exp6, 1U );
+        static const char* const steps7[] = { "10 INPUT A$\r", "RUN\r", "ab\033[D\xc3\xb6", "\r", "PRINT A$;LEN(A$)\r", "\004" };
+        static const char* const exp7[] = { "a\xc3\xb6" "b3\r\n" };
+        failed += !pty_case( "terminal: INPUT uses the same editor (a character in the middle)", steps7, 6U, exp7, 1U );
         // the full-screen editor and the monitor on the terminal (the same code as in the window; the escape sequences of the painter are what we see)
         static const char* const stepsE1[] = { "10 PRINT 1\r", "EDIT\r", "\033[F", "\r", "20 PRINT 2\r", "\033", "\033", "LIST\r", "\004" };
         static const char* const expE1[] = { "\033[?1049h", "Text Editor", "ESC Close", "\033[?1049l", "\r\n10 PRINT 1\r\n20 PRINT 2\r\n" };
@@ -420,23 +443,35 @@ int main( void ) {
         static const char* const expB1[] = { "? Break in line 10", "\r\n5\r\n" };
         failed += !pty_case( "terminal: a lone ESC breaks a running program (as in the window)", stepsB1, 5U, expB1, 2U );
         static const char* const stepsB2[] = { "10 GOTO 10\r", "RUN\r", "ab", "\003", "10 GET A$:PRINT A$\r", "RUN\r", "x", "\004" };
-        static const char* const expB2[] = { "? Break in line 10", "Ready.\r\n10 GET A$:PRINT A$\r\n", "\r\nx\r\n" };
+        static const char* const expB2[] = { "? Break in line 10", "10 GET A$:PRINT A$", "\r\nx\r\n" };
         failed += !pty_case( "terminal: Ctrl-C breaks a running program; keys typed meanwhile are dropped at its end", stepsB2, 8U, expB2, 3U );
         static const char* const stepsB3[] = { "10 GOTO 10\r", "MONITOR\r", "g\r", "\033", "q\r", "\004" };
         static const char* const expB3[] = { "Running from $0", "Break" };
         failed += !pty_case( "terminal: a lone ESC breaks the program the monitor runs", stepsB3, 6U, expB3, 2U );
-        static const char* const steps8[] = { "PRINT 1", "\033" };
-        static const char* const exp8[] = { "PRINT 1" };
-        failed += !pty_case_st( "terminal: a lone ESC at the prompt is a break (the process ends, like Ctrl-C)", steps8, 2U, exp8, 1U, 128 + SIGINT );
+        static const char* const stepsN1[] = { "10 PRINT 1\r", "EDIT 10\r", "\033[F", "0", "\r", "LIST\r", "\004" };
+        static const char* const expN1[] = { "10 PRINT 10" };
+        failed += !pty_case( "terminal: EDIT n edits the line in the editor, RETURN enters it", stepsN1, 7U, expN1, 1U );
+        static const char* const stepsN2[] = { "10 PRINT 1\r", "EDIT 10\r", "\033", "LIST\r", "\004" };
+        static const char* const expN2[] = { "10 PRINT 1" };
+        failed += !pty_case( "terminal: EDIT n: ESC cancels", stepsN2, 5U, expN2, 1U );
+        static const char* const stepsB4[] = { "10 A$=INKEY$:GOTO 10\r", "RUN\r", "\033", "PRINT 5\r", "\004" };
+        static const char* const expB4[] = { "? Break in line 10", "\r\n5\r\n" };
+        failed += !pty_case( "terminal: a lone ESC breaks an INKEY$ loop", stepsB4, 5U, expB4, 2U );
+        static const char* const stepsB5[] = { "10 GET A$\r", "RUN\r", "\033", "PRINT 5\r", "\004" };
+        static const char* const expB5[] = { "? Break in line 10", "\r\n5\r\n" };
+        failed += !pty_case( "terminal: a lone ESC breaks a program waiting in GET", stepsB5, 5U, expB5, 2U );
+        static const char* const stepsB6[] = { "10 GET A$:PRINT ASC(A$)\r", "RUN\r", "\033[A", "\004" };
+        static const char* const expB6[] = { "\r\n27\r\n" };
+        failed += !pty_case( "terminal: a cursor key (ESC sequence) is a key for GET, not a break", stepsB6, 4U, expB6, 1U );
+        static const char* const steps8[] = { "PRINT 1", "\033", "PRINT 5\r", "\004" };
+        static const char* const exp8[] = { "\r\n5\r\n" };
+        failed += !pty_case( "terminal: a lone ESC at the prompt cancels the line", steps8, 4U, exp8, 1U );
         static const char* const steps9[] = { "10 INPUT A$\r", "RUN\r", "ab\033", "PRINT 5\r", "\004" };
         static const char* const exp9[] = { "? Break in line 10", "\r\n5\r\n" };
         failed += !pty_case( "terminal: a lone ESC at INPUT is a break (Break in line 10)", steps9, 5U, exp9, 2U );
-        static const char* const steps10[] = { "PRINT 1", "\003" };
-        static const char* const exp10[] = { "PRINT 1" };
-        failed += !pty_case_st( "terminal: Ctrl-C at the prompt ends the process", steps10, 2U, exp10, 1U, 128 + SIGINT );
-        static const char* const steps7[] = { "10 INPUT A$\r", "RUN\r", "ab\033[D\xc3\xb6", "\r", "PRINT A$;LEN(A$)\r", "\004" };
-        static const char* const exp7[] = { "ab\xc3\xb6" "3\r\n" };
-        failed += !pty_case( "terminal: INPUT uses the editor", steps7, 6U, exp7, 1U );
+        static const char* const steps10[] = { "PRINT 1", "\003", "PRINT 6\r", "\004" };
+        static const char* const exp10[] = { "\r\n6\r\n" };
+        failed += !pty_case( "terminal: Ctrl-C at the prompt cancels the line", steps10, 4U, exp10, 1U );
     }
     {
         char *out, *err; size_t outlen;

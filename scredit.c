@@ -113,6 +113,7 @@ int scr_lineedit( const scrdrv_t* drv, char* buf, size_t bufsz, void (*onresize)
     if ( buf == 0 || bufsz < 2U ) {
         return SCREDIT_TOOLONG;
     }
+    int state = drv->begin();               // (first: a terminal looks where its cursor is now)
     int sx = 0, sy = 0;
     drv->getsize( &sx, &sy );
     int startx = 0, starty = 0;
@@ -123,17 +124,14 @@ int scr_lineedit( const scrdrv_t* drv, char* buf, size_t bufsz, void (*onresize)
         maxlen = bufsz - 1U;
     }
     size_t len = strlen( buf );
-    if ( len > maxlen ) {
-        return SCREDIT_TOOLONG;
-    }
-    char* work = (char*) malloc( bufsz );
+    char* work = len <= maxlen ? (char*) malloc( bufsz ) : 0;
     if ( work == 0 ) {
+        drv->end( state );
         return SCREDIT_TOOLONG;
     }
     memcpy( work, buf, len + 1U );
     scredit_t ed = { work, len, len, maxlen };
     int result = SCREDIT_CLOSED;
-    int state = drv->begin();
     starty = scr_editdraw( drv, work, ed.len, ed.len, ed.pos, startx, starty );
     int vx = 0, vy = 0, vw = 0, vh = 0;
     drv->getviewport( &vx, &vy, &vw, &vh );
@@ -149,12 +147,17 @@ int scr_lineedit( const scrdrv_t* drv, char* buf, size_t bufsz, void (*onresize)
         for ( ;; ) {
             if ( key.kind == SK_RETURN ) {
                 result = SCREDIT_ACCEPTED; finished = true;
+            } else if ( key.kind == SK_EOF ) {
+                // the end of the input: what was typed is a line (like the last line of a file without a line end); nothing typed: EOF
+                result = ed.len > 0 ? SCREDIT_ACCEPTED : SCREDIT_EOF; finished = true;
             } else if ( key.kind == SK_ESCAPE ) {
                 result = SCREDIT_CANCELLED; finished = true;
+            } else if ( key.kind == SK_CHAR && key.ch == 'd' && ( key.mods & KSMOD_CTRL ) != 0 && ed.len == 0 ) {
+                result = SCREDIT_EOF; finished = true;
             } else if ( key.kind == SK_RESIZE ) {
                 // the screen changed its size: the caller lays its viewport out again; the line (whose start moved up with the contents if
                 // the cursor row would have fallen off) is drawn again at the same place in the new viewport, the rows below it are wiped
-                int abs_start = absy - drv->resizeshift();
+                int abs_start = drv->restart( absy, startx, ed.pos );
                 if ( onresize != 0 ) {
                     onresize( usrdata );
                 }

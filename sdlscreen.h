@@ -96,6 +96,7 @@ void sdlscr_textchanged( void );                // the text screen was changed d
 int sdlscr_lineedit( char* buf, size_t bufsz, void (*vblank_handler)( void* ), void* usrdata );
 // the screen driver of the full-screen editor, the monitor and the one-line editor (scrdrv.h); vblank_handler is called while it waits for keys
 const struct _scrdrv_t* sdlscr_driver( void (*vblank_handler)( void* ), void* usrdata );
+void sdlscr_setbreak( void );                   // a break request, as ESC while a program runs
 int sdlscr_lineinput( int stop_evtmsk, char* buf, size_t bufsz, void (*vblank_handler)( void* ), void* usrdata );
 void sdlscr_gettextscreensize( int* outsx, int* outsy );
 void sdlscr_gettextcursor( int* outx, int* outy );

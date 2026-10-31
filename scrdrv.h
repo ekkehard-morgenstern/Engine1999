@@ -61,7 +61,8 @@ typedef enum _scrkind_t {
     SK_BACKSPACE,
     SK_KEY,             // a cursor, editing or function key: key (KS_*), mods (KSMOD_*)
     SK_RESIZE,          // the screen has a new size
-    SK_CLOSED           // the screen / terminal is gone, or the input has ended: the editor must return
+    SK_CLOSED,          // the screen is gone: the editor must return
+    SK_EOF              // the end of the input (a redirected input, Ctrl-D on a terminal is a key of its own): a line typed so far is complete
 } scrkind_t;
 
 typedef struct _scrkey_t {
@@ -90,7 +91,7 @@ typedef struct _scrdrv_t {
     void    (*getcursor)( int* x, int* y );
     void    (*changed)( void );                                 // the screen was changed: show it
     void    (*reserve)( int rows );                             // a resize keeps the cursor row of the selected screen above its last rows (window: nothing)
-    int     (*resizeshift)( void );                             // after SK_RESIZE: the rows the selected screen's contents moved up (so that its cursor row stays)
+    int     (*restart)( int absy, int startx, size_t pos );     // after SK_RESIZE: where (screen row) a line that started at row absy, column startx and has its cursor at pos starts now
     // keys
     int     (*begin)( void );                                   // the editors read keys: ESC is a key, not the break request; returns the state for end()
     void    (*end)( int state );
@@ -105,6 +106,7 @@ typedef struct _scrdrv_t {
 #define SCREDIT_CANCELLED   1
 #define SCREDIT_TOOLONG     2       // the text doesn't fit on the screen: nothing was done
 #define SCREDIT_CLOSED      3       // the screen was closed
+#define SCREDIT_EOF         4       // the end of the input: Ctrl-D on an empty line, or the end of a redirected input (the console host ends; the window ignores it)
 
 // the editing state of a line (buf holds maxlen characters + NUL)
 typedef struct _scredit_t {
@@ -119,8 +121,8 @@ bool scr_editkey( scredit_t* ed, const scrkey_t* key );
 // the printable characters of ISO-8859-15
 #define SCR_PRINTABLE(c)    ( ( (c) >= 32 && (c) < 127 ) || ( (c) >= 160 && (c) <= 255 ) )
 
-// edits one line on the screen from the cursor on: buf holds the text to edit and receives the result (bufsz includes the NUL). The line may wrap
-// over several rows and is redrawn after every change; RETURN accepts, ESC cancels (buf stays), the cursor is placed on a new line afterwards.
+// edits one line on the screen from the cursor on (the line of the prompt, of INPUT, of EDIT n and of the monitor: one editor for all of them, in every host): buf holds the text to edit and receives the result (bufsz includes the NUL). The line may wrap
+// over several rows and is redrawn after every change; RETURN accepts, ESC cancels (buf stays; the host decides what that means: nothing at the prompt, Break at INPUT), Ctrl-D on an empty line is EOF, the cursor is placed on a new line afterwards.
 // onresize (may be 0) is called after the screen was resized, so that the caller can set its viewport and bars again; the line is then
 // redrawn where it was.
 int scr_lineedit( const scrdrv_t* drv, char* buf, size_t bufsz, void (*onresize)( void* ), void* usrdata );

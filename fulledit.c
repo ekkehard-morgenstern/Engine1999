@@ -873,7 +873,7 @@ void fulledit_run( repl_t* repl, const scrdrv_t* drv ) {
             if ( k.kind == SK_RESIZE ) {
                 ed_layout( e );
                 any = true;
-            } else if ( k.kind == SK_CLOSED ) {
+            } else if ( k.kind == SK_CLOSED || k.kind == SK_EOF ) {
                 e->quit = true;
             } else if ( e->toosmall ) {
                 if ( k.kind == SK_ESCAPE ) {

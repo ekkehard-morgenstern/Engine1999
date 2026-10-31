@@ -558,7 +558,7 @@ static void cmd_asm( mon_t* m, int argc, char** argv ) {
         out( C_PROMPT, "  " );
         char line[100]; line[0] = '\0';
         int r = scr_lineedit( drv, line, sizeof(line), mon_onresize, 0 );
-        if ( r == SCREDIT_CLOSED ) {
+        if ( r == SCREDIT_CLOSED || r == SCREDIT_EOF ) {
             m->quit = true;
             return;
         }
@@ -996,7 +996,7 @@ void monitor_run( repl_t* repl, const scrdrv_t* driver ) {
         out( C_PROMPT, "%s> ", regionnames[mon.region] );
         char line[200]; line[0] = '\0';
         int r = scr_lineedit( drv, line, sizeof(line), mon_onresize, 0 );
-        if ( r == SCREDIT_CLOSED ) {
+        if ( r == SCREDIT_CLOSED || r == SCREDIT_EOF ) {      // (Ctrl-D leaves, like Q)
             break;
         }
         if ( r == SCREDIT_ACCEPTED ) {

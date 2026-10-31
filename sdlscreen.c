@@ -654,81 +654,33 @@ int sdlscr_getkey( void ) {
     return key;
 }
 
+void sdlscr_setbreak( void ) {
+    sdlscr_breakreq = true;
+    sdlev_raise( SDLEV_BREAK );
+}
+
+// a line for the prompt, INPUT, AUTO and the pagers: the one-line editor (scr_lineedit(), the same as for EDIT n and in the console host). ESC
+// cancels: at INPUT (stop_evtmsk has SDLEV_BREAK) that is Break, elsewhere the line is empty. Returns the events that ended it.
 int sdlscr_lineinput( int stop_evtmsk, char* buf, size_t bufsz, void (*vblank_handler)( void* ), void* usrdata ) {
     if ( buf == 0 || bufsz < 2U ) return 0;
-    sdlscr_awaitinput = true;
-    int outmsk = 0;
-    int bufpos = 0;
-    int remain = bufsz - 1;
-    for (;;) {
-        int ev = sdlev_wait( stop_evtmsk | SDLEV_VBLANK | SDLEV_SCREENWORKERFINISHED | SDLEV_INPUT );
-        if ( ev & SDLEV_SCREENWORKERFINISHED ) {
-            outmsk |= SDLEV_SCREENWORKERFINISHED;
-            break;
-        }
-        if ( ev & stop_evtmsk ) {
-            outmsk |= ev & stop_evtmsk;
-            break;
-        }
-        if ( ev & SDLEV_VBLANK ) {
-            if ( vblank_handler ) {
-                vblank_handler( usrdata );
+    int r = scr_lineedit( sdlscr_driver( vblank_handler, usrdata ), buf, bufsz, 0, 0 );
+    switch ( r ) {
+        case SCREDIT_CLOSED:
+            return SDLEV_SCREENWORKERFINISHED;
+        case SCREDIT_CANCELLED:
+        case SCREDIT_EOF:
+            if ( ( stop_evtmsk & SDLEV_BREAK ) != 0 ) {
+                sdlscr_setbreak();
+                return SDLEV_BREAK;
             }
-        }
-        if ( !( ev & SDLEV_INPUT ) ) {
-            continue;
-        }
-        bool done = false;
-        for (;;) {
-            sdlscr_inputmsg_t* msg = sdlscr_dequeueinputmsg();
-            if ( msg == 0 ) break;
-            switch ( msg->inputtype ) {
-                case SDLSCR_INPUT_KEYPRESS:
-                    switch ( msg->symbol ) {
-                        case SDLK_BACKSPACE:
-                            if ( bufpos > 0 ) {
-                                txtscr_rubout();
-                                --bufpos; ++remain;
-                                sdllay_set_modified( &layers[LAY_TXT] );
-                            }
-                            break;
-                        case SDLK_RETURN:
-                            done = true;
-                            break;
-                    }
-                    break;
-                case SDLSCR_INPUT_TEXT:
-                    {
-                        size_t len = strlen( msg->text );
-                        if ( len > 1U ) {
-                            // more than one character at once (an input method): ignored
-                            break;
-                        }
-                        int chr = msg->text[0] & 255;
-                        if ( !SDLSCR_PRINTABLE( chr ) ) {
-                            break;
-                        }
-                        if ( remain < 1 ) {
-                            // no room in buffer: stop
-                            break;
-                        }
-                        buf[ bufpos++ ] = (char) chr; --remain;
-                        txtscr_print( -1, -1, -1, -1, msg->text );
-                        sdllay_set_modified( &layers[LAY_TXT] );
-                    }
-                    break;
-            }
-            sdlscr_deleteinputmsg( msg );
-        }
-        if ( done ) {
-            buf[ bufpos ] = '\0';
-            txtscr_print( -1, -1, -1, -1, "\n" );
-            sdllay_set_modified( &layers[LAY_TXT] );
-            break;
-        }
+            buf[0] = '\0';
+            return 0;
+        case SCREDIT_TOOLONG:
+            buf[0] = '\0';
+            return 0;
+        default:
+            return 0;
     }
-    sdlscr_awaitinput = false;
-    return outmsk;
 }
 
 // -- the screen driver of the editors (scrdrv.h) --------------------------------------------------------
@@ -826,7 +778,7 @@ static void sdlscr_drv_getsize( int* cols, int* rows ) { txtscr_getsize( cols, r
 static void sdlscr_drv_print( int y, int x, int bg, int fg, const char* text ) { sdlscr_printf( y, x, bg, fg, "%s", text ); }
 static int sdlscr_drv_begin( void ) { return sdlscr_editmode_begin() ? 1 : 0; }
 static void sdlscr_drv_end( int state ) { sdlscr_editmode_end( state != 0 ); }
-static int sdlscr_drv_resizeshift( void ) { return 0; }
+static int sdlscr_drv_restart( int absy, int startx, size_t pos ) { (void) startx; (void) pos; return absy; }
 static void sdlscr_drv_reserve( int rows ) { (void) rows; }
 static void sdlscr_drv_getviewport( int* x, int* y, int* w, int* h ) { sdlscr_text_getviewport( x, y, w, h ); }
 static void sdlscr_drv_getcursor( int* x, int* y ) { sdlscr_text_getcursor( x, y ); }
@@ -835,7 +787,7 @@ static const scrdrv_t sdlscr_drv = {
     sdlscr_drv_screensize, sdlscr_drv_getsize,
     sdlscr_text_select, sdlscr_text_selected, sdlscr_text_setviewport, sdlscr_text_resetviewport, sdlscr_drv_getviewport,
     sdlscr_text_setcolors, sdlscr_text_setblank, sdlscr_text_clear, sdlscr_text_write, sdlscr_drv_print, sdlscr_locate, sdlscr_drv_getcursor,
-    sdlscr_textchanged, sdlscr_drv_reserve, sdlscr_drv_resizeshift,
+    sdlscr_textchanged, sdlscr_drv_reserve, sdlscr_drv_restart,
     sdlscr_drv_begin, sdlscr_drv_end, sdlscr_drv_nextkey, sdlscr_inputpending, sdlscr_pollkeys
 };
 

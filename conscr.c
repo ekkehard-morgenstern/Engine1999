@@ -45,7 +45,7 @@ bool conscr_active( void ) {
 }
 
 // the terminal's size
-static void conscr_termsize( int* cols, int* rows ) {
+void conscr_termsize( int* cols, int* rows ) {
     struct winsize ws;
     *cols = 80; *rows = 25;
     if ( ioctl( 1, TIOCGWINSZ, &ws ) == 0 && ws.ws_col > 0 && ws.ws_row > 0 ) {
@@ -236,4 +236,106 @@ void conscr_write( const char* text, size_t len ) {
         conscr_ansiok[n] = true;
     }
     ansi_feed_n( &conscr_ansi[n], text, len, conscr_emit, 0 );
+}
+
+// -- line mode ---------------------------------------------------------------------------------
+
+static int lcols = 80, lrows = 25, lx = 0, ly = 0;      // the model of the terminal: its size and the cursor (lx < lcols)
+static bool lsilent = false;                            // nothing is written (input or output is not a terminal): only the model runs
+
+void conscr_line_setsilent( bool silent ) {
+    lsilent = silent;
+}
+
+void conscr_line_init( int cols, int rows, int cx, int cy ) {
+    lcols = cols < 1 ? 1 : cols; lrows = rows < 1 ? 1 : rows;
+    lx = cx < 0 ? 0 : cx >= lcols ? lcols - 1 : cx;
+    ly = cy < 0 ? 0 : cy >= lrows ? lrows - 1 : cy;
+}
+
+void conscr_line_getsize( int* cols, int* rows ) { *cols = lcols; *rows = lrows; }
+void conscr_line_getviewport( int* x, int* y, int* w, int* h ) { *x = 0; *y = 0; *w = lcols; *h = lrows; }
+void conscr_line_getcursor( int* x, int* y ) { *x = lx; *y = ly; }
+
+void conscr_line_locate( int x, int y ) {
+    if ( x < 0 ) x = 0;
+    if ( y < 0 ) y = 0;
+    if ( x >= lcols ) x = lcols - 1;
+    if ( y >= lrows ) y = lrows - 1;
+    if ( !lsilent ) {
+        printf( "\033[%d;%dH", y + 1, x + 1 );
+    }
+    lx = x; ly = y;
+}
+
+static void conscr_line_newline( void ) {       // the cursor to the start of the next row; at the bottom the terminal scrolls
+    if ( !lsilent ) {
+        fputs( "\r\n", stdout );
+    }
+    lx = 0;
+    if ( ly < lrows - 1 ) {
+        ++ly;
+    }
+}
+
+int conscr_line_write( int y, int x, int bg, int fg, const char* text, int len ) {
+    (void) bg; (void) fg;
+    if ( len < 0 ) {
+        len = (int) strlen( text );
+    }
+    if ( y >= 0 && x >= 0 ) {
+        conscr_line_locate( x, y );
+    }
+    int n = len;
+    if ( lx + n > lcols ) {
+        n = lcols - lx;
+    }
+    for ( int i = 0; i < n && !lsilent; ++i ) {
+        conscr_putchar( (unsigned char) text[i] );
+    }
+    lx += n;
+    if ( lx >= lcols ) {
+        lx = lcols - 1;                         // (stays on the last column: nothing wraps here)
+        if ( !lsilent ) {
+            printf( "\033[%d;%dH", ly + 1, lx + 1 );
+        }
+    }
+    return n;
+}
+
+void conscr_line_print( int y, int x, int bg, int fg, const char* text ) {
+    (void) bg; (void) fg;
+    if ( y >= 0 && x >= 0 ) {
+        conscr_line_locate( x, y );
+    }
+    for ( ; *text; ++text ) {
+        unsigned char c = (unsigned char) *text;
+        if ( c == '\n' ) {
+            conscr_line_newline();
+            continue;
+        }
+        if ( !lsilent ) {
+            conscr_putchar( c );
+        }
+        ++lx;
+        if ( lx >= lcols ) {                    // a full row: wrap at once (the terminal would wait for the next character)
+            conscr_line_newline();
+        }
+    }
+}
+
+void conscr_line_changed( void ) {
+    if ( !lsilent ) {
+        fflush( stdout );
+    }
+}
+
+int conscr_line_restart( int absy, int startx, size_t pos ) {
+    (void) absy;
+    // the terminal may have reflowed the text: the line starts where the cursor, less what is before it, is
+    long lin = (long) ly * lcols + lx - (long) pos - startx;
+    if ( lin < 0 ) {
+        lin = 0;
+    }
+    return (int)( lin / lcols );
 }

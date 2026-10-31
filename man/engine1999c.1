@@ -126,9 +126,12 @@ and
 open the process's streams as channels:
 .B OPEN "stderr:" FOR OUTPUT AS #1.
 Ctrl\-C is Break while a program runs.
-On a terminal the prompt and
+The prompt and
 .B INPUT
-read their lines like the window does: characters are typed at the end of the line, Backspace takes the last one back, Return accepts it, every other key is ignored (255 characters at the prompt, 1023 for INPUT); Ctrl\-D on an empty line ends the input.
+read their lines with the same one-line editor as the window (and as
+.BR "EDIT n" ):
+characters are typed at the cursor, Left, Right, Home, End, Backspace and Delete edit, Return accepts the line, Esc (or Ctrl\-C) cancels it (Break at INPUT), Ctrl\-D on an empty line ends the input; lines are cut at 255 characters (1023 for INPUT).
+A redirected input is no special case: the bytes of the file or pipe are the keys of the same editor (CR LF counts as one line end, the end of the input completes a last line without one), and nothing is drawn.
 On a terminal
 .B GET
 and

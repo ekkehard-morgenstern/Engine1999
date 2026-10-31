@@ -92,12 +92,12 @@ static void d_changed( void ) { }
 static int d_begin( void ) { return 0; }
 static void d_end( int s ) { (void) s; }
 static void d_pollkeys( bool e ) { (void) e; }
-static int d_resizeshift( void ) { return txtscr_resizeshift(); }
+static int d_restart( int absy, int startx, size_t pos ) { (void) startx; (void) pos; return absy - txtscr_resizeshift(); }
 
 static const scrdrv_t drv = {
     d_screensize, d_getsize, d_select, txtscr_selected, txtscr_setviewport, txtscr_resetviewport, d_getviewport,
     txtscr_setcolors, txtscr_setblank, txtscr_clear, txtscr_write, d_print, txtscr_locate, d_getcursor,
-    d_changed, txtscr_setresizereserve, d_resizeshift, d_begin, d_end, d_nextkey, d_pending, d_pollkeys
+    d_changed, txtscr_setresizereserve, d_restart, d_begin, d_end, d_nextkey, d_pending, d_pollkeys
 };
 
 // row y of the selected screen as text (trailing blanks cut)
@@ -163,6 +163,26 @@ static void test_lineedit( void ) {
     strcpy( buf, "" );
     r = scr_lineedit( &drv, buf, sizeof(buf), 0, 0 );
     check( r == SCREDIT_CLOSED, "line editor: the end of the keys is CLOSED" );
+    clearscript();
+    typetext( "last" ); press( SK_EOF );
+    strcpy( buf, "" );
+    r = scr_lineedit( &drv, buf, sizeof(buf), 0, 0 );
+    check( r == SCREDIT_ACCEPTED && strcmp( buf, "last" ) == 0, "line editor: the end of a redirected input completes the line typed so far" );
+    clearscript();
+    press( SK_EOF );
+    strcpy( buf, "" );
+    r = scr_lineedit( &drv, buf, sizeof(buf), 0, 0 );
+    check( r == SCREDIT_EOF, "line editor: the end of the input with nothing typed is EOF" );
+    clearscript();
+    addkey( SK_CHAR, 'd', 0, KSMOD_CTRL );
+    strcpy( buf, "" );
+    r = scr_lineedit( &drv, buf, sizeof(buf), 0, 0 );
+    check( r == SCREDIT_EOF, "line editor: Ctrl-D on an empty line is EOF" );
+    clearscript();
+    typetext( "ab" ); addkey( SK_CHAR, 'd', 0, KSMOD_CTRL ); typetext( "c" ); press( SK_RETURN );
+    strcpy( buf, "" );
+    r = scr_lineedit( &drv, buf, sizeof(buf), 0, 0 );
+    check( r == SCREDIT_ACCEPTED && strcmp( buf, "abc" ) == 0, "line editor: Ctrl-D in the middle of a line does nothing" );
 
     // a line that wraps over rows, and one that is too long for the screen
     freshscreens( 10, 6 );
