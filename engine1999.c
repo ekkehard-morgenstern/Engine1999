@@ -1225,8 +1225,7 @@ int main( int argc, char** argv ) {
         "This program comes with ABSOLUTELY NO WARRANTY; for details type 'SHOW WARRANTY'"
         "This is free software, and you are welcome to redistribute it under certain con-ditions; "
         "type 'SHOW COPYING' for details.\n"
-        "Programs created using Engine 1999 do not fall under this license as long as    "
-        "they do not include the engine itself.\n"
+        "Programs created using Engine 1999 do not fall under this license.\n" 
         "\n"
     );
 
