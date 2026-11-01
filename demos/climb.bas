@@ -1541,7 +1541,7 @@
 15130   UNTIL K$="p" OR K$="P" OR K$="q" OR K$="Q" OR JOY("START") OR JOY("BACK")
 15140   IF K$="q" OR K$="Q" OR JOY("BACK") THEN QT=1
 15145   WHILE JOY("START"):GFX VSYNC:WEND:PSK=0
-15150   TXT FILL 33,10,42,10,32
+15150   TXT FILL 33,10,42,10,32,0,0
 15160 END PROC
 15170 ' ====================================================================== the player
 15180 PROC MOVEPLAYER
