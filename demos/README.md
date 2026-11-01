@@ -7,6 +7,8 @@ and carry the one condition: **an executable made from a demo with `BUILD` conta
 option `--engine1999-about`). The program text itself is not under the GPL (see `LICENSE-EXCEPTION`, section 1). Keep these four lines (or an equivalent
 statement) when you copy a demo and pass an executable of it on.
 
+The listings are indented by block structure (two blanks per level for `FOR`, `REPEAT`, `WHILE`, multi-line `IF`, `PROC` and `FUNC`): the blanks behind the line number are kept by `LOAD`, `LIST` and the editors, and the compiler ignores them.
+
 | File | What it is |
 |---|---|
 | `sfx.bas` | A sound effect board: press 1-9 for laser, explosion, power-up, coin, jump, siren, alarm, laser burst and footsteps, 0 for an engine whose pitch and volume are driven from the program (`PITCH`, `VOLUME`), Q to quit. The effects are stored with `SFX` and use glides, envelopes, vibrato and the noise wave. |

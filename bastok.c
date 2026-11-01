@@ -905,6 +905,11 @@ bool tokenize_line( const char* text, buf_t* out, struct _linehdr_t* phdr ) {
             goto FAIL;
         }
         hdr.lineno = lineno;
+        // a line number is always followed by a blank in the stored line (10PRINT 1 is stored as 10 PRINT 1): the listing and the editors split
+        // "number + blank" from the text. (preprocess_buffer() can't add one: it works in place.)
+        if ( src.rpos < src.size && src.buffer[ src.rpos ] != ' ' && src.buffer[ src.rpos ] != '\0' && !emit_byte( out, TOK_SPACE ) ) {
+            goto FAIL;
+        }
     }
     // main line
     while ( src.rpos < src.size && src.buffer[ src.rpos ] != '\0' ) {
@@ -1178,6 +1183,28 @@ void preprocess_buffer( char* buf ) {
     const char* s = buf;
     char*       d = buf;
     int         quote = 0;
+    // The indentation of a program line is kept: the blanks behind the line number stay as they are (the first one is the
+    // separator, the others are the indent; they are stored as TOK_SPACE tokens, which the compiler ignores). Every blank or tab of
+    // this run is one blank (the text must not grow: this works in place). Everywhere else a run of blanks is one.
+    {
+        const char* t = s;
+        while ( *t == ' ' || *t == '\t' ) {
+            ++t;
+        }
+        if ( *t >= '0' && *t <= '9' ) {
+            if ( t != s ) {
+                *d++ = ' ';                     // (blanks before the number: one, as before)
+            }
+            while ( *t >= '0' && *t <= '9' ) {
+                *d++ = *t++;
+            }
+            while ( *t == ' ' || *t == '\t' ) {
+                *d++ = ' ';
+                ++t;
+            }
+            s = t;
+        }
+    }
     while ( *s != '\0' ) {
         if ( quote == 0 ) {
             if ( *s == ' ' || *s == '\t' ) {

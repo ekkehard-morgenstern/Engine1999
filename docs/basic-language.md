@@ -7,6 +7,11 @@ so far (see "Implemented subset").
 ## Source preprocessing (`preprocess_buffer`)
 
 Collapses runs of blanks/tabs to one space, drops `\r`, upper-cases letters — everywhere except inside `"…"` and `` `…` ``.
+
+**Indentation (2026-11-01):** the run of blanks *behind the line number* is kept as it is, so a program can be indented (`20     PRINT I` stays that way in `LIST`, `SAVE ... ,A`, `EDIT`, the full-screen editor and
+the screen editor; the first blank is the separator after the number, the rest is the indent). Every blank or tab of that run counts as one blank (a tab is not expanded: the preprocessing works in place and the text must not
+grow). The blanks are stored as `TOK_SPACE` tokens (one byte each), which the compiler ignores, so indentation costs program memory but no code. Blanks elsewhere in a line (`PRINT    A`) are still one,
+and a line with blanks before its number gets one. Programs saved before this change load as they were. Tests: `repltest1` ("indent ..."), `contest1` (prompt, `EDIT n`, full-screen editor).
 Identifiers and keywords are therefore case-insensitive; string and shell literals keep case.
 
 ## Tokenized line (`tokenize_line` / `detokenize_line`)

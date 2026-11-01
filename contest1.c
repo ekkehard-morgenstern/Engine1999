@@ -531,6 +531,16 @@ int main( void ) {
         static const char* const sK1[] = { "10 PRINT KEY(\"A\")\r", "RUN\r", "BYE\r" };
         static const char* const eK1[] = { "? KEY is not available in this host in line 10" };
         failed += !pty_case( "screen mode: KEY() is a run-time error in the console host", sK1, 3U, eK1, 1U );
+        // indentation: the blanks behind the line number are kept by the prompt, EDIT n and the full-screen editor
+        static const char* const sN1[] = { "10 FOR I=1 TO 2\r", "20     PRINT I\r", "30 NEXT\r", "RUN\r", "BYE\r" };
+        static const char* const eN1[] = { "20     PRINT I", "\r\n1\r\n2\r\n" };
+        failed += !pty_case( "screen mode: an indented line typed at the prompt keeps its indent (and runs)", sN1, 5U, eN1, 2U );
+        static const char* const sN2[] = { "20     PRINT 5\r", "EDIT 20\r", "\r", "BYE\r" };
+        static const char* const eN2[] = { "20     PRINT 5" };
+        failed += !pty_case( "screen mode: EDIT n keeps the indent", sN2, 4U, eN2, 1U );
+        static const char* const sN3[] = { "10 PRINT 1\r", "20     PRINT 5\r", "EDIT\r", "\033[B", "\033[F", "+0", "\033", "LIST\r", "BYE\r" };
+        static const char* const eN3[] = { "20     PRINT 5+0" };
+        failed += !pty_case( "screen mode: the full-screen editor keeps the indent of an edited line", sN3, 9U, eN3, 1U );
         // the mouse: the terminal reports it in the stream of the keys (xterm SGR mode); the cell (col 10, row 5) is the position 76,54 (8 x 12 pixels per cell)
         static const char* const sM1[] = { "10 IF MOUSE(\"B\")=0 THEN WAIT 1:GOTO 10\r", "20 PRINT MOUSE(\"X\");\",\";MOUSE(\"Y\");\",\";MOUSE(\"B\");\",\";MOUSE(\"VISIBLE\")\r", "RUN\r", "\033[<0;10;5M", "BYE\r" };
         static const char* const eM1[] = { "\033[?1003h\033[?1006h", "76,54,1,-1", "\033[5;10H", "\033[?1003l\033[?1006l\033]22;\033\\", "\033[?1049l" };

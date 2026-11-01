@@ -60,6 +60,19 @@ typedef struct _testcase_t {
 
 static const testcase_t cases[] = {
     { "RENUM adjusts a jump with colon statements", "10 A=0\n20 IF A THEN GOSUB 100:PRINT \"x\"\n100 PRINT \"s\":RETURN\nRENUM\nLIST", "10 A=0\n20 IF A THEN GOSUB 30:PRINT \"x\"\n30 PRINT \"s\":RETURN\n" },
+    // indentation: the blanks behind the line number are kept (the compiler ignores them)
+    { "indent is kept by LIST",   "10 FOR I=1 TO 2\n20     PRINT I\n30 NEXT\nLIST",    "10 FOR I=1 TO 2\n20     PRINT I\n30 NEXT\n" },
+    { "an indented program runs", "10 FOR I=1 TO 2\n20     PRINT I\n30 NEXT\nRUN",     "1\n2\n" },
+    { "no blank after the number: the listing has one", "10PRINT 1\n20PRINT 2\nLIST\nRUN", "10 PRINT 1\n20 PRINT 2\n1\n2\n" },
+    { "a line number alone still deletes the line", "10 PRINT 1\n10\nLIST",        "" },
+    { "indent: a tab after the number is the separator", "10\tPRINT 1\nLIST", "10 PRINT 1\n" },
+    { "indent: every tab is one blank", "10\t\tPRINT 1\nLIST",                   "10  PRINT 1\n" },
+    { "indent: blanks inside the line are still one", "10    PRINT   1  +  2\nLIST", "10    PRINT 1 + 2\n" },
+    { "indent: blanks before the number are one", "   10   PRINT 1\nLIST",        "10   PRINT 1\n" },
+    { "indent is kept by RENUM", "5   A=1\n7     GOTO 5\nRENUM\nLIST",           "10   A=1\n20     GOTO 10\n" },
+    { "indent: blanks in a string are kept, in the rest of the line they are one", "10  PRINT \"a   b\"  : ' c   d\nLIST", "10  PRINT \"a   b\" : ' C D\n" },
+    { "indent survives SAVE ,A, SAVE, LOAD and MERGE APPEND", "10 FOR I=1 TO 2\n20   PRINT I\n30 NEXT\nSAVE \"mem:t\",A\nSAVE \"mem:b\"\nNEW\nLOAD \"mem:t\"\nLIST\nNEW\nLOAD \"mem:b\"\nMERGE \"mem:t\",APPEND\nLIST 40-", "10 FOR I=1 TO 2\n20   PRINT I\n30 NEXT\n40 FOR I=1 TO 2\n50   PRINT I\n60 NEXT\n" },
+    { "indent in an IF block", "10 IF 1 THEN\n20   PRINT 7\n30 ENDIF\nRUN",     "7\n" },
     { "direct mode",            "PRINT 1+2",                                      "3\n" },
     { "KEY is an error in a host that can't tell",  "PRINT KEY(\"A\")",               "? KEY is not available in this host\n" },
     { "KEY: the name is checked first",             "PRINT KEY(\"BANANA\")",          "? Illegal argument\n" },

@@ -11,23 +11,23 @@
 70 REPEAT
 80   FOR R=0 TO 2
 90     FOR I=1 TO LEN(R$(R))
-100      K$=MID$(R$(R),I,1)
-110      GOSUB 300
-120      LOCATE 6+R*2+I*4,6+R*2
-130      PRINT "[";K$;"]";
-140    NEXT I
-150  NEXT R
-160  RESTORE 400
-170  FOR I=1 TO 8
-180    READ K$,X,Y
-190    GOSUB 300
-200    LOCATE X,Y
-210    PRINT " ";K$;" ";
-220  NEXT I
-230  COLOR 1,0
-240  LOCATE 6,22
-250  IF KEY("ANY") THEN PRINT "a key is down   " ELSE PRINT "no key is down  "
-260  WAIT 1
+100       K$=MID$(R$(R),I,1)
+110       GOSUB 300
+120       LOCATE 6+R*2+I*4,6+R*2
+130       PRINT "[";K$;"]";
+140     NEXT I
+150   NEXT R
+160   RESTORE 400
+170   FOR I=1 TO 8
+180     READ K$,X,Y
+190     GOSUB 300
+200     LOCATE X,Y
+210     PRINT " ";K$;" ";
+220   NEXT I
+230   COLOR 1,0
+240   LOCATE 6,22
+250   IF KEY("ANY") THEN PRINT "a key is down   " ELSE PRINT "no key is down  "
+260   WAIT 1
 270 UNTIL KEY("Q")
 280 COLOR 1,0:CLS:PRINT "Bye."
 290 END
