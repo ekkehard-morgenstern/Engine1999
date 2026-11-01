@@ -202,4 +202,4 @@ any more (they include `textscreen.h` for the `TXTSCR_*` constants only).
 
 - Asset tools (images to `DESIGN` rows or image strings), the sprite and tile editors; an image file format with palette and frames (an own format, `.spr`).
 - Joystick and mouse input (`JOY`, `MOUSEX`...); `ON KEY`; `PALETTE CYCLE` (flashing); a second font set; sprite scaling or flipping; more than one tile map (the map selection of `concept.txt`).
-- Synchronization of the layer memory between the main and the screen thread (all calls are already funneled through `sdlscreen`).
+- *(Not planned: synchronization of the layer memory. There are no locks by design; see "Threading" in `docs/display-engine.md` for the rules that keep the unsynchronized access safe.)*

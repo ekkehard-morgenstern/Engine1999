@@ -347,8 +347,32 @@ static void test_sprites( void ) {
     sprscr_getpos( 1, &x, &y );
     check( x == 140 && y == 50 && !sprscr_moving( 1 ), "arrives exactly after the ticks" );
     sprscr_moveto( 1, 0, 0, 0 );
+    check( !sprscr_moving( 1 ), "a jump is no movement" );
+    sprscr_periodicals();           // (the screen thread takes the request in its next frame)
     sprscr_getpos( 1, &x, &y );
     check( x == 0 && y == 0, "0 ticks jumps" );
+    // requests: the last one wins, a new one replaces a movement under way, the target is exact whatever came before
+    sprscr_moveto( 1, 10, 10, 50 );
+    sprscr_moveto( 1, 200, 100, 3 );
+    check( sprscr_moving( 1 ), "a posted request counts as moving" );
+    sprscr_periodicals();
+    sprscr_moveto( 1, 20, 30, 2 );                      // replaces the movement under way
+    for ( int i=0; i < 3; ++i ) sprscr_periodicals();
+    sprscr_getpos( 1, &x, &y );
+    check( x == 20 && y == 30 && !sprscr_moving( 1 ), "the newest request wins; no request is lost" );
+    sprscr_moveto( 1, 90, 90, 40 );
+    sprscr_periodicals();
+    sprscr_moveto( 1, 5, 5, 0 );                        // a jump stops a movement under way
+    sprscr_periodicals();
+    sprscr_getpos( 1, &x, &y );
+    check( x == 5 && y == 5 && !sprscr_moving( 1 ), "a jump request stops a movement" );
+    sprscr_periodicals();
+    sprscr_getpos( 1, &x, &y );
+    check( x == 5 && y == 5, "...and it stays there" );
+    sprscr_moveto( 1, -50, 700, 1 );
+    sprscr_periodicals();
+    sprscr_getpos( 1, &x, &y );
+    check( x == -50 && y == 700, "negative and large targets survive the request word" );
     // collisions
     sprscr_show( 1, true ); sprscr_move( 1, 100, 50 );
     sprscr_show( 2, true ); sprscr_move( 2, 104, 55 ); sprscr_setimage( 2, 5 );

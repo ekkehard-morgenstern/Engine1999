@@ -30,19 +30,20 @@
 #include "tilescreen.h"
 
 typedef struct _sprctrl_t {
+    // The animation counters are the only fields the screen thread changes (sprscr_periodicals), so they are bytes of their own: a bitfield write is a
+    // read-modify-write of the whole word, which would undo what the main thread writes to its neighbours (active, priority, ...) at the same moment.
+    // Everything below is written by the main thread only (the screen thread reads it).
+    uint8_t anim_pos;               // 0..14
+    uint8_t anim_speed_count;       // 0..31
     unsigned int
         anim_index       : 8,
-        anim_pos         : 4,
         anim_size        : 4,
-        anim_speed_count : 5,
         anim_speed_reset : 5,
         priority         : 3,
         active           : 1,
-        spr_spr_coll_ena : 1,
-        spr_spr_coll_ind : 1;   // 32
+        spr_spr_coll_ena : 1;
     unsigned int
         spr_til_coll_ena : 1,
-        spr_til_coll_ind : 1,
         use_image        : 1,   // a fixed image instead of the animation sequence (SPRITE n,IMAGE i)
         image            : 8;
     signed int
@@ -56,7 +57,26 @@ static uint8_t      spranim[MAX_ANIMSEQ][MAX_SPRANIM];
 static uint8_t      sprmap[SPRMAP_WIDTH * SPRMAP_HEIGHT];
 static bool         sprchg = false;
 
-// SPRITE n,MOVETO: the position moves by itself, one step per frame (sprscr_periodicals)
+/*
+Threads: the main thread (BASIC) and the screen thread (sprscr_periodicals(), sprscr_render()) use this module without locks, on purpose: the layer
+memory may be torn (a frame with a few wrong pixels is harmless), but nothing may be *lost*. So (1) a word that both threads write with
+read-modify-write is never shared: the collision indicators are a byte array of their own (sprhit), set with an atomic OR by the screen thread and
+taken with an atomic exchange by the main thread; (2) the event slot is a compare-exchange / exchange; (3) the MOVETO engine belongs to the screen
+thread alone: the main thread only posts a request word (sprreq, one atomic 64-bit store, the last request wins), the screen thread picks it up;
+(4) the "changed" flag is cleared before the data is read (atomic exchange) and set after the data was written (release store).
+*/
+#define SPRREQ_VALID    UINT64_C(0X8000000000000000)    // a request is posted
+#define SPRREQ_CANCEL   UINT64_C(0X4000000000000000)    // stop the movement here
+// ticks in bits 32..47 (0 = jump to the target at once), the target x in bits 16..31 and y in bits 0..15 (int16)
+
+static uint64_t     sprreq[MAX_SPRITES];            // the main thread's request, 0 = none
+static uint8_t      sprhit[MAX_SPRITES];            // collision indicators: bit 0 a sprite was hit, bit 1 a tile (read and cleared by SPRITE n,COLLISION)
+
+static inline void sprscr_touch( void ) {
+    __atomic_store_n( &sprchg, true, __ATOMIC_RELEASE );
+}
+
+// SPRITE n,MOVETO: the position moves by itself, one step per frame (sprscr_periodicals); owned by the screen thread
 typedef struct _sprmove_t {
     bool    active;
     int32_t fx, fy;             // 16.16 fixed point position
@@ -70,7 +90,7 @@ static int          sprcollwith[MAX_SPRITES];       // the sprite a sprite last 
 static int          sprevent = -1;                  // a sprite with a new collision (for ON COLLISION), -1 none
 
 static uint8_t sprscr_curimage( const sprctrl_t* ctrl ) {
-    return ctrl->use_image ? (uint8_t) ctrl->image : spranim[ ctrl->anim_index ][ ctrl->anim_pos ];
+    return ctrl->use_image ? (uint8_t) ctrl->image : spranim[ ctrl->anim_index ][ ctrl->anim_pos & 15U ];
 }
 
 void sprscr_init( void ) {
@@ -78,11 +98,13 @@ void sprscr_init( void ) {
     memset( &spranim[0][0], 0, MAX_ANIMSEQ * MAX_SPRANIM );
     memset( &sprctrl[0], 0, sizeof(sprctrl_t) * MAX_SPRITES );
     memset( &sprmove[0], 0, sizeof(sprmove) );
+    memset( &sprreq[0], 0, sizeof(sprreq) );
+    memset( &sprhit[0], 0, sizeof(sprhit) );
     for ( int i=0; i < MAX_SPRITES; ++i ) {
         sprcollwith[i] = -1;
     }
     sprevent = -1;
-    sprchg = true;
+    sprscr_touch();
 }
 
 void sprscr_show( int sprno, bool active ) {
@@ -90,7 +112,7 @@ void sprscr_show( int sprno, bool active ) {
         return;
     }
     sprctrl[sprno].active = active;
-    sprchg = true;
+    sprscr_touch();
 }
 
 void sprscr_prio( int sprno, int prio ) {
@@ -98,7 +120,7 @@ void sprscr_prio( int sprno, int prio ) {
         return;
     }
     sprctrl[sprno].priority = prio;
-    sprchg = true;
+    sprscr_touch();
 }
 
 void sprscr_move( int sprno, int x, int y ) {
@@ -107,7 +129,7 @@ void sprscr_move( int sprno, int x, int y ) {
     }
     sprctrl[sprno].screen_x = x;
     sprctrl[sprno].screen_y = y;
-    sprchg = true;
+    sprscr_touch();
 }
 
 void sprscr_animdata( int animno, const uint8_t* seq, size_t size ) {
@@ -118,7 +140,7 @@ void sprscr_animdata( int animno, const uint8_t* seq, size_t size ) {
         size = 15U;
     }
     memcpy( &spranim[animno][0], seq, size );
-    sprchg = true;
+    sprscr_touch();
 }
 
 void sprscr_animcfg( int sprno, int animno, int length, int speed ) {
@@ -135,7 +157,7 @@ void sprscr_animcfg( int sprno, int animno, int length, int speed ) {
     ctrl->anim_size        = length;
     ctrl->anim_speed_count = speed;
     ctrl->anim_speed_reset = speed;
-    sprchg = true;
+    sprscr_touch();
 }
 
 void sprscr_writemap( int imgno, const uint8_t data[SPRITE_WIDTH * SPRITE_HEIGHT]) {
@@ -153,25 +175,28 @@ void sprscr_writemap( int imgno, const uint8_t data[SPRITE_WIDTH * SPRITE_HEIGHT
         }
         d += SPRMAP_WIDTH - SPRITE_WIDTH;
     }
-    sprchg = true;
+    sprscr_touch();
 }
 
 void sprscr_reset( bool images ) {
     memset( &sprctrl[0], 0, sizeof(sprctrl) );
-    memset( &sprmove[0], 0, sizeof(sprmove) );
     for ( int i=0; i < MAX_SPRITES; ++i ) {
-        sprcollwith[i] = -1;
+        // the movement belongs to the screen thread: it is asked to stop (and is told here, too, for a host that has no screen thread)
+        __atomic_store_n( &sprreq[i], SPRREQ_VALID | SPRREQ_CANCEL, __ATOMIC_RELEASE );
+        __atomic_store_n( &sprmove[i].active, false, __ATOMIC_RELEASE );
+        __atomic_store_n( &sprhit[i], 0, __ATOMIC_RELAXED );
+        __atomic_store_n( &sprcollwith[i], -1, __ATOMIC_RELAXED );
     }
-    sprevent = -1;
+    __atomic_store_n( &sprevent, -1, __ATOMIC_RELEASE );
     if ( images ) {
         memset( &spranim[0][0], 0, MAX_ANIMSEQ * MAX_SPRANIM );
         memset( &sprmap[0], 0, sizeof(sprmap) );
     }
-    sprchg = true;
+    sprscr_touch();
 }
 
 bool sprscr_changed( void ) {
-    return sprchg;
+    return __atomic_load_n( &sprchg, __ATOMIC_ACQUIRE );
 }
 
 void sprscr_setimage( int sprno, int image ) {
@@ -180,7 +205,7 @@ void sprscr_setimage( int sprno, int image ) {
     }
     sprctrl[sprno].use_image = 1;
     sprctrl[sprno].image = (unsigned) image;
-    sprchg = true;
+    sprscr_touch();
 }
 
 int sprscr_getimage( int sprno ) {
@@ -219,22 +244,27 @@ void sprscr_moveto( int sprno, int x, int y, int ticks ) {
     if ( sprno < 0 || sprno >= MAX_SPRITES ) {
         return;
     }
-    sprmove_t* m = &sprmove[sprno];
-    if ( ticks <= 0 ) {
-        m->active = false;
-        sprscr_move( sprno, x, y );
-        return;
-    }
-    m->active = true;
-    m->fx = (int32_t) sprctrl[sprno].screen_x * 65536; m->fy = (int32_t) sprctrl[sprno].screen_y * 65536;
-    m->dx = (int32_t)( ( (int64_t) x * 65536 - m->fx ) / ticks );
-    m->dy = (int32_t)( ( (int64_t) y * 65536 - m->fy ) / ticks );
-    m->ticks = ticks;
-    m->tx = x; m->ty = y;
+    // the movement is the screen thread's: a request word is posted (one atomic store; a newer request replaces an older one that was not picked up yet)
+    if ( ticks < 0 ) ticks = 0;
+    if ( ticks > 65535 ) ticks = 65535;
+    if ( x < -32768 ) x = -32768;
+    if ( x > 32767 ) x = 32767;
+    if ( y < -32768 ) y = -32768;
+    if ( y > 32767 ) y = 32767;
+    uint64_t r = SPRREQ_VALID | ( (uint64_t) (uint32_t) ticks << 32 ) | ( (uint64_t)(uint16_t)(int16_t) x << 16 ) | (uint64_t)(uint16_t)(int16_t) y;
+    __atomic_store_n( &sprreq[sprno], r, __ATOMIC_RELEASE );
 }
 
+// a movement is going on, or one has been asked for and not picked up yet (a request to stop or to jump is no movement)
 bool sprscr_moving( int sprno ) {
-    return sprno >= 0 && sprno < MAX_SPRITES && sprmove[sprno].active;
+    if ( sprno < 0 || sprno >= MAX_SPRITES ) {
+        return false;
+    }
+    if ( __atomic_load_n( &sprmove[sprno].active, __ATOMIC_ACQUIRE ) ) {
+        return true;
+    }
+    uint64_t r = __atomic_load_n( &sprreq[sprno], __ATOMIC_ACQUIRE );
+    return ( r & SPRREQ_VALID ) != 0 && ( r & SPRREQ_CANCEL ) == 0 && ( ( r >> 32 ) & 0xFFFFU ) > 0;
 }
 
 void sprscr_setcollide( int sprno, bool sprites, bool tiles ) {
@@ -243,29 +273,23 @@ void sprscr_setcollide( int sprno, bool sprites, bool tiles ) {
     }
     sprctrl[sprno].spr_spr_coll_ena = sprites;
     sprctrl[sprno].spr_til_coll_ena = tiles;
-    if ( !sprites ) sprctrl[sprno].spr_spr_coll_ind = 0;
-    if ( !tiles )   sprctrl[sprno].spr_til_coll_ind = 0;
+    if ( !sprites ) __atomic_fetch_and( &sprhit[sprno], (uint8_t) ~1U, __ATOMIC_ACQ_REL );
+    if ( !tiles )   __atomic_fetch_and( &sprhit[sprno], (uint8_t) ~2U, __ATOMIC_ACQ_REL );
 }
 
 uint32_t sprscr_hits( int sprno ) {
     if ( sprno < 0 || sprno >= MAX_SPRITES ) {
         return 0;
     }
-    sprctrl_t* c = &sprctrl[sprno];
-    uint32_t r = ( c->spr_spr_coll_ind ? 1U : 0U ) | ( c->spr_til_coll_ind ? 2U : 0U );
-    c->spr_spr_coll_ind = 0;
-    c->spr_til_coll_ind = 0;
-    return r;
+    return __atomic_exchange_n( &sprhit[sprno], 0, __ATOMIC_ACQ_REL );      // read and cleared in one step: a hit that arrives meanwhile is not lost
 }
 
 int sprscr_collidewith( int sprno ) {
-    return sprno >= 0 && sprno < MAX_SPRITES ? sprcollwith[sprno] : -1;
+    return sprno >= 0 && sprno < MAX_SPRITES ? __atomic_load_n( &sprcollwith[sprno], __ATOMIC_ACQUIRE ) : -1;
 }
 
 int sprscr_nextevent( void ) {
-    int e = sprevent;
-    sprevent = -1;
-    return e;
+    return __atomic_exchange_n( &sprevent, -1, __ATOMIC_ACQ_REL );
 }
 
 // the palette index of a sprite at a screen pixel, 0 where it is transparent or the pixel is outside
@@ -279,9 +303,16 @@ static int sprscr_pixel( int sprno, int x, int y ) {
     return sprmap[ ( ( img / SPRMAP_CELLSX ) * SPRITE_HEIGHT + ly ) * SPRMAP_WIDTH + ( img % SPRMAP_CELLSX ) * SPRITE_WIDTH + lx ];
 }
 
+// the first event wins until it is taken (a sprite number, -1 = none)
+static void sprscr_postevent( int sprno ) {
+    int expected = -1;
+    __atomic_compare_exchange_n( &sprevent, &expected, sprno, false, __ATOMIC_ACQ_REL, __ATOMIC_RELAXED );
+}
+
 static void sprscr_collisions( void ) {
+    int with[MAX_SPRITES];              // (published at the end: a reader never sees "no collision" in between)
     for ( int i=0; i < MAX_SPRITES; ++i ) {
-        sprcollwith[i] = -1;
+        with[i] = -1;
     }
     for ( int a=0; a < MAX_SPRITES; ++a ) {
         const sprctrl_t* ca = &sprctrl[a];
@@ -299,10 +330,9 @@ static void sprscr_collisions( void ) {
                 }
             }
             if ( hit ) {
-                if ( !sprctrl[a].spr_til_coll_ind && sprevent < 0 ) {
-                    sprevent = a;
+                if ( ( __atomic_fetch_or( &sprhit[a], 2, __ATOMIC_ACQ_REL ) & 2U ) == 0 ) {
+                    sprscr_postevent( a );
                 }
-                sprctrl[a].spr_til_coll_ind = 1;
             }
         }
         if ( !ca->spr_spr_coll_ena ) {
@@ -327,15 +357,18 @@ static void sprscr_collisions( void ) {
                 }
             }
             if ( hit ) {
-                if ( sprevent < 0 && !( sprctrl[a].spr_spr_coll_ind && sprctrl[b].spr_spr_coll_ind ) ) {
-                    sprevent = a;
+                uint8_t olda = __atomic_fetch_or( &sprhit[a], 1, __ATOMIC_ACQ_REL );
+                uint8_t oldb = __atomic_fetch_or( &sprhit[b], 1, __ATOMIC_ACQ_REL );
+                if ( !( ( olda & 1U ) && ( oldb & 1U ) ) ) {
+                    sprscr_postevent( a );
                 }
-                sprctrl[a].spr_spr_coll_ind = 1;
-                sprctrl[b].spr_spr_coll_ind = 1;
-                if ( sprcollwith[a] < 0 ) sprcollwith[a] = b;
-                if ( sprcollwith[b] < 0 ) sprcollwith[b] = a;
+                if ( with[a] < 0 ) with[a] = b;
+                if ( with[b] < 0 ) with[b] = a;
             }
         }
+    }
+    for ( int i=0; i < MAX_SPRITES; ++i ) {
+        __atomic_store_n( &sprcollwith[i], with[i], __ATOMIC_RELEASE );
     }
 }
 
@@ -346,20 +379,42 @@ static int sprscr_rendersort( const void* pa, const void* pb ) {
 }
 
 void sprscr_periodicals( void ) {
-    // handle MOVETO
+    // handle MOVETO: first the requests of the main thread, then one step of each movement
     for ( int i=0; i < MAX_SPRITES; ++i ) {
         sprmove_t* m = &sprmove[i];
-        if ( !m->active ) {
+        uint64_t r = __atomic_load_n( &sprreq[i], __ATOMIC_ACQUIRE );
+        if ( r != 0 ) {
+            if ( r & SPRREQ_CANCEL ) {
+                __atomic_store_n( &m->active, false, __ATOMIC_RELEASE );
+            } else {
+                int ticks = (int)( ( r >> 32 ) & 0xFFFFU );
+                int tx = (int16_t)(uint16_t)( ( r >> 16 ) & 0xFFFFU ), ty = (int16_t)(uint16_t)( r & 0xFFFFU );
+                if ( ticks == 0 ) {
+                    __atomic_store_n( &m->active, false, __ATOMIC_RELEASE );
+                    sprctrl[i].screen_x = tx; sprctrl[i].screen_y = ty;
+                    sprscr_touch();
+                } else {
+                    m->fx = (int32_t) sprctrl[i].screen_x * 65536; m->fy = (int32_t) sprctrl[i].screen_y * 65536;
+                    m->dx = (int32_t)( ( (int64_t) tx * 65536 - m->fx ) / ticks );
+                    m->dy = (int32_t)( ( (int64_t) ty * 65536 - m->fy ) / ticks );
+                    m->ticks = ticks;
+                    m->tx = tx; m->ty = ty;
+                    __atomic_store_n( &m->active, true, __ATOMIC_RELEASE );      // (set before the request is taken off: moving() never sees a gap)
+                }
+            }
+            __atomic_compare_exchange_n( &sprreq[i], &r, 0, false, __ATOMIC_ACQ_REL, __ATOMIC_RELAXED );   // a newer request stays for the next frame
+        }
+        if ( !__atomic_load_n( &m->active, __ATOMIC_ACQUIRE ) ) {
             continue;
         }
         if ( --m->ticks <= 0 ) {
-            m->active = false;
+            __atomic_store_n( &m->active, false, __ATOMIC_RELEASE );
             sprctrl[i].screen_x = m->tx; sprctrl[i].screen_y = m->ty;
         } else {
             m->fx += m->dx; m->fy += m->dy;
             sprctrl[i].screen_x = (int)( m->fx >> 16 ); sprctrl[i].screen_y = (int)( m->fy >> 16 );
         }
-        sprchg = true;
+        sprscr_touch();
     }
     // handle animation
     for ( uint16_t i=0; i < UINT16_C(256); ++i ) {
@@ -381,16 +436,16 @@ void sprscr_periodicals( void ) {
             // no change, skip
             continue;
         }
-        sprchg = true;
+        sprscr_touch();
     }
     sprscr_collisions();
 }
 
 void sprscr_render( uint8_t* target ) {
-    if ( !sprchg ) {
+    // (the flag is cleared before the data is read, atomically: a change made while the frame is built sets it again, and is never lost)
+    if ( !__atomic_load_n( &sprchg, __ATOMIC_ACQUIRE ) || !__atomic_exchange_n( &sprchg, false, __ATOMIC_ACQ_REL ) ) {
         return;
     }
-    sprchg = false;
     memset( target, 0, SPRTGT_WIDTH * SPRTGT_HEIGHT );
 
     uint8_t tmp[256];

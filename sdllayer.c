@@ -58,7 +58,7 @@ bool sdllay_init( sdllayer_t* lay, const char* title, uint8_t priority, SDL_Rend
         lay->palette[i] = pal_argb( i );
     }
     // NOTE that the color names aren't currently used, which might change in a future version.
-    lay->modified = true;
+    __atomic_store_n( &lay->modified, true, __ATOMIC_RELEASE );
     lay->disabled = false;
     lay->priority = priority;
     lay->callback = 0;
@@ -98,7 +98,7 @@ void sdllay_cleanup_many( sdllayer_t* lay, size_t cnt ) {
 
 bool sdllay_needsredraw( const sdllayer_t* lay, size_t cnt ) {
     for ( size_t i=0; i < cnt; ++i ) {
-        if ( lay[i].modified && !lay[i].disabled ) return true;
+        if ( __atomic_load_n( &lay[i].modified, __ATOMIC_ACQUIRE ) && !lay[i].disabled ) return true;
     }
     return false;
 }
@@ -112,10 +112,14 @@ bool sdllay_to_texture( sdllayer_t* lay ) {
             return false;
         }
     }
-    if ( !lay->modified || lay->disabled ) {
+    if ( !__atomic_load_n( &lay->modified, __ATOMIC_ACQUIRE ) || lay->disabled ) {
         return true;
     }
-    lay->modified = false;
+    // The flag is cleared *before* the layer memory is read, with an atomic exchange (a full fence): a change that the other thread makes while the
+    // layer is converted sets the flag again and is drawn in the next frame, never lost. (There are no locks: the memory itself may be torn.)
+    if ( !__atomic_exchange_n( &lay->modified, false, __ATOMIC_ACQ_REL ) ) {
+        return true;
+    }
     if ( lay->callback ) {
         lay->callback( lay, lay->userdata );
     }
@@ -184,11 +188,11 @@ void sdllay_reset_palette( sdllayer_t* lay ) {
     for ( int i=0; i < 256; ++i ) {
         lay->palette[i] = pal_argb( i );
     }
-    lay->modified = true;
+    __atomic_store_n( &lay->modified, true, __ATOMIC_RELEASE );
 }
 
 void sdllay_set_modified( sdllayer_t* lay ) {
-    lay->modified = true;
+    __atomic_store_n( &lay->modified, true, __ATOMIC_RELEASE );        // (after the data was written)
 }
 
 void sdllay_enable( sdllayer_t* lay ) {
