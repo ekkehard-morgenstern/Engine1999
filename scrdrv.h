@@ -67,11 +67,15 @@ typedef enum _scrkind_t {
     SK_MOUSE            // a mouse event (only after wantmouse( true )): mouse, mx, my, button, wheel
 } scrkind_t;
 
-// SK_MOUSE: what happened. Only the left button is reported (press, release, moving with it held down) and the wheel.
+// SK_MOUSE: what happened. Only the left button is reported (press, release, moving with it held down, repeats while it is held) and the wheel.
 #define SM_PRESS        1       // the button was pressed at the cell mx, my
 #define SM_RELEASE      2       // ... and let go
 #define SM_DRAG         3       // the mouse moved to the cell mx, my with the button held down (at most once per frame in the window)
 #define SM_WHEEL        4       // the wheel turned one notch: wheel = +1 away from the user (up), -1 towards the user (down)
+#define SM_REPEAT       5       // the button is still held down: the host sends this over and over, at the cell the pointer is on now (the editor decides what a repeat means)
+
+#define SM_REPEAT_DELAY_MS  400 // the time from the press to the first repeat
+#define SM_REPEAT_MS        60  // and between the repeats (about 16 a second)
 
 typedef struct _scrkey_t {
     int     kind;

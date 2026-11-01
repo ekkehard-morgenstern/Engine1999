@@ -31,6 +31,8 @@
 #include "scrdrv.h"
 #include "textscreen.h"
 #include "fulledit.h"
+#include "mouse.h"
+#include "cursors.h"
 #include "monitor.h"
 #include "basrepl.h"
 
@@ -74,7 +76,12 @@ static void addmouse( int mouse, int mx, int my, int button, int wheel ) {
 static void pressk( int key, int mods ) { addkey( SK_KEY, 0, key, mods ); }
 static void resize( int cols, int rows ) { addkey( SK_RESIZE, cols, rows, 0 ); }     // (the driver resizes the screens when it hands the key out)
 
+static int shape_seen[MAXKEYS];                 // the pointer's shape (a request or the last one) when key i was handed out: what the earlier keys made of it
+
 static bool d_nextkey( scrkey_t* k ) {
+    if ( ipos < MAXKEYS ) {
+        shape_seen[ipos] = mouse_get( MOUSEV_SHAPE );
+    }
     if ( ipos >= nscript ) {
         memset( k, 0, sizeof(*k) );
         k->kind = SK_CLOSED;
@@ -300,6 +307,14 @@ static int findrow( const char* part ) {
     return found;
 }
 
+static bool hastoken( const line_t* ln, const char* text ) {
+    size_t n = strlen( text );
+    for ( size_t i = 0; i + n <= ln->toklen; ++i ) {
+        if ( memcmp( ln->tokens + i, text, n ) == 0 ) return true;
+    }
+    return false;
+}
+
 // the line (its number) that has a marker typed into it after the mouse moved the cursor: the program is NEW + 100 lines "10 A" ... "1000 A"
 static void bigprogram( void ) {
     repl_enter( &repl, "NEW" );
@@ -329,7 +344,17 @@ static int mouse_lands_on( void (*script_fn)( void ), bool big ) {
     const char* t = rowtext( y );
     txtscr_select( 0 );
     while ( *t == ' ' ) ++t;
-    return atoi( t );
+    int lineno = atoi( t );
+    // the marker must have been entered into the program, too (leaving the editor enters the edited line)
+    bool entered = false;
+    for ( line_t* ln = repl.pgm.first; ln != 0; ln = ln->next ) {
+        if ( (int) ln->lineno == lineno && hastoken( ln, "Z" ) ) entered = true;
+    }
+    if ( !entered ) {
+        printf( "  (the marker of line %d was not entered into the program)\n", lineno );
+        return -2;
+    }
+    return lineno;
 }
 
 static void sc_wheeldown( void )  { addmouse( SM_WHEEL, 0, 0, 0, -1 ); }
@@ -345,7 +370,17 @@ static void sc_tracktop( void ) { pressk( KS_END, KSMOD_CTRL ); addmouse( SM_PRE
 static void sc_drag( void ) { addmouse( SM_PRESS, 79, 3, 1, 0 ); addmouse( SM_DRAG, 79, 12, 1, 0 ); addmouse( SM_DRAG, 70, 22, 1, 0 ); addmouse( SM_RELEASE, 70, 22, 1, 0 ); }
 static void sc_dragnopress( void ) { addmouse( SM_DRAG, 79, 12, 1, 0 ); }
 static void sc_rightclick( void ) { addmouse( SM_PRESS, 79, 12, 3, 0 ); }
-static void sc_clickelsewhere( void ) { addmouse( SM_PRESS, 40, 12, 1, 0 ); addmouse( SM_PRESS, 78, 12, 1, 0 ); }
+static void sc_clicktext( void ) { addmouse( SM_PRESS, 40, 12, 1, 0 ); addmouse( SM_RELEASE, 40, 12, 1, 0 ); }
+static void sc_clicknumber( void ) { addmouse( SM_PRESS, 3, 5, 1, 0 ); addmouse( SM_RELEASE, 3, 5, 1, 0 ); }
+static void sc_clickpos( void ) { addmouse( SM_PRESS, 11, 3, 1, 0 ); addmouse( SM_RELEASE, 11, 3, 1, 0 ); }
+static void sc_clickbelow( void ) { addmouse( SM_PRESS, 20, 10, 1, 0 ); }
+static void sc_clickinsert( void ) { pressk( KS_END, KSMOD_CTRL ); press( SK_RETURN ); addmouse( SM_PRESS, 20, 7, 1, 0 ); addmouse( SM_RELEASE, 20, 7, 1, 0 ); }
+static void sc_clickrightbutton( void ) { addmouse( SM_PRESS, 20, 7, 3, 0 ); }
+static void sc_holddown( void ) { addmouse( SM_PRESS, 79, 23, 1, 0 ); for ( int i = 0; i < 3; ++i ) addmouse( SM_REPEAT, 79, 23, 1, 0 ); addmouse( SM_RELEASE, 79, 23, 1, 0 ); }
+static void sc_holdup( void ) { pressk( KS_END, KSMOD_CTRL ); addmouse( SM_PRESS, 79, 1, 1, 0 ); addmouse( SM_REPEAT, 79, 1, 1, 0 ); addmouse( SM_REPEAT, 79, 1, 1, 0 ); addmouse( SM_RELEASE, 79, 1, 1, 0 ); }
+static void sc_holdmoved( void ) { addmouse( SM_PRESS, 79, 23, 1, 0 ); addmouse( SM_REPEAT, 79, 20, 1, 0 ); addmouse( SM_REPEAT, 78, 23, 1, 0 ); addmouse( SM_RELEASE, 79, 20, 1, 0 ); }
+static void sc_repeatafter( void ) { addmouse( SM_PRESS, 79, 23, 1, 0 ); addmouse( SM_RELEASE, 79, 23, 1, 0 ); addmouse( SM_REPEAT, 79, 23, 1, 0 ); addmouse( SM_REPEAT, 79, 23, 1, 0 ); }
+static void sc_repeatnopress( void ) { addmouse( SM_REPEAT, 79, 23, 1, 0 ); }
 
 static void test_editor_mouse( void ) {
     int a;
@@ -362,7 +397,18 @@ static void test_editor_mouse( void ) {
     a = mouse_lands_on( sc_drag, true );       check( a >= 770, "editor mouse: dragging the thumb down to the end of the track follows" );
     a = mouse_lands_on( sc_dragnopress, true ); check( a == 10, "editor mouse: a drag that began elsewhere does nothing" );
     a = mouse_lands_on( sc_rightclick, true ); check( a == 10, "editor mouse: another button does nothing" );
-    a = mouse_lands_on( sc_clickelsewhere, true ); check( a == 10, "editor mouse: a click outside the scroll bar does nothing" );
+    a = mouse_lands_on( sc_clicktext, true );  check( a == 120, "editor mouse: a click in the text pane puts the cursor on that line (row 12: line 120)" );
+    a = mouse_lands_on( sc_clicknumber, true ); check( a == 50, "editor mouse: a click in the line number pane puts the cursor on that line (line 50)" );
+    mouse_lands_on( sc_clickpos, true );
+    check( findrow( "REM ZN30" ) > 0, "editor mouse: a click in the text puts the cursor at that character (the marker is typed in front of the 5th character)" );
+    a = mouse_lands_on( sc_clickbelow, false ); check( a == 10, "editor mouse: a click below the last line does nothing" );
+    a = mouse_lands_on( sc_clickinsert, true ); check( a == 840, "editor mouse: a click during an insertion ends it and goes to the line (the view is at the end: row 6 is line 840)" );
+    a = mouse_lands_on( sc_clickrightbutton, true ); check( a == 10, "editor mouse: a click with another button does nothing" );
+    a = mouse_lands_on( sc_holddown, true ); check( a == 50, "editor mouse: a held down arrow repeats (a press and three repeats: 4 lines)" );
+    a = mouse_lands_on( sc_holdup, true );   check( a > 900 && a < 1000, "editor mouse: a held up arrow repeats, too" );
+    a = mouse_lands_on( sc_holdmoved, true ); check( a == 20, "editor mouse: repeats at another cell than the arrow do nothing" );
+    a = mouse_lands_on( sc_repeatafter, true ); check( a == 20, "editor mouse: repeats after the release do nothing" );
+    a = mouse_lands_on( sc_repeatnopress, true ); check( a == 10, "editor mouse: a repeat without a press does nothing" );
     // the wheel with no scroll bar to speak of (the whole program fits) and an empty program: no harm
     a = mouse_lands_on( sc_wheeldown, false );  check( a == 10, "editor mouse: nothing scrolls when the whole program is shown" );
     repl_enter( &repl, "NEW" );
@@ -371,6 +417,35 @@ static void test_editor_mouse( void ) {
     addmouse( SM_WHEEL, 0, 0, 0, -1 ); addmouse( SM_PRESS, 79, 5, 1, 0 ); press( SK_ESCAPE );
     fulledit_run( &repl, &drv );
     check( ipos == 3, "editor mouse: with an empty program the mouse does no harm" );
+}
+
+// the pointer is a hand while the thumb of the scroll bar is dragged, and the shape it had comes back
+static void test_editor_dragshape( void ) {
+    bigprogram();
+    freshscreens( 80, 25 );
+    mouse_request_shape( CUR_ARROW );
+    clearscript();
+    pressk( KS_HOME, KSMOD_CTRL );                      // 0
+    addmouse( SM_PRESS, 79, 12, 1, 0 );                 // 1: on the track
+    addmouse( SM_DRAG, 79, 15, 1, 0 );                  // 2
+    addmouse( SM_RELEASE, 79, 15, 1, 0 );               // 3
+    press( SK_ESCAPE );                                 // 4
+    fulledit_run( &repl, &drv );
+    check( shape_seen[1] == CUR_ARROW && shape_seen[2] == CUR_HAND && shape_seen[3] == CUR_HAND, "editor mouse: the pointer is a hand while the thumb is dragged" );
+    check( shape_seen[4] == CUR_ARROW, "editor mouse: the arrow comes back when the button is released" );
+    // a shape the program set is given back, also when the editor ends with the button held
+    mouse_request_shape( CUR_CROSS );
+    freshscreens( 80, 25 );
+    clearscript();
+    addmouse( SM_PRESS, 79, 12, 1, 0 );                 // 0, and the editor is closed (the keys end)
+    fulledit_run( &repl, &drv );
+    check( shape_seen[1] == CUR_HAND && mouse_get( MOUSEV_SHAPE ) == CUR_CROSS, "editor mouse: the shape from before the drag is restored, even if the editor ends in it" );
+    // the arrows do not change the pointer
+    mouse_request_shape( CUR_ARROW );
+    clearscript();
+    addmouse( SM_PRESS, 79, 23, 1, 0 ); addmouse( SM_RELEASE, 79, 23, 1, 0 ); press( SK_ESCAPE );
+    fulledit_run( &repl, &drv );
+    check( shape_seen[1] == CUR_ARROW && shape_seen[2] == CUR_ARROW, "editor mouse: the arrows of the scroll bar leave the pointer alone" );
 }
 
 static void test_fulledit( void ) {
@@ -967,6 +1042,7 @@ int main( void ) {
     test_lineedit_resize();
     test_fulledit();
     test_editor_mouse();
+    test_editor_dragshape();
     test_monitor();
     test_screenedit();
     cleanup_repl( &repl );

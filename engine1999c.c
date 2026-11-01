@@ -395,6 +395,9 @@ static ssize_t con_mouse_scan( const unsigned char* b, ssize_t n, ssize_t i, int
 static bool con_wantmouse = false;
 static scrkey_t con_mq[32];
 static unsigned con_mqr = 0, con_mqn = 0;
+static bool con_lbdown = false;                 // the left button is held: SM_REPEAT after SM_REPEAT_DELAY_MS and every SM_REPEAT_MS, at the cell the pointer is on
+static uint64_t con_lbnext = 0;
+static int con_lbx = 1, con_lby = 1;
 
 static void con_mq_push( int mouse, int cx, int cy, int button, int wheel ) {
     if ( !con_wantmouse ) {
@@ -412,6 +415,13 @@ static void con_mq_push( int mouse, int cx, int cy, int button, int wheel ) {
 }
 
 static void con_mouse_report( int cb, int cx, int cy, char fin ) {
+    if ( con_wantmouse && ( cb & 64 ) == 0 && ( ( cb & 3 ) == 0 || ( cb & 32 ) != 0 ) ) {
+        if ( ( cb & 32 ) == 0 ) {                           // the left button went down / up
+            con_lbdown = fin == 'M';
+            con_lbnext = con_mouse_ms() + SM_REPEAT_DELAY_MS;
+        }
+        con_lbx = cx; con_lby = cy;
+    }
     if ( ( cb & 64 ) != 0 ) {
         if ( ( cb & 3 ) == 0 ) con_mq_push( SM_WHEEL, cx, cy, 0, 1 );
         else if ( ( cb & 3 ) == 1 ) con_mq_push( SM_WHEEL, cx, cy, 0, -1 );
@@ -481,6 +491,24 @@ static void con_mouse_poll( void ) {
     }
 }
 
+// the repeats of a held left button (for the full-screen editor); called whenever the host waits for the terminal
+static void con_mouse_repeat( void ) {
+    if ( !con_lbdown ) {
+        return;
+    }
+    if ( !con_wantmouse ) {
+        con_lbdown = false;
+        return;
+    }
+    uint64_t now = con_mouse_ms();
+    if ( now >= con_lbnext ) {
+        if ( con_mqn == 0 ) {
+            con_mq_push( SM_REPEAT, con_lbx, con_lby, 1, 0 );
+        }
+        con_lbnext = now + SM_REPEAT_MS;
+    }
+}
+
 static void con_pump( void ) {
     if ( !con_pumping ) {
         return;
@@ -525,12 +553,17 @@ static int con_rawbyte( int timeout ) {
             }
             return q;
         }
+        con_mouse_repeat();
         if ( ( con_wantresize && con_winch ) || con_mqn > 0 ) {
             return -3;
         }
         con_mouse_poll();
         struct pollfd pfd = { 0, POLLIN, 0 };
-        int rv = poll( &pfd, 1, timeout < 0 ? ( con_dirty ? 12 : 100 ) : timeout );     // (a pointer that moved is painted a moment after the last report)
+        int pollms = timeout < 0 ? ( con_dirty ? 12 : 100 ) : timeout;
+        if ( con_lbdown && con_wantmouse && ( pollms < 0 || pollms > 20 ) ) {
+            pollms = 20;                        // (a held button repeats: look at the clock often)
+        }
+        int rv = poll( &pfd, 1, pollms );     // (a pointer that moved is painted a moment after the last report)
         if ( rv < 0 ) {
             if ( errno == EINTR ) {
                 continue;
@@ -998,7 +1031,8 @@ static bool con_drv_nextkey( scrkey_t* k ) {
 }
 
 static void con_drv_wantmouse( bool enable ) {
-    con_wantmouse = enable && con_mouse;        // (reports come in screen mode only)
+    con_wantmouse = enable && con_mouse;
+    con_lbdown = false;                         // (reports come in screen mode only)
     con_mqr = con_mqn = 0;
 }
 

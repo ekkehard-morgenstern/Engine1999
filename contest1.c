@@ -272,10 +272,15 @@ static int run_pty( const char* const* steps, size_t nsteps, char* out, size_t o
             if ( strncmp( st, "@size ", 6U ) == 0 && sscanf( st + 6, "%u %u", &rows, &cols ) == 2 ) {      // the terminal is resized (the process gets SIGWINCH)
                 struct winsize nws = { (unsigned short) rows, (unsigned short) cols, 0, 0 };
                 ioctl( master, TIOCSWINSZ, &nws );
+            } else if ( strncmp( st, "@sleep ", 7U ) == 0 ) {
+                // nothing to send
             } else if ( write( master, st, strlen( st ) ) < 0 ) { }
         }
-        int quiet = 0;
-        for ( int ms = 0; ms < 5000 && quiet < 200; ms += 20 ) {       // collect until it has been quiet for 200 ms
+        int quiet = 0, minms = 0;
+        if ( i >= 1U && i <= nsteps && strncmp( steps[i - 1U], "@sleep ", 7U ) == 0 ) {     // "@sleep ms": collect for that long (a held mouse button repeats after 400 ms)
+            minms = atoi( steps[i - 1U] + 7 );
+        }
+        for ( int ms = 0; ms < 5000 && ( quiet < 200 || ms < minms ); ms += 20 ) {       // collect until it has been quiet for 200 ms
             struct pollfd pfd = { master, POLLIN, 0 };
             int timeout = 20;
             bool got_any = false;
@@ -579,6 +584,15 @@ int main( void ) {
         static const char* const sW4[] = { mkprog, "EDIT\r", "\033[<0;80;4M\033[<32;80;12M\033[<32;80;23M\033[<0;80;23m", "Z", "\033", "LIST\r", "BYE\r" };
         static const char* const eW4[] = { "\033[?1049h", "ZREM" };
         failed += !pty_case( "screen mode: the thumb of the scroll bar can be dragged (a move with the button held)", sW4, 7U, eW4, 2U );
+        // a click in the text moves the cursor there (row 5 = line 40, column 12 = the character behind "REM N" of "REM n40": the marker lands there)
+        static const char* const sC1[] = { mkprog, "EDIT\r", "\033[<0;12;5M\033[<0;12;5m", "Z", "\033", "LIST 30-50\r", "BYE\r" };
+        static const char* const eC1[] = { "\033[?1049h", "40 REM ZN" };
+        failed += !pty_case( "screen mode: a click in the text of the full-screen editor puts the cursor there", sC1, 7U, eC1, 2U );
+        // a held button on the down arrow repeats (1.5 s: the view reaches the end of a 30 line program, line 90 on top; a single click would give line 20)
+        static const char* const mkprog30 = "OPEN \"mem:p\" FOR OUTPUT AS #1:FOR I=1 TO 30:PRINT #1,I*10;\" REM n\":NEXT:CLOSE #1:LOAD \"mem:p\"\r";
+        static const char* const sC2[] = { mkprog30, "EDIT\r", "\033[<0;80;23M", "@sleep 1500", "\033[<0;80;23m", "Z", "\033", "LIST 80-100\r", "BYE\r" };
+        static const char* const eC2[] = { "\033[?1049h", "90 ZREM" };
+        failed += !pty_case( "screen mode: the scroll bar's arrow repeats while the button is held", sC2, 9U, eC2, 2U );
         // the shape is the terminal's own pointer (OSC 22), MOUSE HIDE hides the drawn one
         static const char* const sM3[] = { "10 MOUSE SHAPE CROSS:MOUSE POS 100,100:PRINT MOUSE(\"SHAPE\");MOUSE(\"VISIBLE\");MOUSE(\"X\");MOUSE(\"Y\")\r", "20 MOUSE HIDE:PRINT MOUSE(\"VISIBLE\")\r", "RUN\r", "BYE\r" };
         static const char* const eM3[] = { "\033]22;crosshair\033\\", "6-1100100", "\r\n0\r\n" };

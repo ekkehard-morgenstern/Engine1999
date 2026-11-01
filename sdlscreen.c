@@ -160,7 +160,11 @@ static bool sdlscr_enqueuekeypress( SDL_Keycode key, Uint16 mods ) {
 }
 
 // a mouse event for the full-screen editor (the cell of the 80 x 25 text screen under the pointer; x, y are the pointer in the layer's pixels)
+static bool sdlscr_inputpending( void );
 static volatile bool sdlscr_wantmouse = false;
+static bool sdlscr_lbdown = false;                  // the left button is held (for the editor): SM_REPEAT every SM_REPEAT_MS after SM_REPEAT_DELAY_MS, at the pointer's cell
+static Uint32 sdlscr_lbnext = 0;
+static int sdlscr_lbx = 0, sdlscr_lby = 0;
 
 static bool sdlscr_enqueuemouse( int mouse, int x, int y, int button, int wheel ) {
     sdlscr_inputmsg_t* msg = sdlscr_createinputmsg( SDLSCR_INPUT_MOUSE );
@@ -509,6 +513,9 @@ static int sdlscr_worker( void* arg ) {
                 case SDL_MOUSEMOTION:
                     if ( fmouse++ == 0 ) foldest = ev.motion.timestamp;
                     mouse_event_motion( ev.motion.x, ev.motion.y );
+                    if ( sdlscr_lbdown ) {
+                        sdlscr_lbx = ev.motion.x; sdlscr_lby = ev.motion.y;
+                    }
                     if ( sdlscr_wantmouse && ( ev.motion.state & SDL_BUTTON_LMASK ) != 0 ) {
                         dragx = ev.motion.x; dragy = ev.motion.y; dragged = true;      // (one event per frame: see below)
                     }
@@ -524,6 +531,9 @@ static int sdlscr_worker( void* arg ) {
                     if ( sdlscr_wantmouse && ev.button.button == SDL_BUTTON_LEFT ) {
                         sdlscr_enqueuemouse( ty == SDL_MOUSEBUTTONDOWN ? SM_PRESS : SM_RELEASE, ev.button.x, ev.button.y, 1, 0 );
                         dragged = false;
+                        sdlscr_lbdown = ty == SDL_MOUSEBUTTONDOWN;
+                        sdlscr_lbx = ev.button.x; sdlscr_lby = ev.button.y;
+                        sdlscr_lbnext = SDL_GetTicks() + SM_REPEAT_DELAY_MS;
                     }
                     break;
                 }
@@ -547,6 +557,15 @@ static int sdlscr_worker( void* arg ) {
             }
         }
 
+        if ( sdlscr_lbdown && !sdlscr_wantmouse ) {
+            sdlscr_lbdown = false;
+        }
+        if ( sdlscr_lbdown && (Sint32)( SDL_GetTicks() - sdlscr_lbnext ) >= 0 ) {
+            if ( !sdlscr_inputpending() ) {         // (an editor that is behind gets no pile of repeats)
+                sdlscr_enqueuemouse( SM_REPEAT, sdlscr_lbx, sdlscr_lby, 1, 0 );
+            }
+            sdlscr_lbnext = SDL_GetTicks() + SM_REPEAT_MS;
+        }
         if ( dragged && sdlscr_wantmouse ) {
             sdlscr_enqueuemouse( SM_DRAG, dragx, dragy, 1, 0 );        // (the last position of the frame)
         }
@@ -1078,7 +1097,10 @@ static bool sdlscr_drv_nextkey( scrkey_t* k ) {
 }
 
 static void sdlscr_drv_wantmouse( bool enable ) {
-    sdlscr_wantmouse = enable;          // (mouse events that are still queued afterwards are ignored by every reader)
+    sdlscr_wantmouse = enable;
+    if ( !enable ) {
+        sdlscr_lbdown = false;
+    }                                   // (mouse events that are still queued afterwards are ignored by every reader)
 }
 
 static void sdlscr_drv_screensize( int* cols, int* rows ) { txtscr_getscreensize( cols, rows ); }

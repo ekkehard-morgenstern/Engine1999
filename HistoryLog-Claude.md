@@ -13,12 +13,11 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-### 2026-11-01 — mouse support for the full-screen editor's scroll bar and wheel
-- Owner's request: left click and the mouse wheel for the scroll bar of `EDIT`. The scroll bar and the wheel **scroll the view** (the cursor stays on its line while it is shown, else it goes to the first / last line shown); wheel 3 lines per notch anywhere, up / down arrow 1 line, a click on the track puts the thumb there, the thumb can be dragged. The thumb now shows the place of the *view* (`ed_maxtop()`), not of the cursor line (the same picture with the keys, since the view follows the cursor).
-- Shared driver (`scrdrv.h`): new key kind `SK_MOUSE` with `SM_PRESS / SM_RELEASE / SM_DRAG / SM_WHEEL`, the cell (`mx`, `my`), `button`, `wheel`; new optional member `wantmouse( bool )`, called only by `fulledit_run()` (the other editors never see mouse events). `fulledit.c`: `ed_mouse()`, `ed_setview()`, `ed_viewby()`, `ed_scrolltrack()`, `ed_maxtop()`.
-- Window (`sdlscreen.c`, `sdlscreen.h`): `SDLSCR_INPUT_MOUSE` messages queued by the screen thread when wanted (a drag once per frame), cell = pixel / (8 x 12). Console (`engine1999c.c`): `con_mq` ring filled by `con_mouse_report()`, emptied by `con_drv_nextkey()`, woken like a resize (`con_rawbyte()` returns -3); screen mode only (with `--line` the editor has no mouse). Both hosts, as the standing rule demands.
-- **Checked** in the real window under Xvfb + metacity with an XTest injector (scratchpad only): wheel notches, arrow, track click and thumb drag (screenshots), and on a pty with xterm reports.
-- Tests: `scrtest1` 136 (14 new, clean under valgrind), `contest1` +4 pty cases (162 checks), all other suites still pass. Docs: `docs/display-engine.md`, `docs/console-host.md`, `docs/roadmap.md`, `man/engine1999.1`.
+### 2026-11-01 — full-screen editor: click to place the cursor, held arrows, hand pointer while dragging
+- **Click in the text / number pane** puts the cursor there (`ed_hit()`, `ed_click()` in `fulledit.c`; the cell is mapped through the layout as drawn, wrapped lines included; clamped to the end of the text; below the last line: nothing; an insertion is entered first).
+- **Held arrow repeats**: new `SM_REPEAT` (`scrdrv.h`, `SM_REPEAT_DELAY_MS` 400, `SM_REPEAT_MS` 60); the hosts make the repeats (window: `sdlscr_lbdown` / `sdlscr_lbnext` in the frame loop of `sdlscreen.c`; console: `con_mouse_repeat()` in `engine1999c.c`, the poll time in `con_rawbyte()` is 20 ms while a button is held); the editor acts on a repeat only at the arrow's cell.
+- **Hand pointer while dragging the thumb**: `ED_DRAGSHAPE` = `CUR_HAND` through `mouse_request_shape()` (works in both hosts), the previous shape is restored on release and when the editor ends.
+- Tests: `scrtest1` 150 (14 new; the marker's line is now checked to be stored in the program), `contest1` 164 (2 new; the pty harness got an `@sleep ms` step). Checked in the window under Xvfb (click, a held arrow scrolled about 23 lines in 1.8 s, the hand pointer, the arrow after release); `valgrind` clean. Docs: `docs/display-engine.md`, `docs/roadmap.md`, `man/engine1999.1`.
 
 ## Log
 
@@ -881,3 +880,11 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 3 files, +46/-4. (The owner's check of the VM assembler / decoder.)
 - Question from the owner: are they up to date? Yes: all 152 `INS_` defines of `instset.h` have a name in `cgen_opcode_name()` (167 names in all), and all of them assemble, decode, format and assemble again to the same bytes. The decoder has no per-instruction tables (names come from `cgen_opcode_name()`, the operand display is generic), so new instructions need nothing in `vmasm.c`.
 - `asmtest1`: new check `test_allopcodes()` runs that round trip over every named opcode (67 checks now), so a future instruction that is forgotten in the name table or breaks the assembler shows up.
+
+### 3d042c9 — 2026-11-01 17:13:56 +0100 — "mouse support in full-screen editor, created by Claude Code"
+13 files, +378/-16.
+- Owner's request: left click and the mouse wheel for the scroll bar of `EDIT`. The scroll bar and the wheel **scroll the view** (the cursor stays on its line while it is shown, else it goes to the first / last line shown); wheel 3 lines per notch anywhere, up / down arrow 1 line, a click on the track puts the thumb there, the thumb can be dragged. The thumb now shows the place of the *view* (`ed_maxtop()`), not of the cursor line (the same picture with the keys, since the view follows the cursor).
+- Shared driver (`scrdrv.h`): new key kind `SK_MOUSE` with `SM_PRESS / SM_RELEASE / SM_DRAG / SM_WHEEL`, the cell (`mx`, `my`), `button`, `wheel`; new optional member `wantmouse( bool )`, called only by `fulledit_run()` (the other editors never see mouse events). `fulledit.c`: `ed_mouse()`, `ed_setview()`, `ed_viewby()`, `ed_scrolltrack()`, `ed_maxtop()`.
+- Window (`sdlscreen.c`, `sdlscreen.h`): `SDLSCR_INPUT_MOUSE` messages queued by the screen thread when wanted (a drag once per frame), cell = pixel / (8 x 12). Console (`engine1999c.c`): `con_mq` ring filled by `con_mouse_report()`, emptied by `con_drv_nextkey()`, woken like a resize (`con_rawbyte()` returns -3); screen mode only (with `--line` the editor has no mouse). Both hosts, as the standing rule demands.
+- **Checked** in the real window under Xvfb + metacity with an XTest injector (scratchpad only): wheel notches, arrow, track click and thumb drag (screenshots), and on a pty with xterm reports.
+- Tests: `scrtest1` 136 (14 new, clean under valgrind), `contest1` +4 pty cases (162 checks), all other suites still pass. Docs: `docs/display-engine.md`, `docs/console-host.md`, `docs/roadmap.md`, `man/engine1999.1`.

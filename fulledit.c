@@ -27,6 +27,8 @@
 */
 
 #include "fulledit.h"
+#include "mouse.h"
+#include "cursors.h"
 #include "scrdrv.h"
 #include "textscreen.h"      // (only the TXTSCR_* constants; every call goes through the screen driver)
 #include "ansi.h"
@@ -103,7 +105,9 @@ typedef struct _ed_t {
     char        msg[96];                // error shown in the help bar until the next key
     bool        quit;
     int         sbtrack, sbsize, sbmaxtop;  // the scroll bar as last drawn: track rows (without the arrows), thumb size, the last place of the view (index of the top line; 0 = nothing to scroll)
-    bool        sbdrag;                 // the left button went down on the scroll bar and is still held
+    bool        sbdrag;                 // the left button went down on the scroll bar's track and is still held (the thumb is being dragged)
+    int         sbarrow, sbax, sbay;    // the left button went down on an arrow (-1 up, 1 down; 0 = none) at this cell and is still held: it repeats
+    int         sbsaveshape;            // the pointer's shape before the drag (the drag shows ED_DRAGSHAPE)
 } ed_t;
 
 // remembered between calls: line numbers (the lines may be gone or replaced)
@@ -842,6 +846,15 @@ static void ed_key( ed_t* e, const scrkey_t* k ) {
 // it can be dragged while the button is held. An insertion in progress is entered first, as for the cursor keys.
 
 #define ED_WHEELLINES   3
+#define ED_DRAGSHAPE    CUR_HAND       // the pointer while the thumb is dragged (CUR_GRAB is the closed hand)
+
+static void ed_enddrag( ed_t* e ) {
+    if ( e->sbdrag ) {
+        mouse_request_shape( e->sbsaveshape );
+        e->sbdrag = false;
+    }
+    e->sbarrow = 0;
+}
 
 // the view starts at line index idx (clamped to 0 .. ed_maxtop()); the cursor moves to the nearest line that is shown if it is not any more
 static void ed_setview( ed_t* e, int idx ) {
@@ -904,6 +917,41 @@ static void ed_scrolltrack( ed_t* e, int t ) {
     ed_setview( e, ( pos * e->sbmaxtop + room / 2 ) / room );       // (the inverse of the drawing: pos = room * idx / maxtop)
 }
 
+// where the cell (mx, my) of the whole screen is in the panes: the line and the text position under it; false below the last line
+static bool ed_hit( ed_t* e, int mx, int my, line_t** pln, size_t* ppos ) {
+    int row = my - ED_PANE_Y, y = 0;
+    for ( line_t* ln = e->top; ln != 0 && y <= e->pane_h; ln = ln->next ) {
+        int rows = !e->ins && ln == e->cur ? ed_editrows( e ) : ed_linerows( e, ln );
+        if ( row < y + rows ) {
+            int col = mx - ED_TEXT_X;           // (the number pane is column 0 of the line)
+            col = col < 0 ? 0 : col >= e->text_w ? e->text_w - 1 : col;
+            *pln = ln;
+            *ppos = (size_t)( row - y ) * (size_t) e->text_w + (size_t) col;
+            return true;
+        }
+        y += rows;
+    }
+    return false;
+}
+
+// a click in the number or the text pane: the cursor goes there (an insertion in progress is entered first, as for the cursor keys)
+static void ed_click( ed_t* e, int mx, int my ) {
+    if ( !ed_endins( e ) ) {
+        return;
+    }
+    ed_scroll( e );
+    line_t* ln = 0; size_t pos = 0;
+    if ( e->cur == 0 || !ed_hit( e, mx, my, &ln, &pos ) ) {
+        return;
+    }
+    if ( ln != e->cur ) {
+        uint32_t topno = e->top != 0 ? e->top->lineno : 0;
+        ed_moveto( e, ln );                     // (enters the edited line first; the nodes are looked up again by number)
+        e->top = ed_at( e, topno );
+    }
+    e->ed.pos = pos < e->ed.len ? pos : e->ed.len;
+}
+
 static void ed_mouse( ed_t* e, const scrkey_t* k ) {
     int sbx = ED_TEXT_X + e->text_w;
     bool inpanes = k->my >= ED_PANE_Y && k->my < ED_PANE_Y + e->pane_h;
@@ -912,20 +960,31 @@ static void ed_mouse( ed_t* e, const scrkey_t* k ) {
             ed_viewby( e, -k->wheel * ED_WHEELLINES );
             break;
         case SM_PRESS:
-            e->sbdrag = false;
-            if ( k->button != 1 || k->mx != sbx || !inpanes ) {
+            ed_enddrag( e );
+            if ( k->button != 1 || !inpanes ) {
                 break;
             }
-            {
+            if ( k->mx < sbx ) {
+                ed_click( e, k->mx, k->my );
+                break;
+            }
+            if ( k->mx == sbx ) {
                 int r = k->my - ED_PANE_Y;
-                if ( r == 0 ) {
-                    ed_viewby( e, -1 );
-                } else if ( r == e->pane_h - 1 ) {
-                    ed_viewby( e, 1 );
+                if ( r == 0 || r == e->pane_h - 1 ) {
+                    e->sbarrow = r == 0 ? -1 : 1;           // (it repeats while the button is held: SM_REPEAT)
+                    e->sbax = k->mx; e->sbay = k->my;
+                    ed_viewby( e, e->sbarrow );
                 } else {
-                    ed_scrolltrack( e, r - 1 );
+                    e->sbsaveshape = mouse_get( MOUSEV_SHAPE );
+                    mouse_request_shape( ED_DRAGSHAPE );
                     e->sbdrag = true;
+                    ed_scrolltrack( e, r - 1 );
                 }
+            }
+            break;
+        case SM_REPEAT:
+            if ( e->sbarrow != 0 && k->mx == e->sbax && k->my == e->sbay ) {
+                ed_viewby( e, e->sbarrow );
             }
             break;
         case SM_DRAG:
@@ -935,7 +994,7 @@ static void ed_mouse( ed_t* e, const scrkey_t* k ) {
             }
             break;
         case SM_RELEASE:
-            e->sbdrag = false;
+            ed_enddrag( e );
             break;
         default:
             break;
@@ -1036,6 +1095,7 @@ void fulledit_run( repl_t* repl, const scrdrv_t* drv ) {
     if ( drv->wantmouse != 0 ) {
         drv->wantmouse( false );
     }
+    ed_enddrag( e );
     drv->end( state );
     ed_memcur = e->cur != 0 ? e->cur->lineno : LINENO_NONE;
     ed_memtop = e->top != 0 ? e->top->lineno : LINENO_NONE;
