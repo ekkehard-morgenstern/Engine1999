@@ -12,6 +12,7 @@ commit ID and timestamp once the commit exists (see "Maintenance" in `CLAUDE.md`
 Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `docs/refactoring.md` (refactoring notes).
 
 ## Pending (not committed yet)
+- **ncurses checked for a key state** (the owner's idea, for the console `KEY()` review): the man page `getch(3ncurses)`, `/usr/include/curses.h` and the strings of `libncursesw.so.6.4` / `libtinfo.so.6` have nothing on key release or held keys; the only "released" events are mouse buttons (`BUTTON1_RELEASED` ...), delivered through the xterm mouse protocol (`kmous=\E[<`, `XM=\E[?1006;1000...`); a web search found nothing in ncurses' NEWS about the kitty keyboard protocol (the library of that family that implements it is notcurses, also crossterm and the terminals kitty, foot, WezTerm). Result: no ncurses method to copy; the kitty keyboard protocol stays the one idea for the review row. Useful for later: the xterm mouse reporting (modes 1000 / 1002 / 1003 with the SGR form 1006) is what the console host's mouse input would use. `docs/roadmap.md` (the review row). Documentation only.
 
 ## Log
 
