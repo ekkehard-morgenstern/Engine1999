@@ -13,7 +13,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-- **Proposal document for a C-64 style screen editor on text screen 0** (the owner's idea; nothing implemented, no code, no tests): new `docs/screen-editor-proposal.md` (understanding of the request, what `../gforthstuff/forthbasic` does: cell buffer with NUL = empty, rows linked by the last column, grab/zero-to-space, scroll with lossy scroll-down, RETURN copies the line; fit with the engine; evaluation with recommendations: a flag bit in the unused top byte of the text cell instead of NUL + font change, a WRAP flag for row links, scroll-back ring, keys, AUTO, console host only through an opt-in full-screen mode; design, phases, 8 decisions for the owner); pointers in `docs/README.md` and `docs/roadmap.md`. The entry for `89d5e2d` was moved into the log.
+(nothing pending)
 
 ## Log
 
@@ -752,3 +752,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 ### 89d5e2d — 2026-11-01 01:01:26 +0100 — "Prompt line limit raised to 4095 by Claude Code"
 8 files, +49/-18.
 - **Prompt limit raised to 4095 in both hosts** (the owner's decision, after the consequence for piped lines was pointed out): `engine1999.c` `PROMPT_BUFSIZE` 4096 (prompt and AUTO buffers; was 256 / 200), `engine1999c.c` `CON_PROMPTMAX` 4095 (was 255); with a redirected input the editor's model screen is made tall enough for 4095 characters (nothing is drawn, so only the length counts). **Limit of the editor, said to the owner:** a line must fit the screen minus one row (`scr_lineedit()`), so the interactive limit is 1919 characters in the window (80 x 25) and columns x (rows - 1) on a terminal; only a redirected input reaches 4095. Tests: `contest1` +2 and 1 changed (now 131: a 3000 character line from a pipe is entered whole, a 5000 character line is cut at 4095; on the 24 x 80 pty a 1500 character line is entered and a 2500 character line is cut where the screen ends); checked in the window under Xvfb (the prompt works). Docs: `docs/roadmap.md`, `docs/console-host.md`, man page `engine1999c.1`, `SESSION.md`.
+
+### 1a17a46 — 2026-11-01 01:22:11 +0100 — "C-64-like screen editor proposal and evaluation, by Claude Code"
+5 files, +253/-2. (Committed on the branch `feature/c64-like-screen-editor`, created by the owner for this subproject.)
+- **Proposal document for a C-64 style screen editor on text screen 0** (the owner's idea; nothing implemented, no code, no tests): new `docs/screen-editor-proposal.md` (understanding of the request, what `../gforthstuff/forthbasic` does: cell buffer with NUL = empty, rows linked by the last column, grab/zero-to-space, scroll with lossy scroll-down, RETURN copies the line; fit with the engine; evaluation with recommendations: a flag bit in the unused top byte of the text cell instead of NUL + font change, a WRAP flag for row links, scroll-back ring, keys, AUTO, console host only through an opt-in full-screen mode; design, phases, 8 decisions for the owner); pointers in `docs/README.md` and `docs/roadmap.md`. The entry for `89d5e2d` was moved into the log.
