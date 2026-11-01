@@ -138,6 +138,41 @@ static void test_decode( void ) {
 }
 
 // every instruction of a compiled program must survive decode -> format -> assemble with the same bytes
+// every instruction that has a name (cgen_opcode_name(), so every INS_ of instset.h that was added to it) is assembled with and without an operand,
+// decoded, formatted and assembled again: a new instruction that the assembler or decoder does not know shows up here
+static void test_allopcodes( void ) {
+    int named = 0, bad = 0;
+    for ( unsigned op = 0; op < 0x400U; ++op ) {
+        const char* name = cgen_opcode_name( (uint16_t) op );
+        if ( strcmp( name, "???" ) == 0 ) {
+            continue;
+        }
+        ++named;
+        for ( int withop = 0; withop < 2; ++withop ) {
+            char line[64], err[80]; uint8_t code[VMASM_MAXLEN], code2[VMASM_MAXLEN]; uint32_t len = 0, len2 = 0;
+            snprintf( line, sizeof(line), withop ? "%s 3" : "%s", name );
+            if ( !vmasm_assemble( line, code, &len, err ) ) {
+                if ( !withop && strstr( err, "operand" ) != 0 ) {
+                    continue;                           // (PHPA, PHIM, BRIA, BRIR and LINE need one)
+                }
+                ++bad; printf( "  %s: %s\n", line, err );
+                continue;
+            }
+            vminsn_t in; char m[32], o[32], c[64], again[64];
+            if ( !vmasm_decode( code, len, 0, &in ) || !in.valid || in.size != len || in.opcode != op ) {
+                ++bad; printf( "  %s: does not decode as itself\n", line );
+                continue;
+            }
+            vmasm_format( &in, m, sizeof(m), o, sizeof(o), c, sizeof(c) );
+            snprintf( again, sizeof(again), "%s %s", m, o );
+            if ( withop && ( !vmasm_assemble( again, code2, &len2, err ) || len2 != len || memcmp( code, code2, len ) != 0 ) ) {
+                ++bad; printf( "  %s -> %s: no round trip\n", line, again );
+            }
+        }
+    }
+    check( bad == 0 && named > 150, "every named instruction assembles, decodes, formats and assembles again" );
+}
+
 static void test_roundtrip( void ) {
     static const char* const program[] = {
         "10 DIM A(5), B$(3)",
@@ -194,6 +229,7 @@ int main( void ) {
     test_encodings();
     test_errors();
     test_decode();
+    test_allopcodes();
     test_roundtrip();
     printf( "%d of %d checks passed\n", total - failures, total );
     return failures;

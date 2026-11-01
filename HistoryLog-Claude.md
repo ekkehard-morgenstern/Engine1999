@@ -13,9 +13,9 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-### 2026-11-01 — `AUTO` in the console host (roadmap quick win 22)
-- `con_auto_prompt()` in `engine1999c.c`: while `repl->autoline` is set, the prompt loops of the screen mode (`con_repl_screen()`) and the line mode (`con_repl()`) print the next line number, read the text with `con_getline()` (the one-line editor, as in the window), enter `"<number> <text>"`, advance by the step; an empty line, ESC or Ctrl-C ends it. A script reading from a pipe gets no numbers in its output (`visible` is false there). Consistent with `engine1999.c` (standing rule).
-- `contest1`: 2 pipe cases, 2 line-mode pty cases, 1 screen mode pty case (now 158 checks). Docs: `docs/console-host.md`, `docs/basic-language.md`, `docs/roadmap.md` (item 22).
+### 2026-11-01 — check of the VM assembler / decoder
+- Question from the owner: are they up to date? Yes: all 152 `INS_` defines of `instset.h` have a name in `cgen_opcode_name()` (167 names in all), and all of them assemble, decode, format and assemble again to the same bytes. The decoder has no per-instruction tables (names come from `cgen_opcode_name()`, the operand display is generic), so new instructions need nothing in `vmasm.c`.
+- `asmtest1`: new check `test_allopcodes()` runs that round trip over every named opcode (67 checks now), so a future instruction that is forgotten in the name table or breaks the assembler shows up.
 
 ## Log
 
@@ -868,3 +868,8 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 - **F11 / ALT+RETURN** toggle the window between full screen and a resizable window (roadmap item 44, the owner: SDL delivers F11 as a plain key, the application must switch): `sdlscr_isfullscreenkey()` / `sdlscr_togglefullscreen()` in `sdlscreen.c`, the keys are not passed on to programs. Checked under Xvfb + metacity with an XTest injector (scratchpad only): full screen 1920x1080 -> window 1280x600 centered -> full, same with ALT+RETURN. Man page `engine1999.1` and the roadmap updated.
 - **Window title** (the owner's request): `sdlscr_settitle()` in `sdlscreen.c` sets it to the basename of `/proc/self/exe` (a `BUILD` executable shows its own name; "Engine1999" if it can't be read). Checked under Xvfb + metacity (`engine1999` and a copy named `mygame`: `_NET_WM_NAME`).
 - **Tests:** `vmtest1` 1162 (16 new, clean under ASAN/UBSAN), `repltest1` 343 (2 new, 2 changed), `asmtest1` 66, and all the other suites pass; `make man-check` and `make grammar-check` pass.
+
+### 2c8ef19 — 2026-11-01 16:06:26 +0100 — "AUTO in console, created by Claude Code"
+7 files, +102/-12. (Roadmap quick win 22. Tagged `v0.5.15` / `v0.5.16` and merged into `main` by the owner.)
+- `con_auto_prompt()` in `engine1999c.c`: while `repl->autoline` is set, the prompt loops of the screen mode (`con_repl_screen()`) and the line mode (`con_repl()`) print the next line number, read the text with `con_getline()` (the one-line editor, as in the window), enter `"<number> <text>"`, advance by the step; an empty line, ESC or Ctrl-C ends it. A script reading from a pipe gets no numbers in its output (`visible` is false there). Consistent with `engine1999.c` (standing rule).
+- `contest1`: 2 pipe cases, 2 line-mode pty cases, 1 screen mode pty case (now 158 checks). Docs: `docs/console-host.md`, `docs/basic-language.md`, `docs/roadmap.md` (item 22).
