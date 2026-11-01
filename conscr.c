@@ -106,6 +106,7 @@ void conscr_end( void ) {
     if ( !active ) {
         return;
     }
+    conscr_mouse( false );
     fputs( "\033[0m\033[?7h\033[?25h\033[?1049l", stdout );
     fflush( stdout );
     active = false;
@@ -166,6 +167,68 @@ static void conscr_setcolors( int fg, int bg ) {
     lastfg = fg; lastbg = bg;
 }
 
+// -- the mouse -------------------------------------------------------------------------------
+
+static bool mouse_on = false;
+static bool ptr_vis = false;
+static int  ptr_col = 0, ptr_row = 0;
+static bool ptr_changed = false;
+static int  ptr_shape = -1;
+
+// the names of the shapes as CSS cursors (OSC 22, in the order of CUR_*: ARROW WAIT BUSY TEXT HAND GRAB CROSS SIZEH SIZEV MOVE NO HELP)
+static const char* const ptr_names[12] = {
+    "", "wait", "progress", "text", "pointer", "grabbing", "crosshair", "ew-resize", "ns-resize", "move", "not-allowed", "help"
+};
+
+void conscr_mouse( bool on ) {
+    if ( on == mouse_on || ( on && !active ) ) {
+        return;
+    }
+    mouse_on = on;
+    if ( on ) {
+        fputs( "\033[?1003h\033[?1006h", stdout );
+        ptr_shape = 0;                                       // (the terminal's own pointer: the name of ARROW is empty, which gives that back)         // any motion (so the pointer follows without a button), SGR coordinates (no limit of 223)
+    } else {
+        fputs( "\033[?1003l\033[?1006l\033]22;\033\\", stdout );      // (the empty name: the terminal's own default shape)
+        ptr_shape = -1;
+        ptr_vis = false;
+    }
+    fflush( stdout );
+}
+
+bool conscr_mouse_active( void ) {
+    return mouse_on;
+}
+
+void conscr_setpointer( bool visible, int col, int row ) {
+    if ( visible != ptr_vis || ( visible && ( col != ptr_col || row != ptr_row ) ) ) {
+        ptr_changed = true;
+    }
+    ptr_vis = visible; ptr_col = col; ptr_row = row;
+}
+
+bool conscr_pointer_changed( void ) {
+    return ptr_changed;
+}
+
+void conscr_pointer_shape( int shape ) {
+    if ( !mouse_on || shape == ptr_shape || shape < 0 || shape >= 12 ) {
+        return;
+    }
+    ptr_shape = shape;
+    printf( "\033]22;%s\033\\", ptr_names[shape] );
+    fflush( stdout );
+}
+
+// the cell as it is shown: the one under the pointer with its colors swapped
+static textcell_t conscr_shown( int y, int x ) {
+    textcell_t c = txtscr_getdisplaycell( y, x );
+    if ( ptr_vis && x == ptr_col && y == ptr_row ) {
+        c = TXTSCR_MAKECELL( TXTSCR_CELL_CHR( c ), TXTSCR_CELL_FG( c ), TXTSCR_CELL_BG( c ) );
+    }
+    return c;
+}
+
 // -- painting --------------------------------------------------------------------------------
 
 static void conscr_putchar( int code ) {
@@ -197,11 +260,12 @@ void conscr_paint( void ) {
         shw = w; shh = h;
         fputs( "\033[2J", stdout );
     }
+    ptr_changed = false;
     fputs( "\033[?25l", stdout );
     for ( int y = 0; y < h; ++y ) {
         int x = 0;
         while ( x < w ) {
-            textcell_t c = txtscr_getdisplaycell( y, x );
+            textcell_t c = conscr_shown( y, x );
             if ( c == shadow[ y * w + x ] ) {
                 ++x;
                 continue;
@@ -210,7 +274,7 @@ void conscr_paint( void ) {
             // a run of changed cells (a short gap of equal cells is cheaper to write than to skip)
             int gap = 0;
             while ( x < w ) {
-                c = txtscr_getdisplaycell( y, x );
+                c = conscr_shown( y, x );
                 if ( c == shadow[ y * w + x ] ) {
                     if ( ++gap > 8 ) {
                         break;

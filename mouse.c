@@ -53,6 +53,8 @@ static int      cur_x, cur_y;
 static int      warp_x, warp_y;
 static int      warp_pending;
 
+static int area_w = 640, area_h = 300;
+
 static int clampi( int v, int lo, int hi ) {
     return v < lo ? lo : v > hi ? hi : v;
 }
@@ -63,6 +65,11 @@ static int ld( int* p ) {
 
 static void st( int* p, int v ) {
     __atomic_store_n( p, v, __ATOMIC_RELEASE );
+}
+
+void mouse_setarea( int w, int h ) {
+    __atomic_store_n( &area_w, clampi( w, 1, MOUSE_AREA_MAXW ), __ATOMIC_RELEASE );
+    __atomic_store_n( &area_h, clampi( h, 1, MOUSE_AREA_MAXH ), __ATOMIC_RELEASE );
 }
 
 // -- init -----------------------------------------------------------------------------------------------------------
@@ -79,8 +86,8 @@ void mouse_init( void ) {
 
 // -- events -------------------------------------------------------------------------------------------------------
 void mouse_event_motion( int x, int y ) {
-    st( &e_x, clampi( x, 0, 639 ) );
-    st( &e_y, clampi( y, 0, 299 ) );
+    st( &e_x, clampi( x, 0, ld( &area_w ) - 1 ) );
+    st( &e_y, clampi( y, 0, ld( &area_h ) - 1 ) );
     st( &e_moved, 1 );
 }
 
@@ -116,8 +123,8 @@ void mouse_request_hide( void ) {
 }
 
 void mouse_request_pos( int x, int y ) {
-    x = clampi( x, 0, 639 ); y = clampi( y, 0, 299 );
-    __atomic_store_n( &r_pos, UINT32_C(0x80000000) | ( (uint32_t) x << 16 ) | (uint32_t) y, __ATOMIC_RELEASE );
+    x = clampi( x, 0, ld( &area_w ) - 1 ); y = clampi( y, 0, ld( &area_h ) - 1 );
+    __atomic_store_n( &r_pos, UINT32_C(0x80000000) | ( (uint32_t) ( x & 0x7FFF ) << 16 ) | (uint32_t)( y & 0x7FFF ), __ATOMIC_RELEASE );
 }
 
 void mouse_request_shape( int shape ) {
@@ -148,7 +155,7 @@ bool mouse_tick( uint64_t now_ms ) {
     }
     uint32_t rp = __atomic_exchange_n( &r_pos, 0U, __ATOMIC_ACQ_REL );
     if ( ( rp & UINT32_C(0x80000000) ) != 0 ) {
-        cur_x = (int)( ( rp >> 16 ) & 0x3FFU ); cur_y = (int)( rp & 0xFFFFU );
+        cur_x = (int)( ( rp >> 16 ) & 0x7FFFU ); cur_y = (int)( rp & 0x7FFFU );
         cursors_move( cur_x, cur_y );
         warp_x = cur_x; warp_y = cur_y; warp_pending = 1;
         act = true;
@@ -207,8 +214,8 @@ bool mouse_warp_wanted( int* x, int* y ) {
 int mouse_get( int what ) {
     uint32_t rp = __atomic_load_n( &r_pos, __ATOMIC_ACQUIRE );
     switch ( what ) {
-        case MOUSEV_X:          return ( rp & UINT32_C(0x80000000) ) != 0 ? (int)( ( rp >> 16 ) & 0x3FFU ) : ld( &p_x );
-        case MOUSEV_Y:          return ( rp & UINT32_C(0x80000000) ) != 0 ? (int)( rp & 0xFFFFU ) : ld( &p_y );
+        case MOUSEV_X:          return ( rp & UINT32_C(0x80000000) ) != 0 ? (int)( ( rp >> 16 ) & 0x7FFFU ) : ld( &p_x );
+        case MOUSEV_Y:          return ( rp & UINT32_C(0x80000000) ) != 0 ? (int)( rp & 0x7FFFU ) : ld( &p_y );
         case MOUSEV_BUTTONS:    return ld( &p_buttons );
         case MOUSEV_PRESSED:    return __atomic_exchange_n( &p_pressed, 0, __ATOMIC_ACQ_REL );
         case MOUSEV_RELEASED:   return __atomic_exchange_n( &p_released, 0, __ATOMIC_ACQ_REL );

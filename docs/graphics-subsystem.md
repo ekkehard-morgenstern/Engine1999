@@ -159,7 +159,7 @@ the SDL events (`SDL_MOUSEMOTION`, `SDL_MOUSEBUTTONDOWN/UP`, `SDL_MOUSEWHEEL`, i
 module. The program's thread only posts requests (words that are exchanged to 0 when taken, the last request wins; `POS` and `SHAPE` are separate words, so neither is lost) and reads
 the values the screen thread published (button presses and wheel steps are latched with atomic or / add and cleared by the reader's exchange). A read looks at the pending requests first, so it
 agrees with what the program has just asked for. The window's own pointer is switched off (`SDL_ShowCursor`), `MOUSE POS` warps it with `SDL_RenderLogicalToWindow` / `SDL_WarpMouseInWindow`.
-Tests: `gfxtest1` (the state machine with a made-up clock: 33 checks), `vmtest1` (the statements and functions with the logging host), the real window under Xvfb (events, buttons, wheel,
+**The console host uses the same module** (`docs/console-host.md`, "The mouse"; `mouse_setarea()`, the terminal feeds `mouse_event_*` from its reports and calls `mouse_tick()`). Tests: `gfxtest1` (the state machine with a made-up clock, the area: 36 checks), `vmtest1` (the statements and functions with the logging host), the real window under Xvfb (events, buttons, wheel,
 the 3 s, `POS`, `SHAPE`, `TIMEOUT 0`).
 
 ### `GFX RESET`

@@ -57,6 +57,15 @@ void conscr_write( const char* text, size_t len );      // output of a running p
 void conscr_text_setcolors( int bg, int fg );           // COLOR: the pen and paper of the selected screen (the decoder of PRINT starts again from them)
 void conscr_dump( void );                               // the BASIC screen (screen 0) as plain lines on standard output, trailing blanks and rows cut (call after conscr_end())
 
+// the mouse (console screen mode): the terminal reports the mouse (xterm modes 1003 + 1006: motion, buttons, wheel; the host reads the reports), the pointer is
+// drawn as a cell with its colors swapped (like the text mode pointer of the MS-DOS mouse drivers), and its shape is the terminal's own pointer where the
+// terminal supports OSC 22 (the Engine's shapes ARROW, WAIT, ... as the names of CSS cursors; the terminal ignores what it does not know)
+void conscr_mouse( bool on );                           // switch the reporting on / off (off again by conscr_end(); and the terminal's own pointer shape is reset)
+bool conscr_mouse_active( void );
+void conscr_setpointer( bool visible, int col, int row );   // the cell to draw swapped (0-based), the next conscr_paint() shows it; true if that changes what is shown: use conscr_pointer_changed()
+bool conscr_pointer_changed( void );
+void conscr_pointer_shape( int shape );                 // CUR_* (cursors.h): the terminal's pointer, OSC 22; only written when it changes
+
 // the palette entry nearest to an xterm 256 color number's RGB, and the other way: used by the painter (exposed for the test)
 int conscr_rgb_to_256( int r, int g, int b );
 

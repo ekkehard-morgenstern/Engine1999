@@ -34,6 +34,9 @@
 #include "basrepl.h"
 #include "basdebug.h"
 #include "gfxops.h"
+#include "mouse.h"
+#include "cursors.h"
+#include "sprscreen.h"
 #include "ansi.h"
 #include "scrdrv.h"
 #include "conscr.h"
@@ -80,6 +83,9 @@ static bool con_pumping = false;                // a program is running on a ter
 static bool con_escbreak = true;                // ESC is the break key (BREAK ON); with BREAK OFF it is an ordinary key (Ctrl-C always breaks)
 static size_t con_inqpos = 0, con_inqlen = 0;   // the keys that arrived while it ran (see con_pump())
 static void con_set_raw( bool raw );
+static bool con_mouse = false;                  // screen mode on a terminal with the mouse reported (see "The mouse" below)
+static void con_mouse_poll( void );
+static ssize_t con_mouse_filter( unsigned char* b, ssize_t n, size_t cap );
 
 // Ctrl-C is Break while the BASIC system runs something; between lines the default action (end the process) is in effect. On a terminal a lone ESC
 // is Break as well (as in the window), which needs the keys to arrive without the Return of the line mode: the terminal is in raw mode while a
@@ -339,6 +345,113 @@ static void con_note_bytes( const unsigned char* b, ssize_t n ) {
 
 #endif      // CON_KEYSTATE
 
+// -- the mouse ----------------------------------------------------------------------------
+//
+// In screen mode on a terminal the mouse is reported by the terminal (conscr_mouse(): xterm modes 1003 and 1006, SGR coordinates):
+//     ESC [ < b ; col ; row M   (press, motion, wheel)      ESC [ < b ; col ; row m   (release)
+// b: 0 left, 1 middle, 2 right, 3 none (motion); +4 Shift, +8 Meta, +16 Ctrl, +32 motion, +64 wheel (64 up, 65 down; 66 / 67 sideways: ignored).
+// col and row are cells (from 1); a cell is 8 x 12 pixels of the "area" that mouse.h works in, the centre of the cell is the position the program sees.
+// The reports come in the stream of the keys: con_mouse_filter() takes them out of what was read and gives them to mouse.c; a program polls the
+// state with MOUSE(), the pointer is shown by conscr (a cell with swapped colors) and its shape is the terminal's own (OSC 22). A report that is cut in two
+// reads is waited for briefly; one that was split before its third byte reaches the key reader and is skipped there like any unknown sequence.
+
+static uint64_t con_mouse_ms( void ) {
+    struct timespec ts;
+    clock_gettime( CLOCK_MONOTONIC, &ts );
+    return (uint64_t) ts.tv_sec * 1000U + (uint64_t) ts.tv_nsec / 1000000U;
+}
+
+// the mouse report at b[i]: its length (> 0) and the numbers, 0 if there is none, -1 if it may be one but is not complete
+static ssize_t con_mouse_scan( const unsigned char* b, ssize_t n, ssize_t i, int* cb, int* cx, int* cy, char* fin ) {
+    if ( n - i < 3 || b[i] != 033 || b[i + 1] != '[' || b[i + 2] != '<' ) {
+        return 0;
+    }
+    int v[3] = { 0, 0, 0 };
+    int k = 0;
+    bool digit = false;
+    for ( ssize_t j = i + 3; j < n; ++j ) {
+        unsigned char c = b[j];
+        if ( c >= '0' && c <= '9' ) {
+            v[k] = v[k] * 10 + ( c - '0' );
+            if ( v[k] > 100000 ) {
+                return 0;
+            }
+            digit = true;
+        } else if ( c == ';' && digit && k < 2 ) {
+            ++k;
+            digit = false;
+        } else if ( ( c == 'M' || c == 'm' ) && digit && k == 2 ) {
+            *cb = v[0]; *cx = v[1]; *cy = v[2]; *fin = (char) c;
+            return j - i + 1;
+        } else {
+            return 0;
+        }
+    }
+    return -1;
+}
+
+static void con_mouse_report( int cb, int cx, int cy, char fin ) {
+    mouse_event_motion( ( cx - 1 ) * 8 + 4, ( cy - 1 ) * 12 + 6 );
+    if ( ( cb & 64 ) != 0 ) {
+        if ( ( cb & 3 ) == 0 ) mouse_event_wheel( 1 );
+        else if ( ( cb & 3 ) == 1 ) mouse_event_wheel( -1 );
+    } else if ( ( cb & 32 ) == 0 ) {
+        int bit = ( cb & 3 ) == 0 ? MOUSE_LEFT : ( cb & 3 ) == 1 ? MOUSE_MIDDLE : ( cb & 3 ) == 2 ? MOUSE_RIGHT : 0;
+        mouse_event_button( bit, fin == 'M' );
+    }
+}
+
+static ssize_t con_mouse_filter( unsigned char* b, ssize_t n, size_t cap ) {
+    ssize_t o = 0, i = 0;
+    int waits = 0;
+    while ( i < n ) {
+        if ( b[i] != 033 ) {
+            b[o++] = b[i++];
+            continue;
+        }
+        int cb, cx, cy;
+        char fin;
+        ssize_t len = con_mouse_scan( b, n, i, &cb, &cx, &cy, &fin );
+        if ( len > 0 ) {
+            con_mouse_report( cb, cx, cy, fin );
+            i += len;
+            continue;
+        }
+        if ( len < 0 && waits < 2 && (size_t) n < cap ) {
+            // a report that is cut off at the end of the read: wait a moment for the rest, which is appended behind the data
+            ++waits;
+            struct pollfd pfd = { 0, POLLIN, 0 };
+            if ( poll( &pfd, 1, 20 ) > 0 ) {
+                ssize_t m = read( 0, b + n, cap - (size_t) n );
+                if ( m > 0 ) {
+                    n += m;
+                    continue;
+                }
+            }
+        }
+        b[o++] = b[i++];
+    }
+    return o;
+}
+
+// the clock of the pointer's 3 seconds and the picture: called whenever the host looks at the terminal
+static void con_mouse_poll( void ) {
+    if ( !con_mouse ) {
+        return;
+    }
+    int w = 80, h = 25;
+    txtscr_getscreensize( &w, &h );
+    mouse_setarea( w * 8, h * 12 );
+    mouse_tick( con_mouse_ms() );
+    int x = 0, y = 0;
+    cursors_position( &x, &y );
+    conscr_setpointer( cursors_visible(), x / 8, y / 12 );
+    conscr_pointer_shape( cursors_shape() );
+    if ( conscr_pointer_changed() ) {
+        con_paint_soon();
+    }
+}
+
 static void con_pump( void ) {
     if ( !con_pumping ) {
         return;
@@ -349,6 +462,12 @@ static void con_pump( void ) {
         ssize_t n = read( 0, chunk, sizeof(chunk) );
         if ( n <= 0 ) {
             break;
+        }
+        if ( con_mouse ) {
+            n = con_mouse_filter( chunk, n, sizeof(chunk) );      // (the mouse reports are taken out; what is left is keys)
+            if ( n <= 0 ) {
+                continue;
+            }
         }
 #ifdef CON_KEYSTATE
         con_note_bytes( chunk, n );
@@ -361,6 +480,7 @@ static void con_pump( void ) {
             con_inq[ con_inqlen++ ] = chunk[i];
         }
     }
+    con_mouse_poll();
 }
 
 // one byte of the terminal: >= 0 the byte, -1 end of input / error, -2 timeout (timeout in ms; negative = wait)
@@ -379,8 +499,9 @@ static int con_rawbyte( int timeout ) {
         if ( con_wantresize && con_winch ) {
             return -3;
         }
+        con_mouse_poll();
         struct pollfd pfd = { 0, POLLIN, 0 };
-        int rv = poll( &pfd, 1, timeout < 0 ? 100 : timeout );
+        int rv = poll( &pfd, 1, timeout < 0 ? ( con_dirty ? 12 : 100 ) : timeout );     // (a pointer that moved is painted a moment after the last report)
         if ( rv < 0 ) {
             if ( errno == EINTR ) {
                 continue;
@@ -397,6 +518,26 @@ static int con_rawbyte( int timeout ) {
             return -2;
         }
         unsigned char c;
+        if ( con_mouse ) {
+            // the terminal reports the mouse in the same stream as the keys: read what is there, take the reports out, queue the keys
+            unsigned char chunk[256];
+            ssize_t m = read( 0, chunk, sizeof(chunk) );
+            if ( m == 0 ) {
+                return -1;
+            }
+            if ( m < 0 ) {
+                if ( errno == EINTR ) {
+                    continue;
+                }
+                return -1;
+            }
+            m = con_mouse_filter( chunk, m, sizeof(chunk) );
+            for ( ssize_t i = 0; i < m && con_inqlen < sizeof(con_inq); ++i ) {
+                con_inq[ con_inqlen++ ] = chunk[i];
+            }
+            con_mouse_poll();
+            continue;
+        }
         ssize_t n = read( 0, &c, 1U );
         if ( n == 0 ) {
             return -1;
@@ -594,6 +735,21 @@ static int con_gi( double v, int def ) {
 static bool con_gfx_op( void* usrdata, int op, const double* a, int na, const char* s, size_t slen, uint8_t* out, size_t outsz,
     size_t* outlen, const char** err ) {
     (void) usrdata; (void) na; (void) s;
+    if ( op >= GFXOP_MOUSESHOW && op <= GFXOP_MOUSETMO ) {
+        if ( !con_mouse ) {
+            *err = "Not available in the console host";
+            return false;
+        }
+        switch ( op ) {
+            case GFXOP_MOUSESHOW:   mouse_request_show(); break;
+            case GFXOP_MOUSEHIDE:   mouse_request_hide(); break;
+            case GFXOP_MOUSEPOS:    mouse_request_pos( con_gi( a[0], 0 ), con_gi( a[1], 0 ) ); break;
+            case GFXOP_MOUSESHAPE:  mouse_request_shape( con_gi( a[0], 0 ) ); break;
+            default:                mouse_request_timeout( (int)( a[0] * 1000.0 + 0.5 ) ); break;
+        }
+        con_mouse_poll();
+        return true;
+    }
     if ( con_screen ) {
         // screen mode: the text statements work on the text screen, as in the window
         switch ( op ) {
@@ -635,6 +791,21 @@ static bool con_gfx_op( void* usrdata, int op, const double* a, int na, const ch
 
 static bool con_gfx_query( void* usrdata, int q, const double* a, int na, double* result ) {
     (void) usrdata; (void) na;
+    if ( q >= GFXQ_MOUSEX && q <= GFXQ_MOUSEVISIBLE && con_mouse ) {
+        con_pump();                         // (what the mouse did since the last look)
+        con_mouse_poll();
+        switch ( q ) {
+            case GFXQ_MOUSEX:       *result = mouse_get( MOUSEV_X ); break;
+            case GFXQ_MOUSEY:       *result = mouse_get( MOUSEV_Y ); break;
+            case GFXQ_MOUSEB:       *result = mouse_get( MOUSEV_BUTTONS ); break;
+            case GFXQ_MOUSEPRESSED: *result = mouse_get( MOUSEV_PRESSED ); break;
+            case GFXQ_MOUSERELEASED: *result = mouse_get( MOUSEV_RELEASED ); break;
+            case GFXQ_MOUSEWHEEL:   *result = mouse_get( MOUSEV_WHEEL ); break;
+            case GFXQ_MOUSESHAPE:   *result = mouse_get( MOUSEV_SHAPE ); break;
+            default:                *result = mouse_get( MOUSEV_VISIBLE ) ? -1.0 : 0.0; break;
+        }
+        return true;
+    }
     if ( con_screen ) {
         int x = 0, y = 0, w = 0, h = 0, bg = 0, fg = 0;
         textcell_t c;
@@ -1153,6 +1324,13 @@ static bool con_screen_begin( void ) {
     }
     con_screen = true;
     con_fullscreen = true;
+    const char* mo = getenv( "E1999_MOUSE" );
+    if ( mo == 0 || mo[0] != '0' ) {            // (E1999_MOUSE=0: no mouse reporting; the MOUSE statements then give an error)
+        sprscr_init();                          // (the pointer is a sprite of the engine, drawn here as a cell: see conscr_setpointer())
+        mouse_init();
+        con_mouse = true;
+        conscr_mouse( true );
+    }
     txtscr_select( 0 );
     con_inqpos = con_inqlen = 0;
     con_pendpos = con_pendlen = 0;
@@ -1166,7 +1344,8 @@ static void con_screen_end( bool dump ) {
         return;
     }
     con_flush_paint();
-    conscr_end();
+    con_mouse = false;
+    conscr_end();                       // (switches the mouse reporting off, too)
     con_screen = false;
     con_fullscreen = false;
     con_set_raw( false );

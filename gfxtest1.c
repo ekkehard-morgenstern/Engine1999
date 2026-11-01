@@ -512,6 +512,17 @@ static void test_mouse( void ) {
     mouse_event_motion( 3, 3 ); mouse_tick( 1000000 );
     check( !mouse_tick( 1002999 ) && mouse_tick( 1003000 ), "a negative time means the default again" );
 
+    // the area: the console host sets it to the terminal's size in cells times 8 x 12
+    mouse_setarea( 800, 600 );
+    mouse_event_motion( 799, 599 ); mouse_event_motion( 900, 900 ); mouse_tick( 3000000 );
+    check( mouse_get( MOUSEV_X ) == 799 && mouse_get( MOUSEV_Y ) == 599, "a bigger area: positions are clamped to it" );
+    mouse_request_pos( 5000, 5000 ); mouse_tick( 3000100 );
+    check( mouse_get( MOUSEV_X ) == 799 && mouse_get( MOUSEV_Y ) == 599, "...MOUSE POS, too" );
+    mouse_setarea( 80, 24 );
+    mouse_event_motion( 500, 500 ); mouse_tick( 3000200 );
+    check( mouse_get( MOUSEV_X ) == 79 && mouse_get( MOUSEV_Y ) == 23, "a smaller one" );
+    mouse_setarea( 640, 300 );
+
     // the direct use of cursors_* (sdltest3) has no timer
     cursors_show( true );
     check( !mouse_tick( 2000000 ) && cursors_visible(), "a pointer that was shown without the mouse module is left alone" );

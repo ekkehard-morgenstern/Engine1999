@@ -49,7 +49,8 @@ Threads: everything that changes the pointer (cursors_*) is done by mouse_tick()
 posts requests (mouse_request_*, atomic words) and reads values the screen thread has published (mouse_get): no locks, nothing gets lost (a request is a
 word that is exchanged to zero when it is taken; button presses are latched bits). The events are posted by the screen thread itself.
 
-Coordinates are those of the sprite layer: x 0..639, y 0..299. Buttons are bits: 1 left, 2 right, 4 middle.
+Coordinates are those of the sprite layer: x 0..639, y 0..299 (the "area", mouse_setarea(): the console host sets it to the terminal's size in cells times
+8 x 12 pixels, so that a cell is a mouse position of 8 x 12 pixels, and a program sees the same numbers in both hosts). Buttons are bits: 1 left, 2 right, 4 middle.
 */
 
 #define MOUSE_DEFAULT_TIMEOUT   3000        // milliseconds
@@ -68,6 +69,10 @@ Coordinates are those of the sprite layer: x 0..639, y 0..299. Buttons are bits:
 #define MOUSEV_SHAPE    7       // the pointer's shape (CUR_*)
 #define MOUSEV_VISIBLE  8       // 1 if the pointer is shown now
 
+#define MOUSE_AREA_MAXW   32768                         // the largest area (the VM accepts positions up to this)
+#define MOUSE_AREA_MAXH   32768
+
+void mouse_setarea( int w, int h );                     // the size of the area in pixels (default 640 x 300); positions are clamped to it
 void mouse_init( void );                                // a hidden arrow at 0, 0 (after cursors_install()); the timeout is the default
 
 // the screen thread: events of the window (x, y already in the coordinates of the sprite layer; they are clamped to 0..639, 0..299)

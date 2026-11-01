@@ -55,6 +55,7 @@ Everything after the file name is for the program: `engine1999c prog.bas a "b c"
 - **Sound** statements (`SOUND`, `PLAY`, `SFX`, `ENVELOPE` ...) have no sound device: their arguments are checked and nothing plays, `PLAYING(n)` is 0.
 - **In screen mode (above)** `CLS`, `LOCATE`, `COLOR` and the `TXT` statements and functions work on the text screen as in the window; the rest of this section is the line mode.
 - **`CLS` and `LOCATE`** write ANSI escape sequences when standard output is a terminal (and nothing when it is not). `COLOR` is accepted and ignored: the Engine's palette is not the terminal's; `PRINT CHR$(27);"[31m";...` passes through to terminals as it is.
+- **`MOUSE`** works in screen mode (see "The mouse" below); elsewhere it is an error.
 - **Everything else** that needs a screen (`GFX`, `SPRITE`, `TILE`, `TXT`, `DESIGN`, `SYMBOL`, and the graphics functions) fails with `? Not available in the console host`. `AUTO` and the pager of `FILES` are window-only; `EDIT` without a target and `MONITOR` work on a terminal (next section).
 - The functions that ask for the text screen size answer with the size of the terminal (80 x 25 without one).
 
@@ -82,6 +83,28 @@ Everything after the file name is for the program: `engine1999c prog.bas a "b c"
 - **Without a terminal** (standard input or output is not one) both fail with `? EDIT and MONITOR need a terminal`.
 - **`EDIT n`** works: the line is edited with the same one-line editor as the prompt (RETURN enters it, ESC cancels).
 - **ESC breaks a running program** on a terminal now (like the window), also a program that polls `INKEY$` or waits in `GET`, `INPUT$` or `LINE INPUT`: while a program runs the terminal is in raw mode, the keys typed meanwhile are queued for `GET` / `INKEY$` / `INPUT` (and dropped when the program ends, like the window does), and a lone ESC is Break, like Ctrl-C.
+
+## The mouse (screen mode only; 2026-11-01)
+
+In screen mode the terminal reports the mouse (xterm modes 1003 "any motion" and 1006 "SGR coordinates": `ESC [ < b ; col ; row M` for a press, motion or wheel step, `m` for a
+release; supported by xterm, kitty, foot, wezterm, gnome-terminal, Windows Terminal, tmux, ...) and the `MOUSE` statements and functions of the window work
+(`docs/basic-language.md`, "The mouse"): `MOUSE("X")`, `("Y")`, `("B")`, `("PRESSED")`, `("RELEASED")`, `("WHEEL")`, `("SHAPE")`, `("VISIBLE")`, `MOUSE SHOW|HIDE|POS|SHAPE|TIMEOUT`.
+Unlike keys, **the buttons are exact**: the terminal reports every release. Outside of screen mode (a pipe, a redirected input or output, `--line`) there is no mouse: the statements
+give "Not available in the console host" and the functions "Illegal argument", and nothing is ever written to switch reporting on. `E1999_MOUSE=0` switches it off in screen mode, too.
+
+- **Positions** are those of the window's layer, with a **cell of 8 x 12 pixels** (the 80 x 25 text screen is the 640 x 300 layer): a report for column c, row r is the position
+  ((c-1)\*8+4, (r-1)\*12+6), the middle of the cell. The area is the terminal's size times that (`mouse_setarea()`, follows a resize), so a program sees the same numbers in both hosts; a
+  wider terminal has larger X. `MOUSE POS` puts the *drawn* pointer there (the terminal's own pointer can't be moved).
+- **The pointer** is drawn as in the text mode of the MS-DOS mouse drivers: **the cell under it is shown with its colors swapped** (`conscr_setpointer()`), for 3 seconds after the mouse
+  does something (the rule is the same code as in the window, `mouse.c`), also in the full-screen editor and the monitor.
+- **The shape** is the terminal's own pointer where the terminal supports **OSC 22** (`ESC ] 22 ; name ESC \`): `ARROW` is the empty name (the terminal's default, so what the user's desktop
+  uses), `WAIT` wait, `BUSY` progress, `TEXT` text, `HAND` pointer, `GRAB` grabbing, `CROSS` crosshair, `SIZEH` ew-resize, `SIZEV` ns-resize, `MOVE` move, `NO` not-allowed,
+  `HELP` help (CSS cursor names); a terminal that does not know OSC 22 or a name ignores it. The real pointer can't be hidden by the program: the desktop does that (typing hides it
+  in many terminals). It is set back to the default when the session ends.
+- **Side effects:** while the mouse is reported the terminal does not select text with the mouse (Shift+drag does, in most terminals); reporting is switched off at the end of the session,
+  on SIGTERM / SIGHUP and when the terminal is closed (the same paths as the alternate screen). The reports come in the stream of the keys: `con_mouse_filter()` takes them out (also while
+  a program runs, `con_pump()`); a report that is split in two reads is waited for for 20 ms.
+- Tests: `contest1` (a pty sends reports among typed keys: position, button, release, wheel, OSC 22, `E1999_MOUSE=0`), `gfxtest1` (the area).
 
 ## Not done yet (roadmap section 12)
 

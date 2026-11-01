@@ -531,6 +531,25 @@ int main( void ) {
         static const char* const sK1[] = { "10 PRINT KEY(\"A\")\r", "RUN\r", "BYE\r" };
         static const char* const eK1[] = { "? KEY is not available in this host in line 10" };
         failed += !pty_case( "screen mode: KEY() is a run-time error in the console host", sK1, 3U, eK1, 1U );
+        // the mouse: the terminal reports it in the stream of the keys (xterm SGR mode); the cell (col 10, row 5) is the position 76,54 (8 x 12 pixels per cell)
+        static const char* const sM1[] = { "10 IF MOUSE(\"B\")=0 THEN WAIT 1:GOTO 10\r", "20 PRINT MOUSE(\"X\");\",\";MOUSE(\"Y\");\",\";MOUSE(\"B\");\",\";MOUSE(\"VISIBLE\")\r", "RUN\r", "\033[<0;10;5M", "BYE\r" };
+        static const char* const eM1[] = { "\033[?1003h\033[?1006h", "76,54,1,-1", "\033[5;10H", "\033[?1003l\033[?1006l\033]22;\033\\", "\033[?1049l" };
+        failed += !pty_case( "screen mode: the mouse is reported (position, button, the pointer shows) and switched off at the end", sM1, 5U, eM1, 5U );
+        // a report between keys is no key; a release, motion without a button and the wheel
+        static const char* const sM2[] = { "10 GET A$,B$:PRINT \"[\";A$;B$;\"]\"\r", "20 PRINT MOUSE(\"X\");\",\";MOUSE(\"B\");\",\";MOUSE(\"PRESSED\");\",\";MOUSE(\"RELEASED\");\",\";MOUSE(\"WHEEL\")\r", "RUN\r",
+            "a\033[<0;3;3M\033[<0;3;3m\033[<64;3;3M\033[<64;3;3M\033[<65;3;3M\033[<35;4;3Mb", "BYE\r" };
+        static const char* const eM2[] = { "[ab]", "28,0,1,1,1" };
+        failed += !pty_case( "screen mode: mouse reports inside typed keys are taken out; release, motion and the wheel", sM2, 5U, eM2, 2U );
+        // the shape is the terminal's own pointer (OSC 22), MOUSE HIDE hides the drawn one
+        static const char* const sM3[] = { "10 MOUSE SHAPE CROSS:MOUSE POS 100,100:PRINT MOUSE(\"SHAPE\");MOUSE(\"VISIBLE\");MOUSE(\"X\");MOUSE(\"Y\")\r", "20 MOUSE HIDE:PRINT MOUSE(\"VISIBLE\")\r", "RUN\r", "BYE\r" };
+        static const char* const eM3[] = { "\033]22;crosshair\033\\", "6-1100100", "\r\n0\r\n" };
+        failed += !pty_case( "screen mode: MOUSE SHAPE sets the terminal's pointer shape (OSC 22), POS and HIDE", sM3, 4U, eM3, 3U );
+        // no mouse reporting when it is switched off: the statements are an error
+        setenv( "E1999_MOUSE", "0", 1 );
+        static const char* const sM4[] = { "10 MOUSE SHOW\r", "RUN\r", "BYE\r" };
+        static const char* const eM4[] = { "? Not available in the console host in line 10" };
+        failed += !pty_case( "screen mode: E1999_MOUSE=0 switches the mouse off (an error, no reporting)", sM4, 3U, eM4, 1U );
+        unsetenv( "E1999_MOUSE" );
         // run mode: an error waits for a key (the hint is an overlay, not in the dump); a normal end leaves at once
         put( "prog.bas", "10 PRINT \"before\"\n20 PRINT 1/0\n" );
         pty_args[0] = "prog.bas";
