@@ -1,242 +1,256 @@
-# A C-64 style screen editor for text screen 0 — understanding and evaluation
+# A C-64 style screen editor for text screen 0 — requirements, design and open points
 
-*Written 2026-11-01 for the owner's review. **Nothing in this document is implemented.** It restates the request, says what I learned from
-`../gforthstuff/forthbasic`, evaluates the idea against the code as it is today, proposes a design, and lists the decisions that are yours.*
+*First written 2026-11-01 for the owner's review; **revised the same day with the owner's decisions** (they are marked **decided**).
+**Nothing in this document is implemented.** The branch for the subproject is `feature/c64-like-screen-editor`.*
 
-## 1. Verdict in short
+## 1. Status: what is decided
 
-**Yes, the idea is reasonable and fits the engine well** — in the window version it is a moderate amount of work, and it gives the
-BASIC prompt its classic feel (LIST, cursor up, edit the line number, RETURN; "history" for free, and a natural way to edit a program without
-`EDIT`). I recommend three changes to the details you proposed, none of which changes the user-visible behavior you described:
+| Topic | Decision (owner, 2026-11-01) |
+|---|---|
+| Empty-cell marker | **Cell flags** in the unused top byte of the text cell (not the NUL character, no font change) |
+| Row links | A **WRAP flag** on the last cell of a row that continues in the next row |
+| Typing mode | The screen editor (and only it) starts in **overwrite (OVR)**; **F12** toggles INS/OVR (shown in the status line; **Shift+INSERT** works too); INSERT, DELETE, BACKSPACE as in §5.3 |
+| Cursor movement | **Free**, like the C-64: over empty cells and across rows, scrolling at the screen edges |
+| Backspace at a line start | Never deletes beyond the logical line: the cursor just moves left and **abandons** the line |
+| Cursor left at the top left | The screen scrolls **down**, the cursor goes to the end of the first screen row |
+| Scroll-back | **None**: what leaves the screen is lost |
+| Status line | The bottom row of the screen becomes a **status line, white on red** (not the default text colors), showing the mode with the key to switch it (`OVR  F12=INS`), and **row, column and BASIC line number (if known)** — **only while no program runs and the system waits for a program line** (the screen editor's state; **not** during a program, **not** in `AUTO` / `EDIT n` / `INPUT`). The editor works in the rows above it; the row under the status line is **cleared** when the state is entered. Programs always have the full screen (25 rows in the window) |
+| Highlight | The **screen lines (rows) in which the logical line sits** are shown with a **brighter background** (whole rows, not just the line's cells; 30 % toward white to start with, adjustable later); screen editor only, never in `EDIT n` / `AUTO` / `INPUT` |
+| Where it is active | **Only when no program runs and the system waits for a program line.** `EDIT n`, `AUTO` and `INPUT` are promptless line inputs (as on the C-64), with the line editor that exists today |
+| Console host | The BASIC session runs on the terminal's **alternate screen** (text screen 0) whenever both ends are terminals — interactive mode, run mode, `BUILD` console executables; switches `--screen` / `--line`, `E1999_SCREEN`, `--engine1999-screen|line`; **exit dump on by default**; **an error waits for a key** (§5.9) |
 
-1. **Do not use the NUL byte (and its glyph) as the "empty cell" marker; use a flag bit in the cell instead.** A cell is 32 bits wide and the top
-   8 bits are unused. A flag "never written / cleared" keeps `CHR$(0)` printable and visible (the binary-strings feature and its control glyph
-   stay as they are), needs **no font change at all**, and makes the "line ends at an empty cell" rule exact. (§5.1)
-2. **Mark row wrapping with a second flag bit instead of inferring it from the last column** (what your Forth version does). Inference merges two
-   different lines whenever one fills a row exactly. (§5.2)
-3. **Say clearly what happens in the console host**, which has no text screen 0 to look at: the editor can only exist there if the console
-   BASIC session runs on the alternate screen (like `EDIT` and `MONITOR` do today). I propose window first, console as a later opt-in mode. (§5.7)
+Nothing is open any more (§7 lists what to look at while implementing).
 
-Everything else you described — a line is the run of non-empty cells around the cursor, RETURN enters it into the REPL, cursor up/down navigate and
-scroll, only while the system waits for a program line — I understood and would implement as described.
+## 2. The idea, as I understand it
 
-## 2. My understanding of the request
-
-- A **screen editor** like the Commodore 64's: the text on the screen *is* the buffer. The user moves the cursor anywhere, edits what is there,
-  and presses RETURN on a line to hand that line to the REPL, wherever the line was typed or printed (a `LIST` line, an old command).
-- It exists **only on text screen 0** (the BASIC screen) and **only while the system waits for a program line**: the prompt, and `AUTO`.
-  `INPUT`, `LINE INPUT`, the monitor and `EDIT` keep the line editor they have now.
-- It is **a special case of the general line editor** (`scr_lineedit()` / the key handling of `scredit.c`): the same keys and the same behavior,
-  but the text lives in the screen cells instead of a private buffer.
-- **Line extent:** an *empty* cell is the default content of text screen 0 (`CLS` fills with it). A line begins at a non-empty cell and ends at an
-  empty cell (not included), found by scanning left and right from the cursor (across screen rows, so a long line wraps).
-- **Navigation:** cursor up/down move between rows and **scroll the screen** when they reach the top or bottom.
-- **RETURN** takes the whole line under the cursor (not only the part left of the cursor) and enters it like a typed line.
-- You suggested making the **NUL glyph blank** so that NUL cells look empty, and leaving the glyph untouched until the code is tested.
+A **screen editor** like the Commodore 64's: the text on the screen *is* the buffer. The user moves the cursor anywhere, edits what is there,
+and presses RETURN on a line to hand that line to the REPL — wherever the line was typed or printed (a `LIST` line, an old command).
+It exists on **text screen 0** only, and only while the system **waits for a program line** (the prompt). It is a special case of the general line
+editor (`scr_lineedit()` / `scredit.c`): the same keys and behavior, with the text in the cells instead of a private buffer. A **logical line** is
+the run of non-empty cells around the cursor; empty cells are the default content of the screen (`CLS` fills with them).
 
 ## 3. What the Forth version does (`../gforthstuff/forthbasic`)
 
-Read: `screenupd.fs`, `keyboard.fs`, `execution.fs` (the rest is attributes, escape sequence output and window size handling).
+Read: `screenupd.fs`, `keyboard.fs`, `execution.fs`.
 
 | Mechanism | How it works there |
 |---|---|
-| Screen buffer | `b-window-buffer`: one cell per screen position (character in the low byte, attribute above). Cell value 0 = empty. It is a *shadow* of the terminal that is kept in step by hand (`b-refresh-lines` rewrites rows with ANSI sequences). |
-| Logical line | Rows are linked **by the last column**: a row continues into the next if its rightmost cell is non-zero (`b-down-extent`, `b-up-extent`). The end of the line is the last non-zero cell of the final row (`b-y-line-width` counts back from the right edge). The beginning is always column 0 of the first row. |
-| Grabbing | `b-grab-line` finds the extent and turns the **zero cells inside it into spaces** (`b-line-init-addr`), so a line whose interior was never written becomes ordinary text. |
-| RETURN | `b-execute-line` copies the cells of the whole line (low bytes) into a buffer and tokenizes it; then the cursor goes down one row (`b-output-return`). |
-| Cursor up/down | `b-anticipate-cursor-up/down`: move one row; at the edge **scroll the buffer** (`b-scroll-buffer-down/up`: copy rows, zero-fill the revealed row). Scrolling down *drops the bottom row*: there is no scroll-back. |
-| Typing | Overwrites the cell under the cursor (`b-emit`), no insert mode yet; BACKSPACE moves left and writes a space; Delete, Insert, Home, End, Page keys are stubs. |
-| Marking | The current line is highlighted by changing the attribute of its cells (`b-mark-line` / `b-unmark-line`) and repainting; this is how the user sees the extent of the line that RETURN would take. |
+| Screen buffer | One cell per position (character low byte, attribute above); value 0 = empty. A shadow of the terminal kept in step by hand. |
+| Logical line | Rows are linked **by the last column** (non-zero last cell = the row continues); the end is the last non-zero cell of the final row; the beginning is column 0 of the first row. |
+| Grabbing | `b-grab-line` finds the extent and turns the zero cells inside it into spaces. |
+| RETURN | Copies the cells of the whole line into a buffer and tokenizes it; the cursor goes down one row. |
+| Cursor up/down | One row; at the edge the buffer scrolls (scrolling down drops the bottom row). |
+| Typing | Overwrite only; BACKSPACE moves left and writes a space; Delete, Insert, Home, End, Page keys are stubs. |
+| Marking | The current line is highlighted by changing the cell attributes and repainting. |
 
-So the model you describe for the engine is the model of the Forth version, with "non-NUL begins, NUL ends" stated as a scan instead of a column
-rule. Two things in the Forth version are *not* needed here: the shadow-buffer bookkeeping (the engine's text screen already is the buffer, and
-the screen thread draws it) and the terminal escape sequence handling.
+Not taken over: the shadow-buffer bookkeeping and the escape sequence layer (the engine's text screen, painter and key driver do that), the F2–F4
+attribute keys, ESC = `bye`, the attribute-changing highlight (see §5.6 for how the highlight is done here).
 
 ## 4. How it fits the engine as it is today
 
-Facts I checked in the code:
+- **Cells.** `textcell_t` (`textscreen.h`) is 32 bits: character in bits 0–7, pen 8–15, paper 16–23, **bits 24–31 unused**. The `TXTSCR_CELL_*` macros mask only
+  their own bytes; the host's `TXTCHAR()`/`TXTFGAT()`/`TXTBGAT()` mask too.
+- **Blank cells.** Today the blank is a *space* in the blank colors (`txtscr_blankcell()` in `textscreen.c`, used by `txtscr_clear()`,
+  `txtscr_scrollup()`, `txtscr_scrolldown()`, `txtscr_resize()` and the initial fill) — all in one file.
+- **Wrapping.** Text that runs over the right edge continues in the next row (`txtscr_print_n()`, `if ( cx >= cur->vw ) { cx = 0; ++cy; … }`): the single
+  place where a "this row continues" fact is created.
+- **PRINT** pads comma zones with real spaces (`vm.c`); `LOCATE` + `PRINT`, `TXT` statements and `CLS` can leave empty cells.
+- **Viewports.** A text screen has a viewport (`txtscr_setviewport()`); coordinates, the cursor, scrolling, `CLS` and the `TXT` statements work *inside* it. The editors
+  and the monitor already use viewports for their bars; the screen editor uses one (rows − 1) while it waits for a line, so the cursor and scrolling stay above the status line. Note that setting a
+  viewport moves the cursor to its corner: the editor must put it back.
+- **Line input today.** The prompt calls `sdlscr_lineinput()` → `scr_lineedit()`: the line lives in a private buffer, RETURN returns the buffer. The editor never reads the screen.
+- **Console host.** Text screens exist there for `EDIT`/`MONITOR` (alternate screen, `conscr.c`); the BASIC session itself uses the terminal's scrolling output.
 
-- **Cells.** `textcell_t` (`textscreen.h`) is 32 bits: character in bits 0–7, pen 8–15, paper 16–23, **bits 24–31 unused**. `TXTSCR_CELL_*`
-  macros mask only their own bytes, so extra bits do not disturb existing readers (`TXTCHAR()` etc. in the host mask with `0xFF`, `>> 8`, `>> 16`).
-- **Blank cells.** Today the blank is a *space* in the screen's blank colors (`txtscr_blankcell()`, used by `txtscr_clear()`, `txtscr_scrollup()`,
-  `txtscr_scrolldown()`, `txtscr_resize()`, the initial fill). All of these are in one file, `textscreen.c`.
-- **Wrapping.** Text that runs over the right edge continues in the next row (`txtscr_print_n()`: `if ( cx >= cur->vw ) { cx = 0; ++cy; ... }`),
-  scrolling at the bottom. That is the single place where a "this row continues" fact is created.
-- **PRINT** pads comma zones with real spaces (`vm.c`, `VM_PRINT_SEP_COMMA`), so `PRINT` output does not leave gaps of empty cells inside a line.
-  `LOCATE` + `PRINT`, `TXT` statements and `CLS` can of course leave empty cells.
-- **Screens.** Text screen 0 is BASIC's; screens 1 and 2 belong to `EDIT` and `MONITOR` (they already run on the driver of `scrdrv.h`).
-- **Line input today.** The prompt calls `sdlscr_lineinput()` → `scr_lineedit()`: the line lives in a private buffer, is drawn at the cursor, and
-  RETURN returns the buffer. The editor never *reads* the screen.
-- **Console host.** Output goes to the normal, scrolling terminal; there is **no text screen 0 in the console host** (it only has the text screens
-  for `EDIT`/`MONITOR`, on the alternate screen).
-- **Tests that touch this:** `txttest1` (the text screen), `gfxtest1`, `scrtest1` (editors on a fake driver), the pty cases of `contest1`.
+## 5. Design
 
-## 5. Evaluation
+### 5.1 Cell flags (decided: option B)
 
-### 5.1 NUL as "empty": the problem with using the byte value
+Two flags in the top byte of the cell (`textscreen.h`):
 
-Using code 0 as the empty marker (as in the Forth version) works, but in *this* engine it costs more than it appears:
+- `TXTSCR_EMPTY` (bit 24): the cell was never written since the screen was cleared / the row was scrolled in. An empty cell still looks like a space (character 32 in the blank colors),
+  so nothing changes visually and `TXTCHAR()` still answers 32.
+- `TXTSCR_WRAP` (bit 25): on the **last cell of a row**: the text continues in the first cell of the next row.
 
-- **`CHR$(0)` is a real character here** (binary-safe strings, 2026-10-31). A program that prints a NUL would create a hole that the editor reads
-  as the end of a line; and if the NUL glyph were blanked, the NUL would also be *invisible* on every screen, which undoes the "binary data on
-  the screen is visible" feature for code 0 (the other 31 control codes keep their glyphs).
-- **`txttest1` checks that no glyph is blank except space and NBSP** — that check would have to be loosened.
-- **The cell would change meaning** for the `TXT` functions (`TXTCHAR()` of an empty cell would return 0 instead of 32) and for `TXT SAVE`/`RESTORE`.
+Rules (all in `textscreen.c`): `txtscr_blankcell()` returns `(32, blank colors) | EMPTY` (clear, scroll, resize, initial fill); `txtscr_write()` (and so print, `TXT`
+statements, typing) clears both flags of the cells it writes; `txtscr_print_n()` sets WRAP on the last cell of a row it leaves by wrapping; `txtscr_getcell()` and the painters
+mask the flags; `txtscr_save()`/`restore()` carry them in the unused 4th byte. `txtscr_isempty( cell )` / `txtscr_iswrapped( cell )` are what the editor uses, so the marker could
+still be changed later without touching the editor. `CHR$(0)` stays a normal, visible cell (the control glyph is untouched).
 
-**Alternatives**
+### 5.2 The logical line
 
-| Option | Empty cell is… | Font | `CHR$(0)` | Cost |
-|---|---|---|---|---|
-| A (yours) | character 0 | glyph 0 blank | invisible, ends a line | font change, test change, behavior change |
-| A′ | character 0, blank **only when drawn on screen 0** (renderer rule) | untouched | invisible on screen 0, glyph on 1 and 2 | small renderer rule; still splits lines at a printed NUL |
-| **B (recommended)** | any character with a **flag bit 24 = EMPTY** | **untouched** | unchanged: a printed NUL is a normal cell with the glyph | `textscreen.c` (clear/scroll/fill/init) sets the flag; `txtscr_write`/`print` clear it |
+**Extent.** Cells are numbered row by row. A **row link** exists between the last cell of a row and the first cell of the next row only if the last cell has WRAP. The line
+containing a cursor position is:
 
-With B the empty cell can still *look* like a space (character 32, flag set) — nothing changes visually — and `TXTCHAR()` keeps answering 32 for it.
-`txtscr_save()`/`restore()` store 4 bytes per cell and the 4th is unused today, so they can carry the flags unchanged. If you prefer A, it is a
-one-day change in the font and tests; B is the cleaner design, and B can be switched to "also character 0" later without touching the editor,
-because the editor would only ever ask `txtscr_isempty( cell )`.
+1. its **anchor cell**: the cursor cell if it is non-empty, else the cell directly left of it if that is non-empty (the cursor stands *behind* the text), else none (no line);
+2. the maximal run of **non-empty** cells around the anchor, where the run crosses a row boundary only over a row link; an empty cell ends a run (never part of a line).
 
-### 5.2 Where a logical line ends: rows need an explicit link
+RETURN takes the **whole** run (cells left and right of the cursor), trailing spaces included (the tokenizer ignores them); the cursor then goes to the start of the row below the
+line's last row (the screen scrolls at the bottom) and the line's last cell **loses its WRAP flag** (so the next line typed there is not linked to it).
 
-"Scan left and right across rows until an empty cell" has a hole at the row boundary: if one line fills a row exactly (80 characters), the last cell
-of the row and the first cell of the next row are both non-empty, so the scan **merges two unrelated lines** (a long `LIST` line followed by the next
-line, for example). The Forth version has the same property (it tests the last column). The C-64 solves it with a per-row link table.
+**Gaps — and the owner's idea of marking lines (pondered).** The idea: mark every cell of a program line (output by `LIST`, `EDIT`, or typed) with a LINE bit, so no gaps
+are needed. What it would change:
 
-**Recommendation: flag bit 25 = WRAP** on the last cell of a row that was left by *wrapping* (set in `txtscr_print_n()`, which is the only place
-that wraps; cleared when the cell is overwritten by a non-wrapping write, cleared with the row by clear/scroll). The scan then crosses a row
-boundary only when the WRAP flag is set; otherwise the row boundary ends the line like an empty cell would. Cost: ~10 lines in `textscreen.c`.
+| | Gap rule (empty cell ends a line) | LINE-bit rule (a marked run is a line) |
+|---|---|---|
+| Which text can be entered | anything non-empty (as on the C-64) | only marked text: program lines and what was typed; `Ready.`, errors, `PRINT` output are not lines |
+| Needs host cooperation | no | yes: `LIST`/`EDIT` output must be written in "mark mode" (a `txtscr` flag set by the host around the listing callback) |
+| Does it remove the need for an "unwritten" notion? | — | **no**: the cursor moves freely over unwritten cells, so something must still say where a typed line ends; that is exactly what an unmarked/empty cell does |
+| Interior gaps (from `LOCATE` output) | split a row into several lines | the gap is simply unmarked: same result for output; a *typed* gap (cursor skipped some cells) splits as well, unless the editor marks the skipped cells, which would turn invisible empty cells into line content |
+| Safety | any old text can be executed by RETURN (C-64 behavior: a stale `Ready.` gives a syntax error) | stale output cannot be executed |
 
-### 5.3 The cursor cell and "empty" gaps
+My conclusion: **the gap rule stays**. Marking does not remove the gaps (the free cursor re-creates them every time the user moves over empty cells), it needs
+host cooperation for `LIST`/`EDIT`/`FILES`, and it gives up the C-64 trick of re-entering *any* text. The one real benefit — stale output cannot be executed — can be had later
+as an extra check in the host (ignore a line that is exactly `Ready.` or starts with `? `), without any cell bit. If you still want the LINE bit, it is a third flag (bit 26) and
+the extent rule of §5.2 would add "and marked" to step 2.
 
-Precise rule I would implement (it matters: after typing the cursor sits *on an empty cell behind the text*):
+### 5.3 Keys (the screen editor only)
 
-1. The line under the cursor is the maximal run of non-empty cells, linked across rows by WRAP, that contains the cursor cell **or the cell
-   directly left of it** (whichever is non-empty; the left one wins if both are, which cannot happen since they are in one run).
-2. If both are empty, the line is empty: RETURN just moves to the start of the next row.
-3. The run ends at the last non-empty cell before the first empty cell (empty cells are never part of a line). Interior gaps (from `LOCATE`
-   output) therefore **split** a printed row into several lines; typed and `PRINT`ed text has no gaps.
-4. RETURN enters the **whole** run (cells left *and* right of the cursor), trailing spaces included (the tokenizer ignores them).
-
-This differs from the Forth version in one detail: it turns interior empty cells into spaces ("grab") so a line with a gap is still one line;
-you described "ends at a NUL", so I keep gaps as line ends.
-
-### 5.4 Scrolling at the top and bottom
-
-At the bottom edge cursor-down scrolls the screen up (the existing `txtscr_scrollup()`; the top row is lost, as when output scrolls). At the **top**
-edge cursor-up would scroll *down*: a blank row appears at the top and the **bottom row is lost**, exactly as in the Forth version — only useful if
-there is something above to reveal, and there is not: the engine keeps no scroll-back. Options:
-
-- **Minimal:** cursor up at the top row does nothing (the C-64 behavior: it stops at the top). No data loss.
-- **Better, recommended as a second step:** a **scroll-back ring** per text screen (say the last 500–1000 rows, cells with flags). Rows scrolled off
-  the top go into it; cursor up at the top (and PgUp) brings them back, pushing the bottom row into a small forward ring. Then "scroll up and down if
-  needed" works in both directions without losing text, and the user can review earlier output. Memory: 1000 × 80 × 4 bytes = 320 KB. It touches
-  only `txtscr_scrollup()` / `txtscr_scrolldown()` and a new "scroll the view" call.
-
-### 5.5 Keys and modes
-
-Proposed behavior (the keys of the general editor, applied to cells). Open points are marked **?**.
+The mode is **OVR** at start and stays what the user chose until it is toggled (shown in the status line while that is visible). The **edit unit** of INSERT, DELETE and BACKSPACE is defined below the table.
 
 | Key | Behavior |
 |---|---|
-| printable character | writes the cell under the cursor and moves right (wrapping sets the WRAP flag; at the bottom right the screen scrolls up). **? Overwrite (C-64) or insert (the general editor's way)?** I would take *insert* as the default for consistency with the other editors, and INSERT toggles to overwrite. |
-| LEFT / RIGHT | one cell, across row boundaries (up to the line's first and last cell? **?** C-64 moves freely over empty cells and rows; I propose freely, so the user can step into empty areas to start new text) |
-| UP / DOWN | one row, same column; at the top/bottom scroll (§5.4) |
-| HOME / END | start / end of the **logical line** (as in the line editor). Ctrl+Home / Ctrl+End: top-left / bottom-left of the screen (as in the full-screen editor). |
-| BACKSPACE | deletes the cell left of the cursor and pulls the rest of the **line** one cell left (empty cell appended at its end); at a line start nothing |
-| DELETE | the same at the cursor |
-| INSERT | toggles insert/overwrite mode |
-| RETURN | enter the line (§5.6); the cursor goes to the start of the row below the line (scrolling at the bottom) |
-| ESC | nothing at the prompt (there is nothing to cancel; it still is the break key while a program runs) |
-| PgUp / PgDn | scroll-back (§5.4), ignored in the minimal version |
-| Ctrl+C, Ctrl-D (console), TAB, function keys | as in the general editor (ignored / break / EOF) |
+| printable character | **OVR:** writes the cell under the cursor (colors: the current pen/paper) and moves right. **INS:** inserts the character at the cursor, shifting the rest of the edit unit right (in a logical line a new row is added if it reaches the end of a row, and at the bottom of the screen the screen scrolls up; in a screen-row unit what is pushed past the last column is lost). Writing in the last column sets WRAP on that cell and the cursor continues in the next row (the bottom right scrolls the screen up). |
+| **INSERT** | inserts an empty character (a space) at the cursor and shifts the rest of the edit unit right; the cursor stays. Same in OVR and INS. |
+| **F12** (also **Shift+INSERT**) | toggles INS / OVR. F12 is the key named in the status line, so nobody has to look for it; Shift+INSERT stays as a second binding where the keyboard has it and the terminal passes it on. |
+| **DELETE** | deletes the character at the cursor and shifts the rest of the edit unit left; the cell freed at its end becomes empty (a last row that becomes empty drops the previous row's WRAP flag). The cursor stays. |
+| **BACKSPACE** | if the cell left of the cursor belongs to the edit unit: deletes it, moves the cursor there, shifts the rest of the unit left. **At the first cell of the unit it deletes nothing: the cursor just moves left, abandoning it** (from column 0 to the end of the row above). |
+| LEFT / RIGHT | **free** movement: one cell, wrapping from the first column to the end of the row above and from the last column to the start of the row below; at the top left the screen scrolls **down** and the cursor goes to the **end of the first row**; at the bottom right the screen scrolls **up** and the cursor goes to the start of the last row |
+| UP / DOWN | one row, same column; at the top / bottom row the screen scrolls down / up (the row that leaves is lost; no scroll-back) |
+| HOME / END | start / end of the logical line (no line: the start / end of the screen row). Ctrl+Home / Ctrl+End: top left / bottom left of the editor area, i.e. the rows above the status line (as in the full-screen editor). |
+| RETURN | enters the line (§5.2, §5.5); with no line it just moves to the start of the next row |
+| ESC | nothing at the prompt (it is the break key while a program runs) |
+| Ctrl+C, TAB, the other function keys, PgUp/PgDn | ignored (PgUp/PgDn have nothing to scroll back to) |
 
-Colors: new text is written in the current pen/paper (`COLOR`). I would **not** copy the Forth version's line highlight (`b-mark-line`): it repaints
-cell attributes on every key and would fight with colored `LIST` output; the blinking/solid cursor shows where RETURN acts, and C-64 users know
-the rule.
+**The edit unit of INSERT, DELETE and BACKSPACE.** (1) If the cursor is in or directly behind a **logical line** (§5.2), the unit is that line, across its wrapped rows. (2) Otherwise — the cursor is on an
+empty cell that is not behind text — but the **screen row** under the cursor is **not blank** (it has a non-empty cell anywhere), the unit is **the rest of that screen row**, from the cursor to the last column: the
+keys work on it exactly as on a line, cells that are pushed past the last column are lost, and DELETE/BACKSPACE pull the remainder left (empty cells at the end). This is what ASCII graphics need: art is built
+from runs separated by gaps, and INSERT/DELETE/BACKSPACE must work anywhere in such a row. (3) If the screen row is blank, nothing happens (BACKSPACE at column 0 only moves the cursor left).
+Shifting stays inside the unit: cells beyond the screen's last cell are lost. In case (1) a run that is shifted right grows into the empty cell after it (it may then touch the next run, as it would on the C-64).
 
-### 5.6 RETURN and the REPL
+### 5.4 Scrolling
 
-- The host reads the bytes of the cells of the line (Latin-9, matching the internal character set), builds a C string and passes it to
-  `repl_enter()` exactly as the line from `sdlscr_lineinput()` is passed today (`handle_input()`); nothing in the REPL changes.
-- **`AUTO`**: the host prints the number `110 ` and then waits; with the screen editor the *row* contains `110 …`, so RETURN delivers the number *and*
-  the text. `AUTO` already receives a number plus text from the user and ends on an empty text; I would strip a leading `n ` that equals the prompted
-  number (`110 ` alone = an empty line = AUTO ends).
-- **Stale lines** (`Ready.`, an old error message) can be entered like any other line; that is the C-64 behavior and gives a syntax error.
-- **Where it does not apply:** `INPUT`, `LINE INPUT`, `EDIT n`, the monitor prompt, the pager's "Press ENTER" question. They keep `scr_lineedit()`.
-  `INPUT` on the C-64 also reads the screen; I do not propose that (a program's prompt text would have to be removed from the answer).
-- The `Ready.`/prompt printing after a line stays as it is.
+At the bottom edge the existing `txtscr_scrollup()` is used (the top row is lost, as when output scrolls). At the **top** edge `txtscr_scrolldown()` brings an empty row in and **the
+bottom row of the editor area is lost**. **There is no scroll-back** (decided): information that goes off the screen is gone. (While the screen editor waits for a line the scrolling happens in the **editor area**: the rows above the status line; the status line is not part of it.)
 
-### 5.7 The console host
+### 5.5 RETURN, the REPL, and the prompt-less inputs
 
-The console host has no text screen 0: its output is the terminal's own scrolling output, and a program cannot read what a terminal shows. So the
-screen editor **cannot be added to the existing console mode**. Options, in the order I would consider them:
+- **Active only when** no program runs and the system waits for a program line (the main loop's prompt). The host reads the bytes of the line's cells (Latin-9) into a string and
+  passes it to `repl_enter()` exactly as the string from `sdlscr_lineinput()` is passed today (`handle_input()`); the REPL does not change. `Ready.` and the other messages are
+  printed as before.
+- **`INPUT`, `LINE INPUT`, `AUTO`, `EDIT n`** (while a program asks, or when the host asks for a line to edit) are **promptless line inputs, as on the C-64**: the line editor that exists
+  today (`scr_lineedit()`), which cannot leave its line, with **no** highlight and no screen reading.
+  - `AUTO`: the host prints the suggested line number as the prompt, the user types the text, and the host **adds the suggested number to the text** before passing it to the REPL
+    (what the main loop does today); an empty text ends `AUTO`.
+  - `EDIT n`: the editor starts with the line's text (with its number) and **the text the user entered is passed to the REPL** (as today).
+  - Break keys, ESC (cancel), Ctrl-D (console EOF) behave as they do in these editors today.
+- The pager's "Press ENTER" question also keeps the line editor.
 
-1. **Window only for now**, console keeps today's line editor, and the roadmap says why (a documented difference, as your standing rule asks for).
-2. **Console full-screen mode** (later, opt-in, e.g. `engine1999c --screen`, default off): when both ends are terminals, the REPL session runs on the
-   alternate screen with **text screen 0 as the buffer**, painted by `conscr.c` exactly like the editors today; program output goes to the text screen
-   (the path `con_fullscreen` already has); keys come from `con_drv`. Then the *same screen editor code* runs in both hosts. Costs: the terminal's
-   own scroll-back and copy/paste of earlier output are lost while the session runs (the scroll-back ring of §5.4 compensates a little), and pipes /
-   scripts stay on today's path. It is the only way to satisfy "editing is consistent in both hosts" completely.
+### 5.6 The status line and the highlight
 
-My suggestion: implement the window version with the shared code written against the driver (`scrdrv.h`) so that option 2 is mostly wiring, and
-decide on 2 after you have used the window version.
+Both are **render-time overlays** of the text screen, shown **only while the screen editor waits for a program line** (no program running; not in `AUTO` / `EDIT n` / `INPUT`, which are
+promptless line inputs). They are not stored in the cells, so nothing has to be saved or restored when they appear or disappear, programs never see them, and `TXT` functions, `SAVE`/`RESTORE`
+and the exit dump are not affected.
 
-### 5.8 Sharing code with the general line editor
+**Status line.** An overlay on the **bottom row** of text screen 0: `txtscr_setstatus( text, paper, pen )` makes both renderers (`txtscr_render()` in the window, `conscr_paint()` on the terminal) draw
+that row from the overlay instead of from the cells. It is **white on red** — different from the default text colors; if the user's own colors are white on red, the fallback is yellow on dark red
+(a pair that differs from the current text colors is always chosen). Content (left to right, cut at the screen width, the position part kept when narrow):
 
-`scr_lineedit()` today owns a buffer (`char work[]`, `len`, `pos`) and *draws* it. The screen editor needs the same decisions (which key does
-what, limits, burst handling) with a different store. The clean way is a small **edit-target interface** (`get length`, `char at`, `insert`, `delete`, `move`)
-with two implementations: the private buffer (today) and a *cell run* (new). `scr_editkey()` then works on either. I would not rewrite the existing
-editor for this in the first step: write the cell-run editor beside it, reuse `scr_editkey()`'s key policy through the interface only where it
-fits (character, BACKSPACE, DELETE, LEFT, RIGHT, HOME, END), and unify later if it turns out to be natural.
+```
+OVR  F12=INS     Row 12  Col 7  Line 120
+```
 
-### 5.9 Other effects and risks
+- the **mode**, `INS` or `OVR`, and the **key that switches it** (`F12=INS` / `F12=OVR` naming the mode it would switch to), so the user does not have to look through the keys;
+- the cursor's **row** and **column** (1-based, in the editor area), and the **BASIC line number** if known: the digits at the start of the logical line under the cursor (`Line 120`); `Line -` when
+  the cursor is in no line or the line has no number (`PRINT 5`, `Ready.`).
+
+While it is shown, the editor sets a **viewport of rows − 1** (24 rows in the window) so the cursor and scrolling stay above it, and restores the full viewport (and the cursor) when it leaves the state.
+**Programs always have the whole screen** (25 rows in the window, the terminal's rows in the console's screen mode): the status line exists only while the user is expected to type a program line.
+
+**Entering the state** (after "Ready.", after a program ended, at start-up): (1) if the cursor is on the last row, the **whole screen scrolls up one row** so the cursor stands on the row above it; (2) the **bottom row is
+cleared** — its cells become empty, so text a program left there is discarded (decided: no stale text reappears when the state ends); (3) overlays on, viewport rows − 1, cursor restored.
+**Leaving it** (RETURN): overlays off, full viewport, the cursor at the start of the row below the line, the REPL runs the line (a command may print on the bottom row; a program owns the screen).
+
+**Highlight.** The **screen rows in which the logical line sits** — from the line's first row to its last row, whole rows from the first to the last column, not just the line's own cells — are drawn with a
+**brighter background**: the text screen keeps a *highlight row range* (first and last row; none = off) and the renderers draw every cell of those rows with the **brighter variant of its paper** (the palette entry nearest to the
+paper color blended 30 % toward white — a first try, to be adjusted — as a table computed once from `palette.c`, or from the layer's current palette in the window). When the cursor is in no logical line but its screen row is
+not blank (the edit unit of case 2 in §5.3), that **screen row** is highlighted, so the user sees what INSERT / DELETE / BACKSPACE act on; on a blank row nothing is highlighted. The range is updated after every key
+and cleared with the state (RETURN, a program starts, an `AUTO` / `EDIT n` / `INPUT` line editor takes over).
+
+### 5.7 Sharing code with the general line editor
+
+`scr_lineedit()` owns a buffer (`work`, `len`, `pos`) and draws it; the screen editor needs the same decisions (which key does what) with the cells as the store. I would write the screen
+editor beside it (`scr_screenedit()` in `scredit.c`, no SDL, same driver `scrdrv.h`, same resize handling) and share the key mapping through a small edit-target interface only where it fits (character,
+BACKSPACE, DELETE, LEFT, RIGHT, HOME, END); a later unification is possible but not needed. The logical line (§5.2) is pure functions over the selected screen
+(`scr_screenline_extent()`, `scr_screenline_text()`), easy to test on the fake driver of `scrtest1`.
+
+### 5.8 Key detail for terminals
+
+**F12** is `ESC [ 2 4 ~` in the canonical key sequences (`SDLK_F12` in the window), generated and parsed by the engine already, and terminals pass it on. A few drop-down terminals (Yakuake, Guake, Tilda) use F12 to
+show and hide themselves; there Shift+INSERT is the alternative — which many other terminals take for *paste* — so the status line names F12 and the manual names both.
+
+### 5.9 The console host: the BASIC screen on the alternate screen (decided)
+
+In interactive mode, in run mode (`engine1999c prog.bas`) and in console executables made with `BUILD`, the BASIC session runs on the terminal's **alternate screen with text screen 0 as the
+buffer**, painted by `conscr.c` as the editors are today — whenever standard input *and* output are terminals and `TERM` is not `dumb`. A program therefore behaves the same however it was
+started, the screen editor is one implementation for both hosts, and the user gets a fresh screen.
+
+**Why it is good beyond the editor.** `COLOR`, `LOCATE`, `CLS`, the `TXT` statements and the text screen functions can work for real in the console (today `COLOR` is ignored and `TXT` is "not available");
+colored `LIST`/`FILES` use the Engine's palette; the output path exists already (`con_fullscreen`, `conscr_write()`); resizing is handled (`txtscr_resize()`, SIGWINCH).
+
+**Costs and handling**
+
+| Consequence | Handling |
+|---|---|
+| No scroll-back, and the session text is gone when the alternate screen is left | the **exit dump** (below); the **classic line mode** stays as an option |
+| Copy and paste of earlier output | terminals still select text on the alternate screen |
+| Scripts, pipes, redirections | unchanged: screen mode only when both ends are terminals |
+| A crash or kill must not leave the terminal on the alternate screen, raw, cursor hidden | handlers (SIGTERM, SIGHUP, …) plus `atexit` restore the terminal |
+| Painting speed in a print loop | paint when the program waits for a key, after a newline at most every ~10 ms, and at the end of a statement; never per character |
+| Unsuitable terminals (`TERM=dumb`, no alternate screen) | classic line mode automatically |
+
+**Switches (agreed).**
+
+| Where | Force the screen mode | Force the classic line mode |
+|---|---|---|
+| `engine1999c` | `--screen` | `--line` |
+| every console program, `BUILD` executables included | environment `E1999_SCREEN=1` | environment `E1999_SCREEN=0` |
+| `BUILD` executables, command line | `--engine1999-screen` | `--engine1999-line` |
+
+A built executable hands every command-line word to the program (`ARG$(n)`) except `--engine1999-about`; the new switches are reserved in the same way, with the same prefix. `--no-dump` /
+`E1999_DUMP=0` (`--engine1999-no-dump` for built executables) switch the exit dump off.
+
+**Programs started as commands.** (1) **Exit dump (on by default):** when a screen mode session ends, the text screen is written to the normal terminal screen as plain lines (trailing empty
+cells cut, optionally with SGR colors), so the output stays in the shell's scroll-back; the overlays (status line, highlight) are not part of the cells and so are not dumped. (2) **An error waits for a key** before the screen is left, and the dump includes
+the message. (3) A normal end leaves at once, after queued sound has finished.
+
+**Effect on the console input code.** `con_getline()` (the line editor with the cursor-position model `conscr_line_*`) is then needed only for the classic line mode; in screen mode the prompt uses the screen
+editor and `INPUT` / `LINE INPUT` / `EDIT n` / `AUTO` use `scr_lineedit()` on the text screen itself (no `ESC [ 6 n` query). The console input code gets simpler.
+
+### 5.10 Other effects and risks
 
 | Item | Effect |
 |---|---|
-| `txtscr_getcell()`, `TXT` functions, `TXT SAVE/RESTORE` | flags must be masked (getters) / saved in the 4th byte (save/restore); trivial |
-| Console painter (`conscr.c`) | compares cells to find changes: mask the flags (an empty→space change is not a visual change) |
-| Performance | none: flag tests on keys only |
-| Resizing (console) | `txtscr_resize()` creates empty cells and keeps flags of the copied part; a row that was cut at the new width loses its WRAP flag (the line is split) |
-| `GFX RESET`, `CLS`, `TXT CLS`, `TXT FILL` | clear with EMPTY cells; `FILL` with a character writes non-empty cells |
-| `PRINT` of spaces | non-empty (a typed or printed space is text): `PRINT "A     B"` is one line |
-| `LOCATE`d output with gaps | gaps are empty cells: such a row is several lines for RETURN (§5.3) |
-| Existing behavior at the prompt | changes: a typed line now stays on the screen as text that can be edited (before, the editor's text also stayed, but could not be edited after RETURN); `Ctrl-C`/ESC at the prompt no longer "cancel a line" (nothing to cancel) |
-| `BUILD` executables | no prompt, no change |
-| Scripts/pipes | no change (no screen editor without a terminal) |
+| `txtscr_getcell()`, `TXT` functions, `TXT SAVE/RESTORE` | flags masked (getters) / saved in the 4th byte (save/restore) |
+| Console painter (`conscr.c`) | compare cells without the flags (empty → space is not a visual change); draw the highlight overlay |
+| Viewport of 24 rows | only the editor's own, only while it waits for a line: programs, `TXT` functions and `LOCATE` see the whole screen (25 rows in the window); `GFX`/`TILE`/`SPRITE` layers are not affected |
+| Resizing (console) | `txtscr_resize()` creates empty cells and keeps the flags of the copied part; a row cut at the new width loses its WRAP flag; the overlays are set again by the editor after the resize (new last row, new cell indices) |
+| `CLS`, `TXT CLS`, `TXT FILL`, `GFX RESET` | clear with empty cells; `FILL` with a character writes non-empty cells (the overlays are off while a program or command runs anyway) |
+| `PRINT` of spaces | non-empty (text): `PRINT "A     B"` is one line |
+| `LOCATE`d output with gaps | gaps are empty cells: such a row is several lines for RETURN |
+| Existing behavior at the prompt | a typed line stays on the screen as text that can be edited; ESC and Ctrl-C at the prompt have nothing to cancel |
+| Scripts / pipes / `--line` | no screen editor (no screen) |
 
-## 6. Proposed design (if you agree)
+## 6. Phases and tests
 
-**Cell flags (`textscreen.[ch]`).** `TXTSCR_EMPTY = 1<<24`, `TXTSCR_WRAP = 1<<25`; `txtscr_isempty()`, `txtscr_iswrapped()`;
-`txtscr_blankcell()` returns `(32, blank colors) | EMPTY`; `txtscr_write()` clears both flags of the cells it writes; `txtscr_print_n()` sets WRAP on the
-last cell of a row it leaves by wrapping; `txtscr_getcell()` masks the flags; a raw getter for the editor returns them. `txttest1` gets the new cases.
+1. **Cell flags** (`textscreen.[ch]`, §5.1) + `txttest1` cases; the **overlays** (status line, highlighted row range) in both renderers.
+2. **Logical line and the screen editor** (`scredit.c`: extent, text, the keys of §5.3, INS/OVR); window integration (main loop prompt; `AUTO`, `EDIT n`, `INPUT` stay on `scr_lineedit()`). `scrtest1` on the fake
+   driver: extent rules (gap, wrap, exactly-full row, cursor on an empty or the first/last cell), RETURN text and WRAP clearing, INS/OVR typing, INSERT/DELETE/BACKSPACE across rows and in a row with gaps (edit unit case 2), the status line text (row, column, line number), the highlighted rows, abandoning a line by BACKSPACE,
+   scrolling at all four corners, no scroll-back, entering/leaving the state (viewport, cursor, overlays), `AUTO` / `EDIT n` / `INPUT` without overlays; a window check under Xvfb.
+3. **Console screen mode** (§5.9): BASIC on the alternate screen, painting, the switches, the exit dump, error wait, terminal restore on signals; pty tests for both modes.
 
-**Logical line (`scredit.c`, no SDL).** `scr_screenline_extent( cursorx, cursory ) → (first, last)` over the selected screen with the rules of §5.3;
-`scr_screenline_text( first, last, char* out )`.
+Rough size: phase 1 ≈ 250 lines, phase 2 ≈ 500 lines + tests, phase 3 ≈ 350 lines (the pieces exist: `con_fullscreen`, `conscr.c`, `con_drv`; it also brings `COLOR`/`LOCATE`/`TXT` to the console).
 
-**The editor (`scredit.c`).** `scr_screenedit( drv, char* out, size_t cap, … )`: a loop like `scr_lineedit()` (same driver, same keys, same
-resize handling) that edits cells in place and returns the line text on RETURN, or a cancel/break/EOF result. Window: `sdlscr_lineinput()` for the
-prompt and `AUTO` chooses it when the selected text screen is 0 (a parameter, so `INPUT` etc. are unaffected).
+## 7. Open points
 
-**Tests.** `scrtest1` (fake driver, scripted keys): extent rules (gap, wrap, exactly-full row, cursor on an empty cell), RETURN text, insert/delete across
-rows, scrolling at the bottom, and later the scroll-back; `txttest1` for the flags; a window check under Xvfb; the console variant gets pty tests when
-option 2 is done.
-
-**Phases.** (0) flags in `textscreen.c` + tests; (1) logical line + editor core + window integration (prompt, `AUTO`), without scroll-back;
-(2) scroll-back ring and PgUp/PgDn; (3) console full-screen mode (opt-in). Rough size: phase 0 ≈ 150 lines, phase 1 ≈ 400 lines + tests, phase 2 ≈ 150,
-phase 3 ≈ 200 (the pieces exist).
-
-## 7. Decisions I need from you
-
-1. **Empty-cell marker:** B (flag bit, font untouched — recommended), A′ (character 0, blank on screen 0 only), or A (character 0, glyph blanked everywhere)?
-2. **Row links:** WRAP flag (recommended) or the Forth version's last-column rule?
-3. **Typing mode:** insert by default (INSERT toggles to overwrite) or overwrite by default (C-64)?
-4. **Interior gaps:** a gap of empty cells ends a line (as you described; recommended) or is turned into spaces when the line is grabbed (Forth version)?
-5. **Scrolling at the top:** do nothing / lossy scroll like the Forth version / scroll-back ring (recommended as phase 2)?
-6. **Console:** window only first (recommended), or plan the full-screen console mode right away?
-7. **LEFT/RIGHT** may walk over empty cells and rows freely (C-64; recommended) or stay inside the current line?
-8. **`INPUT`**: keep the plain line editor (recommended) — or read the screen like the C-64 does?
-
-## 8. What I did *not* take from the Forth version
-
-The line highlight (`b-mark-line`), the attribute keys F2–F4, ESC = `bye`, the shadow buffer and its refresh logic, and the terminal escape sequence
-layer: the engine's text screen, painter and key driver already do those jobs.
+**None.** To look at while implementing, because they are matters of taste or of the screen itself: the exact status line layout and colors (white on red is the start), the highlight brightness (30 % toward white), how INSERT/DELETE
+behave in a row with several runs (case 1 shifts a run into the gap after it), and whether F12 collides with the user's desktop.
