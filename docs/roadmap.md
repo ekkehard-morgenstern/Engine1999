@@ -14,7 +14,7 @@ the sections when items are done or added.
 
 | # | Item (section) | What it is | Priority | Notes |
 |---|---|---|---|---|
-| 1 | ~~Key state for games (2)~~ | **done 2026-11-01**: `KEY("name")` (window: SDL keyboard state; console: switched off, see the review row below); not done: key-up *events* (`ON KEY`), the demos `fruit`/`fruit2`/`climb` still use latched controls | ~~High~~ | the demos could be changed to use `KEY` (owner's call) |
+| 1 | ~~Key state for games (2)~~ | **done 2026-11-01**: `KEY("name")` (window: SDL keyboard state; console: switched off, see the review row below); not done: key-up *events* (`ON KEY`) | ~~High~~ | |
 | 2 | **Review: `KEY()` in the console host (11, 12)** | the held-key guess for terminals (140 ms after the last byte) flickered and is switched off (`-DCON_KEYSTATE` in `engine1999c.c`; `KEY` is a run-time error there); look at the code and decide: kitty keyboard protocol (reports releases; kitty, foot, WezTerm, recent Alacritty), another hold time, or window-only for good | Medium | the owner will review the implementation (2026-11-01) |
 | 3 | Sandboxing (8) | permissions for shell literals, `sh:`, files outside the program directory, the network | **High** | matters once programs or `BUILD` executables are passed around; policy is undecided (*decision*); hook is `iodev_allowed()` |
 | 4 | Joystick and mouse input (10) | `JOY`, `MOUSEX/Y/B`, `ON KEY` | **High** | the second half of game input, together with item 1 |
@@ -98,7 +98,7 @@ Open: directory handling for `LOAD`/`SAVE` beyond plain paths (there is no `CD`;
 - [ ] Sound output channels other than the BASIC channels (`PRINT #n`) are not involved; no `SOUND` queue inspection beyond `PLAYING()`
 
 - [x] **Numeric functions and operators** (done, 2026-10-31, found while writing `demos/fruit.bas`): `INT FIX ABS SGN SQR SIN COS TAN ATN EXP LOG RND PI`, `RANDOMIZE`, `MOD` and `\`. Not done: `ASN`/`ACS` (arc sine, cosine), hyperbolic functions, `LOG10`/`LOG2`, `CINT`/`CDBL`, `ROUND(x,n)`, `MIN`/`MAX`, `ATAN2(y,x)`, bit helpers; `DEF FN` can build most of them.
-- [x] Keyboard for games: **`KEY("name")` is done** (2026-11-01, `docs/basic-language.md` "KEY": the real key state in the window; in the console host it is a run-time error: the held-key guess flickered, the code is kept switched off, **marked for review**). `INKEY$` / `GET` get the cursor keys as escape sequences already. Not done: key-up *events* (`ON KEY`), joystick and mouse (section 10), changing `fruit`, `fruit2` and `climb` from latched controls to `KEY`.
+- [x] Keyboard for games: **`KEY("name")` is done** (2026-11-01, `docs/basic-language.md` "KEY": the real key state in the window; in the console host it is a run-time error: the held-key guess flickered, the code is kept switched off, **marked for review**). `INKEY$` / `GET` get the cursor keys as escape sequences already. The demos `fruit`, `fruit2` and `climb` use it (2026-11-01). Not done: key-up *events* (`ON KEY`), joystick and mouse (section 10).
 
 ## 3. Timers and `SYMBOL` *(planned by the project owner, all through host callbacks)*
 

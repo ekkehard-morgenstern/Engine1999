@@ -3,7 +3,7 @@
 3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
 4 ' in the executable (it shows with the command line option --engine1999-about).
 10 ' FRUIT INVADERS - a Space Invaders style game for Engine1999.
-20 ' Keys: A or Z = move left, D or X = move right (the cannon keeps moving), S = stop, SPACE = fire, P = pause, Q = quit.
+20 ' Keys: LEFT / RIGHT or A / D move the cannon (only while the key is held), SPACE or UP fires (hold it for rapid fire), P = pause, Q = quit.
 30 ' Shoot the invading fruit before it lands. Cherries are worth 30 points, apples 20, oranges 10, the pineapple 50 to 300.
 40 ' The pictures are DESIGN rows (see docs/graphics-subsystem.md); the sounds are SFX effects; the shields are drawn on the graphics layer
 50 ' and crumble where a bomb or a bullet hits them (POINT tells what is there).
@@ -245,6 +245,11 @@
 2410 RETURN
 2420 ' ---------------------------------------------------------------------------------------------- keys
 2430 LABEL KEYS
+2432 ' the cannon moves while LEFT / RIGHT (or A / D) is held; SPACE (or UP) fires
+2434 PD=0
+2436 IF KEY("LEFT") OR KEY("A") THEN PD=PD-1
+2438 IF KEY("RIGHT") OR KEY("D") THEN PD=PD+1
+2439 IF KEY("SPACE") OR KEY("UP") THEN FQ=1
 2440 N=0
 2450 REPEAT
 2460 K$=INKEY$
@@ -254,10 +259,6 @@
 2500 RETURN
 2510 LABEL KEYACT
 2520 K=ASC(K$):IF K>=97 AND K<=122 THEN K=K-32
-2530 IF K=65 OR K=90 THEN PD=-1
-2540 IF K=68 OR K=88 THEN PD=1
-2550 IF K=83 THEN PD=0
-2560 IF K=32 THEN FQ=1
 2570 IF K=81 THEN QT=1
 2580 IF K=80 THEN GOSUB PAUSE
 2590 RETURN
@@ -520,10 +521,9 @@
 5160 SPRITE 3,ON:SPRITE 3,464,172,9
 5170 COLOR 140
 5180 LOCATE 25,15:PRINT "=30         =20         =10         =50..300";
-5190 LOCATE 22,18:PRINT "A / D    move left / right (keeps going)";
-5200 LOCATE 22,19:PRINT "S        stop";
-5210 LOCATE 22,20:PRINT "SPACE    fire";
-5220 LOCATE 22,21:PRINT "P pause     Q quit";
+5190 LOCATE 22,18:PRINT "LEFT / RIGHT or A / D   move";
+5200 LOCATE 22,19:PRINT "SPACE or UP   fire (hold for rapid fire)";
+5210 LOCATE 22,20:PRINT "P pause     Q quit";
 5230 COLOR 137:LOCATE 26,23:PRINT "Press SPACE to start";
 5240 COLOR 140
 5250 PLAY "T160 W1 V0.3 O4 E8 G8 >C8 E4","T160 W2 V0.3 O3 C4 G4"

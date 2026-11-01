@@ -6,8 +6,8 @@
 20 ' You are a construction worker and the ice cream stand is on the roof of the unfinished steel tower, 960 pixels above the street. Climb the ladders,
 30 ' jump the gaps, hurdles, cars and birds, and use your drill to make holes in the girders: a rust ball or slime that walks into a hole is trapped,
 40 ' and when the hole closes again, it is gone for a while. You have no weapon of any kind.
-50 ' Keys: A / D walk left / right (you keep walking), W / S climb up / down a ladder (you keep climbing), X stop, SPACE jump,
-60 '       Z / C drill a hole in the girder to your left / right, P pause, M music on / off, Q quit.
+50 ' Keys: LEFT / RIGHT (or A / D) walk, UP / DOWN (or W / S) climb a ladder - you move only while the key is held -, SPACE jump,
+60 '       Z / X (or , / .) drill a hole in the girder to your left / right, P pause, M music on / off, Q quit.
 70 ' The world is 120 x 40 tiles (1920 x 960 pixels, three screens wide and three and a half high) and scrolls smoothly. It lives in the
 80 ' RAM of the machine (POKE and PEEK), one byte per tile; PEEK$ cuts a row of the visible part out of it, TILE FILL puts it on the screen.
 90 ' What this program shows of the language:
@@ -18,7 +18,7 @@
 140 ' (a FUNC has to be defined before the lines that call it, so the functions come first, then the main program, then the procedures)
 150 ' --- global variables ----------------------------------------------------------------------------------------------------------------
 160 ' PX,PY the player (top left, in world pixels), PYF its exact y, VY its speed down, PS its state: 0 walk / fall, 1 climb, 2 drill, 3 hurt
-170 ' DIRX walking direction, CLM climbing direction, FACE the way it looks, GRND stands on something, JREQ / DREQ jump / drill requested
+170 ' DIRX walking direction, CLM climbing direction, FACE the way it looks, GRND stands on something, JREQ / DREQ jump / drill requested (JBUF: a jump press stays valid for a few frames)
 180 ' CX,CY the camera (the world position of the top left corner of the screen), MX().. the monsters, HC().. the holes in the girders
 190 ' CAX().. the cars, BRX().. the birds, SC the score, HI the best height, LV lives, LEVL the number of the climb
 200 ' ----------------------------------------------------------------------------------------------------------------------------------------
@@ -1487,27 +1487,44 @@
 14830 END PROC
 14840 ' ====================================================================== keys
 14850 PROC KEYS
-14860 LOCAL K$,K,N
-14870 REPEAT
-14880 K$=INKEY$
-14890 IF K$<>"" THEN
-14900 K=ASC(K$)
-14910 IF K>=97 AND K<=122 THEN K=K-32
-14920 IF K=65 THEN DIRX=-1:FACE=-1
-14930 IF K=68 THEN DIRX=1:FACE=1
-14940 IF K=88 THEN DIRX=0:CLM=0
-14950 IF K=87 THEN CLM=-1:CLMT=24
-14960 IF K=83 THEN CLM=1:CLMT=24
-14970 IF K=32 THEN JREQ=1
-14980 IF K=90 THEN DREQ=-1
-14990 IF K=67 THEN DREQ=1
-15000 IF K=81 THEN QT=1
-15010 IF K=77 THEN CALL MUSICSWITCH
+14855 LOCAL K$,K,N,L,R,U,D,JD,ZD,XD
+14860 ' walking and climbing follow the keys, only while they are held: LEFT / RIGHT (A / D) walk, UP / DOWN (W / S) climb
+14865 L=KEY("LEFT") OR KEY("A")
+14870 R=KEY("RIGHT") OR KEY("D")
+14875 DIRX=0
+14880 IF L AND NOT R THEN DIRX=-1:FACE=-1
+14885 IF R AND NOT L THEN DIRX=1:FACE=1
+14890 U=KEY("UP") OR KEY("W")
+14895 D=KEY("DOWN") OR KEY("S")
+14900 CLM=0
+14905 IF U AND NOT D THEN CLM=-1:CLMT=24
+14910 IF D AND NOT U THEN CLM=1:CLMT=24
+14915 ' SPACE jumps: a new press stays valid for 6 frames, so it does not have to be exactly on time
+14920 JD=KEY("SPACE")
+14925 IF JD AND NOT JK THEN JBUF=6
+14930 JK=JD
+14935 JREQ=0
+14940 IF JBUF>0 THEN JREQ=1:JBUF=JBUF-1
+14945 ' Z / X (or , / .) drill a hole to the left / right: one hole for each press
+14950 ZD=KEY("Z") OR KEY(",")
+14955 XD=KEY("X") OR KEY(".")
+14960 IF ZD AND NOT ZK THEN DREQ=-1
+14965 IF XD AND NOT XK THEN DREQ=1
+14970 ZK=ZD:XK=XD
+14975 ' Q, M and P are single presses
+14980 N=0
+14985 REPEAT
+14990 K$=INKEY$
+14995 IF K$<>"" THEN
+15000 K=ASC(K$)
+15005 IF K>=97 AND K<=122 THEN K=K-32
+15010 IF K=81 THEN QT=1
+15015 IF K=77 THEN CALL MUSICSWITCH
 15020 IF K=80 THEN CALL PAUSE
-15030 END IF
-15040 N=N+1
-15050 UNTIL K$="" OR N>=6
-15060 END PROC
+15025 END IF
+15030 N=N+1
+15035 UNTIL K$="" OR N>=6
+15040 END PROC
 15070 PROC PAUSE
 15080 LOCAL K$
 15090 CALL TXTAT(33,10,"  PAUSED  ",201)
@@ -1539,7 +1556,7 @@
 15350 IF CLM>0 THEN PYF=PYF+2:PY=INT(PYF)
 15360 EXIT PROC
 15370 END IF
-15380 ' no ladder here: you keep walking and the ladder is taken if there is one within the next 24 frames
+15380 ' no ladder here: the key stays valid for 24 frames and the ladder is taken if there is one within that time (while you walk to it)
 15390 CLMT=CLMT-1
 15400 IF CLMT<=0 THEN CLM=0
 15410 END IF
@@ -1554,7 +1571,7 @@
 15500 GRND=FN BLOCKED(PX,PY+1)
 15510 IF GRND=1 AND DIRX<>0 AND PF MOD 14=0 THEN SFX 12
 15520 IF GRND=1 AND JREQ=1 THEN
-15530 VY=-5.3:GRND=0:SFX 1
+15530 VY=-5.3:GRND=0:SFX 1:JBUF=0
 15540 END IF
 15550 JREQ=0
 15560 IF GRND=0 OR VY<0 THEN
@@ -1880,7 +1897,7 @@
 18760 EXIT PROC
 18770 END IF
 18780 PX=CHKX:PY=CHKY:PYF=PY
-18790 PS=0:VY=0:GRND=0:JREQ=0:DREQ=0
+18790 PS=0:VY=0:GRND=0:JREQ=0:DREQ=0:JBUF=0
 18800 CALL CAMSNAP(PX-320,PY-170)
 18810 END PROC
 18820 ' ====================================================================== sparks
@@ -1973,8 +1990,8 @@
 19690 ' the summit as a backdrop: the stand, the clouds, the birds
 19700 CALL CAMSNAP(58*16+32-320,1)
 19710 CALL BIGTEXT(4,"THE LONG CLIMB",3,4)
-19720 CALL TXTAT(11,15,"  A / D walk   W / S climb   SPACE jump   Z / C drill a hole  ",200)
-19730 CALL TXTAT(11,16,"  X stop   P pause   M music on / off   Q quit              ",200)
+19720 CALL TXTAT(11,15,"  LEFT / RIGHT or A / D walk   UP / DOWN or W / S climb       ",200)
+19730 CALL TXTAT(11,16,"  SPACE jump   Z / X drill a hole   P pause   M music   Q quit",200)
 19740 CALL TXTAT(11,18,"  Reach the ice cream stand on top of the tower!             ",202)
 19750 CALL TXTAT(11,20,"  BEST HEIGHT "+FN PAD$(HI,3)+" meters      Press SPACE to start  ",203)
 19760 FOR I=24 TO 29
@@ -2047,7 +2064,7 @@
 20430 FOR I=0 TO 3
 20440 CAV(I)=CAV(I)*(1+LEVL*0.1)
 20450 NEXT I
-20460 PX=3*16:PY=36*24-24:PYF=PY:VY=0:PS=0:DIRX=0:CLM=0:FACE=1:GRND=1:JREQ=0:DREQ=0
+20460 PX=3*16:PY=36*24-24:PYF=PY:VY=0:PS=0:DIRX=0:CLM=0:FACE=1:GRND=1:JREQ=0:DREQ=0:JBUF=0
 20470 CHKX=PX:CHKY=PY
 20480 FRM=0:PF=0:HONK=1
 20490 CALL CAMSNAP(PX-320,PY-170)

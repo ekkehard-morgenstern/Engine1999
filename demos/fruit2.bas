@@ -3,7 +3,7 @@
 3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
 4 ' in the executable (it shows with the command line option --engine1999-about).
 10 ' FRUIT INVADERS II - a Space Invaders style game for Engine1999, written with procedures.
-20 ' Keys: A or Z = move left, D or X = move right (the cannon keeps moving), S = stop, SPACE = fire, P = pause, Q = quit.
+20 ' Keys: LEFT / RIGHT or A / D move the cannon (only while the key is held), SPACE or UP fires, P = pause, Q = quit.
 30 ' Shoot the invading fruit before it lands. Cherries are worth 50 points, strawberries 40, apples 30, oranges 20, lemons 10, the flying
 40 ' pineapple 50 to 300. Now and then a banana falls out of a fruit: catch it with the cannon for rapid fire (two bullets at a time).
 50 ' What is new compared to Fruit Invaders (fruit.bas):
@@ -860,15 +860,15 @@
 8560 ' ====================================================================== keys
 8570 PROC KEYS
 8580 LOCAL K$,K,N
+8582 PD=0
+8584 IF KEY("LEFT") OR KEY("A") THEN PD=PD-1
+8586 IF KEY("RIGHT") OR KEY("D") THEN PD=PD+1
+8588 IF KEY("SPACE") OR KEY("UP") THEN FQ=1
 8590 REPEAT
 8600 K$=INKEY$
 8610 IF K$<>"" THEN
 8620 K=ASC(K$)
 8630 IF K>=97 AND K<=122 THEN K=K-32
-8640 IF K=65 OR K=90 THEN PD=-1
-8650 IF K=68 OR K=88 THEN PD=1
-8660 IF K=83 THEN PD=0
-8670 IF K=32 THEN FQ=1
 8680 IF K=81 THEN QT=1
 8690 IF K=80 THEN CALL PAUSE
 8700 END IF
@@ -1354,7 +1354,7 @@
 13500 CALL TXTAT(12+I*11,17,MID$("50  40  30  20  10  50+",I*4+1,4),205)
 13510 NEXT I
 13520 CALL TXTAT(18,19,"HIGH SCORE "+FN PAD$(HI,6),201)
-13530 CALL TXTAT(10,21,"A / D move   S stop   SPACE fire   P pause   Q quit",200)
+13530 CALL TXTAT(10,21,"LEFT / RIGHT or A / D move   SPACE fire   P pause   Q quit",200)
 13540 CALL TXTAT(10,22,"Catch the banana for rapid fire!",202)
 13550 CALL TXTAT(19,24,"Press SPACE to start",203)
 13560 PLAY "T150 W1 V0.3 O4 E8 G8 >C8 E4 D8 C8 <B8 >C4","T150 W2 V0.25 O3 C4 G4 C4 G4","T150 W1 V0.12 O5 C16 E16 G16 >C16 C16 E16 G16 >C16"
