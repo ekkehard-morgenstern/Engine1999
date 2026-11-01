@@ -13,6 +13,9 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+### 2026-11-01 — roadmap: a terminal emulator screen and a Claude screen
+- The owner's idea went into `docs/roadmap.md` as items 45 and 46 and the new section 14, with my opinion: a `vt.[ch]` model (VT100 / xterm subset, no SDL, testable) plus a pty front end and a `pty:` driver; the Claude screen first as `claude` running in the emulator, a native chat screen only later; decisions to take first (character set and box drawing, window size, security / `iodev_allowed()`, dependencies, the API key and what is sent where). No code.
+
 ## Log
 
 ### 7a6cb67 — 2026-10-17 13:32:27 +0200 — "Introduced Claude to the project"
