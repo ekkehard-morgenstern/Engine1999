@@ -151,7 +151,8 @@ static const struct {
     { "--debug-parse",      BASDBG_PARSE,       "print every token as the compiler fetches it" },
     { "--debug-tree",       BASDBG_TREE,        "print the syntax tree after parsing" },
     { "--debug-code",       BASDBG_CODE,        "print every instruction the code generator emits" },
-    { "--debug-all",        BASDBG_ALL,         "all of the above (not --debug-keys)" },
+    { "--debug-all",        BASDBG_ALL,         "all of the above (not --debug-keys, --debug-frames)" },
+    { "--debug-frames",     BASDBG_FRAMES,      "window: print the timing (microseconds) of every frame in which the mouse did something: poll, pointer move, redraw, present, sleep, event to screen" },
     { "--debug-keys",       BASDBG_KEYS,        "show what the keyboard delivers: window = SDL key events, console host = the terminal's bytes (ends with Ctrl-D)" },
 };
 

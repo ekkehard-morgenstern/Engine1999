@@ -91,9 +91,17 @@ trace output on **stdout** (one line per item, prefixed with the stage):
 | `--debug-tree` | `BASDBG_TREE` | `[tree]` the syntax tree after parsing (node names, data bytes as hex) |
 | `--debug-code` | `BASDBG_CODE` | `[code]` every instruction as the code generator emits it |
 | `--debug-all` | `BASDBG_ALL` | all of the above |
+| `--debug-frames` | `BASDBG_FRAMES` | `[frames]` window only: the timing of the frames in which the mouse did something (not part of `--debug-all`): see below |
 | `--debug-keys` | `BASDBG_KEYS` | `[keys]` what the keyboard delivers (not part of `--debug-all`): see below |
 
 **`--debug-keys`** (the keyboard): `engine1999` prints one line per SDL event to stdout, e.g. `[keys]     3216 ms  SDL key down sym=0x40000052 "Up" scancode=82 mods=0x0001(LShift)  ->  1b 5b 31 3b 32 41  "\e[1;2A"  = Shift+Up` (the sequence is the one `sdlkeys_sequence()` makes, so it shows what a program will receive; modifier keys alone have none), key releases, and the text the keyboard layout makes (`SDL text input  c3 a4  "\xc3\xa4"` for `ä`). `engine1999c --debug-keys` runs no BASIC but dumps the bytes of the terminal: after each key press `N bytes, T ms after the previous key press` and one line per item (hex, C string, what it is, e.g. `Shift+Up (canonical)` or `unknown escape sequence`); Ctrl-D or the end of the input stops it; a pipe works, too (`printf '\033[1;2A' | engine1999c --debug-keys`). It is for finding out what a terminal sends before the console host's key input is written (roadmap section 4).
+
+**`--debug-frames`** (the window's frame timing, 2026-11-01): for every frame in which the mouse did something (moved, a button, the wheel) `engine1999` prints one line to stdout with all times in **microseconds**:
+`[frames] #n mouse events k | period | poll at +t | pointer moved | redraw | present | sleep | oldest event ... (SDL ms) -> on screen after about ...`. *period* is the time since the start of the previous frame (16667 at 60 Hz);
+*poll at* is when the events were polled after the frame started; *pointer moved* is the time of `mouse_tick()` (apply the position, show / hide, warp); *redraw* is the time of re-rendering the changed layers and
+drawing them (`(none)` if nothing changed); *present* is `SDL_RenderPresent`, which waits for the vertical blank (so a value near the period is normal); *sleep* is the frame pacing; the last two numbers are the age of the oldest event of the frame
+(from SDL's time stamp, which has a resolution of 1 ms: a multiple of 1000) and that age plus the time from the poll to the end of the present: **about how long the mouse took to show on the screen** (the compositor and the monitor
+add more). A long *redraw* or a *period* above 16667 shows that the frame did not keep up while the mouse moved.
 
 `engine1999 --help` lists them. The tokenize/detokenize/tree dumps are produced by hooks in `repl_enter()` / `repl_execute()`;
 the parse and code output comes from the compiler and the code generator themselves, so any host gets it by setting the flags.

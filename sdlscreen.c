@@ -182,6 +182,14 @@ void sdlscr_setkeydebug( bool on ) {
     sdlscr_keydebug = on;
 }
 
+// -- frame timing (--debug-frames) -----------------------------------------------------------------
+
+static volatile bool sdlscr_framedebug = false;
+
+void sdlscr_setframedebug( bool on ) {
+    sdlscr_framedebug = on;
+}
+
 static void sdlscr_modnames( Uint16 mods, char* out, size_t cap ) {
     static const struct { Uint16 bit; const char* name; } names[] = {
         { KMOD_LSHIFT, "LShift" }, { KMOD_RSHIFT, "RShift" }, { KMOD_LCTRL, "LCtrl" }, { KMOD_RCTRL, "RCtrl" }, { KMOD_LALT, "LAlt" }, { KMOD_RALT, "RAlt" },
@@ -360,6 +368,7 @@ static int sdlscr_worker( void* arg ) {
     uint64_t lastTick = sdlutil_getnsec( &lts );
 
     bool oldwantinput = false;
+    uint64_t prevf0 = 0;                // --debug-frames: the start of the previous frame
 
     // main loop
     for (;;) {
@@ -368,6 +377,12 @@ static int sdlscr_worker( void* arg ) {
         }
 
         ++sdlscr_framecnt;
+
+        // --debug-frames: the times of this frame (nanoseconds from the monotonic clock; printed as microseconds)
+        struct timespec fts;
+        uint64_t tf0 = sdlscr_framedebug ? sdlutil_getnsec( &fts ) : 0;
+        int fmouse = 0;                 // mouse events polled in this frame
+        Uint32 foldest = 0;             // the SDL timestamp (ms) of the oldest of them
 
         bool wantinput = sdlscr_awaitinput || sdlscr_pollinput;
         if ( wantinput != oldwantinput ) {
@@ -383,19 +398,6 @@ static int sdlscr_worker( void* arg ) {
             sdllay_set_modified( &layers[LAY_TXT] );
         } else if ( !sdlscr_awaitinput && txtscr_enablecursor( false ) ) {
             sdllay_set_modified( &layers[LAY_TXT] );
-        }
-
-        {
-            // the mouse pointer: events and requests are taken, the pointer is shown or hidden (the only place that changes it)
-            struct timespec mts;
-            uint64_t mnow = sdlutil_getnsec( &mts ) / UINT64_C(1000000);
-            mouse_tick( mnow );
-            int wx = 0, wy = 0;
-            if ( mouse_warp_wanted( &wx, &wy ) ) {
-                int px = 0, py = 0;
-                SDL_RenderLogicalToWindow( renderer, (float) wx, (float) wy, &px, &py );
-                SDL_WarpMouseInWindow( window, px, py );
-            }
         }
 
         if ( sdllay_enabled( &layers[LAY_SPR] ) ) {
@@ -425,11 +427,13 @@ static int sdlscr_worker( void* arg ) {
                     }
                     break;
                 case SDL_MOUSEMOTION:
+                    if ( fmouse++ == 0 ) foldest = ev.motion.timestamp;
                     mouse_event_motion( ev.motion.x, ev.motion.y );
                     break;
                 case SDL_MOUSEBUTTONDOWN:
                 case SDL_MOUSEBUTTONUP: {
                     // (the position is that of the renderer's logical size, the sprite layer's: 640 x 300)
+                    if ( fmouse++ == 0 ) foldest = ev.button.timestamp;
                     mouse_event_motion( ev.button.x, ev.button.y );
                     int b = ev.button.button == SDL_BUTTON_LEFT ? MOUSE_LEFT : ev.button.button == SDL_BUTTON_RIGHT ? MOUSE_RIGHT :
                         ev.button.button == SDL_BUTTON_MIDDLE ? MOUSE_MIDDLE : 0;
@@ -437,6 +441,7 @@ static int sdlscr_worker( void* arg ) {
                     break;
                 }
                 case SDL_MOUSEWHEEL:
+                    if ( fmouse++ == 0 ) foldest = ev.wheel.timestamp;
                     mouse_event_wheel( ev.wheel.direction == SDL_MOUSEWHEEL_FLIPPED ? -ev.wheel.y : ev.wheel.y );
                     break;
                 case SDL_TEXTINPUT:
@@ -447,6 +452,27 @@ static int sdlscr_worker( void* arg ) {
                     break;
             }
         }
+
+        // the mouse pointer: the events of this frame are applied now, so that the pointer is drawn where the mouse is as of this frame's poll
+        // (the events and requests are taken, the pointer is shown or hidden: the only place that changes it)
+        struct timespec tfs;
+        uint64_t tf1 = sdlscr_framedebug ? sdlutil_getnsec( &tfs ) : 0;     // after the events were polled
+        {
+            struct timespec mts;
+            uint64_t mnow = sdlutil_getnsec( &mts ) / UINT64_C(1000000);
+            mouse_tick( mnow );
+            int wx = 0, wy = 0;
+            if ( mouse_warp_wanted( &wx, &wy ) ) {
+                int px = 0, py = 0;
+                SDL_RenderLogicalToWindow( renderer, (float) wx, (float) wy, &px, &py );
+                SDL_WarpMouseInWindow( window, px, py );
+            }
+            if ( sdllay_enabled( &layers[LAY_SPR] ) && sprscr_changed() ) {
+                sdllay_set_modified( &layers[LAY_SPR] );
+            }
+        }
+        uint64_t tf2 = sdlscr_framedebug ? sdlutil_getnsec( &tfs ) : 0;     // after the pointer was moved
+        bool fredraw = false;
 
         if ( sdllay_needsredraw( &layers[0], NLAYERS ) ) {
             // needs redraw
@@ -461,10 +487,13 @@ static int sdlscr_worker( void* arg ) {
             SDL_SetRenderDrawColor( renderer, r, g, b, a );
             SDL_RenderClear( renderer );
             draw_layers( renderer );
+            fredraw = true;
         }
+        uint64_t tf3 = sdlscr_framedebug ? sdlutil_getnsec( &tfs ) : 0;     // after the layers were drawn (the GPU may still be working)
 
         sdlev_raise( SDLEV_VBLANK );
         SDL_RenderPresent( renderer );
+        uint64_t tf4 = sdlscr_framedebug ? sdlutil_getnsec( &tfs ) : 0;     // after the present (it waits for the vertical blank)
 
         // pace the frames: each one is due exactly one period after the previous one's due time
         // (not after the time it was actually finished, so jitter and the work done in a frame don't
@@ -478,6 +507,21 @@ static int sdlscr_worker( void* arg ) {
         } else if ( now - lastTick > FRAME_NSEC ) {
             // more than a frame late (slow machine, suspended, clock set): don't try to catch up
             lastTick = now; lts = ts;
+        }
+        if ( sdlscr_framedebug && fmouse > 0 ) {
+            // one line for every frame in which the mouse did something; all times in microseconds
+            uint64_t tf5 = sdlutil_getnsec( &tfs );
+            unsigned age = (unsigned)( SDL_GetTicks() - foldest );      // (SDL's time stamps have a resolution of 1 ms: this one is a multiple of 1000 us)
+            printf( "[frames] #%-6u mouse events %3d | period %6llu | poll at +%5llu | pointer moved %4llu | redraw %5llu%s | present %6llu | sleep %6llu | oldest event %5u (SDL ms) -> on screen after about %llu\n",
+                (unsigned) sdlscr_framecnt, fmouse,
+                (unsigned long long)( prevf0 ? ( tf0 - prevf0 ) / 1000U : 0U ), (unsigned long long)( ( tf1 - tf0 ) / 1000U ),
+                (unsigned long long)( ( tf2 - tf1 ) / 1000U ), (unsigned long long)( ( tf3 - tf2 ) / 1000U ), fredraw ? "" : " (none)",
+                (unsigned long long)( ( tf4 - tf3 ) / 1000U ), (unsigned long long)( ( tf5 - tf4 ) / 1000U ),
+                age * 1000U, (unsigned long long)( age * 1000U + ( tf4 - tf1 ) / 1000U ) );
+            fflush( stdout );
+        }
+        if ( sdlscr_framedebug ) {
+            prevf0 = tf0;
         }
     }
 

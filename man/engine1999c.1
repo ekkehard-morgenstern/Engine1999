@@ -121,7 +121,12 @@ Print every instruction the code generator emits.
 .TP
 .B \-\-debug\-all
 All of the debug outputs (not
-.BR \-\-debug\-keys ).
+.BR \-\-debug\-keys ", " \-\-debug\-frames ).
+.TP
+.B \-\-debug\-frames
+Accepted for compatibility with
+.BR engine1999 ,
+where it prints the timing of the window's frames; the console host has no frames and ignores it.
 .TP
 .B \-\-debug\-keys
 Show what the terminal sends for each key instead of running BASIC: the bytes of every key press (those arriving within 30 ms belong together) as hex and as a C string, with what they are (a cursor or function key with its modifiers, a control code, a UTF-8 character, an unknown escape sequence).

@@ -64,7 +64,10 @@ Print every instruction the code generator emits.
 .TP
 .B \-\-debug\-all
 All of the debug outputs (not
-.BR \-\-debug\-keys ).
+.BR \-\-debug\-keys ", " \-\-debug\-frames ).
+.TP
+.B \-\-debug\-frames
+Print, for every frame in which the mouse did something (it moved, a button, the wheel), the times of the frame in microseconds: the period since the previous frame, when the events were polled, how long moving the pointer took, the redraw, the present (which waits for the vertical blank), the sleep, and the age of the oldest event until the frame is on the screen. For finding out why the pointer feels slow. Run it from a terminal or redirect the output to a file.
 .TP
 .B \-\-debug\-keys
 Show what the keyboard delivers: every SDL key event (key code, name, scan code, modifiers) and every text input is printed to standard output, with the escape sequence the program would receive for the key (\fBESC [ 1 ; 2 A\fR for Shift+Up, see

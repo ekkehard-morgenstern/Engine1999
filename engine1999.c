@@ -1378,6 +1378,7 @@ int main( int argc, char** argv ) {
     }
 
     sdlscr_setkeydebug( basdbg_on( BASDBG_KEYS ) );
+    sdlscr_setframedebug( basdbg_on( BASDBG_FRAMES ) );
     sdl_init();
 
     srand( time(0) );
