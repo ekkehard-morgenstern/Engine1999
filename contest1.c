@@ -116,6 +116,8 @@ static const testcase_t cases[] = {
     { "sound statements are silent", 0, "", "PLAY \"CDE\"\nSOUND 1,440,1\nPRINT PLAYING(1)\n", "0\n", "", 0, false },
     { "sound arguments are still checked", 0, "", "SOUND 9,440,1\n",                    "", "? Illegal argument\n", 0, false },
     { "a graphics statement fails", 0, "", "GFX LAYER 1,ON\nPRINT 2\n",                 "2\n", "? Not available in the console host\n", 0, false },
+    { "KEY() is not available (a terminal can't tell when a key is let go)", 0, "", "PRINT KEY(\"A\")\nPRINT 2\n", "2\n", "? KEY is not available in this host\n", 0, false },
+    { "KEY(): a wrong name is checked first", 0, "", "PRINT KEY(\"BANANA\")\n", "", "? Illegal argument\n", 0, false },
     { "a graphics statement in a program", 0, "", "10 PRINT 1\n20 SPRITE 1,ON\nRUN\n", "1\n", "? Not available in the console host in line 20\n", 0, true },
     { "LIST is plain in a pipe",    0, "", "10 PRINT 1\nLIST\n",                         "10 PRINT 1\n", "", 0, false },
     { "--color=auto is plain in a pipe", 0, "--color=auto", "10 PRINT 1\nLIST\n",       "10 PRINT 1\n", "", 0, false },
@@ -525,16 +527,10 @@ int main( void ) {
         static const char* const sH[] = { "10 CLS:LOCATE 5,2:COLOR 140,2:PRINT \"hi\":PRINT TXT(\"WIDTH\")\r", "RUN\r", "BYE\r" };
         static const char* const eH[] = { "\r\n\r\n     hi\r\n80\r\nReady.\r\nBYE\r\n" };
         failed += !pty_case( "screen mode: CLS, LOCATE, COLOR and TXT work on the text screen", sH, 3U, eH, 1U );
-        // KEY("name") on a terminal: the key counts as held for a moment after the terminal sent it
-        static const char* const sK1[] = { "10 IF KEY(\"A\") THEN PRINT \"A IS DOWN\":BYE 5\r", "20 GOTO 10\r", "RUN\r", "a" };
-        static const char* const eK1[] = { "A IS DOWN" };
-        failed += !pty_case_st( "screen mode: KEY(\"A\") sees the key a typed while the program runs", sK1, 4U, eK1, 1U, 5 );
-        static const char* const sK2[] = { "10 IF KEY(\"LEFT\") AND KEY(\"SHIFT\") = 0 THEN PRINT \"LEFT\":BYE 6\r", "20 GOTO 10\r", "RUN\r", "\033[D" };
-        static const char* const eK2[] = { "LEFT" };
-        failed += !pty_case_st( "screen mode: KEY(\"LEFT\") sees a cursor key sequence", sK2, 4U, eK2, 1U, 6 );
-        static const char* const sK3[] = { "10 IF KEY(\"SHIFT\") AND KEY(\"X\") THEN PRINT \"SHIFT-X\":BYE 7\r", "20 GOTO 10\r", "RUN\r", "X" };
-        static const char* const eK3[] = { "SHIFT-X" };
-        failed += !pty_case_st( "screen mode: a capital letter is the key with SHIFT", sK3, 4U, eK3, 1U, 7 );
+        // KEY("name") is an error on a terminal, too (the held-key approximation is disabled, see engine1999c.c: -DCON_KEYSTATE)
+        static const char* const sK1[] = { "10 PRINT KEY(\"A\")\r", "RUN\r", "BYE\r" };
+        static const char* const eK1[] = { "? KEY is not available in this host in line 10" };
+        failed += !pty_case( "screen mode: KEY() is a run-time error in the console host", sK1, 3U, eK1, 1U );
         // run mode: an error waits for a key (the hint is an overlay, not in the dump); a normal end leaves at once
         put( "prog.bas", "10 PRINT \"before\"\n20 PRINT 1/0\n" );
         pty_args[0] = "prog.bas";

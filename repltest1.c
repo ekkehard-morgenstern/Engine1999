@@ -61,6 +61,8 @@ typedef struct _testcase_t {
 static const testcase_t cases[] = {
     { "RENUM adjusts a jump with colon statements", "10 A=0\n20 IF A THEN GOSUB 100:PRINT \"x\"\n100 PRINT \"s\":RETURN\nRENUM\nLIST", "10 A=0\n20 IF A THEN GOSUB 30:PRINT \"x\"\n30 PRINT \"s\":RETURN\n" },
     { "direct mode",            "PRINT 1+2",                                      "3\n" },
+    { "KEY is an error in a host that can't tell",  "PRINT KEY(\"A\")",               "? KEY is not available in this host\n" },
+    { "KEY: the name is checked first",             "PRINT KEY(\"BANANA\")",          "? Illegal argument\n" },
     { "SOUND without a sound output does nothing", "SOUND 1,440,1\nPRINT 1",     "1\n" },
     { "SFX persists between direct mode lines", "SFX 1,\"C\"\nSFX 1,1\nSFX 2,1",   "? Undefined effect\n" },
     { "SFX is checked when defined, without a sound output", "SFX 1,\"Z\"",         "? Unknown music command 'Z'\n" },

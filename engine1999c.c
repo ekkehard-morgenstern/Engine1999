@@ -278,10 +278,13 @@ static void con_sigwinch( int sig ) {
     con_winch = 1;
 }
 
-// KEY("name") on a terminal: a terminal tells when a key is pressed, never when it is released, so a key counts as held for a short time after the
+// KEY("name") on a terminal: DISABLED (2026-11-01, the owner's decision after trying it: the state flickers, which is not acceptable). KEY() is an error in
+// this host ("KEY is not available in this host"); the code below is kept for the owner's review, it is compiled only with -DCON_KEYSTATE (and then
+// repl->keydown must be set again in con_init()). The idea: a terminal tells when a key is pressed, never when it is released, so a key counts as held for a short time after the
 // last byte it sent (the keyboard's auto repeat keeps it going; its first repeat comes after the repeat delay, usually 250 to 500 ms, so a key that is held
 // flickers once at the start: the window version has the real state). Letters typed with Shift are noted with SHIFT, Ctrl+letter with CTRL. Only
 // bytes seen by con_pump() are noted (while a program runs on a terminal).
+#ifdef CON_KEYSTATE
 #define CON_KEYHOLD     140         // ms
 
 static uint64_t con_keyseen[KEYID_MAX];
@@ -334,6 +337,8 @@ static void con_note_bytes( const unsigned char* b, ssize_t n ) {
     }
 }
 
+#endif      // CON_KEYSTATE
+
 static void con_pump( void ) {
     if ( !con_pumping ) {
         return;
@@ -345,7 +350,9 @@ static void con_pump( void ) {
         if ( n <= 0 ) {
             break;
         }
+#ifdef CON_KEYSTATE
         con_note_bytes( chunk, n );
+#endif
         if ( n == 1 && chunk[0] == 033 && con_escbreak ) {
             con_break = 1;                      // a lone ESC
             continue;
@@ -538,6 +545,7 @@ static int con_inkey( struct _vm_t* vm, void* usrdata ) {
     return key > 0 ? key : 0;
 }
 
+#ifdef CON_KEYSTATE
 // KEY("name"): held down if the terminal sent it a moment ago (see con_note_bytes()); without a terminal no key is ever down
 static bool con_keydown( struct _vm_t* vm, void* usrdata, int keyid ) {
     (void) vm; (void) usrdata;
@@ -548,6 +556,7 @@ static bool con_keydown( struct _vm_t* vm, void* usrdata, int keyid ) {
     uint64_t seen = con_keyseen[keyid];
     return seen != 0 && con_now_ms() - seen <= CON_KEYHOLD;
 }
+#endif      // CON_KEYSTATE
 
 static bool con_interrupt( struct _vm_t* vm, void* usrdata ) {
     (void) vm; (void) usrdata;
@@ -678,7 +687,9 @@ static bool con_init( repl_t* repl ) {
     repl->getkey    = con_getkey;
     repl->interrupt = con_interrupt;
     repl->breakesc  = con_breakesc;
+#ifdef CON_KEYSTATE
     repl->keydown   = con_keydown;
+#endif                                      // (without a keydown callback KEY() is a run-time error: "KEY is not available in this host")
     repl->save      = con_save;
     repl->edit      = con_edit;
     repl->gfx       = &con_gfx;

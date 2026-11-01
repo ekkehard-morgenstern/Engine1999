@@ -24,7 +24,7 @@ The file is a `.bas` listing or a binary `.e99` file, found the way `LOAD` finds
 - **The exit dump:** when the session ends the screen (text screen 0) is written to the normal terminal screen as plain lines (trailing blanks and empty rows cut, no colors), so that what happened stays in the shell's scroll-back. `--no-dump` or `E1999_DUMP=0` switches it off.
 - **A program that ends with an error waits for a key** before the screen is left (a hint "Press a key to leave" in the bottom row, which is an overlay and not part of the dump); a normal end leaves at once. The exit status is as in the line mode (1 after an error).
 - **The terminal is left in order:** the alternate screen, the cursor, the autowrap and the raw mode are restored at the end, after `exit()` and when the process is killed by `SIGTERM`, `SIGHUP` or `SIGQUIT`. (A `SIGKILL` can't be caught.)
-- **`KEY("name")`** works from the terminal's key bytes: a key counts as held for 140 ms after the last byte, so a held key flickers once at the start (the terminal's repeat delay) and `SHIFT` / `CTRL` are only seen with a letter (see `docs/basic-language.md`, "KEY").
+- **`KEY("name")` is not available** in the console host (the run-time error "KEY is not available in this host"): a terminal never reports that a key is let go. A guess based on the time since the last byte flickered and is switched off (`CON_KEYSTATE` in `engine1999c.c`); marked for review in the roadmap.
 - **Not done:** `AUTO` (in both modes), what Ctrl-D at the prompt should do (a future issue, see `docs/screen-editor-proposal.md` §7), colors in the exit dump.
 
 ## Arguments, environment, standard channels

@@ -2,7 +2,7 @@
 2 ' An executable made with BUILD contains the Engine1999 runtime: the Engine1999 Runtime Exception
 3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
 4 ' in the executable (it shows with the command line option --engine1999-about).
-10 ' KEY(name$): is a key held down right now? A small keyboard that lights up the keys you hold.
+10 ' KEY(name$): is a key held down right now? A small keyboard that lights up the keys you hold. (Window version only.)
 20 DIM R$(3)
 30 R$(0)="QWERTYUIOP":R$(1)="ASDFGHJKL":R$(2)="ZXCVBNM"
 40 CLS

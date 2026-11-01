@@ -540,7 +540,7 @@ The 4096 extended instructions are as follows:
                             Tells the VM and the host (vm_t.breakesc) whether ESC is the break key (1) or an ordinary key (0).
     0001 01111101       KEYD - is a key held down? ( name -- n ) C=0 P=0
                             KEY(name$): -1 if the key of that name (keystate.h: "A", "SPACE", "LEFT", "F1", "SHIFT", "ANY" ...) is down now, else 0; a name that
-                            is no key is "Illegal argument". The host answers (vm_t.keydown); without one the answer is 0.
+                            is no key is "Illegal argument". The host answers (vm_t.keydown); without one it is the error "KEY is not available in this host" (the console host).
     MATH kinds 14..16: CEIL, LOG2, LOG10 (kind 1, INT, is FLOOR as well).
 
 */

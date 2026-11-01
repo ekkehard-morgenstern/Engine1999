@@ -14,46 +14,47 @@ the sections when items are done or added.
 
 | # | Item (section) | What it is | Priority | Notes |
 |---|---|---|---|---|
-| 1 | ~~Key state for games (2)~~ | **done 2026-11-01**: `KEY("name")` (window: SDL keyboard state; console: held for 140 ms after the last byte); not done: key-up *events* (`ON KEY`), the demos `fruit`/`fruit2`/`climb` still use latched controls | ~~High~~ | the demos could be changed to use `KEY` (owner's call) |
-| 2 | Sandboxing (8) | permissions for shell literals, `sh:`, files outside the program directory, the network | **High** | matters once programs or `BUILD` executables are passed around; policy is undecided (*decision*); hook is `iodev_allowed()` |
-| 3 | Joystick and mouse input (10) | `JOY`, `MOUSEX/Y/B`, `ON KEY` | **High** | the second half of game input, together with item 1 |
-| 4 | Screen editor: highlight after `GFX BACKDROP` / `GFX PALETTE` (11) | test that the editor's highlight follows palette and backdrop changes in the window | Medium | a quick manual check, may find a bug |
-| 5 | Screen mode: plain 256-color vs truecolor terminals (11, 12) | check the SlateGray paper, highlight and status line on a terminal without `COLORTERM=truecolor` | Medium | a quick manual check |
-| 6 | Sprite and tile editors (10) | built-in editors based on `SPRITE GET` / `TILE GET`, `DESIGN` rows | Medium | the owner's plan; large; game development tool |
-| 7 | `PRINT USING`, `AT`, `HTAB`, `VTAB` (11) | formatted output | Medium | common in BASIC; `LOCATE` covers placement |
-| 8 | `STRING$`, `SPACE$` and binary helpers (9) | the usual string builders, `HEX` to bytes, unsigned `CVI`/`CVL`, byte-wise `ANDS`/`ORS` | Medium | small, widely expected; the first two are trivial |
-| 9 | `ERR` as a number, `ON ERROR GOTO 0`, `ERROR n` (9) | the rest of the error handling | Medium | small; fits the existing trap |
-| 10 | Comments are converted to upper case (2) | `' Ode to Joy` lists as `' ODE TO JOY` | Medium | annoying in listings; a small tokenizer change (*decision*) |
-| 11 | `FRAME`, handlers during `INPUT`/`GET` (2) | wait for the next refresh; timer handlers do not run while waiting for input | Medium | `FRAME` is useful for games; `VSYNC` partly covers it |
-| 12 | `SWITCH` / `CASE` (13) | multi-way branch | Medium | design questions: fall-through, strings, `AGAIN` / `EXIT` levels (*decision*) |
-| 13 | Full-screen editor (`EDIT`) limits (1) | no mouse, search/replace, block or clipboard operations; long lines read-only | Medium | the screen editor covers much of this need |
-| 14 | Encoding of `.bas` listings (4) | a UTF-8 file with `ä` in a string shows two Latin-9 glyphs: convert on `LOAD`? | Medium | will bite users who edit listings in other editors (*decision*) |
-| 15 | Numeric extras (2) | `ASN`/`ACS`, hyperbolic functions, `ATAN2`, `MIN`/`MAX`, `ROUND(x,n)`, `CINT`/`CDBL` | Medium-Low | `DEF FN` can build most of them |
-| 16 | `PLAY` extras (2b) | chords inside a string, `N` (note number), `X` (run a string), repeat | Medium-Low | one string per voice works today |
-| 17 | Audio without a window (12) | open the audio device alone for scripts that `PLAY` | Medium-Low | optional |
-| 18 | Drivers written in BASIC (8) | `DRIVER "name","PREFIX"` with labelled handlers | Low | postponed by the owner; proposal exists (*decision*) |
-| 19 | Conversion tools and an own image format (10) | images to `DESIGN` rows / image strings / palettes, a `.spr` file | Low | later |
-| 20 | Ctrl-D at the prompt in screen mode (11) | what it should do; today ignored (end with `BYE`) | Low | owner's future issue; ties to the end of input |
-| 21 | `AUTO` in the console host (12) | works in the window only | Low | |
-| 22 | `OPTION BASE`, `DEF type range` (`INT`/`STR`/`FLT` tokens), `TAB`/`TABMODE`, `DISPLAY(x)`, `BREAKPOINT` (2, 13) | assorted language ideas | Low | each needs a short design decision (*decision*) |
-| 23 | `DO … LOOP`, `FOR EVER` (11) | test-at-the-end loop | Low | `REPEAT`/`WHILE`/`UNTIL` cover it |
-| 24 | Small aliases (11) | `OLD`, `CATALOG`, `RENUMBER`, `FUNCTION`/`PROCEDURE`, `YIELD`, `SAFETY ON/OFF` | Low | |
-| 25 | `DYNAMIC`/`ASSOC` arrays, `RECORD`/`TYPE` (11) | structured data | Low | long-term (*decision*) |
-| 26 | Sound extras (2b) | pitch envelope, pulse width, noise filter, `SFX` parameters, FM instruments, band-limited waves, stereo, voice allocator, sample-accurate times | Low | long-term |
-| 27 | `tcp:` server side, `SEEK` as a function, byte-array records (8) | more I/O | Low | |
-| 28 | `LIST #n`, `PRINT` comma zones on files, files kept open across `CHAIN` (1, 4, 8) | I/O corners | Low | |
-| 29 | `LOAD`/`SAVE` directory handling (1) | no `CD`; plain paths only (a shell literal does it) | Low | |
-| 30 | `RENUM` / `DELETE` / `CLEAR` corners (1) | range of another `RENUM` statement is not adjusted; both end a running program; `CLEAR` can't un-dimension | Low | |
-| 31 | Machine monitor limits (5) | no step-over, conditional breakpoints, watches; no variable inspection | Low | |
-| 32 | VM leftovers (5) | `WRLV`, inline assembler `[ … ]` / `{ … }`, `DEF FN` can't call itself | Low | |
-| 33 | Remaining fixed limits (6) | 16-bit variable numbers, 6 array dimensions, strings ≤ 65535 | Low | far from being reached |
-| 34 | Direct mode and `PRINT` corners (4) | redefined functions leave dead code; comma zones ignore the screen wrap at column 80 | Low | |
-| 35 | Test cleanup (4, 12) | `vmtest1` has its own compile-and-run copy; a pty test for the raw keys of `GET`/`INKEY$` | Low | |
-| 36 | Design decisions to revisit (7) | `UNTIL` inside `REPEAT`, `INPUT` prompt literal, `GET` waits, `RUN` clears variables | Low | only if the owner wants them changed (*decision*) |
-| 37 | Font review (later) | punctuation glyphs `% & @ $ ~ # *`, maybe `N` | Low | |
-| 38 | Unused tokens `PUT`, `OFF` (2) | tokens exist without a use | Low | cleanup |
-| 39 | `BUILD` extras (1) | compile check, static SDL2, other systems, icon, bundled `res/` | Low | |
-| 40 | Remaining limits of the console host (12) | graphics layers (`GFX`, `SPRITE`, `TILE`) on a terminal, colors in the exit dump, `ENV` as a statement | Low | no graphics layer on a terminal |
+| 1 | ~~Key state for games (2)~~ | **done 2026-11-01**: `KEY("name")` (window: SDL keyboard state; console: switched off, see the review row below); not done: key-up *events* (`ON KEY`), the demos `fruit`/`fruit2`/`climb` still use latched controls | ~~High~~ | the demos could be changed to use `KEY` (owner's call) |
+| 2 | **Review: `KEY()` in the console host (11, 12)** | the held-key guess for terminals (140 ms after the last byte) flickered and is switched off (`-DCON_KEYSTATE` in `engine1999c.c`; `KEY` is a run-time error there); look at the code and decide: kitty keyboard protocol (reports releases; kitty, foot, WezTerm, recent Alacritty), another hold time, or window-only for good | Medium | the owner will review the implementation (2026-11-01) |
+| 3 | Sandboxing (8) | permissions for shell literals, `sh:`, files outside the program directory, the network | **High** | matters once programs or `BUILD` executables are passed around; policy is undecided (*decision*); hook is `iodev_allowed()` |
+| 4 | Joystick and mouse input (10) | `JOY`, `MOUSEX/Y/B`, `ON KEY` | **High** | the second half of game input, together with item 1 |
+| 5 | Screen editor: highlight after `GFX BACKDROP` / `GFX PALETTE` (11) | test that the editor's highlight follows palette and backdrop changes in the window | Medium | a quick manual check, may find a bug |
+| 6 | Screen mode: plain 256-color vs truecolor terminals (11, 12) | check the SlateGray paper, highlight and status line on a terminal without `COLORTERM=truecolor` | Medium | a quick manual check |
+| 7 | Sprite and tile editors (10) | built-in editors based on `SPRITE GET` / `TILE GET`, `DESIGN` rows | Medium | the owner's plan; large; game development tool |
+| 8 | `PRINT USING`, `AT`, `HTAB`, `VTAB` (11) | formatted output | Medium | common in BASIC; `LOCATE` covers placement |
+| 9 | `STRING$`, `SPACE$` and binary helpers (9) | the usual string builders, `HEX` to bytes, unsigned `CVI`/`CVL`, byte-wise `ANDS`/`ORS` | Medium | small, widely expected; the first two are trivial |
+| 10 | `ERR` as a number, `ON ERROR GOTO 0`, `ERROR n` (9) | the rest of the error handling | Medium | small; fits the existing trap |
+| 11 | Comments are converted to upper case (2) | `' Ode to Joy` lists as `' ODE TO JOY` | Medium | annoying in listings; a small tokenizer change (*decision*) |
+| 12 | `FRAME`, handlers during `INPUT`/`GET` (2) | wait for the next refresh; timer handlers do not run while waiting for input | Medium | `FRAME` is useful for games; `VSYNC` partly covers it |
+| 13 | `SWITCH` / `CASE` (13) | multi-way branch | Medium | design questions: fall-through, strings, `AGAIN` / `EXIT` levels (*decision*) |
+| 14 | Full-screen editor (`EDIT`) limits (1) | no mouse, search/replace, block or clipboard operations; long lines read-only | Medium | the screen editor covers much of this need |
+| 15 | Encoding of `.bas` listings (4) | a UTF-8 file with `ä` in a string shows two Latin-9 glyphs: convert on `LOAD`? | Medium | will bite users who edit listings in other editors (*decision*) |
+| 16 | Numeric extras (2) | `ASN`/`ACS`, hyperbolic functions, `ATAN2`, `MIN`/`MAX`, `ROUND(x,n)`, `CINT`/`CDBL` | Medium-Low | `DEF FN` can build most of them |
+| 17 | `PLAY` extras (2b) | chords inside a string, `N` (note number), `X` (run a string), repeat | Medium-Low | one string per voice works today |
+| 18 | Audio without a window (12) | open the audio device alone for scripts that `PLAY` | Medium-Low | optional |
+| 19 | Drivers written in BASIC (8) | `DRIVER "name","PREFIX"` with labelled handlers | Low | postponed by the owner; proposal exists (*decision*) |
+| 20 | Conversion tools and an own image format (10) | images to `DESIGN` rows / image strings / palettes, a `.spr` file | Low | later |
+| 21 | Ctrl-D at the prompt in screen mode (11) | what it should do; today ignored (end with `BYE`) | Low | owner's future issue; ties to the end of input |
+| 22 | `AUTO` in the console host (12) | works in the window only | Low | |
+| 23 | `OPTION BASE`, `DEF type range` (`INT`/`STR`/`FLT` tokens), `TAB`/`TABMODE`, `DISPLAY(x)`, `BREAKPOINT` (2, 13) | assorted language ideas | Low | each needs a short design decision (*decision*) |
+| 24 | `DO … LOOP`, `FOR EVER` (11) | test-at-the-end loop | Low | `REPEAT`/`WHILE`/`UNTIL` cover it |
+| 25 | Small aliases (11) | `OLD`, `CATALOG`, `RENUMBER`, `FUNCTION`/`PROCEDURE`, `YIELD`, `SAFETY ON/OFF` | Low | |
+| 26 | `DYNAMIC`/`ASSOC` arrays, `RECORD`/`TYPE` (11) | structured data | Low | long-term (*decision*) |
+| 27 | Sound extras (2b) | pitch envelope, pulse width, noise filter, `SFX` parameters, FM instruments, band-limited waves, stereo, voice allocator, sample-accurate times | Low | long-term |
+| 28 | `tcp:` server side, `SEEK` as a function, byte-array records (8) | more I/O | Low | |
+| 29 | `LIST #n`, `PRINT` comma zones on files, files kept open across `CHAIN` (1, 4, 8) | I/O corners | Low | |
+| 30 | `LOAD`/`SAVE` directory handling (1) | no `CD`; plain paths only (a shell literal does it) | Low | |
+| 31 | `RENUM` / `DELETE` / `CLEAR` corners (1) | range of another `RENUM` statement is not adjusted; both end a running program; `CLEAR` can't un-dimension | Low | |
+| 32 | Machine monitor limits (5) | no step-over, conditional breakpoints, watches; no variable inspection | Low | |
+| 33 | VM leftovers (5) | `WRLV`, inline assembler `[ … ]` / `{ … }`, `DEF FN` can't call itself | Low | |
+| 34 | Remaining fixed limits (6) | 16-bit variable numbers, 6 array dimensions, strings ≤ 65535 | Low | far from being reached |
+| 35 | Direct mode and `PRINT` corners (4) | redefined functions leave dead code; comma zones ignore the screen wrap at column 80 | Low | |
+| 36 | Test cleanup (4, 12) | `vmtest1` has its own compile-and-run copy; a pty test for the raw keys of `GET`/`INKEY$` | Low | |
+| 37 | Design decisions to revisit (7) | `UNTIL` inside `REPEAT`, `INPUT` prompt literal, `GET` waits, `RUN` clears variables | Low | only if the owner wants them changed (*decision*) |
+| 38 | Font review (later) | punctuation glyphs `% & @ $ ~ # *`, maybe `N` | Low | |
+| 39 | Unused tokens `PUT`, `OFF` (2) | tokens exist without a use | Low | cleanup |
+| 40 | `BUILD` extras (1) | compile check, static SDL2, other systems, icon, bundled `res/` | Low | |
+| 41 | Remaining limits of the console host (12) | graphics layers (`GFX`, `SPRITE`, `TILE`) on a terminal, colors in the exit dump, `ENV` as a statement | Low | no graphics layer on a terminal |
 
 *Cleaned up while rating (2026-11-01): four stale entries were found already done and ticked (`SYMBOL`, file channels, the graphics statements on channel 0, array parameters of `DEF FN`).*
 
@@ -97,7 +98,7 @@ Open: directory handling for `LOAD`/`SAVE` beyond plain paths (there is no `CD`;
 - [ ] Sound output channels other than the BASIC channels (`PRINT #n`) are not involved; no `SOUND` queue inspection beyond `PLAYING()`
 
 - [x] **Numeric functions and operators** (done, 2026-10-31, found while writing `demos/fruit.bas`): `INT FIX ABS SGN SQR SIN COS TAN ATN EXP LOG RND PI`, `RANDOMIZE`, `MOD` and `\`. Not done: `ASN`/`ACS` (arc sine, cosine), hyperbolic functions, `LOG10`/`LOG2`, `CINT`/`CDBL`, `ROUND(x,n)`, `MIN`/`MAX`, `ATAN2(y,x)`, bit helpers; `DEF FN` can build most of them.
-- [x] Keyboard for games: **`KEY("name")` is done** (2026-11-01, `docs/basic-language.md` "KEY": the real key state in the window, an approximation in the console host). `INKEY$` / `GET` get the cursor keys as escape sequences already. Not done: key-up *events* (`ON KEY`), joystick and mouse (section 10), changing `fruit`, `fruit2` and `climb` from latched controls to `KEY`.
+- [x] Keyboard for games: **`KEY("name")` is done** (2026-11-01, `docs/basic-language.md` "KEY": the real key state in the window; in the console host it is a run-time error: the held-key guess flickered, the code is kept switched off, **marked for review**). `INKEY$` / `GET` get the cursor keys as escape sequences already. Not done: key-up *events* (`ON KEY`), joystick and mouse (section 10), changing `fruit`, `fruit2` and `climb` from latched controls to `KEY`.
 
 ## 3. Timers and `SYMBOL` *(planned by the project owner, all through host callbacks)*
 

@@ -100,7 +100,7 @@ ON ERROR GOTO/GOSUB/OFF, RESUME, and the functions ERR$ and ERL
 ESC, Ctrl+C and (window) PAUSE/BREAK stop a running program; BREAK OFF makes ESC an ordinary key (INKEY$, GET) for the program, BREAK ON gives it its meaning back. Ctrl+C always stops, also in executables made with BUILD.
 .TP
 .B Keys held down
-KEY("name") is \-1 while the key is held down and 0 otherwise ("A", "SPACE", "LEFT", "F1", "SHIFT", "ANY", ...), for any number of keys at once; unlike INKEY$ it knows when a key is let go. In a terminal a key counts as held for a moment after the terminal sent it (the terminal never reports a release).
+KEY("name") is \-1 while the key is held down and 0 otherwise ("A", "SPACE", "LEFT", "F1", "SHIFT", "ANY", ...), for any number of keys at once; unlike INKEY$ it knows when a key is let go. It works in the window only: the console host (and console executables) give the error "KEY is not available in this host", because a terminal never reports that a key is let go.
 .TP
 .B Timers
 AFTER, EVERY, WAIT, and the function REMAIN

@@ -3300,7 +3300,10 @@ static bool vm_system_function( vm_t* vm, uint16_t opcode ) {
             if ( id < 0 ) {
                 return vm_error( vm, "Illegal argument" );
             }
-            return vm_dpush_num( vm, vm->keydown != 0 && vm->keydown( vm, vm->userdata, id ) ? -1.0 : 0.0 );
+            if ( vm->keydown == 0 ) {
+                return vm_error( vm, "KEY is not available in this host" );     // (the console host: a terminal can't tell when a key is let go)
+            }
+            return vm_dpush_num( vm, vm->keydown( vm, vm->userdata, id ) ? -1.0 : 0.0 );
         }
         case INS_ERL:
             return vm_dpush_num( vm, (double) vm->errlastline );
