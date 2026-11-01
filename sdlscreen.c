@@ -36,6 +36,7 @@
 #include "sdlutil.h"
 #include "gfxcore.h"
 #include "sdlkeys.h"
+#include "keystate.h"
 #include "scrdrv.h"
 
 #define NLAYERS 5
@@ -676,6 +677,73 @@ int sdlscr_getkey( void ) {
 void sdlscr_setbreak( void ) {
     sdlscr_breakreq = true;
     sdlev_raise( SDLEV_BREAK );
+}
+
+// KEY("name"): the state of the key right now, from SDL's keyboard state (which the event loop of the screen thread keeps; no lock: a read that
+// races an update sees the old or the new state). A key that types a character is found by that character, whatever the keyboard layout is.
+bool sdlscr_keydown( int keyid ) {
+    int n = 0;
+    const Uint8* st = SDL_GetKeyboardState( &n );
+    if ( st == 0 ) {
+        return false;
+    }
+    #define SDLSCR_DOWN(sc) ( (int)(sc) > 0 && (int)(sc) < n && st[ (int)(sc) ] != 0 )
+    if ( keyid == KEYID_ANY ) {
+        for ( int i = 1; i < n; ++i ) {
+            if ( st[i] != 0 ) {
+                return true;
+            }
+        }
+        return false;
+    }
+    if ( keyid >= 32 && keyid < 127 ) {
+        return SDLSCR_DOWN( SDL_GetScancodeFromKey( (SDL_Keycode) keyid ) );
+    }
+    if ( keyid >= KEYID_KP0 && keyid <= KEYID_KP0 + 9 ) {
+        static const int kp[10] = { SDL_SCANCODE_KP_0, SDL_SCANCODE_KP_1, SDL_SCANCODE_KP_2, SDL_SCANCODE_KP_3, SDL_SCANCODE_KP_4,
+            SDL_SCANCODE_KP_5, SDL_SCANCODE_KP_6, SDL_SCANCODE_KP_7, SDL_SCANCODE_KP_8, SDL_SCANCODE_KP_9 };
+        return SDLSCR_DOWN( kp[ keyid - KEYID_KP0 ] );
+    }
+    int ks = keystate_ks( keyid );
+    if ( ks != KS_NONE ) {
+        static const struct { int ks, sc; } map[] = {
+            { KS_UP, SDL_SCANCODE_UP }, { KS_DOWN, SDL_SCANCODE_DOWN }, { KS_LEFT, SDL_SCANCODE_LEFT }, { KS_RIGHT, SDL_SCANCODE_RIGHT },
+            { KS_HOME, SDL_SCANCODE_HOME }, { KS_END, SDL_SCANCODE_END }, { KS_INSERT, SDL_SCANCODE_INSERT }, { KS_DELETE, SDL_SCANCODE_DELETE },
+            { KS_PGUP, SDL_SCANCODE_PAGEUP }, { KS_PGDN, SDL_SCANCODE_PAGEDOWN },
+            { KS_F1, SDL_SCANCODE_F1 }, { KS_F2, SDL_SCANCODE_F2 }, { KS_F3, SDL_SCANCODE_F3 }, { KS_F4, SDL_SCANCODE_F4 },
+            { KS_F5, SDL_SCANCODE_F5 }, { KS_F6, SDL_SCANCODE_F6 }, { KS_F7, SDL_SCANCODE_F7 }, { KS_F8, SDL_SCANCODE_F8 },
+            { KS_F9, SDL_SCANCODE_F9 }, { KS_F10, SDL_SCANCODE_F10 }, { KS_F11, SDL_SCANCODE_F11 }, { KS_F12, SDL_SCANCODE_F12 }
+        };
+        for ( size_t i = 0; i < sizeof(map) / sizeof(map[0]); ++i ) {
+            if ( map[i].ks == ks ) {
+                return SDLSCR_DOWN( map[i].sc );
+            }
+        }
+        return false;
+    }
+    switch ( keyid ) {
+        case KEYID_ESC:         return SDLSCR_DOWN( SDL_SCANCODE_ESCAPE );
+        case KEYID_RETURN:      return SDLSCR_DOWN( SDL_SCANCODE_RETURN ) || SDLSCR_DOWN( SDL_SCANCODE_KP_ENTER );
+        case KEYID_TAB:         return SDLSCR_DOWN( SDL_SCANCODE_TAB );
+        case KEYID_BACKSPACE:   return SDLSCR_DOWN( SDL_SCANCODE_BACKSPACE );
+        case KEYID_SHIFT:       return SDLSCR_DOWN( SDL_SCANCODE_LSHIFT ) || SDLSCR_DOWN( SDL_SCANCODE_RSHIFT );
+        case KEYID_LSHIFT:      return SDLSCR_DOWN( SDL_SCANCODE_LSHIFT );
+        case KEYID_RSHIFT:      return SDLSCR_DOWN( SDL_SCANCODE_RSHIFT );
+        case KEYID_CTRL:        return SDLSCR_DOWN( SDL_SCANCODE_LCTRL ) || SDLSCR_DOWN( SDL_SCANCODE_RCTRL );
+        case KEYID_LCTRL:       return SDLSCR_DOWN( SDL_SCANCODE_LCTRL );
+        case KEYID_RCTRL:       return SDLSCR_DOWN( SDL_SCANCODE_RCTRL );
+        case KEYID_ALT:         return SDLSCR_DOWN( SDL_SCANCODE_LALT ) || SDLSCR_DOWN( SDL_SCANCODE_RALT );
+        case KEYID_LALT:        return SDLSCR_DOWN( SDL_SCANCODE_LALT );
+        case KEYID_RALT:        return SDLSCR_DOWN( SDL_SCANCODE_RALT );
+        case KEYID_KPENTER:     return SDLSCR_DOWN( SDL_SCANCODE_KP_ENTER );
+        case KEYID_KPPLUS:      return SDLSCR_DOWN( SDL_SCANCODE_KP_PLUS );
+        case KEYID_KPMINUS:     return SDLSCR_DOWN( SDL_SCANCODE_KP_MINUS );
+        case KEYID_KPMUL:       return SDLSCR_DOWN( SDL_SCANCODE_KP_MULTIPLY );
+        case KEYID_KPDIV:       return SDLSCR_DOWN( SDL_SCANCODE_KP_DIVIDE );
+        case KEYID_KPDOT:       return SDLSCR_DOWN( SDL_SCANCODE_KP_PERIOD );
+        default:                return false;
+    }
+    #undef SDLSCR_DOWN
 }
 
 // a line for the prompt, INPUT, AUTO and the pagers: the one-line editor (scr_lineedit(), the same as for EDIT n and in the console host). ESC

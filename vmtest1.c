@@ -29,6 +29,7 @@
 
 #include "basic.h"
 #include "vm.h"
+#include "keystate.h"
 #include "gfxops.h"
 #include "basdebug.h"
 
@@ -576,6 +577,15 @@ static const testcase_t cases[] = {
     { "SOUND SYNC",             "SOUND SYNC 1,2,3",                                "<sync 7>\n" },
     { "SOUND SYNC one",         "SOUND SYNC 4",                                    "<sync 8>\n" },
     { "SOUND SYNC bad channel", "SOUND SYNC 1,9",                                  "? Illegal argument\n" },
+    { "KEY: a held key",        "PRINT KEY(\"A\")",                                  "-1\n" },
+    { "KEY: case does not matter", "PRINT KEY(\"a\");KEY(\"Left\");KEY(\"left\")",    "-1-1-1\n" },
+    { "KEY: a key that is up",  "PRINT KEY(\"B\");KEY(\"RIGHT\");KEY(\"F1\")",         "000\n" },
+    { "KEY: names",             "PRINT KEY(\"SPACE\");KEY(\" \");KEY(\"SHIFT\");KEY(\"CTRL\");KEY(\"ANY\")", "-1-1-10-1\n" },
+    { "KEY: a string expression", "A$=\"LEF\":PRINT KEY(A$+\"T\")",                    "-1\n" },
+    { "KEY in a condition",     "IF KEY(\"SPACE\") THEN PRINT \"JUMP\"",                 "JUMP\n" },
+    { "KEY: unknown name",      "PRINT KEY(\"BANANA\")",                              "? Illegal argument\n" },
+    { "KEY: empty name",        "PRINT KEY(\"\")",                                    "? Illegal argument\n" },
+    { "KEY needs a string",     "PRINT KEY(1)",                                       "? String expression expected\n" },
     { "PLAYING",                "SOUND 1,440,1:PRINT PLAYING(1):PRINT PLAYING(2)", "<tone 0 440 0.5 1>\n-1\n0\n" },
     { "PLAYING after SOUND OFF", "SOUND 1,440,1:SOUND OFF:PRINT PLAYING(1)",       "<tone 0 440 0.5 1>\n<silence -1>\n0\n" },
     { "PLAYING in a condition", "SOUND 5,440,1\nIF PLAYING(5) THEN PRINT \"BUSY\"", "<tone 4 440 0.5 1>\nBUSY\n" },
@@ -1308,6 +1318,12 @@ static bool vm_files( struct _vm_t* vm, void* usrdata, const char* spec ) {
     return true;
 }
 
+// KEY(): the test keyboard holds A, SPACE, LEFT and SHIFT
+static bool vm_keydown( struct _vm_t* vm, void* usrdata, int keyid ) {
+    (void) vm; (void) usrdata;
+    return keyid == 'a' || keyid == 32 || keyid == KEYID_KS + KS_LEFT || keyid == KEYID_SHIFT || keyid == KEYID_ANY;
+}
+
 static void vm_breakesc( struct _vm_t* vm, void* usrdata, bool on ) {
     (void) vm; (void) usrdata;
     out_append( on ? "[ESC breaks]" : "[ESC is a key]" );
@@ -1527,6 +1543,7 @@ static bool compile_and_run( void ) {
     vm.report   = vm_report;
     vm.inkey    = vm_inkey;
     vm.breakesc = vm_breakesc;
+    vm.keydown  = vm_keydown;
     vm.input    = vm_input;
     vm.getkey   = vm_getkey;
     vm.save     = vm_save;

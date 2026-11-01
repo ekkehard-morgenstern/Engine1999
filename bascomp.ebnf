@@ -85,8 +85,9 @@ str-usr-fn-call := str-usr-fn-name [ TOK_LPAREN [ call-args ] TOK_RPAREN ] .
 --# Built-in functions
 -- INT FIX ABS SGN SQR SIN COS TAN ATN EXP LOG FLOOR CEIL LOG2 LOG10: the usual meaning (FLOOR is INT; angles in the unit of DEG/RAD/GRAD, radians
 -- by default). RND is RND(1) without an argument. PEEK(addr [, size]) reads the RAM (size 1 by default: see poke-stmt).
--- CVI CVL CVS CVD unpack a number from a binary string (big endian).
-sys-num-fn-1-arg-call := ( TOK_ASC | TOK_VAL | TOK_LEN | TOK_CVI | TOK_CVL | TOK_CVS | TOK_CVD ) TOK_LPAREN str-expr TOK_RPAREN |
+-- CVI CVL CVS CVD unpack a number from a binary string (big endian). KEY(name$) is -1 if the key of that name is held down now, else 0
+-- ("A", "SPACE", "LEFT", "F1", "SHIFT", "ANY" ...; an unknown name is "Illegal argument").
+sys-num-fn-1-arg-call := ( TOK_ASC | TOK_VAL | TOK_LEN | TOK_CVI | TOK_CVL | TOK_CVS | TOK_CVD | TOK_KEY ) TOK_LPAREN str-expr TOK_RPAREN |
                            ( TOK_FRE | TOK_PLAYING | TOK_REMAIN | TOK_EOF | TOK_LOF | TOK_LOC |
                              TOK_INT | TOK_FIX | TOK_ABS | TOK_SGN | TOK_SQR | TOK_SIN | TOK_COS | TOK_TAN | TOK_ATN | TOK_EXP | TOK_LOG |
                              TOK_FLOOR | TOK_CEIL | TOK_LOG2 | TOK_LOG10 ) TOK_LPAREN num-expr TOK_RPAREN |

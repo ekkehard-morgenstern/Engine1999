@@ -1609,7 +1609,7 @@ bool comp_eat_strusrfncall( compiler_t* comp, node_t** pnode ) {
 
 bool comp_eat_sysnumfn1argcall( compiler_t* comp, node_t** pnode ) {
     /*
-        sys-num-fn-1-arg-call := ( TOK_ASC | TOK_VAL | TOK_LEN | TOK_CVI | TOK_CVL | TOK_CVS | TOK_CVD ) TOK_LPAREN str-expr TOK_RPAREN |
+        sys-num-fn-1-arg-call := ( TOK_ASC | TOK_VAL | TOK_LEN | TOK_CVI | TOK_CVL | TOK_CVS | TOK_CVD | TOK_KEY ) TOK_LPAREN str-expr TOK_RPAREN |
                                  ( TOK_FRE | TOK_PLAYING | TOK_REMAIN | TOK_EOF | TOK_LOF | TOK_LOC ) TOK_LPAREN num-expr TOK_RPAREN .
         NT_SYSNUMFUNCARGCALL    numeric system function call with arguments
             data:
@@ -1658,7 +1658,7 @@ bool comp_eat_sysnumfn1argcall( compiler_t* comp, node_t** pnode ) {
         }
         return true;
     }
-    if ( tok == TOK_ASC || tok == TOK_VAL || tok == TOK_LEN || tok == TOK_CVI || tok == TOK_CVL || tok == TOK_CVS || tok == TOK_CVD ) {
+    if ( tok == TOK_ASC || tok == TOK_VAL || tok == TOK_LEN || tok == TOK_CVI || tok == TOK_CVL || tok == TOK_CVS || tok == TOK_CVD || tok == TOK_KEY ) {
         if ( !comp_fetchtok( comp ) ) {
             return false;
         }

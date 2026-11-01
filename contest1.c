@@ -525,6 +525,16 @@ int main( void ) {
         static const char* const sH[] = { "10 CLS:LOCATE 5,2:COLOR 140,2:PRINT \"hi\":PRINT TXT(\"WIDTH\")\r", "RUN\r", "BYE\r" };
         static const char* const eH[] = { "\r\n\r\n     hi\r\n80\r\nReady.\r\nBYE\r\n" };
         failed += !pty_case( "screen mode: CLS, LOCATE, COLOR and TXT work on the text screen", sH, 3U, eH, 1U );
+        // KEY("name") on a terminal: the key counts as held for a moment after the terminal sent it
+        static const char* const sK1[] = { "10 IF KEY(\"A\") THEN PRINT \"A IS DOWN\":BYE 5\r", "20 GOTO 10\r", "RUN\r", "a" };
+        static const char* const eK1[] = { "A IS DOWN" };
+        failed += !pty_case_st( "screen mode: KEY(\"A\") sees the key a typed while the program runs", sK1, 4U, eK1, 1U, 5 );
+        static const char* const sK2[] = { "10 IF KEY(\"LEFT\") AND KEY(\"SHIFT\") = 0 THEN PRINT \"LEFT\":BYE 6\r", "20 GOTO 10\r", "RUN\r", "\033[D" };
+        static const char* const eK2[] = { "LEFT" };
+        failed += !pty_case_st( "screen mode: KEY(\"LEFT\") sees a cursor key sequence", sK2, 4U, eK2, 1U, 6 );
+        static const char* const sK3[] = { "10 IF KEY(\"SHIFT\") AND KEY(\"X\") THEN PRINT \"SHIFT-X\":BYE 7\r", "20 GOTO 10\r", "RUN\r", "X" };
+        static const char* const eK3[] = { "SHIFT-X" };
+        failed += !pty_case_st( "screen mode: a capital letter is the key with SHIFT", sK3, 4U, eK3, 1U, 7 );
         // run mode: an error waits for a key (the hint is an overlay, not in the dump); a normal end leaves at once
         put( "prog.bas", "10 PRINT \"before\"\n20 PRINT 1/0\n" );
         pty_args[0] = "prog.bas";

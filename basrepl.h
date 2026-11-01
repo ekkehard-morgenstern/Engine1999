@@ -85,6 +85,7 @@ typedef struct _repl_t {
     void        (*print)( struct _vm_t*, void*, int channel, const char* text );
     void        (*printn)( struct _vm_t*, void*, int channel, const char* text, size_t len );   // optional, see vm.h
     void        (*breakesc)( struct _vm_t*, void*, bool on );   // BREAK ON / OFF was executed: ESC is the break key / an ordinary key (optional)
+    bool        (*keydown)( struct _vm_t*, void*, int keyid );  // KEY("name"): is this key (KEYID_*, keystate.h) held down now? (optional: without it every key is up)
     int         (*inkey)( struct _vm_t*, void* );
     char*       (*input)( struct _vm_t*, void*, int channel );
     int         (*getkey)( struct _vm_t*, void*, int channel );

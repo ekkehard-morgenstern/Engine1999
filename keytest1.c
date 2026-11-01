@@ -29,6 +29,7 @@
 
 #include "stdtypes.h"
 #include "keyseq.h"
+#include "keystate.h"
 #include "sdlkeys.h"
 
 /*
@@ -206,7 +207,25 @@ static void test_sdl( void ) {
         sdlkeys_sequence( SDLK_PAUSE, 0, b ) == 0, "SDL: letters, Return, Escape and Pause have no sequence" );
 }
 
+static void test_keystate( void ) {
+    #define KID(s) keystate_id( s, strlen( s ) )
+    check( KID( "A" ) == 'a' && KID( "a" ) == 'a' && KID( "z" ) == 'z' && KID( "5" ) == '5' && KID( "," ) == ',' && KID( "/" ) == '/', "key names: characters (letters in lower case)" );
+    check( KID( " " ) == 32 && KID( "space" ) == 32 && KID( "SPACE" ) == 32, "key names: SPACE" );
+    check( KID( "left" ) == KEYID_KS + KS_LEFT && KID( "Up" ) == KEYID_KS + KS_UP && KID( "PGDN" ) == KEYID_KS + KS_PGDN && KID( "pagedown" ) == KEYID_KS + KS_PGDN, "key names: the cursor keys, case does not matter" );
+    check( KID( "F1" ) == KEYID_KS + KS_F1 && KID( "f12" ) == KEYID_KS + KS_F12 && KID( "F13" ) < 0, "key names: function keys F1..F12" );
+    check( KID( "ESC" ) == KEYID_ESC && KID( "escape" ) == KEYID_ESC && KID( "return" ) == KEYID_RETURN && KID( "enter" ) == KEYID_RETURN && KID( "tab" ) == KEYID_TAB && KID( "BackSpace" ) == KEYID_BACKSPACE, "key names: ESC, RETURN, TAB, BACKSPACE" );
+    check( KID( "shift" ) == KEYID_SHIFT && KID( "lshift" ) == KEYID_LSHIFT && KID( "RCTRL" ) == KEYID_RCTRL && KID( "alt" ) == KEYID_ALT && KID( "ctrl" ) == KEYID_CTRL, "key names: the modifiers" );
+    check( KID( "KP0" ) == KEYID_KP0 && KID( "kp9" ) == KEYID_KP0 + 9 && KID( "KPENTER" ) == KEYID_KPENTER && KID( "KP+" ) == KEYID_KPPLUS && KID( "kp." ) == KEYID_KPDOT, "key names: the keypad" );
+    check( KID( "ANY" ) == KEYID_ANY && KID( "any" ) == KEYID_ANY, "key names: ANY" );
+    check( KID( "" ) < 0 && KID( "BANANA" ) < 0 && KID( "LEF" ) < 0 && KID( "\x01" ) < 0 && KID( "ABCDEFGHIJKLMNOP" ) < 0, "key names: anything else is no key" );
+    check( keystate_id( 0, 0 ) < 0 && keystate_id( "A\0B", 3 ) < 0, "key names: no name, a zero byte" );
+    check( keystate_ks( KID( "DOWN" ) ) == KS_DOWN && keystate_ks( KID( "a" ) ) == KS_NONE && keystate_ks( KEYID_ESC ) == KS_NONE, "key names: the keyseq key of an id" );
+    check( KEYID_MAX <= 1024, "key ids fit the tables of the console host" );
+    #undef KID
+}
+
 int main( void ) {
+    test_keystate();
     test_make();
     test_roundtrip();
     test_dialects();

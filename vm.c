@@ -30,6 +30,7 @@
 #include <ctype.h>
 #include "vm.h"
 #include "keyseq.h"
+#include "keystate.h"
 #include "gfxops.h"
 #include "mml.h"
 #include "instset.h"
@@ -3289,6 +3290,18 @@ static bool vm_system_function( vm_t* vm, uint16_t opcode ) {
             char* s = vm_new_string( vm, v ? v : "", v ? strlen( v ) : 0U );
             return s && vm_push_string( vm, s );
         }
+        case INS_KEYD: {
+            char* name;
+            if ( !vm_dpop_str( vm, &name ) ) {
+                return false;
+            }
+            int id = keystate_id( name, strlen( name ) );
+            free( name );
+            if ( id < 0 ) {
+                return vm_error( vm, "Illegal argument" );
+            }
+            return vm_dpush_num( vm, vm->keydown != 0 && vm->keydown( vm, vm->userdata, id ) ? -1.0 : 0.0 );
+        }
         case INS_ERL:
             return vm_dpush_num( vm, (double) vm->errlastline );
         case INS_ERRS: {
@@ -3600,7 +3613,7 @@ static bool vm_step( vm_t* vm ) {
         case INS_WIAE: return vm_write_elem( vm, param16, VARTYPEV_INT );
         case INS_WSAE: return vm_write_elem( vm, param16, VARTYPEV_STR );
         case INS_TI: case INS_INKY: case INS_FRE: case INS_STRS: case INS_CHRS: case INS_ASC: case INS_LEN: case INS_VAL:
-        case INS_PLNG: case INS_RMN: case INS_EOFN: case INS_LOFN: case INS_LOCN: case INS_INPD: case INS_ADRS: case INS_ERL: case INS_ERRS: case INS_ARGC: case INS_ARGS: case INS_ENVS:
+        case INS_PLNG: case INS_RMN: case INS_EOFN: case INS_LOFN: case INS_LOCN: case INS_INPD: case INS_ADRS: case INS_ERL: case INS_ERRS: case INS_ARGC: case INS_ARGS: case INS_ENVS: case INS_KEYD:
         case INS_BINS: case INS_QUAS: case INS_OCTS: case INS_HEXS: case INS_DECS:
         case INS_LFTS: case INS_RGTS: case INS_MIDS:
             return vm_system_function( vm, opcode );

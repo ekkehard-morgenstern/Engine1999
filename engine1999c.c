@@ -41,6 +41,7 @@
 #include "fulledit.h"
 #include "monitor.h"
 #include "keyseq.h"
+#include "keystate.h"
 #include "version.h"
 
 /*
@@ -277,6 +278,62 @@ static void con_sigwinch( int sig ) {
     con_winch = 1;
 }
 
+// KEY("name") on a terminal: a terminal tells when a key is pressed, never when it is released, so a key counts as held for a short time after the
+// last byte it sent (the keyboard's auto repeat keeps it going; its first repeat comes after the repeat delay, usually 250 to 500 ms, so a key that is held
+// flickers once at the start: the window version has the real state). Letters typed with Shift are noted with SHIFT, Ctrl+letter with CTRL. Only
+// bytes seen by con_pump() are noted (while a program runs on a terminal).
+#define CON_KEYHOLD     140         // ms
+
+static uint64_t con_keyseen[KEYID_MAX];
+
+static uint64_t con_now_ms( void ) {
+    struct timespec ts;
+    clock_gettime( CLOCK_MONOTONIC, &ts );
+    return (uint64_t) ts.tv_sec * 1000U + (uint64_t) ts.tv_nsec / 1000000U + 1U;     // (never 0: 0 is "never seen")
+}
+
+static void con_note_key( int id, uint64_t now ) {
+    if ( id > 0 && id < KEYID_MAX ) {
+        con_keyseen[id] = now;
+        con_keyseen[KEYID_ANY] = now;
+    }
+}
+
+static void con_note_bytes( const unsigned char* b, ssize_t n ) {
+    uint64_t now = con_now_ms();
+    for ( ssize_t i = 0; i < n; ++i ) {
+        unsigned char c = b[i];
+        if ( c == 033 ) {
+            int key, mods;
+            int r = keyseq_parse( (const char*) b + i, (size_t)( n - i ), &key, &mods );
+            if ( r > 0 ) {
+                con_note_key( KEYID_KS + key, now );
+                if ( mods & KSMOD_SHIFT ) { con_note_key( KEYID_SHIFT, now ); }
+                if ( mods & KSMOD_CTRL ) { con_note_key( KEYID_CTRL, now ); }
+                if ( mods & KSMOD_ALT ) { con_note_key( KEYID_ALT, now ); }
+                i += (ssize_t) r - 1;
+            } else {
+                con_note_key( KEYID_ESC, now );
+            }
+        } else if ( c == '\r' || c == '\n' ) {
+            con_note_key( KEYID_RETURN, now );
+        } else if ( c == 8 || c == 127 ) {
+            con_note_key( KEYID_BACKSPACE, now );
+        } else if ( c == '\t' ) {
+            con_note_key( KEYID_TAB, now );
+        } else if ( c >= 1 && c <= 26 ) {
+            con_note_key( 'a' + c - 1, now );            // Ctrl+letter
+            con_note_key( KEYID_CTRL, now );
+        } else if ( c >= 32 && c < 127 ) {
+            if ( c >= 'A' && c <= 'Z' ) {
+                con_note_key( KEYID_SHIFT, now );
+                c = (unsigned char)( c - 'A' + 'a' );
+            }
+            con_note_key( c, now );
+        }
+    }
+}
+
 static void con_pump( void ) {
     if ( !con_pumping ) {
         return;
@@ -288,6 +345,7 @@ static void con_pump( void ) {
         if ( n <= 0 ) {
             break;
         }
+        con_note_bytes( chunk, n );
         if ( n == 1 && chunk[0] == 033 && con_escbreak ) {
             con_break = 1;                      // a lone ESC
             continue;
@@ -480,6 +538,17 @@ static int con_inkey( struct _vm_t* vm, void* usrdata ) {
     return key > 0 ? key : 0;
 }
 
+// KEY("name"): held down if the terminal sent it a moment ago (see con_note_bytes()); without a terminal no key is ever down
+static bool con_keydown( struct _vm_t* vm, void* usrdata, int keyid ) {
+    (void) vm; (void) usrdata;
+    if ( !con_pumping || keyid <= 0 || keyid >= KEYID_MAX ) {
+        return false;
+    }
+    con_pump();
+    uint64_t seen = con_keyseen[keyid];
+    return seen != 0 && con_now_ms() - seen <= CON_KEYHOLD;
+}
+
 static bool con_interrupt( struct _vm_t* vm, void* usrdata ) {
     (void) vm; (void) usrdata;
     static unsigned counter = 0;
@@ -609,6 +678,7 @@ static bool con_init( repl_t* repl ) {
     repl->getkey    = con_getkey;
     repl->interrupt = con_interrupt;
     repl->breakesc  = con_breakesc;
+    repl->keydown   = con_keydown;
     repl->save      = con_save;
     repl->edit      = con_edit;
     repl->gfx       = &con_gfx;

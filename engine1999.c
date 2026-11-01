@@ -829,6 +829,11 @@ static void host_breakesc( struct _vm_t* vm, void* usrdata, bool on ) {
     sdlscr_setescbreak( on );
 }
 
+// KEY("name"): the keyboard state of SDL (see sdlscr_keydown())
+static bool host_keydown( struct _vm_t* vm, void* usrdata, int keyid ) {
+    return sdlscr_keydown( keyid );
+}
+
 static int host_inkey( struct _vm_t* vm, void* usrdata ) {
     return sdlscr_pollkey();
 }
@@ -1121,6 +1126,7 @@ static void init_host( void ) {
     repl.printn    = host_printn;
     repl.inkey     = host_inkey;
     repl.breakesc  = host_breakesc;
+    repl.keydown   = host_keydown;
     repl.input     = host_input;
     repl.getkey    = host_getkey;
     repl.interrupt = host_interrupt;

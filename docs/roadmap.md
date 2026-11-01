@@ -14,7 +14,7 @@ the sections when items are done or added.
 
 | # | Item (section) | What it is | Priority | Notes |
 |---|---|---|---|---|
-| 1 | Key state for games (2) | `INKEY$` has no key-up events or held-key state; a `KEY(n)` / `KEYDOWN("LEFT")` function through SDL scancodes | **High** | all games use latched controls today; decision on the spelling |
+| 1 | ~~Key state for games (2)~~ | **done 2026-11-01**: `KEY("name")` (window: SDL keyboard state; console: held for 140 ms after the last byte); not done: key-up *events* (`ON KEY`), the demos `fruit`/`fruit2`/`climb` still use latched controls | ~~High~~ | the demos could be changed to use `KEY` (owner's call) |
 | 2 | Sandboxing (8) | permissions for shell literals, `sh:`, files outside the program directory, the network | **High** | matters once programs or `BUILD` executables are passed around; policy is undecided (*decision*); hook is `iodev_allowed()` |
 | 3 | Joystick and mouse input (10) | `JOY`, `MOUSEX/Y/B`, `ON KEY` | **High** | the second half of game input, together with item 1 |
 | 4 | Screen editor: highlight after `GFX BACKDROP` / `GFX PALETTE` (11) | test that the editor's highlight follows palette and backdrop changes in the window | Medium | a quick manual check, may find a bug |
@@ -97,7 +97,7 @@ Open: directory handling for `LOAD`/`SAVE` beyond plain paths (there is no `CD`;
 - [ ] Sound output channels other than the BASIC channels (`PRINT #n`) are not involved; no `SOUND` queue inspection beyond `PLAYING()`
 
 - [x] **Numeric functions and operators** (done, 2026-10-31, found while writing `demos/fruit.bas`): `INT FIX ABS SGN SQR SIN COS TAN ATN EXP LOG RND PI`, `RANDOMIZE`, `MOD` and `\`. Not done: `ASN`/`ACS` (arc sine, cosine), hyperbolic functions, `LOG10`/`LOG2`, `CINT`/`CDBL`, `ROUND(x,n)`, `MIN`/`MAX`, `ATAN2(y,x)`, bit helpers; `DEF FN` can build most of them.
-- [ ] Keyboard for games: `INKEY$` delivers text input only (letters, digits, space, RETURN, BACKSPACE, TAB): no cursor keys, no key-up events, no held-key state, so games use latched controls. A key state function (`KEY(n)` / `KEYDOWN("LEFT")`) through SDL scancodes would fix it.
+- [x] Keyboard for games: **`KEY("name")` is done** (2026-11-01, `docs/basic-language.md` "KEY": the real key state in the window, an approximation in the console host). `INKEY$` / `GET` get the cursor keys as escape sequences already. Not done: key-up *events* (`ON KEY`), joystick and mouse (section 10), changing `fruit`, `fruit2` and `climb` from latched controls to `KEY`.
 
 ## 3. Timers and `SYMBOL` *(planned by the project owner, all through host callbacks)*
 

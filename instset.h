@@ -535,8 +535,12 @@ The 4096 extended instructions are as follows:
     0001 01111010       ARGS - a program argument ( n -- s ) C=0 P=0
                             n = 0 is the program name, 1..ARGC the arguments; "" for a larger n; "Illegal argument" for a negative or fractional one.
     0001 01111011       ENVS - an environment variable ( name -- s ) C=0 P=0
-    0001 01111100       BRKM - BREAK ON / OFF: ESC breaks / is a key (param 1 / 0) ( -- ) C=0 P=1
                             The value of the variable of the process (getenv), "" if it is not set. A name with a zero byte is "Illegal argument".
+    0001 01111100       BRKM - BREAK ON / OFF: ESC breaks / is a key (param 1 / 0) ( -- ) C=0 P=1
+                            Tells the VM and the host (vm_t.breakesc) whether ESC is the break key (1) or an ordinary key (0).
+    0001 01111101       KEYD - is a key held down? ( name -- n ) C=0 P=0
+                            KEY(name$): -1 if the key of that name (keystate.h: "A", "SPACE", "LEFT", "F1", "SHIFT", "ANY" ...) is down now, else 0; a name that
+                            is no key is "Illegal argument". The host answers (vm_t.keydown); without one the answer is 0.
     MATH kinds 14..16: CEIL, LOG2, LOG10 (kind 1, INT, is FLOOR as well).
 
 */
@@ -715,5 +719,6 @@ The 4096 extended instructions are as follows:
 #define INS_ARGS        UINT16_C(0X17A)
 #define INS_ENVS        UINT16_C(0X17B)
 #define INS_BRKM        UINT16_C(0X17C)
+#define INS_KEYD        UINT16_C(0X17D)
 
 #endif

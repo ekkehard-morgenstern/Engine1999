@@ -442,6 +442,7 @@ const char* cgen_opcode_name( uint16_t opcode ) {
         case INS_ARGS:      return "ARGS";
         case INS_ENVS:      return "ENVS";
         case INS_BRKM:      return "BRKM";
+        case INS_KEYD:      return "KEYD";
         case INS_AFLT:      return "AFLT";
         case INS_GFXC:      return "GFXC";
         case INS_GFXQ:      return "GFXQ";
@@ -1162,6 +1163,7 @@ bool cgen_gen_argc( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_ARGC, f
 bool cgen_gen_args( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_ARGS, false, false, UINT16_C(0) ); }
 bool cgen_gen_brkm( codegen_t* cgen, uint16_t on ) { return cgen_gen_ins12( cgen, INS_BRKM, false, true, on ); }
 bool cgen_gen_envs( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_ENVS, false, false, UINT16_C(0) ); }
+bool cgen_gen_keyd( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_KEYD, false, false, UINT16_C(0) ); }
 bool cgen_gen_acnt( codegen_t* cgen, uint16_t varoffs ) { return cgen_gen_ins12_imm17( cgen, INS_ACNT, (int32_t) varoffs ); }
 bool cgen_gen_aflt( codegen_t* cgen, uint16_t varoffs ) { return cgen_gen_ins12_imm17( cgen, INS_AFLT, (int32_t) varoffs ); }
 bool cgen_gen_rand( codegen_t* cgen, uint16_t hasseed ) { return cgen_gen_ins12( cgen, INS_RAND, false, true, hasseed ); }
@@ -1558,7 +1560,7 @@ UNEXP:  return cgen_unexpected_node( comp );
 
 bool cgen_from_sysfncall( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     /*
-        sys-num-fn-1-arg-call := ( TOK_ASC | TOK_VAL | TOK_LEN | TOK_CVI | TOK_CVL | TOK_CVS | TOK_CVD ) TOK_LPAREN str-expr TOK_RPAREN |
+        sys-num-fn-1-arg-call := ( TOK_ASC | TOK_VAL | TOK_LEN | TOK_CVI | TOK_CVL | TOK_CVS | TOK_CVD | TOK_KEY ) TOK_LPAREN str-expr TOK_RPAREN |
                                    ( TOK_FRE | TOK_PLAYING | TOK_REMAIN | TOK_EOF | TOK_LOF | TOK_LOC ) TOK_LPAREN num-expr TOK_RPAREN .
 
         sys-str-fn-2-arg-call := ( TOK_BIN | TOK_QUA | TOK_OCT | TOK_DEC | TOK_HEX ) TOK_STRING TOK_LPAREN num-expr
@@ -1670,6 +1672,7 @@ UNEXP:      return cgen_unexpected_node( comp );
         case TOK_CVL:   generator = cgen_gen_cvl; break;
         case TOK_CVS:   generator = cgen_gen_cvs; break;
         case TOK_CVD:   generator = cgen_gen_cvd; break;
+        case TOK_KEY:   generator = cgen_gen_keyd; break;
         default:
             goto UNEXP;
     }

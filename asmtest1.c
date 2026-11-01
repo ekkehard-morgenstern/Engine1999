@@ -97,6 +97,7 @@ static void test_encodings( void ) {
     asmcase( "SND 2", "A1 42 00 02" );
     asmcase( "snd 6", "A1 42 00 06" );
     asmcase( "PLNG", "21 43" );
+    asmcase( "KEYD", "21 7D" );
     asmcase( "WAIT", "21 44" );
     asmcase( "SND 13", "A1 42 00 0D" );
 }

@@ -97,10 +97,11 @@ str-usr-fn-call := str-usr-fn-name [ "(" [ call-args ] ")" ] .
 
 > INT FIX ABS SGN SQR SIN COS TAN ATN EXP LOG FLOOR CEIL LOG2 LOG10: the usual meaning (FLOOR is INT; angles in the unit of DEG/RAD/GRAD, radians
 > by default). RND is RND(1) without an argument. PEEK(addr [, size]) reads the RAM (size 1 by default: see poke-stmt).
-> CVI CVL CVS CVD unpack a number from a binary string (big endian).
+> CVI CVL CVS CVD unpack a number from a binary string (big endian). KEY(name$) is -1 if the key of that name is held down now, else 0
+> ("A", "SPACE", "LEFT", "F1", "SHIFT", "ANY" ...; an unknown name is "Illegal argument").
 
 ```ebnf
-sys-num-fn-1-arg-call := ( ASC | VAL | LEN | CVI | CVL | CVS | CVD ) "(" str-expr ")" |
+sys-num-fn-1-arg-call := ( ASC | VAL | LEN | CVI | CVL | CVS | CVD | KEY ) "(" str-expr ")" |
                            ( FRE | PLAYING | REMAIN | EOF | LOF | LOC |
                              INT | FIX | ABS | SGN | SQR | SIN | COS | TAN | ATN | EXP | LOG |
                              FLOOR | CEIL | LOG2 | LOG10 ) "(" num-expr ")" |
