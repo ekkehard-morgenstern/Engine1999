@@ -141,6 +141,7 @@ const char* nodename( uint8_t nodetype ) {
         case NT_DESIGNROW:              return "NT_DESIGNROW";
         case NT_ONCOLLSTMT:             return "NT_ONCOLLSTMT";
         case NT_ONMOUSESTMT:            return "NT_ONMOUSESTMT";
+        case NT_ERRORSTMT:              return "NT_ERRORSTMT";
         case NT_RANDOMIZESTMT:          return "NT_RANDOMIZESTMT";
         case NT_ANGLESTMT:              return "NT_ANGLESTMT";
         case NT_FOREACHSTMT:            return "NT_FOREACHSTMT";

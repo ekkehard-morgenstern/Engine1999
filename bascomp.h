@@ -210,6 +210,7 @@ bool comp_eat_editstmt( compiler_t* comp, node_t** pnode );
 bool comp_eat_monitorstmt( compiler_t* comp, node_t** pnode );
 bool comp_eat_soundstmt( compiler_t* comp, node_t** pnode );
 bool comp_eat_waitstmt( compiler_t* comp, node_t** pnode );
+bool comp_eat_errorstmt( compiler_t* comp, node_t** pnode );
 bool comp_eat_mergestmt( compiler_t* comp, node_t** pnode );
 bool comp_eat_chainstmt( compiler_t* comp, node_t** pnode );
 bool comp_eat_filesstmt( compiler_t* comp, node_t** pnode );

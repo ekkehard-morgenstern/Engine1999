@@ -6,7 +6,7 @@ so far (see "Implemented subset").
 
 ## Source preprocessing (`preprocess_buffer`)
 
-Collapses runs of blanks/tabs to one space, drops `\r`, upper-cases letters — everywhere except inside `"…"` and `` `…` ``.
+Collapses runs of blanks/tabs to one space, drops `\r`, upper-cases letters — everywhere except inside `"…"` and `` `…` ``; **a comment (from the apostrophe to the end of the line) keeps its case** (since 2026-11-01; it was upper-cased before, so old listings keep their capitals).
 
 **Indentation (2026-11-01):** the run of blanks *behind the line number* is kept as it is, so a program can be indented (`20     PRINT I` stays that way in `LIST`, `SAVE ... ,A`, `EDIT`, the full-screen editor and
 the screen editor; the first blank is the separator after the number, the rest is the indent). Every blank or tab of that run counts as one blank (a tab is not expanded: the preprocessing works in place and the text must not
@@ -408,7 +408,7 @@ run is different. `x \ y` divides after cutting both operands to integers and cu
 that does not fit a number (`EXP(1000)`) is "Overflow". `ABS SGN SQR SIN COS TAN ATN EXP LOG RND FIX PI MOD RANDOMIZE DEG RAD GRAD` are reserved words now
 (`INT` was one already).
 
-## Error handling: `ON ERROR GOTO|GOSUB`, `ON ERROR OFF`, `ERR$`, `ERL`
+## Error handling: `ON ERROR GOTO|GOSUB`, `ON ERROR OFF`, `ERR$`, `ERR`, `ERL`, `ERROR n`
 
 ```
 10 ON ERROR GOTO 900           ' or ON ERROR GOSUB 900 / a label; ON ERROR OFF clears the handler
@@ -427,8 +427,13 @@ handler runs.
 - **`ON ERROR GOSUB target`**: the handler is a subroutine. `RETURN` continues with **the first line after the line that failed**
   (not the failed statement: the rest of that line is skipped; use `RESUME` to go on in a finer way). The trap is off while the handler runs and
   on again after its `RETURN`. In a direct mode line there is no next line: the run ends after the handler.
-- **`ON ERROR OFF`**: errors are fatal again. The handler is also cleared when the program ends (`RUN`, `NEW`, `LOAD`, `CHAIN`, and after
+- **`ON ERROR OFF`** (also written `ON ERROR GOTO 0`, as in other BASICs; so a handler can't be at line 0): errors are fatal again. The handler is also cleared when the program ends (`RUN`, `NEW`, `LOAD`, `CHAIN`, and after
   every direct mode line).
+- **`ERR`** is the number of the last error (0 if there was none; `ERR$` is the text). The numbers are those of GW-BASIC where the message has one: 4 Out of DATA, 5 Illegal argument,
+  6 Overflow, 7 Out of memory, 9 Subscript out of range, 11 Division by zero, 13 Type mismatch, 15 String too long, 52 Bad file number, 53 File not found, 68 Device not found; **every other message is 255**
+  (table `errtab` in `vm.c`; a message counts if it begins with the text, so `Type mismatch (string expected)` is 13).
+- **`ERROR n`** raises error number n (1..255, else "Illegal argument") by hand: the text of the table, or `Error n` for a number that has none (and `ERR` gives n back). It is caught by `ON ERROR` like a real
+  error, or is fatal (`? Error 77 in line 10`) when no handler is set. `ERROR` is now an extension word (reserved; `ON ERROR` still reads the old identifier form in saved programs). Instructions `ERRN 0x180` (`ERR`), `ERRR 0x181` (`ERROR n`).
 - `ERR$` and `ERL` keep the last error until the run ends. Not caught: Break (ESC) and the step limit of the tests. Syntax errors
   are found before the program runs and are not run time errors.
 - **`RESUME`**, **`RESUME NEXT`**, **`RESUME target`** (line number or label) end the handler and go on: `RESUME` runs the statement that failed again

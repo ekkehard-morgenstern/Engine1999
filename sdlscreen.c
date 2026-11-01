@@ -250,6 +250,58 @@ static bool sdlscr_isbreakkey( SDL_KeyCode key ) {
     return key == SDLK_ESCAPE && sdlscr_escbreak;
 }
 
+// The window title: the name of the running executable (a program made with BUILD shows its own name), "Engine1999" if it can't be found.
+static void sdlscr_settitle( SDL_Window* window ) {
+    char path[4096];
+    ssize_t len = readlink( "/proc/self/exe", path, sizeof(path) - 1U );
+    const char* name = "Engine1999";
+    if ( len > 0 ) {
+        path[len] = '\0';
+        char* slash = strrchr( path, '/' );
+        const char* base = slash ? slash + 1 : path;
+        const char* deleted = strstr( base, " (deleted)" );     // (an executable that was replaced while it runs)
+        if ( deleted ) {
+            path[ deleted - path ] = '\0';
+        }
+        if ( *base != '\0' ) {
+            name = base;
+        }
+    }
+    SDL_SetWindowTitle( window, name );
+}
+
+// F11 and ALT+RETURN switch the window between the full screen (the desktop's size) and a normal window. The window manager does not do this for
+// F11: the application has to. The keys are used up here (a program does not see them; KEY("F11") still works, it reads the keyboard state).
+static bool sdlscr_isfullscreenkey( const SDL_KeyboardEvent* k ) {
+    return k->keysym.sym == SDLK_F11 || ( k->keysym.sym == SDLK_RETURN && ( k->keysym.mod & KMOD_ALT ) != 0 );
+}
+
+static void sdlscr_togglefullscreen( SDL_Window* window ) {
+    bool isfull = ( SDL_GetWindowFlags( window ) & SDL_WINDOW_FULLSCREEN_DESKTOP ) != 0;
+    if ( isfull ) {
+        // to a window: a whole multiple of the 640 x 300 screen that fits into 80 % of the display, centered, resizable (the picture is scaled)
+        int scale = 1;
+        SDL_Rect usable;
+        int disp = SDL_GetWindowDisplayIndex( window );
+        if ( disp >= 0 && SDL_GetDisplayUsableBounds( disp, &usable ) == 0 ) {
+            int sx = usable.w * 8 / 10 / SDL_SCREENWIDTH, sy = usable.h * 8 / 10 / SDL_SCREENHEIGHT;
+            scale = sx < sy ? sx : sy;
+            if ( scale < 1 ) {
+                scale = 1;
+            }
+        }
+        if ( SDL_SetWindowFullscreen( window, 0 ) != 0 ) {
+            print_sdlerror( "leave fullscreen mode" );
+            return;
+        }
+        SDL_SetWindowResizable( window, SDL_TRUE );
+        SDL_SetWindowSize( window, SDL_SCREENWIDTH * scale, SDL_SCREENHEIGHT * scale );
+        SDL_SetWindowPosition( window, SDL_WINDOWPOS_CENTERED_DISPLAY( disp >= 0 ? disp : 0 ), SDL_WINDOWPOS_CENTERED_DISPLAY( disp >= 0 ? disp : 0 ) );
+    } else if ( SDL_SetWindowFullscreen( window, SDL_WINDOW_FULLSCREEN_DESKTOP ) != 0 ) {
+        print_sdlerror( "enter fullscreen mode" );
+    }
+}
+
 static void sdlscr_handlekey( SDL_KeyCode key ) {
     if ( !sdlscr_awaitinput && !sdlscr_pollinput ) return;
     if ( sdlscr_pollinput && sdlscr_isbreakkey( key ) ) {
@@ -315,6 +367,8 @@ static int sdlscr_worker( void* arg ) {
         print_sdlerror( "create window" );
         goto ERR2;
     }
+
+    sdlscr_settitle( window );
 
     SDL_Renderer* renderer = SDL_CreateRenderer(
         window,
@@ -418,6 +472,12 @@ static int sdlscr_worker( void* arg ) {
                 case SDL_KEYDOWN:
                     if ( sdlscr_keydebug ) {
                         sdlscr_debugkeyevent( &ev.key );
+                    }
+                    if ( sdlscr_isfullscreenkey( &ev.key ) ) {
+                        if ( !ev.key.repeat ) {
+                            sdlscr_togglefullscreen( window );
+                        }
+                        break;
                     }
                     sdlscr_handlekey( ev.key.keysym.sym );
                     break;

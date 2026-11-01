@@ -2055,6 +2055,19 @@ bool comp_eat_sysnoargnumcall( compiler_t* comp, node_t** pnode ) {
     // sys-noarg-num := sys-noarg-num-name .
     // sys-noarg-num-call := sys-no-arg-num .
     uint8_t tok = comp->currtok;
+    if ( tok == TOK_ERR ) {         // ERR (the number of the last error); ERR$ is the string function
+        comp_push_context( comp );
+        if ( !comp_fetchtok( comp ) || comp->currtok == TOK_STRING ) {
+            comp_pop_context( comp );
+            return false;
+        }
+        comp_commit_context( comp );
+        if ( !comp_create_node( comp, pnode, NT_SYSNOARGNUMCALL, UINT8_C(0), UINT16_C(1), &tok ) || *pnode == NODE_NONE ) {
+            out_of_memory( comp );
+            return false;
+        }
+        return true;
+    }
     if ( ( tok != TOK_TI && tok != TOK_ERL && tok != TOK_PI && tok != TOK_ARGC ) || !comp_fetchtok( comp ) ) {
         return false;
     }
@@ -3773,6 +3786,24 @@ bool comp_eat_soundstmt( compiler_t* comp, node_t** pnode ) {
     return true;
 }
 
+bool comp_eat_errorstmt( compiler_t* comp, node_t** pnode ) {
+    // error-stmt := ERROR num-expr .       (ERROR is an extension word)
+    if ( comp->currtok != TOK_XFUNC || comp->currext != XF_ERROR || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    node_t* number = NODE_NONE;
+    if ( !comp_eat_numexpr( comp, &number ) || number == NODE_NONE ) {
+        comp_error( comp, "Numeric expression expected" );
+        return false;
+    }
+    // NT_ERRORSTMT    ERROR statement (no data, 1 branch of numeric expression: the error number 1..255)
+    if ( !comp_create_node( comp, pnode, NT_ERRORSTMT, UINT8_C(1), UINT16_C(0), 0, number ) || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
 bool comp_eat_waitstmt( compiler_t* comp, node_t** pnode ) {
     // wait-stmt := TOK_WAIT num-expr .
     if ( comp->currtok != TOK_WAIT || !comp_fetchtok( comp ) ) {
@@ -3884,6 +3915,9 @@ bool comp_eat_progstmt( compiler_t* comp, node_t** pnode ) {
         return true;
     }
     if ( comp_eat_waitstmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_errorstmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     return false;
@@ -5610,8 +5644,8 @@ bool comp_eat_onstmt( compiler_t* comp, node_t** pnode ) {
     if ( comp->currtok != TOK_ON || !comp_fetchtok( comp ) ) {
         return false;
     }
-    if ( comp->currtok == TOK_NUMIDENT && strcmp( comp->param, "ERROR" ) == 0 ) {
-        // ON ERROR GOTO target | ON ERROR GOSUB target | ON ERROR OFF  (ERROR is recognized here, it is not a reserved word)
+    if ( ( comp->currtok == TOK_NUMIDENT && strcmp( comp->param, "ERROR" ) == 0 ) || ( comp->currtok == TOK_XFUNC && comp->currext == XF_ERROR ) ) {
+        // ON ERROR GOTO target | ON ERROR GOSUB target | ON ERROR GOTO 0 | ON ERROR OFF  (ERROR is an extension word; the old identifier form still reads)
         if ( !comp_fetchtok( comp ) ) {
             return false;
         }
@@ -5628,7 +5662,12 @@ bool comp_eat_onstmt( compiler_t* comp, node_t** pnode ) {
                 return false;
             }
             kind = gotok == TOK_GOTO ? ERRT_GOTO : ERRT_GOSUB;
-            if ( !comp_eat_gototarget( comp, &target ) || target == NODE_NONE ) {
+            if ( gotok == TOK_GOTO && comp->currtok == TOK_DEC0 ) {     // ON ERROR GOTO 0: the same as OFF (as in other BASICs)
+                kind = ERRT_OFF;
+                if ( !comp_fetchtok( comp ) ) {
+                    return false;
+                }
+            } else if ( !comp_eat_gototarget( comp, &target ) || target == NODE_NONE ) {
                 comp_error( comp, "Jump target expected" );
                 return false;
             }

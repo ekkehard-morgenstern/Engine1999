@@ -445,6 +445,8 @@ const char* cgen_opcode_name( uint16_t opcode ) {
         case INS_KEYD:      return "KEYD";
         case INS_MTH2:      return "MTH2";
         case INS_STRN:      return "STRN";
+        case INS_ERRN:      return "ERRN";
+        case INS_ERRR:      return "ERRR";
         case INS_AFLT:      return "AFLT";
         case INS_GFXC:      return "GFXC";
         case INS_GFXQ:      return "GFXQ";
@@ -1123,6 +1125,14 @@ bool cgen_gen_erl( codegen_t* cgen ) {
     return cgen_gen_ins12( cgen, INS_ERL, false, false, UINT16_C(0) );
 }
 
+bool cgen_gen_errn( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_ERRN, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_errr( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_ERRR, false, false, UINT16_C(0) );
+}
+
 bool cgen_gen_errs( codegen_t* cgen ) {
     return cgen_gen_ins12( cgen, INS_ERRS, false, false, UINT16_C(0) );
 }
@@ -1674,7 +1684,7 @@ UNEXP:      return cgen_unexpected_node( comp );
         case TOK_LOC:   generator = cgen_gen_locn; break;
         case TOK_INPUT: generator = cgen_gen_inpd; break;
         case TOK_ADDRESS: generator = cgen_gen_adrs; break;
-        case TOK_ERR:   generator = cgen_gen_errs; break;
+        case TOK_ERR:   generator = nodetype == NT_SYSNOARGNUMCALL ? cgen_gen_errn : cgen_gen_errs; break;
         case TOK_ERL:   generator = cgen_gen_erl; break;
         case TOK_PEEK:  generator = nodetype == NT_SYSSTRFUNCARGCALL ? cgen_gen_peks : cgen_gen_peek; break;
         case TOK_ARGC:  generator = cgen_gen_argc; break;
@@ -3153,6 +3163,7 @@ static bool cgen_from_stmt_node( codegen_t* cgen, compiler_t* comp, node_t* node
         case NT_MONITORSTMT: return cgen_from_monitorstmt( cgen, comp, node );
         case NT_SOUNDSTMT:  return cgen_from_soundstmt( cgen, comp, node );
         case NT_WAITSTMT:   return cgen_from_waitstmt( cgen, comp, node );
+        case NT_ERRORSTMT:  return cgen_from_errorstmt( cgen, comp, node );
         case NT_MERGESTMT:  return cgen_from_mergestmt( cgen, comp, node );
         case NT_CHAINSTMT:  return cgen_from_chainstmt( cgen, comp, node );
         case NT_FILESSTMT:  return cgen_from_filesstmt( cgen, comp, node );

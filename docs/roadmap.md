@@ -23,8 +23,8 @@ the sections when items are done or added.
 | 7 | Sprite and tile editors (10) | built-in editors based on `SPRITE GET` / `TILE GET`, `DESIGN` rows | Medium | the owner's plan; large; game development tool |
 | 8 | `PRINT USING`, `AT`, `HTAB`, `VTAB` (11) | formatted output | Medium | common in BASIC; `LOCATE` covers placement |
 | 9 | Binary helpers (9) | `HEX` to bytes, unsigned `CVI`/`CVL`, byte-wise `ANDS`/`ORS` | Medium-Low | `STRING$` and `SPACE$` are **done 2026-11-01** (extension words, see the note below the table) |
-| 10 | `ERR` as a number, `ON ERROR GOTO 0`, `ERROR n` (9) | the rest of the error handling | Medium | small; fits the existing trap |
-| 11 | Comments are converted to upper case (2) | `' Ode to Joy` lists as `' ODE TO JOY` | Medium | annoying in listings; a small tokenizer change (*decision*) |
+| 10 | ~~`ERR` as a number, `ON ERROR GOTO 0`, `ERROR n` (9)~~ | **done 2026-11-01** | ~~Medium~~ | |
+| 11 | ~~Comments are converted to upper case (2)~~ | **done 2026-11-01**: a comment keeps its case | ~~Medium~~ | |
 | 12 | `FRAME`, handlers during `INPUT`/`GET` (2) | wait for the next refresh; timer handlers do not run while waiting for input | Medium | `FRAME` is useful for games; `VSYNC` partly covers it |
 | 13 | `SWITCH` / `CASE` (13) | multi-way branch | Medium | design questions: fall-through, strings, `AGAIN` / `EXIT` levels (*decision*) |
 | 14 | Full-screen editor (`EDIT`) limits (1) | no mouse, search/replace, block or clipboard operations; long lines read-only | Medium | the screen editor covers much of this need |
@@ -57,7 +57,7 @@ the sections when items are done or added.
 | 41 | Remaining limits of the console host (12) | graphics layers (`GFX`, `SPRITE`, `TILE`) on a terminal, colors in the exit dump, `ENV` as a statement | Low | no graphics layer on a terminal |
 | 42 | Graphics in terminals (12) | a software compositor + the kitty graphics protocol (sixel as a fallback): the layers, sprites and tiles in `engine1999c` | **Lowest** | owner, 2026-11-01: a "nice to have" for much later; after the joystick and `ON MOUSE` |
 | 43 | Indent fixer (1) | a key (F9) in the full-screen editor that re-indents the whole program by its block structure; the same as a statement for direct mode and the console | Low | owner, 2026-11-01; the algorithm exists (used on the demos), needs a shared module and a decision on undo |
-| 44 | Full screen / window switch (4) | F11 (or ALT+RETURN) toggles the window between full screen and a normal window | Low | owner, 2026-11-01; the window is always `SDL_WINDOW_FULLSCREEN_DESKTOP` now |
+| 44 | ~~Full screen / window switch (4)~~ | **done 2026-11-01**: F11 / ALT+RETURN | ~~Low~~ | start mode option still open |
 
 *Token space (2026-11-01):* the one-byte tokens 0..255 are used up (only the unused `PUT`, 13, is free). New words are **extension words**: token 254 (`TOK_XFUNC`) plus a second byte (`XF_*`, table `xkeywtbl` in `bastok.c`): 255 more are possible. `SPACE STRING MIN MAX ATAN2` are the first. Keep this in mind when adding words: a new word is an `xkeywtbl` row plus its parser branch, not a `TOK_` define.
 
@@ -83,7 +83,7 @@ Open: directory handling for `LOAD`/`SAVE` beyond plain paths (there is no `CD`;
 
 ## 2. Smaller language items *(each needs a short design decision)*
 
-- [ ] **Comments are converted to upper case** by the tokenizer (`' Ode to Joy` is listed as `' ODE TO JOY`; strings keep their case): decide whether comment text should keep its case (found while writing the demos)
+- [x] **Comments keep their case** (done 2026-11-01, `preprocess_buffer()` in `bastok.c`: the case of everything behind an apostrophe is kept; the old listings keep the capitals they have)
 - [ ] `WAIT`, `AFTER` and `EVERY` exist; no `FRAME` (wait for the next screen refresh) yet, handlers do not run during `INPUT`/`GET`
 
 
@@ -130,7 +130,7 @@ how a handler is named (line number / label / `FN`?); how they are cancelled (`O
 - [ ] `vmtest1` still has its own copy of the compile-and-run logic; it could use `basrepl` (`repltest1` already does)
 - [x] Output on channel 0 only goes to the text screen: the graphics-layer / tile / sprite statements exist now (section 10; stale entry ticked 2026-11-01)
 
-- [ ] **F11 (alternative: ALT+RETURN): full screen / windowed mode** (owner, 2026-11-01; the owner named ALT+RETURN as an alternative key, the usual one of games and of the DOS-box / terminal emulators; both could work, or one of them, to be decided): the window is always created as `SDL_WINDOW_FULLSCREEN_DESKTOP` (`sdlscr_worker` in `sdlscreen.c`); F11 / ALT+RETURN should switch between that and a normal, resizable window and back (`SDL_SetWindowFullscreen`; the renderer's logical size 640 x 300 keeps the picture scaled, with bars, in any window size; the mouse coordinates follow the logical size, so the pointer needs no change). Open: the start mode (a command line option or an environment variable, e.g. `E1999_WINDOW=1`?), the window size at the first switch (a multiple of 640 x 300 that fits the desktop), whether the key is caught by the screen thread (like the break keys) so that no program sees it (`KEY("F11")` is known to `keystate`; it would stop reporting it; with ALT+RETURN the program loses RETURN while ALT is held, `KEY("ALT")` and `KEY("RETURN")` would stay for everything else, and RETURN with ALT would not reach `INKEY$` / `GET` / the editors, which matters because the editors may want ALT+RETURN for something later), the console host has no such mode (F11 and ALT+RETURN stay ordinary keys there; say so in the man page).
+- [x] **F11 / ALT+RETURN: full screen <-> window** (done 2026-11-01, `sdlscr_togglefullscreen()` in `sdlscreen.c`: SDL delivers F11 as an ordinary key, the application switches; `SDL_SetWindowFullscreen`, the window gets a whole multiple of 640 x 300 that fits 80 % of the display, centered, resizable; the keys are used up, a program does not see them; checked under Xvfb + metacity with XTest keys: 1920x1080 -> 1280x600 -> full and the same with ALT+RETURN). Not done: a start mode option (`E1999_WINDOW=1`?), remembering the choice, the same for the console host (a terminal has its own)
 
 ## 5. VM and instruction set leftovers
 
@@ -188,7 +188,7 @@ Listed in full in `SESSION.md` ("Design decisions I took"). The ones most likely
 
 - [x] `ON ERROR GOTO|GOSUB`, `ON ERROR OFF`, `ERR$`, `ERL` (done, 2026-10-31)
 - [x] `RESUME` / `RESUME NEXT` / `RESUME target` (done, 2026-10-31; not possible after an error inside a `PROC`/`FUNC` call: the frame is unwound by the trap)
-- [ ] `ERR` as a number, `ON ERROR GOTO 0`, `ERROR n` (raise an error by hand)
+- [x] `ERR` as a number, `ON ERROR GOTO 0`, `ERROR n` (done, 2026-11-01)
 - [x] **Binary-safe strings** (done, 2026-10-31; see `docs/basic-language.md` "Binary strings"): zero bytes in strings, control code glyphs 0..31 in the font, length based print path
 - [x] **Number packing** (done, 2026-10-31): `MKI$`/`MKL$`/`MKS$`/`MKD$` and `CVI`/`CVL`/`CVS`/`CVD`, big endian (network byte order; owner decision)
 - [ ] Helpers for binary data (`STRING$` and `SPACE$` are done, 2026-11-01): `HEX` to bytes / bytes to `HEX$` dump, unsigned `CVI`/`CVL` variants, 24 bit and 64 bit integers; byte-wise `ANDS`/`ORS`

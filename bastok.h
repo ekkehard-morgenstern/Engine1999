@@ -462,6 +462,7 @@ bool read_brclit( rbuf_t* rbuf, char** ptarget );
 #define XF_MIN          UINT8_C(3)          // MIN function (two numbers)
 #define XF_MAX          UINT8_C(4)          // MAX function (two numbers)
 #define XF_ATAN2        UINT8_C(5)          // ATAN2 function (y, x)
+#define XF_ERROR        UINT8_C(6)          // ERROR statement (raise an error), also ON ERROR
 bool is_xkeyword( const char* name, uint8_t* pxid );    // an extension word by name
 const char* xkeyword_name( uint8_t xid );               // the text of an extension word, 0 if there is none
 bool is_keyword( const char* name, uint8_t* ptok );

@@ -527,11 +527,13 @@ fileop-stmt := ( KILL | MKDIR | CHDIR ) str-expr | RENAME str-expr TO str-expr |
 
 ## Errors, random numbers, angles
 
-> ON ERROR GOTO / GOSUB sets a handler for run time errors, ON ERROR OFF clears it (ERROR is an identifier recognized after ON).
-> ERR$ is the text of the last error, ERL its line number.
+> ON ERROR GOTO / GOSUB sets a handler for run time errors, ON ERROR OFF (or ON ERROR GOTO 0) clears it. ERROR is an extension word.
+> ERR$ is the text of the last error, ERR its number (0 = none, 255 = no number of its own), ERL its line number.
+> ERROR n raises the error of number n (1..255) by hand; ON ERROR catches it like any other.
 
 ```ebnf
 on-error-stmt := ON ERROR ( goto-kw goto-target | OFF ) .
+error-stmt := ERROR num-expr .
 ```
 
 > Numeric functions: INT FIX ABS SGN SQR SIN COS TAN ATN EXP LOG RND ( num-expr ) (RND alone is RND(1)); PI. \\ (integer division) and MOD
@@ -630,7 +632,7 @@ gfx-all-stmt := gfx-stmt | txt-stmt | tile-stmt | sprite-stmt | mouse-stmt | on-
 ```ebnf
 prog-stmt := gfx-all-stmt | load-stmt | run-stmt | merge-stmt | chain-stmt | files-stmt | build-stmt | bye-stmt | timer-stmt | list-stmt | new-stmt | clear-stmt |
              delete-stmt | renum-stmt | edit-stmt | monitor-stmt | sound-stmt | wait-stmt | on-error-stmt | randomize-stmt | angle-stmt |
-             cont-stmt | trace-stmt | break-stmt | auto-stmt | poke-stmt .
+             cont-stmt | trace-stmt | break-stmt | auto-stmt | poke-stmt | error-stmt .
 stmt := io-stmt | prog-stmt | assign-stmt | control-flow-stmt .
 stmt-list := stmt { ":" stmt } .
 stmt-line := [ stmt-list ] [ <'comment> ] <end-of-line> .

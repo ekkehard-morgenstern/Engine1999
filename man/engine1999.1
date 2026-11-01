@@ -104,6 +104,14 @@ A program can take ESC for itself with
 Ctrl+C and PAUSE/BREAK still stop it.
 Closing the window ends the program and the Engine.
 .TP
+.B F11, ALT+RETURN
+Switch the window between the full screen and a normal, resizable window (a whole multiple of the 640 x 300 screen, centered).
+The Engine starts in the full screen. The title of the window is the name of the executable (a program made with
+.B BUILD
+shows its own name). The keys are used up by the Engine: a program does not receive them
+.RB "(" KEY("F11")
+still tells that F11 is held).
+.TP
 .B LIST, SAVE, LOAD, RUN, NEW, RENUM, DELETE, MERGE, CHAIN, FILES
 Program commands; they are ordinary BASIC statements and work inside programs, too.
 .TP

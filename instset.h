@@ -542,6 +542,11 @@ The 4096 extended instructions are as follows:
     0001 01111101       KEYD - is a key held down? ( name -- n ) C=0 P=0
                             KEY(name$): -1 if the key of that name (keystate.h: "A", "SPACE", "LEFT", "F1", "SHIFT", "ANY" ...) is down now, else 0; a name that
                             is no key is "Illegal argument". The host answers (vm_t.keydown); without one it is the error "KEY is not available in this host" (the console host).
+    0001 10000000       ERRN - the number of the last caught error ( -- n ) C=0 P=0
+                            ERR: 0 if there was none. The numbers are in the table errtab[] of vm.c (5 Illegal argument, 6 Overflow, 7 Out of memory, 9 Subscript out of range,
+                            11 Division by zero, 13 Type mismatch, ...); 255 for any other message; ERROR n gives n back.
+    0001 10000001       ERRR - raise an error ( n -- ) C=0 P=0
+                            ERROR n: an error with the text of number n (the table; "Error n" if the table has none), n = 1..255, else "Illegal argument". It is caught by ON ERROR like any other.
     MATH kinds 14..16: CEIL, LOG2, LOG10 (kind 1, INT, is FLOOR as well).
 
     0001 01111110       MTH2 - numeric function of two numbers ( x y -- z ) C=0 P=1
@@ -729,5 +734,7 @@ The 4096 extended instructions are as follows:
 #define INS_KEYD        UINT16_C(0X17D)
 #define INS_MTH2        UINT16_C(0X17E)
 #define INS_STRN        UINT16_C(0X17F)
+#define INS_ERRN        UINT16_C(0X180)
+#define INS_ERRR        UINT16_C(0X181)
 
 #endif

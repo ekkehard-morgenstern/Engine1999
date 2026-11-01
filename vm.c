@@ -266,6 +266,43 @@ static void vm_report_error( vm_t* vm, const char* text ) {
     }
 }
 
+// -- error numbers (ERR, ERROR n) ------------------------------------------
+
+// The messages of the run time errors that have a number (the numbers are those of GW-BASIC where there is one). Other messages are 255.
+static const struct { int num; const char* text; } errtab[] = {
+    { 4, "Out of DATA" }, { 5, "Illegal argument" }, { 6, "Overflow" }, { 7, "Out of memory" }, { 9, "Subscript out of range" },
+    { 11, "Division by zero" }, { 13, "Type mismatch" }, { 15, "String too long" }, { 52, "Bad file number" }, { 53, "File not found" }, { 68, "Device not found" },
+    { 0, 0 }
+};
+
+// the number of an error message: the table entry the text begins with, "Error n" gives n, anything else 255; "" (no error yet) is 0
+static int vm_error_number( const char* text ) {
+    if ( text[0] == '\0' ) {
+        return 0;
+    }
+    if ( strncmp( text, "Error ", 6U ) == 0 && text[6] >= '0' && text[6] <= '9' ) {
+        return atoi( text + 6 );
+    }
+    for ( int i=0; errtab[i].num; ++i ) {
+        size_t len = strlen( errtab[i].text );
+        if ( strncmp( text, errtab[i].text, len ) == 0 && ( text[len] == '\0' || text[len] == ' ' || text[len] == '(' ) ) {
+            return errtab[i].num;
+        }
+    }
+    return 255;
+}
+
+// the text for ERROR n
+static const char* vm_error_text( int n, char* buf, size_t bufsz ) {
+    for ( int i=0; errtab[i].num; ++i ) {
+        if ( errtab[i].num == n ) {
+            return errtab[i].text;
+        }
+    }
+    snprintf( buf, bufsz, "Error %d", n );
+    return buf;
+}
+
 // always false, so that callers can write "return vm_error( ... )" (the compiler knows the value)
 static bool vm_error( vm_t* vm, const char* text ) {
     vm_report_error( vm, text );
@@ -3402,6 +3439,19 @@ static bool vm_system_function( vm_t* vm, uint16_t opcode ) {
         }
         case INS_ERL:
             return vm_dpush_num( vm, (double) vm->errlastline );
+        case INS_ERRN:
+            return vm_dpush_num( vm, (double) vm_error_number( vm->errlast ) );
+        case INS_ERRR: {
+            if ( !vm_dpop_num( vm, &num ) ) {
+                return false;
+            }
+            int32_t n = vm_to_int32( num );
+            if ( n < 1 || n > 255 ) {
+                return vm_error( vm, "Illegal argument" );
+            }
+            char text[40];
+            return vm_error( vm, vm_error_text( n, text, sizeof(text) ) );
+        }
         case INS_ERRS: {
             char* s = vm_new_string( vm, vm->errlast, strlen( vm->errlast ) );
             return s && vm_push_string( vm, s );
@@ -3711,7 +3761,7 @@ static bool vm_step( vm_t* vm ) {
         case INS_WIAE: return vm_write_elem( vm, param16, VARTYPEV_INT );
         case INS_WSAE: return vm_write_elem( vm, param16, VARTYPEV_STR );
         case INS_TI: case INS_INKY: case INS_FRE: case INS_STRS: case INS_CHRS: case INS_ASC: case INS_LEN: case INS_VAL:
-        case INS_PLNG: case INS_RMN: case INS_EOFN: case INS_LOFN: case INS_LOCN: case INS_INPD: case INS_ADRS: case INS_ERL: case INS_ERRS: case INS_ARGC: case INS_ARGS: case INS_ENVS: case INS_KEYD:
+        case INS_PLNG: case INS_RMN: case INS_EOFN: case INS_LOFN: case INS_LOCN: case INS_INPD: case INS_ADRS: case INS_ERL: case INS_ERRN: case INS_ERRR: case INS_ERRS: case INS_ARGC: case INS_ARGS: case INS_ENVS: case INS_KEYD:
         case INS_BINS: case INS_QUAS: case INS_OCTS: case INS_HEXS: case INS_DECS:
         case INS_LFTS: case INS_RGTS: case INS_MIDS:
             return vm_system_function( vm, opcode );

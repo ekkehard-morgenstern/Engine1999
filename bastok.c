@@ -840,7 +840,7 @@ static const struct {
     uint8_t     xid;
     const char* name;
 } xkeywtbl[] = {
-    { XF_SPACE, "SPACE" }, { XF_STRING, "STRING" }, { XF_MIN, "MIN" }, { XF_MAX, "MAX" }, { XF_ATAN2, "ATAN2" }, { 0, 0 }
+    { XF_SPACE, "SPACE" }, { XF_STRING, "STRING" }, { XF_MIN, "MIN" }, { XF_MAX, "MAX" }, { XF_ATAN2, "ATAN2" }, { XF_ERROR, "ERROR" }, { 0, 0 }
 };
 
 bool is_xkeyword( const char* name, uint8_t* pxid ) {
@@ -1177,7 +1177,7 @@ bool detokenize_line_hl( buf_t* out, const uint8_t* wherefrom, const struct _lin
                 ++src.rpos;
             } else if ( tok == TOK_XFUNC ) {        // an extension word: the next byte names it
                 const char* xname = src.rpos + 1U < src.size ? xkeyword_name( (uint8_t) src.buffer[ src.rpos + 1U ] ) : 0;
-                if ( xname == 0 || !hl_switch( out, style, usrdata, &cur, HL_FUNCTION ) || writeto_buffer( out, xname, strlen( xname ) ) < 0 ) {
+                if ( xname == 0 || !hl_switch( out, style, usrdata, &cur, (uint8_t) src.buffer[ src.rpos + 1U ] == XF_ERROR ? HL_STATEMENT : HL_FUNCTION ) || writeto_buffer( out, xname, strlen( xname ) ) < 0 ) {
                     goto FAIL;
                 }
                 src.rpos += 2U;
@@ -1217,11 +1217,12 @@ bool detokenize_line( buf_t* out, const uint8_t* wherefrom, const struct _linehd
 void preprocess_buffer( char* buf ) {
     // Replace series of space and tab characters to single spaces.
     // Remove carriage return characters.
-    // Convert lower case characters to upper case.
+    // Convert lower case characters to upper case (not in a comment: from an apostrophe to the end of the line the case is kept).
     // (All take place everywhere except within double quotes or shell quotes.)
     const char* s = buf;
     char*       d = buf;
     int         quote = 0;
+    bool        comment = false;
     // The indentation of a program line is kept: the blanks behind the line number stay as they are (the first one is the
     // separator, the others are the indent; they are stored as TOK_SPACE tokens, which the compiler ignores). Every blank or tab of
     // this run is one blank (the text must not grow: this works in place). Everywhere else a run of blanks is one.
@@ -1257,7 +1258,10 @@ void preprocess_buffer( char* buf ) {
                 ++s;
                 continue;
             }
-            if ( *s >= 'a' && *s <= 'z' ) {
+            if ( *s == '\'' ) {
+                comment = true;
+            }
+            if ( *s >= 'a' && *s <= 'z' && !comment ) {
                 *d++ = ( *s++ - 'a' ) + 'A';
                 continue;
             }
