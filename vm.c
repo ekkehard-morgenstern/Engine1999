@@ -31,6 +31,7 @@
 #include "vm.h"
 #include "keyseq.h"
 #include "keystate.h"
+#include "sprscreen.h"
 #include "gfxops.h"
 #include "mml.h"
 #include "instset.h"
@@ -2668,14 +2669,15 @@ static bool vm_gfx_check( vm_t* vm, int op, const double* a, int na, size_t slen
         case GFXOP_SPRDEF:      ok = IN( 0, 0, 255 ) && slen == 384U; break;
         case GFXOP_SPRGET:      ok = IN( 0, 0, 255 ); break;
         case GFXOP_SPRSEQ:      ok = IN( 0, 0, 255 ) && slen >= 1U && slen <= 15U; break;
+        // the sprite numbers of a program are 0..SPR_USER_COUNT-1; the reserved sprites (the mouse pointer) are the engine's (sprscreen.h)
         case GFXOP_SPRON: case GFXOP_SPROFF:
-                                ok = IN( 0, 0, 255 ); break;
-        case GFXOP_SPRPRIO:     ok = IN( 0, 0, 255 ) && IN( 1, 0, 7 ); break;
-        case GFXOP_SPRIMAGE:    ok = IN( 0, 0, 255 ) && IN( 1, 0, 255 ); break;
-        case GFXOP_SPRANIM:     ok = IN( 0, 0, 255 ) && IN( 1, 0, 255 ) && IN( 2, 0, 15 ) && IN( 3, 0, 31 ); break;
-        case GFXOP_SPRMOVETO:   ok = IN( 0, 0, 255 ) && IN( 1, -1024, 1023 ) && IN( 2, -1024, 1023 ) && IN( 3, 0, 65535 ); break;
-        case GFXOP_SPRCOLL:     ok = IN( 0, 0, 255 ) && IN( 1, 0, 1 ) && OPT( 2, 0, 0 ); break;
-        case GFXOP_SPRMOVE:     ok = IN( 0, 0, 255 ) && IN( 1, -1024, 1023 ) && IN( 2, -1024, 1023 ) && OPT( 3, 0, 255 ); break;
+                                ok = IN( 0, 0, SPR_USER_COUNT - 1 ); break;
+        case GFXOP_SPRPRIO:     ok = IN( 0, 0, SPR_USER_COUNT - 1 ) && IN( 1, 0, 7 ); break;
+        case GFXOP_SPRIMAGE:    ok = IN( 0, 0, SPR_USER_COUNT - 1 ) && IN( 1, 0, 255 ); break;
+        case GFXOP_SPRANIM:     ok = IN( 0, 0, SPR_USER_COUNT - 1 ) && IN( 1, 0, 255 ) && IN( 2, 0, 15 ) && IN( 3, 0, 31 ); break;
+        case GFXOP_SPRMOVETO:   ok = IN( 0, 0, SPR_USER_COUNT - 1 ) && IN( 1, -1024, 1023 ) && IN( 2, -1024, 1023 ) && IN( 3, 0, 65535 ); break;
+        case GFXOP_SPRCOLL:     ok = IN( 0, 0, SPR_USER_COUNT - 1 ) && IN( 1, 0, 1 ) && OPT( 2, 0, 0 ); break;
+        case GFXOP_SPRMOVE:     ok = IN( 0, 0, SPR_USER_COUNT - 1 ) && IN( 1, -1024, 1023 ) && IN( 2, -1024, 1023 ) && OPT( 3, 0, 255 ); break;
         default:                break;
     }
     #undef IN
@@ -2773,7 +2775,7 @@ static bool vm_gfx_query( vm_t* vm, uint16_t q ) {
     }
     if ( q == GFXQ_SPRX || q == GFXQ_SPRY || q == GFXQ_SPRIMAGE || q == GFXQ_SPRON || q == GFXQ_SPRHITS || q == GFXQ_SPRCOLLIDE ||
          q == GFXQ_SPRMOVING ) {
-        if ( !( a[0] >= 0.0 && a[0] <= 255.0 ) ) {
+        if ( !( a[0] >= 0.0 && a[0] <= (double)( SPR_USER_COUNT - 1 ) ) ) {
             return vm_error( vm, "Illegal argument" );
         }
     }

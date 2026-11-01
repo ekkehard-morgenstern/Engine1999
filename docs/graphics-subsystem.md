@@ -13,7 +13,7 @@ The screen is 640 x 300 logical pixels, drawn as five layers from bottom to top 
 | 1 | tiles | 41 x 13 cells of 16 x 24 px from a 256-tile map, scrolled by 0..15 px | `tilescr_render` |
 | 2 | text | 80 x 25 cells of 8 x 12 px, colors per cell | `txtscr_render` |
 | 3 | graphics | plain bitmap (`GFX TARGET 3`, the default) | `gfxcore` through `sdlscreen` |
-| 4 | sprites | 256 sprites of 16 x 24 px, priority, animation sequences, collisions | `sprscr_render` |
+| 4 | sprites | 256 sprites of 16 x 24 px (248 for programs, 8 reserved for the engine), priority, animation sequences, collisions | `sprscr_render` |
 
 Behind them is the backdrop color (`GFX BACKDROP`). **Every layer is 640 x 300 bytes of palette indices with its own 256 entry ARGB palette**
 (`sdllayer_t.palette`, index 0 = transparent by default; the names of the color table, such as "Gold", can be used by `GFX PALNAME`).
@@ -85,7 +85,7 @@ TILE SCROLL sx, sy                    scroll offset in pixels (taken modulo 16 a
 -- sprites
 SPRITE DEF n, a$   SPRITE GET n, a$   sprite image n (0..255) from / to 384 bytes
 SPRITE SEQ a, a$                      animation sequence a (0..255): the string holds 1..15 image numbers
-SPRITE n, x, y [, image]              places sprite n (0..255) at x, y (-1024..1023), optionally with an image
+SPRITE n, x, y [, image]              places sprite n (0..247) at x, y (-1024..1023), optionally with an image; 248..255 are reserved
 SPRITE n, ON | OFF                    shows / hides it
 SPRITE n, PRIORITY p                  0..7 (higher is in front)
 SPRITE n, IMAGE i                     a fixed image
@@ -132,6 +132,21 @@ the cells with `TILE FILL` when the camera crosses a tile boundary, and scrolls 
 of the cell 40. Sprites are placed at world position minus camera. Any frame in which a layer changes costs the screen thread a rendering pass: on a software renderer (a test
 under Xvfb) a program that scrolls the tiles every frame ran at about a third of 60 frames per second; on a normal desktop it is fine.
 
+### Reserved sprites and the mouse pointer (2026-11-01)
+
+The sprites **248..255 belong to the engine**; a program can't reach them (`SPRITE 248,ON`, `SPRITE("X",255)` and the other statements and functions with such a number are
+"Illegal argument"). The program's sprites are 0..247. The reserved ones: have **images and animation sequences of their own** (the second half of the sprite map: 256 more
+images, numbered 256..511 in the map, and 16 sequences, `MAX_SYSANIM`; the program's images 0..255 and sequences stay as they were); are **drawn in front of every sprite of the
+program** whatever its priority; **don't take part in collisions**; are **not touched by `GFX RESET` / `GFX RESET ALL`**; and they are on the sprite layer, so `GFX LAYER 4,OFF` hides them
+with the others. The engine reaches them through `sprscr_sys_*` (`sprscreen.h`). **Sprite 255 is the mouse pointer** (248..254 are free for future use).
+
+The pointer's pictures are drawn by `cursors.[ch]` (no SDL) at start-up, in the colors of the sprite layer's palette (black outline = entry 1, white = 140, grays, red for "forbidden"):
+`ARROW` (hot spot at the tip), `WAIT` (a dark round badge with a ring of dots that turns, 8 frames), `BUSY` (the arrow with a small turning badge, 8 frames), `TEXT` (I-beam),
+`HAND` (pointing), `GRAB` (a closed hand, for dragging), `CROSS` (crosshair), `SIZEH`, `SIZEV` (resize arrows), `MOVE` (four arrows), `NO` (forbidden), `HELP` (the arrow with a
+question mark). `cursors_set()`, `cursors_move()` (the hot spot to x, y), `cursors_show()`; the window has `sdlscr_cursor_*`. **Nothing in BASIC reaches the pointer yet**: the mouse
+support (statements to show it and to choose the shape, the mouse position and buttons) comes next. `sdltest3` shows all shapes on a light, a dark and a striped background and lets you move
+and change the real pointer with the keyboard (N / P, W A S D).
+
 ### `GFX RESET`
 
 `GFX RESET` puts the graphics system back to its start state, so that nothing a program left behind stays on the screen:
@@ -140,7 +155,7 @@ under Xvfb) a program that scrolls the tiles every frame ran at about a third of
 - **all palettes** and the backdrop color are back to the color table (a changed palette would otherwise leave the next program with strange colors);
 - the background and graphics bitmaps are cleared; target 3, pen 1, mode `SET`, and the `DRAW` position, color, scale and angle start again;
 - the tile screen: all cells 0 and no scrolling;
-- all 256 sprites: hidden, at 0,0, default image and animation, no movement, no collision flags, pending collision events dropped;
+- all 248 sprites of the program (not the 8 reserved ones, so the mouse pointer stays): hidden, at 0,0, default image and animation, no movement, no collision flags, pending collision events dropped;
 - the **text colors**: pen, paper and the blank colors of the text screen go back to their defaults (pen 1 = black), and so do the colors an ANSI sequence in `PRINT` set;
   a `COLOR 140` of the program does not outlive `GFX RESET` (an earlier version left them, so text stayed white).
 

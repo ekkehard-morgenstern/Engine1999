@@ -6,6 +6,7 @@ colors-cfrag.txt
 *.o
 sdltest1
 sdltest2
+sdltest3
 gmon.out
 all
 engine.lib

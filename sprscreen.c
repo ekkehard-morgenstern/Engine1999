@@ -28,6 +28,7 @@
 
 #include "sprscreen.h"
 #include "tilescreen.h"
+#include "cursors.h"
 
 typedef struct _sprctrl_t {
     // The animation counters are the only fields the screen thread changes (sprscr_periodicals), so they are bytes of their own: a bitfield write is a
@@ -54,6 +55,7 @@ typedef struct _sprctrl_t {
 
 static sprctrl_t    sprctrl[MAX_SPRITES];
 static uint8_t      spranim[MAX_ANIMSEQ][MAX_SPRANIM];
+static uint8_t      sprsysanim[MAX_SYSANIM][MAX_SPRANIM];      // the animation sequences of the engine (image numbers of the engine's half of the map)
 static uint8_t      sprmap[SPRMAP_WIDTH * SPRMAP_HEIGHT];
 static bool         sprchg = false;
 
@@ -89,13 +91,21 @@ static sprmove_t    sprmove[MAX_SPRITES];
 static int          sprcollwith[MAX_SPRITES];       // the sprite a sprite last collided with (-1 none)
 static int          sprevent = -1;                  // a sprite with a new collision (for ON COLLISION), -1 none
 
-static uint8_t sprscr_curimage( const sprctrl_t* ctrl ) {
-    return ctrl->use_image ? (uint8_t) ctrl->image : spranim[ ctrl->anim_index ][ ctrl->anim_pos & 15U ];
+// the image a sprite shows now: 0..255 for the sprites of the program, SPRMAP_SYSBASE + 0..255 for the reserved ones (their own images and sequences)
+static int sprscr_curimage( const sprctrl_t* ctrl ) {
+    int n = (int)( ctrl - &sprctrl[0] );
+    if ( n >= SPR_SYS_FIRST ) {
+        int rel = ctrl->use_image ? (int) ctrl->image : sprsysanim[ ctrl->anim_index & ( MAX_SYSANIM - 1 ) ][ ctrl->anim_pos & 15U ];
+        return SPRMAP_SYSBASE + rel;
+    }
+    return ctrl->use_image ? (int) ctrl->image : spranim[ ctrl->anim_index ][ ctrl->anim_pos & 15U ];
 }
 
 void sprscr_init( void ) {
     memset( &sprctrl[0], 0, sizeof(sprctrl_t) * MAX_SPRITES );
     memset( &spranim[0][0], 0, MAX_ANIMSEQ * MAX_SPRANIM );
+    memset( &sprsysanim[0][0], 0, MAX_SYSANIM * MAX_SPRANIM );
+    memset( &sprmap[0], 0, sizeof(sprmap) );
     memset( &sprctrl[0], 0, sizeof(sprctrl_t) * MAX_SPRITES );
     memset( &sprmove[0], 0, sizeof(sprmove) );
     memset( &sprreq[0], 0, sizeof(sprreq) );
@@ -104,11 +114,12 @@ void sprscr_init( void ) {
         sprcollwith[i] = -1;
     }
     sprevent = -1;
+    cursors_install();                      // the pictures of the mouse pointer (reserved images and sequences)
     sprscr_touch();
 }
 
 void sprscr_show( int sprno, bool active ) {
-    if ( sprno < 0 || sprno >= MAX_SPRITES ) {
+    if ( sprno < 0 || sprno >= SPR_USER_COUNT ) {
         return;
     }
     sprctrl[sprno].active = active;
@@ -116,7 +127,7 @@ void sprscr_show( int sprno, bool active ) {
 }
 
 void sprscr_prio( int sprno, int prio ) {
-    if ( sprno < 0 || sprno >= MAX_SPRITES ) {
+    if ( sprno < 0 || sprno >= SPR_USER_COUNT ) {
         return;
     }
     sprctrl[sprno].priority = prio;
@@ -124,7 +135,7 @@ void sprscr_prio( int sprno, int prio ) {
 }
 
 void sprscr_move( int sprno, int x, int y ) {
-    if ( sprno < 0 || sprno >= MAX_SPRITES ) {
+    if ( sprno < 0 || sprno >= SPR_USER_COUNT ) {
         return;
     }
     sprctrl[sprno].screen_x = x;
@@ -144,7 +155,7 @@ void sprscr_animdata( int animno, const uint8_t* seq, size_t size ) {
 }
 
 void sprscr_animcfg( int sprno, int animno, int length, int speed ) {
-    if ( sprno < 0 || sprno >= MAX_SPRITES || animno < 0 || animno >= MAX_ANIMSEQ ) {
+    if ( sprno < 0 || sprno >= SPR_USER_COUNT || animno < 0 || animno >= MAX_ANIMSEQ ) {
         return;
     }
     if ( length < 0 || length > 15 || speed < 0 || speed > 31 ) {
@@ -178,9 +189,118 @@ void sprscr_writemap( int imgno, const uint8_t data[SPRITE_WIDTH * SPRITE_HEIGHT
     sprscr_touch();
 }
 
+// the images of a map cell (shared by the program's and the engine's)
+static void sprscr_putcell( int cell, const uint8_t data[SPRITE_WIDTH * SPRITE_HEIGHT] ) {
+    uint16_t mapcx = (uint16_t)( ( cell % SPRMAP_CELLSX ) * SPRITE_WIDTH );
+    uint16_t mapcy = (uint16_t)( ( cell / SPRMAP_CELLSX ) * SPRITE_HEIGHT );
+    uint32_t mapof = (uint32_t) mapcy * SPRMAP_WIDTH + mapcx;
+    const uint8_t* s = &data[0];
+    uint8_t* d = &sprmap[ mapof ];
+    for ( int y=0; y < SPRITE_HEIGHT; ++y ) {
+        for ( int x=0; x < SPRITE_WIDTH; ++x ) {
+            *d++ = *s++;
+        }
+        d += SPRMAP_WIDTH - SPRITE_WIDTH;
+    }
+    sprscr_touch();
+}
+
+// -- the reserved sprites (the engine's, not the program's) ---------------------------------------------
+
+void sprscr_sys_writemap( int sysimg, const uint8_t data[SPRITE_WIDTH * SPRITE_HEIGHT] ) {
+    if ( sysimg < 0 || sysimg > 255 ) {
+        return;
+    }
+    sprscr_putcell( SPRMAP_SYSBASE + sysimg, data );
+}
+
+void sprscr_sys_animdata( int seq, const uint8_t* images, size_t size ) {
+    if ( seq < 0 || seq >= MAX_SYSANIM || images == 0 || size == 0 ) {
+        return;
+    }
+    if ( size > 15U ) {
+        size = 15U;
+    }
+    memcpy( &sprsysanim[seq][0], images, size );
+    sprscr_touch();
+}
+
+void sprscr_sys_setimage( int sprno, int sysimg ) {
+    if ( sprno < SPR_SYS_FIRST || sprno >= MAX_SPRITES || sysimg < 0 || sysimg > 255 ) {
+        return;
+    }
+    sprctrl[sprno].use_image = 1;
+    sprctrl[sprno].image = (unsigned) sysimg;
+    sprscr_touch();
+}
+
+void sprscr_sys_animcfg( int sprno, int seq, int length, int speed ) {
+    if ( sprno < SPR_SYS_FIRST || sprno >= MAX_SPRITES || seq < 0 || seq >= MAX_SYSANIM || length < 0 || length > 15 || speed < 0 || speed > 31 ) {
+        return;
+    }
+    sprctrl_t* ctrl = &sprctrl[sprno];
+    ctrl->use_image        = 0;
+    ctrl->anim_index       = seq;
+    ctrl->anim_pos         = 0;
+    ctrl->anim_size        = length;
+    ctrl->anim_speed_count = speed;
+    ctrl->anim_speed_reset = speed;
+    sprscr_touch();
+}
+
+void sprscr_sys_show( int sprno, bool active ) {
+    if ( sprno < SPR_SYS_FIRST || sprno >= MAX_SPRITES ) {
+        return;
+    }
+    sprctrl[sprno].active = active;
+    sprscr_touch();
+}
+
+void sprscr_sys_move( int sprno, int x, int y ) {
+    if ( sprno < SPR_SYS_FIRST || sprno >= MAX_SPRITES ) {
+        return;
+    }
+    sprctrl[sprno].screen_x = x;
+    sprctrl[sprno].screen_y = y;
+    sprscr_touch();
+}
+
+bool sprscr_sys_isactive( int sprno ) {
+    return sprno >= SPR_SYS_FIRST && sprno < MAX_SPRITES && sprctrl[sprno].active;
+}
+
+bool sprscr_sys_readmap( int sysimg, uint8_t out[SPRITE_WIDTH * SPRITE_HEIGHT] ) {
+    if ( sysimg < 0 || sysimg > 255 ) {
+        return false;
+    }
+    int cell = SPRMAP_SYSBASE + sysimg;
+    uint16_t mapcx = (uint16_t)( ( cell % SPRMAP_CELLSX ) * SPRITE_WIDTH );
+    uint16_t mapcy = (uint16_t)( ( cell / SPRMAP_CELLSX ) * SPRITE_HEIGHT );
+    for ( int y=0; y < SPRITE_HEIGHT; ++y ) {
+        memcpy( &out[ y * SPRITE_WIDTH ], &sprmap[ ( mapcy + y ) * SPRMAP_WIDTH + mapcx ], SPRITE_WIDTH );
+    }
+    return true;
+}
+
+bool sprscr_sys_getpos( int sprno, int* x, int* y ) {
+    if ( sprno < SPR_SYS_FIRST || sprno >= MAX_SPRITES ) {
+        return false;
+    }
+    *x = sprctrl[sprno].screen_x;
+    *y = sprctrl[sprno].screen_y;
+    return true;
+}
+
+int sprscr_sys_getimage( int sprno ) {
+    if ( sprno < SPR_SYS_FIRST || sprno >= MAX_SPRITES ) {
+        return -1;
+    }
+    return sprscr_curimage( &sprctrl[sprno] ) - SPRMAP_SYSBASE;
+}
+
 void sprscr_reset( bool images ) {
-    memset( &sprctrl[0], 0, sizeof(sprctrl) );
-    for ( int i=0; i < MAX_SPRITES; ++i ) {
+    memset( &sprctrl[0], 0, sizeof(sprctrl_t) * SPR_USER_COUNT );      // (the reserved sprites, the mouse pointer, are not the program's to reset)
+    for ( int i=0; i < SPR_USER_COUNT; ++i ) {
         // the movement belongs to the screen thread: it is asked to stop (and is told here, too, for a host that has no screen thread)
         __atomic_store_n( &sprreq[i], SPRREQ_VALID | SPRREQ_CANCEL, __ATOMIC_RELEASE );
         __atomic_store_n( &sprmove[i].active, false, __ATOMIC_RELEASE );
@@ -190,7 +310,7 @@ void sprscr_reset( bool images ) {
     __atomic_store_n( &sprevent, -1, __ATOMIC_RELEASE );
     if ( images ) {
         memset( &spranim[0][0], 0, MAX_ANIMSEQ * MAX_SPRANIM );
-        memset( &sprmap[0], 0, sizeof(sprmap) );
+        memset( &sprmap[0], 0, (size_t) SPRMAP_WIDTH * ( SPRMAP_HEIGHT / 2 ) );     // the program's half of the map; the engine's images stay
     }
     sprscr_touch();
 }
@@ -200,7 +320,7 @@ bool sprscr_changed( void ) {
 }
 
 void sprscr_setimage( int sprno, int image ) {
-    if ( sprno < 0 || sprno >= MAX_SPRITES || image < 0 || image > 255 ) {
+    if ( sprno < 0 || sprno >= SPR_USER_COUNT || image < 0 || image > 255 ) {
         return;
     }
     sprctrl[sprno].use_image = 1;
@@ -209,14 +329,14 @@ void sprscr_setimage( int sprno, int image ) {
 }
 
 int sprscr_getimage( int sprno ) {
-    if ( sprno < 0 || sprno >= MAX_SPRITES ) {
+    if ( sprno < 0 || sprno >= SPR_USER_COUNT ) {
         return -1;
     }
     return sprscr_curimage( &sprctrl[sprno] );
 }
 
 bool sprscr_getpos( int sprno, int* x, int* y ) {
-    if ( sprno < 0 || sprno >= MAX_SPRITES ) {
+    if ( sprno < 0 || sprno >= SPR_USER_COUNT ) {
         return false;
     }
     *x = sprctrl[sprno].screen_x;
@@ -225,7 +345,7 @@ bool sprscr_getpos( int sprno, int* x, int* y ) {
 }
 
 bool sprscr_isactive( int sprno ) {
-    return sprno >= 0 && sprno < MAX_SPRITES && sprctrl[sprno].active;
+    return sprno >= 0 && sprno < SPR_USER_COUNT && sprctrl[sprno].active;
 }
 
 bool sprscr_readmap( int imgno, uint8_t out[SPRITE_WIDTH * SPRITE_HEIGHT] ) {
@@ -241,7 +361,7 @@ bool sprscr_readmap( int imgno, uint8_t out[SPRITE_WIDTH * SPRITE_HEIGHT] ) {
 }
 
 void sprscr_moveto( int sprno, int x, int y, int ticks ) {
-    if ( sprno < 0 || sprno >= MAX_SPRITES ) {
+    if ( sprno < 0 || sprno >= SPR_USER_COUNT ) {
         return;
     }
     // the movement is the screen thread's: a request word is posted (one atomic store; a newer request replaces an older one that was not picked up yet)
@@ -257,7 +377,7 @@ void sprscr_moveto( int sprno, int x, int y, int ticks ) {
 
 // a movement is going on, or one has been asked for and not picked up yet (a request to stop or to jump is no movement)
 bool sprscr_moving( int sprno ) {
-    if ( sprno < 0 || sprno >= MAX_SPRITES ) {
+    if ( sprno < 0 || sprno >= SPR_USER_COUNT ) {
         return false;
     }
     if ( __atomic_load_n( &sprmove[sprno].active, __ATOMIC_ACQUIRE ) ) {
@@ -268,7 +388,7 @@ bool sprscr_moving( int sprno ) {
 }
 
 void sprscr_setcollide( int sprno, bool sprites, bool tiles ) {
-    if ( sprno < 0 || sprno >= MAX_SPRITES ) {
+    if ( sprno < 0 || sprno >= SPR_USER_COUNT ) {
         return;
     }
     sprctrl[sprno].spr_spr_coll_ena = sprites;
@@ -278,14 +398,14 @@ void sprscr_setcollide( int sprno, bool sprites, bool tiles ) {
 }
 
 uint32_t sprscr_hits( int sprno ) {
-    if ( sprno < 0 || sprno >= MAX_SPRITES ) {
+    if ( sprno < 0 || sprno >= SPR_USER_COUNT ) {
         return 0;
     }
     return __atomic_exchange_n( &sprhit[sprno], 0, __ATOMIC_ACQ_REL );      // read and cleared in one step: a hit that arrives meanwhile is not lost
 }
 
 int sprscr_collidewith( int sprno ) {
-    return sprno >= 0 && sprno < MAX_SPRITES ? __atomic_load_n( &sprcollwith[sprno], __ATOMIC_ACQUIRE ) : -1;
+    return sprno >= 0 && sprno < SPR_USER_COUNT ? __atomic_load_n( &sprcollwith[sprno], __ATOMIC_ACQUIRE ) : -1;
 }
 
 int sprscr_nextevent( void ) {
@@ -299,7 +419,7 @@ static int sprscr_pixel( int sprno, int x, int y ) {
     if ( lx < 0 || ly < 0 || lx >= SPRITE_WIDTH || ly >= SPRITE_HEIGHT ) {
         return 0;
     }
-    uint8_t img = sprscr_curimage( c );
+    int img = sprscr_curimage( c );
     return sprmap[ ( ( img / SPRMAP_CELLSX ) * SPRITE_HEIGHT + ly ) * SPRMAP_WIDTH + ( img % SPRMAP_CELLSX ) * SPRITE_WIDTH + lx ];
 }
 
@@ -314,7 +434,7 @@ static void sprscr_collisions( void ) {
     for ( int i=0; i < MAX_SPRITES; ++i ) {
         with[i] = -1;
     }
-    for ( int a=0; a < MAX_SPRITES; ++a ) {
+    for ( int a=0; a < SPR_USER_COUNT; ++a ) {            // (the reserved sprites don't collide)
         const sprctrl_t* ca = &sprctrl[a];
         if ( !ca->active || ( !ca->spr_spr_coll_ena && !ca->spr_til_coll_ena ) ) {
             continue;
@@ -338,7 +458,7 @@ static void sprscr_collisions( void ) {
         if ( !ca->spr_spr_coll_ena ) {
             continue;
         }
-        for ( int b = a + 1; b < MAX_SPRITES; ++b ) {
+        for ( int b = a + 1; b < SPR_USER_COUNT; ++b ) {
             const sprctrl_t* cb = &sprctrl[b];
             if ( !cb->active || !cb->spr_spr_coll_ena ) {
                 continue;
@@ -372,10 +492,15 @@ static void sprscr_collisions( void ) {
     }
 }
 
+// the drawing order: by priority, the reserved sprites (the mouse pointer) after all of the program (key 8), equal keys by number; the keys are
+// copied before sorting so that a priority that changes meanwhile can't make the comparisons inconsistent
+static uint8_t sprsortkey[MAX_SPRITES];
+
 static int sprscr_rendersort( const void* pa, const void* pb ) {
-    uint8_t a = *( (const uint8_t*) pa );
-    uint8_t b = *( (const uint8_t*) pb );
-    return (int)(sprctrl[a].priority) - (int)(sprctrl[b].priority);
+    int a = *( (const uint8_t*) pa );
+    int b = *( (const uint8_t*) pb );
+    int d = (int) sprsortkey[a] - (int) sprsortkey[b];
+    return d != 0 ? d : a - b;
 }
 
 void sprscr_periodicals( void ) {
@@ -451,6 +576,7 @@ void sprscr_render( uint8_t* target ) {
     uint8_t tmp[256];
     for ( uint16_t i=0; i < UINT16_C(256); ++i ) {
         tmp[i] = (uint8_t) i;
+        sprsortkey[i] = i >= SPR_SYS_FIRST ? 8 : (uint8_t) sprctrl[i].priority;
     }
     qsort( &tmp[0], 256U, 1U, sprscr_rendersort );
 
@@ -461,9 +587,9 @@ void sprscr_render( uint8_t* target ) {
             // disabled, skip
             continue;
         }
-        uint8_t sprimg  = sprscr_curimage( ctrl );
-        uint8_t spriy   = sprimg / SPRMAP_CELLSX;
-        uint8_t sprix   = sprimg % SPRMAP_CELLSX;
+        int sprimg      = sprscr_curimage( ctrl );
+        int spriy       = sprimg / SPRMAP_CELLSX;
+        int sprix       = sprimg % SPRMAP_CELLSX;
         uint16_t spricy = spriy * SPRITE_HEIGHT;
         uint16_t spricx = sprix * SPRITE_WIDTH;
         int16_t left    = ctrl->screen_x;

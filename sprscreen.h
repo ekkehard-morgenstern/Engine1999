@@ -36,10 +36,11 @@
 #endif
 
 #define SPRMAP_WIDTH    256
-#define SPRMAP_HEIGHT   384
+#define SPRMAP_HEIGHT   768         // 32 rows of cells: the first 16 rows hold the 256 images of the program, the other 16 the 256 images of the engine
 #define SPRMAP_CELLSX   16
-#define SPRMAP_CELLSY   16
-#define MAX_SPRIMAG     256
+#define SPRMAP_CELLSY   32
+#define MAX_SPRIMAG     256         // the images the program can reach: 0..255
+#define SPRMAP_SYSBASE  256         // the index of the first image of the engine (a cell of the second half of the map)
 
 #define SPRTGT_WIDTH    640
 #define SPRTGT_HEIGHT   300
@@ -51,6 +52,15 @@
 #define MAX_ANIMSEQ     256
 #define MAX_SPRANIM     16
 
+// Reserved sprites (2026-11-01): the sprites 248..255 belong to the engine. A program can't reach them: `SPRITE n` with n > 247 is "Illegal argument", the
+// functions below with such a sprite number do nothing (the engine uses the sprscr_sys_* ones), and they have images and animation sequences of their own
+// (the second half of the image map, MAX_SYSANIM sequences). They are drawn in front of every sprite of the program, don't take part in collisions
+// and are left alone by sprscr_reset() (so GFX RESET does not remove the mouse pointer). See cursors.h for the mouse pointer.
+#define SPR_USER_COUNT  248         // the sprites of the program: 0..247
+#define SPR_SYS_FIRST   248         // the first reserved sprite
+#define SPR_MOUSE       255         // the mouse pointer (cursors.h); 248..254 are free for future use
+#define MAX_SYSANIM     16
+
 void sprscr_init( void );
 void sprscr_show( int sprno, bool active );
 void sprscr_prio( int sprno, int prio );
@@ -59,7 +69,18 @@ void sprscr_animdata( int animno, const uint8_t* seq, size_t size );
 void sprscr_animcfg( int sprno, int animno, int length, int speed );
 void sprscr_writemap( int imgno, const uint8_t data[SPRITE_WIDTH * SPRITE_HEIGHT]);
 bool sprscr_changed( void );
-void sprscr_reset( bool images );          // all sprites hidden, in the default state and at 0,0, no movement, no collision flags; images: the images and animation sequences are cleared as well
+void sprscr_reset( bool images );          // the sprites of the program (not the reserved ones) hidden, in the default state and at 0,0, no movement, no collision flags; images: the images and animation sequences of the program are cleared as well
+// the reserved sprites (SPR_SYS_FIRST..MAX_SPRITES-1), for the engine only; images are numbered from 0 (the cell SPRMAP_SYSBASE + n of the map)
+void sprscr_sys_writemap( int sysimg, const uint8_t data[SPRITE_WIDTH * SPRITE_HEIGHT] );       // an image of the engine, sysimg 0..255
+void sprscr_sys_animdata( int seq, const uint8_t* images, size_t size );                          // a sequence of the engine (seq 0..MAX_SYSANIM-1, 1..15 images)
+void sprscr_sys_setimage( int sprno, int sysimg );                                                // a fixed image
+void sprscr_sys_animcfg( int sprno, int seq, int length, int speed );                             // plays a sequence
+void sprscr_sys_show( int sprno, bool active );
+void sprscr_sys_move( int sprno, int x, int y );
+bool sprscr_sys_isactive( int sprno );
+bool sprscr_sys_readmap( int sysimg, uint8_t out[SPRITE_WIDTH * SPRITE_HEIGHT] );                  // an image of the engine, read back (the gallery and the tests)
+bool sprscr_sys_getpos( int sprno, int* x, int* y );
+int  sprscr_sys_getimage( int sprno );                                                            // the image shown now (0..255 of the engine), -1 for a bad number
 void sprscr_setimage( int sprno, int image );               // a fixed image (until sprscr_animcfg)
 int  sprscr_getimage( int sprno );                          // the image shown now, -1 for a bad sprite number
 bool sprscr_getpos( int sprno, int* x, int* y );

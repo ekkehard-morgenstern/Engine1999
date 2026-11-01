@@ -98,6 +98,12 @@ int sdlscr_lineedit( char* buf, size_t bufsz, void (*vblank_handler)( void* ), v
 // the screen driver of the full-screen editor, the monitor and the one-line editor (scrdrv.h); vblank_handler is called while it waits for keys
 const struct _scrdrv_t* sdlscr_driver( void (*vblank_handler)( void* ), void* usrdata );
 void sdlscr_setbreak( void );                   // a break request, as ESC while a program runs
+// the mouse pointer: a reserved sprite (sprscreen.h SPR_MOUSE) with pictures of the engine (cursors.h, CUR_*); drawn in front of all sprites of the program
+void sdlscr_cursor_show( bool on );
+void sdlscr_cursor_move( int x, int y );        // the hot spot of the shape to x, y of the sprite layer (0..639, 0..299)
+bool sdlscr_cursor_shape( int shape );          // false for a bad shape
+int  sdlscr_cursor_getshape( void );
+bool sdlscr_cursor_image( int image, uint8_t out[SPRITE_WIDTH * SPRITE_HEIGHT] );   // an image of the engine (the gallery: sdltest3)
 // is the key (a KEYID_* of keystate.h) held down now? (the keyboard state of SDL: updated by the event loop of the screen thread, read without a lock)
 bool sdlscr_keydown( int keyid );
 // the prompt line with the C-64 style screen editor (text screen 0, docs/screen-editor-proposal.md); results as sdlscr_lineinput()

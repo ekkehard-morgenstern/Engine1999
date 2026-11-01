@@ -31,6 +31,7 @@
 #include "textscreen.h"
 #include "tilescreen.h"
 #include "sprscreen.h"
+#include "cursors.h"
 
 /*
 Automated test of the graphics backends without SDL: the drawing core (gfxcore.c), and what tilescreen.c, sprscreen.c and textscreen.c got
@@ -314,6 +315,103 @@ static void test_tiles( void ) {
     tilescr_scroll( 0, 0 );
 }
 
+// -- the reserved sprites and the mouse pointer (cursors.c) ------------------------------------------------------
+
+static void test_reserved( void ) {
+    sprscr_init();
+    tilescr_init();
+    uint8_t img[16 * 24], back[16 * 24];
+    memset( img, 9, sizeof(img) );
+    check( SPR_USER_COUNT == 248 && SPR_SYS_FIRST == 248 && SPR_MOUSE == 255 && MAX_SPRITES - SPR_SYS_FIRST == 8, "8 reserved sprites, 248..255; the mouse pointer is the last" );
+    int x = 0, y = 0;
+    // the functions of the program don't reach them
+    sprscr_show( 255, true ); sprscr_move( 255, 5, 6 ); sprscr_setimage( 255, 3 ); sprscr_prio( 250, 1 ); sprscr_animcfg( 255, 1, 2, 3 ); sprscr_moveto( 255, 9, 9, 10 );
+    check( !sprscr_isactive( 255 ) && !sprscr_sys_isactive( 255 ) && !sprscr_getpos( 255, &x, &y ) && sprscr_getimage( 255 ) == -1 && !sprscr_moving( 255 ), "the functions of the program do nothing for a reserved sprite" );
+    sprscr_setcollide( 255, true, true );
+    check( sprscr_hits( 255 ) == 0 && sprscr_collidewith( 255 ) == -1, "...also for the collision functions" );
+    check( !sprscr_sys_isactive( 5 ) && sprscr_sys_getimage( 5 ) == -1 && !sprscr_sys_getpos( 5, &x, &y ), "the engine's functions do nothing for a sprite of the program" );
+    sprscr_sys_show( 5, true ); sprscr_sys_move( 5, 3, 3 );
+    check( !sprscr_isactive( 5 ), "...and don't change it" );
+
+    // the pictures of the mouse pointer exist, in a part of the map of their own
+    check( cursors_shape() == CUR_ARROW && !cursors_visible() && !sprscr_sys_isactive( SPR_MOUSE ), "the pointer starts as a hidden arrow" );
+    int first, count;
+    int speed = cursors_images( CUR_ARROW, &first, &count );
+    bool any = false;
+    check( sprscr_sys_readmap( first, back ) && speed == 0 && count == 1, "the arrow image can be read" );
+    for ( int i = 0; i < 16 * 24; ++i ) any = any || back[i] != 0;
+    check( any && back[0] != 0, "...it is not empty, and its tip is at the top left" );
+    int shapes_ok = 0;
+    for ( int s = 0; s < CUR_COUNT; ++s ) {
+        int f, c;
+        cursors_images( s, &f, &c );
+        bool filled = c >= 1;
+        for ( int k = 0; k < c && filled; ++k ) {
+            bool a = false;
+            sprscr_sys_readmap( f + k, back );
+            for ( int i = 0; i < 16 * 24; ++i ) a = a || back[i] != 0;
+            filled = filled && a;
+        }
+        shapes_ok += filled && strlen( cursors_name( s ) ) > 0;
+    }
+    check( shapes_ok == CUR_COUNT && CUR_COUNT >= 12, "every shape has a drawn picture for every frame" );
+    check( cursors_find( "wait", 4 ) == CUR_WAIT && cursors_find( "HAND", 4 ) == CUR_HAND && cursors_find( "nope", 4 ) < 0 && cursors_find( "SIZEH", 5 ) == CUR_SIZEH &&
+           strcmp( cursors_name( CUR_TEXT ), "TEXT" ) == 0 && cursors_name( 99 )[0] == '\0', "names of the shapes" );
+    int hx, hy;
+    cursors_hotspot( CUR_ARROW, &hx, &hy );
+    check( hx == 0 && hy == 0, "the hot spot of the arrow is its tip" );
+    check( cursors_images( CUR_WAIT, &first, &count ) > 0 && count == 8 && cursors_images( CUR_BUSY, &first, &count ) > 0 && count == 8, "the waiting shapes are animated" );
+    check( !cursors_set( -1 ) && !cursors_set( CUR_COUNT ), "a bad shape is refused" );
+
+    // show and move: the hot spot is where the pointer is
+    cursors_show( true );
+    cursors_move( 100, 50 );
+    check( sprscr_sys_isactive( SPR_MOUSE ) && sprscr_sys_getpos( SPR_MOUSE, &x, &y ) && x == 100 && y == 50, "the arrow's hot spot is its position" );
+    cursors_set( CUR_WAIT );
+    cursors_hotspot( CUR_WAIT, &hx, &hy );
+    check( sprscr_sys_getpos( SPR_MOUSE, &x, &y ) && x == 100 - hx && y == 50 - hy, "another shape keeps the hot spot where it was" );
+    int px, py;
+    cursors_position( &px, &py );
+    check( px == 100 && py == 50, "the position of the hot spot" );
+    cursors_set( CUR_ARROW );
+
+    // drawing order: in front of the sprites of the program, whatever their priority
+    sprscr_writemap( 5, img );
+    sprscr_show( 3, true ); sprscr_move( 3, 100, 50 ); sprscr_setimage( 3, 5 ); sprscr_prio( 3, 7 );
+    static uint8_t scr[SPRTGT_WIDTH * SPRTGT_HEIGHT];
+    sprscr_render( scr );
+    check( scr[ 50 * SPRTGT_WIDTH + 100 ] != 9 && scr[ 50 * SPRTGT_WIDTH + 100 ] != 0 && scr[ 70 * SPRTGT_WIDTH + 110 ] == 9, "the pointer is drawn in front of a sprite with the highest priority" );
+    // no collisions
+    sprscr_setcollide( 3, true, true );
+    for ( int i = 0; i < 3; ++i ) sprscr_periodicals();
+    check( sprscr_hits( 3 ) == 0 && sprscr_collidewith( 3 ) == -1 && sprscr_nextevent() == -1, "the pointer does not collide with the sprites of the program" );
+
+    // animation
+    cursors_set( CUR_WAIT );
+    int speedw = cursors_images( CUR_WAIT, &first, &count );
+    int seen[8] = { 0 }, distinct = 0;
+    for ( int i = 0; i < 8 * speedw * 2; ++i ) {
+        int im = sprscr_sys_getimage( SPR_MOUSE ) - first;
+        if ( im >= 0 && im < 8 && !seen[im] ) { seen[im] = 1; ++distinct; }
+        sprscr_periodicals();
+    }
+    check( distinct == 8, "the waiting pointer plays all its 8 frames" );
+
+    // GFX RESET / sprscr_reset leave the pointer alone
+    sprscr_reset( true );
+    bool filled = sprscr_sys_readmap( first, back );
+    bool nonzero = false;
+    for ( int i = 0; i < 16 * 24; ++i ) nonzero = nonzero || back[i] != 0;
+    check( sprscr_sys_isactive( SPR_MOUSE ) && filled && nonzero && !sprscr_isactive( 3 ), "a reset of the sprites of the program keeps the pointer and its pictures" );
+    sprscr_writemap( 255, img );
+    check( sprscr_sys_readmap( first, back ) && cursors_shape() == CUR_WAIT, "image 255 of the program does not overwrite the engine's images" );
+    sprscr_readmap( 255, back );
+    bool allnine = true;
+    for ( int i = 0; i < 16 * 24; ++i ) allnine = allnine && back[i] == 9;
+    check( allnine, "...and the program's image 255 is its own" );
+    sprscr_init();
+}
+
 static void test_sprites( void ) {
     sprscr_init();
     tilescr_init();
@@ -523,6 +621,7 @@ int main( void ) {
     test_text();
     test_draw();
     test_tiles();
+    test_reserved();
     test_sprites();
     test_textscreen();
     test_reset();

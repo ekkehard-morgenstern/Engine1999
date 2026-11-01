@@ -37,6 +37,7 @@
 #include "gfxcore.h"
 #include "sdlkeys.h"
 #include "keystate.h"
+#include "cursors.h"
 #include "scrdrv.h"
 
 #define NLAYERS 5
@@ -677,6 +678,26 @@ int sdlscr_getkey( void ) {
 void sdlscr_setbreak( void ) {
     sdlscr_breakreq = true;
     sdlev_raise( SDLEV_BREAK );
+}
+
+void sdlscr_cursor_show( bool on ) {
+    cursors_show( on );
+}
+
+void sdlscr_cursor_move( int x, int y ) {
+    cursors_move( x, y );
+}
+
+bool sdlscr_cursor_shape( int shape ) {
+    return cursors_set( shape );
+}
+
+int sdlscr_cursor_getshape( void ) {
+    return cursors_shape();
+}
+
+bool sdlscr_cursor_image( int image, uint8_t out[SPRITE_WIDTH * SPRITE_HEIGHT] ) {
+    return sprscr_sys_readmap( image, out );
 }
 
 // KEY("name"): the state of the key right now, from SDL's keyboard state (which the event loop of the screen thread keeps; no lock: a read that

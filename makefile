@@ -45,7 +45,7 @@ CL=$(CCOMP) $(CFLAGS)
 .c.o:
 	$(CC) -o $@ $<
 
-all: sdltest1 sdltest2 engine1999 basictest1 testcomp1 basictest2 vmtest1 repltest1 ansitest1 txttest1 asmtest1 synthtest1 iotest1 gfxtest1 buildtest1 engine1999c contest1 keytest1 scrtest1
+all: sdltest1 sdltest2 sdltest3 engine1999 basictest1 testcomp1 basictest2 vmtest1 repltest1 ansitest1 txttest1 asmtest1 synthtest1 iotest1 gfxtest1 buildtest1 engine1999c contest1 keytest1 scrtest1
 	echo ok >all
 
 .PHONY: grammar grammar-check kit install uninstall man-check
@@ -59,8 +59,8 @@ grammar-check:
 	perl grammar.pl --check
 
 BASEMOD=sdlevent.o sdllayer.o sdlmain.o sdlscreen.o textscreen.o tilescreen.o sprscreen.o 8x12font1.o sdlaudio.o synth.o mml.o sdlutil.o \
-		basic.o baspgm.o baslin.o bastok.o bascomp.o nodetype.o codegen.o cgenctl.o cgendecl.o cgenprog.o vars.o runtime.o vm.o basfiles.o iodev.o gfxcore.o gfxops.o basbuild.o basrepl.o basdebug.o ansi.o palette.o keyseq.o keystate.o sdlkeys.o scredit.o conscr.o fulledit.o vmasm.o monitor.o
-BASEHDR=sdlevent.h sdllayer.h sdlmain.h sdlscreen.h sdltypes.h textscreen.h tilescreen.h sprscreen.h unxtypes.h sdlaudio.h synth.h mml.h sdlutil.h basfiles.h iodev.h gfxcore.h gfxops.h basbuild.h basic.h baspgm.h baslin.h bastok.h bascomp.h nodetype.h codegen.h instset.h vars.h runtime.h vm.h basrepl.h basdebug.h ansi.h palette.h keyseq.h keystate.h sdlkeys.h scrdrv.h conscr.h fulledit.h vmasm.h monitor.h
+		basic.o baspgm.o baslin.o bastok.o bascomp.o nodetype.o codegen.o cgenctl.o cgendecl.o cgenprog.o vars.o runtime.o vm.o basfiles.o iodev.o gfxcore.o gfxops.o basbuild.o basrepl.o basdebug.o ansi.o palette.o keyseq.o keystate.o cursors.o sdlkeys.o scredit.o conscr.o fulledit.o vmasm.o monitor.o
+BASEHDR=sdlevent.h sdllayer.h sdlmain.h sdlscreen.h sdltypes.h textscreen.h tilescreen.h sprscreen.h unxtypes.h sdlaudio.h synth.h mml.h sdlutil.h basfiles.h iodev.h gfxcore.h gfxops.h basbuild.h basic.h baspgm.h baslin.h bastok.h bascomp.h nodetype.h codegen.h instset.h vars.h runtime.h vm.h basrepl.h basdebug.h ansi.h palette.h keyseq.h keystate.h cursors.h sdlkeys.h scrdrv.h conscr.h fulledit.h vmasm.h monitor.h
 
 LIBMOD=$(BASEMOD)
 LIBHDR=$(BASEHDR)
@@ -75,6 +75,11 @@ sdltest2: sdltest2.o $(LIBNAME)
 	$(CL) -o sdltest2 sdltest2.o $(LIBNAME) -lSDL2 -lrt -lm
 
 sdltest2.o:	sdltest2.c $(LIBHDR)
+
+sdltest3: sdltest3.o $(LIBNAME)
+	$(CL) -o sdltest3 sdltest3.o $(LIBNAME) -lSDL2 -lrt -lm
+
+sdltest3.o:	sdltest3.c $(LIBHDR)
 
 engine1999: engine1999.o $(LIBNAME)
 	$(CL) -o engine1999 engine1999.o $(LIBNAME) -lSDL2 -lrt -lm
@@ -306,6 +311,8 @@ scredit.o: scredit.c $(BASEHDR)
 keyseq.o: keyseq.c $(BASEHDR)
 
 keystate.o: keystate.c $(BASEHDR)
+
+cursors.o: cursors.c $(BASEHDR)
 
 sdlkeys.o: sdlkeys.c $(BASEHDR)
 

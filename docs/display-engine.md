@@ -9,7 +9,7 @@ Design intent is in `concept.txt`; this summarizes it together with the public A
   640x300, 8 bpp palettized with its own 256-entry ARGB8888 palette (SDL2 has no palettized textures, so each layer is expanded
   into a 32-bit texture).
 - Tiles: 16x24 px, 256 per tile map (16x16 tiles = 256x384 px); visible grid 41x13 with 0..15 px scroll offsets; one active map.
-- Sprites: 16x24 px, up to 256 sprites with 8-byte control structures, 256 animation sequences of up to 15 frames, priority 0..7,
+- Sprites: 16x24 px, 256 sprites with 8-byte control structures (0..247 for programs, 248..255 reserved for the engine: the mouse pointer is 255, see `docs/graphics-subsystem.md`), 256 animation sequences of up to 15 frames (16 more for the engine), priority 0..7,
   sprite/sprite and sprite/tile collision flags, coordinates are signed 11 bit.
 - Text cell = background colour index, foreground colour index, character index (font of 256 redefinable 8x12 monochrome glyphs).
 - Redraw model: a layer is flagged *modified* → its memory is regenerated if needed (tiles costliest, then text) → palette-expanded into its
