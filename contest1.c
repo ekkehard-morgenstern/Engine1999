@@ -91,6 +91,8 @@ static const testcase_t cases[] = {
     { "an escape sequence in the input is a key, not text", 0, "", "PRINT 1\033[A\n",         "1\n", "", 0, false },
     // EDIT n: the one-line editor on the keys of the input (the text of the line is there to be edited)
     { "EDIT n: the line is edited with keys from the input (End, a character, RETURN)", 0, "", "10 PRINT 1\nEDIT 10\n\033[F0\nLIST\n", "10 PRINT 10\n", "", 0, false },
+    { "AUTO from a pipe: numbered lines are stored, no prompts are written", 0, "", "AUTO 100,5\nPRINT 1\nPRINT 2\n\nLIST\n", "100 PRINT 1\n105 PRINT 2\n", "", 0, false },
+    { "AUTO: the next lines are entered after it, an empty line ends it", 0, "", "AUTO 10\nA=1\n\nPRINT 5\nLIST\n", "5\n10 A=1\n", "", 0, false },
     { "EDIT n: ESC cancels, the line stays",        0, "", "10 PRINT 1\nEDIT 10\n\033\nLIST\n", "10 PRINT 1\n", "", 0, false },
     { "EDIT n: Home and DELETE edit the number's line", 0, "", "10 PRINT 1\nEDIT 10\n\033[H\033[3~\033[3~\033[3~\033[3~2 \n", "", "", 0, false },
     { "EDIT of a line that does not exist",         0, "", "EDIT 99\nPRINT 5\n",             "5\n", "? Undefined line number 99\n", 0, false },
@@ -499,6 +501,15 @@ int main( void ) {
         static const char* const exp10[] = { "\r\n6\r\n" };
         failed += !pty_case( "terminal: Ctrl-C at the prompt cancels the line", steps10, 4U, exp10, 1U );
     }
+    // AUTO on a terminal in the classic line mode: the prompt shows the line numbers, an empty line ends it
+    {
+        static const char* const stepsA1[] = { "AUTO 100,5\r", "PRINT 1\r", "PRINT 2\r", "\r", "LIST\r", "\004" };
+        static const char* const expA1[] = { "AUTO 100,5", "100 ", "PRINT 1", "105 ", "PRINT 2", "110 ", "Ready.", "\r\n100 PRINT 1\r\n105 PRINT 2\r\n" };
+        failed += !pty_case( "terminal: AUTO prompts with line numbers, an empty line ends it", stepsA1, 6U, expA1, 8U );
+        static const char* const stepsA2[] = { "AUTO 10\r", "A=1\r", "\033", "LIST\r", "\004" };
+        static const char* const expA2[] = { "AUTO 10", "10 ", "A=1", "20 ", "Ready.", "\r\n10 A=1\r\n" };
+        failed += !pty_case( "terminal: ESC ends AUTO, the lines entered stay", stepsA2, 5U, expA2, 6U );
+    }
     // screen mode (the default on a terminal): the session runs on text screen 0 on the alternate screen; what is left of it is written to the normal
     // screen at the end (the "exit dump": the lines come with \r\n, the painting of the alternate screen moves the cursor instead)
     {
@@ -512,6 +523,9 @@ int main( void ) {
         static const char* const sC[] = { "PRINT 1", "\003", "+1\r", "\004", "BYE\r" };
         static const char* const eC[] = { "\r\n2\r\n" };
         failed += !pty_case( "screen mode: Ctrl-C and Ctrl-D at the prompt do nothing", sC, 5U, eC, 1U );
+        static const char* const sAU[] = { "AUTO 100,5\r", "PRINT 1\r", "PRINT 2\r", "\r", "LIST\r", "BYE\r" };
+        static const char* const eAU[] = { "\r\nReady.\r\nAUTO 100,5\r\nReady.\r\n100 PRINT 1\r\n105 PRINT 2\r\n110\r\nReady.\r\nLIST\r\n100 PRINT 1\r\n105 PRINT 2\r\n" };
+        failed += !pty_case( "screen mode: AUTO prompts with line numbers on the screen, an empty line ends it", sAU, 6U, eAU, 1U );
         static const char* const sD[] = { "10 GOTO 10\r", "RUN\r", "\033", "BYE\r" };
         static const char* const eD[] = { "? Break in line 10" };
         failed += !pty_case( "screen mode: a lone ESC breaks a running program", sD, 4U, eD, 1U );

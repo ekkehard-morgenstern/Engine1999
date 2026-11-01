@@ -25,7 +25,8 @@ The file is a `.bas` listing or a binary `.e99` file, found the way `LOAD` finds
 - **A program that ends with an error waits for a key** before the screen is left (a hint "Press a key to leave" in the bottom row, which is an overlay and not part of the dump); a normal end leaves at once. The exit status is as in the line mode (1 after an error).
 - **The terminal is left in order:** the alternate screen, the cursor, the autowrap and the raw mode are restored at the end, after `exit()` and when the process is killed by `SIGTERM`, `SIGHUP` or `SIGQUIT`. (A `SIGKILL` can't be caught.)
 - **`KEY("name")` is not available** in the console host (the run-time error "KEY is not available in this host"): a terminal never reports that a key is let go. A guess based on the time since the last byte flickered and is switched off (`CON_KEYSTATE` in `engine1999c.c`); reviewed by the owner (2026-11-01) and left as it is: an adaptive hold time would not cure the overlap of taps nor the single repeating key of a terminal (roadmap).
-- **Not done:** `AUTO` (in both modes), what Ctrl-D at the prompt should do (a future issue, see `docs/screen-editor-proposal.md` §7), colors in the exit dump.
+- **`AUTO [start[,step]]`** works in the screen mode and in the line mode on a terminal (`con_auto_prompt()` in `engine1999c.c`, the same loop as in `engine1999.c`): the prompt shows the next line number, the text typed behind it (with the one-line editor) is entered as that line, an empty line, ESC or Ctrl-C ends it. From a pipe or a file the lines are stored without any number being written to the output (a script gets no prompts).
+- **Not done:** what Ctrl-D at the prompt should do (a future issue, see `docs/screen-editor-proposal.md` §7), colors in the exit dump.
 
 ## Arguments, environment, standard channels
 
@@ -56,7 +57,7 @@ Everything after the file name is for the program: `engine1999c prog.bas a "b c"
 - **In screen mode (above)** `CLS`, `LOCATE`, `COLOR` and the `TXT` statements and functions work on the text screen as in the window; the rest of this section is the line mode.
 - **`CLS` and `LOCATE`** write ANSI escape sequences when standard output is a terminal (and nothing when it is not). `COLOR` is accepted and ignored: the Engine's palette is not the terminal's; `PRINT CHR$(27);"[31m";...` passes through to terminals as it is.
 - **`MOUSE`** works in screen mode (see "The mouse" below); elsewhere it is an error.
-- **Everything else** that needs a screen (`GFX`, `SPRITE`, `TILE`, `TXT`, `DESIGN`, `SYMBOL`, and the graphics functions) fails with `? Not available in the console host`. `AUTO` and the pager of `FILES` are window-only; `EDIT` without a target and `MONITOR` work on a terminal (next section).
+- **Everything else** that needs a screen (`GFX`, `SPRITE`, `TILE`, `TXT`, `DESIGN`, `SYMBOL`, and the graphics functions) fails with `? Not available in the console host`. The pager of `FILES` is window-only; `EDIT` without a target and `MONITOR` work on a terminal (next section).
 - The functions that ask for the text screen size answer with the size of the terminal (80 x 25 without one).
 
 ## Syntax colors
@@ -108,7 +109,7 @@ give "Not available in the console host" and the functions "Illegal argument", a
 
 ## Not done yet (roadmap section 12)
 
-Audio without a window. `AUTO` in the console host. See roadmap section 12.
+Audio without a window. See roadmap section 12.
 
 ## Design decisions I took (revisit if unwanted)
 

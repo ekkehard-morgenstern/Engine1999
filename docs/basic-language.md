@@ -335,7 +335,7 @@ FOR EACH K,V IN A(): PRINT K;V;: NEXT V    ' key (the index) and value
   `STOP [n]` (AsmBASIC) has no argument here.
 - **`TRACE ON` / `TRACE OFF`**: while on, every program line that starts prints its number in brackets (`[10]`), before the output of the line. It lasts until `TRACE OFF` (also over `RUN`).
 - **`AUTO [start[,step]]`** (direct mode, both default 10) lets the host prompt with line numbers: type the rest of the line and RETURN to enter it, an empty line (or a number above
-  999999) ends it. An existing line number is replaced. In `engine1999` the main loop does this (`repl_t.autoline`/`autostep`); other hosts have to prompt themselves.
+  999999) ends it. An existing line number is replaced. `engine1999` and `engine1999c` do this in their main loops (`repl_t.autoline`/`autostep`; the console host writes the numbers on a terminal only, a script reading from a pipe gets none); other hosts have to prompt themselves.
 - New reserved words: `STOP CONT TRACE` (tokens 240..242; `AUTO` was a token already).
 
 ### `BREAK ON` / `BREAK OFF`: who owns the ESC key

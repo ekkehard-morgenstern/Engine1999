@@ -35,7 +35,7 @@ the sections when items are done or added.
 | 19 | Drivers written in BASIC (8) | `DRIVER "name","PREFIX"` with labelled handlers | Low | postponed by the owner; proposal exists (*decision*) |
 | 20 | Conversion tools and an own image format (10) | images to `DESIGN` rows / image strings / palettes, a `.spr` file | Low | later |
 | 21 | Ctrl-D at the prompt in screen mode (11) | what it should do; today ignored (end with `BYE`) | Low | owner's future issue; ties to the end of input |
-| 22 | `AUTO` in the console host (12) | works in the window only | Low | |
+| 22 | ~~`AUTO` in the console host (12)~~ | **done 2026-11-01** | ~~Low~~ | |
 | 23 | `OPTION BASE`, `DEF type range` (`INT`/`STR`/`FLT` tokens), `TAB`/`TABMODE`, `DISPLAY(x)`, `BREAKPOINT` (2, 13) | assorted language ideas | Low | each needs a short design decision (*decision*) |
 | 24 | `DO … LOOP`, `FOR EVER` (11) | test-at-the-end loop | Low | `REPEAT`/`WHILE`/`UNTIL` cover it |
 | 25 | Small aliases (11) | `OLD`, `CATALOG`, `RENUMBER`, `FUNCTION`/`PROCEDURE`, `YIELD`, `SAFETY ON/OFF` | Low | |

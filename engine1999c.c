@@ -1367,6 +1367,61 @@ static void con_wait_key( void ) {
     con_dirty = true;
 }
 
+// AUTO [start[,step]]: while repl->autoline is set the prompt shows the next line number and the text typed behind it is entered as that line (the same as
+// the window's loop in engine1999.c); an empty line, ESC or Ctrl-C ends it. visible = the prompt may be written (a screen, a terminal or "-i"; a script that
+// reads lines from a pipe gets no numbers in its output). Returns false when the input is gone.
+static bool con_auto_prompt( repl_t* repl, bool visible, char** line, size_t* cap ) {
+    if ( repl->autoline > LINENO_MAX ) {
+        repl->autoline = LINENO_NONE;
+        if ( visible ) {
+            con_write( "Ready.\n", 7U );
+        }
+        return true;
+    }
+    char num[16];
+    int numlen = snprintf( num, sizeof(num), "%u ", (unsigned) repl->autoline );
+    if ( visible ) {
+        con_write( num, (size_t) numlen );
+        if ( !con_screen ) {
+            fflush( stdout );
+        }
+    }
+    ssize_t n = con_getline( line, cap, CON_PROMPTMAX, false );
+    if ( n < 0 ) {
+        return false;
+    }
+    while ( n > 0 && ( (*line)[ n - 1 ] == '\n' || (*line)[ n - 1 ] == '\r' ) ) {
+        (*line)[ --n ] = '\0';
+    }
+    const char* t = *line;
+    while ( *t == ' ' || *t == '\t' ) {
+        ++t;
+    }
+    if ( *t == '\0' ) {                       // an empty line ends AUTO
+        repl->autoline = LINENO_NONE;
+        if ( visible ) {
+            con_write( "Ready.\n", 7U );
+        }
+        return true;
+    }
+    size_t blen = strlen( t ) + 16U;
+    char* buf = (char*) malloc( blen );
+    if ( buf == 0 ) {
+        return false;
+    }
+    snprintf( buf, blen, "%u %s", (unsigned) repl->autoline, t );
+    uint32_t entered = repl->autoline;
+    con_catch_break( true );
+    repl_enter( repl, buf );
+    con_catch_break( false );
+    con_run_windows( repl );
+    free( buf );
+    if ( repl->autoline == entered ) {          // (the line may have been an AUTO of its own)
+        repl->autoline += repl->autostep;
+    }
+    return true;
+}
+
 // the prompt in screen mode: lines typed or picked from the screen are entered like lines from standard input
 static void con_repl_screen( repl_t* repl, bool banner ) {
     static bool insert = false;
@@ -1380,8 +1435,15 @@ static void con_repl_screen( repl_t* repl, bool banner ) {
                 "Console host. BYE or QUIT ends it. The license: SHOW COPYING in the window version, or the file LICENSE.\n\nReady.\n", ENGINE_VERSION );
         con_write( text, strlen( text ) );
     }
+    char* autoline = 0; size_t autocap = 0;
     for (;;) {
         con_flush_paint();
+        if ( repl->autoline != LINENO_NONE ) {
+            if ( !con_auto_prompt( repl, true, &autoline, &autocap ) || repl->quit ) {
+                break;
+            }
+            continue;
+        }
         int r = scr_screenedit( &con_drv, line, CON_PROMPTMAX + 2U, &insert, 0, 0 );
         if ( r == SCREDIT_CANCELLED ) {                      // (a screen under 3 rows: the one-line editor, on the screen)
             line[0] = '\0';
@@ -1412,6 +1474,7 @@ static void con_repl_screen( repl_t* repl, bool banner ) {
             con_write( "Ready.\n", 7U );
         }
     }
+    free( autoline );
     free( line );
 }
 
@@ -1426,6 +1489,12 @@ static void con_repl( repl_t* repl, bool interactive ) {
     for (;;) {
         fflush( stdout );
         con_set_raw( false );
+        if ( repl->autoline != LINENO_NONE ) {
+            if ( !con_auto_prompt( repl, interactive || con_stdout_tty, &line, &cap ) || repl->quit ) {
+                break;
+            }
+            continue;
+        }
         ssize_t n = con_getline( &line, &cap, CON_PROMPTMAX, false );
         if ( n < 0 ) {
             break;
