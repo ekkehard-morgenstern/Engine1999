@@ -17,6 +17,7 @@ Players and BASIC programmers: start with the [README](../README.md). Engine con
 | [graphics-subsystem.md](graphics-subsystem.md) | BASIC statements for layers, palettes, the graphics layer, tiles, sprites, `DESIGN` pictures, collisions and text screen areas; the `sdlscr_*` API (implemented) |
 | [console-host.md](console-host.md) | The console host `engine1999c`: the BASIC system without a window for scripts and pipes (input, output, exit status, what the display statements do) |
 | [io-subsystem.md](io-subsystem.md) | I/O subsystem: virtual device drivers (`file:`, `mem:`, ...), `driver:name` prefixes, `OPEN`/`CLOSE`, `ADDRESS`; phases and the open sandboxing issue |
+| [controller-support.md](controller-support.md) | **Planned**: game controllers and joysticks: what works on a PC (Xbox, PS4, Switch pads), SDL's game controller API, open design points, how the support will be tested (also without hardware), trying a real pad |
 | [contributing.md](contributing.md) | **For contributors**: who contributed, how to build and test, how a new statement goes in, conventions, the license of contributions |
 | [screen-editor-proposal.md](screen-editor-proposal.md) | **Proposal (not implemented)**: a C-64 style screen editor for text screen 0: understanding, evaluation, design and the decisions needed |
 | [roadmap.md](roadmap.md) | **Open work**: everything that is still to do, with the design questions that are waiting for a decision |
