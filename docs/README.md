@@ -18,6 +18,7 @@ Players and BASIC programmers: start with the [README](../README.md). Engine con
 | [console-host.md](console-host.md) | The console host `engine1999c`: the BASIC system without a window for scripts and pipes (input, output, exit status, what the display statements do) |
 | [io-subsystem.md](io-subsystem.md) | I/O subsystem: virtual device drivers (`file:`, `mem:`, ...), `driver:name` prefixes, `OPEN`/`CLOSE`, `ADDRESS`; phases and the open sandboxing issue |
 | [contributing.md](contributing.md) | **For contributors**: who contributed, how to build and test, how a new statement goes in, conventions, the license of contributions |
+| [screen-editor-proposal.md](screen-editor-proposal.md) | **Proposal (not implemented)**: a C-64 style screen editor for text screen 0: understanding, evaluation, design and the decisions needed |
 | [roadmap.md](roadmap.md) | **Open work**: everything that is still to do, with the design questions that are waiting for a decision |
 | [refactoring.md](refactoring.md) | **Current in-progress refactor**: goal, status, known bugs, remaining work, limits table |
 

@@ -163,6 +163,8 @@ useful is the language it planned. The items below are in the order I would sugg
 
 > **Standing rule (owner, 2026-10-31): editing and input behave the same in the window and the console version** (line input, one-line editor, full-screen editor, monitor, break keys, key codes). Differences are listed here with their reason: Ctrl-D on an empty line ends the input in the console (the window has a close button); the graphics statements are not available in the console host yet.
 
+- [ ] **C-64 style screen editor for text screen 0** (owner's idea, 2026-11-01): **proposal for review in `docs/screen-editor-proposal.md`, nothing implemented**; decisions needed: empty-cell marker (flag bit recommended instead of NUL), row links (WRAP flag), insert/overwrite, scroll-back, console full-screen mode.
+
 ## 12. Running without a GUI (scripting) *(wish of the owner, 2026-10-31; not started)*
 
 Goal: use Engine1999 in shell scripts and on servers without a window: `engine1999c prog.bas`, `echo 'PRINT 1+2' | engine1999c`, a `#!` line, output on stdout, errors on stderr, exit codes, no SDL needed at run time.
