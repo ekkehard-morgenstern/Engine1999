@@ -88,6 +88,10 @@ static void test_buttons( void ) {
     check( joy_buttons( 0 ) == 0U && joy_released( 0 ) == ( JOYB_START | JOYB_UP ) && joy_events() == e1 + 1U, "unplugging releases the buttons (latched)" );
     joy_attach( "Q" );
     check( joy_buttons( 0 ) == 0U && joy_pressed( 0 ) == 0U, "a new pad starts clean" );
+    joy_event_button( 0, JOYB_A, true );                // (left in the latches, not read)
+    joy_detach( 0 );
+    joy_attach( "R" );
+    check( joy_buttons( 0 ) == 0U && joy_pressed( 0 ) == 0U && joy_released( 0 ) == 0U, "... also of what the pad before it left in the latches" );
 }
 
 static void test_axes( void ) {
@@ -136,11 +140,11 @@ static void test_names( void ) {
     check( joy_button_by_name( "LX", 2U ) == 0 && joy_button_by_name( "", 0U ) == 0 && joy_button_by_name( "AA", 2U ) == 0, "no such button" );
     check( joy_button_by_name( "UP", 2U ) == (int) JOYB_UP && joy_button_by_name( "START", 5U ) == (int) JOYB_START && joy_button_by_name( "BACK", 4U ) == (int) JOYB_BACK, "more buttons" );
     unsigned all = 0;
-    static const char* const names[] = { "A", "B", "X", "Y", "LB", "RB", "BACK", "START", "GUIDE", "LS", "RS", "UP", "DOWN", "LEFT", "RIGHT" };
+    static const char* const names[] = { "A", "B", "X", "Y", "LB", "RB", "BACK", "START", "GUIDE", "LS", "RS", "UP", "DOWN", "LEFT", "RIGHT", "SHARE" };
     for ( size_t i = 0; i < sizeof(names) / sizeof(names[0]); ++i ) {
         all |= (unsigned) joy_button_by_name( names[i], strlen( names[i] ) );
     }
-    check( all == JOYB_ALL && JOYB_COUNT == 15, "the 15 names make the 15 bits" );
+    check( all == JOYB_ALL && JOYB_COUNT == 16 && joy_button_by_name( "share", 5U ) == (int) JOYB_SHARE, "the 16 names make the 16 bits" );
     check( joy_axis_by_name( "lx", 2U ) == JOYA_LX && joy_axis_by_name( "RT", 2U ) == JOYA_RT && joy_axis_by_name( "LY", 2U ) == JOYA_LY, "axis names" );
     check( joy_axis_by_name( "A", 1U ) == -1 && joy_axis_by_name( "", 0U ) == -1, "no such axis" );
 }

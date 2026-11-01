@@ -63,6 +63,8 @@ int joy_attach( const char* name ) {
             joyslot_t* s = &slots[i];
             snprintf( s->name, sizeof(s->name), "%s", name != 0 ? name : "" );
             ST( &s->buttons, 0U );
+            ST( &s->pressed, 0U );                      // (a new pad starts clean: not with what the pad before it left in the latches)
+            ST( &s->released, 0U );
             for ( int a=0; a < JOYA_COUNT; ++a ) {
                 ST( &s->axis[a], 0 );
             }
@@ -217,7 +219,7 @@ int joy_button_by_name( const char* name, size_t len ) {
     static const struct { const char* name; unsigned bit; } tbl[] = {
         { "A", JOYB_A }, { "B", JOYB_B }, { "X", JOYB_X }, { "Y", JOYB_Y }, { "LB", JOYB_LB }, { "RB", JOYB_RB }, { "BACK", JOYB_BACK },
         { "START", JOYB_START }, { "GUIDE", JOYB_GUIDE }, { "LS", JOYB_LS }, { "RS", JOYB_RS }, { "UP", JOYB_UP }, { "DOWN", JOYB_DOWN },
-        { "LEFT", JOYB_LEFT }, { "RIGHT", JOYB_RIGHT }, { 0, 0 }
+        { "LEFT", JOYB_LEFT }, { "RIGHT", JOYB_RIGHT }, { "SHARE", JOYB_SHARE }, { 0, 0 }
     };
     for ( int i=0; tbl[i].name != 0; ++i ) {
         if ( same( tbl[i].name, name, len ) ) {

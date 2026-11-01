@@ -110,6 +110,44 @@ static int attach_plain( void ) {
     return SDL_JoystickAttachVirtualEx( &d );
 }
 
+// the Share button: a virtual pad with 16 buttons whose 16th (raw button 15) is bound to MISC1 by its mapping, and one whose mapping does not use it
+static void share_test( int base, int variant, const char* title ) {
+    SDL_VirtualJoystickDesc d;
+    SDL_zero( d );
+    d.version = SDL_VIRTUAL_JOYSTICK_DESC_VERSION;
+    d.type = SDL_JOYSTICK_TYPE_GAMECONTROLLER;
+    d.vendor_id = 0x1234; d.product_id = (Uint16)( 0x5600 + variant );
+    d.naxes = 6; d.nbuttons = 16; d.nhats = 0;
+    d.name = title;
+    int index = SDL_JoystickAttachVirtualEx( &d );
+    if ( index < 0 ) {
+        check( false, "a virtual pad with 16 buttons can be attached" );
+        return;
+    }
+    char guid[64], map[600];
+    SDL_JoystickGetGUIDString( SDL_JoystickGetDeviceGUID( index ), guid, sizeof(guid) );
+    snprintf( map, sizeof(map), "%s,%s,a:b0,b:b1,x:b2,y:b3,back:b4,guide:b5,start:b6,leftstick:b7,rightstick:b8,leftshoulder:b9,rightshoulder:b10,"
+        "dpup:b11,dpdown:b12,dpleft:b13,dpright:b14,%sleftx:a0,lefty:a1,rightx:a2,righty:a3,lefttrigger:a4,righttrigger:a5", guid, title,
+        variant == 1 ? "misc1:b15," : "" );
+    SDL_GameControllerAddMapping( map );              // (before the events are looked at: the pad is opened with this mapping)
+    SDL_Joystick* j = SDL_JoystickOpen( index );
+    pump_ms( 100 );
+    check( joy_connected( base ) && strcmp( joy_name( base ), title ) == 0, "the pad is plugged in" );
+    SDL_JoystickSetVirtualButton( j, 15, 1 );
+    pump_ms( 30 );
+    check( joy_buttons( base ) == JOYB_SHARE && joy_pressed( base ) == JOYB_SHARE, title );
+    SDL_JoystickSetVirtualButton( j, 0, 1 );
+    pump_ms( 30 );
+    check( joy_buttons( base ) == ( JOYB_SHARE | JOYB_A ), "... and the other buttons still work beside it" );
+    SDL_JoystickSetVirtualButton( j, 15, 0 );
+    SDL_JoystickSetVirtualButton( j, 0, 0 );
+    pump_ms( 30 );
+    check( joy_buttons( base ) == 0U && joy_released( base ) == ( JOYB_SHARE | JOYB_A ), "released" );
+    SDL_JoystickClose( j );
+    SDL_JoystickDetachVirtual( index );
+    pump_ms( 100 );
+}
+
 static int selftest( void ) {
     if ( !init_sdl() ) {
         return 1;
@@ -212,6 +250,9 @@ static int selftest( void ) {
     SDL_JoystickDetachVirtual( gi );
     pump_ms( 100 );
     check( joy_count() == base && joy_released( base ) == JOYB_Y, "all unplugged, the held button was released" );
+    share_test( base, 1, "Share bound to MISC1 by the mapping" );
+    share_test( base, 2, "Share: the raw button the mapping does not use" );
+    check( joy_count() == base, "the share test pads are unplugged" );
     sdljoy_shutdown();
     SDL_Quit();
     printf( "%d of %d checks passed\n", total - failures, total );
@@ -229,7 +270,7 @@ static void monitor( void ) {
     uint32_t lastbtn[JOY_MAXPLAYERS] = { 0, 0, 0, 0 };
     double lastaxis[JOY_MAXPLAYERS][JOYA_COUNT];
     memset( lastaxis, 0, sizeof(lastaxis) );
-    static const char* const bnames[JOYB_COUNT] = { "A", "B", "X", "Y", "LB", "RB", "BACK", "START", "GUIDE", "LS", "RS", "UP", "DOWN", "LEFT", "RIGHT" };
+    static const char* const bnames[JOYB_COUNT] = { "A", "B", "X", "Y", "LB", "RB", "BACK", "START", "GUIDE", "LS", "RS", "UP", "DOWN", "LEFT", "RIGHT", "SHARE" };
     static const char* const anames[JOYA_COUNT] = { "LX", "LY", "RX", "RY", "LT", "RT" };
     while ( !stop ) {
         pump();

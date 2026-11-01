@@ -400,6 +400,8 @@ static const testcase_t cases[] = {
     { "ON COLLISION OFF",       "10 ON COLLISION GOSUB 100\n15 ON COLLISION OFF\n20 FOR I=1 TO 3000:NEXT I\n30 PRINT \"done\";C\n40 END\n100 C=C+1:RETURN", "done0\n" },
     // game controllers: JOY(name$ [, player]), JOY DEADZONE, ON JOY (the state is joy.h, set up by joy_setup() above for every case)
     { "JOY: a button held",     "PRINT JOY(\"A\")",                                 "-1\n" },
+    { "JOY: the Share button", "A$=INKEY$:PRINT JOY(\"SHARE\");JOY(\"share\",2);JOY(\"BUTTONS\")", "-1032785\n", "\005" },
+    { "JOY: Share is not held at the start", "PRINT JOY(\"SHARE\")", "0\n" },
     { "JOY: a button not held", "PRINT JOY(\"B\")",                                 "0\n" },
     { "JOY: the player",        "PRINT JOY(\"B\",2);JOY(\"A\",2);JOY(\"A\",1)",       "-10-1\n" },
     { "JOY: any case",          "PRINT JOY(\"a\");JOY(\"Lb\");JOY(\"rb\")",            "-1-10\n" },
@@ -1441,7 +1443,7 @@ static void vm_breakesc( struct _vm_t* vm, void* usrdata, bool on ) {
 
 // the test controllers (joy.h), set up for every case in run_case(): player 1 "Test Pad One" holds A and LB, its left stick is full right, the right stick is up by half
 // (raw -16384), the left trigger is at 16384; player 2 "Test Pad Two" holds B. INKEY$ also makes controller events when it meets a control code in the input, so that
-// ON JOY can be tested: 1 = X pressed, 2 = X released on pad 1, 3 = a third pad is plugged in, 4 = pad 2 is unplugged.
+// ON JOY can be tested: 1 = X pressed, 2 = X released on pad 1, 3 = a third pad is plugged in, 4 = pad 2 is unplugged, 5 = Share pressed on pad 1.
 static void joy_setup( void ) {
     joy_init();
     int a = joy_attach( "Test Pad One" ), b = joy_attach( "Test Pad Two" );
@@ -1454,11 +1456,12 @@ static void joy_setup( void ) {
 }
 
 static int vm_inkey( struct _vm_t* vm, void* usrdata ) {
-    while ( keys && *keys >= 1 && *keys <= 4 ) {
+    while ( keys && *keys >= 1 && *keys <= 5 ) {
         switch ( *keys++ ) {
             case 1: joy_event_button( 0, JOYB_X, true ); break;
             case 2: joy_event_button( 0, JOYB_X, false ); break;
             case 3: joy_attach( "Hot Pad" ); break;
+            case 5: joy_event_button( 0, JOYB_SHARE, true ); break;
             default: joy_detach( 1 ); break;
         }
     }

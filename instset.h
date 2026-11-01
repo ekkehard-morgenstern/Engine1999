@@ -548,7 +548,7 @@ The 4096 extended instructions are as follows:
     0001 10000001       ERRR - raise an error ( n -- ) C=0 P=0
                             ERROR n: an error with the text of number n (the table; "Error n" if the table has none), n = 1..255, else "Illegal argument". It is caught by ON ERROR like any other.
     0001 10000010       JOYQ - read a game controller value ( name player -- v ) C=0 P=0
-                            JOY(name$, player): name is a button ("A" .. "RIGHT": -1 held / 0), an axis ("LX" "LY" "RX" "RY": -1 .. 1 with the dead zone, "LT" "RT": 0 .. 1) or one of
+                            JOY(name$, player): name is a button ("A" .. "RIGHT", "SHARE": -1 held / 0), an axis ("LX" "LY" "RX" "RY": -1 .. 1 with the dead zone, "LT" "RT": 0 .. 1) or one of
                             CONNECTED (-1 / 0), BUTTONS / PRESSED / RELEASED (the buttons added up as bits; PRESSED and RELEASED are latched since the last call), COUNT (the pads
                             plugged in) and EVENTS (a counter that ON JOY watches), DEADZONE (the setting). player is 1..4 ("Illegal argument" otherwise, except for COUNT and EVENTS);
                             a player without a pad reads 0. An unknown name is "Illegal argument". The state is joy.h (no host callback).

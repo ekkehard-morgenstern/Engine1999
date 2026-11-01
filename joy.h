@@ -66,8 +66,9 @@ A slot without a pad reads as zero everywhere (a program needs no checks).
 #define JOYB_DOWN       4096U
 #define JOYB_LEFT       8192U
 #define JOYB_RIGHT      16384U
-#define JOYB_ALL        32767U
-#define JOYB_COUNT      15
+#define JOYB_SHARE      32768U      // the Share / Capture / Mic button (Xbox Series Share, Switch Capture, ...): the pad's extra button, if it has one
+#define JOYB_ALL        65535U
+#define JOYB_COUNT      16
 
 // the axes
 #define JOYA_LX         0           // left stick, left -1 .. right 1

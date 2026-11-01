@@ -37,6 +37,7 @@ typedef struct _sdljoydev_t {
     SDL_GameController* gc;         // a pad with a mapping
     SDL_Joystick*       js;         // a plain joystick (no mapping): the fallback
     int                 slot;       // the player's slot in joy.h
+    int                 extrabtn;   // a pad with a mapping: the raw button that the mapping does not use (the Share button of an Xbox Series pad), -1 if none
 } sdljoydev_t;
 
 static sdljoydev_t devs[SDLJOY_MAXDEV];
@@ -96,6 +97,25 @@ static void add_dev( int index ) {
         }
         d->id = SDL_JoystickInstanceID( SDL_GameControllerGetJoystick( d->gc ) );
         name = SDL_GameControllerName( d->gc );
+        // The Share button: SDL's standard MISC1 if the mapping has it; else the first raw button that no standard button is bound to (the kernel's xpad driver
+        // reports the Share button of an Xbox Series pad as a 12th raw button, which SDL's mapping does not use)
+        d->extrabtn = -1;
+        if ( SDL_GameControllerGetBindForButton( d->gc, SDL_CONTROLLER_BUTTON_MISC1 ).bindType == SDL_CONTROLLER_BINDTYPE_NONE ) {
+            bool used[256];
+            memset( used, 0, sizeof(used) );
+            for ( int b = 0; b < SDL_CONTROLLER_BUTTON_MAX; ++b ) {
+                SDL_GameControllerButtonBind bind = SDL_GameControllerGetBindForButton( d->gc, (SDL_GameControllerButton) b );
+                if ( bind.bindType == SDL_CONTROLLER_BINDTYPE_BUTTON && bind.value.button >= 0 && bind.value.button < 256 ) {
+                    used[ bind.value.button ] = true;
+                }
+            }
+            int n = SDL_JoystickNumButtons( SDL_GameControllerGetJoystick( d->gc ) );
+            for ( int b = 0; b < n && b < 256 && d->extrabtn < 0; ++b ) {
+                if ( !used[b] ) {
+                    d->extrabtn = b;
+                }
+            }
+        }
     } else {
         d->js = SDL_JoystickOpen( index );
         if ( d->js == 0 ) {
@@ -130,6 +150,7 @@ static unsigned controller_button( Uint8 b ) {
         case SDL_CONTROLLER_BUTTON_DPAD_DOWN:       return JOYB_DOWN;
         case SDL_CONTROLLER_BUTTON_DPAD_LEFT:       return JOYB_LEFT;
         case SDL_CONTROLLER_BUTTON_DPAD_RIGHT:      return JOYB_RIGHT;
+        case SDL_CONTROLLER_BUTTON_MISC1:           return JOYB_SHARE;
         default:                                    return 0U;
     }
 }
@@ -202,6 +223,8 @@ bool sdljoy_handle_event( const SDL_Event* ev ) {
             d = find( ev->jbutton.which );
             if ( d != 0 && d->js != 0 ) {
                 joy_event_button( d->slot, joystick_button( ev->jbutton.button ), ev->type == SDL_JOYBUTTONDOWN );
+            } else if ( d != 0 && d->gc != 0 && d->extrabtn >= 0 && ev->jbutton.button == d->extrabtn ) {
+                joy_event_button( d->slot, JOYB_SHARE, ev->type == SDL_JOYBUTTONDOWN );      // (a button that SDL's mapping does not know)
             }
             return true;
         case SDL_JOYAXISMOTION:
