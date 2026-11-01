@@ -185,7 +185,7 @@ void conscr_paint( void ) {
     for ( int y = 0; y < h; ++y ) {
         int x = 0;
         while ( x < w ) {
-            textcell_t c = txtscr_getrawcell( y, x );
+            textcell_t c = txtscr_getdisplaycell( y, x );
             if ( c == shadow[ y * w + x ] ) {
                 ++x;
                 continue;
@@ -194,7 +194,7 @@ void conscr_paint( void ) {
             // a run of changed cells (a short gap of equal cells is cheaper to write than to skip)
             int gap = 0;
             while ( x < w ) {
-                c = txtscr_getrawcell( y, x );
+                c = txtscr_getdisplaycell( y, x );
                 if ( c == shadow[ y * w + x ] ) {
                     if ( ++gap > 8 ) {
                         break;

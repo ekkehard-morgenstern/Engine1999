@@ -1419,7 +1419,7 @@ int main( int argc, char** argv ) {
                 }
                 continue;
             }
-            int ev = sdlscr_lineinput( 0, buf, PROMPT_BUFSIZE, vblank_handler, &usrdata );
+            int ev = sdlscr_screeninput( buf, PROMPT_BUFSIZE, vblank_handler, &usrdata );
             if ( ev & SDLEV_SCREENWORKERFINISHED ) break;
             bool ready = handle_input( buf );
             if ( repl.quit ) break;         // BYE / EXIT

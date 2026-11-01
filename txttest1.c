@@ -30,6 +30,7 @@
 // Automated test of the text screen's viewport and its two screens (no display needed): exit status = failures.
 
 #include "textscreen.h"
+#include "palette.h"
 
 static int failures = 0, total = 0;
 
@@ -239,6 +240,172 @@ static void test_render( void ) {
     check( img[ 2 * 12 * TXTSCR_WIDTH * 8 + 3 * 8 ] == TXTSCR_BGCOL, "screen 0 renders its own cells" );
 }
 
+// -- cell flags (EMPTY, WRAP) and the overlays of the screen editor ------------------------
+
+static void test_flags( void ) {
+    txtscr_init();
+    check( txtscr_isempty( 0, 0 ) && txtscr_isempty( 24, 79 ), "a fresh screen is empty" );
+    check( TXTSCR_CELL_CHR( txtscr_getcell( 0, 0 ) ) == ' ' && ( txtscr_getcell( 0, 0 ) & TXTSCR_FLAGS ) == 0, "empty cells look like spaces, the getters hide the flags" );
+    txtscr_write( 2, 3, -1, -1, "ab", 2 );
+    check( !txtscr_isempty( 2, 3 ) && !txtscr_isempty( 2, 4 ) && txtscr_isempty( 2, 5 ), "writing clears EMPTY" );
+    txtscr_write( 2, 5, -1, -1, " ", 1 );
+    check( !txtscr_isempty( 2, 5 ), "a written space is not empty" );
+    txtscr_setempty( 2, 5 );
+    check( txtscr_isempty( 2, 5 ), "txtscr_setempty" );
+    txtscr_clear();
+    check( txtscr_isempty( 2, 3 ), "CLS makes cells empty" );
+
+    // wrap: text running over the right edge links the rows
+    txtscr_clear();
+    char line[200];
+    memset( line, 'x', sizeof line );
+    txtscr_print_n( 0, 0, -1, -1, line, 100 );
+    check( txtscr_iswrapped( 0, 79 ) && !txtscr_iswrapped( 0, 78 ) && !txtscr_iswrapped( 1, 19 ), "a wrapped row has WRAP on its last cell only" );
+    check( !txtscr_isempty( 1, 19 ) && txtscr_isempty( 1, 20 ), "...and the text continues in the next row" );
+    txtscr_write( 0, 79, -1, -1, "y", 1 );
+    check( !txtscr_iswrapped( 0, 79 ), "writing the last cell clears WRAP" );
+
+    // exactly full row: the wrap happens when the cursor leaves the row
+    txtscr_clear();
+    txtscr_print_n( 0, 0, -1, -1, line, 80 );
+    int cx, cy;
+    txtscr_getcursor( &cx, &cy );
+    check( cx == 0 && cy == 1 && txtscr_iswrapped( 0, 79 ) && txtscr_isempty( 1, 0 ), "a full row wraps; the next row stays empty" );
+    txtscr_clear();
+    txtscr_print_n( 0, 0, -1, -1, line, 79 );
+    check( !txtscr_iswrapped( 0, 79 ) && !txtscr_iswrapped( 0, 78 ), "79 characters do not wrap" );
+    txtscr_clear();
+    txtscr_print_n( 0, 0, -1, -1, "abc\ndef", 7 );
+    check( !txtscr_iswrapped( 0, 79 ) && !txtscr_iswrapped( 0, 2 ), "a line feed is no wrap" );
+
+    // the flags move with the rows
+    txtscr_clear();
+    txtscr_print_n( 23, 0, -1, -1, line, 100 );        // rows 23, 24 (wrapped)
+    txtscr_scrollup();
+    check( txtscr_iswrapped( 22, 79 ) && !txtscr_isempty( 23, 0 ) && txtscr_isempty( 24, 0 ), "scrolling up keeps the flags; the new row is empty" );
+    txtscr_scrolldown();
+    check( txtscr_iswrapped( 23, 79 ) && txtscr_isempty( 0, 0 ), "scrolling down keeps the flags; the new row is empty" );
+    // wrapping at the bottom scrolls
+    txtscr_clear();
+    txtscr_locate( 0, 24 );
+    txtscr_print_n( -1, -1, -1, -1, line, 100 );
+    check( txtscr_iswrapped( 23, 79 ) && !txtscr_isempty( 24, 19 ), "wrapping on the last row scrolls and keeps the link" );
+
+    // fill / invert / save / restore
+    txtscr_clear();
+    txtscr_fill( 0, 0, 3, 0, -1, 5, 6 );
+    check( txtscr_isempty( 0, 0 ), "a color-only fill keeps EMPTY" );
+    txtscr_fill( 0, 0, 3, 0, 'q', 5, 6 );
+    check( !txtscr_isempty( 0, 0 ) && !txtscr_isempty( 0, 3 ), "a fill with a character makes cells written" );
+    txtscr_invert( 0, 0, 3, 0 );
+    check( !txtscr_isempty( 0, 0 ) && txtscr_isempty( 1, 0 ), "invert keeps the flags" );
+    txtscr_clear();
+    txtscr_print_n( 0, 0, -1, -1, line, 100 );
+    static uint8_t sv[TXTSCR_WIDTH * TXTSCR_HEIGHT * 4];
+    size_t need = txtscr_save( sv, sizeof sv );
+    txtscr_clear();
+    check( txtscr_restore( sv, need ) && txtscr_iswrapped( 0, 79 ) && !txtscr_isempty( 1, 19 ) && txtscr_isempty( 1, 20 ), "save / restore carry the flags" );
+    check( TXTSCR_CELL_CHR( txtscr_getrawcell( 0, 0 ) ) == 'x' && ( txtscr_getrawcell( 0, 0 ) & TXTSCR_FLAGS ) == 0, "the raw getter hides the flags" );
+
+    // viewport relative
+    txtscr_clear();
+    txtscr_setviewport( 10, 5, 20, 3 );
+    txtscr_print_n( 0, 0, -1, -1, line, 25 );
+    check( txtscr_iswrapped( 0, 19 ) && !txtscr_isempty( 1, 4 ) && txtscr_isempty( 1, 5 ) && txtscr_getflags( 9, 9 ) == 0, "wrapping at the viewport's edge" );
+    txtscr_resetviewport();
+    check( !txtscr_iswrapped( 5, 79 ) && txtscr_iswrapped( 5, 29 ), "...is a link on the viewport's last column" );
+}
+
+static void test_resize_flags( void ) {
+    txtscr_init();
+    char line[200];
+    memset( line, 'x', sizeof line );
+    txtscr_print_n( 0, 0, -1, -1, line, 100 );
+    txtscr_resize( 100, 25 );
+    check( !txtscr_iswrapped( 0, 79 ) && !txtscr_isempty( 0, 79 ) && txtscr_isempty( 0, 80 ) && txtscr_isempty( 24, 99 ), "resize wider: old link gone, new cells empty" );
+    txtscr_resize( 60, 10 );
+    check( !txtscr_iswrapped( 0, 59 ) && !txtscr_isempty( 0, 59 ), "resize narrower: the cut row has no link" );
+    txtscr_resize( TXTSCR_WIDTH, TXTSCR_HEIGHT );
+}
+
+static void test_overlays( void ) {
+    static uint8_t img[TXTSCR_WIDTH * 8 * TXTSCR_HEIGHT * 12];
+    txtscr_init();
+    txtscr_enablecursor( false );
+    txtscr_setcolors( 3, 4 );
+    txtscr_write( 24, 0, -1, -1, "zzz", 3 );
+    txtscr_write( 5, 0, -1, -1, "hi", 2 );
+    check( !txtscr_gethighlight( 0, 0 ), "no highlight at start" );
+    char buf[100];
+    check( !txtscr_getstatus( buf, sizeof buf ) && buf[0] == 0, "no status at start" );
+
+    txtscr_setstatus( "OVR  F12=INS", 9, 8 );
+    check( txtscr_getstatus( buf, sizeof buf ) && strcmp( buf, "OVR  F12=INS" ) == 0, "status set" );
+    textcell_t c = txtscr_getdisplaycell( 24, 1 );
+    check( TXTSCR_CELL_CHR( c ) == 'V' && TXTSCR_CELL_BG( c ) == 9 && TXTSCR_CELL_FG( c ) == 8, "the bottom row shows the status text" );
+    c = txtscr_getdisplaycell( 24, 79 );
+    check( TXTSCR_CELL_CHR( c ) == ' ' && TXTSCR_CELL_BG( c ) == 9, "...padded over the whole row" );
+    check( TXTSCR_CELL_CHR( txtscr_getcell( 24, 0 ) ) == 'z' && TXTSCR_CELL_BG( txtscr_getcell( 24, 0 ) ) == 3, "the cells below are untouched" );
+    txtscr_render( img );
+    bool seen9 = false, seen8 = false;
+    for ( int y=0; y < 12; ++y ) {
+        for ( int x=0; x < 8; ++x ) {
+            uint8_t px = img[ ( 24 * 12 + y ) * TXTSCR_WIDTH * 8 + 8 + x ];     // the 'V'
+            seen9 = seen9 || px == 9;
+            seen8 = seen8 || px == 8;
+        }
+    }
+    check( seen9 && seen8, "the renderer draws the status line" );
+    uint8_t save[TXTSCR_WIDTH * TXTSCR_HEIGHT * 4];
+    txtscr_save( save, sizeof save );
+    check( save[ 24 * TXTSCR_WIDTH * 4 ] == 'z', "save does not see the overlay" );
+    txtscr_setstatus( 0, 0, 0 );
+    check( !txtscr_getstatus( 0, 0 ) && TXTSCR_CELL_CHR( txtscr_getdisplaycell( 24, 0 ) ) == 'z', "status off: the cells show again" );
+
+    // highlight
+    uint8_t map[256];
+    for ( int i=0; i < 256; ++i ) map[i] = (uint8_t)( 255 - i );
+    txtscr_sethighlightmap( map );
+    txtscr_sethighlight( 4, 6 );
+    int f, l;
+    check( txtscr_gethighlight( &f, &l ) && f == 4 && l == 6, "highlight range" );
+    c = txtscr_getdisplaycell( 5, 0 );
+    check( TXTSCR_CELL_CHR( c ) == 'h' && TXTSCR_CELL_BG( c ) == 252 && TXTSCR_CELL_FG( c ) == 4, "a highlighted row shows the mapped paper" );
+    c = txtscr_getdisplaycell( 6, 70 );
+    check( TXTSCR_CELL_BG( c ) == 255 - TXTSCR_BGCOL, "...also its empty cells" );
+    check( TXTSCR_CELL_BG( txtscr_getdisplaycell( 3, 0 ) ) == TXTSCR_BGCOL && TXTSCR_CELL_BG( txtscr_getdisplaycell( 7, 0 ) ) == TXTSCR_BGCOL, "rows outside are normal" );
+    check( TXTSCR_CELL_BG( txtscr_getcell( 5, 0 ) ) == 3, "the cells are not changed" );
+    txtscr_render( img );
+    check( img[ 5 * 12 * TXTSCR_WIDTH * 8 + 40 * 8 ] == 255 - TXTSCR_BGCOL, "the renderer draws the highlight" );
+    txtscr_sethighlight( -1, -1 );
+    check( !txtscr_gethighlight( 0, 0 ) && TXTSCR_CELL_BG( txtscr_getdisplaycell( 5, 0 ) ) == 3, "highlight off" );
+
+    // default map: brighter, same or nearest; black stays dark-ish, never darker
+    txtscr_sethighlightmap( 0 );
+    txtscr_sethighlight( 0, 0 );
+    uint32_t a0 = pal_argb( 1 ), a1 = pal_argb( TXTSCR_CELL_BG( txtscr_getdisplaycell( 0, 0 ) ) );
+    check( TXTSCR_CELL_BG( txtscr_getdisplaycell( 0, 0 ) ) != TXTSCR_BGCOL && ( a1 & 255U ) >= ( a0 & 255U ), "the default map makes a paper brighter" );
+    // the start paper is transparent (the backdrop shows): the highlight must be lighter than the backdrop, opaque, and readable with the default pen
+    txtscr_sethighlight( 0, 0 );
+    uint32_t hl = pal_argb( TXTSCR_CELL_BG( txtscr_getdisplaycell( 0, 5 ) ) ), bd = PAL_DEFAULT_BACKDROP;
+    check( TXTSCR_BGCOL == 0 && pal_argb( 0 ) >> 24 == 0, "(the start paper is the transparent entry)" );
+    (void) bd;
+    check( TXTSCR_CELL_BG( txtscr_getdisplaycell( 0, 5 ) ) == 255 && hl == UINT32_C(0X88FFFFFF), "the highlight of a transparent paper is entry 255, TransparentWhite 0x88FFFFFF (translucent: lighter than whatever is behind)" );
+    txtscr_sethighlight( 0, 0 );
+    check( TXTSCR_CELL_BG( txtscr_getdisplaycell( 0, 5 ) ) == 255, "(the same for other empty cells)" );
+    txtscr_write( 0, 0, 2, 140, "N", 1 );
+    uint32_t hn = pal_argb( TXTSCR_CELL_BG( txtscr_getdisplaycell( 0, 0 ) ) );
+    check( hn >> 24 == 255 && hn != pal_argb( 2 ), "an opaque paper gets a lighter opaque color" );
+    txtscr_sethighlight( -1, -1 );
+
+    // overlays are per screen
+    txtscr_setstatus( "x", 1, 2 );
+    txtscr_select( 1 );
+    check( !txtscr_getstatus( 0, 0 ), "screen 1 has no status" );
+    txtscr_select( 0 );
+    txtscr_setstatus( 0, 0, 0 );
+}
+
 int main( void ) {
     test_basics();
     test_write();
@@ -250,6 +417,9 @@ int main( void ) {
     test_screens();
     test_colors();
     test_render();
+    test_flags();
+    test_resize_flags();
+    test_overlays();
     printf( "%d of %d checks passed\n", total - failures, total );
     return failures;
 }

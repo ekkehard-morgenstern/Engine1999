@@ -318,3 +318,33 @@ bool pal_find( const char* name, uint32_t* pargb ) {
     }
     return false;
 }
+
+void pal_lighter_map( const uint32_t pal[256], int percent, uint32_t backdrop, uint8_t out[256] ) {
+    if ( percent < 0 ) percent = 0;
+    if ( percent > 100 ) percent = 100;
+    for ( int i=0; i < 256; ++i ) {
+        int c[3];
+        for ( int k=0; k < 3; ++k ) {
+            int v = (int)( ( pal[i] >> ( 16 - 8 * k ) ) & 255U );
+            int a = (int)( pal[i] >> 24 ), b = (int)( ( backdrop >> ( 16 - 8 * k ) ) & 255U );
+            v = ( v * a + b * ( 255 - a ) ) / 255;         // what is seen on screen
+            c[k] = v + ( 255 - v ) * percent / 100;
+        }
+        int best = i, bestd = 1 << 30;
+        for ( int j=0; j < 256; ++j ) {
+            if ( ( pal[j] >> 24 ) != 255U ) {
+                continue;       // transparent entries are no candidates
+            }
+            int d = 0;
+            for ( int k=0; k < 3; ++k ) {
+                int e = (int)( ( pal[j] >> ( 16 - 8 * k ) ) & 255U ) - c[k];
+                d += e * e;
+            }
+            if ( d < bestd ) { bestd = d; best = j; }
+        }
+        out[i] = (uint8_t) best;
+        if ( ( pal[i] >> 24 ) == 0 && ( pal[255] >> 24 ) != 255U && ( pal[255] >> 24 ) != 0 && ( pal[255] & UINT32_C(0XFFFFFF) ) == UINT32_C(0XFFFFFF) ) {
+            out[i] = 255;       // a fully transparent paper gets the translucent white entry: the layers behind show through, lighter
+        }
+    }
+}

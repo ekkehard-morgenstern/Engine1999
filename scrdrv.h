@@ -99,6 +99,7 @@ typedef struct _scrdrv_t {
     bool    (*nextkey)( scrkey_t* key );                        // waits for a key (or a resize); false: the screen is closed (SK_CLOSED is in key)
     bool    (*pending)( void );                                 // more keys are waiting (the editors redraw once for a burst)
     void    (*pollkeys)( bool enable );                         // keys are queued for a running program; ESC / Ctrl-C then break it (the monitor runs programs)
+    void    (*palette)( uint32_t pal[256], uint32_t* backdrop );    // the colors of the text layer and the backdrop (the screen editor lightens them for its highlight); may be 0: the start palette
 } scrdrv_t;
 
 // -- the one-line editor (scredit.c) ---------------------------------------------------------
@@ -128,5 +129,23 @@ bool scr_editkey( scredit_t* ed, const scrkey_t* key );
 // onresize (may be 0) is called after the screen was resized, so that the caller can set its viewport and bars again; the line is then
 // redrawn where it was.
 int scr_lineedit( const scrdrv_t* drv, char* buf, size_t bufsz, void (*onresize)( void* ), void* usrdata );
+
+// -- the screen editor (scredit.c) -----------------------------------------------------------
+
+/*
+The C-64 style screen editor of text screen 0 (docs/screen-editor-proposal.md): the text on the screen is the buffer. It runs while the system waits
+for a program line: the bottom row becomes a status line, the screen rows of the logical line under the cursor are highlighted (both overlays of
+textscreen.c), the cursor moves freely, RETURN hands the logical line under the cursor back in buf (ISO-8859-15, trailing blanks cut). It works on
+the selected text screen (the BASIC screen) through textscreen.h and the cell flags EMPTY / WRAP; the driver provides keys and display updates.
+*insert is the typing mode (false = overwrite, the start state), it is kept by the caller between lines. Break keys, ESC and the other keys that do nothing here are ignored
+(no program runs, so Break has no effect). Results: SCREDIT_ACCEPTED, SCREDIT_EOF (end of input; a case to decide later), SCREDIT_CLOSED; SCREDIT_CANCELLED if the screen got too small (less than 3 rows): call again, the one-line editor takes over then.
+*/
+int scr_screenedit( const scrdrv_t* drv, char* buf, size_t bufsz, bool* insert, void (*onresize)( void* ), void* usrdata );
+
+// The logical line around the cell (x, y) of the viewport of the selected screen (a pure function of the cells and their flags): the run of non-empty
+// cells around the cursor cell, or ending directly left of it, joined over row ends only where the last cell has WRAP. Returns false if there is none.
+bool scr_screenline_extent( int x, int y, int* startx, int* starty, int* endx, int* endy );
+// its text (ISO-8859-15), zero terminated, at most outsz - 1 characters; returns the length
+size_t scr_screenline_text( int x, int y, char* out, size_t outsz );
 
 #endif

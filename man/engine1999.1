@@ -71,6 +71,28 @@ Show what the keyboard delivers: every SDL key event (key code, name, scan code,
 .BR engine1999\-basic (7)).
 Run it from a terminal, or redirect the output to a file.
 .SH AT THE PROMPT
+In the window the prompt is a screen editor, as on the Commodore 64: the text on the screen is the buffer.
+Move the cursor anywhere (it moves freely over empty cells and scrolls the screen at the edges, nothing is kept off screen),
+edit what is there and press RETURN: the line under the cursor (the text around it up to the next empty cell, wrapped rows included) is entered,
+wherever it was typed or printed.
+The bottom row is a status line (white on translucent dark red) that shows the typing mode, the row and column and the BASIC line number of the line;
+the screen rows of the line are highlighted.
+Typing overwrites at first;
+.B F12
+(or Shift+INSERT) switches between overwrite and insert mode.
+.B INSERT
+inserts a space,
+.B DELETE
+and
+.B BACKSPACE
+close the gap; BACKSPACE at the start of a line only moves the cursor left, it never deletes beyond the line.
+HOME and END go to the start and end of the line (END on a line that fills its last row opens a new screen line below it);
+Break (Ctrl+C, PAUSE) does nothing while no program runs; Ctrl+HOME and Ctrl+END to the top left and bottom left of the screen.
+In a row between two gaps the keys work on the rest of the screen row (for ASCII graphics).
+.B INPUT, AUTO
+and
+.B EDIT n
+use the plain one\-line editor, and so does a program that is running.
 .TP
 .B ESC, Ctrl+C, PAUSE/BREAK
 Stop a running program ("Break"), also one that waits for a key or a line.

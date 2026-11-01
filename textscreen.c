@@ -27,6 +27,7 @@
 */
 
 #include "textscreen.h"
+#include "palette.h"
 
 #define FONTSIZE 3072
 #define BLINKCOUNTER_ON       45
@@ -41,6 +42,10 @@ typedef struct _txtscreen_t {
       int         vx, vy, vw, vh;
       int         reserve;        // rows at the bottom that a resize keeps free below the cursor (a bar of the editor)
       int         lastshift;      // rows the contents were moved up by the last txtscr_resize()
+      bool        statuson;       // overlay: status line on the bottom row
+      int         spaper, spen;
+      char        status[TXTSCR_MAXW + 1];
+      int         hlfirst, hllast;    // overlay: highlighted screen rows (hlfirst < 0: none)
 } txtscreen_t;
 
 static int        tw = TXTSCR_WIDTH, th = TXTSCR_HEIGHT;       // the size of the screens (the window's is fixed, the console host's follows the terminal)
@@ -92,7 +97,9 @@ static void txtscr_initscreen( txtscreen_t* sc ) {
       sc->cursx = sc->cursy = 0;
       sc->vx = sc->vy = 0;
       sc->vw = tw; sc->vh = th;
-      textcell_t cell = TXTSCR_MAKECELL( 32, TXTSCR_BGCOL, TXTSCR_FGCOL );
+      sc->statuson = false; sc->status[0] = 0;
+      sc->hlfirst = sc->hllast = -1;
+      textcell_t cell = TXTSCR_MAKECELL( 32, TXTSCR_BGCOL, TXTSCR_FGCOL ) | TXTSCR_EMPTY;
       for ( size_t i=0; i < tw * th; ++i ) {
             sc->cells[i] = cell;
       }
@@ -167,7 +174,7 @@ void txtscr_resize( int w, int h ) {
       static textcell_t tmp[TXTSCR_MAXW * TXTSCR_MAXH];
       for ( int i=0; i < TXTSCR_NSCREENS; ++i ) {
             txtscreen_t* sc = &screens[i];
-            textcell_t blank = TXTSCR_MAKECELL( 32, sc->blankbg, sc->blankfg );
+            textcell_t blank = TXTSCR_MAKECELL( 32, sc->blankbg, sc->blankfg ) | TXTSCR_EMPTY;
             int cy = sc->vy + sc->cursy, cx = sc->vx + sc->cursx;
             int keep = h - sc->reserve < 1 ? 1 : h - sc->reserve;       // the cursor row must stay in the first 'keep' rows
             int shift = cy >= keep ? cy - ( keep - 1 ) : 0;
@@ -175,11 +182,16 @@ void txtscr_resize( int w, int h ) {
             for ( int y=0; y < h; ++y ) {
                   for ( int x=0; x < w; ++x ) {
                         int sy = y + shift;
-                        tmp[ y * w + x ] = sy < th && x < tw ? sc->cells[ sy * tw + x ] : blank;
+                        textcell_t c = sy < th && x < tw ? sc->cells[ sy * tw + x ] : blank;
+                        if ( x != w - 1 ) {
+                              c &= ~TXTSCR_WRAP;        // only the last cell of a row can link to the next row
+                        }
+                        tmp[ y * w + x ] = c;
                   }
             }
             memcpy( sc->cells, tmp, (size_t) w * (size_t) h * sizeof(textcell_t) );
             sc->vx = sc->vy = 0; sc->vw = w; sc->vh = h;
+            sc->hlfirst = sc->hllast = -1;      // overlays refer to cell positions: the editor sets them again
             sc->cursx = cx < w ? cx : w - 1;
             sc->cursy = cy - shift < h ? cy - shift : h - 1;
             if ( sc->cursy < 0 ) sc->cursy = 0;
@@ -210,7 +222,7 @@ void txtscr_setblank( int bg, int fg ) {
 }
 
 static textcell_t txtscr_blankcell( void ) {
-      return TXTSCR_MAKECELL( 32, cur->blankbg, cur->blankfg );
+      return TXTSCR_MAKECELL( 32, cur->blankbg, cur->blankfg ) | TXTSCR_EMPTY;
 }
 
 static textcell_t* txtscr_row( int y ) {      // first cell of row y of the viewport
@@ -221,7 +233,7 @@ textcell_t txtscr_getrawcell( int y, int x ) {
       if ( x < 0 || y < 0 || x >= tw || y >= th ) {
             return 0;
       }
-      return cur->cells[ y * tw + x ];
+      return cur->cells[ y * tw + x ] & ~TXTSCR_FLAGS;
 }
 
 void txtscr_getabscursor( int* outx, int* outy ) {
@@ -232,7 +244,37 @@ textcell_t txtscr_getcell( int y, int x ) {
       if ( x < 0 || y < 0 || x >= cur->vw || y >= cur->vh ) {
             return 0;
       }
-      return txtscr_row( y )[x];
+      return txtscr_row( y )[x] & ~TXTSCR_FLAGS;
+}
+
+uint32_t txtscr_getflags( int y, int x ) {
+      if ( x < 0 || y < 0 || x >= cur->vw || y >= cur->vh ) {
+            return 0;
+      }
+      return txtscr_row( y )[x] & TXTSCR_FLAGS;
+}
+
+bool txtscr_isempty( int y, int x ) {
+      return ( txtscr_getflags( y, x ) & TXTSCR_EMPTY ) != 0;
+}
+
+bool txtscr_iswrapped( int y, int x ) {
+      return ( txtscr_getflags( y, x ) & TXTSCR_WRAP ) != 0;
+}
+
+void txtscr_setwrap( int y, int x, bool wrap ) {
+      if ( x < 0 || y < 0 || x >= cur->vw || y >= cur->vh ) {
+            return;
+      }
+      textcell_t* c = &txtscr_row( y )[x];
+      *c = wrap ? ( *c | TXTSCR_WRAP ) : ( *c & ~TXTSCR_WRAP );
+}
+
+void txtscr_setempty( int y, int x ) {
+      if ( x < 0 || y < 0 || x >= cur->vw || y >= cur->vh ) {
+            return;
+      }
+      txtscr_row( y )[x] = txtscr_blankcell();
 }
 
 void txtscr_clear( void ) {
@@ -272,7 +314,7 @@ void txtscr_fill( int x1, int y1, int x2, int y2, int ch, int fg, int bg ) {
                   uint8_t nch = ch >= 0 ? (uint8_t) ch : TXTSCR_CELL_CHR( c );
                   uint8_t nfg = fg >= 0 ? (uint8_t) fg : TXTSCR_CELL_FG( c );
                   uint8_t nbg = bg >= 0 ? (uint8_t) bg : TXTSCR_CELL_BG( c );
-                  d[x] = TXTSCR_MAKECELL( nch, nbg, nfg );
+                  d[x] = TXTSCR_MAKECELL( nch, nbg, nfg ) | ( ch >= 0 ? 0 : ( c & TXTSCR_FLAGS ) );     // a new character makes it a written cell
             }
       }
 }
@@ -313,7 +355,7 @@ void txtscr_invert( int x1, int y1, int x2, int y2 ) {
             textcell_t* d = txtscr_row( y );
             for ( int x = x1; x <= x2; ++x ) {
                   textcell_t c = d[x];
-                  d[x] = TXTSCR_MAKECELL( TXTSCR_CELL_CHR( c ), TXTSCR_CELL_FG( c ), TXTSCR_CELL_BG( c ) );
+                  d[x] = TXTSCR_MAKECELL( TXTSCR_CELL_CHR( c ), TXTSCR_CELL_FG( c ), TXTSCR_CELL_BG( c ) ) | ( c & TXTSCR_FLAGS );
             }
       }
 }
@@ -328,7 +370,7 @@ size_t txtscr_save( uint8_t* out, size_t outsize ) {
             out[ i * 4U ]      = TXTSCR_CELL_CHR( c );
             out[ i * 4U + 1U ] = TXTSCR_CELL_FG( c );
             out[ i * 4U + 2U ] = TXTSCR_CELL_BG( c );
-            out[ i * 4U + 3U ] = 0;
+            out[ i * 4U + 3U ] = (uint8_t)( c >> 24 );      // the flags
       }
       return size;
 }
@@ -338,7 +380,7 @@ bool txtscr_restore( const uint8_t* data, size_t size ) {
             return false;
       }
       for ( size_t i=0; i < (size_t) tw * th; ++i ) {
-            cur->cells[i] = TXTSCR_MAKECELL( data[ i * 4U ], data[ i * 4U + 2U ], data[ i * 4U + 1U ] );
+            cur->cells[i] = TXTSCR_MAKECELL( data[ i * 4U ], data[ i * 4U + 2U ], data[ i * 4U + 1U ] ) | ( (uint32_t) data[ i * 4U + 3U ] << 24 );
       }
       return true;
 }
@@ -363,16 +405,93 @@ const uint8_t* txtscr_font( void ) {
       return currfont;
 }
 
+// -- overlays --------------------------------------------------------------------------
+
+static uint8_t hlmap[256];
+static bool    hlmapset;
+
+void txtscr_setstatus( const char* text, int paper, int pen ) {
+      if ( text == 0 ) {
+            cur->statuson = false;
+            return;
+      }
+      strncpy( cur->status, text, TXTSCR_MAXW );
+      cur->status[TXTSCR_MAXW] = 0;
+      cur->spaper = paper & 255; cur->spen = pen & 255;
+      cur->statuson = true;
+}
+
+bool txtscr_getstatus( char* out, size_t outsize ) {
+      if ( out != 0 && outsize > 0 ) {
+            snprintf( out, outsize, "%s", cur->statuson ? cur->status : "" );
+      }
+      return cur->statuson;
+}
+
+void txtscr_sethighlight( int firstrow, int lastrow ) {
+      if ( firstrow < 0 || lastrow < firstrow ) {
+            cur->hlfirst = cur->hllast = -1;
+            return;
+      }
+      cur->hlfirst = firstrow; cur->hllast = lastrow;
+}
+
+bool txtscr_gethighlight( int* outfirst, int* outlast ) {
+      if ( outfirst ) *outfirst = cur->hlfirst;
+      if ( outlast ) *outlast = cur->hllast;
+      return cur->hlfirst >= 0;
+}
+
+void txtscr_sethighlightmap( const uint8_t map[256] ) {
+      if ( map == 0 ) {
+            hlmapset = false;
+            return;
+      }
+      memcpy( hlmap, map, 256 );
+      hlmapset = true;
+}
+
+static const uint8_t* txtscr_hlmap( void ) {
+      static uint8_t dflt[256];
+      static bool dfltset;
+      if ( hlmapset ) {
+            return hlmap;
+      }
+      if ( !dfltset ) {
+            uint32_t pal[256];
+            for ( int i=0; i < 256; ++i ) {
+                  pal[i] = pal_argb( i );
+            }
+            pal_lighter_map( pal, 30, PAL_DEFAULT_BACKDROP, dflt );
+            dfltset = true;
+      }
+      return dflt;
+}
+
+textcell_t txtscr_getdisplaycell( int y, int x ) {
+      if ( x < 0 || y < 0 || x >= tw || y >= th ) {
+            return 0;
+      }
+      if ( cur->statuson && y == th - 1 ) {
+            size_t n = strlen( cur->status );
+            return TXTSCR_MAKECELL( x < (int) n ? (uint8_t) cur->status[x] : 32, cur->spaper, cur->spen );
+      }
+      textcell_t c = cur->cells[ y * tw + x ] & ~TXTSCR_FLAGS;
+      if ( cur->hlfirst >= 0 && y >= cur->hlfirst && y <= cur->hllast ) {
+            c = TXTSCR_MAKECELL( TXTSCR_CELL_CHR( c ), txtscr_hlmap()[ TXTSCR_CELL_BG( c ) ], TXTSCR_CELL_FG( c ) );
+      }
+      return c;
+}
+
 // -- rendering -------------------------------------------------------------------------
 
 void txtscr_render( uint8_t* target ) {
-      const textcell_t* s = &cur->cells[0];
       uint8_t* d = target;
       int stride = tw * 8;
       int ccx = cur->vx + cur->cursx, ccy = cur->vy + cur->cursy;
       for ( uint8_t y=0; y < (uint8_t) th; ++y ) {
             for ( uint8_t x=0; x < (uint8_t) tw; ++x ) {
-                  textcell_t cell = *s++;
+                  textcell_t cell = txtscr_getdisplaycell( y, x );
                   uint8_t bg = TXTSCR_CELL_BG(cell);
                   uint8_t fg = TXTSCR_CELL_FG(cell);
                   uint8_t ch = TXTSCR_CELL_CHR(cell);
@@ -508,6 +627,7 @@ void txtscr_print_n( int y, int x, int bg, int fg, const char* text, size_t text
                   }
                   cx += n; len -= n; s0 += n;
                   if ( cx >= cur->vw ) {
+                        txtscr_setwrap( cy, cur->vw - 1, true );        // the row continues in the next one
                         cx = 0;
                         ++cy;
                         if ( cy >= cur->vh ) {

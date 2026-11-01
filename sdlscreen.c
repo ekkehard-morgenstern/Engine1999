@@ -813,18 +813,43 @@ static void sdlscr_drv_reserve( int rows ) { (void) rows; }
 static void sdlscr_drv_getviewport( int* x, int* y, int* w, int* h ) { sdlscr_text_getviewport( x, y, w, h ); }
 static void sdlscr_drv_getcursor( int* x, int* y ) { sdlscr_text_getcursor( x, y ); }
 
+static void sdlscr_drv_palette( uint32_t pal[256], uint32_t* backdrop ) {
+    memcpy( pal, layers[LAY_TXT].palette, 256 * sizeof(uint32_t) );
+    *backdrop = sdlscr_bgcol;
+}
+
 static const scrdrv_t sdlscr_drv = {
     sdlscr_drv_screensize, sdlscr_drv_getsize,
     sdlscr_text_select, sdlscr_text_selected, sdlscr_text_setviewport, sdlscr_text_resetviewport, sdlscr_drv_getviewport,
     sdlscr_text_setcolors, sdlscr_text_setblank, sdlscr_text_clear, sdlscr_text_write, sdlscr_drv_print, sdlscr_locate, sdlscr_drv_getcursor,
     sdlscr_textchanged, sdlscr_drv_reserve, sdlscr_drv_restart,
-    sdlscr_drv_begin, sdlscr_drv_end, sdlscr_drv_nextkey, sdlscr_inputpending, sdlscr_pollkeys
+    sdlscr_drv_begin, sdlscr_drv_end, sdlscr_drv_nextkey, sdlscr_inputpending, sdlscr_pollkeys,
+    sdlscr_drv_palette
 };
 
 const scrdrv_t* sdlscr_driver( void (*vblank_handler)( void* ), void* usrdata ) {
     sdlscr_drv_vblank = vblank_handler;
     sdlscr_drv_usrdata = usrdata;
     return &sdlscr_drv;
+}
+
+// the line of the prompt: the screen editor (scr_screenedit()) of text screen 0. Same results as sdlscr_lineinput(); the typing mode
+// (insert / overwrite) is kept between calls.
+int sdlscr_screeninput( char* buf, size_t bufsz, void (*vblank_handler)( void* ), void* usrdata ) {
+    static bool insert = false;
+    if ( buf == 0 || bufsz < 2U ) return 0;
+    int r = scr_screenedit( sdlscr_driver( vblank_handler, usrdata ), buf, bufsz, &insert, 0, 0 );
+    switch ( r ) {
+        case SCREDIT_CLOSED:
+            return SDLEV_SCREENWORKERFINISHED;
+        case SCREDIT_CANCELLED:     // (the screen is too small)
+            return sdlscr_lineinput( 0, buf, bufsz, vblank_handler, usrdata );
+        case SCREDIT_ACCEPTED:
+            return 0;
+        default:                    // Break, end of input: no line
+            buf[0] = '\0';
+            return 0;
+    }
 }
 
 int sdlscr_lineedit( char* buf, size_t bufsz, void (*vblank_handler)( void* ), void* usrdata ) {

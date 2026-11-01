@@ -58,6 +58,13 @@
 #define TXTSCR_CELL_CHR(n) \
     ( (uint8_t)( (n) & UINT32_C(0XFF) ) )
 
+// Cell flags (bits 24..31; the getters below don't return them, txtscr_getflags() does):
+//   TXTSCR_EMPTY  the cell was not written since the screen was cleared / the row was scrolled in (it looks like a space in the blank colors)
+//   TXTSCR_WRAP   on the last cell of a row: the text continues in the first cell of the next row
+#define TXTSCR_EMPTY    UINT32_C(0X01000000)
+#define TXTSCR_WRAP     UINT32_C(0X02000000)
+#define TXTSCR_FLAGS    UINT32_C(0XFF000000)
+
 typedef uint32_t textcell_t;
 
 bool txtscr_enablecursor( bool enable );
@@ -86,8 +93,22 @@ void txtscr_getcolors( int* outbg, int* outfg );
 void txtscr_setblank( int bg, int fg );     // colors scrolling and txtscr_clear() fill with (default: TXTSCR_BGCOL/FGCOL)
 textcell_t txtscr_getcell( int y, int x );  // relative to the viewport; 0 outside of it
 textcell_t txtscr_getrawcell( int y, int x ); // relative to the screen (for painters); 0 outside
+uint32_t txtscr_getflags( int y, int x );   // TXTSCR_EMPTY / TXTSCR_WRAP of a cell, relative to the viewport; 0 outside of it
+bool txtscr_isempty( int y, int x );
+bool txtscr_iswrapped( int y, int x );
+void txtscr_setwrap( int y, int x, bool wrap );     // sets / clears WRAP of a cell (viewport relative)
+void txtscr_setempty( int y, int x );               // the cell becomes a blank (empty) cell
 void txtscr_getabscursor( int* outx, int* outy );    // the cursor relative to the screen
 void txtscr_clear( void );                  // fills the viewport with blanks, cursor to its top left
+
+// Overlays of the selected screen: drawn by the renderers, not stored in the cells (so they are never saved, read back or printed).
+// The status line replaces the bottom row of the screen; the highlight draws the screen rows first..last (absolute) with a brighter paper.
+void txtscr_setstatus( const char* text, int paper, int pen );       // text 0 = off
+bool txtscr_getstatus( char* out, size_t outsize );                  // is it on? (copies the text)
+void txtscr_sethighlight( int firstrow, int lastrow );               // firstrow < 0 = off
+bool txtscr_gethighlight( int* outfirst, int* outlast );
+void txtscr_sethighlightmap( const uint8_t map[256] );               // paper -> brighter paper (0 = computed from the engine's start palette, 30 % toward white)
+textcell_t txtscr_getdisplaycell( int y, int x );                    // a cell as drawn, overlays applied (absolute; flags removed; 0 outside)
 
 void txtscr_render( uint8_t* target );
 

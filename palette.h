@@ -46,4 +46,10 @@ uint32_t pal_argb( int index );                         // 0xAARRGGBB of an entr
 const char* pal_title( int index );                     // its name ("Navy")
 bool pal_find( const char* name, uint32_t* pargb );     // an entry by name (case does not matter)
 
+// For each entry the nearest opaque entry of 'pal' to its color blended 'percent' % toward white (the highlight of the screen editor).
+// A fully transparent entry maps to entry 255 if that is a translucent white (TransparentWhite, 0x88FFFFFF): the layers behind show through, lighter.
+// Other (partly) transparent entries is lightened as it looks on screen, i.e. composited over 'backdrop' first (the start paper is transparent).
+#define PAL_DEFAULT_BACKDROP    UINT32_C(0XFF708090)        // SlateGray, the window's start backdrop
+void pal_lighter_map( const uint32_t pal[256], int percent, uint32_t backdrop, uint8_t out[256] );
+
 #endif

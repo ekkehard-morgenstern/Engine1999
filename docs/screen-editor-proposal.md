@@ -1,7 +1,7 @@
 # A C-64 style screen editor for text screen 0 — requirements, design and open points
 
 *First written 2026-11-01 for the owner's review; **revised the same day with the owner's decisions** (they are marked **decided**).
-**Nothing in this document is implemented.** The branch for the subproject is `feature/c64-like-screen-editor`.*
+**Phases 1 (cell flags, overlays) and 2 (the editor, window host) are implemented since 2026-11-01; phase 3 (console) is not.** The branch for the subproject is `feature/c64-like-screen-editor`.*
 
 ## 1. Status: what is decided
 
@@ -110,16 +110,17 @@ The mode is **OVR** at start and stays what the user chose until it is toggled (
 | Key | Behavior |
 |---|---|
 | printable character | **OVR:** writes the cell under the cursor (colors: the current pen/paper) and moves right. **INS:** inserts the character at the cursor, shifting the rest of the edit unit right (in a logical line a new row is added if it reaches the end of a row, and at the bottom of the screen the screen scrolls up; in a screen-row unit what is pushed past the last column is lost). Writing in the last column sets WRAP on that cell and the cursor continues in the next row (the bottom right scrolls the screen up). |
-| **INSERT** | inserts an empty character (a space) at the cursor and shifts the rest of the edit unit right; the cursor stays. Same in OVR and INS. |
+| **INSERT** | inserts an empty character (a space) at the cursor and shifts the rest of the edit unit right; the cursor stays. Same in OVR and INS. **Decided 2026-11-01:** if the line would grow into a row that holds another line (it ends on a row's last cell, unlinked, and the next row begins with text), **a blank screen line is opened below the line** (the rows below move down one row, the bottom row of the editor area is lost) and the line grows into it; at the very bottom the screen scrolls up instead. |
 | **F12** (also **Shift+INSERT**) | toggles INS / OVR. F12 is the key named in the status line, so nobody has to look for it; Shift+INSERT stays as a second binding where the keyboard has it and the terminal passes it on. |
 | **DELETE** | deletes the character at the cursor and shifts the rest of the edit unit left; the cell freed at its end becomes empty (a last row that becomes empty drops the previous row's WRAP flag). The cursor stays. |
 | **BACKSPACE** | if the cell left of the cursor belongs to the edit unit: deletes it, moves the cursor there, shifts the rest of the unit left. **At the first cell of the unit it deletes nothing: the cursor just moves left, abandoning it** (from column 0 to the end of the row above). |
 | LEFT / RIGHT | **free** movement: one cell, wrapping from the first column to the end of the row above and from the last column to the start of the row below; at the top left the screen scrolls **down** and the cursor goes to the **end of the first row**; at the bottom right the screen scrolls **up** and the cursor goes to the start of the last row |
 | UP / DOWN | one row, same column; at the top / bottom row the screen scrolls down / up (the row that leaves is lost; no scroll-back) |
-| HOME / END | start / end of the logical line (no line: the start / end of the screen row). Ctrl+Home / Ctrl+End: top left / bottom left of the editor area, i.e. the rows above the status line (as in the full-screen editor). |
+| HOME / END | start / end of the logical line (no line: the start / end of the screen row). **Decided 2026-11-01:** if the line ends on the last cell of a row, END opens **a new blank screen line below it** (the text below moves down; if the row below is blank it is used as it is; on the last row the screen scrolls up), links it to the line (WRAP) and puts the cursor in its first cell, so typing goes on with the line. Ctrl+Home / Ctrl+End: top left / bottom left of the editor area, i.e. the rows above the status line (as in the full-screen editor). |
 | RETURN | enters the line (§5.2, §5.5); with no line it just moves to the start of the next row |
 | ESC | nothing at the prompt (it is the break key while a program runs) |
-| Ctrl+C, TAB, the other function keys, PgUp/PgDn | ignored (PgUp/PgDn have nothing to scroll back to) |
+| Ctrl+C / PAUSE (Break) | **no effect at all while no program runs** (decided 2026-11-01: the editor is never left by Break, nothing moves) |
+| TAB, the other function keys, PgUp/PgDn | ignored (PgUp/PgDn have nothing to scroll back to) |
 
 **The edit unit of INSERT, DELETE and BACKSPACE.** (1) If the cursor is in or directly behind a **logical line** (§5.2), the unit is that line, across its wrapped rows. (2) Otherwise — the cursor is on an
 empty cell that is not behind text — but the **screen row** under the cursor is **not blank** (it has a non-empty cell anywhere), the unit is **the rest of that screen row**, from the cursor to the last column: the
@@ -252,5 +253,7 @@ Rough size: phase 1 ≈ 250 lines, phase 2 ≈ 500 lines + tests, phase 3 ≈ 35
 
 ## 7. Open points
 
-**None.** To look at while implementing, because they are matters of taste or of the screen itself: the exact status line layout and colors (white on red is the start), the highlight brightness (30 % toward white), how INSERT/DELETE
+**A future issue (2026-11-01, the owner):** the screen editor must not be left except by RETURN (a line) or by closing the window. Today the end of the input (`SK_EOF`, a redirected input or a closed pipe: not expected on a terminal in screen mode) and a Ctrl-D of the console host still end it without a visible effect (`SCREDIT_EOF`: the host then treats it as an empty line / the end of the session); what the console host should do with Ctrl-D and with a lost standard input in screen mode is to be decided with phase 3.
+
+**Otherwise none.** To look at while implementing, because they are matters of taste or of the screen itself: the exact status line layout and colors (white on red is the start), the highlight brightness (30 % toward white), how INSERT/DELETE
 behave in a row with several runs (case 1 shifts a run into the gap after it), and whether F12 collides with the user's desktop.
