@@ -304,6 +304,7 @@
 #define TOK_BREAK       UINT8_C(251)        // BREAK keyword (BREAK ON / OFF: ESC is the break key / an ordinary key)
 #define TOK_KEY         UINT8_C(252)        // KEY function (is a key held down?)
 #define TOK_MOUSE       UINT8_C(253)        // MOUSE keyword (MOUSE SHOW|HIDE|POS|SHAPE|TIMEOUT, MOUSE("X") ...)
+#define TOK_XFUNC       UINT8_C(254)        // extension token: the next byte (XF_*) names the word (the one-byte token space is full)
 #define TOK_NONE        UINT8_C(255)        // no token (!)
 
 // -- buffers ---------------------------------------------------------------
@@ -455,6 +456,14 @@ bool read_brclit( rbuf_t* rbuf, char** ptarget );
 
 // -- keywords --------------------------------------------------------------
 
+// Extension words: TOK_XFUNC followed by one byte (XF_*). They are reserved words like all others; new words go here.
+#define XF_SPACE        UINT8_C(1)          // SPACE$ function
+#define XF_STRING       UINT8_C(2)          // STRING$ function
+#define XF_MIN          UINT8_C(3)          // MIN function (two numbers)
+#define XF_MAX          UINT8_C(4)          // MAX function (two numbers)
+#define XF_ATAN2        UINT8_C(5)          // ATAN2 function (y, x)
+bool is_xkeyword( const char* name, uint8_t* pxid );    // an extension word by name
+const char* xkeyword_name( uint8_t xid );               // the text of an extension word, 0 if there is none
 bool is_keyword( const char* name, uint8_t* ptok );
 bool is_keyword2( uint8_t tok );
 const char* keyword_name( uint8_t tok );        // the keyword text of a token, 0 if it is none

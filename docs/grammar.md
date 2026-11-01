@@ -119,8 +119,18 @@ sys-str-fn-2-arg-call := ( BIN | QUA | OCT | DEC | HEX ) "$" "(" num-expr
                          ( LEFT | RIGHT ) "$" "(" str-expr "," num-expr ")" |
                          MID "$" "(" str-expr "," num-expr [ "," num-expr ] ")" |
                          INPUT "$" "(" num-expr [ "," chan-spec ] ")" .
-sys-num-fn-arg-call := sys-num-fn-1-arg-call .
-sys-str-fn-arg-call := sys-str-fn-2-arg-call .
+```
+
+> MIN(a,b) and MAX(a,b) are the smaller / larger number, ATAN2(y,x) the angle of the point (x,y) in the unit of DEG/RAD/GRAD. SPACE$(n) is n blanks,
+> STRING$(n,c) n copies of the character code c (0..255) or of the first character of the string c. These five are extension words: TOK\_XFUNC plus
+> one byte (the grammar writes them by name).
+
+```ebnf
+xfunc-call := ( MIN | MAX | ATAN2 ) "(" num-expr "," num-expr ")" |
+              SPACE "$" "(" num-expr ")" |
+              STRING "$" "(" num-expr "," expr ")" .
+sys-num-fn-arg-call := sys-num-fn-1-arg-call | xfunc-call .
+sys-str-fn-arg-call := sys-str-fn-2-arg-call | xfunc-call .
 sys-noarg-num-name := TI | ERL | PI | ARGC .
 ```
 

@@ -544,6 +544,12 @@ The 4096 extended instructions are as follows:
                             is no key is "Illegal argument". The host answers (vm_t.keydown); without one it is the error "KEY is not available in this host" (the console host).
     MATH kinds 14..16: CEIL, LOG2, LOG10 (kind 1, INT, is FLOOR as well).
 
+    0001 01111110       MTH2 - numeric function of two numbers ( x y -- z ) C=0 P=1
+                            Parameter 1 = MIN, 2 = MAX, 3 = ATAN2 (y = the first argument, x = the second; the angle is in the unit of DEG / RAD / GRAD).
+    0001 01111111       STRN - repeat a character ( n c -- s ) C=0 P=1
+                            STRING$(n, c) and SPACE$(n). Parameter 0: c is a character code 0..255; 1: c is a string, its first byte is repeated
+                            (an empty string is "Illegal argument"); 2: SPACE$, the stack holds n only. n is 0..65535, else "Illegal argument".
+
 */
 
 #define INS_NODATA      UINT32_C(0XFFFFFFFF)
@@ -721,5 +727,7 @@ The 4096 extended instructions are as follows:
 #define INS_ENVS        UINT16_C(0X17B)
 #define INS_BRKM        UINT16_C(0X17C)
 #define INS_KEYD        UINT16_C(0X17D)
+#define INS_MTH2        UINT16_C(0X17E)
+#define INS_STRN        UINT16_C(0X17F)
 
 #endif

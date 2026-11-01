@@ -163,7 +163,7 @@ void comp_push_context( compiler_t* comp ) {
     }
     ctx->prev = comp->ctxstk; comp->ctxstk = ctx;
     memcpy( &ctx->iter, &comp->iter, sizeof(pgmiter_t) );
-    ctx->tokp = comp->tokp; ctx->tokend = comp->tokend; ctx->currtok = comp->currtok;
+    ctx->tokp = comp->tokp; ctx->tokend = comp->tokend; ctx->currtok = comp->currtok; ctx->currext = comp->currext;
     ctx->param = 0; ctx->number = comp->number;
     switch ( ctx->currtok ) {
         case TOK_HEXLIT: case TOK_DECLIT: case TOK_OCTLIT: case TOK_QUALIT: case TOK_BINLIT:
@@ -195,7 +195,7 @@ void comp_pop_context( compiler_t* comp ) {
     }
     comp->ctxstk = ctx->prev;
     memcpy( &comp->iter, &ctx->iter, sizeof(pgmiter_t) );
-    comp->tokp = ctx->tokp; comp->tokend = ctx->tokend; comp->currtok = ctx->currtok;
+    comp->tokp = ctx->tokp; comp->tokend = ctx->tokend; comp->currtok = ctx->currtok; comp->currext = ctx->currext;
     switch ( comp->currtok ) {
         case TOK_HEXLIT: case TOK_DECLIT: case TOK_OCTLIT: case TOK_QUALIT: case TOK_BINLIT:
             comp->number = ctx->number;
@@ -1964,13 +1964,89 @@ COMMA:      comp_error( comp, "Comma ',' expected" );
     return false;
 }
 
+// -- extension words (TOK_XFUNC) -------------------------------------------
+
+static bool comp_eat_xfunccall( compiler_t* comp, node_t** pnode, bool wantstr ) {
+    /*
+        xfunc-call := TOK_XFUNC(SPACE) TOK_STRING TOK_LPAREN num-expr TOK_RPAREN |
+                      TOK_XFUNC(STRING) TOK_STRING TOK_LPAREN num-expr TOK_COMMA expr TOK_RPAREN |
+                      ( TOK_XFUNC(MIN) | TOK_XFUNC(MAX) | TOK_XFUNC(ATAN2) ) TOK_LPAREN num-expr TOK_COMMA num-expr TOK_RPAREN .
+
+        NT_SYSNUMFUNCARGCALL / NT_SYSSTRFUNCARGCALL with the data TOK_XFUNC, the XF_* id and, for STRING$, 1 when the second
+        argument is a string (0 = a character code).
+    */
+    if ( comp->currtok != TOK_XFUNC ) {
+        return false;
+    }
+    uint8_t xid = comp->currext;
+    bool isstr = xid == XF_SPACE || xid == XF_STRING;
+    if ( isstr != wantstr ) {
+        return false;
+    }
+    if ( !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    if ( isstr ) {
+        if ( comp->currtok != TOK_STRING || !comp_fetchtok( comp ) ) {
+            comp_error( comp, "String sigil '$' expected" );
+            return false;
+        }
+    }
+    if ( comp->currtok != TOK_LPAREN || !comp_fetchtok( comp ) ) {
+        comp_error( comp, "Opening parenthesis '(' expected" );
+        return false;
+    }
+    node_t* arg1 = NODE_NONE, *arg2 = NODE_NONE;
+    if ( !comp_eat_numexpr( comp, &arg1 ) || arg1 == NODE_NONE ) {
+        comp_error( comp, "Numeric expression expected" );
+        return false;
+    }
+    uint8_t data[3] = { TOK_XFUNC, xid, 0 };
+    uint16_t datalen = 2;
+    if ( xid != XF_SPACE ) {
+        if ( comp->currtok != TOK_COMMA || !comp_fetchtok( comp ) ) {
+            comp_error( comp, "Comma ',' expected" );
+            return false;
+        }
+        if ( xid == XF_STRING ) {
+            if ( !comp_eat_expr( comp, &arg2 ) || arg2 == NODE_NONE ) {
+                comp_error( comp, "Expression expected" );
+                return false;
+            }
+            data[2] = arg2->type == NT_STREXPR ? 1 : 0;
+            datalen = 3;
+        } else if ( !comp_eat_numexpr( comp, &arg2 ) || arg2 == NODE_NONE ) {
+            comp_error( comp, "Numeric expression expected" );
+            return false;
+        }
+    }
+    if ( comp->currtok != TOK_RPAREN || !comp_fetchtok( comp ) ) {
+        comp_error( comp, "Closing parenthesis ')' expected" );
+        return false;
+    }
+    uint8_t type = wantstr ? NT_SYSSTRFUNCARGCALL : NT_SYSNUMFUNCARGCALL;
+    bool ok = arg2 == NODE_NONE ? comp_create_node( comp, pnode, type, UINT8_C(1), datalen, data, arg1 ) :
+                                  comp_create_node( comp, pnode, type, UINT8_C(2), datalen, data, arg1, arg2 );
+    if ( !ok || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
 bool comp_eat_sysnumfuncargcall( compiler_t* comp, node_t** pnode ) {
-    // sys-num-fn-arg-call := sys-num-fn-1-arg-call .
+    // sys-num-fn-arg-call := sys-num-fn-1-arg-call | xfunc-call .
+    if ( comp->currtok == TOK_XFUNC ) {
+        return comp_eat_xfunccall( comp, pnode, false );
+    }
     return comp_eat_sysnumfn1argcall( comp, pnode );
 }
 
 bool comp_eat_sysstrfuncargcall( compiler_t* comp, node_t** pnode ) {
-    // sys-str-fn-arg-call := sys-str-fn-2-arg-call .
+    // sys-str-fn-arg-call := sys-str-fn-2-arg-call | xfunc-call .
+    if ( comp->currtok == TOK_XFUNC ) {
+        return comp_eat_xfunccall( comp, pnode, true );
+    }
     return comp_eat_sysstrfn2argcall( comp, pnode );
 }
 
@@ -2800,6 +2876,9 @@ static bool comp_word( compiler_t* comp, char* buf, size_t sz ) {
     switch ( comp->currtok ) {
         case TOK_IDENT: case TOK_NUMIDENT:
             t = comp->param;
+            break;
+        case TOK_XFUNC:
+            t = xkeyword_name( comp->currext );
             break;
         default:
             t = keyword_name( comp->currtok );
@@ -5901,6 +5980,13 @@ if ( basdbg_on( BASDBG_PARSE ) ) {
     if ( is_sngchrtok( tok ) || ( tok >= TOK_DEC0 && tok <= TOK_DEC9 ) ) {
         return true;
     } else if ( is_keyword2( tok ) ) {
+        return true;
+    } else if ( tok == TOK_XFUNC ) {                // an extension word: one more byte names it
+        if ( comp->tokp >= comp->tokend || xkeyword_name( *comp->tokp ) == 0 ) {
+            --comp->tokp;
+            return false;
+        }
+        comp->currext = *comp->tokp++;
         return true;
     }
     // unknown token, back up

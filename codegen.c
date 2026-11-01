@@ -443,6 +443,8 @@ const char* cgen_opcode_name( uint16_t opcode ) {
         case INS_ENVS:      return "ENVS";
         case INS_BRKM:      return "BRKM";
         case INS_KEYD:      return "KEYD";
+        case INS_MTH2:      return "MTH2";
+        case INS_STRN:      return "STRN";
         case INS_AFLT:      return "AFLT";
         case INS_GFXC:      return "GFXC";
         case INS_GFXQ:      return "GFXQ";
@@ -1163,6 +1165,8 @@ bool cgen_gen_argc( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_ARGC, f
 bool cgen_gen_args( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_ARGS, false, false, UINT16_C(0) ); }
 bool cgen_gen_brkm( codegen_t* cgen, uint16_t on ) { return cgen_gen_ins12( cgen, INS_BRKM, false, true, on ); }
 bool cgen_gen_envs( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_ENVS, false, false, UINT16_C(0) ); }
+bool cgen_gen_mth2( codegen_t* cgen, uint16_t kind ) { return cgen_gen_ins12( cgen, INS_MTH2, false, true, kind ); }
+bool cgen_gen_strn( codegen_t* cgen, uint16_t kind ) { return cgen_gen_ins12( cgen, INS_STRN, false, true, kind ); }
 bool cgen_gen_keyd( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_KEYD, false, false, UINT16_C(0) ); }
 bool cgen_gen_acnt( codegen_t* cgen, uint16_t varoffs ) { return cgen_gen_ins12_imm17( cgen, INS_ACNT, (int32_t) varoffs ); }
 bool cgen_gen_aflt( codegen_t* cgen, uint16_t varoffs ) { return cgen_gen_ins12_imm17( cgen, INS_AFLT, (int32_t) varoffs ); }
@@ -1609,13 +1613,25 @@ bool cgen_from_sysfncall( codegen_t* cgen, compiler_t* comp, node_t* node ) {
 UNEXP:      return cgen_unexpected_node( comp );
     }
     uint16_t datalen = node->datalen;
-    if ( datalen != UINT16_C(1) ) {
+    if ( datalen != UINT16_C(1) && !( hasargs && datalen >= UINT16_C(2) && datalen <= UINT16_C(3) && node->data[0] == TOK_XFUNC ) ) {
         goto UNEXP;
     }
     if ( hasargs && !gen_from_sysfncall( cgen, comp, node ) ) {
         return false;
     }
     uint8_t functok = node->data[0];
+    if ( functok == TOK_XFUNC && datalen >= UINT16_C(2) ) {     // an extension word (XF_*)
+        bool ok = false;
+        switch ( node->data[1] ) {
+            case XF_MIN:    ok = cgen_gen_mth2( cgen, 1 ); break;
+            case XF_MAX:    ok = cgen_gen_mth2( cgen, 2 ); break;
+            case XF_ATAN2:  ok = cgen_gen_mth2( cgen, 3 ); break;
+            case XF_SPACE:  ok = cgen_gen_strn( cgen, 2 ); break;
+            case XF_STRING: ok = cgen_gen_strn( cgen, datalen == UINT16_C(3) && node->data[2] ? 1 : 0 ); break;
+            default:        goto UNEXP;
+        }
+        return ok || cgen_out_of_code_memory( comp );
+    }
     {   // the numeric functions are one instruction with the kind as parameter (its argument is on the stack already)
         uint16_t kind = 0;
         switch ( functok ) {

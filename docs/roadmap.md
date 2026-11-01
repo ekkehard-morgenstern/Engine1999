@@ -22,14 +22,14 @@ the sections when items are done or added.
 | 6 | Screen mode: plain 256-color vs truecolor terminals (11, 12) | check the SlateGray paper, highlight and status line on a terminal without `COLORTERM=truecolor` | Medium | a quick manual check |
 | 7 | Sprite and tile editors (10) | built-in editors based on `SPRITE GET` / `TILE GET`, `DESIGN` rows | Medium | the owner's plan; large; game development tool |
 | 8 | `PRINT USING`, `AT`, `HTAB`, `VTAB` (11) | formatted output | Medium | common in BASIC; `LOCATE` covers placement |
-| 9 | `STRING$`, `SPACE$` and binary helpers (9) | the usual string builders, `HEX` to bytes, unsigned `CVI`/`CVL`, byte-wise `ANDS`/`ORS` | Medium | small, widely expected; the first two are trivial |
+| 9 | Binary helpers (9) | `HEX` to bytes, unsigned `CVI`/`CVL`, byte-wise `ANDS`/`ORS` | Medium-Low | `STRING$` and `SPACE$` are **done 2026-11-01** (extension words, see the note below the table) |
 | 10 | `ERR` as a number, `ON ERROR GOTO 0`, `ERROR n` (9) | the rest of the error handling | Medium | small; fits the existing trap |
 | 11 | Comments are converted to upper case (2) | `' Ode to Joy` lists as `' ODE TO JOY` | Medium | annoying in listings; a small tokenizer change (*decision*) |
 | 12 | `FRAME`, handlers during `INPUT`/`GET` (2) | wait for the next refresh; timer handlers do not run while waiting for input | Medium | `FRAME` is useful for games; `VSYNC` partly covers it |
 | 13 | `SWITCH` / `CASE` (13) | multi-way branch | Medium | design questions: fall-through, strings, `AGAIN` / `EXIT` levels (*decision*) |
 | 14 | Full-screen editor (`EDIT`) limits (1) | no mouse, search/replace, block or clipboard operations; long lines read-only | Medium | the screen editor covers much of this need |
 | 15 | Encoding of `.bas` listings (4) | a UTF-8 file with `ä` in a string shows two Latin-9 glyphs: convert on `LOAD`? | Medium | will bite users who edit listings in other editors (*decision*) |
-| 16 | Numeric extras (2) | `ASN`/`ACS`, hyperbolic functions, `ATAN2`, `MIN`/`MAX`, `ROUND(x,n)`, `CINT`/`CDBL` | Medium-Low | `DEF FN` can build most of them |
+| 16 | Numeric extras (2) | `ASN`/`ACS`, hyperbolic functions, `ROUND(x,n)`, `CINT`/`CDBL` (`ATAN2`, `MIN`, `MAX` are **done 2026-11-01**) | Medium-Low | `DEF FN` can build most of them |
 | 17 | `PLAY` extras (2b) | chords inside a string, `N` (note number), `X` (run a string), repeat | Medium-Low | one string per voice works today |
 | 18 | Audio without a window (12) | open the audio device alone for scripts that `PLAY` | Medium-Low | optional |
 | 19 | Drivers written in BASIC (8) | `DRIVER "name","PREFIX"` with labelled handlers | Low | postponed by the owner; proposal exists (*decision*) |
@@ -58,6 +58,8 @@ the sections when items are done or added.
 | 42 | Graphics in terminals (12) | a software compositor + the kitty graphics protocol (sixel as a fallback): the layers, sprites and tiles in `engine1999c` | **Lowest** | owner, 2026-11-01: a "nice to have" for much later; after the joystick and `ON MOUSE` |
 | 43 | Indent fixer (1) | a key (F9) in the full-screen editor that re-indents the whole program by its block structure; the same as a statement for direct mode and the console | Low | owner, 2026-11-01; the algorithm exists (used on the demos), needs a shared module and a decision on undo |
 | 44 | Full screen / window switch (4) | F11 (or ALT+RETURN) toggles the window between full screen and a normal window | Low | owner, 2026-11-01; the window is always `SDL_WINDOW_FULLSCREEN_DESKTOP` now |
+
+*Token space (2026-11-01):* the one-byte tokens 0..255 are used up (only the unused `PUT`, 13, is free). New words are **extension words**: token 254 (`TOK_XFUNC`) plus a second byte (`XF_*`, table `xkeywtbl` in `bastok.c`): 255 more are possible. `SPACE STRING MIN MAX ATAN2` are the first. Keep this in mind when adding words: a new word is an `xkeywtbl` row plus its parser branch, not a `TOK_` define.
 
 *Cleaned up while rating (2026-11-01): four stale entries were found already done and ticked (`SYMBOL`, file channels, the graphics statements on channel 0, array parameters of `DEF FN`).*
 
@@ -189,7 +191,7 @@ Listed in full in `SESSION.md` ("Design decisions I took"). The ones most likely
 - [ ] `ERR` as a number, `ON ERROR GOTO 0`, `ERROR n` (raise an error by hand)
 - [x] **Binary-safe strings** (done, 2026-10-31; see `docs/basic-language.md` "Binary strings"): zero bytes in strings, control code glyphs 0..31 in the font, length based print path
 - [x] **Number packing** (done, 2026-10-31): `MKI$`/`MKL$`/`MKS$`/`MKD$` and `CVI`/`CVL`/`CVS`/`CVD`, big endian (network byte order; owner decision)
-- [ ] Helpers for binary data: `STRING$(n,c)`, `SPACE$`, `HEX` to bytes / bytes to `HEX$` dump, unsigned `CVI`/`CVL` variants, 24 bit and 64 bit integers; byte-wise `ANDS`/`ORS`
+- [ ] Helpers for binary data (`STRING$` and `SPACE$` are done, 2026-11-01): `HEX` to bytes / bytes to `HEX$` dump, unsigned `CVI`/`CVL` variants, 24 bit and 64 bit integers; byte-wise `ANDS`/`ORS`
 
 ## 10. Graphics subsystem *(implemented: `docs/graphics-subsystem.md`)*
 

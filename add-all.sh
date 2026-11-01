@@ -1,2 +1,3 @@
 #!/bin/bash
-git add *.md *.c *.h *.ebnf .gitignore makefile demos/* docs/*.md man/* residue/* *.sh
+git add *.md *.c *.h *.ebnf .gitignore makefile demos/* docs/*.md man/* residue/* *.sh docs/*.html
+

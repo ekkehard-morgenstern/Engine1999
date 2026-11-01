@@ -2280,6 +2280,75 @@ static bool vm_trig( vm_t* vm, uint16_t kind, double x, double* pr ) {
     return true;
 }
 
+// MTH2 ( x y -- z ): MIN (1), MAX (2), ATAN2 (3: x = the first argument y, y = the second x)
+static bool vm_math2( vm_t* vm, uint16_t kind ) {
+    double a = 0.0, b = 0.0, r = 0.0;
+    if ( !vm_dpop_num( vm, &b ) || !vm_dpop_num( vm, &a ) ) {
+        return false;
+    }
+    switch ( kind ) {
+        case 1:  r = a < b ? a : b; break;
+        case 2:  r = a > b ? a : b; break;
+        case 3: {
+            r = atan2( a, b );
+            if ( vm->angmode == 1 ) {
+                r *= 180.0 / 3.14159265358979323846;
+            } else if ( vm->angmode == 3 ) {
+                r *= 200.0 / 3.14159265358979323846;
+            }
+            break;
+        }
+        default:
+            return vm_error( vm, "Illegal instruction" );
+    }
+    return vm_dpush_num( vm, r );
+}
+
+// STRN ( n c -- s ) / ( n -- s ): STRING$ with a character code (0) or a string (1), SPACE$ (2)
+static bool vm_string_n( vm_t* vm, uint16_t kind ) {
+    char c = ' ';
+    if ( kind == 0 ) {
+        double code = 0.0;
+        if ( !vm_dpop_num( vm, &code ) ) {
+            return false;
+        }
+        int32_t v = vm_to_int32( code );
+        if ( v < 0 || v > 255 ) {
+            return vm_error( vm, "Illegal argument" );
+        }
+        c = (char) v;
+    } else if ( kind == 1 ) {
+        char* sv; size_t slen;
+        if ( !vm_dpop_bstr( vm, &sv, &slen ) ) {
+            return false;
+        }
+        bool empty = slen == 0;
+        if ( !empty ) {
+            c = sv[0];
+        }
+        free( sv );
+        if ( empty ) {
+            return vm_error( vm, "Illegal argument" );
+        }
+    }
+    double n = 0.0;
+    if ( !vm_dpop_num( vm, &n ) ) {
+        return false;
+    }
+    int32_t count = vm_to_int32( n );
+    if ( count < 0 || count > 65535 ) {
+        return vm_error( vm, "Illegal argument" );
+    }
+    char* buf = malloc( (size_t) count + 1U );
+    if ( buf == 0 ) {
+        return vm_error( vm, "Out of memory" );
+    }
+    memset( buf, c, (size_t) count );
+    bool ok = vm_push_bytes( vm, buf, (size_t) count );
+    free( buf );
+    return ok;
+}
+
 // MATH ( x -- y ): INT FIX ABS SGN SQR SIN COS TAN ATN EXP LOG RND, PI ( -- pi )
 static bool vm_math( vm_t* vm, uint16_t kind ) {
     double x = 0.0, r = 0.0;
@@ -3664,6 +3733,8 @@ static bool vm_step( vm_t* vm ) {
         case INS_ERRT: return vm_set_errtrap( vm, param16 );
         case INS_PACK: return vm_pack( vm, param16 );
         case INS_MATH: return vm_math( vm, param16 );
+        case INS_MTH2: return vm_math2( vm, param16 );
+        case INS_STRN: return vm_string_n( vm, param16 );
         case INS_RAND: return vm_randomize( vm, param16 != 0 );
         case INS_ANGM:
             if ( param16 < 1 || param16 > 3 ) {

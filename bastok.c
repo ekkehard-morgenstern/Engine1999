@@ -836,6 +836,32 @@ static const struct {
     { TOK_RGB, "RGB" }, { TOK_POINT, "POINT" }, { TOK_CLS, "CLS" }, { TOK_LOCATE, "LOCATE" }, { TOK_COLOR, "COLOR" }, { TOK_AMP, "&" }, { TOK_LE, "<=" }, { TOK_GE, ">=" }, { TOK_NE, "<>" }, { 0, 0 }
 };
 
+static const struct {
+    uint8_t     xid;
+    const char* name;
+} xkeywtbl[] = {
+    { XF_SPACE, "SPACE" }, { XF_STRING, "STRING" }, { XF_MIN, "MIN" }, { XF_MAX, "MAX" }, { XF_ATAN2, "ATAN2" }, { 0, 0 }
+};
+
+bool is_xkeyword( const char* name, uint8_t* pxid ) {
+    for ( int i=0; xkeywtbl[i].xid; ++i ) {
+        if ( strcmp( xkeywtbl[i].name, name ) == 0 ) {
+            *pxid = xkeywtbl[i].xid;
+            return true;
+        }
+    }
+    return false;
+}
+
+const char* xkeyword_name( uint8_t xid ) {
+    for ( int i=0; xkeywtbl[i].xid; ++i ) {
+        if ( xkeywtbl[i].xid == xid ) {
+            return xkeywtbl[i].name;
+        }
+    }
+    return 0;
+}
+
 bool is_keyword( const char* name, uint8_t* ptok ) {
     for ( int i=0; keywtbl[i].tok; ++i ) {
         if ( strcmp( keywtbl[i].name, name ) == 0 ) {
@@ -954,6 +980,13 @@ bool tokenize_line( const char* text, buf_t* out, struct _linehdr_t* phdr ) {
         if ( eat_ident( &src, &item ) ) {
             if ( is_keyword( item, &tok ) ) {
                 if ( !emit_byte( out, tok ) ) {
+                    goto FAIL;
+                }
+                continue;
+            }
+            uint8_t xid = 0;
+            if ( is_xkeyword( item, &xid ) ) {
+                if ( !emit_byte( out, TOK_XFUNC ) || !emit_byte( out, xid ) ) {
                     goto FAIL;
                 }
                 continue;
@@ -1142,6 +1175,12 @@ bool detokenize_line_hl( buf_t* out, const uint8_t* wherefrom, const struct _lin
                     goto FAIL;
                 }
                 ++src.rpos;
+            } else if ( tok == TOK_XFUNC ) {        // an extension word: the next byte names it
+                const char* xname = src.rpos + 1U < src.size ? xkeyword_name( (uint8_t) src.buffer[ src.rpos + 1U ] ) : 0;
+                if ( xname == 0 || !hl_switch( out, style, usrdata, &cur, HL_FUNCTION ) || writeto_buffer( out, xname, strlen( xname ) ) < 0 ) {
+                    goto FAIL;
+                }
+                src.rpos += 2U;
             } else {
                 goto FAIL;
             }

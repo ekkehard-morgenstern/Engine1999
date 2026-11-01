@@ -107,8 +107,15 @@ sys-str-fn-2-arg-call := ( TOK_BIN | TOK_QUA | TOK_OCT | TOK_DEC | TOK_HEX ) TOK
                          TOK_MID TOK_STRING TOK_LPAREN str-expr TOK_COMMA num-expr [ TOK_COMMA num-expr ] TOK_RPAREN |
                          TOK_INPUT TOK_STRING TOK_LPAREN num-expr [ TOK_COMMA chan-spec ] TOK_RPAREN .
 
-sys-num-fn-arg-call := sys-num-fn-1-arg-call .
-sys-str-fn-arg-call := sys-str-fn-2-arg-call .
+-- MIN(a,b) and MAX(a,b) are the smaller / larger number, ATAN2(y,x) the angle of the point (x,y) in the unit of DEG/RAD/GRAD. SPACE$(n) is n blanks,
+-- STRING$(n,c) n copies of the character code c (0..255) or of the first character of the string c. These five are extension words: TOK_XFUNC plus
+-- one byte (the grammar writes them by name).
+xfunc-call := ( MIN | MAX | ATAN2 ) TOK_LPAREN num-expr TOK_COMMA num-expr TOK_RPAREN |
+              SPACE TOK_STRING TOK_LPAREN num-expr TOK_RPAREN |
+              STRING TOK_STRING TOK_LPAREN num-expr TOK_COMMA expr TOK_RPAREN .
+
+sys-num-fn-arg-call := sys-num-fn-1-arg-call | xfunc-call .
+sys-str-fn-arg-call := sys-str-fn-2-arg-call | xfunc-call .
 
 sys-noarg-num-name := TOK_TI | TOK_ERL | TOK_PI | TOK_ARGC .
 -- MKI$ MKL$ MKS$ MKD$ pack a number into a binary string (2, 4, 4, 8 bytes, big endian), CVI CVL CVS CVD unpack it again

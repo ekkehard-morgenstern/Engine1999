@@ -1743,6 +1743,12 @@ int main( int argc, char** argv ) {
                     puts( kw );
                 }
             }
+            for ( int xid = 1; xid < 255; ++xid ) {          // the extension words (TOK_XFUNC)
+                const char* kw = xkeyword_name( (uint8_t) xid );
+                if ( kw != 0 ) {
+                    puts( kw );
+                }
+            }
             return EXIT_SUCCESS;
         }
         if ( strcmp( arg, "-i" ) == 0 ) {

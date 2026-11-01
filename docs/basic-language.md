@@ -368,6 +368,13 @@ PRINT PEEK$(200,5)               ' a string of 5 bytes from the RAM
 - `TIME$` (`HH:MM:SS`), `DATE$` (`YYYY-MM-DD`), `DATETIME$` (both, with a blank), the local time (instruction `DTIM`). They can't be assigned (no setting of the clock).
 - New reserved words: `FLOOR CEIL LOG2 LOG10 TIME DATE DATETIME IMP NIMP EQV NEQV SHL SHR ASL ASR` (tokens 220..234).
 
+## `MIN`, `MAX`, `ATAN2`, `SPACE$`, `STRING$` (2026-11-01)
+
+- `MIN(a,b)`, `MAX(a,b)`: the smaller / larger of two numbers (two arguments only; nest them for more: `MAX(MIN(x,hi),lo)` clamps).
+- `ATAN2(y,x)`: the angle of the point (x, y) in the unit of `DEG` / `RAD` / `GRAD` (radians by default), -PI..PI in all four quadrants (`ATN` only knows two). `ATAN2(0,0)` is 0.
+- `SPACE$(n)`: n blanks. `STRING$(n,c)`: n copies of a character; `c` is a character code 0..255 (`STRING$(3,0)` is three zero bytes) or a string, whose first character is used (an empty string is "Illegal argument"). n is 0..65535, else "Illegal argument".
+- **New reserved words** `SPACE STRING MIN MAX ATAN2`, but they are the first **extension words**: the one-byte token space (0..255) is full, so these are stored as the token `TOK_XFUNC` (254) followed by one byte naming the word (`XF_*` in `bastok.h`, table `xkeywtbl` in `bastok.c`). To the programmer nothing differs from any other reserved word (they list in upper case, `--list-keywords` and the man page include them). **New words are added to that table from now on**: 255 more are possible. Instructions `MTH2 0x17E` (`( x y -- z )`, parameter 1 MIN, 2 MAX, 3 ATAN2) and `STRN 0x17F` (`( n c -- s )`, parameter 0 code, 1 string, 2 `SPACE$`). Tests: `vmtest1` (17), `repltest1` (2), `asmtest1` (2).
+
 ## Numeric functions, `\`, `MOD`, `RND`
 
 ```

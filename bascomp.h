@@ -84,6 +84,7 @@ typedef struct _comp_ctxstk_t {
     uint8_t*                tokp;
     const uint8_t*          tokend;
     uint8_t                 currtok;
+    uint8_t                 currext;    // the XF_* id when currtok is TOK_XFUNC
     char*                   param;      // heap allocated, owned by the context
     double                  number;
 } comp_ctxstk_t;
@@ -96,6 +97,7 @@ typedef struct _compiler_t {
     uint8_t*        tokp;
     const uint8_t*  tokend;         // end of the current line's tokens (see comp_set_tokens)
     uint8_t         currtok;
+    uint8_t         currext;        // the XF_* id (bastok.h) when currtok is TOK_XFUNC
     char*           param;          // heap allocated text of the current literal/identifier token
     double          number;         // value of the current numeric literal token
     char*           name;           // buffer for comp_node_name()

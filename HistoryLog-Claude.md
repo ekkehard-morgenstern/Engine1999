@@ -13,6 +13,12 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+### 2026-11-01 — extension words, `MIN` `MAX` `ATAN2` `SPACE$` `STRING$` (roadmap quick wins 9 and 16)
+- **Found:** the one-byte token space is full (only 254 and the unused `PUT` were free). The owner chose an extension mechanism: token 254 `TOK_XFUNC` + one id byte (`XF_*`, `bastok.h`; table `xkeywtbl`, `is_xkeyword()` / `xkeyword_name()` in `bastok.c`). Tokenizer emits it, detokenizer prints it (highlight class function), `comp_fetchtok()` reads the id into `compiler_t.currext` (saved/restored by the context stack), `comp_node_name()` knows it.
+- **Words:** `MIN(a,b)`, `MAX(a,b)`, `ATAN2(y,x)` (unit of `DEG`/`RAD`/`GRAD`), `SPACE$(n)`, `STRING$(n,c)` (c = code or string). Parser `comp_eat_xfunccall()` (node data `TOK_XFUNC, id [, kind]`), `cgen_from_sysfncall()` accepts them, new instructions `MTH2 0x17E` and `STRN 0x17F` (`instset.h`, `vm_math2()`, `vm_string_n()`).
+- `engine1999c --list-keywords` lists the extension words; man page list rewritten (`mancheck.sh --update`), `FUNCTIONS` groups extended; `bascomp.ebnf` rule `xfunc-call`, `make grammar`; `docs/basic-language.md`, `docs/compiler-and-vm.md`, `docs/roadmap.md` (token space note, items 9 and 16).
+- **Tests:** `vmtest1` 1146 of 1146 (17 new; also clean under ASAN/UBSAN), `repltest1` 341 (2 new, clean under valgrind), `asmtest1` 64 (2 new), `txttest1`, `gfxtest1`, `iotest1`, `keytest1`, `scrtest1`, `ansitest1`, `buildtest1`, `contest1`, `testcomp1` pass; `make man-check`, `make grammar-check` pass. Demos checked: they use the new words only in strings and comments.
+
 ## Log
 
 ### 7a6cb67 — 2026-10-17 13:32:27 +0200 — "Introduced Claude to the project"
