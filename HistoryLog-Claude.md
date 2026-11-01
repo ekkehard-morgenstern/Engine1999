@@ -13,6 +13,10 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+### 2026-11-01 — roadmap: a UI subsystem
+- **Decisions of the owner the same day** (recorded in section 15 and item 47): the UI owns the graphics layer; first one form + modal dialogs + pop-up menus, overlapping windows later; retained widgets; a separate font engine with proportional fonts for the UI (my notes: `font.[ch]`, no FreeType, bitmap fonts, measuring first, `GFX TEXT` benefits, `fonttest1`); the console host gets it too (a text screen renderer behind the same widget tree, layout through a metrics table).
+- The owner's idea went into `docs/roadmap.md` as item 47 and the new section 15, with my opinion: a C module `ui.[ch]` (retained widget tree, theme, hit testing, focus, dirty redraw on a `gfxcore` bitmap, tested headlessly) driven by the polled mouse and the keys, a BASIC side through one extension word (`UI`) with `ON UI GOSUB`, forms defined by DATA; a BASIC-only library weighed and rejected for the core; what mouse / keys still lack (motion by polling, double click, capture, focus, key repeat); decisions first (layer and palette, windows, retained vs immediate mode, fonts, a text renderer for the console host); the sprite / tile editors (item 7) as its first users; the joystick could drive the focus. No code.
+
 ### 2026-11-01 — roadmap: a terminal emulator screen and a Claude screen
 - The owner's idea went into `docs/roadmap.md` as items 45 and 46 and the new section 14, with my opinion: a `vt.[ch]` model (VT100 / xterm subset, no SDL, testable) plus a pty front end and a `pty:` driver; the Claude screen first as `claude` running in the emulator, a native chat screen only later; decisions to take first (character set and box drawing, window size, security / `iodev_allowed()`, dependencies, the API key and what is sent where). No code.
 
