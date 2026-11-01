@@ -137,6 +137,7 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXQ_MOUSEWHEEL 105             // MOUSE("WHEEL"): wheel steps since the last call (up is positive)
 #define GFXQ_MOUSESHAPE 106             // MOUSE("SHAPE")
 #define GFXQ_MOUSEVISIBLE 107           // MOUSE("VISIBLE"): -1 / 0
+#define GFXQ_MOUSEEVENT 108             // (the VM polls it for ON MOUSE) the number of presses, releases and wheel steps so far; a change is an event
 #define GFXQ_EVENT      90              // (the VM polls it for ON COLLISION) a sprite with a new collision, -1 none
 
 typedef struct _gfxcmd_t {

@@ -511,6 +511,25 @@ after the last of these** (every new one starts the 3 seconds again). The window
 | `MOUSE("WHEEL")` | the wheel steps since the last call (up is positive), cleared by reading |
 | `MOUSE("SHAPE")` | the shape's number (0 `ARROW` .. 11 `HELP`, in the order above) |
 | `MOUSE("VISIBLE")` | -1 if the pointer is shown now, else 0 |
+| `MOUSE("EVENTS")` | how many button presses, releases and wheel steps there have been since the program started looking (a counter that wraps at 2^31; `ON MOUSE` watches it) |
+
+**`ON MOUSE GOSUB|GOTO target`** (and **`ON MOUSE OFF`**) runs a handler when something *discrete* happens: **a button is pressed or released, or the wheel turns** (not for motion: that would be
+a call per frame; the handler or the main loop reads `MOUSE("X")` and `("Y")` when it wants the position). It works like `ON COLLISION`: the VM looks about every 32 instructions
+(and while `WAIT`ing), the handler runs between two statements, never in the middle of an expression, `RETURN` goes back. **It has the highest priority of the timers** (above
+`ON COLLISION` and the four `AFTER` / `EVERY` timers, and it interrupts any of their handlers; a running mouse handler is not interrupted). Several events that happen while the
+handler is busy or the program is in the middle of a statement make *one* call (like timers whose ticks are dropped): the handler finds what happened in the latched values `MOUSE("PRESSED")`,
+`("RELEASED")` and `("WHEEL")`, which collect everything since they were last read, so **a handler should read them** (an unread latch stays set and is reported by the next read; it is
+not an event by itself). Only events after the `ON MOUSE` statement count. Like the other handlers it ends with the run (`RUN`, `NEW`, `LOAD`); not during `INPUT` / `GET`.
+
+```
+10 ON MOUSE GOSUB 100
+20 REPEAT:WAIT 6:UNTIL INKEY$="q"
+30 END
+100 P=MOUSE("PRESSED"):W=MOUSE("WHEEL")
+110 IF P AND 1 THEN PRINT "left click at";MOUSE("X");MOUSE("Y")
+120 IF W THEN PRINT "wheel";W
+130 RETURN
+```
 
 A request is true for the program at once: after `MOUSE POS 5,6`, `MOUSE("X")` is 5, and after `MOUSE HIDE`, `MOUSE("VISIBLE")` is 0, even if the screen has not been redrawn yet (the
 screen thread carries the requests out, once per frame, and nothing is locked). The word `MOUSE` is reserved (token 253); `SHOW`, `HIDE`, `POS`, ... are words recognized after it and
@@ -521,7 +540,7 @@ pointer by OSC 22), see `docs/console-host.md`, "The mouse"; elsewhere (pipes, `
 
 Design decisions I took (revisit if unwanted): the statements and functions are a table in `gfxops.c` like `SPRITE` (one new reserved word); positions are those of the sprite layer
 (640 x 300), not of the text screen; `MOUSE POS` beyond the screen is clamped; the buttons are bits (1 left, 2 right, 4 middle); latched
-`PRESSED` / `RELEASED` instead of events (`ON MOUSE` is not there yet); the timeout is in seconds.
+`PRESSED` / `RELEASED` latches and `ON MOUSE` for the discrete events (no event for motion, no filter by button); the timeout is in seconds.
 
 ## Sound: `SOUND`, `PLAY`, `WAVE`, `TEMPO`, `PLAYING()`
 

@@ -5566,6 +5566,36 @@ bool comp_eat_onstmt( compiler_t* comp, node_t** pnode ) {
         }
         return true;
     }
+    if ( comp->currtok == TOK_MOUSE ) {
+        // ON MOUSE GOTO target | ON MOUSE GOSUB target | ON MOUSE OFF
+        if ( !comp_fetchtok( comp ) ) {
+            return false;
+        }
+        uint8_t kind = ERRT_OFF;
+        node_t* target = NODE_NONE;
+        if ( comp->currtok == TOK_OFF ) {
+            if ( !comp_fetchtok( comp ) ) {
+                return false;
+            }
+        } else {
+            uint8_t gotok = TOK_EOL;
+            if ( !comp_eat_gotokw( comp, &gotok ) ) {
+                comp_error( comp, "GOTO, GOSUB or OFF expected" );
+                return false;
+            }
+            kind = gotok == TOK_GOTO ? ERRT_GOTO : ERRT_GOSUB;
+            if ( !comp_eat_gototarget( comp, &target ) || target == NODE_NONE ) {
+                comp_error( comp, "Jump target expected" );
+                return false;
+            }
+        }
+        if ( !( target == NODE_NONE ? comp_create_node( comp, pnode, NT_ONMOUSESTMT, UINT8_C(0), UINT16_C(1), &kind ) :
+                comp_create_node( comp, pnode, NT_ONMOUSESTMT, UINT8_C(1), UINT16_C(1), &kind, target ) ) || *pnode == NODE_NONE ) {
+            out_of_memory( comp );
+            return false;
+        }
+        return true;
+    }
     if ( comp->currtok == TOK_NUMIDENT && strcmp( comp->param, "COLLISION" ) == 0 ) {
         // ON COLLISION GOTO target | ON COLLISION GOSUB target | ON COLLISION OFF
         if ( !comp_fetchtok( comp ) ) {

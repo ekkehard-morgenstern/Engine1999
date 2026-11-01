@@ -114,6 +114,7 @@ static const gfxquery_t queries[] = {
     { "MOUSE",  "WHEEL",    GFXQ_MOUSEWHEEL,0, 0 },
     { "MOUSE",  "SHAPE",    GFXQ_MOUSESHAPE,0, 0 },
     { "MOUSE",  "VISIBLE",  GFXQ_MOUSEVISIBLE, 0, 0 },
+    { "MOUSE",  "EVENTS",   GFXQ_MOUSEEVENT, 0, 0 },
     { "SPRITE", "X",        GFXQ_SPRX,      1, 1 },
     { "SPRITE", "Y",        GFXQ_SPRY,      1, 1 },
     { "SPRITE", "IMAGE",    GFXQ_SPRIMAGE,  1, 1 },

@@ -471,6 +471,7 @@ The 4096 extended instructions are as follows:
                             @ "row": 16 (8 for CHAR) characters of . 1-9 A-F o; when the last row has arrived the image is defined.
     0001 01100010       COLT - set the collision handler ( -- ) C=0 P=1
                             ON COLLISION: parameter 0 = OFF; 1 = GOSUB, 2 = GOTO with the handler's address on the return stack.
+                            ON MOUSE: the same with the parameter bit 2 added (4 = OFF, 5 = GOSUB, 6 = GOTO).
     0001 01100011       IDIV - integer division ( a b -- n ) C=0 P=0
                             a \ b: both operands are truncated toward zero, the quotient too; b = 0 (after truncating) is "Division by zero".
     0001 01100100       MOD  - remainder ( a b -- n ) C=0 P=0

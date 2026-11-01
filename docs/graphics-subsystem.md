@@ -116,7 +116,7 @@ SPRITE("X",n) ("Y",n) ("IMAGE",n) ("ON",n) ("MOVING",n) ("HITS",n) ("COLLIDE",n)
 of the sprite it overlapped at the last frame (-1 none). A collision means an overlap of **opaque pixels** (index not 0); a sprite is checked only with the flags set by
 `SPRITE n,COLLISION ON`. The check runs once per frame in the screen thread (`sprscr_periodicals`) while the sprite layer is enabled.
 `ON COLLISION`: the VM asks the host for a new collision about every 32 instructions (and while `WAIT`ing) and runs the handler between two statements, like a timer
-handler (it has the highest priority); the program finds out which sprite with `SPRITE("HITS",n)`.
+handler (it has the highest priority of the timers except `ON MOUSE`, which is above it); the program finds out which sprite with `SPRITE("HITS",n)`.
 
 ### Scrolling a world that is bigger than the screen (`TILE SCROLL`)
 

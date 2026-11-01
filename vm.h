@@ -203,7 +203,8 @@ typedef struct _vm_sound_t {
 
 #define VM_NUSERTIMERS      4           // AFTER / EVERY timers 0..3
 #define VM_COLSLOT          4           // the ON COLLISION handler lives in the slot behind them
-#define VM_NTIMERS          5
+#define VM_MOUSESLOT        5           // ... and the ON MOUSE handler behind that (the highest priority)
+#define VM_NTIMERS          6
 
 #define VM_ADDRLEN          20
 
@@ -301,6 +302,8 @@ typedef struct _vm_t {
     uint64_t        rndstate;       // RND: the state of the random number generator (xorshift64*)
     double          rndlast;        // the last number RND returned (RND(0) gives it again)
     bool            colpending;     // (internal) the host reported a sprite collision that the ON COLLISION handler has not seen yet
+    bool            mousepending;   // (internal) the mouse counter changed and the ON MOUSE handler has not seen it yet
+    uint32_t        mouseseen;      // (internal) the host's count of mouse events (button presses and releases, wheel steps) at the last look
     struct {                        // (internal) DESIGN: the picture being collected
         bool        active;
         int         kind;           // DESK_*

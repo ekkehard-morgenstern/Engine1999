@@ -68,6 +68,7 @@ Coordinates are those of the sprite layer: x 0..639, y 0..299 (the "area", mouse
 #define MOUSEV_WHEEL    6       // the wheel steps since the last call of this (cleared by it; up is positive)
 #define MOUSEV_SHAPE    7       // the pointer's shape (CUR_*)
 #define MOUSEV_VISIBLE  8       // 1 if the pointer is shown now
+#define MOUSEV_EVENTS   9       // how many button presses, releases and wheel steps there have been (a counter that wraps at 2^31; ON MOUSE looks for a change)
 
 #define MOUSE_AREA_MAXW   32768                         // the largest area (the VM accepts positions up to this)
 #define MOUSE_AREA_MAXH   32768

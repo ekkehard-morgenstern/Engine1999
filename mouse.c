@@ -45,6 +45,7 @@ static int r_shape;                 // NOREQ or a shape
 static int r_timeout;               // NOREQ (nothing) or milliseconds
 // published by mouse_tick(), read by mouse_get()
 static int p_x, p_y, p_buttons, p_shape, p_visible;
+static int p_events;                                    // counts the presses, releases and wheel steps (ON MOUSE)
 static int p_pressed, p_released, p_wheel;              // latched / accumulated by the screen thread, cleared by the reader
 // the screen thread's own
 static int      timeout_ms = MOUSE_DEFAULT_TIMEOUT;
@@ -77,7 +78,7 @@ void mouse_init( void ) {
     st( &e_x, 0 ); st( &e_y, 0 ); st( &e_moved, 0 ); st( &e_activity, 0 );
     st( &r_vis, 0 ); __atomic_store_n( &r_pos, 0U, __ATOMIC_RELEASE ); st( &r_shape, NOREQ ); st( &r_timeout, NOREQ );
     st( &p_x, 0 ); st( &p_y, 0 ); st( &p_buttons, 0 ); st( &p_shape, CUR_ARROW ); st( &p_visible, 0 );
-    st( &p_pressed, 0 ); st( &p_released, 0 ); st( &p_wheel, 0 );
+    st( &p_pressed, 0 ); st( &p_released, 0 ); st( &p_wheel, 0 ); st( &p_events, 0 );
     timeout_ms = MOUSE_DEFAULT_TIMEOUT;
     deadline = 0;
     cur_x = cur_y = 0;
@@ -103,12 +104,14 @@ void mouse_event_button( int button, bool down ) {
         __atomic_fetch_and( &p_buttons, ~button, __ATOMIC_ACQ_REL );
         __atomic_fetch_or( &p_released, button, __ATOMIC_ACQ_REL );
     }
+    __atomic_fetch_add( &p_events, 1, __ATOMIC_ACQ_REL );
     st( &e_activity, 1 );
 }
 
 void mouse_event_wheel( int steps ) {
     if ( steps != 0 ) {
         __atomic_fetch_add( &p_wheel, steps, __ATOMIC_ACQ_REL );
+        __atomic_fetch_add( &p_events, 1, __ATOMIC_ACQ_REL );
         st( &e_activity, 1 );
     }
 }
@@ -220,6 +223,7 @@ int mouse_get( int what ) {
         case MOUSEV_PRESSED:    return __atomic_exchange_n( &p_pressed, 0, __ATOMIC_ACQ_REL );
         case MOUSEV_RELEASED:   return __atomic_exchange_n( &p_released, 0, __ATOMIC_ACQ_REL );
         case MOUSEV_WHEEL:      return __atomic_exchange_n( &p_wheel, 0, __ATOMIC_ACQ_REL );
+        case MOUSEV_EVENTS:     return ld( &p_events ) & 0x7FFFFFFF;
         case MOUSEV_SHAPE: {
             int sh = ld( &r_shape );
             return sh != NOREQ ? sh : ld( &p_shape );

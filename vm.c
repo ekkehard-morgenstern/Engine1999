@@ -98,6 +98,8 @@ void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem ) {
     vm_randomize( vm, false );          // RND is different every time unless the program seeds it
     vm->gfx = 0;
     vm->colpending = false;
+    vm->mousepending = false;
+    vm->mouseseen = 0;
     vm->design.active = false;
     snprintf( vm->addrcur, sizeof(vm->addrcur), "file" );
     snprintf( vm->addrprev, sizeof(vm->addrprev), "file" );
@@ -2551,7 +2553,8 @@ static bool vm_clear_timers( vm_t* vm, uint16_t param ) {
 static int vm_irq_find( const vm_t* vm, uint64_t now ) {
     int level = vm->irqdepth > 0 ? vm->irq[ vm->irqdepth - 1 ].timer : -1;
     for ( int i=VM_NTIMERS-1; i > level; --i ) {
-        if ( i == VM_COLSLOT ? vm->timers[i].active && vm->colpending : vm->timers[i].active && vm->timers[i].due <= now ) {
+        if ( i == VM_COLSLOT ? vm->timers[i].active && vm->colpending : i == VM_MOUSESLOT ? vm->timers[i].active && vm->mousepending :
+                vm->timers[i].active && vm->timers[i].due <= now ) {
             return i;
         }
     }
@@ -2562,7 +2565,9 @@ static int vm_irq_find( const vm_t* vm, uint64_t now ) {
 static bool vm_irq_fire( vm_t* vm, int t ) {
     vm_timer_t* tm = &vm->timers[t];
     uint32_t target = tm->target;
-    if ( t == VM_COLSLOT ) {
+    if ( t == VM_MOUSESLOT ) {
+        vm->mousepending = false;       // the mouse handler stays set, too
+    } else if ( t == VM_COLSLOT ) {
         vm->colpending = false;         // the collision handler stays set
     } else if ( tm->every ) {
         uint64_t now = vm_now_ns();
@@ -2610,6 +2615,13 @@ static bool vm_irq_poll( vm_t* vm, uint64_t steps ) {
         double ev = -1.0;
         if ( vm->gfx->query( vm->userdata, GFXQ_EVENT, 0, 0, &ev ) && ev >= 0.0 ) {
             vm->colpending = true;
+        }
+    }
+    if ( vm->timers[VM_MOUSESLOT].active && !vm->mousepending && vm->gfx && vm->gfx->query && ( safe || ( steps & 31U ) == 0 ) ) {
+        double cnt = 0.0;
+        if ( vm->gfx->query( vm->userdata, GFXQ_MOUSEEVENT, 0, 0, &cnt ) && (uint32_t) cnt != vm->mouseseen ) {
+            vm->mouseseen = (uint32_t) cnt;
+            vm->mousepending = true;
         }
     }
     int t = vm_irq_find( vm, vm_now_ns() );
@@ -2874,12 +2886,14 @@ static bool vm_design_row( vm_t* vm ) {
     return ok;
 }
 
-// COLT ( -- ) ( r: target -- ): ON COLLISION GOSUB (1) / GOTO (2), OFF (0)
+// COLT ( -- ) ( r: target -- ): ON COLLISION GOSUB (1) / GOTO (2), OFF (0); with the bit 4: ON MOUSE (5, 6, 4)
 static bool vm_set_collision( vm_t* vm, uint16_t param ) {
-    vm_timer_t* tm = &vm->timers[VM_COLSLOT];
+    bool mouse = ( param & 4U ) != 0;
+    vm_timer_t* tm = &vm->timers[ mouse ? VM_MOUSESLOT : VM_COLSLOT ];
+    param &= 3U;
     if ( param == 0 ) {
         tm->active = false;
-        vm->colpending = false;
+        if ( mouse ) vm->mousepending = false; else vm->colpending = false;
         vm_count_timers( vm );
         return true;
     }
@@ -2891,7 +2905,14 @@ static bool vm_set_collision( vm_t* vm, uint16_t param ) {
     tm->every = false;
     tm->gosub = param == 1;
     tm->target = target;
-    vm->colpending = false;
+    if ( mouse ) {
+        // only what happens from now on counts: the events so far are taken as seen
+        double cnt = 0.0;
+        vm->mousepending = false;
+        vm->mouseseen = vm->gfx && vm->gfx->query && vm->gfx->query( vm->userdata, GFXQ_MOUSEEVENT, 0, 0, &cnt ) ? (uint32_t) cnt : 0U;
+    } else {
+        vm->colpending = false;
+    }
     vm_count_timers( vm );
     return true;
 }
@@ -3865,6 +3886,7 @@ bool vm_begin( vm_t* vm, uint32_t start ) {
     vm->irqsafe = false;
     vm->irqpending = false;
     vm->colpending = false;
+    vm->mousepending = false;
     vm->design.active = false;
     vm->errset = vm->errgosub = vm->errinhandler = vm->errcaught = false;      // the error handler ends with the run, too
     vm->resumestate = 0;

@@ -1085,6 +1085,7 @@ static bool host_gfx_query( void* usrdata, int q, const double* a, int na, doubl
         case GFXQ_MOUSERELEASED: *result = sdlscr_mouse_get( MOUSEV_RELEASED ); break;
         case GFXQ_MOUSEWHEEL:   *result = sdlscr_mouse_get( MOUSEV_WHEEL ); break;
         case GFXQ_MOUSESHAPE:   *result = sdlscr_mouse_get( MOUSEV_SHAPE ); break;
+        case GFXQ_MOUSEEVENT:   *result = sdlscr_mouse_get( MOUSEV_EVENTS ); break;
         case GFXQ_MOUSEVISIBLE: *result = sdlscr_mouse_get( MOUSEV_VISIBLE ) ? -1.0 : 0.0; break;
         case GFXQ_EVENT:        *result = sdlscr_sprite_nextevent(); break;
         default:                return false;

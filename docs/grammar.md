@@ -142,7 +142,7 @@ sys-noarg-str-call := sys-noarg-str .
 
 > The graphics functions (docs/graphics-subsystem.md) are a table in gfxops.c: RGB(r,g,b[,a]), POINT(x,y), TILE(x,y), and the named values
 > GFX("FRAME"), GFX("LAYER",n), GFX("PRIORITY",n), GFX("PALETTE",n,i), GFX("TARGET"), TXT("X"), TXT("Y"), TXT("FG"), TXT("BG"),
-> MOUSE("X"\|"Y"\|"B"\|"PRESSED"\|"RELEASED"\|"WHEEL"\|"SHAPE"\|"VISIBLE") (no further arguments),
+> MOUSE("X"\|"Y"\|"B"\|"PRESSED"\|"RELEASED"\|"WHEEL"\|"SHAPE"\|"VISIBLE"\|"EVENTS") (no further arguments),
 > TXT("CHAR",x,y), TXT("FGAT",x,y), TXT("BGAT",x,y), TXT("WIDTH"), TXT("HEIGHT"), SPRITE("X"\|"Y"\|"IMAGE"\|"ON"\|"HITS"\|"COLLIDE"\|"MOVING",n):
 > the name is a string literal and the number of arguments after it depends on the name.
 
@@ -601,7 +601,14 @@ on-collision-stmt := ON COLLISION ( goto-kw goto-target | OFF ) .
 ```ebnf
 mouse-stmt := MOUSE ( SHOW | HIDE | POS num-expr "," num-expr | TIMEOUT num-expr |
                           SHAPE ( ARROW | WAIT | BUSY | TEXT | HAND | GRAB | CROSS | SIZEH | SIZEV | MOVE | NO | HELP ) ) .
-gfx-all-stmt := gfx-stmt | txt-stmt | tile-stmt | sprite-stmt | mouse-stmt | cls-stmt | locate-stmt | color-stmt | symbol-stmt | design-stmt | design-row | on-collision-stmt .
+```
+
+> ON MOUSE GOSUB / GOTO target runs the handler when a mouse button is pressed or released or the wheel turns (not for motion: read MOUSE("X") / ("Y")); it is polled
+> between statements like ON COLLISION and has the highest priority of the timers; OFF clears it.
+
+```ebnf
+on-mouse-stmt := ON MOUSE ( goto-kw goto-target | OFF ) .
+gfx-all-stmt := gfx-stmt | txt-stmt | tile-stmt | sprite-stmt | mouse-stmt | on-mouse-stmt | cls-stmt | locate-stmt | color-stmt | symbol-stmt | design-stmt | design-row | on-collision-stmt .
 ```
 
 ## Statements and lines

@@ -791,7 +791,7 @@ static bool con_gfx_op( void* usrdata, int op, const double* a, int na, const ch
 
 static bool con_gfx_query( void* usrdata, int q, const double* a, int na, double* result ) {
     (void) usrdata; (void) na;
-    if ( q >= GFXQ_MOUSEX && q <= GFXQ_MOUSEVISIBLE && con_mouse ) {
+    if ( ( ( q >= GFXQ_MOUSEX && q <= GFXQ_MOUSEVISIBLE ) || q == GFXQ_MOUSEEVENT ) && con_mouse ) {
         con_pump();                         // (what the mouse did since the last look)
         con_mouse_poll();
         switch ( q ) {
@@ -802,6 +802,7 @@ static bool con_gfx_query( void* usrdata, int q, const double* a, int na, double
             case GFXQ_MOUSERELEASED: *result = mouse_get( MOUSEV_RELEASED ); break;
             case GFXQ_MOUSEWHEEL:   *result = mouse_get( MOUSEV_WHEEL ); break;
             case GFXQ_MOUSESHAPE:   *result = mouse_get( MOUSEV_SHAPE ); break;
+            case GFXQ_MOUSEEVENT:   *result = mouse_get( MOUSEV_EVENTS ); break;
             default:                *result = mouse_get( MOUSEV_VISIBLE ) ? -1.0 : 0.0; break;
         }
         return true;

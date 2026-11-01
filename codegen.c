@@ -3145,6 +3145,7 @@ static bool cgen_from_stmt_node( codegen_t* cgen, compiler_t* comp, node_t* node
         case NT_TIMERSTMT:  return cgen_from_timerstmt( cgen, comp, node );
         case NT_ERRTRAPSTMT: return cgen_from_errtrapstmt( cgen, comp, node );
         case NT_ONCOLLSTMT: return cgen_from_oncollstmt( cgen, comp, node );
+        case NT_ONMOUSESTMT: return cgen_from_onmousestmt( cgen, comp, node );
         case NT_GFXSTMT:    return cgen_from_gfxstmt( cgen, comp, node );
         case NT_RANDOMIZESTMT: return cgen_from_randomizestmt( cgen, comp, node );
         case NT_ANGLESTMT:  return cgen_from_anglestmt( cgen, comp, node );

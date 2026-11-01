@@ -448,6 +448,7 @@ bool cgen_from_chainstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_filesstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_errtrapstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_oncollstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_onmousestmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_gfxstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_randomizestmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_anglestmt( codegen_t* cgen, compiler_t* comp, node_t* node );
