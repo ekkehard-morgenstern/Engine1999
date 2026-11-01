@@ -65,6 +65,36 @@ is set).
 alone means
 .BR always .
 .TP
+.B \-\-screen
+Screen mode (the default whenever standard input and output are terminals and
+.B TERM
+is not
+.BR dumb ):
+the session runs on the Engine's text screen, painted on the terminal's alternate screen, exactly as in the window: the prompt is the screen editor
+(move the cursor anywhere, edit what is there, RETURN enters the line under the cursor; a status line at the bottom shows the typing mode, F12 switches it),
+programs print to the screen (ANSI colors,
+.BR CLS ,
+.BR LOCATE ,
+.B COLOR
+and the
+.B TXT
+statements work), and
+.BR EDIT " and " MONITOR
+open their screens on it.
+Run mode (a file) and executables made with
+.B BUILD
+use it too.
+When the session ends the screen is written to the normal terminal as plain lines (so its text stays in the scroll\-back); a program that ends with an error waits for a key first.
+.TP
+.B \-\-line
+The classic line mode: output scrolls as usual and nothing is drawn on an alternate screen (also
+.BR E1999_SCREEN=0 ).
+It is always used when standard input or output is not a terminal.
+.TP
+.B \-\-no\-dump
+In screen mode, do not write the screen to the terminal when the session ends (also
+.BR E1999_DUMP=0 ).
+.TP
 .B \-\-list\-keywords
 Print the reserved words of the language, one per line.
 .TP
@@ -185,6 +215,14 @@ in this host makes an executable without a window, which needs only the C and th
 It has the same input, output, arguments and exit status as described here, and takes one option of its own,
 .BR \-\-engine1999\-about ,
 as the first argument: it prints the license notice of the runtime.
+Three more words of that kind are the runtime's too and are not the program's arguments, if they stand first:
+.BR \-\-engine1999\-screen ,
+.B \-\-engine1999\-line
+and
+.BR \-\-engine1999\-no\-dump
+(as
+.BR \-\-screen ,
+.BR \-\-line " and " \-\-no\-dump ).
 See
 .BR engine1999\-basic (7).
 .SH EXAMPLES
@@ -203,6 +241,18 @@ A script:
 20 PRINT "Hello, "; ARG$(1)
 .fi
 .SH ENVIRONMENT
+.TP
+.B E1999_SCREEN
+.B 1
+selects screen mode, 
+.B 0
+the classic line mode (the command line options win; the default: screen mode on a terminal). Also for executables made with
+.BR BUILD .
+.TP
+.B E1999_DUMP
+.B 0
+is
+.BR \-\-no\-dump .
 .TP
 .B NO_COLOR
 Switches the syntax colors of \fB\-\-color=auto\fR off.

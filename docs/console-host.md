@@ -13,6 +13,19 @@ engine1999c                       on a terminal: a banner and "Ready." prompts, 
 A script can start with a `#!` line (`#!/usr/bin/env engine1999c`): the loader skips a first line that begins with `#!` in text listings (also for `LOAD` and `MERGE` in the window version).
 The file is a `.bas` listing or a binary `.e99` file, found the way `LOAD` finds it (`engine1999c prog` finds `prog.bas`).
 
+## Screen mode (the default on a terminal)
+
+**When standard input and output are both terminals** (and `TERM` is set and not `dumb`) the session runs in *screen mode*, whatever the way it was started: interactively, in run mode (`engine1999c prog.bas`), and in console executables made with `BUILD`. It is the same screen as the window's: **text screen 0**, painted by `conscr.c` on the terminal's *alternate screen* (the shell's text is back when it ends), in the Engine's palette (a transparent or translucent entry is seen over the window's start backdrop, SlateGray, so the terminal looks like the window). Pipes, redirections and scripts are unchanged (the classic line mode); `--line` or `E1999_SCREEN=0` selects it on a terminal as well, `--screen` / `E1999_SCREEN=1` asks for screen mode (it still needs terminals), and executables made with `BUILD` take `--engine1999-screen` / `--engine1999-line` / `--engine1999-no-dump` as their first words.
+
+- **The prompt** is the screen editor (`scr_screenedit()`, `docs/screen-editor-proposal.md`, `docs/display-engine.md`): the same code as in the window; move the cursor anywhere, edit what is there, RETURN enters the line under the cursor; a status line (white on translucent dark red) at the bottom shows the typing mode and the cursor; F12 (or Shift+INSERT) switches overwrite / insert mode. `INPUT`, `LINE INPUT` and `EDIT n` use the one-line editor on the screen (`scr_lineedit()`, no cursor position query any more); `EDIT` and `MONITOR` open their screens on the same alternate screen.
+- **Keys:** a lone ESC, Ctrl-C break a running program (`BREAK ON|OFF` as in the window); at the prompt both do nothing. Ctrl-D at the prompt does nothing either (end the session with `BYE`); a lost terminal (hang up, the end of the input) ends it. A terminal resize (`SIGWINCH`) is followed: the screen is resized and the editor lays itself out again.
+- **Program output** goes to the screen (ANSI colors work, also the syntax colors of `LIST`), painted at most every 10 ms while a program prints, and always when it waits for a key or a line, and when it ends. `CLS`, `LOCATE`, `COLOR` and the `TXT` statements and functions work as in the window (`TXT("WIDTH")` and `TXT("HEIGHT")` are the terminal's size); `GFX`, `SPRITE`, `TILE`, `DESIGN`, `SYMBOL` are still "Not available in the console host".
+- **Messages and errors** appear on the screen, not on standard error.
+- **The exit dump:** when the session ends the screen (text screen 0) is written to the normal terminal screen as plain lines (trailing blanks and empty rows cut, no colors), so that what happened stays in the shell's scroll-back. `--no-dump` or `E1999_DUMP=0` switches it off.
+- **A program that ends with an error waits for a key** before the screen is left (a hint "Press a key to leave" in the bottom row, which is an overlay and not part of the dump); a normal end leaves at once. The exit status is as in the line mode (1 after an error).
+- **The terminal is left in order:** the alternate screen, the cursor, the autowrap and the raw mode are restored at the end, after `exit()` and when the process is killed by `SIGTERM`, `SIGHUP` or `SIGQUIT`. (A `SIGKILL` can't be caught.)
+- **Not done:** `AUTO` (in both modes), what Ctrl-D at the prompt should do (a future issue, see `docs/screen-editor-proposal.md` §7), colors in the exit dump.
+
 ## Arguments, environment, standard channels
 
 Everything after the file name is for the program: `engine1999c prog.bas a "b c"` gives `ARGC` = 2, `ARG$(1)` = `a`, `ARG$(2)` = `b c`, `ARG$(0)` = `prog.bas`; `ENV$("HOME")` reads the environment; `OPEN "stderr:" FOR OUTPUT AS #1` writes to standard error, `OPEN "stdin:" FOR INPUT AS #2` reads standard input (`docs/basic-language.md`, "Program arguments and the environment"). With standard input as the program (`engine1999c - a b`) `ARG$(0)` is `-`.
@@ -39,6 +52,7 @@ Everything after the file name is for the program: `engine1999c prog.bas a "b c"
 ## Display and sound statements
 
 - **Sound** statements (`SOUND`, `PLAY`, `SFX`, `ENVELOPE` ...) have no sound device: their arguments are checked and nothing plays, `PLAYING(n)` is 0.
+- **In screen mode (above)** `CLS`, `LOCATE`, `COLOR` and the `TXT` statements and functions work on the text screen as in the window; the rest of this section is the line mode.
 - **`CLS` and `LOCATE`** write ANSI escape sequences when standard output is a terminal (and nothing when it is not). `COLOR` is accepted and ignored: the Engine's palette is not the terminal's; `PRINT CHR$(27);"[31m";...` passes through to terminals as it is.
 - **Everything else** that needs a screen (`GFX`, `SPRITE`, `TILE`, `TXT`, `DESIGN`, `SYMBOL`, and the graphics functions) fails with `? Not available in the console host`. `AUTO` and the pager of `FILES` are window-only; `EDIT` without a target and `MONITOR` work on a terminal (next section).
 - The functions that ask for the text screen size answer with the size of the terminal (80 x 25 without one).
@@ -53,7 +67,7 @@ Everything after the file name is for the program: `engine1999c prog.bas a "b c"
 
 ## Options
 
-`-i` (go on with standard input after the file), `-` (read the lines from standard input), `--color[=always|never|auto]`, `--version`, `-h`/`--help`, and the `--debug-*` options of `engine1999` (`--help` lists them).
+`-i` (go on with standard input after the file), `-` (read the lines from standard input), `--screen`, `--line`, `--no-dump` (screen mode, above), `--color[=always|never|auto]`, `--version`, `-h`/`--help`, and the `--debug-*` options of `engine1999` (`--help` lists them).
 
 ## The full-screen editor and the monitor on a terminal
 
@@ -78,4 +92,4 @@ Audio without a window. `AUTO` in the console host. See roadmap section 12.
 - Standard input is unbuffered (`getline` and the key reads both go to the file descriptor), so lines and single keys stay in step in a pipe; for very large scripts on standard input a file argument is faster.
 - A line error in the pipe mode doesn't change the exit status; run mode returns 1.
 - Ctrl-C only catches while a program runs (the handler is installed around each line), so an idle prompt ends on Ctrl-C.
-- Tests: `contest1` (116 checks: through the shell, and on a pseudo terminal for the line editor: pipes, exit codes, the `#!` line, `INPUT`/`GET` from a pipe, SIGINT; run it in the build directory).
+- Tests: `contest1` (143 checks: through the shell, and on a pseudo terminal for the line editor: pipes, exit codes, the `#!` line, `INPUT`/`GET` from a pipe, SIGINT; run it in the build directory).

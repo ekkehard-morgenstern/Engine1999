@@ -1,7 +1,7 @@
 # A C-64 style screen editor for text screen 0 — requirements, design and open points
 
 *First written 2026-11-01 for the owner's review; **revised the same day with the owner's decisions** (they are marked **decided**).
-**Phases 1 (cell flags, overlays) and 2 (the editor, window host) are implemented since 2026-11-01; phase 3 (console) is not.** The branch for the subproject is `feature/c64-like-screen-editor`.*
+**All three phases are implemented since 2026-11-01 (cell flags and overlays, the editor, the console host's screen mode).** The branch for the subproject is `feature/c64-like-screen-editor`.*
 
 ## 1. Status: what is decided
 

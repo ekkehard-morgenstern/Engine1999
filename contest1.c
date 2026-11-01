@@ -222,6 +222,9 @@ static void clean( void ) {
 
 // -- the line editor on a terminal: engine1999c runs on a pseudo terminal, keys are sent one step at a time -----------------------------------------
 
+static const char* pty_screen = "0";            // E1999_SCREEN of the child: the old terminal tests are for the classic line mode
+static const char* pty_args[8];                 // extra arguments of the child (0 terminated)
+
 // runs engine1999c on a pty, writes the steps (with a pause behind each), collects everything it writes; returns the exit status (-1: it did not end)
 static int run_pty( const char* const* steps, size_t nsteps, char* out, size_t outcap ) {
     int master = posix_openpt( O_RDWR | O_NOCTTY );
@@ -246,7 +249,14 @@ static int run_pty( const char* const* steps, size_t nsteps, char* out, size_t o
         if ( chdir( workdir ) != 0 ) {
             _exit( 127 );
         }
-        execl( exe, exe, (char*) 0 );
+        setenv( "E1999_SCREEN", pty_screen, 1 );
+        setenv( "TERM", "xterm-256color", 1 );
+        const char* av[12];
+        int ac = 0;
+        av[ac++] = exe;
+        for ( int k = 0; pty_args[k] != 0; ++k ) av[ac++] = pty_args[k];
+        av[ac] = 0;
+        execv( exe, (char* const*) av );
         _exit( 127 );
     }
     size_t n = 0, answered = 0;
@@ -486,6 +496,51 @@ int main( void ) {
         static const char* const steps10[] = { "PRINT 1", "\003", "PRINT 6\r", "\004" };
         static const char* const exp10[] = { "\r\n6\r\n" };
         failed += !pty_case( "terminal: Ctrl-C at the prompt cancels the line", steps10, 4U, exp10, 1U );
+    }
+    // screen mode (the default on a terminal): the session runs on text screen 0 on the alternate screen; what is left of it is written to the normal
+    // screen at the end (the "exit dump": the lines come with \r\n, the painting of the alternate screen moves the cursor instead)
+    {
+        pty_screen = "1";
+        static const char* const sA[] = { "PRINT 1+1\r", "BYE 3\r" };
+        static const char* const eA[] = { "\033[?1049h", "OVR  F12=INS", "\033[?1049l", "\r\nReady.\r\nPRINT 1+1\r\n2\r\nReady.\r\nBYE 3\r\n" };
+        failed += !pty_case_st( "screen mode: the session is on the alternate screen, the status line shows, the screen is dumped at the end, BYE's status", sA, 2U, eA, 4U, 3 );
+        static const char* const sB[] = { "10 PRINT 1\r", "\033[A", "\033[C\033[C\033[C\033[C\033[C\033[C\033[C\033[C\033[C", "7\r", "RUN\r", "BYE\r" };
+        static const char* const eB[] = { "\r\n7\r\nReady.\r\nBYE\r\n" };
+        failed += !pty_case( "screen mode: a line is picked up from the screen, edited in place and entered", sB, 6U, eB, 1U );
+        static const char* const sC[] = { "PRINT 1", "\003", "+1\r", "\004", "BYE\r" };
+        static const char* const eC[] = { "\r\n2\r\n" };
+        failed += !pty_case( "screen mode: Ctrl-C and Ctrl-D at the prompt do nothing", sC, 5U, eC, 1U );
+        static const char* const sD[] = { "10 GOTO 10\r", "RUN\r", "\033", "BYE\r" };
+        static const char* const eD[] = { "? Break in line 10" };
+        failed += !pty_case( "screen mode: a lone ESC breaks a running program", sD, 4U, eD, 1U );
+        static const char* const sE[] = { "10 INPUT \"x\";A$:PRINT \"[\";A$;\"]\"\r", "RUN\r", "ab\033[D\xc3\xb6\r", "BYE\r" };
+        static const char* const eE[] = { "x? a\xc3\xb6" "b\r\n[a\xc3\xb6" "b]\r\n" };
+        failed += !pty_case( "screen mode: INPUT uses the one-line editor on the screen (a character in the middle)", sE, 4U, eE, 1U );
+        static const char* const sF[] = { "10 PRINT 1\r", "EDIT\r", "\033", "PRINT 8\r", "BYE\r" };
+        static const char* const eF[] = { "\033[?1049h", " Text Editor", "\r\n8\r\nReady.\r\nBYE\r\n" };
+        failed += !pty_case( "screen mode: EDIT opens the editor on its own screen and comes back to the BASIC screen", sF, 5U, eF, 3U );
+        static const char* const sG[] = { "@size 12 50", "PRINT 3\r", "BYE\r" };
+        static const char* const eG[] = { "\r\n3\r\nReady.\r\nBYE\r\n" };
+        failed += !pty_case( "screen mode: a resize of the terminal is followed", sG, 3U, eG, 1U );
+        static const char* const sH[] = { "10 CLS:LOCATE 5,2:COLOR 140,2:PRINT \"hi\":PRINT TXT(\"WIDTH\")\r", "RUN\r", "BYE\r" };
+        static const char* const eH[] = { "\r\n\r\n     hi\r\n80\r\nReady.\r\nBYE\r\n" };
+        failed += !pty_case( "screen mode: CLS, LOCATE, COLOR and TXT work on the text screen", sH, 3U, eH, 1U );
+        // run mode: an error waits for a key (the hint is an overlay, not in the dump); a normal end leaves at once
+        put( "prog.bas", "10 PRINT \"before\"\n20 PRINT 1/0\n" );
+        pty_args[0] = "prog.bas";
+        static const char* const sI[] = { "@size 24 80", "x" };
+        static const char* const eI[] = { "Press a key to leave", "before\r\n? Division by zero in line 20\r\n" };
+        failed += !pty_case_st( "screen mode: a program that fails waits for a key, then the screen is dumped; status 1", sI, 2U, eI, 2U, 1 );
+        put( "prog.bas", "10 PRINT \"fine\"\n" );
+        static const char* const sJ[] = { "@size 24 80" };
+        static const char* const eJ[] = { "\033[?1049l" "fine\r\n" };
+        failed += !pty_case_st( "screen mode: a program that ends normally leaves at once (dumped)", sJ, 1U, eJ, 1U, 0 );
+        pty_args[0] = "--no-dump"; pty_args[1] = "prog.bas";
+        failed += !pty_case_st( "screen mode: --no-dump ends the session and leaves the alternate screen", sJ, 1U, (const char* const[]){ "\033[?1049l" }, 1U, 0 );
+        pty_args[0] = "--line"; pty_args[1] = "prog.bas";
+        failed += !pty_case_st( "--line: no alternate screen even on a terminal", sJ, 1U, (const char* const[]){ "fine\r\n" }, 1U, 0 );
+        pty_args[0] = pty_args[1] = 0;
+        pty_screen = "0";
     }
     {
         char *out, *err; size_t outlen;

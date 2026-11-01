@@ -135,11 +135,27 @@ int conscr_rgb_to_256( int r, int g, int b ) {
     return best;
 }
 
+// the color a palette entry shows as on the terminal: a transparent or translucent entry (the start paper, the highlight and the status line of the
+// screen editor) is seen over the window's start backdrop, so that the terminal looks as the window does
+static uint32_t conscr_visible( int index ) {
+    uint32_t argb = pal_argb( index );
+    uint32_t a = argb >> 24;
+    if ( a == 255U ) {
+        return argb;
+    }
+    uint32_t out = 0;
+    for ( int sh = 0; sh <= 16; sh += 8 ) {
+        uint32_t c = ( argb >> sh ) & 255U, bd = ( PAL_DEFAULT_BACKDROP >> sh ) & 255U;
+        out |= ( ( c * a + bd * ( 255U - a ) ) / 255U ) << sh;
+    }
+    return out | UINT32_C(0XFF000000);
+}
+
 static void conscr_setcolors( int fg, int bg ) {
     if ( fg == lastfg && bg == lastbg ) {
         return;
     }
-    uint32_t f = pal_argb( fg ), b = pal_argb( bg );
+    uint32_t f = conscr_visible( fg ), b = conscr_visible( bg );
     if ( truecolor ) {
         printf( "\033[38;2;%u;%u;%u;48;2;%u;%u;%um", (unsigned)( ( f >> 16 ) & 255U ), (unsigned)( ( f >> 8 ) & 255U ), (unsigned)( f & 255U ),
             (unsigned)( ( b >> 16 ) & 255U ), (unsigned)( ( b >> 8 ) & 255U ), (unsigned)( b & 255U ) );
@@ -236,6 +252,42 @@ void conscr_write( const char* text, size_t len ) {
         conscr_ansiok[n] = true;
     }
     ansi_feed_n( &conscr_ansi[n], text, len, conscr_emit, 0 );
+}
+
+// the colors of the text screen's pen and paper; PRINT goes through the decoder, which holds its own colors: it starts again from the new ones
+void conscr_text_setcolors( int bg, int fg ) {
+    txtscr_setcolors( bg, fg );
+    conscr_ansiok[ txtscr_selected() ] = false;
+}
+
+// the BASIC screen as plain lines on the normal screen (what remains of the session in the terminal's scroll-back): trailing blanks and rows are cut
+void conscr_dump( void ) {
+    int oldsel = txtscr_selected();
+    txtscr_select( 0 );
+    txtscr_resetviewport();
+    int w, h;
+    txtscr_getscreensize( &w, &h );
+    int last = -1;
+    for ( int y = 0; y < h; ++y ) {
+        for ( int x = 0; x < w; ++x ) {
+            if ( TXTSCR_CELL_CHR( txtscr_getrawcell( y, x ) ) != 32 ) {
+                last = y;
+                break;
+            }
+        }
+    }
+    for ( int y = 0; y <= last; ++y ) {
+        int end = w;
+        while ( end > 0 && TXTSCR_CELL_CHR( txtscr_getrawcell( y, end - 1 ) ) == 32 ) {
+            --end;
+        }
+        for ( int x = 0; x < end; ++x ) {
+            conscr_putchar( TXTSCR_CELL_CHR( txtscr_getrawcell( y, x ) ) );
+        }
+        fputc( '\n', stdout );
+    }
+    fflush( stdout );
+    txtscr_select( oldsel );
 }
 
 // -- line mode ---------------------------------------------------------------------------------

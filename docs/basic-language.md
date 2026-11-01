@@ -246,7 +246,7 @@ For programs that run as commands (`engine1999c prog.bas a b`, or an executable 
 - `ARGC` — the number of arguments (0 if there are none).
 - `ARG$(n)` — argument `n`: `ARG$(0)` is the program (the file given to `engine1999c`, `-` for standard input, the executable's own name in a built program), `ARG$(1)` ... `ARG$(ARGC)` the arguments as the shell split them. A larger `n` gives `""` (so a missing argument needs no test of `ARGC`), a negative or fractional one is "Illegal argument". In the window version `engine1999` there are no arguments (`ARGC` is 0, `ARG$(0)` is `""`).
 - `ENV$(name$)` — the value of the environment variable of the process, `""` if it is not set (or the name is empty). Reading only: there is no way to set one yet. Works in every version.
-- The words behind the program file are the program's, even if they look like options: `engine1999c prog.bas --version` hands `--version` to the program. A built program takes only one option of its own, `--engine1999-about`, and only as its first argument.
+- The words behind the program file are the program's, even if they look like options: `engine1999c prog.bas --version` hands `--version` to the program. A built program takes only one option of its own, `--engine1999-about`, and only as its first argument; a console executable also takes `--engine1999-screen`, `--engine1999-line` and `--engine1999-no-dump` (screen mode, see `docs/console-host.md`), before the program's words.
 
 ```
 10 IF ARGC < 1 THEN PRINT "usage: greet NAME": BYE 2

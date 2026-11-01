@@ -67,7 +67,14 @@ static void con_sigint( int sig ) {
     con_break = 1;
 }
 
-static bool con_fullscreen = false;             // the full-screen editor or the monitor is open: program output and messages go to the text screen
+static bool con_fullscreen = false;             // the BASIC session or the full-screen editor / monitor is on the text screen: program output and messages go there
+static bool con_screen = false;                 // screen mode: the whole session runs on text screen 0 on the alternate screen (see "Screen mode" below)
+static int  con_screenopt = -1;                 // -1 automatic, 0 --line, 1 --screen
+static bool con_dump = true;                    // screen mode: the screen is written to the normal terminal when the session ends
+static bool con_dirty = false;                  // the text screen was changed and not painted yet
+static struct timespec con_lastpaint;
+static void con_screen_end( bool dump );
+static void con_flush_paint( void );
 static bool con_pumping = false;                // a program is running on a terminal: look for keys (see con_pump())
 static bool con_escbreak = true;                // ESC is the break key (BREAK ON); with BREAK OFF it is an ordinary key (Ctrl-C always breaks)
 static size_t con_inqpos = 0, con_inqlen = 0;   // the keys that arrived while it ran (see con_pump())
@@ -79,7 +86,7 @@ static void con_set_raw( bool raw );
 static void con_catch_break( bool on ) {
     struct sigaction sa;
     memset( &sa, 0, sizeof(sa) );
-    sa.sa_handler = on ? con_sigint : SIG_DFL;      // no SA_RESTART: a blocked read ends and the VM sees the Break
+    sa.sa_handler = on || con_screen ? con_sigint : SIG_DFL;      // no SA_RESTART: a blocked read ends and the VM sees the Break (screen mode: the terminal must be left in order, so always)
     sigemptyset( &sa.sa_mask );
     sigaction( SIGINT, &sa, 0 );
     if ( on ) {
@@ -100,7 +107,7 @@ static bool con_tio_saved = false, con_raw = false;
 
 // GET and INKEY$ on a terminal take single keys without echo; lines (INPUT, the REPL) the usual way
 static void con_set_raw( bool raw ) {
-    if ( !isatty( 0 ) || raw == con_raw ) {
+    if ( !isatty( 0 ) || raw == con_raw || ( !raw && con_screen ) ) {      // (screen mode: the terminal stays raw until the session ends)
         return;
     }
     if ( !con_tio_saved ) {
@@ -121,6 +128,7 @@ static void con_set_raw( bool raw ) {
 }
 
 static void con_restore_tty( void ) {
+    con_screen_end( false );            // (does nothing outside of screen mode)
     con_set_raw( false );
 }
 
@@ -131,12 +139,43 @@ static bool con_color = false;
 static bool con_midline = false;        // the last character written to standard output was not a newline
 static int con_col = 0;                 // the column after the last output (a guess: printable bytes since the last newline), for a terminal that does not answer ESC [ 6 n
 
+// Painting the screen is not done per character: a burst of output is drawn at most every 10 ms, and always when the program waits for a key, a line
+// (con_flush_paint()) and when it ends.
+static volatile sig_atomic_t con_winch = 0;     // the terminal was resized (SIGWINCH)
+static bool con_wantresize;                     // an editor is waiting for keys: it is told about a resize (-3 / SK_RESIZE)
+
+static void con_paint_now( void ) {
+    if ( con_winch && !con_wantresize ) {       // (an editor that waits for keys learns of the resize itself)
+        con_winch = 0;
+        conscr_syncsize();
+    }
+    conscr_paint();
+    con_dirty = false;
+    clock_gettime( CLOCK_MONOTONIC, &con_lastpaint );
+}
+
+static void con_paint_soon( void ) {
+    con_dirty = true;
+    struct timespec now;
+    clock_gettime( CLOCK_MONOTONIC, &now );
+    long ms = (long)( now.tv_sec - con_lastpaint.tv_sec ) * 1000L + ( now.tv_nsec - con_lastpaint.tv_nsec ) / 1000000L;
+    if ( ms >= 10L || ms < 0 ) {
+        con_paint_now();
+    }
+}
+
+static void con_flush_paint( void ) {
+    if ( con_fullscreen && con_dirty ) {
+        con_paint_now();
+    }
+}
+
 // Text is ISO-8859-15 inside the Engine. On a terminal (which speaks UTF-8) the characters from 128 up are converted; in a pipe or a file the bytes
 // go out as they are (binary output must stay intact), and so they come in: see con_readkey().
 static void con_write( const char* text, size_t len ) {
     if ( con_fullscreen ) {
         conscr_write( text, len );
-        conscr_paint();
+        con_paint_soon();
         return;
     }
     bool high = false;
@@ -180,7 +219,7 @@ static void con_report( struct _repl_t* repl, const char* text ) {
     (void) repl;
     if ( con_fullscreen ) {
         conscr_write( text, strlen( text ) );
-        conscr_paint();
+        con_paint_soon();
         return;
     }
     if ( con_midline && con_stdout_tty ) {      // on a terminal the message starts on a line of its own (not in a pipe: that is data)
@@ -233,9 +272,6 @@ static size_t con_pendpos = 0, con_pendlen = 0;
 // (con_pump(), called by the interrupt check) and the bytes wait here until a program reads a key. A lone ESC is not queued: it is the
 // break key (like Ctrl-C), as in the window.
 static unsigned char con_inq[1024];
-static volatile sig_atomic_t con_winch = 0;     // the terminal was resized (SIGWINCH)
-static bool con_wantresize = false;             // a full-screen session is waiting for keys: a resize is reported as -3
-
 static void con_sigwinch( int sig ) {
     (void) sig;
     con_winch = 1;
@@ -288,6 +324,9 @@ static int con_rawbyte( int timeout ) {
         }
         if ( rv == 0 ) {
             if ( timeout < 0 ) {
+                if ( con_fullscreen && con_winch && !con_wantresize ) {
+                    con_paint_now();            // a program waits for a key and the terminal was resized: draw it again at its new size
+                }
                 continue;
             }
             return -2;
@@ -312,6 +351,7 @@ static bool con_aftercr = false;        // the last key was a CR: a LF right beh
 
 static int con_readkey( bool wait ) {
     fflush( stdout );
+    con_flush_paint();
     if ( !con_linemode ) {
         con_set_raw( true );
     }
@@ -443,8 +483,13 @@ static int con_inkey( struct _vm_t* vm, void* usrdata ) {
 static bool con_interrupt( struct _vm_t* vm, void* usrdata ) {
     (void) vm; (void) usrdata;
     static unsigned counter = 0;
-    if ( con_pumping && ( ++counter & 63U ) == 0 ) {
-        con_pump();
+    if ( ( ++counter & 63U ) == 0 ) {
+        if ( con_pumping ) {
+            con_pump();
+        }
+        if ( con_dirty ) {
+            con_paint_soon();
+        }
     }
     return con_break != 0;
 }
@@ -459,10 +504,37 @@ static bool con_save( struct _vm_t* vm, void* usrdata, const char* filename, boo
     return repl_save_program( (repl_t*) usrdata, filename, ascii );
 }
 
+// an argument of a display statement as an int; an omitted one is a huge negative number (see gfxops.h)
+static int con_gi( double v, int def ) {
+    if ( v < -1.0e8 ) {
+        return def;
+    }
+    return v > 1.0e6 ? 1000000 : v < -1.0e6 ? -1000000 : (int) v;
+}
+
 // the display statements: the text ones that a terminal can do, an error for the rest
 static bool con_gfx_op( void* usrdata, int op, const double* a, int na, const char* s, size_t slen, uint8_t* out, size_t outsz,
     size_t* outlen, const char** err ) {
-    (void) usrdata; (void) na; (void) s; (void) slen; (void) out; (void) outsz; (void) outlen;
+    (void) usrdata; (void) na; (void) s;
+    if ( con_screen ) {
+        // screen mode: the text statements work on the text screen, as in the window
+        switch ( op ) {
+            case GFXOP_CLS:         txtscr_clear(); break;
+            case GFXOP_LOCATE:      txtscr_locate( con_gi( a[0], 0 ), con_gi( a[1], 0 ) ); break;
+            case GFXOP_COLOR:       conscr_text_setcolors( con_gi( a[1], -1 ), con_gi( a[0], -1 ) ); break;
+            case GFXOP_TXTFILL:     txtscr_fill( con_gi( a[0], 0 ), con_gi( a[1], 0 ), con_gi( a[2], 0 ), con_gi( a[3], 0 ), con_gi( a[4], -1 ), con_gi( a[5], -1 ), con_gi( a[6], -1 ) ); break;
+            case GFXOP_TXTCOPY:     txtscr_copy( con_gi( a[0], 0 ), con_gi( a[1], 0 ), con_gi( a[2], 0 ), con_gi( a[3], 0 ), con_gi( a[4], 0 ), con_gi( a[5], 0 ) ); break;
+            case GFXOP_TXTINVERT:   txtscr_invert( con_gi( a[0], 0 ), con_gi( a[1], 0 ), con_gi( a[2], 0 ), con_gi( a[3], 0 ) ); break;
+            case GFXOP_TXTSAVE:     *outlen = txtscr_save( out, outsz ); break;
+            case GFXOP_TXTLOAD:     txtscr_restore( (const uint8_t*) s, slen ); break;
+            default:
+                *err = "Not available in the console host";
+                return false;
+        }
+        con_paint_soon();
+        return true;
+    }
+    (void) slen; (void) out; (void) outsz; (void) outlen;
     switch ( op ) {
         case GFXOP_CLS:
             if ( con_stdout_tty ) {
@@ -484,7 +556,23 @@ static bool con_gfx_op( void* usrdata, int op, const double* a, int na, const ch
 }
 
 static bool con_gfx_query( void* usrdata, int q, const double* a, int na, double* result ) {
-    (void) usrdata; (void) a; (void) na;
+    (void) usrdata; (void) na;
+    if ( con_screen ) {
+        int x = 0, y = 0, w = 0, h = 0, bg = 0, fg = 0;
+        textcell_t c;
+        switch ( q ) {
+            case GFXQ_TXTX:         txtscr_getcursor( &x, &y ); *result = x; return true;
+            case GFXQ_TXTY:         txtscr_getcursor( &x, &y ); *result = y; return true;
+            case GFXQ_TXTFG:        txtscr_getcolors( &bg, &fg ); *result = fg; return true;
+            case GFXQ_TXTBG:        txtscr_getcolors( &bg, &fg ); *result = bg; return true;
+            case GFXQ_TXTCHAR:      c = txtscr_getcell( con_gi( a[1], 0 ), con_gi( a[0], 0 ) ); *result = TXTSCR_CELL_CHR( c ); return true;
+            case GFXQ_TXTFGAT:      c = txtscr_getcell( con_gi( a[1], 0 ), con_gi( a[0], 0 ) ); *result = TXTSCR_CELL_FG( c ); return true;
+            case GFXQ_TXTBGAT:      c = txtscr_getcell( con_gi( a[1], 0 ), con_gi( a[0], 0 ) ); *result = TXTSCR_CELL_BG( c ); return true;
+            case GFXQ_TXTWIDTH:     txtscr_getsize( &w, &h ); *result = w; return true;
+            case GFXQ_TXTHEIGHT:    txtscr_getsize( &w, &h ); *result = h; return true;
+            default:                return false;
+        }
+    }
     struct winsize ws;
     bool have = isatty( 1 ) && ioctl( 1, TIOCGWINSZ, &ws ) == 0 && ws.ws_col > 0 && ws.ws_row > 0;
     switch ( q ) {
@@ -814,7 +902,8 @@ static int con_runedit( char* work, size_t bufsz ) {
     // the terminal is in raw mode only if the editor draws on it; with a redirected output the terminal's own line mode echoes
     con_linemode = true;
     con_set_raw( isatty( 0 ) && isatty( 1 ) );
-    int r = scr_lineedit( &con_linedrv, work, bufsz, 0, 0 );
+    // screen mode: the line is edited on the text screen, where the program's output is (no cursor position query)
+    int r = con_screen ? scr_lineedit( &con_drv, work, bufsz, 0, 0 ) : scr_lineedit( &con_linedrv, work, bufsz, 0, 0 );
     con_linemode = false;
     con_set_raw( false );
     sigaction( SIGINT, &old, 0 );
@@ -861,7 +950,7 @@ static char* con_edit( struct _repl_t* repl, const char* text ) {
         return 0;
     }
     strcpy( buf, text );
-    if ( con_midline && con_stdout_tty ) {       // the editor starts on a line of its own
+    if ( con_midline && con_stdout_tty && !con_screen ) {       // the editor starts on a line of its own
         fputc( '\n', stdout );
         con_midline = false;
         con_col = 0;
@@ -887,18 +976,22 @@ static void con_run_windows( repl_t* repl ) {
         return;
     }
     fflush( stdout );
+    bool own = !con_screen;                     // screen mode: the terminal is on its alternate screen and set up already
     struct sigaction winch, oldwinch;
     memset( &winch, 0, sizeof(winch) );
     winch.sa_handler = con_sigwinch;
     sigemptyset( &winch.sa_mask );
-    sigaction( SIGWINCH, &winch, &oldwinch );
+    if ( own ) {
+        sigaction( SIGWINCH, &winch, &oldwinch );
+    }
     con_catch_break( true );                    // Ctrl-C does not kill the process while the terminal is changed
     con_pumping = false;                        // (the monitor asks for it while it runs a program)
     con_set_raw( true );
     con_inqpos = con_inqlen = 0;
     con_pendpos = con_pendlen = 0;
     con_winch = 1;                              // the first thing is to look at the size
-    if ( conscr_begin() ) {
+    if ( !own || conscr_begin() ) {
+        con_flush_paint();
         con_fullscreen = true;
         if ( ed ) {
             fulledit_run( repl, &con_drv );
@@ -906,8 +999,13 @@ static void con_run_windows( repl_t* repl ) {
         if ( mon ) {
             monitor_run( repl, &con_drv );
         }
-        con_fullscreen = false;
-        conscr_end();
+        con_fullscreen = con_screen;
+        if ( own ) {
+            conscr_end();
+        } else {
+            txtscr_select( 0 );                 // back on the BASIC screen: it is painted again
+            con_dirty = true;
+        }
     } else {
         con_report( repl, "? EDIT and MONITOR need a terminal\n" );
     }
@@ -915,9 +1013,145 @@ static void con_run_windows( repl_t* repl ) {
     con_wantresize = false;
     con_set_raw( false );
     con_catch_break( false );
-    sigaction( SIGWINCH, &oldwinch, 0 );
+    if ( own ) {
+        sigaction( SIGWINCH, &oldwinch, 0 );
+    }
     repl->fulledit = false;
     repl->monitor = false;
+}
+
+// -- screen mode -------------------------------------------------------------------------------------------------
+//
+// When standard input and output are terminals the BASIC session runs on text screen 0, painted on the terminal's alternate screen by conscr.c, exactly as
+// in the window: the prompt is the screen editor (scr_screenedit()), INPUT and EDIT n the one-line editor on the screen, programs print to the screen
+// (colors, CLS, LOCATE, COLOR and the TXT statements work), and the screen is written to the normal terminal when the session ends (the "exit dump"), so
+// that its text stays in the shell's scroll-back. --line (or E1999_SCREEN=0) selects the classic line mode, where the terminal scrolls as usual.
+
+static void con_sigfatal( int sig ) {       // a killed session leaves the terminal in order
+    static const char seq[] = "\033[0m\033[?7h\033[?25h\033[?1049l";
+    if ( write( 1, seq, sizeof(seq) - 1U ) < 0 ) { }
+    if ( con_tio_saved ) {
+        tcsetattr( 0, TCSANOW, &con_saved_tio );
+    }
+    signal( sig, SIG_DFL );
+    raise( sig );
+}
+
+// does this session run in screen mode: both ends are a terminal that can do it, and nothing asked for the line mode
+static bool con_want_screen( void ) {
+    int opt = con_screenopt;
+    const char* e = getenv( "E1999_SCREEN" );
+    if ( opt < 0 && e != 0 && e[0] != '\0' ) {
+        opt = e[0] == '0' ? 0 : 1;
+    }
+    const char* d = getenv( "E1999_DUMP" );
+    if ( d != 0 && d[0] == '0' ) {
+        con_dump = false;
+    }
+    const char* term = getenv( "TERM" );
+    return opt != 0 && isatty( 0 ) && isatty( 1 ) && term != 0 && term[0] != '\0' && strcmp( term, "dumb" ) != 0;
+}
+
+static bool con_screen_begin( void ) {
+    if ( con_screen ) {
+        return true;
+    }
+    struct sigaction sa;
+    memset( &sa, 0, sizeof(sa) );
+    sigemptyset( &sa.sa_mask );
+    sa.sa_handler = con_sigwinch;
+    sigaction( SIGWINCH, &sa, 0 );
+    sa.sa_handler = con_sigfatal;
+    sigaction( SIGTERM, &sa, 0 );
+    sigaction( SIGHUP, &sa, 0 );
+    sigaction( SIGQUIT, &sa, 0 );
+    con_set_raw( true );
+    if ( !conscr_begin() ) {
+        con_set_raw( false );
+        return false;
+    }
+    con_screen = true;
+    con_fullscreen = true;
+    txtscr_select( 0 );
+    con_inqpos = con_inqlen = 0;
+    con_pendpos = con_pendlen = 0;
+    con_catch_break( false );                   // (screen mode: the handler stays installed)
+    con_dirty = true;
+    return true;
+}
+
+static void con_screen_end( bool dump ) {
+    if ( !con_screen ) {
+        return;
+    }
+    con_flush_paint();
+    conscr_end();
+    con_screen = false;
+    con_fullscreen = false;
+    con_set_raw( false );
+    if ( dump && con_dump ) {
+        conscr_dump();
+    }
+}
+
+// an error ended the program: the message stays on the screen until a key is pressed (the hint is an overlay, not text of the screen)
+static void con_wait_key( void ) {
+    txtscr_setstatus( "Press a key to leave", 190, 140 );
+    con_paint_now();
+    int c;
+    do {
+        c = con_readkey( true );
+    } while ( c == 0 || c == -3 );
+    txtscr_setstatus( 0, 0, 0 );
+    con_dirty = true;
+}
+
+// the prompt in screen mode: lines typed or picked from the screen are entered like lines from standard input
+static void con_repl_screen( repl_t* repl, bool banner ) {
+    static bool insert = false;
+    char* line = (char*) malloc( CON_PROMPTMAX + 2U );
+    if ( line == 0 ) {
+        return;
+    }
+    if ( banner ) {
+        char text[300];
+        snprintf( text, sizeof(text), "Engine 1999 %s (c) Copyright 2026 Ekkehard Morgenstern.\n"
+                "Console host. BYE or QUIT ends it. The license: SHOW COPYING in the window version, or the file LICENSE.\n\nReady.\n", ENGINE_VERSION );
+        con_write( text, strlen( text ) );
+    }
+    for (;;) {
+        con_flush_paint();
+        int r = scr_screenedit( &con_drv, line, CON_PROMPTMAX + 2U, &insert, 0, 0 );
+        if ( r == SCREDIT_CANCELLED ) {                      // (a screen under 3 rows: the one-line editor, on the screen)
+            line[0] = '\0';
+            r = scr_lineedit( &con_drv, line, CON_PROMPTMAX + 2U, 0, 0 );
+        }
+        if ( r != SCREDIT_ACCEPTED ) {
+            if ( r == SCREDIT_CLOSED || r == SCREDIT_EOF ) {
+                break;                                       // the input is gone
+            }
+            continue;
+        }
+        const char* p = line;
+        while ( *p == ' ' || *p == '\t' ) {
+            ++p;
+        }
+        if ( *p == '\0' ) {
+            continue;
+        }
+        bool stored = *p >= '0' && *p <= '9';
+        con_catch_break( true );
+        repl_enter( repl, line );
+        con_catch_break( false );
+        con_run_windows( repl );
+        if ( repl->quit ) {
+            break;
+        }
+        if ( !stored ) {
+            con_write( "Ready.\n", 7U );
+        }
+    }
+    free( line );
 }
 
 // reads lines from standard input and enters them; returns when the input ends or BYE / QUIT asks for the end
@@ -990,6 +1224,20 @@ static const char about_text[] =
 // runs the embedded program and ends, with the exit status of the console host (0, BYE n, 1 after an error); the whole command line is the program's
 // (ARG$(0) is the executable), except for --engine1999-about as the first argument
 static int con_run_embedded( int argc, char** argv ) {
+    // the switches of the runtime come first and are not the program's: --engine1999-screen, --engine1999-line, --engine1999-no-dump
+    int shift = 0;
+    for ( ; argc > 1 + shift; ++shift ) {
+        const char* a = argv[ 1 + shift ];
+        if ( strcmp( a, "--engine1999-screen" ) == 0 ) con_screenopt = 1;
+        else if ( strcmp( a, "--engine1999-line" ) == 0 ) con_screenopt = 0;
+        else if ( strcmp( a, "--engine1999-no-dump" ) == 0 ) con_dump = false;
+        else break;
+    }
+    if ( shift > 0 ) {
+        argv[shift] = argv[0];
+        argv += shift;
+        argc -= shift;
+    }
     if ( argc > 1 && strcmp( argv[1], "--engine1999-about" ) == 0 ) {
         fputs( about_text, stdout );
         return EXIT_SUCCESS;
@@ -1007,12 +1255,17 @@ static int con_run_embedded( int argc, char** argv ) {
     repl.argv = (const char* const*) argv;
     int status = EXIT_SUCCESS;
     if ( repl_load_image( &repl, embedded_program_start, (size_t)( embedded_program_end - embedded_program_start ) ) ) {
+        bool scr = con_want_screen() && con_screen_begin();
         con_catch_break( true );
         bool ok = repl_run( &repl );
         con_catch_break( false );
         con_run_windows( &repl );
         fflush( stdout );
         status = repl.quit ? repl.exitcode : ok ? EXIT_SUCCESS : 1;
+        if ( scr && !ok && !repl.quit ) {
+            con_wait_key();
+        }
+        con_screen_end( true );
     } else {
         status = 2;
     }
@@ -1193,6 +1446,9 @@ static void usage( FILE* out, const char* prog ) {
         "Options:\n"
         "  -i           after running the file, go on with the lines from standard input\n"
         "  --color[=when]  syntax colors in LIST and FILES: always, never or auto (the default: on a terminal, unless NO_COLOR is set)\n"
+        "  --screen     run the session on a screen on the terminal's alternate screen (the default if standard input and output are terminals)\n"
+        "  --line       the classic line mode: the terminal scrolls as usual (also E1999_SCREEN=0)\n"
+        "  --no-dump    in screen mode, do not write the screen to the terminal when the session ends (also E1999_DUMP=0)\n"
         "  --list-keywords  print the reserved words of the language, one per line\n"
         "  --version    show the version\n"
         "  -h, --help   show this text\n"
@@ -1230,6 +1486,12 @@ int main( int argc, char** argv ) {
         }
         if ( strcmp( arg, "-i" ) == 0 ) {
             interact = true;
+        } else if ( strcmp( arg, "--screen" ) == 0 ) {
+            con_screenopt = 1;
+        } else if ( strcmp( arg, "--line" ) == 0 ) {
+            con_screenopt = 0;
+        } else if ( strcmp( arg, "--no-dump" ) == 0 ) {
+            con_dump = false;
         } else if ( strcmp( arg, "--color" ) == 0 ) {
             colormode = "always";
         } else if ( strncmp( arg, "--color=", 8U ) == 0 ) {
@@ -1290,6 +1552,7 @@ int main( int argc, char** argv ) {
             cleanup_repl( &repl );
             return 2;
         }
+        bool scr = con_want_screen() && con_screen_begin();
         con_catch_break( true );
         bool ok = repl_run( &repl );
         con_catch_break( false );
@@ -1300,11 +1563,23 @@ int main( int argc, char** argv ) {
         } else if ( !ok ) {
             status = 1;
         }
+        if ( scr && !ok && !repl.quit && !interact ) {
+            con_wait_key();
+        }
         if ( interact && !repl.quit ) {
-            con_repl( &repl, isatty( 0 ) );
+            if ( scr ) {
+                con_repl_screen( &repl, false );
+            } else {
+                con_repl( &repl, isatty( 0 ) );
+            }
             if ( repl.quit ) {
                 status = repl.exitcode;
             }
+        }
+    } else if ( con_want_screen() && con_screen_begin() ) {
+        con_repl_screen( &repl, true );
+        if ( repl.quit ) {
+            status = repl.exitcode;
         }
     } else {
         con_repl( &repl, isatty( 0 ) );
@@ -1312,6 +1587,7 @@ int main( int argc, char** argv ) {
             status = repl.exitcode;
         }
     }
+    con_screen_end( true );
     fflush( stdout );
     cleanup_repl( &repl );
     free( progargs );

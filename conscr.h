@@ -54,6 +54,8 @@ bool conscr_active( void );
 bool conscr_syncsize( void );           // the terminal's size is read and the screens are resized to it; true if it changed
 void conscr_paint( void );              // shows the selected screen (and the cursor) on the terminal
 void conscr_write( const char* text, size_t len );      // output of a running program while the screen is active: text with ANSI colors, printed to the selected screen
+void conscr_text_setcolors( int bg, int fg );           // COLOR: the pen and paper of the selected screen (the decoder of PRINT starts again from them)
+void conscr_dump( void );                               // the BASIC screen (screen 0) as plain lines on standard output, trailing blanks and rows cut (call after conscr_end())
 
 // the palette entry nearest to an xterm 256 color number's RGB, and the other way: used by the painter (exposed for the test)
 int conscr_rgb_to_256( int r, int g, int b );
