@@ -150,4 +150,4 @@ Read this first when resuming; details are in `docs/` (start with `docs/README.m
 - `SYMBOL` (redefine one character of the character set). (`AFTER` / `EVERY` are done, see above.)
 
 ## Open / next steps
-**The full list of open work is `docs/roadmap.md`** (program commands as language statements, smaller language items, timers/`SYMBOL`, host polish, VM leftovers, remaining limits, decisions to revisit). Keep it current: tick or remove entries when they are done, add new findings there. Suggested next item: the rest of the program commands (`MERGE`, `CHAIN`, `FILES`, …), which needs the owner's language decisions first.
+**The full list of open work is `docs/roadmap.md`** (it starts with a priority table: High / Medium / Low per item, 2026-11-01) (program commands as language statements, smaller language items, timers/`SYMBOL`, host polish, VM leftovers, remaining limits, decisions to revisit). Keep it current: tick or remove entries when they are done, add new findings there. Suggested next item: the rest of the program commands (`MERGE`, `CHAIN`, `FILES`, …), which needs the owner's language decisions first.

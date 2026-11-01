@@ -13,6 +13,8 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+- **Roadmap: a priority table** (the owner's request; documentation only, no code, no tests): `docs/roadmap.md` has a new section "Priorities — an overview of everything that is open" with 41 rows (item, short description, priority High / Medium / Low, notes incl. which ones need an owner decision). Suggested High: key state for games (`KEY(n)`), synchronization of the layer memory between the threads, sandboxing, joystick / mouse input. While rating, four stale entries were found already done and ticked: `SYMBOL`, file channels, the graphics statements on channel 0, array parameters of `DEF FN`. The ratings are suggestions for the owner to change. `SESSION.md` points at the table.
+
 ## Log
 
 ### 7a6cb67 — 2026-10-17 13:32:27 +0200 — "Introduced Claude to the project"
