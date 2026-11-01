@@ -13,11 +13,9 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-### 2026-11-01 — full-screen editor: click to place the cursor, held arrows, hand pointer while dragging
-- **Click in the text / number pane** puts the cursor there (`ed_hit()`, `ed_click()` in `fulledit.c`; the cell is mapped through the layout as drawn, wrapped lines included; clamped to the end of the text; below the last line: nothing; an insertion is entered first).
-- **Held arrow repeats**: new `SM_REPEAT` (`scrdrv.h`, `SM_REPEAT_DELAY_MS` 400, `SM_REPEAT_MS` 60); the hosts make the repeats (window: `sdlscr_lbdown` / `sdlscr_lbnext` in the frame loop of `sdlscreen.c`; console: `con_mouse_repeat()` in `engine1999c.c`, the poll time in `con_rawbyte()` is 20 ms while a button is held); the editor acts on a repeat only at the arrow's cell.
-- **Hand pointer while dragging the thumb**: `ED_DRAGSHAPE` = `CUR_HAND` through `mouse_request_shape()` (works in both hosts), the previous shape is restored on release and when the editor ends.
-- Tests: `scrtest1` 150 (14 new; the marker's line is now checked to be stored in the program), `contest1` 164 (2 new; the pty harness got an `@sleep ms` step). Checked in the window under Xvfb (click, a held arrow scrolled about 23 lines in 1.8 s, the hand pointer, the arrow after release); `valgrind` clean. Docs: `docs/display-engine.md`, `docs/roadmap.md`, `man/engine1999.1`.
+### 2026-11-01 — more screenshots in the README
+- Owner's request. Six new images in `docs/images/` (960 x 450 like the others, cropped from 1920 x 1080 captures of the real window under Xvfb + metacity with an XTest injector that is in the session scratchpad only): `editor.png` (the full-screen editor in the procedures of `fruit2.bas`, with syntax colors and the scroll bar), `screen-editor.png` (the C-64 style screen editor: a listing, the highlighted line, the red status line), `monitor.png` (the machine monitor: disassembly and 12 single steps), `fruit.png` (Fruit Invaders), `mouse-paint.png` (`demos/mouse.bas`, drawn with a scripted mouse), `keys.png` (`demos/keys.bas` with keys held down).
+- `README.md`: new section "Edit, look around, debug" (the editor with its mouse support, the screen editor, the monitor) with three of them; the demo table got `mouse.bas` and `keys.bas` rows, and three demo images follow the existing ones. No code changed.
 
 ## Log
 
@@ -888,3 +886,10 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 - Window (`sdlscreen.c`, `sdlscreen.h`): `SDLSCR_INPUT_MOUSE` messages queued by the screen thread when wanted (a drag once per frame), cell = pixel / (8 x 12). Console (`engine1999c.c`): `con_mq` ring filled by `con_mouse_report()`, emptied by `con_drv_nextkey()`, woken like a resize (`con_rawbyte()` returns -3); screen mode only (with `--line` the editor has no mouse). Both hosts, as the standing rule demands.
 - **Checked** in the real window under Xvfb + metacity with an XTest injector (scratchpad only): wheel notches, arrow, track click and thumb drag (screenshots), and on a pty with xterm reports.
 - Tests: `scrtest1` 136 (14 new, clean under valgrind), `contest1` +4 pty cases (162 checks), all other suites still pass. Docs: `docs/display-engine.md`, `docs/console-host.md`, `docs/roadmap.md`, `man/engine1999.1`.
+
+### 20c6671 — 2026-11-01 17:36:02 +0100 — "improved mouse support in full-screen editor, created by Claude Code"
+11 files, +250/-33. (Tagged `v0.5.17` and merged into `main` by the owner.)
+- **Click in the text / number pane** puts the cursor there (`ed_hit()`, `ed_click()` in `fulledit.c`; the cell is mapped through the layout as drawn, wrapped lines included; clamped to the end of the text; below the last line: nothing; an insertion is entered first).
+- **Held arrow repeats**: new `SM_REPEAT` (`scrdrv.h`, `SM_REPEAT_DELAY_MS` 400, `SM_REPEAT_MS` 60); the hosts make the repeats (window: `sdlscr_lbdown` / `sdlscr_lbnext` in the frame loop of `sdlscreen.c`; console: `con_mouse_repeat()` in `engine1999c.c`, the poll time in `con_rawbyte()` is 20 ms while a button is held); the editor acts on a repeat only at the arrow's cell.
+- **Hand pointer while dragging the thumb**: `ED_DRAGSHAPE` = `CUR_HAND` through `mouse_request_shape()` (works in both hosts), the previous shape is restored on release and when the editor ends.
+- Tests: `scrtest1` 150 (14 new; the marker's line is now checked to be stored in the program), `contest1` 164 (2 new; the pty harness got an `@sleep ms` step). Checked in the window under Xvfb (click, a held arrow scrolled about 23 lines in 1.8 s, the hand pointer, the arrow after release); `valgrind` clean. Docs: `docs/display-engine.md`, `docs/roadmap.md`, `man/engine1999.1`.

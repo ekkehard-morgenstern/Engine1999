@@ -25,6 +25,23 @@ When it is done, `BUILD` turns it into a standalone executable.
 
 ![A program lists itself, with syntax colors](docs/images/listing.png)
 
+### Edit, look around, debug
+
+`EDIT` opens a **full-screen text editor** for the whole program: line numbers in their own pane, syntax colors, a scroll bar, a help bar. It works with the keyboard
+(cursor keys, PgUp/PgDn, Ctrl+Home/End, Ctrl+Y deletes a line) and with the **mouse**: click into the text to put the cursor there, turn the wheel, click or hold the arrows of the
+scroll bar, drag its thumb. The same editor runs in the console version, in a terminal.
+
+![The full-screen editor showing procedures of Fruit Invaders II](docs/images/editor.png)
+
+At the `Ready.` prompt the **screen itself is the editor**, like on a Commodore 64: `LIST` something, move the cursor up into the listing, change a line and press RETURN to enter it.
+The red status line shows the mode (overwrite or insert, F12 switches), the position and the BASIC line number; the screen rows of the line under the cursor are highlighted.
+
+![The screen editor: a listing on the screen, a line picked up for editing](docs/images/screen-editor.png)
+
+`MONITOR` opens a **machine monitor** for the virtual machine your program is compiled to: disassemble, dump and patch memory, set breakpoints, step through the code and watch the stacks.
+
+![The machine monitor: a listing of the compiled code, and twelve steps of it](docs/images/monitor.png)
+
 ## Try it
 
 You need Linux, `gcc`, `make` and the SDL2 development files (on Debian and Ubuntu: `sudo apt install build-essential libsdl2-dev`). It is developed and tested on Debian 12 on x86-64.
@@ -56,11 +73,19 @@ Then try the demos: `LOAD "demos/fruit2"` and `RUN`.
 | `demos/climb.bas` | **The Long Climb**, a jump and run game: climb a steel tower, drill holes to trap monsters, reach the ice cream stand on the roof |
 | `demos/fruit.bas` | The first, simpler Fruit Invaders |
 | `demos/gfx.bas` | The graphics layers: palettes, drawing, tiles, `DESIGN` pictures, sprites |
+| `demos/mouse.bas` | A small paint program for the mouse: draw, erase, choose pens from a color bar (the pointer changes its shape) |
+| `demos/keys.bas` | A keyboard that lights up the keys you hold down: `KEY("name")` knows when you let go, and several keys at once |
 | `demos/sfx.bas`, `demos/ode.bas`, `demos/prelude.bas` | A sound effect board; Beethoven's "Ode to Joy" and Bach's "Prelude in C" |
 
 ![The Long Climb, a jump and run demo](docs/images/climb.png)
 
 ![The graphics demo: layers, drawing, a sprite](docs/images/graphics.png)
+
+![Fruit Invaders, the first and simpler version of the game](docs/images/fruit.png)
+
+![The paint demo: strokes in several colors, the color bar below, the crosshair pointer](docs/images/mouse-paint.png)
+
+![The keyboard demo: the keys that are held down right now are lit](docs/images/keys.png)
 
 See [demos/README.md](demos/README.md) for all of them. The language is documented in [docs/basic-language.md](docs/basic-language.md).
 
