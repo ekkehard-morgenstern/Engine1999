@@ -87,6 +87,8 @@ Everything after the file name is for the program: `engine1999c prog.bas a "b c"
 
 ## The mouse (screen mode only; 2026-11-01)
 
+*The full-screen `EDIT` uses the mouse reports, too (the wheel and the scroll bar scroll it): see `docs/display-engine.md`, "The mouse in the full-screen editor".*
+
 In screen mode the terminal reports the mouse (xterm modes 1003 "any motion" and 1006 "SGR coordinates": `ESC [ < b ; col ; row M` for a press, motion or wheel step, `m` for a
 release; supported by xterm, kitty, foot, wezterm, gnome-terminal, Windows Terminal, tmux, ...) and the `MOUSE` statements and functions of the window work
 (`docs/basic-language.md`, "The mouse"): `MOUSE("X")`, `("Y")`, `("B")`, `("PRESSED")`, `("RELEASED")`, `("WHEEL")`, `("SHAPE")`, `("VISIBLE")`, `MOUSE SHOW|HIDE|POS|SHAPE|TIMEOUT`.

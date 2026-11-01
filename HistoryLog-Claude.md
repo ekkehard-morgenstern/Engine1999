@@ -13,9 +13,12 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-### 2026-11-01 — check of the VM assembler / decoder
-- Question from the owner: are they up to date? Yes: all 152 `INS_` defines of `instset.h` have a name in `cgen_opcode_name()` (167 names in all), and all of them assemble, decode, format and assemble again to the same bytes. The decoder has no per-instruction tables (names come from `cgen_opcode_name()`, the operand display is generic), so new instructions need nothing in `vmasm.c`.
-- `asmtest1`: new check `test_allopcodes()` runs that round trip over every named opcode (67 checks now), so a future instruction that is forgotten in the name table or breaks the assembler shows up.
+### 2026-11-01 — mouse support for the full-screen editor's scroll bar and wheel
+- Owner's request: left click and the mouse wheel for the scroll bar of `EDIT`. The scroll bar and the wheel **scroll the view** (the cursor stays on its line while it is shown, else it goes to the first / last line shown); wheel 3 lines per notch anywhere, up / down arrow 1 line, a click on the track puts the thumb there, the thumb can be dragged. The thumb now shows the place of the *view* (`ed_maxtop()`), not of the cursor line (the same picture with the keys, since the view follows the cursor).
+- Shared driver (`scrdrv.h`): new key kind `SK_MOUSE` with `SM_PRESS / SM_RELEASE / SM_DRAG / SM_WHEEL`, the cell (`mx`, `my`), `button`, `wheel`; new optional member `wantmouse( bool )`, called only by `fulledit_run()` (the other editors never see mouse events). `fulledit.c`: `ed_mouse()`, `ed_setview()`, `ed_viewby()`, `ed_scrolltrack()`, `ed_maxtop()`.
+- Window (`sdlscreen.c`, `sdlscreen.h`): `SDLSCR_INPUT_MOUSE` messages queued by the screen thread when wanted (a drag once per frame), cell = pixel / (8 x 12). Console (`engine1999c.c`): `con_mq` ring filled by `con_mouse_report()`, emptied by `con_drv_nextkey()`, woken like a resize (`con_rawbyte()` returns -3); screen mode only (with `--line` the editor has no mouse). Both hosts, as the standing rule demands.
+- **Checked** in the real window under Xvfb + metacity with an XTest injector (scratchpad only): wheel notches, arrow, track click and thumb drag (screenshots), and on a pty with xterm reports.
+- Tests: `scrtest1` 136 (14 new, clean under valgrind), `contest1` +4 pty cases (162 checks), all other suites still pass. Docs: `docs/display-engine.md`, `docs/console-host.md`, `docs/roadmap.md`, `man/engine1999.1`.
 
 ## Log
 
@@ -873,3 +876,8 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 7 files, +102/-12. (Roadmap quick win 22. Tagged `v0.5.15` / `v0.5.16` and merged into `main` by the owner.)
 - `con_auto_prompt()` in `engine1999c.c`: while `repl->autoline` is set, the prompt loops of the screen mode (`con_repl_screen()`) and the line mode (`con_repl()`) print the next line number, read the text with `con_getline()` (the one-line editor, as in the window), enter `"<number> <text>"`, advance by the step; an empty line, ESC or Ctrl-C ends it. A script reading from a pipe gets no numbers in its output (`visible` is false there). Consistent with `engine1999.c` (standing rule).
 - `contest1`: 2 pipe cases, 2 line-mode pty cases, 1 screen mode pty case (now 158 checks). Docs: `docs/console-host.md`, `docs/basic-language.md`, `docs/roadmap.md` (item 22).
+
+### 467718a — 2026-11-01 16:14:51 +0100 — "Claude status files and tools update"
+3 files, +46/-4. (The owner's check of the VM assembler / decoder.)
+- Question from the owner: are they up to date? Yes: all 152 `INS_` defines of `instset.h` have a name in `cgen_opcode_name()` (167 names in all), and all of them assemble, decode, format and assemble again to the same bytes. The decoder has no per-instruction tables (names come from `cgen_opcode_name()`, the operand display is generic), so new instructions need nothing in `vmasm.c`.
+- `asmtest1`: new check `test_allopcodes()` runs that round trip over every named opcode (67 checks now), so a future instruction that is forgotten in the name table or breaks the assembler shows up.

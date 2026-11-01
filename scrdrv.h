@@ -63,14 +63,25 @@ typedef enum _scrkind_t {
     SK_RESIZE,          // the screen has a new size
     SK_CLOSED,          // the screen is gone: the editor must return
     SK_BREAK,           // Ctrl+C or PAUSE/BREAK: the break key (the editors treat it like ESC; INPUT is stopped by it even after BREAK OFF)
-    SK_EOF              // the end of the input (a redirected input, Ctrl-D on a terminal is a key of its own): a line typed so far is complete
+    SK_EOF,             // the end of the input (a redirected input, Ctrl-D on a terminal is a key of its own): a line typed so far is complete
+    SK_MOUSE            // a mouse event (only after wantmouse( true )): mouse, mx, my, button, wheel
 } scrkind_t;
+
+// SK_MOUSE: what happened. Only the left button is reported (press, release, moving with it held down) and the wheel.
+#define SM_PRESS        1       // the button was pressed at the cell mx, my
+#define SM_RELEASE      2       // ... and let go
+#define SM_DRAG         3       // the mouse moved to the cell mx, my with the button held down (at most once per frame in the window)
+#define SM_WHEEL        4       // the wheel turned one notch: wheel = +1 away from the user (up), -1 towards the user (down)
 
 typedef struct _scrkey_t {
     int     kind;
     int     ch;
     int     key;
     int     mods;
+    int     mouse;              // SK_MOUSE: SM_*
+    int     mx, my;             // SK_MOUSE: the cell on the whole text screen (from 0, the same for the window and a terminal)
+    int     button;             // SK_MOUSE: 1 = left
+    int     wheel;              // SM_WHEEL: +1 / -1
 } scrkey_t;
 
 typedef struct _scrdrv_t {
@@ -100,6 +111,7 @@ typedef struct _scrdrv_t {
     bool    (*pending)( void );                                 // more keys are waiting (the editors redraw once for a burst)
     void    (*pollkeys)( bool enable );                         // keys are queued for a running program; ESC / Ctrl-C then break it (the monitor runs programs)
     void    (*palette)( uint32_t pal[256], uint32_t* backdrop );    // the colors of the text layer and the backdrop (the screen editor lightens them for its highlight); may be 0: the start palette
+    void    (*wantmouse)( bool enable );                        // the full-screen editor wants SK_MOUSE events from nextkey() (no other editor does); may be 0: this driver has no mouse
 } scrdrv_t;
 
 // -- the one-line editor (scredit.c) ---------------------------------------------------------

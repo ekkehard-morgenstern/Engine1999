@@ -390,7 +390,36 @@ static ssize_t con_mouse_scan( const unsigned char* b, ssize_t n, ssize_t i, int
     return -1;
 }
 
+// Events for the full-screen editor (scrdrv.h SK_MOUSE; con_drv.wantmouse): the left button and the wheel, in a small ring that con_drv_nextkey() empties.
+// A move with the button held replaces a move that is still waiting.
+static bool con_wantmouse = false;
+static scrkey_t con_mq[32];
+static unsigned con_mqr = 0, con_mqn = 0;
+
+static void con_mq_push( int mouse, int cx, int cy, int button, int wheel ) {
+    if ( !con_wantmouse ) {
+        return;
+    }
+    if ( mouse == SM_DRAG && con_mqn > 0 && con_mq[ ( con_mqr + con_mqn - 1U ) % 32U ].mouse == SM_DRAG ) {
+        --con_mqn;                              // (only the last place counts)
+    }
+    if ( con_mqn >= 32U ) {
+        return;
+    }
+    scrkey_t* k = &con_mq[ ( con_mqr + con_mqn++ ) % 32U ];
+    memset( k, 0, sizeof(*k) );
+    k->kind = SK_MOUSE; k->mouse = mouse; k->mx = cx - 1; k->my = cy - 1; k->button = button; k->wheel = wheel;
+}
+
 static void con_mouse_report( int cb, int cx, int cy, char fin ) {
+    if ( ( cb & 64 ) != 0 ) {
+        if ( ( cb & 3 ) == 0 ) con_mq_push( SM_WHEEL, cx, cy, 0, 1 );
+        else if ( ( cb & 3 ) == 1 ) con_mq_push( SM_WHEEL, cx, cy, 0, -1 );
+    } else if ( ( cb & 32 ) != 0 ) {
+        if ( ( cb & 3 ) == 0 ) con_mq_push( SM_DRAG, cx, cy, 1, 0 );
+    } else if ( ( cb & 3 ) == 0 ) {
+        con_mq_push( fin == 'M' ? SM_PRESS : SM_RELEASE, cx, cy, 1, 0 );
+    }
     mouse_event_motion( ( cx - 1 ) * 8 + 4, ( cy - 1 ) * 12 + 6 );
     if ( ( cb & 64 ) != 0 ) {
         if ( ( cb & 3 ) == 0 ) mouse_event_wheel( 1 );
@@ -496,7 +525,7 @@ static int con_rawbyte( int timeout ) {
             }
             return q;
         }
-        if ( con_wantresize && con_winch ) {
+        if ( ( con_wantresize && con_winch ) || con_mqn > 0 ) {
             return -3;
         }
         con_mouse_poll();
@@ -918,7 +947,7 @@ static bool con_scrkey( int c, scrkey_t* k ) {
 }
 
 static bool con_drv_pending( void ) {
-    if ( con_pendpos < con_pendlen || con_inqpos < con_inqlen || con_winch ) {
+    if ( con_pendpos < con_pendlen || con_inqpos < con_inqlen || con_winch || con_mqn > 0 ) {
         return true;
     }
     struct pollfd pfd = { 0, POLLIN, 0 };
@@ -927,6 +956,12 @@ static bool con_drv_pending( void ) {
 
 static bool con_drv_nextkey( scrkey_t* k ) {
     for (;;) {
+        if ( con_mqn > 0 ) {                    // a mouse event (only while the full-screen editor wants them)
+            *k = con_mq[ con_mqr ];
+            con_mqr = ( con_mqr + 1U ) % 32U;
+            --con_mqn;
+            return true;
+        }
         if ( con_winch ) {
             con_winch = 0;
             if ( conscr_syncsize() ) {
@@ -960,6 +995,11 @@ static bool con_drv_nextkey( scrkey_t* k ) {
             return true;
         }
     }
+}
+
+static void con_drv_wantmouse( bool enable ) {
+    con_wantmouse = enable && con_mouse;        // (reports come in screen mode only)
+    con_mqr = con_mqn = 0;
 }
 
 static int con_drv_select( int n ) { return txtscr_select( n ) ? n : txtscr_selected(); }
@@ -997,7 +1037,7 @@ static const scrdrv_t con_drv = {
     con_drv_select, txtscr_selected, txtscr_setviewport, txtscr_resetviewport, con_drv_getviewport,
     txtscr_setcolors, txtscr_setblank, txtscr_clear, txtscr_write, con_drv_print, txtscr_locate, con_drv_getcursor,
     con_drv_changed, txtscr_setresizereserve, con_drv_restart,
-    con_drv_begin, con_drv_end, con_drv_nextkey, con_drv_pending, con_drv_pollkeys
+    con_drv_begin, con_drv_end, con_drv_nextkey, con_drv_pending, con_drv_pollkeys, 0, con_drv_wantmouse
 };
 
 // -- the one-line editor on the terminal -------------------------------------------------------------------

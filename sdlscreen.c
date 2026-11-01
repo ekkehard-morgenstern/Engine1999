@@ -159,6 +159,24 @@ static bool sdlscr_enqueuekeypress( SDL_Keycode key, Uint16 mods ) {
     return true;
 }
 
+// a mouse event for the full-screen editor (the cell of the 80 x 25 text screen under the pointer; x, y are the pointer in the layer's pixels)
+static volatile bool sdlscr_wantmouse = false;
+
+static bool sdlscr_enqueuemouse( int mouse, int x, int y, int button, int wheel ) {
+    sdlscr_inputmsg_t* msg = sdlscr_createinputmsg( SDLSCR_INPUT_MOUSE );
+    if ( msg == 0 ) return false;
+    msg->mouse = mouse; msg->button = button; msg->wheel = wheel;
+    msg->mx = x < 0 ? 0 : x / 8; msg->my = y < 0 ? 0 : y / 12;
+    if ( msg->mx > 79 ) msg->mx = 79;
+    if ( msg->my > 24 ) msg->my = 24;
+    if ( !sdlscr_enqueueinputmsg( msg ) ) {
+        sdlscr_deleteinputmsg( msg );
+        return false;
+    }
+    sdlev_raise( SDLEV_INPUT );
+    return true;
+}
+
 static bool sdlscr_enqueuetext( const char text[SDL_TEXTINPUTEVENT_TEXT_SIZE] ) {
     sdlscr_inputmsg_t* msg = sdlscr_createinputmsg( SDLSCR_INPUT_TEXT );
     if ( msg == 0 ) return false;
@@ -462,6 +480,8 @@ static int sdlscr_worker( void* arg ) {
         }
 
         // process messages
+        int dragx = 0, dragy = 0;
+        bool dragged = false;
         SDL_Event ev;
         while ( SDL_PollEvent( &ev ) ) {
             Uint32 ty = ev.type;
@@ -489,6 +509,9 @@ static int sdlscr_worker( void* arg ) {
                 case SDL_MOUSEMOTION:
                     if ( fmouse++ == 0 ) foldest = ev.motion.timestamp;
                     mouse_event_motion( ev.motion.x, ev.motion.y );
+                    if ( sdlscr_wantmouse && ( ev.motion.state & SDL_BUTTON_LMASK ) != 0 ) {
+                        dragx = ev.motion.x; dragy = ev.motion.y; dragged = true;      // (one event per frame: see below)
+                    }
                     break;
                 case SDL_MOUSEBUTTONDOWN:
                 case SDL_MOUSEBUTTONUP: {
@@ -498,11 +521,22 @@ static int sdlscr_worker( void* arg ) {
                     int b = ev.button.button == SDL_BUTTON_LEFT ? MOUSE_LEFT : ev.button.button == SDL_BUTTON_RIGHT ? MOUSE_RIGHT :
                         ev.button.button == SDL_BUTTON_MIDDLE ? MOUSE_MIDDLE : 0;
                     mouse_event_button( b, ty == SDL_MOUSEBUTTONDOWN );
+                    if ( sdlscr_wantmouse && ev.button.button == SDL_BUTTON_LEFT ) {
+                        sdlscr_enqueuemouse( ty == SDL_MOUSEBUTTONDOWN ? SM_PRESS : SM_RELEASE, ev.button.x, ev.button.y, 1, 0 );
+                        dragged = false;
+                    }
                     break;
                 }
                 case SDL_MOUSEWHEEL:
                     if ( fmouse++ == 0 ) foldest = ev.wheel.timestamp;
                     mouse_event_wheel( ev.wheel.direction == SDL_MOUSEWHEEL_FLIPPED ? -ev.wheel.y : ev.wheel.y );
+                    if ( sdlscr_wantmouse && ev.wheel.y != 0 ) {
+                        int wy = ev.wheel.direction == SDL_MOUSEWHEEL_FLIPPED ? -ev.wheel.y : ev.wheel.y;
+                        int steps = wy < 0 ? -wy : wy;
+                        for ( int i = 0; i < steps && i < 4; ++i ) {
+                            sdlscr_enqueuemouse( SM_WHEEL, 0, 0, 0, wy > 0 ? 1 : -1 );     // (the wheel is not tied to a place)
+                        }
+                    }
                     break;
                 case SDL_TEXTINPUT:
                     if ( sdlscr_keydebug ) {
@@ -511,6 +545,10 @@ static int sdlscr_worker( void* arg ) {
                     sdlscr_handletext( ev.text.text );
                     break;
             }
+        }
+
+        if ( dragged && sdlscr_wantmouse ) {
+            sdlscr_enqueuemouse( SM_DRAG, dragx, dragy, 1, 0 );        // (the last position of the frame)
         }
 
         // the mouse pointer: the events of this frame are applied now, so that the pointer is drawn where the mouse is as of this frame's poll
@@ -974,6 +1012,10 @@ static bool sdlscr_inputpending( void ) {
 // the key an input message stands for; false for keys the editors don't use
 static bool sdlscr_msgtoscrkey( const sdlscr_inputmsg_t* msg, scrkey_t* k ) {
     memset( k, 0, sizeof(*k) );
+    if ( msg->inputtype == SDLSCR_INPUT_MOUSE ) {
+        k->kind = SK_MOUSE; k->mouse = msg->mouse; k->mx = msg->mx; k->my = msg->my; k->button = msg->button; k->wheel = msg->wheel;
+        return true;
+    }
     if ( msg->inputtype == SDLSCR_INPUT_TEXT ) {
         int chr = msg->text[0] & 255;
         if ( msg->text[0] != '\0' && msg->text[1] == '\0' && SDLSCR_PRINTABLE( chr ) ) {
@@ -1035,6 +1077,10 @@ static bool sdlscr_drv_nextkey( scrkey_t* k ) {
     }
 }
 
+static void sdlscr_drv_wantmouse( bool enable ) {
+    sdlscr_wantmouse = enable;          // (mouse events that are still queued afterwards are ignored by every reader)
+}
+
 static void sdlscr_drv_screensize( int* cols, int* rows ) { txtscr_getscreensize( cols, rows ); }
 static void sdlscr_drv_getsize( int* cols, int* rows ) { txtscr_getsize( cols, rows ); }
 static void sdlscr_drv_print( int y, int x, int bg, int fg, const char* text ) { sdlscr_printf( y, x, bg, fg, "%s", text ); }
@@ -1056,7 +1102,7 @@ static const scrdrv_t sdlscr_drv = {
     sdlscr_text_setcolors, sdlscr_text_setblank, sdlscr_text_clear, sdlscr_text_write, sdlscr_drv_print, sdlscr_locate, sdlscr_drv_getcursor,
     sdlscr_textchanged, sdlscr_drv_reserve, sdlscr_drv_restart,
     sdlscr_drv_begin, sdlscr_drv_end, sdlscr_drv_nextkey, sdlscr_inputpending, sdlscr_pollkeys,
-    sdlscr_drv_palette
+    sdlscr_drv_palette, sdlscr_drv_wantmouse
 };
 
 const scrdrv_t* sdlscr_driver( void (*vblank_handler)( void* ), void* usrdata ) {

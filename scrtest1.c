@@ -66,6 +66,11 @@ static void typetext( const char* t ) {
     for ( ; *t; ++t ) addkey( SK_CHAR, (unsigned char) *t, 0, 0 );
 }
 static void press( int kind ) { addkey( kind, 0, 0, 0 ); }
+static void addmouse( int mouse, int mx, int my, int button, int wheel ) {
+    addkey( SK_MOUSE, 0, 0, 0 );
+    script[nscript - 1].mouse = mouse; script[nscript - 1].mx = mx; script[nscript - 1].my = my;
+    script[nscript - 1].button = button; script[nscript - 1].wheel = wheel;
+}
 static void pressk( int key, int mods ) { addkey( SK_KEY, 0, key, mods ); }
 static void resize( int cols, int rows ) { addkey( SK_RESIZE, cols, rows, 0 ); }     // (the driver resizes the screens when it hands the key out)
 
@@ -280,6 +285,92 @@ static int lineof( uint32_t no ) {
         if ( ln->lineno == no ) return 1;
     }
     return 0;
+}
+
+// the screen row of the editor (screen 1) that has this text in it, -1 if there is none
+static int findrow( const char* part ) {
+    int w, h;
+    txtscr_select( 1 );
+    txtscr_getscreensize( &w, &h );
+    int found = -1;
+    for ( int y = 1; y < h - 1 && found < 0; ++y ) {
+        if ( rowhas( y, part ) ) found = y;
+    }
+    txtscr_select( 0 );
+    return found;
+}
+
+// the line (its number) that has a marker typed into it after the mouse moved the cursor: the program is NEW + 100 lines "10 A" ... "1000 A"
+static void bigprogram( void ) {
+    repl_enter( &repl, "NEW" );
+    for ( int i = 1; i <= 100; ++i ) {
+        char text[40];
+        snprintf( text, sizeof(text), "%d REM n%d", i * 10, i * 10 );
+        repl_enter( &repl, text );
+    }
+}
+
+// runs the editor with the script (Ctrl+Home first, so that the start is the first line), then types a marker into the line the cursor is on and leaves
+static int mouse_lands_on( void (*script_fn)( void ), bool big ) {
+    if ( big ) bigprogram(); else newprogram();
+    freshscreens( 80, 25 );
+    clearscript();                                      // (the editor remembers its view: start from the top)
+    pressk( KS_HOME, KSMOD_CTRL ); press( SK_ESCAPE );
+    fulledit_run( &repl, &drv );
+    freshscreens( 80, 25 );
+    clearscript();
+    pressk( KS_HOME, KSMOD_CTRL );
+    script_fn();
+    typetext( "Z" ); press( SK_ESCAPE );
+    fulledit_run( &repl, &drv );
+    int y = findrow( "Z" );
+    if ( y < 0 ) return -1;
+    txtscr_select( 1 );
+    const char* t = rowtext( y );
+    txtscr_select( 0 );
+    while ( *t == ' ' ) ++t;
+    return atoi( t );
+}
+
+static void sc_wheeldown( void )  { addmouse( SM_WHEEL, 0, 0, 0, -1 ); }
+static void sc_wheeldown2( void ) { addmouse( SM_WHEEL, 0, 0, 0, -1 ); addmouse( SM_WHEEL, 0, 0, 0, -1 ); }
+static void sc_wheelup( void )    { pressk( KS_END, KSMOD_CTRL ); addmouse( SM_WHEEL, 0, 0, 0, 1 ); }
+static void sc_arrowdown( void )  { addmouse( SM_PRESS, 79, 23, 1, 0 ); addmouse( SM_RELEASE, 79, 23, 1, 0 ); }
+static void sc_arrowup( void )    { addmouse( SM_WHEEL, 0, 0, 0, -1 ); addmouse( SM_PRESS, 79, 1, 1, 0 ); addmouse( SM_RELEASE, 79, 1, 1, 0 ); }
+static void sc_staysvisible( void ) { for ( int i = 0; i < 5; ++i ) pressk( KS_DOWN, 0 ); addmouse( SM_PRESS, 79, 23, 1, 0 ); addmouse( SM_RELEASE, 79, 23, 1, 0 ); addmouse( SM_WHEEL, 0, 0, 0, -1 ); }
+static void sc_pulled( void ) { pressk( KS_DOWN, 0 ); pressk( KS_DOWN, 0 ); addmouse( SM_WHEEL, 0, 0, 0, -1 ); }
+static void sc_trackmiddle( void ) { addmouse( SM_PRESS, 79, 12, 1, 0 ); addmouse( SM_RELEASE, 79, 12, 1, 0 ); }
+static void sc_trackbottom( void ) { addmouse( SM_PRESS, 79, 22, 1, 0 ); addmouse( SM_RELEASE, 79, 22, 1, 0 ); }
+static void sc_tracktop( void ) { pressk( KS_END, KSMOD_CTRL ); addmouse( SM_PRESS, 79, 2, 1, 0 ); addmouse( SM_RELEASE, 79, 2, 1, 0 ); }
+static void sc_drag( void ) { addmouse( SM_PRESS, 79, 3, 1, 0 ); addmouse( SM_DRAG, 79, 12, 1, 0 ); addmouse( SM_DRAG, 70, 22, 1, 0 ); addmouse( SM_RELEASE, 70, 22, 1, 0 ); }
+static void sc_dragnopress( void ) { addmouse( SM_DRAG, 79, 12, 1, 0 ); }
+static void sc_rightclick( void ) { addmouse( SM_PRESS, 79, 12, 3, 0 ); }
+static void sc_clickelsewhere( void ) { addmouse( SM_PRESS, 40, 12, 1, 0 ); addmouse( SM_PRESS, 78, 12, 1, 0 ); }
+
+static void test_editor_mouse( void ) {
+    int a;
+    a = mouse_lands_on( sc_wheeldown, true );  check( a == 40, "editor mouse: one wheel notch down scrolls 3 lines (line 40)" );
+    a = mouse_lands_on( sc_wheeldown2, true );  check( a == 70, "editor mouse: two notches down are 6 lines (line 70)" );
+    a = mouse_lands_on( sc_wheelup, true );    check( a == 970, "editor mouse: a notch up scrolls 3 lines up (from line 1000 to 970)" );
+    a = mouse_lands_on( sc_arrowdown, true );  check( a == 20, "editor mouse: the down arrow of the scroll bar scrolls one line" );
+    a = mouse_lands_on( sc_arrowup, true );    check( a == 40, "editor mouse: the up arrow scrolls the view one line back (the cursor stays on line 40, which is still shown)" );
+    a = mouse_lands_on( sc_staysvisible, true ); check( a == 60, "editor mouse: the cursor stays on its line while it is shown (line 60 after a step and a notch)" );
+    a = mouse_lands_on( sc_pulled, true );      check( a == 40, "editor mouse: the cursor is pulled to the first line shown when the view moves past it (line 30 -> 40)" );
+    a = mouse_lands_on( sc_trackmiddle, true ); check( a >= 300 && a <= 450, "editor mouse: a click in the middle of the track puts the view there (the cursor goes to its first line)" );
+    a = mouse_lands_on( sc_trackbottom, true ); check( a >= 770, "editor mouse: a click at the bottom of the track shows the end of the program" );
+    a = mouse_lands_on( sc_tracktop, true );   check( a <= 250, "editor mouse: a click at the top of the track shows the start (the cursor goes to the last line shown)" );
+    a = mouse_lands_on( sc_drag, true );       check( a >= 770, "editor mouse: dragging the thumb down to the end of the track follows" );
+    a = mouse_lands_on( sc_dragnopress, true ); check( a == 10, "editor mouse: a drag that began elsewhere does nothing" );
+    a = mouse_lands_on( sc_rightclick, true ); check( a == 10, "editor mouse: another button does nothing" );
+    a = mouse_lands_on( sc_clickelsewhere, true ); check( a == 10, "editor mouse: a click outside the scroll bar does nothing" );
+    // the wheel with no scroll bar to speak of (the whole program fits) and an empty program: no harm
+    a = mouse_lands_on( sc_wheeldown, false );  check( a == 10, "editor mouse: nothing scrolls when the whole program is shown" );
+    repl_enter( &repl, "NEW" );
+    freshscreens( 80, 25 );
+    clearscript();
+    addmouse( SM_WHEEL, 0, 0, 0, -1 ); addmouse( SM_PRESS, 79, 5, 1, 0 ); press( SK_ESCAPE );
+    fulledit_run( &repl, &drv );
+    check( ipos == 3, "editor mouse: with an empty program the mouse does no harm" );
 }
 
 static void test_fulledit( void ) {
@@ -875,6 +966,7 @@ int main( void ) {
     test_lineedit();
     test_lineedit_resize();
     test_fulledit();
+    test_editor_mouse();
     test_monitor();
     test_screenedit();
     cleanup_repl( &repl );

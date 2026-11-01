@@ -48,6 +48,7 @@
 
 #define SDLSCR_INPUT_KEYPRESS       0
 #define SDLSCR_INPUT_TEXT           1
+#define SDLSCR_INPUT_MOUSE          2       // for the full-screen editor only (sdlscr_driver()'s wantmouse): a mouse event, see scrdrv.h SM_*
 
 typedef struct _sdlscr_inputmsg_t {
     int     inputtype;
@@ -57,6 +58,9 @@ typedef struct _sdlscr_inputmsg_t {
             Uint16      mods;       // SDL_Keymod bits (KMOD_CTRL, ...) at the time of the key press
         };
         char            text[SDL_TEXTINPUTEVENT_TEXT_SIZE];
+        struct {
+            int         mouse, mx, my, button, wheel;
+        };
     };
 } sdlscr_inputmsg_t;
 

@@ -102,6 +102,8 @@ typedef struct _ed_t {
     bool        escwarn;                // ESC failed once because of an error: the next one discards
     char        msg[96];                // error shown in the help bar until the next key
     bool        quit;
+    int         sbtrack, sbsize, sbmaxtop;  // the scroll bar as last drawn: track rows (without the arrows), thumb size, the last place of the view (index of the top line; 0 = nothing to scroll)
+    bool        sbdrag;                 // the left button went down on the scroll bar and is still held
 } ed_t;
 
 // remembered between calls: line numbers (the lines may be gone or replaced)
@@ -326,6 +328,20 @@ static void ed_drawbars( ed_t* e ) {
     }
 }
 
+// the last place of the view: the index of the first line shown when the end of the program is at the bottom of the panes (0 if it all fits)
+static int ed_maxtop( ed_t* e ) {
+    int rows = 0, count = 0;
+    for ( line_t* ln = e->pgm->last; ln != 0; ln = ln->prev ) {
+        rows += ed_linerows( e, ln );
+        if ( rows > e->pane_h ) {
+            break;
+        }
+        ++count;
+    }
+    int total = ed_countlines( e, 0 );
+    return total > count ? total - count : 0;
+}
+
 static void ed_drawscrollbar( ed_t* e, int shown ) {
     const scrdrv_t* d = e->drv;
     d->setviewport( ED_TEXT_X + e->text_w, ED_PANE_Y, 1, e->pane_h );
@@ -336,13 +352,16 @@ static void ed_drawscrollbar( ed_t* e, int shown ) {
     int track = e->pane_h - 2;
     int total = ed_countlines( e, 0 );
     int size = track, pos = 0;
+    int maxtop = ed_maxtop( e );
+    e->sbtrack = track; e->sbmaxtop = maxtop;
     if ( total > shown && total > 0 ) {
         size = track * shown / total;
         if ( size < 1 ) {
             size = 1;
         }
-        int idx = e->cur != 0 ? ed_countlines( e, e->cur ) + ( e->ins ? 1 : 0 ) : 0;
-        pos = total > 1 ? ( track - size ) * idx / ( total - 1 ) : 0;
+        // the thumb shows the place of the view (the first line shown) in the program
+        int idx = e->top != 0 ? ed_countlines( e, e->top ) : 0;
+        pos = maxtop > 0 ? ( track - size ) * idx / maxtop : 0;
         if ( pos > track - size ) {
             pos = track - size;
         }
@@ -350,6 +369,7 @@ static void ed_drawscrollbar( ed_t* e, int shown ) {
     for ( int i=0; i < size; ++i ) {
         d->write( 1 + pos + i, 0, C_SBTHUMB_BG, C_WHITE, " ", 1 );
     }
+    e->sbsize = size;
 }
 
 static void ed_numtext( ed_t* e, const slot_t* s, char* out ) {      // 7 characters + NUL
@@ -814,6 +834,114 @@ static void ed_key( ed_t* e, const scrkey_t* k ) {
     }
 }
 
+// -- the mouse -------------------------------------------------------------------------
+//
+// The scroll bar (the last column of the panes) and the wheel scroll the VIEW; the cursor stays on its line as long as that is shown and is
+// pulled to the first or last line shown when the view moves past it (the thumb shows the place of the view). The wheel scrolls
+// ED_WHEELLINES lines per notch, anywhere on the screen; a click on the up / down arrow one line; a click on the track puts the thumb there, and
+// it can be dragged while the button is held. An insertion in progress is entered first, as for the cursor keys.
+
+#define ED_WHEELLINES   3
+
+// the view starts at line index idx (clamped to 0 .. ed_maxtop()); the cursor moves to the nearest line that is shown if it is not any more
+static void ed_setview( ed_t* e, int idx ) {
+    if ( e->pgm->first == 0 || e->toosmall ) {
+        return;
+    }
+    ed_scroll( e );
+    int maxtop = ed_maxtop( e );
+    idx = idx < 0 ? 0 : idx > maxtop ? maxtop : idx;
+    line_t* top = e->pgm->first;
+    for ( int i=0; i < idx && top->next != 0; ++i ) {
+        top = top->next;
+    }
+    uint32_t topno = top->lineno;
+    // the line the cursor should be on: where it is while it is in view, else the nearest line that is (the first, or the last one shown completely)
+    line_t* target = top;
+    if ( e->cur != 0 ) {
+        int curidx = ed_countlines( e, e->cur );
+        if ( curidx >= idx ) {
+            int rows = 0;
+            for ( line_t* ln = top; ln != 0; ln = ln->next ) {
+                rows += ed_linerows( e, ln );
+                if ( rows > e->pane_h ) {
+                    break;
+                }
+                target = ln;
+                if ( ln == e->cur ) {
+                    break;
+                }
+            }
+        }
+    }
+    if ( !ed_endins( e ) ) {
+        return;
+    }
+    if ( target != e->cur && target != 0 ) {
+        ed_moveto( e, target );             // (enters the edited line first: the nodes are looked up again by number below)
+    }
+    e->top = ed_at( e, topno );
+}
+
+static void ed_viewby( ed_t* e, int delta ) {
+    ed_scroll( e );                     // (the view as it is drawn: the cursor is in it)
+    ed_setview( e, ( e->top != 0 ? ed_countlines( e, e->top ) : 0 ) + delta );
+}
+
+// the thumb is put so that its middle is at track row t (0 = the first row below the up arrow)
+static void ed_scrolltrack( ed_t* e, int t ) {
+    int room = e->sbtrack - e->sbsize;          // the places the thumb's top can have: 0..room
+    if ( e->sbmaxtop < 1 || room <= 0 ) {
+        return;                                 // everything is shown: nothing to scroll
+    }
+    int pos = t - e->sbsize / 2;
+    if ( pos < 0 ) {
+        pos = 0;
+    }
+    if ( pos > room ) {
+        pos = room;
+    }
+    ed_setview( e, ( pos * e->sbmaxtop + room / 2 ) / room );       // (the inverse of the drawing: pos = room * idx / maxtop)
+}
+
+static void ed_mouse( ed_t* e, const scrkey_t* k ) {
+    int sbx = ED_TEXT_X + e->text_w;
+    bool inpanes = k->my >= ED_PANE_Y && k->my < ED_PANE_Y + e->pane_h;
+    switch ( k->mouse ) {
+        case SM_WHEEL:
+            ed_viewby( e, -k->wheel * ED_WHEELLINES );
+            break;
+        case SM_PRESS:
+            e->sbdrag = false;
+            if ( k->button != 1 || k->mx != sbx || !inpanes ) {
+                break;
+            }
+            {
+                int r = k->my - ED_PANE_Y;
+                if ( r == 0 ) {
+                    ed_viewby( e, -1 );
+                } else if ( r == e->pane_h - 1 ) {
+                    ed_viewby( e, 1 );
+                } else {
+                    ed_scrolltrack( e, r - 1 );
+                    e->sbdrag = true;
+                }
+            }
+            break;
+        case SM_DRAG:
+            if ( e->sbdrag ) {
+                int t = k->my - ED_PANE_Y - 1;          // (above or below the bar: the first or the last place)
+                ed_scrolltrack( e, t < 0 ? 0 : t >= e->sbtrack ? e->sbtrack - 1 : t );
+            }
+            break;
+        case SM_RELEASE:
+            e->sbdrag = false;
+            break;
+        default:
+            break;
+    }
+}
+
 // without any line the editor is always inserting: the cursor waits in the line number pane
 static void ed_idle( ed_t* e ) {
     if ( !e->quit && !e->ins && e->cur == 0 ) {
@@ -862,6 +990,9 @@ void fulledit_run( repl_t* repl, const scrdrv_t* drv ) {
     ed_loadcur( e, 0 );
     ed_idle( e );
     int state = drv->begin();
+    if ( drv->wantmouse != 0 ) {
+        drv->wantmouse( true );
+    }
     ed_draw( e );
     while ( !e->quit ) {
         scrkey_t k;
@@ -878,6 +1009,12 @@ void fulledit_run( repl_t* repl, const scrdrv_t* drv ) {
                 any = true;
             } else if ( k.kind == SK_CLOSED || k.kind == SK_EOF ) {
                 e->quit = true;
+            } else if ( k.kind == SK_MOUSE ) {
+                if ( !e->toosmall ) {
+                    ed_mouse( e, &k );
+                    ed_idle( e );
+                    any = true;
+                }
             } else if ( e->toosmall ) {
                 if ( k.kind == SK_ESCAPE ) {
                     e->quit = true;
@@ -895,6 +1032,9 @@ void fulledit_run( repl_t* repl, const scrdrv_t* drv ) {
         if ( any ) {
             ed_draw( e );
         }
+    }
+    if ( drv->wantmouse != 0 ) {
+        drv->wantmouse( false );
     }
     drv->end( state );
     ed_memcur = e->cur != 0 ? e->cur->lineno : LINENO_NONE;

@@ -564,6 +564,21 @@ int main( void ) {
             "a\033[<0;3;3M\033[<0;3;3m\033[<64;3;3M\033[<64;3;3M\033[<65;3;3M\033[<35;4;3Mb", "BYE\r" };
         static const char* const eM2[] = { "[ab]", "28,0,1,1,1" };
         failed += !pty_case( "screen mode: mouse reports inside typed keys are taken out; release, motion and the wheel", sM2, 5U, eM2, 2U );
+        // the mouse in the full-screen editor (a 24 x 80 terminal: panes in rows 2..23, the scroll bar in column 80; a report is col;row from 1): the wheel and
+        // the scroll bar scroll the view, the cursor is pulled to the first line shown; a marker typed afterwards shows where it is
+        static const char* const mkprog = "OPEN \"mem:p\" FOR OUTPUT AS #1:FOR I=1 TO 60:PRINT #1,I*10;\" REM n\":NEXT:CLOSE #1:LOAD \"mem:p\"\r";
+        static const char* const sW1[] = { mkprog, "EDIT\r", "\033[<65;5;5M\033[<65;5;5M", "Z", "\033", "LIST 60-80\r", "BYE\r" };
+        static const char* const eW1[] = { "\033[?1049h", "70 ZREM" };
+        failed += !pty_case( "screen mode: the wheel scrolls the full-screen editor (two notches: 6 lines)", sW1, 7U, eW1, 2U );
+        static const char* const sW2[] = { mkprog, "EDIT\r", "\033[<0;80;23M\033[<0;80;23m", "Z", "\033", "LIST 10-30\r", "BYE\r" };
+        static const char* const eW2[] = { "\033[?1049h", "20 ZREM" };
+        failed += !pty_case( "screen mode: a click on the down arrow of the scroll bar scrolls one line", sW2, 7U, eW2, 2U );
+        static const char* const sW3[] = { mkprog, "EDIT\r", "\033[<0;80;12M\033[<0;80;12m", "Z", "\033", "LIST 180-200\r", "BYE\r" };
+        static const char* const eW3[] = { "\033[?1049h", "190 ZREM" };
+        failed += !pty_case( "screen mode: a click on the track of the scroll bar puts the view there", sW3, 7U, eW3, 2U );
+        static const char* const sW4[] = { mkprog, "EDIT\r", "\033[<0;80;4M\033[<32;80;12M\033[<32;80;23M\033[<0;80;23m", "Z", "\033", "LIST\r", "BYE\r" };
+        static const char* const eW4[] = { "\033[?1049h", "ZREM" };
+        failed += !pty_case( "screen mode: the thumb of the scroll bar can be dragged (a move with the button held)", sW4, 7U, eW4, 2U );
         // the shape is the terminal's own pointer (OSC 22), MOUSE HIDE hides the drawn one
         static const char* const sM3[] = { "10 MOUSE SHAPE CROSS:MOUSE POS 100,100:PRINT MOUSE(\"SHAPE\");MOUSE(\"VISIBLE\");MOUSE(\"X\");MOUSE(\"Y\")\r", "20 MOUSE HIDE:PRINT MOUSE(\"VISIBLE\")\r", "RUN\r", "BYE\r" };
         static const char* const eM3[] = { "\033]22;crosshair\033\\", "6-1100100", "\r\n0\r\n" };
