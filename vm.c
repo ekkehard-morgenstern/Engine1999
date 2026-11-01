@@ -2641,6 +2641,9 @@ static bool vm_gfx_check( vm_t* vm, int op, const double* a, int na, size_t slen
     bool ok = true;
     switch ( op ) {
         case GFXOP_LAYER:       ok = IN( 0, 0, 4 ) && IN( 1, 0, 1 ); break;
+        case GFXOP_MOUSEPOS:    ok = IN( 0, 0, 639 ) && IN( 1, 0, 299 ); break;
+        case GFXOP_MOUSESHAPE:  ok = IN( 0, 0, 11 ); break;
+        case GFXOP_MOUSETMO:    ok = IN( 0, 0, 3600 ); break;
         case GFXOP_PRIORITY:    ok = IN( 0, 0, 4 ) && IN( 1, 0, 4 ); break;
         case GFXOP_PALETTE:     ok = IN( 0, 0, 4 ) && IN( 1, 0, 255 ) && IN( 2, -2147483648.0, 4294967295.0 ); break;
         case GFXOP_PALNAME:     ok = IN( 0, 0, 4 ) && IN( 1, 0, 255 ); break;

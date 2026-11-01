@@ -32,6 +32,7 @@
 #include "tilescreen.h"
 #include "sprscreen.h"
 #include "cursors.h"
+#include "mouse.h"
 
 /*
 Automated test of the graphics backends without SDL: the drawing core (gfxcore.c), and what tilescreen.c, sprscreen.c and textscreen.c got
@@ -412,6 +413,112 @@ static void test_reserved( void ) {
     sprscr_init();
 }
 
+// -- the mouse (mouse.c): when the pointer is seen, what the program reads -----------------------------------------
+
+static void test_mouse( void ) {
+    sprscr_init();                                  // (installs the pointer's pictures: a hidden arrow)
+    mouse_init();
+    int x = 0, y = 0;
+    check( !cursors_visible() && mouse_get( MOUSEV_VISIBLE ) == 0 && MOUSE_DEFAULT_TIMEOUT == 3000, "the pointer starts hidden; the default is 3 s" );
+
+    // an event of the window shows it for 3 s
+    mouse_event_motion( 100, 50 );
+    check( mouse_tick( 1000 ) && cursors_visible() && mouse_get( MOUSEV_VISIBLE ) == 1, "moving the mouse shows the pointer" );
+    cursors_position( &x, &y );
+    check( x == 100 && y == 50 && mouse_get( MOUSEV_X ) == 100 && mouse_get( MOUSEV_Y ) == 50, "...at the mouse's position, and the program can read it" );
+    check( !mouse_tick( 3999 ) && cursors_visible(), "...it is still there just before 3 s are over" );
+    check( mouse_tick( 4000 ) && !cursors_visible() && mouse_get( MOUSEV_VISIBLE ) == 0, "...and hidden when they are" );
+    check( !mouse_tick( 9000 ) && !cursors_visible(), "...for good" );
+
+    // further movement restarts the 3 s
+    mouse_event_motion( 101, 50 ); mouse_tick( 10000 );
+    mouse_event_motion( 102, 50 ); mouse_tick( 12000 );
+    check( !mouse_tick( 14999 ) && cursors_visible() && mouse_tick( 15000 ) && !cursors_visible(), "every movement restarts the time" );
+
+    // the coordinates are clamped
+    mouse_event_motion( -5, 9999 ); mouse_tick( 16000 );
+    check( mouse_get( MOUSEV_X ) == 0 && mouse_get( MOUSEV_Y ) == 299, "events outside the layer are clamped" );
+
+    // buttons: held, latched, released
+    mouse_event_button( MOUSE_LEFT, true );
+    mouse_event_button( MOUSE_RIGHT, true );
+    mouse_event_button( MOUSE_LEFT, false );
+    check( mouse_get( MOUSEV_BUTTONS ) == MOUSE_RIGHT, "the buttons held down" );
+    check( mouse_get( MOUSEV_PRESSED ) == ( MOUSE_LEFT | MOUSE_RIGHT ) && mouse_get( MOUSEV_PRESSED ) == 0, "presses are latched, and cleared by reading them" );
+    check( mouse_get( MOUSEV_RELEASED ) == MOUSE_LEFT && mouse_get( MOUSEV_RELEASED ) == 0, "...so are releases" );
+    mouse_event_button( MOUSE_RIGHT, false ); mouse_event_button( MOUSE_MIDDLE, true ); mouse_event_button( 0, true );
+    check( mouse_get( MOUSEV_BUTTONS ) == MOUSE_MIDDLE, "the middle button; an unknown button counts for nothing" );
+    mouse_event_button( MOUSE_MIDDLE, false );
+    mouse_get( MOUSEV_PRESSED ); mouse_get( MOUSEV_RELEASED );
+    mouse_tick( 17000 );                            // (a button shows the pointer, too)
+    check( cursors_visible(), "a button press shows the pointer" );
+    mouse_tick( 20000 );
+    check( !cursors_visible(), "...for 3 s" );
+    mouse_event_wheel( 2 ); mouse_event_wheel( -1 ); mouse_event_wheel( 0 );
+    mouse_tick( 21000 );
+    check( cursors_visible() && mouse_get( MOUSEV_WHEEL ) == 1 && mouse_get( MOUSEV_WHEEL ) == 0, "the wheel shows the pointer; the steps add up and are cleared by reading" );
+    mouse_tick( 24000 );
+
+    // requests of the program
+    mouse_request_show();
+    check( mouse_tick( 30000 ) && cursors_visible() && !mouse_tick( 32999 ) && mouse_tick( 33000 ) && !cursors_visible(), "MOUSE SHOW: for 3 s" );
+    mouse_request_show(); mouse_tick( 40000 );
+    mouse_request_hide();
+    check( mouse_tick( 41000 ) && !cursors_visible(), "MOUSE HIDE: at once" );
+    mouse_request_show(); mouse_request_hide();
+    mouse_tick( 42000 );
+    check( !cursors_visible(), "the last request wins" );
+    mouse_request_hide(); mouse_request_show();
+    mouse_tick( 43000 );
+    check( cursors_visible(), "...in either order" );
+    mouse_tick( 50000 );
+    mouse_request_pos( 320, 150 );
+    int wx = -1, wy = -1;
+    check( mouse_tick( 51000 ) && cursors_visible() && mouse_get( MOUSEV_X ) == 320 && mouse_get( MOUSEV_Y ) == 150, "MOUSE POS moves the pointer and shows it" );
+    cursors_position( &x, &y );
+    check( x == 320 && y == 150 && mouse_warp_wanted( &wx, &wy ) && wx == 320 && wy == 150 && !mouse_warp_wanted( &wx, &wy ), "...and asks the window to follow, once" );
+    mouse_request_pos( 5000, -3 ); mouse_tick( 52000 );
+    check( mouse_get( MOUSEV_X ) == 639 && mouse_get( MOUSEV_Y ) == 0, "...clamped" );
+    mouse_tick( 60000 );
+    mouse_request_shape( CUR_HAND );
+    mouse_tick( 61000 );
+    check( cursors_shape() == CUR_HAND && mouse_get( MOUSEV_SHAPE ) == CUR_HAND && cursors_visible(), "MOUSE SHAPE changes the shape and shows the pointer" );
+    mouse_request_shape( 99 ); mouse_request_shape( -1 );
+    mouse_tick( 61500 );
+    check( cursors_shape() == CUR_HAND, "...a bad shape does nothing" );
+    mouse_tick( 70000 );
+    cursors_position( &x, &y );
+    check( !cursors_visible() && x == 639 && y == 0, "...the position is kept when the pointer is hidden" );
+
+    // a request is true for the program at once, before the screen thread has taken it
+    mouse_request_pos( 12, 34 ); mouse_request_shape( CUR_CROSS );
+    check( mouse_get( MOUSEV_X ) == 12 && mouse_get( MOUSEV_Y ) == 34 && mouse_get( MOUSEV_SHAPE ) == CUR_CROSS && mouse_get( MOUSEV_VISIBLE ) == 1, "MOUSE POS / SHAPE are seen by MOUSE() at once" );
+    mouse_request_hide();
+    check( mouse_get( MOUSEV_VISIBLE ) == 0, "MOUSE HIDE, too" );
+    mouse_tick( 70500 );
+    check( mouse_get( MOUSEV_X ) == 12 && mouse_get( MOUSEV_SHAPE ) == CUR_CROSS && mouse_get( MOUSEV_VISIBLE ) == 0, "...and still when the screen thread has taken them" );
+    mouse_tick( 75000 );
+
+    // the time
+    mouse_request_timeout( 500 );
+    mouse_event_motion( 1, 1 ); mouse_tick( 80000 );
+    check( !mouse_tick( 80499 ) && mouse_tick( 80500 ) && !cursors_visible(), "MOUSE TIMEOUT 0.5" );
+    mouse_request_timeout( 0 );
+    mouse_event_motion( 2, 2 ); mouse_tick( 90000 );
+    check( !mouse_tick( 900000 ) && cursors_visible(), "MOUSE TIMEOUT 0: the pointer stays" );
+    mouse_request_hide(); mouse_tick( 900001 );
+    check( !cursors_visible(), "...until MOUSE HIDE" );
+    mouse_request_timeout( -1 );
+    mouse_event_motion( 3, 3 ); mouse_tick( 1000000 );
+    check( !mouse_tick( 1002999 ) && mouse_tick( 1003000 ), "a negative time means the default again" );
+
+    // the direct use of cursors_* (sdltest3) has no timer
+    cursors_show( true );
+    check( !mouse_tick( 2000000 ) && cursors_visible(), "a pointer that was shown without the mouse module is left alone" );
+    cursors_show( false );
+    sprscr_init();
+}
+
 static void test_sprites( void ) {
     sprscr_init();
     tilescr_init();
@@ -622,6 +729,7 @@ int main( void ) {
     test_draw();
     test_tiles();
     test_reserved();
+    test_mouse();
     test_sprites();
     test_textscreen();
     test_reset();

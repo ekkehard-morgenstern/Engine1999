@@ -303,6 +303,7 @@
 #define TOK_ENV         UINT8_C(250)        // ENV$ function (an environment variable)
 #define TOK_BREAK       UINT8_C(251)        // BREAK keyword (BREAK ON / OFF: ESC is the break key / an ordinary key)
 #define TOK_KEY         UINT8_C(252)        // KEY function (is a key held down?)
+#define TOK_MOUSE       UINT8_C(253)        // MOUSE keyword (MOUSE SHOW|HIDE|POS|SHAPE|TIMEOUT, MOUSE("X") ...)
 #define TOK_NONE        UINT8_C(255)        // no token (!)
 
 // -- buffers ---------------------------------------------------------------

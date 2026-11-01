@@ -142,12 +142,13 @@ sys-noarg-str-call := sys-noarg-str .
 
 > The graphics functions (docs/graphics-subsystem.md) are a table in gfxops.c: RGB(r,g,b[,a]), POINT(x,y), TILE(x,y), and the named values
 > GFX("FRAME"), GFX("LAYER",n), GFX("PRIORITY",n), GFX("PALETTE",n,i), GFX("TARGET"), TXT("X"), TXT("Y"), TXT("FG"), TXT("BG"),
+> MOUSE("X"\|"Y"\|"B"\|"PRESSED"\|"RELEASED"\|"WHEEL"\|"SHAPE"\|"VISIBLE") (no further arguments),
 > TXT("CHAR",x,y), TXT("FGAT",x,y), TXT("BGAT",x,y), TXT("WIDTH"), TXT("HEIGHT"), SPRITE("X"\|"Y"\|"IMAGE"\|"ON"\|"HITS"\|"COLLIDE"\|"MOVING",n):
 > the name is a string literal and the number of arguments after it depends on the name.
 
 ```ebnf
 gfx-query-call := ( RGB | POINT | TILE ) "(" num-expr { "," num-expr } ")" |
-                  ( GFX | TXT | SPRITE ) "(" <string> { "," num-expr } ")" .
+                  ( GFX | TXT | SPRITE | MOUSE ) "(" <string> { "," num-expr } ")" .
 num-func-call := num-usr-fn-call | sys-num-fn-arg-call | sys-noarg-num-call | gfx-query-call .
 str-func-call := str-usr-fn-call | sys-str-fn-arg-call | sys-noarg-str-call .
 ```
@@ -592,7 +593,15 @@ design-row := "@" str-expr .
 
 ```ebnf
 on-collision-stmt := ON COLLISION ( goto-kw goto-target | OFF ) .
-gfx-all-stmt := gfx-stmt | txt-stmt | tile-stmt | sprite-stmt | cls-stmt | locate-stmt | color-stmt | symbol-stmt | design-stmt | design-row | on-collision-stmt .
+```
+
+> The mouse pointer (docs/basic-language.md "The mouse"): it is shown for 3 seconds after the mouse moves, a button is pressed, or SHOW, POS, SHAPE
+> are executed; HIDE hides it at once; TIMEOUT sets the seconds (0 = it stays). POS moves it (x 0..639, y 0..299). The shape is one of the words.
+
+```ebnf
+mouse-stmt := MOUSE ( SHOW | HIDE | POS num-expr "," num-expr | TIMEOUT num-expr |
+                          SHAPE ( ARROW | WAIT | BUSY | TEXT | HAND | GRAB | CROSS | SIZEH | SIZEV | MOVE | NO | HELP ) ) .
+gfx-all-stmt := gfx-stmt | txt-stmt | tile-stmt | sprite-stmt | mouse-stmt | cls-stmt | locate-stmt | color-stmt | symbol-stmt | design-stmt | design-row | on-collision-stmt .
 ```
 
 ## Statements and lines

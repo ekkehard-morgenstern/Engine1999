@@ -103,6 +103,14 @@ void sdlscr_cursor_show( bool on );
 void sdlscr_cursor_move( int x, int y );        // the hot spot of the shape to x, y of the sprite layer (0..639, 0..299)
 bool sdlscr_cursor_shape( int shape );          // false for a bad shape
 int  sdlscr_cursor_getshape( void );
+// the mouse (mouse.h): the pointer is shown for 3 s (or the MOUSE TIMEOUT) after the mouse does something or one of the requests below; the screen thread
+// does the work (nothing of cursor_* is to be mixed with these); sdlscr_mouse_get() takes MOUSEV_*
+void sdlscr_mouse_show( void );
+void sdlscr_mouse_hide( void );
+void sdlscr_mouse_pos( int x, int y );
+void sdlscr_mouse_shape( int shape );
+void sdlscr_mouse_timeout( int ms );
+int  sdlscr_mouse_get( int what );
 bool sdlscr_cursor_image( int image, uint8_t out[SPRITE_WIDTH * SPRITE_HEIGHT] );   // an image of the engine (the gallery: sdltest3)
 // is the key (a KEYID_* of keystate.h) held down now? (the keyboard state of SDL: updated by the event loop of the screen thread, read without a lock)
 bool sdlscr_keydown( int keyid );

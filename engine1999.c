@@ -34,6 +34,7 @@
 #include "basrepl.h"
 #include "basdebug.h"
 #include "gfxops.h"
+#include "mouse.h"
 #include "gfxcore.h"
 #include "sdlutil.h"
 #include "version.h"
@@ -1014,6 +1015,11 @@ static bool host_gfx_op( void* usrdata, int op, const double* a, int na, const c
         case GFXOP_TILEFILL:    sdlscr_tile_setcells( (const uint8_t*) s, slen ); break;
         case GFXOP_TILESCROLL:  sdlscr_scrolltiles( ( gi( a[0], 0 ) % TILE_WIDTH + TILE_WIDTH ) % TILE_WIDTH,
                                     ( gi( a[1], 0 ) % TILE_HEIGHT + TILE_HEIGHT ) % TILE_HEIGHT ); break;
+        case GFXOP_MOUSESHOW:   sdlscr_mouse_show(); break;
+        case GFXOP_MOUSEHIDE:   sdlscr_mouse_hide(); break;
+        case GFXOP_MOUSEPOS:    sdlscr_mouse_pos( gi( a[0], 0 ), gi( a[1], 0 ) ); break;
+        case GFXOP_MOUSESHAPE:  sdlscr_mouse_shape( gi( a[0], 0 ) ); break;
+        case GFXOP_MOUSETMO:    sdlscr_mouse_timeout( (int)( a[0] * 1000.0 + 0.5 ) ); break;
         case GFXOP_SPRDEF:      sdlscr_writesprite( gi( a[0], 0 ), (const uint8_t*) s ); break;
         case GFXOP_SPRGET:
             sdlscr_sprite_getmap( gi( a[0], 0 ), out );
@@ -1072,6 +1078,14 @@ static bool host_gfx_query( void* usrdata, int q, const double* a, int na, doubl
         case GFXQ_SPRHITS:      *result = (double) sdlscr_sprite_hits( gi( a[0], 0 ) ); break;
         case GFXQ_SPRCOLLIDE:   *result = sdlscr_sprite_collide( gi( a[0], 0 ) ); break;
         case GFXQ_SPRMOVING:    *result = sdlscr_sprite_moving( gi( a[0], 0 ) ) ? -1.0 : 0.0; break;
+        case GFXQ_MOUSEX:       *result = sdlscr_mouse_get( MOUSEV_X ); break;
+        case GFXQ_MOUSEY:       *result = sdlscr_mouse_get( MOUSEV_Y ); break;
+        case GFXQ_MOUSEB:       *result = sdlscr_mouse_get( MOUSEV_BUTTONS ); break;
+        case GFXQ_MOUSEPRESSED: *result = sdlscr_mouse_get( MOUSEV_PRESSED ); break;
+        case GFXQ_MOUSERELEASED: *result = sdlscr_mouse_get( MOUSEV_RELEASED ); break;
+        case GFXQ_MOUSEWHEEL:   *result = sdlscr_mouse_get( MOUSEV_WHEEL ); break;
+        case GFXQ_MOUSESHAPE:   *result = sdlscr_mouse_get( MOUSEV_SHAPE ); break;
+        case GFXQ_MOUSEVISIBLE: *result = sdlscr_mouse_get( MOUSEV_VISIBLE ) ? -1.0 : 0.0; break;
         case GFXQ_EVENT:        *result = sdlscr_sprite_nextevent(); break;
         default:                return false;
     }

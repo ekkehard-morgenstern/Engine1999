@@ -87,6 +87,11 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXOP_TILESET   52              // TILE SET x, y, n
 #define GFXOP_TILEFILL  53              // TILE FILL a$        (533 bytes)
 #define GFXOP_TILESCROLL 54             // TILE SCROLL sx, sy
+#define GFXOP_MOUSESHOW 80              // MOUSE SHOW
+#define GFXOP_MOUSEHIDE 81              // MOUSE HIDE
+#define GFXOP_MOUSEPOS  82              // MOUSE POS x, y
+#define GFXOP_MOUSESHAPE 83             // MOUSE SHAPE name
+#define GFXOP_MOUSETMO  84              // MOUSE TIMEOUT seconds
 #define GFXOP_SPRDEF    60              // SPRITE DEF n, a$    (384 bytes)
 #define GFXOP_SPRGET    61              // SPRITE GET n, a$
 #define GFXOP_SPRSEQ    62              // SPRITE SEQ a, a$    (animation sequence: the image numbers)
@@ -124,10 +129,18 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXQ_SPRHITS    44              // SPRITE("HITS", n): the indicator bits (1 sprite, 2 tile), cleared
 #define GFXQ_SPRCOLLIDE 45              // SPRITE("COLLIDE", n): the other sprite, -1 none
 #define GFXQ_SPRMOVING  46
+#define GFXQ_MOUSEX     100             // MOUSE("X"): 0..639, the sprite layer's coordinates
+#define GFXQ_MOUSEY     101             // MOUSE("Y"): 0..299
+#define GFXQ_MOUSEB     102             // MOUSE("B"): the buttons held down (1 left, 2 right, 4 middle)
+#define GFXQ_MOUSEPRESSED 103           // MOUSE("PRESSED"): buttons pressed since the last call
+#define GFXQ_MOUSERELEASED 104          // MOUSE("RELEASED")
+#define GFXQ_MOUSEWHEEL 105             // MOUSE("WHEEL"): wheel steps since the last call (up is positive)
+#define GFXQ_MOUSESHAPE 106             // MOUSE("SHAPE")
+#define GFXQ_MOUSEVISIBLE 107           // MOUSE("VISIBLE"): -1 / 0
 #define GFXQ_EVENT      90              // (the VM polls it for ON COLLISION) a sprite with a new collision, -1 none
 
 typedef struct _gfxcmd_t {
-    const char* group;                  // "GFX", "TXT", "TILE", "SPRITE", or "" for the statements that are reserved words themselves
+    const char* group;                  // "GFX", "TXT", "TILE", "SPRITE", "MOUSE", or "" for the statements that are reserved words themselves
     const char* name;                   // the word after the group (the statement itself for group ""; "" for the position form of SPRITE)
     uint16_t    op;
     const char* sig;
@@ -136,7 +149,7 @@ typedef struct _gfxcmd_t {
 } gfxcmd_t;
 
 typedef struct _gfxquery_t {
-    const char* group;                  // "GFX", "TXT", "SPRITE" (selector first); "" for POINT / RGB / TILE (no selector)
+    const char* group;                  // "GFX", "TXT", "SPRITE", "MOUSE" (selector first); "" for POINT / RGB / TILE (no selector)
     const char* sel;
     uint16_t    q;
     int         minargs, maxargs;       // numeric arguments after the selector

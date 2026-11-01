@@ -484,6 +484,43 @@ Ten new reserved words (`GFX SPRITE TILE TXT DESIGN RGB POINT CLS LOCATE COLOR`)
 picture rows, the functions, the collision rules and the internals are in [graphics-subsystem.md](graphics-subsystem.md); the example is `demos/gfx.bas`.
 `CHR$(0)`..`CHR$(31)` are drawn as two letter glyphs on the text screen (see "Binary strings").
 
+## The mouse: `MOUSE` *(2026-11-01, window host)*
+
+```
+MOUSE SHOW                  MOUSE HIDE                  MOUSE POS 320,150
+MOUSE SHAPE HAND            MOUSE TIMEOUT 5             IF MOUSE("B") AND 1 THEN GFX PSET MOUSE("X"),MOUSE("Y")
+```
+
+The pointer is the reserved sprite 255 (`docs/graphics-subsystem.md`, "Reserved sprites and the mouse pointer"). It is **not on the screen all the time, so that the text can be
+read**: it appears when the mouse moves, a button is pressed or the wheel turns, and when the program executes `MOUSE SHOW`, `MOUSE POS` or `MOUSE SHAPE`; it disappears **3 seconds
+after the last of these** (every new one starts the 3 seconds again). The window's own pointer is not drawn above the Engine's window.
+
+| Statement | Effect |
+|---|---|
+| `MOUSE SHOW` | shows the pointer (for 3 seconds, or the `TIMEOUT`) |
+| `MOUSE HIDE` | hides it at once (it comes back when the mouse is used again) |
+| `MOUSE POS x, y` | puts the pointer at `x` 0..639, `y` 0..299 (the coordinates of the sprite layer; the real mouse is moved with it where the system allows it) and shows it |
+| `MOUSE SHAPE name` | the shape: `ARROW`, `WAIT`, `BUSY`, `TEXT`, `HAND`, `GRAB`, `CROSS`, `SIZEH`, `SIZEV`, `MOVE`, `NO`, `HELP` (the pictures: `sdltest3`); shows the pointer |
+| `MOUSE TIMEOUT s` | seconds the pointer stays after its last sign of life, 0..3600, default 3; **0 = it stays until `MOUSE HIDE`** |
+
+| Function | Value |
+|---|---|
+| `MOUSE("X")`, `MOUSE("Y")` | the position, 0..639 and 0..299 (also while the pointer is hidden) |
+| `MOUSE("B")` | the buttons held down now, as bits: 1 left, 2 right, 4 middle |
+| `MOUSE("PRESSED")`, `MOUSE("RELEASED")` | the buttons pressed / released **since the last call** of this function (same bits), so a click between two looks of the program is not lost; reading clears them |
+| `MOUSE("WHEEL")` | the wheel steps since the last call (up is positive), cleared by reading |
+| `MOUSE("SHAPE")` | the shape's number (0 `ARROW` .. 11 `HELP`, in the order above) |
+| `MOUSE("VISIBLE")` | -1 if the pointer is shown now, else 0 |
+
+A request is true for the program at once: after `MOUSE POS 5,6`, `MOUSE("X")` is 5, and after `MOUSE HIDE`, `MOUSE("VISIBLE")` is 0, even if the screen has not been redrawn yet (the
+screen thread carries the requests out, once per frame, and nothing is locked). The word `MOUSE` is reserved (token 253); `SHOW`, `HIDE`, `POS`, ... are words recognized after it and
+stay free as variable names. Arguments out of range are "Illegal argument". **Console host and console executables: not available yet** (the statements give "Not available in the
+console host", the functions "Illegal argument"; xterm mouse reporting is next in the roadmap). The demo is `demos/mouse.bas`.
+
+Design decisions I took (revisit if unwanted): the statements and functions are a table in `gfxops.c` like `SPRITE` (one new reserved word); positions are those of the sprite layer
+(640 x 300), not of the text screen; `MOUSE POS` out of the layer is an error instead of being clamped (as `GFX` does); the buttons are bits (1 left, 2 right, 4 middle); latched
+`PRESSED` / `RELEASED` instead of events (`ON MOUSE` is not there yet); the timeout is in seconds.
+
 ## Sound: `SOUND`, `PLAY`, `WAVE`, `TEMPO`, `PLAYING()`
 
 Statements of the language (`bascomp.ebnf` `sound-stmt`, `cgenprog.c`); everything is queued and returns at once. Channels are 1..8.

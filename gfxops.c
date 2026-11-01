@@ -32,6 +32,7 @@
 
 // sub-keywords are listed in the order of their numbers; ON / OFF: OFF = 0, ON = 1
 #define DRAWMODES   "SET,CLEAR,XOR,OR,AND"
+#define MOUSESHAPES "ARROW,WAIT,BUSY,TEXT,HAND,GRAB,CROSS,SIZEH,SIZEV,MOVE,NO,HELP"      // the order of CUR_* (cursors.h)
 
 static const gfxcmd_t cmds[] = {
     { "GFX", "LAYER",    GFXOP_LAYER,    "nw",       "OFF,ON", false },
@@ -69,6 +70,11 @@ static const gfxcmd_t cmds[] = {
     { "TILE", "SET",     GFXOP_TILESET,  "nnn",      0, false },
     { "TILE", "FILL",    GFXOP_TILEFILL, "s",        0, false },
     { "TILE", "SCROLL",  GFXOP_TILESCROLL,"nn",      0, false },
+    { "MOUSE", "SHOW",   GFXOP_MOUSESHOW,"",         0, false },
+    { "MOUSE", "HIDE",   GFXOP_MOUSEHIDE,"",         0, false },
+    { "MOUSE", "POS",    GFXOP_MOUSEPOS, "nn",       0, false },
+    { "MOUSE", "SHAPE",  GFXOP_MOUSESHAPE,"w",       MOUSESHAPES, false },
+    { "MOUSE", "TIMEOUT",GFXOP_MOUSETMO, "n",        0, false },
     { "SPRITE", "DEF",   GFXOP_SPRDEF,   "ns",       0, false },
     { "SPRITE", "GET",   GFXOP_SPRGET,   "nv",       0, false },
     { "SPRITE", "SEQ",   GFXOP_SPRSEQ,   "ns",       0, false },
@@ -100,6 +106,14 @@ static const gfxquery_t queries[] = {
     { "TXT",    "BGAT",     GFXQ_TXTBGAT,   2, 2 },
     { "TXT",    "WIDTH",    GFXQ_TXTWIDTH,  0, 0 },
     { "TXT",    "HEIGHT",   GFXQ_TXTHEIGHT, 0, 0 },
+    { "MOUSE",  "X",        GFXQ_MOUSEX,    0, 0 },
+    { "MOUSE",  "Y",        GFXQ_MOUSEY,    0, 0 },
+    { "MOUSE",  "B",        GFXQ_MOUSEB,    0, 0 },
+    { "MOUSE",  "PRESSED",  GFXQ_MOUSEPRESSED, 0, 0 },
+    { "MOUSE",  "RELEASED", GFXQ_MOUSERELEASED, 0, 0 },
+    { "MOUSE",  "WHEEL",    GFXQ_MOUSEWHEEL,0, 0 },
+    { "MOUSE",  "SHAPE",    GFXQ_MOUSESHAPE,0, 0 },
+    { "MOUSE",  "VISIBLE",  GFXQ_MOUSEVISIBLE, 0, 0 },
     { "SPRITE", "X",        GFXQ_SPRX,      1, 1 },
     { "SPRITE", "Y",        GFXQ_SPRY,      1, 1 },
     { "SPRITE", "IMAGE",    GFXQ_SPRIMAGE,  1, 1 },

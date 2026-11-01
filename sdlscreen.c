@@ -38,6 +38,7 @@
 #include "sdlkeys.h"
 #include "keystate.h"
 #include "cursors.h"
+#include "mouse.h"
 #include "scrdrv.h"
 
 #define NLAYERS 5
@@ -340,6 +341,8 @@ static int sdlscr_worker( void* arg ) {
     txtscr_init();
     tilescr_init();
     sprscr_init();
+    mouse_init();
+    SDL_ShowCursor( SDL_DISABLE );          // the pointer is the engine's own (cursors.h, mouse.h): shown for a while after the mouse did something
 
     // sdllay_disable( &layers[LAY_BG]  );
     // sdllay_disable( &layers[LAY_TIL] );
@@ -382,6 +385,19 @@ static int sdlscr_worker( void* arg ) {
             sdllay_set_modified( &layers[LAY_TXT] );
         }
 
+        {
+            // the mouse pointer: events and requests are taken, the pointer is shown or hidden (the only place that changes it)
+            struct timespec mts;
+            uint64_t mnow = sdlutil_getnsec( &mts ) / UINT64_C(1000000);
+            mouse_tick( mnow );
+            int wx = 0, wy = 0;
+            if ( mouse_warp_wanted( &wx, &wy ) ) {
+                int px = 0, py = 0;
+                SDL_RenderLogicalToWindow( renderer, (float) wx, (float) wy, &px, &py );
+                SDL_WarpMouseInWindow( window, px, py );
+            }
+        }
+
         if ( sdllay_enabled( &layers[LAY_SPR] ) ) {
             sprscr_periodicals();
             if ( sprscr_changed() ) {
@@ -407,6 +423,21 @@ static int sdlscr_worker( void* arg ) {
                     if ( sdlscr_keydebug ) {
                         sdlscr_debugkeyevent( &ev.key );
                     }
+                    break;
+                case SDL_MOUSEMOTION:
+                    mouse_event_motion( ev.motion.x, ev.motion.y );
+                    break;
+                case SDL_MOUSEBUTTONDOWN:
+                case SDL_MOUSEBUTTONUP: {
+                    // (the position is that of the renderer's logical size, the sprite layer's: 640 x 300)
+                    mouse_event_motion( ev.button.x, ev.button.y );
+                    int b = ev.button.button == SDL_BUTTON_LEFT ? MOUSE_LEFT : ev.button.button == SDL_BUTTON_RIGHT ? MOUSE_RIGHT :
+                        ev.button.button == SDL_BUTTON_MIDDLE ? MOUSE_MIDDLE : 0;
+                    mouse_event_button( b, ty == SDL_MOUSEBUTTONDOWN );
+                    break;
+                }
+                case SDL_MOUSEWHEEL:
+                    mouse_event_wheel( ev.wheel.direction == SDL_MOUSEWHEEL_FLIPPED ? -ev.wheel.y : ev.wheel.y );
                     break;
                 case SDL_TEXTINPUT:
                     if ( sdlscr_keydebug ) {
@@ -679,6 +710,14 @@ void sdlscr_setbreak( void ) {
     sdlscr_breakreq = true;
     sdlev_raise( SDLEV_BREAK );
 }
+
+// the mouse (mouse.h): requests of the program, values of the screen thread
+void sdlscr_mouse_show( void )                  { mouse_request_show(); }
+void sdlscr_mouse_hide( void )                  { mouse_request_hide(); }
+void sdlscr_mouse_pos( int x, int y )           { mouse_request_pos( x, y ); }
+void sdlscr_mouse_shape( int shape )            { mouse_request_shape( shape ); }
+void sdlscr_mouse_timeout( int ms )             { mouse_request_timeout( ms ); }
+int  sdlscr_mouse_get( int what )               { return mouse_get( what ); }
 
 void sdlscr_cursor_show( bool on ) {
     cursors_show( on );

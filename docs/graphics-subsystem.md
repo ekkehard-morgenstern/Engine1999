@@ -146,9 +146,21 @@ top left, a dark edge at the bottom right, a lighter and a darker band inside (a
 a program that changes that palette changes the pointer. The shapes are 10 to 14 pixels wide: `ARROW` (blue, hot spot at the tip), `WAIT` (a teal glass badge with a comet of eight colored
 dots that turns, 8 frames), `BUSY` (the arrow with a small glass badge and a comet, 8 frames), `TEXT` (I-beam, teal), `HAND` (pointing, gold), `GRAB` (a closed hand for dragging, gold), `CROSS`
 (crosshair, green), `SIZEH`, `SIZEV` (resize arrows, purple), `MOVE` (four arrows, purple), `NO` (a red ring and slash around frosted glass) and `HELP` (the arrow with a gold bubble that holds a
-question mark). `cursors_set()`, `cursors_move()` (the hot spot to x, y), `cursors_show()`; the window has `sdlscr_cursor_*`. **Nothing in BASIC reaches the pointer yet**: the mouse
-support (statements to show it and to choose the shape, the mouse position and buttons) comes next. `sdltest3` shows all shapes on a light, a dark and a striped background (the stripes show the translucency) and lets you move
+question mark). `cursors_set()`, `cursors_move()` (the hot spot to x, y), `cursors_show()`; the window has `sdlscr_cursor_*`. **BASIC reaches the pointer with `MOUSE`** (see the next section and `docs/basic-language.md`, "The mouse"). `sdltest3` shows all shapes on a light, a dark and a striped background (the stripes show the translucency) and lets you move
 and change the real pointer with the keyboard (N / P, W A S D).
+
+### The mouse (2026-11-01)
+
+`mouse.[ch]` (no SDL) is the logic: the position and buttons from the events of the window, the requests of the program, and **when the pointer is seen** (3 s after every event or
+`MOUSE SHOW` / `POS` / `SHAPE`, `MOUSE TIMEOUT` changes the time, `MOUSE HIDE` hides at once). The statements and functions are rows of the table in `gfxops.c` (group `MOUSE`:
+`GFXOP_MOUSESHOW .. GFXOP_MOUSETMO` 80..84, `GFXQ_MOUSEX .. GFXQ_MOUSEVISIBLE` 100..107), `host_gfx_op` / `host_gfx_query` in `engine1999.c` call `sdlscr_mouse_*`. **Threads, with no
+locks (the owner's rule):** everything that changes the pointer (`cursors_*`, so the sprite) is done by `mouse_tick()` in the screen thread, once per frame; the screen thread also reads
+the SDL events (`SDL_MOUSEMOTION`, `SDL_MOUSEBUTTONDOWN/UP`, `SDL_MOUSEWHEEL`, in the renderer's logical coordinates, which are the sprite layer's 640 x 300) and posts them to the same
+module. The program's thread only posts requests (words that are exchanged to 0 when taken, the last request wins; `POS` and `SHAPE` are separate words, so neither is lost) and reads
+the values the screen thread published (button presses and wheel steps are latched with atomic or / add and cleared by the reader's exchange). A read looks at the pending requests first, so it
+agrees with what the program has just asked for. The window's own pointer is switched off (`SDL_ShowCursor`), `MOUSE POS` warps it with `SDL_RenderLogicalToWindow` / `SDL_WarpMouseInWindow`.
+Tests: `gfxtest1` (the state machine with a made-up clock: 33 checks), `vmtest1` (the statements and functions with the logging host), the real window under Xvfb (events, buttons, wheel,
+the 3 s, `POS`, `SHAPE`, `TIMEOUT 0`).
 
 ### `GFX RESET`
 
