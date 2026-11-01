@@ -554,6 +554,16 @@ The 4096 extended instructions are as follows:
                             a player without a pad reads 0. An unknown name is "Illegal argument". The state is joy.h (no host callback).
     0001 10000011       JOYD - set the dead zone ( d -- ) C=0 P=0
                             JOY DEADZONE d: 0 .. 0.9 for all pads, else "Illegal argument".
+    0001 10000100       FRAM - wait for the screen refresh ( n -- ) C=0 P=0
+                            FRAME n: waits until n more frames have begun (the host's frame counter, GFX("FRAME"); the console host counts 60 a second); n = 0 returns at once, 1 is the next refresh.
+                            Like WAIT it gives way to timer handlers and stops with Break; n is 0 .. 3600, else "Illegal argument".
+    0001 10000101       JOYS - a game controller text ( name player -- s ) C=0 P=0
+                            JOY$(name$, player): "NAME" is the pad's name ("" for a player without a pad); other names are "Illegal argument"; player as for JOYQ.
+    0001 10000110       KEYS - a key event text ( name -- s ) C=0 P=0
+                            KEY$("EVENT"): the oldest key event that has not been read: "+A" (the key went down) or "-A" (it was let go), the name as KEY("name") knows it ("A", "SPACE", "LEFT", "F5",
+                            "LSHIFT" ...); "" if there is none. The window queues the events (64 at most, a key repeat is none) while a program runs; other names are "Illegal argument";
+                            without a host that has key events (the console host) it is the error "KEY is not available in this host".
+    COLT with the parameter bit 16: ON KEY OFF (16) / GOSUB (17) / GOTO (18): a handler for the key events (the bit 8 is ON JOY, 4 is ON MOUSE).
     COLT with the parameter bit 8: ON JOY OFF (8) / GOSUB (9) / GOTO (10) (the bit 4 is ON MOUSE).
     MATH kinds 14..16: CEIL, LOG2, LOG10 (kind 1, INT, is FLOOR as well).
 
@@ -746,5 +756,8 @@ The 4096 extended instructions are as follows:
 #define INS_ERRR        UINT16_C(0X181)
 #define INS_JOYQ        UINT16_C(0X182)
 #define INS_JOYD        UINT16_C(0X183)
+#define INS_FRAM        UINT16_C(0X184)
+#define INS_JOYS        UINT16_C(0X185)
+#define INS_KEYS        UINT16_C(0X186)
 
 #endif

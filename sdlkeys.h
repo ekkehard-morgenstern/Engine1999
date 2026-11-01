@@ -48,6 +48,7 @@ without a display.
 // the key (KS_*) and the modifiers (KSMOD_*) of an SDL key press: false for keys that have no sequence. Keypad keys count as the cursor
 // block when Num Lock is off. SDL's KMOD_GUI is KSMOD_META; Caps Lock, Num Lock and AltGr (KMOD_MODE) are not modifiers here.
 bool sdlkeys_map( SDL_Keycode sym, Uint16 sdlmods, int* key, int* mods );
+int  sdlkeys_keyid( SDL_Keycode sym );        // the keystate.h id of an SDL key (the keys of KEY("name")), 0 if it has none
 
 // the canonical sequence of an SDL key press in buf (at least KEYSEQ_MAXLEN bytes); returns its length, 0 if the key has none
 size_t sdlkeys_sequence( SDL_Keycode sym, Uint16 sdlmods, char* buf );

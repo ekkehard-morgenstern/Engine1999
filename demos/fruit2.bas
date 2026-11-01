@@ -4,6 +4,7 @@
 4 ' in the executable (it shows with the command line option --engine1999-about).
 10 ' FRUIT INVADERS II - a Space Invaders style game for Engine1999, written with procedures.
 20 ' Keys: LEFT / RIGHT or A / D move the cannon (only while the key is held), SPACE or UP fires, P = pause, Q = quit.
+21 ' Game controller (optional, JOY): the D-pad or the left stick moves, A or the right trigger fires, START pauses, BACK quits.
 30 ' Shoot the invading fruit before it lands. Cherries are worth 50 points, strawberries 40, apples 30, oranges 20, lemons 10, the flying
 40 ' pineapple 50 to 300. Now and then a banana falls out of a fruit: catch it with the cannon for rapid fire (two bullets at a time).
 50 ' What is new compared to Fruit Invaders (fruit.bas):
@@ -861,9 +862,11 @@
 8570 PROC KEYS
 8580   LOCAL K$,K,N
 8582   PD=0
-8584   IF KEY("LEFT") OR KEY("A") THEN PD=PD-1
-8586   IF KEY("RIGHT") OR KEY("D") THEN PD=PD+1
-8588   IF KEY("SPACE") OR KEY("UP") THEN FQ=1
+8584   IF KEY("LEFT") OR KEY("A") OR JOY("LEFT") OR JOY("LX")<-0.4 THEN PD=PD-1
+8586   IF KEY("RIGHT") OR KEY("D") OR JOY("RIGHT") OR JOY("LX")>0.4 THEN PD=PD+1
+8587   IF JOY("BACK") THEN QT=1
+8588   IF KEY("SPACE") OR KEY("UP") OR JOY("A") OR JOY("RT")>0.4 THEN FQ=1
+8589   PS0=PSK:PSK=JOY("START"):IF PSK AND NOT PS0 THEN CALL PAUSE
 8590   REPEAT
 8600     K$=INKEY$
 8610     IF K$<>"" THEN
@@ -878,11 +881,13 @@
 8740 PROC PAUSE
 8750   LOCAL K$
 8760   CALL TXTAT(36,17,"PAUSED",201)
+8765   WHILE JOY("START"):GFX VSYNC:WEND
 8770   REPEAT
 8780     GFX VSYNC
 8790     K$=INKEY$
-8800   UNTIL K$="p" OR K$="P" OR K$="q" OR K$="Q"
-8810   IF K$="q" OR K$="Q" THEN QT=1
+8800   UNTIL K$="p" OR K$="P" OR K$="q" OR K$="Q" OR JOY("START") OR JOY("BACK")
+8810   IF K$="q" OR K$="Q" OR JOY("BACK") THEN QT=1
+8815   WHILE JOY("START"):GFX VSYNC:WEND:PSK=0
 8820   TXT FILL 36,17,41,17,32
 8830 END PROC
 8840 ' ====================================================================== the cannon and its bullets
@@ -1356,7 +1361,7 @@
 13520   CALL TXTAT(18,19,"HIGH SCORE "+FN PAD$(HI,6),201)
 13530   CALL TXTAT(10,21,"LEFT / RIGHT or A / D move   SPACE fire   P pause   Q quit",200)
 13540   CALL TXTAT(10,22,"Catch the banana for rapid fire!",202)
-13550   CALL TXTAT(19,24,"Press SPACE to start",203)
+13550   CALL TXTAT(17,24,"Press SPACE or A to start",203)
 13560   PLAY "T150 W1 V0.3 O4 E8 G8 >C8 E4 D8 C8 <B8 >C4","T150 W2 V0.25 O3 C4 G4 C4 G4","T150 W1 V0.12 O5 C16 E16 G16 >C16 C16 E16 G16 >C16"
 13570   QT=0
 13580   REPEAT
@@ -1371,8 +1376,8 @@
 13670     SPRITE 5,96+5*88,166+INT(7*SIN(T/9+5)),10+F
 13680     CALL STARS
 13690     K$=INKEY$
-13700   UNTIL K$=" " OR K$="q" OR K$="Q"
-13710   IF K$="q" OR K$="Q" THEN QT=1
+13700   UNTIL K$=" " OR K$="q" OR K$="Q" OR JOY("A") OR JOY("START") OR JOY("BACK")
+13710   IF K$="q" OR K$="Q" OR JOY("BACK") THEN QT=1
 13720 END PROC
 13730 PROC PLAYGAME
 13740   SC=0:LV=3:WV=1:NX=1500:OV=0:LANDED=0:QT=0

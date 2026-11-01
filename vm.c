@@ -103,6 +103,8 @@ void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem ) {
     vm->mouseseen = 0;
     vm->joypending = false;
     vm->joyseen = 0;
+    vm->keypending = false;
+    vm->keyseen = 0;
     vm->design.active = false;
     snprintf( vm->addrcur, sizeof(vm->addrcur), "file" );
     snprintf( vm->addrprev, sizeof(vm->addrprev), "file" );
@@ -2367,6 +2369,47 @@ static bool vm_joy_query( vm_t* vm ) {
     return vm_dpush_num( vm, v );
 }
 
+// KEYS ( name -- s ): KEY$("EVENT"): the oldest key event that has not been read, "+A" (down) / "-A" (up), "" if there is none
+static bool vm_key_event_text( vm_t* vm ) {
+    char* name = 0; size_t len = 0;
+    if ( !vm_dpop_bstr( vm, &name, &len ) ) {
+        return false;
+    }
+    bool isevent = len == 5U && strncasecmp( name, "EVENT", 5U ) == 0;
+    free( name );
+    if ( !isevent ) {
+        return vm_error( vm, "Illegal argument" );
+    }
+    if ( vm->keydown == 0 ) {
+        return vm_error( vm, "KEY is not available in this host" );
+    }
+    int id = 0; bool down = false;
+    char text[24];
+    if ( !keystate_event_pop( &id, &down ) ) {
+        text[0] = '\0';
+    } else {
+        snprintf( text, sizeof(text), "%c%s", down ? '+' : '-', keystate_name( id ) );
+    }
+    return vm_push_bytes( vm, text, strlen( text ) );
+}
+
+// JOYS ( name player -- s ): JOY$(name$, player)
+static bool vm_joy_text( vm_t* vm ) {
+    double pl = 0.0;
+    char* name = 0; size_t len = 0;
+    if ( !vm_dpop_num( vm, &pl ) || !vm_dpop_bstr( vm, &name, &len ) ) {
+        return false;
+    }
+    bool isname = len == 4U && strncasecmp( name, "NAME", 4U ) == 0;
+    free( name );
+    if ( !isname || !( pl >= 1.0 && pl < (double)( JOY_MAXPLAYERS + 1 ) ) ) {
+        return vm_error( vm, "Illegal argument" );
+    }
+    char copy[64];
+    snprintf( copy, sizeof(copy), "%s", joy_name( (int) pl - 1 ) );        // (a copy: the pad may be unplugged while the text is made)
+    return vm_push_bytes( vm, copy, strlen( copy ) );
+}
+
 // JOYD ( d -- ): JOY DEADZONE d
 static bool vm_joy_deadzone( vm_t* vm ) {
     double d = 0.0;
@@ -2723,7 +2766,7 @@ static int vm_irq_find( const vm_t* vm, uint64_t now ) {
     int level = vm->irqdepth > 0 ? vm->irq[ vm->irqdepth - 1 ].timer : -1;
     for ( int i=VM_NTIMERS-1; i > level; --i ) {
         if ( i == VM_COLSLOT ? vm->timers[i].active && vm->colpending : i == VM_MOUSESLOT ? vm->timers[i].active && vm->mousepending :
-                i == VM_JOYSLOT ? vm->timers[i].active && vm->joypending :
+                i == VM_KEYSLOT ? vm->timers[i].active && vm->keypending : i == VM_JOYSLOT ? vm->timers[i].active && vm->joypending :
                 vm->timers[i].active && vm->timers[i].due <= now ) {
             return i;
         }
@@ -2735,7 +2778,9 @@ static int vm_irq_find( const vm_t* vm, uint64_t now ) {
 static bool vm_irq_fire( vm_t* vm, int t ) {
     vm_timer_t* tm = &vm->timers[t];
     uint32_t target = tm->target;
-    if ( t == VM_JOYSLOT ) {
+    if ( t == VM_KEYSLOT ) {
+        vm->keypending = false;         // the key handler stays set
+    } else if ( t == VM_JOYSLOT ) {
         vm->joypending = false;         // the controller handler stays set
     } else if ( t == VM_MOUSESLOT ) {
         vm->mousepending = false;       // the mouse handler stays set, too
@@ -2794,6 +2839,13 @@ static bool vm_irq_poll( vm_t* vm, uint64_t steps ) {
         if ( vm->gfx->query( vm->userdata, GFXQ_MOUSEEVENT, 0, 0, &cnt ) && (uint32_t) cnt != vm->mouseseen ) {
             vm->mouseseen = (uint32_t) cnt;
             vm->mousepending = true;
+        }
+    }
+    if ( vm->timers[VM_KEYSLOT].active && !vm->keypending && ( safe || ( steps & 31U ) == 0 ) ) {
+        uint32_t cnt = keystate_event_count();
+        if ( cnt != vm->keyseen ) {
+            vm->keyseen = cnt;
+            vm->keypending = true;
         }
     }
     if ( vm->timers[VM_JOYSLOT].active && !vm->joypending && ( safe || ( steps & 31U ) == 0 ) ) {
@@ -3067,13 +3119,17 @@ static bool vm_design_row( vm_t* vm ) {
 
 // COLT ( -- ) ( r: target -- ): ON COLLISION GOSUB (1) / GOTO (2), OFF (0); with the bit 4: ON MOUSE (5, 6, 4)
 static bool vm_set_collision( vm_t* vm, uint16_t param ) {
-    bool joy = ( param & 8U ) != 0;
-    bool mouse = !joy && ( param & 4U ) != 0;
-    vm_timer_t* tm = &vm->timers[ joy ? VM_JOYSLOT : mouse ? VM_MOUSESLOT : VM_COLSLOT ];
+    bool key = ( param & 16U ) != 0;
+    bool joy = !key && ( param & 8U ) != 0;
+    bool mouse = !key && !joy && ( param & 4U ) != 0;
+    vm_timer_t* tm = &vm->timers[ key ? VM_KEYSLOT : joy ? VM_JOYSLOT : mouse ? VM_MOUSESLOT : VM_COLSLOT ];
     param &= 3U;
+    if ( key && param != 0 && vm->keydown == 0 ) {
+        return vm_error( vm, "KEY is not available in this host" );        // (no key events in the console host: a terminal does not tell when a key is let go)
+    }
     if ( param == 0 ) {
         tm->active = false;
-        if ( joy ) vm->joypending = false; else if ( mouse ) vm->mousepending = false; else vm->colpending = false;
+        if ( key ) vm->keypending = false; else if ( joy ) vm->joypending = false; else if ( mouse ) vm->mousepending = false; else vm->colpending = false;
         vm_count_timers( vm );
         return true;
     }
@@ -3085,7 +3141,10 @@ static bool vm_set_collision( vm_t* vm, uint16_t param ) {
     tm->every = false;
     tm->gosub = param == 1;
     tm->target = target;
-    if ( joy ) {
+    if ( key ) {
+        vm->keypending = false;
+        vm->keyseen = keystate_event_count();       // (only what happens from now on counts)
+    } else if ( joy ) {
         vm->joypending = false;
         vm->joyseen = joy_events();     // (only what happens from now on counts)
     } else if ( mouse ) {
@@ -3098,6 +3157,51 @@ static bool vm_set_collision( vm_t* vm, uint16_t param ) {
     }
     vm_count_timers( vm );
     return true;
+}
+
+// the host's frame counter (GFX("FRAME")); without a host that has one, 60 frames a second by the clock
+static bool vm_frame_count( vm_t* vm, uint64_t* pcount ) {
+    double cnt = 0.0;
+    if ( vm->gfx && vm->gfx->query && vm->gfx->query( vm->userdata, GFXQ_FRAME, 0, 0, &cnt ) ) {
+        *pcount = cnt > 0.0 ? (uint64_t) cnt : 0U;
+        return true;
+    }
+    *pcount = vm_now_ns() / UINT64_C(16666667);
+    return true;
+}
+
+// FRAM ( n -- ): FRAME n waits until n more frames have begun
+static bool vm_frame( vm_t* vm, uint32_t inspc ) {
+    double n = 0.0;
+    if ( !vm_dpop_num( vm, &n ) ) {
+        return false;
+    }
+    if ( !( n >= 0.0 && n <= 3600.0 ) ) {
+        return vm_error( vm, "Illegal argument" );
+    }
+    uint64_t cnt = 0;
+    vm_frame_count( vm, &cnt );
+    uint64_t target = cnt + (uint64_t) n;
+    for (;;) {
+        vm_frame_count( vm, &cnt );
+        if ( cnt >= target ) {
+            return true;
+        }
+        if ( vm_interrupted( vm ) ) {
+            return vm_error( vm, "Break" );
+        }
+        if ( vm->numtimers > 0 && vm_irq_find( vm, vm_now_ns() ) >= 0 ) {
+            // a handler is due: it runs now and the rest of the frames are waited for afterwards (FRAME starts again)
+            if ( !vm_dpush_num( vm, (double)( target - cnt ) ) ) {
+                return false;
+            }
+            vm->pc = inspc;
+            vm->irqsafe = true;
+            return true;
+        }
+        struct timespec nap = { 0, 1000000L };      // (1 ms: the frame is 16.7 ms)
+        nanosleep( &nap, 0 );
+    }
 }
 
 // WAIT ( n -- ): sleeps n/60 s; asks the interrupt callback every 10 ms
@@ -3851,6 +3955,7 @@ static bool vm_step( vm_t* vm ) {
         case INS_MON: return vm_monitor_request( vm );
         case INS_SND: return vm_sound( vm, param16 );
         case INS_WAIT: return vm_wait( vm, inspc );
+        case INS_FRAM: return vm_frame( vm, inspc );
         case INS_HLT: vm->pc = vm->cgen->codesize; return true;
         case INS_OPEN: return vm_open_channel( vm, param16 != 0 );
         case INS_CLOS: return vm_close_channel( vm );
@@ -3862,6 +3967,8 @@ static bool vm_step( vm_t* vm ) {
         case INS_MATH: return vm_math( vm, param16 );
         case INS_MTH2: return vm_math2( vm, param16 );
         case INS_JOYQ: return vm_joy_query( vm );
+        case INS_JOYS: return vm_joy_text( vm );
+        case INS_KEYS: return vm_key_event_text( vm );
         case INS_JOYD: return vm_joy_deadzone( vm );
         case INS_STRN: return vm_string_n( vm, param16 );
         case INS_RAND: return vm_randomize( vm, param16 != 0 );
@@ -4088,6 +4195,8 @@ bool vm_begin( vm_t* vm, uint32_t start ) {
     vm->colpending = false;
     vm->mousepending = false;
     vm->joypending = false;
+    vm->keypending = false;
+    keystate_event_clear();                             // (events of the run before are forgotten)
     vm->design.active = false;
     vm->errset = vm->errgosub = vm->errinhandler = vm->errcaught = false;      // the error handler ends with the run, too
     vm->resumestate = 0;

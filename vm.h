@@ -205,7 +205,8 @@ typedef struct _vm_sound_t {
 #define VM_COLSLOT          4           // the ON COLLISION handler lives in the slot behind them
 #define VM_MOUSESLOT        5           // ... and the ON MOUSE handler behind that (the highest priority)
 #define VM_JOYSLOT          6           // ... and the ON JOY handler behind that (the highest priority of all)
-#define VM_NTIMERS          7
+#define VM_KEYSLOT          7           // ... and the ON KEY handler (the key events of the window), above all of them
+#define VM_NTIMERS          8
 
 #define VM_ADDRLEN          20
 
@@ -304,6 +305,8 @@ typedef struct _vm_t {
     double          rndlast;        // the last number RND returned (RND(0) gives it again)
     bool            colpending;     // (internal) the host reported a sprite collision that the ON COLLISION handler has not seen yet
     bool            mousepending;   // (internal) the mouse counter changed and the ON MOUSE handler has not seen it yet
+    bool            keypending;     // (internal) a key event has come and the ON KEY handler has not seen it yet
+    uint32_t        keyseen;        // (internal) keystate_event_count() at the last look
     bool            joypending;     // (internal) the controller event counter changed and the ON JOY handler has not seen it yet
     uint32_t        joyseen;        // (internal) joy_events() at the last look
     uint32_t        mouseseen;      // (internal) the host's count of mouse events (button presses and releases, wheel steps) at the last look

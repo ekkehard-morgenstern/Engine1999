@@ -7,6 +7,7 @@
 30 ' jump the gaps, hurdles, cars and birds, and use your drill to make holes in the girders: a rust ball or slime that walks into a hole is trapped,
 40 ' and when the hole closes again, it is gone for a while. You have no weapon of any kind.
 50 ' Keys: LEFT / RIGHT (or A / D) walk, UP / DOWN (or W / S) climb a ladder - you move only while the key is held -, SPACE jump,
+51 ' Game controller (optional, JOY): the D-pad or the left stick walks and climbs, A jumps, X / LB and B / RB drill left / right, Y music, START pauses, BACK quits.
 60 '       Z / X (or , / .) drill a hole in the girder to your left / right, P pause, M music on / off, Q quit.
 70 ' The world is 120 x 40 tiles (1920 x 960 pixels, three screens wide and three and a half high) and scrolls smoothly. It lives in the
 80 ' RAM of the machine (POKE and PEEK), one byte per tile; PEEK$ cuts a row of the visible part out of it, TILE FILL puts it on the screen.
@@ -1489,29 +1490,34 @@
 14850 PROC KEYS
 14855   LOCAL K$,K,N,L,R,U,D,JD,ZD,XD
 14860   ' walking and climbing follow the keys, only while they are held: LEFT / RIGHT (A / D) walk, UP / DOWN (W / S) climb
-14865   L=KEY("LEFT") OR KEY("A")
-14870   R=KEY("RIGHT") OR KEY("D")
+14865   L=KEY("LEFT") OR KEY("A") OR JOY("LEFT") OR JOY("LX")<-0.4
+14870   R=KEY("RIGHT") OR KEY("D") OR JOY("RIGHT") OR JOY("LX")>0.4
 14875   DIRX=0
 14880   IF L AND NOT R THEN DIRX=-1:FACE=-1
 14885   IF R AND NOT L THEN DIRX=1:FACE=1
-14890   U=KEY("UP") OR KEY("W")
-14895   D=KEY("DOWN") OR KEY("S")
+14890   U=KEY("UP") OR KEY("W") OR JOY("UP") OR JOY("LY")<-0.4
+14895   D=KEY("DOWN") OR KEY("S") OR JOY("DOWN") OR JOY("LY")>0.4
 14900   CLM=0
 14905   IF U AND NOT D THEN CLM=-1:CLMT=24
 14910   IF D AND NOT U THEN CLM=1:CLMT=24
 14915   ' SPACE jumps: a new press stays valid for 6 frames, so it does not have to be exactly on time
-14920   JD=KEY("SPACE")
+14920   JD=KEY("SPACE") OR JOY("A")
 14925   IF JD AND NOT JK THEN JBUF=6
 14930   JK=JD
 14935   JREQ=0
 14940   IF JBUF>0 THEN JREQ=1:JBUF=JBUF-1
 14945   ' Z / X (or , / .) drill a hole to the left / right: one hole for each press
-14950   ZD=KEY("Z") OR KEY(",")
-14955   XD=KEY("X") OR KEY(".")
+14950   ZD=KEY("Z") OR KEY(",") OR JOY("X") OR JOY("LB")
+14955   XD=KEY("X") OR KEY(".") OR JOY("B") OR JOY("RB")
 14960   IF ZD AND NOT ZK THEN DREQ=-1
 14965   IF XD AND NOT XK THEN DREQ=1
 14970   ZK=ZD:XK=XD
-14975   ' Q, M and P are single presses
+14972   ' on a pad: Y switches the music, START pauses, BACK quits
+14973   MYD=JOY("Y"):IF MYD AND NOT MYK THEN CALL MUSICSWITCH
+14974   MYK=MYD
+14975   PS0=PSK:PSK=JOY("START"):IF PSK AND NOT PS0 THEN CALL PAUSE
+14976   IF JOY("BACK") THEN QT=1
+14977   ' Q, M and P are single presses
 14980   N=0
 14985   REPEAT
 14990     K$=INKEY$
@@ -1528,11 +1534,13 @@
 15070 PROC PAUSE
 15080   LOCAL K$
 15090   CALL TXTAT(33,10,"  PAUSED  ",201)
+15095   WHILE JOY("START"):GFX VSYNC:WEND
 15100   REPEAT
 15110     GFX VSYNC
 15120     K$=INKEY$
-15130   UNTIL K$="p" OR K$="P" OR K$="q" OR K$="Q"
-15140   IF K$="q" OR K$="Q" THEN QT=1
+15130   UNTIL K$="p" OR K$="P" OR K$="q" OR K$="Q" OR JOY("START") OR JOY("BACK")
+15140   IF K$="q" OR K$="Q" OR JOY("BACK") THEN QT=1
+15145   WHILE JOY("START"):GFX VSYNC:WEND:PSK=0
 15150   TXT FILL 33,10,42,10,32
 15160 END PROC
 15170 ' ====================================================================== the player
@@ -1993,7 +2001,7 @@
 19720   CALL TXTAT(11,15,"  LEFT / RIGHT or A / D walk   UP / DOWN or W / S climb       ",200)
 19730   CALL TXTAT(11,16,"  SPACE jump   Z / X drill a hole   P pause   M music   Q quit",200)
 19740   CALL TXTAT(11,18,"  Reach the ice cream stand on top of the tower!             ",202)
-19750   CALL TXTAT(11,20,"  BEST HEIGHT "+FN PAD$(HI,3)+" meters      Press SPACE to start  ",203)
+19750   CALL TXTAT(11,20,"  BEST HEIGHT "+FN PAD$(HI,3)+" meters   Press SPACE or A to start",203)
 19760   FOR I=24 TO 29
 19770     SPRITE I,ON
 19780   NEXT I
@@ -2014,8 +2022,8 @@
 19930     NEXT I
 19940     SPRITE 29,312,44+INT(5*SIN(T/12)),31+(T\20) MOD 2
 19950     K$=INKEY$
-19960   UNTIL K$=" " OR K$="q" OR K$="Q"
-19970   IF K$="q" OR K$="Q" THEN QT=1
+19960   UNTIL K$=" " OR K$="q" OR K$="Q" OR JOY("A") OR JOY("START") OR JOY("BACK")
+19970   IF K$="q" OR K$="Q" OR JOY("BACK") THEN QT=1
 19980   SPRITE 29,OFF
 19990 END PROC
 20000 PROC PLAYGAME

@@ -85,6 +85,58 @@ int keystate_id( const char* name, size_t len ) {
     return -1;
 }
 
+const char* keystate_name( int id ) {
+    static char one[2][2];
+    static int n = 0;
+    if ( id > 32 && id < 127 ) {
+        char* p = one[ n++ & 1 ];                    // (a letter in upper case; two buffers so that two names can be used at once)
+        p[0] = (char)( id >= 'a' && id <= 'z' ? id - 'a' + 'A' : id );
+        p[1] = '\0';
+        return p;
+    }
+    for ( const keyname_t* k = keynames; k->name != 0; ++k ) {
+        if ( k->id == id && id != KEYID_ANY ) {
+            return k->name;                          // (the first name of an id is its canonical one: RETURN before ENTER)
+        }
+    }
+    return "?";
+}
+
+static uint16_t  evid[KEYEV_SIZE];
+static uint8_t   evdown[KEYEV_SIZE];
+static uint32_t  evhead = 0, evtail = 0, evtotal = 0;
+
+void keystate_event_push( int id, bool down ) {
+    uint32_t h = __atomic_load_n( &evhead, __ATOMIC_RELAXED ), t = __atomic_load_n( &evtail, __ATOMIC_ACQUIRE );
+    if ( h - t >= KEYEV_SIZE || id <= 0 || id > 65535 ) {
+        return;
+    }
+    evid[ h % KEYEV_SIZE ] = (uint16_t) id;
+    evdown[ h % KEYEV_SIZE ] = down ? 1 : 0;
+    __atomic_store_n( &evhead, h + 1U, __ATOMIC_RELEASE );
+    __atomic_and_fetch( &evtotal, UINT32_C(0x7FFFFFFF), __ATOMIC_ACQ_REL );
+    __atomic_add_fetch( &evtotal, 1U, __ATOMIC_ACQ_REL );
+}
+
+bool keystate_event_pop( int* id, bool* down ) {
+    uint32_t t = __atomic_load_n( &evtail, __ATOMIC_RELAXED ), h = __atomic_load_n( &evhead, __ATOMIC_ACQUIRE );
+    if ( t == h ) {
+        return false;
+    }
+    *id = evid[ t % KEYEV_SIZE ];
+    *down = evdown[ t % KEYEV_SIZE ] != 0;
+    __atomic_store_n( &evtail, t + 1U, __ATOMIC_RELEASE );
+    return true;
+}
+
+uint32_t keystate_event_count( void ) {
+    return __atomic_load_n( &evtotal, __ATOMIC_ACQUIRE );
+}
+
+void keystate_event_clear( void ) {
+    __atomic_store_n( &evtail, __atomic_load_n( &evhead, __ATOMIC_ACQUIRE ), __ATOMIC_RELEASE );
+}
+
 int keystate_ks( int id ) {
     return id >= KEYID_KS && id < KEYID_KS + KS_COUNT ? id - KEYID_KS : KS_NONE;
 }

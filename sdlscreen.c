@@ -505,11 +505,23 @@ static int sdlscr_worker( void* arg ) {
                         }
                         break;
                     }
+                    if ( sdlscr_pollinput && !ev.key.repeat ) {         // (a running program: the key events of ON KEY and KEY$("EVENT"))
+                        int kid = sdlkeys_keyid( ev.key.keysym.sym );
+                        if ( kid > 0 ) {
+                            keystate_event_push( kid, true );
+                        }
+                    }
                     sdlscr_handlekey( ev.key.keysym.sym );
                     break;
                 case SDL_KEYUP:
                     if ( sdlscr_keydebug ) {
                         sdlscr_debugkeyevent( &ev.key );
+                    }
+                    if ( sdlscr_pollinput ) {
+                        int kid = sdlkeys_keyid( ev.key.keysym.sym );
+                        if ( kid > 0 ) {
+                            keystate_event_push( kid, false );
+                        }
                     }
                     break;
                 case SDL_MOUSEMOTION:

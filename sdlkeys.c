@@ -29,6 +29,7 @@
 
 
 #include "sdlkeys.h"
+#include "keystate.h"
 
 bool sdlkeys_map( SDL_Keycode sym, Uint16 sdlmods, int* key, int* mods ) {
     int k = KS_NONE;
@@ -89,4 +90,39 @@ size_t sdlkeys_sequence( SDL_Keycode sym, Uint16 sdlmods, char* buf ) {
         return 0;
     }
     return keyseq_make( key, mods, buf );
+}
+
+// the key id (keystate.h) of an SDL key: what KEY("name") and the key events call it
+int sdlkeys_keyid( SDL_Keycode sym ) {
+    if ( sym >= 32 && sym < 127 ) {
+        return (int) sym;                           // (SDL's symbols of the letters are lower case already)
+    }
+    switch ( sym ) {
+        case SDLK_RETURN:       return KEYID_RETURN;
+        case SDLK_KP_ENTER:     return KEYID_KPENTER;
+        case SDLK_ESCAPE:       return KEYID_ESC;
+        case SDLK_TAB:          return KEYID_TAB;
+        case SDLK_BACKSPACE:    return KEYID_BACKSPACE;
+        case SDLK_LSHIFT:       return KEYID_LSHIFT;
+        case SDLK_RSHIFT:       return KEYID_RSHIFT;
+        case SDLK_LCTRL:        return KEYID_LCTRL;
+        case SDLK_RCTRL:        return KEYID_RCTRL;
+        case SDLK_LALT:         return KEYID_LALT;
+        case SDLK_RALT:         return KEYID_RALT;
+        case SDLK_KP_PLUS:      return KEYID_KPPLUS;
+        case SDLK_KP_MINUS:     return KEYID_KPMINUS;
+        case SDLK_KP_MULTIPLY:  return KEYID_KPMUL;
+        case SDLK_KP_DIVIDE:    return KEYID_KPDIV;
+        case SDLK_KP_PERIOD:    return KEYID_KPDOT;
+        case SDLK_KP_0:         return KEYID_KP0;
+        case SDLK_KP_1: case SDLK_KP_2: case SDLK_KP_3: case SDLK_KP_4: case SDLK_KP_5: case SDLK_KP_6: case SDLK_KP_7: case SDLK_KP_8: case SDLK_KP_9:
+            return KEYID_KP0 + (int)( sym - SDLK_KP_1 ) + 1;
+        default:
+            break;
+    }
+    int key = 0, mods = 0;
+    if ( sdlkeys_map( sym, 0, &key, &mods ) && key > KS_NONE && key < KS_COUNT ) {
+        return KEYID_KS + key;                      // the cursor keys, HOME .. PGDN, F1 .. F12
+    }
+    return 0;
 }

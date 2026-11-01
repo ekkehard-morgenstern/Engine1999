@@ -101,6 +101,8 @@ sys-str-fn-2-arg-call := ( TOK_BIN | TOK_QUA | TOK_OCT | TOK_DEC | TOK_HEX ) TOK
                          -- an environment variable ("" if it is not set); the arguments come from the command line of engine1999c or of a built program
                          TOK_ARG TOK_STRING TOK_LPAREN num-expr TOK_RPAREN |
                          TOK_ENV TOK_STRING TOK_LPAREN str-expr TOK_RPAREN |
+                         -- KEY$("EVENT") is the oldest key event that has not been read: "+A" (down) or "-A" (up), "" if there is none (window host)
+                         TOK_KEY TOK_STRING TOK_LPAREN str-expr TOK_RPAREN |
                          -- PEEK$(addr, length) is read like BIN$ (the length is mandatory: "Illegal argument" without it)
                          TOK_PEEK TOK_STRING TOK_LPAREN num-expr [ TOK_COMMA num-expr ] TOK_RPAREN |
                          ( TOK_LEFT | TOK_RIGHT ) TOK_STRING TOK_LPAREN str-expr TOK_COMMA num-expr TOK_RPAREN |
@@ -111,9 +113,11 @@ sys-str-fn-2-arg-call := ( TOK_BIN | TOK_QUA | TOK_OCT | TOK_DEC | TOK_HEX ) TOK
 -- STRING$(n,c) n copies of the character code c (0..255) or of the first character of the string c. These five are extension words: TOK_XFUNC plus
 -- one byte (the grammar writes them by name). JOY(name$ [, player]) reads a game controller (player 1..4, 1 by default): name$ is a button ("A" "B" "X" "Y" "LB"
 -- "RB" "BACK" "START" "GUIDE" "LS" "RS" "UP" "DOWN" "LEFT" "RIGHT" "SHARE": -1 held, 0 not), an axis ("LX" "LY" "RX" "RY": -1..1, up is negative; "LT" "RT": 0..1) or
--- "CONNECTED", "COUNT", "BUTTONS", "PRESSED", "RELEASED", "EVENTS", "DEADZONE"; a player without a pad reads 0.
+-- "CONNECTED", "COUNT", "BUTTONS", "PRESSED", "RELEASED", "EVENTS", "DEADZONE"; a player without a pad reads 0. JOY$("NAME" [, player]) is the name of the pad.
+-- FRAME [n] waits for the next n screen refreshes.
+frame-stmt := FRAME [ num-expr ] .
 xfunc-call := ( MIN | MAX | ATAN2 ) TOK_LPAREN num-expr TOK_COMMA num-expr TOK_RPAREN |
-              JOY TOK_LPAREN str-expr [ TOK_COMMA num-expr ] TOK_RPAREN |
+              JOY [ TOK_STRING ] TOK_LPAREN str-expr [ TOK_COMMA num-expr ] TOK_RPAREN |
               SPACE TOK_STRING TOK_LPAREN num-expr TOK_RPAREN |
               STRING TOK_STRING TOK_LPAREN num-expr TOK_COMMA expr TOK_RPAREN .
 
@@ -418,6 +422,8 @@ error-stmt := ERROR num-expr .
 -- plugged in or out (not when a stick moves).
 joy-stmt := JOY DEADZONE num-expr .
 on-joy-stmt := TOK_ON JOY ( goto-kw goto-target | TOK_OFF ) .
+-- ON KEY runs a handler when a key goes down or is let go (window host; KEY$("EVENT") tells which).
+on-key-stmt := TOK_ON TOK_KEY ( goto-kw goto-target | TOK_OFF ) .
 -- Numeric functions: INT FIX ABS SGN SQR SIN COS TAN ATN EXP LOG RND ( num-expr ) (RND alone is RND(1)); PI. \ (integer division) and MOD
 -- are at the level of * and /. RANDOMIZE [ seed ] seeds RND.
 randomize-stmt := TOK_RANDOMIZE [ num-expr ] .
@@ -480,7 +486,7 @@ gfx-all-stmt := gfx-stmt | txt-stmt | tile-stmt | sprite-stmt | mouse-stmt | on-
 -- Several statements on a line are separated by a colon; a line may end with a comment (an apostrophe).
 prog-stmt := gfx-all-stmt | load-stmt | run-stmt | merge-stmt | chain-stmt | files-stmt | build-stmt | bye-stmt | timer-stmt | list-stmt | new-stmt | clear-stmt |
              delete-stmt | renum-stmt | edit-stmt | monitor-stmt | sound-stmt | wait-stmt | on-error-stmt | randomize-stmt | angle-stmt |
-             cont-stmt | trace-stmt | break-stmt | auto-stmt | poke-stmt | error-stmt | joy-stmt | on-joy-stmt .
+             cont-stmt | trace-stmt | break-stmt | auto-stmt | poke-stmt | error-stmt | joy-stmt | on-joy-stmt | on-key-stmt | frame-stmt .
 
 stmt := io-stmt | prog-stmt | assign-stmt | control-flow-stmt .
 stmt-list := stmt { TOK_COLON stmt } .

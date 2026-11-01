@@ -72,6 +72,16 @@ terminal sent the key).
 #define KEYID_KS        512     // + a keyseq_key_t: the cursor keys, HOME .. PGDN, F1 .. F12
 #define KEYID_MAX       (KEYID_KS + KS_COUNT)
 
+// The key events (ON KEY, KEY$("EVENT")): the host that knows when a key goes down and up (the window) pushes them, the program reads them. A ring of KEYEV_SIZE events,
+// one producer (the screen thread) and one consumer (the program), atomic indices, no locks; when the ring is full the new event is dropped (a handler that
+// reads them as they come never loses one).
+#define KEYEV_SIZE      64
+void     keystate_event_push( int id, bool down );      // the producer
+bool     keystate_event_pop( int* id, bool* down );     // the consumer: the oldest event, false if there is none
+uint32_t keystate_event_count( void );                  // the events pushed so far (wraps at 2^31; ON KEY looks for a change)
+void     keystate_event_clear( void );                  // the consumer forgets what is waiting (a run starts)
+const char* keystate_name( int id );                    // the canonical name of a key id ("A", "SPACE", "LEFT", "F5", "LSHIFT", "KP5" ...), "?" if there is none
+
 int keystate_id( const char* name, size_t len );        // the id of a key name, -1 if it is none
 int keystate_ks( int id );                              // the keyseq_key_t of an id of the KEYID_KS range, KS_NONE for any other
 

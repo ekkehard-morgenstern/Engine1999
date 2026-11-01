@@ -4,6 +4,7 @@
 4 ' in the executable (it shows with the command line option --engine1999-about).
 10 ' FRUIT INVADERS - a Space Invaders style game for Engine1999.
 20 ' Keys: LEFT / RIGHT or A / D move the cannon (only while the key is held), SPACE or UP fires (hold it for rapid fire), P = pause, Q = quit.
+21 ' Game controller (optional, JOY): the D-pad or the left stick moves, A or the right trigger fires, START pauses, BACK quits.
 30 ' Shoot the invading fruit before it lands. Cherries are worth 30 points, apples 20, oranges 10, the pineapple 50 to 300.
 40 ' The pictures are DESIGN rows (see docs/graphics-subsystem.md); the sounds are SFX effects; the shields are drawn on the graphics layer
 50 ' and crumble where a bomb or a bullet hits them (POINT tells what is there).
@@ -245,11 +246,13 @@
 2410 RETURN
 2420 ' ---------------------------------------------------------------------------------------------- keys
 2430 LABEL KEYS
-2432 ' the cannon moves while LEFT / RIGHT (or A / D) is held; SPACE (or UP) fires
+2432 ' the cannon moves while LEFT / RIGHT (or A / D, the D-pad or the left stick) is held; SPACE (or UP, A, the right trigger) fires; START pauses, BACK quits
 2434 PD=0
-2436 IF KEY("LEFT") OR KEY("A") THEN PD=PD-1
-2438 IF KEY("RIGHT") OR KEY("D") THEN PD=PD+1
-2439 IF KEY("SPACE") OR KEY("UP") THEN FQ=1
+2436 IF KEY("LEFT") OR KEY("A") OR JOY("LEFT") OR JOY("LX")<-0.4 THEN PD=PD-1
+2438 IF KEY("RIGHT") OR KEY("D") OR JOY("RIGHT") OR JOY("LX")>0.4 THEN PD=PD+1
+2439 IF KEY("SPACE") OR KEY("UP") OR JOY("A") OR JOY("RT")>0.4 THEN FQ=1
+2441 PS0=PSK:PSK=JOY("START"):IF PSK AND NOT PS0 THEN GOSUB PAUSE
+2443 IF JOY("BACK") THEN QT=1
 2440 N=0
 2450 REPEAT
 2460   K$=INKEY$
@@ -264,11 +267,13 @@
 2590 RETURN
 2600 LABEL PAUSE
 2610 COLOR 140:LOCATE 36,21:PRINT "PAUSED"; :COLOR 140
+2615 WHILE JOY("START"):GFX VSYNC:WEND
 2620 REPEAT
 2630   GFX VSYNC
 2640   K$=INKEY$
-2650 UNTIL K$="p" OR K$="P" OR K$="q" OR K$="Q"
-2660 IF K$="q" OR K$="Q" THEN QT=1
+2650 UNTIL K$="p" OR K$="P" OR K$="q" OR K$="Q" OR JOY("START") OR JOY("BACK")
+2660 IF K$="q" OR K$="Q" OR JOY("BACK") THEN QT=1
+2665 WHILE JOY("START"):GFX VSYNC:WEND
 2670 TXT FILL 36,21,41,21,32
 2680 RETURN
 2690 ' ---------------------------------------------------------------------------------------------- the cannon and its bullet
@@ -523,16 +528,16 @@
 5180 LOCATE 25,15:PRINT "=30         =20         =10         =50..300";
 5190 LOCATE 22,18:PRINT "LEFT / RIGHT or A / D   move";
 5200 LOCATE 22,19:PRINT "SPACE or UP   fire (hold for rapid fire)";
-5210 LOCATE 22,20:PRINT "P pause     Q quit";
-5230 COLOR 137:LOCATE 26,23:PRINT "Press SPACE to start";
+5210 LOCATE 22,20:PRINT "P pause     Q quit     (pad: START, BACK)";
+5230 COLOR 137:LOCATE 24,23:PRINT "Press SPACE or A to start";
 5240 COLOR 140
 5250 PLAY "T160 W1 V0.3 O4 E8 G8 >C8 E4","T160 W2 V0.3 O3 C4 G4"
 5260 QT=0
 5270 REPEAT
 5280   GFX VSYNC
 5290   K$=INKEY$
-5300 UNTIL K$=" " OR K$="q" OR K$="Q"
-5310 IF K$="q" OR K$="Q" THEN QT=1
+5300 UNTIL K$=" " OR K$="q" OR K$="Q" OR JOY("A") OR JOY("START") OR JOY("BACK")
+5310 IF K$="q" OR K$="Q" OR JOY("BACK") THEN QT=1
 5320 RETURN
 5330 LABEL PLAYGAME
 5340 SC=0:LV=3:WV=1:NX=1500:OV=0:LANDED=0:QT=0

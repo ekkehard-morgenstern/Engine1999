@@ -114,6 +114,8 @@ sys-str-fn-2-arg-call := ( BIN | QUA | OCT | DEC | HEX ) "$" "(" num-expr
     (* an environment variable ("" if it is not set); the arguments come from the command line of engine1999c or of a built program *)
                          ARG "$" "(" num-expr ")" |
                          ENV "$" "(" str-expr ")" |
+    (* KEY$("EVENT") is the oldest key event that has not been read: "+A" (down) or "-A" (up), "" if there is none (window host) *)
+                         KEY "$" "(" str-expr ")" |
     (* PEEK$(addr, length) is read like BIN$ (the length is mandatory: "Illegal argument" without it) *)
                          PEEK "$" "(" num-expr [ "," num-expr ] ")" |
                          ( LEFT | RIGHT ) "$" "(" str-expr "," num-expr ")" |
@@ -125,11 +127,13 @@ sys-str-fn-2-arg-call := ( BIN | QUA | OCT | DEC | HEX ) "$" "(" num-expr
 > STRING$(n,c) n copies of the character code c (0..255) or of the first character of the string c. These five are extension words: TOK\_XFUNC plus
 > one byte (the grammar writes them by name). JOY(name$ [, player]) reads a game controller (player 1..4, 1 by default): name$ is a button ("A" "B" "X" "Y" "LB"
 > "RB" "BACK" "START" "GUIDE" "LS" "RS" "UP" "DOWN" "LEFT" "RIGHT" "SHARE": -1 held, 0 not), an axis ("LX" "LY" "RX" "RY": -1..1, up is negative; "LT" "RT": 0..1) or
-> "CONNECTED", "COUNT", "BUTTONS", "PRESSED", "RELEASED", "EVENTS", "DEADZONE"; a player without a pad reads 0.
+> "CONNECTED", "COUNT", "BUTTONS", "PRESSED", "RELEASED", "EVENTS", "DEADZONE"; a player without a pad reads 0. JOY$("NAME" [, player]) is the name of the pad.
+> FRAME [n] waits for the next n screen refreshes.
 
 ```ebnf
+frame-stmt := FRAME [ num-expr ] .
 xfunc-call := ( MIN | MAX | ATAN2 ) "(" num-expr "," num-expr ")" |
-              JOY "(" str-expr [ "," num-expr ] ")" |
+              JOY [ "$" ] "(" str-expr [ "," num-expr ] ")" |
               SPACE "$" "(" num-expr ")" |
               STRING "$" "(" num-expr "," expr ")" .
 sys-num-fn-arg-call := sys-num-fn-1-arg-call | xfunc-call .
@@ -547,6 +551,12 @@ joy-stmt := JOY DEADZONE num-expr .
 on-joy-stmt := ON JOY ( goto-kw goto-target | OFF ) .
 ```
 
+> ON KEY runs a handler when a key goes down or is let go (window host; KEY$("EVENT") tells which).
+
+```ebnf
+on-key-stmt := ON KEY ( goto-kw goto-target | OFF ) .
+```
+
 > Numeric functions: INT FIX ABS SGN SQR SIN COS TAN ATN EXP LOG RND ( num-expr ) (RND alone is RND(1)); PI. \\ (integer division) and MOD
 > are at the level of \* and /. RANDOMIZE [ seed ] seeds RND.
 
@@ -643,7 +653,7 @@ gfx-all-stmt := gfx-stmt | txt-stmt | tile-stmt | sprite-stmt | mouse-stmt | on-
 ```ebnf
 prog-stmt := gfx-all-stmt | load-stmt | run-stmt | merge-stmt | chain-stmt | files-stmt | build-stmt | bye-stmt | timer-stmt | list-stmt | new-stmt | clear-stmt |
              delete-stmt | renum-stmt | edit-stmt | monitor-stmt | sound-stmt | wait-stmt | on-error-stmt | randomize-stmt | angle-stmt |
-             cont-stmt | trace-stmt | break-stmt | auto-stmt | poke-stmt | error-stmt | joy-stmt | on-joy-stmt .
+             cont-stmt | trace-stmt | break-stmt | auto-stmt | poke-stmt | error-stmt | joy-stmt | on-joy-stmt | on-key-stmt | frame-stmt .
 stmt := io-stmt | prog-stmt | assign-stmt | control-flow-stmt .
 stmt-list := stmt { ":" stmt } .
 stmt-line := [ stmt-list ] [ <'comment> ] <end-of-line> .

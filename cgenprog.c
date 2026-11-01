@@ -703,6 +703,20 @@ bool cgen_from_soundstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     return cgen_gen_snd( cgen, kind ) || cgen_out_of_code_memory( comp );
 }
 
+bool cgen_from_framestmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    // NT_FRAMESTMT    FRAME statement (no branch: 1 frame; or 1 branch of numeric expression)
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->type != NT_FRAMESTMT || node->numbranches > 1U ) {
+        return cgen_unexpected_node( comp );
+    }
+    if ( node->numbranches == 1U ? !cgen_from_numexpr( cgen, comp, node->branches[0] ) : !cgen_gen_phim( cgen, 1 ) ) {
+        return node->numbranches == 1U ? false : cgen_out_of_code_memory( comp );
+    }
+    return cgen_gen_fram( cgen ) || cgen_out_of_code_memory( comp );
+}
+
 bool cgen_from_joystmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     // NT_JOYSTMT      JOY statement (data: 1 byte of kind, 1 = DEADZONE; 1 branch of numeric expression)
     if ( node == NODE_NONE ) {

@@ -1659,7 +1659,14 @@ bool comp_eat_sysnumfn1argcall( compiler_t* comp, node_t** pnode ) {
         return true;
     }
     if ( tok == TOK_ASC || tok == TOK_VAL || tok == TOK_LEN || tok == TOK_CVI || tok == TOK_CVL || tok == TOK_CVS || tok == TOK_CVD || tok == TOK_KEY ) {
-        if ( !comp_fetchtok( comp ) ) {
+        if ( tok == TOK_KEY ) {                 // KEY( ... ) is the number function, KEY$( ... ) the string function: look at what follows the word
+            comp_push_context( comp );
+            if ( !comp_fetchtok( comp ) || comp->currtok == TOK_STRING ) {
+                comp_pop_context( comp );
+                return false;
+            }
+            comp_commit_context( comp );
+        } else if ( !comp_fetchtok( comp ) ) {
             return false;
         }
         if ( comp->currtok != TOK_LPAREN || !comp_fetchtok( comp ) ) {
@@ -1816,8 +1823,8 @@ OOM:        out_of_memory( comp );
             goto OOM;
         }
         return true;
-    } else if ( tok == TOK_ENV ) {
-        // TOK_ENV TOK_STRING TOK_LPAREN str-expr TOK_RPAREN .      (ENV$(name$): an environment variable)
+    } else if ( tok == TOK_ENV || tok == TOK_KEY ) {
+        // ( TOK_ENV | TOK_KEY ) TOK_STRING TOK_LPAREN str-expr TOK_RPAREN .      (ENV$(name$): an environment variable; KEY$("EVENT"): the next key event)
         if ( !comp_fetchtok( comp ) ) {
             return false;
         }
@@ -1980,16 +1987,35 @@ static bool comp_eat_xfunccall( compiler_t* comp, node_t** pnode, bool wantstr )
     }
     uint8_t xid = comp->currext;
     bool isstr = xid == XF_SPACE || xid == XF_STRING;
-    if ( isstr != wantstr ) {
-        return false;
-    }
-    if ( !comp_fetchtok( comp ) ) {
-        return false;
-    }
-    if ( isstr ) {
-        if ( comp->currtok != TOK_STRING || !comp_fetchtok( comp ) ) {
-            comp_error( comp, "String sigil '$' expected" );
+    if ( xid == XF_JOY ) {
+        // JOY( ... ) is the number function, JOY$( ... ) the string function (the pad's name): look at what follows the word
+        comp_push_context( comp );
+        if ( !comp_fetchtok( comp ) ) {
+            comp_pop_context( comp );
             return false;
+        }
+        isstr = comp->currtok == TOK_STRING;
+        if ( isstr != wantstr ) {
+            comp_pop_context( comp );
+            return false;
+        }
+        comp_commit_context( comp );
+        if ( isstr && !comp_fetchtok( comp ) ) {
+            comp_error( comp, "Opening parenthesis '(' expected" );
+            return false;
+        }
+    } else {
+        if ( isstr != wantstr ) {
+            return false;
+        }
+        if ( !comp_fetchtok( comp ) ) {
+            return false;
+        }
+        if ( isstr ) {
+            if ( comp->currtok != TOK_STRING || !comp_fetchtok( comp ) ) {
+                comp_error( comp, "String sigil '$' expected" );
+                return false;
+            }
         }
     }
     if ( comp->currtok != TOK_LPAREN || !comp_fetchtok( comp ) ) {
@@ -1998,7 +2024,7 @@ static bool comp_eat_xfunccall( compiler_t* comp, node_t** pnode, bool wantstr )
     }
     node_t* arg1 = NODE_NONE, *arg2 = NODE_NONE;
     if ( xid == XF_JOY ) {
-        // JOY ( str-expr [ TOK_COMMA num-expr ] )     the name of the value, the player (1 by default)
+        // JOY ( str-expr [ TOK_COMMA num-expr ] ) and JOY TOK_STRING ( str-expr [ TOK_COMMA num-expr ] )     the name of the value, the player (1 by default)
         if ( !comp_eat_strexpr( comp, &arg1 ) || arg1 == NODE_NONE ) {
             comp_error( comp, "String expression expected" );
             return false;
@@ -2021,7 +2047,7 @@ static bool comp_eat_xfunccall( compiler_t* comp, node_t** pnode, bool wantstr )
             return false;
         }
         uint8_t jdata[2] = { TOK_XFUNC, xid };
-        if ( !comp_create_node( comp, pnode, NT_SYSNUMFUNCARGCALL, UINT8_C(2), UINT16_C(2), jdata, arg1, arg2 ) || *pnode == NODE_NONE ) {
+        if ( !comp_create_node( comp, pnode, wantstr ? NT_SYSSTRFUNCARGCALL : NT_SYSNUMFUNCARGCALL, UINT8_C(2), UINT16_C(2), jdata, arg1, arg2 ) || *pnode == NODE_NONE ) {
             out_of_memory( comp );
             return false;
         }
@@ -3834,6 +3860,27 @@ bool comp_eat_errorstmt( compiler_t* comp, node_t** pnode ) {
     return true;
 }
 
+bool comp_eat_framestmt( compiler_t* comp, node_t** pnode ) {
+    // frame-stmt := FRAME [ num-expr ] .       (FRAME is an extension word)
+    if ( comp->currtok != TOK_XFUNC || comp->currext != XF_FRAME || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    node_t* count = NODE_NONE;
+    if ( comp->currtok != TOK_EOL && comp->currtok != TOK_COLON && comp->currtok != TOK_ELSE ) {
+        if ( !comp_eat_numexpr( comp, &count ) || count == NODE_NONE ) {
+            comp_error( comp, "Numeric expression expected" );
+            return false;
+        }
+    }
+    // NT_FRAMESTMT    FRAME statement (no data; no branch or 1 branch of numeric expression: the number of frames, 1 by default)
+    if ( !( count != NODE_NONE ? comp_create_node( comp, pnode, NT_FRAMESTMT, UINT8_C(1), UINT16_C(0), 0, count ) :
+            comp_create_node( comp, pnode, NT_FRAMESTMT, UINT8_C(0), UINT16_C(0), 0 ) ) || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
 bool comp_eat_joystmt( compiler_t* comp, node_t** pnode ) {
     // joy-stmt := JOY DEADZONE num-expr .       (JOY is an extension word; with a parenthesis it is the function)
     if ( comp->currtok != TOK_XFUNC || comp->currext != XF_JOY ) {
@@ -3979,6 +4026,9 @@ bool comp_eat_progstmt( compiler_t* comp, node_t** pnode ) {
         return true;
     }
     if ( comp_eat_joystmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_framestmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     return false;
@@ -5770,6 +5820,36 @@ bool comp_eat_onstmt( compiler_t* comp, node_t** pnode ) {
         }
         if ( !( target == NODE_NONE ? comp_create_node( comp, pnode, NT_ONMOUSESTMT, UINT8_C(0), UINT16_C(1), &kind ) :
                 comp_create_node( comp, pnode, NT_ONMOUSESTMT, UINT8_C(1), UINT16_C(1), &kind, target ) ) || *pnode == NODE_NONE ) {
+            out_of_memory( comp );
+            return false;
+        }
+        return true;
+    }
+    if ( comp->currtok == TOK_KEY ) {
+        // ON KEY GOTO target | ON KEY GOSUB target | ON KEY OFF     (a key went down or was let go: KEY$("EVENT") tells which)
+        if ( !comp_fetchtok( comp ) ) {
+            return false;
+        }
+        uint8_t kind = ERRT_OFF;
+        node_t* target = NODE_NONE;
+        if ( comp->currtok == TOK_OFF ) {
+            if ( !comp_fetchtok( comp ) ) {
+                return false;
+            }
+        } else {
+            uint8_t gotok = TOK_EOL;
+            if ( !comp_eat_gotokw( comp, &gotok ) ) {
+                comp_error( comp, "GOTO, GOSUB or OFF expected" );
+                return false;
+            }
+            kind = gotok == TOK_GOTO ? ERRT_GOTO : ERRT_GOSUB;
+            if ( !comp_eat_gototarget( comp, &target ) || target == NODE_NONE ) {
+                comp_error( comp, "Jump target expected" );
+                return false;
+            }
+        }
+        if ( !( target == NODE_NONE ? comp_create_node( comp, pnode, NT_ONKEYSTMT, UINT8_C(0), UINT16_C(1), &kind ) :
+                comp_create_node( comp, pnode, NT_ONKEYSTMT, UINT8_C(1), UINT16_C(1), &kind, target ) ) || *pnode == NODE_NONE ) {
             out_of_memory( comp );
             return false;
         }

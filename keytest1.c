@@ -224,8 +224,59 @@ static void test_keystate( void ) {
     #undef KID
 }
 
+// the names of key ids, the key event queue (ON KEY, KEY$("EVENT")) and the SDL keys' ids
+static void test_events( void ) {
+    check( strcmp( keystate_name( 'a' ), "A" ) == 0 && strcmp( keystate_name( '5' ), "5" ) == 0 && strcmp( keystate_name( ',' ), "," ) == 0 && strcmp( keystate_name( 32 ), "SPACE" ) == 0, "key event names: characters, SPACE" );
+    check( strcmp( keystate_name( KEYID_RETURN ), "RETURN" ) == 0 && strcmp( keystate_name( KEYID_ESC ), "ESC" ) == 0 && strcmp( keystate_name( KEYID_BACKSPACE ), "BACKSPACE" ) == 0 &&
+        strcmp( keystate_name( KEYID_KS + KS_LEFT ), "LEFT" ) == 0 && strcmp( keystate_name( KEYID_KS + KS_F5 ), "F5" ) == 0 && strcmp( keystate_name( KEYID_KS + KS_PGDN ), "PGDN" ) == 0,
+        "key event names: RETURN (not ENTER), ESC, the cursor and function keys" );
+    check( strcmp( keystate_name( KEYID_LSHIFT ), "LSHIFT" ) == 0 && strcmp( keystate_name( KEYID_KP0 + 5 ), "KP5" ) == 0 && strcmp( keystate_name( KEYID_KPPLUS ), "KP+" ) == 0 &&
+        strcmp( keystate_name( 9999 ), "?" ) == 0 && strcmp( keystate_name( 0 ), "?" ) == 0, "key event names: modifiers, the keypad, no such key" );
+    bool roundtrip = true;
+    for ( int id = 1; id < KEYID_MAX; ++id ) {
+        if ( id >= 'A' && id <= 'Z' ) {
+            continue;                       // (the ids of the letters are lower case)
+        }
+        const char* n = keystate_name( id );
+        if ( strcmp( n, "?" ) != 0 && keystate_id( n, strlen( n ) ) != id && id != KEYID_ANY ) {
+            roundtrip = false;
+            printf( "  id %d is called %s, which is id %d\n", id, n, keystate_id( n, strlen( n ) ) );
+        }
+    }
+    check( roundtrip, "key event names: every name is the name of its id" );
+    int id = 0; bool down = false;
+    keystate_event_clear();
+    uint32_t c0 = keystate_event_count();
+    check( !keystate_event_pop( &id, &down ), "key events: none at the start" );
+    keystate_event_push( 'a', true ); keystate_event_push( 'a', false ); keystate_event_push( KEYID_KS + KS_LEFT, true );
+    check( keystate_event_count() == c0 + 3U, "key events: counted" );
+    check( keystate_event_pop( &id, &down ) && id == 'a' && down && keystate_event_pop( &id, &down ) && id == 'a' && !down &&
+        keystate_event_pop( &id, &down ) && id == KEYID_KS + KS_LEFT && down && !keystate_event_pop( &id, &down ), "key events: in the order they came" );
+    keystate_event_push( 'b', true ); keystate_event_push( 'c', true );
+    keystate_event_clear();
+    check( !keystate_event_pop( &id, &down ), "key events: clear forgets them" );
+    for ( int i = 0; i < KEYEV_SIZE + 10; ++i ) {
+        keystate_event_push( 'a' + ( i % 26 ), i % 2 == 0 );
+    }
+    int n = 0; bool order = true;
+    while ( keystate_event_pop( &id, &down ) ) {
+        if ( id != 'a' + ( n % 26 ) || down != ( n % 2 == 0 ) ) order = false;
+        ++n;
+    }
+    check( n == KEYEV_SIZE && order, "key events: a full ring drops the new ones, the old ones stay in order" );
+    keystate_event_push( 0, true ); keystate_event_push( -5, true ); keystate_event_push( 70000, true );
+    check( !keystate_event_pop( &id, &down ), "key events: bad ids are ignored" );
+    check( sdlkeys_keyid( SDLK_a ) == 'a' && sdlkeys_keyid( SDLK_SPACE ) == 32 && sdlkeys_keyid( SDLK_COMMA ) == ',' && sdlkeys_keyid( SDLK_5 ) == '5', "SDL key ids: characters" );
+    check( sdlkeys_keyid( SDLK_RETURN ) == KEYID_RETURN && sdlkeys_keyid( SDLK_ESCAPE ) == KEYID_ESC && sdlkeys_keyid( SDLK_TAB ) == KEYID_TAB && sdlkeys_keyid( SDLK_BACKSPACE ) == KEYID_BACKSPACE, "SDL key ids: RETURN, ESC, TAB, BACKSPACE" );
+    check( sdlkeys_keyid( SDLK_LEFT ) == KEYID_KS + KS_LEFT && sdlkeys_keyid( SDLK_F5 ) == KEYID_KS + KS_F5 && sdlkeys_keyid( SDLK_PAGEDOWN ) == KEYID_KS + KS_PGDN && sdlkeys_keyid( SDLK_HOME ) == KEYID_KS + KS_HOME, "SDL key ids: the cursor and function keys" );
+    check( sdlkeys_keyid( SDLK_LSHIFT ) == KEYID_LSHIFT && sdlkeys_keyid( SDLK_RCTRL ) == KEYID_RCTRL && sdlkeys_keyid( SDLK_LALT ) == KEYID_LALT, "SDL key ids: the modifiers" );
+    check( sdlkeys_keyid( SDLK_KP_0 ) == KEYID_KP0 && sdlkeys_keyid( SDLK_KP_5 ) == KEYID_KP0 + 5 && sdlkeys_keyid( SDLK_KP_9 ) == KEYID_KP0 + 9 && sdlkeys_keyid( SDLK_KP_ENTER ) == KEYID_KPENTER && sdlkeys_keyid( SDLK_KP_PLUS ) == KEYID_KPPLUS, "SDL key ids: the keypad" );
+    check( sdlkeys_keyid( SDLK_PRINTSCREEN ) == 0 && sdlkeys_keyid( SDLK_CAPSLOCK ) == 0 && sdlkeys_keyid( SDLK_PAUSE ) == 0, "SDL key ids: keys without a name give 0" );
+}
+
 int main( void ) {
     test_keystate();
+    test_events();
     test_make();
     test_roundtrip();
     test_dialects();

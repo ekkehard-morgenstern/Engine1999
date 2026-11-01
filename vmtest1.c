@@ -349,7 +349,7 @@ static const testcase_t cases[] = {
     { "RGB",                    "PRINT RGB(1,2,3)",                               "4278256131\n" },
     { "RGB with alpha",         "PRINT RGB(1,2,3,4)",                             "67174915\n" },
     { "RGB out of range",       "PRINT RGB(256,0,0)",                             "? Illegal argument\n" },
-    { "GFX() values",           "PRINT GFX(\"FRAME\");GFX(\"LAYER\",3);GFX(\"PALETTE\",1,5)", "036\n" },
+    { "GFX() values",           "PRINT GFX(\"FRAME\");GFX(\"LAYER\",3);GFX(\"PALETTE\",1,5)", "136\n" },
     { "TXT() values",           "PRINT TXT(\"CHAR\",2,3);TXT(\"X\")",             "50\n" },
     { "SPRITE() values",        "PRINT SPRITE(\"X\",9);SPRITE(\"HITS\",2)",       "92\n" },
     // the mouse
@@ -398,7 +398,45 @@ static const testcase_t cases[] = {
     { "an unfinished DESIGN does nothing", "10 DESIGN CHAR 1\n20 @ \"oooooooo\"\n30 PRINT \"x\"", "x\n" },
     { "ON COLLISION GOSUB",     "10 ON COLLISION GOSUB 100\n20 FOR I=1 TO 3000:NEXT I\n30 PRINT \"done\";C\n40 END\n100 C=C+1:RETURN", "done1\n" },
     { "ON COLLISION OFF",       "10 ON COLLISION GOSUB 100\n15 ON COLLISION OFF\n20 FOR I=1 TO 3000:NEXT I\n30 PRINT \"done\";C\n40 END\n100 C=C+1:RETURN", "done0\n" },
+    // ON KEY and KEY$("EVENT"): the key events of the window (the test host queues them through control codes in INKEY$: 6 = A down, 7 = A up, 8 = LEFT down, 9 = LSHIFT down)
+    { "KEY$: no event",         "PRINT \"[\"+KEY$(\"EVENT\")+\"]\"",                  "[]\n" },
+    { "KEY$: down and up",      "A$=INKEY$:PRINT KEY$(\"EVENT\");KEY$(\"EVENT\");\"[\"+KEY$(\"EVENT\")+\"]\"", "+A-A[]\n", "\006\007" },
+    { "KEY$: the names",        "A$=INKEY$:PRINT KEY$(\"event\");KEY$(\"Event\")",     "+LEFT+LSHIFT\n", "\010\011" },
+    { "KEY$: a name that is none", "PRINT KEY$(\"A\")",                           "? Illegal argument\n" },
+    { "KEY$: a number is no name", "PRINT KEY$(1)",                                "? String expression expected\n" },
+    { "KEY and KEY$ side by side", "PRINT KEY(\"A\");\"[\"+KEY$(\"EVENT\")+\"]\"",    "-1[]\n" },
+    { "ON KEY GOSUB",           "10 ON KEY GOSUB 100\n20 A$=INKEY$\n30 FOR I=1 TO 300:NEXT I\n40 PRINT C;E$\n50 END\n100 C=C+1:E$=KEY$(\"EVENT\"):RETURN", "1+A\n", "\006" },
+    { "ON KEY GOTO",            "10 ON KEY GOTO 100\n20 A$=INKEY$\n30 FOR I=1 TO 300:NEXT I\n40 PRINT C\n50 END\n100 C=C+1:ON KEY OFF:GOTO 30", "1\n", "\006" },
+    { "ON KEY: a release is an event, too", "10 ON KEY GOSUB 100\n20 A$=INKEY$\n30 FOR I=1 TO 300:NEXT I\n40 PRINT C;E$\n50 END\n100 C=C+1:E$=KEY$(\"EVENT\"):RETURN", "1+A\n", "\006" },
+    { "ON KEY: the handler reads all events", "10 ON KEY GOSUB 100\n20 A$=INKEY$\n30 FOR I=1 TO 300:NEXT I\n40 PRINT H;N\n50 END\n100 H=H+1:E$=KEY$(\"EVENT\")\n110 WHILE E$<>\"\":N=N+1:E$=KEY$(\"EVENT\"):WEND\n120 RETURN", "13\n", "\006\007\010" },
+    { "ON KEY: no event, no handler", "10 ON KEY GOSUB 100\n20 FOR I=1 TO 300:NEXT I\n30 PRINT \"done\";C\n40 END\n100 C=C+1:RETURN", "done0\n" },
+    { "ON KEY OFF",             "10 ON KEY GOSUB 100\n15 ON KEY OFF\n20 A$=INKEY$\n30 FOR I=1 TO 300:NEXT I\n40 PRINT \"done\";C\n50 END\n100 C=C+1:RETURN", "done0\n", "\006" },
+    { "ON KEY: the events before it do not count", "10 A$=INKEY$\n20 ON KEY GOSUB 100\n30 FOR I=1 TO 300:NEXT I\n40 PRINT \"done\";C\n50 END\n100 C=C+1:RETURN", "done0\n", "\006" },
+    { "ON KEY with a label",    "10 ON KEY GOSUB KEYS\n20 A$=INKEY$\n30 FOR I=1 TO 300:NEXT I\n40 PRINT \"done\";C\n50 END\n60 LABEL KEYS:C=C+10:RETURN", "done10\n", "\006" },
+    { "ON KEY needs GOTO, GOSUB or OFF", "ON KEY",                                   "? GOTO, GOSUB or OFF expected\n" },
+    // FRAME [n]: waits for n screen refreshes (the test host counts one at every look)
+    { "FRAME",                  "PRINT \"a\";:FRAME:PRINT \"b\"",                      "ab\n" },
+    { "FRAME n",                "FRAME 3:PRINT \"x\"",                              "x\n" },
+    { "FRAME 0",                "FRAME 0:PRINT \"x\"",                              "x\n" },
+    { "FRAME with an expression", "N=2:FRAME N*2+1:PRINT \"x\"",                    "x\n" },
+    { "FRAME in a loop",        "FOR I=1 TO 5:FRAME:S=S+I:NEXT I:PRINT S",         "15\n" },
+    { "FRAME after THEN",       "IF 1 THEN FRAME:PRINT \"y\"",                      "y\n" },
+    { "FRAME before ELSE",      "IF 0 THEN PRINT \"n\" ELSE FRAME:PRINT \"e\"",      "e\n" },
+    { "FRAME negative",         "FRAME -1",                                        "? Illegal argument\n" },
+    { "FRAME too many",         "FRAME 3601",                                      "? Illegal argument\n" },
+    { "FRAME needs a number",   "FRAME \"a\"",                                      "? Numeric expression expected\n" },
     // game controllers: JOY(name$ [, player]), JOY DEADZONE, ON JOY (the state is joy.h, set up by joy_setup() above for every case)
+    { "JOY$: the name",         "PRINT JOY$(\"NAME\")",                            "Test Pad One\n" },
+    { "JOY$: the name of player 2", "PRINT JOY$(\"name\",2)",                      "Test Pad Two\n" },
+    { "JOY$: no pad, no name",  "PRINT \"[\"+JOY$(\"NAME\",3)+\"]\";LEN(JOY$(\"NAME\",4))",  "[]0\n" },
+    { "JOY$: in a condition",   "IF JOY$(\"NAME\")=\"Test Pad One\" THEN PRINT \"yes\"",    "yes\n" },
+    { "JOY$: joined",           "A$=\"<\"+JOY$(\"NAME\")+\">\":PRINT A$;LEN(A$)",         "<Test Pad One>14\n" },
+    { "JOY$: a pad that is plugged in", "A$=INKEY$:PRINT JOY$(\"NAME\",3)",       "Hot Pad\n", "\003" },
+    { "JOY$: the number function next to it", "PRINT JOY(\"A\");JOY$(\"NAME\")",      "-1Test Pad One\n" },
+    { "JOY$: a name that is none", "PRINT JOY$(\"X\")",                            "? Illegal argument\n" },
+    { "JOY$: player 0",         "PRINT JOY$(\"NAME\",0)",                          "? Illegal argument\n" },
+    { "JOY$: player 5",         "PRINT JOY$(\"NAME\",5)",                          "? Illegal argument\n" },
+    { "JOY$: a number is no name", "PRINT JOY$(1)",                                "? String expression expected\n" },
     { "JOY: a button held",     "PRINT JOY(\"A\")",                                 "-1\n" },
     { "JOY: the Share button", "A$=INKEY$:PRINT JOY(\"SHARE\");JOY(\"share\",2);JOY(\"BUTTONS\")", "-1032785\n", "\005" },
     { "JOY: Share is not held at the start", "PRINT JOY(\"SHARE\")", "0\n" },
@@ -1443,7 +1481,7 @@ static void vm_breakesc( struct _vm_t* vm, void* usrdata, bool on ) {
 
 // the test controllers (joy.h), set up for every case in run_case(): player 1 "Test Pad One" holds A and LB, its left stick is full right, the right stick is up by half
 // (raw -16384), the left trigger is at 16384; player 2 "Test Pad Two" holds B. INKEY$ also makes controller events when it meets a control code in the input, so that
-// ON JOY can be tested: 1 = X pressed, 2 = X released on pad 1, 3 = a third pad is plugged in, 4 = pad 2 is unplugged, 5 = Share pressed on pad 1.
+// ON JOY can be tested: 1 = X pressed, 2 = X released on pad 1, 3 = a third pad is plugged in, 4 = pad 2 is unplugged, 5 = Share pressed on pad 1; the key events (ON KEY): 6 = A down, 7 = A up, 8 = LEFT down, 9 = LSHIFT down.
 static void joy_setup( void ) {
     joy_init();
     int a = joy_attach( "Test Pad One" ), b = joy_attach( "Test Pad Two" );
@@ -1456,12 +1494,16 @@ static void joy_setup( void ) {
 }
 
 static int vm_inkey( struct _vm_t* vm, void* usrdata ) {
-    while ( keys && *keys >= 1 && *keys <= 5 ) {
+    while ( keys && *keys >= 1 && *keys <= 9 ) {
         switch ( *keys++ ) {
             case 1: joy_event_button( 0, JOYB_X, true ); break;
             case 2: joy_event_button( 0, JOYB_X, false ); break;
             case 3: joy_attach( "Hot Pad" ); break;
             case 5: joy_event_button( 0, JOYB_SHARE, true ); break;
+            case 6: keystate_event_push( 'a', true ); break;
+            case 7: keystate_event_push( 'a', false ); break;
+            case 8: keystate_event_push( KEYID_KS + KS_LEFT, true ); break;
+            case 9: keystate_event_push( KEYID_LSHIFT, true ); break;
             default: joy_detach( 1 ); break;
         }
     }
@@ -1584,6 +1626,7 @@ static const vm_sound_t test_sound = { snd_tone, snd_setwave, snd_setenv, snd_se
 // a graphics host that logs every operation as "<gfx NAME args>" (an omitted argument is -); queries return the sum of their arguments
 static int gfx_polls = 0;
 static int gfx_mousepolls = 0;
+static double gfx_frames = 0.0;
 
 static bool gfx_op( void* usrdata, int op, const double* a, int na, const char* s, size_t slen, uint8_t* out, size_t outsz, size_t* outlen,
     const char** err ) {
@@ -1619,6 +1662,10 @@ static bool gfx_query( void* usrdata, int q, const double* a, int na, double* re
     (void) usrdata;
     if ( q == GFXQ_EVENT ) {
         *result = ++gfx_polls == 3 ? 3.0 : -1.0;        // a collision is reported at the third look
+        return true;
+    }
+    if ( q == GFXQ_FRAME ) {
+        *result = ++gfx_frames;                         // (a frame passes at every look: FRAME does not wait in the tests)
         return true;
     }
     if ( q == GFXQ_MOUSEEVENT ) {
@@ -1699,6 +1746,7 @@ static bool compile_and_run( void ) {
     vm.gfx      = &test_gfx;
     gfx_polls   = 0;
     gfx_mousepolls = 0;
+    gfx_frames = 0.0;
     vm.maxsteps = UINT64_C(20000000);     // (a busy wait for a timer tick of the handler tests may take a few million steps on a fast machine)
     ok = vm_run_at( &vm, start );
     if ( ok && vm.request != VMREQ_NONE ) {

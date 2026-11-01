@@ -666,6 +666,8 @@ Explanation of node types:
 #define NT_BUILDSTMT            UINT8_C(0X83)   // BUILD name (1 branch: a string expression, the name of the executable)
 #define NT_BREAKSTMT            UINT8_C(0X85)   // BREAK ON / OFF (data: 1 byte, 1 = ON: ESC breaks, 0 = OFF: ESC is a key)
 #define NT_ONMOUSESTMT          UINT8_C(0X86)   // ON MOUSE GOSUB|GOTO target | OFF (data: 1 byte, ERRT_* kind; the target branch unless OFF)
+#define NT_ONKEYSTMT            UINT8_C(0X8B)   // ON KEY GOSUB|GOTO target | OFF (data: 1 byte, ERRT_* kind; the target branch unless OFF)
+#define NT_FRAMESTMT            UINT8_C(0X8A)   // FRAME [n] (0 or 1 branch: a numeric expression, the number of frames)
 #define NT_JOYSTMT              UINT8_C(0X88)   // JOY DEADZONE d (data: 1 byte, 1 = DEADZONE; 1 numeric branch)
 #define NT_ONJOYSTMT            UINT8_C(0X89)   // ON JOY GOSUB|GOTO target | OFF (data: 1 byte, ERRT_* kind; the target branch unless OFF)
 #define NT_ERRORSTMT            UINT8_C(0X87)   // ERROR n (1 branch: a numeric expression, the error number)

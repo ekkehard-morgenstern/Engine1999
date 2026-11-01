@@ -853,6 +853,10 @@ static bool con_gfx_op( void* usrdata, int op, const double* a, int na, const ch
 
 static bool con_gfx_query( void* usrdata, int q, const double* a, int na, double* result ) {
     (void) usrdata; (void) na;
+    if ( q == GFXQ_FRAME ) {                // (no screen refresh: 60 frames a second by the clock, so that FRAME works as a short wait)
+        *result = (double)( con_mouse_ms() * 60U / 1000U );
+        return true;
+    }
     if ( ( ( q >= GFXQ_MOUSEX && q <= GFXQ_MOUSEVISIBLE ) || q == GFXQ_MOUSEEVENT ) && con_mouse ) {
         con_pump();                         // (what the mouse did since the last look)
         con_mouse_poll();
