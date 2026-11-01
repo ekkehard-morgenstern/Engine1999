@@ -140,11 +140,14 @@ images, numbered 256..511 in the map, and 16 sequences, `MAX_SYSANIM`; the progr
 program** whatever its priority; **don't take part in collisions**; are **not touched by `GFX RESET` / `GFX RESET ALL`**; and they are on the sprite layer, so `GFX LAYER 4,OFF` hides them
 with the others. The engine reaches them through `sprscr_sys_*` (`sprscreen.h`). **Sprite 255 is the mouse pointer** (248..254 are free for future use).
 
-The pointer's pictures are drawn by `cursors.[ch]` (no SDL) at start-up, in the colors of the sprite layer's palette (black outline = entry 1, white = 140, grays, red for "forbidden"):
-`ARROW` (hot spot at the tip), `WAIT` (a dark round badge with a ring of dots that turns, 8 frames), `BUSY` (the arrow with a small turning badge, 8 frames), `TEXT` (I-beam),
-`HAND` (pointing), `GRAB` (a closed hand, for dragging), `CROSS` (crosshair), `SIZEH`, `SIZEV` (resize arrows), `MOVE` (four arrows), `NO` (forbidden), `HELP` (the arrow with a
+The pointer's pictures are drawn by `cursors.[ch]` (no SDL) at start-up, in the look of **colored glass that floats above the screen**: every shape is a silhouette that is turned into a
+translucent body in one of six hues (blue, gold, green, red, purple, teal: the translucent entries 141..255 of the palette, so the picture behind shows through), with a bright edge at the
+top left, a dark edge at the bottom right, a lighter and a darker band inside (a bevel) and a soft shadow that falls to the lower right. They are the colors of the sprite layer's palette:
+a program that changes that palette changes the pointer. The shapes are 10 to 14 pixels wide: `ARROW` (blue, hot spot at the tip), `WAIT` (a teal glass badge with a comet of eight colored
+dots that turns, 8 frames), `BUSY` (the arrow with a small glass badge and a comet, 8 frames), `TEXT` (I-beam, teal), `HAND` (pointing, gold), `GRAB` (a closed hand for dragging, gold), `CROSS`
+(crosshair, green), `SIZEH`, `SIZEV` (resize arrows, purple), `MOVE` (four arrows, purple), `NO` (a red ring and slash around frosted glass) and `HELP` (the arrow with a gold bubble that holds a
 question mark). `cursors_set()`, `cursors_move()` (the hot spot to x, y), `cursors_show()`; the window has `sdlscr_cursor_*`. **Nothing in BASIC reaches the pointer yet**: the mouse
-support (statements to show it and to choose the shape, the mouse position and buttons) comes next. `sdltest3` shows all shapes on a light, a dark and a striped background and lets you move
+support (statements to show it and to choose the shape, the mouse position and buttons) comes next. `sdltest3` shows all shapes on a light, a dark and a striped background (the stripes show the translucency) and lets you move
 and change the real pointer with the keyboard (N / P, W A S D).
 
 ### `GFX RESET`
