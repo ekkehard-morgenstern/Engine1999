@@ -102,6 +102,9 @@ ESC, Ctrl+C and (window) PAUSE/BREAK stop a running program; BREAK OFF makes ESC
 .B Keys held down
 KEY("name") is \-1 while the key is held down and 0 otherwise ("A", "SPACE", "LEFT", "F1", "SHIFT", "ANY", ...), for any number of keys at once; unlike INKEY$ it knows when a key is let go. It works in the window only: the console host (and console executables) give the error "KEY is not available in this host", because a terminal never reports that a key is let go.
 .TP
+.B Game controllers
+JOY(name$ [, player]) reads the game controllers (up to four, with one standard layout whatever the brand: buttons "A" "B" "X" "Y" "LB" "RB" "BACK" "START" "GUIDE" "LS" "RS" "UP" "DOWN" "LEFT" "RIGHT" give -1 or 0, the axes "LX" "LY" "RX" "RY" -1..1 with up negative and "LT" "RT" 0..1; also "CONNECTED", "COUNT", "BUTTONS", "PRESSED", "RELEASED", "EVENTS", "DEADZONE"); a player without a pad reads 0. JOY DEADZONE d sets the dead zone of the sticks (0..0.9). ON JOY GOSUB/GOTO/OFF runs a handler when a button is pressed or released or a pad is plugged in or out. The console host has no controllers (JOY("COUNT") is 0).
+.TP
 .B The mouse
 MOUSE SHOW, HIDE, POS x,y, SHAPE name and TIMEOUT seconds control the mouse pointer, which is shown for 3 seconds after the mouse moves, a button is pressed or one of SHOW, POS, SHAPE is executed and then hidden so that the text can be read (TIMEOUT 0: it stays until HIDE). The shapes are ARROW, WAIT, BUSY, TEXT, HAND, GRAB, CROSS, SIZEH, SIZEV, MOVE, NO and HELP. The functions MOUSE("X") and MOUSE("Y") (0..639, 0..299), MOUSE("B") (buttons held: 1 left, 2 right, 4 middle), MOUSE("PRESSED") and MOUSE("RELEASED") (buttons since the last call), MOUSE("WHEEL"), MOUSE("SHAPE") and MOUSE("VISIBLE") read it. ON MOUSE GOSUB/GOTO/OFF runs a handler when a button is pressed or released or the wheel turns (not on motion; highest priority of the event handlers). Works in the window and in the console host's screen mode (a terminal that reports the mouse: the pointer is the cell under it with swapped colors and its shape is the terminal's pointer, OSC 22; a cell is 8 x 12 pixels); elsewhere the console host gives an error.
 .TP
@@ -231,7 +234,7 @@ ABS ADDRESS AFTER AGAIN AND ARG ARGC ASC ASL ASR ASSOC ATAN2 ATN AUTO BASE BIN B
 CEIL CHAIN CHDIR CHR CLEAR CLOSE CLS COLOR CONT COPYING COS CVD CVI CVL CVS DATA DATE DATETIME DEC 
 DEF DEG DELETE DESIGN DIM DYNAMIC EDIT ELSE END ENDIF ENDUNLESS ENV ENVELOPE EOF EQV ERASE ERL ERR 
 ERROR EVERY EXIT EXP FIELD FILES FIX FLOOR FLT FN FOR FRE FUNC GET GETREC GFX GO GOSUB GOTO GRAD 
-HEX IF IMP INKEY INPUT INT ITERATE KEY KILL LABEL LEAVE LEFT LEN LET LINE LIST LOAD LOC LOCAL 
+HEX IF IMP INKEY INPUT INT ITERATE JOY KEY KILL LABEL LEAVE LEFT LEN LET LINE LIST LOAD LOC LOCAL 
 LOCATE LOF LOG LOG10 LOG2 LSET LSHIFT MAX MERGE MID MIN MKD MKDIR MKI MKL MKS MOD MONITOR MOUSE 
 NAND NEQV NEW NEXT NIMP NOR NOT OCT OFF ON OPEN OPTION OR PEEK PI PITCH PLAY PLAYING POINT POKE POP 
 PRINT PROC PUT PUTREC QUA QUIT RAD RANDOMIZE READ REMAIN RENAME RENUM REPEAT RESTORE RESUME RETURN 

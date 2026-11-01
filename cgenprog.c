@@ -703,6 +703,17 @@ bool cgen_from_soundstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     return cgen_gen_snd( cgen, kind ) || cgen_out_of_code_memory( comp );
 }
 
+bool cgen_from_joystmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    // NT_JOYSTMT      JOY statement (data: 1 byte of kind, 1 = DEADZONE; 1 branch of numeric expression)
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->type != NT_JOYSTMT || node->numbranches != 1U || node->datalen != UINT16_C(1) || node->data[0] != 1 ) {
+        return cgen_unexpected_node( comp );
+    }
+    return cgen_from_numexpr( cgen, comp, node->branches[0] ) && ( cgen_gen_joyd( cgen ) || cgen_out_of_code_memory( comp ) );
+}
+
 bool cgen_from_errorstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     // NT_ERRORSTMT    ERROR statement (1 branch of numeric expression: the error number)
     if ( node == NODE_NONE ) {

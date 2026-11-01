@@ -109,8 +109,11 @@ sys-str-fn-2-arg-call := ( TOK_BIN | TOK_QUA | TOK_OCT | TOK_DEC | TOK_HEX ) TOK
 
 -- MIN(a,b) and MAX(a,b) are the smaller / larger number, ATAN2(y,x) the angle of the point (x,y) in the unit of DEG/RAD/GRAD. SPACE$(n) is n blanks,
 -- STRING$(n,c) n copies of the character code c (0..255) or of the first character of the string c. These five are extension words: TOK_XFUNC plus
--- one byte (the grammar writes them by name).
+-- one byte (the grammar writes them by name). JOY(name$ [, player]) reads a game controller (player 1..4, 1 by default): name$ is a button ("A" "B" "X" "Y" "LB"
+-- "RB" "BACK" "START" "GUIDE" "LS" "RS" "UP" "DOWN" "LEFT" "RIGHT": -1 held, 0 not), an axis ("LX" "LY" "RX" "RY": -1..1, up is negative; "LT" "RT": 0..1) or
+-- "CONNECTED", "COUNT", "BUTTONS", "PRESSED", "RELEASED", "EVENTS", "DEADZONE"; a player without a pad reads 0.
 xfunc-call := ( MIN | MAX | ATAN2 ) TOK_LPAREN num-expr TOK_COMMA num-expr TOK_RPAREN |
+              JOY TOK_LPAREN str-expr [ TOK_COMMA num-expr ] TOK_RPAREN |
               SPACE TOK_STRING TOK_LPAREN num-expr TOK_RPAREN |
               STRING TOK_STRING TOK_LPAREN num-expr TOK_COMMA expr TOK_RPAREN .
 
@@ -411,6 +414,10 @@ fileop-stmt := ( TOK_KILL | TOK_MKDIR | TOK_CHDIR ) str-expr | TOK_RENAME str-ex
 -- ERROR n raises the error of number n (1..255) by hand; ON ERROR catches it like any other.
 on-error-stmt := TOK_ON ERROR ( goto-kw goto-target | TOK_OFF ) .
 error-stmt := ERROR num-expr .
+-- JOY DEADZONE d sets the dead zone of the sticks (0..0.9, 0.2 at the start) for all pads. ON JOY runs a handler when a button is pressed or released or a pad is
+-- plugged in or out (not when a stick moves).
+joy-stmt := JOY DEADZONE num-expr .
+on-joy-stmt := TOK_ON JOY ( goto-kw goto-target | TOK_OFF ) .
 -- Numeric functions: INT FIX ABS SGN SQR SIN COS TAN ATN EXP LOG RND ( num-expr ) (RND alone is RND(1)); PI. \ (integer division) and MOD
 -- are at the level of * and /. RANDOMIZE [ seed ] seeds RND.
 randomize-stmt := TOK_RANDOMIZE [ num-expr ] .
@@ -473,7 +480,7 @@ gfx-all-stmt := gfx-stmt | txt-stmt | tile-stmt | sprite-stmt | mouse-stmt | on-
 -- Several statements on a line are separated by a colon; a line may end with a comment (an apostrophe).
 prog-stmt := gfx-all-stmt | load-stmt | run-stmt | merge-stmt | chain-stmt | files-stmt | build-stmt | bye-stmt | timer-stmt | list-stmt | new-stmt | clear-stmt |
              delete-stmt | renum-stmt | edit-stmt | monitor-stmt | sound-stmt | wait-stmt | on-error-stmt | randomize-stmt | angle-stmt |
-             cont-stmt | trace-stmt | break-stmt | auto-stmt | poke-stmt | error-stmt .
+             cont-stmt | trace-stmt | break-stmt | auto-stmt | poke-stmt | error-stmt | joy-stmt | on-joy-stmt .
 
 stmt := io-stmt | prog-stmt | assign-stmt | control-flow-stmt .
 stmt-list := stmt { TOK_COLON stmt } .

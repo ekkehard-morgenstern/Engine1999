@@ -34,6 +34,7 @@
 #include "sprscreen.h"
 #include "gfxops.h"
 #include "mml.h"
+#include "joy.h"
 #include "instset.h"
 
 // -- helpers ---------------------------------------------------------------
@@ -100,6 +101,8 @@ void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem ) {
     vm->colpending = false;
     vm->mousepending = false;
     vm->mouseseen = 0;
+    vm->joypending = false;
+    vm->joyseen = 0;
     vm->design.active = false;
     snprintf( vm->addrcur, sizeof(vm->addrcur), "file" );
     snprintf( vm->addrprev, sizeof(vm->addrprev), "file" );
@@ -2317,6 +2320,66 @@ static bool vm_trig( vm_t* vm, uint16_t kind, double x, double* pr ) {
     return true;
 }
 
+// JOYQ ( name player -- v ): JOY(name$, player), see instset.h
+static bool vm_joy_query( vm_t* vm ) {
+    double pl = 0.0;
+    char* name = 0; size_t len = 0;
+    if ( !vm_dpop_num( vm, &pl ) || !vm_dpop_bstr( vm, &name, &len ) ) {
+        return false;
+    }
+    int slot = -1;
+    bool playeropt = false;
+    uint32_t bit = 0U;
+    int axis = -1;
+    enum { JQ_BUTTON, JQ_AXIS, JQ_CONNECTED, JQ_COUNT, JQ_BUTTONS, JQ_PRESSED, JQ_RELEASED, JQ_EVENTS, JQ_DEADZONE, JQ_NONE } kind = JQ_NONE;
+    if ( len == 9U && strncasecmp( name, "CONNECTED", 9U ) == 0 ) kind = JQ_CONNECTED;
+    else if ( len == 5U && strncasecmp( name, "COUNT", 5U ) == 0 ) { kind = JQ_COUNT; playeropt = true; }
+    else if ( len == 7U && strncasecmp( name, "BUTTONS", 7U ) == 0 ) kind = JQ_BUTTONS;
+    else if ( len == 7U && strncasecmp( name, "PRESSED", 7U ) == 0 ) kind = JQ_PRESSED;
+    else if ( len == 8U && strncasecmp( name, "RELEASED", 8U ) == 0 ) kind = JQ_RELEASED;
+    else if ( len == 6U && strncasecmp( name, "EVENTS", 6U ) == 0 ) { kind = JQ_EVENTS; playeropt = true; }
+    else if ( len == 8U && strncasecmp( name, "DEADZONE", 8U ) == 0 ) { kind = JQ_DEADZONE; playeropt = true; }
+    else if ( ( bit = (uint32_t) joy_button_by_name( name, len ) ) != 0U ) kind = JQ_BUTTON;
+    else if ( ( axis = joy_axis_by_name( name, len ) ) >= 0 ) kind = JQ_AXIS;
+    free( name );
+    if ( kind == JQ_NONE ) {
+        return vm_error( vm, "Illegal argument" );
+    }
+    if ( !playeropt ) {
+        if ( !( pl >= 1.0 && pl < (double)( JOY_MAXPLAYERS + 1 ) ) ) {
+            return vm_error( vm, "Illegal argument" );
+        }
+        slot = (int) pl - 1;
+    }
+    double v = 0.0;
+    switch ( kind ) {
+        case JQ_BUTTON:     v = ( joy_buttons( slot ) & bit ) != 0U ? -1.0 : 0.0; break;
+        case JQ_AXIS:       v = joy_axis( slot, axis ); break;
+        case JQ_CONNECTED:  v = joy_connected( slot ) ? -1.0 : 0.0; break;
+        case JQ_COUNT:      v = (double) joy_count(); break;
+        case JQ_BUTTONS:    v = (double) joy_buttons( slot ); break;
+        case JQ_PRESSED:    v = (double) joy_pressed( slot ); break;
+        case JQ_RELEASED:   v = (double) joy_released( slot ); break;
+        case JQ_EVENTS:     v = (double) joy_events(); break;
+        case JQ_DEADZONE:   v = joy_getdeadzone(); break;
+        default:            break;
+    }
+    return vm_dpush_num( vm, v );
+}
+
+// JOYD ( d -- ): JOY DEADZONE d
+static bool vm_joy_deadzone( vm_t* vm ) {
+    double d = 0.0;
+    if ( !vm_dpop_num( vm, &d ) ) {
+        return false;
+    }
+    if ( !( d >= 0.0 && d <= 0.9 ) ) {
+        return vm_error( vm, "Illegal argument" );
+    }
+    joy_setdeadzone( d );
+    return true;
+}
+
 // MTH2 ( x y -- z ): MIN (1), MAX (2), ATAN2 (3: x = the first argument y, y = the second x)
 static bool vm_math2( vm_t* vm, uint16_t kind ) {
     double a = 0.0, b = 0.0, r = 0.0;
@@ -2660,6 +2723,7 @@ static int vm_irq_find( const vm_t* vm, uint64_t now ) {
     int level = vm->irqdepth > 0 ? vm->irq[ vm->irqdepth - 1 ].timer : -1;
     for ( int i=VM_NTIMERS-1; i > level; --i ) {
         if ( i == VM_COLSLOT ? vm->timers[i].active && vm->colpending : i == VM_MOUSESLOT ? vm->timers[i].active && vm->mousepending :
+                i == VM_JOYSLOT ? vm->timers[i].active && vm->joypending :
                 vm->timers[i].active && vm->timers[i].due <= now ) {
             return i;
         }
@@ -2671,7 +2735,9 @@ static int vm_irq_find( const vm_t* vm, uint64_t now ) {
 static bool vm_irq_fire( vm_t* vm, int t ) {
     vm_timer_t* tm = &vm->timers[t];
     uint32_t target = tm->target;
-    if ( t == VM_MOUSESLOT ) {
+    if ( t == VM_JOYSLOT ) {
+        vm->joypending = false;         // the controller handler stays set
+    } else if ( t == VM_MOUSESLOT ) {
         vm->mousepending = false;       // the mouse handler stays set, too
     } else if ( t == VM_COLSLOT ) {
         vm->colpending = false;         // the collision handler stays set
@@ -2728,6 +2794,13 @@ static bool vm_irq_poll( vm_t* vm, uint64_t steps ) {
         if ( vm->gfx->query( vm->userdata, GFXQ_MOUSEEVENT, 0, 0, &cnt ) && (uint32_t) cnt != vm->mouseseen ) {
             vm->mouseseen = (uint32_t) cnt;
             vm->mousepending = true;
+        }
+    }
+    if ( vm->timers[VM_JOYSLOT].active && !vm->joypending && ( safe || ( steps & 31U ) == 0 ) ) {
+        uint32_t cnt = joy_events();
+        if ( cnt != vm->joyseen ) {
+            vm->joyseen = cnt;
+            vm->joypending = true;
         }
     }
     int t = vm_irq_find( vm, vm_now_ns() );
@@ -2994,12 +3067,13 @@ static bool vm_design_row( vm_t* vm ) {
 
 // COLT ( -- ) ( r: target -- ): ON COLLISION GOSUB (1) / GOTO (2), OFF (0); with the bit 4: ON MOUSE (5, 6, 4)
 static bool vm_set_collision( vm_t* vm, uint16_t param ) {
-    bool mouse = ( param & 4U ) != 0;
-    vm_timer_t* tm = &vm->timers[ mouse ? VM_MOUSESLOT : VM_COLSLOT ];
+    bool joy = ( param & 8U ) != 0;
+    bool mouse = !joy && ( param & 4U ) != 0;
+    vm_timer_t* tm = &vm->timers[ joy ? VM_JOYSLOT : mouse ? VM_MOUSESLOT : VM_COLSLOT ];
     param &= 3U;
     if ( param == 0 ) {
         tm->active = false;
-        if ( mouse ) vm->mousepending = false; else vm->colpending = false;
+        if ( joy ) vm->joypending = false; else if ( mouse ) vm->mousepending = false; else vm->colpending = false;
         vm_count_timers( vm );
         return true;
     }
@@ -3011,7 +3085,10 @@ static bool vm_set_collision( vm_t* vm, uint16_t param ) {
     tm->every = false;
     tm->gosub = param == 1;
     tm->target = target;
-    if ( mouse ) {
+    if ( joy ) {
+        vm->joypending = false;
+        vm->joyseen = joy_events();     // (only what happens from now on counts)
+    } else if ( mouse ) {
         // only what happens from now on counts: the events so far are taken as seen
         double cnt = 0.0;
         vm->mousepending = false;
@@ -3784,6 +3861,8 @@ static bool vm_step( vm_t* vm ) {
         case INS_PACK: return vm_pack( vm, param16 );
         case INS_MATH: return vm_math( vm, param16 );
         case INS_MTH2: return vm_math2( vm, param16 );
+        case INS_JOYQ: return vm_joy_query( vm );
+        case INS_JOYD: return vm_joy_deadzone( vm );
         case INS_STRN: return vm_string_n( vm, param16 );
         case INS_RAND: return vm_randomize( vm, param16 != 0 );
         case INS_ANGM:
@@ -4008,6 +4087,7 @@ bool vm_begin( vm_t* vm, uint32_t start ) {
     vm->irqpending = false;
     vm->colpending = false;
     vm->mousepending = false;
+    vm->joypending = false;
     vm->design.active = false;
     vm->errset = vm->errgosub = vm->errinhandler = vm->errcaught = false;      // the error handler ends with the run, too
     vm->resumestate = 0;

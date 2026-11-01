@@ -31,6 +31,7 @@
 #include "sdlevent.h"
 #include "sdlscreen.h"
 #include "sdlaudio.h"
+#include "sdljoy.h"
 
 static void sdl_cleanup( void ) {
     sdlaud_cleanup();
@@ -40,6 +41,7 @@ static void sdl_cleanup( void ) {
 }
 
 void sdl_init( void ) {
+    sdljoy_hints();                         // (the game controllers: the face buttons by position)
     int rv = SDL_Init( SDL_INIT_EVERYTHING );
     if ( rv < 0 ) {
         fprintf( stderr, "sdl_init(): failed to initialize SDL: %s\n", SDL_GetError() );

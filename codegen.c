@@ -447,6 +447,8 @@ const char* cgen_opcode_name( uint16_t opcode ) {
         case INS_STRN:      return "STRN";
         case INS_ERRN:      return "ERRN";
         case INS_ERRR:      return "ERRR";
+        case INS_JOYQ:      return "JOYQ";
+        case INS_JOYD:      return "JOYD";
         case INS_AFLT:      return "AFLT";
         case INS_GFXC:      return "GFXC";
         case INS_GFXQ:      return "GFXQ";
@@ -1125,6 +1127,14 @@ bool cgen_gen_erl( codegen_t* cgen ) {
     return cgen_gen_ins12( cgen, INS_ERL, false, false, UINT16_C(0) );
 }
 
+bool cgen_gen_joyq( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_JOYQ, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_joyd( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_JOYD, false, false, UINT16_C(0) );
+}
+
 bool cgen_gen_errn( codegen_t* cgen ) {
     return cgen_gen_ins12( cgen, INS_ERRN, false, false, UINT16_C(0) );
 }
@@ -1638,6 +1648,7 @@ UNEXP:      return cgen_unexpected_node( comp );
             case XF_ATAN2:  ok = cgen_gen_mth2( cgen, 3 ); break;
             case XF_SPACE:  ok = cgen_gen_strn( cgen, 2 ); break;
             case XF_STRING: ok = cgen_gen_strn( cgen, datalen == UINT16_C(3) && node->data[2] ? 1 : 0 ); break;
+            case XF_JOY:    ok = cgen_gen_joyq( cgen ); break;
             default:        goto UNEXP;
         }
         return ok || cgen_out_of_code_memory( comp );
@@ -3164,6 +3175,7 @@ static bool cgen_from_stmt_node( codegen_t* cgen, compiler_t* comp, node_t* node
         case NT_SOUNDSTMT:  return cgen_from_soundstmt( cgen, comp, node );
         case NT_WAITSTMT:   return cgen_from_waitstmt( cgen, comp, node );
         case NT_ERRORSTMT:  return cgen_from_errorstmt( cgen, comp, node );
+        case NT_JOYSTMT:    return cgen_from_joystmt( cgen, comp, node );
         case NT_MERGESTMT:  return cgen_from_mergestmt( cgen, comp, node );
         case NT_CHAINSTMT:  return cgen_from_chainstmt( cgen, comp, node );
         case NT_FILESSTMT:  return cgen_from_filesstmt( cgen, comp, node );
@@ -3173,6 +3185,7 @@ static bool cgen_from_stmt_node( codegen_t* cgen, compiler_t* comp, node_t* node
         case NT_ERRTRAPSTMT: return cgen_from_errtrapstmt( cgen, comp, node );
         case NT_ONCOLLSTMT: return cgen_from_oncollstmt( cgen, comp, node );
         case NT_ONMOUSESTMT: return cgen_from_onmousestmt( cgen, comp, node );
+        case NT_ONJOYSTMT:  return cgen_from_onjoystmt( cgen, comp, node );
         case NT_GFXSTMT:    return cgen_from_gfxstmt( cgen, comp, node );
         case NT_RANDOMIZESTMT: return cgen_from_randomizestmt( cgen, comp, node );
         case NT_ANGLESTMT:  return cgen_from_anglestmt( cgen, comp, node );

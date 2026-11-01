@@ -501,6 +501,35 @@ Ten new reserved words (`GFX SPRITE TILE TXT DESIGN RGB POINT CLS LOCATE COLOR`)
 picture rows, the functions, the collision rules and the internals are in [graphics-subsystem.md](graphics-subsystem.md); the example is `demos/gfx.bas`.
 `CHR$(0)`..`CHR$(31)` are drawn as two letter glyphs on the text screen (see "Binary strings").
 
+## Game controllers: `JOY`, `ON JOY`, `JOY DEADZONE` *(2026-11-01, window host)*
+
+Up to four game controllers (Xbox, PlayStation, Switch Pro and generic pads; see [controller-support.md](controller-support.md) for what works on a PC and how it is tested). Every pad is
+mapped to **one standard layout**, whatever its brand, so a program reads the same names on all of them. A pad keeps its player number while it is plugged in; a pad that is plugged in
+takes the lowest free number, the others keep theirs. **A player without a pad reads 0 everywhere** (no error), so a program needs no checks.
+
+```
+10 IF JOY("A") THEN PRINT "fire!"           ' player 1 is the default
+20 X=X+JOY("LX",2)*4                         ' the left stick of player 2: -1 .. 1
+30 PRINT JOY("COUNT");" pads"
+40 ON JOY GOSUB 100                          ' a button was pressed or released, a pad was plugged in or out
+100 IF JOY("PRESSED") AND 128 THEN PRINT "START"
+110 RETURN
+```
+
+- **`JOY(name$ [, player])`**, player 1..4 (1 by default; anything else is "Illegal argument", except for `COUNT`, `EVENTS` and `DEADZONE`, which need no player). The name may be in any case and may be a variable.
+  - **Buttons** return -1 (held) or 0: `"A"` `"B"` `"X"` `"Y"` (the four face buttons **by position**: A at the bottom, B at the right, X at the left, Y at the top, as on an Xbox pad; on a PlayStation pad
+    these are Cross, Circle, Square, Triangle; on a Nintendo pad A and B are *not* swapped), `"LB"` `"RB"` (shoulder buttons), `"BACK"` `"START"` `"GUIDE"`, `"LS"` `"RS"` (the sticks pressed), `"UP"` `"DOWN"` `"LEFT"` `"RIGHT"` (the D-pad).
+  - **Axes**: `"LX"` `"LY"` (left stick) and `"RX"` `"RY"` (right stick) return -1 .. 1 with the dead zone applied, **up is negative** (screen coordinates); `"LT"` `"RT"` (the triggers) 0 .. 1.
+  - `"CONNECTED"` (-1 / 0), `"COUNT"` (how many pads are plugged in), `"BUTTONS"` (the buttons that are held, added up as bits: A 1, B 2, X 4, Y 8, LB 16, RB 32, BACK 64, START 128, GUIDE 256, LS 512, RS 1024, UP 2048, DOWN 4096, LEFT 8192, RIGHT 16384), `"PRESSED"` and `"RELEASED"`
+    (the same bits for the buttons pressed / released **since the last call**: a quick tap between two calls is not lost), `"EVENTS"` (a counter of button presses and releases and of plugging in and out) and `"DEADZONE"` (the setting).
+- **`JOY DEADZONE d`** (0 .. 0.9, 0.2 at the start; "Illegal argument" otherwise) sets the dead zone of the sticks for all pads: inside it a stick reads 0, outside it the rest of the way is scaled to the full range (with 0.2, a stick at 0.5 reads 0.375). Triggers have no dead zone.
+- **`ON JOY GOSUB|GOTO target`** / **`ON JOY OFF`**: the handler runs when a button is pressed or released or a pad is plugged in or out (**not** when a stick moves: read the sticks). It is an event slot like `ON MOUSE` (the highest priority of the handlers); only what happens after `ON JOY` counts.
+- Hosts: the window uses SDL's game controller API (pads without a mapping fall back to the plain joystick API: axes 0, 1 are the left stick, 2, 3 the right one, buttons 0 .. 9 are A B X Y LB RB BACK START LS RS, the first hat is the D-pad). **The console host has no controllers: `JOY("COUNT")` is 0 and everything reads 0.**
+  SDL delays the release of the Guide button by 250 ms, so that a quick tap is seen.
+- New reserved word `JOY` (an extension word, see "MIN, MAX, ATAN2, SPACE$, STRING$"). Instructions `JOYQ 0x182` (`( name player -- v )`), `JOYD 0x183` (`( d -- )`), `ON JOY` is `COLT` with the parameter bit 8 (`VM_JOYSLOT`), nodes `NT_JOYSTMT 0x88`, `NT_ONJOYSTMT 0x89`.
+  The state is `joy.[ch]` (no SDL), the SDL side `sdljoy.[ch]`. Example: `demos/joy.bas`. Tests: `joytest1` (the state), `vmtest1` (the language, 36 cases), `sdltest4 --selftest` (SDL with virtual pads).
+- Not done: the pad's name as a string (`JOY$("NAME")`), rumble, a second set of names for the Nintendo labels, motion sensors and touchpads, joysticks in the console host.
+
 ## The mouse: `MOUSE` *(2026-11-01, window and console screen mode)*
 
 ```

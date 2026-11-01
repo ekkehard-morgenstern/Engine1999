@@ -1997,6 +1997,36 @@ static bool comp_eat_xfunccall( compiler_t* comp, node_t** pnode, bool wantstr )
         return false;
     }
     node_t* arg1 = NODE_NONE, *arg2 = NODE_NONE;
+    if ( xid == XF_JOY ) {
+        // JOY ( str-expr [ TOK_COMMA num-expr ] )     the name of the value, the player (1 by default)
+        if ( !comp_eat_strexpr( comp, &arg1 ) || arg1 == NODE_NONE ) {
+            comp_error( comp, "String expression expected" );
+            return false;
+        }
+        if ( comp->currtok == TOK_COMMA && comp_fetchtok( comp ) ) {
+            if ( !comp_eat_numexpr( comp, &arg2 ) || arg2 == NODE_NONE ) {
+                comp_error( comp, "Numeric expression expected" );
+                return false;
+            }
+        } else {
+            uint8_t one[8];
+            comp_set_numlit( one, 1.0 );
+            if ( !comp_create_node( comp, &arg2, NT_NUMLIT, UINT8_C(0), UINT16_C(8), one ) || arg2 == NODE_NONE ) {
+                out_of_memory( comp );
+                return false;
+            }
+        }
+        if ( comp->currtok != TOK_RPAREN || !comp_fetchtok( comp ) ) {
+            comp_error( comp, "Closing parenthesis ')' expected" );
+            return false;
+        }
+        uint8_t jdata[2] = { TOK_XFUNC, xid };
+        if ( !comp_create_node( comp, pnode, NT_SYSNUMFUNCARGCALL, UINT8_C(2), UINT16_C(2), jdata, arg1, arg2 ) || *pnode == NODE_NONE ) {
+            out_of_memory( comp );
+            return false;
+        }
+        return true;
+    }
     if ( !comp_eat_numexpr( comp, &arg1 ) || arg1 == NODE_NONE ) {
         comp_error( comp, "Numeric expression expected" );
         return false;
@@ -3804,6 +3834,34 @@ bool comp_eat_errorstmt( compiler_t* comp, node_t** pnode ) {
     return true;
 }
 
+bool comp_eat_joystmt( compiler_t* comp, node_t** pnode ) {
+    // joy-stmt := JOY DEADZONE num-expr .       (JOY is an extension word; with a parenthesis it is the function)
+    if ( comp->currtok != TOK_XFUNC || comp->currext != XF_JOY ) {
+        return false;
+    }
+    comp_push_context( comp );
+    if ( !comp_fetchtok( comp ) || comp->currtok != TOK_NUMIDENT || strcmp( comp->param, "DEADZONE" ) != 0 ) {
+        comp_pop_context( comp );
+        return false;
+    }
+    comp_commit_context( comp );
+    if ( !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    node_t* value = NODE_NONE;
+    if ( !comp_eat_numexpr( comp, &value ) || value == NODE_NONE ) {
+        comp_error( comp, "Numeric expression expected" );
+        return false;
+    }
+    // NT_JOYSTMT      JOY statement (data: 1 byte of kind, 1 = DEADZONE; 1 branch of numeric expression)
+    uint8_t kind = 1;
+    if ( !comp_create_node( comp, pnode, NT_JOYSTMT, UINT8_C(1), UINT16_C(1), &kind, value ) || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
 bool comp_eat_waitstmt( compiler_t* comp, node_t** pnode ) {
     // wait-stmt := TOK_WAIT num-expr .
     if ( comp->currtok != TOK_WAIT || !comp_fetchtok( comp ) ) {
@@ -3918,6 +3976,9 @@ bool comp_eat_progstmt( compiler_t* comp, node_t** pnode ) {
         return true;
     }
     if ( comp_eat_errorstmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_joystmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     return false;
@@ -5709,6 +5770,36 @@ bool comp_eat_onstmt( compiler_t* comp, node_t** pnode ) {
         }
         if ( !( target == NODE_NONE ? comp_create_node( comp, pnode, NT_ONMOUSESTMT, UINT8_C(0), UINT16_C(1), &kind ) :
                 comp_create_node( comp, pnode, NT_ONMOUSESTMT, UINT8_C(1), UINT16_C(1), &kind, target ) ) || *pnode == NODE_NONE ) {
+            out_of_memory( comp );
+            return false;
+        }
+        return true;
+    }
+    if ( comp->currtok == TOK_XFUNC && comp->currext == XF_JOY ) {
+        // ON JOY GOTO target | ON JOY GOSUB target | ON JOY OFF     (a button was pressed or released, a pad was plugged in or out)
+        if ( !comp_fetchtok( comp ) ) {
+            return false;
+        }
+        uint8_t kind = ERRT_OFF;
+        node_t* target = NODE_NONE;
+        if ( comp->currtok == TOK_OFF ) {
+            if ( !comp_fetchtok( comp ) ) {
+                return false;
+            }
+        } else {
+            uint8_t gotok = TOK_EOL;
+            if ( !comp_eat_gotokw( comp, &gotok ) ) {
+                comp_error( comp, "GOTO, GOSUB or OFF expected" );
+                return false;
+            }
+            kind = gotok == TOK_GOTO ? ERRT_GOTO : ERRT_GOSUB;
+            if ( !comp_eat_gototarget( comp, &target ) || target == NODE_NONE ) {
+                comp_error( comp, "Jump target expected" );
+                return false;
+            }
+        }
+        if ( !( target == NODE_NONE ? comp_create_node( comp, pnode, NT_ONJOYSTMT, UINT8_C(0), UINT16_C(1), &kind ) :
+                comp_create_node( comp, pnode, NT_ONJOYSTMT, UINT8_C(1), UINT16_C(1), &kind, target ) ) || *pnode == NODE_NONE ) {
             out_of_memory( comp );
             return false;
         }

@@ -134,6 +134,12 @@ End the Engine; the process exits with the code (0 to 255, default 0).
 Show the terms of the license (the GNU General Public License and the Engine1999 Runtime Exception).
 .SH ENVIRONMENT
 .TP
+.B SDL_GAMECONTROLLERCONFIG
+SDL's mapping strings for game controllers that SDL does not know (see the SDL Game Controller DB); a controller without a mapping is still usable through the plain joystick fallback
+(see
+.BR engine1999\-basic (7),
+JOY).
+.TP
 .BR SDL_VIDEODRIVER ", " SDL_AUDIODRIVER
 Chosen as for any SDL2 program (for example
 .B SDL_AUDIODRIVER=disk

@@ -29,6 +29,7 @@
 
 #include "basic.h"
 #include "vm.h"
+#include "joy.h"
 #include "keystate.h"
 #include "gfxops.h"
 #include "basdebug.h"
@@ -397,6 +398,45 @@ static const testcase_t cases[] = {
     { "an unfinished DESIGN does nothing", "10 DESIGN CHAR 1\n20 @ \"oooooooo\"\n30 PRINT \"x\"", "x\n" },
     { "ON COLLISION GOSUB",     "10 ON COLLISION GOSUB 100\n20 FOR I=1 TO 3000:NEXT I\n30 PRINT \"done\";C\n40 END\n100 C=C+1:RETURN", "done1\n" },
     { "ON COLLISION OFF",       "10 ON COLLISION GOSUB 100\n15 ON COLLISION OFF\n20 FOR I=1 TO 3000:NEXT I\n30 PRINT \"done\";C\n40 END\n100 C=C+1:RETURN", "done0\n" },
+    // game controllers: JOY(name$ [, player]), JOY DEADZONE, ON JOY (the state is joy.h, set up by joy_setup() above for every case)
+    { "JOY: a button held",     "PRINT JOY(\"A\")",                                 "-1\n" },
+    { "JOY: a button not held", "PRINT JOY(\"B\")",                                 "0\n" },
+    { "JOY: the player",        "PRINT JOY(\"B\",2);JOY(\"A\",2);JOY(\"A\",1)",       "-10-1\n" },
+    { "JOY: any case",          "PRINT JOY(\"a\");JOY(\"Lb\");JOY(\"rb\")",            "-1-10\n" },
+    { "JOY: a name in a variable", "N$=\"LB\":PRINT JOY(N$)",                        "-1\n" },
+    { "JOY: in a condition",    "IF JOY(\"A\") THEN PRINT \"fire\"",                  "fire\n" },
+    { "JOY: added up",          "PRINT JOY(\"A\")+JOY(\"B\",2)",                     "-2\n" },
+    { "JOY: a stick at the end", "PRINT JOY(\"LX\");JOY(\"LY\")",                    "10\n" },
+    { "JOY: the dead zone is applied and the rest scaled", "PRINT ABS(JOY(\"RY\")+0.375)<0.001", "-1\n" },
+    { "JOY: a trigger",         "PRINT ABS(JOY(\"LT\")-0.5)<0.001;JOY(\"RT\")",     "-10\n" },
+    { "JOY DEADZONE",           "JOY DEADZONE 0:PRINT ABS(JOY(\"RY\")+0.5)<0.001",    "-1\n" },
+    { "JOY DEADZONE is read",   "JOY DEADZONE 0.3:PRINT JOY(\"DEADZONE\")",           "0.3\n" },
+    { "JOY: the default dead zone", "PRINT JOY(\"DEADZONE\")",                      "0.2\n" },
+    { "JOY DEADZONE too big",   "JOY DEADZONE 1",                                  "? Illegal argument\n" },
+    { "JOY DEADZONE negative",  "JOY DEADZONE -0.1",                               "? Illegal argument\n" },
+    { "JOY: CONNECTED",         "PRINT JOY(\"CONNECTED\");JOY(\"CONNECTED\",2);JOY(\"CONNECTED\",3);JOY(\"CONNECTED\",4)", "-1-100\n" },
+    { "JOY: a player without a pad reads 0", "PRINT JOY(\"A\",3);JOY(\"LX\",4);JOY(\"BUTTONS\",3)", "000\n" },
+    { "JOY: COUNT",             "PRINT JOY(\"COUNT\")",                            "2\n" },
+    { "JOY: COUNT needs no player", "PRINT JOY(\"COUNT\",9);JOY(\"COUNT\",0)",    "22\n" },
+    { "JOY: BUTTONS",           "PRINT JOY(\"BUTTONS\");JOY(\"BUTTONS\",2)",       "172\n" },
+    { "JOY: PRESSED is latched", "PRINT JOY(\"PRESSED\");JOY(\"PRESSED\")",         "170\n" },
+    { "JOY: RELEASED",          "PRINT JOY(\"RELEASED\")",                         "0\n" },
+    { "JOY: EVENTS",            "PRINT JOY(\"EVENTS\")",                           "5\n" },
+    { "JOY: a name that is none", "PRINT JOY(\"ZZZ\")",                            "? Illegal argument\n" },
+    { "JOY: player 0",          "PRINT JOY(\"A\",0)",                              "? Illegal argument\n" },
+    { "JOY: player 5",          "PRINT JOY(\"A\",5)",                              "? Illegal argument\n" },
+    { "JOY: a number is no name", "PRINT JOY(1)",                                  "? String expression expected\n" },
+    { "JOY: the parenthesis",   "PRINT JOY(\"A\"",                                 "? Closing parenthesis ')' expected\n" },
+    { "ON JOY GOSUB",           "10 ON JOY GOSUB 100\n20 A$=INKEY$\n30 FOR I=1 TO 300:NEXT I\n40 PRINT \"done\";C\n50 END\n100 C=C+1:RETURN", "done1\n", "\001" },
+    { "ON JOY GOTO",            "10 ON JOY GOTO 100\n20 A$=INKEY$\n30 FOR I=1 TO 300:NEXT I\n40 PRINT \"done\";C\n50 END\n100 C=C+1:ON JOY OFF:GOTO 30", "done1\n", "\001" },
+    { "ON JOY: no event, no handler", "10 ON JOY GOSUB 100\n20 FOR I=1 TO 300:NEXT I\n30 PRINT \"done\";C\n40 END\n100 C=C+1:RETURN", "done0\n" },
+    { "ON JOY: a release is an event, too", "10 ON JOY GOSUB 100\n20 A$=INKEY$:B$=INKEY$\n30 FOR I=1 TO 300:NEXT I\n40 PRINT \"done\";C\n50 END\n100 C=C+1:RETURN", "done1\n", "\001\002" },
+    { "ON JOY: plugging in is an event", "10 ON JOY GOSUB 100\n20 A$=INKEY$\n30 FOR I=1 TO 300:NEXT I\n40 PRINT \"done\";C;JOY(\"COUNT\")\n50 END\n100 C=C+1:RETURN", "done13\n", "\003" },
+    { "ON JOY: plugging out is an event", "10 ON JOY GOSUB 100\n20 A$=INKEY$\n30 FOR I=1 TO 300:NEXT I\n40 PRINT \"done\";C;JOY(\"COUNT\");JOY(\"CONNECTED\",2)\n50 END\n100 C=C+1:RETURN", "done110\n", "\004" },
+    { "ON JOY OFF",             "10 ON JOY GOSUB 100\n15 ON JOY OFF\n20 A$=INKEY$\n30 FOR I=1 TO 300:NEXT I\n40 PRINT \"done\";C\n50 END\n100 C=C+1:RETURN", "done0\n", "\001" },
+    { "ON JOY: the events before it do not count", "10 A$=INKEY$\n20 ON JOY GOSUB 100\n30 FOR I=1 TO 300:NEXT I\n40 PRINT \"done\";C\n50 END\n100 C=C+1:RETURN", "done0\n", "\001" },
+    { "ON JOY with a label",    "10 ON JOY GOSUB PAD\n20 A$=INKEY$\n30 FOR I=1 TO 300:NEXT I\n40 PRINT \"done\";C\n50 END\n60 LABEL PAD:C=C+10:RETURN", "done10\n", "\001" },
+    { "ON JOY needs GOTO, GOSUB or OFF", "ON JOY",                                   "? GOTO, GOSUB or OFF expected\n" },
     { "ON MOUSE GOSUB",         "10 ON MOUSE GOSUB 100\n20 FOR I=1 TO 3000:NEXT I\n30 PRINT \"done\";C\n40 END\n100 C=C+1:RETURN", "done1\n" },
     { "ON MOUSE GOTO",          "10 ON MOUSE GOTO 100\n20 FOR I=1 TO 3000:NEXT I\n30 PRINT \"done\";C\n40 END\n100 C=C+1:ON MOUSE OFF:GOTO 20", "done1\n" },
     { "ON MOUSE OFF",           "10 ON MOUSE GOSUB 100\n15 ON MOUSE OFF\n20 FOR I=1 TO 3000:NEXT I\n30 PRINT \"done\";C\n40 END\n100 C=C+1:RETURN", "done0\n" },
@@ -1399,7 +1439,29 @@ static void vm_breakesc( struct _vm_t* vm, void* usrdata, bool on ) {
     out_append( on ? "[ESC breaks]" : "[ESC is a key]" );
 }
 
+// the test controllers (joy.h), set up for every case in run_case(): player 1 "Test Pad One" holds A and LB, its left stick is full right, the right stick is up by half
+// (raw -16384), the left trigger is at 16384; player 2 "Test Pad Two" holds B. INKEY$ also makes controller events when it meets a control code in the input, so that
+// ON JOY can be tested: 1 = X pressed, 2 = X released on pad 1, 3 = a third pad is plugged in, 4 = pad 2 is unplugged.
+static void joy_setup( void ) {
+    joy_init();
+    int a = joy_attach( "Test Pad One" ), b = joy_attach( "Test Pad Two" );
+    joy_event_button( a, JOYB_A, true );
+    joy_event_button( a, JOYB_LB, true );
+    joy_event_axis( a, JOYA_LX, 32767 );
+    joy_event_axis( a, JOYA_RY, -16384 );
+    joy_event_axis( a, JOYA_LT, 16384 );
+    joy_event_button( b, JOYB_B, true );
+}
+
 static int vm_inkey( struct _vm_t* vm, void* usrdata ) {
+    while ( keys && *keys >= 1 && *keys <= 4 ) {
+        switch ( *keys++ ) {
+            case 1: joy_event_button( 0, JOYB_X, true ); break;
+            case 2: joy_event_button( 0, JOYB_X, false ); break;
+            case 3: joy_attach( "Hot Pad" ); break;
+            default: joy_detach( 1 ); break;
+        }
+    }
     return keys && *keys ? (uint8_t) *keys++ : 0;
 }
 
@@ -1722,6 +1784,7 @@ static bool run_case( const testcase_t* tc, buf_t* tokbuf ) {
     out_reset();
     snd_reset();
     keys = tc->input;
+    joy_setup();
     cleanup_runtime( &rt );
     init_runtime( &rt );
     rt.report = rt_report;

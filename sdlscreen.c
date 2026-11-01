@@ -39,6 +39,7 @@
 #include "keystate.h"
 #include "cursors.h"
 #include "mouse.h"
+#include "sdljoy.h"
 #include "scrdrv.h"
 
 #define NLAYERS 5
@@ -426,6 +427,7 @@ static int sdlscr_worker( void* arg ) {
     tilescr_init();
     sprscr_init();
     mouse_init();
+    sdljoy_init();                          // the game controllers (events of plugged in pads arrive in the loop below)
     SDL_ShowCursor( SDL_DISABLE );          // the pointer is the engine's own (cursors.h, mouse.h): shown for a while after the mouse did something
 
     // sdllay_disable( &layers[LAY_BG]  );
@@ -554,6 +556,9 @@ static int sdlscr_worker( void* arg ) {
                     }
                     sdlscr_handletext( ev.text.text );
                     break;
+                default:
+                    sdljoy_handle_event( &ev );     // the game controllers (joy.h)
+                    break;
             }
         }
 
@@ -648,6 +653,7 @@ static int sdlscr_worker( void* arg ) {
 
     // cleanup
     sdlscr_initok = false;
+    sdljoy_shutdown();
 
 /* ERR5: */ cleanup_layers();
 ERR4:   SDL_DestroyRenderer( renderer );

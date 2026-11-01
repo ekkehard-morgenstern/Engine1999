@@ -101,6 +101,8 @@ static void test_encodings( void ) {
     asmcase( "MTH2 3", "A1 7E 00 03" );
     asmcase( "STRN 2", "A1 7F 00 02" );
     asmcase( "ERRN", "21 80" );
+    asmcase( "JOYQ", "21 82" );
+    asmcase( "JOYD", "21 83" );
     asmcase( "ERRR", "21 81" );
     asmcase( "WAIT", "21 44" );
     asmcase( "SND 13", "A1 42 00 0D" );

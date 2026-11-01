@@ -123,10 +123,13 @@ sys-str-fn-2-arg-call := ( BIN | QUA | OCT | DEC | HEX ) "$" "(" num-expr
 
 > MIN(a,b) and MAX(a,b) are the smaller / larger number, ATAN2(y,x) the angle of the point (x,y) in the unit of DEG/RAD/GRAD. SPACE$(n) is n blanks,
 > STRING$(n,c) n copies of the character code c (0..255) or of the first character of the string c. These five are extension words: TOK\_XFUNC plus
-> one byte (the grammar writes them by name).
+> one byte (the grammar writes them by name). JOY(name$ [, player]) reads a game controller (player 1..4, 1 by default): name$ is a button ("A" "B" "X" "Y" "LB"
+> "RB" "BACK" "START" "GUIDE" "LS" "RS" "UP" "DOWN" "LEFT" "RIGHT": -1 held, 0 not), an axis ("LX" "LY" "RX" "RY": -1..1, up is negative; "LT" "RT": 0..1) or
+> "CONNECTED", "COUNT", "BUTTONS", "PRESSED", "RELEASED", "EVENTS", "DEADZONE"; a player without a pad reads 0.
 
 ```ebnf
 xfunc-call := ( MIN | MAX | ATAN2 ) "(" num-expr "," num-expr ")" |
+              JOY "(" str-expr [ "," num-expr ] ")" |
               SPACE "$" "(" num-expr ")" |
               STRING "$" "(" num-expr "," expr ")" .
 sys-num-fn-arg-call := sys-num-fn-1-arg-call | xfunc-call .
@@ -536,6 +539,14 @@ on-error-stmt := ON ERROR ( goto-kw goto-target | OFF ) .
 error-stmt := ERROR num-expr .
 ```
 
+> JOY DEADZONE d sets the dead zone of the sticks (0..0.9, 0.2 at the start) for all pads. ON JOY runs a handler when a button is pressed or released or a pad is
+> plugged in or out (not when a stick moves).
+
+```ebnf
+joy-stmt := JOY DEADZONE num-expr .
+on-joy-stmt := ON JOY ( goto-kw goto-target | OFF ) .
+```
+
 > Numeric functions: INT FIX ABS SGN SQR SIN COS TAN ATN EXP LOG RND ( num-expr ) (RND alone is RND(1)); PI. \\ (integer division) and MOD
 > are at the level of \* and /. RANDOMIZE [ seed ] seeds RND.
 
@@ -632,7 +643,7 @@ gfx-all-stmt := gfx-stmt | txt-stmt | tile-stmt | sprite-stmt | mouse-stmt | on-
 ```ebnf
 prog-stmt := gfx-all-stmt | load-stmt | run-stmt | merge-stmt | chain-stmt | files-stmt | build-stmt | bye-stmt | timer-stmt | list-stmt | new-stmt | clear-stmt |
              delete-stmt | renum-stmt | edit-stmt | monitor-stmt | sound-stmt | wait-stmt | on-error-stmt | randomize-stmt | angle-stmt |
-             cont-stmt | trace-stmt | break-stmt | auto-stmt | poke-stmt | error-stmt .
+             cont-stmt | trace-stmt | break-stmt | auto-stmt | poke-stmt | error-stmt | joy-stmt | on-joy-stmt .
 stmt := io-stmt | prog-stmt | assign-stmt | control-flow-stmt .
 stmt-list := stmt { ":" stmt } .
 stmt-line := [ stmt-list ] [ <'comment> ] <end-of-line> .

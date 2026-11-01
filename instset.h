@@ -547,6 +547,14 @@ The 4096 extended instructions are as follows:
                             11 Division by zero, 13 Type mismatch, ...); 255 for any other message; ERROR n gives n back.
     0001 10000001       ERRR - raise an error ( n -- ) C=0 P=0
                             ERROR n: an error with the text of number n (the table; "Error n" if the table has none), n = 1..255, else "Illegal argument". It is caught by ON ERROR like any other.
+    0001 10000010       JOYQ - read a game controller value ( name player -- v ) C=0 P=0
+                            JOY(name$, player): name is a button ("A" .. "RIGHT": -1 held / 0), an axis ("LX" "LY" "RX" "RY": -1 .. 1 with the dead zone, "LT" "RT": 0 .. 1) or one of
+                            CONNECTED (-1 / 0), BUTTONS / PRESSED / RELEASED (the buttons added up as bits; PRESSED and RELEASED are latched since the last call), COUNT (the pads
+                            plugged in) and EVENTS (a counter that ON JOY watches), DEADZONE (the setting). player is 1..4 ("Illegal argument" otherwise, except for COUNT and EVENTS);
+                            a player without a pad reads 0. An unknown name is "Illegal argument". The state is joy.h (no host callback).
+    0001 10000011       JOYD - set the dead zone ( d -- ) C=0 P=0
+                            JOY DEADZONE d: 0 .. 0.9 for all pads, else "Illegal argument".
+    COLT with the parameter bit 8: ON JOY OFF (8) / GOSUB (9) / GOTO (10) (the bit 4 is ON MOUSE).
     MATH kinds 14..16: CEIL, LOG2, LOG10 (kind 1, INT, is FLOOR as well).
 
     0001 01111110       MTH2 - numeric function of two numbers ( x y -- z ) C=0 P=1
@@ -736,5 +744,7 @@ The 4096 extended instructions are as follows:
 #define INS_STRN        UINT16_C(0X17F)
 #define INS_ERRN        UINT16_C(0X180)
 #define INS_ERRR        UINT16_C(0X181)
+#define INS_JOYQ        UINT16_C(0X182)
+#define INS_JOYD        UINT16_C(0X183)
 
 #endif

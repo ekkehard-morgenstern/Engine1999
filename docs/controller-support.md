@@ -1,7 +1,7 @@
 # Controller and joystick support
 
-**Status: planned, not implemented** (roadmap item 4; the mouse part of that item is done, the joystick is next). This page collects what is known about game
-controllers on a PC and how the support will be tested, so that it does not have to be worked out again. Written 2026-11-01. The statements about drivers and
+**Status: implemented 2026-11-01** (roadmap item 4; see "What is implemented" at the end; the language is in `docs/basic-language.md`, "Game controllers"). This page collects what is known about game
+controllers on a PC and how the support is tested. Written 2026-11-01, before the implementation; the design points below are marked with what was decided. The statements about drivers and
 brands are from general knowledge of the Linux kernel and SDL, **not verified on hardware by this project**; the checks in "Trying a real controller" are there to do exactly that.
 
 ## Do the console controllers work on a PC?
@@ -21,7 +21,7 @@ Yes. On Linux (Debian 12, kernel 6.1, SDL 2.26 are what the project is built on)
 position, two shoulder buttons, two triggers, the D-pad, two sticks, Start / Back / Guide, the stick clicks) using SDL's controller database, so that a program sees the same
 numbers on an Xbox, a PS4 and a Switch pad. Pads SDL does not know about are still reachable through the plain joystick API (numbered axes and buttons).
 
-Points to settle in the design (nothing is decided):
+Points of the design (decided when it was implemented, see the end):
 - **Face button naming.** SDL can name the buttons by *position* (bottom, right, left, top) or by *label* (A, B, X, Y: a Nintendo pad then swaps A and B). Position is the safer
   basis for games; the hint is `SDL_GAMECONTROLLER_USE_BUTTON_LABELS`.
 - **The words.** Probably a function `JOY(player, "name")` in the style of `KEY("name")` and `MOUSE("X")` (names for buttons, stick axes -1..1, triggers 0..1, D-pad), `ON JOY GOSUB` like
@@ -59,3 +59,16 @@ sdl2-jstest --list                     # what SDL sees, and whether it has a map
 
 If the pad shows up in `sdl2-jstest --list` with a mapping, the Engine will see it with the standard layout. A pad without a mapping can be given one with the
 environment variable `SDL_GAMECONTROLLERCONFIG` (SDL's mapping string format; the SDL Game Controller DB is the usual source); a mapping that works should be reported and added to the Engine.
+
+## What is implemented
+
+- **`joy.[ch]`** (no SDL): four slots, atomic words, latched `PRESSED` / `RELEASED` bits, an event counter, the dead zone (default 0.2, `JOY DEADZONE`), names. **`sdljoy.[ch]`**: SDL's game controller API with the plain joystick API as the fallback
+  (axes 0, 1 = left stick, 2, 3 = right stick, buttons 0 .. 9, the first hat = the D-pad); the events are given to it by the screen thread's loop (`sdlscreen.c`). Both pads with and without a mapping, hot plugging and removal work.
+- **BASIC**: `JOY(name$ [, player])`, `JOY DEADZONE d`, `ON JOY GOSUB|GOTO|OFF` (one new extension word, `JOY`); a player without a pad reads 0 (no error), the console host reads 0 everywhere (`JOY("COUNT")` is 0). Details: `docs/basic-language.md`, "Game controllers".
+- **Decisions I took** (revisit if unwanted): face buttons **by position** (SDL's hint `SDL_GAMECONTROLLER_USE_BUTTON_LABELS` is set to 0 before `SDL_Init`, so a Nintendo pad does not swap A and B); up is negative on the sticks; the sticks have **no radial dead zone** (each axis on its own);
+  the dead zone is global, not per pad; a pad keeps its player number until it is unplugged and a new pad takes the lowest free number; four pads at most; `ON JOY` fires on button presses and releases and on plugging in or out, not on stick motion; `JOY("PRESSED")` and `("RELEASED")` are latched per player like the mouse's.
+- **Quirks found while testing**: SDL **delays the release of the Guide button by 250 ms** (so that a quick tap is seen); the trigger axes of a **virtual** pad are rescaled by SDL (a raw 16384 reads 0.75); SDL turns Ctrl-C and SIGTERM into `SDL_QUIT` events (a program that polls events must look for it).
+- **Tested**: `joytest1` (the state, 43 checks), `vmtest1` (the BASIC level with injected state: 36 cases, `ON JOY` through control codes in the test host's `INKEY$`), `sdltest4 --selftest` (SDL events with virtual pads: a pad with a mapping, a plain joystick, all 15 buttons, sticks,
+  triggers, the hat, unplugging, taking a free slot again: 20 checks), `asmtest1`, `repltest1`. **A real pad**: an **Xbox Series X|S controller on USB** was plugged into the development machine during the work (the kernel's `xpad` driver, SDL: "Xbox Series X Controller"); it is found as player 1 by `sdltest4` and by `demos/joy.bas` in the real window,
+  and the self test runs with it plugged in. What was **not** tried by me: pressing its buttons and moving its sticks (nobody was at the pad), PlayStation and Switch pads, Bluetooth, hot plugging of a real pad while a program runs.
+- **Not done**: the pad's name as a string, rumble, motion sensors, touchpads, joysticks in the console host (reading `/dev/input/js*` would do it), a configuration of the mapping from inside the Engine, an analog "radial" dead zone.
