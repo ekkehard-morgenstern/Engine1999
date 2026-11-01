@@ -59,7 +59,7 @@ how a handler is named (line number / label / `FN`?); how they are cancelled (`O
 
 ## 4. Host polish (`engine1999.c`, `basrepl.[ch]`, `sdlscreen.c`)
 
-- [ ] Typed lines are limited to 255 characters (input buffer in `engine1999.c`); fine for now, may be raised later
+- [x] The prompt line is limited to 4095 characters in both hosts (2026-11-01, owner's decision; `PROMPT_BUFSIZE` in `engine1999.c`, `CON_PROMPTMAX` in `engine1999c.c`). A screen holds fewer: the editor leaves one row free, so a window of 80 x 25 takes 1919 characters at most (a terminal as many as `columns x (rows - 1)`); a redirected input takes the full 4095. Longer lines would need a horizontally scrolling editor (not planned)
 - [ ] Cursor keys and function keys for `GET` / `INKEY$`: **designed 2026-10-31, owner's decision** (`docs/basic-language.md`, "Keyboard: cursor keys, function keys, the character set"): keys that are not one byte arrive as xterm style ANSI escape sequences (`ESC [ A`...; F1 = HELP, reserved), ESC pressed twice = break, PAUSE/BREAK = immediate break, a sequence that stalls is dropped after a short time (console host); character set ISO-8859-15, the font gets the printable glyphs 160..255 and control glyphs for 127..159, typed `ä ö ü ß €` are mapped to it. Steps: (1) **done 2026-10-31**: font 128..255 + screen path (`txttest1`), (1b) **done**: `keyseq.[ch]` (canonical sequences, parser of the terminal dialects) + `sdlkeys.[ch]` (SDL key code -> sequence with modifiers) + `--debug-keys` in both hosts (`keytest1`), (2) window host: **done 2026-10-31**: the sequences reach `GET`/`INKEY$`, typed `ä ö ü ß €` -> ISO-8859-15; **done 2026-11-01:** break keys ESC / Ctrl+C / PAUSE (window) and `BREAK OFF|ON` (no double ESC), (3) console host: **done 2026-10-31** (the owner's terminal dumps agree with the canonical forms; the host re-encodes other dialects, drops unknown sequences, 50 ms ESC timeout, UTF-8 <-> ISO-8859-15 on a terminal), (4) **done**: VM grouping of sequences for `INKEY$`/`GET` (`vm_key_sequence()`, `vm_t.keyback`), (5) tests, man pages, docs. Also open: the encoding of `.bas` listings (UTF-8 files with `ä` in strings would show as two Latin-9 glyphs: convert on `LOAD`?)
 - [ ] File channels (`#n` with `n` ≠ 0): being done by the I/O subsystem, see section 8 and `docs/io-subsystem.md`
       discards output / reports end of input for every channel except 0
@@ -89,7 +89,7 @@ how a handler is named (line number / label / `FN`?); how they are cancelled (`O
 
 - [ ] 16-bit variable numbers (≤ 65535 variables), 6 array dimensions, one dimension ≤ 65535
 - [ ] VM strings ≤ 65535 bytes
-- [ ] `engine1999`: the command prompt line editor is limited to 255 characters (`INPUT` lines to 1023)
+- [x] the prompt line editor takes 4095 characters (`INPUT` lines 1023; the screen size limits it further, see section 4)
 
 ## 7. Design decisions taken that the owner may want to revisit
 

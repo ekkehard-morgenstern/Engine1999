@@ -1273,6 +1273,10 @@ static bool parse_args( int argc, char** argv, bool* phelp ) {
 extern const unsigned char embedded_program_start[] __asm__( "_binary_program_e99_start" ) __attribute__((weak));
 extern const unsigned char embedded_program_end[] __asm__( "_binary_program_e99_end" ) __attribute__((weak));
 
+// the longest line of the prompt (and of AUTO): 4095 characters; a window screen of 80 x 25 holds fewer (the editor leaves a row free), so the practical
+// limit there is 1919; the console host has the same limit (CON_PROMPTMAX), and a redirected input has the full 4095
+#define PROMPT_BUFSIZE  4096U
+
 #define TITLECOLOR  3
 #define INFOCOLOR   6
 
@@ -1383,7 +1387,7 @@ int main( int argc, char** argv ) {
         sdlscr_printf( -1, -1, -1, -1, "%s", "Ready.\n" );
 
         while ( !sdlscr_term() ) {
-            char buf[256]; buf[0] = '\0';
+            char buf[PROMPT_BUFSIZE + 16]; buf[0] = '\0';
             if ( repl.autoline != LINENO_NONE ) {
                 // AUTO: the host prompts with the next line number; an empty line ends it
                 if ( repl.autoline > LINENO_MAX ) {
@@ -1392,7 +1396,7 @@ int main( int argc, char** argv ) {
                     sdlscr_printf( -1, -1, -1, -1, "%s", "Ready.\n" );
                     continue;
                 }
-                char text[200]; text[0] = '\0';
+                char text[PROMPT_BUFSIZE]; text[0] = '\0';
                 sdlscr_printf( -1, -1, -1, -1, "%u ", (unsigned) repl.autoline );
                 int aev = sdlscr_lineinput( 0, text, sizeof(text), vblank_handler, &usrdata );
                 if ( aev & SDLEV_SCREENWORKERFINISHED ) break;
@@ -1415,7 +1419,7 @@ int main( int argc, char** argv ) {
                 }
                 continue;
             }
-            int ev = sdlscr_lineinput( 0, buf, 256U, vblank_handler, &usrdata );
+            int ev = sdlscr_lineinput( 0, buf, PROMPT_BUFSIZE, vblank_handler, &usrdata );
             if ( ev & SDLEV_SCREENWORKERFINISHED ) break;
             bool ready = handle_input( buf );
             if ( repl.quit ) break;         // BYE / EXIT

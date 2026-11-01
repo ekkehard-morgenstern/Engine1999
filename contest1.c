@@ -414,11 +414,13 @@ int main( void ) {
         static const char* const steps5[] = { "PRINT 5\004", "\r", "\004" };
         static const char* const exp5[] = { "\r\n5\r\n" };
         failed += !pty_case( "terminal: Ctrl-D does nothing in the middle of a line", steps5, 3U, exp5, 1U );
-        static char longline[400];
-        snprintf( longline, sizeof(longline), "PRINT 1%*s+2", 300, "" );
-        static const char* const steps6[] = { longline, "\r", "\004" };
-        static const char* const exp6[] = { "\r\n1\r\n" };
-        failed += !pty_case( "terminal: a line at the prompt is cut at 255 characters", steps6, 3U, exp6, 1U );
+        // a line at the prompt is as long as the screen holds (the editor leaves one row free: 23 x 80 = 1840 on this 24 x 80 terminal)
+        static char longline[2600], mediumline[1600];
+        snprintf( longline, sizeof(longline), "PRINT 1%*s+2", 2500, "" );
+        snprintf( mediumline, sizeof(mediumline), "PRINT 1%*s+2", 1500, "" );
+        static const char* const steps6[] = { mediumline, "\r", longline, "\r", "\004" };
+        static const char* const exp6[] = { "\r\n3\r\n", "\r\n1\r\n" };
+        failed += !pty_case( "terminal: a 1500 character line is entered, a 2500 character line is cut where the screen ends", steps6, 5U, exp6, 2U );
         static const char* const steps7[] = { "10 INPUT A$\r", "RUN\r", "ab\033[D\xc3\xb6", "\r", "PRINT A$;LEN(A$)\r", "\004" };
         static const char* const exp7[] = { "a\xc3\xb6" "b3\r\n" };
         failed += !pty_case( "terminal: INPUT uses the same editor (a character in the middle)", steps7, 6U, exp7, 1U );
@@ -487,6 +489,22 @@ int main( void ) {
     }
     {
         char *out, *err; size_t outlen;
+        // the prompt takes lines of up to 4095 characters from a redirected input (the screen's size does not matter there)
+        {
+            static char big[6200];
+            snprintf( big, sizeof(big), "PRINT 1%*s+2\n", 3000, "" );
+            int st2 = run( "-", big, &out, &outlen, &err );
+            bool ok2 = st2 == 0 && strcmp( out, "3\n" ) == 0;
+            printf( "%s  a 3000 character line from a pipe is entered whole\n", ok2 ? "PASS" : "FAIL" );
+            failed += !ok2;
+            free( out ); free( err );
+            snprintf( big, sizeof(big), "PRINT 1%*s+2\n", 5000, "" );
+            st2 = run( "-", big, &out, &outlen, &err );
+            ok2 = st2 == 0 && strcmp( out, "1\n" ) == 0;
+            printf( "%s  a 5000 character line from a pipe is cut at 4095\n", ok2 ? "PASS" : "FAIL" );
+            failed += !ok2;
+            free( out ); free( err );
+        }
         // binary-safe output
         int st = run( "-", "PRINT CHR$(0);\"x\"\n", &out, &outlen, &err );
         bool ok = st == 0 && outlen == 3U && out[0] == '\0' && out[1] == 'x' && out[2] == '\n';

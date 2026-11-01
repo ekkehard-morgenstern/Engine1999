@@ -130,7 +130,7 @@ The prompt and
 .B INPUT
 read their lines with the same one-line editor as the window (and as
 .BR "EDIT n" ):
-characters are typed at the cursor, Left, Right, Home, End, Backspace and Delete edit, Return accepts the line, Esc (or Ctrl\-C) cancels it (Break at INPUT), Ctrl\-D on an empty line ends the input; lines are cut at 255 characters (1023 for INPUT).
+characters are typed at the cursor, Left, Right, Home, End, Backspace and Delete edit, Return accepts the line, Esc (or Ctrl\-C) cancels it (Break at INPUT), Ctrl\-D on an empty line ends the input; lines are cut at 4095 characters (1023 for INPUT), or where the screen ends if that is sooner.
 A redirected input is no special case: the bytes of the file or pipe are the keys of the same editor (CR LF counts as one line end, the end of the input completes a last line without one), and nothing is drawn.
 On a terminal
 .B GET

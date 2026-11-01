@@ -191,6 +191,7 @@ static void con_report( struct _repl_t* repl, const char* text ) {
     fputs( text, stderr );
 }
 
+#define CON_PROMPTMAX   4095U       // the longest line at the prompt (the window's: PROMPT_BUFSIZE - 1 in engine1999.c)
 static ssize_t con_getline( char** line, size_t* cap, size_t maxlen, bool input );
 static char* con_edit( struct _repl_t* repl, const char* text );
 
@@ -728,6 +729,10 @@ static void con_line_sync( void ) {
     conscr_termsize( &cols, &rows );
     conscr_line_setsilent( !( isatty( 0 ) && isatty( 1 ) ) );       // a redirected input or output: nothing is drawn, the editor works on its model
     if ( !( isatty( 0 ) && isatty( 1 ) ) ) {
+        // nothing is drawn: the model screen is as tall as a line of the longest length needs, so only the length limit counts
+        if ( rows < (int)( CON_PROMPTMAX / (unsigned) cols ) + 3 ) {
+            rows = (int)( CON_PROMPTMAX / (unsigned) cols ) + 3;
+        }
         conscr_line_init( cols, rows, 0, 0 );
         return;
     }
@@ -926,7 +931,7 @@ static void con_repl( repl_t* repl, bool interactive ) {
     for (;;) {
         fflush( stdout );
         con_set_raw( false );
-        ssize_t n = con_getline( &line, &cap, 255U, false );
+        ssize_t n = con_getline( &line, &cap, CON_PROMPTMAX, false );
         if ( n < 0 ) {
             break;
         }
