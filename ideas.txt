@@ -11,6 +11,8 @@ Ideas to put on the roadmap or to amend or expand existing entries:
 
 - Are we there yet for making "demo scene" programs? From around the year 1999 would be sufficient. Low priority.
 
+- A potential bug: Sometimes when starting engine1999, its screen opens in the background. Any idea why this happens? If not, we should add some code at the beginning of the program to attempt to bring it into foreground first if it isn't (this could be tried for up to 1-3 seconds). High priority.
+
 Important new rule to add: Do not make breaking changes to the ABI (i.e. *.E99 format), so users can trust that a program saved will always load back currently (you have a version number in the E99 format for that purpose, bump the version if you make a breaking change. The engine should then keep supporting the old formats / version numbers for LOAD). An optional addition to that would be to make the default SAVE format ASCII (A), since nowadays, people would be more likely to expect that. 
 
 
