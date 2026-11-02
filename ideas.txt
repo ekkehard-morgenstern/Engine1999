@@ -9,6 +9,8 @@ Ideas to put on the roadmap or to amend or expand existing entries:
 - Support of Microsoft BMP files (should be easy to implement and permissible since the ECMA standard for Windows 3.1): During loading, palettized files should be converted to 8bpp and their colors matched to existing palette entries. For 16, 24 and 32 bit colors, the pixels should be mapped to palette colors. During saving, the reverse should happen: For 1,4,8 bpp, the palette should be synthesized from the pixels and the image color reduced while doing so. For 16,24,32 bpp, the pixels should be converted to the nearest approximation (esp. 16bpp, 24 bpp loses alpha channel, 32 bpp stored literally).
 - After implementing that, there should be support for sprite and sprite map load and save, background load and save, tile map load and save, tile load and save. Feel free to suggest something more suitable.
 
+- Are we there yet for making "demo scene" programs? From around the year 1999 would be sufficient. Low priority.
+
 Important new rule to add: Do not make breaking changes to the ABI (i.e. *.E99 format), so users can trust that a program saved will always load back currently (you have a version number in the E99 format for that purpose, bump the version if you make a breaking change. The engine should then keep supporting the old formats / version numbers for LOAD). An optional addition to that would be to make the default SAVE format ASCII (A), since nowadays, people would be more likely to expect that. 
 
 
