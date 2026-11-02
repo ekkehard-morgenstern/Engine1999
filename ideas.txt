@@ -15,4 +15,5 @@ Ideas to put on the roadmap or to amend or expand existing entries:
 
 Important new rule to add: Do not make breaking changes to the ABI (i.e. *.E99 format), so users can trust that a program saved will always load back currently (you have a version number in the E99 format for that purpose, bump the version if you make a breaking change. The engine should then keep supporting the old formats / version numbers for LOAD). An optional addition to that would be to make the default SAVE format ASCII (A), since nowadays, people would be more likely to expect that. 
 
+Another rule to add: Unlike C++, in C, variables that go into the BSS segment of an executable (uninitialized variables), are NOT set to zero automatically. When writing new code, always check for uninitialized variables and explicitly set them to zero. Likewise, malloc(), unlike calloc(), always return an uninitialized data block. Memory exposed via realloc() is also not initialized. Always set affected memory regions to zero before using them.
 

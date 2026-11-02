@@ -92,6 +92,7 @@ void txtscr_getcursor( int* outx, int* outy ) {
 // -- screens and viewport --------------------------------------------------------------
 
 static void txtscr_initscreen( txtscreen_t* sc ) {
+      memset( sc, 0, sizeof(textscreen_t) );
       sc->pen = sc->blankfg = TXTSCR_FGCOL;
       sc->paper = sc->blankbg = TXTSCR_BGCOL;
       sc->cursx = sc->cursy = 0;
