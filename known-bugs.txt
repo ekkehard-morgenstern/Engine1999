@@ -1,0 +1,3 @@
+The following are some known bugs that are yet unchecked or unsolved:
+- Building Engine1999 runs into -Werror reports on some platforms. Workaround for users: Remove -Werror from makefile.
+- On some platforms, parts of the screen flicker or swap. As of yet unsolved.
