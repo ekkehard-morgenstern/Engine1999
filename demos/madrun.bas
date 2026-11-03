@@ -2,6 +2,8 @@
 2 ' An executable made with BUILD contains the Engine1999 runtime: the Engine1999 Runtime Exception
 3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
 4 ' in the executable (it shows with the command line option --engine1999-about).
+5 ' the helpers that the demo games share (RN, CLAMP, PAD$, DISK, PLAYSEQ) are in the library demos/lib/util.lib
+6 LOAD LIBRARY "util"
 10 ' MADRUN - a crossing game for one to four players, for Engine1999.
 20 ' A telephone booth stands on the island in the middle of a busy crossing, and the phone is ringing! Get there before the caller hangs up.
 30 ' Cars, trucks, buses, motorbikes and (later) ambulances drive on eight lanes. They stop for each other and for the crossing, but never for you.
@@ -22,17 +24,6 @@
 180 ' VR the crossing reserved + 1; lanes 0..7 (LDIR, LAX axis, LPOS, LLEN, CA crossing entries, CID crossing numbers); OCC(crossing, axis) occupied
 190 ' --------------------------------------------------------------------------------------------------------------------------------------------
 200 ' (a FUNC has to be defined before the lines that call it)
-210 FUNC RN(M)
-220   RETURN INT(RND(1)*M)
-230 END FUNC
-240 FUNC PAD$(N,W)
-250   RETURN RIGHT$("00000000"+STR$(N),W)
-260 END FUNC
-270 FUNC CLAMP(V,LO,HI2)
-280   IF V<LO THEN RETURN LO
-290   IF V>HI2 THEN RETURN HI2
-300   RETURN V
-310 END FUNC
 320 ' is a button held on any of the four pads?
 330 FUNC ANYSTART(X)
 340   LOCAL P,R

@@ -117,6 +117,7 @@ sys-str-fn-2-arg-call := ( TOK_BIN | TOK_QUA | TOK_OCT | TOK_DEC | TOK_HEX ) TOK
 -- FRAME [n] waits for the next n screen refreshes.
 frame-stmt := FRAME [ num-expr ] .
 xfunc-call := ( MIN | MAX | ATAN2 ) TOK_LPAREN num-expr TOK_COMMA num-expr TOK_RPAREN |
+              EXISTS TOK_LPAREN str-expr TOK_RPAREN |
               JOY [ TOK_STRING ] TOK_LPAREN str-expr [ TOK_COMMA num-expr ] TOK_RPAREN |
               SPACE TOK_STRING TOK_LPAREN num-expr TOK_RPAREN |
               STRING TOK_STRING TOK_LPAREN num-expr TOK_COMMA expr TOK_RPAREN .

@@ -169,7 +169,7 @@ executable `repl_load_image()` recognizes the magic, loads the program and keeps
    line table per module, the module table for error messages, the start address of the program, the init calls).
 4. **`RUN` of a library** and the plain-`LOAD`-works rule; direct mode `LOAD LIBRARY` error; **`SAVE LIBRARY`** with `.lib` / `.l99`; **`LIBRARIES`** (DONE).
 5. **`BUILD` container** and the runtime's lookup of embedded libraries (DONE).
-6. **First libraries for the demos** (`demos/lib/`): the key / pad input of the games, text helpers; the games then shrink.
+6. **First libraries for the demos** (`demos/lib/`): the key / pad input of the games, text helpers; the games then shrink. *Survey and proposal: section 7c.*
 7. Tests: `vmtest1`, `repltest1`, `buildtest1`; `make install` installs the shared libraries; roadmap and `SESSION.md` updated.
 
 ## 7a. What step 3 does, exactly (2026-11-03)
@@ -209,6 +209,47 @@ executable `repl_load_image()` recognizes the magic, loads the program and keeps
 - **`LOAD LIBRARY` at the prompt** is the error "LOAD LIBRARY belongs in a program (RUN loads the libraries a program names)" (a direct line has no program to attach the libraries to; the check is in the code generator:
   a statement with no line number). In a program line it is accepted wherever (the checks of `baslib` apply).
 - Tests: `repltest1` (14 cases), `vmtest1` (6), grammar, man page, `mancheck.sh --update` (`LIBRARIES` is a reserved word now).
+
+## 7c. Step 6: survey of the demos and proposal for the first libraries (2026-11-03)
+
+**What was looked at:** the PROCs and FUNCs of `fruit.bas`, `fruit2.bas`, `climb.bas` and `madrun.bas` (the four big games; `fruit.bas` has no procedures at all, it is the old line-number style and stays as it is), compared by name and by similarity; the small demos
+(`gfx`, `joy`, `keys`, `mouse`, `sfx`, `ode`, `prelude`) have nothing worth sharing.
+
+**What is duplicated** (identical = byte for byte, apart from the line numbers):
+
+| Code | In | Lines each | Notes |
+|---|---|---|---|
+| `RN(M)`, `CLAMP(V,LO,HI)`, `PAD$(N,W)` | climb, fruit2, madrun | 3 + 5 + 3 | identical in all three |
+| `DISK(x,y,r,c)` (filled circle) | climb, fruit2 | 7 | identical but for the parameter names |
+| `PLAYSEQ(NT(),N,CH,BT,VL)` | climb, fruit2 | 6 | identical |
+| `TXTAT(x,y,t$,c)` | climb, fruit2, madrun | 5 | differs in the paper (`COLOR c` / `COLOR c,210`) |
+| `BIGTEXT(y,t$,c,s)` | climb, fruit2 | 6 | differs in the shadow color (2 / 11) |
+| `SHUTDOWN` (`SOUND OFF`, `GFX RESET`, `CLS`, a thank-you line) | climb, fruit2, madrun | 6 | differs in the title |
+| `KEYS` + `PAUSE` (arrows / WASD / space, pad stick, A, START edge for pause, BACK / Q to quit, P pauses) | climb, fruit2, madrun | 20 to 60 | the same logic; the games add their own keys (climb: UP / DOWN climb, Z / X drill) |
+| `ANYSTART` / `ANYBACK` / `ANYA` (a button on any of four pads) | madrun | 24 | the other games read pad 1 only |
+| the high score file (`ON ERROR GOTO`, `OPEN`, `INPUT #`, `CLOSE`, two handler labels in the main program) | climb, fruit2, madrun | ~22 | the same sequence |
+
+About 330 lines in all; more important than the lines is that a fix (the pause box bug of `climb.bas` was exactly this kind) has to be made three times.
+
+**Proposed libraries** (file names in `demos/lib/`, written with `SAVE LIBRARY`; found from a demo in `demos/` through the program's own `lib/`):
+
+1. **`util`** (no prefix needed for the three identical one-liners: **keep their names** `RN`, `CLAMP`, `PAD$` so that no caller changes; the rule only constrains *variables*): `RN`, `CLAMP`, `PAD$`, `DISK`, `PLAYSEQ` (array parameter). The smallest and safest first step: it proves the whole chain (`LOAD LIBRARY` in a demo, `BUILD`, `make install`) on code that cannot go wrong. Each demo drops its own copy (a copy left behind is "Duplicate name").
+2. **`input`** (prefix `IN_`): the common part of `KEYS` / `PAUSE`: `IN_POLL` sets `IN_DX`, `IN_DY`, `IN_FIRE`, `IN_START` (edge), `IN_BACK`, `IN_QUIT` from the keyboard and pad 1 (WASD, arrows, space, stick, D-pad, A); `IN_PAUSE` runs the pause loop (P / START to go on, Q / BACK to quit) and **returns** instead of drawing, so the game puts up its own box (a library cannot call the game's `TXTAT`); `IN_ANYSTART`, `IN_ANYBACK`, `IN_ANYA` over four pads (the button name of `JOY()` has to be a literal, so one function per button, as in `madrun.bas` today); `IN_PADS` (how many pads are connected). The games keep their extra keys in a few lines of their own.
+3. **`text`** (prefix `TX_`): `TXTAT` with the paper as an argument, `BIGTEXT` with the shadow color as an argument, `TX_CENTER`, `SHUTDOWN` taking the title as an argument; the banner helper of `madrun.bas` (`BANNER` / `CENTER` on the graphics layer) if the other games want it.
+4. **`hiscore`** (prefix `HS_`): `HS_LOAD(file$)` and `HS_SAVE(file$, value)`, **blocked by a language gap, see below**.
+
+**Not worth sharing:** the art (`DEFSPRITES`, `DEFTILES`, `MAKEIMAGES`; game specific, mostly `DATA`), `SOUNDS` (each game has its own effect table), `INIT`, `TITLE`, `PLAYGAME`, `HUD`, `GAMEOVER`, the traffic simulation and its drawing code (`madrun`), the tower map (`climb`), `LOADPAL` (see below). Possible later: the particle code of `fruit2` (explosions) and `climb` (sparks) if they turn out the same on a closer look, and `GRABSPRITE` of `madrun` (`GFX GRAB` + `SPRITE DEF`).
+
+**What the library rules mean for the extraction** (found while surveying, each checked against the implementation):
+- A library **cannot call the game's procedures** (it is compiled first). Anything that needs the game's drawing (the "PAUSED" box, the title screen) stays in the game; the library returns a value or takes the colors as arguments.
+- A library's **`READ` reads its own `DATA`**: `LOADPAL` (palette entries from the game's `DATA` rows) cannot move into a library; a shared `PAL_SET( layer, base, ARR() )` taking the colors in an array could, at the price of the games filling the array.
+- **State becomes prefixed variables** (`IN_DX`, `HS_...`): the games read them directly; the library has no top-level code, so the arrays it needs are `DIM`ed in `IN_INIT`, which the runtime calls before the program starts.
+- **Timer handlers** (`EVERY` / `AFTER ... GOSUB label`) can name a label *of the same library*; the games' music handlers call the game's own `BAR` and stay in the games.
+- **High score: not possible today.** The sequence `ON ERROR GOTO handler` ... `RESUME label` only works at the program's top level: an error inside a `PROC` or `FUNC` unwinds its frame, so `RESUME label` lands in code whose `RETURN` finds no frame ("Return stack underflow", reproduced with a prototype `HS_LOAD`). The programs get away with it because their file code is in the main program. A library needs a way to test for a file without raising an error: **an `EXISTS(file$)` function** (`-1` / `0`, through the I/O drivers like `OPEN`), or errors that can be resumed inside procedures. I would add `EXISTS()` (a small, useful word on its own: it is roadmap item 59 now); `HS_LOAD` is then `IF EXISTS(F$) THEN OPEN ...`. *Decision for the owner.*
+
+**Done 2026-11-03: `util`** (`demos/lib/util.lib`: `RN`, `CLAMP`, `PAD$`, `DISK`, `PLAYSEQ`, names unchanged, no prefix): `fruit2`, `climb` and `madrun` load it with `LOAD LIBRARY "util"` (line 6) and lost 59 lines of copies; checked in the window under Xvfb (each game started and played: score, high score from its file, planet / moon, music) and `fruit2` built with `BUILD` and run from another directory (the library came out of the bundle); `make install` installs `demos/lib/*.lib` next to the installed demos (found through the program's own `lib/`). **`EXISTS(file$)`** is done (roadmap item 59), so `hiscore` is possible next.
+
+**Order of work** (each step ends with the demo running as before: the headless runners and the window under Xvfb, the same checks as when the games were written): `util` (three demos), then `input` (three demos plus the pad helpers; the biggest gain), then `text`, then `hiscore` once `EXISTS()` is there. After each library: `make install` must install `demos/lib/` (a line in the makefile), `BUILD` of each demo is tried (the bundle carries the libraries), the README of the demos gets a section on the libraries.
 
 ## 8. Decisions (owner, 2026-11-03)
 

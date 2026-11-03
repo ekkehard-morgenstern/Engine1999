@@ -2,6 +2,8 @@
 2 ' An executable made with BUILD contains the Engine1999 runtime: the Engine1999 Runtime Exception
 3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
 4 ' in the executable (it shows with the command line option --engine1999-about).
+5 ' the helpers that the demo games share (RN, CLAMP, PAD$, DISK, PLAYSEQ) are in the library demos/lib/util.lib
+6 LOAD LIBRARY "util"
 10 ' FRUIT INVADERS II - a Space Invaders style game for Engine1999, written with procedures.
 20 ' Keys: LEFT / RIGHT or A / D move the cannon (only while the key is held), SPACE or UP fires, P = pause, Q = quit.
 21 ' Game controller (optional, JOY): the D-pad or the left stick moves, A or the right trigger fires, START pauses, BACK quits.
@@ -23,17 +25,6 @@
 180 ' UA,UX,UY,UD pineapple, UFOREADY set by the AFTER timer, PU,PUX,PUY banana, EP() explosion timers, PL() particle lives
 190 ' --------------------------------------------------------------------------------------------------------------------------------------
 200 ' (a FUNC has to be defined before the lines that call it)
-210 FUNC RN(M)
-220   RETURN INT(RND(1)*M)
-230 END FUNC
-240 FUNC CLAMP(V,LO,HI2)
-250   IF V<LO THEN RETURN LO
-260   IF V>HI2 THEN RETURN HI2
-270   RETURN V
-280 END FUNC
-290 FUNC PAD$(N,W)
-300   RETURN RIGHT$("00000000"+STR$(N),W)
-310 END FUNC
 320 ' the number of fruits that are still alive (FOR EACH goes over the whole array, a row after the other)
 330 FUNC COUNTALIVE(G())
 340   LOCAL N,V
@@ -160,13 +151,6 @@
 1550   NEXT I
 1560 END PROC
 1570 ' a filled disk on the graphics or background layer (horizontal lines)
-1580 PROC DISK(CX,CY,R,C)
-1590   LOCAL Y,W
-1600   FOR Y=-R TO R
-1610     W=INT(SQR(R*R-Y*Y))
-1620     GFX LINE CX-W,CY+Y,CX+W,CY+Y,C
-1630   NEXT Y
-1640 END PROC
 1650 PROC BACKGROUND
 1660   LOCAL I,X,H
 1670   GFX TARGET 0
@@ -1319,12 +1303,6 @@
 13100 END PROC
 13110 ' ====================================================================== the music: two voices on the channels 3 and 4, a bar after the other
 13120 ' the notes of the array NT(), N of them, one after the other on channel CH, BT beats each, volume VL
-13130 PROC PLAYSEQ(NT(),N,CH,BT,VL)
-13140   LOCAL I
-13150   FOR I=0 TO N-1
-13160     SOUND CH,NT(I),BT,VL
-13170   NEXT I
-13180 END PROC
 13190 ' one bar (4 beats): an arpeggio of the chord on channel 3 and two half notes of bass on channel 4
 13200 PROC BAR
 13210   LOCAL I,TA(8)

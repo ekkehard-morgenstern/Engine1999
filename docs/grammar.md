@@ -133,6 +133,7 @@ sys-str-fn-2-arg-call := ( BIN | QUA | OCT | DEC | HEX ) "$" "(" num-expr
 ```ebnf
 frame-stmt := FRAME [ num-expr ] .
 xfunc-call := ( MIN | MAX | ATAN2 ) "(" num-expr "," num-expr ")" |
+              EXISTS "(" str-expr ")" |
               JOY [ "$" ] "(" str-expr [ "," num-expr ] ")" |
               SPACE "$" "(" num-expr ")" |
               STRING "$" "(" num-expr "," expr ")" .

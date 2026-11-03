@@ -2026,6 +2026,23 @@ static bool comp_eat_xfunccall( compiler_t* comp, node_t** pnode, bool wantstr )
         return false;
     }
     node_t* arg1 = NODE_NONE, *arg2 = NODE_NONE;
+    if ( xid == XF_EXISTS ) {
+        // EXISTS ( str-expr )
+        if ( !comp_eat_strexpr( comp, &arg1 ) || arg1 == NODE_NONE ) {
+            comp_error( comp, "String expression expected" );
+            return false;
+        }
+        if ( comp->currtok != TOK_RPAREN || !comp_fetchtok( comp ) ) {
+            comp_error( comp, "Closing parenthesis ')' expected" );
+            return false;
+        }
+        uint8_t edata[2] = { TOK_XFUNC, xid };
+        if ( !comp_create_node( comp, pnode, NT_SYSNUMFUNCARGCALL, UINT8_C(1), UINT16_C(2), edata, arg1 ) || *pnode == NODE_NONE ) {
+            out_of_memory( comp );
+            return false;
+        }
+        return true;
+    }
     if ( xid == XF_JOY ) {
         // JOY ( str-expr [ TOK_COMMA num-expr ] ) and JOY TOK_STRING ( str-expr [ TOK_COMMA num-expr ] )     the name of the value, the player (1 by default)
         if ( !comp_eat_strexpr( comp, &arg1 ) || arg1 == NODE_NONE ) {

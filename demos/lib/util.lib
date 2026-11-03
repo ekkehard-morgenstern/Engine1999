@@ -1,0 +1,36 @@
+1 ' License: free for everybody to use, copy, change and build into executables (BUILD).
+2 ' An executable made with BUILD contains the Engine1999 runtime: the Engine1999 Runtime Exception
+3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
+4 ' in the executable (it shows with the command line option --engine1999-about).
+10 ' util - small helpers that the demo games share (a library: LOAD LIBRARY "util").
+20 ' The names are short on purpose: callers use them as they are, so a program that loads this library must not define them a second time.
+30 LIBRARY "util"
+40 ' RN(M): a random whole number from 0 to M-1
+50 FUNC RN(M)
+60   RETURN INT(RND(1)*M)
+70 END FUNC
+80 ' CLAMP(V,LO,HI): V, but not below LO and not above HI
+90 FUNC CLAMP(V,LO,HI)
+100   IF V<LO THEN RETURN LO
+110   IF V>HI THEN RETURN HI
+120   RETURN V
+130 END FUNC
+140 ' PAD$(N,W): the number N as text, filled with zeros from the left to the width W (a score: PAD$(1250,8) is 00001250)
+150 FUNC PAD$(N,W)
+160   RETURN RIGHT$("00000000"+STR$(N),W)
+170 END FUNC
+180 ' DISK(X,Y,R,C): a filled circle of radius R around X,Y in the color C on the graphics layer
+190 PROC DISK(CX,CY,R,C)
+200   LOCAL Y,W
+210   FOR Y=-R TO R
+220     W=INT(SQR(R*R-Y*Y))
+230     GFX LINE CX-W,CY+Y,CX+W,CY+Y,C
+240   NEXT Y
+250 END PROC
+260 ' PLAYSEQ(NT(),N,CH,BT,VL): plays the N notes of the array NT on the sound channel CH, each for BT beats at the volume VL
+270 PROC PLAYSEQ(NT(),N,CH,BT,VL)
+280   LOCAL I
+290   FOR I=0 TO N-1
+300     SOUND CH,NT(I),BT,VL
+310   NEXT I
+320 END PROC

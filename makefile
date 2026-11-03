@@ -232,11 +232,12 @@ kit/engine1999c: kit/engine1999c.o kit/engine.lib
 	$(CCOMP) $(KITFLAGS) -o $@ kit/engine1999c.o kit/engine.lib -lrt -lm
 
 install: kit version.h
-	install -d $(DESTDIR)$(BINDIR) $(DESTDIR)$(LIBDIR) $(DESTDIR)$(SHAREDIR)/demos $(DESTDIR)$(DOCDIR)/docs/images \
+	install -d $(DESTDIR)$(BINDIR) $(DESTDIR)$(LIBDIR) $(DESTDIR)$(SHAREDIR)/demos/lib $(DESTDIR)$(DOCDIR)/docs/images \
 		$(DESTDIR)$(MANDIR)/man1 $(DESTDIR)$(MANDIR)/man7
 	install -m 755 kit/engine1999 kit/engine1999c $(DESTDIR)$(BINDIR)
 	install -m 644 kit/engine1999.o kit/engine1999c.o kit/engine.lib $(DESTDIR)$(LIBDIR)
 	install -m 644 demos/*.bas demos/README.md $(DESTDIR)$(SHAREDIR)/demos
+	install -m 644 demos/lib/*.lib $(DESTDIR)$(SHAREDIR)/demos/lib
 	install -m 644 README.md LICENSE LICENSE-EXCEPTION $(DESTDIR)$(DOCDIR)
 	install -m 644 docs/*.md docs/grammar.html $(DESTDIR)$(DOCDIR)/docs
 	install -m 644 docs/images/*.png $(DESTDIR)$(DOCDIR)/docs/images

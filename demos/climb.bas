@@ -2,6 +2,8 @@
 2 ' An executable made with BUILD contains the Engine1999 runtime: the Engine1999 Runtime Exception
 3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
 4 ' in the executable (it shows with the command line option --engine1999-about).
+5 ' the helpers that the demo games share (RN, CLAMP, PAD$, DISK, PLAYSEQ) are in the library demos/lib/util.lib
+6 LOAD LIBRARY "util"
 10 ' THE LONG CLIMB - a jump and run game for Engine1999.
 20 ' You are a construction worker and the ice cream stand is on the roof of the unfinished steel tower, 960 pixels above the street. Climb the ladders,
 30 ' jump the gaps, hurdles, cars and birds, and use your drill to make holes in the girders: a rust ball or slime that walks into a hole is trapped,
@@ -25,17 +27,6 @@
 200 ' ----------------------------------------------------------------------------------------------------------------------------------------
 210 ' the tables of the tiles (an array that a function uses has to exist before the function is read): solid, can be climbed
 220 DIM SOL(256),LAD(256)
-230 FUNC RN(M)
-240   RETURN INT(RND(1)*M)
-250 END FUNC
-260 FUNC CLAMP(V,LO,HI2)
-270   IF V<LO THEN RETURN LO
-280   IF V>HI2 THEN RETURN HI2
-290   RETURN V
-300 END FUNC
-310 FUNC PAD$(N,W)
-320   RETURN RIGHT$("00000000"+STR$(N),W)
-330 END FUNC
 340 ' the frequency of a MIDI note number (69 = the A of 440 Hz), 0 = a rest
 350 FUNC FREQ(M)
 360   IF M<=0 THEN RETURN 0
@@ -191,13 +182,6 @@
 1860   GFX BACKDROP RGB(120,170,230)
 1870 END PROC
 1880 ' ====================================================================== the background layer: sky, sun, hills, factories, trees
-1890 PROC DISK(CX2,CY2,R,C)
-1900   LOCAL Y,W
-1910   FOR Y=-R TO R
-1920     W=INT(SQR(R*R-Y*Y))
-1930     GFX LINE CX2-W,CY2+Y,CX2+W,CY2+Y,C
-1940   NEXT Y
-1950 END PROC
 1960 ' a tree from branches that split in two: the procedure calls itself (every call has its own X, Y, LEN, ANG and DEP, LOCAL keeps them apart)
 1970 PROC TREE(X,Y,LEN2,ANG,DEP)
 1980   LOCAL X2,Y2
@@ -1938,12 +1922,6 @@
 19090 END PROC
 19100 ' ====================================================================== the music: a melody and a bass on the channels 3 and 4, a drum on 5
 19110 ' the notes of the array NT(), N of them one after the other on channel CH, BT beats each (a note is a MIDI number, 0 a rest), volume VL
-19120 PROC PLAYSEQ(NT(),N,CH,BT,VL)
-19130   LOCAL I
-19140   FOR I=0 TO N-1
-19150     SOUND CH,FN FREQ(NT(I)),BT,VL
-19160   NEXT I
-19170 END PROC
 19180 ' one bar of the song (4 beats): its 8 melody notes (a LOCAL array that is passed on to PLAYSEQ), 2 bass notes and 8 drum beats
 19190 PROC BAR
 19200   LOCAL I,TA(8),TB(2),TC(8)

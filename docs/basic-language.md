@@ -246,6 +246,8 @@ OPEN "con:" FOR OUTPUT AS #2: PRINT #2,"hi"      (con: the screen / the keyboard
 ```
 
 `RENAME` never replaces an existing file ("File already exists") and both names must be on one driver. `mem:` has no directories.
+**`EXISTS(file$)`** (2026-11-03, extension word `XF_EXISTS` 11, instruction `EXST 0x188` `( name -- n )`): `-1` if the file can be opened for reading through the I/O drivers, else `0`; a `driver:` prefix works and `ADDRESS` names the default driver; the name is taken as it is (no extension search as in `LOAD`); an empty name is `0`; it never raises a file error. It is the way to test for a file inside a `PROC` or `FUNC`: `ON ERROR` + `RESUME label` does not work there (the error unwinds the frame). `IF EXISTS("game.hi") THEN OPEN "game.hi" FOR INPUT AS #1 ...`. `EXISTS` is a reserved word.
+
 `CHDIR` changes the directory of the whole program, so it affects `LOAD`, `SAVE` and `FILES`. Details: [io-subsystem.md](io-subsystem.md).
 
 Phase 3 adds random access files, read/write files, and two more drivers:

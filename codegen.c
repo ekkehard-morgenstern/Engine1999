@@ -560,6 +560,7 @@ const char* cgen_opcode_name( uint16_t opcode ) {
         case INS_JOYS:      return "JOYS";
         case INS_KEYS:      return "KEYS";
         case INS_LIBS:      return "LIBS";
+        case INS_EXST:      return "EXST";
         case INS_AFLT:      return "AFLT";
         case INS_GFXC:      return "GFXC";
         case INS_GFXQ:      return "GFXQ";
@@ -1242,6 +1243,10 @@ bool cgen_gen_fram( codegen_t* cgen ) {
     return cgen_gen_ins12( cgen, INS_FRAM, false, false, UINT16_C(0) );
 }
 
+bool cgen_gen_exst( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_EXST, false, false, UINT16_C(0) );
+}
+
 bool cgen_gen_libs( codegen_t* cgen ) {
     return cgen_gen_ins12( cgen, INS_LIBS, false, false, UINT16_C(0) );
 }
@@ -1776,6 +1781,7 @@ UNEXP:      return cgen_unexpected_node( comp );
             case XF_SPACE:  ok = cgen_gen_strn( cgen, 2 ); break;
             case XF_STRING: ok = cgen_gen_strn( cgen, datalen == UINT16_C(3) && node->data[2] ? 1 : 0 ); break;
             case XF_JOY:    ok = nodetype == NT_SYSSTRFUNCARGCALL ? cgen_gen_joys( cgen ) : cgen_gen_joyq( cgen ); break;
+            case XF_EXISTS: ok = cgen_gen_exst( cgen ); break;
             default:        goto UNEXP;
         }
         return ok || cgen_out_of_code_memory( comp );
