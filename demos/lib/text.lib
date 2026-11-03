@@ -1,0 +1,32 @@
+1 ' License: free for everybody to use, copy, change and build into executables (BUILD).
+2 ' An executable made with BUILD contains the Engine1999 runtime: the Engine1999 Runtime Exception
+3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
+4 ' in the executable (it shows with the command line option --engine1999-about).
+10 ' text - the text helpers that the demo games share (a library: LOAD LIBRARY "text").
+20 '   CALL TXTAT(X,Y,T$,C)       prints T$ on the text screen at column X, row Y in the pen C on the paper TX_PAPER
+30 '   CALL BIGTEXT(Y,T$,C,S)     draws T$ centered on the graphics layer at row Y (pixels) in the color C, S times as large as the 8 x 12 font, with a shadow in TX_SHADOW
+40 '   CALL TX_BYE(T$)            the end of a game: sound off, GFX RESET, a clear screen and "Thanks for playing T$!"
+50 ' TX_PAPER (default 210, a translucent dark paper) and TX_SHADOW (default 2) are set by TX_INIT before the program starts; a game that wants other
+60 ' colors assigns them (fruit2: TX_PAPER=0:TX_SHADOW=11). The short names TXTAT and BIGTEXT are kept as the games always had them.
+70 LIBRARY "text","TX_"
+80 PROC TX_INIT
+90   TX_PAPER=210
+100   TX_SHADOW=2
+110 END PROC
+120 PROC TXTAT(X,Y,T$,C)
+130   LOCATE X,Y
+140   COLOR C,TX_PAPER
+150   PRINT T$;
+160 END PROC
+170 PROC BIGTEXT(Y,T$,C,S)
+180   LOCAL X
+190   X=(640-LEN(T$)*8*S)\2
+200   GFX TEXT X+S\2+1,Y+S\2+1,T$,TX_SHADOW,S,S
+210   GFX TEXT X,Y,T$,C,S,S
+220 END PROC
+230 PROC TX_BYE(T$)
+240   SOUND OFF
+250   GFX RESET
+260   CLS
+270   PRINT "Thanks for playing ";T$;"!"
+280 END PROC

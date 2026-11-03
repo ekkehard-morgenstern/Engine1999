@@ -2,10 +2,11 @@
 2 ' An executable made with BUILD contains the Engine1999 runtime: the Engine1999 Runtime Exception
 3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
 4 ' in the executable (it shows with the command line option --engine1999-about).
-5 ' the helpers that the demo games share are in the libraries demos/lib/util.lib, input.lib and hiscore.lib
+5 ' the helpers that the demo games share are in the libraries demos/lib/util.lib, input.lib, hiscore.lib and text.lib
 6 LOAD LIBRARY "util"
 7 LOAD LIBRARY "input"
 8 LOAD LIBRARY "hiscore"
+9 LOAD LIBRARY "text"
 10 ' MADRUN - a crossing game for one to four players, for Engine1999.
 20 ' A telephone booth stands on the island in the middle of a busy crossing, and the phone is ringing! Get there before the caller hangs up.
 30 ' Cars, trucks, buses, motorbikes and (later) ambulances drive on eight lanes. They stop for each other and for the crossing, but never for you.
@@ -43,7 +44,7 @@
 790     END IF
 800   END IF
 810 UNTIL QT=1
-820 CALL SHUTDOWN
+820 CALL TX_BYE("MADRUN")
 830 END
 840 ' the library hiscore reads the high score (a missing or empty file is 0, no error); a file that can't be written is ignored: the error handler is here in the main program, where RESUME <label> can continue (inside a PROC the frame would be gone)
 880 LABEL HIERR2
@@ -411,12 +412,6 @@
 4500   GFX TARGET 3
 4510 END PROC
 4520 ' ====================================================================== start screen
-4530 PROC CENTER(Y,T$,C,S)
-4540   LOCAL X
-4550   X=(640-LEN(T$)*8*S)\2
-4560   GFX TEXT X+S\2+1,Y+S\2+1,T$,2,S,S
-4570   GFX TEXT X,Y,T$,C,S,S
-4580 END PROC
 4590 ' a message on the graphics layer; N frames (0 = until it is cleared)
 4600 PROC BANNER(T1$,T2$,N)
 4610   LOCAL S
@@ -424,28 +419,28 @@
 4630   GFX LINE 90,96,549,194,250,BF
 4640   GFX LINE 90,96,549,194,3,B
 4650   S=3:IF LEN(T1$)*24>430 THEN S=2
-4660   CALL CENTER(112,T1$,3,S)
-4670   CALL CENTER(164,T2$,1,1)
+4660   CALL BIGTEXT(112,T1$,3,S)
+4670   CALL BIGTEXT(164,T2$,1,1)
 4680   BN=N
 4690 END PROC
 4700 PROC DRAWMENU(DM,NP)
 4710   GFX CLEAR
 4720   GFX LINE 70,8,569,216,250,BF
 4730   GFX LINE 70,8,569,216,3,B
-4740   CALL CENTER(16,"MADRUN",3,7)
-4750   CALL CENTER(106,"Reach the ringing phone booth in the middle!",1,1)
+4740   CALL BIGTEXT(16,"MADRUN",3,7)
+4750   CALL BIGTEXT(106,"Reach the ringing phone booth in the middle!",1,1)
 4760   IF DM=0 THEN
-4770     CALL CENTER(134,"K   keyboard      (1 or 2 players)",5,1)
-4780     CALL CENTER(152,"C   controllers   (1 to 4 players)",5,1)
-4790     IF NP>0 THEN CALL CENTER(168,"-- "+STR$(NP)+" connected, press A or START --",4,1)
-4800     CALL CENTER(184,"Q   quit",5,1)
+4770     CALL BIGTEXT(134,"K   keyboard      (1 or 2 players)",5,1)
+4780     CALL BIGTEXT(152,"C   controllers   (1 to 4 players)",5,1)
+4790     IF NP>0 THEN CALL BIGTEXT(168,"-- "+STR$(NP)+" connected, press A or START --",4,1)
+4800     CALL BIGTEXT(184,"Q   quit",5,1)
 4810   ELSE
-4820     CALL CENTER(130,"Keyboard: how many players?",1,1)
-4830     CALL CENTER(150,"1   one player      (WASD or cursor keys)",5,1)
-4840     CALL CENTER(166,"2   two players     (WASD and cursor keys)",5,1)
-4850     CALL CENTER(184,"Q   back",5,1)
+4820     CALL BIGTEXT(130,"Keyboard: how many players?",1,1)
+4830     CALL BIGTEXT(150,"1   one player      (WASD or cursor keys)",5,1)
+4840     CALL BIGTEXT(166,"2   two players     (WASD and cursor keys)",5,1)
+4850     CALL BIGTEXT(184,"Q   back",5,1)
 4860   END IF
-4870   CALL CENTER(200,"HIGH SCORE "+FN PAD$(HI,6)+"      P pause   Q quit",3,1)
+4870   CALL BIGTEXT(200,"HIGH SCORE "+FN PAD$(HI,6)+"      P pause   Q quit",3,1)
 4880 END PROC
 4890 PROC TITLE
 4900   LOCAL K$,K,ST,N,N0,I,DONE,RD
@@ -839,11 +834,6 @@
 9040   NEXT P
 9050 END PROC
 9060 ' ====================================================================== the text screen
-9070 PROC TXTAT(X,Y,T$,C)
-9080   LOCATE X,Y
-9090   COLOR C,210
-9100   PRINT T$;
-9110 END PROC
 9120 PROC HUD
 9130   LOCAL P,X,Y,S
 9140   FOR P=1 TO 4
@@ -1028,12 +1018,6 @@
 10930   SPRITE SA,INT(SX),INT(SY),IM
 10940   IF NSEG(KD)=2 THEN SPRITE SA+1,INT(SX2),INT(SY2),IMGB(KD,VR2,1)*4+D
 10950 END PROC
-10960 PROC SHUTDOWN
-10970   SOUND OFF
-10980   GFX RESET
-10990   CLS
-11000   PRINT "Thanks for playing MADRUN!"
-11010 END PROC
 11020 ' ====================================================================== the data
 11030 ' vehicle kinds (car, truck, bus, motorbike, ambulance): variants, sprites, length, width, speed factor
 11040 DATA 6,1,16,10,1, 3,2,32,10,0.8, 2,2,32,10,0.85, 3,1,12,6,1.35, 2,1,16,10,1.5

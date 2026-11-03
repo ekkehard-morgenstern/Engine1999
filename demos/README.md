@@ -20,6 +20,7 @@ The listings are indented by block structure (two blanks per level for `FOR`, `R
 | `lib/util.lib` | **A library** shared by the games (not a program): `RN`, `CLAMP`, `PAD$`, `DISK`, `PLAYSEQ`. The games name it with `LOAD LIBRARY "util"`; `RUN` finds it in `demos/lib/` and compiles it ahead of the game, and `BUILD` embeds it in the executable. |
 | `lib/input.lib` | **A library** for the games' controls: `IN_POLL` (arrows / WASD / D-pad / stick of pad 1 -> `IN_DX`, `IN_DY`, `IN_BTN`), `IN_SERVICE` (P / START ask for a pause, Q / BACK quit, other keys in `IN_KEY`), `IN_PAUSELOOP`, and `IN_ANYSTART` / `IN_ANYBACK` / `IN_ANYA` over four pads. Used by `fruit2`, `climb` and `madrun`. |
 | `lib/hiscore.lib` | **A library** that keeps one number in a small text file: `HS_LOAD(file$)` (0 if the file is missing or empty: no error, thanks to `EXISTS`) and `HS_SAVE file$, value`. Used by `fruit2`, `climb` and `madrun` for their high scores. |
+| `lib/text.lib` | **A library** with the text helpers of the games: `TXTAT` (text screen), `BIGTEXT` (large centered text with a shadow on the graphics layer) and `TX_BYE` (the closing message). The colors are the variables `TX_PAPER` and `TX_SHADOW`. Used by `fruit2`, `climb` and `madrun`. |
 | `keys.bas` | A small keyboard that lights up the keys you hold: `KEY("name")` tells whether a key is down right now (it knows when you let go, and several keys at once). Q quits. |
 | `joy.bas` | The game controllers: plug in up to four pads (Xbox, PlayStation, Switch Pro, ...) and see the buttons that are held lit, both sticks and both triggers: `JOY(name$, player)` (window version only). Q quits. |
 | `mouse.bas` | A small paint program for the mouse: left button draws, right button erases, the wheel or a click on the color bar chooses the pen, the pointer's shape follows where it is (`MOUSE SHAPE`), `MOUSE("X")` / `("Y")` / `("B")` / `("PRESSED")` / `("WHEEL")`. C clears, Q quits. Window and console screen mode. |
@@ -39,5 +40,5 @@ Conventions:
 
 Libraries (`demos/lib/*.lib`): a library is a program whose first statement is `LIBRARY "name"`; a program says `LOAD LIBRARY "name"` (a line of its own, never at the prompt)
 and `RUN` finds the file next to the program (its own folder, then `lib/` below it). A library is written with `SAVE LIBRARY "name"` (the extension `.lib` is added), edited with
-`LOAD "lib/name"` like any program, and cannot be run by itself. Names in a library are global, so a game that loads `util` must not define `RN`, `CLAMP`, `PAD$`, `DISK` or `PLAYSEQ` itself, and the variables of a library start with its prefix (`IN_` for `input`).
+`LOAD "lib/name"` like any program, and cannot be run by itself. Names in a library are global, so a game that loads `util` must not define `RN`, `CLAMP`, `PAD$`, `DISK` or `PLAYSEQ` itself, and the variables of a library start with its prefix (`IN_` for `input`, `HS_` for `hiscore`, `TX_` for `text`).
 See `docs/library-support.md`.

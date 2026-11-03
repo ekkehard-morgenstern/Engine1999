@@ -2,10 +2,11 @@
 2 ' An executable made with BUILD contains the Engine1999 runtime: the Engine1999 Runtime Exception
 3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
 4 ' in the executable (it shows with the command line option --engine1999-about).
-5 ' the helpers that the demo games share are in the libraries demos/lib/util.lib, input.lib and hiscore.lib
+5 ' the helpers that the demo games share are in the libraries demos/lib/util.lib, input.lib, hiscore.lib and text.lib
 6 LOAD LIBRARY "util"
 7 LOAD LIBRARY "input"
 8 LOAD LIBRARY "hiscore"
+9 LOAD LIBRARY "text"
 10 ' FRUIT INVADERS II - a Space Invaders style game for Engine1999, written with procedures.
 20 ' Keys: LEFT / RIGHT or A / D move the cannon (only while the key is held), SPACE or UP fires, P = pause, Q = quit.
 21 ' Game controller (optional, JOY): the D-pad or the left stick moves, A or the right trigger fires, START pauses, BACK quits.
@@ -50,7 +51,7 @@
 600     ON ERROR OFF
 610   END IF
 620 UNTIL QT=1
-630 CALL SHUTDOWN
+630 CALL TX_BYE("FRUIT INVADERS II")
 640 END
 650 ' the library hiscore reads the high score (a missing or empty file is 0, no error); a file that can't be written is ignored: the error handler is here in the main program, where RESUME <label> can continue (inside a PROC the frame would be gone)
 690 LABEL HIERR2
@@ -64,6 +65,7 @@
 770 RETURN
 780 ' ====================================================================== set up (once)
 790 PROC INIT
+791   TX_PAPER=0:TX_SHADOW=11   ' the colors of the text library: no paper behind the text, a violet shadow
 800   LOCAL I
 810   RANDOMIZE
 820   GFX RESET ALL
@@ -796,18 +798,7 @@
 8160   NEXT I
 8170 END PROC
 8180 ' ====================================================================== text helpers
-8190 PROC TXTAT(X,Y,T$,C)
-8200   LOCATE X,Y
-8210   COLOR C
-8220   PRINT T$;
-8230 END PROC
 8240 ' centered text on the graphics layer with a shadow
-8250 PROC BIGTEXT(Y,T$,C,S)
-8260   LOCAL X
-8270   X=(640-LEN(T$)*8*S)\2
-8280   GFX TEXT X+S\2+1,Y+S\2+1,T$,11,S,S
-8290   GFX TEXT X,Y,T$,C,S,S
-8300 END PROC
 8310 ' the score line and the lives (small cannons)
 8320 PROC HUD
 8330   LOCAL I
@@ -1373,12 +1364,6 @@
 14130     K$=INKEY$
 14140   NEXT Z
 14150 END PROC
-14160 PROC SHUTDOWN
-14170   SOUND OFF
-14180   GFX RESET
-14190   CLS
-14200   PRINT "Thanks for playing FRUIT INVADERS II!"
-14210 END PROC
 14220 ' ====================================================================== the data
 14230 ' fruit window, first image, points for the rows 1 to 5; the notes of the march, the bass of the music, the points of the pineapple
 14240 DATA 16,0,50, 32,2,40, 48,4,30, 64,6,20, 80,8,10

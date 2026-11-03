@@ -2,10 +2,11 @@
 2 ' An executable made with BUILD contains the Engine1999 runtime: the Engine1999 Runtime Exception
 3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
 4 ' in the executable (it shows with the command line option --engine1999-about).
-5 ' the helpers that the demo games share are in the libraries demos/lib/util.lib, input.lib and hiscore.lib
+5 ' the helpers that the demo games share are in the libraries demos/lib/util.lib, input.lib, hiscore.lib and text.lib
 6 LOAD LIBRARY "util"
 7 LOAD LIBRARY "input"
 8 LOAD LIBRARY "hiscore"
+9 LOAD LIBRARY "text"
 10 ' THE LONG CLIMB - a jump and run game for Engine1999.
 20 ' You are a construction worker and the ice cream stand is on the roof of the unfinished steel tower, 960 pixels above the street. Climb the ladders,
 30 ' jump the gaps, hurdles, cars and birds, and use your drill to make holes in the girders: a rust ball or slime that walks into a hole is trapped,
@@ -78,7 +79,7 @@
 880   END IF
 890   HI0=HI
 900 UNTIL QT=1
-910 CALL SHUTDOWN
+910 CALL TX_BYE("THE LONG CLIMB")
 920 END
 930 ' the library hiscore reads the best height (a missing or empty file is 0, no error); a file that can't be written is ignored: the error handler is here in the main program, where RESUME <label> can continue (inside a PROC the frame would be gone)
 970 LABEL HIERR2
@@ -1414,18 +1415,7 @@
 14340   END IF
 14350 END PROC
 14360 ' ====================================================================== text helpers
-14370 PROC TXTAT(X,Y,T$,C)
-14380   LOCATE X,Y
-14390   COLOR C,210
-14400   PRINT T$;
-14410 END PROC
 14420 ' centered text on the graphics layer with a shadow
-14430 PROC BIGTEXT(Y,T$,C,S)
-14440   LOCAL X
-14450   X=(640-LEN(T$)*8*S)\2
-14460   GFX TEXT X+S\2+1,Y+S\2+1,T$,2,S,S
-14470   GFX TEXT X,Y,T$,C,S,S
-14480 END PROC
 14490 PROC HUD
 14500   LOCAL I,T
 14510   T=FRM\60
@@ -2067,12 +2057,6 @@
 20900     K$=INKEY$
 20910   NEXT Z
 20920 END PROC
-20930 PROC SHUTDOWN
-20940   SOUND OFF
-20950   GFX RESET
-20960   CLS
-20970   PRINT "Thanks for playing THE LONG CLIMB!"
-20980 END PROC
 20990 ' the colors: window base, number of colors, then red, green, blue of each (sprites, then tiles)
 21000 LABEL SPRPALDATA
 21010 DATA 16,15,30,25,45,190,130,0,255,200,20,255,235,110,255,205,160,215,150,110,40,90,200,90,150,255,60,40,30,190,195,210,90,95,110,240,120,20,255,255,255,0,0,0,0,0,0

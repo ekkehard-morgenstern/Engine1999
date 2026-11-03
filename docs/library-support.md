@@ -1,6 +1,6 @@
 # Library support — design
 
-Status: **design settled (2026-11-03: the owner's answers to the open points are worked in below), nothing implemented.** Owner's request, highest priority on the roadmap (item 48). This
+Status: **implemented (2026-11-03, steps 1 to 6; this is step 7, the documentation pass).** Owner's request, highest priority on the roadmap (item 48). The sections 1 to 6 are the design as built; 7a to 7c record what each step does; a short user guide is section 9. This
 document replaces the first sketch in `docs/roadmap.md` section 16 after the owner's decisions of the same day:
 
 - Programs load libraries with **`LOAD LIBRARY "name"`** (the AmigaBASIC word), not with a new word like `USE`.
@@ -86,8 +86,8 @@ list as well, so `LOAD "sprites"` finds a library for editing). It looks in this
 1. the current directory (relative to where the program was started or `CHDIR`ed),
 2. a `lib/` directory below it,
 3. the directory of the stored program's own file (`repl_t.filename`) and its `lib/`,
-4. the installed libraries: `$(PREFIX)/lib/engine1999/lib/` next to the kit (`make install` puts the demos' shared libraries
-   there, read-only).
+4. the installed libraries (`baslib_system_dirs()`): `$ENGINE1999_HOME/lib`, `<program>/../lib/engine1999/lib`, `/usr/local/lib/engine1999/lib`, `/usr/lib/engine1999/lib`.
+   *(As built: `make install` puts the demos' libraries into `$(PREFIX)/share/engine1999/demos/lib`, beside the installed demos, where step 3 finds them for an installed demo; a library of your own that should be found from anywhere goes into one of the directories above.)*
 
 The name may not be absolute or contain `..` (downward only; the owner's default I/O policy, roadmap item 54 and section 17), except that
 step 4 is the system's own directory. Driver names (`mem:`, `res:`) work as for `LOAD` (so the tests need no files). A library that
@@ -157,7 +157,7 @@ executable `repl_load_image()` recognizes the magic, loads the program and keeps
 
 ## 7. Implementation plan
 
-**Status (2026-11-03): steps 1 to 5 are done** (step 1: the words and their grammar; step 2: `baslib.[ch]`, the resolver, and its hook in the REPL: `RUN` and the monitor's `c` find the libraries of the stored program and report what is wrong, **but the libraries are not compiled yet**, so a program that names a library that exists still does not see its `FUNC`s: that is step 3). (step 1: the words and their grammar; step 2: `baslib.[ch]`, the resolver, and its hook in the REPL; **step 3: the libraries are compiled ahead of the program**, see "What step 3 does, exactly" below). **Step 4:** `SAVE LIBRARY`, `LIBRARIES`, the direct-mode error (see "What step 4 does" below). **Step 5:** the `BUILD` bundle (section 6). Open: the shared libraries for the demos (step 6), the final documentation pass (step 7).
+**Status (2026-11-03): all seven steps are done.** Step 1: the words and their grammar; step 2: `baslib.[ch]`, the resolver, and its hook in the REPL; step 3: the libraries are compiled ahead of the program (7a); step 4: `SAVE LIBRARY`, `LIBRARIES`, the direct-mode error (7b); step 5: the `BUILD` bundle (section 6); step 6: the shared libraries of the demos (7c); step 7: this documentation pass.
 
 1. **Extension word `LIBRARY`** (`XF_LIBRARY`), parser rules for `LIBRARY "name"[,"prefix"]` and `LOAD LIBRARY "name"` (new node
    types; no code is generated for either: `NOP`), `bascomp.ebnf` + `make grammar`, man page, `docs/basic-language.md`.
@@ -169,8 +169,8 @@ executable `repl_load_image()` recognizes the magic, loads the program and keeps
    line table per module, the module table for error messages, the start address of the program, the init calls).
 4. **`RUN` of a library** and the plain-`LOAD`-works rule; direct mode `LOAD LIBRARY` error; **`SAVE LIBRARY`** with `.lib` / `.l99`; **`LIBRARIES`** (DONE).
 5. **`BUILD` container** and the runtime's lookup of embedded libraries (DONE).
-6. **First libraries for the demos** (`demos/lib/`): the key / pad input of the games, text helpers; the games then shrink. *Survey and proposal: section 7c.*
-7. Tests: `vmtest1`, `repltest1`, `buildtest1`; `make install` installs the shared libraries; roadmap and `SESSION.md` updated.
+6. **First libraries for the demos** (`demos/lib/`: `util`, `input`, `hiscore`, `text`; the games shrank by about 300 lines) (DONE). *Survey and what was done: section 7c.*
+7. Tests: `libtest1` (47), `vmtest1`, `repltest1`, `buildtest1`; `make install` installs the shared libraries; roadmap, `SESSION.md`, man pages, grammar (DONE).
 
 ## 7a. What step 3 does, exactly (2026-11-03)
 
@@ -193,7 +193,7 @@ executable `repl_load_image()` recognizes the magic, loads the program and keeps
 - **`RUN` of a library:** "Library cannot be run (m is a library: a program names it with LOAD LIBRARY)".
 - **Tests:** `repltest1` (23 cases: calls, local line numbers, error messages with the library, library mode, variable rule, duplicates, `INIT`, DATA private / `RESTORE` / public label,
   two runs, nested libraries, a program without libraries), all suites pass, clean under valgrind (`repltest1`) and ASAN / UBSAN (`vmtest1`, `repltest1`, `libtest1`).
-- **Known limits:** the monitor lists the libraries' code like any other code; `BUILD` does not embed libraries yet (step 5); `LIBRARIES` and `SAVE LIBRARY` come with step 4.
+- **Known limits:** the monitor lists the libraries' code like any other code (no library names in the disassembly); a library cannot call the program's procedures (section 4).
 
 ## 7b. What step 4 does, exactly (2026-11-03)
 
@@ -253,7 +253,17 @@ About 330 lines in all; more important than the lines is that a fix (the pause b
 
 **Done 2026-11-03: `hiscore`** (`demos/lib/hiscore.lib`, prefix `HS_`: `HS_LOAD(file$)`, `HS_SAVE(file$, value)`; `EXISTS`, `EOF`, `LINE INPUT`, `VAL`, so a missing, empty or garbage file is 0 and never an error). The games load the high score with one line and save it with one; a file that cannot be *written* is still ignored by the handler that stays in each game's **main program** (`ON ERROR GOTO` ... `RESUME <label>` can only continue there, not inside a `PROC`; the library says so in its header). **Found on the way (engine bug, fixed):** a `FUNC` that used a file channel (`LINE INPUT #1`, `PRINT #1`) left that channel selected for the statement that called it, so `PRINT FN HS_LOAD(...)` printed to the closed file ("File not open"); the VM saves the current channel in the call context and restores it on return (`vm_context_t.channel`; 2 `vmtest1` cases).
 
+**Done 2026-11-03: `text`** (`demos/lib/text.lib`, prefix `TX_`: `TXTAT`, `BIGTEXT`, `TX_BYE`; the variables `TX_PAPER` (default 210) and `TX_SHADOW` (default 2) are set by `TX_INIT`, which the runtime calls before the program, and `fruit2` assigns `TX_PAPER=0:TX_SHADOW=11` in its `INIT`). `BIGTEXT` and `madrun`'s `CENTER` were the same procedure (14 calls renamed), `SHUTDOWN` became `CALL TX_BYE("title")`. **All four libraries of the survey are done** (`util`, `input`, `hiscore`, `text`); the three games lost about 300 duplicated lines in all. Left in the games on purpose: the art, the sound tables, `INIT`, `TITLE`, `PLAYGAME`, `HUD`, `GAMEOVER`, `BANNER` (madrun), `LOADPAL`.
+
 **Order of work** (each step ends with the demo running as before: the headless runners and the window under Xvfb, the same checks as when the games were written): `util` (three demos), then `input` (three demos plus the pad helpers; the biggest gain), then `text`, then `hiscore` once `EXISTS()` is there. After each library: `make install` must install `demos/lib/` (a line in the makefile), `BUILD` of each demo is tried (the bundle carries the libraries), the README of the demos gets a section on the libraries.
+
+## 9. User guide in short
+
+- **Use a library:** `LOAD LIBRARY "util"` near the top of the program, one per line; never at the prompt. `RUN` finds the file, compiles it before the program, calls `<prefix>INIT`. `LIBRARIES` shows what was loaded, `LIBRARIES "util"` what it defines.
+- **Write one:** start a program with `LIBRARY "name","PFX_"`; only `PROC`, `FUNC`, `DEF FN`, `LABEL` sections, `DATA` and `LOAD LIBRARY` at the top level; variables are parameters, `LOCAL` or start with the prefix; state is set up in `PFX_INIT`; then `SAVE LIBRARY "name"` (`name.lib`, with `,B` `name.l99`). Put it in the program's directory or its `lib/`.
+- **Share it:** `BUILD` embeds the libraries a program names, so the executable runs alone.
+- **The shipped libraries** are in `demos/lib/` (list in `demos/README.md`): `util`, `input` (`IN_`), `hiscore` (`HS_`), `text` (`TX_`).
+- **Limits:** a library cannot call the program's procedures; `RESUME label` cannot continue inside a `PROC` / `FUNC` (use `EXISTS()`); names are global (prefix them).
 
 ## 8. Decisions (owner, 2026-11-03)
 

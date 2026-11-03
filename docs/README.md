@@ -16,7 +16,7 @@ Players and BASIC programmers: start with the [README](../README.md). Engine con
 | [build-and-test.md](build-and-test.md) | Building, executables, test programs, tooling |
 | [graphics-subsystem.md](graphics-subsystem.md) | BASIC statements for layers, palettes, the graphics layer, tiles, sprites, `DESIGN` pictures, collisions and text screen areas; the `sdlscr_*` API (implemented) |
 | [console-host.md](console-host.md) | The console host `engine1999c`: the BASIC system without a window for scripts and pipes (input, output, exit status, what the display statements do) |
-| [library-support.md](library-support.md) | Library support (design, not implemented): `LOAD LIBRARY` in programs, `LIBRARY` files, compile order, names, `BUILD`, open decisions |
+| [library-support.md](library-support.md) | Library support (implemented): `LOAD LIBRARY` in programs, `LIBRARY` files, `SAVE LIBRARY`, `LIBRARIES`, compile order, names, `BUILD`, the shared libraries of the demos |
 | [io-subsystem.md](io-subsystem.md) | I/O subsystem: virtual device drivers (`file:`, `mem:`, ...), `driver:name` prefixes, `OPEN`/`CLOSE`, `ADDRESS`; phases and the open sandboxing issue |
 | [controller-support.md](controller-support.md) | **Planned**: game controllers and joysticks: what works on a PC (Xbox, PS4, Switch pads), SDL's game controller API, open design points, how the support will be tested (also without hardware), trying a real pad |
 | [contributing.md](contributing.md) | **For contributors**: who contributed, how to build and test, how a new statement goes in, conventions, the license of contributions |
