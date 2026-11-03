@@ -1064,6 +1064,12 @@ static const testcase_t cases[] = {
     { "LIBRARY needs a prefix in quotes", "10 LIBRARY \"a\",",                       "? Library prefix in quotes expected in line 10\n" },
     { "LOAD LIBRARY takes no expression", "10 LOAD LIBRARY A$",                      "? Library name in quotes expected in line 10\n" },
     { "LIBRARY is a reserved word", "10 LIBRARY=5",                                   "? Library name in quotes expected in line 10\n" },
+    { "SAVE LIBRARY",           "10 PRINT 1\n20 SAVE LIBRARY \"X\"",                "1\n<save X ascii library>\n10 PRINT 1\n20 SAVE LIBRARY \"X\"\n" },
+    { "SAVE LIBRARY without a name", "10 PRINT 1\n20 SAVE LIBRARY",                  "1\n<save (no name) ascii library>\n10 PRINT 1\n20 SAVE LIBRARY\n" },
+    { "SAVE LIBRARY with option A", "10 SAVE LIBRARY \"X\",A",                       "<save X ascii library>\n10 SAVE LIBRARY \"X\",A\n" },
+    { "LIBRARIES needs a host that has it", "10 LIBRARIES",                          "? LIBRARIES is not available in line 10\n" },
+    { "LIBRARIES with a name needs a host that has it", "10 LIBRARIES \"x\"",          "? LIBRARIES is not available in line 10\n" },
+    { "LIBRARIES with a number is a type mismatch", "10 LIBRARIES 5",                "? String expression expected in line 10\n" },
     { "SAVE bad mode",          "SAVE \"X\",Z",                                    "? Bad SAVE mode\n" },
     { "SAVE empty name",        "SAVE \"\"",                                       "? Illegal argument\n" },
     // loops: WHILE, UNTIL, REPEAT, AGAIN
@@ -1397,7 +1403,8 @@ static bool vm_save( struct _vm_t* vm, void* usrdata, const char* filename, bool
     fclose( f );
     out_append( "<save " );
     out_append( filename != 0 ? filename : "(no name)" );
-    out_append( ascii ? " ascii>\n" : " binary>\n" );
+    out_append( ascii ? " ascii" : " binary" );
+    out_append( ( vm->savemode & 4 ) != 0 ? " library>\n" : ">\n" );
     if ( ascii ) {
         out_append( text );
     } else {

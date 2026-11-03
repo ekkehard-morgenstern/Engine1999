@@ -563,6 +563,9 @@ The 4096 extended instructions are as follows:
                             KEY$("EVENT"): the oldest key event that has not been read: "+A" (the key went down) or "-A" (it was let go), the name as KEY("name") knows it ("A", "SPACE", "LEFT", "F5",
                             "LSHIFT" ...); "" if there is none. The window queues the events (64 at most, a key repeat is none) while a program runs; other names are "Illegal argument";
                             without a host that has key events (the console host) it is the error "KEY is not available in this host".
+    0001 10000111       LIBS - list libraries ( name -- ) C=0 P=0
+                            LIBRARIES [name$]: the empty string lists the libraries of the last compile (name, prefix, file); a name lists the PROCs, FUNCs and LABELs that library defines.
+                            The host does it through vm_t.libraries; without one it is the error "LIBRARIES is not available".
     COLT with the parameter bit 16: ON KEY OFF (16) / GOSUB (17) / GOTO (18): a handler for the key events (the bit 8 is ON JOY, 4 is ON MOUSE).
     COLT with the parameter bit 8: ON JOY OFF (8) / GOSUB (9) / GOTO (10) (the bit 4 is ON MOUSE).
     MATH kinds 14..16: CEIL, LOG2, LOG10 (kind 1, INT, is FLOOR as well).
@@ -759,5 +762,6 @@ The 4096 extended instructions are as follows:
 #define INS_FRAM        UINT16_C(0X184)
 #define INS_JOYS        UINT16_C(0X185)
 #define INS_KEYS        UINT16_C(0X186)
+#define INS_LIBS        UINT16_C(0X187)
 
 #endif

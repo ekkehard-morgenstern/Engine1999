@@ -2544,9 +2544,16 @@ bool comp_eat_expr( compiler_t* comp, node_t** pnode ) {
 }
 
 bool comp_eat_savestmt( compiler_t* comp, node_t** pnode ) {
-    // save-stmt := SAVE [ str-expr ] [ TOK_COMMA TOK_NUMIDENT ] .      (without a name: the file of the last LOAD or SAVE)
+    // save-stmt := SAVE [ LIBRARY ] [ str-expr ] [ TOK_COMMA TOK_NUMIDENT ] .      (without a name: the file of the last LOAD or SAVE; LIBRARY: write the library extensions)
     if ( comp->currtok != TOK_SAVE || !comp_fetchtok( comp ) ) {
         return false;
+    }
+    bool savelib = false;
+    if ( comp->currtok == TOK_XFUNC && comp->currext == XF_LIBRARY ) {
+        savelib = true;
+        if ( !comp_fetchtok( comp ) ) {
+            return false;
+        }
     }
     node_t* strexpr = NODE_NONE;
     bool noname = comp->currtok == TOK_COMMA || comp->currtok == TOK_EOL || comp->currtok == TOK_COLON || comp->currtok == TOK_ELSE;
@@ -2566,6 +2573,19 @@ bool comp_eat_savestmt( compiler_t* comp, node_t** pnode ) {
             comp_error( comp, "SAVE options expected" );
             return false;
         }
+    }
+    if ( savelib ) {                    // the mode string of a library save starts with L
+        size_t n = saveopt ? strlen( saveopt ) : 0;
+        char* lib = (char*) malloc( n + 2U );
+        if ( lib == 0 ) {
+            free( saveopt );
+            out_of_memory( comp );
+            return false;
+        }
+        lib[0] = 'L';
+        memcpy( lib + 1, saveopt ? saveopt : "", n + 1U );
+        free( saveopt );
+        saveopt = lib;
     }
     size_t saveoptlen = saveopt ? strlen( saveopt ) : 0;
     if ( saveoptlen > UINT16_MAX ) {
@@ -2599,6 +2619,27 @@ bool comp_eat_savestmt( compiler_t* comp, node_t** pnode ) {
 static bool comp_eat_quoted( compiler_t* comp, node_t** pnode, const char* what ) {
     if ( comp->currtok != TOK_STRLIT || !comp_eat_strlit( comp, pnode ) || *pnode == NODE_NONE ) {
         comp_error( comp, what );
+        return false;
+    }
+    return true;
+}
+
+bool comp_eat_librariesstmt( compiler_t* comp, node_t** pnode ) {
+    // libraries-stmt := LIBRARIES [ str-expr ] .      (LIBRARIES is an extension word)
+    if ( comp->currtok != TOK_XFUNC || comp->currext != XF_LIBRARIES || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    node_t* name = NODE_NONE;
+    if ( comp->currtok != TOK_EOL && comp->currtok != TOK_COLON && comp->currtok != TOK_ELSE ) {
+        if ( !comp_eat_strexpr( comp, &name ) || name == NODE_NONE ) {
+            comp_error( comp, "String expression expected" );
+            return false;
+        }
+    }
+    // NT_LIBRARIESSTMT  LIBRARIES statement (no data; no branch, or 1 branch of string expression: a library name)
+    if ( !( name != NODE_NONE ? comp_create_node( comp, pnode, NT_LIBRARIESSTMT, UINT8_C(1), UINT16_C(0), 0, name ) :
+            comp_create_node( comp, pnode, NT_LIBRARIESSTMT, UINT8_C(0), UINT16_C(0), 0 ) ) || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
         return false;
     }
     return true;
@@ -4082,6 +4123,9 @@ bool comp_eat_progstmt( compiler_t* comp, node_t** pnode ) {
         return true;
     }
     if ( comp_eat_librarystmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_librariesstmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     return false;

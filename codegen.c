@@ -559,6 +559,7 @@ const char* cgen_opcode_name( uint16_t opcode ) {
         case INS_FRAM:      return "FRAM";
         case INS_JOYS:      return "JOYS";
         case INS_KEYS:      return "KEYS";
+        case INS_LIBS:      return "LIBS";
         case INS_AFLT:      return "AFLT";
         case INS_GFXC:      return "GFXC";
         case INS_GFXQ:      return "GFXQ";
@@ -1239,6 +1240,10 @@ bool cgen_gen_erl( codegen_t* cgen ) {
 
 bool cgen_gen_fram( codegen_t* cgen ) {
     return cgen_gen_ins12( cgen, INS_FRAM, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_libs( codegen_t* cgen ) {
+    return cgen_gen_ins12( cgen, INS_LIBS, false, false, UINT16_C(0) );
 }
 
 bool cgen_gen_keys( codegen_t* cgen ) {
@@ -3287,8 +3292,15 @@ static bool cgen_from_stmt_node( codegen_t* cgen, compiler_t* comp, node_t* node
         case NT_LETSTMT:    return cgen_from_letstmt( cgen, comp, node );
         case NT_PRINTSTMT:  return cgen_from_printstmt( cgen, comp, node );
         case NT_SAVESTMT:   return cgen_from_savestmt( cgen, comp, node );
-        case NT_LIBRARYSTMT: case NT_LOADLIBSTMT:
-                            return cgen_gen_nop( cgen ) || cgen_out_of_code_memory( comp );    // declarations: nothing happens at run time
+        case NT_LIBRARYSTMT:
+                            return cgen_gen_nop( cgen ) || cgen_out_of_code_memory( comp );    // a declaration: nothing happens at run time
+        case NT_LOADLIBSTMT:
+            if ( comp->iter.hdr.lineno == LINENO_NONE ) {
+                comp_error( comp, "LOAD LIBRARY belongs in a program (RUN loads the libraries a program names)" );
+                return false;
+            }
+            return cgen_gen_nop( cgen ) || cgen_out_of_code_memory( comp );
+        case NT_LIBRARIESSTMT: return cgen_from_librariesstmt( cgen, comp, node );
         case NT_LOADSTMT:   return cgen_from_loadstmt( cgen, comp, node );
         case NT_RUNSTMT:    return cgen_from_runstmt( cgen, comp, node );
         case NT_LISTSTMT:   return cgen_from_liststmt( cgen, comp, node );

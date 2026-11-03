@@ -152,7 +152,7 @@ travel with it.
 
 ## 7. Implementation plan
 
-**Status (2026-11-03): steps 1, 2 and 3 are done** (step 1: the words and their grammar; step 2: `baslib.[ch]`, the resolver, and its hook in the REPL: `RUN` and the monitor's `c` find the libraries of the stored program and report what is wrong, **but the libraries are not compiled yet**, so a program that names a library that exists still does not see its `FUNC`s: that is step 3). (step 1: the words and their grammar; step 2: `baslib.[ch]`, the resolver, and its hook in the REPL; **step 3: the libraries are compiled ahead of the program**, see "What step 3 does, exactly" below). Not done: `RUN` of a library is refused (done), but `SAVE LIBRARY`, `LIBRARIES`, plain `LOAD` of a library in the editor title, and the `BUILD` container (steps 4 and 5) are open.
+**Status (2026-11-03): steps 1 to 4 are done** (step 1: the words and their grammar; step 2: `baslib.[ch]`, the resolver, and its hook in the REPL: `RUN` and the monitor's `c` find the libraries of the stored program and report what is wrong, **but the libraries are not compiled yet**, so a program that names a library that exists still does not see its `FUNC`s: that is step 3). (step 1: the words and their grammar; step 2: `baslib.[ch]`, the resolver, and its hook in the REPL; **step 3: the libraries are compiled ahead of the program**, see "What step 3 does, exactly" below). **Step 4:** `SAVE LIBRARY`, `LIBRARIES`, the direct-mode error (see "What step 4 does" below). Open: the `BUILD` container (step 5), the shared libraries for the demos (step 6).
 
 1. **Extension word `LIBRARY`** (`XF_LIBRARY`), parser rules for `LIBRARY "name"[,"prefix"]` and `LOAD LIBRARY "name"` (new node
    types; no code is generated for either: `NOP`), `bascomp.ebnf` + `make grammar`, man page, `docs/basic-language.md`.
@@ -162,7 +162,7 @@ travel with it.
 3. **Library mode in the compiler** (DONE) (`compiler_t.library`: the statements allowed at top level; the variable check; per-module DATA
    chains and READ pointers, section 4a) and the **multi-module compile in `basrepl.c`** (`repl_compile()` / `repl_execute()`: modules compiled in order, a
    line table per module, the module table for error messages, the start address of the program, the init calls).
-4. **`RUN` of a library** and the plain-`LOAD`-works rule; direct mode `LOAD LIBRARY` error; **`SAVE LIBRARY`** with `.lib` / `.l99`; **`LIBRARIES`**.
+4. **`RUN` of a library** and the plain-`LOAD`-works rule; direct mode `LOAD LIBRARY` error; **`SAVE LIBRARY`** with `.lib` / `.l99`; **`LIBRARIES`** (DONE).
 5. **`BUILD` container** and the runtime's lookup of embedded libraries.
 6. **First libraries for the demos** (`demos/lib/`): the key / pad input of the games, text helpers; the games then shrink.
 7. Tests: `vmtest1`, `repltest1`, `buildtest1`; `make install` installs the shared libraries; roadmap and `SESSION.md` updated.
@@ -189,6 +189,21 @@ travel with it.
 - **Tests:** `repltest1` (23 cases: calls, local line numbers, error messages with the library, library mode, variable rule, duplicates, `INIT`, DATA private / `RESTORE` / public label,
   two runs, nested libraries, a program without libraries), all suites pass, clean under valgrind (`repltest1`) and ASAN / UBSAN (`vmtest1`, `repltest1`, `libtest1`).
 - **Known limits:** the monitor lists the libraries' code like any other code; `BUILD` does not embed libraries yet (step 5); `LIBRARIES` and `SAVE LIBRARY` come with step 4.
+
+## 7b. What step 4 does, exactly (2026-11-03)
+
+- **`SAVE LIBRARY [name$] [,A|B]`** (the extension word `LIBRARY` after `SAVE`; the mode string of the `SAVE` instruction starts with `L`; `vm_t.savemode` bit 4): writes the stored program as a library with
+  the library extensions, `name.lib` (ASCII, the default) or `name.l99` (`,B`); a name with an extension is used as it is. The stored program has to be a library, else "Not a library (its first
+  statement must be LIBRARY "name")" and "Save failed". Without a name the remembered file is used with its standard extension (`.bas .e99 .lib .l99`) replaced by the library extension of the format
+  (the remembered file's format without an option). **Plain `SAVE`** writes the regular extensions, also for a library; with a remembered `.lib` / `.l99` and no name it keeps the name and the format;
+  an explicit option swaps `.lib` <-> `.l99` (and `.bas` <-> `.e99`). What makes a file a library is only its `LIBRARY` statement. `LOAD` finds `.lib` / `.l99` (after the old four extensions); `BUILD`
+  refuses to overwrite them like `.bas` / `.e99`.
+- **`LIBRARIES`** (extension word `XF_LIBRARIES` 10, `NT_LIBRARIESSTMT 0x8E`, instruction `LIBS 0x187` `( name -- )`, `vm_t.libraries`, `repl_vm_libraries()`): `LIBRARIES` prints the libraries of the last compile
+  (`repl_t.libs`: name, prefix, file; "No libraries ..." if there are none; `NEW` and a program without libraries empty the list), `LIBRARIES "name"` the `PROC`s, `FUNC`s (with their parameters, array
+  parameters as `A()`, a `DEF FN` counts as a `FUNC`) and `LABEL`s that library defines, in the order of its code; an unknown name is "Library not loaded: name".
+- **`LOAD LIBRARY` at the prompt** is the error "LOAD LIBRARY belongs in a program (RUN loads the libraries a program names)" (a direct line has no program to attach the libraries to; the check is in the code generator:
+  a statement with no line number). In a program line it is accepted wherever (the checks of `baslib` apply).
+- Tests: `repltest1` (14 cases), `vmtest1` (6), grammar, man page, `mancheck.sh --update` (`LIBRARIES` is a reserved word now).
 
 ## 8. Decisions (owner, 2026-11-03)
 

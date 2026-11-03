@@ -119,6 +119,7 @@ void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem ) {
     vm->irqsafe = false;
     vm->irqpending = false;
     vm->files    = 0;
+    vm->libraries = 0;
     vm->argc     = 0;
     vm->argv     = 0;
     vm->build    = 0;
@@ -1515,12 +1516,17 @@ static bool vm_save_program( vm_t* vm, uint16_t noname ) {
     bool ok = true;
     bool ascii = true;      // the default is the text listing (or, without a file name, the format of the file that was loaded); B asks for the tokenized binary form
     vm->savemode = 0;
-    if ( strcmp( mode, "B" ) == 0 ) {
+    const char* opt = mode;
+    if ( mode[0] == 'L' ) {                 // SAVE LIBRARY: the library extensions (.lib / .l99); the option follows the L
+        vm->savemode = 4;
+        ++opt;
+    }
+    if ( strcmp( opt, "B" ) == 0 ) {
         ascii = false;
-        vm->savemode = 2;
-    } else if ( strcmp( mode, "A" ) == 0 ) {
-        vm->savemode = 1;
-    } else if ( mode[0] != '\0' && strcmp( mode, "A" ) != 0 ) {
+        vm->savemode |= 2;
+    } else if ( strcmp( opt, "A" ) == 0 ) {
+        vm->savemode |= 1;
+    } else if ( opt[0] != '\0' ) {
         ok = vm_error( vm, "Bad SAVE mode" );
     }
     if ( ok && name != 0 && name[0] == '\0' ) {
@@ -1613,6 +1619,23 @@ static bool vm_build_program( vm_t* vm, uint16_t kind ) {
 }
 
 // FILS ( s -- ): lists files through the host
+// LIBS ( name -- ): LIBRARIES [name$]
+static bool vm_list_libraries( vm_t* vm ) {
+    char* name;
+    if ( !vm_dpop_str( vm, &name ) ) {
+        return false;
+    }
+    bool ok = true;
+    if ( vm->libraries == 0 ) {
+        ok = vm_error( vm, "LIBRARIES is not available" );
+    } else {
+        ok = vm->libraries( vm, vm->userdata, name );
+        vm->column = 0;
+    }
+    free( name );
+    return ok;
+}
+
 static bool vm_list_files( vm_t* vm ) {
     char* spec;
     if ( !vm_dpop_str( vm, &spec ) ) {
@@ -4027,6 +4050,7 @@ static bool vm_step( vm_t* vm ) {
         case INS_JOYQ: return vm_joy_query( vm );
         case INS_JOYS: return vm_joy_text( vm );
         case INS_KEYS: return vm_key_event_text( vm );
+        case INS_LIBS: return vm_list_libraries( vm );
         case INS_JOYD: return vm_joy_deadzone( vm );
         case INS_STRN: return vm_string_n( vm, param16 );
         case INS_RAND: return vm_randomize( vm, param16 != 0 );

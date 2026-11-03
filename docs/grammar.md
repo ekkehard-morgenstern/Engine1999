@@ -215,10 +215,11 @@ expr         := num-expr | str-expr .
 
 ## Input and output
 
-> The option is A (ASCII listing, the default) or B (binary, tokenized). Without a name the file of the last LOAD or SAVE is written (an error if there is none).
+> The option is A (ASCII listing, the default) or B (binary, tokenized). Without a name the file of the last LOAD or SAVE is written (an error if there is none). SAVE LIBRARY writes
+> the library extensions .lib (ASCII) / .l99 (binary); the stored program has to be a library (its first statement is LIBRARY).
 
 ```ebnf
-save-stmt := SAVE [ str-expr ] [ "," <name> ] .
+save-stmt := SAVE [ LIBRARY ] [ str-expr ] [ "," <name> ] .
 chan-spec := "#" num-expr .
 print-sep := "," | ";" .
 print-arg := expr [ print-sep ] .
@@ -385,6 +386,12 @@ poke-stmt := POKE num-expr "," expr [ "," num-expr ] .
 ```ebnf
 load-stmt := LOAD ( str-expr | LIBRARY str-lit ) .
 library-stmt := LIBRARY str-lit [ "," str-lit ] .
+```
+
+> LIBRARIES lists the libraries of the last compile (name, prefix, file); LIBRARIES "name" lists the PROCs, FUNCs and LABELs of that library.
+
+```ebnf
+libraries-stmt := LIBRARIES [ str-expr ] .
 run-stmt := RUN [ goto-target ] .
 list-stmt := LIST [ goto-target ] [ "-" [ goto-target ] ] .
 ```
@@ -658,7 +665,7 @@ gfx-all-stmt := gfx-stmt | txt-stmt | tile-stmt | sprite-stmt | mouse-stmt | on-
 ```ebnf
 prog-stmt := gfx-all-stmt | load-stmt | run-stmt | merge-stmt | chain-stmt | files-stmt | build-stmt | bye-stmt | timer-stmt | list-stmt | new-stmt | clear-stmt |
              delete-stmt | renum-stmt | edit-stmt | monitor-stmt | sound-stmt | wait-stmt | on-error-stmt | randomize-stmt | angle-stmt |
-             cont-stmt | trace-stmt | break-stmt | auto-stmt | poke-stmt | error-stmt | joy-stmt | on-joy-stmt | on-key-stmt | frame-stmt | library-stmt .
+             cont-stmt | trace-stmt | break-stmt | auto-stmt | poke-stmt | error-stmt | joy-stmt | on-joy-stmt | on-key-stmt | frame-stmt | library-stmt | libraries-stmt .
 stmt := io-stmt | prog-stmt | assign-stmt | control-flow-stmt .
 stmt-list := stmt { ":" stmt } .
 stmt-line := [ stmt-list ] [ <'comment> ] <end-of-line> .

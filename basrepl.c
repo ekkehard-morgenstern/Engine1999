@@ -205,6 +205,7 @@ static bool repl_vm_renumber( struct _vm_t* vm, void* usrdata, const char* first
     const char* lastlabel, int32_t lastline, int32_t step );
 static bool repl_vm_merge( struct _vm_t* vm, void* usrdata, const char* name, bool append );
 static bool repl_vm_files( struct _vm_t* vm, void* usrdata, const char* spec );
+static bool repl_vm_libraries( struct _vm_t* vm, void* usrdata, const char* name );
 static bool repl_vm_build( struct _vm_t* vm, void* usrdata, const char* name, int kind );
 
 // hands the host callbacks to the VM
@@ -228,6 +229,7 @@ static void repl_setup_vm( repl_t* repl ) {
     vm->renumber  = repl_vm_renumber;
     vm->merge     = repl_vm_merge;
     vm->files     = repl_vm_files;
+    vm->libraries = repl_vm_libraries;
     vm->argc      = repl->argc;
     vm->argv      = repl->argv;
     vm->build     = repl_vm_build;
@@ -942,6 +944,131 @@ static bool repl_files_emit( void* usrdata, const char* line ) {
 }
 
 // FILES [spec]: oldest first like "ls -ltr" (basfiles.c); colored on the screen channel only
+// -- LIBRARIES ------------------------------------------------------------------------
+
+static void repl_out( repl_t* repl, const char* text ) {
+    if ( repl->print ) {
+        repl->print( &repl->vm, repl, repl->vm.channel, text );
+    } else {
+        fputs( text, stdout );
+    }
+}
+
+typedef struct _libdef_t {
+    uint32_t    addr;
+    char        text[200];
+} libdef_t;
+
+static int repl_libdef_cmp( const void* a, const void* b ) {
+    const libdef_t* x = (const libdef_t*) a; const libdef_t* y = (const libdef_t*) b;
+    return x->addr < y->addr ? -1 : x->addr > y->addr ? 1 : 0;
+}
+
+static const char* repl_suffix( uint8_t type ) {
+    switch ( type & VARTYPEM_BASE ) {
+        case VARTYPEV_INT: return "%";
+        case VARTYPEV_STR: return "$";
+        default:           return "";
+    }
+}
+
+// the name of a variable as the programmer writes it (the type suffix is added if the stored name has none)
+static void repl_typed_name( char* out, size_t size, const char* name, uint8_t type ) {
+    size_t n = strlen( name );
+    bool has = n > 0 && ( name[n - 1U] == '%' || name[n - 1U] == '$' );
+    snprintf( out, size, "%s%s", name, has ? "" : repl_suffix( type ) );
+}
+
+// LIBRARIES: the libraries of the last compile (name, prefix, file); LIBRARIES "name": what the library defines, in the order of its code
+static bool repl_vm_libraries( struct _vm_t* vm, void* usrdata, const char* name ) {
+    repl_t* repl = (repl_t*) usrdata;
+    char line[400];
+    if ( name[0] == '\0' ) {
+        if ( repl->libs.count == 0 ) {
+            repl_out( repl, "No libraries (a program names them with LOAD LIBRARY; RUN loads them)\n" );
+            return true;
+        }
+        repl_out( repl, "NAME             PREFIX   FILE\n" );
+        for ( size_t i=0; i < repl->libs.count; ++i ) {
+            const baslib_t* lib = &repl->libs.libs[i];
+            snprintf( line, sizeof(line), "%-16s %-8s %s\n", lib->name, lib->prefix[0] ? lib->prefix : "-", lib->file ? lib->file : "" );
+            repl_out( repl, line );
+        }
+        return true;
+    }
+    const codegen_t* cgen = &repl->rt.codegen;
+    const cgen_module_t* mod = 0;
+    for ( size_t i=0; i < cgen->nummodules; ++i ) {
+        if ( strcasecmp( cgen->modules[i].name, name ) == 0 ) {
+            mod = &cgen->modules[i];
+            break;
+        }
+    }
+    if ( mod == 0 ) {
+        repl_vm_error( repl, "Library not loaded:", name );
+        return false;
+    }
+    size_t cap = 64, n = 0;
+    libdef_t* defs = (libdef_t*) malloc( cap * sizeof(libdef_t) );
+    if ( defs == 0 ) {
+        repl_vm_error( repl, "Out of memory", 0 );
+        return false;
+    }
+    const varmem_t* vmem = &repl->rt.varmem;
+    for ( size_t i=0; i < vmem->numslots; ++i ) {
+        const var_t* v = vmem->table[i];
+        if ( v == 0 || v->name == 0 || v->name[0] == '@' || ( v->type & VARTYPEM_BASE ) > VARTYPEV_LABEL ) {
+            continue;
+        }
+        bool isfunc = ( v->type & VARTYPEF_FUNC ) != 0;
+        bool islabel = !isfunc && ( v->type & VARTYPEM_BASE ) == VARTYPEV_LABEL;
+        if ( !isfunc && !islabel ) {
+            continue;
+        }
+        uint32_t addr = v->v.codeoffs;
+        if ( addr == CODEOFFS_NONE || addr < mod->codestart || addr >= mod->codeend ) {
+            continue;
+        }
+        if ( n == cap ) {
+            libdef_t* p = (libdef_t*) realloc( defs, cap * 2U * sizeof(libdef_t) );
+            if ( p == 0 ) {
+                break;
+            }
+            defs = p;
+            cap *= 2U;
+        }
+        libdef_t* d = &defs[n++];
+        d->addr = addr;
+        char nm[80];
+        if ( islabel ) {
+            snprintf( d->text, sizeof(d->text), "LABEL %s", v->name );
+        } else {
+            bool isproc = ( v->type & VARTYPEM_BASE ) == VARTYPEV_LABEL;
+            repl_typed_name( nm, sizeof(nm), v->name, v->type );
+            size_t len = (size_t) snprintf( d->text, sizeof(d->text), "%s %s(", isproc ? "PROC" : "FUNC", nm );
+            for ( uint8_t p=0; p < v->numparams && len < sizeof(d->text) - 40U; ++p ) {
+                char pn[80];
+                repl_typed_name( pn, sizeof(pn), v->params[p].name ? v->params[p].name : "?", v->params[p].type );
+                len += (size_t) snprintf( d->text + len, sizeof(d->text) - len, "%s%s%s", p ? ", " : "", pn, ( v->params[p].type & VARTYPEF_ARRAY ) ? "()" : "" );
+            }
+            snprintf( d->text + len, sizeof(d->text) - len, ")" );
+        }
+    }
+    qsort( defs, n, sizeof(libdef_t), repl_libdef_cmp );
+    snprintf( line, sizeof(line), "Library %s:\n", mod->name );
+    repl_out( repl, line );
+    for ( size_t i=0; i < n; ++i ) {
+        snprintf( line, sizeof(line), "  %s\n", defs[i].text );
+        repl_out( repl, line );
+    }
+    if ( n == 0 ) {
+        repl_out( repl, "  (nothing defined)\n" );
+    }
+    free( defs );
+    (void) vm;
+    return true;
+}
+
 static bool repl_vm_files( struct _vm_t* vm, void* usrdata, const char* spec ) {
     repl_t* repl = (repl_t*) usrdata;
     filesout_t out = { repl, 0, false, false };
@@ -983,10 +1110,10 @@ bool repl_program_image( repl_t* repl, uint8_t** pdata, size_t* plen ) {
     return true;
 }
 
-// the name of a BASIC program file (.bas, .e99): BUILD refuses to overwrite one with an executable
+// the name of a BASIC program file (.bas, .e99, .lib, .l99): BUILD refuses to overwrite one with an executable
 static bool repl_is_program_name( const char* name ) {
     const char* dot = strrchr( name, '.' );
-    return dot != 0 && strchr( dot, '/' ) == 0 && ( strcasecmp( dot, ".bas" ) == 0 || strcasecmp( dot, ".e99" ) == 0 );
+    return dot != 0 && strchr( dot, '/' ) == 0 && ( strcasecmp( dot, ".bas" ) == 0 || strcasecmp( dot, ".e99" ) == 0 || strcasecmp( dot, ".lib" ) == 0 || strcasecmp( dot, ".l99" ) == 0 );
 }
 
 // BUILD name: the stored program becomes the executable <name> (basbuild.c: the system linker binds it to the Engine)
@@ -1297,21 +1424,23 @@ static bool repl_vm_renumber( struct _vm_t* vm, void* usrdata, const char* first
 
 // SAVE name: a name without an extension gets .bas (ASCII listing) or .e99 (binary, tokenized)
 // SAVE without a name: the file of the last LOAD or SAVE. Without an option it is written in the format that file has (repl->fileascii) under
-// its own name; with an option of the other format the standard extension (.bas / .e99) is swapped for the one of that format, any other name is kept.
-static char* repl_default_save_name( const repl_t* repl, bool ascii, bool optiongiven ) {
+// its own name; with an option of the other format the standard extension (.bas / .e99, .lib / .l99) is swapped for the one of that format, any other
+// name is kept. SAVE LIBRARY (lib) always puts the library extension of the format on a name that has a standard one.
+static char* repl_default_save_name( const repl_t* repl, bool ascii, bool optiongiven, bool lib ) {
     if ( repl->filename == 0 ) {
         return 0;
     }
     char* name = strdup( repl->filename );
-    if ( name == 0 || !optiongiven ) {
+    if ( name == 0 || ( !optiongiven && !lib ) ) {
         return name;
     }
     char* dot = strrchr( name, '.' );
     if ( dot != 0 && strchr( dot, '/' ) == 0 ) {
-        if ( ascii && strcasecmp( dot, ".e99" ) == 0 ) {
-            memcpy( dot, ".bas", 4 );
-        } else if ( !ascii && strcasecmp( dot, ".bas" ) == 0 ) {
-            memcpy( dot, ".e99", 4 );
+        bool std = strcasecmp( dot, ".bas" ) == 0 || strcasecmp( dot, ".e99" ) == 0 || strcasecmp( dot, ".lib" ) == 0 || strcasecmp( dot, ".l99" ) == 0;
+        bool islibext = strcasecmp( dot, ".lib" ) == 0 || strcasecmp( dot, ".l99" ) == 0;
+        if ( std && ( lib || islibext || optiongiven ) ) {
+            const char* ext = lib ? ( ascii ? ".lib" : ".l99" ) : islibext ? ( ascii ? ".lib" : ".l99" ) : ( ascii ? ".bas" : ".e99" );
+            memcpy( dot, ext, 4 );
         }
     }
     return name;
@@ -1323,18 +1452,30 @@ bool repl_save_program( repl_t* repl, const char* name, bool ascii ) {
 
 bool repl_save_program_ex( repl_t* repl, const char* name, int mode ) {
     char* filename;
+    bool lib = ( mode & 4 ) != 0;
+    mode &= 3;
     bool ascii = mode != 2;
+    if ( lib ) {                                    // SAVE LIBRARY: the stored program has to be one
+        char* lname = 0; char* lprefix = 0;
+        if ( !baslib_header( &repl->pgm, &lname, &lprefix, 0 ) ) {
+            repl_report( repl, "? Not a library (its first statement must be LIBRARY \"name\")" );
+            return false;
+        }
+        free( lname );
+        free( lprefix );
+    }
     if ( name == 0 ) {
         if ( mode == 0 ) {
             ascii = repl->fileascii;
         }
-        filename = repl_default_save_name( repl, ascii, mode != 0 );
+        filename = repl_default_save_name( repl, ascii, mode != 0, lib );
         if ( filename == 0 ) {
             repl_report( repl, "? No file name (LOAD or SAVE a file first, or give a name)" );
             return false;
         }
     } else {
-        filename = repl_has_extension( name ) ? strdup( name ) : repl_add_extension( name, ascii ? ".bas" : ".e99" );
+        const char* ext = lib ? ( ascii ? ".lib" : ".l99" ) : ( ascii ? ".bas" : ".e99" );
+        filename = repl_has_extension( name ) ? strdup( name ) : repl_add_extension( name, ext );
     }
     if ( filename == 0 ) {
         return false;

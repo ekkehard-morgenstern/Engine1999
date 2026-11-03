@@ -465,6 +465,7 @@ bool read_brclit( rbuf_t* rbuf, char** ptarget );
 #define XF_ERROR        UINT8_C(6)          // ERROR statement (raise an error), also ON ERROR
 #define XF_JOY          UINT8_C(7)          // JOY function (game controllers), ON JOY, JOY DEADZONE
 #define XF_FRAME        UINT8_C(8)          // FRAME statement (wait for the next screen refresh)
+#define XF_LIBRARIES    UINT8_C(10)         // LIBRARIES [name$]: lists the libraries of the last compile (or the procedures and functions of one)
 #define XF_LIBRARY      UINT8_C(9)          // LIBRARY "name"[,"prefix"] (first statement of a library), LOAD LIBRARY "name", SAVE LIBRARY
 bool is_xkeyword( const char* name, uint8_t* pxid );    // an extension word by name
 const char* xkeyword_name( uint8_t xid );               // the text of an extension word, 0 if there is none

@@ -397,6 +397,8 @@ bool cgen_gen_wait( codegen_t* cgen );
 bool cgen_gen_errn( codegen_t* cgen );
 bool cgen_gen_fram( codegen_t* cgen );
 bool cgen_gen_keys( codegen_t* cgen );
+bool cgen_gen_libs( codegen_t* cgen );
+bool cgen_from_librariesstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_gen_joys( codegen_t* cgen );
 bool cgen_gen_joyq( codegen_t* cgen );
 bool cgen_gen_joyd( codegen_t* cgen );

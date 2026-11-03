@@ -703,6 +703,20 @@ bool cgen_from_soundstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     return cgen_gen_snd( cgen, kind ) || cgen_out_of_code_memory( comp );
 }
 
+bool cgen_from_librariesstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    // NT_LIBRARIESSTMT    LIBRARIES statement (no branch: the empty string is pushed = list all; or 1 string expression: a library name)   code: <name or ""> LIBS
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->type != NT_LIBRARIESSTMT || node->numbranches > 1U ) {
+        return cgen_unexpected_node( comp );
+    }
+    if ( node->numbranches == 1U ? !cgen_from_strexpr( cgen, comp, node->branches[0] ) : !cp_push_string( cgen, comp, "" ) ) {
+        return false;
+    }
+    return cgen_gen_libs( cgen ) || cgen_out_of_code_memory( comp );
+}
+
 bool cgen_from_framestmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     // NT_FRAMESTMT    FRAME statement (no branch: 1 frame; or 1 branch of numeric expression)
     if ( node == NODE_NONE ) {

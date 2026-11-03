@@ -293,6 +293,9 @@ typedef struct _vm_t {
     // reporting an error. The run ends afterwards.
     // FILES: lists the files of spec ("" = the current directory) to the current output channel. Return false after reporting an error.
     bool            (*files)( struct _vm_t*, void*, const char* spec );
+    // LIBRARIES: lists the libraries of the last compile to the current output channel (name "" = all), or the PROCs, FUNCs and LABELs of the library <name>.
+    // Return false after reporting an error.
+    bool            (*libraries)( struct _vm_t*, void*, const char* name );
     // BUILD: creates the executable file <name> from the stored program. Return false after reporting an error.
     // kind: 0 = the host's own kind of runtime, 1 = WINDOW, 2 = CONSOLE
     bool            (*build)( struct _vm_t*, void*, const char* name, int kind );
