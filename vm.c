@@ -1459,10 +1459,10 @@ static bool vm_save_program( vm_t* vm ) {
         return false;
     }
     bool ok = true;
-    bool ascii = false;
-    if ( strcmp( mode, "A" ) == 0 ) {
-        ascii = true;
-    } else if ( mode[0] != '\0' && strcmp( mode, "B" ) != 0 ) {
+    bool ascii = true;      // the default is the text listing; B asks for the tokenized binary form
+    if ( strcmp( mode, "B" ) == 0 ) {
+        ascii = false;
+    } else if ( mode[0] != '\0' && strcmp( mode, "A" ) != 0 ) {
         ok = vm_error( vm, "Bad SAVE mode" );
     }
     if ( ok && name[0] == '\0' ) {

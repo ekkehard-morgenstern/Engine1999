@@ -618,7 +618,7 @@ static const testcase_t cases[] = {
     { "shell strips newlines",  "PRINT \"[\"+`printf 'x\\n\\n'`+\"]\"",          "[x]\n" },
     { "shell no output",        "PRINT LEN(`true`)",                              "0\n" },
     { "shell after assignment", "C$=\"echo \"+\"ok\"\nPRINT `echo ok`",       "ok\n" },
-    { "SAVE binary default",    "10 PRINT 1\n20 SAVE \"X\"",                       "1\n<save X binary>\n89 45 39 39 01 00 00 0A 00 0A 20 0B 20 31 00 00 00 14 00 0D 20 14 20 03 00 01 58 00 \n" },
+    { "SAVE ascii default",     "10 PRINT 1\n20 SAVE \"X\"",                       "1\n<save X ascii>\n10 PRINT 1\n20 SAVE \"X\"\n" },
     { "SAVE ascii",             "10 PRINT 1\n20 SAVE \"X\",A",                     "1\n<save X ascii>\n10 PRINT 1\n20 SAVE \"X\",A\n" },
     { "SAVE binary option",     "10 PRINT 1\n20 SAVE \"X\",B",                     "1\n<save X binary>\n89 45 39 39 01 00 00 0A 00 0A 20 0B 20 31 00 00 00 14 00 12 20 14 20 03 00 01 58 2C 8A 00 01 42 00 \n" },
     // LOAD, RUN, LIST (the VM only leaves requests / calls the host)

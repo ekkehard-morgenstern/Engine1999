@@ -29,7 +29,7 @@ Music demos play until the end or until a key is pressed (`SOUND OFF` is issued 
 The demos use `WAIT` to pause (a busy loop on `TI` would keep the processor at 100 %).
 
 Conventions:
-- Programs are kept as **ASCII listings** with the extension `.bas` (`SAVE "name",A` writes them; `LOAD "name"` finds `name.bas`),
-  so they can be read and diffed. Binary tokenized programs (`.e99`, the default of `SAVE "name"`) don't belong in this folder.
+- Programs are kept as **ASCII listings** with the extension `.bas` (`SAVE "name"` writes them; `LOAD "name"` finds `name.bas`),
+  so they can be read and diffed. Binary tokenized programs (`.e99`, `SAVE "name",B`) don't belong in this folder.
 - Run one with `engine1999`, then `LOAD "demos/name"` and `RUN`; make a standalone executable with `BUILD "name"` (`./name` starts it).
 - The first four lines (1..4) are the license comment: new demos get the same four lines.

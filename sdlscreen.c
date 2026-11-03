@@ -367,6 +367,34 @@ static void sdlscr_handletext( const char text[SDL_TEXTINPUTEVENT_TEXT_SIZE] ) {
     }
 }
 
+// the index of the display that holds the mouse pointer (0 if it can't be found or SDL_VIDEO_FULLSCREEN_DISPLAY is set)
+static int sdlscr_pointerdisplay( void ) {
+    if ( getenv( "SDL_VIDEO_FULLSCREEN_DISPLAY" ) != 0 || getenv( "SDL_VIDEO_FULLSCREEN_HEAD" ) != 0 ) {
+        return 0;
+    }
+    int n = SDL_GetNumVideoDisplays();
+    if ( n < 2 ) {
+        return 0;
+    }
+    int mx = 0, my = 0;
+    SDL_GetGlobalMouseState( &mx, &my );
+    for ( int i = 0; i < n; ++i ) {
+        SDL_Rect r;
+        if ( SDL_GetDisplayBounds( i, &r ) == 0 && mx >= r.x && mx < r.x + r.w && my >= r.y && my < r.y + r.h ) {
+            return i;
+        }
+    }
+    return 0;
+}
+
+// bring the window to the front: the window manager may have opened it behind other windows or not given it the focus
+static void sdlscr_tryraise( SDL_Window* window ) {
+    if ( ( SDL_GetWindowFlags( window ) & SDL_WINDOW_INPUT_FOCUS ) == 0 ) {
+        SDL_ShowWindow( window );
+        SDL_RaiseWindow( window );
+    }
+}
+
 static int sdlscr_worker( void* arg ) {
 
     sdlscr_initok = false;
@@ -378,10 +406,14 @@ static int sdlscr_worker( void* arg ) {
         goto ERR1;
     }
 
+    // the window opens on the display where the pointer is (the user started the program from a window on that display, as a rule);
+    // SDL_VIDEO_FULLSCREEN_DISPLAY, if set, decides instead
+    int startdisp = sdlscr_pointerdisplay();
+    SDL_SetHint( SDL_HINT_FORCE_RAISEWINDOW, "1" );     // ask the window manager to activate the window, not only to raise it
     SDL_Window* window = SDL_CreateWindow(
         "",
-        SDL_WINDOWPOS_UNDEFINED,
-        SDL_WINDOWPOS_UNDEFINED,
+        SDL_WINDOWPOS_CENTERED_DISPLAY( startdisp ),
+        SDL_WINDOWPOS_CENTERED_DISPLAY( startdisp ),
         0,
         0,
         SDL_WINDOW_FULLSCREEN_DESKTOP
@@ -455,6 +487,9 @@ static int sdlscr_worker( void* arg ) {
         }
 
         ++sdlscr_framecnt;
+        if ( sdlscr_framecnt <= 180 && sdlscr_framecnt % 10 == 1 ) {         // up to 3 seconds: ask again every 10 frames until the window has the focus
+            sdlscr_tryraise( window );
+        }
 
         // --debug-frames: the times of this frame (nanoseconds from the monotonic clock; printed as microseconds)
         struct timespec fts;

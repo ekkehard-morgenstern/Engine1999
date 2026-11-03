@@ -185,6 +185,7 @@ num-expr     := num-or-ex .
 expr         := num-expr | str-expr .
 
 --# Input and output
+-- The option is A (ASCII listing, the default) or B (binary, tokenized).
 save-stmt := SAVE str-expr [ TOK_COMMA TOK_NUMIDENT ] .
 
 chan-spec := TOK_LATTICE num-expr .

@@ -2577,7 +2577,7 @@ bool comp_eat_savestmt( compiler_t* comp, node_t** pnode ) {
                 - 1 branch of string expression
             immediate processing:
                 - the SAVE statement is special b/c it uses an identifier as optional second parameter
-                  denoting save mode (A for ASCII, B (default) for binary)
+                  denoting save mode (A for ASCII (default), B for binary)
                 - the file name need not be a string literal
     */
     bool ok = comp_create_node( comp, pnode, NT_SAVESTMT, UINT8_C(1), (uint16_t) saveoptlen,

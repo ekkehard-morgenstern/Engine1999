@@ -45,7 +45,7 @@ tokens…  TOK_EOL (0)
 
 ## Binary program files (`.e99`)
 
-`SAVE "name"` (without the `A` option) writes the program in its stored, tokenized form; `LOAD`, `MERGE` and `CHAIN` read it back (`save_program()` in `baspgm.c`, `read_program_header()` there and `repl_read_program()` in `basrepl.c`). The file is a 5-byte header followed by the lines:
+`SAVE "name",B` writes the program in its stored, tokenized form (the default of `SAVE` is the ASCII listing since 2026-11-03; `A` is still accepted); `LOAD`, `MERGE` and `CHAIN` read it back (`save_program()` in `baspgm.c`, `read_program_header()` there and `repl_read_program()` in `basrepl.c`). The file is a 5-byte header followed by the lines:
 
 ```
 header (5 bytes)
@@ -76,7 +76,7 @@ Example, `10 PRINT "HI";A$` and `20 GOTO 10` (the space after a line number is a
 - Only the source is saved: no variables, no compiled code, no checksum. `RUN` compiles the program again, so the file does not depend on the instruction set or on variable numbers.
 - The loader reads into a scratch program and replaces (or, for `MERGE`, merges into) the stored one only when the whole file is fine. A line with a length of 5 or less, a line number above 999999, a line that is cut off or doesn't end in `00`, and bytes left over at the end are "Bad program file".
 - Compatibility: the tokens are only valid for the token set of the same build (`TOK_*` in `bastok.h`; the literal length prefix is 2 bytes since the tokenizer refactor, see [refactoring.md](refactoring.md)), which is what the version byte is for: a change of the token set or the line layout must bump `PGMFILE_VERSION`.
-- The ASCII form (`SAVE "name",A`, `.bas`) is the listing text as `LIST` prints it, one line per program line; `LOAD` tells the two apart by the magic number.
+- The ASCII form (`SAVE "name"` or `SAVE "name",A`, `.bas`; the default since 2026-11-03) is the listing text as `LIST` prints it, one line per program line; `LOAD` tells the two apart by the magic number.
 
 ## Keyword and operator groups (see `bastok.h` for all IDs)
 
@@ -259,7 +259,7 @@ in BASIC: [io-subsystem.md](io-subsystem.md).
 
 Channel 0 is the screen and keyboard; channels 1 to 255 are opened by `OPEN`. `LOAD`, `SAVE`, `MERGE`, `CHAIN` and `FILES` take driver names too (`SAVE "mem:game"`, `FILES "mem:"`); the default extensions apply to the path. `WRITE` is `PRINT` with strings in double quotes and commas between the items; `LINE INPUT` takes the whole line; `INPUT #n` splits it into fields and goes on with the next line when it runs out. Lines are written with a newline and read with a newline or a carriage return and a newline. A restart (`RUN`, `NEW`, `LOAD`, `CHAIN`) closes all channels. See io-subsystem.md for the exact rules, the error messages and what comes next (`KILL`, `RENAME`, `SEEK`, more drivers, random access records, the open sandboxing question).
 
-**File extensions:** `SAVE "name"` writes the binary (tokenized) form and appends `.e99` to a name without extension; `SAVE "name",A` writes the ASCII listing and appends `.bas`. A name with an extension is used as it is. `LOAD` recognizes both forms by the header, whatever the extension is.
+**File extensions:** `SAVE "name"` (or `SAVE "name",A`) writes the ASCII listing and appends `.bas` to a name without extension; `SAVE "name",B` writes the binary (tokenized) form and appends `.e99`. Before 2026-11-03 the default was binary; programs saved that way still load. A name with an extension is used as it is. `LOAD` recognizes both forms by the header, whatever the extension is.
 
 ## Program arguments and the environment: `ARGC`, `ARG$`, `ENV$`; the standard streams
 

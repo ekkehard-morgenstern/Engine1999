@@ -140,6 +140,9 @@ SDL's mapping strings for game controllers that SDL does not know (see the SDL G
 .BR engine1999\-basic (7),
 JOY).
 .TP
+.B SDL_VIDEO_FULLSCREEN_DISPLAY
+The number of the display on which the window opens. Without it the window opens on the display that holds the mouse pointer.
+.TP
 .BR SDL_VIDEODRIVER ", " SDL_AUDIODRIVER
 Chosen as for any SDL2 program (for example
 .B SDL_AUDIODRIVER=disk
@@ -174,12 +177,12 @@ A program can read any variable with the BASIC function
 .TP
 .I *.bas
 Programs as text listings (what
-.B SAVE "name",A
+.B SAVE "name"
 writes).
 .TP
 .I *.e99
 Programs in the binary tokenized form (what
-.B SAVE "name"
+.B SAVE "name",B
 writes).
 .B LOAD "name"
 finds either.

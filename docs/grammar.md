@@ -215,6 +215,8 @@ expr         := num-expr | str-expr .
 
 ## Input and output
 
+> The option is A (ASCII listing, the default) or B (binary, tokenized).
+
 ```ebnf
 save-stmt := SAVE str-expr [ "," <name> ] .
 chan-spec := "#" num-expr .

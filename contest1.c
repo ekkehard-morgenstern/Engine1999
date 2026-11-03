@@ -646,7 +646,7 @@ int main( void ) {
         free( out ); free( err );
 
         // a binary program file (SAVE writes .e99) runs
-        st = run( "-", "10 PRINT 3\nSAVE \"binprog\"\n", &out, &outlen, &err );
+        st = run( "-", "10 PRINT 3\nSAVE \"binprog\",B\n", &out, &outlen, &err );
         free( out ); free( err );
         st = run( "binprog.e99", "", &out, &outlen, &err );
         ok = st == 0 && strcmp( out, "3\n" ) == 0;
