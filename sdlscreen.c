@@ -91,7 +91,12 @@ static uint32_t sdlscr_bgcol = SDLSCR_DEFAULT_BGCOL;
 
 static SDL_Thread* sdlscr_workerthr = 0;
 
-static uint64_t sdlscr_framecnt = 0;
+static uint64_t sdlscr_framecnt = 0;       // the screen thread's loop counter (the top of every iteration)
+// The frame counter that programs see (GFX VSYNC, FRAME, GFX("FRAME")): it is increased when a frame has been converted and drawn, right before it is presented. A program that
+// waits for it therefore starts its updates of the layers *after* the screen thread has taken the previous ones, and has the whole wait for the vertical blank to finish them: the
+// updates can't be cut in two by the conversion of the next frame (tearing between the tiles, the sprites and the text). (Before 2026-11-03 the counter was increased at the top of
+// the loop, so the program woke up at the same moment the screen thread began to convert the layers, and a burst of updates could overlap it.)
+static uint64_t sdlscr_vblankcnt = 0;
 static volatile bool sdlscr_awaitinput = false;     // line input in progress: queue keys, show the cursor
 static volatile bool sdlscr_pollinput = false;      // a program is running: queue keys, ESC = break
 static volatile bool sdlscr_breakreq = false;
@@ -194,7 +199,7 @@ static bool sdlscr_enqueuetext( const char text[SDL_TEXTINPUTEVENT_TEXT_SIZE] ) 
 }
 
 uint64_t sdlscr_getframecnt( void ) {
-    return sdlscr_framecnt;
+    return sdlscr_vblankcnt;
 }
 
 // -- key debugging (--debug-keys) ---------------------------------------------------------------
@@ -674,6 +679,7 @@ static int sdlscr_worker( void* arg ) {
         }
         uint64_t tf3 = sdlscr_framedebug ? sdlutil_getnsec( &tfs ) : 0;     // after the layers were drawn (the GPU may still be working)
 
+        __atomic_store_n( &sdlscr_vblankcnt, sdlscr_vblankcnt + 1U, __ATOMIC_RELEASE );     // (after the layers were converted and drawn: see the comment at the declaration)
         sdlev_raise( SDLEV_VBLANK );
         SDL_RenderPresent( renderer );
         uint64_t tf4 = sdlscr_framedebug ? sdlutil_getnsec( &tfs ) : 0;     // after the present (it waits for the vertical blank)
@@ -1668,9 +1674,9 @@ void sdlscr_gfx_reset( bool images ) {
 // timing
 
 void sdlscr_vsync( void ) {
-    uint64_t f = sdlscr_framecnt;
+    uint64_t f = __atomic_load_n( &sdlscr_vblankcnt, __ATOMIC_ACQUIRE );
     struct timespec nap = { 0, 1000000L };
-    while ( sdlscr_framecnt == f && !sdlscr_doexit && sdlscr_initok ) {
+    while ( __atomic_load_n( &sdlscr_vblankcnt, __ATOMIC_ACQUIRE ) == f && !sdlscr_doexit && sdlscr_initok ) {
         nanosleep( &nap, 0 );
     }
 }

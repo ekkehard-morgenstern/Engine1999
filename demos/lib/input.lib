@@ -1,0 +1,92 @@
+1 ' License: free for everybody to use, copy, change and build into executables (BUILD).
+2 ' An executable made with BUILD contains the Engine1999 runtime: the Engine1999 Runtime Exception
+3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
+4 ' in the executable (it shows with the command line option --engine1999-about).
+10 ' input - the keyboard and game controller handling that the demo games share (a library: LOAD LIBRARY "input").
+20 ' What a game calls each frame:
+30 '   CALL IN_POLL          sets IN_DX and IN_DY (-1, 0 or 1: the arrow keys, WASD, the D-pad or the left stick of pad 1; opposite directions cancel)
+40 '                         and IN_BTN (-1 while SPACE or the A button of pad 1 is held)
+50 '   IF FN IN_SERVICE() THEN CALL PAUSE
+60 '                         reads the keys typed since the last call: P and the START button of any pad ask for a pause (the function returns -1; the game
+70 '                         shows its own box and calls IN_PAUSELOOP), Q and the BACK button of any pad set IN_QUIT to 1, the last other key (upper case) is IN_KEY
+80 '                         (0 if there was none) for the game's own single keys
+90 '   CALL IN_PAUSELOOP     waits until P or START continues or Q or BACK quits (IN_QUIT = 1); the game draws and clears its "PAUSED" box around it
+100 '   FN IN_ANYSTART(0), FN IN_ANYBACK(0), FN IN_ANYA(0)   is that button held on any of the four pads? (-1 / 0; JOY needs the button name as a literal: one function each)
+110 ' A game resets IN_QUIT to 0 when it starts and reads it after the calls. The variables of this library start with IN_.
+120 LIBRARY "input","IN_"
+130 FUNC IN_ANYSTART(X)
+140   LOCAL P,R
+150   R=0
+160   FOR P=1 TO 4
+170     IF JOY("START",P) THEN R=-1
+180   NEXT P
+190   RETURN R
+200 END FUNC
+210 FUNC IN_ANYBACK(X)
+220   LOCAL P,R
+230   R=0
+240   FOR P=1 TO 4
+250     IF JOY("BACK",P) THEN R=-1
+260   NEXT P
+270   RETURN R
+280 END FUNC
+290 FUNC IN_ANYA(X)
+300   LOCAL P,R
+310   R=0
+320   FOR P=1 TO 4
+330     IF JOY("A",P) THEN R=-1
+340   NEXT P
+350   RETURN R
+360 END FUNC
+370 PROC IN_POLL
+380   LOCAL L,R,U,D
+390   L=KEY("LEFT") OR KEY("A") OR JOY("LEFT") OR JOY("LX")<-0.4
+400   R=KEY("RIGHT") OR KEY("D") OR JOY("RIGHT") OR JOY("LX")>0.4
+410   U=KEY("UP") OR KEY("W") OR JOY("UP") OR JOY("LY")<-0.4
+420   D=KEY("DOWN") OR KEY("S") OR JOY("DOWN") OR JOY("LY")>0.4
+430   IN_DX=0:IN_DY=0
+440   IF L AND NOT R THEN IN_DX=-1
+450   IF R AND NOT L THEN IN_DX=1
+460   IF U AND NOT D THEN IN_DY=-1
+470   IF D AND NOT U THEN IN_DY=1
+480   IN_BTN=KEY("SPACE") OR JOY("A")
+490 END PROC
+500 FUNC IN_SERVICE()
+510   LOCAL K$,K,N,S,Q
+520   Q=0
+530   IF FN IN_ANYBACK(0) THEN IN_QUIT=1
+540   S=FN IN_ANYSTART(0)
+550   IF S AND NOT IN_PSK THEN Q=-1
+560   IN_PSK=S
+570   IN_KEY=0
+580   N=0
+590   REPEAT
+600     K$=INKEY$
+610     IF K$<>"" THEN
+620       K=ASC(K$)
+630       IF K>=97 AND K<=122 THEN K=K-32
+640       IF K=81 THEN
+650         IN_QUIT=1
+660       ELSE
+670         IF K=80 THEN Q=-1 ELSE IN_KEY=K
+680       END IF
+690     END IF
+700     N=N+1
+710   UNTIL K$="" OR N>=6
+720   RETURN Q
+730 END FUNC
+740 PROC IN_PAUSELOOP
+750   LOCAL K$
+760   WHILE FN IN_ANYSTART(0)
+770     GFX VSYNC
+780   WEND
+790   REPEAT
+800     GFX VSYNC
+810     K$=INKEY$
+820   UNTIL K$="p" OR K$="P" OR K$="q" OR K$="Q" OR FN IN_ANYSTART(0) OR FN IN_ANYBACK(0)
+830   IF K$="q" OR K$="Q" OR FN IN_ANYBACK(0) THEN IN_QUIT=1
+840   WHILE FN IN_ANYSTART(0)
+850     GFX VSYNC
+860   WEND
+870   IN_PSK=0
+880 END PROC

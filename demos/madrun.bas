@@ -4,6 +4,7 @@
 4 ' in the executable (it shows with the command line option --engine1999-about).
 5 ' the helpers that the demo games share (RN, CLAMP, PAD$, DISK, PLAYSEQ) are in the library demos/lib/util.lib
 6 LOAD LIBRARY "util"
+7 LOAD LIBRARY "input"
 10 ' MADRUN - a crossing game for one to four players, for Engine1999.
 20 ' A telephone booth stands on the island in the middle of a busy crossing, and the phone is ringing! Get there before the caller hangs up.
 30 ' Cars, trucks, buses, motorbikes and (later) ambulances drive on eight lanes. They stop for each other and for the crossing, but never for you.
@@ -24,31 +25,6 @@
 180 ' VR the crossing reserved + 1; lanes 0..7 (LDIR, LAX axis, LPOS, LLEN, CA crossing entries, CID crossing numbers); OCC(crossing, axis) occupied
 190 ' --------------------------------------------------------------------------------------------------------------------------------------------
 200 ' (a FUNC has to be defined before the lines that call it)
-320 ' is a button held on any of the four pads?
-330 FUNC ANYSTART(X)
-340   LOCAL P,R
-350   R=0
-360   FOR P=1 TO 4
-370     IF JOY("START",P) THEN R=-1
-380   NEXT P
-390   RETURN R
-400 END FUNC
-410 FUNC ANYBACK(X)
-420   LOCAL P,R
-430   R=0
-440   FOR P=1 TO 4
-450     IF JOY("BACK",P) THEN R=-1
-460   NEXT P
-470   RETURN R
-480 END FUNC
-490 FUNC ANYA(X)
-500   LOCAL P,R
-510   R=0
-520   FOR P=1 TO 4
-530     IF JOY("A",P) THEN R=-1
-540   NEXT P
-550   RETURN R
-560 END FUNC
 570 ' ====================================================================== main program
 580 CALL INIT
 590 HI=0
@@ -505,18 +481,18 @@
 5100     IF K>=97 AND K<=122 THEN K=K-32
 5110     IF ST=0 THEN
 5120       IF K=75 THEN ST=1:RD=-1
-5130       IF K=67 OR FN ANYA(0) OR FN ANYSTART(0) THEN GM=2:DONE=-1
-5140       IF K=81 OR FN ANYBACK(0) THEN QT=1:DONE=-1
+5130       IF K=67 OR FN IN_ANYA(0) OR FN IN_ANYSTART(0) THEN GM=2:DONE=-1
+5140       IF K=81 OR FN IN_ANYBACK(0) THEN QT=1:DONE=-1
 5150     ELSE
 5160       IF K=49 THEN NK=1:GM=1:DONE=-1
 5170       IF K=50 THEN NK=2:GM=1:DONE=-1
 5180       IF K=81 OR K=66 THEN ST=0:RD=-1
 5190     END IF
 5200   UNTIL DONE
-5210   WHILE FN ANYSTART(0) OR FN ANYBACK(0) OR FN ANYA(0)
+5210   WHILE FN IN_ANYSTART(0) OR FN IN_ANYBACK(0) OR FN IN_ANYA(0)
 5220     GFX VSYNC
 5230   WEND
-5240   PSK=0
+5240   IN_PSK=0
 5250   SOUND OFF
 5260   GFX CLEAR
 5270 END PROC
@@ -549,7 +525,7 @@
 5540     IF SCP(P)>BEST THEN BEST=SCP(P)
 5550   NEXT P
 5560   IF OV=1 THEN CALL GAMEOVER
-5570   WHILE FN ANYSTART(0) OR FN ANYBACK(0)
+5570   WHILE FN IN_ANYSTART(0) OR FN IN_ANYBACK(0)
 5580     GFX VSYNC
 5590   WEND
 5600   SOUND OFF
@@ -566,7 +542,7 @@
 5710     PST(1)=1:PLD(1)=1
 5720     IF NK=2 THEN PST(2)=1:PLD(2)=1
 5730   END IF
-5740   GQ=0:OV=0:BN=0:PSK=0:PUK=0
+5740   GQ=0:OV=0:BN=0:IN_QUIT=0:PUK=0
 5750   CALL NEWLEVEL(1)
 5760 END PROC
 5770 PROC NEWLEVEL(LV2)
@@ -594,42 +570,16 @@
 5990 END PROC
 6000 ' P and Q on the keyboard, START and BACK on any pad
 6010 PROC CTRL
-6020   LOCAL K$,K,N,S
-6030   S=0
-6040   IF FN ANYSTART(0) THEN S=-1
-6050   IF FN ANYBACK(0) THEN GQ=1
-6060   PS0=PSK:PSK=S
-6070   IF PSK AND NOT PS0 THEN CALL PAUSE
-6080   N=0
-6090   REPEAT
-6100     K$=INKEY$
-6110     IF K$<>"" THEN
-6120       K=ASC(K$)
-6130       IF K>=97 AND K<=122 THEN K=K-32
-6140       IF K=81 THEN GQ=1
-6150       IF K=80 THEN CALL PAUSE
-6160     END IF
-6170     N=N+1
-6180   UNTIL K$="" OR N>=6
-6190 END PROC
+6020   IF FN IN_SERVICE() THEN CALL PAUSE
+6030   IF IN_QUIT THEN GQ=1
+6040 END PROC
 6200 PROC PAUSE
-6210   LOCAL K$
-6220   CALL BANNER("PAUSED","P or START continues      Q or BACK quits",0)
-6230   WHILE FN ANYSTART(0)
-6240     GFX VSYNC
-6250   WEND
-6260   REPEAT
-6270     GFX VSYNC
-6280     K$=INKEY$
-6290   UNTIL K$="p" OR K$="P" OR K$="q" OR K$="Q" OR FN ANYSTART(0) OR FN ANYBACK(0)
-6300   IF K$="q" OR K$="Q" OR FN ANYBACK(0) THEN GQ=1
-6310   WHILE FN ANYSTART(0)
-6320     GFX VSYNC
-6330   WEND
-6340   PSK=0
-6350   GFX CLEAR
-6360   BN=0
-6370 END PROC
+6210   CALL BANNER("PAUSED","P or START continues      Q or BACK quits",0)
+6220   CALL IN_PAUSELOOP
+6230   IF IN_QUIT THEN GQ=1
+6240   GFX CLEAR
+6250   BN=0
+6260 END PROC
 6380 ' ====================================================================== the players
 6390 ' controller mode: a pad that is connected brings its player, a pad that is removed takes the player away (lives and score stay)
 6400 PROC JOINS

@@ -4,6 +4,7 @@
 4 ' in the executable (it shows with the command line option --engine1999-about).
 5 ' the helpers that the demo games share (RN, CLAMP, PAD$, DISK, PLAYSEQ) are in the library demos/lib/util.lib
 6 LOAD LIBRARY "util"
+7 LOAD LIBRARY "input"
 10 ' THE LONG CLIMB - a jump and run game for Engine1999.
 20 ' You are a construction worker and the ice cream stand is on the roof of the unfinished steel tower, 960 pixels above the street. Climb the ladders,
 30 ' jump the gaps, hurdles, cars and birds, and use your drill to make holes in the girders: a rust ball or slime that walks into a hole is trapped,
@@ -1472,61 +1473,40 @@
 14830 END PROC
 14840 ' ====================================================================== keys
 14850 PROC KEYS
-14855   LOCAL K$,K,N,L,R,U,D,JD,ZD,XD
-14860   ' walking and climbing follow the keys, only while they are held: LEFT / RIGHT (A / D) walk, UP / DOWN (W / S) climb
-14865   L=KEY("LEFT") OR KEY("A") OR JOY("LEFT") OR JOY("LX")<-0.4
-14870   R=KEY("RIGHT") OR KEY("D") OR JOY("RIGHT") OR JOY("LX")>0.4
-14875   DIRX=0
-14880   IF L AND NOT R THEN DIRX=-1:FACE=-1
-14885   IF R AND NOT L THEN DIRX=1:FACE=1
-14890   U=KEY("UP") OR KEY("W") OR JOY("UP") OR JOY("LY")<-0.4
-14895   D=KEY("DOWN") OR KEY("S") OR JOY("DOWN") OR JOY("LY")>0.4
-14900   CLM=0
-14905   IF U AND NOT D THEN CLM=-1:CLMT=24
-14910   IF D AND NOT U THEN CLM=1:CLMT=24
-14915   ' SPACE jumps: a new press stays valid for 6 frames, so it does not have to be exactly on time
-14920   JD=KEY("SPACE") OR JOY("A")
-14925   IF JD AND NOT JK THEN JBUF=6
-14930   JK=JD
-14935   JREQ=0
-14940   IF JBUF>0 THEN JREQ=1:JBUF=JBUF-1
-14945   ' Z / X (or , / .) drill a hole to the left / right: one hole for each press
-14950   ZD=KEY("Z") OR KEY(",") OR JOY("X") OR JOY("LB")
-14955   XD=KEY("X") OR KEY(".") OR JOY("B") OR JOY("RB")
-14960   IF ZD AND NOT ZK THEN DREQ=-1
-14965   IF XD AND NOT XK THEN DREQ=1
-14970   ZK=ZD:XK=XD
-14972   ' on a pad: Y switches the music, START pauses, BACK quits
-14973   MYD=JOY("Y"):IF MYD AND NOT MYK THEN CALL MUSICSWITCH
-14974   MYK=MYD
-14975   PS0=PSK:PSK=JOY("START"):IF PSK AND NOT PS0 THEN CALL PAUSE
-14976   IF JOY("BACK") THEN QT=1
-14977   ' Q, M and P are single presses
-14980   N=0
-14985   REPEAT
-14990     K$=INKEY$
-14995     IF K$<>"" THEN
-15000       K=ASC(K$)
-15005       IF K>=97 AND K<=122 THEN K=K-32
-15010       IF K=81 THEN QT=1
-15015       IF K=77 THEN CALL MUSICSWITCH
-15020       IF K=80 THEN CALL PAUSE
-15025     END IF
-15030     N=N+1
-15035   UNTIL K$="" OR N>=6
-15040 END PROC
+14851   LOCAL JD,ZD,XD
+14852   CALL IN_POLL
+14853   ' walking and climbing follow the keys, only while they are held: LEFT / RIGHT (A / D) walk, UP / DOWN (W / S) climb
+14854   DIRX=0
+14855   IF IN_DX<0 THEN DIRX=-1:FACE=-1
+14856   IF IN_DX>0 THEN DIRX=1:FACE=1
+14857   CLM=0
+14858   IF IN_DY<0 THEN CLM=-1:CLMT=24
+14859   IF IN_DY>0 THEN CLM=1:CLMT=24
+14860   ' SPACE jumps: a new press stays valid for 6 frames, so it does not have to be exactly on time
+14861   JD=IN_BTN
+14862   IF JD AND NOT JK THEN JBUF=6
+14863   JK=JD
+14864   JREQ=0
+14865   IF JBUF>0 THEN JREQ=1:JBUF=JBUF-1
+14866   ' Z / X (or , / .) drill a hole to the left / right: one hole for each press
+14867   ZD=KEY("Z") OR KEY(",") OR JOY("X") OR JOY("LB")
+14868   XD=KEY("X") OR KEY(".") OR JOY("B") OR JOY("RB")
+14869   IF ZD AND NOT ZK THEN DREQ=-1
+14870   IF XD AND NOT XK THEN DREQ=1
+14871   ZK=ZD:XK=XD
+14872   ' on a pad: Y switches the music; START pauses, BACK and Q quit (the input library), M switches the music
+14873   MYD=JOY("Y"):IF MYD AND NOT MYK THEN CALL MUSICSWITCH
+14874   MYK=MYD
+14875   IF FN IN_SERVICE() THEN CALL PAUSE
+14876   IF IN_KEY=77 THEN CALL MUSICSWITCH
+14877   IF IN_QUIT THEN QT=1
+14878 END PROC
 15070 PROC PAUSE
-15080   LOCAL K$
-15090   CALL TXTAT(33,10,"  PAUSED  ",201)
-15095   WHILE JOY("START"):GFX VSYNC:WEND
-15100   REPEAT
-15110     GFX VSYNC
-15120     K$=INKEY$
-15130   UNTIL K$="p" OR K$="P" OR K$="q" OR K$="Q" OR JOY("START") OR JOY("BACK")
-15140   IF K$="q" OR K$="Q" OR JOY("BACK") THEN QT=1
-15145   WHILE JOY("START"):GFX VSYNC:WEND:PSK=0
-15150   TXT FILL 33,10,42,10,32,0,0
-15160 END PROC
+15080   CALL TXTAT(33,10,"  PAUSED  ",201)
+15090   CALL IN_PAUSELOOP
+15100   IF IN_QUIT THEN QT=1
+15110   TXT FILL 33,10,42,10,32,0,0
+15120 END PROC
 15170 ' ====================================================================== the player
 15180 PROC MOVEPLAYER
 15190   LOCAL NX,NYI,R,CXT

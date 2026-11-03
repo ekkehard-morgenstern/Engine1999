@@ -4,6 +4,7 @@
 4 ' in the executable (it shows with the command line option --engine1999-about).
 5 ' the helpers that the demo games share (RN, CLAMP, PAD$, DISK, PLAYSEQ) are in the library demos/lib/util.lib
 6 LOAD LIBRARY "util"
+7 LOAD LIBRARY "input"
 10 ' FRUIT INVADERS II - a Space Invaders style game for Engine1999, written with procedures.
 20 ' Keys: LEFT / RIGHT or A / D move the cannon (only while the key is held), SPACE or UP fires, P = pause, Q = quit.
 21 ' Game controller (optional, JOY): the D-pad or the left stick moves, A or the right trigger fires, START pauses, BACK quits.
@@ -844,36 +845,18 @@
 8550 END PROC
 8560 ' ====================================================================== keys
 8570 PROC KEYS
-8580   LOCAL K$,K,N
-8582   PD=0
-8584   IF KEY("LEFT") OR KEY("A") OR JOY("LEFT") OR JOY("LX")<-0.4 THEN PD=PD-1
-8586   IF KEY("RIGHT") OR KEY("D") OR JOY("RIGHT") OR JOY("LX")>0.4 THEN PD=PD+1
-8587   IF JOY("BACK") THEN QT=1
-8588   IF KEY("SPACE") OR KEY("UP") OR JOY("A") OR JOY("RT")>0.4 THEN FQ=1
-8589   PS0=PSK:PSK=JOY("START"):IF PSK AND NOT PS0 THEN CALL PAUSE
-8590   REPEAT
-8600     K$=INKEY$
-8610     IF K$<>"" THEN
-8620       K=ASC(K$)
-8630       IF K>=97 AND K<=122 THEN K=K-32
-8680       IF K=81 THEN QT=1
-8690       IF K=80 THEN CALL PAUSE
-8700     END IF
-8710     N=N+1
-8720   UNTIL K$="" OR N>=6
-8730 END PROC
+8580   CALL IN_POLL
+8590   PD=IN_DX
+8600   IF IN_BTN OR KEY("UP") OR JOY("RT")>0.4 THEN FQ=1
+8610   IF FN IN_SERVICE() THEN CALL PAUSE
+8620   IF IN_QUIT THEN QT=1
+8630 END PROC
 8740 PROC PAUSE
-8750   LOCAL K$
-8760   CALL TXTAT(36,17,"PAUSED",201)
-8765   WHILE JOY("START"):GFX VSYNC:WEND
-8770   REPEAT
-8780     GFX VSYNC
-8790     K$=INKEY$
-8800   UNTIL K$="p" OR K$="P" OR K$="q" OR K$="Q" OR JOY("START") OR JOY("BACK")
-8810   IF K$="q" OR K$="Q" OR JOY("BACK") THEN QT=1
-8815   WHILE JOY("START"):GFX VSYNC:WEND:PSK=0
-8820   TXT FILL 36,17,41,17,32
-8830 END PROC
+8750   CALL TXTAT(36,17,"PAUSED",201)
+8760   CALL IN_PAUSELOOP
+8770   IF IN_QUIT THEN QT=1
+8780   TXT FILL 36,17,41,17,32
+8790 END PROC
 8840 ' ====================================================================== the cannon and its bullets
 8850 PROC MOVECANNON
 8860   IF RAPID>0 THEN
