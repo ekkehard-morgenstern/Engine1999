@@ -1,6 +1,6 @@
 # Session state
 
-Maintained by Claude; updated whenever work in a session changes something. Last update: 2026-11-01 (FRAME, JOY$, ON KEY, pad support in the games).
+Maintained by Claude; updated whenever work in a session changes something. Last update: 2026-11-03 (demo MADRUN).
 Read this first when resuming; details are in `docs/` (start with `docs/README.md`) and `CLAUDE.md`.
 
 ## Standing rules
@@ -14,6 +14,7 @@ Read this first when resuming; details are in `docs/` (start with `docs/README.m
 - **No locks on the layer memory** (owner's design, restated 2026-11-01): the screen thread reads the layers and text screens without synchronization; the content may be torn, but nothing may be freed / reallocated, indices must stay bounded, and nothing may be *lost*: shared state is owned by one thread and handed over by atomic words (GCC `__atomic` builtins, no mutex, no pthreads). Rules: `docs/display-engine.md`, "Threading". Don't add mutexes around layer memory.
 
 ## Repo state
+- **`demos/madrun.bas`** (2026-11-03, owner's game idea; entry in `HistoryLog-Claude.md`): crossing game for 1-4 players (keyboard WASD / cursor keys, or pads that come and go while it runs), traffic simulation with leaders and crossing reservations, pick-ups, levels. Checked headless-ish in the window under Xvfb and with a traffic stress run; not tried with a real pad or at 60 fps by the owner yet. The previous commit `57786b0` (climb pause box) is in the log.
 - **Extension words** (2026-11-01, quick wins from the roadmap; `docs/basic-language.md` "`MIN`, `MAX`, `ATAN2`, `SPACE$`, `STRING$`"): the one-byte token space is full, so new reserved words are stored as `TOK_XFUNC` (254) + an id byte (`XF_*`, `xkeywtbl` in `bastok.c`; 255 more possible; `compiler_t.currext`). First users: `MIN MAX ATAN2 SPACE$ STRING$` (instructions `MTH2 0x17E`, `STRN 0x17F`). `vmtest1` 1146, `repltest1` 341, `asmtest1` 64. **Next quick wins** (my suggestion): `ERR` as a number / `ON ERROR GOTO 0` / `ERROR n`, comments keep their case, `AUTO` in the console host, F11 full screen toggle.
 - **Error handling extras and case of comments** (2026-11-01): `ERR` (number; table `errtab[]` in `vm.c`), `ON ERROR GOTO 0` (= OFF), `ERROR n` (extension word `XF_ERROR`, `NT_ERRORSTMT 0x87`, `ERRN 0x180`, `ERRR 0x181`); comments keep their case. `vmtest1` 1162, `repltest1` 343, `asmtest1` 66. Extension words so far: `SPACE STRING MIN MAX ATAN2 ERROR`.
 - **Repo (2026-11-01, night):** everything up to `d7b503f` (the joystick) is committed. **The owner tested `demos/joy.bas` with a real Xbox Series X|S controller (USB): every axis, button, trigger and pad works.** The tag is still `v0.5.18`; the branch `feature/joystick-and-mouse-support` has not been merged into `main` since the README commit.
