@@ -55,6 +55,111 @@ void init_codegen( codegen_t* cgen ) {
     cgen->dataoffs  = 0; cgen->numdataitems = cgen->maxdataitems = 0;
     cgen->restorefix = 0; cgen->numrestorefix = cgen->maxrestorefix = 0;
     cgen->labeldata = 0; cgen->numlabeldata = cgen->maxlabeldata = 0;
+    cgen->modules = 0; cgen->nummodules = cgen->maxmodules = 0;
+    cgen->publabels = 0; cgen->numpublabels = cgen->maxpublabels = 0;
+    cgen->mainstart = 0;
+    cgen->initjump = cgen->initnext = CODEOFFS_NONE;
+    cgen->keepstmts = false;
+    cgen->libprefix = 0;
+    cgen->libincode = false;
+}
+
+static void cgen_free_modules( codegen_t* cgen ) {
+    for ( size_t i=0; i < cgen->nummodules; ++i ) {
+        free( cgen->modules[i].name );
+        free( cgen->modules[i].prefix );
+    }
+    free( cgen->modules );
+    free( cgen->publabels );
+    cgen->publabels = 0;
+    cgen->numpublabels = cgen->maxpublabels = 0;
+    cgen->modules = 0;
+    cgen->nummodules = cgen->maxmodules = 0;
+    cgen->mainstart = 0;
+    cgen->initjump = cgen->initnext = CODEOFFS_NONE;
+    cgen->keepstmts = false;
+    cgen->libprefix = 0;
+}
+
+bool cgen_module_begin( codegen_t* cgen, const char* name, const char* prefix ) {
+    if ( cgen->nummodules == cgen->maxmodules ) {
+        size_t cap = cgen->maxmodules ? cgen->maxmodules * 2U : 8U;
+        cgen_module_t* p = (cgen_module_t*) realloc( cgen->modules, cap * sizeof(cgen_module_t) );
+        if ( p == 0 ) {
+            return false;
+        }
+        memset( p + cgen->maxmodules, 0, ( cap - cgen->maxmodules ) * sizeof(cgen_module_t) );
+        cgen->modules = p;
+        cgen->maxmodules = cap;
+    }
+    cgen_module_t* m = &cgen->modules[ cgen->nummodules ];
+    memset( m, 0, sizeof(*m) );
+    m->name = strdup( name );
+    m->prefix = strdup( prefix );
+    if ( m->name == 0 || m->prefix == 0 ) {
+        free( m->name );
+        free( m->prefix );
+        m->name = m->prefix = 0;
+        return false;
+    }
+    m->codestart = cgen->codesize;
+    m->codeend = cgen->codesize;
+    m->datafirst = m->datalast = DATAOFFS_NONE;
+    ++cgen->nummodules;
+    cgen->datafirst = cgen->datalast = DATAOFFS_NONE;       // a chain of its own
+    cgen->keepstmts = cgen->nummodules > 1U;
+    cgen->libincode = false;
+    cgen->libprefix = m->prefix;
+    return true;
+}
+
+void cgen_module_end( codegen_t* cgen ) {
+    cgen_module_t* m = &cgen->modules[ cgen->nummodules - 1U ];
+    m->codeend = cgen->codesize;
+    m->datafirst = cgen->datafirst;
+    m->datalast = cgen->datalast;
+    // its labels stay known to the modules after it (RESTORE label of labelled DATA); a label with no DATA item behind it in this library has none
+    for ( size_t i=0; i < cgen->numlabeldata; ++i ) {
+        if ( !cgen_grow( (void**) &cgen->publabels, &cgen->numpublabels, &cgen->maxpublabels, sizeof(cgen_labeldata_t) ) ) {
+            return;
+        }
+        cgen_labeldata_t ld = cgen->labeldata[i];
+        if ( ld.dataindex >= cgen->numdataitems ) {
+            ld.dataindex = SIZE_MAX;
+        }
+        cgen->publabels[ cgen->numpublabels++ ] = ld;
+    }
+}
+
+void cgen_main_begin( codegen_t* cgen ) {
+    cgen->initjump = cgen->initnext = CODEOFFS_NONE;
+    cgen->libprefix = 0;
+    cgen->libincode = false;
+    cgen->mainstart = cgen->codesize;
+    cgen->datafirst = cgen->datalast = DATAOFFS_NONE;       // the program's own chain
+    cgen->keepstmts = cgen->nummodules > 0U;
+}
+
+bool cgen_defined_elsewhere( const codegen_t* cgen, uint32_t addr, const char** plib ) {
+    if ( addr == CODEOFFS_NONE || cgen->nummodules == 0U ) {
+        return false;
+    }
+    uint32_t start = cgen->libprefix != 0 ? cgen->modules[ cgen->nummodules - 1U ].codestart : cgen->mainstart;
+    if ( addr >= start ) {
+        return false;
+    }
+    const cgen_module_t* m = cgen_module_at( cgen, addr );
+    *plib = m != 0 ? m->name : 0;
+    return true;
+}
+
+const cgen_module_t* cgen_module_at( const codegen_t* cgen, uint32_t addr ) {
+    for ( size_t i=0; i < cgen->nummodules; ++i ) {
+        if ( addr >= cgen->modules[i].codestart && addr < cgen->modules[i].codeend ) {
+            return &cgen->modules[i];
+        }
+    }
+    return 0;
 }
 
 void cleanup_codegen( codegen_t* cgen ) {
@@ -70,6 +175,7 @@ void cleanup_codegen( codegen_t* cgen ) {
     free( cgen->dataoffs );
     free( cgen->restorefix );
     free( cgen->labeldata );
+    cgen_free_modules( cgen );
     cgen->code      = cgen->data = 0;
     cgen->codesize  = cgen->datasize = 0;
     cgen->codecap   = cgen->datacap = 0;
@@ -90,6 +196,7 @@ void cgen_reset( codegen_t* cgen ) {
     cgen->datasize = UINT32_C(0);
     cgen->datafirst = cgen->datalast = DATAOFFS_NONE;
     cgen->numdataitems = 0;
+    cgen_free_modules( cgen );
     for ( size_t i=0; i < cgen->maxconsts; ++i ) {
         cgen->consts[i].offs = CGEN_CONST_FREE;
     }
@@ -3054,12 +3161,13 @@ bool cgen_from_assignlist( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     switch ( nodetype ) {
         case NT_NUMASSIGN: case NT_SUBSTRASSIGN: case NT_STRASSIGN:
             return cgen_from_anyassign( cgen, comp, node );
-        case NT_ASSIGNLIST:
+        case NT_ASSIGNLIST: {
             cbdata_t cbdata = { cgen, comp, node, UINT16_C(0) };
             if ( !comp_node_iter_branches( comp, node, &cbdata, from_assignlist_cb ) ) {
                 return false;
             }
             return true;
+        }
         default:
             break;
     }
@@ -3298,12 +3406,77 @@ bool cgen_from_stmtline( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     return node->numbranches == 0U || cgen_from_stmt( cgen, comp, node->branches[0] );
 }
 
+// Library mode (the compiler is compiling a library): which statements may stand outside of a PROC / FUNC? DEF FN, LABEL, DATA, LIBRARY, LOAD LIBRARY and
+// comments always; anything else only inside a labelled code section (from a LABEL to the next RETURN), which GOSUB can enter. Returns false after the error.
+static bool cgen_check_library_line( codegen_t* cgen, compiler_t* comp, node_t* line ) {
+    if ( line == NODE_NONE || line->type != NT_STMTLINE || line->numbranches == 0U ) {
+        return true;
+    }
+    uint32_t lineno = 0;
+    if ( line->datalen == UINT16_C(3) ) {
+        lineno = ( ( (uint32_t) line->data[0] ) << UINT8_C(16) ) | ( ( (uint32_t) line->data[1] ) << UINT8_C(8) ) | line->data[2];
+    }
+    node_t* first = line->branches[0];
+    node_t** stmts = &line->branches[0];
+    size_t count = 1;
+    if ( first != NODE_NONE && first->type == NT_STMTLIST ) {
+        stmts = first->branches;
+        count = first->numbranches;
+    }
+    for ( size_t i=0; i < count; ++i ) {
+        node_t* st = stmts[i];
+        if ( st == NODE_NONE ) {
+            continue;
+        }
+        switch ( st->type ) {
+            case NT_PROCSTMT:
+                cgen->libincode = false;
+                if ( !cgen_check_library_vars( cgen, comp, st, lineno ) ) {
+                    return false;
+                }
+                break;
+            case NT_DEFSTMT:
+                if ( !cgen_check_library_vars( cgen, comp, st, lineno ) ) {
+                    return false;
+                }
+                break;
+            case NT_DATASTMT: case NT_LIBRARYSTMT: case NT_LOADLIBSTMT:
+                break;
+            case NT_LABELSTMT:
+                cgen->libincode = true;
+                break;
+            case NT_RETURNSTMT:
+                if ( !cgen->libincode ) {
+                    comp->iter.hdr.lineno = lineno;
+                    comp_error( comp, "Not allowed in a library: RETURN outside of a labelled section" );
+                    return false;
+                }
+                cgen->libincode = false;
+                break;
+            default:
+                if ( !cgen->libincode ) {
+                    comp->iter.hdr.lineno = lineno;
+                    comp_error( comp, "Not allowed in a library: code outside of a PROC, FUNC or labelled section" );
+                    return false;
+                }
+                if ( !cgen_check_library_vars( cgen, comp, st, lineno ) ) {
+                    return false;
+                }
+                break;
+        }
+    }
+    return true;
+}
+
 bool cgen_from_stmtlines( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     // stmt-lines := stmt-line { stmt-line } .
     if ( node == NODE_NONE || node->type != NT_STMTLINES ) {
         return cgen_bad_node( comp );
     }
     for ( size_t i=0; i < node->numbranches; ++i ) {
+        if ( comp->libname != 0 && !cgen->inproc && !cgen_check_library_line( cgen, comp, node->branches[i] ) ) {
+            return false;
+        }
         if ( !cgen_from_stmtline( cgen, comp, node->branches[i] ) ) {
             return false;
         }
@@ -3326,6 +3499,8 @@ bool cgen_from_program( codegen_t* cgen, compiler_t* comp ) {
     if ( direct ) {
         cgen->numlineaddrs = numlines;
         cgen->numstmts = numstmts;
+    } else if ( cgen->keepstmts ) {
+        cgen->numstmts = numstmts;      // a library or the program behind libraries: the statements of the modules before stay known (RESUME)
     }
     bool ok = root->type == NT_STMTLINES ? cgen_from_stmtlines( cgen, comp, root ) : cgen_from_stmtline( cgen, comp, root );
     cgen->endaddr = CODEOFFS_NONE;

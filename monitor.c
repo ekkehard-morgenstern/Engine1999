@@ -755,7 +755,7 @@ static void cmd_go( mon_t* m, int argc, char** argv ) {
         if ( !mon_arg_number( argv[0], &addr ) || !start_vm( m, addr ) ) {
             return;
         }
-    } else if ( !m->repl->vm.suspended && !start_vm( m, 0 ) ) {
+    } else if ( !m->repl->vm.suspended && !start_vm( m, m->repl->rt.codegen.mainstart ) ) {
         return;
     }
     out( C_GRAY, "Running from $%X (ESC breaks)\n", (unsigned) m->repl->vm.pc );
@@ -769,7 +769,7 @@ static void cmd_trace( mon_t* m, int argc, char** argv ) {
     if ( argc > 0 && ( !mon_arg_number( argv[0], &n ) || n == 0 ) ) {
         return;
     }
-    if ( !m->repl->vm.suspended && !start_vm( m, 0 ) ) {
+    if ( !m->repl->vm.suspended && !start_vm( m, m->repl->rt.codegen.mainstart ) ) {
         return;
     }
     const codegen_t* cg = mon_cgen( m );

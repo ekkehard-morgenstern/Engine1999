@@ -115,6 +115,14 @@ typedef struct _cgen_loopjump_t {
     bool        iterate;        // false: to the end of the loop
 } cgen_loopjump_t;
 
+// a library compiled into the code segment: its name, the code it occupies and its own chain of DATA items
+typedef struct _cgen_module_t {
+    char*       name;
+    char*       prefix;     // the variable prefix the library declared ("" = none)
+    uint32_t    codestart, codeend;
+    uint32_t    datafirst, datalast;
+} cgen_module_t;
+
 typedef struct _codegen_t {
     void*           userdata;
     void            (*report)( struct _codegen_t*, void*, const char* );
@@ -154,10 +162,31 @@ typedef struct _codegen_t {
     size_t              numrestorefix, maxrestorefix;
     cgen_labeldata_t*   labeldata;      // where in the DATA items the labels are
     size_t              numlabeldata, maxlabeldata;
+    cgen_labeldata_t*   publabels;      // the labels of the libraries compiled so far (a RESTORE label may name labelled DATA of a library); dataindex SIZE_MAX = no item behind it
+    size_t              numpublabels, maxpublabels;
+    cgen_module_t*      modules;        // the libraries that were compiled ahead of the program (docs/library-support.md), in code order
+    size_t              nummodules, maxmodules;
+    uint32_t            initjump;       // the BRIA behind the calls of the libraries' <prefix>INIT procedures (CODEOFFS_NONE: there are none); its target is patched before a run
+    uint32_t            initnext;       // where the program proper starts (the code behind that BRIA)
+    uint32_t            mainstart;      // where the program itself starts in the code segment (0 when there are no libraries)
+    const char*         libprefix;      // library mode: the prefix of the library being compiled ("" = none; 0 = not compiling a library)
+    bool                libincode;      // library mode: a labelled code section is open (set by LABEL, ended by RETURN)
+    bool                keepstmts;      // a compile keeps the statement table of the modules before it (set while a program and its libraries are compiled)
 } codegen_t;
 
 void init_codegen( codegen_t* cgen );
 void cleanup_codegen( codegen_t* cgen );    // frees the bookkeeping tables
+// Libraries (docs/library-support.md): cgen_module_begin() is called before a library is compiled (it starts a DATA chain of its own),
+// cgen_module_end() after it (it records the end of its code and its DATA chain); the program is compiled last, with cgen_main_begin().
+// cgen_module_at() finds the library that holds a code address (0 for the program).
+bool cgen_module_begin( codegen_t* cgen, const char* name, const char* prefix );
+void cgen_module_end( codegen_t* cgen );
+void cgen_main_begin( codegen_t* cgen );
+// Was the code at 'addr' (a function's or label's definition) generated for another module than the one being compiled? Then a second definition of the
+// name is a clash between libraries; *plib receives that library's name (0: it is not known). false without libraries or for CODEOFFS_NONE.
+bool cgen_defined_elsewhere( const codegen_t* cgen, uint32_t addr, const char** plib );
+bool cgen_check_library_vars( codegen_t* cgen, compiler_t* comp, node_t* stmt, uint32_t lineno );   // library mode: the variable rule (cgenlib.c)
+const cgen_module_t* cgen_module_at( const codegen_t* cgen, uint32_t addr );
 void cgen_reset( codegen_t* cgen );         // discards all code and data (keeps the callbacks)
 // DEF FN (the function variable gets a code offset), LABEL (same) and DATA (records chained in the data segment) store
 // references to what they generate. A direct mode line that did none of this can be discarded after it has run:

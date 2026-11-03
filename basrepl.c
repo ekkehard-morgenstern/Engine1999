@@ -250,7 +250,7 @@ static void repl_vm_error( repl_t* repl, const char* text, const char* arg ) {
 // where a run starts: the beginning, or a label / line number (RUN target)
 static bool repl_find_start( repl_t* repl, const char* label, int32_t line, uint32_t* pstart ) {
     codegen_t* cgen = &repl->rt.codegen;
-    *pstart = 0;
+    *pstart = cgen->mainstart;      // the program starts behind the libraries (0 without any)
     if ( label && label[0] ) {
         uint16_t varoffs = VAROFFS_NONE; varvalue_t value;
         memset( &value, 0, sizeof(value) );
@@ -272,6 +272,83 @@ static bool repl_find_start( repl_t* repl, const char* label, int32_t line, uint
 }
 
 static bool repl_resolve_libraries( repl_t* repl );
+static void repl_compile_libraries( repl_t* repl );
+static void repl_emit_init_calls( repl_t* repl );
+
+// The program starts with a call of the procedure <prefix>INIT of every library that has a prefix and defines such a PROC (it must take no
+// parameters), in dependency order, followed by a jump to the real start (patched before the run: the start can be a RUN target).
+static void repl_emit_init_calls( repl_t* repl ) {
+    codegen_t* cgen = &repl->rt.codegen;
+    bool any = false;
+    for ( size_t i=0; i < repl->libs.count; ++i ) {
+        const baslib_t* lib = &repl->libs.libs[i];
+        if ( lib->prefix == 0 || lib->prefix[0] == '\0' ) {
+            continue;
+        }
+        char name[64];
+        snprintf( name, sizeof(name), "%sINIT", lib->prefix );
+        uint16_t offs = VAROFFS_NONE; uint8_t ftype = 0, numparams = 0; uint32_t code = CODEOFFS_NONE;
+        if ( !vmem_lookup_var( &repl->rt.varmem, VARTYPEV_LABEL | VARTYPEF_FUNC, name, &offs ) || offs == VAROFFS_NONE ||
+             !vmem_get_func_info( &repl->rt.varmem, offs, &ftype, &numparams, &code ) || code == CODEOFFS_NONE ) {
+            continue;
+        }
+        if ( numparams != 0 ) {
+            char msg[160];
+            snprintf( msg, sizeof(msg), "? %s must take no parameters (the library %s)", name, lib->name );
+            repl_report( repl, msg );
+            repl_comp_halt( &repl->comp, repl );
+        }
+        if ( !cgen_gen_phim( cgen, 0 ) || !cgen_gen_calf( cgen, offs ) ) {
+            repl_report( repl, "? Out of memory" );
+            repl_comp_halt( &repl->comp, repl );
+        }
+        any = true;
+    }
+    if ( any ) {
+        cgen->initjump = cgen->codesize;
+        if ( !cgen_gen_bria( cgen, 0 ) ) {
+            repl_report( repl, "? Out of memory" );
+            repl_comp_halt( &repl->comp, repl );
+        }
+        cgen->initnext = cgen->codesize;
+    }
+}
+
+// Compiles the libraries of repl->libs into the code segment, one after the other (each with its own line table and DATA chain), and leaves the
+// compiler positioned on the stored program, which is compiled by the caller behind them. Without libraries it only notes where the program starts.
+// A compile error ends in repl_comp_halt() (longjmp), as for the program itself.
+static void repl_compile_libraries( repl_t* repl ) {
+    codegen_t* cgen = &repl->rt.codegen;
+    for ( size_t i=0; i < repl->libs.count; ++i ) {
+        baslib_t* lib = &repl->libs.libs[i];
+        repl_setup_compiler( repl );
+        repl->comp.libname = lib->name;
+        if ( !begin_iterate_program( &repl->comp.iter, &lib->pgm ) ) {
+            continue;
+        }
+        comp_set_tokens( &repl->comp, repl->comp.iter.tok, repl->comp.iter.hdr.length - LINEHDR_SIZE );
+        if ( !cgen_module_begin( cgen, lib->name, lib->prefix ) ) {
+            repl_report( repl, "? Out of memory" );
+            repl_comp_halt( &repl->comp, repl );
+        }
+        run_compiler( &repl->comp );
+        bool ok = cgen_from_program( cgen, &repl->comp );
+        cgen_module_end( cgen );
+        if ( !ok ) {
+            repl_comp_halt( &repl->comp, repl );        // (the code generator has reported the reason)
+        }
+    }
+    if ( repl->libs.count > 0 ) {
+        repl_setup_compiler( repl );
+        if ( !begin_iterate_program( &repl->comp.iter, &repl->pgm ) ) {
+            repl_report( repl, "? Empty program" );
+            repl_comp_halt( &repl->comp, repl );
+        }
+        comp_set_tokens( &repl->comp, repl->comp.iter.tok, repl->comp.iter.hdr.length - LINEHDR_SIZE );
+    }
+    cgen_main_begin( cgen );
+    repl_emit_init_calls( repl );
+}
 
 // compiles what the compiler has been set up with, and runs the result; reentry point of error jumps.
 // fromstart: run from the beginning (RUN: DATA pointer reset) instead of from the new code (direct mode); then
@@ -292,6 +369,9 @@ static bool repl_execute( repl_t* repl, bool fromstart, const char* label, int32
         cgen->numlineaddrs = 0;     // the program changed since it was compiled: a direct line must not jump into the old code by line number
     }
     if ( setjmp( repl->jmp ) == 0 ) {
+        if ( fromstart ) {
+            repl_compile_libraries( repl );         // (the compiler is positioned on the stored program afterwards; an error jumps out)
+        }
         run_compiler( &repl->comp );
         if ( basdbg_on( BASDBG_TREE ) ) {
             basdbg_print_tree( &repl->comp );
@@ -311,10 +391,15 @@ static bool repl_execute( repl_t* repl, bool fromstart, const char* label, int32
             uint32_t target = 0;
             ok = repl_find_start( repl, label, line, &target );
             repl->started = ok;
+            if ( ok && cgen->initjump != CODEOFFS_NONE ) {
+                // the libraries' <prefix>INIT procedures run first, whatever the start is: the jump behind them goes to the start
+                cgen_patch_param( cgen, cgen->initjump, target == cgen->mainstart ? cgen->initnext : target );
+                target = cgen->mainstart;
+            }
             if ( ok && target == 0 ) {
                 ok = vm_run( &repl->vm );
             } else if ( ok ) {
-                repl->vm.datapos = cgen->datafirst;
+                vm_reset_data( &repl->vm );
                 ok = vm_run_at( &repl->vm, target );
             }
         } else if ( ok ) {
@@ -346,11 +431,15 @@ bool repl_compile( repl_t* repl ) {
         return false;
     }
     if ( setjmp( repl->jmp ) == 0 ) {
+        repl_compile_libraries( repl );
         run_compiler( &repl->comp );
         ok = cgen_from_program( &repl->rt.codegen, &repl->comp );
     }
     if ( ok ) {
         repl->linesstale = false;
+        if ( repl->rt.codegen.initjump != CODEOFFS_NONE ) {         // the INIT calls of the libraries are followed by the program
+            cgen_patch_param( &repl->rt.codegen, repl->rt.codegen.initjump, repl->rt.codegen.initnext );
+        }
     }
     return ok;
 }
@@ -1077,6 +1166,9 @@ bool repl_vm_start( repl_t* repl, uint32_t addr ) {
         return false;
     }
     repl_setup_vm( repl );
+    if ( addr == repl->rt.codegen.mainstart ) {
+        vm_reset_data( &repl->vm );         // the start of the program: every READ pointer at the first item of its chain
+    }
     return vm_begin( &repl->vm, addr );
 }
 

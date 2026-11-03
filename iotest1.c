@@ -259,6 +259,13 @@ static const char* conkeys = "ab";
 static bool con_write_hook( void* ud, const char* text, size_t len ) { (void) ud; memcpy( conout + conlen, text, len ); conlen += len; conout[conlen] = '\0'; return true; }
 static int con_key_hook( void* ud ) { (void) ud; return *conkeys ? (unsigned char) *conkeys++ : 0; }
 
+// runs a shell command and ignores its status (a cast to void does not silence warn_unused_result of glibc's system() in GCC)
+static void run_shell( const char* cmd ) {
+    if ( system( cmd ) != 0 ) {
+        // (the commands only clean up; a failure shows in the checks that follow)
+    }
+}
+
 static void test_phase2( void ) {
     const char* e = 0;
     iotab_t t; iotab_init( &t );
@@ -298,7 +305,7 @@ static void test_phase2( void ) {
     char cwd[512];
     check( "getcwd", getcwd( cwd, sizeof(cwd) ) != 0 );
     const char* dir = "iotest1.d2";
-    (void) system( "rm -rf iotest1.d2" );
+    run_shell( "rm -rf iotest1.d2" );
     check( "mkdir", iodev_mkdir( dir, "file", &e ) );
     check( "mkdir again", !iodev_mkdir( dir, "file", &e ) && strcmp( e, "File already exists" ) == 0 );
     check( "chdir", iodev_chdir( dir, "file", &e ) );
@@ -352,9 +359,9 @@ static void test_phase2( void ) {
     iotab_closeall( &t );
     iodev_set_console( 0 );
 
-    (void) system( "rm -f sh.out; rm -rf res" );
+    run_shell( "rm -f sh.out; rm -rf res" );
     check( "chdir back", chdir( cwd ) == 0 );
-    (void) system( "rm -rf iotest1.d2" );
+    run_shell( "rm -rf iotest1.d2" );
     iodev_mem_clear();
 }
 
@@ -395,7 +402,7 @@ static void test_phase3( void ) {
     // random files on disk
     char cwd[512];
     check( "getcwd", getcwd( cwd, sizeof(cwd) ) != 0 );
-    (void) system( "rm -rf iotest1.d3; mkdir iotest1.d3" );
+    run_shell( "rm -rf iotest1.d3; mkdir iotest1.d3" );
     check( "chdir", chdir( "iotest1.d3" ) == 0 );
     check( "file random open (creates)", iotab_open_ex( &t, 1, "rec.dat", "file", IOMODE_READ | IOMODE_WRITE | IOMODE_RANDOM, 4U, &e ) );
     rb = iotab_recbuf( &t, 1, 0 );
@@ -409,7 +416,7 @@ static void test_phase3( void ) {
         iotab_getrec( &t, 1, 2, &e ) && memcmp( iotab_recbuf( &t, 1, 0 ), "aaaa", 4 ) == 0 );
     iotab_closeall( &t );
     check( "chdir back", chdir( cwd ) == 0 );
-    (void) system( "rm -rf iotest1.d3" );
+    run_shell( "rm -rf iotest1.d3" );
 
     // play: lines are played when complete
     check( "play without a host", !iotab_open( &t, 1, "play:", "file", IOMODE_WRITE, &e ) && strcmp( e, "Not supported by device" ) == 0 );

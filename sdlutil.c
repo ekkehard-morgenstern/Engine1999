@@ -73,7 +73,7 @@ void sdlutil_projecttime( uint64_t nsec, const struct timespec* from, struct tim
 void sdlutil_nanosleep( uint64_t nsec, const struct timespec* pts ) {
     struct timespec ts;
     sdlutil_projecttime( nsec, pts, &ts );
-RETRY:
+RETRY:;
     int rv = clock_nanosleep( CLOCK_MONOTONIC, TIMER_ABSTIME, &ts, 0 );
     if ( rv == EINTR ) {
         struct timespec now;

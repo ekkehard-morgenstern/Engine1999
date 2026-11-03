@@ -104,9 +104,10 @@ is not found is the compile error "Library not found: sprites" in the line of th
 - **Errors at run time** report the line **and the library**: `? Illegal argument in line 120 (library sprites)`. The VM's `LINE`
   instructions carry the line number only; a module table (code address ranges -> library name, built by the compile) gives the
   name for the message, `ERL` stays the number, `ERR$` unchanged.
-- **Calls both ways:** a library `PROC` may `CALL` a `PROC` that the program defines (a callback by name: `CALL` is resolved late
-  by the code generator). A library `FUNC` cannot call a program `FUNC` (it is compiled first, so it is unknown to the parser).
-  Programs call library procedures and functions freely.
+- **Calls go one way:** the program calls library procedures and functions freely, and a library may call the libraries it names. A library can
+  **not** call a `PROC` or `FUNC` of the program (the libraries are compiled before the program is parsed, so the name does not exist yet:
+  "Undefined procedure"). *(Correction 2026-11-03: the first sketch said a library `PROC` could call a program `PROC` by name; it can't.)* A
+  library that needs a callback takes the work as data (a line number or label for `GOSUB`), or a later version adds forward declarations.
 
 ## 4a. `DATA` in libraries (owner's decision)
 
@@ -151,20 +152,43 @@ travel with it.
 
 ## 7. Implementation plan
 
-**Status (2026-11-03): steps 1 and 2 are done** (step 1: the words and their grammar; step 2: `baslib.[ch]`, the resolver, and its hook in the REPL: `RUN` and the monitor's `c` find the libraries of the stored program and report what is wrong, **but the libraries are not compiled yet**, so a program that names a library that exists still does not see its `FUNC`s: that is step 3).
+**Status (2026-11-03): steps 1, 2 and 3 are done** (step 1: the words and their grammar; step 2: `baslib.[ch]`, the resolver, and its hook in the REPL: `RUN` and the monitor's `c` find the libraries of the stored program and report what is wrong, **but the libraries are not compiled yet**, so a program that names a library that exists still does not see its `FUNC`s: that is step 3). (step 1: the words and their grammar; step 2: `baslib.[ch]`, the resolver, and its hook in the REPL; **step 3: the libraries are compiled ahead of the program**, see "What step 3 does, exactly" below). Not done: `RUN` of a library is refused (done), but `SAVE LIBRARY`, `LIBRARIES`, plain `LOAD` of a library in the editor title, and the `BUILD` container (steps 4 and 5) are open.
 
 1. **Extension word `LIBRARY`** (`XF_LIBRARY`), parser rules for `LIBRARY "name"[,"prefix"]` and `LOAD LIBRARY "name"` (new node
    types; no code is generated for either: `NOP`), `bascomp.ebnf` + `make grammar`, man page, `docs/basic-language.md`.
 2. **`baslib.[ch]`** (DONE; no SDL; the logic of sections 2 and 3): the pre-scan of a stored program, finding and reading a file through
    the I/O drivers (`repl_open_program()` is reused), the dependency order, the cycle and clash checks; unit tests in `repltest1`
    with `mem:` files.
-3. **Library mode in the compiler** (`compiler_t.library`: the statements allowed at top level; the variable check; per-module DATA
+3. **Library mode in the compiler** (DONE) (`compiler_t.library`: the statements allowed at top level; the variable check; per-module DATA
    chains and READ pointers, section 4a) and the **multi-module compile in `basrepl.c`** (`repl_compile()` / `repl_execute()`: modules compiled in order, a
    line table per module, the module table for error messages, the start address of the program, the init calls).
 4. **`RUN` of a library** and the plain-`LOAD`-works rule; direct mode `LOAD LIBRARY` error; **`SAVE LIBRARY`** with `.lib` / `.l99`; **`LIBRARIES`**.
 5. **`BUILD` container** and the runtime's lookup of embedded libraries.
 6. **First libraries for the demos** (`demos/lib/`): the key / pad input of the games, text helpers; the games then shrink.
 7. Tests: `vmtest1`, `repltest1`, `buildtest1`; `make install` installs the shared libraries; roadmap and `SESSION.md` updated.
+
+## 7a. What step 3 does, exactly (2026-11-03)
+
+- **Compile order** (`repl_compile_libraries()` in `basrepl.c`, called by `RUN` and the monitor's `c` inside the protected compile): each library of `repl_t.libs` is compiled in dependency order into the same code and data
+  segments, then the program. A library's compile has its own line table, fixups and DATA chain (`cgen_module_begin()` / `cgen_module_end()`: the library name, prefix,
+  code range and DATA chain are kept in `codegen_t.modules`), the statement table for `RESUME` keeps growing across modules (`codegen_t.keepstmts`). The program starts at
+  `codegen_t.mainstart`; `RUN` begins there (and `RUN label` / `RUN line` find their targets as before). Line numbers in messages: a compile error is
+  "? text in line N of the library X" (`compiler_t.libname`), a run time error the same (`cgen_module_at( steppc )` in `vm_report_error()`); `ERL` stays the number.
+- **Library mode of the code generator** (`cgen_check_library_line()` in `codegen.c`, `cgenlib.c`): only `PROC` / `FUNC` / `DEF FN` / `LABEL` / `DATA` / `LIBRARY` /
+  `LOAD LIBRARY` may stand at the top level; any other statement only inside a labelled section (from a `LABEL` to the next `RETURN`), else "Not allowed in a library: code
+  outside of a PROC, FUNC or labelled section" (and "RETURN outside of a labelled section"). The variable rule (section 5, an error): in a `PROC`, `FUNC` or `DEF FN` only
+  parameters, `LOCAL` variables, the compiler's hidden `@` variables and names that start with the prefix; in a labelled section only prefixed names; "Variable X is global in
+  the library (declare it LOCAL, or start its name with P_)" with the line (a library without a prefix: "...; the library has no prefix").
+- **Name clashes:** a `PROC`, `FUNC`, `DEF FN` or label that an earlier module defined is "Duplicate name X (also defined in the library L)" (`cgen_defined_elsewhere()`).
+- **`<prefix>INIT`:** for every library with a prefix that defines a `PROC` of that name the program starts with `PHIM 0 / CALF` of it, in dependency order, then a `BRIA` to the
+  real start (`codegen_t.initjump` / `initnext`; patched before every run, so `RUN 30` initializes the libraries first, too). It must take no parameters.
+- **DATA** (section 4a): every module has its own chain (`cgen_module_begin()` resets `datafirst` / `datalast`; the program's chain is the one in `codegen_t`); the VM keeps a READ pointer
+  per module (`vm_t.moddata`, `vm_datapos_ref()`: the module of the executing instruction decides; `vm_reset_data()` at the start of a run); `RESTORE` without a target restores the
+  module's own chain; the labels of the libraries stay known to the modules after them (`codegen_t.publabels`), so `RESTORE label` of a library's labelled DATA works from the program.
+- **`RUN` of a library:** "Library cannot be run (m is a library: a program names it with LOAD LIBRARY)".
+- **Tests:** `repltest1` (23 cases: calls, local line numbers, error messages with the library, library mode, variable rule, duplicates, `INIT`, DATA private / `RESTORE` / public label,
+  two runs, nested libraries, a program without libraries), all suites pass, clean under valgrind (`repltest1`) and ASAN / UBSAN (`vmtest1`, `repltest1`, `libtest1`).
+- **Known limits:** the monitor lists the libraries' code like any other code; `BUILD` does not embed libraries yet (step 5); `LIBRARIES` and `SAVE LIBRARY` come with step 4.
 
 ## 8. Decisions (owner, 2026-11-03)
 

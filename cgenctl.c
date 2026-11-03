@@ -572,6 +572,18 @@ bool cgen_from_labelstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     cgen_note_label_data( cgen, varoffs );
     varvalue_t value;
     memset( &value, 0, sizeof(value) );
+    {
+        const char* lib = 0;
+        varvalue_t old;
+        memset( &old, 0, sizeof(old) );
+        if ( vmem_get_var( &comp->rt->varmem, varoffs, VARTYPEV_LABEL, 0, 0, &old ) && cgen_defined_elsewhere( cgen, old.lbloffs, &lib ) ) {
+            var_t* v = vmem_var( &comp->rt->varmem, varoffs );
+            char msg[200];
+            snprintf( msg, sizeof(msg), "Duplicate name %s (also defined in the library %s)", v != 0 ? v->name : "?", lib != 0 ? lib : "?" );
+            comp_error( comp, msg );
+            return false;
+        }
+    }
     value.lbloffs = here;
     cgen_note_persistent( cgen );       // the label variable now points into the code
     if ( !vmem_set_var( &comp->rt->varmem, varoffs, VARTYPEV_LABEL, 0, 0, &value ) ) {

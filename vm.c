@@ -55,6 +55,8 @@ void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem ) {
     vm->maxctx   = 0;
     vm->pc       = UINT32_C(0);
     vm->datapos  = cgen->datafirst;
+    vm->moddata  = 0;
+    vm->nmoddata = 0;
     vm->line     = LINENO_NONE;
     vm->maxsteps = UINT64_C(0);
     vm->debug = false;
@@ -224,6 +226,9 @@ void vm_clear_request( vm_t* vm ) {
 
 void cleanup_vm( vm_t* vm ) {
     vm_discard_stop( vm );
+    free( vm->moddata );
+    vm->moddata = 0;
+    vm->nmoddata = 0;
     free( vm->ram );
     vm->ram = 0;
     iotab_closeall( &vm->io );
@@ -258,8 +263,11 @@ static void vm_report_error( vm_t* vm, const char* text ) {
         vm->errpc = vm->steppc;
         return;
     }
-    char buf[160];
-    if ( vm->line != LINENO_NONE ) {
+    char buf[240];
+    const cgen_module_t* lib = vm->cgen != 0 && vm->line != LINENO_NONE ? cgen_module_at( vm->cgen, vm->steppc ) : 0;
+    if ( vm->line != LINENO_NONE && lib != 0 ) {
+        snprintf( buf, sizeof(buf), "? %s in line %u of the library %s\n", text, (unsigned) vm->line, lib->name );
+    } else if ( vm->line != LINENO_NONE ) {
         snprintf( buf, sizeof(buf), "? %s in line %u\n", text, (unsigned) vm->line );
     } else {
         snprintf( buf, sizeof(buf), "? %s\n", text );
@@ -797,10 +805,55 @@ static bool vm_set_substring( vm_t* vm, uint16_t opcode, uint16_t varoffs ) {
 
 // -- DATA ----------------------------------------------------------------------
 
+// the data pointer that the code at the current instruction uses: the program's, or that of the library the instruction belongs to
+// (docs/library-support.md: every module has its own DATA chain and READ pointer); *pfirst receives the first item of that chain
+static uint32_t* vm_datapos_ref( vm_t* vm, uint32_t* pfirst ) {
+    const codegen_t* cgen = vm->cgen;
+    const cgen_module_t* m = cgen->nummodules > 0U ? cgen_module_at( cgen, vm->steppc ) : 0;
+    if ( m == 0 ) {
+        *pfirst = cgen->datafirst;
+        return &vm->datapos;
+    }
+    size_t idx = (size_t)( m - cgen->modules );
+    if ( idx >= vm->nmoddata ) {
+        uint32_t* p = (uint32_t*) realloc( vm->moddata, cgen->nummodules * sizeof(uint32_t) );
+        if ( p == 0 ) {
+            *pfirst = cgen->datafirst;
+            return &vm->datapos;
+        }
+        for ( size_t i = vm->nmoddata; i < cgen->nummodules; ++i ) {
+            p[i] = cgen->modules[i].datafirst;
+        }
+        vm->moddata = p;
+        vm->nmoddata = cgen->nummodules;
+    }
+    *pfirst = m->datafirst;
+    return &vm->moddata[idx];
+}
+
+// every READ pointer to the first item of its chain (what a run starts with, and RESTORE)
+void vm_reset_data( vm_t* vm ) {
+    const codegen_t* cgen = vm->cgen;
+    vm->datapos = cgen->datafirst;
+    if ( cgen->nummodules > vm->nmoddata ) {
+        uint32_t* p = (uint32_t*) realloc( vm->moddata, cgen->nummodules * sizeof(uint32_t) );
+        if ( p == 0 ) {
+            return;
+        }
+        vm->moddata = p;
+        vm->nmoddata = cgen->nummodules;
+    }
+    for ( size_t i=0; i < cgen->nummodules; ++i ) {
+        vm->moddata[i] = cgen->modules[i].datafirst;
+    }
+}
+
 // RDNM, RDST: ( -- n ) or ( -- s ): reads the next DATA item, see instset.h
 static bool vm_read_data( vm_t* vm, bool wantstr ) {
     const codegen_t* cgen = vm->cgen;
-    uint32_t pos = vm->datapos;
+    uint32_t first = DATAOFFS_NONE;
+    uint32_t* ppos = vm_datapos_ref( vm, &first );
+    uint32_t pos = *ppos;
     if ( pos == DATAOFFS_NONE || pos > cgen->datasize || DATAREC_HEADER > cgen->datasize - pos ) {
         return vm_error( vm, "Out of DATA" );
     }
@@ -827,7 +880,7 @@ static bool vm_read_data( vm_t* vm, bool wantstr ) {
             return false;
         }
     }
-    vm->datapos = next;
+    *ppos = next;
     return true;
 }
 
@@ -4028,9 +4081,12 @@ static bool vm_step( vm_t* vm ) {
             return vmem_erase_array( vm->vmem, param16 ) || vm_error( vm, "Not an array" );
         case INS_RDNM: return vm_read_data( vm, false );
         case INS_RDST: return vm_read_data( vm, true );
-        case INS_RSTR:
-            vm->datapos = hasp ? param : cgen->datafirst;
+        case INS_RSTR: {
+            uint32_t first = DATAOFFS_NONE;
+            uint32_t* ppos = vm_datapos_ref( vm, &first );
+            *ppos = hasp ? param : first;
             return true;
+        }
         case INS_CALF: return vm_call_function( vm, param16, pc );
         case INS_RETF: return vm_return_function( vm );
         case INS_WRNV: return vm_write_var( vm, param16, VARTYPEV_FLOAT );
@@ -4080,7 +4136,7 @@ static bool vm_step( vm_t* vm ) {
 }
 
 bool vm_run( vm_t* vm ) {
-    vm->datapos = vm->cgen->datafirst;      // like RESTORE: a program starts with the first DATA item
+    vm_reset_data( vm );                    // like RESTORE: a program starts with the first DATA item (of every module)
     return vm_run_at( vm, UINT32_C(0) );
 }
 

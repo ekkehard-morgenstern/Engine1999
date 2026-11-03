@@ -111,6 +111,7 @@ typedef struct _compiler_t {
     uint16_t        arraydim[MAXDIM];
     uint8_t         numdim;
     node_t*         syntree;
+    const char*     libname;        // the library whose lines are being compiled (error messages say so), 0 = the program
 } compiler_t;
 
 void init_compiler( compiler_t* comp, struct _runtime_t* rt, program_t* pgm, bool keepmemory );

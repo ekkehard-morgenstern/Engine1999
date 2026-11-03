@@ -194,6 +194,16 @@ bool cgen_from_procstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         comp_error( comp, "Internal error (function variable not found)" );
         return false;
     }
+    {
+        const char* lib = 0;
+        if ( cgen_defined_elsewhere( cgen, oldcode, &lib ) ) {
+            var_t* v = vmem_var( &comp->rt->varmem, funcoffs );
+            char msg[200];
+            snprintf( msg, sizeof(msg), "Duplicate name %s (also defined in the library %s)", v != 0 ? v->name : "?", lib != 0 ? lib : "?" );
+            comp_error( comp, msg );
+            return false;
+        }
+    }
     if ( !cd_ensure_param_vars( comp, funcoffs, numparams ) ) {
         return false;
     }
@@ -324,6 +334,16 @@ bool cgen_from_defstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     if ( !vmem_get_func_info( &comp->rt->varmem, funcoffs, &ftype, &numparams, &oldcode ) || ftype != functype ) {
         comp_error( comp, "Internal error (function variable not found)" );
         return false;
+    }
+    {
+        const char* lib = 0;
+        if ( cgen_defined_elsewhere( cgen, oldcode, &lib ) ) {
+            var_t* v = vmem_var( &comp->rt->varmem, funcoffs );
+            char msg[200];
+            snprintf( msg, sizeof(msg), "Duplicate name %s (also defined in the library %s)", v != 0 ? v->name : "?", lib != 0 ? lib : "?" );
+            comp_error( comp, msg );
+            return false;
+        }
     }
     if ( !cd_ensure_param_vars( comp, funcoffs, numparams ) ) {
         return false;
@@ -573,6 +593,12 @@ bool cgen_finish_data( codegen_t* cgen, compiler_t* comp ) {
                     index = cgen->labeldata[j].dataindex;
                     found = true;
                     break;
+                }
+            }
+            for ( size_t j=0; j < cgen->numpublabels && !found; ++j ) {        // a label of a library (labelled DATA is public)
+                if ( cgen->publabels[j].varoffs == fx->varoffs ) {
+                    index = cgen->publabels[j].dataindex;
+                    found = true;
                 }
             }
             if ( !found ) {

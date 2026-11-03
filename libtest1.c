@@ -226,7 +226,7 @@ int main( void ) {
 
     // -- depth --
     {
-        static libsrc_t deep[48]; static char texts[48][96]; static char names[48][8];
+        static libsrc_t deep[48]; static char texts[48][160]; static char names[48][16];
         for ( int i=0; i < 47; ++i ) {
             snprintf( names[i], sizeof(names[i]), "d%d", i );
             snprintf( texts[i], sizeof(texts[i]), "10 LIBRARY \"d%d\"|20 LOAD LIBRARY \"d%d\"", i, i + 1 );

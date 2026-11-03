@@ -248,7 +248,9 @@ typedef struct _vm_t {
     vm_context_t*   ctxs;           // contexts of the function calls in progress
     size_t          nctx, maxctx;
     uint32_t        pc;             // offset of the next instruction
-    uint32_t        datapos;        // data offset of the next DATA item (DATAOFFS_NONE = behind the last one)
+    uint32_t        datapos;        // data offset of the next DATA item of the program (DATAOFFS_NONE = behind the last one)
+    uint32_t*       moddata;        // the same for each library (indexed like cgen->modules): READ in the code of a library reads its own chain
+    size_t          nmoddata;
     uint32_t        line;           // current line number (LINE instruction)
     uint64_t        maxsteps;       // stop with an error after this many instructions (0 = unlimited)
     // debugging (set by the host before vm_resume(); the VM doesn't keep them across init_vm())
@@ -361,6 +363,7 @@ typedef struct _vm_t {
 
 void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem );
 void cleanup_vm( vm_t* vm );        // frees the stacks and the strings still on the data stack
+void vm_reset_data( vm_t* vm );        // the READ pointers of the program and of every library to the first item of their chains
 bool vm_run( vm_t* vm );            // runs from offset 0 until the end of the code; false after reporting an error
 void vm_discard_stop( vm_t* vm );            // forgets the state CONT would continue with (the program changed, a program starts)
 void vm_clear_request( vm_t* vm );    // forgets a pending request (frees the name)

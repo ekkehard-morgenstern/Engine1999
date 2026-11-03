@@ -516,6 +516,14 @@ bool baslib_resolve( program_t* pgm, baslib_loader_t load, void* usrdata, liblis
     rs.usrdata = usrdata;
     rs.out = out;
     rs.err = err;
+    char* name = 0; char* prefix = 0;
+    if ( baslib_header( pgm, &name, &prefix, 0 ) ) {        // a library by itself can't be run
+        resolve_fail( &rs, "", 0, "Library cannot be run (%s is a library: a program names it with LOAD LIBRARY)", name );
+        free( name );
+        free( prefix );
+        baslib_free( out );
+        return false;
+    }
     resolve_program( &rs, pgm, "" );
     if ( rs.failed ) {
         baslib_free( out );

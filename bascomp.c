@@ -46,6 +46,7 @@ void init_compiler( compiler_t* comp, struct _runtime_t* rt, program_t* pgm, boo
     comp->namealloc = 0;
     comp->curfn    = NODE_NONE;
     comp->ctxstk   = 0;
+    comp->libname  = 0;
     // CAUTION: Set the "keepmemory" flag only if you know what you're doing!
     if ( keepmemory ) {
         return;
@@ -100,11 +101,13 @@ void comp_set_tokens( compiler_t* comp, const uint8_t* tokens, size_t size ) {
 }
 
 void comp_error( compiler_t* comp, const char* text ) {
-    char buf[128];
-    if ( comp->iter.hdr.lineno != LINENO_NONE ) {
-        snprintf( buf, 128U, "? %s in line %u\n", text, (unsigned) comp->iter.hdr.lineno );
+    char buf[256];
+    if ( comp->iter.hdr.lineno != LINENO_NONE && comp->libname != 0 ) {
+        snprintf( buf, sizeof(buf), "? %s in line %u of the library %s\n", text, (unsigned) comp->iter.hdr.lineno, comp->libname );
+    } else if ( comp->iter.hdr.lineno != LINENO_NONE ) {
+        snprintf( buf, sizeof(buf), "? %s in line %u\n", text, (unsigned) comp->iter.hdr.lineno );
     } else {
-        snprintf( buf, 128U, "? %s\n", text );
+        snprintf( buf, sizeof(buf), "? %s\n", text );
     }
     if ( comp->report ) {
         comp->report( comp, comp->userdata, buf );
@@ -6188,7 +6191,7 @@ NEXTTOK:
         }
         return false;
     }
-SKIPTOK:
+SKIPTOK:;       // (a label can only precede a statement, not a declaration, before C23: clang and older GCC reject it)
     uint8_t tok = comp->currtok = *comp->tokp++;
 if ( basdbg_on( BASDBG_PARSE ) ) {
         printf( "[parse] token %02" PRIX8 "\n", tok );
