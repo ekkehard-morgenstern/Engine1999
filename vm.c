@@ -1230,6 +1230,7 @@ static bool vm_call_function( vm_t* vm, uint16_t funcoffs, uint32_t retaddr ) {
     vm_context_t* ctx = &vm->ctxs[ vm->nctx ];
     ctx->numsaved = 0;
     ctx->rsp = vm->rsp;
+    ctx->channel = vm->channel;
     for ( uint8_t i=0; i < numparams; ++i ) {
         uint8_t ptype = 0; const char* name = 0; uint16_t poffs = VAROFFS_NONE;
         if ( !vmem_get_func_param( vm->vmem, funcoffs, i, &ptype, &name ) ) {
@@ -1306,6 +1307,7 @@ static bool vm_return_function( vm_t* vm ) {
         return vm_error( vm, "RETF without function call" );
     }
     vm_context_t* ctx = &vm->ctxs[ --vm->nctx ];
+    vm->channel = ctx->channel;             // (a PRINT that calls a function which used #1 goes on writing to the screen)
     // the result stays on the data stack; restore the parameter variables in reverse order
     bool ok = true;
     for ( size_t i = ctx->numsaved; i > 0; --i ) {

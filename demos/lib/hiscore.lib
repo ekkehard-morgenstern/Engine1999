@@ -1,0 +1,29 @@
+1 ' License: free for everybody to use, copy, change and build into executables (BUILD).
+2 ' An executable made with BUILD contains the Engine1999 runtime: the Engine1999 Runtime Exception
+3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
+4 ' in the executable (it shows with the command line option --engine1999-about).
+10 ' hiscore - keeps one number (the high score, the best height ...) in a small text file (a library: LOAD LIBRARY "hiscore").
+20 '   HI=FN HS_LOAD("game.hi")    the number in the file; 0 if there is no such file or it holds nothing usable. A missing file is not an error (EXISTS tests for it).
+30 '   CALL HS_SAVE("game.hi",HI)  writes the number to the file. A file error (a folder that can't be written) is raised as usual: a program that wants to ignore
+40 '                               it traps it in its MAIN program, where RESUME <label> can continue: ON ERROR GOTO handler ... CALL HS_SAVE ... LABEL done ... ON ERROR OFF,
+50 '                               with LABEL handler / RESUME done. (RESUME <label> inside a PROC or FUNC would land in a frame that the error has already taken apart.)
+60 ' Both use the file channel #1: a program must not have a file open on it at that moment.
+70 LIBRARY "hiscore","HS_"
+80 FUNC HS_LOAD(F$)
+90   LOCAL V,A$
+100   V=0
+110   IF EXISTS(F$) THEN
+120     OPEN F$ FOR INPUT AS #1
+130     IF NOT EOF(1) THEN
+140       LINE INPUT #1,A$
+150       V=VAL(A$)
+160     END IF
+170     CLOSE #1
+180   END IF
+190   RETURN V
+200 END FUNC
+210 PROC HS_SAVE(F$,V)
+220   OPEN F$ FOR OUTPUT AS #1
+230   PRINT #1,V
+240   CLOSE #1
+250 END PROC

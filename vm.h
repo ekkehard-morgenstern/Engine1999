@@ -179,6 +179,7 @@ typedef struct _vm_savedvar_t {
 
 typedef struct _vm_context_t {
     size_t          rsp;            // the return stack depth before the call (to unwind after an error)
+    int             channel;        // the current I/O channel at the call: a function that does file I/O must not leave its channel selected for the statement that called it
     vm_savedvar_t*  saved;          // the parameters and LOCAL variables of the call, in the order they were saved (heap, reused)
     size_t          numsaved, maxsaved;
 } vm_context_t;

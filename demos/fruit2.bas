@@ -2,9 +2,10 @@
 2 ' An executable made with BUILD contains the Engine1999 runtime: the Engine1999 Runtime Exception
 3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
 4 ' in the executable (it shows with the command line option --engine1999-about).
-5 ' the helpers that the demo games share (RN, CLAMP, PAD$, DISK, PLAYSEQ) are in the library demos/lib/util.lib
+5 ' the helpers that the demo games share are in the libraries demos/lib/util.lib, input.lib and hiscore.lib
 6 LOAD LIBRARY "util"
 7 LOAD LIBRARY "input"
+8 LOAD LIBRARY "hiscore"
 10 ' FRUIT INVADERS II - a Space Invaders style game for Engine1999, written with procedures.
 20 ' Keys: LEFT / RIGHT or A / D move the cannon (only while the key is held), SPACE or UP fires, P = pause, Q = quit.
 21 ' Game controller (optional, JOY): the D-pad or the left stick moves, A or the right trigger fires, START pauses, BACK quits.
@@ -36,13 +37,7 @@
 390 END FUNC
 400 ' ====================================================================== main program
 410 CALL INIT
-420 HI=0
-430 ON ERROR GOTO HIERR
-440 OPEN "fruit2.hi" FOR INPUT AS #1
-450 INPUT #1,HI
-460 CLOSE #1
-470 LABEL HIDONE
-480 ON ERROR OFF
+420 HI=FN HS_LOAD("fruit2.hi")
 490 QT=0
 500 REPEAT
 510   CALL TITLE
@@ -50,19 +45,14 @@
 530   IF SC>=HI AND SC>0 THEN
 540     HI=SC
 550     ON ERROR GOTO HIERR2
-560     OPEN "fruit2.hi" FOR OUTPUT AS #1
-570     PRINT #1,HI
-580     CLOSE #1
+560     CALL HS_SAVE("fruit2.hi",HI)
 590     LABEL HIDONE2
 600     ON ERROR OFF
 610   END IF
 620 UNTIL QT=1
 630 CALL SHUTDOWN
 640 END
-650 ' the high score file does not exist (yet): start with 0 and go on behind the file statements; a file that can't be written is ignored
-660 LABEL HIERR
-670 HI=0
-680 RESUME HIDONE
+650 ' the library hiscore reads the high score (a missing or empty file is 0, no error); a file that can't be written is ignored: the error handler is here in the main program, where RESUME <label> can continue (inside a PROC the frame would be gone)
 690 LABEL HIERR2
 700 RESUME HIDONE2
 710 ' the AFTER and EVERY handlers: they only call a procedure (the procedure uses LOCAL variables, so it can interrupt anything)

@@ -2,9 +2,10 @@
 2 ' An executable made with BUILD contains the Engine1999 runtime: the Engine1999 Runtime Exception
 3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
 4 ' in the executable (it shows with the command line option --engine1999-about).
-5 ' the helpers that the demo games share (RN, CLAMP, PAD$, DISK, PLAYSEQ) are in the library demos/lib/util.lib
+5 ' the helpers that the demo games share are in the libraries demos/lib/util.lib, input.lib and hiscore.lib
 6 LOAD LIBRARY "util"
 7 LOAD LIBRARY "input"
+8 LOAD LIBRARY "hiscore"
 10 ' THE LONG CLIMB - a jump and run game for Engine1999.
 20 ' You are a construction worker and the ice cream stand is on the roof of the unfinished steel tower, 960 pixels above the street. Climb the ladders,
 30 ' jump the gaps, hurdles, cars and birds, and use your drill to make holes in the girders: a rust ball or slime that walks into a hole is trapped,
@@ -64,22 +65,14 @@
 670 END FUNC
 680 ' ====================================================================== main program
 690 CALL INIT
-700 HI=0
-710 ON ERROR GOTO HIERR
-720 OPEN "climb.hi" FOR INPUT AS #1
-730 INPUT #1,HI
-740 CLOSE #1
-750 LABEL HIDONE
-760 ON ERROR OFF
+700 HI=FN HS_LOAD("climb.hi")
 770 QT=0
 780 REPEAT
 790   CALL TITLE
 800   IF QT=0 THEN CALL PLAYGAME
 810   IF HI>HI0 THEN
 820     ON ERROR GOTO HIERR2
-830     OPEN "climb.hi" FOR OUTPUT AS #1
-840     PRINT #1,HI
-850     CLOSE #1
+830     CALL HS_SAVE("climb.hi",HI)
 860     LABEL HIDONE2
 870     ON ERROR OFF
 880   END IF
@@ -87,10 +80,7 @@
 900 UNTIL QT=1
 910 CALL SHUTDOWN
 920 END
-930 ' no file with the best height (yet): start with 0; a file that can't be written is ignored
-940 LABEL HIERR
-950 HI=0
-960 RESUME HIDONE
+930 ' the library hiscore reads the best height (a missing or empty file is 0, no error); a file that can't be written is ignored: the error handler is here in the main program, where RESUME <label> can continue (inside a PROC the frame would be gone)
 970 LABEL HIERR2
 980 RESUME HIDONE2
 990 ' the EVERY and AFTER handlers only call a procedure or set a flag

@@ -2,9 +2,10 @@
 2 ' An executable made with BUILD contains the Engine1999 runtime: the Engine1999 Runtime Exception
 3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
 4 ' in the executable (it shows with the command line option --engine1999-about).
-5 ' the helpers that the demo games share (RN, CLAMP, PAD$, DISK, PLAYSEQ) are in the library demos/lib/util.lib
+5 ' the helpers that the demo games share are in the libraries demos/lib/util.lib, input.lib and hiscore.lib
 6 LOAD LIBRARY "util"
 7 LOAD LIBRARY "input"
+8 LOAD LIBRARY "hiscore"
 10 ' MADRUN - a crossing game for one to four players, for Engine1999.
 20 ' A telephone booth stands on the island in the middle of a busy crossing, and the phone is ringing! Get there before the caller hangs up.
 30 ' Cars, trucks, buses, motorbikes and (later) ambulances drive on eight lanes. They stop for each other and for the crossing, but never for you.
@@ -27,13 +28,7 @@
 200 ' (a FUNC has to be defined before the lines that call it)
 570 ' ====================================================================== main program
 580 CALL INIT
-590 HI=0
-600 ON ERROR GOTO HIERR
-610 OPEN "madrun.hi" FOR INPUT AS #1
-620 INPUT #1,HI
-630 CLOSE #1
-640 LABEL HIDONE
-650 ON ERROR OFF
+590 HI=FN HS_LOAD("madrun.hi")
 660 QT=0
 670 REPEAT
 680   CALL TITLE
@@ -42,9 +37,7 @@
 710     IF BEST>HI THEN
 720       HI=BEST
 730       ON ERROR GOTO HIERR2
-740       OPEN "madrun.hi" FOR OUTPUT AS #1
-750       PRINT #1,HI
-760       CLOSE #1
+740       CALL HS_SAVE("madrun.hi",HI)
 770       LABEL HIDONE2
 780       ON ERROR OFF
 790     END IF
@@ -52,10 +45,7 @@
 810 UNTIL QT=1
 820 CALL SHUTDOWN
 830 END
-840 ' the high score file does not exist (yet): start with 0 and go on behind the file statements; a file that can't be written is ignored
-850 LABEL HIERR
-860 HI=0
-870 RESUME HIDONE
+840 ' the library hiscore reads the high score (a missing or empty file is 0, no error); a file that can't be written is ignored: the error handler is here in the main program, where RESUME <label> can continue (inside a PROC the frame would be gone)
 880 LABEL HIERR2
 890 RESUME HIDONE2
 900 ' ====================================================================== set up (once)

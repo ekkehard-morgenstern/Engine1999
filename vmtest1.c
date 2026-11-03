@@ -1070,6 +1070,8 @@ static const testcase_t cases[] = {
     { "LIBRARIES needs a host that has it", "10 LIBRARIES",                          "? LIBRARIES is not available in line 10\n" },
     { "LIBRARIES with a name needs a host that has it", "10 LIBRARIES \"x\"",          "? LIBRARIES is not available in line 10\n" },
     { "LIBRARIES with a number is a type mismatch", "10 LIBRARIES 5",                "? String expression expected in line 10\n" },
+    { "a FUNC that reads a file does not leave its channel selected for the PRINT that called it", "10 OPEN \"mem:chn1\" FOR OUTPUT AS #1:PRINT #1,77:CLOSE #1\n20 FUNC LD(F$)\n30   LOCAL A$\n40   OPEN F$ FOR INPUT AS #1\n50   LINE INPUT #1,A$\n60   CLOSE #1\n70   RETURN VAL(A$)\n80 END FUNC\n90 PRINT FN LD(\"mem:chn1\")", "77\n" },
+    { "a FUNC that writes to a channel does not redirect the PRINT that called it", "10 FUNC W(F$)\n20   OPEN F$ FOR OUTPUT AS #1\n30   PRINT #1,5\n40   CLOSE #1\n50   RETURN 9\n60 END FUNC\n70 PRINT \"a\";FN W(\"mem:chn2\");\"b\"", "a9b\n" },
     { "EXISTS of a missing file", "10 PRINT EXISTS(\"mem:nothere\")",                "0\n" },
     { "EXISTS of an empty name", "10 PRINT EXISTS(\"\")",                            "0\n" },
     { "EXISTS of a file that was written", "10 OPEN \"mem:exs1\" FOR OUTPUT AS #1\n20 CLOSE #1\n30 PRINT EXISTS(\"mem:exs1\")", "-1\n" },
