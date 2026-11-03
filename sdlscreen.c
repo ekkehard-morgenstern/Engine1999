@@ -395,6 +395,8 @@ static void sdlscr_tryraise( SDL_Window* window ) {
     }
 }
 
+static bool sdlscr_keepsbackbuffer;    // the renderer keeps its back buffer between frames (the software renderer): unchanged frames need no drawing
+
 static int sdlscr_worker( void* arg ) {
 
     sdlscr_initok = false;
@@ -435,6 +437,10 @@ static int sdlscr_worker( void* arg ) {
         goto ERR3;
     }
 
+    {
+        SDL_RendererInfo info;
+        sdlscr_keepsbackbuffer = SDL_GetRendererInfo( renderer, &info ) == 0 && info.name != 0 && strcmp( info.name, "software" ) == 0;
+    }
     SDL_SetHint( SDL_HINT_RENDER_SCALE_QUALITY, "linear" );
     int rv = SDL_RenderSetLogicalSize(
         renderer,
@@ -643,11 +649,19 @@ static int sdlscr_worker( void* arg ) {
         uint64_t tf2 = sdlscr_framedebug ? sdlutil_getnsec( &tfs ) : 0;     // after the pointer was moved
         bool fredraw = false;
 
-        if ( sdllay_needsredraw( &layers[0], NLAYERS ) ) {
-            // needs redraw
+        // The layer textures are converted only when a layer changed (they keep their contents), but the scene is drawn into the back buffer
+        // EVERY frame and then presented: after SDL_RenderPresent() the content of the back buffer is undefined (SDL documentation). On
+        // a display that really flips between two buffers (most GPU drivers, compositors, Wayland), presenting a back buffer that was not drawn
+        // shows the picture of two frames ago: an unchanged screen then alternated between the old and the new picture at the frame rate
+        // (flickering cursor, line highlight, shifted sections: the owner's report of 2026-11-03). The software renderer keeps its buffer, so
+        // it may skip the drawing of unchanged frames (this saves a lot of time there).
+        bool changed = sdllay_needsredraw( &layers[0], NLAYERS );
+        if ( changed ) {
             if ( !sdllay_to_texture_many( &layers[0], NLAYERS ) ) {
                 break;
             }
+        }
+        if ( changed || !sdlscr_keepsbackbuffer ) {
             uint32_t c = sdlscr_bgcol;
             uint8_t a = (uint8_t)( c >> UINT8_C(24) );
             uint8_t r = (uint8_t)( c >> UINT8_C(16) );
@@ -656,7 +670,7 @@ static int sdlscr_worker( void* arg ) {
             SDL_SetRenderDrawColor( renderer, r, g, b, a );
             SDL_RenderClear( renderer );
             draw_layers( renderer );
-            fredraw = true;
+            fredraw = changed;
         }
         uint64_t tf3 = sdlscr_framedebug ? sdlutil_getnsec( &tfs ) : 0;     // after the layers were drawn (the GPU may still be working)
 
