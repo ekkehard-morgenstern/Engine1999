@@ -840,7 +840,7 @@ static const struct {
     uint8_t     xid;
     const char* name;
 } xkeywtbl[] = {
-    { XF_SPACE, "SPACE" }, { XF_STRING, "STRING" }, { XF_MIN, "MIN" }, { XF_MAX, "MAX" }, { XF_ATAN2, "ATAN2" }, { XF_ERROR, "ERROR" }, { XF_JOY, "JOY" }, { XF_FRAME, "FRAME" }, { 0, 0 }
+    { XF_SPACE, "SPACE" }, { XF_STRING, "STRING" }, { XF_MIN, "MIN" }, { XF_MAX, "MAX" }, { XF_ATAN2, "ATAN2" }, { XF_ERROR, "ERROR" }, { XF_JOY, "JOY" }, { XF_FRAME, "FRAME" }, { XF_LIBRARY, "LIBRARY" }, { 0, 0 }
 };
 
 bool is_xkeyword( const char* name, uint8_t* pxid ) {
@@ -1177,7 +1177,7 @@ bool detokenize_line_hl( buf_t* out, const uint8_t* wherefrom, const struct _lin
                 ++src.rpos;
             } else if ( tok == TOK_XFUNC ) {        // an extension word: the next byte names it
                 const char* xname = src.rpos + 1U < src.size ? xkeyword_name( (uint8_t) src.buffer[ src.rpos + 1U ] ) : 0;
-                if ( xname == 0 || !hl_switch( out, style, usrdata, &cur, (uint8_t) src.buffer[ src.rpos + 1U ] == XF_ERROR ? HL_STATEMENT : HL_FUNCTION ) || writeto_buffer( out, xname, strlen( xname ) ) < 0 ) {
+                if ( xname == 0 || !hl_switch( out, style, usrdata, &cur, ( (uint8_t) src.buffer[ src.rpos + 1U ] == XF_ERROR || (uint8_t) src.buffer[ src.rpos + 1U ] == XF_FRAME || (uint8_t) src.buffer[ src.rpos + 1U ] == XF_LIBRARY ) ? HL_STATEMENT : HL_FUNCTION ) || writeto_buffer( out, xname, strlen( xname ) ) < 0 ) {
                     goto FAIL;
                 }
                 src.rpos += 2U;

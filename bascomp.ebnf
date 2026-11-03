@@ -185,8 +185,8 @@ num-expr     := num-or-ex .
 expr         := num-expr | str-expr .
 
 --# Input and output
--- The option is A (ASCII listing, the default) or B (binary, tokenized).
-save-stmt := SAVE str-expr [ TOK_COMMA TOK_NUMIDENT ] .
+-- The option is A (ASCII listing, the default) or B (binary, tokenized). Without a name the file of the last LOAD or SAVE is written (an error if there is none).
+save-stmt := SAVE [ str-expr ] [ TOK_COMMA TOK_NUMIDENT ] .
 
 chan-spec := TOK_LATTICE num-expr .
 
@@ -318,7 +318,10 @@ poke-stmt := TOK_POKE num-expr TOK_COMMA expr [ TOK_COMMA num-expr ] .
 -- Program commands. They work inside programs, too. RUN and LOAD restart the program (RUN: after clearing all
 -- variables, at the given line or label; LOAD: replace the program by the one in the file and run it from the
 -- beginning); LIST lists the program: a single target lists that line, "a-b" the range, "a-" to the end, "-b" from the start.
-load-stmt := TOK_LOAD str-expr .
+-- LOAD LIBRARY and LIBRARY are declarations for libraries (docs/library-support.md): the compiler resolves them, nothing happens at run time. The names are plain
+-- string literals. A library is a program whose first statement is LIBRARY "name" [, "prefix"].
+load-stmt := TOK_LOAD ( str-expr | LIBRARY str-lit ) .
+library-stmt := LIBRARY str-lit [ TOK_COMMA str-lit ] .
 run-stmt := TOK_RUN [ goto-target ] .
 list-stmt := TOK_LIST [ goto-target ] [ TOK_MINUS [ goto-target ] ] .
 -- NEW deletes the program and all variables and returns to the host (READY prompt): the running program ends.
@@ -487,7 +490,7 @@ gfx-all-stmt := gfx-stmt | txt-stmt | tile-stmt | sprite-stmt | mouse-stmt | on-
 -- Several statements on a line are separated by a colon; a line may end with a comment (an apostrophe).
 prog-stmt := gfx-all-stmt | load-stmt | run-stmt | merge-stmt | chain-stmt | files-stmt | build-stmt | bye-stmt | timer-stmt | list-stmt | new-stmt | clear-stmt |
              delete-stmt | renum-stmt | edit-stmt | monitor-stmt | sound-stmt | wait-stmt | on-error-stmt | randomize-stmt | angle-stmt |
-             cont-stmt | trace-stmt | break-stmt | auto-stmt | poke-stmt | error-stmt | joy-stmt | on-joy-stmt | on-key-stmt | frame-stmt .
+             cont-stmt | trace-stmt | break-stmt | auto-stmt | poke-stmt | error-stmt | joy-stmt | on-joy-stmt | on-key-stmt | frame-stmt | library-stmt .
 
 stmt := io-stmt | prog-stmt | assign-stmt | control-flow-stmt .
 stmt-list := stmt { TOK_COLON stmt } .

@@ -668,6 +668,8 @@ Explanation of node types:
 #define NT_ONMOUSESTMT          UINT8_C(0X86)   // ON MOUSE GOSUB|GOTO target | OFF (data: 1 byte, ERRT_* kind; the target branch unless OFF)
 #define NT_ONKEYSTMT            UINT8_C(0X8B)   // ON KEY GOSUB|GOTO target | OFF (data: 1 byte, ERRT_* kind; the target branch unless OFF)
 #define NT_FRAMESTMT            UINT8_C(0X8A)   // FRAME [n] (0 or 1 branch: a numeric expression, the number of frames)
+#define NT_LIBRARYSTMT          UINT8_C(0X8C)   // LIBRARY "name" [, "prefix"] (2 or 1 branches: string literals; no code)
+#define NT_LOADLIBSTMT          UINT8_C(0X8D)   // LOAD LIBRARY "name" (1 branch: a string literal; no code, the compiler resolves it before compiling)
 #define NT_JOYSTMT              UINT8_C(0X88)   // JOY DEADZONE d (data: 1 byte, 1 = DEADZONE; 1 numeric branch)
 #define NT_ONJOYSTMT            UINT8_C(0X89)   // ON JOY GOSUB|GOTO target | OFF (data: 1 byte, ERRT_* kind; the target branch unless OFF)
 #define NT_ERRORSTMT            UINT8_C(0X87)   // ERROR n (1 branch: a numeric expression, the error number)

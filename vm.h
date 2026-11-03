@@ -346,6 +346,7 @@ typedef struct _vm_t {
     char            addrcur[VM_ADDRLEN], addrprev[VM_ADDRLEN];
     const char*     iofail;         // (internal) a message of an I/O error that happened where it can't be reported at once
     const char*     inerr;          // (internal) why vm_get_line() returned nothing (a file channel)
+    int             savemode;       // SAVE: the option of the statement the callback is called for: 0 none, 1 A (ASCII), 2 B (binary); the host reads it in vm->save()
     int             request;        // VMREQ_*: LOAD / RUN stop the VM and leave a request for the host (see vm_run_at)
     char*           reqname;        // LOAD: the file name; RUN: the label name ("" = none); owned by the VM
     int32_t         reqline;        // RUN: the line number, -1 = none

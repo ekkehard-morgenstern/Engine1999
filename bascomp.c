@@ -2541,12 +2541,13 @@ bool comp_eat_expr( compiler_t* comp, node_t** pnode ) {
 }
 
 bool comp_eat_savestmt( compiler_t* comp, node_t** pnode ) {
-    // save-stmt := SAVE str-expr [ TOK_COMMA TOK_NUMIDENT ] .
+    // save-stmt := SAVE [ str-expr ] [ TOK_COMMA TOK_NUMIDENT ] .      (without a name: the file of the last LOAD or SAVE)
     if ( comp->currtok != TOK_SAVE || !comp_fetchtok( comp ) ) {
         return false;
     }
     node_t* strexpr = NODE_NONE;
-    if ( !comp_eat_strexpr( comp, &strexpr ) || strexpr == NODE_NONE ) {
+    bool noname = comp->currtok == TOK_COMMA || comp->currtok == TOK_EOL || comp->currtok == TOK_COLON || comp->currtok == TOK_ELSE;
+    if ( !noname && ( !comp_eat_strexpr( comp, &strexpr ) || strexpr == NODE_NONE ) ) {
         comp_error( comp, "String expression expected" );
         return false;
     }
@@ -2580,8 +2581,9 @@ bool comp_eat_savestmt( compiler_t* comp, node_t** pnode ) {
                   denoting save mode (A for ASCII (default), B for binary)
                 - the file name need not be a string literal
     */
-    bool ok = comp_create_node( comp, pnode, NT_SAVESTMT, UINT8_C(1), (uint16_t) saveoptlen,
-        saveopt ? saveopt : "", strexpr ) && *pnode != NODE_NONE;
+    bool ok = ( noname ? comp_create_node( comp, pnode, NT_SAVESTMT, UINT8_C(0), (uint16_t) saveoptlen, saveopt ? saveopt : "" ) :
+                         comp_create_node( comp, pnode, NT_SAVESTMT, UINT8_C(1), (uint16_t) saveoptlen, saveopt ? saveopt : "", strexpr ) ) &&
+              *pnode != NODE_NONE;
     free( saveopt );
     if ( !ok ) {
         out_of_memory( comp );
@@ -2590,10 +2592,55 @@ bool comp_eat_savestmt( compiler_t* comp, node_t** pnode ) {
     return true;
 }
 
+// a plain quoted string literal (library names): not an expression, not a shell literal
+static bool comp_eat_quoted( compiler_t* comp, node_t** pnode, const char* what ) {
+    if ( comp->currtok != TOK_STRLIT || !comp_eat_strlit( comp, pnode ) || *pnode == NODE_NONE ) {
+        comp_error( comp, what );
+        return false;
+    }
+    return true;
+}
+
+bool comp_eat_librarystmt( compiler_t* comp, node_t** pnode ) {
+    // library-stmt := LIBRARY str-lit [ TOK_COMMA str-lit ] .      (LIBRARY is an extension word; the first statement of a library)
+    if ( comp->currtok != TOK_XFUNC || comp->currext != XF_LIBRARY || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    node_t* name = NODE_NONE;
+    if ( !comp_eat_quoted( comp, &name, "Library name in quotes expected" ) ) {
+        return false;
+    }
+    node_t* prefix = NODE_NONE;
+    if ( comp->currtok == TOK_COMMA ) {
+        if ( !comp_fetchtok( comp ) || !comp_eat_quoted( comp, &prefix, "Library prefix in quotes expected" ) ) {
+            return false;
+        }
+    }
+    // NT_LIBRARYSTMT  LIBRARY statement (no data; 1 branch: the name, or 2: the name and the prefix; both string literals)
+    if ( !( prefix != NODE_NONE ? comp_create_node( comp, pnode, NT_LIBRARYSTMT, UINT8_C(2), UINT16_C(0), 0, name, prefix ) :
+            comp_create_node( comp, pnode, NT_LIBRARYSTMT, UINT8_C(1), UINT16_C(0), 0, name ) ) || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
 bool comp_eat_loadstmt( compiler_t* comp, node_t** pnode ) {
-    // load-stmt := TOK_LOAD str-expr .
+    // load-stmt := TOK_LOAD ( str-expr | LIBRARY str-lit ) .      (LOAD LIBRARY: a declaration that the compiler resolves, see docs/library-support.md)
     if ( comp->currtok != TOK_LOAD || !comp_fetchtok( comp ) ) {
         return false;
+    }
+    if ( comp->currtok == TOK_XFUNC && comp->currext == XF_LIBRARY ) {
+        node_t* name = NODE_NONE;
+        if ( !comp_fetchtok( comp ) || !comp_eat_quoted( comp, &name, "Library name in quotes expected" ) ) {
+            return false;
+        }
+        // NT_LOADLIBSTMT  LOAD LIBRARY statement (no data; 1 branch: the name, a string literal)
+        if ( !comp_create_node( comp, pnode, NT_LOADLIBSTMT, UINT8_C(1), UINT16_C(0), 0, name ) || *pnode == NODE_NONE ) {
+            out_of_memory( comp );
+            return false;
+        }
+        return true;
     }
     node_t* strexpr = NODE_NONE;
     if ( !comp_eat_strexpr( comp, &strexpr ) || strexpr == NODE_NONE ) {
@@ -4029,6 +4076,9 @@ bool comp_eat_progstmt( compiler_t* comp, node_t** pnode ) {
         return true;
     }
     if ( comp_eat_framestmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_librarystmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     return false;

@@ -781,8 +781,8 @@ static void con_breakesc( struct _vm_t* vm, void* usrdata, bool on ) {
 }
 
 static bool con_save( struct _vm_t* vm, void* usrdata, const char* filename, bool ascii ) {
-    (void) vm;
-    return repl_save_program( (repl_t*) usrdata, filename, ascii );
+    (void) ascii;
+    return repl_save_program_ex( (repl_t*) usrdata, filename, vm->savemode );
 }
 
 // an argument of a display statement as an int; an omitted one is a huge negative number (see gfxops.h)

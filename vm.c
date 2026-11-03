@@ -1449,9 +1449,10 @@ static bool vm_shell_execute( vm_t* vm ) {
 }
 
 // SAVE: ( mode name -- ) the program belongs to the host, so it does the saving through the save callback
-static bool vm_save_program( vm_t* vm ) {
-    char* name; char* mode;
-    if ( !vm_dpop_str( vm, &name ) ) {
+// parameter 1: no file name was given, only the mode is on the stack; the host is called with a null name (the name of the last LOAD / SAVE)
+static bool vm_save_program( vm_t* vm, uint16_t noname ) {
+    char* name = 0; char* mode;
+    if ( !noname && !vm_dpop_str( vm, &name ) ) {
         return false;
     }
     if ( !vm_dpop_str( vm, &mode ) ) {
@@ -1459,13 +1460,17 @@ static bool vm_save_program( vm_t* vm ) {
         return false;
     }
     bool ok = true;
-    bool ascii = true;      // the default is the text listing; B asks for the tokenized binary form
+    bool ascii = true;      // the default is the text listing (or, without a file name, the format of the file that was loaded); B asks for the tokenized binary form
+    vm->savemode = 0;
     if ( strcmp( mode, "B" ) == 0 ) {
         ascii = false;
+        vm->savemode = 2;
+    } else if ( strcmp( mode, "A" ) == 0 ) {
+        vm->savemode = 1;
     } else if ( mode[0] != '\0' && strcmp( mode, "A" ) != 0 ) {
         ok = vm_error( vm, "Bad SAVE mode" );
     }
-    if ( ok && name[0] == '\0' ) {
+    if ( ok && name != 0 && name[0] == '\0' ) {
         ok = vm_error( vm, "Illegal argument" );
     }
     if ( ok && vm->save == 0 ) {
@@ -3947,7 +3952,7 @@ static bool vm_step( vm_t* vm ) {
         case INS_LFTS: case INS_RGTS: case INS_MIDS:
             return vm_system_function( vm, opcode );
         case INS_SHEX: return vm_shell_execute( vm );
-        case INS_SAVE: return vm_save_program( vm );
+        case INS_SAVE: return vm_save_program( vm, param16 );
         case INS_LOAD: return vm_load_program( vm );
         case INS_RUNP: return vm_run_program( vm );
         case INS_LIST: return vm_list_program( vm );

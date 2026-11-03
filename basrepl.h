@@ -41,6 +41,7 @@
 
 #ifndef VM_H
 #include "vm.h"
+#include "baslib.h"
 #endif
 
 /*
@@ -123,6 +124,8 @@ typedef struct _repl_t {
     bool        started;            // internal: repl_execute() got as far as running the program (CHAIN keeps the old runtime if not)
     bool        linesstale;         // internal: the stored program was changed since it was compiled (its line table is out of date)
     runtime_t*  keeprt;             // internal (CHAIN): the previous runtime, whose variables the program being started takes over
+    liblist_t   libs;               // the libraries the stored program names (LOAD LIBRARY), in dependency order: found by every RUN / compile (docs/library-support.md)
+    bool        fileascii;          // the file named by filename is an ASCII listing (false: binary); what SAVE without a name and without an option writes
     char*       filename;           // name of the last file loaded or saved (malloc'ed), 0 = none or NEW; for the editor's title
 } repl_t;
 
@@ -136,7 +139,8 @@ void repl_list( repl_t* repl, uint32_t first, uint32_t last );  // LIST (LINENO_
 bool repl_compile( repl_t* repl );          // compiles the stored program without running it (variables are cleared); for the monitor
 bool repl_vm_start( repl_t* repl, uint32_t addr );    // monitor: suspend the VM at addr (code segment as it is, empty stacks, variables kept)
 bool repl_vm_resume( repl_t* repl, bool step, const uint32_t* breakpoints, size_t numbreakpoints );   // continue / single-step it; see repl_vm_resume()
-bool repl_save_program( repl_t* repl, const char* filename, bool ascii );   // for the host's SAVE callback
+bool repl_save_program( repl_t* repl, const char* filename, bool ascii );
+bool repl_save_program_ex( repl_t* repl, const char* filename, int mode );   // mode: 0 none given, 1 A, 2 B; a null filename = the file of the last LOAD / SAVE (with mode 0: in the format it had)   // for the host's SAVE callback
 bool repl_program_image( repl_t* repl, uint8_t** pdata, size_t* plen );     // the stored program as a binary program file (malloc'ed); BUILD
 bool repl_load_file( repl_t* repl, const char* name );                    // LOAD without running (the extension search, drivers); reports errors
 bool repl_load_image( repl_t* repl, const void* data, size_t len );         // replaces the stored program by a program file in memory

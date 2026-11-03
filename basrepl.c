@@ -171,12 +171,14 @@ void cleanup_repl( repl_t* repl ) {
     cleanup_compiler( &repl->comp );
     cleanup_runtime( &repl->rt );
     free_program( &repl->pgm );
+    baslib_free( &repl->libs );
     delete_buffer( repl->tokbuf );
     repl->tokbuf = 0;
     free( repl->pending );
     repl->pending = 0;
     free( repl->filename );
     repl->filename = 0;
+    repl->fileascii = true;
 }
 
 static void repl_set_filename( repl_t* repl, const char* filename ) {
@@ -269,6 +271,8 @@ static bool repl_find_start( repl_t* repl, const char* label, int32_t line, uint
     return true;
 }
 
+static bool repl_resolve_libraries( repl_t* repl );
+
 // compiles what the compiler has been set up with, and runs the result; reentry point of error jumps.
 // fromstart: run from the beginning (RUN: DATA pointer reset) instead of from the new code (direct mode); then
 // <label> / <line> may name another start (RUN target).
@@ -281,6 +285,9 @@ static bool repl_execute( repl_t* repl, bool fromstart, const char* label, int32
     uint32_t persistent = cgen->persistent;
     uint32_t prevlast = cgen->datalast;
     repl_setup_vm( repl );
+    if ( fromstart && !repl_resolve_libraries( repl ) ) {
+        return false;                               // the libraries the program names are missing or wrong: it is not compiled
+    }
     if ( !fromstart && repl->linesstale ) {
         cgen->numlineaddrs = 0;     // the program changed since it was compiled: a direct line must not jump into the old code by line number
     }
@@ -335,6 +342,9 @@ bool repl_compile( repl_t* repl ) {
     comp_set_tokens( &repl->comp, repl->comp.iter.tok, repl->comp.iter.hdr.length - LINEHDR_SIZE );
     repl_setup_vm( repl );
     bool ok = false;
+    if ( !repl_resolve_libraries( repl ) ) {
+        return false;
+    }
     if ( setjmp( repl->jmp ) == 0 ) {
         run_compiler( &repl->comp );
         ok = cgen_from_program( &repl->rt.codegen, &repl->comp );
@@ -493,7 +503,7 @@ static char* repl_add_extension( const char* name, const char* ext ) {
 static char* repl_find_program_file( const repl_t* repl, const char* name ) {
     const char* def = repl->vm.addrcur;
     if ( !repl_has_extension( name ) && !iodev_exists( name, def ) ) {
-        static const char* const exts[] = { ".bas", ".e99", ".BAS", ".E99" };
+        static const char* const exts[] = { ".bas", ".e99", ".BAS", ".E99", ".lib", ".l99", ".LIB", ".L99" };
         for ( size_t i=0; i < sizeof(exts) / sizeof(exts[0]); ++i ) {
             char* full = repl_add_extension( name, exts[i] );
             if ( full != 0 && iodev_exists( full, def ) ) {
@@ -534,6 +544,174 @@ static FILE* repl_open_program( repl_t* repl, const char* name, char** pfilename
     return f;
 }
 
+// -- libraries (docs/library-support.md) ---------------------------------------------------------
+
+// the part of a name behind a "driver:" prefix starts at the returned offset (0: no prefix)
+static size_t repl_driver_prefix_len( const char* name ) {
+    iodrv_t* drv; const char* path; const char* err;
+    if ( iodev_resolve( name, "file", &drv, &path, &err ) ) {
+        return (size_t)( path - name ) > 0U && path != name ? (size_t)( path - name ) : 0U;
+    }
+    return 0;
+}
+
+// a library name may only point down: no absolute path, no ".." (a driver prefix is allowed: mem:x)
+static bool repl_library_name_ok( const char* name ) {
+    const char* p = name + repl_driver_prefix_len( name );
+    if ( *p == '/' ) {
+        return false;
+    }
+    for ( ; *p; ++p ) {
+        if ( p[0] == '.' && p[1] == '.' && ( p == name || p[-1] == '/' || p[-1] == ':' ) && ( p[2] == '\0' || p[2] == '/' ) ) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// directory + name, keeping a driver prefix of the name in front: ( "lib/", "mem:x" ) -> "mem:lib/x"
+static char* repl_library_join( const char* dir, const char* name ) {
+    size_t plen = repl_driver_prefix_len( name );
+    size_t len = strlen( dir ) + strlen( name ) + 1U;
+    char* full = (char*) malloc( len );
+    if ( full != 0 ) {
+        snprintf( full, len, "%.*s%s%s", (int) plen, name, dir, name + plen );
+    }
+    return full;
+}
+
+// the file of the library 'name' (malloc'ed) or 0: the current directory, lib/ below it, the directory of the stored program and its lib/,
+// then the installed libraries (not for names with a driver prefix); a name without an extension is tried as it is, then with
+// .lib, .l99, .bas, .e99 and the upper case variants
+static char* repl_find_library_file( const repl_t* repl, const char* name ) {
+    const char* def = repl->vm.addrcur;
+    char* dirs[16]; size_t ndirs = 0;
+    bool prefixed = repl_driver_prefix_len( name ) > 0U;
+    dirs[ndirs++] = strdup( "" );
+    dirs[ndirs++] = strdup( "lib/" );
+    if ( !prefixed && repl->filename != 0 ) {
+        const char* slash = strrchr( repl->filename, '/' );
+        if ( slash != 0 && repl_driver_prefix_len( repl->filename ) == 0U ) {
+            size_t n = (size_t)( slash - repl->filename ) + 1U;
+            char* d = (char*) malloc( n + 5U );
+            if ( d != 0 ) {
+                memcpy( d, repl->filename, n );
+                d[n] = '\0';
+                dirs[ndirs++] = d;
+                char* d2 = (char*) malloc( n + 5U );
+                if ( d2 != 0 ) {
+                    memcpy( d2, repl->filename, n );
+                    memcpy( d2 + n, "lib/", 5 );
+                    dirs[ndirs++] = d2;
+                }
+            }
+        }
+    }
+    if ( !prefixed ) {
+        char* sys[4];
+        size_t ns = baslib_system_dirs( sys, 4 );
+        for ( size_t i=0; i < ns && ndirs < 15U; ++i ) {
+            size_t n = strlen( sys[i] );
+            char* d = (char*) malloc( n + 2U );
+            if ( d != 0 ) {
+                memcpy( d, sys[i], n );
+                d[n] = '/';
+                d[n + 1U] = '\0';
+                dirs[ndirs++] = d;
+            }
+            free( sys[i] );
+        }
+    }
+    static const char* const exts[] = { ".lib", ".l99", ".bas", ".e99", ".LIB", ".L99", ".BAS", ".E99" };
+    char* found = 0;
+    bool hasext = repl_has_extension( name );
+    for ( size_t d=0; d < ndirs && found == 0; ++d ) {
+        if ( dirs[d] == 0 ) {
+            continue;
+        }
+        char* base = repl_library_join( dirs[d], name );
+        if ( base == 0 ) {
+            continue;
+        }
+        if ( iodev_exists( base, def ) ) {
+            found = base;
+            continue;
+        }
+        if ( !hasext ) {
+            for ( size_t i=0; i < sizeof(exts) / sizeof(exts[0]) && found == 0; ++i ) {
+                char* full = repl_add_extension( base, exts[i] );
+                if ( full != 0 && iodev_exists( full, def ) ) {
+                    found = full;
+                } else {
+                    free( full );
+                }
+            }
+        }
+        if ( found != base ) {
+            free( base );
+        }
+    }
+    for ( size_t d=0; d < ndirs; ++d ) {
+        free( dirs[d] );
+    }
+    return found;
+}
+
+// the loader of baslib_resolve(): finds the file and reads it as a program
+static int repl_library_loader( void* usrdata, const char* name, program_t* pgm, char** pfile, char* reason, size_t reasonsize ) {
+    repl_t* repl = (repl_t*) usrdata;
+    if ( !repl_library_name_ok( name ) ) {
+        snprintf( reason, reasonsize, "the name may only point down from the current directory (no absolute path, no ..)" );
+        return BASLIB_FAILED;
+    }
+    char* filename = repl_find_library_file( repl, name );
+    if ( filename == 0 ) {
+        return BASLIB_NOTFOUND;
+    }
+    const char* err = 0;
+    uint8_t* data = 0; size_t len = 0;
+    if ( !iodev_read_all( filename, repl->vm.addrcur, &data, &len, &err ) ) {
+        snprintf( reason, reasonsize, "%s", err ? err : "can't be read" );
+        free( filename );
+        return BASLIB_FAILED;
+    }
+    FILE* f = len > 0 ? fmemopen( data, len, "rb" ) : fopen( "/dev/null", "rb" );
+    if ( f == 0 ) {
+        free( data );
+        free( filename );
+        snprintf( reason, reasonsize, "out of memory" );
+        return BASLIB_FAILED;
+    }
+    bool ok = repl_read_program( repl, f, pgm );
+    fclose( f );
+    free( data );
+    if ( !ok ) {
+        snprintf( reason, reasonsize, "can't be read as a program file (%s)", filename );
+        free( filename );
+        return BASLIB_FAILED;
+    }
+    *pfile = filename;
+    return BASLIB_FOUND;
+}
+
+// finds the libraries of the stored program (repl->libs); reports the first problem as an error "? ... in line N (library X)"
+static bool repl_resolve_libraries( repl_t* repl ) {
+    baslib_error_t err;
+    if ( baslib_resolve( &repl->pgm, repl_library_loader, repl, &repl->libs, &err ) ) {
+        return true;
+    }
+    char msg[400];
+    if ( err.line != 0 && err.lib[0] != '\0' ) {
+        snprintf( msg, sizeof(msg), "? %s in line %u of the library %s", err.msg, (unsigned) err.line, err.lib );
+    } else if ( err.line != 0 ) {
+        snprintf( msg, sizeof(msg), "? %s in line %u", err.msg, (unsigned) err.line );
+    } else {
+        snprintf( msg, sizeof(msg), "? %s", err.msg );
+    }
+    repl_report( repl, msg );
+    return false;
+}
+
 // LOAD: replaces the stored program; the old one stays if anything goes wrong
 static bool repl_load_program( repl_t* repl, const char* name ) {
     char* filename = 0; uint8_t* data = 0;
@@ -543,6 +721,9 @@ static bool repl_load_program( repl_t* repl, const char* name ) {
     }
     program_t loaded;
     init_program( &loaded );
+    unsigned char magic[PGMFILE_MAGIC_SIZE];
+    bool binary = fread( magic, 1, sizeof(magic), f ) == sizeof(magic) && magic[0] == 0x89 && magic[1] == 'E' && magic[2] == '9' && magic[3] == '9';
+    rewind( f );
     bool ok = repl_read_program( repl, f, &loaded );
     if ( ok && ferror( f ) ) {
         repl_report( repl, "? Read error" );
@@ -559,6 +740,7 @@ static bool repl_load_program( repl_t* repl, const char* name ) {
     repl->pgm = loaded;
     repl_program_changed( repl );
     repl_set_filename( repl, filename );
+    repl->fileascii = !binary;
     free( filename );
     return true;
 }
@@ -922,11 +1104,13 @@ bool repl_vm_resume( repl_t* repl, bool step, const uint32_t* breakpoints, size_
 }
 
 void repl_new( repl_t* repl ) {
+    baslib_free( &repl->libs );
     free_program( &repl->pgm );
     init_program( &repl->pgm );
     repl_reset_runtime( repl );
     free( repl->filename );
     repl->filename = 0;
+    repl->fileascii = true;
 }
 
 // LIST output goes through the host print callback (list_program's printer has no user data parameter)
@@ -1020,8 +1204,46 @@ static bool repl_vm_renumber( struct _vm_t* vm, void* usrdata, const char* first
 }
 
 // SAVE name: a name without an extension gets .bas (ASCII listing) or .e99 (binary, tokenized)
+// SAVE without a name: the file of the last LOAD or SAVE. Without an option it is written in the format that file has (repl->fileascii) under
+// its own name; with an option of the other format the standard extension (.bas / .e99) is swapped for the one of that format, any other name is kept.
+static char* repl_default_save_name( const repl_t* repl, bool ascii, bool optiongiven ) {
+    if ( repl->filename == 0 ) {
+        return 0;
+    }
+    char* name = strdup( repl->filename );
+    if ( name == 0 || !optiongiven ) {
+        return name;
+    }
+    char* dot = strrchr( name, '.' );
+    if ( dot != 0 && strchr( dot, '/' ) == 0 ) {
+        if ( ascii && strcasecmp( dot, ".e99" ) == 0 ) {
+            memcpy( dot, ".bas", 4 );
+        } else if ( !ascii && strcasecmp( dot, ".bas" ) == 0 ) {
+            memcpy( dot, ".e99", 4 );
+        }
+    }
+    return name;
+}
+
 bool repl_save_program( repl_t* repl, const char* name, bool ascii ) {
-    char* filename = repl_has_extension( name ) ? strdup( name ) : repl_add_extension( name, ascii ? ".bas" : ".e99" );
+    return repl_save_program_ex( repl, name, ascii ? 1 : 2 );
+}
+
+bool repl_save_program_ex( repl_t* repl, const char* name, int mode ) {
+    char* filename;
+    bool ascii = mode != 2;
+    if ( name == 0 ) {
+        if ( mode == 0 ) {
+            ascii = repl->fileascii;
+        }
+        filename = repl_default_save_name( repl, ascii, mode != 0 );
+        if ( filename == 0 ) {
+            repl_report( repl, "? No file name (LOAD or SAVE a file first, or give a name)" );
+            return false;
+        }
+    } else {
+        filename = repl_has_extension( name ) ? strdup( name ) : repl_add_extension( name, ascii ? ".bas" : ".e99" );
+    }
     if ( filename == 0 ) {
         return false;
     }
@@ -1045,6 +1267,7 @@ bool repl_save_program( repl_t* repl, const char* name, bool ascii ) {
     free( buf );
     if ( ok ) {
         repl_set_filename( repl, filename );
+        repl->fileascii = ascii;
     }
     free( filename );
     return ok;

@@ -8,7 +8,7 @@ Linux, `gcc`, `make`, SDL2 development files (`libsdl2-dev`). Perl only to regen
 
 | Command | Result |
 |---|---|
-| `make` | `engine.lib` (all modules in `BASEMOD`) + `sdltest1 sdltest2 sdltest3 sdltest4 engine1999 joytest1 basictest1 testcomp1 basictest2 vmtest1 repltest1 ansitest1 txttest1 asmtest1 synthtest1 iotest1 gfxtest1 buildtest1 engine1999c contest1 keytest1 scrtest1`, then writes marker file `all` |
+| `make` | `engine.lib` (all modules in `BASEMOD`) + `sdltest1 sdltest2 sdltest3 sdltest4 engine1999 joytest1 basictest1 testcomp1 basictest2 vmtest1 repltest1 ansitest1 txttest1 asmtest1 synthtest1 iotest1 gfxtest1 buildtest1 engine1999c contest1 keytest1 scrtest1 libtest1`, then writes marker file `all` |
 | `make DEBUG=1` | same with `-g` instead of `-O3` (do a `rm *.o engine.lib` first — objects do not track flags) |
 | `make <name>.o` | compile one module |
 

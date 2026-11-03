@@ -215,10 +215,10 @@ expr         := num-expr | str-expr .
 
 ## Input and output
 
-> The option is A (ASCII listing, the default) or B (binary, tokenized).
+> The option is A (ASCII listing, the default) or B (binary, tokenized). Without a name the file of the last LOAD or SAVE is written (an error if there is none).
 
 ```ebnf
-save-stmt := SAVE str-expr [ "," <name> ] .
+save-stmt := SAVE [ str-expr ] [ "," <name> ] .
 chan-spec := "#" num-expr .
 print-sep := "," | ";" .
 print-arg := expr [ print-sep ] .
@@ -379,9 +379,12 @@ poke-stmt := POKE num-expr "," expr [ "," num-expr ] .
 > Program commands. They work inside programs, too. RUN and LOAD restart the program (RUN: after clearing all
 > variables, at the given line or label; LOAD: replace the program by the one in the file and run it from the
 > beginning); LIST lists the program: a single target lists that line, "a-b" the range, "a-" to the end, "-b" from the start.
+> LOAD LIBRARY and LIBRARY are declarations for libraries (docs/library-support.md): the compiler resolves them, nothing happens at run time. The names are plain
+> string literals. A library is a program whose first statement is LIBRARY "name" [, "prefix"].
 
 ```ebnf
-load-stmt := LOAD str-expr .
+load-stmt := LOAD ( str-expr | LIBRARY str-lit ) .
+library-stmt := LIBRARY str-lit [ "," str-lit ] .
 run-stmt := RUN [ goto-target ] .
 list-stmt := LIST [ goto-target ] [ "-" [ goto-target ] ] .
 ```
@@ -655,7 +658,7 @@ gfx-all-stmt := gfx-stmt | txt-stmt | tile-stmt | sprite-stmt | mouse-stmt | on-
 ```ebnf
 prog-stmt := gfx-all-stmt | load-stmt | run-stmt | merge-stmt | chain-stmt | files-stmt | build-stmt | bye-stmt | timer-stmt | list-stmt | new-stmt | clear-stmt |
              delete-stmt | renum-stmt | edit-stmt | monitor-stmt | sound-stmt | wait-stmt | on-error-stmt | randomize-stmt | angle-stmt |
-             cont-stmt | trace-stmt | break-stmt | auto-stmt | poke-stmt | error-stmt | joy-stmt | on-joy-stmt | on-key-stmt | frame-stmt .
+             cont-stmt | trace-stmt | break-stmt | auto-stmt | poke-stmt | error-stmt | joy-stmt | on-joy-stmt | on-key-stmt | frame-stmt | library-stmt .
 stmt := io-stmt | prog-stmt | assign-stmt | control-flow-stmt .
 stmt-list := stmt { ":" stmt } .
 stmt-line := [ stmt-list ] [ <'comment> ] <end-of-line> .

@@ -1022,8 +1022,8 @@ bool cgen_gen_eras( codegen_t* cgen, uint16_t varoffs ) {
 
 // BASIC system command implementations
 
-bool cgen_gen_save( codegen_t* cgen ) {
-    return cgen_gen_ins12( cgen, INS_SAVE, false, false, UINT16_C(0) );
+bool cgen_gen_save( codegen_t* cgen, bool noname ) {
+    return cgen_gen_ins12( cgen, INS_SAVE, false, true, noname ? UINT16_C(1) : UINT16_C(0) );
 }
 
 bool cgen_gen_load( codegen_t* cgen ) {
@@ -2435,13 +2435,14 @@ bool cgen_from_savestmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     }
 
     // create code to push file name on stack as a string
+    // (no branch: SAVE without a name, the host takes the name of the last LOAD or SAVE; parameter 1 of the instruction)
     cbdata_t cbdata = { cgen, comp, node, UINT16_C(0) };
-    if ( !comp_node_iter_branches( comp, node, &cbdata, from_savestmt_cb ) ) {
+    if ( node->numbranches > 0 && !comp_node_iter_branches( comp, node, &cbdata, from_savestmt_cb ) ) {
         return false;
     }
 
     // create code to run the SAVE statement
-    if ( !cgen_gen_save( cgen ) ) {
+    if ( !cgen_gen_save( cgen, node->numbranches == 0 ) ) {
         return cgen_out_of_code_memory( comp );
     }
 
@@ -3178,6 +3179,8 @@ static bool cgen_from_stmt_node( codegen_t* cgen, compiler_t* comp, node_t* node
         case NT_LETSTMT:    return cgen_from_letstmt( cgen, comp, node );
         case NT_PRINTSTMT:  return cgen_from_printstmt( cgen, comp, node );
         case NT_SAVESTMT:   return cgen_from_savestmt( cgen, comp, node );
+        case NT_LIBRARYSTMT: case NT_LOADLIBSTMT:
+                            return cgen_gen_nop( cgen ) || cgen_out_of_code_memory( comp );    // declarations: nothing happens at run time
         case NT_LOADSTMT:   return cgen_from_loadstmt( cgen, comp, node );
         case NT_RUNSTMT:    return cgen_from_runstmt( cgen, comp, node );
         case NT_LISTSTMT:   return cgen_from_liststmt( cgen, comp, node );

@@ -293,7 +293,7 @@ The 4096 extended instructions are as follows:
                         The characters come from the beginning of s, the length of the variable doesn't change.
                         n < 0, start < 1 or start > LEN(var) are errors.
     0001 00101111       (reserved)
-    0001 00110000       SAVE - save program ( s s -- ) C=0 P=0
+    0001 00110000       SAVE - save program ( s s -- ) or, with P=1 (no file name given), ( s -- ) C=0 P=0/1
     0001 00110001       PCHN - print channel ( n -- ) C=0 P=0
     0001 00110010       PNUM - print number (param=separator) ( n -- ) C=0 P=0/1
     0001 00110011       PSTR - print string (param=separator) ( n -- ) C=0 P=0/1

@@ -861,7 +861,8 @@ static bool host_interrupt( struct _vm_t* vm, void* usrdata ) {
 }
 
 static bool host_save( struct _vm_t* vm, void* usrdata, const char* filename, bool ascii ) {
-    return repl_save_program( (repl_t*) usrdata, filename, ascii );
+    (void) ascii;
+    return repl_save_program_ex( (repl_t*) usrdata, filename, vm->savemode );
 }
 
 // sound output of SOUND, PLAY, ... : the audio engine (all calls are no-ops when there is no audio device)

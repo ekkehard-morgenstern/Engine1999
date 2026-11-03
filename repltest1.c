@@ -154,6 +154,28 @@ static const testcase_t cases[] = {
     { "LIST all from a program","10 LIST\n20 PRINT 2\nRUN",                            "10 LIST\n20 PRINT 2\n2\n" },
     { "LIST undefined label in a program", "10 LIST X\nRUN",                           "? Undefined label X in line 10\n" },
     { "SAVE without extension makes .e99, LOAD finds it", "10 PRINT \"E\"\nSAVE \"repltest1x\",B\nNEW\nLOAD \"repltest1x.e99\"\nRUN\nNEW\nLOAD \"repltest1x\"\nRUN", "E\nE\n" },
+    { "SAVE without a name and nothing loaded", "10 PRINT 1\nSAVE", "? No file name (LOAD or SAVE a file first, or give a name)\n? Save failed\n" },
+    { "SAVE without a name writes the file of the last LOAD", "10 PRINT 1\nSAVE \"mem:t\"\nNEW\nLOAD \"mem:t\"\n20 PRINT 2\nSAVE\nNEW\nLOAD \"mem:t\"\nLIST", "10 PRINT 1\n20 PRINT 2\n" },
+    { "SAVE without a name after a SAVE", "10 PRINT 1\nSAVE \"mem:t\"\n20 PRINT 2\nSAVE\nNEW\nLOAD \"mem:t\"\nLIST", "10 PRINT 1\n20 PRINT 2\n" },
+    { "SAVE without a name keeps the format of the loaded file (binary)", "10 PRINT 3\nSAVE \"mem:u\",B\nNEW\nLOAD \"mem:u\"\n20 PRINT 4\nSAVE\nOPEN \"mem:u.e99\" FOR INPUT AS #1\nPRINT ASC(INPUT$(1,#1))\nCLOSE #1\nNEW\nLOAD \"mem:u.e99\"\nLIST", "137\n10 PRINT 3\n20 PRINT 4\n" },
+    { "SAVE without a name keeps the format of the loaded file (ASCII)", "10 PRINT 3\nSAVE \"mem:u\"\nNEW\nLOAD \"mem:u\"\n20 PRINT 4\nSAVE\nOPEN \"mem:u.bas\" FOR INPUT AS #1\nPRINT ASC(INPUT$(1,#1))\nCLOSE #1", "49\n" },
+    { "SAVE ,A without a name swaps .e99 for .bas", "10 PRINT 3\nSAVE \"mem:u\",B\nNEW\nLOAD \"mem:u\"\n20 PRINT 4\nSAVE ,A\nNEW\nLOAD \"mem:u.bas\"\nLIST", "10 PRINT 3\n20 PRINT 4\n" },
+    { "SAVE without a name after a binary SAVE stays binary", "10 PRINT 3\nSAVE \"mem:u\",B\n20 PRINT 4\nSAVE\nOPEN \"mem:u.e99\" FOR INPUT AS #1\nPRINT ASC(INPUT$(1,#1))", "137\n" },
+    { "SAVE ,B without a name swaps .bas for .e99", "10 PRINT 5\nSAVE \"mem:w\"\nNEW\nLOAD \"mem:w\"\n20 PRINT 6\nSAVE ,B\nNEW\nLOAD \"mem:w.e99\"\nLIST", "10 PRINT 5\n20 PRINT 6\n" },
+    { "LIBRARY and LOAD LIBRARY lines are stored and listed", "10 LIBRARY \"x\",\"X_\"\n20 LOAD LIBRARY \"y\"\n30 PRINT 7\nLIST", "10 LIBRARY \"x\",\"X_\"\n20 LOAD LIBRARY \"y\"\n30 PRINT 7\n" },
+    { "LOAD LIBRARY finds mem:m.lib and the program runs", "10 LIBRARY \"m\"\nSAVE \"mem:m.lib\"\nNEW\n10 LOAD LIBRARY \"mem:m\"\n20 PRINT 1\nRUN", "1\n" },
+    { "LOAD LIBRARY finds .l99 and .bas, too", "10 LIBRARY \"m2\"\nSAVE \"mem:m2.l99\",B\nNEW\n10 LIBRARY \"m3\"\nSAVE \"mem:m3.bas\"\nNEW\n10 LOAD LIBRARY \"mem:m2\"\n20 LOAD LIBRARY \"mem:m3\"\n30 PRINT 2\nRUN", "2\n" },
+    { "LOAD LIBRARY looks in lib/ below the directory", "10 LIBRARY \"q\"\nSAVE \"mem:lib/q.lib\"\nNEW\n10 LOAD LIBRARY \"mem:q\"\n20 PRINT 3\nRUN", "3\n" },
+    { "LOAD LIBRARY with an explicit extension", "10 LIBRARY \"m\"\nSAVE \"mem:m.lib\"\nNEW\n10 LOAD LIBRARY \"mem:m.lib\"\n20 PRINT 4\nRUN", "4\n" },
+    { "LOAD LIBRARY: a library that is not there", "10 LOAD LIBRARY \"mem:nothere\"\nRUN", "? Library not found: mem:nothere in line 10\n" },
+    { "LOAD LIBRARY: an absolute name is refused", "10 LOAD LIBRARY \"/etc/x\"\nRUN", "? Library /etc/x: the name may only point down from the current directory (no absolute path, no ..) in line 10\n" },
+    { "LOAD LIBRARY: .. is refused", "10 LOAD LIBRARY \"../x\"\nRUN", "? Library ../x: the name may only point down from the current directory (no absolute path, no ..) in line 10\n" },
+    { "LOAD LIBRARY behind IF is refused", "10 IF 1 THEN LOAD LIBRARY \"mem:m\"\nRUN", "? LOAD LIBRARY must be a plain statement, not behind IF / THEN / ELSE in line 10\n" },
+    { "LOAD LIBRARY of an ordinary program", "10 PRINT 5\nSAVE \"mem:p.bas\"\nNEW\n10 LOAD LIBRARY \"mem:p\"\nRUN", "? Not a library: mem:p (its first statement must be LIBRARY \"name\") in line 10\n" },
+    { "LOAD LIBRARY: a cycle", "10 LIBRARY \"b\"\n20 LOAD LIBRARY \"mem:a\"\nSAVE \"mem:b.lib\"\nNEW\n10 LIBRARY \"a\"\n20 LOAD LIBRARY \"mem:b\"\nSAVE \"mem:a.lib\"\nNEW\n10 LOAD LIBRARY \"mem:a\"\nRUN", "? Library cycle (a, b, a) in line 20 of the library b\n" },
+    { "LOAD LIBRARY: a library that needs another", "10 LIBRARY \"in\"\nSAVE \"mem:in.lib\"\nNEW\n10 LIBRARY \"out\"\n20 LOAD LIBRARY \"mem:in\"\nSAVE \"mem:out.lib\"\nNEW\n10 LOAD LIBRARY \"mem:out\"\n20 PRINT 6\nRUN", "6\n" },
+    { "LOAD LIBRARY: a library with a wrong declared name", "10 LIBRARY \"other\"\nSAVE \"mem:wr.lib\"\nNEW\n10 LOAD LIBRARY \"mem:wr\"\nRUN", "? The file mem:wr.lib holds the library other, not wr in line 10\n" },
+    { "plain LOAD finds a .lib file for editing", "10 LIBRARY \"z\"\n20 PRINT 1\nSAVE \"mem:z.lib\"\nNEW\nLOAD \"mem:z\"\nLIST", "10 LIBRARY \"z\"\n20 PRINT 1\n" },
     { "SAVE without an option makes the ASCII .bas, LOAD finds it", "10 PRINT \"D\"\nSAVE \"repltest1x\"\nNEW\nLOAD \"repltest1x.bas\"\nRUN", "D\n" },
     { "SAVE ,A without extension makes .bas, LOAD finds it", "10 PRINT \"A\"\nSAVE \"repltest1x\",A\nNEW\nLOAD \"repltest1x\"\nRUN", "A\n" },
     { "LOAD without extension: .bas before .e99", "10 PRINT \"E\"\nSAVE \"repltest1x\",B\nNEW\n10 PRINT \"A\"\nSAVE \"repltest1x\",A\nNEW\nLOAD \"repltest1x\"\nRUN", "A\n" },
@@ -407,7 +429,8 @@ static char* host_input( struct _vm_t* vm, void* usrdata, int channel ) {
 }
 
 static bool host_save( struct _vm_t* vm, void* usrdata, const char* filename, bool ascii ) {
-    return repl_save_program( (repl_t*) usrdata, filename, ascii );
+    (void) ascii;
+    return repl_save_program_ex( (repl_t*) usrdata, filename, vm->savemode );
 }
 
 static bool host_interrupt( struct _vm_t* vm, void* usrdata ) {

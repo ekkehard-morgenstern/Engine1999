@@ -292,7 +292,7 @@ bool cgen_gen_getk( codegen_t* cgen );
 bool cgen_gen_rstr( codegen_t* cgen, bool hasparam, uint32_t dataoffs );     // with a parameter: wide, patched later
 
 // BASIC system command implementations
-bool cgen_gen_save( codegen_t* cgen );
+bool cgen_gen_save( codegen_t* cgen, bool noname );   // noname: no file name on the stack (the host takes the name of the last LOAD / SAVE)
 bool cgen_gen_load( codegen_t* cgen );
 bool cgen_gen_runp( codegen_t* cgen );
 bool cgen_gen_edit( codegen_t* cgen );

@@ -1055,6 +1055,15 @@ static const testcase_t cases[] = {
     { "LIST minus alone",       "LIST -",                                          "<list * * on channel 0>\n" },
     { "SAVE of empty program",  "SAVE \"X\",A",                                    "<save X ascii>\n" },
     { "SAVE with name expression", "N$=\"AB\"\nSAVE N$+\"C\",A",                   "<save ABC ascii>\n" },
+    { "SAVE without a name",    "10 PRINT 1\nSAVE\n",                              "<save (no name) ascii>\n10 PRINT 1\n1\n" },
+    { "SAVE without a name, B", "10 PRINT 1\n20 SAVE ,B",                         "1\n<save (no name) binary>\n89 45 39 39 01 00 00 0A 00 0A 20 0B 20 31 00 00 00 14 00 0E 20 14 20 2C 8A 00 01 42 00 \n" },
+    { "LIBRARY statement does nothing", "10 LIBRARY \"x\",\"X_\"\n20 PRINT 1",         "1\n" },
+    { "LIBRARY with a name only", "10 LIBRARY \"x\"\n20 PRINT 2",                   "2\n" },
+    { "LOAD LIBRARY does nothing at run time", "10 PRINT 1: LOAD LIBRARY \"y\": PRINT 2", "1\n2\n" },
+    { "LIBRARY needs a name in quotes", "10 LIBRARY X",                              "? Library name in quotes expected in line 10\n" },
+    { "LIBRARY needs a prefix in quotes", "10 LIBRARY \"a\",",                       "? Library prefix in quotes expected in line 10\n" },
+    { "LOAD LIBRARY takes no expression", "10 LOAD LIBRARY A$",                      "? Library name in quotes expected in line 10\n" },
+    { "LIBRARY is a reserved word", "10 LIBRARY=5",                                   "? Library name in quotes expected in line 10\n" },
     { "SAVE bad mode",          "SAVE \"X\",Z",                                    "? Bad SAVE mode\n" },
     { "SAVE empty name",        "SAVE \"\"",                                       "? Illegal argument\n" },
     // loops: WHILE, UNTIL, REPEAT, AGAIN
@@ -1387,7 +1396,7 @@ static bool vm_save( struct _vm_t* vm, void* usrdata, const char* filename, bool
     bool ok = save_program( current_pgm, f, ascii );
     fclose( f );
     out_append( "<save " );
-    out_append( filename );
+    out_append( filename != 0 ? filename : "(no name)" );
     out_append( ascii ? " ascii>\n" : " binary>\n" );
     if ( ascii ) {
         out_append( text );

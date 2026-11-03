@@ -45,7 +45,7 @@ CL=$(CCOMP) $(CFLAGS)
 .c.o:
 	$(CC) -o $@ $<
 
-all: sdltest1 sdltest2 sdltest3 sdltest4 engine1999 joytest1 basictest1 testcomp1 basictest2 vmtest1 repltest1 ansitest1 txttest1 asmtest1 synthtest1 iotest1 gfxtest1 buildtest1 engine1999c contest1 keytest1 scrtest1
+all: sdltest1 sdltest2 sdltest3 sdltest4 engine1999 joytest1 basictest1 testcomp1 basictest2 vmtest1 repltest1 ansitest1 txttest1 asmtest1 synthtest1 iotest1 gfxtest1 buildtest1 engine1999c contest1 keytest1 scrtest1 libtest1
 	echo ok >all
 
 .PHONY: grammar grammar-check kit install uninstall man-check
@@ -59,8 +59,8 @@ grammar-check:
 	perl grammar.pl --check
 
 BASEMOD=sdlevent.o sdllayer.o sdlmain.o sdlscreen.o textscreen.o tilescreen.o sprscreen.o 8x12font1.o sdlaudio.o synth.o mml.o sdlutil.o \
-		basic.o baspgm.o baslin.o bastok.o bascomp.o nodetype.o codegen.o cgenctl.o cgendecl.o cgenprog.o vars.o runtime.o vm.o basfiles.o iodev.o gfxcore.o gfxops.o basbuild.o basrepl.o basdebug.o ansi.o palette.o keyseq.o keystate.o cursors.o mouse.o joy.o sdljoy.o sdlkeys.o scredit.o conscr.o fulledit.o vmasm.o monitor.o
-BASEHDR=sdlevent.h sdllayer.h sdlmain.h sdlscreen.h sdltypes.h textscreen.h tilescreen.h sprscreen.h unxtypes.h sdlaudio.h synth.h mml.h sdlutil.h basfiles.h iodev.h gfxcore.h gfxops.h basbuild.h basic.h baspgm.h baslin.h bastok.h bascomp.h nodetype.h codegen.h instset.h vars.h runtime.h vm.h basrepl.h basdebug.h ansi.h palette.h keyseq.h keystate.h cursors.h mouse.h joy.h sdljoy.h sdlkeys.h scrdrv.h conscr.h fulledit.h vmasm.h monitor.h
+		basic.o baspgm.o baslin.o bastok.o bascomp.o nodetype.o codegen.o cgenctl.o cgendecl.o cgenprog.o vars.o runtime.o vm.o basfiles.o iodev.o gfxcore.o gfxops.o basbuild.o baslib.o basrepl.o basdebug.o ansi.o palette.o keyseq.o keystate.o cursors.o mouse.o joy.o sdljoy.o sdlkeys.o scredit.o conscr.o fulledit.o vmasm.o monitor.o
+BASEHDR=sdlevent.h sdllayer.h sdlmain.h sdlscreen.h sdltypes.h textscreen.h tilescreen.h sprscreen.h unxtypes.h sdlaudio.h synth.h mml.h sdlutil.h basfiles.h iodev.h gfxcore.h gfxops.h basbuild.h baslib.h basic.h baspgm.h baslin.h bastok.h bascomp.h nodetype.h codegen.h instset.h vars.h runtime.h vm.h basrepl.h basdebug.h ansi.h palette.h keyseq.h keystate.h cursors.h mouse.h joy.h sdljoy.h sdlkeys.h scrdrv.h conscr.h fulledit.h vmasm.h monitor.h
 
 LIBMOD=$(BASEMOD)
 LIBHDR=$(BASEHDR)
@@ -154,6 +154,11 @@ iotest1.o: iotest1.c $(LIBHDR)
 
 gfxtest1: gfxtest1.o $(LIBNAME)
 	$(CL) -o gfxtest1 gfxtest1.o $(LIBNAME) -lm
+
+libtest1: libtest1.o $(LIBNAME)
+	$(CL) -o libtest1 libtest1.o $(LIBNAME) -lm
+
+libtest1.o: libtest1.c $(LIBHDR)
 
 gfxtest1.o: gfxtest1.c $(LIBHDR)
 
@@ -301,6 +306,8 @@ runtime.o: runtime.c $(BASEHDR)
 vm.o: vm.c $(BASEHDR)
 
 basfiles.o: basfiles.c $(BASEHDR)
+
+baslib.o: baslib.c $(BASEHDR)
 
 iodev.o: iodev.c $(BASEHDR)
 
