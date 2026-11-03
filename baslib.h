@@ -93,6 +93,9 @@ bool baslib_header( program_t* pgm, char** pname, char** pprefix, uint32_t* plin
 // nesting deeper than BASLIB_MAXDEPTH, a library that is not found.
 bool baslib_resolve( program_t* pgm, baslib_loader_t load, void* usrdata, liblist_t* out, baslib_error_t* err );
 
+// The name a LOAD LIBRARY asks for, reduced to what the library has to call itself: no driver prefix, no directory, no extension.
+void baslib_request_key( const char* request, char* key, size_t size );
+
 // Is this a valid library prefix: a letter, then letters, digits and underscores (the empty string is valid: no prefix)?
 bool baslib_valid_prefix( const char* prefix );
 

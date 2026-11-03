@@ -72,6 +72,13 @@ Known limitations: a line that defines a function, label or DATA keeps its code 
 the old code behind until NEW or RUN); direct mode can't GOTO into the stored program.
 */
 
+// a library that is part of a built executable: its name and the image of its program file
+typedef struct _repl_embedlib_t {
+    char*       name;
+    uint8_t*    data;
+    size_t      len;
+} repl_embedlib_t;
+
 typedef struct _repl_t {
     runtime_t   rt;
     compiler_t  comp;
@@ -124,6 +131,9 @@ typedef struct _repl_t {
     bool        started;            // internal: repl_execute() got as far as running the program (CHAIN keeps the old runtime if not)
     bool        linesstale;         // internal: the stored program was changed since it was compiled (its line table is out of date)
     runtime_t*  keeprt;             // internal (CHAIN): the previous runtime, whose variables the program being started takes over
+    repl_embedlib_t* embedlibs;   // a built executable: the libraries that came with the program (BUILD embeds them); 0 otherwise
+    size_t      nembedlibs;
+    bool        embedded;           // the program is that of a built executable (repl_load_image()): LOAD LIBRARY looks only in embedlibs
     liblist_t   libs;               // the libraries the stored program names (LOAD LIBRARY), in dependency order: found by every RUN / compile (docs/library-support.md)
     bool        fileascii;          // the file named by filename is an ASCII listing (false: binary); what SAVE without a name and without an option writes
     char*       filename;           // name of the last file loaded or saved (malloc'ed), 0 = none or NEW; for the editor's title

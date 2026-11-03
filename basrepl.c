@@ -148,6 +148,8 @@ static void repl_restore_runtime( repl_t* repl, runtime_t* old ) {
     memcpy( repl->vm.sfx_defined, sfxdef, sizeof(sfxdef) );
 }
 
+static void repl_free_embedlibs( repl_t* repl );
+
 bool init_repl( repl_t* repl ) {
     memset( repl, 0, sizeof(*repl) );
     repl->autoline = LINENO_NONE;
@@ -172,6 +174,7 @@ void cleanup_repl( repl_t* repl ) {
     cleanup_runtime( &repl->rt );
     free_program( &repl->pgm );
     baslib_free( &repl->libs );
+    repl_free_embedlibs( repl );
     delete_buffer( repl->tokbuf );
     repl->tokbuf = 0;
     free( repl->pending );
@@ -748,9 +751,129 @@ static char* repl_find_library_file( const repl_t* repl, const char* name ) {
     return found;
 }
 
+// -- the bundle of a built executable --------------------------------------------------------
+//
+// A program without libraries is embedded as the plain program file. A program with libraries is embedded as a bundle:
+//   89 'E' 'B' 'N'  version.8 (1)  count.16  { kind.8 (0 program, 1 library)  namelen.16  name  length.32  program file image } ...   (big endian)
+// The first entry is the program, the others the libraries (named by the name they declare), each a normal binary program file.
+
+#define BUNDLE_MAGIC_SIZE   4U
+#define BUNDLE_VERSION      1U
+
+static const uint8_t bundle_magic[BUNDLE_MAGIC_SIZE] = { 0x89, 'E', 'B', 'N' };
+
+static void repl_free_embedlibs( repl_t* repl ) {
+    for ( size_t i=0; i < repl->nembedlibs; ++i ) {
+        free( repl->embedlibs[i].name );
+        free( repl->embedlibs[i].data );
+    }
+    free( repl->embedlibs );
+    repl->embedlibs = 0;
+    repl->nembedlibs = 0;
+}
+
+// the binary program file of a program (malloc'ed), false if out of memory
+static bool repl_pgm_image( program_t* pgm, uint8_t** pdata, size_t* plen ) {
+    char* buf = 0; size_t size = 0;
+    FILE* f = open_memstream( &buf, &size );
+    if ( f == 0 ) {
+        return false;
+    }
+    bool ok = save_program( pgm, f, false );
+    if ( fclose( f ) != 0 ) {
+        ok = false;
+    }
+    if ( !ok ) {
+        free( buf );
+        return false;
+    }
+    *pdata = (uint8_t*) buf;
+    *plen = size;
+    return true;
+}
+
+static bool bundle_put( uint8_t** pbuf, size_t* plen, size_t* pcap, const void* data, size_t n ) {
+    if ( *plen + n > *pcap ) {
+        size_t cap = *pcap ? *pcap : 4096U;
+        while ( cap < *plen + n ) {
+            cap *= 2U;
+        }
+        uint8_t* p = (uint8_t*) realloc( *pbuf, cap );
+        if ( p == 0 ) {
+            return false;
+        }
+        *pbuf = p;
+        *pcap = cap;
+    }
+    memcpy( *pbuf + *plen, data, n );
+    *plen += n;
+    return true;
+}
+
+static bool bundle_entry( uint8_t** pbuf, size_t* plen, size_t* pcap, uint8_t kind, const char* name, const uint8_t* data, size_t len ) {
+    size_t nlen = strlen( name );
+    uint8_t head[3] = { kind, (uint8_t)( nlen >> 8 ), (uint8_t) nlen };
+    uint8_t lenb[4] = { (uint8_t)( len >> 24 ), (uint8_t)( len >> 16 ), (uint8_t)( len >> 8 ), (uint8_t) len };
+    return nlen < 65536U && bundle_put( pbuf, plen, pcap, head, 3 ) && bundle_put( pbuf, plen, pcap, name, nlen ) &&
+        bundle_put( pbuf, plen, pcap, lenb, 4 ) && bundle_put( pbuf, plen, pcap, data, len );
+}
+
+// reads the next entry of a bundle at *ppos: kind, name (malloc'ed), a pointer to the image inside the bundle
+static bool bundle_next( const uint8_t* data, size_t len, size_t* ppos, uint8_t* pkind, char** pname, const uint8_t** pimage, size_t* pimagelen ) {
+    size_t pos = *ppos;
+    if ( len - pos < 3U ) {
+        return false;
+    }
+    uint8_t kind = data[pos];
+    size_t nlen = ( (size_t) data[pos + 1U] << 8 ) | data[pos + 2U];
+    pos += 3U;
+    if ( len - pos < nlen + 4U ) {
+        return false;
+    }
+    char* name = (char*) malloc( nlen + 1U );
+    if ( name == 0 ) {
+        return false;
+    }
+    memcpy( name, data + pos, nlen );
+    name[nlen] = '\0';
+    pos += nlen;
+    size_t ilen = ( (size_t) data[pos] << 24 ) | ( (size_t) data[pos + 1U] << 16 ) | ( (size_t) data[pos + 2U] << 8 ) | data[pos + 3U];
+    pos += 4U;
+    if ( len - pos < ilen ) {
+        free( name );
+        return false;
+    }
+    *pkind = kind; *pname = name; *pimage = data + pos; *pimagelen = ilen;
+    *ppos = pos + ilen;
+    return true;
+}
+
 // the loader of baslib_resolve(): finds the file and reads it as a program
 static int repl_library_loader( void* usrdata, const char* name, program_t* pgm, char** pfile, char* reason, size_t reasonsize ) {
     repl_t* repl = (repl_t*) usrdata;
+    if ( repl->embedded ) {                         // a built executable: the libraries come with it, the disk is not looked at
+        char key[128];
+        baslib_request_key( name, key, sizeof(key) );
+        for ( size_t i=0; i < repl->nembedlibs; ++i ) {
+            if ( strcasecmp( repl->embedlibs[i].name, key ) != 0 ) {
+                continue;
+            }
+            FILE* f = fmemopen( repl->embedlibs[i].data, repl->embedlibs[i].len, "rb" );
+            if ( f == 0 ) {
+                snprintf( reason, reasonsize, "out of memory" );
+                return BASLIB_FAILED;
+            }
+            bool ok = repl_read_program( repl, f, pgm );
+            fclose( f );
+            if ( !ok ) {
+                snprintf( reason, reasonsize, "the embedded library can't be read" );
+                return BASLIB_FAILED;
+            }
+            *pfile = strdup( "(built in)" );
+            return BASLIB_FOUND;
+        }
+        return BASLIB_NOTFOUND;
+    }
     if ( !repl_library_name_ok( name ) ) {
         snprintf( reason, reasonsize, "the name may only point down from the current directory (no absolute path, no ..)" );
         return BASLIB_FAILED;
@@ -842,7 +965,53 @@ bool repl_load_file( repl_t* repl, const char* name ) {
 
 // replaces the stored program by the program file image in memory (the program of a built executable, see BUILD)
 bool repl_load_image( repl_t* repl, const void* data, size_t len ) {
-    FILE* f = len > 0 ? fmemopen( (void*) data, len, "rb" ) : 0;
+    const uint8_t* base = (const uint8_t*) data;      // the whole payload
+    const uint8_t* image = base;                      // the program file inside it
+    size_t imagelen = len;
+    repl_free_embedlibs( repl );
+    repl->embedded = true;                          // a built executable: LOAD LIBRARY takes the libraries that came with it
+    if ( len >= BUNDLE_MAGIC_SIZE + 3U && memcmp( data, bundle_magic, BUNDLE_MAGIC_SIZE ) == 0 ) {
+        size_t pos = BUNDLE_MAGIC_SIZE;
+        uint8_t version = base[pos++];
+        size_t count = ( (size_t) base[pos] << 8 ) | base[pos + 1U];
+        pos += 2U;
+        bool ok = version == BUNDLE_VERSION && count >= 1U;
+        for ( size_t i=0; ok && i < count; ++i ) {
+            uint8_t kind = 0; char* name = 0; const uint8_t* img = 0; size_t imglen = 0;
+            if ( !bundle_next( base, len, &pos, &kind, &name, &img, &imglen ) || ( i == 0U ) != ( kind == 0U ) ) {
+                free( name );
+                ok = false;
+                break;
+            }
+            if ( i == 0U ) {
+                free( name );
+                image = img;
+                imagelen = imglen;
+                continue;
+            }
+            repl_embedlib_t* p = (repl_embedlib_t*) realloc( repl->embedlibs, ( repl->nembedlibs + 1U ) * sizeof(repl_embedlib_t) );
+            uint8_t* copy = (uint8_t*) malloc( imglen > 0 ? imglen : 1U );
+            if ( p == 0 || copy == 0 ) {
+                free( copy );
+                free( name );
+                if ( p != 0 ) repl->embedlibs = p;
+                ok = false;
+                break;
+            }
+            memcpy( copy, img, imglen );
+            repl->embedlibs = p;
+            repl->embedlibs[ repl->nembedlibs ].name = name;
+            repl->embedlibs[ repl->nembedlibs ].data = copy;
+            repl->embedlibs[ repl->nembedlibs ].len = imglen;
+            ++repl->nembedlibs;
+        }
+        if ( !ok ) {
+            repl_free_embedlibs( repl );
+            repl_report( repl, "? Bad program file" );
+            return false;
+        }
+    }
+    FILE* f = imagelen > 0 ? fmemopen( (void*) image, imagelen, "rb" ) : 0;
     if ( f == 0 ) {
         repl_report( repl, "? Bad program file" );
         return false;
@@ -1087,27 +1256,70 @@ static bool repl_vm_files( struct _vm_t* vm, void* usrdata, const char* spec ) {
 // -- BUILD -----------------------------------------------------------------------------
 
 // the stored program in the form of a binary program file (what SAVE writes); malloc'ed. false if there is none or out of memory
-bool repl_program_image( repl_t* repl, uint8_t** pdata, size_t* plen ) {
-    *pdata = 0; *plen = 0;
+// the stored program as what BUILD embeds: the plain program file, or, when it names libraries, a bundle of the program and those libraries
+// (docs/library-support.md section 6). false after a message if a library is missing or wrong; *preported tells that the reason was reported.
+static bool repl_make_image( repl_t* repl, uint8_t** pdata, size_t* plen, bool* preported ) {
+    *pdata = 0; *plen = 0; *preported = false;
     if ( repl->pgm.first == 0 ) {
         return false;
     }
-    char* buf = 0; size_t size = 0;
-    FILE* f = open_memstream( &buf, &size );
-    if ( f == 0 ) {
+    uint8_t* main = 0; size_t mainlen = 0;
+    if ( !repl_pgm_image( &repl->pgm, &main, &mainlen ) ) {
         return false;
     }
-    bool ok = save_program( &repl->pgm, f, false );
-    if ( fclose( f ) != 0 ) {
-        ok = false;
+    if ( repl->embedded ) {                         // (a built executable can't build)
+        *pdata = main; *plen = mainlen;
+        return true;
     }
+    liblist_t libs;
+    baslib_init( &libs );
+    baslib_error_t err;
+    if ( !baslib_resolve( &repl->pgm, repl_library_loader, repl, &libs, &err ) ) {
+        char msg[400];
+        if ( err.line != 0 && err.lib[0] != '\0' ) {
+            snprintf( msg, sizeof(msg), "? %s in line %u of the library %s", err.msg, (unsigned) err.line, err.lib );
+        } else if ( err.line != 0 ) {
+            snprintf( msg, sizeof(msg), "? %s in line %u", err.msg, (unsigned) err.line );
+        } else {
+            snprintf( msg, sizeof(msg), "? %s", err.msg );
+        }
+        repl_report( repl, msg );
+        *preported = true;
+        free( main );
+        return false;
+    }
+    if ( libs.count == 0 ) {
+        baslib_free( &libs );
+        *pdata = main; *plen = mainlen;
+        return true;
+    }
+    uint8_t* buf = 0; size_t len = 0, cap = 0;
+    uint8_t head[BUNDLE_MAGIC_SIZE + 3U];
+    memcpy( head, bundle_magic, BUNDLE_MAGIC_SIZE );
+    head[BUNDLE_MAGIC_SIZE] = (uint8_t) BUNDLE_VERSION;
+    size_t count = libs.count + 1U;
+    head[BUNDLE_MAGIC_SIZE + 1U] = (uint8_t)( count >> 8 );
+    head[BUNDLE_MAGIC_SIZE + 2U] = (uint8_t) count;
+    bool ok = count < 65536U && bundle_put( &buf, &len, &cap, head, sizeof(head) ) && bundle_entry( &buf, &len, &cap, 0, "", main, mainlen );
+    free( main );
+    for ( size_t i=0; ok && i < libs.count; ++i ) {
+        uint8_t* img = 0; size_t imglen = 0;
+        ok = repl_pgm_image( &libs.libs[i].pgm, &img, &imglen ) && bundle_entry( &buf, &len, &cap, 1, libs.libs[i].name, img, imglen );
+        free( img );
+    }
+    baslib_free( &libs );
     if ( !ok ) {
         free( buf );
         return false;
     }
-    *pdata = (uint8_t*) buf;
-    *plen = size;
+    *pdata = buf;
+    *plen = len;
     return true;
+}
+
+bool repl_program_image( repl_t* repl, uint8_t** pdata, size_t* plen ) {
+    bool reported = false;
+    return repl_make_image( repl, pdata, plen, &reported );
 }
 
 // the name of a BASIC program file (.bas, .e99, .lib, .l99): BUILD refuses to overwrite one with an executable
@@ -1129,8 +1341,11 @@ static bool repl_vm_build( struct _vm_t* vm, void* usrdata, const char* name, in
         return false;
     }
     uint8_t* image = 0; size_t imagelen = 0;
-    if ( !repl_program_image( repl, &image, &imagelen ) ) {
-        repl_vm_error( repl, repl->pgm.first == 0 ? "No program" : "Out of memory", 0 );
+    bool reported = false;
+    if ( !repl_make_image( repl, &image, &imagelen, &reported ) ) {
+        if ( !reported ) {
+            repl_vm_error( repl, repl->pgm.first == 0 ? "No program" : "Out of memory", 0 );
+        }
         return false;
     }
     char err[300];

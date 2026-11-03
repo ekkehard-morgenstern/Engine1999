@@ -363,7 +363,7 @@ static void resolve_fail( resolve_t* rs, const char* lib, uint32_t line, const c
 }
 
 // the name a LOAD LIBRARY asks for, reduced to what the library has to call itself: no driver prefix, no directory, no extension
-static void request_key( const char* request, char* key, size_t size ) {
+void baslib_request_key( const char* request, char* key, size_t size ) {
     const char* p = request;
     const char* colon = strchr( p, ':' );
     if ( colon != 0 && colon - p >= 2 ) {
@@ -400,7 +400,7 @@ static void resolve_program( resolve_t* rs, program_t* pgm, const char* ownernam
 // reads the library named in 'ref' (a line of 'ownername') and everything it needs
 static void resolve_ref( resolve_t* rs, const libref_t* ref, const char* ownername ) {
     char key[128];
-    request_key( ref->name, key, sizeof(key) );
+    baslib_request_key( ref->name, key, sizeof(key) );
     if ( find_known( rs->out, key ) != 0 ) {
         return;                                         // already read (a library is loaded once)
     }

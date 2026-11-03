@@ -213,10 +213,15 @@ executable has the runtime of
 and needs only the C and the math library.
 Without the option the kind of the host is made.
 Names that end in
-.I .bas
+.IR .bas ,
+.IR .e99 ,
+.I .lib
 or
-.I .e99
+.I .l99
 are refused.
+A program that names libraries (\fBLOAD LIBRARY\fR) is built together with them: the executable carries the libraries
+and never looks for their files.
+A missing or wrong library stops the build.
 .PP
 .B BUILD
 needs the runtime kit, the files \fIengine1999.o\fR, \fIengine1999c.o\fR and \fIengine.lib\fR.

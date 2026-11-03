@@ -127,6 +127,12 @@ static int count_entries( const char* dir ) {
     return n;
 }
 
+// the host's SAVE for the REPLs of the tests
+static bool test_save( struct _vm_t* vm, void* usrdata, const char* filename, bool ascii ) {
+    (void) ascii;
+    return repl_save_program_ex( (repl_t*) usrdata, filename, vm->savemode );
+}
+
 int main( void ) {
     // a program image with every byte value in it (zero bytes included)
     unsigned char prog[1024];
@@ -274,8 +280,70 @@ int main( void ) {
             free( cexe );
         }
         unlink( "buildtest1.con" );
+        check( image != 0 && imagelen > 5 && image[0] == 0x89 && image[1] == 'E' && image[2] == '9' && image[3] == '9', "a program without libraries is embedded as a plain program file" );
         free( image );
         cleanup_repl( &repl );
+
+        // a program that names libraries: embedded as a bundle with its libraries, and runs without the library files
+        static repl_t lrepl;
+        check( init_repl( &lrepl ), "a REPL for a program with libraries" );
+        lrepl.save = test_save;
+        repl_enter( &lrepl, "10 LIBRARY \"bl2\",\"B2_\"" );
+        repl_enter( &lrepl, "20 FUNC B2_ONE()" );
+        repl_enter( &lrepl, "30 RETURN 1" );
+        repl_enter( &lrepl, "40 END FUNC" );
+        repl_enter( &lrepl, "SAVE \"mem:bl2.lib\"" );
+        repl_enter( &lrepl, "NEW" );
+        repl_enter( &lrepl, "10 LIBRARY \"bl1\",\"B1_\"" );
+        repl_enter( &lrepl, "20 LOAD LIBRARY \"mem:bl2\"" );
+        repl_enter( &lrepl, "30 FUNC B1_TWICE(X)" );
+        repl_enter( &lrepl, "40 RETURN X*2+FN B2_ONE()" );
+        repl_enter( &lrepl, "50 END FUNC" );
+        repl_enter( &lrepl, "60 PROC B1_INIT" );
+        repl_enter( &lrepl, "70 B1_N=7" );
+        repl_enter( &lrepl, "80 END PROC" );
+        repl_enter( &lrepl, "SAVE \"mem:bl1.lib\"" );
+        repl_enter( &lrepl, "NEW" );
+        repl_enter( &lrepl, "10 LOAD LIBRARY \"mem:bl1\"" );
+        repl_enter( &lrepl, "20 PRINT FN B1_TWICE(20);B1_N" );
+        repl_enter( &lrepl, "30 BYE 5" );
+        uint8_t* limage = 0; size_t limagelen = 0;
+        check( repl_program_image( &lrepl, &limage, &limagelen ), "a program with libraries as a file image" );
+        check( limage != 0 && limagelen > 8 && limage[0] == 0x89 && limage[1] == 'E' && limage[2] == 'B' && limage[3] == 'N' && limage[4] == 1 && limage[5] == 0 && limage[6] == 3,
+            "the image is a bundle of three entries: the program and its two libraries" );
+        check( limage != 0 && contains( limage, limagelen, "\x89" "E99" ), "the entries are program files" );
+        // the image is read back by a REPL as an executable does: the libraries come out of the bundle (the mem: files are gone)
+        {
+            static repl_t rrepl;
+            check( init_repl( &rrepl ), "a REPL for the embedded program" );
+            iodev_mem_clear();
+            check( limage != 0 && repl_load_image( &rrepl, limage, limagelen ), "the bundle loads" );
+            check( rrepl.nembedlibs == 2U && rrepl.embedded, "the libraries are kept for LOAD LIBRARY" );
+            cleanup_repl( &rrepl );
+        }
+        build_opts_t lcon;
+        build_console_opts( &lcon );
+        lcon.kitdir = ".";
+        unlink( "buildtest1.lib" );
+        ok = limage != 0 && build_executable( "buildtest1.lib", limage, limagelen, &lcon, err, sizeof(err) );
+        checkf( ok, "build a program with libraries", err );
+        if ( ok ) {
+            out = run_capture( "./buildtest1.lib < /dev/null", &len, &status );
+            check( status == 5, "the executable with libraries ends with the code of BYE" );
+            check( out != 0 && contains( out, len, "417\n" ), "the executable runs the library code (the files of the libraries are not there)" );
+            free( out );
+        }
+        unlink( "buildtest1.lib" );
+        free( limage );
+        cleanup_repl( &lrepl );
+
+        // a library that is missing stops the build
+        static repl_t mrepl;
+        check( init_repl( &mrepl ), "a REPL for a program with a missing library" );
+        repl_enter( &mrepl, "10 LOAD LIBRARY \"mem:nothere\"" );
+        uint8_t* mimage = 0; size_t mimagelen = 0;
+        check( !repl_program_image( &mrepl, &mimage, &mimagelen ) && mimage == 0, "a missing library: no image" );
+        cleanup_repl( &mrepl );
     } else {
         printf( "(no engine1999c.o here: the console runtime was not tried)\n" );
     }

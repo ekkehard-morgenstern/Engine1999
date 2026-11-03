@@ -143,16 +143,21 @@ third checked:
 
 ## 6. Libraries and `BUILD`
 
-An executable made with `BUILD` must contain the libraries its program uses, else it could not run alone. The embedded program is
-today a program file; the executable gets the program **plus the resolved library files as additional modules** (the embedded
-payload becomes a small container: one entry per module, each a normal program file: nothing in the program file format changes,
-the container is new and versioned from the start). The runtime resolves `LOAD LIBRARY` in an embedded program from the
-container, not from the disk. `engine1999 --engine1999-about` and the license rule are unchanged; a library's license lines
-travel with it.
+An executable made with `BUILD` must contain the libraries its program uses, else it could not run alone. **Done (step 5, 2026-11-03):** `BUILD` resolves the libraries of the stored program like `RUN` does (a missing or wrong one stops
+the build with the same message) and embeds a **bundle** instead of the plain program file. A program without libraries is embedded as before (the plain binary program file), so nothing changes for it and executables made earlier still run.
+
+```
+bundle := 89 'E' 'B' 'N'   version.8 (1)   count.16   entry { count }                 (all numbers big endian)
+entry  := kind.8 (0 = the program, 1 = a library)   namelen.16   name   length.32   a binary program file image (89 'E' '9' '9' ...)
+```
+
+The first entry is the program (empty name), the others the libraries in dependency order, named by the name they declare. The bundle is new and versioned (the program file format itself does not change, and old files load as before). In the running
+executable `repl_load_image()` recognizes the magic, loads the program and keeps the libraries (`repl_t.embedlibs`, `embedded`); `LOAD LIBRARY` is resolved from them only (by the declared name: a request like `"lib/gfx.lib"` or `"mem:gfx"` is reduced to
+`gfx`), never from the disk; a name that is not in the bundle is "Library not found". `engine1999 --engine1999-about` and the license rule are unchanged; a library's license lines travel with it. Window and console executables share the code.
 
 ## 7. Implementation plan
 
-**Status (2026-11-03): steps 1 to 4 are done** (step 1: the words and their grammar; step 2: `baslib.[ch]`, the resolver, and its hook in the REPL: `RUN` and the monitor's `c` find the libraries of the stored program and report what is wrong, **but the libraries are not compiled yet**, so a program that names a library that exists still does not see its `FUNC`s: that is step 3). (step 1: the words and their grammar; step 2: `baslib.[ch]`, the resolver, and its hook in the REPL; **step 3: the libraries are compiled ahead of the program**, see "What step 3 does, exactly" below). **Step 4:** `SAVE LIBRARY`, `LIBRARIES`, the direct-mode error (see "What step 4 does" below). Open: the `BUILD` container (step 5), the shared libraries for the demos (step 6).
+**Status (2026-11-03): steps 1 to 5 are done** (step 1: the words and their grammar; step 2: `baslib.[ch]`, the resolver, and its hook in the REPL: `RUN` and the monitor's `c` find the libraries of the stored program and report what is wrong, **but the libraries are not compiled yet**, so a program that names a library that exists still does not see its `FUNC`s: that is step 3). (step 1: the words and their grammar; step 2: `baslib.[ch]`, the resolver, and its hook in the REPL; **step 3: the libraries are compiled ahead of the program**, see "What step 3 does, exactly" below). **Step 4:** `SAVE LIBRARY`, `LIBRARIES`, the direct-mode error (see "What step 4 does" below). **Step 5:** the `BUILD` bundle (section 6). Open: the shared libraries for the demos (step 6), the final documentation pass (step 7).
 
 1. **Extension word `LIBRARY`** (`XF_LIBRARY`), parser rules for `LIBRARY "name"[,"prefix"]` and `LOAD LIBRARY "name"` (new node
    types; no code is generated for either: `NOP`), `bascomp.ebnf` + `make grammar`, man page, `docs/basic-language.md`.
@@ -163,7 +168,7 @@ travel with it.
    chains and READ pointers, section 4a) and the **multi-module compile in `basrepl.c`** (`repl_compile()` / `repl_execute()`: modules compiled in order, a
    line table per module, the module table for error messages, the start address of the program, the init calls).
 4. **`RUN` of a library** and the plain-`LOAD`-works rule; direct mode `LOAD LIBRARY` error; **`SAVE LIBRARY`** with `.lib` / `.l99`; **`LIBRARIES`** (DONE).
-5. **`BUILD` container** and the runtime's lookup of embedded libraries.
+5. **`BUILD` container** and the runtime's lookup of embedded libraries (DONE).
 6. **First libraries for the demos** (`demos/lib/`): the key / pad input of the games, text helpers; the games then shrink.
 7. Tests: `vmtest1`, `repltest1`, `buildtest1`; `make install` installs the shared libraries; roadmap and `SESSION.md` updated.
 
