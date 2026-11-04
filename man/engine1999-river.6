@@ -1,0 +1,50 @@
+.\" Engine1999 - A 2D games engine written in C
+.\" Copyright (C) 2026  Ekkehard Morgenstern
+.\"
+.\" This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published
+.\" by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It is distributed WITHOUT ANY
+.\" WARRANTY. ADDITIONAL PERMISSION (GPLv3 section 7): the Engine1999 Runtime Exception applies, see the file LICENSE-EXCEPTION.
+.\"
+.\" Keep this page current: it describes the demo game demos/river.bas (an executable made with BUILD, installed by "make install").
+.TH ENGINE1999-RIVER 6 "November 2026" "Engine 1999 @VERSION@" "Engine1999 Manual"
+.SH NAME
+engine1999-river \- Eternal River, a scroll-down boat game
+.SH SYNOPSIS
+.B engine1999-river
+.SH DESCRIPTION
+Eternal River is a scroll-down boat game in the spirit of River Raid. You steer a boat down a river that meanders and never ends. Swimmers, divers and other boats are in the way, and people on the banks throw rocks at you. Now and then a bridge crosses the river, with people, a bicycle and cars on it, just for decoration: you pass under it (and score 100 points). The banks are lined with meadows, trees, villages and roads.
+.PP
+A hit is a matter of luck: you may be wrecked, or you may only be thrown into the water. Then swim to a bank (the swimming time is limited), walk along it (the river scrolls as you walk up), pick up the apples, carrots and ice cream cones you find, and look for a boat: one moored at a jetty, or one that was left drifting. The river gets narrower and busier with the distance (every 4000 pixels is a new level), and you get an extra life for every 5000 points.
+.PP
+The program is the demo \fIriver.bas\fR of Engine1999, made into an executable with
+.B BUILD
+(window kind: it needs the SDL2 library, nothing else); its BASIC libraries are inside it. It opens the Engine1999 window; the window can
+be switched between the full screen and a window with F11 or ALT+RETURN.
+.SH CONTROLS
+.TP
+.BR LEFT / RIGHT " or " A / D
+steer the boat (swim, walk).
+.TP
+.BR UP " or " W
+faster; walking: walk on (the river scrolls).
+.TP
+.BR DOWN " or " S
+slower.
+.TP
+.B SPACE
+walking: jump into the water.
+.TP
+.B P
+pause.
+.TP
+.B Q
+quit.
+.PP
+A game controller works, too: D-pad or left stick steers, A jumps, START pauses, BACK quits.
+.SH FILES
+The best score is kept in the file
+.I river.hi
+in the current directory (the game goes on without it if the file cannot be written).
+.SH SEE ALSO
+.BR engine1999 (1),
+.BR engine1999-basic (7)
