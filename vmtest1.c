@@ -490,6 +490,11 @@ static const testcase_t cases[] = {
     { "ON MOUSE GOSUB",         "10 ON MOUSE GOSUB 100\n20 FOR I=1 TO 3000:NEXT I\n30 PRINT \"done\";C\n40 END\n100 C=C+1:RETURN", "done1\n" },
     { "ON MOUSE GOTO",          "10 ON MOUSE GOTO 100\n20 FOR I=1 TO 3000:NEXT I\n30 PRINT \"done\";C\n40 END\n100 C=C+1:ON MOUSE OFF:GOTO 20", "done1\n" },
     { "ON MOUSE OFF",           "10 ON MOUSE GOSUB 100\n15 ON MOUSE OFF\n20 FOR I=1 TO 3000:NEXT I\n30 PRINT \"done\";C\n40 END\n100 C=C+1:RETURN", "done0\n" },
+    { "ON UI GOSUB",            "10 ON UI GOSUB 100\n20 FOR I=1 TO 3000:NEXT I\n30 PRINT \"done\";C\n40 END\n100 C=C+1:RETURN", "done1\n" },
+    { "ON UI GOTO",             "10 ON UI GOTO 100\n20 FOR I=1 TO 3000:NEXT I\n30 PRINT \"done\";C\n40 END\n100 C=C+1:ON UI OFF:GOTO 20", "done1\n" },
+    { "ON UI OFF",              "10 ON UI GOSUB 100\n15 ON UI OFF\n20 FOR I=1 TO 3000:NEXT I\n30 PRINT \"done\";C\n40 END\n100 C=C+1:RETURN", "done0\n" },
+    { "ON UI needs GOTO, GOSUB or OFF", "ON UI", "? GOTO, GOSUB or OFF expected\n" },
+    { "ON UI with a label",     "10 ON UI GOSUB EV\n20 FOR I=1 TO 3000:NEXT I\n30 PRINT \"done\";C\n40 END\n50 LABEL EV:C=C+10:RETURN", "done10\n" },
     { "ON MOUSE needs GOTO, GOSUB or OFF", "ON MOUSE", "? GOTO, GOSUB or OFF expected\n" },
     { "ON MOUSE with a label",  "10 ON MOUSE GOSUB CLICK\n20 FOR I=1 TO 3000:NEXT I\n30 PRINT \"done\";C\n40 END\n50 LABEL CLICK:C=C+10:RETURN", "done10\n" },
     { "ON COLLISION needs GOTO, GOSUB or OFF", "ON COLLISION", "? GOTO, GOSUB or OFF expected\n" },
@@ -1662,6 +1667,7 @@ static const vm_sound_t test_sound = { snd_tone, snd_setwave, snd_setenv, snd_se
 // a graphics host that logs every operation as "<gfx NAME args>" (an omitted argument is -); queries return the sum of their arguments
 static int gfx_polls = 0;
 static int gfx_mousepolls = 0;
+static int gfx_uipolls = 0;
 static double gfx_frames = 0.0;
 
 static bool gfx_op( void* usrdata, int op, const double* a, int na, const char* s, size_t slen, uint8_t* out, size_t outsz, size_t* outlen,
@@ -1702,6 +1708,10 @@ static bool gfx_query( void* usrdata, int q, const double* a, int na, double* re
     }
     if ( q == GFXQ_FRAME ) {
         *result = ++gfx_frames;                         // (a frame passes at every look: FRAME does not wait in the tests)
+        return true;
+    }
+    if ( q == GFXQ_UIEVENTS ) {
+        *result = ++gfx_uipolls > 3 ? 1.0 : 0.0;        // the count of the UI's events goes from 0 to 1 at the fourth look (the first is the baseline at ON UI)
         return true;
     }
     if ( q == GFXQ_MOUSEEVENT ) {
@@ -1782,6 +1792,7 @@ static bool compile_and_run( void ) {
     vm.gfx      = &test_gfx;
     gfx_polls   = 0;
     gfx_mousepolls = 0;
+    gfx_uipolls = 0;
     gfx_frames = 0.0;
     vm.maxsteps = UINT64_C(20000000);     // (a busy wait for a timer tick of the handler tests may take a few million steps on a fast machine)
     ok = vm_run_at( &vm, start );

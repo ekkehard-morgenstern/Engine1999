@@ -1140,6 +1140,10 @@ static bool host_ui_query( int q, const double* a, double* result ) {
         *result = host_ui_open ? -1.0 : 0.0;
         return true;
     }
+    if ( q == GFXQ_UIEVENTS ) {
+        *result = ui_event_count();
+        return true;
+    }
     if ( !host_ui_open ) {
         *result = 0.0;
         return true;
@@ -1331,7 +1335,7 @@ static bool host_gfx_query( void* usrdata, int q, const double* a, int na, doubl
         case GFXQ_MOUSEEVENT:   *result = sdlscr_mouse_get( MOUSEV_EVENTS ); break;
         case GFXQ_MOUSEVISIBLE: *result = sdlscr_mouse_get( MOUSEV_VISIBLE ) ? -1.0 : 0.0; break;
         case GFXQ_EVENT:        *result = sdlscr_sprite_nextevent(); break;
-        case GFXQ_UIEVENT: case GFXQ_UIKIND: case GFXQ_UIVALUE: case GFXQ_UIGET: case GFXQ_UICOUNT: case GFXQ_UIFOCUS: case GFXQ_UIOPEN:
+        case GFXQ_UIEVENT: case GFXQ_UIKIND: case GFXQ_UIVALUE: case GFXQ_UIGET: case GFXQ_UICOUNT: case GFXQ_UIFOCUS: case GFXQ_UIOPEN: case GFXQ_UIEVENTS:
             return host_ui_query( q, a, result );
         default:                return false;
     }

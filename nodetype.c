@@ -145,6 +145,7 @@ const char* nodename( uint8_t nodetype ) {
         case NT_JOYSTMT:                return "NT_JOYSTMT";
         case NT_FRAMESTMT:              return "NT_FRAMESTMT";
         case NT_ONKEYSTMT:              return "NT_ONKEYSTMT";
+        case NT_ONUISTMT:               return "NT_ONUISTMT";
         case NT_LIBRARYSTMT:            return "NT_LIBRARYSTMT";
         case NT_LIBRARIESSTMT:          return "NT_LIBRARIESSTMT";
         case NT_LOADLIBSTMT:            return "NT_LOADLIBSTMT";

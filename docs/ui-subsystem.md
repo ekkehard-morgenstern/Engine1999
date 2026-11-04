@@ -10,14 +10,17 @@ Widgets (panels, labels, buttons, check boxes, radio buttons, text fields, lists
 ## Decisions taken (owner, 2026-11-01) and mine
 - The UI owns the graphics layer; its theme uses the palette entries 224..239 of that layer (`UI_PALBASE`); the mouse pointer sprite stays in front; `UI OPEN` shows the pointer permanently.
 - One form plus modal panels and pop-ups first; overlapping windows later. Retained widgets.
-- Mine: widgets are drawn in creation order (z-order = order of creation); a **pop-up is a hidden list** that `UI POPUP id,x,y` shows (a click outside or Escape closes it with a cancel event); a **modal panel** (`UI MODAL id`) makes only the panel and widgets lying inside it react; events are polled (`UI("EVENT")`), not `ON UI` (not done).
+- Mine: widgets are drawn in creation order (z-order = order of creation); a **pop-up is a hidden list** that `UI POPUP id,x,y` shows (a click outside or Escape closes it with a cancel event); a **modal panel** (`UI MODAL id`) makes only the panel and widgets lying inside it react; events are polled with `UI("EVENT")` or delivered to a handler by `ON UI` (below).
 
 ## Statements
 `UI OPEN`, `UI CLOSE`, `UI CLEAR`, `UI UPDATE`; `UI LABEL|BUTTON|CHECK|TEXT|PANEL id,x,y,w,h,text$`; `UI RADIO id,x,y,w,h,text$[,group]`; `UI LIST|PROGRESS id,x,y,w,h`; `UI SLIDER id,x,y,w,h[,min]`; `UI SCROLL id,x,y,w,h[,page]` (a scroll bar: vertical when it is higher than wide; positions 0..100 until `UI RANGE id,min,max`; `UI PAGE id,n` sets the size of the visible part, which sizes the knob and the Page up / down step; events: change with the position); `UI REMOVE|FOCUS|CLEARLIST|MODAL id` (`MODAL 0` ends it); `UI CAPTION|ITEM id,text$`; `UI VALUE|ENABLE|SHOW id,n`; `UI RANGE id,min,max`; `UI POPUP id,x,y`; `UI GETTEXT id,a$`; `UI ITEMTEXT id,row,a$`.
 
 ## Functions
-`UI("EVENT")` next event id (0 none; makes it current), `UI("KIND")`, `UI("VALUE")` of the current event, `UI("GET",id)`, `UI("COUNT",id)` rows of a list, `UI("FOCUS")`, `UI("OPEN")`.
+`UI("EVENT")` next event id (0 none; makes it current), `UI("KIND")`, `UI("VALUE")` of the current event, `UI("GET",id)`, `UI("COUNT",id)` rows of a list, `UI("FOCUS")`, `UI("OPEN")`, `UI("EVENTS")` (the number of events queued so far; what `ON UI` watches).
 Event kinds: 1 click (button), 2 change (check, radio, slider, text field: the new length), 3 select (list row), 4 double click (or Return in a list), 5 Return in a text field, 6 cancel (Escape in a modal panel / pop-up, click outside a pop-up).
+
+## ON UI
+`ON UI GOSUB|GOTO target` / `ON UI OFF` (2026-11-05): a handler that runs between two statements whenever a widget has queued an event, so the main loop only has to call `UI UPDATE`. An event slot like `ON MOUSE` / `ON KEY` (`VM_UISLOT` 8, the highest priority of all; `COLT` bit 32; `NT_ONUISTMT 0x8F`); only events queued after `ON UI` count. **The handler fetches the events itself**: `E=UI("EVENT")` in a loop until it is 0, then `RETURN`; the handler is entered once per *new* event (the host's counter `UI("EVENTS")`, `ui_event_count()`), so a handler that leaves events in the queue is not entered again for the same ones. Events are queued by `UI UPDATE` (the frame loop), nothing else. A run's end switches it off. Example: `10 ON UI GOSUB 200` ... `200 E=UI("EVENT"):WHILE E<>0:...:E=UI("EVENT"):WEND:RETURN`. Window host only (the console host has no UI).
 
 ## Scroll bars
 A scroll bar has an arrow button at each end, a light / gray checkered track and a raised knob whose length is `page / (range + page)` of the track (at least 10 pixels), with a grip. A click on an arrow moves one step, a click in the track one page; both repeat while the button is held (after 400 ms, then every 60 ms; the track repeat stops when the knob reaches the mouse); the knob can be dragged; the wheel moves 3 steps; with the focus the arrow keys, Page up / down, Home and End work. A **list** that has more rows than it shows gets such a bar by itself (it only scrolls the view: the selection does not change).
@@ -32,4 +35,4 @@ A library, `demos/lib/filereq.lib` (`LOAD LIBRARY "filereq"`, prefix `FR_`; demo
 Tab / Shift+Tab move the focus; Space and Return press buttons and toggle boxes; arrows work in lists (Home, End, Page up / down), sliders and radio groups; text fields take typing, Backspace, Delete, Home, End, Left, Right.
 
 ## Not done
-`ON UI GOSUB`, overlapping and draggable windows, scroll bars as widgets, combo boxes, the sprite / tile editors, the console text renderer, the joystick driving the focus. Widgets are not drawn until `UI UPDATE` runs (the demo updates once per frame).
+overlapping and draggable windows, scroll bars as widgets, combo boxes, the sprite / tile editors, the console text renderer, the joystick driving the focus. Widgets are not drawn until `UI UPDATE` runs (the demo updates once per frame).

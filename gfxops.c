@@ -157,6 +157,7 @@ static const gfxquery_t queries[] = {
     { "UI",     "COUNT",    GFXQ_UICOUNT,   1, 1 },
     { "UI",     "FOCUS",    GFXQ_UIFOCUS,   0, 0 },
     { "UI",     "OPEN",     GFXQ_UIOPEN,    0, 0 },
+    { "UI",     "EVENTS",   GFXQ_UIEVENTS,  0, 0 },
 };
 
 const gfxcmd_t* gfxops_find( const char* group, const char* name ) {

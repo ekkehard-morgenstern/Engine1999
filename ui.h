@@ -184,6 +184,7 @@ bool ui_popup( ui_t* ui, int listid, int x, int y );            // shows the lis
 
 // the input of one frame: the mouse (buttons UIB_*, wheel steps, up positive) and the keys typed since the last call; now_ms for the double click
 void ui_input( ui_t* ui, int mx, int my, int buttons, int wheel, const int* keys, int nkeys, uint32_t now_ms );
+uint32_t ui_event_count( void );                                // the number of events queued so far (all UIs): a change means a new event (ON UI)
 bool ui_next_event( ui_t* ui, ui_event_t* ev );                 // false: none
 
 // draws the changed widgets (all = true: the whole canvas)

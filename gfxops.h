@@ -172,6 +172,7 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXQ_UIGET      123             // UI("GET", id): the value of a widget (check box 0 / 1, radio button, slider, progress, list row, text field length)
 #define GFXQ_UICOUNT    124             // UI("COUNT", id): the rows of a list
 #define GFXQ_UIFOCUS    125             // UI("FOCUS"): the id of the widget that has the focus
+#define GFXQ_UIEVENTS   127             // (the VM polls it for ON UI) the number of events the UI has queued so far; a change is an event
 #define GFXQ_UIOPEN     126             // UI("OPEN"): -1 / 0
 #define GFXQ_MOUSEEVENT 108             // (the VM polls it for ON MOUSE) the number of presses, releases and wheel steps so far; a change is an event
 #define GFXQ_EVENT      90              // (the VM polls it for ON COLLISION) a sprite with a new collision, -1 none

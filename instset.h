@@ -569,6 +569,7 @@ The 4096 extended instructions are as follows:
     0001 10001000       EXST - does a file exist ( name -- n ) C=0 P=0
                             EXISTS(name$): -1 if the name can be opened for reading through the I/O drivers (a "driver:" prefix works, ADDRESS names the default driver; no extension search: the name is taken as it is), else 0. An empty name is 0, not an error;
                             it never raises a file error (that is what it is for: ON ERROR + RESUME does not work inside a PROC or FUNC).
+    COLT with the parameter bit 32: ON UI OFF (32) / GOSUB (33) / GOTO (34): a handler for the events of the UI widgets.
     COLT with the parameter bit 16: ON KEY OFF (16) / GOSUB (17) / GOTO (18): a handler for the key events (the bit 8 is ON JOY, 4 is ON MOUSE).
     COLT with the parameter bit 8: ON JOY OFF (8) / GOSUB (9) / GOTO (10) (the bit 4 is ON MOUSE).
     MATH kinds 14..16: CEIL, LOG2, LOG10 (kind 1, INT, is FLOOR as well).

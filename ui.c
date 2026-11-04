@@ -83,7 +83,14 @@ static bool in_scope( ui_t* ui, const ui_widget_t* w ) {
     return true;
 }
 
+static uint32_t ui_events_total = 0;           // every event ever queued (by any ui_t): ON UI watches the change
+
+uint32_t ui_event_count( void ) {
+    return ui_events_total;
+}
+
 static void push_event( ui_t* ui, int id, int kind, int value ) {
+    ++ui_events_total;
     if ( ui->qcount >= UI_EVENTS ) {
         return;
     }

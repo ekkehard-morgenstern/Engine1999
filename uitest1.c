@@ -610,6 +610,16 @@ int main( void ) {
     check( "and is empty afterwards", none() );
     done();
 
+    // the counter that ON UI watches
+    setup();
+    ui_add( &ui, UIK_BUTTON, 1, 10, 10, 60, 22, "OK", 0 );
+    uint32_t c0 = ui_event_count();
+    key( ' ' );
+    check( "ui_event_count counts a queued event", ui_event_count() == c0 + 1U );
+    drain();
+    check( "reading an event does not change the count", ui_event_count() == c0 + 1U );
+    done();
+
     // a popup and drawing never write outside of the canvas (a widget partly outside)
     setup();
     ui_add( &ui, UIK_BUTTON, 1, 380, 230, 60, 22, "Edge", 0 );

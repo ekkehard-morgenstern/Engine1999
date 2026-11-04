@@ -570,6 +570,12 @@ on-joy-stmt := ON JOY ( goto-kw goto-target | OFF ) .
 on-key-stmt := ON KEY ( goto-kw goto-target | OFF ) .
 ```
 
+> ON UI runs a handler when a UI widget has queued an event (window host); the handler reads them with UI("EVENT") until it returns 0.
+
+```ebnf
+on-ui-stmt := ON UI ( goto-kw goto-target | OFF ) .
+```
+
 > Numeric functions: INT FIX ABS SGN SQR SIN COS TAN ATN EXP LOG RND ( num-expr ) (RND alone is RND(1)); PI. \\ (integer division) and MOD
 > are at the level of \* and /. RANDOMIZE [ seed ] seeds RND.
 
@@ -682,7 +688,7 @@ gfx-all-stmt := gfx-stmt | txt-stmt | tile-stmt | sprite-stmt | mouse-stmt | on-
 ```ebnf
 prog-stmt := gfx-all-stmt | load-stmt | run-stmt | merge-stmt | chain-stmt | files-stmt | build-stmt | bye-stmt | timer-stmt | list-stmt | new-stmt | clear-stmt |
              delete-stmt | renum-stmt | edit-stmt | monitor-stmt | sound-stmt | wait-stmt | on-error-stmt | randomize-stmt | angle-stmt |
-             cont-stmt | trace-stmt | break-stmt | auto-stmt | poke-stmt | error-stmt | joy-stmt | on-joy-stmt | on-key-stmt | frame-stmt | library-stmt | libraries-stmt .
+             cont-stmt | trace-stmt | break-stmt | auto-stmt | poke-stmt | error-stmt | joy-stmt | on-joy-stmt | on-key-stmt | on-ui-stmt | frame-stmt | library-stmt | libraries-stmt .
 stmt := io-stmt | prog-stmt | assign-stmt | control-flow-stmt .
 stmt-list := stmt { ":" stmt } .
 stmt-line := [ stmt-list ] [ <'comment> ] <end-of-line> .

@@ -13,7 +13,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-(nothing pending)
+- **`ON UI GOSUB|GOTO|OFF` (roadmap item 47, next UI item):** a handler for the events of the UI widgets, built like `ON KEY`: `ui_event_count()` (`ui.c`, every event ever queued) is exposed as `UI("EVENTS")` (`GFXQ_UIEVENTS` 127, `gfxops.c` / `engine1999.c`); new interrupt slot `VM_UISLOT` 8 (`VM_NTIMERS` 9), `vm_t.uipending` / `uiseen`, polled in `vm_irq_poll()`; `COLT` parameter bit 32 (33 GOSUB / 34 GOTO / 32 OFF), node `NT_ONUISTMT 0x8F`, parser (`ON` + the extension word `UI`), `cgen_from_onuistmt()`, grammar rule `on-ui-stmt`. The handler reads the events itself with `UI("EVENT")`; it is entered once per new event. Tests: `vmtest1` 1278 (+5 ON UI cases, the test host's counter goes 0 to 1 at the fourth look), `uitest1` 152 (+2), `repltest1` 415, `asmtest1` 72, `make grammar-check`, `make man-check`. Checked in the window under Xvfb: a program with `ON UI GOSUB` counted three button clicks and ended on Quit. Docs: `docs/ui-subsystem.md` "ON UI", `instset.h`, `man/engine1999-basic.7`, roadmap item 47. Test hygiene: all Xvfb / metacity / engine processes of this test were killed (`ps` checked); one `engine1999` survived `timeout` for a while and was killed by PID.
 
 ## Log
 

@@ -495,6 +495,7 @@ bool cgen_from_oncollstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_onmousestmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_onjoystmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_onkeystmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_onuistmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_gfxstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_randomizestmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_anglestmt( codegen_t* cgen, compiler_t* comp, node_t* node );
