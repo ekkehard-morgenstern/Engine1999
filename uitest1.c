@@ -27,6 +27,7 @@
 */
 
 #include "ui.h"
+#include "joy.h"
 #include "gfxcore.h"
 
 /*
@@ -618,6 +619,59 @@ int main( void ) {
     check( "ui_event_count counts a queued event", ui_event_count() == c0 + 1U );
     drain();
     check( "reading an event does not change the count", ui_event_count() == c0 + 1U );
+    done();
+
+    // arrows move the focus to the nearest widget in that direction
+    setup();
+    ui_add( &ui, UIK_BUTTON, 1, 10, 10, 60, 22, "A", 0 );
+    ui_add( &ui, UIK_BUTTON, 2, 100, 10, 60, 22, "B", 0 );
+    ui_add( &ui, UIK_BUTTON, 3, 10, 80, 60, 22, "C", 0 );
+    ui_add( &ui, UIK_CHECK, 4, 100, 80, 80, 16, "D", 0 );
+    check( "the first button has the focus", ui.focus == 1 );
+    key( UIKEY_RIGHT );
+    check( "right: the button on the right", ui.focus == 2 );
+    key( UIKEY_DOWN );
+    check( "down: the box below", ui.focus == 4 );
+    key( UIKEY_LEFT );
+    check( "left: the button on the left", ui.focus == 3 );
+    key( UIKEY_UP );
+    check( "up: the button above", ui.focus == 1 );
+    key( UIKEY_UP );
+    check( "up at the top stays", ui.focus == 1 );
+    drain();
+    done();
+
+    // a game controller as keys
+    setup();
+    ui_add( &ui, UIK_BUTTON, 1, 10, 10, 60, 22, "A", 0 );
+    ui_add( &ui, UIK_LIST, 2, 100, 10, 80, 60, "", 0 );
+    int pk[16];
+    int np = ui_pad_keys( &ui, 0, 0.0, 0.0, 1000, pk, 16 );
+    check( "no buttons, no keys", np == 0 );
+    np = ui_pad_keys( &ui, JOYB_A, 0.0, 0.0, 1000, pk, 16 );
+    check( "A on a button is Space", np == 1 && pk[0] == ' ' );
+    np = ui_pad_keys( &ui, JOYB_A, 0.0, 0.0, 1010, pk, 16 );
+    check( "a held A does not repeat", np == 0 );
+    np = ui_pad_keys( &ui, JOYB_RIGHT, 0.0, 0.0, 1100, pk, 16 );
+    check( "the D-pad is an arrow key", np == 1 && pk[0] == UIKEY_RIGHT );
+    np = ui_pad_keys( &ui, JOYB_RIGHT, 0.0, 0.0, 1300, pk, 16 );
+    check( "no repeat before 400 ms", np == 0 );
+    np = ui_pad_keys( &ui, JOYB_RIGHT, 0.0, 0.0, 1520, pk, 16 );
+    check( "repeat after 400 ms", np == 1 && pk[0] == UIKEY_RIGHT );
+    np = ui_pad_keys( &ui, JOYB_RIGHT, 0.0, 0.0, 1560, pk, 16 );
+    check( "then every 60 ms", np == 0 );
+    np = ui_pad_keys( &ui, JOYB_RIGHT, 0.0, 0.0, 1585, pk, 16 );
+    check( "the second repeat", np == 1 );
+    np = ui_pad_keys( &ui, 0, 0.0, -0.9, 1700, pk, 16 );
+    check( "the left stick up is the Up key", np == 1 && pk[0] == UIKEY_UP );
+    np = ui_pad_keys( &ui, 0, 0.3, 0.3, 1800, pk, 16 );
+    check( "a small stick move is nothing", np == 0 );
+    np = ui_pad_keys( &ui, JOYB_B | JOYB_LB | JOYB_RB | JOYB_START, 0.0, 0.0, 1900, pk, 16 );
+    check( "B, LB, RB, Start", np == 4 && pk[0] == UIKEY_ENTER && pk[1] == UIKEY_ESCAPE && pk[2] == UIKEY_BACKTAB && pk[3] == UIKEY_TAB );
+    ui_pad_keys( &ui, 0, 0.0, 0.0, 2000, pk, 16 );
+    ui_set_focus( &ui, 2 );
+    np = ui_pad_keys( &ui, JOYB_A, 0.0, 0.0, 2100, pk, 16 );
+    check( "A in a list is Return", np == 1 && pk[0] == UIKEY_ENTER );
     done();
 
     // canvas: a zoomed grid of cells

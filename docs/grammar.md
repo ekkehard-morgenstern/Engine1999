@@ -670,7 +670,7 @@ ui-stmt := XFUNC(UI) ( OPEN | CLOSE | CLEAR | UPDATE |
                            ( LABEL | BUTTON | CHECK | TEXT | PANEL ) ui-geometry "," str-expr |
                            RADIO ui-geometry "," str-expr [ "," num-expr ] |
                            ( LIST | PROGRESS ) ui-geometry | ( SLIDER | SCROLL ) ui-geometry [ "," num-expr ] |
-                           PAGE num-expr "," num-expr |
+                           PAGE num-expr "," num-expr | JOY num-expr |
                            CANVAS ui-geometry "," num-expr "," num-expr | PIXEL num-expr "," num-expr "," num-expr "," num-expr |
                            IMAGE num-expr "," str-expr | GETIMAGE num-expr "," str-var-ref |
                            ( REMOVE | FOCUS | CLEARLIST | MODAL ) num-expr | ( CAPTION | ITEM ) num-expr "," str-expr |

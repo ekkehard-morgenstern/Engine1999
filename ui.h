@@ -148,6 +148,9 @@ typedef struct _ui_t {
     int             popup;              // id of the open pop-up list (0 none)
     int             capture;            // id of the widget that has the mouse button pressed (0 none)
     int             lastbuttons, lastx, lasty;
+    uint32_t        padprev;            // ui_pad_keys(): the pad buttons of the last call
+    int             padkey;             // the direction key that is held (0 none)
+    uint32_t        padnext_ms;         // when it repeats
     int             capcell;            // canvas: the cell last reported while the mouse is held
     int             cappart;            // scroll bar parts (UISB_*): the part that was pressed (while capture is a scroll bar or a list)
     int             capoff;             // the distance of the mouse from the top / left of the knob when it was grabbed
@@ -197,6 +200,9 @@ bool ui_popup( ui_t* ui, int listid, int x, int y );            // shows the lis
 // the input of one frame: the mouse (buttons UIB_*, wheel steps, up positive) and the keys typed since the last call; now_ms for the double click
 void ui_input( ui_t* ui, int mx, int my, int buttons, int wheel, const int* keys, int nkeys, uint32_t now_ms );
 uint32_t ui_event_count( void );                                // the number of events queued so far (all UIs): a change means a new event (ON UI)
+// a game controller as keys: the D-pad and the left stick are the arrow keys (they repeat while held), A presses (Space, Return in lists and text fields),
+// B is Escape, the shoulder buttons are Shift+Tab / Tab, Start is Return. buttons are JOYB_* bits (joy.h), lx / ly the left stick; returns the number of keys.
+int  ui_pad_keys( ui_t* ui, uint32_t buttons, double lx, double ly, uint32_t now_ms, int* keys, int max );
 bool ui_next_event( ui_t* ui, ui_event_t* ev );                 // false: none
 
 // draws the changed widgets (all = true: the whole canvas)

@@ -114,6 +114,7 @@ static const gfxcmd_t cmds[] = {
     { "UI", "ITEMTEXT",  GFXOP_UIITEMTEXT, "nnv",    0, false },
     { "UI", "SCROLL",    GFXOP_UISCROLL, "nnnnno",   0, false },
     { "UI", "PAGE",      GFXOP_UIPAGE,   "nn",       0, false },
+    { "UI", "JOY",       GFXOP_UIJOY,    "n",        0, false },
     { "UI", "CANVAS",    GFXOP_UICANVAS, "nnnnnnn",  0, false },
     { "UI", "PIXEL",     GFXOP_UIPIXEL,  "nnnn",     0, false },
     { "UI", "IMAGE",     GFXOP_UIIMAGE,  "ns",       0, false },

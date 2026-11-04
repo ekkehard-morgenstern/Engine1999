@@ -27,6 +27,7 @@
 */
 
 #include "ui.h"
+#include "joy.h"
 #include <math.h>
 
 #define ROWH        14                  // the height of a list row
@@ -1224,6 +1225,87 @@ static void focus_step( ui_t* ui, int dir ) {
     }
 }
 
+// the arrow keys move the focus to the nearest widget in that direction (for the widgets that do not use the arrow themselves)
+static void focus_dir( ui_t* ui, int key ) {
+    ui_widget_t* cur = ui_find( ui, ui->focus );
+    if ( cur == 0 ) {
+        focus_step( ui, 1 );
+        return;
+    }
+    int cx = cur->x + cur->w / 2, cy = cur->y + cur->h / 2, best = -1;
+    long bestscore = 0;
+    for ( int i = 0; i < ui->count; ++i ) {
+        ui_widget_t* w = &ui->widgets[i];
+        if ( w == cur || !focusable( w ) || !in_scope( ui, w ) ) {
+            continue;
+        }
+        int dx = w->x + w->w / 2 - cx, dy = w->y + w->h / 2 - cy;
+        int p = key == UIKEY_UP ? -dy : key == UIKEY_DOWN ? dy : key == UIKEY_LEFT ? -dx : dx;
+        int o = ( key == UIKEY_UP || key == UIKEY_DOWN ) ? abs( dx ) : abs( dy );
+        if ( p <= 0 ) {
+            continue;
+        }
+        long score = p + 2L * o;
+        if ( best < 0 || score < bestscore ) {
+            best = i;
+            bestscore = score;
+        }
+    }
+    if ( best >= 0 ) {
+        ui_set_focus( ui, ui->widgets[best].id );
+    }
+}
+
+int ui_pad_keys( ui_t* ui, uint32_t buttons, double lx, double ly, uint32_t now_ms, int* keys, int max ) {
+    int n = 0;
+    uint32_t pressed = buttons & ~ui->padprev;
+    ui->padprev = buttons;
+    const ui_widget_t* f = ui_find( ui, ui->focus );
+    bool enter = f != 0 && ( f->kind == UIK_LIST || f->kind == UIK_TEXT );
+    if ( ( pressed & JOYB_A ) && n < max ) {
+        keys[n++] = enter ? UIKEY_ENTER : ' ';
+    }
+    if ( ( pressed & JOYB_START ) && n < max ) {
+        keys[n++] = UIKEY_ENTER;
+    }
+    if ( ( pressed & JOYB_B ) && n < max ) {
+        keys[n++] = UIKEY_ESCAPE;
+    }
+    if ( ( pressed & JOYB_LB ) && n < max ) {
+        keys[n++] = UIKEY_BACKTAB;
+    }
+    if ( ( pressed & JOYB_RB ) && n < max ) {
+        keys[n++] = UIKEY_TAB;
+    }
+    int dir = 0;
+    if ( buttons & JOYB_UP ) {
+        dir = UIKEY_UP;
+    } else if ( buttons & JOYB_DOWN ) {
+        dir = UIKEY_DOWN;
+    } else if ( buttons & JOYB_LEFT ) {
+        dir = UIKEY_LEFT;
+    } else if ( buttons & JOYB_RIGHT ) {
+        dir = UIKEY_RIGHT;
+    } else if ( fabs( lx ) > 0.5 || fabs( ly ) > 0.5 ) {
+        dir = fabs( ly ) >= fabs( lx ) ? ( ly < 0.0 ? UIKEY_UP : UIKEY_DOWN ) : ( lx < 0.0 ? UIKEY_LEFT : UIKEY_RIGHT );
+    }
+    if ( dir == 0 ) {
+        ui->padkey = 0;
+    } else if ( dir != ui->padkey ) {
+        ui->padkey = dir;
+        ui->padnext_ms = now_ms + 400U;
+        if ( n < max ) {
+            keys[n++] = dir;
+        }
+    } else if ( now_ms >= ui->padnext_ms ) {
+        ui->padnext_ms = now_ms + 60U;
+        if ( n < max ) {
+            keys[n++] = dir;
+        }
+    }
+    return n;
+}
+
 static void handle_key( ui_t* ui, int key ) {
     if ( key == UIKEY_ESCAPE ) {
         if ( ui->popup != 0 ) {
@@ -1241,8 +1323,19 @@ static void handle_key( ui_t* ui, int key ) {
         }
         return;
     }
+    bool arrow = key == UIKEY_UP || key == UIKEY_DOWN || key == UIKEY_LEFT || key == UIKEY_RIGHT;
     ui_widget_t* w = ui_find( ui, ui->focus );
+    if ( w == 0 && arrow && ui->popup == 0 ) {
+        focus_step( ui, 1 );
+        return;
+    }
     if ( w == 0 || !( w->flags & UIF_ENABLED ) || !( w->flags & UIF_VISIBLE ) || !in_scope( ui, w ) ) {
+        return;
+    }
+    if ( arrow && ui->popup == 0 && ( w->kind == UIK_BUTTON || w->kind == UIK_CHECK ||
+         ( w->kind == UIK_TEXT && ( key == UIKEY_UP || key == UIKEY_DOWN ) ) ||
+         ( w->kind == UIK_LIST && ( key == UIKEY_LEFT || key == UIKEY_RIGHT ) ) ) ) {
+        focus_dir( ui, key );
         return;
     }
     switch ( w->kind ) {

@@ -135,6 +135,7 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXOP_UIPIXEL   119             // UI PIXEL id, x, y, c
 #define GFXOP_UIIMAGE   120             // UI IMAGE id, a$                        (cw * ch bytes into the cells)
 #define GFXOP_UIGETIMAGE 121            // UI GETIMAGE id, a$
+#define GFXOP_UIJOY     122             // UI JOY n                               (1 = a game controller drives the focus, the default; 0 = the program reads the pads itself)
 #define GFXOP_UIPAGE    117             // UI PAGE id, n                           (the size of the visible part)
 
 // queries (vm_gfx_t.query): functions of the language

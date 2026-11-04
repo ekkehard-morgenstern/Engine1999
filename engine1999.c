@@ -37,6 +37,7 @@
 #include "mouse.h"
 #include "gfxcore.h"
 #include "ui.h"
+#include "joy.h"
 #include "keyseq.h"
 #include "sdlutil.h"
 #include "version.h"
@@ -944,6 +945,7 @@ static int gi( double v, int def ) {
 
 static ui_t        host_ui;
 static bool        host_ui_open = false;
+static bool        host_ui_pad = true;           // UI JOY: the game controllers drive the focus
 static ui_event_t  host_ui_event;       // the current event (UI("KIND"), UI("VALUE"))
 
 static void ui_c_box( void* ctx, int x1, int y1, int x2, int y2, int color, bool fill ) {
@@ -982,6 +984,7 @@ static void host_ui_start( void ) {
     ui_init( &host_ui, &c, UI_PALBASE );
     memset( &host_ui_event, 0, sizeof(host_ui_event) );
     host_ui_open = true;
+    host_ui_pad = true;
     ui_draw( &host_ui, true );
 }
 
@@ -1066,6 +1069,18 @@ static bool host_ui_op( int op, const double* a, int na, const char* s, size_t s
         case GFXOP_UIUPDATE: {
             int keys[64];
             int nk = host_ui_keys( keys, 64 );
+            if ( host_ui_pad && joy_count() > 0 ) {
+                uint32_t b = 0;
+                double lx = 0.0, ly = 0.0;
+                for ( int p = 0; p < JOY_MAXPLAYERS; ++p ) {
+                    if ( joy_connected( p ) ) {
+                        b |= joy_buttons( p );
+                        if ( fabs( joy_axis( p, JOYA_LX ) ) > fabs( lx ) ) lx = joy_axis( p, JOYA_LX );
+                        if ( fabs( joy_axis( p, JOYA_LY ) ) > fabs( ly ) ) ly = joy_axis( p, JOYA_LY );
+                    }
+                }
+                nk += ui_pad_keys( &host_ui, b, lx, ly, host_ui_now(), keys + nk, 64 - nk );
+            }
             ui_input( &host_ui, sdlscr_mouse_get( MOUSEV_X ), sdlscr_mouse_get( MOUSEV_Y ), sdlscr_mouse_get( MOUSEV_BUTTONS ),
                 sdlscr_mouse_get( MOUSEV_WHEEL ), keys, nk, host_ui_now() );
             ui_draw( &host_ui, false );
@@ -1087,6 +1102,7 @@ static bool host_ui_op( int op, const double* a, int na, const char* s, size_t s
         case GFXOP_UIPIXEL:     ok = ui_canvas_set( &host_ui, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 0 ) ); break;
         case GFXOP_UIIMAGE:     ok = ui_canvas_load( &host_ui, id, (const uint8_t*) s, slen ); break;
         case GFXOP_UIGETIMAGE:  ok = ui_canvas_save( &host_ui, id, out, outsz, outlen ); break;
+        case GFXOP_UIJOY:       host_ui_pad = a[0] != 0.0; break;
         case GFXOP_UIPAGE:      ok = ui_set_page( &host_ui, id, gi( a[1], 1 ) ); break;
         case GFXOP_UIPANEL:     ok = ui_add( &host_ui, UIK_PANEL, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), text, 0 ); break;
         case GFXOP_UIREMOVE:    ok = ui_remove( &host_ui, id ); break;
@@ -1189,7 +1205,7 @@ static bool host_gfx_op( void* usrdata, int op, const double* a, int na, const c
     size_t* outlen, const char** err ) {
     (void) usrdata; (void) na;
     int t = sdlscr_gfx_target();
-    if ( op >= GFXOP_UIOPEN && op <= GFXOP_UIGETIMAGE ) {
+    if ( op >= GFXOP_UIOPEN && op <= GFXOP_UIJOY ) {
         return host_ui_op( op, a, na, s, slen, out, outsz, outlen, err );
     }
     switch ( op ) {

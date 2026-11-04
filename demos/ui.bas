@@ -7,7 +7,7 @@
 30 ' number, an id, that the program chooses) and UI UPDATE, once a frame, takes the mouse and the keys, draws what changed and queues events. UI("EVENT") is the
 40 ' id of the next event (0 = none), UI("KIND") and UI("VALUE") say what happened: kind 1 click, 2 change, 3 select, 4 double click, 5 Return in a text field, 6 cancel.
 50 ' Mouse: click, drag the slider, wheel over the list. Keys: Tab / Shift+Tab move the focus, Space and Return press, the arrow keys work in the list, the slider and
-60 ' the radio buttons, a text field takes typing. (A game controller is not used here.)
+60 ' the radio buttons, a text field takes typing. (A game controller works, too: D-pad or left stick move the focus, A presses, B is Escape, LB / RB are Shift+Tab / Tab.)
 70 ' ESC is an ordinary key here (BREAK OFF): it cancels a dialog or a pop-up; Ctrl+C stops the program. Scroll bars: UI SCROLL, UI RANGE, UI PAGE; a list shows its own when it has more rows than fit.
 80 ' Needs the window (engine1999): the UI draws on the graphics layer.
 90 GFX RESET ALL
