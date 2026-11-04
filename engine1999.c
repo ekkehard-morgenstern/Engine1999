@@ -36,6 +36,8 @@
 #include "gfxops.h"
 #include "mouse.h"
 #include "gfxcore.h"
+#include "ui.h"
+#include "keyseq.h"
 #include "sdlutil.h"
 #include "version.h"
 #include "ansi.h"
@@ -934,10 +936,240 @@ static int gi( double v, int def ) {
     return v > 1.0e6 ? 1000000 : v < -1.0e6 ? -1000000 : (int) v;
 }
 
+
+// -- the UI subsystem (ui.h, docs/ui-subsystem.md): widgets on the graphics layer; the program drives it with UI UPDATE (once a frame) ----------
+
+#define UI_LAYER        3               // the UI owns the graphics layer
+#define UI_PALBASE      224             // its theme: the palette entries 224 .. 239 of the graphics layer
+
+static ui_t        host_ui;
+static bool        host_ui_open = false;
+static ui_event_t  host_ui_event;       // the current event (UI("KIND"), UI("VALUE"))
+
+static void ui_c_box( void* ctx, int x1, int y1, int x2, int y2, int color, bool fill ) {
+    (void) ctx;
+    sdlscr_gfx_box( UI_LAYER, x1, y1, x2, y2, color, fill );
+}
+
+static void ui_c_pset( void* ctx, int x, int y, int color ) {
+    (void) ctx;
+    sdlscr_gfx_pset( UI_LAYER, x, y, color );
+}
+
+static void host_ui_start( void ) {
+    uint32_t argb[ UI_PAL_COLORS ];
+    ui_theme_argb( argb );
+    for ( int i = 0; i < UI_PAL_COLORS; ++i ) {
+        sdlscr_palette_set( UI_LAYER, UI_PALBASE + i, argb[i] );
+    }
+    sdlscr_layer_enable( UI_LAYER, true );
+    sdlscr_mouse_show();
+    sdlscr_mouse_timeout( 0 );                       // the pointer stays: a form is no place for a hidden pointer
+    if ( host_ui_open ) {
+        ui_free( &host_ui );
+    }
+    ui_canvas_t c = { 0, 640, 300, ui_c_box, ui_c_pset };
+    ui_init( &host_ui, &c, UI_PALBASE );
+    memset( &host_ui_event, 0, sizeof(host_ui_event) );
+    host_ui_open = true;
+    ui_draw( &host_ui, true );
+}
+
+// the keys typed since the last look: bytes of sdlscr_pollkey() (canonical escape sequences for the special keys) as UI keys
+static int host_ui_keys( int* keys, int max ) {
+    char bytes[128];
+    size_t n = 0;
+    int c;
+    while ( n < sizeof(bytes) && ( c = sdlscr_pollkey() ) != 0 ) {
+        bytes[n++] = (char) c;
+    }
+    int nk = 0;
+    for ( size_t i = 0; i < n && nk < max; ) {
+        unsigned char b = (unsigned char) bytes[i];
+        if ( b == 27 ) {
+            int key = 0, mods = 0;
+            int used = i + 1 < n ? keyseq_parse( bytes + i, n - i, &key, &mods ) : 0;
+            if ( used > 0 ) {
+                static const struct { int ks, ui; } map[] = {
+                    { KS_LEFT, UIKEY_LEFT }, { KS_RIGHT, UIKEY_RIGHT }, { KS_UP, UIKEY_UP }, { KS_DOWN, UIKEY_DOWN }, { KS_HOME, UIKEY_HOME },
+                    { KS_END, UIKEY_END }, { KS_PGUP, UIKEY_PGUP }, { KS_PGDN, UIKEY_PGDN }, { KS_DELETE, UIKEY_DELETE }, { KS_BACKTAB, UIKEY_BACKTAB }
+                };
+                for ( size_t m = 0; m < sizeof(map) / sizeof(map[0]); ++m ) {
+                    if ( map[m].ks == key ) {
+                        keys[nk++] = map[m].ui;
+                        break;
+                    }
+                }
+                i += (size_t) used;
+            } else {
+                keys[nk++] = UIKEY_ESCAPE;
+                ++i;
+            }
+            continue;
+        }
+        if ( b == 127 ) {
+            keys[nk++] = UIKEY_BACKSPACE;
+        } else if ( b == 10 ) {
+            keys[nk++] = UIKEY_ENTER;
+        } else {
+            keys[nk++] = b;                         // TAB 9, ENTER 13, BACKSPACE 8 and the characters are the codes of ui.h
+        }
+        ++i;
+    }
+    return nk;
+}
+
+static uint32_t host_ui_now( void ) {
+    struct timespec ts;
+    clock_gettime( CLOCK_MONOTONIC, &ts );
+    return (uint32_t)( ts.tv_sec * 1000U + (unsigned) ( ts.tv_nsec / 1000000L ) );
+}
+
+static bool host_ui_op( int op, const double* a, int na, const char* s, size_t slen, uint8_t* out, size_t outsz, size_t* outlen, const char** err ) {
+    (void) na;
+    if ( op == GFXOP_UIOPEN ) {
+        host_ui_start();
+        return true;
+    }
+    if ( !host_ui_open ) {
+        *err = "UI is not open (UI OPEN)";
+        return false;
+    }
+    char text[ UI_TEXTMAX + 1 ];
+    if ( s != 0 ) {
+        size_t n = slen > UI_TEXTMAX ? UI_TEXTMAX : slen;
+        memcpy( text, s, n );
+        text[n] = '\0';
+    } else {
+        text[0] = '\0';
+    }
+    int id = gi( a[0], 0 );
+    bool ok = true;
+    switch ( op ) {
+        case GFXOP_UICLOSE:
+            ui_free( &host_ui );
+            host_ui_open = false;
+            sdlscr_gfx_clear( UI_LAYER, 0 );
+            break;
+        case GFXOP_UICLEAR:
+            ui_clear( &host_ui );
+            ui_draw( &host_ui, true );
+            break;
+        case GFXOP_UIUPDATE: {
+            int keys[64];
+            int nk = host_ui_keys( keys, 64 );
+            ui_input( &host_ui, sdlscr_mouse_get( MOUSEV_X ), sdlscr_mouse_get( MOUSEV_Y ), sdlscr_mouse_get( MOUSEV_BUTTONS ),
+                sdlscr_mouse_get( MOUSEV_WHEEL ), keys, nk, host_ui_now() );
+            ui_draw( &host_ui, false );
+            return true;
+        }
+        case GFXOP_UILABEL:     ok = ui_add( &host_ui, UIK_LABEL, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), text, 0 ); break;
+        case GFXOP_UIBUTTON:    ok = ui_add( &host_ui, UIK_BUTTON, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), text, 0 ); break;
+        case GFXOP_UICHECK:     ok = ui_add( &host_ui, UIK_CHECK, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), text, 0 ); break;
+        case GFXOP_UIRADIO:     ok = ui_add( &host_ui, UIK_RADIO, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), text, gi( a[5], 0 ) ); break;
+        case GFXOP_UITEXT:      ok = ui_add( &host_ui, UIK_TEXT, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), text, 0 ); break;
+        case GFXOP_UILIST:      ok = ui_add( &host_ui, UIK_LIST, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), "", 0 ); break;
+        case GFXOP_UIPROGRESS:  ok = ui_add( &host_ui, UIK_PROGRESS, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), "", 0 ); break;
+        case GFXOP_UISLIDER:    ok = ui_add( &host_ui, UIK_SLIDER, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), "", gi( a[5], 0 ) ); break;
+        case GFXOP_UIPANEL:     ok = ui_add( &host_ui, UIK_PANEL, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), text, 0 ); break;
+        case GFXOP_UIREMOVE:    ok = ui_remove( &host_ui, id ); break;
+        case GFXOP_UICAPTION:   ok = ui_set_text( &host_ui, id, text ); break;
+        case GFXOP_UIVALUE:     ok = ui_set_value( &host_ui, id, gi( a[1], 0 ) ); break;
+        case GFXOP_UIRANGE:     ok = ui_set_range( &host_ui, id, gi( a[1], 0 ), gi( a[2], 0 ) ); break;
+        case GFXOP_UIENABLE:    ok = ui_set_enabled( &host_ui, id, a[1] != 0.0 ); break;
+        case GFXOP_UISHOW:      ok = ui_set_visible( &host_ui, id, a[1] != 0.0 ); break;
+        case GFXOP_UIFOCUS:     ok = ui_set_focus( &host_ui, id ); break;
+        case GFXOP_UIITEM:      ok = ui_list_add( &host_ui, id, text ); break;
+        case GFXOP_UICLEARLIST: ok = ui_list_clear( &host_ui, id ); break;
+        case GFXOP_UIMODAL:     ok = ui_set_modal( &host_ui, id ); break;
+        case GFXOP_UIPOPUP:     ok = ui_popup( &host_ui, id, gi( a[1], 0 ), gi( a[2], 0 ) ); break;
+        case GFXOP_UIGETTEXT: {
+            const char* t = ui_get_text( &host_ui, id );
+            if ( t == 0 ) {
+                ok = false;
+                break;
+            }
+            size_t n = strlen( t );
+            if ( n > outsz ) {
+                n = outsz;
+            }
+            memcpy( out, t, n );
+            *outlen = n;
+            break;
+        }
+        case GFXOP_UIITEMTEXT: {
+            const char* t = ui_list_get( &host_ui, id, gi( a[1], -1 ) );
+            if ( t == 0 ) {
+                ok = false;
+                break;
+            }
+            size_t n = strlen( t );
+            if ( n > outsz ) {
+                n = outsz;
+            }
+            memcpy( out, t, n );
+            *outlen = n;
+            break;
+        }
+        default:
+            ok = false;
+            break;
+    }
+    if ( !ok ) {
+        *err = "Illegal UI argument (the id, the kind of widget or the room)";
+        return false;
+    }
+    if ( op >= GFXOP_UILABEL && op != GFXOP_UIGETTEXT && op != GFXOP_UIITEMTEXT ) {
+        // (the widgets are drawn by UI UPDATE; a program that never updates sees nothing: draw once so that a form shows at once)
+    }
+    return true;
+}
+
+static bool host_ui_query( int q, const double* a, double* result ) {
+    if ( q == GFXQ_UIOPEN ) {
+        *result = host_ui_open ? -1.0 : 0.0;
+        return true;
+    }
+    if ( !host_ui_open ) {
+        *result = 0.0;
+        return true;
+    }
+    switch ( q ) {
+        case GFXQ_UIEVENT: {
+            ui_event_t e;
+            if ( ui_next_event( &host_ui, &e ) ) {
+                host_ui_event = e;
+                *result = e.id;
+            } else {
+                *result = 0.0;
+            }
+            break;
+        }
+        case GFXQ_UIKIND:   *result = host_ui_event.kind; break;
+        case GFXQ_UIVALUE:  *result = host_ui_event.value; break;
+        case GFXQ_UIGET: {
+            int v = 0;
+            *result = ui_get_value( &host_ui, gi( a[0], 0 ), &v ) ? v : 0;
+            break;
+        }
+        case GFXQ_UICOUNT: {
+            ui_widget_t* w = ui_find( &host_ui, gi( a[0], 0 ) );
+            *result = w != 0 && w->kind == UIK_LIST ? w->nitems : 0;
+            break;
+        }
+        case GFXQ_UIFOCUS:  *result = host_ui.focus; break;
+        default:            return false;
+    }
+    return true;
+}
+
 static bool host_gfx_op( void* usrdata, int op, const double* a, int na, const char* s, size_t slen, uint8_t* out, size_t outsz,
     size_t* outlen, const char** err ) {
     (void) usrdata; (void) na;
     int t = sdlscr_gfx_target();
+    if ( op >= GFXOP_UIOPEN && op <= GFXOP_UIITEMTEXT ) {
+        return host_ui_op( op, a, na, s, slen, out, outsz, outlen, err );
+    }
     switch ( op ) {
         case GFXOP_LAYER:       sdlscr_layer_enable( gi( a[0], 0 ), a[1] != 0.0 ); break;
         case GFXOP_PRIORITY:    sdlscr_layer_setpriority( gi( a[0], 0 ), gi( a[1], 0 ) ); break;
@@ -1089,6 +1321,8 @@ static bool host_gfx_query( void* usrdata, int q, const double* a, int na, doubl
         case GFXQ_MOUSEEVENT:   *result = sdlscr_mouse_get( MOUSEV_EVENTS ); break;
         case GFXQ_MOUSEVISIBLE: *result = sdlscr_mouse_get( MOUSEV_VISIBLE ) ? -1.0 : 0.0; break;
         case GFXQ_EVENT:        *result = sdlscr_sprite_nextevent(); break;
+        case GFXQ_UIEVENT: case GFXQ_UIKIND: case GFXQ_UIVALUE: case GFXQ_UIGET: case GFXQ_UICOUNT: case GFXQ_UIFOCUS: case GFXQ_UIOPEN:
+            return host_ui_query( q, a, result );
         default:                return false;
     }
     return true;

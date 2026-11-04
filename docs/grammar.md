@@ -166,7 +166,7 @@ sys-noarg-str-call := sys-noarg-str .
 
 ```ebnf
 gfx-query-call := ( RGB | POINT | TILE ) "(" num-expr { "," num-expr } ")" |
-                  ( GFX | TXT | SPRITE | MOUSE ) "(" <string> { "," num-expr } ")" .
+                  ( GFX | TXT | SPRITE | MOUSE | XFUNC(UI) ) "(" <string> { "," num-expr } ")" .
 num-func-call := num-usr-fn-call | sys-num-fn-arg-call | sys-noarg-num-call | gfx-query-call .
 str-func-call := str-usr-fn-call | sys-str-fn-arg-call | sys-noarg-str-call .
 ```
@@ -654,7 +654,22 @@ mouse-stmt := MOUSE ( SHOW | HIDE | POS num-expr "," num-expr | TIMEOUT num-expr
 
 ```ebnf
 on-mouse-stmt := ON MOUSE ( goto-kw goto-target | OFF ) .
-gfx-all-stmt := gfx-stmt | txt-stmt | tile-stmt | sprite-stmt | mouse-stmt | on-mouse-stmt | cls-stmt | locate-stmt | color-stmt | symbol-stmt | design-stmt | design-row | on-collision-stmt .
+```
+
+> The UI subsystem (docs/ui-subsystem.md; UI is an extension word): widgets on the graphics layer. Every widget has an id (a positive number the program chooses); x, y, w, h are
+> pixels on the 640 x 300 layer. UI UPDATE (once a frame) takes the mouse and the keys, draws what changed and queues events; UI("EVENT") is the id of the next event (0 = none).
+
+```ebnf
+ui-stmt := XFUNC(UI) ( OPEN | CLOSE | CLEAR | UPDATE |
+                           ( LABEL | BUTTON | CHECK | TEXT | PANEL ) ui-geometry "," str-expr |
+                           RADIO ui-geometry "," str-expr [ "," num-expr ] |
+                           ( LIST | PROGRESS ) ui-geometry | SLIDER ui-geometry [ "," num-expr ] |
+                           ( REMOVE | FOCUS | CLEARLIST | MODAL ) num-expr | ( CAPTION | ITEM ) num-expr "," str-expr |
+                           ( VALUE | ENABLE | SHOW ) num-expr "," num-expr | RANGE num-expr "," num-expr "," num-expr |
+                           POPUP num-expr "," num-expr "," num-expr | GETTEXT num-expr "," str-var-ref |
+                           ITEMTEXT num-expr "," num-expr "," str-var-ref ) .
+ui-geometry := num-expr "," num-expr "," num-expr "," num-expr "," num-expr .
+gfx-all-stmt := gfx-stmt | txt-stmt | tile-stmt | sprite-stmt | mouse-stmt | on-mouse-stmt | ui-stmt | cls-stmt | locate-stmt | color-stmt | symbol-stmt | design-stmt | design-row | on-collision-stmt .
 ```
 
 ## Statements and lines

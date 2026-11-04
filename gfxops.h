@@ -103,6 +103,33 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXOP_SPRMOVETO 68              // SPRITE n, MOVETO x, y, ticks
 #define GFXOP_SPRCOLL   69              // SPRITE n, COLLISION ON|OFF [, TILES]
 #define GFXOP_SPRMOVE   70              // SPRITE n, x, y [, image]
+// the UI subsystem (docs/ui-subsystem.md): the words after UI
+#define GFXOP_UIOPEN    90              // UI OPEN
+#define GFXOP_UICLOSE   91              // UI CLOSE
+#define GFXOP_UICLEAR   92              // UI CLEAR
+#define GFXOP_UIUPDATE  93              // UI UPDATE
+#define GFXOP_UILABEL   94              // UI LABEL id, x, y, w, h, text$
+#define GFXOP_UIBUTTON  95              // UI BUTTON id, x, y, w, h, text$
+#define GFXOP_UICHECK   96              // UI CHECK id, x, y, w, h, text$
+#define GFXOP_UIRADIO   97              // UI RADIO id, x, y, w, h, text$ [, group]
+#define GFXOP_UITEXT    98              // UI TEXT id, x, y, w, h, text$          (a text field)
+#define GFXOP_UILIST    99              // UI LIST id, x, y, w, h
+#define GFXOP_UIPROGRESS 100            // UI PROGRESS id, x, y, w, h
+#define GFXOP_UISLIDER  101             // UI SLIDER id, x, y, w, h [, min]
+#define GFXOP_UIPANEL   102             // UI PANEL id, x, y, w, h, title$
+#define GFXOP_UIREMOVE  103             // UI REMOVE id
+#define GFXOP_UICAPTION 104             // UI CAPTION id, text$
+#define GFXOP_UIVALUE   105             // UI VALUE id, n
+#define GFXOP_UIRANGE   106             // UI RANGE id, min, max
+#define GFXOP_UIENABLE  107             // UI ENABLE id, n
+#define GFXOP_UISHOW    108             // UI SHOW id, n
+#define GFXOP_UIFOCUS   109             // UI FOCUS id
+#define GFXOP_UIITEM    110             // UI ITEM id, text$                      (a row of a list)
+#define GFXOP_UICLEARLIST 111           // UI CLEARLIST id
+#define GFXOP_UIMODAL   112             // UI MODAL id                            (0 ends it)
+#define GFXOP_UIPOPUP   113             // UI POPUP id, x, y
+#define GFXOP_UIGETTEXT 114             // UI GETTEXT id, a$
+#define GFXOP_UIITEMTEXT 115            // UI ITEMTEXT id, row, a$
 
 // queries (vm_gfx_t.query): functions of the language
 #define GFXQ_RGB        1               // RGB(r, g, b [, a]): computed by the VM itself
@@ -137,6 +164,13 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXQ_MOUSEWHEEL 105             // MOUSE("WHEEL"): wheel steps since the last call (up is positive)
 #define GFXQ_MOUSESHAPE 106             // MOUSE("SHAPE")
 #define GFXQ_MOUSEVISIBLE 107           // MOUSE("VISIBLE"): -1 / 0
+#define GFXQ_UIEVENT    120             // UI("EVENT"): the id of the next event (0 none); it becomes the current event
+#define GFXQ_UIKIND     121             // UI("KIND"): the kind of the current event (1 click, 2 change, 3 select, 4 double, 5 enter, 6 cancel)
+#define GFXQ_UIVALUE    122             // UI("VALUE"): the value of the current event
+#define GFXQ_UIGET      123             // UI("GET", id): the value of a widget (check box 0 / 1, radio button, slider, progress, list row, text field length)
+#define GFXQ_UICOUNT    124             // UI("COUNT", id): the rows of a list
+#define GFXQ_UIFOCUS    125             // UI("FOCUS"): the id of the widget that has the focus
+#define GFXQ_UIOPEN     126             // UI("OPEN"): -1 / 0
 #define GFXQ_MOUSEEVENT 108             // (the VM polls it for ON MOUSE) the number of presses, releases and wheel steps so far; a change is an event
 #define GFXQ_EVENT      90              // (the VM polls it for ON COLLISION) a sprite with a new collision, -1 none
 

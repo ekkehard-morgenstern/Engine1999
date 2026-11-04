@@ -42,3 +42,5 @@ libtest1
 river.hi
 backups/*.zip
 backups/restored/
+fonttest1
+uitest1

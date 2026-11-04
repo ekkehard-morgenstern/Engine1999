@@ -320,7 +320,7 @@ static void bigprogram( void ) {
     repl_enter( &repl, "NEW" );
     for ( int i = 1; i <= 100; ++i ) {
         char text[40];
-        snprintf( text, sizeof(text), "%d REM n%d", i * 10, i * 10 );
+        snprintf( text, sizeof(text), "%d ' abn%d", i * 10, i * 10 );
         repl_enter( &repl, text );
     }
 }
@@ -400,7 +400,7 @@ static void test_editor_mouse( void ) {
     a = mouse_lands_on( sc_clicktext, true );  check( a == 120, "editor mouse: a click in the text pane puts the cursor on that line (row 12: line 120)" );
     a = mouse_lands_on( sc_clicknumber, true ); check( a == 50, "editor mouse: a click in the line number pane puts the cursor on that line (line 50)" );
     mouse_lands_on( sc_clickpos, true );
-    check( findrow( "REM ZN30" ) > 0, "editor mouse: a click in the text puts the cursor at that character (the marker is typed in front of the 5th character)" );
+    check( findrow( "' abZn30" ) > 0, "editor mouse: a click in the text puts the cursor at that character (the marker is typed in front of the 5th character)" );
     a = mouse_lands_on( sc_clickbelow, false ); check( a == 10, "editor mouse: a click below the last line does nothing" );
     a = mouse_lands_on( sc_clickinsert, true ); check( a == 840, "editor mouse: a click during an insertion ends it and goes to the line (the view is at the end: row 6 is line 840)" );
     a = mouse_lands_on( sc_clickrightbutton, true ); check( a == 10, "editor mouse: a click with another button does nothing" );

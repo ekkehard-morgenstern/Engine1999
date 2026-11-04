@@ -466,6 +466,7 @@ bool read_brclit( rbuf_t* rbuf, char** ptarget );
 #define XF_JOY          UINT8_C(7)          // JOY function (game controllers), ON JOY, JOY DEADZONE
 #define XF_FRAME        UINT8_C(8)          // FRAME statement (wait for the next screen refresh)
 #define XF_EXISTS       UINT8_C(11)         // EXISTS(file$): is there such a file (through the I/O drivers)? -1 / 0
+#define XF_UI           UINT8_C(12)         // UI: the UI subsystem (widgets on the graphics layer): statements UI OPEN, UI BUTTON ... and the function UI("EVENT")
 #define XF_LIBRARIES    UINT8_C(10)         // LIBRARIES [name$]: lists the libraries of the last compile (or the procedures and functions of one)
 #define XF_LIBRARY      UINT8_C(9)          // LIBRARY "name"[,"prefix"] (first statement of a library), LOAD LIBRARY "name", SAVE LIBRARY
 bool is_xkeyword( const char* name, uint8_t* pxid );    // an extension word by name

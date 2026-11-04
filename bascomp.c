@@ -3176,7 +3176,7 @@ WORD:       {
 }
 
 bool comp_eat_gfxstmt( compiler_t* comp, node_t** pnode ) {
-    // gfx-stmt := ( TOK_GFX | TOK_TXT | TOK_TILE | TOK_MOUSE ) word args | TOK_SPRITE ( word args | num-expr TOK_COMMA ( word args | args ) ) |
+    // gfx-stmt := ( TOK_GFX | TOK_TXT | TOK_TILE | TOK_MOUSE | TOK_XFUNC(UI) ) word args | TOK_SPRITE ( word args | num-expr TOK_COMMA ( word args | args ) ) |
     //             ( TOK_CLS | TOK_LOCATE | TOK_COLOR | TOK_SYMBOL ) args .
     uint8_t tok = comp->currtok;
     const char* group = "";
@@ -3186,6 +3186,12 @@ bool comp_eat_gfxstmt( compiler_t* comp, node_t** pnode ) {
         case TOK_TILE:      group = "TILE"; break;
         case TOK_MOUSE:     group = "MOUSE"; break;
         case TOK_SPRITE:    group = "SPRITE"; break;
+        case TOK_XFUNC:                                     // the extension word UI
+            if ( comp->currext != XF_UI ) {
+                return false;
+            }
+            group = "UI";
+            break;
         case TOK_CLS: case TOK_LOCATE: case TOK_COLOR: case TOK_SYMBOL:
             break;
         default:
@@ -3256,7 +3262,7 @@ bool comp_eat_gfxstmt( compiler_t* comp, node_t** pnode ) {
 
 bool comp_eat_gfxquerycall( compiler_t* comp, node_t** pnode ) {
     // gfx-query-call := ( TOK_RGB | TOK_POINT | TOK_TILE ) TOK_LPAREN num-expr { TOK_COMMA num-expr } TOK_RPAREN |
-    //                   ( TOK_GFX | TOK_TXT | TOK_SPRITE | TOK_MOUSE ) TOK_LPAREN TOK_STRLIT { TOK_COMMA num-expr } TOK_RPAREN .
+    //                   ( TOK_GFX | TOK_TXT | TOK_SPRITE | TOK_MOUSE | TOK_XFUNC(UI) ) TOK_LPAREN TOK_STRLIT { TOK_COMMA num-expr } TOK_RPAREN .
     uint8_t tok = comp->currtok;
     const char* group = "";
     switch ( tok ) {
@@ -3265,6 +3271,12 @@ bool comp_eat_gfxquerycall( compiler_t* comp, node_t** pnode ) {
         case TOK_TXT:       group = "TXT"; break;
         case TOK_SPRITE:    group = "SPRITE"; break;
         case TOK_MOUSE:     group = "MOUSE"; break;
+        case TOK_XFUNC:                                     // UI("EVENT")
+            if ( comp->currext != XF_UI ) {
+                return false;
+            }
+            group = "UI";
+            break;
         default:            return false;
     }
     if ( !comp_fetchtok( comp ) ) {

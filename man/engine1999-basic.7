@@ -134,6 +134,8 @@ JOY(name$ [, player]) reads the game controllers (up to four, with one standard 
 .TP
 .B The mouse
 MOUSE SHOW, HIDE, POS x,y, SHAPE name and TIMEOUT seconds control the mouse pointer, which is shown for 3 seconds after the mouse moves, a button is pressed or one of SHOW, POS, SHAPE is executed and then hidden so that the text can be read (TIMEOUT 0: it stays until HIDE). The shapes are ARROW, WAIT, BUSY, TEXT, HAND, GRAB, CROSS, SIZEH, SIZEV, MOVE, NO and HELP. The functions MOUSE("X") and MOUSE("Y") (0..639, 0..299), MOUSE("B") (buttons held: 1 left, 2 right, 4 middle), MOUSE("PRESSED") and MOUSE("RELEASED") (buttons since the last call), MOUSE("WHEEL"), MOUSE("SHAPE") and MOUSE("VISIBLE") read it. ON MOUSE GOSUB/GOTO/OFF runs a handler when a button is pressed or released or the wheel turns (not on motion; highest priority of the event handlers). Works in the window and in the console host's screen mode (a terminal that reports the mouse: the pointer is the cell under it with swapped colors and its shape is the terminal's pointer, OSC 22; a cell is 8 x 12 pixels); elsewhere the console host gives an error.
+.PP
+UI OPEN starts the UI subsystem (window only): widgets drawn on the graphics layer, which the UI owns while it is open. UI PANEL, LABEL, BUTTON, CHECK, RADIO, TEXT, LIST, SLIDER and PROGRESS create widgets (id, x, y, w, h and a text; ids are chosen by the program), UI CAPTION, VALUE, RANGE, ENABLE, SHOW, FOCUS, ITEM, CLEARLIST, REMOVE, MODAL, POPUP, GETTEXT and ITEMTEXT change and read them. UI UPDATE, once a frame, takes the mouse and the keys, draws what changed and queues events; UI("EVENT") is the id of the next event (0 = none), UI("KIND") and UI("VALUE") describe it (1 click, 2 change, 3 select, 4 double click, 5 Return in a text field, 6 cancel), UI("GET",id), UI("COUNT",id), UI("FOCUS") and UI("OPEN") read state. UI CLOSE ends it. See docs/ui-subsystem.md.
 .TP
 .B Timers
 AFTER, EVERY, WAIT, FRAME [n] (wait for the next n screen refreshes, 1 by default; in step with the display, no processor time), and the function REMAIN
@@ -272,7 +274,7 @@ MKI MKL MKS MOD MONITOR MOUSE NAND NEQV NEW NEXT NIMP NOR NOT OCT OFF ON OPEN OP
 PITCH PLAY PLAYING POINT POKE POP PRINT PROC PUT PUTREC QUA QUIT RAD RANDOMIZE READ REMAIN RENAME 
 RENUM REPEAT RESTORE RESUME RETURN RGB RIGHT RND RSET RSHIFT RUN SAVE SEEK SFX SGN SHL SHOW SHR SIN 
 SOUND SPACE SPRITE SQR STEP STOP STR STRING SUB SYMBOL SYNC TAN TEMPO THEN TI TILE TIME TO TRACE 
-TREMOLO TXT UEND UNLESS UNTIL VAL VIBRATO VOLUME WAIT WARRANTY WAVE WEND WHILE WRITE XNOR XOR 
+TREMOLO TXT UEND UI UNLESS UNTIL VAL VIBRATO VOLUME WAIT WARRANTY WAVE WEND WHILE WRITE XNOR XOR 
 .\" KEYWORDS-END
 .SH SEE ALSO
 .BR engine1999 (1),

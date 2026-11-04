@@ -1,0 +1,530 @@
+/*
+    Engine1999 - A 2D games engine written in C
+    Copyright (C) 2026  Ekkehard Morgenstern
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+    ADDITIONAL PERMISSION (GPLv3 section 7): the Engine1999 Runtime Exception
+        applies. Programs written in the built-in programming language, and
+        executables made from them with BUILD, do not fall under this license
+        as the exception describes (see the file LICENSE-EXCEPTION).
+
+    CONTACT INFO:
+        E-Mail: ekkehard@ekkehardmorgenstern.de
+        Mail: Ekkehard Morgenstern, Mozartstr. 1, D-76744 Woerth am Rhein,
+              Germany, Europe
+*/
+
+#include "ui.h"
+#include "gfxcore.h"
+
+/*
+Automated test of the UI subsystem (ui.[ch]) without a screen or a VM: widgets are created, mouse and keys are fed in, the events and the state are checked,
+and the drawing is checked by pixels on a gfxcore bitmap. The exit status is the number of failed checks.
+*/
+
+static int checks = 0, failures = 0;
+
+static void check( const char* name, bool ok ) {
+    ++checks;
+    if ( !ok ) {
+        ++failures;
+        printf( "FAIL  %s\n", name );
+    }
+}
+
+static uint8_t buf[ 400 * 240 ];
+static gfx_t   g;
+static ui_t    ui;
+static uint32_t now = 1000;
+
+static void c_box( void* ctx, int x1, int y1, int x2, int y2, int color, bool fill ) {
+    gfx_box( ctx, x1, y1, x2, y2, color, fill );
+}
+
+static void c_pset( void* ctx, int x, int y, int color ) {
+    gfx_pset( ctx, x, y, color );
+}
+
+static void setup( void ) {
+    gfx_init( &g, buf, 400, 240 );
+    gfx_clear( &g, 0 );
+    ui_canvas_t c = { &g, 400, 240, c_box, c_pset };
+    ui_init( &ui, &c, 100 );                       // the theme in the palette entries 100 .. 115
+}
+
+static void done( void ) {
+    ui_free( &ui );
+}
+
+static void mouse( int x, int y, int buttons, int wheel ) {
+    ui_input( &ui, x, y, buttons, wheel, 0, 0, now );
+}
+
+static void click( int x, int y ) {
+    mouse( x, y, UIB_LEFT, 0 );
+    mouse( x, y, 0, 0 );
+}
+
+static void keys( const int* k, int n ) {
+    ui_input( &ui, 0, 0, 0, 0, k, n, now );
+}
+
+static void key( int k ) {
+    keys( &k, 1 );
+}
+
+static void typed( const char* s ) {
+    for ( ; *s; ++s ) {
+        key( (unsigned char) *s );
+    }
+}
+
+static int nevents( void ) {
+    return ui.qcount;
+}
+
+// the next event must be this one
+static bool expect( int id, int kind, int value ) {
+    ui_event_t e;
+    return ui_next_event( &ui, &e ) && e.id == id && e.kind == kind && e.value == value;
+}
+
+static bool none( void ) {
+    ui_event_t e;
+    return !ui_next_event( &ui, &e );
+}
+
+static void drain( void ) {
+    ui_event_t e;
+    while ( ui_next_event( &ui, &e ) ) {
+    }
+}
+
+static int count_color( int x1, int y1, int x2, int y2, int color ) {
+    int n = 0;
+    for ( int y = y1; y <= y2; ++y ) {
+        for ( int x = x1; x <= x2; ++x ) {
+            if ( gfx_point( &g, x, y ) == color ) {
+                ++n;
+            }
+        }
+    }
+    return n;
+}
+
+int main( void ) {
+    ui_theme_t th;
+    ui_theme_default( &th, 100 );
+    uint32_t argb[ UI_PAL_COLORS ];
+    ui_theme_argb( argb );
+    bool opaque = true;
+    for ( int i = 0; i < UI_PAL_COLORS; ++i ) {
+        if ( ( argb[i] >> 24 ) != 0xFF ) {
+            opaque = false;
+        }
+    }
+    check( "the theme colours are opaque and start at the base", opaque && th.desk == 100 && th.fill == 112 && th.font == FONT_SANS );
+
+    // -- creating widgets ---------------------------------------------------------------------------------------------------------------------------------
+    setup();
+    check( "a button is created", ui_add( &ui, UIK_BUTTON, 1, 10, 10, 60, 20, "OK", 0 ) );
+    check( "the same id twice is refused", !ui_add( &ui, UIK_BUTTON, 1, 80, 10, 60, 20, "No", 0 ) );
+    check( "id 0 and negative ids are refused", !ui_add( &ui, UIK_LABEL, 0, 0, 0, 10, 10, "x", 0 ) && !ui_add( &ui, UIK_LABEL, -3, 0, 0, 10, 10, "x", 0 ) );
+    check( "an invalid kind is refused", !ui_add( &ui, UIK_NONE, 2, 0, 0, 10, 10, "x", 0 ) && !ui_add( &ui, UIK_COUNT, 2, 0, 0, 10, 10, "x", 0 ) );
+    check( "an empty size is refused", !ui_add( &ui, UIK_LABEL, 2, 0, 0, 0, 10, "x", 0 ) );
+    check( "the first widget that can have the focus has it", ui.focus == 1 );
+    check( "a widget is found", ui_find( &ui, 1 ) != 0 && ui_find( &ui, 99 ) == 0 );
+    check( "the caption is kept as a copy", strcmp( ui_get_text( &ui, 1 ), "OK" ) == 0 && ui_get_text( &ui, 99 ) == 0 );
+    char longtext[400];
+    memset( longtext, 'x', sizeof(longtext) - 1 );
+    longtext[ sizeof(longtext) - 1 ] = '\0';
+    check( "a long text is cut to 255 characters", ui_add( &ui, UIK_TEXT, 3, 10, 200, 100, 16, longtext, 0 ) && strlen( ui_get_text( &ui, 3 ) ) == UI_TEXTMAX );
+    check( "a remove works", ui_remove( &ui, 3 ) && ui_find( &ui, 3 ) == 0 && !ui_remove( &ui, 3 ) );
+    done();
+
+    setup();
+    bool room = true;
+    for ( int i = 1; i <= UI_MAXWIDGETS; ++i ) {
+        room = room && ui_add( &ui, UIK_LABEL, i, 0, 0, 5, 5, "", 0 );
+    }
+    check( "the table takes UI_MAXWIDGETS widgets", room );
+    check( "and refuses one more", !ui_add( &ui, UIK_LABEL, 1000, 0, 0, 5, 5, "", 0 ) );
+    ui_clear( &ui );
+    check( "clear empties it", ui.count == 0 && ui.focus == 0 && ui_add( &ui, UIK_LABEL, 1, 0, 0, 5, 5, "", 0 ) );
+    done();
+
+    // -- buttons and the focus ---------------------------------------------------------------------------------------------------------------------------
+    setup();
+    ui_add( &ui, UIK_LABEL, 10, 10, 5, 100, 14, "A form", 0 );
+    ui_add( &ui, UIK_BUTTON, 1, 10, 30, 60, 22, "OK", 0 );
+    ui_add( &ui, UIK_BUTTON, 2, 80, 30, 60, 22, "Cancel", 0 );
+    ui_add( &ui, UIK_BUTTON, 3, 150, 30, 60, 22, "Help", 0 );
+    check( "a label does not take the focus", ui.focus == 1 );
+    click( 20, 40 );
+    check( "a click on a button is an event", expect( 1, UIE_CLICK, 0 ) && none() );
+    mouse( 20, 40, UIB_LEFT, 0 );
+    mouse( 200, 100, 0, 0 );
+    check( "press on a button, release elsewhere: no click", none() );
+    click( 20, 100 );
+    check( "a click on nothing is nothing", none() );
+    click( 90, 40 );
+    check( "a click gives the button the focus", expect( 2, UIE_CLICK, 0 ) && ui.focus == 2 );
+    key( UIKEY_TAB );
+    check( "Tab moves the focus on", ui.focus == 3 );
+    key( UIKEY_TAB );
+    check( "Tab goes round", ui.focus == 1 );
+    key( UIKEY_BACKTAB );
+    check( "Shift+Tab goes back", ui.focus == 3 );
+    ui_set_enabled( &ui, 1, false );
+    key( UIKEY_TAB );
+    check( "Tab skips a disabled button", ui.focus == 2 );
+    click( 20, 40 );
+    check( "a disabled button does not click", none() );
+    ui_set_visible( &ui, 3, false );
+    key( UIKEY_TAB );
+    check( "Tab skips a hidden button", ui.focus == 2 );
+    ui_set_visible( &ui, 3, true );
+    ui_set_enabled( &ui, 1, true );
+    ui_set_focus( &ui, 3 );
+    key( ' ' );
+    check( "Space presses the button that has the focus", expect( 3, UIE_CLICK, 0 ) );
+    key( UIKEY_ENTER );
+    check( "Return does, too", expect( 3, UIE_CLICK, 0 ) );
+    check( "a label cannot have the focus", !ui_set_focus( &ui, 10 ) && ui.focus == 3 );
+    done();
+
+    // -- check boxes and radio buttons -----------------------------------------------------------------------------------------------------------------
+    setup();
+    ui_add( &ui, UIK_CHECK, 1, 10, 10, 120, 16, "Sound", 0 );
+    ui_add( &ui, UIK_RADIO, 2, 10, 40, 120, 16, "Low", 1 );
+    ui_add( &ui, UIK_RADIO, 3, 10, 60, 120, 16, "Medium", 1 );
+    ui_add( &ui, UIK_RADIO, 4, 10, 80, 120, 16, "High", 1 );
+    ui_add( &ui, UIK_RADIO, 5, 10, 110, 120, 16, "Other group", 2 );
+    int v;
+    check( "a check box starts off", ui_get_value( &ui, 1, &v ) && v == 0 );
+    click( 15, 18 );
+    check( "a click switches a check box on", expect( 1, UIE_CHANGE, 1 ) && ui_get_value( &ui, 1, &v ) && v == 1 );
+    click( 50, 18 );
+    check( "a click on its text switches it off again", expect( 1, UIE_CHANGE, 0 ) );
+    ui_set_focus( &ui, 1 );
+    key( ' ' );
+    check( "Space toggles it", expect( 1, UIE_CHANGE, 1 ) && none() );
+    check( "set_value switches without an event", ui_set_value( &ui, 1, 0 ) && none() && ui_get_value( &ui, 1, &v ) && v == 0 );
+    click( 14, 48 );
+    check( "a click selects a radio button", expect( 2, UIE_CHANGE, 1 ) );
+    click( 14, 68 );
+    int a, b;
+    ui_get_value( &ui, 2, &a );
+    ui_get_value( &ui, 3, &b );
+    check( "the others of the group go off", expect( 3, UIE_CHANGE, 1 ) && a == 0 && b == 1 );
+    ui_set_value( &ui, 5, 1 );
+    ui_get_value( &ui, 3, &b );
+    check( "another group is independent", b == 1 && ui_get_value( &ui, 5, &a ) && a == 1 );
+    click( 14, 68 );
+    check( "a click on the selected radio button is no change", none() );
+    ui_set_focus( &ui, 3 );
+    key( UIKEY_DOWN );
+    check( "Down selects the next radio button of the group", expect( 4, UIE_CHANGE, 1 ) && ui.focus == 4 );
+    key( UIKEY_DOWN );
+    check( "and goes round", expect( 2, UIE_CHANGE, 1 ) && ui.focus == 2 );
+    key( UIKEY_UP );
+    check( "Up goes back", expect( 4, UIE_CHANGE, 1 ) );
+    ui_get_value( &ui, 5, &a );
+    check( "the other group is still on", a == 1 );
+    done();
+
+    // -- text fields ---------------------------------------------------------------------------------------------------------------------------------------
+    setup();
+    ui_add( &ui, UIK_TEXT, 1, 10, 10, 100, 18, "", 0 );
+    ui_add( &ui, UIK_BUTTON, 2, 10, 50, 60, 22, "OK", 0 );
+    typed( "Hello" );
+    check( "typing fills a text field", strcmp( ui_get_text( &ui, 1 ), "Hello" ) == 0 );
+    drain();
+    key( UIKEY_BACKSPACE );
+    check( "Backspace", strcmp( ui_get_text( &ui, 1 ), "Hell" ) == 0 && expect( 1, UIE_CHANGE, 4 ) );
+    key( UIKEY_LEFT );
+    key( UIKEY_LEFT );
+    typed( "X" );
+    check( "the caret moves: insert in the middle", strcmp( ui_get_text( &ui, 1 ), "HeXll" ) == 0 );
+    key( UIKEY_DELETE );
+    check( "Delete", strcmp( ui_get_text( &ui, 1 ), "HeXl" ) == 0 );
+    key( UIKEY_HOME );
+    typed( ">" );
+    key( UIKEY_END );
+    typed( "<" );
+    check( "Home and End", strcmp( ui_get_text( &ui, 1 ), ">HeXl<" ) == 0 );
+    drain();
+    key( UIKEY_ENTER );
+    check( "Return in a text field is an event with the length", expect( 1, UIE_ENTER, 6 ) );
+    key( UIKEY_HOME );
+    key( UIKEY_BACKSPACE );
+    key( UIKEY_LEFT );
+    check( "Backspace at the start and Left at the start change nothing", strcmp( ui_get_text( &ui, 1 ), ">HeXl<" ) == 0 );
+    drain();
+    ui_set_text( &ui, 1, "abc" );
+    click( 12, 18 );
+    typed( "-" );
+    check( "a click near the left edge puts the caret at the start", strcmp( ui_get_text( &ui, 1 ), "-abc" ) == 0 );
+    click( 105, 18 );
+    typed( "+" );
+    check( "a click right of the text puts the caret at the end", strcmp( ui_get_text( &ui, 1 ), "-abc+" ) == 0 );
+    char big[ 300 ];
+    memset( big, 'a', sizeof(big) - 1 );
+    big[ sizeof(big) - 1 ] = '\0';
+    ui_set_text( &ui, 1, "" );
+    for ( int i = 0; i < 300; ++i ) {
+        key( 'a' );
+    }
+    check( "a text field takes 255 characters and no more", strlen( ui_get_text( &ui, 1 ) ) == UI_TEXTMAX );
+    ui_widget_t* w = ui_find( &ui, 1 );
+    check( "a long text scrolls so that the caret is shown", w->scroll > 0 );
+    ui_set_enabled( &ui, 1, false );
+    key( 'b' );
+    check( "a disabled text field does not take keys", strlen( ui_get_text( &ui, 1 ) ) == UI_TEXTMAX );
+    ui_set_enabled( &ui, 1, true );
+    check( "a text field value is its length", ui_get_value( &ui, 1, &v ) && v == UI_TEXTMAX );
+    done();
+
+    // -- lists ---------------------------------------------------------------------------------------------------------------------------------------------
+    setup();
+    ui_add( &ui, UIK_LIST, 1, 10, 10, 120, 74, "", 0 );                 // (74 - 4) / 14 = 5 rows
+    for ( int i = 0; i < 12; ++i ) {
+        char s[16];
+        snprintf( s, sizeof(s), "Item %d", i );
+        ui_list_add( &ui, 1, s );
+    }
+    check( "a list has its items", strcmp( ui_list_get( &ui, 1, 3 ), "Item 3" ) == 0 && ui_list_get( &ui, 1, 12 ) == 0 );
+    check( "nothing is selected at first", ui_get_value( &ui, 1, &v ) && v == -1 );
+    click( 30, 10 + 2 + 14 * 2 + 5 );
+    check( "a click selects the row", expect( 1, UIE_SELECT, 2 ) && ui_get_value( &ui, 1, &v ) && v == 2 );
+    now += 100;
+    click( 30, 10 + 2 + 14 * 2 + 5 );
+    check( "a second click on the same row in time is a double click", expect( 1, UIE_DOUBLE, 2 ) && none() );
+    now += 1000;
+    click( 30, 10 + 2 + 14 * 2 + 5 );
+    now += 1000;
+    click( 30, 10 + 2 + 14 * 3 + 5 );
+    check( "a click on another row selects it", expect( 1, UIE_SELECT, 3 ) && none() );
+    key( UIKEY_DOWN );
+    check( "Down selects the next row", expect( 1, UIE_SELECT, 4 ) );
+    key( UIKEY_END );
+    check( "End selects the last row and scrolls to it", expect( 1, UIE_SELECT, 11 ) && ui_find( &ui, 1 )->scroll == 7 );
+    key( UIKEY_HOME );
+    check( "Home selects the first row and scrolls back", expect( 1, UIE_SELECT, 0 ) && ui_find( &ui, 1 )->scroll == 0 );
+    key( UIKEY_PGDN );
+    check( "Page down moves by the rows shown (5)", expect( 1, UIE_SELECT, 5 ) );
+    key( UIKEY_PGUP );
+    key( UIKEY_UP );
+    drain();
+    key( UIKEY_ENTER );
+    check( "Return activates the row (a double click)", expect( 1, UIE_DOUBLE, 0 ) );
+    mouse( 30, 40, 0, 1 );
+    check( "the wheel up at the top of the list changes nothing", ui_find( &ui, 1 )->scroll == 0 );
+    mouse( 30, 40, 0, -1 );
+    check( "the wheel down scrolls the list by 3 rows", ui_find( &ui, 1 )->scroll == 3 );
+    mouse( 30, 40, 0, 1 );
+    check( "the wheel up scrolls back", ui_find( &ui, 1 )->scroll == 0 );
+    mouse( 30, 40, 0, -9 );
+    check( "and stops at the end of the list", ui_find( &ui, 1 )->scroll == 7 );
+    check( "set_value selects a row without an event and shows it", ui_set_value( &ui, 1, 1 ) && none() && ui_find( &ui, 1 )->scroll == 1 );
+    check( "a row that does not exist selects none", ui_set_value( &ui, 1, 50 ) && ui_get_value( &ui, 1, &v ) && v == -1 );
+    check( "list_clear", ui_list_clear( &ui, 1 ) && ui_list_get( &ui, 1, 0 ) == 0 );
+    done();
+
+    // -- sliders and progress bars ---------------------------------------------------------------------------------------------------------------------------
+    setup();
+    ui_add( &ui, UIK_SLIDER, 1, 10, 10, 110, 20, "", 0 );                // 0 .. 100, travel 100 pixels
+    ui_add( &ui, UIK_PROGRESS, 2, 10, 50, 104, 14, "", 0 );
+    check( "a slider starts at its minimum", ui_get_value( &ui, 1, &v ) && v == 0 );
+    click( 10 + 5 + 50, 20 );
+    check( "a click on the track sets the value", expect( 1, UIE_CHANGE, 50 ) );
+    mouse( 15, 20, UIB_LEFT, 0 );
+    drain();
+    mouse( 15 + 25, 20, UIB_LEFT, 0 );
+    mouse( 15 + 25, 20, 0, 0 );
+    check( "dragging follows the mouse", ui_get_value( &ui, 1, &v ) && v == 25 );
+    drain();
+    ui_set_focus( &ui, 1 );
+    key( UIKEY_RIGHT );
+    check( "Right adds one", expect( 1, UIE_CHANGE, 26 ) );
+    key( UIKEY_PGUP );
+    check( "Page up adds a tenth of the range", expect( 1, UIE_CHANGE, 36 ) );
+    key( UIKEY_END );
+    check( "End goes to the maximum", expect( 1, UIE_CHANGE, 100 ) );
+    key( UIKEY_RIGHT );
+    check( "no event past the maximum", none() );
+    check( "set_range changes and clamps", ui_set_range( &ui, 1, 10, 20 ) && ui_get_value( &ui, 1, &v ) && v == 20 );
+    check( "a bad range is refused", !ui_set_range( &ui, 1, 5, 1 ) && !ui_set_range( &ui, 2, 5, 1 ) );
+    check( "set_value on a slider clamps", ui_set_value( &ui, 1, 99 ) && ui_get_value( &ui, 1, &v ) && v == 20 && ui_set_value( &ui, 1, -4 ) && ui_get_value( &ui, 1, &v ) && v == 10 );
+    check( "a progress bar can not have the focus or be clicked", !ui_set_focus( &ui, 2 ) );
+    ui_set_value( &ui, 2, 50 );
+    ui_draw( &ui, true );
+    check( "a progress bar of 50 % is half filled", count_color( 12, 52, 12 + 51, 61, th.fill ) > 0 && gfx_point( &g, 12 + 40, 56 ) == th.fill && gfx_point( &g, 12 + 60, 56 ) == th.field );
+    done();
+
+    // -- a modal panel and a pop-up ------------------------------------------------------------------------------------------------------------------------
+    setup();
+    ui_add( &ui, UIK_BUTTON, 1, 10, 10, 60, 22, "Outside", 0 );
+    ui_add( &ui, UIK_PANEL, 5, 100, 50, 200, 100, "Question", 0 );
+    ui_add( &ui, UIK_BUTTON, 6, 110, 110, 60, 22, "Yes", 0 );
+    ui_add( &ui, UIK_BUTTON, 7, 200, 110, 60, 22, "No", 0 );
+    check( "a panel is a panel", ui_set_modal( &ui, 5 ) && ui.modal == 5 && !ui_set_modal( &ui, 1 ) && !ui_set_modal( &ui, 99 ) );
+    check( "the focus goes into the panel", ui.focus == 6 );
+    click( 20, 20 );
+    check( "a widget outside of a modal panel does not react", none() );
+    click( 120, 120 );
+    check( "a widget inside does", expect( 6, UIE_CLICK, 0 ) );
+    key( UIKEY_TAB );
+    key( UIKEY_TAB );
+    check( "Tab stays inside the panel", ui.focus == 6 );
+    key( UIKEY_ESCAPE );
+    check( "Escape in a modal panel is a cancel event for the panel", expect( 5, UIE_CANCEL, 0 ) );
+    ui_set_modal( &ui, 0 );
+    click( 20, 20 );
+    check( "without the modal panel the outside button reacts again", expect( 1, UIE_CLICK, 0 ) );
+    done();
+
+    setup();
+    ui_add( &ui, UIK_BUTTON, 1, 10, 10, 60, 22, "Menu", 0 );
+    ui_add( &ui, UIK_LIST, 2, 0, 0, 80, 60, "", 0 );
+    ui_list_add( &ui, 2, "New" );
+    ui_list_add( &ui, 2, "Open" );
+    ui_list_add( &ui, 2, "Quit" );
+    ui_set_visible( &ui, 2, false );
+    ui_draw( &ui, true );
+    click( 20, 20 );
+    drain();
+    check( "a pop-up opens", ui_popup( &ui, 2, 10, 34 ) && ui.popup == 2 && ( ui_find( &ui, 2 )->flags & UIF_VISIBLE ) );
+    click( 20, 20 );
+    check( "a click outside closes it with a cancel", expect( 2, UIE_CANCEL, 0 ) && ui.popup == 0 && !( ui_find( &ui, 2 )->flags & UIF_VISIBLE ) && none() );
+    ui_popup( &ui, 2, 10, 34 );
+    click( 30, 34 + 2 + 14 + 3 );
+    check( "a click on a row chooses it and closes the pop-up", expect( 2, UIE_SELECT, 1 ) && ui.popup == 0 && none() );
+    ui_popup( &ui, 2, 10, 34 );
+    key( UIKEY_DOWN );
+    key( UIKEY_DOWN );
+    drain();
+    key( UIKEY_ENTER );
+    check( "keys work in the pop-up (it starts at the row chosen last: row 1): Return chooses", expect( 2, UIE_SELECT, 2 ) && ui.popup == 0 );
+    ui_popup( &ui, 2, 10, 34 );
+    key( UIKEY_ESCAPE );
+    check( "Escape closes the pop-up with a cancel", expect( 2, UIE_CANCEL, 0 ) && ui.popup == 0 );
+    check( "the focus is back where it was", ui.focus == 1 );
+    done();
+
+    // -- drawing -------------------------------------------------------------------------------------------------------------------------------------------
+    setup();
+    ui_add( &ui, UIK_PANEL, 1, 20, 20, 200, 120, "Title", 0 );
+    ui_add( &ui, UIK_LABEL, 2, 30, 50, 100, 14, "Name:", 0 );
+    ui_add( &ui, UIK_BUTTON, 3, 30, 80, 70, 24, "OK", 0 );
+    ui_add( &ui, UIK_CHECK, 4, 120, 80, 90, 16, "Fast", 0 );
+    ui_draw( &ui, true );
+    check( "the desk has the desk colour", gfx_point( &g, 5, 5 ) == th.desk && gfx_point( &g, 395, 235 ) == th.desk );
+    check( "a panel is drawn with a border and the face colour", gfx_point( &g, 20, 20 ) == th.border && gfx_point( &g, 100, 130 ) == th.face && gfx_point( &g, 21, 21 ) == th.light );
+    check( "the title bar has the title colour and the title text", gfx_point( &g, 40, 40 ) == th.title || gfx_point( &g, 24, 24 ) == th.title );
+    check( "the title text is in the title text colour", count_color( 24, 23, 214, 38, th.titletext ) > 10 );
+    check( "a label draws ink in the text colour on the face", count_color( 30, 50, 129, 63, th.text ) > 10 );
+    check( "a button has a raised bevel: light top left", gfx_point( &g, 31, 81 ) == th.light && gfx_point( &g, 98, 102 ) == th.shadow );
+    check( "a button has a face and a caption", gfx_point( &g, 36, 86 ) == th.face && count_color( 31, 82, 98, 101, th.text ) > 10 );
+    check( "a check box is a white box with a border", gfx_point( &g, 120, 81 ) == th.border && gfx_point( &g, 124, 85 ) == th.field );
+    ui_set_value( &ui, 4, 1 );
+    ui_draw( &ui, false );
+    check( "a check mark is drawn when it is on", count_color( 121, 82, 131, 92, th.text ) > 4 );
+    mouse( 40, 90, UIB_LEFT, 0 );
+    ui_draw( &ui, false );
+    check( "a pressed button is sunken: shadow top left", gfx_point( &g, 31, 81 ) == th.shadow && gfx_point( &g, 98, 102 ) == th.light );
+    mouse( 40, 90, 0, 0 );
+    drain();
+    ui_draw( &ui, false );
+    check( "released again: raised", gfx_point( &g, 31, 81 ) == th.light );
+
+    // changed parts only
+    int ink0 = count_color( 30, 50, 129, 63, th.text );
+    ui_set_text( &ui, 2, "Name: Hello" );
+    ui_draw( &ui, false );
+    int ink1 = count_color( 30, 50, 129, 63, th.text );
+    check( "a changed label is drawn again with more ink", ink1 > ink0 );
+    ui_set_text( &ui, 2, "Name:" );
+    ui_draw( &ui, false );
+    check( "and the old text is gone when it is set back", count_color( 30, 50, 129, 63, th.text ) == ink0 );
+    gfx_pset( &g, 220, 200, 77 );
+    ui_set_text( &ui, 2, "x" );
+    ui_draw( &ui, false );
+    check( "a partial redraw leaves the rest of the canvas alone", gfx_point( &g, 220, 200 ) == 77 );
+    ui_set_visible( &ui, 3, false );
+    ui_draw( &ui, false );
+    check( "a hidden widget leaves the face of the panel", gfx_point( &g, 33, 83 ) == th.face && count_color( 30, 80, 99, 103, th.text ) == 0 && gfx_point( &g, 31, 81 ) == th.face );
+    ui_set_visible( &ui, 3, true );
+    ui_draw( &ui, false );
+    check( "shown again", gfx_point( &g, 31, 81 ) == th.light );
+    ui_remove( &ui, 3 );
+    check( "a removed widget is erased at once", gfx_point( &g, 31, 81 ) == th.face );
+    ui_set_enabled( &ui, 4, false );
+    ui_draw( &ui, false );
+    check( "a disabled widget is drawn in the disabled colour", count_color( 121, 82, 131, 92, th.disabled ) > 4 );
+    // a button outside any panel has the desk behind it when it is hidden
+    ui_add( &ui, UIK_BUTTON, 9, 300, 150, 60, 22, "Free", 0 );
+    ui_draw( &ui, false );
+    ui_set_visible( &ui, 9, false );
+    ui_draw( &ui, false );
+    check( "outside of a panel the background is the desk", gfx_point( &g, 330, 160 ) == th.desk );
+    done();
+
+    // a hidden widget that overlaps a panel must not erase the panel when the panel is drawn after it was hidden
+    setup();
+    ui_draw( &ui, true );
+    ui_add( &ui, UIK_PANEL, 1, 20, 15, 200, 100, "P", 0 );
+    ui_add( &ui, UIK_LIST, 2, 0, 0, 90, 66, "", 0 );
+    ui_set_visible( &ui, 2, false );
+    ui_draw( &ui, false );
+    check( "a hidden widget over a panel leaves the panel intact", gfx_point( &g, 50, 50 ) == th.face && gfx_point( &g, 5, 5 ) == th.desk );
+    done();
+
+    // a radio button and a list are drawn
+    setup();
+    ui_add( &ui, UIK_RADIO, 1, 10, 10, 100, 16, "One", 1 );
+    ui_add( &ui, UIK_LIST, 2, 10, 40, 100, 60, "", 0 );
+    ui_list_add( &ui, 2, "Alpha" );
+    ui_list_add( &ui, 2, "Beta" );
+    ui_set_value( &ui, 2, 1 );
+    ui_set_value( &ui, 1, 1 );
+    ui_draw( &ui, true );
+    check( "a selected radio button has a dot", gfx_point( &g, 16, 18 ) == th.text && gfx_point( &g, 12, 18 ) == th.field );
+    check( "the selected list row is highlighted", gfx_point( &g, 14, 40 + 2 + 14 + 6 ) == th.hilite || count_color( 12, 56, 108, 70, th.hilite ) > 100 );
+    check( "its text is in the highlight text colour", count_color( 12, 56, 108, 70, th.hilitetext ) > 8 );
+    done();
+
+    // the event queue does not overflow
+    setup();
+    ui_add( &ui, UIK_BUTTON, 1, 10, 10, 60, 22, "OK", 0 );
+    for ( int i = 0; i < 200; ++i ) {
+        key( ' ' );
+    }
+    check( "the queue holds UI_EVENTS events and drops the rest", nevents() == UI_EVENTS );
+    drain();
+    check( "and is empty afterwards", none() );
+    done();
+
+    // a popup and drawing never write outside of the canvas (a widget partly outside)
+    setup();
+    ui_add( &ui, UIK_BUTTON, 1, 380, 230, 60, 22, "Edge", 0 );
+    ui_add( &ui, UIK_TEXT, 2, -10, -5, 60, 22, "clip", 0 );
+    ui_draw( &ui, true );
+    check( "a widget half outside of the canvas is clipped", gfx_point( &g, 399, 239 ) != 0 );
+    done();
+
+    printf( "%d checks, %d failed\n", checks, failures );
+    return failures;
+}
