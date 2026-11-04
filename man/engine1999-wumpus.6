@@ -1,0 +1,28 @@
+.\" Engine1999 - A 2D games engine written in C
+.\" Copyright (C) 2026  Ekkehard Morgenstern
+.\"
+.\" This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published
+.\" by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It is distributed WITHOUT ANY
+.\" WARRANTY. ADDITIONAL PERMISSION (GPLv3 section 7): the Engine1999 Runtime Exception applies, see the file LICENSE-EXCEPTION.
+.\"
+.\" Keep this page current: it describes the demo game demos/wumpus.bas (an executable made with BUILD, installed by "make install").
+.TH ENGINE1999-WUMPUS 6 "November 2026" "Engine 1999 @VERSION@" "Engine1999 Manual"
+.SH NAME
+engine1999-wumpus \- Hunt the Wumpus, the classic cave game
+.SH SYNOPSIS
+.B engine1999-wumpus
+.SH DESCRIPTION
+Hunt the Wumpus (1973) is a text game. The wumpus lives in a cave of 20 rooms; every room has three tunnels to other rooms. Two rooms hold bottomless pits (you fall in and lose), two hold colonies of super bats (they carry you to another room), and the wumpus eats you if you enter its room or if it wakes up and walks into yours. You have five arrows. In each room the game warns you of what is in the three rooms next to it: \fII smell a wumpus\fR, \fII feel a draft\fR, \fIbats nearby\fR.
+.PP
+Each turn you either move (give the number of one of the three rooms next to you) or shoot: an arrow flies through up to five rooms that you name one after the other, each next to the one before. It kills the wumpus if it passes its room, and you if it passes yours. A missed shot wakes the wumpus up.
+.PP
+The program is the demo \fIwumpus.bas\fR of Engine1999, written in the style of the 1980s (line numbers, GOTO, GOSUB, DATA), made into an executable with
+.B BUILD
+(console kind: it needs no window and no SDL2, only a terminal; the same program runs with \fBengine1999c demos/wumpus.bas\fR).
+.SH CONTROLS
+The game asks for instructions (Y or N) and then, in every turn, \fBS\fR (shoot) or \fBM\fR (move) and the numbers of the rooms; Return ends each answer. Ctrl-C ends the game.
+.SH FILES
+The game does not write any file.
+.SH SEE ALSO
+.BR engine1999c (1),
+.BR engine1999-basic (7)

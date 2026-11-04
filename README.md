@@ -65,7 +65,7 @@ LIST
 SAVE "hello"
 ```
 
-Then try the demos: `LOAD "demos/fruit2"` and `RUN`. After `make install` the games are programs of their own: `engine1999-fruit`, `engine1999-fruit2`, `engine1999-climb` and `engine1999-madrun` (each with a manual page, e.g. `man engine1999-madrun`).
+Then try the demos: `LOAD "demos/fruit2"` and `RUN`. After `make install` the games are programs of their own (and `engine1999-wumpus`, a text game for any terminal): `engine1999-fruit`, `engine1999-fruit2`, `engine1999-climb` and `engine1999-madrun` (each with a manual page, e.g. `man engine1999-madrun`).
 
 | Demo | |
 |---|---|
