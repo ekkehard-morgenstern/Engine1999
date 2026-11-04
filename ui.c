@@ -147,6 +147,13 @@ void ui_theme_argb( uint32_t argb[ UI_PAL_COLORS ] ) {
 // -- drawing primitives (clipped to the widget being drawn) ---------------------------------------------------------------------------------------------
 
 static void cbox( ui_t* ui, int x1, int y1, int x2, int y2, int color, bool fill ) {
+    if ( !fill && x2 > x1 && y2 > y1 ) {                    // an outline is four lines, each clipped on its own (clipping the rectangle would draw a frame along the clip edge)
+        cbox( ui, x1, y1, x2, y1, color, true );
+        cbox( ui, x1, y2, x2, y2, color, true );
+        cbox( ui, x1, y1 + 1, x1, y2 - 1, color, true );
+        cbox( ui, x2, y1 + 1, x2, y2 - 1, color, true );
+        return;
+    }
     if ( x1 < ui->clip[0] ) {
         x1 = ui->clip[0];
     }
@@ -189,6 +196,136 @@ static void set_clip( ui_t* ui, int x1, int y1, int x2, int y2 ) {
     ui->clip[1] = y1 < 0 ? 0 : y1;
     ui->clip[2] = x2 >= ui->canvas.w ? ui->canvas.w - 1 : x2;
     ui->clip[3] = y2 >= ui->canvas.h ? ui->canvas.h - 1 : y2;
+    if ( ui->dmgon ) {                                      // (a damage redraw: only this part of the canvas may change)
+        if ( ui->clip[0] < ui->dmg[0] ) ui->clip[0] = ui->dmg[0];
+        if ( ui->clip[1] < ui->dmg[1] ) ui->clip[1] = ui->dmg[1];
+        if ( ui->clip[2] > ui->dmg[2] ) ui->clip[2] = ui->dmg[2];
+        if ( ui->clip[3] > ui->dmg[3] ) ui->clip[3] = ui->dmg[3];
+    }
+}
+
+// -- regions and damage lists ---------------------------------------------------------------------------------------------------------------------------
+
+// a region used while drawing: a list of rectangles (x1 y1 x2 y2, inclusive), not necessarily disjoint
+#define RGNMAX 96
+typedef struct _rgn_t {
+    int     n;
+    int     r[RGNMAX][4];
+    bool    over;                                           // it grew beyond RGNMAX: the caller falls back to drawing everything
+} rgn_t;
+
+static void rgn_set( rgn_t* g, int x1, int y1, int x2, int y2 ) {
+    g->n = 0;
+    g->over = false;
+    if ( x1 <= x2 && y1 <= y2 ) {
+        g->r[0][0] = x1; g->r[0][1] = y1; g->r[0][2] = x2; g->r[0][3] = y2;
+        g->n = 1;
+    }
+}
+
+static void rgn_push( rgn_t* g, int x1, int y1, int x2, int y2 ) {
+    if ( x1 > x2 || y1 > y2 ) {
+        return;
+    }
+    if ( g->n >= RGNMAX ) {
+        g->over = true;
+        return;
+    }
+    g->r[g->n][0] = x1; g->r[g->n][1] = y1; g->r[g->n][2] = x2; g->r[g->n][3] = y2;
+    ++g->n;
+}
+
+// takes the rectangle out of the region (each member is cut into at most four pieces)
+static void rgn_sub( rgn_t* g, int x1, int y1, int x2, int y2 ) {
+    rgn_t out;
+    out.n = 0;
+    out.over = g->over;
+    for ( int k = 0; k < g->n; ++k ) {
+        int a = g->r[k][0], b = g->r[k][1], c = g->r[k][2], d = g->r[k][3];
+        if ( x1 > c || x2 < a || y1 > d || y2 < b ) {
+            rgn_push( &out, a, b, c, d );
+            continue;
+        }
+        int ix1 = x1 > a ? x1 : a, ix2 = x2 < c ? x2 : c, iy1 = y1 > b ? y1 : b, iy2 = y2 < d ? y2 : d;
+        rgn_push( &out, a, b, c, iy1 - 1 );                 // above
+        rgn_push( &out, a, iy2 + 1, c, d );                 // below
+        rgn_push( &out, a, iy1, ix1 - 1, iy2 );             // left
+        rgn_push( &out, ix2 + 1, iy1, c, iy2 );             // right
+    }
+    *g = out;
+}
+
+// adds a rectangle to a widget's damage list (merged into the bounding box when the list is full)
+static void dmg_add( ui_dmg_t* d, int x1, int y1, int x2, int y2 ) {
+    if ( x1 > x2 || y1 > y2 ) {
+        return;
+    }
+    for ( int k = 0; k < d->n; ++k ) {
+        if ( x1 >= d->r[k][0] && y1 >= d->r[k][1] && x2 <= d->r[k][2] && y2 <= d->r[k][3] ) {
+            return;                                         // already in the list
+        }
+    }
+    int m = 0;
+    for ( int k = 0; k < d->n; ++k ) {                      // the entries that the new one swallows go
+        if ( !( d->r[k][0] >= x1 && d->r[k][1] >= y1 && d->r[k][2] <= x2 && d->r[k][3] <= y2 ) ) {
+            if ( m != k ) {
+                memcpy( d->r[m], d->r[k], sizeof(d->r[m]) );
+            }
+            ++m;
+        }
+    }
+    d->n = m;
+    if ( d->n >= UI_DMGMAX ) {
+        for ( int k = 0; k < d->n; ++k ) {
+            if ( d->r[k][0] < x1 ) x1 = d->r[k][0];
+            if ( d->r[k][1] < y1 ) y1 = d->r[k][1];
+            if ( d->r[k][2] > x2 ) x2 = d->r[k][2];
+            if ( d->r[k][3] > y2 ) y2 = d->r[k][3];
+        }
+        d->n = 0;
+    }
+    d->r[d->n][0] = x1; d->r[d->n][1] = y1; d->r[d->n][2] = x2; d->r[d->n][3] = y2;
+    ++d->n;
+}
+
+// the damage of w within the rectangle of another widget: what a widget in front of w (or one that goes away) does to it
+static void dmg_add_overlap( ui_widget_t* w, int x1, int y1, int x2, int y2 ) {
+    int ax1 = x1 > w->x ? x1 : w->x, ay1 = y1 > w->y ? y1 : w->y, ax2 = x2 < w->x + w->w - 1 ? x2 : w->x + w->w - 1, ay2 = y2 < w->y + w->h - 1 ? y2 : w->y + w->h - 1;
+    dmg_add( &w->dmg, ax1, ay1, ax2, ay2 );
+}
+
+// which group a widget is in: the widgets of one group do not hide one another's pixels (a window and the widgets in it, a plain panel and the widgets that lie
+// inside it); a widget in another group that is in front does
+static int group_of( const ui_t* ui, int i ) {
+    const ui_widget_t* w = &ui->widgets[i];
+    if ( w->owner != 0 ) {
+        return w->owner;
+    }
+    if ( ( w->flags & UIF_WINDOW ) || w->kind == UIK_PANEL ) {
+        return w->id;
+    }
+    for ( int k = i - 1; k >= 0; --k ) {
+        const ui_widget_t* p = &ui->widgets[k];
+        if ( p->kind == UIK_PANEL && !( p->flags & UIF_WINDOW ) && ( p->flags & UIF_VISIBLE ) && inside( w, p ) ) {
+            return p->id;
+        }
+    }
+    return w->id;
+}
+
+// the visible part of widget i: its rectangle without the rectangles of the visible widgets in front of it that are in another group; false: too complex
+static bool vis_region( const ui_t* ui, const int* grp, int i, rgn_t* g ) {
+    const ui_widget_t* w = &ui->widgets[i];
+    int x1 = w->x < 0 ? 0 : w->x, y1 = w->y < 0 ? 0 : w->y;
+    int x2 = w->x + w->w - 1 >= ui->canvas.w ? ui->canvas.w - 1 : w->x + w->w - 1, y2 = w->y + w->h - 1 >= ui->canvas.h ? ui->canvas.h - 1 : w->y + w->h - 1;
+    rgn_set( g, x1, y1, x2, y2 );
+    for ( int j = i + 1; j < ui->count && g->n > 0; ++j ) {
+        const ui_widget_t* o = &ui->widgets[j];
+        if ( ( o->flags & UIF_VISIBLE ) && grp[j] != grp[i] && overlaps( w, o ) ) {
+            rgn_sub( g, o->x, o->y, o->x + o->w - 1, o->y + o->h - 1 );
+        }
+    }
+    return !g->over;
 }
 
 // a 1 pixel border and a 1 pixel bevel: raised (light top left, shadow bottom right) or sunken (the other way round)
@@ -449,6 +586,16 @@ static void sb_drag( ui_t* ui, ui_widget_t* w, int mx, int my ) {
 
 // -- drawing the widgets --------------------------------------------------------------------------------------------------------------------------------
 
+// is the window at this index the one in front (the last window of the list)?
+static bool is_top_window( const ui_t* ui, int index ) {
+    for ( int i = ui->count - 1; i >= 0; --i ) {
+        if ( ( ui->widgets[i].flags & UIF_WINDOW ) && ( ui->widgets[i].flags & UIF_VISIBLE ) ) {
+            return i == index;
+        }
+    }
+    return false;
+}
+
 static void draw_widget( ui_t* ui, int index ) {
     ui_widget_t* w = &ui->widgets[index];
     const ui_theme_t* t = &ui->theme;
@@ -467,8 +614,18 @@ static void draw_widget( ui_t* ui, int index ) {
             cbox( ui, x1, y1, x2, y2, t->face, true );
             bevel( ui, x1, y1, x2, y2, true );
             if ( len > 0 ) {
-                cbox( ui, x1 + 3, y1 + 3, x2 - 3, y1 + 18, t->title, true );
+                bool win = ( w->flags & UIF_WINDOW ) != 0;
+                cbox( ui, x1 + 3, y1 + 3, x2 - 3, y1 + 18, win && !is_top_window( ui, index ) ? t->shadow : t->title, true );
                 draw_text( ui, t->boldfont, x1 + 8, y1 + 4, w->text, len, t->titletext );
+                if ( win ) {                                // the close box: an X on a small raised button
+                    int cx1 = x2 - 17, cy1 = y1 + 5;
+                    cbox( ui, cx1, cy1, cx1 + 12, cy1 + 12, t->face, true );
+                    bevel( ui, cx1, cy1, cx1 + 12, cy1 + 12, true );
+                    for ( int k = 0; k < 7; ++k ) {
+                        cpset( ui, cx1 + 3 + k, cy1 + 3 + k, t->text );
+                        cpset( ui, cx1 + 9 - k, cy1 + 3 + k, t->text );
+                    }
+                }
             }
             break;
         case UIK_BUTTON: {
@@ -603,10 +760,39 @@ static void draw_widget( ui_t* ui, int index ) {
     }
 }
 
+static void clear_damage( ui_t* ui ) {
+    ui->deskdmg.n = 0;
+    for ( int i = 0; i < ui->count; ++i ) {
+        ui->widgets[i].dmg.n = 0;
+        ui->widgets[i].flags &= ~UIF_DIRTY;
+    }
+}
+
+// the place of a widget changed (it went away, moved, was hidden): the desk behind it, and everything it overlapped, has to be drawn again
+static void reveal( ui_t* ui, int skip, int x1, int y1, int x2, int y2 ) {
+    dmg_add( &ui->deskdmg, x1, y1, x2, y2 );
+    for ( int j = 0; j < ui->count; ++j ) {
+        if ( j != skip && ( ui->widgets[j].flags & UIF_VISIBLE ) ) {
+            dmg_add_overlap( &ui->widgets[j], x1, y1, x2, y2 );
+        }
+    }
+}
+
+// a widget (or a group) was put over the rectangle: what is under it in other groups is overwritten, which goes into its damage list as well (the obscured part)
+static void obscure( ui_t* ui, int top, int x1, int y1, int x2, int y2 ) {
+    int gt = group_of( ui, top );
+    for ( int j = 0; j < top; ++j ) {
+        if ( ( ui->widgets[j].flags & UIF_VISIBLE ) && group_of( ui, j ) != gt ) {
+            dmg_add_overlap( &ui->widgets[j], x1, y1, x2, y2 );
+        }
+    }
+}
+
 void ui_draw( ui_t* ui, bool all ) {
     if ( !ui->drawn ) {
         all = true;
     }
+    ui->dmgon = false;
     if ( all ) {
         set_clip( ui, 0, 0, ui->canvas.w - 1, ui->canvas.h - 1 );
         cbox( ui, 0, 0, ui->canvas.w - 1, ui->canvas.h - 1, ui->theme.desk, true );
@@ -614,44 +800,127 @@ void ui_draw( ui_t* ui, bool all ) {
             if ( ui->widgets[i].flags & UIF_VISIBLE ) {
                 draw_widget( ui, i );
             }
-            ui->widgets[i].flags &= ~UIF_DIRTY;
+        }
+        clear_damage( ui );
+        int grp[UI_MAXWIDGETS];
+        for ( int i = 0; i < ui->count; ++i ) {
+            grp[i] = group_of( ui, i );
+        }
+        for ( int i = 0; i < ui->count; ++i ) {             // what a widget in front of another group hides is overwritten: it goes on the damage list
+            ui_widget_t* w = &ui->widgets[i];
+            rgn_t vis, hid;
+            if ( ( w->flags & UIF_VISIBLE ) && vis_region( ui, grp, i, &vis ) ) {
+                rgn_set( &hid, w->x, w->y, w->x + w->w - 1, w->y + w->h - 1 );
+                for ( int v = 0; v < vis.n; ++v ) {
+                    rgn_sub( &hid, vis.r[v][0], vis.r[v][1], vis.r[v][2], vis.r[v][3] );
+                }
+                for ( int k = 0; k < hid.n; ++k ) {
+                    dmg_add( &w->dmg, hid.r[k][0], hid.r[k][1], hid.r[k][2], hid.r[k][3] );
+                }
+            }
         }
         ui->drawn = true;
         return;
     }
-    for ( int i = 0; i < ui->count; ++i ) {                 // a widget that went away: its place gets the background, whatever was under it is drawn again
-        ui_widget_t* w = &ui->widgets[i];
-        if ( ( w->flags & UIF_DIRTY ) && !( w->flags & UIF_VISIBLE ) ) {
-            set_clip( ui, w->x, w->y, w->x + w->w - 1, w->y + w->h - 1 );
-            cbox( ui, w->x, w->y, w->x + w->w - 1, w->y + w->h - 1, background( ui, i ), true );
-            w->flags &= ~UIF_DIRTY;
-            for ( int j = 0; j < ui->count; ++j ) {
-                if ( j != i && ( ui->widgets[j].flags & UIF_VISIBLE ) && overlaps( w, &ui->widgets[j] ) ) {
-                    ui->widgets[j].flags |= UIF_DIRTY;
-                }
-            }
-        }
+    int grp[UI_MAXWIDGETS];
+    for ( int i = 0; i < ui->count; ++i ) {
+        grp[i] = group_of( ui, i );
     }
-    for ( int i = 0; i < ui->count; ++i ) {                 // what lies over a changed widget is drawn again
-        if ( ui->widgets[i].flags & UIF_DIRTY ) {
-            for ( int j = i + 1; j < ui->count; ++j ) {
-                if ( ( ui->widgets[j].flags & UIF_VISIBLE ) && overlaps( &ui->widgets[i], &ui->widgets[j] ) ) {
-                    ui->widgets[j].flags |= UIF_DIRTY;
-                }
-            }
-        }
-    }
+    // 1. changed widgets: a visible one has to be drawn all over, one that went away gives its place back
     for ( int i = 0; i < ui->count; ++i ) {
         ui_widget_t* w = &ui->widgets[i];
         if ( !( w->flags & UIF_DIRTY ) ) {
             continue;
         }
-        set_clip( ui, w->x, w->y, w->x + w->w - 1, w->y + w->h - 1 );
-        cbox( ui, w->x, w->y, w->x + w->w - 1, w->y + w->h - 1, background( ui, i ), true );     // (a hidden widget leaves the background)
-        if ( w->flags & UIF_VISIBLE ) {
-            draw_widget( ui, i );
-        }
         w->flags &= ~UIF_DIRTY;
+        if ( w->flags & UIF_VISIBLE ) {
+            dmg_add( &w->dmg, w->x, w->y, w->x + w->w - 1, w->y + w->h - 1 );
+        } else {
+            w->dmg.n = 0;
+            reveal( ui, i, w->x, w->y, w->x + w->w - 1, w->y + w->h - 1 );
+        }
+    }
+    // 2. the desk: what is damaged and not covered by a widget
+    if ( ui->deskdmg.n > 0 ) {
+        rgn_t g;
+        g.n = 0;
+        g.over = false;
+        for ( int k = 0; k < ui->deskdmg.n; ++k ) {
+            rgn_push( &g, ui->deskdmg.r[k][0], ui->deskdmg.r[k][1], ui->deskdmg.r[k][2], ui->deskdmg.r[k][3] );
+        }
+        ui->deskdmg.n = 0;
+        for ( int j = 0; j < ui->count && g.n > 0; ++j ) {
+            const ui_widget_t* o = &ui->widgets[j];
+            if ( o->flags & UIF_VISIBLE ) {
+                rgn_sub( &g, o->x, o->y, o->x + o->w - 1, o->y + o->h - 1 );
+            }
+        }
+        if ( g.over ) {
+            ui_draw( ui, true );
+            return;
+        }
+        for ( int k = 0; k < g.n; ++k ) {
+            set_clip( ui, g.r[k][0], g.r[k][1], g.r[k][2], g.r[k][3] );
+            cbox( ui, g.r[k][0], g.r[k][1], g.r[k][2], g.r[k][3], ui->theme.desk, true );
+        }
+    }
+    // 3. the widgets from the back to the front: the damaged part that is visible is drawn, the rest stays on the damage list until it is revealed
+    for ( int i = 0; i < ui->count; ++i ) {
+        ui_widget_t* w = &ui->widgets[i];
+        if ( w->dmg.n == 0 ) {
+            continue;
+        }
+        if ( !( w->flags & UIF_VISIBLE ) ) {
+            w->dmg.n = 0;
+            continue;
+        }
+        rgn_t vis;
+        if ( !vis_region( ui, grp, i, &vis ) ) {
+            ui_draw( ui, true );
+            return;
+        }
+        rgn_t todo;                                         // damage inside the visible part
+        todo.n = 0;
+        todo.over = false;
+        for ( int k = 0; k < w->dmg.n; ++k ) {
+            for ( int v = 0; v < vis.n; ++v ) {
+                int x1 = w->dmg.r[k][0] > vis.r[v][0] ? w->dmg.r[k][0] : vis.r[v][0], y1 = w->dmg.r[k][1] > vis.r[v][1] ? w->dmg.r[k][1] : vis.r[v][1];
+                int x2 = w->dmg.r[k][2] < vis.r[v][2] ? w->dmg.r[k][2] : vis.r[v][2], y2 = w->dmg.r[k][3] < vis.r[v][3] ? w->dmg.r[k][3] : vis.r[v][3];
+                rgn_push( &todo, x1, y1, x2, y2 );
+            }
+        }
+        // what stays: the damage outside the visible part (obscured)
+        rgn_t keep;
+        keep.n = 0;
+        keep.over = false;
+        for ( int k = 0; k < w->dmg.n; ++k ) {
+            rgn_push( &keep, w->dmg.r[k][0], w->dmg.r[k][1], w->dmg.r[k][2], w->dmg.r[k][3] );
+        }
+        for ( int v = 0; v < vis.n; ++v ) {
+            rgn_sub( &keep, vis.r[v][0], vis.r[v][1], vis.r[v][2], vis.r[v][3] );
+        }
+        w->dmg.n = 0;
+        for ( int k = 0; k < keep.n; ++k ) {
+            dmg_add( &w->dmg, keep.r[k][0], keep.r[k][1], keep.r[k][2], keep.r[k][3] );
+        }
+        if ( todo.over ) {
+            ui_draw( ui, true );
+            return;
+        }
+        for ( int k = 0; k < todo.n; ++k ) {
+            int x1 = todo.r[k][0], y1 = todo.r[k][1], x2 = todo.r[k][2], y2 = todo.r[k][3];
+            ui->dmg[0] = x1; ui->dmg[1] = y1; ui->dmg[2] = x2; ui->dmg[3] = y2;
+            ui->dmgon = true;
+            set_clip( ui, x1, y1, x2, y2 );
+            cbox( ui, x1, y1, x2, y2, background( ui, i ), true );
+            draw_widget( ui, i );
+            ui->dmgon = false;
+            for ( int j = i + 1; j < ui->count; ++j ) {     // what was drawn over: the widgets in front of it in the same group are drawn again
+                if ( grp[j] == grp[i] && ( ui->widgets[j].flags & UIF_VISIBLE ) ) {
+                    dmg_add_overlap( &ui->widgets[j], x1, y1, x2, y2 );
+                }
+            }
+        }
     }
 }
 
@@ -722,6 +991,22 @@ bool ui_add( ui_t* ui, int kind, int id, int x, int y, int w, int h, const char*
     wd->value = 0;
     wd->min = 0;
     wd->max = 100;
+    if ( kind == UIK_PANEL && extra == 1 ) {
+        wd->flags |= UIF_WINDOW;
+        for ( int i = ui->count - 1; i >= 0; --i ) {         // the window that was in front loses the blue title bar
+            if ( ui->widgets[i].flags & UIF_WINDOW ) {
+                dirty( &ui->widgets[i] );
+                break;
+            }
+        }
+    } else if ( kind != UIK_PANEL ) {                     // a widget created inside a window belongs to the topmost one
+        for ( int i = ui->count - 1; i >= 0; --i ) {
+            if ( ( ui->widgets[i].flags & UIF_WINDOW ) && inside( wd, &ui->widgets[i] ) ) {
+                wd->owner = ui->widgets[i].id;
+                break;
+            }
+        }
+    }
     if ( kind == UIK_RADIO ) {
         wd->group = extra;
     }
@@ -744,6 +1029,7 @@ bool ui_add( ui_t* ui, int kind, int id, int x, int y, int w, int h, const char*
         wd->caret = (int) strlen( wd->text );
     }
     ++ui->count;
+    obscure( ui, ui->count - 1, x, y, x + w - 1, y + h - 1 );
     if ( ui->focus == 0 && focusable( wd ) ) {
         ui->focus = id;
     }
@@ -819,19 +1105,19 @@ bool ui_remove( ui_t* ui, int id ) {
         return false;
     }
     ui_widget_t w = ui->widgets[i];
-    // the place is repainted: the widget goes on as a hidden, dirty entry for one ui_draw? no: the array entry is removed at once, so erase now
-    if ( ui->drawn ) {
-        int bg = background( ui, i );
-        set_clip( ui, w.x, w.y, w.x + w.w - 1, w.y + w.h - 1 );
-        cbox( ui, w.x, w.y, w.x + w.w - 1, w.y + w.h - 1, bg, true );
-    }
+    // its place goes to the desk and to what was under it (the damage lists; ui_draw draws it)
+    reveal( ui, i, w.x, w.y, w.x + w.w - 1, w.y + w.h - 1 );
+    bool wastop = ( w.flags & UIF_WINDOW ) && is_top_window( ui, i );
     free_widget( &ui->widgets[i] );
     memmove( &ui->widgets[i], &ui->widgets[i + 1], (size_t)( ui->count - i - 1 ) * sizeof(ui_widget_t) );
     --ui->count;
     memset( &ui->widgets[ ui->count ], 0, sizeof(ui_widget_t) );
-    for ( int j = 0; j < ui->count; ++j ) {                 // whatever was under it or near it is drawn again
-        if ( overlaps( &w, &ui->widgets[j] ) ) {
-            ui->widgets[j].flags |= UIF_DIRTY;
+    if ( wastop ) {                                          // the next window in front gets the blue title bar
+        for ( int j = ui->count - 1; j >= 0; --j ) {
+            if ( ui->widgets[j].flags & UIF_WINDOW ) {
+                dirty( &ui->widgets[j] );
+                break;
+            }
         }
     }
     if ( ui->focus == id ) {
@@ -839,6 +1125,7 @@ bool ui_remove( ui_t* ui, int id ) {
         for ( int j = 0; j < ui->count && ui->focus == 0; ++j ) {
             if ( focusable( &ui->widgets[j] ) ) {
                 ui->focus = ui->widgets[j].id;
+                dirty( &ui->widgets[j] );                   // (it shows the focus now)
             }
         }
     }
@@ -992,6 +1279,7 @@ bool ui_set_visible( ui_t* ui, int id, bool on ) {
     }
     if ( on ) {
         w->flags |= UIF_VISIBLE;
+        obscure( ui, index_of( ui, id ), w->x, w->y, w->x + w->w - 1, w->y + w->h - 1 );
     } else {
         w->flags &= ~UIF_VISIBLE;
         if ( ui->focus == id ) {
@@ -1074,20 +1362,36 @@ static void raise_group( ui_t* ui, int id ) {
         return;
     }
     int n = 0;
+    bool win = ( panel.flags & UIF_WINDOW ) != 0;         // a window owns the widgets created in it, any other panel the ones that lie inside it
     for ( int i = 0; i < ui->count; ++i ) {                 // the others first
-        if ( !( i == p || ( i > p && ui->widgets[i].kind != UIK_PANEL && inside( &ui->widgets[i], &panel ) ) ) ) {
+        bool in = i == p || ( i > p && ( win ? ui->widgets[i].owner == id : ( ui->widgets[i].kind != UIK_PANEL && inside( &ui->widgets[i], &panel ) ) ) );
+        if ( !in ) {
             tmp[n++] = ui->widgets[i];
         }
     }
     for ( int i = 0; i < ui->count; ++i ) {                 // then the panel and what is in it
-        if ( i == p || ( i > p && ui->widgets[i].kind != UIK_PANEL && inside( &ui->widgets[i], &panel ) ) ) {
+        bool in = i == p || ( i > p && ( win ? ui->widgets[i].owner == id : ( ui->widgets[i].kind != UIK_PANEL && inside( &ui->widgets[i], &panel ) ) ) );
+        if ( in ) {
             tmp[n++] = ui->widgets[i];
         }
     }
     memcpy( ui->widgets, tmp, sizeof(ui_widget_t) * (size_t) ui->count );
     free( tmp );
-    for ( int i = 0; i < ui->count; ++i ) {
+    int first = ui->count;                                  // the group is the tail of the list: find where it starts
+    while ( first > 0 && ( ui->widgets[ first - 1 ].id == id || ( win ? ui->widgets[ first - 1 ].owner == id : inside( &ui->widgets[ first - 1 ], &panel ) && ui->widgets[ first - 1 ].kind != UIK_PANEL ) ) ) {
+        --first;
+    }
+    for ( int i = first; i < ui->count; ++i ) {              // the group is drawn again, and what it covers goes onto the damage lists of the widgets under it
         dirty( &ui->widgets[i] );
+        obscure( ui, i, ui->widgets[i].x, ui->widgets[i].y, ui->widgets[i].x + ui->widgets[i].w - 1, ui->widgets[i].y + ui->widgets[i].h - 1 );
+    }
+    if ( win ) {                                            // the window that was in front loses its blue title bar
+        for ( int i = first - 1; i >= 0; --i ) {
+            if ( ui->widgets[i].flags & UIF_WINDOW ) {
+                dirty( &ui->widgets[i] );
+                break;
+            }
+        }
     }
 }
 
@@ -1108,6 +1412,54 @@ bool ui_set_modal( ui_t* ui, int panelid ) {
         if ( &ui->widgets[i] != m && inside( &ui->widgets[i], m ) && focusable( &ui->widgets[i] ) ) {
             ui_set_focus( ui, ui->widgets[i].id );
             break;
+        }
+    }
+    return true;
+}
+
+bool ui_raise( ui_t* ui, int id ) {
+    ui_widget_t* w = ui_find( ui, id );
+    if ( w == 0 || w->kind != UIK_PANEL ) {
+        return false;
+    }
+    int idx = index_of( ui, id );
+    bool top = true;                                        // already in front: the window is last, with the widgets it owns behind it
+    for ( int i = idx + 1; i < ui->count; ++i ) {
+        if ( ui->widgets[i].owner != id ) {
+            top = false;
+        }
+    }
+    if ( !top ) {
+        raise_group( ui, id );
+    }
+    return true;
+}
+
+bool ui_move( ui_t* ui, int id, int x, int y ) {
+    ui_widget_t* w = ui_find( ui, id );
+    if ( w == 0 ) {
+        return false;
+    }
+    int dx = x - w->x, dy = y - w->y;
+    if ( dx == 0 && dy == 0 ) {
+        return true;
+    }
+    int idx = index_of( ui, id );
+    bool win = ( w->flags & UIF_WINDOW ) != 0;
+    reveal( ui, -1, w->x, w->y, w->x + w->w - 1, w->y + w->h - 1 );      // the old place: the desk and what was under it
+    for ( int i = 0; i < ui->count; ++i ) {
+        ui_widget_t* m = &ui->widgets[i];
+        if ( i == idx || ( win && m->owner == id ) ) {
+            m->x += dx;
+            m->y += dy;
+            m->dmg.n = 0;                                   // (the damage was in the old place; the moved widget is drawn all over)
+            dirty( m );
+        }
+    }
+    for ( int i = 0; i < ui->count; ++i ) {                 // the new place: what is under it in other groups is overwritten
+        ui_widget_t* m = &ui->widgets[i];
+        if ( i == idx || ( win && m->owner == id ) ) {
+            obscure( ui, i, m->x, m->y, m->x + m->w - 1, m->y + m->h - 1 );
         }
     }
     return true;
@@ -1474,15 +1826,49 @@ static void handle_key( ui_t* ui, int key ) {
     }
 }
 
-void ui_input( ui_t* ui, int mx, int my, int buttons, int wheel, const int* keys, int nkeys, uint32_t now_ms ) {
-    bool down = ( buttons & UIB_LEFT ) != 0, was = ( ui->lastbuttons & UIB_LEFT ) != 0;
-    bool press = down && !was, release = !down && was;
-    ui_widget_t* hot = 0;
+// the topmost visible widget at the point
+static ui_widget_t* find_hot( ui_t* ui, int mx, int my ) {
     for ( int i = ui->count - 1; i >= 0; --i ) {
         ui_widget_t* w = &ui->widgets[i];
         if ( ( w->flags & UIF_VISIBLE ) && mx >= w->x && mx < w->x + w->w && my >= w->y && my < w->y + w->h ) {
-            hot = w;
-            break;
+            return w;
+        }
+    }
+    return 0;
+}
+
+void ui_input( ui_t* ui, int mx, int my, int buttons, int wheel, const int* keys, int nkeys, uint32_t now_ms ) {
+    bool down = ( buttons & UIB_LEFT ) != 0, was = ( ui->lastbuttons & UIB_LEFT ) != 0;
+    bool press = down && !was, release = !down && was;
+    ui_widget_t* hot = find_hot( ui, mx, my );
+    // windows: a press raises the window it is in, a press on the title bar starts dragging it (the close box asks for the close: event kind 6 cancel)
+    if ( press && ui->popup == 0 && hot != 0 && in_scope( ui, hot ) ) {
+        int wid = ( hot->flags & UIF_WINDOW ) ? hot->id : hot->owner;
+        if ( wid != 0 ) {
+            ui_raise( ui, wid );
+            hot = find_hot( ui, mx, my );                   // (the widgets moved in the list)
+            ui_widget_t* win = ui_find( ui, wid );
+            if ( win != 0 && hot == win && my < win->y + 20 && win->text != 0 && win->text[0] != '\0' ) {
+                if ( mx >= win->x + win->w - 17 && mx <= win->x + win->w - 5 && my >= win->y + 5 && my <= win->y + 17 ) {
+                    push_event( ui, win->id, UIE_CANCEL, 0 );
+                } else {
+                    ui->capture = win->id;
+                    ui->cappart = UISB_NONE;
+                    ui->dragx = mx - win->x;
+                    ui->dragy = my - win->y;
+                }
+            }
+        }
+    }
+    if ( down && ui->capture != 0 ) {                       // dragging a window
+        ui_widget_t* dw = ui_find( ui, ui->capture );
+        if ( dw != 0 && ( dw->flags & UIF_WINDOW ) ) {
+            int nx = mx - ui->dragx, ny = my - ui->dragy;
+            if ( nx < 40 - dw->w ) nx = 40 - dw->w;
+            if ( nx > ui->canvas.w - 40 ) nx = ui->canvas.w - 40;
+            if ( ny < 0 ) ny = 0;
+            if ( ny > ui->canvas.h - 20 ) ny = ui->canvas.h - 20;
+            ui_move( ui, dw->id, nx, ny );
         }
     }
     if ( wheel != 0 ) {

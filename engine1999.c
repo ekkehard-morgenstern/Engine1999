@@ -1102,6 +1102,9 @@ static bool host_ui_op( int op, const double* a, int na, const char* s, size_t s
         case GFXOP_UIPIXEL:     ok = ui_canvas_set( &host_ui, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 0 ) ); break;
         case GFXOP_UIIMAGE:     ok = ui_canvas_load( &host_ui, id, (const uint8_t*) s, slen ); break;
         case GFXOP_UIGETIMAGE:  ok = ui_canvas_save( &host_ui, id, out, outsz, outlen ); break;
+        case GFXOP_UIWINDOW:    ok = ui_add( &host_ui, UIK_PANEL, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), text, 1 ); break;
+        case GFXOP_UIMOVE:      ok = ui_move( &host_ui, id, gi( a[1], 0 ), gi( a[2], 0 ) ); break;
+        case GFXOP_UIRAISE:     ok = ui_raise( &host_ui, id ); break;
         case GFXOP_UIJOY:       host_ui_pad = a[0] != 0.0; break;
         case GFXOP_UIPAGE:      ok = ui_set_page( &host_ui, id, gi( a[1], 1 ) ); break;
         case GFXOP_UIPANEL:     ok = ui_add( &host_ui, UIK_PANEL, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), text, 0 ); break;
@@ -1205,7 +1208,7 @@ static bool host_gfx_op( void* usrdata, int op, const double* a, int na, const c
     size_t* outlen, const char** err ) {
     (void) usrdata; (void) na;
     int t = sdlscr_gfx_target();
-    if ( op >= GFXOP_UIOPEN && op <= GFXOP_UIJOY ) {
+    if ( op >= GFXOP_UIOPEN && op <= GFXOP_UIRAISE ) {
         return host_ui_op( op, a, na, s, slen, out, outsz, outlen, err );
     }
     switch ( op ) {

@@ -107,6 +107,7 @@ typedef struct _ui_event_t {
 #define UIF_VISIBLE     1
 #define UIF_ENABLED     2
 #define UIF_DIRTY       4
+#define UIF_WINDOW      16              // a panel made by UI WINDOW: draggable by its title bar, raised when clicked, owns the widgets created inside it
 #define UIF_POPUP       8               // a list used as a pop-up menu
 
 typedef struct _ui_canvas_t {
@@ -122,6 +123,14 @@ typedef struct _ui_theme_t {
     int     font, boldfont;             // FONT_*
 } ui_theme_t;
 
+// a damage list: the parts of a widget's rectangle that are not valid on the canvas (never drawn, overwritten by a widget in front, changed while it was
+// obscured) and are drawn again as soon as they are visible. At most UI_DMGMAX rectangles (x1 y1 x2 y2, inclusive); more are merged into their bounding box.
+#define UI_DMGMAX       8
+typedef struct _ui_dmg_t {
+    int     n;
+    int     r[UI_DMGMAX][4];
+} ui_dmg_t;
+
 typedef struct _ui_widget_t {
     int     id, kind;
     int     x, y, w, h;
@@ -129,6 +138,8 @@ typedef struct _ui_widget_t {
     char*   text;                       // caption / text field content / panel title
     int     value, min, max;            // check box and radio button: 1 on; slider; progress; list: the selected row (-1 none)
     int     page;                       // scroll bar: the size of the visible part (the knob is page / (max - min + page) of the track)
+    ui_dmg_t dmg;                       // the damage list of this widget
+    int     owner;                      // the id of the window this widget was created in (0 none): it moves and rises with it
     int     group;                      // radio buttons of the same group exclude each other
     int     caret, scroll;              // text field: the caret (a byte index) and the first visible pixel column; list: the first visible row in scroll
     uint8_t* pix;                       // canvas: cw x ch cells, each a palette index (0 is drawn as a checkered 'transparent')
@@ -148,6 +159,10 @@ typedef struct _ui_t {
     int             popup;              // id of the open pop-up list (0 none)
     int             capture;            // id of the widget that has the mouse button pressed (0 none)
     int             lastbuttons, lastx, lasty;
+    int             dragx, dragy;       // window drag: the mouse offset inside the window's corner
+    int             dmg[4];             // while a damaged part is drawn: its rectangle (x1 y1 x2 y2); the clip is cut to it
+    bool            dmgon;
+    ui_dmg_t        deskdmg;            // the parts of the desk (behind all widgets) that need the desk color again
     uint32_t        padprev;            // ui_pad_keys(): the pad buttons of the last call
     int             padkey;             // the direction key that is held (0 none)
     uint32_t        padnext_ms;         // when it repeats
@@ -187,6 +202,8 @@ bool ui_canvas_set( ui_t* ui, int id, int x, int y, int c );
 int  ui_canvas_get( ui_t* ui, int id, int x, int y );           // the cell, -1 for a bad id or place
 bool ui_canvas_load( ui_t* ui, int id, const uint8_t* data, size_t n );        // cw * ch bytes (fewer: the rest is 0)
 bool ui_canvas_save( ui_t* ui, int id, uint8_t* out, size_t cap, size_t* n );
+bool ui_move( ui_t* ui, int id, int x, int y );                 // moves a widget to x, y; a window takes the widgets it owns along
+bool ui_raise( ui_t* ui, int id );                              // a window (and its widgets) in front of the others
 bool ui_set_page( ui_t* ui, int id, int page );                 // scroll bar: the size of the visible part (>= 1); sets the size of the knob and the step of Page up / down
 bool ui_set_enabled( ui_t* ui, int id, bool on );
 bool ui_set_visible( ui_t* ui, int id, bool on );

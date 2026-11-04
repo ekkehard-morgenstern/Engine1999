@@ -50,12 +50,21 @@ static gfx_t   g;
 static ui_t    ui;
 static uint32_t now = 1000;
 
+static long painted = 0;                                // the area of the boxes drawn since it was last cleared (to see how much a redraw touches)
+
 static void c_box( void* ctx, int x1, int y1, int x2, int y2, int color, bool fill ) {
+    painted += (long)( x2 - x1 + 1 ) * ( y2 - y1 + 1 );
     gfx_box( ctx, x1, y1, x2, y2, color, fill );
 }
 
 static void c_pset( void* ctx, int x, int y, int color ) {
     gfx_pset( ctx, x, y, color );
+}
+
+static uint32_t rnd_state = 12345U;
+static int RND( int n ) {
+    rnd_state = rnd_state * 1103515245U + 12345U;
+    return (int)( ( rnd_state >> 16 ) % (unsigned) n );
 }
 
 static void setup( void ) {
@@ -471,7 +480,8 @@ int main( void ) {
     ui_draw( &ui, false );
     check( "shown again", gfx_point( &g, 31, 81 ) == th.light );
     ui_remove( &ui, 3 );
-    check( "a removed widget is erased at once", gfx_point( &g, 31, 81 ) == th.face );
+    ui_draw( &ui, false );
+    check( "a removed widget is erased by the next ui_draw", gfx_point( &g, 31, 81 ) == th.face );
     ui_set_enabled( &ui, 4, false );
     ui_draw( &ui, false );
     check( "a disabled widget is drawn in the disabled colour", count_color( 121, 82, 131, 92, th.disabled ) > 4 );
@@ -673,6 +683,175 @@ int main( void ) {
     np = ui_pad_keys( &ui, JOYB_A, 0.0, 0.0, 2100, pk, 16 );
     check( "A in a list is Return", np == 1 && pk[0] == UIKEY_ENTER );
     done();
+
+    // windows: raising, moving, ownership
+    setup();
+    ui_add( &ui, UIK_PANEL, 10, 10, 10, 150, 100, "One", 1 );
+    ui_add( &ui, UIK_BUTTON, 11, 20, 40, 60, 22, "B1", 0 );
+    ui_add( &ui, UIK_PANEL, 20, 60, 50, 150, 100, "Two", 1 );
+    ui_add( &ui, UIK_BUTTON, 21, 75, 80, 60, 22, "B2", 0 );
+    ui_add( &ui, UIK_BUTTON, 30, 300, 10, 60, 22, "Free", 0 );
+    check( "a widget created inside a window is owned by it", ui_find( &ui, 11 )->owner == 10 && ui_find( &ui, 21 )->owner == 20 && ui_find( &ui, 30 )->owner == 0 );
+    check( "the window is a window", ( ui_find( &ui, 10 )->flags & UIF_WINDOW ) != 0 );
+    ui_draw( &ui, true );
+    // window Two is in front: a press in the overlap (80, 60) hits Two, a press at (30, 30) hits One's body and raises One
+    drain();
+    click( 30, 60 );
+    check( "a press in a window raises it: its panel is behind its widgets, after the others", ui.widgets[ ui.count - 2 ].id == 10 && ui.widgets[ ui.count - 1 ].id == 11 );
+    check( "the other window is now behind", ui.widgets[0].id == 20 || ui.widgets[1].id == 20 );
+    click( 30, 51 );
+    check( "a click on the widget of the raised window", expect( 11, UIE_CLICK, 0 ) );
+    drain();
+    // the close box: x2 - 17 .. x2 - 5, y + 5 .. y + 17 of the window One (10, 10, 150 wide)
+    click( 10 + 150 - 10, 10 + 11 );
+    check( "the close box asks for cancel", expect( 10, UIE_CANCEL, 0 ) );
+    // dragging by the title bar: press at (50, 15), move by (100, 50), release
+    mouse( 50, 15, UIB_LEFT, 0 );
+    mouse( 90, 45, UIB_LEFT, 0 );
+    mouse( 150, 65, UIB_LEFT, 0 );
+    mouse( 150, 65, 0, 0 );
+    check( "the window moved with the mouse", ui_find( &ui, 10 )->x == 110 && ui_find( &ui, 10 )->y == 60 );
+    check( "its widgets moved with it", ui_find( &ui, 11 )->x == 120 && ui_find( &ui, 11 )->y == 90 );
+    check( "the other window did not", ui_find( &ui, 20 )->x == 60 && ui_find( &ui, 21 )->x == 75 );
+    ui_draw( &ui, false );
+    check( "the old place shows the desk again", gfx_point( &g, 12, 12 ) == ui.theme.desk );
+    check( "the new place shows the window (its title bar)", gfx_point( &g, 150, 64 ) == ui.theme.title );
+    check( "ui_move moves a window and its widgets", ui_move( &ui, 10, 10, 10 ) && ui_find( &ui, 11 )->x == 20 && ui_find( &ui, 11 )->y == 40 );
+    check( "ui_move of an unknown id fails", !ui_move( &ui, 99, 0, 0 ) );
+    check( "ui_raise brings Two to the front", ui_raise( &ui, 20 ) && ui.widgets[ ui.count - 1 ].id == 21 );
+    mouse( 30, 15, UIB_LEFT, 0 );
+    mouse( 5000, 5000, UIB_LEFT, 0 );
+    mouse( 5000, 5000, 0, 0 );
+    check( "a window cannot be dragged out of the canvas", ui_find( &ui, 10 )->x == 400 - 40 && ui_find( &ui, 10 )->y == 240 - 20 );
+    drain();
+    done();
+
+    // damage lists: the part of a window that another window hides is not drawn, and is drawn when it is revealed
+    setup();
+    ui_add( &ui, UIK_PANEL, 10, 10, 10, 150, 100, "One", 1 );
+    ui_add( &ui, UIK_LABEL, 11, 20, 40, 100, 14, "first", 0 );
+    ui_add( &ui, UIK_PANEL, 20, 90, 50, 150, 100, "Two", 1 );
+    ui_add( &ui, UIK_BUTTON, 21, 110, 80, 60, 22, "B2", 0 );
+    painted = 0;
+    ui_draw( &ui, true );
+    long fullpaint = painted;
+    check( "the window in front owns the overlap", gfx_point( &g, 100, 70 ) == ui.theme.face && gfx_point( &g, 95, 55 ) == ui.theme.title );
+    check( "window One has the overlap on its damage list", ui_find( &ui, 10 )->dmg.n > 0 );
+    // a change in the hidden part of One must not show through Two
+    ui_set_text( &ui, 10, "One!" );
+    ui_set_text( &ui, 11, "second" );
+    int before = gfx_point( &g, 100, 70 );
+    ui_draw( &ui, false );
+    check( "changing a window under another leaves the one in front alone", gfx_point( &g, 100, 70 ) == before && gfx_point( &g, 95, 55 ) == ui.theme.title );
+    check( "its obscured part is still on its damage list", ui_find( &ui, 10 )->dmg.n > 0 );
+    // moving Two away reveals One: the revealed part is drawn again
+    ui_move( &ui, 20, 300, 50 );
+    painted = 0;
+    ui_draw( &ui, false );
+    check( "the revealed part of One is drawn (its face)", gfx_point( &g, 100, 70 ) == ui.theme.face && gfx_point( &g, 150, 100 ) == ui.theme.face );
+    check( "and the desk where Two was", gfx_point( &g, 200, 150 ) == ui.theme.desk );
+    check( "a window moved elsewhere is drawn there", gfx_point( &g, 305, 55 ) == ui.theme.shadow || gfx_point( &g, 305, 55 ) == ui.theme.title );
+    check( "a redraw touches only the changed parts (less than the full draw)", painted < fullpaint );
+    check( "the damage list of One is empty now", ui_find( &ui, 10 )->dmg.n == 0 );
+    // raising One over Two: Two's part that One covers goes on Two's list
+    ui_move( &ui, 20, 90, 50 );
+    ui_draw( &ui, false );
+    check( "Two is in front again, intact", gfx_point( &g, 95, 55 ) == ui.theme.title && gfx_point( &g, 100, 70 ) == ui.theme.face );
+    ui_raise( &ui, 10 );
+    ui_draw( &ui, false );
+    check( "raising One shows it over Two (its title bar)", gfx_point( &g, 100, 15 ) != ui.theme.desk && gfx_point( &g, 95, 55 ) != ui.theme.title );
+    check( "Two keeps the covered part on its damage list", ui_find( &ui, 20 )->dmg.n > 0 );
+    ui_raise( &ui, 20 );
+    ui_draw( &ui, false );
+    check( "raising Two again redraws the covered part", gfx_point( &g, 95, 55 ) == ui.theme.title && ui_find( &ui, 20 )->dmg.n == 0 );
+    // a window hidden / removed gives its place back
+    ui_remove( &ui, 21 );
+    ui_remove( &ui, 20 );
+    ui_draw( &ui, false );
+    check( "a removed window shows the one under it", gfx_point( &g, 100, 70 ) == ui.theme.face && gfx_point( &g, 200, 150 ) == ui.theme.desk );
+    done();
+
+    // the incremental redraw (damage lists) must give the picture of a full redraw: a modal panel over a form, added and removed
+    setup();
+    ui_add( &ui, UIK_PANEL, 1, 10, 10, 300, 200, "Form", 0 );
+    ui_add( &ui, UIK_LABEL, 2, 20, 40, 60, 14, "Name", 0 );
+    ui_add( &ui, UIK_TEXT, 3, 90, 36, 150, 18, "abc", 0 );
+    ui_add( &ui, UIK_BUTTON, 4, 20, 150, 80, 22, "OK", 0 );
+    ui_add( &ui, UIK_LIST, 5, 20, 70, 120, 60, "", 0 );
+    ui_draw( &ui, true );
+    ui_add( &ui, UIK_PANEL, 20, 60, 60, 200, 100, "Dialog", 0 );
+    ui_add( &ui, UIK_LABEL, 23, 70, 90, 150, 14, "Sure?", 0 );
+    ui_add( &ui, UIK_BUTTON, 21, 70, 120, 60, 22, "Yes", 0 );
+    ui_set_modal( &ui, 20 );
+    ui_draw( &ui, false );
+    ui_set_modal( &ui, 0 );
+    ui_remove( &ui, 21 );
+    ui_remove( &ui, 23 );
+    ui_remove( &ui, 20 );
+    ui_draw( &ui, false );
+    {
+        static uint8_t keep[ 400 * 240 ];
+        memcpy( keep, buf, sizeof(keep) );
+        ui_draw( &ui, true );
+        int diff = 0;
+        for ( int i = 0; i < 400 * 240; ++i ) {
+            diff += keep[i] != buf[i];
+        }
+        check( "after a modal panel came and went, the picture is the full redraw", diff == 0 );
+    }
+    done();
+
+    // random windows: after any run of moves, raises, changes, hides and removals the incremental redraw gives the picture of a full redraw
+    {
+        setup();
+        static uint8_t keep[ 400 * 240 ];
+        int wid[4] = { 100, 200, 300, 400 };
+        bool present[4] = { false, false, false, false };
+        int bad = 0, steps = 0;
+        for ( int step = 0; step < 400 && bad == 0; ++step ) {
+            for ( int op = 0; op < 3; ++op ) {
+                int k = RND( 4 ), w = wid[k], what = RND( 7 );
+                if ( !present[k] ) {
+                    int x = RND( 250 ), y = RND( 120 );
+                    ui_add( &ui, UIK_PANEL, w, x, y, 140, 90, "Win", 1 );
+                    ui_add( &ui, UIK_LABEL, w + 1, x + 10, y + 30, 80, 14, "label", 0 );
+                    ui_add( &ui, UIK_BUTTON, w + 2, x + 10, y + 50, 60, 22, "Btn", 0 );
+                    ui_add( &ui, UIK_CHECK, w + 3, x + 80, y + 50, 50, 16, "c", 0 );
+                    present[k] = true;
+                } else if ( what == 0 || what == 1 ) {
+                    ui_move( &ui, w, RND( 300 ) - 20, RND( 200 ) );
+                } else if ( what == 2 ) {
+                    ui_raise( &ui, w );
+                } else if ( what == 3 ) {
+                    ui_set_text( &ui, w + 1, ( rnd_state & 1U ) ? "a longer label" : "x" );
+                } else if ( what == 4 ) {
+                    ui_set_visible( &ui, w + 2, ( rnd_state & 2U ) != 0 );
+                } else if ( what == 5 ) {
+                    ui_set_value( &ui, w + 3, (int)( rnd_state & 1U ) );
+                } else {
+                    ui_remove( &ui, w + 3 );
+                    ui_remove( &ui, w + 2 );
+                    ui_remove( &ui, w + 1 );
+                    ui_remove( &ui, w );
+                    present[k] = false;
+                }
+            }
+            ui_draw( &ui, false );
+            memcpy( keep, buf, sizeof(keep) );
+            ui_draw( &ui, true );
+            ++steps;
+            for ( int i = 0; i < 400 * 240; ++i ) {
+                if ( keep[i] != buf[i] ) {
+                    ++bad;
+                }
+            }
+            if ( bad ) {
+                printf( "random windows: step %d differs in %d pixels\n", step, bad );
+            }
+        }
+        check( "400 random steps of windows: every incremental redraw equals a full redraw", bad == 0 && steps == 400 );
+        done();
+    }
 
     // canvas: a zoomed grid of cells
     setup();
