@@ -240,6 +240,36 @@ static int list_rows( const ui_widget_t* w ) {
 }
 
 
+// -- canvas: a zoomed grid of cells --------------------------------------------------------------------------------
+
+// the size of a cell in pixels and the upper left corner of the grid (centered in the widget)
+static bool canvas_geom( const ui_widget_t* w, int* pz, int* pox, int* poy ) {
+    if ( w->cw < 1 || w->ch < 1 ) {
+        return false;
+    }
+    int zx = ( w->w - 4 ) / w->cw, zy = ( w->h - 4 ) / w->ch, z = zx < zy ? zx : zy;
+    if ( z < 1 ) {
+        return false;
+    }
+    *pz = z;
+    *pox = w->x + 2 + ( ( w->w - 4 ) - z * w->cw ) / 2;
+    *poy = w->y + 2 + ( ( w->h - 4 ) - z * w->ch ) / 2;
+    return true;
+}
+
+// the cell under the mouse, or -1
+static int canvas_cell( const ui_widget_t* w, int mx, int my ) {
+    int z, ox, oy;
+    if ( w->pix == 0 || !canvas_geom( w, &z, &ox, &oy ) ) {
+        return -1;
+    }
+    int cx = ( mx - ox ), cy = ( my - oy );
+    if ( cx < 0 || cy < 0 || cx >= z * w->cw || cy >= z * w->ch ) {
+        return -1;
+    }
+    return ( cy / z ) * w->cw + cx / z;
+}
+
 // -- scroll bars (the widget UIK_SCROLL and the bar inside a list that has more rows than it shows) ----------------------------------------------------------
 
 static int list_rows( const ui_widget_t* w );
@@ -528,6 +558,22 @@ static void draw_widget( ui_t* ui, int index ) {
             }
             break;
         }
+        case UIK_CANVAS: {
+            cbox( ui, x1, y1, x2, y2, t->shadow, true );
+            bevel( ui, x1, y1, x2, y2, false );
+            int z, ox, oy;
+            if ( w->pix != 0 && canvas_geom( w, &z, &ox, &oy ) ) {
+                int gap = z >= 4 ? 1 : 0;
+                for ( int cy = 0; cy < w->ch; ++cy ) {
+                    for ( int cx = 0; cx < w->cw; ++cx ) {
+                        int c = w->pix[ cy * w->cw + cx ];
+                        int px = ox + cx * z, py = oy + cy * z;
+                        cbox( ui, px, py, px + z - 1 - gap, py + z - 1 - gap, c != 0 ? c : ( ( cx + cy ) & 1 ) ? t->light : t->face, true );
+                    }
+                }
+            }
+            break;
+        }
         case UIK_PROGRESS: {
             cbox( ui, x1, y1, x2, y2, t->field, true );
             bevel( ui, x1, y1, x2, y2, false );
@@ -619,6 +665,7 @@ void ui_init( ui_t* ui, const ui_canvas_t* canvas, int palbase ) {
 
 static void free_widget( ui_widget_t* w ) {
     free( w->text );
+    free( w->pix );
     for ( int i = 0; i < w->nitems; ++i ) {
         free( w->items[i] );
     }
@@ -699,6 +746,69 @@ bool ui_add( ui_t* ui, int kind, int id, int x, int y, int w, int h, const char*
     if ( ui->focus == 0 && focusable( wd ) ) {
         ui->focus = id;
     }
+    return true;
+}
+
+bool ui_set_canvas( ui_t* ui, int id, int cw, int ch ) {
+    ui_widget_t* w = ui_find( ui, id );
+    if ( w == 0 || w->kind != UIK_CANVAS || cw < 1 || ch < 1 || cw > 256 || ch > 256 ) {
+        return false;
+    }
+    uint8_t* p = (uint8_t*) calloc( (size_t) cw * (size_t) ch, 1U );
+    if ( p == 0 ) {
+        return false;
+    }
+    free( w->pix );
+    w->pix = p;
+    w->cw = cw;
+    w->ch = ch;
+    dirty( w );
+    return true;
+}
+
+bool ui_canvas_set( ui_t* ui, int id, int x, int y, int c ) {
+    ui_widget_t* w = ui_find( ui, id );
+    if ( w == 0 || w->kind != UIK_CANVAS || w->pix == 0 || x < 0 || y < 0 || x >= w->cw || y >= w->ch || c < 0 || c > 255 ) {
+        return false;
+    }
+    if ( w->pix[ y * w->cw + x ] != (uint8_t) c ) {
+        w->pix[ y * w->cw + x ] = (uint8_t) c;
+        dirty( w );
+    }
+    return true;
+}
+
+int ui_canvas_get( ui_t* ui, int id, int x, int y ) {
+    ui_widget_t* w = ui_find( ui, id );
+    if ( w == 0 || w->kind != UIK_CANVAS || w->pix == 0 || x < 0 || y < 0 || x >= w->cw || y >= w->ch ) {
+        return -1;
+    }
+    return w->pix[ y * w->cw + x ];
+}
+
+bool ui_canvas_load( ui_t* ui, int id, const uint8_t* data, size_t n ) {
+    ui_widget_t* w = ui_find( ui, id );
+    if ( w == 0 || w->kind != UIK_CANVAS || w->pix == 0 ) {
+        return false;
+    }
+    size_t cells = (size_t) w->cw * (size_t) w->ch;
+    memset( w->pix, 0, cells );
+    memcpy( w->pix, data, n < cells ? n : cells );
+    dirty( w );
+    return true;
+}
+
+bool ui_canvas_save( ui_t* ui, int id, uint8_t* out, size_t cap, size_t* n ) {
+    ui_widget_t* w = ui_find( ui, id );
+    if ( w == 0 || w->kind != UIK_CANVAS || w->pix == 0 ) {
+        return false;
+    }
+    size_t cells = (size_t) w->cw * (size_t) w->ch;
+    if ( cells > cap ) {
+        cells = cap;
+    }
+    memcpy( out, w->pix, cells );
+    *n = cells;
     return true;
 }
 
@@ -1388,6 +1498,27 @@ void ui_input( ui_t* ui, int mx, int my, int buttons, int wheel, const int* keys
                     push_event( ui, cw->id, UIE_CHANGE, 1 );
                 }
             }
+        }
+    }
+    // canvas: a press with either button and dragging over cells report the cell (once per cell) until the buttons are let go
+    bool anybtn = ( buttons & ( UIB_LEFT | UIB_RIGHT ) ) != 0, wasany = ( ui->lastbuttons & ( UIB_LEFT | UIB_RIGHT ) ) != 0;
+    if ( anybtn && !wasany && ui->popup == 0 && hot != 0 && hot->kind == UIK_CANVAS && in_scope( ui, hot ) && ( hot->flags & UIF_ENABLED ) ) {
+        ui->capture = hot->id;
+        ui->capcell = -1;
+    }
+    if ( anybtn && ui->capture != 0 ) {
+        ui_widget_t* cw = ui_find( ui, ui->capture );
+        if ( cw != 0 && cw->kind == UIK_CANVAS ) {
+            int cell = canvas_cell( cw, mx, my );
+            if ( cell >= 0 && cell != ui->capcell ) {
+                ui->capcell = cell;
+                push_event( ui, cw->id, ( buttons & UIB_LEFT ) ? UIE_PIXEL : UIE_PIXEL2, cell );
+            }
+        }
+    } else if ( !anybtn && ui->capture != 0 ) {
+        ui_widget_t* cw = ui_find( ui, ui->capture );
+        if ( cw != 0 && cw->kind == UIK_CANVAS ) {
+            ui->capture = 0;
         }
     }
     for ( int i = 0; i < nkeys; ++i ) {

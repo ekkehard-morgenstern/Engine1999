@@ -114,6 +114,10 @@ static const gfxcmd_t cmds[] = {
     { "UI", "ITEMTEXT",  GFXOP_UIITEMTEXT, "nnv",    0, false },
     { "UI", "SCROLL",    GFXOP_UISCROLL, "nnnnno",   0, false },
     { "UI", "PAGE",      GFXOP_UIPAGE,   "nn",       0, false },
+    { "UI", "CANVAS",    GFXOP_UICANVAS, "nnnnnnn",  0, false },
+    { "UI", "PIXEL",     GFXOP_UIPIXEL,  "nnnn",     0, false },
+    { "UI", "IMAGE",     GFXOP_UIIMAGE,  "ns",       0, false },
+    { "UI", "GETIMAGE",  GFXOP_UIGETIMAGE, "nv",     0, false },
 };
 
 static const gfxquery_t queries[] = {
@@ -158,6 +162,7 @@ static const gfxquery_t queries[] = {
     { "UI",     "FOCUS",    GFXQ_UIFOCUS,   0, 0 },
     { "UI",     "OPEN",     GFXQ_UIOPEN,    0, 0 },
     { "UI",     "EVENTS",   GFXQ_UIEVENTS,  0, 0 },
+    { "UI",     "PIXEL",    GFXQ_UIPIXEL,   3, 3 },
 };
 
 const gfxcmd_t* gfxops_find( const char* group, const char* name ) {

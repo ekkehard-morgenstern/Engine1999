@@ -131,6 +131,10 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXOP_UIGETTEXT 114             // UI GETTEXT id, a$
 #define GFXOP_UIITEMTEXT 115            // UI ITEMTEXT id, row, a$
 #define GFXOP_UISCROLL  116             // UI SCROLL id, x, y, w, h [, page]       (a scroll bar: vertical when it is higher than wide)
+#define GFXOP_UICANVAS  118             // UI CANVAS id, x, y, w, h, cw, ch       (a zoomed grid of cw x ch cells, each a palette index; events 7 / 8 = left / right button on a cell)
+#define GFXOP_UIPIXEL   119             // UI PIXEL id, x, y, c
+#define GFXOP_UIIMAGE   120             // UI IMAGE id, a$                        (cw * ch bytes into the cells)
+#define GFXOP_UIGETIMAGE 121            // UI GETIMAGE id, a$
 #define GFXOP_UIPAGE    117             // UI PAGE id, n                           (the size of the visible part)
 
 // queries (vm_gfx_t.query): functions of the language
@@ -172,6 +176,7 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXQ_UIGET      123             // UI("GET", id): the value of a widget (check box 0 / 1, radio button, slider, progress, list row, text field length)
 #define GFXQ_UICOUNT    124             // UI("COUNT", id): the rows of a list
 #define GFXQ_UIFOCUS    125             // UI("FOCUS"): the id of the widget that has the focus
+#define GFXQ_UIPIXEL    128             // UI("PIXEL", id, x, y): a cell of a canvas (-1 for a bad id or place)
 #define GFXQ_UIEVENTS   127             // (the VM polls it for ON UI) the number of events the UI has queued so far; a change is an event
 #define GFXQ_UIOPEN     126             // UI("OPEN"): -1 / 0
 #define GFXQ_MOUSEEVENT 108             // (the VM polls it for ON MOUSE) the number of presses, releases and wheel steps so far; a change is an event

@@ -1080,6 +1080,13 @@ static bool host_ui_op( int op, const double* a, int na, const char* s, size_t s
         case GFXOP_UIPROGRESS:  ok = ui_add( &host_ui, UIK_PROGRESS, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), "", 0 ); break;
         case GFXOP_UISLIDER:    ok = ui_add( &host_ui, UIK_SLIDER, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), "", gi( a[5], 0 ) ); break;
         case GFXOP_UISCROLL:    ok = ui_add( &host_ui, UIK_SCROLL, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), "", gi( a[5], 0 ) ); break;
+        case GFXOP_UICANVAS:
+            ok = ui_add( &host_ui, UIK_CANVAS, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), "", 0 ) &&
+                ( ui_set_canvas( &host_ui, id, gi( a[5], 1 ), gi( a[6], 1 ) ) || ( ui_remove( &host_ui, id ), false ) );
+            break;
+        case GFXOP_UIPIXEL:     ok = ui_canvas_set( &host_ui, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 0 ) ); break;
+        case GFXOP_UIIMAGE:     ok = ui_canvas_load( &host_ui, id, (const uint8_t*) s, slen ); break;
+        case GFXOP_UIGETIMAGE:  ok = ui_canvas_save( &host_ui, id, out, outsz, outlen ); break;
         case GFXOP_UIPAGE:      ok = ui_set_page( &host_ui, id, gi( a[1], 1 ) ); break;
         case GFXOP_UIPANEL:     ok = ui_add( &host_ui, UIK_PANEL, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), text, 0 ); break;
         case GFXOP_UIREMOVE:    ok = ui_remove( &host_ui, id ); break;
@@ -1172,6 +1179,7 @@ static bool host_ui_query( int q, const double* a, double* result ) {
             break;
         }
         case GFXQ_UIFOCUS:  *result = host_ui.focus; break;
+        case GFXQ_UIPIXEL:  *result = ui_canvas_get( &host_ui, gi( a[0], 0 ), gi( a[1], 0 ), gi( a[2], 0 ) ); break;
         default:            return false;
     }
     return true;
@@ -1181,7 +1189,7 @@ static bool host_gfx_op( void* usrdata, int op, const double* a, int na, const c
     size_t* outlen, const char** err ) {
     (void) usrdata; (void) na;
     int t = sdlscr_gfx_target();
-    if ( op >= GFXOP_UIOPEN && op <= GFXOP_UIPAGE ) {
+    if ( op >= GFXOP_UIOPEN && op <= GFXOP_UIGETIMAGE ) {
         return host_ui_op( op, a, na, s, slen, out, outsz, outlen, err );
     }
     switch ( op ) {
@@ -1335,7 +1343,7 @@ static bool host_gfx_query( void* usrdata, int q, const double* a, int na, doubl
         case GFXQ_MOUSEEVENT:   *result = sdlscr_mouse_get( MOUSEV_EVENTS ); break;
         case GFXQ_MOUSEVISIBLE: *result = sdlscr_mouse_get( MOUSEV_VISIBLE ) ? -1.0 : 0.0; break;
         case GFXQ_EVENT:        *result = sdlscr_sprite_nextevent(); break;
-        case GFXQ_UIEVENT: case GFXQ_UIKIND: case GFXQ_UIVALUE: case GFXQ_UIGET: case GFXQ_UICOUNT: case GFXQ_UIFOCUS: case GFXQ_UIOPEN: case GFXQ_UIEVENTS:
+        case GFXQ_UIEVENT: case GFXQ_UIKIND: case GFXQ_UIVALUE: case GFXQ_UIGET: case GFXQ_UICOUNT: case GFXQ_UIFOCUS: case GFXQ_UIOPEN: case GFXQ_UIEVENTS: case GFXQ_UIPIXEL:
             return host_ui_query( q, a, result );
         default:                return false;
     }

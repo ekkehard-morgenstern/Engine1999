@@ -620,6 +620,44 @@ int main( void ) {
     check( "reading an event does not change the count", ui_event_count() == c0 + 1U );
     done();
 
+    // canvas: a zoomed grid of cells
+    setup();
+    check( "a canvas is added", ui_add( &ui, UIK_CANVAS, 7, 10, 10, 100, 100, "", 0 ) );
+    check( "a canvas without cells has no pixel", ui_canvas_get( &ui, 7, 0, 0 ) == -1 );
+    check( "the cells are set", ui_set_canvas( &ui, 7, 8, 6 ) && ui_canvas_get( &ui, 7, 0, 0 ) == 0 );
+    check( "bad cell counts are refused", !ui_set_canvas( &ui, 7, 0, 6 ) && !ui_set_canvas( &ui, 7, 8, 300 ) && !ui_set_canvas( &ui, 99, 8, 6 ) );
+    check( "a pixel is set and read", ui_canvas_set( &ui, 7, 3, 2, 42 ) && ui_canvas_get( &ui, 7, 3, 2 ) == 42 );
+    check( "a pixel out of the grid is refused", !ui_canvas_set( &ui, 7, 8, 0, 1 ) && !ui_canvas_set( &ui, 7, 0, 6, 1 ) && !ui_canvas_set( &ui, 7, 0, 0, 256 ) &&
+        ui_canvas_get( &ui, 7, 0, 6 ) == -1 );
+    ui_draw( &ui, true );
+    // 100 - 4 = 96 pixels: a cell is 12 pixels (8 cells), the grid is 96 x 72 pixels, centered: x from 12, y from 10 + 2 + 12 = 24
+    check( "the cell is drawn in its color", gfx_point( &g, 12 + 3 * 12 + 3, 24 + 2 * 12 + 3 ) == 42 );
+    check( "an empty cell is checkered", gfx_point( &g, 12 + 3, 24 + 3 ) != 0 && gfx_point( &g, 12 + 3, 24 + 3 ) != gfx_point( &g, 12 + 12 + 3, 24 + 3 ) );
+    drain();
+    mouse( 12 + 5 * 12 + 4, 24 + 1 * 12 + 4, UIB_LEFT, 0 );
+    check( "a left press reports the cell", expect( 7, UIE_PIXEL, 1 * 8 + 5 ) );
+    mouse( 12 + 5 * 12 + 6, 24 + 1 * 12 + 6, UIB_LEFT, 0 );
+    check( "moving inside the cell reports nothing", none() );
+    mouse( 12 + 6 * 12 + 4, 24 + 1 * 12 + 4, UIB_LEFT, 0 );
+    check( "dragging to the next cell reports it", expect( 7, UIE_PIXEL, 1 * 8 + 6 ) );
+    mouse( 12 + 6 * 12 + 4, 24 + 1 * 12 + 4, 0, 0 );
+    mouse( 12 + 2 * 12 + 4, 24 + 4 * 12 + 4, UIB_RIGHT, 0 );
+    check( "a right press reports with the other kind", expect( 7, UIE_PIXEL2, 4 * 8 + 2 ) );
+    mouse( 0, 0, 0, 0 );
+    mouse( 11, 17, UIB_LEFT, 0 );
+    check( "a press next to the grid (inside the widget) reports nothing", none() );
+    mouse( 0, 0, 0, 0 );
+    uint8_t img[ 48 ], back[ 64 ];
+    for ( int i = 0; i < 48; ++i ) {
+        img[i] = (uint8_t)( i + 1 );
+    }
+    size_t nb = 0;
+    check( "an image is loaded", ui_canvas_load( &ui, 7, img, 48 ) && ui_canvas_get( &ui, 7, 7, 5 ) == 48 && ui_canvas_get( &ui, 7, 0, 0 ) == 1 );
+    check( "a short image clears the rest", ui_canvas_load( &ui, 7, img, 10 ) && ui_canvas_get( &ui, 7, 2, 1 ) == 0 && ui_canvas_get( &ui, 7, 1, 0 ) == 2 );
+    check( "the image is read back", ui_canvas_save( &ui, 7, back, sizeof(back), &nb ) && nb == 48U && memcmp( back, img, 10 ) == 0 && back[10] == 0 );
+    check( "removing the canvas frees it", ui_remove( &ui, 7 ) );
+    done();
+
     // a popup and drawing never write outside of the canvas (a widget partly outside)
     setup();
     ui_add( &ui, UIK_BUTTON, 1, 380, 230, 60, 22, "Edge", 0 );
