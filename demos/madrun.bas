@@ -9,7 +9,7 @@
 9 LOAD LIBRARY "text"
 10 ' MADRUN - a crossing game for one to four players, for Engine1999.
 20 ' A telephone booth stands on the island in the middle of a busy crossing, and the phone is ringing! Get there before the caller hangs up.
-30 ' Cars, trucks, buses, motorbikes and (later) ambulances drive on eight lanes. They stop for each other and for the crossing, but never for you.
+30 ' Cars, trucks, buses, motorbikes and (later) ambulances drive on sixteen lanes (two in each direction on each road). They stop for each other and for the crossing, but never for you.
 40 ' The four corners and the blocks between the roads are safe. If a vehicle hits you, you start again in a corner. The first player at the booth
 50 ' scores the level (more points for a fast answer), then the next level starts with more and faster traffic. A call you miss costs everybody a life.
 60 ' Keyboard: player 1 WASD (with one player the cursor keys work, too), player 2 the cursor keys. Controllers: players 1 to 4, left stick or D-pad;
@@ -56,10 +56,10 @@
 940   GFX RESET ALL
 950   CLS
 960   ' (DIM n makes n elements, 0 to n-1)
-970   DIM VK(50),VVR(50),VLN(50),VWD(50),VL(50),VS(50),VSP(50),VMX(50),VLD(50),VR(50),VX1(50),VY1(50),VX2(50),VY2(50),VSTL(50)
-980   DIM OCC(4,2),LDIR(8),LAX(8),LPOS(8),LLEN(8),CA(8,2),CID(8,2),IMGB(5,6,2)
+970   DIM VK(100),VVR(100),VLN(100),VWD(100),VL(100),VS(100),VSP(100),VMX(100),VLD(100),VR(100),VX1(100),VY1(100),VX2(100),VY2(100),VSTL(100)
+980   DIM OCC(4,2),WT(4,2),WN(4,2),LDIR(16),LAX(16),LPOS(16),LLEN(16),LSPF(16),CA(16,2),CID(16,2),IMGB(5,6,2)
 990   DIM NVAR(5),NSEG(5),VLEN(5),VWID(5),VSPF(5),SPX(5),SPY(5),PSPX(8),PSPY(8)
-1000   DIM PST(5),PX(5),PY(5),PHT(5),PINV(5),PBT(5),SCP(5),LV(5),PLD(5),NXL(5),PWF(5),DXI(5),DYI(5),PCOL(5),NM(5,50)
+1000   DIM PST(5),PX(5),PY(5),PHT(5),PINV(5),PBT(5),SCP(5),LV(5),PLD(5),NXL(5),PWF(5),DXI(5),DYI(5),PCOL(5),NM(5,100)
 1010   ' kinds of vehicle: variants, sprites (16 pixels each), length, width, speed factor
 1020   FOR K=0 TO 4
 1030     READ NVAR(K),NSEG(K),VLEN(K),VWID(K),VSPF(K)
@@ -86,13 +86,20 @@
 1240   FOR K=6 TO 9
 1250     SPRITE K,PRIORITY 5
 1260   NEXT K
-1270   FOR K=12 TO 107
+1270   FOR K=12 TO 191
 1280     SPRITE K,PRIORITY 3
 1290   NEXT K
 1300   SPRITE 4,ON
 1310 END PROC
 1320 PROC SOUNDS
-1330   SFX 1,"W1 V0.3 ML H1400,3 H1000,3 H1400,3 H1000,3"
+1321   LOCAL B$,I
+1322   ' the telephone: a bell rings by a hammer striking two gongs in turn about 20 times a second (a 1400 and a 2000 Hz tone, each a short
+1323   ' plucked "ting"), twice in a row, then a pause (the double ring of an old telephone); the cadence fits the 80 frames between the rings
+1324   B$=""
+1325   FOR I=1 TO 8
+1326     B$=B$+" H1400,32 H2000,32"
+1327   NEXT I
+1330   SFX 1,"W2 V0.4 MN T300 X0,0.012,0.3,0.004"+B$+" R4"+B$
 1340   SFX 2,"W3 V0.6 ML X0,0.01,0.3,0.2 S400,60,12"
 1350   SFX 3,"W1 V0.4 ML H784,6 H988,6 H1319,8"
 1360   SFX 4,"W2 V0.3 ML H196,10 H220,12"
@@ -126,29 +133,36 @@
 1640 ' the eight lanes: road row 0/1 (y 64, y 204), road column 0/1 (x 200, x 408); every lane has two crossings, CA = where the front enters one,
 1650 ' CID = its number (row * 2 + column); a lane is a circle: 64 pixels longer than the screen so that vehicles wrap while out of sight
 1660 PROC LANES
-1670   LOCAL K,R,C
-1680   FOR K=0 TO 7
-1690     IF K<4 THEN
-1700       LAX(K)=0:LLEN(K)=704
-1710       R=K\2
-1720       IF K MOD 2=0 THEN
-1730         LDIR(K)=1:CA(K,0)=232:CID(K,0)=R*2+1:CA(K,1)=440:CID(K,1)=R*2
-1740       ELSE
-1750         LDIR(K)=0:CA(K,0)=232:CID(K,0)=R*2:CA(K,1)=440:CID(K,1)=R*2+1
-1760       END IF
-1770       LPOS(K)=64+R*140+(K MOD 2)*16
-1780     ELSE
-1790       LAX(K)=1:LLEN(K)=364
-1800       C=(K-4)\2
-1810       IF K MOD 2=0 THEN
-1820         LDIR(K)=2:CA(K,0)=96:CID(K,0)=C:CA(K,1)=236:CID(K,1)=2+C
-1830       ELSE
-1840         LDIR(K)=3:CA(K,0)=96:CID(K,0)=2+C:CA(K,1)=236:CID(K,1)=C
-1850       END IF
-1860       LPOS(K)=200+C*208+(K MOD 2)*16
-1870     END IF
-1880   NEXT K
-1890 END PROC
+1667   LOCAL K,R,C,J
+1674   ' 16 lanes: each of the four roads is 64 pixels wide with two lanes per direction (lanes 0 and 1 of a road drive west / south, 2 and 3 east / north)
+1681   ' LAX 0 = along x (the horizontal roads, lanes 0..7), 1 = along y (the vertical roads, lanes 8..15); CA the places where the lane meets a crossing
+1688   FOR K=0 TO 15
+1695     IF K<8 THEN
+1702       R=K\4:J=K MOD 4
+1709       LAX(K)=0:LLEN(K)=704
+1716       LPOS(K)=48+R*140+J*16
+1723       CA(K,0)=200:CA(K,1)=440
+1730       IF J<2 THEN
+1737         LDIR(K)=1:CID(K,0)=R*2+1:CID(K,1)=R*2
+1744       ELSE
+1751         LDIR(K)=0:CID(K,0)=R*2:CID(K,1)=R*2+1
+1758       END IF
+1765     ELSE
+1772       C=(K-8)\4:J=(K-8) MOD 4
+1779       LAX(K)=1:LLEN(K)=364
+1786       LPOS(K)=168+C*240+J*16
+1793       CA(K,0)=80:CA(K,1)=220
+1800       IF J<2 THEN
+1807         LDIR(K)=2:CID(K,0)=C:CID(K,1)=2+C
+1814       ELSE
+1821         LDIR(K)=3:CID(K,0)=2+C:CID(K,1)=C
+1828       END IF
+1835     END IF
+1842     ' the lanes next to the middle line are the fast ones
+1849     LSPF(K)=1
+1856     IF J=1 OR J=2 THEN LSPF(K)=1.12
+1863   NEXT K
+1870 END PROC
 1900 ' ====================================================================== pictures
 1910 ' a rectangle in vehicle coordinates: u along the vehicle (the front is 15), v across (0 to 9); DD = direction 0 E, 1 W, 2 S, 3 N
 1920 PROC RR(U1,V1,U2,V2,C)
@@ -358,59 +372,69 @@
 3960   GFX CIRCLE X-2,Y-2,3,15
 3970 END PROC
 3980 PROC DRAWMAP
-3990   LOCAL I,X,Y,R,C,X0,Y0
-4000   GFX TARGET 0
-4010   GFX CLEAR 5
-4020   GFX LINE 0,64,639,95,1,BF:GFX LINE 0,204,639,235,1,BF
-4030   GFX LINE 200,0,231,299,1,BF:GFX LINE 408,0,439,299,1,BF
-4040   FOR I=1 TO 500
-4050     GFX PSET FN RN(640),FN RN(300),2
-4060   NEXT I
-4070   FOR R=0 TO 2
-4080     FOR C=0 TO 2
-4090       X0=0:IF C=1 THEN X0=232
-4100       IF C=2 THEN X0=440
-4110       Y0=0:IF R=1 THEN Y0=96
-4120       IF R=2 THEN Y0=236
-4130       X=199:IF C=1 THEN X=407
-4140       IF C=2 THEN X=639
-4150       Y=63:IF R=1 THEN Y=203
-4160       IF R=2 THEN Y=299
-4170       CALL BLOCK(X0,Y0,X,Y)
-4180     NEXT C
-4190   NEXT R
-4200   ' the dashed lines between the lanes (not in the crossings)
-4210   FOR X=0 TO 639 STEP 24
-4220     IF NOT (X+11>=196 AND X<=235) AND NOT (X+11>=404 AND X<=443) THEN
-4230       GFX LINE X,79,X+11,80,7,BF:GFX LINE X,219,X+11,220,7,BF
-4240     END IF
-4250   NEXT X
-4260   FOR Y=0 TO 299 STEP 24
-4270     IF NOT (Y+11>=60 AND Y<=99) AND NOT (Y+11>=200 AND Y<=239) THEN
-4280       GFX LINE 215,Y,216,Y+11,7,BF:GFX LINE 423,Y,424,Y+11,7,BF
-4290     END IF
-4300   NEXT Y
-4310   ' the stop lines in front of the crossings
-4320   FOR R=0 TO 1
-4330     FOR C=0 TO 1
-4340       X0=200+C*208:Y0=64+R*140
-4350       GFX LINE X0-4,Y0+16,X0-3,Y0+31,7,BF
-4360       GFX LINE X0+34,Y0,X0+35,Y0+15,7,BF
-4370       GFX LINE X0,Y0-4,X0+15,Y0-3,7,BF
-4380       GFX LINE X0+16,Y0+34,X0+31,Y0+35,7,BF
-4390     NEXT C
-4400   NEXT R
-4410   ' trees, the plaza around the phone booth, the starting rings of the four players
-4420   CALL TREE(30,115):CALL TREE(170,115):CALL TREE(30,185):CALL TREE(170,185)
-4430   CALL TREE(470,115):CALL TREE(610,115):CALL TREE(470,185):CALL TREE(610,185)
-4440   CALL TREE(252,116):CALL TREE(388,116):CALL TREE(252,184):CALL TREE(388,184)
-4450   GFX LINE 294,124,345,175,9,BF:GFX LINE 294,124,345,175,16,B:GFX LINE 297,127,342,172,16,B
-4460   FOR I=1 TO 4
-4470     GFX CIRCLE SPX(I)+8,SPY(I)+22,12,16+I,0,360,0.4
-4480     GFX CIRCLE SPX(I)+8,SPY(I)+22,13,16+I,0,360,0.4
-4490   NEXT I
-4500   GFX TARGET 3
-4510 END PROC
+3988   LOCAL I,X,Y,R,C,X0,Y0
+3996   GFX TARGET 0
+4004   GFX CLEAR 5
+4012   ' the roads (64 pixels wide: two lanes in each direction), two across and two down
+4020   GFX LINE 0,48,639,111,1,BF:GFX LINE 0,188,639,251,1,BF
+4028   GFX LINE 168,0,231,299,1,BF:GFX LINE 408,0,471,299,1,BF
+4036   FOR I=1 TO 700
+4044     GFX PSET FN RN(640),FN RN(300),2
+4052   NEXT I
+4060   ' the nine blocks between the roads
+4068   FOR R=0 TO 2
+4076     FOR C=0 TO 2
+4084       X0=0:IF C=1 THEN X0=232
+4092       IF C=2 THEN X0=472
+4100       Y0=0:IF R=1 THEN Y0=112
+4108       IF R=2 THEN Y0=252
+4116       X=167:IF C=1 THEN X=407
+4124       IF C=2 THEN X=639
+4132       Y=47:IF R=1 THEN Y=187
+4140       IF R=2 THEN Y=299
+4148       CALL BLOCK(X0,Y0,X,Y)
+4156     NEXT C
+4164   NEXT R
+4172   ' the dashed lines between the lanes of one direction and the double line between the directions (not in the crossings)
+4180   FOR R=0 TO 1
+4188     Y0=48+R*140
+4196     FOR X=0 TO 639 STEP 24
+4204       IF NOT (X+11>=164 AND X<=235) AND NOT (X+11>=404 AND X<=475) THEN
+4212         GFX LINE X,Y0+15,X+11,Y0+16,7,BF:GFX LINE X,Y0+47,X+11,Y0+48,7,BF
+4220       END IF
+4228     NEXT X
+4236     GFX LINE 0,Y0+31,163,Y0+32,8,BF:GFX LINE 236,Y0+31,403,Y0+32,8,BF:GFX LINE 476,Y0+31,639,Y0+32,8,BF
+4244   NEXT R
+4252   FOR C=0 TO 1
+4260     X0=168+C*240
+4268     FOR Y=0 TO 299 STEP 24
+4276       IF NOT (Y+11>=44 AND Y<=115) AND NOT (Y+11>=184 AND Y<=255) THEN
+4284         GFX LINE X0+15,Y,X0+16,Y+11,7,BF:GFX LINE X0+47,Y,X0+48,Y+11,7,BF
+4292       END IF
+4300     NEXT Y
+4308     GFX LINE X0+31,0,X0+32,43,8,BF:GFX LINE X0+31,116,X0+32,183,8,BF:GFX LINE X0+31,256,X0+32,299,8,BF
+4316   NEXT C
+4324   ' the stop lines in front of the crossings (across the two lanes that come in)
+4332   FOR R=0 TO 1
+4340     FOR C=0 TO 1
+4348       X0=168+C*240:Y0=48+R*140
+4356       GFX LINE X0-4,Y0+32,X0-3,Y0+63,7,BF
+4364       GFX LINE X0+66,Y0,X0+67,Y0+31,7,BF
+4372       GFX LINE X0,Y0-4,X0+31,Y0-3,7,BF
+4380       GFX LINE X0+32,Y0+66,X0+63,Y0+67,7,BF
+4388     NEXT C
+4396   NEXT R
+4404   ' trees, the plaza around the phone booth, the starting rings of the four players
+4412   CALL TREE(24,124):CALL TREE(144,124):CALL TREE(24,176):CALL TREE(144,176)
+4420   CALL TREE(496,124):CALL TREE(616,124):CALL TREE(496,176):CALL TREE(616,176)
+4428   CALL TREE(252,124):CALL TREE(388,124):CALL TREE(252,176):CALL TREE(388,176)
+4436   GFX LINE 294,124,345,175,9,BF:GFX LINE 294,124,345,175,16,B:GFX LINE 297,127,342,172,16,B
+4444   FOR I=1 TO 4
+4452     GFX CIRCLE SPX(I)+8,SPY(I)+22,12,16+I,0,360,0.4
+4460     GFX CIRCLE SPX(I)+8,SPY(I)+22,13,16+I,0,360,0.4
+4468   NEXT I
+4476   GFX TARGET 3
+4484 END PROC
 4520 ' ====================================================================== start screen
 4590 ' a message on the graphics layer; N frames (0 = until it is cleared)
 4600 PROC BANNER(T1$,T2$,N)
@@ -874,8 +898,8 @@
 9490   NEXT V
 9500   NV=0
 9510   SPD=MIN(2.7,1.1+0.12*LV2)
-9520   GX2=MAX(30,150-LV2*10)
-9530   FOR K=0 TO 7
+9520   GX2=MAX(36,170-LV2*9)
+9530   FOR K=0 TO 15
 9540     FIRST=0:PREV=0
 9550     S=30+FN RN(60)
 9560     WHILE S<LLEN(K)-50
@@ -889,12 +913,12 @@
 9640       OK=-1
 9650       FOR J=0 TO 1
 9660         A=CA(K,J)
-9670         IF S>A-8 AND S-LN<A+40 THEN OK=0
+9670         IF S>A-8 AND S-LN<A+72 THEN OK=0
 9680       NEXT J
-9690       IF OK AND NV<48 THEN
+9690       IF OK AND NV<90 THEN
 9700         NV=NV+1
 9710         VK(NV)=KD:VVR(NV)=FN RN(NVAR(KD)):VLN(NV)=LN:VWD(NV)=VWID(KD):VL(NV)=K:VS(NV)=S:VSP(NV)=0
-9720         VMX(NV)=MIN(3,SPD*VSPF(KD)*(0.9+RND(1)*0.2)):VR(NV)=0:VSTL(NV)=0:VLD(NV)=NV
+9720         VMX(NV)=MIN(3,SPD*VSPF(KD)*LSPF(K)*(0.9+RND(1)*0.2)):VR(NV)=0:VSTL(NV)=0:VLD(NV)=NV
 9730         IF PREV<>0 THEN VLD(PREV)=NV ELSE FIRST=NV
 9740         PREV=NV
 9750         S=S+LN+GX2+FN RN(60)
@@ -911,7 +935,7 @@
 9860     CALL SHOWVEH(V)
 9870   NEXT V
 9880   FOR K=0 TO 4
-9890     FOR V=0 TO 49
+9890     FOR V=0 TO 99
 9900       NM(K,V)=0
 9910     NEXT V
 9920   NEXT K
@@ -920,6 +944,7 @@
 9950   LOCAL V,I
 9960   FOR I=0 TO 3
 9970     OCC(I,0)=0:OCC(I,1)=0
+9971     WT(I,0)=WN(I,0):WT(I,1)=WN(I,1):WN(I,0)=0:WN(I,1)=0
 9980   NEXT I
 9990   FOR V=1 TO NV
 10000     IF VR(V)>0 THEN OCC(VR(V)-1,LAX(VL(V)))=OCC(VR(V)-1,LAX(VL(V)))+1
@@ -945,17 +970,18 @@
 10200   FOR J=0 TO 1
 10210     A=CA(K,J):C=CID(K,J)
 10220     IF VR(VI)=C+1 THEN
-10230       IF S-VLN(VI)>=A+32 THEN VR(VI)=0
+10230       IF S-VLN(VI)>=A+64 THEN VR(VI)=0
 10240     ELSE
 10250       DD2=A-S
 10260       IF DD2>=0 AND DD2<=ZONE THEN
 10270         ' enter a crossing only if no vehicle of the other axis uses it and there is room behind it for the whole vehicle
-10280         RM=A+40+VLN(VI)+GAP-S
-10290         IF OCC(C,1-AX)=0 AND G>=RM THEN
+10280         RM=A+72+VLN(VI)+GAP-S
+10290         IF OCC(C,1-AX)=0 AND G>=RM AND (WT(C,1-AX)=0 OR WT(C,AX)>0) THEN
 10300           VR(VI)=C+1
 10310           OCC(C,AX)=OCC(C,AX)+1
 10320         ELSE
 10330           P=MIN(P,A-STOPGAP)
+10335           IF VSTL(VI)>=40 THEN WN(C,AX)=1
 10340         END IF
 10350       END IF
 10360     END IF
@@ -1022,8 +1048,8 @@
 11030 ' vehicle kinds (car, truck, bus, motorbike, ambulance): variants, sprites, length, width, speed factor
 11040 DATA 6,1,16,10,1, 3,2,32,10,0.8, 2,2,32,10,0.85, 3,1,12,6,1.35, 2,1,16,10,1.5
 11050 ' where the four players start (the sprite's corner), then eight places for the pick-ups
-11060 DATA 92,34, 532,34, 92,242, 532,242
-11070 DATA 310,38, 310,238, 60,128, 140,150, 500,128, 580,150, 260,128, 364,160
+11060 DATA 92,12, 532,12, 92,264, 532,264
+11070 DATA 310,12, 310,264, 60,128, 140,150, 500,128, 580,150, 260,128, 364,160
 11080 ' the sprite colors 1 to 34
 11090 DATA 20,20,25, 140,200,235, 255,245,160, 230,40,40, 240,240,240, 150,150,155
 11100 DATA 220,50,50, 60,100,230, 60,180,80, 235,200,50, 240,140,40, 160,80,210

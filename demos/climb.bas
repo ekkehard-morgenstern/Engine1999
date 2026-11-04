@@ -1929,7 +1929,7 @@
 19620   NEXT I
 19630 END PROC
 19640 PROC TITLE
-19650   LOCAL I,T,K$
+19650   LOCAL I,T,K$,X
 19660   CALL CLEARALL
 19670   CALL LOADWORLD
 19680   CALL INITENT
@@ -1949,14 +1949,14 @@
 19820     GFX VSYNC
 19830     T=T+1
 19840     FOR I=0 TO 4
-19850       BRX(I)=BRX(I)+BRV(I)
-19860       IF BRX(I)>WW*16 THEN BRX(I)=-20
-19870       IF BRX(I)<-20 THEN BRX(I)=WW*16
 19880       BRP(I)=BRP(I)+0.04
 19890     NEXT I
 19900     ' the birds fly by, high up, the cone over the stand wobbles
 19910     FOR I=0 TO 4
-19920       SPRITE 24+I,(BRX(I)\3+I*90) MOD 700-30,60+I*30+INT(14*SIN(BRP(I))),27+((BRV(I)<0)*-2)+(T\8) MOD 2
+19911       ' the position comes from the frame count (a wrapping world coordinate made the birds jump)
+19912       X=(INT(T*ABS(BRV(I))/3)+I*90) MOD 700
+19913       IF BRV(I)<0 THEN X=699-X
+19920       SPRITE 24+I,X-30,60+I*30+INT(14*SIN(BRP(I))),27+((BRV(I)<0)*-2)+(T\8) MOD 2
 19930     NEXT I
 19940     SPRITE 29,312,44+INT(5*SIN(T/12)),31+(T\20) MOD 2
 19950     K$=INKEY$
