@@ -22,7 +22,7 @@
 # Keeps the man pages (man/) honest. "sh mancheck.sh" (make man-check) fails if
 #   - an option that "engine1999 --help" or "engine1999c --help" lists is missing from the page of that program,
 #   - the list of reserved words in man/engine1999-basic.7 is not the list "engine1999c --list-keywords" prints,
-#   - a page has no @VERSION@ in its header, or roff finds a mistake in it (when groff is there).
+#   - a page (also of the games, section 6) has no @VERSION@ in its header, or roff finds a mistake in it (when groff is there).
 # "sh mancheck.sh --update" rewrites the list of reserved words (the rest of the pages is written by hand).
 # Run it in the build directory (needs ./engine1999 and ./engine1999c).
 
@@ -65,7 +65,7 @@ for prog in engine1999 engine1999c; do
 done
 
 # 3. form
-for page in man/*.1 man/*.7; do
+for page in man/*.1 man/*.6 man/*.7; do
     grep -q '^\.TH .*@VERSION@' "$page" || fail "$page has no @VERSION@ in its .TH line"
     if command -v groff >/dev/null 2>&1; then
         msg=$(sed 's/@VERSION@/x/' "$page" | groff -man -ww -z 2>&1)

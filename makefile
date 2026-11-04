@@ -215,6 +215,18 @@ KITOBJ=$(addprefix kit/,$(BASEMOD))
 
 kit: kit/engine1999 kit/engine1999c kit/engine1999.o kit/engine1999c.o kit/engine.lib
 
+# The demo games as programs of their own (roadmap item 60): each demo is turned into an executable with BUILD (window kind, its libraries
+# inside), named engine1999-<game> so that nothing on the user's system clashes. Needs only the system linker, like BUILD itself.
+GAMES=fruit fruit2 climb madrun
+GAMEEXE=$(addprefix kit/games/engine1999-,$(GAMES))
+
+games: $(GAMEEXE)
+
+$(GAMEEXE): kit/games/engine1999-%: demos/%.bas $(wildcard demos/lib/*.lib) kit/engine1999c kit/engine1999.o kit/engine.lib
+	@mkdir -p kit/games
+	printf 'LOAD "demos/$*"\nBUILD "$@", WINDOW\nBYE\n' | ENGINE1999_HOME=$(CURDIR)/kit ./kit/engine1999c
+	@test -x $@
+
 $(KITOBJ) kit/engine1999.o kit/engine1999c.o: kit/%.o: %.c $(BASEHDR)
 	@mkdir -p kit
 	$(CCOMP) -c $(KITFLAGS) -o $@ $<
@@ -231,10 +243,11 @@ kit/engine1999: kit/engine1999.o kit/engine.lib
 kit/engine1999c: kit/engine1999c.o kit/engine.lib
 	$(CCOMP) $(KITFLAGS) -o $@ kit/engine1999c.o kit/engine.lib -lrt -lm
 
-install: kit version.h
+install: kit games version.h
 	install -d $(DESTDIR)$(BINDIR) $(DESTDIR)$(LIBDIR) $(DESTDIR)$(SHAREDIR)/demos/lib $(DESTDIR)$(DOCDIR)/docs/images \
-		$(DESTDIR)$(MANDIR)/man1 $(DESTDIR)$(MANDIR)/man7
+		$(DESTDIR)$(MANDIR)/man1 $(DESTDIR)$(MANDIR)/man6 $(DESTDIR)$(MANDIR)/man7
 	install -m 755 kit/engine1999 kit/engine1999c $(DESTDIR)$(BINDIR)
+	install -m 755 $(GAMEEXE) $(DESTDIR)$(BINDIR)
 	install -m 644 kit/engine1999.o kit/engine1999c.o kit/engine.lib $(DESTDIR)$(LIBDIR)
 	install -m 644 demos/*.bas demos/README.md $(DESTDIR)$(SHAREDIR)/demos
 	install -m 644 demos/lib/*.lib $(DESTDIR)$(SHAREDIR)/demos/lib
@@ -243,13 +256,15 @@ install: kit version.h
 	install -m 644 docs/images/*.png $(DESTDIR)$(DOCDIR)/docs/images
 	@v=$$(sed -n 's/.*ENGINE_VERSION *"\(.*\)".*/\1/p' version.h); \
 	for p in man/*.1; do sed "s/@VERSION@/$$v/" $$p > $(DESTDIR)$(MANDIR)/man1/$$(basename $$p); chmod 644 $(DESTDIR)$(MANDIR)/man1/$$(basename $$p); done; \
+	for p in man/*.6; do sed "s/@VERSION@/$$v/" $$p > $(DESTDIR)$(MANDIR)/man6/$$(basename $$p); chmod 644 $(DESTDIR)$(MANDIR)/man6/$$(basename $$p); done; \
 	for p in man/*.7; do sed "s/@VERSION@/$$v/" $$p > $(DESTDIR)$(MANDIR)/man7/$$(basename $$p); chmod 644 $(DESTDIR)$(MANDIR)/man7/$$(basename $$p); done
-	@echo "installed in $(DESTDIR)$(PREFIX): engine1999, engine1999c, the BUILD kit in $(DESTDIR)$(LIBDIR), man pages (man engine1999)"
+	@echo "installed in $(DESTDIR)$(PREFIX): engine1999, engine1999c, the games ($(addprefix engine1999-,$(GAMES))), the BUILD kit in $(DESTDIR)$(LIBDIR), man pages (man engine1999)"
 
 uninstall:
-	rm -f $(DESTDIR)$(BINDIR)/engine1999 $(DESTDIR)$(BINDIR)/engine1999c
+	rm -f $(DESTDIR)$(BINDIR)/engine1999 $(DESTDIR)$(BINDIR)/engine1999c $(addprefix $(DESTDIR)$(BINDIR)/engine1999-,$(GAMES))
 	rm -rf $(DESTDIR)$(LIBDIR) $(DESTDIR)$(SHAREDIR) $(DESTDIR)$(DOCDIR)
 	for p in man/*.1; do rm -f $(DESTDIR)$(MANDIR)/man1/$$(basename $$p); done
+	for p in man/*.6; do rm -f $(DESTDIR)$(MANDIR)/man6/$$(basename $$p); done
 	for p in man/*.7; do rm -f $(DESTDIR)$(MANDIR)/man7/$$(basename $$p); done
 
 # the man pages (man/) must say what the programs do: options, reserved words (needs ./engine1999 and ./engine1999c)

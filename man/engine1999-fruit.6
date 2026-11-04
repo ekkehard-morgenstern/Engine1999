@@ -1,0 +1,41 @@
+.\" Engine1999 - A 2D games engine written in C
+.\" Copyright (C) 2026  Ekkehard Morgenstern
+.\"
+.\" This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published
+.\" by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It is distributed WITHOUT ANY
+.\" WARRANTY. ADDITIONAL PERMISSION (GPLv3 section 7): the Engine1999 Runtime Exception applies, see the file LICENSE-EXCEPTION.
+.\"
+.\" Keep this page current: it describes the demo game demos/fruit.bas (an executable made with BUILD, installed by "make install").
+.TH ENGINE1999-FRUIT 6 "November 2026" "Engine 1999 @VERSION@" "Engine1999 Manual"
+.SH NAME
+engine1999-fruit \- Fruit Invaders, a Space Invaders style game
+.SH SYNOPSIS
+.B engine1999-fruit
+.SH DESCRIPTION
+Fruit Invaders is a Space Invaders style game: forty fruits march across the sky in a formation, drop bombs and come lower with every step. Shoot them before they land. Cherries are worth 30 points, apples 20, oranges 10, the pineapple that flies by now and then 50 to 300. Four shields protect the cannon and crumble where a bomb or a bullet hits. Every wave is faster; you have three lives and get an extra life now and then. See also \fBengine1999-fruit2\fR(6), the later and bigger version.
+.PP
+The program is the demo \fIfruit.bas\fR of Engine1999, made into an executable with
+.B BUILD
+(window kind: it needs the SDL2 library, nothing else); its BASIC libraries are inside it. It opens the Engine1999 window; the window can
+be switched between the full screen and a window with F11 or ALT+RETURN.
+.SH CONTROLS
+.TP
+.BR LEFT / RIGHT " or " A / D
+move the cannon (only while the key is held).
+.TP
+.BR SPACE " or " UP
+fire (hold it for rapid fire).
+.TP
+.B P
+pause.
+.TP
+.B Q
+quit.
+.PP
+A game controller works, too: D-pad or left stick moves, A or the right trigger fires, START pauses, BACK quits.
+.SH FILES
+Fruit Invaders does not write any file.
+.SH SEE ALSO
+.BR engine1999 (1),
+.BR engine1999-basic (7),
+.BR engine1999-fruit2 (6)

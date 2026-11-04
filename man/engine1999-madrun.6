@@ -1,0 +1,41 @@
+.\" Engine1999 - A 2D games engine written in C
+.\" Copyright (C) 2026  Ekkehard Morgenstern
+.\"
+.\" This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published
+.\" by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It is distributed WITHOUT ANY
+.\" WARRANTY. ADDITIONAL PERMISSION (GPLv3 section 7): the Engine1999 Runtime Exception applies, see the file LICENSE-EXCEPTION.
+.\"
+.\" Keep this page current: it describes the demo game demos/madrun.bas (an executable made with BUILD, installed by "make install").
+.TH ENGINE1999-MADRUN 6 "November 2026" "Engine 1999 @VERSION@" "Engine1999 Manual"
+.SH NAME
+engine1999-madrun \- MADRUN, a street crossing game for one to four players
+.SH SYNOPSIS
+.B engine1999-madrun
+.SH DESCRIPTION
+MADRUN is a crossing game for one to four players. A telephone is ringing in the booth on the island in the middle of a busy crossing: get there before the caller hangs up. Cars, trucks, buses, motorbikes and (later) ambulances drive on sixteen lanes (two in each direction on each of four roads); they stop for each other and for the crossings, but never for you. The four corners and the blocks between the roads are safe. If a vehicle hits you, you start again in a corner. The first player at the booth scores the level (more points for a fast answer); every level has more and faster traffic, and a call you miss costs everybody a life. Pick-ups: a whistle stops the traffic for five seconds, boots make you fast for ten seconds, a heart is an extra life. A close call scores 5 points.
+.PP
+The program is the demo \fImadrun.bas\fR of Engine1999, made into an executable with
+.B BUILD
+(window kind: it needs the SDL2 library, nothing else); its BASIC libraries are inside it. It opens the Engine1999 window; the window can
+be switched between the full screen and a window with F11 or ALT+RETURN.
+.SH CONTROLS
+The game asks at the start for the keyboard (1 or 2 players) or for game controllers (up to 4: a controller that is connected brings its player, one that is removed takes it away).
+.TP
+.B Keyboard
+player 1 moves with W A S D (with one player the cursor keys work, too), player 2 with the cursor keys.
+.TP
+.B Controllers
+left stick or D-pad.
+.TP
+.B P
+pause (START on a controller).
+.TP
+.B Q
+quit (BACK on a controller).
+.SH FILES
+The high score is kept in the file
+.I madrun.hi
+in the current directory (the game goes on without it if the file cannot be written).
+.SH SEE ALSO
+.BR engine1999 (1),
+.BR engine1999-basic (7)

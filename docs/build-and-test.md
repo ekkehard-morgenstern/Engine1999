@@ -54,15 +54,15 @@ printf '10 PRINT "HI";A$:LET B=1+2*3\n20 GOTO 10\n' | ./basictest2
 
 | Where | What |
 |---|---|
-| `$(PREFIX)/bin` | `engine1999`, `engine1999c` |
+| `$(PREFIX)/bin` | `engine1999`, `engine1999c` and the games `engine1999-fruit`, `engine1999-fruit2`, `engine1999-climb`, `engine1999-madrun` (the demos made into executables with `BUILD` by `make games`, part of `make install`; window kind, libraries inside; they keep their high score file in the current directory) |
 | `$(PREFIX)/lib/engine1999` | the kit of `BUILD`: `engine1999.o`, `engine1999c.o`, `engine.lib` |
 | `$(PREFIX)/share/engine1999/demos` | the demo programs; `demos/lib` below it holds their libraries (`*.lib`) |
 | `$(PREFIX)/share/doc/engine1999` | README, LICENSE, LICENSE-EXCEPTION, `docs/` (with `grammar.html`) |
-| `$(PREFIX)/share/man/man1`, `man7` | `engine1999(1)`, `engine1999c(1)`, `engine1999-basic(7)` (the `@VERSION@` of the sources is filled in) |
+| `$(PREFIX)/share/man/man1`, `man6`, `man7` | `engine1999(1)`, `engine1999c(1)`, `engine1999-<game>(6)` (one page per game), `engine1999-basic(7)` (the `@VERSION@` of the sources is filled in) |
 
 `make uninstall` removes them again. `BUILD` finds an installed kit on its own: it looks in `../lib/engine1999` next to the running program, so any prefix works (`~/.local/bin/engine1999` finds `~/.local/lib/engine1999`); a copied kit goes into `ENGINE1999_HOME`. The kit needs the system linker (`ld`, binutils) and the development files of the C library on the machine that runs `BUILD`, and SDL2 for window executables.
 
-**Man pages** (`man/engine1999.1`, `man/engine1999c.1`, `man/engine1999-basic.7`) are written by hand and kept current by `make man-check` (`mancheck.sh`): it fails when an option that `engine1999 --help` or `engine1999c --help` lists is missing from the page of that program, when the list of reserved words in the language page is not `engine1999c --list-keywords` (`sh mancheck.sh --update` rewrites that list), and when groff finds a mistake. Read an uninstalled page with `man -l man/engine1999.1`.
+**Man pages** (`man/engine1999.1`, `man/engine1999c.1`, `man/engine1999-basic.7` and `man/engine1999-<game>.6` for each installed game) are written by hand and kept current by `make man-check` (`mancheck.sh`): it fails when an option that `engine1999 --help` or `engine1999c --help` lists is missing from the page of that program, when the list of reserved words in the language page is not `engine1999c --list-keywords` (`sh mancheck.sh --update` rewrites that list), and when groff finds a mistake. Read an uninstalled page with `man -l man/engine1999.1`.
 
 ## Version
 
