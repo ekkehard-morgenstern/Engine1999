@@ -1938,6 +1938,7 @@
 19710   CALL BIGTEXT(4,"THE LONG CLIMB",3,4)
 19720   CALL TXTAT(11,15,"  LEFT / RIGHT or A / D walk   UP / DOWN or W / S climb       ",200)
 19730   CALL TXTAT(11,16,"  SPACE jump   Z / X drill a hole   P pause   M music   Q quit",200)
+19735   CALL TXTAT(11,17,"  Controller: stick / D-pad, A jump, X / B drill, START pause ",206)
 19740   CALL TXTAT(11,18,"  Reach the ice cream stand on top of the tower!             ",202)
 19750   CALL TXTAT(11,20,"  BEST HEIGHT "+FN PAD$(HI,3)+" meters   Press SPACE or A to start",203)
 19760   FOR I=24 TO 29

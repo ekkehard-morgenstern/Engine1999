@@ -1303,6 +1303,7 @@
 13520   CALL TXTAT(18,19,"HIGH SCORE "+FN PAD$(HI,6),201)
 13530   CALL TXTAT(10,21,"LEFT / RIGHT or A / D move   SPACE fire   P pause   Q quit",200)
 13540   CALL TXTAT(10,22,"Catch the banana for rapid fire!",202)
+13545   CALL TXTAT(10,23,"Controller: stick / D-pad move, A fire, START pause, BACK quit",206)
 13550   CALL TXTAT(17,24,"Press SPACE or A to start",203)
 13560   PLAY "T150 W1 V0.3 O4 E8 G8 >C8 E4 D8 C8 <B8 >C4","T150 W2 V0.25 O3 C4 G4 C4 G4","T150 W1 V0.12 O5 C16 E16 G16 >C16 C16 E16 G16 >C16"
 13570   QT=0

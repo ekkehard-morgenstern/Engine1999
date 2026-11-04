@@ -13,6 +13,10 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+### 2026-11-04 — the title screens of `fruit`, `fruit2` and `climb` show that a game controller works
+- One new line on each title screen: `fruit.bas` (line 5220: "Controller: D-pad or stick moves, A fires"), `fruit2.bas` (13545: "Controller: stick / D-pad move, A fire, START pause, BACK quit"), `climb.bas` (19735: "Controller: stick / D-pad, A jump, X / B drill, START pause"; in the box of the other two key lines). `madrun` and `river` showed it already.
+- Checked in the window under Xvfb: the three title screens (the lines fit and are readable; `climb`'s line was shortened afterwards to the width of the box).
+
 ## Log
 
 ### 7a6cb67 — 2026-10-17 13:32:27 +0200 — "Introduced Claude to the project"
@@ -1115,3 +1119,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 - **Touching one on land** (`PM` 2): `TOWRAITH` — the wraith is gone, the player becomes a wraith (`PM` 4) for 900 frames (15 s), with or without a horse (random), and loses a life (`SFX 11`). As a wraith nothing harms him (boats, swimmers, rocks, other wraiths), he can still collect things (apples, carrots, ice cream), moves freely over the banks, the water and the bridges (faster with the horse), UP / DOWN scroll the world like walking (also back), `WRAITHEND`: the wraith vanishes (`SFX 12`) and the player starts again in a new boat if he has lives left, else it is game over.
 - Title screen, HUD, the man page and `demos/README.md` mention the wraiths.
 - Checked in the window under Xvfb with forced events: a wraith and a rider on the left bank, the walker touching one: lives 3 to 2, the player shown as a black rider, "THE WRAITH VANISHES" and a new boat after the (shortened) time, the wraiths walking about; the art in a zoomed screenshot. Not seen: a wraith crossing a bridge, the natural frequency of wraiths over a long game.
+
+### 8e3fd41 — 2026-11-04 05:17:01 +0100 — "Claude Code session update"
+2 files, +8/-7.
+- The bookkeeping of the previous commit (`e9c5078`, the wraiths): `SESSION.md` and this log (commit ID in the Eternal River note, the entry moved from Pending). No code.

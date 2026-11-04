@@ -529,6 +529,7 @@
 5190 LOCATE 22,18:PRINT "LEFT / RIGHT or A / D   move";
 5200 LOCATE 22,19:PRINT "SPACE or UP   fire (hold for rapid fire)";
 5210 LOCATE 22,20:PRINT "P pause     Q quit     (pad: START, BACK)";
+5220 LOCATE 22,21:PRINT "Controller: D-pad or stick moves, A fires";
 5230 COLOR 137:LOCATE 24,23:PRINT "Press SPACE or A to start";
 5240 COLOR 140
 5250 PLAY "T160 W1 V0.3 O4 E8 G8 >C8 E4","T160 W2 V0.3 O3 C4 G4"
