@@ -260,6 +260,16 @@ static bool con_write_hook( void* ud, const char* text, size_t len ) { (void) ud
 static int con_key_hook( void* ud ) { (void) ud; return *conkeys ? (unsigned char) *conkeys++ : 0; }
 
 // runs a shell command and ignores its status (a cast to void does not silence warn_unused_result of glibc's system() in GCC)
+static int dir_has( const char* d, size_t l, const char* s ) {
+    size_t n = strlen( s );
+    for ( size_t i=0; i + n <= l; ++i ) {
+        if ( memcmp( d + i, s, n ) == 0 ) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 static void run_shell( const char* cmd ) {
     if ( system( cmd ) != 0 ) {
         // (the commands only clean up; a failure shows in the checks that follow)
@@ -347,6 +357,26 @@ static void test_phase2( void ) {
         !iotab_open( &t, 1, "res:/etc/passwd", "file", IOMODE_READ, &e ) && strcmp( e, "Permission denied" ) == 0 );
     check( "res missing", !iotab_open( &t, 1, "res:none", "file", IOMODE_READ, &e ) && strcmp( e, "File not found" ) == 0 );
     check( "res can't kill", !iodev_remove( "res:snd.txt", "file", &e ) && strcmp( e, "Not supported by device" ) == 0 );
+
+    // dir: a directory as a text file (the file requester)
+    run_shell( "mkdir -p dirt/sub dirt/Alpha dirt/.hid; : > dirt/b.bas; : > dirt/A.txt; : > dirt/c.BAS; : > dirt/.dot" );
+    {
+        char* d1 = 0; size_t l1 = 0;
+        check( "dir lists dirs first", iodev_read_all( "dir:dirt", "file", (uint8_t**) &d1, &l1, &e ) && l1 > 0 );
+        char* nl = d1 ? memchr( d1, '\n', l1 ) : 0;
+        check( "dir first line is the full name", nl != 0 && nl - d1 >= 5 && d1[0] == '/' && memcmp( nl - 5, "/dirt", 5 ) == 0 );
+        check( "dir order", nl != 0 && (size_t)( l1 - ( nl + 1 - d1 ) ) == 30U && memcmp( nl + 1, "Alpha/\nsub/\nA.txt\nb.bas\nc.BAS\n", 30U ) == 0 );
+        free( d1 );
+        check( "dir pattern", iodev_read_all( "dir:dirt/*.bas;*.txt", "file", (uint8_t**) &d1, &l1, &e ) && (dir_has( d1, l1, "\nAlpha/\nsub/\nA.txt\nb.bas\n" ) != 0) && (dir_has( d1, l1, "c.BAS" ) == 0) && (dir_has( d1, l1, ".dot" ) == 0) );
+        free( d1 );
+        check( "dir hidden on request", iodev_read_all( "dir:dirt/.*", "file", (uint8_t**) &d1, &l1, &e ) && (dir_has( d1, l1, ".dot\n" ) != 0) && (dir_has( d1, l1, ".hid/\n" ) != 0) );
+        free( d1 );
+        check( "dir missing", !iodev_read_all( "dir:dirt/nope", "file", (uint8_t**) &d1, &l1, &e ) && strcmp( e, "File not found" ) == 0 );
+        check( "dir is read only", !iotab_open( &t, 1, "dir:dirt", "file", IOMODE_WRITE, &e ) && strcmp( e, "Permission denied" ) == 0 );
+        check( "dir current directory", iodev_read_all( "dir:", "file", (uint8_t**) &d1, &l1, &e ) && (dir_has( d1, l1, "\ndirt/\n" ) != 0) );
+        free( d1 );
+        run_shell( "rm -rf dirt" );
+    }
 
     // con: the screen and the keyboard
     check( "con without a host", !iotab_open( &t, 1, "con:", "file", IOMODE_WRITE, &e ) && strcmp( e, "Not supported by device" ) == 0 );

@@ -1,0 +1,159 @@
+1 ' License: free for everybody to use, copy, change and build into executables (BUILD).
+2 ' An executable made with BUILD contains the Engine1999 runtime: the Engine1999 Runtime Exception
+3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
+4 ' in the executable (it shows with the command line option --engine1999-about).
+10 ' filereq - a file requester for programs that use the UI subsystem (a library: LOAD LIBRARY "filereq").
+20 '   F$=FN FR_PICK$(TTL$,DR$,PT$,SV)
+30 '       opens a modal dialog on the open UI (UI OPEN must have been done) and returns the full name of the file the user chose, or "" when the
+40 '       dialog was cancelled (Cancel, ESC). DIR$ is the start directory ("" = the current one), PATTERN$ selects the files ("*.bas;*.txt", "" = all);
+50 '       directories are always shown. SAVE = 0: an existing file is chosen (open); SAVE = -1: the name may be new, an existing file asks
+60 '       "Replace?". A double click on a directory (or "../") enters it; a click on a file puts its name into the field; Return in the field accepts.
+70 '   FR_DIR$ is the directory the requester ended in (pass it as DIR$ the next time to start where the user left off).
+80 ' The requester uses the UI widget ids 900..912 and the channel 255 (closed again); the form behind it stays as it is and is redrawn after it.
+90 ' It reads directories through the dir: driver. Needs the window (engine1999): the UI draws on the graphics layer.
+100 LIBRARY "filereq","FR_"
+110 PROC FR_INIT
+120   FR_DIR$=""
+130   FR_SAVE=0
+140   FR_DONE=0
+150   FR_RES$=""
+160   FR_ASKED$=""
+170 END PROC
+180 ' reads the directory FR_DIR$ with the pattern P$ into the list 902; FR_DIR$ becomes its full name
+190 PROC FR_READ(P$)
+200   LOCAL L$,N,S$
+210   S$="dir:"+FR_DIR$
+220   IF FR_DIR$="" THEN S$="dir:."
+230   IF P$<>"" THEN S$=S$+"/"+P$
+240   UI CLEARLIST 902
+250   UI ITEM 902,"../"
+260   N=1
+270   OPEN S$ FOR INPUT AS #255
+280   LINE INPUT #255,L$
+290   FR_DIR$=L$
+300   WHILE EOF(255)=0 AND N<500
+310     LINE INPUT #255,L$
+320     IF L$<>"" THEN
+330       UI ITEM 902,L$
+340       N=N+1
+350     END IF
+360   WEND
+370   CLOSE #255
+380   UI CAPTION 901,FR_DIR$
+390   UI VALUE 902,1
+400 END PROC
+410 ' the full name of the file called N$ in the directory FR_DIR$
+420 FUNC FR_FULL$(N$)
+430   IF LEFT$(N$,1)="/" THEN RETURN N$
+440   IF FR_DIR$="/" THEN RETURN "/"+N$
+450   RETURN FR_DIR$+"/"+N$
+460 END FUNC
+470 PROC FR_ENTER(N$)
+480   FR_DIR$=FN FR_FULL$(N$)
+490 END PROC
+500 ' what the user chose: a directory is entered, a file ends the dialog
+510 PROC FR_CHOOSE(N$,P$)
+520   LOCAL F$
+530   IF N$="" THEN EXIT PROC
+540   IF RIGHT$(N$,1)="/" THEN
+550     CALL FR_ENTER(N$)
+560     CALL FR_READ(P$)
+570     UI CAPTION 904,""
+580     EXIT PROC
+590   END IF
+600   F$=FN FR_FULL$(N$)
+610   IF FR_SAVE AND EXISTS(F$) THEN
+620     CALL FR_ASK(F$)
+630   ELSE
+640     FR_RES$=F$
+650     FR_DONE=1
+660   END IF
+670 END PROC
+680 PROC FR_ASK(F$)
+690   UI PANEL 910,150,100,340,100,"Replace?"
+700   UI LABEL 911,166,134,308,14,"The file exists. Replace it?"
+710   UI BUTTON 912,166,160,100,24,"Replace"
+720   UI BUTTON 913,374,160,100,24,"Keep"
+730   UI MODAL 910
+740   FR_ASKED$=F$
+750 END PROC
+760 FUNC FR_PICK$(TTL$,DR$,PT$,SV)
+770   LOCAL E,K,V,N$,P$,SEL$,F$
+780   FR_DIR$=DR$
+790   FR_SAVE=SV
+800   FR_DONE=0
+810   FR_RES$=""
+820   FR_ASKED$=""
+830   P$=PT$
+840   UI PANEL 900,100,10,440,280,TTL$
+850   UI LABEL 901,116,40,408,14,""
+860   UI LIST 902,116,60,408,150
+870   UI LABEL 903,116,224,50,14,"Name:"
+880   UI TEXT 904,170,220,354,18,""
+890   UI LABEL 905,116,250,200,14,P$
+900   UI BUTTON 906,330,248,90,24,"OK"
+910   UI BUTTON 907,434,248,90,24,"Cancel"
+920   UI MODAL 900
+930   UI FOCUS 904
+940   CALL FR_READ(P$)
+950   WHILE FR_DONE=0
+960     GFX VSYNC
+970     UI UPDATE
+980     E=UI("EVENT")
+990     WHILE E<>0 AND FR_DONE=0
+1000       K=UI("KIND")
+1010       V=UI("VALUE")
+1020       IF FR_ASKED$<>"" THEN
+1030         IF E=912 AND K=1 THEN
+1040           FR_RES$=FR_ASKED$
+1050           FR_DONE=1
+1060         END IF
+1070         IF (E=913 AND K=1) OR (E=910 AND K=6) THEN
+1080           FR_ASKED$=""
+1090           UI MODAL 0
+1100           UI REMOVE 913
+1110           UI REMOVE 912
+1120           UI REMOVE 911
+1130           UI REMOVE 910
+1140           UI MODAL 900
+1150         END IF
+1160       ELSE
+1170         IF E=902 AND K=3 THEN
+1180           UI ITEMTEXT 902,V,SEL$
+1190           IF RIGHT$(SEL$,1)<>"/" THEN UI CAPTION 904,SEL$
+1200         END IF
+1210         IF E=902 AND K=4 THEN
+1220           UI ITEMTEXT 902,V,SEL$
+1230           CALL FR_CHOOSE(SEL$,P$)
+1240         END IF
+1250         IF (E=906 AND K=1) OR (E=904 AND K=5) THEN
+1260           UI GETTEXT 904,N$
+1270           IF N$="" THEN
+1280             UI ITEMTEXT 902,UI("GET",902),N$
+1290           END IF
+1300           CALL FR_CHOOSE(N$,P$)
+1310         END IF
+1320         IF (E=907 AND K=1) OR (E=900 AND K=6) THEN FR_DONE=2
+1330       END IF
+1340       E=UI("EVENT")
+1350     WEND
+1360   WEND
+1370   IF FR_ASKED$<>"" THEN
+1380     UI MODAL 0
+1390     UI REMOVE 913
+1400     UI REMOVE 912
+1410     UI REMOVE 911
+1420     UI REMOVE 910
+1430   END IF
+1440   UI MODAL 0
+1450   UI REMOVE 907
+1460   UI REMOVE 906
+1470   UI REMOVE 905
+1480   UI REMOVE 904
+1490   UI REMOVE 903
+1500   UI REMOVE 902
+1510   UI REMOVE 901
+1520   UI REMOVE 900
+1530   IF FR_DONE=2 THEN RETURN ""
+1540   RETURN FR_RES$
+1550 END FUNC

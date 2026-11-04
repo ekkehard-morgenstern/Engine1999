@@ -192,6 +192,13 @@ A shell command as a file:
 Read\-only game assets in the directory
 .IR res/ .
 .TP
+.B dir:
+A directory as a read\-only text file: the first line is its full name, then the sub\-directories (with a
+.BR / ),
+then the files, in alphabetical order. A pattern such as
+.I dir:/tmp/*.bas;*.txt
+selects files.
+.TP
 .B con:
 The screen and keyboard as a channel.
 .TP

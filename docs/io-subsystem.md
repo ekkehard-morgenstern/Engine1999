@@ -152,6 +152,7 @@ ADDRESS [driver]     ADDRESS$                     chooses / returns the default 
   `PRINT #1,"T120 O4 C D E"` plays. A bad string is an error with the music parser's message ("Unknown music command 'Z'"). Voices
   started by separate lines are not synchronized with each other (use `PLAY a$,b$` for chords). It is output only.
   Without a sound output (tests) the strings are checked and dropped.
+- **`dir:`** (2026-11-05, for the file requester): `OPEN "dir:/some/dir/*.bas;*.txt" FOR INPUT AS #1` reads a directory as text: line 1 is its full name (`realpath`), then the sub-directories with a `/` at the end, then the files that match the pattern (`;` separates several; none = all), each group sorted without regard to case; names starting with `.` only when the pattern starts with `.`; `dir:` alone is the current directory. Read only, `LINE INPUT #1` until `EOF(1)`.
 - **`stdin:`, `stdout:`, `stderr:`** (2026-10-31): the standard streams of the process as channels (`OPEN "stderr:" FOR OUTPUT AS #2`); nothing behind the colon; `stdin:` is input only (one line per read, never read ahead), the other two output only (append is accepted); closing does not close the stream; `stderr:` flushes `stdout` first. See `docs/basic-language.md` ("Program arguments and the environment").
 - **`tcp:`**: `OPEN "tcp:host:port" FOR UPDATE AS #1` (`"tcp:[::1]:8080"` for IPv6 literals) connects (10 s limit; "Host not found",
   "Connection refused", "Timed out") and gives a duplex channel: `PRINT #1`, `LINE INPUT #1`, `INPUT$(n,#1)`, `EOF(1)` (waits until a byte

@@ -27,6 +27,7 @@
 */
 
 #include <ctype.h>
+#include <dirent.h>
 #include <fnmatch.h>
 #include <fcntl.h>
 #include <poll.h>
@@ -662,6 +663,183 @@ static bool res_list( iodrv_t* drv, const char* spec, hlstyle_t style, void* sty
 
 static iodrv_t res_driver = { "res", res_open, file_read, 0, file_size, file_close, res_list, 0, 0, 0, 0, file_seek, 0 };
 
+// -- the dir driver (a directory as a text file: the data of the file requester) ------------------------
+
+typedef struct _dirhandle_t {
+    char*       text;
+    size_t      len, pos;
+} dirhandle_t;
+
+typedef struct _direntry_t {
+    char*       name;                   // with a "/" at the end for a directory
+    bool        isdir;
+} direntry_t;
+
+static int dir_compare( const void* pa, const void* pb ) {
+    const direntry_t* a = (const direntry_t*) pa;
+    const direntry_t* b = (const direntry_t*) pb;
+    if ( a->isdir != b->isdir ) {
+        return a->isdir ? -1 : 1;
+    }
+    int c = strcasecmp( a->name, b->name );
+    return c != 0 ? c : strcmp( a->name, b->name );
+}
+
+// does name match one of the patterns of pat (separated by ";")? An empty pattern matches everything
+static bool dir_match( const char* pat, const char* name ) {
+    if ( pat[0] == '\0' ) {
+        return true;
+    }
+    char one[256];
+    while ( *pat ) {
+        size_t n = strcspn( pat, ";" );
+        if ( n > 0 && n < sizeof(one) ) {
+            memcpy( one, pat, n );
+            one[n] = '\0';
+            if ( fnmatch( one, name, FNM_PERIOD ) == 0 ) {
+                return true;
+            }
+        }
+        pat += n;
+        if ( *pat == ';' ) {
+            ++pat;
+        }
+    }
+    return false;
+}
+
+// "dir:", "dir:/some/dir", "dir:/some/dir/*.bas;*.txt", "dir:*.bas". First line: the full name of the directory. Then the
+// directories (name and "/"), then the files that match the pattern; each in alphabetical order; hidden names only when asked for.
+static void* dir_open( iodrv_t* drv, const char* path, unsigned mode, char* err, size_t errsz ) {
+    (void) drv;
+    if ( mode & IOMODE_WRITE ) {
+        iodev_set_err( err, errsz, "Permission denied" );
+        return 0;
+    }
+    char dirname[4096];
+    const char* pat = "";
+    const char* slash = strrchr( path, '/' );
+    const char* last = slash ? slash + 1 : path;
+    if ( strpbrk( last, "*?[" ) != 0 ) {
+        pat = last;
+        size_t n = slash ? (size_t)( slash - path ) + ( slash == path ? 1U : 0U ) : 0U;
+        if ( n >= sizeof(dirname) ) {
+            iodev_set_err( err, errsz, "Bad file name" );
+            return 0;
+        }
+        memcpy( dirname, path, n );
+        dirname[n] = '\0';
+    } else {
+        if ( strlen( path ) >= sizeof(dirname) ) {
+            iodev_set_err( err, errsz, "Bad file name" );
+            return 0;
+        }
+        strcpy( dirname, path );
+    }
+    char full[4200];
+    if ( realpath( dirname[0] ? dirname : ".", full ) == 0 ) {
+        iodev_set_err( err, errsz, iodev_errno_text( errno ) );
+        return 0;
+    }
+    DIR* d = opendir( full );
+    if ( d == 0 ) {
+        iodev_set_err( err, errsz, iodev_errno_text( errno ) );
+        return 0;
+    }
+    bool wanthidden = pat[0] == '.';
+    direntry_t* ent = 0;
+    size_t n = 0, cap = 0;
+    bool ok = true;
+    struct dirent* de;
+    while ( ok && ( de = readdir( d ) ) != 0 ) {
+        const char* nm = de->d_name;
+        if ( strcmp( nm, "." ) == 0 || strcmp( nm, ".." ) == 0 || ( nm[0] == '.' && !wanthidden ) ) {
+            continue;
+        }
+        char fn[4400];
+        struct stat st;
+        snprintf( fn, sizeof(fn), "%s/%s", full, nm );
+        bool isdir = stat( fn, &st ) == 0 && S_ISDIR( st.st_mode );
+        if ( !isdir && !dir_match( pat, nm ) ) {
+            continue;
+        }
+        if ( n == cap ) {
+            size_t ncap = cap ? cap * 2U : 64U;
+            direntry_t* ne = (direntry_t*) realloc( ent, ncap * sizeof(*ne) );
+            if ( ne == 0 ) {
+                ok = false;
+                break;
+            }
+            ent = ne; cap = ncap;
+        }
+        size_t l = strlen( nm );
+        ent[n].name = (char*) malloc( l + 2U );
+        if ( ent[n].name == 0 ) {
+            ok = false;
+            break;
+        }
+        memcpy( ent[n].name, nm, l );
+        if ( isdir ) {
+            ent[n].name[l++] = '/';
+        }
+        ent[n].name[l] = '\0';
+        ent[n].isdir = isdir;
+        ++n;
+    }
+    closedir( d );
+    dirhandle_t* h = ok ? (dirhandle_t*) calloc( 1U, sizeof(*h) ) : 0;
+    if ( h != 0 ) {
+        qsort( ent, n, sizeof(*ent), dir_compare );
+        size_t total = strlen( full ) + 2U;
+        for ( size_t i=0; i < n; ++i ) {
+            total += strlen( ent[i].name ) + 1U;
+        }
+        h->text = (char*) malloc( total );
+        if ( h->text == 0 ) {
+            free( h );
+            h = 0;
+        } else {
+            size_t o = (size_t) sprintf( h->text, "%s\n", full );
+            for ( size_t i=0; i < n; ++i ) {
+                o += (size_t) sprintf( h->text + o, "%s\n", ent[i].name );
+            }
+            h->len = o;
+        }
+    }
+    for ( size_t i=0; i < n; ++i ) {
+        free( ent[i].name );
+    }
+    free( ent );
+    if ( h == 0 ) {
+        iodev_set_err( err, errsz, "Out of memory" );
+    }
+    return h;
+}
+
+static ssize_t dir_read( void* handle, void* buf, size_t count ) {
+    dirhandle_t* h = (dirhandle_t*) handle;
+    size_t n = h->len - h->pos;
+    if ( n > count ) {
+        n = count;
+    }
+    memcpy( buf, h->text + h->pos, n );
+    h->pos += n;
+    return (ssize_t) n;
+}
+
+static int64_t dir_size( void* handle ) {
+    return (int64_t) ( (dirhandle_t*) handle )->len;
+}
+
+static bool dir_close( void* handle ) {
+    dirhandle_t* h = (dirhandle_t*) handle;
+    free( h->text );
+    free( h );
+    return true;
+}
+
+static iodrv_t dir_driver = { "dir", dir_open, dir_read, 0, dir_size, dir_close, 0, 0, 0, 0, 0, 0, 0 };
+
 // -- the con driver (the screen and the keyboard as a channel) -------------------------------------------
 
 static iocon_t iodev_con;
@@ -1049,6 +1227,7 @@ void iodev_init( void ) {
         iodev_register( &mem_driver );
         iodev_register( &sh_driver );
         iodev_register( &res_driver );
+        iodev_register( &dir_driver );
         iodev_register( &con_driver );
         iodev_register( &play_driver );
         iodev_register( &tcp_driver );
