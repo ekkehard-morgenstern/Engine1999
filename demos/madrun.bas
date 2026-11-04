@@ -92,14 +92,6 @@
 1300   SPRITE 4,ON
 1310 END PROC
 1320 PROC SOUNDS
-1321   LOCAL B$,I
-1322   ' the telephone: a bell rings by a hammer striking two gongs in turn about 20 times a second (a 1400 and a 2000 Hz tone, each a short
-1323   ' plucked "ting"), twice in a row, then a pause (the double ring of an old telephone); the cadence fits the 80 frames between the rings
-1324   B$=""
-1325   FOR I=1 TO 8
-1326     B$=B$+" H1400,32 H2000,32"
-1327   NEXT I
-1330   SFX 1,"W2 V0.4 MN T300 X0,0.012,0.3,0.004"+B$+" R4"+B$
 1340   SFX 2,"W3 V0.6 ML X0,0.01,0.3,0.2 S400,60,12"
 1350   SFX 3,"W1 V0.4 ML H784,6 H988,6 H1319,8"
 1360   SFX 4,"W2 V0.3 ML H196,10 H220,12"
@@ -109,6 +101,15 @@
 1400   SFX 8,"W1 V0.35 ML ~12,0.5 H2200,16 H1900,16"
 1410   SFX 9,"W2 V0.2 ML H330,3"
 1420 END PROC
+1421 PROC RING
+1422   ' The telephone: a real bell, as measured on a recording of an old telephone: three partials that are not harmonics of each other (1290,
+1423   ' 500 and 3360 Hz), a clapper that strikes about 20 times a second (the slight tremolo), 2 seconds of ringing. The 1290 and 3360 Hz
+1424   PLAY "W0 V0.3 ML ^20,0.15 X0.005,0,1,1.3 H1290,1 R1 XR ^0,0","W0 V0.28 ML ~15,1.5 ^20,0.5 X0.005,0,1,0.03 H500,1 R1 XR ~0,0 ^0,0","W0 V0.09 ML ^20,0.2 X0.005,0,1,1.6 H3360,1 R1 XR ^0,0"
+1425 END PROC
+1426 PROC HANGUP
+1427   SOUND OFF 1:SOUND OFF 2:SOUND OFF 3
+1428   ENVELOPE 1:ENVELOPE 2:ENVELOPE 3:TREMOLO 1,0,0:TREMOLO 2,0,0:TREMOLO 3,0,0:VIBRATO 2,0,0
+1429 END PROC
 1430 ' ====================================================================== colors
 1440 PROC PALETTES
 1450   LOCAL I,R,GG,BL
@@ -567,7 +568,7 @@
 5870   SPRITE 5,OFF
 5880   MSG$="THE PHONE IS RINGING!"
 5890   CALL BANNER("LEVEL "+STR$(LV2),"The phone is ringing - hurry!",150)
-5900   SFX 1
+5900   CALL RING
 5910   CALL HUD
 5920 END PROC
 5930 PROC SPAWN(P2,C)
@@ -730,7 +731,7 @@
 7760   NEXT P
 7770   IF TST=1 THEN
 7780     IF NA>0 THEN TLEFT=TLEFT-1
-7790     IF NA>0 AND TLEFT MOD 80=0 THEN SFX 1
+7790     IF NA>0 AND TLEFT<TLIM AND (TLIM-TLEFT) MOD 240=0 THEN CALL RING
 7800     SPRITE 4,312,138,120+((FRM\5) MOD 2)
 7810     FOR P=1 TO 4
 7820       IF PST(P)=1 THEN
@@ -753,6 +754,7 @@
 7990 PROC ANSWER(P2)
 8000   LOCAL BONUS
 8010   TST=2:TCNT=200
+8011   CALL HANGUP
 8020   BONUS=100+(TLEFT\60)*10+LEVEL*50
 8030   SCP(P2)=SCP(P2)+BONUS
 8040   CALL EXTRALIFE(P2)
@@ -764,6 +766,7 @@
 8100 PROC TOOLATE
 8110   LOCAL P
 8120   TST=3:TCNT=170
+8121   CALL HANGUP
 8130   FOR P=1 TO 4
 8140     IF PST(P)=1 OR PST(P)=2 THEN
 8150       LV(P)=LV(P)-1
