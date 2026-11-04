@@ -13,12 +13,6 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-### 2026-11-04 — ETERNAL RIVER: wraiths (owner's addition)
-- **Wraiths** (object kinds 10 on foot, 11 on a horse, 40 % of them): black and white and see-through (new palette entries 63 to 65 with alpha on the sprite and graphics layers), four new pictures (32 / 33 hooded wraith with a ragged hem, 34 / 35 a black horse with a white mane and a hooded rider seen from above, two walking frames each). They turn up on the banks in the new rows (`SPAWNROW`: about one in 70 rows, more with the level) and walk about on land with a new direction every 50 to 140 frames (0.35 pixels a frame, riders 0.85), turn round at water, walk over bridges, and now and then moan (`SFX 12`, when on screen); they stay in the pool like the other objects on land (950 pixels below the screen).
-- **Touching one on land** (`PM` 2): `TOWRAITH` — the wraith is gone, the player becomes a wraith (`PM` 4) for 900 frames (15 s), with or without a horse (random), and loses a life (`SFX 11`). As a wraith nothing harms him (boats, swimmers, rocks, other wraiths), he can still collect things (apples, carrots, ice cream), moves freely over the banks, the water and the bridges (faster with the horse), UP / DOWN scroll the world like walking (also back), `WRAITHEND`: the wraith vanishes (`SFX 12`) and the player starts again in a new boat if he has lives left, else it is game over.
-- Title screen, HUD, the man page and `demos/README.md` mention the wraiths.
-- Checked in the window under Xvfb with forced events: a wraith and a rider on the left bank, the walker touching one: lives 3 to 2, the player shown as a black rider, "THE WRAITH VANISHES" and a new boat after the (shortened) time, the wraiths walking about; the art in a zoomed screenshot. Not seen: a wraith crossing a bridge, the natural frequency of wraiths over a long game.
-
 ## Log
 
 ### 7a6cb67 — 2026-10-17 13:32:27 +0200 — "Introduced Claude to the project"
@@ -1114,3 +1108,10 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 - **Trees and bushes are no obstacle** for the walker any more (houses are); a boat at a jetty is easier to board (its rectangle reaches 8 pixels over the bank).
 - **Found while testing:** `TILE FILL` with a short string is "Illegal argument" (rows below the first generated row; the scrollback is limited to the first row now); at 12 frames a second under Xvfb a swim to the bank takes seconds, so the test keys have to be held long.
 - Checked in the window under Xvfb: the new river and roads (fast scroll), swimming to the bank, walking up (scrolls), walking down (scrolls back, no error). The owner's remark that a rock hit once: the rocks do hit (45 % end the boat).
+
+### e9c5078 — 2026-11-04 05:13:42 +0100 — "Eternal River game update, by Claude Code"
+5 files, +1208/-1098.
+- **Wraiths** (object kinds 10 on foot, 11 on a horse, 40 % of them): black and white and see-through (new palette entries 63 to 65 with alpha on the sprite and graphics layers), four new pictures (32 / 33 hooded wraith with a ragged hem, 34 / 35 a black horse with a white mane and a hooded rider seen from above, two walking frames each). They turn up on the banks in the new rows (`SPAWNROW`: about one in 70 rows, more with the level) and walk about on land with a new direction every 50 to 140 frames (0.35 pixels a frame, riders 0.85), turn round at water, walk over bridges, and now and then moan (`SFX 12`, when on screen); they stay in the pool like the other objects on land (950 pixels below the screen).
+- **Touching one on land** (`PM` 2): `TOWRAITH` — the wraith is gone, the player becomes a wraith (`PM` 4) for 900 frames (15 s), with or without a horse (random), and loses a life (`SFX 11`). As a wraith nothing harms him (boats, swimmers, rocks, other wraiths), he can still collect things (apples, carrots, ice cream), moves freely over the banks, the water and the bridges (faster with the horse), UP / DOWN scroll the world like walking (also back), `WRAITHEND`: the wraith vanishes (`SFX 12`) and the player starts again in a new boat if he has lives left, else it is game over.
+- Title screen, HUD, the man page and `demos/README.md` mention the wraiths.
+- Checked in the window under Xvfb with forced events: a wraith and a rider on the left bank, the walker touching one: lives 3 to 2, the player shown as a black rider, "THE WRAITH VANISHES" and a new boat after the (shortened) time, the wraiths walking about; the art in a zoomed screenshot. Not seen: a wraith crossing a bridge, the natural frequency of wraiths over a long game.
