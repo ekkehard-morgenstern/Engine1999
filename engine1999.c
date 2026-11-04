@@ -956,6 +956,16 @@ static void ui_c_pset( void* ctx, int x, int y, int color ) {
     sdlscr_gfx_pset( UI_LAYER, x, y, color );
 }
 
+// the UI ends with the run: whatever stopped the program (END, an error, ESC) leaves no form over the text screen
+static void host_ui_shutdown( void ) {
+    if ( host_ui_open ) {
+        ui_free( &host_ui );
+        host_ui_open = false;
+        sdlscr_gfx_clear( UI_LAYER, 0 );
+        sdlscr_mouse_timeout( 3000 );
+    }
+}
+
 static void host_ui_start( void ) {
     uint32_t argb[ UI_PAL_COLORS ];
     ui_theme_argb( argb );
@@ -1047,9 +1057,7 @@ static bool host_ui_op( int op, const double* a, int na, const char* s, size_t s
     bool ok = true;
     switch ( op ) {
         case GFXOP_UICLOSE:
-            ui_free( &host_ui );
-            host_ui_open = false;
-            sdlscr_gfx_clear( UI_LAYER, 0 );
+            host_ui_shutdown();
             break;
         case GFXOP_UICLEAR:
             ui_clear( &host_ui );
@@ -1071,6 +1079,8 @@ static bool host_ui_op( int op, const double* a, int na, const char* s, size_t s
         case GFXOP_UILIST:      ok = ui_add( &host_ui, UIK_LIST, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), "", 0 ); break;
         case GFXOP_UIPROGRESS:  ok = ui_add( &host_ui, UIK_PROGRESS, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), "", 0 ); break;
         case GFXOP_UISLIDER:    ok = ui_add( &host_ui, UIK_SLIDER, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), "", gi( a[5], 0 ) ); break;
+        case GFXOP_UISCROLL:    ok = ui_add( &host_ui, UIK_SCROLL, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), "", gi( a[5], 0 ) ); break;
+        case GFXOP_UIPAGE:      ok = ui_set_page( &host_ui, id, gi( a[1], 1 ) ); break;
         case GFXOP_UIPANEL:     ok = ui_add( &host_ui, UIK_PANEL, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), text, 0 ); break;
         case GFXOP_UIREMOVE:    ok = ui_remove( &host_ui, id ); break;
         case GFXOP_UICAPTION:   ok = ui_set_text( &host_ui, id, text ); break;
@@ -1167,7 +1177,7 @@ static bool host_gfx_op( void* usrdata, int op, const double* a, int na, const c
     size_t* outlen, const char** err ) {
     (void) usrdata; (void) na;
     int t = sdlscr_gfx_target();
-    if ( op >= GFXOP_UIOPEN && op <= GFXOP_UIITEMTEXT ) {
+    if ( op >= GFXOP_UIOPEN && op <= GFXOP_UIPAGE ) {
         return host_ui_op( op, a, na, s, slen, out, outsz, outlen, err );
     }
     switch ( op ) {
@@ -1481,6 +1491,7 @@ static bool handle_input( const char* buf ) {
     sdlscr_pollkeys( true );
     repl_enter( &repl, buf );
     sdlscr_pollkeys( false );
+    host_ui_shutdown();         // a program that stopped (END, an error, Break) leaves no UI on the graphics layer: it would hide the prompt
     if ( repl.fulledit ) {      // EDIT without a target (not run from inside the REPL: the editor enters lines itself)
         repl.fulledit = false;
         fulledit_run( &repl, sdlscr_driver( vblank_handler, &usrdata ) );

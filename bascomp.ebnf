@@ -491,7 +491,8 @@ on-mouse-stmt := TOK_ON TOK_MOUSE ( goto-kw goto-target | TOK_OFF ) .
 ui-stmt := TOK_XFUNC(UI) ( OPEN | CLOSE | CLEAR | UPDATE |
                            ( LABEL | BUTTON | CHECK | TEXT | PANEL ) ui-geometry TOK_COMMA str-expr |
                            RADIO ui-geometry TOK_COMMA str-expr [ TOK_COMMA num-expr ] |
-                           ( LIST | PROGRESS ) ui-geometry | SLIDER ui-geometry [ TOK_COMMA num-expr ] |
+                           ( LIST | PROGRESS ) ui-geometry | ( SLIDER | SCROLL ) ui-geometry [ TOK_COMMA num-expr ] |
+                           PAGE num-expr TOK_COMMA num-expr |
                            ( REMOVE | FOCUS | CLEARLIST | MODAL ) num-expr | ( CAPTION | ITEM ) num-expr TOK_COMMA str-expr |
                            ( VALUE | ENABLE | SHOW ) num-expr TOK_COMMA num-expr | RANGE num-expr TOK_COMMA num-expr TOK_COMMA num-expr |
                            POPUP num-expr TOK_COMMA num-expr TOK_COMMA num-expr | GETTEXT num-expr TOK_COMMA str-var-ref |

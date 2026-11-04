@@ -112,6 +112,8 @@ static const gfxcmd_t cmds[] = {
     { "UI", "POPUP",     GFXOP_UIPOPUP,  "nnn",      0, false },
     { "UI", "GETTEXT",   GFXOP_UIGETTEXT,"nv",       0, false },
     { "UI", "ITEMTEXT",  GFXOP_UIITEMTEXT, "nnv",    0, false },
+    { "UI", "SCROLL",    GFXOP_UISCROLL, "nnnnno",   0, false },
+    { "UI", "PAGE",      GFXOP_UIPAGE,   "nn",       0, false },
 };
 
 static const gfxquery_t queries[] = {

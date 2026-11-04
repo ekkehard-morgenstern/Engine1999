@@ -33,6 +33,10 @@
 #define CHECKSZ     13
 #define THUMBW      10
 #define DBLCLICK_MS 400
+#define SBW         15                  // the width of a scroll bar
+#define SB_MINKNOB  10
+#define SB_FIRST_MS 400                 // a held arrow or track click repeats after this, then every SB_REPEAT_MS
+#define SB_REPEAT_MS 60
 
 // -- small helpers ------------------------------------------------------------------------------------------------------------------------------------
 
@@ -64,7 +68,7 @@ static bool inside( const ui_widget_t* inner, const ui_widget_t* outer ) {
 
 static bool focusable( const ui_widget_t* w ) {
     return ( w->flags & UIF_VISIBLE ) && ( w->flags & UIF_ENABLED ) &&
-        ( w->kind == UIK_BUTTON || w->kind == UIK_CHECK || w->kind == UIK_RADIO || w->kind == UIK_TEXT || w->kind == UIK_LIST || w->kind == UIK_SLIDER );
+        ( w->kind == UIK_BUTTON || w->kind == UIK_CHECK || w->kind == UIK_RADIO || w->kind == UIK_TEXT || w->kind == UIK_LIST || w->kind == UIK_SLIDER || w->kind == UIK_SCROLL );
 }
 
 // does the widget react to input at the moment (a pop-up or a modal panel limits it)?
@@ -228,6 +232,183 @@ static int list_rows( const ui_widget_t* w ) {
     return n < 1 ? 1 : n;
 }
 
+
+// -- scroll bars (the widget UIK_SCROLL and the bar inside a list that has more rows than it shows) ----------------------------------------------------------
+
+static int list_rows( const ui_widget_t* w );
+
+typedef struct _sbgeom_t {
+    bool    vert;
+    int     x1, y1, x2, y2;             // the whole bar
+    int     a1, a2;                     // along the bar: its first and last coordinate
+    int     c1, c2;                     // across
+    int     asz;                        // the size of an arrow button (along the bar)
+    int     t1, t2, tlen;               // the track between the arrows
+    int     k1, klen;                   // the knob: its first coordinate and length
+    int     min, max, page, value;
+} sbgeom_t;
+
+// the parameters of the bar of a widget; false: it has none (a list that shows all its rows)
+static bool sb_params( const ui_widget_t* w, sbgeom_t* g ) {
+    memset( g, 0, sizeof(*g) );
+    if ( w->kind == UIK_SCROLL ) {
+        g->x1 = w->x; g->y1 = w->y; g->x2 = w->x + w->w - 1; g->y2 = w->y + w->h - 1;
+        g->vert = w->h >= w->w;
+        g->min = w->min; g->max = w->max; g->page = w->page < 1 ? 1 : w->page; g->value = w->value;
+    } else if ( w->kind == UIK_LIST && w->nitems > list_rows( w ) ) {
+        int rows = list_rows( w );
+        g->x1 = w->x + w->w - 2 - SBW; g->x2 = w->x + w->w - 3; g->y1 = w->y + 2; g->y2 = w->y + w->h - 3;
+        g->vert = true;
+        g->min = 0; g->max = w->nitems - rows; g->page = rows; g->value = w->scroll;
+    } else {
+        return false;
+    }
+    g->a1 = g->vert ? g->y1 : g->x1;
+    g->a2 = g->vert ? g->y2 : g->x2;
+    g->c1 = g->vert ? g->x1 : g->y1;
+    g->c2 = g->vert ? g->x2 : g->y2;
+    int cross = g->c2 - g->c1 + 1, len = g->a2 - g->a1 + 1;
+    g->asz = cross < len / 2 ? cross : len / 2;
+    g->t1 = g->a1 + g->asz;
+    g->t2 = g->a2 - g->asz;
+    g->tlen = g->t2 - g->t1 + 1;
+    int range = g->max - g->min;
+    g->klen = g->tlen;
+    g->k1 = g->t1;
+    if ( range > 0 && g->tlen > 0 ) {
+        long kl = (long) g->tlen * g->page / ( range + g->page );
+        g->klen = (int) ( kl < SB_MINKNOB ? SB_MINKNOB : kl );
+        if ( g->klen > g->tlen ) {
+            g->klen = g->tlen;
+        }
+        g->k1 = g->t1 + (int)( (long)( g->tlen - g->klen ) * ( g->value - g->min ) / range );
+    }
+    return true;
+}
+
+// which part is at the coordinate a along the bar
+static int sb_part( const sbgeom_t* g, int a ) {
+    if ( a < g->a1 + g->asz ) {
+        return UISB_ARROW1;
+    }
+    if ( a > g->a2 - g->asz ) {
+        return UISB_ARROW2;
+    }
+    if ( a < g->k1 ) {
+        return UISB_BEFORE;
+    }
+    if ( a >= g->k1 + g->klen ) {
+        return UISB_AFTER;
+    }
+    return UISB_KNOB;
+}
+
+// a box given along / across the bar
+static void sbbox( ui_t* ui, const sbgeom_t* g, int a1, int c1, int a2, int c2, int color, bool fill ) {
+    if ( g->vert ) {
+        cbox( ui, c1, a1, c2, a2, color, fill );
+    } else {
+        cbox( ui, a1, c1, a2, c2, color, fill );
+    }
+}
+
+// an arrow pointing to the start (dir -1) or the end (dir 1) of the bar, in the box a1..a2 x c1..c2
+static void sb_arrow( ui_t* ui, const sbgeom_t* g, int a1, int a2, int dir, int color ) {
+    int c = ( g->c1 + g->c2 ) / 2, am = ( a1 + a2 ) / 2;
+    for ( int i = 0; i < 4; ++i ) {                                   // 4 steps: 1, 3, 5, 7 pixels wide
+        int a = dir < 0 ? am - 2 + i : am + 1 - i;
+        sbbox( ui, g, a, c - i, a, c + i, color, true );
+    }
+}
+
+static void draw_scrollbar( ui_t* ui, const sbgeom_t* g, bool on, int pressedpart ) {
+    const ui_theme_t* t = &ui->theme;
+    int sav[4] = { ui->clip[0], ui->clip[1], ui->clip[2], ui->clip[3] };
+    // the track: a light / face checker, so that it stands out from the knob and from the page behind it
+    for ( int a = g->a1; a <= g->a2; ++a ) {
+        for ( int c = g->c1; c <= g->c2; ++c ) {
+            int color = ( ( a + c ) & 1 ) ? t->light : t->face;
+            if ( g->vert ) {
+                cpset( ui, c, a, color );
+            } else {
+                cpset( ui, a, c, color );
+            }
+        }
+    }
+    sbbox( ui, g, g->a1, g->c1, g->a2, g->c2, t->border, false );
+    int tc = on ? t->text : t->disabled;
+    for ( int i = 0; i < 2; ++i ) {
+        int a1 = i == 0 ? g->a1 : g->a2 - g->asz + 1, a2 = a1 + g->asz - 1;
+        bool pr = pressedpart == ( i == 0 ? UISB_ARROW1 : UISB_ARROW2 );
+        sbbox( ui, g, a1, g->c1, a2, g->c2, t->face, true );
+        if ( g->vert ) {
+            bevel( ui, g->c1, a1, g->c2, a2, !pr );
+        } else {
+            bevel( ui, a1, g->c1, a2, g->c2, !pr );
+        }
+        sb_arrow( ui, g, a1 + ( pr ? 1 : 0 ), a2 + ( pr ? 1 : 0 ), i == 0 ? -1 : 1, tc );
+    }
+    if ( g->tlen > 0 && g->max > g->min ) {
+        int k2 = g->k1 + g->klen - 1;
+        sbbox( ui, g, g->k1, g->c1, k2, g->c2, t->face, true );
+        if ( g->vert ) {
+            bevel( ui, g->c1, g->k1, g->c2, k2, true );
+        } else {
+            bevel( ui, g->k1, g->c1, k2, g->c2, true );
+        }
+        if ( g->klen >= 16 ) {                                         // a grip: three short lines in the middle
+            int m = g->k1 + g->klen / 2, cm1 = g->c1 + 4, cm2 = g->c2 - 4;
+            for ( int i = -2; i <= 2; i += 2 ) {
+                sbbox( ui, g, m + i, cm1, m + i, cm2, t->shadow, true );
+            }
+        }
+    }
+    ui->clip[0] = sav[0]; ui->clip[1] = sav[1]; ui->clip[2] = sav[2]; ui->clip[3] = sav[3];
+}
+
+// moves the bar of a widget to a new position (clamped); a scroll bar widget sends UIE_CHANGE
+static void sb_set( ui_t* ui, ui_widget_t* w, int v ) {
+    sbgeom_t g;
+    if ( !sb_params( w, &g ) ) {
+        return;
+    }
+    v = clampi( v, g.min, g.max );
+    if ( w->kind == UIK_SCROLL ) {
+        if ( v != w->value ) {
+            w->value = v;
+            dirty( w );
+            push_event( ui, w->id, UIE_CHANGE, v );
+        }
+    } else if ( v != w->scroll ) {
+        w->scroll = v;
+        dirty( w );
+    }
+}
+
+// one step of a held part (arrow: 1, track: a page)
+static void sb_step( ui_t* ui, ui_widget_t* w, const sbgeom_t* g, int part ) {
+    int v = g->value;
+    switch ( part ) {
+        case UISB_ARROW1: v -= 1; break;
+        case UISB_ARROW2: v += 1; break;
+        case UISB_BEFORE: v -= g->page; break;
+        case UISB_AFTER:  v += g->page; break;
+        default: return;
+    }
+    sb_set( ui, w, v );
+}
+
+// the mouse moved the knob that was grabbed
+static void sb_drag( ui_t* ui, ui_widget_t* w, int mx, int my ) {
+    sbgeom_t g;
+    if ( !sb_params( w, &g ) || g.tlen <= g.klen ) {
+        return;
+    }
+    int a = g.vert ? my : mx, range = g.max - g.min;
+    int p = clampi( a - ui->capoff - g.t1, 0, g.tlen - g.klen );
+    sb_set( ui, w, g.min + (int)( ( (long) p * range + ( g.tlen - g.klen ) / 2 ) / ( g.tlen - g.klen ) ) );
+}
+
 // -- drawing the widgets --------------------------------------------------------------------------------------------------------------------------------
 
 static void draw_widget( ui_t* ui, int index ) {
@@ -308,7 +489,9 @@ static void draw_widget( ui_t* ui, int index ) {
         case UIK_LIST: {
             cbox( ui, x1, y1, x2, y2, t->field, true );
             bevel( ui, x1, y1, x2, y2, false );
-            set_clip( ui, x1 + 2, y1 + 2, x2 - 2, y2 - 2 );
+            sbgeom_t sg;
+            bool hasbar = sb_params( w, &sg );
+            set_clip( ui, x1 + 2, y1 + 2, hasbar ? sg.x1 - 1 : x2 - 2, y2 - 2 );
             int rows = list_rows( w );
             for ( int r = 0; r < rows && w->scroll + r < w->nitems; ++r ) {
                 int row = w->scroll + r, ry = y1 + 2 + r * ROWH;
@@ -322,9 +505,19 @@ static void draw_widget( ui_t* ui, int index ) {
                     dotted( ui, x1 + 2, ry, x2 - 2, ry + ROWH - 1, t->hilitetext );
                 }
             }
-            if ( w->nitems > rows ) {                       // a bar for how much of the list is shown
-                int track = w->h - 6, bar = track * rows / w->nitems, pos = ( track - bar ) * w->scroll / ( w->nitems - rows );
-                cbox( ui, x2 - 4, y1 + 3 + pos, x2 - 3, y1 + 3 + pos + bar, t->shadow, true );
+            if ( hasbar ) {
+                set_clip( ui, sg.x1, sg.y1, sg.x2, sg.y2 );
+                draw_scrollbar( ui, &sg, on, ui->capture == w->id ? ui->cappart : UISB_NONE );
+            }
+            break;
+        }
+        case UIK_SCROLL: {
+            sbgeom_t sg;
+            if ( sb_params( w, &sg ) ) {
+                draw_scrollbar( ui, &sg, on, pressed ? ui->cappart : UISB_NONE );
+                if ( focus ) {
+                    dotted( ui, sg.x1 + 2, sg.y1 + 2, sg.x2 - 2, sg.y2 - 2, t->border );
+                }
             }
             break;
         }
@@ -487,6 +680,11 @@ bool ui_add( ui_t* ui, int kind, int id, int x, int y, int w, int h, const char*
     if ( kind == UIK_LIST ) {
         wd->value = -1;
     }
+    if ( kind == UIK_SCROLL ) {
+        wd->min = 0;
+        wd->max = 100;
+        wd->page = extra > 0 ? extra : 10;
+    }
     if ( kind == UIK_TEXT ) {
         wd->caret = (int) strlen( wd->text );
     }
@@ -605,7 +803,7 @@ bool ui_set_value( ui_t* ui, int id, int value ) {
                 w->value = 0;
             }
             break;
-        case UIK_SLIDER: case UIK_PROGRESS:
+        case UIK_SLIDER: case UIK_PROGRESS: case UIK_SCROLL:
             w->value = clampi( value, w->min, w->max );
             break;
         case UIK_LIST:
@@ -632,12 +830,22 @@ bool ui_get_value( ui_t* ui, int id, int* value ) {
 
 bool ui_set_range( ui_t* ui, int id, int min, int max ) {
     ui_widget_t* w = ui_find( ui, id );
-    if ( w == 0 || ( w->kind != UIK_SLIDER && w->kind != UIK_PROGRESS ) || max < min ) {
+    if ( w == 0 || ( w->kind != UIK_SLIDER && w->kind != UIK_PROGRESS && w->kind != UIK_SCROLL ) || max < min ) {
         return false;
     }
     w->min = min;
     w->max = max;
     w->value = clampi( w->value, min, max );
+    dirty( w );
+    return true;
+}
+
+bool ui_set_page( ui_t* ui, int id, int page ) {
+    ui_widget_t* w = ui_find( ui, id );
+    if ( w == 0 || w->kind != UIK_SCROLL || page < 1 ) {
+        return false;
+    }
+    w->page = page;
     dirty( w );
     return true;
 }
@@ -1010,6 +1218,24 @@ static void handle_key( ui_t* ui, int key ) {
             }
             break;
         }
+        case UIK_SCROLL: {
+            int v = w->value, page = w->page < 1 ? 1 : w->page;
+            if ( key == UIKEY_LEFT || key == UIKEY_UP ) {
+                v -= 1;
+            } else if ( key == UIKEY_RIGHT || key == UIKEY_DOWN ) {
+                v += 1;
+            } else if ( key == UIKEY_PGUP ) {
+                v -= page;
+            } else if ( key == UIKEY_PGDN ) {
+                v += page;
+            } else if ( key == UIKEY_HOME ) {
+                v = w->min;
+            } else if ( key == UIKEY_END ) {
+                v = w->max;
+            }
+            sb_set( ui, w, v );
+            break;
+        }
         case UIK_SLIDER: {
             int range = w->max - w->min, step = range / 10 < 1 ? 1 : range / 10, v = w->value;
             if ( key == UIKEY_LEFT || key == UIKEY_DOWN ) {
@@ -1050,14 +1276,32 @@ void ui_input( ui_t* ui, int mx, int my, int buttons, int wheel, const int* keys
         }
     }
     if ( wheel != 0 ) {
-        ui_widget_t* lw = ui->popup != 0 ? ui_find( ui, ui->popup ) : ( hot != 0 && hot->kind == UIK_LIST && in_scope( ui, hot ) ? hot : 0 );
-        if ( lw != 0 && lw->nitems > 0 ) {
+        ui_widget_t* lw = ui->popup != 0 ? ui_find( ui, ui->popup ) : ( hot != 0 && ( hot->kind == UIK_LIST || hot->kind == UIK_SCROLL ) && in_scope( ui, hot ) ? hot : 0 );
+        if ( lw != 0 && lw->kind == UIK_SCROLL ) {
+            sb_set( ui, lw, lw->value - wheel * 3 );
+        } else if ( lw != 0 && lw->nitems > 0 ) {
             int rows = list_rows( lw );
             lw->scroll = clampi( lw->scroll - wheel * 3, 0, lw->nitems > rows ? lw->nitems - rows : 0 );
             dirty( lw );
         }
     }
-    if ( press ) {
+    sbgeom_t pg;
+    if ( press && ( ui->popup != 0 ? ui_find( ui, ui->popup ) == hot : hot != 0 && in_scope( ui, hot ) && ( hot->flags & UIF_ENABLED ) ) &&
+         hot != 0 && sb_params( hot, &pg ) && mx >= pg.x1 && mx <= pg.x2 && my >= pg.y1 && my <= pg.y2 ) {
+        // a press on a scroll bar (the widget or the bar of a list)
+        if ( focusable( hot ) && ui->popup == 0 ) {
+            ui_set_focus( ui, hot->id );
+        }
+        int a = pg.vert ? my : mx;
+        ui->capture = hot->id;
+        ui->cappart = sb_part( &pg, a );
+        ui->capoff = a - pg.k1;
+        ui->capnext_ms = now_ms + SB_FIRST_MS;
+        if ( ui->cappart != UISB_KNOB ) {
+            sb_step( ui, hot, &pg, ui->cappart );
+        }
+        dirty( hot );
+    } else if ( press ) {
         if ( ui->popup != 0 ) {
             ui_widget_t* pw = ui_find( ui, ui->popup );
             if ( pw != 0 && hot == pw ) {
@@ -1104,8 +1348,21 @@ void ui_input( ui_t* ui, int mx, int my, int buttons, int wheel, const int* keys
         }
     } else if ( down && ui->capture != 0 ) {
         ui_widget_t* cw = ui_find( ui, ui->capture );
+        sbgeom_t cg;
         if ( cw != 0 && cw->kind == UIK_SLIDER ) {
             slider_from_x( ui, cw, mx );
+        } else if ( cw != 0 && sb_params( cw, &cg ) ) {
+            if ( ui->cappart == UISB_KNOB ) {
+                sb_drag( ui, cw, mx, my );
+            } else if ( now_ms >= ui->capnext_ms ) {
+                // a held arrow or track click repeats (the track stops where the knob has reached the mouse)
+                int a = cg.vert ? my : mx;
+                bool onbar = mx >= cg.x1 && mx <= cg.x2 && my >= cg.y1 && my <= cg.y2;
+                if ( onbar && sb_part( &cg, a ) == ui->cappart ) {
+                    sb_step( ui, cw, &cg, ui->cappart );
+                }
+                ui->capnext_ms = now_ms + SB_REPEAT_MS;
+            }
         }
     }
     if ( release && ui->capture != 0 ) {

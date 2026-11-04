@@ -482,6 +482,99 @@ int main( void ) {
     check( "outside of a panel the background is the desk", gfx_point( &g, 330, 160 ) == th.desk );
     done();
 
+    // -- scroll bars ---------------------------------------------------------------------------------------------------------------------------------
+    setup();
+    ui_add( &ui, UIK_SCROLL, 1, 10, 10, 15, 120, "", 10 );              // vertical: arrows 15 + 15, track 90, positions 0..100, page 10
+    check( "a scroll bar starts at 0", ui_get_value( &ui, 1, &v ) && v == 0 );
+    check( "a scroll bar can have the focus", ui.focus == 1 );
+    check( "a page below 1 is refused", !ui_set_page( &ui, 1, 0 ) && ui_set_page( &ui, 1, 10 ) );
+    ui_draw( &ui, true );
+    check( "the knob is a tenth of... page / (range + page) of the track (90 * 10 / 110 = 8, at least 10)", gfx_point( &g, 17, 25 + 4 ) == th.face && gfx_point( &g, 17, 25 + 9 ) == th.border );
+    check( "the arrow buttons and the knob are raised", gfx_point( &g, 11, 11 ) == th.light && gfx_point( &g, 11, 26 ) == th.light );
+    click( 17, 14 );
+    check( "the down arrow moves by one (the up arrow at the top does nothing)", none() );
+    click( 17, 130 - 5 );
+    check( "the lower arrow adds one", expect( 1, UIE_CHANGE, 1 ) && none() );
+    now += 1000;
+    click( 17, 100 );
+    check( "a click in the track behind the knob moves by a page", expect( 1, UIE_CHANGE, 11 ) );
+    now += 1000;
+    click( 17, 12 + 15 );
+    check( "a click in the track before the knob moves back by a page", expect( 1, UIE_CHANGE, 1 ) );
+    // hold the lower arrow: repeats after 400 ms, then every 60 ms
+    now += 1000;
+    mouse( 17, 125, UIB_LEFT, 0 );
+    drain();
+    now += 100;
+    mouse( 17, 125, UIB_LEFT, 0 );
+    check( "holding an arrow does not repeat at once", none() );
+    now += 400;
+    mouse( 17, 125, UIB_LEFT, 0 );
+    check( "but after 400 ms", expect( 1, UIE_CHANGE, 3 ) );
+    now += 70;
+    mouse( 17, 125, UIB_LEFT, 0 );
+    check( "then every 60 ms", expect( 1, UIE_CHANGE, 4 ) );
+    mouse( 17, 125, 0, 0 );
+    drain();
+    // drag the knob
+    now += 1000;
+    ui_set_value( &ui, 1, 0 );
+    ui_draw( &ui, false );
+    mouse( 17, 28, UIB_LEFT, 0 );                                       // on the knob (it starts at y = 25)
+    mouse( 17, 28 + 40, UIB_LEFT, 0 );
+    mouse( 17, 28 + 40, 0, 0 );
+    ui_get_value( &ui, 1, &v );
+    check( "dragging the knob follows the mouse", v > 30 && v < 70 );
+    drain();
+    ui_set_value( &ui, 1, 0 );
+    mouse( 17, 28, UIB_LEFT, 0 );
+    mouse( 17, 28 + 500, UIB_LEFT, 0 );
+    mouse( 17, 28 + 500, 0, 0 );
+    check( "dragging past the end gives the maximum", ui_get_value( &ui, 1, &v ) && v == 100 );
+    drain();
+    key( UIKEY_HOME );
+    check( "Home", expect( 1, UIE_CHANGE, 0 ) );
+    key( UIKEY_PGDN );
+    check( "Page down adds the page", expect( 1, UIE_CHANGE, 10 ) );
+    key( UIKEY_DOWN );
+    check( "Down adds one", expect( 1, UIE_CHANGE, 11 ) );
+    key( UIKEY_END );
+    check( "End", expect( 1, UIE_CHANGE, 100 ) );
+    key( UIKEY_DOWN );
+    check( "no event past the end", none() );
+    mouse( 17, 60, 0, 1 );
+    check( "the wheel scrolls it by 3 (up is back)", expect( 1, UIE_CHANGE, 97 ) );
+    check( "the range can change and clamps", ui_set_range( &ui, 1, 0, 20 ) && ui_get_value( &ui, 1, &v ) && v == 20 );
+    done();
+
+    setup();
+    ui_add( &ui, UIK_SCROLL, 1, 10, 10, 120, 15, "", 50 );              // horizontal, page 50 of 0..100: the knob is a third of the track
+    ui_draw( &ui, true );
+    check( "a horizontal scroll bar is drawn: a knob after the left arrow", gfx_point( &g, 25 + 4, 17 ) == th.face && gfx_point( &g, 25 + 20, 17 ) == th.face );
+    click( 125, 17 );
+    check( "its right arrow adds one", expect( 1, UIE_CHANGE, 1 ) );
+    done();
+
+    // the bar of a list
+    setup();
+    ui_add( &ui, UIK_LIST, 1, 10, 10, 120, 74, "", 0 );                  // 5 rows
+    for ( int i = 0; i < 12; ++i ) {
+        ui_list_add( &ui, 1, "row" );
+    }
+    ui_draw( &ui, true );
+    check( "a list with more rows than it shows has a bar at the right", gfx_point( &g, 10 + 120 - 3 - 7, 10 + 2 + 20 ) != th.field && count_color( 10 + 120 - 2 - 15, 12, 10 + 120 - 3, 80, th.border ) > 20 );
+    click( 10 + 120 - 3 - 7, 10 + 74 - 6 );
+    check( "its lower arrow scrolls the list by one row without a selection", none() && ui_find( &ui, 1 )->scroll == 1 && ui_find( &ui, 1 )->value == -1 );
+    click( 10 + 120 - 3 - 7, 10 + 74 - 25 );
+    check( "a click in its track scrolls a page", ui_find( &ui, 1 )->scroll == 6 && none() );
+    click( 30, 12 + 3 );
+    check( "a click left of the bar still selects a row", expect( 1, UIE_SELECT, 6 ) );
+    ui_list_clear( &ui, 1 );
+    ui_list_add( &ui, 1, "one" );
+    ui_draw( &ui, false );
+    check( "a list that shows all its rows has no bar", gfx_point( &g, 10 + 120 - 3 - 7, 10 + 2 + 20 ) == th.field );
+    done();
+
     // a hidden widget that overlaps a panel must not erase the panel when the panel is drawn after it was hidden
     setup();
     ui_draw( &ui, true );

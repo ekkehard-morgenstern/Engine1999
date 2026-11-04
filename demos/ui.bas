@@ -8,120 +8,136 @@
 40 ' id of the next event (0 = none), UI("KIND") and UI("VALUE") say what happened: kind 1 click, 2 change, 3 select, 4 double click, 5 Return in a text field, 6 cancel.
 50 ' Mouse: click, drag the slider, wheel over the list. Keys: Tab / Shift+Tab move the focus, Space and Return press, the arrow keys work in the list, the slider and
 60 ' the radio buttons, a text field takes typing. (A game controller is not used here.)
-70 ' Needs the window (engine1999): the UI draws on the graphics layer.
-80 GFX RESET ALL
-90 CLS
-100 QT=0
-110 CALL MAKEFORM
-120 CALL STATUS("Ready: click, type, drag the slider; OK asks whether to quit.")
-130 REPEAT
-140   GFX VSYNC
-150   UI UPDATE
-160   E=UI("EVENT")
-170   WHILE E<>0
-180     CALL HANDLE(E,UI("KIND"),UI("VALUE"))
-190     E=UI("EVENT")
-200   WEND
-210 UNTIL QT=1
-220 UI CLOSE
-230 GFX RESET
-240 CLS
-250 PRINT "UI demo finished."
-260 END
-270 ' ====================================================================== the form
-280 PROC MAKEFORM
-290   LOCAL I
-300   UI OPEN
-310   UI PANEL 1,20,10,300,270,"Settings"
-320   UI LABEL 2,34,40,50,14,"Name:"
-330   UI TEXT 3,90,37,210,18,"Engine1999"
-340   UI CHECK 4,34,67,120,16,"Sound on"
-350   UI CHECK 5,34,87,120,16,"Full screen"
-360   UI VALUE 4,-1
-370   UI RADIO 6,34,113,100,16,"Easy",1
-380   UI RADIO 7,34,133,100,16,"Normal",1
-390   UI RADIO 8,34,153,100,16,"Hard",1
-400   UI VALUE 7,1
-410   UI LIST 9,170,67,130,90
-420   FOR I=1 TO 8
-430     UI ITEM 9,"Level "+STR$(I)
-440   NEXT I
-450   UI VALUE 9,2
-460   UI LABEL 10,34,182,50,14,"Volume"
-470   UI SLIDER 11,90,178,210,20
-480   UI VALUE 11,60
-490   UI PROGRESS 12,34,208,266,16
-500   UI VALUE 12,60
-510   UI BUTTON 16,34,240,100,24,"Menu..."
-520   UI BUTTON 13,150,240,70,24,"OK"
-530   UI BUTTON 14,230,240,70,24,"Cancel"
-540   UI FOCUS 3
-550   ' the pop-up menu: a list that is hidden until UI POPUP shows it
-560   UI LIST 15,0,0,90,66
-570   UI ITEM 15,"New"
-580   UI ITEM 15,"Open..."
-590   UI ITEM 15,"Save"
-600   UI ITEM 15,"Quit"
-610   UI SHOW 15,0
-620   ' a label on the desk for what happened last
-630   UI LABEL 17,340,20,290,60,""
-640 END PROC
-650 PROC STATUS(T$)
-660   UI CAPTION 17,T$
-670 END PROC
-680 ' ====================================================================== what happens
-690 PROC HANDLE(E,K,V)
-700   LOCAL T$
-710   IF E=13 AND K=1 THEN CALL ASKQUIT
-720   IF E=14 AND K=1 THEN CALL ASKQUIT
-730   IF E=16 AND K=1 THEN UI POPUP 15,34,172
-740   IF E=21 AND K=1 THEN QT=1
-750   IF (E=22 AND K=1) OR (E=20 AND K=6) THEN CALL CLOSEASK
-760   IF E=11 THEN
-770     UI VALUE 12,V
-780     CALL STATUS("Volume "+STR$(V))
-790   END IF
-800   IF E=3 AND K=2 THEN CALL STATUS("The text has "+STR$(V)+" characters")
-810   IF E=3 AND K=5 THEN
-820     UI GETTEXT 3,T$
-830     CALL STATUS("Hello, "+T$+"!")
-840   END IF
-850   IF E=4 THEN
-860     IF V THEN CALL STATUS("Sound is on") ELSE CALL STATUS("Sound is off")
-870   END IF
-880   IF E=5 THEN
-890     IF V THEN CALL STATUS("Full screen is on") ELSE CALL STATUS("Full screen is off")
-900   END IF
-910   IF E>=6 AND E<=8 AND K=2 THEN
-920     IF E=6 THEN T$="Easy"
-930     IF E=7 THEN T$="Normal"
-940     IF E=8 THEN T$="Hard"
-950     CALL STATUS("Difficulty "+T$+" chosen")
-960   END IF
-970   IF E=9 AND (K=3 OR K=4) THEN
-980     UI ITEMTEXT 9,V,T$
-990     IF K=3 THEN CALL STATUS("Selected: "+T$) ELSE CALL STATUS("Double click: "+T$)
+70 ' ESC is an ordinary key here (BREAK OFF): it cancels a dialog or a pop-up; Ctrl+C stops the program. Scroll bars: UI SCROLL, UI RANGE, UI PAGE; a list shows its own when it has more rows than fit.
+80 ' Needs the window (engine1999): the UI draws on the graphics layer.
+90 GFX RESET ALL
+100 CLS
+110 BREAK OFF
+120 QT=0
+130 CALL MAKEFORM
+140 CALL STATUS("Ready: click, type, drag the slider; OK asks whether to quit.")
+150 REPEAT
+160   GFX VSYNC
+170   UI UPDATE
+180   E=UI("EVENT")
+190   WHILE E<>0
+200     CALL HANDLE(E,UI("KIND"),UI("VALUE"))
+210     E=UI("EVENT")
+220   WEND
+230 UNTIL QT=1
+240 UI CLOSE
+250 GFX RESET
+260 CLS
+270 PRINT "UI demo finished."
+280 END
+290 ' ====================================================================== the form
+300 PROC MAKEFORM
+310   LOCAL I
+320   UI OPEN
+330   UI PANEL 1,20,10,300,270,"Settings"
+340   UI LABEL 2,34,40,50,14,"Name:"
+350   UI TEXT 3,90,37,210,18,"Engine1999"
+360   UI CHECK 4,34,67,120,16,"Sound on"
+370   UI CHECK 5,34,87,120,16,"Full screen"
+380   UI VALUE 4,-1
+390   UI RADIO 6,34,113,100,16,"Easy",1
+400   UI RADIO 7,34,133,100,16,"Normal",1
+410   UI RADIO 8,34,153,100,16,"Hard",1
+420   UI VALUE 7,1
+430   UI LIST 9,170,67,130,90
+440   FOR I=1 TO 8
+450     UI ITEM 9,"Level "+STR$(I)
+460   NEXT I
+470   UI VALUE 9,2
+480   UI LABEL 10,34,182,50,14,"Volume"
+490   UI SLIDER 11,90,178,210,20
+500   UI VALUE 11,60
+510   UI PROGRESS 12,34,208,266,16
+520   UI VALUE 12,60
+530   UI BUTTON 16,34,240,100,24,"Menu..."
+540   UI BUTTON 13,150,240,70,24,"OK"
+550   UI BUTTON 14,230,240,70,24,"Cancel"
+560   UI FOCUS 3
+570   ' the pop-up menu: a list that is hidden until UI POPUP shows it
+580   UI LIST 15,0,0,90,66
+590   UI ITEM 15,"New"
+600   UI ITEM 15,"Open..."
+610   UI ITEM 15,"Save"
+620   UI ITEM 15,"Quit"
+630   UI SHOW 15,0
+640   ' a label on the desk for what happened last
+650   UI LABEL 17,340,20,290,30,""
+660   UI LABEL 30,340,70,290,14,"Scroll bars (arrows, track, knob, wheel):"
+670   UI SCROLL 31,340,95,16,150
+680   UI RANGE 31,0,90
+690   UI PAGE 31,10
+700   UI SCROLL 32,370,95,250,16
+710   UI RANGE 32,0,200
+720   UI PAGE 32,50
+730   UI LABEL 33,370,125,250,14,"Vertical 0   Horizontal 0"
+740   UI LIST 34,370,150,250,60
+750   FOR I=1 TO 30
+760     UI ITEM 34,"A long list: row "+STR$(I)
+770   NEXT I
+780 END PROC
+790 PROC STATUS(T$)
+800   UI CAPTION 17,T$
+810 END PROC
+820 ' ====================================================================== what happens
+830 PROC HANDLE(E,K,V)
+840   LOCAL T$
+850   IF E=13 AND K=1 THEN CALL ASKQUIT
+860   IF E=14 AND K=1 THEN CALL ASKQUIT
+870   IF E=16 AND K=1 THEN UI POPUP 15,34,172
+880   IF E=31 OR E=32 THEN CALL STATUS("Scroll bar "+STR$(E)+" at "+STR$(V))
+890   IF E=31 OR E=32 THEN UI CAPTION 33,"Vertical "+STR$(UI("GET",31))+"   Horizontal "+STR$(UI("GET",32))
+900   IF E=21 AND K=1 THEN QT=1
+910   IF (E=22 AND K=1) OR (E=20 AND K=6) THEN CALL CLOSEASK
+920   IF E=11 THEN
+930     UI VALUE 12,V
+940     CALL STATUS("Volume "+STR$(V))
+950   END IF
+960   IF E=3 AND K=2 THEN CALL STATUS("The text has "+STR$(V)+" characters")
+970   IF E=3 AND K=5 THEN
+980     UI GETTEXT 3,T$
+990     CALL STATUS("Hello, "+T$+"!")
 1000   END IF
-1010   IF E=15 AND K=3 THEN
-1020     UI ITEMTEXT 15,V,T$
-1030     CALL STATUS("Menu: "+T$)
-1040     IF V=3 THEN CALL ASKQUIT
-1050   END IF
-1060   IF E=15 AND K=6 THEN CALL STATUS("Menu closed")
-1070 END PROC
-1080 ' a modal dialog: a panel with two buttons; only its widgets react until it is closed
-1090 PROC ASKQUIT
-1100   UI PANEL 20,170,100,220,100,"Quit?"
-1110   UI LABEL 23,190,135,180,14,"Really leave the demo?"
-1120   UI BUTTON 21,190,160,70,24,"Yes"
-1130   UI BUTTON 22,300,160,70,24,"No"
-1140   UI MODAL 20
-1150 END PROC
-1160 PROC CLOSEASK
-1170   UI MODAL 0
-1180   UI REMOVE 23
-1190   UI REMOVE 22
-1200   UI REMOVE 21
-1210   UI REMOVE 20
-1220   CALL STATUS("Carry on.")
+1010   IF E=4 THEN
+1020     IF V THEN CALL STATUS("Sound is on") ELSE CALL STATUS("Sound is off")
+1030   END IF
+1040   IF E=5 THEN
+1050     IF V THEN CALL STATUS("Full screen is on") ELSE CALL STATUS("Full screen is off")
+1060   END IF
+1070   IF E>=6 AND E<=8 AND K=2 THEN
+1080     IF E=6 THEN T$="Easy"
+1090     IF E=7 THEN T$="Normal"
+1100     IF E=8 THEN T$="Hard"
+1110     CALL STATUS("Difficulty "+T$+" chosen")
+1120   END IF
+1130   IF E=9 AND (K=3 OR K=4) THEN
+1140     UI ITEMTEXT 9,V,T$
+1150     IF K=3 THEN CALL STATUS("Selected: "+T$) ELSE CALL STATUS("Double click: "+T$)
+1160   END IF
+1170   IF E=15 AND K=3 THEN
+1180     UI ITEMTEXT 15,V,T$
+1190     CALL STATUS("Menu: "+T$)
+1200     IF V=3 THEN CALL ASKQUIT
+1210   END IF
+1220   IF E=15 AND K=6 THEN CALL STATUS("Menu closed")
 1230 END PROC
+1240 ' a modal dialog: a panel with two buttons; only its widgets react until it is closed
+1250 PROC ASKQUIT
+1260   UI PANEL 20,170,100,220,100,"Quit?"
+1270   UI LABEL 23,190,135,180,14,"Really leave the demo?"
+1280   UI BUTTON 21,190,160,70,24,"Yes"
+1290   UI BUTTON 22,300,160,70,24,"No"
+1300   UI MODAL 20
+1310 END PROC
+1320 PROC CLOSEASK
+1330   UI MODAL 0
+1340   UI REMOVE 23
+1350   UI REMOVE 22
+1360   UI REMOVE 21
+1370   UI REMOVE 20
+1380   CALL STATUS("Carry on.")
+1390 END PROC

@@ -59,7 +59,7 @@ callbacks to sdlscreen) and on a gfxcore bitmap in the test. All coordinates are
 #define UI_PAL_COLORS   16              // the theme uses this many consecutive palette entries (the host sets them: ui_theme_argb)
 
 typedef enum _ui_kind_t {
-    UIK_NONE = 0, UIK_LABEL, UIK_BUTTON, UIK_CHECK, UIK_RADIO, UIK_TEXT, UIK_LIST, UIK_PROGRESS, UIK_SLIDER, UIK_PANEL, UIK_COUNT
+    UIK_NONE = 0, UIK_LABEL, UIK_BUTTON, UIK_CHECK, UIK_RADIO, UIK_TEXT, UIK_LIST, UIK_PROGRESS, UIK_SLIDER, UIK_PANEL, UIK_SCROLL, UIK_COUNT
 } ui_kind_t;
 
 #define UIE_CLICK       1               // a button was clicked
@@ -91,6 +91,13 @@ typedef struct _ui_event_t {
 #define UIKEY_DELETE    0x1009
 #define UIKEY_BACKTAB   0x100A          // Shift+Tab
 
+#define UISB_NONE       0               // the parts of a scroll bar
+#define UISB_ARROW1     1               // up / left
+#define UISB_ARROW2     2               // down / right
+#define UISB_BEFORE     3               // the track before the knob
+#define UISB_AFTER      4               // the track behind the knob
+#define UISB_KNOB       5
+
 #define UIB_LEFT        1               // mouse buttons of ui_input()
 
 #define UIF_VISIBLE     1
@@ -117,6 +124,7 @@ typedef struct _ui_widget_t {
     int     flags;                      // UIF_*
     char*   text;                       // caption / text field content / panel title
     int     value, min, max;            // check box and radio button: 1 on; slider; progress; list: the selected row (-1 none)
+    int     page;                       // scroll bar: the size of the visible part (the knob is page / (max - min + page) of the track)
     int     group;                      // radio buttons of the same group exclude each other
     int     caret, scroll;              // text field: the caret (a byte index) and the first visible pixel column; list: the first visible row in scroll
     char**  items;                      // list
@@ -134,6 +142,9 @@ typedef struct _ui_t {
     int             popup;              // id of the open pop-up list (0 none)
     int             capture;            // id of the widget that has the mouse button pressed (0 none)
     int             lastbuttons, lastx, lasty;
+    int             cappart;            // scroll bar parts (UISB_*): the part that was pressed (while capture is a scroll bar or a list)
+    int             capoff;             // the distance of the mouse from the top / left of the knob when it was grabbed
+    uint32_t        capnext_ms;         // when a held arrow or track click repeats next
     int             clip[4];            // x1 y1 x2 y2 of the clip rectangle while drawing
     uint32_t        lastclick_ms;       // for the double click
     int             lastclick_id, lastclick_row;
@@ -150,7 +161,7 @@ void ui_init( ui_t* ui, const ui_canvas_t* canvas, int palbase );
 void ui_free( ui_t* ui );
 void ui_clear( ui_t* ui );                                      // removes every widget (the screen is left as it is: ui_draw( true ) repaints)
 
-// creates a widget; extra: the group of a radio button, the minimum of a slider (its maximum is 100 until ui_set_range), unused otherwise. false: the id exists
+// creates a widget; extra: the group of a radio button, the page of a scroll bar (default 10; positions 0..100 until ui_set_range), the minimum of a slider (its maximum is 100 until ui_set_range), unused otherwise. false: the id exists
 // or is not positive, the kind is invalid or there is no room
 bool ui_add( ui_t* ui, int kind, int id, int x, int y, int w, int h, const char* text, int extra );
 bool ui_remove( ui_t* ui, int id );
@@ -160,7 +171,8 @@ bool ui_set_text( ui_t* ui, int id, const char* text );         // caption, text
 const char* ui_get_text( ui_t* ui, int id );                    // 0 for an unknown widget
 bool ui_set_value( ui_t* ui, int id, int value );               // check box 0 / 1, radio button (1 selects it, the others of the group go off), slider, progress, list row
 bool ui_get_value( ui_t* ui, int id, int* value );
-bool ui_set_range( ui_t* ui, int id, int min, int max );        // slider and progress bar
+bool ui_set_range( ui_t* ui, int id, int min, int max );        // slider, progress bar and scroll bar (the smallest and the largest position)
+bool ui_set_page( ui_t* ui, int id, int page );                 // scroll bar: the size of the visible part (>= 1); sets the size of the knob and the step of Page up / down
 bool ui_set_enabled( ui_t* ui, int id, bool on );
 bool ui_set_visible( ui_t* ui, int id, bool on );
 bool ui_set_focus( ui_t* ui, int id );

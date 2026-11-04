@@ -663,7 +663,8 @@ on-mouse-stmt := ON MOUSE ( goto-kw goto-target | OFF ) .
 ui-stmt := XFUNC(UI) ( OPEN | CLOSE | CLEAR | UPDATE |
                            ( LABEL | BUTTON | CHECK | TEXT | PANEL ) ui-geometry "," str-expr |
                            RADIO ui-geometry "," str-expr [ "," num-expr ] |
-                           ( LIST | PROGRESS ) ui-geometry | SLIDER ui-geometry [ "," num-expr ] |
+                           ( LIST | PROGRESS ) ui-geometry | ( SLIDER | SCROLL ) ui-geometry [ "," num-expr ] |
+                           PAGE num-expr "," num-expr |
                            ( REMOVE | FOCUS | CLEARLIST | MODAL ) num-expr | ( CAPTION | ITEM ) num-expr "," str-expr |
                            ( VALUE | ENABLE | SHOW ) num-expr "," num-expr | RANGE num-expr "," num-expr "," num-expr |
                            POPUP num-expr "," num-expr "," num-expr | GETTEXT num-expr "," str-var-ref |

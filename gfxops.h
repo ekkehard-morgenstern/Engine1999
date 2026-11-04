@@ -130,6 +130,8 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXOP_UIPOPUP   113             // UI POPUP id, x, y
 #define GFXOP_UIGETTEXT 114             // UI GETTEXT id, a$
 #define GFXOP_UIITEMTEXT 115            // UI ITEMTEXT id, row, a$
+#define GFXOP_UISCROLL  116             // UI SCROLL id, x, y, w, h [, page]       (a scroll bar: vertical when it is higher than wide)
+#define GFXOP_UIPAGE    117             // UI PAGE id, n                           (the size of the visible part)
 
 // queries (vm_gfx_t.query): functions of the language
 #define GFXQ_RGB        1               // RGB(r, g, b [, a]): computed by the VM itself
