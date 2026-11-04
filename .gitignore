@@ -40,3 +40,5 @@ sdltest4
 madrun.hi
 libtest1
 river.hi
+backups/*.zip
+backups/restored/
