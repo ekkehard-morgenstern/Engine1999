@@ -571,7 +571,7 @@ int main( void ) {
         failed += !pty_case( "screen mode: mouse reports inside typed keys are taken out; release, motion and the wheel", sM2, 5U, eM2, 2U );
         // the mouse in the full-screen editor (a 24 x 80 terminal: panes in rows 2..23, the scroll bar in column 80; a report is col;row from 1): the wheel and
         // the scroll bar scroll the view, the cursor is pulled to the first line shown; a marker typed afterwards shows where it is
-        static const char* const mkprog = "OPEN \"mem:p\" FOR OUTPUT AS #1:FOR I=1 TO 60:PRINT #1,I*10;\" REM n\":NEXT:CLOSE #1:LOAD \"mem:p\"\r";
+        static const char* const mkprog = "OPEN \"mem:p\" FOR OUTPUT AS #1:FOR I=1 TO 60:PRINT #1,I*10;\" REM:n\":NEXT:CLOSE #1:LOAD \"mem:p\"\r";
         static const char* const sW1[] = { mkprog, "EDIT\r", "\033[<65;5;5M\033[<65;5;5M", "Z", "\033", "LIST 60-80\r", "BYE\r" };
         static const char* const eW1[] = { "\033[?1049h", "70 ZREM" };
         failed += !pty_case( "screen mode: the wheel scrolls the full-screen editor (two notches: 6 lines)", sW1, 7U, eW1, 2U );
@@ -586,10 +586,10 @@ int main( void ) {
         failed += !pty_case( "screen mode: the thumb of the scroll bar can be dragged (a move with the button held)", sW4, 7U, eW4, 2U );
         // a click in the text moves the cursor there (row 5 = line 40, column 12 = the character behind "REM N" of "REM n40": the marker lands there)
         static const char* const sC1[] = { mkprog, "EDIT\r", "\033[<0;12;5M\033[<0;12;5m", "Z", "\033", "LIST 30-50\r", "BYE\r" };
-        static const char* const eC1[] = { "\033[?1049h", "40 REM ZN" };
+        static const char* const eC1[] = { "\033[?1049h", "40 REM:ZN" };
         failed += !pty_case( "screen mode: a click in the text of the full-screen editor puts the cursor there", sC1, 7U, eC1, 2U );
         // a held button on the down arrow repeats (1.5 s: the view reaches the end of a 30 line program, line 90 on top; a single click would give line 20)
-        static const char* const mkprog30 = "OPEN \"mem:p\" FOR OUTPUT AS #1:FOR I=1 TO 30:PRINT #1,I*10;\" REM n\":NEXT:CLOSE #1:LOAD \"mem:p\"\r";
+        static const char* const mkprog30 = "OPEN \"mem:p\" FOR OUTPUT AS #1:FOR I=1 TO 30:PRINT #1,I*10;\" REM:n\":NEXT:CLOSE #1:LOAD \"mem:p\"\r";
         static const char* const sC2[] = { mkprog30, "EDIT\r", "\033[<0;80;23M", "@sleep 1500", "\033[<0;80;23m", "Z", "\033", "LIST 80-100\r", "BYE\r" };
         static const char* const eC2[] = { "\033[?1049h", "90 ZREM" };
         failed += !pty_case( "screen mode: the scroll bar's arrow repeats while the button is held", sC2, 9U, eC2, 2U );

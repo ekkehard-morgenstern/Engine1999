@@ -26,7 +26,9 @@ in /usr/local/share/doc/engine1999/ (docs/ in the source tree), and the whole sy
 .B Lines
 A line with a number from 0 to 999999 is stored in the program; a line without one runs at once (direct mode).
 Several statements on a line are separated by a colon.
-A comment starts with an apostrophe.
+A comment starts with an apostrophe or with
+.B REM
+(at the start of a statement; it is listed as an apostrophe).
 Words are not case sensitive; strings keep their case.
 .TP
 .B Targets

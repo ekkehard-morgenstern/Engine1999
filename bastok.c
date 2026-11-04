@@ -1218,11 +1218,13 @@ void preprocess_buffer( char* buf ) {
     // Replace series of space and tab characters to single spaces.
     // Remove carriage return characters.
     // Convert lower case characters to upper case (not in a comment: from an apostrophe to the end of the line the case is kept).
+    // REM at the start of a statement (followed by a blank or the end of the line) is a comment: it becomes an apostrophe.
     // (All take place everywhere except within double quotes or shell quotes.)
     const char* s = buf;
     char*       d = buf;
     int         quote = 0;
     bool        comment = false;
+    bool        stmt = true;                    // at the start of a statement (REM is a comment there: it is made an apostrophe)
     // The indentation of a program line is kept: the blanks behind the line number stay as they are (the first one is the
     // separator, the others are the indent; they are stored as TOK_SPACE tokens, which the compiler ignores). Every blank or tab of
     // this run is one blank (the text must not grow: this works in place). Everywhere else a run of blanks is one.
@@ -1261,8 +1263,18 @@ void preprocess_buffer( char* buf ) {
             if ( *s == '\'' ) {
                 comment = true;
             }
+            if ( stmt && !comment && ( s[0] == 'R' || s[0] == 'r' ) && ( s[1] == 'E' || s[1] == 'e' ) && ( s[2] == 'M' || s[2] == 'm' ) &&
+                    ( s[3] == '\0' || s[3] == ' ' || s[3] == '\t' || s[3] == '\r' || s[3] == '\n' ) ) {
+                // the classic REM comment (from here to the end of the line): the same as an apostrophe, which is what is stored and listed
+                *d++ = '\'';
+                s += 3;
+                comment = true;
+                stmt = false;
+                continue;
+            }
             if ( *s >= 'a' && *s <= 'z' && !comment ) {
                 *d++ = ( *s++ - 'a' ) + 'A';
+                stmt = false;
                 continue;
             }
         }
@@ -1271,6 +1283,9 @@ void preprocess_buffer( char* buf ) {
         }
         if ( *s == '`' ) {
             quote ^= 2;
+        }
+        if ( quote == 0 ) {
+            stmt = ( *s == ':' );
         }
         *d++ = *s++;
     }

@@ -13,6 +13,12 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+### 2026-11-04 — a language tour, an old-style game, `REM`, and a feature index of the demos (the owner was away: "do them all")
+- **`REM` is a comment** (`bastok.c` `preprocess_buffer()`): the classic `REM text` at the start of a statement (behind the line number or a colon; followed by a blank or the end of the line, upper or lower case) is turned into an apostrophe, so `10 REM text` is stored and listed as `10 ' text`; `REMAIN`, a variable like `REM_X` and `REM` inside a string are untouched. Found because the first line of the new old-style game, `10 REM ...`, was "Assignment operator '=' expected": this BASIC had only the apostrophe. 5 new `repltest1` cases (415), `contest1`'s filler text `REM n` (a comment now) became `REM:n` (0 failures); `docs/basic-language.md` "Source preprocessing" and the man page `engine1999-basic.7` say so.
+- **`demos/wumpus.bas`** (new, 120 lines): Hunt the Wumpus, written the old way (line numbers, `GOTO` / `GOSUB` / `POP`, `DATA` / `READ`, `INPUT`, `REM`, no procedures, no labels), only `PRINT` / `INPUT`, so it also runs in the console (`engine1999c demos/wumpus.bas`). Checked by a bot (a Python script played 80 games through a pipe: random moves and shots, all games end, wins and losses, exit status 0, no error).
+- **`demos/tour.bas`** (new, 365 lines): "A tour of the language", ten lessons (variables, loops and decisions, arrays and DATA, procedures and functions, errors, files, graphics and sprites, sound, timers, keys and controllers); each lesson shows a few lines in cyan and runs them (the result in green); written in the style it teaches (a recursive `FUNC` at the top, labelled lessons with `GOSUB`, procedures for the page layout, a word-wrapping `SAY`, `ON ERROR` + `RESUME NEXT` in the main program, `mem:` files, `EVERY`, `KEY()` / `JOY()`). Checked in the window under Xvfb through all ten lessons and the closing page (layout, the graphics lesson with the drawing under the text, sound and timers run without errors).
+- **`demos/README.md`:** rows for `tour.bas` and `wumpus.bas`, and a new section "Where to look: which demo shows what" with 25 features and the BASIC line number of the first place where each is used (made with a script from the demos).
+
 ## Log
 
 ### 7a6cb67 — 2026-10-17 13:32:27 +0200 — "Introduced Claude to the project"

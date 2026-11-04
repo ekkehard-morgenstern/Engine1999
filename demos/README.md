@@ -18,6 +18,8 @@ The listings are indented by block structure (two blanks per level for `FOR`, `R
 | `climb.bas` | **The Long Climb**, a jump and run game in the spirit of Lode Runner and Donkey Kong (no likeness of either): a construction worker climbs a steel tower of 120 x 40 tiles (three screens wide, three and a half high, scrolling smoothly) up to an ice cream stand on the roof. Walk, jump (SPACE) and climb ladders (W / S), jump the gaps, hurdles and rust balls and slimes, and drill holes in the girders (Z / C) to trap monsters: when the hole closes again they are gone for a while (there is no weapon). Cars drive on the road, birds fly through the corridors, there is music (a melody, a bass and a drum on three channels, timed by `EVERY`) and sound effects, a time bonus, harder climbs, and a best height in `climb.hi`. Girders, ladders, bricks, concrete, dirt and grass are tiles; the world lives in the RAM (`POKE`, `PEEK`, `PEEK$`), its map is readable ASCII art in the `DATA` lines at the end. Uses `PROC`/`FUNC`/`LOCAL`, recursion (the trees on the hills), a `LOCAL` array passed to an array parameter, `FOR EACH`, `EXIT`, `ITERATE`, `AFTER`/`EVERY`, `ON ERROR` with `RESUME <label>`, `SIN`/`COS`/`EXP`/`LOG`, `DATA`/`RESTORE <label>`. Keys (read with `KEY()`, you move only while a key is held): LEFT / RIGHT or A / D walk, UP / DOWN or W / S climb, SPACE jump (a press a few frames early still counts), Z / X (or , / .) drill left / right, P pause, M music, Q quit. **Game controller:** the D-pad or the left stick, A and the other buttons (see the comment at the top of the file); START pauses, BACK quits. |
 | `madrun.bas` | **MADRUN**, a crossing game for one to four players: a phone rings in the booth on the island in the middle of a busy crossing, and the first player there scores the level. Cars, trucks, buses, motorbikes and ambulances on sixteen lanes (four roads, two lanes in each direction; the lanes next to the middle line are faster) stop for each other and for the crossings (reservations, braking from the stopping distance, a vehicle that has waited a while gets its turn), never for you; pick-ups (whistle stops the traffic, boots, heart), levels with more and faster traffic, a time limit. Asks for keyboard (WASD, cursor keys; 1 or 2 players) or controllers (up to 4: a pad that is connected brings its player, one that is removed takes it away; a blinking question mark marks an empty corner). P pauses, Q quits (START / BACK on a pad). Pictures are drawn at start-up with `GFX LINE`, grabbed with `GFX GRAB` and defined with `SPRITE DEF`. |
 | `river.bas` | **ETERNAL RIVER**, a scroll-down boat game in the spirit of River Raid: steer down an endless, meandering river (rows made up on the way from a hash of the row number and scrolled with `TILE SCROLL` / `TILE FILL`), avoid swimmers, divers, other boats and the rocks that people on the banks throw; bridges with decorative traffic (cars, a bicycle, people) that you pass under; a hit may only throw you into the water: swim to a bank, walk along it (up and down, the river scrolls with you and back) picking up apples, carrots and ice cream cones, and find a boat (moored at a jetty or left drifting); beware of the wraiths on the banks: touch one and you become a wraith yourself for a while (and lose a life). Levels make the river narrower and busier; music that is made up bar by bar. Keys or a pad: steer, UP faster, DOWN slower, P pause, Q quit (START / BACK on a pad). Uses the four libraries. |
+| `tour.bas` | **A tour of the language**: ten short lessons for somebody who has never used this BASIC (variables, loops and decisions, arrays and `DATA`, procedures and functions, errors, files, graphics and sprites, sound, timers, keys and controllers): each lesson shows a few lines and runs them. Run it in the window; `LIST` it afterwards, it is written the way it teaches. |
+| `wumpus.bas` | **Hunt the Wumpus**, the classic cave game (1973), written the old way: line numbers, `GOTO` / `GOSUB` / `POP`, `DATA`, `READ`, `INPUT`, `REM` comments, no procedures and no labels. It only uses `PRINT` and `INPUT`, so it runs in the console too: `engine1999c demos/wumpus.bas`. |
 | `lib/util.lib` | **A library** shared by the games (not a program): `RN`, `CLAMP`, `PAD$`, `DISK`, `PLAYSEQ`. The games name it with `LOAD LIBRARY "util"`; `RUN` finds it in `demos/lib/` and compiles it ahead of the game, and `BUILD` embeds it in the executable. |
 | `lib/input.lib` | **A library** for the games' controls: `IN_POLL` (arrows / WASD / D-pad / stick of pad 1 -> `IN_DX`, `IN_DY`, `IN_BTN`), `IN_SERVICE` (P / START ask for a pause, Q / BACK quit, other keys in `IN_KEY`), `IN_PAUSELOOP`, and `IN_ANYSTART` / `IN_ANYBACK` / `IN_ANYA` over four pads. Used by `fruit2`, `climb` and `madrun`. |
 | `lib/hiscore.lib` | **A library** that keeps one number in a small text file: `HS_LOAD(file$)` (0 if the file is missing or empty: no error, thanks to `EXISTS`) and `HS_SAVE file$, value`. Used by `fruit2`, `climb` and `madrun` for their high scores. |
@@ -43,3 +45,38 @@ Libraries (`demos/lib/*.lib`): a library is a program whose first statement is `
 and `RUN` finds the file next to the program (its own folder, then `lib/` below it). A library is written with `SAVE LIBRARY "name"` (the extension `.lib` is added), edited with
 `LOAD "lib/name"` like any program, and cannot be run by itself. Names in a library are global, so a game that loads `util` must not define `RN`, `CLAMP`, `PAD$`, `DISK` or `PLAYSEQ` itself, and the variables of a library start with its prefix (`IN_` for `input`, `HS_` for `hiscore`, `TX_` for `text`).
 See `docs/library-support.md`.
+
+## Where to look: which demo shows what
+
+The numbers are BASIC line numbers (`LOAD "demos/river"`, then `LIST 7420-7500`). They point at the first place where the feature is used.
+
+| Feature | Demo and line |
+|---|---|
+| `PROC` / `FUNC` / `LOCAL`, recursion | `tour.bas`, line 50 |
+| procedures that call each other, a game written from them | `fruit2.bas`, line 13730 |
+| array parameter (`PROC P(A())`) | `lib/util.lib`, line 270 |
+| `FOR EACH`, `EXIT`, `ITERATE`, `DOWNTO` | `fruit2.bas`, line 350 |
+| old style: `GOSUB`, `GOTO`, `ON`, `POP`, `DATA` / `READ` | `wumpus.bas`, line 640 |
+| `DATA` / `READ` / `RESTORE` with labels | `climb.bas`, line 1740 |
+| `ON ERROR` + `RESUME <label>` in the main program | `river.bas`, line 1140 |
+| `EXISTS()`, files that may be missing | `lib/hiscore.lib`, line 110 |
+| files and drivers: `OPEN`, `LINE INPUT #`, `mem:` | `tour.bas`, line 2180 |
+| `PEEK` / `POKE` / `PEEK$`: a world in RAM | `climb.bas`, line 13910 |
+| tiles: `TILE FILL` and `TILE SCROLL` (a scrolling world) | `river.bas`, line 7420 |
+| an endless world from a hash of the row number | `river.bas`, line 210 |
+| pictures drawn with `GFX LINE` and grabbed (`GFX GRAB`, `SPRITE DEF`) | `madrun.bas`, line 2660 |
+| pictures by rows: `DESIGN SPRITE` and `@ "row"` | `gfx.bas`, line 130 |
+| `SPRITE n,MOVETO`, engine-driven movement | `fruit2.bas`, line 11620 |
+| palette changes, translucent colors | `river.bas`, line 1610 |
+| `SOUND`, `PLAY`, `WAVE`, `ENVELOPE` | `ode.bas`, line 90 |
+| `SFX` effects (stored sounds) | `sfx.bas`, line 20 |
+| music made up bar by bar by an `EVERY` handler | `river.bas`, line 13190 |
+| `EVERY` / `AFTER` timers | `tour.bas`, line 3020 |
+| `KEY()` (keys held down) | `keys.bas`, line 50 |
+| game controllers: `JOY()` | `joy.bas`, line 60 |
+| `MOUSE`, `ON MOUSE` | `mouse.bas`, line 30 |
+| libraries: `LOAD LIBRARY`, `LIBRARY` files | `lib/text.lib`, line 70 |
+| a traffic simulation (leaders, reservations) | `madrun.bas`, line 10100 |
+| an animation made of sprite frames and sounds (the phone call) | `madrun.bas`, line 12320 |
+
+Start with `tour.bas`, then read a small demo (`sfx`, `gfx`, `keys`), then a game: `wumpus` for the classic style, `fruit2` or `river` for the modern one.

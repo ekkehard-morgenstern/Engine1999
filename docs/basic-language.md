@@ -6,7 +6,7 @@ so far (see "Implemented subset").
 
 ## Source preprocessing (`preprocess_buffer`)
 
-Collapses runs of blanks/tabs to one space, drops `\r`, upper-cases letters — everywhere except inside `"…"` and `` `…` ``; **a comment (from the apostrophe to the end of the line) keeps its case** (since 2026-11-01; it was upper-cased before, so old listings keep their capitals).
+Collapses runs of blanks/tabs to one space, drops `\r`, upper-cases letters — everywhere except inside `"…"` and `` `…` ``; **a comment (from the apostrophe to the end of the line) keeps its case** (since 2026-11-01; it was upper-cased before, so old listings keep their capitals). **`REM` is a comment, too** (2026-11-04, for programs written in the classic style, `demos/wumpus.bas`): `REM` at the start of a statement (the start of the line behind the line number, or behind a colon) followed by a blank or the end of the line is turned into an apostrophe here, so `10 REM text` is stored and listed as `10 ' text`; `REMAIN` and a variable `REM_X` are no comments, and `REM` inside a string is text.
 
 **Indentation (2026-11-01):** the run of blanks *behind the line number* is kept as it is, so a program can be indented (`20     PRINT I` stays that way in `LIST`, `SAVE ... ,A`, `EDIT`, the full-screen editor and
 the screen editor; the first blank is the separator after the number, the rest is the indent). Every blank or tab of that run counts as one blank (a tab is not expanded: the preprocessing works in place and the text must not
