@@ -628,6 +628,110 @@ static void test_sprites( void ) {
     tilescr_setcell( 7, 3, 0 );
 }
 
+static void test_sprite_groups( void ) {
+    sprscr_init();
+    tilescr_init();
+    static uint8_t scr[SPRTGT_WIDTH * SPRTGT_HEIGHT];
+    uint8_t img[16 * 24];
+    for ( int i=0; i < 8; ++i ) {                       // the images 20..27 are solid in the colors 11..18
+        memset( img, 11 + i, sizeof(img) );
+        sprscr_writemap( 20 + i, img );
+    }
+    int w = 0, h = 0, x = 0, y = 0;
+    // making groups
+    check( sprscr_setsize( 10, 2, 3 ), "a group of 2 x 3 sprites" );
+    sprscr_getsize( 10, &w, &h );
+    check( w == 2 && h == 3, "...its size" );
+    sprscr_getsize( 11, &w, &h );
+    check( w == 1 && h == 1, "a member is no head" );
+    check( sprscr_headof( 10 ) == 10 && sprscr_headof( 11 ) == 10 && sprscr_headof( 15 ) == 10 && sprscr_headof( 16 ) == 16, "the head of a sprite" );
+    check( !sprscr_setsize( 12, 1, 2 ), "a member can't be a head" );
+    check( !sprscr_setsize( 9, 2, 2 ), "a group can't take the members of another" );
+    check( !sprscr_setsize( 241, 2, 4 ), "...nor reach beyond the sprites of the program" );
+    check( !sprscr_setsize( 3, 0, 1 ) && !sprscr_setsize( 3, 9, 1 ) && !sprscr_setsize( 250, 1, 1 ) && !sprscr_setsize( -1, 1, 1 ), "bad sizes and numbers" );
+    check( sprscr_setsize( 10, 3, 2 ), "a head can be resized" );
+    check( sprscr_headof( 15 ) == 10 && sprscr_headof( 16 ) == 16, "...six members again" );
+    check( sprscr_setsize( 10, 2, 3 ), "and back" );
+    check( sprscr_setsize( 20, 2, 2 ) && sprscr_headof( 23 ) == 20, "another group next to it" );
+    check( sprscr_setsize( 20, 1, 1 ) && sprscr_headof( 21 ) == 21, "(1, 1) dissolves a group" );
+    // drawing: the head rules, the member k shows the image + k at its place
+    sprscr_show( 10, true ); sprscr_move( 10, 100, 50 ); sprscr_setimage( 10, 20 );
+    sprscr_show( 11, true ); sprscr_move( 11, 300, 200 ); sprscr_setimage( 11, 7 );      // (the member's own settings do not count)
+    sprscr_render( scr );
+    bool ok = true;
+    for ( int k=0; k < 6; ++k ) {
+        int px = 100 + 16 * ( k % 2 ) + 3, py = 50 + 24 * ( k / 2 ) + 5;
+        if ( scr[ py * SPRTGT_WIDTH + px ] != 11 + k ) ok = false;
+    }
+    check( ok, "the six sprites are drawn as one block, each with its image" );
+    check( scr[ 200 * SPRTGT_WIDTH + 300 ] == 0 && scr[ 49 * SPRTGT_WIDTH + 100 ] == 0 && scr[ 122 * SPRTGT_WIDTH + 100 ] == 0 && scr[ 100 * SPRTGT_WIDTH + 132 ] == 0, "...and nothing else" );
+    check( sprscr_getpos( 15, &x, &y ) && x == 116 && y == 98 && sprscr_getimage( 15 ) == 25 && sprscr_isactive( 15 ), "a member reports its place, image and state" );
+    sprscr_show( 10, false );
+    sprscr_render( scr );
+    check( scr[ 50 * SPRTGT_WIDTH + 100 ] == 0 && scr[ 98 * SPRTGT_WIDTH + 116 ] == 0 && !sprscr_isactive( 13 ), "hiding the head hides the group" );
+    sprscr_show( 10, true );
+    // movement of the head (MOVETO) takes the block along; animation: each member adds its number to the head's image
+    sprscr_moveto( 10, 120, 70, 2 );
+    sprscr_periodicals(); sprscr_periodicals(); sprscr_periodicals();
+    sprscr_getpos( 14, &x, &y );
+    check( x == 120 && y == 70 + 48, "MOVETO of the head moves the members" );
+    uint8_t seq[2] = { 20, 22 };
+    sprscr_animdata( 7, seq, 2 );
+    sprscr_animcfg( 10, 7, 2, 1 );
+    check( sprscr_getimage( 13 ) == 23, "an animation of the head: the members follow" );
+    sprscr_periodicals();
+    check( sprscr_getimage( 10 ) == 22 && sprscr_getimage( 13 ) == 25, "...frame by frame" );
+    sprscr_setimage( 10, 253 );
+    check( sprscr_getimage( 15 ) == 255, "an image number beyond 255 is held at 255" );
+    sprscr_setimage( 10, 20 );
+    // priority: the group is one sprite for the order
+    sprscr_show( 40, true ); sprscr_move( 40, 120, 70 ); sprscr_setimage( 40, 27 ); sprscr_prio( 40, 3 );
+    sprscr_prio( 10, 5 );
+    sprscr_render( scr );
+    check( scr[ 72 * SPRTGT_WIDTH + 122 ] == 11, "a group in front of a sprite" );
+    sprscr_prio( 10, 1 );
+    sprscr_render( scr );
+    check( scr[ 72 * SPRTGT_WIDTH + 122 ] == 18, "...and behind it (the head's priority)" );
+    sprscr_show( 40, false );
+    // collisions: the group is one object; the head reports
+    sprscr_setcollide( 10, true, false );
+    sprscr_show( 100, true ); sprscr_move( 100, 135, 125 ); sprscr_setimage( 100, 27 ); sprscr_setcollide( 100, true, false );
+    sprscr_periodicals();
+    check( sprscr_collidewith( 100 ) == 10 && sprscr_collidewith( 10 ) == 100, "a sprite meets a member: the head of the group is reported" );
+    check( sprscr_hits( 10 ) == 1 && sprscr_hits( 100 ) == 1 && sprscr_hits( 15 ) == 0, "hits count for the head" );
+    check( sprscr_nextevent() == 10, "the event names the head" );
+    sprscr_move( 100, 400, 250 );
+    sprscr_periodicals();
+    check( sprscr_collidewith( 10 ) == -1, "no overlap, no collision" );
+    // the members don't collide with each other; a group that is not set to collide does not collide
+    sprscr_setcollide( 10, true, false );
+    sprscr_periodicals();
+    check( sprscr_collidewith( 10 ) == -1 && sprscr_hits( 10 ) == 0, "the members of a group don't hit each other" );
+    sprscr_move( 100, 135, 125 );
+    sprscr_setcollide( 10, false, false );
+    sprscr_periodicals();
+    check( sprscr_collidewith( 100 ) == -1, "the head's flags rule the group" );
+    // tiles
+    uint8_t solid[16 * 24];
+    memset( solid, 4, sizeof(solid) );
+    tilescr_writetile( 1, solid );
+    tilescr_setcell( 20, 8, 1 );                         // x 320..335, y 192..215
+    sprscr_setcollide( 10, false, true );
+    sprscr_show( 100, false );
+    sprscr_move( 10, 310, 100 );                         // the member in the bottom row, right column: x 326..341, y 148..171: no tile
+    sprscr_periodicals();
+    check( sprscr_hits( 10 ) == 0, "no tile in reach" );
+    sprscr_move( 10, 310, 150 );                         // the bottom right member: x 326..341, y 198..221: overlaps the tile
+    sprscr_periodicals();
+    check( sprscr_hits( 10 ) == 2, "a member over a solid tile: bit 2 for the head" );
+    tilescr_setcell( 20, 8, 0 );
+    // a reset dissolves the groups
+    sprscr_reset( false );
+    check( sprscr_headof( 12 ) == 12, "a reset dissolves the groups" );
+    sprscr_getsize( 10, &w, &h );
+    check( w == 1 && h == 1, "...every one" );
+}
+
 static void test_textscreen( void ) {
     txtscr_init();
     txtscr_write( 0, 0, 2, 3, "\xC8\x80\xFF", 3 );
@@ -742,6 +846,7 @@ int main( void ) {
     test_reserved();
     test_mouse();
     test_sprites();
+    test_sprite_groups();
     test_textscreen();
     test_reset();
     printf( "%d checks, %d failure(s)\n", checks, failures );

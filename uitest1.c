@@ -853,6 +853,35 @@ int main( void ) {
         done();
     }
 
+    // a canvas that is removed and made again with other cells: the redraw is complete (the sprite editor does it when its size changes)
+    {
+        setup();
+        static uint8_t keep2[ 400 * 240 ];
+        ui_add( &ui, UIK_PANEL, 99, 0, 0, 400, 240, "T", 0 );
+        ui_add( &ui, UIK_CANVAS, 100, 10, 24, 120, 180, "", 0 );
+        ui_set_canvas( &ui, 100, 16, 24 );
+        ui_add( &ui, UIK_LABEL, 112, 10, 210, 300, 14, "status", 0 );
+        ui_add( &ui, UIK_SLIDER, 126, 150, 40, 120, 18, "", 0 );
+        ui_add( &ui, UIK_BUTTON, 114, 150, 80, 60, 22, "Clear", 0 );
+        ui_add( &ui, UIK_BUTTON, 115, 220, 80, 60, 22, "Flip", 0 );
+        ui_draw( &ui, false );
+        ui_remove( &ui, 100 );
+        ui_add( &ui, UIK_CANVAS, 100, 10, 24, 120, 180, "", 0 );
+        ui_set_canvas( &ui, 100, 64, 24 );
+        ui_set_text( &ui, 112, "other" );
+        ui_draw( &ui, false );
+        memcpy( keep2, buf, sizeof(keep2) );
+        ui_draw( &ui, true );
+        int bad = 0;
+        for ( int i = 0; i < 400 * 240; ++i ) {
+            if ( keep2[i] != buf[i] ) {
+                ++bad;
+            }
+        }
+        check( "a canvas removed and made again with other cells: the incremental redraw equals a full redraw", bad == 0 );
+        done();
+    }
+
     // canvas: a zoomed grid of cells
     setup();
     check( "a canvas is added", ui_add( &ui, UIK_CANVAS, 7, 10, 10, 100, 100, "", 0 ) );

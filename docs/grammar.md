@@ -161,7 +161,7 @@ sys-noarg-str-call := sys-noarg-str .
 > The graphics functions (docs/graphics-subsystem.md) are a table in gfxops.c: RGB(r,g,b[,a]), POINT(x,y), TILE(x,y), and the named values
 > GFX("FRAME"), GFX("LAYER",n), GFX("PRIORITY",n), GFX("PALETTE",n,i), GFX("TARGET"), TXT("X"), TXT("Y"), TXT("FG"), TXT("BG"),
 > MOUSE("X"\|"Y"\|"B"\|"PRESSED"\|"RELEASED"\|"WHEEL"\|"SHAPE"\|"VISIBLE"\|"EVENTS") (no further arguments),
-> TXT("CHAR",x,y), TXT("FGAT",x,y), TXT("BGAT",x,y), TXT("WIDTH"), TXT("HEIGHT"), SPRITE("X"\|"Y"\|"IMAGE"\|"ON"\|"HITS"\|"COLLIDE"\|"MOVING",n):
+> TXT("CHAR",x,y), TXT("FGAT",x,y), TXT("BGAT",x,y), TXT("WIDTH"), TXT("HEIGHT"), SPRITE("X"\|"Y"\|"IMAGE"\|"ON"\|"HITS"\|"COLLIDE"\|"MOVING"\|"COLS"\|"ROWS",n):
 > the name is a string literal and the number of arguments after it depends on the name.
 
 ```ebnf
@@ -618,13 +618,15 @@ tile-stmt := TILE ( DEF num-expr "," str-expr | GET num-expr "," str-var-ref |
                         SET num-expr "," num-expr "," num-expr | FILL str-expr | SCROLL num-expr "," num-expr ) .
 ```
 
-> SPRITE n, x, y [, image] places a sprite; MOVETO makes the engine move it; the collision word list is OFF, or ON [, TILES].
+> SPRITE n, x, y [, image] places a sprite; MOVETO makes the engine move it; the collision word list is OFF, or ON [, TILES]; SIZE w, h makes the
+> sprite n the head of a group of w x h sprites (n .. n+w\*h-1) that is drawn as one large sprite (1, 1 dissolves it).
 
 ```ebnf
 sprite-stmt := SPRITE ( DEF num-expr "," str-expr | GET num-expr "," str-var-ref | SEQ num-expr "," str-expr |
                             num-expr "," ( ON | OFF | PRIORITY num-expr | IMAGE num-expr |
                                                  ANIM num-expr "," num-expr "," num-expr |
                                                  MOVETO num-expr "," num-expr "," num-expr |
+                                                 SIZE num-expr "," num-expr |
                                                  COLLISION ( OFF | ON [ "," TILES ] ) |
                                                  num-expr "," num-expr [ "," num-expr ] ) ) .
 cls-stmt := CLS .

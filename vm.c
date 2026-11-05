@@ -3017,6 +3017,7 @@ static bool vm_gfx_check( vm_t* vm, int op, const double* a, int na, size_t slen
         case GFXOP_SPRANIM:     ok = IN( 0, 0, SPR_USER_COUNT - 1 ) && IN( 1, 0, 255 ) && IN( 2, 0, 15 ) && IN( 3, 0, 31 ); break;
         case GFXOP_SPRMOVETO:   ok = IN( 0, 0, SPR_USER_COUNT - 1 ) && IN( 1, -1024, 1023 ) && IN( 2, -1024, 1023 ) && IN( 3, 0, 65535 ); break;
         case GFXOP_SPRCOLL:     ok = IN( 0, 0, SPR_USER_COUNT - 1 ) && IN( 1, 0, 1 ) && OPT( 2, 0, 0 ); break;
+        case GFXOP_SPRSIZE:     ok = IN( 0, 0, SPR_USER_COUNT - 1 ) && IN( 1, 1, SPR_GROUP_MAX ) && IN( 2, 1, SPR_GROUP_MAX ); break;
         case GFXOP_SPRMOVE:     ok = IN( 0, 0, SPR_USER_COUNT - 1 ) && IN( 1, -1024, 1023 ) && IN( 2, -1024, 1023 ) && OPT( 3, 0, 255 ); break;
         default:                break;
     }
@@ -3114,7 +3115,7 @@ static bool vm_gfx_query( vm_t* vm, uint16_t q ) {
         }
     }
     if ( q == GFXQ_SPRX || q == GFXQ_SPRY || q == GFXQ_SPRIMAGE || q == GFXQ_SPRON || q == GFXQ_SPRHITS || q == GFXQ_SPRCOLLIDE ||
-         q == GFXQ_SPRMOVING ) {
+         q == GFXQ_SPRMOVING || q == GFXQ_SPRCOLS || q == GFXQ_SPRROWS ) {
         if ( !( a[0] >= 0.0 && a[0] <= (double)( SPR_USER_COUNT - 1 ) ) ) {
             return vm_error( vm, "Illegal argument" );
         }

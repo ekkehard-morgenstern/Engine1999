@@ -61,6 +61,16 @@
 #define SPR_MOUSE       255         // the mouse pointer (cursors.h); 248..254 are free for future use
 #define MAX_SYSANIM     16
 
+// Sprite groups (2026-11-05, roadmap item 62): SPRITE n,SIZE w,h makes the sprite n the head of a w x h block of sprites: the sprites n .. n+w*h-1 (row by
+// row) are drawn side by side as one large sprite. The head's position, priority, shown / hidden state, animation, MOVETO and collision flags rule the
+// block: member k (column k % w, row k / w) is drawn at the head's position + (16 * column, 24 * row) and shows the head's image + k. A member's own
+// settings are ignored while it belongs to a group. The block collides as one object (the head's number is reported); the members don't collide
+// with each other. w, h 1..8, w * h <= 64; (1, 1) dissolves the group.
+#define SPR_GROUP_MAX   8
+bool sprscr_setsize( int head, int w, int h );              // false: bad numbers, the block does not fit below 248 or touches another group
+void sprscr_getsize( int head, int* w, int* h );            // 1, 1 for a sprite that is no head
+int  sprscr_headof( int sprno );                            // the head of the group the sprite belongs to (itself if it is none), -1 for a bad number
+
 void sprscr_init( void );
 void sprscr_show( int sprno, bool active );
 void sprscr_prio( int sprno, int prio );

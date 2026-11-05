@@ -1,0 +1,79 @@
+1 ' License: free for everybody to use, copy, change and build into executables (BUILD).
+2 ' An executable made with BUILD contains the Engine1999 runtime: the Engine1999 Runtime Exception
+3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
+4 ' in the executable (it shows with the command line option --engine1999-about).
+10 ' tilegrp - groups of tiles: a block of w x h tiles that is put on the tile screen as one picture (a library: LOAD LIBRARY "tilegrp", prefix TG_).
+20 ' The sprites have groups in the engine (SPRITE n,SIZE w,h); the tile screen is a grid of cells, so a group of tiles is only a rule how to fill the
+30 ' cells: the tiles of a block are numbered one after the other, row by row, from the base number (a 2 x 3 block at tile 40 uses the tiles 40..45).
+40 '   CALL TG_DEF(G,T0,W,H)          names the block G (0..63): W x H tiles from tile T0 on (W, H 1..16)
+50 '   CALL TG_PUT(G,CX,CY)           puts block G on the tile screen with its top left tile in the cell CX,CY (TILE SET); cells outside are left alone
+60 '   CALL TG_ERASE(G,CX,CY)         puts tile 0 into the cells the block covers
+70 '   CALL TG_REPEAT(G,CX,CY,NX,NY)  puts the block NX times to the right and NY times down (a wall, a floor)
+80 '   FN TG_W(G), FN TG_H(G), FN TG_BASE(G)   what DEF said (0 for a block that was never defined)
+90 '   FN TG_HIT(G,CX,CY,X,Y)         is the screen point X,Y (pixels) inside block G placed at the cell CX,CY? -1 / 0 (for your own collision tests)
+100 '   FN TG_COLS(), FN TG_ROWS()     the cells of the tile screen (40 and 12)
+110 LIBRARY "tilegrp","TG_"
+120 PROC TG_INIT
+130   TG_REG$=STRING$(384,0)
+140 END PROC
+150 PROC TG_DEF(G,T0,W,H)
+160   IF G<0 OR G>63 OR W<1 OR W>16 OR H<1 OR H>16 OR T0<0 OR T0+W*H>256 THEN ERROR 5
+170   MID$(TG_REG$,G*6+1,6)=MKI$(T0)+MKI$(W)+MKI$(H)
+180 END PROC
+190 FUNC TG_BASE(G)
+200   IF G<0 OR G>63 THEN RETURN 0
+210   RETURN CVI(MID$(TG_REG$,G*6+1,2))
+220 END FUNC
+230 FUNC TG_W(G)
+240   IF G<0 OR G>63 THEN RETURN 0
+250   RETURN CVI(MID$(TG_REG$,G*6+3,2))
+260 END FUNC
+270 FUNC TG_H(G)
+280   IF G<0 OR G>63 THEN RETURN 0
+290   RETURN CVI(MID$(TG_REG$,G*6+5,2))
+300 END FUNC
+310 FUNC TG_COLS()
+320   RETURN 40
+330 END FUNC
+340 FUNC TG_ROWS()
+350   RETURN 12
+360 END FUNC
+370 ' puts the tiles of block G (or tile 0 where EMPTY is true) at the cell CX,CY
+380 PROC TG_FILL(G,CX,CY,EMPTY)
+390   LOCAL R,C,W,H,B,X,Y
+400   W=FN TG_W(G)
+410   H=FN TG_H(G)
+420   B=FN TG_BASE(G)
+430   FOR R=0 TO H-1
+440     FOR C=0 TO W-1
+450       X=CX+C
+460       Y=CY+R
+470       IF X>=0 AND X<FN TG_COLS() AND Y>=0 AND Y<FN TG_ROWS() THEN
+480         IF EMPTY THEN TILE SET X,Y,0 ELSE TILE SET X,Y,B+R*W+C
+490       END IF
+500     NEXT C
+510   NEXT R
+520 END PROC
+530 PROC TG_PUT(G,CX,CY)
+540   CALL TG_FILL(G,CX,CY,0)
+550 END PROC
+560 PROC TG_ERASE(G,CX,CY)
+570   CALL TG_FILL(G,CX,CY,-1)
+580 END PROC
+590 PROC TG_REPEAT(G,CX,CY,NX,NY)
+600   LOCAL I,J,W,H
+610   W=FN TG_W(G)
+620   H=FN TG_H(G)
+630   FOR J=0 TO NY-1
+640     FOR I=0 TO NX-1
+650       CALL TG_PUT(G,CX+I*W,CY+J*H)
+660     NEXT I
+670   NEXT J
+680 END PROC
+690 FUNC TG_HIT(G,CX,CY,X,Y)
+700   LOCAL PX,PY
+710   PX=X-CX*16
+720   PY=Y-CY*24
+730   IF PX>=0 AND PY>=0 AND PX<FN TG_W(G)*16 AND PY<FN TG_H(G)*24 THEN RETURN -1
+740   RETURN 0
+750 END FUNC

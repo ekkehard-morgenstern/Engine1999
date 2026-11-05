@@ -88,6 +88,13 @@ typedef struct _sprmove_t {
 } sprmove_t;
 
 static sprmove_t    sprmove[MAX_SPRITES];
+
+// Sprite groups: sprgrp_w / sprgrp_h are set for a head (0 = none), sprgrp_head for a member (SPRGRP_NONE = not a member). Written by the main thread
+// only; the screen thread reads them without locks, so every use is bounded (sprscr_view() clamps what it reads).
+#define SPRGRP_NONE     0xFFU
+static uint8_t      sprgrp_w[MAX_SPRITES];
+static uint8_t      sprgrp_h[MAX_SPRITES];
+static uint8_t      sprgrp_head[MAX_SPRITES];
 static int          sprcollwith[MAX_SPRITES];       // the sprite a sprite last collided with (-1 none)
 static int          sprevent = -1;                  // a sprite with a new collision (for ON COLLISION), -1 none
 
@@ -101,6 +108,96 @@ static int sprscr_curimage( const sprctrl_t* ctrl ) {
     return ctrl->use_image ? (int) ctrl->image : spranim[ ctrl->anim_index ][ ctrl->anim_pos & 15U ];
 }
 
+// What a sprite looks like on the screen now: for the member of a group the head's state and the member's place in the block
+typedef struct _sprview_t {
+    bool    active;
+    int     x, y;           // the position of its top left corner
+    int     image;          // the image shown (0..255; SPRMAP_SYSBASE + n for the reserved sprites)
+    int     prio;
+    bool    coll_spr, coll_til;
+    int     head;           // the sprite that reports the hits and rules the block (the sprite itself if it is alone)
+} sprview_t;
+
+static void sprscr_view( int n, sprview_t* v ) {
+    const sprctrl_t* c = &sprctrl[n];
+    int head = n, col = 0, row = 0, w = 1;
+    if ( n < SPR_USER_COUNT && sprgrp_head[n] != SPRGRP_NONE ) {
+        int hd = sprgrp_head[n];
+        int gw = sprgrp_w[hd], gh = sprgrp_h[hd];
+        if ( hd < n && gw >= 1 && gw <= SPR_GROUP_MAX && gh >= 1 && gh <= SPR_GROUP_MAX && n - hd < gw * gh ) {
+            head = hd;
+            w = gw;
+            col = ( n - hd ) % gw;
+            row = ( n - hd ) / gw;
+        }
+    }
+    const sprctrl_t* hc = &sprctrl[head];
+    int img = sprscr_curimage( hc );
+    if ( head != n ) {
+        img += row * w + col;
+        if ( img > 255 ) {
+            img = 255;
+        }
+    }
+    v->active   = hc->active;
+    v->x        = hc->screen_x + col * SPRITE_WIDTH;
+    v->y        = hc->screen_y + row * SPRITE_HEIGHT;
+    v->image    = img;
+    v->prio     = hc->priority;
+    v->coll_spr = hc->spr_spr_coll_ena;
+    v->coll_til = hc->spr_til_coll_ena;
+    v->head     = head;
+    (void) c;
+}
+
+int sprscr_headof( int sprno ) {
+    if ( sprno < 0 || sprno >= MAX_SPRITES ) {
+        return -1;
+    }
+    sprview_t v;
+    sprscr_view( sprno, &v );
+    return v.head;
+}
+
+void sprscr_getsize( int head, int* w, int* h ) {
+    *w = *h = 1;
+    if ( head >= 0 && head < SPR_USER_COUNT && sprgrp_w[head] * sprgrp_h[head] > 1 ) {
+        *w = sprgrp_w[head];
+        *h = sprgrp_h[head];
+    }
+}
+
+bool sprscr_setsize( int head, int w, int h ) {
+    if ( head < 0 || head >= SPR_USER_COUNT || w < 1 || w > SPR_GROUP_MAX || h < 1 || h > SPR_GROUP_MAX || head + w * h > SPR_USER_COUNT ) {
+        return false;
+    }
+    if ( sprgrp_head[head] != SPRGRP_NONE ) {
+        return false;                                       // a member of a group can't be a head
+    }
+    int ow = sprgrp_w[head], oh = sprgrp_h[head];
+    int n = w * h;
+    for ( int k = 1; k < n; ++k ) {                         // the members must be free (or already ours)
+        int m = head + k;
+        if ( ( sprgrp_head[m] != SPRGRP_NONE && sprgrp_head[m] != head ) || sprgrp_w[m] * sprgrp_h[m] > 1 ) {
+            return false;
+        }
+    }
+    for ( int k = 1; k < ow * oh; ++k ) {                   // the old group goes away
+        sprgrp_head[ head + k ] = SPRGRP_NONE;
+    }
+    if ( n == 1 ) {
+        sprgrp_w[head] = sprgrp_h[head] = 0;
+    } else {
+        sprgrp_w[head] = (uint8_t) w;
+        sprgrp_h[head] = (uint8_t) h;
+        for ( int k = 1; k < n; ++k ) {
+            sprgrp_head[ head + k ] = (uint8_t) head;
+        }
+    }
+    sprscr_touch();
+    return true;
+}
+
 void sprscr_init( void ) {
     memset( &sprctrl[0], 0, sizeof(sprctrl_t) * MAX_SPRITES );
     memset( &spranim[0][0], 0, MAX_ANIMSEQ * MAX_SPRANIM );
@@ -110,6 +207,9 @@ void sprscr_init( void ) {
     memset( &sprmove[0], 0, sizeof(sprmove) );
     memset( &sprreq[0], 0, sizeof(sprreq) );
     memset( &sprhit[0], 0, sizeof(sprhit) );
+    memset( &sprgrp_w[0], 0, sizeof(sprgrp_w) );
+    memset( &sprgrp_h[0], 0, sizeof(sprgrp_h) );
+    memset( &sprgrp_head[0], SPRGRP_NONE, sizeof(sprgrp_head) );
     for ( int i=0; i < MAX_SPRITES; ++i ) {
         sprcollwith[i] = -1;
     }
@@ -299,6 +399,9 @@ int sprscr_sys_getimage( int sprno ) {
 }
 
 void sprscr_reset( bool images ) {
+    memset( &sprgrp_w[0], 0, SPR_USER_COUNT );                       // (the groups are dissolved)
+    memset( &sprgrp_h[0], 0, SPR_USER_COUNT );
+    memset( &sprgrp_head[0], SPRGRP_NONE, SPR_USER_COUNT );
     memset( &sprctrl[0], 0, sizeof(sprctrl_t) * SPR_USER_COUNT );      // (the reserved sprites, the mouse pointer, are not the program's to reset)
     for ( int i=0; i < SPR_USER_COUNT; ++i ) {
         // the movement belongs to the screen thread: it is asked to stop (and is told here, too, for a host that has no screen thread)
@@ -332,20 +435,29 @@ int sprscr_getimage( int sprno ) {
     if ( sprno < 0 || sprno >= SPR_USER_COUNT ) {
         return -1;
     }
-    return sprscr_curimage( &sprctrl[sprno] );
+    sprview_t v;
+    sprscr_view( sprno, &v );
+    return v.image;
 }
 
 bool sprscr_getpos( int sprno, int* x, int* y ) {
     if ( sprno < 0 || sprno >= SPR_USER_COUNT ) {
         return false;
     }
-    *x = sprctrl[sprno].screen_x;
-    *y = sprctrl[sprno].screen_y;
+    sprview_t v;
+    sprscr_view( sprno, &v );
+    *x = v.x;
+    *y = v.y;
     return true;
 }
 
 bool sprscr_isactive( int sprno ) {
-    return sprno >= 0 && sprno < SPR_USER_COUNT && sprctrl[sprno].active;
+    if ( sprno < 0 || sprno >= SPR_USER_COUNT ) {
+        return false;
+    }
+    sprview_t v;
+    sprscr_view( sprno, &v );
+    return v.active;
 }
 
 bool sprscr_readmap( int imgno, uint8_t out[SPRITE_WIDTH * SPRITE_HEIGHT] ) {
@@ -413,13 +525,12 @@ int sprscr_nextevent( void ) {
 }
 
 // the palette index of a sprite at a screen pixel, 0 where it is transparent or the pixel is outside
-static int sprscr_pixel( int sprno, int x, int y ) {
-    const sprctrl_t* c = &sprctrl[sprno];
-    int lx = x - c->screen_x, ly = y - c->screen_y;
+static int sprscr_pixel( const sprview_t* v, int x, int y ) {
+    int lx = x - v->x, ly = y - v->y;
     if ( lx < 0 || ly < 0 || lx >= SPRITE_WIDTH || ly >= SPRITE_HEIGHT ) {
         return 0;
     }
-    int img = sprscr_curimage( c );
+    int img = v->image;
     return sprmap[ ( ( img / SPRMAP_CELLSX ) * SPRITE_HEIGHT + ly ) * SPRMAP_WIDTH + ( img % SPRMAP_CELLSX ) * SPRITE_WIDTH + lx ];
 }
 
@@ -431,59 +542,65 @@ static void sprscr_postevent( int sprno ) {
 
 static void sprscr_collisions( void ) {
     int with[MAX_SPRITES];              // (published at the end: a reader never sees "no collision" in between)
+    sprview_t vw[SPR_USER_COUNT];
     for ( int i=0; i < MAX_SPRITES; ++i ) {
         with[i] = -1;
     }
+    for ( int i=0; i < SPR_USER_COUNT; ++i ) {
+        sprscr_view( i, &vw[i] );
+    }
     for ( int a=0; a < SPR_USER_COUNT; ++a ) {            // (the reserved sprites don't collide)
-        const sprctrl_t* ca = &sprctrl[a];
-        if ( !ca->active || ( !ca->spr_spr_coll_ena && !ca->spr_til_coll_ena ) ) {
+        const sprview_t* va = &vw[a];
+        if ( !va->active || ( !va->coll_spr && !va->coll_til ) ) {
             continue;
         }
-        if ( ca->spr_til_coll_ena ) {
+        int ha = va->head;                                  // (the members of a group report through their head)
+        if ( va->coll_til ) {
             bool hit = false;
             for ( int j=0; j < SPRITE_HEIGHT && !hit; ++j ) {
                 for ( int i=0; i < SPRITE_WIDTH && !hit; ++i ) {
-                    int x = ca->screen_x + i, y = ca->screen_y + j;
-                    if ( sprscr_pixel( a, x, y ) != 0 && tilescr_pixel( x, y ) > 0 ) {
+                    int x = va->x + i, y = va->y + j;
+                    if ( sprscr_pixel( va, x, y ) != 0 && tilescr_pixel( x, y ) > 0 ) {
                         hit = true;
                     }
                 }
             }
             if ( hit ) {
-                if ( ( __atomic_fetch_or( &sprhit[a], 2, __ATOMIC_ACQ_REL ) & 2U ) == 0 ) {
-                    sprscr_postevent( a );
+                if ( ( __atomic_fetch_or( &sprhit[ha], 2, __ATOMIC_ACQ_REL ) & 2U ) == 0 ) {
+                    sprscr_postevent( ha );
                 }
             }
         }
-        if ( !ca->spr_spr_coll_ena ) {
+        if ( !va->coll_spr ) {
             continue;
         }
         for ( int b = a + 1; b < SPR_USER_COUNT; ++b ) {
-            const sprctrl_t* cb = &sprctrl[b];
-            if ( !cb->active || !cb->spr_spr_coll_ena ) {
+            const sprview_t* vb = &vw[b];
+            if ( !vb->active || !vb->coll_spr || vb->head == ha ) {
                 continue;
             }
-            int dx = cb->screen_x - ca->screen_x, dy = cb->screen_y - ca->screen_y;
+            int hb = vb->head;
+            int dx = vb->x - va->x, dy = vb->y - va->y;
             if ( dx <= -SPRITE_WIDTH || dx >= SPRITE_WIDTH || dy <= -SPRITE_HEIGHT || dy >= SPRITE_HEIGHT ) {
                 continue;
             }
             bool hit = false;
             for ( int j=0; j < SPRITE_HEIGHT && !hit; ++j ) {
                 for ( int i=0; i < SPRITE_WIDTH && !hit; ++i ) {
-                    int x = ca->screen_x + i, y = ca->screen_y + j;
-                    if ( sprscr_pixel( a, x, y ) != 0 && sprscr_pixel( b, x, y ) != 0 ) {
+                    int x = va->x + i, y = va->y + j;
+                    if ( sprscr_pixel( va, x, y ) != 0 && sprscr_pixel( vb, x, y ) != 0 ) {
                         hit = true;
                     }
                 }
             }
             if ( hit ) {
-                uint8_t olda = __atomic_fetch_or( &sprhit[a], 1, __ATOMIC_ACQ_REL );
-                uint8_t oldb = __atomic_fetch_or( &sprhit[b], 1, __ATOMIC_ACQ_REL );
+                uint8_t olda = __atomic_fetch_or( &sprhit[ha], 1, __ATOMIC_ACQ_REL );
+                uint8_t oldb = __atomic_fetch_or( &sprhit[hb], 1, __ATOMIC_ACQ_REL );
                 if ( !( ( olda & 1U ) && ( oldb & 1U ) ) ) {
-                    sprscr_postevent( a );
+                    sprscr_postevent( ha );
                 }
-                if ( with[a] < 0 ) with[a] = b;
-                if ( with[b] < 0 ) with[b] = a;
+                if ( with[ha] < 0 ) with[ha] = hb;
+                if ( with[hb] < 0 ) with[hb] = ha;
             }
         }
     }
@@ -574,26 +691,28 @@ void sprscr_render( uint8_t* target ) {
     memset( target, 0, SPRTGT_WIDTH * SPRTGT_HEIGHT );
 
     uint8_t tmp[256];
+    sprview_t views[256];
     for ( uint16_t i=0; i < UINT16_C(256); ++i ) {
         tmp[i] = (uint8_t) i;
-        sprsortkey[i] = i >= SPR_SYS_FIRST ? 8 : (uint8_t) sprctrl[i].priority;
+        sprscr_view( i, &views[i] );                // (a member of a group takes the head's priority, position and image + its place)
+        sprsortkey[i] = i >= SPR_SYS_FIRST ? 8 : (uint8_t) views[i].prio;
     }
     qsort( &tmp[0], 256U, 1U, sprscr_rendersort );
 
     for ( uint16_t i=0; i < UINT16_C(256); ++i ) {
         uint8_t sprno = tmp[i];
-        const sprctrl_t* ctrl = &sprctrl[ sprno ];
+        const sprview_t* ctrl = &views[ sprno ];
         if ( !ctrl->active ) {
             // disabled, skip
             continue;
         }
-        int sprimg      = sprscr_curimage( ctrl );
+        int sprimg      = ctrl->image;
         int spriy       = sprimg / SPRMAP_CELLSX;
         int sprix       = sprimg % SPRMAP_CELLSX;
         uint16_t spricy = spriy * SPRITE_HEIGHT;
         uint16_t spricx = sprix * SPRITE_WIDTH;
-        int16_t left    = ctrl->screen_x;
-        int16_t top     = ctrl->screen_y;
+        int16_t left    = (int16_t) ctrl->x;
+        int16_t top     = (int16_t) ctrl->y;
         int16_t right   = left + SPRITE_WIDTH;
         int16_t bottom  = top + SPRITE_HEIGHT;
         uint8_t offsx   = 0;

@@ -1620,6 +1620,16 @@ void sdlscr_sprite_moveto( int sprno, int x, int y, int ticks ) {
     sdllay_set_modified( &layers[LAY_SPR] );
 }
 
+bool sdlscr_sprite_setsize( int head, int w, int h ) {
+    bool ok = sprscr_setsize( head, w, h );
+    sdllay_set_modified( &layers[LAY_SPR] );
+    return ok;
+}
+
+void sdlscr_sprite_getsize( int head, int* w, int* h ) {
+    sprscr_getsize( head, w, h );
+}
+
 bool sdlscr_sprite_moving( int sprno ) {
     return sprscr_moving( sprno );
 }

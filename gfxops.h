@@ -103,6 +103,7 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXOP_SPRMOVETO 68              // SPRITE n, MOVETO x, y, ticks
 #define GFXOP_SPRCOLL   69              // SPRITE n, COLLISION ON|OFF [, TILES]
 #define GFXOP_SPRMOVE   70              // SPRITE n, x, y [, image]
+#define GFXOP_SPRSIZE   71              // SPRITE n, SIZE w, h     (a group: the sprites n .. n+w*h-1 are drawn as one large sprite, row by row; 1, 1 dissolves it)
 // the UI subsystem (docs/ui-subsystem.md): the words after UI
 #define GFXOP_UIOPEN    90              // UI OPEN
 #define GFXOP_UICLOSE   91              // UI CLOSE
@@ -166,6 +167,8 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXQ_SPRHITS    44              // SPRITE("HITS", n): the indicator bits (1 sprite, 2 tile), cleared
 #define GFXQ_SPRCOLLIDE 45              // SPRITE("COLLIDE", n): the other sprite, -1 none
 #define GFXQ_SPRMOVING  46
+#define GFXQ_SPRCOLS    47              // SPRITE("COLS", n): the width of the group n heads in sprites (1 if none)
+#define GFXQ_SPRROWS    48              // SPRITE("ROWS", n)
 #define GFXQ_MOUSEX     100             // MOUSE("X"): 0..639, the sprite layer's coordinates
 #define GFXQ_MOUSEY     101             // MOUSE("Y"): 0..299
 #define GFXQ_MOUSEB     102             // MOUSE("B"): the buttons held down (1 left, 2 right, 4 middle)

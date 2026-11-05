@@ -1311,6 +1311,12 @@ static bool host_gfx_op( void* usrdata, int op, const double* a, int na, const c
             sdlscr_sprite_setcollide( gi( a[0], 0 ), on, on && a[2] > -1.0e8 );
             break;
         }
+        case GFXOP_SPRSIZE:
+            if ( !sdlscr_sprite_setsize( gi( a[0], 0 ), gi( a[1], 1 ), gi( a[2], 1 ) ) ) {
+                *err = "Illegal argument (the sprites of the group do not fit or belong to another group)";
+                return false;
+            }
+            break;
         case GFXOP_SPRMOVE:
             sdlscr_movesprite( gi( a[0], 0 ), gi( a[1], 0 ), gi( a[2], 0 ) );
             if ( a[3] > -1.0e8 ) {
@@ -1351,6 +1357,8 @@ static bool host_gfx_query( void* usrdata, int q, const double* a, int na, doubl
         case GFXQ_SPRON:        *result = sdlscr_sprite_active( gi( a[0], 0 ) ) ? -1.0 : 0.0; break;
         case GFXQ_SPRHITS:      *result = (double) sdlscr_sprite_hits( gi( a[0], 0 ) ); break;
         case GFXQ_SPRCOLLIDE:   *result = sdlscr_sprite_collide( gi( a[0], 0 ) ); break;
+        case GFXQ_SPRCOLS:      sdlscr_sprite_getsize( gi( a[0], 0 ), &x, &y ); *result = x; break;
+        case GFXQ_SPRROWS:      sdlscr_sprite_getsize( gi( a[0], 0 ), &x, &y ); *result = y; break;
         case GFXQ_SPRMOVING:    *result = sdlscr_sprite_moving( gi( a[0], 0 ) ) ? -1.0 : 0.0; break;
         case GFXQ_MOUSEX:       *result = sdlscr_mouse_get( MOUSEV_X ); break;
         case GFXQ_MOUSEY:       *result = sdlscr_mouse_get( MOUSEV_Y ); break;

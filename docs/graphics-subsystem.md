@@ -90,6 +90,7 @@ SPRITE n, ON | OFF                    shows / hides it
 SPRITE n, PRIORITY p                  0..7 (higher is in front)
 SPRITE n, IMAGE i                     a fixed image
 SPRITE n, ANIM a, length, speed       plays sequence a (length 0..15 images, speed 0..31 frames per image); IMAGE ends the animation and the other way round
+SPRITE n, SIZE w, h                   a group: the sprites n .. n+w*h-1 are drawn as one large sprite (see "Sprite groups"); 1, 1 dissolves it
 SPRITE n, MOVETO x, y, ticks          the engine moves the sprite by itself in ticks/60 s (Simons' BASIC: RLOCMOB); a new position or MOVETO replaces it
 SPRITE n, COLLISION OFF | ON [, TILES]  collision detection with other sprites (and, with TILES, with solid tile pixels)
 -- pictures
@@ -110,7 +111,17 @@ GFX("FRAME")  GFX("LAYER", n)  GFX("PRIORITY", n)  GFX("PALETTE", layer, i)  GFX
 TXT("X") TXT("Y") TXT("FG") TXT("BG") TXT("WIDTH") TXT("HEIGHT") TXT("CHAR",x,y) TXT("FGAT",x,y) TXT("BGAT",x,y)   cursor, colors, size, cell contents
 TILE(x, y)                            the tile in a cell of the tile screen
 SPRITE("X",n) ("Y",n) ("IMAGE",n) ("ON",n) ("MOVING",n) ("HITS",n) ("COLLIDE",n)   position, image, shown, moving, collision bits, the other sprite
+SPRITE("COLS",n) ("ROWS",n)           the size of the group that n heads, in sprites (1 and 1 if there is none)
 ```
+
+### Sprite groups (2026-11-05, roadmap item 62)
+`SPRITE n,SIZE w,h` (w, h 1..8, at most 64 sprites; `sprscr_setsize()`) makes the sprite **n the head of a block of w x h sprites**: the sprites `n .. n+w*h-1`, row by row, are drawn side by side as **one large sprite** of 16 w x 24 h pixels. The head rules the block, so everything you do to it is done to the whole group:
+- `SPRITE n,x,y` places it (member k, in column `k mod w` and row `k \ w`, is drawn at x + 16 column, y + 24 row), `ON` / `OFF` show and hide it, `PRIORITY` is the group's order in front of or behind other sprites, `MOVETO` moves it, `ANIM` plays a sequence;
+- **images:** member k shows the head's image + k (the images of a block are consecutive, row by row: a 2 x 3 group at image 20 uses images 20..25; an animation sequence holds the *first* image of each frame, so frames of 6 images are 20, 26, 32, ...; beyond image 255 the number is held at 255);
+- **collisions:** the head's flags (`SPRITE n,COLLISION ON [,TILES]`) apply to all members; every member collides pixel by pixel; the members of one group don't hit each other; hits, `SPRITE("HITS",n)`, `SPRITE("COLLIDE",n)` (the *head* of the other group) and the `ON COLLISION` event all name the head. `SPRITE("X"|"Y"|"IMAGE"|"ON",member)` give the place, image and state a member has now;
+- the settings of a member (its own position, image, state, flags) are ignored while it belongs to a group; the members are not usable as sprites of their own until the group is dissolved with `SPRITE n,SIZE 1,1` (they then show what they were set to before);
+- a group needs free sprites: a member can't be the head of another group or belong to one, and the block must end at sprite 247 ("Illegal argument ..."); `SPRITE n,SIZE` on a head with a group resizes it; `GFX RESET` dissolves all groups.
+`SPRITE("COLS",n)` and `SPRITE("ROWS",n)` give the size of the group n heads. Tiles have no engine groups: the BASIC library `demos/lib/tilegrp.lib` (`TG_DEF`, `TG_PUT`, `TG_ERASE`, `TG_REPEAT`, `TG_HIT`, ...; prefix `TG_`) names blocks of tiles (w x h tiles from a base number, row by row) and puts them on the tile screen; `demos/groups.bas` shows both kinds, and `demos/spriteed.bas` edits blocks of both.
 
 `SPRITE("HITS", n)` returns the indicator bits since it was last asked and clears them (1 = hit another sprite, 2 = hit a tile). `SPRITE("COLLIDE", n)` is the number
 of the sprite it overlapped at the last frame (-1 none). A collision means an overlap of **opaque pixels** (index not 0); a sprite is checked only with the flags set by

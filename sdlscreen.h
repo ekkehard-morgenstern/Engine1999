@@ -210,6 +210,8 @@ bool     sdlscr_sprite_moving( int sprno );
 void     sdlscr_sprite_setcollide( int sprno, bool sprites, bool tiles );
 uint32_t sdlscr_sprite_hits( int sprno );
 int      sdlscr_sprite_collide( int sprno );
+bool     sdlscr_sprite_setsize( int head, int w, int h );    // SPRITE n,SIZE w,h: a group of sprites drawn as one large one (sprscreen.h)
+void     sdlscr_sprite_getsize( int head, int* w, int* h );
 int      sdlscr_sprite_nextevent( void );
 
 // back to the defaults (GFX RESET): all layers shown in the original order, all palettes and the backdrop back to the table, the background and
