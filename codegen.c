@@ -50,7 +50,7 @@ void init_codegen( codegen_t* cgen ) {
     cgen->loopbase  = 0;
     cgen->inproc    = false;
     cgen->scratch   = 0; cgen->numscratch   = cgen->maxscratch   = 0;
-    cgen->forserial = 0;
+    cgen->forserial = cgen->progserial = 0;
     cgen->datafirst = cgen->datalast = DATAOFFS_NONE;
     cgen->dataoffs  = 0; cgen->numdataitems = cgen->maxdataitems = 0;
     cgen->restorefix = 0; cgen->numrestorefix = cgen->maxrestorefix = 0;
@@ -3514,7 +3514,18 @@ bool cgen_from_program( codegen_t* cgen, compiler_t* comp ) {
     // the line table stays
     bool direct = root->type == NT_STMTLINE && root->datalen != UINT16_C(3);
     size_t numlines = cgen->numlineaddrs, numstmts = cgen->numstmts;
+    // The hidden variables of the FOR loops and ON statements ("@FOR<n>L") are global and named by this serial number: it goes on
+    // counting over the libraries and the program (a loop of a library that is under way must not share them with a loop of the
+    // program, e.g. one in a timer handler); direct mode lines use a range of their own, so they cannot disturb a program that CONT continues.
     cgen_begin_control( cgen );
+    if ( direct ) {
+        if ( cgen->forserial < CGEN_SERIAL_DIRECT ) {
+            cgen->progserial = cgen->forserial;
+        }
+        cgen->forserial = CGEN_SERIAL_DIRECT;
+    } else if ( cgen->forserial >= CGEN_SERIAL_DIRECT ) {
+        cgen->forserial = cgen->progserial;         // (a direct line that failed did not give it back)
+    }
     if ( direct ) {
         cgen->numlineaddrs = numlines;
         cgen->numstmts = numstmts;
@@ -3529,6 +3540,9 @@ bool cgen_from_program( codegen_t* cgen, compiler_t* comp ) {
         cgen->endaddr = cgen->codesize;
         ok = cgen_gen_hlt( cgen ) || cgen_out_of_code_memory( comp );
         cgen->progsize = cgen->codesize;
+    }
+    if ( direct ) {
+        cgen->forserial = cgen->progserial;
     }
     return ok && cgen_finish_control( cgen, comp );
 }

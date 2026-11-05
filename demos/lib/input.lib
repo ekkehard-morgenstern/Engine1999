@@ -4,14 +4,14 @@
 4 ' in the executable (it shows with the command line option --engine1999-about).
 10 ' input - the keyboard and game controller handling that the demo games share (a library: LOAD LIBRARY "input").
 20 ' What a game calls each frame:
-30 '   CALL IN_POLL          sets IN_DX and IN_DY (-1, 0 or 1: the arrow keys, WASD, the D-pad or the left stick of pad 1; opposite directions cancel)
-40 '                         and IN_BTN (-1 while SPACE or the A button of pad 1 is held)
-50 '   IF FN IN_SERVICE() THEN CALL PAUSE
-60 '                         reads the keys typed since the last call: P and the START button of any pad ask for a pause (the function returns -1; the game
-70 '                         shows its own box and calls IN_PAUSELOOP), Q and the BACK button of any pad set IN_QUIT to 1, the last other key (upper case) is IN_KEY
-80 '                         (0 if there was none) for the game's own single keys
-90 '   CALL IN_PAUSELOOP     waits until P or START continues or Q or BACK quits (IN_QUIT = 1); the game draws and clears its "PAUSED" box around it
-100 '   FN IN_ANYSTART(0), FN IN_ANYBACK(0), FN IN_ANYA(0)   is that button held on any of the four pads? (-1 / 0; JOY needs the button name as a literal: one function each)
+30 ' CALL IN_POLL sets IN_DX and IN_DY (-1, 0 or 1: the arrow keys, WASD, the D-pad or the left stick of pad 1; opposite directions cancel)
+40 ' and IN_BTN (-1 while SPACE or the A button of pad 1 is held)
+50 ' IF FN IN_SERVICE() THEN CALL PAUSE
+60 ' reads the keys typed since the last call: P and the START button of any pad ask for a pause (the function returns -1; the game
+70 ' shows its own box and calls IN_PAUSELOOP), Q and the BACK button of any pad set IN_QUIT to 1, the last other key (upper case) is IN_KEY
+80 ' (0 if there was none) for the game's own single keys
+90 ' CALL IN_PAUSELOOP waits until P or START continues or Q or BACK quits (IN_QUIT = 1); the game draws and clears its "PAUSED" box around it
+100 ' FN IN_ANYSTART(0), FN IN_ANYBACK(0), FN IN_ANYA(0) is that button held on any of the four pads? (-1 / 0; JOY needs the button name as a literal: one function each)
 110 ' A game resets IN_QUIT to 0 when it starts and reads it after the calls. The variables of this library start with IN_.
 120 LIBRARY "input","IN_"
 130 FUNC IN_ANYSTART(X)

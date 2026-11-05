@@ -48,6 +48,8 @@
 #define DATASIZE_MAX    UINT32_C(0X10000000)
 
 // a constant in the data segment, for sharing identical constants (see cgen_data_const())
+#define CGEN_SERIAL_DIRECT  UINT32_C(0x40000000)    // first serial of the hidden variables of direct mode lines
+
 typedef struct _cgen_const_t {
     uint32_t    offs;           // offset in the data segment, CGEN_CONST_FREE = unused slot
     uint32_t    size;           // bytes, including the terminating NUL of a string
@@ -154,7 +156,8 @@ typedef struct _codegen_t {
     size_t              loopbase;       // loops below this number belong to code around the current function body
     uint32_t*           scratch;        // temporary list of code offsets (ON .. GOSUB)
     size_t              numscratch, maxscratch;
-    uint32_t            forserial;      // numbers the hidden variables of loops and ON statements
+    uint32_t            forserial;      // numbers the hidden variables of loops and ON statements (over the libraries and the program)
+    uint32_t            progserial;     // the program's counter while a direct mode line uses the range from CGEN_SERIAL_DIRECT
     uint32_t            datafirst, datalast;    // first and last DATA item in the data segment (DATAOFFS_NONE = none)
     uint32_t*           dataoffs;       // the data offsets of all DATA items, in program order
     size_t              numdataitems, maxdataitems;

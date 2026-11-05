@@ -71,7 +71,6 @@ void cgen_begin_control( codegen_t* cgen ) {
     cgen->numscratch   = 0;
     cgen->numrestorefix = 0;
     cgen->numlabeldata = 0;
-    cgen->forserial    = 0;
 }
 
 bool cgen_grow( void** pitems, size_t* pnum, size_t* pmax, size_t itemsize ) {

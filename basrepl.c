@@ -324,6 +324,7 @@ static void repl_emit_init_calls( repl_t* repl ) {
 // A compile error ends in repl_comp_halt() (longjmp), as for the program itself.
 static void repl_compile_libraries( repl_t* repl ) {
     codegen_t* cgen = &repl->rt.codegen;
+    cgen->forserial = cgen->progserial = 0;        // the libraries and the program share one numbering of the hidden loop variables (they are global)
     for ( size_t i=0; i < repl->libs.count; ++i ) {
         baslib_t* lib = &repl->libs.libs[i];
         repl_setup_compiler( repl );

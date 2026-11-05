@@ -13,6 +13,8 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+- **Bug fix: FOR loops of a library shared hidden variables with the program (owner's report: games stop now and then with an error in line 250 of the input library, `JOY("BACK",P)`):** the limit and step of a `FOR` live in global hidden variables named by a serial number (`@FOR<n>L`, `@FOR<n>S`, also `@ON<n>O`), and `cgen_from_program()` (via `cgen_begin_control()`) restarted the numbering at 0 for every library and for the program, so loop number n of a library and loop number n of the program used the same variables. A library `FOR` that is under way is then clobbered by a program `FOR` that runs in between (a timer handler like the music `EVERY`, which is how it appears: rare, timing dependent), or the library's loop damages the program's loop around its call (deterministic: `FOR I=1 TO 5 : X=FN LIB_F(0) : NEXT` stopped after 2). The player number `P` ran out of 1..4, hence "Illegal argument". Now the serial goes on counting over the libraries and the program (`repl_compile_libraries()` resets it once per compile) and direct mode lines use their own range from `CGEN_SERIAL_DIRECT` (`codegen_t.progserial` keeps the program's counter), so a direct line cannot disturb a program that `CONT` continues. Test: `repltest1` 416 (new: library loop inside a program loop); `vmtest1` 1286, `asmtest1`, `libtest1`, `buildtest1`, `iotest1`, `uitest1`, `contest1` pass. Not reproduced with the real games (no way to provoke the timing), but the mechanism was reproduced deterministically.
+
 ## Log
 
 ### 7a6cb67 — 2026-10-17 13:32:27 +0200 — "Introduced Claude to the project"
