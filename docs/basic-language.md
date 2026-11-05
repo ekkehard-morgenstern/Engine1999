@@ -152,6 +152,17 @@ The window queues the events while a program runs (64 at most; when the ring is 
 
 **Open points for the owner:** whether `GET n` should rather return a code outside 0..255 for sequences (it would need the `GETK` result as a number), the double-press time, whether the Windows-style `Ctrl` + letter control codes (1..26) are delivered as bytes (proposal: yes).
 
+## Listing files: UTF-8 (2026-11-05, roadmap item 15)
+
+Inside the Engine text is ISO-8859-15, but listings (`.bas`, `.lib`) are edited in other programs, which write UTF-8. So:
+
+- **`LOAD`, `MERGE`, `CHAIN`, `LOAD LIBRARY` and the console run mode** read a text listing as **UTF-8 if it contains non-ASCII characters and is well-formed UTF-8 throughout** (shortest forms, no surrogates, at most U+10FFFF; a leading BOM is skipped), otherwise as ISO-8859-15 byte for byte (the old files keep working). Characters ISO-8859-15 lacks (Japanese, `¤`, ...) become `?`; the load then prints `Warning: n character(s) not in ISO-8859-15 became '?'`. U+0080..U+009F map to the control glyph codes 128..159.
+- **`SAVE`** (the ASCII form) writes **UTF-8**; every ISO-8859-15 text, including the control glyph codes, reads back unchanged. The binary form `.e99` is not touched (its strings are the Engine's bytes).
+- A Latin-9 file that happens to be well-formed UTF-8 (for example the two characters `Ã¤`) is read as UTF-8; the chance is small.
+- Lines typed or piped into the prompt are not converted (the console host converts keys from a terminal, as before).
+
+Code: `keyseq_listing_is_utf8()`, `keyseq_listing_from_utf8()`, `keyseq_listing_to_utf8()` in `keyseq.c`; used by `repl_read_program()` and `repl_save_program_ex()` in `basrepl.c`. Tests: `keytest1` (76), `contest1` (listing cases).
+
 ## Program commands: `LOAD`, `RUN`, `MERGE`, `CHAIN`, `FILES`, `LIST`, `NEW`, `CLEAR`, `DELETE`, `RENUM`, `EDIT`, `MONITOR`, `BYE`, `QUIT`
 
 They are ordinary statements (`bascomp.ebnf`, `cgenprog.c`), so they work in direct mode and inside programs.

@@ -334,3 +334,90 @@ size_t keyseq_latin9_to_utf8( const char* in, size_t len, char* out ) {
     }
     return n;
 }
+
+// -- program listings -----------------------------------------------------------------------------------------------------------------------
+
+// decodes one UTF-8 character at s[pos]; returns its length (0 = malformed) and sets *cp
+static size_t listing_decode( const unsigned char* s, size_t len, size_t pos, uint32_t* cp ) {
+    unsigned char c = s[pos];
+    size_t need; uint32_t v, min;
+    if ( c < 0x80 )         { *cp = c; return 1U; }
+    else if ( c >= 0xF8 )   { return 0; }
+    else if ( c >= 0xF0 )   { v = c & 7U;  need = 4U; min = 0x10000U; }
+    else if ( c >= 0xE0 )   { v = c & 15U; need = 3U; min = 0x800U; }
+    else if ( c >= 0xC0 )   { v = c & 31U; need = 2U; min = 0x80U; }
+    else                    { return 0; }
+    if ( pos + need > len ) {
+        return 0;
+    }
+    for ( size_t i = 1U; i < need; ++i ) {
+        if ( ( s[pos + i] & 0xC0 ) != 0x80 ) {
+            return 0;
+        }
+        v = ( v << 6 ) | ( s[pos + i] & 63U );
+    }
+    if ( v < min || v > 0x10FFFFU || ( v >= 0xD800U && v <= 0xDFFFU ) ) {
+        return 0;
+    }
+    *cp = v;
+    return need;
+}
+
+bool keyseq_listing_is_utf8( const char* in, size_t len ) {
+    const unsigned char* s = (const unsigned char*) in;
+    bool high = false;
+    for ( size_t pos = 0; pos < len; ) {
+        uint32_t cp = 0;
+        size_t n = listing_decode( s, len, pos, &cp );
+        if ( n == 0 ) {
+            return false;
+        }
+        if ( n > 1U ) {
+            high = true;
+        }
+        pos += n;
+    }
+    return high;
+}
+
+size_t keyseq_listing_from_utf8( const char* in, size_t len, char* out, size_t* lost ) {
+    const unsigned char* s = (const unsigned char*) in;
+    size_t n = 0;
+    for ( size_t pos = 0; pos < len; ) {
+        uint32_t cp = 0;
+        size_t k = listing_decode( s, len, pos, &cp );
+        if ( k == 0 ) {                         // not UTF-8 after all: keep the byte
+            out[n++] = (char) s[pos++];
+            continue;
+        }
+        pos += k;
+        int code = cp >= 0x80 && cp < 0xA0 ? (int) cp : keyseq_latin9( cp );
+        if ( code < 0 ) {
+            code = '?';
+            if ( lost != 0 ) {
+                ++*lost;
+            }
+        }
+        out[n++] = (char) code;
+    }
+    return n;
+}
+
+size_t keyseq_listing_to_utf8( const char* in, size_t len, char* out ) {
+    size_t n = 0;
+    for ( size_t i = 0; i < len; ++i ) {
+        int code = (unsigned char) in[i];
+        uint32_t cp = code >= 0x80 && code < 0xA0 ? (uint32_t) code : keyseq_unicode( code );
+        if ( cp < 0x80 ) {
+            out[n++] = (char) cp;
+        } else if ( cp < 0x800 ) {
+            out[n++] = (char) ( 0xC0 | ( cp >> 6 ) );
+            out[n++] = (char) ( 0x80 | ( cp & 63U ) );
+        } else {
+            out[n++] = (char) ( 0xE0 | ( cp >> 12 ) );
+            out[n++] = (char) ( 0x80 | ( ( cp >> 6 ) & 63U ) );
+            out[n++] = (char) ( 0x80 | ( cp & 63U ) );
+        }
+    }
+    return n;
+}

@@ -32,7 +32,7 @@ the sections when items are done or added.
 | 12 | `FRAME` done; handlers during `INPUT`/`GET` (2) | **`FRAME [n]` is done 2026-11-01**; timer handlers still do not run while waiting for input | Medium-Low | `VSYNC` and `FRAME` cover the games |
 | 13 | `SWITCH` / `CASE` (13) | multi-way branch | Medium | design questions: fall-through, strings, `AGAIN` / `EXIT` levels (*decision*) |
 | 14 | Full-screen editor (`EDIT`) limits (1) | search/replace, block or clipboard operations; long lines read-only; the mouse scrolls (scroll bar with held arrows and a dragged thumb, wheel) and a click places the cursor (all done 2026-11-01); no selecting with the mouse | Medium | the screen editor covers much of this need |
-| 15 | Encoding of `.bas` listings (4) | a UTF-8 file with `ä` in a string shows two Latin-9 glyphs: convert on `LOAD`? | Medium | will bite users who edit listings in other editors (*decision*) |
+| 15 | ~~Encoding of `.bas` listings (4)~~ **done 2026-11-05** | UTF-8 listings are detected on load and converted to Latin-9; `SAVE` writes UTF-8 (owner's decisions) | ~~Medium~~ | `docs/basic-language.md` "Listing files: UTF-8" |
 | 16 | Numeric extras (2) | `ASN`/`ACS`, hyperbolic functions, `ROUND(x,n)`, `CINT`/`CDBL` (`ATAN2`, `MIN`, `MAX` are **done 2026-11-01**) | Medium-Low | `DEF FN` can build most of them |
 | 17 | `PLAY` extras (2b) | chords inside a string, `N` (note number), `X` (run a string), repeat | Medium-Low | one string per voice works today |
 | 18 | Audio without a window (12) | open the audio device alone for scripts that `PLAY` | Medium-Low | optional |

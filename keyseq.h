@@ -109,4 +109,17 @@ size_t keyseq_utf8_to_latin9( const char* in, size_t len, char* out );
 // ISO-8859-15 text as UTF-8; out has room for 3 * len bytes; returns the length
 size_t keyseq_latin9_to_utf8( const char* in, size_t len, char* out );
 
+// -- program listings (.bas, .lib): UTF-8 on disk, ISO-8859-15 inside --------------------------------------------------------------------------
+
+// is the text UTF-8 with at least one non-ASCII character, and well formed throughout (shortest forms, no surrogates, at most U+10FFFF)?
+// A text that is not (plain ASCII, or a Latin-9 file) is read as it is.
+bool keyseq_listing_is_utf8( const char* in, size_t len );
+
+// UTF-8 listing text as ISO-8859-15 bytes; out has room for len bytes. Characters the set doesn't have become '?' (counted in *lost). U+0080..U+009F
+// map to the codes 128..159 (the engine's control glyphs), so that a saved listing always reads back as it was. Returns the length.
+size_t keyseq_listing_from_utf8( const char* in, size_t len, char* out, size_t* lost );
+
+// ISO-8859-15 listing text as UTF-8 (lossless: the codes 128..159 become U+0080..U+009F); out has room for 3 * len bytes; returns the length
+size_t keyseq_listing_to_utf8( const char* in, size_t len, char* out );
+
 #endif

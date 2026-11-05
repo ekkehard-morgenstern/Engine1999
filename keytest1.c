@@ -164,6 +164,21 @@ static void test_charset( void ) {
     check( keyseq_latin9_to_utf8( "\xe4\xa4", 2U, u ) == 5U && memcmp( u, "\xc3\xa4\xe2\x82\xac", 5U ) == 0, "UTF-8 of ä and the euro sign" );
     n = keyseq_utf8_to_latin9( "a\xc3\xa4\xe3\x81\x82\x80z\xc3", 8U, back );
     check( n == 3U && memcmp( back, "a\xe4z", 3U ) == 0, "UTF-8 -> ISO-8859-15 drops other scripts, stray bytes and cut-off characters" );
+    // listings: UTF-8 on disk
+    check( keyseq_listing_is_utf8( "a\xc3\xa4", 3U ) && !keyseq_listing_is_utf8( "plain", 5U ) && !keyseq_listing_is_utf8( "a\xe4z", 3U ) &&
+        !keyseq_listing_is_utf8( "\xc3", 1U ) && !keyseq_listing_is_utf8( "\xc0\x80", 2U ) && !keyseq_listing_is_utf8( "\xed\xa0\x80", 3U ) &&
+        !keyseq_listing_is_utf8( "\xc3\xa4\xe4", 3U ), "a listing is UTF-8 only if it has non-ASCII characters and is well formed" );
+    size_t lost = 0;
+    n = keyseq_listing_from_utf8( "\xc3\xa4\xe2\x82\xac\xe3\x81\x82\xc2\x85", 10U, back, &lost );
+    check( n == 4U && memcmp( back, "\xe4\xa4?\x85", 4U ) == 0 && lost == 1U, "listing from UTF-8: umlaut, euro, a lost character as '?', a C1 code kept" );
+    unsigned char all[256]; char l9[256 * 3 + 1], l9b[256 * 3 + 1];
+    for ( int c2 = 0; c2 < 256; ++c2 ) {
+        all[c2] = (unsigned char) c2;
+    }
+    size_t ul = keyseq_listing_to_utf8( (const char*) all, 256U, l9 );
+    lost = 0;
+    check( keyseq_listing_is_utf8( l9, ul ) && keyseq_listing_from_utf8( l9, ul, l9b, &lost ) == 256U && memcmp( l9b, all, 256U ) == 0 && lost == 0U,
+        "all 256 codes survive a round trip through a UTF-8 listing" );
 }
 
 static void test_names( void ) {

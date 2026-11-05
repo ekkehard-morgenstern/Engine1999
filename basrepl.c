@@ -33,6 +33,7 @@
 #include "basfiles.h"
 #include "iodev.h"
 #include "policy.h"
+#include "keyseq.h"
 #include "basbuild.h"
 
 // -- helpers -------------------------------------------------------------------
@@ -548,10 +549,51 @@ static bool repl_read_program( repl_t* repl, FILE* f, program_t* pgm ) {
         repl_report( repl, "? Out of memory" );
         return false;
     }
+    // a listing on disk is UTF-8 when it has non-ASCII characters and is well formed UTF-8 (a BOM is skipped), else ISO-8859-15 as it is;
+    // inside the Engine it is ISO-8859-15 (docs/basic-language.md, "Listing files: UTF-8")
+    char* whole = 0; size_t wholelen = 0;
+    {
+        char chunk[4096]; size_t got;
+        FILE* mem = open_memstream( &whole, &wholelen );
+        while ( mem != 0 && ( got = fread( chunk, 1U, sizeof(chunk), f ) ) > 0 ) {
+            fwrite( chunk, 1U, got, mem );
+        }
+        if ( mem == 0 || fclose( mem ) != 0 ) {
+            free( whole );
+            delete_buffer( tokbuf );
+            repl_report( repl, "? Out of memory" );
+            return false;
+        }
+    }
+    const char* wp = whole; size_t wl = wholelen;
+    if ( wl >= 3U && memcmp( wp, "\xEF\xBB\xBF", 3U ) == 0 ) {
+        wp += 3; wl -= 3U;
+    }
+    char* conv = 0;
+    if ( keyseq_listing_is_utf8( wp, wl ) ) {
+        conv = (char*) malloc( wl + 1U );
+        if ( conv != 0 ) {
+            size_t lost = 0;
+            wl = keyseq_listing_from_utf8( wp, wl, conv, &lost );
+            wp = conv;
+            if ( lost > 0U ) {
+                char msg[100];
+                snprintf( msg, sizeof(msg), "Warning: %lu character(s) not in ISO-8859-15 became '?'", (unsigned long) lost );
+                repl_report( repl, msg );
+            }
+        }
+    }
+    FILE* lf = wl > 0U ? fmemopen( (void*) wp, wl, "rb" ) : fopen( "/dev/null", "rb" );
+    if ( lf == 0 ) {
+        free( conv ); free( whole );
+        delete_buffer( tokbuf );
+        repl_report( repl, "? Out of memory" );
+        return false;
+    }
     bool ok = true;
     bool firstline = true;
     char* text = 0; size_t cap = 0; ssize_t len;
-    while ( ok && ( len = getline( &text, &cap, f ) ) >= 0 ) {
+    while ( ok && ( len = getline( &text, &cap, lf ) ) >= 0 ) {
         while ( len > 0 && ( text[ len - 1 ] == '\n' || text[ len - 1 ] == '\r' ) ) {
             text[ --len ] = '\0';
         }
@@ -582,6 +624,9 @@ static bool repl_read_program( repl_t* repl, FILE* f, program_t* pgm ) {
         }
     }
     free( text );
+    fclose( lf );
+    free( conv );
+    free( whole );
     delete_buffer( tokbuf );
     return ok;
 }
@@ -1730,6 +1775,16 @@ bool repl_save_program_ex( repl_t* repl, const char* name, int mode ) {
     bool ok = save_program( &repl->pgm, f, ascii );
     if ( fclose( f ) != 0 ) {
         ok = false;
+    }
+    if ( ok && ascii ) {                // a listing is written as UTF-8 (the Engine's text is ISO-8859-15)
+        char* utf = (char*) malloc( 3U * size + 1U );
+        if ( utf == 0 ) {
+            ok = false;
+        } else {
+            size = keyseq_listing_to_utf8( buf, size, utf );
+            free( buf );
+            buf = utf;
+        }
     }
     const char* err = 0;
     if ( ok && !iodev_write_all( filename, repl->vm.addrcur, buf, size, &err ) ) {

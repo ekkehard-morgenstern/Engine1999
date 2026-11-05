@@ -56,6 +56,8 @@ typedef struct _testcase_t {
 
 static const testcase_t cases[] = {
     // the security policy (policy.h): a program that runs may use its folder only; what is typed at the prompt is not restricted; no terminal: no questions
+    { "listing: a UTF-8 program file", "10 PRINT \"gr\xc3\xbc\xc3\x9f \xe2\x82\xac\"\n", "prog.bas", "", "gr\xfc\xdf \xa4\n", "", 0, false },
+    { "listing: a Latin-9 program file", "10 PRINT \"gr\xfc\xdf \xa4\"\n", "prog.bas", "", "gr\xfc\xdf \xa4\n", "", 0, false },
     { "policy: a program may not write outside its folder", "10 ON ERROR GOTO 100\n20 OPEN \"../contest1-polx.txt\" FOR OUTPUT AS #1\n30 PRINT \"wrote\":CLOSE #1:KILL \"../contest1-polx.txt\":END\n100 PRINT ERR$:END\n", "prog.bas", "", "Permission denied\n", "", 0, false },
     { "policy: --allow=write lets it", "10 ON ERROR GOTO 100\n20 OPEN \"../contest1-polx.txt\" FOR OUTPUT AS #1\n30 PRINT \"wrote\":CLOSE #1:KILL \"../contest1-polx.txt\":END\n100 PRINT ERR$:END\n", "--allow=write prog.bas", "", "wrote\n", "", 0, false },
     { "policy: --allow=read is not enough for writing", "10 ON ERROR GOTO 100\n20 OPEN \"../contest1-polx.txt\" FOR OUTPUT AS #1\n30 PRINT \"wrote\":CLOSE #1:KILL \"../contest1-polx.txt\":END\n100 PRINT ERR$:END\n", "--allow=read prog.bas", "", "Permission denied\n", "", 0, false },

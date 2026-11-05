@@ -13,6 +13,8 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+- **Roadmap item 15, UTF-8 listings (owner: "Perhaps we should solve item 15 first"; decisions: auto-detect on load, `SAVE` writes UTF-8):** `keyseq.[ch]`: `keyseq_listing_is_utf8()` (non-ASCII and well formed), `keyseq_listing_from_utf8()` (lossy characters become `?`, C1 codes kept), `keyseq_listing_to_utf8()` (lossless); `basrepl.c`: `repl_read_program()` reads the rest of a text listing, skips a BOM, converts a UTF-8 listing (warning for lost characters) and tokenizes from memory; `repl_save_program_ex()` converts an ASCII listing to UTF-8. Docs: `docs/basic-language.md` "Listing files: UTF-8", man page `engine1999-basic.7`, roadmap item 15. Tests: `keytest1` +3 (76, valgrind clean), `contest1` +2 (0 failures), `repltest1` 416, `vmtest1` 1317, `man-check`; by hand a UTF-8 file, a Latin-9 file and a LOAD / SAVE round trip. (A script of mine emptied `keyseq.h` once by mistake; restored from HEAD with a read-only `git show`, nothing lost.)
+
 ## Log
 
 ### 7a6cb67 — 2026-10-17 13:32:27 +0200 — "Introduced Claude to the project"
