@@ -1,3 +1,0 @@
-The following are some known bugs that are yet unchecked or unsolved:
-- Building Engine1999 runs into -Werror reports on some platforms. Workaround for users: Remove -Werror from makefile. Nov 2, 2026: 21:12: Attempt to fix by placing (void) before system() calls in iotest1.c (fails due to -Werror on compilers that warn about unused results). Needs testing on affected machine.
-- On some platforms, parts of the screen flicker or swap. As of yet unsolved. Nov 2, 2026, 20:07: Probably solved by txtscr_initscreen() bugfix, need to test it on affected machines.
