@@ -1,0 +1,174 @@
+1 ' License: free for everybody to use, copy, change and build into executables (BUILD).
+2 ' An executable made with BUILD contains the Engine1999 runtime: the Engine1999 Runtime Exception
+3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
+4 ' in the executable (it shows with the command line option --engine1999-about).
+10 ' uikit - small helpers on top of the UI widgets (a library: LOAD LIBRARY "uikit", prefix UK_). The editors musiced and sfxed and spriteed use it.
+20 ' All of it needs the open UI (UI OPEN) and the window (engine1999). The dialogs are modal and run their own event loop, so call them from the
+30 ' ON UI handler (as the file requester is) or after ON UI OFF; they use the widget ids 940..959 and put everything away again.
+40 '   CALL UK_MSG(TTL$,TX$)           a message box with an OK button; | in TX$ starts a new line (up to 6 lines)
+50 '   R=FN UK_ASK(TTL$,TX$)           a question with Yes / No: -1 for Yes, 0 for No or ESC
+60 '   A$=FN UK_INPUT$(TTL$,PR$,DF$)   asks for a line of text (DF$ is the start text); "" and UK_OK=0 if cancelled, UK_OK=-1 if accepted
+70 '   CALL UK_DIVISOR(DV)             (optional, before the next UK_SLIDER) the readout shows position / DV: 1 (default), 10, 100, 1000
+80 '   CALL UK_SLIDER(ID,X,Y,W,LB$,MN,MX,V)   a label, a slider (ids ID, ID+1 label, ID+2 readout: leave ID+1 and ID+2 free) and the readout of its value
+90 '   R=FN UK_TRACK(E,V)              call it with each event (E = UI("EVENT"), V = UI("VALUE")): if E is a slider made by UK_SLIDER it updates
+100 '                                   the readout and returns -1, else 0
+110 '   V=FN UK_VAL(ID)                 the value of such a slider (position / DV)
+120 '   CALL UK_SET(ID,POS)             moves such a slider and updates its readout;  CALL UK_READ(ID,T$) puts your own text into the readout
+130 LIBRARY "uikit","UK_"
+140 PROC UK_INIT
+150   UK_REG$=""
+160   UK_DIV$=""
+170   UK_DV=1
+180   UK_OK=0
+190 END PROC
+200 ' ---------------------------------------------------------------------- dialogs
+210 ' labels for the lines of TX$ (split at |), ids ID0.., returns how many
+220 FUNC UK_LINES(TX$,ID0,X,Y,W)
+230   LOCAL I,S,N,C$,T$
+240   T$=TX$+"|"
+250   N=0
+260   S=1
+270   FOR I=1 TO LEN(T$)
+280     C$=MID$(T$,I,1)
+290     IF C$="|" AND N<6 THEN
+300       UI LABEL ID0+N,X,Y+N*16,W,14,MID$(T$,S,I-S)
+310       N=N+1
+320       S=I+1
+330     END IF
+340   NEXT I
+350   RETURN N
+360 END FUNC
+370 ' the dialog with one or two buttons: returns 1 or 2 (0 = ESC / closed)
+380 FUNC UK_DIALOG(TTL$,TX$,B1$,B2$)
+390   LOCAL N,H,Y,E,K,R,I
+400   N=1
+410   FOR I=1 TO LEN(TX$)
+420     IF MID$(TX$,I,1)="|" THEN N=N+1
+430   NEXT I
+440   IF N>6 THEN N=6
+450   H=70+N*16
+460   Y=150-H\2
+470   UI PANEL 940,150,Y,340,H,TTL$
+480   N=FN UK_LINES(TX$,941,166,Y+30,308)
+490   UI BUTTON 947,166,Y+H-34,100,24,B1$
+500   IF B2$<>"" THEN UI BUTTON 948,374,Y+H-34,100,24,B2$
+510   UI MODAL 940
+520   UI FOCUS 947
+530   R=-1
+540   WHILE R<0
+550     GFX VSYNC
+560     UI UPDATE
+570     E=UI("EVENT")
+580     WHILE E<>0
+590       K=UI("KIND")
+600       IF E=947 AND K=1 THEN R=1
+610       IF E=948 AND K=1 THEN R=2
+620       IF E=940 AND K=6 THEN R=0
+630       E=UI("EVENT")
+640     WEND
+650   WEND
+660   UI MODAL 0
+670   IF B2$<>"" THEN UI REMOVE 948
+680   UI REMOVE 947
+690   FOR I=N-1 TO 0 STEP -1
+700     UI REMOVE 941+I
+710   NEXT I
+720   UI REMOVE 940
+730   RETURN R
+740 END FUNC
+750 PROC UK_MSG(TTL$,TX$)
+760   LOCAL R
+770   R=FN UK_DIALOG(TTL$,TX$,"OK","")
+780 END PROC
+790 FUNC UK_ASK(TTL$,TX$)
+800   IF FN UK_DIALOG(TTL$,TX$,"Yes","No")=1 THEN RETURN -1
+810   RETURN 0
+820 END FUNC
+830 FUNC UK_INPUT$(TTL$,PR$,DF$)
+840   LOCAL E,K,R,A$
+850   UI PANEL 950,120,100,400,100,TTL$
+860   UI LABEL 951,136,132,368,14,PR$
+870   UI TEXT 952,136,150,368,18,DF$
+880   UI BUTTON 953,136,176,100,24,"OK"
+890   UI BUTTON 954,404,176,100,24,"Cancel"
+900   UI MODAL 950
+910   UI FOCUS 952
+920   R=-1
+930   WHILE R<0
+940     GFX VSYNC
+950     UI UPDATE
+960     E=UI("EVENT")
+970     WHILE E<>0
+980       K=UI("KIND")
+990       IF (E=953 AND K=1) OR (E=952 AND K=5) THEN R=1
+1000       IF (E=954 AND K=1) OR (E=950 AND K=6) THEN R=0
+1010       E=UI("EVENT")
+1020     WEND
+1030   WEND
+1040   A$=""
+1050   IF R=1 THEN UI GETTEXT 952,A$
+1060   UI MODAL 0
+1070   UI REMOVE 954
+1080   UI REMOVE 953
+1090   UI REMOVE 952
+1100   UI REMOVE 951
+1110   UI REMOVE 950
+1120   UK_OK=0
+1130   IF R=1 THEN UK_OK=-1
+1140   RETURN A$
+1150 END FUNC
+1160 ' ---------------------------------------------------------------------- sliders with a label and a readout
+1170 PROC UK_SHOW(ID,POS,DV)
+1180   UI CAPTION ID+2,STR$(POS/DV)
+1190 END PROC
+1200 PROC UK_SLIDER(ID,X,Y,W,LB$,MN,MX,V)
+1210   LOCAL DV
+1220   DV=UK_DV
+1230   UI LABEL ID+1,X,Y+2,70,14,LB$
+1240   UI SLIDER ID,X+72,Y,W-72-46,18
+1250   UI RANGE ID,MN,MX
+1260   UI VALUE ID,V
+1270   UI LABEL ID+2,X+W-42,Y+2,42,14,""
+1280   CALL UK_SHOW(ID,V,DV)
+1290   UK_REG$=UK_REG$+MKI$(ID)
+1300   UK_DIV$=UK_DIV$+MKI$(DV)
+1310   UK_DV=1
+1320 END PROC
+1330 ' the divisor of the slider that UK_SLIDER makes next (the readout shows position / divisor); UK_SLIDER sets it back to 1
+1340 PROC UK_DIVISOR(DV)
+1350   UK_DV=DV
+1360 END PROC
+1370 ' the position in the registry of the slider ID (1, 3, 5, ...), 0 if there is none
+1380 FUNC UK_FIND(ID)
+1390   LOCAL I,R
+1400   R=0
+1410   FOR I=1 TO LEN(UK_REG$) STEP 2
+1420     IF CVI(MID$(UK_REG$,I,2))=ID THEN
+1430       R=I
+1440       EXIT
+1450     END IF
+1460   NEXT I
+1470   RETURN R
+1480 END FUNC
+1490 FUNC UK_TRACK(E,V)
+1500   LOCAL I
+1510   I=FN UK_FIND(E)
+1520   IF I=0 THEN RETURN 0
+1530   CALL UK_SHOW(E,V,CVI(MID$(UK_DIV$,I,2)))
+1540   RETURN -1
+1550 END FUNC
+1560 FUNC UK_VAL(ID)
+1570   LOCAL I
+1580   I=FN UK_FIND(ID)
+1590   IF I=0 THEN RETURN UI("GET",ID)
+1600   RETURN UI("GET",ID)/CVI(MID$(UK_DIV$,I,2))
+1610 END FUNC
+1620 PROC UK_SET(ID,POS)
+1630   LOCAL I
+1640   UI VALUE ID,POS
+1650   I=FN UK_FIND(ID)
+1660   IF I>0 THEN CALL UK_SHOW(ID,POS,CVI(MID$(UK_DIV$,I,2)))
+1670 END PROC
+1680 PROC UK_READ(ID,T$)
+1690   UI CAPTION ID+2,T$
+1700 END PROC

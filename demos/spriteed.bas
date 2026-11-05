@@ -3,7 +3,7 @@
 3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
 4 ' in the executable (it shows with the command line option --engine1999-about).
 10 ' SPRITE AND TILE EDITOR - edits the 16 x 24 pictures of the sprites and the tiles with the mouse, on the UI subsystem (UI CANVAS, ON UI, the file
-20 ' requester of the library filereq). Needs the window (engine1999). ESC stops the program, as always.
+20 ' requester of the library filereq, dialogs of the library uikit). Needs the window (engine1999). ESC cancels a dialog; Ctrl+C stops the program.
 30 '   Left button: paint with the current color (the Pen) or fill an area (the Fill tool); right button: erase (color 0, transparent).
 40 '   Colors: the 16 colors of a palette window (the slider "Window" moves it over the 224 colors of the layer: sprites use the palette of the sprite
 50 '   layer, tiles that of the tile layer); a click on a color picks it. Cell 0 of a window is transparent, cell n is color base + n, as in
@@ -15,6 +15,8 @@
 100 '   program; Open reads such a file (DESIGN SPRITE / DESIGN TILE, the rows of @ statements). A picture can be saved only when its colors
 110 '   fit into one window of 15 colors. The preview shows the picture as a real sprite (a tile uses the sprite palette there).
 120 LOAD LIBRARY "filereq"
+125 LOAD LIBRARY "uikit"
+126 BREAK OFF
 130 GFX RESET ALL
 140 CLS
 150 DIM SX(400)
@@ -56,7 +58,8 @@
 510 PRINT "Sprite and tile editor finished."
 520 END
 530 LABEL ERRH
-540 UI CAPTION 112,"Error: "+ERR$
+535 ON UI OFF
+540 CALL UK_MSG("Error",ERR$)
 550 RESUME LOOPTOP
 560 ' ====================================================================== the form
 570 PROC MAKEFORM
@@ -408,7 +411,13 @@
 4030     DR$=FR_DIR$
 4040     IF F$<>"" THEN CALL EXPORT(F$)
 4050   END IF
-4060   IF E=121 AND K=1 THEN Q=1
+4060   IF E=121 AND K=1 THEN
+4061     IF DT=0 THEN
+4062       Q=1
+4063     ELSE
+4064       IF FN UK_ASK("Quit","The picture has changes that were not stored.|Quit anyway?")<>0 THEN Q=1
+4065     END IF
+4066   END IF
 4070   E=UI("EVENT")
 4080 WEND
 4090 RETURN

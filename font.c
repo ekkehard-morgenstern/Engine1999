@@ -73,7 +73,7 @@ static void build_font( int id ) {
         int w = last - first + 1;
         for ( int r = 0; r < 12; ++r ) {
             uint8_t b = (uint8_t)( src[r] << first );
-            if ( id == FONT_BOLD ) {
+            if ( id == FONT_BOLD && c != '#' ) {      // (the bars of # are a pixel apart: the double strike made a block of it)
                 b |= (uint8_t)( b >> 1 );       // one pixel to the right: stems of 3 pixels (a glyph of 8 pixels loses the ninth)
             }
             f->rows[c][r] = b;

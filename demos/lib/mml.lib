@@ -1,0 +1,78 @@
+1 ' License: free for everybody to use, copy, change and build into executables (BUILD).
+2 ' An executable made with BUILD contains the Engine1999 runtime: the Engine1999 Runtime Exception
+3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
+4 ' in the executable (it shows with the command line option --engine1999-about).
+10 ' mml - a tokenizer for the music strings of PLAY and SFX (a library: LOAD LIBRARY "mml"); the editors musiced and sfxed use it.
+20 '   CALL MK_SET(A$)        loads a music string (blanks and ; are dropped, letters made upper case)
+30 '   T$=FN MK_NEXT$()       the next token, "" at the end. A token is one command with its numbers: "C#4." "R8" "O5" "<" "T120" "V0.5" "W1"
+40 '                          "ML" "XR" "X0,0.1,0.5,0.2" "S800,200,4" "H440,8" "~5,2" "^6,0.3"
+50 '   V=FN MK_ARG(T$,N)      the N-th number (0, 1, ...) behind the command letter of a token; notes: MK_ARG(T$,0) is the length (0 if none)
+60 '                          (the accidental of a note is skipped: "C#4" -> 4)
+70 '   FN MK_JOIN$(A$)        the string with the tokens separated by single blanks
+80 LIBRARY "mml","MK_"
+90 PROC MK_INIT
+100   MK_S$=""
+110   MK_P=1
+120 END PROC
+130 PROC MK_SET(A$)
+140   LOCAL I,C,D$
+150   D$=""
+160   FOR I=1 TO LEN(A$)
+170     C=ASC(MID$(A$,I,1))
+180     IF C<>32 AND C<>59 AND C<>9 AND C<>10 AND C<>13 THEN
+190       IF C>=97 AND C<=122 THEN C=C-32
+200       D$=D$+CHR$(C)
+210     END IF
+220   NEXT I
+230   MK_S$=D$
+240   MK_P=1
+250 END PROC
+260 ' is C$ a character that belongs to the numbers of a command?
+270 FUNC MK_ISARG(C$)
+280   IF C$="" THEN RETURN 0
+290   IF C$>="0" AND C$<="9" THEN RETURN -1
+300   IF C$="." OR C$="," OR C$="#" OR C$="+" OR C$="-" THEN RETURN -1
+310   RETURN 0
+320 END FUNC
+330 FUNC MK_NEXT$()
+340   LOCAL T$,N
+350   N=LEN(MK_S$)
+360   IF MK_P>N THEN RETURN ""
+370   T$=MID$(MK_S$,MK_P,1)
+380   MK_P=MK_P+1
+390   IF T$="M" OR (T$="X" AND MID$(MK_S$,MK_P,1)="R") THEN
+400     T$=T$+MID$(MK_S$,MK_P,1)
+410     MK_P=MK_P+1
+420   END IF
+430   WHILE MK_P<=N AND FN MK_ISARG(MID$(MK_S$,MK_P,1))
+440     T$=T$+MID$(MK_S$,MK_P,1)
+450     MK_P=MK_P+1
+460   WEND
+470   RETURN T$
+480 END FUNC
+490 FUNC MK_ARG(T$,N)
+500   LOCAL I,S,K
+510   S=2
+520   WHILE MID$(T$,S,1)="#" OR MID$(T$,S,1)="+" OR MID$(T$,S,1)="-"
+530     S=S+1
+540   WEND
+550   FOR K=1 TO N
+560     FOR I=S TO LEN(T$)
+570       IF MID$(T$,I,1)="," THEN EXIT
+580     NEXT I
+590     S=I+1
+600   NEXT K
+610   RETURN VAL(MID$(T$,S))
+620 END FUNC
+630 FUNC MK_JOIN$(A$)
+640   LOCAL R$,T$
+650   CALL MK_SET(A$)
+660   R$=""
+670   T$=FN MK_NEXT$()
+680   WHILE T$<>""
+690     IF R$<>"" THEN R$=R$+" "
+700     R$=R$+T$
+710     T$=FN MK_NEXT$()
+720   WEND
+730   RETURN R$
+740 END FUNC
