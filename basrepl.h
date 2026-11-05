@@ -137,6 +137,11 @@ typedef struct _repl_t {
     liblist_t   libs;               // the libraries the stored program names (LOAD LIBRARY), in dependency order: found by every RUN / compile (docs/library-support.md)
     bool        fileascii;          // the file named by filename is an ASCII listing (false: binary); what SAVE without a name and without an option writes
     char*       filename;           // name of the last file loaded or saved (malloc'ed), 0 = none or NEW; for the editor's title
+    // the security policy (policy.h) asks who the running program is: the file it was loaded from, else (an executable made with BUILD) what the host says
+    const char* policyfile;         // 0: filename; else the file of the program (the executable) and, for the hash, its embedded image
+    const void* policyimage;
+    size_t      policyimagelen;
+    const char* policyroot;         // 0: the folder of the file (a typed in program: the current directory)
 } repl_t;
 
 bool init_repl( repl_t* repl );             // false if out of memory

@@ -45,7 +45,7 @@ CL=$(CCOMP) $(CFLAGS)
 .c.o:
 	$(CC) -o $@ $<
 
-all: sdltest1 sdltest2 sdltest3 sdltest4 engine1999 joytest1 basictest1 testcomp1 basictest2 vmtest1 repltest1 ansitest1 txttest1 asmtest1 synthtest1 iotest1 gfxtest1 buildtest1 engine1999c contest1 keytest1 scrtest1 libtest1 fonttest1 uitest1
+all: sdltest1 sdltest2 sdltest3 sdltest4 engine1999 joytest1 basictest1 testcomp1 basictest2 vmtest1 repltest1 ansitest1 txttest1 asmtest1 synthtest1 iotest1 gfxtest1 buildtest1 engine1999c contest1 keytest1 scrtest1 libtest1 fonttest1 uitest1 poltest1
 	echo ok >all
 
 .PHONY: grammar grammar-check kit install uninstall man-check
@@ -58,9 +58,9 @@ grammar:
 grammar-check:
 	perl grammar.pl --check
 
-BASEMOD=sdlevent.o sdllayer.o sdlmain.o sdlscreen.o textscreen.o tilescreen.o sprscreen.o sprpath.o 8x12font1.o sdlaudio.o synth.o mml.o sdlutil.o \
+BASEMOD=sdlevent.o sdllayer.o sdlmain.o sdlscreen.o textscreen.o tilescreen.o sprscreen.o sprpath.o policy.o 8x12font1.o sdlaudio.o synth.o mml.o sdlutil.o \
 		basic.o baspgm.o baslin.o bastok.o bascomp.o nodetype.o codegen.o cgenctl.o cgendecl.o cgenprog.o vars.o runtime.o vm.o basfiles.o iodev.o gfxcore.o gfxops.o bmp.o gfxfile.o basbuild.o baslib.o cgenlib.o basrepl.o basdebug.o ansi.o palette.o keyseq.o keystate.o cursors.o mouse.o joy.o sdljoy.o sdlkeys.o scredit.o conscr.o fulledit.o vmasm.o monitor.o font.o ui.o
-BASEHDR=sdlevent.h sdllayer.h sdlmain.h sdlscreen.h sdltypes.h textscreen.h tilescreen.h sprscreen.h sprpath.h unxtypes.h sdlaudio.h synth.h mml.h sdlutil.h basfiles.h iodev.h gfxcore.h gfxops.h bmp.h gfxfile.h basbuild.h baslib.h basic.h baspgm.h baslin.h bastok.h bascomp.h nodetype.h codegen.h instset.h vars.h runtime.h vm.h basrepl.h basdebug.h ansi.h palette.h keyseq.h keystate.h cursors.h mouse.h joy.h sdljoy.h sdlkeys.h scrdrv.h conscr.h fulledit.h vmasm.h monitor.h font.h ui.h
+BASEHDR=sdlevent.h sdllayer.h sdlmain.h sdlscreen.h sdltypes.h textscreen.h tilescreen.h sprscreen.h sprpath.h policy.h unxtypes.h sdlaudio.h synth.h mml.h sdlutil.h basfiles.h iodev.h gfxcore.h gfxops.h bmp.h gfxfile.h basbuild.h baslib.h basic.h baspgm.h baslin.h bastok.h bascomp.h nodetype.h codegen.h instset.h vars.h runtime.h vm.h basrepl.h basdebug.h ansi.h palette.h keyseq.h keystate.h cursors.h mouse.h joy.h sdljoy.h sdlkeys.h scrdrv.h conscr.h fulledit.h vmasm.h monitor.h font.h ui.h
 
 LIBMOD=$(BASEMOD)
 LIBHDR=$(BASEHDR)
@@ -159,6 +159,11 @@ libtest1: libtest1.o $(LIBNAME)
 	$(CL) -o libtest1 libtest1.o $(LIBNAME) -lm
 
 libtest1.o: libtest1.c $(LIBHDR)
+
+poltest1: poltest1.o $(LIBNAME)
+	$(CL) -o poltest1 poltest1.o $(LIBNAME) -lm
+
+poltest1.o: poltest1.c $(LIBHDR)
 
 fonttest1: fonttest1.o $(LIBNAME)
 	$(CL) -o fonttest1 fonttest1.o $(LIBNAME) -lm
@@ -312,6 +317,8 @@ sdlaudio.o: sdlaudio.c $(BASEHDR)
 synth.o: synth.c $(BASEHDR)
 
 sprpath.o: sprpath.c $(BASEHDR)
+
+policy.o: policy.c $(BASEHDR)
 
 mml.o: mml.c $(BASEHDR)
 

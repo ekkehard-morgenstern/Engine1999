@@ -37,6 +37,7 @@
 #include <unistd.h>
 #include <sys/stat.h>
 #include "iodev.h"
+#include "policy.h"
 
 // -- the registry --------------------------------------------------------------------
 
@@ -78,8 +79,7 @@ bool iodev_register( iodrv_t* drv ) {
 }
 
 bool iodev_allowed( const char* operation, const iodrv_t* drv, const char* path ) {
-    (void) operation; (void) drv; (void) path;
-    return true;        // sandboxing is an open issue (docs/io-subsystem.md)
+    return policy_check( operation, drv != 0 ? drv->name : 0, path );      // the security policy (policy.[ch], docs/security-policy.md): only while a program runs
 }
 
 bool iodev_resolve( const char* name, const char* defaultdriver, iodrv_t** pdrv, const char** ppath, const char** perr ) {

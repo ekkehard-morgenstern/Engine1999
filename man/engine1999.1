@@ -59,6 +59,17 @@ Print every token as the compiler fetches it.
 .B \-\-debug\-tree
 Print the syntax tree after parsing.
 .TP
+.BI \-\-allow= list
+Let the programs that run use these powers without asking: a comma separated list of
+.BR read ", " write " (files outside the program's folder), " shell " (shell literals and " sh: "), " net " (" tcp: ") and " all .
+See
+.B SECURITY
+in
+.BR engine1999\-basic (7).
+.TP
+.BI \-\-deny= list
+Refuse these powers without asking (the same words; the last of the options for a power wins).
+.TP
 .B \-\-debug\-code
 Print every instruction the code generator emits.
 .TP

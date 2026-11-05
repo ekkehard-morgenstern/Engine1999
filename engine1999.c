@@ -39,6 +39,7 @@
 #include "mouse.h"
 #include "gfxcore.h"
 #include "ui.h"
+#include "policy.h"
 #include "joy.h"
 #include "keyseq.h"
 #include "sdlutil.h"
@@ -1040,6 +1041,27 @@ static uint32_t host_ui_now( void ) {
     return (uint32_t)( ts.tv_sec * 1000U + (unsigned) ( ts.tv_nsec / 1000000L ) );
 }
 
+// one UI frame: the mouse, the keys and the game controllers go to the widgets, what changed is drawn, events are queued (UI UPDATE; the permission dialog)
+static void host_ui_step( void ) {
+    int keys[64];
+    int nk = host_ui_keys( keys, 64 );
+    if ( host_ui_pad && joy_count() > 0 ) {
+        uint32_t b = 0;
+        double lx = 0.0, ly = 0.0;
+        for ( int p = 0; p < JOY_MAXPLAYERS; ++p ) {
+            if ( joy_connected( p ) ) {
+                b |= joy_buttons( p );
+                if ( fabs( joy_axis( p, JOYA_LX ) ) > fabs( lx ) ) lx = joy_axis( p, JOYA_LX );
+                if ( fabs( joy_axis( p, JOYA_LY ) ) > fabs( ly ) ) ly = joy_axis( p, JOYA_LY );
+            }
+        }
+        nk += ui_pad_keys( &host_ui, b, lx, ly, host_ui_now(), keys + nk, 64 - nk );
+    }
+    ui_input( &host_ui, sdlscr_mouse_get( MOUSEV_X ), sdlscr_mouse_get( MOUSEV_Y ), sdlscr_mouse_get( MOUSEV_BUTTONS ),
+        sdlscr_mouse_get( MOUSEV_WHEEL ), keys, nk, host_ui_now() );
+    ui_draw( &host_ui, false );
+}
+
 static bool host_ui_op( int op, const double* a, int na, const char* s, size_t slen, uint8_t* out, size_t outsz, size_t* outlen, const char** err ) {
     (void) na;
     if ( op == GFXOP_UIOPEN ) {
@@ -1068,26 +1090,9 @@ static bool host_ui_op( int op, const double* a, int na, const char* s, size_t s
             ui_clear( &host_ui );
             ui_draw( &host_ui, true );
             break;
-        case GFXOP_UIUPDATE: {
-            int keys[64];
-            int nk = host_ui_keys( keys, 64 );
-            if ( host_ui_pad && joy_count() > 0 ) {
-                uint32_t b = 0;
-                double lx = 0.0, ly = 0.0;
-                for ( int p = 0; p < JOY_MAXPLAYERS; ++p ) {
-                    if ( joy_connected( p ) ) {
-                        b |= joy_buttons( p );
-                        if ( fabs( joy_axis( p, JOYA_LX ) ) > fabs( lx ) ) lx = joy_axis( p, JOYA_LX );
-                        if ( fabs( joy_axis( p, JOYA_LY ) ) > fabs( ly ) ) ly = joy_axis( p, JOYA_LY );
-                    }
-                }
-                nk += ui_pad_keys( &host_ui, b, lx, ly, host_ui_now(), keys + nk, 64 - nk );
-            }
-            ui_input( &host_ui, sdlscr_mouse_get( MOUSEV_X ), sdlscr_mouse_get( MOUSEV_Y ), sdlscr_mouse_get( MOUSEV_BUTTONS ),
-                sdlscr_mouse_get( MOUSEV_WHEEL ), keys, nk, host_ui_now() );
-            ui_draw( &host_ui, false );
+        case GFXOP_UIUPDATE:
+            host_ui_step();
             return true;
-        }
         case GFXOP_UILABEL:     ok = ui_add( &host_ui, UIK_LABEL, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), text, 0 ); break;
         case GFXOP_UIBUTTON:    ok = ui_add( &host_ui, UIK_BUTTON, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), text, 0 ); break;
         case GFXOP_UICHECK:     ok = ui_add( &host_ui, UIK_CHECK, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), text, 0 ); break;
@@ -1530,7 +1535,11 @@ static bool host_pause( struct _repl_t* r ) {
     return key != -1 && key != 'q' && key != 'Q';
 }
 
+static int host_policy_ask( void* ud, int category, const char* what );
+
 static void init_host( void ) {
+    policy_enable( true );                      // what a running program may do: policy.h
+    policy_set_asker( host_policy_ask, 0 );
     if ( !init_repl( &repl ) ) {
         fprintf( stderr, "failed to initialize the BASIC system\n" );
         exit( EXIT_FAILURE );
@@ -1657,11 +1666,111 @@ static bool handle_input( const char* buf ) {
     return !stored;
 }
 
+// -- the security policy: the question of the window (policy.h, docs/security-policy.md) ----------------------------------
+
+// The running program wants a power it does not have. A modal dialog on the UI layer asks "Allow / Deny", and after an Allow for how long (this session,
+// 24 hours, always). If the program has no UI open, the UI is opened for the question and the graphics layer is put back afterwards.
+#define PD_PANEL    9900
+static int host_policy_ask( void* ud, int category, const char* what ) {
+    (void) ud;
+    bool wasopen = host_ui_open;
+    uint8_t* saved = 0;
+    size_t savedlen = 0;
+    bool layerwas = sdlscr_layer_enabled( UI_LAYER );
+    uint32_t pal[ UI_PAL_COLORS ];
+    int answer = POL_ANS_DENY;
+    if ( !wasopen ) {
+        size_t need = sdlscr_gfx_grab( UI_LAYER, 0, 0, 639, 299, 0, 0 );
+        saved = (uint8_t*) malloc( need );
+        if ( saved != 0 ) {
+            savedlen = sdlscr_gfx_grab( UI_LAYER, 0, 0, 639, 299, saved, need );
+        }
+        for ( int i = 0; i < UI_PAL_COLORS; ++i ) {
+            pal[i] = sdlscr_palette_get( UI_LAYER, UI_PALBASE + i );
+        }
+        host_ui_start();
+    }
+    char l1[72], l2[72], title[64];
+    size_t wl = strlen( what );
+    snprintf( l1, sizeof(l1), "%.58s", what );
+    l2[0] = '\0';
+    if ( wl > 58U ) {
+        snprintf( l2, sizeof(l2), "%.55s%s", what + 58, wl > 113U ? "..." : "" );
+    }
+    snprintf( title, sizeof(title), "Permission: %s", policy_category_name( category ) );
+    ui_add( &host_ui, UIK_PANEL, PD_PANEL, 60, 70, 520, 150, title, 0 );
+    ui_add( &host_ui, UIK_LABEL, PD_PANEL + 1, 76, 100, 488, 14, "The running program wants to:", 0 );
+    ui_add( &host_ui, UIK_LABEL, PD_PANEL + 2, 76, 118, 488, 14, l1, 0 );
+    ui_add( &host_ui, UIK_LABEL, PD_PANEL + 3, 76, 134, 488, 14, l2, 0 );
+    ui_add( &host_ui, UIK_LABEL, PD_PANEL + 4, 76, 154, 488, 14, "Allow it?", 0 );
+    ui_add( &host_ui, UIK_BUTTON, PD_PANEL + 10, 100, 184, 140, 24, "Allow", 0 );
+    ui_add( &host_ui, UIK_BUTTON, PD_PANEL + 11, 400, 184, 140, 24, "Deny", 0 );
+    ui_add( &host_ui, UIK_BUTTON, PD_PANEL + 12, 76, 184, 110, 24, "This session", 0 );
+    ui_add( &host_ui, UIK_BUTTON, PD_PANEL + 13, 196, 184, 110, 24, "24 hours", 0 );
+    ui_add( &host_ui, UIK_BUTTON, PD_PANEL + 14, 316, 184, 110, 24, "Always", 0 );
+    ui_add( &host_ui, UIK_BUTTON, PD_PANEL + 15, 436, 184, 110, 24, "Cancel", 0 );
+    for ( int id = PD_PANEL + 12; id <= PD_PANEL + 15; ++id ) {
+        ui_set_visible( &host_ui, id, false );
+    }
+    ui_set_modal( &host_ui, PD_PANEL );
+    ui_set_focus( &host_ui, PD_PANEL + 11 );
+    bool done = false, stage2 = false;
+    while ( !done && !sdlscr_term() && !sdlscr_breakrequested() ) {
+        sdlscr_vsync();
+        host_ui_step();
+        ui_event_t ev;
+        while ( !done && ui_next_event( &host_ui, &ev ) ) {
+            if ( ev.id == PD_PANEL && ev.kind == UIE_CANCEL ) {
+                done = true;
+            } else if ( ev.kind == UIE_CLICK ) {
+                if ( ev.id == PD_PANEL + 10 && !stage2 ) {
+                    stage2 = true;
+                    ui_set_visible( &host_ui, PD_PANEL + 10, false );
+                    ui_set_visible( &host_ui, PD_PANEL + 11, false );
+                    for ( int id = PD_PANEL + 12; id <= PD_PANEL + 15; ++id ) {
+                        ui_set_visible( &host_ui, id, true );
+                    }
+                    ui_set_text( &host_ui, PD_PANEL + 4, "For how long?" );
+                    ui_set_focus( &host_ui, PD_PANEL + 12 );
+                } else if ( ev.id == PD_PANEL + 11 || ev.id == PD_PANEL + 15 ) {
+                    done = true;
+                } else if ( ev.id == PD_PANEL + 12 ) {
+                    answer = POL_ANS_SESSION; done = true;
+                } else if ( ev.id == PD_PANEL + 13 ) {
+                    answer = POL_ANS_DAY; done = true;
+                } else if ( ev.id == PD_PANEL + 14 ) {
+                    answer = POL_ANS_ALWAYS; done = true;
+                }
+            }
+        }
+    }
+    ui_set_modal( &host_ui, 0 );
+    for ( int id = PD_PANEL + 15; id >= PD_PANEL; --id ) {
+        ui_remove( &host_ui, id );
+    }
+    if ( wasopen ) {
+        ui_draw( &host_ui, true );
+    } else {
+        host_ui_shutdown();
+        for ( int i = 0; i < UI_PAL_COLORS; ++i ) {
+            sdlscr_palette_set( UI_LAYER, UI_PALBASE + i, pal[i] );
+        }
+        if ( saved != 0 && savedlen > 0 ) {
+            sdlscr_gfx_blit( UI_LAYER, saved, savedlen, 0, 0, false );
+        }
+        sdlscr_layer_enable( UI_LAYER, layerwas );
+    }
+    free( saved );
+    return answer;
+}
+
 // -- command line ----------------------------------------------------------------------
 
 static void usage( FILE* out, const char* prog ) {
     fprintf( out, "Usage: %s [options]\n\nDebug output (to standard output, off by default):\n", prog );
     basdbg_usage( out );
+    fprintf( out, "\nSecurity (what a running program may do; see the manual):\n  %-20s %s\n  %-20s %s\n", "--allow=list", "let programs use these powers without asking: read, write (outside their folder), shell, net, or all",
+        "--deny=list", "refuse these powers without asking (the same words)" );
     fprintf( out, "\nOther:\n  %-20s %s\n  %-20s %s\n", "--version", "show the version", "-h, --help", "show this text" );
 }
 
@@ -1676,6 +1785,15 @@ static bool parse_args( int argc, char** argv, bool* phelp ) {
         if ( strcmp( arg, "--version" ) == 0 ) {
             printf( "Engine 1999 %s\n", ENGINE_VERSION );
             exit( EXIT_SUCCESS );
+        }
+        if ( strncmp( arg, "--allow=", 8U ) == 0 || strncmp( arg, "--deny=", 7U ) == 0 ) {
+            bool allow = arg[2] == 'a';
+            char err[100];
+            if ( !policy_set_option( arg + ( allow ? 8 : 7 ), allow, err, sizeof(err) ) ) {
+                fprintf( stderr, "%s: %s\n", argv[0], err );
+                return false;
+            }
+            continue;
         }
         bool found = basdbg_option( arg );
         if ( !found ) {
@@ -1726,12 +1844,44 @@ static int run_embedded( int argc, char** argv ) {
         fputs( about_text, stdout );
         return EXIT_SUCCESS;
     }
+    // the switches of the runtime come first and are not the program's: --engine1999-allow=LIST, --engine1999-deny=LIST
+    int shift = 0;
+    for ( ; argc > 1 + shift; ++shift ) {
+        const char* a = argv[ 1 + shift ];
+        if ( strncmp( a, "--engine1999-allow=", 19U ) == 0 || strncmp( a, "--engine1999-deny=", 18U ) == 0 ) {
+            bool allow = a[13] == 'a';
+            char err[100];
+            if ( !policy_set_option( a + ( allow ? 19 : 18 ), allow, err, sizeof(err) ) ) {
+                fprintf( stderr, "%s: %s\n", argv[0], err );
+                return 2;
+            }
+        } else {
+            break;
+        }
+    }
+    if ( shift > 0 ) {
+        argv[shift] = argv[0];
+        argv += shift;
+        argc -= shift;
+    }
     sdl_init();
     srand( time(0) );
     init_usrdata( &usrdata );
     init_host();
     repl.argc = argc;                       // ARGC, ARG$(n): argv[0] is the executable
     repl.argv = (const char* const*) argv;
+    static char selfexe[4096], selfdir[4096];
+    ssize_t selflen = readlink( "/proc/self/exe", selfexe, sizeof(selfexe) - 1U );
+    if ( selflen > 0 ) {                    // the security policy: the program is this executable, its folder is the executable's folder
+        selfexe[selflen] = '\0';
+        snprintf( selfdir, sizeof(selfdir), "%s", selfexe );
+        char* sl = strrchr( selfdir, '/' );
+        if ( sl != 0 ) { if ( sl == selfdir ) selfdir[1] = '\0'; else *sl = '\0'; }
+        repl.policyfile = selfexe;
+        repl.policyimage = embedded_program_start;
+        repl.policyimagelen = (size_t)( embedded_program_end - embedded_program_start );
+        repl.policyroot = selfdir;
+    }
     bool ok = repl_load_image( &repl, embedded_program_start, (size_t)( embedded_program_end - embedded_program_start ) );
     if ( ok ) {
         sdlscr_pollkeys( true );

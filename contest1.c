@@ -55,6 +55,18 @@ typedef struct _testcase_t {
 } testcase_t;
 
 static const testcase_t cases[] = {
+    // the security policy (policy.h): a program that runs may use its folder only; what is typed at the prompt is not restricted; no terminal: no questions
+    { "policy: a program may not write outside its folder", "10 ON ERROR GOTO 100\n20 OPEN \"../contest1-polx.txt\" FOR OUTPUT AS #1\n30 PRINT \"wrote\":CLOSE #1:KILL \"../contest1-polx.txt\":END\n100 PRINT ERR$:END\n", "prog.bas", "", "Permission denied\n", "", 0, false },
+    { "policy: --allow=write lets it", "10 ON ERROR GOTO 100\n20 OPEN \"../contest1-polx.txt\" FOR OUTPUT AS #1\n30 PRINT \"wrote\":CLOSE #1:KILL \"../contest1-polx.txt\":END\n100 PRINT ERR$:END\n", "--allow=write prog.bas", "", "wrote\n", "", 0, false },
+    { "policy: --allow=read is not enough for writing", "10 ON ERROR GOTO 100\n20 OPEN \"../contest1-polx.txt\" FOR OUTPUT AS #1\n30 PRINT \"wrote\":CLOSE #1:KILL \"../contest1-polx.txt\":END\n100 PRINT ERR$:END\n", "--allow=read prog.bas", "", "Permission denied\n", "", 0, false },
+    { "policy: --deny=all", "10 ON ERROR GOTO 100\n20 OPEN \"../contest1-polx.txt\" FOR OUTPUT AS #1\n30 PRINT \"wrote\":CLOSE #1:KILL \"../contest1-polx.txt\":END\n100 PRINT ERR$:END\n", "--allow=write --deny=write prog.bas", "", "Permission denied\n", "", 0, false },
+    { "policy: its own folder is free", "10 OPEN \"inside.txt\" FOR OUTPUT AS #1:PRINT #1,\"x\":CLOSE #1\n20 OPEN \"./inside.txt\" FOR INPUT AS #1:LINE INPUT #1,A$:CLOSE #1:PRINT A$:KILL \"inside.txt\"\n", "prog.bas", "", "x\n", "", 0, false },
+    { "policy: the shell needs permission", "10 ON ERROR GOTO 100\n20 A$=`echo hi`\n30 PRINT A$:END\n100 PRINT ERR$:END\n", "prog.bas", "", "Permission denied\n", "", 0, false },
+    { "policy: --allow=shell lets it", "10 ON ERROR GOTO 100\n20 A$=`echo hi`\n30 PRINT A$:END\n100 PRINT ERR$:END\n", "--allow=shell prog.bas", "", "hi\n", "", 0, false },
+    { "policy: sh: is the same power", "10 ON ERROR GOTO 100\n20 OPEN \"sh:echo viash\" FOR INPUT AS #1:LINE INPUT #1,A$:PRINT A$:END\n100 PRINT ERR$:END\n", "prog.bas", "", "Permission denied\n", "", 0, false },
+    { "policy: a typed in program has the current directory as its folder", 0, "", "10 ON ERROR GOTO 100\n20 OPEN \"../contest1-polx.txt\" FOR OUTPUT AS #1:PRINT \"wrote\":CLOSE #1:KILL \"../contest1-polx.txt\":END\n100 PRINT ERR$:END\nRUN\n", "Permission denied\n", "", 0, false },
+    { "policy: a line typed at the prompt is not restricted", 0, "", "OPEN \"../contest1-polx.txt\" FOR OUTPUT AS #1:PRINT \"direct ok\":CLOSE #1:KILL \"../contest1-polx.txt\"\nPRINT `echo shell ok`\n", "direct ok\nshell ok\n", "", 0, false },
+    { "policy: a bad word in --allow", 0, "--allow=read,bogus", "", "", "unknown permission 'bogus'", 2, true },
     // the REPL on standard input
     { "a direct line",              0, "", "PRINT 1+2\n",                               "3\n", "", 0, false },
     { "a stored program and RUN",   0, "", "10 PRINT \"HI\"\nRUN\n",                  "HI\n", "", 0, false },
@@ -377,6 +389,7 @@ int main( void ) {
     }
     snprintf( exe, sizeof(exe), "%s/engine1999c", cwd );
     setenv( "E1999_CON", "from the shell", 1 );
+    setenv( "ENGINE1999_GRANTS", "/tmp/contest1-grants-none", 1 );          // (the stored grants of the user are never read by this test)
     unsetenv( "E1999_NOT_SET" );
     if ( access( exe, X_OK ) != 0 ) {
         printf( "engine1999c is not here: run this test in the build directory\n" );
@@ -411,6 +424,29 @@ int main( void ) {
     }
 
     // cases that need more than a table row
+
+    // the permission file next to a program: it asks up front; with no terminal the answer is no, with --allow it is yes
+    {
+        put( "prog.bas", "10 ON ERROR GOTO 100\n20 A$=`echo hi`\n30 PRINT A$:END\n100 PRINT ERR$:END\n" );
+        put( "prog.perm", "# the shell is needed\nrequest shell\n" );
+        char *out, *err; size_t outlen;
+        int st = run( "prog.bas", "", &out, &outlen, &err );
+        bool ok = st == 0 && strcmp( out, "Permission denied\n" ) == 0;
+        printf( "%s  policy: the permission file is asked for at the start (no terminal: no)\n", ok ? "PASS" : "FAIL" );
+        if ( !ok ) { printf( "    status %d out \"%s\" err \"%s\"\n", st, out, err ); }
+        failed += !ok;
+        free( out ); free( err );
+        st = run( "--allow=shell prog.bas", "", &out, &outlen, &err );
+        ok = st == 0 && strcmp( out, "hi\n" ) == 0;
+        printf( "%s  policy: ...and --allow=shell grants it\n", ok ? "PASS" : "FAIL" );
+        if ( !ok ) { printf( "    status %d out \"%s\" err \"%s\"\n", st, out, err ); }
+        failed += !ok;
+        free( out ); free( err );
+        char cmd2[300];
+        snprintf( cmd2, sizeof(cmd2), "rm -f %s/prog.perm", workdir );
+        if ( system( cmd2 ) != 0 ) { }
+    }
+
 
     // the line editor on a terminal (a pty): the one-line editor of EDIT n and the monitor, the same as in the window (scredit.c); the terminal answers
     // ESC [ 6 n; the terminal's own echo of an escape sequence ("^[[A") must not be seen

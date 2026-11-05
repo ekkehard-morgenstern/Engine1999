@@ -95,6 +95,17 @@ It is always used when standard input or output is not a terminal.
 In screen mode, do not write the screen to the terminal when the session ends (also
 .BR E1999_DUMP=0 ).
 .TP
+.BI \-\-allow= list
+Let the programs that run use these powers without asking: a comma separated list of
+.BR read ", " write " (files outside the program's folder), " shell " (shell literals and " sh: "), " net " (" tcp: ") and " all .
+See
+.B SECURITY
+in
+.BR engine1999\-basic (7).
+.TP
+.BI \-\-deny= list
+Refuse these powers without asking (the same words; the last of the options for a power wins).
+.TP
 .B \-\-list\-keywords
 Print the reserved words of the language, one per line.
 .TP
@@ -228,6 +239,15 @@ and
 (as
 .BR \-\-screen ,
 .BR \-\-line " and " \-\-no\-dump ).
+Likewise
+.BI \-\-engine1999\-allow= list
+and
+.BI \-\-engine1999\-deny= list
+(as
+.BR \-\-allow " and " \-\-deny ;
+see
+.BR engine1999\-basic (7),
+SECURITY).
 See
 .BR engine1999\-basic (7).
 .SH EXAMPLES

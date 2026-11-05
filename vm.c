@@ -29,6 +29,7 @@
 
 #include <ctype.h>
 #include "vm.h"
+#include "iodev.h"
 #include "keyseq.h"
 #include "keystate.h"
 #include "sprscreen.h"
@@ -1461,6 +1462,10 @@ static bool vm_shell_execute( vm_t* vm ) {
     char* cmd;
     if ( !vm_dpop_str( vm, &cmd ) ) {
         return false;
+    }
+    if ( !iodev_allowed( "shell", 0, cmd ) ) {      // (the security policy: a program has to be allowed to run a shell command)
+        free( cmd );
+        return vm_error( vm, "Permission denied" );
     }
     fflush( stdout );
     FILE* pipe = popen( cmd, "r" );

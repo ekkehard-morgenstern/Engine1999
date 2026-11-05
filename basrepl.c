@@ -32,6 +32,7 @@
 #include "basdebug.h"
 #include "basfiles.h"
 #include "iodev.h"
+#include "policy.h"
 #include "basbuild.h"
 
 // -- helpers -------------------------------------------------------------------
@@ -360,6 +361,15 @@ static void repl_compile_libraries( repl_t* repl ) {
 // fromstart: run from the beginning (RUN: DATA pointer reset) instead of from the new code (direct mode); then
 // <label> / <line> may name another start (RUN target).
 // A run may end with a LOAD / RUN request in the VM; repl_finish() carries it out.
+// a program starts to run: the security policy learns who it is (and may ask what the program's permission file requests)
+static void repl_policy_begin( repl_t* repl ) {
+    if ( repl->policyfile != 0 ) {
+        policy_begin_program( repl->policyfile, repl->policyimage, repl->policyimagelen, repl->policyroot );
+    } else {
+        policy_begin_program( repl->filename, 0, 0, 0 );
+    }
+}
+
 static bool repl_execute( repl_t* repl, bool fromstart, const char* label, int32_t line ) {
     bool ok = false;
     codegen_t* cgen = &repl->rt.codegen;
@@ -370,6 +380,9 @@ static bool repl_execute( repl_t* repl, bool fromstart, const char* label, int32
     repl_setup_vm( repl );
     if ( fromstart && !repl_resolve_libraries( repl ) ) {
         return false;                               // the libraries the program names are missing or wrong: it is not compiled
+    }
+    if ( fromstart ) {
+        repl_policy_begin( repl );                  // (the run is a program's: the policy applies until repl_finish() ends it)
     }
     if ( !fromstart && repl->linesstale ) {
         cgen->numlineaddrs = 0;     // the program changed since it was compiled: a direct line must not jump into the old code by line number
@@ -1341,6 +1354,10 @@ static bool repl_vm_build( struct _vm_t* vm, void* usrdata, const char* name, in
         repl_vm_error( repl, "Bad name for an executable", 0 );
         return false;
     }
+    if ( !iodev_allowed( "write", drv, path ) ) {
+        repl_vm_error( repl, "Permission denied", 0 );
+        return false;
+    }
     uint8_t* image = 0; size_t imagelen = 0;
     bool reported = false;
     if ( !repl_make_image( repl, &image, &imagelen, &reported ) ) {
@@ -1409,7 +1426,7 @@ static bool repl_edit_line( repl_t* repl, const char* label, int32_t line ) {
 
 // carries out the LOAD / RUN requests the program run left in the VM, until a run ends without one (iteratively:
 // a program that ends with RUN must not nest); a LOAD typed in direct mode only loads (direct = the run was a direct line)
-static bool repl_finish( repl_t* repl, bool ok, bool direct ) {
+static bool repl_finish_inner( repl_t* repl, bool ok, bool direct ) {
     bool chained = false;       // the run was started by a request, not by the host
     while ( ok && repl->vm.request != VMREQ_NONE ) {
         int kind = repl->vm.request;
@@ -1485,6 +1502,13 @@ static bool repl_finish( repl_t* repl, bool ok, bool direct ) {
     return ok;
 }
 
+// carries out the requests of a run, then the program is over for the security policy
+static bool repl_finish( repl_t* repl, bool ok, bool direct ) {
+    bool r = repl_finish_inner( repl, ok, direct );
+    policy_end_program();
+    return r;
+}
+
 static bool repl_run_direct( repl_t* repl, const uint8_t* tokens, size_t size ) {
     repl_setup_compiler( repl );
     repl->comp.iter.hdr.lineno = LINENO_NONE;
@@ -1512,6 +1536,7 @@ bool repl_vm_start( repl_t* repl, uint32_t addr ) {
     if ( addr == repl->rt.codegen.mainstart ) {
         vm_reset_data( &repl->vm );         // the start of the program: every READ pointer at the first item of its chain
     }
+    repl_policy_begin( repl );
     return vm_begin( &repl->vm, addr );
 }
 

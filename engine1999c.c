@@ -43,6 +43,7 @@
 #include "textscreen.h"
 #include "fulledit.h"
 #include "monitor.h"
+#include "policy.h"
 #include "keyseq.h"
 #include "keystate.h"
 #include "version.h"
@@ -912,11 +913,54 @@ static bool con_want_color( const char* mode ) {
     return con_stdout_tty && ( nc == 0 || nc[0] == '\0' );
 }
 
+// the security policy (policy.h): the running program wants a power it does not have. On the screen of screen mode the question is the status line, in line
+// mode on a terminal it is written to standard error and the key comes from the terminal; without a terminal the answer is no (--allow= decides then)
+static int con_policy_ask( void* ud, int category, const char* what ) {
+    (void) ud;
+    char q[400];
+    snprintf( q, sizeof(q), "The program wants to %s. Allow (%s)? n no, s session, d 24 hours, a always", what, policy_category_name( category ) );
+    int c = 0;
+    if ( con_screen ) {
+        txtscr_setstatus( q, 190, 140 );
+        con_paint_now();
+        do {
+            c = con_readkey( true );
+        } while ( c == 0 || c == -3 );
+        txtscr_setstatus( 0, 0, 0 );
+        con_dirty = true;
+    } else if ( con_pumping ) {
+        fprintf( stderr, "\n%s: ", q );
+        fflush( stderr );
+        do {
+            c = con_readkey( true );
+        } while ( c == 0 || c == -3 );
+        fprintf( stderr, "%c\n", c >= 32 && c < 127 ? c : '?' );
+    } else {
+        FILE* tty = isatty( 1 ) || isatty( 2 ) ? fopen( "/dev/tty", "r+" ) : 0;      // (a run without any terminal output, a script or a test, never asks)
+        if ( tty == 0 ) {
+            return POL_ANS_DENY;
+        }
+        fprintf( tty, "%s: ", q );
+        fflush( tty );
+        char line[16];
+        c = fgets( line, sizeof(line), tty ) != 0 ? line[0] : 0;
+        fclose( tty );
+    }
+    switch ( c ) {
+        case 's': case 'S': return POL_ANS_SESSION;
+        case 'd': case 'D': return POL_ANS_DAY;
+        case 'a': case 'A': return POL_ANS_ALWAYS;
+        default: return POL_ANS_DENY;
+    }
+}
+
 static bool con_init( repl_t* repl ) {
     if ( !init_repl( repl ) ) {
         fprintf( stderr, "failed to initialize the BASIC system\n" );
         return false;
     }
+    policy_enable( true );
+    policy_set_asker( con_policy_ask, 0 );
     repl->report    = con_report;
     repl->print     = con_print;
     repl->printn    = con_printn;
@@ -1639,6 +1683,14 @@ static int con_run_embedded( int argc, char** argv ) {
         if ( strcmp( a, "--engine1999-screen" ) == 0 ) con_screenopt = 1;
         else if ( strcmp( a, "--engine1999-line" ) == 0 ) con_screenopt = 0;
         else if ( strcmp( a, "--engine1999-no-dump" ) == 0 ) con_dump = false;
+        else if ( strncmp( a, "--engine1999-allow=", 19U ) == 0 || strncmp( a, "--engine1999-deny=", 18U ) == 0 ) {
+            bool allow = a[13] == 'a';
+            char err[100];
+            if ( !policy_set_option( a + ( allow ? 19 : 18 ), allow, err, sizeof(err) ) ) {
+                fprintf( stderr, "%s: %s\n", argv[0], err );
+                return 2;
+            }
+        }
         else break;
     }
     if ( shift > 0 ) {
@@ -1661,6 +1713,19 @@ static int con_run_embedded( int argc, char** argv ) {
     repl.buildconsole = true;
     repl.argc = argc;
     repl.argv = (const char* const*) argv;
+    static char selfexe[4096];
+    ssize_t selflen = readlink( "/proc/self/exe", selfexe, sizeof(selfexe) - 1U );
+    if ( selflen > 0 ) {                    // the security policy: the program is this executable, its folder is the executable's folder
+        selfexe[selflen] = '\0';
+        static char selfdir[4096];
+        snprintf( selfdir, sizeof(selfdir), "%s", selfexe );
+        char* sl = strrchr( selfdir, '/' );
+        if ( sl != 0 ) { if ( sl == selfdir ) selfdir[1] = '\0'; else *sl = '\0'; }
+        repl.policyfile = selfexe;
+        repl.policyimage = embedded_program_start;
+        repl.policyimagelen = (size_t)( embedded_program_end - embedded_program_start );
+        repl.policyroot = selfdir;
+    }
     int status = EXIT_SUCCESS;
     if ( repl_load_image( &repl, embedded_program_start, (size_t)( embedded_program_end - embedded_program_start ) ) ) {
         bool scr = con_want_screen() && con_screen_begin();
@@ -1857,6 +1922,8 @@ static void usage( FILE* out, const char* prog ) {
         "  --screen     run the session on a screen on the terminal's alternate screen (the default if standard input and output are terminals)\n"
         "  --line       the classic line mode: the terminal scrolls as usual (also E1999_SCREEN=0)\n"
         "  --no-dump    in screen mode, do not write the screen to the terminal when the session ends (also E1999_DUMP=0)\n"
+        "  --allow=list  let programs use these powers without asking: read, write (outside their folder), shell, net, or all (see the manual)\n"
+        "  --deny=list   refuse these powers without asking (the same words)\n"
         "  --list-keywords  print the reserved words of the language, one per line\n"
         "  --version    show the version\n"
         "  -h, --help   show this text\n"
@@ -1906,6 +1973,13 @@ int main( int argc, char** argv ) {
             con_screenopt = 0;
         } else if ( strcmp( arg, "--no-dump" ) == 0 ) {
             con_dump = false;
+        } else if ( strncmp( arg, "--allow=", 8U ) == 0 || strncmp( arg, "--deny=", 7U ) == 0 ) {
+            bool allow = arg[2] == 'a';
+            char err[100];
+            if ( !policy_set_option( arg + ( allow ? 8 : 7 ), allow, err, sizeof(err) ) ) {
+                fprintf( stderr, "%s: %s\n", argv[0], err );
+                return 2;
+            }
         } else if ( strcmp( arg, "--color" ) == 0 ) {
             colormode = "always";
         } else if ( strncmp( arg, "--color=", 8U ) == 0 ) {

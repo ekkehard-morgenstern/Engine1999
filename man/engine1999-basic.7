@@ -212,6 +212,45 @@ A network connection (client).
 .TP
 .BR stdin: ", " stdout: ", " stderr:
 The standard streams of the process.
+.SH SECURITY
+While a program runs it may use the folder it was loaded from (the folder of the executable for one made with
+.BR BUILD ;
+the current directory for a program that was typed in) and nothing else without permission. Commands typed at the prompt are never restricted.
+.PP
+Without permission a program cannot read or write files outside its folder (a path with
+.B ..
+or an absolute path elsewhere; symbolic links are followed), run a shell command (a shell literal or
+.BR OPEN\ "sh:..." ),
+or open a network connection
+.RB ( tcp: ).
+The error is
+.BR "Permission denied" .
+.B mem: null: con: stdin: stdout: stderr: res:
+and
+.B play:
+need no permission.
+.PP
+When a program needs more, the window shows a dialog ("The running program wants to: ... Allow it?") and after an Allow asks for how long: this session, 24 hours or always. The console host asks on the terminal (a key: n, s, d, a); with no terminal the answer is no. What is allowed for 24 hours or always is stored in
+.IR ~/.config/engine1999/grants
+(or the file named by
+.BR ENGINE1999_GRANTS ),
+keyed by the path of the program and a hash of its content, so a changed program has no consent.
+.PP
+A program can ask for permissions up front with a file next to it,
+.I NAME.perm
+(NAME is the program file without its extension), with lines
+.B request read
+(also
+.BR write ", " shell ", " net ", " all ;
+# starts a comment): the user is asked once when the program starts. The options
+.B \-\-allow=list
+and
+.B \-\-deny=list
+(for an executable made with BUILD:
+.B \-\-engine1999\-allow=list
+and
+.BR \-\-engine1999\-deny=list )
+decide without asking. See docs/security-policy.md.
 .SH BUILDING EXECUTABLES
 .B BUILD "name" [, WINDOW | CONSOLE]
 makes a standalone executable from the program in memory, using only the system linker

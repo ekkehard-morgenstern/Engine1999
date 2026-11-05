@@ -255,9 +255,9 @@ disk. The `file` driver uses the current directory of the process.
 2. Random access records use new keywords (`FIELD`, `GETREC`, `PUTREC`), not GW-BASIC's `GET`/`PUT`.
 3. `LOAD`, `SAVE`, `MERGE`, `CHAIN`, `FILES` go through the drivers in phase 1.
 4. `ADDRESS` is reset by `RUN`. Text is written with `"\n"` and read with `"\n"` or `"\r\n"`.
-5. Sandboxing is an **open issue** (next section).
+5. Sandboxing is **implemented** (2026-11-05): [security-policy.md](security-policy.md); the next section is the design discussion that led to it.
 
-## Sandboxing (open)
+## Sandboxing (implemented 2026-11-05: see [security-policy.md](security-policy.md); the open questions below were decided there)
 
 Programs written in the built-in language can already do anything the user can: shell literals (`` `rm -rf ~` ``, `A$=`...``) run a
 shell command, and the `file` driver reaches every file the process can. That is acceptable for the programmer's own programs
@@ -275,4 +275,4 @@ shell literals need the same treatment. Nothing of this is implemented; the ques
   property of a *run*, set when a program is `LOAD`ed or `CHAIN`ed from elsewhere, and cleared by the user.
 
 The drivers take the access decision through one function (`iodev_allowed( op, driver, path )`) so that a policy can be added in one
-place; phase 1 allows everything. The decision on how the policy is configured is still to be made.
+place; it now calls `policy_check()` (`policy.c`).
