@@ -1,0 +1,59 @@
+.\" Engine1999 - A 2D games engine written in C
+.\" Copyright (C) 2026  Ekkehard Morgenstern
+.\"
+.\" This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published
+.\" by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It is distributed WITHOUT ANY
+.\" WARRANTY. ADDITIONAL PERMISSION (GPLv3 section 7): the Engine1999 Runtime Exception applies, see the file LICENSE-EXCEPTION.
+.\"
+.\" Keep this page current: it describes the demo game demos/rustball.bas (an executable made with BUILD, installed by "make install").
+.TH ENGINE1999-RUSTBALL 6 "November 2026" "Engine 1999 @VERSION@" "Engine1999 Manual"
+.SH NAME
+engine1999-rustball \- Being a Rustball, a labyrinth game for one to four players
+.SH SYNOPSIS
+.B engine1999-rustball
+.SH DESCRIPTION
+You are a rust ball in a labyrinth full of construction workers. A new labyrinth is made at random for every level and scrolls with the balls. The workers run away from a ball they see, so sneak up on one from behind: whoever you touch on the back is covered in rust, turns into a statue and crumbles, and your score goes up (a quick chain of workers is worth up to five times as much). Touching a worker from the front only alarms it.
+.PP
+Screws, nuts and bolts lie about the labyrinth. Five of them make you one size bigger, up to three times your original size: a bigger ball is faster, but it no longer fits through narrow doors (a size 3 ball needs doors three tiles wide when it goes up or down, two tiles when it goes sideways). If the ball eats nothing for twelve seconds it dries out: it loses an item, and finally a size.
+.PP
+Workers who have seen fruit lying in the labyrinth forget about you and walk to it to eat it, and one that is eating does not see you unless you are right in front of it: the best time for an attack. A worker that is cornered freezes and can be rusted from any side. The foremen in the green vests carry hoses and wash you down when they see you from the front: a ball is one size smaller after a hit, the smallest ball is destroyed (a life). Foremen can be rusted from behind, too, for 500 points. When all workers are rusted the next level begins, with more workers, more foremen and more fruit.
+.PP
+The program is the demo \fIrustball.bas\fR of Engine1999, made into an executable with
+.B BUILD
+(window kind: it needs the SDL2 library, nothing else); its BASIC libraries are inside it. It opens the Engine1999 window; the window can
+be switched between the full screen and a window with F11 or ALT+RETURN. Up to four players share one picture: the camera follows the middle of all balls and a ball cannot leave the picture.
+.SH CONTROLS
+On the title screen press
+.B 1
+for one player,
+.B 2
+for two players on the keyboard,
+.B C
+(or A or START on a game controller) for controllers.
+.TP
+.BR WASD
+player 1 (with one player the cursor keys work, too).
+.TP
+.B "cursor keys"
+player 2 (with two players).
+.TP
+.B "controllers"
+players 1 to 4: left stick or D-pad. A pad that is connected brings its player into the game, a pad that is removed takes the player out.
+.TP
+.B P
+pause (START on a pad).
+.TP
+.B M
+music on or off.
+.TP
+.B Q
+quit (BACK on a pad).
+.SH FILES
+The best score is kept in the file
+.I rustball.hi
+in the current directory (the game goes on without it if the file cannot be written). The current directory is outside the folder of the game, so Engine1999 asks once for permission to write there; answer "Always" to keep the high score (see
+.BR engine1999\-basic (7),
+SECURITY).
+.SH SEE ALSO
+.BR engine1999 (1),
+.BR engine1999-basic (7)

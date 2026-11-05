@@ -55,7 +55,7 @@ printf '10 PRINT "HI";A$:LET B=1+2*3\n20 GOTO 10\n' | ./basictest2
 
 | Where | What |
 |---|---|
-| `$(PREFIX)/bin` | `engine1999`, `engine1999c` and the games `engine1999-fruit`, `engine1999-fruit2`, `engine1999-climb`, `engine1999-madrun`, `engine1999-river` and, a console executable that needs no SDL2, `engine1999-wumpus` (the demos made into executables with `BUILD` by `make games`, part of `make install`; window kind, libraries inside; they keep their high score file in the current directory) |
+| `$(PREFIX)/bin` | `engine1999`, `engine1999c` and the games `engine1999-fruit`, `engine1999-fruit2`, `engine1999-climb`, `engine1999-madrun`, `engine1999-river`, `engine1999-rustball` and, a console executable that needs no SDL2, `engine1999-wumpus` (the demos made into executables with `BUILD` by `make games`, part of `make install`; window kind, libraries inside; they keep their high score file in the current directory) |
 | `$(PREFIX)/lib/engine1999` | the kit of `BUILD`: `engine1999.o`, `engine1999c.o`, `engine.lib` |
 | `$(PREFIX)/share/engine1999/demos` | the demo programs; `demos/lib` below it holds their libraries (`*.lib`) |
 | `$(PREFIX)/share/doc/engine1999` | README, LICENSE, LICENSE-EXCEPTION, `docs/` (with `grammar.html`) |
