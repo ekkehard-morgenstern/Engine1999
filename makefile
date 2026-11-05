@@ -229,7 +229,7 @@ kit: kit/engine1999 kit/engine1999c kit/engine1999.o kit/engine1999c.o kit/engin
 
 # The demo games as programs of their own (roadmap item 60): each demo is turned into an executable with BUILD (window kind, its libraries
 # inside), named engine1999-<game> so that nothing on the user's system clashes. Needs only the system linker, like BUILD itself.
-GAMES=fruit fruit2 climb madrun river
+GAMES=fruit fruit2 fruit3 climb climb2 madrun madrun2 river river2
 GAMEEXE=$(addprefix kit/games/engine1999-,$(GAMES))
 # text games: console executables (BUILD ..., CONSOLE: no window, no SDL2 needed to run them)
 CONGAMES=wumpus

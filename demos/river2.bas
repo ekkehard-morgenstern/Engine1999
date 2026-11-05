@@ -1,0 +1,1451 @@
+1 ' License: free for everybody to use, copy, change and build into executables (BUILD).
+2 ' An executable made with BUILD contains the Engine1999 runtime: the Engine1999 Runtime Exception
+3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
+4 ' in the executable (it shows with the command line option --engine1999-about).
+5 ' the helpers that the demo games share are in the libraries demos/lib/util.lib, input.lib, hiscore.lib and text.lib
+6 LOAD LIBRARY "util"
+7 LOAD LIBRARY "input"
+8 LOAD LIBRARY "hiscore"
+9 LOAD LIBRARY "text"
+10 DIM RS$(64),RCLA(64),RCRA(64),RDLA(64),RDRA(64)
+20 ' ETERNAL RIVER II - the second edition of the scroll-down boat game for Engine1999: a hot air balloon of 3 x 3 sprites and flocks of gulls fly over the river on sprite paths.
+30 ' You steer a boat down a river that meanders and never ends. Swimmers, divers and other boats are in the way, people on the banks throw rocks
+40 ' at you, and there are bridges with traffic on them (just for decoration: you pass under them). A hit is a matter of luck: you may be thrown
+50 ' into the water instead of drowning. Then swim to a bank, walk along it (up, to go on: the river scrolls as you walk), pick up the fruit,
+60 ' vegetables and ice cream cones you find, and look for a boat: a boat moored at a jetty, or one that was left drifting.
+70 ' Keys: LEFT / RIGHT or A / D steer, UP / W faster (swimming: nothing, walking: walk on), DOWN / S slower, P pause, Q quit. A game controller works too (left stick or D-pad,
+80 ' START pauses, BACK quits). The river gets narrower and busier with the distance, every 4000 pixels is a new level; an extra life for every 5000 points.
+90 ' What this program shows of the language:
+100 '   * an endless world made of rows that are made up on the way (a hash of the row number: the meander, the banks, the houses, the objects)
+110 '     and scrolled with TILE SCROLL / TILE FILL (see docs/graphics-subsystem.md, "Scrolling a world that is bigger than the screen"), tiles and sprites drawn with GFX LINE
+120 '     and grabbed (GFX GRAB, TILE DEF, SPRITE DEF), a pool of objects with their own motion, PROC / FUNC / LOCAL, SFX, generative music with EVERY
+130 ' --- global variables ---------------------------------------------------------------------------------------------------------------------
+131 '   * NEW in II: a hot air balloon (SPRITE n,SIZE 3,3, a translucent shadow in its pictures) drifts across the screen on a PATH (SPRITE n,PATH a$), and gulls cross it in flocks;
+132 '     the program moves none of them: the paths report events (E n) that ON SPRITE GOSUB hands to a handler (the burner's roar, a gull's cry)
+140 ' W world scroll in pixels (WF exact), TR the world row shown in tile row 0, RB$(j) the 41 tiles of tile row j, PM what the player is: 0 boat, 1 swimming,
+150 ' 2 walking, 3 lost (waiting for the new boat), PX,PY the player on the screen, SW swimming time left, INV protection frames, LIVES, SCORE, LVL level, DIST pixels
+160 ' objects 1..NO: OK kind (0 free, 1 swimmer, 2 diver, 3 boat, 4 thrower, 5 something to collect, 6 a boat to board, 7 rock, 8 bridge traffic, 9 splash),
+170 ' OX screen x, OY world y of the top (screen y = W + 312 - OY), OVX / OVY speeds, OT timer, OF kind of it (side, picture), OA helper
+180 ' --------------------------------------------------------------------------------------------------------------------------------------------
+190 ' (a FUNC has to be defined before the lines that call it)
+200 ' a number between 0 and 1 that is always the same for the same A and B (the whole world comes from this)
+210 FUNC HASH(A,B)
+220   LOCAL X
+230   X=SIN(A*12.9898+B*78.233)*43758.5453
+240   RETURN X-INT(X)
+250 END FUNC
+260 ' where the middle of the river is (a tile column) and half its width in the world row N
+270 FUNC RCEN(N)
+280   RETURN 20+5.5*SIN(N*0.04)+2*SIN(N*0.11+1.3)
+290 END FUNC
+300 FUNC RHALF(N)
+310   RETURN MAX(3.6,7.2+1.2*SIN(N*0.03+2)-MIN(3,LVL*0.35))
+320 END FUNC
+330 ' the shores of the rows that were made (the last 64 rows are kept): the tile columns of the left and of the right shore, and the middle between them
+340 FUNC LSHORE(N)
+350   RETURN RCLA(N MOD 64)
+360 END FUNC
+370 FUNC RSHORE(N)
+380   RETURN RCRA(N MOD 64)
+390 END FUNC
+400 FUNC MIDRIV(N)
+410   RETURN (RCLA(N MOD 64)+RCRA(N MOD 64))/2
+420 END FUNC
+430 ' do the rectangles (x, y, width, height) overlap?
+440 FUNC HIT(X1,Y1,W1,H1,X2,Y2,W2,H2)
+450   IF X1+W1>X2 AND X1<X2+W2 AND Y1+H1>Y2 AND Y1<Y2+H2 THEN RETURN -1
+460   RETURN 0
+470 END FUNC
+480 ' what kind of ground is the tile T at the pixel column XP: 0 water, 1 land to walk on, 2 land that is in the way (tree, house, bush); MD 1 = a swimmer (a bridge is no land for him)
+490 FUNC TCL(T,XP,MD)
+500   IF T<=2 THEN RETURN 0
+510   IF T=3 THEN
+520     IF XP MOD 16<10 THEN RETURN 1
+530     RETURN 0
+540   END IF
+550   IF T=4 THEN
+560     IF XP MOD 16>=6 THEN RETURN 1
+570     RETURN 0
+580   END IF
+590   IF T=16 AND MD=1 THEN RETURN 0
+600   IF T>=10 AND T<=13 THEN RETURN 2
+610   RETURN 1
+620 END FUNC
+630 ' the tile at the screen point (XI,YI)
+640 FUNC TILEAT(XI,YI)
+650   LOCAL N,X
+660   N=INT((W+311-YI)/24)
+670   X=INT(XI/16)
+680   IF N>TRMAX OR N<TRMAX-63 OR N<FIRSTROW OR X<0 OR X>40 THEN RETURN 5
+690   RETURN ASC(MID$(RS$(N MOD 64),X+1,1))
+700 END FUNC
+710 ' the style of a stretch of a bank of 40 rows: 0 meadow, 1 village, 2 road
+720 FUNC STYLE(A,B)
+730   LOCAL V
+740   V=FN HASH(A,B)
+750   IF V<0.35 THEN RETURN 0
+760   IF V<0.7 THEN RETURN 1
+770   RETURN 2
+780 END FUNC
+790 ' the tile of a bank: N the row, M the pair of rows (houses are two rows high), X the column, D the distance from the river, ST the style of this stretch of the
+800 ' bank (0 meadow, 1 village, 2 road), RX the column of the road (-1 none), SD 0 left / 1 right bank
+810 FUNC BANKT(N,M,X,D,ST,RX,SD)
+820   LOCAL H,HH
+830   IF X=RX THEN RETURN 9
+840   H=FN HASH(N+SD*1000,X*3+SD)
+850   IF ST=1 AND D>=2 THEN
+860     HH=FN HASH(M+SD*500,X+SD*7)
+870     IF HH>0.78 AND X<>RX-1 AND X<>RX+1 THEN
+880       IF HH>0.9 THEN
+890         IF N MOD 2=0 THEN RETURN 13
+900         RETURN 12
+910       END IF
+920       IF N MOD 2=0 THEN RETURN 11
+930       RETURN 10
+940     END IF
+950   END IF
+960   IF H<0.16 AND D>=2 THEN
+970     IF H<0.07 THEN RETURN 8
+980     RETURN 7
+990   END IF
+1000   IF H<0.2 AND D>=2 THEN RETURN 17
+1010   IF H>0.92 THEN RETURN 6
+1020   RETURN 5
+1030 END FUNC
+1040 ' ====================================================================== main program
+1050 CALL INIT
+1060 HI=FN HS_LOAD("river2.hi")
+1070 QT=0
+1080 REPEAT
+1090   CALL TITLE
+1100   IF QT=0 THEN
+1110     CALL PLAYGAME
+1120     IF BEST>HI THEN
+1130       HI=BEST
+1140       ON ERROR GOTO HIERR
+1150       CALL HS_SAVE("river2.hi",HI)
+1160       LABEL HIDONE
+1170       ON ERROR OFF
+1180     END IF
+1190   END IF
+1200 UNTIL QT=1
+1210 CALL TX_BYE("ETERNAL RIVER II")
+1220 END
+1230 ' the library hiscore reads the high score (a missing or empty file is 0, no error); a file that can't be written is ignored: the error handler is here in the main program, where RESUME <label> can continue
+1240 LABEL HIERR
+1250 RESUME HIDONE
+1260 ' the music: one bar (2 seconds) at a time (see MBAR)
+1270 LABEL MUSICTIMER
+1280 CALL MBAR
+1290 RETURN
+1300 ' ====================================================================== set up (once)
+1310 PROC INIT
+1320   RANDOMIZE
+1330   GFX RESET ALL
+1340   CLS
+1350   ' (DIM n makes n elements, 0 to n-1)
+1360   DIM OK(44),OX(44),OY(44),OVX(44),OVY(44),OT(44),OF(44),OA(44),SH(44)
+1370   DIM RT(4),AR(4),PT(8)
+1380   NO=40
+1390   CALL PALETTES
+1400   CALL SOUNDS
+1410   CALL MAKEART
+1420   TX_PAPER=211:TX_SHADOW=1
+1430   SPRITE 0,PRIORITY 6
+1440   CALL STARTWORLD
+1450   MUSON=0
+1455   CALL AMBSTART
+1460 END PROC
+1470 ' the colors: the same table for the tiles (layer 1), the sprites (layer 4) and the graphics layer (3), where the pictures are drawn
+1480 PROC PALETTES
+1490   LOCAL I,R,G,B
+1500   FOR I=1 TO 62
+1510     READ R,G,B
+1520     GFX PALETTE 1,I,RGB(R,G,B)
+1530     GFX PALETTE 4,I,RGB(R,G,B)
+1540     GFX PALETTE 3,I,RGB(R,G,B)
+1550   NEXT I
+1560   GFX PALETTE 3,250,RGB(0,0,20,185)
+1570   GFX PALETTE 2,200,RGB(255,255,255):GFX PALETTE 2,201,RGB(255,210,50):GFX PALETTE 2,202,RGB(120,220,255):GFX PALETTE 2,203,RGB(255,100,90)
+1580   GFX PALETTE 2,204,RGB(140,255,140):GFX PALETTE 2,205,RGB(190,200,230):GFX PALETTE 2,206,RGB(255,150,210):GFX PALETTE 2,207,RGB(255,170,40)
+1590   GFX PALETTE 2,211,RGB(8,24,58)
+1600   ' the wraiths: black and white and see-through
+1610   GFX PALETTE 4,63,RGB(240,240,250,165):GFX PALETTE 4,64,RGB(150,150,165,175):GFX PALETTE 4,65,RGB(12,12,18,205)
+1620   GFX PALETTE 3,63,RGB(240,240,250,165):GFX PALETTE 3,64,RGB(150,150,165,175):GFX PALETTE 3,65,RGB(12,12,18,205)
+1630 END PROC
+1640 ' ====================================================================== the sounds
+1650 PROC SOUNDS
+1660   SFX 1,"W3 V0.5 X0,0.005,0.3,0.3 S2500,300,6"
+1670   SFX 2,"W3 V0.25 X0.02,0.05,0.3,0.1 S400,1800,10"
+1680   SFX 3,"W3 V0.7 ML X0,0.005,0.35,0.4 S1400,70,4"
+1690   SFX 4,"W1 V0.3 ML H1319,16 H1760,10"
+1700   SFX 5,"W2 V0.4 X0,0.004,0,0.05 S200,80,12"
+1710   SFX 6,"W2 V0.35 ML S500,90,3"
+1720   SFX 7,"W0 V0.25 ML H880,12 H660,12 H990,8"
+1730   SFX 8,"W1 V0.35 ML H523,8 H659,8 H784,8 H1047,6"
+1740   SFX 9,"W0 V0.18 X0,0.02,0.3,0.1 S300,900,20"
+1750   SFX 10,"W1 V0.3 ML H220,8 H196,6"
+1760   SFX 11,"W0 V0.35 ~7,1.2 X0.1,0.1,0.7,0.5 S250,800,5 S800,150,5"
+1770   SFX 12,"W0 V0.22 ~5,2 X0.2,0.2,0.5,0.6 S600,200,3"
+1780 END PROC
+1790 ' ====================================================================== the pictures
+1800 PROC GRABSPRITE(IM)
+1810   GFX GRAB 0,0,15,23,G$
+1820   SPRITE DEF IM,MID$(G$,5)
+1830 END PROC
+1840 PROC GRABTILE(TN)
+1850   GFX GRAB 0,0,15,23,G$
+1860   TILE DEF TN,MID$(G$,5)
+1870 END PROC
+1880 PROC CLR
+1890   GFX LINE 0,0,15,23,0,BF
+1900 END PROC
+1910 PROC MAKEART
+1920   LOCAL T,I
+1930   GFX LAYER 3,OFF
+1940   GFX TARGET 3
+1950   FOR T=0 TO 20
+1960     CALL MKTILE(T)
+1970     CALL GRABTILE(T)
+1980   NEXT T
+1990   FOR I=0 TO 35
+2000     CALL MKSPR(I)
+2010     CALL GRABSPRITE(I)
+2020   NEXT I
+2030   GFX CLEAR
+2040   GFX LAYER 3,ON
+2050 END PROC
+2060 ' water 0 1 2, shore left 3 / right 4, grass 5 / with flowers 6, trees 7 8, road 9, house 10..13 (roof, wall: red, blue), dock left 14 / right 18, sand 15, bridge 16, bush 17
+2070 PROC MKTILE(T)
+2080   LOCAL I,X,Y
+2090   IF T<=2 THEN
+2100     GFX LINE 0,0,15,23,4,BF
+2110     FOR I=1 TO 4
+2120       X=FN RN(11):Y=FN RN(22)
+2130       GFX LINE X,Y,X+3+FN RN(3),Y,3
+2140     NEXT I
+2150     FOR I=1 TO 4+T
+2160       X=FN RN(11):Y=FN RN(22)
+2170       GFX LINE X,Y,X+2+FN RN(3),Y,5
+2180     NEXT I
+2190     FOR I=1 TO T+1
+2200       GFX PSET FN RN(16),FN RN(24),6
+2210     NEXT I
+2220   END IF
+2230   IF T=3 OR T=14 THEN
+2240     GFX LINE 0,0,15,23,4,BF
+2250     GFX LINE 0,0,6,23,7,BF:GFX LINE 7,0,9,23,10,BF:GFX LINE 10,0,10,23,6
+2260     FOR I=1 TO 6
+2270       GFX PSET FN RN(7),FN RN(24),8:GFX PSET FN RN(7),FN RN(24),9
+2280     NEXT I
+2290     FOR I=1 TO 3
+2300       GFX PSET 11+FN RN(5),FN RN(24),5
+2310     NEXT I
+2320   END IF
+2330   IF T=4 OR T=18 THEN
+2340     GFX LINE 0,0,15,23,4,BF
+2350     GFX LINE 9,0,15,23,7,BF:GFX LINE 6,0,8,23,10,BF:GFX LINE 5,0,5,23,6
+2360     FOR I=1 TO 6
+2370       GFX PSET 9+FN RN(7),FN RN(24),8:GFX PSET 9+FN RN(7),FN RN(24),9
+2380     NEXT I
+2390     FOR I=1 TO 3
+2400       GFX PSET FN RN(5),FN RN(24),5
+2410     NEXT I
+2420   END IF
+2430   IF T=14 THEN
+2440     GFX LINE 5,4,15,19,26,BF
+2450     FOR Y=5 TO 18 STEP 3
+2460       GFX LINE 5,Y,15,Y+1,25,BF
+2470     NEXT Y
+2480     GFX LINE 5,4,15,4,1:GFX LINE 5,19,15,19,1
+2490   END IF
+2500   IF T=18 THEN
+2510     GFX LINE 0,4,10,19,26,BF
+2520     FOR Y=5 TO 18 STEP 3
+2530       GFX LINE 0,Y,10,Y+1,25,BF
+2540     NEXT Y
+2550     GFX LINE 0,4,10,4,1:GFX LINE 0,19,10,19,1
+2560   END IF
+2570   IF T=5 OR T=6 OR T=7 OR T=8 OR T=10 OR T=11 OR T=12 OR T=13 OR T=17 THEN
+2580     GFX LINE 0,0,15,23,7,BF
+2590     FOR I=1 TO 10
+2600       GFX PSET FN RN(16),FN RN(24),8:GFX PSET FN RN(16),FN RN(24),9
+2610     NEXT I
+2620   END IF
+2630   IF T=6 THEN
+2640     FOR I=1 TO 4
+2650       X=FN RN(14)+1:Y=FN RN(22)+1
+2660       GFX PSET X,Y,27+FN RN(2):GFX PSET X+1,Y,27+FN RN(2)
+2670     NEXT I
+2680   END IF
+2690   IF T=7 THEN
+2700     GFX LINE 7,15,8,21,12,BF
+2710     GFX CIRCLE 8,9,7,13:GFX PAINT 8,9,13,13
+2720     GFX CIRCLE 6,7,3,14:GFX PAINT 6,7,14,14
+2730     GFX CIRCLE 8,9,7,8
+2740   END IF
+2750   IF T=8 THEN
+2760     GFX LINE 6,16,9,22,58,BF
+2770     GFX CIRCLE 8,10,8,13:GFX PAINT 8,10,13,13
+2780     GFX CIRCLE 5,7,3,14:GFX PAINT 5,7,14,14:GFX CIRCLE 11,13,3,14:GFX PAINT 11,13,14,14
+2790     GFX CIRCLE 8,10,8,8
+2800   END IF
+2810   IF T=9 THEN
+2820     GFX LINE 0,0,15,23,15,BF
+2830     GFX LINE 0,0,1,23,16,BF:GFX LINE 14,0,15,23,16,BF
+2840     GFX LINE 7,2,8,9,17,BF:GFX LINE 7,14,8,21,17,BF
+2850     FOR I=1 TO 8
+2860       GFX PSET 2+FN RN(12),FN RN(24),16
+2870     NEXT I
+2880   END IF
+2890   IF T=19 THEN
+2900     GFX LINE 0,0,15,23,15,BF
+2910     GFX LINE 0,0,1,23,16,BF
+2920     FOR I=1 TO 8
+2930       GFX PSET 2+FN RN(14),FN RN(24),16
+2940     NEXT I
+2950   END IF
+2960   IF T=20 THEN
+2970     GFX LINE 0,0,15,23,15,BF
+2980     GFX LINE 14,0,15,23,16,BF
+2990     FOR I=1 TO 8
+3000       GFX PSET FN RN(14),FN RN(24),16
+3010     NEXT I
+3020   END IF
+3030   IF T=10 OR T=12 THEN
+3040     ' a roof (the house is two tiles high: the roof above the wall)
+3050     I=18:IF T=12 THEN I=24
+3060     GFX LINE 1,3,14,23,I,BF
+3070     GFX LINE 1,3,14,3,19:GFX LINE 1,3,1,23,19:GFX LINE 14,3,14,23,19
+3080     FOR Y=7 TO 23 STEP 4
+3090       GFX LINE 2,Y,13,Y,19
+3100     NEXT Y
+3110     GFX LINE 10,5,12,9,30,BF
+3120   END IF
+3130   IF T=11 OR T=13 THEN
+3140     GFX LINE 1,0,14,17,20,BF
+3150     GFX LINE 1,0,1,17,21:GFX LINE 14,0,14,17,21
+3160     GFX LINE 3,4,6,9,22,BF:GFX LINE 3,4,6,4,1:GFX LINE 3,9,6,9,1:GFX LINE 3,4,3,9,1:GFX LINE 6,4,6,9,1
+3170     GFX LINE 9,7,12,17,23,BF:GFX LINE 9,7,12,7,1:GFX PSET 11,12,39
+3180     GFX LINE 1,18,14,19,21,BF
+3190   END IF
+3200   IF T=15 THEN
+3210     GFX LINE 0,0,15,23,10,BF
+3220     FOR I=1 TO 10
+3230       GFX PSET FN RN(16),FN RN(24),11
+3240     NEXT I
+3250   END IF
+3260   IF T=16 THEN
+3270     GFX LINE 0,0,15,23,15,BF
+3280     GFX LINE 0,0,15,3,29,BF:GFX LINE 0,3,15,3,30
+3290     GFX LINE 0,20,15,23,29,BF:GFX LINE 0,20,15,20,30
+3300     FOR X=2 TO 14 STEP 6
+3310       GFX LINE X,0,X+1,3,52,BF:GFX LINE X,20,X+1,23,52,BF
+3320     NEXT X
+3330     GFX LINE 2,11,9,12,17,BF
+3340     GFX LINE 0,4,15,4,16:GFX LINE 0,19,15,19,16
+3350   END IF
+3360   IF T=17 THEN
+3370     GFX CIRCLE 8,13,6,13:GFX PAINT 8,13,13,13
+3380     GFX CIRCLE 6,11,3,14:GFX PAINT 6,11,14,14
+3390     GFX CIRCLE 8,13,6,8
+3400     GFX PSET 10,15,27:GFX PSET 5,13,28
+3410   END IF
+3420 END PROC
+3430 ' a boat hull seen from above (bow at the top if UP, else at the bottom): outline, rim color CO, inside color CI
+3440 PROC HULL(CO,CI,UP)
+3450   LOCAL YY,Y,HW
+3460   FOR YY=0 TO 21
+3470     HW=INT(1+YY*0.75)
+3480     IF HW>6 THEN HW=6
+3490     IF YY>15 THEN HW=6-INT((YY-15)*0.3)
+3500     IF UP THEN Y=1+YY ELSE Y=22-YY
+3510     GFX LINE 8-HW,Y,7+HW,Y,1
+3520     IF HW>=2 THEN GFX LINE 9-HW,Y,6+HW,Y,CO
+3530     IF HW>=3 THEN GFX LINE 10-HW,Y,5+HW,Y,CI
+3540   NEXT YY
+3550 END PROC
+3560 ' a person seen from the front or the back (BK): head, body in the shirt color SC, legs; FR 0 / 1 the two walking frames, 2 standing
+3570 PROC PERSON(SC,BK,FR,TOPY)
+3580   LOCAL LA,RA
+3590   LA=0:RA=0
+3600   IF FR=0 THEN LA=2
+3610   IF FR=1 THEN RA=2
+3620   GFX LINE 5,TOPY,10,TOPY+7,1,BF
+3630   GFX LINE 6,TOPY+1,9,TOPY+6,31,BF
+3640   IF BK THEN GFX LINE 6,TOPY+1,9,TOPY+4,37,BF ELSE GFX LINE 6,TOPY+1,9,TOPY+2,37,BF:GFX PSET 7,TOPY+4,1:GFX PSET 9,TOPY+4,1
+3650   GFX LINE 3,TOPY+8,12,TOPY+15,1,BF
+3660   GFX LINE 4,TOPY+9,11,TOPY+14,SC,BF
+3670   GFX LINE 1,TOPY+8-LA,2,TOPY+13-LA,1,BF:GFX LINE 13,TOPY+8-RA,14,TOPY+13-RA,1,BF
+3680   GFX LINE 1,TOPY+9-LA,1,TOPY+11-LA,SC:GFX LINE 14,TOPY+9-RA,14,TOPY+11-RA,SC
+3690   GFX LINE 1,TOPY+12-LA,2,TOPY+13-LA,31,BF:GFX LINE 13,TOPY+12-RA,14,TOPY+13-RA,31,BF
+3700   GFX LINE 4,TOPY+16,7,TOPY+20-LA,1,BF:GFX LINE 8,TOPY+16,11,TOPY+20-RA,1,BF
+3710   GFX LINE 5,TOPY+16,6,TOPY+19-LA,36,BF:GFX LINE 9,TOPY+16,10,TOPY+19-RA,36,BF
+3720   GFX LINE 4,TOPY+20-LA,7,TOPY+21-LA,25,BF:GFX LINE 8,TOPY+20-RA,11,TOPY+21-RA,25,BF
+3730 END PROC
+3740 ' a swimmer: the head, the arms, ripples; CAP the color of the cap, FR the arm stroke
+3750 PROC SWIMMER(CAP,FR)
+3760   GFX CIRCLE 8,12,7,6,0,360,0.55
+3770   GFX CIRCLE 8,12,5,5,0,360,0.6
+3780   GFX LINE 6,14,9,18,CAP,BF
+3790   GFX LINE 6,10,9,13,31,BF
+3800   GFX LINE 6,9,9,10,CAP,BF
+3810   IF FR=0 THEN
+3820     GFX LINE 2,12,5,12,31:GFX LINE 10,12,13,12,31
+3830   ELSE
+3840     GFX LINE 3,9,5,11,31:GFX LINE 10,14,12,16,31
+3850     GFX PSET 3,8,6:GFX PSET 12,17,6
+3860   END IF
+3870 END PROC
+3880 PROC MKSPR(I)
+3890   LOCAL X,Y,SD,FR
+3900   CALL CLR
+3910   ' 0 1 the player's boat, 2 an empty boat
+3920   IF I<=2 THEN
+3930     CALL HULL(40,42,-1)
+3940     GFX LINE 4,12,11,12,26
+3950     IF I<2 THEN
+3960       GFX LINE 5,9,10,14,1,BF:GFX LINE 6,10,9,13,32,BF
+3970       GFX LINE 6,6,9,8,1,BF:GFX LINE 7,7,8,8,31:GFX LINE 6,6,9,6,37
+3980       GFX LINE 3,10,4,13,31:GFX LINE 11,10,12,13,31
+3990     END IF
+4000     GFX LINE 6,19,9,22,30,BF
+4010     IF I=0 THEN
+4020       GFX LINE 4,22,11,23,6:GFX PSET 3,23,6:GFX PSET 12,23,6
+4030     ELSE
+4040       GFX LINE 5,23,10,23,6:GFX PSET 3,22,6:GFX PSET 12,22,6:GFX PSET 7,21,6
+4050     END IF
+4060   END IF
+4070   ' 3 .. 6 a rowboat and a motorboat, each bow up and bow down
+4080   IF I>=3 AND I<=6 THEN
+4090     SD=(I-3) MOD 2
+4100     IF I<=4 THEN
+4110       CALL HULL(26,42,SD=0)
+4120       GFX LINE 0,9,4,12,12:GFX LINE 11,12,15,9,12
+4130       GFX LINE 6,10,9,15,1,BF:GFX LINE 7,11,8,14,33,BF
+4140     ELSE
+4150       CALL HULL(41,40,SD=0)
+4160       GFX LINE 5,8,10,9,22,BF:GFX LINE 5,8,10,8,1
+4170       GFX LINE 6,16,9,19,30,BF
+4180     END IF
+4190   END IF
+4200   IF I=7 OR I=8 THEN CALL SWIMMER(35,I-7)
+4210   IF I=9 OR I=10 THEN CALL SWIMMER(32,I-9)
+4220   IF I=11 OR I=12 THEN
+4230     GFX LINE 5,8,10,20,38,BF:GFX LINE 5,8,10,8,1:GFX LINE 4,9,4,19,1:GFX LINE 11,9,11,19,1
+4240     GFX LINE 6,4,9,8,1,BF:GFX LINE 7,5,8,7,31:GFX LINE 6,4,9,5,38
+4250     GFX LINE 6,12,9,17,39,BF
+4260     GFX LINE 3,20,12,23,38,BF:GFX LINE 3,23,12,23,1
+4270     IF I=11 THEN
+4280       GFX CIRCLE 7,2,1,49:GFX CIRCLE 10,0,1,49:GFX PSET 5,5,49
+4290     ELSE
+4300       GFX CIRCLE 9,3,1,49:GFX CIRCLE 6,1,1,49:GFX PSET 11,6,49
+4310     END IF
+4320   END IF
+4330   ' 13 .. 16 a person on the bank who throws rocks: left bank facing right, right bank facing left; the second picture has the arm up with a rock
+4340   IF I>=13 AND I<=16 THEN
+4350     SD=(I-13)\2
+4360     FR=(I-13) MOD 2
+4370     CALL PERSON(33,0,2,4)
+4380     IF SD=0 THEN
+4390       IF FR=1 THEN
+4400         GFX LINE 12,12,14,20,0,BF:GFX LINE 12,2,14,12,1,BF:GFX LINE 13,2,13,12,33:GFX CIRCLE 13,0,2,50:GFX PSET 13,-1,6
+4410       END IF
+4420     ELSE
+4430       IF FR=1 THEN
+4440         GFX LINE 1,12,3,20,0,BF:GFX LINE 1,2,3,12,1,BF:GFX LINE 2,2,2,12,33:GFX CIRCLE 2,0,2,50
+4450       END IF
+4460     END IF
+4470   END IF
+4480   IF I=17 THEN
+4490     GFX CIRCLE 8,12,3,51:GFX PAINT 8,12,50,51:GFX PSET 7,11,6
+4500   END IF
+4510   IF I=18 THEN
+4520     GFX CIRCLE 8,12,3,6:GFX CIRCLE 8,12,5,59,0,360,0.7
+4530     GFX PSET 8,7,59:GFX PSET 4,10,59:GFX PSET 12,10,59
+4540   END IF
+4550   IF I=19 THEN
+4560     GFX CIRCLE 8,12,6,6:GFX CIRCLE 8,12,8,5,0,360,0.7
+4570     GFX PSET 8,3,59:GFX PSET 3,8,59:GFX PSET 13,8,59:GFX PSET 2,14,59:GFX PSET 14,14,59
+4580   END IF
+4590   ' 20 an apple, 21 a carrot, 22 an ice cream cone
+4600   IF I=20 THEN
+4610     GFX CIRCLE 8,13,5,44:GFX PAINT 8,13,44,44:GFX PSET 6,11,2:GFX PSET 6,12,2
+4620     GFX LINE 8,6,8,8,12:GFX LINE 9,6,11,5,13
+4630   END IF
+4640   IF I=21 THEN
+4650     FOR Y=8 TO 21
+4660       X=INT((21-Y)*0.32)+1
+4670       GFX LINE 8-X,Y,7+X,Y,45
+4680     NEXT Y
+4690     GFX LINE 6,4,6,8,13:GFX LINE 8,2,8,8,13:GFX LINE 10,4,10,8,13
+4700     GFX LINE 5,11,7,11,2:GFX LINE 9,15,10,15,2
+4710   END IF
+4720   IF I=22 THEN
+4730     FOR Y=12 TO 22
+4740       X=INT((22-Y)*0.4)
+4750       GFX LINE 8-X,Y,7+X,Y,46
+4760     NEXT Y
+4770     GFX LINE 6,14,9,15,2
+4780     GFX CIRCLE 8,9,4,47:GFX PAINT 8,9,47,47
+4790     GFX CIRCLE 8,5,3,48:GFX PAINT 8,5,48,48:GFX PSET 8,2,44
+4800   END IF
+4810   ' 23 24 25 the player walking away from you (the back), standing; 26 27 a passer-by on the bridge
+4820   IF I>=23 AND I<=25 THEN CALL PERSON(32,-1,I-23,2)
+4830   IF I=26 OR I=27 THEN CALL PERSON(33,0,I-26,2)
+4840   ' 28 29 a car on the bridge driving east / west
+4850   IF I=28 OR I=29 THEN
+4860     GFX LINE 1,7,14,17,1,BF
+4870     IF I=28 THEN GFX LINE 2,8,13,16,54,BF ELSE GFX LINE 2,8,13,16,55,BF
+4880     GFX LINE 4,9,11,15,22,BF:GFX LINE 6,9,9,15,0
+4890     IF I=28 THEN GFX LINE 6,9,9,15,54,BF:GFX LINE 13,8,14,9,56,BF:GFX LINE 13,15,14,16,56,BF ELSE GFX LINE 6,9,9,15,55,BF:GFX LINE 1,8,2,9,56,BF:GFX LINE 1,15,2,16,56,BF
+4900     GFX LINE 3,6,5,6,1:GFX LINE 10,6,12,6,1:GFX LINE 3,17,5,17,1:GFX LINE 10,17,12,17,1
+4910   END IF
+4920   ' 32 33 a wraith on foot, 34 35 a wraith on a horse (seen from above): black and white, see-through
+4930   IF I=32 OR I=33 THEN
+4940     FR=I-32
+4950     FOR Y=9 TO 21
+4960       X=3+INT((Y-9)*0.4)
+4970       SD=0:IF Y>16 THEN SD=FR*2-1
+4980       GFX LINE 8-X+SD,Y,7+X+SD,Y,63
+4990     NEXT Y
+5000     GFX LINE 6,11,6,20,64:GFX LINE 10,11,10,20,64:GFX LINE 8,13,8,19,64
+5010     FOR X=0 TO 5
+5020       GFX LINE 2+X*2+FR,21,2+X*2+FR,22+((X+FR) MOD 2),63
+5030     NEXT X
+5040     GFX LINE 4,12,3,17,64:GFX LINE 11,12,12,17,64:GFX LINE 3,17,3,18,2:GFX LINE 12,17,12,18,2
+5050     GFX CIRCLE 8,6,4,63:GFX PAINT 8,6,63,63:GFX CIRCLE 8,6,4,65
+5060     GFX CIRCLE 8,7,2,65:GFX PAINT 8,7,65,65
+5070     GFX PSET 7,6,2:GFX PSET 9,6,2
+5080   END IF
+5090   IF I=34 OR I=35 THEN
+5100     FR=I-34
+5110     GFX CIRCLE 8,15,4,65,0,360,2.1:GFX PAINT 8,15,65,65
+5120     GFX LINE 7,1,9,7,64,BF:GFX LINE 6,2,6,3,64:GFX LINE 10,2,10,3,64:GFX LINE 8,1,8,7,63
+5130     IF FR=0 THEN
+5140       GFX PSET 3,9,64:GFX PSET 12,9,64:GFX PSET 4,20,64:GFX PSET 11,20,64
+5150     ELSE
+5160       GFX PSET 4,9,64:GFX PSET 11,9,64:GFX PSET 3,20,64:GFX PSET 12,20,64
+5170     END IF
+5180     GFX LINE 7,22,9,23,63
+5190     GFX CIRCLE 8,13,3,63:GFX PAINT 8,13,63,63:GFX CIRCLE 8,11,2,65:GFX PAINT 8,11,65,65:GFX PSET 8,10,2
+5200   END IF
+5210   ' 30 31 a cyclist riding east / west
+5220   IF I=30 OR I=31 THEN
+5230     GFX CIRCLE 4,15,3,1:GFX CIRCLE 12,15,3,1
+5240     GFX LINE 4,15,8,11,57:GFX LINE 8,11,12,15,57:GFX LINE 8,11,7,8,57
+5250     IF I=30 THEN X=1 ELSE X=-1
+5260     GFX LINE 8,5,8+X,9,35:GFX LINE 7,3,9,5,31,BF:GFX LINE 7,3,9,3,37
+5270     GFX LINE 8,9,8+X*3,12,36
+5280   END IF
+5290 END PROC
+5300 ' ====================================================================== the world: rows made up on the way
+5310 ' the tiles of the world row N into ROW$ (41 tiles); GCL / GCR are the tile columns of the shores, BRG is -1 if the row is a bridge, DOCK 1 / 2 a jetty on the left / right bank
+5320 PROC MKROW(N)
+5330   LOCAL X,CL,CR,SL,SR,M,T,TL,TQ,PL,PR,RDL,RDR,PRL,PRR
+5340   TL=INT(FN RCEN(N)-FN RHALF(N)):TQ=INT(FN RCEN(N)+FN RHALF(N))
+5350   PL=TL:PR=TQ
+5360   PRL=-1:PRR=-1
+5370   IF N>FIRSTROW THEN
+5380     PL=RCLA((N-1) MOD 64):PR=RCRA((N-1) MOD 64)
+5390     PRL=RDLA((N-1) MOD 64):PRR=RDRA((N-1) MOD 64)
+5400   END IF
+5410   ' each shore follows its target by one tile at most every third row: it never jumps and the rows above and below always connect
+5420   CL=PL:CR=PR
+5430   IF TL<>PL AND SNCL>=2 THEN CL=PL+SGN(TL-PL):SNCL=0 ELSE SNCL=SNCL+1
+5440   IF TQ<>PR AND SNCR>=2 THEN CR=PR+SGN(TQ-PR):SNCR=0 ELSE SNCR=SNCR+1
+5450   CL=MAX(3,CL):CR=MIN(37,CR)
+5460   IF CR-CL<7 THEN CL=CL-1:CR=CR+1
+5470   RCLA(N MOD 64)=CL:RCRA(N MOD 64)=CR
+5480   GCL=CL:GCR=CR:BRG=0:DOCK=0
+5490   ROW$=""
+5500   SL=FN STYLE(N\40,1):SR=FN STYLE(N\40,2)
+5510   ' the roads follow the banks: 3 to 6 columns from the shore, moving one column at a time (the row where it moves has both columns as road)
+5520   RDL=-1:RDR=-1
+5530   IF SL=2 THEN
+5540     RDL=MAX(0,CL-3)
+5550     IF PRL>=0 THEN
+5560       RDL=PRL
+5570       IF CL-RDL<3 THEN RDL=RDL-1
+5580       IF CL-RDL>6 THEN RDL=RDL+1
+5590     END IF
+5600   END IF
+5610   IF SR=2 THEN
+5620     RDR=MIN(40,CR+3)
+5630     IF PRR>=0 THEN
+5640       RDR=PRR
+5650       IF RDR-CR<3 THEN RDR=RDR+1
+5660       IF RDR-CR>6 THEN RDR=RDR-1
+5670     END IF
+5680   END IF
+5690   IF RDL<0 THEN RDL=-1
+5700   IF RDR>40 THEN RDR=-1
+5710   RDLA(N MOD 64)=RDL:RDRA(N MOD 64)=RDR
+5720   IF N MOD 100=60 THEN
+5730     BRG=-1
+5740     FOR X=0 TO 40
+5750       ROW$=ROW$+CHR$(16)
+5760     NEXT X
+5770     EXIT PROC
+5780   END IF
+5790   M=N\2
+5800   IF N MOD 5=2 THEN
+5810     IF FN HASH(N\5,77)>0.93 THEN DOCK=1
+5820     IF FN HASH(N\5,78)>0.93 THEN DOCK=2
+5830   END IF
+5840   FOR X=0 TO 40
+5850     IF X<CL THEN
+5860       T=FN BANKT(N,M,X,CL-X,SL,RDL,0)
+5870     ELSE
+5880       IF X=CL THEN
+5890         T=3:IF DOCK=1 THEN T=14
+5900       ELSE
+5910         IF X<CR THEN
+5920           T=INT(FN HASH(N,X)*3)
+5930         ELSE
+5940           IF X=CR THEN
+5950             T=4:IF DOCK=2 THEN T=18
+5960           ELSE
+5970             T=FN BANKT(N,M,X,X-CR,SR,RDR,1)
+5980           END IF
+5990         END IF
+6000       END IF
+6010     END IF
+6020     ROW$=ROW$+CHR$(T)
+6030   NEXT X
+6040   IF RDL>=0 THEN
+6050     IF PRL>=0 AND PRL<>RDL THEN
+6060       MID$(ROW$,MIN(PRL,RDL)+1,1)=CHR$(19):MID$(ROW$,MAX(PRL,RDL)+1,1)=CHR$(20)
+6070     ELSE
+6080       MID$(ROW$,RDL+1,1)=CHR$(9)
+6090     END IF
+6100   END IF
+6110   IF RDR>=0 THEN
+6120     IF PRR>=0 AND PRR<>RDR THEN
+6130       MID$(ROW$,MIN(PRR,RDR)+1,1)=CHR$(19):MID$(ROW$,MAX(PRR,RDR)+1,1)=CHR$(20)
+6140     ELSE
+6150       MID$(ROW$,RDR+1,1)=CHR$(9)
+6160     END IF
+6170   END IF
+6180 END PROC
+6190 ' look for a free object and give it a kind K at the screen column X and the world height Y (SLT = 0 if there is none)
+6200 PROC NEWOBJ(K,X,Y)
+6210   LOCAL I
+6220   SLT=0
+6230   FOR I=1 TO NO
+6240     IF OK(I)=0 THEN
+6250       OK(I)=K:OX(I)=X:OY(I)=Y:OVX(I)=0:OVY(I)=0:OT(I)=0:OF(I)=0:OA(I)=0
+6260       SLT=I
+6270       EXIT PROC
+6280     END IF
+6290   NEXT I
+6300 END PROC
+6310 ' what turns up in the new row N (at the top of the screen): swimmers, divers, boats, throwers, things to collect, a boat at a jetty, traffic on a bridge
+6320 PROC SPAWNROW(N)
+6330   LOCAL Y,X,H,S
+6340   Y=N*24+24+8+FN RN(16)
+6350   IF BRG THEN
+6360     CALL SPAWNBRIDGE(N)
+6370     EXIT PROC
+6380   END IF
+6390   H=FN HASH(N,3)
+6400   IF H<0.03+0.012*LVL THEN
+6410     X=(GCL+1)*16+FN RN((GCR-GCL-1)*16-16)
+6420     CALL NEWOBJ(1,X,Y)
+6430     IF SLT>0 THEN OVX(SLT)=(RND(1)-0.5)*0.4
+6440   END IF
+6450   H=FN HASH(N,4)
+6460   IF H<0.012+0.007*LVL THEN
+6470     X=(GCL+1)*16+FN RN((GCR-GCL-1)*16-16)
+6480     CALL NEWOBJ(2,X,Y)
+6490     IF SLT>0 THEN
+6500       OVX(SLT)=(0.5+RND(1)*0.8)*(1-2*FN RN(2))
+6510       OT(SLT)=FN RN(60)
+6520     END IF
+6530   END IF
+6540   H=FN HASH(N,5)
+6550   IF H<0.016+0.008*LVL AND N MOD 3=0 THEN
+6560     X=(GCL+1)*16+FN RN((GCR-GCL-1)*16-16)
+6570     CALL NEWOBJ(3,X,Y)
+6580     IF SLT>0 THEN
+6590       OF(SLT)=FN RN(2)
+6600       S=1-2*FN RN(2)
+6610       OVY(SLT)=S*(0.35+RND(1)*0.45+LVL*0.04)
+6620       IF S>0 THEN OVY(SLT)=OVY(SLT)*0.6
+6630     END IF
+6640   END IF
+6650   H=FN HASH(N,6)
+6660   IF H<0.035+0.01*LVL THEN
+6670     S=FN RN(2)
+6680     IF S=0 THEN X=GCL*16-6 ELSE X=GCR*16+10
+6690     IF X>=0 AND X<=624 THEN
+6700       CALL NEWOBJ(4,X,Y)
+6710       IF SLT>0 THEN OF(SLT)=S:OT(SLT)=40+FN RN(80)
+6720     END IF
+6730   END IF
+6740   H=FN HASH(N,7)
+6750   IF H<0.07 THEN
+6760     S=FN RN(2)
+6770     IF S=0 THEN X=(GCL-2-FN RN(3))*16 ELSE X=(GCR+2+FN RN(3))*16
+6780     IF X>=0 AND X<=624 THEN
+6790       CALL NEWOBJ(5,X,Y)
+6800       IF SLT>0 THEN OF(SLT)=FN RN(3)
+6810     END IF
+6820   END IF
+6830   H=FN HASH(N,11)
+6840   IF H<0.015+0.004*LVL THEN
+6850     S=FN RN(2)
+6860     IF S=0 THEN X=(GCL-3-FN RN(3))*16 ELSE X=(GCR+3+FN RN(3))*16
+6870     IF X>=0 AND X<=600 THEN
+6880       S=10:IF FN RN(10)<4 THEN S=11
+6890       CALL NEWOBJ(S,X,Y)
+6900       IF SLT>0 THEN OF(SLT)=100+FN RN(300)
+6910     END IF
+6920   END IF
+6930   IF DOCK>0 THEN
+6940     IF DOCK=1 THEN X=(GCL+1)*16-2 ELSE X=(GCR-1)*16+2
+6950     CALL NEWOBJ(6,X,N*24+24)
+6960     IF SLT>0 THEN OA(SLT)=1
+6970   END IF
+6980 END PROC
+6990 ' the traffic on a bridge: a few people, a bicycle, cars; they only decorate it (OF 0 passer-by, 1 cyclist, 2 car; OVX the speed, east or west)
+7000 PROC SPAWNBRIDGE(N)
+7010   LOCAL I,K,S
+7020   FOR I=1 TO 5
+7030     K=FN RN(3)
+7040     S=1-2*FN RN(2)
+7050     CALL NEWOBJ(8,FN RN(620),N*24+24)
+7060     IF SLT>0 THEN
+7070       OF(SLT)=K
+7080       IF K=0 THEN OVX(SLT)=S*(0.3+RND(1)*0.3)
+7090       IF K=1 THEN OVX(SLT)=S*(1+RND(1)*0.8)
+7100       IF K=2 THEN OVX(SLT)=S*(1.8+RND(1)*1.2)
+7110     END IF
+7120   NEXT I
+7130 END PROC
+7140 ' the first rows of a new game: 37 rows, the 13 that are visible and 24 below them for the walker's scrollback (made from the bottom up, each connects to the one below), no objects yet
+7150 PROC STARTWORLD
+7160   LOCAL J
+7170   LVL=1
+7180   WF=960:W=960:TR=W\24+12:WPEAK=WF
+7190   FIRSTROW=TR-36:TRMAX=FIRSTROW-1:SNCL=0:SNCR=0
+7200   FOR J=FIRSTROW TO TR
+7210     CALL MKROW(J)
+7220     RS$(J MOD 64)=ROW$
+7230     TRMAX=J
+7240   NEXT J
+7250   FOR J=1 TO NO
+7260     OK(J)=0:SH(J)=0
+7270     SPRITE J,OFF
+7280   NEXT J
+7290   CALL SHOWTILES
+7300 END PROC
+7310 PROC SHOWTILES
+7320   LOCAL J,N,M$
+7330   FOR J=0 TO 12
+7340     N=TR-J
+7350     IF N>TRMAX OR N<TRMAX-63 OR N<FIRSTROW THEN
+7360       M$=M$+STRING$(41,CHR$(5))
+7370     ELSE
+7380       M$=M$+RS$(N MOD 64)
+7390     END IF
+7400   NEXT J
+7410   TILE FILL M$
+7420   TILE SCROLL 0,W MOD 24
+7430 END PROC
+7440 ' the world moves by SP pixels (forwards: new rows are made at the top; backwards, for a walker: the last rows are still there, up to 24 rows = two screens back)
+7450 PROC SCROLL(SP)
+7460   LOCAL NT
+7470   WF=WF+SP
+7480   IF WF<WPEAK-576 THEN WF=WPEAK-576
+7490   IF WF<FIRSTROW*24 THEN WF=FIRSTROW*24
+7500   IF WF>WPEAK THEN WPEAK=WF
+7510   W=INT(WF)
+7520   NT=W\24+12
+7530   WHILE TRMAX<NT
+7540     TRMAX=TRMAX+1
+7550     CALL MKROW(TRMAX)
+7560     RS$(TRMAX MOD 64)=ROW$
+7570     IF SPAWNING THEN CALL SPAWNROW(TRMAX)
+7580   WEND
+7590   IF NT<>TR THEN
+7600     TR=NT
+7610     CALL SHOWTILES
+7620   ELSE
+7630     TILE SCROLL 0,W MOD 24
+7640   END IF
+7650 END PROC
+7660 ' ====================================================================== a game
+7670 PROC PLAYGAME
+7680   CALL STARTGAME
+7690   REPEAT
+7700     GFX VSYNC
+7701     CALL AMBIENT
+7710     FRM=FRM+1
+7720     CALL CTRL
+7730     IF GQ=0 THEN
+7740       CALL MOVEPLAYER
+7750       CALL OBJECTS
+7760       CALL SHOWALL
+7770       IF BN>0 THEN
+7780         BN=BN-1
+7790         IF BN=0 THEN GFX CLEAR
+7800       END IF
+7810       IF MTM>0 THEN
+7820         MTM=MTM-1
+7830         IF MTM=0 THEN MSG$=""
+7840       END IF
+7850       IF FRM MOD 5=0 THEN CALL HUD
+7860     END IF
+7870   UNTIL GQ=1 OR OV=1
+7880   BEST=SCORE
+7890   IF OV=1 THEN CALL GAMEOVER
+7900   CALL MUSICOFF:CALL SNDRESET
+7910   SPAWNING=0
+7920   CALL HIDESPRITES
+7930   GFX CLEAR
+7940   TXT FILL 0,0,79,24,32,0,0
+7950 END PROC
+7960 PROC STARTGAME
+7970   SCORE=0:LIVES=3:LVL=1:DIST=0:BONUS=0:NXL=5000:OV=0:GQ=0:IN_QUIT=0:FRM=0
+7980   MSG$="":MTM=0:BN=0:LASTB=0:HF=0:WMV=0:UB=0:OLVL=0:BRN=0:WT=0:WH=0
+7990   CALL STARTWORLD
+8000   SPAWNING=-1
+8010   CALL RESPAWN
+8020   TX_PAPER=211
+8030   TXT FILL 0,0,79,24,32,0,0
+8040   TXT FILL 0,0,79,1,32,200,211
+8050   MSG$="DOWN THE ETERNAL RIVER - STEER CLEAR OF EVERYTHING!":MTM=300
+8060   CALL MUSICON
+8070   CALL HUD
+8080 END PROC
+8090 ' a new boat in the middle of the river; what is near it goes away
+8100 PROC RESPAWN
+8110   LOCAL N,I,SY
+8120   N=INT((W+311-226)/24)
+8130   PX=FN MIDRIV(N)*16:PY=226
+8140   PM=0:INV=120:SW=0:BT=0:DTM=0
+8150   FOR I=1 TO NO
+8160     IF OK(I)=1 OR OK(I)=2 OR OK(I)=3 OR OK(I)=7 THEN
+8170       SY=W+312-OY(I)
+8180       IF SY>150 THEN OK(I)=0
+8190     END IF
+8200   NEXT I
+8210 END PROC
+8220 PROC CTRL
+8230   CALL IN_POLL
+8240   IF FN IN_SERVICE() THEN CALL PAUSE
+8250   IF IN_QUIT THEN GQ=1
+8260 END PROC
+8270 PROC PAUSE
+8280   CALL MUSICOFF
+8290   CALL BANNER("PAUSED","P or START continues      Q or BACK quits",0)
+8300   CALL IN_PAUSELOOP
+8310   IF IN_QUIT THEN GQ=1
+8320   GFX CLEAR
+8330   BN=0
+8340   IF GQ=0 THEN CALL MUSICON
+8350 END PROC
+8360 ' ====================================================================== the player
+8370 ' the room the boat has at its height on the screen: BXL .. BXR (the pixel columns of the left edge of its picture)
+8380 PROC BOUNDS
+8390   LOCAL N1,N2,L1,R1,L2,R2
+8400   N1=INT((W+311-PY)/24):N2=INT((W+311-PY-23)/24)
+8410   L1=FN LSHORE(N1):R1=FN RSHORE(N1)
+8420   L2=FN LSHORE(N2):R2=FN RSHORE(N2)
+8430   BXL=MAX(L1,L2)*16+8:BXR=MIN(R1,R2)*16-8
+8440   IF BXR<BXL THEN BXL=(BXL+BXR)/2:BXR=BXL
+8450 END PROC
+8460 PROC MOVEPLAYER
+8470   LOCAL SP,C,NX,NN,I,SPW
+8480   IF INV>0 THEN INV=INV-1
+8490   IF BT>0 THEN BT=BT-1
+8500   SP=0
+8510   WMV=0
+8520   IF PM=0 THEN
+8530     SP=MIN(2.6,1.3+LVL*0.12)
+8540     IF IN_DY<0 THEN SP=SP*1.8
+8550     IF IN_DY>0 THEN SP=SP*0.45
+8560     PX=PX+IN_DX*2.4
+8570     CALL BOUNDS
+8580     PX=FN CLAMP(PX,BXL,BXR)
+8590     ' under a bridge?
+8600     UB=0
+8610     FOR I=1 TO 2
+8620       NN=INT((W+311-PY-4-(I-1)*16)/24)
+8630       IF NN MOD 100=60 THEN UB=-1:BRN=NN
+8640     NEXT I
+8650     IF UB AND LASTB<>BRN THEN
+8660       LASTB=BRN:BONUS=BONUS+100:SFX 7
+8670       MSG$="UNDER THE BRIDGE! +100":MTM=120
+8680     END IF
+8690   END IF
+8700   IF PM=1 THEN
+8710     UB=0
+8720     SP=1.2
+8730     PX=FN CLAMP(PX+IN_DX*1.8,0,624)
+8740     PY=FN CLAMP(PY+IN_DY*1.8,40,270)
+8750     SW=SW-1
+8760     IF SW<=0 THEN CALL DIE("YOU DROWNED")
+8770     IF PM=1 THEN
+8780       C=FN TCL(FN TILEAT(PX+8,PY+14),PX+8,1)
+8790       IF C>0 THEN
+8800         PM=2
+8810         SFX 5
+8820         MSG$="SAFE ON THE BANK! WALK UP / DOWN AND LOOK FOR A BOAT":MTM=300
+8830       END IF
+8840     END IF
+8850   END IF
+8860   IF PM=2 THEN
+8870     UB=0
+8880     NX=PX+IN_DX*1.3
+8890     NX=FN CLAMP(NX,0,624)
+8900     IF IN_DX<>0 THEN
+8910       C=FN TCL(FN TILEAT(NX+8,PY+20),NX+8,0)
+8920       IF C=1 THEN PX=NX:WMV=-1
+8930       IF C=0 AND IN_BTN THEN
+8940         PM=1:SW=600:PX=NX:SFX 1
+8950         CALL NEWOBJ(9,PX,W+312-PY-6)
+8960         IF SLT>0 THEN OT(SLT)=16
+8970         MSG$="SWIM!":MTM=90
+8980       END IF
+8990     END IF
+9000     IF PM=2 AND IN_DY<0 THEN
+9010       C=FN TCL(FN TILEAT(PX+8,PY+15),PX+8,0)
+9020       IF C=1 THEN SP=1.3:WMV=-1
+9030     END IF
+9040     IF PM=2 AND IN_DY>0 THEN
+9050       C=FN TCL(FN TILEAT(PX+8,PY+22),PX+8,0)
+9060       IF C=1 AND WF>WPEAK-570 AND WF>FIRSTROW*24+2 THEN SP=-1.3:WMV=-1
+9070     END IF
+9080     IF PM=2 THEN
+9090       C=FN TCL(FN TILEAT(PX+8,PY+20),PX+8,0)
+9100       IF C=0 THEN
+9110         PM=1:SW=600:SFX 1
+9120         MSG$="YOU FELL INTO THE WATER!":MTM=120
+9130       END IF
+9140     END IF
+9150   END IF
+9160   IF PM=4 THEN
+9170     UB=0
+9180     WT=WT-1
+9190     SPW=1.7:IF WH THEN SPW=2.6
+9200     PX=FN CLAMP(PX+IN_DX*SPW,0,624)
+9210     IF IN_DX<>0 THEN WMV=-1
+9220     IF IN_DY<0 THEN SP=SPW:WMV=-1
+9230     IF IN_DY>0 AND WF>WPEAK-570 AND WF>FIRSTROW*24+2 THEN SP=-SPW:WMV=-1
+9240     IF WT<=0 THEN CALL WRAITHEND
+9250   END IF
+9260   IF PM=3 THEN
+9270     UB=0
+9280     SP=0.8
+9290     DTM=DTM-1
+9300     IF DTM<=0 THEN
+9310       IF LIVES<=0 THEN OV=1 ELSE CALL RESPAWN
+9320     END IF
+9330   END IF
+9340   SPD2=SP
+9350   SCORE=INT(DIST/10)+BONUS
+9360   LVL=1+INT(DIST/4000)
+9370   IF LVL<>OLVL THEN
+9380     IF OLVL>0 THEN MSG$="RIVER LEVEL "+STR$(LVL)+" - NARROWER AND BUSIER":MTM=240:SFX 8
+9390     OLVL=LVL
+9400   END IF
+9410   IF SCORE>=NXL THEN
+9420     NXL=NXL+5000
+9430     IF LIVES<9 THEN LIVES=LIVES+1
+9440     SFX 8:MSG$="EXTRA LIFE!":MTM=180
+9450   END IF
+9460   CALL SCROLL(SP)
+9470   DIST=WPEAK-960
+9480 END PROC
+9490 ' you are out of the boat: the boat is lost, the swimmer is in the water (a luck roll decides in CRASH)
+9500 PROC DIE(R$)
+9510   IF PM=3 THEN EXIT PROC
+9520   PM=3:DTM=140:LIVES=LIVES-1
+9530   SFX 6
+9540   CALL NEWOBJ(9,PX,W+312-PY-6)
+9550   IF SLT>0 THEN OT(SLT)=30
+9560   MSG$=R$+"!":MTM=150
+9570   HF=-1
+9580 END PROC
+9590 ' a hit in the boat (I the object): often the end, but sometimes you are only thrown into the water
+9600 PROC CRASH(I)
+9610   LOCAL R,S
+9620   SFX 3
+9630   R=FN RN(100)
+9640   IF R<45 THEN
+9650     CALL DIE("CRASH! THE BOAT IS WRECKED")
+9660   ELSE
+9670     S=1-2*FN RN(2)
+9680     CALL NEWOBJ(6,FN CLAMP(PX+S*20,0,624),W+312-PY)
+9690     IF SLT>0 THEN OVX(SLT)=S*0.25:OVY(SLT)=0.6
+9700     PM=1:SW=900:BT=45:INV=60
+9710     MSG$="THROWN INTO THE WATER! SWIM TO A BANK OR TO A BOAT":MTM=300
+9720     CALL NEWOBJ(9,PX,W+312-PY-6)
+9730     IF SLT>0 THEN OT(SLT)=16
+9740   END IF
+9750   HF=-1
+9760 END PROC
+9770 ' the wraith I touched takes you in: you are a wraith too (with or without a horse), at the price of a life
+9780 PROC TOWRAITH(I)
+9790   OK(I)=0:SPRITE I,OFF:SH(I)=0
+9800   PM=4:WT=900:WH=FN RN(2)
+9810   LIVES=LIVES-1
+9820   SFX 11
+9830   MSG$="A WRAITH TOOK YOU - YOU ARE ONE OF THEM! COLLECT WHAT YOU CAN":MTM=300
+9840   HF=-1
+9850 END PROC
+9860 ' the wraith vanishes: a new boat, or the end if there are no lives left
+9870 PROC WRAITHEND
+9880   SFX 12
+9890   MSG$="THE WRAITH VANISHES":MTM=120
+9900   HF=-1
+9910   IF LIVES<=0 THEN
+9920     OV=1
+9930   ELSE
+9940     CALL RESPAWN
+9950   END IF
+9960 END PROC
+9970 PROC BOARD(I)
+9980   OK(I)=0:SPRITE I,OFF:SH(I)=0
+9990   PX=FN CLAMP(OX(I),0,624):PY=226
+10000   CALL BOUNDS
+10010   PX=FN CLAMP(PX,BXL,BXR)
+10020   PM=0:INV=100:SW=0
+10030   BONUS=BONUS+50
+10040   SFX 5
+10050   MSG$="A BOAT! GO ON DOWN THE RIVER (+50)":MTM=200
+10060 END PROC
+10070 ' ====================================================================== the objects
+10080 ' keeps the object I inside the river (a swimmer, a diver, a boat): OA(I) bounce
+10090 PROC KEEPIN(I)
+10100   LOCAL N,L,R
+10110   N=INT(OY(I)/24)
+10120   L=FN LSHORE(N)*16+12:R=FN RSHORE(N)*16-12
+10130   IF OX(I)<L THEN OX(I)=L:OVX(I)=ABS(OVX(I))
+10140   IF OX(I)>R THEN OX(I)=R:OVX(I)=-ABS(OVX(I))
+10150 END PROC
+10160 PROC OBJECTS
+10170   LOCAL AA,SS,LIM,I,K,SX,SY,TX,PWY,DX,DY,TT,D,PR,PRX,PRY,PRW,PRH,OW,OH,OXX,OYY,HZ
+10180   IF PM=3 THEN EXIT PROC
+10190   ' the player's rectangle
+10200   PRX=PX+3:PRY=PY+4:PRW=10:PRH=16
+10210   IF PM=1 THEN PRX=PX+4:PRY=PY+6:PRW=8:PRH=10
+10220   IF PM=2 THEN PRX=PX+4:PRY=PY+6:PRW=8:PRH=16
+10230   PWY=W+312-(PY+12)
+10240   FOR I=1 TO NO
+10250     K=OK(I)
+10260     IF K>0 THEN
+10270       OX(I)=OX(I)+OVX(I):OY(I)=OY(I)+OVY(I)
+10280       SX=OX(I):SY=W+312-OY(I)
+10290       LIM=330
+10300       IF K=4 OR K=5 OR K=6 OR K=10 OR K=11 THEN LIM=950
+10310       IF SY>LIM OR SY<-800 OR SX<-40 OR SX>680 THEN
+10320         OK(I)=0
+10330         ITERATE
+10340       END IF
+10350       IF K=1 THEN
+10360         IF (FRM+I*7) MOD 70=0 THEN OVX(I)=(RND(1)-0.5)*0.5
+10370         CALL KEEPIN(I)
+10380       END IF
+10390       IF K=2 THEN
+10400         OT(I)=OT(I)+1
+10410         IF OT(I)=90 THEN SFX 9
+10420         CALL KEEPIN(I)
+10430       END IF
+10440       IF K=3 THEN
+10450         TT=INT(OY(I)/24)
+10460         TX=FN MIDRIV(TT)*16-8
+10470         D=((I MOD 5)-2)*14
+10480         OVX(I)=FN CLAMP((TX+D-OX(I))*0.05,-1.3,1.3)
+10490       END IF
+10500       IF K=4 THEN
+10510         IF OA(I)>0 THEN OA(I)=OA(I)-1
+10520         OT(I)=OT(I)-1
+10530         IF OT(I)<=0 AND SY>40 AND SY<230 AND ABS(OX(I)-PX)<300 AND PM<>3 THEN
+10540           OT(I)=MAX(45,100+FN RN(90)-LVL*8)
+10550           OA(I)=14
+10560           CALL THROWROCK(I)
+10570         END IF
+10580       END IF
+10590       IF K=7 THEN
+10600         OT(I)=OT(I)-1
+10610         IF OT(I)<=0 THEN
+10620           IF FN TCL(FN TILEAT(SX+8,SY+12),SX+8,0)=0 THEN
+10630             OK(I)=9:OT(I)=16:SFX 1
+10640           ELSE
+10650             OK(I)=0
+10660           END IF
+10670         END IF
+10680       END IF
+10690       IF K=9 THEN
+10700         OT(I)=OT(I)-1
+10710         IF OT(I)<=0 THEN OK(I)=0
+10720       END IF
+10730       IF K=10 OR K=11 THEN
+10740         OT(I)=OT(I)-1
+10750         OF(I)=OF(I)-1
+10760         IF OF(I)<=0 THEN
+10770           OF(I)=300+FN RN(300)
+10780           IF SY>30 AND SY<290 THEN SFX 12
+10790         END IF
+10800         IF OT(I)<=0 THEN
+10810           OT(I)=50+FN RN(90)
+10820           AA=RND(1)*6.2832
+10830           SS=0.35:IF K=11 THEN SS=0.85
+10840           OVX(I)=COS(AA)*SS:OVY(I)=SIN(AA)*SS
+10850         END IF
+10860         ' they walk about on land: at the water they turn round
+10870         IF FN TCL(FN TILEAT(OX(I)+OVX(I)*10+8,SY-OVY(I)*10+20),OX(I)+OVX(I)*10+8,0)=0 OR OX(I)<4 OR OX(I)>612 THEN
+10880           OVX(I)=-OVX(I):OVY(I)=-OVY(I):OT(I)=OT(I)+10
+10890         END IF
+10900       END IF
+10910       ' what hits the player
+10920       K=OK(I)
+10930       IF K>0 THEN
+10940         OXX=SX:OYY=SY:OW=12:OH=16
+10950         IF K=1 THEN OXX=SX+4:OYY=SY+7:OW=8:OH=9
+10960         IF K=2 THEN OXX=SX+3:OYY=SY+4:OW=10:OH=14
+10970         IF K=3 OR K=6 THEN OXX=SX+2:OYY=SY+1:OW=12:OH=22
+10980         IF K=10 OR K=11 THEN OXX=SX+3:OYY=SY+4:OW=10:OH=18
+10990         IF K=6 AND OA(I)=1 THEN OXX=SX-8:OW=28
+11000         IF K=5 THEN OXX=SX+2:OYY=SY+4:OW=12:OH=16
+11010         IF K=7 THEN OXX=SX+5:OYY=SY+9:OW=6:OH=6
+11020         HZ=0
+11030         IF FN HIT(PRX,PRY,PRW,PRH,OXX,OYY,OW,OH) THEN
+11040           IF PM=0 AND INV<=0 AND NOT UB THEN
+11050             IF K=1 OR K=2 OR K=3 OR K=7 THEN CALL CRASH(I)
+11060           END IF
+11070           IF PM=1 AND INV<=0 THEN
+11080             IF K=2 OR K=3 OR K=7 THEN CALL DIE("HIT WHILE SWIMMING")
+11090           END IF
+11100           IF PM=2 AND K=7 THEN CALL DIE("HIT BY A ROCK")
+11110           IF (PM=1 OR PM=2) AND K=6 AND BT<=0 THEN CALL BOARD(I)
+11120           IF PM=2 AND (K=10 OR K=11) THEN CALL TOWRAITH(I)
+11130           IF (PM=2 OR PM=4) AND K=5 THEN
+11140             OK(I)=0:SPRITE I,OFF:SH(I)=0
+11150             BONUS=BONUS+25+25*OF(I)
+11160             SFX 4
+11170             MSG$=MID$("APPLE +25    CARROT +50   ICE CREAM +75",1+OF(I)*13,13):MTM=100
+11180           END IF
+11190         END IF
+11200         IF PM=3 THEN EXIT PROC
+11210       END IF
+11220     END IF
+11230   NEXT I
+11240 END PROC
+11250 ' the thrower I throws a rock at where the player will be in 70 frames (the world moves on meanwhile), and not quite exactly
+11260 PROC THROWROCK(I)
+11270   LOCAL TWY,S,SYI
+11280   S=OF(I)
+11290   CALL NEWOBJ(7,OX(I)+4,OY(I)-6)
+11300   IF SLT=0 THEN EXIT PROC
+11310   OT(SLT)=70
+11320   TWY=W+312-(PY+12)+SPD2*70
+11330   OVX(SLT)=(PX+4-OX(SLT))/70+(RND(1)-0.5)*0.35
+11340   OVY(SLT)=(TWY-OY(SLT))/70+(RND(1)-0.5)*0.3
+11350   SFX 2
+11360 END PROC
+11370 ' ====================================================================== showing it all
+11380 PROC HIDESPRITES
+11390   LOCAL I
+11400   FOR I=0 TO NO
+11410     SPRITE I,OFF
+11420     SH(I)=0
+11430   NEXT I
+11440 END PROC
+11450 PROC SHOWALL
+11460   LOCAL I,K,SX,SY,IM,PRI
+11470   ' the player: the boat, the swimmer, the walker
+11480   IM=-1
+11490   IF PM=0 AND NOT UB THEN IM=(FRM\6) MOD 2
+11500   IF PM=1 THEN IM=9+(FRM\10) MOD 2
+11510   IF PM=2 THEN
+11520     IM=25
+11530     IF WMV THEN IM=23+(FRM\6) MOD 2
+11540   END IF
+11550   IF PM=4 THEN
+11560     IM=32+(FRM\8) MOD 2
+11570     IF WH THEN IM=34+(FRM\6) MOD 2
+11580   END IF
+11590   IF IM>=0 AND INV>0 AND PM=0 AND (FRM\3) MOD 2=0 THEN IM=-1
+11600   IF IM<0 THEN
+11610     IF SH(0) THEN SPRITE 0,OFF:SH(0)=0
+11620   ELSE
+11630     SPRITE 0,INT(PX),INT(PY),IM
+11640     IF SH(0)=0 THEN SPRITE 0,ON:SH(0)=1
+11650   END IF
+11660   FOR I=1 TO NO
+11670     K=OK(I)
+11680     IF K=0 THEN
+11690       IF SH(I) THEN SPRITE I,OFF:SH(I)=0
+11700     ELSE
+11710       SX=INT(OX(I)):SY=INT(W+312-OY(I))
+11720       IF SY<-30 OR SY>310 THEN
+11730         IF SH(I) THEN SPRITE I,OFF:SH(I)=0
+11740       ELSE
+11750         IM=0
+11760         IF K=1 THEN IM=7+(FRM\12) MOD 2
+11770         IF K=2 THEN IM=11+(FRM\8) MOD 2
+11780         IF K=3 THEN
+11790           IM=3+OF(I)*2
+11800           IF OVY(I)<0 THEN IM=IM+1
+11810         END IF
+11820         IF K=4 THEN
+11830           IM=13+OF(I)*2
+11840           IF OA(I)>0 AND OA(I)<9 THEN IM=IM+1
+11850         END IF
+11860         IF K=5 THEN IM=20+OF(I)
+11870         IF K=10 THEN IM=32+(FRM\8) MOD 2
+11880         IF K=11 THEN IM=34+(FRM\6) MOD 2
+11890         IF K=6 THEN IM=2
+11900         IF K=7 THEN IM=17
+11910         IF K=8 THEN
+11920           IF OF(I)=0 THEN IM=26+(FRM\10) MOD 2
+11930           IF OF(I)=1 THEN
+11940             IM=30:IF OVX(I)<0 THEN IM=31
+11950           END IF
+11960           IF OF(I)=2 THEN
+11970             IM=28:IF OVX(I)<0 THEN IM=29
+11980           END IF
+11990         END IF
+12000         IF K=9 THEN IM=18+(OT(I)\4) MOD 2
+12010         IF K=1 AND SH(I)=0 THEN SPRITE I,PRIORITY 5
+12020         IF K=8 AND SH(I)=0 THEN SPRITE I,PRIORITY 7
+12030         SPRITE I,SX,SY,IM
+12040         IF SH(I)=0 THEN SPRITE I,ON:SH(I)=1
+12050       END IF
+12060     END IF
+12070   NEXT I
+12080 END PROC
+12090 ' ====================================================================== the status lines (the top two lines of the screen)
+12100 PROC HUD
+12110   LOCAL L1$,L2$,I
+12120   L1$=" SCORE "+FN PAD$(SCORE,6)+"   LIVES "+STR$(LIVES)+"   LEVEL "+STR$(LVL)+"   BEST "+FN PAD$(HI,6)+"   "+STR$(INT(DIST/10))+" m"
+12130   L2$=" "+MSG$
+12140   IF MSG$="" THEN
+12150     IF PM=0 THEN L2$=" IN THE BOAT"
+12160     IF PM=1 THEN L2$=" SWIMMING: "+STR$(INT(SW/60))+" s left - to the bank or to a boat!"
+12170     IF PM=2 THEN L2$=" WALKING: UP / DOWN walk, SPACE jumps into the water - find a boat or fruit"
+12180     IF PM=3 THEN L2$=" ..."
+12190     IF PM=4 THEN L2$=" WRAITH! "+STR$(INT(WT/60))+" s left - collect what you can, nothing can hurt you"
+12200   END IF
+12210   L1$=LEFT$(L1$+SPACE$(80),80)
+12220   L2$=LEFT$(L2$+SPACE$(80),80)
+12230   LOCATE 0,0:COLOR 201,211:PRINT L1$;
+12240   LOCATE 0,1:COLOR 202,211:PRINT L2$;
+12250   HF=0
+12260 END PROC
+12270 ' a message on the graphics layer, N frames (0 = until it is cleared)
+12280 PROC BANNER(T1$,T2$,N)
+12290   GFX CLEAR
+12300   GFX LINE 90,96,549,194,250,BF
+12310   GFX LINE 90,96,549,194,2,B
+12320   CALL BIGTEXT(112,T1$,2,3)
+12330   CALL BIGTEXT(164,T2$,2,1)
+12340   BN=N
+12350 END PROC
+12360 ' ====================================================================== start screen and the end of a game
+12370 PROC TITLE
+12380   LOCAL K$,K,N,N1
+12390   SPAWNING=0
+12400   CALL HIDESPRITES
+12410   CALL STARTWORLD
+12420   TX_PAPER=210
+12430   GFX CLEAR
+12440   TXT FILL 0,0,79,24,32,0,0
+12450   CALL BIGTEXT(24,"ETERNAL RIVER II",2,3)
+12460   CALL TXTAT(20,9,"  Steer your boat down the endless river!                ",200)
+12470   CALL TXTAT(20,10,"  Avoid swimmers, divers and other boats, and the         ",200)
+12480   CALL TXTAT(20,11,"  rocks that people on the banks throw at you.            ",200)
+12490   CALL TXTAT(20,12,"  Hit? Maybe you are only thrown into the water: swim     ",200)
+12500   CALL TXTAT(20,13,"  to the bank, walk on, find a boat, pick up fruit.       ",200)
+12510   CALL TXTAT(20,14,"  Beware of the wraiths that walk the banks!              ",206)
+12520   CALL TXTAT(20,15,"  LEFT / RIGHT steer    UP faster    DOWN slower          ",202)
+12530   CALL TXTAT(20,16,"  P pause    Q quit    (a game controller works, too)     ",202)
+12540   CALL TXTAT(20,18,"  BEST "+FN PAD$(HI,6)+"      Press SPACE or A to start    ",201)
+12550   PX=300:PY=226:PM=0:INV=0:UB=0:FRM=0
+12560   SPRITE 0,ON:SH(0)=1
+12570   DONE=0
+12580   REPEAT
+12590     GFX VSYNC
+12600     FRM=FRM+1
+12601     CALL AMBIENT
+12610     CALL SCROLL(1.2)
+12620     N1=INT((W+311-PY)/24)
+12630     PX=PX+(FN MIDRIV(N1)*16-PX)*0.05
+12640     SPRITE 0,INT(PX),INT(PY),(FRM\6) MOD 2
+12650     K$=INKEY$
+12660     K=0:IF K$<>"" THEN K=ASC(K$)
+12670     IF K>=97 AND K<=122 THEN K=K-32
+12680     IF K=32 OR K=13 OR FN IN_ANYA(0) OR FN IN_ANYSTART(0) THEN DONE=-1
+12690     IF K=81 OR FN IN_ANYBACK(0) THEN QT=1:DONE=-1
+12700   UNTIL DONE
+12710   WHILE FN IN_ANYSTART(0) OR FN IN_ANYBACK(0) OR FN IN_ANYA(0)
+12720     GFX VSYNC
+12730   WEND
+12740   IN_PSK=0
+12750   GFX CLEAR
+12760   TXT FILL 0,0,79,24,32,0,0
+12770   TX_PAPER=211
+12780 END PROC
+12790 PROC GAMEOVER
+12800   LOCAL I
+12810   CALL MUSICOFF
+12820   CALL BANNER("GAME OVER","Your score "+FN PAD$(SCORE,6),0)
+12830   PLAY "T110 W2 V0.3 O4 G4 E4 C4 <G2","T110 W0 V0.2 O3 C4 <G4 E4 C2"
+12840   FOR I=1 TO 240
+12850     GFX VSYNC
+12860     CALL SCROLL(0.7)
+12870   NEXT I
+12880   WHILE FN IN_ANYSTART(0) OR FN IN_ANYBACK(0)
+12890     GFX VSYNC
+12900   WEND
+12910 END PROC
+12920 ' ====================================================================== sound and music
+12930 ' All channels back to their plain state
+12940 PROC SNDRESET
+12950   LOCAL C
+12960   SOUND OFF
+12970   FOR C=1 TO 8
+12980     ENVELOPE C:VIBRATO C,0,0:TREMOLO C,0,0:WAVE C,0
+12990   NEXT C
+13000 END PROC
+13010 ' The music: a gentle flowing tune made one bar (2 seconds) at a time by the EVERY handler (the label MUSICTIMER in the main program): a bass note, an arpeggio of the chord,
+13020 ' and a melody that wanders through a pentatonic scale with rests; four chords go round (C, A minor, F, G). The channels 4 to 6 (the sound effects use 8 and 7).
+13030 PROC MUSICON
+13040   RT(0)=130.81:RT(1)=110:RT(2)=87.31:RT(3)=98
+13050   PT(0)=392:PT(1)=440:PT(2)=523.25:PT(3)=587.33:PT(4)=659.26:PT(5)=784:PT(6)=880:PT(7)=1046.5
+13060   MI=3:BR=0
+13070   WAVE 4,2:ENVELOPE 4,0.04,0.1,0.7,0.2:VIBRATO 4,5,0.25
+13080   WAVE 5,0:ENVELOPE 5,0.01,0.2,0.4,0.2
+13090   WAVE 6,2:ENVELOPE 6,0.3,0,1,0.6
+13100   CALL MBAR
+13110   EVERY 120,0 GOSUB MUSICTIMER
+13120   MUSON=-1
+13130 END PROC
+13140 PROC MUSICOFF
+13150   EVERY OFF 0
+13160   SOUND OFF 4:SOUND OFF 5:SOUND OFF 6
+13170   MUSON=0
+13180 END PROC
+13190 PROC MBAR
+13200   LOCAL I,J,F,L,RF,CH
+13210   CH=BR MOD 4
+13220   RF=RT(CH)
+13230   SOUND 6,RF,4,0.15
+13240   AR(0)=1:AR(1)=1.25:AR(2)=1.5:AR(3)=2
+13250   IF CH=1 THEN AR(1)=1.2
+13260   FOR I=0 TO 7
+13270     J=I:IF I>=4 THEN J=7-I
+13280     F=RF*2*AR(J)
+13290     SOUND 5,F,0.5,0.07
+13300   NEXT I
+13310   I=0
+13320   WHILE I<8
+13330     L=1+FN RN(3)
+13340     IF I+L>8 THEN L=8-I
+13350     IF FN RN(4)=0 THEN
+13360       SOUND 4,0,L*0.5
+13370     ELSE
+13380       MI=FN CLAMP(MI+FN RN(5)-2,0,7)
+13390       SOUND 4,PT(MI),L*0.5,0.13
+13400     END IF
+13410     I=I+L
+13420   WEND
+13430   BR=BR+1
+13440 END PROC
+13450 ' ====================================================================== the data: the colors 1 to 62 (red, green, blue)
+13460 DATA 20,20,25, 240,240,240, 30,90,170, 45,115,195, 90,160,225, 210,235,250
+13470 DATA 60,150,70, 45,125,55, 85,175,85, 215,195,140, 180,160,110, 100,65,35
+13480 DATA 35,110,45, 60,150,60, 95,95,100, 70,70,75, 235,225,160, 190,60,50
+13490 DATA 140,40,35, 235,225,195, 200,185,150, 110,170,220, 120,75,40, 70,90,170
+13500 DATA 165,120,70, 120,85,50, 230,60,60, 250,220,70, 130,130,135, 90,90,95
+13510 DATA 240,190,150, 220,50,50, 60,100,230, 60,180,80, 240,210,60, 50,60,120
+13520 DATA 60,40,25, 30,35,45, 240,200,50, 245,245,250, 210,50,45, 150,100,55
+13530 DATA 50,90,200, 220,40,40, 240,140,30, 200,150,80, 250,170,200, 250,240,210
+13540 DATA 190,225,245, 140,140,150, 95,95,105, 180,180,185, 25,70,140, 220,60,60
+13550 DATA 60,120,230, 255,245,160, 200,50,50, 80,50,30, 230,245,255, 0,0,0
+13560 DATA 0,0,0, 0,0,0
+14000 ' ====================================================================== new in Eternal River II: the balloon and the gulls
+14010 ' the handler of ON SPRITE: it only calls a procedure (the paths report events: 1 the balloon has come, 3 a gull cries)
+14020 LABEL SPRTIMER
+14030 CALL AMBIENT
+14040 RETURN
+14050 ' colors, pictures, the group and the paths; they run from now on, in the title and in the game
+14060 PROC AMBSTART
+14070   LOCAL I
+14080   GFX PALETTE 4,220,RGB(220,40,40):GFX PALETTE 4,221,RGB(250,250,245):GFX PALETTE 4,222,RGB(240,190,40):GFX PALETTE 4,223,RGB(120,60,30)
+14090   GFX PALETTE 4,224,RGB(170,25,25):GFX PALETTE 4,225,RGB(215,215,205):GFX PALETTE 4,226,RGB(0,0,0,100)
+14100   GFX PALETTE 4,227,RGB(255,255,255):GFX PALETTE 4,228,RGB(150,155,170):GFX PALETTE 4,229,RGB(40,40,50):GFX PALETTE 4,230,RGB(255,180,40)
+14110   SFX 40,"W3 V0.07 ML X0.3,0.2,0.4,0.5 H300,14"
+14120   SFX 41,"W0 V0.09 ML X0,0.01,0.3,0.05 S2600,1500,3 S1500,2100,3"
+14130   CALL DEFAMB
+14140   SPRITE 200,SIZE 3,3
+14150   SPRITE SEQ 12,CHR$(100)+CHR$(109)
+14160   SPRITE SEQ 13,CHR$(118)+CHR$(119)
+14170   SPRITE 200,-60,40,100
+14180   SPRITE 200,PRIORITY 7
+14190   SPRITE 200,ANIM 12,2,30
+14200   SPRITE 200,PATH "H W 500 X=-60 Y=30 S E 1 [ M 1,1*35 M 1,-1*25 M 1,0*20 ]9 H E 2 W 1400 R"
+14210   SPRITE 200,ON
+14220   ' a flock of four gulls, each one a little behind the one before
+14230   FOR I=0 TO 3
+14240     SPRITE 210+I,PRIORITY 7
+14250     SPRITE 210+I,PATH "H W "+STR$(900+I*18)+" X=-30 Y="+STR$(110+I*22)+" A 13,2,7 S "+MID$("E 3 ",1,4*(I=0))+"[ M 3,1*10 M 3,-1*10 ]18 H W "+STR$(1100-I*10)+" R"
+14260     SPRITE 210+I,ON
+14270   NEXT I
+14280   ON SPRITE GOSUB SPRTIMER
+14290 END PROC
+14300 ' the pictures: the balloon seen from above (3 x 3 images: striped envelope, a ring and a cap, with its translucent shadow; two images of the gores, 100..108 and 109..117)
+14310 ' and a gull (118, 119: wings up and down)
+14320 PROC DEFAMB
+14330   LOCAL F,K,X,Y,GX,GY,C,A$,D,AN
+14340   FOR F=0 TO 1
+14350     FOR K=0 TO 8
+14360       A$=""
+14370       FOR Y=0 TO 23
+14380         FOR X=0 TO 15
+14390           GX=(K MOD 3)*16+X:GY=(K\3)*24+Y:C=0
+14400           IF SQR((GX-33)^2+(GY-40)^2)<20 THEN C=226
+14410           D=SQR((GX-22)^2+(GY-28)^2)
+14420           IF D<21 THEN
+14430             AN=INT((ATAN2(GY-28,GX-22)+PI)*8/PI+F)
+14440             C=220+(AN MOD 2)
+14450             IF D>17 THEN C=224+(AN MOD 2)
+14460             IF D<5 THEN C=222
+14470             IF D<2.5 THEN C=223
+14480           END IF
+14490           A$=A$+CHR$(C)
+14500         NEXT X
+14510       NEXT Y
+14520       SPRITE DEF 100+F*9+K,A$
+14530     NEXT K
+14540   NEXT F
+14550   FOR F=0 TO 1
+14560     A$=""
+14570     FOR Y=0 TO 23
+14580       FOR X=0 TO 15
+14590         C=0
+14600         IF ((X-7)/6.5)^2+((Y-12)/2)^2<1 THEN C=227
+14610         IF F=0 AND ABS(Y-12)>=2 AND ABS(Y-12)<=9 AND X>=4+ABS(Y-12)\2 AND X<=11 THEN C=227-(ABS(Y-12)>6)*0+(ABS(Y-12)>6)
+14620         IF F=1 AND ABS(Y-12)>=2 AND ABS(Y-12)<=5 AND X>=5+ABS(Y-12)\2 AND X<=11 THEN C=227+(ABS(Y-12)>4)
+14630         IF (X-13)^2+(Y-12)^2<3 THEN C=227
+14640         IF X=15 AND Y=12 THEN C=230
+14650         A$=A$+CHR$(C)
+14660       NEXT X
+14670     NEXT Y
+14680     SPRITE DEF 118+F,A$
+14690   NEXT F
+14700 END PROC
+14710 ' the events of the paths: the handler (and the title and the game loop, to be sure) take them out one after the other
+14720 PROC AMBIENT
+14730   LOCAL E
+14740   E=SPRITE("EVENT")
+14750   WHILE E>=0
+14760     IF E=1 THEN SFX 40
+14770     IF E=3 THEN SFX 41
+14780     E=SPRITE("EVENT")
+14790   WEND
+14800 END PROC
