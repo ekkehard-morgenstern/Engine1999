@@ -1402,6 +1402,10 @@ void sdlscr_gfx_setmode( int mode ) {
     }
 }
 
+int sdlscr_gfx_getmode( void ) {
+    return sdlscr_gfxmode;
+}
+
 #define SDLSCR_GFX(layer) gfx_t* g = sdlscr_gfxof( layer ); if ( g == 0 ) return
 
 void sdlscr_gfx_clear( int layer, int color ) {

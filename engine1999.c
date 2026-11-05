@@ -34,6 +34,8 @@
 #include "basrepl.h"
 #include "basdebug.h"
 #include "gfxops.h"
+#include "gfxfile.h"
+#include "iodev.h"
 #include "mouse.h"
 #include "gfxcore.h"
 #include "ui.h"
@@ -1204,6 +1206,104 @@ static bool host_ui_query( int q, const double* a, double* result ) {
     return true;
 }
 
+// -- picture files (BMP): GFX LOAD / SAVE, SPRITE / TILE LOAD / SAVE, GFX PALLOAD / PALSAVE (gfxfile.c) ----------------------------------------
+
+static uint32_t ff_palget( void* ud, int layer, int i ) { (void) ud; return sdlscr_palette_get( layer, i ); }
+static void ff_palset( void* ud, int layer, int i, uint32_t argb ) { (void) ud; sdlscr_palette_set( layer, i, argb ); }
+static int ff_point( void* ud, int layer, int x, int y ) { (void) ud; return sdlscr_gfx_point( layer, x, y ); }
+static void ff_pset( void* ud, int layer, int x, int y, int c ) { (void) ud; sdlscr_gfx_pset( layer, x, y, c ); }
+static bool ff_getcell( void* ud, int kind, int n, uint8_t* out ) {
+    (void) ud;
+    return kind == GFXFILE_SPRITE ? sdlscr_sprite_getmap( n, out ) : sdlscr_tile_getimage( n, out );
+}
+static void ff_putcell( void* ud, int kind, int n, const uint8_t* data ) {
+    (void) ud;
+    if ( kind == GFXFILE_SPRITE ) sdlscr_writesprite( n, data ); else sdlscr_writetile( n, data );
+}
+
+static const gfxfile_host_t ff_host = { 0, ff_palget, ff_palset, ff_point, ff_pset, ff_getcell, ff_putcell };
+
+// a file name for a picture: ".bmp" is added if the last part has no extension
+static bool ff_name( const char* s, size_t slen, char* buf, size_t bufsz, const char** err ) {
+    if ( strlen( s ) != slen || slen == 0 || slen + 5 > bufsz ) {
+        *err = "Illegal argument (file name)";
+        return false;
+    }
+    memcpy( buf, s, slen + 1 );
+    const char* base = strrchr( buf, '/' );
+    base = base ? base + 1 : buf;
+    const char* colon = strrchr( base, ':' );
+    if ( colon ) base = colon + 1;
+    if ( strchr( base, '.' ) == 0 && *base != 0 ) {
+        strcat( buf, ".bmp" );
+    }
+    return true;
+}
+
+static bool host_picture_op( int op, const double* a, const char* s, size_t slen, const char** err ) {
+    static char errbuf[160];
+    char name[1100];
+    if ( !ff_name( s, slen, name, sizeof(name), err ) ) {
+        return false;
+    }
+    const char* ioerr = 0;
+    bool ok;
+    uint8_t* data = 0; size_t len = 0;
+    int mode = sdlscr_gfx_getmode();
+    bool saving = op == GFXOP_GFXSAVE || op == GFXOP_PALSAVE || op == GFXOP_SPRSAVE || op == GFXOP_TILESAVE;
+    if ( !saving ) {
+        if ( !iodev_read_all( name, repl.vm.addrcur, &data, &len, &ioerr ) ) {
+            snprintf( errbuf, sizeof(errbuf), "%s", ioerr ? ioerr : "File not found" );
+            *err = errbuf;
+            return false;
+        }
+    }
+    const char* ferr = "Illegal argument";
+    int t = sdlscr_gfx_target();
+    sdlscr_gfx_setmode( GFXM_SET );
+    switch ( op ) {
+        case GFXOP_GFXLOAD:
+            ok = gfxfile_load_layer( &ff_host, t, data, len, gi( a[0], 0 ), gi( a[1], 0 ), a[2] > -1.0e8, &ferr );
+            break;
+        case GFXOP_PALLOAD:
+            ok = gfxfile_load_palette( &ff_host, gi( a[0], 0 ), data, len, &ferr );
+            break;
+        case GFXOP_SPRLOAD: case GFXOP_TILELOAD:
+            ok = gfxfile_load_cells( &ff_host, op == GFXOP_SPRLOAD ? GFXFILE_SPRITE : GFXFILE_TILE, gi( a[0], 0 ), gi( a[1], -1 ), data, len,
+                a[2] > -1.0e8, &ferr );
+            break;
+        case GFXOP_GFXSAVE: {
+            bool all = a[0] < -1.0e8 && a[1] < -1.0e8 && a[2] < -1.0e8 && a[3] < -1.0e8;
+            bool none = a[0] < -1.0e8 || a[1] < -1.0e8 || a[2] < -1.0e8 || a[3] < -1.0e8;
+            if ( !all && none ) {
+                ok = false;
+            } else {
+                ok = gfxfile_save_layer( &ff_host, t, gi( a[0], 0 ), gi( a[1], 0 ), gi( a[2], GFXFILE_LW - 1 ), gi( a[3], GFXFILE_LH - 1 ), &data, &len, &ferr );
+            }
+            break;
+        }
+        case GFXOP_PALSAVE:
+            ok = gfxfile_save_palette( &ff_host, gi( a[0], 0 ), &data, &len, &ferr );
+            break;
+        default:        // SPRITE SAVE / TILE SAVE
+            ok = gfxfile_save_cells( &ff_host, op == GFXOP_SPRSAVE ? GFXFILE_SPRITE : GFXFILE_TILE, gi( a[0], 0 ), gi( a[1], 1 ), gi( a[2], 0 ),
+                &data, &len, &ferr );
+            break;
+    }
+    sdlscr_gfx_setmode( mode );
+    if ( ok && saving && !iodev_write_all( name, repl.vm.addrcur, data, len, &ioerr ) ) {
+        snprintf( errbuf, sizeof(errbuf), "%s", ioerr ? ioerr : "Cannot write the file" );
+        ferr = errbuf;
+        ok = false;
+    }
+    free( data );
+    if ( !ok ) {
+        snprintf( errbuf, sizeof(errbuf), "%s", ferr );
+        *err = errbuf;
+    }
+    return ok;
+}
+
 static bool host_gfx_op( void* usrdata, int op, const double* a, int na, const char* s, size_t slen, uint8_t* out, size_t outsz,
     size_t* outlen, const char** err ) {
     (void) usrdata; (void) na;
@@ -1212,6 +1312,9 @@ static bool host_gfx_op( void* usrdata, int op, const double* a, int na, const c
         return host_ui_op( op, a, na, s, slen, out, outsz, outlen, err );
     }
     switch ( op ) {
+        case GFXOP_GFXLOAD: case GFXOP_GFXSAVE: case GFXOP_PALLOAD: case GFXOP_PALSAVE:
+        case GFXOP_SPRLOAD: case GFXOP_SPRSAVE: case GFXOP_TILELOAD: case GFXOP_TILESAVE:
+            return host_picture_op( op, a, s, slen, err );
         case GFXOP_LAYER:       sdlscr_layer_enable( gi( a[0], 0 ), a[1] != 0.0 ); break;
         case GFXOP_PRIORITY:    sdlscr_layer_setpriority( gi( a[0], 0 ), gi( a[1], 0 ) ); break;
         case GFXOP_PALETTE:     sdlscr_palette_set( gi( a[0], 0 ), gi( a[1], 0 ), (uint32_t)(int64_t) a[2] ); break;

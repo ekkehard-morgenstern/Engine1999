@@ -609,12 +609,24 @@ gfx-stmt := GFX ( LAYER num-expr "," ( ON | OFF ) | PRIORITY num-expr "," num-ex
                       GRAB num-expr "," num-expr "," num-expr "," num-expr "," str-var-ref |
                       BLIT str-expr "," num-expr "," num-expr [ "," TRANS ] |
                       TEXT num-expr "," num-expr "," str-expr [ "," num-expr [ "," num-expr [ "," num-expr ] ] ] |
-                      DRAW str-expr | VSYNC | RESET [ ALL ] ) .
+                      DRAW str-expr | VSYNC | RESET [ ALL ] |
+                      LOAD str-expr [ "," num-expr "," num-expr [ "," PALETTE ] ] |
+                      SAVE str-expr [ "," num-expr "," num-expr "," num-expr "," num-expr ] |
+                      PALLOAD num-expr "," str-expr | PALSAVE num-expr "," str-expr ) .
 txt-stmt := TXT ( FILL num-expr "," num-expr "," num-expr "," num-expr [ "," num-expr [ "," num-expr
                                                                                                           [ "," num-expr ] ] ] |
                       COPY num-expr "," num-expr "," num-expr "," num-expr "," num-expr "," num-expr |
                       INVERT num-expr "," num-expr "," num-expr "," num-expr | SAVE str-var-ref | LOAD str-expr ) .
+```
+
+> Picture files (docs/graphics-subsystem.md "Picture files"): Windows BMP; the name gets ".bmp" if it has no extension. GFX LOAD / SAVE: the target
+> layer (a rectangle); GFX PALLOAD / PALSAVE: the palette of a layer (as a 16 x 16 picture); SPRITE / TILE LOAD / SAVE: a sheet of images of
+> 16 x 24 pixels, row by row, first image, how many, SAVE: columns of the sheet. PALETTE installs the file's palette first.
+
+```ebnf
 tile-stmt := TILE ( DEF num-expr "," str-expr | GET num-expr "," str-var-ref |
+                        LOAD str-expr "," num-expr [ "," [ num-expr ] [ "," PALETTE ] ] |
+                        SAVE str-expr "," num-expr "," num-expr [ "," num-expr ] |
                         SET num-expr "," num-expr "," num-expr | FILL str-expr | SCROLL num-expr "," num-expr ) .
 ```
 
@@ -623,6 +635,8 @@ tile-stmt := TILE ( DEF num-expr "," str-expr | GET num-expr "," str-var-ref |
 
 ```ebnf
 sprite-stmt := SPRITE ( DEF num-expr "," str-expr | GET num-expr "," str-var-ref | SEQ num-expr "," str-expr |
+                            LOAD str-expr "," num-expr [ "," [ num-expr ] [ "," PALETTE ] ] |
+                            SAVE str-expr "," num-expr "," num-expr [ "," num-expr ] |
                             num-expr "," ( ON | OFF | PRIORITY num-expr | IMAGE num-expr |
                                                  ANIM num-expr "," num-expr "," num-expr |
                                                  MOVETO num-expr "," num-expr "," num-expr |

@@ -73,6 +73,10 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXOP_DRAW      19              // GFX DRAW a$
 #define GFXOP_VSYNC     20              // GFX VSYNC
 #define GFXOP_RESET     21              // GFX RESET [ALL]
+#define GFXOP_GFXLOAD   22              // GFX LOAD a$ [, x, y [, PALETTE]]       (a BMP file onto the target layer)
+#define GFXOP_GFXSAVE   23              // GFX SAVE a$ [, x1, y1, x2, y2]
+#define GFXOP_PALLOAD   24              // GFX PALLOAD layer, a$                  (the colors of a BMP file into the palette of a layer)
+#define GFXOP_PALSAVE   25              // GFX PALSAVE layer, a$
 #define GFXOP_TXTFILL   30              // TXT FILL x1, y1, x2, y2 [, chr [, fg [, bg]]]
 #define GFXOP_TXTCOPY   31              // TXT COPY x1, y1, x2, y2, tx, ty
 #define GFXOP_TXTINVERT 32              // TXT INVERT x1, y1, x2, y2
@@ -87,6 +91,10 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXOP_TILESET   52              // TILE SET x, y, n
 #define GFXOP_TILEFILL  53              // TILE FILL a$        (533 bytes)
 #define GFXOP_TILESCROLL 54             // TILE SCROLL sx, sy
+#define GFXOP_TILELOAD  55              // TILE LOAD a$, first [, count [, PALETTE]]   (a BMP sheet cut into tiles of 16 x 24)
+#define GFXOP_TILESAVE  56              // TILE SAVE a$, first, count [, cols]
+#define GFXOP_SPRLOAD   72              // SPRITE LOAD a$, first [, count [, PALETTE]]  (a BMP sheet cut into sprite images)
+#define GFXOP_SPRSAVE   73              // SPRITE SAVE a$, first, count [, cols]
 #define GFXOP_MOUSESHOW 80              // MOUSE SHOW
 #define GFXOP_MOUSEHIDE 81              // MOUSE HIDE
 #define GFXOP_MOUSEPOS  82              // MOUSE POS x, y

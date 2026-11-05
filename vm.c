@@ -3007,6 +3007,14 @@ static bool vm_gfx_check( vm_t* vm, int op, const double* a, int na, size_t slen
         case GFXOP_TILESET:     ok = IN( 0, 0, 40 ) && IN( 1, 0, 12 ) && IN( 2, 0, 255 ); break;
         case GFXOP_TILEFILL:    ok = slen == 533U; break;
         case GFXOP_SPRDEF:      ok = IN( 0, 0, 255 ) && slen == 384U; break;
+        case GFXOP_PALLOAD: case GFXOP_PALSAVE:
+                                ok = IN( 0, 0, 4 ) && slen >= 1U; break;
+        case GFXOP_GFXLOAD:     ok = slen >= 1U && OPT( 0, -32768, 32767 ) && OPT( 1, -32768, 32767 ); break;
+        case GFXOP_GFXSAVE:     ok = slen >= 1U && OPT( 0, -32768, 32767 ) && OPT( 1, -32768, 32767 ) && OPT( 2, -32768, 32767 ) && OPT( 3, -32768, 32767 ); break;
+        case GFXOP_SPRLOAD: case GFXOP_TILELOAD:
+                                ok = slen >= 1U && IN( 0, 0, 255 ) && OPT( 1, 1, 256 ); break;
+        case GFXOP_SPRSAVE: case GFXOP_TILESAVE:
+                                ok = slen >= 1U && IN( 0, 0, 255 ) && IN( 1, 1, 256 ) && OPT( 2, 1, 256 ); break;
         case GFXOP_SPRGET:      ok = IN( 0, 0, 255 ); break;
         case GFXOP_SPRSEQ:      ok = IN( 0, 0, 255 ) && slen >= 1U && slen <= 15U; break;
         // the sprite numbers of a program are 0..SPR_USER_COUNT-1; the reserved sprites (the mouse pointer) are the engine's (sprscreen.h)

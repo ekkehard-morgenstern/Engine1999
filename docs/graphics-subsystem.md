@@ -68,6 +68,12 @@ GFX TEXT x, y, a$ [, c [, sx [, sy]]] the 8 x 12 font at pixel position, each pi
 GFX DRAW a$                           the GW-BASIC drawing language: U D L R E F G H n, M x,y (a sign makes it relative), B, N, C n, S n (quarters), A n (0..3)
 GFX VSYNC                             waits for the next frame (60 Hz); a break key still works
 GFX RESET [ALL]                       back to the defaults, to wipe the screen of everything a program drew (see below)
+GFX LOAD a$ [, x, y [, PALETTE]]      a BMP file onto the target layer at x, y (see "Picture files")
+GFX SAVE a$ [, x1, y1, x2, y2]        the target layer (or a rectangle of it) as an 8 bit BMP file
+GFX PALLOAD layer, a$                 the colors of a BMP file into the palette of a layer
+GFX PALSAVE layer, a$                 the palette of a layer as a 16 x 16 picture
+SPRITE LOAD a$, first [, count [, PALETTE]]   a BMP sheet cut into sprite images; SPRITE SAVE a$, first, count [, cols] writes them
+TILE LOAD a$, first [, count [, PALETTE]]     the same for tiles;                  TILE SAVE a$, first, count [, cols]
 -- the text screen
 CLS                                   clears the text screen
 LOCATE x, y                           cursor to column x (0..79), row y (0..24)
@@ -113,6 +119,15 @@ TILE(x, y)                            the tile in a cell of the tile screen
 SPRITE("X",n) ("Y",n) ("IMAGE",n) ("ON",n) ("MOVING",n) ("HITS",n) ("COLLIDE",n)   position, image, shown, moving, collision bits, the other sprite
 SPRITE("COLS",n) ("ROWS",n)           the size of the group that n heads, in sprites (1 and 1 if there is none)
 ```
+
+### Picture files (2026-11-05, roadmap item 53)
+Pictures are **Windows BMP files**, so any paint program can edit them (`bmp.[ch]`: the codec, no SDL; `gfxfile.[ch]`: the statements on top of it through a small table of functions, tested with a fake screen in `gfxtest1`; the host reads and writes the bytes through the I/O drivers, so `mem:` and the other drivers work, and `ADDRESS` applies). A name without an extension gets `.bmp`; a missing file is "File not found".
+- **Reading:** 1, 4, 8, 16 (555, or 565 by bit fields), 24 and 32 bits per pixel, bottom-up or top-down, uncompressed (RLE is refused: "Compressed BMP files are not supported"); the file is checked against its size ("The BMP file is truncated"). A 32 bit picture has transparency if any alpha byte is not zero (many programs leave it zero: then it is opaque); the reserved byte of a palette entry is the alpha if any is not zero.
+- **Matching:** the colors are matched to the palette *of the layer the pictures belong to* (graphics or background layer for `GFX LOAD`, the sprite layer's palette for sprites, the tile layer's for tiles): the nearest entry by weighted RGB distance; **entry 0 is transparent**: pixels with alpha < 128 become 0, no other color is ever matched to entry 0, and entries that are fully transparent are skipped. With **`PALETTE`** the palette of the file is installed in the layer first and an indexed picture keeps its indices (so index 0 of the file is the transparent one); a true color picture gets a palette made by a median cut (entry 0 stays free if the picture has transparent pixels).
+- **`GFX LOAD a$ [,x,y [,PALETTE]]`** draws onto the target layer (`GFX TARGET`: 0 or 3) at x, y (default 0, 0), clipped; always as `SET`, whatever `GFX MODE` says. **`GFX SAVE a$ [,x1,y1,x2,y2]`** writes the whole layer or the rectangle as an 8 bit BMP with the layer's 256 colors (so loading it again with `PALETTE` gives the same picture).
+- **Sheets:** `SPRITE LOAD a$,first[,count[,PALETTE]]` and `TILE LOAD` cut the picture into cells of 16 x 24 pixels, left to right and top to bottom, into the images `first ..`; without `count` all cells that fit (sprites up to image 247, tiles up to 255); too many is "Illegal argument". The images of a sprite group are consecutive, so a sheet of w x h cells loaded at the head's image is a group (item 62). `SPRITE SAVE a$,first,count[,cols]` and `TILE SAVE` write `count` images, `cols` per row (default 16 or fewer); a missing cell at the end is 0.
+- **Palettes:** `GFX PALSAVE layer,a$` writes a 16 x 16 picture in which the cell in column c and row r has the color r * 16 + c, and the 256 entry palette; `GFX PALLOAD layer,a$` takes the palette of any indexed BMP (entries 0..n-1; a true color picture gives its 255 best colors from entry 1 on).
+- **Not in this item:** the tile map (`TILE MAP LOAD` / `SAVE`: a program keeps its map in the RAM or in a file of its own), writing true color BMPs, the own container `.spr` with sequences (roadmap item 20), the editors (`spriteed` still saves `DESIGN` listings), and the console host (no layers: "Not available").
 
 ### Sprite groups (2026-11-05, roadmap item 62)
 `SPRITE n,SIZE w,h` (w, h 1..8, at most 64 sprites; `sprscr_setsize()`) makes the sprite **n the head of a block of w x h sprites**: the sprites `n .. n+w*h-1`, row by row, are drawn side by side as **one large sprite** of 16 w x 24 h pixels. The head rules the block, so everything you do to it is done to the whole group:

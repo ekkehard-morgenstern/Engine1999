@@ -33,6 +33,8 @@
 #include "sprscreen.h"
 #include "cursors.h"
 #include "mouse.h"
+#include "bmp.h"
+#include "gfxfile.h"
 
 /*
 Automated test of the graphics backends without SDL: the drawing core (gfxcore.c), and what tilescreen.c, sprscreen.c and textscreen.c got
@@ -833,6 +835,257 @@ static void test_reset( void ) {
     check( same, "the font is back to the built-in one" );
 }
 
+
+// -- BMP files and picture statements (bmp.c, gfxfile.c) -------------------------------------------------------------------
+
+static void put16( uint8_t* p, uint32_t v ) { p[0] = (uint8_t) v; p[1] = (uint8_t)( v >> 8 ); }
+static void put32( uint8_t* p, uint32_t v ) { put16( p, v ); put16( p + 2, v >> 16 ); }
+
+// a BMP with the 40 byte header; 'pal' (BGRA entries) may be 0; rows are given bottom-up as in a file unless topdown
+static uint8_t* make_bmp( int w, int h, int bpp, int comp, const uint8_t* pal, int npal, const uint8_t* rows, size_t rowsz, bool topdown, size_t* plen ) {
+    size_t stride = ( ( (size_t) w * (size_t) bpp + 31U ) / 32U ) * 4U, off = 14U + 40U + (size_t) npal * 4U + ( comp == 3 ? 12U : 0U );
+    uint8_t* o = (uint8_t*) calloc( 1, off + stride * (size_t) h );
+    o[0] = 'B'; o[1] = 'M';
+    put32( o + 2, (uint32_t)( off + stride * (size_t) h ) ); put32( o + 10, (uint32_t) off ); put32( o + 14, 40 );
+    put32( o + 18, (uint32_t) w ); put32( o + 22, (uint32_t)( topdown ? -h : h ) );
+    put16( o + 26, 1 ); put16( o + 28, (uint32_t) bpp ); put32( o + 30, (uint32_t) comp ); put32( o + 46, (uint32_t) npal );
+    size_t pos = 54;
+    if ( comp == 3 ) {
+        put32( o + pos, 0xF800U ); put32( o + pos + 4, 0x7E0U ); put32( o + pos + 8, 0x1FU );
+        pos += 12;
+    }
+    if ( npal > 0 ) {
+        memcpy( o + pos, pal, (size_t) npal * 4U );
+    }
+    for ( int y=0; y < h; ++y ) {
+        memcpy( o + off + stride * (size_t) y, rows + rowsz * (size_t) y, rowsz );
+    }
+    *plen = off + stride * (size_t) h;
+    return o;
+}
+
+typedef struct {
+    uint32_t pal[5][256];
+    uint8_t  layer[2][GFXFILE_LW * GFXFILE_LH];         // 0: background, 1: graphics (layer 3)
+    uint8_t  cells[2][256][GFXFILE_CELLW * GFXFILE_CELLH];
+    int      psets;
+} fakescr_t;
+
+static uint32_t f_palget( void* ud, int l, int i ) { return ((fakescr_t*) ud)->pal[l][i]; }
+static void f_palset( void* ud, int l, int i, uint32_t c ) { ((fakescr_t*) ud)->pal[l][i] = c; }
+static uint8_t* f_pix( fakescr_t* f, int l, int x, int y ) {
+    if ( x < 0 || y < 0 || x >= GFXFILE_LW || y >= GFXFILE_LH ) return 0;
+    return &f->layer[l == 3][y * GFXFILE_LW + x];
+}
+static int f_point( void* ud, int l, int x, int y ) { uint8_t* p = f_pix( (fakescr_t*) ud, l, x, y ); return p ? *p : -1; }
+static void f_pset( void* ud, int l, int x, int y, int c ) { uint8_t* p = f_pix( (fakescr_t*) ud, l, x, y ); if ( p ) { *p = (uint8_t) c; ((fakescr_t*) ud)->psets++; } }
+static bool f_getcell( void* ud, int k, int n, uint8_t* out ) { memcpy( out, ((fakescr_t*) ud)->cells[k][n], GFXFILE_CELLW * GFXFILE_CELLH ); return true; }
+static void f_putcell( void* ud, int k, int n, const uint8_t* d ) { memcpy( ((fakescr_t*) ud)->cells[k][n], d, GFXFILE_CELLW * GFXFILE_CELLH ); }
+
+static fakescr_t fake;
+static gfxfile_host_t fh = { &fake, f_palget, f_palset, f_point, f_pset, f_getcell, f_putcell };
+
+static void fake_reset( void ) {
+    memset( &fake, 0, sizeof(fake) );
+    for ( int l=0; l < 5; ++l ) {
+        fake.pal[l][0] = 0;
+        for ( int i=1; i < 256; ++i ) {
+            // 1 red, 2 green, 3 blue, then a grey ramp
+            fake.pal[l][i] = i == 1 ? 0xFFFF0000U : i == 2 ? 0xFF00FF00U : i == 3 ? 0xFF0000FFU : 0xFF000000U | (uint32_t)( i * 0x010101U );
+        }
+    }
+}
+
+static void test_bmp( void ) {
+    const char* err = 0;
+    bmp_image_t img;
+    // 24 bit, 2 x 2, bottom-up: bottom row red, green; top row blue, white (BGR)
+    uint8_t rows24[2][8] = { { 0,0,255, 0,255,0, 0,0 }, { 255,0,0, 255,255,255, 0,0 } };
+    size_t len;
+    uint8_t* f = make_bmp( 2, 2, 24, 0, 0, 0, &rows24[0][0], 8, false, &len );
+    check( bmp_decode( f, len, &img, &err ) && img.w == 2 && img.h == 2 && img.idx == 0, "bmp: 24 bit decodes" );
+    check( img.argb[0] == 0xFF0000FFU && img.argb[1] == 0xFFFFFFFFU && img.argb[2] == 0xFFFF0000U && img.argb[3] == 0xFF00FF00U, "bmp: 24 bit pixels, top row first" );
+    bmp_free( &img );
+    // truncated and bad
+    check( !bmp_decode( f, len - 1, &img, &err ) && err != 0, "bmp: a truncated file is refused" );
+    check( !bmp_decode( f, 10, &img, &err ), "bmp: a short file is refused" );
+    f[0] = 'X';
+    check( !bmp_decode( f, len, &img, &err ), "bmp: bad magic" );
+    f[0] = 'B'; put32( f + 30, 1 );
+    check( !bmp_decode( f, len, &img, &err ) && strstr( err, "ompress" ) != 0, "bmp: RLE is refused" );
+    put32( f + 30, 0 ); put16( f + 28, 7 );
+    check( !bmp_decode( f, len, &img, &err ), "bmp: odd color depth is refused" );
+    free( f );
+    // top-down 8 bit with a palette
+    uint8_t pal[8] = { 1,2,3,0, 10,20,30,0 };                   // entry 0 = RGB(3,2,1), entry 1 = RGB(30,20,10)
+    uint8_t rows8[2][4] = { { 0, 1, 0, 0 }, { 1, 1, 0, 0 } };
+    f = make_bmp( 2, 2, 8, 0, pal, 2, &rows8[0][0], 4, true, &len );
+    check( bmp_decode( f, len, &img, &err ) && img.npal == 2 && img.idx != 0, "bmp: 8 bit top-down decodes" );
+    check( img.idx[0] == 0 && img.idx[1] == 1 && img.idx[2] == 1 && img.idx[3] == 1 && img.pal[1] == 0xFF1E140AU, "bmp: 8 bit indices and palette (opaque when the reserved byte is 0)" );
+    bmp_free( &img );
+    free( f );
+    // 4 bit (two pixels per byte) and 1 bit (eight)
+    uint8_t pal4[16 * 4];
+    memset( pal4, 0, sizeof(pal4) );
+    pal4[2*4+2] = 200;                                          // entry 2 = red 200
+    uint8_t row4[4] = { 0x12, 0x20, 0, 0 };
+    f = make_bmp( 3, 1, 4, 0, pal4, 16, row4, 4, false, &len );
+    check( bmp_decode( f, len, &img, &err ) && img.idx[0] == 1 && img.idx[1] == 2 && img.idx[2] == 2 && img.pal[2] == 0xFFC80000U, "bmp: 4 bit" );
+    bmp_free( &img ); free( f );
+    uint8_t pal1[8] = { 0,0,0,0, 255,255,255,0 };
+    uint8_t row1[4] = { 0xA0, 0, 0, 0 };                        // 1 0 1
+    f = make_bmp( 3, 1, 1, 0, pal1, 2, row1, 4, false, &len );
+    check( bmp_decode( f, len, &img, &err ) && img.idx[0] == 1 && img.idx[1] == 0 && img.idx[2] == 1, "bmp: 1 bit" );
+    bmp_free( &img ); free( f );
+    // 32 bit: alpha used if any pixel has some, else opaque
+    uint8_t row32[8] = { 0,0,255,0x80, 0,255,0,0 };             // BGRA
+    f = make_bmp( 2, 1, 32, 0, 0, 0, row32, 8, false, &len );
+    check( bmp_decode( f, len, &img, &err ) && img.argb[0] == 0x80FF0000U && img.argb[1] == 0x0000FF00U, "bmp: 32 bit alpha" );
+    bmp_free( &img ); free( f );
+    row32[3] = 0;
+    f = make_bmp( 2, 1, 32, 0, 0, 0, row32, 8, false, &len );
+    check( bmp_decode( f, len, &img, &err ) && img.argb[0] == 0xFFFF0000U && img.argb[1] == 0xFF00FF00U, "bmp: 32 bit without alpha is opaque" );
+    bmp_free( &img ); free( f );
+    // 16 bit: 565 by bit fields, 555 by default
+    uint8_t row16[4] = { 0x00, 0xF8, 0x1F, 0x00 };              // 0xF800 red, 0x001F blue
+    f = make_bmp( 2, 1, 16, 3, 0, 0, row16, 4, false, &len );
+    check( bmp_decode( f, len, &img, &err ) && img.argb[0] == 0xFFFF0000U && img.argb[1] == 0xFF0000FFU, "bmp: 16 bit 565" );
+    bmp_free( &img ); free( f );
+    uint8_t row555[4] = { 0x00, 0x7C, 0x1F, 0x00 };
+    f = make_bmp( 2, 1, 16, 0, 0, 0, row555, 4, false, &len );
+    check( bmp_decode( f, len, &img, &err ) && img.argb[0] == 0xFFFF0000U && img.argb[1] == 0xFF0000FFU, "bmp: 16 bit 555" );
+    bmp_free( &img ); free( f );
+
+    // writing and reading back
+    uint32_t wp[256];
+    for ( int i=0; i < 256; ++i ) wp[i] = 0xFF000000U | (uint32_t)( i * 0x010203U & 0xFFFFFF );
+    wp[0] = 0;
+    uint8_t px[5 * 3];
+    for ( int i=0; i < 15; ++i ) px[i] = (uint8_t)( i * 17 );
+    uint8_t* out = 0; size_t olen = 0;
+    check( bmp_encode8( 5, 3, px, wp, &out, &olen ) && olen == 14U + 40U + 1024U + 8U * 3U, "bmp: encode8 size (rows padded to 4 bytes)" );
+    check( bmp_decode( out, olen, &img, &err ) && img.w == 5 && img.h == 3 && img.npal == 256 && memcmp( img.idx, px, 15 ) == 0, "bmp: encode8 round trip: pixels" );
+    check( img.pal[0] == 0 && img.pal[7] == wp[7] && img.pal[255] == wp[255], "bmp: encode8 round trip: palette with alpha" );
+    bmp_free( &img ); free( out );
+
+    // colors
+    check( bmp_nearest( wp, 1, 0xFF010203U ) == 1, "nearest: exact" );
+    check( bmp_nearest( wp, 1, 0x00FFFFFFU ) == 0, "nearest: transparent is entry 0" );
+    wp[5] = 0;
+    check( bmp_nearest( wp, 1, wp[4] ) == 4 && bmp_nearest( wp, 1, 0xFF050A0FU ) != 5, "nearest: a fully transparent entry is skipped" );
+    uint32_t many[1000];
+    for ( int i=0; i < 1000; ++i ) many[i] = 0xFF000000U | (uint32_t)( ( i * 37 ) & 255 ) << 16 | (uint32_t)( ( i * 91 ) & 255 ) << 8 | (uint32_t)( ( i * 13 ) & 255 );
+    uint32_t qp[256];
+    memset( qp, 0, sizeof(qp) );
+    int nq = bmp_quantize( many, 1000, qp, 1, 255 );
+    check( nq > 100 && nq <= 255 && qp[0] == 0 && ( qp[1] >> 24 ) == 255U, "quantize: at most the allowed number of colors, from the first entry" );
+    uint32_t few[4] = { 0xFF112233U, 0xFF112233U, 0xFF445566U, 0x00000000U };
+    nq = bmp_quantize( few, 4, qp, 0, 256 );
+    check( nq == 2 && qp[0] == 0xFF112233U && qp[1] == 0xFF445566U, "quantize: few colors are kept exactly, transparent ones left out" );
+}
+
+static void test_gfxfile( void ) {
+    const char* err = 0;
+    fake_reset();
+    // GFX LOAD: a 24 bit picture 3 x 2 is matched to the layer's palette: red = 1, green = 2, blue = 3, a dark grey, transparent = 0
+    uint8_t rows[2][12] = { { 0x40,0x40,0x40, 0x00,0x00,0xFF, 0x00,0x00,0x00, 0,0,0 }, { 0xFF,0x00,0x00, 0x00,0xFF,0x00, 0x00,0x00,0xFF, 0,0,0 } };
+    size_t len;
+    uint8_t* f = make_bmp( 3, 2, 24, 0, 0, 0, &rows[0][0], 12, false, &len );
+    check( gfxfile_load_layer( &fh, 3, f, len, 10, 20, false, &err ), "gfxfile: load onto the graphics layer" );
+    // the top row is the file's last row: blue, green, red (BGR bytes); below it: grey 0x404040, red, black
+    check( f_point( &fake, 3, 10, 20 ) == 3 && f_point( &fake, 3, 11, 20 ) == 2 && f_point( &fake, 3, 12, 20 ) == 1, "gfxfile: blue, green, red found in the palette" );
+    check( f_point( &fake, 3, 10, 21 ) == 64 && f_point( &fake, 3, 11, 21 ) == 1, "gfxfile: grey and red below" );
+    check( f_point( &fake, 3, 12, 21 ) == 4, "gfxfile: black is matched to the darkest entry (never to entry 0)" );
+    check( f_point( &fake, 0, 10, 20 ) == 0, "gfxfile: the other layer is untouched" );
+    // clipping
+    fake.psets = 0;
+    check( gfxfile_load_layer( &fh, 3, f, len, 638, 299, false, &err ) && fake.psets == 2, "gfxfile: clipped at the corner (2 of 6 pixels)" );
+    fake.psets = 0;
+    check( gfxfile_load_layer( &fh, 3, f, len, -5, -5, false, &err ) && fake.psets == 0, "gfxfile: nothing drawn when it is off the screen" );
+    free( f );
+    // PALETTE: an indexed picture installs its palette and keeps its indices
+    uint8_t pal[12] = { 9,8,7,0, 50,60,70,0, 1,2,3,0 };
+    uint8_t r8[1][4] = { { 2, 1, 0, 0 } };
+    f = make_bmp( 3, 1, 8, 0, pal, 3, &r8[0][0], 4, false, &len );
+    check( gfxfile_load_layer( &fh, 0, f, len, 0, 0, true, &err ), "gfxfile: load with PALETTE" );
+    check( f_point( &fake, 0, 0, 0 ) == 2 && f_point( &fake, 0, 1, 0 ) == 1 && f_point( &fake, 0, 2, 0 ) == 0, "gfxfile: PALETTE keeps the indices" );
+    check( fake.pal[0][1] == 0xFF463C32U && fake.pal[0][2] == 0xFF030201U && fake.pal[0][0] == 0xFF070809U, "gfxfile: PALETTE installs the colors" );
+    // without PALETTE the same picture is matched to the existing palette (index 0 of the file is not entry 0)
+    fake_reset();
+    check( gfxfile_load_layer( &fh, 0, f, len, 0, 0, false, &err ) && f_point( &fake, 0, 0, 0 ) != 2 && f_point( &fake, 0, 2, 0 ) != 0, "gfxfile: matched to the palette without PALETTE" );
+    free( f );
+    // a bad file
+    uint8_t junk[40] = { 0 };
+    check( !gfxfile_load_layer( &fh, 3, junk, sizeof(junk), 0, 0, false, &err ) && err != 0, "gfxfile: junk is refused" );
+
+    // GFX SAVE and load again
+    fake_reset();
+    for ( int y=0; y < 10; ++y ) for ( int x=0; x < 20; ++x ) fake.layer[1][( 40 + y ) * GFXFILE_LW + 100 + x] = (uint8_t)( x + y * 3 );
+    uint8_t* out = 0; size_t olen = 0;
+    check( gfxfile_save_layer( &fh, 3, 100, 40, 119, 49, &out, &olen, &err ), "gfxfile: save a rectangle" );
+    bmp_image_t img;
+    check( bmp_decode( out, olen, &img, &err ) && img.w == 20 && img.h == 10 && img.npal == 256 && img.pal[2] == fake.pal[3][2], "gfxfile: saved size and palette" );
+    check( img.idx[0] == 0 && img.idx[19 + 9 * 20] == 19 + 27, "gfxfile: saved pixels" );
+    bmp_free( &img );
+    fake_reset();
+    check( gfxfile_load_layer( &fh, 3, out, olen, 5, 6, true, &err ) && f_point( &fake, 3, 5 + 19, 6 + 9 ) == 19 + 27 && f_point( &fake, 3, 5, 6 ) == 0, "gfxfile: save and load round trip" );
+    free( out );
+    check( gfxfile_save_layer( &fh, 3, 300, 100, 10, 5, &out, &olen, &err ), "gfxfile: corners may be given in any order" );
+    free( out );
+    check( !gfxfile_save_layer( &fh, 3, 700, 0, 800, 10, &out, &olen, &err ), "gfxfile: a rectangle off the screen is refused" );
+
+    // sheets: 2 x 2 images of 16 x 24 in a 32 x 48 picture, true color
+    fake_reset();
+    uint8_t* sheet = (uint8_t*) calloc( 1, 32 * 48 * 3 );
+    for ( int y=0; y < 48; ++y ) for ( int x=0; x < 32; ++x ) {
+        uint8_t* p = sheet + ( 47 - y ) * 96 + x * 3;          // bottom-up rows, stride 96 is a multiple of 4
+        int cell = ( y / 24 ) * 2 + x / 16;
+        p[0] = p[1] = 0; p[2] = 0;
+        if ( cell == 0 ) p[2] = 255;                              // red
+        if ( cell == 1 ) p[1] = 255;                              // green
+        if ( cell == 2 ) p[0] = 255;                              // blue
+    }
+    f = make_bmp( 32, 48, 24, 0, 0, 0, sheet, 96, false, &len );
+    free( sheet );
+    check( gfxfile_load_cells( &fh, GFXFILE_SPRITE, 10, -1, f, len, false, &err ), "cells: load a sheet into sprite images" );
+    check( fake.cells[0][10][0] == 1 && fake.cells[0][11][5 * 16 + 5] == 2 && fake.cells[0][12][23 * 16 + 15] == 3, "cells: red, green, blue in images 10, 11, 12" );
+    check( fake.cells[0][13][0] != 1 && fake.cells[0][14][0] == 0, "cells: no more than the sheet has" );
+    check( gfxfile_load_cells( &fh, GFXFILE_TILE, 250, 2, f, len, false, &err ) && fake.cells[1][250][0] == 1 && fake.cells[1][251][0] == 2, "cells: tiles" );
+    check( !gfxfile_load_cells( &fh, GFXFILE_TILE, 255, 2, f, len, false, &err ), "cells: tiles beyond 255 are refused" );
+    check( gfxfile_load_cells( &fh, GFXFILE_SPRITE, 246, -1, f, len, false, &err ) && fake.cells[0][246][0] == 1 && fake.cells[0][247][0] == 2 && fake.cells[0][248][0] == 0, "cells: default count stops at sprite 247" );
+    check( !gfxfile_load_cells( &fh, GFXFILE_SPRITE, 0, 5, f, len, false, &err ), "cells: more images than the sheet has is refused" );
+    free( f );
+    uint8_t smallrow[4 * 3] = { 0 };
+    f = make_bmp( 1, 1, 24, 0, 0, 0, smallrow, 4, false, &len );
+    check( !gfxfile_load_cells( &fh, GFXFILE_SPRITE, 0, -1, f, len, false, &err ) && strstr( err, "smaller" ) != 0, "cells: a picture smaller than one image" );
+    free( f );
+
+    // saving sheets and reading them back
+    fake_reset();
+    for ( int k=0; k < 5; ++k ) memset( fake.cells[0][20 + k], k + 1, sizeof(fake.cells[0][0]) );
+    check( gfxfile_save_cells( &fh, GFXFILE_SPRITE, 20, 5, 2, &out, &olen, &err ), "cells: save 5 images, 2 columns" );
+    check( bmp_decode( out, olen, &img, &err ) && img.w == 32 && img.h == 72 && img.idx[0] == 1 && img.idx[16] == 2 && img.idx[24 * 32] == 3 && img.idx[48 * 32] == 5 && img.idx[48 * 32 + 16] == 0, "cells: sheet layout, the empty cell is 0" );
+    bmp_free( &img );
+    fake_reset();
+    check( gfxfile_load_cells( &fh, GFXFILE_SPRITE, 100, 5, out, olen, true, &err ) && fake.cells[0][104][3] == 5 && fake.cells[0][100][3] == 1, "cells: sheet round trip" );
+    free( out );
+    check( gfxfile_save_cells( &fh, GFXFILE_TILE, 0, 20, 0, &out, &olen, &err ) && bmp_decode( out, olen, &img, &err ) && img.w == 256 && img.h == 48, "cells: default columns are 16" );
+    bmp_free( &img ); free( out );
+    check( !gfxfile_save_cells( &fh, GFXFILE_SPRITE, 240, 10, 0, &out, &olen, &err ), "cells: saving past sprite 247 is refused" );
+
+    // palettes
+    fake_reset();
+    check( gfxfile_save_palette( &fh, 2, &out, &olen, &err ) && bmp_decode( out, olen, &img, &err ) && img.w == 16 && img.h == 16 && img.idx[17] == 17 && img.pal[3] == fake.pal[2][3], "palette: save as a 16 x 16 picture" );
+    bmp_free( &img );
+    fake.pal[2][3] = 0xFFABCDEFU;
+    check( gfxfile_load_palette( &fh, 1, out, olen, &err ) && fake.pal[1][3] == 0xFF0000FFU && fake.pal[1][100] == fake.pal[2][100], "palette: load into another layer" );
+    free( out );
+    uint8_t rows24b[1][4 * 3] = { { 0,0,255, 255,0,0, 0,0,255, 255,0,0 } };
+    f = make_bmp( 4, 1, 24, 0, 0, 0, &rows24b[0][0], 12, false, &len );
+    check( gfxfile_load_palette( &fh, 0, f, len, &err ) && fake.pal[0][1] == 0xFF0000FFU && fake.pal[0][2] == 0xFFFF0000U && fake.pal[0][3] == 0xFF0000FFU, "palette: from a true color picture (only the colors of the picture are set)" );
+    free( f );
+}
+
 int main( void ) {
     txtscr_init();
     test_pixels();
@@ -848,6 +1101,8 @@ int main( void ) {
     test_sprites();
     test_sprite_groups();
     test_textscreen();
+    test_bmp();
+    test_gfxfile();
     test_reset();
     printf( "%d checks, %d failure(s)\n", checks, failures );
     return failures;

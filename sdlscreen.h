@@ -160,6 +160,7 @@ void     sdlscr_gfx_settarget( int layer );                     // 0 or 3: where
 int      sdlscr_gfx_target( void );
 void     sdlscr_gfx_setpen( int color );
 void     sdlscr_gfx_setmode( int mode );                        // GFXM_* of gfxcore.h
+int      sdlscr_gfx_getmode( void );
 void     sdlscr_gfx_clear( int layer, int color );
 void     sdlscr_gfx_pset( int layer, int x, int y, int color );
 int      sdlscr_gfx_point( int layer, int x, int y );           // -1 outside
