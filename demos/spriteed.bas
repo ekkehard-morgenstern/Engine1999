@@ -18,6 +18,10 @@
 140 '   Open... / Save...: a picture as a DESIGN listing (a comment ' GROUP w,h, then for each picture DESIGN SPRITE n, base and 24 rows @ "...") that you
 150 '   can MERGE or LOAD into a program; Open reads such a file (DESIGN SPRITE / DESIGN TILE, the rows of @ statements). A block can be saved only when
 160 '   its colors fit into one window of 15 colors. The preview shows the block as a real sprite group (a tile uses the sprite palette there).
+161 '   Import BMP... / Export BMP...: Windows BMP files (roadmap item 53: SPRITE LOAD / SAVE, TILE LOAD / SAVE). Import cuts a BMP picture into 16 x 24 pictures (row by row)
+162 '   and puts them into the engine from the picture Image on (the palette question: Yes takes the colors of the file as the palette of the layer, No matches the
+163 '   colors of the file to the present palette; transparent pixels and color 0 are transparent), then loads the block into the editor. Export stores the edited block
+164 '   first and writes its pictures as a sheet as wide as the block (a 2 x 3 block gives a sheet of 2 x 3 cells); a name without an extension gets .bmp.
 170 LOAD LIBRARY "filereq"
 180 LOAD LIBRARY "uikit"
 190 BREAK OFF
@@ -110,9 +114,11 @@
 1060   UI BUTTON 116,436,182,90,22,"Flip V"
 1070   UI BUTTON 117,534,182,90,22,"Revert"
 1080   UI BUTTON 118,436,208,90,22,"Store"
+1085   UI BUTTON 130,534,208,90,22,"Import BMP"
 1090   UI BUTTON 119,436,234,90,22,"Open..."
 1100   UI BUTTON 120,534,234,90,22,"Save..."
 1110   UI BUTTON 121,534,260,90,22,"Quit"
+1115   UI BUTTON 131,436,260,90,22,"Export BMP"
 1120   UI LABEL 112,10,276,420,14,"Left button paints, right button erases. Store puts the picture into the engine."
 1130 END PROC
 1140 PROC STATUS(T$)
@@ -545,6 +551,14 @@
 5410     DR$=FR_DIR$
 5420     IF F$<>"" THEN CALL EXPORT(F$)
 5430   END IF
+5431   IF E=130 AND K=1 THEN
+5432     F$=FN FR_PICK$("Import a BMP picture",DR$,"*.[bB][mM][pP]",0)
+5433     DR$=FR_DIR$:IF F$<>"" THEN CALL IMPBMP(F$)
+5434   END IF
+5435   IF E=131 AND K=1 THEN
+5436     F$=FN FR_PICK$("Export the picture as BMP",DR$,"*.[bB][mM][pP]",-1)
+5437     DR$=FR_DIR$:IF F$<>"" THEN CALL EXPBMP(F$)
+5438   END IF
 5440   IF E=121 AND K=1 THEN
 5450     IF DT=0 THEN
 5460       Q=1
@@ -555,3 +569,26 @@
 5510   E=UI("EVENT")
 5520 WEND
 5530 RETURN
+6000 ' a BMP file becomes pictures of the engine, starting at the picture Image (a sheet: 16 x 24 cells, row by row), then the block is loaded into the editor
+6010 PROC IMPBMP(F$)
+6020   LOCAL P
+6030   IF DT<>0 THEN
+6040     IF FN UK_ASK("Import BMP","The picture has changes that were not stored.|Import anyway?")=0 THEN EXIT PROC
+6050   END IF
+6060   P=FN UK_ASK("Import BMP","Take over the colors of the file, too?|Yes: its palette becomes the palette of the layer.|No: the colors are matched to the present palette.")
+6070   IF MD=0 THEN
+6080     IF P THEN SPRITE LOAD F$,IMG,,PALETTE ELSE SPRITE LOAD F$,IMG
+6090   ELSE
+6100     IF P THEN TILE LOAD F$,IMG,,PALETTE ELSE TILE LOAD F$,IMG
+6110   END IF
+6120   CALL PALCOPY
+6130   CALL SHOWWIN
+6140   CALL LOADIMG
+6150   CALL STATUS("BMP "+F$+" imported from the picture "+STR$(IMG)+" on.")
+6160 END PROC
+6170 ' the edited block is stored in the engine, then its pictures are written as a sheet as wide as the block
+6180 PROC EXPBMP(F$)
+6190   CALL STOREIMG
+6200   IF MD=0 THEN SPRITE SAVE F$,IMG,NB,GW ELSE TILE SAVE F$,IMG,NB,GW
+6210   CALL STATUS("Exported "+STR$(NB)+" picture(s) to "+F$+" (sheet "+STR$(GW)+" wide).")
+6220 END PROC

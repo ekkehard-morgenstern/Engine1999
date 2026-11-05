@@ -1113,7 +1113,7 @@ static void test_gfxfile( void ) {
     f = make_bmp( 3, 1, 8, 0, pal, 3, &r8[0][0], 4, false, &len );
     check( gfxfile_load_layer( &fh, 0, f, len, 0, 0, true, &err ), "gfxfile: load with PALETTE" );
     check( f_point( &fake, 0, 0, 0 ) == 2 && f_point( &fake, 0, 1, 0 ) == 1 && f_point( &fake, 0, 2, 0 ) == 0, "gfxfile: PALETTE keeps the indices" );
-    check( fake.pal[0][1] == 0xFF463C32U && fake.pal[0][2] == 0xFF030201U && fake.pal[0][0] == 0xFF070809U, "gfxfile: PALETTE installs the colors" );
+    check( fake.pal[0][1] == 0xFF463C32U && fake.pal[0][2] == 0xFF030201U && fake.pal[0][0] == 0x00070809U, "gfxfile: PALETTE installs the colors (entry 0 stays transparent)" );
     // without PALETTE the same picture is matched to the existing palette (index 0 of the file is not entry 0)
     fake_reset();
     check( gfxfile_load_layer( &fh, 0, f, len, 0, 0, false, &err ) && f_point( &fake, 0, 0, 0 ) != 2 && f_point( &fake, 0, 2, 0 ) != 0, "gfxfile: matched to the palette without PALETTE" );

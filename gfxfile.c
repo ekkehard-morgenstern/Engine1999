@@ -58,17 +58,14 @@ static uint8_t* map_image( const gfxfile_host_t* h, int layer, const bmp_image_t
     if ( setpal ) {
         if ( img->idx != 0 ) {
             for ( int i=0; i < img->npal; ++i ) {
-                h->palset( h->ud, layer, i, img->pal[i] );
+                // (entry 0 stays transparent: it is "nothing" on every layer, an opaque color there would cover the whole layer)
+                h->palset( h->ud, layer, i, i == 0 ? ( img->pal[i] & 0x00FFFFFFU ) : img->pal[i] );
             }
             memcpy( out, img->idx, n );
             return out;
         }
-        bool transparent = false;
-        for ( size_t i=0; i < n; ++i ) {
-            if ( ( img->argb[i] >> 24 ) < 128U ) { transparent = true; break; }
-        }
         memset( pal, 0, sizeof(pal) );
-        first = transparent ? 1 : 0;
+        first = 1;                                  // (entry 0 is never given a color: transparent, as on every layer)
         int cnt = bmp_quantize( img->argb, n, pal, first, 256 - first );
         for ( int i=0; i < cnt; ++i ) {
             h->palset( h->ud, layer, first + i, pal[first + i] );
