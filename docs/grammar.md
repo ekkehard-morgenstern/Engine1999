@@ -576,6 +576,12 @@ on-key-stmt := ON KEY ( goto-kw goto-target | OFF ) .
 on-ui-stmt := ON UI ( goto-kw goto-target | OFF ) .
 ```
 
+> ON SPRITE runs a handler when a sprite path executes E n (window host); the handler reads the events with SPRITE("EVENT") until it returns -1.
+
+```ebnf
+on-sprite-stmt := ON SPRITE ( goto-kw goto-target | OFF ) .
+```
+
 > Numeric functions: INT FIX ABS SGN SQR SIN COS TAN ATN EXP LOG RND ( num-expr ) (RND alone is RND(1)); PI. \\ (integer division) and MOD
 > are at the level of \* and /. RANDOMIZE [ seed ] seeds RND.
 
@@ -630,6 +636,7 @@ tile-stmt := TILE ( DEF num-expr "," str-expr | GET num-expr "," str-var-ref |
                         SET num-expr "," num-expr "," num-expr | FILL str-expr | SCROLL num-expr "," num-expr ) .
 ```
 
+> SPRITE n, PATH a$ gives the sprite a path (a string of commands the engine runs by itself, one step per frame: see "Sprite paths" in docs/graphics-subsystem.md; "" stops it).
 > SPRITE n, x, y [, image] places a sprite; MOVETO makes the engine move it; the collision word list is OFF, or ON [, TILES]; SIZE w, h makes the
 > sprite n the head of a group of w x h sprites (n .. n+w\*h-1) that is drawn as one large sprite (1, 1 dissolves it).
 
@@ -641,6 +648,7 @@ sprite-stmt := SPRITE ( DEF num-expr "," str-expr | GET num-expr "," str-var-ref
                                                  ANIM num-expr "," num-expr "," num-expr |
                                                  MOVETO num-expr "," num-expr "," num-expr |
                                                  SIZE num-expr "," num-expr |
+                                                 PATH str-expr |
                                                  COLLISION ( OFF | ON [ "," TILES ] ) |
                                                  num-expr "," num-expr [ "," num-expr ] ) ) .
 cls-stmt := CLS .
@@ -707,7 +715,7 @@ gfx-all-stmt := gfx-stmt | txt-stmt | tile-stmt | sprite-stmt | mouse-stmt | on-
 ```ebnf
 prog-stmt := gfx-all-stmt | load-stmt | run-stmt | merge-stmt | chain-stmt | files-stmt | build-stmt | bye-stmt | timer-stmt | list-stmt | new-stmt | clear-stmt |
              delete-stmt | renum-stmt | edit-stmt | monitor-stmt | sound-stmt | wait-stmt | on-error-stmt | randomize-stmt | angle-stmt |
-             cont-stmt | trace-stmt | break-stmt | auto-stmt | poke-stmt | error-stmt | joy-stmt | on-joy-stmt | on-key-stmt | on-ui-stmt | frame-stmt | library-stmt | libraries-stmt .
+             cont-stmt | trace-stmt | break-stmt | auto-stmt | poke-stmt | error-stmt | joy-stmt | on-joy-stmt | on-key-stmt | on-ui-stmt | on-sprite-stmt | frame-stmt | library-stmt | libraries-stmt .
 stmt := io-stmt | prog-stmt | assign-stmt | control-flow-stmt .
 stmt-list := stmt { ":" stmt } .
 stmt-line := [ stmt-list ] [ <'comment> ] <end-of-line> .

@@ -214,6 +214,11 @@ int      sdlscr_sprite_collide( int sprno );
 bool     sdlscr_sprite_setsize( int head, int w, int h );    // SPRITE n,SIZE w,h: a group of sprites drawn as one large one (sprscreen.h)
 void     sdlscr_sprite_getsize( int head, int* w, int* h );
 int      sdlscr_sprite_nextevent( void );
+bool     sdlscr_sprite_setpath( int sprno, const char* s, size_t slen, char* err, size_t errsize );      // false: the path has an error (text in err)
+bool     sdlscr_sprite_pathrunning( int sprno );
+int      sdlscr_sprite_pathevent( void );
+int      sdlscr_sprite_pathevent_sprite( void );
+uint32_t sdlscr_sprite_pathevents( void );
 
 // back to the defaults (GFX RESET): all layers shown in the original order, all palettes and the backdrop back to the table, the background and
 // graphics bitmaps cleared, target 3, pen 1, mode SET, DRAW state; the tile cells and scrolling cleared; all sprites hidden and reset. The text

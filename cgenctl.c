@@ -502,6 +502,25 @@ bool cgen_from_onuistmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         ( cgen_gen_colt( cgen, kind == ERRT_GOTO ? UINT16_C(34) : UINT16_C(33) ) || cgen_out_of_code_memory( comp ) );
 }
 
+bool cgen_from_onsprstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    // NT_ONSPRSTMT: like ON MOUSE, with the parameter bit 64 of COLT: COLT(65 GOSUB / 66 GOTO)      COLT(64)
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->type != NT_ONSPRSTMT || node->datalen != UINT16_C(1) ) {
+        return cgen_unexpected_node( comp );
+    }
+    uint8_t kind = node->data[0];
+    if ( kind == ERRT_OFF ) {
+        return node->numbranches == 0U ? ( cgen_gen_colt( cgen, UINT16_C(64) ) || cgen_out_of_code_memory( comp ) ) : cgen_unexpected_node( comp );
+    }
+    if ( ( kind != ERRT_GOSUB && kind != ERRT_GOTO ) || node->numbranches != 1U ) {
+        return cgen_unexpected_node( comp );
+    }
+    return cc_push_target_address( cgen, comp, node->branches[0] ) &&
+        ( cgen_gen_colt( cgen, kind == ERRT_GOTO ? UINT16_C(66) : UINT16_C(65) ) || cgen_out_of_code_memory( comp ) );
+}
+
 bool cgen_from_onjoystmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     // NT_ONJOYSTMT: like ON MOUSE, with the parameter bit 8 of COLT: COLT(9 GOSUB / 10 GOTO)      COLT(8)
     if ( node == NODE_NONE ) {

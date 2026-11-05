@@ -793,6 +793,110 @@ static void test_textscreen( void ) {
     check( nonempty == 32, "all 32 control code glyphs have pixels" );
 }
 
+static sprpath_t* pp( const char* s ) {
+    char err[96]; size_t pos = 0;
+    return sprpath_parse( s, strlen( s ), err, sizeof(err), &pos );
+}
+
+static bool pbad( const char* s, size_t at ) {
+    char err[96]; size_t pos = 99;
+    sprpath_t* p = sprpath_parse( s, strlen( s ), err, sizeof(err), &pos );
+    bool ok = p == 0 && pos == at && err[0] != 0;
+    sprpath_free( p );
+    return ok;
+}
+
+static void frames( int n ) {
+    for ( int i=0; i < n; ++i ) sprscr_periodicals();
+}
+
+static void test_paths( void ) {
+    sprscr_reset( true );
+    sprpath_t* p = pp( "x+3*20 y-60 T 5 X+10 w 4 a 3,2,1 d 9 e 7 H S P 2 R [ W1 ]3 X=-4 Y=5 M 2,-2*3 M 6,6" );
+    check( p != 0 && p->n == 18, "a path with every command is translated" );
+    check( p && p->cmd[0].op == SPO_MOVE && p->cmd[0].a == 60 && p->cmd[0].b == 0 && p->cmd[0].c == 20, "X+3*20: 60 pixels over 20 frames" );
+    check( p && p->cmd[1].op == SPO_MOVE && p->cmd[1].b == -60 && p->cmd[1].c == 1, "Y-60: all at once (T defaults to 1)" );
+    check( p && p->cmd[2].a == 10 && p->cmd[2].c == 5, "after T 5 a move takes 5 frames" );
+    check( p && p->cmd[3].op == SPO_WAIT && p->cmd[3].c == 4 && p->cmd[4].op == SPO_ANIM && p->cmd[4].a == 3 && p->cmd[4].b == 2 && p->cmd[4].c == 1, "W and A" );
+    check( p && p->cmd[11].op == SPO_LOOP && p->cmd[13].op == SPO_ENDLOOP && p->cmd[13].a == 12 && p->cmd[13].c == 3, "a loop knows where it starts" );
+    check( p && p->cmd[14].op == SPO_SETX && p->cmd[14].a == -4 && p->cmd[16].op == SPO_MOVE && p->cmd[16].a == 6 && p->cmd[16].b == -6 && p->cmd[16].c == 3, "X=-4 and M dx,dy*k" );
+    sprpath_free( p );
+    p = pp( "" );
+    check( p != 0 && p->n == 0, "an empty path is fine" );
+    sprpath_free( p );
+    check( pbad( "Q", 0 ) && pbad( "X", 1 ) && pbad( "X5", 1 ) && pbad( "W 0", 0 ) && pbad( "E 256", 0 ) && pbad( "P 8", 0 ) && pbad( "[ W1", 4 ) && pbad( "W1 ]2", 3 ) &&
+           pbad( "[[[[[ W1 ]1 ]1 ]1 ]1 ]1", 4 ) && pbad( "A 1,16,0", 0 ) && pbad( "X+3*0", 5 ) && pbad( "M 1", 3 ), "errors with the place" );
+
+    // running: X+3*4 moves 3 pixels a frame
+    int x = 0, y = 0;
+    sprscr_show( 1, true ); sprscr_move( 1, 10, 20 );
+    sprscr_setpath( 1, pp( "X+3*4 W 2 Y+5 E 9 D 4" ) );
+    check( sprscr_pathrunning( 1 ), "a posted path counts as running" );
+    frames( 1 );
+    sprscr_getpos( 1, &x, &y );
+    check( x == 13 && y == 20, "the first step happens in the frame the path is taken" );
+    frames( 3 );
+    sprscr_getpos( 1, &x, &y );
+    check( x == 22 && y == 20 && sprscr_pathrunning( 1 ), "arrives exactly" );
+    frames( 2 );
+    sprscr_getpos( 1, &x, &y );
+    check( y == 20, "waits 2 frames" );
+    frames( 1 );
+    sprscr_getpos( 1, &x, &y );
+    check( y == 25 && sprscr_pathevent() == -1, "then Y+5" );
+    frames( 1 );
+    check( !sprscr_pathrunning( 1 ) && sprscr_getimage( 1 ) == 4, "D sets the image, the path is finished" );
+    uint32_t ev = sprscr_pathevents();
+    check( ev == 1 && sprscr_pathevent() == 9 && sprscr_pathevent_sprite() == 1 && sprscr_pathevent() == -1, "E 9 gives an event of sprite 1" );
+
+    // loops and repeat
+    sprscr_move( 2, 0, 0 );
+    sprscr_setpath( 2, pp( "[ X+1 [ Y+1 ]2 ]3" ) );
+    frames( 20 );
+    sprscr_getpos( 2, &x, &y );
+    check( x == 3 && y == 6 && !sprscr_pathrunning( 2 ), "nested loops: 3 x (X+1, 2 x Y+1)" );
+    sprscr_move( 3, 0, 0 );
+    sprscr_setpath( 3, pp( "X+1 R" ) );
+    frames( 10 );
+    sprscr_getpos( 3, &x, &y );
+    check( x == 10 && sprscr_pathrunning( 3 ), "R repeats forever, one step a frame" );
+    sprscr_setpath( 3, 0 );
+    frames( 3 );
+    sprscr_getpos( 3, &x, &y );
+    check( x == 10 && !sprscr_pathrunning( 3 ), "a null path stops it" );
+    sprscr_setpath( 3, pp( "E 1 E 2 R" ) );
+    frames( 400 );
+    check( sprscr_pathevents() > 200 && sprscr_pathevent() == 1, "a full event ring drops events without stopping the path" );
+    sprscr_setpath( 3, 0 );
+    frames( 1 );
+    while ( sprscr_pathevent() >= 0 ) {}
+
+    // overrides: H / S / P / D / A, and the program's own statements win again
+    sprscr_show( 4, true ); sprscr_prio( 4, 1 ); sprscr_setimage( 4, 1 );
+    sprscr_setpath( 4, pp( "H P 5 D 7 W 1 S" ) );
+    frames( 1 );
+    check( !sprscr_isactive( 4 ), "H hides the sprite" );
+    check( sprscr_getimage( 4 ) == 7, "D shows image 7" );
+    frames( 2 );
+    check( sprscr_isactive( 4 ), "S shows it again" );
+    sprscr_show( 4, false );
+    check( !sprscr_isactive( 4 ), "SPRITE n,OFF takes the override away" );
+    sprscr_setimage( 4, 2 );
+    check( sprscr_getimage( 4 ) == 2, "SPRITE n,IMAGE takes the override away" );
+    uint8_t seq[3] = { 10, 11, 12 };
+    sprscr_animdata( 5, seq, 3 );
+    sprscr_setpath( 6, pp( "A 5,3,1" ) );
+    frames( 1 );
+    int i0 = sprscr_getimage( 6 );
+    frames( 1 );
+    int i1 = sprscr_getimage( 6 );
+    check( i0 == 10 && i1 == 11, "A plays the sequence" );
+    sprscr_reset( false );
+    check( !sprscr_pathrunning( 6 ) && sprscr_pathevent() == -1, "reset stops the paths and forgets the events" );
+    frames( 1 );
+    sprscr_setpath( 300, pp( "X+1" ) );             // (a bad sprite number frees the path)
+}
+
 static void test_reset( void ) {
     uint8_t img[16 * 24], back[16 * 24];
     memset( img, 7, sizeof(img) );
@@ -1100,6 +1204,7 @@ int main( void ) {
     test_mouse();
     test_sprites();
     test_sprite_groups();
+    test_paths();
     test_textscreen();
     test_bmp();
     test_gfxfile();

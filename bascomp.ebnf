@@ -434,6 +434,8 @@ on-joy-stmt := TOK_ON JOY ( goto-kw goto-target | TOK_OFF ) .
 on-key-stmt := TOK_ON TOK_KEY ( goto-kw goto-target | TOK_OFF ) .
 -- ON UI runs a handler when a UI widget has queued an event (window host); the handler reads them with UI("EVENT") until it returns 0.
 on-ui-stmt := TOK_ON UI ( goto-kw goto-target | TOK_OFF ) .
+-- ON SPRITE runs a handler when a sprite path executes E n (window host); the handler reads the events with SPRITE("EVENT") until it returns -1.
+on-sprite-stmt := TOK_ON TOK_SPRITE ( goto-kw goto-target | TOK_OFF ) .
 -- Numeric functions: INT FIX ABS SGN SQR SIN COS TAN ATN EXP LOG RND ( num-expr ) (RND alone is RND(1)); PI. \ (integer division) and MOD
 -- are at the level of * and /. RANDOMIZE [ seed ] seeds RND.
 randomize-stmt := TOK_RANDOMIZE [ num-expr ] .
@@ -472,6 +474,7 @@ tile-stmt := TOK_TILE ( DEF num-expr TOK_COMMA str-expr | GET num-expr TOK_COMMA
                         LOAD str-expr TOK_COMMA num-expr [ TOK_COMMA [ num-expr ] [ TOK_COMMA PALETTE ] ] |
                         SAVE str-expr TOK_COMMA num-expr TOK_COMMA num-expr [ TOK_COMMA num-expr ] |
                         SET num-expr TOK_COMMA num-expr TOK_COMMA num-expr | FILL str-expr | SCROLL num-expr TOK_COMMA num-expr ) .
+-- SPRITE n, PATH a$ gives the sprite a path (a string of commands the engine runs by itself, one step per frame: see "Sprite paths" in docs/graphics-subsystem.md; "" stops it).
 -- SPRITE n, x, y [, image] places a sprite; MOVETO makes the engine move it; the collision word list is OFF, or ON [, TILES]; SIZE w, h makes the
 -- sprite n the head of a group of w x h sprites (n .. n+w*h-1) that is drawn as one large sprite (1, 1 dissolves it).
 sprite-stmt := TOK_SPRITE ( DEF num-expr TOK_COMMA str-expr | GET num-expr TOK_COMMA str-var-ref | SEQ num-expr TOK_COMMA str-expr |
@@ -481,6 +484,7 @@ sprite-stmt := TOK_SPRITE ( DEF num-expr TOK_COMMA str-expr | GET num-expr TOK_C
                                                  ANIM num-expr TOK_COMMA num-expr TOK_COMMA num-expr |
                                                  MOVETO num-expr TOK_COMMA num-expr TOK_COMMA num-expr |
                                                  SIZE num-expr TOK_COMMA num-expr |
+                                                 PATH str-expr |
                                                  COLLISION ( TOK_OFF | TOK_ON [ TOK_COMMA TILES ] ) |
                                                  num-expr TOK_COMMA num-expr [ TOK_COMMA num-expr ] ) ) .
 cls-stmt := TOK_CLS .
@@ -523,7 +527,7 @@ gfx-all-stmt := gfx-stmt | txt-stmt | tile-stmt | sprite-stmt | mouse-stmt | on-
 -- Several statements on a line are separated by a colon; a line may end with a comment (an apostrophe).
 prog-stmt := gfx-all-stmt | load-stmt | run-stmt | merge-stmt | chain-stmt | files-stmt | build-stmt | bye-stmt | timer-stmt | list-stmt | new-stmt | clear-stmt |
              delete-stmt | renum-stmt | edit-stmt | monitor-stmt | sound-stmt | wait-stmt | on-error-stmt | randomize-stmt | angle-stmt |
-             cont-stmt | trace-stmt | break-stmt | auto-stmt | poke-stmt | error-stmt | joy-stmt | on-joy-stmt | on-key-stmt | on-ui-stmt | frame-stmt | library-stmt | libraries-stmt .
+             cont-stmt | trace-stmt | break-stmt | auto-stmt | poke-stmt | error-stmt | joy-stmt | on-joy-stmt | on-key-stmt | on-ui-stmt | on-sprite-stmt | frame-stmt | library-stmt | libraries-stmt .
 
 stmt := io-stmt | prog-stmt | assign-stmt | control-flow-stmt .
 stmt-list := stmt { TOK_COLON stmt } .

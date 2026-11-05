@@ -208,7 +208,8 @@ typedef struct _vm_sound_t {
 #define VM_JOYSLOT          6           // ... and the ON JOY handler behind that (the highest priority of all)
 #define VM_KEYSLOT          7           // ... and the ON KEY handler (the key events of the window), above all of them
 #define VM_UISLOT           8           // ... and the ON UI handler (events of the UI widgets), the highest of all
-#define VM_NTIMERS          9
+#define VM_SPRSLOT          9           // ... and the ON SPRITE handler (events E n of sprite paths)
+#define VM_NTIMERS          10
 
 #define VM_ADDRLEN          20
 
@@ -316,6 +317,8 @@ typedef struct _vm_t {
     uint32_t        keyseen;        // (internal) keystate_event_count() at the last look
     bool            joypending;     // (internal) the controller event counter changed and the ON JOY handler has not seen it yet
     bool            uipending;      // (internal) a UI event has come and the ON UI handler has not seen it yet
+    bool            sprpending;     // (internal) a sprite path event has come and the ON SPRITE handler has not seen it yet
+    uint32_t        sprseen;        // (internal) the engine's count of path events at the last look
     uint32_t        uiseen;         // (internal) the UI's count of queued events at the last look
     uint32_t        joyseen;        // (internal) joy_events() at the last look
     uint32_t        mouseseen;      // (internal) the host's count of mouse events (button presses and releases, wheel steps) at the last look

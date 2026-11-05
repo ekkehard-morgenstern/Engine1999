@@ -109,6 +109,8 @@ void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem ) {
     vm->keyseen = 0;
     vm->uipending = false;
     vm->uiseen = 0;
+    vm->sprpending = false;
+    vm->sprseen = 0;
     vm->design.active = false;
     snprintf( vm->addrcur, sizeof(vm->addrcur), "file" );
     snprintf( vm->addrprev, sizeof(vm->addrprev), "file" );
@@ -2851,7 +2853,7 @@ static int vm_irq_find( const vm_t* vm, uint64_t now ) {
     int level = vm->irqdepth > 0 ? vm->irq[ vm->irqdepth - 1 ].timer : -1;
     for ( int i=VM_NTIMERS-1; i > level; --i ) {
         if ( i == VM_COLSLOT ? vm->timers[i].active && vm->colpending : i == VM_MOUSESLOT ? vm->timers[i].active && vm->mousepending :
-                i == VM_UISLOT ? vm->timers[i].active && vm->uipending : i == VM_KEYSLOT ? vm->timers[i].active && vm->keypending : i == VM_JOYSLOT ? vm->timers[i].active && vm->joypending :
+                i == VM_SPRSLOT ? vm->timers[i].active && vm->sprpending : i == VM_UISLOT ? vm->timers[i].active && vm->uipending : i == VM_KEYSLOT ? vm->timers[i].active && vm->keypending : i == VM_JOYSLOT ? vm->timers[i].active && vm->joypending :
                 vm->timers[i].active && vm->timers[i].due <= now ) {
             return i;
         }
@@ -2863,7 +2865,9 @@ static int vm_irq_find( const vm_t* vm, uint64_t now ) {
 static bool vm_irq_fire( vm_t* vm, int t ) {
     vm_timer_t* tm = &vm->timers[t];
     uint32_t target = tm->target;
-    if ( t == VM_UISLOT ) {
+    if ( t == VM_SPRSLOT ) {
+        vm->sprpending = false;         // the sprite path handler stays set
+    } else if ( t == VM_UISLOT ) {
         vm->uipending = false;          // the UI handler stays set
     } else if ( t == VM_KEYSLOT ) {
         vm->keypending = false;         // the key handler stays set
@@ -2926,6 +2930,13 @@ static bool vm_irq_poll( vm_t* vm, uint64_t steps ) {
         if ( vm->gfx->query( vm->userdata, GFXQ_MOUSEEVENT, 0, 0, &cnt ) && (uint32_t) cnt != vm->mouseseen ) {
             vm->mouseseen = (uint32_t) cnt;
             vm->mousepending = true;
+        }
+    }
+    if ( vm->timers[VM_SPRSLOT].active && !vm->sprpending && vm->gfx && vm->gfx->query && ( safe || ( steps & 31U ) == 0 ) ) {
+        double cnt = 0.0;
+        if ( vm->gfx->query( vm->userdata, GFXQ_SPREVENTS, 0, 0, &cnt ) && (uint32_t) cnt != vm->sprseen ) {
+            vm->sprseen = (uint32_t) cnt;
+            vm->sprpending = true;
         }
     }
     if ( vm->timers[VM_UISLOT].active && !vm->uipending && vm->gfx && vm->gfx->query && ( safe || ( steps & 31U ) == 0 ) ) {
@@ -3025,6 +3036,7 @@ static bool vm_gfx_check( vm_t* vm, int op, const double* a, int na, size_t slen
         case GFXOP_SPRANIM:     ok = IN( 0, 0, SPR_USER_COUNT - 1 ) && IN( 1, 0, 255 ) && IN( 2, 0, 15 ) && IN( 3, 0, 31 ); break;
         case GFXOP_SPRMOVETO:   ok = IN( 0, 0, SPR_USER_COUNT - 1 ) && IN( 1, -1024, 1023 ) && IN( 2, -1024, 1023 ) && IN( 3, 0, 65535 ); break;
         case GFXOP_SPRCOLL:     ok = IN( 0, 0, SPR_USER_COUNT - 1 ) && IN( 1, 0, 1 ) && OPT( 2, 0, 0 ); break;
+        case GFXOP_SPRPATH:     ok = IN( 0, 0, SPR_USER_COUNT - 1 ) && slen <= 65535U; break;
         case GFXOP_SPRSIZE:     ok = IN( 0, 0, SPR_USER_COUNT - 1 ) && IN( 1, 1, SPR_GROUP_MAX ) && IN( 2, 1, SPR_GROUP_MAX ); break;
         case GFXOP_SPRMOVE:     ok = IN( 0, 0, SPR_USER_COUNT - 1 ) && IN( 1, -1024, 1023 ) && IN( 2, -1024, 1023 ) && OPT( 3, 0, 255 ); break;
         default:                break;
@@ -3123,7 +3135,7 @@ static bool vm_gfx_query( vm_t* vm, uint16_t q ) {
         }
     }
     if ( q == GFXQ_SPRX || q == GFXQ_SPRY || q == GFXQ_SPRIMAGE || q == GFXQ_SPRON || q == GFXQ_SPRHITS || q == GFXQ_SPRCOLLIDE ||
-         q == GFXQ_SPRMOVING || q == GFXQ_SPRCOLS || q == GFXQ_SPRROWS ) {
+         q == GFXQ_SPRMOVING || q == GFXQ_SPRCOLS || q == GFXQ_SPRROWS || q == GFXQ_SPRPATH ) {
         if ( !( a[0] >= 0.0 && a[0] <= (double)( SPR_USER_COUNT - 1 ) ) ) {
             return vm_error( vm, "Illegal argument" );
         }
@@ -3222,18 +3234,19 @@ static bool vm_design_row( vm_t* vm ) {
 
 // COLT ( -- ) ( r: target -- ): ON COLLISION GOSUB (1) / GOTO (2), OFF (0); with the bit 4: ON MOUSE (5, 6, 4)
 static bool vm_set_collision( vm_t* vm, uint16_t param ) {
-    bool ui = ( param & 32U ) != 0;
-    bool key = !ui && ( param & 16U ) != 0;
-    bool joy = !ui && !key && ( param & 8U ) != 0;
-    bool mouse = !ui && !key && !joy && ( param & 4U ) != 0;
-    vm_timer_t* tm = &vm->timers[ ui ? VM_UISLOT : key ? VM_KEYSLOT : joy ? VM_JOYSLOT : mouse ? VM_MOUSESLOT : VM_COLSLOT ];
+    bool spr = ( param & 64U ) != 0;
+    bool ui = !spr && ( param & 32U ) != 0;
+    bool key = !ui && !spr && ( param & 16U ) != 0;
+    bool joy = !ui && !spr && !key && ( param & 8U ) != 0;
+    bool mouse = !ui && !spr && !key && !joy && ( param & 4U ) != 0;
+    vm_timer_t* tm = &vm->timers[ spr ? VM_SPRSLOT : ui ? VM_UISLOT : key ? VM_KEYSLOT : joy ? VM_JOYSLOT : mouse ? VM_MOUSESLOT : VM_COLSLOT ];
     param &= 3U;
     if ( key && param != 0 && vm->keydown == 0 ) {
         return vm_error( vm, "KEY is not available in this host" );        // (no key events in the console host: a terminal does not tell when a key is let go)
     }
     if ( param == 0 ) {
         tm->active = false;
-        if ( ui ) vm->uipending = false; else if ( key ) vm->keypending = false; else if ( joy ) vm->joypending = false; else if ( mouse ) vm->mousepending = false; else vm->colpending = false;
+        if ( spr ) vm->sprpending = false; else if ( ui ) vm->uipending = false; else if ( key ) vm->keypending = false; else if ( joy ) vm->joypending = false; else if ( mouse ) vm->mousepending = false; else vm->colpending = false;
         vm_count_timers( vm );
         return true;
     }
@@ -3245,7 +3258,11 @@ static bool vm_set_collision( vm_t* vm, uint16_t param ) {
     tm->every = false;
     tm->gosub = param == 1;
     tm->target = target;
-    if ( ui ) {
+    if ( spr ) {
+        double cnt = 0.0;
+        vm->sprpending = false;
+        vm->sprseen = vm->gfx && vm->gfx->query && vm->gfx->query( vm->userdata, GFXQ_SPREVENTS, 0, 0, &cnt ) ? (uint32_t) cnt : 0U;
+    } else if ( ui ) {
         double cnt = 0.0;
         vm->uipending = false;
         vm->uiseen = vm->gfx && vm->gfx->query && vm->gfx->query( vm->userdata, GFXQ_UIEVENTS, 0, 0, &cnt ) ? (uint32_t) cnt : 0U;   // (only what happens from now on counts)
@@ -4318,6 +4335,7 @@ bool vm_begin( vm_t* vm, uint32_t start ) {
     vm->joypending = false;
     vm->keypending = false;
     vm->uipending = false;
+    vm->sprpending = false;
     keystate_event_clear();                             // (events of the run before are forgotten)
     vm->design.active = false;
     vm->errset = vm->errgosub = vm->errinhandler = vm->errcaught = false;      // the error handler ends with the run, too

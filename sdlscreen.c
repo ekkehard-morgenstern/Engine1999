@@ -1624,6 +1624,37 @@ void sdlscr_sprite_moveto( int sprno, int x, int y, int ticks ) {
     sdllay_set_modified( &layers[LAY_SPR] );
 }
 
+bool sdlscr_sprite_setpath( int sprno, const char* s, size_t slen, char* err, size_t errsize ) {
+    size_t pos = 0;
+    sprpath_t* p = sprpath_parse( s, slen, err, errsize, &pos );
+    if ( p == 0 ) {
+        size_t n = strlen( err );
+        if ( n + 24 < errsize ) {
+            snprintf( err + n, errsize - n, " (at %lu)", (unsigned long) pos + 1UL );
+        }
+        return false;
+    }
+    sprscr_setpath( sprno, p );
+    sdllay_set_modified( &layers[LAY_SPR] );
+    return true;
+}
+
+bool sdlscr_sprite_pathrunning( int sprno ) {
+    return sprscr_pathrunning( sprno );
+}
+
+int sdlscr_sprite_pathevent( void ) {
+    return sprscr_pathevent();
+}
+
+int sdlscr_sprite_pathevent_sprite( void ) {
+    return sprscr_pathevent_sprite();
+}
+
+uint32_t sdlscr_sprite_pathevents( void ) {
+    return sprscr_pathevents();
+}
+
 bool sdlscr_sprite_setsize( int head, int w, int h ) {
     bool ok = sprscr_setsize( head, w, h );
     sdllay_set_modified( &layers[LAY_SPR] );

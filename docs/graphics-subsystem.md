@@ -96,6 +96,7 @@ SPRITE n, ON | OFF                    shows / hides it
 SPRITE n, PRIORITY p                  0..7 (higher is in front)
 SPRITE n, IMAGE i                     a fixed image
 SPRITE n, ANIM a, length, speed       plays sequence a (length 0..15 images, speed 0..31 frames per image); IMAGE ends the animation and the other way round
+SPRITE n, PATH a$                     a path the engine runs by itself (X+3*20 W 5 [ ... ]3 E 1 R ...); "" stops it (see "Sprite paths")
 SPRITE n, SIZE w, h                   a group: the sprites n .. n+w*h-1 are drawn as one large sprite (see "Sprite groups"); 1, 1 dissolves it
 SPRITE n, MOVETO x, y, ticks          the engine moves the sprite by itself in ticks/60 s (Simons' BASIC: RLOCMOB); a new position or MOVETO replaces it
 SPRITE n, COLLISION OFF | ON [, TILES]  collision detection with other sprites (and, with TILES, with solid tile pixels)
@@ -143,6 +144,31 @@ of the sprite it overlapped at the last frame (-1 none). A collision means an ov
 `SPRITE n,COLLISION ON`. The check runs once per frame in the screen thread (`sprscr_periodicals`) while the sprite layer is enabled.
 `ON COLLISION`: the VM asks the host for a new collision about every 32 instructions (and while `WAIT`ing) and runs the handler between two statements, like a timer
 handler (it has the highest priority of the timers except `ON MOUSE`, which is above it); the program finds out which sprite with `SPRITE("HITS",n)`.
+
+### Sprite paths (2026-11-05, roadmap item 52)
+`SPRITE n,PATH a$` gives sprite n (0..247) a **path**: a string of commands that the engine runs by itself, one step per frame in the screen thread, like a `PLAY` string runs per note. The BASIC program does not move the sprite and uses no time for it. The string is translated completely first (`sprpath.c`): a mistake is an error at once ("? Unknown path command (at 5)"), nothing is changed then. A new path replaces the running one; `SPRITE n,PATH ""` stops it (the sprite stays where it is); `GFX RESET` stops all paths. `SPRITE("PATH",n)` is -1 while a path runs for the sprite.
+
+| command | meaning |
+|---|---|
+| `X+n` `X-n` `Y+n` `Y-n` | move n pixels (relative) over T frames (see `T`; default 1 frame = a jump); `X+3*20`: 3 pixels **per frame** for 20 frames |
+| `X=n` `Y=n` | set the coordinate at once |
+| `M dx,dy` `M dx,dy*k` | move in both directions at once (same rules as `X` / `Y`) |
+| `W n` | wait n frames |
+| `A a,len,speed` | play animation sequence a (like `SPRITE n,ANIM`) |
+| `D i` | show the fixed image i |
+| `H` `S` | hide / show the sprite |
+| `P n` | priority 0..7 |
+| `E n` | event n (0..255) for the program |
+| `T n` | the default duration of the following moves, in frames (1..65535) |
+| `[ ... ]n` | repeat the commands between the brackets n times; nested up to 4 deep |
+| `R` | start again from the beginning (forever) |
+
+Letters in either case, blanks between commands are ignored, numbers are decimal. At the end of the string the path is finished. A move takes exactly its frames (the first step happens in the frame the command is taken), the target is exact; `W n` leaves n frames without a step. At most 4096 commands; a path of instant commands only (`[ X=1 ]1000`) is run 256 commands per frame, so it can't freeze the screen thread.
+- **Events:** `E n` queues (sprite, n) in a ring of 256 (a full ring drops new events; the screen thread is the only writer, the program the only reader, no locks). `SPRITE("EVENT")` takes the oldest one and returns n (-1 = none), `SPRITE("EVENTSPR")` is the sprite of the event taken last. **`ON SPRITE GOSUB|GOTO|OFF`** (`VM_SPRSLOT` 9, `COLT` bit 64, `NT_ONSPRSTMT 0x90`) runs a handler when a path has queued an event, polled like `ON UI` (a change of `SPRITE("EVENTS")`, the number of events so far); the handler loops on `SPRITE("EVENT")` until it is -1 (see `demos/paths.bas`).
+- **Overrides:** `H` `S` `P` `D` `A` do not change the sprite's own settings but override them (words that the screen thread alone writes, `sprscr_view()` applies them); the program's own `SPRITE n,ON|OFF|PRIORITY|IMAGE|ANIM` takes the override of that property away again.
+- **Mixed with `MOVETO` or `SPRITE n,x,y`:** all three write the position, the last writer in a frame wins (a path that moves and a `MOVETO` at the same time fight). Paths on group heads move the whole group; a member's path is ignored while it belongs to a group.
+- Not done: `J n` (jump), absolute moves over time, easing, console host (`SPRITE` is not available there anyway).
+
 
 ### Scrolling a world that is bigger than the screen (`TILE SCROLL`)
 

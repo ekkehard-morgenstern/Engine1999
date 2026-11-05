@@ -29,6 +29,7 @@
 #include "sprscreen.h"
 #include "tilescreen.h"
 #include "cursors.h"
+#include "sprpath.h"
 
 typedef struct _sprctrl_t {
     // The animation counters are the only fields the screen thread changes (sprscr_periodicals), so they are bytes of their own: a bitfield write is a
@@ -95,6 +96,35 @@ static sprmove_t    sprmove[MAX_SPRITES];
 static uint8_t      sprgrp_w[MAX_SPRITES];
 static uint8_t      sprgrp_h[MAX_SPRITES];
 static uint8_t      sprgrp_head[MAX_SPRITES];
+// Sprite paths (roadmap item 52): the screen thread runs them (sprscr_paths()). The main thread hands a translated path over through sprpathreq (one
+// atomic exchange; SPRPATH_STOP stops the running one); everything else in sprrun[] belongs to the screen thread. A path changes the sprite only through
+// the position (like MOVETO) and the override words below, which the screen thread alone writes (the main thread's statements for the same property
+// switch the override off again with a plain byte store); sprscr_view() applies them.
+#define SPRPATH_STOP    ( (sprpath_t*) 1 )
+typedef struct _sprrun_t {
+    sprpath_t*  code;
+    uint32_t    pc;
+    int         wait;                   // frames still to wait
+    int         frames;                 // frames of the move still to do (0 = no move)
+    int32_t     fx, fy, dx, dy;         // 16.16 position and step per frame
+    int         tx, ty;                 // the target of the move
+    int         cnt[SPRPATH_NEST];      // the loop counters
+} sprrun_t;
+static sprrun_t     sprrun[SPR_USER_COUNT];
+static sprpath_t*   sprpathreq[SPR_USER_COUNT];
+static uint8_t      sprpathon[SPR_USER_COUNT];      // a path is running (written by the screen thread)
+static int8_t       pov_show[SPR_USER_COUNT];       // -1 = the sprite's own setting, 0 hidden, 1 shown
+static int8_t       pov_prio[SPR_USER_COUNT];       // -1 = own, 0..7
+static int16_t      pov_img[SPR_USER_COUNT];        // -1 = own, else a fixed image
+typedef struct _povanim_t { uint8_t on, idx, size, reset, count, pos; } povanim_t;
+static povanim_t    pov_anim[SPR_USER_COUNT];       // an animation started by a path (on = 0: the sprite's own)
+// events (E n): a ring of (sprite << 8 | event); the screen thread is the only producer, the main thread the only consumer. A full ring drops new events.
+#define SPREV_RING      256U
+static uint16_t     sprevring[SPREV_RING];
+static uint32_t     sprevhead, sprevtail;
+static uint32_t     sprevtotal;                     // events posted so far (a change = an event, for ON SPRITE)
+static int          sprevlast = -1;                 // the sprite of the event taken last (main thread)
+
 static int          sprcollwith[MAX_SPRITES];       // the sprite a sprite last collided with (-1 none)
 static int          sprevent = -1;                  // a sprite with a new collision (for ON COLLISION), -1 none
 
@@ -133,17 +163,28 @@ static void sprscr_view( int n, sprview_t* v ) {
     }
     const sprctrl_t* hc = &sprctrl[head];
     int img = sprscr_curimage( hc );
+    bool pathshow = hc->active;
+    int pathprio = hc->priority;
+    if ( head < SPR_USER_COUNT ) {
+        if ( pov_img[head] >= 0 ) {
+            img = pov_img[head];
+        } else if ( pov_anim[head].on ) {
+            img = spranim[ pov_anim[head].idx ][ pov_anim[head].pos & 15U ];
+        }
+        if ( pov_show[head] >= 0 ) pathshow = pov_show[head] != 0;
+        if ( pov_prio[head] >= 0 ) pathprio = pov_prio[head];
+    }
     if ( head != n ) {
         img += row * w + col;
         if ( img > 255 ) {
             img = 255;
         }
     }
-    v->active   = hc->active;
+    v->active   = pathshow;
     v->x        = hc->screen_x + col * SPRITE_WIDTH;
     v->y        = hc->screen_y + row * SPRITE_HEIGHT;
     v->image    = img;
-    v->prio     = hc->priority;
+    v->prio     = pathprio;
     v->coll_spr = hc->spr_spr_coll_ena;
     v->coll_til = hc->spr_til_coll_ena;
     v->head     = head;
@@ -198,7 +239,20 @@ bool sprscr_setsize( int head, int w, int h ) {
     return true;
 }
 
+static void sprscr_pathsclear( void ) {
+    for ( int i=0; i < SPR_USER_COUNT; ++i ) {
+        sprpath_t* old = __atomic_exchange_n( &sprpathreq[i], SPRPATH_STOP, __ATOMIC_ACQ_REL );
+        if ( old != 0 && old != SPRPATH_STOP ) {
+            sprpath_free( old );
+        }
+        pov_show[i] = -1; pov_prio[i] = -1; pov_img[i] = -1; pov_anim[i].on = 0;
+    }
+    __atomic_store_n( &sprevhead, __atomic_load_n( &sprevtail, __ATOMIC_ACQUIRE ), __ATOMIC_RELEASE );
+    sprevlast = -1;
+}
+
 void sprscr_init( void ) {
+    sprscr_pathsclear();
     memset( &sprctrl[0], 0, sizeof(sprctrl_t) * MAX_SPRITES );
     memset( &spranim[0][0], 0, MAX_ANIMSEQ * MAX_SPRANIM );
     memset( &sprsysanim[0][0], 0, MAX_SYSANIM * MAX_SPRANIM );
@@ -223,6 +277,7 @@ void sprscr_show( int sprno, bool active ) {
         return;
     }
     sprctrl[sprno].active = active;
+    pov_show[sprno] = -1;
     sprscr_touch();
 }
 
@@ -231,6 +286,7 @@ void sprscr_prio( int sprno, int prio ) {
         return;
     }
     sprctrl[sprno].priority = prio;
+    pov_prio[sprno] = -1;
     sprscr_touch();
 }
 
@@ -268,6 +324,8 @@ void sprscr_animcfg( int sprno, int animno, int length, int speed ) {
     ctrl->anim_size        = length;
     ctrl->anim_speed_count = speed;
     ctrl->anim_speed_reset = speed;
+    pov_img[sprno] = -1;
+    pov_anim[sprno].on = 0;
     sprscr_touch();
 }
 
@@ -402,6 +460,7 @@ void sprscr_reset( bool images ) {
     memset( &sprgrp_w[0], 0, SPR_USER_COUNT );                       // (the groups are dissolved)
     memset( &sprgrp_h[0], 0, SPR_USER_COUNT );
     memset( &sprgrp_head[0], SPRGRP_NONE, SPR_USER_COUNT );
+    sprscr_pathsclear();
     memset( &sprctrl[0], 0, sizeof(sprctrl_t) * SPR_USER_COUNT );      // (the reserved sprites, the mouse pointer, are not the program's to reset)
     for ( int i=0; i < SPR_USER_COUNT; ++i ) {
         // the movement belongs to the screen thread: it is asked to stop (and is told here, too, for a host that has no screen thread)
@@ -428,6 +487,8 @@ void sprscr_setimage( int sprno, int image ) {
     }
     sprctrl[sprno].use_image = 1;
     sprctrl[sprno].image = (unsigned) image;
+    pov_img[sprno] = -1;
+    pov_anim[sprno].on = 0;
     sprscr_touch();
 }
 
@@ -620,7 +681,149 @@ static int sprscr_rendersort( const void* pa, const void* pb ) {
     return d != 0 ? d : a - b;
 }
 
+// -- sprite paths ----------------------------------------------------------------------------------------------------
+
+void sprscr_setpath( int sprno, sprpath_t* path ) {
+    if ( sprno < 0 || sprno >= SPR_USER_COUNT ) {
+        sprpath_free( path );
+        return;
+    }
+    // (an empty path runs nothing: it is a stop)
+    sprpath_t* mine = path != 0 && path->n > 0 ? path : SPRPATH_STOP;
+    if ( mine == SPRPATH_STOP ) {
+        sprpath_free( path );
+    }
+    sprpath_t* old = __atomic_exchange_n( &sprpathreq[sprno], mine, __ATOMIC_ACQ_REL );
+    if ( old != 0 && old != SPRPATH_STOP ) {
+        sprpath_free( old );                    // (never seen by the screen thread: it takes a request with an exchange)
+    }
+}
+
+bool sprscr_pathrunning( int sprno ) {
+    if ( sprno < 0 || sprno >= SPR_USER_COUNT ) {
+        return false;
+    }
+    sprpath_t* r = __atomic_load_n( &sprpathreq[sprno], __ATOMIC_ACQUIRE );
+    return ( r != 0 && r != SPRPATH_STOP ) || __atomic_load_n( &sprpathon[sprno], __ATOMIC_ACQUIRE ) != 0;
+}
+
+int sprscr_pathevent( void ) {
+    uint32_t head = __atomic_load_n( &sprevhead, __ATOMIC_RELAXED );
+    if ( head == __atomic_load_n( &sprevtail, __ATOMIC_ACQUIRE ) ) {
+        return -1;
+    }
+    uint16_t v = sprevring[ head % SPREV_RING ];
+    __atomic_store_n( &sprevhead, head + 1, __ATOMIC_RELEASE );
+    sprevlast = v >> 8;
+    return v & 0xFF;
+}
+
+int sprscr_pathevent_sprite( void ) {
+    return sprevlast;
+}
+
+uint32_t sprscr_pathevents( void ) {
+    return __atomic_load_n( &sprevtotal, __ATOMIC_ACQUIRE );
+}
+
+static void sprscr_post_pathevent( int sprno, int ev ) {
+    uint32_t tail = __atomic_load_n( &sprevtail, __ATOMIC_RELAXED );
+    if ( tail - __atomic_load_n( &sprevhead, __ATOMIC_ACQUIRE ) >= SPREV_RING ) {
+        return;                                 // full: dropped
+    }
+    sprevring[ tail % SPREV_RING ] = (uint16_t)( sprno << 8 | ev );
+    __atomic_store_n( &sprevtail, tail + 1, __ATOMIC_RELEASE );
+    __atomic_add_fetch( &sprevtotal, 1, __ATOMIC_ACQ_REL );
+}
+
+static void sprscr_pathmove( int i, sprrun_t* r ) {
+    sprctrl_t* c = &sprctrl[i];
+    if ( --r->frames <= 0 ) {
+        c->screen_x = r->tx; c->screen_y = r->ty;
+        r->frames = 0;
+    } else {
+        r->fx += r->dx; r->fy += r->dy;
+        c->screen_x = (int)( r->fx >> 16 ); c->screen_y = (int)( r->fy >> 16 );
+    }
+    sprscr_touch();
+}
+
+// one frame of the path of sprite i
+static void sprscr_pathstep( int i ) {
+    sprrun_t* r = &sprrun[i];
+    sprpath_t* q = __atomic_exchange_n( &sprpathreq[i], 0, __ATOMIC_ACQ_REL );
+    if ( q != 0 ) {
+        sprpath_free( r->code );
+        memset( r, 0, sizeof(*r) );
+        if ( q != SPRPATH_STOP ) {
+            r->code = q;
+        }
+        __atomic_store_n( &sprpathon[i], r->code != 0, __ATOMIC_RELEASE );
+    }
+    sprctrl_t* c = &sprctrl[i];
+    if ( pov_anim[i].on && pov_anim[i].size > 0 && pov_anim[i].count > 0 && --pov_anim[i].count == 0 ) {
+        pov_anim[i].count = pov_anim[i].reset;
+        if ( ++pov_anim[i].pos >= pov_anim[i].size ) pov_anim[i].pos = 0;
+        sprscr_touch();
+    }
+    if ( r->code == 0 ) {
+        return;
+    }
+    if ( r->frames > 0 ) {
+        sprscr_pathmove( i, r );
+        return;
+    }
+    if ( r->wait > 0 ) {
+        --r->wait;
+        return;
+    }
+    for ( int budget = 256; budget > 0; --budget ) {
+        if ( r->pc >= r->code->n ) {
+            __atomic_store_n( &sprpathon[i], 0, __ATOMIC_RELEASE );
+            return;                             // finished (the code stays until the next request)
+        }
+        const sprpath_cmd_t* m = &r->code->cmd[ r->pc++ ];
+        switch ( m->op ) {
+            case SPO_MOVE:
+                r->fx = (int32_t) c->screen_x * 65536; r->fy = (int32_t) c->screen_y * 65536;
+                r->tx = c->screen_x + m->a; r->ty = c->screen_y + m->b;
+                r->dx = (int32_t)( (int64_t) m->a * 65536 / m->c ); r->dy = (int32_t)( (int64_t) m->b * 65536 / m->c );
+                r->frames = m->c;
+                sprscr_pathmove( i, r );
+                return;
+            case SPO_WAIT:
+                r->wait = m->c - 1;
+                return;
+            case SPO_SETX: c->screen_x = m->a; sprscr_touch(); break;
+            case SPO_SETY: c->screen_y = m->a; sprscr_touch(); break;
+            case SPO_ANIM:
+                pov_anim[i].idx = (uint8_t) m->a; pov_anim[i].size = (uint8_t) m->b; pov_anim[i].reset = (uint8_t) m->c;
+                pov_anim[i].count = (uint8_t) m->c; pov_anim[i].pos = 0;
+                pov_img[i] = -1; pov_anim[i].on = 1;
+                sprscr_touch();
+                break;
+            case SPO_IMAGE: pov_img[i] = (int16_t) m->a; pov_anim[i].on = 0; sprscr_touch(); break;
+            case SPO_EVENT: sprscr_post_pathevent( i, m->a ); break;
+            case SPO_SHOW: pov_show[i] = 1; sprscr_touch(); break;
+            case SPO_HIDE: pov_show[i] = 0; sprscr_touch(); break;
+            case SPO_PRIO: pov_prio[i] = (int8_t) m->a; sprscr_touch(); break;
+            case SPO_LOOP: if ( m->b >= 0 && m->b < SPRPATH_NEST ) r->cnt[m->b] = 0; break;
+            case SPO_ENDLOOP:
+                if ( m->b >= 0 && m->b < SPRPATH_NEST ) {
+                    if ( r->cnt[m->b] == 0 ) r->cnt[m->b] = m->c;
+                    if ( --r->cnt[m->b] > 0 ) r->pc = (uint32_t) m->a;
+                }
+                break;
+            case SPO_REPEAT: r->pc = 0; break;
+            default: break;
+        }
+    }
+}
+
 void sprscr_periodicals( void ) {
+    for ( int i=0; i < SPR_USER_COUNT; ++i ) {
+        sprscr_pathstep( i );
+    }
     // handle MOVETO: first the requests of the main thread, then one step of each movement
     for ( int i=0; i < MAX_SPRITES; ++i ) {
         sprmove_t* m = &sprmove[i];

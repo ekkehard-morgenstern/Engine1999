@@ -35,6 +35,8 @@
 #include "stdtypes.h"
 #endif
 
+#include "sprpath.h"
+
 #define SPRMAP_WIDTH    256
 #define SPRMAP_HEIGHT   768         // 32 rows of cells: the first 16 rows hold the 256 images of the program, the other 16 the 256 images of the engine
 #define SPRMAP_CELLSX   16
@@ -102,6 +104,12 @@ void sprscr_setcollide( int sprno, bool sprites, bool tiles );
 uint32_t sprscr_hits( int sprno );                          // indicator bits (1 sprite, 2 tile), cleared by reading
 int  sprscr_collidewith( int sprno );                       // the other sprite of the last overlap found, -1 none
 int  sprscr_nextevent( void );                              // a sprite with a new collision since the last call, -1 none
+// Sprite paths (roadmap item 52, see sprpath.h): the screen thread runs a translated path for the sprite, one step per sprscr_periodicals() call.
+void sprscr_setpath( int sprno, sprpath_t* path );  // takes over the path (0 or an empty one stops the running path); a new path replaces the old at once
+bool sprscr_pathrunning( int sprno );
+int  sprscr_pathevent( void );                              // takes the oldest event of a path (E n): its number 0..255, -1 none; the sprite is next
+int  sprscr_pathevent_sprite( void );                       // the sprite of the event taken last, -1 none
+uint32_t sprscr_pathevents( void );                         // the number of events so far (a change is an event; the VM polls it for ON SPRITE)
 void sprscr_periodicals( void );
 void sprscr_render( uint8_t* target );
 

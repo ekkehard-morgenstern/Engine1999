@@ -3333,6 +3333,7 @@ static bool cgen_from_stmt_node( codegen_t* cgen, compiler_t* comp, node_t* node
         case NT_ONJOYSTMT:  return cgen_from_onjoystmt( cgen, comp, node );
         case NT_ONKEYSTMT:  return cgen_from_onkeystmt( cgen, comp, node );
         case NT_ONUISTMT:   return cgen_from_onuistmt( cgen, comp, node );
+        case NT_ONSPRSTMT:  return cgen_from_onsprstmt( cgen, comp, node );
         case NT_GFXSTMT:    return cgen_from_gfxstmt( cgen, comp, node );
         case NT_RANDOMIZESTMT: return cgen_from_randomizestmt( cgen, comp, node );
         case NT_ANGLESTMT:  return cgen_from_anglestmt( cgen, comp, node );

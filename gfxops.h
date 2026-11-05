@@ -111,6 +111,7 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXOP_SPRMOVETO 68              // SPRITE n, MOVETO x, y, ticks
 #define GFXOP_SPRCOLL   69              // SPRITE n, COLLISION ON|OFF [, TILES]
 #define GFXOP_SPRMOVE   70              // SPRITE n, x, y [, image]
+#define GFXOP_SPRPATH   74              // SPRITE n, PATH a$     (a path run by the engine, see sprpath.h; "" stops it)
 #define GFXOP_SPRSIZE   71              // SPRITE n, SIZE w, h     (a group: the sprites n .. n+w*h-1 are drawn as one large sprite, row by row; 1, 1 dissolves it)
 // the UI subsystem (docs/ui-subsystem.md): the words after UI
 #define GFXOP_UIOPEN    90              // UI OPEN
@@ -177,6 +178,10 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXQ_SPRMOVING  46
 #define GFXQ_SPRCOLS    47              // SPRITE("COLS", n): the width of the group n heads in sprites (1 if none)
 #define GFXQ_SPRROWS    48              // SPRITE("ROWS", n)
+#define GFXQ_SPRPATH    49              // SPRITE("PATH", n): -1 while a path runs for the sprite, else 0
+#define GFXQ_SPREVENT   50              // SPRITE("EVENT"): takes the oldest event of a path (E n): its number, -1 if there is none
+#define GFXQ_SPREVENTSPR 51             // SPRITE("EVENTSPR"): the sprite of the event taken last, -1 if none
+#define GFXQ_SPREVENTS  52              // (the VM polls it for ON SPRITE) the number of path events so far; a change is an event
 #define GFXQ_MOUSEX     100             // MOUSE("X"): 0..639, the sprite layer's coordinates
 #define GFXQ_MOUSEY     101             // MOUSE("Y"): 0..299
 #define GFXQ_MOUSEB     102             // MOUSE("B"): the buttons held down (1 left, 2 right, 4 middle)
