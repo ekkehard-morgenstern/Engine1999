@@ -1,4 +1,5 @@
 
 Ideas to put on the roadmap or to amend or expand existing entries:
 
-- make it possible to create larger sprites and tiles by combining multiple ones into one (like adjacent up and/or down and/or left and/or right). I.e., sprite and tile groups. Editors should be expanded to support them. Either by creating a utility library for the feature or by adding it at a base level into the sprite and tile subsystems.
+- make new versions of every game (except fruit, since that already has a successor), and name them the same way you did with fruit and fruit2: An incremented roman numeral in the title, and an incremented number in the file name. These games should make use of the new features like sprite groups / assets and/or BMP file loading. Improve at least the graphics, so that playing them has even more appeal. This should be one roadmap item.
+
