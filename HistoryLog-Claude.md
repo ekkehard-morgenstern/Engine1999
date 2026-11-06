@@ -13,14 +13,6 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-### README screenshot of EDIT WINDOW (2026-11-06, owner's request)
-- `docs/images/editor-window.png` replaced by a new screenshot (1024 x 480, the real window under Xvfb, a program typed at the prompt and `EDIT WINDOW` opened by an XTest key injector kept in the scratchpad): syntax colors and the block caret. README text and caption mention the colors and `ENGINE1999_UITHEME`. 
-- `docs/images/notepad.png` redone the same way (owner: "redo notepad.png too"): the notepad with a BASIC program, Syntax: BASIC on, the new Syntax / Theme buttons. **Bug found by it and fixed:** my earlier edit of `demos/notepad.bas` (item 68) had added two lines without line numbers (`IF B=25 ...`, `IF B=26 ...`), so `LOAD` of the demo failed with "Line number missing in program file" (committed in `b529bb3`; the notepad did not start at all). They are lines 621 and 622 now; `synhltest1` checks that every line of a demo or library has a line number (37346 checks, 0 failures). No processes left.
-
-### Status message after pasting numbered lines (2026-11-06, owner's question: "nothing happened" when pasting lines whose numbers exist)
-- `fulledit.c` `ed_paste()`: counts the pasted numbered lines as new / replaced / unchanged (stored line before and after each entry, `ed_progbody()`) and shows `Pasted N lines: 1 new, 1 replaced, 1 unchanged` in the status line; a refused line keeps its own error message. The behavior (same number = replaced) is unchanged and was confirmed by the test.
-- `scrtest1` 176 (3 new: unchanged, new + replaced with the new text, new + unchanged; valgrind clean); `contest1` 0 failures; `docs/display-engine.md`.
-
 ## Log
 
 ### 7a6cb67 — 2026-10-17 13:32:27 +0200 — "Introduced Claude to the project"
@@ -1319,3 +1311,18 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
   - Language: `UI COLOR`, `UI THEME`, `UI SYNTAX`, `UI SYNTAXCOLOR`, `UI HILITE` (`GFXOP_UICOLOR` 134 .. `GFXOP_UIHILITE` 138) and `UI("THEME"|"SYNTAX"|"COLOR"|"SYNTAXCOLOR")` (`GFXQ` 134..137); host in `engine1999.c` (`host_ui_set_theme()` writes only layer 3). `EDIT WINDOW` uses BASIC colors and `ENGINE1999_UITHEME`; `demos/notepad.bas` got Syntax and Theme buttons.
   - Docs: `docs/ui-subsystem.md`, `docs/basic-language.md`, `bascomp.ebnf` + `make grammar`, both man pages (`ENGINE1999_UITHEME`), roadmap, `CLAUDE.md`, `docs/build-and-test.md`, `SESSION.md`; makefile (`synhl.o`, `synhltest1`, `CHECKTESTS`).
   - Tests: new `synhltest1` (18680 checks, valgrind clean), `uitest1` 297, `vmtest1` 1388, `repltest1` 424, `contest1`, `buildtest1`, `scrtest1`, `txttest1`, `gfxtest1`, `asmtest1`, `keytest1` all pass; `make man-check` and `make grammar-check` pass. Checked in the window under Xvfb (classic and dark theme screenshots); no processes left.
+
+### bc0bddb — 2026-11-06 07:37:05 +0100 — "Claude session and roadmap files update"
+3 files, +16/-15. Bookkeeping only: the log entry of `b529bb3` (items 68 and 69), `SESSION.md` (tested by the owner), `docs/roadmap.md`.
+
+### 1bb5183 — 2026-11-06 07:45:17 +0100 — "Pasting numbered lines into full-screen editor now shows status, implemented by Claude Code"
+6 files, +59/-3.
+- **Status message after pasting numbered lines (2026-11-06, owner's question: "nothing happened" when pasting lines whose numbers exist)**
+  - `fulledit.c` `ed_paste()`: counts the pasted numbered lines as new / replaced / unchanged (stored line before and after each entry, `ed_progbody()`) and shows `Pasted N lines: 1 new, 1 replaced, 1 unchanged` in the status line; a refused line keeps its own error message. The behavior (same number = replaced) is unchanged and was confirmed by the test.
+  - `scrtest1` 176 (3 new: unchanged, new + replaced with the new text, new + unchanged; valgrind clean); `contest1` 0 failures; `docs/display-engine.md`.
+
+### f2b0f67 — 2026-11-06 07:54:29 +0100 — "Notepad demo fix, and updated screenshots, by Claude Code"
+7 files, +13/-5.
+- **README screenshot of EDIT WINDOW (2026-11-06, owner's request)**
+  - `docs/images/editor-window.png` replaced by a new screenshot (1024 x 480, the real window under Xvfb, a program typed at the prompt and `EDIT WINDOW` opened by an XTest key injector kept in the scratchpad): syntax colors and the block caret. README text and caption mention the colors and `ENGINE1999_UITHEME`. 
+  - `docs/images/notepad.png` redone the same way (owner: "redo notepad.png too"): the notepad with a BASIC program, Syntax: BASIC on, the new Syntax / Theme buttons. **Bug found by it and fixed:** my earlier edit of `demos/notepad.bas` (item 68) had added two lines without line numbers (`IF B=25 ...`, `IF B=26 ...`), so `LOAD` of the demo failed with "Line number missing in program file" (committed in `b529bb3`; the notepad did not start at all). They are lines 621 and 622 now; `synhltest1` checks that every line of a demo or library has a line number (37346 checks, 0 failures). No processes left.
