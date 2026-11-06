@@ -17,8 +17,13 @@ When it is done, `BUILD` turns it into a standalone executable.
   binary-safe strings, `` `shell commands` `` as string literals. The whole syntax fits on one page: [docs/grammar.html](docs/grammar.html) ([text version](docs/grammar.md)).
 - **Five display layers:** background, tiles, graphics, text and sprites, each with its own palette. Lines, circles, flood fill, `DRAW` strings, pictures defined in the program text
   with `DESIGN`, sprites with animation and collision detection, smooth scrolling. See [docs/graphics-subsystem.md](docs/graphics-subsystem.md).
+- **Sprite groups, paths and pictures:** one sprite can be a block of several (`SPRITE n,SIZE 3,3`) that moves and collides as one object, sprites can follow a path string on their own (`SPRITE n,PATH "..."`, with events), and pictures load and save as BMP files (`GFX LOAD`, `SPRITE SAVE`, ...).
 - **Sound:** an eight channel synthesizer (sine, square, triangle and noise waves, envelopes, vibrato, glides). `PLAY "T120 O4 CDEFG"` plays music strings, `SOUND` and `SFX` make effects. See [docs/sound.md](docs/sound.md).
 - **Files and devices:** `OPEN`, `PRINT #`, `LINE INPUT`, random access records, and drivers addressed like `mem:`, `sh:`, `tcp:`, `res:`. See [docs/io-subsystem.md](docs/io-subsystem.md).
+- **Mouse, keyboard and game controllers:** `MOUSE(...)`, `KEY("name")` (is a key held right now?), `JOY(...)` for up to four pads, with `ON MOUSE`, `ON KEY` and `ON JOY` handlers. See [docs/controller-support.md](docs/controller-support.md).
+- **A UI toolkit and editors:** the `UI` statements give buttons, lists, sliders, scroll bars, overlapping windows and a pixel canvas; a file requester and three editors for sprites and tiles, music and sound effects are written in BASIC on top of it (`demos/spriteed.bas`, `musiced.bas`, `sfxed.bas`). See [docs/ui-subsystem.md](docs/ui-subsystem.md).
+- **Libraries:** `LOAD LIBRARY "name"` pulls in a shared BASIC library (the games share `util`, `input`, `text`, `hiscore`, `uikit`, ...); `BUILD` embeds them. See [docs/library-support.md](docs/library-support.md).
+- **Safe by default:** a running program may use the files below its own folder; anything else (other folders, shell commands, the network) asks first, and the answer can be remembered. Listings can be UTF-8. See [docs/security-policy.md](docs/security-policy.md).
 - **Tools built in:** a full-screen editor (`EDIT`), a machine monitor with single-step and breakpoints (`MONITOR`), syntax colored `LIST`, `TRACE`, `STOP`/`CONT`, `RENUM`, `MERGE`, `CHAIN`.
 - **`BUILD "name"`** makes a standalone Linux executable from your program (details below).
 - **`engine1999c`**, a console version without a window for shell scripts and pipes: `engine1999c prog.bas` (also with a `#!` line), `echo 'PRINT 2^10' | engine1999c`, exit codes with `BYE n`. See [docs/console-host.md](docs/console-host.md).
@@ -41,6 +46,10 @@ The red status line shows the mode (overwrite or insert, F12 switches), the posi
 `MONITOR` opens a **machine monitor** for the virtual machine your program is compiled to: disassemble, dump and patch memory, set breakpoints, step through the code and watch the stacks.
 
 ![The machine monitor: a listing of the compiled code, and twelve steps of it](docs/images/monitor.png)
+
+The sprite and tile editor, itself a BASIC program built on the UI statements, imports and exports BMP files:
+
+![The sprite and tile editor, a UI program in BASIC](docs/images/spriteed.png)
 
 ## Try it
 
@@ -65,12 +74,18 @@ LIST
 SAVE "hello"
 ```
 
-Then try the demos: `LOAD "demos/fruit2"` and `RUN`. After `make install` the games are programs of their own (and `engine1999-wumpus`, a text game for any terminal): `engine1999-fruit`, `engine1999-fruit2`, `engine1999-climb` and `engine1999-madrun` (each with a manual page, e.g. `man engine1999-madrun`).
+Then try the demos: `LOAD "demos/fruit2"` and `RUN`. After `make install` the games are programs of their own (and `engine1999-wumpus`, a text game for any terminal): `engine1999-fruit`, `-fruit2`, `-fruit3`, `-climb`, `-climb2`, `-madrun`, `-madrun2`, `-river`, `-river2` and `-rustball` (each with a manual page, e.g. `man engine1999-rustball`).
 
 | Demo | |
 |---|---|
 | `demos/fruit2.bas` | **Fruit Invaders II**, a Space Invaders style game with shaded sprites, a scrolling starfield, music and effects (keys: A/D move, SPACE fires, P pauses, Q quits) |
 | `demos/climb.bas` | **The Long Climb**, a jump and run game: climb a steel tower, drill holes to trap monsters, reach the ice cream stand on the roof |
+| `demos/fruit3.bas` | **Fruit Invaders III**: the same game with a sprite-group mothership, shooting stars and a giant watermelon boss every fifth wave |
+| `demos/climb2.bas`, `demos/madrun2.bas`, `demos/river2.bas` | Second editions of the games with new graphics: a giant ice cream cone and falling bolts, a traffic helicopter and pigeons, a hot air balloon and gulls |
+| `demos/madrun.bas` | **MADRUN**: a crossing game for one to four players, with a phone booth, traffic and a rescue ambulance |
+| `demos/river.bas` | **ETERNAL RIVER**: a scroll-down boat game over an endless river, with bridges, swimmers and wraiths on the banks |
+| `demos/rustball.bas` | **BEING A RUSTBALL**: a labyrinth game for one to four players: you are a rust ball, sneak up on the workers from behind, grow by eating nuts and bolts, and crush walls when you are big |
+| `demos/spriteed.bas`, `musiced.bas`, `sfxed.bas` | The sprite and tile editor, the music editor and the sound effect editor (UI programs) |
 | `demos/fruit.bas` | The first, simpler Fruit Invaders |
 | `demos/gfx.bas` | The graphics layers: palettes, drawing, tiles, `DESIGN` pictures, sprites |
 | `demos/mouse.bas` | A small paint program for the mouse: draw, erase, choose pens from a color bar (the pointer changes its shape) |
@@ -82,6 +97,18 @@ Then try the demos: `LOAD "demos/fruit2"` and `RUN`. After `make install` the ga
 ![The graphics demo: layers, drawing, a sprite](docs/images/graphics.png)
 
 ![Fruit Invaders, the first and simpler version of the game](docs/images/fruit.png)
+
+![Fruit Invaders III, the third edition of the invaders game](docs/images/fruit3.png)
+
+![Being a Rustball: a scrolling labyrinth, a rust ball, workers, bolts and nuts](docs/images/rustball.png)
+
+![The title screen of Being a Rustball](docs/images/rustball-title.png)
+
+![Eternal River II: a boat on the endless river, a bridge with traffic](docs/images/river2.png)
+
+![Madrun II: the crossing with the phone booth in the middle](docs/images/madrun2.png)
+
+![The Long Climb II: steel girders, the sun and a yellow truck](docs/images/climb2.png)
 
 ![The paint demo: strokes in several colors, the color bar below, the crosshair pointer](docs/images/mouse-paint.png)
 

@@ -1531,7 +1531,7 @@
 15220   CALL BIGTEXT(60,"RUSTBALL",4,6)
 15230   CALL TXTAT(9,13,"  Sneak up on the workers from behind and cover them in rust!       ",200)
 15240   CALL TXTAT(9,14,"  Screws, nuts and bolts make you bigger and faster. Beware of the  ",200)
-15250   CALL TXTAT(9,15,"  foremen with their hoses, and of drying out. A big ball crushes walls.",200)
+15250   CALL TXTAT(9,15,"  foremen and their hoses, and drying out. Big balls crush walls.   ",200)
 15260   CALL TXTAT(9,17,"  1   one player: WASD or the cursor keys                           ",204)
 15270   CALL TXTAT(9,18,"  2   two players: WASD and the cursor keys                         ",204)
 15280   CALL TXTAT(9,19,"  C   controllers: up to four players, or press A / START on a pad  ",204)

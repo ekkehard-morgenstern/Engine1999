@@ -1,6 +1,6 @@
 # Session state
 
-Maintained by Claude; updated whenever work in a session changes something. Last update: 2026-11-05 (Being a Rustball, roadmap item 64; split screen item 65).
+Maintained by Claude; updated whenever work in a session changes something. Last update: 2026-11-06 (README / docs refresh with new screenshots; Being a Rustball committed as `e26c1d9` and `12f8f4d`; split screen item 65 open).
 Read this first when resuming; details are in `docs/` (start with `docs/README.md`) and `CLAUDE.md`.
 
 ## Standing rules
