@@ -24,6 +24,12 @@
 #       Mail: Ekkehard Morgenstern, Mozartstr. 1, D-76744 Woerth am Rhein,
 #             Germany, Europe
 
+# Optional: the settings that ./configure found (prefix, compiler, SDL2 flags); everything works without it, too
+-include config.mk
+
+SDL_CFLAGS?=
+SDL_LIBS?=-lSDL2
+
 # The compiler: gcc, unless the caller says CC=... (the internal compile command is $(CCO), not CC)
 ifeq ($(origin CC),default)
 CCOMP=gcc
@@ -45,14 +51,14 @@ endif
 # Flags: CFLAGS, CPPFLAGS and LDFLAGS from the environment or the command line (as a package build passes them, e.g. from dpkg-buildflags)
 # replace the development defaults, and the installed kit (make kit) then uses them too. Without them: the development build (-Werror, -march=native)
 # and a portable -O2 kit.
-ifeq ($(filter environment command line,$(firstword $(origin CFLAGS))),)
+ifeq ($(filter environment command line file,$(firstword $(origin CFLAGS))),)
 CFLAGS=-Wall -Werror $(PRFFLG) $(DBGFLG) -march=native -mtune=native
 KITFLAGS=-Wall -Werror -O2
 else
 KITFLAGS=$(CFLAGS)
 endif
 
-CCO=$(CCOMP) -c $(CPPFLAGS) $(CFLAGS)
+CCO=$(CCOMP) -c $(SDL_CFLAGS) $(CPPFLAGS) $(CFLAGS)
 CL=$(CCOMP) $(CFLAGS) $(LDFLAGS)
 
 .c.o:
@@ -63,7 +69,7 @@ PROGS=sdltest1 sdltest2 sdltest3 sdltest4 engine1999 joytest1 basictest1 testcom
 all: $(PROGS)
 	echo ok >all
 
-.PHONY: grammar grammar-check kit install uninstall man-check check dist clean
+.PHONY: grammar grammar-check kit install uninstall man-check check dist clean distclean
 
 # the quick reference of the language (docs/grammar.md and docs/grammar.html) from bascomp.ebnf; needs perl
 grammar:
@@ -82,27 +88,27 @@ LIBHDR=$(BASEHDR)
 LIBNAME=engine.lib
 
 sdltest1: sdltest1.o $(LIBNAME)
-	$(CL) -o sdltest1 sdltest1.o $(LIBNAME) -lSDL2 -lrt -lm
+	$(CL) -o sdltest1 sdltest1.o $(LIBNAME) $(SDL_LIBS) -lrt -lm
 
 sdltest1.o:	sdltest1.c $(LIBHDR)
 
 sdltest2: sdltest2.o $(LIBNAME)
-	$(CL) -o sdltest2 sdltest2.o $(LIBNAME) -lSDL2 -lrt -lm
+	$(CL) -o sdltest2 sdltest2.o $(LIBNAME) $(SDL_LIBS) -lrt -lm
 
 sdltest2.o:	sdltest2.c $(LIBHDR)
 
 sdltest3: sdltest3.o $(LIBNAME)
-	$(CL) -o sdltest3 sdltest3.o $(LIBNAME) -lSDL2 -lrt -lm
+	$(CL) -o sdltest3 sdltest3.o $(LIBNAME) $(SDL_LIBS) -lrt -lm
 
 sdltest3.o:	sdltest3.c $(LIBHDR)
 
 sdltest4: sdltest4.o $(LIBNAME)
-	$(CL) -o sdltest4 sdltest4.o $(LIBNAME) -lSDL2 -lrt -lm
+	$(CL) -o sdltest4 sdltest4.o $(LIBNAME) $(SDL_LIBS) -lrt -lm
 
 sdltest4.o:	sdltest4.c $(LIBHDR)
 
 engine1999: engine1999.o $(LIBNAME)
-	$(CL) -o engine1999 engine1999.o $(LIBNAME) -lSDL2 -lrt -lm
+	$(CL) -o engine1999 engine1999.o $(LIBNAME) $(SDL_LIBS) -lrt -lm
 
 engine1999.o: engine1999.c $(LIBHDR) version.h
 
@@ -237,13 +243,13 @@ $(LIBNAME): $(LIBMOD)
 # objects stay as they are. Everything is made with "make kit"; "make install" copies it (PREFIX=/usr/local by default, DESTDIR for packagers).
 
 PREFIX?=/usr/local
-BINDIR=$(PREFIX)/bin
+BINDIR?=$(PREFIX)/bin
 # where the games go (a package build uses $(PREFIX)/games, the Debian place for games)
 GAMESBINDIR?=$(BINDIR)
 LIBDIR=$(PREFIX)/lib/engine1999
 SHAREDIR=$(PREFIX)/share/engine1999
 DOCDIR=$(PREFIX)/share/doc/engine1999
-MANDIR=$(PREFIX)/share/man
+MANDIR?=$(PREFIX)/share/man
 KITOBJ=$(addprefix kit/,$(BASEMOD))
 
 kit: kit/engine1999 kit/engine1999c kit/engine1999.o kit/engine1999c.o kit/engine.lib
@@ -270,7 +276,7 @@ $(CONEXE): kit/games/engine1999-%: demos/%.bas $(wildcard demos/lib/*.lib) kit/e
 
 $(KITOBJ) kit/engine1999.o kit/engine1999c.o: kit/%.o: %.c $(BASEHDR)
 	@mkdir -p kit
-	$(CCOMP) -c $(CPPFLAGS) $(KITFLAGS) -o $@ $<
+	$(CCOMP) -c $(SDL_CFLAGS) $(CPPFLAGS) $(KITFLAGS) -o $@ $<
 
 kit/engine1999.o kit/engine1999c.o: version.h
 
@@ -279,7 +285,7 @@ kit/engine.lib: $(KITOBJ)
 	ar q kit/engine.lib $(KITOBJ)
 
 kit/engine1999: kit/engine1999.o kit/engine.lib
-	$(CCOMP) $(KITFLAGS) $(LDFLAGS) -o $@ kit/engine1999.o kit/engine.lib -lSDL2 -lrt -lm
+	$(CCOMP) $(KITFLAGS) $(LDFLAGS) -o $@ kit/engine1999.o kit/engine.lib $(SDL_LIBS) -lrt -lm
 
 kit/engine1999c: kit/engine1999c.o kit/engine.lib
 	$(CCOMP) $(KITFLAGS) $(LDFLAGS) -o $@ kit/engine1999c.o kit/engine.lib -lrt -lm
@@ -438,3 +444,7 @@ dist: version.h
 clean:
 	rm -f *.o $(PROGS) engine.lib all gmon.out
 	rm -rf kit
+
+# make distclean: clean, and the settings of ./configure
+distclean: clean
+	rm -f config.mk

@@ -1,0 +1,115 @@
+#!/bin/sh
+#
+#   Engine1999 - A 2D games engine written in C
+#   Copyright (C) 2026  Ekkehard Morgenstern
+#
+#   This program is free software: you can redistribute it and/or modify
+#   it under the terms of the GNU General Public License as published by
+#   the Free Software Foundation, either version 3 of the License, or
+#   (at your option) any later version.
+#
+#   This program is distributed in the hope that it will be useful,
+#   but WITHOUT ANY WARRANTY; without even the implied warranty of
+#   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#   GNU General Public License for more details.
+#
+#   You should have received a copy of the GNU General Public License
+#   along with this program.  If not, see <https://www.gnu.org/licenses/>.
+#
+#   ADDITIONAL PERMISSION (GPLv3 section 7): the Engine1999 Runtime Exception
+#       applies, see the file LICENSE-EXCEPTION.
+#
+# A small hand-written configure script (no autotools): checks for the tools and SDL2 and writes config.mk, which the makefile includes.
+# Using it is optional: the makefile works without it (defaults: gcc, -lSDL2, PREFIX=/usr/local).
+#
+#   ./configure [--prefix=DIR] [--bindir=DIR] [--gamesdir=DIR] [--mandir=DIR] [--cc=COMPILER] [--help]
+#   make && make check && sudo make install
+
+prefix=/usr/local
+bindir=
+gamesdir=
+mandir=
+cc=${CC:-gcc}
+
+usage() {
+    cat <<EOT
+Usage: ./configure [options]
+  --prefix=DIR     install below DIR (default /usr/local)
+  --bindir=DIR     programs (default PREFIX/bin)
+  --gamesdir=DIR   the games (default: the bindir; Debian uses /usr/games)
+  --mandir=DIR     manual pages (default PREFIX/share/man)
+  --cc=COMPILER    C compiler (default: \$CC or gcc)
+Environment: CFLAGS, CPPFLAGS and LDFLAGS are written to config.mk when set.
+Writes config.mk; "make distclean" removes it.
+EOT
+}
+
+for arg in "$@"; do
+    case "$arg" in
+        --prefix=*)   prefix=${arg#*=} ;;
+        --bindir=*)   bindir=${arg#*=} ;;
+        --gamesdir=*) gamesdir=${arg#*=} ;;
+        --mandir=*)   mandir=${arg#*=} ;;
+        --cc=*)       cc=${arg#*=} ;;
+        --help|-h)    usage; exit 0 ;;
+        *) echo "configure: unknown option $arg" >&2; usage >&2; exit 1 ;;
+    esac
+done
+
+fail=0
+need() { # need name what-it-is-for
+    if command -v "$1" >/dev/null 2>&1; then printf 'checking for %s... yes\n' "$1"
+    else printf 'checking for %s... NO (%s)\n' "$1" "$2"; fail=1; fi
+}
+
+need "$cc" "the C compiler"
+need make "make"
+need ar "the library archiver (binutils)"
+need ld "the linker, which the BUILD statement uses (binutils)"
+need sh "the shell"
+
+# SDL2: pkg-config, else sdl2-config, else plain -lSDL2 with a test compile
+sdlcflags=; sdllibs=
+if command -v pkg-config >/dev/null 2>&1 && pkg-config --exists sdl2 2>/dev/null; then
+    sdlcflags=$(pkg-config --cflags sdl2); sdllibs=$(pkg-config --libs sdl2); how=pkg-config
+elif command -v sdl2-config >/dev/null 2>&1; then
+    sdlcflags=$(sdl2-config --cflags); sdllibs=$(sdl2-config --libs); how=sdl2-config
+else
+    sdllibs=-lSDL2; how="a test compile"
+fi
+tmp=$(mktemp -d) || exit 1
+trap 'rm -rf "$tmp"' EXIT
+cat > "$tmp/t.c" <<'EOT'
+#include <SDL2/SDL.h>
+int main( int argc, char** argv ) { (void) argc; (void) argv; return SDL_Init( 0 ) < 0; }
+EOT
+if "$cc" $sdlcflags -o "$tmp/t" "$tmp/t.c" $sdllibs >"$tmp/log" 2>&1; then
+    printf 'checking for SDL2 (%s)... yes\n' "$how"
+else
+    printf 'checking for SDL2 (%s)... NO (install the SDL2 development files, e.g. libsdl2-dev)\n' "$how"; fail=1
+fi
+# the C library development files (crt files for BUILD) and the math / realtime libraries
+cat > "$tmp/u.c" <<'EOT'
+#include <math.h>
+#include <time.h>
+int main( int argc, char** argv ) { (void) argv; return (int) sqrt( (double) argc ) - 1 + (int) time( 0 ) * 0; }
+EOT
+if "$cc" -o "$tmp/u" "$tmp/u.c" -lrt -lm >"$tmp/log" 2>&1; then echo 'checking for libm and librt... yes'
+else echo 'checking for libm and librt... NO'; fail=1; fi
+
+if [ $fail -ne 0 ]; then echo "configure: something is missing, see above" >&2; exit 1; fi
+
+{
+    echo "# written by ./configure, removed by make distclean"
+    echo "CC=$cc"
+    echo "PREFIX=$prefix"
+    [ -n "$bindir" ] && echo "BINDIR=$bindir"
+    [ -n "$gamesdir" ] && echo "GAMESBINDIR=$gamesdir"
+    [ -n "$mandir" ] && echo "MANDIR=$mandir"
+    echo "SDL_CFLAGS=$sdlcflags"
+    echo "SDL_LIBS=$sdllibs"
+    [ -n "${CFLAGS+x}" ] && echo "CFLAGS=$CFLAGS"
+    [ -n "${CPPFLAGS+x}" ] && echo "CPPFLAGS=$CPPFLAGS"
+    [ -n "${LDFLAGS+x}" ] && echo "LDFLAGS=$LDFLAGS"
+} > config.mk
+echo "configure: wrote config.mk (prefix $prefix); now run: make"
