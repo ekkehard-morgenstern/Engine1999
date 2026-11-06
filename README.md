@@ -52,11 +52,11 @@ Select text with Shift and the cursor keys or the mouse, copy, cut and paste wit
 
 ![The full-screen editor with a selection](docs/images/editor-selection.png)
 
-`EDIT WINDOW` edits the program in a window in the UI toolkit, and `demos/notepad.bas` shows the same editor widget in a small text editor written in BASIC:
+`EDIT WINDOW` edits the program in a window in the UI toolkit, with the same syntax colors as `LIST` (`ENGINE1999_UITHEME=dark` gives a dark theme), and `demos/notepad.bas` shows the same editor widget in a small text editor written in BASIC:
 
-![The editor window opened by EDIT WINDOW](docs/images/editor-window.png)
+![The editor window opened by EDIT WINDOW, with syntax colors](docs/images/editor-window.png)
 
-![Notepad, a text editor written in BASIC](docs/images/notepad.png)
+![Notepad, a text editor written in BASIC, with the BASIC syntax colors switched on](docs/images/notepad.png)
 
 The sprite and tile editor, itself a BASIC program built on the UI statements, imports and exports BMP files:
 

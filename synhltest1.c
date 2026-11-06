@@ -137,6 +137,9 @@ static void file( const char* path ) {
         ++no;
         char where[300];
         snprintf( where, sizeof(where), "%s:%d", path, no );
+        if ( strstr( path, "demos/" ) != 0 && line[0] != '\0' ) {            // a demo is a numbered listing: a line without a number would make LOAD fail ("Line number missing in program file")
+            CHECK( line[0] >= '0' && line[0] <= '9', "%s: the line has no line number: %s", where, line );
+        }
         compare_line( line, where );
     }
     fclose( f );
