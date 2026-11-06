@@ -1,0 +1,37 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: Engine1999
+Upstream-Contact: Ekkehard Morgenstern <ekkehard@ekkehardmorgenstern.de>
+Source: https://github.com/ekkehard-morgenstern/Engine1999
+
+Files: *
+Copyright: 2026 Ekkehard Morgenstern <ekkehard@ekkehardmorgenstern.de>
+License: GPL-3+ with Engine1999 Runtime Exception
+
+Files: debian/*
+Copyright: 2026 Ekkehard Morgenstern <ekkehard@ekkehardmorgenstern.de>
+License: GPL-3+
+
+License: GPL-3+
+ This program is free software: you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+ .
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+ .
+ On Debian systems, the complete text of the GNU General Public
+ License version 3 can be found in /usr/share/common-licenses/GPL-3.
+
+License: GPL-3+ with Engine1999 Runtime Exception
+ Engine1999 is licensed under the GPL-3+ (see above) with an additional
+ permission under section 7 of the GPLv3, the Engine1999 Runtime
+ Exception, which is installed as /usr/share/doc/engine1999/LICENSE-EXCEPTION
+ (and is part of the source). In short: programs written in the built-in
+ BASIC language are not covered by the GPL, and executables made from them
+ with the BUILD statement may be conveyed under terms of your choice, as long
+ as the runtime in them is the unmodified one and its notice is kept (the
+ executable shows it with --engine1999-about). Changes to the engine itself
+ stay under the GPL.

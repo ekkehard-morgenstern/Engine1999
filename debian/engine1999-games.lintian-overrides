@@ -1,0 +1,3 @@
+# the games are made by the BUILD statement (the system linker, no PIE start files); making BUILD link position independent and with -z now is open work (roadmap item 66)
+engine1999-games: hardening-no-pie *
+engine1999-games: hardening-no-bindnow *

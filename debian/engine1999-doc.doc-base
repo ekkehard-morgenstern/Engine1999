@@ -1,0 +1,11 @@
+Document: engine1999
+Title: Engine1999 documentation
+Author: Ekkehard Morgenstern
+Abstract: The language reference, the grammar quick reference and the
+ documentation of the graphics, sound, I/O, UI, library and security
+ subsystems of Engine1999.
+Section: Programming
+
+Format: HTML
+Index: /usr/share/doc/engine1999-doc/grammar.html
+Files: /usr/share/doc/engine1999-doc/grammar.html

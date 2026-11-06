@@ -1,0 +1,32 @@
+#!/usr/bin/make -f
+# Engine1999: the makefile builds the portable kit with the flags of dpkg-buildflags (CFLAGS, CPPFLAGS, LDFLAGS from the environment).
+
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	dh_auto_build -- kit games
+
+override_dh_auto_test:
+ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
+	dh_auto_test -- check
+endif
+
+override_dh_auto_install:
+	dh_auto_install -- PREFIX=/usr GAMESBINDIR=/usr/games
+
+override_dh_auto_clean:
+	dh_auto_clean -- clean
+
+override_dh_installchangelogs:
+	dh_installchangelogs HistoryLog-Claude.md
+
+# the games were made by BUILD (linked by ld, no build id): strip them, but no debug symbol package
+override_dh_strip:
+	dh_strip -Nengine1999-games
+	dh_strip -pengine1999-games --no-automatic-dbgsym
+
+override_dh_dwz:
+	dh_dwz -Nengine1999-games

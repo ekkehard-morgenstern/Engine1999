@@ -1,0 +1,51 @@
+Source: engine1999
+Section: games
+Priority: optional
+Maintainer: Ekkehard Morgenstern <ekkehard@ekkehardmorgenstern.de>
+Build-Depends: debhelper-compat (= 13),
+               libsdl2-dev,
+               binutils,
+               libc6-dev,
+Standards-Version: 4.6.2
+Rules-Requires-Root: no
+Homepage: https://github.com/ekkehard-morgenstern/Engine1999
+
+Package: engine1999
+Architecture: any
+Section: devel
+Depends: ${shlibs:Depends}, ${misc:Depends},
+         binutils,
+         libc6-dev | libc-dev,
+         libsdl2-dev,
+Suggests: engine1999-games, engine1999-doc
+Description: 2D game engine simulating a 1980s home computer, with a BASIC
+ Engine1999 behaves like a home computer of the late 1980s and early 1990s:
+ an 80x25 text screen, tile, graphics and sprite layers, a software
+ synthesizer, files and devices, and a built-in BASIC dialect with
+ procedures, timers, sprite paths, a UI toolkit and editors for sprites,
+ music and sound effects.
+ .
+ The BUILD statement turns a program into a standalone executable using
+ the system linker; for that this package depends on binutils, the C
+ library and SDL2 development files. It contains the window version
+ (engine1999), the console version without a window (engine1999c), the
+ BUILD kit and the demo programs.
+
+Package: engine1999-games
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: demo games written in Engine1999 BASIC
+ Fruit Invaders (I to III), The Long Climb (I and II), Madrun (I and II),
+ Eternal River (I and II), Being a Rustball, and Hunt the Wumpus (a text
+ game for any terminal), each built into a program of its own
+ (engine1999-<name>) with its own manual page. The sources are in the
+ engine1999 package (/usr/share/engine1999/demos).
+
+Package: engine1999-doc
+Architecture: all
+Section: doc
+Depends: ${misc:Depends}
+Multi-Arch: foreign
+Description: documentation of Engine1999
+ The language reference, the grammar quick reference, the graphics, sound,
+ I/O, UI, library and security documentation of Engine1999.

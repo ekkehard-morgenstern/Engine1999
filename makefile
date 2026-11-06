@@ -58,10 +58,12 @@ CL=$(CCOMP) $(CFLAGS) $(LDFLAGS)
 .c.o:
 	$(CCO) -o $@ $<
 
-all: sdltest1 sdltest2 sdltest3 sdltest4 engine1999 joytest1 basictest1 testcomp1 basictest2 vmtest1 repltest1 ansitest1 txttest1 asmtest1 synthtest1 iotest1 gfxtest1 buildtest1 engine1999c contest1 keytest1 scrtest1 libtest1 fonttest1 uitest1 poltest1
+PROGS=sdltest1 sdltest2 sdltest3 sdltest4 engine1999 joytest1 basictest1 testcomp1 basictest2 vmtest1 repltest1 ansitest1 txttest1 asmtest1 synthtest1 iotest1 gfxtest1 buildtest1 engine1999c contest1 keytest1 scrtest1 libtest1 fonttest1 uitest1 poltest1
+
+all: $(PROGS)
 	echo ok >all
 
-.PHONY: grammar grammar-check kit install uninstall man-check check dist
+.PHONY: grammar grammar-check kit install uninstall man-check check dist clean
 
 # the quick reference of the language (docs/grammar.md and docs/grammar.html) from bascomp.ebnf; needs perl
 grammar:
@@ -236,6 +238,8 @@ $(LIBNAME): $(LIBMOD)
 
 PREFIX?=/usr/local
 BINDIR=$(PREFIX)/bin
+# where the games go (a package build uses $(PREFIX)/games, the Debian place for games)
+GAMESBINDIR?=$(BINDIR)
 LIBDIR=$(PREFIX)/lib/engine1999
 SHAREDIR=$(PREFIX)/share/engine1999
 DOCDIR=$(PREFIX)/share/doc/engine1999
@@ -281,10 +285,10 @@ kit/engine1999c: kit/engine1999c.o kit/engine.lib
 	$(CCOMP) $(KITFLAGS) $(LDFLAGS) -o $@ kit/engine1999c.o kit/engine.lib -lrt -lm
 
 install: kit games version.h
-	install -d $(DESTDIR)$(BINDIR) $(DESTDIR)$(LIBDIR) $(DESTDIR)$(SHAREDIR)/demos/lib $(DESTDIR)$(DOCDIR)/docs/images \
+	install -d $(DESTDIR)$(BINDIR) $(DESTDIR)$(GAMESBINDIR) $(DESTDIR)$(LIBDIR) $(DESTDIR)$(SHAREDIR)/demos/lib $(DESTDIR)$(DOCDIR)/docs/images \
 		$(DESTDIR)$(MANDIR)/man1 $(DESTDIR)$(MANDIR)/man6 $(DESTDIR)$(MANDIR)/man7
 	install -m 755 kit/engine1999 kit/engine1999c $(DESTDIR)$(BINDIR)
-	install -m 755 $(GAMEEXE) $(CONEXE) $(DESTDIR)$(BINDIR)
+	install -m 755 $(GAMEEXE) $(CONEXE) $(DESTDIR)$(GAMESBINDIR)
 	install -m 644 kit/engine1999.o kit/engine1999c.o kit/engine.lib $(DESTDIR)$(LIBDIR)
 	install -m 644 demos/*.bas demos/README.md $(DESTDIR)$(SHAREDIR)/demos
 	install -m 644 demos/lib/*.lib $(DESTDIR)$(SHAREDIR)/demos/lib
@@ -298,7 +302,7 @@ install: kit games version.h
 	@echo "installed in $(DESTDIR)$(PREFIX): engine1999, engine1999c, the games ($(addprefix engine1999-,$(GAMES) $(CONGAMES))), the BUILD kit in $(DESTDIR)$(LIBDIR), man pages (man engine1999)"
 
 uninstall:
-	rm -f $(DESTDIR)$(BINDIR)/engine1999 $(DESTDIR)$(BINDIR)/engine1999c $(addprefix $(DESTDIR)$(BINDIR)/engine1999-,$(GAMES) $(CONGAMES))
+	rm -f $(DESTDIR)$(BINDIR)/engine1999 $(DESTDIR)$(BINDIR)/engine1999c $(addprefix $(DESTDIR)$(GAMESBINDIR)/engine1999-,$(GAMES) $(CONGAMES))
 	rm -rf $(DESTDIR)$(LIBDIR) $(DESTDIR)$(SHAREDIR) $(DESTDIR)$(DOCDIR)
 	for p in man/*.1; do rm -f $(DESTDIR)$(MANDIR)/man1/$$(basename $$p); done
 	for p in man/*.6; do rm -f $(DESTDIR)$(MANDIR)/man6/$$(basename $$p); done
@@ -429,3 +433,8 @@ dist: version.h
 	@v=$$(sed -n 's/.*ENGINE_VERSION *"v\{0,1\}\([^"]*\)".*/\1/p' version.h); d=engine1999-$$v; \
 	list=$$(mktemp); (git ls-files | grep -v '^backups/\|^residue/'; echo version.h) > $$list; \
 	tar --transform "s,^,$$d/," -czf $$d.tar.gz -T $$list && rm -f $$list && echo "made $$d.tar.gz"
+
+# make clean: everything the build made (objects, programs, the library, the kit/ folder); keeps version.h (it cannot be made without git)
+clean:
+	rm -f *.o $(PROGS) engine.lib all gmon.out
+	rm -rf kit

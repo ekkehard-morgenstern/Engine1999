@@ -1,0 +1,2 @@
+# engine.lib is the static library that the BUILD statement links into programs; one member (the font) has data only, no code sections
+engine1999: no-code-sections [usr/lib/engine1999/engine.lib]
