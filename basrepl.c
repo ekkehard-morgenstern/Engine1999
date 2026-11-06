@@ -366,6 +366,7 @@ static void repl_compile_libraries( repl_t* repl ) {
 // A run may end with a LOAD / RUN request in the VM; repl_finish() carries it out.
 // a program starts to run: the security policy learns who it is (and may ask what the program's permission file requests)
 static void repl_policy_begin( repl_t* repl ) {
+    iodev_set_program_name( repl->policyfile != 0 ? repl->policyfile : repl->filename );
     if ( repl->policyfile != 0 ) {
         policy_begin_program( repl->policyfile, repl->policyimage, repl->policyimagelen, repl->policyroot );
     } else {
@@ -1679,6 +1680,7 @@ static bool repl_finish_inner( repl_t* repl, bool ok, bool direct ) {
 static bool repl_finish( repl_t* repl, bool ok, bool direct ) {
     bool r = repl_finish_inner( repl, ok, direct );
     policy_end_program();
+    iodev_set_program_name( 0 );
     return r;
 }
 

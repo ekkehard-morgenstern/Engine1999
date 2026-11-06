@@ -13,6 +13,12 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+### Roadmap item 71, `config:` and `local:` drivers (2026-11-06)
+- `iodev.c` / `iodev.h`: drivers `config:` (`$XDG_CONFIG_HOME/<name>/`, default `~/.config/<name>/`) and `local:` (`$XDG_DATA_HOME/<name>/`, default `~/.local/share/<name>/`); `iodev_set_program_name()` (name = base name of the program file without extension and without `engine1999-`; `engine1999` reserved), `iodev_program_name()`, `iodev_set_own_limit()`; folders made on demand (0700), path check (no absolute names / `..`, `realpath` of the parent inside the program's folder, no symlink as the file), 64 MiB limit per program ("Disk full"), `CHDIR` not offered, no program name = the plain file name (file driver, security policy applies). `basrepl.c`: the REPL tells the name when a program starts and clears it when it ends.
+- `demos/lib/hiscore.lib`: names without a driver go to `local:`; `HS_LOAD` falls back to the old file in the current directory (migration); the games are unchanged.
+- Docs: `docs/io-subsystem.md`, `docs/security-policy.md`, `docs/basic-language.md`, `man/engine1999-basic.7`, the nine game pages (FILES), `docs/roadmap.md` row 71 (done, decisions), `SESSION.md`.
+- Tests: `iotest1` 233 (43 new; ASAN / UBSAN clean; found a crash in my first version: the no-name path returned an unwrapped handle), `contest1` +3 (0 failures), `vmtest1` 1388, `repltest1` 424, `poltest1` 54, `libtest1` 47, `buildtest1` 51, `synhltest1`, `make man-check`; end to end in the console host with a `hiscore` program (new score in `local:`, old score migrated, `config:` file written). Backups `pre-own-drivers`, `own-drivers`.
+
 ### Roadmap item 70, `TOOL` and a tools folder (2026-11-06)
 - `docs/roadmap.md`: new row 70 from the owner's idea in `ideas-and-suggestions.txt` (editors reachable without losing the program): editors stay in BASIC, move to an installed `tools/` folder, `TOOL "name"[,arg$]` runs one in a pushed REPL context; `BUILD` embeds no tools; not available in the console host (owner's decisions). `SESSION.md` note added. Docs only, no tests.
 

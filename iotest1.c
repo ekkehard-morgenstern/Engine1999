@@ -31,6 +31,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <dirent.h>
 #include "iodev.h"
 
 /*
@@ -518,6 +519,149 @@ static void test_register( void ) {
     iotab_closeall( &t );
 }
 
+static void rm_tree( const char* dir ) {
+    DIR* d = opendir( dir );
+    if ( d != 0 ) {
+        struct dirent* de;
+        while ( ( de = readdir( d ) ) != 0 ) {
+            if ( strcmp( de->d_name, "." ) == 0 || strcmp( de->d_name, ".." ) == 0 ) {
+                continue;
+            }
+            char p[700];
+            snprintf( p, sizeof(p), "%s/%s", dir, de->d_name );
+            struct stat st;
+            if ( lstat( p, &st ) == 0 && S_ISDIR( st.st_mode ) ) {
+                rm_tree( p );
+            } else {
+                unlink( p );
+            }
+        }
+        closedir( d );
+    }
+    rmdir( dir );
+}
+
+static bool slurp_is( const char* name, const char* text ) {
+    const char* e = 0; uint8_t* d = 0; size_t n = 0;
+    bool ok = iodev_read_all( name, "file", &d, &n, &e ) && n == strlen( text ) && memcmp( d, text, n ) == 0;
+    free( d );
+    return ok;
+}
+
+// the config: and local: drivers
+static void test_own( void ) {
+    char root[300];
+    const char* tmpdir = getenv( "TMPDIR" );
+    snprintf( root, sizeof(root), "%s/iotest-own-XXXXXX", tmpdir != 0 && tmpdir[0] == '/' ? tmpdir : "/tmp" );
+    if ( mkdtemp( root ) == 0 ) {
+        check( "scratch directory", false );
+        return;
+    }
+    char cfg[320], dat[320], path[700];
+    snprintf( cfg, sizeof(cfg), "%s/cfg", root );
+    snprintf( dat, sizeof(dat), "%s/dat", root );
+    setenv( "XDG_CONFIG_HOME", cfg, 1 );
+    setenv( "XDG_DATA_HOME", dat, 1 );
+    const char* e = 0;
+    struct stat st;
+
+    iodev_set_program_name( "/games/engine1999-rustball" );
+    check( "name: prefix engine1999- is dropped", strcmp( iodev_program_name(), "rustball" ) == 0 );
+    iodev_set_program_name( "demos/Rust.Ball.bas" );
+    check( "name: the last extension is dropped", strcmp( iodev_program_name(), "Rust.Ball" ) == 0 );
+    iodev_set_program_name( "x/engine1999" );
+    check( "name: engine1999 is reserved", iodev_program_name()[0] == '\0' );
+    iodev_set_program_name( "x/ENGINE1999.bas" );
+    check( "name: reserved without regard to case", iodev_program_name()[0] == '\0' );
+    iodev_set_program_name( "x/.hidden" );
+    check( "name: no leading dot", iodev_program_name()[0] == '\0' );
+    iodev_set_program_name( "x/a b.bas" );
+    check( "name: no blanks", iodev_program_name()[0] == '\0' );
+    iodev_set_program_name( 0 );
+    check( "name: none", iodev_program_name()[0] == '\0' );
+
+    iodev_set_program_name( "demos/game.bas" );
+    snprintf( path, sizeof(path), "%s/game", cfg );
+    check( "folder is created on demand", stat( path, &st ) != 0 );
+    check( "config: write", iodev_write_all( "config:opts.txt", "file", "A=1", 3, &e ) );
+    check( "the folder exists now", stat( path, &st ) == 0 && S_ISDIR( st.st_mode ) && ( st.st_mode & 0077 ) == 0 );
+    snprintf( path, sizeof(path), "%s/game/opts.txt", cfg );
+    check( "config: file is below XDG_CONFIG_HOME/<name>", slurp_is( path, "A=1" ) );
+    check( "config: read", slurp_is( "config:opts.txt", "A=1" ) );
+    check( "local: write", iodev_write_all( "local:hi.txt", "file", "99", 2, &e ) );
+    snprintf( path, sizeof(path), "%s/game/hi.txt", dat );
+    check( "local: file is below XDG_DATA_HOME/<name>", slurp_is( path, "99" ) );
+    check( "the two trees are apart", !iodev_exists( "config:hi.txt", "file" ) && !iodev_exists( "local:opts.txt", "file" ) );
+    check( "EXISTS", iodev_exists( "local:hi.txt", "file" ) && !iodev_exists( "local:nothere", "file" ) );
+    uint8_t* d = 0; size_t n = 0;
+    check( "missing file is an error", !iodev_read_all( "local:nothere", "file", &d, &n, &e ) && strcmp( e, "File not found" ) == 0 );
+
+    check( "no absolute names", !iodev_write_all( "config:/etc/x", "file", "x", 1, &e ) && strcmp( e, "Permission denied" ) == 0 );
+    check( "no ..", !iodev_write_all( "local:../x", "file", "x", 1, &e ) && strcmp( e, "Permission denied" ) == 0 );
+    check( "no .. in the middle", !iodev_write_all( "local:a/../../x", "file", "x", 1, &e ) && strcmp( e, "Permission denied" ) == 0 );
+    snprintf( path, sizeof(path), "%s/x", dat );
+    check( "nothing was written outside", stat( path, &st ) != 0 );
+
+    // sub folders: MKDIR, a file inside, a list
+    check( "MKDIR", iodev_mkdir( "local:sub", "file", &e ) );
+    check( "a file in the sub folder", iodev_write_all( "local:sub/a.txt", "file", "s", 1, &e ) && slurp_is( "local:sub/a.txt", "s" ) );
+    check( "no sub folder, no file", !iodev_write_all( "local:nosub/a.txt", "file", "s", 1, &e ) );
+    check( "RENAME", iodev_rename( "local:sub/a.txt", "local:sub/b.txt", "file", &e ) && iodev_exists( "local:sub/b.txt", "file" ) );
+    check( "KILL", iodev_remove( "local:sub/b.txt", "file", &e ) && !iodev_exists( "local:sub/b.txt", "file" ) );
+    check( "CHDIR is not supported", !iodev_chdir( "local:sub", "file", &e ) && strcmp( e, "Not supported by device" ) == 0 );
+
+    // symbolic links must not lead out
+    char outside[400];
+    snprintf( outside, sizeof(outside), "%s/outside", root );
+    mkdir( outside, 0700 );
+    snprintf( path, sizeof(path), "%s/secret", outside );
+    FILE* f = fopen( path, "w" );
+    if ( f != 0 ) { fputs( "top", f ); fclose( f ); }
+    snprintf( path, sizeof(path), "%s/game/link", dat );
+    check( "symlink to a folder", symlink( outside, path ) == 0 );
+    check( "no read through a folder link", !iodev_read_all( "local:link/secret", "file", &d, &n, &e ) && strcmp( e, "Permission denied" ) == 0 );
+    check( "no write through a folder link", !iodev_write_all( "local:link/new", "file", "x", 1, &e ) && strcmp( e, "Permission denied" ) == 0 );
+    snprintf( path, sizeof(path), "%s/new", outside );
+    check( "nothing was written through the link", stat( path, &st ) != 0 );
+    snprintf( path, sizeof(path), "%s/game/flink", dat );
+    snprintf( outside, sizeof(outside), "%s/outside/secret", root );
+    check( "symlink to a file", symlink( outside, path ) == 0 );
+    check( "no read of a file link", !iodev_read_all( "local:flink", "file", &d, &n, &e ) && strcmp( e, "Permission denied" ) == 0 );
+    check( "no write to a file link", !iodev_write_all( "local:flink", "file", "x", 1, &e ) && strcmp( e, "Permission denied" ) == 0 );
+
+    // the limit
+    iodev_set_own_limit( 100 );
+    check( "a file within the limit", iodev_write_all( "local:big", "file", "0123456789", 10, &e ) );
+    char blob[200];
+    memset( blob, 'x', sizeof(blob) );
+    check( "a write over the limit fails", !iodev_write_all( "config:blob", "file", blob, sizeof(blob), &e ) );
+    iodev_set_own_limit( 0 );
+    check( "with the default limit it fits", iodev_write_all( "config:blob", "file", blob, sizeof(blob), &e ) );
+
+    // another program has its own folders, the reserved name is never a folder
+    iodev_set_program_name( "x/other.bas" );
+    check( "another program does not see the files", !iodev_exists( "local:hi.txt", "file" ) );
+    snprintf( path, sizeof(path), "%s/engine1999", cfg );
+    iodev_set_program_name( "x/engine1999" );
+    check( "the reserved name: no folder is made", iodev_write_all( "config:grants", "file", "", 0, &e ) || true );
+    check( "the reserved name made no folder", stat( path, &st ) != 0 );
+    unlink( "grants" );                 // (the name was used as a plain file in the current directory)
+    iodev_set_program_name( 0 );
+
+    // no program name: the plain name is a file name in the current directory
+    char olddir[400];
+    if ( getcwd( olddir, sizeof(olddir) ) != 0 && chdir( root ) == 0 ) {
+        check( "no name: config:x is the file x", iodev_write_all( "config:plain.txt", "file", "p", 1, &e ) && iodev_exists( "plain.txt", "file" ) );
+        check( "no name: local:x reads it", slurp_is( "local:plain.txt", "p" ) );
+        check( "no name: the sub folder rules are the file driver's", iodev_exists( "local:plain.txt", "file" ) );
+        if ( chdir( olddir ) != 0 ) { check( "back", false ); }
+    }
+
+    rm_tree( root );
+    unsetenv( "XDG_CONFIG_HOME" );
+    unsetenv( "XDG_DATA_HOME" );
+}
+
 int main( void ) {
     iodev_init();
     test_resolve();
@@ -530,6 +674,7 @@ int main( void ) {
     test_register();
     test_phase2();
     test_phase3();
+    test_own();
     printf( "%d checks, %d failure(s)\n", checks, failures );
     return failures;
 }

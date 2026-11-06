@@ -59,6 +59,9 @@ static const testcase_t cases[] = {
     { "listing: a UTF-8 program file", "10 PRINT \"gr\xc3\xbc\xc3\x9f \xe2\x82\xac\"\n", "prog.bas", "", "gr\xfc\xdf \xa4\n", "", 0, false },
     { "listing: a Latin-9 program file", "10 PRINT \"gr\xfc\xdf \xa4\"\n", "prog.bas", "", "gr\xfc\xdf \xa4\n", "", 0, false },
     { "policy: a program may not write outside its folder", "10 ON ERROR GOTO 100\n20 OPEN \"../contest1-polx.txt\" FOR OUTPUT AS #1\n30 PRINT \"wrote\":CLOSE #1:KILL \"../contest1-polx.txt\":END\n100 PRINT ERR$:END\n", "prog.bas", "", "Permission denied\n", "", 0, false },
+    { "own files: config: and local: need no permission", "10 OPEN \"config:a.ini\" FOR OUTPUT AS #1:PRINT #1,\"x\":CLOSE #1\n20 OPEN \"local:hi.dat\" FOR OUTPUT AS #1:PRINT #1,\"7\":CLOSE #1\n30 PRINT EXISTS(\"config:a.ini\");EXISTS(\"local:hi.dat\");EXISTS(\"local:a.ini\");EXISTS(\"a.ini\")\n", "prog.bas", "", "-1-100\n", "", 0, false },
+    { "own files: no way out of the folder", "10 ON ERROR GOTO 100\n20 OPEN \"local:../x\" FOR OUTPUT AS #1\n30 PRINT \"wrote\":END\n100 PRINT ERR$:END\n", "prog.bas", "", "Permission denied\n", "", 0, false },
+    { "own files: a typed in program has no folder, the name is a plain file", 0, "", "10 OPEN \"config:plain.txt\" FOR OUTPUT AS #1:PRINT #1,\"x\":CLOSE #1\n20 PRINT EXISTS(\"plain.txt\")\nRUN\nKILL \"plain.txt\"\nBYE\n", "-1\n", "", 0, false },
     { "policy: --allow=write lets it", "10 ON ERROR GOTO 100\n20 OPEN \"../contest1-polx.txt\" FOR OUTPUT AS #1\n30 PRINT \"wrote\":CLOSE #1:KILL \"../contest1-polx.txt\":END\n100 PRINT ERR$:END\n", "--allow=write prog.bas", "", "wrote\n", "", 0, false },
     { "policy: --allow=read is not enough for writing", "10 ON ERROR GOTO 100\n20 OPEN \"../contest1-polx.txt\" FOR OUTPUT AS #1\n30 PRINT \"wrote\":CLOSE #1:KILL \"../contest1-polx.txt\":END\n100 PRINT ERR$:END\n", "--allow=read prog.bas", "", "Permission denied\n", "", 0, false },
     { "policy: --deny=all", "10 ON ERROR GOTO 100\n20 OPEN \"../contest1-polx.txt\" FOR OUTPUT AS #1\n30 PRINT \"wrote\":CLOSE #1:KILL \"../contest1-polx.txt\":END\n100 PRINT ERR$:END\n", "--allow=write --deny=write prog.bas", "", "Permission denied\n", "", 0, false },
@@ -399,6 +402,13 @@ int main( void ) {
     }
     if ( mkdtemp( workdir ) == 0 ) {
         return 1;
+    }
+    {   // the config: and local: drivers keep their files below the work directory (removed by clean())
+        char xdg[960];
+        snprintf( xdg, sizeof(xdg), "%s/xdg-cfg", workdir );
+        setenv( "XDG_CONFIG_HOME", xdg, 1 );
+        snprintf( xdg, sizeof(xdg), "%s/xdg-dat", workdir );
+        setenv( "XDG_DATA_HOME", xdg, 1 );
     }
     int failed = 0;
     size_t n = sizeof(cases) / sizeof(cases[0]);

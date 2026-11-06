@@ -117,6 +117,26 @@ ADDRESS [driver]     ADDRESS$                     chooses / returns the default 
 - **`res:`**: read-only files below the directory `res` of the current directory (`OPEN "res:sprites/ship.dat" FOR INPUT`). Absolute
   names and names with a `..` component are "Permission denied", as is any attempt to write. `FILES "res:"` lists it (the names
   then show the `res/` prefix, because the listing is the `file` driver's). `res` is a directory, not yet an archive.
+- **`config:` and `local:`** (2026-11-06, roadmap item 71): a program's own files. `config:` is the tree below `$XDG_CONFIG_HOME/<name>/` (default
+  `~/.config/<name>/`), `local:` the tree below `$XDG_DATA_HOME/<name>/` (default `~/.local/share/<name>/`). `<name>` is the name of the *running program*:
+  the base name of the file it was loaded from (or of the `BUILD` executable) without the extension and without a leading `engine1999-` / `engine1999c-`
+  (`iodev_set_program_name()`, called by the REPL when a program starts, cleared when it ends), so `rustball.bas` and `engine1999-rustball` use the
+  same folder. A name is valid if it has 1 to 64 letters, digits, `-`, `_`, `.` and does not start with a dot; **`engine1999` is reserved** (case does not
+  matter): `~/.config/engine1999/grants` is the security policy's permission store and must never be inside a program's tree.
+  - The folder is **created when it is needed** (`mkdir -p`, mode 0700).
+  - **A path can't leave the tree:** absolute names and `..` components are "Permission denied" (as in `res:`); and because a symbolic link inside the tree
+    could point out, the folder that holds the file must be inside `realpath()` of the program's folder and the file itself must not be a link (`lstat()`).
+    Sub folders are made with `MKDIR`; `CHDIR` is "Not supported by device" (it would move the whole process). `FILES "config:"` lists the folder, `KILL`,
+    `RENAME`, `EXISTS`, `LOAD` / `SAVE` all work; the listing shows the full path of the folder (it is the `file` driver's).
+  - **Size limit:** all files below a program's two folders together may not exceed 64 MiB (`OWN_QUOTA_DEFAULT`); a write that would exceed it fails with
+    "Disk full". The size is measured when a channel is opened for writing and counted up by what the channel writes (an overwrite counts as new data: the
+    limit errs on the safe side; two channels open at once measure separately, so the limit is not exact then). `iodev_set_own_limit()` changes it (tests).
+  - **No program name is not an error** (owner's decision): for a program typed in at the prompt (or the reserved name) both drivers use the name as a plain
+    file name, as if the prefix were not there; then the file driver's rules and the security policy apply to it (`config:x` = `x` in the current directory).
+  - The security policy asks nothing for these drivers (a program reaches only its own folders). Tests: `iotest1` (43 checks: names, escape attempts, links, the
+    limit, no name), `contest1` (3 cases, XDG variables set below the work directory).
+  - The `hiscore` library puts a name without a driver (`game.hi`) into `local:`; `HS_LOAD` falls back to the file of that name in the current directory
+    (where older versions of the games kept it), so no score is lost; `HS_SAVE` writes to `local:`.
 - **`con:`**: the screen (FOR OUTPUT) and the keyboard (FOR INPUT) as an ordinary channel, so generic routines can write to `#n`
   wherever it points. Output goes to the host's print callback exactly like channel 0 (the screen column is updated), input reads
   keys one at a time through the host's `getkey`/`inkey` (no echo, no line editing: use `INPUT$(1,#n)` or `GET #n,k$`). The VM
@@ -235,6 +255,7 @@ disk. The `file` driver uses the current directory of the process.
 | `sh` | 2 (done) | `OPEN "sh:ls -l" FOR INPUT AS #1` reads the output of a command, `FOR OUTPUT` feeds its input (see Sandboxing) |
 | `res` | 2 (done) | read-only game assets (a directory or an archive next to the program) |
 | `con` | 2 (done) | the screen / keyboard as an ordinary channel, so generic routines can write to `#n` |
+| `config`, `local` | 2b (done 2026-11-06) | a program's own files below `~/.config/<name>/` and `~/.local/share/<name>/` (confined, 64 MiB limit) |
 | `play` | 3 (done) | writing a music string to the channel plays it (`PLAY` voices) |
 | `tcp` | 3 (done) | network connections (see Sandboxing) |
 | programmable | proposal (below) | a driver written in BASIC (open/read/write/close as subroutines) |

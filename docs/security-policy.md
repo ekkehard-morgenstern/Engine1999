@@ -16,7 +16,7 @@ Code: `policy.[ch]` (no SDL, no VM), the hook `iodev_allowed()` in `iodev.c`, `r
 - **Powers that need permission** (`POL_*`): `read` (files / directories outside the folder, also listing), `write` (writing, `KILL`, `RENAME`, `MKDIR`,
   `CHDIR` is a read, `BUILD` writes its executable), `shell` (shell literals `` `cmd` `` and `OPEN "sh:..."`), `net` (`tcp:`). Without it the statement fails
   with the error **Permission denied** (a program can catch it with `ON ERROR`).
-- **No permission needed:** `mem:`, `null:`, `con:`, `stdin:`, `stdout:`, `stderr:`, `res:` (read only, below `./res`), `play:`, and drivers a program defines itself.
+- **No permission needed:** `mem:`, `null:`, `con:`, `stdin:`, `stdout:`, `stderr:`, `res:` (read only, below `./res`), `config:` and `local:` (a program's own folders `~/.config/<name>/` and `~/.local/share/<name>/`, confined and limited to 64 MiB: `docs/io-subsystem.md`), `play:`, and drivers a program defines itself.
 - **A power is granted for everything** (not per path): "write outside my folder" is one decision.
 
 ## Questions

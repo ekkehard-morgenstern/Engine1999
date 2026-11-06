@@ -44,9 +44,13 @@ A game controller works, too: D-pad or left stick steers, A jumps, START pauses,
 .SH FILES
 The best score is kept in the file
 .I river.hi
-in the current directory (the game goes on without it if the file cannot be written). The current directory is outside the folder of the game, so Engine1999 asks once for permission to write there; answer "Always" to keep the high score (see
-.BR engine1999\-basic (7),
-SECURITY).
+in the folder
+.IR ~/.local/share/river/
+(the driver
+.BR local: ;
+the file is safe there and needs no permission; a file of that name in the current directory, where older versions kept it, is still read when the new one does not exist yet; the game goes on without the file if it cannot be written).
+.BR engine1999\-basic (7)
+has the details, see FILES AND DEVICES.
 .SH SEE ALSO
 .BR engine1999 (1),
 .BR engine1999-basic (7)

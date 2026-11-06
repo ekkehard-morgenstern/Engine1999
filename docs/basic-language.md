@@ -253,6 +253,7 @@ KILL "old.dat"     RENAME "a.txt" TO "b.txt"     MKDIR "saves"     CHDIR "saves"
 SEEK #1,100                                       (byte position from the start of the open channel; LOC follows)
 OPEN "sh:ls -l" FOR INPUT AS #1                  (sh: the output of a shell command; FOR OUTPUT feeds its input)
 OPEN "res:ship.dat" FOR INPUT AS #1              (res: read-only game assets in the directory ./res)
+OPEN "local:scores.txt" FOR OUTPUT AS #1         (local: the program's own data folder ~/.local/share/<program>/; config: ~/.config/<program>/)
 OPEN "con:" FOR OUTPUT AS #2: PRINT #2,"hi"      (con: the screen / the keyboard as an ordinary channel)
 ```
 

@@ -121,6 +121,12 @@ void iodev_set_music( const iomusic_t* music);  // 0 = none ("Not supported by d
 // the "tcp" driver waits for the network in slices and asks this function whether the user pressed Break (true = stop)
 void iodev_set_interrupt( bool (*func)( void* usrdata ), void* usrdata );
 
+// the config: and local: drivers (a program's own files below ~/.config/<name>/ and ~/.local/share/<name>/): the REPL tells the name of
+// the running program (the file it was loaded from; 0 = none: the drivers then use the plain name as a file name instead)
+void iodev_set_program_name( const char* file );
+const char* iodev_program_name( void );         // "" = none
+void iodev_set_own_limit( uint64_t bytes );     // the limit for a program's folders together (default 64 MiB; 0 = default); for the tests
+
 // the RAM disk, for the tests: deletes all files of the mem driver
 void iodev_mem_clear( void );
 

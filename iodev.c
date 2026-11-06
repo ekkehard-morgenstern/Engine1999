@@ -663,6 +663,369 @@ static bool res_list( iodrv_t* drv, const char* spec, hlstyle_t style, void* sty
 
 static iodrv_t res_driver = { "res", res_open, file_read, 0, file_size, file_close, res_list, 0, 0, 0, 0, file_seek, 0 };
 
+// -- the config: and local: drivers (a program's own files, docs/io-subsystem.md "config: and local:") -----------------------------
+//
+// config: = the tree below $XDG_CONFIG_HOME/<program>/ (default ~/.config/<program>/), local: = below $XDG_DATA_HOME/<program>/ (default
+// ~/.local/share/<program>/). <program> is the name of the running program (iodev_set_program_name()). A path can't leave the tree: no
+// absolute names, no ".." and no symbolic link on the way (checked with realpath() / lstat()); the folders are created when they are
+// needed (mode 0700); a program's trees together are limited to OWN_QUOTA bytes. Without a usable program name (typed in, or the
+// reserved name "engine1999": ~/.config/engine1999/grants holds the security policy's permissions) the drivers do not fail: the name
+// is used as a plain file name, as if there were no prefix (the file driver's rules, i.e. the security policy, apply then).
+
+#include <pwd.h>
+
+#define OWN_QUOTA_DEFAULT   ( UINT64_C(64) * UINT64_C(1048576) )
+#define OWN_NAME_MAX        64
+
+static char own_name[ OWN_NAME_MAX + 1 ];       // "" = no name
+static uint64_t own_quota = OWN_QUOTA_DEFAULT;
+
+static bool own_name_valid( const char* n ) {
+    size_t len = strlen( n );
+    if ( len == 0 || len > OWN_NAME_MAX || n[0] == '.' || strcasecmp( n, "engine1999" ) == 0 ) {
+        return false;
+    }
+    for ( size_t i=0; i < len; ++i ) {
+        unsigned char c = (unsigned char) n[i];
+        if ( !( isalnum( c ) || c == '-' || c == '_' || c == '.' ) ) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// the name of the program: the base name of its file without the extension and without a leading "engine1999-" (the name of an installed
+// game), so that "rustball.bas" and the executable "engine1999-rustball" share their files
+void iodev_set_program_name( const char* file ) {
+    own_name[0] = '\0';
+    if ( file == 0 || file[0] == '\0' ) {
+        return;
+    }
+    const char* base = strrchr( file, '/' );
+    base = base != 0 ? base + 1 : file;
+    char tmp[256];
+    snprintf( tmp, sizeof(tmp), "%s", base );
+    char* dot = strrchr( tmp, '.' );
+    if ( dot != 0 && dot > tmp ) {
+        *dot = '\0';
+    }
+    const char* name = tmp;
+    if ( strncasecmp( name, "engine1999-", 11U ) == 0 ) {
+        name += 11;
+    } else if ( strncasecmp( name, "engine1999c-", 12U ) == 0 ) {
+        name += 12;
+    }
+    if ( own_name_valid( name ) ) {
+        snprintf( own_name, sizeof(own_name), "%s", name );
+    }
+}
+
+const char* iodev_program_name( void ) {
+    return own_name;
+}
+
+void iodev_set_own_limit( uint64_t bytes ) {
+    own_quota = bytes != 0 ? bytes : OWN_QUOTA_DEFAULT;
+}
+
+// mkdir -p, mode 0700
+static bool own_mkdirs( const char* path ) {
+    char tmp[PATH_MAX];
+    if ( strlen( path ) >= sizeof(tmp) ) {
+        return false;
+    }
+    snprintf( tmp, sizeof(tmp), "%s", path );
+    for ( char* p = tmp + 1; ; ++p ) {
+        if ( *p == '/' || *p == '\0' ) {
+            char c = *p;
+            *p = '\0';
+            if ( mkdir( tmp, 0700 ) != 0 && errno != EEXIST ) {
+                return false;
+            }
+            if ( c == '\0' ) {
+                break;
+            }
+            *p = '/';
+        }
+    }
+    return true;
+}
+
+static bool own_home( char* out, size_t outsize ) {
+    const char* home = getenv( "HOME" );
+    if ( home == 0 || home[0] != '/' ) {
+        struct passwd* pw = getpwuid( getuid() );
+        home = pw != 0 ? pw->pw_dir : 0;
+    }
+    if ( home == 0 || home[0] != '/' ) {
+        return false;
+    }
+    snprintf( out, outsize, "%s", home );
+    return true;
+}
+
+// the folder of the program (created when it does not exist); kind 0 = config, 1 = local
+static bool own_root( int kind, char* out, size_t outsize ) {
+    char base[PATH_MAX];
+    const char* env = getenv( kind == 0 ? "XDG_CONFIG_HOME" : "XDG_DATA_HOME" );
+    if ( env != 0 && env[0] == '/' ) {
+        snprintf( base, sizeof(base), "%s", env );
+    } else {
+        char home[PATH_MAX];
+        if ( !own_home( home, sizeof(home) ) ) {
+            return false;
+        }
+        const char* sub = kind == 0 ? "/.config" : "/.local/share";
+        if ( strlen( home ) + strlen( sub ) >= sizeof(base) ) {
+            return false;
+        }
+        strcpy( base, home );
+        strcat( base, sub );
+    }
+    size_t bl = strlen( base );
+    while ( bl > 1U && base[bl-1U] == '/' ) {
+        base[--bl] = '\0';
+    }
+    int n = snprintf( out, outsize, "%s/%s", base, own_name );
+    if ( n < 0 || (size_t) n >= outsize ) {
+        return false;
+    }
+    return own_mkdirs( out );
+}
+
+// a name that may not leave the folder: not absolute, no ".." component
+static bool own_lexical_ok( const char* path ) {
+    if ( path[0] == '/' ) {
+        return false;
+    }
+    for ( const char* p = path; *p; ) {
+        const char* e = strchr( p, '/' );
+        size_t n = e ? (size_t)( e - p ) : strlen( p );
+        if ( n == 2U && p[0] == '.' && p[1] == '.' ) {
+            return false;
+        }
+        p += n;
+        if ( *p == '/' ) {
+            ++p;
+        }
+    }
+    return true;
+}
+
+static bool own_inside( const char* real, const char* root ) {
+    size_t n = strlen( root );
+    return strncmp( real, root, n ) == 0 && ( real[n] == '\0' || real[n] == '/' || n == 1U );
+}
+
+// 0 = error (message in err), 1 = full is the path in the folder, 2 = there is no program name: the plain name (rel) is to be used
+static int own_resolve( const iodrv_t* drv, const char* rel, char* full, size_t fullsize, char* err, size_t errsz ) {
+    if ( own_name[0] == '\0' ) {
+        snprintf( full, fullsize, "%s", rel );
+        return 2;
+    }
+    if ( !own_lexical_ok( rel ) ) {
+        iodev_set_err( err, errsz, "Permission denied" );
+        return 0;
+    }
+    char root[PATH_MAX];
+    if ( !own_root( drv->userdata != 0 ? 1 : 0, root, sizeof(root) ) ) {
+        iodev_set_err( err, errsz, "Device I/O error" );
+        return 0;
+    }
+    int n = snprintf( full, fullsize, rel[0] != '\0' ? "%s/%s" : "%s", root, rel );
+    if ( n < 0 || (size_t) n >= fullsize ) {
+        iodev_set_err( err, errsz, "Bad file name" );
+        return 0;
+    }
+    if ( rel[0] == '\0' ) {
+        return 1;
+    }
+    // the folder that holds the file must really be inside the program's folder (a symbolic link in the way would lead out of it) ...
+    char parent[PATH_MAX], realroot[PATH_MAX], realparent[PATH_MAX];
+    snprintf( parent, sizeof(parent), "%s", full );
+    char* slash = strrchr( parent, '/' );
+    if ( slash != 0 && slash != parent ) {
+        *slash = '\0';
+    }
+    if ( realpath( root, realroot ) == 0 || realpath( parent, realparent ) == 0 ) {
+        iodev_set_err( err, errsz, "File not found" );
+        return 0;
+    }
+    if ( !own_inside( realparent, realroot ) ) {
+        iodev_set_err( err, errsz, "Permission denied" );
+        return 0;
+    }
+    // ... and the file itself must not be a link
+    struct stat st;
+    if ( lstat( full, &st ) == 0 && S_ISLNK( st.st_mode ) ) {
+        iodev_set_err( err, errsz, "Permission denied" );
+        return 0;
+    }
+    return 1;
+}
+
+// the bytes in all files below dir (links are not followed)
+static uint64_t own_tree_size( const char* dir, int depth ) {
+    uint64_t sum = 0;
+    DIR* d = opendir( dir );
+    if ( d == 0 ) {
+        return 0;
+    }
+    struct dirent* de;
+    while ( ( de = readdir( d ) ) != 0 ) {
+        if ( strcmp( de->d_name, "." ) == 0 || strcmp( de->d_name, ".." ) == 0 ) {
+            continue;
+        }
+        char path[PATH_MAX];
+        if ( snprintf( path, sizeof(path), "%s/%s", dir, de->d_name ) >= (int) sizeof(path) ) {
+            continue;
+        }
+        struct stat st;
+        if ( lstat( path, &st ) != 0 ) {
+            continue;
+        }
+        if ( S_ISREG( st.st_mode ) ) {
+            sum += (uint64_t) st.st_size;
+        } else if ( S_ISDIR( st.st_mode ) && depth < 32 ) {
+            sum += own_tree_size( path, depth + 1 );
+        }
+    }
+    closedir( d );
+    return sum;
+}
+
+typedef struct _ownhandle_t {
+    void*       inner;                  // the file driver's handle
+    bool        writable;
+    uint64_t    used;                   // bytes in the program's trees (measured at OPEN) + what this channel wrote
+    uint64_t    limit;
+} ownhandle_t;
+
+static void* own_open( iodrv_t* drv, const char* path, unsigned mode, char* err, size_t errsz ) {
+    char full[PATH_MAX];
+    int r = own_resolve( drv, path, full, sizeof(full), err, errsz );
+    if ( r == 0 ) {
+        return 0;
+    }
+    bool writing = ( mode & IOMODE_WRITE ) != 0;
+    if ( r == 2 && !iodev_allowed( writing ? "write" : "read", &file_driver, path ) ) {
+        iodev_set_err( err, errsz, "Permission denied" );
+        return 0;
+    }
+    void* inner = file_open( &file_driver, full, mode, err, errsz );
+    if ( inner == 0 ) {
+        return 0;
+    }
+    ownhandle_t* h = (ownhandle_t*) calloc( 1U, sizeof(*h) );
+    if ( h == 0 ) {
+        file_close( inner );
+        iodev_set_err( err, errsz, "Out of memory" );
+        return 0;
+    }
+    h->inner = inner;
+    h->writable = writing;
+    h->limit = r == 2 ? UINT64_MAX : own_quota;      // (a plain file in the current directory has no limit of ours)
+    if ( writing && r == 1 ) {
+        char root0[PATH_MAX], root1[PATH_MAX];
+        h->used = ( own_root( 0, root0, sizeof(root0) ) ? own_tree_size( root0, 0 ) : 0 ) +
+                  ( own_root( 1, root1, sizeof(root1) ) ? own_tree_size( root1, 0 ) : 0 );
+    }
+    return h;
+}
+
+static ssize_t own_read( void* handle, void* buf, size_t count ) {
+    return file_read( ( (ownhandle_t*) handle )->inner, buf, count );
+}
+
+static ssize_t own_write( void* handle, const void* buf, size_t count ) {
+    ownhandle_t* h = (ownhandle_t*) handle;
+    if ( h->used + (uint64_t) count > h->limit ) {
+        iodev_pending = "Disk full";
+        return -1;
+    }
+    ssize_t n = file_write( h->inner, buf, count );
+    if ( n > 0 ) {
+        h->used += (uint64_t) n;
+    }
+    return n;
+}
+
+static int64_t own_size( void* handle ) {
+    return file_size( ( (ownhandle_t*) handle )->inner );
+}
+
+static bool own_close( void* handle ) {
+    ownhandle_t* h = (ownhandle_t*) handle;
+    bool ok = file_close( h->inner );
+    free( h );
+    return ok;
+}
+
+static bool own_seek( void* handle, int64_t pos ) {
+    return file_seek( ( (ownhandle_t*) handle )->inner, pos );
+}
+
+static bool own_list( iodrv_t* drv, const char* spec, hlstyle_t style, void* styleud, files_emit_t emit, void* emitud, char* err,
+    size_t errsz ) {
+    char full[PATH_MAX];
+    int r = own_resolve( drv, spec, full, sizeof(full), err, errsz );
+    if ( r == 0 ) {
+        return false;
+    }
+    if ( r == 2 && !iodev_allowed( "list", &file_driver, spec ) ) {
+        iodev_set_err( err, errsz, "Permission denied" );
+        return false;
+    }
+    return file_list( &file_driver, full, style, styleud, emit, emitud, err, errsz );
+}
+
+static bool own_remove( iodrv_t* drv, const char* path, char* err, size_t errsz ) {
+    char full[PATH_MAX];
+    int r = own_resolve( drv, path, full, sizeof(full), err, errsz );
+    if ( r == 0 ) {
+        return false;
+    }
+    if ( r == 2 && !iodev_allowed( "write", &file_driver, path ) ) {
+        iodev_set_err( err, errsz, "Permission denied" );
+        return false;
+    }
+    return file_remove( &file_driver, full, err, errsz );
+}
+
+static bool own_rename( iodrv_t* drv, const char* from, const char* to, char* err, size_t errsz ) {
+    char f1[PATH_MAX], f2[PATH_MAX];
+    int r1 = own_resolve( drv, from, f1, sizeof(f1), err, errsz );
+    if ( r1 == 0 ) {
+        return false;
+    }
+    int r2 = own_resolve( drv, to, f2, sizeof(f2), err, errsz );
+    if ( r2 == 0 ) {
+        return false;
+    }
+    if ( r1 == 2 && ( !iodev_allowed( "write", &file_driver, from ) || !iodev_allowed( "write", &file_driver, to ) ) ) {
+        iodev_set_err( err, errsz, "Permission denied" );
+        return false;
+    }
+    return file_rename( &file_driver, f1, f2, err, errsz );
+}
+
+static bool own_mkdir( iodrv_t* drv, const char* path, char* err, size_t errsz ) {
+    char full[PATH_MAX];
+    int r = own_resolve( drv, path, full, sizeof(full), err, errsz );
+    if ( r == 0 ) {
+        return false;
+    }
+    if ( r == 2 && !iodev_allowed( "write", &file_driver, path ) ) {
+        iodev_set_err( err, errsz, "Permission denied" );
+        return false;
+    }
+    return file_mkdir( &file_driver, full, err, errsz );
+}
+
+// userdata: 0 = config, 1 = local (CHDIR is not offered: it would move the whole process)
+static iodrv_t config_driver = { "config", own_open, own_read, own_write, own_size, own_close, own_list, own_remove, own_rename, own_mkdir, 0, own_seek, 0 };
+static iodrv_t local_driver = { "local", own_open, own_read, own_write, own_size, own_close, own_list, own_remove, own_rename, own_mkdir, 0, own_seek, (void*) 1 };
+
 // -- the dir driver (a directory as a text file: the data of the file requester) ------------------------
 
 typedef struct _dirhandle_t {
@@ -1227,6 +1590,8 @@ void iodev_init( void ) {
         iodev_register( &mem_driver );
         iodev_register( &sh_driver );
         iodev_register( &res_driver );
+        iodev_register( &config_driver );
+        iodev_register( &local_driver );
         iodev_register( &dir_driver );
         iodev_register( &con_driver );
         iodev_register( &play_driver );

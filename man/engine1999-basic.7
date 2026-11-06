@@ -196,6 +196,34 @@ A shell command as a file:
 Read\-only game assets in the directory
 .IR res/ .
 .TP
+.B config: local:
+A program's own files. The name is the running program's: the base name of its file without the extension (and without a leading
+.IR engine1999\- ,
+so the installed game
+.B engine1999\-rustball
+and
+.B rustball.bas
+share their files).
+.B config:
+is the folder
+.IR $XDG_CONFIG_HOME/<name>/
+(default
+.IR ~/.config/<name>/ ),
+.B local:
+is
+.IR $XDG_DATA_HOME/<name>/
+(default
+.IR ~/.local/share/<name>/ ).
+The folder is created when it is needed (mode 0700). A name can not leave it: absolute names, a
+.B ..
+component and symbolic links are
+.BR "Permission denied" ;
+sub\-folders are made with MKDIR; CHDIR is not offered. All files below a program's two folders together are limited to 64 MiB
+.RB ( "Disk full" ).
+Nothing is asked for: a program only reaches its own folders. A program without a usable name (typed in at the prompt, or named
+.BR engine1999 ,
+whose folder holds the permission store) does not get an error: the name is used as an ordinary file name, as if there were no prefix.
+.TP
 .B dir:
 A directory as a read\-only text file: the first line is its full name, then the sub\-directories (with a
 .BR / ),
@@ -227,7 +255,7 @@ or open a network connection
 .RB ( tcp: ).
 The error is
 .BR "Permission denied" .
-.B mem: null: con: stdin: stdout: stderr: res:
+.B mem: null: con: stdin: stdout: stderr: res: config: local:
 and
 .B play:
 need no permission.

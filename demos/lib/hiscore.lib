@@ -7,23 +7,38 @@
 30 '   CALL HS_SAVE("game.hi",HI)  writes the number to the file. A file error (a folder that can't be written) is raised as usual: a program that wants to ignore
 40 '                               it traps it in its MAIN program, where RESUME <label> can continue: ON ERROR GOTO handler ... CALL HS_SAVE ... LABEL done ... ON ERROR OFF,
 50 '                               with LABEL handler / RESUME done. (RESUME <label> inside a PROC or FUNC would land in a frame that the error has already taken apart.)
-60 ' Both use the file channel #1: a program must not have a file open on it at that moment.
-70 LIBRARY "hiscore","HS_"
-80 FUNC HS_LOAD(F$)
-90   LOCAL V,A$
-100   V=0
-110   IF EXISTS(F$) THEN
-120     OPEN F$ FOR INPUT AS #1
-130     IF NOT EOF(1) THEN
-140       LINE INPUT #1,A$
-150       V=VAL(A$)
-160     END IF
-170     CLOSE #1
-180   END IF
-190   RETURN V
-200 END FUNC
-210 PROC HS_SAVE(F$,V)
-220   OPEN F$ FOR OUTPUT AS #1
-230   PRINT #1,V
-240   CLOSE #1
-250 END PROC
+60 ' A name without a driver ("game.hi") lives in the program's own folder (the driver local:, ~/.local/share/<program>/): the file is safe there and needs no
+70 ' permission. HS_LOAD falls back to a file of that name in the current directory, where older versions of the games kept it, so scores are not lost; without a
+80 ' program name (typed in) local: is the current directory itself. A name with a driver ("mem:game.hi", "config:game.hi") is used as it is.
+90 ' Both use the file channel #1: a program must not have a file open on it at that moment.
+100 LIBRARY "hiscore","HS_"
+110 FUNC HS_FILE$(F$)
+115   LOCAL I,R$
+120   R$="local:"+F$
+125   FOR I=3 TO 17
+130     IF MID$(F$,I,1)=":" THEN R$=F$
+135   NEXT I
+140   RETURN R$
+145 END FUNC
+150 FUNC HS_LOAD(F$)
+160   LOCAL V,A$,N$
+170   V=0
+180   N$=FN HS_FILE$(F$)
+190   IF NOT EXISTS(N$) THEN N$=F$
+200   IF EXISTS(N$) THEN
+210     OPEN N$ FOR INPUT AS #1
+220     IF NOT EOF(1) THEN
+230       LINE INPUT #1,A$
+240       V=VAL(A$)
+250     END IF
+260     CLOSE #1
+270   END IF
+280   RETURN V
+290 END FUNC
+300 PROC HS_SAVE(F$,V)
+305   LOCAL N$
+308   N$=FN HS_FILE$(F$)
+310   OPEN N$ FOR OUTPUT AS #1
+320   PRINT #1,V
+330   CLOSE #1
+340 END PROC

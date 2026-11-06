@@ -1,5 +1,8 @@
 
 Ideas to put on the roadmap or to amend or expand existing entries:
 
+- editors that are now BASIC demos should also exist as BASIC or host statements, so the user does not have to switch between programs. One solution would be to keep multiple BASIC buffers in memory, but this would require either move the programs out of the demo folder into a tools folder and to ensure they're always present, or implement them in C and keep the BASIC demos as they are. What's your opinion on this?
+
+
 
 
