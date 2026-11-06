@@ -51,7 +51,8 @@ fonttest1
 uitest1
 synhltest1
 poltest1
-
 engine1999-*.tar.gz
 config.mk
 engine1999_*.orig.tar.gz
+residue/
+

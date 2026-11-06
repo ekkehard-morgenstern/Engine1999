@@ -13,7 +13,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-- **Condensed `SESSION.md` and `CLAUDE.md`** (owner's request 2026-11-07: both too large). `SESSION.md` 147 KB -> 11 KB: standing rules reduced to a pointer to `CLAUDE.md` plus the rules unique to it (no locks on layer memory, host consistency, no git writes); "Repo state" turned from per-feature paragraphs into one or two lines per roadmap item (open points and untested-by-owner notes kept); "What exists" is now an index pointing to `docs/`; tests as one list; a short "Lessons / gotchas" section. `CLAUDE.md` 15 KB -> 13.8 KB: "Current state" shortened, the long test bullet replaced by a list that mentions `make check`. Nothing was removed from `HistoryLog-Claude.md` or `docs/`; dropped detail lives there, unchecked item by item. Test counts in `SESSION.md` are approximate (taken from the old text, not re-run). Backup copies of the old files are in the session scratchpad (the old uncommitted `SESSION.md` is not in git). No source changes, no tests run.
+- **2026-11-07 — `demos/mathplot.bas`** (new, 14 lines + the 4 license lines, fits one screen): a shaded surface (ripples, `SIN`/`SQR`/`COS`, 64 x 60 cells in a 64 color palette made with `GFX PALETTE` + `RGB`) and graphs of SIN / COS (-2PI..2PI) and SQR / LOG / ATN (0..10) with `GFX PSET`. Added a row to `demos/README.md`. Checked in the window under Xvfb + metacity + xvkbd (screenshot looked right; the console host has no graphics); test processes cleaned up. No source or format change, so the regression tests were not run.
 
 ## Log
 
@@ -1376,3 +1376,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 7 files, +31/-7.
 #### README: screenshots of the tools (2026-11-06, owner's request)
 - `docs/images/tool-spriteed.png`, `tool-spriteed-after.png`, `tool-fonted.png`, `tool-fonted-text.png` (window under Xvfb: `fruit2` running, ESC, `TOOL "spriteed"`, cherry pixels painted and stored, Quit, `CONT` works; `TOOL "fonted"` with the letter K as a chess king loaded from a `DESIGN CHAR` file, and the text screen after it) and a README section "Tools: edit while the program waits". No code changed.
+
+### a9dc918 — 2026-11-07 00:32:28 +0100 — "Claude session files size reduction, by Claude Code"
+3 files, +55/-252.
+- **Condensed `SESSION.md` and `CLAUDE.md`** (owner's request 2026-11-07: both too large). `SESSION.md` 147 KB -> 11 KB: standing rules reduced to a pointer to `CLAUDE.md` plus the rules unique to it (no locks on layer memory, host consistency, no git writes); "Repo state" turned from per-feature paragraphs into one or two lines per roadmap item (open points and untested-by-owner notes kept); "What exists" is now an index pointing to `docs/`; tests as one list; a short "Lessons / gotchas" section. `CLAUDE.md` 15 KB -> 13.8 KB: "Current state" shortened, the long test bullet replaced by a list that mentions `make check`. Nothing was removed from `HistoryLog-Claude.md` or `docs/`; dropped detail lives there, unchecked item by item. Test counts in `SESSION.md` are approximate (taken from the old text, not re-run). Backup copies of the old files are in the session scratchpad (the old uncommitted `SESSION.md` is not in git). No source changes, no tests run.
