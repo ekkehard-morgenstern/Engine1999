@@ -1,5 +1,5 @@
 
 Ideas to put on the roadmap or to amend or expand existing entries:
 
-- make new versions of every game (except fruit, since that already has a successor), and name them the same way you did with fruit and fruit2: An incremented roman numeral in the title, and an incremented number in the file name. These games should make use of the new features like sprite groups / assets and/or BMP file loading. Improve at least the graphics, so that playing them has even more appeal. This should be one roadmap item.
+
 
