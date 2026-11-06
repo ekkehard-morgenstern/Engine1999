@@ -35,10 +35,7 @@ Full documentation is in `docs/` — start with `docs/README.md`.
 
 ## Current state — read first
 
-The branch `feature/refactor-to-remove-some-limits` (merged into `main` on 2026-10-28; work continues on `main`) completed the tokenizer refactor: `bastok.[ch]` now uses heap strings (`char**`),
-growable output buffers (`buf_t`) and bounded read buffers (`rbuf_t`); identifiers/literals may be up to 65535 bytes (2-byte length prefix in the token stream).
-All callers were converted and `make` builds cleanly; `basictest1`/`basictest2` run clean under valgrind.
-The program store, the syntax tree and the variables are heap structures now; the code and data segments have 32-bit offsets and grow on demand; the remaining fixed limits (16-bit variable numbers, array dimensions, string length) are listed in `docs/refactoring.md`.
+The tokenizer, program store, syntax tree and variables are heap structures (identifiers/literals up to 65535 bytes, 32-bit code/data offsets that grow on demand); the remaining fixed limits are in `docs/refactoring.md`. Work continues on `main`; current status and recent work: `SESSION.md`.
 
 ## Build
 
@@ -47,7 +44,7 @@ The program store, the syntax tree and the variables are heap structures now; th
 - Needs `gcc`, SDL2 (`-lSDL2 -lrt -lm`). Only `sdltest1`, `sdltest3` and `engine1999` link SDL2; `engine1999c` (the console host, no window) does not.
 - `make kit` builds the portable, profiling-free kit in `kit/` (git-ignored) and `make install` [`PREFIX=/usr/local`, `DESTDIR=`] installs the programs, the `BUILD` kit (`$(PREFIX)/lib/engine1999`), demos, docs and man pages; `make uninstall` removes them. `BUILD` finds an installed kit through `../lib/engine1999` relative to the running program.
 - The version (banner, `--version`, `--engine1999-about`) is the newest `vX.Y.Z` git tag: `bump_version.sh` tags (local only), `tagtoverstr.sh` writes the git-ignored `version.h` during `make` (`docs/build-and-test.md`, "Version").
-- `vmtest1` (back end), `repltest1` (REPL), `ansitest1` (ANSI decoder) and `txttest1` (text screen viewports, cell flags, overlays), `asmtest1` (VM assembler/decoder), `synthtest1` (synthesizer core and music string parser) and `iotest1` (I/O drivers and channels) and `gfxtest1` (drawing core, tiles, sprites, text areas) `buildtest1` (the `BUILD` linking, run in the build directory) and `contest1` (the console host `engine1999c`, run in the build directory) `keytest1` (key sequences), `joytest1` (game controller state; `sdltest4 --selftest` is the SDL side with virtual pads) `scrtest1` (the editors on a fake screen), `synhltest1` (the syntax highlighter `synhl.c` against `LIST`'s colors, on the demos) and `libtest1` (the library resolver `baslib.c`: scanning, dependency order, cycles, errors) and `poltest1` (the security policy `policy.c`: paths, grants, questions) are the automated regression tests (run `./poltest1`, `./vmtest1`, `./repltest1`, `./ansitest1`, `./txttest1`, `./asmtest1`, `./synthtest1`, `./iotest1`, `./gfxtest1`, `./buildtest1`, `./contest1`, `./keytest1`, `./scrtest1`, `./libtest1`, exit status = failures); the other `*test*` programs are interactive/manual (see `docs/build-and-test.md`).
+- Automated regression tests (exit status = failures): `vmtest1 repltest1 ansitest1 txttest1 asmtest1 synthtest1 iotest1 gfxtest1 buildtest1 contest1 keytest1 joytest1 scrtest1 synhltest1 libtest1 poltest1 uitest1 fonttest1`; `buildtest1` and `contest1` run in the build directory. `make check` runs them; the other `*test*` programs are interactive/manual (`docs/build-and-test.md`, `SESSION.md` "Tests").
 - The makefile has a stale `8x12font.o` rule (file is `8x12font1.c`) and every object depends on *all* headers.
 - Build artifacts (`*.o`, binaries, `engine.lib`, `gmon.out`, `all`) are git-ignored but present in the working tree.
 
