@@ -78,6 +78,28 @@ A text file may start with a
 .B #!
 line.
 .TP
+.B TOOL
+.IR name$ " [, " arg$ ]
+runs a tool, a BASIC program of the tools folder (the editors
+.BR spriteed ,
+.B musiced
+and
+.BR sfxed ),
+in a state of its own and returns when it ends: the stored program, its variables and the text on the screen stay. The tool is searched as
+.IR name.bas
+in
+.IR tools/
+of the current directory, next to the program, in
+.BR $ENGINE1999_HOME/tools
+and in the installed
+.IR lib/engine1999/tools .
+The argument is what the tool reads as
+.BR ARG$(1)
+(a file to open). The security policy does not apply to a tool. A tool owns the screen while it runs: a program with a UI, sprites or tiles on the screen finds them gone afterwards.
+Not available in the console host (and not in
+.B BUILD
+executables, which embed no tools).
+.TP
 .B Ending
 .B BYE [code]
 or
@@ -320,7 +342,11 @@ and
 the linker, the startup files and the libraries it finds by itself.
 .B make install
 puts the kit into
-.IR /usr/local/lib/engine1999 .
+.IR /usr/local/lib/engine1999 ,
+the shared libraries into
+.IR /usr/local/lib/engine1999/lib
+and the tools (\fBTOOL\fR) into
+.IR /usr/local/lib/engine1999/tools .
 .PP
 The executable starts the program at once.
 The command line is the program's (\fBARGC\fR, \fBARG$\fR), except
@@ -352,7 +378,7 @@ MAX MERGE MID MIN MKD MKDIR MKI MKL MKS MOD MONITOR MOUSE NAND NEQV NEW NEXT NIM
 ON OPEN OPTION OR PEEK PI PITCH PLAY PLAYING POINT POKE POP PRINT PROC PUT PUTREC QUA QUIT RAD 
 RANDOMIZE READ REMAIN RENAME RENUM REPEAT RESTORE RESUME RETURN RGB RIGHT RND RSET RSHIFT RUN SAVE 
 SEEK SFX SGN SHL SHOW SHR SIN SOUND SPACE SPRITE SQR STEP STOP STR STRING SUB SYMBOL SYNC TAN TEMPO 
-THEN TI TILE TIME TO TRACE TREMOLO TXT UEND UI UNLESS UNTIL USING VAL VIBRATO VOLUME VTAB WAIT 
+THEN TI TILE TIME TO TOOL TRACE TREMOLO TXT UEND UI UNLESS UNTIL USING VAL VIBRATO VOLUME VTAB WAIT 
 WARRANTY WAVE WEND WHILE WRITE XNOR XOR 
 .\" KEYWORDS-END
 .SH SEE ALSO

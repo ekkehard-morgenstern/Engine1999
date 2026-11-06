@@ -86,7 +86,8 @@ list as well, so `LOAD "sprites"` finds a library for editing). It looks in this
 1. the current directory (relative to where the program was started or `CHDIR`ed),
 2. a `lib/` directory below it,
 3. the directory of the stored program's own file (`repl_t.filename`) and its `lib/`,
-4. the installed libraries (`baslib_system_dirs()`): `$ENGINE1999_HOME/lib`, `<program>/../lib/engine1999/lib`, `/usr/local/lib/engine1999/lib`, `/usr/lib/engine1999/lib`.
+4. (a program in a folder called `tools`: first the `lib/` folder next to it and, in the source tree, `../demos/lib`; roadmap item 70)
+5. the installed libraries (`baslib_system_dirs()`): `$ENGINE1999_HOME/lib`, `<program>/../lib/engine1999/lib`, `/usr/local/lib/engine1999/lib`, `/usr/lib/engine1999/lib`.
    *(As built: `make install` puts the demos' libraries into `$(PREFIX)/share/engine1999/demos/lib`, beside the installed demos, where step 3 finds them for an installed demo; a library of your own that should be found from anywhere goes into one of the directories above.)*
 
 The name may not be absolute or contain `..` (downward only; the owner's default I/O policy, roadmap item 54 and section 17), except that

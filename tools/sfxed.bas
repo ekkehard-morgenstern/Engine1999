@@ -2,6 +2,8 @@
 2 ' An executable made with BUILD contains the Engine1999 runtime: the Engine1999 Runtime Exception
 3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
 4 ' in the executable (it shows with the command line option --engine1999-about).
+6 ' A tool of Engine1999: start it with TOOL "sfxed" (or TOOL "sfxed","file" to open a sound effect file) from the prompt or from a program;
+7 ' the program you are working on stays as it is. It can also be run as a program of its own (LOAD "tools/sfxed", RUN; ARG$(1) is read the same way).
 10 ' SOUND EFFECT EDITOR - builds the string of an SFX effect (a music string with the effect commands W T ML V X ~ ^ S H, see docs/sound.md)
 20 ' from sliders and lets you hear it. It is written in BASIC on the UI subsystem and uses the libraries uikit (sliders, dialogs), mml
 30 ' (tokenizer) and filereq (file requester). Needs the window (engine1999).
@@ -16,7 +18,7 @@
 120 LOAD LIBRARY "uikit"
 130 LOAD LIBRARY "mml"
 140 LOAD LIBRARY "filereq"
-150 GFX RESET ALL
+150 REM the graphics of the calling program stay (no GFX RESET)
 160 CLS
 170 BREAK OFF
 180 Q=0
@@ -77,6 +79,9 @@
 730 CALL PRESET(1)
 740 CALL SETSTATUS("Pick a preset or move the sliders. Play plays the effect.")
 750 ON ERROR GOTO ERRH
+751 ARGLOAD$=""
+752 IF ARGC>=1 THEN ARGLOAD$=ARG$(1)
+753 IF ARGLOAD$<>"" THEN CALL OPENF(ARGLOAD$)
 760 LABEL LOOPTOP
 770 ON ERROR GOTO ERRH
 780 ON UI GOSUB HANDLER
@@ -88,7 +93,7 @@
 840 ON ERROR OFF
 850 SOUND OFF
 860 UI CLOSE
-870 GFX RESET
+870 REM no GFX RESET here
 880 CLS
 890 PRINT "Sound effect editor finished."
 900 END

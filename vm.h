@@ -301,6 +301,8 @@ typedef struct _vm_t {
     // LIBRARIES: lists the libraries of the last compile to the current output channel (name "" = all), or the PROCs, FUNCs and LABELs of the library <name>.
     // Return false after reporting an error.
     bool            (*libraries)( struct _vm_t*, void*, const char* name );
+    // TOOL: runs the tool <name> (argument <arg>, "" if none) and returns when it has ended. Returns 0, or the text of an error (a static string: the VM reports it).
+    const char*     (*tool)( struct _vm_t*, void*, const char* name, const char* arg );
     // BUILD: creates the executable file <name> from the stored program. Return false after reporting an error.
     // kind: 0 = the host's own kind of runtime, 1 = WINDOW, 2 = CONSOLE
     bool            (*build)( struct _vm_t*, void*, const char* name, int kind );

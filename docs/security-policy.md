@@ -17,6 +17,7 @@ Code: `policy.[ch]` (no SDL, no VM), the hook `iodev_allowed()` in `iodev.c`, `r
   `CHDIR` is a read, `BUILD` writes its executable), `shell` (shell literals `` `cmd` `` and `OPEN "sh:..."`), `net` (`tcp:`). Without it the statement fails
   with the error **Permission denied** (a program can catch it with `ON ERROR`).
 - **No permission needed:** `mem:`, `null:`, `con:`, `stdin:`, `stdout:`, `stderr:`, `res:` (read only, below `./res`), `config:` and `local:` (a program's own folders `~/.config/<name>/` and `~/.local/share/<name>/`, confined and limited to 64 MiB: `docs/io-subsystem.md`), `play:`, and drivers a program defines itself.
+- **Tools are trusted** (roadmap item 70): while a tool started by `TOOL` runs, the policy is suspended (`policy_suspend()`); the tool is the engine's own program and works on the files the user picks in its file requester. The caller's policy state comes back when the tool ends.
 - **A power is granted for everything** (not per path): "write outside my folder" is one decision.
 
 ## Questions

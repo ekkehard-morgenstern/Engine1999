@@ -8,6 +8,8 @@ option `--engine1999-about`). The program text itself is not under the GPL (see 
 statement) when you copy a demo and pass an executable of it on.
 
 The listings are indented by block structure (two blanks per level for `FOR`, `REPEAT`, `WHILE`, multi-line `IF`, `PROC` and `FUNC`): the blanks behind the line number are kept by `LOAD`, `LIST` and the editors, and the compiler ignores them.
+The editors (`spriteed`, `musiced`, `sfxed`) are **tools** now: they live in the `tools/` folder and run with `TOOL "spriteed"` (see [../tools/README.md](../tools/README.md)).
+
 
 | File | What it is |
 |---|---|
@@ -32,13 +34,10 @@ The listings are indented by block structure (two blanks per level for `FOR`, `R
 | `lib/text.lib` | **A library** with the text helpers of the games: `TXTAT` (text screen), `BIGTEXT` (large centered text with a shadow on the graphics layer) and `TX_BYE` (the closing message). The colors are the variables `TX_PAPER` and `TX_SHADOW`. Used by `fruit2`, `climb` and `madrun`. |
 | `keys.bas` | A small keyboard that lights up the keys you hold: `KEY("name")` tells whether a key is down right now (it knows when you let go, and several keys at once). Q quits. |
 | `joy.bas` | The game controllers: plug in up to four pads (Xbox, PlayStation, Switch Pro, ...) and see the buttons that are held lit, both sticks and both triggers: `JOY(name$, player)` (window version only). Q quits. |
-| `musiced.bas` | A **music editor** on the UI subsystem: piano keys add notes to up to three voices (a token list you can select, edit, delete), controls for octave, length, dots, tempo, volume, wave and note style, a preview of every note, Play / Stop, Save / Open as text and Export as a `PLAY` line. Uses the libraries `uikit`, `mml` and `filereq`. Window only. |
-| `sfxed.bas` | A **sound effect editor**: sliders for pitch (start / end, logarithmic), length, volume, envelope, vibrato and tremolo build the `SFX` string; presets, Random, Play (or play on every change), the string can be edited by hand and applied, Save / Open / Export as `SFX n,"..."` lines. Uses `uikit`, `mml`, `filereq`. Window only. |
 | `lib/uikit.lib` | **A library** of UI helpers (prefix `UK_`): `UK_MSG`, `UK_ASK` (Yes / No), `UK_INPUT$` (a line of text) as modal dialogs, and `UK_SLIDER` / `UK_TRACK` / `UK_VAL` / `UK_SET` for a slider with a label and a readout. Used by `musiced`, `sfxed` and `spriteed`. |
 | `lib/mml.lib` | **A library** that cuts a `PLAY` / `SFX` music string into tokens (prefix `MK_`: `MK_SET`, `MK_NEXT$`, `MK_ARG`, `MK_JOIN$`). No UI needed. |
 | `groups.bas` | **Sprite groups and tile groups**: a ball made of six sprites (`SPRITE n,SIZE 3,2`) bounces between walls made of tile groups (the library `tilegrp`), collides with the tile blocks as one sprite and counts the meetings with a ghost of four sprites. Window only. |
 | `lib/tilegrp.lib` | **A library** for groups of tiles (prefix `TG_`): `TG_DEF`, `TG_PUT`, `TG_ERASE`, `TG_REPEAT`, `TG_HIT`, `TG_W` / `TG_H` / `TG_BASE`. |
-| `spriteed.bas` | A sprite and tile editor on the UI subsystem (reads and writes BMP files, too: Import BMP / Export BMP): a zoomed canvas, a palette window, pen / fill / flip, undo and redo (30 steps), groups of up to 8 pictures (a block of sprites or tiles), a preview, Store / Revert, and Open / Save of `DESIGN` listings through the file requester. Window only. |
 | `windows.bas` | Overlapping, draggable windows (`UI WINDOW`): drag by the title bar, click to bring to the front, close boxes, "New window" makes more. Window only. |
 | `paths.bas` | **Sprite paths**: four sprites run on paths (`SPRITE n,PATH a$`: back and forth, a square, a staircase that repeats, hide / show) without the program moving them; a handler (`ON SPRITE GOSUB`, `SPRITE("EVENT")`) counts the events the paths report. Window only. |
 | `onui.bas` | `ON UI GOSUB`: the main loop only calls `UI UPDATE` and animates a bar and a frame counter; a handler reports the events of a check box, slider, list, text field and buttons. Window only. |

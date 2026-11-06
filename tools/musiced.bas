@@ -2,6 +2,8 @@
 2 ' An executable made with BUILD contains the Engine1999 runtime: the Engine1999 Runtime Exception
 3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
 4 ' in the executable (it shows with the command line option --engine1999-about).
+6 ' A tool of Engine1999: start it with TOOL "musiced" (or TOOL "musiced","file" to open a music file) from the prompt or from a program;
+7 ' the program you are working on stays as it is. It can also be run as a program of its own (LOAD "tools/musiced", RUN; ARG$(1) is read the same way).
 10 ' MUSIC EDITOR - builds the music strings of PLAY (up to three voices) from buttons, and plays them. It is written in BASIC on the UI
 20 ' subsystem and uses the libraries uikit (dialogs, sliders), mml (tokenizer) and filereq (file requester). Needs the window (engine1999).
 30 '   The string of a voice is a list of tokens (the list on the left): notes, rests and commands. A click on a piano key adds a note (and a
@@ -17,7 +19,7 @@
 130 LOAD LIBRARY "uikit"
 140 LOAD LIBRARY "mml"
 150 LOAD LIBRARY "filereq"
-160 GFX RESET ALL
+160 REM the graphics of the calling program stay (no GFX RESET)
 170 CLS
 180 BREAK OFF
 190 DIM TK$(1500)
@@ -91,6 +93,9 @@
 870 CALL MAKEFORM
 880 CALL SETSTATUS("Click the piano keys to add notes. The list shows the tokens of the voice.")
 890 ON ERROR GOTO ERRH
+891 ARGLOAD$=""
+892 IF ARGC>=1 THEN ARGLOAD$=ARG$(1)
+893 IF ARGLOAD$<>"" THEN CALL OPENF(ARGLOAD$)
 900 LABEL LOOPTOP
 910 ON ERROR GOTO ERRH
 920 ON UI GOSUB HANDLER
@@ -102,7 +107,7 @@
 980 ON ERROR OFF
 990 SOUND OFF
 1000 UI CLOSE
-1010 GFX RESET
+1010 REM no GFX RESET here
 1020 CLS
 1030 PRINT "Music editor finished."
 1040 END

@@ -690,6 +690,31 @@ static bool vm_clipboard_set( vm_t* vm ) {
     return true;
 }
 
+// TOOL ( name [arg] -- ): TOOL name$ [, arg$]
+static bool vm_run_tool( vm_t* vm, bool hasarg ) {
+    char *name = 0, *arg = 0;
+    if ( hasarg && !vm_dpop_str( vm, &arg ) ) {
+        return false;
+    }
+    if ( !vm_dpop_str( vm, &name ) ) {
+        free( arg );
+        return false;
+    }
+    bool ok = true;
+    if ( vm->tool == 0 ) {
+        ok = vm_error( vm, "TOOL is not available in the console host" );
+    } else {
+        const char* err = vm->tool( vm, vm->userdata, name, arg != 0 ? arg : "" );
+        if ( err != 0 ) {
+            ok = vm_error( vm, err );
+        }
+        vm->column = 0;
+    }
+    free( name );
+    free( arg );
+    return ok;
+}
+
 // FMTS ( value format -- text ): FORMAT$( value, format$ ): the value in the first field of the format, with the literal text around it
 static bool vm_format_function( vm_t* vm, uint16_t isstr ) {
     char *fmt = 0, *sval = 0;
@@ -4242,6 +4267,7 @@ static bool vm_step( vm_t* vm ) {
         case INS_FMTS: return vm_format_function( vm, param16 );
         case INS_CLPG: return vm_clipboard_get( vm );
         case INS_CLPS: return vm_clipboard_set( vm );
+        case INS_TOOL: return vm_run_tool( vm, param16 != 0 );
         case INS_PUSG: return param16 == 0 ? vm_using_begin( vm ) : vm_using_end( vm );
         case INS_OPEN: return vm_open_channel( vm, param16 != 0 );
         case INS_CLOS: return vm_close_channel( vm );

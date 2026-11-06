@@ -78,7 +78,8 @@ bool        policy_set_option( const char* list, bool allow, char* err, size_t e
 // root = its folder (0: the folder of file, or the current directory). It loads the stored grants and asks for what the permission file requests.
 void        policy_begin_program( const char* file, const void* image, size_t len, const char* root );
 void        policy_end_program( void );
-bool        policy_active( void );                                      // enabled and a program runs
+bool        policy_active( void );
+bool        policy_suspend( bool on );                                  // TOOL: the running tool is the engine's own program, the policy does not apply to it; returns the previous state                                      // enabled and a program runs
 
 // the decision for an operation of a running program: operation "read", "write", "list", "shell", "net", "sound"; drv = the name of the driver (0 for
 // the shell literal); path = what follows the driver prefix. Returns true when it is allowed (it may have asked).

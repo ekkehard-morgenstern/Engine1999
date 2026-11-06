@@ -746,6 +746,22 @@ bool cgen_from_clipstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     return cgen_from_strexpr( cgen, comp, node->branches[0] ) && ( cgen_gen_clps( cgen ) || cgen_out_of_code_memory( comp ) );
 }
 
+bool cgen_from_toolstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    // NT_TOOLSTMT     TOOL name$ [, arg$] (1 or 2 branches of string expression)
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->type != NT_TOOLSTMT || node->numbranches < 1U || node->numbranches > 2U ) {
+        return cgen_unexpected_node( comp );
+    }
+    for ( uint16_t i=0; i < node->numbranches; ++i ) {
+        if ( !cgen_from_strexpr( cgen, comp, node->branches[i] ) ) {
+            return false;
+        }
+    }
+    return cgen_gen_tool( cgen, node->numbranches == 2U ? UINT16_C(1) : UINT16_C(0) ) || cgen_out_of_code_memory( comp );
+}
+
 bool cgen_from_joystmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     // NT_JOYSTMT      JOY statement (data: 1 byte of kind, 1 = DEADZONE; 1 branch of numeric expression)
     if ( node == NODE_NONE ) {

@@ -26,6 +26,7 @@
               Germany, Europe
 */
 
+#include <ctype.h>
 #include <sys/stat.h>
 #include <strings.h>
 #include "basrepl.h"
@@ -212,6 +213,7 @@ static bool repl_vm_merge( struct _vm_t* vm, void* usrdata, const char* name, bo
 static bool repl_vm_files( struct _vm_t* vm, void* usrdata, const char* spec );
 static bool repl_vm_libraries( struct _vm_t* vm, void* usrdata, const char* name );
 static bool repl_vm_build( struct _vm_t* vm, void* usrdata, const char* name, int kind );
+static const char* repl_vm_tool( struct _vm_t* vm, void* usrdata, const char* name, const char* arg );
 
 // hands the host callbacks to the VM
 static void repl_setup_vm( repl_t* repl ) {
@@ -240,6 +242,7 @@ static void repl_setup_vm( repl_t* repl ) {
     vm->argc      = repl->argc;
     vm->argv      = repl->argv;
     vm->build     = repl_vm_build;
+    vm->tool      = repl->toolsok ? repl_vm_tool : 0;
     vm->trace     = repl->trace;       // TRACE ON lasts until TRACE OFF, over RUN, too
 }
 
@@ -366,6 +369,9 @@ static void repl_compile_libraries( repl_t* repl ) {
 // A run may end with a LOAD / RUN request in the VM; repl_finish() carries it out.
 // a program starts to run: the security policy learns who it is (and may ask what the program's permission file requests)
 static void repl_policy_begin( repl_t* repl ) {
+    if ( repl->istool ) {
+        return;                                     // a tool is the engine's own program: the caller's policy state and program name stay
+    }
     iodev_set_program_name( repl->policyfile != 0 ? repl->policyfile : repl->filename );
     if ( repl->policyfile != 0 ) {
         policy_begin_program( repl->policyfile, repl->policyimage, repl->policyimagelen, repl->policyroot );
@@ -760,6 +766,26 @@ static char* repl_find_library_file( const repl_t* repl, const char* name ) {
                     memcpy( d2 + n, "lib/", 5 );
                     dirs[ndirs++] = d2;
                 }
+            }
+        }
+    }
+    bool intools = false;       // a program of a folder called tools (run by TOOL or by itself)
+    if ( repl->filename != 0 && !prefixed ) {
+        const char* sl = strrchr( repl->filename, '/' );
+        size_t dl = sl != 0 ? (size_t)( sl - repl->filename ) + 1U : 0U;
+        intools = repl->istool || ( dl >= 6U && strncmp( repl->filename + dl - 6U, "tools/", 6U ) == 0 && ( dl == 6U || repl->filename[ dl - 7U ] == '/' ) );
+    }
+    if ( intools ) {
+        // a tool in the tools folder finds the libraries in the lib folder next to it, and (the source tree) in demos/lib
+        const char* slash = strrchr( repl->filename, '/' );
+        size_t n = slash != 0 ? (size_t)( slash - repl->filename ) + 1U : 0U;
+        static const char* const rel[] = { "../lib/", "../demos/lib/" };
+        for ( size_t i=0; i < 2U && ndirs < 15U; ++i ) {
+            char* d = (char*) malloc( n + 16U );
+            if ( d != 0 ) {
+                memcpy( d, repl->filename, n );
+                strcpy( d + n, rel[i] );
+                dirs[ndirs++] = d;
             }
         }
     }
@@ -1391,6 +1417,165 @@ static bool repl_is_program_name( const char* name ) {
 }
 
 // BUILD name: the stored program becomes the executable <name> (basbuild.c: the system linker binds it to the Engine)
+// -- tools (TOOL) ---------------------------------------------------------------------------
+
+#define TOOL_DEPTH_MAX  4
+
+static bool repl_tool_name_ok( const char* name ) {
+    size_t n = strlen( name );
+    if ( n == 0U || n > 64U || name[0] == '.' ) {
+        return false;
+    }
+    for ( size_t i=0; i < n; ++i ) {
+        unsigned char c = (unsigned char) name[i];
+        if ( !( isalnum( c ) || c == '-' || c == '_' || c == '.' ) ) {
+            return false;
+        }
+    }
+    return true;
+}
+
+char* repl_find_tool_file( const repl_t* repl, const char* name ) {
+    if ( !repl_tool_name_ok( name ) ) {
+        return 0;
+    }
+    const char* def = "file";
+    char* dirs[12]; size_t ndirs = 0;
+    dirs[ndirs++] = strdup( "tools/" );
+    if ( repl != 0 && repl->filename != 0 && repl_driver_prefix_len( repl->filename ) == 0U ) {
+        const char* slash = strrchr( repl->filename, '/' );
+        if ( slash != 0 ) {
+            size_t n = (size_t)( slash - repl->filename ) + 1U;
+            char* d = (char*) malloc( n + 16U );
+            if ( d != 0 ) {
+                memcpy( d, repl->filename, n );
+                strcpy( d + n, "tools/" );
+                dirs[ndirs++] = d;
+            }
+        }
+    }
+    char* sys[4];
+    size_t ns = baslib_system_dirs( sys, 4 );      // ".../lib" of the libraries: the tools are the folder "tools" next to it
+    for ( size_t i=0; i < ns; ++i ) {
+        size_t n = strlen( sys[i] );
+        if ( n >= 4U && strcmp( sys[i] + n - 4U, "/lib" ) == 0 && ndirs < 11U ) {
+            char* d = (char*) malloc( n + 8U );
+            if ( d != 0 ) {
+                memcpy( d, sys[i], n - 3U );
+                strcpy( d + n - 3U, "tools/" );
+                dirs[ndirs++] = d;
+            }
+        }
+        free( sys[i] );
+    }
+    static const char* const exts[] = { ".bas", ".e99", ".BAS", ".E99" };
+    char* found = 0;
+    for ( size_t d=0; d < ndirs && found == 0; ++d ) {
+        if ( dirs[d] == 0 ) {
+            continue;
+        }
+        size_t n = strlen( dirs[d] ) + strlen( name ) + 1U;
+        char* base = (char*) malloc( n );
+        if ( base == 0 ) {
+            continue;
+        }
+        snprintf( base, n, "%s%s", dirs[d], name );
+        if ( repl_has_extension( name ) && iodev_exists( base, def ) ) {
+            found = base;
+            continue;
+        }
+        for ( size_t i=0; i < sizeof(exts) / sizeof(exts[0]) && found == 0; ++i ) {
+            char* full = repl_add_extension( base, exts[i] );
+            if ( full != 0 && iodev_exists( full, def ) ) {
+                found = full;
+            } else {
+                free( full );
+            }
+        }
+        if ( found == 0 ) {
+            free( base );
+        }
+    }
+    for ( size_t d=0; d < ndirs; ++d ) {
+        free( dirs[d] );
+    }
+    return found;
+}
+
+// TOOL: the tool runs in a repl_t of its own (a fresh program store, runtime, VM and library list: the caller's are not touched), with the host's callbacks.
+// The security policy does not apply to it and it has its own program name (config: / local: folders); both are put back afterwards.
+// the messages of a tool (errors of its program) are shown on its own screen, which is gone when it ends: the last one is kept and said again then
+static void repl_tool_report( repl_t* tool, const char* text ) {
+    char* copy = strdup( text );
+    if ( copy != 0 ) {
+        free( tool->toolerr );
+        tool->toolerr = copy;
+    }
+    if ( tool->toolouter != 0 && tool->toolouter->report != 0 ) {
+        tool->toolouter->report( tool->toolouter, text );
+    }
+}
+
+static const char* repl_vm_tool( struct _vm_t* vm, void* usrdata, const char* name, const char* arg ) {
+    repl_t* outer = (repl_t*) usrdata;
+    (void) vm;
+    if ( outer->tooldepth >= TOOL_DEPTH_MAX ) {
+        return "Tools are nested too deeply";
+    }
+    char* file = repl_find_tool_file( outer, name );
+    if ( file == 0 ) {
+        return repl_tool_name_ok( name ) ? "Tool not found" : "Bad tool name";
+    }
+    repl_t* tool = (repl_t*) malloc( sizeof(*tool) );
+    if ( tool == 0 ) {
+        free( file );
+        return "Out of memory";
+    }
+    if ( !init_repl( tool ) ) {
+        free( tool );
+        free( file );
+        return "Out of memory";
+    }
+    tool->report = repl_tool_report;        tool->toolouter = outer;
+    tool->print = outer->print;     tool->printn = outer->printn;
+    tool->breakesc = outer->breakesc;       tool->clipget = outer->clipget;         tool->clipset = outer->clipset;
+    tool->keydown = outer->keydown;         tool->inkey = outer->inkey;             tool->input = outer->input;
+    tool->getkey = outer->getkey;           tool->interrupt = outer->interrupt;     tool->save = outer->save;
+    tool->sound = outer->sound;             tool->gfx = outer->gfx;                 tool->hlstyle = outer->hlstyle;
+    tool->edit = outer->edit;               tool->pagesize = outer->pagesize;       tool->pause = outer->pause;
+    tool->userdata = outer->userdata;       tool->buildconsole = outer->buildconsole;
+    tool->toolsok = outer->toolsok;         tool->toolbegin = outer->toolbegin;     tool->toolend = outer->toolend;
+    tool->istool = true;
+    tool->tooldepth = outer->tooldepth + 1;
+    const char* targv[3] = { file, arg, 0 };
+    tool->argc = arg != 0 && arg[0] != '\0' ? 2 : 1;       // ARG$(1) is the argument (the tool's own name is ARG$(0))
+    tool->argv = targv;
+    const char* error = 0;
+    char savedname[96];
+    snprintf( savedname, sizeof(savedname), "%s", iodev_program_name() );
+    bool wassuspended = policy_suspend( true );
+    if ( outer->toolbegin != 0 ) {
+        outer->toolbegin( outer );
+    }
+    iodev_set_program_name( file );
+    if ( repl_load_file( tool, file ) ) {
+        repl_run( tool );
+    }
+    iodev_set_program_name( savedname[0] != '\0' ? savedname : 0 );
+    policy_suspend( wassuspended );
+    if ( outer->toolend != 0 ) {
+        outer->toolend( outer );
+    }
+    if ( tool->toolerr != 0 && outer->report != 0 ) {
+        outer->report( outer, tool->toolerr );
+    }
+    free( tool->toolerr );
+    cleanup_repl( tool );
+    free( tool );
+    free( file );
+    return error;
+}
+
 static bool repl_vm_build( struct _vm_t* vm, void* usrdata, const char* name, int kind ) {
     repl_t* repl = (repl_t*) usrdata;
     iodrv_t* drv = 0; const char* path = 0; const char* derr = 0;
@@ -1679,8 +1864,10 @@ static bool repl_finish_inner( repl_t* repl, bool ok, bool direct ) {
 // carries out the requests of a run, then the program is over for the security policy
 static bool repl_finish( repl_t* repl, bool ok, bool direct ) {
     bool r = repl_finish_inner( repl, ok, direct );
-    policy_end_program();
-    iodev_set_program_name( 0 );
+    if ( !repl->istool ) {
+        policy_end_program();
+        iodev_set_program_name( 0 );
+    }
     return r;
 }
 

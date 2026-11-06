@@ -565,6 +565,7 @@ const char* cgen_opcode_name( uint16_t opcode ) {
         case INS_FMTS:      return "FMTS";
         case INS_CLPG:      return "CLPG";
         case INS_CLPS:      return "CLPS";
+        case INS_TOOL:      return "TOOL";
         case INS_AFLT:      return "AFLT";
         case INS_GFXC:      return "GFXC";
         case INS_GFXQ:      return "GFXQ";
@@ -1248,6 +1249,7 @@ bool cgen_gen_fram( codegen_t* cgen ) {
 }
 
 bool cgen_gen_clpg( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_CLPG, false, false, UINT16_C(0) ); }
+bool cgen_gen_tool( codegen_t* cgen, uint16_t hasarg ) { return cgen_gen_ins12( cgen, INS_TOOL, false, true, hasarg ); }
 bool cgen_gen_clps( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_CLPS, false, false, UINT16_C(0) ); }
 
 bool cgen_gen_fmts( codegen_t* cgen, uint16_t isstr ) {
@@ -3379,6 +3381,7 @@ static bool cgen_from_stmt_node( codegen_t* cgen, compiler_t* comp, node_t* node
         case NT_JOYSTMT:    return cgen_from_joystmt( cgen, comp, node );
         case NT_FRAMESTMT:  return cgen_from_framestmt( cgen, comp, node );
         case NT_CLIPSTMT:   return cgen_from_clipstmt( cgen, comp, node );
+        case NT_TOOLSTMT:   return cgen_from_toolstmt( cgen, comp, node );
         case NT_MERGESTMT:  return cgen_from_mergestmt( cgen, comp, node );
         case NT_CHAINSTMT:  return cgen_from_chainstmt( cgen, comp, node );
         case NT_FILESSTMT:  return cgen_from_filesstmt( cgen, comp, node );

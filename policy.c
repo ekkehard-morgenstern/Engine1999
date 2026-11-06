@@ -56,7 +56,9 @@ static const char* const pol_names[POL_COUNT] = { "read", "write", "shell", "net
 void policy_enable( bool on ) { pol_enabled = on; }
 bool policy_enabled( void ) { return pol_enabled; }
 void policy_set_asker( policy_ask_t ask, void* ud ) { pol_ask = ask; pol_askud = ud; }
-bool policy_active( void ) { return pol_enabled && pol_running; }
+static bool pol_suspended = false;
+bool policy_active( void ) { return pol_enabled && pol_running && !pol_suspended; }
+bool policy_suspend( bool on ) { bool was = pol_suspended; pol_suspended = on; return was; }
 const char* policy_root( void ) { return pol_root; }
 const char* policy_category_name( int category ) { return category >= 0 && category < POL_COUNT ? pol_names[category] : "?"; }
 void policy_forget_session( void ) { pol_nsess = 0; memset( pol_opt, 0, sizeof(pol_opt) ); }

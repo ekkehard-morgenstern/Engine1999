@@ -118,6 +118,9 @@ sys-str-fn-2-arg-call := ( TOK_BIN | TOK_QUA | TOK_OCT | TOK_DEC | TOK_HEX ) TOK
 frame-stmt := FRAME [ num-expr ] .
 -- CLIPBOARD a$ puts a text on the clipboard (the system's in the window; the terminal's by OSC 52 in the console in screen mode); CLIPBOARD$ is the text on it.
 clip-stmt := CLIPBOARD str-expr .
+-- TOOL runs a tool, a BASIC program of the tools folder (the editors), in a state of its own and comes back when it ends: the stored program, its variables and the
+-- text on the screen stay. The optional text is the tool's argument (it reads it as ARG$(1): a file to open). Window host only.
+tool-stmt := TOOL str-expr [ TOK_COMMA str-expr ] .
 xfunc-call := ( MIN | MAX | ATAN2 ) TOK_LPAREN num-expr TOK_COMMA num-expr TOK_RPAREN |
               EXISTS TOK_LPAREN str-expr TOK_RPAREN |
               JOY [ TOK_STRING ] TOK_LPAREN str-expr [ TOK_COMMA num-expr ] TOK_RPAREN |
@@ -544,7 +547,7 @@ gfx-all-stmt := gfx-stmt | txt-stmt | tile-stmt | sprite-stmt | mouse-stmt | on-
 -- Several statements on a line are separated by a colon; a line may end with a comment (an apostrophe).
 prog-stmt := gfx-all-stmt | load-stmt | run-stmt | merge-stmt | chain-stmt | files-stmt | build-stmt | bye-stmt | timer-stmt | list-stmt | new-stmt | clear-stmt |
              delete-stmt | renum-stmt | edit-stmt | monitor-stmt | sound-stmt | wait-stmt | on-error-stmt | randomize-stmt | angle-stmt |
-             cont-stmt | trace-stmt | break-stmt | auto-stmt | poke-stmt | error-stmt | joy-stmt | on-joy-stmt | on-key-stmt | on-ui-stmt | on-sprite-stmt | frame-stmt | clip-stmt | library-stmt | libraries-stmt .
+             cont-stmt | trace-stmt | break-stmt | auto-stmt | poke-stmt | error-stmt | joy-stmt | on-joy-stmt | on-key-stmt | on-ui-stmt | on-sprite-stmt | frame-stmt | clip-stmt | tool-stmt | library-stmt | libraries-stmt .
 
 stmt := io-stmt | prog-stmt | assign-stmt | control-flow-stmt .
 stmt-list := stmt { TOK_COLON stmt } .

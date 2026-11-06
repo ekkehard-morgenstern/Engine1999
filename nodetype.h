@@ -672,6 +672,7 @@ Explanation of node types:
 #define NT_LOADLIBSTMT          UINT8_C(0X8D)   // LOAD LIBRARY "name" (1 branch: a string literal; no code, the compiler resolves it before compiling)
 #define NT_LIBRARIESSTMT        UINT8_C(0X8E)   // LIBRARIES [name$] (0 or 1 string branch)
 #define NT_ONUISTMT             UINT8_C(0X8F)   // ON UI GOSUB|GOTO target | OFF (data: 1 byte, ERRT_* kind; the target branch unless OFF)
+#define NT_TOOLSTMT             UINT8_C(0X92)   // TOOL name$ [, arg$] (1 or 2 string branches): runs a tool
 #define NT_CLIPSTMT             UINT8_C(0X91)   // CLIPBOARD a$ (1 string branch): puts the text on the clipboard
 #define NT_ONSPRSTMT            UINT8_C(0X90)   // ON SPRITE GOSUB|GOTO target | OFF (data: 1 byte, ERRT_* kind; the target branch unless OFF): events of sprite paths
 #define NT_JOYSTMT              UINT8_C(0X88)   // JOY DEADZONE d (data: 1 byte, 1 = DEADZONE; 1 numeric branch)

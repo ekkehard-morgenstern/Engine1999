@@ -1608,6 +1608,43 @@ static bool host_pause( struct _repl_t* r ) {
 static void host_edit_window( void );
 static int host_policy_ask( void* ud, int category, const char* what );
 
+// TOOL (basrepl.c): the tool owns the screen while it runs; what the caller had on the text screen (contents, cursor, colors) comes back afterwards, and what
+// the tool may have left (a UI form, graphics, sprites) is cleaned up. A caller with a UI open finds it closed.
+#define HOST_TOOL_DEPTH 8
+
+static struct { uint8_t* text; size_t len; int cx, cy, bg, fg; } host_tool_saved[ HOST_TOOL_DEPTH ];
+static int host_tool_level = 0;
+
+static void host_toolbegin( repl_t* outer ) {
+    (void) outer;
+    if ( host_tool_level >= HOST_TOOL_DEPTH ) {
+        ++host_tool_level;
+        return;
+    }
+    __typeof__( host_tool_saved[0] )* s = &host_tool_saved[ host_tool_level++ ];
+    size_t need = sdlscr_text_save( 0, 0 );
+    s->text = (uint8_t*) malloc( need );
+    s->len = s->text != 0 ? sdlscr_text_save( s->text, need ) : 0U;
+    sdlscr_text_getcursor( &s->cx, &s->cy );
+    sdlscr_text_getcolors( &s->bg, &s->fg );
+}
+
+static void host_toolend( repl_t* outer ) {
+    (void) outer;
+    host_ui_shutdown();                 // the graphics (sprites, tiles, palettes, layers) are left alone: they are the caller's
+    if ( --host_tool_level >= HOST_TOOL_DEPTH ) {
+        return;
+    }
+    __typeof__( host_tool_saved[0] )* s = &host_tool_saved[ host_tool_level ];
+    if ( s->text != 0 ) {
+        sdlscr_text_restore( s->text, s->len );
+        free( s->text );
+        s->text = 0;
+    }
+    sdlscr_text_setcolors( s->bg, s->fg );
+    sdlscr_locate( s->cx, s->cy );
+}
+
 static void init_host( void ) {
     policy_enable( true );                      // what a running program may do: policy.h
     policy_set_asker( host_policy_ask, 0 );
@@ -1635,6 +1672,9 @@ static void init_host( void ) {
     sdlscr_gettextscreensize( &width, &height );
     repl.pagesize  = height > 2 ? height - 1 : 0;       // one line stays for the prompt of the pause
     repl.pause     = host_pause;
+    repl.toolsok   = true;                     // TOOL: runs the editors of the tools folder
+    repl.toolbegin = host_toolbegin;
+    repl.toolend   = host_toolend;
 }
 
 

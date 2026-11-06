@@ -840,7 +840,7 @@ static const struct {
     uint8_t     xid;
     const char* name;
 } xkeywtbl[] = {
-    { XF_SPACE, "SPACE" }, { XF_STRING, "STRING" }, { XF_MIN, "MIN" }, { XF_MAX, "MAX" }, { XF_ATAN2, "ATAN2" }, { XF_ERROR, "ERROR" }, { XF_JOY, "JOY" }, { XF_FRAME, "FRAME" }, { XF_LIBRARY, "LIBRARY" }, { XF_LIBRARIES, "LIBRARIES" }, { XF_EXISTS, "EXISTS" }, { XF_UI, "UI" }, { XF_USING, "USING" }, { XF_FORMAT, "FORMAT" }, { XF_CLIPBOARD, "CLIPBOARD" }, { XF_AT, "AT" }, { XF_HTAB, "HTAB" }, { XF_VTAB, "VTAB" }, { 0, 0 }
+    { XF_SPACE, "SPACE" }, { XF_STRING, "STRING" }, { XF_MIN, "MIN" }, { XF_MAX, "MAX" }, { XF_ATAN2, "ATAN2" }, { XF_ERROR, "ERROR" }, { XF_JOY, "JOY" }, { XF_FRAME, "FRAME" }, { XF_LIBRARY, "LIBRARY" }, { XF_LIBRARIES, "LIBRARIES" }, { XF_EXISTS, "EXISTS" }, { XF_UI, "UI" }, { XF_USING, "USING" }, { XF_FORMAT, "FORMAT" }, { XF_CLIPBOARD, "CLIPBOARD" }, { XF_AT, "AT" }, { XF_HTAB, "HTAB" }, { XF_VTAB, "VTAB" }, { XF_TOOL, "TOOL" }, { 0, 0 }
 };
 
 bool is_xkeyword( const char* name, uint8_t* pxid ) {
@@ -1093,7 +1093,7 @@ hlclass_t keyword_hlclass( uint8_t tok ) {
 // the highlight class of an extension word (statements and functions)
 hlclass_t xkeyword_hlclass( uint8_t xid ) {
     switch ( xid ) {
-        case XF_ERROR: case XF_FRAME: case XF_LIBRARY: case XF_LIBRARIES: case XF_UI: case XF_USING: case XF_AT: case XF_HTAB: case XF_VTAB:
+        case XF_ERROR: case XF_FRAME: case XF_LIBRARY: case XF_LIBRARIES: case XF_UI: case XF_USING: case XF_AT: case XF_HTAB: case XF_VTAB: case XF_TOOL:
             return HL_STATEMENT;
     }
     return HL_FUNCTION;

@@ -27,6 +27,7 @@
 */
 
 #include <unistd.h>
+#include <sys/stat.h>
 #include "basrepl.h"
 #include "basdebug.h"
 #include "instset.h"
@@ -1085,6 +1086,97 @@ static void run_auto_tests( size_t* pnum, size_t* pfailed ) {
     }
 }
 
+// TOOL: runs a BASIC program of the tools folder in a repl_t of its own; the caller's program and variables stay
+static int tool_begins = 0, tool_ends = 0;
+static void host_toolbegin( repl_t* outer ) { (void) outer; ++tool_begins; }
+static void host_toolend( repl_t* outer ) { (void) outer; ++tool_ends; }
+
+static void tool_write( const char* path, const char* text ) {
+    FILE* f = fopen( path, "w" );
+    if ( f != 0 ) {
+        fputs( text, f );
+        fclose( f );
+    }
+}
+
+static bool tool_case( size_t* pnum, size_t* pfailed, const char* name, bool toolsok, const char* source, const char* expected ) {
+    ++*pnum;
+    out_reset();
+    keys = 0; polls = 0; breakafter = 0;
+    tool_begins = tool_ends = 0;
+    repl_t repl;
+    bool ok = false;
+    if ( init_repl( &repl ) ) {
+        repl.report = host_report;
+        repl.print  = host_print;
+        repl.input  = host_input;
+        repl.inkey  = host_inkey;
+        repl.interrupt = host_interrupt;
+        repl.toolsok = toolsok;
+        repl.toolbegin = host_toolbegin;
+        repl.toolend = host_toolend;
+        char* src = strdup( source );
+        for ( char* line = strtok( src, "\n" ); line; line = strtok( 0, "\n" ) ) {
+            repl_enter( &repl, line );
+        }
+        free( src );
+        cleanup_repl( &repl );
+        ok = strcmp( outbuf, expected ) == 0;
+    }
+    printf( "%s  %s\n", ok ? "PASS" : "FAIL", name );
+    if ( !ok ) {
+        ++*pfailed;
+        show( "expected", expected );
+        show( "got     ", outbuf );
+    }
+    return ok;
+}
+
+static void run_tool_tests( size_t* pnum, size_t* pfailed ) {
+    char olddir[512], dir[300];
+    const char* tmp = getenv( "TMPDIR" );
+    snprintf( dir, sizeof(dir), "%s/repltest1-tools-XXXXXX", tmp != 0 && tmp[0] == '/' ? tmp : "/tmp" );
+    if ( getcwd( olddir, sizeof(olddir) ) == 0 || mkdtemp( dir ) == 0 || chdir( dir ) != 0 ) {
+        ++*pnum; ++*pfailed;
+        printf( "FAIL  tools: scratch directory\n" );
+        return;
+    }
+    mkdir( "tools", 0700 );
+    mkdir( "lib", 0700 );
+    tool_write( "tools/t1.bas", "10 PRINT \"tool \";ARGC;\" [\";ARG$(1);\"]\"\n20 A=9\n" );
+    tool_write( "tools/t2.bas", "10 PRINT \"t2\"\n20 TOOL \"t1\",\"deep\"\n30 PRINT \"t2 back\"\n" );
+    tool_write( "tools/t3.bas", "10 PRINT \"t3\"\n20 TOOL \"t3\"\n30 PRINT \"t3 end\"\n" );
+    tool_write( "tools/t4.bas", "10 PRINT 1/0\n20 PRINT \"not reached\"\n" );
+    tool_write( "tools/t5.bas", "10 OPEN \"mem:toolresult\" FOR OUTPUT AS #1:PRINT #1,\"done\":CLOSE #1\n" );
+    tool_write( "tools/t6.bas", "10 LOAD LIBRARY \"tl\"\n20 PRINT FN TL_TWICE(21)\n" );
+    tool_write( "lib/tl.lib", "10 LIBRARY \"tl\",\"TL_\"\n20 FUNC TL_TWICE(X)\n30   RETURN X*2\n40 END FUNC\n" );
+    tool_write( "tools/t7.bas", "10 PRINT 1\n20 BYE 3\n" );
+    tool_case( pnum, pfailed, "TOOL runs a tool and comes back", true, "TOOL \"t1\"\nPRINT \"after\"", "tool 0 []\nafter\n" );
+    tool_case( pnum, pfailed, "TOOL: the argument is ARG$(1)", true, "TOOL \"t1\",\"file.txt\"", "tool 1 [file.txt]\n" );
+    tool_case( pnum, pfailed, "TOOL: the stored program stays", true, "10 PRINT \"main\"\n20 PRINT \"two\"\nTOOL \"t1\"\nLIST\nRUN", "tool 0 []\n10 PRINT \"main\"\n20 PRINT \"two\"\nmain\ntwo\n" );
+    tool_case( pnum, pfailed, "TOOL: the variables stay", true, "A=5\nTOOL \"t1\"\nPRINT A", "tool 0 []\n5\n" );
+    tool_case( pnum, pfailed, "TOOL in a running program: it goes on afterwards", true, "10 A=1\n20 PRINT \"before\"\n30 TOOL \"t1\",\"x\"\n40 PRINT \"after\";A\nRUN", "before\ntool 1 [x]\nafter1\n" );
+    tool_case( pnum, pfailed, "TOOL: the hooks are called once", true, "TOOL \"t1\"", "tool 0 []\n" );
+    printf( "%s  TOOL: the hooks are called once (counters)\n", tool_begins == 1 && tool_ends == 1 ? "PASS" : "FAIL" );
+    ++*pnum; if ( !( tool_begins == 1 && tool_ends == 1 ) ) ++*pfailed;
+    tool_case( pnum, pfailed, "TOOL: a tool can start a tool", true, "TOOL \"t2\"\nPRINT \"main\"", "t2\ntool 1 [deep]\nt2 back\nmain\n" );
+    tool_case( pnum, pfailed, "TOOL: nesting is limited", true, "TOOL \"t3\"\nPRINT \"main\"",
+        "t3\nt3\nt3\nt3\n? Tools are nested too deeply in line 20\n? Tools are nested too deeply in line 20\nt3 end\n? Tools are nested too deeply in line 20\nt3 end\n? Tools are nested too deeply in line 20\nt3 end\n? Tools are nested too deeply in line 20\nmain\n" );
+    tool_case( pnum, pfailed, "TOOL: an error in the tool ends the tool only", true, "TOOL \"t4\"\nPRINT \"main\"", "? Division by zero in line 10\n? Division by zero in line 10\nmain\n" );
+    tool_case( pnum, pfailed, "TOOL: results through mem:", true, "TOOL \"t5\"\nOPEN \"mem:toolresult\" FOR INPUT AS #1:LINE INPUT #1,A$:CLOSE #1:PRINT A$", "done\n" );
+    tool_case( pnum, pfailed, "TOOL: a tool finds its libraries next to its folder", true, "TOOL \"t6\"", "42\n" );
+    tool_case( pnum, pfailed, "TOOL: BYE in a tool ends the tool", true, "TOOL \"t7\"\nPRINT \"main\"", "1\nmain\n" );
+    tool_case( pnum, pfailed, "TOOL: an unknown tool", true, "TOOL \"nothere\"", "? Tool not found\n" );
+    tool_case( pnum, pfailed, "TOOL: a name with a path is refused", true, "TOOL \"../t1\"", "? Bad tool name\n" );
+    tool_case( pnum, pfailed, "TOOL: not available in the console host", false, "TOOL \"t1\"", "? TOOL is not available in the console host\n" );
+    tool_case( pnum, pfailed, "TOOL is listed", true, "10 TOOL \"a\":TOOL \"b\",\"c\"+\"d\"\nLIST", "10 TOOL \"a\":TOOL \"b\",\"c\"+\"d\"\n" );
+    tool_case( pnum, pfailed, "TOOL in lower case", true, "10 tool \"a\"\nLIST", "10 TOOL \"a\"\n" );
+    if ( chdir( olddir ) != 0 ) { ++*pnum; ++*pfailed; }
+    char cmd[400];
+    snprintf( cmd, sizeof(cmd), "rm -rf '%s'", dir );
+    if ( system( cmd ) != 0 ) { }
+}
+
 int main( int argc, char** argv ) {
     if ( argc > 1 && strcmp( argv[1], "-v" ) == 0 ) {
         basdbg_flags = BASDBG_ALL;
@@ -1109,6 +1201,7 @@ int main( int argc, char** argv ) {
     run_editwindow_tests( &numcases, &failed );
     run_debug_tests( &numcases, &failed );
     run_auto_tests( &numcases, &failed );
+    run_tool_tests( &numcases, &failed );
     cleanup_testfiles();
     printf( "%u of %u passed\n", (unsigned)( numcases - failed ), (unsigned) numcases );
     free( outbuf );

@@ -2,6 +2,8 @@
 2 ' An executable made with BUILD contains the Engine1999 runtime: the Engine1999 Runtime Exception
 3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
 4 ' in the executable (it shows with the command line option --engine1999-about).
+6 ' A tool of Engine1999: start it with TOOL "spriteed" (or TOOL "spriteed","file" to open a picture file (.bas)) from the prompt or from a program;
+7 ' the program you are working on stays as it is. It can also be run as a program of its own (LOAD "tools/spriteed", RUN; ARG$(1) is read the same way).
 10 ' SPRITE AND TILE EDITOR - edits the 16 x 24 pictures of the sprites and the tiles with the mouse, on the UI subsystem (UI CANVAS, ON UI, the file
 20 ' requester of the library filereq, dialogs of the library uikit). Needs the window (engine1999). ESC cancels a dialog; Ctrl+C stops the program.
 30 '   Size: a picture can be a group of up to 8 pictures drawn side by side (the sprite groups of SPRITE n,SIZE w,h; for tiles the blocks of the library
@@ -25,7 +27,7 @@
 170 LOAD LIBRARY "filereq"
 180 LOAD LIBRARY "uikit"
 190 BREAK OFF
-200 GFX RESET ALL
+200 REM the graphics of the calling program stay (no GFX RESET)
 210 CLS
 220 DIM SX(7000)
 230 DIM SY(7000)
@@ -46,7 +48,7 @@
 380 M$=""
 390 WB=0
 400 COL=1
-410 TOOL=0
+410 PTOOL=0
 420 DT=0
 430 Q=0
 440 UC=0
@@ -61,6 +63,9 @@
 530 CALL SETRANGE
 540 CALL LOADIMG
 550 ON ERROR GOTO ERRH
+551 ARGLOAD$=""
+552 IF ARGC>=1 THEN ARGLOAD$=ARG$(1)
+553 IF ARGLOAD$<>"" THEN CALL IMPORT(ARGLOAD$)
 560 LABEL LOOPTOP
 570 ON ERROR GOTO ERRH
 580 ON UI GOSUB HANDLER
@@ -74,7 +79,7 @@
 660 SPRITE 240,SIZE 1,1
 670 SPRITE 240,OFF
 680 UI CLOSE
-690 GFX RESET
+690 REM no GFX RESET: sprites, tiles and palettes belong to the caller
 700 CLS
 710 PRINT "Sprite and tile editor finished."
 720 END
@@ -272,7 +277,7 @@
 2620   PNT=1
 2630   X=CELL MOD BW
 2640   Y=CELL\BW
-2650   IF TOOL=1 THEN CALL FLOOD(X,Y,C) ELSE UI PIXEL 100,X,Y,C
+2650   IF PTOOL=1 THEN CALL FLOOD(X,Y,C) ELSE UI PIXEL 100,X,Y,C
 2660   DT=-1
 2670   CALL PREVIEW
 2680 END PROC
@@ -533,7 +538,7 @@
 5230     CALL LOADIMG
 5240   END IF
 5250   IF E=126 AND V<>SZ THEN CALL NEWSIZE(V)
-5260   IF (E=110 OR E=111) AND K=2 THEN TOOL=E-110
+5260   IF (E=110 OR E=111) AND K=2 THEN PTOOL=E-110
 5270   IF E=114 AND K=1 THEN CALL TRANSFORM(3)
 5280   IF E=115 AND K=1 THEN CALL TRANSFORM(1)
 5290   IF E=116 AND K=1 THEN CALL TRANSFORM(2)

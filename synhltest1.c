@@ -137,7 +137,7 @@ static void file( const char* path ) {
         ++no;
         char where[300];
         snprintf( where, sizeof(where), "%s:%d", path, no );
-        if ( strstr( path, "demos/" ) != 0 && line[0] != '\0' ) {            // a demo is a numbered listing: a line without a number would make LOAD fail ("Line number missing in program file")
+        if ( ( strstr( path, "demos/" ) != 0 || strstr( path, "tools/" ) != 0 ) && line[0] != '\0' ) {            // a demo is a numbered listing: a line without a number would make LOAD fail ("Line number missing in program file")
             CHECK( line[0] >= '0' && line[0] <= '9', "%s: the line has no line number: %s", where, line );
         }
         compare_line( line, where );
@@ -165,8 +165,8 @@ int main( int argc, char** argv ) {
         file( argv[i] );
     }
     if ( argc == 1 ) {                                              // no files given: the demos and their libraries (run in the build directory)
-        const char* pats[] = { "demos/*.bas", "demos/lib/*.lib" };
-        for ( int k = 0; k < 2; ++k ) {
+        const char* pats[] = { "demos/*.bas", "demos/lib/*.lib", "tools/*.bas" };
+        for ( int k = 0; k < 3; ++k ) {
             glob_t gl;
             if ( glob( pats[k], 0, 0, &gl ) == 0 ) {
                 for ( size_t i = 0; i < gl.gl_pathc; ++i ) {

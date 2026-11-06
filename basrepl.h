@@ -145,6 +145,16 @@ typedef struct _repl_t {
     const void* policyimage;
     size_t      policyimagelen;
     const char* policyroot;         // 0: the folder of the file (a typed in program: the current directory)
+    // TOOL name$ [, arg$] (docs/basic-language.md): runs a tool of the tools folder in a repl_t of its own, then the caller goes on. The window host switches it on;
+    // the console host leaves it off (the statement is the error "TOOL is not available in the console host"). The hooks (optional) let the host save what the
+    // tool will disturb (the text screen) before it runs and put it back / clean up (close the UI) after it
+    bool        toolsok;
+    void        (*toolbegin)( struct _repl_t* outer );
+    void        (*toolend)( struct _repl_t* outer );
+    bool        istool;             // internal: this repl_t runs a tool (the security policy and the program name are left to the caller's)
+    int         tooldepth;          // internal: how many tools are running above this one
+    struct _repl_t* toolouter;      // internal: the repl_t that started this tool
+    char*       toolerr;            // internal: the last message the tool reported (it is said again when the tool has ended and the screen is back)
 } repl_t;
 
 bool init_repl( repl_t* repl );             // false if out of memory
@@ -161,6 +171,9 @@ bool repl_save_program( repl_t* repl, const char* filename, bool ascii );
 bool repl_save_program_ex( repl_t* repl, const char* filename, int mode );   // mode: 0 none given, 1 A, 2 B; a null filename = the file of the last LOAD / SAVE (with mode 0: in the format it had)   // for the host's SAVE callback
 bool repl_program_image( repl_t* repl, uint8_t** pdata, size_t* plen );     // the stored program as a binary program file (malloc'ed); BUILD
 bool repl_load_file( repl_t* repl, const char* name );                    // LOAD without running (the extension search, drivers); reports errors
+// the file of the tool <name> (malloc'ed), found in tools/ of the current directory, tools/ next to the stored program's folder, ENGINE1999_HOME/tools and the installed
+// lib/engine1999/tools; 0 if there is none or the name is not a plain name
+char* repl_find_tool_file( const repl_t* repl, const char* name );
 bool repl_load_image( repl_t* repl, const void* data, size_t len );         // replaces the stored program by a program file in memory
 
 // the stored program as text (lines "10 PRINT ..." separated by LF, no highlighting), malloc'ed; 0 if out of memory. *plen is its length.

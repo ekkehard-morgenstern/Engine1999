@@ -4074,6 +4074,32 @@ bool comp_eat_clipstmt( compiler_t* comp, node_t** pnode ) {
     return true;
 }
 
+bool comp_eat_toolstmt( compiler_t* comp, node_t** pnode ) {
+    // tool-stmt := TOOL str-expr [ TOK_COMMA str-expr ] .       (TOOL is an extension word)
+    if ( comp->currtok != TOK_XFUNC || comp->currext != XF_TOOL || !comp_fetchtok( comp ) ) {
+        return false;
+    }
+    node_t* name = NODE_NONE;
+    if ( !comp_eat_strexpr( comp, &name ) || name == NODE_NONE ) {
+        comp_error( comp, "String expression expected" );
+        return false;
+    }
+    node_t* arg = NODE_NONE;
+    if ( comp->currtok == TOK_COMMA ) {
+        if ( !comp_fetchtok( comp ) || !comp_eat_strexpr( comp, &arg ) || arg == NODE_NONE ) {
+            comp_error( comp, "String expression expected" );
+            return false;
+        }
+    }
+    // NT_TOOLSTMT  TOOL statement (no data; 1 branch of string expression: the tool's name, or 2: the name and the argument)
+    if ( !( arg != NODE_NONE ? comp_create_node( comp, pnode, NT_TOOLSTMT, UINT8_C(2), UINT16_C(0), 0, name, arg ) :
+            comp_create_node( comp, pnode, NT_TOOLSTMT, UINT8_C(1), UINT16_C(0), 0, name ) ) || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
 bool comp_eat_joystmt( compiler_t* comp, node_t** pnode ) {
     // joy-stmt := JOY DEADZONE num-expr .       (JOY is an extension word; with a parenthesis it is the function)
     if ( comp->currtok != TOK_XFUNC || comp->currext != XF_JOY ) {
@@ -4225,6 +4251,9 @@ bool comp_eat_progstmt( compiler_t* comp, node_t** pnode ) {
         return true;
     }
     if ( comp_eat_clipstmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_toolstmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     if ( comp_eat_librarystmt( comp, pnode ) && *pnode != NODE_NONE ) {

@@ -138,6 +138,13 @@ frame-stmt := FRAME [ num-expr ] .
 
 ```ebnf
 clip-stmt := CLIPBOARD str-expr .
+```
+
+> TOOL runs a tool, a BASIC program of the tools folder (the editors), in a state of its own and comes back when it ends: the stored program, its variables and the
+> text on the screen stay. The optional text is the tool's argument (it reads it as ARG$(1): a file to open). Window host only.
+
+```ebnf
+tool-stmt := TOOL str-expr [ "," str-expr ] .
 xfunc-call := ( MIN | MAX | ATAN2 ) "(" num-expr "," num-expr ")" |
               EXISTS "(" str-expr ")" |
               JOY [ "$" ] "(" str-expr [ "," num-expr ] ")" |
@@ -752,7 +759,7 @@ gfx-all-stmt := gfx-stmt | txt-stmt | tile-stmt | sprite-stmt | mouse-stmt | on-
 ```ebnf
 prog-stmt := gfx-all-stmt | load-stmt | run-stmt | merge-stmt | chain-stmt | files-stmt | build-stmt | bye-stmt | timer-stmt | list-stmt | new-stmt | clear-stmt |
              delete-stmt | renum-stmt | edit-stmt | monitor-stmt | sound-stmt | wait-stmt | on-error-stmt | randomize-stmt | angle-stmt |
-             cont-stmt | trace-stmt | break-stmt | auto-stmt | poke-stmt | error-stmt | joy-stmt | on-joy-stmt | on-key-stmt | on-ui-stmt | on-sprite-stmt | frame-stmt | clip-stmt | library-stmt | libraries-stmt .
+             cont-stmt | trace-stmt | break-stmt | auto-stmt | poke-stmt | error-stmt | joy-stmt | on-joy-stmt | on-key-stmt | on-ui-stmt | on-sprite-stmt | frame-stmt | clip-stmt | tool-stmt | library-stmt | libraries-stmt .
 stmt := io-stmt | prog-stmt | assign-stmt | control-flow-stmt .
 stmt-list := stmt { ":" stmt } .
 stmt-line := [ stmt-list ] [ <'comment> ] <end-of-line> .

@@ -571,6 +571,11 @@ The 4096 extended instructions are as follows:
                             LF line ends; empty if there is none; "String too long" over 65535 bytes).
     0001 10001100       CLPS - CLIPBOARD a$ ( text -- ) C=0 P=0
                             Puts the text on the clipboard (the host's clipset callback, else the internal clipboard).
+    0001 10001101       TOOL - run a tool ( name [arg] -- ) C=0 P=1
+                            TOOL name$ [, arg$]: runs the tool (a BASIC program of the tools folder) in a fresh state and comes back when it ends: the stored program, its
+                            variables and the CONT state stay as they were. Parameter 0: the name only, 1: the argument is on the stack, too (the tool reads it as ARG$(1)).
+                            The host does it through vm_t.tool, which returns 0 or an error text; without such a callback (the console host) it is the error
+                            "TOOL is not available in the console host".
     0001 10001010       FMTS - FORMAT$ ( value format -- text ) C=0 P=1
                             FORMAT$(value, format$): the value in the first field of a PRINT USING format, with the literal text around it (in front of the field and
                             up to the next one behind it). Parameter 0: the value is a number, 1: a string. Same errors as PRINT USING.
@@ -786,5 +791,6 @@ The 4096 extended instructions are as follows:
 #define INS_FMTS        UINT16_C(0X18A)
 #define INS_CLPG        UINT16_C(0X18B)
 #define INS_CLPS        UINT16_C(0X18C)
+#define INS_TOOL        UINT16_C(0X18D)
 
 #endif

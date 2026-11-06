@@ -661,6 +661,10 @@ static const testcase_t cases[] = {
     { "CLIPBOARD empty", "CLIPBOARD \"\":PRINT LEN(CLIPBOARD$)", "0\n" },
     { "CLIPBOARD needs a string", "CLIPBOARD 5", "? String expression expected\n" },
     { "CLIPBOARD$ with two statements", "CLIPBOARD \"q\":CLIPBOARD CLIPBOARD$+CLIPBOARD$:PRINT CLIPBOARD$", "qq\n" },
+    // TOOL (the VM test host has no tools)
+    { "TOOL without a host", "TOOL \"x\"", "? TOOL is not available in the console host\n" },
+    { "TOOL with an argument", "TOOL \"x\",\"y\"", "? TOOL is not available in the console host\n" },
+    { "TOOL needs a string", "TOOL 5", "? String expression expected\n" },
     // the multi-line editor widget
     { "UI EDIT", "UI EDIT 3,10,20,200,100,\"a\"", "<gfx UI EDIT 3 10 20 200 100 s(1)=97>\n" },
     { "UI CARET", "UI CARET 3,5", "<gfx UI CARET 3 5>\n" },
