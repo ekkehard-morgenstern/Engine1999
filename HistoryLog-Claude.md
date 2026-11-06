@@ -13,10 +13,10 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-### Controllers: wait for the buttons to be released on entering the title screen (2026-11-06)
-- `demos/lib/input.lib`: new `PROC IN_WAITRELEASE` (waits until A, START and BACK are released on all pads, then drops the typed keys; header comment updated). Cause of the owner's report: BACK quits a game, the quit goes to the title screen, which polls the start / back buttons at once; a button still held (BACK, or A from firing) started or quit the next screen immediately (fruit2 style games: BACK still held made the title set `QT` and end the whole program).
-- The title screens of `fruit2`, `fruit3`, `climb`, `climb2`, `madrun`, `madrun2`, `river`, `river2`, `rustball` call `IN_WAITRELEASE` before their wait loop; the game over waits of `madrun*` / `river*` (they waited for START and BACK only, not A) call it too; `fruit.bas` (no library) got the same wait as a `WHILE` line (5265).
-- Tests: `synhltest1` (numbering of all demos / libraries, 0 failures), every game compiles (console host stops at the first graphics statement), `IN_WAITRELEASE` runs through in the console host. **Not tried with a real pad.**
+### Controllers: BACK in play ends the game, not the program (2026-11-06)
+- **My first fix (`8b14a3e`) did not solve the owner's problem; the cause was a misreading.** The owner's report was not (only) a held button: in `fruit`, `fruit2`, `fruit3`, `climb`, `climb2` and `rustball` the variable `QT` means "quit the program": BACK (or Q) during play set `QT=1`, the game ended, `OVER` skipped the game over screen (`IF QT=1 THEN EXIT PROC`) and the main loop `UNTIL QT=1` ended the program. So BACK always left the program (it was no event handler).
+- Changed: in those six games BACK / Q during play only ends the game: `OVER` no longer skips the game over screen, the main loop resets `QT` after `PLAYGAME` (`IF QT=0 THEN CALL PLAYGAME:QT=0`; the one-line form checked in a small test program), `IN_QUIT=0` at the start of `PLAYGAME` in `fruit2`, `fruit3`, `climb`, `climb2` (it was never reset because the program ended; `rustball` already did). The title screen (BACK there = exit) waits for the release first (`IN_WAITRELEASE` from `8b14a3e`), so a BACK held down while playing does not leave the program. `madrun*` and `river*` already returned to the title on BACK (they use `GQ`), so they only got the release wait.
+- Tests: `synhltest1` (numbering of all demos, 0 failures); the games compile; the control flow checked with a mock program in the console host. **Not tried with a real pad or in the window.**
 
 
 ## Log
@@ -1342,3 +1342,9 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ### Roadmap item 70, `TOOL` and a tools folder (2026-11-06)
 - `docs/roadmap.md`: new row 70 from the owner's idea in `ideas-and-suggestions.txt` (editors reachable without losing the program): editors stay in BASIC, move to an installed `tools/` folder, `TOOL "name"[,arg$]` runs one in a pushed REPL context; `BUILD` embeds no tools; not available in the console host (owner's decisions). `SESSION.md` note added. Docs only, no tests.
+
+### 8b14a3e — 2026-11-06 21:29:26 +0100 — "IN_WAITRELEASE library function created by Claude Code"
+13 files changed, +42/-20.
+- `demos/lib/input.lib`: new `PROC IN_WAITRELEASE` (waits until A, START and BACK are released on all pads, then drops the typed keys; header comment updated). Cause of the owner's report: BACK quits a game, the quit goes to the title screen, which polls the start / back buttons at once; a button still held (BACK, or A from firing) started or quit the next screen immediately (fruit2 style games: BACK still held made the title set `QT` and end the whole program).
+- The title screens of `fruit2`, `fruit3`, `climb`, `climb2`, `madrun`, `madrun2`, `river`, `river2`, `rustball` call `IN_WAITRELEASE` before their wait loop; the game over waits of `madrun*` / `river*` (they waited for START and BACK only, not A) call it too; `fruit.bas` (no library) got the same wait as a `WHILE` line (5265).
+- Tests: `synhltest1` (numbering of all demos / libraries, 0 failures), every game compiles (console host stops at the first graphics statement), `IN_WAITRELEASE` runs through in the console host. **Not tried with a real pad.**
