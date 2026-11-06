@@ -30,3 +30,7 @@ override_dh_strip:
 
 override_dh_dwz:
 	dh_dwz -Nengine1999-games
+
+# the ./configure of the source is optional and takes other options than an autoconf one: the makefile needs nothing configured
+override_dh_auto_configure:
+	@true

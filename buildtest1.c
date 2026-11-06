@@ -177,7 +177,24 @@ int main( void ) {
     check( contains( exe, exelen, "ld-linux" ) || contains( exe, exelen, "ld-musl" ) || contains( exe, exelen, "ld64.so" ) ||
            contains( exe, exelen, "ld.so" ), "dynamically linked (names the dynamic linker)" );
     check( contains( exe, exelen, "libc.so" ), "needs the shared C library" );
+    // ELF type (little endian files only): 3 = position independent executable (the default when the start files exist), 2 = plain
+    int etype = exe[5] == 1 ? exe[16] | ( exe[17] << 8 ) : -1;
+    check( etype == 3 || etype == 2 || etype == -1, "the executable is a PIE or a plain executable" );
     free( exe );
+
+    // ENGINE1999_BUILD_PIE=0: a plain executable (ELF type 2), which runs the same
+    setenv( "ENGINE1999_BUILD_PIE", "0", 1 );
+    unlink( "buildtest1.out" );
+    ok = build_executable( "buildtest1.out", prog, sizeof(prog), &opts, err, sizeof(err) );
+    checkf( ok, "build without PIE", err );
+    exe = read_file( "buildtest1.out", &exelen );
+    check( exe != 0 && exelen > 1000U && ( exe[5] != 1 || ( exe[16] | ( exe[17] << 8 ) ) == 2 ), "ENGINE1999_BUILD_PIE=0 gives a plain executable" );
+    free( exe );
+    out = run_capture( "./buildtest1.out", &len, &status );
+    check( status == 7 && len == sizeof(prog) && memcmp( out, prog, len ) == 0, "the plain executable runs the same" );
+    free( out );
+    unsetenv( "ENGINE1999_BUILD_PIE" );
+    unlink( "buildtest1.out" );
 
     // building again over the old file works; a one byte program too
     unsigned char one = 0x55;

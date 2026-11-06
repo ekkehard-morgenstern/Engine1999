@@ -500,7 +500,7 @@ bool build_executable( const char* outname, const void* prog, size_t len, const 
     machine_t m;
     machine_get( &m );
     strlist_t libdirs = { 0, 0, 0 }, kitdirs = { 0, 0, 0 }, args = { 0, 0, 0 };
-    char *ld = 0, *interp = 0, *gccdir = 0, *robj = 0, *rlib = 0, *crt1 = 0, *crti = 0, *crtn = 0, *libc = 0;
+    char *ld = 0, *interp = 0, *gccdir = 0, *robj = 0, *rlib = 0, *scrt1 = 0, *crt1 = 0, *crti = 0, *crtn = 0, *libc = 0;
     char tmpdir[1024]; tmpdir[0] = '\0';
     bool ok = false;
     strlist_t libpaths = { 0, 0, 0 };       // the libraries found, in link order
@@ -608,51 +608,78 @@ bool build_executable( const char* outname, const void* prog, size_t len, const 
         }
     }
 
-    // step 2: the executable
-    ok = sl_add( &args, ld ) && sl_add( &args, "-o" ) && sl_add( &args, outname ) && sl_add( &args, "--eh-frame-hdr" ) &&
-         sl_add( &args, "-z" ) && sl_add( &args, "noexecstack" ) && sl_add( &args, "-z" ) && sl_add( &args, "relro" ) &&
-         sl_add( &args, "--hash-style=gnu" ) && sl_add( &args, "-dynamic-linker" ) && sl_add( &args, interp );
-    for ( size_t i=0; ok && i < libdirs.n; ++i ) {      // the libraries the libraries need
-        ok = sl_add( &args, "-rpath-link" ) && sl_add( &args, libdirs.v[i] );
-    }
-    ok = ok && sl_add( &args, crt1 ) && sl_add( &args, crti );
-    char gccfile[1100];
-    if ( gccdir != 0 ) {
-        snprintf( gccfile, sizeof(gccfile), "%s/crtbegin.o", gccdir );
-        ok = ok && sl_add( &args, gccfile );
-    }
-    ok = ok && sl_add( &args, robj ) && sl_add( &args, progobj );
-    if ( rlib != 0 ) {
-        ok = ok && sl_add( &args, rlib );
-    }
-    ok = ok && sl_add( &args, "--as-needed" );
-    for ( size_t i=0; ok && i < libpaths.n; ++i ) {
-        ok = sl_add( &args, libpaths.v[i] );
-    }
-    if ( gccdir != 0 ) {
-        snprintf( gccfile, sizeof(gccfile), "%s/libgcc.a", gccdir );
-        ok = ok && sl_add( &args, gccfile );
-    }
-    ok = ok && sl_add( &args, libc );
-    if ( gccdir != 0 ) {
-        snprintf( gccfile, sizeof(gccfile), "%s/libgcc.a", gccdir );
-        ok = ok && sl_add( &args, gccfile );
-        snprintf( gccfile, sizeof(gccfile), "%s/crtend.o", gccdir );
-        ok = ok && sl_add( &args, gccfile );
-    }
-    ok = ok && sl_add( &args, crtn );
-    if ( !ok ) {
-        ok = fail( err, errsize, "Out of memory" );
-        goto DONE;
-    }
+    // step 2: the executable. First as a position independent executable (PIE, the start files Scrt1.o / crtbeginS.o / crtendS.o; needs the
+    // Engine's objects compiled position independent, which a compiler that makes PIE by default does), and if that is not possible, as a
+    // plain executable. ENGINE1999_BUILD_PIE=0 asks for the plain one at once. Both are linked with "-z now" (no lazy binding) and "-z relro".
     {
-        int st = run_tool( 0, logfile, args.v );
-        if ( st != 0 ) {
-            read_log( logfile, log, sizeof(log) );
-            // the first message is the point; ld's own name in front of it is noise
-            fail( err, errsize, "Link failed (%s)", log[0] != '\0' ? log : st < 0 ? "can't run the linker" : "see ENGINE1999_BUILD_TRACE" );
-            ok = false;
-            goto DONE;
+        const char* pe = getenv( "ENGINE1999_BUILD_PIE" );
+        bool wantpie = !( pe != 0 && pe[0] == '0' );
+        char gccS[1100], gccE[1100];
+        gccS[0] = gccE[0] = '\0';
+        scrt1 = wantpie ? find_in_dirs( &libdirs, "Scrt1.o" ) : 0;
+        if ( gccdir != 0 ) {
+            snprintf( gccS, sizeof(gccS), "%s/crtbeginS.o", gccdir );
+            snprintf( gccE, sizeof(gccE), "%s/crtendS.o", gccdir );
+        }
+        bool piepossible = scrt1 != 0 && ( gccdir == 0 || ( is_file( gccS ) && is_file( gccE ) ) );
+        for ( int pass = piepossible ? 0 : 1; pass < 2; ++pass ) {
+            bool pie = pass == 0;
+            sl_free( &args );
+            memset( &args, 0, sizeof(args) );
+            ok = sl_add( &args, ld ) && sl_add( &args, "-o" ) && sl_add( &args, outname ) && sl_add( &args, "--eh-frame-hdr" ) &&
+                 sl_add( &args, "-z" ) && sl_add( &args, "noexecstack" ) && sl_add( &args, "-z" ) && sl_add( &args, "relro" ) &&
+                 sl_add( &args, "-z" ) && sl_add( &args, "now" ) &&
+                 sl_add( &args, "--hash-style=gnu" ) && sl_add( &args, "-dynamic-linker" ) && sl_add( &args, interp );
+            if ( ok && pie ) {
+                ok = sl_add( &args, "-pie" );
+            }
+            for ( size_t i=0; ok && i < libdirs.n; ++i ) {      // the libraries the libraries need
+                ok = sl_add( &args, "-rpath-link" ) && sl_add( &args, libdirs.v[i] );
+            }
+            ok = ok && sl_add( &args, pie ? scrt1 : crt1 ) && sl_add( &args, crti );
+            char gccfile[1100];
+            if ( gccdir != 0 ) {
+                snprintf( gccfile, sizeof(gccfile), "%s/%s", gccdir, pie ? "crtbeginS.o" : "crtbegin.o" );
+                ok = ok && sl_add( &args, gccfile );
+            }
+            ok = ok && sl_add( &args, robj ) && sl_add( &args, progobj );
+            if ( rlib != 0 ) {
+                ok = ok && sl_add( &args, rlib );
+            }
+            ok = ok && sl_add( &args, "--as-needed" );
+            for ( size_t i=0; ok && i < libpaths.n; ++i ) {
+                ok = sl_add( &args, libpaths.v[i] );
+            }
+            if ( gccdir != 0 ) {
+                snprintf( gccfile, sizeof(gccfile), "%s/libgcc.a", gccdir );
+                ok = ok && sl_add( &args, gccfile );
+            }
+            ok = ok && sl_add( &args, libc );
+            if ( gccdir != 0 ) {
+                snprintf( gccfile, sizeof(gccfile), "%s/libgcc.a", gccdir );
+                ok = ok && sl_add( &args, gccfile );
+                snprintf( gccfile, sizeof(gccfile), "%s/%s", gccdir, pie ? "crtendS.o" : "crtend.o" );
+                ok = ok && sl_add( &args, gccfile );
+            }
+            ok = ok && sl_add( &args, crtn );
+            if ( !ok ) {
+                ok = fail( err, errsize, "Out of memory" );
+                goto DONE;
+            }
+            unlink( logfile );
+            int st = run_tool( 0, logfile, args.v );
+            if ( st == 0 ) {
+                ok = true;
+                break;
+            }
+            if ( pass == 1 ) {          // the plain link failed, too: this is the error
+                read_log( logfile, log, sizeof(log) );
+                // the first message is the point; ld's own name in front of it is noise
+                fail( err, errsize, "Link failed (%s)", log[0] != '\0' ? log : st < 0 ? "can't run the linker" : "see ENGINE1999_BUILD_TRACE" );
+                ok = false;
+                goto DONE;
+            }
+            unlink( outname );          // a failed PIE link: try the plain one
         }
     }
     ok = true;
@@ -662,6 +689,6 @@ DONE:
         remove_tmp( tmpdir );
     }
     sl_free( &libdirs ); sl_free( &kitdirs ); sl_free( &args ); sl_free( &libpaths );
-    free( ld ); free( interp ); free( gccdir ); free( robj ); free( rlib ); free( crt1 ); free( crti ); free( crtn ); free( libc );
+    free( ld ); free( interp ); free( gccdir ); free( robj ); free( rlib ); free( scrt1 ); free( crt1 ); free( crti ); free( crtn ); free( libc );
     return ok;
 }

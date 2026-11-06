@@ -177,6 +177,12 @@ If set to something other than 0,
 .B BUILD
 prints the commands it runs to standard error.
 .TP
+.B ENGINE1999_BUILD_PIE
+.B BUILD
+makes position independent executables (PIE, linked with
+.BR "\-z now" )
+when the start files and the Engine's objects allow it, else plain ones; if set to 0, plain ones at once.
+.TP
 .BR LIBRARY_PATH ", " TMPDIR
 Extra library directories for
 .BR BUILD ;
