@@ -1,4 +1,4 @@
-engine1999 (0.6.19) UNRELEASED; urgency=low
+engine1999 (0.6.19-1) UNRELEASED; urgency=low
 
   * First packaging: the engine, the console version, the BUILD kit, the
     demo games as programs of their own, the documentation.

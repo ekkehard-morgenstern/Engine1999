@@ -69,7 +69,7 @@ PROGS=sdltest1 sdltest2 sdltest3 sdltest4 engine1999 joytest1 basictest1 testcom
 all: $(PROGS)
 	echo ok >all
 
-.PHONY: grammar grammar-check kit install uninstall man-check check dist clean distclean
+.PHONY: grammar grammar-check kit install uninstall man-check check dist orig clean distclean
 
 # the quick reference of the language (docs/grammar.md and docs/grammar.html) from bascomp.ebnf; needs perl
 grammar:
@@ -439,6 +439,15 @@ dist: version.h
 	@v=$$(sed -n 's/.*ENGINE_VERSION *"v\{0,1\}\([^"]*\)".*/\1/p' version.h); d=engine1999-$$v; \
 	list=$$(mktemp); (git ls-files | grep -v '^backups/\|^residue/'; echo version.h) > $$list; \
 	tar --transform "s,^,$$d/," -czf $$d.tar.gz -T $$list && rm -f $$list && echo "made $$d.tar.gz"
+
+# make orig: engine1999_<version>.orig.tar.gz, the upstream tarball of a Debian source package in the quilt format (debian/source/format): the
+# same files as "make dist" but without debian/, in the directory engine1999-<version>/; put it next to the source directory and build with
+# dpkg-buildpackage. The version is the one of the newest git tag (a version after a tag, like 0.6.19-3-g1a2b3c4, becomes 0.6.19+3.g1a2b3c4);
+# ORIGVER=x.y.z overrides it (it must match debian/changelog). Release: tag the commit, make orig, dpkg-buildpackage -S.
+orig: version.h
+	@v=$(ORIGVER); [ -n "$$v" ] || v=$$(sed -n 's/.*ENGINE_VERSION *"v\{0,1\}\([^"]*\)".*/\1/p' version.h | sed 's/-\([0-9][0-9]*\)-g\([0-9a-f][0-9a-f]*\)$$/+\1.g\2/'); \
+	d=engine1999-$$v; list=$$(mktemp); (git ls-files | grep -v '^backups/\|^residue/\|^debian/'; echo version.h) > $$list; \
+	tar --transform "s,^,$$d/," -czf engine1999_$$v.orig.tar.gz -T $$list && rm -f $$list && echo "made engine1999_$$v.orig.tar.gz"
 
 # make clean: everything the build made (objects, programs, the library, the kit/ folder); keeps version.h (it cannot be made without git)
 clean:

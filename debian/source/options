@@ -1,0 +1,2 @@
+# files of a working tree that are not part of the source (the owner's backups and scratch folders, high score files, the settings of ./configure)
+extend-diff-ignore = "(^|/)(config\.mk|[a-z0-9]+\.hi|backups/.*|residue/.*)$"

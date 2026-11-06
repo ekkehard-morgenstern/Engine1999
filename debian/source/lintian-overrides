@@ -1,0 +1,2 @@
+# docs/grammar.html is generated from bascomp.ebnf by grammar.pl (make grammar); it is the source
+engine1999: source-is-missing [docs/grammar.html]
