@@ -467,6 +467,10 @@ bool read_brclit( rbuf_t* rbuf, char** ptarget );
 #define XF_FRAME        UINT8_C(8)          // FRAME statement (wait for the next screen refresh)
 #define XF_EXISTS       UINT8_C(11)         // EXISTS(file$): is there such a file (through the I/O drivers)? -1 / 0
 #define XF_UI           UINT8_C(12)         // UI: the UI subsystem (widgets on the graphics layer): statements UI OPEN, UI BUTTON ... and the function UI("EVENT")
+#define XF_FORMAT       UINT8_C(14)         // FORMAT$(value, format$): a number or string in the first field of a PRINT USING format
+#define XF_AT           UINT8_C(15)         // AT(x, y) in a PRINT list: moves the cursor
+#define XF_HTAB         UINT8_C(16)         // HTAB x: the cursor to column x of the row it is in
+#define XF_VTAB         UINT8_C(17)         // VTAB y: the cursor to row y of the column it is in
 #define XF_USING        UINT8_C(13)         // PRINT USING format$; list (formatted output)
 #define XF_LIBRARIES    UINT8_C(10)         // LIBRARIES [name$]: lists the libraries of the last compile (or the procedures and functions of one)
 #define XF_LIBRARY      UINT8_C(9)          // LIBRARY "name"[,"prefix"] (first statement of a library), LOAD LIBRARY "name", SAVE LIBRARY

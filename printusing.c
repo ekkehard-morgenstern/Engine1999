@@ -277,3 +277,59 @@ size_t pu_string( const pu_field_t* f, const char* str, size_t slen, char* out )
     }
     return k;
 }
+
+// -- one value into the next field -------------------------------------------------------------
+
+int pu_item( const char* fmt, size_t len, size_t* pos, bool trailing, bool isstr, double num, const char* str, size_t slen, char** pout, size_t* poutlen ) {
+    *pout = 0;
+    *poutlen = 0;
+    if ( !pu_has_field( fmt, len ) ) {
+        return PU_NOFIELD;
+    }
+    char* lit = (char*) malloc( len + 1U );
+    char* res = (char*) malloc( len + 1U + ( slen > 2000U ? slen : 2000U ) + PU_NUMBER_MAX );
+    if ( lit == 0 || res == 0 ) {
+        free( lit );
+        free( res );
+        return PU_NOMEM;
+    }
+    size_t n = 0, ln = 0, end = 0, at = *pos;
+    pu_field_t f;
+    for ( int pass = 0; pass < 2; ++pass ) {
+        end = pu_next( fmt, len, at, lit, &ln, &f );
+        memcpy( &res[n], lit, ln );
+        n += ln;
+        if ( f.kind != PU_NONE ) {
+            break;
+        }
+        at = 0;                                 // the format is used up: it starts again
+    }
+    int rc = PU_OK;
+    if ( f.kind == PU_NONE ) {
+        rc = PU_NOFIELD;
+    } else if ( ( f.kind == PU_STRING ) != isstr ) {
+        rc = isstr ? PU_STRTONUM : PU_NUMTOSTR;
+    } else {
+        at = end;
+        if ( isstr ) {
+            n += pu_string( &f, str, slen, &res[n] );
+        } else {
+            n += pu_number( &f, num, &res[n] );
+        }
+        if ( trailing ) {
+            size_t e2 = pu_next( fmt, len, at, lit, &ln, &f );
+            memcpy( &res[n], lit, ln );
+            n += ln;
+            at = f.kind == PU_NONE ? e2 : f.start;
+        }
+        *pos = at;
+    }
+    free( lit );
+    if ( rc != PU_OK ) {
+        free( res );
+        return rc;
+    }
+    *pout = res;
+    *poutlen = n;
+    return PU_OK;
+}

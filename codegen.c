@@ -562,6 +562,7 @@ const char* cgen_opcode_name( uint16_t opcode ) {
         case INS_LIBS:      return "LIBS";
         case INS_EXST:      return "EXST";
         case INS_PUSG:      return "PUSG";
+        case INS_FMTS:      return "FMTS";
         case INS_AFLT:      return "AFLT";
         case INS_GFXC:      return "GFXC";
         case INS_GFXQ:      return "GFXQ";
@@ -1244,6 +1245,10 @@ bool cgen_gen_fram( codegen_t* cgen ) {
     return cgen_gen_ins12( cgen, INS_FRAM, false, false, UINT16_C(0) );
 }
 
+bool cgen_gen_fmts( codegen_t* cgen, uint16_t isstr ) {
+    return cgen_gen_ins12( cgen, INS_FMTS, false, true, isstr );
+}
+
 bool cgen_gen_pusg( codegen_t* cgen, uint16_t param ) {
     return cgen_gen_ins12( cgen, INS_PUSG, false, true, param );
 }
@@ -1787,6 +1792,7 @@ UNEXP:      return cgen_unexpected_node( comp );
             case XF_STRING: ok = cgen_gen_strn( cgen, datalen == UINT16_C(3) && node->data[2] ? 1 : 0 ); break;
             case XF_JOY:    ok = nodetype == NT_SYSSTRFUNCARGCALL ? cgen_gen_joys( cgen ) : cgen_gen_joyq( cgen ); break;
             case XF_EXISTS: ok = cgen_gen_exst( cgen ); break;
+            case XF_FORMAT: ok = cgen_gen_fmts( cgen, datalen == UINT16_C(3) && node->data[2] ? 1 : 0 ); break;
             default:        goto UNEXP;
         }
         return ok || cgen_out_of_code_memory( comp );
@@ -2611,6 +2617,7 @@ bool cgen_from_chanspec( codegen_t* cgen, compiler_t* comp, node_t* node, bool (
 
 #define PRTARGV_NUMEXPR UINT16_C(0X0001)
 #define PRTARGV_STREXPR UINT16_C(0X0002)
+#define PRTARGV_STMT    UINT16_C(0X0003)        // (with both type bits) a statement in the list: AT( x, y )
 #define PRTARGM_TYPE    UINT16_C(0X0003)
 #define PRTARGV_SEMIC   UINT16_C(0X0004)
 #define PRTARGV_COMMA   UINT16_C(0X0008)
@@ -2640,6 +2647,16 @@ static bool from_printarg_cb( void* param, node_t* node ) {
                 return false;
             }
             pdata->count |= PRTARGV_NUMEXPR;
+            return true;
+        case NT_GFXSTMT:                // AT( x, y ): a LOCATE inside the print list
+            if ( pdata->cgen->printchan ) {
+                comp_error( pdata->comp, "AT works on the screen only (not with PRINT #)" );
+                return false;
+            }
+            if ( !cgen_from_gfxstmt( pdata->cgen, pdata->comp, node ) ) {
+                return false;
+            }
+            pdata->count |= PRTARGV_STMT;
             return true;
         case NT_PRINTSEP:
             datalen = node->datalen;
@@ -2691,6 +2708,8 @@ UNEXP:  return cgen_unexpected_node( comp );
     }
     bool  hasparam = param ? true : false;
     switch ( cbdata.count & PRTARGM_TYPE ) {
+        case PRTARGV_STMT:
+            return true;                // AT: nothing is printed, the separator after it changes nothing
         case PRTARGV_STREXPR:
             if ( !cgen_gen_pstr( cgen, hasparam, param ) ) {
                 return cgen_out_of_code_memory( comp );
@@ -2848,6 +2867,7 @@ bool cgen_from_printstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     bool usingmode = node->datalen >= UINT16_C(2) && node->data[1] == 1;
     cgen->writemode = node->datalen >= UINT16_C(1) && node->data[0] == 1;
     cgen->usingmode = usingmode;
+    cgen->printchan = node->numbranches >= 1U && node->branches[0] != NODE_NONE;
     bool argsok = true;
     for ( uint8_t b = 0; argsok && b < node->numbranches; ++b ) {
         node_t* br = node->branches[b];
@@ -2866,6 +2886,7 @@ bool cgen_from_printstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     }
     cgen->writemode = false;
     cgen->usingmode = false;
+    cgen->printchan = false;
     if ( !argsok ) {
         return false;
     }

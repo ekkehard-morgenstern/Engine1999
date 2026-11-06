@@ -638,45 +638,56 @@ static bool vm_using_item( vm_t* vm, bool isstr, double num, const char* str, si
     if ( !vm->useactive ) {
         return vm_error( vm, "PRINT USING without a format" );
     }
-    if ( !vm->usehasfield ) {
-        return vm_error( vm, "Illegal argument (the format has no field)" );
+    char* out = 0;
+    size_t outlen = 0;
+    int rc = pu_item( vm->usefmt, vm->uselen, &vm->usepos, false, isstr, num, str, slen, &out, &outlen );
+    switch ( rc ) {
+        case PU_OK:         break;
+        case PU_NOFIELD:    return vm_error( vm, "Illegal argument (the format has no field)" );
+        case PU_NUMTOSTR:   return vm_error( vm, "Type mismatch (the field is a string field)" );
+        case PU_STRTONUM:   return vm_error( vm, "Type mismatch (the field is a number field)" );
+        default:            return vm_error( vm, "Out of memory" );
     }
-    pu_field_t f;
-    char lit[256];
-    size_t n = 0, end = 0;
-    for ( int pass = 0; pass < 2; ++pass ) {
-        end = pu_next( vm->usefmt, vm->uselen, vm->usepos, lit, &n, &f );
-        vm_out_bytes( vm, lit, n );
-        if ( f.kind != PU_NONE ) {
-            break;
-        }
-        vm->usepos = 0;                         // the format is used up: it starts again
-    }
-    if ( f.kind == PU_NONE ) {
-        return vm_error( vm, "Illegal argument" );
-    }
-    if ( ( f.kind == PU_STRING ) != isstr ) {
-        return vm_error( vm, isstr ? "Type mismatch (the field is a number field)" : "Type mismatch (the field is a string field)" );
-    }
-    vm->usepos = end;
-    if ( isstr ) {
-        if ( f.width == 0 ) {
-            vm_out_bytes( vm, str, slen );
-        } else {
-            char buf[256];
-            size_t k = pu_string( &f, str, slen, buf );
-            vm_out_bytes( vm, buf, k );
-        }
-    } else {
-        char buf[PU_NUMBER_MAX];
-        size_t k = pu_number( &f, num, buf );
-        vm_out_bytes( vm, buf, k );
-    }
+    vm_out_bytes( vm, out, outlen );
+    free( out );
     if ( !hassep || ( sep & ( VM_PRINT_SEP_SEMIC | VM_PRINT_SEP_COMMA ) ) == 0 ) {
         vm_using_trailing( vm );                // the last value: the text behind its field, then the line end
         vm_out( vm, "\n" );
     }
     return true;
+}
+
+// FMTS ( value format -- text ): FORMAT$( value, format$ ): the value in the first field of the format, with the literal text around it
+static bool vm_format_function( vm_t* vm, uint16_t isstr ) {
+    char *fmt = 0, *sval = 0;
+    size_t flen = 0, slen = 0;
+    double num = 0.0;
+    if ( !vm_dpop_bstr( vm, &fmt, &flen ) ) {
+        return false;
+    }
+    if ( isstr ? !vm_dpop_bstr( vm, &sval, &slen ) : !vm_dpop_num( vm, &num ) ) {
+        free( fmt );
+        return false;
+    }
+    char* out = 0;
+    size_t outlen = 0, pos = 0;
+    int rc = pu_item( fmt, flen, &pos, true, isstr != 0, num, sval, slen, &out, &outlen );
+    free( fmt );
+    free( sval );
+    switch ( rc ) {
+        case PU_OK:         break;
+        case PU_NOFIELD:    return vm_error( vm, "Illegal argument (the format has no field)" );
+        case PU_NUMTOSTR:   return vm_error( vm, "Type mismatch (the field is a string field)" );
+        case PU_STRTONUM:   return vm_error( vm, "Type mismatch (the field is a number field)" );
+        default:            return vm_error( vm, "Out of memory" );
+    }
+    if ( outlen > UINT16_MAX ) {
+        free( out );
+        return vm_error( vm, "String too long" );
+    }
+    bool ok = vm_push_bytes( vm, out, outlen );
+    free( out );
+    return ok;
 }
 
 
@@ -3110,6 +3121,8 @@ static bool vm_gfx_check( vm_t* vm, int op, const double* a, int na, size_t slen
         case GFXOP_TXTFILL:     ok = OPT( 4, 0, 255 ) && OPT( 5, 0, 255 ) && OPT( 6, 0, 255 ); break;
         case GFXOP_TXTLOAD:     ok = slen == 8000U; break;
         case GFXOP_LOCATE:      ok = IN( 0, 0, 79 ) && IN( 1, 0, 24 ); break;
+        case GFXOP_HTAB:        ok = IN( 0, 0, 79 ); break;
+        case GFXOP_VTAB:        ok = IN( 0, 0, 24 ); break;
         case GFXOP_COLOR:       ok = IN( 0, 0, 255 ) && OPT( 1, 0, 255 ); break;
         case GFXOP_SYMBOL:      ok = IN( 0, 0, 255 ) && slen == 12U; break;
         case GFXOP_TILEDEF:     ok = IN( 0, 0, 255 ) && slen == 384U; break;
@@ -3196,6 +3209,9 @@ static bool vm_gfx_command( vm_t* vm, uint16_t op ) {
         } else if ( hasresult && outlen > 65535U ) {
             ok = vm_error( vm, "String too long" );
         }
+    }
+    if ( ok && ( op == GFXOP_LOCATE || op == GFXOP_HTAB ) && na > 0 ) {
+        vm->column = (unsigned) a[0];           // the column the zones of PRINT count from
     }
     (void) hasstr;
     free( s );
@@ -4190,6 +4206,7 @@ static bool vm_step( vm_t* vm ) {
         case INS_WAIT: return vm_wait( vm, inspc );
         case INS_FRAM: return vm_frame( vm, inspc );
         case INS_HLT: vm->pc = vm->cgen->codesize; return true;
+        case INS_FMTS: return vm_format_function( vm, param16 );
         case INS_PUSG: return param16 == 0 ? vm_using_begin( vm ) : vm_using_end( vm );
         case INS_OPEN: return vm_open_channel( vm, param16 != 0 );
         case INS_CLOS: return vm_close_channel( vm );

@@ -1386,6 +1386,16 @@ static bool host_gfx_op( void* usrdata, int op, const double* a, int na, const c
         case GFXOP_TXTLOAD:     sdlscr_text_restore( (const uint8_t*) s, slen ); break;
         case GFXOP_CLS:         sdlscr_text_clear(); break;
         case GFXOP_LOCATE:      sdlscr_locate( gi( a[0], 0 ), gi( a[1], 0 ) ); break;
+        case GFXOP_HTAB: case GFXOP_VTAB: {
+            int cx = 0, cy = 0;
+            sdlscr_gettextcursor( &cx, &cy );
+            if ( op == GFXOP_HTAB ) {
+                sdlscr_locate( gi( a[0], 0 ), cy );
+            } else {
+                sdlscr_locate( cx, gi( a[0], 0 ) );
+            }
+            break;
+        }
         case GFXOP_COLOR:       sdlscr_text_setcolors( gi( a[1], -1 ), gi( a[0], -1 ) ); break;
         case GFXOP_SYMBOL:      sdlscr_text_defchar( gi( a[0], 0 ), (const uint8_t*) s ); break;
         case GFXOP_TILEDEF:     sdlscr_writetile( gi( a[0], 0 ), (const uint8_t*) s ); break;

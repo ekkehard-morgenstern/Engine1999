@@ -136,6 +136,7 @@ typedef struct _codegen_t {
     uint32_t        progsize;       // the size of the code of the last compiled program including its HLT (direct mode code lies behind it)
     uint32_t        endaddr;        // where END and running off the end of a program go: its HLT instruction (CODEOFFS_NONE: the end of the code)
     bool            writemode;      // (internal) generating the arguments of a WRITE statement
+    bool            printchan;      // (internal) the PRINT statement being generated has a channel (#n)
     bool            usingmode;      // (internal) generating the arguments of a PRINT USING statement
     uint32_t        persistent;     // counts what the code/data generated so far has stored that outlives it (see cgen_note_persistent)
     cgen_const_t*   consts;         // hash table of the shared constants in the data segment (size: power of two)
@@ -403,6 +404,7 @@ bool cgen_gen_fram( codegen_t* cgen );
 bool cgen_gen_keys( codegen_t* cgen );
 bool cgen_gen_libs( codegen_t* cgen );
 bool cgen_gen_exst( codegen_t* cgen );
+bool cgen_gen_fmts( codegen_t* cgen, uint16_t isstr );   // FORMAT$: 0 = a number, 1 = a string
 bool cgen_gen_pusg( codegen_t* cgen, uint16_t param );   // PRINT USING: 0 = begin (format on the stack), 1 = end
 bool cgen_from_librariesstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_gen_joys( codegen_t* cgen );

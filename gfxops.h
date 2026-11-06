@@ -85,6 +85,8 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXOP_CLS       40              // CLS
 #define GFXOP_LOCATE    41              // LOCATE x, y
 #define GFXOP_COLOR     42              // COLOR fg [, bg]
+#define GFXOP_HTAB      44              // HTAB x: the cursor to column x (0..79) of its row
+#define GFXOP_VTAB      45              // VTAB y: the cursor to row y (0..24) of its column
 #define GFXOP_SYMBOL    43              // SYMBOL c, a$        (12 bytes)
 #define GFXOP_TILEDEF   50              // TILE DEF n, a$      (384 bytes)
 #define GFXOP_TILEGET   51              // TILE GET n, a$

@@ -818,6 +818,16 @@ static bool con_gfx_op( void* usrdata, int op, const double* a, int na, const ch
         switch ( op ) {
             case GFXOP_CLS:         txtscr_clear(); break;
             case GFXOP_LOCATE:      txtscr_locate( con_gi( a[0], 0 ), con_gi( a[1], 0 ) ); break;
+            case GFXOP_HTAB: case GFXOP_VTAB: {
+                int cx = 0, cy = 0;
+                txtscr_getcursor( &cx, &cy );
+                if ( op == GFXOP_HTAB ) {
+                    txtscr_locate( con_gi( a[0], 0 ), cy );
+                } else {
+                    txtscr_locate( cx, con_gi( a[0], 0 ) );
+                }
+                break;
+            }
             case GFXOP_COLOR:       conscr_text_setcolors( con_gi( a[1], -1 ), con_gi( a[0], -1 ) ); break;
             case GFXOP_TXTFILL:     txtscr_fill( con_gi( a[0], 0 ), con_gi( a[1], 0 ), con_gi( a[2], 0 ), con_gi( a[3], 0 ), con_gi( a[4], -1 ), con_gi( a[5], -1 ), con_gi( a[6], -1 ) ); break;
             case GFXOP_TXTCOPY:     txtscr_copy( con_gi( a[0], 0 ), con_gi( a[1], 0 ), con_gi( a[2], 0 ), con_gi( a[3], 0 ), con_gi( a[4], 0 ), con_gi( a[5], 0 ) ); break;
@@ -842,6 +852,16 @@ static bool con_gfx_op( void* usrdata, int op, const double* a, int na, const ch
             if ( con_stdout_tty ) {
                 // the columns and rows of the screen start at 0, the terminal's at 1; an omitted one is a huge negative number
                 printf( "\033[%d;%dH", a[1] > -1.0e8 ? (int) a[1] + 1 : 1, a[0] > -1.0e8 ? (int) a[0] + 1 : 1 );
+            }
+            return true;
+        case GFXOP_HTAB:
+            if ( con_stdout_tty ) {
+                printf( "\033[%dG", (int) a[0] + 1 );        // the terminal's column, from 1
+            }
+            return true;
+        case GFXOP_VTAB:
+            if ( con_stdout_tty ) {
+                printf( "\033[%dd", (int) a[0] + 1 );
             }
             return true;
         case GFXOP_COLOR:

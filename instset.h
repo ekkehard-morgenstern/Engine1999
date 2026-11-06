@@ -566,6 +566,9 @@ The 4096 extended instructions are as follows:
     0001 10000111       LIBS - list libraries ( name -- ) C=0 P=0
                             LIBRARIES [name$]: the empty string lists the libraries of the last compile (name, prefix, file); a name lists the PROCs, FUNCs and LABELs that library defines.
                             The host does it through vm_t.libraries; without one it is the error "LIBRARIES is not available".
+    0001 10001010       FMTS - FORMAT$ ( value format -- text ) C=0 P=1
+                            FORMAT$(value, format$): the value in the first field of a PRINT USING format, with the literal text around it (in front of the field and
+                            up to the next one behind it). Parameter 0: the value is a number, 1: a string. Same errors as PRINT USING.
     0001 10001001       PUSG - PRINT USING ( format -- ) C=0 P=1
                             Parameter 0: begins a formatted PRINT (the format string is taken from the stack; at most 255 bytes, else "Illegal argument");
                             the PNUM / PSTR that follow with the parameter bit PRTARG_USING put each value into the next field of the format (the format
@@ -775,5 +778,6 @@ The 4096 extended instructions are as follows:
 #define INS_LIBS        UINT16_C(0X187)
 #define INS_EXST        UINT16_C(0X188)
 #define INS_PUSG        UINT16_C(0X189)
+#define INS_FMTS        UINT16_C(0X18A)
 
 #endif

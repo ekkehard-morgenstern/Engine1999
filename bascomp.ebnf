@@ -120,7 +120,9 @@ xfunc-call := ( MIN | MAX | ATAN2 ) TOK_LPAREN num-expr TOK_COMMA num-expr TOK_R
               EXISTS TOK_LPAREN str-expr TOK_RPAREN |
               JOY [ TOK_STRING ] TOK_LPAREN str-expr [ TOK_COMMA num-expr ] TOK_RPAREN |
               SPACE TOK_STRING TOK_LPAREN num-expr TOK_RPAREN |
-              STRING TOK_STRING TOK_LPAREN num-expr TOK_COMMA expr TOK_RPAREN .
+              STRING TOK_STRING TOK_LPAREN num-expr TOK_COMMA expr TOK_RPAREN |
+              FORMAT TOK_STRING TOK_LPAREN expr TOK_COMMA str-expr TOK_RPAREN .
+-- FORMAT$(value, format$) puts a number or a string into the first field of a PRINT USING format and returns the text (with the literal text of the format around it).
 
 sys-num-fn-arg-call := sys-num-fn-1-arg-call | xfunc-call .
 sys-str-fn-arg-call := sys-str-fn-2-arg-call | xfunc-call .
@@ -193,7 +195,8 @@ save-stmt := SAVE [ LIBRARY ] [ str-expr ] [ TOK_COMMA TOK_NUMIDENT ] .
 chan-spec := TOK_LATTICE num-expr .
 
 print-sep := TOK_COMMA | TOK_SEMIC .
-print-arg := expr [ print-sep ] .
+-- AT(x, y) in a PRINT list moves the cursor like LOCATE x, y and prints nothing (screen only: not with PRINT #n).
+print-arg := ( expr | AT TOK_LPAREN num-expr TOK_COMMA num-expr TOK_RPAREN ) [ print-sep ] .
 print-arg-list := print-arg { print-arg } .
 -- PRINT USING puts each value into the next field of the format (the format starts again when it is used up); USING is an extension word.
 -- Fields: ! \ \ & for strings, # . , + - ** $$ ^^^^ for numbers, _ makes the next character literal.
@@ -491,6 +494,9 @@ sprite-stmt := TOK_SPRITE ( DEF num-expr TOK_COMMA str-expr | GET num-expr TOK_C
                                                  num-expr TOK_COMMA num-expr [ TOK_COMMA num-expr ] ) ) .
 cls-stmt := TOK_CLS .
 locate-stmt := TOK_LOCATE num-expr TOK_COMMA num-expr .
+-- HTAB x moves the cursor to column x (0..79) of its row, VTAB y to row y (0..24) of its column; both are extension words.
+htab-stmt := HTAB num-expr .
+vtab-stmt := VTAB num-expr .
 color-stmt := TOK_COLOR num-expr [ TOK_COMMA num-expr ] .
 symbol-stmt := TOK_SYMBOL num-expr TOK_COMMA str-expr .
 -- DESIGN defines a sprite, tile or character by pictures: the following "@" statements (design-row) give one row each, executed in
@@ -521,7 +527,7 @@ ui-stmt := TOK_XFUNC(UI) ( OPEN | CLOSE | CLEAR | UPDATE |
                            POPUP num-expr TOK_COMMA num-expr TOK_COMMA num-expr | GETTEXT num-expr TOK_COMMA str-var-ref |
                            ITEMTEXT num-expr TOK_COMMA num-expr TOK_COMMA str-var-ref ) .
 ui-geometry := num-expr TOK_COMMA num-expr TOK_COMMA num-expr TOK_COMMA num-expr TOK_COMMA num-expr .
-gfx-all-stmt := gfx-stmt | txt-stmt | tile-stmt | sprite-stmt | mouse-stmt | on-mouse-stmt | ui-stmt | cls-stmt | locate-stmt | color-stmt | symbol-stmt | design-stmt | design-row | on-collision-stmt .
+gfx-all-stmt := gfx-stmt | txt-stmt | tile-stmt | sprite-stmt | mouse-stmt | on-mouse-stmt | ui-stmt | cls-stmt | locate-stmt | htab-stmt | vtab-stmt | color-stmt | symbol-stmt | design-stmt | design-row | on-collision-stmt .
 
 --# Statements and lines
 -- The statements by group: io-stmt (PRINT, INPUT, GET, DATA, READ, OPEN, CLOSE, ...), prog-stmt (program commands, sound, graphics, timers, error

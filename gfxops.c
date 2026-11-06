@@ -67,6 +67,8 @@ static const gfxcmd_t cmds[] = {
     { "TXT", "LOAD",     GFXOP_TXTLOAD,  "s",        0, false },
     { "",    "CLS",      GFXOP_CLS,      "",         0, false },
     { "",    "LOCATE",   GFXOP_LOCATE,   "nn",       0, false },
+    { "",    "HTAB",     GFXOP_HTAB,     "n",        0, false },
+    { "",    "VTAB",     GFXOP_VTAB,     "n",        0, false },
     { "",    "COLOR",    GFXOP_COLOR,    "no",       0, false },
     { "",    "SYMBOL",   GFXOP_SYMBOL,   "ns",       0, false },
     { "TILE", "DEF",     GFXOP_TILEDEF,  "ns",       0, false },

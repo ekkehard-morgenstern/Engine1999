@@ -78,4 +78,14 @@ size_t pu_number( const pu_field_t* f, double x, char* out );
 // formats a string: PU_STRING fields only; out has room for max( f->width, len ) bytes; returns the length ('!' gives one character, a blank for an empty string)
 size_t pu_string( const pu_field_t* f, const char* str, size_t slen, char* out );
 
+// formats one value into the next field of the format, starting at *pos (the literal text in front of the field is included; when the
+// format is used up it starts again); moves *pos behind the field; with trailing the literal text behind the field up to the next one is
+// included and *pos stays at that field. *pout is a malloc'ed buffer (the caller frees it). Returns PU_OK or an error:
+#define PU_OK           0
+#define PU_NOFIELD      1       // the format has no field
+#define PU_NUMTOSTR     2       // a number for a string field
+#define PU_STRTONUM     3       // a string for a number field
+#define PU_NOMEM        4
+int pu_item( const char* fmt, size_t len, size_t* pos, bool trailing, bool isstr, double num, const char* str, size_t slen, char** pout, size_t* poutlen );
+
 #endif

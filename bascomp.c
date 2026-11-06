@@ -1989,7 +1989,10 @@ static bool comp_eat_xfunccall( compiler_t* comp, node_t** pnode, bool wantstr )
         return false;
     }
     uint8_t xid = comp->currext;
-    bool isstr = xid == XF_SPACE || xid == XF_STRING;
+    bool isstr = xid == XF_SPACE || xid == XF_STRING || xid == XF_FORMAT;
+    if ( xid == XF_AT || xid == XF_HTAB || xid == XF_VTAB ) {
+        return false;                       // statements (AT inside a PRINT list), not functions
+    }
     if ( xid == XF_JOY ) {
         // JOY( ... ) is the number function, JOY$( ... ) the string function (the pad's name): look at what follows the word
         comp_push_context( comp );
@@ -2068,6 +2071,31 @@ static bool comp_eat_xfunccall( compiler_t* comp, node_t** pnode, bool wantstr )
         }
         uint8_t jdata[2] = { TOK_XFUNC, xid };
         if ( !comp_create_node( comp, pnode, wantstr ? NT_SYSSTRFUNCARGCALL : NT_SYSNUMFUNCARGCALL, UINT8_C(2), UINT16_C(2), jdata, arg1, arg2 ) || *pnode == NODE_NONE ) {
+            out_of_memory( comp );
+            return false;
+        }
+        return true;
+    }
+    if ( xid == XF_FORMAT ) {
+        // FORMAT$ ( expr , str-expr )     a number or a string, and the format
+        if ( !comp_eat_expr( comp, &arg1 ) || arg1 == NODE_NONE ) {
+            comp_error( comp, "Expression expected" );
+            return false;
+        }
+        if ( comp->currtok != TOK_COMMA || !comp_fetchtok( comp ) ) {
+            comp_error( comp, "Comma ',' expected" );
+            return false;
+        }
+        if ( !comp_eat_strexpr( comp, &arg2 ) || arg2 == NODE_NONE ) {
+            comp_error( comp, "Format string expected" );
+            return false;
+        }
+        if ( comp->currtok != TOK_RPAREN || !comp_fetchtok( comp ) ) {
+            comp_error( comp, "Closing parenthesis ')' expected" );
+            return false;
+        }
+        uint8_t fdata[3] = { TOK_XFUNC, xid, (uint8_t)( arg1->type == NT_STREXPR ? 1 : 0 ) };
+        if ( !comp_create_node( comp, pnode, NT_SYSSTRFUNCARGCALL, UINT8_C(2), UINT16_C(3), fdata, arg1, arg2 ) || *pnode == NODE_NONE ) {
             out_of_memory( comp );
             return false;
         }
@@ -3186,7 +3214,10 @@ bool comp_eat_gfxstmt( compiler_t* comp, node_t** pnode ) {
         case TOK_TILE:      group = "TILE"; break;
         case TOK_MOUSE:     group = "MOUSE"; break;
         case TOK_SPRITE:    group = "SPRITE"; break;
-        case TOK_XFUNC:                                     // the extension word UI
+        case TOK_XFUNC:                                     // the extension word UI; HTAB and VTAB are statements without a group word
+            if ( comp->currext == XF_HTAB || comp->currext == XF_VTAB ) {
+                break;
+            }
             if ( comp->currext != XF_UI ) {
                 return false;
             }
@@ -3197,6 +3228,7 @@ bool comp_eat_gfxstmt( compiler_t* comp, node_t** pnode ) {
         default:
             return false;
     }
+    const char* ownname = tok == TOK_XFUNC && group[0] == '\0' ? xkeyword_name( comp->currext ) : 0;
     if ( !comp_fetchtok( comp ) ) {
         return false;
     }
@@ -3204,7 +3236,7 @@ bool comp_eat_gfxstmt( compiler_t* comp, node_t** pnode ) {
     node_t* lead = NODE_NONE;
     char w[32];
     if ( group[0] == '\0' ) {
-        cmd = gfxops_find( "", keyword_name( tok ) );
+        cmd = gfxops_find( "", ownname != 0 ? ownname : keyword_name( tok ) );
     } else if ( tok == TOK_SPRITE ) {
         if ( comp_word( comp, w, sizeof(w) ) && ( cmd = gfxops_find( "SPRITE", w ) ) != 0 && !cmd->lead && cmd->name[0] != '\0' ) {
             if ( !comp_fetchtok( comp ) ) {
@@ -4205,9 +4237,38 @@ bool comp_eat_printsep( compiler_t* comp, node_t** pnode ) {
 }
 
 bool comp_eat_printarg( compiler_t* comp, node_t** pnode ) {
-    // print-arg := expr [ print-sep ] .
+    // print-arg := ( expr | AT TOK_LPAREN num-expr TOK_COMMA num-expr TOK_RPAREN ) [ print-sep ] .       (AT is an extension word)
     node_t* expr = NODE_NONE;
-    if ( !comp_eat_expr( comp, &expr ) || expr == NODE_NONE ) {
+    if ( comp->currtok == TOK_XFUNC && comp->currext == XF_AT ) {
+        // AT ( x, y ): moves the cursor like LOCATE x, y; prints nothing, and the separator after it changes nothing
+        if ( !comp_fetchtok( comp ) || comp->currtok != TOK_LPAREN || !comp_fetchtok( comp ) ) {
+            comp_error( comp, "Opening parenthesis '(' expected" );
+            return false;
+        }
+        node_t *ax = NODE_NONE, *ay = NODE_NONE;
+        if ( !comp_eat_numexpr( comp, &ax ) || ax == NODE_NONE ) {
+            comp_error( comp, "Numeric expression expected" );
+            return false;
+        }
+        if ( comp->currtok != TOK_COMMA || !comp_fetchtok( comp ) ) {
+            comp_error( comp, "Comma ',' expected" );
+            return false;
+        }
+        if ( !comp_eat_numexpr( comp, &ay ) || ay == NODE_NONE ) {
+            comp_error( comp, "Numeric expression expected" );
+            return false;
+        }
+        if ( comp->currtok != TOK_RPAREN || !comp_fetchtok( comp ) ) {
+            comp_error( comp, "Closing parenthesis ')' expected" );
+            return false;
+        }
+        uint8_t atdata[2] = { (uint8_t)( GFXOP_LOCATE >> UINT8_C(8) ), (uint8_t) GFXOP_LOCATE };
+        if ( !comp_create_node( comp, &expr, NT_GFXSTMT, UINT8_C(0), UINT16_C(2), atdata ) || expr == NODE_NONE ||
+             !comp_add_branch( comp, expr, ax ) || !comp_add_branch( comp, expr, ay ) ) {
+            out_of_memory( comp );
+            return false;
+        }
+    } else if ( !comp_eat_expr( comp, &expr ) || expr == NODE_NONE ) {
         return false;
     }
     node_t* sep = NODE_NONE;

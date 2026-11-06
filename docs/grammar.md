@@ -136,7 +136,13 @@ xfunc-call := ( MIN | MAX | ATAN2 ) "(" num-expr "," num-expr ")" |
               EXISTS "(" str-expr ")" |
               JOY [ "$" ] "(" str-expr [ "," num-expr ] ")" |
               SPACE "$" "(" num-expr ")" |
-              STRING "$" "(" num-expr "," expr ")" .
+              STRING "$" "(" num-expr "," expr ")" |
+              FORMAT "$" "(" expr "," str-expr ")" .
+```
+
+> FORMAT$(value, format$) puts a number or a string into the first field of a PRINT USING format and returns the text (with the literal text of the format around it).
+
+```ebnf
 sys-num-fn-arg-call := sys-num-fn-1-arg-call | xfunc-call .
 sys-str-fn-arg-call := sys-str-fn-2-arg-call | xfunc-call .
 sys-noarg-num-name := TI | ERL | PI | ARGC .
@@ -223,7 +229,12 @@ expr         := num-expr | str-expr .
 save-stmt := SAVE [ LIBRARY ] [ str-expr ] [ "," <name> ] .
 chan-spec := "#" num-expr .
 print-sep := "," | ";" .
-print-arg := expr [ print-sep ] .
+```
+
+> AT(x, y) in a PRINT list moves the cursor like LOCATE x, y and prints nothing (screen only: not with PRINT #n).
+
+```ebnf
+print-arg := ( expr | AT "(" num-expr "," num-expr ")" ) [ print-sep ] .
 print-arg-list := print-arg { print-arg } .
 ```
 
@@ -659,6 +670,13 @@ sprite-stmt := SPRITE ( DEF num-expr "," str-expr | GET num-expr "," str-var-ref
                                                  num-expr "," num-expr [ "," num-expr ] ) ) .
 cls-stmt := CLS .
 locate-stmt := LOCATE num-expr "," num-expr .
+```
+
+> HTAB x moves the cursor to column x (0..79) of its row, VTAB y to row y (0..24) of its column; both are extension words.
+
+```ebnf
+htab-stmt := HTAB num-expr .
+vtab-stmt := VTAB num-expr .
 color-stmt := COLOR num-expr [ "," num-expr ] .
 symbol-stmt := SYMBOL num-expr "," str-expr .
 ```
@@ -709,7 +727,7 @@ ui-stmt := XFUNC(UI) ( OPEN | CLOSE | CLEAR | UPDATE |
                            POPUP num-expr "," num-expr "," num-expr | GETTEXT num-expr "," str-var-ref |
                            ITEMTEXT num-expr "," num-expr "," str-var-ref ) .
 ui-geometry := num-expr "," num-expr "," num-expr "," num-expr "," num-expr .
-gfx-all-stmt := gfx-stmt | txt-stmt | tile-stmt | sprite-stmt | mouse-stmt | on-mouse-stmt | ui-stmt | cls-stmt | locate-stmt | color-stmt | symbol-stmt | design-stmt | design-row | on-collision-stmt .
+gfx-all-stmt := gfx-stmt | txt-stmt | tile-stmt | sprite-stmt | mouse-stmt | on-mouse-stmt | ui-stmt | cls-stmt | locate-stmt | htab-stmt | vtab-stmt | color-stmt | symbol-stmt | design-stmt | design-row | on-collision-stmt .
 ```
 
 ## Statements and lines

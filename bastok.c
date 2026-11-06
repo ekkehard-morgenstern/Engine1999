@@ -840,7 +840,7 @@ static const struct {
     uint8_t     xid;
     const char* name;
 } xkeywtbl[] = {
-    { XF_SPACE, "SPACE" }, { XF_STRING, "STRING" }, { XF_MIN, "MIN" }, { XF_MAX, "MAX" }, { XF_ATAN2, "ATAN2" }, { XF_ERROR, "ERROR" }, { XF_JOY, "JOY" }, { XF_FRAME, "FRAME" }, { XF_LIBRARY, "LIBRARY" }, { XF_LIBRARIES, "LIBRARIES" }, { XF_EXISTS, "EXISTS" }, { XF_UI, "UI" }, { XF_USING, "USING" }, { 0, 0 }
+    { XF_SPACE, "SPACE" }, { XF_STRING, "STRING" }, { XF_MIN, "MIN" }, { XF_MAX, "MAX" }, { XF_ATAN2, "ATAN2" }, { XF_ERROR, "ERROR" }, { XF_JOY, "JOY" }, { XF_FRAME, "FRAME" }, { XF_LIBRARY, "LIBRARY" }, { XF_LIBRARIES, "LIBRARIES" }, { XF_EXISTS, "EXISTS" }, { XF_UI, "UI" }, { XF_USING, "USING" }, { XF_FORMAT, "FORMAT" }, { XF_AT, "AT" }, { XF_HTAB, "HTAB" }, { XF_VTAB, "VTAB" }, { 0, 0 }
 };
 
 bool is_xkeyword( const char* name, uint8_t* pxid ) {
@@ -1177,7 +1177,7 @@ bool detokenize_line_hl( buf_t* out, const uint8_t* wherefrom, const struct _lin
                 ++src.rpos;
             } else if ( tok == TOK_XFUNC ) {        // an extension word: the next byte names it
                 const char* xname = src.rpos + 1U < src.size ? xkeyword_name( (uint8_t) src.buffer[ src.rpos + 1U ] ) : 0;
-                if ( xname == 0 || !hl_switch( out, style, usrdata, &cur, ( (uint8_t) src.buffer[ src.rpos + 1U ] == XF_ERROR || (uint8_t) src.buffer[ src.rpos + 1U ] == XF_FRAME || (uint8_t) src.buffer[ src.rpos + 1U ] == XF_LIBRARY || (uint8_t) src.buffer[ src.rpos + 1U ] == XF_LIBRARIES || (uint8_t) src.buffer[ src.rpos + 1U ] == XF_UI ) ? HL_STATEMENT : HL_FUNCTION ) || writeto_buffer( out, xname, strlen( xname ) ) < 0 ) {
+                if ( xname == 0 || !hl_switch( out, style, usrdata, &cur, ( (uint8_t) src.buffer[ src.rpos + 1U ] == XF_ERROR || (uint8_t) src.buffer[ src.rpos + 1U ] == XF_FRAME || (uint8_t) src.buffer[ src.rpos + 1U ] == XF_LIBRARY || (uint8_t) src.buffer[ src.rpos + 1U ] == XF_LIBRARIES || (uint8_t) src.buffer[ src.rpos + 1U ] == XF_UI || (uint8_t) src.buffer[ src.rpos + 1U ] == XF_USING || (uint8_t) src.buffer[ src.rpos + 1U ] == XF_AT || (uint8_t) src.buffer[ src.rpos + 1U ] == XF_HTAB || (uint8_t) src.buffer[ src.rpos + 1U ] == XF_VTAB ) ? HL_STATEMENT : HL_FUNCTION ) || writeto_buffer( out, xname, strlen( xname ) ) < 0 ) {
                     goto FAIL;
                 }
                 src.rpos += 2U;
