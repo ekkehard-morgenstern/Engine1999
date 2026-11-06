@@ -1268,6 +1268,7 @@
 12550   PX=300:PY=226:PM=0:INV=0:UB=0:FRM=0
 12560   SPRITE 0,ON:SH(0)=1
 12570   DONE=0
+12579   CALL IN_WAITRELEASE
 12580   REPEAT
 12590     GFX VSYNC
 12600     FRM=FRM+1
@@ -1299,9 +1300,7 @@
 12850     GFX VSYNC
 12860     CALL SCROLL(0.7)
 12870   NEXT I
-12880   WHILE FN IN_ANYSTART(0) OR FN IN_ANYBACK(0)
-12890     GFX VSYNC
-12900   WEND
+12880   CALL IN_WAITRELEASE
 12910 END PROC
 12920 ' ====================================================================== sound and music
 12930 ' All channels back to their plain state

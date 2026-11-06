@@ -12,6 +12,8 @@
 80 ' (0 if there was none) for the game's own single keys
 90 ' CALL IN_PAUSELOOP waits until P or START continues or Q or BACK quits (IN_QUIT = 1); the game draws and clears its "PAUSED" box around it
 100 ' FN IN_ANYSTART(0), FN IN_ANYBACK(0), FN IN_ANYA(0) is that button held on any of the four pads? (-1 / 0; JOY needs the button name as a literal: one function each)
+105 ' CALL IN_WAITRELEASE waits until no start button (A, START, BACK of any pad) is held, then drops the keys typed meanwhile: a game calls it when it enters its
+106 ' title / game over screen, so a button that was still held from the game (the fire button, BACK that quit it) does not start or quit the next screen at once
 110 ' A game resets IN_QUIT to 0 when it starts and reads it after the calls. The variables of this library start with IN_.
 120 LIBRARY "input","IN_"
 130 FUNC IN_ANYSTART(X)
@@ -90,3 +92,13 @@
 860   WEND
 870   IN_PSK=0
 880 END PROC
+890 PROC IN_WAITRELEASE
+900   LOCAL K$
+910   WHILE FN IN_ANYSTART(0) OR FN IN_ANYBACK(0) OR FN IN_ANYA(0)
+920     GFX VSYNC
+930   WEND
+940   REPEAT
+950     K$=INKEY$
+960   UNTIL K$=""
+970   IN_PSK=0
+980 END PROC

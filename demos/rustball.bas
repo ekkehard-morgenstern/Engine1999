@@ -1538,6 +1538,7 @@
 15290   CALL TXTAT(9,20,"  P pauses, M music, Q quits.      BEST "+FN PAD$(HI,6)+"                      ",202)
 15300   CALL MUSICOFF
 15310   QT=0:DONE=0:T=0
+15319   CALL IN_WAITRELEASE
 15320   REPEAT
 15330     GFX VSYNC
 15340     T=T+1
