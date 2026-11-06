@@ -225,7 +225,13 @@ chan-spec := "#" num-expr .
 print-sep := "," | ";" .
 print-arg := expr [ print-sep ] .
 print-arg-list := print-arg { print-arg } .
-print-stmt := ( PRINT | WRITE ) [ chan-spec [ "," ] ] [ print-arg-list ] .
+```
+
+> PRINT USING puts each value into the next field of the format (the format starts again when it is used up); USING is an extension word.
+> Fields: ! \\ \\ & for strings, # . , + - \*\* $$ ^^^^ for numbers, \_ makes the next character literal.
+
+```ebnf
+print-stmt := ( PRINT | WRITE ) [ chan-spec [ "," ] ] [ USING str-expr print-sep ] [ print-arg-list ] .
 data-item := [ "+" | "-" ] num-lit | <string> .
 data-stmt := DATA data-item { "," data-item } .
 read-stmt := READ ( num-var-ref | str-var-ref ) { "," ( num-var-ref | str-var-ref ) } .

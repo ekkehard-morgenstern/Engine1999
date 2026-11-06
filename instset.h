@@ -566,6 +566,11 @@ The 4096 extended instructions are as follows:
     0001 10000111       LIBS - list libraries ( name -- ) C=0 P=0
                             LIBRARIES [name$]: the empty string lists the libraries of the last compile (name, prefix, file); a name lists the PROCs, FUNCs and LABELs that library defines.
                             The host does it through vm_t.libraries; without one it is the error "LIBRARIES is not available".
+    0001 10001001       PUSG - PRINT USING ( format -- ) C=0 P=1
+                            Parameter 0: begins a formatted PRINT (the format string is taken from the stack; at most 255 bytes, else "Illegal argument");
+                            the PNUM / PSTR that follow with the parameter bit PRTARG_USING put each value into the next field of the format (the format
+                            starts again when it is used up) and the literal text around the fields; "Type mismatch" if a value does not fit the kind of
+                            field, "Illegal argument" if the format has no field. Parameter 1: ends it (prints the literal text behind the last field that was used).
     0001 10001000       EXST - does a file exist ( name -- n ) C=0 P=0
                             EXISTS(name$): -1 if the name can be opened for reading through the I/O drivers (a "driver:" prefix works, ADDRESS names the default driver; no extension search: the name is taken as it is), else 0. An empty name is 0, not an error;
                             it never raises a file error (that is what it is for: ON ERROR + RESUME does not work inside a PROC or FUNC).
@@ -706,6 +711,7 @@ The 4096 extended instructions are as follows:
 #define INS_TMRO        UINT16_C(0X149)
 #define INS_RMN         UINT16_C(0X14A)
 #define INS_HLT         UINT16_C(0X14B)
+#define PRTARG_USING    UINT16_C(0X0020)    // parameter bit of PNUM / PSTR: the value goes into the next field of the PRINT USING format
 #define PRTARG_WRITE    UINT16_C(0X0010)    // parameter bit of PNUM / PSTR: WRITE format (quoted strings, "," for a separator)
 #define INS_OPEN        UINT16_C(0X14C)
 #define INS_CLOS        UINT16_C(0X14D)
@@ -768,5 +774,6 @@ The 4096 extended instructions are as follows:
 #define INS_KEYS        UINT16_C(0X186)
 #define INS_LIBS        UINT16_C(0X187)
 #define INS_EXST        UINT16_C(0X188)
+#define INS_PUSG        UINT16_C(0X189)
 
 #endif

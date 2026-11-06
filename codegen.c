@@ -561,6 +561,7 @@ const char* cgen_opcode_name( uint16_t opcode ) {
         case INS_KEYS:      return "KEYS";
         case INS_LIBS:      return "LIBS";
         case INS_EXST:      return "EXST";
+        case INS_PUSG:      return "PUSG";
         case INS_AFLT:      return "AFLT";
         case INS_GFXC:      return "GFXC";
         case INS_GFXQ:      return "GFXQ";
@@ -1241,6 +1242,10 @@ bool cgen_gen_erl( codegen_t* cgen ) {
 
 bool cgen_gen_fram( codegen_t* cgen ) {
     return cgen_gen_ins12( cgen, INS_FRAM, false, false, UINT16_C(0) );
+}
+
+bool cgen_gen_pusg( codegen_t* cgen, uint16_t param ) {
+    return cgen_gen_ins12( cgen, INS_PUSG, false, true, param );
 }
 
 bool cgen_gen_exst( codegen_t* cgen ) {
@@ -2681,6 +2686,9 @@ UNEXP:  return cgen_unexpected_node( comp );
     if ( cgen->writemode ) {
         param |= PRTARG_WRITE;
     }
+    if ( cgen->usingmode ) {
+        param |= PRTARG_USING;
+    }
     bool  hasparam = param ? true : false;
     switch ( cbdata.count & PRTARGM_TYPE ) {
         case PRTARGV_STREXPR:
@@ -2837,11 +2845,33 @@ bool cgen_from_printstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         return false;
     }
     cbdata_t cbdata = { cgen, comp, node, UINT16_C(0) };
-    cgen->writemode = node->datalen == UINT16_C(1) && node->data[0] == 1;
-    bool argsok = comp_node_iter_branches( comp, node, &cbdata, from_printstmt_cb );
+    bool usingmode = node->datalen >= UINT16_C(2) && node->data[1] == 1;
+    cgen->writemode = node->datalen >= UINT16_C(1) && node->data[0] == 1;
+    cgen->usingmode = usingmode;
+    bool argsok = true;
+    for ( uint8_t b = 0; argsok && b < node->numbranches; ++b ) {
+        node_t* br = node->branches[b];
+        if ( b == 1U ) {                    // PRINT USING: the format string is evaluated after the channel, before the arguments
+            if ( usingmode ) {
+                if ( br == NODE_NONE || br->type != NT_STREXPR ) {
+                    comp_error( comp, "String expression expected as the USING format" );
+                    argsok = false;
+                } else {
+                    argsok = cgen_from_strexpr( cgen, comp, br ) && ( cgen_gen_pusg( cgen, UINT16_C(0) ) || cgen_out_of_code_memory( comp ) );
+                }
+            }
+            continue;
+        }
+        argsok = from_printstmt_cb( &cbdata, br );
+    }
     cgen->writemode = false;
+    cgen->usingmode = false;
     if ( !argsok ) {
         return false;
+    }
+    if ( usingmode ) {
+        // prints the text behind the last field (before the newline, if the last value had no separator, it was printed already)
+        return cgen_gen_pusg( cgen, UINT16_C(1) ) || cgen_out_of_code_memory( comp );
     }
     if ( cbdata.count == UINT16_C(0) ) {
         // no arguments: just print a newline, by printing an empty string

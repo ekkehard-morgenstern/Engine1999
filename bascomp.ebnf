@@ -195,7 +195,9 @@ chan-spec := TOK_LATTICE num-expr .
 print-sep := TOK_COMMA | TOK_SEMIC .
 print-arg := expr [ print-sep ] .
 print-arg-list := print-arg { print-arg } .
-print-stmt := ( TOK_PRINT | TOK_WRITE ) [ chan-spec [ TOK_COMMA ] ] [ print-arg-list ] .
+-- PRINT USING puts each value into the next field of the format (the format starts again when it is used up); USING is an extension word.
+-- Fields: ! \ \ & for strings, # . , + - ** $$ ^^^^ for numbers, _ makes the next character literal.
+print-stmt := ( TOK_PRINT | TOK_WRITE ) [ chan-spec [ TOK_COMMA ] ] [ USING str-expr print-sep ] [ print-arg-list ] .
 
 data-item := [ TOK_PLUS | TOK_MINUS ] num-lit | TOK_STRLIT .
 data-stmt := TOK_DATA data-item { TOK_COMMA data-item } .

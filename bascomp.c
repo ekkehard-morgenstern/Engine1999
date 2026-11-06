@@ -4253,17 +4253,38 @@ bool comp_eat_printstmt( compiler_t* comp, node_t** pnode ) {
             return false;
         }
     }
+    // PRINT [#n,] USING format$ ; list   (USING is an extension word)
+    node_t* fmt = NODE_NONE;
+    uint8_t pdata[2] = { writemode, 0 };
+    if ( !writemode && comp->currtok == TOK_XFUNC && comp->currext == XF_USING ) {
+        if ( !comp_fetchtok( comp ) ) {
+            return false;
+        }
+        if ( !comp_eat_expr( comp, &fmt ) || fmt == NODE_NONE ) {
+            comp_error( comp, "Format string expected after USING" );
+            return false;
+        }
+        if ( comp->currtok != TOK_SEMIC && comp->currtok != TOK_COMMA ) {
+            comp_error( comp, "Semicolon ';' expected after the USING format" );
+            return false;
+        }
+        if ( !comp_fetchtok( comp ) ) {
+            return false;
+        }
+        pdata[1] = 1;
+    }
     node_t* args = NODE_NONE;
     comp_eat_printarglist( comp, &args );
     /*
         NT_PRINTSTMT    print statement
             data:
-                - none, or (for WRITE) 1 byte with the value 1
+                - none, or 2 bytes: 1 for WRITE, 1 for USING
             branches:
                 - 1 optional branch of channel info
+                - 1 optional branch of the PRINT USING format (a string expression)
                 - 1 optional branch of print argument list
     */
-    if ( !comp_create_node( comp, pnode, NT_PRINTSTMT, UINT8_C(2), writemode ? UINT16_C(1) : UINT16_C(0), &writemode, chan, args ) ||
+    if ( !comp_create_node( comp, pnode, NT_PRINTSTMT, UINT8_C(3), ( writemode || pdata[1] ) ? UINT16_C(2) : UINT16_C(0), pdata, chan, fmt, args ) ||
         *pnode == NODE_NONE ) {
         out_of_memory( comp );
         return false;

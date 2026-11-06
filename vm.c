@@ -29,6 +29,7 @@
 
 #include <ctype.h>
 #include "vm.h"
+#include "printusing.h"
 #include "iodev.h"
 #include "keyseq.h"
 #include "keystate.h"
@@ -585,6 +586,99 @@ static bool vm_print_sep( vm_t* vm, bool hassep, uint16_t sep ) {
 }
 
 static bool vm_branch_to( vm_t* vm, uint32_t target );
+
+// -- PRINT USING -----------------------------------------------------------
+
+// PUSG 0: takes the format from the stack
+static bool vm_using_begin( vm_t* vm ) {
+    char* str = 0;
+    size_t slen = 0;
+    if ( !vm_dpop_bstr( vm, &str, &slen ) ) {
+        return false;
+    }
+    if ( slen >= sizeof(vm->usefmt) ) {
+        free( str );
+        return vm_error( vm, "Illegal argument (format longer than 255 bytes)" );
+    }
+    memcpy( vm->usefmt, str, slen );
+    free( str );
+    vm->uselen = slen;
+    vm->usepos = 0;
+    vm->useactive = true;
+    vm->usehasfield = pu_has_field( vm->usefmt, slen );
+    return true;
+}
+
+// prints the literal text up to the next field (and no field)
+static void vm_using_trailing( vm_t* vm ) {
+    char lit[256];
+    size_t n = 0;
+    pu_field_t f;
+    size_t end = pu_next( vm->usefmt, vm->uselen, vm->usepos, lit, &n, &f );
+    if ( f.kind == PU_NONE ) {
+        vm_out_bytes( vm, lit, n );
+        vm->usepos = end;
+    } else {
+        vm_out_bytes( vm, lit, n );
+        vm->usepos = f.start;                   // the next field stays where it is (and the text in front of it is printed)
+    }
+}
+
+// PUSG 1: the end of the statement
+static bool vm_using_end( vm_t* vm ) {
+    if ( vm->useactive ) {
+        vm_using_trailing( vm );
+        vm->useactive = false;
+    }
+    return true;
+}
+
+// puts a value into the next field; the separator (parameter of PNUM / PSTR) decides what follows
+static bool vm_using_item( vm_t* vm, bool isstr, double num, const char* str, size_t slen, bool hassep, uint16_t sep ) {
+    if ( !vm->useactive ) {
+        return vm_error( vm, "PRINT USING without a format" );
+    }
+    if ( !vm->usehasfield ) {
+        return vm_error( vm, "Illegal argument (the format has no field)" );
+    }
+    pu_field_t f;
+    char lit[256];
+    size_t n = 0, end = 0;
+    for ( int pass = 0; pass < 2; ++pass ) {
+        end = pu_next( vm->usefmt, vm->uselen, vm->usepos, lit, &n, &f );
+        vm_out_bytes( vm, lit, n );
+        if ( f.kind != PU_NONE ) {
+            break;
+        }
+        vm->usepos = 0;                         // the format is used up: it starts again
+    }
+    if ( f.kind == PU_NONE ) {
+        return vm_error( vm, "Illegal argument" );
+    }
+    if ( ( f.kind == PU_STRING ) != isstr ) {
+        return vm_error( vm, isstr ? "Type mismatch (the field is a number field)" : "Type mismatch (the field is a string field)" );
+    }
+    vm->usepos = end;
+    if ( isstr ) {
+        if ( f.width == 0 ) {
+            vm_out_bytes( vm, str, slen );
+        } else {
+            char buf[256];
+            size_t k = pu_string( &f, str, slen, buf );
+            vm_out_bytes( vm, buf, k );
+        }
+    } else {
+        char buf[PU_NUMBER_MAX];
+        size_t k = pu_number( &f, num, buf );
+        vm_out_bytes( vm, buf, k );
+    }
+    if ( !hassep || ( sep & ( VM_PRINT_SEP_SEMIC | VM_PRINT_SEP_COMMA ) ) == 0 ) {
+        vm_using_trailing( vm );                // the last value: the text behind its field, then the line end
+        vm_out( vm, "\n" );
+    }
+    return true;
+}
+
 
 // -- variables -------------------------------------------------------------
 
@@ -4096,6 +4190,7 @@ static bool vm_step( vm_t* vm ) {
         case INS_WAIT: return vm_wait( vm, inspc );
         case INS_FRAM: return vm_frame( vm, inspc );
         case INS_HLT: vm->pc = vm->cgen->codesize; return true;
+        case INS_PUSG: return param16 == 0 ? vm_using_begin( vm ) : vm_using_end( vm );
         case INS_OPEN: return vm_open_channel( vm, param16 != 0 );
         case INS_CLOS: return vm_close_channel( vm );
         case INS_INPW: return vm_input_whole( vm );
@@ -4190,6 +4285,9 @@ static bool vm_step( vm_t* vm ) {
             if ( !vm_dpop_num( vm, &num ) ) {
                 return false;
             }
+            if ( hasp && ( param16 & PRTARG_USING ) != 0 ) {
+                return vm_using_item( vm, false, num, 0, 0, hasp, param16 );
+            }
             vm_format_number( num, buf );
             vm_out( vm, buf );
             return vm_print_sep( vm, hasp, param16 );
@@ -4198,6 +4296,11 @@ static bool vm_step( vm_t* vm ) {
             size_t slen = 0;
             if ( !vm_dpop_bstr( vm, &str, &slen ) ) {
                 return false;
+            }
+            if ( hasp && ( param16 & PRTARG_USING ) != 0 ) {
+                bool okk = vm_using_item( vm, true, 0.0, str, slen, hasp, param16 );
+                free( str );
+                return okk;
             }
             if ( hasp && ( param16 & PRTARG_WRITE ) != 0 ) {
                 vm_out( vm, "\"" );

@@ -402,6 +402,27 @@ PRINT PEEK$(200,5)               ' a string of 5 bytes from the RAM
 - `TIME$` (`HH:MM:SS`), `DATE$` (`YYYY-MM-DD`), `DATETIME$` (both, with a blank), the local time (instruction `DTIM`). They can't be assigned (no setting of the clock).
 - New reserved words: `FLOOR CEIL LOG2 LOG10 TIME DATE DATETIME IMP NIMP EQV NEQV SHL SHR ASL ASR` (tokens 220..234).
 
+## `PRINT USING` (2026-11-06)
+
+`PRINT [#n,] USING format$ ; value [; value ...]` prints values in fields of a format string, as in GW-BASIC (`USING` is an extension word, `XF_USING` 13, so it is a reserved word now). Literal text in the format is printed as it is; each value goes into the next field; **when the values outnumber the fields the format starts again**; the text behind the last field that got a value is printed, and a newline follows unless the list ends with `;` or `,` (`,` and `;` are the same here: there are no print zones). `PRINT USING f$;` without values prints the text up to the first field and no newline.
+
+| Field | Meaning |
+|---|---|
+| `#` | a digit position (a number is right-justified in the field; leading zeros are blanks, but a digit position directly in front of the point shows `0`) |
+| `.` | the decimal point; digit positions behind it give the decimals (rounded half away from zero) |
+| `,` | among the digit positions: thousands separators (the comma takes a place in the field) |
+| `+` in front | the sign is always shown (`+` or `-`) |
+| `+` or `-` behind | the sign at the end (`-` shows a space for a positive number) |
+| `**` | the blanks in front are filled with `*` (two digit positions) |
+| `$$` | a dollar sign in front of the number (one digit position); `**$` both, the dollar sign takes a place of its own |
+| `^^^^` | exponent form `E+nn` (the digit positions in front of the point decide the exponent: `##.##^^^^` of 1234.5 is `12.35E+02`) |
+| `!` | a string field: the first character |
+| `\  \` | a string field of 2 + (the blanks between) characters, cut or padded with blanks |
+| `&` | a string field: the whole string |
+| `_` | the next character is literal (`_#`, `_!`, `_&`, `_\`, `_+`, `__`) |
+
+A number that does not fit its field is printed in full with a `%` in front. A number for a string field or a string for a number field is "Type mismatch"; a format without any field is "Illegal argument". The format may be at most 255 bytes. A negative number without a sign field gets a `-` in front, which uses a place of the field (`##` shows `-5` as `-5` and `-12` as `%-12`). `PRINT USING` works on every output channel (`PRINT #1, USING ...`); `WRITE USING` does not exist. Design decisions I took (revisit if unwanted): a trailing `-` or `+` after a field is always taken as its sign (use `_-` for a dash, as in GW-BASIC), the dollar sign is placed behind the sign, `**` fill and `$$` follow the GW-BASIC fields otherwise as written above, ties round away from zero (so `##.#` of 2.25 is `2.3`), `,` and `;` are alike, `USING` inside an expression of the same statement that itself does a `PRINT USING` (a `FUNC` called in the value list) would spoil the outer format (the state is one per VM). Implementation: `printusing.[ch]` (no VM; scanning of the format and the formatting), instruction `PUSG 0x189` (parameter 0 begins with the format on the stack, 1 ends) and the parameter bit `PRTARG_USING` 0x20 of `PNUM` / `PSTR`, node `NT_PRINTSTMT` with three branches (channel, format, values; data byte 1 = USING). Not done: `AT`, `HTAB`, `VTAB` (roadmap item 8; `LOCATE` places the cursor), `LPRINT USING`, `STR$` with a format.
+
 ## `MIN`, `MAX`, `ATAN2`, `SPACE$`, `STRING$` (2026-11-01)
 
 - `MIN(a,b)`, `MAX(a,b)`: the smaller / larger of two numbers (two arguments only; nest them for more: `MAX(MIN(x,hi),lo)` clamps).
