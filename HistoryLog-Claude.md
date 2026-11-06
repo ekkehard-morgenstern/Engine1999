@@ -13,6 +13,9 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+### Roadmap item 70, `TOOL` and a tools folder (2026-11-06)
+- `docs/roadmap.md`: new row 70 from the owner's idea in `ideas-and-suggestions.txt` (editors reachable without losing the program): editors stay in BASIC, move to an installed `tools/` folder, `TOOL "name"[,arg$]` runs one in a pushed REPL context; `BUILD` embeds no tools; not available in the console host (owner's decisions). `SESSION.md` note added. Docs only, no tests.
+
 ## Log
 
 ### 7a6cb67 — 2026-10-17 13:32:27 +0200 — "Introduced Claude to the project"
