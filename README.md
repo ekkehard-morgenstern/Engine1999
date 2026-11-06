@@ -62,6 +62,24 @@ The sprite and tile editor, itself a BASIC program built on the UI statements, i
 
 ![The sprite and tile editor, a UI program in BASIC](docs/images/spriteed.png)
 
+### Tools: edit while the program waits
+
+The editors are *tools* (the `tools/` folder): `TOOL "spriteed"` runs one without losing the program you are working on, as on the home computers of old, where you stopped a game, changed its sprites and went on. Here `fruit2` is running; ESC stops it, `TOOL "spriteed"` opens the sprite editor on the pictures the game has loaded (the cherry is picture 1), a few pixels get a new color, and Store puts the picture back into the engine:
+
+![The sprite editor opened with TOOL over the stopped game fruit2, a few pixels of the cherry painted cyan; the game's own sprites are still on the screen](docs/images/tool-spriteed.png)
+
+Quit returns to the prompt with the game's graphics and variables untouched, and `CONT` goes on playing:
+
+![Back at the prompt after the sprite editor: the game is still on the screen, and CONT continues it](docs/images/tool-spriteed-after.png)
+
+`TOOL "fonted"` is the font editor for the text screen font (the characters `SYMBOL` redefines): a table of all 256 characters, an 8 x 12 grid, every stroke goes to the engine at once. Here the letter K has become a chess king (loaded from a file of `DESIGN CHAR` lines; Save writes such files):
+
+![The font editor with the letter K turned into a chess king](docs/images/tool-fonted.png)
+
+The font stays changed when the tool ends:
+
+![The prompt after the font editor: every K on the screen is a chess king now](docs/images/tool-fonted-text.png)
+
 ## Try it
 
 You need Linux, `gcc`, `make` and the SDL2 development files (on Debian and Ubuntu: `sudo apt install build-essential libsdl2-dev`). It is developed and tested on Debian 12 on x86-64.

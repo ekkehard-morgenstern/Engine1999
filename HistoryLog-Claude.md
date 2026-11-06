@@ -13,12 +13,8 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-### Roadmap item 72, the font editor `tools/fonted.bas` (2026-11-06)
-- **Engine:** queries `TXT("GLYPH",code,row)` and `TXT("BUILTIN",code,row)` (`GFXQ_TXTGLYPH 29`, `GFXQ_TXTBUILTIN 31` in `gfxops.[ch]`; `sdlscr_text_glyph()`; `txtscr_builtin_font()`; hosts `engine1999.c`, `engine1999c.c` (screen mode)).
-- **Tool:** `tools/fonted.bas` (table of 256 characters, 8 x 12 grid, transformations, copy / paste, built-in, undo 30, Save / Open as `DESIGN CHAR` listings, argument = file to open). No `GFX RESET`: the edited font stays.
-- **Docs:** `tools/README.md`, `docs/graphics-subsystem.md`, `docs/ui-subsystem.md`, `docs/basic-language.md`, `bascomp.ebnf` / grammar, man page, README, roadmap row 72, `SESSION.md`.
-- **Bugs of my own found while testing:** `DIM n` has n elements; a FUNC needs `FN`; a UI canvas needs a little more room than its cells (scale 1 gave nothing); `ON` / `OFF` / `ALL` are reserved words as variable names.
-- **Tests:** checked in the window under Xvfb (table, paint, undo, select, Save, Open through `ARG$(1)`, the font stays after Quit); see below for the suites.
+### README: screenshots of the tools (2026-11-06, owner's request)
+- `docs/images/tool-spriteed.png`, `tool-spriteed-after.png`, `tool-fonted.png`, `tool-fonted-text.png` (window under Xvfb: `fruit2` running, ESC, `TOOL "spriteed"`, cherry pixels painted and stored, Quit, `CONT` works; `TOOL "fonted"` with the letter K as a chess king loaded from a `DESIGN CHAR` file, and the text screen after it) and a README section "Tools: edit while the program waits". No code changed.
 
 ## Log
 
@@ -1367,3 +1363,12 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 - **Tools folder:** `demos/spriteed.bas`, `musiced.bas`, `sfxed.bas` moved to `tools/` (+ `tools/README.md`; moved with `mv`, the owner's git sees delete + add); each opens `ARG$(1)` at the start; spriteed's variable `TOOL` renamed `PTOOL` (found by running it: "String expression expected in line 410" was hidden by the restored screen, hence the message repeat). `makefile`: `make install` installs `tools/*.bas` to `lib/engine1999/tools` and `demos/lib/*.lib` also to `lib/engine1999/lib` (the search path of `baslib_system_dirs()`; before they were only in `share/engine1999/demos/lib`); `synhltest1` checks `tools/*.bas`.
 - **Docs:** `docs/basic-language.md` (TOOL), `docs/security-policy.md`, `docs/library-support.md`, `docs/build-and-test.md`, `docs/ui-subsystem.md`, `docs/grammar.*`, `README.md`, `demos/README.md`, `man/engine1999-basic.7`, `docs/roadmap.md` row 70 (done, decisions), `SESSION.md`.
 - **Tests:** `repltest1` 442 (18 new), `vmtest1` 1391 (+3), `synhltest1` 37422, `iotest1` 233, `poltest1` 54, `libtest1` 47, `buildtest1` 51, `contest1` 0 failures, `keytest1`, `scrtest1`, `uitest1`, `gfxtest1`, `make man-check`, `make grammar-check`; in the window under Xvfb (XTest typing): `TOOL "sfxed"`, `"spriteed"`, `"musiced"` open, Quit returns to the prompt with `A=5` and the stored program intact. The install rules were only checked with `make -n` (the `kit/` folder is owned by root). Backups `tool-m1`, `tool-m2`.
+
+### 07f435f — 2026-11-06 23:31:30 +0100 — "Font editor, created by Claude Code"
+22 files, +498/-19.
+#### Roadmap item 72, the font editor `tools/fonted.bas` (2026-11-06)
+- **Engine:** queries `TXT("GLYPH",code,row)` and `TXT("BUILTIN",code,row)` (`GFXQ_TXTGLYPH 29`, `GFXQ_TXTBUILTIN 31` in `gfxops.[ch]`; `sdlscr_text_glyph()`; `txtscr_builtin_font()`; hosts `engine1999.c`, `engine1999c.c` (screen mode)).
+- **Tool:** `tools/fonted.bas` (table of 256 characters, 8 x 12 grid, transformations, copy / paste, built-in, undo 30, Save / Open as `DESIGN CHAR` listings, argument = file to open). No `GFX RESET`: the edited font stays.
+- **Docs:** `tools/README.md`, `docs/graphics-subsystem.md`, `docs/ui-subsystem.md`, `docs/basic-language.md`, `bascomp.ebnf` / grammar, man page, README, roadmap row 72, `SESSION.md`.
+- **Bugs of my own found while testing:** `DIM n` has n elements; a FUNC needs `FN`; a UI canvas needs a little more room than its cells (scale 1 gave nothing); `ON` / `OFF` / `ALL` are reserved words as variable names.
+- **Tests:** checked in the window under Xvfb (table, paint, undo, select, Save, Open through `ARG$(1)`, the font stays after Quit); see below for the suites.
