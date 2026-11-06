@@ -1532,6 +1532,8 @@ static bool host_gfx_query( void* usrdata, int q, const double* a, int na, doubl
         case GFXQ_TXTCHAR:      *result = sdlscr_text_getcell( gi( a[1], 0 ), gi( a[0], 0 ) ) & 0xFFU; break;
         case GFXQ_TXTFGAT:      *result = ( sdlscr_text_getcell( gi( a[1], 0 ), gi( a[0], 0 ) ) >> 8 ) & 0xFFU; break;
         case GFXQ_TXTBGAT:      *result = ( sdlscr_text_getcell( gi( a[1], 0 ), gi( a[0], 0 ) ) >> 16 ) & 0xFFU; break;
+        case GFXQ_TXTGLYPH:     *result = sdlscr_text_glyph( gi( a[0], -1 ), gi( a[1], -1 ), false ); break;
+        case GFXQ_TXTBUILTIN:   *result = sdlscr_text_glyph( gi( a[0], -1 ), gi( a[1], -1 ), true ); break;
         case GFXQ_TXTWIDTH:     sdlscr_text_getviewport( &x, &y, &w, &h ); *result = w; break;
         case GFXQ_TXTHEIGHT:    sdlscr_text_getviewport( &x, &y, &w, &h ); *result = h; break;
         case GFXQ_TILECELL:     *result = sdlscr_tile_getcell( gi( a[0], 0 ), gi( a[1], 0 ) ); break;

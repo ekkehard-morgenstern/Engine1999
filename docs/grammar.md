@@ -181,7 +181,7 @@ sys-noarg-str-call := sys-noarg-str .
 > The graphics functions (docs/graphics-subsystem.md) are a table in gfxops.c: RGB(r,g,b[,a]), POINT(x,y), TILE(x,y), and the named values
 > GFX("FRAME"), GFX("LAYER",n), GFX("PRIORITY",n), GFX("PALETTE",n,i), GFX("TARGET"), TXT("X"), TXT("Y"), TXT("FG"), TXT("BG"),
 > MOUSE("X"\|"Y"\|"B"\|"PRESSED"\|"RELEASED"\|"WHEEL"\|"SHAPE"\|"VISIBLE"\|"EVENTS") (no further arguments),
-> TXT("CHAR",x,y), TXT("FGAT",x,y), TXT("BGAT",x,y), TXT("WIDTH"), TXT("HEIGHT"), SPRITE("X"\|"Y"\|"IMAGE"\|"ON"\|"HITS"\|"COLLIDE"\|"MOVING"\|"COLS"\|"ROWS",n):
+> TXT("CHAR",x,y), TXT("FGAT",x,y), TXT("BGAT",x,y), TXT("WIDTH"), TXT("HEIGHT"), TXT("GLYPH",code,row), TXT("BUILTIN",code,row), SPRITE("X"\|"Y"\|"IMAGE"\|"ON"\|"HITS"\|"COLLIDE"\|"MOVING"\|"COLS"\|"ROWS",n):
 > the name is a string literal and the number of arguments after it depends on the name.
 
 ```ebnf

@@ -1661,6 +1661,13 @@ void sdlscr_text_defchar( int code, const uint8_t rows[12] ) {
     sdllay_set_modified( &layers[LAY_TXT] );
 }
 
+int sdlscr_text_glyph( int code, int row, bool builtin ) {
+    if ( code < 0 || code > 255 || row < 0 || row > 11 ) {
+        return -1;
+    }
+    return ( builtin ? txtscr_builtin_font() : txtscr_font() )[ (size_t) code * 12U + (size_t) row ];
+}
+
 // tiles
 
 void sdlscr_tile_setcell( int x, int y, int tile ) {

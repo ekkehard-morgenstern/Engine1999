@@ -402,6 +402,10 @@ void txtscr_resetfont( void ) {
       memcpy( currfont, fontdef1, FONTSIZE );
 }
 
+const uint8_t* txtscr_builtin_font( void ) {
+      return fontdef1;
+}
+
 const uint8_t* txtscr_font( void ) {
       return currfont;
 }

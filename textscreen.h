@@ -123,6 +123,7 @@ bool txtscr_restore( const uint8_t* data, size_t size );
 void txtscr_defchar( int code, const uint8_t rows[12] );
 void txtscr_resetcolors( void );                                            // pen, paper and the blank colors of the selected screen back to the defaults (the contents stay)
 void txtscr_resetfont( void );                                              // all characters back to the built-in font
+const uint8_t* txtscr_builtin_font( void );                                 // the built-in font (256 * 12 bytes), never changed by txtscr_defchar()
 const uint8_t* txtscr_font( void );                                         // 256 * 12 bytes
 
 int txtscr_write( int y, int x, int bg, int fg, const char* text, int len );

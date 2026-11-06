@@ -115,7 +115,7 @@ Functions (the name of the value is a string literal, so the compiler checks it;
 RGB(r, g, b [, a])                    0..255 each (a defaults to 255): the ARGB value for GFX PALETTE / BACKDROP
 POINT(x, y)                           the palette index at x, y of the target layer, -1 outside
 GFX("FRAME")  GFX("LAYER", n)  GFX("PRIORITY", n)  GFX("PALETTE", layer, i)  GFX("TARGET")      frame counter, -1/0 shown, priority, ARGB, target layer
-TXT("X") TXT("Y") TXT("FG") TXT("BG") TXT("WIDTH") TXT("HEIGHT") TXT("CHAR",x,y) TXT("FGAT",x,y) TXT("BGAT",x,y)   cursor, colors, size, cell contents
+TXT("X") TXT("Y") TXT("FG") TXT("BG") TXT("WIDTH") TXT("HEIGHT") TXT("CHAR",x,y) TXT("FGAT",x,y) TXT("BGAT",x,y) TXT("GLYPH",c,row) TXT("BUILTIN",c,row)   cursor, colors, size, cell contents
 TILE(x, y)                            the tile in a cell of the tile screen
 SPRITE("X",n) ("Y",n) ("IMAGE",n) ("ON",n) ("MOVING",n) ("HITS",n) ("COLLIDE",n)   position, image, shown, moving, collision bits, the other sprite
 SPRITE("COLS",n) ("ROWS",n)           the size of the group that n heads, in sprites (1 and 1 if there is none)

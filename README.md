@@ -96,7 +96,7 @@ Then try the demos: `LOAD "demos/fruit2"` and `RUN`. After `make install` the ga
 | `demos/madrun.bas` | **MADRUN**: a crossing game for one to four players, with a phone booth, traffic and a rescue ambulance |
 | `demos/river.bas` | **ETERNAL RIVER**: a scroll-down boat game over an endless river, with bridges, swimmers and wraiths on the banks |
 | `demos/rustball.bas` | **BEING A RUSTBALL**: a labyrinth game for one to four players: you are a rust ball, sneak up on the workers from behind, grow by eating nuts and bolts, and crush walls when you are big |
-| `tools/spriteed.bas`, `musiced.bas`, `sfxed.bas` | The sprite and tile editor, the music editor and the sound effect editor (UI programs); run them with `TOOL "name"` |
+| `tools/spriteed.bas`, `fonted.bas`, `musiced.bas`, `sfxed.bas` | The sprite and tile editor, the text font editor, the music editor and the sound effect editor (UI programs); run them with `TOOL "name"` |
 | `demos/fruit.bas` | The first, simpler Fruit Invaders |
 | `demos/gfx.bas` | The graphics layers: palettes, drawing, tiles, `DESIGN` pictures, sprites |
 | `demos/mouse.bas` | A small paint program for the mouse: draw, erase, choose pens from a color bar (the pointer changes its shape) |

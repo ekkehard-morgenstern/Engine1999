@@ -956,6 +956,8 @@ static bool con_gfx_query( void* usrdata, int q, const double* a, int na, double
             case GFXQ_TXTCHAR:      c = txtscr_getcell( con_gi( a[1], 0 ), con_gi( a[0], 0 ) ); *result = TXTSCR_CELL_CHR( c ); return true;
             case GFXQ_TXTFGAT:      c = txtscr_getcell( con_gi( a[1], 0 ), con_gi( a[0], 0 ) ); *result = TXTSCR_CELL_FG( c ); return true;
             case GFXQ_TXTBGAT:      c = txtscr_getcell( con_gi( a[1], 0 ), con_gi( a[0], 0 ) ); *result = TXTSCR_CELL_BG( c ); return true;
+            case GFXQ_TXTGLYPH:     *result = ( con_gi( a[0], -1 ) | con_gi( a[1], -1 ) ) < 0 || con_gi( a[0], 0 ) > 255 || con_gi( a[1], 0 ) > 11 ? -1 : txtscr_font()[ (size_t) con_gi( a[0], 0 ) * 12U + (size_t) con_gi( a[1], 0 ) ]; return true;
+            case GFXQ_TXTBUILTIN:   *result = ( con_gi( a[0], -1 ) | con_gi( a[1], -1 ) ) < 0 || con_gi( a[0], 0 ) > 255 || con_gi( a[1], 0 ) > 11 ? -1 : txtscr_builtin_font()[ (size_t) con_gi( a[0], 0 ) * 12U + (size_t) con_gi( a[1], 0 ) ]; return true;
             case GFXQ_TXTWIDTH:     txtscr_getsize( &w, &h ); *result = w; return true;
             case GFXQ_TXTHEIGHT:    txtscr_getsize( &w, &h ); *result = h; return true;
             default:                return false;

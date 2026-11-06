@@ -161,6 +161,8 @@ static const gfxquery_t queries[] = {
     { "TXT",    "BGAT",     GFXQ_TXTBGAT,   2, 2 },
     { "TXT",    "WIDTH",    GFXQ_TXTWIDTH,  0, 0 },
     { "TXT",    "HEIGHT",   GFXQ_TXTHEIGHT, 0, 0 },
+    { "TXT",    "GLYPH",    GFXQ_TXTGLYPH,  2, 2 },
+    { "TXT",    "BUILTIN",  GFXQ_TXTBUILTIN,2, 2 },
     { "MOUSE",  "X",        GFXQ_MOUSEX,    0, 0 },
     { "MOUSE",  "Y",        GFXQ_MOUSEY,    0, 0 },
     { "MOUSE",  "B",        GFXQ_MOUSEB,    0, 0 },

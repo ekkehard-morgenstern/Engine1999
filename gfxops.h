@@ -177,6 +177,8 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXQ_TXTBGAT    26              // TXT("BGAT", x, y)
 #define GFXQ_TXTWIDTH   27              // TXT("WIDTH")
 #define GFXQ_TXTHEIGHT  28              // TXT("HEIGHT")
+#define GFXQ_TXTGLYPH   29              // TXT("GLYPH", code, row): row 0..11 of the character's picture now (bit 7 = left)
+#define GFXQ_TXTBUILTIN 31              // TXT("BUILTIN", code, row): the same in the built-in font (what SYMBOL has not changed)
 #define GFXQ_TILECELL   30              // TILE(x, y)
 #define GFXQ_SPRX       40              // SPRITE("X", n)
 #define GFXQ_SPRY       41

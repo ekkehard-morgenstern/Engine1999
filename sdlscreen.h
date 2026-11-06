@@ -195,6 +195,7 @@ void     sdlscr_text_invert( int x1, int y1, int x2, int y2 );
 size_t   sdlscr_text_save( uint8_t* out, size_t outsize );      // 4 bytes per cell; returns the size needed
 bool     sdlscr_text_restore( const uint8_t* data, size_t size );
 void     sdlscr_text_defchar( int code, const uint8_t rows[12] );
+int      sdlscr_text_glyph( int code, int row, bool builtin );   // one row byte of a character of the font (or of the built-in font), -1 if code or row are out of range
 
 // tiles (more above: sdlscr_writetile, sdlscr_scrolltiles)
 void     sdlscr_tile_setcell( int x, int y, int tile );
