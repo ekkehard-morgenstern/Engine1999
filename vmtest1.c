@@ -665,6 +665,14 @@ static const testcase_t cases[] = {
     { "UI EDIT", "UI EDIT 3,10,20,200,100,\"a\"", "<gfx UI EDIT 3 10 20 200 100 s(1)=97>\n" },
     { "UI CARET", "UI CARET 3,5", "<gfx UI CARET 3 5>\n" },
     { "UI editor queries", "PRINT UI(\"CARET\",7);UI(\"LINE\",2);UI(\"COLUMN\",1);UI(\"SELECTED\",4);UI(\"LINES\",5)", "72145\n" },
+    // colors, themes and syntax highlighting of the UI
+    { "UI COLOR", "UI COLOR 4,20,30", "<gfx UI COLOR 4 20 30>\n" },
+    { "UI COLOR with one color", "UI COLOR 4,-1", "<gfx UI COLOR 4 -1 ->\n" },
+    { "UI THEME", "UI THEME 1", "<gfx UI THEME 1>\n" },
+    { "UI SYNTAX", "UI SYNTAX 3,1", "<gfx UI SYNTAX 3 1>\n" },
+    { "UI SYNTAXCOLOR", "UI SYNTAXCOLOR 2,200", "<gfx UI SYNTAXCOLOR 2 200>\n" },
+    { "UI HILITE", "UI HILITE 3,CHR$(0)+CHR$(2)", "<gfx UI HILITE 3 s(2)=0,2>\n" },
+    { "UI color queries", "PRINT UI(\"THEME\");UI(\"SYNTAX\",4);UI(\"COLOR\",5,1);UI(\"SYNTAXCOLOR\",6)", "0466\n" },
     // number packing (big endian)
     { "MKI$ is two bytes, big endian", "A$=MKI$(258):PRINT LEN(A$);ASC(A$);ASC(MID$(A$,2,1))", "212\n" },
     { "MKL$ is four bytes, big endian", "A$=MKL$(16909060):PRINT LEN(A$);ASC(A$);ASC(MID$(A$,2,1));ASC(MID$(A$,3,1));ASC(RIGHT$(A$,1))", "41234\n" },

@@ -49,6 +49,7 @@ backups/*.zip
 backups/restored/
 fonttest1
 uitest1
+synhltest1
 poltest1
 
 engine1999-*.tar.gz

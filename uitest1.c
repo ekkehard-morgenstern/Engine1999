@@ -277,6 +277,132 @@ static void test_edit( void ) {
     done();
 }
 
+// -- colors, themes, syntax highlighting -------------------------------------------------------------------------------------------------------------------
+
+static int cell_count( int col, int line, int color ) {         // the pixels of a color in one character cell of the editor at (10, 10)
+    int x = 10 + 3 + col * 8, y = 10 + 3 + line * 12;
+    return count_color( x, y, x + 7, y + 11, color );
+}
+
+static void test_colors( void ) {
+    setup();
+    check( "color: an unknown widget is refused", !ui_set_color( &ui, 9, 20, 30 ) );
+    ui_add( &ui, UIK_BUTTON, 1, 10, 10, 80, 24, "Go", 0 );
+    check( "color: 0 and 256 are refused (0 is transparent)", !ui_set_color( &ui, 1, 0, -2 ) && !ui_set_color( &ui, 1, -2, 256 ) && !ui_set_color( &ui, 1, -3, -2 ) );
+    check( "color: the theme's color is the default", ui_get_color( &ui, 1, 0 ) == -1 && ui_get_color( &ui, 1, 1 ) == -1 );
+    check( "color: a color is set", ui_set_color( &ui, 1, 20, 30 ) && ui_get_color( &ui, 1, 0 ) == 20 && ui_get_color( &ui, 1, 1 ) == 30 );
+    check( "color: -2 leaves one as it is", ui_set_color( &ui, 1, -2, 31 ) && ui_get_color( &ui, 1, 0 ) == 20 && ui_get_color( &ui, 1, 1 ) == 31 );
+    ui_draw( &ui, true );
+    check( "color: the button face has the color", gfx_point( &g, 14, 14 ) == 31 );
+    check( "color: its caption has the color", count_color( 10, 10, 89, 33, 20 ) > 10 );
+    check( "color: -1 goes back to the theme", ui_set_color( &ui, 1, -1, -1 ) && ui_get_color( &ui, 1, 1 ) == -1 );
+    ui_draw( &ui, false );
+    check( "color: the face is the theme's again", gfx_point( &g, 14, 14 ) == ui.theme.face );
+    ui_add( &ui, UIK_LABEL, 2, 100, 10, 60, 14, "Hi", 0 );
+    ui_set_color( &ui, 2, 40, 41 );
+    ui_draw( &ui, false );
+    check( "color: a label with a background fills it", gfx_point( &g, 158, 11 ) == 41 );
+    ui_add( &ui, UIK_TEXT, 3, 10, 60, 100, 20, "abc", 0 );
+    ui_set_color( &ui, 3, 50, 51 );
+    ui_draw( &ui, false );
+    check( "color: a text field has its colors", gfx_point( &g, 105, 62 ) == 51 && count_color( 10, 60, 109, 79, 50 ) > 5 );
+    done();
+
+    // the presets
+    uint32_t a[ UI_PAL_COLORS ], b[ UI_PAL_COLORS ], s0[ UI_SYN_COLORS ], s1[ UI_SYN_COLORS ];
+    ui_theme_preset( 0, a ); ui_theme_preset( 1, b );
+    uint32_t classic[ UI_PAL_COLORS ];
+    ui_theme_argb( classic );
+    check( "theme: preset 0 is the classic theme", memcmp( a, classic, sizeof(a) ) == 0 );
+    check( "theme: the dark preset differs", memcmp( a, b, sizeof(a) ) != 0 && ( b[4] & 0xFF ) > 0x80 );
+    ui_theme_preset( 7, b );
+    check( "theme: an unknown preset is the classic one", memcmp( a, b, sizeof(a) ) == 0 );
+    ui_syntax_argb( 0, s0 ); ui_syntax_argb( 1, s1 );
+    check( "theme: the syntax colors differ per preset and are opaque", memcmp( s0, s1, sizeof(s0) ) != 0 && ( s0[2] >> 24 ) == 0xFF && ( s1[9] >> 24 ) == 0xFF );
+
+    // an editor with BASIC highlighting (the syntax slots are the palette entries 116 + slot)
+    setup();
+    ui_add( &ui, UIK_EDIT, 1, 10, 10, 300, 80, "10 PRINT \"A\"\nX=1", 0 );
+    ui_draw( &ui, true );
+    check( "syntax: plain text has no syntax colors", cell_count( 0, 0, 116 + HL_LINENO ) == 0 && cell_count( 3, 0, 116 + HL_STATEMENT ) == 0 );
+    check( "syntax: a bad mode is refused", !ui_set_syntax( &ui, 1, 5 ) && !ui_set_syntax( &ui, 9, 1 ) && ui_get_syntax( &ui, 1 ) == 0 );
+    check( "syntax: BASIC is set", ui_set_syntax( &ui, 1, 1 ) && ui_get_syntax( &ui, 1 ) == 1 );
+    ui_draw( &ui, false );
+    check( "syntax: the line number", cell_count( 1, 0, 116 + HL_LINENO ) > 3 );
+    check( "syntax: the statement", cell_count( 3, 0, 116 + HL_STATEMENT ) > 3 && cell_count( 7, 0, 116 + HL_STATEMENT ) > 3 );
+    check( "syntax: the string", cell_count( 9, 0, 116 + HL_STRING ) > 2 );
+    check( "syntax: identifier and number on the next line", cell_count( 0, 1, 116 + HL_IDENT ) > 3 && cell_count( 2, 1, 116 + HL_NUMBER ) > 3 );
+    check( "syntax: the operator", cell_count( 1, 1, 116 + HL_OPERATOR ) > 2 );
+    check( "syntax: a slot gets another color", ui_syntax_color( &ui, HL_STATEMENT, 200 ) && !ui_syntax_color( &ui, 16, 5 ) && !ui_syntax_color( &ui, 2, 0 ) );
+    ui_draw( &ui, false );
+    check( "syntax: the new color is drawn", cell_count( 3, 0, 200 ) > 3 && cell_count( 3, 0, 116 + HL_STATEMENT ) == 0 );
+    key( UIKEY_CTRL | UIKEY_HOME );
+    typed( "'" );
+    ui_draw( &ui, false );
+    check( "syntax: typing recolors the line (a comment now)", cell_count( 5, 0, 116 + HL_COMMENT ) > 2 && cell_count( 5, 0, 200 ) == 0 );
+    ui_set_enabled( &ui, 1, false );
+    ui_draw( &ui, false );
+    check( "syntax: a disabled editor is drawn plain", cell_count( 5, 0, 116 + HL_COMMENT ) == 0 );
+    ui_set_enabled( &ui, 1, true );
+    check( "syntax: mode 0 is plain again", ui_set_syntax( &ui, 1, 0 ) );
+    ui_draw( &ui, false );
+    check( "syntax: plain after all", cell_count( 3, 0, 116 + HL_COMMENT ) == 0 );
+    done();
+
+    // colors that the program gives (UI HILITE)
+    setup();
+    ui_add( &ui, UIK_EDIT, 1, 10, 10, 300, 80, "abc", 0 );
+    uint8_t cl[3] = { 0, 13, 31 };
+    check( "hilite: the classes are set (only the low 4 bits count)", ui_set_hilite( &ui, 1, cl, 3 ) && ui_get_syntax( &ui, 1 ) == 2 && !ui_set_hilite( &ui, 9, cl, 3 ) );
+    ui_draw( &ui, true );
+    check( "hilite: slot 13 and 15 are drawn, slot 0 is plain", cell_count( 1, 0, 116 + 13 ) > 3 && cell_count( 2, 0, 116 + 15 ) > 3 && cell_count( 0, 0, 116 + 13 ) == 0 );
+    key( UIKEY_CTRL | UIKEY_HOME );
+    typed( "X" );
+    ui_draw( &ui, false );
+    check( "hilite: the colors move with the text, new text is plain", cell_count( 0, 0, 116 + 13 ) == 0 && cell_count( 2, 0, 116 + 13 ) > 3 && cell_count( 3, 0, 116 + 15 ) > 3 );
+    key( UIKEY_BACKSPACE );
+    key( UIKEY_DELETE );
+    key( UIKEY_END );
+    ui_draw( &ui, false );
+    check( "hilite: a deleted byte takes its color away", cell_count( 0, 0, 116 + 13 ) > 3 && cell_count( 1, 0, 116 + 15 ) > 3 );
+    ui_set_text( &ui, 1, "zz" );
+    key( UIKEY_END );
+    ui_draw( &ui, false );
+    check( "hilite: a new text has none", cell_count( 0, 0, 116 + 13 ) == 0 && cell_count( 1, 0, 116 + 15 ) == 0 );
+    ui_add( &ui, UIK_LIST, 2, 10, 100, 50, 50, "", 0 );
+    check( "hilite: a list is no editor", !ui_set_hilite( &ui, 2, cl, 3 ) && !ui_set_syntax( &ui, 2, 1 ) );
+    ui_set_color( &ui, 1, 60, 61 );
+    ui_draw( &ui, false );
+    check( "color: an editor has its colors", gfx_point( &g, 200, 60 ) == 61 && cell_count( 0, 0, 60 ) > 3 );
+    done();
+}
+
+static void test_caret( void ) {
+    setup();
+    ui_add( &ui, UIK_EDIT, 1, 10, 10, 300, 80, "abc", 0 );
+    ui_draw( &ui, true );
+    check( "caret: a block as wide as a character is drawn at the caret", cell_count( 0, 0, 100 + 4 ) > 50 );
+    ui_input( &ui, 0, 0, 0, 0, 0, 0, 2600 );
+    ui_draw( &ui, false );
+    check( "caret: it blinks off after 500 ms without action", cell_count( 0, 0, 100 + 4 ) < 40 );
+    ui_input( &ui, 0, 0, 0, 0, 0, 0, 3100 );
+    ui_draw( &ui, false );
+    check( "caret: and on again", cell_count( 0, 0, 100 + 4 ) > 50 );
+    ui_input( &ui, 0, 0, 0, 0, 0, 0, 3700 );
+    ui_draw( &ui, false );
+    check( "caret: off", cell_count( 0, 0, 100 + 4 ) < 40 );
+    int k = UIKEY_END;
+    ui_input( &ui, 0, 0, 0, 0, &k, 1, 3800 );
+    ui_draw( &ui, false );
+    check( "caret: a key makes it solid and moves it", cell_count( 3, 0, 100 + 4 ) > 50 && cell_count( 0, 0, 100 + 4 ) < 40 );
+    ui_set_focus( &ui, 0 );
+    ui_add( &ui, UIK_BUTTON, 2, 10, 120, 50, 20, "x", 0 );
+    ui_set_focus( &ui, 2 );
+    ui_draw( &ui, true );
+    check( "caret: an editor without the focus has none", cell_count( 3, 0, 100 + 4 ) < 40 );
+    done();
+}
+
 int main( void ) {
     ui_theme_t th;
     ui_theme_default( &th, 100 );
@@ -1072,6 +1198,8 @@ int main( void ) {
     done();
 
     test_edit();
+    test_colors();
+    test_caret();
 
     printf( "%d checks, %d failed\n", checks, failures );
     return failures;

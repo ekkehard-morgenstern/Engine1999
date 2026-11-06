@@ -36,6 +36,7 @@
 #endif
 
 #include "font.h"
+#include "synhl.h"
 
 /*
 The UI subsystem (docs/ui-subsystem.md): retained widgets on a canvas, no SDL, no VM. The program (the BASIC statements, or a test) creates widgets,
@@ -58,6 +59,8 @@ callbacks to sdlscreen) and on a gfxcore bitmap in the test. All coordinates are
 #define UI_EVENTS       64              // the event queue
 
 #define UI_PAL_COLORS   16              // the theme uses this many consecutive palette entries (the host sets them: ui_theme_argb)
+#define UI_SYN_COLORS   16              // the syntax colors (SYN_SLOTS) follow the theme: the next 16 palette entries (ui_syntax_argb)
+#define UI_THEMES       3               // the presets: 0 classic (grey), 1 dark, 2 high contrast
 
 typedef enum _ui_kind_t {
     UIK_NONE = 0, UIK_LABEL, UIK_BUTTON, UIK_CHECK, UIK_RADIO, UIK_TEXT, UIK_LIST, UIK_PROGRESS, UIK_SLIDER, UIK_PANEL, UIK_SCROLL, UIK_CANVAS, UIK_EDIT, UIK_COUNT
@@ -146,6 +149,8 @@ typedef struct _ui_widget_t {
     int     page;                       // scroll bar: the size of the visible part (the knob is page / (max - min + page) of the track)
     ui_dmg_t dmg;                       // the damage list of this widget
     int     owner;                      // the id of the window this widget was created in (0 none): it moves and rises with it
+    int     fg, bg;                     // palette entries of this widget's text and background (0: the theme's; UI COLOR)
+    int     syntax;                     // UIK_EDIT: 0 plain text, 1 BASIC (synhl.c), 2 the classes the program gave (UI HILITE)
     int     group;                      // radio buttons of the same group exclude each other
     int     caret, scroll;              // text field: the caret (a byte index) and the first visible pixel column; list: the first visible row in scroll
     struct _ui_edit_t* edit;            // multi-line editor: the selection, the undo steps, the mouse state (ui.c)
@@ -158,6 +163,8 @@ typedef struct _ui_widget_t {
 typedef struct _ui_t {
     ui_canvas_t     canvas;
     ui_theme_t      theme;
+    int             palbase;            // the first palette entry of the theme
+    int             syncolor[ UI_SYN_COLORS ];      // the palette entry of each syntax slot (default: palbase + UI_PAL_COLORS + slot)
     ui_widget_t     widgets[UI_MAXWIDGETS];
     int             count;
     int             focus;              // id (0 none)
@@ -170,6 +177,8 @@ typedef struct _ui_t {
     int             dmg[4];             // while a damaged part is drawn: its rectangle (x1 y1 x2 y2); the clip is cut to it
     bool            dmgon;
     ui_dmg_t        deskdmg;            // the parts of the desk (behind all widgets) that need the desk color again
+    bool            blink_on, blink_drawn;  // the caret of an editor: shown now / the phase that was last drawn
+    uint32_t        blink_base;         // the time of the last key or mouse action (the caret is solid for 500 ms after it)
     uint32_t        padprev;            // ui_pad_keys(): the pad buttons of the last call
     int             padkey;             // the direction key that is held (0 none)
     uint32_t        padnext_ms;         // when it repeats
@@ -190,6 +199,8 @@ typedef struct _ui_t {
 // the theme with the palette entries base .. base + UI_PAL_COLORS - 1; ui_theme_argb fills the ARGB values the host puts into the palette
 void ui_theme_default( ui_theme_t* t, int base );
 void ui_theme_argb( uint32_t argb[ UI_PAL_COLORS ] );
+void ui_theme_preset( int n, uint32_t argb[ UI_PAL_COLORS ] );          // the preset n (0 .. UI_THEMES - 1; others: 0): the theme's ARGB values
+void ui_syntax_argb( int n, uint32_t argb[ UI_SYN_COLORS ] );           // the syntax colors that go with the preset n
 
 void ui_init( ui_t* ui, const ui_canvas_t* canvas, int palbase );
 void ui_free( ui_t* ui );
@@ -216,6 +227,12 @@ bool ui_raise( ui_t* ui, int id );                              // a window (and
 bool ui_set_page( ui_t* ui, int id, int page );                 // scroll bar: the size of the visible part (>= 1); sets the size of the knob and the step of Page up / down
 bool ui_edit_caret( ui_t* ui, int id, int pos );                // multi-line editor: the caret to a byte position (the selection is dropped, the view follows)
 int  ui_edit_query( ui_t* ui, int id, int what );               // multi-line editor: 0 the caret (byte), 1 its line (from 0), 2 its column, 3 the length of the selection, 4 the number of lines; -1 for a bad id
+bool ui_set_color( ui_t* ui, int id, int fg, int bg );          // the colors of a widget's text and background: a palette entry 1..255, -1 the theme's, -2 unchanged (0 and everything else is refused)
+int  ui_get_color( ui_t* ui, int id, int which );               // which 0 text, 1 background: the entry, -1 = the theme's (or no such widget)
+bool ui_set_syntax( ui_t* ui, int id, int mode );               // multi-line editor: 0 plain, 1 BASIC (the colors of LIST); mode 2 is set by ui_set_hilite
+int  ui_get_syntax( ui_t* ui, int id );                         // -1 for a bad id
+bool ui_syntax_color( ui_t* ui, int slot, int entry );          // the palette entry (1..255) a syntax slot 0..15 is drawn with
+bool ui_set_hilite( ui_t* ui, int id, const uint8_t* classes, size_t n );   // multi-line editor: a slot 0..15 per byte of the text (the rest is slot 0); kept (and moved) while the text is edited
 bool ui_set_enabled( ui_t* ui, int id, bool on );
 bool ui_set_visible( ui_t* ui, int id, bool on );
 bool ui_set_focus( ui_t* ui, int id );

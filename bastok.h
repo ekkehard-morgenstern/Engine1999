@@ -537,6 +537,11 @@ typedef enum _hlclass_t {
 
 typedef const char* (*hlstyle_t)( hlclass_t cls, void* usrdata );
 
+// the class of a keyword token / of an extension word (shared by LIST, the editors and synhl.c)
+hlclass_t keyword_hlclass( uint8_t tok );
+hlclass_t xkeyword_hlclass( uint8_t xid );
+hlclass_t sngchr_hlclass( uint8_t tok );
+
 bool detokenize_line_hl( buf_t* out, const uint8_t* wherefrom, const struct _linehdr_t* phdr,
     hlstyle_t style, void* usrdata );
 

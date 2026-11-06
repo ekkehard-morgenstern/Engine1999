@@ -137,12 +137,46 @@ void ui_theme_default( ui_theme_t* t, int base ) {
     t->boldfont = FONT_BOLD;
 }
 
-void ui_theme_argb( uint32_t argb[ UI_PAL_COLORS ] ) {
-    static const uint32_t c[ UI_PAL_COLORS ] = {
+static const uint32_t theme_presets[ UI_THEMES ][ UI_PAL_COLORS ] = {
+    {   // 0 classic
         0xFF006060, 0xFFC0C0C0, 0xFFFFFFFF, 0xFF808080, 0xFF000000, 0xFF000080, 0xFFFFFFFF, 0xFFFFFFFF,
         0xFF808080, 0xFF000000, 0xFF000080, 0xFFFFFFFF, 0xFF0000AA, 0xFFFFFF00, 0xFFFF0000, 0xFF008000
-    };
-    memcpy( argb, c, sizeof(c) );
+    },
+    {   // 1 dark
+        0xFF1B2128, 0xFF3A3F47, 0xFF5E656F, 0xFF14171B, 0xFFE0E0E0, 0xFF2B5EA8, 0xFFFFFFFF, 0xFF1E1E1E,
+        0xFF7C828A, 0xFFE0E0E0, 0xFF1F4E8C, 0xFFFFFFFF, 0xFF3A7FD5, 0xFFFFFF00, 0xFFFF5050, 0xFF40C040
+    },
+    {   // 2 high contrast
+        0xFF000000, 0xFF000000, 0xFFFFFFFF, 0xFF909090, 0xFFFFFFFF, 0xFFFFFF00, 0xFF000000, 0xFF000000,
+        0xFFA0A0A0, 0xFFFFFFFF, 0xFFFFFF00, 0xFF000000, 0xFF00FF00, 0xFFFFFF00, 0xFFFF4040, 0xFF40FF40
+    }
+};
+
+static const uint32_t syntax_presets[ UI_THEMES ][ UI_SYN_COLORS ] = {
+    {   // plain, line number, statement, control, command, function, operator, identifier, number, string, shell, comment, punctuation, 3 free
+        0xFF000000, 0xFF808000, 0xFF000080, 0xFF800080, 0xFFC00000, 0xFF008080, 0xFF404040, 0xFF000000,
+        0xFF800000, 0xFF008000, 0xFFC000C0, 0xFF808080, 0xFF000000, 0xFFC00000, 0xFF008000, 0xFF0000C0
+    },
+    {
+        0xFFE0E0E0, 0xFFC8B060, 0xFF6CB0FF, 0xFFD08CFF, 0xFFFF7070, 0xFF50D8D0, 0xFFD0D0D0, 0xFFE0E0E0,
+        0xFFFFA070, 0xFF90E070, 0xFFFF80FF, 0xFF808890, 0xFFC0C0C0, 0xFFFF7070, 0xFF90E070, 0xFF70A0FF
+    },
+    {
+        0xFFFFFFFF, 0xFFFFFF00, 0xFF40FFFF, 0xFFFF80FF, 0xFFFF6060, 0xFF80FF80, 0xFFFFFFFF, 0xFFFFFFFF,
+        0xFFFFC040, 0xFFFFE080, 0xFFFF9000, 0xFFA0A0A0, 0xFFFFFFFF, 0xFFFF6060, 0xFF80FF80, 0xFF8080FF
+    }
+};
+
+void ui_theme_preset( int n, uint32_t argb[ UI_PAL_COLORS ] ) {
+    memcpy( argb, theme_presets[ n >= 0 && n < UI_THEMES ? n : 0 ], sizeof(theme_presets[0]) );
+}
+
+void ui_syntax_argb( int n, uint32_t argb[ UI_SYN_COLORS ] ) {
+    memcpy( argb, syntax_presets[ n >= 0 && n < UI_THEMES ? n : 0 ], sizeof(syntax_presets[0]) );
+}
+
+void ui_theme_argb( uint32_t argb[ UI_PAL_COLORS ] ) {
+    ui_theme_preset( 0, argb );
 }
 
 // -- drawing primitives (clipped to the widget being drawn) ---------------------------------------------------------------------------------------------
@@ -615,6 +649,8 @@ typedef struct _ui_edit_t {
     int     nredo;
     int     lastkind;                           // what the last change was (typing is joined to one undo step)
     int     lastend;                            // the caret after it
+    uint8_t* hil;                               // syntax slots per byte of the text (UI HILITE), hillen bytes; 0: none
+    int     hillen;
     bool    drag;                               // the left button went down in the text: the mouse extends the selection
     uint32_t lastclick_ms;
     int     lastclick_pos, clicks;
@@ -644,6 +680,7 @@ static void edit_clear_undo( ui_edit_t* e ) {
 
 static void edit_free( ui_widget_t* w ) {
     if ( w->edit != 0 ) {
+        free( w->edit->hil );
         edit_clear_undo( w->edit );
         free( w->edit );
         w->edit = 0;
@@ -656,6 +693,9 @@ static void edit_reset( ui_widget_t* w ) {
         return;
     }
     edit_clear_undo( w->edit );
+    free( w->edit->hil );
+    w->edit->hil = 0;
+    w->edit->hillen = 0;
     w->edit->anchor = -1;
     w->edit->hscroll = 0;
     w->edit->wantcol = -1;
@@ -817,6 +857,21 @@ static bool edit_replace( ui_t* ui, ui_widget_t* w, int from, int to, const char
     if ( !join ) {
         edit_push_undo( w );
     }
+    if ( e->hil != 0 ) {                                    // the syntax slots move with the text; what is new is plain until the program colors it again
+        int nl = len - ( to - from ) + (int) m;
+        uint8_t* nh = (uint8_t*) calloc( (size_t) nl + 1U, 1U );
+        if ( nh != 0 ) {
+            for ( int i = 0; i < from && i < e->hillen; ++i ) nh[i] = e->hil[i];
+            for ( int i = to; i < len && i < e->hillen; ++i ) nh[ from + (int) m + ( i - to ) ] = e->hil[i];
+            free( e->hil );
+            e->hil = nh;
+            e->hillen = nl;
+        } else {
+            free( e->hil );
+            e->hil = 0;
+            e->hillen = 0;
+        }
+    }
     memcpy( nt, w->text, (size_t) from );
     memcpy( nt + from, clean, m );
     memcpy( nt + from + m, w->text + to, (size_t)( len - to ) + 1U );
@@ -888,6 +943,9 @@ static void edit_undo( ui_t* ui, ui_widget_t* w, bool redo ) {
     ++*nto;
     --*nfrom;
     free( w->text );
+    free( e->hil );
+    e->hil = 0;
+    e->hillen = 0;
     w->text = from[*nfrom];
     w->caret = fcaret[*nfrom];
     int len = edit_len( w );
@@ -1140,17 +1198,106 @@ int ui_edit_query( ui_t* ui, int id, int what ) {
     }
 }
 
+// -- colors and syntax highlighting (UI COLOR, UI SYNTAX, UI SYNTAXCOLOR, UI HILITE) ----------------------------------------------------------------------
+// Colors are palette entries of the UI's layer; entry 0 is transparent in every layer (a widget painted with it would show the layers behind it, and it is the
+// mouse pointer's background), so it is refused; -1 means the theme's color.
+
+static bool color_ok( int c ) {
+    return c == -1 || c == -2 || ( c >= 1 && c <= 255 );
+}
+
+bool ui_set_color( ui_t* ui, int id, int fg, int bg ) {
+    ui_widget_t* w = ui_find( ui, id );
+    if ( w == 0 || !color_ok( fg ) || !color_ok( bg ) ) {
+        return false;
+    }
+    if ( fg != -2 ) {
+        w->fg = fg == -1 ? 0 : fg;
+    }
+    if ( bg != -2 ) {
+        w->bg = bg == -1 ? 0 : bg;
+    }
+    dirty( w );
+    return true;
+}
+
+int ui_get_color( ui_t* ui, int id, int which ) {
+    ui_widget_t* w = ui_find( ui, id );
+    if ( w == 0 ) {
+        return -1;
+    }
+    int c = which == 0 ? w->fg : w->bg;
+    return c == 0 ? -1 : c;
+}
+
+bool ui_set_syntax( ui_t* ui, int id, int mode ) {
+    ui_widget_t* w = ui_find( ui, id );
+    if ( w == 0 || w->kind != UIK_EDIT || w->edit == 0 || mode < 0 || mode > 1 ) {
+        return false;
+    }
+    w->syntax = mode;
+    free( w->edit->hil );
+    w->edit->hil = 0;
+    w->edit->hillen = 0;
+    dirty( w );
+    return true;
+}
+
+int ui_get_syntax( ui_t* ui, int id ) {
+    ui_widget_t* w = ui_find( ui, id );
+    return w == 0 || w->kind != UIK_EDIT ? -1 : w->syntax;
+}
+
+bool ui_syntax_color( ui_t* ui, int slot, int entry ) {
+    if ( slot < 0 || slot >= UI_SYN_COLORS || entry < 1 || entry > 255 ) {
+        return false;
+    }
+    ui->syncolor[slot] = entry;
+    for ( int i = 0; i < ui->count; ++i ) {
+        if ( ui->widgets[i].kind == UIK_EDIT && ui->widgets[i].syntax != 0 ) {
+            dirty( &ui->widgets[i] );
+        }
+    }
+    return true;
+}
+
+bool ui_set_hilite( ui_t* ui, int id, const uint8_t* classes, size_t n ) {
+    ui_widget_t* w = ui_find( ui, id );
+    if ( w == 0 || w->kind != UIK_EDIT || w->edit == 0 ) {
+        return false;
+    }
+    uint8_t* h = 0;
+    size_t len = (size_t) edit_len( w );
+    if ( n > len ) {
+        n = len;
+    }
+    h = (uint8_t*) calloc( len + 1U, 1U );
+    if ( h == 0 ) {
+        return false;
+    }
+    for ( size_t i = 0; i < n; ++i ) {
+        h[i] = (uint8_t)( classes[i] & 15U );
+    }
+    free( w->edit->hil );
+    w->edit->hil = h;
+    w->edit->hillen = (int) len;
+    w->syntax = 2;
+    dirty( w );
+    return true;
+}
+
 static void edit_draw( ui_t* ui, ui_widget_t* w, bool focus, bool on ) {
     const ui_theme_t* t = &ui->theme;
     int x1 = w->x, y1 = w->y, x2 = w->x + w->w - 1, y2 = w->y + w->h - 1;
-    cbox( ui, x1, y1, x2, y2, t->field, true );
+    cbox( ui, x1, y1, x2, y2, w->bg ? w->bg : t->field, true );
     bevel( ui, x1, y1, x2, y2, false );
     if ( w->edit == 0 ) {
         return;
     }
     int rows = edit_rows( w ), nl = edit_nlines( w ), tw = edit_textw( w ), a = 0, b = 0;
     bool hassel = edit_sel( w, &a, &b );
-    int tc = on ? t->text : t->disabled;
+    int fgc = w->fg ? w->fg : t->text;
+    int tc = on ? fgc : t->disabled;
     int tx0 = x1 + EDIT_PAD, ty0 = y1 + EDIT_PAD;
     sbgeom_t sg;
     bool hasbar = sb_params( w, &sg );
@@ -1161,7 +1308,7 @@ static void edit_draw( ui_t* ui, ui_widget_t* w, bool focus, bool on ) {
         int y = ty0 + r * FONT_HEIGHT;
         int from = ls + c0 > le ? le : ls + c0, to = from + maxcols > le ? le : from + maxcols;
         int px = tx0 - ( hs - c0 * EDIT_CW );
-        // the selected part: its background first, then the text in two or three runs
+        // the selected part: its background first
         int sa = hassel && a < le + 1 && b > ls ? ( a > from ? a : from ) : -1, sb = hassel && sa >= 0 ? ( b < to ? b : to ) : -1;
         if ( sa >= 0 && sb > sa ) {
             cbox( ui, px + ( sa - from ) * EDIT_CW, y, px + ( sb - from ) * EDIT_CW - 1, y + FONT_HEIGHT - 1, t->hilite, true );
@@ -1169,19 +1316,58 @@ static void edit_draw( ui_t* ui, ui_widget_t* w, bool focus, bool on ) {
         if ( hassel && a <= le && b > le && le >= from && le - from <= maxcols ) {      // the selection runs over the end of the line: a selected blank marks it
             cbox( ui, px + ( le - from ) * EDIT_CW, y, px + ( le - from + 1 ) * EDIT_CW - 1, y + FONT_HEIGHT - 1, t->hilite, true );
         }
-        if ( sa >= 0 && sb > sa ) {
-            if ( sa > from ) draw_text( ui, FONT_FIXED, px, y, w->text + from, (size_t)( sa - from ), tc );
-            draw_text( ui, FONT_FIXED, px + ( sa - from ) * EDIT_CW, y, w->text + sa, (size_t)( sb - sa ), t->hilitetext );
-            if ( to > sb ) draw_text( ui, FONT_FIXED, px + ( sb - from ) * EDIT_CW, y, w->text + sb, (size_t)( to - sb ), tc );
-        } else if ( to > from ) {
-            draw_text( ui, FONT_FIXED, px, y, w->text + from, (size_t)( to - from ), tc );
+        // the syntax class of every byte of the line (BASIC: the lexer of the tokenizer; 2: what the program gave)
+        uint8_t* cls = 0;
+        if ( on && w->syntax == 1 && le > ls ) {
+            cls = (uint8_t*) malloc( (size_t)( le - ls ) );
+            if ( cls != 0 ) {
+                synhl_line( w->text + ls, (size_t)( le - ls ), cls );
+            }
         }
+        // the text in runs of one color
+        int i = from;
+        while ( i < to ) {
+            bool sel = sa >= 0 && i >= sa && i < sb;
+            int slot = 0;
+            if ( on && !sel ) {
+                if ( cls != 0 ) {
+                    slot = cls[ i - ls ];
+                } else if ( w->syntax == 2 && w->edit->hil != 0 && i < w->edit->hillen ) {
+                    slot = w->edit->hil[i];
+                }
+            }
+            int col = sel ? t->hilitetext : slot > 0 && slot < UI_SYN_COLORS ? ui->syncolor[slot] : tc;
+            int j = i + 1;
+            while ( j < to ) {
+                bool sel2 = sa >= 0 && j >= sa && j < sb;
+                int slot2 = 0;
+                if ( on && !sel2 ) {
+                    if ( cls != 0 ) {
+                        slot2 = cls[ j - ls ];
+                    } else if ( w->syntax == 2 && w->edit->hil != 0 && j < w->edit->hillen ) {
+                        slot2 = w->edit->hil[j];
+                    }
+                }
+                if ( sel2 != sel || ( !sel && slot2 != slot ) ) {
+                    break;
+                }
+                ++j;
+            }
+            draw_text( ui, FONT_FIXED, px + ( i - from ) * EDIT_CW, y, w->text + i, (size_t)( j - i ), col );
+            i = j;
+        }
+        free( cls );
     }
     if ( focus ) {
         int col = 0, line = edit_lineof( w, w->caret, &col );
         if ( line >= w->scroll && line < w->scroll + rows ) {
             int cx = tx0 + col * EDIT_CW - hs, cy = ty0 + ( line - w->scroll ) * FONT_HEIGHT;
-            cbox( ui, cx, cy, cx, cy + FONT_HEIGHT - 1, t->text, true );
+            if ( ui->blink_on ) {                           // a block the width of a character (the fixed font), the character under it inverted
+                cbox( ui, cx, cy, cx + EDIT_CW - 1, cy + FONT_HEIGHT - 1, fgc, true );
+                if ( w->caret < edit_len( w ) && w->text[ w->caret ] != '\n' ) {
+                    draw_text( ui, FONT_FIXED, cx, cy, w->text + w->caret, 1U, w->bg ? w->bg : t->field );
+                }
+            }
         }
     }
     if ( hasbar ) {
@@ -1209,15 +1395,19 @@ static void draw_widget( ui_t* ui, int index ) {
     bool on = ( w->flags & UIF_ENABLED ) != 0;
     bool focus = ui->focus == w->id && on;
     bool pressed = ui->capture == w->id;
-    int tc = on ? t->text : t->disabled;
+    int fgc = w->fg ? w->fg : t->text, facec = w->bg ? w->bg : t->face, fieldc = w->bg ? w->bg : t->field;
+    int tc = on ? fgc : t->disabled;
     size_t len = w->text ? strlen( w->text ) : 0;
     set_clip( ui, x1, y1, x2, y2 );
     switch ( w->kind ) {
         case UIK_LABEL:
+            if ( w->bg ) {
+                cbox( ui, x1, y1, x2, y2, w->bg, true );
+            }
             draw_text( ui, t->font, x1, y1 + ( w->h - FONT_HEIGHT ) / 2, w->text ? w->text : "", len, tc );
             break;
         case UIK_PANEL:
-            cbox( ui, x1, y1, x2, y2, t->face, true );
+            cbox( ui, x1, y1, x2, y2, facec, true );
             bevel( ui, x1, y1, x2, y2, true );
             if ( len > 0 ) {
                 bool win = ( w->flags & UIF_WINDOW ) != 0;
@@ -1235,7 +1425,7 @@ static void draw_widget( ui_t* ui, int index ) {
             }
             break;
         case UIK_BUTTON: {
-            cbox( ui, x1, y1, x2, y2, t->face, true );
+            cbox( ui, x1, y1, x2, y2, facec, true );
             bevel( ui, x1, y1, x2, y2, !pressed );
             int tw = text_width( ui, t->boldfont, w->text ? w->text : "", len );
             int off = pressed ? 1 : 0;
@@ -1246,6 +1436,9 @@ static void draw_widget( ui_t* ui, int index ) {
             break;
         }
         case UIK_CHECK: {
+            if ( w->bg ) {
+                cbox( ui, x1, y1, x2, y2, w->bg, true );
+            }
             int by = y1 + ( w->h - CHECKSZ ) / 2;
             cbox( ui, x1, by, x1 + CHECKSZ - 1, by + CHECKSZ - 1, t->field, true );
             bevel( ui, x1, by, x1 + CHECKSZ - 1, by + CHECKSZ - 1, false );
@@ -1263,6 +1456,9 @@ static void draw_widget( ui_t* ui, int index ) {
             break;
         }
         case UIK_RADIO: {
+            if ( w->bg ) {
+                cbox( ui, x1, y1, x2, y2, w->bg, true );
+            }
             int cy = y1 + w->h / 2;
             disc( ui, x1 + 6, cy, 6, t->border );
             disc( ui, x1 + 6, cy, 5, t->field );
@@ -1276,14 +1472,14 @@ static void draw_widget( ui_t* ui, int index ) {
             break;
         }
         case UIK_TEXT: {
-            cbox( ui, x1, y1, x2, y2, t->field, true );
+            cbox( ui, x1, y1, x2, y2, fieldc, true );
             bevel( ui, x1, y1, x2, y2, false );
             set_clip( ui, x1 + 2, y1 + 2, x2 - 2, y2 - 2 );
             int tx = x1 + 4 - w->scroll, ty = y1 + ( w->h - FONT_HEIGHT ) / 2;
             draw_text( ui, t->font, tx, ty, w->text ? w->text : "", len, tc );
             if ( focus ) {
                 int cx = tx + text_width( ui, t->font, w->text ? w->text : "", (size_t) w->caret );
-                cbox( ui, cx, ty, cx, ty + FONT_HEIGHT - 1, t->text, true );
+                cbox( ui, cx, ty, cx, ty + FONT_HEIGHT - 1, fgc, true );
             }
             break;
         }
@@ -1291,7 +1487,7 @@ static void draw_widget( ui_t* ui, int index ) {
             edit_draw( ui, w, focus, on );
             break;
         case UIK_LIST: {
-            cbox( ui, x1, y1, x2, y2, t->field, true );
+            cbox( ui, x1, y1, x2, y2, fieldc, true );
             bevel( ui, x1, y1, x2, y2, false );
             sbgeom_t sg;
             bool hasbar = sb_params( w, &sg );
@@ -1539,6 +1735,11 @@ void ui_init( ui_t* ui, const ui_canvas_t* canvas, int palbase ) {
     memset( ui, 0, sizeof(*ui) );
     ui->canvas = *canvas;
     ui_theme_default( &ui->theme, palbase );
+    ui->palbase = palbase;
+    ui->blink_on = ui->blink_drawn = true;
+    for ( int i = 0; i < UI_SYN_COLORS; ++i ) {
+        ui->syncolor[i] = palbase + UI_PAL_COLORS + i;
+    }
     ui->lastclick_row = -1;
 }
 
@@ -2473,6 +2674,22 @@ static ui_widget_t* find_hot( ui_t* ui, int mx, int my ) {
 void ui_input( ui_t* ui, int mx, int my, int buttons, int wheel, const int* keys, int nkeys, uint32_t now_ms ) {
     bool down = ( buttons & UIB_LEFT ) != 0, was = ( ui->lastbuttons & UIB_LEFT ) != 0;
     bool press = down && !was, release = !down && was;
+    {                                                       // the caret of an editor blinks (500 ms on, 500 ms off) and is solid for 500 ms after every key or mouse action
+        if ( nkeys > 0 || wheel != 0 || buttons != ui->lastbuttons ) {
+            ui->blink_base = now_ms;
+        }
+        bool on = ( ( now_ms - ui->blink_base ) / 500U ) % 2U == 0U;
+        if ( on != ui->blink_on ) {
+            ui->blink_on = on;
+        }
+        ui_widget_t* fw = ui->focus != 0 ? ui_find( ui, ui->focus ) : 0;
+        if ( fw != 0 && fw->kind == UIK_EDIT ) {
+            if ( ui->blink_drawn != ui->blink_on || nkeys > 0 ) {
+                dirty( fw );
+            }
+            ui->blink_drawn = ui->blink_on;
+        }
+    }
     ui_widget_t* hot = find_hot( ui, mx, my );
     // windows: a press raises the window it is in, a press on the title bar starts dragging it (the close box asks for the close: event kind 6 cancel)
     if ( press && ui->popup == 0 && hot != 0 && in_scope( ui, hot ) ) {

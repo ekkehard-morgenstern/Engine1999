@@ -6,19 +6,24 @@
 20 ' selection with Shift + the cursor keys or the mouse (double click = word, triple click = line), Ctrl+A / C / X / V (select all, copy, cut, paste:
 30 ' the system clipboard), Ctrl+Z / Y (undo, redo), Ctrl+Home / End and a scroll bar. New, Open and Save work on text files (at most 60000 bytes).
 40 ' Ctrl+Insert / Shift+Insert / Shift+Delete copy, paste and cut as well; Tab moves to the buttons. Needs the window (engine1999).
-50 ' widget ids: 1 the panel, 10 the editor, 20..24 the buttons, 30 the status line
+45 ' Syntax switches the colors of BASIC source text on and off (the same colors as LIST), Theme cycles the color themes (UI THEME): classic, dark, high contrast.
+50 ' widget ids: 1 the panel, 10 the editor, 20..26 the buttons, 30 the status line
 60 LOAD LIBRARY "uikit"
 70 LOAD LIBRARY "filereq"
 80 GFX RESET ALL
 90 CLS
 100 BREAK OFF
 110 Q=0
+115 SY=0
+116 TH=0
 120 F$=""
 130 DR$=""
 140 DIRTY=0
 160 UI OPEN
 170 UI PANEL 1,0,0,640,300,"Notepad"
-180 UI EDIT 10,6,24,628,242,""
+180 UI EDIT 10,6,24,628,218,""
+185 UI BUTTON 25,6,248,130,20,"Syntax: off"
+186 UI BUTTON 26,142,248,150,20,"Theme: classic"
 190 UI BUTTON 20,6,272,60,22,"New"
 200 UI BUTTON 21,72,272,60,22,"Open"
 210 UI BUTTON 22,138,272,60,22,"Save"
@@ -63,6 +68,8 @@
 600   IF B=22 THEN CALL SAVEFILE(0)
 610   IF B=23 THEN CALL SAVEFILE(-1)
 620   IF B=24 THEN CALL QUITIT
+  IF B=25 THEN CALL SYNTAXMODE
+  IF B=26 THEN CALL THEMEMODE
 630 END PROC
 640 FUNC SURE(TTL$)
 650   IF DIRTY=0 THEN RETURN -1
@@ -103,3 +110,15 @@
 910 PROC QUITIT
 920   IF FN SURE("Quit")<>0 THEN Q=-1
 930 END PROC
+940 PROC SYNTAXMODE
+950   SY=1-SY
+960   UI SYNTAX 10,SY
+970   IF SY THEN UI CAPTION 25,"Syntax: BASIC" ELSE UI CAPTION 25,"Syntax: off"
+980 END PROC
+990 PROC THEMEMODE
+1000  TH=(TH+1) MOD 3
+1010  UI THEME TH
+1020  IF TH=0 THEN UI CAPTION 26,"Theme: classic"
+1021  IF TH=1 THEN UI CAPTION 26,"Theme: dark"
+1022  IF TH=2 THEN UI CAPTION 26,"Theme: contrast"
+1030 END PROC

@@ -153,6 +153,11 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXOP_UIRAISE   125             // UI RAISE id
 #define GFXOP_UIEDIT    126             // UI EDIT id, x, y, w, h, text$          (a multi-line text editor: LF separates the lines; selection, clipboard, undo)
 #define GFXOP_UICARET   127             // UI CARET id, pos                       (the caret of an editor to a byte position)
+#define GFXOP_UICOLOR   134             // UI COLOR id, fg [, bg]                 (the colors of a widget: palette entries 1..255, -1 the theme's; a missing bg stays as it is)
+#define GFXOP_UITHEME   135             // UI THEME n                             (0 classic, 1 dark, 2 high contrast: the theme's and the syntax colors' palette entries)
+#define GFXOP_UISYNTAX  136             // UI SYNTAX id, mode                     (an editor: 0 plain, 1 BASIC)
+#define GFXOP_UISYNTAXCOLOR 137         // UI SYNTAXCOLOR slot, c                 (the palette entry a syntax slot 0..15 is drawn with)
+#define GFXOP_UIHILITE  138             // UI HILITE id, a$                       (an editor: a slot 0..15 per byte of the text)
 #define GFXOP_UIPAGE    117             // UI PAGE id, n                           (the size of the visible part)
 
 // queries (vm_gfx_t.query): functions of the language
@@ -205,6 +210,10 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXQ_UICOLUMN   131             // UI("COLUMN", id): its column (from 0)
 #define GFXQ_UISELECTED 132             // UI("SELECTED", id): the length of the selection (0 none)
 #define GFXQ_UILINES    133             // UI("LINES", id): the number of lines
+#define GFXQ_UITHEME    134             // UI("THEME"): the number of the theme set last
+#define GFXQ_UISYNTAX   135             // UI("SYNTAX", id): the mode of an editor (-1 for a bad id)
+#define GFXQ_UICOLOR    136             // UI("COLOR", id, which): 0 the text color, 1 the background color of a widget; -1 = the theme's
+#define GFXQ_UISYNTAXCOLOR 137          // UI("SYNTAXCOLOR", slot): the palette entry of a syntax slot
 #define GFXQ_UIPIXEL    128             // UI("PIXEL", id, x, y): a cell of a canvas (-1 for a bad id or place)
 #define GFXQ_UIEVENTS   127             // (the VM polls it for ON UI) the number of events the UI has queued so far; a change is an event
 #define GFXQ_UIOPEN     126             // UI("OPEN"): -1 / 0

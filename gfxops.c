@@ -130,6 +130,11 @@ static const gfxcmd_t cmds[] = {
     { "UI", "WINDOW",    GFXOP_UIWINDOW, "nnnnns",   0, false },
     { "UI", "EDIT",      GFXOP_UIEDIT,   "nnnnns",   0, false },
     { "UI", "CARET",     GFXOP_UICARET,  "nn",       0, false },
+    { "UI", "COLOR",     GFXOP_UICOLOR,  "nno",      0, false },
+    { "UI", "THEME",     GFXOP_UITHEME,  "n",        0, false },
+    { "UI", "SYNTAX",    GFXOP_UISYNTAX, "nn",       0, false },
+    { "UI", "SYNTAXCOLOR", GFXOP_UISYNTAXCOLOR, "nn", 0, false },
+    { "UI", "HILITE",    GFXOP_UIHILITE, "ns",       0, false },
     { "UI", "MOVE",      GFXOP_UIMOVE,   "nnn",      0, false },
     { "UI", "RAISE",     GFXOP_UIRAISE,  "n",        0, false },
     { "UI", "CANVAS",    GFXOP_UICANVAS, "nnnnnnn",  0, false },
@@ -192,6 +197,10 @@ static const gfxquery_t queries[] = {
     { "UI",     "COLUMN",   GFXQ_UICOLUMN,  1, 1 },
     { "UI",     "SELECTED", GFXQ_UISELECTED, 1, 1 },
     { "UI",     "LINES",    GFXQ_UILINES,   1, 1 },
+    { "UI",     "THEME",    GFXQ_UITHEME,   0, 0 },
+    { "UI",     "SYNTAX",   GFXQ_UISYNTAX,  1, 1 },
+    { "UI",     "COLOR",    GFXQ_UICOLOR,   2, 2 },
+    { "UI",     "SYNTAXCOLOR", GFXQ_UISYNTAXCOLOR, 1, 1 },
 };
 
 const gfxcmd_t* gfxops_find( const char* group, const char* name ) {

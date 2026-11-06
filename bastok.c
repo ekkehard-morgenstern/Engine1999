@@ -1062,7 +1062,7 @@ FAIL:
 // -- detokenization --------------------------------------------------------
 
 // the highlight class of a keyword token
-static hlclass_t keyword_hlclass( uint8_t tok ) {
+hlclass_t keyword_hlclass( uint8_t tok ) {
     switch ( tok ) {
         case TOK_LIST: case TOK_SAVE: case TOK_RUN: case TOK_AUTO: case TOK_CONT: case TOK_TRACE: case TOK_RENUM: case TOK_DELETE: case TOK_MERGE:
         case TOK_CHAIN: case TOK_FILES: case TOK_BUILD: case TOK_BYE: case TOK_QUIT: case TOK_NEW: case TOK_CLEAR: case TOK_EDIT: case TOK_MONITOR: case TOK_LOAD: case TOK_SHOW:
@@ -1084,14 +1084,23 @@ static hlclass_t keyword_hlclass( uint8_t tok ) {
             return HL_FUNCTION;
         case TOK_NOT: case TOK_AND: case TOK_OR: case TOK_XOR: case TOK_NAND: case TOK_NOR: case TOK_XNOR:
         case TOK_LSHIFT: case TOK_RSHIFT: case TOK_MOD: case TOK_IMP: case TOK_NIMP: case TOK_EQV: case TOK_NEQV: case TOK_SHL: case TOK_SHR:
-        case TOK_ASL: case TOK_ASR:
+        case TOK_ASL: case TOK_ASR: case TOK_LE: case TOK_GE: case TOK_NE: case TOK_AMP:
             return HL_OPERATOR;
     }
     return HL_STATEMENT;
 }
 
+// the highlight class of an extension word (statements and functions)
+hlclass_t xkeyword_hlclass( uint8_t xid ) {
+    switch ( xid ) {
+        case XF_ERROR: case XF_FRAME: case XF_LIBRARY: case XF_LIBRARIES: case XF_UI: case XF_USING: case XF_AT: case XF_HTAB: case XF_VTAB:
+            return HL_STATEMENT;
+    }
+    return HL_FUNCTION;
+}
+
 // the highlight class of a single character token
-static hlclass_t sngchr_hlclass( uint8_t tok ) {
+hlclass_t sngchr_hlclass( uint8_t tok ) {
     switch ( tok ) {
         case TOK_MULT: case TOK_PLUS: case TOK_MINUS: case TOK_DIV: case TOK_LT: case TOK_EQ: case TOK_GT:
         case TOK_ADDROF: case TOK_BACKSL: case TOK_POW: case TOK_TILDE: case TOK_PLING:
@@ -1177,7 +1186,7 @@ bool detokenize_line_hl( buf_t* out, const uint8_t* wherefrom, const struct _lin
                 ++src.rpos;
             } else if ( tok == TOK_XFUNC ) {        // an extension word: the next byte names it
                 const char* xname = src.rpos + 1U < src.size ? xkeyword_name( (uint8_t) src.buffer[ src.rpos + 1U ] ) : 0;
-                if ( xname == 0 || !hl_switch( out, style, usrdata, &cur, ( (uint8_t) src.buffer[ src.rpos + 1U ] == XF_ERROR || (uint8_t) src.buffer[ src.rpos + 1U ] == XF_FRAME || (uint8_t) src.buffer[ src.rpos + 1U ] == XF_LIBRARY || (uint8_t) src.buffer[ src.rpos + 1U ] == XF_LIBRARIES || (uint8_t) src.buffer[ src.rpos + 1U ] == XF_UI || (uint8_t) src.buffer[ src.rpos + 1U ] == XF_USING || (uint8_t) src.buffer[ src.rpos + 1U ] == XF_AT || (uint8_t) src.buffer[ src.rpos + 1U ] == XF_HTAB || (uint8_t) src.buffer[ src.rpos + 1U ] == XF_VTAB ) ? HL_STATEMENT : HL_FUNCTION ) || writeto_buffer( out, xname, strlen( xname ) ) < 0 ) {
+                if ( xname == 0 || !hl_switch( out, style, usrdata, &cur, xkeyword_hlclass( (uint8_t) src.buffer[ src.rpos + 1U ] ) ) || writeto_buffer( out, xname, strlen( xname ) ) < 0 ) {
                     goto FAIL;
                 }
                 src.rpos += 2U;

@@ -960,6 +960,7 @@ static int gi( double v, int def ) {
 static ui_t        host_ui;
 static bool        host_ui_open = false;
 static bool        host_ui_pad = true;           // UI JOY: the game controllers drive the focus
+static int         host_ui_theme = 0;            // UI THEME: the preset that was set last
 static ui_event_t  host_ui_event;       // the current event (UI("KIND"), UI("VALUE"))
 
 static void ui_c_box( void* ctx, int x1, int y1, int x2, int y2, int color, bool fill ) {
@@ -982,12 +983,23 @@ static void host_ui_shutdown( void ) {
     }
 }
 
-static void host_ui_start( void ) {
-    uint32_t argb[ UI_PAL_COLORS ];
-    ui_theme_argb( argb );
+// the theme preset n: the entries 224 .. 239 (the widgets) and 240 .. 255 (the syntax colors) of the graphics layer's palette. Only the UI's layer: the sprite layer
+// that colors the mouse pointer is never touched.
+static void host_ui_set_theme( int n ) {
+    uint32_t argb[ UI_PAL_COLORS ], syn[ UI_SYN_COLORS ];
+    ui_theme_preset( n, argb );
+    ui_syntax_argb( n, syn );
     for ( int i = 0; i < UI_PAL_COLORS; ++i ) {
         sdlscr_palette_set( UI_LAYER, UI_PALBASE + i, argb[i] );
     }
+    for ( int i = 0; i < UI_SYN_COLORS; ++i ) {
+        sdlscr_palette_set( UI_LAYER, UI_PALBASE + UI_PAL_COLORS + i, syn[i] );
+    }
+    host_ui_theme = n >= 0 && n < UI_THEMES ? n : 0;
+}
+
+static void host_ui_start( void ) {
+    host_ui_set_theme( 0 );
     sdlscr_layer_enable( UI_LAYER, true );
     sdlscr_mouse_show();
     sdlscr_mouse_timeout( 0 );                       // the pointer stays: a form is no place for a hidden pointer
@@ -1123,6 +1135,17 @@ static bool host_ui_op( int op, const double* a, int na, const char* s, size_t s
         case GFXOP_UIRADIO:     ok = ui_add( &host_ui, UIK_RADIO, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), text, gi( a[5], 0 ) ); break;
         case GFXOP_UIEDIT:      ok = ui_add( &host_ui, UIK_EDIT, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), text, 0 ); break;
         case GFXOP_UICARET:     ok = ui_edit_caret( &host_ui, id, gi( a[1], 0 ) ); break;
+        case GFXOP_UICOLOR:     ok = ui_set_color( &host_ui, id, gi( a[1], -1 ), gi( a[2], -2 ) ); break;
+        case GFXOP_UITHEME:
+            ok = id >= 0 && id < UI_THEMES;
+            if ( ok ) {
+                host_ui_set_theme( id );
+                ui_draw( &host_ui, true );
+            }
+            break;
+        case GFXOP_UISYNTAX:    ok = ui_set_syntax( &host_ui, id, gi( a[1], 0 ) ); break;
+        case GFXOP_UISYNTAXCOLOR: ok = ui_syntax_color( &host_ui, id, gi( a[1], 0 ) ); break;
+        case GFXOP_UIHILITE:    ok = ui_set_hilite( &host_ui, id, (const uint8_t*) ( s != 0 ? s : "" ), s != 0 ? slen : 0U ); break;
         case GFXOP_UITEXT:      ok = ui_add( &host_ui, UIK_TEXT, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), text, 0 ); break;
         case GFXOP_UILIST:      ok = ui_add( &host_ui, UIK_LIST, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), "", 0 ); break;
         case GFXOP_UIPROGRESS:  ok = ui_add( &host_ui, UIK_PROGRESS, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), "", 0 ); break;
@@ -1231,6 +1254,10 @@ static bool host_ui_query( int q, const double* a, double* result ) {
             break;
         }
         case GFXQ_UIFOCUS:  *result = host_ui.focus; break;
+        case GFXQ_UITHEME:  *result = host_ui_theme; break;
+        case GFXQ_UISYNTAX: *result = ui_get_syntax( &host_ui, gi( a[0], 0 ) ); break;
+        case GFXQ_UICOLOR:  *result = ui_get_color( &host_ui, gi( a[0], 0 ), gi( a[1], 0 ) ); break;
+        case GFXQ_UISYNTAXCOLOR: { int k = gi( a[0], 0 ); *result = k >= 0 && k < UI_SYN_COLORS ? host_ui.syncolor[k] : -1; break; }
         case GFXQ_UICARET:  *result = ui_edit_query( &host_ui, gi( a[0], 0 ), 0 ); break;
         case GFXQ_UILINE:   *result = ui_edit_query( &host_ui, gi( a[0], 0 ), 1 ); break;
         case GFXQ_UICOLUMN: *result = ui_edit_query( &host_ui, gi( a[0], 0 ), 2 ); break;
@@ -1344,7 +1371,7 @@ static bool host_gfx_op( void* usrdata, int op, const double* a, int na, const c
     size_t* outlen, const char** err ) {
     (void) usrdata; (void) na;
     int t = sdlscr_gfx_target();
-    if ( op >= GFXOP_UIOPEN && op <= GFXOP_UICARET ) {
+    if ( ( op >= GFXOP_UIOPEN && op <= GFXOP_UICARET ) || ( op >= GFXOP_UICOLOR && op <= GFXOP_UIHILITE ) ) {
         return host_ui_op( op, a, na, s, slen, out, outsz, outlen, err );
     }
     switch ( op ) {
@@ -1533,6 +1560,7 @@ static bool host_gfx_query( void* usrdata, int q, const double* a, int na, doubl
         case GFXQ_EVENT:        *result = sdlscr_sprite_nextevent(); break;
         case GFXQ_UIEVENT: case GFXQ_UIKIND: case GFXQ_UIVALUE: case GFXQ_UIGET: case GFXQ_UICOUNT: case GFXQ_UIFOCUS: case GFXQ_UIOPEN: case GFXQ_UIEVENTS: case GFXQ_UIPIXEL:
         case GFXQ_UICARET: case GFXQ_UILINE: case GFXQ_UICOLUMN: case GFXQ_UISELECTED: case GFXQ_UILINES:
+        case GFXQ_UITHEME: case GFXQ_UISYNTAX: case GFXQ_UICOLOR: case GFXQ_UISYNTAXCOLOR:
             return host_ui_query( q, a, result );
         default:                return false;
     }
@@ -1832,16 +1860,23 @@ static void host_edit_window( void ) {
     uint8_t* saved = 0;
     size_t savedlen = 0;
     bool layerwas = sdlscr_layer_enabled( UI_LAYER );
-    uint32_t pal[ UI_PAL_COLORS ];
+    uint32_t pal[ UI_PAL_COLORS + UI_SYN_COLORS ];
     size_t need = sdlscr_gfx_grab( UI_LAYER, 0, 0, 639, 299, 0, 0 );
     saved = (uint8_t*) malloc( need );
     if ( saved != 0 ) {
         savedlen = sdlscr_gfx_grab( UI_LAYER, 0, 0, 639, 299, saved, need );
     }
-    for ( int i = 0; i < UI_PAL_COLORS; ++i ) {
+    for ( int i = 0; i < UI_PAL_COLORS + UI_SYN_COLORS; ++i ) {
         pal[i] = sdlscr_palette_get( UI_LAYER, UI_PALBASE + i );
     }
     host_ui_start();
+    {                                                   // ENGINE1999_UITHEME=0|1|2|classic|dark|contrast: the colors of this window (the classic theme is the default)
+        const char* th = getenv( "ENGINE1999_UITHEME" );
+        if ( th != 0 && th[0] != '\0' ) {
+            int n = th[0] >= '0' && th[0] <= '9' ? atoi( th ) : strcmp( th, "dark" ) == 0 ? 1 : strcmp( th, "contrast" ) == 0 ? 2 : 0;
+            host_ui_set_theme( n );
+        }
+    }
     const scrdrv_t* drv = sdlscr_driver( vblank_handler, &usrdata );
     int keystate = drv->begin();
     ui_add( &host_ui, UIK_PANEL, EW_PANEL, 0, 0, 640, 300, "Program editor", 0 );
@@ -1850,6 +1885,8 @@ static void host_edit_window( void ) {
     ui_add( &host_ui, UIK_BUTTON, EW_PANEL + 3, 82, 272, 70, 22, "Apply", 0 );
     ui_add( &host_ui, UIK_BUTTON, EW_PANEL + 4, 158, 272, 70, 22, "Cancel", 0 );
     ui_add( &host_ui, UIK_LABEL, EW_PANEL + 5, 238, 277, 396, 14, "Ctrl+C / X / V / Z / Y, Shift+arrows select. Tab: buttons.", 0 );
+    ui_set_syntax( &host_ui, EW_PANEL + 1, 1 );           // the colors of LIST
+    ui_draw( &host_ui, true );
     ui_set_modal( &host_ui, EW_PANEL );
     ui_set_focus( &host_ui, EW_PANEL + 1 );
     bool done = false, escwarn = false;
@@ -1900,7 +1937,7 @@ static void host_edit_window( void ) {
     drv->end( keystate );
     ui_set_modal( &host_ui, 0 );
     host_ui_shutdown();
-    for ( int i = 0; i < UI_PAL_COLORS; ++i ) {
+    for ( int i = 0; i < UI_PAL_COLORS + UI_SYN_COLORS; ++i ) {
         sdlscr_palette_set( UI_LAYER, UI_PALBASE + i, pal[i] );
     }
     if ( saved != 0 && savedlen > 0 ) {

@@ -720,6 +720,8 @@ on-mouse-stmt := ON MOUSE ( goto-kw goto-target | OFF ) .
 
 > The UI subsystem (docs/ui-subsystem.md; UI is an extension word): widgets on the graphics layer. Every widget has an id (a positive number the program chooses); x, y, w, h are
 > UI EDIT is a multi-line text editor (lines separated by LF, selection, clipboard, undo; UI GETTEXT reads the text, UI("CARET" \| "LINE" \| "COLUMN" \| "SELECTED" \| "LINES", id) its state).
+> UI COLOR sets the colors of one widget (palette entries; -1 the theme's), UI THEME a preset (0 classic, 1 dark, 2 high contrast), UI SYNTAX the highlighting of an editor (0 none, 1 BASIC),
+> UI SYNTAXCOLOR the palette entry of a syntax slot 0..15, UI HILITE the slots a program gives (one byte per byte of the text); UI("THEME"), UI("SYNTAX", id), UI("COLOR", id, 0\|1), UI("SYNTAXCOLOR", slot) read them.
 > pixels on the 640 x 300 layer. UI UPDATE (once a frame) takes the mouse and the keys, draws what changed and queues events; UI("EVENT") is the id of the next event (0 = none).
 
 ```ebnf
@@ -734,7 +736,9 @@ ui-stmt := XFUNC(UI) ( OPEN | CLOSE | CLEAR | UPDATE |
                            ( REMOVE | FOCUS | CLEARLIST | MODAL ) num-expr | ( CAPTION | ITEM ) num-expr "," str-expr |
                            ( VALUE | ENABLE | SHOW ) num-expr "," num-expr | RANGE num-expr "," num-expr "," num-expr |
                            POPUP num-expr "," num-expr "," num-expr | GETTEXT num-expr "," str-var-ref |
-                           ITEMTEXT num-expr "," num-expr "," str-var-ref ) .
+                           ITEMTEXT num-expr "," num-expr "," str-var-ref |
+                           COLOR num-expr "," num-expr [ "," num-expr ] | THEME num-expr | SYNTAX num-expr "," num-expr |
+                           SYNTAXCOLOR num-expr "," num-expr | HILITE num-expr "," str-expr ) .
 ui-geometry := num-expr "," num-expr "," num-expr "," num-expr "," num-expr .
 gfx-all-stmt := gfx-stmt | txt-stmt | tile-stmt | sprite-stmt | mouse-stmt | on-mouse-stmt | ui-stmt | cls-stmt | locate-stmt | htab-stmt | vtab-stmt | color-stmt | symbol-stmt | design-stmt | design-row | on-collision-stmt .
 ```
