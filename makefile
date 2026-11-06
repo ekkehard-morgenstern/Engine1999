@@ -24,7 +24,12 @@
 #       Mail: Ekkehard Morgenstern, Mozartstr. 1, D-76744 Woerth am Rhein,
 #             Germany, Europe
 
+# The compiler: gcc, unless the caller says CC=... (the internal compile command is $(CCO), not CC)
+ifeq ($(origin CC),default)
 CCOMP=gcc
+else
+CCOMP=$(CC)
+endif
 
 ifdef DEBUG
 DBGFLG=-g
@@ -37,18 +42,26 @@ ifdef PROFILE
 PRFFLG=-p
 endif
 
+# Flags: CFLAGS, CPPFLAGS and LDFLAGS from the environment or the command line (as a package build passes them, e.g. from dpkg-buildflags)
+# replace the development defaults, and the installed kit (make kit) then uses them too. Without them: the development build (-Werror, -march=native)
+# and a portable -O2 kit.
+ifeq ($(filter environment command line,$(firstword $(origin CFLAGS))),)
 CFLAGS=-Wall -Werror $(PRFFLG) $(DBGFLG) -march=native -mtune=native
+KITFLAGS=-Wall -Werror -O2
+else
+KITFLAGS=$(CFLAGS)
+endif
 
-CC=$(CCOMP) -c $(CFLAGS)
-CL=$(CCOMP) $(CFLAGS)
+CCO=$(CCOMP) -c $(CPPFLAGS) $(CFLAGS)
+CL=$(CCOMP) $(CFLAGS) $(LDFLAGS)
 
 .c.o:
-	$(CC) -o $@ $<
+	$(CCO) -o $@ $<
 
 all: sdltest1 sdltest2 sdltest3 sdltest4 engine1999 joytest1 basictest1 testcomp1 basictest2 vmtest1 repltest1 ansitest1 txttest1 asmtest1 synthtest1 iotest1 gfxtest1 buildtest1 engine1999c contest1 keytest1 scrtest1 libtest1 fonttest1 uitest1 poltest1
 	echo ok >all
 
-.PHONY: grammar grammar-check kit install uninstall man-check
+.PHONY: grammar grammar-check kit install uninstall man-check check dist
 
 # the quick reference of the language (docs/grammar.md and docs/grammar.html) from bascomp.ebnf; needs perl
 grammar:
@@ -227,7 +240,6 @@ LIBDIR=$(PREFIX)/lib/engine1999
 SHAREDIR=$(PREFIX)/share/engine1999
 DOCDIR=$(PREFIX)/share/doc/engine1999
 MANDIR=$(PREFIX)/share/man
-KITFLAGS=-Wall -Werror -O2
 KITOBJ=$(addprefix kit/,$(BASEMOD))
 
 kit: kit/engine1999 kit/engine1999c kit/engine1999.o kit/engine1999c.o kit/engine.lib
@@ -254,7 +266,7 @@ $(CONEXE): kit/games/engine1999-%: demos/%.bas $(wildcard demos/lib/*.lib) kit/e
 
 $(KITOBJ) kit/engine1999.o kit/engine1999c.o: kit/%.o: %.c $(BASEHDR)
 	@mkdir -p kit
-	$(CCOMP) -c $(KITFLAGS) -o $@ $<
+	$(CCOMP) -c $(CPPFLAGS) $(KITFLAGS) -o $@ $<
 
 kit/engine1999.o kit/engine1999c.o: version.h
 
@@ -263,10 +275,10 @@ kit/engine.lib: $(KITOBJ)
 	ar q kit/engine.lib $(KITOBJ)
 
 kit/engine1999: kit/engine1999.o kit/engine.lib
-	$(CCOMP) $(KITFLAGS) -o $@ kit/engine1999.o kit/engine.lib -lSDL2 -lrt -lm
+	$(CCOMP) $(KITFLAGS) $(LDFLAGS) -o $@ kit/engine1999.o kit/engine.lib -lSDL2 -lrt -lm
 
 kit/engine1999c: kit/engine1999c.o kit/engine.lib
-	$(CCOMP) $(KITFLAGS) -o $@ kit/engine1999c.o kit/engine.lib -lrt -lm
+	$(CCOMP) $(KITFLAGS) $(LDFLAGS) -o $@ kit/engine1999c.o kit/engine.lib -lrt -lm
 
 install: kit games version.h
 	install -d $(DESTDIR)$(BINDIR) $(DESTDIR)$(LIBDIR) $(DESTDIR)$(SHAREDIR)/demos/lib $(DESTDIR)$(DOCDIR)/docs/images \
@@ -396,3 +408,24 @@ fulledit.o: fulledit.c $(BASEHDR)
 vmasm.o: vmasm.c $(BASEHDR)
 
 monitor.o: monitor.c $(BASEHDR)
+
+# -- check and dist (packaging, roadmap item 66) ---------------------------------------------------------
+# make check: all automated tests (the programs of CHECKTESTS, no display needed) and the man pages check; prints one line per test, the output of
+# a failing one, and fails if any failed. Run it in the build directory.
+CHECKTESTS=poltest1 vmtest1 repltest1 ansitest1 txttest1 asmtest1 synthtest1 iotest1 gfxtest1 buildtest1 contest1 keytest1 scrtest1 libtest1 uitest1 fonttest1 joytest1
+
+check: $(CHECKTESTS) engine1999 engine1999c
+	@fail=0; log=$$(mktemp); \
+	for t in $(CHECKTESTS); do \
+		if ./$$t > $$log 2>&1; then printf '%-12s ok\n' $$t; else printf '%-12s FAILED\n' $$t; tail -n 20 $$log; fail=$$((fail+1)); fi; \
+	done; \
+	if sh mancheck.sh > $$log 2>&1; then printf '%-12s ok\n' man-check; else printf '%-12s FAILED\n' man-check; tail -n 20 $$log; fail=$$((fail+1)); fi; \
+	rm -f $$log; \
+	if [ $$fail -ne 0 ]; then echo "$$fail check(s) failed"; exit 1; fi; echo "all checks passed"
+
+# make dist: engine1999-<version>.tar.gz with the files git tracks (but not the owner's backup and scratch folders) and the generated version.h,
+# so that the archive builds without git (tagtoverstr.sh keeps an existing version.h). Needs a git checkout; read-only git only.
+dist: version.h
+	@v=$$(sed -n 's/.*ENGINE_VERSION *"v\{0,1\}\([^"]*\)".*/\1/p' version.h); d=engine1999-$$v; \
+	list=$$(mktemp); (git ls-files | grep -v '^backups/\|^residue/'; echo version.h) > $$list; \
+	tar --transform "s,^,$$d/," -czf $$d.tar.gz -T $$list && rm -f $$list && echo "made $$d.tar.gz"
