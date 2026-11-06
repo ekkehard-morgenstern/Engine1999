@@ -32,6 +32,7 @@
 #include "palette.h"
 #include "ansi.h"
 #include "keyseq.h"
+#include "clipboard.h"
 #include <sys/ioctl.h>
 #include <unistd.h>
 
@@ -107,6 +108,7 @@ void conscr_end( void ) {
         return;
     }
     conscr_mouse( false );
+    conscr_paste( false );
     fputs( "\033[0m\033[?7h\033[?25h\033[?1049l", stdout );
     fflush( stdout );
     active = false;
@@ -194,6 +196,33 @@ void conscr_mouse( bool on ) {
         ptr_vis = false;
     }
     fflush( stdout );
+}
+
+// bracketed paste: the terminal frames pasted text by ESC [ 200 ~ ... ESC [ 201 ~ (the full-screen editor takes it as a paste)
+static bool paste_on = false;
+
+void conscr_paste( bool on ) {
+    if ( on == paste_on || ( on && !active ) ) {
+        return;
+    }
+    paste_on = on;
+    fputs( on ? "\033[?2004h" : "\033[?2004l", stdout );
+    fflush( stdout );
+}
+
+// the OSC 52 sequence that puts text on the terminal's clipboard (most terminals take it; xterm only when allowed)
+void conscr_setclipboard( const char* text, size_t len ) {
+    if ( !active || len > 400000U ) {
+        return;
+    }
+    char* b64 = (char*) malloc( 4U * ( ( len + 2U ) / 3U ) + 1U );
+    if ( b64 == 0 ) {
+        return;
+    }
+    clip_base64( (const unsigned char*) text, len, b64 );
+    fprintf( stdout, "\033]52;c;%s\007", b64 );
+    fflush( stdout );
+    free( b64 );
 }
 
 bool conscr_mouse_active( void ) {

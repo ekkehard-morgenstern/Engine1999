@@ -485,6 +485,13 @@ int main( void ) {
         static const char* const stepsE1[] = { "10 PRINT 1\r", "EDIT\r", "\033[F", "\r", "20 PRINT 2\r", "\033", "\033", "LIST\r", "\004" };
         static const char* const expE1[] = { "\033[?1049h", "Text Editor", "ESC Close", "\033[?1049l", "\r\n10 PRINT 1\r\n20 PRINT 2\r\n" };
         failed += !pty_case( "terminal: EDIT opens the editor on the alternate screen, a line is added, ESC leaves", stepsE1, 9U, expE1, 5U );
+        // selection and clipboard: a bracketed paste of the terminal is a paste, Ctrl+Insert copies (to the terminal's clipboard by OSC 52)
+        static const char* const stepsEP[] = { "10 PRINT 1\r", "EDIT\r", "\033[200~20 PRINT 2\n30 PRINT 3\033[201~", "\033", "LIST\r", "\004" };
+        static const char* const expEP[] = { "\033[?2004h", "\033[?2004l", "\r\n10 PRINT 1\r\n20 PRINT 2\r\n30 PRINT 3\r\n" };
+        failed += !pty_case( "terminal: EDIT takes a bracketed paste of numbered lines", stepsEP, 6U, expEP, 3U );
+        static const char* const stepsEC[] = { "10 PRINT 1\r", "EDIT\r", "\033[2;5~", "\033", "\004" };
+        static const char* const expEC[] = { "\033]52;c;MTAgUFJJTlQgMQ==\007" };
+        failed += !pty_case( "terminal: EDIT copies the line with Ctrl+Insert to the terminal's clipboard (OSC 52)", stepsEC, 5U, expEC, 1U );
         static const char* const stepsE2[] = { "10 PRINT 1\r", "EDIT\r", "@size 12 50", "\033", "\004" };
         static const char* const expE2[] = { "\033[12;1H", "ESC Close" };
         failed += !pty_case( "terminal: EDIT follows a resize of the terminal (the help bar moves to row 12)", stepsE2, 5U, expE2, 2U );

@@ -553,7 +553,11 @@ bool cgen_from_editstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     if ( node->type != NT_EDITSTMT || node->numbranches > 1U ) {
         return cgen_unexpected_node( comp );
     }
-    if ( !cp_push_target( cgen, comp, node->numbranches ? node->branches[0] : NODE_NONE ) ) {
+    if ( node->datalen == UINT16_C(1) && node->data[0] == 1 ) {              // EDIT WINDOW: no label, the line number -2
+        if ( !cp_push_string( cgen, comp, "" ) || !cgen_push_number( cgen, comp, -2.0 ) ) {
+            return false;
+        }
+    } else if ( !cp_push_target( cgen, comp, node->numbranches ? node->branches[0] : NODE_NONE ) ) {
         return false;
     }
     if ( !cgen_gen_edit( cgen ) ) {
@@ -729,6 +733,17 @@ bool cgen_from_framestmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         return node->numbranches == 1U ? false : cgen_out_of_code_memory( comp );
     }
     return cgen_gen_fram( cgen ) || cgen_out_of_code_memory( comp );
+}
+
+bool cgen_from_clipstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
+    // NT_CLIPSTMT     CLIPBOARD a$ (1 branch of string expression)
+    if ( node == NODE_NONE ) {
+        return cgen_bad_node( comp );
+    }
+    if ( node->type != NT_CLIPSTMT || node->numbranches != 1U ) {
+        return cgen_unexpected_node( comp );
+    }
+    return cgen_from_strexpr( cgen, comp, node->branches[0] ) && ( cgen_gen_clps( cgen ) || cgen_out_of_code_memory( comp ) );
 }
 
 bool cgen_from_joystmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {

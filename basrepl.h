@@ -93,6 +93,8 @@ typedef struct _repl_t {
     void        (*print)( struct _vm_t*, void*, int channel, const char* text );
     void        (*printn)( struct _vm_t*, void*, int channel, const char* text, size_t len );   // optional, see vm.h
     void        (*breakesc)( struct _vm_t*, void*, bool on );   // BREAK ON / OFF was executed: ESC is the break key / an ordinary key (optional)
+    char*       (*clipget)( struct _vm_t*, void*, size_t* len );        // CLIPBOARD$ (optional: without it the internal clipboard)
+    void        (*clipset)( struct _vm_t*, void*, const char* text, size_t len );   // CLIPBOARD a$ (optional)
     bool        (*keydown)( struct _vm_t*, void*, int keyid );  // KEY("name"): is this key (KEYID_*, keystate.h) held down now? (optional: without it KEY() is a run-time error; the console host has none)
     int         (*inkey)( struct _vm_t*, void* );
     char*       (*input)( struct _vm_t*, void*, int channel );
@@ -114,6 +116,7 @@ typedef struct _repl_t {
     char*       pending;            // an edited line waiting to be entered (see repl_enter())
     // EDIT without a target asks the host for the full-screen editor: the REPL sets this flag and returns; the host
     // checks it after repl_enter() (not inside a callback: the editor enters lines itself), clears it and opens the editor
+    bool        editwin;                // (with fulledit) EDIT WINDOW: the host opens the editor window (a UI widget) instead of the text screen editor, if it has one
     bool        fulledit;
     // MONITOR asks the host for the machine monitor the same way (the run ends, the host checks the flag after repl_enter())
     bool        monitor;
@@ -159,5 +162,12 @@ bool repl_save_program_ex( repl_t* repl, const char* filename, int mode );   // 
 bool repl_program_image( repl_t* repl, uint8_t** pdata, size_t* plen );     // the stored program as a binary program file (malloc'ed); BUILD
 bool repl_load_file( repl_t* repl, const char* name );                    // LOAD without running (the extension search, drivers); reports errors
 bool repl_load_image( repl_t* repl, const void* data, size_t len );         // replaces the stored program by a program file in memory
+
+// the stored program as text (lines "10 PRINT ..." separated by LF, no highlighting), malloc'ed; 0 if out of memory. *plen is its length.
+char* repl_program_text( repl_t* repl, size_t* plen );
+// replaces the stored program by the lines of text (every non-blank line must start with a line number and have text behind it; a line number alone is ignored):
+// NEW, then every line is entered like a typed one; the name of the file stays. false and msg: nothing was changed (a line without a number). Otherwise true;
+// *pcount lines were accepted, msg is "" or the first message of a rejected line (rejected lines are dropped).
+bool repl_apply_text( repl_t* repl, const char* text, char* msg, size_t msgsz, size_t* pcount );
 
 #endif

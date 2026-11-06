@@ -1989,7 +1989,7 @@ static bool comp_eat_xfunccall( compiler_t* comp, node_t** pnode, bool wantstr )
         return false;
     }
     uint8_t xid = comp->currext;
-    bool isstr = xid == XF_SPACE || xid == XF_STRING || xid == XF_FORMAT;
+    bool isstr = xid == XF_SPACE || xid == XF_STRING || xid == XF_FORMAT || xid == XF_CLIPBOARD;
     if ( xid == XF_AT || xid == XF_HTAB || xid == XF_VTAB ) {
         return false;                       // statements (AT inside a PRINT list), not functions
     }
@@ -2023,6 +2023,14 @@ static bool comp_eat_xfunccall( compiler_t* comp, node_t** pnode, bool wantstr )
                 return false;
             }
         }
+    }
+    if ( xid == XF_CLIPBOARD ) {                // CLIPBOARD$ has no argument
+        uint8_t cdata[2] = { TOK_XFUNC, xid };
+        if ( !comp_create_node( comp, pnode, NT_SYSSTRFUNCARGCALL, UINT8_C(0), UINT16_C(2), cdata ) || *pnode == NODE_NONE ) {
+            out_of_memory( comp );
+            return false;
+        }
+        return true;
     }
     if ( comp->currtok != TOK_LPAREN || !comp_fetchtok( comp ) ) {
         comp_error( comp, "Opening parenthesis '(' expected" );
@@ -3757,18 +3765,28 @@ bool comp_eat_byestmt( compiler_t* comp, node_t** pnode ) {
 }
 
 bool comp_eat_editstmt( compiler_t* comp, node_t** pnode ) {
-    // edit-stmt := TOK_EDIT [ goto-target ] .
+    // edit-stmt := TOK_EDIT [ WINDOW | goto-target ] .
     if ( comp->currtok != TOK_EDIT || !comp_fetchtok( comp ) ) {
         return false;
     }
     node_t* target = NODE_NONE;
-    bool hastarget = comp_eat_gototarget( comp, &target ) && target != NODE_NONE;
+    uint8_t window = 0;
+    if ( comp->currtok == TOK_NUMIDENT && strcmp( comp->param, "WINDOW" ) == 0 ) {      // EDIT WINDOW: the editor window (a word of its own here, not a label)
+        window = 1;
+        if ( !comp_fetchtok( comp ) ) {
+            return false;
+        }
+    }
+    bool hastarget = window == 0 && comp_eat_gototarget( comp, &target ) && target != NODE_NONE;
     /*
         NT_EDITSTMT     EDIT statement
+            data:
+                - none, or 1 byte with the value 1 for EDIT WINDOW
             branches:
                 - none, or 1 branch of goto target (NT_GOTOTARGET: a line number or a label)
     */
     if ( !( hastarget ? comp_create_node( comp, pnode, NT_EDITSTMT, UINT8_C(1), UINT16_C(0), 0, target ) :
+            window ? comp_create_node( comp, pnode, NT_EDITSTMT, UINT8_C(0), UINT16_C(1), &window ) :
             comp_create_node( comp, pnode, NT_EDITSTMT, UINT8_C(0), UINT16_C(0), 0 ) ) || *pnode == NODE_NONE ) {
         out_of_memory( comp );
         return false;
@@ -4033,6 +4051,29 @@ bool comp_eat_framestmt( compiler_t* comp, node_t** pnode ) {
     return true;
 }
 
+bool comp_eat_clipstmt( compiler_t* comp, node_t** pnode ) {
+    // clip-stmt := CLIPBOARD str-expr .       (CLIPBOARD is an extension word; CLIPBOARD$ is the function)
+    if ( comp->currtok != TOK_XFUNC || comp->currext != XF_CLIPBOARD ) {
+        return false;
+    }
+    comp_push_context( comp );
+    if ( !comp_fetchtok( comp ) || comp->currtok == TOK_STRING ) {
+        comp_pop_context( comp );               // CLIPBOARD$: the function
+        return false;
+    }
+    comp_commit_context( comp );
+    node_t* text = NODE_NONE;
+    if ( !comp_eat_strexpr( comp, &text ) || text == NODE_NONE ) {
+        comp_error( comp, "String expression expected" );
+        return false;
+    }
+    if ( !comp_create_node( comp, pnode, NT_CLIPSTMT, UINT8_C(1), UINT16_C(0), 0, text ) || *pnode == NODE_NONE ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
+}
+
 bool comp_eat_joystmt( compiler_t* comp, node_t** pnode ) {
     // joy-stmt := JOY DEADZONE num-expr .       (JOY is an extension word; with a parenthesis it is the function)
     if ( comp->currtok != TOK_XFUNC || comp->currext != XF_JOY ) {
@@ -4181,6 +4222,9 @@ bool comp_eat_progstmt( compiler_t* comp, node_t** pnode ) {
         return true;
     }
     if ( comp_eat_framestmt( comp, pnode ) && *pnode != NODE_NONE ) {
+        return true;
+    }
+    if ( comp_eat_clipstmt( comp, pnode ) && *pnode != NODE_NONE ) {
         return true;
     }
     if ( comp_eat_librarystmt( comp, pnode ) && *pnode != NODE_NONE ) {

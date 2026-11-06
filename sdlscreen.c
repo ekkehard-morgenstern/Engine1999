@@ -41,6 +41,7 @@
 #include "mouse.h"
 #include "sdljoy.h"
 #include "scrdrv.h"
+#include "clipboard.h"
 
 #define NLAYERS 5
 #define LAY_BG          0
@@ -168,6 +169,13 @@ static bool sdlscr_enqueuekeypress( SDL_Keycode key, Uint16 mods ) {
 // a mouse event for the full-screen editor (the cell of the 80 x 25 text screen under the pointer; x, y are the pointer in the layer's pixels)
 static bool sdlscr_inputpending( void );
 static volatile bool sdlscr_wantmouse = false;
+
+// The system clipboard. SDL's clipboard calls belong to the thread of the video system (the screen thread), the editors run in the program
+// thread: a request is handed over in atomic words and the screen thread serves it once a frame (no mutex, as for all shared state here).
+// 0 = no request, 1 = get (the text comes back in sdlscr_clip_out), 2 = set (the text is in sdlscr_clip_in); the screen thread sets it to 0 when done.
+static volatile int sdlscr_clip_req = 0;
+static char* volatile sdlscr_clip_in = 0;
+static char* volatile sdlscr_clip_out = 0;
 static bool sdlscr_lbdown = false;                  // the left button is held (for the editor): SM_REPEAT every SM_REPEAT_MS after SM_REPEAT_DELAY_MS, at the pointer's cell
 static Uint32 sdlscr_lbnext = 0;
 static int sdlscr_lbx = 0, sdlscr_lby = 0;
@@ -633,6 +641,26 @@ static int sdlscr_worker( void* arg ) {
             sdlscr_enqueuemouse( SM_DRAG, dragx, dragy, 1, 0 );        // (the last position of the frame)
         }
 
+        {
+            int rq = __atomic_load_n( &sdlscr_clip_req, __ATOMIC_ACQUIRE );
+            if ( rq == 1 ) {
+                char* t = SDL_HasClipboardText() ? SDL_GetClipboardText() : 0;
+                char* copy = t != 0 && t[0] != '\0' ? strdup( t ) : 0;
+                if ( t != 0 ) {
+                    SDL_free( t );
+                }
+                __atomic_store_n( &sdlscr_clip_out, copy, __ATOMIC_RELEASE );
+                __atomic_store_n( &sdlscr_clip_req, 0, __ATOMIC_RELEASE );
+            } else if ( rq == 2 ) {
+                char* t = __atomic_exchange_n( &sdlscr_clip_in, (char*) 0, __ATOMIC_ACQ_REL );
+                if ( t != 0 ) {
+                    SDL_SetClipboardText( t );
+                    free( t );
+                }
+                __atomic_store_n( &sdlscr_clip_req, 0, __ATOMIC_RELEASE );
+            }
+        }
+
         // the mouse pointer: the events of this frame are applied now, so that the pointer is drawn where the mouse is as of this frame's poll
         // (the events and requests are taken, the pointer is shown or hidden: the only place that changes it)
         struct timespec tfs;
@@ -885,6 +913,10 @@ static size_t sdlscr_msgbytes( const sdlscr_inputmsg_t* msg, char* out ) {
                 break;                  // Shift+Tab is a sequence (BackTab)
             default:                break;
         }
+        if ( ( msg->mods & KMOD_CTRL ) != 0 && ( msg->mods & KMOD_ALT ) == 0 && msg->symbol >= 'a' && msg->symbol <= 'z' ) {
+            out[0] = (char)( msg->symbol - 'a' + 1 );       // Ctrl + a letter is the control code (Ctrl+C only gets here when it is not the break key: in the editors' mode)
+            return 1U;
+        }
         return sdlkeys_sequence( msg->symbol, msg->mods, out );
     }
     if ( msg->inputtype == SDLSCR_INPUT_TEXT ) {
@@ -1122,6 +1154,9 @@ static bool sdlscr_msgtoscrkey( const sdlscr_inputmsg_t* msg, scrkey_t* k ) {
     int key, mods;
     if ( msg->symbol == SDLK_PAUSE || msg->symbol == SDLK_CANCEL || ( msg->symbol == SDLK_c && ( msg->mods & KMOD_CTRL ) != 0 ) ) {
         k->kind = SK_BREAK;
+        if ( msg->symbol == SDLK_c ) {
+            k->ch = 'c'; k->mods = KSMOD_CTRL;       // (Ctrl+C: the full-screen editor copies; everyone else treats it as the break key)
+        }
         return true;
     }
     switch ( msg->symbol ) {
@@ -1191,13 +1226,63 @@ static void sdlscr_drv_palette( uint32_t pal[256], uint32_t* backdrop ) {
     *backdrop = sdlscr_bgcol;
 }
 
+// the clipboard for the editors: ISO-8859-15 text with LF line ends. The internal clipboard (clipboard.h) always gets a copy and is the answer
+// when the system has no text (no window, no clipboard manager, or the screen thread does not answer within a second)
+static bool sdlscr_clip_wait( void ) {
+    for ( int i = 0; i < 1000 && __atomic_load_n( &sdlscr_clip_req, __ATOMIC_ACQUIRE ) != 0; ++i ) {
+        SDL_Delay( 1 );
+    }
+    return __atomic_load_n( &sdlscr_clip_req, __ATOMIC_ACQUIRE ) == 0;
+}
+
+static char* sdlscr_drv_clip_get( size_t* len ) {
+    if ( sdlscr_initok && !sdlscr_doexit && __atomic_load_n( &sdlscr_clip_req, __ATOMIC_ACQUIRE ) == 0 ) {
+        __atomic_store_n( &sdlscr_clip_req, 1, __ATOMIC_RELEASE );
+        if ( sdlscr_clip_wait() ) {
+            char* u = __atomic_exchange_n( &sdlscr_clip_out, (char*) 0, __ATOMIC_ACQ_REL );
+            if ( u != 0 ) {
+                size_t ulen = strlen( u ), lost = 0;
+                char* out = (char*) malloc( ulen + 1U );
+                if ( out != 0 ) {
+                    size_t n = keyseq_listing_from_utf8( u, ulen, out, &lost );
+                    out[n] = '\0';
+                    free( u );
+                    *len = n;
+                    return out;
+                }
+                free( u );
+            }
+        }
+    }
+    return clip_internal_get( len );
+}
+
+static void sdlscr_drv_clip_set( const char* text, size_t len ) {
+    clip_internal_set( text, len );
+    if ( !sdlscr_initok || sdlscr_doexit || __atomic_load_n( &sdlscr_clip_req, __ATOMIC_ACQUIRE ) != 0 ) {
+        return;
+    }
+    char* u = (char*) malloc( 3U * len + 1U );
+    if ( u == 0 ) {
+        return;
+    }
+    size_t n = keyseq_latin9_to_utf8( text, len, u );
+    u[n] = '\0';
+    __atomic_store_n( &sdlscr_clip_in, u, __ATOMIC_RELEASE );
+    __atomic_store_n( &sdlscr_clip_req, 2, __ATOMIC_RELEASE );
+    sdlscr_clip_wait();
+}
+
+char* sdlscr_clipboard_get( size_t* len ) { return sdlscr_drv_clip_get( len ); }
+void sdlscr_clipboard_set( const char* text, size_t len ) { sdlscr_drv_clip_set( text, len ); }
+
 static const scrdrv_t sdlscr_drv = {
     sdlscr_drv_screensize, sdlscr_drv_getsize,
     sdlscr_text_select, sdlscr_text_selected, sdlscr_text_setviewport, sdlscr_text_resetviewport, sdlscr_drv_getviewport,
     sdlscr_text_setcolors, sdlscr_text_setblank, sdlscr_text_clear, sdlscr_text_write, sdlscr_drv_print, sdlscr_locate, sdlscr_drv_getcursor,
     sdlscr_textchanged, sdlscr_drv_reserve, sdlscr_drv_restart,
     sdlscr_drv_begin, sdlscr_drv_end, sdlscr_drv_nextkey, sdlscr_inputpending, sdlscr_pollkeys,
-    sdlscr_drv_palette, sdlscr_drv_wantmouse
+    sdlscr_drv_palette, sdlscr_drv_wantmouse, sdlscr_drv_clip_get, sdlscr_drv_clip_set
 };
 
 const scrdrv_t* sdlscr_driver( void (*vblank_handler)( void* ), void* usrdata ) {

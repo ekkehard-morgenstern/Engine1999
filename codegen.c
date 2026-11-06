@@ -563,6 +563,8 @@ const char* cgen_opcode_name( uint16_t opcode ) {
         case INS_EXST:      return "EXST";
         case INS_PUSG:      return "PUSG";
         case INS_FMTS:      return "FMTS";
+        case INS_CLPG:      return "CLPG";
+        case INS_CLPS:      return "CLPS";
         case INS_AFLT:      return "AFLT";
         case INS_GFXC:      return "GFXC";
         case INS_GFXQ:      return "GFXQ";
@@ -1245,6 +1247,9 @@ bool cgen_gen_fram( codegen_t* cgen ) {
     return cgen_gen_ins12( cgen, INS_FRAM, false, false, UINT16_C(0) );
 }
 
+bool cgen_gen_clpg( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_CLPG, false, false, UINT16_C(0) ); }
+bool cgen_gen_clps( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_CLPS, false, false, UINT16_C(0) ); }
+
 bool cgen_gen_fmts( codegen_t* cgen, uint16_t isstr ) {
     return cgen_gen_ins12( cgen, INS_FMTS, false, true, isstr );
 }
@@ -1778,7 +1783,7 @@ UNEXP:      return cgen_unexpected_node( comp );
     if ( datalen != UINT16_C(1) && !( hasargs && datalen >= UINT16_C(2) && datalen <= UINT16_C(3) && node->data[0] == TOK_XFUNC ) ) {
         goto UNEXP;
     }
-    if ( hasargs && !gen_from_sysfncall( cgen, comp, node ) ) {
+    if ( hasargs && node->numbranches > 0 && !gen_from_sysfncall( cgen, comp, node ) ) {
         return false;
     }
     uint8_t functok = node->data[0];
@@ -1792,6 +1797,7 @@ UNEXP:      return cgen_unexpected_node( comp );
             case XF_STRING: ok = cgen_gen_strn( cgen, datalen == UINT16_C(3) && node->data[2] ? 1 : 0 ); break;
             case XF_JOY:    ok = nodetype == NT_SYSSTRFUNCARGCALL ? cgen_gen_joys( cgen ) : cgen_gen_joyq( cgen ); break;
             case XF_EXISTS: ok = cgen_gen_exst( cgen ); break;
+            case XF_CLIPBOARD: ok = cgen_gen_clpg( cgen ); break;
             case XF_FORMAT: ok = cgen_gen_fmts( cgen, datalen == UINT16_C(3) && node->data[2] ? 1 : 0 ); break;
             default:        goto UNEXP;
         }
@@ -3372,6 +3378,7 @@ static bool cgen_from_stmt_node( codegen_t* cgen, compiler_t* comp, node_t* node
         case NT_ERRORSTMT:  return cgen_from_errorstmt( cgen, comp, node );
         case NT_JOYSTMT:    return cgen_from_joystmt( cgen, comp, node );
         case NT_FRAMESTMT:  return cgen_from_framestmt( cgen, comp, node );
+        case NT_CLIPSTMT:   return cgen_from_clipstmt( cgen, comp, node );
         case NT_MERGESTMT:  return cgen_from_mergestmt( cgen, comp, node );
         case NT_CHAINSTMT:  return cgen_from_chainstmt( cgen, comp, node );
         case NT_FILESSTMT:  return cgen_from_filesstmt( cgen, comp, node );

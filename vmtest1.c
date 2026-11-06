@@ -654,6 +654,17 @@ static const testcase_t cases[] = {
     { "FORMAT$ string into a number field", "PRINT FORMAT$(\"a\",\"##\")", "? Type mismatch (the field is a number field)\n" },
     { "FORMAT$ number into a string field", "PRINT FORMAT$(5,\"&\")", "? Type mismatch (the field is a string field)\n" },
     { "FORMAT$ with a format expression", "F$=\"###.#\":PRINT FORMAT$(2.25,F$);FORMAT$(-1,F$)", "  2.3 -1.0\n" },
+    // CLIPBOARD
+    { "CLIPBOARD round trip", "CLIPBOARD \"abc\":PRINT CLIPBOARD$", "abc\n" },
+    { "CLIPBOARD$ in an expression", "CLIPBOARD \"ab\":A$=CLIPBOARD$+\"c\":PRINT A$;LEN(A$)", "abc3\n" },
+    { "CLIPBOARD takes an expression", "A$=\"x\":CLIPBOARD A$+\"y\"+CHR$(10)+\"z\":PRINT LEN(CLIPBOARD$)", "4\n" },
+    { "CLIPBOARD empty", "CLIPBOARD \"\":PRINT LEN(CLIPBOARD$)", "0\n" },
+    { "CLIPBOARD needs a string", "CLIPBOARD 5", "? String expression expected\n" },
+    { "CLIPBOARD$ with two statements", "CLIPBOARD \"q\":CLIPBOARD CLIPBOARD$+CLIPBOARD$:PRINT CLIPBOARD$", "qq\n" },
+    // the multi-line editor widget
+    { "UI EDIT", "UI EDIT 3,10,20,200,100,\"a\"", "<gfx UI EDIT 3 10 20 200 100 s(1)=97>\n" },
+    { "UI CARET", "UI CARET 3,5", "<gfx UI CARET 3 5>\n" },
+    { "UI editor queries", "PRINT UI(\"CARET\",7);UI(\"LINE\",2);UI(\"COLUMN\",1);UI(\"SELECTED\",4);UI(\"LINES\",5)", "72145\n" },
     // number packing (big endian)
     { "MKI$ is two bytes, big endian", "A$=MKI$(258):PRINT LEN(A$);ASC(A$);ASC(MID$(A$,2,1))", "212\n" },
     { "MKL$ is four bytes, big endian", "A$=MKL$(16909060):PRINT LEN(A$);ASC(A$);ASC(MID$(A$,2,1));ASC(MID$(A$,3,1));ASC(RIGHT$(A$,1))", "41234\n" },

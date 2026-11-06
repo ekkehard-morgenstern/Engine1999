@@ -151,6 +151,8 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXOP_UIWINDOW  123             // UI WINDOW id, x, y, w, h, title$       (a panel the user can drag by its title bar; it rises when clicked and owns the widgets created inside it; the close box gives the cancel event)
 #define GFXOP_UIMOVE    124             // UI MOVE id, x, y                       (a window takes its widgets along)
 #define GFXOP_UIRAISE   125             // UI RAISE id
+#define GFXOP_UIEDIT    126             // UI EDIT id, x, y, w, h, text$          (a multi-line text editor: LF separates the lines; selection, clipboard, undo)
+#define GFXOP_UICARET   127             // UI CARET id, pos                       (the caret of an editor to a byte position)
 #define GFXOP_UIPAGE    117             // UI PAGE id, n                           (the size of the visible part)
 
 // queries (vm_gfx_t.query): functions of the language
@@ -198,6 +200,11 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXQ_UIGET      123             // UI("GET", id): the value of a widget (check box 0 / 1, radio button, slider, progress, list row, text field length)
 #define GFXQ_UICOUNT    124             // UI("COUNT", id): the rows of a list
 #define GFXQ_UIFOCUS    125             // UI("FOCUS"): the id of the widget that has the focus
+#define GFXQ_UICARET    129             // UI("CARET", id): the caret of an editor (a byte position, from 0)
+#define GFXQ_UILINE     130             // UI("LINE", id): its line (from 0)
+#define GFXQ_UICOLUMN   131             // UI("COLUMN", id): its column (from 0)
+#define GFXQ_UISELECTED 132             // UI("SELECTED", id): the length of the selection (0 none)
+#define GFXQ_UILINES    133             // UI("LINES", id): the number of lines
 #define GFXQ_UIPIXEL    128             // UI("PIXEL", id, x, y): a cell of a canvas (-1 for a bad id or place)
 #define GFXQ_UIEVENTS   127             // (the VM polls it for ON UI) the number of events the UI has queued so far; a change is an event
 #define GFXQ_UIOPEN     126             // UI("OPEN"): -1 / 0

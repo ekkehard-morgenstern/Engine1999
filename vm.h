@@ -280,6 +280,8 @@ typedef struct _vm_t {
     int             keyback;        // a key that was read but did not belong to the escape sequence before it (0 = none): the next key read returns it
     bool            escbreak;       // BREAK ON / OFF: ESC is the break key (the default) or an ordinary key; Ctrl+C always breaks
     void            (*breakesc)( struct _vm_t*, void*, bool on );                  // the host is told when BREAK ON / OFF is executed (0 = nobody)
+    char*           (*clipget)( struct _vm_t*, void*, size_t* len );               // CLIPBOARD$: the text on the clipboard, malloc'ed (ISO-8859-15, LF); 0 = none (0 callback: the internal clipboard of clipboard.h)
+    void            (*clipset)( struct _vm_t*, void*, const char* text, size_t len );   // CLIPBOARD a$ (0 callback: the internal clipboard)
     bool            (*keydown)( struct _vm_t*, void*, int keyid );                 // KEY("name"): is the key (a KEYID_* of keystate.h) held down now? (0 = the host can't tell: KEY() is the error "KEY is not available in this host")
     int             (*inkey)( struct _vm_t*, void* );                              // INKEY$: key code, 0 = none
     char*           (*input)( struct _vm_t*, void*, int channel );                 // INPUT: a line (malloc'd, without newline), 0 = end of input

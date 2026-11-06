@@ -951,6 +951,58 @@ static void run_fulledit_tests( size_t* pnum, size_t* pfailed ) {
     }
 }
 
+// EDIT WINDOW, the program as text and the program replaced by text (the editor window of the window host)
+static void run_editwindow_tests( size_t* pnum, size_t* pfailed ) {
+    repl_t repl;
+    if ( !init_repl( &repl ) ) {
+        return;
+    }
+    repl.report = host_report;
+    repl.print  = host_print;
+    out_reset();
+    struct { const char* name; bool ok; } r[16];
+    int n = 0;
+    repl_enter( &repl, "EDIT WINDOW" );
+    r[n].name = "EDIT WINDOW sets the editor flag and the window flag"; r[n++].ok = repl.fulledit && repl.editwin;
+    repl.fulledit = repl.editwin = false;
+    repl_enter( &repl, "EDIT" );
+    r[n].name = "EDIT alone sets the editor flag, not the window flag"; r[n++].ok = repl.fulledit && !repl.editwin;
+    repl.fulledit = repl.editwin = false;
+    repl_enter( &repl, "10 EDIT WINDOW" );
+    repl_enter( &repl, "RUN" );
+    r[n].name = "EDIT WINDOW in a program"; r[n++].ok = repl.fulledit && repl.editwin;
+    repl.fulledit = repl.editwin = false;
+    repl_enter( &repl, "NEW" );
+    repl_enter( &repl, "10 PRINT \"A\"" );
+    repl_enter( &repl, "20 FOR I=1 TO 3:PRINT I:NEXT" );
+    size_t len = 0;
+    char* text = repl_program_text( &repl, &len );
+    r[n].name = "the program as text"; r[n++].ok = text != 0 && strcmp( text, "10 PRINT \"A\"\n20 FOR I=1 TO 3:PRINT I:NEXT\n" ) == 0 && len == strlen( text );
+    free( text );
+    char msg[200];
+    size_t count = 0;
+    r[n].name = "a text with a line without a number changes nothing";
+    r[n++].ok = !repl_apply_text( &repl, "30 PRINT 3\nPRINT 4\n", msg, sizeof(msg), &count ) && strstr( msg, "Line 2" ) != 0 && repl.pgm.first != 0 && repl.pgm.first->lineno == 10;
+    r[n].name = "a text replaces the program";
+    r[n++].ok = repl_apply_text( &repl, "5 REM x\n15 PRINT 1\n\n  25 PRINT 2  \r\n35\n", msg, sizeof(msg), &count ) && msg[0] == '\0' && count == 3U &&
+        repl.pgm.first != 0 && repl.pgm.first->lineno == 5 && repl.pgm.last->lineno == 25;
+    text = repl_program_text( &repl, &len );
+    r[n].name = "the lines are as entered"; r[n++].ok = text != 0 && strcmp( text, "5 ' x\n15 PRINT 1\n25 PRINT 2\n" ) == 0;
+    free( text );
+    repl.save = host_save;
+    repl_enter( &repl, "SAVE \"" TESTFILE "\",B" );
+    r[n].name = "the file name stays after a text was applied";
+    r[n++].ok = repl_apply_text( &repl, "1 PRINT 1\n", msg, sizeof(msg), &count ) && count == 1U && repl.filename != 0 && strcmp( repl.filename, TESTFILE ) == 0;
+    for ( int i = 0; i < n; ++i ) {
+        printf( "%s  %s\n", r[i].ok ? "PASS" : "FAIL", r[i].name );
+        if ( !r[i].ok ) {
+            ++*pfailed;
+        }
+        ++*pnum;
+    }
+    cleanup_repl( &repl );
+}
+
 // -- debugging: breakpoints, BRK, single-step ----------------------------------------------------
 
 static void run_debug_tests( size_t* pnum, size_t* pfailed ) {
@@ -1054,6 +1106,7 @@ int main( int argc, char** argv ) {
     run_files_tests( &numcases, &failed );
     run_edit_tests( &numcases, &failed );
     run_fulledit_tests( &numcases, &failed );
+    run_editwindow_tests( &numcases, &failed );
     run_debug_tests( &numcases, &failed );
     run_auto_tests( &numcases, &failed );
     cleanup_testfiles();

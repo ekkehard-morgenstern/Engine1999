@@ -62,6 +62,8 @@ void conscr_dump( void );                               // the BASIC screen (scr
 // terminal supports OSC 22 (the Engine's shapes ARROW, WAIT, ... as the names of CSS cursors; the terminal ignores what it does not know)
 void conscr_mouse( bool on );                           // switch the reporting on / off (off again by conscr_end(); and the terminal's own pointer shape is reset)
 bool conscr_mouse_active( void );
+void conscr_paste( bool on );                           // bracketed paste on / off (also off again by conscr_end())
+void conscr_setclipboard( const char* text, size_t len );   // the terminal's clipboard by the OSC 52 sequence (UTF-8 text expected)
 void conscr_setpointer( bool visible, int col, int row );   // the cell to draw swapped (0-based), the next conscr_paint() shows it; true if that changes what is shown: use conscr_pointer_changed()
 bool conscr_pointer_changed( void );
 void conscr_pointer_shape( int shape );                 // CUR_* (cursors.h): the terminal's pointer, OSC 22; only written when it changes

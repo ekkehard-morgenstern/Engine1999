@@ -30,6 +30,7 @@
 #include <ctype.h>
 #include "vm.h"
 #include "printusing.h"
+#include "clipboard.h"
 #include "iodev.h"
 #include "keyseq.h"
 #include "keystate.h"
@@ -654,6 +655,38 @@ static bool vm_using_item( vm_t* vm, bool isstr, double num, const char* str, si
         vm_using_trailing( vm );                // the last value: the text behind its field, then the line end
         vm_out( vm, "\n" );
     }
+    return true;
+}
+
+// CLPG ( -- text ): CLIPBOARD$
+static bool vm_clipboard_get( vm_t* vm ) {
+    size_t len = 0;
+    char* text = vm->clipget != 0 ? vm->clipget( vm, vm->userdata, &len ) : clip_internal_get( &len );
+    if ( text == 0 ) {
+        return vm_push_bytes( vm, "", 0 );
+    }
+    if ( len > UINT16_MAX ) {
+        free( text );
+        return vm_error( vm, "String too long" );
+    }
+    bool ok = vm_push_bytes( vm, text, len );
+    free( text );
+    return ok;
+}
+
+// CLPS ( text -- ): CLIPBOARD a$
+static bool vm_clipboard_set( vm_t* vm ) {
+    char* str = 0;
+    size_t slen = 0;
+    if ( !vm_dpop_bstr( vm, &str, &slen ) ) {
+        return false;
+    }
+    if ( vm->clipset != 0 ) {
+        vm->clipset( vm, vm->userdata, str, slen );
+    } else {
+        clip_internal_set( str, slen );
+    }
+    free( str );
     return true;
 }
 
@@ -1949,7 +1982,7 @@ static bool vm_edit_request( vm_t* vm ) {
     if ( !vm_dpop_str( vm, &name ) ) {
         return false;
     }
-    if ( num < -1.0 || num > (double) LINENO_MAX ) {
+    if ( num < -2.0 || num > (double) LINENO_MAX ) {            // (-1: no target, -2: EDIT WINDOW)
         free( name );
         return vm_error( vm, "Illegal argument" );
     }
@@ -4207,6 +4240,8 @@ static bool vm_step( vm_t* vm ) {
         case INS_FRAM: return vm_frame( vm, inspc );
         case INS_HLT: vm->pc = vm->cgen->codesize; return true;
         case INS_FMTS: return vm_format_function( vm, param16 );
+        case INS_CLPG: return vm_clipboard_get( vm );
+        case INS_CLPS: return vm_clipboard_set( vm );
         case INS_PUSG: return param16 == 0 ? vm_using_begin( vm ) : vm_using_end( vm );
         case INS_OPEN: return vm_open_channel( vm, param16 != 0 );
         case INS_CLOS: return vm_close_channel( vm );

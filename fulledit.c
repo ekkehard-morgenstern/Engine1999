@@ -33,6 +33,8 @@
 #include "textscreen.h"      // (only the TXTSCR_* constants; every call goes through the screen driver)
 #include "ansi.h"
 #include "baspgm.h"
+#include "clipboard.h"
+#include <time.h>
 
 // -- layout and colors -----------------------------------------------------------------
 
@@ -78,6 +80,8 @@
 #define C_MSG_FG        C_YELLOW
 #define C_SBTRACK_BG    C_LIGHTGRAY
 #define C_SBTHUMB_BG    C_DARKSLATEBLUE
+#define C_SEL_BG        C_DARKSLATEBLUE // the selection
+#define C_SEL_FG        C_WHITE
 
 // -- state -----------------------------------------------------------------------------
 
@@ -108,6 +112,13 @@ typedef struct _ed_t {
     bool        sbdrag;                 // the left button went down on the scroll bar's track and is still held (the thumb is being dragged)
     int         sbarrow, sbax, sbay;    // the left button went down on an arrow (-1 up, 1 down; 0 = none) at this cell and is still held: it repeats
     int         sbsaveshape;            // the pointer's shape before the drag (the drag shows ED_DRAGSHAPE)
+    bool        sel;                    // a selection has an anchor (it is empty while the anchor and the cursor are the same place)
+    uint32_t    selno;                  // the anchor: the number of its line ...
+    size_t      selpos;                 // ... and the position in the text of that line (the cursor end is cur / ed.pos)
+    bool        selwhole;               // the selection is a whole line picked by the mouse (number pane / triple click): copied with its number, deleted as a line
+    bool        seldrag;                // the left button went down in the text and is held: the mouse extends the selection
+    long        lastclick_ms;           // the time, the cell and the count of the last click (double click = word, triple = line)
+    int         lastclickx, lastclicky, clicks;
 } ed_t;
 
 // remembered between calls: line numbers (the lines may be gone or replaced)
@@ -218,6 +229,64 @@ static void ed_loadcur( ed_t* e, size_t pos ) {
     free( text );
 }
 
+// -- the selection ---------------------------------------------------------------------
+//
+// The selection runs from an anchor (a line number and a position in the text of that line) to the cursor (the edited line and its position).
+// It can reach over several lines, which is why the anchor is kept by line number: the lines other than the edited one are the program's.
+
+static void ed_selclear( ed_t* e ) {
+    e->sel = false;
+    e->selwhole = false;
+    e->seldrag = false;
+}
+
+static void ed_selbegin( ed_t* e ) {            // the anchor is the cursor, unless there is one
+    if ( !e->sel && e->cur != 0 && !e->ins ) {
+        e->sel = true;
+        e->selno = e->cur->lineno;
+        e->selpos = e->ed.pos;
+    }
+}
+
+// the selection from its start to its end (false if there is none or it is empty)
+static bool ed_selrange( ed_t* e, uint32_t* sno, size_t* spos, uint32_t* eno, size_t* epos ) {
+    if ( !e->sel || e->ins || e->cur == 0 ) {
+        return false;
+    }
+    uint32_t cno = e->cur->lineno;
+    size_t cpos = e->ed.pos;
+    if ( e->selno == cno && e->selpos == cpos ) {
+        return false;
+    }
+    if ( e->selno < cno || ( e->selno == cno && e->selpos < cpos ) ) {
+        *sno = e->selno; *spos = e->selpos; *eno = cno; *epos = cpos;
+    } else {
+        *sno = cno; *spos = cpos; *eno = e->selno; *epos = e->selpos;
+    }
+    return true;
+}
+
+static bool ed_selactive( ed_t* e ) {
+    uint32_t a = 0, b = 0;
+    size_t c = 0, d = 0;
+    return ed_selrange( e, &a, &c, &b, &d );
+}
+
+// which characters of the line lineno (blen characters in its text) are selected: [*a, *b); *eol: the selection goes on behind the end of the line
+static void ed_slotsel( ed_t* e, uint32_t lineno, size_t blen, size_t* a, size_t* b, bool* eol ) {
+    uint32_t sno = 0, eno = 0;
+    size_t spos = 0, epos = 0;
+    *a = *b = 0;
+    *eol = false;
+    if ( !ed_selrange( e, &sno, &spos, &eno, &epos ) || lineno < sno || lineno > eno ) {
+        return;
+    }
+    size_t x = lineno == sno ? spos : 0, y = lineno == eno ? epos : blen;
+    *a = x > blen ? blen : x;
+    *b = y > blen ? blen : y;
+    *eol = lineno < eno;
+}
+
 // -- drawing ---------------------------------------------------------------------------
 
 typedef struct _put_t {
@@ -225,6 +294,7 @@ typedef struct _put_t {
     int     y0;         // first row of the entry in the text pane
     int     pos;        // characters put so far
     size_t  skip;       // characters of the line number prefix still to skip
+    size_t  sel0, sel1; // the characters [sel0, sel1) of the text are selected (none if sel0 >= sel1)
 } put_t;
 
 // puts text into the text pane, wrapping at its right edge (the pane clips at the bottom)
@@ -240,7 +310,19 @@ static void ed_put( void* usrdata, int bg, int fg, const char* text, size_t len 
         if ( (size_t) n > len ) {
             n = (int) len;
         }
-        p->e->drv->write( p->y0 + row, col, bg, fg, text, n );
+        int wbg = bg, wfg = fg;
+        if ( p->sel0 < p->sel1 ) {                  // the selected part is drawn in the selection colors
+            size_t at = (size_t) p->pos;
+            if ( at < p->sel0 && at + (size_t) n > p->sel0 ) {
+                n = (int)( p->sel0 - at );
+            } else if ( at >= p->sel0 && at < p->sel1 ) {
+                if ( at + (size_t) n > p->sel1 ) {
+                    n = (int)( p->sel1 - at );
+                }
+                wbg = C_SEL_BG; wfg = C_SEL_FG;
+            }
+        }
+        p->e->drv->write( p->y0 + row, col, wbg, wfg, text, n );
         p->pos += n; text += n; len -= (size_t) n;
     }
 }
@@ -321,7 +403,7 @@ static void ed_drawbars( ed_t* e ) {
     d->clear();
     static const struct { const char* key; const char* what; } help[] = {
         { "ESC", "Close" }, { "^Y", "Del line" }, { "RET", "New line" }, { "PgUp/PgDn", "Scroll" },
-        { "^Home/^End", "First/last" },
+        { "^C^X^V", "Copy/cut/paste" },
     };
     int x = 1;
     for ( size_t i=0; i < sizeof(help) / sizeof(help[0]); ++i ) {
@@ -468,8 +550,10 @@ static void ed_draw( ed_t* e ) {
         for ( int r=0; r < s->rows; ++r ) {
             d->write( s->y + r, 0, bg, C_TEXT_FG, blanks, e->text_w );
         }
-        put_t p = { e, s->y, 0, 0 };
+        put_t p = { e, s->y, 0, 0, 0, 0 };
+        bool eol = false;
         if ( s->edited ) {
+            ed_slotsel( e, e->cur != 0 ? e->cur->lineno : 0, e->ed.len, &p.sel0, &p.sel1, &eol );
             ed_put( &p, bg, C_TEXT_FG, e->buf, strlen( e->buf ) );
             curx = (int)( e->ed.pos % (size_t) e->text_w ); cury = s->y + (int)( e->ed.pos / (size_t) e->text_w );
         } else {
@@ -479,6 +563,7 @@ static void ed_draw( ed_t* e ) {
                 continue;
             }
             p.skip = pfx;
+            ed_slotsel( e, s->line->lineno, strlen( plain ) - pfx, &p.sel0, &p.sel1, &eol );
             if ( e->repl->hlstyle != 0 ) {
                 char* hl = ed_linetext( e, s->line, true, 0 );
                 if ( hl != 0 ) {
@@ -491,6 +576,13 @@ static void ed_draw( ed_t* e ) {
                 ed_put( &p, bg, C_TEXT_FG, plain, strlen( plain ) );
             }
             free( plain );
+        }
+        if ( eol ) {                            // the selection goes on over the end of this line: its end is marked by a selected blank
+            size_t endat = (size_t) p.pos;
+            int row = (int)( endat / (size_t) e->text_w );
+            if ( row < s->rows ) {
+                d->write( s->y + row, (int)( endat % (size_t) e->text_w ), C_SEL_BG, C_SEL_FG, " ", 1 );
+            }
         }
     }
     // scroll bar, bars
@@ -707,6 +799,397 @@ static void ed_deleteline( ed_t* e ) {
     ed_loadcur( e, 0 );
 }
 
+// -- selection, cut, copy and paste ------------------------------------------------------
+//
+// What is copied: a selection inside one line is copied as plain text; a selection over several lines, and the current line when nothing is
+// selected, as program lines with their numbers (a valid listing: it can be pasted into a file, a chat, or back into the editor).
+// What is pasted: text whose every line starts with a line number (and has text after it) is entered like typed lines; any other text goes
+// into the current line (one line), or becomes new lines with automatic numbers behind the current one (several lines).
+
+// the text of the line number no, malloc'ed (the edited line: as it is being edited); 0 if there is no such line
+static char* ed_bodyof( ed_t* e, uint32_t no ) {
+    if ( e->cur != 0 && !e->ins && e->cur->lineno == no ) {
+        return strdup( e->buf );
+    }
+    line_t* found = 0; line_t* prev = 0;
+    if ( !find_line( e->pgm, no, &found, &prev ) || found == 0 ) {
+        return 0;
+    }
+    return ed_bodytext( e, found );
+}
+
+typedef struct _sbuf_t {
+    char*   p;
+    size_t  n, cap;
+    bool    fail;
+} sbuf_t;
+
+static void sbuf_add( sbuf_t* b, const char* s, size_t len ) {
+    if ( b->fail ) {
+        return;
+    }
+    if ( b->n + len + 1U > b->cap ) {
+        size_t cap = b->cap == 0 ? 256U : b->cap;
+        while ( b->n + len + 1U > cap ) {
+            cap *= 2U;
+        }
+        char* np = (char*) realloc( b->p, cap );
+        if ( np == 0 ) {
+            b->fail = true;
+            return;
+        }
+        b->p = np; b->cap = cap;
+    }
+    memcpy( b->p + b->n, s, len );
+    b->n += len;
+    b->p[b->n] = '\0';
+}
+
+// the last line a multi-line selection takes (the line the selection ends in, unless it ends at the start of that line)
+static uint32_t ed_sellast( ed_t* e, uint32_t eno, size_t epos ) {
+    if ( epos > 0 ) {
+        return eno;
+    }
+    line_t* found = 0; line_t* prev = 0;
+    if ( find_line( e->pgm, eno, &found, &prev ) && found != 0 && found->prev != 0 ) {
+        return found->prev->lineno;
+    }
+    return eno;
+}
+
+// the text for the clipboard (malloc'ed, ISO-8859-15, lines separated by LF); 0 if there is nothing
+static char* ed_seltext( ed_t* e, size_t* plen ) {
+    uint32_t sno = 0, eno = 0;
+    size_t spos = 0, epos = 0;
+    sbuf_t b = { 0, 0, 0, false };
+    if ( !ed_selrange( e, &sno, &spos, &eno, &epos ) ) {
+        if ( e->cur == 0 || e->ins ) {
+            return 0;
+        }
+        char* body = ed_bodyof( e, e->cur->lineno );          // no selection: the current line, with its number
+        char num[16];
+        int nn = snprintf( num, sizeof(num), "%u ", (unsigned) e->cur->lineno );
+        sbuf_add( &b, num, (size_t) nn );
+        if ( body != 0 ) {
+            sbuf_add( &b, body, strlen( body ) );
+        }
+        free( body );
+    } else if ( sno == eno ) {
+        char* body = ed_bodyof( e, sno );
+        if ( e->selwhole ) {                                  // a whole line picked by the mouse: with its number
+            char num[16];
+            int nn = snprintf( num, sizeof(num), "%u ", (unsigned) sno );
+            sbuf_add( &b, num, (size_t) nn );
+        }
+        if ( body != 0 ) {
+            size_t len = strlen( body );
+            size_t a = spos > len ? len : spos, z = epos > len ? len : epos;
+            sbuf_add( &b, body + a, z - a );
+            free( body );
+        }
+    } else {
+        uint32_t last = ed_sellast( e, eno, epos );
+        line_t* found = 0; line_t* prev = 0;
+        find_line( e->pgm, sno, &found, &prev );
+        for ( line_t* ln = found; ln != 0 && ln->lineno <= last; ln = ln->next ) {
+            char* body = ed_bodyof( e, ln->lineno );
+            char num[16];
+            int nn = snprintf( num, sizeof(num), "%u ", (unsigned) ln->lineno );
+            if ( b.n > 0 ) {
+                sbuf_add( &b, "\n", 1U );
+            }
+            sbuf_add( &b, num, (size_t) nn );
+            if ( body != 0 ) {
+                sbuf_add( &b, body, strlen( body ) );
+            }
+            free( body );
+        }
+    }
+    if ( b.fail || b.n == 0 ) {
+        free( b.p );
+        return 0;
+    }
+    *plen = b.n;
+    return b.p;
+}
+
+static void ed_clipset( ed_t* e, const char* text, size_t len ) {
+    if ( e->drv->clip_set != 0 ) {
+        e->drv->clip_set( text, len );
+    } else {
+        clip_internal_set( text, len );
+    }
+}
+
+static void ed_copy( ed_t* e ) {
+    size_t len = 0;
+    char* text = ed_seltext( e, &len );
+    if ( text == 0 ) {
+        ed_setmsg( e, "Nothing to copy" );
+        return;
+    }
+    ed_clipset( e, text, len );
+    free( text );
+}
+
+// the lines from..to (numbers) are deleted; the cursor goes to the line behind them
+static void ed_deletelines( ed_t* e, uint32_t from, uint32_t to ) {
+    if ( !ed_endins( e ) ) {
+        return;
+    }
+    size_t cnt = 0, cap = 64;
+    uint32_t* nums = (uint32_t*) malloc( cap * sizeof(uint32_t) );
+    if ( nums == 0 ) {
+        return;
+    }
+    line_t* found = 0; line_t* prev = 0;
+    find_line( e->pgm, from, &found, &prev );
+    for ( line_t* ln = found; ln != 0 && ln->lineno <= to; ln = ln->next ) {
+        if ( ln->lineno < from ) {
+            continue;
+        }
+        if ( cnt == cap ) {
+            cap *= 2U;
+            uint32_t* bigger = (uint32_t*) realloc( nums, cap * sizeof(uint32_t) );
+            if ( bigger == 0 ) {
+                break;
+            }
+            nums = bigger;
+        }
+        nums[cnt++] = ln->lineno;
+    }
+    bool curin = e->cur != 0 && e->cur->lineno >= from && e->cur->lineno <= to;
+    if ( curin ) {
+        e->dirty = false;                       // (it goes away: its changes need not be entered)
+    } else if ( !ed_commit( e ) ) {
+        free( nums );
+        return;
+    }
+    uint32_t topno = e->top != 0 ? e->top->lineno : 0;
+    for ( size_t i = 0; i < cnt; ++i ) {
+        char text[16];
+        snprintf( text, sizeof(text), "%u", (unsigned) nums[i] );
+        if ( !ed_enter( e, text ) ) {
+            break;
+        }
+    }
+    free( nums );
+    e->top = ed_at( e, topno );
+    e->cur = ed_at( e, from );
+    ed_loadcur( e, 0 );
+}
+
+// deletes the selected text (a selection inside a line: the characters; over several lines: those lines)
+static bool ed_seldelete( ed_t* e ) {
+    uint32_t sno = 0, eno = 0;
+    size_t spos = 0, epos = 0;
+    if ( !ed_selrange( e, &sno, &spos, &eno, &epos ) ) {
+        return false;
+    }
+    if ( sno == eno && e->selwhole ) {
+        ed_selclear( e );
+        ed_deletelines( e, sno, sno );
+        return true;
+    }
+    if ( sno == eno ) {
+        if ( !e->readonly && e->cur != 0 && e->cur->lineno == sno && epos <= e->ed.len ) {
+            memmove( e->buf + spos, e->buf + epos, e->ed.len - epos + 1U );
+            e->ed.len -= epos - spos;
+            e->ed.pos = spos;
+            e->dirty = true;
+        }
+        ed_selclear( e );
+        return true;
+    }
+    uint32_t last = ed_sellast( e, eno, epos );
+    ed_selclear( e );
+    ed_deletelines( e, sno, last );
+    return true;
+}
+
+static void ed_cut( ed_t* e ) {
+    if ( e->ins ) {
+        ed_endins( e );
+    }
+    size_t len = 0;
+    char* text = ed_seltext( e, &len );
+    if ( text == 0 ) {
+        ed_setmsg( e, "Nothing to cut" );
+        return;
+    }
+    ed_clipset( e, text, len );
+    free( text );
+    if ( !ed_seldelete( e ) ) {
+        ed_deleteline( e );                     // nothing selected: the current line
+    }
+}
+
+// a line that starts with a line number and has text behind it
+static bool ed_numberedline( const char* s ) {
+    size_t i = 0;
+    while ( s[i] >= '0' && s[i] <= '9' && i < 7U ) {
+        ++i;
+    }
+    if ( i == 0 || i > ED_NUMDIGITS || s[i] != ' ' ) {
+        return false;
+    }
+    while ( s[i] == ' ' ) {
+        ++i;
+    }
+    return s[i] != '\0';
+}
+
+static void ed_paste( ed_t* e, const char* clip, size_t cliplen ) {
+    if ( e->toosmall || ( e->ins && e->numphase ) ) {
+        return;
+    }
+    char* text = (char*) malloc( cliplen + 1U );
+    if ( text == 0 ) {
+        return;
+    }
+    memcpy( text, clip, cliplen );
+    size_t len = clip_normalize( text, cliplen );
+    text[len] = '\0';
+    if ( len == 0 ) {
+        free( text );
+        return;
+    }
+    // the lines
+    size_t nlines = 1;
+    for ( size_t i = 0; i < len; ++i ) {
+        if ( text[i] == '\n' ) {
+            text[i] = '\0';
+            ++nlines;
+        }
+    }
+    char** lines = (char**) malloc( nlines * sizeof(char*) );
+    if ( lines == 0 ) {
+        free( text );
+        return;
+    }
+    size_t nl = 0, nonempty = 0, numbered = 0;
+    for ( char* p = text; p < text + len + 1U && nl < nlines; p += strlen( p ) + 1U ) {
+        lines[nl++] = p;
+        if ( p[0] != '\0' ) {
+            ++nonempty;
+            if ( ed_numberedline( p ) ) {
+                ++numbered;
+            }
+        }
+    }
+    if ( nonempty > 0 && numbered == nonempty ) {
+        // numbered lines: entered like typed lines
+        if ( ed_endins( e ) ) {
+            ed_selclear( e );
+            if ( ed_commit( e ) ) {
+                uint32_t topno = e->top != 0 ? e->top->lineno : 0, lastno = 0;
+                for ( size_t i = 0; i < nl; ++i ) {
+                    if ( lines[i][0] == '\0' ) {
+                        continue;
+                    }
+                    if ( !ed_enter( e, lines[i] ) ) {
+                        break;
+                    }
+                    lastno = (uint32_t) strtoul( lines[i], 0, 10 );
+                    if ( lastno < topno ) {
+                        topno = lastno;                 // (a pasted line above the view: the view starts there)
+                    }
+                }
+                e->top = ed_at( e, topno );
+                if ( lastno != 0 ) {
+                    e->cur = ed_at( e, lastno );
+                }
+                ed_loadcur( e, 0 );
+            }
+        }
+    } else if ( nonempty <= 1 ) {
+        // one line of text: into the edited line at the cursor, replacing a selection inside the line
+        const char* ins = "";
+        for ( size_t i = 0; i < nl; ++i ) {
+            if ( lines[i][0] != '\0' ) {
+                ins = lines[i];
+            }
+        }
+        uint32_t sno = 0, eno = 0;
+        size_t spos = 0, epos = 0;
+        if ( ed_selrange( e, &sno, &spos, &eno, &epos ) && sno == eno ) {
+            ed_seldelete( e );
+        } else {
+            ed_selclear( e );
+        }
+        if ( !e->readonly && ( e->ins || e->cur != 0 ) ) {
+            size_t n = strlen( ins );
+            if ( n > e->ed.maxlen - e->ed.len ) {
+                n = e->ed.maxlen - e->ed.len;
+            }
+            memmove( e->buf + e->ed.pos + n, e->buf + e->ed.pos, e->ed.len - e->ed.pos + 1U );
+            memcpy( e->buf + e->ed.pos, ins, n );
+            e->ed.pos += n; e->ed.len += n;
+            if ( n > 0 ) {
+                e->dirty = true;
+            }
+        }
+    } else if ( ed_endins( e ) ) {
+        // several lines without numbers: new lines behind the current one
+        ed_selclear( e );
+        if ( ed_commit( e ) ) {
+            uint32_t topno = e->top != 0 ? e->top->lineno : 0;
+            for ( size_t i = 0; i < nl; ++i ) {
+                if ( lines[i][0] == '\0' ) {
+                    continue;
+                }
+                uint32_t no = ed_autonumber( e );
+                if ( no == 0 ) {
+                    ed_setmsg( e, "No room for a new line here" );
+                    break;
+                }
+                char* entry = (char*) malloc( strlen( lines[i] ) + 16U );
+                if ( entry == 0 ) {
+                    break;
+                }
+                sprintf( entry, "%u %s", (unsigned) no, lines[i] );
+                bool ok = ed_enter( e, entry );
+                free( entry );
+                if ( !ok ) {
+                    break;
+                }
+                e->cur = ed_at( e, no );
+                if ( no < topno ) {
+                    topno = no;
+                }
+            }
+            e->top = ed_at( e, topno );
+            ed_loadcur( e, 0 );
+        }
+    }
+    free( lines );
+    free( text );
+}
+
+static void ed_pasteclip( ed_t* e ) {
+    size_t len = 0;
+    char* text = e->drv->clip_get != 0 ? e->drv->clip_get( &len ) : clip_internal_get( &len );
+    if ( text == 0 || len == 0 ) {
+        free( text );
+        ed_setmsg( e, "The clipboard is empty" );
+        return;
+    }
+    ed_paste( e, text, len );
+    free( text );
+}
+
+static void ed_selectall( ed_t* e ) {
+    if ( e->pgm->first == 0 || !ed_endins( e ) ) {
+        return;
+    }
+    uint32_t firstno = e->pgm->first->lineno;
+    ed_moveto( e, e->pgm->last );
+    if ( e->cur != 0 ) {
+        e->ed.pos = e->ed.len;
+        e->sel = true; e->selno = firstno; e->selpos = 0;
+    }
+}
+
 // -- keys ------------------------------------------------------------------------------
 
 // ESC: the new line and the edited line are entered first; if that fails, the next ESC discards them
@@ -742,9 +1225,65 @@ static void ed_edit( ed_t* e, const scrkey_t* k ) {
 }
 
 static void ed_key( ed_t* e, const scrkey_t* k ) {
-    bool ctrl = ( k->mods & KSMOD_CTRL ) != 0;
+    bool ctrl = ( k->mods & KSMOD_CTRL ) != 0, shift = ( k->mods & KSMOD_SHIFT ) != 0;
     if ( k->kind != SK_ESCAPE ) {
         e->escwarn = false;
+    }
+    // the clipboard and the selection
+    if ( k->kind == SK_PASTE ) {
+        ed_pasteclip( e );
+        return;
+    }
+    if ( k->kind == SK_CHAR && ctrl ) {
+        switch ( k->ch ) {
+            case 'c': ed_copy( e ); return;
+            case 'x': ed_cut( e ); return;
+            case 'v': ed_pasteclip( e ); return;
+            case 'a': ed_selectall( e ); return;
+            default:  ed_selclear( e ); break;          // (Ctrl+Y and the like)
+        }
+    }
+    if ( k->kind == SK_KEY ) {
+        if ( k->key == KS_INSERT && ctrl ) { ed_copy( e ); return; }
+        if ( k->key == KS_INSERT && shift ) { ed_pasteclip( e ); return; }
+        if ( k->key == KS_DELETE && shift ) { ed_cut( e ); return; }
+        if ( k->key == KS_DELETE && ed_seldelete( e ) ) { return; }
+        switch ( k->key ) {
+            case KS_LEFT: case KS_RIGHT: case KS_UP: case KS_DOWN: case KS_HOME: case KS_END: case KS_PGUP: case KS_PGDN:
+                if ( shift && !e->ins ) {
+                    ed_selbegin( e );
+                    if ( k->key == KS_LEFT && e->ed.pos == 0 && e->cur != 0 && e->cur->prev != 0 ) {         // over the line end
+                        ed_moveto( e, e->cur->prev );
+                        e->ed.pos = e->ed.len;
+                        return;
+                    }
+                    if ( k->key == KS_RIGHT && e->ed.pos == e->ed.len && e->cur != 0 && e->cur->next != 0 ) {
+                        ed_moveto( e, e->cur->next );
+                        e->ed.pos = 0;
+                        return;
+                    }
+                } else {
+                    ed_selclear( e );
+                }
+                break;
+            default:
+                break;
+        }
+    } else if ( k->kind == SK_BACKSPACE && ed_seldelete( e ) ) {
+        return;
+    } else if ( k->kind == SK_ESCAPE && e->sel && !e->ins && ed_selactive( e ) ) {
+        ed_selclear( e );                              // (ESC drops a selection before it closes the editor)
+        return;
+    } else if ( k->kind == SK_RETURN || k->kind == SK_TAB ) {
+        ed_selclear( e );
+    } else if ( k->kind == SK_CHAR && !ctrl ) {
+        uint32_t sno = 0, eno = 0;
+        size_t spos = 0, epos = 0;
+        if ( ed_selrange( e, &sno, &spos, &eno, &epos ) && sno == eno ) {
+            ed_seldelete( e );                         // typing replaces a selection inside a line
+        } else {
+            ed_selclear( e );
+        }
     }
     if ( k->kind == SK_CHAR && !ctrl ) {
         if ( e->ins && e->numphase ) {
@@ -952,6 +1491,76 @@ static void ed_click( ed_t* e, int mx, int my ) {
     e->ed.pos = pos < e->ed.len ? pos : e->ed.len;
 }
 
+static long ed_now_ms( void ) {
+    struct timespec ts;
+    clock_gettime( CLOCK_MONOTONIC, &ts );
+    return (long) ts.tv_sec * 1000L + (long)( ts.tv_nsec / 1000000L );
+}
+
+static bool ed_wordchar( int c ) {
+    return ( c >= '0' && c <= '9' ) || ( c >= 'A' && c <= 'Z' ) || ( c >= 'a' && c <= 'z' ) || c == '_' || c >= 160;
+}
+
+// a click in the panes: the cursor goes there and a selection starts (a double click selects the word, a triple click the line); a double
+// click in the number pane selects the line
+static void ed_selpress( ed_t* e, int mx, int my ) {
+    ed_selclear( e );
+    ed_click( e, mx, my );
+    if ( e->cur == 0 || e->ins ) {
+        return;
+    }
+    long now = ed_now_ms();
+    if ( now - e->lastclick_ms < 450L && e->lastclickx == mx && e->lastclicky == my ) {
+        e->clicks = e->clicks >= 3 ? 1 : e->clicks + 1;
+    } else {
+        e->clicks = 1;
+    }
+    e->lastclick_ms = now; e->lastclickx = mx; e->lastclicky = my;
+    if ( mx < ED_TEXT_X && e->clicks == 1 ) {                       // (a single click in the number pane only puts the cursor there)
+        return;
+    }
+    if ( mx < ED_TEXT_X || e->clicks == 3 ) {                       // the line
+        e->sel = true; e->selno = e->cur->lineno; e->selpos = 0;
+        e->ed.pos = e->ed.len;
+        e->selwhole = e->ed.len > 0;
+        return;
+    }
+    if ( e->clicks == 2 ) {                                         // the word
+        size_t a = e->ed.pos, z = e->ed.pos;
+        if ( a == e->ed.len && a > 0 ) {
+            --a; --z;
+        }
+        if ( a < e->ed.len && ed_wordchar( (unsigned char) e->buf[a] ) ) {
+            while ( a > 0 && ed_wordchar( (unsigned char) e->buf[a-1U] ) ) {
+                --a;
+            }
+            while ( z < e->ed.len && ed_wordchar( (unsigned char) e->buf[z] ) ) {
+                ++z;
+            }
+            e->sel = true; e->selno = e->cur->lineno; e->selpos = a;
+            e->ed.pos = z;
+            return;
+        }
+    }
+    ed_selbegin( e );
+    e->seldrag = true;
+}
+
+// the button is held and the pointer is at the cell: the cursor follows (above or below the panes the view scrolls)
+static void ed_seldrag( ed_t* e, int mx, int my ) {
+    if ( my < ED_PANE_Y ) {
+        ed_viewby( e, -1 );
+        my = ED_PANE_Y;
+    } else if ( my >= ED_PANE_Y + e->pane_h ) {
+        ed_viewby( e, 1 );
+        my = ED_PANE_Y + e->pane_h - 1;
+    }
+    if ( mx < ED_TEXT_X ) {
+        mx = ED_TEXT_X;
+    }
+    ed_click( e, mx, my );
+}
+
 static void ed_mouse( ed_t* e, const scrkey_t* k ) {
     int sbx = ED_TEXT_X + e->text_w;
     bool inpanes = k->my >= ED_PANE_Y && k->my < ED_PANE_Y + e->pane_h;
@@ -965,7 +1574,7 @@ static void ed_mouse( ed_t* e, const scrkey_t* k ) {
                 break;
             }
             if ( k->mx < sbx ) {
-                ed_click( e, k->mx, k->my );
+                ed_selpress( e, k->mx, k->my );
                 break;
             }
             if ( k->mx == sbx ) {
@@ -985,15 +1594,27 @@ static void ed_mouse( ed_t* e, const scrkey_t* k ) {
         case SM_REPEAT:
             if ( e->sbarrow != 0 && k->mx == e->sbax && k->my == e->sbay ) {
                 ed_viewby( e, e->sbarrow );
+            } else if ( e->seldrag ) {
+                ed_seldrag( e, k->mx, k->my );          // (the button is held outside the panes: the view scrolls on)
             }
             break;
         case SM_DRAG:
-            if ( e->sbdrag ) {
+            if ( e->seldrag ) {
+                ed_seldrag( e, k->mx, k->my );
+            } else if ( e->sbdrag ) {
                 int t = k->my - ED_PANE_Y - 1;          // (above or below the bar: the first or the last place)
                 ed_scrolltrack( e, t < 0 ? 0 : t >= e->sbtrack ? e->sbtrack - 1 : t );
             }
             break;
         case SM_RELEASE:
+            if ( e->seldrag ) {
+                e->seldrag = false;
+                uint32_t a = 0, b = 0;
+                size_t c = 0, d = 0;
+                if ( !ed_selrange( e, &a, &c, &b, &d ) ) {
+                    ed_selclear( e );                   // (a click without a drag selects nothing)
+                }
+            }
             ed_enddrag( e );
             break;
         default:
@@ -1061,7 +1682,11 @@ void fulledit_run( repl_t* repl, const scrdrv_t* drv ) {
         bool any = false;
         for ( ;; ) {
             if ( k.kind == SK_BREAK ) {
-                k.kind = SK_ESCAPE;         // (the break key leaves the editor like ESC)
+                if ( k.ch == 'c' && ( k.mods & KSMOD_CTRL ) != 0 ) {
+                    k.kind = SK_CHAR;       // (Ctrl+C in the window: copy)
+                } else {
+                    k.kind = SK_ESCAPE;     // (the break key leaves the editor like ESC)
+                }
             }
             if ( k.kind == SK_RESIZE ) {
                 ed_layout( e );

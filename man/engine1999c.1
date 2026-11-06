@@ -279,6 +279,9 @@ the classic line mode (the command line options win; the default: screen mode on
 is
 .BR \-\-no\-dump .
 .TP
+.B E1999_CLIPBOARD
+Set to 0, the full-screen editor does not write the terminal's clipboard (OSC 52) when text is copied; pasting by the terminal (bracketed paste) works either way.
+.TP
 .B E1999_MOUSE
 .B 0
 switches the mouse off in screen mode: the terminal's mouse reporting is not enabled and the MOUSE statements give an error (the default: the mouse is reported, see

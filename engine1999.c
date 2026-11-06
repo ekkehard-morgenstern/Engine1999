@@ -836,6 +836,17 @@ static void host_breakesc( struct _vm_t* vm, void* usrdata, bool on ) {
     sdlscr_setescbreak( on );
 }
 
+// CLIPBOARD$ and CLIPBOARD a$: the system clipboard through SDL
+static char* host_clipget( struct _vm_t* vm, void* usrdata, size_t* len ) {
+    (void) vm; (void) usrdata;
+    return sdlscr_clipboard_get( len );
+}
+
+static void host_clipset( struct _vm_t* vm, void* usrdata, const char* text, size_t len ) {
+    (void) vm; (void) usrdata;
+    sdlscr_clipboard_set( text, len );
+}
+
 // KEY("name"): the keyboard state of SDL (see sdlscr_keydown())
 static bool host_keydown( struct _vm_t* vm, void* usrdata, int keyid ) {
     return sdlscr_keydown( keyid );
@@ -985,6 +996,8 @@ static void host_ui_start( void ) {
     }
     ui_canvas_t c = { 0, 640, 300, ui_c_box, ui_c_pset };
     ui_init( &host_ui, &c, UI_PALBASE );
+    host_ui.clip_get = sdlscr_clipboard_get;
+    host_ui.clip_set = sdlscr_clipboard_set;
     memset( &host_ui_event, 0, sizeof(host_ui_event) );
     host_ui_open = true;
     host_ui_pad = true;
@@ -1010,10 +1023,19 @@ static int host_ui_keys( int* keys, int max ) {
                     { KS_LEFT, UIKEY_LEFT }, { KS_RIGHT, UIKEY_RIGHT }, { KS_UP, UIKEY_UP }, { KS_DOWN, UIKEY_DOWN }, { KS_HOME, UIKEY_HOME },
                     { KS_END, UIKEY_END }, { KS_PGUP, UIKEY_PGUP }, { KS_PGDN, UIKEY_PGDN }, { KS_DELETE, UIKEY_DELETE }, { KS_BACKTAB, UIKEY_BACKTAB }
                 };
-                for ( size_t m = 0; m < sizeof(map) / sizeof(map[0]); ++m ) {
-                    if ( map[m].ks == key ) {
-                        keys[nk++] = map[m].ui;
-                        break;
+                int modbits = ( ( mods & KSMOD_SHIFT ) != 0 ? UIKEY_SHIFT : 0 ) | ( ( mods & KSMOD_CTRL ) != 0 ? UIKEY_CTRL : 0 );
+                if ( key == KS_INSERT && ( mods & KSMOD_CTRL ) != 0 ) {         // Ctrl+Insert, Shift+Insert, Shift+Delete: copy, paste, cut
+                    keys[nk++] = UIKEY_CTRL | 'c';
+                } else if ( key == KS_INSERT && ( mods & KSMOD_SHIFT ) != 0 ) {
+                    keys[nk++] = UIKEY_CTRL | 'v';
+                } else if ( key == KS_DELETE && ( mods & KSMOD_SHIFT ) != 0 ) {
+                    keys[nk++] = UIKEY_CTRL | 'x';
+                } else {
+                    for ( size_t m = 0; m < sizeof(map) / sizeof(map[0]); ++m ) {
+                        if ( map[m].ks == key ) {
+                            keys[nk++] = map[m].ui | modbits;
+                            break;
+                        }
                     }
                 }
                 i += (size_t) used;
@@ -1025,6 +1047,8 @@ static int host_ui_keys( int* keys, int max ) {
         }
         if ( b == 127 ) {
             keys[nk++] = UIKEY_BACKSPACE;
+        } else if ( b >= 1 && b <= 26 && b != 8 && b != 9 && b != 10 && b != 13 ) {
+            keys[nk++] = UIKEY_CTRL | ( 'a' + b - 1 );        // Ctrl + a letter (the multi-line editor: A C X V Z Y)
         } else if ( b == 10 ) {
             keys[nk++] = UIKEY_ENTER;
         } else {
@@ -1097,6 +1121,8 @@ static bool host_ui_op( int op, const double* a, int na, const char* s, size_t s
         case GFXOP_UIBUTTON:    ok = ui_add( &host_ui, UIK_BUTTON, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), text, 0 ); break;
         case GFXOP_UICHECK:     ok = ui_add( &host_ui, UIK_CHECK, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), text, 0 ); break;
         case GFXOP_UIRADIO:     ok = ui_add( &host_ui, UIK_RADIO, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), text, gi( a[5], 0 ) ); break;
+        case GFXOP_UIEDIT:      ok = ui_add( &host_ui, UIK_EDIT, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), text, 0 ); break;
+        case GFXOP_UICARET:     ok = ui_edit_caret( &host_ui, id, gi( a[1], 0 ) ); break;
         case GFXOP_UITEXT:      ok = ui_add( &host_ui, UIK_TEXT, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), text, 0 ); break;
         case GFXOP_UILIST:      ok = ui_add( &host_ui, UIK_LIST, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), "", 0 ); break;
         case GFXOP_UIPROGRESS:  ok = ui_add( &host_ui, UIK_PROGRESS, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), "", 0 ); break;
@@ -1205,6 +1231,11 @@ static bool host_ui_query( int q, const double* a, double* result ) {
             break;
         }
         case GFXQ_UIFOCUS:  *result = host_ui.focus; break;
+        case GFXQ_UICARET:  *result = ui_edit_query( &host_ui, gi( a[0], 0 ), 0 ); break;
+        case GFXQ_UILINE:   *result = ui_edit_query( &host_ui, gi( a[0], 0 ), 1 ); break;
+        case GFXQ_UICOLUMN: *result = ui_edit_query( &host_ui, gi( a[0], 0 ), 2 ); break;
+        case GFXQ_UISELECTED: *result = ui_edit_query( &host_ui, gi( a[0], 0 ), 3 ); break;
+        case GFXQ_UILINES:  *result = ui_edit_query( &host_ui, gi( a[0], 0 ), 4 ); break;
         case GFXQ_UIPIXEL:  *result = ui_canvas_get( &host_ui, gi( a[0], 0 ), gi( a[1], 0 ), gi( a[2], 0 ) ); break;
         default:            return false;
     }
@@ -1313,7 +1344,7 @@ static bool host_gfx_op( void* usrdata, int op, const double* a, int na, const c
     size_t* outlen, const char** err ) {
     (void) usrdata; (void) na;
     int t = sdlscr_gfx_target();
-    if ( op >= GFXOP_UIOPEN && op <= GFXOP_UIRAISE ) {
+    if ( op >= GFXOP_UIOPEN && op <= GFXOP_UICARET ) {
         return host_ui_op( op, a, na, s, slen, out, outsz, outlen, err );
     }
     switch ( op ) {
@@ -1501,6 +1532,7 @@ static bool host_gfx_query( void* usrdata, int q, const double* a, int na, doubl
         case GFXQ_MOUSEVISIBLE: *result = sdlscr_mouse_get( MOUSEV_VISIBLE ) ? -1.0 : 0.0; break;
         case GFXQ_EVENT:        *result = sdlscr_sprite_nextevent(); break;
         case GFXQ_UIEVENT: case GFXQ_UIKIND: case GFXQ_UIVALUE: case GFXQ_UIGET: case GFXQ_UICOUNT: case GFXQ_UIFOCUS: case GFXQ_UIOPEN: case GFXQ_UIEVENTS: case GFXQ_UIPIXEL:
+        case GFXQ_UICARET: case GFXQ_UILINE: case GFXQ_UICOLUMN: case GFXQ_UISELECTED: case GFXQ_UILINES:
             return host_ui_query( q, a, result );
         default:                return false;
     }
@@ -1545,6 +1577,7 @@ static bool host_pause( struct _repl_t* r ) {
     return key != -1 && key != 'q' && key != 'Q';
 }
 
+static void host_edit_window( void );
 static int host_policy_ask( void* ud, int category, const char* what );
 
 static void init_host( void ) {
@@ -1560,6 +1593,8 @@ static void init_host( void ) {
     repl.inkey     = host_inkey;
     repl.breakesc  = host_breakesc;
     repl.keydown   = host_keydown;
+    repl.clipget   = host_clipget;
+    repl.clipset   = host_clipset;
     repl.input     = host_input;
     repl.getkey    = host_getkey;
     repl.interrupt = host_interrupt;
@@ -1667,7 +1702,14 @@ static bool handle_input( const char* buf ) {
     host_ui_shutdown();         // a program that stopped (END, an error, Break) leaves no UI on the graphics layer: it would hide the prompt
     if ( repl.fulledit ) {      // EDIT without a target (not run from inside the REPL: the editor enters lines itself)
         repl.fulledit = false;
-        fulledit_run( &repl, sdlscr_driver( vblank_handler, &usrdata ) );
+        const char* ed = getenv( "ENGINE1999_EDITOR" );
+        bool window = repl.editwin || ( ed != 0 && strcmp( ed, "window" ) == 0 );     // EDIT WINDOW, or the setting that makes it the default
+        repl.editwin = false;
+        if ( window ) {
+            host_edit_window();
+        } else {
+            fulledit_run( &repl, sdlscr_driver( vblank_handler, &usrdata ) );
+        }
     }
     if ( repl.monitor ) {       // MONITOR: same, the monitor runs REPL functions itself
         repl.monitor = false;
@@ -1772,6 +1814,101 @@ static int host_policy_ask( void* ud, int category, const char* what ) {
     }
     free( saved );
     return answer;
+}
+
+
+// -- the editor window: EDIT WINDOW (a UI widget on the graphics layer, docs/ui-subsystem.md "The multi-line text editor") ----------------------------------
+
+// The stored program as text in a multi-line editor widget; OK enters the text as the program (NEW and every line like a typed one), Apply does it and stays,
+// Cancel (and ESC) leaves without. It is the same editor as UI EDIT gives a BASIC program, so it has selection, the clipboard and undo.
+#define EW_PANEL    9800
+
+static void host_edit_window( void ) {
+    size_t len = 0;
+    char* orig = repl_program_text( &repl, &len );
+    if ( orig == 0 ) {
+        return;
+    }
+    uint8_t* saved = 0;
+    size_t savedlen = 0;
+    bool layerwas = sdlscr_layer_enabled( UI_LAYER );
+    uint32_t pal[ UI_PAL_COLORS ];
+    size_t need = sdlscr_gfx_grab( UI_LAYER, 0, 0, 639, 299, 0, 0 );
+    saved = (uint8_t*) malloc( need );
+    if ( saved != 0 ) {
+        savedlen = sdlscr_gfx_grab( UI_LAYER, 0, 0, 639, 299, saved, need );
+    }
+    for ( int i = 0; i < UI_PAL_COLORS; ++i ) {
+        pal[i] = sdlscr_palette_get( UI_LAYER, UI_PALBASE + i );
+    }
+    host_ui_start();
+    const scrdrv_t* drv = sdlscr_driver( vblank_handler, &usrdata );
+    int keystate = drv->begin();
+    ui_add( &host_ui, UIK_PANEL, EW_PANEL, 0, 0, 640, 300, "Program editor", 0 );
+    ui_add( &host_ui, UIK_EDIT, EW_PANEL + 1, 6, 24, 628, 242, orig, 0 );
+    ui_add( &host_ui, UIK_BUTTON, EW_PANEL + 2, 6, 272, 70, 22, "OK", 0 );
+    ui_add( &host_ui, UIK_BUTTON, EW_PANEL + 3, 82, 272, 70, 22, "Apply", 0 );
+    ui_add( &host_ui, UIK_BUTTON, EW_PANEL + 4, 158, 272, 70, 22, "Cancel", 0 );
+    ui_add( &host_ui, UIK_LABEL, EW_PANEL + 5, 238, 277, 396, 14, "Ctrl+C / X / V / Z / Y, Shift+arrows select. Tab: buttons.", 0 );
+    ui_set_modal( &host_ui, EW_PANEL );
+    ui_set_focus( &host_ui, EW_PANEL + 1 );
+    bool done = false, escwarn = false;
+    while ( !done && !sdlscr_term() ) {
+        sdlscr_vsync();
+        host_ui_step();
+        ui_event_t ev;
+        while ( !done && ui_next_event( &host_ui, &ev ) ) {
+            char msg[200];
+            size_t count = 0;
+            bool apply = false;
+            if ( ev.id == EW_PANEL + 1 && ev.kind == UIE_CHANGE ) {
+                escwarn = false;
+            } else if ( ev.id == EW_PANEL && ev.kind == UIE_CANCEL ) {
+                const char* now = ui_get_text( &host_ui, EW_PANEL + 1 );
+                if ( now == 0 || strcmp( now, orig ) == 0 || escwarn ) {
+                    done = true;
+                } else {
+                    escwarn = true;
+                    ui_set_text( &host_ui, EW_PANEL + 5, "Not applied: ESC again (or Cancel) discards, OK applies." );
+                }
+            } else if ( ev.kind == UIE_CLICK && ev.id == EW_PANEL + 4 ) {
+                done = true;
+            } else if ( ev.kind == UIE_CLICK && ( ev.id == EW_PANEL + 2 || ev.id == EW_PANEL + 3 ) ) {
+                apply = true;
+            }
+            if ( apply ) {
+                if ( !repl_apply_text( &repl, ui_get_text( &host_ui, EW_PANEL + 1 ), msg, sizeof(msg), &count ) ) {
+                    ui_set_text( &host_ui, EW_PANEL + 5, msg );
+                } else if ( msg[0] != '\0' ) {
+                    ui_set_text( &host_ui, EW_PANEL + 5, msg );
+                } else {
+                    char ok[64];
+                    snprintf( ok, sizeof(ok), "Applied: %u line%s.", (unsigned) count, count == 1U ? "" : "s" );
+                    ui_set_text( &host_ui, EW_PANEL + 5, ok );
+                    free( orig );
+                    orig = strdup( ui_get_text( &host_ui, EW_PANEL + 1 ) );
+                    if ( orig == 0 ) {
+                        orig = strdup( "" );
+                    }
+                    if ( ev.id == EW_PANEL + 2 ) {
+                        done = true;
+                    }
+                }
+            }
+        }
+    }
+    drv->end( keystate );
+    ui_set_modal( &host_ui, 0 );
+    host_ui_shutdown();
+    for ( int i = 0; i < UI_PAL_COLORS; ++i ) {
+        sdlscr_palette_set( UI_LAYER, UI_PALBASE + i, pal[i] );
+    }
+    if ( saved != 0 && savedlen > 0 ) {
+        sdlscr_gfx_blit( UI_LAYER, saved, savedlen, 0, 0, false );
+    }
+    sdlscr_layer_enable( UI_LAYER, layerwas );
+    free( saved );
+    free( orig );
 }
 
 // -- command line ----------------------------------------------------------------------

@@ -53,13 +53,14 @@ callbacks to sdlscreen) and on a gfxcore bitmap in the test. All coordinates are
 
 #define UI_MAXWIDGETS   128
 #define UI_TEXTMAX      255             // the longest text of a widget (a text field)
+#define UI_EDITMAX      60000           // the longest text of a multi-line editor (UIK_EDIT)
 #define UI_MAXITEMS     512             // the rows of a list
 #define UI_EVENTS       64              // the event queue
 
 #define UI_PAL_COLORS   16              // the theme uses this many consecutive palette entries (the host sets them: ui_theme_argb)
 
 typedef enum _ui_kind_t {
-    UIK_NONE = 0, UIK_LABEL, UIK_BUTTON, UIK_CHECK, UIK_RADIO, UIK_TEXT, UIK_LIST, UIK_PROGRESS, UIK_SLIDER, UIK_PANEL, UIK_SCROLL, UIK_CANVAS, UIK_COUNT
+    UIK_NONE = 0, UIK_LABEL, UIK_BUTTON, UIK_CHECK, UIK_RADIO, UIK_TEXT, UIK_LIST, UIK_PROGRESS, UIK_SLIDER, UIK_PANEL, UIK_SCROLL, UIK_CANVAS, UIK_EDIT, UIK_COUNT
 } ui_kind_t;
 
 #define UIE_CLICK       1               // a button was clicked
@@ -92,6 +93,11 @@ typedef struct _ui_event_t {
 #define UIKEY_PGDN      0x1008
 #define UIKEY_DELETE    0x1009
 #define UIKEY_BACKTAB   0x100A          // Shift+Tab
+// modifiers (added to a key code; only the multi-line editor reacts to them, every other widget takes Shift+key as the key and ignores Ctrl+key):
+// Shift + a cursor key (UIKEY_SHIFT | UIKEY_LEFT ...) extends the selection, Ctrl + a letter (UIKEY_CTRL | 'a' .. 'z'): A select all, C copy, X cut, V paste, Z undo, Y redo;
+// Ctrl + Home / End (UIKEY_CTRL | UIKEY_HOME)
+#define UIKEY_SHIFT     0x10000
+#define UIKEY_CTRL      0x20000
 
 #define UISB_NONE       0               // the parts of a scroll bar
 #define UISB_ARROW1     1               // up / left
@@ -142,6 +148,7 @@ typedef struct _ui_widget_t {
     int     owner;                      // the id of the window this widget was created in (0 none): it moves and rises with it
     int     group;                      // radio buttons of the same group exclude each other
     int     caret, scroll;              // text field: the caret (a byte index) and the first visible pixel column; list: the first visible row in scroll
+    struct _ui_edit_t* edit;            // multi-line editor: the selection, the undo steps, the mouse state (ui.c)
     uint8_t* pix;                       // canvas: cw x ch cells, each a palette index (0 is drawn as a checkered 'transparent')
     int     cw, ch;
     char**  items;                      // list
@@ -173,6 +180,8 @@ typedef struct _ui_t {
     int             clip[4];            // x1 y1 x2 y2 of the clip rectangle while drawing
     uint32_t        lastclick_ms;       // for the double click
     int             lastclick_id, lastclick_row;
+    char*         (*clip_get)( size_t* len );                       // the clipboard of the multi-line editor (ISO-8859-15, LF line ends; malloc'ed, 0 if empty); 0: the internal clipboard
+    void          (*clip_set)( const char* text, size_t len );
     ui_event_t      queue[UI_EVENTS];
     int             qhead, qcount;
     bool            drawn;              // ui_draw( all ) has been done
@@ -205,6 +214,8 @@ bool ui_canvas_save( ui_t* ui, int id, uint8_t* out, size_t cap, size_t* n );
 bool ui_move( ui_t* ui, int id, int x, int y );                 // moves a widget to x, y; a window takes the widgets it owns along
 bool ui_raise( ui_t* ui, int id );                              // a window (and its widgets) in front of the others
 bool ui_set_page( ui_t* ui, int id, int page );                 // scroll bar: the size of the visible part (>= 1); sets the size of the knob and the step of Page up / down
+bool ui_edit_caret( ui_t* ui, int id, int pos );                // multi-line editor: the caret to a byte position (the selection is dropped, the view follows)
+int  ui_edit_query( ui_t* ui, int id, int what );               // multi-line editor: 0 the caret (byte), 1 its line (from 0), 2 its column, 3 the length of the selection, 4 the number of lines; -1 for a bad id
 bool ui_set_enabled( ui_t* ui, int id, bool on );
 bool ui_set_visible( ui_t* ui, int id, bool on );
 bool ui_set_focus( ui_t* ui, int id );

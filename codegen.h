@@ -404,6 +404,8 @@ bool cgen_gen_fram( codegen_t* cgen );
 bool cgen_gen_keys( codegen_t* cgen );
 bool cgen_gen_libs( codegen_t* cgen );
 bool cgen_gen_exst( codegen_t* cgen );
+bool cgen_gen_clpg( codegen_t* cgen );                    // CLIPBOARD$
+bool cgen_gen_clps( codegen_t* cgen );                    // CLIPBOARD a$
 bool cgen_gen_fmts( codegen_t* cgen, uint16_t isstr );   // FORMAT$: 0 = a number, 1 = a string
 bool cgen_gen_pusg( codegen_t* cgen, uint16_t param );   // PRINT USING: 0 = begin (format on the stack), 1 = end
 bool cgen_from_librariesstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
@@ -505,6 +507,7 @@ bool cgen_from_onkeystmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_onuistmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_onsprstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_gfxstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
+bool cgen_from_clipstmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_randomizestmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_anglestmt( codegen_t* cgen, compiler_t* comp, node_t* node );
 bool cgen_from_procstmt( codegen_t* cgen, compiler_t* comp, node_t* node );

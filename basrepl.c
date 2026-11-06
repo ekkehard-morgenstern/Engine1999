@@ -223,6 +223,8 @@ static void repl_setup_vm( repl_t* repl ) {
     vm->inkey     = repl->inkey;
     vm->breakesc  = repl->breakesc;
     vm->keydown   = repl->keydown;
+    vm->clipget   = repl->clipget;
+    vm->clipset   = repl->clipset;
     vm->input     = repl->input;
     vm->getkey    = repl->getkey;
     vm->interrupt = repl->interrupt;
@@ -1427,6 +1429,131 @@ static bool repl_vm_build( struct _vm_t* vm, void* usrdata, const char* name, in
     return ok;
 }
 
+// -- the program as text (EDIT WINDOW) -------------------------------------------------
+
+char* repl_program_text( repl_t* repl, size_t* plen ) {
+    size_t cap = 4096, n = 0;
+    char* out = (char*) malloc( cap );
+    if ( out == 0 ) {
+        return 0;
+    }
+    out[0] = '\0';
+    pgmiter_t iter;
+    clear_iter( &iter, &repl->pgm );
+    for ( line_t* ln = repl->pgm.first; ln != 0; ln = ln->next ) {
+        buf_t* b = create_buffer();
+        if ( b == 0 ) {
+            free( out );
+            return 0;
+        }
+        if ( iter_load_line( &iter, ln ) && detokenize_line( b, iter.tok, &iter.hdr ) ) {
+            size_t len = strlen( b->buffer );
+            if ( n + len + 2U > cap ) {
+                while ( n + len + 2U > cap ) {
+                    cap *= 2U;
+                }
+                char* bigger = (char*) realloc( out, cap );
+                if ( bigger == 0 ) {
+                    delete_buffer( b );
+                    free( out );
+                    return 0;
+                }
+                out = bigger;
+            }
+            memcpy( out + n, b->buffer, len );
+            n += len;
+            out[n++] = '\n';
+            out[n] = '\0';
+        }
+        delete_buffer( b );
+    }
+    *plen = n;
+    return out;
+}
+
+static char apply_firstmsg[160];
+static size_t apply_errors = 0;
+
+static void apply_report( struct _repl_t* repl, const char* text ) {
+    (void) repl;
+    ++apply_errors;
+    if ( apply_firstmsg[0] == '\0' ) {
+        if ( text[0] == '?' && text[1] == ' ' ) {
+            text += 2;
+        }
+        snprintf( apply_firstmsg, sizeof(apply_firstmsg), "%s", text );
+        size_t n = strlen( apply_firstmsg );
+        while ( n > 0 && ( apply_firstmsg[n-1U] == '\n' || apply_firstmsg[n-1U] == '\r' ) ) {
+            apply_firstmsg[--n] = '\0';
+        }
+    }
+}
+
+bool repl_apply_text( repl_t* repl, const char* text, char* msg, size_t msgsz, size_t* pcount ) {
+    msg[0] = '\0';
+    *pcount = 0;
+    // pass 1: every line must have a number
+    size_t lineno = 0;
+    for ( const char* p = text; *p != '\0'; ) {
+        const char* e = strchr( p, '\n' );
+        size_t len = e != 0 ? (size_t)( e - p ) : strlen( p );
+        ++lineno;
+        size_t i = 0;
+        while ( i < len && ( p[i] == ' ' || p[i] == '\r' ) ) ++i;
+        if ( i < len ) {
+            size_t d = i;
+            while ( d < len && p[d] >= '0' && p[d] <= '9' ) ++d;
+            if ( d == i || d - i > 6U || ( d < len && p[d] != ' ' ) ) {
+                snprintf( msg, msgsz, "Line %u of the text has no line number: %.30s", (unsigned) lineno, p + i );
+                return false;
+            }
+        }
+        p = e != 0 ? e + 1 : p + len;
+    }
+    char* savedname = repl->filename != 0 ? strdup( repl->filename ) : 0;
+    void (*oldreport)( struct _repl_t*, const char* ) = repl->report;
+    repl_enter( repl, "NEW" );
+    repl->report = apply_report;
+    apply_firstmsg[0] = '\0';
+    apply_errors = 0;
+    size_t count = 0, rejected = 0;
+    for ( const char* p = text; *p != '\0'; ) {
+        const char* e = strchr( p, '\n' );
+        size_t len = e != 0 ? (size_t)( e - p ) : strlen( p );
+        char* line = (char*) malloc( len + 1U );
+        if ( line != 0 ) {
+            memcpy( line, p, len );
+            line[len] = '\0';
+            while ( len > 0 && ( line[len-1U] == '\r' || line[len-1U] == ' ' ) ) {
+                line[--len] = '\0';
+            }
+            char* q = line;
+            while ( *q == ' ' ) ++q;
+            const char* sp = strchr( q, ' ' );
+            if ( *q != '\0' && sp != 0 ) {           // (a line number alone is ignored)
+                size_t before = apply_errors;
+                if ( repl_enter( repl, q ) && apply_errors == before ) {
+                    ++count;
+                } else {
+                    ++rejected;
+                }
+            }
+            free( line );
+        }
+        p = e != 0 ? e + 1 : p + len;
+    }
+    repl->report = oldreport;
+    if ( savedname != 0 ) {
+        free( repl->filename );
+        repl->filename = savedname;
+    }
+    *pcount = count;
+    if ( rejected > 0 ) {
+        snprintf( msg, msgsz, "%u line%s rejected: %.100s", (unsigned) rejected, rejected == 1U ? "" : "s", apply_firstmsg );
+    }
+    return true;
+}
+
 // -- EDIT ------------------------------------------------------------------------------
 
 static bool repl_list_end( repl_t* repl, const char* label, int32_t line, uint32_t* plineno );
@@ -1437,6 +1564,7 @@ static bool repl_edit_line( repl_t* repl, const char* label, int32_t line ) {
     uint32_t lineno = LINENO_NONE;
     if ( label[0] == '\0' && line < 0 ) {
         repl->fulledit = true;      // the host opens the full-screen editor when repl_enter() has returned
+        repl->editwin = line == -2;     // (EDIT WINDOW: the editor window of the window host, if there is one)
         return true;
     }
     if ( !repl_list_end( repl, label, line, &lineno ) ) {

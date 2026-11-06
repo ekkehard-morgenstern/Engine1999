@@ -64,6 +64,7 @@ typedef enum _scrkind_t {
     SK_CLOSED,          // the screen is gone: the editor must return
     SK_BREAK,           // Ctrl+C or PAUSE/BREAK: the break key (the editors treat it like ESC; INPUT is stopped by it even after BREAK OFF)
     SK_EOF,             // the end of the input (a redirected input, Ctrl-D on a terminal is a key of its own): a line typed so far is complete
+    SK_PASTE,           // the terminal pasted text (a bracketed paste): it is the clipboard now (clip_get()); the editor pastes it
     SK_MOUSE            // a mouse event (only after wantmouse( true )): mouse, mx, my, button, wheel
 } scrkind_t;
 
@@ -116,6 +117,8 @@ typedef struct _scrdrv_t {
     void    (*pollkeys)( bool enable );                         // keys are queued for a running program; ESC / Ctrl-C then break it (the monitor runs programs)
     void    (*palette)( uint32_t pal[256], uint32_t* backdrop );    // the colors of the text layer and the backdrop (the screen editor lightens them for its highlight); may be 0: the start palette
     void    (*wantmouse)( bool enable );                        // the full-screen editor wants SK_MOUSE events from nextkey() (no other editor does); may be 0: this driver has no mouse
+    char*   (*clip_get)( size_t* len );                         // the clipboard (ISO-8859-15, LF line ends), malloc'ed, 0 if empty; may be 0: the internal clipboard of clipboard.h
+    void    (*clip_set)( const char* text, size_t len );        // puts text on the clipboard (the system's as well, where there is one); may be 0: the internal clipboard
 } scrdrv_t;
 
 // -- the one-line editor (scredit.c) ---------------------------------------------------------

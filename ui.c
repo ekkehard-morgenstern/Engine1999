@@ -28,6 +28,7 @@
 
 #include "ui.h"
 #include "joy.h"
+#include "clipboard.h"
 #include <math.h>
 
 #define ROWH        14                  // the height of a list row
@@ -69,7 +70,7 @@ static bool inside( const ui_widget_t* inner, const ui_widget_t* outer ) {
 
 static bool focusable( const ui_widget_t* w ) {
     return ( w->flags & UIF_VISIBLE ) && ( w->flags & UIF_ENABLED ) &&
-        ( w->kind == UIK_BUTTON || w->kind == UIK_CHECK || w->kind == UIK_RADIO || w->kind == UIK_TEXT || w->kind == UIK_LIST || w->kind == UIK_SLIDER || w->kind == UIK_SCROLL );
+        ( w->kind == UIK_BUTTON || w->kind == UIK_CHECK || w->kind == UIK_RADIO || w->kind == UIK_TEXT || w->kind == UIK_LIST || w->kind == UIK_SLIDER || w->kind == UIK_SCROLL || w->kind == UIK_EDIT );
 }
 
 // does the widget react to input at the moment (a pop-up or a modal panel limits it)?
@@ -411,6 +412,8 @@ static int canvas_cell( const ui_widget_t* w, int mx, int my ) {
 // -- scroll bars (the widget UIK_SCROLL and the bar inside a list that has more rows than it shows) ----------------------------------------------------------
 
 static int list_rows( const ui_widget_t* w );
+static int edit_nlines( const ui_widget_t* w );
+static int edit_rows( const ui_widget_t* w );
 
 typedef struct _sbgeom_t {
     bool    vert;
@@ -435,6 +438,11 @@ static bool sb_params( const ui_widget_t* w, sbgeom_t* g ) {
         g->x1 = w->x + w->w - 2 - SBW; g->x2 = w->x + w->w - 3; g->y1 = w->y + 2; g->y2 = w->y + w->h - 3;
         g->vert = true;
         g->min = 0; g->max = w->nitems - rows; g->page = rows; g->value = w->scroll;
+    } else if ( w->kind == UIK_EDIT && w->edit != 0 && edit_nlines( w ) > edit_rows( w ) ) {
+        int rows = edit_rows( w );
+        g->x1 = w->x + w->w - 2 - SBW; g->x2 = w->x + w->w - 3; g->y1 = w->y + 2; g->y2 = w->y + w->h - 3;
+        g->vert = true;
+        g->min = 0; g->max = edit_nlines( w ) - rows; g->page = rows; g->value = w->scroll;
     } else {
         return false;
     }
@@ -584,6 +592,604 @@ static void sb_drag( ui_t* ui, ui_widget_t* w, int mx, int my ) {
     sb_set( ui, w, g.min + (int)( ( (long) p * range + ( g.tlen - g.klen ) / 2 ) / ( g.tlen - g.klen ) ) );
 }
 
+// -- the multi-line text editor (UIK_EDIT) -----------------------------------------------------------------------------------------------------------------
+//
+// The text is the widget's text, lines separated by LF, in the fixed font (8 x 12). The widget keeps the caret (a byte index, w->caret), the selection
+// (the anchor in ui_edit_t, -1 if there is none), the first visible line (w->scroll), the first visible pixel column (hscroll) and undo steps
+// (snapshots of the whole text). It has a vertical scroll bar (the machinery of the list) when it has more lines than it shows.
+
+#define UI_UNDO         24
+#define EDIT_CW         8                       // the width of a glyph of FONT_FIXED
+#define EDIT_PAD        3                       // pixels between the bevel and the text
+
+typedef struct _ui_edit_t {
+    int     anchor;                             // the other end of the selection (a byte index), -1: none
+    int     hscroll;                            // pixels the text is moved to the left
+    int     wantcol;                            // the column Up / Down try to keep (-1: the caret's)
+    bool    vert;                               // the last key was Up / Down / Page up / down (keeps wantcol)
+    char*   undo[UI_UNDO];                      // snapshots of the text before a change (oldest first) and the caret at that time
+    int     ucaret[UI_UNDO];
+    int     nundo;
+    char*   redo[UI_UNDO];
+    int     rcaret[UI_UNDO];
+    int     nredo;
+    int     lastkind;                           // what the last change was (typing is joined to one undo step)
+    int     lastend;                            // the caret after it
+    bool    drag;                               // the left button went down in the text: the mouse extends the selection
+    uint32_t lastclick_ms;
+    int     lastclick_pos, clicks;
+} ui_edit_t;
+
+#define EK_NONE         0
+#define EK_TYPE         1
+#define EK_DELETE       2
+#define EK_OTHER        3
+
+static bool edit_init( ui_widget_t* w ) {
+    w->edit = (ui_edit_t*) calloc( 1U, sizeof(ui_edit_t) );
+    if ( w->edit == 0 ) {
+        return false;
+    }
+    w->edit->anchor = -1;
+    w->edit->wantcol = -1;
+    w->caret = 0;
+    return true;
+}
+
+static void edit_clear_undo( ui_edit_t* e ) {
+    for ( int i = 0; i < e->nundo; ++i ) free( e->undo[i] );
+    for ( int i = 0; i < e->nredo; ++i ) free( e->redo[i] );
+    e->nundo = e->nredo = 0;
+}
+
+static void edit_free( ui_widget_t* w ) {
+    if ( w->edit != 0 ) {
+        edit_clear_undo( w->edit );
+        free( w->edit );
+        w->edit = 0;
+    }
+}
+
+// a new text: the caret at the start, nothing selected, no undo
+static void edit_reset( ui_widget_t* w ) {
+    if ( w->edit == 0 ) {
+        return;
+    }
+    edit_clear_undo( w->edit );
+    w->edit->anchor = -1;
+    w->edit->hscroll = 0;
+    w->edit->wantcol = -1;
+    w->edit->lastkind = EK_NONE;
+    w->caret = 0;
+    w->scroll = 0;
+}
+
+static int edit_len( const ui_widget_t* w ) {
+    return w->text != 0 ? (int) strlen( w->text ) : 0;
+}
+
+// the first byte of line n (0-based); the end of the text if there is no such line
+static int edit_linestart( const ui_widget_t* w, int line ) {
+    const char* t = w->text != 0 ? w->text : "";
+    int pos = 0;
+    while ( line > 0 && t[pos] != '\0' ) {
+        if ( t[pos] == '\n' ) {
+            --line;
+        }
+        ++pos;
+    }
+    return pos;
+}
+
+static int edit_lineend( const ui_widget_t* w, int start ) {      // the LF or the end of the text
+    const char* t = w->text != 0 ? w->text : "";
+    int pos = start;
+    while ( t[pos] != '\0' && t[pos] != '\n' ) {
+        ++pos;
+    }
+    return pos;
+}
+
+static int edit_nlines( const ui_widget_t* w ) {
+    int n = 1;
+    for ( const char* p = w->text != 0 ? w->text : ""; *p != '\0'; ++p ) {
+        if ( *p == '\n' ) ++n;
+    }
+    return n;
+}
+
+static int edit_lineof( const ui_widget_t* w, int pos, int* col ) {
+    const char* t = w->text != 0 ? w->text : "";
+    int line = 0, ls = 0;
+    for ( int i = 0; i < pos && t[i] != '\0'; ++i ) {
+        if ( t[i] == '\n' ) {
+            ++line;
+            ls = i + 1;
+        }
+    }
+    if ( col != 0 ) {
+        *col = pos - ls;
+    }
+    return line;
+}
+
+static int edit_rows( const ui_widget_t* w ) {
+    int n = ( w->h - 4 - 2 * ( EDIT_PAD - 2 ) ) / FONT_HEIGHT;
+    return n < 1 ? 1 : n;
+}
+
+// the selection [*a, *b); false if there is none
+static bool edit_sel( const ui_widget_t* w, int* a, int* b ) {
+    if ( w->edit == 0 || w->edit->anchor < 0 || w->edit->anchor == w->caret ) {
+        return false;
+    }
+    int x = w->edit->anchor, y = w->caret;
+    *a = x < y ? x : y;
+    *b = x < y ? y : x;
+    return true;
+}
+
+// the width in pixels of the text area (the bar takes room when there are more lines than rows)
+static int edit_textw( const ui_widget_t* w ) {
+    int bar = edit_nlines( w ) > edit_rows( w ) ? SBW + 2 : 0;
+    return w->w - 4 - 2 * ( EDIT_PAD - 2 ) - bar;
+}
+
+// scrolls so that the caret is visible
+static void edit_show_caret( ui_widget_t* w ) {
+    int col = 0, line = edit_lineof( w, w->caret, &col ), rows = edit_rows( w ), nl = edit_nlines( w );
+    if ( line < w->scroll ) {
+        w->scroll = line;
+    } else if ( line >= w->scroll + rows ) {
+        w->scroll = line - rows + 1;
+    }
+    if ( w->scroll > nl - rows ) {
+        w->scroll = nl - rows;
+    }
+    if ( w->scroll < 0 ) {
+        w->scroll = 0;
+    }
+    int tw = edit_textw( w ), cx = col * EDIT_CW;
+    if ( cx < w->edit->hscroll ) {
+        w->edit->hscroll = cx;
+    } else if ( cx + EDIT_CW > w->edit->hscroll + tw ) {
+        w->edit->hscroll = cx + EDIT_CW - tw;
+    }
+    if ( w->edit->hscroll < 0 ) {
+        w->edit->hscroll = 0;
+    }
+}
+
+static void edit_push_undo( ui_widget_t* w ) {
+    ui_edit_t* e = w->edit;
+    for ( int i = 0; i < e->nredo; ++i ) free( e->redo[i] );
+    e->nredo = 0;
+    if ( e->nundo == UI_UNDO ) {
+        free( e->undo[0] );
+        memmove( e->undo, e->undo + 1, ( UI_UNDO - 1 ) * sizeof(char*) );
+        memmove( e->ucaret, e->ucaret + 1, ( UI_UNDO - 1 ) * sizeof(int) );
+        --e->nundo;
+    }
+    char* copy = strdup( w->text != 0 ? w->text : "" );
+    if ( copy != 0 ) {
+        e->undo[e->nundo] = copy;
+        e->ucaret[e->nundo] = w->caret;
+        ++e->nundo;
+    }
+}
+
+// replaces the bytes [from, to) of the text by ins (LF and the characters 32..255 without 127; the rest is dropped); the caret goes behind the new text.
+// kind joins consecutive typing / deleting to one undo step. false: nothing changed (too long)
+static bool edit_replace( ui_t* ui, ui_widget_t* w, int from, int to, const char* ins, size_t inslen, int kind ) {
+    char* clean = (char*) malloc( inslen + 1U );
+    if ( clean == 0 ) {
+        return false;
+    }
+    size_t m = 0;
+    for ( size_t i = 0; i < inslen; ++i ) {
+        unsigned char c = (unsigned char) ins[i];
+        if ( c == '\n' || ( c >= 32 && c != 127 ) ) {
+            clean[m++] = (char) c;
+        }
+    }
+    int len = edit_len( w );
+    if ( from < 0 ) from = 0;
+    if ( to > len ) to = len;
+    if ( from > to ) from = to;
+    if ( (long) len - ( to - from ) + (long) m > UI_EDITMAX ) {
+        m = (size_t)( UI_EDITMAX - ( len - ( to - from ) ) );
+        if ( (long) UI_EDITMAX < ( len - ( to - from ) ) ) {
+            free( clean );
+            return false;
+        }
+    }
+    if ( m == 0 && to == from ) {
+        free( clean );
+        return false;
+    }
+    char* nt = (char*) malloc( (size_t)( len - ( to - from ) ) + m + 1U );
+    if ( nt == 0 ) {
+        free( clean );
+        return false;
+    }
+    ui_edit_t* e = w->edit;
+    bool join = kind != EK_OTHER && kind == e->lastkind && w->caret == e->lastend && e->anchor < 0;
+    if ( !join ) {
+        edit_push_undo( w );
+    }
+    memcpy( nt, w->text, (size_t) from );
+    memcpy( nt + from, clean, m );
+    memcpy( nt + from + m, w->text + to, (size_t)( len - to ) + 1U );
+    free( clean );
+    free( w->text );
+    w->text = nt;
+    w->caret = from + (int) m;
+    e->anchor = -1;
+    e->lastkind = kind;
+    e->lastend = w->caret;
+    e->vert = false;
+    edit_show_caret( w );
+    dirty( w );
+    push_event( ui, w->id, UIE_CHANGE, edit_len( w ) );
+    return true;
+}
+
+static void edit_clip_set( ui_t* ui, const char* text, size_t len ) {
+    if ( ui->clip_set != 0 ) {
+        ui->clip_set( text, len );
+    } else {
+        clip_internal_set( text, len );
+    }
+}
+
+static void edit_copy( ui_t* ui, ui_widget_t* w ) {
+    int a = 0, b = 0;
+    if ( edit_sel( w, &a, &b ) ) {
+        edit_clip_set( ui, w->text + a, (size_t)( b - a ) );
+    }
+}
+
+static void edit_paste( ui_t* ui, ui_widget_t* w ) {
+    size_t len = 0;
+    char* text = ui->clip_get != 0 ? ui->clip_get( &len ) : clip_internal_get( &len );
+    if ( text == 0 ) {
+        return;
+    }
+    len = clip_normalize( text, len );
+    int a = w->caret, b = w->caret;
+    edit_sel( w, &a, &b );
+    edit_replace( ui, w, a, b, text, len, EK_OTHER );
+    free( text );
+}
+
+static void edit_undo( ui_t* ui, ui_widget_t* w, bool redo ) {
+    ui_edit_t* e = w->edit;
+    char** from = redo ? e->redo : e->undo;
+    int* fcaret = redo ? e->rcaret : e->ucaret;
+    int* nfrom = redo ? &e->nredo : &e->nundo;
+    if ( *nfrom == 0 ) {
+        return;
+    }
+    char** to = redo ? e->undo : e->redo;
+    int* tcaret = redo ? e->ucaret : e->rcaret;
+    int* nto = redo ? &e->nundo : &e->nredo;
+    char* cur = strdup( w->text != 0 ? w->text : "" );
+    if ( cur == 0 ) {
+        return;
+    }
+    if ( *nto == UI_UNDO ) {
+        free( to[0] );
+        memmove( to, to + 1, ( UI_UNDO - 1 ) * sizeof(char*) );
+        memmove( tcaret, tcaret + 1, ( UI_UNDO - 1 ) * sizeof(int) );
+        --*nto;
+    }
+    to[*nto] = cur;
+    tcaret[*nto] = w->caret;
+    ++*nto;
+    --*nfrom;
+    free( w->text );
+    w->text = from[*nfrom];
+    w->caret = fcaret[*nfrom];
+    int len = edit_len( w );
+    if ( w->caret > len ) w->caret = len;
+    e->anchor = -1;
+    e->lastkind = EK_NONE;
+    e->vert = false;
+    edit_show_caret( w );
+    dirty( w );
+    push_event( ui, w->id, UIE_CHANGE, len );
+}
+
+// moves the caret to pos; extend = keep (or begin) the selection, else drop it
+static void edit_move( ui_widget_t* w, int pos, bool extend, bool vert ) {
+    ui_edit_t* e = w->edit;
+    int len = edit_len( w );
+    pos = pos < 0 ? 0 : pos > len ? len : pos;
+    if ( extend ) {
+        if ( e->anchor < 0 ) {
+            e->anchor = w->caret;
+        }
+    } else {
+        e->anchor = -1;
+    }
+    w->caret = pos;
+    e->lastkind = EK_NONE;
+    if ( !vert ) {
+        e->wantcol = -1;
+    }
+    e->vert = vert;
+    edit_show_caret( w );
+    dirty( w );
+}
+
+// the byte position at the column col of line (clamped to the line)
+static int edit_pos_at( const ui_widget_t* w, int line, int col ) {
+    int nl = edit_nlines( w );
+    line = line < 0 ? 0 : line >= nl ? nl - 1 : line;
+    int ls = edit_linestart( w, line ), le = edit_lineend( w, ls );
+    return col < 0 ? ls : ls + col > le ? le : ls + col;
+}
+
+static bool edit_wordchar( int c ) {
+    return ( c >= '0' && c <= '9' ) || ( c >= 'A' && c <= 'Z' ) || ( c >= 'a' && c <= 'z' ) || c == '_' || c >= 160;
+}
+
+static void edit_key( ui_t* ui, ui_widget_t* w, int key, int mods ) {
+    ui_edit_t* e = w->edit;
+    bool shift = ( mods & UIKEY_SHIFT ) != 0, ctrl = ( mods & UIKEY_CTRL ) != 0;
+    int len = edit_len( w ), a = 0, b = 0;
+    bool hassel = edit_sel( w, &a, &b );
+    int col = 0, line = edit_lineof( w, w->caret, &col );
+    int rows = edit_rows( w ), nl = edit_nlines( w );
+    if ( ctrl ) {
+        switch ( key ) {
+            case 'a':
+                e->anchor = 0;
+                w->caret = len;
+                e->lastkind = EK_NONE;
+                edit_show_caret( w );
+                dirty( w );
+                return;
+            case 'c':
+                edit_copy( ui, w );
+                return;
+            case 'x':
+                if ( hassel ) {
+                    edit_copy( ui, w );
+                    edit_replace( ui, w, a, b, "", 0, EK_OTHER );
+                }
+                return;
+            case 'v':
+                edit_paste( ui, w );
+                return;
+            case 'z':
+                edit_undo( ui, w, false );
+                return;
+            case 'y':
+                edit_undo( ui, w, true );
+                return;
+            case UIKEY_HOME:
+                edit_move( w, 0, shift, false );
+                return;
+            case UIKEY_END:
+                edit_move( w, len, shift, false );
+                return;
+            default:
+                return;
+        }
+    }
+    if ( key >= 32 && key <= 255 && key != 127 ) {
+        char c = (char) key;
+        edit_replace( ui, w, hassel ? a : w->caret, hassel ? b : w->caret, &c, 1U, EK_TYPE );
+        return;
+    }
+    switch ( key ) {
+        case UIKEY_ENTER: {
+            char nlbuf[ 64 ];
+            size_t m = 0;
+            nlbuf[m++] = '\n';
+            int ls = edit_linestart( w, line );
+            while ( m < sizeof(nlbuf) - 1U && ls + (int) m - 1 < w->caret && w->text[ ls + (int) m - 1 ] == ' ' ) {      // the new line starts as indented as this one
+                nlbuf[m] = ' ';
+                ++m;
+            }
+            edit_replace( ui, w, hassel ? a : w->caret, hassel ? b : w->caret, nlbuf, m, EK_OTHER );
+            break;
+        }
+        case UIKEY_BACKSPACE:
+            if ( hassel ) {
+                edit_replace( ui, w, a, b, "", 0, EK_OTHER );
+            } else if ( w->caret > 0 ) {
+                edit_replace( ui, w, w->caret - 1, w->caret, "", 0, EK_DELETE );
+            }
+            break;
+        case UIKEY_DELETE:
+            if ( hassel ) {
+                edit_replace( ui, w, a, b, "", 0, EK_OTHER );
+            } else if ( w->caret < len ) {
+                edit_replace( ui, w, w->caret, w->caret + 1, "", 0, EK_DELETE );
+            }
+            break;
+        case UIKEY_LEFT:
+            if ( hassel && !shift ) {
+                edit_move( w, a, false, false );
+            } else {
+                edit_move( w, w->caret - 1, shift, false );
+            }
+            break;
+        case UIKEY_RIGHT:
+            if ( hassel && !shift ) {
+                edit_move( w, b, false, false );
+            } else {
+                edit_move( w, w->caret + 1, shift, false );
+            }
+            break;
+        case UIKEY_HOME:
+            edit_move( w, edit_linestart( w, line ), shift, false );
+            break;
+        case UIKEY_END:
+            edit_move( w, edit_lineend( w, edit_linestart( w, line ) ), shift, false );
+            break;
+        case UIKEY_UP: case UIKEY_DOWN: case UIKEY_PGUP: case UIKEY_PGDN: {
+            int step = key == UIKEY_UP ? -1 : key == UIKEY_DOWN ? 1 : key == UIKEY_PGUP ? -( rows - 1 ) : rows - 1;
+            if ( !e->vert || e->wantcol < 0 ) {
+                e->wantcol = col;
+            }
+            int want = e->wantcol, to = line + step;
+            if ( to < 0 ) to = 0;
+            if ( to >= nl ) to = nl - 1;
+            if ( key == UIKEY_UP && line == 0 ) {
+                edit_move( w, 0, shift, true );
+            } else if ( key == UIKEY_DOWN && line == nl - 1 ) {
+                edit_move( w, len, shift, true );
+            } else {
+                edit_move( w, edit_pos_at( w, to, want ), shift, true );
+            }
+            e->wantcol = want;
+            break;
+        }
+        default:
+            break;
+    }
+}
+
+// a press (clicks counts the clicks in a row: 2 = the word, 3 = the line) / the pointer moving with the button held
+static int edit_hit( const ui_widget_t* w, int mx, int my ) {
+    int line = w->scroll + ( my - ( w->y + EDIT_PAD ) ) / FONT_HEIGHT;
+    if ( my < w->y + EDIT_PAD ) {
+        line = w->scroll - 1;
+    }
+    int col = ( mx - ( w->x + EDIT_PAD ) + w->edit->hscroll + EDIT_CW / 2 ) / EDIT_CW;
+    return edit_pos_at( w, line, col );
+}
+
+static void edit_press( ui_t* ui, ui_widget_t* w, int mx, int my, uint32_t now_ms ) {
+    ui_edit_t* e = w->edit;
+    int pos = edit_hit( w, mx, my );
+    if ( now_ms - e->lastclick_ms < 450U && e->lastclick_pos == pos ) {
+        e->clicks = e->clicks >= 3 ? 1 : e->clicks + 1;
+    } else {
+        e->clicks = 1;
+    }
+    e->lastclick_ms = now_ms;
+    e->lastclick_pos = pos;
+    e->lastkind = EK_NONE;
+    e->vert = false;
+    e->wantcol = -1;
+    if ( e->clicks == 3 ) {                                         // the line
+        int col = 0, line = edit_lineof( w, pos, &col ), ls = edit_linestart( w, line );
+        e->anchor = ls;
+        w->caret = edit_lineend( w, ls );
+    } else if ( e->clicks == 2 ) {                                  // the word
+        const char* t = w->text;
+        int s = pos, z = pos;
+        if ( edit_wordchar( (unsigned char) t[z] ) || ( z > 0 && edit_wordchar( (unsigned char) t[z - 1] ) ) ) {
+            if ( !edit_wordchar( (unsigned char) t[z] ) ) {
+                --s; --z;
+            }
+            while ( s > 0 && edit_wordchar( (unsigned char) t[s - 1] ) ) --s;
+            while ( t[z] != '\0' && edit_wordchar( (unsigned char) t[z] ) ) ++z;
+        }
+        e->anchor = s;
+        w->caret = z;
+    } else {
+        e->anchor = pos;
+        w->caret = pos;
+        e->drag = true;
+    }
+    edit_show_caret( w );
+    dirty( w );
+    (void) ui;
+}
+
+static void edit_drag( ui_widget_t* w, int mx, int my ) {
+    ui_edit_t* e = w->edit;
+    int pos = edit_hit( w, mx, my );
+    if ( my > w->y + w->h - EDIT_PAD ) {                            // below the text: the view moves on
+        pos = edit_pos_at( w, w->scroll + edit_rows( w ), ( mx - ( w->x + EDIT_PAD ) + e->hscroll + EDIT_CW / 2 ) / EDIT_CW );
+    }
+    if ( pos != w->caret ) {
+        w->caret = pos;
+        edit_show_caret( w );
+        dirty( w );
+    }
+}
+
+bool ui_edit_caret( ui_t* ui, int id, int pos ) {
+    ui_widget_t* w = ui_find( ui, id );
+    if ( w == 0 || w->kind != UIK_EDIT || w->edit == 0 ) {
+        return false;
+    }
+    edit_move( w, pos, false, false );
+    return true;
+}
+
+int ui_edit_query( ui_t* ui, int id, int what ) {
+    ui_widget_t* w = ui_find( ui, id );
+    if ( w == 0 || w->kind != UIK_EDIT || w->edit == 0 ) {
+        return -1;
+    }
+    int col = 0, line = edit_lineof( w, w->caret, &col ), a = 0, b = 0;
+    switch ( what ) {
+        case 0: return w->caret;
+        case 1: return line;
+        case 2: return col;
+        case 3: return edit_sel( w, &a, &b ) ? b - a : 0;
+        case 4: return edit_nlines( w );
+        default: return -1;
+    }
+}
+
+static void edit_draw( ui_t* ui, ui_widget_t* w, bool focus, bool on ) {
+    const ui_theme_t* t = &ui->theme;
+    int x1 = w->x, y1 = w->y, x2 = w->x + w->w - 1, y2 = w->y + w->h - 1;
+    cbox( ui, x1, y1, x2, y2, t->field, true );
+    bevel( ui, x1, y1, x2, y2, false );
+    if ( w->edit == 0 ) {
+        return;
+    }
+    int rows = edit_rows( w ), nl = edit_nlines( w ), tw = edit_textw( w ), a = 0, b = 0;
+    bool hassel = edit_sel( w, &a, &b );
+    int tc = on ? t->text : t->disabled;
+    int tx0 = x1 + EDIT_PAD, ty0 = y1 + EDIT_PAD;
+    sbgeom_t sg;
+    bool hasbar = sb_params( w, &sg );
+    set_clip( ui, tx0, y1 + 2, tx0 + tw - 1, y2 - 2 );
+    int hs = w->edit->hscroll, c0 = hs / EDIT_CW, maxcols = tw / EDIT_CW + 2;
+    for ( int r = 0; r < rows && w->scroll + r < nl; ++r ) {
+        int ls = edit_linestart( w, w->scroll + r ), le = edit_lineend( w, ls );
+        int y = ty0 + r * FONT_HEIGHT;
+        int from = ls + c0 > le ? le : ls + c0, to = from + maxcols > le ? le : from + maxcols;
+        int px = tx0 - ( hs - c0 * EDIT_CW );
+        // the selected part: its background first, then the text in two or three runs
+        int sa = hassel && a < le + 1 && b > ls ? ( a > from ? a : from ) : -1, sb = hassel && sa >= 0 ? ( b < to ? b : to ) : -1;
+        if ( sa >= 0 && sb > sa ) {
+            cbox( ui, px + ( sa - from ) * EDIT_CW, y, px + ( sb - from ) * EDIT_CW - 1, y + FONT_HEIGHT - 1, t->hilite, true );
+        }
+        if ( hassel && a <= le && b > le && le >= from && le - from <= maxcols ) {      // the selection runs over the end of the line: a selected blank marks it
+            cbox( ui, px + ( le - from ) * EDIT_CW, y, px + ( le - from + 1 ) * EDIT_CW - 1, y + FONT_HEIGHT - 1, t->hilite, true );
+        }
+        if ( sa >= 0 && sb > sa ) {
+            if ( sa > from ) draw_text( ui, FONT_FIXED, px, y, w->text + from, (size_t)( sa - from ), tc );
+            draw_text( ui, FONT_FIXED, px + ( sa - from ) * EDIT_CW, y, w->text + sa, (size_t)( sb - sa ), t->hilitetext );
+            if ( to > sb ) draw_text( ui, FONT_FIXED, px + ( sb - from ) * EDIT_CW, y, w->text + sb, (size_t)( to - sb ), tc );
+        } else if ( to > from ) {
+            draw_text( ui, FONT_FIXED, px, y, w->text + from, (size_t)( to - from ), tc );
+        }
+    }
+    if ( focus ) {
+        int col = 0, line = edit_lineof( w, w->caret, &col );
+        if ( line >= w->scroll && line < w->scroll + rows ) {
+            int cx = tx0 + col * EDIT_CW - hs, cy = ty0 + ( line - w->scroll ) * FONT_HEIGHT;
+            cbox( ui, cx, cy, cx, cy + FONT_HEIGHT - 1, t->text, true );
+        }
+    }
+    if ( hasbar ) {
+        set_clip( ui, sg.x1, sg.y1, sg.x2, sg.y2 );
+        draw_scrollbar( ui, &sg, on, ui->capture == w->id ? ui->cappart : UISB_NONE );
+    }
+}
+
 // -- drawing the widgets --------------------------------------------------------------------------------------------------------------------------------
 
 // is the window at this index the one in front (the last window of the list)?
@@ -681,6 +1287,9 @@ static void draw_widget( ui_t* ui, int index ) {
             }
             break;
         }
+        case UIK_EDIT:
+            edit_draw( ui, w, focus, on );
+            break;
         case UIK_LIST: {
             cbox( ui, x1, y1, x2, y2, t->field, true );
             bevel( ui, x1, y1, x2, y2, false );
@@ -933,7 +1542,10 @@ void ui_init( ui_t* ui, const ui_canvas_t* canvas, int palbase ) {
     ui->lastclick_row = -1;
 }
 
+static void edit_free( ui_widget_t* w );
+
 static void free_widget( ui_widget_t* w ) {
+    edit_free( w );
     free( w->text );
     free( w->pix );
     for ( int i = 0; i < w->nitems; ++i ) {
@@ -971,13 +1583,15 @@ static char* dupn( const char* s, size_t max, size_t cap ) {
     return r;
 }
 
+static bool edit_init( ui_widget_t* w );
+
 bool ui_add( ui_t* ui, int kind, int id, int x, int y, int w, int h, const char* text, int extra ) {
     if ( kind <= UIK_NONE || kind >= UIK_COUNT || id <= 0 || ui->count >= UI_MAXWIDGETS || index_of( ui, id ) >= 0 || w < 1 || h < 1 ) {
         return false;
     }
     ui_widget_t* wd = &ui->widgets[ ui->count ];
     memset( wd, 0, sizeof(*wd) );
-    wd->text = dupn( text, UI_TEXTMAX, kind == UIK_TEXT ? UI_TEXTMAX + 1U : 0U );
+    wd->text = dupn( text, kind == UIK_EDIT ? UI_EDITMAX : UI_TEXTMAX, kind == UIK_TEXT ? UI_TEXTMAX + 1U : 0U );
     if ( wd->text == 0 ) {
         return false;
     }
@@ -1027,6 +1641,11 @@ bool ui_add( ui_t* ui, int kind, int id, int x, int y, int w, int h, const char*
     }
     if ( kind == UIK_TEXT ) {
         wd->caret = (int) strlen( wd->text );
+    }
+    if ( kind == UIK_EDIT && !edit_init( wd ) ) {
+        free( wd->text );
+        memset( wd, 0, sizeof(*wd) );
+        return false;
     }
     ++ui->count;
     obscure( ui, ui->count - 1, x, y, x + w - 1, y + h - 1 );
@@ -1141,17 +1760,22 @@ bool ui_remove( ui_t* ui, int id ) {
     return true;
 }
 
+static void edit_reset( ui_widget_t* w );
+
 bool ui_set_text( ui_t* ui, int id, const char* text ) {
     ui_widget_t* w = ui_find( ui, id );
     if ( w == 0 ) {
         return false;
     }
-    char* t = dupn( text, UI_TEXTMAX, w->kind == UIK_TEXT ? UI_TEXTMAX + 1U : 0U );
+    char* t = dupn( text, w->kind == UIK_EDIT ? UI_EDITMAX : UI_TEXTMAX, w->kind == UIK_TEXT ? UI_TEXTMAX + 1U : 0U );
     if ( t == 0 ) {
         return false;
     }
     free( w->text );
     w->text = t;
+    if ( w->kind == UIK_EDIT ) {
+        edit_reset( w );
+    }
     if ( w->kind == UIK_TEXT ) {
         w->caret = (int) strlen( t );
         w->scroll = 0;
@@ -1229,7 +1853,7 @@ bool ui_get_value( ui_t* ui, int id, int* value ) {
     if ( w == 0 ) {
         return false;
     }
-    *value = w->kind == UIK_TEXT ? (int) strlen( w->text ) : w->value;
+    *value = w->kind == UIK_TEXT || w->kind == UIK_EDIT ? (int) strlen( w->text ) : w->value;
     return true;
 }
 
@@ -1613,7 +2237,7 @@ int ui_pad_keys( ui_t* ui, uint32_t buttons, double lx, double ly, uint32_t now_
     uint32_t pressed = buttons & ~ui->padprev;
     ui->padprev = buttons;
     const ui_widget_t* f = ui_find( ui, ui->focus );
-    bool enter = f != 0 && ( f->kind == UIK_LIST || f->kind == UIK_TEXT );
+    bool enter = f != 0 && ( f->kind == UIK_LIST || f->kind == UIK_TEXT || f->kind == UIK_EDIT );
     if ( ( pressed & JOYB_A ) && n < max ) {
         keys[n++] = enter ? UIKEY_ENTER : ' ';
     }
@@ -1659,6 +2283,8 @@ int ui_pad_keys( ui_t* ui, uint32_t buttons, double lx, double ly, uint32_t now_
 }
 
 static void handle_key( ui_t* ui, int key ) {
+    int mods = key & ( UIKEY_SHIFT | UIKEY_CTRL );
+    key &= ~mods;
     if ( key == UIKEY_ESCAPE ) {
         if ( ui->popup != 0 ) {
             int id = ui->popup;
@@ -1682,6 +2308,13 @@ static void handle_key( ui_t* ui, int key ) {
         return;
     }
     if ( w == 0 || !( w->flags & UIF_ENABLED ) || !( w->flags & UIF_VISIBLE ) || !in_scope( ui, w ) ) {
+        return;
+    }
+    if ( w->kind != UIK_EDIT && ( mods & UIKEY_CTRL ) != 0 ) {
+        return;                                                 // (Ctrl + a key is for the multi-line editor only; Shift + a key is the key)
+    }
+    if ( w->kind == UIK_EDIT && w->edit != 0 ) {
+        edit_key( ui, w, key, mods );
         return;
     }
     if ( arrow && ui->popup == 0 && ( w->kind == UIK_BUTTON || w->kind == UIK_CHECK ||
@@ -1872,9 +2505,13 @@ void ui_input( ui_t* ui, int mx, int my, int buttons, int wheel, const int* keys
         }
     }
     if ( wheel != 0 ) {
-        ui_widget_t* lw = ui->popup != 0 ? ui_find( ui, ui->popup ) : ( hot != 0 && ( hot->kind == UIK_LIST || hot->kind == UIK_SCROLL ) && in_scope( ui, hot ) ? hot : 0 );
+        ui_widget_t* lw = ui->popup != 0 ? ui_find( ui, ui->popup ) : ( hot != 0 && ( hot->kind == UIK_LIST || hot->kind == UIK_SCROLL || hot->kind == UIK_EDIT ) && in_scope( ui, hot ) ? hot : 0 );
         if ( lw != 0 && lw->kind == UIK_SCROLL ) {
             sb_set( ui, lw, lw->value - wheel * 3 );
+        } else if ( lw != 0 && lw->kind == UIK_EDIT ) {
+            int top = edit_nlines( lw ) - edit_rows( lw );
+            lw->scroll = clampi( lw->scroll - wheel * 3, 0, top > 0 ? top : 0 );
+            dirty( lw );
         } else if ( lw != 0 && lw->nitems > 0 ) {
             int rows = list_rows( lw );
             lw->scroll = clampi( lw->scroll - wheel * 3, 0, lw->nitems > rows ? lw->nitems - rows : 0 );
@@ -1923,6 +2560,10 @@ void ui_input( ui_t* ui, int mx, int my, int buttons, int wheel, const int* keys
                 if ( hot->kind == UIK_SLIDER ) {
                     slider_from_x( ui, hot, mx );
                 }
+            } else if ( hot->kind == UIK_EDIT && hot->edit != 0 ) {
+                ui->capture = hot->id;
+                ui->cappart = UISB_NONE;
+                edit_press( ui, hot, mx, my, now_ms );
             } else if ( hot->kind == UIK_TEXT ) {
                 hot->caret = text_pos_at( ui, hot, mx );
                 text_show_caret( ui, hot );
@@ -1947,6 +2588,10 @@ void ui_input( ui_t* ui, int mx, int my, int buttons, int wheel, const int* keys
         sbgeom_t cg;
         if ( cw != 0 && cw->kind == UIK_SLIDER ) {
             slider_from_x( ui, cw, mx );
+        } else if ( cw != 0 && cw->kind == UIK_EDIT && cw->edit != 0 && ui->cappart == UISB_NONE ) {
+            if ( cw->edit->drag ) {
+                edit_drag( cw, mx, my );
+            }
         } else if ( cw != 0 && sb_params( cw, &cg ) ) {
             if ( ui->cappart == UISB_KNOB ) {
                 sb_drag( ui, cw, mx, my );
@@ -1964,6 +2609,12 @@ void ui_input( ui_t* ui, int mx, int my, int buttons, int wheel, const int* keys
     if ( release && ui->capture != 0 ) {
         ui_widget_t* cw = ui_find( ui, ui->capture );
         ui->capture = 0;
+        if ( cw != 0 && cw->kind == UIK_EDIT && cw->edit != 0 ) {
+            cw->edit->drag = false;
+            if ( cw->edit->anchor == cw->caret ) {
+                cw->edit->anchor = -1;                          // (a click without a drag selects nothing)
+            }
+        }
         if ( cw != 0 ) {
             dirty( cw );
             if ( hot == cw && ( cw->flags & UIF_ENABLED ) ) {

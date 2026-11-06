@@ -566,6 +566,11 @@ The 4096 extended instructions are as follows:
     0001 10000111       LIBS - list libraries ( name -- ) C=0 P=0
                             LIBRARIES [name$]: the empty string lists the libraries of the last compile (name, prefix, file); a name lists the PROCs, FUNCs and LABELs that library defines.
                             The host does it through vm_t.libraries; without one it is the error "LIBRARIES is not available".
+    0001 10001011       CLPG - CLIPBOARD$ ( -- text ) C=0 P=0
+                            The text on the clipboard (the system's through the host's clipget callback, else the internal clipboard of clipboard.h; ISO-8859-15,
+                            LF line ends; empty if there is none; "String too long" over 65535 bytes).
+    0001 10001100       CLPS - CLIPBOARD a$ ( text -- ) C=0 P=0
+                            Puts the text on the clipboard (the host's clipset callback, else the internal clipboard).
     0001 10001010       FMTS - FORMAT$ ( value format -- text ) C=0 P=1
                             FORMAT$(value, format$): the value in the first field of a PRINT USING format, with the literal text around it (in front of the field and
                             up to the next one behind it). Parameter 0: the value is a number, 1: a string. Same errors as PRINT USING.
@@ -779,5 +784,7 @@ The 4096 extended instructions are as follows:
 #define INS_EXST        UINT16_C(0X188)
 #define INS_PUSG        UINT16_C(0X189)
 #define INS_FMTS        UINT16_C(0X18A)
+#define INS_CLPG        UINT16_C(0X18B)
+#define INS_CLPS        UINT16_C(0X18C)
 
 #endif

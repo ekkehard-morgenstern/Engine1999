@@ -132,12 +132,19 @@ sys-str-fn-2-arg-call := ( BIN | QUA | OCT | DEC | HEX ) "$" "(" num-expr
 
 ```ebnf
 frame-stmt := FRAME [ num-expr ] .
+```
+
+> CLIPBOARD a$ puts a text on the clipboard (the system's in the window; the terminal's by OSC 52 in the console in screen mode); CLIPBOARD$ is the text on it.
+
+```ebnf
+clip-stmt := CLIPBOARD str-expr .
 xfunc-call := ( MIN | MAX | ATAN2 ) "(" num-expr "," num-expr ")" |
               EXISTS "(" str-expr ")" |
               JOY [ "$" ] "(" str-expr [ "," num-expr ] ")" |
               SPACE "$" "(" num-expr ")" |
               STRING "$" "(" num-expr "," expr ")" |
-              FORMAT "$" "(" expr "," str-expr ")" .
+              FORMAT "$" "(" expr "," str-expr ")" |
+              CLIPBOARD "$" .
 ```
 
 > FORMAT$(value, format$) puts a number or a string into the first field of a PRINT USING format and returns the text (with the literal text of the format around it).
@@ -436,9 +443,10 @@ renum-stmt := RENUM [ goto-target ] [ "-" [ goto-target ] ] [ "," num-expr ] .
 
 > EDIT n / EDIT label: a simple line editor for that line (see docs/basic-language.md); the edited line is then entered
 > like a typed one. It ends the running program (like NEW). EDIT alone opens the full-screen editor (docs/display-engine.md).
+> EDIT WINDOW opens the editor window of the window version (the multi-line editor widget); the console version has the text editor only.
 
 ```ebnf
-edit-stmt := EDIT [ goto-target ] .
+edit-stmt := EDIT [ WINDOW | goto-target ] .
 ```
 
 > MONITOR opens the machine monitor (text screen 2). It ends the running program (like NEW).
@@ -711,11 +719,12 @@ on-mouse-stmt := ON MOUSE ( goto-kw goto-target | OFF ) .
 ```
 
 > The UI subsystem (docs/ui-subsystem.md; UI is an extension word): widgets on the graphics layer. Every widget has an id (a positive number the program chooses); x, y, w, h are
+> UI EDIT is a multi-line text editor (lines separated by LF, selection, clipboard, undo; UI GETTEXT reads the text, UI("CARET" \| "LINE" \| "COLUMN" \| "SELECTED" \| "LINES", id) its state).
 > pixels on the 640 x 300 layer. UI UPDATE (once a frame) takes the mouse and the keys, draws what changed and queues events; UI("EVENT") is the id of the next event (0 = none).
 
 ```ebnf
 ui-stmt := XFUNC(UI) ( OPEN | CLOSE | CLEAR | UPDATE |
-                           ( LABEL | BUTTON | CHECK | TEXT | PANEL ) ui-geometry "," str-expr |
+                           ( LABEL | BUTTON | CHECK | TEXT | EDIT | PANEL ) ui-geometry "," str-expr | CARET num-expr "," num-expr |
                            RADIO ui-geometry "," str-expr [ "," num-expr ] |
                            ( LIST | PROGRESS ) ui-geometry | ( SLIDER | SCROLL ) ui-geometry [ "," num-expr ] |
                            PAGE num-expr "," num-expr | JOY num-expr |
@@ -739,7 +748,7 @@ gfx-all-stmt := gfx-stmt | txt-stmt | tile-stmt | sprite-stmt | mouse-stmt | on-
 ```ebnf
 prog-stmt := gfx-all-stmt | load-stmt | run-stmt | merge-stmt | chain-stmt | files-stmt | build-stmt | bye-stmt | timer-stmt | list-stmt | new-stmt | clear-stmt |
              delete-stmt | renum-stmt | edit-stmt | monitor-stmt | sound-stmt | wait-stmt | on-error-stmt | randomize-stmt | angle-stmt |
-             cont-stmt | trace-stmt | break-stmt | auto-stmt | poke-stmt | error-stmt | joy-stmt | on-joy-stmt | on-key-stmt | on-ui-stmt | on-sprite-stmt | frame-stmt | library-stmt | libraries-stmt .
+             cont-stmt | trace-stmt | break-stmt | auto-stmt | poke-stmt | error-stmt | joy-stmt | on-joy-stmt | on-key-stmt | on-ui-stmt | on-sprite-stmt | frame-stmt | clip-stmt | library-stmt | libraries-stmt .
 stmt := io-stmt | prog-stmt | assign-stmt | control-flow-stmt .
 stmt-list := stmt { ":" stmt } .
 stmt-line := [ stmt-list ] [ <'comment> ] <end-of-line> .

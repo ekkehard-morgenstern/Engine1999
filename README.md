@@ -24,6 +24,7 @@ When it is done, `BUILD` turns it into a standalone executable.
 - **A UI toolkit and editors:** the `UI` statements give buttons, lists, sliders, scroll bars, overlapping windows and a pixel canvas; a file requester and three editors for sprites and tiles, music and sound effects are written in BASIC on top of it (`demos/spriteed.bas`, `musiced.bas`, `sfxed.bas`). See [docs/ui-subsystem.md](docs/ui-subsystem.md).
 - **Libraries:** `LOAD LIBRARY "name"` pulls in a shared BASIC library (the games share `util`, `input`, `text`, `hiscore`, `uikit`, ...); `BUILD` embeds them. See [docs/library-support.md](docs/library-support.md).
 - **Safe by default:** a running program may use the files below its own folder; anything else (other folders, shell commands, the network) asks first, and the answer can be remembered. Listings can be UTF-8. See [docs/security-policy.md](docs/security-policy.md).
+- **Selection and the clipboard in the editors:** the full-screen editor selects with Shift and the arrows or the mouse and copies, cuts and pastes through the system clipboard (the terminal's in the console version); BASIC programs get `CLIPBOARD$` / `CLIPBOARD a$` and a multi-line text editor widget (`UI EDIT`); `EDIT WINDOW` opens the program in a window editor built on it (`demos/notepad.bas` is a small text editor in BASIC).
 - **Tools built in:** a full-screen editor (`EDIT`), a machine monitor with single-step and breakpoints (`MONITOR`), syntax colored `LIST`, `TRACE`, `STOP`/`CONT`, `RENUM`, `MERGE`, `CHAIN`.
 - **`BUILD "name"`** makes a standalone Linux executable from your program (details below).
 - **`engine1999c`**, a console version without a window for shell scripts and pipes: `engine1999c prog.bas` (also with a `#!` line), `echo 'PRINT 2^10' | engine1999c`, exit codes with `BYE n`. See [docs/console-host.md](docs/console-host.md).
@@ -46,6 +47,16 @@ The red status line shows the mode (overwrite or insert, F12 switches), the posi
 `MONITOR` opens a **machine monitor** for the virtual machine your program is compiled to: disassemble, dump and patch memory, set breakpoints, step through the code and watch the stacks.
 
 ![The machine monitor: a listing of the compiled code, and twelve steps of it](docs/images/monitor.png)
+
+Select text with Shift and the cursor keys or the mouse, copy, cut and paste with Ctrl+C / X / V (the system clipboard; Ctrl+Insert, Shift+Delete and Shift+Insert as well; in the console version the terminal's):
+
+![The full-screen editor with a selection](docs/images/editor-selection.png)
+
+`EDIT WINDOW` edits the program in a window in the UI toolkit, and `demos/notepad.bas` shows the same editor widget in a small text editor written in BASIC:
+
+![The editor window opened by EDIT WINDOW](docs/images/editor-window.png)
+
+![Notepad, a text editor written in BASIC](docs/images/notepad.png)
 
 The sprite and tile editor, itself a BASIC program built on the UI statements, imports and exports BMP files:
 

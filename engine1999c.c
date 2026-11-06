@@ -45,8 +45,12 @@
 #include "monitor.h"
 #include "policy.h"
 #include "keyseq.h"
+#include "clipboard.h"
 #include "keystate.h"
 #include "version.h"
+
+static char* con_vm_clipget( struct _vm_t* vm, void* usrdata, size_t* len );        // CLIPBOARD$ / CLIPBOARD a$ (defined with the clipboard of the editors)
+static void con_vm_clipset( struct _vm_t* vm, void* usrdata, const char* text, size_t len );
 
 /*
 The console host of the Engine: the BASIC system without a window, for shell scripts and servers (docs/console-host.md).
@@ -615,6 +619,49 @@ static int con_rawbyte( int timeout ) {
     }
 }
 
+static bool con_pastepending = false;  // a bracketed paste arrived (con_readpaste()): the next con_drv_nextkey() returns SK_PASTE
+
+// the text between ESC [ 200 ~ and ESC [ 201 ~ (the start was read): converted to ISO-8859-15 and made the internal clipboard
+static void con_readpaste( void ) {
+    size_t cap = 4096, n = 0;
+    char* text = (char*) malloc( cap );
+    if ( text == 0 ) {
+        return;
+    }
+    static const char endseq[] = "\033[201~";
+    for ( ;; ) {
+        int d = con_rawbyte( 2000 );
+        if ( d < 0 ) {
+            break;                                      // the end marker never came: take what there is
+        }
+        if ( n + 1U >= cap ) {
+            if ( cap >= (size_t) 4 * 1024 * 1024 ) {
+                continue;                               // (too much: the rest is dropped up to the end marker)
+            }
+            char* bigger = (char*) realloc( text, cap * 2U );
+            if ( bigger == 0 ) {
+                break;
+            }
+            text = bigger; cap *= 2U;
+        }
+        text[n++] = (char) d;
+        if ( n >= 6U && memcmp( text + n - 6U, endseq, 6U ) == 0 ) {
+            n -= 6U;
+            break;
+        }
+    }
+    char* latin = (char*) malloc( n + 1U );
+    if ( latin != 0 ) {
+        size_t lost = 0;
+        size_t m = n > 0 ? keyseq_listing_from_utf8( text, n, latin, &lost ) : 0;
+        m = clip_normalize( latin, m );
+        clip_internal_set( latin, m );
+        con_pastepending = true;
+        free( latin );
+    }
+    free( text );
+}
+
 static bool con_linemode = false;       // a line is being edited: the terminal's mode is the line editor's business (see con_getline())
 static bool con_aftercr = false;        // the last key was a CR: a LF right behind it (a file with CR LF line ends) is part of it
 
@@ -661,6 +708,10 @@ static int con_readkey( bool wait ) {
                     return (unsigned char) con_pend[0];
                 }
                 if ( r == 0 ) {
+                    if ( n == 6U && memcmp( buf, "\033[200~", 6U ) == 0 ) {
+                        con_readpaste();                // bracketed paste: the text is the clipboard now, the editor is told by SK_PASTE
+                        return 0;
+                    }
                     // no known sequence: an unknown CSI / SS3 sequence is skipped, anything else is an ESC and the bytes behind it
                     if ( n >= 2U && ( buf[1] == '[' || buf[1] == 'O' ) ) {
                         skip = true;
@@ -991,7 +1042,9 @@ static bool con_init( repl_t* repl ) {
     repl->breakesc  = con_breakesc;
 #ifdef CON_KEYSTATE
     repl->keydown   = con_keydown;
-#endif                                      // (without a keydown callback KEY() is a run-time error: "KEY is not available in this host")
+#endif
+    repl->clipget   = con_vm_clipget;
+    repl->clipset   = con_vm_clipset;                                      // (without a keydown callback KEY() is a run-time error: "KEY is not available in this host")
     repl->save      = con_save;
     repl->edit      = con_edit;
     repl->gfx       = &con_gfx;
@@ -1090,6 +1143,12 @@ static bool con_drv_nextkey( scrkey_t* k ) {
             return false;
         }
         if ( c == 0 ) {
+            if ( con_pastepending ) {
+                con_pastepending = false;
+                memset( k, 0, sizeof(*k) );
+                k->kind = SK_PASTE;
+                return true;
+            }
             continue;
         }
         if ( con_scrkey( c, k ) ) {
@@ -1100,6 +1159,9 @@ static bool con_drv_nextkey( scrkey_t* k ) {
 
 static void con_drv_wantmouse( bool enable ) {
     con_wantmouse = enable && con_mouse;
+    if ( con_stdout_tty ) {
+        conscr_paste( enable );                 // (the full-screen editor takes a bracketed paste; only while the terminal is on the alternate screen)
+    }
     con_lbdown = false;                         // (reports come in screen mode only)
     con_mqr = con_mqn = 0;
 }
@@ -1134,12 +1196,32 @@ static void con_drv_pollkeys( bool enable ) {
     }
 }
 
+// the clipboard of the editors: the internal one; copying also goes to the terminal's clipboard (OSC 52, E1999_CLIPBOARD=0 switches that off),
+// pasting is the terminal's own (a bracketed paste fills the internal clipboard)
+static char* con_drv_clip_get( size_t* len ) { return clip_internal_get( len ); }
+
+static void con_drv_clip_set( const char* text, size_t len ) {
+    clip_internal_set( text, len );
+    const char* cb = getenv( "E1999_CLIPBOARD" );
+    if ( con_stdout_tty && !( cb != 0 && cb[0] == '0' ) && len > 0 ) {
+        char* u = (char*) malloc( 3U * len + 1U );
+        if ( u != 0 ) {
+            size_t n = keyseq_latin9_to_utf8( text, len, u );
+            conscr_setclipboard( u, n );
+            free( u );
+        }
+    }
+}
+
+static char* con_vm_clipget( struct _vm_t* vm, void* usrdata, size_t* len ) { (void) vm; (void) usrdata; return con_drv_clip_get( len ); }
+static void con_vm_clipset( struct _vm_t* vm, void* usrdata, const char* text, size_t len ) { (void) vm; (void) usrdata; con_drv_clip_set( text, len ); }
+
 static const scrdrv_t con_drv = {
     con_drv_screensize, con_drv_getsize,
     con_drv_select, txtscr_selected, txtscr_setviewport, txtscr_resetviewport, con_drv_getviewport,
     txtscr_setcolors, txtscr_setblank, txtscr_clear, txtscr_write, con_drv_print, txtscr_locate, con_drv_getcursor,
     con_drv_changed, txtscr_setresizereserve, con_drv_restart,
-    con_drv_begin, con_drv_end, con_drv_nextkey, con_drv_pending, con_drv_pollkeys, 0, con_drv_wantmouse
+    con_drv_begin, con_drv_end, con_drv_nextkey, con_drv_pending, con_drv_pollkeys, 0, con_drv_wantmouse, con_drv_clip_get, con_drv_clip_set
 };
 
 // -- the one-line editor on the terminal -------------------------------------------------------------------
@@ -1365,6 +1447,7 @@ static void con_run_windows( repl_t* repl ) {
     }
     bool ed = repl->fulledit, mon = repl->monitor;
     repl->fulledit = false;
+    repl->editwin = false;                       // (EDIT WINDOW: the console has the text editor only)
     repl->monitor = false;
     if ( !isatty( 0 ) || !isatty( 1 ) ) {
         con_report( repl, "? EDIT and MONITOR need a terminal\n" );

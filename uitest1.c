@@ -29,6 +29,7 @@
 #include "ui.h"
 #include "joy.h"
 #include "gfxcore.h"
+#include "clipboard.h"
 
 /*
 Automated test of the UI subsystem (ui.[ch]) without a screen or a VM: widgets are created, mouse and keys are fed in, the events and the state are checked,
@@ -132,6 +133,148 @@ static int count_color( int x1, int y1, int x2, int y2, int color ) {
         }
     }
     return n;
+}
+
+
+// -- the multi-line text editor (UIK_EDIT) ---------------------------------------------------------------------------------------------------------------
+
+static char fakeclip[400];
+static char* fake_clip_get( size_t* len ) {
+    if ( fakeclip[0] == '\0' ) { *len = 0; return 0; }
+    *len = strlen( fakeclip );
+    return strdup( fakeclip );
+}
+static void fake_clip_set( const char* t, size_t n ) {
+    snprintf( fakeclip, sizeof(fakeclip), "%.*s", (int) n, t );
+}
+
+static int ed_caret( void ) { return ui_edit_query( &ui, 1, 0 ); }
+static const char* ed_text( void ) { return ui_get_text( &ui, 1 ); }
+static void keymod( int k, int mods ) { key( k | mods ); }
+
+// the pixel position of the character at column col of the first line (fixed font: 8 wide), for the widget at 10, 10
+static int colx( int col ) { return 10 + 3 + col * 8 + 1; }
+
+static void test_edit( void ) {
+    setup();
+    ui.clip_get = fake_clip_get; ui.clip_set = fake_clip_set;
+    fakeclip[0] = '\0';
+    check( "edit: a multi-line editor is created", ui_add( &ui, UIK_EDIT, 1, 10, 10, 200, 80, "hello\nworld", 0 ) && ui.focus == 1 );
+    check( "edit: the text, the caret, the lines", strcmp( ed_text(), "hello\nworld" ) == 0 && ed_caret() == 0 && ui_edit_query( &ui, 1, 4 ) == 2 );
+    drain();
+    typed( "ab" );
+    check( "edit: typing inserts at the caret and queues changes", strcmp( ed_text(), "abhello\nworld" ) == 0 && ed_caret() == 2 && expect( 1, UIE_CHANGE, 12 ) );
+    drain();
+    key( UIKEY_END );
+    check( "edit: End goes to the end of the line", ed_caret() == 7 );
+    key( UIKEY_ENTER );
+    check( "edit: Return inserts a line end", strcmp( ed_text(), "abhello\n\nworld" ) == 0 && ed_caret() == 8 && ui_edit_query( &ui, 1, 4 ) == 3 );
+    key( UIKEY_BACKSPACE );
+    check( "edit: BackSpace removes it again", strcmp( ed_text(), "abhello\nworld" ) == 0 && ed_caret() == 7 );
+    key( UIKEY_DOWN );
+    check( "edit: Down goes to the next line, the column is kept as far as the line goes", ui_edit_query( &ui, 1, 1 ) == 1 && ui_edit_query( &ui, 1, 2 ) == 5 );
+    key( UIKEY_UP );
+    check( "edit: Up goes back to the wanted column", ed_caret() == 7 );
+    key( UIKEY_HOME );
+    key( UIKEY_DELETE );
+    check( "edit: Delete removes the character", strcmp( ed_text(), "bhello\nworld" ) == 0 );
+    // selection by Shift + cursor keys, typing replaces it
+    keymod( UIKEY_RIGHT, UIKEY_SHIFT ); keymod( UIKEY_RIGHT, UIKEY_SHIFT ); keymod( UIKEY_RIGHT, UIKEY_SHIFT );
+    check( "edit: Shift + Right selects", ui_edit_query( &ui, 1, 3 ) == 3 && ed_caret() == 3 );
+    typed( "X" );
+    check( "edit: typing replaces the selection", strcmp( ed_text(), "Xllo\nworld" ) == 0 && ui_edit_query( &ui, 1, 3 ) == 0 );
+    // the clipboard
+    key( UIKEY_CTRL | 'a' );
+    check( "edit: Ctrl+A selects everything", ui_edit_query( &ui, 1, 3 ) == 10 );
+    key( UIKEY_CTRL | 'c' );
+    check( "edit: Ctrl+C copies the selection", strcmp( fakeclip, "Xllo\nworld" ) == 0 );
+    key( UIKEY_CTRL | UIKEY_END );
+    check( "edit: Ctrl+End goes to the end of the text", ed_caret() == 10 );
+    key( UIKEY_CTRL | 'v' );
+    check( "edit: Ctrl+V pastes", strcmp( ed_text(), "Xllo\nworldXllo\nworld" ) == 0 && ed_caret() == 20 );
+    key( UIKEY_CTRL | 'z' );
+    check( "edit: Ctrl+Z undoes the paste", strcmp( ed_text(), "Xllo\nworld" ) == 0 );
+    key( UIKEY_CTRL | 'y' );
+    check( "edit: Ctrl+Y redoes it", strcmp( ed_text(), "Xllo\nworldXllo\nworld" ) == 0 );
+    key( UIKEY_CTRL | 'z' ); key( UIKEY_CTRL | 'z' );
+    check( "edit: typing was one undo step (the second undo goes back further)", ed_text() != 0 );
+    // cut
+    ui_set_text( &ui, 1, "one two three" );
+    check( "edit: a new text resets the caret and the undo", ed_caret() == 0 && ui_edit_query( &ui, 1, 3 ) == 0 );
+    for ( int i = 0; i < 3; ++i ) keymod( UIKEY_RIGHT, UIKEY_SHIFT );
+    key( UIKEY_CTRL | 'x' );
+    check( "edit: Ctrl+X cuts", strcmp( ed_text(), " two three" ) == 0 && strcmp( fakeclip, "one" ) == 0 );
+    key( UIKEY_CTRL | 'z' );
+    check( "edit: Ctrl+Z brings it back", strcmp( ed_text(), "one two three" ) == 0 );
+    // typing is one undo step
+    ui_set_text( &ui, 1, "" );
+    typed( "abc" );
+    key( UIKEY_CTRL | 'z' );
+    check( "edit: typed characters are one undo step", strcmp( ed_text(), "" ) == 0 );
+    // pasted text may contain line ends and is normalized
+    snprintf( fakeclip, sizeof(fakeclip), "a\r\nb\tc" );
+    key( UIKEY_CTRL | 'v' );
+    check( "edit: a paste is normalized (CR LF, tab)", strcmp( ed_text(), "a\nb c" ) == 0 );
+    // the mouse: click, drag, double click
+    ui_set_text( &ui, 1, "hello world\nsecond" );
+    click( colx( 3 ), 10 + 3 + 2 );
+    check( "edit: a click puts the caret there", ed_caret() == 3 );
+    mouse( colx( 1 ), 10 + 3 + 2, UIB_LEFT, 0 );
+    mouse( colx( 4 ), 10 + 3 + 2, UIB_LEFT, 0 );
+    mouse( colx( 4 ), 10 + 3 + 2, 0, 0 );
+    check( "edit: dragging selects", ui_edit_query( &ui, 1, 3 ) == 3 && ed_caret() == 4 );
+    click( colx( 8 ), 10 + 3 + 2 );
+    now += 100;
+    click( colx( 8 ), 10 + 3 + 2 );
+    check( "edit: a double click selects the word", ui_edit_query( &ui, 1, 3 ) == 5 && ed_caret() == 11 );
+    now += 100;
+    click( colx( 8 ), 10 + 3 + 2 );
+    check( "edit: a triple click selects the line", ui_edit_query( &ui, 1, 3 ) == 11 );
+    now += 1000;
+    // drawing: the selection is drawn in the highlight color, the caret in the text color
+    ui_draw( &ui, true );
+    check( "edit: the selection is drawn with the highlight", count_color( 12, 12, 200, 40, ui.theme.hilite ) > 100 );
+    key( UIKEY_CTRL | 'a' );
+    key( UIKEY_LEFT );
+    check( "edit: Left drops the selection and goes to its start", ed_caret() == 0 && ui_edit_query( &ui, 1, 3 ) == 0 );
+    // a long text scrolls: more lines than rows gives a scroll bar, the wheel and the caret move the view
+    ui_set_text( &ui, 1, "1\n2\n3\n4\n5\n6\n7\n8\n9\n10" );
+    ui_draw( &ui, true );
+    ui_widget_t* ew = ui_find( &ui, 1 );
+    check( "edit: the first line is at the top", ew->scroll == 0 );
+    mouse( 100, 30, 0, -1 );
+    check( "edit: the wheel scrolls", ew->scroll == 3 );
+    key( UIKEY_CTRL | UIKEY_END );
+    check( "edit: the caret is kept in view", ui_edit_query( &ui, 1, 1 ) == 9 && ew->scroll == 9 - 5 );
+    key( UIKEY_CTRL | UIKEY_HOME );
+    check( "edit: Ctrl+Home goes to the start and shows it", ed_caret() == 0 && ew->scroll == 0 );
+    // a press on the scroll bar scrolls (the bar is at the right edge)
+    click( 10 + 200 - 3 - 7, 10 + 80 - 3 - 3 );
+    check( "edit: the scroll bar works (the down arrow)", ew->scroll == 1 );
+    // Shift is the key itself for other widgets, Ctrl + a key is ignored by them
+    ui_add( &ui, UIK_TEXT, 2, 10, 100, 100, 18, "abc", 0 );
+    ui_set_focus( &ui, 2 );
+    keymod( UIKEY_LEFT, UIKEY_SHIFT );
+    check( "edit: other widgets take Shift + Left as Left", ui_find( &ui, 2 )->caret == 2 );
+    key( UIKEY_CTRL | 'v' );
+    check( "edit: other widgets ignore Ctrl + a key", strcmp( ui_get_text( &ui, 2 ), "abc" ) == 0 );
+    // Tab leaves the editor
+    ui_set_focus( &ui, 1 );
+    key( UIKEY_TAB );
+    check( "edit: Tab moves the focus on", ui.focus == 2 );
+    // the length limit and the caret statement
+    char* big = (char*) malloc( UI_EDITMAX + 100 );
+    memset( big, 'x', UI_EDITMAX + 99 ); big[ UI_EDITMAX + 99 ] = '\0';
+    check( "edit: a long text is cut to UI_EDITMAX", ui_set_text( &ui, 1, big ) && (int) strlen( ed_text() ) == UI_EDITMAX );
+    ui_set_focus( &ui, 1 );
+    typed( "y" );
+    check( "edit: typing into a full editor does nothing", (int) strlen( ed_text() ) == UI_EDITMAX );
+    free( big );
+    ui_set_text( &ui, 1, "ab\ncd" );
+    check( "edit: ui_edit_caret moves the caret", ui_edit_caret( &ui, 1, 4 ) && ui_edit_query( &ui, 1, 1 ) == 1 && ui_edit_query( &ui, 1, 2 ) == 1 && !ui_edit_caret( &ui, 2, 0 ) );
+    check( "edit: the queries refuse other widgets", ui_edit_query( &ui, 2, 0 ) == -1 );
+    check( "edit: a remove frees it", ui_remove( &ui, 1 ) );
+    done();
 }
 
 int main( void ) {
@@ -927,6 +1070,8 @@ int main( void ) {
     ui_draw( &ui, true );
     check( "a widget half outside of the canvas is clipped", gfx_point( &g, 399, 239 ) != 0 );
     done();
+
+    test_edit();
 
     printf( "%d checks, %d failed\n", checks, failures );
     return failures;

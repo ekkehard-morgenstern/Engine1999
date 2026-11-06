@@ -125,6 +125,8 @@ int sdlscr_lineinput( int stop_evtmsk, char* buf, size_t bufsz, void (*vblank_ha
 void sdlscr_gettextscreensize( int* outsx, int* outsy );
 void sdlscr_gettextcursor( int* outx, int* outy );
 void sdlscr_locate( int x, int y );
+char* sdlscr_clipboard_get( size_t* len );                        // the clipboard (ISO-8859-15, LF line ends): malloc'ed, 0 if empty; the system's when there is one
+void sdlscr_clipboard_set( const char* text, size_t len );
 
 // tile screen functions
 void sdlscr_writetile( int tileno, const uint8_t data[TILE_WIDTH * TILE_HEIGHT]);

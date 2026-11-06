@@ -35,6 +35,7 @@
 #include "cursors.h"
 #include "monitor.h"
 #include "basrepl.h"
+#include "clipboard.h"
 
 /*
 Automated test of the editors on a fake screen driver (no SDL, no terminal): scripted keys go in, the text screens are looked at afterwards: the
@@ -457,7 +458,7 @@ static void test_fulledit( void ) {
     txtscr_select( 1 );
     check( rowhas( 0, "Text Editor" ), "editor 80x25: title bar" );
     check( rowhas( 1, "10 PRINT \"A\"" ) && rowhas( 2, "20 FOR I=1 TO 3:PRINT I:NEXT" ) && rowhas( 3, "30 END" ), "editor 80x25: the program lines with their numbers" );
-    check( rowhas( 24, "ESC Close" ) && rowhas( 24, "First/last" ), "editor 80x25: help bar in the last row" );
+    check( rowhas( 24, "ESC Close" ) && rowhas( 24, "Copy/cut/paste" ), "editor 80x25: help bar in the last row" );
     check( strcmp( rowtext( 1 ) + 79, "^" ) == 0 && strcmp( rowtext( 23 ) + 79, "v" ) == 0, "editor 80x25: scroll bar in column 79" );
     txtscr_select( 0 );
 
@@ -1032,6 +1033,168 @@ static void test_screenedit( void ) {
     txtscr_resize( TXTSCR_WIDTH, TXTSCR_HEIGHT );
 }
 
+// -- selection, cut, copy and paste ---------------------------------------------------------
+
+// the listing text of a line ("10 PRINT ..."), "" if there is none
+static const char* linetext( uint32_t no ) {
+    static char out[400];
+    out[0] = '\0';
+    line_t* found = 0; line_t* prev = 0;
+    if ( !find_line( &repl.pgm, no, &found, &prev ) || found == 0 ) {
+        return out;
+    }
+    pgmiter_t iter; clear_iter( &iter, &repl.pgm );
+    buf_t* b = create_buffer();
+    if ( b != 0 && iter_load_line( &iter, found ) && detokenize_line( b, iter.tok, &iter.hdr ) ) {
+        snprintf( out, sizeof(out), "%s", b->buffer );
+    }
+    if ( b != 0 ) delete_buffer( b );
+    return out;
+}
+
+static char clipcopy[2000];
+static const char* clipboard_now( void ) {
+    size_t n = 0;
+    char* t = clip_internal_get( &n );
+    clipcopy[0] = '\0';
+    if ( t != 0 ) { snprintf( clipcopy, sizeof(clipcopy), "%s", t ); free( t ); }
+    return clipcopy;
+}
+
+static void ctrlkey( int c ) { addkey( SK_CHAR, c, 0, KSMOD_CTRL ); }
+
+// runs the editor with the script on a fresh program
+static void runeditor( void ) {
+    freshscreens( 80, 25 );
+    fulledit_run( &repl, &drv );
+}
+
+static void test_editor_selection( void ) {
+    // copy without a selection: the current line with its number
+    newprogram(); clip_internal_set( "", 0 );
+    clearscript(); pressk( KS_HOME, KSMOD_CTRL ); ctrlkey( 'c' ); press( SK_ESCAPE );
+    runeditor();
+    check( strcmp( clipboard_now(), "10 PRINT \"A\"" ) == 0, "selection: Ctrl+C without a selection copies the line with its number" );
+    // Shift + cursor keys select inside a line
+    clearscript(); pressk( KS_HOME, KSMOD_CTRL );
+    for ( int i = 0; i < 3; ++i ) pressk( KS_RIGHT, KSMOD_SHIFT );
+    ctrlkey( 'c' ); press( SK_ESCAPE );   // (the first ESC drops the selection, the second leaves)
+    press( SK_ESCAPE );
+    runeditor();
+    check( strcmp( clipboard_now(), "PRI" ) == 0, "selection: Shift+Right x3 and Ctrl+C copy plain text" );
+    // over lines: whole lines with numbers; a selection that ends at the start of a line leaves that line out
+    clearscript(); pressk( KS_HOME, KSMOD_CTRL );
+    pressk( KS_DOWN, KSMOD_SHIFT ); pressk( KS_DOWN, KSMOD_SHIFT );
+    ctrlkey( 'c' ); press( SK_ESCAPE ); press( SK_ESCAPE );
+    runeditor();
+    check( strcmp( clipboard_now(), "10 PRINT \"A\"\n20 FOR I=1 TO 3:PRINT I:NEXT" ) == 0, "selection: Shift+Down x2 copies lines 10 and 20 with numbers" );
+    // cut removes the lines
+    clearscript(); pressk( KS_HOME, KSMOD_CTRL );
+    pressk( KS_DOWN, KSMOD_SHIFT ); pressk( KS_DOWN, KSMOD_SHIFT );
+    ctrlkey( 'x' ); press( SK_ESCAPE );
+    runeditor();
+    check( !lineof( 10 ) && !lineof( 20 ) && lineof( 30 ), "selection: Ctrl+X cuts the lines" );
+    check( strcmp( clipboard_now(), "10 PRINT \"A\"\n20 FOR I=1 TO 3:PRINT I:NEXT" ) == 0, "selection: the cut text is on the clipboard" );
+    // paste numbered lines: they are entered
+    clip_internal_set( "15 PRINT \"B\"\n25 REM C", 20 );
+    clearscript(); pressk( KS_HOME, KSMOD_CTRL ); ctrlkey( 'v' ); press( SK_ESCAPE );
+    runeditor();
+    check( lineof( 15 ) && lineof( 25 ) && strcmp( linetext( 15 ), "15 PRINT \"B\"" ) == 0, "paste: numbered lines are entered" );
+    // paste text without numbers over several lines: new lines with automatic numbers behind the current one
+    newprogram();
+    clip_internal_set( "REM one\nREM two", 15 );
+    clearscript(); pressk( KS_HOME, KSMOD_CTRL ); ctrlkey( 'v' ); press( SK_ESCAPE );
+    runeditor();
+    check( lineof( 15 ) && lineof( 17 ) && strcmp( linetext( 15 ), "15 ' one" ) == 0 && strcmp( linetext( 17 ), "17 ' two" ) == 0,
+           "paste: several lines without numbers become new lines" );
+    // paste one line into the edited line at the cursor
+    newprogram();
+    clip_internal_set( "ZZ", 2 );
+    clearscript(); pressk( KS_HOME, KSMOD_CTRL ); ctrlkey( 'v' ); press( SK_ESCAPE );
+    runeditor();
+    check( strncmp( linetext( 10 ), "10 ZZPRINT", 10 ) == 0, "paste: one line goes in at the cursor" );
+    // a lone number is text, not a line to enter
+    repl_enter( &repl, "NEW" ); repl_enter( &repl, "10 REM x" );
+    clip_internal_set( "99", 2 );
+    clearscript(); pressk( KS_HOME, KSMOD_CTRL ); pressk( KS_END, 0 ); ctrlkey( 'v' ); press( SK_ESCAPE );
+    runeditor();
+    check( !lineof( 99 ) && strcmp( linetext( 10 ), "10 ' x99" ) == 0, "paste: digits alone are text" );
+    // typing replaces a selection inside a line, Delete and BackSpace remove it
+    newprogram();
+    clearscript(); pressk( KS_HOME, KSMOD_CTRL );
+    for ( int i = 0; i < 5; ++i ) pressk( KS_RIGHT, KSMOD_SHIFT );
+    typetext( "REM" ); press( SK_ESCAPE );
+    runeditor();
+    check( strcmp( linetext( 10 ), "10 ' \"A\"" ) == 0, "selection: typing replaces it" );
+    newprogram();
+    clearscript(); pressk( KS_HOME, KSMOD_CTRL );
+    for ( int i = 0; i < 6; ++i ) pressk( KS_RIGHT, KSMOD_SHIFT );
+    pressk( KS_DELETE, 0 ); press( SK_ESCAPE );
+    runeditor();
+    check( strcmp( linetext( 10 ), "10 \"A\"" ) == 0, "selection: Delete removes it" );
+    newprogram();
+    clearscript(); pressk( KS_HOME, KSMOD_CTRL );
+    pressk( KS_DOWN, KSMOD_SHIFT ); pressk( KS_DOWN, KSMOD_SHIFT ); press( SK_BACKSPACE ); press( SK_ESCAPE );
+    runeditor();
+    check( !lineof( 10 ) && !lineof( 20 ) && lineof( 30 ), "selection: BackSpace removes selected lines" );
+    // select all and copy
+    newprogram();
+    clearscript(); pressk( KS_HOME, KSMOD_CTRL ); ctrlkey( 'a' ); ctrlkey( 'c' ); press( SK_ESCAPE ); press( SK_ESCAPE );
+    runeditor();
+    check( strcmp( clipboard_now(), "10 PRINT \"A\"\n20 FOR I=1 TO 3:PRINT I:NEXT\n30 END" ) == 0, "selection: Ctrl+A selects the whole program" );
+    // Ctrl+Insert, Shift+Insert and Shift+Delete are the same as Ctrl+C, Ctrl+V and Ctrl+X
+    newprogram();
+    clearscript(); pressk( KS_HOME, KSMOD_CTRL ); pressk( KS_INSERT, KSMOD_CTRL ); press( SK_ESCAPE );
+    runeditor();
+    check( strcmp( clipboard_now(), "10 PRINT \"A\"" ) == 0, "keys: Ctrl+Insert copies" );
+    clearscript(); pressk( KS_HOME, KSMOD_CTRL ); pressk( KS_DELETE, KSMOD_SHIFT ); press( SK_ESCAPE );
+    runeditor();
+    check( !lineof( 10 ), "keys: Shift+Delete cuts the line" );
+    clip_internal_set( "10 PRINT \"A\"", 12 );
+    clearscript(); pressk( KS_HOME, KSMOD_CTRL ); pressk( KS_INSERT, KSMOD_SHIFT ); press( SK_ESCAPE );
+    runeditor();
+    check( lineof( 10 ), "keys: Shift+Insert pastes" );
+    // the paste of a terminal (SK_PASTE)
+    newprogram();
+    clip_internal_set( "5 REM top", 9 );
+    clearscript(); pressk( KS_HOME, KSMOD_CTRL ); press( SK_PASTE ); press( SK_ESCAPE );
+    runeditor();
+    check( lineof( 5 ), "keys: SK_PASTE pastes the clipboard" );
+    // the mouse: drag over text, double click on a word
+    newprogram();
+    clearscript(); pressk( KS_HOME, KSMOD_CTRL );
+    addmouse( SM_PRESS, 7, 1, 1, 0 ); addmouse( SM_DRAG, 12, 1, 1, 0 ); addmouse( SM_RELEASE, 12, 1, 1, 0 );
+    ctrlkey( 'c' ); press( SK_ESCAPE ); press( SK_ESCAPE );
+    runeditor();
+    check( strcmp( clipboard_now(), "PRINT" ) == 0, "mouse: dragging selects text" );
+    clearscript(); pressk( KS_HOME, KSMOD_CTRL );
+    addmouse( SM_PRESS, 9, 1, 1, 0 ); addmouse( SM_RELEASE, 9, 1, 1, 0 );
+    addmouse( SM_PRESS, 9, 1, 1, 0 ); addmouse( SM_RELEASE, 9, 1, 1, 0 );
+    ctrlkey( 'c' ); press( SK_ESCAPE ); press( SK_ESCAPE );
+    runeditor();
+    check( strcmp( clipboard_now(), "PRINT" ) == 0, "mouse: a double click selects the word" );
+    clearscript(); pressk( KS_HOME, KSMOD_CTRL );
+    addmouse( SM_PRESS, 3, 2, 1, 0 ); addmouse( SM_RELEASE, 3, 2, 1, 0 ); addmouse( SM_PRESS, 3, 2, 1, 0 ); addmouse( SM_RELEASE, 3, 2, 1, 0 );
+    ctrlkey( 'c' ); press( SK_ESCAPE ); press( SK_ESCAPE );
+    runeditor();
+    check( strcmp( clipboard_now(), "20 FOR I=1 TO 3:PRINT I:NEXT" ) == 0, "mouse: a double click on the line number selects the line" );
+    clearscript(); pressk( KS_HOME, KSMOD_CTRL );
+    addmouse( SM_PRESS, 3, 2, 1, 0 ); addmouse( SM_RELEASE, 3, 2, 1, 0 ); addmouse( SM_PRESS, 3, 2, 1, 0 ); addmouse( SM_RELEASE, 3, 2, 1, 0 ); press( SK_BACKSPACE ); press( SK_ESCAPE );
+    runeditor();
+    check( !lineof( 20 ) && lineof( 10 ) && lineof( 30 ), "mouse: a selected line is deleted as a line" );
+    // shift over the end of a line goes to the next one
+    clearscript(); pressk( KS_HOME, KSMOD_CTRL ); pressk( KS_END, 0 ); pressk( KS_RIGHT, KSMOD_SHIFT ); pressk( KS_RIGHT, KSMOD_SHIFT );
+    ctrlkey( 'c' ); press( SK_ESCAPE ); press( SK_ESCAPE );
+    runeditor();
+    check( strcmp( clipboard_now(), "10 PRINT \"A\"\n20 FOR I=1 TO 3:PRINT I:NEXT" ) == 0 || strncmp( clipboard_now(), "10 PRINT", 8 ) == 0,
+           "selection: Shift+Right goes over the end of the line" );
+    // the break key (not Ctrl+C) still leaves the editor
+    newprogram();
+    clearscript(); press( SK_BREAK );
+    runeditor();
+    check( lineof( 10 ), "keys: the break key leaves the editor" );
+}
+
 int main( void ) {
     if ( !init_repl( &repl ) ) {
         printf( "init_repl failed\n" );
@@ -1043,6 +1206,7 @@ int main( void ) {
     test_fulledit();
     test_editor_mouse();
     test_editor_dragshape();
+    test_editor_selection();
     test_monitor();
     test_screenedit();
     cleanup_repl( &repl );

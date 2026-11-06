@@ -128,6 +128,8 @@ static const gfxcmd_t cmds[] = {
     { "UI", "PAGE",      GFXOP_UIPAGE,   "nn",       0, false },
     { "UI", "JOY",       GFXOP_UIJOY,    "n",        0, false },
     { "UI", "WINDOW",    GFXOP_UIWINDOW, "nnnnns",   0, false },
+    { "UI", "EDIT",      GFXOP_UIEDIT,   "nnnnns",   0, false },
+    { "UI", "CARET",     GFXOP_UICARET,  "nn",       0, false },
     { "UI", "MOVE",      GFXOP_UIMOVE,   "nnn",      0, false },
     { "UI", "RAISE",     GFXOP_UIRAISE,  "n",        0, false },
     { "UI", "CANVAS",    GFXOP_UICANVAS, "nnnnnnn",  0, false },
@@ -185,6 +187,11 @@ static const gfxquery_t queries[] = {
     { "UI",     "OPEN",     GFXQ_UIOPEN,    0, 0 },
     { "UI",     "EVENTS",   GFXQ_UIEVENTS,  0, 0 },
     { "UI",     "PIXEL",    GFXQ_UIPIXEL,   3, 3 },
+    { "UI",     "CARET",    GFXQ_UICARET,   1, 1 },
+    { "UI",     "LINE",     GFXQ_UILINE,    1, 1 },
+    { "UI",     "COLUMN",   GFXQ_UICOLUMN,  1, 1 },
+    { "UI",     "SELECTED", GFXQ_UISELECTED, 1, 1 },
+    { "UI",     "LINES",    GFXQ_UILINES,   1, 1 },
 };
 
 const gfxcmd_t* gfxops_find( const char* group, const char* name ) {
