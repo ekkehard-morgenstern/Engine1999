@@ -818,6 +818,15 @@ static char* ed_bodyof( ed_t* e, uint32_t no ) {
     return ed_bodytext( e, found );
 }
 
+// the text of the stored line number no (not the edited copy), malloc'ed; 0 if there is no such line
+static char* ed_progbody( ed_t* e, uint32_t no ) {
+    line_t* found = 0; line_t* prev = 0;
+    if ( !find_line( e->pgm, no, &found, &prev ) || found == 0 ) {
+        return 0;
+    }
+    return ed_bodytext( e, found );
+}
+
 typedef struct _sbuf_t {
     char*   p;
     size_t  n, cap;
@@ -1083,14 +1092,28 @@ static void ed_paste( ed_t* e, const char* clip, size_t cliplen ) {
             ed_selclear( e );
             if ( ed_commit( e ) ) {
                 uint32_t topno = e->top != 0 ? e->top->lineno : 0, lastno = 0;
+                unsigned nnew = 0, nrepl = 0, nsame = 0;
                 for ( size_t i = 0; i < nl; ++i ) {
                     if ( lines[i][0] == '\0' ) {
                         continue;
                     }
+                    uint32_t no = (uint32_t) strtoul( lines[i], 0, 10 );
+                    char* before = ed_progbody( e, no );
                     if ( !ed_enter( e, lines[i] ) ) {
+                        free( before );
                         break;
                     }
-                    lastno = (uint32_t) strtoul( lines[i], 0, 10 );
+                    char* after = ed_progbody( e, no );
+                    if ( before == 0 ) {
+                        ++nnew;
+                    } else if ( after != 0 && strcmp( before, after ) == 0 ) {
+                        ++nsame;
+                    } else {
+                        ++nrepl;
+                    }
+                    free( before );
+                    free( after );
+                    lastno = no;
                     if ( lastno < topno ) {
                         topno = lastno;                 // (a pasted line above the view: the view starts there)
                     }
@@ -1099,7 +1122,17 @@ static void ed_paste( ed_t* e, const char* clip, size_t cliplen ) {
                 if ( lastno != 0 ) {
                     e->cur = ed_at( e, lastno );
                 }
+                bool rejected = e->msg[0] != '\0';            // (a refused line has told why: that message stays)
                 ed_loadcur( e, 0 );
+                if ( !rejected ) {                          // what the paste did: a paste of lines that are there already changes nothing, and says so
+                    char m[ sizeof(e->msg) ];
+                    int n = snprintf( m, sizeof(m), "Pasted %u line%s:", nnew + nrepl + nsame, nnew + nrepl + nsame == 1U ? "" : "s" );
+                    const char* sep = " ";
+                    if ( nnew > 0 ) { n += snprintf( m + n, sizeof(m) - (size_t) n, "%s%u new", sep, nnew ); sep = ", "; }
+                    if ( nrepl > 0 ) { n += snprintf( m + n, sizeof(m) - (size_t) n, "%s%u replaced", sep, nrepl ); sep = ", "; }
+                    if ( nsame > 0 ) { snprintf( m + n, sizeof(m) - (size_t) n, "%s%u unchanged", sep, nsame ); }
+                    ed_setmsg( e, m );
+                }
             }
         }
     } else if ( nonempty <= 1 ) {

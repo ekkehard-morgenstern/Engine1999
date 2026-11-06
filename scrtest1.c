@@ -1100,6 +1100,24 @@ static void test_editor_selection( void ) {
     clearscript(); pressk( KS_HOME, KSMOD_CTRL ); ctrlkey( 'v' ); press( SK_ESCAPE );
     runeditor();
     check( lineof( 15 ) && lineof( 25 ) && strcmp( linetext( 15 ), "15 PRINT \"B\"" ) == 0, "paste: numbered lines are entered" );
+    // the status message says what a paste of numbered lines did, also when it changed nothing
+    newprogram();
+    clip_internal_set( "10 PRINT \"A\"", 12 );
+    clearscript(); pressk( KS_HOME, KSMOD_CTRL ); ctrlkey( 'v' );
+    runeditor();
+    txtscr_select( 1 );
+    check( rowhas( 24, "Pasted 1 line: 1 unchanged" ) && strcmp( linetext( 10 ), "10 PRINT \"A\"" ) == 0, "paste: lines that are there already: the message says unchanged" );
+    clip_internal_set( "10 PRINT \"B\"\n40 END", 19 );
+    clearscript(); pressk( KS_HOME, KSMOD_CTRL ); ctrlkey( 'v' );
+    runeditor();
+    txtscr_select( 1 );
+    check( rowhas( 24, "Pasted 2 lines: 1 new, 1 replaced" ) && strcmp( linetext( 10 ), "10 PRINT \"B\"" ) == 0 && lineof( 40 ), "paste: a new and a replaced line are counted, the replaced one has the new text" );
+    clip_internal_set( "10 PRINT \"B\"\n20 FOR I=1 TO 3:PRINT I:NEXT\n99 END", 46 );
+    clearscript(); pressk( KS_HOME, KSMOD_CTRL ); ctrlkey( 'v' );
+    runeditor();
+    txtscr_select( 1 );
+    check( rowhas( 24, "Pasted 3 lines: 1 new, 2 unchanged" ), "paste: new and unchanged lines are counted" );
+    newprogram();
     // paste text without numbers over several lines: new lines with automatic numbers behind the current one
     newprogram();
     clip_internal_set( "REM one\nREM two", 15 );

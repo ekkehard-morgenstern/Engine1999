@@ -13,6 +13,10 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+### Status message after pasting numbered lines (2026-11-06, owner's question: "nothing happened" when pasting lines whose numbers exist)
+- `fulledit.c` `ed_paste()`: counts the pasted numbered lines as new / replaced / unchanged (stored line before and after each entry, `ed_progbody()`) and shows `Pasted N lines: 1 new, 1 replaced, 1 unchanged` in the status line; a refused line keeps its own error message. The behavior (same number = replaced) is unchanged and was confirmed by the test.
+- `scrtest1` 176 (3 new: unchanged, new + replaced with the new text, new + unchanged; valgrind clean); `contest1` 0 failures; `docs/display-engine.md`.
+
 ## Log
 
 ### 7a6cb67 — 2026-10-17 13:32:27 +0200 — "Introduced Claude to the project"
