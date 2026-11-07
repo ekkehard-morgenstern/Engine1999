@@ -13,8 +13,6 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-- **2026-11-07 — bright text in this session's demos** (owner's request: the `Ready.` prompt was unreadable after ESC): line `5 COLOR 140` (white in the default palette, as the other demos use it) added after the license lines of `mathplot.bas`, `mathplot3d.bas`, `cube3d.bas`, `bounce.bas` and `mandel.bas`. Checked with `bounce.bas` under Xvfb + metacity + xvkbd: after ESC, `? Break in line 125` and `Ready.` are white on the dark backdrop. The other demos were not touched. No source change, tests not run. Test processes cleaned up.
-
 ## Log
 
 ### 7a6cb67 — 2026-10-17 13:32:27 +0200 — "Introduced Claude to the project"
@@ -1409,3 +1407,8 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 3 files, +28/-1.
 - New `demos/mandel.bas` (16 lines + the 4 license lines): Mandelbrot zoom into the Seahorse Valley (-0.743643887037151 + 0.13182590420533i), 160 x 75 cells of 4 x 4 pixels computed in BASIC and painted as they are done, 64 color cycling palette, black inside, each step halves the view (x1 .. x16384, then restarts) and raises the iteration limit (60 + 12 per step); label `zoom xN` (`GFX TEXT`, `STR$`). Row in `demos/README.md`.
 - First version zoomed in with a truncated center and too few iterations (mostly black at depth): fixed before the commit. Checked in the window under Xvfb + metacity + xvkbd (six screenshots); no source change, tests not run.
+
+### 146effb — 2026-11-07 01:45:40 +0100 — "Minor change to the math demos, created by Claude Code"
+6 files, +11/-1.
+- Owner's request (the `Ready.` prompt was unreadable after ESC): line `5 COLOR 140` (white in the default palette) added after the license lines of `mathplot.bas`, `mathplot3d.bas`, `cube3d.bas`, `bounce.bas` and `mandel.bas`.
+- Checked with `bounce.bas` under Xvfb + metacity + xvkbd: after ESC the break message and `Ready.` are white on the dark backdrop. No source change, tests not run.
