@@ -13,12 +13,6 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-### Roadmap item 77, desktop integration (2026-11-07, owner's request: icons for each installed program, menu categories)
-- **New `desktop/`:** 16 menu entries (`engine1999`, `engine1999c`, the 13 games, the Y2K demo; `Exec` placeholders `@BINDIR@` / `@GAMESBINDIR@`, categories per the freedesktop menu spec, `Terminal=true` for the console programs) and 16 SVG icons (128 x 128, drawn for each program: a CRT, a terminal, an apple, cherries, an orange under the moon, a tower, a crossing, a river with a boat, a maze with a rust ball, a gem in the dirt, copper bars, an alien and a house, a wumpus in its cave; editions II / III carry a badge).
-- **`makefile`:** `APPDIR` / `ICONDIR`, `install` copies icons and entries (placeholders filled in with `BINDIR` / `GAMESBINDIR`) and, with an empty `DESTDIR`, updates the desktop database and icon cache if the tools exist; `uninstall` removes them; `check` runs the new **`desktopcheck.sh`** (every program of `GAMES` / `CONGAMES` has an entry and an icon, entries name an existing icon, no orphans, `desktop-file-validate` and `xmllint` if present). `debian/engine1999.install`, `engine1999-games.install` list the files; `debian/control` text.
-- **Docs:** `docs/build-and-test.md` (install table, check list), `README.md`, `CLAUDE.md` (file table; new games need both files), `docs/roadmap.md` (item 77), `SESSION.md`.
-- **Tested:** `make install PREFIX=/usr GAMESBINDIR=/usr/games DESTDIR=<staging>`, `desktop-file-validate` on the installed entries (no message), `make uninstall` leaves no entry or icon. Not tested: a real desktop menu, a Debian package build.
-
 ## Log
 
 ### 7a6cb67 — 2026-10-17 13:32:27 +0200 — "Introduced Claude to the project"
@@ -1535,3 +1529,15 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 - **New: `man/engine1999-deqq.6`**; `GAMES` in the makefile (`engine1999-deqq`), `README.md`, `demos/README.md`, `docs/build-and-test.md`, `docs/roadmap.md` (item 76), `SESSION.md`.
 - **Checks:** the full walkthrough (80 turns), 6000 random commands headless and 3000 under Xvfb without an error, every room seen under Xvfb (screenshots), a real keyboard (XTest typing: line editor, backspace, history, page up, ESC), `make man-check` ok, `make kit/games/engine1999-deqq` builds. Not done: hearing the sounds, a play-through by the owner. Backups `pre-deqq`, `deqq-m1-engine-rooms`, `deqq-m2-docs`.
 - **Lessons:** `LABEL` and `ON` are reserved words; a user `FUNC` must be called with `FN` (a build script inserts it); `NOT` is bitwise, so flags have to be -1 / 0 (found by a failing walkthrough: `NOT 1` is -2, true); a `LOCAL` array was avoided; keys typed while a "-- more --" page waits are taken by the page; `kill` of a `timeout` wrapper leaves the built window program running (use `kill -9` on the program).
+
+### bf93a03 — 2026-11-07 22:15:54 +0100 — "Claude bookkeeping files update"
+2 files changed (see `git show --stat bf93a03`).
+- `SESSION.md` / `HistoryLog-Claude.md`: the Deqq entry moved from Pending into the Log (`f255c69`), the owner's playtest ("seemed okay") recorded, a joined bullet in `SESSION.md` split.
+
+### 9c9408b — 2026-11-07 23:00:09 +0100 — "Desktop support for make install, created by Claude Code"
+45 files changed, 430 insertions(+), 8 deletions(-).
+- **New `desktop/`:** 16 menu entries (`engine1999`, `engine1999c`, the 13 games, the Y2K demo; `Exec` placeholders `@BINDIR@` / `@GAMESBINDIR@`, categories per the freedesktop menu spec, `Terminal=true` for the console programs) and 16 SVG icons (128 x 128, drawn for each program: a CRT, a terminal, an apple, cherries, an orange under the moon, a tower, a crossing, a river with a boat, a maze with a rust ball, a gem in the dirt, copper bars, an alien and a house, a wumpus in its cave; editions II / III carry a badge).
+- **`makefile`:** `APPDIR` / `ICONDIR`, `install` copies icons and entries (placeholders filled in with `BINDIR` / `GAMESBINDIR`) and, with an empty `DESTDIR`, updates the desktop database and icon cache if the tools exist; `uninstall` removes them; `check` runs the new **`desktopcheck.sh`** (every program of `GAMES` / `CONGAMES` has an entry and an icon, entries name an existing icon, no orphans, `desktop-file-validate` and `xmllint` if present). `debian/engine1999.install`, `engine1999-games.install` list the files; `debian/control` text.
+- **Docs:** `docs/build-and-test.md` (install table, check list), `README.md`, `CLAUDE.md` (file table; new games need both files), `docs/roadmap.md` (item 77), `SESSION.md`.
+- **Tested:** `make install PREFIX=/usr GAMESBINDIR=/usr/games DESTDIR=<staging>`, `desktop-file-validate` on the installed entries (no message), `make uninstall` leaves no entry or icon. Not tested: a real desktop menu, a Debian package build.
+- The owner tested it: menu entries and icons show in the application menu and in the window buttons of his panel (so the running windows have their icons); his window manager's theme draws no icons on the window frames, which is a theme matter.
