@@ -1,0 +1,68 @@
+.\" Engine1999 - A 2D games engine written in C
+.\" Copyright (C) 2026  Ekkehard Morgenstern
+.\"
+.\" This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published
+.\" by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It is distributed WITHOUT ANY
+.\" WARRANTY. ADDITIONAL PERMISSION (GPLv3 section 7): the Engine1999 Runtime Exception applies, see the file LICENSE-EXCEPTION.
+.\"
+.\" Keep this page current: it describes the demo game demos/deqq.bas (an executable made with BUILD, installed by "make install").
+.TH ENGINE1999-DEQQ 6 "November 2026" "Engine 1999 @VERSION@" "Engine1999 Manual"
+.SH NAME
+engine1999\-deqq \- Deqq's House, a graphics adventure
+.SH SYNOPSIS
+.B engine1999\-deqq
+.SH DESCRIPTION
+Deqq is an alien who crash-landed and now lives in an abandoned house. He is out on an errand and has left the front door open. Eight parts of his spaceship are hidden in the house and in the garden, each one behind a small puzzle: a hot oven, a frozen compass, a crystal on top of a cupboard, a guard under the bed, a running washing machine, a mirror that is not a mirror, a safe with a code and a bucket at the bottom of a well. Find them, carry them to the wreck north of the back yard, and \fBINSTALL\fR them. When all eight are built in, the ship flies.
+.PP
+The top four fifths of the screen show the place you are in as a simple 3D world (every room is a box seen from the south with a perspective camera, furniture is made of shaded boxes, the picture is drawn again after every change); the bottom five text rows are the message window and the input line. You type commands. The game is turn-based: only actions that change something (moving, taking, opening ...) pass a turn; looking around, the inventory and the help are free.
+.PP
+\fBDeqq comes home now and then.\fR You get a warning, three turns before: a humming, footsteps on the gravel, a hand on the door. While fewer than four parts are built into the wreck he hunts you through the house: if he finds you he throws you out, bolts the front door, and unbolts it (leaving it open) only when he goes out again. You can leave by the back door, or \fBHIDE\fR in a wardrobe, a tub, a closet, behind the sofa, in a barrel, in the pantry, in a chest or in a trunk (he may still find you now and then). With four or more parts built in he only watches you, from a distance, and says creepy things now and then. When the last part is built in, he thanks you and flies away in his ship; if he is out on his errand, the ship is yours.
+.PP
+You can carry six slots of things (a few big things take two slots), so you will have to go back and forth. Everything can be picked up, put down, put in, on or under other things and examined; look under beds, behind pictures and on top of tall furniture. The program is the demo \fIdeqq.bas\fR of Engine1999, made into an executable with
+.B BUILD
+(window kind: it needs the SDL2 library, nothing else). The window can be switched between the full screen and a window with F11 or ALT+RETURN.
+.SH COMMANDS
+Words of a command are separated by blanks, upper and lower case do not matter, articles (the, a, an) are ignored, \fBIT\fR means the thing you last mentioned.
+.TP
+.B "N S E W U D IN OUT"
+move (also \fBGO NORTH\fR, \fBUP\fR, \fBENTER\fR). Doors that are closed open by themselves when they are not locked.
+.TP
+.B "LOOK, EXAMINE x, LOOK UNDER/IN/BEHIND x, SEARCH x"
+look at the room or at a thing; \fBL\fR and \fBX\fR are short forms.
+.TP
+.B "TAKE x, TAKE ALL, DROP x, DROP ALL, INVENTORY"
+pick things up and put them down (\fBI\fR lists what you carry).
+.TP
+.B "PUT x IN/ON/UNDER y, GIVE x TO y, OPEN x, CLOSE x, UNLOCK x, DIAL 123"
+things and containers.
+.TP
+.B "TURN x ON/OFF, PUSH x, PULL x, UNPLUG x, UNSCREW x, CLIMB x, USE x"
+machines and tools.
+.TP
+.B "HIDE, COME OUT, WAIT"
+hide from Deqq, come out again, let a turn pass.
+.TP
+.B "INSTALL x, INSTALL"
+at the wreck: build a part (or all you carry) into the ship.
+.TP
+.B "HINT, HELP, STATUS"
+a hint for the first part you have not found yet, the list of commands, and how far you are.
+.TP
+.B "SAVE, LOAD, QUIT"
+the game can be saved to one file and loaded again.
+.TP
+.B "cursor up/down, page up"
+the lines you typed before; page up shows the older messages (any key leaves them).
+.SH FILES
+The saved game is the file
+.I deqq.sav
+in the folder
+.IR ~/.local/share/deqq/
+(the driver
+.BR local: ;
+the game goes on without saving if the file cannot be written).
+.BR engine1999\-basic (7)
+has the details, see FILES AND DEVICES.
+.SH SEE ALSO
+.BR engine1999 (1),
+.BR engine1999\-basic (7)

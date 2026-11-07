@@ -263,7 +263,7 @@ kit: kit/engine1999 kit/engine1999c kit/engine1999.o kit/engine1999c.o kit/engin
 
 # The demo games as programs of their own (roadmap item 60): each demo is turned into an executable with BUILD (window kind, its libraries
 # inside), named engine1999-<game> so that nothing on the user's system clashes. Needs only the system linker, like BUILD itself.
-GAMES=orchard orchard2 orchard3 climb climb2 madrun madrun2 river river2 rustinpeace glyphminer y2k
+GAMES=orchard orchard2 orchard3 climb climb2 madrun madrun2 river river2 rustinpeace glyphminer y2k deqq
 GAMEEXE=$(addprefix kit/games/engine1999-,$(GAMES))
 # text games: console executables (BUILD ..., CONSOLE: no window, no SDL2 needed to run them)
 CONGAMES=wumpus
@@ -443,6 +443,7 @@ check: $(CHECKTESTS) engine1999 engine1999c
 		if ./$$t > $$log 2>&1; then printf '%-12s ok\n' $$t; else printf '%-12s FAILED\n' $$t; tail -n 20 $$log; fail=$$((fail+1)); fi; \
 	done; \
 	if sh mancheck.sh > $$log 2>&1; then printf '%-12s ok\n' man-check; else printf '%-12s FAILED\n' man-check; tail -n 20 $$log; fail=$$((fail+1)); fi; \
+	if sh deqqtest.sh > $$log 2>&1; then printf '%-12s ok\n' deqqtest; else printf '%-12s FAILED\n' deqqtest; tail -n 20 $$log; fail=$$((fail+1)); fi; \
 	rm -f $$log; \
 	if [ $$fail -ne 0 ]; then echo "$$fail check(s) failed"; exit 1; fi; echo "all checks passed"
 

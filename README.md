@@ -103,7 +103,7 @@ LIST
 SAVE "hello"
 ```
 
-Then try the demos: `LOAD "demos/orchard2"` and `RUN`. After `make install` the games are programs of their own (and `engine1999-wumpus`, a text game for any terminal): `engine1999-orchard`, `-orchard2`, `-orchard3`, `-climb`, `-climb2`, `-madrun`, `-madrun2`, `-river`, `-river2`, `-rustinpeace` and `-glyphminer` (each with a manual page, e.g. `man engine1999-rustinpeace`).
+Then try the demos: `LOAD "demos/orchard2"` and `RUN`. After `make install` the games are programs of their own (and `engine1999-wumpus`, a text game for any terminal): `engine1999-orchard`, `-orchard2`, `-orchard3`, `-climb`, `-climb2`, `-madrun`, `-madrun2`, `-river`, `-river2`, `-rustinpeace`, `-glyphminer` and `-deqq` (each with a manual page, e.g. `man engine1999-rustinpeace`).
 
 | Demo | |
 |---|---|
@@ -113,6 +113,7 @@ Then try the demos: `LOAD "demos/orchard2"` and `RUN`. After `make install` the 
 | `demos/climb2.bas`, `demos/madrun2.bas`, `demos/river2.bas` | Second editions of the games with new graphics: a giant ice cream cone and falling bolts, a traffic helicopter and pigeons, a hot air balloon and gulls |
 | `demos/madrun.bas` | **MADRUN**: a crossing game for one to four players, with a phone booth, traffic and a rescue ambulance |
 | `demos/river.bas` | **ETERNAL RIVER**: a scroll-down boat game over an endless river, with bridges, swimmers and wraiths on the banks |
+| `demos/deqq.bas` | **DEQQ'S HOUSE**: a graphics adventure: an alien's house is a simple 3D world drawn with shaded boxes (the top 4/5 of the screen, redrawn after every change), a message window and a command line below; eight hidden ship parts behind puzzles, an alien who comes home (warnings, hiding, throwing you out, creepy watching), a ship to build |
 | `demos/glyphminer.bas` | **GLYPH MINER**: a cave digging game on the text screen with redefined characters for the cave, sprites for the miner and the enemies, sound effects and music |
 | `demos/y2k.bas` | **Y2K COUNTDOWN**: a silly demo in the style of 1999: copper bars, starfield, plasma, vector balls, tunnel, sine scroller, parallax landscape and a millennium bug finale, with a chip tune the program makes by itself (palette cycling, sprites, scrolled tiles, eight music channels); window only |
 | `demos/rustinpeace.bas` | **RUST IN PEACE**: a labyrinth game for one to four players: you are a rust ball, sneak up on the workers from behind, grow by eating nuts and bolts, and crush walls when you are big |
