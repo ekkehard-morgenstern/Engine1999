@@ -8,11 +8,11 @@
 .\" Keep this page current: it describes the demo game demos/fruit2.bas (an executable made with BUILD, installed by "make install").
 .TH ENGINE1999-FRUIT2 6 "November 2026" "Engine 1999 @VERSION@" "Engine1999 Manual"
 .SH NAME
-engine1999-fruit2 \- Fruit Invaders II, a Space Invaders style game with music
+engine1999-fruit2 \- Fruit Invaders II, a gardener throws balls at marching fruit, with music
 .SH SYNOPSIS
 .B engine1999-fruit2
 .SH DESCRIPTION
-Fruit Invaders II is the rewrite of Fruit Invaders with shaded, animated sprites, a scrolling and twinkling starfield with a planet and a moon, music that gets faster with every wave, and more effects. Shoot the invading fruit before it lands: cherries are worth 50 points, strawberries 40, apples 30, oranges 20, lemons 10, the flying pineapple 50 to 300. Now and then a banana falls out of a fruit: catch it with the cannon for rapid fire (two bullets at a time). Bombs can be shot down. You have lives and get an extra life for every few thousand points.
+Fruit Invaders II is the middle edition of the fruit games: the game of Fruit Invaders with shaded, animated sprites, a sunny sky with a sun, hills and clouds that drift at three speeds, a gardener with a walking cycle who loses his hat when a seed hits him, a bird that flies by, music that gets faster with every wave, and more effects. Throw balls at the fruit before it reaches the bushes: cherries are worth 50 points, strawberries 40, apples 30, oranges 20, lemons 10, the bird 50 to 300. Now and then a banana falls out of a fruit: catch it with the gardener for rapid fire (two balls at a time). Seeds can be knocked out of the air with a ball. You have lives and get an extra life for every few thousand points. See also \fBengine1999-fruit\fR(6), the simple edition, and \fBengine1999-fruit3\fR(6), the biggest one.
 .PP
 The program is the demo \fIfruit2.bas\fR of Engine1999, made into an executable with
 .B BUILD
@@ -21,10 +21,10 @@ be switched between the full screen and a window with F11 or ALT+RETURN.
 .SH CONTROLS
 .TP
 .BR LEFT / RIGHT " or " A / D
-move the cannon (only while the key is held).
+walk (only while the key is held).
 .TP
 .BR SPACE " or " UP
-fire.
+throw a ball (hold it for rapid fire).
 .TP
 .B P
 pause.
@@ -32,7 +32,7 @@ pause.
 .B Q
 quit.
 .PP
-A game controller works, too: D-pad or left stick moves, A or the right trigger fires, START pauses, BACK quits.
+A game controller works, too: D-pad or left stick walks, A or the right trigger throws, START pauses, BACK quits.
 .SH FILES
 The high score is kept in the file
 .I fruit2.hi
