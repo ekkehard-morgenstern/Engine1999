@@ -13,8 +13,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-- **2026-11-07 — `demos/cube3d.bas`** (new, 15 lines + the 4 license lines): a spinning solid cube: rotation about two axes, perspective, back faces skipped (face center toward the viewer), lit faces (shade from the face normal and a light direction, 64 step palette), each face outlined, filled with `GFX PAINT c,c` and outlined again in white (palette entry 80). Two layers take turns (draw hidden, swap) like `mathplot3d.bas`. Row in `demos/README.md`. **Fix after the owner's report (faces visible that should be hidden):** the culling test was `CZ<0` (right for a parallel projection), but the camera is at z=-5 with perspective, so a face is visible only if `CZ<-0.2` (normal . (camera - center) > 0); faces turned slightly away were drawn as slivers. Found by drawing every face in its own color (as the owner suggested), then restored the lit shading. Checked under Xvfb + metacity + xvkbd (frames with 1, 2 and 3 faces look like a proper cube); no source change, tests not run.
-  - **Livelier look (owner: "boring"):** six faces in six colors (red, green, yellow, blue, magenta, cyan), each a 10 step ramp dark to bright from the light direction (palette 16 + face*10 + shade, white outline 80), and the cube pulses in size (`S0=48+8*SIN(A*3)`). Slip while editing: a `sed` on physical line 10 hit the `DATA` line ("Out of DATA in line 40"); restored. Checked in four screenshots.
+- **2026-11-07 — `demos/bounce.bas`** (new, 21 lines incl. 2 `GOSUB` routines + the 4 license lines): bouncing balls physics demo: 7 balls of random size, gravity (0.25 px/frame^2), floor and wall bounces that lose energy (0.88 / 0.95), floor friction, elastic ball-ball collisions with mass proportional to radius squared (normal impulse, overlap pushed apart), re-kicked every 500 frames so it keeps moving; each ball shaded with three `GFX CIRCLE` + `GFX PAINT` layers (dark body, light offset, white highlight); two layers take turns (no flicker). Row in `demos/README.md`. Found while testing: `DIM` wants constant dimensions (`DIM X(N)` gave "Number expected"), and a `NEXT` must not share a line with a single-line `IF ... THEN` (it is swallowed): I forgot `NEXT J` once. Checked in the window under Xvfb + metacity + xvkbd (screenshots); no source change, tests not run.
 
 ## Log
 
@@ -1392,3 +1391,10 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 3 files, +23/-0.
 - New `demos/mathplot3d.bas` (15 lines + the 4 license lines): rotating 3D wireframe of Z=2*SIN(2R)/(1+R), 21 x 21 grid, perspective, lines colored by height; two layers (0 and 3) take turns (draw on the hidden one with `GFX TARGET`, swap with `GFX LAYER`) so it does not flicker. Row in `demos/README.md`.
 - Found while testing: `DIM A(n)` gives n elements (0..n-1), so the grid needs `DIM Z(21,21)`. The scale was reduced to fit the 640 x 300 screen. Checked in the window under Xvfb; no source change, tests not run.
+
+### c9e7ac2 — 2026-11-07 01:25:42 +0100 — "Cube 3D demo program, by Claude Code"
+3 files, +40/-3.
+- New `demos/cube3d.bas` (15 lines + the 4 license lines): spinning solid cube, rotation about two axes, perspective, back faces skipped, six colored faces lit by a light direction (palette 16 + face*10 + shade, white outline 80), pulsing size, each face outlined / filled with `GFX PAINT c,c` / outlined again; two layers (0 and 3) take turns (no flicker). Row in `demos/README.md`.
+- Fix found with the owner's report (faces visible that should be hidden): the culling test was `CZ<0`, right for a parallel projection only; with the camera at z=-5 and perspective a face is visible only if `CZ<-0.2`. Found by drawing each face in its own color. Then the look was made livelier on the owner's request (six colors, pulsing size).
+- Slip while editing: a `sed` on physical line 10 overwrote the `DATA` line ("Out of DATA in line 40"); restored.
+- Checked in the window under Xvfb + metacity + xvkbd (screenshots); no source change, regression tests not run.
