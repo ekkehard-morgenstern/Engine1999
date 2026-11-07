@@ -29,7 +29,8 @@ Channels are numbered 1..8 in BASIC (0..7 in the host). Everything is queued and
 TEMPO bpm                        tempo of the beats of SOUND, 1..1000, default 60 (1 beat = 1 s)
 WAVE ch, w                       wave type: 0 sine, 1 square, 2 triangle, 3 noise; applies to the sounds queued after it
 SOUND ch, freq, beats [, vol [, f2]]  a tone of freq Hz (20..20000) for "beats", volume 0..1 (default 0.5), gliding to f2 (see effects).
-                                 freq 0 = a rest of "beats". beats 0 = no end: the tone goes on until the next SOUND on the
+                                 freq 0 = a rest of "beats". The tone ends after its beats (like a note of sheet music; a rest adds silence on top).
+                                 beats -1 (or 0) = no end: the tone goes on until the next SOUND on the
                                  channel (or SOUND OFF); SOUND on a channel always follows what the channel has queued
 SOUND OFF [ch]                   silences the channel (no channel or 0 = all) now and forgets what is queued for it
 SOUND SYNC ch [, ch ...]         lines up the time of the channels, so that what is queued next starts together on all of them

@@ -890,7 +890,10 @@ static void host_snd_tone( void* usrdata, int chan, float freq, float freq2, flo
         sdlaud_playfreq( chan, freq, vol, beats );
     } else {
         sdlaud_stopchan( chan, beats );
+        return;
     }
+    // the note ends after its beats, like a note of sheet music (beats 0: no end, it goes on until the next event of the channel)
+    if ( beats > 0.0f ) sdlaud_stopchan( chan, 0.0f );
 }
 
 static void host_snd_setwave( void* usrdata, int chan, int wave ) {

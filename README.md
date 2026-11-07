@@ -103,7 +103,7 @@ LIST
 SAVE "hello"
 ```
 
-Then try the demos: `LOAD "demos/fruit2"` and `RUN`. After `make install` the games are programs of their own (and `engine1999-wumpus`, a text game for any terminal): `engine1999-fruit`, `-fruit2`, `-fruit3`, `-climb`, `-climb2`, `-madrun`, `-madrun2`, `-river`, `-river2` and `-rustball` (each with a manual page, e.g. `man engine1999-rustball`).
+Then try the demos: `LOAD "demos/fruit2"` and `RUN`. After `make install` the games are programs of their own (and `engine1999-wumpus`, a text game for any terminal): `engine1999-fruit`, `-fruit2`, `-fruit3`, `-climb`, `-climb2`, `-madrun`, `-madrun2`, `-river`, `-river2`, `-rustball` and `-glyphminer` (each with a manual page, e.g. `man engine1999-rustball`).
 
 | Demo | |
 |---|---|
@@ -113,6 +113,7 @@ Then try the demos: `LOAD "demos/fruit2"` and `RUN`. After `make install` the ga
 | `demos/climb2.bas`, `demos/madrun2.bas`, `demos/river2.bas` | Second editions of the games with new graphics: a giant ice cream cone and falling bolts, a traffic helicopter and pigeons, a hot air balloon and gulls |
 | `demos/madrun.bas` | **MADRUN**: a crossing game for one to four players, with a phone booth, traffic and a rescue ambulance |
 | `demos/river.bas` | **ETERNAL RIVER**: a scroll-down boat game over an endless river, with bridges, swimmers and wraiths on the banks |
+| `demos/glyphminer.bas` | **GLYPH MINER**: a cave digging game on the text screen with redefined characters for the cave, sprites for the miner and the enemies, sound effects and music |
 | `demos/rustball.bas` | **BEING A RUSTBALL**: a labyrinth game for one to four players: you are a rust ball, sneak up on the workers from behind, grow by eating nuts and bolts, and crush walls when you are big |
 | `tools/spriteed.bas`, `fonted.bas`, `musiced.bas`, `sfxed.bas` | The sprite and tile editor, the text font editor, the music editor and the sound effect editor (UI programs); run them with `TOOL "name"` |
 | `demos/fruit.bas` | The first, simpler Fruit Invaders |

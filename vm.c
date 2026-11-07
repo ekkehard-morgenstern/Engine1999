@@ -3555,6 +3555,7 @@ static bool vm_sound( vm_t* vm, uint16_t kind ) {
                  !vm_dpop_num( vm, &a ) || !vm_sound_channel( vm, a, &chan ) ) {
                 return false;
             }
+            if ( c == -1.0 ) c = 0.0;       // -1 beats: the tone is held until the next event of the channel (like 0)
             if ( !( ( b == 0.0 || ( b >= 20.0 && b <= 20000.0 ) ) && c >= 0.0 && c <= 1.0e6 && d >= 0.0 && d <= 1.0 &&
                     ( e == 0.0 || ( e >= 20.0 && e <= 20000.0 && c > 0.0 ) ) ) ) {
                 return vm_error( vm, "Illegal argument" );

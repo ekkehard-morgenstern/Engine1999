@@ -1,0 +1,53 @@
+.\" Engine1999 - A 2D games engine written in C
+.\" Copyright (C) 2026  Ekkehard Morgenstern
+.\"
+.\" This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published
+.\" by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It is distributed WITHOUT ANY
+.\" WARRANTY. ADDITIONAL PERMISSION (GPLv3 section 7): the Engine1999 Runtime Exception applies, see the file LICENSE-EXCEPTION.
+.\"
+.\" Keep this page current: it describes the demo game demos/glyphminer.bas (an executable made with BUILD, installed by "make install").
+.TH ENGINE1999-GLYPHMINER 6 "November 2026" "Engine 1999 @VERSION@" "Engine1999 Manual"
+.SH NAME
+engine1999-glyphminer \- Glyph Miner, a cave digging game on the text screen
+.SH SYNOPSIS
+.B engine1999-glyphminer
+.SH DESCRIPTION
+You are a miner in a cave of 40 by 12 cells. Dig through the dirt, collect gems, and when you have enough of them the door opens: run into it before the time is up. A new cave is made at random for every level, with more boulders, bricks and enemies as the levels go on.
+.PP
+Boulders and gems fall when there is nothing under them, and roll off other round things. You can push a boulder sideways, and you can stand under one that is at rest, but one that is falling crushes you. Fireflies follow the wall at their left hand; a boulder that falls on one makes it burst into gems, and so does everything around it (you too, if you stand next to it). Worms tunnel through the dirt after you and are crushed by boulders like the fireflies. You have three lives; an extra life comes every 2000 points, and the time left at the end of a level is worth bonus points. Gems taken after the door is open are worth double, and several gems in a quick chain play rising notes.
+.PP
+The cave is the text screen: every cell is 2 by 2 characters that the program redefines (dirt, steel, brick, boulder, gem, door); the miner and the enemies are sprites. The program is the demo \fIglyphminer.bas\fR of Engine1999, made into an executable with
+.B BUILD
+(window kind: it needs the SDL2 library, nothing else); its BASIC libraries are inside it. The window can be switched between the full screen and a window with F11 or ALT+RETURN.
+.SH CONTROLS
+.TP
+.B "cursor keys, WASD"
+walk and dig.
+.TP
+.B SPACE
+together with a direction: take the dirt or the gem there without stepping.
+.TP
+.B "game controller"
+left stick or D-pad walk, A takes without stepping, START pauses, BACK quits.
+.TP
+.B P
+pause.
+.TP
+.B M
+music on or off.
+.TP
+.B Q
+quit to the title screen; Q there ends the program.
+.SH FILES
+The best score is kept in the file
+.I glyphminer.hi
+in the folder
+.IR ~/.local/share/glyphminer/
+(the driver
+.BR local: ;
+the game goes on without the file if it cannot be written).
+.BR engine1999\-basic (7)
+has the details, see FILES AND DEVICES.
+.SH SEE ALSO
+.BR engine1999 (1),
+.BR engine1999\-basic (7)
