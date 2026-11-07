@@ -3943,7 +3943,7 @@ bool comp_eat_soundstmt( compiler_t* comp, node_t** pnode ) {
                 kind = SNDK_OFF; minargs = 0; maxargs = 1; optional = true;
                 comp_fetchtok( comp );
             } else if ( comp->currtok == TOK_SYNC ) {
-                kind = SNDK_SYNC; minargs = 1; maxargs = SND_MAXVOICES;
+                kind = SNDK_SYNC; minargs = 1; maxargs = SND_NCHAN;
                 comp_fetchtok( comp );
             }
             break;

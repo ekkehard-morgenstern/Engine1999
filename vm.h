@@ -316,7 +316,7 @@ typedef struct _vm_t {
     bool            (*build)( struct _vm_t*, void*, const char* name, int kind );
     bool            (*merge)( struct _vm_t*, void*, const char* name, bool append );
     bool            (*renumber)( struct _vm_t*, void*, const char* firstlabel, int32_t firstline, const char* lastlabel, int32_t lastline, int32_t step );
-    vm_chanstate_t  chanstate[SND_MAXVOICES];   // what the VM has set on each sound channel (WAVE, ENVELOPE, VIBRATO, TREMOLO, W X ~ ^ of PLAY): SFX gives it back
+    vm_chanstate_t  chanstate[SND_NCHAN];     // what the VM has set on each sound channel (WAVE, ENVELOPE, VIBRATO, TREMOLO, W X ~ ^ of PLAY): SFX gives it back
     bool            sfx_defined[SND_MAXSFX];
     mml_t           sfx[SND_MAXSFX];    // the stored sound effects (SFX n, a$), parsed; cleared with the VM
     const vm_sound_t* sound;        // SOUND / PLAY / ...: the host's sound output; 0 = none (arguments are checked, nothing plays)

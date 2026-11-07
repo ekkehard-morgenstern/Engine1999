@@ -506,7 +506,7 @@ bye-stmt := ( BYE | QUIT ) [ num-expr ] .
 
 ## Sound
 
-> Sound (see docs/sound.md). Channels are 1..8. SOUND ch, freq, beats [, vol]: a tone of freq Hz (20..20000; 0 = a rest) for
+> Sound (see docs/sound.md). Channels are 1..16 (1..8 music, 9..16 effects). SOUND ch, freq, beats [, vol]: a tone of freq Hz (20..20000; 0 = a rest) for
 > "beats" (the tone ends then and the channel's next event follows; -1 = held until the next SOUND; 0 = zero length, only the state changes), vol 0..1 (default 0.5). SOUND OFF silences
 > one channel / all of them at once, SOUND SYNC lines up the time of the channels (to start them together). PLAY plays one
 > music string per voice (voice n = channel n, all start together); both return at once, PLAYING(ch) is -1 while the channel
@@ -525,7 +525,7 @@ sound-stmt := SOUND num-expr "," num-expr "," num-expr [ "," num-expr [ "," num-
 > Sound effects (docs/sound.md): SOUND ch, f1, beats, vol, f2 glides from f1 to f2 during the tone; PITCH ch, f and VOLUME ch, v
 > change a sounding channel at once; ENVELOPE ch, attack, decay, sustain, release shapes the tones (ENVELOPE ch alone: back to the
 > default); VIBRATO / TREMOLO ch, rate, depth; SFX n, a$ stores a music string as effect n (1..64), SFX n [, ch] plays it
-> (no channel: a free one, the highest first).
+> (no channel: a free effects channel, 16 down to 9; else 16).
 
 ## Timing: WAIT, AFTER, EVERY
 

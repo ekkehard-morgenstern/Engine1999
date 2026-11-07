@@ -696,7 +696,9 @@ Explanation of node types:
 #define SNDK_TREMOLO            UINT8_C(11)     // TREMOLO ch, rate, depth: 3 numeric branches
 #define SNDK_SFXDEF             UINT8_C(12)     // SFX n, a$: a numeric and a string branch
 #define SNDK_SFXPLAY            UINT8_C(13)     // SFX n [, ch]: 1 or 2 numeric branches
-#define SND_MAXVOICES           8               // PLAY strings / SYNC channels per statement (= SYNTH_NCHAN)
+#define SND_MAXVOICES           8               // PLAY strings per statement (= the music channels 1..8)
+#define SND_NMUSIC              8               // music channels 1..8: SOUND, PLAY, ...; SFX without a channel never takes them
+#define SND_NCHAN               16              // all sound channels (= SYNTH_NCHAN): 9..16 are the effects channels of SFX
 #define SND_MAXSFX              64              // stored effects (SFX 1..64)
 
 #define LISTF_FIRST             UINT8_C(0X01)   // LIST: start target present (first branch)

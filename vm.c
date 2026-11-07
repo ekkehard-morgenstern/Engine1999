@@ -88,7 +88,7 @@ void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem ) {
     vm->sound    = 0;
     memset( vm->sfx, 0, sizeof(vm->sfx) );
     memset( vm->sfx_defined, 0, sizeof(vm->sfx_defined) );
-    for ( int c=0; c < SND_MAXVOICES; ++c ) vm_chanstate_default( &vm->chanstate[c] );
+    for ( int c=0; c < SND_NCHAN; ++c ) vm_chanstate_default( &vm->chanstate[c] );
     vm->input    = 0;
     vm->interrupt = 0;
     vm->getkey   = 0;
@@ -2243,9 +2243,9 @@ static bool vm_quit_request( vm_t* vm ) {
     return true;
 }
 
-// the channel number 1..8 -> 0..7; false after reporting an error
+// the channel number 1..16 -> 0..15; false after reporting an error
 static bool vm_sound_channel( vm_t* vm, double num, int* pchan ) {
-    if ( !( num >= 1.0 && num < 9.0 ) ) {
+    if ( !( num >= 1.0 && num < (double)( SND_NCHAN + 1 ) ) ) {
         return vm_error( vm, "Illegal argument" );
     }
     *pchan = (int) num - 1;
@@ -2955,13 +2955,13 @@ static bool vm_sfx_define( vm_t* vm ) {
     return ok;
 }
 
-// SFX n [, ch] ( n ch -- ): plays the effect on the channel; 0 = a free one (the highest that isn't busy)
+// SFX n [, ch] ( n ch -- ): plays the effect on the channel; 0 = a free effects channel (the highest of 9..16 that isn't busy)
 static bool vm_sfx_play( vm_t* vm ) {
     double n = 0, ch = 0;
     if ( !vm_dpop_num( vm, &ch ) || !vm_dpop_num( vm, &n ) ) {
         return false;
     }
-    if ( !( n >= 1.0 && n < (double)( SND_MAXSFX + 1 ) ) || !( ch >= 0.0 && ch < 9.0 ) ) {
+    if ( !( n >= 1.0 && n < (double)( SND_MAXSFX + 1 ) ) || !( ch >= 0.0 && ch < (double)( SND_NCHAN + 1 ) ) ) {
         return vm_error( vm, "Illegal argument" );
     }
     const mml_t* m = &vm->sfx[ (int) n - 1 ];
@@ -2974,8 +2974,8 @@ static bool vm_sfx_play( vm_t* vm ) {
     const vm_sound_t* snd = vm->sound;
     int chan = (int) ch - 1;
     if ( chan < 0 ) {
-        chan = SND_MAXVOICES - 1;
-        for ( int c=SND_MAXVOICES-1; c >= 0; --c ) {
+        chan = SND_NCHAN - 1;           // none free: the last one, the effect waits behind what it has queued
+        for ( int c=SND_NCHAN-1; c >= SND_NMUSIC; --c ) {       // the effects channels 9..16, the highest free one
             if ( !snd->busy( vm->userdata, c ) ) {
                 chan = c;
                 break;
@@ -3674,7 +3674,7 @@ static bool vm_sound( vm_t* vm, uint16_t kind ) {
             if ( !vm_dpop_num( vm, &a ) ) {
                 return false;
             }
-            if ( !( a >= 1.0 && a <= (double) SND_MAXVOICES ) ) {
+            if ( !( a >= 1.0 && a <= (double) SND_NCHAN ) ) {
                 return vm_error( vm, "Illegal argument" );
             }
             int n = (int) a; unsigned mask = 0; bool ok = true;

@@ -5,7 +5,7 @@ Software synthesizer, split in two layers so the core can be tested without a so
 | File | Role |
 |---|---|
 | `mml.[ch]` | Parser of the `PLAY` music strings (no SDL): string → events with times in seconds. |
-| `synth.[ch]` | The synthesizer core, no SDL: 8 channels (`SYNTH_NCHAN`), oscillators (sine, square, triangle, noise), mixer, a time-ordered event queue and the per-channel time cursors. All times are nanosecond time stamps passed in by the caller; it has no clock and no locking. Tested by `synthtest1`. |
+| `synth.[ch]` | The synthesizer core, no SDL: 16 channels (`SYNTH_NCHAN`: 1..8 music, 9..16 effects), oscillators (sine, square, triangle, noise), mixer, a time-ordered event queue and the per-channel time cursors. All times are nanosecond time stamps passed in by the caller; it has no clock and no locking. Tested by `synthtest1`. |
 | `sdlaudio.[ch]` | The host side: opens the SDL audio device (mono, float, 44100 Hz, 1024-sample buffers), runs a worker thread that applies the queued events when their time has come (looks at the queue at least every millisecond, using `sdlutil_getnsec/nanosleep`), and the audio callback that renders the synth. One mutex guards the synth. The `sdlaud_*` calls do nothing (`sdlaud_busy()` is false) if no audio device could be opened (`sdl_init()` then prints a warning and runs without sound). |
 
 ## API (`sdlaudio.h`)
@@ -23,7 +23,7 @@ Software synthesizer, split in two layers so the core can be tested without a so
 
 ## BASIC statements (implemented)
 
-Channels are numbered 1..8 in BASIC (0..7 in the host). Everything is queued and returns at once; nothing blocks until the music is over.
+Channels are numbered 1..16 in BASIC (0..15 in the host): **1..8 are the music channels** (`PLAY` voice n plays on channel n; `SOUND`, `WAVE`, ... as you like) and **9..16 the effects channels**, which `SFX` without a channel uses (the highest free one, 16 down to 9; a music channel is never taken; with all eight busy it takes channel 16 and the effect waits behind what that channel has queued). Any statement may use any channel 1..16, `SFX n, ch` too (the split is a convention, not a restriction; before 2026-11-07 there were 8 channels and `SFX` took the highest free one of them, which could hijack a music channel). Programs that use only channels 1..8 are not affected. Everything is queued and returns at once; nothing blocks until the music is over.
 
 ```
 TEMPO bpm                        tempo of the beats of SOUND, 1..1000, default 60 (1 beat = 1 s)
@@ -91,7 +91,7 @@ ENVELOPE ch, a, d, s, r        attack, decay (seconds 0..60), sustain level 0..1
 VIBRATO ch, rate, depth        pitch LFO: rate 0..100 Hz, depth 0..24 semitones (0 = off)
 TREMOLO ch, rate, depth        volume LFO: rate 0..100 Hz, depth 0..1 (0 = off)
 SFX n, a$                      stores the music string a$ as effect n (1..64); it is parsed at once (a mistake is an error now)
-SFX n [, ch]                   plays effect n on channel ch; without ch on a free channel (the highest one that isn't busy, else 8)
+SFX n [, ch]                   plays effect n on channel ch; without ch on a free effects channel (the highest of 9..16 that isn't busy, else 16)
 ```
 
 - `PITCH`/`VOLUME` take effect immediately: no allocation, no queue (a lock and a few stores), so calling them every frame (60 per second,

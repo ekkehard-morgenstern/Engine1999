@@ -58,7 +58,7 @@ of several channels (for chords). Events are applied in time order (stable for e
 queued in, so one channel's far-ahead events don't hold up another channel's.
 */
 
-#define SYNTH_NCHAN         8
+#define SYNTH_NCHAN         16          // 1..8 music, 9..16 effects (the split is made by the VM: nodetype.h SND_NMUSIC)
 #define SYNTH_NOTES         72          // note 0 = A at 110 Hz, 12 notes per octave, up to ~6.6 kHz
 #define SYNTH_FREQ_MIN      20.0f
 #define SYNTH_FREQ_MAX      20000.0f

@@ -265,7 +265,9 @@ static void test_queue( void ) {
     check( !synth_schedule( &s, 0, SYNTH_EV_PLAY, 0, 20001.0f, 0.5f, SYNTH_SINE ), "frequency above 20 kHz refused" );
     check( !synth_schedule( &s, 0, SYNTH_EV_PLAY, 0, 440.0f, 1.5f, SYNTH_SINE ), "volume above 1 refused" );
     check( !synth_schedule( &s, 0, SYNTH_EV_PLAY, 0, 440.0f, -0.1f, SYNTH_SINE ), "negative volume refused" );
-    check( !synth_schedule( &s, 0, SYNTH_EV_PLAY, 8, 440.0f, 0.5f, SYNTH_SINE ), "channel 8 refused" );
+    check( !synth_schedule( &s, 0, SYNTH_EV_PLAY, SYNTH_NCHAN, 440.0f, 0.5f, SYNTH_SINE ), "the channel after the last one is refused" );
+    check( synth_schedule( &s, 0, SYNTH_EV_PLAY, SYNTH_NCHAN - 1, 440.0f, 0.5f, SYNTH_SINE ) && s.nevents == 1, "channel 16 is accepted" );
+    synth_silence( &s, 0 );
     check( !synth_schedule( &s, 0, SYNTH_EV_WAVE, 0, 0, 0, SYNTH_NWAVES ), "unknown wave refused" );
     check( s.nevents == 0, "refused events aren't queued" );
     // the queue is limited

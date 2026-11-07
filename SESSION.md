@@ -52,5 +52,5 @@ Most rules (no git writes, program file format, uninitialized memory, test-proce
 - Design decisions I took are marked "revisit if unwanted" in `docs/basic-language.md` and the matching log entries; revisit them when the owner objects.
 
 ## Open / next steps
-Sound (owner, 2026-11-07): effects are occasionally drowned out or lost in `fruit2` (minor; see `docs/roadmap.md` 2b for hypotheses and the sound log tool); the owner still checks the other games after the `SFX` state restore.
+Sound (owner, 2026-11-07): **16 sound channels, 1..8 music and 9..16 effects** (`SFX` without a channel uses 16 down to 9; uncommitted until the owner commits); effects were occasionally drowned out or lost in `fruit2` (minor, probably better now; see `docs/roadmap.md` 2b and the sound log tool); the owner still checks the other games after the `SFX` state restore and the channel split.
 The full list is `docs/roadmap.md`. Next candidates: item 65 (split screen, `TILE VIEW`), `LPRINT USING`, tile map editor / `TILE MAP LOAD|SAVE`, console text renderer for the UI, search / replace and undo in the text screen editor, tests on other machines (Ubuntu, other architectures, multi-monitor, real pads).

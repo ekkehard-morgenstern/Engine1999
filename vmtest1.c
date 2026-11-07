@@ -807,7 +807,9 @@ static const testcase_t cases[] = {
     { "SOUND with expressions", "A=3:SOUND A,110*4,A-2",                           "<tone 2 440 0.5 1>\n" },
     { "SOUND lower case",       "sound 8,20,1",                                    "<tone 7 20 0.5 1>\n" },
     { "SOUND channel 0",        "SOUND 0,440,1",                                   "? Illegal argument\n" },
-    { "SOUND channel 9",        "SOUND 9,440,1",                                   "? Illegal argument\n" },
+    { "SOUND channel 9",        "SOUND 9,440,1",                                   "<tone 8 440 0.5 1>\n" },
+    { "SOUND channel 16",       "SOUND 16,440,1",                                  "<tone 15 440 0.5 1>\n" },
+    { "SOUND channel 17",       "SOUND 17,440,1",                                  "? Illegal argument\n" },
     { "SOUND frequency low",    "SOUND 1,19,1",                                    "? Illegal argument\n" },
     { "SOUND frequency high",   "SOUND 1,20001,1",                                 "? Illegal argument\n" },
     { "SOUND volume",           "SOUND 1,440,1,1.5",                               "? Illegal argument\n" },
@@ -824,10 +826,12 @@ static const testcase_t cases[] = {
     { "SOUND OFF",              "SOUND OFF",                                       "<silence -1>\n" },
     { "SOUND OFF channel",      "SOUND OFF 3",                                     "<silence 2>\n" },
     { "SOUND OFF 0 is all",     "SOUND OFF 0",                                     "<silence -1>\n" },
-    { "SOUND OFF bad channel",  "SOUND OFF 9",                                     "? Illegal argument\n" },
+    { "SOUND OFF channel 16",   "SOUND OFF 16",                                    "<silence 15>\n" },
+    { "SOUND OFF bad channel",  "SOUND OFF 17",                                    "? Illegal argument\n" },
     { "SOUND SYNC",             "SOUND SYNC 1,2,3",                                "<sync 7>\n" },
     { "SOUND SYNC one",         "SOUND SYNC 4",                                    "<sync 8>\n" },
-    { "SOUND SYNC bad channel", "SOUND SYNC 1,9",                                  "? Illegal argument\n" },
+    { "SOUND SYNC effects channels", "SOUND SYNC 1,9,16",                          "<sync 33025>\n" },
+    { "SOUND SYNC bad channel", "SOUND SYNC 1,17",                                 "? Illegal argument\n" },
     { "KEY: a held key",        "PRINT KEY(\"A\")",                                  "-1\n" },
     { "KEY: case does not matter", "PRINT KEY(\"a\");KEY(\"Left\");KEY(\"left\")",    "-1-1-1\n" },
     { "KEY: a key that is up",  "PRINT KEY(\"B\");KEY(\"RIGHT\");KEY(\"F1\")",         "000\n" },
@@ -838,6 +842,8 @@ static const testcase_t cases[] = {
     { "KEY: empty name",        "PRINT KEY(\"\")",                                    "? Illegal argument\n" },
     { "KEY needs a string",     "PRINT KEY(1)",                                       "? String expression expected\n" },
     { "PLAYING",                "SOUND 1,440,1:PRINT PLAYING(1):PRINT PLAYING(2)", "<tone 0 440 0.5 1>\n-1\n0\n" },
+    { "PLAYING on an effects channel", "SOUND 12,440,1:PRINT PLAYING(12):PRINT PLAYING(11)", "<tone 11 440 0.5 1>\n-1\n0\n" },
+    { "PLAYING channel 17", "PRINT PLAYING(17)", "? Illegal argument\n" },
     { "PLAYING after SOUND OFF", "SOUND 1,440,1:SOUND OFF:PRINT PLAYING(1)",       "<tone 0 440 0.5 1>\n<silence -1>\n0\n" },
     { "PLAYING in a condition", "SOUND 5,440,1\nIF PLAYING(5) THEN PRINT \"BUSY\"", "<tone 4 440 0.5 1>\nBUSY\n" },
     { "PLAYING bad channel",    "PRINT PLAYING(0)",                                "? Illegal argument\n" },
@@ -881,8 +887,11 @@ static const testcase_t cases[] = {
     { "PLAY effect command errors", "PLAY \"X1,2\"",                                "? Value missing or out of range after 'X'\n" },
     { "PLAY H frequency range", "PLAY \"H10\"",                                    "? Value missing or out of range after 'H'\n" },
     { "SFX define and play",    "SFX 1,\"ML S1000,100\":SFX 1,3",                  "<sync 4>\n<wave 2 0>\n<env 2 off>\n<vib 2 0 0>\n<trem 2 0 0>\n<tone 2 1000 0.5 0.5 glide 100>\n<tone 2 0 0 0>\n" },
-    { "SFX without a channel uses the highest free one", "SFX 2,\"ML R\":SFX 2", "<sync 128>\n<wave 7 0>\n<env 7 off>\n<vib 7 0 0>\n<trem 7 0 0>\n<tone 7 0 0 0.5>\n<tone 7 0 0 0>\n" },
-    { "SFX skips busy channels", "SOUND 8,440,1:SFX 2,\"ML R\":SFX 2", "<tone 7 440 0.5 1>\n<sync 64>\n<wave 6 0>\n<env 6 off>\n<vib 6 0 0>\n<trem 6 0 0>\n<tone 6 0 0 0.5>\n<tone 6 0 0 0>\n" },
+    { "SFX without a channel uses the highest free effects channel", "SFX 2,\"ML R\":SFX 2", "<sync 32768>\n<wave 15 0>\n<env 15 off>\n<vib 15 0 0>\n<trem 15 0 0>\n<tone 15 0 0 0.5>\n<tone 15 0 0 0>\n" },
+    { "SFX skips busy effects channels", "SOUND 16,440,1:SFX 2,\"ML R\":SFX 2", "<tone 15 440 0.5 1>\n<sync 16384>\n<wave 14 0>\n<env 14 off>\n<vib 14 0 0>\n<trem 14 0 0>\n<tone 14 0 0 0.5>\n<tone 14 0 0 0>\n" },
+    { "SFX without a channel never takes a music channel", "SOUND 1,440,1:SOUND 2,440,1:SOUND 8,440,1:SFX 2,\"ML R\":SFX 2", "<tone 0 440 0.5 1>\n<tone 1 440 0.5 1>\n<tone 7 440 0.5 1>\n<sync 32768>\n<wave 15 0>\n<env 15 off>\n<vib 15 0 0>\n<trem 15 0 0>\n<tone 15 0 0 0.5>\n<tone 15 0 0 0>\n" },
+    { "SFX with all effects channels busy takes the last one", "FOR C=9 TO 16:SOUND C,440,1:NEXT C:SFX 2,\"ML R\":SFX 2", "<tone 8 440 0.5 1>\n<tone 9 440 0.5 1>\n<tone 10 440 0.5 1>\n<tone 11 440 0.5 1>\n<tone 12 440 0.5 1>\n<tone 13 440 0.5 1>\n<tone 14 440 0.5 1>\n<tone 15 440 0.5 1>\n<sync 32768>\n<wave 15 0>\n<env 15 off>\n<vib 15 0 0>\n<trem 15 0 0>\n<tone 15 0 0 0.5>\n<tone 15 0 0 0>\n" },
+    { "SFX on an effects channel by number", "SFX 1,\"ML R\":SFX 1,12", "<sync 2048>\n<wave 11 0>\n<env 11 off>\n<vib 11 0 0>\n<trem 11 0 0>\n<tone 11 0 0 0.5>\n<tone 11 0 0 0>\n" },
     { "SFX takes back its wave", "SFX 1,\"W1 ML R\":SFX 1,1", "<sync 1>\n<wave 0 0>\n<env 0 off>\n<vib 0 0 0>\n<trem 0 0 0>\n<wave 0 1>\n<tone 0 0 0 0.5>\n<tone 0 0 0 0>\n<wave 0 0>\n" },
     { "SFX takes back vibrato and tremolo", "SFX 1,\"ML ~5,1 ^4,0.5 R\":SFX 1,1", "<sync 1>\n<wave 0 0>\n<env 0 off>\n<vib 0 0 0>\n<trem 0 0 0>\n<vib 0 5 1>\n<trem 0 4 0.5>\n<tone 0 0 0 0.5>\n<tone 0 0 0 0>\n<vib 0 0 0>\n<trem 0 0 0>\n" },
     { "SFX waits for the release before it takes back the envelope", "SFX 1,\"ML X0,0.1,0,0.5 R\":SFX 1,1", "<sync 1>\n<wave 0 0>\n<env 0 off>\n<vib 0 0 0>\n<trem 0 0 0>\n<env 0 0 0.1 0 0.5>\n<tone 0 0 0 0.5>\n<tone 0 0 0 0>\n<tone 0 0 0 0.5>\n<env 0 off>\n" },
@@ -895,7 +904,7 @@ static const testcase_t cases[] = {
     { "SFX not defined",        "SFX 5,1",                                         "? Undefined effect\n" },
     { "SFX number range",       "SFX 65,\"C\"",                                   "? Illegal argument\n" },
     { "SFX number 0",           "SFX 0,\"C\"",                                    "? Illegal argument\n" },
-    { "SFX channel range",      "SFX 1,\"C\":SFX 1,9",                            "? Illegal argument\n" },
+    { "SFX channel range",      "SFX 1,\"C\":SFX 1,17",                            "? Illegal argument\n" },
     { "SFX string is checked when defined", "SFX 1,\"Z\"",                         "? Unknown music command 'Z'\n" },
     { "SFX with a string expression", "A$=\"ML \":SFX 1,A$+\"R\":SFX 1,2",         "<sync 2>\n<wave 1 0>\n<env 1 off>\n<vib 1 0 0>\n<trem 1 0 0>\n<tone 1 0 0 0.5>\n<tone 1 0 0 0>\n" },
     { "SFX empty string",       "SFX 1,\"\":SFX 1,1",                            "<sync 1>\n<wave 0 0>\n<env 0 off>\n<vib 0 0 0>\n<trem 0 0 0>\n<tone 0 0 0 0>\n" },
@@ -1699,7 +1708,7 @@ static int vm_getkey( struct _vm_t* vm, void* usrdata, int channel ) {
 }
 
 // the sound output: every call is logged as text; PLAYING( ch ) is true from a tone until SOUND OFF
-static bool snd_busy[8];
+static bool snd_busy[16];
 static int snd_bpm = 60;
 
 static void snd_reset( void ) {
@@ -1779,7 +1788,7 @@ static void snd_silence( void* usrdata, int chan ) {
     char text[40];
     snprintf( text, sizeof(text), "<silence %d>\n", chan );
     out_append( text );
-    for ( int i=0; i < 8; ++i ) {
+    for ( int i=0; i < 16; ++i ) {
         if ( chan < 0 || chan == i ) snd_busy[i] = false;
     }
 }

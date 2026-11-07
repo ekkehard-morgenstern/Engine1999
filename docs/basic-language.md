@@ -663,7 +663,7 @@ Design decisions I took (revisit if unwanted): the statements and functions are 
 
 ## Sound: `SOUND`, `PLAY`, `WAVE`, `TEMPO`, `PLAYING()`
 
-Statements of the language (`bascomp.ebnf` `sound-stmt`, `cgenprog.c`); everything is queued and returns at once. Channels are 1..8.
+Statements of the language (`bascomp.ebnf` `sound-stmt`, `cgenprog.c`); everything is queued and returns at once. Channels are 1..16: 1..8 are the music channels, 9..16 the effects channels that `SFX` without a channel uses (`docs/sound.md`).
 `SOUND ch, freq, beats [, vol]` (a tone of 20..20000 Hz, 0 = a rest; the tone ends after its beats; beats -1 = held until the next sound on the channel, beats 0 = a note of zero length (silent; only its state changes, e.g. ending a held tone); volume 0..1, default 0.5),
 `SOUND OFF [ch]`, `SOUND SYNC ch [, ch ...]`, `PLAY a$ [, b$ ...]` (a music string per voice, all start together; the music string language:
 notes `A`-`G`, `#`/`+`/`-`, lengths and dots, `R`, `O < >`, `L`, `T`, `V`, `W`, `ML MN MS`), `WAVE ch, w` (0 sine, 1 square, 2 triangle, 3 noise),

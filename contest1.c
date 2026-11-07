@@ -133,7 +133,7 @@ static const testcase_t cases[] = {
     { "LOCATE prints nothing without a terminal", 0, "", "LOCATE 5,5:PRINT 1\n",         "1\n", "", 0, false },
     { "COLOR is accepted",          0, "", "COLOR 3:PRINT 1\n",                         "1\n", "", 0, false },
     { "sound statements are silent", 0, "", "PLAY \"CDE\"\nSOUND 1,440,1\nPRINT PLAYING(1)\n", "0\n", "", 0, false },
-    { "sound arguments are still checked", 0, "", "SOUND 9,440,1\n",                    "", "? Illegal argument\n", 0, false },
+    { "sound arguments are still checked", 0, "", "SOUND 17,440,1\n",                    "", "? Illegal argument\n", 0, false },
     { "a graphics statement fails", 0, "", "GFX LAYER 1,ON\nPRINT 2\n",                 "2\n", "? Not available in the console host\n", 0, false },
     { "KEY() is not available (a terminal can't tell when a key is let go)", 0, "", "PRINT KEY(\"A\")\nPRINT 2\n", "2\n", "? KEY is not available in this host\n", 0, false },
     { "KEY(): a wrong name is checked first", 0, "", "PRINT KEY(\"BANANA\")\n", "", "? Illegal argument\n", 0, false },

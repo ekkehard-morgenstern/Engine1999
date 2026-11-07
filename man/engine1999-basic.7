@@ -171,7 +171,7 @@ AFTER, EVERY, WAIT, FRAME [n] (wait for the next n screen refreshes, 1 by defaul
 OPEN, CLOSE, PRINT #, INPUT #, LINE INPUT #, GET #, SEEK, FIELD, LSET, RSET, GETREC, PUTREC, KILL, RENAME, MKDIR, CHDIR, ADDRESS, FILES
 .TP
 .B Sound
-SOUND, PLAY, SFX, WAVE, TEMPO, PITCH, VOLUME, ENVELOPE, VIBRATO, TREMOLO
+SOUND, PLAY, SFX, WAVE, TEMPO, PITCH, VOLUME, ENVELOPE, VIBRATO, TREMOLO. There are 16 channels: 1 to 8 for music (PLAY voice n plays on channel n), 9 to 16 for sound effects (SFX without a channel takes the highest free one of them).
 .TP
 .B Graphics
 GFX, TXT, TILE, SPRITE and DESIGN, with their own sub\-words (layers, palettes, drawing, tiles, sprites with collisions and sprite groups, BMP picture files for layers, sprites, tiles and palettes (LOAD, SAVE, PALLOAD, PALSAVE), text areas), and ON COLLISION. A program has the sprites 0 to 247; 248 to 255 belong to the engine (the mouse pointer is 255) and give "Illegal argument".
