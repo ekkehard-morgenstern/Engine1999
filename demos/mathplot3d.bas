@@ -2,6 +2,7 @@
 2 ' An executable made with BUILD contains the Engine1999 runtime: the Engine1999 Runtime Exception
 3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
 4 ' in the executable (it shows with the command line option --engine1999-about).
+5 COLOR 140: ' bright text, so the Ready prompt stays readable after a break
 10 ' A rotating 3D wireframe of Z=2*SIN(2R)/(1+R). Two layers take turns (draw hidden, then show): no flicker. Any key ends.
 20 RAD:CLS:DIM Z(21,21),PX(21,21),PY(21,21):T=0.9:CT=COS(T):ST=SIN(T):GFX BACKDROP RGB(0,0,24)
 30 FOR L=0 TO 3 STEP 3:FOR I=0 TO 63:H=I/63*4.2

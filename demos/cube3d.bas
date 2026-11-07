@@ -2,6 +2,7 @@
 2 ' An executable made with BUILD contains the Engine1999 runtime: the Engine1999 Runtime Exception
 3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
 4 ' in the executable (it shows with the command line option --engine1999-about).
+5 COLOR 140: ' bright text, so the Ready prompt stays readable after a break
 10 ' A spinning solid cube: six colored faces, lit by a light, pulsing in size; hidden faces are skipped, the rest is outlined and filled with GFX PAINT. Two layers take turns. Any key ends.
 20 RAD:CLS:DIM VX(8),VY(8),VZ(8),SX(8),SY(8),FC(6,4):GFX BACKDROP RGB(0,0,24)
 30 FOR L=0 TO 3 STEP 3:GFX PALETTE L,80,RGB(255,255,255):FOR F=0 TO 5:K=F+1:FOR S=0 TO 9:Q=0.25+0.75*S/9

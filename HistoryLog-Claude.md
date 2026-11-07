@@ -13,7 +13,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-- **2026-11-07 — `demos/mandel.bas`** (new, 16 lines + the 4 license lines, one screen): Mandelbrot zoom into the Seahorse Valley (-0.743643887037151 + 0.13182590420533i): 160 x 75 cells of 4 x 4 pixels computed in BASIC (`WHILE` escape loop) and painted as they are done (top to bottom, over the previous image), 64 color cycling palette (`GFX PALETTE` + `RGB`), black inside, each step halves the view (x1 .. x16384, then restarts) and raises the iteration limit (60 + 12 per step); label `zoom xN` after each image (`GFX TEXT`, `STR$`). Row in `demos/README.md`. First version zoomed in with a truncated center and too few iterations (mostly black at depth): fixed. Checked in the window under Xvfb + metacity + xvkbd (six screenshots: spirals and mini-Mandelbrots); one image takes a few seconds under Xvfb; no source change, tests not run. Test processes cleaned up.
+- **2026-11-07 — bright text in this session's demos** (owner's request: the `Ready.` prompt was unreadable after ESC): line `5 COLOR 140` (white in the default palette, as the other demos use it) added after the license lines of `mathplot.bas`, `mathplot3d.bas`, `cube3d.bas`, `bounce.bas` and `mandel.bas`. Checked with `bounce.bas` under Xvfb + metacity + xvkbd: after ESC, `? Break in line 125` and `Ready.` are white on the dark backdrop. The other demos were not touched. No source change, tests not run. Test processes cleaned up.
 
 ## Log
 
@@ -1404,3 +1404,8 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 - New `demos/bounce.bas` (21 lines incl. two `GOSUB` routines + the 4 license lines): 7 balls of random size, gravity, floor / wall bounces that lose energy, floor friction, elastic ball-ball collisions (mass ~ radius squared, overlap pushed apart), re-kicked every 500 frames; balls shaded with three `GFX CIRCLE` + `GFX PAINT` layers; two layers (0 and 3) take turns (no flicker). Row in `demos/README.md`.
 - Found while testing: `DIM` wants constant dimensions (`DIM X(N)` gave "Number expected"); a `NEXT` must not share a line with a single-line `IF ... THEN` (swallowed): a missing `NEXT J` was added on its own line.
 - Checked in the window under Xvfb + metacity + xvkbd (screenshots); no source change, regression tests not run.
+
+### d690497 — 2026-11-07 01:39:48 +0100 — "Mandelbrot zoom demo program, by Claude Code"
+3 files, +28/-1.
+- New `demos/mandel.bas` (16 lines + the 4 license lines): Mandelbrot zoom into the Seahorse Valley (-0.743643887037151 + 0.13182590420533i), 160 x 75 cells of 4 x 4 pixels computed in BASIC and painted as they are done, 64 color cycling palette, black inside, each step halves the view (x1 .. x16384, then restarts) and raises the iteration limit (60 + 12 per step); label `zoom xN` (`GFX TEXT`, `STR$`). Row in `demos/README.md`.
+- First version zoomed in with a truncated center and too few iterations (mostly black at depth): fixed before the commit. Checked in the window under Xvfb + metacity + xvkbd (six screenshots); no source change, tests not run.

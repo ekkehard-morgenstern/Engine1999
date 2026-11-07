@@ -2,6 +2,7 @@
 2 ' An executable made with BUILD contains the Engine1999 runtime: the Engine1999 Runtime Exception
 3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
 4 ' in the executable (it shows with the command line option --engine1999-about).
+5 COLOR 140: ' bright text, so the Ready prompt stays readable after a break
 10 ' Math plots: a shaded surface (ripples) and graphs of SIN, COS, SQR, LOG, ATN. Any key ends.
 20 RAD:CLS:GFX LAYER 3,ON:GFX CLEAR:GFX BACKDROP RGB(0,0,24)
 30 FOR I=0 TO 63:T=I/63*6.283:GFX PALETTE 3,16+I,RGB(INT(127+127*SIN(T)),INT(127+127*SIN(T+2.1)),INT(127+127*SIN(T+4.2))):NEXT I

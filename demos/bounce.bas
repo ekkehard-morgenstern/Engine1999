@@ -2,6 +2,7 @@
 2 ' An executable made with BUILD contains the Engine1999 runtime: the Engine1999 Runtime Exception
 3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
 4 ' in the executable (it shows with the command line option --engine1999-about).
+5 COLOR 140: ' bright text, so the Ready prompt stays readable after a break
 10 ' Bouncing balls: gravity, bounces that lose energy, and elastic collisions of balls of different mass. Shaded with GFX CIRCLE + GFX PAINT. Two layers take turns. Any key ends.
 20 RAD:RANDOMIZE:CLS:N=7:DIM X(7),Y(7),VX(7),VY(7),R(7),M(7):GFX BACKDROP RGB(0,0,24):GFX TARGET 3:B=3:GFX LAYER 0,OFF:GFX LAYER 3,OFF
 30 FOR L=0 TO 3 STEP 3:GFX PALETTE L,80,RGB(255,255,255):GFX PALETTE L,81,RGB(90,100,130):FOR I=0 TO N-1:H=I*0.9
