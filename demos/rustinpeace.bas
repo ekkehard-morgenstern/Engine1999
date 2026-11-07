@@ -7,7 +7,7 @@
 7 LOAD LIBRARY "input"
 8 LOAD LIBRARY "hiscore"
 9 LOAD LIBRARY "text"
-10 ' BEING A RUSTBALL - a labyrinth game for one to four players, for Engine1999.
+10 ' RUST IN PEACE - a labyrinth game for one to four players, for Engine1999.
 20 ' You are a rust ball, and the labyrinth is full of construction workers. They run away when they see you, so creep up on one from behind: whoever you touch
 30 ' on the back is covered in rust, turns into a statue and crumbles. Screws, nuts and bolts give you power: five of them make you one size bigger (up to three
 40 ' times as big, and the bigger you are the faster you roll, and a ball of size 2 or 3 crushes the walls: keep pushing against one for a moment).
@@ -129,7 +129,7 @@
 1200 END FUNC
 1210 ' ====================================================================== main program
 1220 CALL INIT
-1230 HI=FN HS_LOAD("rustball.hi")
+1230 HI=FN HS_LOAD("rustinpeace.hi")
 1240 HI0=HI
 1250 QT=0
 1260 REPEAT
@@ -137,13 +137,13 @@
 1280   IF QT=0 THEN CALL PLAYGAME:QT=0
 1290   IF HI>HI0 THEN
 1300     ON ERROR GOTO HIERR2
-1310     CALL HS_SAVE("rustball.hi",HI)
+1310     CALL HS_SAVE("rustinpeace.hi",HI)
 1320     LABEL HIDONE2
 1330     ON ERROR OFF
 1340   END IF
 1350   HI0=HI
 1360 UNTIL QT=1
-1370 CALL TX_BYE("BEING A RUSTBALL")
+1370 CALL TX_BYE("RUST IN PEACE")
 1380 END
 1390 ' the library hiscore reads the best score (a missing or empty file is 0, no error); a file that can't be written is ignored: the error handler is here in the main program, where RESUME <label> can continue
 1400 LABEL HIERR2
@@ -1527,8 +1527,8 @@
 15180   CALL SPAWNFRUIT(0):CALL SPAWNFRUIT(1)
 15190   CX=1:CY=1:OCOL=-99
 15200   CALL SHOWCAM
-15210   CALL BIGTEXT(10,"BEING A",3,4)
-15220   CALL BIGTEXT(60,"RUSTBALL",4,6)
+15210   CALL BIGTEXT(10,"RUST IN",3,4)
+15220   CALL BIGTEXT(60,"PEACE",4,6)
 15230   CALL TXTAT(9,13,"  Sneak up on the workers from behind and cover them in rust!       ",200)
 15240   CALL TXTAT(9,14,"  Screws, nuts and bolts make you bigger and faster. Beware of the  ",200)
 15250   CALL TXTAT(9,15,"  foremen and their hoses, and drying out. Big balls crush walls.   ",200)

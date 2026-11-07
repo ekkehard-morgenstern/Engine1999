@@ -34,8 +34,8 @@ Package: engine1999-games
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: demo games written in Engine1999 BASIC
- Fruit Invaders (I to III), The Long Climb (I and II), Madrun (I and II),
- Eternal River (I and II), Being a Rustball, and Hunt the Wumpus (a text
+ Orchard Defense (I to III), The Long Climb (I and II), Madrun (I and II),
+ Eternal River (I and II), Rust in Peace, and Hunt the Wumpus (a text
  game for any terminal), each built into a program of its own
  (engine1999-<name>) with its own manual page. The sources are in the
  engine1999 package (/usr/share/engine1999/demos).

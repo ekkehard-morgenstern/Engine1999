@@ -134,7 +134,7 @@
 1300 REPEAT:N=N-100:UNTIL N<0
 1310 CALL OUT("N ended as "+STR$(N))
 1320 CALL SAY("",200)
-1330 CALL SAY("EXIT leaves a loop early, ITERATE goes to the next round (see demos/fruit2.bas).",200)
+1330 CALL SAY("EXIT leaves a loop early, ITERATE goes to the next round (see demos/orchard2.bas).",200)
 1340 CALL KEYWAIT
 1350 RETURN
 1360 LABEL L3
@@ -323,7 +323,7 @@
 3190 PRINT
 3200 CALL OUT("the main program only waited, "+STR$(CNT)+" ticks came by themselves")
 3210 CALL SAY("",200)
-3220 CALL SAY("The big games use timers for their music and for events (demos/climb.bas, fruit2.bas).",200)
+3220 CALL SAY("The big games use timers for their music and for events (demos/climb.bas, orchard2.bas).",200)
 3230 CALL KEYWAIT
 3240 RETURN
 3250 LABEL TICK
@@ -356,7 +356,7 @@
 3520 CALL SAY("Old style, line numbers and GOSUB (it runs in the console, too):",201)
 3530 CALL SAY("   demos/wumpus.bas  (Hunt the Wumpus)",200)
 3540 CALL SAY("Games made of procedures and libraries:",201)
-3550 CALL SAY("   demos/fruit2.bas  climb.bas  madrun.bas  river.bas   and demos/lib/*.lib",200)
+3550 CALL SAY("   demos/orchard2.bas  climb.bas  madrun.bas  river.bas   and demos/lib/*.lib",200)
 3560 CALL SAY("",200)
 3570 CALL SAY("demos/README.md tells what each demo shows and in which line to look.",204)
 3580 CALL SAY("docs/basic-language.md is the manual, docs/grammar.html the whole syntax on one page.",204)

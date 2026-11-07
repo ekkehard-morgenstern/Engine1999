@@ -565,8 +565,8 @@ static void test_own( void ) {
     const char* e = 0;
     struct stat st;
 
-    iodev_set_program_name( "/games/engine1999-rustball" );
-    check( "name: prefix engine1999- is dropped", strcmp( iodev_program_name(), "rustball" ) == 0 );
+    iodev_set_program_name( "/games/engine1999-rustinpeace" );
+    check( "name: prefix engine1999- is dropped", strcmp( iodev_program_name(), "rustinpeace" ) == 0 );
     iodev_set_program_name( "demos/Rust.Ball.bas" );
     check( "name: the last extension is dropped", strcmp( iodev_program_name(), "Rust.Ball" ) == 0 );
     iodev_set_program_name( "x/engine1999" );

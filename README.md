@@ -4,7 +4,7 @@ A 2D game engine in C (SDL2) that behaves like a home computer of the late 1980s
 You type a program, `RUN` it, and it can use an 80x25 text screen, a tile layer, sprites and a free-drawing graphics layer, a software synthesizer, files and devices.
 When it is done, `BUILD` turns it into a standalone executable.
 
-![Fruit Invaders II, a demo game written in Engine1999 BASIC: a gardener throws balls at marching fruit](docs/images/fruit2-game.png)
+![Orchard Defense II, a demo game written in Engine1999 BASIC: a gardener throws balls at marching fruit](docs/images/orchard2-game.png)
 
 > **Status: work in progress.** The engine and the language are still changing (statements may be renamed or reworked before a 1.0), and there are rough edges, but it is
 > usable today, and the demos below show what it can do. If you like retro computing, BASIC or small games, you may find it useful already. Open work is listed in
@@ -37,7 +37,7 @@ When it is done, `BUILD` turns it into a standalone executable.
 (cursor keys, PgUp/PgDn, Ctrl+Home/End, Ctrl+Y deletes a line) and with the **mouse**: click into the text to put the cursor there, turn the wheel, click or hold the arrows of the
 scroll bar, drag its thumb. The same editor runs in the console version, in a terminal.
 
-![The full-screen editor showing procedures of Fruit Invaders II](docs/images/editor.png)
+![The full-screen editor showing procedures of Orchard Defense II](docs/images/editor.png)
 
 At the `Ready.` prompt the **screen itself is the editor**, like on a Commodore 64: `LIST` something, move the cursor up into the listing, change a line and press RETURN to enter it.
 The red status line shows the mode (overwrite or insert, F12 switches), the position and the BASIC line number; the screen rows of the line under the cursor are highlighted.
@@ -64,9 +64,9 @@ The sprite and tile editor, itself a BASIC program built on the UI statements, i
 
 ### Tools: edit while the program waits
 
-The editors are *tools* (the `tools/` folder): `TOOL "spriteed"` runs one without losing the program you are working on, as on the home computers of old, where you stopped a game, changed its sprites and went on. Here `fruit2` is running; ESC stops it, `TOOL "spriteed"` opens the sprite editor on the pictures the game has loaded (the cherry is picture 1), a few pixels get a new color, and Store puts the picture back into the engine:
+The editors are *tools* (the `tools/` folder): `TOOL "spriteed"` runs one without losing the program you are working on, as on the home computers of old, where you stopped a game, changed its sprites and went on. Here `orchard2` is running; ESC stops it, `TOOL "spriteed"` opens the sprite editor on the pictures the game has loaded (the cherry is picture 1), a few pixels get a new color, and Store puts the picture back into the engine:
 
-![The sprite editor opened with TOOL over the stopped game fruit2, a few pixels of the cherry painted cyan; the game's own sprites are still on the screen](docs/images/tool-spriteed.png)
+![The sprite editor opened with TOOL over the stopped game orchard2, a few pixels of the cherry painted cyan; the game's own sprites are still on the screen](docs/images/tool-spriteed.png)
 
 Quit returns to the prompt with the game's graphics and variables untouched, and `CONT` goes on playing:
 
@@ -103,21 +103,21 @@ LIST
 SAVE "hello"
 ```
 
-Then try the demos: `LOAD "demos/fruit2"` and `RUN`. After `make install` the games are programs of their own (and `engine1999-wumpus`, a text game for any terminal): `engine1999-fruit`, `-fruit2`, `-fruit3`, `-climb`, `-climb2`, `-madrun`, `-madrun2`, `-river`, `-river2`, `-rustball` and `-glyphminer` (each with a manual page, e.g. `man engine1999-rustball`).
+Then try the demos: `LOAD "demos/orchard2"` and `RUN`. After `make install` the games are programs of their own (and `engine1999-wumpus`, a text game for any terminal): `engine1999-orchard`, `-orchard2`, `-orchard3`, `-climb`, `-climb2`, `-madrun`, `-madrun2`, `-river`, `-river2`, `-rustinpeace` and `-glyphminer` (each with a manual page, e.g. `man engine1999-rustinpeace`).
 
 | Demo | |
 |---|---|
-| `demos/fruit2.bas` | **Fruit Invaders II**: a gardener throws balls at marching fruit under a sunny sky with drifting clouds, hills and a sun; shaded sprites, a bird, round bushes, music and effects (keys: A/D walk, SPACE throws, P pauses, Q quits) |
+| `demos/orchard2.bas` | **Orchard Defense II**: a gardener throws balls at marching fruit under a sunny sky with drifting clouds, hills and a sun; shaded sprites, a bird, round bushes, music and effects (keys: A/D walk, SPACE throws, P pauses, Q quits) |
 | `demos/climb.bas` | **The Long Climb**, a jump and run game: climb a steel tower, drill holes to trap monsters, reach the ice cream stand on the roof |
-| `demos/fruit3.bas` | **Fruit Invaders III**: the top-notch edition for one or two players: a day that passes (dawn to night), wind, swaying fruit, coconuts, a balloon that drops power-ups, and a giant melon that splits in two every fifth wave |
+| `demos/orchard3.bas` | **Orchard Defense III**: the top-notch edition for one or two players: a day that passes (dawn to night), wind, swaying fruit, coconuts, a balloon that drops power-ups, and a giant melon that splits in two every fifth wave |
 | `demos/climb2.bas`, `demos/madrun2.bas`, `demos/river2.bas` | Second editions of the games with new graphics: a giant ice cream cone and falling bolts, a traffic helicopter and pigeons, a hot air balloon and gulls |
 | `demos/madrun.bas` | **MADRUN**: a crossing game for one to four players, with a phone booth, traffic and a rescue ambulance |
 | `demos/river.bas` | **ETERNAL RIVER**: a scroll-down boat game over an endless river, with bridges, swimmers and wraiths on the banks |
 | `demos/glyphminer.bas` | **GLYPH MINER**: a cave digging game on the text screen with redefined characters for the cave, sprites for the miner and the enemies, sound effects and music |
 | `demos/y2k.bas` | **Y2K COUNTDOWN**: a silly demo in the style of 1999: copper bars, starfield, plasma, vector balls, tunnel, sine scroller, parallax landscape and a millennium bug finale, with a chip tune the program makes by itself (palette cycling, sprites, scrolled tiles, eight music channels); window only |
-| `demos/rustball.bas` | **BEING A RUSTBALL**: a labyrinth game for one to four players: you are a rust ball, sneak up on the workers from behind, grow by eating nuts and bolts, and crush walls when you are big |
+| `demos/rustinpeace.bas` | **RUST IN PEACE**: a labyrinth game for one to four players: you are a rust ball, sneak up on the workers from behind, grow by eating nuts and bolts, and crush walls when you are big |
 | `tools/spriteed.bas`, `fonted.bas`, `musiced.bas`, `sfxed.bas` | The sprite and tile editor, the text font editor, the music editor and the sound effect editor (UI programs); run them with `TOOL "name"` |
-| `demos/fruit.bas` | The first and simplest Fruit Invaders, written to be read: the same game with fewer features |
+| `demos/orchard.bas` | The first and simplest Orchard Defense, written to be read: the same game with fewer features |
 | `demos/gfx.bas` | The graphics layers: palettes, drawing, tiles, `DESIGN` pictures, sprites |
 | `demos/mouse.bas` | A small paint program for the mouse: draw, erase, choose pens from a color bar (the pointer changes its shape) |
 | `demos/keys.bas` | A keyboard that lights up the keys you hold down: `KEY("name")` knows when you let go, and several keys at once |
@@ -127,13 +127,13 @@ Then try the demos: `LOAD "demos/fruit2"` and `RUN`. After `make install` the ga
 
 ![The graphics demo: layers, drawing, a sprite](docs/images/graphics.png)
 
-![Fruit Invaders, the first and simplest version of the game: a gardener, balls, seeds and round bushes](docs/images/fruit.png)
+![Orchard Defense, the first and simplest version of the game: a gardener, balls, seeds and round bushes](docs/images/orchard.png)
 
-![Fruit Invaders III at sunset: coconuts, a balloon that drops a power-up crate, wind and clouds](docs/images/fruit3.png)
+![Orchard Defense III at sunset: coconuts, a balloon that drops a power-up crate, wind and clouds](docs/images/orchard3.png)
 
-![Being a Rustball: a scrolling labyrinth, a rust ball, workers, bolts and nuts](docs/images/rustball.png)
+![Rust in Peace: a scrolling labyrinth, a rust ball, workers, bolts and nuts](docs/images/rustinpeace.png)
 
-![The title screen of Being a Rustball](docs/images/rustball-title.png)
+![The title screen of Rust in Peace](docs/images/rustinpeace-title.png)
 
 ![Eternal River II: a boat on the endless river, a bridge with traffic](docs/images/river2.png)
 
@@ -150,11 +150,11 @@ See [demos/README.md](demos/README.md) for all of them. The language is document
 ## Standalone executables
 
 ```
-LOAD "demos/fruit2"
-BUILD "fruit2"
+LOAD "demos/orchard2"
+BUILD "orchard2"
 ```
 
-and `./fruit2` starts the game without the Engine. `BUILD` uses only the system linker (`ld`; no compiler is needed to build programs), finds what it needs on the system itself,
+and `./orchard2` starts the game without the Engine. `BUILD` uses only the system linker (`ld`; no compiler is needed to build programs), finds what it needs on the system itself,
 and links SDL2 and the C library dynamically, so the person who runs the program needs `libSDL2` installed. `BUILD "name", CONSOLE` makes a program without a window that needs **no SDL2 at all** (for servers and scripts: it reads standard input, writes standard output and returns its exit code). To build you need `ld` (binutils), the development files of the C library and SDL2, and `engine1999.o` and `engine.lib` next to `engine1999` (`make` leaves them there). See [docs/basic-language.md](docs/basic-language.md) (section `BUILD`).
 
 ## License

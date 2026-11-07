@@ -220,8 +220,8 @@ EVERY OFF [timer]                      clear all EVERY timers (or only that one)
 `BUILD name$` makes an executable file `name$` (no extension is added) from the stored program, in direct mode or inside a program (the run goes on). The executable starts the program at once, in the Engine's window, without banner and `Ready.` prompt; `RUN`, `LOAD`, `CHAIN` and `MERGE` inside it work as usual (they load other files), `EDIT` and `MONITOR` end the program, there is no direct mode.
 
 ```
-LOAD "demos/fruit2"
-BUILD "fruit2"          ' then, in a shell:  ./fruit2
+LOAD "demos/orchard2"
+BUILD "orchard2"          ' then, in a shell:  ./orchard2
 BUILD "report", CONSOLE ' a program without a window: needs no SDL2 (see below)
 ```
 

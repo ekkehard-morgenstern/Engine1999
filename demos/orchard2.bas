@@ -7,13 +7,13 @@
 30 LOAD LIBRARY "input"
 40 LOAD LIBRARY "hiscore"
 50 LOAD LIBRARY "text"
-60 ' FRUIT INVADERS II - the middle edition of the fruit games, written with procedures. Read Fruit Invaders (fruit.bas) first: this is the same game
+60 ' ORCHARD DEFENSE II - the middle edition of the fruit games, written with procedures. Read Orchard Defense (orchard.bas) first: this is the same game
 70 ' with more of the engine. A gardener walks on the grass under a sunny sky and throws balls at the fruit that marches down; the fruit spits seeds back.
 80 ' Keys: LEFT / RIGHT or A / D walk (only while the key is held), SPACE or UP throws a ball, P = pause, Q = quit.
 90 ' Game controller (optional, JOY): the D-pad or the left stick walks, A or the right trigger throws, START pauses, BACK quits.
 100 ' Hit the fruit before it reaches the bushes. Cherries are worth 50 points, strawberries 40, apples 30, oranges 20, lemons 10, the bird that
 110 ' flies by 50 to 300. Now and then a banana falls out of a fruit: catch it with the gardener for rapid fire (two balls at a time).
-120 ' What is new compared to Fruit Invaders (fruit.bas):
+120 ' What is new compared to Orchard Defense (orchard.bas):
 130 '   * PROC / FUNC / CALL / LOCAL instead of GOSUB (the names of the procedures say what the game does); EXIT PROC, FOR EACH, ITERATE, EXIT,
 140 '     DOWNTO, a LOCAL array and an array parameter (the music), RESUME NEXT / RESUME <label> with ON ERROR (the high score file)
 150 '   * shaded sprites with faces and two animation frames, engine-driven animations (SPRITE SEQ / ANIM): the gardener has a walking cycle, a throwing
@@ -22,7 +22,7 @@
 180 '     (TILE SCROLL, the map is refilled from a longer world every 16 pixels) and two cloud sprites on paths (SPRITE n,PATH, SPRITE n,SIZE)
 190 '   * seeds that turn while they fall and vanish in the grass, round bushes, the fruit glides from step to step (MOVETO) and rustles
 200 '   * music while you play (two voices on their own channels, timed by EVERY, getting faster with every wave), more sound effects
-210 '   * AFTER timer for the bird, a high score that is kept in the file fruit2.hi
+210 '   * AFTER timer for the bird, a high score that is kept in the file orchard2.hi
 220 '
 230 ' --- global variables -----------------------------------------------------------------------------------------------------------------
 240 ' SC score, HI high score, LV lives, WV wave, NX score of the next extra life, OV game over, QT quit, LANDED the fruit has landed
@@ -42,7 +42,7 @@
 380 END FUNC
 390 ' ====================================================================== main program
 400 CALL INIT
-410 HI=FN HS_LOAD("fruit2.hi")
+410 HI=FN HS_LOAD("orchard2.hi")
 420 QT=0
 430 REPEAT
 440   CALL TITLE
@@ -50,12 +50,12 @@
 460   IF SC>=HI AND SC>0 THEN
 470     HI=SC
 480     ON ERROR GOTO HIERR2
-490     CALL HS_SAVE("fruit2.hi",HI)
+490     CALL HS_SAVE("orchard2.hi",HI)
 500     LABEL HIDONE2
 510     ON ERROR OFF
 520   END IF
 530 UNTIL QT=1
-540 CALL TX_BYE("FRUIT INVADERS II")
+540 CALL TX_BYE("ORCHARD DEFENSE II")
 550 END
 560 ' the library hiscore reads the high score (a missing or empty file is 0, no error); a file that can't be written is ignored: the error handler is here in the main program, where RESUME <label> can continue (inside a PROC the frame would be gone)
 570 LABEL HIERR2
@@ -1551,8 +1551,8 @@
 15530 PROC TITLE
 15540   LOCAL I,T,K$,F
 15550   CALL CLEARALL
-15560   CALL BIGTEXT(14,"FRUIT",10,8)
-15570   CALL BIGTEXT(112,"INVADERS II",12,4)
+15560   CALL BIGTEXT(14,"ORCHARD",10,8)
+15570   CALL BIGTEXT(112,"DEFENSE II",12,4)
 15580   FOR I=0 TO 5
 15590     SPRITE I,ON
 15600   NEXT I

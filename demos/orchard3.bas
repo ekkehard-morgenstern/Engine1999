@@ -7,14 +7,14 @@
 30 LOAD LIBRARY "input"
 40 LOAD LIBRARY "hiscore"
 50 LOAD LIBRARY "text"
-60 ' FRUIT INVADERS III - the top-notch edition of the fruit games: Fruit Invaders II with a day that passes, wind, swaying fruit, power-ups and two players.
+60 ' ORCHARD DEFENSE III - the top-notch edition of the fruit games: Orchard Defense II with a day that passes, wind, swaying fruit, power-ups and two players.
 70 ' Keys: one player: LEFT / RIGHT or A / D walk (only while the key is held), SPACE, UP or W throws a ball. Two players: player 1 A / D and W (or SPACE), pad 1;
 80 ' player 2 LEFT / RIGHT and UP (or RETURN), pad 2. P = pause, Q = quit, M = music on / off.
 90 ' Game controller (optional, JOY): the D-pad or the left stick walks, A or the right trigger throws, START pauses, BACK quits.
 100 ' Hit the fruit before it reaches the bushes. Cherries are worth 50 points, strawberries 40, apples 30, oranges 20, lemons 10, coconuts 100 (they take two hits),
 110 ' the bird 50 to 300, the balloon 200. Bananas give rapid fire, the balloon drops crates with a power-up: two balls at once, a big ball or an umbrella
 120 ' that keeps the seeds off. Every fifth wave a giant melon comes; when it is half beaten it splits in two.
-130 ' What is new compared to Fruit Invaders II (fruit2.bas):
+130 ' What is new compared to Orchard Defense II (orchard2.bas):
 140 '   * the day passes with the waves: dawn, morning, noon, afternoon, sunset and night; the palettes of the sky, the hills, the grass and the bushes fade
 150 '     from one time of day to the next (GFX PALETTE in steps), the sun moves, at night there are stars, a moon, fireflies and shooting stars
 160 '   * wind: a windsock (its picture follows the wind) shows it, the seeds drift with it and the tile clouds drift with it; the clouds also move a little
@@ -69,7 +69,7 @@
 650 END FUNC
 660 ' ====================================================================== main program
 670 CALL INIT
-680 HI=FN HS_LOAD("fruit3.hi")
+680 HI=FN HS_LOAD("orchard3.hi")
 690 QT=0
 700 ON KEY GOSUB KEYEVENT
 710 ON SPRITE GOSUB SPRITEEVENT
@@ -79,12 +79,12 @@
 750   IF SC>=HI AND SC>0 THEN
 760     HI=SC
 770     ON ERROR GOTO HIERR2
-780     CALL HS_SAVE("fruit3.hi",HI)
+780     CALL HS_SAVE("orchard3.hi",HI)
 790     LABEL HIDONE2
 800     ON ERROR OFF
 810   END IF
 820 UNTIL QT=1
-830 CALL TX_BYE("FRUIT INVADERS III")
+830 CALL TX_BYE("ORCHARD DEFENSE III")
 840 END
 850 ' the library hiscore reads the high score (a missing or empty file is 0, no error); a file that can't be written is ignored: the error handler is here in the main program, where RESUME <label> can continue (inside a PROC the frame would be gone)
 860 LABEL HIERR2
@@ -2454,8 +2454,8 @@
 24550   CALL NIGHTOFF
 24560   CALL TODAPPLY(1,1,1)
 24570   CALL GROUND
-24580   CALL BIGTEXT(14,"FRUIT",10,8)
-24590   CALL BIGTEXT(112,"INVADERS III",12,4)
+24580   CALL BIGTEXT(14,"ORCHARD",10,8)
+24590   CALL BIGTEXT(112,"DEFENSE III",12,4)
 24600   FOR I=0 TO 6
 24610     SPRITE I,ON
 24620   NEXT I

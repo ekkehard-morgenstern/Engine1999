@@ -695,7 +695,7 @@ static bool own_name_valid( const char* n ) {
 }
 
 // the name of the program: the base name of its file without the extension and without a leading "engine1999-" (the name of an installed
-// game), so that "rustball.bas" and the executable "engine1999-rustball" share their files
+// game), so that "rustinpeace.bas" and the executable "engine1999-rustinpeace" share their files
 void iodev_set_program_name( const char* file ) {
     own_name[0] = '\0';
     if ( file == 0 || file[0] == '\0' ) {

@@ -120,7 +120,7 @@ ADDRESS [driver]     ADDRESS$                     chooses / returns the default 
 - **`config:` and `local:`** (2026-11-06, roadmap item 71): a program's own files. `config:` is the tree below `$XDG_CONFIG_HOME/<name>/` (default
   `~/.config/<name>/`), `local:` the tree below `$XDG_DATA_HOME/<name>/` (default `~/.local/share/<name>/`). `<name>` is the name of the *running program*:
   the base name of the file it was loaded from (or of the `BUILD` executable) without the extension and without a leading `engine1999-` / `engine1999c-`
-  (`iodev_set_program_name()`, called by the REPL when a program starts, cleared when it ends), so `rustball.bas` and `engine1999-rustball` use the
+  (`iodev_set_program_name()`, called by the REPL when a program starts, cleared when it ends), so `rustinpeace.bas` and `engine1999-rustinpeace` use the
   same folder. A name is valid if it has 1 to 64 letters, digits, `-`, `_`, `.` and does not start with a dot; **`engine1999` is reserved** (case does not
   matter): `~/.config/engine1999/grants` is the security policy's permission store and must never be inside a program's tree.
   - The folder is **created when it is needed** (`mkdir -p`, mode 0700).

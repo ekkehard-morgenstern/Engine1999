@@ -2,7 +2,7 @@
 2 ' An executable made with BUILD contains the Engine1999 runtime: the Engine1999 Runtime Exception
 3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
 4 ' in the executable (it shows with the command line option --engine1999-about).
-10 ' FRUIT INVADERS - the simple edition: an easy to read game for Engine1999 (see fruit2 and fruit3 for the bigger ones).
+10 ' ORCHARD DEFENSE - the simple edition: an easy to read game for Engine1999 (see orchard2 and orchard3 for the bigger ones).
 20 ' A gardener walks on the grass under a blue sky and throws balls at the fruit that marches down from the trees.
 30 ' The fruit spits seeds back. Round bushes protect the gardener and lose their leaves where a seed or a ball hits.
 40 ' Keys: LEFT / RIGHT or A / D walk (only while the key is held), SPACE or UP throws a ball (hold it for rapid fire), P = pause, Q = quit.
@@ -576,8 +576,8 @@
 5720 ' ---------------------------------------------------------------------------------------------- the game
 5730 LABEL TITLE
 5740 GOSUB CLEARALL
-5750 GFX TEXT 200,20,"FRUIT",137,6,6
-5760 GFX TEXT 160,100,"INVADERS",110,5,5
+5750 GFX TEXT 152,20,"ORCHARD",137,6,6
+5760 GFX TEXT 180,100,"DEFENSE",110,5,5
 5770 SPRITE 0,ON:SPRITE 0,176,172,0
 5780 SPRITE 1,ON:SPRITE 1,272,172,2
 5790 SPRITE 2,ON:SPRITE 2,368,172,4
@@ -643,5 +643,5 @@
 6390 SOUND OFF
 6400 GFX RESET
 6410 CLS
-6420 PRINT "Thanks for playing FRUIT INVADERS!"
+6420 PRINT "Thanks for playing ORCHARD DEFENSE!"
 6430 END

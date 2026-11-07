@@ -24,12 +24,12 @@ asmtest1
 synthtest1
 iotest1
 gfxtest1
-fruit2.hi
-fruit3.hi
+orchard2.hi
+orchard3.hi
 climb2.hi
 madrun2.hi
 river2.hi
-rustball.hi
+rustinpeace.hi
 glyphminer.hi
 climb.hi
 buildtest1
@@ -57,3 +57,7 @@ config.mk
 engine1999_*.orig.tar.gz
 residue/
 
+fruit.hi
+fruit2.hi
+fruit3.hi
+rustball.hi

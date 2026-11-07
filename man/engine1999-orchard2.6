@@ -5,16 +5,16 @@
 .\" by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It is distributed WITHOUT ANY
 .\" WARRANTY. ADDITIONAL PERMISSION (GPLv3 section 7): the Engine1999 Runtime Exception applies, see the file LICENSE-EXCEPTION.
 .\"
-.\" Keep this page current: it describes the demo game demos/fruit2.bas (an executable made with BUILD, installed by "make install").
-.TH ENGINE1999-FRUIT2 6 "November 2026" "Engine 1999 @VERSION@" "Engine1999 Manual"
+.\" Keep this page current: it describes the demo game demos/orchard2.bas (an executable made with BUILD, installed by "make install").
+.TH ENGINE1999-ORCHARD2 6 "November 2026" "Engine 1999 @VERSION@" "Engine1999 Manual"
 .SH NAME
-engine1999-fruit2 \- Fruit Invaders II, a gardener throws balls at marching fruit, with music
+engine1999-orchard2 \- Orchard Defense II, a gardener throws balls at marching fruit, with music
 .SH SYNOPSIS
-.B engine1999-fruit2
+.B engine1999-orchard2
 .SH DESCRIPTION
-Fruit Invaders II is the middle edition of the fruit games: the game of Fruit Invaders with shaded, animated sprites, a sunny sky with a sun, hills and clouds that drift at three speeds, a gardener with a walking cycle who loses his hat when a seed hits him, a bird that flies by, music that gets faster with every wave, and more effects. Throw balls at the fruit before it reaches the bushes: cherries are worth 50 points, strawberries 40, apples 30, oranges 20, lemons 10, the bird 50 to 300. Now and then a banana falls out of a fruit: catch it with the gardener for rapid fire (two balls at a time). Seeds can be knocked out of the air with a ball. You have lives and get an extra life for every few thousand points. See also \fBengine1999-fruit\fR(6), the simple edition, and \fBengine1999-fruit3\fR(6), the biggest one.
+Orchard Defense II is the middle edition of the fruit games: the game of Orchard Defense with shaded, animated sprites, a sunny sky with a sun, hills and clouds that drift at three speeds, a gardener with a walking cycle who loses his hat when a seed hits him, a bird that flies by, music that gets faster with every wave, and more effects. Throw balls at the fruit before it reaches the bushes: cherries are worth 50 points, strawberries 40, apples 30, oranges 20, lemons 10, the bird 50 to 300. Now and then a banana falls out of a fruit: catch it with the gardener for rapid fire (two balls at a time). Seeds can be knocked out of the air with a ball. You have lives and get an extra life for every few thousand points. See also \fBengine1999-orchard\fR(6), the simple edition, and \fBengine1999-orchard3\fR(6), the biggest one.
 .PP
-The program is the demo \fIfruit2.bas\fR of Engine1999, made into an executable with
+The program is the demo \fIorchard2.bas\fR of Engine1999, made into an executable with
 .B BUILD
 (window kind: it needs the SDL2 library, nothing else); its BASIC libraries are inside it. It opens the Engine1999 window; the window can
 be switched between the full screen and a window with F11 or ALT+RETURN.
@@ -35,9 +35,9 @@ quit.
 A game controller works, too: D-pad or left stick walks, A or the right trigger throws, START pauses, BACK quits.
 .SH FILES
 The high score is kept in the file
-.I fruit2.hi
+.I orchard2.hi
 in the folder
-.IR ~/.local/share/fruit2/
+.IR ~/.local/share/orchard2/
 (the driver
 .BR local: ;
 the file is safe there and needs no permission; a file of that name in the current directory, where older versions kept it, is still read when the new one does not exist yet; the game goes on without the file if it cannot be written).
@@ -46,4 +46,4 @@ has the details, see FILES AND DEVICES.
 .SH SEE ALSO
 .BR engine1999 (1),
 .BR engine1999-basic (7),
-.BR engine1999-fruit (6)
+.BR engine1999-orchard (6)

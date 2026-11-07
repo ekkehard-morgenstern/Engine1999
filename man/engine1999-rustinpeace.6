@@ -5,12 +5,12 @@
 .\" by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It is distributed WITHOUT ANY
 .\" WARRANTY. ADDITIONAL PERMISSION (GPLv3 section 7): the Engine1999 Runtime Exception applies, see the file LICENSE-EXCEPTION.
 .\"
-.\" Keep this page current: it describes the demo game demos/rustball.bas (an executable made with BUILD, installed by "make install").
-.TH ENGINE1999-RUSTBALL 6 "November 2026" "Engine 1999 @VERSION@" "Engine1999 Manual"
+.\" Keep this page current: it describes the demo game demos/rustinpeace.bas (an executable made with BUILD, installed by "make install").
+.TH ENGINE1999-RUSTINPEACE 6 "November 2026" "Engine 1999 @VERSION@" "Engine1999 Manual"
 .SH NAME
-engine1999-rustball \- Being a Rustball, a labyrinth game for one to four players
+engine1999-rustinpeace \- Rust in Peace, a labyrinth game for one to four players
 .SH SYNOPSIS
-.B engine1999-rustball
+.B engine1999-rustinpeace
 .SH DESCRIPTION
 You are a rust ball in a labyrinth full of construction workers. A new labyrinth is made at random for every level and scrolls with the balls. The workers run away from a ball they see, so sneak up on one from behind: whoever you touch on the back is covered in rust, turns into a statue and crumbles, and your score goes up (a quick chain of workers is worth up to five times as much). Touching a worker from the front only alarms it.
 .PP
@@ -18,7 +18,7 @@ Screws, nuts and bolts lie about the labyrinth. Five of them make you one size b
 .PP
 Workers who have seen fruit lying in the labyrinth forget about you and walk to it to eat it, and one that is eating does not see you unless you are right in front of it: the best time for an attack. A worker that is cornered freezes and can be rusted from any side. The foremen in the green vests carry hoses and wash you down when they see you from the front: a ball is one size smaller after a hit, the smallest ball is destroyed (a life). Foremen can be rusted from behind, too, for 500 points. An arrow at the edge of the picture points to the nearest worker that is out of sight. When fewer than half of the workers are left, a new one arrives now and then (at most six times in a level). When all workers are rusted the next level begins, with more workers, more foremen and more fruit.
 .PP
-The program is the demo \fIrustball.bas\fR of Engine1999, made into an executable with
+The program is the demo \fIrustinpeace.bas\fR of Engine1999, made into an executable with
 .B BUILD
 (window kind: it needs the SDL2 library, nothing else); its BASIC libraries are inside it. It opens the Engine1999 window; the window can
 be switched between the full screen and a window with F11 or ALT+RETURN. Up to four players share one picture: the camera follows the middle of all balls and a ball cannot leave the picture.
@@ -50,9 +50,9 @@ music on or off.
 quit (BACK on a pad).
 .SH FILES
 The best score is kept in the file
-.I rustball.hi
+.I rustinpeace.hi
 in the folder
-.IR ~/.local/share/rustball/
+.IR ~/.local/share/rustinpeace/
 (the driver
 .BR local: ;
 the file is safe there and needs no permission; a file of that name in the current directory, where older versions kept it, is still read when the new one does not exist yet; the game goes on without the file if it cannot be written).

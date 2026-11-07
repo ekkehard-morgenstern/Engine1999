@@ -7,7 +7,7 @@
 30 '   CALL BIGTEXT(Y,T$,C,S)     draws T$ centered on the graphics layer at row Y (pixels) in the color C, S times as large as the 8 x 12 font, with a shadow in TX_SHADOW
 40 '   CALL TX_BYE(T$)            the end of a game: sound off, GFX RESET, a clear screen and "Thanks for playing T$!"
 50 ' TX_PAPER (default 210, a translucent dark paper) and TX_SHADOW (default 2) are set by TX_INIT before the program starts; a game that wants other
-60 ' colors assigns them (fruit2: TX_PAPER=0:TX_SHADOW=11). The short names TXTAT and BIGTEXT are kept as the games always had them.
+60 ' colors assigns them (orchard2: TX_PAPER=0:TX_SHADOW=11). The short names TXTAT and BIGTEXT are kept as the games always had them.
 70 LIBRARY "text","TX_"
 80 PROC TX_INIT
 90   TX_PAPER=210

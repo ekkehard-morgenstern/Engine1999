@@ -1,0 +1,41 @@
+.\" Engine1999 - A 2D games engine written in C
+.\" Copyright (C) 2026  Ekkehard Morgenstern
+.\"
+.\" This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published
+.\" by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It is distributed WITHOUT ANY
+.\" WARRANTY. ADDITIONAL PERMISSION (GPLv3 section 7): the Engine1999 Runtime Exception applies, see the file LICENSE-EXCEPTION.
+.\"
+.\" Keep this page current: it describes the demo game demos/orchard.bas (an executable made with BUILD, installed by "make install").
+.TH ENGINE1999-ORCHARD 6 "November 2026" "Engine 1999 @VERSION@" "Engine1999 Manual"
+.SH NAME
+engine1999-orchard \- Orchard Defense, the simple edition: a gardener throws balls at marching fruit
+.SH SYNOPSIS
+.B engine1999-orchard
+.SH DESCRIPTION
+Orchard Defense is the simple edition of the fruit games and the one that is easiest to read as a program. A gardener walks on the grass under a blue sky with clouds, a sun and hills. Forty fruits march down from the trees in a formation, rustling like leaves, spit seeds at the gardener and come lower with every step. Throw balls at them before they reach the bushes. Cherries are worth 30 points, apples 20, oranges 10. Four round bushes protect the gardener and lose their leaves where a seed or a ball hits. Every wave is faster; you have three lives and get an extra life now and then. See also \fBengine1999-orchard2\fR(6) and \fBengine1999-orchard3\fR(6), the later and bigger versions.
+.PP
+The program is the demo \fIorchard.bas\fR of Engine1999, made into an executable with
+.B BUILD
+(window kind: it needs the SDL2 library, nothing else); its BASIC libraries are inside it. It opens the Engine1999 window; the window can
+be switched between the full screen and a window with F11 or ALT+RETURN.
+.SH CONTROLS
+.TP
+.BR LEFT / RIGHT " or " A / D
+walk (only while the key is held).
+.TP
+.BR SPACE " or " UP
+throw a ball (hold it for rapid fire).
+.TP
+.B P
+pause.
+.TP
+.B Q
+quit.
+.PP
+A game controller works, too: D-pad or left stick walks, A or the right trigger throws, START pauses, BACK quits.
+.SH FILES
+Orchard Defense does not write any file.
+.SH SEE ALSO
+.BR engine1999 (1),
+.BR engine1999-basic (7),
+.BR engine1999-orchard2 (6)
