@@ -13,7 +13,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-- **2026-11-07 — `demos/bounce.bas`** (new, 21 lines incl. 2 `GOSUB` routines + the 4 license lines): bouncing balls physics demo: 7 balls of random size, gravity (0.25 px/frame^2), floor and wall bounces that lose energy (0.88 / 0.95), floor friction, elastic ball-ball collisions with mass proportional to radius squared (normal impulse, overlap pushed apart), re-kicked every 500 frames so it keeps moving; each ball shaded with three `GFX CIRCLE` + `GFX PAINT` layers (dark body, light offset, white highlight); two layers take turns (no flicker). Row in `demos/README.md`. Found while testing: `DIM` wants constant dimensions (`DIM X(N)` gave "Number expected"), and a `NEXT` must not share a line with a single-line `IF ... THEN` (it is swallowed): I forgot `NEXT J` once. Checked in the window under Xvfb + metacity + xvkbd (screenshots); no source change, tests not run.
+- **2026-11-07 — `demos/mandel.bas`** (new, 16 lines + the 4 license lines, one screen): Mandelbrot zoom into the Seahorse Valley (-0.743643887037151 + 0.13182590420533i): 160 x 75 cells of 4 x 4 pixels computed in BASIC (`WHILE` escape loop) and painted as they are done (top to bottom, over the previous image), 64 color cycling palette (`GFX PALETTE` + `RGB`), black inside, each step halves the view (x1 .. x16384, then restarts) and raises the iteration limit (60 + 12 per step); label `zoom xN` after each image (`GFX TEXT`, `STR$`). Row in `demos/README.md`. First version zoomed in with a truncated center and too few iterations (mostly black at depth): fixed. Checked in the window under Xvfb + metacity + xvkbd (six screenshots: spirals and mini-Mandelbrots); one image takes a few seconds under Xvfb; no source change, tests not run. Test processes cleaned up.
 
 ## Log
 
@@ -1397,4 +1397,10 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 - New `demos/cube3d.bas` (15 lines + the 4 license lines): spinning solid cube, rotation about two axes, perspective, back faces skipped, six colored faces lit by a light direction (palette 16 + face*10 + shade, white outline 80), pulsing size, each face outlined / filled with `GFX PAINT c,c` / outlined again; two layers (0 and 3) take turns (no flicker). Row in `demos/README.md`.
 - Fix found with the owner's report (faces visible that should be hidden): the culling test was `CZ<0`, right for a parallel projection only; with the camera at z=-5 and perspective a face is visible only if `CZ<-0.2`. Found by drawing each face in its own color. Then the look was made livelier on the owner's request (six colors, pulsing size).
 - Slip while editing: a `sed` on physical line 10 overwrote the `DATA` line ("Out of DATA in line 40"); restored.
+- Checked in the window under Xvfb + metacity + xvkbd (screenshots); no source change, regression tests not run.
+
+### f4a4bc5 — 2026-11-07 01:32:55 +0100 — "Bounce demo program, by Claude Code"
+3 files, +37/-2.
+- New `demos/bounce.bas` (21 lines incl. two `GOSUB` routines + the 4 license lines): 7 balls of random size, gravity, floor / wall bounces that lose energy, floor friction, elastic ball-ball collisions (mass ~ radius squared, overlap pushed apart), re-kicked every 500 frames; balls shaded with three `GFX CIRCLE` + `GFX PAINT` layers; two layers (0 and 3) take turns (no flicker). Row in `demos/README.md`.
+- Found while testing: `DIM` wants constant dimensions (`DIM X(N)` gave "Number expected"); a `NEXT` must not share a line with a single-line `IF ... THEN` (swallowed): a missing `NEXT J` was added on its own line.
 - Checked in the window under Xvfb + metacity + xvkbd (screenshots); no source change, regression tests not run.
