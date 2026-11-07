@@ -13,6 +13,8 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+- **2026-11-07 — `demos/mathplot3d.bas`** (new, 15 lines + the 4 license lines): rotating 3D wireframe of Z=2*SIN(2R)/(1+R) (21 x 21 grid, rotation about the vertical axis, fixed tilt, perspective, lines colored by height with a 64 color palette). Double buffering by two layers (0 and 3: draw on the hidden one with `GFX TARGET`, then swap with `GFX LAYER`), no flicker. Found while testing: `DIM A(n)` gives n elements (0..n-1), so a 21 x 21 grid needs `DIM Z(21,21)` (first run: "Subscript out of range"). Checked under Xvfb + metacity + xvkbd (rotation seen in two screenshots; scale reduced to fit the 640 x 300 screen). `demos/README.md` row added. No source change; tests not run.
+
 - **2026-11-07 — `demos/mathplot.bas`** (new, 14 lines + the 4 license lines, fits one screen): a shaded surface (ripples, `SIN`/`SQR`/`COS`, 64 x 60 cells in a 64 color palette made with `GFX PALETTE` + `RGB`) and graphs of SIN / COS (-2PI..2PI) and SQR / LOG / ATN (0..10) with `GFX PSET`. Added a row to `demos/README.md`. Checked in the window under Xvfb + metacity + xvkbd (screenshot looked right; the console host has no graphics); test processes cleaned up. No source or format change, so the regression tests were not run.
 
 ## Log
