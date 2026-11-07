@@ -4,7 +4,7 @@ A 2D game engine in C (SDL2) that behaves like a home computer of the late 1980s
 You type a program, `RUN` it, and it can use an 80x25 text screen, a tile layer, sprites and a free-drawing graphics layer, a software synthesizer, files and devices.
 When it is done, `BUILD` turns it into a standalone executable.
 
-![Fruit Invaders II, a demo game written in Engine1999 BASIC](docs/images/fruit2-game.png)
+![Fruit Invaders II, a demo game written in Engine1999 BASIC: a gardener throws balls at marching fruit](docs/images/fruit2-game.png)
 
 > **Status: work in progress.** The engine and the language are still changing (statements may be renamed or reworked before a 1.0), and there are rough edges, but it is
 > usable today, and the demos below show what it can do. If you like retro computing, BASIC or small games, you may find it useful already. Open work is listed in
@@ -107,9 +107,9 @@ Then try the demos: `LOAD "demos/fruit2"` and `RUN`. After `make install` the ga
 
 | Demo | |
 |---|---|
-| `demos/fruit2.bas` | **Fruit Invaders II**, a Space Invaders style game with shaded sprites, a scrolling starfield, music and effects (keys: A/D move, SPACE fires, P pauses, Q quits) |
+| `demos/fruit2.bas` | **Fruit Invaders II**: a gardener throws balls at marching fruit under a sunny sky with drifting clouds, hills and a sun; shaded sprites, a bird, round bushes, music and effects (keys: A/D walk, SPACE throws, P pauses, Q quits) |
 | `demos/climb.bas` | **The Long Climb**, a jump and run game: climb a steel tower, drill holes to trap monsters, reach the ice cream stand on the roof |
-| `demos/fruit3.bas` | **Fruit Invaders III**: the same game with a sprite-group mothership, shooting stars and a giant watermelon boss every fifth wave |
+| `demos/fruit3.bas` | **Fruit Invaders III**: the top-notch edition for one or two players: a day that passes (dawn to night), wind, swaying fruit, coconuts, a balloon that drops power-ups, and a giant melon that splits in two every fifth wave |
 | `demos/climb2.bas`, `demos/madrun2.bas`, `demos/river2.bas` | Second editions of the games with new graphics: a giant ice cream cone and falling bolts, a traffic helicopter and pigeons, a hot air balloon and gulls |
 | `demos/madrun.bas` | **MADRUN**: a crossing game for one to four players, with a phone booth, traffic and a rescue ambulance |
 | `demos/river.bas` | **ETERNAL RIVER**: a scroll-down boat game over an endless river, with bridges, swimmers and wraiths on the banks |
@@ -117,7 +117,7 @@ Then try the demos: `LOAD "demos/fruit2"` and `RUN`. After `make install` the ga
 | `demos/y2k.bas` | **Y2K COUNTDOWN**: a silly demo in the style of 1999: copper bars, starfield, plasma, vector balls, tunnel, sine scroller, parallax landscape and a millennium bug finale, with a chip tune the program makes by itself (palette cycling, sprites, scrolled tiles, eight music channels); window only |
 | `demos/rustball.bas` | **BEING A RUSTBALL**: a labyrinth game for one to four players: you are a rust ball, sneak up on the workers from behind, grow by eating nuts and bolts, and crush walls when you are big |
 | `tools/spriteed.bas`, `fonted.bas`, `musiced.bas`, `sfxed.bas` | The sprite and tile editor, the text font editor, the music editor and the sound effect editor (UI programs); run them with `TOOL "name"` |
-| `demos/fruit.bas` | The first, simpler Fruit Invaders |
+| `demos/fruit.bas` | The first and simplest Fruit Invaders, written to be read: the same game with fewer features |
 | `demos/gfx.bas` | The graphics layers: palettes, drawing, tiles, `DESIGN` pictures, sprites |
 | `demos/mouse.bas` | A small paint program for the mouse: draw, erase, choose pens from a color bar (the pointer changes its shape) |
 | `demos/keys.bas` | A keyboard that lights up the keys you hold down: `KEY("name")` knows when you let go, and several keys at once |
@@ -127,9 +127,9 @@ Then try the demos: `LOAD "demos/fruit2"` and `RUN`. After `make install` the ga
 
 ![The graphics demo: layers, drawing, a sprite](docs/images/graphics.png)
 
-![Fruit Invaders, the first and simpler version of the game](docs/images/fruit.png)
+![Fruit Invaders, the first and simplest version of the game: a gardener, balls, seeds and round bushes](docs/images/fruit.png)
 
-![Fruit Invaders III, the third edition of the invaders game](docs/images/fruit3.png)
+![Fruit Invaders III at sunset: coconuts, a balloon that drops a power-up crate, wind and clouds](docs/images/fruit3.png)
 
 ![Being a Rustball: a scrolling labyrinth, a rust ball, workers, bolts and nuts](docs/images/rustball.png)
 
