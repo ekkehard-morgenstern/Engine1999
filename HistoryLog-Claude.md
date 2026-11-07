@@ -13,6 +13,8 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+- **Roadmap / `SESSION.md`: two sound items recorded** (owner, 2026-11-07, after committing the bookkeeping and bumping the revision): check that sound effects do not get lost (occasional drown-outs in `fruit2`; three hypotheses and remedies in `docs/roadmap.md` 2b), and the owner's own check of the other games after the `SFX` state restore. Documentation only, nothing investigated.
+
 ## Log
 
 ### 7a6cb67 — 2026-10-17 13:32:27 +0200 — "Introduced Claude to the project"
