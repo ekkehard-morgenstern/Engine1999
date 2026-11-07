@@ -241,6 +241,14 @@ typedef struct _vm_stopstate_t {
     size_t          nctx, maxctx;
 } vm_stopstate_t;
 
+// the sound settings of one channel as the program set them (SFX restores them when an effect is over)
+typedef struct _vm_chanstate_t {
+    int     wave;           // 0 sine, 1 square, 2 triangle, 3 noise
+    float   env[4];         // attack, decay, sustain, release; attack < 0 = no envelope (-1, 0, 0, 0)
+    float   vib[2];         // rate, depth (depth 0 = off)
+    float   trem[2];
+} vm_chanstate_t;
+
 typedef struct _vm_t {
     codegen_t*      cgen;           // code and data segments
     varmem_t*       vmem;           // variables
@@ -308,6 +316,7 @@ typedef struct _vm_t {
     bool            (*build)( struct _vm_t*, void*, const char* name, int kind );
     bool            (*merge)( struct _vm_t*, void*, const char* name, bool append );
     bool            (*renumber)( struct _vm_t*, void*, const char* firstlabel, int32_t firstline, const char* lastlabel, int32_t lastline, int32_t step );
+    vm_chanstate_t  chanstate[SND_MAXVOICES];   // what the VM has set on each sound channel (WAVE, ENVELOPE, VIBRATO, TREMOLO, W X ~ ^ of PLAY): SFX gives it back
     bool            sfx_defined[SND_MAXSFX];
     mml_t           sfx[SND_MAXSFX];    // the stored sound effects (SFX n, a$), parsed; cleared with the VM
     const vm_sound_t* sound;        // SOUND / PLAY / ...: the host's sound output; 0 = none (arguments are checked, nothing plays)

@@ -44,6 +44,13 @@
 
 static bool vm_randomize( vm_t* vm, bool hasseed );
 
+static void vm_chanstate_default( vm_chanstate_t* st ) {
+    st->wave = 0;
+    st->env[0] = -1.0f; st->env[1] = st->env[2] = st->env[3] = 0.0f;
+    st->vib[0] = st->vib[1] = 0.0f;
+    st->trem[0] = st->trem[1] = 0.0f;
+}
+
 void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem ) {
     vm->cgen     = cgen;
     vm->vmem     = vmem;
@@ -81,6 +88,7 @@ void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem ) {
     vm->sound    = 0;
     memset( vm->sfx, 0, sizeof(vm->sfx) );
     memset( vm->sfx_defined, 0, sizeof(vm->sfx_defined) );
+    for ( int c=0; c < SND_MAXVOICES; ++c ) vm_chanstate_default( &vm->chanstate[c] );
     vm->input    = 0;
     vm->interrupt = 0;
     vm->getkey   = 0;
@@ -2244,6 +2252,29 @@ static bool vm_sound_channel( vm_t* vm, double num, int* pchan ) {
     return true;
 }
 
+// the sound settings of a channel: every change goes through these, so that the VM knows what a channel was set to
+static void vm_set_wave( vm_t* vm, int chan, int wave ) {
+    vm->sound->setwave( vm->userdata, chan, wave );
+    vm->chanstate[chan].wave = wave;
+}
+
+static void vm_set_env( vm_t* vm, int chan, float a, float d, float s, float r ) {
+    vm->sound->setenv( vm->userdata, chan, a, d, s, r );
+    vm_chanstate_t* st = &vm->chanstate[chan];
+    if ( a < 0.0f ) { a = -1.0f; d = s = r = 0.0f; }        // one form for "no envelope"
+    st->env[0] = a; st->env[1] = d; st->env[2] = s; st->env[3] = r;
+}
+
+static void vm_set_vib( vm_t* vm, int chan, float rate, float depth ) {
+    vm->sound->setvib( vm->userdata, chan, rate, depth );
+    vm->chanstate[chan].vib[0] = rate; vm->chanstate[chan].vib[1] = depth;
+}
+
+static void vm_set_trem( vm_t* vm, int chan, float rate, float depth ) {
+    vm->sound->settrem( vm->userdata, chan, rate, depth );
+    vm->chanstate[chan].trem[0] = rate; vm->chanstate[chan].trem[1] = depth;
+}
+
 // the events of a music string on a channel (the caller has synced the channels); the voice ends with a stop
 static void vm_queue_voice( vm_t* vm, int chan, const mml_t* m, double tobeats ) {
     const vm_sound_t* snd = vm->sound;
@@ -2261,49 +2292,51 @@ static void vm_queue_voice( vm_t* vm, int chan, const mml_t* m, double tobeats )
                 snd->tone( ud, chan, 0.0f, 0.0f, 0.0f, (float)( ev->seconds * tobeats ) );
                 break;
             case MML_WAVE:
-                snd->setwave( ud, chan, ev->wave );
+                vm_set_wave( vm, chan, ev->wave );
                 break;
             case MML_ENV:
-                snd->setenv( ud, chan, ev->p[0], ev->p[1], ev->p[2], ev->p[3] );
+                vm_set_env( vm, chan, ev->p[0], ev->p[1], ev->p[2], ev->p[3] );
                 break;
             case MML_VIB:
-                snd->setvib( ud, chan, ev->p[0], ev->p[1] );
+                vm_set_vib( vm, chan, ev->p[0], ev->p[1] );
                 break;
             case MML_TREM:
-                snd->settrem( ud, chan, ev->p[0], ev->p[1] );
+                vm_set_trem( vm, chan, ev->p[0], ev->p[1] );
                 break;
         }
     }
     snd->tone( ud, chan, 0.0f, 0.0f, 0.0f, 0.0f );      // the end of the voice: nothing goes on sounding
 }
 
-// an effect that has set wave, envelope, vibrato or tremolo takes them back when it is over, so that the next note on the
-// channel is not affected (an envelope with sustain 0 would silence it); the envelope's release is awaited first
-static void vm_sfx_cleanup( vm_t* vm, int chan, const mml_t* m, double tobeats ) {
+// an effect gives the channel back as it was before the effect (wave, envelope, vibrato, tremolo as the program had set them,
+// "before"), so that the next note on the channel is not affected (an envelope with sustain 0 would silence it, a changed wave
+// can make a note inaudible); the envelope's release is awaited first
+static void vm_sfx_cleanup( vm_t* vm, int chan, const mml_t* m, double tobeats, const vm_chanstate_t* before ) {
     const vm_sound_t* snd = vm->sound;
     void* ud = vm->userdata;
-    bool wave = false, env = false, vib = false, trem = false;
+    bool env = false;
     double release = 0.0;
     for ( size_t k=0; k < m->count; ++k ) {
         const mml_event_t* ev = &m->events[k];
-        switch ( ev->kind ) {
-            case MML_WAVE: wave = true; break;
-            case MML_ENV:  env = true; release = ev->p[0] < 0.0f ? 0.0 : (double) ev->p[3]; break;
-            case MML_VIB:  vib = true; break;
-            case MML_TREM: trem = true; break;
-            default: break;
+        if ( ev->kind == MML_ENV ) {
+            env = true; release = ev->p[0] < 0.0f ? 0.0 : (double) ev->p[3];
         }
     }
-    if ( !wave && !env && !vib && !trem ) {
+    const vm_chanstate_t* now = &vm->chanstate[chan];
+    bool wave = now->wave != before->wave;
+    bool envd = memcmp( now->env, before->env, sizeof(now->env) ) != 0;
+    bool vib  = memcmp( now->vib, before->vib, sizeof(now->vib) ) != 0;
+    bool trem = memcmp( now->trem, before->trem, sizeof(now->trem) ) != 0;
+    if ( !wave && !envd && !vib && !trem ) {
         return;
     }
     if ( env && release > 0.0 ) {
         snd->tone( ud, chan, 0.0f, 0.0f, 0.0f, (float)( release * tobeats ) );      // the channel is busy until the release is over
     }
-    if ( wave ) snd->setwave( ud, chan, 0 );
-    if ( env  ) snd->setenv( ud, chan, -1.0f, 0.0f, 0.0f, 0.0f );
-    if ( vib  ) snd->setvib( ud, chan, 0.0f, 0.0f );
-    if ( trem ) snd->settrem( ud, chan, 0.0f, 0.0f );
+    if ( wave ) vm_set_wave( vm, chan, before->wave );
+    if ( envd ) vm_set_env( vm, chan, before->env[0], before->env[1], before->env[2], before->env[3] );
+    if ( vib  ) vm_set_vib( vm, chan, before->vib[0], before->vib[1] );
+    if ( trem ) vm_set_trem( vm, chan, before->trem[0], before->trem[1] );
 }
 
 // the host's beats per second of music-string time
@@ -2951,12 +2984,13 @@ static bool vm_sfx_play( vm_t* vm ) {
     }
     double tobeats = vm_sound_tobeats( vm );
     snd->sync( vm->userdata, 1U << chan );
-    snd->setwave( vm->userdata, chan, 0 );                  // an effect starts from a clean channel
-    snd->setenv( vm->userdata, chan, -1.0f, 0.0f, 0.0f, 0.0f );
-    snd->setvib( vm->userdata, chan, 0.0f, 0.0f );
-    snd->settrem( vm->userdata, chan, 0.0f, 0.0f );
+    const vm_chanstate_t before = vm->chanstate[chan];      // what the program had set: the effect gives it back
+    vm_set_wave( vm, chan, 0 );                             // an effect starts from a clean channel
+    vm_set_env( vm, chan, -1.0f, 0.0f, 0.0f, 0.0f );
+    vm_set_vib( vm, chan, 0.0f, 0.0f );
+    vm_set_trem( vm, chan, 0.0f, 0.0f );
     vm_queue_voice( vm, chan, m, tobeats );
-    vm_sfx_cleanup( vm, chan, m, tobeats );
+    vm_sfx_cleanup( vm, chan, m, tobeats, &before );
     return true;
 }
 
@@ -3575,7 +3609,7 @@ static bool vm_sound( vm_t* vm, uint16_t kind ) {
             if ( !( b >= 0.0 && b < 4.0 ) ) {
                 return vm_error( vm, "Illegal argument" );
             }
-            if ( snd ) snd->setwave( vm->userdata, chan, (int) b );
+            if ( snd ) vm_set_wave( vm, chan, (int) b );
             return true;
         case SNDK_PITCH:
         case SNDK_VOLUME:
@@ -3601,7 +3635,7 @@ static bool vm_sound( vm_t* vm, uint16_t kind ) {
             if ( b >= 0.0 && !( b <= 60.0 && c >= 0.0 && c <= 60.0 && d >= 0.0 && d <= 1.0 && e >= 0.0 && e <= 60.0 ) ) {
                 return vm_error( vm, "Illegal argument" );
             }
-            if ( snd ) snd->setenv( vm->userdata, chan, b < 0.0 ? -1.0f : (float) b, (float) c, (float) d, (float) e );
+            if ( snd ) vm_set_env( vm, chan, b < 0.0 ? -1.0f : (float) b, (float) c, (float) d, (float) e );
             return true;
         case SNDK_VIBRATO:
         case SNDK_TREMOLO:
@@ -3612,8 +3646,8 @@ static bool vm_sound( vm_t* vm, uint16_t kind ) {
                 return vm_error( vm, "Illegal argument" );
             }
             if ( snd ) {
-                if ( kind == SNDK_VIBRATO ) snd->setvib( vm->userdata, chan, (float) b, (float) c );
-                else snd->settrem( vm->userdata, chan, (float) b, (float) c );
+                if ( kind == SNDK_VIBRATO ) vm_set_vib( vm, chan, (float) b, (float) c );
+                else vm_set_trem( vm, chan, (float) b, (float) c );
             }
             return true;
         case SNDK_TEMPO:
