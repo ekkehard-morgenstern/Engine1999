@@ -166,12 +166,13 @@
 1620   ' the rustle of the leaves when the fruit marches: two different noises one after the other
 1630   SFX 12,"W3 V0.2 ML X0.005,0.02,0.3,0.06 S5000,3500,6"
 1640   SFX 13,"W3 V0.2 ML X0.005,0.02,0.3,0.06 S3800,2800,6"
-1650   ' footsteps in the grass, the clunk of a coconut, the boing of the umbrella, a bird, a cricket
-1660   SFX 14,"W3 V0.1 ML X0,0.002,0.1,0.02 S1800,500,3"
-1670   SFX 15,"W1 V0.3 ML X0,0.005,0.2,0.05 S300,140,6"
-1680   SFX 16,"W2 V0.3 ML H1568,3 H1175,5"
-1690   SFX 17,"W0 V0.12 ML H2400,3 H2800,3 H2400,3 H3000,6"
-1700   SFX 18,"W0 V0.06 ML H4200,2 H4300,2 H4200,2 H4300,2"
+1650   ' footsteps in the grass, the clunk of a coconut, the boing of the umbrella, two bird chirps (17, 19), a cricket (the number after the note is the note value: 32 = 1/32 note, a chirp lasts well under half a second)
+1660   SFX 14,"W3 V0.1 ML X0,0.002,0.1,0.02 S1800,500,32"
+1670   SFX 15,"W1 V0.3 ML X0,0.005,0.2,0.05 S300,140,12"
+1680   SFX 16,"W2 V0.3 ML H1568,16 H1175,8"
+1690   SFX 17,"W0 V0.12 ML H2600,32 H3200,32 H2800,32 H3400,16"
+1695   SFX 19,"W0 V0.1 ML H3000,48 H3600,48 H3000,48 H3600,48 H3300,24"
+1700   SFX 18,"W0 V0.06 ML H4300,64 R64 H4300,64 R64 H4300,64 R64 H4300,64"
 1710 END PROC
 1720 ' ====================================================================== colors
 1730 ' the sprite colors are in windows of 16 palette entries: the pictures use the digits 1..9 and A..C, and DESIGN adds the base of the window
@@ -195,7 +196,7 @@
 1910   GFX PALETTE 4,203,RGB(255,255,255):GFX PALETTE 4,204,RGB(200,220,255):GFX PALETTE 4,205,RGB(120,140,220):GFX PALETTE 4,206,RGB(60,70,140)
 1920   ' the tiles: clouds (white with a bluish shadow)
 1930   GFX PALETTE 1,1,RGB(255,255,255):GFX PALETTE 1,2,RGB(205,220,240)
-1940   ' graphics layer: the colors 1 to 6 (bushes, grass, seed splat) belong to the time of day (PROC TODAPPLY); flowers (7..9), title (10..13)
+1940   ' graphics layer: the colors 1 to 6 (bushes, grass) belong to the time of day (PROC TODAPPLY); flowers (7..9), title (10..13)
 1950   GFX PALETTE 3,7,RGB(250,70,100):GFX PALETTE 3,8,RGB(255,235,70):GFX PALETTE 3,9,RGB(255,255,255)
 1960   GFX PALETTE 3,10,RGB(255,255,255):GFX PALETTE 3,11,RGB(20,45,100):GFX PALETTE 3,12,RGB(255,215,60):GFX PALETTE 3,13,RGB(255,255,255)
 1970   ' stars on the background layer
@@ -331,7 +332,7 @@
 3270       GFX PALETTE 0,71,RGB(FN CLAMP(120+FN RN(100),0,255),FN CLAMP(130+FN RN(100),0,255),255)
 3280     END IF
 3290   ELSE
-3300     IF FN RN(300)=0 THEN SFX 17
+3300     IF FN RN(300)=0 THEN SFX 17+2*FN RN(2)
 3310   END IF
 3320 END PROC
 3330 PROC DEFSPRITES
@@ -890,9 +891,9 @@
 8860   @ "...666666666666."
 8870   @ "..666666666677.."
 8880   @ "..666666666677.."
-8890   @ "..468888888864.."
-8900   @ "..4.88888888.4.."
-8910   @ "..4.88888888.4.."
+8890   @ "..468888888888.."
+8900   @ "..4.88888888...."
+8910   @ "..4.88888888...."
 8920   @ "....88888899...."
 8930   @ "....88888899...."
 8940   @ "....888..999...."
@@ -1832,7 +1833,6 @@
 18280   SEEDX(I)=FN CLAMP(INT(SEEDX(I)+WIND*0.35),0,624)
 18290   SEEDY(I)=SEEDY(I)+BS
 18300   IF SEEDY(I)>268 THEN
-18310     CALL SEEDSPLAT(INT(SEEDX(I))+7)
 18320     CALL KILLSEED(I)
 18330     EXIT PROC
 18340   END IF
@@ -1868,11 +1868,6 @@
 18640     END IF
 18650   NEXT J
 18660 END PROC
-18670 ' a seed that lands in the grass leaves a little brown splat on the graphics layer (it is wiped with the next wave)
-18680 PROC SEEDSPLAT(X)
-18690   GFX LINE X-3,289,X+3,290,6,BF
-18700   GFX PSET X-1,288,6:GFX PSET X+2,288,6:GFX PSET X-4,291,6:GFX PSET X+4,291,6
-18710 END PROC
 18720 PROC KILLSEED(I)
 18730   SEEDON(I)=0
 18740   SPRITE 46+I,OFF

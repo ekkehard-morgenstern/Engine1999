@@ -20,7 +20,7 @@
 160 '     pose and loses his hat when he is hit (MOVETO), the bird flaps its wings; juice splashes with flying bits (MOVETO), leaves that fly off the bushes
 170 '   * a sky of 24 palette bands with a sun and green hills on the background layer; the clouds drift at three speeds: a scrolling tile layer
 180 '     (TILE SCROLL, the map is refilled from a longer world every 16 pixels) and two cloud sprites on paths (SPRITE n,PATH, SPRITE n,SIZE)
-190 '   * seeds that turn while they fall and leave a splat in the grass, round bushes, the fruit glides from step to step (MOVETO) and rustles
+190 '   * seeds that turn while they fall and vanish in the grass, round bushes, the fruit glides from step to step (MOVETO) and rustles
 200 '   * music while you play (two voices on their own channels, timed by EVERY, getting faster with every wave), more sound effects
 210 '   * AFTER timer for the bird, a high score that is kept in the file fruit2.hi
 220 '
@@ -136,7 +136,7 @@
 1320   NEXT I
 1330   ' the tiles: clouds (white with a bluish shadow)
 1340   GFX PALETTE 1,1,RGB(255,255,255):GFX PALETTE 1,2,RGB(205,220,240)
-1350   ' graphics layer: bushes (1 dark, 2 green, 3 light), grass (4, 5 light line), seed splat (6), flowers (7..9), title (10..13)
+1350   ' graphics layer: bushes (1 dark, 2 green, 3 light), grass (4, 5 light line), flowers (7..9), title (10..13)
 1360   GFX PALETTE 3,1,RGB(30,110,45):GFX PALETTE 3,2,RGB(60,165,65):GFX PALETTE 3,3,RGB(130,220,95)
 1370   GFX PALETTE 3,4,RGB(75,175,55):GFX PALETTE 3,5,RGB(120,205,80):GFX PALETTE 3,6,RGB(110,70,40)
 1380   GFX PALETTE 3,7,RGB(250,70,100):GFX PALETTE 3,8,RGB(255,235,70):GFX PALETTE 3,9,RGB(255,255,255)
@@ -737,9 +737,9 @@
 7330   @ "...666666666666."
 7340   @ "..666666666677.."
 7350   @ "..666666666677.."
-7360   @ "..468888888864.."
-7370   @ "..4.88888888.4.."
-7380   @ "..4.88888888.4.."
+7360   @ "..468888888888.."
+7370   @ "..4.88888888...."
+7380   @ "..4.88888888...."
 7390   @ "....88888899...."
 7400   @ "....88888899...."
 7410   @ "....888..999...."
@@ -1212,7 +1212,6 @@
 12080   LOCAL TX,TY,J
 12090   SEEDY(I)=SEEDY(I)+BS
 12100   IF SEEDY(I)>268 THEN
-12110     CALL SEEDSPLAT(SEEDX(I)+7)
 12120     CALL KILLSEED(I)
 12130     EXIT PROC
 12140   END IF
@@ -1238,11 +1237,6 @@
 12340     END IF
 12350   NEXT J
 12360 END PROC
-12370 ' a seed that lands in the grass leaves a little brown splat on the graphics layer (it is wiped with the next wave)
-12380 PROC SEEDSPLAT(X)
-12390   GFX LINE X-3,289,X+3,290,6,BF
-12400   GFX PSET X-1,288,6:GFX PSET X+2,288,6:GFX PSET X-4,291,6:GFX PSET X+4,291,6
-12410 END PROC
 12420 PROC KILLSEED(I)
 12430   SEEDON(I)=0
 12440   SPRITE 44+I,OFF
