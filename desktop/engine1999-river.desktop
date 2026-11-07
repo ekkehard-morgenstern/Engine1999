@@ -1,0 +1,13 @@
+# Engine1999 menu entry. @BINDIR@ / @GAMESBINDIR@ are filled in by "make install" (see the makefile, target install).
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Eternal River
+GenericName=Game
+Comment=Steer a boat down an endless river and swim for it when you crash
+Exec=@GAMESBINDIR@/engine1999-river
+Icon=engine1999-river
+Terminal=false
+Categories=Game;ArcadeGame;
+Keywords=boat;scroller;arcade;
+StartupNotify=false

@@ -257,6 +257,9 @@ LIBDIR=$(PREFIX)/lib/engine1999
 SHAREDIR=$(PREFIX)/share/engine1999
 DOCDIR=$(PREFIX)/share/doc/engine1999
 MANDIR?=$(PREFIX)/share/man
+# desktop integration (desktop/): the menu entries and the icons (SVG, the freedesktop.org icon theme "hicolor")
+APPDIR?=$(PREFIX)/share/applications
+ICONDIR?=$(PREFIX)/share/icons/hicolor/scalable/apps
 KITOBJ=$(addprefix kit/,$(BASEMOD))
 
 kit: kit/engine1999 kit/engine1999c kit/engine1999.o kit/engine1999c.o kit/engine.lib
@@ -299,7 +302,7 @@ kit/engine1999c: kit/engine1999c.o kit/engine.lib
 
 install: kit games version.h
 	install -d $(DESTDIR)$(BINDIR) $(DESTDIR)$(GAMESBINDIR) $(DESTDIR)$(LIBDIR)/lib $(DESTDIR)$(LIBDIR)/tools $(DESTDIR)$(SHAREDIR)/demos/lib $(DESTDIR)$(DOCDIR)/docs/images \
-		$(DESTDIR)$(MANDIR)/man1 $(DESTDIR)$(MANDIR)/man6 $(DESTDIR)$(MANDIR)/man7
+		$(DESTDIR)$(MANDIR)/man1 $(DESTDIR)$(MANDIR)/man6 $(DESTDIR)$(MANDIR)/man7 $(DESTDIR)$(APPDIR) $(DESTDIR)$(ICONDIR)
 	install -m 755 kit/engine1999 kit/engine1999c $(DESTDIR)$(BINDIR)
 	install -m 755 $(GAMEEXE) $(CONEXE) $(DESTDIR)$(GAMESBINDIR)
 	install -m 644 kit/engine1999.o kit/engine1999c.o kit/engine.lib $(DESTDIR)$(LIBDIR)
@@ -310,11 +313,17 @@ install: kit games version.h
 	install -m 644 README.md LICENSE LICENSE-EXCEPTION $(DESTDIR)$(DOCDIR)
 	install -m 644 docs/*.md docs/grammar.html $(DESTDIR)$(DOCDIR)/docs
 	install -m 644 docs/images/*.png $(DESTDIR)$(DOCDIR)/docs/images
+	install -m 644 desktop/icons/*.svg $(DESTDIR)$(ICONDIR)
+	for d in desktop/*.desktop; do sed -e 's|@BINDIR@|$(BINDIR)|' -e 's|@GAMESBINDIR@|$(GAMESBINDIR)|' $$d > $(DESTDIR)$(APPDIR)/$$(basename $$d); chmod 644 $(DESTDIR)$(APPDIR)/$$(basename $$d); done
 	@v=$$(sed -n 's/.*ENGINE_VERSION *"\(.*\)".*/\1/p' version.h); \
 	for p in man/*.1; do sed "s/@VERSION@/$$v/" $$p > $(DESTDIR)$(MANDIR)/man1/$$(basename $$p); chmod 644 $(DESTDIR)$(MANDIR)/man1/$$(basename $$p); done; \
 	for p in man/*.6; do sed "s/@VERSION@/$$v/" $$p > $(DESTDIR)$(MANDIR)/man6/$$(basename $$p); chmod 644 $(DESTDIR)$(MANDIR)/man6/$$(basename $$p); done; \
 	for p in man/*.7; do sed "s/@VERSION@/$$v/" $$p > $(DESTDIR)$(MANDIR)/man7/$$(basename $$p); chmod 644 $(DESTDIR)$(MANDIR)/man7/$$(basename $$p); done
-	@echo "installed in $(DESTDIR)$(PREFIX): engine1999, engine1999c, the games ($(addprefix engine1999-,$(GAMES) $(CONGAMES))), the BUILD kit in $(DESTDIR)$(LIBDIR), man pages (man engine1999)"
+	@echo "installed in $(DESTDIR)$(PREFIX): engine1999, engine1999c, the games ($(addprefix engine1999-,$(GAMES) $(CONGAMES))), the BUILD kit in $(DESTDIR)$(LIBDIR), man pages (man engine1999), menu entries and icons"
+	@if [ -z "$(DESTDIR)" ]; then \
+		(update-desktop-database -q $(APPDIR) || true) 2>/dev/null; \
+		(gtk-update-icon-cache -q -t -f $(PREFIX)/share/icons/hicolor || true) 2>/dev/null; \
+	fi
 
 uninstall:
 	rm -f $(DESTDIR)$(BINDIR)/engine1999 $(DESTDIR)$(BINDIR)/engine1999c $(addprefix $(DESTDIR)$(GAMESBINDIR)/engine1999-,$(GAMES) $(CONGAMES))
@@ -322,6 +331,8 @@ uninstall:
 	for p in man/*.1; do rm -f $(DESTDIR)$(MANDIR)/man1/$$(basename $$p); done
 	for p in man/*.6; do rm -f $(DESTDIR)$(MANDIR)/man6/$$(basename $$p); done
 	for p in man/*.7; do rm -f $(DESTDIR)$(MANDIR)/man7/$$(basename $$p); done
+	for p in desktop/*.desktop; do rm -f $(DESTDIR)$(APPDIR)/$$(basename $$p); done
+	for p in desktop/icons/*.svg; do rm -f $(DESTDIR)$(ICONDIR)/$$(basename $$p); done
 
 # the man pages (man/) must say what the programs do: options, reserved words (needs ./engine1999 and ./engine1999c)
 man-check: engine1999 engine1999c
@@ -443,6 +454,7 @@ check: $(CHECKTESTS) engine1999 engine1999c
 		if ./$$t > $$log 2>&1; then printf '%-12s ok\n' $$t; else printf '%-12s FAILED\n' $$t; tail -n 20 $$log; fail=$$((fail+1)); fi; \
 	done; \
 	if sh mancheck.sh > $$log 2>&1; then printf '%-12s ok\n' man-check; else printf '%-12s FAILED\n' man-check; tail -n 20 $$log; fail=$$((fail+1)); fi; \
+	if sh desktopcheck.sh > $$log 2>&1; then printf '%-12s ok\n' desktopcheck; else printf '%-12s FAILED\n' desktopcheck; tail -n 20 $$log; fail=$$((fail+1)); fi; \
 	if sh deqqtest.sh > $$log 2>&1; then printf '%-12s ok\n' deqqtest; else printf '%-12s FAILED\n' deqqtest; tail -n 20 $$log; fail=$$((fail+1)); fi; \
 	rm -f $$log; \
 	if [ $$fail -ne 0 ]; then echo "$$fail check(s) failed"; exit 1; fi; echo "all checks passed"

@@ -1,0 +1,13 @@
+# Engine1999 menu entry. @BINDIR@ / @GAMESBINDIR@ are filled in by "make install" (see the makefile, target install).
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Engine1999 (console)
+GenericName=BASIC interpreter
+Comment=The Engine1999 BASIC in a terminal, without a window
+Exec=@BINDIR@/engine1999c
+Icon=engine1999c
+Terminal=true
+Categories=Development;IDE;
+Keywords=BASIC;retro;interpreter;terminal;console;
+StartupNotify=false

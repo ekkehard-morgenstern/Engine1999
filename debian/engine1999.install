@@ -4,3 +4,7 @@ usr/lib/engine1999
 usr/share/engine1999
 usr/share/man/man1
 usr/share/man/man7
+usr/share/applications/engine1999.desktop
+usr/share/applications/engine1999c.desktop
+usr/share/icons/hicolor/scalable/apps/engine1999.svg
+usr/share/icons/hicolor/scalable/apps/engine1999c.svg

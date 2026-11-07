@@ -1,0 +1,13 @@
+# Engine1999 menu entry. @BINDIR@ / @GAMESBINDIR@ are filled in by "make install" (see the makefile, target install).
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Hunt the Wumpus
+GenericName=Game
+Comment=The classic cave game of 1973, a text game for any terminal
+Exec=@GAMESBINDIR@/engine1999-wumpus
+Icon=engine1999-wumpus
+Terminal=true
+Categories=Game;AdventureGame;LogicGame;
+Keywords=wumpus;text adventure;classic;terminal;
+StartupNotify=false

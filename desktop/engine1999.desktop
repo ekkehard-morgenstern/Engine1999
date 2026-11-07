@@ -1,0 +1,13 @@
+# Engine1999 menu entry. @BINDIR@ / @GAMESBINDIR@ are filled in by "make install" (see the makefile, target install).
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Engine1999
+GenericName=BASIC programming environment
+Comment=A 1980s home computer with a BASIC, sprites, tiles, sound and editors (window version)
+Exec=@BINDIR@/engine1999
+Icon=engine1999
+Terminal=false
+Categories=Development;IDE;
+Keywords=BASIC;retro;home computer;programming;game engine;
+StartupNotify=false

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+<defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1b2447"/><stop offset="1" stop-color="#0b1022"/></linearGradient><clipPath id="cl"><rect x="4" y="4" width="120" height="120" rx="22"/></clipPath></defs>
+<rect x="4" y="4" width="120" height="120" rx="22" fill="url(#bg)" stroke="#000" stroke-opacity=".5" stroke-width="2"/>
+<g clip-path="url(#cl)"><rect x="4" y="4" width="120" height="120" fill="#5a3a22"/><g fill="#7a4e2c"><rect x="10" y="12" width="24" height="18" rx="4"/><rect x="60" y="8" width="30" height="20" rx="4"/><rect x="96" y="40" width="26" height="22" rx="4"/><rect x="8" y="80" width="30" height="20" rx="4"/><rect x="80" y="96" width="30" height="20" rx="4"/></g></g>
+<path d="M64 24 L92 50 L64 100 L36 50Z" fill="#3ee0e8" stroke="#064a50" stroke-width="3"/><path d="M36 50 L92 50 M64 24 L52 50 L64 100 M64 24 L76 50 L64 100" stroke="#064a50" stroke-width="2" fill="none"/><path d="M64 24 L52 50 L36 50Z" fill="#b8f8fc"/>
+
+</svg>

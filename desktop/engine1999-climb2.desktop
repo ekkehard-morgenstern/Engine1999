@@ -1,0 +1,13 @@
+# Engine1999 menu entry. @BINDIR@ / @GAMESBINDIR@ are filled in by "make install" (see the makefile, target install).
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=The Long Climb II
+GenericName=Game
+Comment=Climb the steel tower again: a giant ice cream cone and falling bolts
+Exec=@GAMESBINDIR@/engine1999-climb2
+Icon=engine1999-climb2
+Terminal=false
+Categories=Game;ArcadeGame;
+Keywords=platform;jump and run;tower;
+StartupNotify=false

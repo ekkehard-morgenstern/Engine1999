@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+<defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6a3a8a"/><stop offset="1" stop-color="#f08a6a"/></linearGradient><clipPath id="cl"><rect x="4" y="4" width="120" height="120" rx="22"/></clipPath></defs>
+<rect x="4" y="4" width="120" height="120" rx="22" fill="url(#bg)" stroke="#000" stroke-opacity=".5" stroke-width="2"/>
+<g clip-path="url(#cl)"><rect x="4" y="100" width="120" height="30" fill="#3a3f48"/></g>
+<path d="M40 100 L52 22 M88 100 L76 22" stroke="#e08a2c" stroke-width="6" stroke-linecap="round"/>
+<path d="M44 78 L84 78 M47 56 L81 56 M50 36 L78 36 M40 100 L88 100" stroke="#e08a2c" stroke-width="5"/>
+<path d="M44 78 L81 56 M84 78 L47 56 M47 56 L78 36 M81 56 L50 36" stroke="#c46f1a" stroke-width="3"/>
+<g stroke="#9cc" stroke-width="3"><path d="M96 100 L96 40 M108 100 L108 40"/><path d="M96 90 L108 90 M96 78 L108 78 M96 66 L108 66 M96 54 L108 54"/></g>
+<circle cx="62" cy="14" r="7" fill="#f4d03f" stroke="#222" stroke-width="2"/>
+<circle cx="100" cy="100" r="22" fill="#f4d03f" stroke="#222" stroke-width="3"/><text x="100" y="109" font-family="DejaVu Sans,Arial,sans-serif" font-weight="bold" font-size="24" text-anchor="middle" fill="#222">II</text>
+</svg>

@@ -1,0 +1,13 @@
+# Engine1999 menu entry. @BINDIR@ / @GAMESBINDIR@ are filled in by "make install" (see the makefile, target install).
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Glyph Miner
+GenericName=Game
+Comment=Dig for gems in a cave made of redefined characters
+Exec=@GAMESBINDIR@/engine1999-glyphminer
+Icon=engine1999-glyphminer
+Terminal=false
+Categories=Game;ArcadeGame;
+Keywords=digging;boulder;cave;puzzle;
+StartupNotify=false

@@ -1,0 +1,13 @@
+# Engine1999 menu entry. @BINDIR@ / @GAMESBINDIR@ are filled in by "make install" (see the makefile, target install).
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Orchard Defense III
+GenericName=Game
+Comment=A gardener defends the orchard through day and night: wind, coconuts, a balloon, two players
+Exec=@GAMESBINDIR@/engine1999-orchard3
+Icon=engine1999-orchard3
+Terminal=false
+Categories=Game;ArcadeGame;
+Keywords=arcade;fruit;shooter;garden;
+StartupNotify=false

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+<defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0f1a45"/><stop offset="1" stop-color="#27427a"/></linearGradient><clipPath id="cl"><rect x="4" y="4" width="120" height="120" rx="22"/></clipPath></defs>
+<rect x="4" y="4" width="120" height="120" rx="22" fill="url(#bg)" stroke="#000" stroke-opacity=".5" stroke-width="2"/>
+<g clip-path="url(#cl)"><ellipse cx="40" cy="128" rx="90" ry="34" fill="#1e5a2a"/><ellipse cx="110" cy="132" rx="70" ry="30" fill="#164a22"/></g><circle cx="94" cy="34" r="14" fill="#f6efc0"/><circle cx="101" cy="30" r="12" fill="#0f1a45"/><g fill="#fff"><circle cx="30" cy="28" r="2"/><circle cx="56" cy="20" r="1.5"/><circle cx="76" cy="46" r="1.5"/></g><circle cx="60" cy="72" r="32" fill="#f39a1c" stroke="#7a4300" stroke-width="3"/><ellipse cx="48" cy="60" rx="7" ry="11" fill="#fff" opacity=".35"/><path d="M60 40 C62 32 68 28 76 28 C74 36 68 40 60 40Z" fill="#4caf50" stroke="#1d5a20" stroke-width="2"/>
+<circle cx="100" cy="100" r="22" fill="#f4d03f" stroke="#222" stroke-width="3"/><text x="100" y="109" font-family="DejaVu Sans,Arial,sans-serif" font-weight="bold" font-size="24" text-anchor="middle" fill="#222">III</text>
+</svg>

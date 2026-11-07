@@ -1,0 +1,13 @@
+# Engine1999 menu entry. @BINDIR@ / @GAMESBINDIR@ are filled in by "make install" (see the makefile, target install).
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Madrun
+GenericName=Game
+Comment=A crossing game for one to four players: be first to the ringing phone
+Exec=@GAMESBINDIR@/engine1999-madrun
+Icon=engine1999-madrun
+Terminal=false
+Categories=Game;ArcadeGame;
+Keywords=traffic;multiplayer;arcade;
+StartupNotify=false
