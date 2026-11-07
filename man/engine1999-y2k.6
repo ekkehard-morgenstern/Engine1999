@@ -1,0 +1,31 @@
+.\" Engine1999 - A 2D games engine written in C
+.\" Copyright (C) 2026  Ekkehard Morgenstern
+.\"
+.\" This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published
+.\" by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It is distributed WITHOUT ANY
+.\" WARRANTY. ADDITIONAL PERMISSION (GPLv3 section 7): the Engine1999 Runtime Exception applies, see the file LICENSE-EXCEPTION.
+.\"
+.\" Keep this page current: it describes the demo demos/y2k.bas (an executable made with BUILD, installed by "make install").
+.TH ENGINE1999-Y2K 6 "November 2026" "Engine 1999 @VERSION@" "Engine1999 Manual"
+.SH NAME
+engine1999-y2k \- Y2K Countdown, a silly demo in the style of the late 1990s
+.SH SYNOPSIS
+.B engine1999-y2k
+.RI [ part ]
+.SH DESCRIPTION
+A demo of about two minutes, in nine parts, to a chip tune that the program makes by itself: the intro with falling letters, copper bars, a starfield with a flying saucer, a plasma with bobs, vector balls that morph from a cube into a sphere, a torus and a double helix above a grid floor, a spiral tunnel, a sine scroller with greetings, a landscape with three layers of hills, tiles and a bug, and at last the millennium bug: a countdown, a crash, a boot screen and fireworks over a skyline.
+.PP
+It shows what the engine can do: palette cycling (plasma, tunnel), two graphics layers that take turns (no flicker), sprites as balls and as letters, tiles scrolled with wrap-around, the text screen as a color gradient, translucent flashes, sound effects and eight music channels. All motion follows the clock, so the demo runs at the same speed on a fast and on a slow machine. The program is the demo \fIy2k.bas\fR of Engine1999, made into an executable with
+.B BUILD
+(window kind: it needs the SDL2 library, nothing else). The window can be switched between the full screen and a window with F11 or ALT+RETURN.
+.SH OPTIONS
+.TP
+.I part
+a number from 0 to 8: start the demo at that part (0 intro, 1 copper bars, 2 starfield, 3 plasma, 4 vector balls, 5 tunnel, 6 scroller, 7 landscape, 8 the finale), the music starting there too.
+.SH CONTROLS
+.TP
+.B "Q, ESC"
+end the demo.
+.SH SEE ALSO
+.BR engine1999 (1),
+.BR engine1999\-basic (7)

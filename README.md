@@ -114,6 +114,7 @@ Then try the demos: `LOAD "demos/fruit2"` and `RUN`. After `make install` the ga
 | `demos/madrun.bas` | **MADRUN**: a crossing game for one to four players, with a phone booth, traffic and a rescue ambulance |
 | `demos/river.bas` | **ETERNAL RIVER**: a scroll-down boat game over an endless river, with bridges, swimmers and wraiths on the banks |
 | `demos/glyphminer.bas` | **GLYPH MINER**: a cave digging game on the text screen with redefined characters for the cave, sprites for the miner and the enemies, sound effects and music |
+| `demos/y2k.bas` | **Y2K COUNTDOWN**: a silly demo in the style of 1999: copper bars, starfield, plasma, vector balls, tunnel, sine scroller, parallax landscape and a millennium bug finale, with a chip tune the program makes by itself (palette cycling, sprites, scrolled tiles, eight music channels); window only |
 | `demos/rustball.bas` | **BEING A RUSTBALL**: a labyrinth game for one to four players: you are a rust ball, sneak up on the workers from behind, grow by eating nuts and bolts, and crush walls when you are big |
 | `tools/spriteed.bas`, `fonted.bas`, `musiced.bas`, `sfxed.bas` | The sprite and tile editor, the text font editor, the music editor and the sound effect editor (UI programs); run them with `TOOL "name"` |
 | `demos/fruit.bas` | The first, simpler Fruit Invaders |

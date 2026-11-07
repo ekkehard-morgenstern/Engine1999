@@ -1,0 +1,1287 @@
+1 ' License: free for everybody to use, copy, change and build into executables (BUILD).
+2 ' An executable made with BUILD contains the Engine1999 runtime: the Engine1999 Runtime Exception
+3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
+4 ' in the executable (it shows with the command line option --engine1999-about).
+10 ' Y2K COUNTDOWN - a silly megademo in the style of the late 1990s, for Engine1999 (window version only).
+20 ' Nine parts, one after the other, to one soundtrack: intro, copper bars, starfield, plasma, vector balls, tunnel, sine scroller, parallax, the millennium bug.
+30 ' Keys: Q or ESC ends the demo. Start with an argument to begin at a part: engine1999-y2k 4 (0..8).
+40 ' What it shows: palette cycling (plasma, tunnel), two graphics layers taking turns (no flicker), sprites as vector balls and as a sine scroller
+50 ' (letter images cut from the built-in font), tiles scrolled with wrap-around, the text screen as a color gradient, sprite paths, translucent flashes,
+60 ' a chip tune made by the program itself with PLAY (all 8 music channels), and sound effects. All motion is driven by the clock, so it runs
+70 ' at the same speed on a fast and on a slow machine.
+80 ' --- globals: TK ticks since the start, TT seconds, TB beats (150 per minute), PU pulse (1 on the beat, falling to 0) -----------------------
+90 DIM PS(9),PE(9),SXX(250),SYY(250),SZZ(250),RC(6),MNR(6),CHO(3,8),PSEL(9),PENT(5),FB(9,6),DM(9),MEL$(16),MV$(9,8)
+100 ' (a FUNC has to be defined before the lines that call it)
+110 FUNC CLAMP(V,A,B)
+120   IF V<A THEN RETURN A
+130   IF V>B THEN RETURN B
+140   RETURN V
+150 END FUNC
+160 ' a note as music string text: octave and name (note 48 = C4, 57 = A4 = 440 Hz)
+170 FUNC NN$(N)
+180   LOCAL A$
+190   A$=MID$("C C+D D+E F F+G G+A A+B ",(N MOD 12)*2+1,2)
+200   IF RIGHT$(A$,1)=" " THEN A$=LEFT$(A$,1)
+210   RETURN "O"+CHR$(48+N\12)+A$
+220 END FUNC
+230 ' drums: K = kick (a short falling triangle tone), S = snare (noise), anything else a rest; 16 sixteenths
+240 FUNC DRUMS$(P$)
+250   LOCAL I,C$,R$
+260   FOR I=1 TO 16
+270     C$=MID$(P$,I,1)
+280     IF C$="K" THEN R$=R$+"W2 V0.6 O3 G64 D64 O2 G32 "
+290     IF C$="S" THEN R$=R$+"W3 V0.35 O5 C16 "
+300     IF C$<>"K" AND C$<>"S" THEN R$=R$+"R16 "
+310   NEXT I
+320   RETURN R$
+330 END FUNC
+340 FUNC HATS$(P$)
+350   LOCAL I,R$
+360   FOR I=1 TO 16
+370     IF MID$(P$,I,1)="x" THEN R$=R$+"W3 V0.1 O7 C32 R32 " ELSE R$=R$+"R16 "
+380   NEXT I
+390   RETURN R$
+400 END FUNC
+410 ' a color value that can't go wrong: every part is limited to 0..255
+420 FUNC RGBC(R,G,B)
+430   RETURN RGB(FN CLAMP(INT(R),0,255),FN CLAMP(INT(G),0,255),FN CLAMP(INT(B),0,255))
+440 END FUNC
+450 ' ====================================================================== main program
+460 BREAK OFF
+470 RANDOMIZE 1999
+480 NP=9
+490 S=0
+500 FOR I=0 TO NP-1
+510   READ B
+520   PS(I)=S
+530   S=S+B*96
+540   PE(I)=S
+550 NEXT I
+560 ' the bars of each part (a bar is 1.6 seconds)
+570 DATA 8,8,8,8,8,8,12,8,10
+580 ' music tables: the chord roots (Am F C G Em Dm), 1 = minor, the three chord progressions, which progression each part uses,
+590 ' the pentatonic scale, the first bar in which each voice plays in each part (lead, drums, bass, arp, pad, hats), drum style per part
+600 DATA 9,5,0,7,4,2
+610 DATA 1,0,0,0,1,1
+620 DATA 0,1,2,3,0,1,2,3
+630 DATA 1,3,0,4,1,3,0,0
+640 DATA 0,5,1,3,0,5,3,0
+650 DATA 0,0,1,0,1,2,0,1,0
+660 DATA 0,3,5,7,10
+670 DATA 99,6,4,0,0,4
+680 DATA 0,0,0,0,0,0
+690 DATA 4,0,0,0,0,0
+700 DATA 0,2,0,0,0,0
+710 DATA 0,0,0,0,0,0
+720 DATA 4,0,0,0,0,0
+730 DATA 0,0,0,0,0,0
+740 DATA 0,0,0,0,0,0
+750 DATA 0,0,0,0,0,0
+760 DATA 0,0,0,0,0,0
+770 DATA 0,0,0,0,0,0,1,0,0
+780 SP=VAL(ARG$(1))
+790 IF SP<0 OR SP>=NP THEN SP=0
+800 FOR I=0 TO 5:READ RC(I):NEXT I
+810 FOR I=0 TO 5:READ MNR(I):NEXT I
+820 FOR I=0 TO 2:FOR K=0 TO 7:READ CHO(I,K):NEXT K:NEXT I
+830 FOR I=0 TO 8:READ PSEL(I):NEXT I
+840 FOR I=0 TO 4:READ PENT(I):NEXT I
+850 FOR I=0 TO 8:FOR K=0 TO 5:READ FB(I,K):NEXT K:NEXT I
+860 FOR I=0 TO 8:READ DM(I):NEXT I
+870 QT=0:FA=0:BF=0
+880 CALL SETUP
+890 CALL MUSIC(SP)
+900 FOR P=SP TO NP-1
+910   IF QT=0 THEN
+920     CALL CLOCK
+930     CALL NEWPART(P)
+940     IF P=0 THEN CALL P_INTRO
+950     IF P=1 THEN CALL P_COPPER
+960     IF P=2 THEN CALL P_STARS
+970     IF P=3 THEN CALL P_PLASMA
+980     IF P=4 THEN CALL P_VECTOR
+990     IF P=5 THEN CALL P_TUNNEL
+1000     IF P=6 THEN CALL P_SCROLL
+1010     IF P=7 THEN CALL P_PARALLAX
+1020     IF P=8 THEN CALL P_FINALE
+1030   END IF
+1040 NEXT P
+1050 CALL FINISH
+1060 PRINT "Y2K COUNTDOWN - an Engine1999 demo. See you in the next millennium!"
+1070 END
+1080 ' ====================================================================== common procedures
+1090 PROC SETUP
+1100   GFX RESET ALL
+1110   CLS
+1120   GFX BACKDROP RGB(0,0,0)
+1130   MOUSE HIDE
+1140   CALL MAKEUFO(0)
+1150   CALL MAKEBALLS
+1160   CALL MAKELEVELS
+1170   CALL MAKEGLYPHS
+1180   CALL MAKETILES
+1190   CALL MAKESPRITES
+1200   CALL SFXDEF
+1210 END PROC
+1220 PROC FINISH
+1230   SOUND OFF
+1240   SPRITE 0,OFF
+1250   GFX RESET ALL
+1260   CLS
+1270   COLOR 140
+1280 END PROC
+1290 PROC CLOCK
+1300   TK=TI-T0
+1310   TT=TK/60
+1320   TB=TK/24
+1330   PU=1-(TB-INT(TB))
+1340 END PROC
+1350 ' sets the clock for a new part: a white flash, all sprites hidden, graphics cleared
+1360 PROC NEWPART(P)
+1370   LOCAL I
+1380   GFX RESET
+1390   FOR I=0 TO 247
+1400     SPRITE I,OFF
+1410   NEXT I
+1420   FA=255
+1430   CALL LAYERS_TOP
+1440   CALL PALFIX
+1450   GFX TARGET 0:GFX CLEAR:GFX TARGET 3:GFX CLEAR
+1460   GFX LAYER 0,ON:GFX LAYER 3,OFF
+1470   BF=3:GFX TARGET BF
+1480   TXT FILL 0,0,79,24,32,0,0
+1490   CLS
+1500 END PROC
+1510 ' the two graphics layers go above the text screen: order bottom to top = tiles, text, layer 0, layer 3, sprites
+1520 PROC LAYERS_TOP
+1530   GFX PRIORITY 0,2
+1540   GFX PRIORITY 1,0
+1550 END PROC
+1560 ' fixed colors on both graphics layers: 1 white, 2 black, 3 yellow, 4 cyan, 5 red, 6 green, 7 blue, 8 orange, 9 magenta, 10 grey
+1570 PROC PAL(I,R,G,B)
+1580   LOCAL C
+1590   C=FN RGBC(R,G,B)
+1600   GFX PALETTE 0,I,C
+1610   GFX PALETTE 3,I,C
+1620 END PROC
+1630 PROC PALFIX
+1640   CALL PAL(1,255,255,255):CALL PAL(2,0,0,0):CALL PAL(3,255,230,0):CALL PAL(4,0,230,255):CALL PAL(5,255,40,40)
+1650   CALL PAL(6,40,255,60):CALL PAL(7,60,90,255):CALL PAL(8,255,150,0):CALL PAL(9,255,60,220):CALL PAL(10,130,130,150)
+1660   LOCAL I
+1670   FOR I=1 TO 10
+1680     GFX PALETTE 4,I,GFX("PALETTE",0,I)
+1690   NEXT I
+1700 END PROC
+1710 ' a rainbow color: hue H (radians), brightness V (0..1)
+1720 PROC HUE(I,H,V)
+1730   CALL PAL(I,INT(V*(127+127*SIN(H))),INT(V*(127+127*SIN(H+2.094))),INT(V*(127+127*SIN(H+4.189))))
+1740 END PROC
+1750 ' the text screen as a gradient: 25 rows of background color, palette 16..40 of the text layer
+1760 PROC BGBANDS(R0,G0,B0,R1,G1,B1)
+1770   LOCAL Y,F
+1780   FOR Y=0 TO 24
+1790     F=Y/24
+1800     GFX PALETTE 2,16+Y,RGB(INT(R0+(R1-R0)*F),INT(G0+(G1-G0)*F),INT(B0+(B1-B0)*F))
+1810     TXT FILL 0,Y,79,Y,32,0,16+Y
+1820   NEXT Y
+1830 END PROC
+1840 ' end of a frame: a flash that fades, swap the buffers, wait for the display, look at the keys
+1850 PROC FLIP
+1860   LOCAL K$
+1870   IF FA>0 THEN
+1880     GFX PALETTE 0,250,RGB(255,255,255,FA)
+1890     GFX PALETTE 3,250,RGB(255,255,255,FA)
+1900     GFX LINE 0,0,639,299,250,BF
+1910     FA=FA-22
+1920     IF FA<0 THEN FA=0
+1930   END IF
+1940   GFX LAYER BF,ON
+1950   GFX LAYER 3-BF,OFF
+1960   BF=3-BF
+1970   GFX TARGET BF
+1980   GFX CLEAR
+1990   K$=INKEY$
+2000   IF K$="q" OR K$="Q" OR K$=CHR$(27) THEN QT=1
+2010   FRAME
+2020   CALL CLOCK
+2030 END PROC
+2040 ' text centered in a buffer at row Y, scale SX x SY, shadow color 2
+2050 PROC CTEXT(Y,A$,C,SX,SY)
+2060   LOCAL X
+2070   X=320-LEN(A$)*4*SX
+2080   GFX TEXT X+SX,Y+SY,A$,2,SX,SY
+2090   GFX TEXT X,Y,A$,C,SX,SY
+2100 END PROC
+2110 ' ====================================================================== part 0: the intro
+2120 PROC P_INTRO
+2130   LOCAL I,X,Y,DT,A,R,N,T$
+2140   DIM ST(60,3)
+2150   CALL BGBANDS(0,0,24,60,0,70)
+2160   FOR I=0 TO 59
+2170     ST(I,0)=INT(RND(1)*640):ST(I,1)=INT(RND(1)*300):ST(I,2)=RND(1)*6
+2180   NEXT I
+2190   T$="ENGINE1999"
+2200   REPEAT
+2210     ' twinkling stars
+2220     FOR I=0 TO 59
+2230       GFX PSET ST(I,0),ST(I,1),1+INT(2*(1+SIN(TT*5+ST(I,2)))/2)*9
+2240     NEXT I
+2250     FOR I=0 TO 9
+2260       CALL HUE(16+I,I*0.6+TT*3,0.55+0.45*PU)
+2270       DT=TT-(0.4+0.18*I)
+2280       IF DT>0 THEN
+2290         Y=56-300*EXP(-3.2*DT)*ABS(COS(DT*7.5))
+2300         R=FN CLAMP(TT-2.6,0,1)
+2310         Y=Y+R*7*SIN(TT*4+I*0.7)
+2320         X=40+I*56
+2330         GFX TEXT X+6,Y+6,MID$(T$,I+1,1),2,7,5
+2340         GFX TEXT X,Y,MID$(T$,I+1,1),16+I,7,5
+2350       END IF
+2360     NEXT I
+2370     IF TT>1.8 THEN CALL CTEXT(124,"- PRESENTS -",1,2,2)
+2380     IF TT>3 THEN
+2390       N=FN CLAMP(INT((TT-3)/0.12),0,13)
+2400       FOR I=1 TO N
+2410         CALL HUE(30+I,I*0.5-TT*4,1)
+2420         A=I-1
+2430         Y=160+4*SIN(TT*6+I*0.8)
+2440         GFX TEXT 8+A*48+3,Y+3,MID$("Y2K COUNTDOWN",I,1),2,6,5
+2450         GFX TEXT 8+A*48,Y,MID$("Y2K COUNTDOWN",I,1),30+I,6,5
+2460       NEXT I
+2470     END IF
+2480     IF TT>5.5 THEN CALL CTEXT(244,"THE LAST DEMO OF THE MILLENNIUM",3,2,2)
+2490     CALL FLIP
+2500   UNTIL QT OR TI-T0>=PE(0)
+2510 END PROC
+2520 ' ====================================================================== part 1: copper bars
+2530 ' eight bars of 15 shades each: palette 16 + 16 * bar + shade (both graphics layers); each bar is 15 boxes of two rows
+2540 PROC P_COPPER
+2550   LOCAL I,PH,Y,X
+2560   CALL BARPAL
+2570   CALL BGBANDS(0,0,10,0,10,40)
+2580   REPEAT
+2590     CALL HUE(200,TT*2.5,1)
+2600     FOR I=0 TO 7
+2610       PH=TT*1.7+I*0.6
+2620       IF COS(PH)<0 THEN CALL BAR(I,135+105*SIN(PH))
+2630     NEXT I
+2640     FOR I=0 TO 7
+2650       PH=TT*1.7+I*0.6
+2660       IF COS(PH)>=0 THEN CALL BAR(I,135+105*SIN(PH))
+2670     NEXT I
+2680     FOR I=1 TO 21
+2690       X=(I-1)*24+60
+2700       Y=118+40*SIN(TT*3.2+I*0.45)
+2710       GFX TEXT X+3,Y+4,MID$("COPPER BARS NEVER DIE",I,1),2,3,4
+2720       GFX TEXT X,Y,MID$("COPPER BARS NEVER DIE",I,1),200,3,4
+2730     NEXT I
+2740     CALL FLIP
+2750   UNTIL QT OR TI-T0>=PE(1)
+2760 END PROC
+2770 PROC BARPAL
+2780   LOCAL B,K,F,H,R,G,Q
+2790   FOR B=0 TO 7
+2800     H=B*0.8+0.5
+2810     FOR K=0 TO 14
+2820       F=SIN(3.14159*(K+0.5)/15)
+2830       Q=F^6
+2840       R=MIN(255,INT((127+127*SIN(H))*F+210*Q))
+2850       G=MIN(255,INT((127+127*SIN(H+2.094))*F+210*Q))
+2860       Q=MIN(255,INT((127+127*SIN(H+4.189))*F+210*Q))
+2870       CALL PAL(16+B*16+K,R,G,Q)
+2880     NEXT K
+2890   NEXT B
+2900 END PROC
+2910 PROC BAR(B,Y)
+2920   LOCAL K
+2930   FOR K=0 TO 14
+2940     GFX LINE 0,Y+K*2-15,639,Y+K*2-14,16+B*16+K,BF
+2950   NEXT K
+2960 END PROC
+2970 ' ====================================================================== part 2: the starfield
+2980 PROC P_STARS
+2990   LOCAL I,Z,X,Y,SPD,DT,TP,C1,S1,A,X1,Y1,X2,Y2,Z2,LT,K,W$
+3000   FOR I=0 TO 7
+3010     CALL PAL(11+I,40+I*30,60+I*28,110+I*20)
+3020   NEXT I
+3030   CALL BGBANDS(0,0,12,10,0,30)
+3040   FOR I=0 TO 249
+3050     SXX(I)=RND(1)*2-1:SYY(I)=RND(1)*2-1:SZZ(I)=RND(1)
+3060   NEXT I
+3070   SPRITE 0,ON:SPRITE 0,SIZE 2,1:SPRITE 0,PRIORITY 6
+3080   TP=TT
+3090   REPEAT
+3100     DT=TT-TP:TP=TT
+3110     LT=TT-PS(2)/60
+3120     SPD=0.25+0.9*((LT/12.8)^2)+0.35*(PU^2)
+3130     A=0.35*SIN(TT*0.5)
+3140     C1=COS(A):S1=SIN(A)
+3150     FOR I=0 TO 249
+3160       Z=SZZ(I)
+3170       Z2=Z+SPD*DT*2.2
+3180       Z=Z-SPD*DT
+3190       IF Z<0.03 THEN
+3200         Z=1:Z2=1:SXX(I)=RND(1)*2-1:SYY(I)=RND(1)*2-1
+3210       END IF
+3220       SZZ(I)=Z
+3230       X=SXX(I)*C1-SYY(I)*S1
+3240       Y=SXX(I)*S1+SYY(I)*C1
+3250       X1=320+X/Z*160
+3260       Y1=150+Y/Z*160
+3270       IF X1>=0 AND X1<640 AND Y1>=0 AND Y1<300 THEN
+3280         K=MIN(7,INT((1-Z)*8))
+3290         X2=320+X/Z2*160
+3300         Y2=150+Y/Z2*160
+3310         IF SPD>0.5 THEN
+3320           GFX LINE X2,Y2,X1,Y1,11+K
+3330         ELSE
+3340           GFX PSET X1,Y1,11+K
+3350           IF K>5 THEN GFX PSET X1+1,Y1,11+K
+3360         END IF
+3370       ELSE
+3380         SZZ(I)=0.01
+3390       END IF
+3400     NEXT I
+3410     W$="WARP "+MID$(STR$(INT(SPD*10)/10),1)
+3420     CALL CTEXT(12,"HYPERSPACE",4,3,3)
+3430     CALL CTEXT(262,W$,1,2,2)
+3440     SPRITE 0,320+250*SIN(TT*0.9)-16,60+60*SIN(TT*1.7)+LT*5
+3450     CALL FLIP
+3460   UNTIL QT OR TI-T0>=PE(2)
+3470 END PROC
+3480 ' ====================================================================== part 3: plasma (drawn once, animated by rotating the palette) with bobs
+3490 PROC P_PLASMA
+3500   LOCAL X,Y,V,I,SH,C,R,G,B,J,H,BX,BY,K$
+3510   DIM PTA(450),CA(160),CB(75),CXS(160),CYS(75)
+3520   FOR I=0 TO 447
+3530     H=I*2*3.14159/224*2
+3540     R=INT(150+105*SIN(H)):G=INT(150+105*SIN(H+2.094)):B=INT(150+105*SIN(H+4.189))
+3550     PTA(I)=RGB(R,G,B)
+3560   NEXT I
+3570   FOR X=0 TO 159
+3580     CA(X)=SIN(X*0.12):CXS(X)=(X-80)^2
+3590   NEXT X
+3600   FOR Y=0 TO 74
+3610     CB(Y)=SIN(Y*0.17):CYS(Y)=(Y-37)^2
+3620   NEXT Y
+3630   GFX TARGET 0
+3640   FOR Y=0 TO 74
+3650     FOR X=0 TO 159
+3660       V=CA(X)+CB(Y)+SIN((X+Y)*0.09)+SIN(SQR(CXS(X)+CYS(Y))*0.15)
+3670       GFX LINE X*4,Y*4,X*4+3,Y*4+3,16+INT((V+4)*27.8),BF
+3680     NEXT X
+3690   NEXT Y
+3700   GFX LAYER 0,ON
+3710   GFX TARGET 3
+3720   GFX LAYER 3,ON
+3730   FOR I=0 TO 5
+3740     FOR J=0 TO 2
+3750       GFX TEXT 32+J*3+I*96,102+J*2,MID$("PLASMA",I+1,1),2,12,8
+3760     NEXT J
+3770     GFX TEXT 32+I*96,102,MID$("PLASMA",I+1,1),200,12,8
+3780   NEXT I
+3790   CALL PALBALLS
+3800   FOR I=0 TO 9
+3810     SPRITE I,ON:SPRITE I,PRIORITY 6
+3820   NEXT I
+3830   REPEAT
+3840     SH=INT(TT*90) MOD 224
+3850     FOR I=0 TO 223
+3860       GFX PALETTE 0,16+I,PTA(I+SH)
+3870     NEXT I
+3880     GFX PALETTE 3,200,RGB(127+127*SIN(TT*4),127+127*SIN(TT*4+2.1),127+127*SIN(TT*4+4.2))
+3890     FOR J=0 TO 9
+3900       BX=312+250*SIN(TT*1.3+J*0.3)
+3910       BY=138+105*SIN(TT*1.7+J*0.3+1)
+3920       SPRITE J,BX,BY,100+J
+3930     NEXT J
+3940     CALL CLOCK
+3950     FRAME
+3960     K$=INKEY$
+3970     IF K$="q" OR K$="Q" OR K$=CHR$(27) THEN QT=1
+3980   UNTIL QT OR TI-T0>=PE(3)
+3990 END PROC
+4000 ' ====================================================================== sprite images
+4010 ' a flying saucer, 2 x 1 sprites (images I and I+1)
+4020 PROC MAKEUFO(IM)
+4030   LOCAL X,Y,C,L$,R$,DX,DY
+4040   FOR Y=0 TO 23
+4050     FOR X=0 TO 31
+4060       C=0
+4070       DX=X-15.5
+4080       DY=Y-9
+4090       IF DX*DX/36+DY*DY/30<1 AND Y<11 THEN C=4
+4100       DY=Y-15
+4110       IF DX*DX/240+DY*DY/14<1 THEN C=10
+4120       IF DX*DX/200+(Y-18)*(Y-18)/6<1 AND Y>=16 THEN C=7
+4130       IF Y=15 AND X MOD 5=2 AND ABS(DX)<12 THEN C=3
+4140       IF X<16 THEN L$=L$+CHR$(C) ELSE R$=R$+CHR$(C)
+4150     NEXT X
+4160   NEXT Y
+4170   SPRITE DEF IM,L$
+4180   SPRITE DEF IM+1,R$
+4190 END PROC
+4200 ' ten shaded balls (images 100..109, palette of the sprite layer 40 + 8 * ball + shade)
+4210 PROC PALBALLS
+4220   LOCAL J,S,K,H
+4230   FOR J=0 TO 9
+4240     H=J*0.63
+4250     FOR S=0 TO 7
+4260       K=S/7
+4270       GFX PALETTE 4,40+J*8+S,FN RGBC(30+(100+110*SIN(H))*K+110*(K^4),30+(100+110*SIN(H+2.094))*K+110*(K^4),30+(100+110*SIN(H+4.189))*K+110*(K^4))
+4280     NEXT S
+4290   NEXT J
+4300 END PROC
+4310 PROC MAKEBALLS
+4320   LOCAL J,X,Y,S,D,A$
+4330   FOR J=0 TO 9
+4340     A$=""
+4350     FOR Y=0 TO 23
+4360       FOR X=0 TO 15
+4370         D=SQR((X-7.5)^2+(Y-12)^2)
+4380         IF D<=7.6 THEN
+4390           S=INT(7.99*(1-SQR((X-5.5)^2+(Y-9.5)^2)/11))
+4400           S=FN CLAMP(S,0,7)
+4410           A$=A$+CHR$(40+J*8+S)
+4420         ELSE
+4430           A$=A$+CHR$(0)
+4440         END IF
+4450       NEXT X
+4460     NEXT Y
+4470     SPRITE DEF 100+J,A$
+4480   NEXT J
+4490 END PROC
+4500 ' ====================================================================== part 4: vector balls
+4510 DIM SHP(4,64,3),PLV(64)
+4520 PROC MAKESHAPES
+4530   LOCAL K,I,J,L,Y,R,A,B,RR
+4540   FOR K=0 TO 63
+4550     I=K MOD 4:J=(K\4) MOD 4:L=K\16
+4560     SHP(0,K,0)=(I-1.5)*0.6:SHP(0,K,1)=(J-1.5)*0.6:SHP(0,K,2)=(L-1.5)*0.6
+4570     Y=1-2*(K+0.5)/64
+4580     R=SQR(1-Y*Y)
+4590     A=K*2.39996
+4600     SHP(1,K,0)=1.1*R*COS(A):SHP(1,K,1)=1.1*Y:SHP(1,K,2)=1.1*R*SIN(A)
+4610     A=(K MOD 8)*0.785398:B=(K\8)*0.785398
+4620     RR=0.8+0.35*COS(B)
+4630     SHP(2,K,0)=RR*COS(A):SHP(2,K,2)=RR*SIN(A):SHP(2,K,1)=0.35*SIN(B)
+4640     A=K*0.45+(K MOD 2)*3.14159
+4650     SHP(3,K,0)=0.75*COS(A):SHP(3,K,2)=0.75*SIN(A):SHP(3,K,1)=(K\2)/16-1
+4660   NEXT K
+4670 END PROC
+4680 ' six sizes of balls (levels 0 far .. 5 near): images 120..125, palette 120 + 8 * level + shade
+4690 PROC PALLEVELS
+4700   LOCAL L,S,K,H,Q
+4710   FOR L=0 TO 5
+4720     H=4.4-L*0.7
+4730     FOR S=0 TO 7
+4740       K=S/7
+4750       Q=200*(K^6)
+4760       GFX PALETTE 4,120+L*8+S,FN RGBC((127+127*SIN(H))*(0.2+0.8*K)+Q,(127+127*SIN(H+2.094))*(0.2+0.8*K)+Q,(127+127*SIN(H+4.189))*(0.2+0.8*K)+Q)
+4770     NEXT S
+4780   NEXT L
+4790 END PROC
+4800 PROC MAKELEVELS
+4810   LOCAL L,X,Y,S,D,A$,RR,LX,LY
+4820   FOR L=0 TO 5
+4830     RR=3+L*1.05
+4840     LX=7.5-RR*0.35:LY=12-RR*0.4
+4850     A$=""
+4860     FOR Y=0 TO 23
+4870       FOR X=0 TO 15
+4880         D=SQR((X-7.5)^2+(Y-12)^2)
+4890         IF D<=RR THEN
+4900           S=INT(7.99*(1-SQR((X-LX)^2+(Y-LY)^2)/(RR*1.6)))
+4910           A$=A$+CHR$(120+L*8+FN CLAMP(S,0,7))
+4920         ELSE
+4930           A$=A$+CHR$(0)
+4940         END IF
+4950       NEXT X
+4960     NEXT Y
+4970     SPRITE DEF 120+L,A$
+4980   NEXT L
+4990 END PROC
+5000 PROC P_VECTOR
+5010   LOCAL I,K,LT,SEG,PH,M,A,B,C1,S1,C2,S2,X,Y,Z,X1,Z1,Y2,Z2,F,LV,SX,SY,SA,SB,N$,W
+5020   CALL PALLEVELS
+5030   CALL MAKESHAPES
+5040   CALL BGBANDS(10,0,40,10,0,40)
+5050   FOR I=0 TO 10
+5060     W=I/10
+5070     GFX PALETTE 2,16+I,FN RGBC(10+230*W,0+90*W,40+70*W)
+5080     TXT FILL 0,I,79,I,32,0,16+I
+5090   NEXT I
+5100   FOR I=11 TO 24
+5110     GFX PALETTE 2,16+I,FN RGBC(24-I*0.8,0,40-I)
+5120     TXT FILL 0,I,79,I,32,0,16+I
+5130   NEXT I
+5140   FOR I=0 TO 11
+5150     CALL PAL(20+I,FN CLAMP(60+I*16,0,255),0,FN CLAMP(90+I*14,0,255))
+5160   NEXT I
+5170   FOR I=0 TO 11
+5180     CALL PAL(32+I,255,FN CLAMP(230-I*18,0,255),FN CLAMP(30,0,255))
+5190   NEXT I
+5200   FOR I=0 TO 63
+5210     SPRITE I,ON:PLV(I)=-1
+5220   NEXT I
+5230   REPEAT
+5240     LT=TT-PS(4)/60
+5250     SEG=INT(LT/3.2)
+5260     PH=LT-SEG*3.2
+5270     M=1
+5280     IF PH<1.2 THEN M=PH/1.2:M=M*M*(3-2*M)
+5290     SA=SEG MOD 4:SB=(SEG+3) MOD 4
+5300     A=TT*0.8:B=0.45*SIN(TT*0.5)+0.35
+5310     C1=COS(A):S1=SIN(A):C2=COS(B):S2=SIN(B)
+5320     ' the grid floor and the sun
+5330     FOR I=0 TO 28
+5340       Y=50+I*2
+5350       F=SQR(MAX(0,3600-(110-Y)^2))
+5360       IF Y<85 OR (Y MOD 6)<3 THEN GFX LINE 320-F,Y,320+F,Y+1,32+MIN(11,INT(I/2.6)),BF
+5370     NEXT I
+5380     FOR I=-10 TO 10
+5390       GFX LINE 320+I*8,132,320+I*110,299,20+5,
+5400     NEXT I
+5410     F=TT*0.9:F=F-INT(F)
+5420     FOR I=0 TO 9
+5430       Z=(I+F)/10
+5440       Y=132+168*Z*Z
+5450       GFX LINE 0,Y,639,Y,20+INT(Z*11)
+5460     NEXT I
+5470     FOR I=0 TO 63
+5480       X=SHP(SB,I,0)+(SHP(SA,I,0)-SHP(SB,I,0))*M
+5490       Y=SHP(SB,I,1)+(SHP(SA,I,1)-SHP(SB,I,1))*M
+5500       Z=SHP(SB,I,2)+(SHP(SA,I,2)-SHP(SB,I,2))*M
+5510       X1=X*C1-Z*S1:Z1=X*S1+Z*C1
+5520       Y2=Y*C2-Z1*S2:Z2=Y*S2+Z1*C2
+5530       F=3.6/(3.6+Z2)
+5540       SX=320+X1*F*125-8
+5550       SY=140+Y2*F*125-12
+5560       LV=FN CLAMP(INT((1.7-Z2)/3.4*6),0,5)
+5570       SPRITE I,SX,SY,120+LV
+5580       IF LV<>PLV(I) THEN SPRITE I,PRIORITY LV+1:PLV(I)=LV
+5590     NEXT I
+5600     N$=MID$("CUBE  SPHERETORUS DNA   ",SA*6+1,6)
+5610     CALL CTEXT(8,"VECTOR BALLS",1,3,3)
+5620     CALL CTEXT(268,N$,3,2,2)
+5630     CALL FLIP
+5640   UNTIL QT OR TI-T0>=PE(4)
+5650 END PROC
+5660 ' ====================================================================== part 5: the tunnel (drawn once, flown by rotating the palette)
+5670 PROC P_TUNNEL
+5680   LOCAL X,Y,DX,DY,D,A,V,I,H,B,SH,R,L,F,K$
+5690   DIM TUN(450)
+5700   FOR I=0 TO 447
+5710     B=0.2+0.8*(0.5+0.5*SIN(I*0.19635))
+5720     H=I*0.02805
+5730     TUN(I)=FN RGBC(B*(120+135*SIN(H)),B*(120+135*SIN(H+2.094)),B*(120+135*SIN(H+4.189)))
+5740   NEXT I
+5750   GFX TARGET 0
+5760   FOR Y=0 TO 74
+5770     FOR X=0 TO 159
+5780       DX=X*4+2-320:DY=Y*4+2-150
+5790       D=SQR(DX*DX+DY*DY)
+5800       A=ATAN2(DY,DX)/6.28319+0.5
+5810       V=30000/(D+30)+A*448
+5820       GFX LINE X*4,Y*4,X*4+3,Y*4+3,16+(INT(V) MOD 224),BF
+5830     NEXT X
+5840   NEXT Y
+5850   GFX LAYER 0,ON
+5860   GFX TARGET 3
+5870   GFX LAYER 3,ON
+5880   GFX PALETTE 3,251,RGB(0,0,0,40):GFX PALETTE 3,252,RGB(0,0,0,90):GFX PALETTE 3,253,RGB(0,0,0,150):GFX PALETTE 3,254,RGB(0,0,0,210):GFX PALETTE 3,255,RGB(0,0,0,255)
+5890   FOR I=0 TO 4
+5900     R=110-I*22
+5910     GFX CIRCLE 320,150,R,251+I:GFX PAINT 320,150,251+I,251+I
+5920   NEXT I
+5930   CALL CTEXT2(262,"FLY THROUGH THE YEAR 2000",1,2,2)
+5940   CALL PALLEVELS
+5950   FOR I=0 TO 17
+5960     SPRITE I,ON:SPRITE I,PRIORITY 6
+5970   NEXT I
+5980   REPEAT
+5990     SH=INT(TT*110) MOD 224
+6000     FOR I=0 TO 223
+6010       GFX PALETTE 0,16+I,TUN(I+SH)
+6020     NEXT I
+6030     FOR I=0 TO 17
+6040       F=TT*0.55+I/18:F=F-INT(F)
+6050       R=8+F*F*330
+6060       A=I*1.7+TT*0.6+F*2
+6070       L=FN CLAMP(INT(F*6.5),0,5)
+6080       SPRITE I,320+R*COS(A)-8,150+R*0.9*SIN(A)-12,120+L
+6090     NEXT I
+6100     CALL CLOCK
+6110     FRAME
+6120     K$=INKEY$
+6130     IF K$="q" OR K$="Q" OR K$=CHR$(27) THEN QT=1
+6140   UNTIL QT OR TI-T0>=PE(5)
+6150 END PROC
+6160 ' text centered, once, no buffer swap (for the parts that draw a layer only once)
+6170 PROC CTEXT2(Y,A$,C,SX,SY)
+6180   CALL CTEXT(Y,A$,C,SX,SY)
+6190 END PROC
+6200 ' ====================================================================== part 6: the sine scroller
+6210 ' the letters (code 32..127) as sprite images 128..223: the built-in 8 x 12 font at double size, a chrome gradient in the colors 16..39, black outline
+6220 PROC MAKEGLYPHS
+6230   LOCAL C,X,Y,A$,B,N
+6240   DIM GB(18,26)
+6250   FOR C=32 TO 127
+6260     FOR Y=0 TO 25
+6270       FOR X=0 TO 17
+6280         GB(X,Y)=0
+6290       NEXT X
+6300     NEXT Y
+6310     FOR Y=0 TO 11
+6320       B=TXT("BUILTIN",C,Y)
+6330       FOR X=0 TO 7
+6340         IF (B AND (128 SHR X))<>0 THEN
+6350           GB(2+X*2,2+Y*2)=1:GB(3+X*2,2+Y*2)=1:GB(2+X*2,3+Y*2)=1:GB(3+X*2,3+Y*2)=1
+6360         END IF
+6370       NEXT X
+6380     NEXT Y
+6390     A$=""
+6400     FOR Y=0 TO 23
+6410       FOR X=0 TO 15
+6420         IF GB(X+1,Y+1)=1 THEN
+6430           A$=A$+CHR$(16+Y)
+6440         ELSE
+6450           N=GB(X,Y+1)+GB(X+2,Y+1)+GB(X+1,Y)+GB(X+1,Y+2)+GB(X,Y)+GB(X+2,Y+2)
+6460           IF N>0 THEN A$=A$+CHR$(2) ELSE A$=A$+CHR$(0)
+6470         END IF
+6480       NEXT X
+6490     NEXT Y
+6500     SPRITE DEF 128+C-32,A$
+6510   NEXT C
+6520 END PROC
+6530 PROC P_SCROLL
+6540   LOCAL I,K,N,SCO,X,Y,F,H,LT,SC$,AMP,SPDX,R,G,B,C
+6550   SC$="HELLO AND WELCOME TO THE LAST DEMO OF THE MILLENNIUM...   THIS IS ENGINE1999 SHOWING OFF WHAT A BASIC INTERPRETER CAN DO IN THE STYLE OF 1999.   "
+6560   SC$=SC$+"GREETINGS FLY OUT TO ALL OLD SCHOOL CODERS, TRACKER MUSICIANS AND PIXEL PUSHERS:   THE AMIGA PEOPLE, THE C64 PEOPLE, THE ATARI PEOPLE, THE PC DEMO SCENE AND EVERYBODY WHO EVER TYPED 10 PRINT...   "
+6570   SC$=SC$+"SPECIAL GREETINGS TO MY CAT FOR WALKING OVER THE KEYBOARD AT EXACTLY THE RIGHT MOMENT.   THE YEAR 2000 IS COMING - BACK UP YOUR FLOPPY DISKS!   "
+6580   CALL BARPAL
+6590   CALL BGBANDS(0,0,20,30,0,50)
+6600   FOR I=0 TO 40
+6610     SPRITE I,ON:SPRITE I,PRIORITY 6
+6620   NEXT I
+6630   SPDX=((LEN(SC$)+40)*16)/17.5
+6640   REPEAT
+6650     LT=TT-PS(6)/60
+6660     SCO=LT*SPDX
+6670     ' chrome gradient, tinted by a slowly turning hue: a bright top, a dark line in the middle, a bright reflection below
+6680     H=TT*1.5
+6690     FOR I=0 TO 23
+6700       IF I<12 THEN C=1-0.3*(I/11) ELSE C=0.6+0.4*((I-12)/11)
+6710       F=200*MAX(0,1-I/7)
+6720       R=(30+225*(0.5+0.5*SIN(H)))*C+F
+6730       G=(30+225*(0.5+0.5*SIN(H+2.094)))*C+F
+6740       B=(30+225*(0.5+0.5*SIN(H+4.189)))*C+F
+6750       GFX PALETTE 4,16+I,FN RGBC(R,G,B)
+6760     NEXT I
+6770     FOR I=0 TO 5
+6780       CALL BAR(I,150+110*SIN(TT*0.9+I*0.9))
+6790     NEXT I
+6800     AMP=26+14*SIN(TT*0.7)
+6810     N=INT(SCO/16)-40
+6820     FOR K=0 TO 40
+6830       X=640+(N+K)*16-SCO
+6840       Y=135+AMP*SIN(X*0.019+TT*3.1)+7*SIN(X*0.043-TT*2)-6*PU
+6850       IF N+K<0 OR N+K>=LEN(SC$) THEN
+6860         SPRITE K,X,Y,128
+6870       ELSE
+6880         SPRITE K,X,Y,128+ASC(MID$(SC$,N+K+1,1))-32
+6890       END IF
+6900     NEXT K
+6910     CALL CTEXT(10,"GREETINGS",1,3,3)
+6920     CALL FLIP
+6930   UNTIL QT OR TI-T0>=PE(6)
+6940 END PROC
+6950 ' ====================================================================== part 7: parallax
+6960 ' the layers, bottom to top: sky + three ridges (layers 0 / 3 take turns, below the tiles), the tiles (ground, trees, bushes), the text, the sprites
+6970 DIM DEC9(256),DEC10(256)
+6980 PROC TILEPAL
+6990   GFX PALETTE 1,1,FN RGBC(30,100,40):GFX PALETTE 1,2,FN RGBC(60,170,60):GFX PALETTE 1,3,FN RGBC(140,230,90)
+7000   GFX PALETTE 1,4,FN RGBC(110,70,30):GFX PALETTE 1,5,FN RGBC(120,80,50):GFX PALETTE 1,6,FN RGBC(90,55,35)
+7010   GFX PALETTE 1,7,FN RGBC(230,50,60):GFX PALETTE 1,8,FN RGBC(255,220,60):GFX PALETTE 1,9,FN RGBC(20,70,30)
+7020 END PROC
+7030 PROC MAKETILES
+7040   LOCAL T,X,Y,C,A$,DX,DY
+7050   FOR T=1 TO 6
+7060     A$=""
+7070     FOR Y=0 TO 23
+7080       FOR X=0 TO 15
+7090         C=0
+7100         IF T=1 THEN
+7110           IF Y<2 THEN C=3
+7120           IF Y>=2 AND Y<6 THEN C=2
+7130           IF Y>=2 AND Y<6-((X*7+Y*3) MOD 3) THEN C=2
+7140           IF Y>=6-((X*7) MOD 3) AND Y>=3 THEN C=5
+7150           IF Y>=6 THEN C=5
+7160           IF Y>=6 AND ((X*5+Y*3) MOD 11)=0 THEN C=6
+7170         END IF
+7180         IF T=2 THEN
+7190           C=5
+7200           IF ((X*5+Y*7) MOD 9)=0 THEN C=6
+7210           IF ((X*3+Y*11) MOD 17)=0 THEN C=4
+7220         END IF
+7230         IF T=3 THEN
+7240           IF X>=6 AND X<=9 THEN C=4
+7250           IF X=9 THEN C=6
+7260         END IF
+7270         IF T=4 THEN
+7280           DX=(X-7.5)/8:DY=(Y-13)/11.5
+7290           IF DX*DX+DY*DY<1 THEN C=2
+7300           IF DX*DX+DY*DY<1 AND DX*DX+DY*DY>0.7 THEN C=1
+7310           IF DX*DX+DY*DY<0.35 AND ((X*3+Y*5) MOD 7)=0 THEN C=3
+7320           IF DX*DX+DY*DY>=1 AND DX*DX+DY*DY<1.18 AND Y<22 THEN C=9
+7330           IF Y>=22 AND X>=6 AND X<=9 THEN C=4
+7340         END IF
+7350         IF T=5 THEN
+7360           DX=(X-7.5)/8:DY=(Y-17)/6.5
+7370           IF DX*DX+DY*DY<1 THEN C=2
+7380           IF DX*DX+DY*DY<1 AND DX*DX+DY*DY>0.65 THEN C=1
+7390           IF DX*DX+DY*DY<0.3 AND ((X*5+Y*3) MOD 5)=0 THEN C=3
+7400         END IF
+7410         IF T=6 THEN
+7420           IF Y>=14 AND (X=3 OR X=8 OR X=13) THEN C=2
+7430           IF Y>=18 AND (X=4 OR X=12) THEN C=1
+7440           IF (Y=12 OR Y=13) AND (X=2 OR X=3 OR X=7 OR X=8) THEN C=7
+7450           IF (Y=13 OR Y=14) AND (X=12 OR X=13) THEN C=8
+7460           IF Y=12 AND (X=12 OR X=13) THEN C=8
+7470         END IF
+7480         A$=A$+CHR$(C)
+7490       NEXT X
+7500     NEXT Y
+7510     TILE DEF T,A$
+7520   NEXT T
+7530 END PROC
+7540 PROC MAKESPRITES
+7550   LOCAL X,Y,C,L$,R$,DX,DY,F,A$
+7560   ' a cloud, 2 x 1 sprites: images 226, 227
+7570   FOR Y=0 TO 23
+7580     FOR X=0 TO 31
+7590       C=0
+7600       DX=(X-9)/9:DY=(Y-14)/6
+7610       IF DX*DX+DY*DY<1 THEN C=1
+7620       DX=(X-16)/10:DY=(Y-10)/8
+7630       IF DX*DX+DY*DY<1 THEN C=1
+7640       DX=(X-24)/8:DY=(Y-14)/6
+7650       IF DX*DX+DY*DY<1 THEN C=1
+7660       IF C=1 AND Y>=17 THEN C=10
+7670       IF X<16 THEN L$=L$+CHR$(C) ELSE R$=R$+CHR$(C)
+7680     NEXT X
+7690   NEXT Y
+7700   SPRITE DEF 226,L$
+7710   SPRITE DEF 227,R$
+7720   ' the Y2K bug, two frames of walking legs: images 228, 229
+7730   FOR F=0 TO 1
+7740     A$=""
+7750     FOR Y=0 TO 23
+7760       FOR X=0 TO 15
+7770         C=0
+7780         DX=(X-7.5)/6.5:DY=(Y-16)/5.5
+7790         IF DX*DX+DY*DY<1 THEN C=5
+7800         IF DX*DX+DY*DY<1 AND (X=7 OR X=8) THEN C=2
+7810         IF DX*DX+DY*DY<1 AND ((X=4 OR X=11) AND (Y=14 OR Y=18)) THEN C=2
+7820         IF X>=11 AND X<=14 AND Y>=13 AND Y<=16 AND ((X-12.5)^2+(Y-14.5)^2)<4 THEN C=2
+7830         IF Y>=19 AND Y<=21 AND ((X+F+Y) MOD 4)=0 AND X>=2 AND X<=13 THEN C=2
+7840         IF Y=11 AND (X=11 OR X=13) THEN C=2
+7850         A$=A$+CHR$(C)
+7860       NEXT X
+7870     NEXT Y
+7880     SPRITE DEF 228+F,A$
+7890   NEXT F
+7900   SPRITE SEQ 5,CHR$(228)+CHR$(229)
+7910   ' sparks for the fireworks: images 230..236 (colors 3 4 5 6 8 9 1), 237 a dim one, 238 a rocket
+7920   FOR F=0 TO 7
+7930     A$=""
+7940     FOR Y=0 TO 23
+7950       FOR X=0 TO 15
+7960         C=0
+7970         DX=SQR((X-7.5)^2+(Y-11.5)^2)
+7980         IF F<7 AND DX<=2.5 THEN C=VAL(MID$("34568910",F+1,1))
+7990         IF F<7 AND DX<=1 THEN C=1
+8000         IF F=7 AND DX<=1.5 THEN C=10
+8010         A$=A$+CHR$(C)
+8020       NEXT X
+8030     NEXT Y
+8040     SPRITE DEF 230+F,A$
+8050   NEXT F
+8060   A$=""
+8070   FOR Y=0 TO 23
+8080     FOR X=0 TO 15
+8090       C=0
+8100       IF X>=7 AND X<=8 AND Y>=10 AND Y<=22 THEN C=3
+8110       IF X>=7 AND X<=8 AND Y>=8 AND Y<=11 THEN C=1
+8120       A$=A$+CHR$(C)
+8130     NEXT X
+8140   NEXT Y
+8150   SPRITE DEF 238,A$
+8160 END PROC
+8170 PROC P_PARALLAX
+8180   LOCAL I,X,Y,LT,CX,W0,OW,F,SPD,W,H,K,CL
+8190   DIM RD(3,3)
+8200   GFX PRIORITY 0,0
+8210   GFX PRIORITY 3,1
+8220   CALL TILEPAL
+8230   FOR I=0 TO 19
+8240     CALL PAL(20+I,12+I*12.5,14+I*5.5,80+I*3-I*I*0.12)
+8250   NEXT I
+8260   CALL PAL(41,70,60,130):CALL PAL(42,100,90,150):CALL PAL(43,40,110,80)
+8270   FOR I=0 TO 40
+8280     DEC9(I)=0
+8290   NEXT I
+8300   FOR I=0 TO 255
+8310     DEC9(I)=0:DEC10(I)=0
+8320     F=RND(1)
+8330     IF F<0.2 THEN
+8340       DEC9(I)=4:DEC10(I)=3
+8350     ELSE
+8360       IF F<0.36 THEN DEC10(I)=5
+8370       IF F>=0.36 AND F<0.46 THEN DEC10(I)=6
+8380     END IF
+8390   NEXT I
+8400   FOR I=0 TO 40
+8410     TILE SET I,11,1:TILE SET I,12,2
+8420   NEXT I
+8430   FOR I=0 TO 2
+8440     SPRITE I*2,ON:SPRITE I*2,SIZE 2,1:SPRITE I*2,PRIORITY 1
+8450   NEXT I
+8460   W0=-99
+8470   SPRITE 20,ON:SPRITE 20,PRIORITY 5:SPRITE 20,ANIM 5,2,5:SPRITE 20,200,240,228
+8480   SPRITE 21,ON:SPRITE 21,SIZE 2,1:SPRITE 21,PRIORITY 6
+8490   REPEAT
+8500     LT=TT-PS(7)/60
+8510     CX=INT(LT*300)+1
+8520     ' the tiles: the row of trees and bushes is refilled whenever the camera crosses a tile boundary
+8530     W=(CX-1)\16
+8540     IF W<>W0 THEN
+8550       FOR I=0 TO 40
+8560         IF I=40 THEN OW=W ELSE OW=W+1+I
+8570         TILE SET I,9,DEC9(OW MOD 256):TILE SET I,10,DEC10(OW MOD 256)
+8580       NEXT I
+8590       W0=W
+8600     END IF
+8610     TILE SCROLL 15-(CX-1) MOD 16,0
+8620     ' sky
+8630     FOR I=0 TO 19
+8640       GFX LINE 0,I*14,639,I*14+13,20+I,BF
+8650     NEXT I
+8660     ' three ridges at three speeds
+8670     FOR K=0 TO 2
+8680       SPD=LT*(22+K*45+K*K*30)
+8690       FOR I=0 TO 80
+8700         X=I*8
+8710         W=X+SPD
+8720         IF K=0 THEN H=165+35*SIN(W*0.011)+14*SIN(W*0.031+1)
+8730         IF K=1 THEN H=128+25*SIN(W*0.017+2)+10*SIN(W*0.047)
+8740         IF K=2 THEN H=85+14*SIN(W*0.026+4)+6*SIN(W*0.071+1)
+8750         GFX LINE X,299-H,X+7,299,41+K,BF
+8760       NEXT I
+8770     NEXT K
+8780     CALL CTEXT(10,"PARALLAX",1,4,4)
+8790     FOR I=0 TO 2
+8800       CL=640-((LT*(14+I*11)+I*230) MOD 780)
+8810       SPRITE I*2,CL,40+I*38+8*SIN(LT+I),226
+8820     NEXT I
+8830     SPRITE 21,FN CLAMP(640-((LT-4)*120),-64,700),70+20*SIN(LT*2),0
+8840     CALL FLIP
+8850   UNTIL QT OR TI-T0>=PE(7)
+8860 END PROC
+8870 ' ====================================================================== sound effects
+8880 PROC SFXDEF
+8890   SFX 1,"W3 V0.4 ML X0.05,0.05,0.6,0.25 S400,2500,6"
+8900   SFX 2,"W3 V0.9 ML X0,0.02,0.4,0.5 S800,60,2"
+8910   SFX 3,"W1 V0.3 ML X0,0.15,0,0.05 H1319,16"
+8920   SFX 4,"W1 V0.25 ML X0,0.05,0.5,0.2 S500,2400,6"
+8930   SFX 5,"W3 V0.9 ML X0,0.01,0.8,0.8 S3000,30,8 S2000,60,4"
+8940   SFX 6,"W3 V0.3 ML X0,0.01,0,0.15 H4000,32"
+8950 END PROC
+8960 ' ====================================================================== part 8: the millennium bug (countdown, crash, boot, fireworks)
+8970 DIM RK(4,5),PQ(200,7),BL$(8)
+8980 PROC P_FINALE
+8990   CALL FIN_COUNT
+9000   IF QT=0 THEN CALL FIN_GLITCH
+9010   IF QT=0 THEN CALL FIN_BOOT
+9020   IF QT=0 THEN CALL FIN_FIRE
+9030 END PROC
+9040 ' seconds into the finale
+9050 FUNC FINT(X)
+9060   RETURN X-PS(8)/60
+9070 END FUNC
+9080 PROC FIN_COUNT
+9090   LOCAL N,LN,I,R,SX,X,T$,H
+9100   LN=-1
+9110   CALL BGBANDS(0,0,8,0,0,50)
+9120   REPEAT
+9130     N=10-INT(FN FINT(TT)/0.48)
+9140     IF N<1 THEN N=1
+9150     IF N<>LN THEN
+9160       SFX 3
+9170       LN=N
+9180     END IF
+9190     ' rings that run out on every beat
+9200     FOR I=0 TO 2
+9210       R=((1-PU)+I)*140
+9220       GFX CIRCLE 320,150,R,4
+9230       GFX CIRCLE 320,150,R+1,4
+9240     NEXT I
+9250     T$=MID$(STR$(N),1)
+9260     SX=16+INT(5*PU)
+9270     X=320-LEN(T$)*4*SX
+9280     CALL HUE(201,TT*4,1)
+9290     GFX TEXT X+8,64+8,T$,2,SX,10
+9300     GFX TEXT X,64,T$,201,SX,10
+9310     CALL CTEXT(228,"DEC 31 1999  23:59:"+MID$(STR$(60-N),1),3,3,3)
+9320     CALL CTEXT(8,"THE FINAL COUNTDOWN",1,2,2)
+9330     CALL FLIP
+9340   UNTIL QT OR FN FINT(TT)>=4.8
+9350 END PROC
+9360 PROC FIN_GLITCH
+9370   LOCAL I,X,Y,W,C,T$,SK
+9380   FA=255
+9390   SFX 5
+9400   REPEAT
+9410     SK=INT(RND(1)*5)
+9420     FOR I=0 TO 45
+9430       X=RND(1)*640:Y=RND(1)*300
+9440       GFX LINE X,Y,X+RND(1)*200,Y+RND(1)*14,INT(RND(1)*10)+1,BF
+9450     NEXT I
+9460     FOR I=0 TO 4
+9470       Y=RND(1)*280
+9480       X=RND(1)*60
+9490       CALL CTEXT(Y,MID$("SYSTEM ERROR  YEAR 1900     DATE OVERFLOW ?????????????   01.01.1900   BUG BUG BUG",INT(RND(1)*5)*14+1,14),5,3,3)
+9500     NEXT I
+9510     CALL CTEXT(112+SK*4,"01.01.1900",5,8,8)
+9520     GFX BACKDROP RGB(INT(RND(1)*80),0,0)
+9530     CALL FLIP
+9540   UNTIL QT OR FN FINT(TT)>=6.4
+9550   GFX BACKDROP RGB(0,0,0)
+9560 END PROC
+9570 PROC FIN_BOOT
+9580   LOCAL N,LN,K,K$
+9590   GFX LAYER 0,OFF:GFX LAYER 3,OFF
+9600   GFX PALETTE 2,200,RGB(80,255,80):GFX PALETTE 2,201,RGB(255,255,255):GFX PALETTE 2,202,RGB(255,200,60)
+9610   TXT FILL 0,0,79,24,32,0,0
+9620   BL$(0)="ENGINE1999 BIOS V1.999    (C) 1999-2000"
+9630   BL$(1)="CPU: BASIC VIRTUAL MACHINE ............ OK"
+9640   BL$(2)="MEMORY TEST 1024K ..................... OK"
+9650   BL$(3)="CHECKING THE CALENDAR ..."
+9660   BL$(4)="  DATE 01.01.1900 ... THAT IS NOT RIGHT"
+9670   BL$(5)="  APPLYING THE Y2K PATCH ............ DONE"
+9680   BL$(6)="  DATE 01.01.2000 ................... OK!"
+9690   BL$(7)="ALL SYSTEMS GO."
+9700   LN=-1
+9710   REPEAT
+9720     N=INT((FN FINT(TT)-6.4)/0.2)
+9730     IF N>7 THEN N=7
+9740     IF N>LN THEN
+9750       FOR K=LN+1 TO N
+9760         COLOR 200,0
+9770         IF K=4 THEN COLOR 202,0
+9780         IF K=7 THEN COLOR 201,0
+9790         LOCATE 2,3+K*2:PRINT BL$(K);
+9800         SFX 3
+9810       NEXT K
+9820       LN=N
+9830     END IF
+9840     CALL CLOCK
+9850     FRAME
+9860     K$=INKEY$
+9870     IF K$="q" OR K$="Q" OR K$=CHR$(27) THEN QT=1
+9880   UNTIL QT OR FN FINT(TT)>=8
+9890 END PROC
+9900 PROC FIN_FIRE
+9910   LOCAL I,X,Y,H,W,DT,TP,A,SPD,C,K,LT,NP,K$
+9920   CALL PAL(1,255,255,255)
+9930   ' the night sky and a skyline made of text cells
+9940   FOR I=0 TO 24
+9950     GFX PALETTE 2,16+I,FN RGBC(0,0,10+I*3)
+9960     TXT FILL 0,I,79,I,32,0,16+I
+9970   NEXT I
+9980   GFX PALETTE 2,60,RGB(4,4,16):GFX PALETTE 2,61,RGB(255,220,90):GFX PALETTE 2,62,RGB(120,100,50)
+9990   X=0
+10000   WHILE X<80
+10010     W=3+INT(RND(1)*5)
+10020     H=3+INT(RND(1)*8)
+10030     IF X+W>79 THEN W=79-X
+10040     TXT FILL X,25-H,X+W-1,24,32,0,60
+10050     FOR I=1 TO W*H/3
+10060       Y=X+INT(RND(1)*W)
+10070       A=25-H+INT(RND(1)*H)
+10080       TXT FILL Y,A,Y,A,32,0,61+INT(RND(1)*2)
+10090     NEXT I
+10100     X=X+W+1
+10110   WEND
+10120   GFX PALETTE 2,0,RGB(0,0,0,0)
+10130   GFX LAYER 3,ON
+10140   GFX TARGET 3
+10150   GFX CLEAR
+10160   FA=0
+10170   FOR K=0 TO 3
+10180     FOR I=0 TO 5
+10190       GFX TEXT 40+I*96+6,30+6,MID$("HAPPY",I+1,1),2,1,1
+10200     NEXT I
+10210   NEXT K
+10220   CALL BIGTEXT(24,"HAPPY",12,8)
+10230   CALL BIGTEXT(124,"2000",12,8)
+10240   FOR I=0 TO 3
+10250     RK(I,0)=0
+10260   NEXT I
+10270   FOR I=0 TO 199
+10280     PQ(I,0)=0
+10290   NEXT I
+10300   TP=TT:NP=0
+10310   REPEAT
+10320     DT=TT-TP:TP=TT
+10330     LT=FN FINT(TT)
+10340     CALL HUE(200,TT*3,1)
+10350     ' launch
+10360     IF LT<14.2 AND RND(1)<DT*3.6 THEN
+10370       FOR I=0 TO 3
+10380         IF RK(I,0)=0 THEN
+10390           RK(I,0)=1:RK(I,1)=60+RND(1)*520:RK(I,2)=300:RK(I,3)=-(230+RND(1)*90):RK(I,4)=50+RND(1)*110
+10400           SPRITE I,RK(I,1)-8,300,238:SPRITE I,ON:SPRITE I,PRIORITY 6
+10410           SFX 4
+10420           EXIT
+10430         END IF
+10440       NEXT I
+10450     END IF
+10460     FOR I=0 TO 3
+10470       IF RK(I,0)=1 THEN
+10480         RK(I,2)=RK(I,2)+RK(I,3)*DT
+10490         IF RK(I,2)<=RK(I,4) THEN
+10500           RK(I,0)=0:SPRITE I,OFF
+10510           C=INT(RND(1)*7)
+10520           SFX 2
+10530           FOR K=1 TO 56
+10540             NP=(NP+1) MOD 200
+10550             A=K*6.28319/56+RND(1)*0.15
+10560             SPD=(60+RND(1)*110)
+10570             IF K MOD 2=0 THEN SPD=SPD*0.55
+10580             PQ(NP,0)=1:PQ(NP,1)=RK(I,1):PQ(NP,2)=RK(I,2):PQ(NP,3)=SPD*COS(A):PQ(NP,4)=SPD*SIN(A):PQ(NP,5)=1.1+RND(1)*0.9:PQ(NP,6)=C
+10590             SPRITE 10+NP,RK(I,1)-8,RK(I,2)-12,230+C:SPRITE 10+NP,ON:SPRITE 10+NP,PRIORITY 6
+10600           NEXT K
+10610         ELSE
+10620           SPRITE I,RK(I,1)-8,RK(I,2)-12,238
+10630         END IF
+10640       END IF
+10650     NEXT I
+10660     FOR I=0 TO 199
+10670       IF PQ(I,0)=1 THEN
+10680         PQ(I,1)=PQ(I,1)+PQ(I,3)*DT
+10690         PQ(I,2)=PQ(I,2)+PQ(I,4)*DT
+10700         PQ(I,4)=PQ(I,4)+95*DT
+10710         PQ(I,3)=PQ(I,3)*(1-0.6*DT)
+10720         PQ(I,5)=PQ(I,5)-DT
+10730         IF PQ(I,5)<=0 THEN
+10740           PQ(I,0)=0:SPRITE 10+I,OFF
+10750         ELSE
+10760           IF PQ(I,5)<0.45 THEN K=237 ELSE K=230+PQ(I,6)
+10770           SPRITE 10+I,PQ(I,1)-8,PQ(I,2)-12,K
+10780         END IF
+10790       END IF
+10800     NEXT I
+10810     CALL CLOCK
+10820     FRAME
+10830     K$=INKEY$
+10840     IF K$="q" OR K$="Q" OR K$=CHR$(27) THEN QT=1
+10850   UNTIL QT OR FN FINT(TT)>=PE(8)/60-PS(8)/60
+10860 END PROC
+10870 ' big text with a black outline in the layer that is the target now
+10880 PROC BIGTEXT(Y,A$,SX,SY)
+10890   LOCAL X,I,J
+10900   X=320-LEN(A$)*4*SX
+10910   FOR I=-2 TO 2 STEP 2
+10920     FOR J=-2 TO 2 STEP 2
+10930       GFX TEXT X+I*2,Y+J*2,A$,2,SX,SY
+10940     NEXT J
+10950   NEXT I
+10960   GFX TEXT X,Y,A$,200,SX,SY
+10970 END PROC
+10980 ' ====================================================================== the music: 150 beats a minute, eight voices (1 lead, 2 arp, 3 bass, 4 kick and snare, 5 hats, 6 7 8 pad), made bar by bar
+10990 ' a bar is 16 sixteenths = 1.6 s; every voice's string gets exactly one whole note per bar. All strings are made first, then queued at once.
+11000 PROC MUSIC(START)
+11010   LOCAL P,V
+11020   FOR P=START TO NP-1
+11030     CALL SECTION(P)
+11040   NEXT P
+11050   FOR P=START TO NP-1
+11060     PLAY MV$(P,0),MV$(P,1),MV$(P,2),MV$(P,3),MV$(P,4),MV$(P,5),MV$(P,6),MV$(P,7)
+11070     IF P=START THEN T0=TI-PS(START)
+11080   NEXT P
+11090 END PROC
+11100 PROC SECTION(P)
+11110   LOCAL B,NB
+11120   NB=(PE(P)-PS(P))/96
+11130   LD$="T150 W1 V0.26 MN ":AR$="T150 W1 V0.12 MS ":BS$="T150 W2 V0.34 ML ":DR$="T150 ML ":HT$="T150 ML "
+11140   PA$="T150 W2 V0.09 ML ":PB$=PA$:PC$=PA$
+11150   CALL MKMEL(P,NB)
+11160   FOR B=0 TO NB-1
+11170     IF P=8 THEN CALL BAR8(B) ELSE CALL MBAR(P,B,NB)
+11180   NEXT B
+11190   MV$(P,0)=LD$:MV$(P,1)=AR$:MV$(P,2)=BS$:MV$(P,3)=DR$:MV$(P,4)=HT$:MV$(P,5)=PA$:MV$(P,6)=PB$:MV$(P,7)=PC$
+11200 END PROC
+11210 ' the lead: a random walk in the pentatonic scale (a made-up generator with a fixed seed, so every run sounds the same); bars 4.. repeat bars 0..
+11220 PROC MKMEL(P,NB)
+11230   LOCAL B,K,S,IX,PAT,PAT$,N$,NT
+11240   S=1000+P*37
+11250   IX=4
+11260   FOR B=0 TO NB-1
+11270     IF B>=4 AND B<NB-1 THEN
+11280       MEL$(B)=MEL$(B-4)
+11290     ELSE
+11300       S=(S*75+74) MOD 65537
+11310       PAT=INT(S/65537*4)
+11320       PAT$=MID$("xxxxxxxxx.xx.xx.xx.xx.xxx..xx..x",PAT*8+1,8)
+11330       N$=""
+11340       FOR K=1 TO 8
+11350         IF MID$(PAT$,K,1)="x" THEN
+11360           S=(S*75+74) MOD 65537
+11370           IX=IX+INT(S/65537*7)-3
+11380           IF IX<1 THEN IX=3
+11390           IF IX>8 THEN IX=6
+11400           NT=57+PENT(IX MOD 5)+12*(IX\5)
+11410           N$=N$+FN NN$(NT)+"8 "
+11420         ELSE
+11430           N$=N$+"R8 "
+11440         END IF
+11450       NEXT K
+11460       MEL$(B)=N$
+11470     END IF
+11480   NEXT B
+11490   MEL$(NB-1)=FN NN$(64)+"4 "+FN NN$(60)+"4 "+FN NN$(57)+"2 "
+11500 END PROC
+11510 ' one bar of the six voices; C = chord, R = its root (0..11), the third is 3 (minor) or 4 semitones up
+11520 PROC MBAR(P,B,NB)
+11530   LOCAL C,R,TH,K,A$,D$,H$,PT$,N,SH,BS
+11540   C=CHO(PSEL(P),B MOD 8)
+11550   R=RC(C)
+11560   TH=4-MNR(C)
+11570   IF B>=FB(P,0) THEN LD$=LD$+MEL$(B) ELSE LD$=LD$+"R1 "
+11580   ' arp: root, third, fifth, octave, fifth, third, fifth, third ... in sixteenths
+11590   IF B>=FB(P,3) THEN
+11600     SH=0
+11610     IF (B MOD 4)>=2 THEN SH=12
+11620     FOR K=0 TO 15
+11630       N=VAL(MID$("0123212",(K MOD 8)+1,1))
+11640       IF K MOD 8=7 THEN N=1
+11650       IF N=0 THEN N=48+R
+11660       IF N=1 THEN N=48+R+TH
+11670       IF N=2 THEN N=48+R+7
+11680       IF N=3 THEN N=48+R+12
+11690       AR$=AR$+FN NN$(N+SH)+"16 "
+11700     NEXT K
+11710   ELSE
+11720     AR$=AR$+"R1 "
+11730   END IF
+11740   IF B>=FB(P,2) THEN
+11750     BS=36+R
+11760     FOR K=0 TO 7
+11770       N=BS
+11780       IF K=2 OR K=6 THEN N=BS+12
+11790       BS$=BS$+FN NN$(N)+"8 "
+11800     NEXT K
+11810   ELSE
+11820     BS$=BS$+"R1 "
+11830   END IF
+11840   IF B>=FB(P,4) THEN
+11850     PA$=PA$+FN NN$(36+R)+"1 ":PB$=PB$+FN NN$(36+R+TH)+"1 ":PC$=PC$+FN NN$(36+R+7)+"1 "
+11860   ELSE
+11870     PA$=PA$+"R1 ":PB$=PB$+"R1 ":PC$=PC$+"R1 "
+11880   END IF
+11890   IF B>=FB(P,1) THEN
+11900     PT$="K...S...K.K.S..."
+11910     IF DM(P)=1 THEN PT$="K...K...K...K..."
+11920     IF B=NB-1 THEN PT$="K...S...K.S.SSSS"
+11930     DR$=DR$+FN DRUMS$(PT$)
+11940   ELSE
+11950     DR$=DR$+"R1 "
+11960   END IF
+11970   IF B>=FB(P,5) THEN
+11980     PT$="x.x.x.x.x.x.x.x."
+11990     IF B=NB-1 THEN PT$="xxxxxxxxxxxxxxxx"
+12000     HT$=HT$+FN HATS$(PT$)
+12010   ELSE
+12020     HT$=HT$+"R1 "
+12030   END IF
+12040 END PROC
+12050 ' the finale: 0..2 countdown build-up, 3 the crash (a stutter), 4 the boot (a few beeps), 5..8 the fanfare (C G Am F), 9 the last chord
+12060 PROC BAR8(B)
+12070   LOCAL C,R,TH,K,N,SH,S,BS,PT$
+12080   C=0
+12090   IF B=2 OR B=8 THEN C=1
+12100   IF B=5 OR B=9 THEN C=2
+12110   IF B=6 THEN C=3
+12120   R=RC(C)
+12130   TH=4-MNR(C)
+12140   IF B>=5 AND B<9 THEN LD$=LD$+MEL$(B)
+12150   IF B=9 THEN LD$=LD$+FN NN$(72)+"1 "
+12160   IF B<5 OR B>9 THEN
+12170     IF B=3 THEN
+12180       S=777
+12190       FOR K=1 TO 16
+12200         S=(S*75+74) MOD 65537
+12210         IF S/65537<0.55 THEN
+12220           LD$=LD$+FN NN$(72+INT(S/65537*7)*2)+"32 R32 "
+12230         ELSE
+12240           LD$=LD$+"R16 "
+12250         END IF
+12260       NEXT K
+12270     ELSE
+12280       IF B=4 THEN LD$=LD$+"V0.15 O6 C16 R16 R16 R16 O6 E16 R16 R16 R16 O6 G16 R16 R16 R16 O7 C16 R16 R16 R16 " ELSE LD$=LD$+"R1 "
+12290     END IF
+12300   END IF
+12310   IF B<=2 OR (B>=5 AND B<=8) THEN
+12320     SH=0
+12330     IF B>=5 AND (B MOD 4)>=2 THEN SH=12
+12340     FOR K=0 TO 15
+12350       N=VAL(MID$("0123212",(K MOD 8)+1,1))
+12360       IF K MOD 8=7 THEN N=1
+12370       IF N=0 THEN N=48+R
+12380       IF N=1 THEN N=48+R+TH
+12390       IF N=2 THEN N=48+R+7
+12400       IF N=3 THEN N=48+R+12
+12410       AR$=AR$+FN NN$(N+SH)+"16 "
+12420     NEXT K
+12430   ELSE
+12440     AR$=AR$+"R1 "
+12450   END IF
+12460   IF B=3 THEN
+12470     BS$=BS$+"R1 "
+12480   ELSE
+12490     IF B=4 THEN
+12500       BS$=BS$+FN NN$(33)+"1 "
+12510     ELSE
+12520       BS=36+R
+12530       IF B=9 THEN
+12540         BS$=BS$+FN NN$(BS)+"1 "
+12550       ELSE
+12560         FOR K=0 TO 7
+12570           N=BS
+12580           IF K=2 OR K=6 THEN N=BS+12
+12590           BS$=BS$+FN NN$(N)+"8 "
+12600         NEXT K
+12610       END IF
+12620     END IF
+12630   END IF
+12640   IF B=3 OR B=4 THEN
+12650     PA$=PA$+"R1 ":PB$=PB$+"R1 ":PC$=PC$+"R1 "
+12660   ELSE
+12670     PA$=PA$+FN NN$(36+R)+"1 ":PB$=PB$+FN NN$(36+R+TH)+"1 ":PC$=PC$+FN NN$(36+R+7)+"1 "
+12680   END IF
+12690   PT$=""
+12700   IF B=0 THEN PT$="K...K...K...K..."
+12710   IF B=1 OR (B>=5 AND B<=8) THEN PT$="K...S...K.K.S..."
+12720   IF B=2 THEN PT$="SSSSSSSSSSSSSSSS"
+12730   IF B=8 THEN PT$="K...S...K.S.SSSS"
+12740   IF B=9 THEN
+12750     DR$=DR$+"W2 V0.6 O3 G64 D64 O2 G32 R2 R4 R8 R16 "
+12760   ELSE
+12770     IF PT$="" THEN DR$=DR$+"R1 " ELSE DR$=DR$+FN DRUMS$(PT$)
+12780   END IF
+12790   IF B=1 OR (B>=5 AND B<=7) THEN HT$=HT$+FN HATS$("x.x.x.x.x.x.x.x.")
+12800   IF B=2 OR B=8 THEN HT$=HT$+FN HATS$("xxxxxxxxxxxxxxxx")
+12810   IF B=9 THEN HT$=HT$+"W3 V0.3 O6 C1 "
+12820   IF B=0 OR B=3 OR B=4 THEN HT$=HT$+"R1 "
+12830 END PROC

@@ -13,6 +13,12 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+### Roadmap item 74: demo "Y2K Countdown" (2026-11-07, owner: "do it all and go with your choices", after my suggestion of a 1999 style demo)
+- New `demos/y2k.bas` (~1290 lines, window only; installed as `engine1999-y2k`): nine parts to one chip tune (intro, copper bars, starfield, plasma, vector balls, tunnel, sine scroller, parallax, millennium-bug finale). Plasma and tunnel are drawn once and animated by palette cycling; two graphics layers take turns (no flicker); sprites as bobs, balls and letters (glyphs cut from `TXT("BUILTIN")`); the text screen as a color gradient; tiles scrolled with wrap-around; `GFX PRIORITY` puts the buffers below the tile layer; translucent flashes; 200-sprite fireworks. Everything is clock driven (`TI`). The music is generated bar by bar (pentatonic random walk with a fixed seed, arps, bass, drums, pads) into eight `PLAY` strings. Argument 0..8 starts at a part.
+- `man/engine1999-y2k.6`, `GAMES` in the makefile, rows in `README.md` / `demos/README.md`, `docs/build-and-test.md`.
+- Tested under Xvfb + metacity with screenshots (all nine parts, a full run from part 0 to the end without an error); the music strings were rendered offline with `synth.c` + `mml.c` (no clipping, peak 0.91). Not heard by ear, not tried with a real sound card. `make man-check` ok. No C source changed, so the regression suites were not run.
+- Found on the way (not changed, written down in `SESSION.md`): `^` binds like `*` (`110*0.5^4` is `55^4`), `MOD` cuts both operands to integers, `DIM A(n)` has n elements (0..n-1), `OFF` can't be a variable name.
+
 ## Log
 
 ### 7a6cb67 — 2026-10-17 13:32:27 +0200 — "Introduced Claude to the project"
