@@ -8,31 +8,37 @@
 .\" Keep this page current: it describes the demo game demos/fruit3.bas (an executable made with BUILD, installed by "make install").
 .TH ENGINE1999-FRUIT3 6 "November 2026" "Engine 1999 @VERSION@" "Engine1999 Manual"
 .SH NAME
-engine1999-fruit3 \- Fruit Invaders III, a Space Invaders style game with music
+engine1999-fruit3 \- Fruit Invaders III, the top-notch edition for one or two players
 .SH SYNOPSIS
 .B engine1999-fruit3
 .SH DESCRIPTION
-Fruit Invaders III is the third game of the series. New: the flying pineapple is a mothership made of three sprites (a sprite group) that flies by itself on a sprite path, and every fifth wave a boss arrives, a giant angry watermelon of 4 x 2 sprites (64 x 48 pixels) that patrols on a path, drops bombs and takes many hits (its health bar is at the top; a hit makes it flash white; 1000 points for beating it). Shooting stars cross the sky on paths of their own. Everything of Fruit Invaders II is still there. Fruit Invaders II is the rewrite of Fruit Invaders with shaded, animated sprites, a scrolling and twinkling starfield with a planet and a moon, music that gets faster with every wave, and more effects. Shoot the invading fruit before it lands: cherries are worth 50 points, strawberries 40, apples 30, oranges 20, lemons 10, the flying pineapple 50 to 300. Now and then a banana falls out of a fruit: catch it with the cannon for rapid fire (two bullets at a time). Bombs can be shot down. You have lives and get an extra life for every few thousand points.
+Fruit Invaders III is the biggest of the fruit games and the one that uses the most of the engine. A gardener (or two, at the same time) throws balls at marching fruit that sways on its branches and spits seeds back. The day passes with the waves: dawn, morning, noon, afternoon, sunset and night, with the sky, the hills, the grass and the bushes fading from one time of day to the next; at night there are stars, a moon, fireflies and shooting stars. A windsock shows the wind, which carries the seeds and the clouds. Cherries are worth 50 points, strawberries 40, apples 30, oranges 20, lemons 10, the bird that flies by 50 to 300. Coconuts (from the second wave) are worth 100 and take two hits. Bananas give rapid fire. A balloon crosses the sky now and then and drops a crate with a power-up for 15 seconds: two balls at once, a big ball that hits several fruits, or an umbrella that keeps the seeds off; shoot the balloon for 200 points and the crate. Every fifth wave a giant melon arrives; when it is half beaten it splits in two. Four round bushes protect the gardeners and lose their leaves where a seed or a ball hits. You have lives (up to five) and get an extra life for every 1500 points. See also \fBengine1999-fruit\fR(6) and \fBengine1999-fruit2\fR(6), the simple and the middle edition.
 .PP
 The program is the demo \fIfruit3.bas\fR of Engine1999, made into an executable with
 .B BUILD
 (window kind: it needs the SDL2 library, nothing else); its BASIC libraries are inside it. It opens the Engine1999 window; the window can
 be switched between the full screen and a window with F11 or ALT+RETURN.
 .SH CONTROLS
+One player:
 .TP
 .BR LEFT / RIGHT " or " A / D
-move the cannon (only while the key is held).
+walk (only while the key is held).
 .TP
-.BR SPACE " or " UP
-fire.
+.BR SPACE ", " UP " or " W
+throw a ball (hold it for rapid fire when you have it).
+.PP
+Two players (press 2 on the title screen, or A on the second pad): player 1 walks with A / D and throws with W (or SPACE), player 2 walks with LEFT / RIGHT and throws with UP (or RETURN). Both can use their own game controller, too.
 .TP
 .B P
 pause.
 .TP
 .B Q
 quit.
+.TP
+.B M
+music on / off.
 .PP
-A game controller works, too: D-pad or left stick moves, A or the right trigger fires, START pauses, BACK quits.
+A game controller works, too: D-pad or left stick walks, A or the right trigger throws, START pauses, BACK quits.
 .SH FILES
 The high score is kept in the file
 .I fruit3.hi
