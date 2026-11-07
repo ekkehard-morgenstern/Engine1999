@@ -10,7 +10,7 @@
 60 ' a chip tune made by the program itself with PLAY (all 8 music channels), and sound effects. All motion is driven by the clock, so it runs
 70 ' at the same speed on a fast and on a slow machine.
 80 ' --- globals: TK ticks since the start, TT seconds, TB beats (150 per minute), PU pulse (1 on the beat, falling to 0) -----------------------
-90 DIM PS(9),PE(9),SXX(250),SYY(250),SZZ(250),RC(6),MNR(6),CHO(3,8),PSEL(9),PENT(5),FB(9,6),DM(9),MEL$(16),MV$(9,8)
+90 DIM PS(9),PE(9),SXX(250),SYY(250),SZZ(250),RC(6),MNR(6),CHO(3,8),PSEL(9),PENT(5),FB(9,6),DM(9),MEL$(24),MV$(9,8)
 100 ' (a FUNC has to be defined before the lines that call it)
 110 FUNC CLAMP(V,A,B)
 120   IF V<A THEN RETURN A
@@ -58,7 +58,7 @@
 540   PE(I)=S
 550 NEXT I
 560 ' the bars of each part (a bar is 1.6 seconds)
-570 DATA 8,8,8,8,8,8,12,8,10
+570 DATA 8,8,8,8,8,8,18,8,12
 580 ' music tables: the chord roots (Am F C G Em Dm), 1 = minor, the three chord progressions, which progression each part uses,
 590 ' the pentatonic scale, the first bar in which each voice plays in each part (lead, drums, bass, arp, pad, hats), drum style per part
 600 DATA 9,5,0,7,4,2
@@ -655,19 +655,25 @@
 6510   NEXT C
 6520 END PROC
 6530 PROC P_SCROLL
-6540   LOCAL I,K,N,SCO,X,Y,F,H,LT,SC$,AMP,SPDX,R,G,B,C
-6550   SC$="HELLO AND WELCOME TO THE LAST DEMO OF THE MILLENNIUM...   THIS IS ENGINE1999 SHOWING OFF WHAT A BASIC INTERPRETER CAN DO IN THE STYLE OF 1999.   "
-6560   SC$=SC$+"GREETINGS FLY OUT TO ALL OLD SCHOOL CODERS, TRACKER MUSICIANS AND PIXEL PUSHERS:   THE AMIGA PEOPLE, THE C64 PEOPLE, THE ATARI PEOPLE, THE PC DEMO SCENE AND EVERYBODY WHO EVER TYPED 10 PRINT...   "
-6570   SC$=SC$+"SPECIAL GREETINGS TO MY CAT FOR WALKING OVER THE KEYBOARD AT EXACTLY THE RIGHT MOMENT.   THE YEAR 2000 IS COMING - BACK UP YOUR FLOPPY DISKS!   "
+6540   LOCAL I,K,N,SCO,X,Y,F,H,LT,SC$,AMP,SPDX,R,G,B,C,MB,SPF,LASTT
+6550   SC$="HELLO AND WELCOME TO THE LAST DEMO OF THE MILLENNIUM...   THIS IS ENGINE1999 SHOWING OFF WHAT A BASIC INTERPRETER CAN DO.   "
+6560   SC$=SC$+"GREETINGS TO ALL OLD SCHOOL CODERS, TRACKER MUSICIANS AND PIXEL PUSHERS AND TO EVERYBODY WHO EVER TYPED 10 PRINT...   "
+6570   SC$=SC$+"SPECIAL GREETINGS TO MY CAT FOR WALKING OVER THE KEYBOARD.   BACK UP YOUR FLOPPY DISKS!   HOLD THE LEFT MOUSE BUTTON TO SLOW DOWN, THE RIGHT ONE TO SPEED UP...   "
 6580   CALL BARPAL
 6590   CALL BGBANDS(0,0,20,30,0,50)
 6600   FOR I=0 TO 40
 6610     SPRITE I,ON:SPRITE I,PRIORITY 6
 6620   NEXT I
-6630   SPDX=((LEN(SC$)+40)*16)/17.5
+6630   ' the normal speed shows the whole text in the length of the part; a held mouse button slows it down (left) or speeds it up (right)
+6635   SPDX=((LEN(SC$)+40)*16)/((PE(6)-PS(6))/60)
+6636   SCO=0:LASTT=TT
 6640   REPEAT
 6650     LT=TT-PS(6)/60
-6660     SCO=LT*SPDX
+6660     MB=MOUSE("B")
+6662     SPF=1
+6664     IF (MB AND 1)<>0 THEN SPF=0.3
+6666     IF (MB AND 2)<>0 THEN SPF=2.5
+6668     SCO=SCO+(TT-LASTT)*SPDX*SPF:LASTT=TT
 6670     ' chrome gradient, tinted by a slowly turning hue: a bright top, a dark line in the middle, a bright reflection below
 6680     H=TT*1.5
 6690     FOR I=0 TO 23
@@ -958,39 +964,80 @@
 9540   UNTIL QT OR FN FINT(TT)>=6.4
 9550   GFX BACKDROP RGB(0,0,0)
 9560 END PROC
-9570 PROC FIN_BOOT
-9580   LOCAL N,LN,K,K$
-9590   GFX LAYER 0,OFF:GFX LAYER 3,OFF
-9600   GFX PALETTE 2,200,RGB(80,255,80):GFX PALETTE 2,201,RGB(255,255,255):GFX PALETTE 2,202,RGB(255,200,60)
-9610   TXT FILL 0,0,79,24,32,0,0
-9620   BL$(0)="ENGINE1999 BIOS V1.999    (C) 1999-2000"
-9630   BL$(1)="CPU: BASIC VIRTUAL MACHINE ............ OK"
-9640   BL$(2)="MEMORY TEST 1024K ..................... OK"
-9650   BL$(3)="CHECKING THE CALENDAR ..."
-9660   BL$(4)="  DATE 01.01.1900 ... THAT IS NOT RIGHT"
-9670   BL$(5)="  APPLYING THE Y2K PATCH ............ DONE"
-9680   BL$(6)="  DATE 01.01.2000 ................... OK!"
-9690   BL$(7)="ALL SYSTEMS GO."
-9700   LN=-1
-9710   REPEAT
-9720     N=INT((FN FINT(TT)-6.4)/0.2)
-9730     IF N>7 THEN N=7
-9740     IF N>LN THEN
-9750       FOR K=LN+1 TO N
-9760         COLOR 200,0
-9770         IF K=4 THEN COLOR 202,0
-9780         IF K=7 THEN COLOR 201,0
-9790         LOCATE 2,3+K*2:PRINT BL$(K);
-9800         SFX 3
-9810       NEXT K
-9820       LN=N
-9830     END IF
-9840     CALL CLOCK
-9850     FRAME
-9860     K$=INKEY$
-9870     IF K$="q" OR K$="Q" OR K$=CHR$(27) THEN QT=1
-9880   UNTIL QT OR FN FINT(TT)>=8
-9890 END PROC
+9561 DIM TID(128,4)
+9562 NTI=0
+9563 PROC PUTCH(X,Y,C,COL)
+9564   LOCAL A$,R,B,Q
+9565   IF C<33 OR C>127 THEN C=33
+9566   IF TID(C,COL)=0 THEN
+9567     NTI=NTI+1:TID(C,COL)=NTI
+9568     A$=""
+9569     FOR R=0 TO 23
+9570       B=TXT("BUILTIN",C,R\2)
+9571       FOR Q=0 TO 15
+9572         IF (B AND (128 SHR (Q\2)))<>0 THEN A$=A$+CHR$(COL) ELSE A$=A$+CHR$(0)
+9573       NEXT Q
+9574     NEXT R
+9575     TILE DEF NTI,A$
+9576   END IF
+9577   TILE SET X,Y,TID(C,COL)
+9578 END PROC
+9579 ' the boot screen is made of tiles (every character = one 16 x 24 tile, cut from the built-in font at double size), so that the tile screen can twitch it with TILE SCROLL
+9580 PROC FIN_BOOT
+9581   LOCAL N,LN,K,K$,I,COL,TW,SX,SY,T
+9582   GFX LAYER 0,OFF:GFX LAYER 3,OFF:GFX LAYER 1,ON
+9583   GFX PALETTE 1,1,RGB(80,255,80):GFX PALETTE 1,2,RGB(255,200,60):GFX PALETTE 1,3,RGB(255,255,255)
+9584   TXT FILL 0,0,79,24,32,0,0
+9585   FOR K=0 TO 12
+9586     FOR I=0 TO 40
+9587       TILE SET I,K,0
+9588     NEXT I
+9589   NEXT K
+9590   SX=8:SY=12:TILE SCROLL SX,SY
+9591   BL$(0)="ENGINE1999 BIOS V1.999  (C) 1999-2000"
+9592   BL$(1)="CPU: BASIC VIRTUAL MACHINE ....... OK"
+9593   BL$(2)="MEMORY TEST 1024K ................ OK"
+9594   BL$(3)="CHECKING THE CALENDAR ..."
+9595   BL$(4)="  DATE 01.01.1900 ... NOT RIGHT"
+9596   BL$(5)="  APPLYING THE Y2K PATCH ....... DONE"
+9597   BL$(6)="  DATE 01.01.2000 ............... OK!"
+9598   BL$(7)="ALL SYSTEMS GO."
+9599   LN=-1:TW=0
+9600   REPEAT
+9601     T=FN FINT(TT)
+9602     N=INT((T-6.4)/0.2)
+9603     IF N>7 THEN N=7
+9604     IF N>LN THEN
+9605       FOR K=LN+1 TO N
+9606         COL=1
+9607         IF K=4 THEN COL=2
+9608         IF K=7 THEN COL=3
+9609         FOR I=1 TO LEN(BL$(K))
+9610           IF MID$(BL$(K),I,1)<>" " THEN CALL PUTCH(I-1,2+K,ASC(MID$(BL$(K),I,1)),COL)
+9611         NEXT I
+9612         SFX 3
+9613       NEXT K
+9614       LN=N
+9615     END IF
+9616     ' the hold: after the last line the screen stays (3.2 s to read it) and twitches now and then
+9617     IF T>=8 THEN
+9618       IF TW=0 AND RND(1)<0.1 THEN TW=2+INT(RND(1)*4)
+9619       IF TW>0 THEN
+9620         SX=8+INT(RND(1)*13)-6:SY=12+INT(RND(1)*9)-4
+9621         TW=TW-1
+9622       ELSE
+9623         SX=8:SY=12
+9624       END IF
+9625       TILE SCROLL SX,SY
+9626     END IF
+9627     CALL CLOCK
+9628     FRAME
+9629     K$=INKEY$
+9630     IF K$="q" OR K$="Q" OR K$=CHR$(27) THEN QT=1
+9631   UNTIL QT OR FN FINT(TT)>=11.2
+9632   TILE SCROLL 0,0
+9633   GFX LAYER 1,OFF
+9634 END PROC
 9900 PROC FIN_FIRE
 9910   LOCAL I,X,Y,H,W,DT,TP,A,SPD,C,K,LT,NP,K$
 9920   CALL PAL(1,255,255,255)
@@ -1034,7 +1081,7 @@
 10300   TP=TT:NP=0
 10310   REPEAT
 10320     DT=TT-TP:TP=TT
-10330     LT=FN FINT(TT)
+10330     LT=FN FINT(TT)-3.2
 10340     CALL HUE(200,TT*3,1)
 10350     ' launch
 10360     IF LT<14.2 AND RND(1)<DT*3.6 THEN
@@ -1207,8 +1254,12 @@
 12030   END IF
 12040 END PROC
 12050 ' the finale: 0..2 countdown build-up, 3 the crash (a stutter), 4 the boot (a few beeps), 5..8 the fanfare (C G Am F), 9 the last chord
-12060 PROC BAR8(B)
-12070   LOCAL C,R,TH,K,N,SH,S,BS,PT$
+12060 PROC BAR8(BB)
+12070   LOCAL C,R,TH,K,N,SH,S,BS,PT$,B
+12071   ' the two hold bars after the boot screen (bars 5, 6) repeat bar 4; later bars are shifted
+12072   B=BB
+12073   IF BB=5 OR BB=6 THEN B=4
+12074   IF BB>=7 THEN B=BB-2
 12080   C=0
 12090   IF B=2 OR B=8 THEN C=1
 12100   IF B=5 OR B=9 THEN C=2
