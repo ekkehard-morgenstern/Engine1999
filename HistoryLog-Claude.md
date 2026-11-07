@@ -13,6 +13,8 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+- **Fruit rework, stretch 1: `demos/fruit.bas` (Fruit Invaders, simple edition)** (roadmap item 75). New theme instead of space: blue sky as 12 palette bands on the background layer with a sun and hills (a `DISC` routine of `GFX LINE`s), cloud tiles (`TILE SET`), grass with flowers and four round bushes on the graphics layer, a gardener (new sprite image 6) who throws balls (image 7), seeds instead of bombs, round holes where a seed / ball hits a bush, the rustle of leaves (noise `SFX` 7 / 8, alternating) instead of the march notes; the pineapple UFO is gone (simple edition), the file is commented as a teaching example. Pictures of the fruit, seeds and splashes unchanged. `man/engine1999-fruit.6` and the `demos/README.md` row updated, roadmap item 75 added. Checked under Xvfb (title, play, held-key throwing, hits, score, bush erosion); `make man-check` ok; sounds not heard. Backup `pre-fruit-rework` made.
+
 ## Log
 
 ### 7a6cb67 — 2026-10-17 13:32:27 +0200 — "Introduced Claude to the project"
