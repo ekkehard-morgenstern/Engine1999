@@ -13,13 +13,6 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-### Y2K demo: "COPPER WARS NEVER DIE", new greetings (2026-11-07, owner's wording)
-- `demos/y2k.bas`: copper bars text now "COPPER WARS NEVER DIE" (a hat-tip to the Copper Wars of the demo scene); the scroller's cat greeting is replaced by "SPECIAL GREETINGS TO SIMON, YUSSUF (JÜRGEN), MEGATRON (UWE) AND JUG (JENS) ..."; `MAKEGLYPHS` makes a 129th glyph for the umlaut (code 220 of the built-in font, image 239), `P_SCROLL` maps it. Seen under Xvfb (both texts, the umlaut renders).
-
-### Y2K demo: readable boot screen again, twitch through tiles grabbed from the graphics layer (2026-11-07, owner: the first version was easier to read)
-- `demos/y2k.bas`: `FIN_BOOT` is the original again (text screen, 8 x 12 characters, original wording; `PUTCH` / `TID` tile font removed). After the last line the new `FIN_HOLD` paints the lines on graphics layer 3 (`GFX TEXT`), cuts them with `GFX GRAB` into 16 x 24 tile images (`TILE DEF` / `TILE SET`, block of cell (cx, cy) starts at 16*cx+8, 24*cy+12 so that `TILE SCROLL 8,12` puts it where it was painted), shows the tile layer, clears layer 3 and the text screen, and twitches with `TILE SCROLL` for 3.2 s (bursts of 2..5 frames, up to 6 px). Colors 220..222 on layer 3 and the tile palette.
-- Tested under Xvfb: the screenshots during the hold differ from each other (twitch) and show the clean text, then the fireworks follow. No test processes left.
-
 ## Log
 
 ### 7a6cb67 — 2026-10-17 13:32:27 +0200 — "Introduced Claude to the project"
@@ -1482,3 +1475,13 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 - `demos/y2k.bas`: the scroller position now accumulates per frame (`SCO=SCO+dt*SPDX*SPF`); normal speed shows the whole (shortened) text over the length of the part, which grew from 12 to 18 bars (about 29 s); left button held = 0.3x, right button held = 2.5x (`MOUSE("B")`). `MEL$` is dimensioned 24 (an 18-bar part overflowed `MEL$(16)` and ended the demo at once).
 - Man page, `demos/README.md` mention the mouse control. Tested under Xvfb (part 6 runs and scrolls; the button hold itself not injected); `make man-check` ok.
 - **Boot screen holds and twitches** (owner, same day): `FIN_BOOT` now builds the boot text from tiles (`PUTCH`: each character is one 16 x 24 tile cut from the built-in font at double size, `TILE DEF` on demand, colors in tile palette 1; lines shortened to 37 characters because the tile screen has 40 columns) and after the last line holds the screen for 3.2 s, twitching it with `TILE SCROLL` (random offsets of up to 6 px in bursts of 2..5 frames). The finale grew from 10 to 12 bars (hold bars 5 and 6 repeat bar 4 of the music via `BAR8`; later bars shifted, `FIN_FIRE` time offset 3.2 s). Tested under Xvfb: boot screen and fireworks seen; twitch itself not seen in a still.
+
+### 1899fd8 — 2026-11-07 12:59:22 +0100 — "Y2K demoscene demo updated by Claude Code"
+3 files, +112/-88. Two changes bundled in one commit (newest first):
+
+### Y2K demo: "COPPER WARS NEVER DIE", new greetings (2026-11-07, owner's wording)
+- `demos/y2k.bas`: copper bars text now "COPPER WARS NEVER DIE" (a hat-tip to the Copper Wars of the demo scene); the scroller's cat greeting is replaced by "SPECIAL GREETINGS TO SIMON, YUSSUF (JÜRGEN), MEGATRON (UWE) AND JUG (JENS) ..."; `MAKEGLYPHS` makes a 129th glyph for the umlaut (code 220 of the built-in font, image 239), `P_SCROLL` maps it. Seen under Xvfb (both texts, the umlaut renders).
+
+### Y2K demo: readable boot screen again, twitch through tiles grabbed from the graphics layer (2026-11-07, owner: the first version was easier to read)
+- `demos/y2k.bas`: `FIN_BOOT` is the original again (text screen, 8 x 12 characters, original wording; `PUTCH` / `TID` tile font removed). After the last line the new `FIN_HOLD` paints the lines on graphics layer 3 (`GFX TEXT`), cuts them with `GFX GRAB` into 16 x 24 tile images (`TILE DEF` / `TILE SET`, block of cell (cx, cy) starts at 16*cx+8, 24*cy+12 so that `TILE SCROLL 8,12` puts it where it was painted), shows the tile layer, clears layer 3 and the text screen, and twitches with `TILE SCROLL` for 3.2 s (bursts of 2..5 frames, up to 6 px). Colors 220..222 on layer 3 and the tile palette.
+- Tested under Xvfb: the screenshots during the hold differ from each other (twitch) and show the clean text, then the fireworks follow. No test processes left.
