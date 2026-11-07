@@ -450,9 +450,12 @@ void synth_render( synth_t* s, float* buf, int count ) {
                 c->trem_phase += (double) c->trem_rate / (double) s->rate;
                 if ( c->trem_phase >= 1.0 ) c->trem_phase -= floor( c->trem_phase );
             }
-            sum += synth_osc_next( &c->osc ) * level;
+            float v = synth_osc_next( &c->osc ) * level;
+            sum += v;
+            if ( fabsf( v ) > s->peak[i] ) s->peak[i] = fabsf( v );
             sumgain += c->gain;
         }
         buf[j] = sumgain > 1.0f ? sum / sumgain : sum;      // loud chords are scaled down, not clipped
+        if ( fabsf( buf[j] ) > s->outpeak ) s->outpeak = fabsf( buf[j] );
     }
 }

@@ -47,6 +47,10 @@ static bool sdlaud_cleanup_warning = false;
 static volatile bool sdlaud_initok = false;
 static volatile bool sdlaud_request_exit = false;
 static SDL_Thread* sdlaud_workerthr = 0;
+static FILE* volatile sdlaud_log = 0;
+static uint64_t sdlaud_logstart = 0;      // sound log (ENGINE1999_SOUNDLOG, see engine1999.c)
+static uint64_t sdlaud_cbtime = 0, sdlaud_cbgap = 0;     // sound log: time of the last callback, longest gap since the last state line
+static int sdlaud_cbcount = 0, sdlaud_cblen = 0;
 
 static void sdlaud_callback( void* userdata, Uint8* stream, int len ) {
     (void) userdata;
@@ -55,6 +59,13 @@ static void sdlaud_callback( void* userdata, Uint8* stream, int len ) {
         return;
     }
     SDL_LockMutex( sdlaud_mtx );
+    if ( sdlaud_log != 0 ) {        // sound log: how often the device calls, in how big pieces, and the longest pause between two calls
+        uint64_t t = sdlutil_getnsec( 0 );
+        if ( sdlaud_cbtime != 0 && t - sdlaud_cbtime > sdlaud_cbgap ) sdlaud_cbgap = t - sdlaud_cbtime;
+        sdlaud_cbtime = t;
+        ++sdlaud_cbcount;
+        sdlaud_cblen = len / (int) sizeof(float);
+    }
     synth_render( &sdlaud_synth, (float*) stream, len / (int) sizeof(float) );
     SDL_UnlockMutex( sdlaud_mtx );
 }
@@ -111,6 +122,28 @@ static int sdlaud_worker( void* arg ) {
         bool queued;
         SDL_LockMutex( sdlaud_mtx );
         synth_runevents( &sdlaud_synth, now );
+        FILE* lg = sdlaud_log;
+        if ( lg != 0 ) {        // the state of the channels twice a second: on / gain / how far ahead of now the channel is queued (s) or idle, queue length
+            static uint64_t lastlog = 0;
+            if ( now - lastlog >= UINT64_C(500000000) ) {
+                lastlog = now;
+                fprintf( lg, "%.3f state bpm %d queued %d", (double)( now - sdlaud_logstart ) / 1.0e9, sdlaud_synth.bpm, sdlaud_synth.nevents );
+                for ( int i=0; i < SYNTH_NCHAN; ++i ) {
+                    const synth_chan_t* c = &sdlaud_synth.chan[i];
+                    if ( sdlaud_synth.cursor[i] > now ) {
+                        fprintf( lg, " | %d %s g%.2f +%.2f pk%.2f", i + 1, c->on ? "on" : "off", (double) c->gain,
+                                 ( (double) sdlaud_synth.cursor[i] - (double) now ) / 1.0e9, (double) sdlaud_synth.peak[i] );
+                    } else {
+                        fprintf( lg, " | %d %s g%.2f idle pk%.2f", i + 1, c->on ? "on" : "off", (double) c->gain, (double) sdlaud_synth.peak[i] );
+                    }
+                    sdlaud_synth.peak[i] = 0.0f;
+                }
+                fprintf( lg, " | mix pk%.2f callbacks %d of %d samples, longest gap %.0f ms", (double) sdlaud_synth.outpeak, sdlaud_cbcount,
+                         sdlaud_cblen, (double) sdlaud_cbgap / 1.0e6 );
+                sdlaud_synth.outpeak = 0.0f; sdlaud_cbcount = 0; sdlaud_cbgap = 0;
+                fputc( '\n', lg );
+            }
+        }
         queued = synth_nextevent( &sdlaud_synth, &next );
         if ( !queued && !sdlaud_request_exit ) {
             SDL_CondWaitTimeout( sdlaud_cond, sdlaud_mtx, SDLAUD_IDLE_MSEC );     // an event that is queued meanwhile wakes us
@@ -216,6 +249,11 @@ void sdlaud_playsweep( int chan, float freq, float freq2, float vol, float beats
     memset( &sp, 0, sizeof(sp) );
     sp.type = SYNTH_EV_PLAY; sp.freq = freq; sp.freq2 = freq2; sp.vol = vol;
     sdlaud_queue( chan, beats, &sp );
+}
+
+void sdlaud_setlog( FILE* f, uint64_t start ) {
+    sdlaud_logstart = start;
+    sdlaud_log = f;
 }
 
 void sdlaud_stopchan( int chan, float beats ) {

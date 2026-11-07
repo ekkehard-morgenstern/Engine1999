@@ -507,7 +507,7 @@ bye-stmt := ( BYE | QUIT ) [ num-expr ] .
 ## Sound
 
 > Sound (see docs/sound.md). Channels are 1..8. SOUND ch, freq, beats [, vol]: a tone of freq Hz (20..20000; 0 = a rest) for
-> "beats" (the tone ends then and the channel's next event follows; -1 or 0 = held until the next SOUND), vol 0..1 (default 0.5). SOUND OFF silences
+> "beats" (the tone ends then and the channel's next event follows; -1 = held until the next SOUND; 0 = zero length, only the state changes), vol 0..1 (default 0.5). SOUND OFF silences
 > one channel / all of them at once, SOUND SYNC lines up the time of the channels (to start them together). PLAY plays one
 > music string per voice (voice n = channel n, all start together); both return at once, PLAYING(ch) is -1 while the channel
 > still sounds or has music queued, else 0. WAVE ch, w: 0 sine, 1 square, 2 triangle, 3 noise. TEMPO bpm: beats per minute.

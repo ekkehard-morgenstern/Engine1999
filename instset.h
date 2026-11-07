@@ -348,7 +348,7 @@ The 4096 extended instructions are as follows:
                             Stores a request for the host (like NEW) and ends the run.
     0001 01000010       SND  - sound statement ( args -- ) C=0 P=1; the parameter is the kind (SNDK_* in nodetype.h):
                             1 SOUND ( ch freq beats vol endfreq -- )   a tone: channel 1..8, 20..20000 Hz (0 = a rest),
-                              beats >= 0 (the channel's next event follows after that), volume 0..1; endfreq != 0 (20..20000,
+                              beats >= 0 (the channel's next event follows after that; -1 = held until the next event), volume 0..1; endfreq != 0 (20..20000,
                               needs beats > 0): the pitch glides to it during the tone
                             2 PLAY ( s1 .. sn n -- )           n music strings (1..8): string i plays on channel i, all
                               voices start together (the strings are parsed first: a wrong one queues nothing, see mml.h)

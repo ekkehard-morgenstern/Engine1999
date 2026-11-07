@@ -144,6 +144,8 @@ typedef struct _synth_t {
     synth_event_t*  events;             // sorted by time
     synth_event_t*  tail;               // the last one (events queued in time order are appended without a search)
     int             nevents;
+    float           peak[SYNTH_NCHAN];  // debugging: the loudest sample each channel (and the mix) produced since the owner last reset these
+    float           outpeak;
 } synth_t;
 
 void synth_init( synth_t* s, int rate );

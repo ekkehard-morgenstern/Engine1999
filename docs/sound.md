@@ -30,8 +30,9 @@ TEMPO bpm                        tempo of the beats of SOUND, 1..1000, default 6
 WAVE ch, w                       wave type: 0 sine, 1 square, 2 triangle, 3 noise; applies to the sounds queued after it
 SOUND ch, freq, beats [, vol [, f2]]  a tone of freq Hz (20..20000) for "beats", volume 0..1 (default 0.5), gliding to f2 (see effects).
                                  freq 0 = a rest of "beats". The tone ends after its beats (like a note of sheet music; a rest adds silence on top).
-                                 beats -1 (or 0) = no end: the tone goes on until the next SOUND on the
-                                 channel (or SOUND OFF); SOUND on a channel always follows what the channel has queued
+                                 beats -1 = no end: the tone goes on until the next SOUND on the
+                                 channel (or SOUND OFF); beats 0 = a note of zero length: nothing sounds, but the
+                                 statement's state changes happen (an earlier held tone ends); SOUND on a channel always follows what the channel has queued
 SOUND OFF [ch]                   silences the channel (no channel or 0 = all) now and forgets what is queued for it
 SOUND SYNC ch [, ch ...]         lines up the time of the channels, so that what is queued next starts together on all of them
 PLAY a$ [, b$ ...]               music strings, up to 8; string n plays on channel n, all voices start together (PLAY syncs
@@ -115,6 +116,10 @@ Host interface: `vm_sound_t` has `tone( chan, freq, freq2, vol, beats )` (freq2 
 `synth_schedule_ev()` with `synth_evspec_t`, `synth_setpitch/setvolume`. Instructions: `SND` kinds 7..13 (see `instset.h`).
 
 Not done: noise filtering (the noise is white), a pulse width for the square wave, a pitch envelope, stereo, `SFX` with parameters.
+
+## Sound log (debugging)
+
+`ENGINE1999_SOUNDLOG=file engine1999 ...` (or `-` for standard error) writes a text log of the sound output of the window host, off by default: one line for every call the VM makes to the host (`tone freq f freq2 f2 vol v beats b` where beats -1 = held and 0 = a note of zero length, `wave`, `envelope`, `vibrato`, `tremolo`, `pitch`, `volume`, `tempo`, `sync mask`, `silence`), each with the time in seconds since the first sound call and the channel (`ch1`..`ch8`, `all`), and twice a second a `state` line: tempo, length of the event queue and for each channel `on` / `off`, the gain, and `+s` (how many seconds ahead of now the channel is queued) or `idle`, and `pkX`: the loudest sample the channel actually *rendered* since the last state line (so `pk0.00` on a channel that is asked for tones = nothing audible came out), then for the mix `mix pkX`, the number of calls of the audio device's callback since the last line, their size in samples, and the longest pause between two calls. (The state lines come every 0.5 s: a sound that repeats every 0.25 s is always seen in the same phase, so look at `pk`, not at `on` / `off`.) The state lines are written by the audio worker (`sdlaud_setlog()`). Use it to see whether a missing sound is never asked for (no `tone` line), asked for but not played (state of the channel), or queued far ahead. With `SDL_AUDIODRIVER=disk` (`SDL_DISKAUDIOFILE=out.raw`, 32-bit float mono, 44100 Hz) the sound can also be recorded without a sound card. Not available in the console host (it has no sound).
 
 ## Instruments (planned)
 

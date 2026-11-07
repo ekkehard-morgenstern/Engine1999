@@ -159,6 +159,13 @@ Chosen as for any SDL2 program (for example
 .B SDL_AUDIODRIVER=disk
 to write the sound to a file).
 .TP
+.B ENGINE1999_SOUNDLOG
+A file name (or
+.B \-
+for standard error): every call of a sound statement to the audio engine (tone, wave, envelope, tempo, sync, silence, ...) is
+written there with the time in seconds, and twice a second the state of the eight channels (on or off, volume, how far ahead the
+channel is queued, length of the event queue). For finding out why a sound is missing; off by default.
+.TP
 .B ENGINE1999_HOME
 The directory with the runtime kit (\fIengine1999.o\fR, \fIengine1999c.o\fR, \fIengine.lib\fR) that
 .B BUILD

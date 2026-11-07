@@ -25,6 +25,7 @@
         Mail: Ekkehard Morgenstern, Mozartstr. 1, D-76744 Woerth am Rhein,
               Germany, Europe
 */
+#include <stdarg.h>
 #include "sdlmain.h"
 #include "sdlscreen.h"
 #include "sdlevent.h"
@@ -883,7 +884,46 @@ static bool host_save( struct _vm_t* vm, void* usrdata, const char* filename, bo
 }
 
 // sound output of SOUND, PLAY, ... : the audio engine (all calls are no-ops when there is no audio device)
+// sound log (debugging): ENGINE1999_SOUNDLOG=file (or - for standard error) writes every call of the sound statements to the
+// audio engine, with the time in seconds, and twice a second the state of the channels (sdlaud_setlog())
+static FILE* snd_logfile = 0;
+static bool snd_logchecked = false;
+static uint64_t snd_logstart = 0;
+
+static FILE* snd_log( void ) {
+    if ( !snd_logchecked ) {
+        snd_logchecked = true;
+        const char* name = getenv( "ENGINE1999_SOUNDLOG" );
+        if ( name != 0 && name[0] != '\0' ) {
+            snd_logfile = strcmp( name, "-" ) == 0 ? stderr : fopen( name, "w" );
+            if ( snd_logfile != 0 ) {
+                setvbuf( snd_logfile, 0, _IOLBF, 0 );
+                snd_logstart = sdlutil_getnsec( 0 );
+                sdlaud_setlog( snd_logfile, snd_logstart );
+            }
+        }
+    }
+    return snd_logfile;
+}
+
+static void snd_logf( int chan, const char* fmt, ... ) {
+    FILE* f = snd_log();
+    if ( f == 0 ) return;
+    fprintf( f, "%.3f ", (double)( sdlutil_getnsec( 0 ) - snd_logstart ) / 1.0e9 );
+    if ( chan >= 0 ) fprintf( f, "ch%d ", chan + 1 ); else fprintf( f, "all " );
+    va_list ap; va_start( ap, fmt ); vfprintf( f, fmt, ap ); va_end( ap );
+    fputc( '\n', f );
+}
+
 static void host_snd_tone( void* usrdata, int chan, float freq, float freq2, float vol, float beats ) {
+    snd_logf( chan, "tone freq %g freq2 %g vol %g beats %g", (double) freq, (double) freq2, (double) vol, (double) beats );
+    bool held = beats < 0.0f;
+    if ( held ) beats = 0.0f;       // -1: held; the audio engine takes no negative durations (its cursor would run wild)
+    if ( beats == 0.0f && !held ) {
+        // a note of zero length: nothing sounds, but the channel's earlier tone ends (state changes only)
+        sdlaud_stopchan( chan, 0.0f );
+        return;
+    }
     if ( freq > 0.0f && freq2 > 0.0f ) {
         sdlaud_playsweep( chan, freq, freq2, vol, beats );
     } else if ( freq > 0.0f ) {
@@ -892,35 +932,42 @@ static void host_snd_tone( void* usrdata, int chan, float freq, float freq2, flo
         sdlaud_stopchan( chan, beats );
         return;
     }
-    // the note ends after its beats, like a note of sheet music (beats 0: no end, it goes on until the next event of the channel)
-    if ( beats > 0.0f ) sdlaud_stopchan( chan, 0.0f );
+    // the note ends after its beats, like a note of sheet music (beats -1: no end, it goes on until the next event of the channel)
+    if ( !held ) sdlaud_stopchan( chan, 0.0f );
 }
 
 static void host_snd_setwave( void* usrdata, int chan, int wave ) {
+    snd_logf( chan, "wave %d", wave );
     sdlaud_setwave( chan, wave );
 }
 
 static void host_snd_setenv( void* usrdata, int chan, float a, float d, float s, float r ) {
+    snd_logf( chan, "envelope %g %g %g %g", (double) a, (double) d, (double) s, (double) r );
     sdlaud_setenvelope( chan, a, d, s, r );
 }
 
 static void host_snd_setvib( void* usrdata, int chan, float rate, float depth ) {
+    snd_logf( chan, "vibrato %g %g", (double) rate, (double) depth );
     sdlaud_setvibrato( chan, rate, depth );
 }
 
 static void host_snd_settrem( void* usrdata, int chan, float rate, float depth ) {
+    snd_logf( chan, "tremolo %g %g", (double) rate, (double) depth );
     sdlaud_settremolo( chan, rate, depth );
 }
 
 static void host_snd_setpitch( void* usrdata, int chan, float freq ) {
+    snd_logf( chan, "pitch %g", (double) freq );
     sdlaud_setpitch( chan, freq );
 }
 
 static void host_snd_setvolume( void* usrdata, int chan, float vol ) {
+    snd_logf( chan, "volume %g", (double) vol );
     sdlaud_setvolume( chan, vol );
 }
 
 static void host_snd_setbpm( void* usrdata, int bpm ) {
+    snd_logf( -1, "tempo %d", bpm );
     sdlaud_setbpm( bpm );
 }
 
@@ -929,10 +976,12 @@ static int host_snd_getbpm( void* usrdata ) {
 }
 
 static void host_snd_sync( void* usrdata, unsigned chanmask ) {
+    snd_logf( -1, "sync mask %02x", chanmask );
     sdlaud_syncchans( chanmask );
 }
 
 static void host_snd_silence( void* usrdata, int chan ) {
+    snd_logf( chan, "silence" );
     if ( chan < 0 ) {
         sdlaud_silenceall();
     } else {

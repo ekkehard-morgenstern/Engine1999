@@ -29,7 +29,7 @@
 505 ' Channel 8 is also the one SFX picks when the others are busy, and an effect leaves its envelope behind: start clean.
 506 SOUND OFF 8:ENVELOPE 8:TREMOLO 8,0,0
 510 WAVE 8,1:VIBRATO 8,14,0.25
-520 SOUND 8,50,0,0.3
+520 SOUND 8,50,-1,0.3
 530 FOR I=0 TO 100
 540   PITCH 8,50+I*2.5
 550   VOLUME 8,0.3+I/250
