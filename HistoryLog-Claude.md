@@ -13,10 +13,16 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-### Roadmap review (2026-11-08, owner's request: update the stale roadmap and tick off what is done)
-- `docs/roadmap.md` only (rows 4, 7, 14, 30, 39, 50, 75; bullets for `OFF`, `LOAD`/`SAVE` directories, cursor keys, `PRINT USING` / `AT` / `HTAB` / `VTAB`, item 79, screen mode leftovers, sandboxing, the Simons' BASIC list (`INSTR` missing); headers of sections 1, 3, 8, 12; the priorities header). `SESSION.md`. No code changed.
-- Checked against the code: `--list-keywords` for words that do not exist (`SWITCH`, `DO`, `TAB`, `DISPLAY`, `BREAKPOINT`, `INSTR`, ...), `OPTION BASE 1` and `LIST #1` at the prompt.
+### Roadmap split into parts (2026-11-08, owner's request)
+- `docs/roadmap.md` (now the overview: parts, priorities, compact table of open items), new `docs/roadmap/{language,sound,hosts,io-and-vm,graphics-and-ui,projects,done}.md` (content moved verbatim by a script; the check that no line was lost and that all relative links resolve was run), `docs/README.md`, `CLAUDE.md` (where the roadmap lives), `docs/library-support.md` (link), `makefile` (`make install` copies `docs/roadmap/*.md`), `SESSION.md`. `orchard3` played a lot by the owner: noted at item 75 in `done.md`. No code changed.
 
+### Roadmap: owner-side playtest of the 3D demos ticked (2026-11-08, owner's report)
+- `docs/roadmap.md` (section 18 bullet done, incl. the install of `engine1999-bughunt` on the owner's machine), `SESSION.md`; the moved entry of the roadmap review (`2bf2a2f`). No code changed.
+
+
+### `INSTR` (2026-11-08, owner's request after the roadmap review)
+- `bastok.[ch]` (`XF_INSTR` 32), `bascomp.c` (`INSTR([start,] hay$, needle$)`: the first argument decides the form), `codegen.[ch]` (`cgen_gen_insr`), `vm.c` (`vm_instr`, instruction `INSR` 0x18F), `instset.h`, `bascomp.ebnf` + `make grammar`, `man/engine1999-basic.7`, `docs/basic-language.md`, `docs/roadmap.md`, `SESSION.md`.
+- Tests: `vmtest1` 9 new cases (1479), `asmtest1` `INSR 1` (73), `make check`, `make man-check`, `make grammar-check`.
 
 ## Log
 
@@ -1616,3 +1622,8 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 17 files changed, 75 insertions(+), 21 deletions(-).
 - Item 25: `bastok.[ch]` (`aliastbl[]`, `keyword_alias_name()`, `is_keyword()` knows the aliases), `engine1999c.c` (`--list-keywords` prints them), `bascomp.ebnf`, man page (`mancheck.sh --update`), `docs/basic-language.md`; `repltest1` 5 new cases (447).
 - Item 21: `scredit.c` (Ctrl-D in `scr_screenedit()` = `se_delete`), `scrtest1.c` 2 new cases (178), `docs/console-host.md`, `docs/screen-editor-proposal.md` §7; roadmap rows 21 and 25, `SESSION.md`.
+
+### 2bf2a2f — 2026-11-08 08:25:40 +0100 — "Roadmap and Claude files update, by Claude Code"
+3 files changed, 41 insertions(+), 33 deletions(-).
+- `docs/roadmap.md` only (rows 4, 7, 14, 30, 39, 50, 75; bullets for `OFF`, `LOAD`/`SAVE` directories, cursor keys, `PRINT USING` / `AT` / `HTAB` / `VTAB`, item 79, screen mode leftovers, sandboxing, the Simons' BASIC list (`INSTR` missing); headers of sections 1, 3, 8, 12; the priorities header). `SESSION.md`. No code changed.
+- Checked against the code: `--list-keywords` for words that do not exist (`SWITCH`, `DO`, `TAB`, `DISPLAY`, `BREAKPOINT`, `INSTR`, ...), `OPTION BASE 1` and `LIST #1` at the prompt.

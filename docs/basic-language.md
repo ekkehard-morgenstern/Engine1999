@@ -450,6 +450,10 @@ A number that does not fit its field is printed in full with a `%` in front. A n
 - `SPACE$(n)`: n blanks. `STRING$(n,c)`: n copies of a character; `c` is a character code 0..255 (`STRING$(3,0)` is three zero bytes) or a string, whose first character is used (an empty string is "Illegal argument"). n is 0..65535, else "Illegal argument".
 - **New reserved words** `SPACE STRING MIN MAX ATAN2`, but they are the first **extension words**: the one-byte token space (0..255) is full, so these are stored as the token `TOK_XFUNC` (254) followed by one byte naming the word (`XF_*` in `bastok.h`, table `xkeywtbl` in `bastok.c`). To the programmer nothing differs from any other reserved word (they list in upper case, `--list-keywords` and the man page include them). **New words are added to that table from now on**: 255 more are possible. Instructions `MTH2 0x17E` (`( x y -- z )`, parameter 1 MIN, 2 MAX, 3 ATAN2) and `STRN 0x17F` (`( n c -- s )`, parameter 0 code, 1 string, 2 `SPACE$`). Tests: `vmtest1` (17), `repltest1` (2), `asmtest1` (2).
 
+## `INSTR` (2026-11-08)
+
+`INSTR([start,] hay$, needle$)`: the position (the first character is 1) of the first `needle$` in `hay$` at or after `start` (1 by default); 0 if it is not there. Case sensitive and binary safe (zero bytes are ordinary characters). `start` < 1 is "Illegal argument", a `start` beyond the end of `hay$` gives 0; an empty `needle$` is found at `start` (1 if left out) as long as that is inside `hay$`, so `INSTR("","")` is 0. The first argument decides the form: a number is the start position. Extension word `XF_INSTR` (32), instruction `INSR` (0x18F; parameter 1 = with a start). New reserved word `INSTR`; no demo used it. Design decisions I took (revisit if unwanted): GW-BASIC's argument order; a start of 0 is an error rather than 1.
+
 ## `ASN`, `ACS`, hyperbolic functions, `ROUND`, `CINT`, `CDBL` (2026-11-08, roadmap item 16)
 
 Extension words (token 254 + `XF_ASN` .. `XF_CDBL` 21..31); instructions `MATH` kinds 17..26 and `MTH2` kind 4.

@@ -2760,6 +2760,54 @@ static bool vm_math2( vm_t* vm, uint16_t kind ) {
     return vm_dpush_num( vm, r );
 }
 
+// INSR ( [start] hay needle -- n ): INSTR; kind 1 has a start position (1 = the first byte)
+static bool vm_instr( vm_t* vm, uint16_t kind ) {
+    char* needle = 0; size_t nlen = 0;
+    char* hay = 0; size_t hlen = 0;
+    double dstart = 1.0;
+    if ( !vm_dpop_bstr( vm, &needle, &nlen ) ) {
+        return false;
+    }
+    if ( !vm_dpop_bstr( vm, &hay, &hlen ) ) {
+        free( needle );
+        return false;
+    }
+    if ( kind == 1 && !vm_dpop_num( vm, &dstart ) ) {
+        free( needle );
+        free( hay );
+        return false;
+    }
+    int32_t start = vm_to_int32( dstart );
+    double result = 0.0;
+    bool ok = true;
+    if ( start < 1 ) {
+        ok = false;
+    } else if ( (size_t) start <= hlen ) {
+        size_t from = (size_t) start - 1U;
+        if ( nlen == 0 ) {
+            result = (double) start;
+        } else {
+            for ( size_t i = from; i + nlen <= hlen; ++i ) {
+                const char* q = memchr( hay + i, needle[0], hlen - nlen - i + 1U );
+                if ( q == 0 ) {
+                    break;
+                }
+                i = (size_t)( q - hay );
+                if ( memcmp( hay + i, needle, nlen ) == 0 ) {
+                    result = (double) ( i + 1U );
+                    break;
+                }
+            }
+        }
+    }
+    free( needle );
+    free( hay );
+    if ( !ok ) {
+        return vm_error( vm, "Illegal argument" );
+    }
+    return vm_dpush_num( vm, result );
+}
+
 // STRN ( n c -- s ) / ( n -- s ): STRING$ with a character code (0) or a string (1), SPACE$ (2)
 static bool vm_string_n( vm_t* vm, uint16_t kind ) {
     char c = ' ';
@@ -4378,6 +4426,7 @@ static bool vm_step( vm_t* vm ) {
         case INS_LIBS: return vm_list_libraries( vm );
         case INS_JOYD: return vm_joy_deadzone( vm );
         case INS_STRN: return vm_string_n( vm, param16 );
+        case INS_INSR: return vm_instr( vm, param16 );
         case INS_RAND: return vm_randomize( vm, param16 != 0 );
         case INS_ANGM:
             if ( param16 < 1 || param16 > 3 ) {

@@ -149,9 +149,11 @@ tool-stmt := TOOL str-expr [ "," str-expr ] .
 
 > ASN(x) and ACS(x) are the arc sine and cosine in the unit of DEG/RAD/GRAD; SINH COSH TANH ASINH ACOSH ATANH the hyperbolic functions; ROUND(x[,n]) rounds to n decimals
 > (halves away from zero; n \< 0: tens, hundreds), CINT(x) to an integer, CDBL(x) is x.
+> INSTR([start,] hay$, needle$) is the position of needle in hay (0 = not found); a numeric first argument is the start position.
 
 ```ebnf
 xfunc-call := ( MIN | MAX | ATAN2 ) "(" num-expr "," num-expr ")" |
+              INSTR "(" [ num-expr "," ] str-expr "," str-expr ")" |
               ROUND "(" num-expr [ "," num-expr ] ")" |
               ( ASN | ACS | SINH | COSH | TANH | ASINH | ACOSH | ATANH | CINT | CDBL ) "(" num-expr ")" |
               EXISTS "(" str-expr ")" |

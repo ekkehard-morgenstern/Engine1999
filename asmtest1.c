@@ -100,6 +100,7 @@ static void test_encodings( void ) {
     asmcase( "KEYD", "21 7D" );
     asmcase( "MTH2 3", "A1 7E 00 03" );
     asmcase( "STRN 2", "A1 7F 00 02" );
+    asmcase( "INSR 1", "A1 8F 00 01" );
     asmcase( "ERRN", "21 80" );
     asmcase( "JOYQ", "21 82" );
     asmcase( "JOYD", "21 83" );

@@ -589,6 +589,10 @@ The 4096 extended instructions are as follows:
                             the PNUM / PSTR that follow with the parameter bit PRTARG_USING put each value into the next field of the format (the format
                             starts again when it is used up) and the literal text around the fields; "Type mismatch" if a value does not fit the kind of
                             field, "Illegal argument" if the format has no field. Parameter 1: ends it (prints the literal text behind the last field that was used).
+    0001 10001111       INSR - search in a string ( [start] hay needle -- n ) C=0 P=1
+                            INSTR([start,] hay$, needle$): the position (1 = first byte) of the first needle in hay at or after start, 0 if it is not there. Parameter 0: no start (it is 1);
+                            parameter 1: start is the first of the three values. start < 1 is "Illegal argument", start beyond the end of hay gives 0; an empty needle is found at start
+                            (if start is within hay). Binary safe (zero bytes are ordinary bytes), case sensitive.
     0001 10001000       EXST - does a file exist ( name -- n ) C=0 P=0
                             EXISTS(name$): -1 if the name can be opened for reading through the I/O drivers (a "driver:" prefix works, ADDRESS names the default driver; no extension search: the name is taken as it is), else 0. An empty name is 0, not an error;
                             it never raises a file error (that is what it is for: ON ERROR + RESUME does not work inside a PROC or FUNC).
@@ -799,5 +803,6 @@ The 4096 extended instructions are as follows:
 #define INS_CLPS        UINT16_C(0X18C)
 #define INS_TOOL        UINT16_C(0X18D)
 #define INS_RTRP        UINT16_C(0X18E)
+#define INS_INSR        UINT16_C(0X18F)
 
 #endif

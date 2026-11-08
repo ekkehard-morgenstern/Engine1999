@@ -842,7 +842,7 @@ static const struct {
 } xkeywtbl[] = {
     { XF_SPACE, "SPACE" }, { XF_STRING, "STRING" }, { XF_MIN, "MIN" }, { XF_MAX, "MAX" }, { XF_ATAN2, "ATAN2" }, { XF_ERROR, "ERROR" }, { XF_JOY, "JOY" }, { XF_FRAME, "FRAME" }, { XF_LIBRARY, "LIBRARY" }, { XF_LIBRARIES, "LIBRARIES" }, { XF_EXISTS, "EXISTS" }, { XF_UI, "UI" }, { XF_USING, "USING" }, { XF_FORMAT, "FORMAT" }, { XF_CLIPBOARD, "CLIPBOARD" }, { XF_AT, "AT" }, { XF_HTAB, "HTAB" }, { XF_VTAB, "VTAB" }, { XF_TOOL, "TOOL" }, { XF_W3D, "W3D" },
     { XF_ASN, "ASN" }, { XF_ACS, "ACS" }, { XF_SINH, "SINH" }, { XF_COSH, "COSH" }, { XF_TANH, "TANH" }, { XF_ASINH, "ASINH" }, { XF_ACOSH, "ACOSH" }, { XF_ATANH, "ATANH" },
-    { XF_ROUND, "ROUND" }, { XF_CINT, "CINT" }, { XF_CDBL, "CDBL" }, { 0, 0 }
+    { XF_ROUND, "ROUND" }, { XF_CINT, "CINT" }, { XF_CDBL, "CDBL" }, { XF_INSTR, "INSTR" }, { 0, 0 }
 };
 
 bool is_xkeyword( const char* name, uint8_t* pxid ) {

@@ -6,7 +6,7 @@ tokenized, compiled to a syntax tree, and code-generated into a stack-machine in
 GPLv3 with the **Engine1999 Runtime Exception** (`LICENSE-EXCEPTION`, a GPLv3 section 7 additional permission): programs written *in* the built-in language are exempt, and so are executables made from them with `BUILD` (conditions: unmodified runtime, notice kept). Every source file header carries the 4-line `ADDITIONAL PERMISSION` note that points to it; new files get the same; the demos in `demos/` start with four license comment lines (1..4).
 
 **Git: never commit or run any git write command in this repo — the user does all git writes manually.** Read-only git is fine.
-Session progress is tracked in `SESSION.md` (imported below, so it is loaded at startup); keep it updated when work changes the state. Open work is listed in `docs/roadmap.md`; keep that current too.
+Session progress is tracked in `SESSION.md` (imported below, so it is loaded at startup); keep it updated when work changes the state. Open work is listed in `docs/roadmap.md` (the overview and priorities) and its parts in `docs/roadmap/` (language, sound, hosts, io-and-vm, graphics-and-ui, projects, done); keep them current too: an item's full row lives in its part, the central table only lists it.
 
 **History log: `HistoryLog-Claude.md` records every change Claude made, per commit (ID, timestamp, details). Keep it updated:**
 - After each piece of work, add a short entry (what changed, why, tests run) under its **Pending** section — do this together with the `SESSION.md` update.

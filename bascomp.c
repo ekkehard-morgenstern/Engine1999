@@ -2056,6 +2056,45 @@ static bool comp_eat_xfunccall( compiler_t* comp, node_t** pnode, bool wantstr )
         }
         return true;
     }
+    if ( xid == XF_INSTR ) {
+        // INSTR ( [ num-expr TOK_COMMA ] str-expr TOK_COMMA str-expr )     the start position (1 by default), the string to search in and the string to look for
+        node_t* arg3 = NODE_NONE;
+        if ( !comp_eat_expr( comp, &arg1 ) || arg1 == NODE_NONE ) {
+            comp_error( comp, "Expression expected" );
+            return false;
+        }
+        bool withstart = arg1->type != NT_STREXPR;
+        if ( comp->currtok != TOK_COMMA || !comp_fetchtok( comp ) ) {
+            comp_error( comp, "Comma ',' expected" );
+            return false;
+        }
+        if ( !comp_eat_strexpr( comp, &arg2 ) || arg2 == NODE_NONE ) {
+            comp_error( comp, "String expression expected" );
+            return false;
+        }
+        if ( withstart ) {
+            if ( comp->currtok != TOK_COMMA || !comp_fetchtok( comp ) ) {
+                comp_error( comp, "Comma ',' expected" );
+                return false;
+            }
+            if ( !comp_eat_strexpr( comp, &arg3 ) || arg3 == NODE_NONE ) {
+                comp_error( comp, "String expression expected" );
+                return false;
+            }
+        }
+        if ( comp->currtok != TOK_RPAREN || !comp_fetchtok( comp ) ) {
+            comp_error( comp, "Closing parenthesis ')' expected" );
+            return false;
+        }
+        uint8_t idata[3] = { TOK_XFUNC, xid, (uint8_t)( withstart ? 1 : 0 ) };
+        bool iok = withstart ? comp_create_node( comp, pnode, NT_SYSNUMFUNCARGCALL, UINT8_C(3), UINT16_C(3), idata, arg1, arg2, arg3 ) :
+                               comp_create_node( comp, pnode, NT_SYSNUMFUNCARGCALL, UINT8_C(2), UINT16_C(3), idata, arg1, arg2 );
+        if ( !iok || *pnode == NODE_NONE ) {
+            out_of_memory( comp );
+            return false;
+        }
+        return true;
+    }
     if ( xid == XF_JOY ) {
         // JOY ( str-expr [ TOK_COMMA num-expr ] ) and JOY TOK_STRING ( str-expr [ TOK_COMMA num-expr ] )     the name of the value, the player (1 by default)
         if ( !comp_eat_strexpr( comp, &arg1 ) || arg1 == NODE_NONE ) {

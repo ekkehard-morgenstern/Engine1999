@@ -1445,6 +1445,16 @@ static const testcase_t cases[] = {
     { "ATAN2 quadrants",        "10 PRINT SGN(ATAN2(1,-1));SGN(ATAN2(-1,-1));SGN(ATAN2(-1,1));SGN(ATAN2(0,-1))", "1-1-11\n" },
     { "ATAN2 in degrees",       "10 DEG:PRINT ATAN2(1,0);ATAN2(0,-1);ATAN2(-1,0)",             "90180-90\n" },
     { "ATAN2 in gradians",      "10 GRAD:PRINT ATAN2(1,0);ATAN2(0,-1)",                        "100200\n" },
+    // INSTR
+    { "INSTR finds",            "10 PRINT INSTR(\"hello\",\"ll\");INSTR(\"hello\",\"h\");INSTR(\"hello\",\"o\");INSTR(\"hello\",\"hello\")", "3151\n" },
+    { "INSTR does not find",    "10 PRINT INSTR(\"hello\",\"z\");INSTR(\"hello\",\"hellos\");INSTR(\"\",\"x\");INSTR(\"Hello\",\"h\")", "0000\n" },
+    { "INSTR with a start",     "10 PRINT INSTR(1,\"abcabc\",\"c\");INSTR(4,\"abcabc\",\"c\");INSTR(6,\"abcabc\",\"c\");INSTR(7,\"abcabc\",\"c\")", "3660\n" },
+    { "INSTR with an empty needle", "10 PRINT INSTR(\"abc\",\"\");INSTR(2,\"abc\",\"\");INSTR(3,\"abc\",\"\");INSTR(4,\"abc\",\"\")", "1230\n" },
+    { "INSTR is binary safe",   "10 PRINT INSTR(\"a\"+CHR$(0)+\"b\"+CHR$(0)+\"c\",CHR$(0)+\"c\");INSTR(\"a\"+CHR$(0)+\"b\",CHR$(0))", "42\n" },
+    { "INSTR with expressions", "10 A$=\"x,y,z\":P=INSTR(A$,\",\"):PRINT P;INSTR(P+1,A$,\",\");LEFT$(A$,P-1)", "24x\n" },
+    { "INSTR start 0",          "10 PRINT INSTR(0,\"a\",\"a\")",                                      "? Illegal argument in line 10\n" },
+    { "INSTR needs strings",    "10 PRINT INSTR(\"a\",1)",                                              "? String expression expected in line 10\n" },
+    { "INSTR needs two strings", "10 PRINT INSTR(\"a\")",                                               "? Comma ',' expected in line 10\n" },
     // ASN ACS SINH COSH TANH ASINH ACOSH ATANH ROUND CINT CDBL
     { "ASN and ACS in radians", "10 PRINT INT(ASN(1)*2*1000000+0.5);ACS(1);INT(ACS(0)*2*1000000+0.5)", "314159303141593\n" },
     { "ASN and ACS in degrees", "10 DEG:PRINT ASN(1);ACS(0);ASN(-1);INT(ASN(0.5)+0.5)",               "9090-9030\n" },

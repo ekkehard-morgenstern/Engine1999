@@ -301,7 +301,7 @@ kit/engine1999c: kit/engine1999c.o kit/engine.lib
 	$(CCOMP) $(KITFLAGS) $(LDFLAGS) -o $@ kit/engine1999c.o kit/engine.lib -lrt -lm
 
 install: kit games version.h
-	install -d $(DESTDIR)$(BINDIR) $(DESTDIR)$(GAMESBINDIR) $(DESTDIR)$(LIBDIR)/lib $(DESTDIR)$(LIBDIR)/tools $(DESTDIR)$(SHAREDIR)/demos/lib $(DESTDIR)$(DOCDIR)/docs/images \
+	install -d $(DESTDIR)$(BINDIR) $(DESTDIR)$(GAMESBINDIR) $(DESTDIR)$(LIBDIR)/lib $(DESTDIR)$(LIBDIR)/tools $(DESTDIR)$(SHAREDIR)/demos/lib $(DESTDIR)$(DOCDIR)/docs/images $(DESTDIR)$(DOCDIR)/docs/roadmap \
 		$(DESTDIR)$(MANDIR)/man1 $(DESTDIR)$(MANDIR)/man6 $(DESTDIR)$(MANDIR)/man7 $(DESTDIR)$(APPDIR) $(DESTDIR)$(ICONDIR)
 	install -m 755 kit/engine1999 kit/engine1999c $(DESTDIR)$(BINDIR)
 	install -m 755 $(GAMEEXE) $(CONEXE) $(DESTDIR)$(GAMESBINDIR)
@@ -312,6 +312,7 @@ install: kit games version.h
 	install -m 644 tools/*.bas $(DESTDIR)$(LIBDIR)/tools
 	install -m 644 README.md LICENSE LICENSE-EXCEPTION $(DESTDIR)$(DOCDIR)
 	install -m 644 docs/*.md docs/grammar.html $(DESTDIR)$(DOCDIR)/docs
+	install -m 644 docs/roadmap/*.md $(DESTDIR)$(DOCDIR)/docs/roadmap
 	install -m 644 docs/images/*.png $(DESTDIR)$(DOCDIR)/docs/images
 	install -m 644 desktop/icons/*.svg $(DESTDIR)$(ICONDIR)
 	for d in desktop/*.desktop; do sed -e 's|@BINDIR@|$(BINDIR)|' -e 's|@GAMESBINDIR@|$(GAMESBINDIR)|' $$d > $(DESTDIR)$(APPDIR)/$$(basename $$d); chmod 644 $(DESTDIR)$(APPDIR)/$$(basename $$d); done

@@ -567,6 +567,7 @@ const char* cgen_opcode_name( uint16_t opcode ) {
         case INS_CLPS:      return "CLPS";
         case INS_TOOL:      return "TOOL";
         case INS_RTRP:      return "RTRP";
+        case INS_INSR:      return "INSR";
         case INS_AFLT:      return "AFLT";
         case INS_GFXC:      return "GFXC";
         case INS_GFXQ:      return "GFXQ";
@@ -1251,6 +1252,7 @@ bool cgen_gen_fram( codegen_t* cgen ) {
 
 bool cgen_gen_clpg( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_CLPG, false, false, UINT16_C(0) ); }
 bool cgen_gen_tool( codegen_t* cgen, uint16_t hasarg ) { return cgen_gen_ins12( cgen, INS_TOOL, false, true, hasarg ); }
+bool cgen_gen_insr( codegen_t* cgen, uint16_t kind ) { return cgen_gen_ins12( cgen, INS_INSR, false, true, kind ); }
 bool cgen_gen_rtrp( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_RTRP, false, false, UINT16_C(0) ); }
 bool cgen_gen_clps( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_CLPS, false, false, UINT16_C(0) ); }
 
@@ -1798,6 +1800,7 @@ UNEXP:      return cgen_unexpected_node( comp );
             case XF_MAX:    ok = cgen_gen_mth2( cgen, 2 ); break;
             case XF_ATAN2:  ok = cgen_gen_mth2( cgen, 3 ); break;
             case XF_ROUND:  ok = cgen_gen_mth2( cgen, 4 ); break;
+            case XF_INSTR:  ok = cgen_gen_insr( cgen, datalen == UINT16_C(3) && node->data[2] ? 1 : 0 ); break;
             case XF_ASN: case XF_ACS: case XF_SINH: case XF_COSH: case XF_TANH: case XF_ASINH: case XF_ACOSH: case XF_ATANH:
                 ok = cgen_gen_math( cgen, (uint16_t)( 17 + node->data[1] - XF_ASN ) ); break;     // MATH kinds 17..24
             case XF_CINT:   ok = cgen_gen_math( cgen, 25 ); break;

@@ -1,7 +1,7 @@
 # Library support — design
 
 Status: **implemented (2026-11-03, steps 1 to 6; this is step 7, the documentation pass).** Owner's request, highest priority on the roadmap (item 48). The sections 1 to 6 are the design as built; 7a to 7c record what each step does; a short user guide is section 9. This
-document replaces the first sketch in `docs/roadmap.md` section 16 after the owner's decisions of the same day:
+document replaces the first sketch in `docs/roadmap/language.md` section 16 after the owner's decisions of the same day:
 
 - Programs load libraries with **`LOAD LIBRARY "name"`** (the AmigaBASIC word), not with a new word like `USE`.
 - **At the prompt the user never has to type it**: `RUN` takes care of the libraries a program names.

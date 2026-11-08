@@ -24,7 +24,7 @@ Players and BASIC programmers: start with the [README](../README.md). Engine con
 | [ui-subsystem.md](ui-subsystem.md) | The UI subsystem (implemented): the `UI` statements, widgets (buttons, lists, scroll bars, canvas, windows), events, `ON UI`, the file requester, the editors built on it |
 | [contributing.md](contributing.md) | **For contributors**: who contributed, how to build and test, how a new statement goes in, conventions, the license of contributions |
 | [screen-editor-proposal.md](screen-editor-proposal.md) | **Proposal (not implemented)**: a C-64 style screen editor for text screen 0: understanding, evaluation, design and the decisions needed |
-| [roadmap.md](roadmap.md) | **Open work**: everything that is still to do, with the design questions that are waiting for a decision |
+| [roadmap.md](roadmap.md) | **Open work**: the overview and priorities of everything that is still to do; the details are in the parts in [roadmap/](roadmap/) (language, sound, hosts, I/O and VM, graphics and UI, projects, done) |
 | [refactoring.md](refactoring.md) | **Current in-progress refactor**: goal, status, known bugs, remaining work, limits table |
 
 Primary sources of truth in the code: `concept.txt` (display design), `bascomp.ebnf` (grammar),
