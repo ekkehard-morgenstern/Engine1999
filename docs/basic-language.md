@@ -355,7 +355,7 @@ FOR EACH K,V IN A(): PRINT K;V;: NEXT V    ' key (the index) and value
   procedure gets one per level) and go away at the end of the call; `LOCAL D()` gives a call its own zeroed copy, with the shape, of an array `D` that exists (also an array parameter). The
   array variable itself is still one global name: outside the call it is the original again (for `LOCAL T(10)` the array declared at parse time, a one-time declaration).
 - A `FUNC` returns what `RETURN expr` or `FN name = expr` last set (0 / `""` if none); `RETURN expr` also leaves at once. `EXIT PROC` / `EXIT FUNC` (also `EXIT FN` in a multi-line `DEF FN`)
-  leave at once (a `FUNC` returns the value set so far). A plain `RETURN` is still the `RETURN` of `GOSUB` (a `GOSUB` inside a procedure to a line of that procedure is fine). `RETURN expr` also works in
+  leave at once (a `FUNC` returns the value set so far). A plain `RETURN` in a `PROC` / `FUNC` / multi-line `DEF FN` returns from a `GOSUB` that was made *in that procedure* and has not returned yet; if there is none it leaves the procedure like `EXIT PROC` (a `FUNC` returns the value set so far). Before 2026-11-08 it was the error "Breakpoint" (the instruction `RTRP` now decides at run time); in the main program a plain `RETURN` is the `RETURN` of `GOSUB` as ever. `RETURN expr` also works in
   a multi-line `DEF FN`.
 - The result of a `FUNC` lives in the hidden variable `@FN<name>`, which is saved like a `LOCAL`, so a recursive call does not disturb the result of its caller.
 - Design decisions I took (revisit if unwanted): `PROC` is a function variable of the label type (own name space: a `PROC A` and a `FUNC A` may both exist); redefining a name with the same number of

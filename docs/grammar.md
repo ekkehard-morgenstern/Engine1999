@@ -311,6 +311,8 @@ goto-stmt := goto-kw goto-target .
 
 > RETURN expr (a number or string according to the function) is only valid in the body of a FUNC or a multi-line DEF FN: it sets the
 > result and leaves. Without a value it is the RETURN of GOSUB.
+> RETURN without a value returns from a GOSUB; inside a PROC, FUNC or multi-line DEF FN it returns from a GOSUB made in that procedure if one is pending, else it leaves the
+> procedure like EXIT PROC (instruction RTRP). RETURN with a value is for a FUNC.
 
 ```ebnf
 return-stmt := RETURN [ expr ] .
@@ -755,7 +757,7 @@ ui-geometry := num-expr "," num-expr "," num-expr "," num-expr "," num-expr .
 > (next \>= 0: a portal to that sector); W3D WALLTEX s,i,mid,upper,lower, WALLOFF, WALLFLAG (1 masked, 2 blocks movement, 4 blocks shots and sight), HEIGHT (doors and lifts), LIGHT
 > and TAG change them; CAMERA x,y,angle[,pitch[,lift]] sets the viewer, TURN turns it, MOVE forward,right walks with collision (PLAYER sets size and step height); VIEW x,y,w,h[,scale[,fov]]
 > is the picture's place, FOG its distance, COLORMAP builds the brightness table from the palette, RENDER draws. THING n,x,y,tex,w,h places a thing (THINGZ, THINGTEX, THINGOFF,
-> THINGMOVE dx,dy, THINGLIGHT). W3D("X"\|"Y"\|"Z"\|"ANGLE"\|"PITCH"\|"SECTOR"\|"FLOORZ"\|"HIT"\|"SECTORS"\|"SHOTDIST"\|"SHOTX"\|"SHOTY"\|"SHOTKIND") need no argument, W3D("SECTORAT"\|"FLOORAT",x,y) two,
+> THINGMOVE dx,dy, THINGLIGHT). W3D("X"\|"Y"\|"Z"\|"ANGLE"\|"PITCH"\|"SECTOR"\|"FLOORZ"\|"LIFT"\|"HIT"\|"SECTORS"\|"SHOTDIST"\|"SHOTX"\|"SHOTY"\|"SHOTKIND") need no argument, W3D("SECTORAT"\|"FLOORAT",x,y) two,
 > the others one: a sector (FLOOR CEIL LIGHT TAG WALLS), a thing (TX TY TZ TSECTOR TON DIST BEARING SEES), a texture (TEXW TEXH), a range (SHOOT USE).
 
 ```ebnf
@@ -765,7 +767,7 @@ w3d-stmt := XFUNC(W3D) ( RESET | COLORMAP | RENDER | TEXTURE num-expr "," str-ex
                              WALLTEX num-expr "," num-expr "," num-expr "," num-expr "," num-expr |
                              ( WALLOFF | THINGMOVE ) num-expr "," num-expr "," num-expr [ "," num-expr ] |
                              ( WALLFLAG | HEIGHT ) num-expr "," num-expr "," num-expr |
-                             ( LIGHT | TAG | THINGZ | THINGTEX | THINGLIGHT | MOVE ) num-expr "," num-expr | ( SKY | FOG | THINGOFF ) num-expr |
+                             ( LIGHT | TAG | THINGZ | THINGTEX | THINGLIGHT | MOVE ) num-expr "," num-expr | ( SKY | FOG | LIFT | THINGOFF ) num-expr |
                              CAMERA num-expr "," num-expr "," num-expr [ "," num-expr [ "," num-expr ] ] |
                              TURN num-expr [ "," num-expr ] |
                              PLAYER num-expr "," num-expr "," num-expr "," num-expr |

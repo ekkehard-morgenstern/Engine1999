@@ -583,6 +583,14 @@ bool cgen_from_returnstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         }
         return cc_add_procexit( cgen, comp, &ins );
     }
+    if ( cgen->inproc ) {
+        // a plain RETURN in a procedure: returns from a GOSUB made in the procedure if one is pending, else leaves the procedure like EXIT PROC
+        uint32_t ins = 0;
+        if ( !cgen_gen_rtrp( cgen ) ) {
+            return cgen_out_of_code_memory( comp );
+        }
+        return cc_add_procexit( cgen, comp, &ins );
+    }
     if ( !cgen_gen_jump( cgen ) ) {     // the return address is on the return stack
         return cgen_out_of_code_memory( comp );
     }

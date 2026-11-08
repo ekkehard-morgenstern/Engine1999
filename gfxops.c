@@ -166,6 +166,7 @@ static const gfxcmd_t cmds[] = {
     { "W3D", "THINGOFF", GFXOP_W3DTHINGOFF, "n",     0, false },
     { "W3D", "THINGMOVE", GFXOP_W3DTHINGMOVE, "nnn", 0, false },
     { "W3D", "THINGLIGHT", GFXOP_W3DTHINGLIGHT, "nn", 0, false },
+    { "W3D", "LIFT",     GFXOP_W3DLIFT,  "n",        0, false },
 };
 
 static const gfxquery_t queries[] = {
@@ -260,6 +261,7 @@ static const gfxquery_t queries[] = {
     { "W3D",    "TZ",        GFXQ_W3DTZ, 1, 1 },
     { "W3D",    "FLOORZ",    GFXQ_W3DFLOORZ, 0, 0 },
     { "W3D",    "SHOTKIND",  GFXQ_W3DSHOTKIND, 0, 0 },
+    { "W3D",    "LIFT",      GFXQ_W3DLIFT, 0, 0 },
 };
 
 const gfxcmd_t* gfxops_find( const char* group, const char* name ) {

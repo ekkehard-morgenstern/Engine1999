@@ -13,6 +13,12 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+### Plain RETURN in a PROC, jumping in Manor (2026-11-08, owner's requests after playtesting the 3D demos)
+- **New VM instruction `RTRP`** (`instset.h`, `vm.c` `vm_return_proc()`, `codegen.[ch]`, `cgenctl.c`): a plain `RETURN` inside a `PROC` / `FUNC` / multi-line `DEF FN` returns from a pending `GOSUB` of that procedure, else leaves it like `EXIT PROC` (before: the error "Breakpoint"). 5 new `vmtest1` cases; `docs/basic-language.md`, `bascomp.ebnf` (+ `make grammar`).
+- **Jump:** `W3D LIFT h` and `W3D("LIFT")` (`gfxops.[ch]`, `w3d.c`: steps up to step + h in `W3D MOVE`); `W3K_JUMP` in `demos/lib/w3dkit.lib`; `demos/manor.bas`: SPACE / pad A jump, E / RETURN / pad X open doors. `docs/3d-subsystem.md`, `man/engine1999-basic.7`, 2 `vmtest1` cases, `w3dtest1` case.
+- **Fixed:** `w3d_op()` read uninitialized argument slots when called with fewer arguments than the signature (the VM never does; `w3dtest1` did): the slots beyond `na` are now "omitted".
+- Tested: `make check` all passed (`vmtest1` 1449, `w3dtest1` 93, also under ASan / UBSan), Xvfb: jump out of the pool. No git stash (refused by the sandbox, nothing changed).
+
 ### 3D follow-up: freeze fixes and the 3D settings library (2026-11-08, owner's report after testing item 78)
 - **Freezes:** bare `RETURN` in a `PROC` ends the program with "Breakpoint" (the picture stays because the text layer is hidden): replaced by `EXIT PROC` in `demos/manor.bas` and `demos/bughunt.bas`; both now trap errors (`ON ERROR GOTO FAILED`: `W3K_DONE`, the message, `END`). Renderer fuzzed with both real levels, no hang.
 - **New `demos/lib/prefs3d.lib`:** invert X / Y axis, gamma, field of view, turning speed; file `local:3dprefs.cfg`; dialog on O / pad Y (`P3_DIALOG`). `demos/lib/w3dkit.lib`: the settings variables, `W3K_VIEW`, `W3K_REAPPLY`, `W3K_SETPREFS`, `W3K_RESETCLOCK`, gamma in `W3K_PALETTE`, inversion and turning speed in `W3K_WALK`. Demos load the settings and show the hint; `man/engine1999-bughunt.6`, `demos/README.md`, `docs/3d-subsystem.md`, `SESSION.md` updated.

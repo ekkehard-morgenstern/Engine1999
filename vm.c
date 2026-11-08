@@ -1474,6 +1474,15 @@ FAIL:
     return false;
 }
 
+// RTRP: a plain RETURN in a procedure: a GOSUB of the procedure that has not returned is returned from, else nothing happens (the next instruction leaves)
+static bool vm_return_proc( vm_t* vm ) {
+    if ( vm->nctx > 0 && vm->rsp > vm->ctxs[ vm->nctx - 1U ].rsp + 2U ) {
+        uint32_t addr = 0;
+        return vm_rpop( vm, &addr ) && vm_branch_to( vm, addr );
+    }
+    return true;
+}
+
 static bool vm_return_function( vm_t* vm ) {
     uint32_t ctxindex = 0, retaddr = 0;
     if ( !vm_rpop( vm, &ctxindex ) || !vm_rpop( vm, &retaddr ) ) {
@@ -4379,6 +4388,7 @@ static bool vm_step( vm_t* vm ) {
         }
         case INS_CALF: return vm_call_function( vm, param16, pc );
         case INS_RETF: return vm_return_function( vm );
+        case INS_RTRP: return vm_return_proc( vm );
         case INS_WRNV: return vm_write_var( vm, param16, VARTYPEV_FLOAT );
         case INS_WRIV: return vm_write_var( vm, param16, VARTYPEV_INT );
         case INS_WRSV: return vm_write_var( vm, param16, VARTYPEV_STR );

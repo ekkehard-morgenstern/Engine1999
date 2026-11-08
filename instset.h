@@ -571,6 +571,11 @@ The 4096 extended instructions are as follows:
                             LF line ends; empty if there is none; "String too long" over 65535 bytes).
     0001 10001100       CLPS - CLIPBOARD a$ ( text -- ) C=0 P=0
                             Puts the text on the clipboard (the host's clipset callback, else the internal clipboard).
+    0001 10001110       RTRP - plain RETURN inside a PROC / FUNC ( -- ) C=0 P=0
+                            A GOSUB made in the body of the procedure that has not returned yet (the return stack holds more than the call's own two entries: the return
+                            address and the context) is returned from like JUMP: the address is pulled and execution goes on there. Otherwise the instruction does nothing
+                            and the next instruction (a BRIA to the end of the procedure, as for EXIT PROC) leaves the procedure. The compiler emits RTRP + BRIA for every
+                            plain RETURN in a PROC / FUNC / multi-line DEF FN; in the main program a plain RETURN stays a JUMP.
     0001 10001101       TOOL - run a tool ( name [arg] -- ) C=0 P=1
                             TOOL name$ [, arg$]: runs the tool (a BASIC program of the tools folder) in a fresh state and comes back when it ends: the stored program, its
                             variables and the CONT state stay as they were. Parameter 0: the name only, 1: the argument is on the stack, too (the tool reads it as ARG$(1)).
@@ -792,5 +797,6 @@ The 4096 extended instructions are as follows:
 #define INS_CLPG        UINT16_C(0X18B)
 #define INS_CLPS        UINT16_C(0X18C)
 #define INS_TOOL        UINT16_C(0X18D)
+#define INS_RTRP        UINT16_C(0X18E)
 
 #endif

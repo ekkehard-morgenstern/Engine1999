@@ -915,11 +915,15 @@ static double norm_angle( double a ) {
     return a < 0.0 ? a + 360.0 : a;
 }
 
-bool w3d_op( w3d_t* w, int op, const double* a, int na, const char* s, size_t slen, const char** err ) {
-    (void) na;
+bool w3d_op( w3d_t* w, int op, const double* args, int na, const char* s, size_t slen, const char** err ) {
+    // arguments that were not passed are "omitted" (the VM passes the whole signature; a caller of this function may pass fewer)
+    double a[12];
+    for ( int i=0; i < 12; ++i ) {
+        a[i] = i < na ? args[i] : GFX_NONE;
+    }
     *err = ARG_ERR;
     int i1 = 0, i2 = 0, i3 = 0, i4 = 0;
-    for ( int i=0; i < na; ++i ) {
+    for ( int i=0; i < 12; ++i ) {
         if ( !NONE_VAL( a[i] ) && !num_ok( a[i] ) ) {
             return false;
         }
@@ -1091,6 +1095,12 @@ bool w3d_op( w3d_t* w, int op, const double* a, int na, const char* s, size_t sl
             }
             w->fog = a[0];
             return true;
+        case GFXOP_W3DLIFT:
+            if ( !( a[0] >= -1000.0 && a[0] <= 10000.0 ) ) {
+                return false;
+            }
+            w->lift = a[0];
+            return true;
         case GFXOP_W3DMOVE: {
             if ( !sector_valid( w, w->csector ) ) {
                 *err = "No camera position set";
@@ -1098,7 +1108,8 @@ bool w3d_op( w3d_t* w, int op, const double* a, int na, const char* s, size_t sl
             }
             double fx = cos( w->angle * DEG2RAD ), fy = sin( w->angle * DEG2RAD );
             double dx = fx * a[0] + fy * a[1], dy = fy * a[0] - fx * a[1];
-            w->hit = move_circle( w, &w->cx, &w->cy, &w->csector, dx, dy, w->pr, w->ph, w->pstep );
+            // a jump (lift > 0) lifts the feet: steps higher by that much can be taken (out of a pool)
+            w->hit = move_circle( w, &w->cx, &w->cy, &w->csector, dx, dy, w->pr, w->ph, w->pstep + ( w->lift > 0.0 ? w->lift : 0.0 ) );
             return true;
         }
         case GFXOP_W3DTHING: {
@@ -1195,6 +1206,7 @@ bool w3d_query( w3d_t* w, int q, const double* a, int na, double* result ) {
         case GFXQ_W3DSHOTX:     *result = w->shotx; return true;
         case GFXQ_W3DSHOTY:     *result = w->shoty; return true;
         case GFXQ_W3DSHOTKIND:  *result = w->shotkind; return true;
+        case GFXQ_W3DLIFT:      *result = w->lift; return true;
         case GFXQ_W3DFLOOR: case GFXQ_W3DCEIL: case GFXQ_W3DLIGHT: case GFXQ_W3DTAG: case GFXQ_W3DWALLS:
             if ( !whole( a[0], 0, W3D_MAXSECTORS - 1, &i1 ) || !sector_valid( w, i1 ) ) {
                 return false;

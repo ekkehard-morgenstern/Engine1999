@@ -186,8 +186,9 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXOP_W3DTHINGOFF 162           // W3D THINGOFF n
 #define GFXOP_W3DTHINGMOVE 163          // W3D THINGMOVE n, dx, dy
 #define GFXOP_W3DTHINGLIGHT 164         // W3D THINGLIGHT n, light
+#define GFXOP_W3DLIFT   165             // W3D LIFT h                             (the height of the feet above the floor: a jump; the eye rises with it and steps up to step + h can be taken)
 #define GFXOP_W3DFIRST  GFXOP_W3DRESET
-#define GFXOP_W3DLAST   GFXOP_W3DTHINGLIGHT
+#define GFXOP_W3DLAST   GFXOP_W3DLIFT
 
 // queries (vm_gfx_t.query): functions of the language
 #define GFXQ_RGB        1               // RGB(r, g, b [, a]): computed by the VM itself
@@ -284,8 +285,9 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXQ_W3DTZ      229             // W3D("TZ", n): height of a thing above the floor
 #define GFXQ_W3DFLOORZ  230             // W3D("FLOORZ"): the floor under the player
 #define GFXQ_W3DSHOTKIND 231            // W3D("SHOTKIND"): 0 nothing, 1 a wall, 2 a thing
+#define GFXQ_W3DLIFT    232             // W3D("LIFT")
 #define GFXQ_W3DFIRST   GFXQ_W3DX
-#define GFXQ_W3DLAST    GFXQ_W3DSHOTKIND
+#define GFXQ_W3DLAST    GFXQ_W3DLIFT
 
 typedef struct _gfxcmd_t {
     const char* group;                  // "GFX", "TXT", "TILE", "SPRITE", "MOUSE", or "" for the statements that are reserved words themselves

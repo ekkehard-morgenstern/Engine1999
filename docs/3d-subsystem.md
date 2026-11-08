@@ -55,6 +55,7 @@ Speed (measured, one core): 0.5 ms per frame for a 320 x 150 picture, 2 ms for 6
 | `W3D CAMERA x, y, angle [, pitch [, lift]]` | puts the viewer somewhere (error "Position outside of all sectors"); `lift` is added to the eye height (jumping, crouching) |
 | `W3D TURN dangle [, dpitch]` | turns the viewer |
 | `W3D MOVE forward, right` | walks relative to the view direction, with collision: slides along walls, up steps of at most the step height, through portals the body fits through (opening at least the player's height); sets `W3D("HIT")` |
+| `W3D LIFT h` | the height of the feet above the floor, for a jump (`W3D("LIFT")` reads it): the eye rises with it, and **steps up to the step height + h can be taken** (so a jump gets out of a pool whose edge is too high to walk); a program makes the arc itself (`W3K_JUMP` in `w3dkit`: up to 40 units, 0.7 s) |
 | `W3D PLAYER radius, height, eye, step` | the body (defaults 14, 56, 46, 24) |
 | `W3D VIEW x, y, w, h [, scale [, fov]]` | the picture's place on the layer in layer pixels (w 8 .. 1280, h 8 .. 800); `scale` 1 .. 4 draws every pixel of a (w / scale) x (h / scale) picture scale x scale times (default 1); `fov` 30 .. 150 degrees, 90 default. The default view is 0, 0, 640, 300 at scale 2 |
 | `W3D FOG distance` | the distance where light fades to black (default 1200, 0 = no darkening by distance) |
@@ -68,7 +69,7 @@ Speed (measured, one core): 0.5 ms per frame for a 320 x 150 picture, 2 ms for 6
 ## Functions
 
 `W3D("X")`, `("Y")`, `("Z")` (the eye, absolute), `("ANGLE")` (0 .. 360), `("PITCH")`, `("SECTOR")` (-1 if none), `("FLOORZ")`, `("HIT")` (bits of the last move: 1 a wall pushed the body, 2 it could not move at all, 4 it changed sector),
-`("SECTORS")` (highest number + 1), `("SECTORAT", x, y)` (-1 outside), `("FLOORAT", x, y)` (-1000000 outside), `("FLOOR", s)`, `("CEIL", s)`, `("LIGHT", s)`, `("TAG", s)`, `("WALLS", s)` (= the number the next wall gets),
+`("SECTORS")` (highest number + 1), `("LIFT")` (the jump height), `("SECTORAT", x, y)` (-1 outside), `("FLOORAT", x, y)` (-1000000 outside), `("FLOOR", s)`, `("CEIL", s)`, `("LIGHT", s)`, `("TAG", s)`, `("WALLS", s)` (= the number the next wall gets),
 `("TX", n)`, `("TY", n)`, `("TZ", n)`, `("TSECTOR", n)`, `("TON", n)` (-1 if the thing exists), `("DIST", n)` (from the viewer), `("BEARING", n)` (degrees from the view direction, positive = to the right, -180 .. 180),
 `("TEXW", n)`, `("TEXH", n)` (0 if undefined),
 `("SHOOT", range)`: shoots along the view direction (also up and down by the pitch) from the eye: returns the nearest *thing* hit (a thing is hit within 0.4 of its width of its center and between its feet and its top), -1 if there is none; walls and closed doors stop the shot, portals pass it if the opening is there at the height of the shot.

@@ -373,6 +373,7 @@ bool cgen_gen_peks( codegen_t* cgen );
 bool cgen_gen_poke( codegen_t* cgen );
 bool cgen_gen_bld( codegen_t* cgen, uint16_t kind );     // kind: 0 default, 1 WINDOW, 2 CONSOLE
 bool cgen_gen_bye( codegen_t* cgen );
+bool cgen_gen_rtrp( codegen_t* cgen );   // a plain RETURN in a procedure: a pending GOSUB returns, else falls through to the BRIA that leaves the procedure
 bool cgen_gen_argc( codegen_t* cgen );
 bool cgen_gen_args( codegen_t* cgen );
 bool cgen_gen_envs( codegen_t* cgen );

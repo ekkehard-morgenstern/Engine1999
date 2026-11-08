@@ -186,6 +186,17 @@ static void test_move( void ) {
     op( GFXOP_W3DHEIGHT, 3, 1.0, 20.0, 128.0 );
     op( GFXOP_W3DMOVE, 2, 300.0, 0.0 );
     CHECK( Q( GFXQ_W3DSECTOR, 0 ) == 1 );
+    // a jump lifts the feet: a step of 30 (more than 24) can be taken with a lift of 10 or more
+    op( GFXOP_W3DHEIGHT, 3, 1.0, 30.0, 128.0 );
+    op( GFXOP_W3DCAMERA, 5, 200.0, 200.0, 0.0, NONE, NONE );
+    op( GFXOP_W3DLIFT, 1, 3.0 );
+    op( GFXOP_W3DMOVE, 2, 300.0, 0.0 );
+    CHECK( Q( GFXQ_W3DSECTOR, 0 ) == 0 && Q( GFXQ_W3DLIFT, 0 ) == 3 );
+    op( GFXOP_W3DLIFT, 1, 10.0 );
+    op( GFXOP_W3DMOVE, 2, 300.0, 0.0 );
+    CHECK( Q( GFXQ_W3DSECTOR, 0 ) == 1 );
+    op( GFXOP_W3DLIFT, 1, 0.0 );
+    op( GFXOP_W3DHEIGHT, 3, 1.0, 20.0, 128.0 );
     // a low ceiling (a closed door)
     op( GFXOP_W3DCAMERA, 5, 200.0, 200.0, 0.0, NONE, NONE );
     op( GFXOP_W3DHEIGHT, 3, 1.0, 0.0, 40.0 );
