@@ -873,8 +873,12 @@ static bool con_gfx_op( void* usrdata, int op, const double* a, int na, const ch
             *err = "Out of memory";
             return false;
         }
-        if ( op == GFXOP_W3DRENDER || op == GFXOP_W3DCOLORMAP ) {
-            return true;                    // (nothing to draw on)
+        if ( op == GFXOP_W3DRENDER ) {
+            w3d_render( con_w3d );          // (nothing to draw on, but the viewer's height follows the floor as in the window: logic that reads it behaves the same)
+            return true;
+        }
+        if ( op == GFXOP_W3DCOLORMAP ) {
+            return true;
         }
         return w3d_op( con_w3d, op, a, na, s, slen, err );
     }

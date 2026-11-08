@@ -1,0 +1,61 @@
+.\" Engine1999 - A 2D games engine written in C
+.\" Copyright (C) 2026  Ekkehard Morgenstern
+.\"
+.\" This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published
+.\" by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It is distributed WITHOUT ANY
+.\" WARRANTY. ADDITIONAL PERMISSION (GPLv3 section 7): the Engine1999 Runtime Exception applies, see the file LICENSE-EXCEPTION.
+.\"
+.\" Keep this page current: it describes the demo game demos/deqq2.bas (an executable made with BUILD, installed by "make install").
+.TH ENGINE1999-DEQQ2 6 "November 2026" "Engine 1999 @VERSION@" "Engine1999 Manual"
+.SH NAME
+engine1999\-deqq2 \- Deqq's House II, a real-time 3D adventure
+.SH SYNOPSIS
+.B engine1999\-deqq2
+.SH DESCRIPTION
+The sequel of the text adventure
+.BR engine1999\-deqq (6):
+Deqq is an alien who crash-landed and now lives in an abandoned house. Eight parts of his spaceship are hidden in the house, the garden, the tool shed and the cellar, each one behind a small puzzle: a hot oven, a frozen compass, a crystal on top of a tall cupboard, a glorp that sits on the nozzle, a washing machine that is still running, a mirror that is not a mirror, a safe with a three digit code and a bucket stuck at the bottom of a well. Find the parts, carry them to the wreck at the end of the back yard and build them in. When all eight are in, the ship flies.
+.PP
+This time you walk through the house in the first person, in real time (the software 3D renderer of Engine1999, the \fBW3D\fR statements). You can carry three places of things (the chair, the hull plate and the thruster nozzle take two); put down what you do not need at the moment. Use your eyes: the sign in the front garden, the shopping list in the kitchen, the photo in the living room and the blueprint in the shed tell you what to do.
+.PP
+\fBDeqq is home.\fR He walks a round through the house and the front garden, stops here and there, and listens for you. If he sees you he follows you; he is slower than you are when you run, and you can close him out behind a door, lose him around a corner or hide in the coat closet, the pantry, behind the sofa, in the wardrobe, behind the shower curtain, between the barrels in the cellar or in the trunk in the attic (he only notices you there when he nearly stumbles over you). If he catches you he carries you out of the house and puts you down in the front garden; the things you carried are put back where you found them, the parts you have built in stay built in. Nobody is hurt in this game.
+.PP
+The program is the demo \fIdeqq2.bas\fR of Engine1999, made into an executable with
+.B BUILD
+(window kind: it needs the SDL2 library, nothing else). The window can be switched between the full screen and a window with F11 or ALT+RETURN.
+.SH CONTROLS
+.TP
+.B "UP / W, DOWN / S, LEFT, RIGHT, A, D"
+walk forward and back (UP or W, DOWN or S), turn (the arrow keys), slide sideways (A and D).
+.TP
+.B "SHIFT, SPACE"
+run, jump (jumping gets you onto the chair you placed, and out of low pits).
+.TP
+.B "R and F, PAGE UP and PAGE DOWN, HOME"
+look up and down, look straight.
+.TP
+.B "E or RETURN"
+take or use what is in front of you; the line at the bottom of the picture says what E would do. Doors with a lock need the spare key.
+.TP
+.B "G"
+put down the last thing you carry.
+.TP
+.B "O"
+opens the 3D settings: invert the X axis (turning with the right stick of a game controller) or the Y axis (looking up and down), gamma, field of view and turning speed. RETURN saves them (in the file 3dprefs.cfg of the folder ~/.local/share/deqq2/), ESC cancels, DELETE sets the defaults; changes show at once.
+.TP
+.B "P, Q or ESC"
+pause, quit.
+.PP
+A game controller works as well: the left stick walks and slides, the right stick turns and looks, A jumps, X takes and uses, B puts down, Y opens the settings, the left trigger runs, START pauses, BACK quits.
+.SH FILES
+The parts you have built in are saved after each one in the file
+.I deqq2.sav
+in the folder
+.IR ~/.local/share/deqq2/
+(the driver
+.BR local: ;
+the game goes on without saving if the file cannot be written). The title screen then offers to continue. The saved game is deleted when the ship flies.
+.SH SEE ALSO
+.BR engine1999 (1),
+.BR engine1999\-deqq (6),
+.BR engine1999\-basic (7)

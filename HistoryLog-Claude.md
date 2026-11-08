@@ -13,6 +13,12 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+### Roadmap item 79 — Deqq's House II (2026-11-08, owner's request; decisions: same story in 3D, stealth Deqq, use key / three carried places, all in one stretch)
+- **New game `demos/deqq2.bas`** (installed as `engine1999-deqq2`: `GAMES` in the makefile, `man/engine1999-deqq2.6`, `desktop/engine1999-deqq2.desktop`, `desktop/icons/engine1999-deqq2.svg`): a real-time 3D adventure on the `W3D` renderer, eight puzzles as in the text adventure, Deqq as a stealth threat (a round of way points, line of sight, chase, lose track, carries you out; nothing is violent), hiding places, closed doors stop him, saved built parts, the 3D settings (`prefs3d`). `demos/levels/deqq2.py` (51 sectors) and `deqq2art.py` (about 55 sprites as drawing commands) generate its `DATA`; `demos/levels/mkw3d.py` got `inner(..., tex)`.
+- **Test `deqq2test.sh`** (in `make check`; headless in the console host: `DEQQ2_HEADLESS=1`, `DEQQ2_PLAY=file`): the whole game, locked doors, the carrying limit, Deqq's round / catch / lose track / hiding, the saved game.
+- **Library change:** `W3K_INIT` is now `W3K_SETUP` in `demos/lib/w3dkit.lib` (a library's `<prefix>INIT` runs by itself at program start, which breaks a headless run); `manor.bas`, `bughunt.bas`, `prefs3d.lib` and `docs/3d-subsystem.md` follow. `engine1999c.c`: `W3D RENDER` runs the renderer (no picture) so the viewer's height follows the floor as in the window.
+- Docs: `docs/roadmap.md` (item 79 done), `docs/3d-subsystem.md` (the demos as examples), `README.md`, `demos/README.md`, `SESSION.md`. Tested: `deqq2test.sh`, Xvfb (title, rooms, prompts, dialog), the `BUILD` executable. Not played by the owner; sounds not heard.
+
 ### Plain RETURN in a PROC, jumping in Manor (2026-11-08, owner's requests after playtesting the 3D demos)
 - **New VM instruction `RTRP`** (`instset.h`, `vm.c` `vm_return_proc()`, `codegen.[ch]`, `cgenctl.c`): a plain `RETURN` inside a `PROC` / `FUNC` / multi-line `DEF FN` returns from a pending `GOSUB` of that procedure, else leaves it like `EXIT PROC` (before: the error "Breakpoint"). 5 new `vmtest1` cases; `docs/basic-language.md`, `bascomp.ebnf` (+ `make grammar`).
 - **Jump:** `W3D LIFT h` and `W3D("LIFT")` (`gfxops.[ch]`, `w3d.c`: steps up to step + h in `W3D MOVE`); `W3K_JUMP` in `demos/lib/w3dkit.lib`; `demos/manor.bas`: SPACE / pad A jump, E / RETURN / pad X open doors. `docs/3d-subsystem.md`, `man/engine1999-basic.7`, 2 `vmtest1` cases, `w3dtest1` case.

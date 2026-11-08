@@ -1,0 +1,13 @@
+# Engine1999 menu entry. @BINDIR@ / @GAMESBINDIR@ are filled in by "make install" (see the makefile, target install).
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Deqq's House II
+GenericName=3D adventure
+Comment=A real-time 3D adventure: build an alien's spaceship while he walks his round through the house
+Exec=@GAMESBINDIR@/engine1999-deqq2
+Icon=engine1999-deqq2
+Terminal=false
+Categories=Game;AdventureGame;
+Keywords=adventure;alien;puzzle;3d;stealth;
+StartupNotify=false

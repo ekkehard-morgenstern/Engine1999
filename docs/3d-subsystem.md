@@ -36,7 +36,7 @@ Speed (measured, one core): 0.5 ms per frame for a 320 x 150 picture, 2 ms for 6
   Wall pictures are anchored to the world height (the bottom edge at multiples of the picture's height) and repeat; floors and ceilings are anchored to the world's x, y.
 - **Sectors** are numbered 0 .. 4095, walls per sector (the number is the order they were added in, 0, 1, ...), things 0 .. 1023. A point must be in one sector only (no rooms above rooms).
 - The **layer**: `W3D RENDER` draws into the layer `GFX TARGET` names (0 or 3), replacing the pixels of the view. The program draws its HUD on top with `GFX` statements. For a picture without flicker draw into the layer that is not shown and swap (`w3dkit`'s `W3K_SHOW`);
-  the tile and text layers (1, 2) lie between layers 0 and 3, so a program that swaps those two hides them (`W3K_INIT` does).
+  the tile and text layers (1, 2) lie between layers 0 and 3, so a program that swaps those two hides them (`W3K_SETUP` does).
 
 ## Statements
 
@@ -85,7 +85,7 @@ thin sectors, each floor 16 higher than the one before (a step of at most 24 can
 
 ## The demos and the library
 
-`demos/lib/w3dkit.lib` (`LOAD LIBRARY "w3dkit"`): `W3K_INIT` (palette: 15 hues x 16 shades at 16 .. 255 on layers 0 and 3, `W3D RESET`, hides the tile and text layers), `FN W3K_C(hue,shade)`, the texture makers (`W3K_BRICK`, `STONE`, `PLASTER` (64 x 128 with a wainscot), `METAL`, `CARPET`, `TILES`, `PLANKS`, `GRASS`, `DOORTEX`, `WINDOW` and `GRATE` (see-through), `SKY` (256 x 64)),
+`demos/lib/w3dkit.lib` (`LOAD LIBRARY "w3dkit"`): `W3K_SETUP` (palette: 15 hues x 16 shades at 16 .. 255 on layers 0 and 3, `W3D RESET`, hides the tile and text layers), `FN W3K_C(hue,shade)`, the texture makers (`W3K_BRICK`, `STONE`, `PLASTER` (64 x 128 with a wainscot), `METAL`, `CARPET`, `TILES`, `PLANKS`, `GRASS`, `DOORTEX`, `WINDOW` and `GRATE` (see-through), `SKY` (256 x 64)),
 the sprite makers (`PLANT`, `LAMP`, `BARREL`, `TORCH` (two frames), `MEDKIT`, `AMMOBOX`, `KEYCARD`), `W3K_WALK` (arrows / WASD / R F look / SHIFT run or a game controller: moves and turns by the time passed), `W3K_SHOW` (the flicker free swap), `W3K_HUDBAR`, `W3K_DONE`. `manor.bas` is a walk through a house (doors, stairs, a pool, a window, a cupola, a cellar); `bughunt.bas` is a game (installed as `engine1999-bughunt`).
 
 ## The user's 3D settings (`demos/lib/prefs3d.lib`)
@@ -94,6 +94,10 @@ A library, `LOAD LIBRARY "prefs3d"`: **invert the X axis** (the right stick turn
 `CALL P3_LOAD` reads `local:3dprefs.cfg` (the file of the driver `local:`, `~/.local/share/<program>/`: **each program has its own copy**; a shared file would need a driver feature) and applies the settings; `CALL P3_DIALOG` shows the dialog over the picture of the world
 (keys: UP / DOWN choose, LEFT / RIGHT change, RETURN saves, ESC cancels, DELETE defaults; pad: D-pad or left stick, A, B / BACK, X; changes show at once) and the programs open it on **O** (or the pad's **Y**). The programs honor the settings through `w3dkit`: `W3K_WALK` (inversion, turning speed), `W3K_VIEW(x,y,w,h,scale)` instead of `W3D VIEW` (field of view), `W3K_PALETTE` (gamma). The file is five numbers after a `3DPREFS 1` line.
 A library can not use the variables of another library ("Variable W3K_INVX is global in the library"), so `prefs3d` keeps `P3_INVX`, `P3_INVY`, `P3_GAMMA`, `P3_FOV`, `P3_TURN` and hands them over with `W3K_SETPREFS`. Settings are 3D renderer *demo* settings: the `W3D` statements themselves know nothing of them.
+
+## The demos as examples of what the engine can do
+
+`manor.bas` (a house to walk through), `bughunt.bas` (a shooter: monsters that chase and shoot, keys, a lift) and **`deqq2.bas`** (Deqq's House II, a stealth adventure). In Deqq's House II everything you touch is a *thing* with a table of properties; the program finds the one in front of you with `W3D("DIST")`, `W3D("BEARING")` and `W3D("SEES")` (E takes or uses it); doors and the chair platform are sectors whose heights change (`W3D HEIGHT`); Deqq walks along a list of way points with `W3D THINGMOVE` (which keeps him inside the walls and on the stairs), sees you when `W3D("SEES", 0)` and the angle between his walking direction and you fit, follows you, loses you when he has not seen you for 3.5 seconds and carries you out when he touches you (a closed door stops him: he can not open one); a *hiding place* is a small dark sector with the tag 50 (he notices you there only from 55 units). The jump (`W3D LIFT`) gets you onto the chair. Its whole logic runs in the console host without a picture (`DEQQ2_HEADLESS=1`, `DEQQ2_PLAY=file`), which is what `deqq2test.sh` does.
 
 ## Hosts
 

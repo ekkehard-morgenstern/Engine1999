@@ -23,9 +23,9 @@ class Level:
         if both: B.links[opp].append((lo,hi,a,dict(d)))
     def pillar(s, a, x1, y1, x2, y2, tex=None):
         s.rooms[a].loops.append(('solid', x1,y1,x2,y2,None,tex))
-    def inner(s, a, b):      # room b lies inside room a (a hole in a): all four sides of b are portals
+    def inner(s, a, b, tex=None):      # room b lies inside room a (a hole in a): all four sides of b are portals (tex: the picture of the walls seen from room a)
         B=s.rooms[b]
-        s.rooms[a].loops.append(('portal', B.x1,B.y1,B.x2,B.y2,b,None))
+        s.rooms[a].loops.append(('portal', B.x1,B.y1,B.x2,B.y2,b,tex))
         for side,(lo,hi) in {'S':(B.x1,B.x2),'N':(B.x1,B.x2),'W':(B.y1,B.y2),'E':(B.y1,B.y2)}.items():
             B.links[side].append((lo,hi,a,dict(tex=None,up=None,low=None,flags=0,xoff=0,yoff=0)))
     def wall(s, r, x1,y1,x2,y2, tex, nxt, d=None):

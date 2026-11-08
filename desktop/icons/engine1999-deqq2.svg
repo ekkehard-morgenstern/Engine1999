@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+<defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#241446"/><stop offset="1" stop-color="#5a2e78"/></linearGradient><clipPath id="cl"><rect x="4" y="4" width="120" height="120" rx="22"/></clipPath></defs>
+<rect x="4" y="4" width="120" height="120" rx="22" fill="url(#bg)" stroke="#000" stroke-opacity=".5" stroke-width="2"/>
+<g clip-path="url(#cl)"><path d="M4 70 L50 52 L78 52 L124 70 L124 124 L4 124Z" fill="#3a2a58"/><path d="M50 52 L78 52 L78 84 L50 84Z" fill="#12091f"/><path d="M4 70 L50 84 L78 84 L124 70 L124 124 L4 124Z" fill="#7a4aa0"/><path d="M4 70 L50 52 M124 70 L78 52 M50 84 L4 124 M78 84 L124 124" stroke="#b58ad8" stroke-width="2" fill="none"/>
+<path d="M52 84 L76 84 L82 124 L46 124Z" fill="#9a62c0" opacity=".6"/></g>
+<path d="M54 118 C50 96 54 82 64 76 C74 82 78 96 74 118Z" fill="#5a5a6e" stroke="#111" stroke-width="2"/>
+<ellipse cx="64" cy="58" rx="13" ry="18" fill="#8fe0c4" stroke="#111" stroke-width="2"/><ellipse cx="58" cy="55" rx="4" ry="7" fill="#000"/><ellipse cx="70" cy="55" rx="4" ry="7" fill="#000"/><circle cx="57" cy="52" r="1.4" fill="#6dffb0"/><circle cx="69" cy="52" r="1.4" fill="#6dffb0"/><path d="M60 68 L68 68" stroke="#111" stroke-width="2"/>
+<path d="M64 40 L64 33" stroke="#8fe0c4" stroke-width="2.4"/><circle cx="64" cy="31" r="3" fill="#ffd84a"/>
+<path d="M98 24 L104 36 L98 48 L92 36Z" fill="#c07aff" stroke="#fff" stroke-width="1.2"/>
+</svg>

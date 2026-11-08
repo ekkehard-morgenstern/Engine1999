@@ -8,7 +8,7 @@
 40 '   P3_GAMMA  0.6 .. 1.8, 1 = as drawn: above 1 brightens the middle shades            P3_FOV    the field of view, 60 .. 110 degrees (90)
 50 '   P3_TURN   the turning speed in percent, 50 .. 200 (100)
 60 ' They are kept in the file 3dprefs.cfg of the driver local: (~/.local/share/<program>/, so each program has its own copy; a program that was never started
-70 ' with a settings file just gets the defaults). A program uses it like this, after CALL W3K_INIT and CALL W3K_VIEW(...):
+70 ' with a settings file just gets the defaults). A program uses it like this, after CALL W3K_SETUP and CALL W3K_VIEW(...):
 80 '   CALL P3_LOAD                  reads the file (if there is one) and applies the settings: palette, color map and view are made again
 90 '   CALL P3_DIALOG                shows the dialog over the picture of the world (W3D RENDER draws it behind the dialog, so a change of the gamma
 100 '                                 or the field of view can be seen at once): UP / DOWN choose, LEFT / RIGHT change, RETURN saves and closes, ESC cancels
