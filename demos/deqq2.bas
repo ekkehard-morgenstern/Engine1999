@@ -13,8 +13,8 @@
 90 ' in front of you (the prompt at the bottom says what), G puts down the last thing you carry, O opens the 3D settings (invert axes, gamma, field of view, turning
 100 ' speed; kept for next time), M turns the music on and off, P pauses, Q or ESC quits. Game controller: left stick walks, right stick turns and looks, LT runs, A jumps, X uses and takes, B puts
 110 ' down, Y the settings, START pauses, BACK quits. The built parts are saved (the file deqq2.sav of the folder ~/.local/share/<name>/).
-120 ' How it is made: the house is DATA (rectangular sectors, walls and portals: demos/levels/deqq2.py), the pictures are drawn by GFX statements from a table of
-130 ' drawing commands (demos/levels/deqq2art.py) and grabbed into W3D TEXTURE, everything you can touch is a thing (W3D THING) that W3D("DIST"), ("BEARING") and ("SEES")
+120 ' How it is made: the house is DATA (rectangular sectors, walls and portals: demos/levels/deqq2.bas), the pictures are drawn by GFX statements from a table of
+130 ' drawing commands (demos/levels/deqq2art.bas) and grabbed into W3D TEXTURE, everything you can touch is a thing (W3D THING) that W3D("DIST"), ("BEARING") and ("SEES")
 140 ' find; Deqq walks with W3D THINGMOVE along a route of way points and sees you with W3D("SEES", 0). The whole game logic also runs in the console host without a
 150 ' picture, for the test deqq2test.sh: environment DEQQ2_HEADLESS=1 and DEQQ2_PLAY=file (commands; see PLAYBACK).
 160 LOAD LIBRARY "w3dkit"
@@ -332,7 +332,7 @@
 3280   CALL W3K_BARREL(92)
 3290   W3D SKY 11
 3300 END PROC
-3310 ' the sprites: DATA n,w,h then commands t,a,b,c,d,hue,shade (see demos/levels/deqq2art.py) up to a 0; the table ends with -1
+3310 ' the sprites: DATA n,w,h then commands t,a,b,c,d,hue,shade (see demos/levels/deqq2art.bas) up to a 0; the table ends with -1
 3320 PROC MAKESPRITES
 3330   LOCAL N,W,H,T,A,B,C,D,HU,SH,K
 3340   RESTORE ARTDATA
