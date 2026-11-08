@@ -13,16 +13,9 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-### Roadmap items 25 and 21 — aliases and Ctrl-D (2026-11-08, owner's request)
-- Item 25: `bastok.[ch]` (`aliastbl[]`, `keyword_alias_name()`, `is_keyword()` knows the aliases), `engine1999c.c` (`--list-keywords` prints them), `bascomp.ebnf`, man page (`mancheck.sh --update`), `docs/basic-language.md`; `repltest1` 5 new cases (447).
-- Item 21: `scredit.c` (Ctrl-D in `scr_screenedit()` = `se_delete`), `scrtest1.c` 2 new cases (178), `docs/console-host.md`, `docs/screen-editor-proposal.md` §7; roadmap rows 21 and 25, `SESSION.md`.
-
-### Roadmap item 16 — numeric extras (2026-11-08, owner's request; rounding: half away from zero)
-- `bastok.[ch]` (`XF_ASN`..`XF_CDBL` 21..31, keyword table), `bascomp.c` (one-argument forms, `ROUND(x[,n])` with 0 as default for n), `codegen.[ch]`, `vm.c` (`MATH` kinds 17..26, `MTH2` kind 4; no negative zero from `CINT` / `ROUND`), `instset.h`, `bascomp.ebnf` + `make grammar`, `man/engine1999-basic.7` (`mancheck.sh --update`), `docs/basic-language.md`, `docs/roadmap.md` (item 16 done), `SESSION.md`.
-- Tests: `vmtest1` 21 new cases (1470 pass), `make man-check`, `make grammar-check`.
-
-### Roadmap item 81, synthesizer instruments planned (2026-11-08, owner's request after my estimate; decisions: subtractive first, 16 presets)
-- `docs/roadmap.md`: new row 81 (steps, risks, estimate; the open entry in the sound section points to it), `SESSION.md`: note that it is planned and not started. No code changed, no tests run.
+### Roadmap review (2026-11-08, owner's request: update the stale roadmap and tick off what is done)
+- `docs/roadmap.md` only (rows 4, 7, 14, 30, 39, 50, 75; bullets for `OFF`, `LOAD`/`SAVE` directories, cursor keys, `PRINT USING` / `AT` / `HTAB` / `VTAB`, item 79, screen mode leftovers, sandboxing, the Simons' BASIC list (`INSTR` missing); headers of sections 1, 3, 8, 12; the priorities header). `SESSION.md`. No code changed.
+- Checked against the code: `--list-keywords` for words that do not exist (`SWITCH`, `DO`, `TAB`, `DISPLAY`, `BREAKPOINT`, `INSTR`, ...), `OPTION BASE 1` and `LIST #1` at the prompt.
 
 
 ## Log
@@ -1609,3 +1602,17 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 - Language limits met on the way: a procedure has at most 8 parameters (`MAXPARAM`), so `MK_ROOM` / `MK_LINKX` take the long attribute lists as a comma separated string (`"floortex,ceiltex,light,tag,walltex"`) and pass the rest between procedures in library globals; `TEMPO` and `DEC` are reserved (renamed helpers); a library cannot `DIM` outside its prefix; `DIM A(n)` arrays are indexed from 0 so a `WHILE J>0 AND A(J-1)...` needs a nested `IF` (both operands of `AND` are evaluated); writing a file outside the program's folder is refused by the security policy without `--allow=write` (give a file name in the current directory, or use standard output).
 - **New** `levelstest.sh` (in `make check`, `makefile`): runs the five generators and checks that their output is an unbroken run of lines in `demos/manor.bas`, `demos/bughunt.bas`, `demos/deqq2.bas` and `demos/lib/music3d.lib`. Also tried by hand with two broken inputs (rooms that do not touch; a changed number): refused / detected.
 - Docs: `docs/3d-subsystem.md`, `demos/README.md`, `docs/roadmap.md` and the comments in `demos/deqq2.bas` now name the `.bas` generators.
+
+### f2a851a — 2026-11-08 07:38:37 +0100 — "Claude session files update"
+2 files changed, 8 insertions(+), 7 deletions(-).
+- `docs/roadmap.md`: new row 81 (steps, risks, estimate; the open entry in the sound section points to it), `SESSION.md`: note that it is planned and not started. No code changed, no tests run.
+
+### e4a6902 — 2026-11-08 08:04:46 +0100 — "Additional numeric functions, implemented by Claude Code"
+17 files changed, 162 insertions(+), 24 deletions(-).
+- `bastok.[ch]` (`XF_ASN`..`XF_CDBL` 21..31, keyword table), `bascomp.c` (one-argument forms, `ROUND(x[,n])` with 0 as default for n), `codegen.[ch]`, `vm.c` (`MATH` kinds 17..26, `MTH2` kind 4; no negative zero from `CINT` / `ROUND`), `instset.h`, `bascomp.ebnf` + `make grammar`, `man/engine1999-basic.7` (`mancheck.sh --update`), `docs/basic-language.md`, `docs/roadmap.md` (item 16 done), `SESSION.md`.
+- Tests: `vmtest1` 21 new cases (1470 pass), `make man-check`, `make grammar-check`.
+
+### e1e1979 — 2026-11-08 08:12:25 +0100 — "Various small changes (cf. history log), implemented by Claude Code"
+17 files changed, 75 insertions(+), 21 deletions(-).
+- Item 25: `bastok.[ch]` (`aliastbl[]`, `keyword_alias_name()`, `is_keyword()` knows the aliases), `engine1999c.c` (`--list-keywords` prints them), `bascomp.ebnf`, man page (`mancheck.sh --update`), `docs/basic-language.md`; `repltest1` 5 new cases (447).
+- Item 21: `scredit.c` (Ctrl-D in `scr_screenedit()` = `se_delete`), `scrtest1.c` 2 new cases (178), `docs/console-host.md`, `docs/screen-editor-proposal.md` §7; roadmap rows 21 and 25, `SESSION.md`.
