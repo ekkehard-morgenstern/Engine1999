@@ -1,0 +1,43 @@
+.\" Engine1999 - A 2D games engine written in C
+.\" Copyright (C) 2026  Ekkehard Morgenstern
+.\"
+.\" This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published
+.\" by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It is distributed WITHOUT ANY
+.\" WARRANTY. ADDITIONAL PERMISSION (GPLv3 section 7): the Engine1999 Runtime Exception applies, see the file LICENSE-EXCEPTION.
+.\"
+.\" Keep this page current: it describes the demo game demos/bughunt.bas (an executable made with BUILD, installed by "make install").
+.TH ENGINE1999-BUGHUNT 6 "November 2026" "Engine 1999 @VERSION@" "Engine1999 Manual"
+.SH NAME
+engine1999\-bughunt \- Bug Hunt, a first person shooter
+.SH SYNOPSIS
+.B engine1999\-bughunt
+.SH DESCRIPTION
+A research bunker has been overrun by giant robot bugs. You start in a small room and have to get out: through the corridor into the arena, to the west room for the red key, through the red door in the east, up in the lift, take the blue key and leave through the blue door. The level is drawn in the style of Doom and Duke Nukem 3D by the software 3D sector renderer of Engine1999 (the \fBW3D\fR statements): rooms of different heights, doors that slide up, a lift, pillars, flat pictures for the bugs and the things you pick up.
+.PP
+\fBCrawlers\fR run at you and bite when they are close; they take two hits. \fBSpitters\fR hover at a distance and shoot green globs at you; they take one hit. Bugs notice you when they can see you. Medkits give 25 health, ammo boxes 15 shots; you start with 40 shots and 100 health. The program is the demo \fIbughunt.bas\fR of Engine1999, made into an executable with
+.B BUILD
+(window kind: it needs the SDL2 library, nothing else). The window can be switched between the full screen and a window with F11 or ALT+RETURN.
+.SH CONTROLS
+.TP
+.B "UP / W, DOWN / S, LEFT, RIGHT, A, D"
+walk forward and back (UP or W, DOWN or S), turn left and right (the arrow keys), slide sideways (A and D).
+.TP
+.B "SHIFT"
+run.
+.TP
+.B "R and F, PAGE UP and PAGE DOWN, HOME"
+look up and down, look straight.
+.TP
+.B "SPACE or CTRL"
+fire (hold it for automatic fire).
+.TP
+.B "E or RETURN"
+open a door in front of you (the red and blue doors need their keys).
+.TP
+.B "P, Q or ESC"
+pause, quit.
+.PP
+A game controller works as well: the left stick walks and slides, the right stick turns and looks, A or the right trigger fires, X opens doors, the left trigger runs, START pauses, BACK quits.
+.SH SEE ALSO
+.BR engine1999 (1),
+.BR engine1999\-basic (7)

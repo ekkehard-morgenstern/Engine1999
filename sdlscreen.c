@@ -1545,6 +1545,12 @@ size_t sdlscr_gfx_grab( int layer, int x1, int y1, int x2, int y2, uint8_t* out,
     return g ? gfx_grab( g, x1, y1, x2, y2, out, outsize ) : 0;
 }
 
+void sdlscr_gfx_putbuf( int layer, int x, int y, const uint8_t* src, int sw, int sh, int scale ) {
+    SDLSCR_GFX( layer );
+    gfx_putbuf( g, x, y, src, sw, sh, scale );
+    sdllay_set_modified( &layers[layer] );
+}
+
 bool sdlscr_gfx_blit( int layer, const uint8_t* block, size_t size, int x, int y, bool transparent ) {
     gfx_t* g = sdlscr_gfxof( layer );
     if ( g == 0 ) {

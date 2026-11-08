@@ -71,6 +71,8 @@ void gfx_paint( gfx_t* g, int x, int y, int color, int border );
 // a block as a string: MKI(w) MKI(h) w*h pixels (big endian); returns the size (also when out is too small: then nothing is written)
 size_t gfx_grab( const gfx_t* g, int x1, int y1, int x2, int y2, uint8_t* out, size_t outsize );
 bool gfx_blit( gfx_t* g, const uint8_t* block, size_t size, int x, int y, bool transparent );   // false: the block is malformed
+// copies a bitmap sw x sh (one byte per pixel) to x, y, every source pixel as scale x scale pixels, ignoring the mode (the 3D view, w3d.h)
+void gfx_putbuf( gfx_t* g, int x, int y, const uint8_t* src, int sw, int sh, int scale );
 // text from an 8 x 12 font (12 bytes per character, bit 7 = the left pixel), each pixel as sx * sy pixels
 void gfx_text( gfx_t* g, int x, int y, const char* text, size_t len, int color, int sx, int sy, const uint8_t* font );
 // the GW-BASIC drawing language: U D L R E F G H n, M x,y (a sign makes it relative), B (move only), N (come back), C n, S n, A n

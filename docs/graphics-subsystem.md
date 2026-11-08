@@ -19,6 +19,8 @@ Behind them is the backdrop color (`GFX BACKDROP`). **Every layer is 640 x 300 b
 (`sdllayer_t.palette`, index 0 = transparent by default; the names of the color table, such as "Gold", can be used by `GFX PALNAME`).
 Colors in all statements are palette indices of the layer that is drawn on.
 
+The 3D sector renderer (`W3D`, `w3d.[ch]`) draws into a view on the target graphics layer through `gfx_putbuf()` / `sdlscr_gfx_putbuf()`; it is described in [3d-subsystem.md](3d-subsystem.md).
+
 ## Principles
 
 1. **All calls into the graphics modules go through `sdlscreen`** (owner's requirement). Nothing outside `sdlscreen.c` calls `sdllayer`, `textscreen`,

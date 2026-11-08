@@ -401,3 +401,34 @@ bool gfx_draw( gfx_t* g, const char* cmd, size_t len, char* err, size_t errsz ) 
         blank = back = false;
     }
 }
+
+void gfx_putbuf( gfx_t* g, int x, int y, const uint8_t* src, int sw, int sh, int scale ) {
+    if ( scale < 1 ) {
+        scale = 1;
+    }
+    for ( int sy = 0; sy < sh; ++sy ) {
+        for ( int ry = 0; ry < scale; ++ry ) {
+            int dy = y + sy * scale + ry;
+            if ( dy < 0 || dy >= g->h ) {
+                continue;
+            }
+            uint8_t* dst = g->buf + (size_t) dy * (size_t) g->w;
+            const uint8_t* row = src + (size_t) sy * (size_t) sw;
+            if ( scale == 1 ) {
+                int x0 = x < 0 ? -x : 0, x1 = x + sw > g->w ? g->w - x : sw;
+                if ( x1 > x0 ) {
+                    memcpy( dst + x + x0, row + x0, (size_t)( x1 - x0 ) );
+                }
+                continue;
+            }
+            for ( int sx = 0; sx < sw; ++sx ) {
+                for ( int rx = 0; rx < scale; ++rx ) {
+                    int dx = x + sx * scale + rx;
+                    if ( dx >= 0 && dx < g->w ) {
+                        dst[dx] = row[sx];
+                    }
+                }
+            }
+        }
+    }
+}

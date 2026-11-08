@@ -172,6 +172,7 @@ void     sdlscr_gfx_circle( int layer, int x, int y, int r, int color, int a1, i
 void     sdlscr_gfx_radius( int layer, int x, int y, int r, double angle, int color );
 void     sdlscr_gfx_paint( int layer, int x, int y, int color, int border );
 size_t   sdlscr_gfx_grab( int layer, int x1, int y1, int x2, int y2, uint8_t* out, size_t outsize );   // returns the size needed
+void     sdlscr_gfx_putbuf( int layer, int x, int y, const uint8_t* src, int sw, int sh, int scale );   // the 3D view: opaque, scaled
 bool     sdlscr_gfx_blit( int layer, const uint8_t* block, size_t size, int x, int y, bool transparent );
 void     sdlscr_gfx_text( int layer, int x, int y, const char* text, size_t len, int color, int sx, int sy );
 bool     sdlscr_gfx_draw( int layer, const char* cmd, size_t len, char* err, size_t errsz );

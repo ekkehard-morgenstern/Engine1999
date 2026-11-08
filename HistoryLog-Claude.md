@@ -13,6 +13,13 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+### Roadmap item 78 — the software 3D sector renderer `W3D`, two demos (2026-11-08, owner's request after my feasibility answer: software first, implement it with example programs)
+- **New module `w3d.[ch]` (no SDL, no global state):** sectors (floor / ceiling height, flats, light, tag), walls and portals, things (billboards), a color map built from the palette, per-column 2D ray tracing (concave sectors and holes work, no sorting), floors and ceilings per pixel, sky, masked walls, a depth buffer for things, collision (`move_circle`: sliding, steps, portals, low ceilings), shots / sight / use (`trace`). `w3d_op()` / `w3d_query()` carry out the statements and functions; `w3d_render()` draws into its own palette bitmap, the host copies it onto the target layer (`gfx_putbuf()` in `gfxcore`, `sdlscr_gfx_putbuf()` in `sdlscreen`).
+- **Language:** the extension word `W3D` (`XF_W3D` 20 in `bastok.[ch]`, `bascomp.c`: statement and function groups next to `UI`), 25 statements (`GFXOP_W3D*` 140..164) and 32 functions (`GFXQ_W3D*` 200..231) in the table of `gfxops.[ch]`; both hosts: the window draws, the console host runs the world headless (`RENDER` / `COLORMAP` do nothing there).
+- **Demos:** `demos/manor.bas` (a walk through a house: doors, stairs, pool, window, cupola, cellar), `demos/bughunt.bas` (first person shooter, installed as `engine1999-bughunt`: `GAMES` in the makefile, `man/engine1999-bughunt.6`, `desktop/engine1999-bughunt.desktop`, `desktop/icons/engine1999-bughunt.svg`), `demos/lib/w3dkit.lib` (palette, procedural textures and sprites, `W3K_WALK`, `W3K_SHOW`), `demos/levels/` (Python generators of the level `DATA`: `mkw3d.py`, `manor.py`, `bunker.py`).
+- **Docs:** new `docs/3d-subsystem.md`; `docs/roadmap.md` (items 78 done, 79 Deqq's House II, 80 more 3D; section 18), `docs/README.md`, `demos/README.md`, `README.md`, `bascomp.ebnf` + `make grammar`, `man/engine1999-basic.7` (+ reserved words), `man/engine1999c.1`, `CLAUDE.md`, `SESSION.md`.
+- **Tests:** new `w3dtest1` (91 cases, in `make check`; also run under ASan / UBSan; includes 600 random frames), 35 new `vmtest1` cases (1442 pass), `make check` all passed, `make man-check`, `make grammar-check`, `desktopcheck.sh`. Under Xvfb: screenshots of every room of both demos, keys held with XTest (walking, door, shooting, the lift, death screen), the executable made with `BUILD` runs. Speed: 0.5 ms (320 x 150) / 2 ms (640 x 300) per frame. **Not done / not checked:** the owner has not played them; sounds not heard; no real game pad; `make kit` / `make install` could not be run here (the `kit/` directory belongs to root), checked with `make -n`, `desktopcheck.sh` and a `BUILD` from the working tree instead. Backup `pre-w3d` made before the work.
+
 ## Log
 
 ### 7a6cb67 — 2026-10-17 13:32:27 +0200 — "Introduced Claude to the project"
@@ -1541,3 +1548,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 - **Docs:** `docs/build-and-test.md` (install table, check list), `README.md`, `CLAUDE.md` (file table; new games need both files), `docs/roadmap.md` (item 77), `SESSION.md`.
 - **Tested:** `make install PREFIX=/usr GAMESBINDIR=/usr/games DESTDIR=<staging>`, `desktop-file-validate` on the installed entries (no message), `make uninstall` leaves no entry or icon. Not tested: a real desktop menu, a Debian package build.
 - The owner tested it: menu entries and icons show in the application menu and in the window buttons of his panel (so the running windows have their icons); his window manager's theme draws no icons on the window frames, which is a theme matter.
+
+### 0bd2581 — 2026-11-07 23:13:04 +0100 — "Claude roadmap and session files update"
+3 files changed, 14 insertions(+), 8 deletions(-).
+- Bookkeeping only: `docs/roadmap.md`, `SESSION.md` and this file brought up to date after the desktop integration (item 77).

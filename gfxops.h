@@ -160,6 +160,35 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXOP_UIHILITE  138             // UI HILITE id, a$                       (an editor: a slot 0..15 per byte of the text)
 #define GFXOP_UIPAGE    117             // UI PAGE id, n                           (the size of the visible part)
 
+// the 3D sector renderer (w3d.h, docs/3d-subsystem.md): the words after W3D
+#define GFXOP_W3DRESET  140             // W3D RESET
+#define GFXOP_W3DTEXTURE 141            // W3D TEXTURE n, a$                      (a GFX GRAB block: width, height, pixels)
+#define GFXOP_W3DSECTOR 142             // W3D SECTOR s, floor, ceil [, floortex [, ceiltex [, light]]]
+#define GFXOP_W3DWALL   143             // W3D WALL s, x1, y1, x2, y2, tex [, next]
+#define GFXOP_W3DWALLTEX 144            // W3D WALLTEX s, i, mid, upper, lower    (-1 = unchanged)
+#define GFXOP_W3DWALLOFF 145            // W3D WALLOFF s, i, xoff, yoff
+#define GFXOP_W3DWALLFLAG 146           // W3D WALLFLAG s, i, flags
+#define GFXOP_W3DHEIGHT 147             // W3D HEIGHT s, floor, ceil
+#define GFXOP_W3DLIGHT  148             // W3D LIGHT s, light
+#define GFXOP_W3DTAG    149             // W3D TAG s, value
+#define GFXOP_W3DSKY    150             // W3D SKY tex
+#define GFXOP_W3DCAMERA 151             // W3D CAMERA x, y, angle [, pitch [, lift]]
+#define GFXOP_W3DTURN   152             // W3D TURN dangle [, dpitch]
+#define GFXOP_W3DPLAYER 153             // W3D PLAYER radius, height, eye, step
+#define GFXOP_W3DVIEW   154             // W3D VIEW x, y, w, h [, scale [, fov]]
+#define GFXOP_W3DFOG    155             // W3D FOG distance
+#define GFXOP_W3DCOLORMAP 156           // W3D COLORMAP
+#define GFXOP_W3DRENDER 157             // W3D RENDER
+#define GFXOP_W3DMOVE   158             // W3D MOVE forward, right
+#define GFXOP_W3DTHING  159             // W3D THING n, x, y, tex, w, h
+#define GFXOP_W3DTHINGZ 160             // W3D THINGZ n, z
+#define GFXOP_W3DTHINGTEX 161           // W3D THINGTEX n, tex
+#define GFXOP_W3DTHINGOFF 162           // W3D THINGOFF n
+#define GFXOP_W3DTHINGMOVE 163          // W3D THINGMOVE n, dx, dy
+#define GFXOP_W3DTHINGLIGHT 164         // W3D THINGLIGHT n, light
+#define GFXOP_W3DFIRST  GFXOP_W3DRESET
+#define GFXOP_W3DLAST   GFXOP_W3DTHINGLIGHT
+
 // queries (vm_gfx_t.query): functions of the language
 #define GFXQ_RGB        1               // RGB(r, g, b [, a]): computed by the VM itself
 #define GFXQ_POINT      2               // POINT(x, y)
@@ -221,6 +250,42 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXQ_UIOPEN     126             // UI("OPEN"): -1 / 0
 #define GFXQ_MOUSEEVENT 108             // (the VM polls it for ON MOUSE) the number of presses, releases and wheel steps so far; a change is an event
 #define GFXQ_EVENT      90              // (the VM polls it for ON COLLISION) a sprite with a new collision, -1 none
+
+// the 3D sector renderer: W3D("name", ...)
+#define GFXQ_W3DX       200             // W3D("X"): the player's position
+#define GFXQ_W3DY       201
+#define GFXQ_W3DZ       202             // W3D("Z"): the eye height (absolute)
+#define GFXQ_W3DANGLE   203             // W3D("ANGLE"): 0..360
+#define GFXQ_W3DPITCH   204
+#define GFXQ_W3DSECTOR  205             // W3D("SECTOR"): the player's sector, -1 outside
+#define GFXQ_W3DSECTORAT 206            // W3D("SECTORAT", x, y)
+#define GFXQ_W3DFLOORAT 207             // W3D("FLOORAT", x, y)
+#define GFXQ_W3DFLOOR   208             // W3D("FLOOR", s)
+#define GFXQ_W3DCEIL    209             // W3D("CEIL", s)
+#define GFXQ_W3DLIGHT   210             // W3D("LIGHT", s)
+#define GFXQ_W3DTAG     211             // W3D("TAG", s)
+#define GFXQ_W3DWALLS   212             // W3D("WALLS", s): the number of walls (= the number the next wall gets)
+#define GFXQ_W3DSECTORS 213             // W3D("SECTORS"): the highest sector number + 1
+#define GFXQ_W3DTX      214             // W3D("TX", n): position of a thing
+#define GFXQ_W3DTY      215
+#define GFXQ_W3DTSECTOR 216             // W3D("TSECTOR", n)
+#define GFXQ_W3DTON     217             // W3D("TON", n): -1 if the thing exists
+#define GFXQ_W3DDIST    218             // W3D("DIST", n): distance from the player to a thing
+#define GFXQ_W3DBEARING 219             // W3D("BEARING", n): angle of a thing from the view direction (positive = to the right), -180..180
+#define GFXQ_W3DHIT     220             // W3D("HIT"): flags of the last W3D MOVE / THINGMOVE
+#define GFXQ_W3DSHOOT   221             // W3D("SHOOT", range): the thing hit by a shot along the view direction (-1 none); sets SHOTDIST etc.
+#define GFXQ_W3DSHOTDIST 222
+#define GFXQ_W3DSHOTX   223
+#define GFXQ_W3DSHOTY   224
+#define GFXQ_W3DUSE     225             // W3D("USE", reach): the sector behind the portal wall in front of the player, -1 none
+#define GFXQ_W3DSEES    226             // W3D("SEES", n): -1 if the thing has a line of sight to the player
+#define GFXQ_W3DTEXW    227             // W3D("TEXW", n)
+#define GFXQ_W3DTEXH    228
+#define GFXQ_W3DTZ      229             // W3D("TZ", n): height of a thing above the floor
+#define GFXQ_W3DFLOORZ  230             // W3D("FLOORZ"): the floor under the player
+#define GFXQ_W3DSHOTKIND 231            // W3D("SHOTKIND"): 0 nothing, 1 a wall, 2 a thing
+#define GFXQ_W3DFIRST   GFXQ_W3DX
+#define GFXQ_W3DLAST    GFXQ_W3DSHOTKIND
 
 typedef struct _gfxcmd_t {
     const char* group;                  // "GFX", "TXT", "TILE", "SPRITE", "MOUSE", or "" for the statements that are reserved words themselves

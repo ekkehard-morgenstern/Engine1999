@@ -35,6 +35,7 @@
 #include "basrepl.h"
 #include "basdebug.h"
 #include "gfxops.h"
+#include "w3d.h"
 #include "gfxfile.h"
 #include "iodev.h"
 #include "mouse.h"
@@ -1419,10 +1420,63 @@ static bool host_picture_op( int op, const double* a, const char* s, size_t slen
     return ok;
 }
 
+// -- the 3D sector renderer (w3d.h) ---------------------------------------------------------------
+
+static w3d_t* host_w3d;
+
+static void host_w3d_free( void ) {
+    w3d_free( host_w3d );
+    host_w3d = 0;
+}
+
+static bool host_w3d_op( int op, const double* a, int na, const char* s, size_t slen, const char** err ) {
+    if ( host_w3d == 0 ) {
+        host_w3d = w3d_new();
+        if ( host_w3d == 0 ) {
+            *err = "Out of memory";
+            return false;
+        }
+        atexit( host_w3d_free );
+    }
+    int t = sdlscr_gfx_target();
+    if ( op == GFXOP_W3DCOLORMAP ) {
+        uint32_t pal[256];
+        for ( int i=0; i < 256; ++i ) {
+            pal[i] = sdlscr_palette_get( t, i );
+        }
+        w3d_colormap( host_w3d, pal );
+        return true;
+    }
+    if ( op == GFXOP_W3DRENDER ) {
+        const uint8_t* fb = w3d_render( host_w3d );
+        if ( fb != 0 ) {
+            int x, y, w, h, scale, bw, bh;
+            w3d_getview( host_w3d, &x, &y, &w, &h, &scale, &bw, &bh );
+            sdlscr_gfx_putbuf( t, x, y, fb, bw, bh, scale );
+        }
+        return true;
+    }
+    return w3d_op( host_w3d, op, a, na, s, slen, err );
+}
+
+static bool host_w3d_query( int q, const double* a, int na, double* result ) {
+    if ( host_w3d == 0 ) {
+        host_w3d = w3d_new();
+        if ( host_w3d == 0 ) {
+            return false;
+        }
+        atexit( host_w3d_free );
+    }
+    return w3d_query( host_w3d, q, a, na, result );
+}
+
 static bool host_gfx_op( void* usrdata, int op, const double* a, int na, const char* s, size_t slen, uint8_t* out, size_t outsz,
     size_t* outlen, const char** err ) {
     (void) usrdata; (void) na;
     int t = sdlscr_gfx_target();
+    if ( op >= GFXOP_W3DFIRST && op <= GFXOP_W3DLAST ) {
+        return host_w3d_op( op, a, na, s, slen, err );
+    }
     if ( ( op >= GFXOP_UIOPEN && op <= GFXOP_UICARET ) || ( op >= GFXOP_UICOLOR && op <= GFXOP_UIHILITE ) ) {
         return host_ui_op( op, a, na, s, slen, out, outsz, outlen, err );
     }
@@ -1570,6 +1624,9 @@ static bool host_gfx_query( void* usrdata, int q, const double* a, int na, doubl
     (void) usrdata; (void) na;
     int x = 0, y = 0, w = 0, h = 0, bg = 0, fg = 0;
     *result = 0.0;
+    if ( q >= GFXQ_W3DFIRST && q <= GFXQ_W3DLAST ) {
+        return host_w3d_query( q, a, na, result );
+    }
     switch ( q ) {
         case GFXQ_POINT:        *result = sdlscr_gfx_point( sdlscr_gfx_target(), gi( a[0], 0 ), gi( a[1], 0 ) ); break;
         case GFXQ_FRAME:        *result = (double) sdlscr_getframecnt(); break;

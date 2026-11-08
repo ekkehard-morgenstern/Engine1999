@@ -56,8 +56,9 @@ engine1999-*.tar.gz
 config.mk
 engine1999_*.orig.tar.gz
 residue/
-
 fruit.hi
 fruit2.hi
 fruit3.hi
 rustball.hi
+w3dtest1
+

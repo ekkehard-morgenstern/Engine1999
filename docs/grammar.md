@@ -186,7 +186,7 @@ sys-noarg-str-call := sys-noarg-str .
 
 ```ebnf
 gfx-query-call := ( RGB | POINT | TILE ) "(" num-expr { "," num-expr } ")" |
-                  ( GFX | TXT | SPRITE | MOUSE | XFUNC(UI) ) "(" <string> { "," num-expr } ")" .
+                  ( GFX | TXT | SPRITE | MOUSE | XFUNC(UI) | XFUNC(W3D) ) "(" <string> { "," num-expr } ")" .
 num-func-call := num-usr-fn-call | sys-num-fn-arg-call | sys-noarg-num-call | gfx-query-call .
 str-func-call := str-usr-fn-call | sys-str-fn-arg-call | sys-noarg-str-call .
 ```
@@ -747,7 +747,31 @@ ui-stmt := XFUNC(UI) ( OPEN | CLOSE | CLEAR | UPDATE |
                            COLOR num-expr "," num-expr [ "," num-expr ] | THEME num-expr | SYNTAX num-expr "," num-expr |
                            SYNTAXCOLOR num-expr "," num-expr | HILITE num-expr "," str-expr ) .
 ui-geometry := num-expr "," num-expr "," num-expr "," num-expr "," num-expr .
-gfx-all-stmt := gfx-stmt | txt-stmt | tile-stmt | sprite-stmt | mouse-stmt | on-mouse-stmt | ui-stmt | cls-stmt | locate-stmt | htab-stmt | vtab-stmt | color-stmt | symbol-stmt | design-stmt | design-row | on-collision-stmt .
+```
+
+> The 3D sector renderer (docs/3d-subsystem.md; W3D is an extension word): a world of sectors (floor and ceiling height, flats, light) bounded by walls, some of them portals
+> into the next sector, drawn like Doom and Duke Nukem 3D into a view on the target graphics layer, plus flat pictures that face the viewer (things). Textures are pictures in
+> the GFX GRAB format. W3D SECTOR s,floor,ceil[,floortex[,ceiltex[,light]]] defines a sector (ceiltex -1 = the sky of W3D SKY), W3D WALL s,x1,y1,x2,y2,tex[,next] adds a wall
+> (next \>= 0: a portal to that sector); W3D WALLTEX s,i,mid,upper,lower, WALLOFF, WALLFLAG (1 masked, 2 blocks movement, 4 blocks shots and sight), HEIGHT (doors and lifts), LIGHT
+> and TAG change them; CAMERA x,y,angle[,pitch[,lift]] sets the viewer, TURN turns it, MOVE forward,right walks with collision (PLAYER sets size and step height); VIEW x,y,w,h[,scale[,fov]]
+> is the picture's place, FOG its distance, COLORMAP builds the brightness table from the palette, RENDER draws. THING n,x,y,tex,w,h places a thing (THINGZ, THINGTEX, THINGOFF,
+> THINGMOVE dx,dy, THINGLIGHT). W3D("X"\|"Y"\|"Z"\|"ANGLE"\|"PITCH"\|"SECTOR"\|"FLOORZ"\|"HIT"\|"SECTORS"\|"SHOTDIST"\|"SHOTX"\|"SHOTY"\|"SHOTKIND") need no argument, W3D("SECTORAT"\|"FLOORAT",x,y) two,
+> the others one: a sector (FLOOR CEIL LIGHT TAG WALLS), a thing (TX TY TZ TSECTOR TON DIST BEARING SEES), a texture (TEXW TEXH), a range (SHOOT USE).
+
+```ebnf
+w3d-stmt := XFUNC(W3D) ( RESET | COLORMAP | RENDER | TEXTURE num-expr "," str-expr |
+                             SECTOR num-expr "," num-expr "," num-expr [ "," num-expr [ "," num-expr [ "," num-expr ] ] ] |
+                             WALL num-expr "," num-expr "," num-expr "," num-expr "," num-expr "," num-expr [ "," num-expr ] |
+                             WALLTEX num-expr "," num-expr "," num-expr "," num-expr "," num-expr |
+                             ( WALLOFF | THINGMOVE ) num-expr "," num-expr "," num-expr [ "," num-expr ] |
+                             ( WALLFLAG | HEIGHT ) num-expr "," num-expr "," num-expr |
+                             ( LIGHT | TAG | THINGZ | THINGTEX | THINGLIGHT | MOVE ) num-expr "," num-expr | ( SKY | FOG | THINGOFF ) num-expr |
+                             CAMERA num-expr "," num-expr "," num-expr [ "," num-expr [ "," num-expr ] ] |
+                             TURN num-expr [ "," num-expr ] |
+                             PLAYER num-expr "," num-expr "," num-expr "," num-expr |
+                             VIEW num-expr "," num-expr "," num-expr "," num-expr [ "," num-expr [ "," num-expr ] ] |
+                             THING num-expr "," num-expr "," num-expr "," num-expr "," num-expr "," num-expr ) .
+gfx-all-stmt := gfx-stmt | txt-stmt | tile-stmt | sprite-stmt | mouse-stmt | on-mouse-stmt | ui-stmt | w3d-stmt | cls-stmt | locate-stmt | htab-stmt | vtab-stmt | color-stmt | symbol-stmt | design-stmt | design-row | on-collision-stmt .
 ```
 
 ## Statements and lines

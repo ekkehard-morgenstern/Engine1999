@@ -34,6 +34,7 @@
 #include "basrepl.h"
 #include "basdebug.h"
 #include "gfxops.h"
+#include "w3d.h"
 #include "mouse.h"
 #include "cursors.h"
 #include "sprscreen.h"
@@ -846,9 +847,37 @@ static int con_gi( double v, int def ) {
 }
 
 // the display statements: the text ones that a terminal can do, an error for the rest
+// the 3D sector renderer has no picture here, but the world, the movement and the functions work (scripts and tests can run a game headless)
+static w3d_t* con_w3d;
+
+static void con_w3d_free( void ) {
+    w3d_free( con_w3d );
+    con_w3d = 0;
+}
+
+static bool con_w3d_get( void ) {
+    if ( con_w3d == 0 ) {
+        con_w3d = w3d_new();
+        if ( con_w3d != 0 ) {
+            atexit( con_w3d_free );
+        }
+    }
+    return con_w3d != 0;
+}
+
 static bool con_gfx_op( void* usrdata, int op, const double* a, int na, const char* s, size_t slen, uint8_t* out, size_t outsz,
     size_t* outlen, const char** err ) {
     (void) usrdata; (void) na; (void) s;
+    if ( op >= GFXOP_W3DFIRST && op <= GFXOP_W3DLAST ) {
+        if ( !con_w3d_get() ) {
+            *err = "Out of memory";
+            return false;
+        }
+        if ( op == GFXOP_W3DRENDER || op == GFXOP_W3DCOLORMAP ) {
+            return true;                    // (nothing to draw on)
+        }
+        return w3d_op( con_w3d, op, a, na, s, slen, err );
+    }
     if ( op >= GFXOP_MOUSESHOW && op <= GFXOP_MOUSETMO ) {
         if ( !con_mouse ) {
             *err = "Not available in the console host";
@@ -925,6 +954,9 @@ static bool con_gfx_op( void* usrdata, int op, const double* a, int na, const ch
 
 static bool con_gfx_query( void* usrdata, int q, const double* a, int na, double* result ) {
     (void) usrdata; (void) na;
+    if ( q >= GFXQ_W3DFIRST && q <= GFXQ_W3DLAST ) {
+        return con_w3d_get() && w3d_query( con_w3d, q, a, na, result );
+    }
     if ( q == GFXQ_FRAME ) {                // (no screen refresh: 60 frames a second by the clock, so that FRAME works as a short wait)
         *result = (double)( con_mouse_ms() * 60U / 1000U );
         return true;
