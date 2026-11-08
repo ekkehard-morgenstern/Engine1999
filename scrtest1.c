@@ -998,6 +998,14 @@ static void test_screenedit( void ) {
     clearscript(); press( SK_EOF );
     r = runse( &ins );
     check( r == SCREDIT_EOF && !txtscr_getstatus( 0, 0 ), "end of input leaves the editor (an open question)" );
+    // Ctrl-D in the screen editor does not leave it: it deletes the character under the cursor, like DELETE (the owner: the editor is left by RETURN only)
+    freshscreens( 40, 10 );
+    putat( 0, 0, "abcd" ); txtscr_locate( 1, 0 );
+    clearscript(); addkey( SK_CHAR, 'd', 0, KSMOD_CTRL ); addkey( SK_CHAR, 'd', 0, KSMOD_CTRL ); press( SK_RETURN );
+    r = runse( &ins );
+    check( r == SCREDIT_ACCEPTED, "Ctrl-D in the screen editor does not end it" );
+    seclear();
+    check( rowis( 0, "ad" ), "Ctrl-D in the screen editor deletes the character under the cursor" );
     freshscreens( 40, 10 );
     putat( 0, 0, "A" ); txtscr_locate( 0, 0 );
     clearscript(); press( SK_ESCAPE ); press( SK_TAB ); pressk( KS_PGUP, 0 ); pressk( KS_F5, 0 ); press( SK_RETURN );

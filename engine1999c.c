@@ -2098,6 +2098,9 @@ int main( int argc, char** argv ) {
                     puts( kw );
                 }
             }
+            for ( int i = 0; keyword_alias_name( i ) != 0; ++i ) {       // the alternative spellings
+                puts( keyword_alias_name( i ) );
+            }
             for ( int xid = 1; xid < 255; ++xid ) {          // the extension words (TOK_XFUNC)
                 const char* kw = xkeyword_name( (uint8_t) xid );
                 if ( kw != 0 ) {

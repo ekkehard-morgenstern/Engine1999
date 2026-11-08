@@ -163,6 +163,10 @@ Inside the Engine text is ISO-8859-15, but listings (`.bas`, `.lib`) are edited 
 
 Code: `keyseq_listing_is_utf8()`, `keyseq_listing_from_utf8()`, `keyseq_listing_to_utf8()` in `keyseq.c`; used by `repl_read_program()` and `repl_save_program_ex()` in `basrepl.c`. Tests: `keytest1` (76), `contest1` (listing cases).
 
+## Alternative spellings: `OLD`, `CATALOG`, `RENUMBER` (2026-11-08, roadmap item 25)
+
+`OLD` is `LOAD`, `CATALOG` is `FILES` and `RENUMBER` is `RENUM`, as in other BASICs. They are reserved words that the tokenizer reads as the token of the statement (`aliastbl[]` in `bastok.c`), so `LIST` shows the canonical word (`10 OLD "x"` lists as `10 LOAD "x"`) and nothing changes in the program file format. `--list-keywords` and the man page list them. Not done (no clear meaning here, left on the roadmap): `FUNCTION` / `PROCEDURE` spellings of `FUNC` / `PROC`, `YIELD`, `SAFETY ON|OFF`.
+
 ## Program commands: `LOAD`, `RUN`, `MERGE`, `CHAIN`, `FILES`, `LIST`, `NEW`, `CLEAR`, `DELETE`, `RENUM`, `EDIT`, `MONITOR`, `BYE`, `QUIT`
 
 They are ordinary statements (`bascomp.ebnf`, `cgenprog.c`), so they work in direct mode and inside programs.

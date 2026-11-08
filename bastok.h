@@ -492,6 +492,7 @@ bool is_xkeyword( const char* name, uint8_t* pxid );    // an extension word by 
 const char* xkeyword_name( uint8_t xid );               // the text of an extension word, 0 if there is none
 bool is_keyword( const char* name, uint8_t* ptok );
 bool is_keyword2( uint8_t tok );
+const char* keyword_alias_name( int index );    // the index-th alternative spelling (OLD, CATALOG, RENUMBER), 0 beyond the last
 const char* keyword_name( uint8_t tok );        // the keyword text of a token, 0 if it is none
 bool print_keyword( uint8_t tok, buf_t* buf );
 

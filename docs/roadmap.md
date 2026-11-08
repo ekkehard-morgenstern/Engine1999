@@ -38,11 +38,11 @@ the sections when items are done or added.
 | 18 | Audio without a window (12) | open the audio device alone for scripts that `PLAY`; idea 2026-11-07: generic `audio:` driver over `sdlaud:` / `alsafio:` (ALSA by file I/O + ioctl), feasibility open (section 12) | Medium-Low | optional |
 | 19 | Drivers written in BASIC (8) | `DRIVER "name","PREFIX"` with labelled handlers | Low | postponed by the owner; proposal exists (*decision*) |
 | 20 | Conversion tools and an own image format (10) | images to `DESIGN` rows / image strings / palettes, a `.spr` file | Low | later |
-| 21 | Ctrl-D at the prompt in screen mode (11) | what it should do; today ignored (end with `BYE`) | Low | owner's future issue; ties to the end of input |
+| 21 | ~~Ctrl-D at the prompt in screen mode (11)~~ **done 2026-11-08** | Ctrl-D in the screen editor deletes the character under the cursor (shared code `scredit.c`, window and console alike; the screen editor is left by RETURN only, as the owner wanted); the real end of the input still ends the console session; the default was my choice, revisit if unwanted | ~~Low~~ | owner's future issue |
 | 22 | ~~`AUTO` in the console host (12)~~ | **done 2026-11-01** | ~~Low~~ | |
 | 23 | `OPTION BASE`, `DEF type range` (`INT`/`STR`/`FLT` tokens), `TAB`/`TABMODE`, `DISPLAY(x)`, `BREAKPOINT` (2, 13) | assorted language ideas | Low | each needs a short design decision (*decision*) |
 | 24 | `DO … LOOP`, `FOR EVER` (11) | test-at-the-end loop | Low | `REPEAT`/`WHILE`/`UNTIL` cover it |
-| 25 | Small aliases (11) | `OLD`, `CATALOG`, `RENUMBER`, `FUNCTION`/`PROCEDURE`, `YIELD`, `SAFETY ON/OFF` | Low | |
+| 25 | Small aliases (11): `OLD`, `CATALOG`, `RENUMBER` **done 2026-11-08**; open: `FUNCTION`/`PROCEDURE`, `YIELD`, `SAFETY ON/OFF` | `OLD` = `LOAD`, `CATALOG` = `FILES`, `RENUMBER` = `RENUM` (reserved words read as the same tokens); the rest has no clear meaning yet | Low | |
 | 26 | `DYNAMIC`/`ASSOC` arrays, `RECORD`/`TYPE` (11) | structured data | Low | long-term (*decision*) |
 | 27 | Sound extras (2b) | pitch envelope, pulse width, noise filter, `SFX` parameters, FM instruments, band-limited waves, stereo, voice allocator, sample-accurate times | Low | long-term |
 | 28 | `tcp:` server side, `SEEK` as a function, byte-array records (8) | more I/O | Low | |
@@ -257,7 +257,7 @@ useful is the language it planned. The items below are in the order I would sugg
 - [x] `PEEK`/`POKE`/`PEEK$` on a 1 MiB RAM area (done, 2026-10-31); not done: `SYS addr[,args]`, a window into the data segment / code / screen memory, `PEEKB/W/L/F` spellings
 - [ ] `PRINT USING fmt$` (formatted output); `AT(row[,col])`, `HTAB`, `VTAB` in `PRINT` (`LOCATE` covers the placement)
 - [x] `TIME$`, `DATE$`, `DATETIME$` (done, 2026-10-31; read only: no setting of the clock)
-- [ ] Small aliases: `OLD` for `LOAD`, `CATALOG` for `FILES`, `RENUMBER`, `FUNCTION`/`PROCEDURE` spellings; `YIELD` (give the host a time slice) and `SAFETY ON|OFF` (the sandbox switch; see section 8) are AsmBASIC's ideas, too
+- [ ] Small aliases: `OLD` for `LOAD`, `CATALOG` for `FILES`, `RENUMBER` (these three done 2026-11-08), `FUNCTION`/`PROCEDURE` spellings; `YIELD` (give the host a time slice) and `SAFETY ON|OFF` (the sandbox switch; see section 8) are AsmBASIC's ideas, too
 - [ ] To think about (the owner decides): `DYNAMIC`/`ASSOC` arrays (parsed since the start, no meaning: `DIM a(n, DYNAMIC, ASSOC)`), `RECORD`/`TYPE`, number tokens that keep their base (check that `&H1F` lists back as hex), AsmBASIC's "undimensioned arrays are 0..10" rule
 
 > **Standing rule (owner, 2026-10-31): editing and input behave the same in the window and the console version** (line input, one-line editor, full-screen editor, monitor, break keys, key codes). Differences are listed here with their reason: Ctrl-D on an empty line ends the input in the console (the window has a close button); the graphics statements are not available in the console host yet.

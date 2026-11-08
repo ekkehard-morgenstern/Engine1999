@@ -864,10 +864,33 @@ const char* xkeyword_name( uint8_t xid ) {
     return 0;
 }
 
+// alternative spellings of statements (other BASICs'): reserved words that are read as the token of the statement and listed under its own name
+static const struct {
+    uint8_t     tok;
+    const char* name;
+} aliastbl[] = {
+    { TOK_LOAD, "OLD" }, { TOK_FILES, "CATALOG" }, { TOK_RENUM, "RENUMBER" }, { 0, 0 }
+};
+
+const char* keyword_alias_name( int index ) {
+    for ( int i=0; aliastbl[i].tok; ++i ) {
+        if ( i == index ) {
+            return aliastbl[i].name;
+        }
+    }
+    return 0;
+}
+
 bool is_keyword( const char* name, uint8_t* ptok ) {
     for ( int i=0; keywtbl[i].tok; ++i ) {
         if ( strcmp( keywtbl[i].name, name ) == 0 ) {
             *ptok = keywtbl[i].tok;
+            return true;
+        }
+    }
+    for ( int i=0; aliastbl[i].tok; ++i ) {
+        if ( strcmp( aliastbl[i].name, name ) == 0 ) {
+            *ptok = aliastbl[i].tok;
             return true;
         }
     }

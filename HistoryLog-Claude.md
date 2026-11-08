@@ -13,6 +13,10 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+### Roadmap items 25 and 21 — aliases and Ctrl-D (2026-11-08, owner's request)
+- Item 25: `bastok.[ch]` (`aliastbl[]`, `keyword_alias_name()`, `is_keyword()` knows the aliases), `engine1999c.c` (`--list-keywords` prints them), `bascomp.ebnf`, man page (`mancheck.sh --update`), `docs/basic-language.md`; `repltest1` 5 new cases (447).
+- Item 21: `scredit.c` (Ctrl-D in `scr_screenedit()` = `se_delete`), `scrtest1.c` 2 new cases (178), `docs/console-host.md`, `docs/screen-editor-proposal.md` §7; roadmap rows 21 and 25, `SESSION.md`.
+
 ### Roadmap item 16 — numeric extras (2026-11-08, owner's request; rounding: half away from zero)
 - `bastok.[ch]` (`XF_ASN`..`XF_CDBL` 21..31, keyword table), `bascomp.c` (one-argument forms, `ROUND(x[,n])` with 0 as default for n), `codegen.[ch]`, `vm.c` (`MATH` kinds 17..26, `MTH2` kind 4; no negative zero from `CINT` / `ROUND`), `instset.h`, `bascomp.ebnf` + `make grammar`, `man/engine1999-basic.7` (`mancheck.sh --update`), `docs/basic-language.md`, `docs/roadmap.md` (item 16 done), `SESSION.md`.
 - Tests: `vmtest1` 21 new cases (1470 pass), `make man-check`, `make grammar-check`.

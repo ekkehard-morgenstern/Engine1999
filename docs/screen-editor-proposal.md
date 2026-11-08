@@ -253,7 +253,7 @@ Rough size: phase 1 ≈ 250 lines, phase 2 ≈ 500 lines + tests, phase 3 ≈ 35
 
 ## 7. Open points
 
-**A future issue (2026-11-01, the owner):** the screen editor must not be left except by RETURN (a line) or by closing the window. Today the end of the input (`SK_EOF`, a redirected input or a closed pipe: not expected on a terminal in screen mode) and a Ctrl-D of the console host still end it without a visible effect (`SCREDIT_EOF`: the host then treats it as an empty line / the end of the session); what the console host should do with Ctrl-D and with a lost standard input in screen mode is to be decided with phase 3.
+**A future issue (2026-11-01, the owner):** the screen editor must not be left except by RETURN (a line) or by closing the window. Today the end of the input (`SK_EOF`, a redirected input or a closed pipe: not expected on a terminal in screen mode) and a Ctrl-D of the console host still end it without a visible effect (`SCREDIT_EOF`: the host then treats it as an empty line / the end of the session); **Decided 2026-11-08 (roadmap item 21, default taken by me, revisit if unwanted): Ctrl-D in the screen editor deletes the character under the cursor** (`scredit.c`, shared by both hosts, like DELETE) and never leaves it; the real end of the input / a lost terminal (`SK_EOF`) still ends the console session.
 
 **Otherwise none.** To look at while implementing, because they are matters of taste or of the screen itself: the exact status line layout and colors (white on red is the start), the highlight brightness (30 % toward white), how INSERT/DELETE
 behave in a row with several runs (case 1 shifts a run into the gap after it), and whether F12 collides with the user's desktop.

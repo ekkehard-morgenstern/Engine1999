@@ -735,6 +735,8 @@ int scr_screenedit( const scrdrv_t* drv, char* buf, size_t bufsz, bool* insert, 
                 if ( onresize != 0 ) {
                     onresize( usrdata );
                 }
+            } else if ( key.kind == SK_CHAR && key.ch == 'd' && ( key.mods & KSMOD_CTRL ) != 0 ) {
+                se_delete( &e );                // Ctrl-D deletes the character under the cursor (like DELETE); the screen editor is left only by RETURN or a closed screen
             } else if ( key.kind == SK_CHAR && ( key.mods & KSMOD_CTRL ) == 0 ) {
                 if ( SCR_PRINTABLE( key.ch ) ) {
                     se_type( &e, key.ch );
