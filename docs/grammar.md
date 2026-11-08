@@ -426,7 +426,7 @@ poke-stmt := POKE num-expr "," expr [ "," num-expr ] .
 > beginning); LIST lists the program: a single target lists that line, "a-b" the range, "a-" to the end, "-b" from the start.
 > LOAD LIBRARY and LIBRARY are declarations for libraries (docs/library-support.md): the compiler resolves them, nothing happens at run time. The names are plain
 > string literals. A library is a program whose first statement is LIBRARY "name" [, "prefix"].
-> OLD is another spelling of LOAD, CATALOG of FILES and RENUMBER of RENUM (the same tokens: LIST shows LOAD, FILES and RENUM).
+> OLD is another spelling of LOAD, CATALOG of FILES, RENUMBER of RENUM and PUT of PUTREC (the same tokens: LIST shows LOAD, FILES, RENUM and PUTREC).
 
 ```ebnf
 load-stmt := LOAD ( str-expr | LIBRARY str-lit ) .
@@ -438,7 +438,12 @@ library-stmt := LIBRARY str-lit [ "," str-lit ] .
 ```ebnf
 libraries-stmt := LIBRARIES [ str-expr ] .
 run-stmt := RUN [ goto-target ] .
-list-stmt := LIST [ goto-target ] [ "-" [ goto-target ] ] .
+```
+
+> LIST # n [,] writes the listing to the channel n (a file or device opened with OPEN; plain text, no colors) instead of the screen.
+
+```ebnf
+list-stmt := LIST [ chan-spec [ "," ] ] [ goto-target ] [ "-" [ goto-target ] ] .
 ```
 
 > NEW deletes the program and all variables and returns to the host (READY prompt): the running program ends.

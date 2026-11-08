@@ -3881,20 +3881,40 @@ static bool comp_make_rangenode( compiler_t* comp, node_t** pnode, uint8_t nodet
 }
 
 bool comp_eat_liststmt( compiler_t* comp, node_t** pnode ) {
-    // list-stmt := TOK_LIST [ goto-target ] [ TOK_MINUS [ goto-target ] ] .
+    // list-stmt := TOK_LIST [ chan-spec [ TOK_COMMA ] ] [ goto-target ] [ TOK_MINUS [ goto-target ] ] .
     if ( comp->currtok != TOK_LIST || !comp_fetchtok( comp ) ) {
         return false;
     }
-    uint8_t flags = 0; node_t* first = NODE_NONE; node_t* last = NODE_NONE;
+    uint8_t flags = 0; node_t* first = NODE_NONE; node_t* last = NODE_NONE; node_t* chan = NODE_NONE;
     /*
         NT_LISTSTMT     LIST statement
             data:
-                - 1 byte of flags: LISTF_FIRST, LISTF_LAST (the targets that are present), LISTF_RANGE (minus given)
+                - 1 byte of flags: LISTF_FIRST, LISTF_LAST (the targets that are present), LISTF_RANGE (minus given), LISTF_CHAN (a channel)
             branches:
-                - the start target if LISTF_FIRST, then the end target if LISTF_LAST (NT_GOTOTARGET)
+                - the channel specifier (NT_CHANSPEC) if LISTF_CHAN, then the start target if LISTF_FIRST, then the end target if LISTF_LAST (NT_GOTOTARGET)
     */
-    return comp_eat_linerange( comp, &flags, &first, &last ) &&
-        comp_make_rangenode( comp, pnode, NT_LISTSTMT, flags, first, last, NODE_NONE );
+    if ( comp->currtok == TOK_LATTICE ) {
+        if ( !comp_eat_chanspec( comp, &chan ) || chan == NODE_NONE ) {
+            return false;
+        }
+        if ( comp->currtok == TOK_COMMA && !comp_fetchtok( comp ) ) {
+            return false;
+        }
+    }
+    if ( !comp_eat_linerange( comp, &flags, &first, &last ) ) {
+        return false;
+    }
+    if ( chan != NODE_NONE ) {
+        flags |= LISTF_CHAN;            // (comp_eat_linerange starts with no flags)
+    }
+    if ( !comp_make_rangenode( comp, pnode, NT_LISTSTMT, flags, chan, NODE_NONE, NODE_NONE ) ) {
+        return false;
+    }
+    if ( ( first != NODE_NONE && !comp_add_branch( comp, *pnode, first ) ) || ( last != NODE_NONE && !comp_add_branch( comp, *pnode, last ) ) ) {
+        out_of_memory( comp );
+        return false;
+    }
+    return true;
 }
 
 bool comp_eat_deletestmt( compiler_t* comp, node_t** pnode ) {

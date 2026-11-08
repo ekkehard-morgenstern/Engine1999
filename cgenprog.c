@@ -581,16 +581,20 @@ bool cgen_from_liststmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         return cgen_unexpected_node( comp );
     }
     uint8_t flags = node->data[0];
-    size_t expected = ( ( flags & LISTF_FIRST ) ? 1U : 0U ) + ( ( flags & LISTF_LAST ) ? 1U : 0U );
+    size_t nchan = ( flags & LISTF_CHAN ) ? 1U : 0U;
+    size_t expected = nchan + ( ( flags & LISTF_FIRST ) ? 1U : 0U ) + ( ( flags & LISTF_LAST ) ? 1U : 0U );
     if ( node->numbranches != expected ) {
         return cgen_unexpected_node( comp );
     }
-    node_t* first = ( flags & LISTF_FIRST ) ? node->branches[0] : NODE_NONE;
+    node_t* chan  = nchan ? node->branches[0] : NODE_NONE;
+    node_t* first = ( flags & LISTF_FIRST ) ? node->branches[nchan] : NODE_NONE;
     node_t* last  = ( flags & LISTF_LAST ) ? node->branches[ expected - 1U ] : NODE_NONE;
     if ( ( flags & LISTF_RANGE ) == 0 && first != NODE_NONE ) {
         last = first;       // a single target lists that line only
     }
-    if ( !cgen_gen_channel0( cgen, comp ) || !cp_push_target( cgen, comp, first ) || !cp_push_target( cgen, comp, last ) ) {
+    // (PCHN is sticky: LIST # n selects the channel, a plain LIST selects the screen)
+    bool chanok = chan != NODE_NONE ? cgen_from_chanspec( cgen, comp, chan, cgen_gen_pchn ) : cgen_gen_channel0( cgen, comp );
+    if ( !chanok || !cp_push_target( cgen, comp, first ) || !cp_push_target( cgen, comp, last ) ) {
         return false;
     }
     if ( !cgen_gen_list( cgen ) ) {

@@ -515,17 +515,24 @@ static bool repl_read_program( repl_t* repl, FILE* f, program_t* pgm ) {
     if ( read_program_header( f, &version ) ) {
         uint8_t hdrbytes[LINEHDR_SIZE];
         size_t got;
+        buf_t* check = create_buffer();             // every line is detokenized once: a token nobody defines (an unused number) is an error
+        if ( check == 0 ) {
+            repl_report( repl, "? Out of memory" );
+            return false;
+        }
         while ( ( got = fread( hdrbytes, 1U, LINEHDR_SIZE, f ) ) == LINEHDR_SIZE ) {
             linehdr_t hdr; const uint8_t* p = hdrbytes;
             clear_linehdr( &hdr );
             read_linehdr_raw( &p, &hdr );
             if ( hdr.length <= LINEHDR_SIZE || hdr.lineno > LINENO_MAX ) {
                 repl_report( repl, "? Bad program file" );
+                delete_buffer( check );
                 return false;
             }
             uint8_t* line = (uint8_t*) malloc( hdr.length );
             if ( line == 0 ) {
                 repl_report( repl, "? Out of memory" );
+                delete_buffer( check );
                 return false;
             }
             memcpy( line, hdrbytes, LINEHDR_SIZE );
@@ -533,15 +540,22 @@ static bool repl_read_program( repl_t* repl, FILE* f, program_t* pgm ) {
             bool ok = fread( line + LINEHDR_SIZE, 1U, toklen, f ) == toklen && line[ hdr.length - 1U ] == TOK_EOL;
             if ( !ok ) {
                 repl_report( repl, "? Bad program file" );
+            } else if ( clear_buffer( check ), !detokenize_line( check, line + LINEHDR_SIZE, &hdr ) ) {
+                char msg[80];
+                snprintf( msg, sizeof(msg), "? Unknown token in line %u of the program file", (unsigned) hdr.lineno );
+                repl_report( repl, msg );
+                ok = false;
             } else if ( !enter_line( pgm, line, 0 ) ) {
                 repl_report( repl, "? Out of memory" );
                 ok = false;
             }
             free( line );
             if ( !ok ) {
+                delete_buffer( check );
                 return false;
             }
         }
+        delete_buffer( check );
         if ( got != 0 ) {
             repl_report( repl, "? Bad program file" );
             return false;
@@ -1940,8 +1954,11 @@ static repl_t* listing_repl = 0;
 
 static void repl_list_printer( const char* text ) {
     repl_t* repl = listing_repl;
-    // LIST writes to the channel the program selected (the VM's current one)
-    if ( repl->print ) {
+    // LIST writes to the channel the program selected (the VM's current one): a file or device (LIST #n) through the VM, the screen through the host
+    if ( repl->vm.channel > 0 ) {
+        vm_out_text( &repl->vm, text );
+        vm_out_text( &repl->vm, "\n" );
+    } else if ( repl->print ) {
         repl->print( &repl->vm, repl, repl->vm.channel, text );
         repl->print( &repl->vm, repl, repl->vm.channel, "\n" );
     } else {

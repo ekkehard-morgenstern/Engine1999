@@ -41,12 +41,12 @@ the parts when items are done or added.
 | 18 | Audio without a window (12) | Medium-Low | [Sound and music](roadmap/sound.md) |
 | 19 | Drivers written in BASIC (8) | Low | [I/O, VM and limits](roadmap/io-and-vm.md) |
 | 20 | Conversion tools and an own image format (10) | Low | [Graphics, UI and 3D](roadmap/graphics-and-ui.md) |
-| 23 | `OPTION BASE`, `DEF type range` (`INT`/`STR`/`FLT` tokens), `TAB`/`TABMODE`, `DISPLAY(x)`, `BREAKPOINT` (2, 13) | Low | [Language](roadmap/language.md) |
+| 23 | `TAB`/`TABMODE`, `DISPLAY(x)`, `BREAKPOINT` (2, 13) | Low | [Language](roadmap/language.md) |
 | 24 | `DO … LOOP`, `FOR EVER` (11) | Low | [Language](roadmap/language.md) |
 | 26 | `DYNAMIC`/`ASSOC` arrays, `RECORD`/`TYPE` (11) | Low | [Language](roadmap/language.md) |
 | 27 | Sound extras (2b) | Low | [Sound and music](roadmap/sound.md) |
 | 28 | `tcp:` server side, `SEEK` as a function, byte-array records (8) | Low | [I/O, VM and limits](roadmap/io-and-vm.md) |
-| 29 | `LIST #n`, `PRINT` comma zones on files, files kept open across `CHAIN` (1, 4, 8) | Low | [I/O, VM and limits](roadmap/io-and-vm.md) |
+| 29 | (`LIST #n` done 2026-11-08) `PRINT` comma zones on files, files kept open across `CHAIN` (1, 4, 8) | Low | [I/O, VM and limits](roadmap/io-and-vm.md) |
 | 31 | `RENUM` / `DELETE` / `CLEAR` corners (1) | Low | [Language](roadmap/language.md) |
 | 32 | Machine monitor limits (5) | Low | [I/O, VM and limits](roadmap/io-and-vm.md) |
 | 33 | VM leftovers (5) | Low | [I/O, VM and limits](roadmap/io-and-vm.md) |
@@ -55,7 +55,6 @@ the parts when items are done or added.
 | 36 | Test cleanup (4, 12) | Low | [Hosts, editors and terminals](roadmap/hosts.md) |
 | 37 | Design decisions to revisit (7) | Low | [Language](roadmap/language.md) |
 | 38 | Font review (later) | Low | [Graphics, UI and 3D](roadmap/graphics-and-ui.md) |
-| 39 | Unused tokens `PUT`, `OFF` (2) | Low | [Language](roadmap/language.md) |
 | 40 | `BUILD` extras (1) | Low | [Projects, games and packaging](roadmap/projects.md) |
 | 41 | Remaining limits of the console host (12) | Low | [Hosts, editors and terminals](roadmap/hosts.md) |
 | 42 | Graphics in terminals (12) | Lowest | [Hosts, editors and terminals](roadmap/hosts.md) |

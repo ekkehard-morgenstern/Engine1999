@@ -9,7 +9,7 @@ Part of the roadmap: see [the central roadmap](../roadmap.md). The I/O subsystem
 | 9 | Binary helpers (9) | `HEX` to bytes, unsigned `CVI`/`CVL`, byte-wise `ANDS`/`ORS` | Medium-Low | `STRING$` and `SPACE$` are **done 2026-11-01** (extension words, see the note below the table) |
 | 19 | Drivers written in BASIC (8) | `DRIVER "name","PREFIX"` with labelled handlers | Low | postponed by the owner; proposal exists (*decision*) |
 | 28 | `tcp:` server side, `SEEK` as a function, byte-array records (8) | more I/O | Low | |
-| 29 | `LIST #n`, `PRINT` comma zones on files, files kept open across `CHAIN` (1, 4, 8) | I/O corners | Low | |
+| 29 | `LIST #n` **done 2026-11-08**; open: `PRINT` comma zones on files, files kept open across `CHAIN` (1, 4, 8) | I/O corners | Low | |
 | 32 | Machine monitor limits (5) | no step-over, conditional breakpoints, watches; no variable inspection | Low | |
 | 33 | VM leftovers (5) | `WRLV`, inline assembler `[ … ]` / `{ … }`, `DEF FN` can't call itself | Low | |
 | 34 | Remaining fixed limits (6) | 16-bit variable numbers, 6 array dimensions, strings ≤ 65535 | Low | far from being reached |
@@ -42,7 +42,7 @@ Part of the roadmap: see [the central roadmap](../roadmap.md). The I/O subsystem
 - [ ] `tcp:` server side (listening sockets), `SEEK` as a function, binary-safe strings or a byte-array interface for records
 - [ ] **Sandboxing (partly done: the policy `policy.[ch]`, `--allow=` / `--deny=`, grants file, item 54; open: per-path grants, a monitor, a grants editor)** (the owner's proposed policy of 2026-11-03 is in section 17 and item 54): permissions for shell literals, `sh:`, writing/reading outside the program directory, the network; how a policy is configured (command line switch, trust level per program, permission file) is undecided; `iodev_allowed()` is the single place for the decision
 - [ ] Files stay open across `CHAIN` in GW-BASIC; here a restart (`RUN`, `NEW`, `LOAD`, `CHAIN`) closes all channels
-- [ ] `LIST #n` / `LIST` to a file channel (`LIST` still writes to channel 0 only; with the drivers it could write a listing to `mem:` or a file); `PRINT` comma zones on a file channel use the screen column
+- [x] (`LIST #n` done 2026-11-08) `LIST #n` / `LIST` to a file channel (`LIST` still writes to channel 0 only; with the drivers it could write a listing to `mem:` or a file); open: `PRINT` comma zones on a file channel use the screen column
 - [x] Binary data in files (done with binary strings, 2026-10-31)
 
 ## 9. Error handling

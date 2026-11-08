@@ -801,13 +801,13 @@ static const struct {
     uint8_t     tok;
     const char* name;
 } keywtbl[] = {
-    { TOK_PRINT, "PRINT" }, { TOK_INPUT, "INPUT" }, { TOK_PUT, "PUT" }, { TOK_GET, "GET" }, { TOK_LIST, "LIST" },
+    { TOK_PRINT, "PRINT" }, { TOK_INPUT, "INPUT" }, { TOK_GET, "GET" }, { TOK_LIST, "LIST" },
     { TOK_READ, "READ" }, { TOK_DATA, "DATA" }, { TOK_RESTORE, "RESTORE" }, { TOK_SAVE, "SAVE" }, { TOK_RUN, "RUN" },
     { TOK_AUTO, "AUTO" }, { TOK_RENUM, "RENUM" }, { TOK_DELETE, "DELETE" }, { TOK_MERGE, "MERGE" }, { TOK_CHAIN, "CHAIN" },
     { TOK_FILES, "FILES" }, { TOK_NEW, "NEW" }, { TOK_CLEAR, "CLEAR" }, { TOK_ERASE, "ERASE" }, { TOK_EDIT, "EDIT" },
     { TOK_LOAD, "LOAD" }, { TOK_SHOW, "SHOW" }, { TOK_WARRANTY, "WARRANTY" }, { TOK_COPYING, "COPYING" }, { TOK_LEN, "LEN" },
-    { TOK_DIM, "DIM" }, { TOK_DEF, "DEF" }, { TOK_INT, "INT" }, { TOK_STR, "STR" }, { TOK_FLT, "FLT" }, { TOK_OPTION, "OPTION" },
-    { TOK_BASE, "BASE" }, { TOK_ASC, "ASC" }, { TOK_VAL, "VAL" }, { TOK_FRE, "FRE" }, { TOK_LEFT, "LEFT" }, { TOK_MID, "MID" },
+    { TOK_DIM, "DIM" }, { TOK_DEF, "DEF" }, { TOK_INT, "INT" }, { TOK_STR, "STR" },
+    { TOK_ASC, "ASC" }, { TOK_VAL, "VAL" }, { TOK_FRE, "FRE" }, { TOK_LEFT, "LEFT" }, { TOK_MID, "MID" },
     { TOK_RIGHT, "RIGHT" }, { TOK_INKEY, "INKEY" }, { TOK_BIN, "BIN" }, { TOK_QUA, "QUA" }, { TOK_OCT, "OCT" },
     { TOK_DEC, "DEC" }, { TOK_HEX, "HEX" }, { TOK_GOTO, "GOTO" }, { TOK_GOSUB, "GOSUB" }, { TOK_GO, "GO" }, { TOK_TI, "TI" },
     { TOK_TO, "TO" }, { TOK_SUB, "SUB" }, { TOK_RETURN, "RETURN" }, { TOK_IF, "IF" }, { TOK_UNLESS, "UNLESS" },
@@ -864,12 +864,12 @@ const char* xkeyword_name( uint8_t xid ) {
     return 0;
 }
 
-// alternative spellings of statements (other BASICs'): reserved words that are read as the token of the statement and listed under its own name
+// alternative spellings of statements (other BASICs', and PUT = PUTREC): reserved words that are read as the token of the statement and listed under its own name
 static const struct {
     uint8_t     tok;
     const char* name;
 } aliastbl[] = {
-    { TOK_LOAD, "OLD" }, { TOK_FILES, "CATALOG" }, { TOK_RENUM, "RENUMBER" }, { 0, 0 }
+    { TOK_LOAD, "OLD" }, { TOK_FILES, "CATALOG" }, { TOK_RENUM, "RENUMBER" }, { TOK_PUTREC, "PUT" }, { 0, 0 }
 };
 
 const char* keyword_alias_name( int index ) {

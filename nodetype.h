@@ -705,6 +705,7 @@ Explanation of node types:
 #define LISTF_LAST              UINT8_C(0X02)   // LIST: end target present (next branch)
 #define LISTF_RANGE             UINT8_C(0X04)   // LIST: a minus sign was given (otherwise a single target)
 #define LISTF_STEP              UINT8_C(0X08)   // RENUM: a step (numeric expression) is the last branch
+#define LISTF_CHAN              UINT8_C(0X10)   // LIST: a channel specifier (# n) is the first branch
 
 #define INPUTF_CHAN             UINT8_C(0X01)   // INPUT / GET: channel info present
 #define INPUTF_PROMPT           UINT8_C(0X02)   // INPUT: prompt present

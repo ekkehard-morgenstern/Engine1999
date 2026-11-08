@@ -392,6 +392,7 @@ typedef struct _vm_t {
 void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem );
 void cleanup_vm( vm_t* vm );        // frees the stacks and the strings still on the data stack
 void vm_reset_data( vm_t* vm );        // the READ pointers of the program and of every library to the first item of their chains
+void vm_out_text( vm_t* vm, const char* text );    // writes a text to the current channel (the screen, or a file / device opened with OPEN)
 bool vm_run( vm_t* vm );            // runs from offset 0 until the end of the code; false after reporting an error
 void vm_discard_stop( vm_t* vm );            // forgets the state CONT would continue with (the program changed, a program starts)
 void vm_clear_request( vm_t* vm );    // forgets a pending request (frees the name)

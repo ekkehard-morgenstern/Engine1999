@@ -380,6 +380,11 @@ static void vm_out_bytes( vm_t* vm, const char* text, size_t len ) {
     }
 }
 
+// writes a text to the current channel (the screen or a file / device opened with OPEN); used by LIST to a channel
+void vm_out_text( vm_t* vm, const char* text ) {
+    vm_out_bytes( vm, text, strlen( text ) );
+}
+
 static void vm_out( vm_t* vm, const char* text ) {
     vm_out_bytes( vm, text, strlen( text ) );
 }
