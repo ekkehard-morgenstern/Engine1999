@@ -13,6 +13,10 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+### Music for the two 3D games (2026-11-08, owner's request after playtesting)
+- **New `demos/lib/music3d.lib`** (`MU_`: moods title / calm / uneasy / danger / sting / fanfare, loops queued without a gap, `M` toggles) and `demos/levels/music3d.py` (the tunes of both games, length check, writes the library's `PLAY` procedure). `demos/lib/w3dkit.lib` loads it and `W3K_SHOW` calls `MU_TICK`. `demos/bughunt.bas` and `demos/deqq2.bas` choose the moods (danger / calm; Deqq II also uneasy), play the stings and fanfares, silence the music in the pause and have the M key and a hint on the title screen. `man/engine1999-bughunt.6`, `man/engine1999-deqq2.6`, `demos/README.md`, `docs/3d-subsystem.md`, `docs/roadmap.md`, `SESSION.md` updated.
+- Tested: the tunes parse in the console host (`deqq2test.sh` runs the moods; all 12 tunes through a small script), `make check`; in the window under Xvfb with `ENGINE1999_SOUNDLOG` (the sequence of moods and the loop timing of both games). Not heard by a human yet.
+
 ### Roadmap item 79 — Deqq's House II (2026-11-08, owner's request; decisions: same story in 3D, stealth Deqq, use key / three carried places, all in one stretch)
 - **New game `demos/deqq2.bas`** (installed as `engine1999-deqq2`: `GAMES` in the makefile, `man/engine1999-deqq2.6`, `desktop/engine1999-deqq2.desktop`, `desktop/icons/engine1999-deqq2.svg`): a real-time 3D adventure on the `W3D` renderer, eight puzzles as in the text adventure, Deqq as a stealth threat (a round of way points, line of sight, chase, lose track, carries you out; nothing is violent), hiding places, closed doors stop him, saved built parts, the 3D settings (`prefs3d`). `demos/levels/deqq2.py` (51 sectors) and `deqq2art.py` (about 55 sprites as drawing commands) generate its `DATA`; `demos/levels/mkw3d.py` got `inner(..., tex)`.
 - **Test `deqq2test.sh`** (in `make check`; headless in the console host: `DEQQ2_HEADLESS=1`, `DEQQ2_PLAY=file`): the whole game, locked doors, the carrying limit, Deqq's round / catch / lose track / hiding, the saved game.
