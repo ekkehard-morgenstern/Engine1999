@@ -87,6 +87,13 @@ thin sectors, each floor 16 higher than the one before (a step of at most 24 can
 `demos/lib/w3dkit.lib` (`LOAD LIBRARY "w3dkit"`): `W3K_INIT` (palette: 15 hues x 16 shades at 16 .. 255 on layers 0 and 3, `W3D RESET`, hides the tile and text layers), `FN W3K_C(hue,shade)`, the texture makers (`W3K_BRICK`, `STONE`, `PLASTER` (64 x 128 with a wainscot), `METAL`, `CARPET`, `TILES`, `PLANKS`, `GRASS`, `DOORTEX`, `WINDOW` and `GRATE` (see-through), `SKY` (256 x 64)),
 the sprite makers (`PLANT`, `LAMP`, `BARREL`, `TORCH` (two frames), `MEDKIT`, `AMMOBOX`, `KEYCARD`), `W3K_WALK` (arrows / WASD / R F look / SHIFT run or a game controller: moves and turns by the time passed), `W3K_SHOW` (the flicker free swap), `W3K_HUDBAR`, `W3K_DONE`. `manor.bas` is a walk through a house (doors, stairs, a pool, a window, a cupola, a cellar); `bughunt.bas` is a game (installed as `engine1999-bughunt`).
 
+## The user's 3D settings (`demos/lib/prefs3d.lib`)
+
+A library, `LOAD LIBRARY "prefs3d"`: **invert the X axis** (the right stick turns the other way), **invert the Y axis** (looking up and down), **gamma** (0.6 .. 1.8; it shapes the shades of the palette that `W3K_PALETTE` makes, so it also changes how the light falls off), **field of view** (60 .. 110) and **turning speed** (50 .. 200 %).
+`CALL P3_LOAD` reads `local:3dprefs.cfg` (the file of the driver `local:`, `~/.local/share/<program>/`: **each program has its own copy**; a shared file would need a driver feature) and applies the settings; `CALL P3_DIALOG` shows the dialog over the picture of the world
+(keys: UP / DOWN choose, LEFT / RIGHT change, RETURN saves, ESC cancels, DELETE defaults; pad: D-pad or left stick, A, B / BACK, X; changes show at once) and the programs open it on **O** (or the pad's **Y**). The programs honor the settings through `w3dkit`: `W3K_WALK` (inversion, turning speed), `W3K_VIEW(x,y,w,h,scale)` instead of `W3D VIEW` (field of view), `W3K_PALETTE` (gamma). The file is five numbers after a `3DPREFS 1` line.
+A library can not use the variables of another library ("Variable W3K_INVX is global in the library"), so `prefs3d` keeps `P3_INVX`, `P3_INVY`, `P3_GAMMA`, `P3_FOV`, `P3_TURN` and hands them over with `W3K_SETPREFS`. Settings are 3D renderer *demo* settings: the `W3D` statements themselves know nothing of them.
+
 ## Hosts
 
 The window host draws. **The console host runs the whole world** (`W3D RESET` ... the functions, collision, shots, sight) **but draws nothing** (`W3D RENDER` and `W3D COLORMAP` return at once), so the logic of a game can be tested headless. The graphics layer statements around it (`GFX ...`) are "Not available in the console host" there, as always.

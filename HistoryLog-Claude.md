@@ -13,6 +13,11 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+### 3D follow-up: freeze fixes and the 3D settings library (2026-11-08, owner's report after testing item 78)
+- **Freezes:** bare `RETURN` in a `PROC` ends the program with "Breakpoint" (the picture stays because the text layer is hidden): replaced by `EXIT PROC` in `demos/manor.bas` and `demos/bughunt.bas`; both now trap errors (`ON ERROR GOTO FAILED`: `W3K_DONE`, the message, `END`). Renderer fuzzed with both real levels, no hang.
+- **New `demos/lib/prefs3d.lib`:** invert X / Y axis, gamma, field of view, turning speed; file `local:3dprefs.cfg`; dialog on O / pad Y (`P3_DIALOG`). `demos/lib/w3dkit.lib`: the settings variables, `W3K_VIEW`, `W3K_REAPPLY`, `W3K_SETPREFS`, `W3K_RESETCLOCK`, gamma in `W3K_PALETTE`, inversion and turning speed in `W3K_WALK`. Demos load the settings and show the hint; `man/engine1999-bughunt.6`, `demos/README.md`, `docs/3d-subsystem.md`, `SESSION.md` updated.
+- Tested under Xvfb (dialog, live changes, save / load / cancel, a door key without a door). Not tried: a real stick with inversion.
+
 ### Roadmap item 78 — the software 3D sector renderer `W3D`, two demos (2026-11-08, owner's request after my feasibility answer: software first, implement it with example programs)
 - **New module `w3d.[ch]` (no SDL, no global state):** sectors (floor / ceiling height, flats, light, tag), walls and portals, things (billboards), a color map built from the palette, per-column 2D ray tracing (concave sectors and holes work, no sorting), floors and ceilings per pixel, sky, masked walls, a depth buffer for things, collision (`move_circle`: sliding, steps, portals, low ceilings), shots / sight / use (`trace`). `w3d_op()` / `w3d_query()` carry out the statements and functions; `w3d_render()` draws into its own palette bitmap, the host copies it onto the target layer (`gfx_putbuf()` in `gfxcore`, `sdlscr_gfx_putbuf()` in `sdlscreen`).
 - **Language:** the extension word `W3D` (`XF_W3D` 20 in `bastok.[ch]`, `bascomp.c`: statement and function groups next to `UI`), 25 statements (`GFXOP_W3D*` 140..164) and 32 functions (`GFXQ_W3D*` 200..231) in the table of `gfxops.[ch]`; both hosts: the window draws, the console host runs the world headless (`RENDER` / `COLORMAP` do nothing there).

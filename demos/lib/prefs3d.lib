@@ -1,0 +1,176 @@
+1 ' License: free for everybody to use, copy, change and build into executables (BUILD).
+2 ' An executable made with BUILD contains the Engine1999 runtime: the Engine1999 Runtime Exception
+3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
+4 ' in the executable (it shows with the command line option --engine1999-about).
+10 ' prefs3d - the user's settings for programs that use the 3D sector renderer (W3D), with a dialog to change them (a library: LOAD LIBRARY "prefs3d").
+20 ' The settings (handed over to the library w3dkit with W3K_SETPREFS: a library can not use the variables of another one) are used by the controls and the picture of a program honor (W3K_WALK, W3K_VIEW, the palette):
+30 '   P3_INVX   1 = the right stick (or the turning axis) turns the other way          P3_INVY   1 = looking up and down is inverted (stick up looks down)
+40 '   P3_GAMMA  0.6 .. 1.8, 1 = as drawn: above 1 brightens the middle shades            P3_FOV    the field of view, 60 .. 110 degrees (90)
+50 '   P3_TURN   the turning speed in percent, 50 .. 200 (100)
+60 ' They are kept in the file 3dprefs.cfg of the driver local: (~/.local/share/<program>/, so each program has its own copy; a program that was never started
+70 ' with a settings file just gets the defaults). A program uses it like this, after CALL W3K_INIT and CALL W3K_VIEW(...):
+80 '   CALL P3_LOAD                  reads the file (if there is one) and applies the settings: palette, color map and view are made again
+90 '   CALL P3_DIALOG                shows the dialog over the picture of the world (W3D RENDER draws it behind the dialog, so a change of the gamma
+100 '                                 or the field of view can be seen at once): UP / DOWN choose, LEFT / RIGHT change, RETURN saves and closes, ESC cancels
+110 '                                 (the old settings are back), DELETE sets the defaults; on a game controller: D-pad or left stick, A saves, B or BACK cancels, X sets the defaults.
+120 '                                 The program calls it when the user presses O (or the Y button) and afterwards sets its own time stamps again.
+130 '   CALL P3_SAVE                  writes the file (P3_DIALOG does that itself when RETURN is pressed)
+140 '   CALL P3_DEFAULTS              the settings as they come
+150 ' The file channel #1 is used: a program must not have a file open on it at that moment. A write error (a folder that can't be written) is raised as usual.
+160 ' The settings are kept in the variables P3_INVX, P3_INVY, P3_GAMMA, P3_FOV, P3_TURN (a program may read them) and handed to w3dkit by P3_PUSH.
+170 ' The variables of this library start with P3_.
+180 LIBRARY "prefs3d","P3_"
+190 LOAD LIBRARY "w3dkit"
+200 ' a library can not use the variables of another one: the settings are handed to w3dkit by a procedure
+210 PROC P3_PUSH
+220   CALL W3K_SETPREFS(P3_INVX,P3_INVY,P3_GAMMA,P3_FOV,P3_TURN)
+230   CALL W3K_REAPPLY
+240 END PROC
+250 PROC P3_INIT
+260   CALL P3_DEFAULTS
+270 END PROC
+280 PROC P3_DEFAULTS
+290   P3_INVX=0:P3_INVY=0:P3_GAMMA=1:P3_FOV=90:P3_TURN=100
+300 END PROC
+310 FUNC P3_CLAMP(V,LO,HI)
+320   IF V<LO THEN RETURN LO
+330   IF V>HI THEN RETURN HI
+340   RETURN V
+350 END FUNC
+360 PROC P3_LOAD
+370   LOCAL A$,G,F,T,X,Y
+380   CALL P3_DEFAULTS
+390   IF EXISTS("local:3dprefs.cfg") THEN
+400     OPEN "local:3dprefs.cfg" FOR INPUT AS #1
+410     A$=""
+420     IF NOT EOF(1) THEN LINE INPUT #1,A$
+430     IF A$="3DPREFS 1" THEN
+440       G=1:F=90:T=100:X=0:Y=0
+450       IF NOT EOF(1) THEN LINE INPUT #1,A$:X=VAL(A$)
+460       IF NOT EOF(1) THEN LINE INPUT #1,A$:Y=VAL(A$)
+470       IF NOT EOF(1) THEN LINE INPUT #1,A$:G=VAL(A$)
+480       IF NOT EOF(1) THEN LINE INPUT #1,A$:F=VAL(A$)
+490       IF NOT EOF(1) THEN LINE INPUT #1,A$:T=VAL(A$)
+500       IF X<>0 THEN P3_INVX=-1 ELSE P3_INVX=0
+510       IF Y<>0 THEN P3_INVY=-1 ELSE P3_INVY=0
+520       P3_GAMMA=FN P3_CLAMP(G,0.6,1.8)
+530       P3_FOV=FN P3_CLAMP(F,60,110)
+540       P3_TURN=FN P3_CLAMP(T,50,200)
+550     END IF
+560     CLOSE #1
+570   END IF
+580   CALL P3_PUSH
+590 END PROC
+600 PROC P3_SAVE
+610   OPEN "local:3dprefs.cfg" FOR OUTPUT AS #1
+620   PRINT #1,"3DPREFS 1"
+630   PRINT #1,ABS(P3_INVX<>0)
+640   PRINT #1,ABS(P3_INVY<>0)
+650   PRINT #1,P3_GAMMA
+660   PRINT #1,P3_FOV
+670   PRINT #1,P3_TURN
+680   CLOSE #1
+690 END PROC
+700 FUNC P3_ONOFF$(V)
+710   IF V THEN RETURN "ON"
+720   RETURN "OFF"
+730 END FUNC
+740 FUNC P3_TENTHS$(V)
+750   LOCAL A
+760   A=INT(V*10+0.5)
+770   RETURN STR$(A\10)+"."+STR$(A MOD 10)
+780 END FUNC
+790 ' one row of the dialog: the label, the value as text, a bar from 0 to 1 (negative: none)
+800 PROC P3_ROW(N,L$,V$,B)
+810   LOCAL Y,C
+820   Y=76+N*24
+830   IF N=P3_SEL THEN
+840     GFX LINE 142,Y-4,497,Y+14,FN W3K_C(9,5),BF
+850     C=FN W3K_C(3,15)
+860   ELSE
+870     C=FN W3K_C(0,12)
+880   END IF
+890   GFX TEXT 152,Y,L$,C
+900   GFX TEXT 328,Y,V$,C
+910   IF B>=0 THEN
+920     GFX LINE 392,Y+2,484,Y+9,FN W3K_C(0,3),BF
+930     GFX LINE 392,Y+2,392+INT(92*B),Y+9,C,BF
+940   END IF
+950 END PROC
+960 PROC P3_DRAW
+970   GFX LINE 130,28,509,238,FN W3K_C(0,1),BF
+980   GFX LINE 130,28,509,238,FN W3K_C(9,10),B
+990   GFX LINE 131,29,508,237,FN W3K_C(9,6),B
+1000   GFX TEXT 224,38,"3D SETTINGS",FN W3K_C(3,15),2,2
+1010   CALL P3_ROW(0,"INVERT X AXIS",FN P3_ONOFF$(P3_INVX),-1)
+1020   CALL P3_ROW(1,"INVERT Y AXIS",FN P3_ONOFF$(P3_INVY),-1)
+1030   CALL P3_ROW(2,"GAMMA",FN P3_TENTHS$(P3_GAMMA),(P3_GAMMA-0.6)/1.2)
+1040   CALL P3_ROW(3,"FIELD OF VIEW",STR$(P3_FOV),(P3_FOV-60)/50)
+1050   CALL P3_ROW(4,"TURNING SPEED",STR$(P3_TURN)+"%",(P3_TURN-50)/150)
+1060   GFX TEXT 152,200,"UP/DOWN CHOOSE   LEFT/RIGHT CHANGE",FN W3K_C(0,10)
+1070   GFX TEXT 152,214,"RETURN SAVE  ESC CANCEL  DEL DEFAULTS",FN W3K_C(0,10)
+1080   GFX TEXT 152,226,"PAD: D-PAD  A SAVE  B CANCEL  X DEFAULTS",FN W3K_C(0,8)
+1090 END PROC
+1100 ' changes the setting of the chosen row by D steps
+1110 PROC P3_CHANGE(D)
+1120   IF P3_SEL=0 THEN P3_INVX=NOT P3_INVX
+1130   IF P3_SEL=1 THEN P3_INVY=NOT P3_INVY
+1140   IF P3_SEL=2 THEN P3_GAMMA=FN P3_CLAMP(INT((P3_GAMMA+D*0.1)*10+0.5)/10,0.6,1.8)
+1150   IF P3_SEL=3 THEN P3_FOV=FN P3_CLAMP(P3_FOV+D*5,60,110)
+1160   IF P3_SEL=4 THEN P3_TURN=FN P3_CLAMP(P3_TURN+D*10,50,200)
+1170   CALL P3_PUSH
+1180 END PROC
+1190 FUNC P3_PAD(X)
+1200   RETURN KEY("RETURN") OR JOY("A") OR JOY("START")
+1210 END FUNC
+1220 FUNC P3_ESC(X)
+1230   RETURN KEY("ESC") OR JOY("B") OR JOY("BACK")
+1240 END FUNC
+1250 FUNC P3_DEL(X)
+1260   RETURN KEY("DELETE") OR KEY("BACKSPACE") OR JOY("X")
+1270 END FUNC
+1280 PROC P3_DIALOG
+1290   LOCAL DX,DY,OK,CN,DF,LOK,LCN,LDF,LDX,LDY,H,DONE,O1,O2,O3,O4,O5
+1300   O1=P3_INVX:O2=P3_INVY:O3=P3_GAMMA:O4=P3_FOV:O5=P3_TURN
+1310   WHILE INKEY$<>""
+1320   WEND
+1330   P3_SEL=0
+1340   LOK=FN P3_PAD(0):LCN=FN P3_ESC(0):LDF=FN P3_DEL(0):LDX=0:LDY=0:H=0:DONE=0
+1350   REPEAT
+1360     W3D RENDER
+1370     CALL P3_DRAW
+1380     CALL W3K_SHOW
+1390     DX=0:DY=0
+1400     IF KEY("UP") OR KEY("W") OR JOY("UP") OR JOY("LY")<-0.5 THEN DY=DY-1
+1410     IF KEY("DOWN") OR KEY("S") OR JOY("DOWN") OR JOY("LY")>0.5 THEN DY=DY+1
+1420     IF KEY("LEFT") OR KEY("A") OR JOY("LEFT") OR JOY("LX")<-0.5 THEN DX=DX-1
+1430     IF KEY("RIGHT") OR KEY("D") OR JOY("RIGHT") OR JOY("LX")>0.5 THEN DX=DX+1
+1440     IF (DX<>0 OR DY<>0) AND DX=LDX AND DY=LDY THEN H=H+1 ELSE H=0
+1450     LDX=DX:LDY=DY
+1460     IF (DX<>0 OR DY<>0) AND (H=0 OR (H>=20 AND (H-20) MOD 3=0)) THEN
+1470       IF DY<>0 THEN P3_SEL=(P3_SEL+DY+5) MOD 5
+1480       IF DX<>0 THEN CALL P3_CHANGE(DX)
+1490     END IF
+1500     OK=FN P3_PAD(0):CN=FN P3_ESC(0):DF=FN P3_DEL(0)
+1510     IF OK<>0 AND LOK=0 THEN
+1520       CALL P3_SAVE
+1530       DONE=-1
+1540     END IF
+1550     IF CN<>0 AND LCN=0 THEN
+1560       P3_INVX=O1:P3_INVY=O2:P3_GAMMA=O3:P3_FOV=O4:P3_TURN=O5
+1570       CALL P3_PUSH
+1580       DONE=-1
+1590     END IF
+1600     IF DF<>0 AND LDF=0 THEN
+1610       CALL P3_DEFAULTS
+1620       CALL P3_PUSH
+1630     END IF
+1640     LOK=OK:LCN=CN:LDF=DF
+1650   UNTIL DONE
+1660   WHILE FN P3_PAD(0) OR FN P3_ESC(0)
+1670     FRAME
+1680   WEND
+1690   WHILE INKEY$<>""
+1700   WEND
+1710   CALL W3K_RESETCLOCK
+1720 END PROC
