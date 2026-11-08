@@ -13,17 +13,6 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-### `PUT` as an alias of `PUTREC` (2026-11-08, owner's decision, option 1)
-- `bastok.[ch]` (`aliastbl[]`: `PUT` -> `TOK_PUTREC`; token 13 unused), `repltest1.c` (2 cases), `bascomp.ebnf` + `make grammar`, man page (`mancheck.sh --update`), `docs/basic-language.md`, roadmap (row 39 to `done.md`), `SESSION.md`. Demos checked: `PUT` appears only inside strings. Tested: `make check`.
-
-### OPTION BASE / DEF type struck, tokens 75..77 unused (2026-11-08, owner's request)
-- `bastok.[ch]` (`FLT`, `OPTION`, `BASE` removed from the reserved words; the numbers are documented as unused; `basrepl.c` `repl_read_program()` refuses a binary line with an undefined token: "Unknown token in line n of the program file"), `repltest1.c` (2 cases, one with an old `.e99` built from bytes), `docs/basic-language.md`, `docs/roadmap.md` + `docs/roadmap/language.md`, man page (`mancheck.sh --update`), `SESSION.md`.
-- Tested: `make check`; a binary file with the former `OPTION` token: before the check it failed to list with "Out of memory", now `LOAD` says which line has the unknown token. First version kept a table to list such files (undone after the owner said there are no old programs).
-
-### `LIST #n` (2026-11-08, owner's request)
-- `nodetype.h` (`LISTF_CHAN`), `bascomp.c` (`LIST [chan-spec [,]] [range]`), `cgenprog.c` (`PCHN` with the channel, else channel 0), `vm.c` / `vm.h` (`vm_out_text()`), `basrepl.c` (the listing printer writes through the VM for channels > 0), `bascomp.ebnf` + `make grammar`, `docs/basic-language.md`, `docs/roadmap.md` and `docs/roadmap/{io-and-vm,language}.md`, `SESSION.md`.
-- Tests: `repltest1` 5 new cases (452); `make check`.
-
 
 ## Log
 
@@ -1642,3 +1631,18 @@ The owner bundled three pieces of Claude work into this commit (oldest first):
 
 #### Roadmap split into parts (2026-11-08, owner's request)
 - `docs/roadmap.md` (now the overview: parts, priorities, compact table of open items), new `docs/roadmap/{language,sound,hosts,io-and-vm,graphics-and-ui,projects,done}.md` (content moved verbatim by a script; the check that no line was lost and that all relative links resolve was run), `docs/README.md`, `CLAUDE.md` (where the roadmap lives), `docs/library-support.md` (link), `makefile` (`make install` copies `docs/roadmap/*.md`), `SESSION.md`. `orchard3` played a lot by the owner: noted at item 75 in `done.md`. No code changed.
+
+### ff89b49 — 2026-11-08 09:08:14 +0100 — "Various changes (cf. history log), implemented by Claude Code"
+22 files changed, 154 insertions(+), 66 deletions(-).
+The owner bundled three pieces of Claude work into this commit (oldest first):
+
+#### `LIST #n` (2026-11-08, owner's request)
+- `nodetype.h` (`LISTF_CHAN`), `bascomp.c` (`LIST [chan-spec [,]] [range]`), `cgenprog.c` (`PCHN` with the channel, else channel 0), `vm.c` / `vm.h` (`vm_out_text()`), `basrepl.c` (the listing printer writes through the VM for channels > 0), `bascomp.ebnf` + `make grammar`, `docs/basic-language.md`, `docs/roadmap.md` and `docs/roadmap/{io-and-vm,language}.md`, `SESSION.md`.
+- Tests: `repltest1` 5 new cases (452); `make check`.
+
+#### OPTION BASE / DEF type struck, tokens 75..77 unused (2026-11-08, owner's request)
+- `bastok.[ch]` (`FLT`, `OPTION`, `BASE` removed from the reserved words; the numbers are documented as unused; `basrepl.c` `repl_read_program()` refuses a binary line with an undefined token: "Unknown token in line n of the program file"), `repltest1.c` (2 cases, one with an old `.e99` built from bytes), `docs/basic-language.md`, `docs/roadmap.md` + `docs/roadmap/language.md`, man page (`mancheck.sh --update`), `SESSION.md`.
+- Tested: `make check`; a binary file with the former `OPTION` token: before the check it failed to list with "Out of memory", now `LOAD` says which line has the unknown token. First version kept a table to list such files (undone after the owner said there are no old programs).
+
+#### `PUT` as an alias of `PUTREC` (2026-11-08, owner's decision, option 1)
+- `bastok.[ch]` (`aliastbl[]`: `PUT` -> `TOK_PUTREC`; token 13 unused), `repltest1.c` (2 cases), `bascomp.ebnf` + `make grammar`, man page (`mancheck.sh --update`), `docs/basic-language.md`, roadmap (row 39 to `done.md`), `SESSION.md`. Demos checked: `PUT` appears only inside strings. Tested: `make check`.
