@@ -378,7 +378,7 @@ bool cgen_gen_argc( codegen_t* cgen );
 bool cgen_gen_args( codegen_t* cgen );
 bool cgen_gen_envs( codegen_t* cgen );
 bool cgen_gen_keyd( codegen_t* cgen );
-bool cgen_gen_mth2( codegen_t* cgen, uint16_t kind );     // MIN / MAX / ATAN2 (1 / 2 / 3)
+bool cgen_gen_mth2( codegen_t* cgen, uint16_t kind );     // MIN / MAX / ATAN2 / ROUND (1 / 2 / 3 / 4)
 bool cgen_gen_strn( codegen_t* cgen, uint16_t kind );     // STRING$ (0: code, 1: string) / SPACE$ (2)
 bool cgen_gen_acnt( codegen_t* cgen, uint16_t varoffs );
 bool cgen_gen_aflt( codegen_t* cgen, uint16_t varoffs );

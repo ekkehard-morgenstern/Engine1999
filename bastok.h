@@ -467,6 +467,17 @@ bool read_brclit( rbuf_t* rbuf, char** ptarget );
 #define XF_FRAME        UINT8_C(8)          // FRAME statement (wait for the next screen refresh)
 #define XF_EXISTS       UINT8_C(11)         // EXISTS(file$): is there such a file (through the I/O drivers)? -1 / 0
 #define XF_UI           UINT8_C(12)         // UI: the UI subsystem (widgets on the graphics layer): statements UI OPEN, UI BUTTON ... and the function UI("EVENT")
+#define XF_ASN          UINT8_C(21)         // ASN(x): arc sine (in the unit of DEG / RAD / GRAD)
+#define XF_ACS          UINT8_C(22)         // ACS(x): arc cosine
+#define XF_SINH         UINT8_C(23)         // SINH(x), COSH(x), TANH(x): hyperbolic functions; ASINH, ACOSH, ATANH their inverses
+#define XF_COSH         UINT8_C(24)
+#define XF_TANH         UINT8_C(25)
+#define XF_ASINH        UINT8_C(26)
+#define XF_ACOSH        UINT8_C(27)
+#define XF_ATANH        UINT8_C(28)
+#define XF_ROUND        UINT8_C(29)         // ROUND(x [, digits]): x rounded to digits decimals (half away from zero; digits < 0 rounds to tens, hundreds ...)
+#define XF_CINT         UINT8_C(30)         // CINT(x): x rounded to the nearest integer (half away from zero); "Overflow" outside the 32-bit range
+#define XF_CDBL         UINT8_C(31)         // CDBL(x): x as a floating point number (the number itself: every number is one)
 #define XF_W3D          UINT8_C(20)         // W3D: the software 3D sector renderer: statements W3D SECTOR, W3D WALL ... and the function W3D("X")
 #define XF_TOOL         UINT8_C(19)         // TOOL name$ [, arg$]: runs a tool (an editor in BASIC from the tools folder) without losing the current program
 #define XF_CLIPBOARD    UINT8_C(18)         // CLIPBOARD$ (the text on the clipboard) and the statement CLIPBOARD a$

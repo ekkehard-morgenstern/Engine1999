@@ -13,6 +13,13 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+### Roadmap item 16 — numeric extras (2026-11-08, owner's request; rounding: half away from zero)
+- `bastok.[ch]` (`XF_ASN`..`XF_CDBL` 21..31, keyword table), `bascomp.c` (one-argument forms, `ROUND(x[,n])` with 0 as default for n), `codegen.[ch]`, `vm.c` (`MATH` kinds 17..26, `MTH2` kind 4; no negative zero from `CINT` / `ROUND`), `instset.h`, `bascomp.ebnf` + `make grammar`, `man/engine1999-basic.7` (`mancheck.sh --update`), `docs/basic-language.md`, `docs/roadmap.md` (item 16 done), `SESSION.md`.
+- Tests: `vmtest1` 21 new cases (1470 pass), `make man-check`, `make grammar-check`.
+
+### Roadmap item 81, synthesizer instruments planned (2026-11-08, owner's request after my estimate; decisions: subtractive first, 16 presets)
+- `docs/roadmap.md`: new row 81 (steps, risks, estimate; the open entry in the sound section points to it), `SESSION.md`: note that it is planned and not started. No code changed, no tests run.
+
 
 ## Log
 

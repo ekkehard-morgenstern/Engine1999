@@ -2720,7 +2720,7 @@ static bool vm_joy_deadzone( vm_t* vm ) {
     return true;
 }
 
-// MTH2 ( x y -- z ): MIN (1), MAX (2), ATAN2 (3: x = the first argument y, y = the second x)
+// MTH2 ( x y -- z ): MIN (1), MAX (2), ATAN2 (3: x = the first argument y, y = the second x), ROUND (4: x rounded to y decimals)
 static bool vm_math2( vm_t* vm, uint16_t kind ) {
     double a = 0.0, b = 0.0, r = 0.0;
     if ( !vm_dpop_num( vm, &b ) || !vm_dpop_num( vm, &a ) ) {
@@ -2736,6 +2736,22 @@ static bool vm_math2( vm_t* vm, uint16_t kind ) {
             } else if ( vm->angmode == 3 ) {
                 r *= 200.0 / 3.14159265358979323846;
             }
+            break;
+        }
+        case 4: {                           // ROUND(x,n): halves away from zero; n < 0 rounds to tens, hundreds ...
+            int32_t n = vm_to_int32( b );
+            if ( n > 15 ) {
+                r = a;
+            } else if ( n < -15 ) {
+                r = 0.0;
+            } else {
+                double p = pow( 10.0, (double) ( n < 0 ? -n : n ) );
+                r = n >= 0 ? round( a * p ) / p : round( a / p ) * p;
+            }
+            if ( !isfinite( r ) ) {
+                return vm_error( vm, "Overflow" );
+            }
+            r += 0.0;                       // no negative zero
             break;
         }
         default:
@@ -2824,6 +2840,40 @@ static bool vm_math( vm_t* vm, uint16_t kind ) {
             break;
         case 10: r = exp( x ); break;
         case 14: r = ceil( x ); break;
+        case 17: case 18:                   // ASN, ACS: -1 <= x <= 1; the angle in the unit of DEG / RAD / GRAD
+            if ( !( x >= -1.0 && x <= 1.0 ) ) {
+                return vm_error( vm, "Illegal argument" );
+            }
+            r = kind == 17 ? asin( x ) : acos( x );
+            if ( vm->angmode == 1 ) {
+                r *= 180.0 / 3.14159265358979323846;
+            } else if ( vm->angmode == 3 ) {
+                r *= 200.0 / 3.14159265358979323846;
+            }
+            break;
+        case 19: r = sinh( x ); break;
+        case 20: r = cosh( x ); break;
+        case 21: r = tanh( x ); break;
+        case 22: r = asinh( x ); break;
+        case 23:
+            if ( !( x >= 1.0 ) ) {
+                return vm_error( vm, "Illegal argument" );
+            }
+            r = acosh( x );
+            break;
+        case 24:
+            if ( !( x > -1.0 && x < 1.0 ) ) {
+                return vm_error( vm, "Illegal argument" );
+            }
+            r = atanh( x );
+            break;
+        case 25:                            // CINT: the nearest integer, halves away from zero, within the 32-bit range
+            r = round( x ) + 0.0;               // + 0.0: no negative zero
+            if ( !( r >= -2147483648.0 && r <= 2147483647.0 ) ) {
+                return vm_error( vm, "Overflow" );
+            }
+            break;
+        case 26: r = x; break;              // CDBL
         case 15: case 16:
             if ( !( x > 0.0 ) ) {
                 return vm_error( vm, "Illegal argument" );

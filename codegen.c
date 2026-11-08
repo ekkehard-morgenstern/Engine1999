@@ -1797,6 +1797,11 @@ UNEXP:      return cgen_unexpected_node( comp );
             case XF_MIN:    ok = cgen_gen_mth2( cgen, 1 ); break;
             case XF_MAX:    ok = cgen_gen_mth2( cgen, 2 ); break;
             case XF_ATAN2:  ok = cgen_gen_mth2( cgen, 3 ); break;
+            case XF_ROUND:  ok = cgen_gen_mth2( cgen, 4 ); break;
+            case XF_ASN: case XF_ACS: case XF_SINH: case XF_COSH: case XF_TANH: case XF_ASINH: case XF_ACOSH: case XF_ATANH:
+                ok = cgen_gen_math( cgen, (uint16_t)( 17 + node->data[1] - XF_ASN ) ); break;     // MATH kinds 17..24
+            case XF_CINT:   ok = cgen_gen_math( cgen, 25 ); break;
+            case XF_CDBL:   ok = cgen_gen_math( cgen, 26 ); break;
             case XF_SPACE:  ok = cgen_gen_strn( cgen, 2 ); break;
             case XF_STRING: ok = cgen_gen_strn( cgen, datalen == UINT16_C(3) && node->data[2] ? 1 : 0 ); break;
             case XF_JOY:    ok = nodetype == NT_SYSSTRFUNCARGCALL ? cgen_gen_joys( cgen ) : cgen_gen_joyq( cgen ); break;

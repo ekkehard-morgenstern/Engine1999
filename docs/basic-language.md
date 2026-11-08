@@ -446,6 +446,15 @@ A number that does not fit its field is printed in full with a `%` in front. A n
 - `SPACE$(n)`: n blanks. `STRING$(n,c)`: n copies of a character; `c` is a character code 0..255 (`STRING$(3,0)` is three zero bytes) or a string, whose first character is used (an empty string is "Illegal argument"). n is 0..65535, else "Illegal argument".
 - **New reserved words** `SPACE STRING MIN MAX ATAN2`, but they are the first **extension words**: the one-byte token space (0..255) is full, so these are stored as the token `TOK_XFUNC` (254) followed by one byte naming the word (`XF_*` in `bastok.h`, table `xkeywtbl` in `bastok.c`). To the programmer nothing differs from any other reserved word (they list in upper case, `--list-keywords` and the man page include them). **New words are added to that table from now on**: 255 more are possible. Instructions `MTH2 0x17E` (`( x y -- z )`, parameter 1 MIN, 2 MAX, 3 ATAN2) and `STRN 0x17F` (`( n c -- s )`, parameter 0 code, 1 string, 2 `SPACE$`). Tests: `vmtest1` (17), `repltest1` (2), `asmtest1` (2).
 
+## `ASN`, `ACS`, hyperbolic functions, `ROUND`, `CINT`, `CDBL` (2026-11-08, roadmap item 16)
+
+Extension words (token 254 + `XF_ASN` .. `XF_CDBL` 21..31); instructions `MATH` kinds 17..26 and `MTH2` kind 4.
+- `ASN(x)`, `ACS(x)`: arc sine / arc cosine, `x` must be -1..1 (else "Illegal argument"); the angle is in the unit of `DEG` / `RAD` / `GRAD` like `ATN` and `ATAN2`.
+- `SINH`, `COSH`, `TANH` and their inverses `ASINH`, `ACOSH` (x >= 1), `ATANH` (-1 < x < 1; else "Illegal argument"); a result that does not fit (`SINH(1000)`) is "Overflow".
+- `ROUND(x [, n])`: `x` rounded to `n` decimals (0 if left out), **halves away from zero** (`ROUND(2.5)` is 3, `ROUND(-2.5)` is -3). A negative `n` rounds to tens, hundreds ...: `ROUND(1250,-2)` is 1300. `n` > 15 gives `x`, `n` < -15 gives 0. The rounding works on the binary number, so `ROUND(2.675,2)` is 2.67 (2.675 is slightly below 2.675 in binary). Design decision I took (revisit if unwanted): half away from zero, not half to even.
+- `CINT(x)`: `x` rounded to the nearest integer, halves away from zero; "Overflow" outside -2147483648 .. 2147483647 (unlike `INT`, which floors, and `FIX`, which truncates). `CDBL(x)`: the number itself (every number is a double here); it exists so that programs written for other BASICs run.
+- New reserved words (check that your variable and procedure names do not use them): `ASN ACS SINH COSH TANH ASINH ACOSH ATANH ROUND CINT CDBL`. None of the demos did.
+
 ## Numeric functions, `\`, `MOD`, `RND`
 
 ```

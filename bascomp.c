@@ -1980,7 +1980,9 @@ static bool comp_eat_xfunccall( compiler_t* comp, node_t** pnode, bool wantstr )
     /*
         xfunc-call := TOK_XFUNC(SPACE) TOK_STRING TOK_LPAREN num-expr TOK_RPAREN |
                       TOK_XFUNC(STRING) TOK_STRING TOK_LPAREN num-expr TOK_COMMA expr TOK_RPAREN |
-                      ( TOK_XFUNC(MIN) | TOK_XFUNC(MAX) | TOK_XFUNC(ATAN2) ) TOK_LPAREN num-expr TOK_COMMA num-expr TOK_RPAREN .
+                      ( TOK_XFUNC(MIN) | TOK_XFUNC(MAX) | TOK_XFUNC(ATAN2) ) TOK_LPAREN num-expr TOK_COMMA num-expr TOK_RPAREN |
+                      TOK_XFUNC(ROUND) TOK_LPAREN num-expr [ TOK_COMMA num-expr ] TOK_RPAREN |
+                      ( TOK_XFUNC(ASN) | ... | TOK_XFUNC(CDBL) ) TOK_LPAREN num-expr TOK_RPAREN .
 
         NT_SYSNUMFUNCARGCALL / NT_SYSSTRFUNCARGCALL with the data TOK_XFUNC, the XF_* id and, for STRING$, 1 when the second
         argument is a string (0 = a character code).
@@ -2115,7 +2117,17 @@ static bool comp_eat_xfunccall( compiler_t* comp, node_t** pnode, bool wantstr )
     }
     uint8_t data[3] = { TOK_XFUNC, xid, 0 };
     uint16_t datalen = 2;
-    if ( xid != XF_SPACE ) {
+    bool unary = xid >= XF_ASN && xid <= XF_ATANH;
+    unary = unary || xid == XF_CINT || xid == XF_CDBL;
+    if ( xid == XF_ROUND && comp->currtok != TOK_COMMA ) {
+        // ROUND(x) is ROUND(x,0)
+        uint8_t zero[8];
+        comp_set_numlit( zero, 0.0 );
+        if ( !comp_create_node( comp, &arg2, NT_NUMLIT, UINT8_C(0), UINT16_C(8), zero ) || arg2 == NODE_NONE ) {
+            out_of_memory( comp );
+            return false;
+        }
+    } else if ( xid != XF_SPACE && !unary ) {
         if ( comp->currtok != TOK_COMMA || !comp_fetchtok( comp ) ) {
             comp_error( comp, "Comma ',' expected" );
             return false;
