@@ -70,6 +70,8 @@ the parts when items are done or added.
 | 66 | Packages for Debian and Ubuntu, build system (60) | libc-dev`, `libsdl2-dev`), `engine1999-games` | [Projects, games and packaging](roadmap/projects.md) |
 | 80 | 3D renderer: hardware path, room-over-room, translucency, more (18) | Low | [Graphics, UI and 3D](roadmap/graphics-and-ui.md) |
 | 81 | Synthesizer instruments: subtractive first, 16 presets (2b) | Medium | [Sound and music](roadmap/sound.md) |
+| 82 | Screenshot key and `SCREENSHOT` (item 83 step 1) | Medium | [Graphics, UI and 3D](roadmap/graphics-and-ui.md) |
+| 83 | AV capture subsystem: audio / video recording with a lock-free queue and ffmpeg | Medium | [Graphics, UI and 3D](roadmap/graphics-and-ui.md) |
 
 
 *Token space (2026-11-01):* the one-byte tokens 0..255 are used up (only the unused `PUT`, 13, is free). New words are **extension words**: token 254 (`TOK_XFUNC`) plus a second byte (`XF_*`, table `xkeywtbl` in `bastok.c`): 255 more are possible. `SPACE STRING MIN MAX ATAN2` are the first. Keep this in mind when adding words: a new word is an `xkeywtbl` row plus its parser branch, not a `TOK_` define.
