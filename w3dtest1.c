@@ -417,6 +417,38 @@ static void test_fuzz( void ) {
     CHECK( bad == 0 );
 }
 
+// a thing in a sector that no column got into (behind a low wall, over the sky) is not drawn
+static void test_hidden_things( void ) {
+    op( GFXOP_W3DRESET, 0 );
+    op( GFXOP_W3DSECTOR, 6, 0.0, 0.0, 100.0, 20.0, -1.0, 255.0 );
+    wall( 0, 0, 0, 400, 0, 10, -1 );
+    wall( 0, 400, 0, 400, 400, 10, -1 );
+    wall( 0, 400, 400, 0, 400, 10, 1 );          // the north wall is a portal into a low sky room: you look over it
+    wall( 0, 0, 400, 0, 0, 10, -1 );
+    op( GFXOP_W3DSECTOR, 6, 1.0, 0.0, 100.0, 20.0, -1.0, 255.0 );
+    wall( 1, 0, 400, 400, 400, 10, 0 );
+    wall( 1, 400, 400, 400, 420, 10, -1 );
+    wall( 1, 400, 420, 0, 420, 77, -1 );
+    wall( 1, 0, 420, 0, 400, 10, -1 );
+    op( GFXOP_W3DSECTOR, 6, 2.0, 0.0, 300.0, 20.0, 30.0, 255.0 );      // a room behind the wall, not reachable by any column
+    wall( 2, 0, 500, 400, 500, 10, -1 );
+    wall( 2, 400, 500, 400, 700, 10, -1 );
+    wall( 2, 400, 700, 0, 700, 10, -1 );
+    wall( 2, 0, 700, 0, 500, 10, -1 );
+    op( GFXOP_W3DVIEW, 6, 0.0, 0.0, 320.0, 150.0, 1.0, 90.0 );
+    op( GFXOP_W3DCAMERA, 5, 200.0, 100.0, 90.0, NONE, NONE );
+    op( GFXOP_W3DTHING, 6, 0.0, 200.0, 600.0, 55.0, 100.0, 280.0 );     // tall, behind the low fence, in sector 2
+    const uint8_t* fb = w3d_render( W );
+    int found = 0;
+    for ( int i=0; i < 320 * 150; ++i ) {
+        if ( fb[i] == 55 ) {
+            ++found;
+        }
+    }
+    CHECK( found == 0 );
+    CHECK( px( fb, 160, 10 ) != 55 );
+}
+
 int main( void ) {
     W = w3d_new();
     if ( W == 0 ) {
@@ -431,6 +463,7 @@ int main( void ) {
     test_masked_sky_light();
     test_concave();
     test_fuzz();
+    test_hidden_things();
     w3d_free( W );
     printf( "w3dtest1: %d cases, %d failures\n", cases, failures );
     return failures;

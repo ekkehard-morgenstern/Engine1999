@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # The house, the garden and the cellar of demos/deqq2.bas (Deqq's House II) as DATA lines: python3 deqq2.py [file]
-# textures: 1 gray brick, 2 plaster purple (hall), 3 plaster teal (kitchen), 4 plaster magenta (living room), 5 plaster blue (bedroom), 6 bath tiles,
+# textures: 27 the front of the house (128 x 300: roof, two floors with windows), 28 a door in it (64 x 300), 1 gray brick, 2 plaster purple (hall), 3 plaster teal (kitchen), 4 plaster magenta (living room), 5 plaster blue (bedroom), 6 bath tiles,
 # 7 plaster sand (landing), 8 stone (cellar), 9 planks, 10 grass, 11 sky, 12 brown door, 13 hall floor, 14 kitchen floor, 15 red carpet, 16 blue carpet,
 # 17 bath floor, 18 stair planks, 19 mossy stone, 20 gray door, 23 dark alcove, 24 sand stone (front garden), 25 attic wall (planks darker), 26 cupboard wood
 # tags: 1 front door, 2 back door, 3 shed door, 4 hatch, 50 a hiding place, 40 the chair platform, 99 nothing; rooms: 10 front garden, 11 west garden, 12 back yard,
@@ -11,31 +11,33 @@ L=Level()
 R=L.room
 SKY=-1
 # outdoors: floor grass (10), sky ceiling, fence = gray brick (1)
-R(0, -400,0,1240,300, 0,128, 24,SKY, 255, 10, 1)        # front garden (a road of sand stone)
-R(1, -400,300,180,700, 0,128, 10,SKY, 255, 11, 1)       # west garden (the hatch)
-R(2, -400,700,180,1250, 0,128, 10,SKY, 255, 12, 1)      # back yard
-R(3, -400,1250,-100,1500, 0,128, 10,SKY, 255, 13, 1)    # the crash site
-R(4, 840,300,1240,700, 0,128, 10,SKY, 255, 14, 1)       # east garden
-R(5, 840,700,1240,1000, 0,128, 10,SKY, 255, 15, 1)      # north-east corner (the well, the tree)
+R(0, -380,0,1240,300, 0,300, 24,SKY, 255, 10, 1)        # front garden (a road of sand stone); 300 high: the house front stands on its north side
+R(1, -380,300,180,700, 0,300, 10,SKY, 255, 11, 1)       # west garden (the hatch); 300 high: the west side of the house
+R(2, -380,700,180,1250, 0,300, 10,SKY, 255, 12, 1)      # back yard; 300 high: the back of the house
+R(3, -380,1250,-100,1500, 0,100, 10,SKY, 255, 13, 1)    # the crash site (fence high)
+R(4, 840,300,1220,700, 0,300, 10,SKY, 255, 14, 1)       # east garden; 300 high: the east side of the house
+R(5, 840,700,1220,1000, 0,300, 10,SKY, 255, 15, 1)      # north-east corner (the well, the tree); 300 high: the east side of the house
 R(9, 1260,760,1460,960, 0,128, 9,9, 150, 16, 9)         # the tool shed
 R(6, 440,300,520,330, 0,100, 13,2, 200, 1, 12)          # front door (open: ceiling 100)
 R(7, 180,520,200,584, 0,0, 14,3, 190, 2, 12)            # back door (locked, closed: ceiling = floor)
 R(8, 1240,820,1260,884, 0,0, 9,9, 190, 3, 12)           # shed door
+R(61, 1220,820,1240,884, 0,100, 10,-1, 255, 0, 1)        # a niche in the garden's east wall in front of the shed door (fence high)
 # the house
 R(10, 200,330,400,680, 0,128, 14,3, 205, 20, 3)         # kitchen
 R(11, 400,330,560,680, 0,128, 13,2, 215, 21, 2)         # hall
 R(12, 560,330,800,680, 0,128, 15,4, 200, 22, 4)         # living room
-L.link(0,'N',440,520,6, tex=12)
+L.link(0,'N',440,520,6, tex=12, up=27)
 L.link(6,'N',440,520,11, tex=12)
 L.link(0,'N',-400,180,1) if False else None
-L.link(1,'S',-400,180,0)
-L.link(2,'S',-400,180,1)
-L.link(3,'S',-400,-100,2)
-L.link(4,'S',840,1240,0)
-L.link(5,'S',840,1240,4)
-L.link(1,'E',520,584,7, tex=12)
+L.link(1,'S',-380,180,0)
+L.link(2,'S',-380,180,1)
+L.link(3,'S',-380,-100,2)
+L.link(4,'S',840,1220,0)
+L.link(5,'S',840,1220,4)
+L.link(1,'E',520,584,7, tex=28)
 L.link(7,'E',520,584,10, tex=12)
-L.link(5,'E',820,884,8, tex=12)
+L.link(5,'E',820,884,61)
+L.link(61,'E',820,884,8, tex=12)
 L.link(8,'E',820,884,9, tex=12)
 L.link(10,'E',430,560,11)
 L.link(11,'E',430,560,12)
@@ -61,7 +63,9 @@ for i in range(1,8):
 L.link(31,'N',460,540,32, tex=9)
 # the cellar: the hatch door in the west garden's west wall, five steps down
 R(33, -420,420,-400,484, 0,0, 8,8, 120, 4, 20)
-L.link(1,'W',420,484,33, tex=20)
+R(60, -400,420,-380,484, 0,100, 10,-1, 255, 0, 1)         # a niche in the garden's west wall in front of the hatch (fence high)
+L.link(1,'W',420,484,60)
+L.link(60,'W',420,484,33, tex=20)
 for i in range(1,6):
     R(33+i, -420-24*i,420,-420-24*(i-1),484, -16*i,112, 8,8, 90, 0, 8)
 L.link(33,'W',420,484,34, tex=20)
@@ -93,5 +97,8 @@ R(52, 660,900,780,960, 30,128, 16,5, 195, 0, 26)          # the bed (a wooden fr
 L.inner(22,52,tex=26)
 R(53, 250,430,330,500, 36,128, 26,3, 205, 0, 26)          # the kitchen table
 L.inner(10,53,tex=26)
+for k,spans in ((0,{'N':[(180,840)]}),(1,{'E':[(300,700)]}),(2,{'E':[(700,1050)]}),(4,{'W':[(300,700)]}),(5,{'W':[(700,1000)]})):
+    L.rooms[k].outdoor=True; L.rooms[k].house=spans
+L.finish_outdoor(27)
 out=sys.argv[1] if len(sys.argv)>1 else '/dev/stdout'
 open(out,'w').write(L.emit())

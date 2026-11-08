@@ -7,6 +7,7 @@ class Room:
     def __init__(s, id, x1, y1, x2, y2, f, c, ft, ct, light, tag, wt):
         s.id=id; s.x1=x1; s.y1=y1; s.x2=x2; s.y2=y2; s.f=f; s.c=c; s.ft=ft; s.ct=ct; s.light=light; s.tag=tag; s.wt=wt
         s.links={'S':[],'E':[],'N':[],'W':[]}; s.loops=[]
+        s.outdoor=False; s.house={}      # outdoor: finish_outdoor() looks at its solid walls; house: {side: [(lo,hi)]} the parts of its walls that are the house
 class Level:
     def __init__(s): s.rooms={}
     def room(s, *a):
@@ -30,7 +31,8 @@ class Level:
             B.links[side].append((lo,hi,a,dict(tex=None,up=None,low=None,flags=0,xoff=0,yoff=0)))
     def wall(s, r, x1,y1,x2,y2, tex, nxt, d=None):
         d=d or {}
-        t=d.get('tex'); t = r.wt if t is None else t
+        t=d.get('tex')
+        if t is None: t = r.wt if tex is None else tex
         up=d.get('up'); up=-1 if up is None else up
         lo=d.get('low'); lo=-1 if lo is None else lo
         return (x1,y1,x2,y2,t,nxt,d.get('flags',0),up,lo,d.get('xoff',0),d.get('yoff',0))
@@ -47,8 +49,11 @@ class Level:
             if rev: segs=segs[::-1]
             for lo,hi,b,d in segs:
                 p,q=(hi,lo) if rev else (lo,hi)
-                if horiz: out.append(s.wall(r,p,fixed,q,fixed,r.wt if b is None else None,-1 if b is None else b,d))
-                else: out.append(s.wall(r,fixed,p,fixed,q,r.wt if b is None else None,-1 if b is None else b,d))
+                if b is None: tx,nx,dd=r.wt,-1,d
+                elif b=='solid': tx,nx,dd=d['tex'],-1,dict(tex=d['tex'])
+                else: tx,nx,dd=None,b,d
+                if horiz: out.append(s.wall(r,p,fixed,q,fixed,tx,nx,dd))
+                else: out.append(s.wall(r,fixed,p,fixed,q,tx,nx,dd))
         side('S', r.y1, r.x1, r.x2, False, True)
         side('E', r.x2, r.y1, r.y2, False, False)
         side('N', r.y2, r.x1, r.x2, True, True)
@@ -59,6 +64,38 @@ class Level:
             out.append((x1,y1,x1,y2,t,nx,0,-1,-1,0,0)); out.append((x1,y2,x2,y2,t,nx,0,-1,-1,0,0))
             out.append((x2,y2,x2,y1,t,nx,0,-1,-1,0,0)); out.append((x2,y1,x1,y1,t,nx,0,-1,-1,0,0))
         return out
+    # Outdoor rooms that are higher than a fence (the house stands next to them): their solid walls are either the house (tex of the house front, as high as the room)
+    # or a low fence: a thin sector behind the wall, as high as a fence and open to the sky, that you can see through but not walk into. (A sector can not show anything
+    # above its own ceiling, so the house needs tall sectors in front of it and the fence needs low ones behind it.)
+    def finish_outdoor(s, housetex, fence_h=100, fence_tex=1, fid=100):
+        for r in list(s.rooms.values()):
+            if not r.outdoor: continue
+            for side in 'SENW':
+                a0,a1 = (r.x1,r.x2) if side in 'SN' else (r.y1,r.y2)
+                gaps=[]; pos=a0
+                for lo,hi,b,d in sorted(r.links[side], key=lambda l:l[0]):
+                    if lo>pos: gaps.append((pos,lo))
+                    pos=hi
+                if pos<a1: gaps.append((pos,a1))
+                for g0,g1 in gaps:
+                    pieces=[]; cur=g0
+                    for h0,h1 in sorted(r.house.get(side,[])):
+                        lo=max(g0,h0); hi=min(g1,h1)
+                        if lo<hi:
+                            if lo>cur: pieces.append(('fence',cur,lo))
+                            pieces.append(('house',lo,hi)); cur=hi
+                    if cur<g1: pieces.append(('fence',cur,g1))
+                    for kind,lo,hi in pieces:
+                        if kind=='house':
+                            r.links[side].append((lo,hi,'solid',dict(tex=housetex)))
+                        else:
+                            if side=='S': rect=(lo,r.y1-20,hi,r.y1)
+                            elif side=='N': rect=(lo,r.y2,hi,r.y2+20)
+                            elif side=='W': rect=(r.x1-20,lo,r.x1,hi)
+                            else: rect=(r.x2,lo,r.x2+20,hi)
+                            s.room(fid,rect[0],rect[1],rect[2],rect[3], 0,fence_h, 10,-1, 255, 0, fence_tex)
+                            s.link(r.id,side,lo,hi,fid,flags=6)     # nothing walks, shoots or sees through the fence
+                            fid+=1
     def emit(s):
         ids=sorted(s.rooms); lines=['DATA %d' % len(ids)]
         for i in ids:

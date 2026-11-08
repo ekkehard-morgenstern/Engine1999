@@ -13,6 +13,15 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+### Deqq's House II: no exposed furniture, a title picture, Deqq gives up outside (2026-11-08, owner's report)
+- `w3d.c`: `visited` sectors, things drawn only in reached sectors; `w3dtest1.c`: `test_hidden_things` (95 cases; fails without the fix).
+- `demos/levels/deqq2.py`: the east garden and the north-east corner 300 high with the house's east wall, the shed niche, house spans; `demos/deqq2.bas`: `TITLEBG` and the new title layout, `OUTSIDE()`, Deqq gives up when you are outside (`DQS=3` returns through the front door), his round only inside (31 way points), 66 sectors; `deqq2test.sh`, `man/engine1999-deqq2.6`, `docs/3d-subsystem.md`, `SESSION.md`.
+- Tested: `make check`, Deqq's route (C harness), Xvfb screenshots (title, the east side of the house).
+
+### Deqq's House II: the house seen from outside (2026-11-08, owner's report)
+- `demos/levels/mkw3d.py`: `Level.finish_outdoor()` (house walls and fence sectors), `solid` link pieces with a picture, `wall()` takes the tex argument; `demos/levels/deqq2.py`: tall garden sectors (300), house spans, fence sectors, a niche before the hatch (the west edge of the gardens at -380), low east garden / corner / crash site; `demos/deqq2.bas`: `MAKEFACADE` (textures 27 and 28: roof, two floors, windows, a door), 60 sectors; `deqq2test.sh` (the hatch step), `docs/3d-subsystem.md`, `SESSION.md`.
+- Tested: `deqq2test.sh`, Deqq's route (38 way points, C harness), Xvfb screenshots from the front, the west side and the back yard.
+
 ### Music for the two 3D games (2026-11-08, owner's request after playtesting)
 - **New `demos/lib/music3d.lib`** (`MU_`: moods title / calm / uneasy / danger / sting / fanfare, loops queued without a gap, `M` toggles) and `demos/levels/music3d.py` (the tunes of both games, length check, writes the library's `PLAY` procedure). `demos/lib/w3dkit.lib` loads it and `W3K_SHOW` calls `MU_TICK`. `demos/bughunt.bas` and `demos/deqq2.bas` choose the moods (danger / calm; Deqq II also uneasy), play the stings and fanfares, silence the music in the pause and have the M key and a hint on the title screen. `man/engine1999-bughunt.6`, `man/engine1999-deqq2.6`, `demos/README.md`, `docs/3d-subsystem.md`, `docs/roadmap.md`, `SESSION.md` updated.
 - Tested: the tunes parse in the console host (`deqq2test.sh` runs the moods; all 12 tunes through a small script), `make check`; in the window under Xvfb with `ENGINE1999_SOUNDLOG` (the sequence of moods and the loop timing of both games). Not heard by a human yet.

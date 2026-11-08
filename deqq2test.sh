@@ -29,7 +29,7 @@ count() {
 # 1. the whole game without Deqq
 cat > $T/play <<'PLAY'
 deqqoff
-goto 1200 850 0
+goto 1232 850 0
 face 1260 850
 use
 step 30
@@ -37,7 +37,7 @@ goto -240 880 180
 face -300 900
 use
 use
-goto 1200 850 0
+goto 1232 850 0
 face 1260 850
 use
 step 150
@@ -129,7 +129,7 @@ state
 goto 430 380 90
 face 430 350
 use
-goto -380 452 180
+goto -392 452 180
 face -420 452
 use
 step 150
@@ -234,25 +234,53 @@ check "# state built=0"                         "a new game starts with nothing 
 cat > $T/play <<'PLAY'
 goto -250 1320 90
 deqqon
-step 600
+step 300
 state
-step 600
+step 300
 state
-step 600
+step 300
 state
-step 600
+step 300
 state
-step 600
+step 300
 state
-step 600
+step 300
 state
-step 600
+step 300
 state
-step 600
+step 300
 state
-step 600
+step 300
 state
-step 600
+step 300
+state
+step 300
+state
+step 300
+state
+step 300
+state
+step 300
+state
+step 300
+state
+step 300
+state
+step 300
+state
+step 300
+state
+step 300
+state
+step 300
+state
+step 300
+state
+step 300
+state
+step 300
+state
+step 300
 state
 goto 480 520 90
 give 10
@@ -262,7 +290,7 @@ state
 goto 480 520 90
 deqq 480 400
 step 40
-goto -250 880 0
+goto -700 500 0
 step 400
 state
 goto 425 705 90
@@ -272,6 +300,12 @@ say hidden
 goto 480 640 90
 step 60
 state
+goto 480 600 90
+deqq 480 510
+step 10
+goto 480 150 90
+step 120
+state
 PLAY
 run
 check "sec 22"                                  "Deqq's round leads him to the bedroom"
@@ -280,8 +314,10 @@ check "sec 11"                                  "Deqq's round leads him through 
 check "DEQQ HAS CAUGHT YOU"                     "being caught"
 check "DEQQ MUTTERS, LOSES YOUR TRACK"          "losing Deqq's track"
 check "caught=1 dqs"                            "caught once after the first chase"
-count "HAS SEEN YOU" 3                          "the alarms (caught, lost track, after hiding) but none while hidden"
+count "HAS SEEN YOU" 4                          "the alarms (caught, lost track, after hiding, the one he gives up) but none while hidden"
 check "THE PARTS BUILT IN STAY"                 "what you carried is put back"
+check "OUTSIDE IS NOT MY BUSINESS"               "Deqq loses interest when you are outside"
+nocheck " sec 0$"                               "Deqq stays inside the house while you are outside"
 nocheck "^Error"                                "a run time error"
 if [ $fail -ne 0 ]; then echo "$fail failure(s)"; fi
 exit $fail

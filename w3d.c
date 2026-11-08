@@ -81,6 +81,8 @@ struct _w3d_t {
     int         shotkind;
     double      shotdist, shotx, shoty;
     int*        order;                  // scratch of the sprite sort
+    uint8_t*    visited;                // per sector: did a column of this frame get into it? (things in other sectors are not drawn: they could show over the sky above a low wall)
+    int         visitcap;
 };
 
 #define NONE_VAL(v)     ( (v) < -1.0e8 )
@@ -189,7 +191,7 @@ void w3d_free( w3d_t* w ) {
     if ( w->texs != 0 && w->things != 0 ) {
         free_world( w );
     }
-    free( w->texs ); free( w->things ); free( w->order ); free( w->fb ); free( w->zb );
+    free( w->texs ); free( w->things ); free( w->order ); free( w->fb ); free( w->zb ); free( w->visited );
     free( w );
 }
 
@@ -500,6 +502,7 @@ typedef struct _rc_t {
     // the column being drawn
     double          skyu;
     bool            skyok;
+    uint8_t*        visited;
 } rc_t;
 
 typedef struct _masked_t {
@@ -628,6 +631,7 @@ static void render_column( rc_t* c, int x ) {
     c->skyok = false;
     for ( int depth = 0; depth < 64 && ytop < ybot; ++depth ) {
         const sector_t* s = &w->sectors[cur];
+        c->visited[cur] = 1;
         double t = 1.0e30;
         const wall_t* wl = nearest_wall( s, c->cx, c->cy, rx, ry, tprev, 1.0e30, &t );
         if ( wl == 0 ) {
@@ -723,7 +727,7 @@ static void render_things( rc_t* c ) {
     int n = 0;
     for ( int i=0; i < W3D_MAXTHINGS; ++i ) {
         const thing_t* th = &w->things[i];
-        if ( !th->used || !sector_valid( w, th->sector ) ) {
+        if ( !th->used || !sector_valid( w, th->sector ) || !c->visited[ th->sector ] ) {
             continue;
         }
         double dx = th->x - c->cx, dy = th->y - c->cy;
@@ -810,8 +814,18 @@ const uint8_t* w3d_render( w3d_t* w ) {
     } else {
         w->pz += ( floor_ - w->pz ) * 0.4;                  // stairs and lifts are followed smoothly
     }
+    if ( w->visitcap < w->nsectors ) {
+        uint8_t* nv = (uint8_t*) realloc( w->visited, (size_t) w->nsectors );
+        if ( nv == 0 ) {
+            return w->fb;
+        }
+        w->visited = nv;
+        w->visitcap = w->nsectors;
+    }
+    memset( w->visited, 0, (size_t) w->nsectors );
     rc_t c;
     memset( &c, 0, sizeof(c) );
+    c.visited = w->visited;
     c.w = w; c.fb = w->fb; c.zb = w->zb; c.W = w->bw; c.H = w->bh;
     c.f = ( w->bw * 0.5 ) / tan( w->fov * 0.5 * DEG2RAD );
     c.horizon = w->bh * 0.5 + tan( w->pitch * DEG2RAD ) * c.f;
