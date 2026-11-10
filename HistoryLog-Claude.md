@@ -13,7 +13,6 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-- **Instrument editor, roadmap items 85 to 87, and a VM fix:** new `tools/insted.bas` (instrument editor tool), `instedtest.sh` (+ `makefile` `check`), `synthtest1.c` (`test_insted_presets`: the 16 strings of the tool against `synth.c`, 333 checks), `vm.c` (`vm_resume_error()`: `RESUME label` leaves running event handlers), `vmtest1.c` (+3, 1509), docs (`tools/README.md`, `README.md`, `demos/README.md`, `man/engine1999-basic.7` TOOL list, `docs/sound.md`, `docs/ui-subsystem.md`, `docs/basic-language.md` RESUME and TOOL, `docs/build-and-test.md`, roadmap: items 85 to 87 added, 85 moved to `done.md`), `SESSION.md`. Tested: `make check`, `make hosttest`, the whole tool in the window host under Xvfb with an XTest mouse helper (scratchpad). Test files written during the checks (`ietest*.ins` / `.bas` in the repo folder) were removed. Backups `pre-insted`, `insted-m1-model`, `insted-m2-window`, `insted-done`.
 ## Log
 
 ### 7a6cb67 — 2026-10-17 13:32:27 +0200 — "Introduced Claude to the project"
@@ -1698,3 +1697,7 @@ The owner bundled three pieces of Claude work into this commit (oldest first):
 ### f244ab6 — 2026-11-10 23:23:06 +0100 — "Updated Y2K demo by Claude Code"
 8 files, +17/-12.
 - **Y2K Countdown on instruments, roadmap item 84:** `demos/y2k.bas` (lines 280 / 290 / 370 the drum and hat hits, 11130 / 11135 / 11140 the voice prefixes, 8910 `SFX 3`, two comments), `man/engine1999-y2k.6`, `demos/README.md`; `docs/roadmap.md` + `docs/roadmap/projects.md` (new item 84 "Y2K38"), `SESSION.md`. Volumes from the dumped generated strings (scratchpad only); part lengths unchanged; parse check of all nine parts; window host under Xvfb. Backup `instruments-y2k-music`.
+
+### b17b5f4 — 2026-11-11 00:40:05 +0100 — "Instrument editor, created by Claude Code"
+20 files, +813/-16.
+- **Instrument editor, roadmap items 85 to 87, and a VM fix:** new `tools/insted.bas` (instrument editor tool), `instedtest.sh` (+ `makefile` `check`), `synthtest1.c` (`test_insted_presets`: the 16 strings of the tool against `synth.c`, 333 checks), `vm.c` (`vm_resume_error()`: `RESUME label` leaves running event handlers), `vmtest1.c` (+3, 1509), docs (`tools/README.md`, `README.md`, `demos/README.md`, `man/engine1999-basic.7` TOOL list, `docs/sound.md`, `docs/ui-subsystem.md`, `docs/basic-language.md` RESUME and TOOL, `docs/build-and-test.md`, roadmap: items 85 to 87 added, 85 moved to `done.md`), `SESSION.md`. Tested: `make check`, `make hosttest`, the whole tool in the window host under Xvfb with an XTest mouse helper (scratchpad). Test files written during the checks (`ietest*.ins` / `.bas` in the repo folder) were removed. Backups `pre-insted`, `insted-m1-model`, `insted-m2-window`, `insted-done`.
