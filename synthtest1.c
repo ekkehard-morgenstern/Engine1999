@@ -945,6 +945,76 @@ static void test_instruments( void ) {
     }
 }
 
+// renders one second of a note (volume 1) of the instrument that the definition string describes; false if the string is refused
+static bool render_def( const char* def, float freq, float* buf ) {
+    synth_t s; synth_init( &s, RATE );
+    synth_inst_t d; char err[MML_ERRLEN];
+    if ( !mml_parse_inst( def, &d, err ) || !synth_setinst( &s, 20, &d ) ) { synth_cleanup( &s ); return false; }
+    synth_evspec_t sp; memset( &sp, 0, sizeof(sp) ); sp.type = SYNTH_EV_INST; sp.p[0] = 20.0f;
+    synth_schedule_ev( &s, 0, &sp );
+    synth_schedule( &s, 0, SYNTH_EV_PLAY, 0, freq, 1.0f, SYNTH_SINE );
+    synth_runevents( &s, 0 );
+    synth_render( &s, buf, RATE );
+    synth_cleanup( &s );
+    return true;
+}
+
+static double crossings( const float* b, int from, int to ) {       // sign changes per second
+    int zc = 0;
+    for ( int k = from + 1; k < to; ++k ) if ( ( b[k-1] < 0.0f ) != ( b[k] < 0.0f ) ) ++zc;
+    return (double) zc * RATE / (double)( to - from );
+}
+
+static void test_instrument_fixed_post( void ) {
+    float* a = (float*) malloc( sizeof(float) * RATE );
+    float* b = (float*) malloc( sizeof(float) * RATE );
+    char nm[160];
+    // a negative ratio is a fixed frequency in Hz: it ignores the note
+    check( render_def( "OSC SINE 1 -500", 220.0f, a ) && near( measure( a, RATE ), 500.0, 0.5 ), "fixed 500 Hz at note 220" );
+    check( render_def( "OSC SINE 1 -500", 880.0f, a ) && near( measure( a, RATE ), 500.0, 0.5 ), "fixed 500 Hz at note 880" );
+    check( render_def( "OSC SINE 1 -500 1200", 220.0f, a ) && near( measure( a, RATE ), 1000.0, 1.0 ), "the detune applies to a fixed frequency too (+1200 cents: 1000 Hz)" );
+    check( render_def( "OSC SINE 1 -500; PITCH 12 0.05; VIB 6 1", 220.0f, a ) && near( measure( a, RATE ), 500.0, 0.5 ), "a fixed frequency ignores the pitch envelope and the vibrato" );
+    // fixed-rate noise sounds the same at every note; white noise (ratio 0) is a new value every sample; a ratio follows the note
+    render_def( "OSC NOISE 1 -5000", 110.0f, a ); render_def( "OSC NOISE 1 -5000", 1760.0f, b );
+    double z1 = crossings( a, 2000, RATE ), z2 = crossings( b, 2000, RATE );
+    snprintf( nm, sizeof(nm), "fixed-rate noise: %.0f and %.0f sign changes per second at A2 and A6 (half the 5000 Hz rate = 2500)", z1, z2 );
+    check( near( z1, 2500.0, 125.0 ) && near( z2, 2500.0, 125.0 ), nm );
+    render_def( "OSC NOISE 1 0", 220.0f, a );
+    z1 = crossings( a, 2000, RATE );
+    snprintf( nm, sizeof(nm), "white noise: %.0f sign changes per second (about 22050)", z1 );
+    check( near( z1, 22050.0, 1000.0 ), nm );
+    render_def( "OSC NOISE 1 8", 110.0f, a ); render_def( "OSC NOISE 1 8", 1760.0f, b );
+    check( crossings( b, 2000, RATE ) > 8.0 * crossings( a, 2000, RATE ), "noise with a ratio follows the note (the old behavior)" );
+    // POST: the oscillator bypasses the filter
+    double amp_post = 0, amp_pre = 0;
+    render_def( "OSC SAW 1; OSC SINE 0.5 -3300 0 0.5 POST; FILTER 2", 110.0f, a );
+    amp_post = amp_at( a, 4000, RATE, 3300.0 );
+    render_def( "OSC SAW 1; OSC SINE 0.5 -3300; FILTER 2", 110.0f, a );
+    amp_pre = amp_at( a, 4000, RATE, 3300.0 );
+    snprintf( nm, sizeof(nm), "POST: a fixed 3300 Hz sine behind a low-pass at 220 Hz keeps its level (%.3f), without POST the filter removes it (%.4f)", amp_post, amp_pre );
+    check( near( amp_post, 0.5, 0.03 ) && amp_pre < 0.02, nm );
+    // without a filter POST changes nothing at all
+    render_def( "OSC SAW 0.5; OSC SINE 0.4 2 0 0.5 POST", 330.0f, a ); render_def( "OSC SAW 0.5; OSC SINE 0.4 2", 330.0f, b );
+    bool same = true; for ( int k = 0; k < RATE; ++k ) if ( a[k] != b[k] ) same = false;
+    check( same, "POST without a filter: the same signal sample for sample" );
+    // the FLUTE preset: its breath noise is a fixed-rate oscillator behind the filter
+    synth_t s; synth_init( &s, RATE );
+    const synth_inst_t* fl = synth_getinst( &s, 11 );
+    check( strcmp( fl->name, "FLUTE" ) == 0 && fl->osc[1].wave == SYNTH_NOISE && fl->osc[1].ratio < 0.0f && fl->osc[1].post && !fl->osc[0].post, "FLUTE: breath noise = fixed-rate noise behind the filter" );
+    synth_cleanup( &s );
+    // validation
+    synth_inst_t d; char err[MML_ERRLEN];
+    check( mml_parse_inst( "OSC SINE 1 -1", &d, err ) && mml_parse_inst( "OSC SINE 1 -20000", &d, err ), "fixed frequencies -1 and -20000 Hz are accepted" );
+    check( !mml_parse_inst( "OSC SINE 1 -20001", &d, err ) && !mml_parse_inst( "OSC SINE 1 -0.5", &d, err ), "-20001 and -0.5 are refused" );
+    check( mml_parse_inst( "OSC NOISE 1 -5000 0 0.5 POST", &d, err ) && d.osc[0].ratio == -5000.0f && d.osc[0].post, "parser: negative ratio and POST" );
+    check( mml_parse_inst( "OSC SINE POST", &d, err ) && d.osc[0].post && d.osc[0].level == 1.0f, "parser: POST right after the wave" );
+    check( mml_parse_inst( "osc sine 1 1 0 0.5 post ; gain 2", &d, err ) && d.osc[0].post && d.gain == 2.0f, "parser: POST in lower case, then another command" );
+    check( !mml_parse_inst( "OSC SINE 1 1 0 0.5 BOGUS", &d, err ) && strstr( err, "POST expected" ) != 0, "parser: another word after the values is refused" );
+    check( !mml_parse_inst( "OSC SINE POST x", &d, err ), "parser: stray character after POST" );
+    check( mml_parse_inst( "OSC SAW; OSC SINE 1 2", &d, err ) && !d.osc[0].post && !d.osc[1].post, "parser: POST is off by default" );
+    free( a ); free( b );
+}
+
 static void test_preset_loudness( void ) {
     // the presets are calibrated: a one-second note at volume 1 (A3, A1 for the low drums) has the same RMS (about 0.34) in every preset and never exceeds the volume (a soft limiter in the instrument path),
     // so that the volume V of a PLAY string means about the same for every instrument
@@ -1043,6 +1113,7 @@ int main( void ) {
     test_basic_waves_golden();
     test_instruments();
     test_preset_loudness();
+    test_instrument_fixed_post();
     test_instrument_snapshots();
     test_instrument_cpu();
     printf( "%d checks, %d failure(s)\n", total, failures );

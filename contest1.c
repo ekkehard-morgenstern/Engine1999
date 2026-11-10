@@ -139,6 +139,7 @@ static const testcase_t cases[] = {
     { "instruments: a program that defines and uses them", "10 INSTRUMENT 21,\"OSC SQUARE 1 1 0 0.25;ENV 0.01 0.1 0.5 0.2\"\n20 PLAY \"I21 C\"\n30 INSTRUMENT 21,\"OSC SINE\"\n40 PLAY \"I21 C\"\n50 PRINT \"OK\"\n", "prog.bas", "", "OK\n", "", 0, false },
     { "instruments: a bad definition is reported", 0, "", "INSTRUMENT 20,\"OSC BOGUS\"\n", "", "? Wave name expected after OSC (SINE SQUARE TRIANGLE NOISE SAW)\n", 0, false },
     { "instruments: a value out of range", 0, "", "INSTRUMENT 20,\"OSC SINE 5\"\n", "", "? Instrument value out of range\n", 0, false },
+    { "instruments: fixed frequency and POST", 0, "", "INSTRUMENT 20,\"OSC SAW; OSC NOISE 0.1 -5000 0 0.5 POST; FILTER 3\"\nPLAY \"I20 C\"\nPRINT \"OK\"\n", "OK\n", "", 0, false },
     { "instruments: the fixed ones can't be defined", 0, "", "INSTRUMENT 3,\"OSC SINE\"\n", "", "? Illegal argument\n", 0, false },
     { "instruments: I in a music string is checked", 0, "", "PLAY \"I32 C\"\n", "", "? Value missing or out of range after 'I'\n", 0, false },
     { "instruments: WAVE takes 4..31", 0, "", "WAVE 1,31\nWAVE 1,32\n", "", "? Illegal argument\n", 0, false },

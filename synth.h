@@ -92,10 +92,12 @@ typedef enum _synth_wave_t {
 typedef struct _synth_iosc_t {
     synth_wave_t    wave;               // SYNTH_SINE .. SYNTH_SAW
     float           level;              // 0..2
-    float           ratio;              // frequency = note * ratio (> 0); noise: 0 = white noise at the sample rate
+    float           ratio;              // frequency = note * ratio (> 0, up to 64); negative = a FIXED frequency of -ratio Hz (1..20000: it ignores the note, the
+                                        // pitch envelope and the vibrato; for noise it is the rate of the sample-and-hold); noise: 0 = white noise at the sample rate
     float           cents;              // detune -2400..2400
     float           pw;                 // pulse width of the square wave 0.02..0.98 (0.5 = square)
-    float           mul;                // derived (ratio * 2^(cents/1200)); set by synth_setinst()
+    float           mul;                // derived (ratio * 2^(cents/1200), negative for a fixed frequency); set by synth_setinst()
+    bool            post;               // the oscillator bypasses the low-pass filter (it is mixed in behind it): breath noise, a chiff, a fixed hiss
 } synth_iosc_t;
 
 typedef struct _synth_inst_t {

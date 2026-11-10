@@ -100,8 +100,10 @@ Parser for the definition string of INSTRUMENT n, a$: commands separated by ';',
 and wave names in any case. A definition starts from a plain sine instrument.
 
     NAME w                           the name (up to 11 letters / digits / _)
-    OSC wave [level [ratio [cents [pw]]]]   an oscillator (up to 3): wave = SINE SQUARE TRIANGLE NOISE SAW (or 0..4), level 0..2 (1),
-                                     frequency ratio to the note 0..64 (1; noise: 0 = white noise), detune in cents (0), pulse width of SQUARE (0.5)
+    OSC wave [level [ratio [cents [pw]]]] [POST]   an oscillator (up to 3): wave = SINE SQUARE TRIANGLE NOISE SAW (or 0..4), level 0..2 (1),
+                                     frequency ratio to the note 0..64 (1; noise: 0 = white noise), detune in cents (0), pulse width of SQUARE (0.5);
+                                     a NEGATIVE ratio is a fixed frequency of -ratio Hz (1..20000: it ignores the note; noise: the rate of the noise), POST
+                                     lets the oscillator bypass the filter (it is mixed in behind it)
     FILTER cutmul [res [fenv [fdecay]]]    low-pass at note frequency * cutmul, resonance 0..0.95, a filter envelope starting fenv octaves
                                      higher and decaying with the time constant fdecay seconds (default 0.2)
     PITCH semitones seconds          pitch envelope: starts semitones off the note and decays with the time constant

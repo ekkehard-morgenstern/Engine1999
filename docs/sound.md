@@ -128,7 +128,7 @@ instruments 4..31 are *subtractive / layered* voices. An instrument (`synth_inst
 
 | Part | Fields |
 |---|---|
-| 1..3 oscillators | wave (sine, square, triangle, noise, **saw**), level 0..2, frequency ratio to the note (noise: 0 = white noise at the sample rate), detune in cents, pulse width 0.02..0.98 for the square. Square, pulse and saw are **band-limited** (polyBLEP), so high notes do not alias much. |
+| 1..3 oscillators | wave (sine, square, triangle, noise, **saw**), level 0..2, frequency ratio to the note (noise: 0 = white noise at the sample rate), detune in cents, pulse width 0.02..0.98 for the square; **a negative ratio is a fixed frequency** of -ratio Hz (1..20000: the oscillator ignores the note, the pitch envelope and the vibrato; for noise it is the rate of the sample-and-hold) and the flag **`POST`** lets the oscillator bypass the filter (it is mixed in behind it). Square, pulse and saw are **band-limited** (polyBLEP), so high notes do not alias much. |
 | low-pass filter | cutoff = note frequency x `cutmul` (follows the note and its glide / vibrato; 0 = no filter), resonance 0..0.95, a filter envelope (`fenv` octaves above the cutoff at the note start, decaying with the time constant `fdecay`). A state variable filter in TPT form: stable at every setting (the first version, Chamberlin, blew up at high cutoff with damping: found by the `PLUCK` preset). The coefficients are recomputed every 32 samples. |
 | pitch envelope | `pitch` semitones off at the note start, decaying with the time constant `pitchtime` (kick, tom, zap). |
 | default ADSR | used while the program has set no `ENVELOPE` on the channel; an `ENVELOPE` wins, `ENVELOPE ch` (default) gives the instrument's back. |
@@ -160,8 +160,10 @@ Definition string (`mml_parse_inst()`, `mml.h`): commands separated by `;`, valu
 
 ```
 NAME w                                 up to 11 letters / digits / _
-OSC wave [level [ratio [cents [pw]]]]  up to 3; wave = SINE SQUARE TRIANGLE NOISE SAW (or 0..4); level 0..2 (1), ratio 0..64 (1; noise 0 = white),
-                                       cents -2400..2400 (0), pulse width of SQUARE 0.02..0.98 (0.5)
+OSC wave [level [ratio [cents [pw]]]] [POST]
+                                       up to 3; wave = SINE SQUARE TRIANGLE NOISE SAW (or 0..4); level 0..2 (1), ratio 0..64 (1; noise 0 = white noise;
+                                       NEGATIVE = a fixed frequency of -ratio Hz, 1..20000, independent of the note), cents -2400..2400 (0), pulse width
+                                       of SQUARE 0.02..0.98 (0.5); POST = the oscillator bypasses the filter (mixed in behind it)
 FILTER cutmul [res [fenv [fdecay]]]    low-pass at note frequency * cutmul (0..64); resonance 0..0.95; fenv -6..6 octaves; fdecay 0..10 s (0.2)
 PITCH semitones seconds                pitch envelope (-48..48, 0..10)
 ENV a d s r                            default envelope (seconds 0..60, sustain 0..1)
@@ -169,7 +171,7 @@ VIB rate depth                         default vibrato (0..100 Hz, 0..24 semiton
 GAIN g                                 overall level 0..4 (1)
 ```
 Example: `INSTRUMENT 20, "NAME MYBASS; OSC SAW 0.8; OSC SQUARE 0.6 0.5 0 0.3; FILTER 3 0.3 2 0.15; ENV 0.005 0.2 0.6 0.1; GAIN 0.6"`, then `PLAY "I20 O2 L8 CDEF"`.
-Errors: "Unknown instrument command 'X'", "Wave name expected after OSC ...", "At most 3 oscillators", "Wrong number of values in the instrument definition",
+Errors: "Unknown instrument command 'X'", "Wave name expected after OSC ...", "POST expected after the OSC values", "At most 3 oscillators", "Wrong number of values in the instrument definition",
 "Instrument value out of range".
 
 A new note (a channel that was not sounding, or one in its release) restarts the pitch and filter envelopes; a legato note (a `PLAY` on a sounding channel without an
@@ -182,8 +184,10 @@ they start as a plain sine named `USER`). The percussion presets want a note of 
 
 **Loudness of the presets (2026-11-10):** the gains of the 16 presets are calibrated so that a one-second note at volume 1 (A3; A1 for KICK and TOM) has an RMS of about **0.34** in every preset (a basic sine has 0.71, a triangle 0.58, a square 0.5) and a peak below 1.0: the volume `V` of a `PLAY` string means about the same for every instrument, and an instrument's `V` can be chosen like a wave's. `synthtest1` checks it (RMS 0.30 .. 0.38, peak <= 1). The calibration was done by measuring (an offline renderer replaying a music string like the VM and the host do; it was a scratchpad tool); redo it after changing a preset's sound (the gain is the first number on the second line of its row in `synth_presets`).
 
+**Fixed-frequency oscillators and `POST` (2026-11-10, owner's request after listening to FLUTE):** the first FLUTE had its breath noise tied to the note (a noise oscillator at 8 x the note, then the key-following filter at 4 x the note), so its breath was a low rumble in low octaves (measured: the noise centred at about 190 Hz at A2, 800 Hz at A4, 3 kHz at A6) and only sounded like breath above octave 4. Now the breath is `OSC NOISE 0.08 -5000 POST`: a sample-and-hold noise at a fixed 5000 Hz, behind the filter, so it is the same at every note (measured: identical level and 2500 sign changes per second at A2 and A6). The same two features suit a pitch-independent hiss (a hi-hat), a chiff, or a fixed formant. A noise oscillator with ratio 0 is still white noise (a new value every sample).
+
 Cost (`synthtest1`, one core, optimized build): 16 channels with the three-oscillator presets + filter = **about 5 % of a core**.
-Tests: `synthtest1` (298 checks): table / names, every preset (finite, audible, peak <= 1, silent after its release), ratio and cents (pitch measured), saw alias level and
+Tests: `synthtest1` (316 checks): table / names, every preset (finite, audible, peak <= 1, silent after its release), ratio and cents (pitch measured), saw alias level and
 amplitude, pulse width harmonics, low-pass attenuation measured with a Goertzel filter, resonance at the limits, pitch envelope, envelope
 precedence, `WAVE` after an instrument identical to the plain wave, validation; also under ASan / UBSan. `vmtest1` (definitions and errors, `WAVE` 4..31, `I` / `W` in `PLAY`, the `SFX` give-back, the order of a redefinition between two `PLAY`s),
 `repltest1`, `asmtest1` (`SND 14` / `15`), `contest1` (the console host checks the instrument statements and strings, 7 cases). **The basic waves are pinned by a golden test** in `synthtest1`: 4 waves x 5 settings (plain, envelope, vibrato + tremolo, glide, wave change mid-note) were rendered with the synthesizer as it was before the instruments (commit `7b7361b`) and the expected sums, RMS and sample values are in the test (tolerance for other CPUs / compilers); the old and the new code are bit-identical on those scenarios, and a deliberate 2 % change of the square wave makes seven checks fail. **`make hosttest`** (`hosttest.sh`, not in `make check`) runs the window host under Xvfb with the disk audio driver and checks the recorded audio (sine, then a redefined square wave): `docs/build-and-test.md`. The sound log (`ENGINE1999_SOUNDLOG`) shows an `instrument n NAME ...` line on the channel for each selection / redefinition.

@@ -354,6 +354,16 @@ bool mml_parse_inst( const char* text, synth_inst_t* in, char err[MML_ERRLEN] ) 
         }
         while ( nv < 5 && mml_signed( &p, &v[nv] ) ) ++nv;
         while ( *p == ' ' || *p == '\t' || *p == ',' ) ++p;
+        bool post = false;
+        if ( strcmp( cmd, "OSC" ) == 0 && ( ( *p >= 'A' && *p <= 'Z' ) || ( *p >= 'a' && *p <= 'z' ) ) ) {      // OSC ... POST: behind the filter
+            char w[16];
+            if ( !mml_word( &p, w, sizeof(w) ) || strcmp( w, "POST" ) != 0 ) {
+                snprintf( err, MML_ERRLEN, "POST expected after the OSC values" );
+                return false;
+            }
+            post = true;
+            while ( *p == ' ' || *p == '\t' || *p == ',' ) ++p;
+        }
         if ( *p != ';' && *p != '\0' && *p != '\n' && *p != '\r' ) {
             snprintf( err, MML_ERRLEN, "Unexpected '%c' in the instrument definition", *p );
             return false;
@@ -366,7 +376,7 @@ bool mml_parse_inst( const char* text, synth_inst_t* in, char err[MML_ERRLEN] ) 
             synth_iosc_t* o = &in->osc[nosc++];
             o->wave = (synth_wave_t) wave; o->level = nv > 0 ? (float) v[0] : 1.0f;
             o->ratio = nv > 1 ? (float) v[1] : ( wave == SYNTH_NOISE ? 0.0f : 1.0f );
-            o->cents = nv > 2 ? (float) v[2] : 0.0f; o->pw = nv > 3 ? (float) v[3] : 0.5f;
+            o->cents = nv > 2 ? (float) v[2] : 0.0f; o->pw = nv > 3 ? (float) v[3] : 0.5f; o->post = post;
         } else if ( strcmp( cmd, "FILTER" ) == 0 ) {    // FILTER cutmul [resonance [fenv [fdecay]]]
             if ( nv < 1 || nv > 4 ) goto COUNT;
             in->cutmul = (float) v[0]; in->res = nv > 1 ? (float) v[1] : 0.0f; in->fenv = nv > 2 ? (float) v[2] : 0.0f;

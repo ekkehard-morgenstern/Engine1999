@@ -92,7 +92,8 @@ static float synth_osc_next( synth_osc_t* o ) {
 
 // -- instruments -------------------------------------------------------------------------
 
-#define O( w, lv, ra, ce, pwid )    { (w), (lv), (ra), (ce), (pwid), 0.0f }
+#define O( w, lv, ra, ce, pwid )    { (w), (lv), (ra), (ce), (pwid), 0.0f, false }
+#define OP( w, lv, ra, ce, pwid )   { (w), (lv), (ra), (ce), (pwid), 0.0f, true }       // an oscillator behind the filter
 #define NOOSC                       O( SYNTH_SINE, 0.0f, 1.0f, 0.0f, 0.5f )
 
 // the factory instruments 4..19 (names and sounds are a first draft)
@@ -112,7 +113,7 @@ static const synth_inst_t synth_presets[SYNTH_NPRESET] = {
       2.03f, 4.0f, 0.05f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.35f, 0.20f, 0.85f, 0.40f, 5.0f, 0.10f },
     { "BRASS", 2, { O( SYNTH_SAW, 0.5f, 1.0f, -4.0f, 0.5f ), O( SYNTH_SAW, 0.5f, 1.0f, 4.0f, 0.5f ), NOOSC },
       1.33f, 2.0f, 0.10f, 2.5f, 0.25f, 0.0f, 0.0f, true, 0.06f, 0.15f, 0.80f, 0.10f, 0.0f, 0.0f },
-    { "FLUTE", 2, { O( SYNTH_SINE, 0.9f, 1.0f, 0.0f, 0.5f ), O( SYNTH_NOISE, 0.08f, 8.0f, 0.0f, 0.5f ), NOOSC },
+    { "FLUTE", 2, { O( SYNTH_SINE, 0.9f, 1.0f, 0.0f, 0.5f ), OP( SYNTH_NOISE, 0.08f, -5000.0f, 0.0f, 0.5f ), NOOSC },
       0.67f, 4.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.08f, 0.05f, 0.90f, 0.15f, 5.0f, 0.20f },
     { "BELL", 3, { O( SYNTH_SINE, 0.5f, 1.0f, 0.0f, 0.5f ), O( SYNTH_SINE, 0.3f, 2.76f, 0.0f, 0.5f ), O( SYNTH_SINE, 0.2f, 5.4f, 0.0f, 0.5f ) },
       1.77f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.0f, 1.50f, 0.0f, 1.00f, 0.0f, 0.0f },
@@ -155,7 +156,7 @@ bool synth_instvalid( const synth_inst_t* d ) {
         const synth_iosc_t* o = &d->osc[i];
         if ( (int) o->wave < 0 || (int) o->wave >= SYNTH_NOSCWAVES ) return false;
         if ( !RNG( o->level, 0.0f, 2.0f ) || !RNG( o->cents, -2400.0f, 2400.0f ) || !RNG( o->pw, 0.02f, 0.98f ) ) return false;
-        if ( !( o->ratio > 0.0f && o->ratio <= 64.0f ) && !( o->wave == SYNTH_NOISE && o->ratio == 0.0f ) ) return false;
+        if ( !( o->ratio > 0.0f && o->ratio <= 64.0f ) && !( o->ratio >= -20000.0f && o->ratio <= -1.0f ) && !( o->wave == SYNTH_NOISE && o->ratio == 0.0f ) ) return false;
     }
     return RNG( d->gain, 0.0f, 4.0f ) && RNG( d->cutmul, 0.0f, 64.0f ) && RNG( d->res, 0.0f, 0.95f ) &&
         RNG( d->fenv, -6.0f, 6.0f ) && RNG( d->fdecay, 0.0f, 10.0f ) && RNG( d->pitch, -48.0f, 48.0f ) &&
@@ -220,8 +221,8 @@ static float synth_softlimit( float x ) {
 }
 
 // one sample of an instrument oscillator (-1 .. 1), then advances its phase; step = the note's phase step
-static float synth_iosc_next( synth_osc_t* o, const synth_iosc_t* d, double step ) {
-    double dt = step * (double) d->mul;
+static float synth_iosc_next( synth_osc_t* o, const synth_iosc_t* d, double step, double invrate ) {
+    double dt = d->mul < 0.0f ? -(double) d->mul * invrate : step * (double) d->mul;      // a negative factor is a fixed frequency in Hz
     if ( dt > 0.45 ) dt = 0.45;
     float v;
     switch ( d->wave ) {
@@ -238,7 +239,7 @@ static float synth_iosc_next( synth_osc_t* o, const synth_iosc_t* d, double step
             v = (float)( o->phase < 0.5 ? 4.0 * o->phase - 1.0 : 3.0 - 4.0 * o->phase );
             break;
         case SYNTH_NOISE:
-            if ( d->mul <= 0.0f ) {         // white noise: a new value every sample
+            if ( d->mul == 0.0f ) {         // white noise: a new value every sample (a negative factor is a fixed rate)
                 return synth_noise( o );
             }
             v = o->held;
@@ -668,6 +669,7 @@ static float synth_env_next( synth_chan_t* c ) {
 }
 
 void synth_render( synth_t* s, float* buf, int count ) {
+    const double invrate = 1.0 / (double) s->rate;
     for ( int j=0; j < count; ++j ) {
         float sum = 0.0f, sumgain = 0.0f;
         for ( int i=0; i < SYNTH_NCHAN; ++i ) {
@@ -718,9 +720,10 @@ void synth_render( synth_t* s, float* buf, int count ) {
                     c->pe *= c->pdec;
                     if ( fabs( c->pe ) < 0.005 ) c->pe = 0.0;
                 }
-                float x = 0.0f;
+                float x = 0.0f, xpost = 0.0f;
                 for ( int k=0; k < in->nosc; ++k ) {
-                    x += synth_iosc_next( &c->iosc[k], &in->osc[k], step ) * in->osc[k].level;
+                    float o = synth_iosc_next( &c->iosc[k], &in->osc[k], step, invrate ) * in->osc[k].level;
+                    if ( in->osc[k].post ) xpost += o; else x += o;
                 }
                 if ( in->cutmul > 0.0f ) {
                     if ( --c->fcount <= 0 ) {       // the cutoff is computed every 32 samples
@@ -739,7 +742,7 @@ void synth_render( synth_t* s, float* buf, int count ) {
                     c->fic2 = 2.0 * v2 - c->fic2;
                     x = (float) v2;
                 }
-                v = synth_softlimit( x * in->gain ) * level;
+                v = synth_softlimit( ( x + xpost ) * in->gain ) * level;       // xpost: the oscillators behind the filter
             }
             sum += v;
             if ( fabsf( v ) > s->peak[i] ) s->peak[i] = fabsf( v );
