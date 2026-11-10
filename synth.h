@@ -71,8 +71,46 @@ typedef enum _synth_wave_t {
     SYNTH_SQUARE,
     SYNTH_TRIANGLE,
     SYNTH_NOISE,
-    SYNTH_NWAVES
+    SYNTH_SAW,                          // only inside instruments (not selectable by SYNTH_EV_WAVE)
+    SYNTH_NOSCWAVES
 } synth_wave_t;
+#define SYNTH_NWAVES        4           // the basic waves 0..3 = instruments 0..3
+
+// -- instruments ------------------------------------------------------------------------
+// Instruments 0..3 are the four basic waves (a plain oscillator, the original signal path, unchanged). Instruments 4..31 are
+// "subtractive / layered": up to SYNTH_INST_NOSC band-limited oscillators (wave, level, frequency ratio, detune in cents, pulse
+// width of the square wave), one resonant low-pass filter whose cutoff follows the note (cutoff = note frequency * cutmul, with
+// an envelope that starts "fenv" octaves higher and decays), a pitch envelope (starts "pitch" semitones off and decays to the
+// note), a default ADSR envelope (an ENVELOPE of the program overrides it) and a default vibrato (a VIBRATO overrides it).
+// 4..19 are the presets of synth_init(); all of 4..31 can be redefined with synth_setinst().
+#define SYNTH_NINST         32
+#define SYNTH_NBASIC        4
+#define SYNTH_NPRESET       16          // instruments 4 .. 4 + SYNTH_NPRESET - 1
+#define SYNTH_INST_NOSC     3
+#define SYNTH_INST_NAMELEN  12
+
+typedef struct _synth_iosc_t {
+    synth_wave_t    wave;               // SYNTH_SINE .. SYNTH_SAW
+    float           level;              // 0..2
+    float           ratio;              // frequency = note * ratio (> 0); noise: 0 = white noise at the sample rate
+    float           cents;              // detune -2400..2400
+    float           pw;                 // pulse width of the square wave 0.02..0.98 (0.5 = square)
+    float           mul;                // derived (ratio * 2^(cents/1200)); set by synth_setinst()
+} synth_iosc_t;
+
+typedef struct _synth_inst_t {
+    char            name[SYNTH_INST_NAMELEN];
+    int             nosc;               // 1..SYNTH_INST_NOSC
+    synth_iosc_t    osc[SYNTH_INST_NOSC];
+    float           gain;               // 0..4, overall
+    float           cutmul;             // low-pass cutoff = note frequency * cutmul (0 = no filter), 0..64
+    float           res;                // resonance 0..0.95
+    float           fenv, fdecay;       // filter envelope: starts fenv octaves (-6..6) above the cutoff, decays with time constant fdecay s (0..10)
+    float           pitch, pitchtime;   // pitch envelope: starts at "pitch" semitones (-48..48) off, decays with time constant pitchtime s (0..10)
+    bool            env;                // a default ADSR envelope ...
+    float           a, d, s, r;         // ... attack / decay / release seconds 0..60, sustain 0..1
+    float           vibrate, vibdepth;  // default vibrato: rate 0..100 Hz, depth 0..24 semitones (0 = none)
+} synth_inst_t;
 
 typedef enum _synth_evtype_t {
     SYNTH_EV_PLAY,                      // start (or change) the tone: freq, vol
@@ -80,7 +118,8 @@ typedef enum _synth_evtype_t {
     SYNTH_EV_WAVE,                      // select the wave type (takes effect at once, also while sounding)
     SYNTH_EV_ENV,                       // envelope: p[0..3] = attack s, decay s, sustain level, release s; p[0] < 0 = off
     SYNTH_EV_VIB,                       // vibrato: p[0] = rate Hz, p[1] = depth in semitones (0 = off)
-    SYNTH_EV_TREM                       // tremolo: p[0] = rate Hz, p[1] = depth 0..1 (0 = off)
+    SYNTH_EV_TREM,                      // tremolo: p[0] = rate Hz, p[1] = depth 0..1 (0 = off)
+    SYNTH_EV_INST                       // select the instrument p[0] = 0 .. SYNTH_NINST-1 (0..3: the basic waves)
 } synth_evtype_t;
 
 typedef enum _synth_envstate_t {
@@ -97,6 +136,15 @@ typedef struct _synth_osc_t {           // one oscillator (the building block of
 
 typedef struct _synth_chan_t {
     synth_osc_t     osc;
+    int             inst;               // the instrument (0..3 = the basic wave in osc.wave)
+    synth_osc_t     iosc[SYNTH_INST_NOSC];  // instrument oscillators
+    double          fic1, fic2;         // low-pass state (TPT state variable filter: unconditionally stable)
+    double          fa1, fa2, fa3;      // its coefficients (set every 32 samples)
+    int             fcount;             // samples until the cutoff is computed again
+    float           fenvlvl;            // filter envelope level 1 -> 0
+    double          pe, pdec;           // pitch envelope: semitones left, factor per sample
+    bool            uenv_on;            // the envelope set by the program (SYNTH_EV_ENV); else the instrument's
+    float           uenv[4];
     bool            on;                 // a note is on (with an envelope: until its release is over)
     float           vol;                // the note's volume
     float           target;             // volume the channel is fading to (0 = stopped)
@@ -140,6 +188,7 @@ typedef struct _synth_t {
     float           slewstep;           // gain change per sample
     int             bpm;
     synth_chan_t    chan[SYNTH_NCHAN];
+    synth_inst_t    inst[SYNTH_NINST];
     uint64_t        cursor[SYNTH_NCHAN];
     synth_event_t*  events;             // sorted by time
     synth_event_t*  tail;               // the last one (events queued in time order are appended without a search)
@@ -170,6 +219,13 @@ bool synth_nextevent( const synth_t* s, uint64_t* when );   // time of the earli
 bool synth_busy( const synth_t* s, int chan, uint64_t now );   // the channel sounds, fades, or has events queued / a sequence still running
 void synth_silencechan( synth_t* s, int chan, uint64_t now );   // the same for one channel
 void synth_silence( synth_t* s, uint64_t now );     // drops all queued events, fades all channels out, resets the cursors
+
+// instruments: 0..3 are fixed; 4..31 can be redefined (false if n or a field is out of range; "name" may be 0)
+bool synth_setinst( synth_t* s, int n, const synth_inst_t* def );
+const synth_inst_t* synth_getinst( const synth_t* s, int n );   // 0 if n is out of range or 0..3
+const char* synth_instname( const synth_t* s, int n );          // "SINE" .. "NOISE", the preset name, "" if out of range
+void synth_instdefault( synth_inst_t* def );                    // a plain instrument: one sine, no filter, no envelope
+void synth_instpreset( int n, synth_inst_t* def );              // the factory definition of 4..19 (else the plain one)
 
 void synth_render( synth_t* s, float* buf, int count );     // mono, count samples
 

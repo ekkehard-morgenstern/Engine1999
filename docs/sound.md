@@ -115,18 +115,40 @@ Host interface: `vm_sound_t` has `tone( chan, freq, freq2, vol, beats )` (freq2 
 `setvolume`; `sdlaud_playsweep`, `sdlaud_setenvelope/setvibrato/settremolo` (queued) and `sdlaud_setpitch/setvolume` (at once);
 `synth_schedule_ev()` with `synth_evspec_t`, `synth_setpitch/setvolume`. Instructions: `SND` kinds 7..13 (see `instset.h`).
 
-Not done: noise filtering (the noise is white), a pulse width for the square wave, a pitch envelope, stereo, `SFX` with parameters.
+Not done: stereo, `SFX` with parameters (a filter, a pulse width and a pitch envelope exist now as parts of the instruments in `synth.[ch]`, see "Instruments", but have no statements yet).
 
 ## Sound log (debugging)
 
 `ENGINE1999_SOUNDLOG=file engine1999 ...` (or `-` for standard error) writes a text log of the sound output of the window host, off by default: one line for every call the VM makes to the host (`tone freq f freq2 f2 vol v beats b` where beats -1 = held and 0 = a note of zero length, `wave`, `envelope`, `vibrato`, `tremolo`, `pitch`, `volume`, `tempo`, `sync mask`, `silence`), each with the time in seconds since the first sound call and the channel (`ch1`..`ch8`, `all`), and twice a second a `state` line: tempo, length of the event queue and for each channel `on` / `off`, the gain, and `+s` (how many seconds ahead of now the channel is queued) or `idle`, and `pkX`: the loudest sample the channel actually *rendered* since the last state line (so `pk0.00` on a channel that is asked for tones = nothing audible came out), then for the mix `mix pkX`, the number of calls of the audio device's callback since the last line, their size in samples, and the longest pause between two calls. (The state lines come every 0.5 s: a sound that repeats every 0.25 s is always seen in the same phase, so look at `pk`, not at `on` / `off`.) The state lines are written by the audio worker (`sdlaud_setlog()`). Use it to see whether a missing sound is never asked for (no `tone` line), asked for but not played (state of the channel), or queued far ahead. With `SDL_AUDIODRIVER=disk` (`SDL_DISKAUDIOFILE=out.raw`, 32-bit float mono, 44100 Hz) the sound can also be recorded without a sound card. Not available in the console host (it has no sound).
 
-## Instruments (planned)
+## Instruments (core done 2026-11-10, roadmap item 81 step 1; no language support yet)
 
-The goal is a software FM synthesizer so games can have proper music and sound effects. The structure is prepared for it:
-`synth_osc_t` (one oscillator: wave, phase, step) is separate from `synth_chan_t` (gain, fade), so an instrument can later
-be a set of oscillators per channel with operator routing (modulation = one oscillator's output added to another's phase),
-a frequency ratio and level per operator, and an ADSR envelope per operator or voice instead of the fixed 2.5 ms slew.
-Instruments would be defined by a statement (`INSTRUMENT n, ...`) or loaded from data, selected by `PLAY`'s `I n` and by
-`sdlaud_setinstrument()`; the basic wave types stay as instrument 0..3. Further steps: a polyphonic voice allocator (more
-simultaneous notes than channels), band-limited square/triangle, per-channel panning once the output is stereo.
+`synth.[ch]` has instruments: instruments 0..3 are the four basic waves (the original signal path, unchanged sample for sample),
+instruments 4..31 are *subtractive / layered* voices. An instrument (`synth_inst_t`) has:
+
+| Part | Fields |
+|---|---|
+| 1..3 oscillators | wave (sine, square, triangle, noise, **saw**), level 0..2, frequency ratio to the note (noise: 0 = white noise at the sample rate), detune in cents, pulse width 0.02..0.98 for the square. Square, pulse and saw are **band-limited** (polyBLEP), so high notes do not alias much. |
+| low-pass filter | cutoff = note frequency x `cutmul` (follows the note and its glide / vibrato; 0 = no filter), resonance 0..0.95, a filter envelope (`fenv` octaves above the cutoff at the note start, decaying with the time constant `fdecay`). A state variable filter in TPT form: stable at every setting (the first version, Chamberlin, blew up at high cutoff with damping: found by the `PLUCK` preset). The coefficients are recomputed every 32 samples. |
+| pitch envelope | `pitch` semitones off at the note start, decaying with the time constant `pitchtime` (kick, tom, zap). |
+| default ADSR | used while the program has set no `ENVELOPE` on the channel; an `ENVELOPE` wins, `ENVELOPE ch` (default) gives the instrument's back. |
+| default vibrato | used while the program has set no `VIBRATO` (depth 0) on the channel. |
+| gain | overall level (the peak of a single preset note is about the volume asked for). |
+
+Selection: the event `SYNTH_EV_INST` (p[0] = 0..31); `SYNTH_EV_WAVE` selects a basic wave and so leaves an instrument. A new note
+(a channel that was not sounding, or one in its release) restarts the pitch and filter envelopes; a legato note (a `PLAY` on a sounding channel without an
+envelope release in between) only changes the pitch. API: `synth_setinst( s, n, def )` (4..31, every field is range checked), `synth_getinst`,
+`synth_instname`, `synth_instdefault`, `synth_instpreset`; the instruments live in `synth_t`, so every synth starts with the presets.
+
+**Presets** (a first draft: names and sounds are to be agreed with the owner, he has not heard them): 4 BASS, 5 LEAD, 6 PAD, 7 PLUCK, 8 ORGAN,
+9 STRINGS, 10 BRASS, 11 FLUTE, 12 BELL, 13 KICK, 14 SNARE, 15 HIHAT, 16 TOM, 17 CLAP, 18 ZAP, 19 EPIANO (20..31 are free for the user's own instruments;
+they start as a plain sine and are named `USER`).
+
+Cost (`synthtest1`, one core, optimized build): 16 channels with the three-oscillator presets + filter = **about 5 % of a core**.
+Tests: `synthtest1` (240 checks): table / names, every preset (finite, audible, peak <= 1, silent after its release), ratio and cents (pitch measured), saw alias level and
+amplitude, pulse width harmonics, low-pass attenuation measured with a Goertzel filter, resonance at the limits, pitch envelope, envelope
+precedence, `WAVE` after an instrument identical to the plain wave, validation. Also run under ASan / UBSan.
+
+**Not done yet (roadmap 81, steps 2 to 5):** the language (`INSTRUMENT n, ...` to define, `I n` in `PLAY` strings, a statement to select, `vm_chanstate_t` + `SFX` restore,
+`instset.h`, grammar, man pages, console `PLAY` check), the `sdlaudio` calls, a demo, switching `music3d.lib` and the games to instruments. Later: FM operators on the same
+data structure, a polyphonic voice allocator, panning once the output is stereo.

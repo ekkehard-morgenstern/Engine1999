@@ -90,6 +90,162 @@ static float synth_osc_next( synth_osc_t* o ) {
     return v;
 }
 
+// -- instruments -------------------------------------------------------------------------
+
+#define O( w, lv, ra, ce, pwid )    { (w), (lv), (ra), (ce), (pwid), 0.0f }
+#define NOOSC                       O( SYNTH_SINE, 0.0f, 1.0f, 0.0f, 0.5f )
+
+// the factory instruments 4..19 (names and sounds are a first draft)
+static const synth_inst_t synth_presets[SYNTH_NPRESET] = {
+    // name, nosc, osc[3], gain, cutmul, res, fenv, fdecay, pitch, pitchtime, env, a, d, s, r, vibrate, vibdepth
+    { "BASS", 2, { O( SYNTH_SAW, 0.8f, 1.0f, 0.0f, 0.5f ), O( SYNTH_SQUARE, 0.6f, 0.5f, 0.0f, 0.5f ), NOOSC },
+      0.6f, 3.0f, 0.30f, 2.0f, 0.15f, 0.0f, 0.0f, true, 0.005f, 0.20f, 0.60f, 0.10f, 0.0f, 0.0f },
+    { "LEAD", 2, { O( SYNTH_SQUARE, 0.6f, 1.0f, 0.0f, 0.25f ), O( SYNTH_SAW, 0.4f, 1.0f, 7.0f, 0.5f ), NOOSC },
+      0.5f, 6.0f, 0.10f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.01f, 0.10f, 0.70f, 0.15f, 5.5f, 0.15f },
+    { "PAD", 3, { O( SYNTH_SAW, 0.33f, 1.0f, -9.0f, 0.5f ), O( SYNTH_SAW, 0.33f, 1.0f, 0.0f, 0.5f ), O( SYNTH_SAW, 0.33f, 1.0f, 9.0f, 0.5f ) },
+      0.6f, 3.0f, 0.10f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.50f, 0.30f, 0.80f, 0.80f, 0.0f, 0.0f },
+    { "PLUCK", 2, { O( SYNTH_SAW, 0.7f, 1.0f, 0.0f, 0.5f ), O( SYNTH_SQUARE, 0.4f, 1.0f, 5.0f, 0.5f ), NOOSC },
+      0.6f, 8.0f, 0.20f, 2.5f, 0.12f, 0.0f, 0.0f, true, 0.0f, 0.25f, 0.0f, 0.10f, 0.0f, 0.0f },
+    { "ORGAN", 3, { O( SYNTH_SINE, 0.5f, 1.0f, 0.0f, 0.5f ), O( SYNTH_SINE, 0.3f, 2.0f, 0.0f, 0.5f ), O( SYNTH_SINE, 0.2f, 3.0f, 0.0f, 0.5f ) },
+      0.8f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.01f, 0.0f, 1.0f, 0.05f, 0.0f, 0.0f },
+    { "STRINGS", 3, { O( SYNTH_SAW, 0.33f, 1.0f, -12.0f, 0.5f ), O( SYNTH_SAW, 0.33f, 1.0f, 0.0f, 0.5f ), O( SYNTH_SAW, 0.33f, 1.0f, 12.0f, 0.5f ) },
+      0.6f, 4.0f, 0.05f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.35f, 0.20f, 0.85f, 0.40f, 5.0f, 0.10f },
+    { "BRASS", 2, { O( SYNTH_SAW, 0.5f, 1.0f, -4.0f, 0.5f ), O( SYNTH_SAW, 0.5f, 1.0f, 4.0f, 0.5f ), NOOSC },
+      0.6f, 2.0f, 0.10f, 2.5f, 0.25f, 0.0f, 0.0f, true, 0.06f, 0.15f, 0.80f, 0.10f, 0.0f, 0.0f },
+    { "FLUTE", 2, { O( SYNTH_SINE, 0.9f, 1.0f, 0.0f, 0.5f ), O( SYNTH_NOISE, 0.08f, 8.0f, 0.0f, 0.5f ), NOOSC },
+      0.8f, 4.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.08f, 0.05f, 0.90f, 0.15f, 5.0f, 0.20f },
+    { "BELL", 3, { O( SYNTH_SINE, 0.5f, 1.0f, 0.0f, 0.5f ), O( SYNTH_SINE, 0.3f, 2.76f, 0.0f, 0.5f ), O( SYNTH_SINE, 0.2f, 5.4f, 0.0f, 0.5f ) },
+      0.8f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.0f, 1.50f, 0.0f, 1.00f, 0.0f, 0.0f },
+    { "KICK", 1, { O( SYNTH_SINE, 1.0f, 1.0f, 0.0f, 0.5f ), NOOSC, NOOSC },
+      0.9f, 0.0f, 0.0f, 0.0f, 0.0f, 24.0f, 0.06f, true, 0.0f, 0.25f, 0.0f, 0.02f, 0.0f, 0.0f },
+    { "SNARE", 2, { O( SYNTH_NOISE, 0.8f, 0.0f, 0.0f, 0.5f ), O( SYNTH_TRIANGLE, 0.4f, 1.0f, 0.0f, 0.5f ), NOOSC },
+      0.7f, 0.0f, 0.0f, 0.0f, 0.0f, 6.0f, 0.03f, true, 0.0f, 0.18f, 0.0f, 0.02f, 0.0f, 0.0f },
+    { "HIHAT", 1, { O( SYNTH_NOISE, 1.0f, 0.0f, 0.0f, 0.5f ), NOOSC, NOOSC },
+      0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.0f, 0.05f, 0.0f, 0.01f, 0.0f, 0.0f },
+    { "TOM", 1, { O( SYNTH_SINE, 1.0f, 1.0f, 0.0f, 0.5f ), NOOSC, NOOSC },
+      0.9f, 0.0f, 0.0f, 0.0f, 0.0f, 12.0f, 0.10f, true, 0.0f, 0.35f, 0.0f, 0.02f, 0.0f, 0.0f },
+    { "CLAP", 1, { O( SYNTH_NOISE, 1.0f, 0.0f, 0.0f, 0.5f ), NOOSC, NOOSC },
+      0.7f, 8.0f, 0.50f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.0f, 0.12f, 0.0f, 0.02f, 0.0f, 0.0f },
+    { "ZAP", 2, { O( SYNTH_SAW, 0.7f, 1.0f, 0.0f, 0.5f ), O( SYNTH_SQUARE, 0.4f, 1.0f, 0.0f, 0.3f ), NOOSC },
+      0.5f, 6.0f, 0.40f, 1.5f, 0.10f, 36.0f, 0.10f, true, 0.0f, 0.20f, 0.0f, 0.05f, 0.0f, 0.0f },
+    { "EPIANO", 2, { O( SYNTH_SINE, 0.7f, 1.0f, 0.0f, 0.5f ), O( SYNTH_SINE, 0.25f, 14.0f, 0.0f, 0.5f ), NOOSC },
+      0.8f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.0f, 0.80f, 0.15f, 0.30f, 0.0f, 0.0f }
+};
+
+void synth_instdefault( synth_inst_t* d ) {
+    memset( d, 0, sizeof(*d) );
+    d->nosc = 1;
+    for ( int i=0; i < SYNTH_INST_NOSC; ++i ) {
+        d->osc[i].wave = SYNTH_SINE; d->osc[i].ratio = 1.0f; d->osc[i].pw = 0.5f; d->osc[i].mul = 1.0f;
+        d->osc[i].level = i == 0 ? 1.0f : 0.0f;
+    }
+    d->gain = 1.0f;
+}
+
+static void synth_inst_derive( synth_inst_t* d ) {
+    for ( int i=0; i < SYNTH_INST_NOSC; ++i ) {
+        d->osc[i].mul = d->osc[i].ratio * (float) pow( 2.0, (double) d->osc[i].cents / 1200.0 );
+    }
+}
+
+static bool synth_inst_ok( const synth_inst_t* d ) {
+    #define RNG( v, lo, hi )    ( (v) >= (lo) && (v) <= (hi) )
+    if ( d->nosc < 1 || d->nosc > SYNTH_INST_NOSC ) return false;
+    for ( int i=0; i < d->nosc; ++i ) {
+        const synth_iosc_t* o = &d->osc[i];
+        if ( (int) o->wave < 0 || (int) o->wave >= SYNTH_NOSCWAVES ) return false;
+        if ( !RNG( o->level, 0.0f, 2.0f ) || !RNG( o->cents, -2400.0f, 2400.0f ) || !RNG( o->pw, 0.02f, 0.98f ) ) return false;
+        if ( !( o->ratio > 0.0f && o->ratio <= 64.0f ) && !( o->wave == SYNTH_NOISE && o->ratio == 0.0f ) ) return false;
+    }
+    return RNG( d->gain, 0.0f, 4.0f ) && RNG( d->cutmul, 0.0f, 64.0f ) && RNG( d->res, 0.0f, 0.95f ) &&
+        RNG( d->fenv, -6.0f, 6.0f ) && RNG( d->fdecay, 0.0f, 10.0f ) && RNG( d->pitch, -48.0f, 48.0f ) &&
+        RNG( d->pitchtime, 0.0f, 10.0f ) && RNG( d->a, 0.0f, 60.0f ) && RNG( d->d, 0.0f, 60.0f ) &&
+        RNG( d->s, 0.0f, 1.0f ) && RNG( d->r, 0.0f, 60.0f ) && RNG( d->vibrate, 0.0f, 100.0f ) && RNG( d->vibdepth, 0.0f, 24.0f );
+    #undef RNG
+}
+
+void synth_instpreset( int n, synth_inst_t* d ) {
+    if ( n >= SYNTH_NBASIC && n < SYNTH_NBASIC + SYNTH_NPRESET ) {
+        *d = synth_presets[n - SYNTH_NBASIC];
+        synth_inst_derive( d );
+    } else {
+        synth_instdefault( d );
+    }
+}
+
+bool synth_setinst( synth_t* s, int n, const synth_inst_t* def ) {
+    if ( n < SYNTH_NBASIC || n >= SYNTH_NINST || !synth_inst_ok( def ) ) {
+        return false;
+    }
+    synth_inst_t* d = &s->inst[n];
+    *d = *def;
+    d->name[SYNTH_INST_NAMELEN-1] = '\0';
+    synth_inst_derive( d );
+    return true;
+}
+
+const synth_inst_t* synth_getinst( const synth_t* s, int n ) {
+    return n >= SYNTH_NBASIC && n < SYNTH_NINST ? &s->inst[n] : 0;
+}
+
+const char* synth_instname( const synth_t* s, int n ) {
+    static const char* const basic[SYNTH_NBASIC] = { "SINE", "SQUARE", "TRIANGLE", "NOISE" };
+    if ( n < 0 || n >= SYNTH_NINST ) return "";
+    if ( n < SYNTH_NBASIC ) return basic[n];
+    return s->inst[n].name[0] != '\0' ? s->inst[n].name : "USER";
+}
+
+// band-limited edge (polyBLEP): t = phase 0..1, dt = phase step
+static float synth_blep( double t, double dt ) {
+    if ( t < dt ) {
+        t /= dt;
+        return (float)( t + t - t * t - 1.0 );
+    }
+    if ( t > 1.0 - dt ) {
+        t = ( t - 1.0 ) / dt;
+        return (float)( t * t + t + t + 1.0 );
+    }
+    return 0.0f;
+}
+
+// one sample of an instrument oscillator (-1 .. 1), then advances its phase; step = the note's phase step
+static float synth_iosc_next( synth_osc_t* o, const synth_iosc_t* d, double step ) {
+    double dt = step * (double) d->mul;
+    if ( dt > 0.45 ) dt = 0.45;
+    float v;
+    switch ( d->wave ) {
+        case SYNTH_SQUARE: {
+            double t2 = o->phase - (double) d->pw;
+            if ( t2 < 0.0 ) t2 += 1.0;
+            v = ( o->phase < (double) d->pw ? 1.0f : -1.0f ) + synth_blep( o->phase, dt ) - synth_blep( t2, dt );
+            break;
+        }
+        case SYNTH_SAW:
+            v = (float)( 2.0 * o->phase - 1.0 ) - synth_blep( o->phase, dt );
+            break;
+        case SYNTH_TRIANGLE:
+            v = (float)( o->phase < 0.5 ? 4.0 * o->phase - 1.0 : 3.0 - 4.0 * o->phase );
+            break;
+        case SYNTH_NOISE:
+            if ( d->mul <= 0.0f ) {         // white noise: a new value every sample
+                return synth_noise( o );
+            }
+            v = o->held;
+            break;
+        case SYNTH_SINE:
+        default:
+            v = (float) sin( TWOPI * o->phase );
+            break;
+    }
+    o->phase += dt;
+    if ( o->phase >= 1.0 ) {
+        o->phase -= 1.0;
+        if ( o->phase >= 1.0 ) o->phase = 0.0;
+        o->held = synth_noise( o );
+    }
+    return v;
+}
+
 // -- the synth -------------------------------------------------------------------------
 
 void synth_init( synth_t* s, int rate ) {
@@ -101,6 +257,13 @@ void synth_init( synth_t* s, int rate ) {
         synth_osc_init( &s->chan[i].osc, 0x9E3779B9U * (uint32_t)( i + 1 ) );
         s->chan[i].osc.held = synth_noise( &s->chan[i].osc );
         s->chan[i].env = 1.0f;
+        for ( int k=0; k < SYNTH_INST_NOSC; ++k ) {
+            synth_osc_init( &s->chan[i].iosc[k], 0x85EBCA6BU * (uint32_t)( i * SYNTH_INST_NOSC + k + 1 ) );
+            s->chan[i].iosc[k].held = synth_noise( &s->chan[i].iosc[k] );
+        }
+    }
+    for ( int n=SYNTH_NBASIC; n < SYNTH_NINST; ++n ) {
+        synth_instpreset( n, &s->inst[n] );
     }
 }
 
@@ -176,6 +339,11 @@ bool synth_schedule_ev( synth_t* s, uint64_t when, const synth_evspec_t* sp ) {
                 return false;
             }
             break;
+        case SYNTH_EV_INST:
+            if ( !( sp->p[0] >= 0.0f && sp->p[0] < (float) SYNTH_NINST ) ) {
+                return false;
+            }
+            break;
         case SYNTH_EV_VIB:
             if ( !( sp->p[0] >= 0.0f && sp->p[0] <= 100.0f && sp->p[1] >= 0.0f && sp->p[1] <= 24.0f ) ) {
                 return false;
@@ -228,6 +396,39 @@ static void synth_release( synth_t* s, synth_chan_t* c ) {      // the note ends
     }
 }
 
+// sets the effective envelope of the channel: on = false switches it off (a release in progress is cut short)
+static void synth_env_config( synth_t* s, synth_chan_t* c, bool on, float a, float d, float sus, float r ) {
+    if ( !on ) {
+        if ( c->env_on && c->on && c->envstate == SYNTH_ENV_RELEASE ) {     // the release is cut short
+            c->on = false; c->target = 0.0f;
+        }
+        c->env_on = false; c->env = 1.0f; c->envstate = SYNTH_ENV_IDLE;
+        return;
+    }
+    bool wasenv = c->env_on;
+    c->env_on = true;
+    c->env_a = a; c->env_d = d; c->env_s = sus; c->env_r = r;
+    float rate = (float) s->rate;
+    c->env_ainc = c->env_a > 0.0f ? 1.0f / ( c->env_a * rate ) : 2.0f;
+    c->env_dinc = c->env_d > 0.0f ? ( 1.0f - c->env_s ) / ( c->env_d * rate ) : 2.0f;
+    if ( !wasenv ) {        // a note that is sounding already stays at its level
+        c->env = 1.0f;
+        c->envstate = c->on ? SYNTH_ENV_SUSTAIN : SYNTH_ENV_IDLE;
+    }
+}
+
+// the envelope of the program (ENVELOPE) wins over the one of the instrument
+static void synth_env_resolve( synth_t* s, synth_chan_t* c ) {
+    if ( c->uenv_on ) {
+        synth_env_config( s, c, true, c->uenv[0], c->uenv[1], c->uenv[2], c->uenv[3] );
+    } else if ( c->inst >= SYNTH_NBASIC && s->inst[c->inst].env ) {
+        const synth_inst_t* d = &s->inst[c->inst];
+        synth_env_config( s, c, true, d->a, d->d, d->s, d->r );
+    } else {
+        synth_env_config( s, c, false, 0.0f, 0.0f, 0.0f, 0.0f );
+    }
+}
+
 static void synth_apply( synth_t* s, const synth_event_t* ev ) {
     synth_chan_t* c = &s->chan[ev->chan];
     switch ( ev->type ) {
@@ -236,6 +437,20 @@ static void synth_apply( synth_t* s, const synth_event_t* ev ) {
             if ( !wason && c->gain == 0.0f ) {
                 c->osc.phase = 0.0;             // a new note starts at the beginning of the cycle; a sounding one goes on
                 c->vib_phase = 0.0; c->trem_phase = 0.0;
+            }
+            if ( c->inst >= SYNTH_NBASIC ) {
+                const synth_inst_t* in = &s->inst[c->inst];
+                bool retrig = !wason || ( c->env_on && ( c->envstate == SYNTH_ENV_RELEASE || c->envstate == SYNTH_ENV_IDLE ) );
+                if ( !wason && c->gain == 0.0f ) {
+                    for ( int k=0; k < SYNTH_INST_NOSC; ++k ) c->iosc[k].phase = 0.0;
+                }
+                if ( retrig ) {
+                    c->pe = (double) in->pitch;
+                    c->pdec = in->pitchtime > 0.0f ? exp( -1.0 / ( (double) in->pitchtime * (double) s->rate ) ) : 0.0;
+                    c->fenvlvl = 1.0f;
+                    c->fcount = 0;
+                    if ( !wason ) { c->fic1 = 0.0; c->fic2 = 0.0; }
+                }
             }
             c->basestep = (double) ev->freq / (double) s->rate;
             c->osc.step = c->basestep;
@@ -261,25 +476,26 @@ static void synth_apply( synth_t* s, const synth_event_t* ev ) {
             break;
         case SYNTH_EV_WAVE:
             c->osc.wave = ev->wave;
+            if ( c->inst != (int) ev->wave ) {
+                c->inst = (int) ev->wave;
+                synth_env_resolve( s, c );
+            }
             break;
+        case SYNTH_EV_INST: {
+            int n = (int) ev->p[0];
+            if ( n < SYNTH_NBASIC ) c->osc.wave = (synth_wave_t) n;
+            c->inst = n;
+            synth_env_resolve( s, c );
+            break;
+        }
         case SYNTH_EV_ENV:
             if ( ev->p[0] < 0.0f ) {
-                if ( c->env_on && c->on && c->envstate == SYNTH_ENV_RELEASE ) {     // the release is cut short
-                    c->on = false; c->target = 0.0f;
-                }
-                c->env_on = false; c->env = 1.0f; c->envstate = SYNTH_ENV_IDLE;
+                c->uenv_on = false;
             } else {
-                bool wasenv = c->env_on;
-                c->env_on = true;
-                c->env_a = ev->p[0]; c->env_d = ev->p[1]; c->env_s = ev->p[2]; c->env_r = ev->p[3];
-                float rate = (float) s->rate;
-                c->env_ainc = c->env_a > 0.0f ? 1.0f / ( c->env_a * rate ) : 2.0f;
-                c->env_dinc = c->env_d > 0.0f ? ( 1.0f - c->env_s ) / ( c->env_d * rate ) : 2.0f;
-                if ( !wasenv ) {        // a note that is sounding already stays at its level
-                    c->env = 1.0f;
-                    c->envstate = c->on ? SYNTH_ENV_SUSTAIN : SYNTH_ENV_IDLE;
-                }
+                c->uenv_on = true;
+                for ( int k=0; k < 4; ++k ) c->uenv[k] = ev->p[k];
             }
+            synth_env_resolve( s, c );
             break;
         case SYNTH_EV_VIB:
             c->vib_rate = ev->p[0]; c->vib_depth = ev->p[1];
@@ -438,19 +654,55 @@ void synth_render( synth_t* s, float* buf, int count ) {
                     c->basestep = c->glide_end;
                 }
             }
-            if ( c->vib_depth > 0.0f ) {
-                c->osc.step = c->basestep * exp2( (double)( c->vib_depth / 12.0f ) * sin( TWOPI * c->vib_phase ) );
-                c->vib_phase += (double) c->vib_rate / (double) s->rate;
+            const synth_inst_t* in = c->inst >= SYNTH_NBASIC ? &s->inst[c->inst] : 0;
+            float vdepth = c->vib_depth, vrate = c->vib_rate;
+            if ( vdepth <= 0.0f && in != 0 ) {      // the instrument's own vibrato, if the program set none
+                vdepth = in->vibdepth; vrate = in->vibrate;
+            }
+            double step = c->basestep;
+            if ( vdepth > 0.0f ) {
+                step = c->basestep * exp2( (double)( vdepth / 12.0f ) * sin( TWOPI * c->vib_phase ) );
+                c->vib_phase += (double) vrate / (double) s->rate;
                 if ( c->vib_phase >= 1.0 ) c->vib_phase -= floor( c->vib_phase );
-            } else {
-                c->osc.step = c->basestep;
             }
             if ( c->trem_depth > 0.0f ) {
                 level *= 1.0f - c->trem_depth * 0.5f * (float)( 1.0 - cos( TWOPI * c->trem_phase ) );
                 c->trem_phase += (double) c->trem_rate / (double) s->rate;
                 if ( c->trem_phase >= 1.0 ) c->trem_phase -= floor( c->trem_phase );
             }
-            float v = synth_osc_next( &c->osc ) * level;
+            float v;
+            if ( in == 0 ) {
+                c->osc.step = step;
+                v = synth_osc_next( &c->osc ) * level;
+            } else {
+                if ( c->pe != 0.0 ) {
+                    step *= exp2( c->pe / 12.0 );
+                    c->pe *= c->pdec;
+                    if ( fabs( c->pe ) < 0.005 ) c->pe = 0.0;
+                }
+                float x = 0.0f;
+                for ( int k=0; k < in->nosc; ++k ) {
+                    x += synth_iosc_next( &c->iosc[k], &in->osc[k], step ) * in->osc[k].level;
+                }
+                if ( in->cutmul > 0.0f ) {
+                    if ( --c->fcount <= 0 ) {       // the cutoff is computed every 32 samples
+                        c->fcount = 32;
+                        double hz = step * (double) s->rate * (double) in->cutmul * exp2( (double)( in->fenv * c->fenvlvl ) );
+                        if ( hz < 20.0 ) hz = 20.0;
+                        if ( hz > (double) s->rate * 0.45 ) hz = (double) s->rate * 0.45;
+                        double g = tan( 3.14159265358979 * hz / (double) s->rate ), k = 2.0 * ( 1.0 - (double) in->res );
+                        c->fa1 = 1.0 / ( 1.0 + g * ( g + k ) ); c->fa2 = g * c->fa1; c->fa3 = g * c->fa2;
+                        c->fenvlvl = in->fdecay > 0.0f ? c->fenvlvl * (float) exp( -32.0 / ( (double) in->fdecay * (double) s->rate ) ) : 0.0f;
+                    }
+                    double v3 = (double) x - c->fic2;
+                    double v1 = c->fa1 * c->fic1 + c->fa2 * v3;
+                    double v2 = c->fic2 + c->fa2 * c->fic1 + c->fa3 * v3;
+                    c->fic1 = 2.0 * v1 - c->fic1;
+                    c->fic2 = 2.0 * v2 - c->fic2;
+                    x = (float) v2;
+                }
+                v = x * in->gain * level;
+            }
             sum += v;
             if ( fabsf( v ) > s->peak[i] ) s->peak[i] = fabsf( v );
             sumgain += c->gain;

@@ -633,6 +633,239 @@ static void test_mml_effects( void ) {
     check( mml_error( "~5", "'~'" ) && mml_error( "~5,25", "'~'" ) && mml_error( "^5,1.5", "'^'" ) && mml_error( "^101,1", "'^'" ), "mml: vibrato and tremolo values" );
 }
 
+// -- instruments -----------------------------------------------------------------------
+
+// amplitude of the frequency f in buf[from..to) (Goertzel)
+static double amp_at( const float* buf, int from, int to, double f ) {
+    double w = 2.0 * 3.14159265358979 * f / RATE, c = 2.0 * cos( w ), s1 = 0, s2 = 0;
+    for ( int i=from; i < to; ++i ) {
+        double s0 = buf[i] + c * s1 - s2;
+        s2 = s1; s1 = s0;
+    }
+    double re = s1 - s2 * cos( w ), im = s2 * sin( w );
+    return 2.0 * sqrt( re * re + im * im ) / (double)( to - from );
+}
+
+// plays freq on channel 0 with instrument inst for hold seconds, then releases; renders total seconds
+static float* inst_note( synth_t* s, int inst, float freq, float vol, double hold, double total_s, int* n ) {
+    synth_init( s, RATE );
+    synth_evspec_t sp; memset( &sp, 0, sizeof(sp) );
+    sp.type = SYNTH_EV_INST; sp.p[0] = (float) inst;
+    synth_schedule_ev( s, 0, &sp );
+    synth_schedule( s, 0, SYNTH_EV_PLAY, 0, freq, vol, SYNTH_SINE );
+    synth_schedule( s, (uint64_t)( hold * 1e9 ), SYNTH_EV_STOP, 0, 0, 0, SYNTH_SINE );
+    synth_runevents( s, 0 );
+    *n = (int)( total_s * RATE );
+    float* buf = (float*) malloc( sizeof(float) * (size_t) *n );
+    int done = 0;
+    while ( done < *n ) {
+        int chunk = *n - done < 441 ? *n - done : 441;
+        synth_runevents( s, (uint64_t)( (double) done * 1e9 / RATE ) );
+        synth_render( s, buf + done, chunk );
+        done += chunk;
+    }
+    return buf;
+}
+
+static void test_instruments( void ) {
+    synth_t s; synth_init( &s, RATE );
+    // the table
+    bool names_ok = true;
+    for ( int i=0; i < SYNTH_NINST; ++i ) {
+        const char* nm = synth_instname( &s, i );
+        if ( nm[0] == '\0' ) names_ok = false;
+        for ( int k=0; k < i; ++k ) {
+            if ( i < SYNTH_NBASIC + SYNTH_NPRESET && strcmp( nm, synth_instname( &s, k ) ) == 0 ) names_ok = false;
+        }
+    }
+    check( names_ok, "32 instruments have names, the first 20 distinct" );
+    check( strcmp( synth_instname( &s, 2 ), "TRIANGLE" ) == 0 && strcmp( synth_instname( &s, 4 ), "BASS" ) == 0, "names of basic waves and presets" );
+    check( synth_instname( &s, 32 )[0] == '\0' && synth_instname( &s, -1 )[0] == '\0', "names out of range are empty" );
+    check( synth_getinst( &s, 3 ) == 0 && synth_getinst( &s, 4 ) != 0 && synth_getinst( &s, 31 ) != 0 && synth_getinst( &s, 32 ) == 0, "getinst range" );
+    synth_cleanup( &s );
+
+    // every preset sounds (finite, audible, not clipping), reaches silence after the release, and is not a copy of another
+    double rms[SYNTH_NINST];
+    for ( int i=SYNTH_NBASIC; i < SYNTH_NBASIC + SYNTH_NPRESET; ++i ) {
+        int n; float* b = inst_note( &s, i, i == 13 || i == 16 ? 55.0f : 220.0f, 1.0f, 0.5, 6.0, &n );
+        bool finite = true; float pk = 0.0f; double e = 0;
+        for ( int k=0; k < n; ++k ) {
+            if ( !isfinite( b[k] ) ) finite = false;
+            if ( fabsf( b[k] ) > pk ) pk = fabsf( b[k] );
+        }
+        for ( int k=0; k < RATE / 2; ++k ) e += (double) b[k] * b[k];
+        rms[i] = sqrt( e / ( RATE / 2 ) );
+        char name[100];
+        snprintf( name, sizeof(name), "preset %d %s sounds (peak %.2f)", i, synth_instname( &s, i ), pk );
+        check( finite && pk > 0.05f && pk <= 1.0f && rms[i] > 0.005, name );
+        snprintf( name, sizeof(name), "preset %d %s is silent after its release", i, synth_instname( &s, i ) );
+        check( peak( b, n - 2000, n ) == 0.0f && !synth_busy( &s, 0, (uint64_t) 6 * SEC ), name );
+        free( b ); synth_cleanup( &s );
+    }
+
+    // pitch of a user instrument: a sine at ratio 2 sounds an octave up; detune by 1200 cents the same
+    synth_inst_t d; synth_instdefault( &d );
+    d.osc[0].ratio = 2.0f;
+    synth_init( &s, RATE );
+    check( synth_setinst( &s, 20, &d ), "define instrument 20" );
+    synth_evspec_t sp; memset( &sp, 0, sizeof(sp) ); sp.type = SYNTH_EV_INST; sp.p[0] = 20.0f;
+    synth_schedule_ev( &s, 0, &sp );
+    synth_schedule( &s, 0, SYNTH_EV_PLAY, 0, 440.0f, 0.5f, SYNTH_SINE );
+    synth_runevents( &s, 0 );
+    float* buf = (float*) malloc( sizeof(float) * RATE );
+    synth_render( &s, buf, RATE );
+    check( near( measure( buf, RATE ), 880.0, 0.5 ), "ratio 2 sounds an octave up" );
+    check( near( peak( buf, 2000, RATE ), 0.5, 0.002 ), "a plain instrument has the volume's peak" );
+    synth_cleanup( &s );
+    d.osc[0].ratio = 1.0f; d.osc[0].cents = 1200.0f;
+    synth_init( &s, RATE ); synth_setinst( &s, 20, &d );
+    synth_schedule_ev( &s, 0, &sp );
+    synth_schedule( &s, 0, SYNTH_EV_PLAY, 0, 440.0f, 0.5f, SYNTH_SINE );
+    synth_runevents( &s, 0 );
+    synth_render( &s, buf, RATE );
+    check( near( measure( buf, RATE ), 880.0, 0.5 ), "1200 cents sounds an octave up" );
+    synth_cleanup( &s );
+
+    // band-limited saw: the alias of the 4th harmonic of 5000 Hz (20000 -> folds to 24100 - 22050 ...) stays small
+    synth_instdefault( &d ); d.osc[0].wave = SYNTH_SAW;
+    synth_init( &s, RATE ); synth_setinst( &s, 20, &d );
+    synth_schedule_ev( &s, 0, &sp );
+    synth_schedule( &s, 0, SYNTH_EV_PLAY, 0, 5000.0f, 1.0f, SYNTH_SINE );
+    synth_runevents( &s, 0 );
+    synth_render( &s, buf, RATE );
+    double fund = amp_at( buf, 2000, RATE, 5000.0 );
+    double alias = amp_at( buf, 2000, RATE, 44100.0 - 5.0 * 5000.0 );        // 5th harmonic 25000 folds to 19100
+    char nm[120]; snprintf( nm, sizeof(nm), "saw: fundamental %.3f (2/pi = 0.637), alias %.4f", fund, alias );
+    check( near( fund, 0.637, 0.04 ) && alias < fund * 0.1, nm );
+    check( near( measure( buf, RATE ), 5000.0, 2.0 ), "saw pitch" );
+    synth_cleanup( &s );
+    // pulse width: a 25 % pulse has a 2nd harmonic, a 50 % one hardly any
+    synth_instdefault( &d ); d.osc[0].wave = SYNTH_SQUARE; d.osc[0].pw = 0.5f;
+    synth_init( &s, RATE ); synth_setinst( &s, 20, &d );
+    synth_schedule_ev( &s, 0, &sp ); synth_schedule( &s, 0, SYNTH_EV_PLAY, 0, 400.0f, 1.0f, SYNTH_SINE );
+    synth_runevents( &s, 0 ); synth_render( &s, buf, RATE );
+    double h2sq = amp_at( buf, 2000, RATE, 800.0 ), h1sq = amp_at( buf, 2000, RATE, 400.0 );
+    synth_cleanup( &s );
+    d.osc[0].pw = 0.25f;
+    synth_init( &s, RATE ); synth_setinst( &s, 20, &d );
+    synth_schedule_ev( &s, 0, &sp ); synth_schedule( &s, 0, SYNTH_EV_PLAY, 0, 400.0f, 1.0f, SYNTH_SINE );
+    synth_runevents( &s, 0 ); synth_render( &s, buf, RATE );
+    double h2pw = amp_at( buf, 2000, RATE, 800.0 );
+    synth_cleanup( &s );
+    check( h2sq < h1sq * 0.02 && h2pw > h1sq * 0.4, "pulse width 0.25 adds the even harmonics" );
+
+    // low-pass: a saw at 110 Hz with cutoff 2 x the note: the harmonic at 3300 Hz is far weaker than without a filter
+    double hi[2];
+    for ( int f=0; f < 2; ++f ) {
+        synth_instdefault( &d ); d.osc[0].wave = SYNTH_SAW; d.cutmul = f == 0 ? 0.0f : 2.0f;
+        synth_init( &s, RATE ); synth_setinst( &s, 20, &d );
+        synth_schedule_ev( &s, 0, &sp ); synth_schedule( &s, 0, SYNTH_EV_PLAY, 0, 110.0f, 1.0f, SYNTH_SINE );
+        synth_runevents( &s, 0 ); synth_render( &s, buf, RATE );
+        hi[f] = amp_at( buf, 4000, RATE, 3300.0 );
+        if ( f == 1 ) check( near( measure( buf, RATE ), 110.0, 0.2 ), "filtered saw keeps its pitch" );
+        synth_cleanup( &s );
+    }
+    snprintf( nm, sizeof(nm), "low-pass: 3300 Hz %.4f -> %.5f", hi[0], hi[1] );
+    check( hi[1] < hi[0] * 0.05, nm );
+    // the filter follows the note: the same instrument one octave up has the same relative spectrum
+    // resonance makes a peak at the cutoff but stays stable (no blow up) at the highest setting
+    synth_instdefault( &d ); d.osc[0].wave = SYNTH_SAW; d.cutmul = 64.0f; d.res = 0.95f; d.fenv = 6.0f; d.fdecay = 0.01f;
+    synth_init( &s, RATE ); synth_setinst( &s, 20, &d );
+    synth_schedule_ev( &s, 0, &sp ); synth_schedule( &s, 0, SYNTH_EV_PLAY, 0, 4000.0f, 1.0f, SYNTH_SINE );
+    synth_runevents( &s, 0 ); synth_render( &s, buf, RATE );
+    bool fin = true; for ( int k=0; k < RATE; ++k ) if ( !isfinite( buf[k] ) ) fin = false;
+    check( fin && peak( buf, 0, RATE ) < 8.0f, "resonant filter at the limits stays finite" );
+    synth_cleanup( &s );
+
+    // pitch envelope: starts an octave up, settles on the note
+    synth_instdefault( &d ); d.pitch = 12.0f; d.pitchtime = 0.05f;
+    synth_init( &s, RATE ); synth_setinst( &s, 20, &d );
+    synth_schedule_ev( &s, 0, &sp ); synth_schedule( &s, 0, SYNTH_EV_PLAY, 0, 200.0f, 1.0f, SYNTH_SINE );
+    synth_runevents( &s, 0 ); synth_render( &s, buf, RATE );
+    // count rising zero crossings in the first 20 ms and in the last half second
+    int c0 = 0, c1 = 0;
+    for ( int k=1; k < RATE / 50; ++k ) if ( buf[k-1] < 0 && buf[k] >= 0 ) ++c0;
+    for ( int k=RATE/2; k < RATE; ++k ) if ( buf[k-1] < 0 && buf[k] >= 0 ) ++c1;
+    snprintf( nm, sizeof(nm), "pitch envelope: %d cycles in the first 20 ms (>= 5), %d in 0.5 s (100)", c0, c1 );
+    check( c0 >= 5 && c1 >= 99 && c1 <= 101, nm );
+    synth_cleanup( &s );
+
+    // default envelope of the instrument, overridden by ENVELOPE, restored by ENVELOPE default
+    synth_instdefault( &d ); d.env = true; d.a = 0.2f; d.d = 0.0f; d.s = 1.0f; d.r = 0.1f;
+    for ( int mode=0; mode < 3; ++mode ) {
+        synth_init( &s, RATE ); synth_setinst( &s, 20, &d );
+        synth_schedule_ev( &s, 0, &sp );
+        synth_evspec_t e; memset( &e, 0, sizeof(e) ); e.type = SYNTH_EV_ENV; e.chan = 0;
+        if ( mode == 1 ) { e.p[0] = 0.0f; e.p[1] = 0.0f; e.p[2] = 1.0f; e.p[3] = 0.0f; synth_schedule_ev( &s, 0, &e ); }
+        if ( mode == 2 ) {
+            e.p[0] = 0.0f; e.p[1] = 0.0f; e.p[2] = 1.0f; e.p[3] = 0.0f; synth_schedule_ev( &s, 0, &e );
+            e.p[0] = -1.0f; synth_schedule_ev( &s, 0, &e );
+        }
+        synth_schedule( &s, 0, SYNTH_EV_PLAY, 0, 440.0f, 1.0f, SYNTH_SINE );
+        synth_runevents( &s, 0 ); synth_render( &s, buf, RATE );
+        float early = peak( buf, 0, 441 );          // first 10 ms
+        snprintf( nm, sizeof(nm), "instrument envelope mode %d: first 10 ms peak %.3f", mode, early );
+        check( mode == 1 ? early > 0.9f : early < 0.2f, nm );
+        check( mode == 0 ? near( peak( buf, RATE - 2000, RATE ), 1.0, 0.01 ) : true, "attack reaches full level" );
+        synth_cleanup( &s );
+    }
+
+    // WAVE selects a basic wave again: the signal is the one of the plain wave
+    synth_init( &s, RATE );
+    synth_schedule_ev( &s, 0, &sp );
+    sp.p[0] = 0.0f;
+    synth_schedule( &s, 0, SYNTH_EV_WAVE, 0, 0, 0, SYNTH_SQUARE );
+    synth_schedule( &s, 0, SYNTH_EV_PLAY, 0, 441.0f, 1.0f, SYNTH_SINE );
+    synth_runevents( &s, 0 ); synth_render( &s, buf, 20000 );
+    float* ref = tone( SYNTH_SQUARE, 441.0f, 1.0f, 20000 );
+    bool same = true; for ( int k=0; k < 20000; ++k ) if ( buf[k] != ref[k] ) same = false;
+    check( same, "WAVE after an instrument is the plain wave again, sample for sample" );
+    free( ref ); synth_cleanup( &s );
+    sp.p[0] = 20.0f;
+
+    // validation
+    synth_inst_t bad; synth_instdefault( &bad );
+    synth_init( &s, RATE );
+    check( !synth_setinst( &s, 0, &bad ) && !synth_setinst( &s, 3, &bad ) && !synth_setinst( &s, 32, &bad ) && !synth_setinst( &s, -1, &bad ), "instruments 0..3 and out of range can't be defined" );
+    check( synth_setinst( &s, 31, &bad ) && synth_setinst( &s, 4, &bad ), "4 and 31 can" );
+    bad.nosc = 0; check( !synth_setinst( &s, 5, &bad ), "0 oscillators refused" );
+    bad.nosc = 4; check( !synth_setinst( &s, 5, &bad ), "4 oscillators refused" );
+    synth_instdefault( &bad ); bad.osc[0].ratio = 0.0f; check( !synth_setinst( &s, 5, &bad ), "ratio 0 refused except for noise" );
+    bad.osc[0].wave = SYNTH_NOISE; check( synth_setinst( &s, 5, &bad ), "noise ratio 0 is white noise" );
+    synth_instdefault( &bad ); bad.osc[0].pw = 0.0f; check( !synth_setinst( &s, 5, &bad ), "pulse width 0 refused" );
+    synth_instdefault( &bad ); bad.res = 1.0f; check( !synth_setinst( &s, 5, &bad ), "resonance 1 refused" );
+    synth_instdefault( &bad ); bad.cutmul = (float) NAN; check( !synth_setinst( &s, 5, &bad ), "NaN refused" );
+    synth_instdefault( &bad ); bad.s = 1.5f; check( !synth_setinst( &s, 5, &bad ), "sustain 1.5 refused" );
+    synth_instdefault( &bad ); bad.osc[0].wave = SYNTH_NOSCWAVES; check( !synth_setinst( &s, 5, &bad ), "unknown wave refused" );
+    check( synth_schedule( &s, 0, SYNTH_EV_INST, 0, 0, 0, SYNTH_SINE ), "instrument 0 is selectable" );
+    sp.p[0] = 32.0f; check( !synth_schedule_ev( &s, 0, &sp ), "instrument 32 refused" );
+    sp.p[0] = -1.0f; check( !synth_schedule_ev( &s, 0, &sp ), "instrument -1 refused" );
+    synth_instpreset( 4, &bad ); check( strcmp( bad.name, "BASS" ) == 0 && bad.nosc == 2 && bad.osc[1].mul == 0.5f, "preset copy (derived ratio filled in)" );
+    synth_cleanup( &s );
+    free( buf );
+}
+
+static void test_instrument_cpu( void ) {
+    // 16 channels of the most expensive presets (3 oscillators + filter) for 4 seconds of audio
+    synth_t s; synth_init( &s, RATE );
+    for ( int c=0; c < SYNTH_NCHAN; ++c ) {
+        synth_evspec_t sp; memset( &sp, 0, sizeof(sp) );
+        sp.type = SYNTH_EV_INST; sp.chan = c; sp.p[0] = (float)( c % 2 == 0 ? 6 : 9 );     // PAD / STRINGS
+        synth_schedule_ev( &s, 0, &sp );
+        synth_schedule( &s, 0, SYNTH_EV_PLAY, c, 110.0f * (float) pow( 2.0, c / 12.0 ), 0.5f, SYNTH_SINE );
+    }
+    synth_runevents( &s, 0 );
+    int n = RATE * 4;
+    float* buf = (float*) malloc( sizeof(float) * (size_t) n );
+    struct timespec t0, t1; clock_gettime( CLOCK_MONOTONIC, &t0 );
+    synth_render( &s, buf, n );
+    clock_gettime( CLOCK_MONOTONIC, &t1 );
+    double used = (double)( t1.tv_sec - t0.tv_sec ) + (double)( t1.tv_nsec - t0.tv_nsec ) / 1e9;
+    printf( "      (16 channels x 3 oscillators + filter: %.3f s CPU for 4 s of audio = %.1f %% of one core)\n", used, used / 4.0 * 100.0 );
+    check( used < 4.0 * 0.25, "16 instrument voices need less than 25 % of a core" );
+    free( buf ); synth_cleanup( &s );
+}
+
 int main( void ) {
     test_notes();
     test_pitch();
@@ -652,6 +885,8 @@ int main( void ) {
     test_lfos();
     test_immediate();
     test_mml_effects();
+    test_instruments();
+    test_instrument_cpu();
     printf( "%d checks, %d failure(s)\n", total, failures );
     return failures;
 }
