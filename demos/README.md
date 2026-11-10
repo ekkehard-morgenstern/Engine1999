@@ -8,7 +8,7 @@ option `--engine1999-about`). The program text itself is not under the GPL (see 
 statement) when you copy a demo and pass an executable of it on.
 
 The listings are indented by block structure (two blanks per level for `FOR`, `REPEAT`, `WHILE`, multi-line `IF`, `PROC` and `FUNC`): the blanks behind the line number are kept by `LOAD`, `LIST` and the editors, and the compiler ignores them.
-The editors (`spriteed`, `musiced`, `sfxed`) are **tools** now: they live in the `tools/` folder and run with `TOOL "spriteed"` (see [../tools/README.md](../tools/README.md)).
+The editors (`spriteed`, `musiced`, `sfxed`, `insted`) are **tools** now: they live in the `tools/` folder and run with `TOOL "spriteed"` (see [../tools/README.md](../tools/README.md)).
 
 
 | File | What it is |

@@ -1015,6 +1015,49 @@ static void test_instrument_fixed_post( void ) {
     free( a ); free( b );
 }
 
+// the instrument editor (tools/insted.bas) carries the 16 factory instruments as definition strings: they must be the ones of synth.c
+static void test_insted_presets( void ) {
+    FILE* f = fopen( "tools/insted.bas", "r" );
+    if ( f == 0 ) {
+        check( false, "tools/insted.bas can be opened (run the test in the repository)" );
+        return;
+    }
+    char line[1200]; int found = 0, same = 0; bool seen[SYNTH_NINST];
+    memset( seen, 0, sizeof(seen) );
+    while ( fgets( line, sizeof(line), f ) != 0 ) {
+        char* d = strstr( line, " DATA \"" );
+        if ( d == 0 ) continue;
+        char name[40], def[1000];
+        if ( sscanf( d, " DATA \"%39[^\"]\",\"%999[^\"]\"", name, def ) != 2 ) continue;
+        int n = -1;
+        for ( int i = SYNTH_NBASIC; i < SYNTH_NBASIC + SYNTH_NPRESET; ++i ) {
+            synth_inst_t p; synth_instpreset( i, &p );
+            if ( strcmp( p.name, name ) == 0 ) n = i;
+        }
+        if ( n < 0 ) continue;
+        ++found; seen[n] = true;
+        synth_inst_t want, got; char err[MML_ERRLEN];
+        synth_instpreset( n, &want );
+        bool ok = mml_parse_inst( def, &got, err ) && strcmp( got.name, want.name ) == 0 && got.nosc == want.nosc && got.env == want.env;
+        if ( ok ) {
+            ok = near( got.gain, want.gain, 1e-5 ) && near( got.cutmul, want.cutmul, 1e-5 ) && near( got.res, want.res, 1e-5 ) && near( got.fenv, want.fenv, 1e-5 ) &&
+                 near( got.fdecay, want.fdecay, 1e-5 ) && near( got.pitch, want.pitch, 1e-5 ) && near( got.pitchtime, want.pitchtime, 1e-5 ) &&
+                 near( got.a, want.a, 1e-5 ) && near( got.d, want.d, 1e-5 ) && near( got.s, want.s, 1e-5 ) && near( got.r, want.r, 1e-5 ) &&
+                 near( got.vibrate, want.vibrate, 1e-5 ) && near( got.vibdepth, want.vibdepth, 1e-5 );
+            for ( int k = 0; k < want.nosc && ok; ++k ) {
+                ok = got.osc[k].wave == want.osc[k].wave && got.osc[k].post == want.osc[k].post && near( got.osc[k].level, want.osc[k].level, 1e-5 ) &&
+                     near( got.osc[k].ratio, want.osc[k].ratio, 1e-5 ) && near( got.osc[k].cents, want.osc[k].cents, 1e-5 ) && near( got.osc[k].pw, want.osc[k].pw, 1e-5 );
+            }
+        }
+        char nm[100]; snprintf( nm, sizeof(nm), "insted: the string of %s is the factory instrument", name );
+        check( ok, nm );
+        if ( ok ) ++same;
+    }
+    fclose( f );
+    char nm[100]; snprintf( nm, sizeof(nm), "insted: all %d factory instruments are in the tool (found %d)", SYNTH_NPRESET, found );
+    check( found == SYNTH_NPRESET && same == SYNTH_NPRESET, nm );
+}
+
 static void test_preset_loudness( void ) {
     // the presets are calibrated: a one-second note at volume 1 (A3, A1 for the low drums) has the same RMS (about 0.34) in every preset and never exceeds the volume (a soft limiter in the instrument path),
     // so that the volume V of a PLAY string means about the same for every instrument
@@ -1113,6 +1156,7 @@ int main( void ) {
     test_basic_waves_golden();
     test_instruments();
     test_preset_loudness();
+    test_insted_presets();
     test_instrument_fixed_post();
     test_instrument_snapshots();
     test_instrument_cpu();

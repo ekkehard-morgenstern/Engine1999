@@ -466,6 +466,7 @@ check: $(CHECKTESTS) engine1999 engine1999c
 	if sh deqqtest.sh > $$log 2>&1; then printf '%-12s ok\n' deqqtest; else printf '%-12s FAILED\n' deqqtest; tail -n 20 $$log; fail=$$((fail+1)); fi; \
 	if sh deqq2test.sh > $$log 2>&1; then printf '%-12s ok\n' deqq2test; else printf '%-12s FAILED\n' deqq2test; tail -n 20 $$log; fail=$$((fail+1)); fi; \
 	if sh levelstest.sh > $$log 2>&1; then printf '%-12s ok\n' levelstest; else printf '%-12s FAILED\n' levelstest; tail -n 20 $$log; fail=$$((fail+1)); fi; \
+	if sh instedtest.sh > $$log 2>&1; then printf '%-12s ok\n' instedtest; else printf '%-12s FAILED\n' instedtest; tail -n 20 $$log; fail=$$((fail+1)); fi; \
 	rm -f $$log; \
 	if [ $$fail -ne 0 ]; then echo "$$fail check(s) failed"; exit 1; fi; echo "all checks passed"
 

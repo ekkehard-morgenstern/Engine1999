@@ -4632,6 +4632,12 @@ static bool vm_resume_error( vm_t* vm, uint16_t kind ) {
     if ( kind < 2 ) {
         dest = kind == 0 ? vm->resumestart : vm->resumeend;
         vm->line = vm->errlastline != 0 ? vm->errlastline : LINENO_NONE;
+    } else if ( vm->irqdepth > 0 ) {
+        // RESUME label goes to the main program: the handlers (AFTER / EVERY / ON UI / ON KEY ...) that were running when the error was
+        // trapped are left, with their return addresses (else the slot stays "busy" for good and no further event ever reaches a handler)
+        vm->rsp = vm->irq[0].rsp;
+        vm->line = vm->irq[0].line;
+        vm->irqdepth = 0;
     }
     return vm_branch_to( vm, dest );
 }
