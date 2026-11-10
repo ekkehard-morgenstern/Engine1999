@@ -24,13 +24,13 @@
 200   IF RIGHT$(A$,1)=" " THEN A$=LEFT$(A$,1)
 210   RETURN "O"+CHR$(48+N\12)+A$
 220 END FUNC
-230 ' drums: K = kick (a short falling triangle tone), S = snare (noise), anything else a rest; 16 sixteenths
+230 ' drums: K = kick (the synthesizer's KICK instrument), S = snare (SNARE), anything else a rest; 16 sixteenths
 240 FUNC DRUMS$(P$)
 250   LOCAL I,C$,R$
 260   FOR I=1 TO 16
 270     C$=MID$(P$,I,1)
-280     IF C$="K" THEN R$=R$+"W2 V0.6 O3 G64 D64 O2 G32 "
-290     IF C$="S" THEN R$=R$+"W3 V0.35 O5 C16 "
+280     IF C$="K" THEN R$=R$+"I13 V0.72 O1 A16 "
+290     IF C$="S" THEN R$=R$+"I14 V0.42 O3 C16 "
 300     IF C$<>"K" AND C$<>"S" THEN R$=R$+"R16 "
 310   NEXT I
 320   RETURN R$
@@ -38,7 +38,7 @@
 340 FUNC HATS$(P$)
 350   LOCAL I,R$
 360   FOR I=1 TO 16
-370     IF MID$(P$,I,1)="x" THEN R$=R$+"W3 V0.1 O7 C32 R32 " ELSE R$=R$+"R16 "
+370     IF MID$(P$,I,1)="x" THEN R$=R$+"I15 V0.08 O7 C32 R32 " ELSE R$=R$+"R16 "
 380   NEXT I
 390   RETURN R$
 400 END FUNC
@@ -903,7 +903,7 @@
 8880 PROC SFXDEF
 8890   SFX 1,"W3 V0.4 ML X0.05,0.05,0.6,0.25 S400,2500,6"
 8900   SFX 2,"W3 V0.9 ML X0,0.02,0.4,0.5 S800,60,2"
-8910   SFX 3,"W1 V0.3 ML X0,0.15,0,0.05 H1319,16"
+8910   SFX 3,"I12 V0.22 ML X0,0.15,0,0.05 H1319,16"
 8920   SFX 4,"W1 V0.25 ML X0,0.05,0.5,0.2 S500,2400,6"
 8930   SFX 5,"W3 V0.9 ML X0,0.01,0.8,0.8 S3000,30,8 S2000,60,4"
 8940   SFX 6,"W3 V0.3 ML X0,0.01,0,0.15 H4000,32"
@@ -1111,7 +1111,7 @@
 10950   NEXT I
 10960   GFX TEXT X,Y,A$,200,SX,SY
 10970 END PROC
-10980 ' ====================================================================== the music: 150 beats a minute, eight voices (1 lead, 2 arp, 3 bass, 4 kick and snare, 5 hats, 6 7 8 pad), made bar by bar
+10980 ' ====================================================================== the music: 150 beats a minute, eight voices (1 lead LEAD, 2 arp PLUCK, 3 bass BASS, 4 kick and snare KICK / SNARE, 5 hats HIHAT, 6 7 8 pad PAD: instruments of the synthesizer; the finale's lead stays a square wave for its glitches and beeps), made bar by bar
 10990 ' a bar is 16 sixteenths = 1.6 s; every voice's string gets exactly one whole note per bar. All strings are made first, then queued at once.
 11000 PROC MUSIC(START)
 11010   LOCAL P,V
@@ -1126,8 +1126,9 @@
 11100 PROC SECTION(P)
 11110   LOCAL B,NB
 11120   NB=(PE(P)-PS(P))/96
-11130   LD$="T150 W1 V0.26 MN ":AR$="T150 W1 V0.12 MS ":BS$="T150 W2 V0.34 ML ":DR$="T150 ML ":HT$="T150 ML "
-11140   PA$="T150 W2 V0.09 ML ":PB$=PA$:PC$=PA$
+11130   LD$="T150 I5 V0.37 MN ":AR$="T150 I7 V0.09 MS ":BS$="T150 I4 V0.44 ML ":DR$="T150 ML ":HT$="T150 ML "
+11135   IF P=8 THEN LD$="T150 W1 V0.26 MN "
+11140   PA$="T150 I6 V0.11 ML ":PB$=PA$:PC$=PA$
 11150   CALL MKMEL(P,NB)
 11160   FOR B=0 TO NB-1
 11170     IF P=8 THEN CALL BAR8(B) ELSE CALL MBAR(P,B,NB)
