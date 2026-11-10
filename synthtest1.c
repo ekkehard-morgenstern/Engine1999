@@ -874,6 +874,43 @@ static void test_instruments( void ) {
     }
 }
 
+static void test_instrument_snapshots( void ) {
+    // INSTDEF is a queued snapshot: notes before it keep the old definition, notes after it use the new one
+    synth_t s; synth_init( &s, RATE );
+    synth_inst_t a, b; synth_instdefault( &a ); synth_instdefault( &b ); b.osc[0].ratio = 2.0f;
+    synth_evspec_t sp; memset( &sp, 0, sizeof(sp) ); sp.type = SYNTH_EV_INSTDEF; sp.p[0] = 20.0f; sp.def = &a;
+    check( synth_schedule_ev( &s, 0, &sp ), "INSTDEF accepted" );
+    synth_schedule( &s, 0, SYNTH_EV_PLAY, 0, 440.0f, 0.5f, SYNTH_SINE );
+    synth_schedule( &s, 1 * SEC, SYNTH_EV_STOP, 0, 0, 0, SYNTH_SINE );
+    sp.def = &b;
+    check( synth_schedule_ev( &s, 3 * SEC / 2, &sp ), "second INSTDEF accepted" );
+    synth_schedule( &s, 3 * SEC / 2, SYNTH_EV_PLAY, 0, 440.0f, 0.5f, SYNTH_SINE );
+    synth_schedule( &s, 3 * SEC, SYNTH_EV_STOP, 0, 0, 0, SYNTH_SINE );
+    sp.def = &a; b.osc[0].ratio = 3.0f;         // changing the caller's struct afterwards changes nothing (the event holds a copy)
+    synth_instpreset( 20, &a );
+    int n = RATE * 3;
+    float* buf = (float*) malloc( sizeof(float) * (size_t) n );
+    for ( int done = 0; done < n; done += 441 ) {
+        synth_runevents( &s, (uint64_t)( (double) done * 1e9 / RATE ) );
+        synth_render( &s, buf + done, 441 );
+    }
+    double f1 = measure( buf + RATE / 5, RATE / 2 ), f2 = measure( buf + RATE * 17 / 10, RATE / 2 );
+    char nm[100]; snprintf( nm, sizeof(nm), "snapshot: 440 Hz before, 880 Hz after the new definition (%.1f / %.1f)", f1, f2 );
+    check( near( f1, 440.0, 1.0 ) && near( f2, 880.0, 2.0 ), nm );
+    free( buf );
+    synth_runevents( &s, 3 * SEC );
+    check( s.nevents == 0, "snapshot events are used up" );
+    sp.def = 0; check( !synth_schedule_ev( &s, 0, &sp ), "INSTDEF without a definition refused" );
+    sp.def = &b; sp.p[0] = 3.0f; check( !synth_schedule_ev( &s, 0, &sp ), "INSTDEF for a basic wave refused" );
+    b.res = 2.0f; sp.p[0] = 20.0f; check( !synth_schedule_ev( &s, 0, &sp ), "INSTDEF with a bad definition refused" );
+    // events dropped with the queue free their snapshots (checked by ASan)
+    b.res = 0.0f; b.osc[0].ratio = 1.0f;
+    synth_schedule_ev( &s, 10 * SEC, &sp ); synth_silencechan( &s, 0, 0 );
+    synth_schedule_ev( &s, 10 * SEC, &sp ); synth_silence( &s, 0 );
+    synth_schedule_ev( &s, 10 * SEC, &sp );
+    synth_cleanup( &s );
+}
+
 static void test_instrument_cpu( void ) {
     // 16 channels of the most expensive presets (3 oscillators + filter) for 4 seconds of audio
     synth_t s; synth_init( &s, RATE );
@@ -915,6 +952,7 @@ int main( void ) {
     test_immediate();
     test_mml_effects();
     test_instruments();
+    test_instrument_snapshots();
     test_instrument_cpu();
     printf( "%d checks, %d failure(s)\n", total, failures );
     return failures;

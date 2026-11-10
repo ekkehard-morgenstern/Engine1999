@@ -264,17 +264,12 @@ void sdlaud_setwave( int chan, int wave ) {
     sdlaud_event( chan, 0.0f, SYNTH_EV_WAVE, 0.0f, 0.0f, (synth_wave_t) wave );
 }
 
-// defines instrument n (4..31) at once (def 0 = the factory instrument); the notes that sound use the new definition from the next sample
-void sdlaud_setinst( int n, const synth_inst_t* def ) {
-    if ( !sdlaud_initok ) return;
-    synth_inst_t fac;
-    if ( def == 0 ) {
-        synth_instpreset( n, &fac );
-        def = &fac;
-    }
-    SDL_LockMutex( sdlaud_mtx );
-    synth_setinst( &sdlaud_synth, n, def );
-    SDL_UnlockMutex( sdlaud_mtx );
+// the channel uses instrument n (4..31) with this definition from the channel's cursor on (a snapshot: the audio engine keeps a copy)
+void sdlaud_setinst( int chan, int n, const synth_inst_t* def ) {
+    synth_evspec_t sp;
+    memset( &sp, 0, sizeof(sp) );
+    sp.type = SYNTH_EV_INSTDEF; sp.p[0] = (float) n; sp.def = def;
+    sdlaud_queue( chan, 0.0f, &sp );
 }
 
 static void sdlaud_setfx( int chan, synth_evtype_t type, float p0, float p1, float p2, float p3 ) {

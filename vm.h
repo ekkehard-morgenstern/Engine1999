@@ -200,7 +200,8 @@ typedef struct _vm_sound_t {
     void    (*sync)( void* usrdata, unsigned chanmask );    // lines up the time of the channels in the mask
     void    (*silence)( void* usrdata, int chan );          // now: drops what is queued for the channel, fades it out; -1 = all
     bool    (*busy)( void* usrdata, int chan );             // the channel sounds, or has events queued / a sequence running
-    void    (*setinst)( void* usrdata, int n, const synth_inst_t* def );    // INSTRUMENT: defines instrument n (4..31); def 0 = the factory one (may be 0: ignored)
+    void    (*setinst)( void* usrdata, int chan, int n, const synth_inst_t* def );   // the channel uses instrument n (4..31) with this definition (a snapshot, queued at the
+                                                                // channel's time like WAVE; may be 0: then setwave( chan, n ) is called and the host's own table is used)
 } vm_sound_t;
 
 #define VM_NUSERTIMERS      4           // AFTER / EVERY timers 0..3
@@ -319,7 +320,8 @@ typedef struct _vm_t {
     bool            (*renumber)( struct _vm_t*, void*, const char* firstlabel, int32_t firstline, const char* lastlabel, int32_t lastline, int32_t step );
     vm_chanstate_t  chanstate[SND_NCHAN];     // what the VM has set on each sound channel (WAVE, ENVELOPE, VIBRATO, TREMOLO, W X ~ ^ of PLAY): SFX gives it back
     bool            sfx_defined[SND_MAXSFX];
-    uint32_t        instdefined;    // bit n: instrument n was defined by the program (RUN / NEW / the end of the VM put the factory one back)
+    uint32_t        instdefined;    // bit n: instrument n was defined by the program (RUN / NEW put the factory one back: bit cleared)
+    synth_inst_t    instdef[SYNTH_NINST];   // ... and its definition (the others are the presets of synth_instpreset())
     mml_t           sfx[SND_MAXSFX];    // the stored sound effects (SFX n, a$), parsed; cleared with the VM
     const vm_sound_t* sound;        // SOUND / PLAY / ...: the host's sound output; 0 = none (arguments are checked, nothing plays)
     const vm_gfx_t*   gfx;          // GFX / SPRITE / ...: the host's graphics output; 0 = none

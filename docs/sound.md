@@ -138,10 +138,23 @@ instruments 4..31 are *subtractive / layered* voices. An instrument (`synth_inst
 **Selecting** (BASIC): `WAVE ch, n` with n = 0..31 (0..3 the basic waves, 4..31 instruments), `W n` or `I n` in a `PLAY` string. It is an event on
 the channel's time line like `WAVE` always was, so it applies at the right place in a sequence; `vm_chanstate_t` keeps it and `SFX` gives it back.
 **Defining**: `INSTRUMENT n, a$` (n = 4..31; 0..3 are fixed: "Illegal argument") parses the definition string at once (a mistake is an error now) and hands the instrument to the host;
-`INSTRUMENT n` puts the factory instrument back (4..19 a preset, 20..31 a plain sine named `USER`). The definition takes effect at once for everything that sounds
-or is queued (it is not an event on a time line: define instruments at the start of the program). A program's instruments are put back to factory when the program run
-ends or is replaced (`RUN`, `NEW`, `LOAD`; `CHAIN` keeps them like the `SFX` definitions). Without a sound output the statement only checks its arguments.
-(C side: `synth_setinst()` etc., the `SYNTH_EV_WAVE` / `SYNTH_EV_INST` events, `vm_sound_t.setinst`, `sdlaud_setinst()`.)
+`INSTRUMENT n` puts the factory instrument back (4..19 a preset, 20..31 a plain sine named `USER`).
+
+**Redefining is queued, like `PLAY` (2026-11-10, owner's design).** The VM keeps the program's definitions. Every time a channel selects an instrument 4..31 (`WAVE`, `W` / `I` in `PLAY`)
+it gets a **snapshot** of the definition as it is *at that moment of the program*, queued on the channel's time line, and the channel plays with its own copy (`SYNTH_EV_INSTDEF`).
+`INSTRUMENT n, def$` stores the new definition and then queues a fresh snapshot, at each channel's own cursor, on every channel that currently uses instrument n. So notes
+queued *before* the statement keep the old sound and notes queued *after* it use the new one, however far ahead the music has been queued and whatever the other channels have queued:
+
+```
+PLAY "I20 O2 L8 CDEF GAB>C"           ' plays with the instrument as it is now
+INSTRUMENT 20, "OSC SQUARE 0.5 1 0 0.2; FILTER 2"
+PLAY "I20 O2 L8 CDEF GAB>C"           ' starts after the first one and uses the new definition (a PLAY without I20 does too: channel 1 still uses 20)
+```
+Channels that use another number are not touched. A change comes at a note boundary, so a note that sounds does not change under you. A program's instruments are put back to
+factory when the program run ends or is replaced (`RUN`, `NEW`, `LOAD`; `CHAIN` keeps them like the `SFX` definitions); channels keep the snapshots they hold until they select something else.
+Without a sound output the statement only checks its arguments.
+(C side: the synth's own table `synth_setinst()` is only the default of `SYNTH_EV_INST` / `SYNTH_EV_WAVE` with a number; the VM uses `SYNTH_EV_INSTDEF` through
+`vm_sound_t.setinst( chan, n, def )` and `sdlaud_setinst( chan, n, def )`.)
 
 Definition string (`mml_parse_inst()`, `mml.h`): commands separated by `;`, values by blanks or commas, case does not matter. It starts from a plain sine instrument:
 
@@ -168,10 +181,10 @@ envelope release in between) only changes the pitch. C API: `synth_setinst( s, n
 they start as a plain sine named `USER`). The percussion presets want a note of about 55 to 220 Hz (`O1 A` .. `O3 A`); their pitch envelopes are relative.
 
 Cost (`synthtest1`, one core, optimized build): 16 channels with the three-oscillator presets + filter = **about 5 % of a core**.
-Tests: `synthtest1` (240 checks): table / names, every preset (finite, audible, peak <= 1, silent after its release), ratio and cents (pitch measured), saw alias level and
+Tests: `synthtest1` (262 checks): table / names, every preset (finite, audible, peak <= 1, silent after its release), ratio and cents (pitch measured), saw alias level and
 amplitude, pulse width harmonics, low-pass attenuation measured with a Goertzel filter, resonance at the limits, pitch envelope, envelope
-precedence, `WAVE` after an instrument identical to the plain wave, validation; also under ASan / UBSan. `vmtest1` (definitions and errors, `WAVE` 4..31, `I` / `W` in `PLAY`, the `SFX` give-back),
-`repltest1`, `asmtest1` (`SND 14` / `15`). The sound log (`ENGINE1999_SOUNDLOG`) shows an `instrument n NAME ...` line for each definition.
+precedence, `WAVE` after an instrument identical to the plain wave, validation; also under ASan / UBSan. `vmtest1` (definitions and errors, `WAVE` 4..31, `I` / `W` in `PLAY`, the `SFX` give-back, the order of a redefinition between two `PLAY`s),
+`repltest1`, `asmtest1` (`SND 14` / `15`). The sound log (`ENGINE1999_SOUNDLOG`) shows an `instrument n NAME ...` line on the channel for each selection / redefinition.
 
 **Not done yet (roadmap 81, steps 3 to 5):** the final list of presets (to agree with the owner), switching `music3d.lib` and the games to instruments. Later: FM operators on the
 same data structure, a polyphonic voice allocator, panning once the output is stereo, `INSTRUMENT$(n)` (the name), a query of the definition.

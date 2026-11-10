@@ -942,13 +942,9 @@ static void host_snd_setwave( void* usrdata, int chan, int wave ) {
     sdlaud_setwave( chan, wave );
 }
 
-static void host_snd_setinst( void* usrdata, int n, const synth_inst_t* def ) {
-    if ( def != 0 ) {
-        snd_logf( -1, "instrument %d %s osc %d gain %g cut %g", n, def->name, def->nosc, (double) def->gain, (double) def->cutmul );
-    } else {
-        snd_logf( -1, "instrument %d factory", n );
-    }
-    sdlaud_setinst( n, def );
+static void host_snd_setinst( void* usrdata, int chan, int n, const synth_inst_t* def ) {
+    snd_logf( chan, "instrument %d %s osc %d gain %g cut %g", n, def->name, def->nosc, (double) def->gain, (double) def->cutmul );
+    sdlaud_setinst( chan, n, def );
 }
 
 static void host_snd_setenv( void* usrdata, int chan, float a, float d, float s, float r ) {

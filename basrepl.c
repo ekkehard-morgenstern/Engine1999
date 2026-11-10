@@ -104,12 +104,14 @@ static void repl_reset_runtime_ex( repl_t* repl, runtime_t* keep ) {
     mml_t sfx[SND_MAXSFX];
     bool sfxdef[SND_MAXSFX];
     uint32_t instdef = 0;
+    synth_inst_t idefs[SYNTH_NINST];
+    memset( idefs, 0, sizeof(idefs) );
     memset( sfx, 0, sizeof(sfx) );
     memset( sfxdef, 0, sizeof(sfxdef) );
     if ( repl->vmready ) {
         if ( keep != 0 ) {
-            instdef = repl->vm.instdefined;         // CHAIN keeps the instruments too (cleanup_vm() would put the factory ones back)
-            repl->vm.instdefined = 0;
+            instdef = repl->vm.instdefined;         // CHAIN keeps the instruments too
+            memcpy( idefs, repl->vm.instdef, sizeof(idefs) );
             memcpy( sfx, repl->vm.sfx, sizeof(sfx) );
             memcpy( sfxdef, repl->vm.sfx_defined, sizeof(sfxdef) );
             memset( repl->vm.sfx, 0, sizeof(repl->vm.sfx) );
@@ -132,6 +134,7 @@ static void repl_reset_runtime_ex( repl_t* repl, runtime_t* keep ) {
         memcpy( repl->vm.sfx, sfx, sizeof(sfx) );
         memcpy( repl->vm.sfx_defined, sfxdef, sizeof(sfxdef) );
         repl->vm.instdefined = instdef;
+        memcpy( repl->vm.instdef, idefs, sizeof(idefs) );
     }
 }
 
@@ -146,6 +149,8 @@ static void repl_restore_runtime( repl_t* repl, runtime_t* old ) {
     memcpy( sfx, repl->vm.sfx, sizeof(sfx) );
     memcpy( sfxdef, repl->vm.sfx_defined, sizeof(sfxdef) );
     uint32_t instdef = repl->vm.instdefined;
+    synth_inst_t idefs[SYNTH_NINST];
+    memcpy( idefs, repl->vm.instdef, sizeof(idefs) );
     memset( repl->vm.sfx, 0, sizeof(repl->vm.sfx) );
     memset( repl->vm.sfx_defined, 0, sizeof(repl->vm.sfx_defined) );
     repl->vm.instdefined = 0;
@@ -154,6 +159,7 @@ static void repl_restore_runtime( repl_t* repl, runtime_t* old ) {
     repl->rt = *old;
     init_vm( &repl->vm, &repl->rt.codegen, &repl->rt.varmem );
     repl->vm.instdefined = instdef;
+    memcpy( repl->vm.instdef, idefs, sizeof(idefs) );
     memcpy( repl->vm.sfx, sfx, sizeof(sfx) );
     memcpy( repl->vm.sfx_defined, sfxdef, sizeof(sfxdef) );
 }

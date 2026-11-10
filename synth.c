@@ -267,11 +267,16 @@ void synth_init( synth_t* s, int rate ) {
     }
 }
 
+static void synth_ev_free( synth_event_t* ev ) {
+    free( ev->def );
+    free( ev );
+}
+
 static void synth_dropevents( synth_t* s ) {
     while ( s->events != 0 ) {
         synth_event_t* ev = s->events;
         s->events = ev->next;
-        free( ev );
+        synth_ev_free( ev );
     }
     s->tail = 0;
     s->nevents = 0;
@@ -344,6 +349,11 @@ bool synth_schedule_ev( synth_t* s, uint64_t when, const synth_evspec_t* sp ) {
                 return false;
             }
             break;
+        case SYNTH_EV_INSTDEF:
+            if ( !( sp->p[0] >= (float) SYNTH_NBASIC && sp->p[0] < (float) SYNTH_NINST ) || sp->def == 0 || !synth_instvalid( sp->def ) ) {
+                return false;
+            }
+            break;
         case SYNTH_EV_VIB:
             if ( !( sp->p[0] >= 0.0f && sp->p[0] <= 100.0f && sp->p[1] >= 0.0f && sp->p[1] <= 24.0f ) ) {
                 return false;
@@ -363,6 +373,17 @@ bool synth_schedule_ev( synth_t* s, uint64_t when, const synth_evspec_t* sp ) {
     }
     ev->next = 0; ev->when = when; ev->type = sp->type; ev->chan = sp->chan; ev->freq = sp->freq; ev->vol = sp->vol;
     ev->wave = sp->wave; ev->freq2 = sp->freq2; ev->dur = sp->dur; memcpy( ev->p, sp->p, sizeof(ev->p) );
+    ev->def = 0;
+    if ( sp->type == SYNTH_EV_INSTDEF ) {
+        ev->def = (synth_inst_t*) malloc( sizeof(*ev->def) );
+        if ( ev->def == 0 ) {
+            free( ev );
+            return false;
+        }
+        *ev->def = *sp->def;
+        ev->def->name[SYNTH_INST_NAMELEN-1] = '\0';
+        synth_inst_derive( ev->def );
+    }
     if ( s->tail == 0 || s->tail->when <= when ) {     // the usual case: a sequence is queued in time order
         if ( s->tail == 0 ) s->events = ev; else s->tail->next = ev;
         s->tail = ev;
@@ -421,12 +442,23 @@ static void synth_env_config( synth_t* s, synth_chan_t* c, bool on, float a, flo
 static void synth_env_resolve( synth_t* s, synth_chan_t* c ) {
     if ( c->uenv_on ) {
         synth_env_config( s, c, true, c->uenv[0], c->uenv[1], c->uenv[2], c->uenv[3] );
-    } else if ( c->inst >= SYNTH_NBASIC && s->inst[c->inst].env ) {
-        const synth_inst_t* d = &s->inst[c->inst];
+    } else if ( c->inst >= SYNTH_NBASIC && c->cinst.env ) {
+        const synth_inst_t* d = &c->cinst;
         synth_env_config( s, c, true, d->a, d->d, d->s, d->r );
     } else {
         synth_env_config( s, c, false, 0.0f, 0.0f, 0.0f, 0.0f );
     }
+}
+
+// the channel uses instrument n: a basic wave, or (4..31) a copy of def (0 = the synth's table entry)
+static void synth_select( synth_t* s, synth_chan_t* c, int n, const synth_inst_t* def ) {
+    if ( n < SYNTH_NBASIC ) {
+        c->osc.wave = (synth_wave_t) n;
+    } else {
+        c->cinst = def != 0 ? *def : s->inst[n];
+    }
+    c->inst = n;
+    synth_env_resolve( s, c );
 }
 
 static void synth_apply( synth_t* s, const synth_event_t* ev ) {
@@ -439,7 +471,7 @@ static void synth_apply( synth_t* s, const synth_event_t* ev ) {
                 c->vib_phase = 0.0; c->trem_phase = 0.0;
             }
             if ( c->inst >= SYNTH_NBASIC ) {
-                const synth_inst_t* in = &s->inst[c->inst];
+                const synth_inst_t* in = &c->cinst;
                 bool retrig = !wason || ( c->env_on && ( c->envstate == SYNTH_ENV_RELEASE || c->envstate == SYNTH_ENV_IDLE ) );
                 if ( !wason && c->gain == 0.0f ) {
                     for ( int k=0; k < SYNTH_INST_NOSC; ++k ) c->iosc[k].phase = 0.0;
@@ -474,22 +506,15 @@ static void synth_apply( synth_t* s, const synth_event_t* ev ) {
         case SYNTH_EV_STOP:
             synth_release( s, c );
             break;
-        case SYNTH_EV_WAVE: {
-            int n = (int) ev->wave;
-            if ( n < SYNTH_NBASIC ) c->osc.wave = (synth_wave_t) n;
-            if ( c->inst != n ) {
-                c->inst = n;
-                synth_env_resolve( s, c );
-            }
+        case SYNTH_EV_WAVE:
+            synth_select( s, c, (int) ev->wave, 0 );
             break;
-        }
-        case SYNTH_EV_INST: {
-            int n = (int) ev->p[0];
-            if ( n < SYNTH_NBASIC ) c->osc.wave = (synth_wave_t) n;
-            c->inst = n;
-            synth_env_resolve( s, c );
+        case SYNTH_EV_INST:
+            synth_select( s, c, (int) ev->p[0], 0 );
             break;
-        }
+        case SYNTH_EV_INSTDEF:
+            synth_select( s, c, (int) ev->p[0], ev->def );
+            break;
         case SYNTH_EV_ENV:
             if ( ev->p[0] < 0.0f ) {
                 c->uenv_on = false;
@@ -537,7 +562,7 @@ int synth_runevents( synth_t* s, uint64_t now ) {
         if ( s->events == 0 ) s->tail = 0;
         --s->nevents;
         synth_apply( s, ev );
-        free( ev );
+        synth_ev_free( ev );
         ++n;
     }
     return n;
@@ -576,7 +601,7 @@ void synth_silencechan( synth_t* s, int chan, uint64_t now ) {
         synth_event_t* ev = *pp;
         if ( ev->chan == chan ) {
             *pp = ev->next;
-            free( ev );
+            synth_ev_free( ev );
             --s->nevents;
         } else {
             s->tail = ev;
@@ -656,7 +681,7 @@ void synth_render( synth_t* s, float* buf, int count ) {
                     c->basestep = c->glide_end;
                 }
             }
-            const synth_inst_t* in = c->inst >= SYNTH_NBASIC ? &s->inst[c->inst] : 0;
+            const synth_inst_t* in = c->inst >= SYNTH_NBASIC ? &c->cinst : 0;
             float vdepth = c->vib_depth, vrate = c->vib_rate;
             if ( vdepth <= 0.0f && in != 0 ) {      // the instrument's own vibrato, if the program set none
                 vdepth = in->vibdepth; vrate = in->vibrate;

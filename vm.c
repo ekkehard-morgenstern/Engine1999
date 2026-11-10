@@ -256,12 +256,7 @@ void cleanup_vm( vm_t* vm ) {
         mml_free( &vm->sfx[i] );
         vm->sfx_defined[i] = false;
     }
-    if ( vm->sound != 0 && vm->sound->setinst != 0 ) {      // the program's instruments go (the factory ones come back)
-        for ( int n=SYNTH_NBASIC; n < SYNTH_NINST; ++n ) {
-            if ( ( vm->instdefined & ( UINT32_C(1) << n ) ) != 0 ) vm->sound->setinst( vm->userdata, n, 0 );
-        }
-    }
-    vm->instdefined = 0;
+    vm->instdefined = 0;                                    // the program's instruments go (the channels keep the snapshots they hold)
     vm_clear_request( vm );
     vm_clear_stacks( vm );
     free( vm->dstack );
@@ -2274,8 +2269,24 @@ static bool vm_sound_channel( vm_t* vm, double num, int* pchan ) {
 }
 
 // the sound settings of a channel: every change goes through these, so that the VM knows what a channel was set to
+// the definition of instrument n (4..31) as it is now: the program's own or the factory preset
+static void vm_inst_get( const vm_t* vm, int n, synth_inst_t* def ) {
+    if ( ( vm->instdefined & ( UINT32_C(1) << n ) ) != 0 ) {
+        *def = vm->instdef[n];
+    } else {
+        synth_instpreset( n, def );
+    }
+}
+
+// wave 4..31 = an instrument: the channel gets a snapshot of its current definition, queued at the channel's time like a wave change
 static void vm_set_wave( vm_t* vm, int chan, int wave ) {
-    vm->sound->setwave( vm->userdata, chan, wave );
+    if ( wave >= SYNTH_NBASIC && vm->sound->setinst != 0 ) {
+        synth_inst_t def;
+        vm_inst_get( vm, wave, &def );
+        vm->sound->setinst( vm->userdata, chan, wave, &def );
+    } else {
+        vm->sound->setwave( vm->userdata, chan, wave );
+    }
     vm->chanstate[chan].wave = wave;
 }
 
@@ -3091,8 +3102,19 @@ static bool vm_instrument( vm_t* vm, bool define ) {
         ok = vm_error( vm, err );
     } else {
         uint32_t bit = UINT32_C(1) << (int) n;
-        if ( vm->sound != 0 && vm->sound->setinst != 0 ) vm->sound->setinst( vm->userdata, (int) n, define ? &def : 0 );
-        if ( define ) vm->instdefined |= bit; else vm->instdefined &= ~bit;
+        if ( define ) {
+            vm->instdef[(int) n] = def;
+            vm->instdefined |= bit;
+        } else {
+            vm->instdefined &= ~bit;
+        }
+        // the channels that use the instrument switch to the new definition at their own time (after what they have queued):
+        // notes queued before keep the old one, notes queued after use the new one, like PLAY
+        if ( vm->sound != 0 && vm->sound->setinst != 0 ) {
+            for ( int c=0; c < SND_NCHAN; ++c ) {
+                if ( vm->chanstate[c].wave == (int) n ) vm_set_wave( vm, c, (int) n );
+            }
+        }
     }
     free( str );
     return ok;

@@ -119,7 +119,10 @@ typedef enum _synth_evtype_t {
     SYNTH_EV_ENV,                       // envelope: p[0..3] = attack s, decay s, sustain level, release s; p[0] < 0 = off
     SYNTH_EV_VIB,                       // vibrato: p[0] = rate Hz, p[1] = depth in semitones (0 = off)
     SYNTH_EV_TREM,                      // tremolo: p[0] = rate Hz, p[1] = depth 0..1 (0 = off)
-    SYNTH_EV_INST                       // select the instrument p[0] = 0 .. SYNTH_NINST-1 (0..3: the basic waves)
+    SYNTH_EV_INST,                      // select the instrument p[0] = 0 .. SYNTH_NINST-1 (0..3: the basic waves; 4..31: the channel takes a copy of the
+                                        // synth's table entry n at that moment)
+    SYNTH_EV_INSTDEF                    // select the instrument p[0] = 4..31 with the definition in "def" (a snapshot: the channel keeps its own copy,
+                                        // so a later definition of the same number does not change the notes that are queued before it)
 } synth_evtype_t;
 
 typedef enum _synth_envstate_t {
@@ -137,6 +140,7 @@ typedef struct _synth_osc_t {           // one oscillator (the building block of
 typedef struct _synth_chan_t {
     synth_osc_t     osc;
     int             inst;               // the instrument (0..3 = the basic wave in osc.wave)
+    synth_inst_t    cinst;              // the channel's own copy of the instrument in use (inst >= SYNTH_NBASIC)
     synth_osc_t     iosc[SYNTH_INST_NOSC];  // instrument oscillators
     double          fic1, fic2;         // low-pass state (TPT state variable filter: unconditionally stable)
     double          fa1, fa2, fa3;      // its coefficients (set every 32 samples)
@@ -171,7 +175,8 @@ typedef struct _synth_event_t {
     synth_wave_t            wave;
     float                   freq2;      // PLAY: the glide ends at this frequency (0 = no glide) after dur ns
     uint64_t                dur;
-    float                   p[4];       // ENV, VIB, TREM
+    float                   p[4];       // ENV, VIB, TREM, INST
+    synth_inst_t*           def;        // INSTDEF: the snapshot (owned)
 } synth_event_t;
 
 typedef struct _synth_evspec_t {        // what synth_schedule_ev() queues (unused fields 0)
@@ -181,6 +186,7 @@ typedef struct _synth_evspec_t {        // what synth_schedule_ev() queues (unus
     synth_wave_t            wave;
     uint64_t                dur;
     float                   p[4];
+    const synth_inst_t*     def;        // INSTDEF (copied)
 } synth_evspec_t;
 
 typedef struct _synth_t {
@@ -220,7 +226,8 @@ bool synth_busy( const synth_t* s, int chan, uint64_t now );   // the channel so
 void synth_silencechan( synth_t* s, int chan, uint64_t now );   // the same for one channel
 void synth_silence( synth_t* s, uint64_t now );     // drops all queued events, fades all channels out, resets the cursors
 
-// instruments: 0..3 are fixed; 4..31 can be redefined (false if n or a field is out of range; "name" may be 0)
+// instruments: 0..3 are fixed; 4..31 can be redefined. The table is the default of SYNTH_EV_INST / SYNTH_EV_WAVE with a number; a channel
+// plays with its own copy (see SYNTH_EV_INSTDEF). (false if n or a field is out of range; "name" may be 0)
 bool synth_setinst( synth_t* s, int n, const synth_inst_t* def );
 bool synth_instvalid( const synth_inst_t* def );                // every field in range (what synth_setinst() checks)
 const synth_inst_t* synth_getinst( const synth_t* s, int n );   // 0 if n is out of range or 0..3

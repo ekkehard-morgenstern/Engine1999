@@ -21,7 +21,7 @@
 170 P=INSTR("ASDFGHJK",K$)
 180 IF P>0 THEN PLAY "I"+STR$(INS)+" O"+STR$(OC)+" L2 "+MID$("CDEFGAB",P,1):IF P=8 THEN PLAY "I"+STR$(INS)+" O"+STR$(OC+1)+" L2 C"
 190 IF K$="T" THEN GOSUB 600
-200 IF K$="D" THEN GOSUB 700
+200 IF K$="U" THEN GOSUB 700
 210 GOSUB 500
 220 GOTO 100
 500 ' the screen
@@ -34,7 +34,7 @@
 570 NEXT I
 580 PRINT
 590 PRINT "N/P instrument  +/- octave ";OC
-595 PRINT "A S D F G H J K play C D E F G A B C   T tune   D demo   Q quit"
+595 PRINT "A S D F G H J K play C D E F G A B C   T tune   U demo   Q quit"
 599 RETURN
 600 ' a short tune with the selected instrument
 610 PLAY "I"+STR$(INS)+" T130 O"+STR$(OC)+" L8 CEGE CEG4 FA>C<A FAC4 GBDG4"

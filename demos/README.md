@@ -13,7 +13,7 @@ The editors (`spriteed`, `musiced`, `sfxed`) are **tools** now: they live in the
 
 | File | What it is |
 |---|---|
-| `instruments.bas` | An instrument board: the 16 factory instruments of the synthesizer (`WAVE ch,4..19`, `I n` in `PLAY`) and one of your own defined with `INSTRUMENT`: N / P choose the instrument, A S D F G H J K play a scale, + / - the octave, T a short tune, D a little band (bass, pad, lead, drums), Q quits. Window or console (the console host only checks the strings). |
+| `instruments.bas` | An instrument board: the 16 factory instruments of the synthesizer (`WAVE ch,4..19`, `I n` in `PLAY`) and one of your own defined with `INSTRUMENT`: N / P choose the instrument, A S D F G H J K play a scale, + / - the octave, T a short tune, U a little band (bass, pad, lead, drums), Q quits. Window or console (the console host only checks the strings). |
 | `sfx.bas` | A sound effect board: press 1-9 for laser, explosion, power-up, coin, jump, siren, alarm, laser burst and footsteps, 0 for an engine whose pitch and volume are driven from the program (`PITCH`, `VOLUME`), Q to quit. The effects are stored with `SFX` and use glides, envelopes, vibrato and the noise wave. |
 | `gfx.bas` | Graphics: palettes, the graphics layer (lines, circle, arc, paint, text, `DRAW`), a tile screen, a sprite defined with `DESIGN` rows that moves by itself with `MOVETO`, text screen areas. |
 | `mathplot.bas` | Math on one screen: a shaded surface of ripples (`SIN`, `COS`, `SQR`, a 64 color palette from `GFX PALETTE` and `RGB`) and graphs of SIN / COS and SQR / LOG / ATN drawn with `GFX PSET`. Window only; any key ends. |

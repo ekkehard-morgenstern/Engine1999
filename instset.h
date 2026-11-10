@@ -365,7 +365,7 @@ The 4096 extended instructions are as follows:
                             12 SFXDEF ( n s -- )               store the music string s as effect n (1..64)
                             13 SFXPLAY ( n ch -- )             play effect n on channel ch (0 = a free one)
                             14 INSTDEF ( n s -- )              define instrument n (4..31) from the definition string s (mml_parse_inst(), see mml.h);
-                              the host gets it through vm_sound_t.setinst
+                              the VM keeps it; the channels that use n get a snapshot queued at their own time (vm_sound_t.setinst)
                             15 INSTRESET ( n -- )              the factory instrument n (4..31) again
                             Everything but 7 and 8 is queued at the channel's time line; all return at once. Without sound
                             callbacks the arguments are only checked. A bad argument is "Illegal argument".
