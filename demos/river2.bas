@@ -1268,11 +1268,13 @@
 12550   PX=300:PY=226:PM=0:INV=0:UB=0:FRM=0
 12560   SPRITE 0,ON:SH(0)=1
 12570   DONE=0
+12575   CALL TITLEMUSIC
 12579   CALL IN_WAITRELEASE
 12580   REPEAT
 12590     GFX VSYNC
 12600     FRM=FRM+1
 12601     CALL AMBIENT
+12605     CALL TITLETICK
 12610     CALL SCROLL(1.2)
 12620     N1=INT((W+311-PY)/24)
 12630     PX=PX+(FN MIDRIV(N1)*16-PX)*0.05
@@ -1283,6 +1285,7 @@
 12680     IF K=32 OR K=13 OR FN IN_ANYA(0) OR FN IN_ANYSTART(0) THEN DONE=-1
 12690     IF K=81 OR FN IN_ANYBACK(0) THEN QT=1:DONE=-1
 12700   UNTIL DONE
+12705   CALL TITLEOFF
 12710   WHILE FN IN_ANYSTART(0) OR FN IN_ANYBACK(0) OR FN IN_ANYA(0)
 12720     GFX VSYNC
 12730   WEND
@@ -1448,3 +1451,23 @@
 14780     E=SPRITE("EVENT")
 14790   WEND
 14800 END PROC
+14900 ' ====================================================================== the title music
+14910 ' A slow, floating barcarolle in C major (6/8, 72 beats a minute, 12 bars = 30 seconds): a pad on channel 1, a rocking arpeggio on channel 2 and a wandering melody
+14920 ' on channel 3, over the chords C, A minor, F, G (like the game music, but in a fixed tune). It loops while the title waits: TITLETICK queues the next round shortly
+14930 ' before the last one ends (TI counts 1/60 s), so there is no gap. The game music (channels 4 to 6) starts when the game does.
+14940 PROC TITLEPLAY
+14950   PLAY "T72 I6 V0.18 ML O3 E2. E2. A2. B2. E2. E2. A2. B2. E2. A2. B2. E2.","T72 I19 V0.09 ML O4 L8 C E G E G E C E A E A E C F A F A F D G B G B G C E G E G E C E A E A E D F A F A F D G B G B G C E G E G E C F A F A F D G B G B G C E G E G E","T72 I9 V0.18 MN O5 L8 E4. G4. A4. G4. A4. E4. D4. G4. E G A G E D E4. C4. D F A F D F D4. G4. E4. G4. A4. F4. G A G E D E C4. R4."
+14960 END PROC
+14970 PROC TITLEMUSIC
+14980   CALL TITLEPLAY
+14990   TTNEXT=TI+1800
+15000 END PROC
+15010 PROC TITLETICK
+15020   IF TI>=TTNEXT-40 THEN
+15030     CALL TITLEPLAY
+15040     TTNEXT=TTNEXT+1800
+15050   END IF
+15060 END PROC
+15070 PROC TITLEOFF
+15080   SOUND OFF 1:SOUND OFF 2:SOUND OFF 3
+15090 END PROC
