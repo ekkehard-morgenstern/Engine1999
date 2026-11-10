@@ -15,6 +15,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 - Roadmap: added items 82 (screenshot key, `SCREENSHOT`) and 83 (AV capture subsystem: lock-free timestamped queue, AV thread, WAV / BMP writers, ffmpeg for the final files, `BEGIN ... CAPTURE` statements) from the owner's description; rows in `docs/roadmap/graphics-and-ui.md`, lines in `docs/roadmap.md`. Docs only, no code, no tests.
 - Roadmap item 83: recorded the owner's answers to the open design points (composed screen data sent directly, ffmpeg pipe, extension words, held-items list in the AV thread with user questions via the UI library and remembered grants, console render thread for `engine1999c`). Docs only. Amended: pure audio streams are piped to ffmpeg too.
+- Roadmap (`docs/roadmap/sound.md`): ticked "Check that sound effects do not get lost" and "Owner to check the other games for sound changes" on the owner's word (he played all games for days, no problems). Docs only; `SESSION.md` sound line updated.
 - Roadmap item 80: noted the SDL2 API check (version 2 context attributes, `SDL_GL_LoadLibrary`, no call for the library path) and the analysis of OpenGL as the main renderer (layers are already GPU textures; conversion measured at about 100 us per 640 x 300 layer with a scratch benchmark, not kept; recommendation: keep SDL renderer). Docs only.
 - Roadmap item 80: noted the answer on 8 bpp textures in OpenGL 2 / ES 2 (one-channel `GL_LUMINANCE8`, no paletted textures, shader palette lookup). Docs only.
 
