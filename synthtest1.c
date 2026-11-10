@@ -721,7 +721,7 @@ static void test_instruments( void ) {
     float* buf = (float*) malloc( sizeof(float) * RATE );
     synth_render( &s, buf, RATE );
     check( near( measure( buf, RATE ), 880.0, 0.5 ), "ratio 2 sounds an octave up" );
-    check( near( peak( buf, 2000, RATE ), 0.5, 0.002 ), "a plain instrument has the volume's peak" );
+    check( near( peak( buf, 2000, RATE ), 0.5, 0.03 ) && peak( buf, 2000, RATE ) <= 0.5f, "a plain instrument peaks at about the volume (the soft limiter takes a few % off the top)" );
     synth_cleanup( &s );
     d.osc[0].ratio = 1.0f; d.osc[0].cents = 1200.0f;
     synth_init( &s, RATE ); synth_setinst( &s, 20, &d );
@@ -812,7 +812,7 @@ static void test_instruments( void ) {
         float early = peak( buf, 0, 441 );          // first 10 ms
         snprintf( nm, sizeof(nm), "instrument envelope mode %d: first 10 ms peak %.3f", mode, early );
         check( mode == 1 ? early > 0.9f : early < 0.2f, nm );
-        check( mode == 0 ? near( peak( buf, RATE - 2000, RATE ), 1.0, 0.01 ) : true, "attack reaches full level" );
+        check( mode == 0 ? near( peak( buf, RATE - 2000, RATE ), 1.0, 0.06 ) : true, "attack reaches full level" );
         synth_cleanup( &s );
     }
 
@@ -871,6 +871,24 @@ static void test_instruments( void ) {
         check( !mml_parse_inst( "GAIN 1 ?", &in, err ), "inst string: stray character" );
         check( !mml_parse_inst( "FILTER 70", &in, err ), "inst string: cutoff range" );
         check( mml_parse_inst( "NAME ABCDEFGHIJKLMNOP", &in, err ) && strlen( in.name ) == SYNTH_INST_NAMELEN - 1, "inst string: long name is cut" );
+    }
+}
+
+static void test_preset_loudness( void ) {
+    // the presets are calibrated: a one-second note at volume 1 (A3, A1 for the low drums) has the same RMS (about 0.34) in every preset and never exceeds the volume (a soft limiter in the instrument path),
+    // so that the volume V of a PLAY string means about the same for every instrument
+    synth_t s;
+    for ( int i=SYNTH_NBASIC; i < SYNTH_NBASIC + SYNTH_NPRESET; ++i ) {
+        int n; float* b = inst_note( &s, i, i == 13 || i == 16 ? 55.0f : 220.0f, 1.0f, 1.0, 4.0, &n );
+        double e = 0; long cnt = 0; float pk = 0.0f;
+        for ( int k=0; k < n; ++k ) {
+            if ( fabsf( b[k] ) > 0.0005f ) { e += (double) b[k] * b[k]; ++cnt; }
+            if ( fabsf( b[k] ) > pk ) pk = fabsf( b[k] );
+        }
+        double rms = cnt > 0 ? sqrt( e / (double) cnt ) : 0.0;
+        char name[100]; snprintf( name, sizeof(name), "preset %d %s loudness: rms %.3f (0.30..0.38), peak %.3f (<= 1.0)", i, synth_instname( &s, i ), rms, (double) pk );
+        check( rms >= 0.30 && rms <= 0.38 && pk <= 1.0f, name );
+        free( b ); synth_cleanup( &s );
     }
 }
 
@@ -952,6 +970,7 @@ int main( void ) {
     test_immediate();
     test_mml_effects();
     test_instruments();
+    test_preset_loudness();
     test_instrument_snapshots();
     test_instrument_cpu();
     printf( "%d checks, %d failure(s)\n", total, failures );

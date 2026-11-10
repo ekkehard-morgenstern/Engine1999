@@ -102,7 +102,7 @@ typedef struct _synth_inst_t {
     char            name[SYNTH_INST_NAMELEN];
     int             nosc;               // 1..SYNTH_INST_NOSC
     synth_iosc_t    osc[SYNTH_INST_NOSC];
-    float           gain;               // 0..4, overall
+    float           gain;               // 0..4, the drive into a soft limiter (untouched up to 0.8, never above 1.0): louder on average, peaks within the volume
     float           cutmul;             // low-pass cutoff = note frequency * cutmul (0 = no filter), 0..64
     float           res;                // resonance 0..0.95
     float           fenv, fdecay;       // filter envelope: starts fenv octaves (-6..6) above the cutoff, decays with time constant fdecay s (0..10)

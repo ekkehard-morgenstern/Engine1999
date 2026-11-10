@@ -99,37 +99,37 @@ static float synth_osc_next( synth_osc_t* o ) {
 static const synth_inst_t synth_presets[SYNTH_NPRESET] = {
     // name, nosc, osc[3], gain, cutmul, res, fenv, fdecay, pitch, pitchtime, env, a, d, s, r, vibrate, vibdepth
     { "BASS", 2, { O( SYNTH_SAW, 0.8f, 1.0f, 0.0f, 0.5f ), O( SYNTH_SQUARE, 0.6f, 0.5f, 0.0f, 0.5f ), NOOSC },
-      0.6f, 3.0f, 0.30f, 2.0f, 0.15f, 0.0f, 0.0f, true, 0.005f, 0.20f, 0.60f, 0.10f, 0.0f, 0.0f },
+      0.76f, 3.0f, 0.30f, 2.0f, 0.15f, 0.0f, 0.0f, true, 0.005f, 0.20f, 0.60f, 0.10f, 0.0f, 0.0f },
     { "LEAD", 2, { O( SYNTH_SQUARE, 0.6f, 1.0f, 0.0f, 0.25f ), O( SYNTH_SAW, 0.4f, 1.0f, 7.0f, 0.5f ), NOOSC },
-      0.5f, 6.0f, 0.10f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.01f, 0.10f, 0.70f, 0.15f, 5.5f, 0.15f },
+      0.83f, 6.0f, 0.10f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.01f, 0.10f, 0.70f, 0.15f, 5.5f, 0.15f },
     { "PAD", 3, { O( SYNTH_SAW, 0.33f, 1.0f, -9.0f, 0.5f ), O( SYNTH_SAW, 0.33f, 1.0f, 0.0f, 0.5f ), O( SYNTH_SAW, 0.33f, 1.0f, 9.0f, 0.5f ) },
-      0.6f, 3.0f, 0.10f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.50f, 0.30f, 0.80f, 0.80f, 0.0f, 0.0f },
+      2.50f, 3.0f, 0.10f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.50f, 0.30f, 0.80f, 0.80f, 0.0f, 0.0f },
     { "PLUCK", 2, { O( SYNTH_SAW, 0.7f, 1.0f, 0.0f, 0.5f ), O( SYNTH_SQUARE, 0.4f, 1.0f, 5.0f, 0.5f ), NOOSC },
-      0.6f, 8.0f, 0.20f, 2.5f, 0.12f, 0.0f, 0.0f, true, 0.0f, 0.25f, 0.0f, 0.10f, 0.0f, 0.0f },
+      2.86f, 8.0f, 0.20f, 2.5f, 0.12f, 0.0f, 0.0f, true, 0.0f, 0.25f, 0.0f, 0.10f, 0.0f, 0.0f },
     { "ORGAN", 3, { O( SYNTH_SINE, 0.5f, 1.0f, 0.0f, 0.5f ), O( SYNTH_SINE, 0.3f, 2.0f, 0.0f, 0.5f ), O( SYNTH_SINE, 0.2f, 3.0f, 0.0f, 0.5f ) },
-      0.8f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.01f, 0.0f, 1.0f, 0.05f, 0.0f, 0.0f },
+      0.79f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.01f, 0.0f, 1.0f, 0.05f, 0.0f, 0.0f },
     { "STRINGS", 3, { O( SYNTH_SAW, 0.33f, 1.0f, -12.0f, 0.5f ), O( SYNTH_SAW, 0.33f, 1.0f, 0.0f, 0.5f ), O( SYNTH_SAW, 0.33f, 1.0f, 12.0f, 0.5f ) },
-      0.6f, 4.0f, 0.05f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.35f, 0.20f, 0.85f, 0.40f, 5.0f, 0.10f },
+      2.03f, 4.0f, 0.05f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.35f, 0.20f, 0.85f, 0.40f, 5.0f, 0.10f },
     { "BRASS", 2, { O( SYNTH_SAW, 0.5f, 1.0f, -4.0f, 0.5f ), O( SYNTH_SAW, 0.5f, 1.0f, 4.0f, 0.5f ), NOOSC },
-      0.6f, 2.0f, 0.10f, 2.5f, 0.25f, 0.0f, 0.0f, true, 0.06f, 0.15f, 0.80f, 0.10f, 0.0f, 0.0f },
+      1.33f, 2.0f, 0.10f, 2.5f, 0.25f, 0.0f, 0.0f, true, 0.06f, 0.15f, 0.80f, 0.10f, 0.0f, 0.0f },
     { "FLUTE", 2, { O( SYNTH_SINE, 0.9f, 1.0f, 0.0f, 0.5f ), O( SYNTH_NOISE, 0.08f, 8.0f, 0.0f, 0.5f ), NOOSC },
-      0.8f, 4.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.08f, 0.05f, 0.90f, 0.15f, 5.0f, 0.20f },
+      0.67f, 4.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.08f, 0.05f, 0.90f, 0.15f, 5.0f, 0.20f },
     { "BELL", 3, { O( SYNTH_SINE, 0.5f, 1.0f, 0.0f, 0.5f ), O( SYNTH_SINE, 0.3f, 2.76f, 0.0f, 0.5f ), O( SYNTH_SINE, 0.2f, 5.4f, 0.0f, 0.5f ) },
-      0.8f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.0f, 1.50f, 0.0f, 1.00f, 0.0f, 0.0f },
+      1.77f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.0f, 1.50f, 0.0f, 1.00f, 0.0f, 0.0f },
     { "KICK", 1, { O( SYNTH_SINE, 1.0f, 1.0f, 0.0f, 0.5f ), NOOSC, NOOSC },
-      0.9f, 0.0f, 0.0f, 0.0f, 0.0f, 24.0f, 0.06f, true, 0.0f, 0.25f, 0.0f, 0.02f, 0.0f, 0.0f },
+      0.84f, 0.0f, 0.0f, 0.0f, 0.0f, 24.0f, 0.06f, true, 0.0f, 0.25f, 0.0f, 0.02f, 0.0f, 0.0f },
     { "SNARE", 2, { O( SYNTH_NOISE, 0.8f, 0.0f, 0.0f, 0.5f ), O( SYNTH_TRIANGLE, 0.4f, 1.0f, 0.0f, 0.5f ), NOOSC },
-      0.7f, 0.0f, 0.0f, 0.0f, 0.0f, 6.0f, 0.03f, true, 0.0f, 0.18f, 0.0f, 0.02f, 0.0f, 0.0f },
+      1.22f, 0.0f, 0.0f, 0.0f, 0.0f, 6.0f, 0.03f, true, 0.0f, 0.18f, 0.0f, 0.02f, 0.0f, 0.0f },
     { "HIHAT", 1, { O( SYNTH_NOISE, 1.0f, 0.0f, 0.0f, 0.5f ), NOOSC, NOOSC },
-      0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.0f, 0.05f, 0.0f, 0.01f, 0.0f, 0.0f },
+      1.09f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.0f, 0.05f, 0.0f, 0.01f, 0.0f, 0.0f },
     { "TOM", 1, { O( SYNTH_SINE, 1.0f, 1.0f, 0.0f, 0.5f ), NOOSC, NOOSC },
-      0.9f, 0.0f, 0.0f, 0.0f, 0.0f, 12.0f, 0.10f, true, 0.0f, 0.35f, 0.0f, 0.02f, 0.0f, 0.0f },
+      0.84f, 0.0f, 0.0f, 0.0f, 0.0f, 12.0f, 0.10f, true, 0.0f, 0.35f, 0.0f, 0.02f, 0.0f, 0.0f },
     { "CLAP", 1, { O( SYNTH_NOISE, 1.0f, 0.0f, 0.0f, 0.5f ), NOOSC, NOOSC },
-      0.7f, 8.0f, 0.50f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.0f, 0.12f, 0.0f, 0.02f, 0.0f, 0.0f },
+      3.42f, 8.0f, 0.50f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.0f, 0.12f, 0.0f, 0.02f, 0.0f, 0.0f },
     { "ZAP", 2, { O( SYNTH_SAW, 0.7f, 1.0f, 0.0f, 0.5f ), O( SYNTH_SQUARE, 0.4f, 1.0f, 0.0f, 0.3f ), NOOSC },
-      0.5f, 6.0f, 0.40f, 1.5f, 0.10f, 36.0f, 0.10f, true, 0.0f, 0.20f, 0.0f, 0.05f, 0.0f, 0.0f },
+      2.44f, 6.0f, 0.40f, 1.5f, 0.10f, 36.0f, 0.10f, true, 0.0f, 0.20f, 0.0f, 0.05f, 0.0f, 0.0f },
     { "EPIANO", 2, { O( SYNTH_SINE, 0.7f, 1.0f, 0.0f, 0.5f ), O( SYNTH_SINE, 0.25f, 14.0f, 0.0f, 0.5f ), NOOSC },
-      0.8f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.0f, 0.80f, 0.15f, 0.30f, 0.0f, 0.0f }
+      1.42f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.0f, 0.80f, 0.15f, 0.30f, 0.0f, 0.0f }
 };
 
 void synth_instdefault( synth_inst_t* d ) {
@@ -206,6 +206,17 @@ static float synth_blep( double t, double dt ) {
         return (float)( t * t + t + t + 1.0 );
     }
     return 0.0f;
+}
+
+// soft limiter of the instrument path: untouched up to 0.8, then compressed smoothly towards 1.0 (never above), so that an instrument with a
+// high gain (drive) is louder on average but its peaks stay within the volume asked for
+static float synth_softlimit( float x ) {
+    float a = fabsf( x );
+    if ( a <= 0.8f ) {
+        return x;
+    }
+    float r = 0.8f + 0.2f * tanhf( ( a - 0.8f ) * 5.0f );
+    return x < 0.0f ? -r : r;
 }
 
 // one sample of an instrument oscillator (-1 .. 1), then advances its phase; step = the note's phase step
@@ -728,7 +739,7 @@ void synth_render( synth_t* s, float* buf, int count ) {
                     c->fic2 = 2.0 * v2 - c->fic2;
                     x = (float) v2;
                 }
-                v = x * in->gain * level;
+                v = synth_softlimit( x * in->gain ) * level;
             }
             sum += v;
             if ( fabsf( v ) > s->peak[i] ) s->peak[i] = fabsf( v );

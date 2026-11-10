@@ -855,7 +855,7 @@ static const testcase_t cases[] = {
     { "SOUND in a program",     "10 FOR C=1 TO 2\n20 SOUND C,100*C,1\n30 NEXT C", "<tone 0 100 0.5 1>\n<tone 1 200 0.5 1>\n" },
     { "WAVE",                   "WAVE 2,1",                                        "<wave 1 1>\n" },
     { "WAVE noise",             "WAVE 1,3",                                        "<wave 0 3>\n" },
-    { "WAVE instrument",        "WAVE 1,4",                                        "<inst 0 4 BASS w4 osc 2 gain 0.6 cut 3 res 0.3 pitch 0 env 1>\n" },
+    { "WAVE instrument",        "WAVE 1,4",                                        "<inst 0 4 BASS factory>\n" },
     { "WAVE instrument 31",     "WAVE 1,31",                                       "<inst 0 31  w0 osc 1 gain 1 cut 0 res 0 pitch 0 env 0>\n" },
     { "WAVE bad type",          "WAVE 1,32",                                       "? Illegal argument\n" },
     { "WAVE bad channel",       "WAVE 0,1",                                        "? Illegal argument\n" },
@@ -950,10 +950,10 @@ static const testcase_t cases[] = {
     { "INSTRUMENT redefines it for the channels that use it", "WAVE 1,20:INSTRUMENT 20,\"OSC SAW;FILTER 3\":INSTRUMENT 20", "<inst 0 20  w0 osc 1 gain 1 cut 0 res 0 pitch 0 env 0>\n<inst 0 20  w4 osc 1 gain 1 cut 3 res 0 pitch 0 env 0>\n<inst 0 20  w0 osc 1 gain 1 cut 0 res 0 pitch 0 env 0>\n" },
     { "INSTRUMENT between two PLAYs: the first notes keep the old definition", "PLAY \"I20 C\":INSTRUMENT 20,\"OSC SAW\":PLAY \"C\"", "<sync 1>\n<inst 0 20  w0 osc 1 gain 1 cut 0 res 0 pitch 0 env 0>\n<tone 0 261.626 0.5 0.4375>\n<tone 0 0 0 0.0625>\n<tone 0 0 0 0>\n<inst 0 20  w4 osc 1 gain 1 cut 0 res 0 pitch 0 env 0>\n<sync 1>\n<tone 0 261.626 0.5 0.4375>\n<tone 0 0 0 0.0625>\n<tone 0 0 0 0>\n" },
     { "INSTRUMENT only touches the channels that use the number", "WAVE 1,20:WAVE 2,21:INSTRUMENT 20,\"OSC SAW\"", "<inst 0 20  w0 osc 1 gain 1 cut 0 res 0 pitch 0 env 0>\n<inst 1 21  w0 osc 1 gain 1 cut 0 res 0 pitch 0 env 0>\n<inst 0 20  w4 osc 1 gain 1 cut 0 res 0 pitch 0 env 0>\n" },
-    { "PLAY selects an instrument with I", "PLAY \"I9 C\"", "<sync 1>\n<inst 0 9 STRINGS w4 osc 3 gain 0.6 cut 4 res 0.05 pitch 0 env 1>\n<tone 0 261.626 0.5 0.4375>\n<tone 0 0 0 0.0625>\n<tone 0 0 0 0>\n" },
+    { "PLAY selects an instrument with I", "PLAY \"I9 C\"", "<sync 1>\n<inst 0 9 STRINGS factory>\n<tone 0 261.626 0.5 0.4375>\n<tone 0 0 0 0.0625>\n<tone 0 0 0 0>\n" },
     { "PLAY W takes 4..31 too", "PLAY \"W31 C\"", "<sync 1>\n<inst 0 31  w0 osc 1 gain 1 cut 0 res 0 pitch 0 env 0>\n<tone 0 261.626 0.5 0.4375>\n<tone 0 0 0 0.0625>\n<tone 0 0 0 0>\n" },
     { "PLAY I 32 is an error", "PLAY \"I32 C\"", "? Value missing or out of range after 'I'\n" },
-    { "SFX takes back an instrument", "SFX 1,\"W1 ML R\":WAVE 1,7:SFX 1,1", "<inst 0 7 PLUCK w4 osc 2 gain 0.6 cut 8 res 0.2 pitch 0 env 1>\n<sync 1>\n<wave 0 0>\n<env 0 off>\n<vib 0 0 0>\n<trem 0 0 0>\n<wave 0 1>\n<tone 0 0 0 0.5>\n<tone 0 0 0 0>\n<inst 0 7 PLUCK w4 osc 2 gain 0.6 cut 8 res 0.2 pitch 0 env 1>\n" },
+    { "SFX takes back an instrument", "SFX 1,\"W1 ML R\":WAVE 1,7:SFX 1,1", "<inst 0 7 PLUCK factory>\n<sync 1>\n<wave 0 0>\n<env 0 off>\n<vib 0 0 0>\n<trem 0 0 0>\n<wave 0 1>\n<tone 0 0 0 0.5>\n<tone 0 0 0 0>\n<inst 0 7 PLUCK factory>\n" },
     { "SFX takes back vibrato and tremolo", "SFX 1,\"ML ~5,1 ^4,0.5 R\":SFX 1,1", "<sync 1>\n<wave 0 0>\n<env 0 off>\n<vib 0 0 0>\n<trem 0 0 0>\n<vib 0 5 1>\n<trem 0 4 0.5>\n<tone 0 0 0 0.5>\n<tone 0 0 0 0>\n<vib 0 0 0>\n<trem 0 0 0>\n" },
     { "SFX waits for the release before it takes back the envelope", "SFX 1,\"ML X0,0.1,0,0.5 R\":SFX 1,1", "<sync 1>\n<wave 0 0>\n<env 0 off>\n<vib 0 0 0>\n<trem 0 0 0>\n<env 0 0 0.1 0 0.5>\n<tone 0 0 0 0.5>\n<tone 0 0 0 0>\n<tone 0 0 0 0.5>\n<env 0 off>\n" },
     { "SFX gives back the wave the program had set", "WAVE 1,1:SFX 1,\"W3 ML R\":SFX 1,1", "<wave 0 1>\n<sync 1>\n<wave 0 0>\n<env 0 off>\n<vib 0 0 0>\n<trem 0 0 0>\n<wave 0 3>\n<tone 0 0 0 0.5>\n<tone 0 0 0 0>\n<wave 0 1>\n" },
@@ -1897,8 +1897,15 @@ static bool snd_isbusy( void* usrdata, int chan ) {
 
 static void snd_setinst( void* usrdata, int chan, int n, const synth_inst_t* def ) {
     char text[140];
-    snprintf( text, sizeof(text), "<inst %d %d %s w%d osc %d gain %g cut %g res %g pitch %g env %d>\n", chan, n, def->name, (int) def->osc[0].wave, def->nosc, (double) def->gain,
-              (double) def->cutmul, (double) def->res, (double) def->pitch, def->env ? 1 : 0 );
+    synth_inst_t fac;
+    synth_instpreset( n, &fac );
+    if ( n < SYNTH_NBASIC + SYNTH_NPRESET && memcmp( def->osc, fac.osc, sizeof(fac.osc) ) == 0 && def->gain == fac.gain && def->cutmul == fac.cutmul &&
+         def->nosc == fac.nosc && strcmp( def->name, fac.name ) == 0 ) {       // the factory preset: its numbers are not part of these tests
+        snprintf( text, sizeof(text), "<inst %d %d %s factory>\n", chan, n, def->name );
+    } else {
+        snprintf( text, sizeof(text), "<inst %d %d %s w%d osc %d gain %g cut %g res %g pitch %g env %d>\n", chan, n, def->name, (int) def->osc[0].wave, def->nosc, (double) def->gain,
+                  (double) def->cutmul, (double) def->res, (double) def->pitch, def->env ? 1 : 0 );
+    }
     out_append( text );
 }
 

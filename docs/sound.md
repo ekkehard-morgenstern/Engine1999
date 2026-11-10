@@ -133,7 +133,7 @@ instruments 4..31 are *subtractive / layered* voices. An instrument (`synth_inst
 | pitch envelope | `pitch` semitones off at the note start, decaying with the time constant `pitchtime` (kick, tom, zap). |
 | default ADSR | used while the program has set no `ENVELOPE` on the channel; an `ENVELOPE` wins, `ENVELOPE ch` (default) gives the instrument's back. |
 | default vibrato | used while the program has set no `VIBRATO` (depth 0) on the channel. |
-| gain | overall level (the peak of a single preset note is about the volume asked for). |
+| gain | the drive into a soft limiter (0..4): the signal is untouched up to 0.8 and compressed smoothly towards 1.0 above it, so the instrument's output never exceeds the volume asked for (a plain gain-1 sine peaks at about 95 % of it) and a high gain makes the instrument louder on average without clipping. |
 
 **Selecting** (BASIC): `WAVE ch, n` with n = 0..31 (0..3 the basic waves, 4..31 instruments), `W n` or `I n` in a `PLAY` string. It is an event on
 the channel's time line like `WAVE` always was, so it applies at the right place in a sequence; `vm_chanstate_t` keeps it and `SFX` gives it back.
@@ -180,11 +180,13 @@ envelope release in between) only changes the pitch. C API: `synth_setinst( s, n
 9 STRINGS, 10 BRASS, 11 FLUTE, 12 BELL, 13 KICK, 14 SNARE, 15 HIHAT, 16 TOM, 17 CLAP, 18 ZAP, 19 EPIANO (20..31 are free for the user's own instruments;
 they start as a plain sine named `USER`). The percussion presets want a note of about 55 to 220 Hz (`O1 A` .. `O3 A`); their pitch envelopes are relative.
 
+**Loudness of the presets (2026-11-10):** the gains of the 16 presets are calibrated so that a one-second note at volume 1 (A3; A1 for KICK and TOM) has an RMS of about **0.34** in every preset (a basic sine has 0.71, a triangle 0.58, a square 0.5) and a peak below 1.0: the volume `V` of a `PLAY` string means about the same for every instrument, and an instrument's `V` can be chosen like a wave's. `synthtest1` checks it (RMS 0.30 .. 0.38, peak <= 1). The calibration was done by measuring (an offline renderer replaying a music string like the VM and the host do; it was a scratchpad tool); redo it after changing a preset's sound (the gain is the first number on the second line of its row in `synth_presets`).
+
 Cost (`synthtest1`, one core, optimized build): 16 channels with the three-oscillator presets + filter = **about 5 % of a core**.
-Tests: `synthtest1` (262 checks): table / names, every preset (finite, audible, peak <= 1, silent after its release), ratio and cents (pitch measured), saw alias level and
+Tests: `synthtest1` (278 checks): table / names, every preset (finite, audible, peak <= 1, silent after its release), ratio and cents (pitch measured), saw alias level and
 amplitude, pulse width harmonics, low-pass attenuation measured with a Goertzel filter, resonance at the limits, pitch envelope, envelope
 precedence, `WAVE` after an instrument identical to the plain wave, validation; also under ASan / UBSan. `vmtest1` (definitions and errors, `WAVE` 4..31, `I` / `W` in `PLAY`, the `SFX` give-back, the order of a redefinition between two `PLAY`s),
 `repltest1`, `asmtest1` (`SND 14` / `15`). The sound log (`ENGINE1999_SOUNDLOG`) shows an `instrument n NAME ...` line on the channel for each selection / redefinition.
 
-**Not done yet (roadmap 81, steps 3 to 5):** the final list of presets (to agree with the owner), switching `music3d.lib` and the games to instruments. Later: FM operators on the
+**Not done yet (roadmap 81):** the final list of presets (to agree with the owner), switching the other games to instruments (`music3d.lib` is done). Later: FM operators on the
 same data structure, a polyphonic voice allocator, panning once the output is stereo, `INSTRUMENT$(n)` (the name), a query of the definition.
