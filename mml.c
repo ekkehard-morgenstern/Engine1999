@@ -208,8 +208,8 @@ bool mml_parse( const char* text, mml_t* mml, char err[MML_ERRLEN] ) {
                     if ( !mml_number( &st, true, &v ) || v > 1.0 ) goto RANGE;
                     st.vol = (float) v;
                     continue;
-                case 'W':
-                    if ( !mml_number( &st, false, &v ) || v > 3.0 ) goto RANGE;
+                case 'W': case 'I':         // wave 0..3 or instrument 4..31: the same selection
+                    if ( !mml_number( &st, false, &v ) || v > (double)( SYNTH_NINST - 1 ) ) goto RANGE;
                     ev.kind = MML_WAVE; ev.wave = (int) v;
                     break;
                 case 'H': case 'S': {       // a tone / a sweep in Hz
@@ -267,6 +267,136 @@ RANGE:
     snprintf( err, MML_ERRLEN, "Value missing or out of range after '%c'", c );
 FAIL:
     mml_free( mml );
+    return false;
+}
+
+// -- instrument definitions ------------------------------------------------------------
+
+static const char* const mml_wavenames[SYNTH_NOSCWAVES] = { "SINE", "SQUARE", "TRIANGLE", "NOISE", "SAW" };
+
+// a number (optional sign, decimals) at p, blanks and commas before it skipped; false if there is none
+static bool mml_signed( const char** pp, double* pval ) {
+    const char* p = *pp;
+    while ( *p == ' ' || *p == '\t' || *p == ',' ) ++p;
+    bool neg = false;
+    if ( *p == '-' || *p == '+' ) { neg = *p == '-'; ++p; }
+    if ( !( ( *p >= '0' && *p <= '9' ) || *p == '.' ) ) {
+        return false;
+    }
+    double v = 0.0;
+    while ( *p >= '0' && *p <= '9' ) {
+        v = v * 10.0 + (double)( *p++ - '0' );
+        if ( v > 1.0e6 ) v = 1.0e6;
+    }
+    if ( *p == '.' ) {
+        ++p;
+        double scale = 0.1;
+        while ( *p >= '0' && *p <= '9' ) { v += scale * (double)( *p++ - '0' ); scale *= 0.1; }
+    }
+    *pp = p;
+    *pval = neg ? -v : v;
+    return true;
+}
+
+// a word of letters / digits / _ at p (blanks before it skipped), upper-cased into w; false if there is none
+static bool mml_word( const char** pp, char* w, size_t max ) {
+    const char* p = *pp;
+    while ( *p == ' ' || *p == '\t' ) ++p;
+    size_t n = 0;
+    while ( ( *p >= 'A' && *p <= 'Z' ) || ( *p >= 'a' && *p <= 'z' ) || ( *p >= '0' && *p <= '9' ) || *p == '_' ) {
+        if ( n + 1 < max ) w[n++] = *p >= 'a' && *p <= 'z' ? (char)( *p - 'a' + 'A' ) : *p;
+        ++p;
+    }
+    w[n] = '\0';
+    *pp = p;
+    return n > 0;
+}
+
+bool mml_parse_inst( const char* text, synth_inst_t* in, char err[MML_ERRLEN] ) {
+    synth_instdefault( in );
+    int nosc = 0;
+    const char* p = text;
+    for (;;) {
+        while ( *p == ' ' || *p == '\t' || *p == ';' || *p == '\n' || *p == '\r' ) ++p;
+        if ( *p == '\0' ) {
+            break;
+        }
+        char cmd[16];
+        if ( !mml_word( &p, cmd, sizeof(cmd) ) ) {
+            snprintf( err, MML_ERRLEN, "Unknown instrument command '%c'", *p );
+            return false;
+        }
+        double v[5]; int nv = 0;
+        if ( strcmp( cmd, "NAME" ) == 0 ) {
+            char w[SYNTH_INST_NAMELEN];
+            if ( !mml_word( &p, w, sizeof(w) ) ) {
+                snprintf( err, MML_ERRLEN, "Name missing after NAME" );
+                return false;
+            }
+            memcpy( in->name, w, sizeof(in->name) );
+            continue;
+        }
+        int wave = -1;
+        if ( strcmp( cmd, "OSC" ) == 0 ) {
+            char w[16]; double wn;
+            const char* q = p;
+            if ( mml_signed( &q, &wn ) ) {
+                if ( wn < 0.0 || wn >= (double) SYNTH_NOSCWAVES || wn != floor( wn ) ) wave = -2; else wave = (int) wn;
+                p = q;
+            } else if ( mml_word( &p, w, sizeof(w) ) ) {
+                wave = -2;
+                for ( int k=0; k < SYNTH_NOSCWAVES; ++k ) if ( strcmp( w, mml_wavenames[k] ) == 0 ) wave = k;
+            }
+            if ( wave < 0 ) {
+                snprintf( err, MML_ERRLEN, "Wave name expected after OSC (SINE SQUARE TRIANGLE NOISE SAW)" );
+                return false;
+            }
+        }
+        while ( nv < 5 && mml_signed( &p, &v[nv] ) ) ++nv;
+        while ( *p == ' ' || *p == '\t' || *p == ',' ) ++p;
+        if ( *p != ';' && *p != '\0' && *p != '\n' && *p != '\r' ) {
+            snprintf( err, MML_ERRLEN, "Unexpected '%c' in the instrument definition", *p );
+            return false;
+        }
+        if ( strcmp( cmd, "OSC" ) == 0 ) {          // OSC wave [level [ratio [cents [pulsewidth]]]]
+            if ( nosc >= SYNTH_INST_NOSC || nv > 4 ) {
+                snprintf( err, MML_ERRLEN, nv > 4 ? "Too many values after OSC" : "At most 3 oscillators" );
+                return false;
+            }
+            synth_iosc_t* o = &in->osc[nosc++];
+            o->wave = (synth_wave_t) wave; o->level = nv > 0 ? (float) v[0] : 1.0f;
+            o->ratio = nv > 1 ? (float) v[1] : ( wave == SYNTH_NOISE ? 0.0f : 1.0f );
+            o->cents = nv > 2 ? (float) v[2] : 0.0f; o->pw = nv > 3 ? (float) v[3] : 0.5f;
+        } else if ( strcmp( cmd, "FILTER" ) == 0 ) {    // FILTER cutmul [resonance [fenv [fdecay]]]
+            if ( nv < 1 || nv > 4 ) goto COUNT;
+            in->cutmul = (float) v[0]; in->res = nv > 1 ? (float) v[1] : 0.0f; in->fenv = nv > 2 ? (float) v[2] : 0.0f;
+            in->fdecay = nv > 3 ? (float) v[3] : 0.2f;
+        } else if ( strcmp( cmd, "PITCH" ) == 0 ) {     // PITCH semitones seconds
+            if ( nv != 2 ) goto COUNT;
+            in->pitch = (float) v[0]; in->pitchtime = (float) v[1];
+        } else if ( strcmp( cmd, "ENV" ) == 0 ) {       // ENV attack decay sustain release
+            if ( nv != 4 ) goto COUNT;
+            in->env = true; in->a = (float) v[0]; in->d = (float) v[1]; in->s = (float) v[2]; in->r = (float) v[3];
+        } else if ( strcmp( cmd, "VIB" ) == 0 ) {       // VIB rate depth
+            if ( nv != 2 ) goto COUNT;
+            in->vibrate = (float) v[0]; in->vibdepth = (float) v[1];
+        } else if ( strcmp( cmd, "GAIN" ) == 0 ) {      // GAIN g
+            if ( nv != 1 ) goto COUNT;
+            in->gain = (float) v[0];
+        } else {
+            snprintf( err, MML_ERRLEN, "Unknown instrument command '%s'", cmd );
+            return false;
+        }
+    }
+    if ( nosc > 0 ) in->nosc = nosc;
+    for ( int k=in->nosc; k < SYNTH_INST_NOSC; ++k ) in->osc[k].level = 0.0f;
+    if ( !synth_instvalid( in ) ) {
+        snprintf( err, MML_ERRLEN, "Instrument value out of range" );
+        return false;
+    }
+    return true;
+COUNT:
+    snprintf( err, MML_ERRLEN, "Wrong number of values in the instrument definition" );
     return false;
 }
 

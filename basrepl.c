@@ -103,10 +103,13 @@ static void repl_program_changed( repl_t* repl ) {
 static void repl_reset_runtime_ex( repl_t* repl, runtime_t* keep ) {
     mml_t sfx[SND_MAXSFX];
     bool sfxdef[SND_MAXSFX];
+    uint32_t instdef = 0;
     memset( sfx, 0, sizeof(sfx) );
     memset( sfxdef, 0, sizeof(sfxdef) );
     if ( repl->vmready ) {
         if ( keep != 0 ) {
+            instdef = repl->vm.instdefined;         // CHAIN keeps the instruments too (cleanup_vm() would put the factory ones back)
+            repl->vm.instdefined = 0;
             memcpy( sfx, repl->vm.sfx, sizeof(sfx) );
             memcpy( sfxdef, repl->vm.sfx_defined, sizeof(sfxdef) );
             memset( repl->vm.sfx, 0, sizeof(repl->vm.sfx) );
@@ -128,6 +131,7 @@ static void repl_reset_runtime_ex( repl_t* repl, runtime_t* keep ) {
     if ( keep != 0 ) {
         memcpy( repl->vm.sfx, sfx, sizeof(sfx) );
         memcpy( repl->vm.sfx_defined, sfxdef, sizeof(sfxdef) );
+        repl->vm.instdefined = instdef;
     }
 }
 
@@ -141,12 +145,15 @@ static void repl_restore_runtime( repl_t* repl, runtime_t* old ) {
     bool sfxdef[SND_MAXSFX];
     memcpy( sfx, repl->vm.sfx, sizeof(sfx) );
     memcpy( sfxdef, repl->vm.sfx_defined, sizeof(sfxdef) );
+    uint32_t instdef = repl->vm.instdefined;
     memset( repl->vm.sfx, 0, sizeof(repl->vm.sfx) );
     memset( repl->vm.sfx_defined, 0, sizeof(repl->vm.sfx_defined) );
+    repl->vm.instdefined = 0;
     cleanup_vm( &repl->vm );
     cleanup_runtime( &repl->rt );
     repl->rt = *old;
     init_vm( &repl->vm, &repl->rt.codegen, &repl->rt.varmem );
+    repl->vm.instdefined = instdef;
     memcpy( repl->vm.sfx, sfx, sizeof(sfx) );
     memcpy( repl->vm.sfx_defined, sfxdef, sizeof(sfxdef) );
 }

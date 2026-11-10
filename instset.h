@@ -352,7 +352,7 @@ The 4096 extended instructions are as follows:
                               needs beats > 0): the pitch glides to it during the tone
                             2 PLAY ( s1 .. sn n -- )           n music strings (1..8): string i plays on channel i, all
                               voices start together (the strings are parsed first: a wrong one queues nothing, see mml.h)
-                            3 WAVE ( ch wave -- )              wave type 0..3 (sine, square, triangle, noise)
+                            3 WAVE ( ch wave -- )              wave type 0..3 (sine, square, triangle, noise) or the instrument 4..31
                             4 TEMPO ( bpm -- )                 beats per minute 1..1000 (the unit of the beats of SOUND)
                             5 OFF ( ch -- )                    silence the channel now and forget what is queued; 0 = all
                             6 SYNC ( ch1 .. chn n -- )         line up the channels' time (so that they start together)
@@ -364,6 +364,9 @@ The 4096 extended instructions are as follows:
                             11 TREMOLO ( ch rate depth -- )    rate 0..100 Hz, depth 0..1 (0 = off)
                             12 SFXDEF ( n s -- )               store the music string s as effect n (1..64)
                             13 SFXPLAY ( n ch -- )             play effect n on channel ch (0 = a free one)
+                            14 INSTDEF ( n s -- )              define instrument n (4..31) from the definition string s (mml_parse_inst(), see mml.h);
+                              the host gets it through vm_sound_t.setinst
+                            15 INSTRESET ( n -- )              the factory instrument n (4..31) again
                             Everything but 7 and 8 is queued at the channel's time line; all return at once. Without sound
                             callbacks the arguments are only checked. A bad argument is "Illegal argument".
     0001 01000011       PLNG - is the channel busy? ( ch -- n ) C=0 P=0

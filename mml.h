@@ -34,6 +34,7 @@
 #ifndef STDTYPES_H
 #include "stdtypes.h"
 #endif
+#include "synth.h"
 
 /*
 Parser for the music strings of the PLAY statement ("music macro language"). No SDL dependency: it turns a string into
@@ -46,7 +47,8 @@ a list of events with times in seconds; the VM hands them to the host's sound ca
     L n                    default note length 1..64 (starts as 4)
     T n                    tempo in quarter notes per minute, 1..1000 (starts as 120)
     V x                    volume 0..1, may have decimals (starts as 0.5)
-    W n                    wave 0..3 (0 sine, 1 square, 2 triangle, 3 noise); the channel keeps its wave otherwise
+    W n  or  I n           wave 0..3 (0 sine, 1 square, 2 triangle, 3 noise) or instrument 4..31 (the presets, see synth.h and
+                           INSTRUMENT); the channel keeps its wave / instrument otherwise
     ML, MN, MS             legato (the note fills its length), normal (7/8, then silence; the default) and staccato (3/4)
     blanks and ;           ignored; letters may be lower case
 
@@ -92,5 +94,21 @@ typedef struct _mml_t {
 // parses "text"; false with a message in err (and nothing in mml) if it is wrong. The caller frees with mml_free().
 bool mml_parse( const char* text, mml_t* mml, char err[MML_ERRLEN] );
 void mml_free( mml_t* mml );
+
+/*
+Parser for the definition string of INSTRUMENT n, a$: commands separated by ';', values separated by blanks or commas, words
+and wave names in any case. A definition starts from a plain sine instrument.
+
+    NAME w                           the name (up to 11 letters / digits / _)
+    OSC wave [level [ratio [cents [pw]]]]   an oscillator (up to 3): wave = SINE SQUARE TRIANGLE NOISE SAW (or 0..4), level 0..2 (1),
+                                     frequency ratio to the note 0..64 (1; noise: 0 = white noise), detune in cents (0), pulse width of SQUARE (0.5)
+    FILTER cutmul [res [fenv [fdecay]]]    low-pass at note frequency * cutmul, resonance 0..0.95, a filter envelope starting fenv octaves
+                                     higher and decaying with the time constant fdecay seconds (default 0.2)
+    PITCH semitones seconds          pitch envelope: starts semitones off the note and decays with the time constant
+    ENV a d s r                      default envelope (an ENVELOPE of the program wins)
+    VIB rate depth                   default vibrato (a VIBRATO of the program wins)
+    GAIN g                           overall level 0..4 (1)
+*/
+bool mml_parse_inst( const char* text, synth_inst_t* inst, char err[MML_ERRLEN] );
 
 #endif

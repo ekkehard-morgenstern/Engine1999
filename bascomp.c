@@ -3997,10 +3997,11 @@ bool comp_eat_soundstmt( compiler_t* comp, node_t** pnode ) {
     //               ( TOK_PITCH | TOK_VOLUME ) num-expr TOK_COMMA num-expr |
     //               TOK_ENVELOPE num-expr [ TOK_COMMA num-expr TOK_COMMA num-expr TOK_COMMA num-expr TOK_COMMA num-expr ] |
     //               ( TOK_VIBRATO | TOK_TREMOLO ) num-expr TOK_COMMA num-expr TOK_COMMA num-expr |
-    //               TOK_SFX num-expr TOK_COMMA str-expr | TOK_SFX num-expr [ TOK_COMMA num-expr ] .
+    //               TOK_SFX num-expr TOK_COMMA str-expr | TOK_SFX num-expr [ TOK_COMMA num-expr ] |
+    //               TOK_INSTRUMENT num-expr [ TOK_COMMA str-expr ] .
     uint8_t tok = comp->currtok;
     if ( tok != TOK_SOUND && tok != TOK_PLAY && tok != TOK_WAVE && tok != TOK_TEMPO && tok != TOK_PITCH && tok != TOK_VOLUME &&
-         tok != TOK_ENVELOPE && tok != TOK_VIBRATO && tok != TOK_TREMOLO && tok != TOK_SFX ) {
+         tok != TOK_ENVELOPE && tok != TOK_VIBRATO && tok != TOK_TREMOLO && tok != TOK_SFX && tok != TOK_INSTRUMENT ) {
         return false;
     }
     if ( !comp_fetchtok( comp ) ) {
@@ -4027,6 +4028,7 @@ bool comp_eat_soundstmt( compiler_t* comp, node_t** pnode ) {
         case TOK_VIBRATO:   kind = SNDK_VIBRATO; minargs = maxargs = 3; break;
         case TOK_TREMOLO:   kind = SNDK_TREMOLO; minargs = maxargs = 3; break;
         case TOK_SFX:       kind = SNDK_SFXPLAY; minargs = 1; maxargs = 2; break;
+        case TOK_INSTRUMENT: kind = SNDK_INSTRESET; minargs = 1; maxargs = 2; break;
         default:            break;
     }
     /*
@@ -4058,6 +4060,13 @@ bool comp_eat_soundstmt( compiler_t* comp, node_t** pnode ) {
             if ( got ) {
                 (*pnode)->data[0] = SNDK_SFXDEF;
                 kind = SNDK_SFXDEF;
+            }
+        }
+        if ( tok == TOK_INSTRUMENT && n == 1 ) {    // INSTRUMENT n, a$ defines an instrument, INSTRUMENT n restores the factory one
+            got = comp_eat_strexpr( comp, &arg ) && arg != NODE_NONE;
+            if ( got ) {
+                (*pnode)->data[0] = SNDK_INSTDEF;
+                kind = SNDK_INSTDEF;
             }
         }
         if ( !got ) {

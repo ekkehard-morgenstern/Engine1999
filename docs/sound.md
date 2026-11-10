@@ -27,7 +27,7 @@ Channels are numbered 1..16 in BASIC (0..15 in the host): **1..8 are the music c
 
 ```
 TEMPO bpm                        tempo of the beats of SOUND, 1..1000, default 60 (1 beat = 1 s)
-WAVE ch, w                       wave type: 0 sine, 1 square, 2 triangle, 3 noise; applies to the sounds queued after it
+WAVE ch, w                       wave type: 0 sine, 1 square, 2 triangle, 3 noise, or the instrument 4..31 (see "Instruments"); applies to the sounds queued after it
 SOUND ch, freq, beats [, vol [, f2]]  a tone of freq Hz (20..20000) for "beats", volume 0..1 (default 0.5), gliding to f2 (see effects).
                                  freq 0 = a rest of "beats". The tone ends after its beats (like a note of sheet music; a rest adds silence on top).
                                  beats -1 = no end: the tone goes on until the next SOUND on the
@@ -54,7 +54,7 @@ A..G [#|+|-] [n] [.]   a note (# or + sharp, - flat), n = length: 1 whole, 2 hal
 R or P [n] [.]         a rest
 O n    octave 0..8 (O4: middle C = C4, A4 = 440 Hz); <  >   one octave down / up
 L n    default length 1..64 (4)      T n   quarter notes per minute 1..1000 (120)
-V x    volume 0..1 with decimals (0.5)      W n   wave 0..3 (the channel keeps its wave otherwise)
+V x    volume 0..1 with decimals (0.5)      W n  or  I n   wave 0..3, or the instrument 4..31 (the channel keeps its wave / instrument otherwise)
 ML MN MS   the note fills its length / sounds 7/8 of it (default) / 3/4 of it; the rest is silence, so equal notes in a row are heard separately
 ```
 
@@ -121,7 +121,7 @@ Not done: stereo, `SFX` with parameters (a filter, a pulse width and a pitch env
 
 `ENGINE1999_SOUNDLOG=file engine1999 ...` (or `-` for standard error) writes a text log of the sound output of the window host, off by default: one line for every call the VM makes to the host (`tone freq f freq2 f2 vol v beats b` where beats -1 = held and 0 = a note of zero length, `wave`, `envelope`, `vibrato`, `tremolo`, `pitch`, `volume`, `tempo`, `sync mask`, `silence`), each with the time in seconds since the first sound call and the channel (`ch1`..`ch8`, `all`), and twice a second a `state` line: tempo, length of the event queue and for each channel `on` / `off`, the gain, and `+s` (how many seconds ahead of now the channel is queued) or `idle`, and `pkX`: the loudest sample the channel actually *rendered* since the last state line (so `pk0.00` on a channel that is asked for tones = nothing audible came out), then for the mix `mix pkX`, the number of calls of the audio device's callback since the last line, their size in samples, and the longest pause between two calls. (The state lines come every 0.5 s: a sound that repeats every 0.25 s is always seen in the same phase, so look at `pk`, not at `on` / `off`.) The state lines are written by the audio worker (`sdlaud_setlog()`). Use it to see whether a missing sound is never asked for (no `tone` line), asked for but not played (state of the channel), or queued far ahead. With `SDL_AUDIODRIVER=disk` (`SDL_DISKAUDIOFILE=out.raw`, 32-bit float mono, 44100 Hz) the sound can also be recorded without a sound card. Not available in the console host (it has no sound).
 
-## Instruments (core done 2026-11-10, roadmap item 81 step 1; no language support yet)
+## Instruments (roadmap item 81; core 2026-11-10, language the same day)
 
 `synth.[ch]` has instruments: instruments 0..3 are the four basic waves (the original signal path, unchanged sample for sample),
 instruments 4..31 are *subtractive / layered* voices. An instrument (`synth_inst_t`) has:
@@ -135,20 +135,43 @@ instruments 4..31 are *subtractive / layered* voices. An instrument (`synth_inst
 | default vibrato | used while the program has set no `VIBRATO` (depth 0) on the channel. |
 | gain | overall level (the peak of a single preset note is about the volume asked for). |
 
-Selection: the event `SYNTH_EV_INST` (p[0] = 0..31); `SYNTH_EV_WAVE` selects a basic wave and so leaves an instrument. A new note
-(a channel that was not sounding, or one in its release) restarts the pitch and filter envelopes; a legato note (a `PLAY` on a sounding channel without an
-envelope release in between) only changes the pitch. API: `synth_setinst( s, n, def )` (4..31, every field is range checked), `synth_getinst`,
+**Selecting** (BASIC): `WAVE ch, n` with n = 0..31 (0..3 the basic waves, 4..31 instruments), `W n` or `I n` in a `PLAY` string. It is an event on
+the channel's time line like `WAVE` always was, so it applies at the right place in a sequence; `vm_chanstate_t` keeps it and `SFX` gives it back.
+**Defining**: `INSTRUMENT n, a$` (n = 4..31; 0..3 are fixed: "Illegal argument") parses the definition string at once (a mistake is an error now) and hands the instrument to the host;
+`INSTRUMENT n` puts the factory instrument back (4..19 a preset, 20..31 a plain sine named `USER`). The definition takes effect at once for everything that sounds
+or is queued (it is not an event on a time line: define instruments at the start of the program). A program's instruments are put back to factory when the program run
+ends or is replaced (`RUN`, `NEW`, `LOAD`; `CHAIN` keeps them like the `SFX` definitions). Without a sound output the statement only checks its arguments.
+(C side: `synth_setinst()` etc., the `SYNTH_EV_WAVE` / `SYNTH_EV_INST` events, `vm_sound_t.setinst`, `sdlaud_setinst()`.)
+
+Definition string (`mml_parse_inst()`, `mml.h`): commands separated by `;`, values by blanks or commas, case does not matter. It starts from a plain sine instrument:
+
+```
+NAME w                                 up to 11 letters / digits / _
+OSC wave [level [ratio [cents [pw]]]]  up to 3; wave = SINE SQUARE TRIANGLE NOISE SAW (or 0..4); level 0..2 (1), ratio 0..64 (1; noise 0 = white),
+                                       cents -2400..2400 (0), pulse width of SQUARE 0.02..0.98 (0.5)
+FILTER cutmul [res [fenv [fdecay]]]    low-pass at note frequency * cutmul (0..64); resonance 0..0.95; fenv -6..6 octaves; fdecay 0..10 s (0.2)
+PITCH semitones seconds                pitch envelope (-48..48, 0..10)
+ENV a d s r                            default envelope (seconds 0..60, sustain 0..1)
+VIB rate depth                         default vibrato (0..100 Hz, 0..24 semitones)
+GAIN g                                 overall level 0..4 (1)
+```
+Example: `INSTRUMENT 20, "NAME MYBASS; OSC SAW 0.8; OSC SQUARE 0.6 0.5 0 0.3; FILTER 3 0.3 2 0.15; ENV 0.005 0.2 0.6 0.1; GAIN 0.6"`, then `PLAY "I20 O2 L8 CDEF"`.
+Errors: "Unknown instrument command 'X'", "Wave name expected after OSC ...", "At most 3 oscillators", "Wrong number of values in the instrument definition",
+"Instrument value out of range".
+
+A new note (a channel that was not sounding, or one in its release) restarts the pitch and filter envelopes; a legato note (a `PLAY` on a sounding channel without an
+envelope release in between) only changes the pitch. C API: `synth_setinst( s, n, def )` (4..31, every field range checked), `synth_getinst`,
 `synth_instname`, `synth_instdefault`, `synth_instpreset`; the instruments live in `synth_t`, so every synth starts with the presets.
 
 **Presets** (a first draft: names and sounds are to be agreed with the owner, he has not heard them): 4 BASS, 5 LEAD, 6 PAD, 7 PLUCK, 8 ORGAN,
 9 STRINGS, 10 BRASS, 11 FLUTE, 12 BELL, 13 KICK, 14 SNARE, 15 HIHAT, 16 TOM, 17 CLAP, 18 ZAP, 19 EPIANO (20..31 are free for the user's own instruments;
-they start as a plain sine and are named `USER`).
+they start as a plain sine named `USER`). The percussion presets want a note of about 55 to 220 Hz (`O1 A` .. `O3 A`); their pitch envelopes are relative.
 
 Cost (`synthtest1`, one core, optimized build): 16 channels with the three-oscillator presets + filter = **about 5 % of a core**.
 Tests: `synthtest1` (240 checks): table / names, every preset (finite, audible, peak <= 1, silent after its release), ratio and cents (pitch measured), saw alias level and
 amplitude, pulse width harmonics, low-pass attenuation measured with a Goertzel filter, resonance at the limits, pitch envelope, envelope
-precedence, `WAVE` after an instrument identical to the plain wave, validation. Also run under ASan / UBSan.
+precedence, `WAVE` after an instrument identical to the plain wave, validation; also under ASan / UBSan. `vmtest1` (definitions and errors, `WAVE` 4..31, `I` / `W` in `PLAY`, the `SFX` give-back),
+`repltest1`, `asmtest1` (`SND 14` / `15`). The sound log (`ENGINE1999_SOUNDLOG`) shows an `instrument n NAME ...` line for each definition.
 
-**Not done yet (roadmap 81, steps 2 to 5):** the language (`INSTRUMENT n, ...` to define, `I n` in `PLAY` strings, a statement to select, `vm_chanstate_t` + `SFX` restore,
-`instset.h`, grammar, man pages, console `PLAY` check), the `sdlaudio` calls, a demo, switching `music3d.lib` and the games to instruments. Later: FM operators on the same
-data structure, a polyphonic voice allocator, panning once the output is stereo.
+**Not done yet (roadmap 81, steps 3 to 5):** the final list of presets (to agree with the owner), switching `music3d.lib` and the games to instruments. Later: FM operators on the
+same data structure, a polyphonic voice allocator, panning once the output is stereo, `INSTRUMENT$(n)` (the name), a query of the definition.

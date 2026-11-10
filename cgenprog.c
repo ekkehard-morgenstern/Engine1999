@@ -660,7 +660,7 @@ bool cgen_from_soundstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     }
     uint8_t kind = node->data[0];
     for ( uint8_t i=0; i < node->numbranches; ++i ) {
-        bool isstr = kind == SNDK_PLAY || ( kind == SNDK_SFXDEF && i == 1U );
+        bool isstr = kind == SNDK_PLAY || ( ( kind == SNDK_SFXDEF || kind == SNDK_INSTDEF ) && i == 1U );
         if ( !( isstr ? cgen_from_strexpr( cgen, comp, node->branches[i] ) :
                         cgen_from_numexpr( cgen, comp, node->branches[i] ) ) ) {
             return false;
@@ -704,6 +704,8 @@ bool cgen_from_soundstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         case SNDK_VIBRATO:
         case SNDK_TREMOLO:
         case SNDK_SFXDEF:
+        case SNDK_INSTDEF:
+        case SNDK_INSTRESET:
             break;
         default:
             return cgen_unexpected_node( comp );

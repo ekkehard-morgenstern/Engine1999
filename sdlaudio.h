@@ -55,7 +55,8 @@ void sdlaud_playfreq( int chan, float freq, float vol, float beats );   // freq 
 void sdlaud_playsweep( int chan, float freq, float freq2, float vol, float beats );   // the pitch glides to freq2 during the tone
 void sdlaud_setlog( FILE* f, uint64_t start );                                          // debugging: the worker writes the state of the channels to f twice a second (0 = off), times in seconds since start (ns, sdlutil_getnsec())
 void sdlaud_stopchan( int chan, float beats );                          // fades the channel out
-void sdlaud_setwave( int chan, int wave );                              // at the channel's cursor, takes no time
+void sdlaud_setwave( int chan, int wave );                              // at the channel's cursor, takes no time; 0..3 a basic wave, 4..31 an instrument
+void sdlaud_setinst( int n, const synth_inst_t* def );                  // defines instrument n (4..31) at once; def 0 = the factory one
 void sdlaud_setenvelope( int chan, float attack, float decay, float sustain, float release );   // queued; attack < 0 = default
 void sdlaud_setvibrato( int chan, float rate, float depth );            // queued; depth 0 = off
 void sdlaud_settremolo( int chan, float rate, float depth );            // queued; depth 0 = off

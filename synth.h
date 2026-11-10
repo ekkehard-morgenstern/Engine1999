@@ -115,7 +115,7 @@ typedef struct _synth_inst_t {
 typedef enum _synth_evtype_t {
     SYNTH_EV_PLAY,                      // start (or change) the tone: freq, vol
     SYNTH_EV_STOP,                      // fade the channel out
-    SYNTH_EV_WAVE,                      // select the wave type (takes effect at once, also while sounding)
+    SYNTH_EV_WAVE,                      // select the wave type 0..3, or the instrument 4..31 (takes effect at once, also while sounding)
     SYNTH_EV_ENV,                       // envelope: p[0..3] = attack s, decay s, sustain level, release s; p[0] < 0 = off
     SYNTH_EV_VIB,                       // vibrato: p[0] = rate Hz, p[1] = depth in semitones (0 = off)
     SYNTH_EV_TREM,                      // tremolo: p[0] = rate Hz, p[1] = depth 0..1 (0 = off)
@@ -222,6 +222,7 @@ void synth_silence( synth_t* s, uint64_t now );     // drops all queued events, 
 
 // instruments: 0..3 are fixed; 4..31 can be redefined (false if n or a field is out of range; "name" may be 0)
 bool synth_setinst( synth_t* s, int n, const synth_inst_t* def );
+bool synth_instvalid( const synth_inst_t* def );                // every field in range (what synth_setinst() checks)
 const synth_inst_t* synth_getinst( const synth_t* s, int n );   // 0 if n is out of range or 0..3
 const char* synth_instname( const synth_t* s, int n );          // "SINE" .. "NOISE", the preset name, "" if out of range
 void synth_instdefault( synth_inst_t* def );                    // a plain instrument: one sine, no filter, no envelope

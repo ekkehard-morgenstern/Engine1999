@@ -148,7 +148,7 @@ static void synth_inst_derive( synth_inst_t* d ) {
     }
 }
 
-static bool synth_inst_ok( const synth_inst_t* d ) {
+bool synth_instvalid( const synth_inst_t* d ) {
     #define RNG( v, lo, hi )    ( (v) >= (lo) && (v) <= (hi) )
     if ( d->nosc < 1 || d->nosc > SYNTH_INST_NOSC ) return false;
     for ( int i=0; i < d->nosc; ++i ) {
@@ -174,7 +174,7 @@ void synth_instpreset( int n, synth_inst_t* d ) {
 }
 
 bool synth_setinst( synth_t* s, int n, const synth_inst_t* def ) {
-    if ( n < SYNTH_NBASIC || n >= SYNTH_NINST || !synth_inst_ok( def ) ) {
+    if ( n < SYNTH_NBASIC || n >= SYNTH_NINST || !synth_instvalid( def ) ) {
         return false;
     }
     synth_inst_t* d = &s->inst[n];
@@ -327,7 +327,7 @@ bool synth_schedule_ev( synth_t* s, uint64_t when, const synth_evspec_t* sp ) {
             }
             break;
         case SYNTH_EV_WAVE:
-            if ( (int) sp->wave < 0 || (int) sp->wave >= SYNTH_NWAVES ) {
+            if ( (int) sp->wave < 0 || (int) sp->wave >= SYNTH_NINST ) {      // 0..3 a basic wave, 4..31 an instrument
                 return false;
             }
             break;
@@ -474,13 +474,15 @@ static void synth_apply( synth_t* s, const synth_event_t* ev ) {
         case SYNTH_EV_STOP:
             synth_release( s, c );
             break;
-        case SYNTH_EV_WAVE:
-            c->osc.wave = ev->wave;
-            if ( c->inst != (int) ev->wave ) {
-                c->inst = (int) ev->wave;
+        case SYNTH_EV_WAVE: {
+            int n = (int) ev->wave;
+            if ( n < SYNTH_NBASIC ) c->osc.wave = (synth_wave_t) n;
+            if ( c->inst != n ) {
+                c->inst = n;
                 synth_env_resolve( s, c );
             }
             break;
+        }
         case SYNTH_EV_INST: {
             int n = (int) ev->p[0];
             if ( n < SYNTH_NBASIC ) c->osc.wave = (synth_wave_t) n;

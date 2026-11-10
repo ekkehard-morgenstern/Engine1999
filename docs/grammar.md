@@ -528,7 +528,7 @@ bye-stmt := ( BYE | QUIT ) [ num-expr ] .
 > "beats" (the tone ends then and the channel's next event follows; -1 = held until the next SOUND; 0 = zero length, only the state changes), vol 0..1 (default 0.5). SOUND OFF silences
 > one channel / all of them at once, SOUND SYNC lines up the time of the channels (to start them together). PLAY plays one
 > music string per voice (voice n = channel n, all start together); both return at once, PLAYING(ch) is -1 while the channel
-> still sounds or has music queued, else 0. WAVE ch, w: 0 sine, 1 square, 2 triangle, 3 noise. TEMPO bpm: beats per minute.
+> still sounds or has music queued, else 0. WAVE ch, w: 0 sine, 1 square, 2 triangle, 3 noise, 4..31 an instrument. TEMPO bpm: beats per minute.
 
 ```ebnf
 sound-stmt := SOUND num-expr "," num-expr "," num-expr [ "," num-expr [ "," num-expr ] ] |
@@ -537,13 +537,15 @@ sound-stmt := SOUND num-expr "," num-expr "," num-expr [ "," num-expr [ "," num-
               ( PITCH | VOLUME ) num-expr "," num-expr |
               ENVELOPE num-expr [ "," num-expr "," num-expr "," num-expr "," num-expr ] |
               ( VIBRATO | TREMOLO ) num-expr "," num-expr "," num-expr |
-              SFX num-expr "," str-expr | SFX num-expr [ "," num-expr ] .
+              SFX num-expr "," str-expr | SFX num-expr [ "," num-expr ] |
+              INSTRUMENT num-expr [ "," str-expr ] .
 ```
 
 > Sound effects (docs/sound.md): SOUND ch, f1, beats, vol, f2 glides from f1 to f2 during the tone; PITCH ch, f and VOLUME ch, v
 > change a sounding channel at once; ENVELOPE ch, attack, decay, sustain, release shapes the tones (ENVELOPE ch alone: back to the
 > default); VIBRATO / TREMOLO ch, rate, depth; SFX n, a$ stores a music string as effect n (1..64), SFX n [, ch] plays it
-> (no channel: a free effects channel, 16 down to 9; else 16).
+> (no channel: a free effects channel, 16 down to 9; else 16). INSTRUMENT n, a$ defines instrument n (4..31) from a definition string
+> (see docs/sound.md), INSTRUMENT n puts the factory instrument back.
 
 ## Timing: WAIT, AFTER, EVERY
 

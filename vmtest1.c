@@ -855,7 +855,9 @@ static const testcase_t cases[] = {
     { "SOUND in a program",     "10 FOR C=1 TO 2\n20 SOUND C,100*C,1\n30 NEXT C", "<tone 0 100 0.5 1>\n<tone 1 200 0.5 1>\n" },
     { "WAVE",                   "WAVE 2,1",                                        "<wave 1 1>\n" },
     { "WAVE noise",             "WAVE 1,3",                                        "<wave 0 3>\n" },
-    { "WAVE bad type",          "WAVE 1,4",                                        "? Illegal argument\n" },
+    { "WAVE instrument",        "WAVE 1,4",                                        "<wave 0 4>\n" },
+    { "WAVE instrument 31",     "WAVE 1,31",                                       "<wave 0 31>\n" },
+    { "WAVE bad type",          "WAVE 1,32",                                       "? Illegal argument\n" },
     { "WAVE bad channel",       "WAVE 0,1",                                        "? Illegal argument\n" },
     { "TEMPO",                  "TEMPO 120",                                       "<bpm 120>\n" },
     { "TEMPO 0",                "TEMPO 0",                                         "? Illegal argument\n" },
@@ -930,6 +932,25 @@ static const testcase_t cases[] = {
     { "SFX with all effects channels busy takes the last one", "FOR C=9 TO 16:SOUND C,440,1:NEXT C:SFX 2,\"ML R\":SFX 2", "<tone 8 440 0.5 1>\n<tone 9 440 0.5 1>\n<tone 10 440 0.5 1>\n<tone 11 440 0.5 1>\n<tone 12 440 0.5 1>\n<tone 13 440 0.5 1>\n<tone 14 440 0.5 1>\n<tone 15 440 0.5 1>\n<sync 32768>\n<wave 15 0>\n<env 15 off>\n<vib 15 0 0>\n<trem 15 0 0>\n<tone 15 0 0 0.5>\n<tone 15 0 0 0>\n" },
     { "SFX on an effects channel by number", "SFX 1,\"ML R\":SFX 1,12", "<sync 2048>\n<wave 11 0>\n<env 11 off>\n<vib 11 0 0>\n<trem 11 0 0>\n<tone 11 0 0 0.5>\n<tone 11 0 0 0>\n" },
     { "SFX takes back its wave", "SFX 1,\"W1 ML R\":SFX 1,1", "<sync 1>\n<wave 0 0>\n<env 0 off>\n<vib 0 0 0>\n<trem 0 0 0>\n<wave 0 1>\n<tone 0 0 0 0.5>\n<tone 0 0 0 0>\n<wave 0 0>\n" },
+    { "INSTRUMENT define", "INSTRUMENT 20,\"NAME TEST; OSC SAW 0.8 1 0 0.5; OSC SQUARE 0.5 0.5 7 0.25; FILTER 3 0.3 2 0.15; PITCH 12 0.05; ENV 0.01 0.2 0.6 0.1; VIB 5 0.1; GAIN 0.6\"", "<inst 20 TEST osc 2 gain 0.6 cut 3 res 0.3 pitch 12 env 1>\n<inst 20 factory>\n" },
+    { "INSTRUMENT define, lower case and commas", "INSTRUMENT 4,\"name x; osc triangle, 0.5; filter 2\"", "<inst 4 X osc 1 gain 1 cut 2 res 0 pitch 0 env 0>\n<inst 4 factory>\n" },
+    { "INSTRUMENT empty definition is a plain sine", "INSTRUMENT 31,\"\"", "<inst 31  osc 1 gain 1 cut 0 res 0 pitch 0 env 0>\n<inst 31 factory>\n" },
+    { "INSTRUMENT back to the factory one", "INSTRUMENT 5,\"OSC SINE\":INSTRUMENT 5", "<inst 5  osc 1 gain 1 cut 0 res 0 pitch 0 env 0>\n<inst 5 factory>\n" },
+    { "INSTRUMENT 3 is fixed", "INSTRUMENT 3,\"OSC SINE\"", "? Illegal argument\n" },
+    { "INSTRUMENT 32", "INSTRUMENT 32", "? Illegal argument\n" },
+    { "INSTRUMENT unknown command", "INSTRUMENT 20,\"FOO 1\"", "? Unknown instrument command 'FOO'\n" },
+    { "INSTRUMENT unknown wave", "INSTRUMENT 20,\"OSC BOGUS\"", "? Wave name expected after OSC (SINE SQUARE TRIANGLE NOISE SAW)\n" },
+    { "INSTRUMENT four oscillators", "INSTRUMENT 20,\"OSC SINE;OSC SAW;OSC SQUARE;OSC NOISE\"", "? At most 3 oscillators\n" },
+    { "INSTRUMENT value out of range", "INSTRUMENT 20,\"OSC SINE 5\"", "? Instrument value out of range\n" },
+    { "INSTRUMENT resonance 1", "INSTRUMENT 20,\"OSC SAW;FILTER 2 1\"", "? Instrument value out of range\n" },
+    { "INSTRUMENT wrong count", "INSTRUMENT 20,\"GAIN\"", "? Wrong number of values in the instrument definition\n" },
+    { "INSTRUMENT stray character", "INSTRUMENT 20,\"GAIN 1 x\"", "? Unexpected 'x' in the instrument definition\n" },
+    { "INSTRUMENT needs a number", "INSTRUMENT", "? Numeric expression expected\n" },
+    { "INSTRUMENT in a program, then WAVE", "10 INSTRUMENT 6,\"OSC SAW\":WAVE 1,6", "<inst 6  osc 1 gain 1 cut 0 res 0 pitch 0 env 0>\n<wave 0 6>\n<inst 6 factory>\n" },
+    { "PLAY selects an instrument with I", "PLAY \"I9 C\"", "<sync 1>\n<wave 0 9>\n<tone 0 261.626 0.5 0.4375>\n<tone 0 0 0 0.0625>\n<tone 0 0 0 0>\n" },
+    { "PLAY W takes 4..31 too", "PLAY \"W31 C\"", "<sync 1>\n<wave 0 31>\n<tone 0 261.626 0.5 0.4375>\n<tone 0 0 0 0.0625>\n<tone 0 0 0 0>\n" },
+    { "PLAY I 32 is an error", "PLAY \"I32 C\"", "? Value missing or out of range after 'I'\n" },
+    { "SFX takes back an instrument", "SFX 1,\"W1 ML R\":WAVE 1,7:SFX 1,1", "<wave 0 7>\n<sync 1>\n<wave 0 0>\n<env 0 off>\n<vib 0 0 0>\n<trem 0 0 0>\n<wave 0 1>\n<tone 0 0 0 0.5>\n<tone 0 0 0 0>\n<wave 0 7>\n" },
     { "SFX takes back vibrato and tremolo", "SFX 1,\"ML ~5,1 ^4,0.5 R\":SFX 1,1", "<sync 1>\n<wave 0 0>\n<env 0 off>\n<vib 0 0 0>\n<trem 0 0 0>\n<vib 0 5 1>\n<trem 0 4 0.5>\n<tone 0 0 0 0.5>\n<tone 0 0 0 0>\n<vib 0 0 0>\n<trem 0 0 0>\n" },
     { "SFX waits for the release before it takes back the envelope", "SFX 1,\"ML X0,0.1,0,0.5 R\":SFX 1,1", "<sync 1>\n<wave 0 0>\n<env 0 off>\n<vib 0 0 0>\n<trem 0 0 0>\n<env 0 0 0.1 0 0.5>\n<tone 0 0 0 0.5>\n<tone 0 0 0 0>\n<tone 0 0 0 0.5>\n<env 0 off>\n" },
     { "SFX gives back the wave the program had set", "WAVE 1,1:SFX 1,\"W3 ML R\":SFX 1,1", "<wave 0 1>\n<sync 1>\n<wave 0 0>\n<env 0 off>\n<vib 0 0 0>\n<trem 0 0 0>\n<wave 0 3>\n<tone 0 0 0 0.5>\n<tone 0 0 0 0>\n<wave 0 1>\n" },
@@ -1871,7 +1892,18 @@ static bool snd_isbusy( void* usrdata, int chan ) {
     return snd_busy[chan];
 }
 
-static const vm_sound_t test_sound = { snd_tone, snd_setwave, snd_setenv, snd_setvib, snd_settrem, snd_setpitch, snd_setvolume, snd_setbpm, snd_getbpm, snd_sync, snd_silence, snd_isbusy };
+static void snd_setinst( void* usrdata, int n, const synth_inst_t* def ) {
+    char text[120];
+    if ( def == 0 ) {
+        snprintf( text, sizeof(text), "<inst %d factory>\n", n );
+    } else {
+        snprintf( text, sizeof(text), "<inst %d %s osc %d gain %g cut %g res %g pitch %g env %d>\n", n, def->name, def->nosc, (double) def->gain,
+                  (double) def->cutmul, (double) def->res, (double) def->pitch, def->env ? 1 : 0 );
+    }
+    out_append( text );
+}
+
+static const vm_sound_t test_sound = { snd_tone, snd_setwave, snd_setenv, snd_setvib, snd_settrem, snd_setpitch, snd_setvolume, snd_setbpm, snd_getbpm, snd_sync, snd_silence, snd_isbusy, snd_setinst };
 
 // a graphics host that logs every operation as "<gfx NAME args>" (an omitted argument is -); queries return the sum of their arguments
 static int gfx_polls = 0;

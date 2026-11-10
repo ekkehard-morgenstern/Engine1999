@@ -942,6 +942,15 @@ static void host_snd_setwave( void* usrdata, int chan, int wave ) {
     sdlaud_setwave( chan, wave );
 }
 
+static void host_snd_setinst( void* usrdata, int n, const synth_inst_t* def ) {
+    if ( def != 0 ) {
+        snd_logf( -1, "instrument %d %s osc %d gain %g cut %g", n, def->name, def->nosc, (double) def->gain, (double) def->cutmul );
+    } else {
+        snd_logf( -1, "instrument %d factory", n );
+    }
+    sdlaud_setinst( n, def );
+}
+
 static void host_snd_setenv( void* usrdata, int chan, float a, float d, float s, float r ) {
     snd_logf( chan, "envelope %g %g %g %g", (double) a, (double) d, (double) s, (double) r );
     sdlaud_setenvelope( chan, a, d, s, r );
@@ -1682,7 +1691,7 @@ static const vm_gfx_t host_gfx = { host_gfx_op, host_gfx_query };
 
 static const vm_sound_t host_sound = {
     host_snd_tone, host_snd_setwave, host_snd_setenv, host_snd_setvib, host_snd_settrem, host_snd_setpitch, host_snd_setvolume,
-    host_snd_setbpm, host_snd_getbpm, host_snd_sync, host_snd_silence, host_snd_busy
+    host_snd_setbpm, host_snd_getbpm, host_snd_sync, host_snd_silence, host_snd_busy, host_snd_setinst
 };
 
 // the line editor of EDIT: ENTER returns the edited line, ESC (or a closed window) returns 0

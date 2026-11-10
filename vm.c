@@ -88,6 +88,7 @@ void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem ) {
     vm->sound    = 0;
     memset( vm->sfx, 0, sizeof(vm->sfx) );
     memset( vm->sfx_defined, 0, sizeof(vm->sfx_defined) );
+    vm->instdefined = 0;
     for ( int c=0; c < SND_NCHAN; ++c ) vm_chanstate_default( &vm->chanstate[c] );
     vm->input    = 0;
     vm->interrupt = 0;
@@ -255,6 +256,12 @@ void cleanup_vm( vm_t* vm ) {
         mml_free( &vm->sfx[i] );
         vm->sfx_defined[i] = false;
     }
+    if ( vm->sound != 0 && vm->sound->setinst != 0 ) {      // the program's instruments go (the factory ones come back)
+        for ( int n=SYNTH_NBASIC; n < SYNTH_NINST; ++n ) {
+            if ( ( vm->instdefined & ( UINT32_C(1) << n ) ) != 0 ) vm->sound->setinst( vm->userdata, n, 0 );
+        }
+    }
+    vm->instdefined = 0;
     vm_clear_request( vm );
     vm_clear_stacks( vm );
     free( vm->dstack );
@@ -3067,6 +3074,30 @@ static bool vm_sfx_define( vm_t* vm ) {
     return ok;
 }
 
+// INSTRUMENT n, a$ ( n s -- ): parses the definition and hands it to the host; INSTRUMENT n ( n -- ): the factory instrument again
+static bool vm_instrument( vm_t* vm, bool define ) {
+    double n = 0; char* str = 0;
+    if ( define && !vm_dpop_str( vm, &str ) ) {
+        return false;
+    }
+    if ( !vm_dpop_num( vm, &n ) ) {
+        free( str );
+        return false;
+    }
+    bool ok = true; synth_inst_t def; char err[MML_ERRLEN];
+    if ( !( n >= (double) SYNTH_NBASIC && n < (double) SYNTH_NINST ) ) {
+        ok = vm_error( vm, "Illegal argument" );
+    } else if ( define && !mml_parse_inst( str, &def, err ) ) {
+        ok = vm_error( vm, err );
+    } else {
+        uint32_t bit = UINT32_C(1) << (int) n;
+        if ( vm->sound != 0 && vm->sound->setinst != 0 ) vm->sound->setinst( vm->userdata, (int) n, define ? &def : 0 );
+        if ( define ) vm->instdefined |= bit; else vm->instdefined &= ~bit;
+    }
+    free( str );
+    return ok;
+}
+
 // SFX n [, ch] ( n ch -- ): plays the effect on the channel; 0 = a free effects channel (the highest of 9..16 that isn't busy)
 static bool vm_sfx_play( vm_t* vm ) {
     double n = 0, ch = 0;
@@ -3714,11 +3745,15 @@ static bool vm_sound( vm_t* vm, uint16_t kind ) {
             return vm_sfx_define( vm );
         case SNDK_SFXPLAY:
             return vm_sfx_play( vm );
+        case SNDK_INSTDEF:
+            return vm_instrument( vm, true );
+        case SNDK_INSTRESET:
+            return vm_instrument( vm, false );
         case SNDK_WAVE:
             if ( !vm_dpop_num( vm, &b ) || !vm_dpop_num( vm, &a ) || !vm_sound_channel( vm, a, &chan ) ) {
                 return false;
             }
-            if ( !( b >= 0.0 && b < 4.0 ) ) {
+            if ( !( b >= 0.0 && b < (double) SYNTH_NINST ) ) {       // 0..3 a basic wave, 4..31 an instrument
                 return vm_error( vm, "Illegal argument" );
             }
             if ( snd ) vm_set_wave( vm, chan, (int) b );

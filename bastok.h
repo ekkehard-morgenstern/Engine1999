@@ -125,7 +125,8 @@
 #define TOK_DEF         UINT8_C(72)         // DEF keyword
 #define TOK_INT         UINT8_C(73)         // INT keyword
 #define TOK_STR         UINT8_C(74)         // STR keyword
-// The token numbers 13, 75, 76 and 77 are UNUSED (2026-11-08, owner's decision: OPTION BASE and DEF INT / LNG / SNG / DBL are not language features here). They were
+#define TOK_INSTRUMENT  UINT8_C(75)         // INSTRUMENT keyword (took the free number of the former FLT, 2026-11-10; sound item 81)
+// The token numbers 13, 76 and 77 are UNUSED (2026-11-08, owner's decision: OPTION BASE and DEF INT / LNG / SNG / DBL are not language features here). They were
 // FLT, OPTION and BASE, reserved words that never had a meaning (13 was PUT, which is an alias of PUTREC now). They are not reserved words any more (the names are ordinary identifiers), the compiler does not know
 // the numbers, and a new keyword may take one. LOAD / MERGE / CHAIN of a binary program file (.e99) refuse a line that holds a token number nobody defines
 // (basrepl.c, repl_read_program(): "Unknown token in line n of the program file"), so no old file can be misread after a number is reused (the owner's decision of

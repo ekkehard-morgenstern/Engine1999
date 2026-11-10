@@ -268,7 +268,7 @@ static void test_queue( void ) {
     check( !synth_schedule( &s, 0, SYNTH_EV_PLAY, SYNTH_NCHAN, 440.0f, 0.5f, SYNTH_SINE ), "the channel after the last one is refused" );
     check( synth_schedule( &s, 0, SYNTH_EV_PLAY, SYNTH_NCHAN - 1, 440.0f, 0.5f, SYNTH_SINE ) && s.nevents == 1, "channel 16 is accepted" );
     synth_silence( &s, 0 );
-    check( !synth_schedule( &s, 0, SYNTH_EV_WAVE, 0, 0, 0, SYNTH_NWAVES ), "unknown wave refused" );
+    check( !synth_schedule( &s, 0, SYNTH_EV_WAVE, 0, 0, 0, (synth_wave_t) SYNTH_NINST ), "unknown wave / instrument refused" );
     check( s.nevents == 0, "refused events aren't queued" );
     // the queue is limited
     int ok = 0;
@@ -366,7 +366,13 @@ static void test_mml( void ) {
     check( mml_error( "L0", "out of range" ) && mml_error( "L65", "out of range" ), "mml: bad default length" );
     check( mml_error( "T0", "out of range" ) && mml_error( "T1001", "out of range" ), "mml: bad tempo" );
     check( mml_error( "V2", "out of range" ) && mml_error( "V", "out of range" ), "mml: bad volume" );
-    check( mml_error( "W4", "out of range" ), "mml: bad wave" );
+    check( mml_error( "W32", "out of range" ) && mml_error( "I32", "out of range" ) && mml_error( "I", "out of range" ), "mml: bad wave / instrument" );
+    {
+        mml_t m; char err[MML_ERRLEN];
+        check( mml_parse( "W4 C I31 D w0 E", &m, err ) && m.count == 6 + 0 && m.events[0].kind == MML_WAVE && m.events[0].wave == 4 &&
+               m.events[2].wave == 31 && m.events[4].wave == 0, "mml: W and I select 0..31" );
+        mml_free( &m );
+    }
     check( mml_error( "C0", "length" ) && mml_error( "C65", "length" ) && mml_error( "R99", "length" ), "mml: bad note length" );
     check( mml_error( "M", "ML, MN or MS" ) && mml_error( "MX", "ML, MN or MS" ), "mml: bad articulation" );
     check( mml_error( "O0 C", "Note out of range" ), "mml: note below 20 Hz" );
@@ -843,6 +849,29 @@ static void test_instruments( void ) {
     synth_instpreset( 4, &bad ); check( strcmp( bad.name, "BASS" ) == 0 && bad.nosc == 2 && bad.osc[1].mul == 0.5f, "preset copy (derived ratio filled in)" );
     synth_cleanup( &s );
     free( buf );
+
+    // the definition string parser
+    {
+        synth_inst_t in; char err[MML_ERRLEN];
+        check( mml_parse_inst( "", &in, err ) && in.nosc == 1 && in.osc[0].wave == SYNTH_SINE && in.cutmul == 0.0f && !in.env && in.name[0] == '\0', "inst string: empty = plain sine" );
+        check( mml_parse_inst( "name bass1; OSC saw 0.8; osc SQUARE,0.6,0.5,7,0.25 ; Filter 3 0.3 2 0.15;pitch 12 0.05;ENV 0.01 0.2 0.6 0.1;vib 5 0.1;gain 0.6", &in, err ) &&
+               strcmp( in.name, "BASS1" ) == 0 && in.nosc == 2 && in.osc[0].wave == SYNTH_SAW && near( in.osc[0].level, 0.8, 1e-6 ) &&
+               in.osc[1].wave == SYNTH_SQUARE && near( in.osc[1].ratio, 0.5, 1e-6 ) && near( in.osc[1].cents, 7.0, 1e-6 ) && near( in.osc[1].pw, 0.25, 1e-6 ) &&
+               near( in.cutmul, 3.0, 1e-6 ) && near( in.res, 0.3, 1e-6 ) && near( in.fenv, 2.0, 1e-6 ) && near( in.fdecay, 0.15, 1e-6 ) &&
+               near( in.pitch, 12.0, 1e-6 ) && in.env && near( in.s, 0.6, 1e-6 ) && near( in.vibrate, 5.0, 1e-6 ) && near( in.gain, 0.6, 1e-6 ), "inst string: every command" );
+        check( mml_parse_inst( "OSC NOISE", &in, err ) && in.osc[0].ratio == 0.0f, "inst string: noise defaults to white" );
+        check( mml_parse_inst( "OSC 4;FILTER 2", &in, err ) && in.osc[0].wave == SYNTH_SAW && near( in.fdecay, 0.2, 1e-6 ), "inst string: wave by number, default filter decay" );
+        check( mml_parse_inst( "OSC SINE -3", &in, err ) == false && strstr( err, "out of range" ) != 0, "inst string: negative level refused" );
+        check( mml_parse_inst( "OSC SINE 1 1 -1200", &in, err ) && near( in.osc[0].cents, -1200.0, 1e-6 ), "inst string: negative cents" );
+        check( !mml_parse_inst( "BOGUS 1", &in, err ) && strstr( err, "BOGUS" ) != 0, "inst string: unknown command named" );
+        check( !mml_parse_inst( "OSC SAW; OSC SAW; OSC SAW; OSC SAW", &in, err ), "inst string: 4 oscillators refused" );
+        check( !mml_parse_inst( "OSC SINE 1 1 0 0.5 9", &in, err ), "inst string: too many values" );
+        check( !mml_parse_inst( "ENV 1 2 3", &in, err ), "inst string: ENV needs 4 values" );
+        check( !mml_parse_inst( "NAME", &in, err ), "inst string: NAME needs a word" );
+        check( !mml_parse_inst( "GAIN 1 ?", &in, err ), "inst string: stray character" );
+        check( !mml_parse_inst( "FILTER 70", &in, err ), "inst string: cutoff range" );
+        check( mml_parse_inst( "NAME ABCDEFGHIJKLMNOP", &in, err ) && strlen( in.name ) == SYNTH_INST_NAMELEN - 1, "inst string: long name is cut" );
+    }
 }
 
 static void test_instrument_cpu( void ) {

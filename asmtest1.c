@@ -110,6 +110,8 @@ static void test_encodings( void ) {
     asmcase( "ERRR", "21 81" );
     asmcase( "WAIT", "21 44" );
     asmcase( "SND 13", "A1 42 00 0D" );
+    asmcase( "SND 14", "A1 42 00 0E" );
+    asmcase( "SND 15", "A1 42 00 0F" );
 }
 
 static void test_errors( void ) {
