@@ -69,7 +69,7 @@ PROGS=sdltest1 sdltest2 sdltest3 sdltest4 engine1999 joytest1 basictest1 testcom
 all: $(PROGS)
 	echo ok >all
 
-.PHONY: grammar grammar-check kit install uninstall man-check check dist orig clean distclean
+.PHONY: grammar grammar-check kit install uninstall man-check check hosttest dist orig clean distclean
 
 # the quick reference of the language (docs/grammar.md and docs/grammar.html) from bascomp.ebnf; needs perl
 grammar:
@@ -468,6 +468,11 @@ check: $(CHECKTESTS) engine1999 engine1999c
 	if sh levelstest.sh > $$log 2>&1; then printf '%-12s ok\n' levelstest; else printf '%-12s FAILED\n' levelstest; tail -n 20 $$log; fail=$$((fail+1)); fi; \
 	rm -f $$log; \
 	if [ $$fail -ne 0 ]; then echo "$$fail check(s) failed"; exit 1; fi; echo "all checks passed"
+
+# make hosttest: the window host's sound path with Xvfb, XTest typing (xtype.c) and SDL's disk audio driver (hosttest.sh); skipped if the X tools are missing.
+# Not part of "make check" (needs an X server program).
+hosttest: engine1999
+	sh hosttest.sh
 
 # make dist: engine1999-<version>.tar.gz with the files git tracks (but not the owner's backup and scratch folders) and the generated version.h,
 # so that the archive builds without git (tagtoverstr.sh keeps an existing version.h). Needs a git checkout; read-only git only.

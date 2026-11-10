@@ -639,6 +639,77 @@ static void test_mml_effects( void ) {
     check( mml_error( "~5", "'~'" ) && mml_error( "~5,25", "'~'" ) && mml_error( "^5,1.5", "'^'" ) && mml_error( "^101,1", "'^'" ), "mml: vibrato and tremolo values" );
 }
 
+// -- the basic waves are unchanged by the instruments ------------------------------------
+// The expected values were rendered with the synthesizer as it was before the instruments (git commit 7b7361b, 2026-11-08) and are compared with a
+// tolerance that also covers other compilers / CPUs. They pin the old signal path: a change that alters how the four basic waves sound fails here.
+// the scenarios of the golden test: one note of a basic wave in different settings; 0.8 s rendered in the chunks the audio worker would use
+typedef struct { double sum, rms; float at[5]; } gold_t;
+static gold_t gold_scenario( int wave, int mode ) {      // mode 0 plain, 1 envelope, 2 vibrato + tremolo, 3 glide, 4 wave set mid-note
+    synth_t s; synth_init( &s, 44100 );
+    synth_evspec_t sp;
+    synth_schedule( &s, 0, SYNTH_EV_WAVE, 0, 0, 0, (synth_wave_t) wave );
+    if ( mode == 1 ) { memset( &sp, 0, sizeof(sp) ); sp.type = SYNTH_EV_ENV; sp.p[0] = 0.01f; sp.p[1] = 0.1f; sp.p[2] = 0.6f; sp.p[3] = 0.2f; synth_schedule_ev( &s, 0, &sp ); }
+    if ( mode == 2 ) {
+        memset( &sp, 0, sizeof(sp) ); sp.type = SYNTH_EV_VIB; sp.p[0] = 5.0f; sp.p[1] = 0.3f; synth_schedule_ev( &s, 0, &sp );
+        memset( &sp, 0, sizeof(sp) ); sp.type = SYNTH_EV_TREM; sp.p[0] = 4.0f; sp.p[1] = 0.5f; synth_schedule_ev( &s, 0, &sp );
+    }
+    memset( &sp, 0, sizeof(sp) ); sp.type = SYNTH_EV_PLAY; sp.freq = 330.0f; sp.vol = 0.7f;
+    if ( mode == 3 ) { sp.freq2 = 660.0f; sp.dur = 500000000; }
+    synth_schedule_ev( &s, 0, &sp );
+    if ( mode == 4 ) synth_schedule( &s, 250000000, SYNTH_EV_WAVE, 0, 0, 0, (synth_wave_t)( ( wave + 1 ) % 4 ) );
+    synth_schedule( &s, 500000000, SYNTH_EV_STOP, 0, 0, 0, SYNTH_SINE );
+    int n = 44100 * 8 / 10;
+    float* buf = (float*) malloc( sizeof(float) * (size_t) n );
+    for ( int d = 0; d < n; d += 441 ) {
+        synth_runevents( &s, (uint64_t)( (double) d * 1e9 / 44100.0 ) );
+        synth_render( &s, buf + d, n - d < 441 ? n - d : 441 );
+    }
+    gold_t g; memset( &g, 0, sizeof(g) ); double e = 0;
+    for ( int i = 0; i < n; ++i ) { g.sum += buf[i]; e += (double) buf[i] * buf[i]; }
+    g.rms = sqrt( e / n );
+    static const int idx[5] = { 1000, 5000, 11025, 20000, 30000 };
+    for ( int k = 0; k < 5; ++k ) g.at[k] = buf[idx[k]];
+    free( buf ); synth_cleanup( &s );
+    return g;
+}
+
+typedef struct { int wave, mode; double sum, rms; float at[5]; } gold_expect_t;
+static const gold_expect_t gold_expect[] = {
+    { 0, 0, 0.000012, 0.391047, { 0.074658f, 0.356458f, -0.000000f, -0.590709f, 0.000000f } },
+    { 0, 1, -0.366646, 0.267163, { 0.070865f, 0.213875f, -0.000000f, -0.354425f, 0.002651f } },
+    { 0, 2, 2.818783, 0.301217, { -0.115135f, -0.355668f, -0.647818f, -0.424397f, 0.000000f } },
+    { 0, 3, -2.283135, 0.391065, { -0.418427f, -0.071458f, -0.421649f, 0.601757f, 0.000000f } },
+    { 0, 4, 2.787839, 0.338483, { 0.074658f, 0.356458f, -0.350000f, -0.350000f, 0.000000f } },
+    { 1, 0, 0.000008, 0.276538, { 0.350000f, 0.350000f, -0.350000f, -0.350000f, 0.000000f } },
+    { 1, 1, -0.332896, 0.188909, { 0.332219f, 0.210000f, -0.210000f, -0.210000f, 0.020688f } },
+    { 1, 2, 4.687790, 0.213002, { -0.336171f, -0.178706f, -0.350000f, -0.296775f, 0.000000f } },
+    { 1, 3, -4.808612, 0.276538, { -0.350000f, -0.350000f, -0.350000f, 0.350000f, 0.000000f } },
+    { 1, 4, 4.505775, 0.298803, { 0.350000f, 0.350000f, 0.700000f, 0.252381f, 0.000000f } },
+    { 2, 0, 0.000002, 0.319356, { 0.652381f, 0.461905f, 0.700000f, 0.252381f, 0.000000f } },
+    { 2, 1, 0.555701, 0.218128, { 0.619239f, 0.277143f, 0.420000f, 0.151429f, 0.039688f } },
+    { 2, 2, 11.770594, 0.245964, { 0.598681f, -0.022482f, 0.173156f, -0.292526f, 0.000000f } },
+    { 2, 3, 5.779778, 0.319334, { 0.414485f, 0.654429f, 0.411921f, 0.238952f, 0.000000f } },
+    { 2, 4, -14.892620, 0.254921, { 0.652381f, 0.461905f, 0.314553f, 0.342778f, 0.000000f } },
+    { 3, 0, -108.115880, 0.166570, { -0.008247f, 0.233951f, 0.314553f, 0.342778f, 0.000000f } },
+    { 3, 1, -131.551510, 0.111560, { -0.007828f, 0.140371f, 0.188732f, 0.205667f, 0.009849f } },
+    { 3, 2, -72.319385, 0.131031, { -0.007921f, 0.119453f, 0.314553f, 0.290651f, 0.000000f } },
+    { 3, 3, -88.143717, 0.163899, { -0.008247f, 0.074671f, -0.281671f, -0.123482f, 0.000000f } },
+    { 3, 4, -100.516852, 0.300477, { -0.008247f, 0.233951f, -0.000000f, -0.590709f, 0.000000f } },
+};
+
+static void test_basic_waves_golden( void ) {
+    static const char* const wn[4] = { "sine", "square", "triangle", "noise" };
+    static const char* const mn[5] = { "plain", "envelope", "vibrato + tremolo", "glide", "wave change mid-note" };
+    for ( size_t i = 0; i < sizeof(gold_expect) / sizeof(gold_expect[0]); ++i ) {
+        const gold_expect_t* e = &gold_expect[i];
+        gold_t g = gold_scenario( e->wave, e->mode );
+        bool ok = near( g.sum, e->sum, 0.02 ) && near( g.rms, e->rms, 1e-4 );
+        for ( int k = 0; k < 5; ++k ) if ( !near( g.at[k], e->at[k], 2e-4 ) ) ok = false;
+        char name[100]; snprintf( name, sizeof(name), "unchanged: %s, %s (rms %.5f, expected %.5f)", wn[e->wave], mn[e->mode], g.rms, e->rms );
+        check( ok, name );
+    }
+}
+
 // -- instruments -----------------------------------------------------------------------
 
 // amplitude of the frequency f in buf[from..to) (Goertzel)
@@ -969,6 +1040,7 @@ int main( void ) {
     test_lfos();
     test_immediate();
     test_mml_effects();
+    test_basic_waves_golden();
     test_instruments();
     test_preset_loudness();
     test_instrument_snapshots();
