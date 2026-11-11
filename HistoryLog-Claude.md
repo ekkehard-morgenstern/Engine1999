@@ -13,6 +13,8 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+- **README.md updated** (owner: update the front-facing README with screenshots and descriptions, gathered from the history log since the last update `b17b5f4`; then also screenshots of Bug Hunt, Y2K and Deqq's House II): the Sound bullet now describes instruments (28 presets, 32 user slots, FM, polyphony), stereo, `PAN` / `CUTOFF`, chords and `K` in `PLAY`; the UI / editors bullet lists all six tools (`fonted`, `insted`, `tracker` added); new bullet for screenshots (Print, Ctrl+Shift+P, `SCREENSHOT`); a new section "Sound: instruments, a tracker, a demo with a soundtrack" (instrument editor, tracker with `groove.trk`, four Y2K38 pictures); a new section "3D and demo scene" (Bug Hunt and Deqq's House II titles and game views, Y2K vector balls); demo table rows for `y2k38` and the tracker. 11 new images in `docs/images/` (taken in the window host under Xvfb, cropped to the window: `tool-insted`, `tool-tracker`, `y2k38-title / -server / -countdown / -overflow`, `bughunt-title`, `bughunt`, `deqq2-title`, `deqq2`, `y2k`). `xtype.c` (test helper) got the comma key. All image links checked. Test processes cleaned up.
+
 
 ## Log
 

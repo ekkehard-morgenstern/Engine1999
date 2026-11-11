@@ -18,13 +18,14 @@ When it is done, `BUILD` turns it into a standalone executable.
 - **Five display layers:** background, tiles, graphics, text and sprites, each with its own palette. Lines, circles, flood fill, `DRAW` strings, pictures defined in the program text
   with `DESIGN`, sprites with animation and collision detection, smooth scrolling. See [docs/graphics-subsystem.md](docs/graphics-subsystem.md).
 - **Sprite groups, paths and pictures:** one sprite can be a block of several (`SPRITE n,SIZE 3,3`) that moves and collides as one object, sprites can follow a path string on their own (`SPRITE n,PATH "..."`, with events), and pictures load and save as BMP files (`GFX LOAD`, `SPRITE SAVE`, ...).
-- **Sound:** a sixteen channel synthesizer (8 music, 8 effects) (sine, square, triangle and noise waves, envelopes, vibrato, glides). `PLAY "T120 O4 CDEFG"` plays music strings, `SOUND` and `SFX` make effects. See [docs/sound.md](docs/sound.md).
+- **Sound:** a sixteen channel stereo synthesizer (8 music, 8 effects). Besides the basic waves (sine, square, triangle, noise) it has **instruments**: 28 factory presets (bass, lead, pad, pluck, organ, strings, brass, flute, bell, drums, electric piano, distorted guitar, marimba, harp, ...) and 32 slots of your own, built from up to three oscillators with a filter, envelopes, FM, vibrato and polyphony (`INSTRUMENT 40,"OSC SAW 0.8; FILTER 3 0.3; ENV 0.01 0.2 0.6 0.3"`). `PLAY "T120 I5 O4 CDEFG [ACE]1"` plays music strings (instrument selection, chords, panning with `Y`, filter sweeps with `K`), `SOUND` and `SFX` make effects, `PAN` and `CUTOFF` shape a channel while it plays. See [docs/sound.md](docs/sound.md).
 - **Files and devices:** `OPEN`, `PRINT #`, `LINE INPUT`, random access records, and drivers addressed like `mem:`, `sh:`, `tcp:`, `res:`. See [docs/io-subsystem.md](docs/io-subsystem.md).
 - **Mouse, keyboard and game controllers:** `MOUSE(...)`, `KEY("name")` (is a key held right now?), `JOY(...)` for up to four pads, with `ON MOUSE`, `ON KEY` and `ON JOY` handlers. See [docs/controller-support.md](docs/controller-support.md).
-- **A UI toolkit and editors:** the `UI` statements give buttons, lists, sliders, scroll bars, overlapping windows and a pixel canvas; a file requester and three editors for sprites and tiles, music and sound effects are written in BASIC on top of it (`tools/spriteed.bas`, `musiced.bas`, `sfxed.bas`, `insted.bas`; start one from the prompt with `TOOL "spriteed"`, your program stays). See [docs/ui-subsystem.md](docs/ui-subsystem.md).
+- **A UI toolkit and editors:** the `UI` statements give buttons, lists, sliders, scroll bars, overlapping windows and a pixel canvas; a file requester, tabs, a character grid and more; the editors for sprites and tiles, fonts, music, sound effects, instruments and a pattern **tracker** are written in BASIC on top of it (`tools/spriteed.bas`, `fonted.bas`, `musiced.bas`, `sfxed.bas`, `insted.bas`, `tracker.bas`; start one from the prompt with `TOOL "spriteed"`, your program stays). See [docs/ui-subsystem.md](docs/ui-subsystem.md).
 - **Libraries:** `LOAD LIBRARY "name"` pulls in a shared BASIC library (the games share `util`, `input`, `text`, `hiscore`, `uikit`, ...); `BUILD` embeds them. See [docs/library-support.md](docs/library-support.md).
 - **Safe by default:** a running program may use the files below its own folder; anything else (other folders, shell commands, the network) asks first, and the answer can be remembered. Listings can be UTF-8. See [docs/security-policy.md](docs/security-policy.md).
 - **Selection and the clipboard in the editors:** the full-screen editor selects with Shift and the arrows or the mouse and copies, cuts and pastes through the system clipboard (the terminal's in the console version); BASIC programs get `CLIPBOARD$` / `CLIPBOARD a$` and a multi-line text editor widget (`UI EDIT`); `EDIT WINDOW` opens the program in a window editor built on it (`demos/notepad.bas` is a small text editor in BASIC).
+- **Screenshots:** the **Print** key (or Ctrl+Shift+P) saves the picture as a BMP file in the current directory, and `SCREENSHOT "name"` does the same from a program.
 - **Tools built in:** a full-screen editor (`EDIT`), a machine monitor with single-step and breakpoints (`MONITOR`), syntax colored `LIST`, `TRACE`, `STOP`/`CONT`, `RENUM`, `MERGE`, `CHAIN`.
 - **`BUILD "name"`** makes a standalone Linux executable from your program (details below).
 - **`engine1999c`**, a console version without a window for shell scripts and pipes: `engine1999c prog.bas` (also with a `#!` line), `echo 'PRINT 2^10' | engine1999c`, exit codes with `BYE n`. See [docs/console-host.md](docs/console-host.md).
@@ -80,6 +81,26 @@ The font stays changed when the tool ends:
 
 ![The prompt after the font editor: every K on the screen is a chess king now](docs/images/tool-fonted-text.png)
 
+### Sound: instruments, a tracker, a demo with a soundtrack
+
+The **instrument editor** (`TOOL "insted"`) shows every parameter of an instrument as a slider: three oscillators with ratio, detune, pulse width and FM, a filter with its own envelope, a pitch envelope, vibrato, polyphony. Notes sound while you move the sliders, and *Export* writes the `INSTRUMENT` line for your program:
+
+![The instrument editor: the BASS preset with its tabs, sliders and the definition string](docs/images/tool-insted.png)
+
+The **tracker** (`TOOL "tracker"`) is a pattern based music editor for up to eight channels: type notes with the piano keys, change the song while it plays, loop a pattern or the whole song, and export the song as `PLAY` strings for your own programs. `demos/groove.trk` is a small song to start with:
+
+![The tracker with the demo song groove.trk loaded: eight channels in colored columns](docs/images/tool-tracker.png)
+
+**Y2K38** is the sequel to the Y2K Countdown demo: a two minute megademo about the day in 2038 when a signed 32 bit clock runs over. Its dark industrial soundtrack is made by the program itself from the synthesizer's instruments, and the pictures show the 3D sector renderer (a flight through a server room), sprites on paths, a picture written to a BMP file and loaded back, and plenty of palette tricks:
+
+![Y2K38, the title: falling letters, a 32 bit counter](docs/images/y2k38-title.png)
+
+![Y2K38, a flight through a server room, drawn with the software 3D renderer](docs/images/y2k38-server.png)
+
+![Y2K38, the countdown to 03:14:07](docs/images/y2k38-countdown.png)
+
+![Y2K38, the overflow: the clock goes negative](docs/images/y2k38-overflow.png)
+
 ## Try it
 
 You need Linux, `gcc`, `make` and the SDL2 development files (on Debian and Ubuntu: `sudo apt install build-essential libsdl2-dev`). It is developed and tested on Debian 12 on x86-64.
@@ -119,8 +140,9 @@ Then try the demos: `LOAD "demos/orchard2"` and `RUN`. After `make install` the 
 | `demos/manor.bas` | **MANOR WALK**: a walk through a small house and garden with the 3D sector renderer: stairs, doors that slide up, a pool you cannot enter, a see-through window, a sky, a dark cellar with flickering torches |
 | `demos/glyphminer.bas` | **GLYPH MINER**: a cave digging game on the text screen with redefined characters for the cave, sprites for the miner and the enemies, sound effects and music |
 | `demos/y2k.bas` | **Y2K COUNTDOWN**: a silly demo in the style of 1999: copper bars, starfield, plasma, vector balls, tunnel, sine scroller, parallax landscape and a millennium bug finale, with a chip tune the program makes by itself (palette cycling, sprites, scrolled tiles, eight music channels); window only |
+| `demos/y2k38.bas` | **Y2K38**: the sequel as a two minute demo with a dark soundtrack: a 32 bit counter, hex rain, copper bars, a `W3D` flight through a server room, falling bits on sprite paths, a tape picture saved as BMP and torn into strips, the countdown to 03:14:07 on 19 January 2038, the overflow and the wrap to 1901 |
 | `demos/rustinpeace.bas` | **RUST IN PEACE**: a labyrinth game for one to four players: you are a rust ball, sneak up on the workers from behind, grow by eating nuts and bolts, and crush walls when you are big |
-| `tools/spriteed.bas`, `fonted.bas`, `musiced.bas`, `sfxed.bas`, `insted.bas` | The sprite and tile editor, the text font editor, the music editor, the sound effect editor and the instrument editor (UI programs); run them with `TOOL "name"` |
+| `tools/spriteed.bas`, `fonted.bas`, `musiced.bas`, `sfxed.bas`, `insted.bas`, `tracker.bas` | The sprite and tile editor, the text font editor, the music editor, the sound effect editor, the instrument editor and the tracker (UI programs); run them with `TOOL "name"` |
 | `demos/orchard.bas` | The first and simplest Orchard Defense, written to be read: the same game with fewer features |
 | `demos/gfx.bas` | The graphics layers: palettes, drawing, tiles, `DESIGN` pictures, sprites |
 | `demos/mouse.bas` | A small paint program for the mouse: draw, erase, choose pens from a color bar (the pointer changes its shape) |
@@ -148,6 +170,22 @@ Then try the demos: `LOAD "demos/orchard2"` and `RUN`. After `make install` the 
 ![The paint demo: strokes in several colors, the color bar below, the crosshair pointer](docs/images/mouse-paint.png)
 
 ![The keyboard demo: the keys that are held down right now are lit](docs/images/keys.png)
+
+### 3D and demo scene
+
+**Bug Hunt** and **Deqq's House II** use the software 3D sector renderer (`W3D`), which draws Doom-style worlds of sectors, portals and billboard things into a graphics layer. Bug Hunt is a first person shooter, Deqq's House II a stealth adventure in a crooked house with an alien who must not catch you:
+
+![The title screen of Bug Hunt](docs/images/bughunt-title.png)
+
+![Bug Hunt: a corridor of the bunker with an ammo box, a medkit, a barrel and a bug in the distance](docs/images/bughunt.png)
+
+![The title screen of Deqq's House II: the crooked house at night with a light in the window](docs/images/deqq2-title.png)
+
+![Deqq's House II: the front of the house, the open front door and a lamp](docs/images/deqq2.png)
+
+**Y2K Countdown** is a demo in the style of 1999, with copper bars, a starfield, a plasma, vector balls over a grid, a tunnel, a sine scroller and a millennium bug finale, to a chip tune that the program plays itself:
+
+![Y2K Countdown: vector balls over a synthwave sun and a grid floor](docs/images/y2k.png)
 
 See [demos/README.md](demos/README.md) for all of them. The language is documented in [docs/basic-language.md](docs/basic-language.md).
 
