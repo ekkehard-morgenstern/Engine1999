@@ -13,6 +13,8 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+- **Roadmap item 84 done: demo "Y2K38"** (owner: "Begin with item 84"; design answers: ~2 min in 9 parts; W3D server-room flythrough, glitching 32-bit clock, sprite paths + BMP pictures, palette / raster glitches; dark industrial music): new `demos/y2k38.bas` (about 1300 numbered lines, written as unnumbered source and numbered by a script), installed as `engine1999-y2k38` (`GAMES` in the makefile, `man/engine1999-y2k38.6`, `desktop/engine1999-y2k38.desktop`, icon `desktop/icons/engine1999-y2k38.svg`), `demos/README.md`; roadmap item 84 moved to `docs/roadmap/done.md`. Parts: boot / counter, hex rain, copper bars, `W3D` server room (w3dkit), timeline with falling bits on sprite paths, tape (`GFX SAVE` / `GFX LOAD` of `local:y2k38-tape.bmp`, strips with `GFX BLIT`), countdown, overflow, wrap. Music: DISTGUIT / ACIDBASS (+ `K` cutoff glide) / BASS / KICK / SNARE / HIHAT / PAD / METALLOPHONE. Checked in the window host under Xvfb: every part seen in screenshots; found and fixed: an illegal camera pitch (-80..80) froze the picture (an `ON ERROR` handler now shows errors), HUD text overdrawn (`W3K_HUDBAR`), `STR$` has no leading blank, `HEX$` is reserved (function renamed). **Not heard by me.** Facts: `BF` in `GFX LINE ...,c,BF` is the box-fill keyword, not the variable.
+
 
 ## Log
 

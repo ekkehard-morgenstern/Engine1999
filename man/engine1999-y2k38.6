@@ -1,0 +1,31 @@
+.\" Engine1999 - A 2D games engine written in C
+.\" Copyright (C) 2026  Ekkehard Morgenstern
+.\"
+.\" This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published
+.\" by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It is distributed WITHOUT ANY
+.\" WARRANTY. ADDITIONAL PERMISSION (GPLv3 section 7): the Engine1999 Runtime Exception applies, see the file LICENSE-EXCEPTION.
+.\"
+.\" Keep this page current: it describes the demo demos/y2k38.bas (an executable made with BUILD, installed by "make install").
+.TH ENGINE1999-Y2K38 6 "November 2026" "Engine 1999 @VERSION@" "Engine1999 Manual"
+.SH NAME
+engine1999-y2k38 \- Y2K38, the sequel to Y2K Countdown: a countdown to the 32-bit time overflow
+.SH SYNOPSIS
+.B engine1999-y2k38
+.RI [ part ]
+.SH DESCRIPTION
+A demo of about two minutes, in nine parts, to a dark industrial tune that the program makes by itself (distorted lead, acid bass arpeggio with an opening filter, bass, drums, pads and bells from the synthesizer's instruments). It counts down to 03:14:07 UTC on 19 January 2038, when a signed 32-bit time_t overflows and the clock jumps back to 13 December 1901, 20:45:52: the boot screen with the 32 bit counter, hex rain, copper bars, a flight through a server room made with the 3D sector renderer, a timeline with falling bits on sprite paths, a corrupted tape (a picture written to a BMP file, loaded back and torn into strips), the countdown, the overflow and the wrap.
+.PP
+All motion follows the clock, so the demo runs at the same speed on a fast and on a slow machine. The tape part writes the file \fIy2k38-tape.bmp\fR into the program's own \fBlocal:\fR folder. The program is the demo \fIy2k38.bas\fR of Engine1999, made into an executable with
+.B BUILD
+(window kind: it needs the SDL2 library, nothing else). The window can be switched between the full screen and a window with F11 or ALT+RETURN.
+.SH OPTIONS
+.TP
+.I part
+a number from 0 to 8: start the demo at that part (0 boot, 1 hex rain, 2 copper bars, 3 server room, 4 timeline, 5 tape, 6 countdown, 7 overflow, 8 the wrap), the music starting there too.
+.SH CONTROLS
+.TP
+.B "Q, ESC"
+end the demo.
+.SH SEE ALSO
+.BR engine1999 (1),
+.BR engine1999\-basic (7)
