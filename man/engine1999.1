@@ -123,11 +123,11 @@ shows its own name). The keys are used up by the Engine: a program does not rece
 .RB "(" KEY("F11")
 still tells that F11 is held).
 .TP
-.B PRINT SCREEN (Print)
+.B Print, CTRL+SHIFT+P
 Saves the picture of the screen (the composed layers, 640 x 300 pixels, without the window frame or the bars of a scaled window) as a 24 bit BMP file
 .B shot-YYYYMMDD-HHMMSS-n.bmp
 in the current directory. The file is written by a thread of its own, so the screen does not wait for the disk; the name is printed on the standard error output.
-A program does not receive the key. The statement
+Ctrl+Shift+P does the same for window managers that take the Print key for themselves. A program does not receive these keys. The statement
 .B SCREENSHOT
 does the same from a program (window version only).
 .TP

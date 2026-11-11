@@ -85,7 +85,11 @@ sleep 2
 set -- "$T"/shot-*.bmp
 [ -e "$1" ] || { echo "FAILED: hosttest (the Print key made no shot-*.bmp file)"; exit 1; }
 shotcheck "$1"
-echo "screenshots: SCREENSHOT \"shota\" and the Print key ($(basename "$1")) ok"
+DISPLAY=":$N" "$T/xtype" "$(printf '\002')" || { echo "FAILED: hosttest (typing failed)"; exit 1; }
+sleep 2
+n=$(ls "$T"/shot-*.bmp 2> /dev/null | wc -l)
+[ "$n" -ge 2 ] || { echo "FAILED: hosttest (Ctrl+Shift+P made no second shot-*.bmp file)"; exit 1; }
+echo "screenshots: SCREENSHOT \"shota\" and the keys Print and Ctrl+Shift+P ($(basename "$1")) ok"
 # the recording: 32-bit float, stereo (left, right), 44100 Hz. Find the start of the sound, then the amplitudes of 220 Hz and 660 Hz in a window of the first note (0.2 .. 0.7 s)
 # and of the second one (1.2 .. 1.7 s), with the Goertzel algorithm.
 od -An -v -f -w8 "$T/out.raw" | awk '

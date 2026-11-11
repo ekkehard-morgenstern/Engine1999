@@ -612,7 +612,8 @@ static int sdlscr_worker( void* arg ) {
                         }
                         break;
                     }
-                    if ( ev.key.keysym.sym == SDLK_PRINTSCREEN ) {      // the screenshot key: not a key of the program
+                    if ( ev.key.keysym.sym == SDLK_PRINTSCREEN ||        // the screenshot keys (not keys of the program): Print, and Ctrl+Shift+P for window managers that take Print
+                         ( ev.key.keysym.sym == SDLK_p && ( ev.key.keysym.mod & KMOD_CTRL ) != 0 && ( ev.key.keysym.mod & KMOD_SHIFT ) != 0 ) ) {
                         if ( !ev.key.repeat ) {
                             shotkey = true;
                         }
