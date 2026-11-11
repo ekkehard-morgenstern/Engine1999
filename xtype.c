@@ -27,7 +27,7 @@
 */
 
 // Test helper of hosttest.sh: types a text into the X display with the XTest extension (as a keyboard would), one key every 60 ms.
-// Usage: DISPLAY=:N ./xtype 'text with \n for Return'. Only the characters the tests need: letters, digits, space, quotes, period, slash, minus, underscore.
+// Usage: DISPLAY=:N ./xtype 'text with \n for Return'. Only the characters the tests need: letters, digits, space, quotes, period, slash, minus, underscore, and the byte 1 = the Print key.
 
 #include <X11/Xlib.h>
 #include <X11/keysym.h>
@@ -53,6 +53,7 @@ int main( int argc, char** argv ) {
         bool shift = false;
         switch ( *p ) {
             case '\n': ks = XK_Return; break;
+            case '\001': ks = XK_Print; break;       // the screenshot key
             case ' ':  ks = XK_space; break;
             case '"':  ks = XK_quotedbl; shift = true; break;
             case '.':  ks = XK_period; break;

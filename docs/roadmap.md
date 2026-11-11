@@ -63,14 +63,12 @@ the parts when items are done or added.
 | 46 | Claude integration text screen (14) | Low | [Hosts, editors and terminals](roadmap/hosts.md) |
 | 47 | UI subsystem (15) | Medium | [Graphics, UI and 3D](roadmap/graphics-and-ui.md) |
 | 49 | Window opens in the background (4) | High | [Hosts, editors and terminals](roadmap/hosts.md) |
-| 56 | Audio tracker (17) | Medium-Low | [Sound and music](roadmap/sound.md) |
 | 57 | Speech synthesis (17) | Low | [Sound and music](roadmap/sound.md) |
 | 58 | Demo scene programs (17) | Low | [Projects, games and packaging](roadmap/projects.md) |
 | 65 | Split screen: `TILE VIEW` and the cost of it (64) | Low-Medium | [Graphics, UI and 3D](roadmap/graphics-and-ui.md) |
 | 66 | Packages for Debian and Ubuntu, build system (60) | libc-dev`, `libsdl2-dev`), `engine1999-games` | [Projects, games and packaging](roadmap/projects.md) |
 | 80 | 3D renderer: hardware path, room-over-room, translucency, more (18) | Low | [Graphics, UI and 3D](roadmap/graphics-and-ui.md) |
 | 81 | Synthesizer instruments: subtractive first, 16 presets (2b) | Medium | [Sound and music](roadmap/sound.md) |
-| 82 | Screenshot key and `SCREENSHOT` (item 83 step 1) | Medium | [Graphics, UI and 3D](roadmap/graphics-and-ui.md) |
 | 83 | AV capture subsystem: audio / video recording with a lock-free queue and ffmpeg | Medium | [Graphics, UI and 3D](roadmap/graphics-and-ui.md) |
 | 84 | Demo "Y2K38", a sequel to Y2K Countdown (17) | Low | [Projects, games and packaging](roadmap/projects.md) |
 

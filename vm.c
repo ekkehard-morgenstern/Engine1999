@@ -3477,7 +3477,7 @@ static bool vm_gfx_command( vm_t* vm, uint16_t op ) {
     int nnum = 0;
     for ( int i=0; i < total; ++i ) {
         char k = cmd->sig[i];
-        if ( k == 'v' ) hasresult = true; else if ( k == 's' ) hasstr = true; else ++nnum;
+        if ( k == 'v' ) hasresult = true; else if ( k == 's' || k == 'S' ) hasstr = true; else ++nnum;
     }
     na = nnum;
     // pop in reverse order of the signature
@@ -3487,7 +3487,7 @@ static bool vm_gfx_command( vm_t* vm, uint16_t op ) {
         if ( k == 'v' ) {
             continue;
         }
-        if ( k == 's' ) {
+        if ( k == 's' || k == 'S' ) {
             if ( !vm_dpop_bstr( vm, &s, &slen ) ) {
                 free( s );
                 return false;

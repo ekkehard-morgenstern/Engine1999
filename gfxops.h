@@ -42,7 +42,8 @@ code generator, the VM and the hosts use the same table, so a statement is descr
 
 Signature characters, one per argument in source order:
     n   a numeric expression              o   an optional numeric expression (omitted: GFX_NONE is passed)
-    s   a string expression               v   a string variable that receives the string result of the operation (always last)
+    s   a string expression               S   the same, optional (omitted: the empty string)
+    v   a string variable that receives the string result of the operation (always last)
     w   a word out of the command's word list (required)    W   the same, optional (omitted: GFX_NONE)
 A word is looked up in the list (words "A,B,C" gives A = 0, B = 1, C = 2) and passed as that number.
 The statement runs the instruction GFXC with the operation number; the VM pops the arguments, calls the host and pushes the string result for 'v'.
@@ -187,6 +188,10 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXOP_W3DTHINGOFF 162           // W3D THINGOFF n
 #define GFXOP_W3DTHINGMOVE 163          // W3D THINGMOVE n, dx, dy
 #define GFXOP_W3DTHINGLIGHT 164         // W3D THINGLIGHT n, light
+#define GFXOP_UIGRID    167             // UI GRID id, x, y, cols, rows               (a character grid: cols x rows cells of the 8 x 12 font, each with its own colors; keys -> event 9, clicks -> event 10)
+#define GFXOP_UIGRIDPUT 168             // UI GRIDPUT id, col, row, a$ [, fg [, bg]]  (text into the grid; colors are palette entries 1..255, 0 the theme's)
+#define GFXOP_UIGRIDCLEAR 169           // UI GRIDCLEAR id [, fg [, bg]]              (spaces everywhere)
+#define GFXOP_SCREENSHOT 166            // SCREENSHOT [file$]                       (the composed picture as a BMP; no name: shot-YYYYMMDD-HHMMSS-n.bmp in the current directory)
 #define GFXOP_W3DLIFT   165             // W3D LIFT h                             (the height of the feet above the floor: a jump; the eye rises with it and steps up to step + h can be taken)
 #define GFXOP_W3DFIRST  GFXOP_W3DRESET
 #define GFXOP_W3DLAST   GFXOP_W3DLIFT

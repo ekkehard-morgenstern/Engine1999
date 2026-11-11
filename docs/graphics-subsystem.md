@@ -249,6 +249,15 @@ the run like all handlers), the contents of variables. A program that wants a cl
   exceed 255). For all 256 values use the string forms, which are the same images as binary strings.
 - Errors: "Bad design row" (wrong length, a bad character, base overflow), "Design without DESIGN".
 
+## Screenshots (roadmap item 82, 2026-11-11)
+
+`shot.[ch]` (no SDL; test `shottest1`, in `make check`). The picture is the **composed layers** (the five layer memories drawn over the backdrop in priority order with the renderer's alpha blending: `shot_compose()`), 640 x 300, 24 bit BMP; not the window (no scaling, no letterbox bars; the mouse pointer sprite is in it while shown). The screen thread owns the layer memories, so only it composes. Two ways out, both without locks (atomic words, the standing rule):
+
+- **The key Print** (`SDLK_PRINTSCREEN`, window host; the key is used up by the Engine like F11): the screen thread composes into a buffer of its own and starts a short-lived thread that writes `shot-YYYYMMDD-HHMMSS-n.bmp` in the current directory (`n` counts per run), so the screen thread never waits for the disk; the thread prints `screenshot saved: name` on the standard error output.
+- **`SCREENSHOT [file$]`** (extension word `XF_SCREENSHOT` 33, `GFXOP_SCREENSHOT` 166, signature `S` = an optional string): the program thread asks by an atomic request slot (`shot_grab()`), the screen thread composes into the slot at the end of its frame and answers (`shot_serve()`; one frame, 1 s time-out), the program thread encodes and writes through the I/O layer (`iodev_write_all`), so the security policy question (a name outside the program's folder) is asked in the program's thread as for `GFX SAVE`. Console host: "Not available in the console host" (item 83 plans a console render thread).
+
+This is step 1 of item 83 (the AV capture subsystem): its queue and writer threads will replace the thread-per-shot and the slot. Checks: `shottest1` (compose, priorities, disabled layers, BMP bytes, names, 200 requests across two threads, ASan / TSan clean), `vmtest1` (4 cases), `hosttest.sh` (the real window host: the statement and the Print key under Xvfb, BMP size and header, a picture that is not flat).
+
 ## Differences from Simons' BASIC
 
 Simons' BASIC (1983) is the model of `DESIGN` and of the command groups; only the keyword list and one-line descriptions were available, so the syntax is our own.

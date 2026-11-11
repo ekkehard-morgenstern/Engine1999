@@ -483,6 +483,7 @@ bool read_brclit( rbuf_t* rbuf, char** ptarget );
 #define XF_ROUND        UINT8_C(29)         // ROUND(x [, digits]): x rounded to digits decimals (half away from zero; digits < 0 rounds to tens, hundreds ...)
 #define XF_CINT         UINT8_C(30)         // CINT(x): x rounded to the nearest integer (half away from zero); "Overflow" outside the 32-bit range
 #define XF_CDBL         UINT8_C(31)         // CDBL(x): x as a floating point number (the number itself: every number is one)
+#define XF_SCREENSHOT   UINT8_C(33)         // SCREENSHOT [file$]: saves the picture on the screen as a BMP file (roadmap item 82)
 #define XF_INSTR        UINT8_C(32)         // INSTR([start,] hay$, needle$): the position of needle in hay, 0 if none
 #define XF_W3D          UINT8_C(20)         // W3D: the software 3D sector renderer: statements W3D SECTOR, W3D WALL ... and the function W3D("X")
 #define XF_TOOL         UINT8_C(19)         // TOOL name$ [, arg$]: runs a tool (an editor in BASIC from the tools folder) without losing the current program

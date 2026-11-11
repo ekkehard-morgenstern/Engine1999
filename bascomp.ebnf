@@ -521,6 +521,9 @@ locate-stmt := TOK_LOCATE num-expr TOK_COMMA num-expr .
 -- HTAB x moves the cursor to column x (0..79) of its row, VTAB y to row y (0..24) of its column; both are extension words.
 htab-stmt := HTAB num-expr .
 vtab-stmt := VTAB num-expr .
+-- SCREENSHOT [file$] saves the picture of the composed layers (640 x 300) as a 24 bit BMP file (default extension .bmp; no name: shot-YYYYMMDD-HHMMSS-n.bmp
+-- in the current directory); an extension word, window host only. The Print key does the same without a program.
+screenshot-stmt := SCREENSHOT [ str-expr ] .
 color-stmt := TOK_COLOR num-expr [ TOK_COMMA num-expr ] .
 symbol-stmt := TOK_SYMBOL num-expr TOK_COMMA str-expr .
 -- DESIGN defines a sprite, tile or character by pictures: the following "@" statements (design-row) give one row each, executed in
@@ -538,6 +541,8 @@ mouse-stmt := TOK_MOUSE ( SHOW | HIDE | POS num-expr TOK_COMMA num-expr | TIMEOU
 on-mouse-stmt := TOK_ON TOK_MOUSE ( goto-kw goto-target | TOK_OFF ) .
 -- The UI subsystem (docs/ui-subsystem.md; UI is an extension word): widgets on the graphics layer. Every widget has an id (a positive number the program chooses); x, y, w, h are
 -- UI TAB id,x,y,w,h,names$ is a strip of tabs (the names separated by |); UI("GET"|VALUE) is the selected tab 0..; a change event when it changes (click, Left / Right); the program shows its pages.
+-- UI GRID id,x,y,cols,rows is a grid of character cells (8 x 12 font) with colors per cell: UI GRIDPUT id,col,row,a$ [,fg [,bg]] writes text, UI GRIDCLEAR id [,fg [,bg]] empties it; it takes the focus and
+-- reports every key but Tab / Escape (event kind 9, value = the key code) and clicks on a cell (kind 10, value = row * cols + col). The editor of tools/tracker.bas is built on it.
 -- UI EDIT is a multi-line text editor (lines separated by LF, selection, clipboard, undo; UI GETTEXT reads the text, UI("CARET" | "LINE" | "COLUMN" | "SELECTED" | "LINES", id) its state).
 -- UI COLOR sets the colors of one widget (palette entries; -1 the theme's), UI THEME a preset (0 classic, 1 dark, 2 high contrast), UI SYNTAX the highlighting of an editor (0 none, 1 BASIC),
 -- UI SYNTAXCOLOR the palette entry of a syntax slot 0..15, UI HILITE the slots a program gives (one byte per byte of the text); UI("THEME"), UI("SYNTAX", id), UI("COLOR", id, 0|1), UI("SYNTAXCOLOR", slot) read them.
@@ -547,6 +552,9 @@ ui-stmt := TOK_XFUNC(UI) ( OPEN | CLOSE | CLEAR | UPDATE |
                            RADIO ui-geometry TOK_COMMA str-expr [ TOK_COMMA num-expr ] |
                            ( LIST | PROGRESS ) ui-geometry | ( SLIDER | SCROLL ) ui-geometry [ TOK_COMMA num-expr ] |
                            PAGE num-expr TOK_COMMA num-expr | JOY num-expr |
+                           GRID num-expr TOK_COMMA num-expr TOK_COMMA num-expr TOK_COMMA num-expr TOK_COMMA num-expr |
+                           GRIDPUT num-expr TOK_COMMA num-expr TOK_COMMA num-expr TOK_COMMA str-expr [ TOK_COMMA num-expr [ TOK_COMMA num-expr ] ] |
+                           GRIDCLEAR num-expr [ TOK_COMMA num-expr [ TOK_COMMA num-expr ] ] |
                            WINDOW ui-geometry TOK_COMMA str-expr | MOVE num-expr TOK_COMMA num-expr TOK_COMMA num-expr | RAISE num-expr |
                            CANVAS ui-geometry TOK_COMMA num-expr TOK_COMMA num-expr | PIXEL num-expr TOK_COMMA num-expr TOK_COMMA num-expr TOK_COMMA num-expr |
                            IMAGE num-expr TOK_COMMA str-expr | GETIMAGE num-expr TOK_COMMA str-var-ref |
@@ -577,7 +585,7 @@ w3d-stmt := TOK_XFUNC(W3D) ( RESET | COLORMAP | RENDER | TEXTURE num-expr TOK_CO
                              PLAYER num-expr TOK_COMMA num-expr TOK_COMMA num-expr TOK_COMMA num-expr |
                              VIEW num-expr TOK_COMMA num-expr TOK_COMMA num-expr TOK_COMMA num-expr [ TOK_COMMA num-expr [ TOK_COMMA num-expr ] ] |
                              THING num-expr TOK_COMMA num-expr TOK_COMMA num-expr TOK_COMMA num-expr TOK_COMMA num-expr TOK_COMMA num-expr ) .
-gfx-all-stmt := gfx-stmt | txt-stmt | tile-stmt | sprite-stmt | mouse-stmt | on-mouse-stmt | ui-stmt | w3d-stmt | cls-stmt | locate-stmt | htab-stmt | vtab-stmt | color-stmt | symbol-stmt | design-stmt | design-row | on-collision-stmt .
+gfx-all-stmt := gfx-stmt | txt-stmt | tile-stmt | sprite-stmt | mouse-stmt | on-mouse-stmt | ui-stmt | w3d-stmt | cls-stmt | locate-stmt | htab-stmt | vtab-stmt | screenshot-stmt | color-stmt | symbol-stmt | design-stmt | design-row | on-collision-stmt .
 
 --# Statements and lines
 -- The statements by group: io-stmt (PRINT, INPUT, GET, DATA, READ, OPEN, CLOSE, ...), prog-stmt (program commands, sound, graphics, timers, error

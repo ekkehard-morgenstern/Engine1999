@@ -717,6 +717,13 @@ locate-stmt := LOCATE num-expr "," num-expr .
 ```ebnf
 htab-stmt := HTAB num-expr .
 vtab-stmt := VTAB num-expr .
+```
+
+> SCREENSHOT [file$] saves the picture of the composed layers (640 x 300) as a 24 bit BMP file (default extension .bmp; no name: shot-YYYYMMDD-HHMMSS-n.bmp
+> in the current directory); an extension word, window host only. The Print key does the same without a program.
+
+```ebnf
+screenshot-stmt := SCREENSHOT [ str-expr ] .
 color-stmt := COLOR num-expr [ "," num-expr ] .
 symbol-stmt := SYMBOL num-expr "," str-expr .
 ```
@@ -752,6 +759,8 @@ on-mouse-stmt := ON MOUSE ( goto-kw goto-target | OFF ) .
 
 > The UI subsystem (docs/ui-subsystem.md; UI is an extension word): widgets on the graphics layer. Every widget has an id (a positive number the program chooses); x, y, w, h are
 > UI TAB id,x,y,w,h,names$ is a strip of tabs (the names separated by \|); UI("GET"\|VALUE) is the selected tab 0..; a change event when it changes (click, Left / Right); the program shows its pages.
+> UI GRID id,x,y,cols,rows is a grid of character cells (8 x 12 font) with colors per cell: UI GRIDPUT id,col,row,a$ [,fg [,bg]] writes text, UI GRIDCLEAR id [,fg [,bg]] empties it; it takes the focus and
+> reports every key but Tab / Escape (event kind 9, value = the key code) and clicks on a cell (kind 10, value = row \* cols + col). The editor of tools/tracker.bas is built on it.
 > UI EDIT is a multi-line text editor (lines separated by LF, selection, clipboard, undo; UI GETTEXT reads the text, UI("CARET" \| "LINE" \| "COLUMN" \| "SELECTED" \| "LINES", id) its state).
 > UI COLOR sets the colors of one widget (palette entries; -1 the theme's), UI THEME a preset (0 classic, 1 dark, 2 high contrast), UI SYNTAX the highlighting of an editor (0 none, 1 BASIC),
 > UI SYNTAXCOLOR the palette entry of a syntax slot 0..15, UI HILITE the slots a program gives (one byte per byte of the text); UI("THEME"), UI("SYNTAX", id), UI("COLOR", id, 0\|1), UI("SYNTAXCOLOR", slot) read them.
@@ -763,6 +772,9 @@ ui-stmt := XFUNC(UI) ( OPEN | CLOSE | CLEAR | UPDATE |
                            RADIO ui-geometry "," str-expr [ "," num-expr ] |
                            ( LIST | PROGRESS ) ui-geometry | ( SLIDER | SCROLL ) ui-geometry [ "," num-expr ] |
                            PAGE num-expr "," num-expr | JOY num-expr |
+                           GRID num-expr "," num-expr "," num-expr "," num-expr "," num-expr |
+                           GRIDPUT num-expr "," num-expr "," num-expr "," str-expr [ "," num-expr [ "," num-expr ] ] |
+                           GRIDCLEAR num-expr [ "," num-expr [ "," num-expr ] ] |
                            WINDOW ui-geometry "," str-expr | MOVE num-expr "," num-expr "," num-expr | RAISE num-expr |
                            CANVAS ui-geometry "," num-expr "," num-expr | PIXEL num-expr "," num-expr "," num-expr "," num-expr |
                            IMAGE num-expr "," str-expr | GETIMAGE num-expr "," str-var-ref |
@@ -797,7 +809,7 @@ w3d-stmt := XFUNC(W3D) ( RESET | COLORMAP | RENDER | TEXTURE num-expr "," str-ex
                              PLAYER num-expr "," num-expr "," num-expr "," num-expr |
                              VIEW num-expr "," num-expr "," num-expr "," num-expr [ "," num-expr [ "," num-expr ] ] |
                              THING num-expr "," num-expr "," num-expr "," num-expr "," num-expr "," num-expr ) .
-gfx-all-stmt := gfx-stmt | txt-stmt | tile-stmt | sprite-stmt | mouse-stmt | on-mouse-stmt | ui-stmt | w3d-stmt | cls-stmt | locate-stmt | htab-stmt | vtab-stmt | color-stmt | symbol-stmt | design-stmt | design-row | on-collision-stmt .
+gfx-all-stmt := gfx-stmt | txt-stmt | tile-stmt | sprite-stmt | mouse-stmt | on-mouse-stmt | ui-stmt | w3d-stmt | cls-stmt | locate-stmt | htab-stmt | vtab-stmt | screenshot-stmt | color-stmt | symbol-stmt | design-stmt | design-row | on-collision-stmt .
 ```
 
 ## Statements and lines

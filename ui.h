@@ -63,7 +63,7 @@ callbacks to sdlscreen) and on a gfxcore bitmap in the test. All coordinates are
 #define UI_THEMES       3               // the presets: 0 classic (grey), 1 dark, 2 high contrast
 
 typedef enum _ui_kind_t {
-    UIK_NONE = 0, UIK_LABEL, UIK_BUTTON, UIK_CHECK, UIK_RADIO, UIK_TEXT, UIK_LIST, UIK_PROGRESS, UIK_SLIDER, UIK_PANEL, UIK_SCROLL, UIK_CANVAS, UIK_EDIT, UIK_TAB, UIK_COUNT
+    UIK_NONE = 0, UIK_LABEL, UIK_BUTTON, UIK_CHECK, UIK_RADIO, UIK_TEXT, UIK_LIST, UIK_PROGRESS, UIK_SLIDER, UIK_PANEL, UIK_SCROLL, UIK_CANVAS, UIK_EDIT, UIK_TAB, UIK_GRID, UIK_COUNT
 } ui_kind_t;
 
 #define UIE_CLICK       1               // a button was clicked
@@ -73,6 +73,8 @@ typedef enum _ui_kind_t {
 #define UIE_ENTER       5               // Return in a text field (value = length)
 #define UIE_PIXEL       7               // canvas: a cell was pressed or dragged over with the left button (value = y * cells wide + x)
 #define UIE_PIXEL2      8               // canvas: the same with the right button
+#define UIE_KEY         9               // grid: a key was typed while it had the focus (value = the key code: UIKEY_* or the character, Tab and Escape stay the UI's)
+#define UIE_CELL        10              // grid: a cell was clicked with the left button (value = row * columns + column)
 #define UIE_CANCEL      6               // a pop-up list was closed without a choice, or Escape in a modal panel (id = the pop-up / the panel)
 
 typedef struct _ui_event_t {
@@ -221,6 +223,13 @@ bool ui_set_canvas( ui_t* ui, int id, int cw, int ch );         // gives a canva
 bool ui_canvas_set( ui_t* ui, int id, int x, int y, int c );
 int  ui_canvas_get( ui_t* ui, int id, int x, int y );           // the cell, -1 for a bad id or place
 bool ui_canvas_load( ui_t* ui, int id, const uint8_t* data, size_t n );        // cw * ch bytes (fewer: the rest is 0)
+// the character grid (UIK_GRID, roadmap item 56): cols x rows cells of the fixed 8 x 12 font, each a character with its own text and background color (a palette
+// entry 1..255, 0 = the theme's). It takes the focus and reports every key but Tab / Escape (UIE_KEY) and the clicks on a cell (UIE_CELL): the program draws the
+// contents and reacts, so the grid is the view of a tracker's pattern or any text based table.
+bool ui_set_grid( ui_t* ui, int id, int cols, int rows );
+bool ui_grid_put( ui_t* ui, int id, int col, int row, const char* text, size_t len, int fg, int bg );    // fg / bg -1: unchanged; the text is cut at the right edge
+bool ui_grid_clear( ui_t* ui, int id, int fg, int bg );                                                  // spaces everywhere, with the colors (-1: unchanged... 0: the theme's)
+int  ui_grid_cell( ui_t* ui, int id, int col, int row );                                                 // the character, -1 for a bad id or place
 bool ui_canvas_save( ui_t* ui, int id, uint8_t* out, size_t cap, size_t* n );
 bool ui_move( ui_t* ui, int id, int x, int y );                 // moves a widget to x, y; a window takes the widgets it owns along
 bool ui_raise( ui_t* ui, int id );                              // a window (and its widgets) in front of the others

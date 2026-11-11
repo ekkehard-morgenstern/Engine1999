@@ -70,7 +70,7 @@ static bool inside( const ui_widget_t* inner, const ui_widget_t* outer ) {
 
 static bool focusable( const ui_widget_t* w ) {
     return ( w->flags & UIF_VISIBLE ) && ( w->flags & UIF_ENABLED ) &&
-        ( w->kind == UIK_BUTTON || w->kind == UIK_CHECK || w->kind == UIK_RADIO || w->kind == UIK_TEXT || w->kind == UIK_LIST || w->kind == UIK_SLIDER || w->kind == UIK_SCROLL || w->kind == UIK_EDIT || w->kind == UIK_TAB );
+        ( w->kind == UIK_BUTTON || w->kind == UIK_CHECK || w->kind == UIK_RADIO || w->kind == UIK_TEXT || w->kind == UIK_LIST || w->kind == UIK_SLIDER || w->kind == UIK_SCROLL || w->kind == UIK_EDIT || w->kind == UIK_TAB || w->kind == UIK_GRID );
 }
 
 // does the widget react to input at the moment (a pop-up or a modal panel limits it)?
@@ -1565,6 +1565,35 @@ static void draw_widget( ui_t* ui, int index ) {
         case UIK_EDIT:
             edit_draw( ui, w, focus, on );
             break;
+        case UIK_GRID: {
+            cbox( ui, x1, y1, x2, y2, fieldc, true );
+            bevel( ui, x1, y1, x2, y2, false );
+            if ( w->pix != 0 ) {
+                size_t n = (size_t) w->cw * (size_t) w->ch;
+                set_clip( ui, x1 + 2, y1 + 2, x2 - 2, y2 - 2 );
+                for ( int r = 0; r < w->ch; ++r ) {
+                    int c = 0, py = y1 + 2 + r * FONT_HEIGHT;
+                    while ( c < w->cw ) {                                  // a run of cells with the same colors is drawn with one call
+                        size_t i = (size_t) r * (size_t) w->cw + (size_t) c;
+                        uint8_t fg = w->pix[ n + i ], bg = w->pix[ 2U * n + i ];
+                        int e = c + 1;
+                        while ( e < w->cw && w->pix[ n + i + (size_t)( e - c ) ] == fg && w->pix[ 2U * n + i + (size_t)( e - c ) ] == bg ) {
+                            ++e;
+                        }
+                        int px = x1 + 2 + c * EDIT_CW;
+                        if ( bg != 0 ) {
+                            cbox( ui, px, py, px + ( e - c ) * EDIT_CW - 1, py + FONT_HEIGHT - 1, bg, true );
+                        }
+                        draw_text( ui, FONT_FIXED, px, py, (const char*) w->pix + i, (size_t)( e - c ), fg != 0 ? fg : tc );
+                        c = e;
+                    }
+                }
+            }
+            if ( focus ) {
+                dotted( ui, x1 + 1, y1 + 1, x2 - 1, y2 - 1, t->border );
+            }
+            break;
+        }
         case UIK_LIST: {
             cbox( ui, x1, y1, x2, y2, fieldc, true );
             bevel( ui, x1, y1, x2, y2, false );
@@ -1962,6 +1991,71 @@ bool ui_canvas_set( ui_t* ui, int id, int x, int y, int c ) {
         dirty( w );
     }
     return true;
+}
+
+bool ui_set_grid( ui_t* ui, int id, int cols, int rows ) {
+    ui_widget_t* w = ui_find( ui, id );
+    if ( w == 0 || w->kind != UIK_GRID || cols < 1 || rows < 1 || cols > 160 || rows > 80 ) {
+        return false;
+    }
+    size_t n = (size_t) cols * (size_t) rows;
+    uint8_t* p = (uint8_t*) calloc( 3U * n, 1U );
+    if ( p == 0 ) {
+        return false;
+    }
+    memset( p, ' ', n );
+    free( w->pix );
+    w->pix = p;
+    w->cw = cols;
+    w->ch = rows;
+    dirty( w );
+    return true;
+}
+
+bool ui_grid_put( ui_t* ui, int id, int col, int row, const char* text, size_t len, int fg, int bg ) {
+    ui_widget_t* w = ui_find( ui, id );
+    if ( w == 0 || w->kind != UIK_GRID || w->pix == 0 || row < 0 || row >= w->ch || col < 0 || col >= w->cw || fg < -1 || fg > 255 || bg < -1 || bg > 255 ) {
+        return false;
+    }
+    size_t n = (size_t) w->cw * (size_t) w->ch, at = (size_t) row * (size_t) w->cw + (size_t) col;
+    if ( len > (size_t)( w->cw - col ) ) {
+        len = (size_t)( w->cw - col );
+    }
+    bool changed = false;
+    for ( size_t k = 0; k < len; ++k ) {
+        uint8_t ch = (uint8_t) text[k];
+        if ( w->pix[ at + k ] != ch || ( fg >= 0 && w->pix[ n + at + k ] != (uint8_t) fg ) || ( bg >= 0 && w->pix[ 2U * n + at + k ] != (uint8_t) bg ) ) {
+            changed = true;
+        }
+        w->pix[ at + k ] = ch;
+        if ( fg >= 0 ) w->pix[ n + at + k ] = (uint8_t) fg;
+        if ( bg >= 0 ) w->pix[ 2U * n + at + k ] = (uint8_t) bg;
+    }
+    if ( changed ) {
+        dirty( w );
+    }
+    return true;
+}
+
+bool ui_grid_clear( ui_t* ui, int id, int fg, int bg ) {
+    ui_widget_t* w = ui_find( ui, id );
+    if ( w == 0 || w->kind != UIK_GRID || w->pix == 0 || fg < -1 || fg > 255 || bg < -1 || bg > 255 ) {
+        return false;
+    }
+    size_t n = (size_t) w->cw * (size_t) w->ch;
+    memset( w->pix, ' ', n );
+    if ( fg >= 0 ) memset( w->pix + n, fg, n );
+    if ( bg >= 0 ) memset( w->pix + 2U * n, bg, n );
+    dirty( w );
+    return true;
+}
+
+int ui_grid_cell( ui_t* ui, int id, int col, int row ) {
+    ui_widget_t* w = ui_find( ui, id );
+    if ( w == 0 || w->kind != UIK_GRID || w->pix == 0 || row < 0 || row >= w->ch || col < 0 || col >= w->cw ) {
+        return -1;
+    }
+    return w->pix[ (size_t) row * (size_t) w->cw + (size_t) col ];
 }
 
 int ui_canvas_get( ui_t* ui, int id, int x, int y ) {
@@ -2607,6 +2701,9 @@ static void handle_key( ui_t* ui, int key ) {
         return;
     }
     switch ( w->kind ) {
+        case UIK_GRID:
+            push_event( ui, w->id, UIE_KEY, key | mods );
+            break;
         case UIK_BUTTON:
             if ( key == ' ' || key == UIKEY_ENTER ) {
                 push_event( ui, w->id, UIE_CLICK, 0 );
@@ -2865,6 +2962,11 @@ void ui_input( ui_t* ui, int mx, int my, int buttons, int wheel, const int* keys
                 dirty( hot );
                 if ( hot->kind == UIK_SLIDER ) {
                     slider_from_x( ui, hot, mx );
+                }
+            } else if ( hot->kind == UIK_GRID && hot->pix != 0 ) {
+                int gc = ( mx - ( hot->x + 2 ) ) / EDIT_CW, gr = ( my - ( hot->y + 2 ) ) / FONT_HEIGHT;
+                if ( mx >= hot->x + 2 && my >= hot->y + 2 && gc >= 0 && gc < hot->cw && gr >= 0 && gr < hot->ch ) {
+                    push_event( ui, hot->id, UIE_CELL, gr * hot->cw + gc );
                 }
             } else if ( hot->kind == UIK_TAB ) {
                 tab_select( ui, hot, tab_at( ui, hot, mx ) );

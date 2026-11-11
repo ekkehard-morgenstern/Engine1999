@@ -402,6 +402,10 @@ bool cgen_from_gfxstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
             if ( !cgen_push_number( cgen, comp, GFX_NONE ) ) {
                 return false;
             }
+        } else if ( *p == 'S' ) {                   // an omitted optional string is the empty string
+            if ( !cp_push_string( cgen, comp, "" ) ) {
+                return false;
+            }
         } else {
             return cgen_unexpected_node( comp );
         }

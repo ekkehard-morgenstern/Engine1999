@@ -1992,7 +1992,7 @@ static bool comp_eat_xfunccall( compiler_t* comp, node_t** pnode, bool wantstr )
     }
     uint8_t xid = comp->currext;
     bool isstr = xid == XF_SPACE || xid == XF_STRING || xid == XF_FORMAT || xid == XF_CLIPBOARD;
-    if ( xid == XF_AT || xid == XF_HTAB || xid == XF_VTAB ) {
+    if ( xid == XF_AT || xid == XF_HTAB || xid == XF_VTAB || xid == XF_SCREENSHOT ) {
         return false;                       // statements (AT inside a PRINT list), not functions
     }
     if ( xid == XF_JOY ) {
@@ -3180,7 +3180,7 @@ static bool comp_gfx_args( compiler_t* comp, const gfxcmd_t* cmd, const char* si
     bool first = true;
     for ( const char* p = sig; *p; ++p ) {
         char kind = *p;
-        bool optional = kind == 'o' || kind == 'W';
+        bool optional = kind == 'o' || kind == 'W' || kind == 'S';
         if ( first ) {
             if ( optional && comp_at_stmt_end( comp ) ) {
                 break;
@@ -3219,6 +3219,17 @@ NUM:            if ( !comp_eat_numexpr( comp, &arg ) || arg == NODE_NONE ) {
                     return false;
                 }
                 break;
+            case 'S':               // an optional string: the empty string when it is omitted
+                if ( comp->currtok == TOK_COMMA || comp_at_stmt_end( comp ) ) {
+                    uint8_t sd[1] = { TOK_STRLIT };
+                    node_t* lit = NODE_NONE;
+                    if ( !comp_create_node( comp, &lit, NT_STRLIT, UINT8_C(0), UINT16_C(1), sd ) || lit == NODE_NONE || !comp_add_branch( comp, stmt, lit ) ) {
+                        out_of_memory( comp );
+                        return false;
+                    }
+                    continue;
+                }
+                // fall through
             case 's':
                 if ( !comp_eat_strexpr( comp, &arg ) || arg == NODE_NONE ) {
                     comp_error( comp, "String expression expected" );
@@ -3274,7 +3285,7 @@ bool comp_eat_gfxstmt( compiler_t* comp, node_t** pnode ) {
         case TOK_MOUSE:     group = "MOUSE"; break;
         case TOK_SPRITE:    group = "SPRITE"; break;
         case TOK_XFUNC:                                     // the extension word UI; HTAB and VTAB are statements without a group word
-            if ( comp->currext == XF_HTAB || comp->currext == XF_VTAB ) {
+            if ( comp->currext == XF_HTAB || comp->currext == XF_VTAB || comp->currext == XF_SCREENSHOT ) {
                 break;
             }
             if ( comp->currext != XF_UI && comp->currext != XF_W3D ) {

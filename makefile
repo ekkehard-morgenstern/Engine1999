@@ -64,7 +64,7 @@ CL=$(CCOMP) $(CFLAGS) $(LDFLAGS)
 .c.o:
 	$(CCO) -o $@ $<
 
-PROGS=sdltest1 sdltest2 sdltest3 sdltest4 engine1999 joytest1 basictest1 testcomp1 basictest2 vmtest1 repltest1 ansitest1 txttest1 asmtest1 synthtest1 iotest1 gfxtest1 buildtest1 engine1999c contest1 keytest1 scrtest1 libtest1 fonttest1 uitest1 synhltest1 poltest1 w3dtest1
+PROGS=sdltest1 sdltest2 sdltest3 sdltest4 engine1999 joytest1 basictest1 testcomp1 basictest2 vmtest1 repltest1 ansitest1 txttest1 asmtest1 synthtest1 iotest1 gfxtest1 buildtest1 engine1999c contest1 keytest1 scrtest1 libtest1 fonttest1 uitest1 synhltest1 poltest1 w3dtest1 shottest1
 
 all: $(PROGS)
 	echo ok >all
@@ -80,8 +80,8 @@ grammar-check:
 	perl grammar.pl --check
 
 BASEMOD=sdlevent.o sdllayer.o sdlmain.o sdlscreen.o textscreen.o tilescreen.o sprscreen.o sprpath.o policy.o 8x12font1.o sdlaudio.o synth.o mml.o printusing.o clipboard.o sdlutil.o \
-		basic.o baspgm.o baslin.o bastok.o bascomp.o nodetype.o codegen.o cgenctl.o cgendecl.o cgenprog.o vars.o runtime.o vm.o basfiles.o iodev.o gfxcore.o gfxops.o w3d.o bmp.o gfxfile.o basbuild.o baslib.o cgenlib.o basrepl.o basdebug.o ansi.o palette.o keyseq.o keystate.o cursors.o mouse.o joy.o sdljoy.o sdlkeys.o scredit.o conscr.o fulledit.o vmasm.o monitor.o font.o ui.o synhl.o
-BASEHDR=sdlevent.h sdllayer.h sdlmain.h sdlscreen.h sdltypes.h textscreen.h tilescreen.h sprscreen.h sprpath.h policy.h unxtypes.h sdlaudio.h synth.h mml.h printusing.h clipboard.h sdlutil.h basfiles.h iodev.h gfxcore.h gfxops.h w3d.h bmp.h gfxfile.h basbuild.h baslib.h basic.h baspgm.h baslin.h bastok.h bascomp.h nodetype.h codegen.h instset.h vars.h runtime.h vm.h basrepl.h basdebug.h ansi.h palette.h keyseq.h keystate.h cursors.h mouse.h joy.h sdljoy.h sdlkeys.h scrdrv.h conscr.h fulledit.h vmasm.h monitor.h font.h ui.h synhl.h
+		basic.o baspgm.o baslin.o bastok.o bascomp.o nodetype.o codegen.o cgenctl.o cgendecl.o cgenprog.o vars.o runtime.o vm.o basfiles.o iodev.o gfxcore.o gfxops.o w3d.o bmp.o shot.o gfxfile.o basbuild.o baslib.o cgenlib.o basrepl.o basdebug.o ansi.o palette.o keyseq.o keystate.o cursors.o mouse.o joy.o sdljoy.o sdlkeys.o scredit.o conscr.o fulledit.o vmasm.o monitor.o font.o ui.o synhl.o
+BASEHDR=sdlevent.h sdllayer.h sdlmain.h sdlscreen.h sdltypes.h textscreen.h tilescreen.h sprscreen.h sprpath.h policy.h unxtypes.h sdlaudio.h synth.h mml.h printusing.h clipboard.h sdlutil.h basfiles.h iodev.h gfxcore.h gfxops.h w3d.h bmp.h shot.h gfxfile.h basbuild.h baslib.h basic.h baspgm.h baslin.h bastok.h bascomp.h nodetype.h codegen.h instset.h vars.h runtime.h vm.h basrepl.h basdebug.h ansi.h palette.h keyseq.h keystate.h cursors.h mouse.h joy.h sdljoy.h sdlkeys.h scrdrv.h conscr.h fulledit.h vmasm.h monitor.h font.h ui.h synhl.h
 
 LIBMOD=$(BASEMOD)
 LIBHDR=$(BASEHDR)
@@ -306,7 +306,7 @@ install: kit games version.h
 	install -m 755 kit/engine1999 kit/engine1999c $(DESTDIR)$(BINDIR)
 	install -m 755 $(GAMEEXE) $(CONEXE) $(DESTDIR)$(GAMESBINDIR)
 	install -m 644 kit/engine1999.o kit/engine1999c.o kit/engine.lib $(DESTDIR)$(LIBDIR)
-	install -m 644 demos/*.bas demos/README.md $(DESTDIR)$(SHAREDIR)/demos
+	install -m 644 demos/*.bas demos/*.trk demos/README.md $(DESTDIR)$(SHAREDIR)/demos
 	install -m 644 demos/lib/*.lib $(DESTDIR)$(SHAREDIR)/demos/lib
 	install -m 644 demos/lib/*.lib $(DESTDIR)$(LIBDIR)/lib
 	install -m 644 tools/*.bas $(DESTDIR)$(LIBDIR)/tools
@@ -416,7 +416,14 @@ w3dtest1: w3dtest1.o $(LIBNAME)
 
 w3dtest1.o: w3dtest1.c $(LIBHDR)
 
+shottest1: shottest1.o $(LIBNAME)
+	$(CL) -o shottest1 shottest1.o $(LIBNAME) -lm -lpthread
+
+shottest1.o: shottest1.c $(LIBHDR) shot.h
+
 bmp.o: bmp.c $(BASEHDR)
+
+shot.o: shot.c $(BASEHDR)
 
 gfxfile.o: gfxfile.c $(BASEHDR)
 
@@ -454,7 +461,7 @@ monitor.o: monitor.c $(BASEHDR)
 # -- check and dist (packaging, roadmap item 66) ---------------------------------------------------------
 # make check: all automated tests (the programs of CHECKTESTS, no display needed) and the man pages check; prints one line per test, the output of
 # a failing one, and fails if any failed. Run it in the build directory.
-CHECKTESTS=poltest1 vmtest1 repltest1 ansitest1 txttest1 asmtest1 synthtest1 iotest1 gfxtest1 buildtest1 contest1 keytest1 scrtest1 libtest1 uitest1 synhltest1 fonttest1 joytest1 w3dtest1
+CHECKTESTS=poltest1 vmtest1 repltest1 ansitest1 txttest1 asmtest1 synthtest1 iotest1 gfxtest1 buildtest1 contest1 keytest1 scrtest1 libtest1 uitest1 synhltest1 fonttest1 joytest1 w3dtest1 shottest1
 
 check: $(CHECKTESTS) engine1999 engine1999c
 	@fail=0; log=$$(mktemp); \
@@ -467,6 +474,7 @@ check: $(CHECKTESTS) engine1999 engine1999c
 	if sh deqq2test.sh > $$log 2>&1; then printf '%-12s ok\n' deqq2test; else printf '%-12s FAILED\n' deqq2test; tail -n 20 $$log; fail=$$((fail+1)); fi; \
 	if sh levelstest.sh > $$log 2>&1; then printf '%-12s ok\n' levelstest; else printf '%-12s FAILED\n' levelstest; tail -n 20 $$log; fail=$$((fail+1)); fi; \
 	if sh instedtest.sh > $$log 2>&1; then printf '%-12s ok\n' instedtest; else printf '%-12s FAILED\n' instedtest; tail -n 20 $$log; fail=$$((fail+1)); fi; \
+	if sh trackertest.sh > $$log 2>&1; then printf '%-12s ok\n' trackertest; else printf '%-12s FAILED\n' trackertest; tail -n 20 $$log; fail=$$((fail+1)); fi; \
 	rm -f $$log; \
 	if [ $$fail -ne 0 ]; then echo "$$fail check(s) failed"; exit 1; fi; echo "all checks passed"
 

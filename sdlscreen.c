@@ -42,6 +42,7 @@
 #include "sdljoy.h"
 #include "scrdrv.h"
 #include "clipboard.h"
+#include "shot.h"
 
 #define NLAYERS 5
 #define LAY_BG          0
@@ -65,6 +66,57 @@ static void cleanup_layers( void ) {
 
 static void draw_layers( SDL_Renderer* renderer ) {
     sdllay_draw_texture_many( &layers[0], NLAYERS, renderer );
+}
+
+// -- screenshots (shot.h) ---------------------------------------------------------------------------------------
+
+// the composed picture of the layers as they are now (the screen thread only: it owns the layer memories)
+static void sdlscr_shot_compose( uint32_t* out, uint32_t backdrop ) {
+    shot_layer_t sl[NLAYERS];
+    for ( int i=0; i < NLAYERS; ++i ) {
+        sl[i].mem = layers[i].memory; sl[i].pal = layers[i].palette; sl[i].enabled = !layers[i].disabled; sl[i].priority = layers[i].priority;
+    }
+    shot_compose( sl, NLAYERS, backdrop, out );
+}
+
+typedef struct _sdlscr_shotjob_t {
+    uint32_t*   pix;
+    char        name[80];
+} sdlscr_shotjob_t;
+
+// the screenshot key: a short-lived thread writes the file, so the screen thread never waits for the disk
+static int sdlscr_shot_writer( void* arg ) {
+    sdlscr_shotjob_t* job = (sdlscr_shotjob_t*) arg;
+    const char* err = 0;
+    if ( shot_write_file( job->name, job->pix, &err ) ) {
+        fprintf( stderr, "screenshot saved: %s\n", job->name );
+    } else {
+        fprintf( stderr, "screenshot %s: %s\n", job->name, err );
+    }
+    free( job->pix );
+    free( job );
+    return 0;
+}
+
+static void sdlscr_shot_key( uint32_t backdrop ) {
+    sdlscr_shotjob_t* job = (sdlscr_shotjob_t*) calloc( 1U, sizeof(*job) );
+    if ( job == 0 ) {
+        return;
+    }
+    job->pix = (uint32_t*) malloc( sizeof(uint32_t) * SHOT_WIDTH * SHOT_HEIGHT );
+    if ( job->pix == 0 ) {
+        free( job );
+        return;
+    }
+    sdlscr_shot_compose( job->pix, backdrop );
+    shot_autoname( job->name, sizeof(job->name), time( 0 ), shot_nextnumber() );
+    SDL_Thread* th = SDL_CreateThread( sdlscr_shot_writer, "screenshot", job );
+    if ( th == 0 ) {
+        free( job->pix );
+        free( job );
+        return;
+    }
+    SDL_DetachThread( th );
 }
 
 static void print_sdlerror( const char* scope ) {
@@ -542,6 +594,7 @@ static int sdlscr_worker( void* arg ) {
         // process messages
         int dragx = 0, dragy = 0;
         bool dragged = false;
+        bool shotkey = false;
         SDL_Event ev;
         while ( SDL_PollEvent( &ev ) ) {
             Uint32 ty = ev.type;
@@ -556,6 +609,12 @@ static int sdlscr_worker( void* arg ) {
                     if ( sdlscr_isfullscreenkey( &ev.key ) ) {
                         if ( !ev.key.repeat ) {
                             sdlscr_togglefullscreen( window );
+                        }
+                        break;
+                    }
+                    if ( ev.key.keysym.sym == SDLK_PRINTSCREEN ) {      // the screenshot key: not a key of the program
+                        if ( !ev.key.repeat ) {
+                            shotkey = true;
                         }
                         break;
                     }
@@ -693,6 +752,14 @@ static int sdlscr_worker( void* arg ) {
             if ( !sdllay_to_texture_many( &layers[0], NLAYERS ) ) {
                 break;
             }
+        }
+        if ( shotkey ) {
+            sdlscr_shot_key( sdlscr_bgcol );
+        }
+        if ( shot_wanted() ) {                  // SCREENSHOT of a program: the picture goes to the program's thread (shot_grab())
+            static uint32_t shotbuf[SHOT_WIDTH * SHOT_HEIGHT];
+            sdlscr_shot_compose( shotbuf, sdlscr_bgcol );
+            shot_serve( shotbuf );
         }
         if ( changed || !sdlscr_keepsbackbuffer ) {
             uint32_t c = sdlscr_bgcol;

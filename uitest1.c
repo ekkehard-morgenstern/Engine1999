@@ -1225,6 +1225,42 @@ int main( void ) {
     check( "a tab strip is drawn (the line under the tabs)", gfx_point( &g, 300, 31 ) != 0 );
     done();
 
+    // the character grid: cells with characters and colors, keys and clicks as events (roadmap item 56)
+    setup();
+    ui_add( &ui, UIK_GRID, 1, 10, 10, 20 * 8 + 4, 6 * 12 + 4, "", 0 );
+    ui_add( &ui, UIK_BUTTON, 2, 10, 100, 50, 20, "Btn", 0 );
+    check( "a grid without cells refuses text", !ui_grid_put( &ui, 1, 0, 0, "x", 1, -1, -1 ) );
+    check( "the grid gets its cells", ui_set_grid( &ui, 1, 20, 6 ) && !ui_set_grid( &ui, 1, 0, 6 ) && !ui_set_grid( &ui, 2, 20, 6 ) );
+    check( "a new grid is spaces", ui_grid_cell( &ui, 1, 0, 0 ) == ' ' && ui_grid_cell( &ui, 1, 19, 5 ) == ' ' && ui_grid_cell( &ui, 1, 20, 5 ) == -1 && ui_grid_cell( &ui, 1, 0, 6 ) == -1 );
+    check( "text is put into the grid", ui_grid_put( &ui, 1, 2, 1, "C-4 05", 6, 7, 9 ) && ui_grid_cell( &ui, 1, 2, 1 ) == 'C' && ui_grid_cell( &ui, 1, 7, 1 ) == '5' && ui_grid_cell( &ui, 1, 8, 1 ) == ' ' );
+    check( "text is cut at the right edge", ui_grid_put( &ui, 1, 18, 2, "ABCDEF", 6, -1, -1 ) && ui_grid_cell( &ui, 1, 19, 2 ) == 'B' && ui_grid_cell( &ui, 1, 0, 3 ) == ' ' );
+    check( "bad places and colors are refused", !ui_grid_put( &ui, 1, 20, 0, "x", 1, -1, -1 ) && !ui_grid_put( &ui, 1, 0, 6, "x", 1, -1, -1 ) && !ui_grid_put( &ui, 1, 0, 0, "x", 1, 256, -1 ) && !ui_grid_put( &ui, 99, 0, 0, "x", 1, -1, -1 ) );
+    ui_draw( &ui, true );
+    check( "the grid is drawn with its background color (9 behind the text)", gfx_point( &g, 10 + 2 + 2 * 8 + 1, 10 + 2 + 12 + 1 ) != 0 );
+    ui_set_focus( &ui, 1 );
+    key( 'a' );
+    key( UIKEY_DOWN );
+    key( UIKEY_ENTER );
+    key( UIKEY_BACKSPACE );
+    key( UIKEY_SHIFT | UIKEY_PGUP );
+    check( "every key but Tab and Escape is an event of the grid (with its modifiers)",
+        expect( 1, UIE_KEY, 'a' ) && expect( 1, UIE_KEY, UIKEY_DOWN ) && expect( 1, UIE_KEY, UIKEY_ENTER ) && expect( 1, UIE_KEY, UIKEY_BACKSPACE ) &&
+        expect( 1, UIE_KEY, UIKEY_SHIFT | UIKEY_PGUP ) && none() );
+    key( UIKEY_TAB );
+    check( "Tab leaves the grid", none() && ui.focus == 2 );
+    ui_set_focus( &ui, 1 );
+    key( UIKEY_ESCAPE );
+    check( "Escape is not the grid's", none() );
+    click( 10 + 2 + 3 * 8 + 2, 10 + 2 + 2 * 12 + 3 );
+    check( "a click on a cell reports it (row * columns + column) and takes the focus", expect( 1, UIE_CELL, 2 * 20 + 3 ) && ui.focus == 1 );
+    click( 10 + 2 + 19 * 8 + 7, 10 + 2 + 5 * 12 + 11 );
+    check( "the last cell", expect( 1, UIE_CELL, 5 * 20 + 19 ) );
+    click( 11, 11 );
+    check( "a click on the border is no cell", none() );
+    check( "clear empties the grid", ui_grid_clear( &ui, 1, 3, 4 ) && ui_grid_cell( &ui, 1, 2, 1 ) == ' ' && !ui_grid_clear( &ui, 99, 0, 0 ) && !ui_grid_clear( &ui, 1, 300, 0 ) );
+    check( "removing the grid frees it", ui_remove( &ui, 1 ) );
+    done();
+
     // a popup and drawing never write outside of the canvas (a widget partly outside)
     setup();
     ui_add( &ui, UIK_BUTTON, 1, 380, 230, 60, 22, "Edge", 0 );

@@ -66,6 +66,26 @@ sleep 6
 n=$(grep -c 'instrument 20 ' "$T/snd.log" 2> /dev/null)
 if [ "$n" != 3 ]; then echo "FAILED: hosttest (the sound log has $n selections of instrument 20, expected 3; see the host's output: $(head -c 300 "$T/win.out"))"; exit 1; fi
 [ -s "$T/out.raw" ] || { echo "FAILED: hosttest (no audio was recorded)"; exit 1; }
+# screenshots (roadmap item 82): the statement at the prompt, then the Print key; the program has ended, the prompt is on the screen
+shotcheck() {       # file: a 24 bit BMP of 640 x 300 (576054 bytes) whose pixels are not all the same
+    [ -s "$1" ] || { echo "FAILED: hosttest (no screenshot file $1)"; exit 1; }
+    sz=$(wc -c < "$1")
+    [ "$sz" = 576054 ] || { echo "FAILED: hosttest (screenshot $1 has $sz bytes, expected 576054)"; exit 1; }
+    [ "$(head -c 2 "$1")" = BM ] || { echo "FAILED: hosttest (screenshot $1 is no BMP)"; exit 1; }
+    kinds=$(od -An -v -tu1 -j54 "$1" | tr -s ' ' '\n' | sort -u | wc -l)
+    [ "$kinds" -gt 4 ] || { echo "FAILED: hosttest (screenshot $1 is a flat picture)"; exit 1; }
+}
+sleep 5            # (the program's WAIT is over: the prompt reads the keys)
+DISPLAY=":$N" "$T/xtype" 'SCREENSHOT "shota"
+' || { echo "FAILED: hosttest (typing failed)"; exit 1; }
+sleep 2
+shotcheck "$T/shota.bmp"
+DISPLAY=":$N" "$T/xtype" "$(printf '\001')" || { echo "FAILED: hosttest (typing failed)"; exit 1; }
+sleep 2
+set -- "$T"/shot-*.bmp
+[ -e "$1" ] || { echo "FAILED: hosttest (the Print key made no shot-*.bmp file)"; exit 1; }
+shotcheck "$1"
+echo "screenshots: SCREENSHOT \"shota\" and the Print key ($(basename "$1")) ok"
 # the recording: 32-bit float, stereo (left, right), 44100 Hz. Find the start of the sound, then the amplitudes of 220 Hz and 660 Hz in a window of the first note (0.2 .. 0.7 s)
 # and of the second one (1.2 .. 1.7 s), with the Goertzel algorithm.
 od -An -v -f -w8 "$T/out.raw" | awk '

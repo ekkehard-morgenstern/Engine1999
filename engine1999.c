@@ -37,6 +37,7 @@
 #include "gfxops.h"
 #include "w3d.h"
 #include "gfxfile.h"
+#include "shot.h"
 #include "iodev.h"
 #include "mouse.h"
 #include "gfxcore.h"
@@ -1206,6 +1207,15 @@ static bool host_ui_op( int op, const double* a, int na, const char* s, size_t s
         case GFXOP_UIBUTTON:    ok = ui_add( &host_ui, UIK_BUTTON, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), text, 0 ); break;
         case GFXOP_UICHECK:     ok = ui_add( &host_ui, UIK_CHECK, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), text, 0 ); break;
         case GFXOP_UITAB:       ok = ui_add( &host_ui, UIK_TAB, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), text, 0 ); break;
+        case GFXOP_UIGRID: {
+            int cols = gi( a[3], 1 ), rows = gi( a[4], 1 );
+            ok = cols >= 1 && cols <= 160 && rows >= 1 && rows <= 80 &&
+                ui_add( &host_ui, UIK_GRID, id, gi( a[1], 0 ), gi( a[2], 0 ), cols * 8 + 4, rows * 12 + 4, "", 0 ) &&
+                ( ui_set_grid( &host_ui, id, cols, rows ) || ( ui_remove( &host_ui, id ), false ) );
+            break;
+        }
+        case GFXOP_UIGRIDPUT:   ok = ui_grid_put( &host_ui, id, gi( a[1], 0 ), gi( a[2], 0 ), s != 0 ? s : "", s != 0 ? slen : 0U, gi( a[3], -1 ), gi( a[4], -1 ) ); break;
+        case GFXOP_UIGRIDCLEAR: ok = ui_grid_clear( &host_ui, id, gi( a[1], -1 ), gi( a[2], -1 ) ); break;
         case GFXOP_UIRADIO:     ok = ui_add( &host_ui, UIK_RADIO, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), text, gi( a[5], 0 ) ); break;
         case GFXOP_UIEDIT:      ok = ui_add( &host_ui, UIK_EDIT, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), text, 0 ); break;
         case GFXOP_UICARET:     ok = ui_edit_caret( &host_ui, id, gi( a[1], 0 ) ); break;
@@ -1441,6 +1451,39 @@ static bool host_picture_op( int op, const double* a, const char* s, size_t slen
     return ok;
 }
 
+// SCREENSHOT [file$]: the picture of the composed layers as a 24 bit BMP (shot.h): the screen thread composes it, this thread writes it through the I/O layer
+// (so the policy, drivers and the default extension work as for GFX SAVE); no name: shot-YYYYMMDD-HHMMSS-n.bmp in the current directory
+static bool host_screenshot( const char* s, size_t slen, const char** err ) {
+    static char errbuf[160];
+    char name[1100];
+    if ( slen == 0 ) {
+        shot_autoname( name, sizeof(name), time( 0 ), shot_nextnumber() );
+    } else if ( !ff_name( s, slen, name, sizeof(name), err ) ) {
+        return false;
+    }
+    uint32_t* pix = (uint32_t*) malloc( sizeof(uint32_t) * SHOT_WIDTH * SHOT_HEIGHT );
+    if ( pix == 0 ) {
+        *err = "Out of memory";
+        return false;
+    }
+    uint8_t* data = 0; size_t len = 0;
+    const char* ioerr = 0;
+    bool ok = shot_grab( pix );
+    if ( !ok ) {
+        *err = "Screenshot failed (no picture)";
+    } else if ( !shot_encode( pix, &data, &len ) ) {
+        *err = "Out of memory";
+        ok = false;
+    } else if ( !iodev_write_all( name, repl.vm.addrcur, data, len, &ioerr ) ) {
+        snprintf( errbuf, sizeof(errbuf), "%s", ioerr ? ioerr : "Can't write the file" );
+        *err = errbuf;
+        ok = false;
+    }
+    free( data );
+    free( pix );
+    return ok;
+}
+
 // -- the 3D sector renderer (w3d.h) ---------------------------------------------------------------
 
 static w3d_t* host_w3d;
@@ -1498,13 +1541,14 @@ static bool host_gfx_op( void* usrdata, int op, const double* a, int na, const c
     if ( op >= GFXOP_W3DFIRST && op <= GFXOP_W3DLAST ) {
         return host_w3d_op( op, a, na, s, slen, err );
     }
-    if ( ( op >= GFXOP_UIOPEN && op <= GFXOP_UICARET ) || ( op >= GFXOP_UICOLOR && op <= GFXOP_UITAB ) ) {
+    if ( ( op >= GFXOP_UIOPEN && op <= GFXOP_UICARET ) || ( op >= GFXOP_UICOLOR && op <= GFXOP_UITAB ) || ( op >= GFXOP_UIGRID && op <= GFXOP_UIGRIDCLEAR ) ) {
         return host_ui_op( op, a, na, s, slen, out, outsz, outlen, err );
     }
     switch ( op ) {
         case GFXOP_GFXLOAD: case GFXOP_GFXSAVE: case GFXOP_PALLOAD: case GFXOP_PALSAVE:
         case GFXOP_SPRLOAD: case GFXOP_SPRSAVE: case GFXOP_TILELOAD: case GFXOP_TILESAVE:
             return host_picture_op( op, a, s, slen, err );
+        case GFXOP_SCREENSHOT:  return host_screenshot( s, slen, err );
         case GFXOP_LAYER:       sdlscr_layer_enable( gi( a[0], 0 ), a[1] != 0.0 ); break;
         case GFXOP_PRIORITY:    sdlscr_layer_setpriority( gi( a[0], 0 ), gi( a[1], 0 ) ); break;
         case GFXOP_PALETTE:     sdlscr_palette_set( gi( a[0], 0 ), gi( a[1], 0 ), (uint32_t)(int64_t) a[2] ); break;
