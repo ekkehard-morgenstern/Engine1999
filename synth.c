@@ -94,6 +94,7 @@ static float synth_osc_next( synth_osc_t* o ) {
 
 #define O( w, lv, ra, ce, pwid )    { (w), (lv), (ra), (ce), (pwid), 0.0f, false }
 #define OP( w, lv, ra, ce, pwid )   { (w), (lv), (ra), (ce), (pwid), 0.0f, true }       // an oscillator behind the filter
+#define OF( w, lv, ra, ce, pwid, fmi, md )  { (w), (lv), (ra), (ce), (pwid), 0.0f, false, (fmi), (md) }   // an FM oscillator: modulated by the next one (index in radians), or a modulator (not mixed)
 #define NOOSC                       O( SYNTH_SINE, 0.0f, 1.0f, 0.0f, 0.5f )
 
 // the factory instruments 4..19 (names and sounds are a first draft)
@@ -104,19 +105,19 @@ static const synth_inst_t synth_presets[SYNTH_NPRESET] = {
     { "LEAD", 2, { O( SYNTH_SQUARE, 0.6f, 1.0f, 0.0f, 0.25f ), O( SYNTH_SAW, 0.4f, 1.0f, 7.0f, 0.5f ), NOOSC },
       0.83f, 6.0f, 0.10f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.01f, 0.10f, 0.70f, 0.15f, 5.5f, 0.15f },
     { "PAD", 3, { O( SYNTH_SAW, 0.33f, 1.0f, -9.0f, 0.5f ), O( SYNTH_SAW, 0.33f, 1.0f, 0.0f, 0.5f ), O( SYNTH_SAW, 0.33f, 1.0f, 9.0f, 0.5f ) },
-      2.50f, 3.0f, 0.10f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.50f, 0.30f, 0.80f, 0.80f, 0.0f, 0.0f },
+      2.50f, 3.0f, 0.10f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.50f, 0.30f, 0.80f, 0.80f, 0.0f, 0.0f, 0.0f, 4 },
     { "PLUCK", 2, { O( SYNTH_SAW, 0.7f, 1.0f, 0.0f, 0.5f ), O( SYNTH_SQUARE, 0.4f, 1.0f, 5.0f, 0.5f ), NOOSC },
-      2.86f, 8.0f, 0.20f, 2.5f, 0.12f, 0.0f, 0.0f, true, 0.0f, 0.25f, 0.0f, 0.10f, 0.0f, 0.0f },
+      2.86f, 8.0f, 0.20f, 2.5f, 0.12f, 0.0f, 0.0f, true, 0.0f, 0.25f, 0.0f, 0.10f, 0.0f, 0.0f, 0.0f, 3 },
     { "ORGAN", 3, { O( SYNTH_SINE, 0.5f, 1.0f, 0.0f, 0.5f ), O( SYNTH_SINE, 0.3f, 2.0f, 0.0f, 0.5f ), O( SYNTH_SINE, 0.2f, 3.0f, 0.0f, 0.5f ) },
-      0.79f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.01f, 0.0f, 1.0f, 0.05f, 0.0f, 0.0f },
+      0.79f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.01f, 0.0f, 1.0f, 0.05f, 0.0f, 0.0f, 0.0f, 4 },
     { "STRINGS", 3, { O( SYNTH_SAW, 0.33f, 1.0f, -12.0f, 0.5f ), O( SYNTH_SAW, 0.33f, 1.0f, 0.0f, 0.5f ), O( SYNTH_SAW, 0.33f, 1.0f, 12.0f, 0.5f ) },
-      2.03f, 4.0f, 0.05f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.35f, 0.20f, 0.85f, 0.40f, 5.0f, 0.10f },
-    { "BRASS", 2, { O( SYNTH_SAW, 0.5f, 1.0f, -4.0f, 0.5f ), O( SYNTH_SAW, 0.5f, 1.0f, 4.0f, 0.5f ), NOOSC },
-      1.33f, 2.0f, 0.10f, 2.5f, 0.25f, 0.0f, 0.0f, true, 0.06f, 0.15f, 0.80f, 0.10f, 0.0f, 0.0f },
+      2.03f, 4.0f, 0.05f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.35f, 0.20f, 0.85f, 0.40f, 5.0f, 0.10f, 0.0f, 4 },
+    { "BRASS", 3, { OF( SYNTH_SINE, 0.55f, 1.0f, 0.0f, 0.5f, 3.0f, false ), OF( SYNTH_SINE, 1.0f, 1.0f, 0.0f, 0.5f, 0.0f, true ), O( SYNTH_SAW, 0.3f, 1.0f, 4.0f, 0.5f ) },
+      1.24f, 2.0f, 0.10f, 2.5f, 0.25f, 0.0f, 0.0f, true, 0.06f, 0.15f, 0.80f, 0.10f, 0.0f, 0.0f, 0.6f, 0 },
     { "FLUTE", 2, { O( SYNTH_SINE, 0.9f, 1.0f, 0.0f, 0.5f ), OP( SYNTH_NOISE, 0.08f, -5000.0f, 0.0f, 0.5f ), NOOSC },
       0.67f, 4.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.08f, 0.05f, 0.90f, 0.15f, 5.0f, 0.20f },
-    { "BELL", 3, { O( SYNTH_SINE, 0.5f, 1.0f, 0.0f, 0.5f ), O( SYNTH_SINE, 0.3f, 2.76f, 0.0f, 0.5f ), O( SYNTH_SINE, 0.2f, 5.4f, 0.0f, 0.5f ) },
-      1.77f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.0f, 1.50f, 0.0f, 1.00f, 0.0f, 0.0f },
+    { "BELL", 3, { OF( SYNTH_SINE, 0.5f, 1.0f, 0.0f, 0.5f, 4.0f, false ), OF( SYNTH_SINE, 1.0f, 3.5f, 0.0f, 0.5f, 0.0f, true ), O( SYNTH_SINE, 0.2f, 5.4f, 0.0f, 0.5f ) },
+      1.89f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.0f, 1.50f, 0.0f, 1.00f, 0.0f, 0.0f, 0.8f, 4 },
     { "KICK", 1, { O( SYNTH_SINE, 1.0f, 1.0f, 0.0f, 0.5f ), NOOSC, NOOSC },
       0.84f, 0.0f, 0.0f, 0.0f, 0.0f, 24.0f, 0.06f, true, 0.0f, 0.25f, 0.0f, 0.02f, 0.0f, 0.0f },
     { "SNARE", 2, { O( SYNTH_NOISE, 0.8f, 0.0f, 0.0f, 0.5f ), O( SYNTH_TRIANGLE, 0.4f, 1.0f, 0.0f, 0.5f ), NOOSC },
@@ -129,8 +130,8 @@ static const synth_inst_t synth_presets[SYNTH_NPRESET] = {
       3.42f, 8.0f, 0.50f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.0f, 0.12f, 0.0f, 0.02f, 0.0f, 0.0f },
     { "ZAP", 2, { O( SYNTH_SAW, 0.7f, 1.0f, 0.0f, 0.5f ), O( SYNTH_SQUARE, 0.4f, 1.0f, 0.0f, 0.3f ), NOOSC },
       2.44f, 6.0f, 0.40f, 1.5f, 0.10f, 36.0f, 0.10f, true, 0.0f, 0.20f, 0.0f, 0.05f, 0.0f, 0.0f },
-    { "EPIANO", 2, { O( SYNTH_SINE, 0.7f, 1.0f, 0.0f, 0.5f ), O( SYNTH_SINE, 0.25f, 14.0f, 0.0f, 0.5f ), NOOSC },
-      1.42f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.0f, 0.80f, 0.15f, 0.30f, 0.0f, 0.0f }
+    { "EPIANO", 3, { OF( SYNTH_SINE, 0.7f, 1.0f, 0.0f, 0.5f, 2.0f, false ), OF( SYNTH_SINE, 1.0f, 1.0f, 0.0f, 0.5f, 0.0f, true ), O( SYNTH_SINE, 0.08f, 14.0f, 0.0f, 0.5f ) },
+      2.14f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.0f, 0.80f, 0.15f, 0.30f, 0.0f, 0.0f, 0.5f, 4 }
 };
 
 void synth_instdefault( synth_inst_t* d ) {

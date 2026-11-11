@@ -13,6 +13,8 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+- **Factory instruments with FM and polyphony:** `synth.c` (`OF()` macro; BELL / EPIANO / BRASS as FM; `POLY 4` for PAD, ORGAN, STRINGS, BELL, EPIANO, `POLY 3` for PLUCK; gains recalibrated), `tools/insted.bas` (the 16 DATA strings), `vmtest1.c`, `docs/sound.md`, `SESSION.md`. Tests: `make check` (synthtest1 369 incl. loudness 0.30..0.38 per preset and the editor string comparison, instedtest, vmtest1 1545).
+
 ## Log
 
 ### 7a6cb67 — 2026-10-17 13:32:27 +0200 — "Introduced Claude to the project"

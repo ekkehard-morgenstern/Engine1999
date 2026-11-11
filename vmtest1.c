@@ -964,7 +964,7 @@ static const testcase_t cases[] = {
     { "INSTRUMENT fixed-rate noise behind the filter", "WAVE 1,20:INSTRUMENT 20,\"OSC SAW;OSC NOISE 0.1 -5000 0 0.5 POST;FILTER 2\"", "<inst 0 20  w0 osc 1 gain 1 cut 0 res 0 pitch 0 env 0>\n<inst 0 20  w4 osc 2 gain 1 cut 2 res 0 pitch 0 env 0>\n" },
     { "INSTRUMENT a fixed frequency out of range", "INSTRUMENT 20,\"OSC SINE 1 -20001\"", "? Instrument value out of range\n" },
     { "INSTRUMENT POST expected", "INSTRUMENT 20,\"OSC SINE 1 1 0 0.5 BOGUS\"", "? POST, MOD or FM expected after the OSC values\n" },
-    { "INSTRUMENT$ of a preset", "PRINT INSTRUMENT$(7)", "NAME PLUCK; OSC SAW 0.7 1 0 0.5; OSC SQUARE 0.4 1 5 0.5; FILTER 8 0.2 2.5 0.12; ENV 0 0.25 0 0.1; GAIN 2.86\n" },
+    { "INSTRUMENT$ of a preset", "PRINT INSTRUMENT$(7)", "NAME PLUCK; OSC SAW 0.7 1 0 0.5; OSC SQUARE 0.4 1 5 0.5; FILTER 8 0.2 2.5 0.12; ENV 0 0.25 0 0.1; POLY 3; GAIN 2.86\n" },
     { "INSTRUMENT$ of a basic wave", "PRINT INSTRUMENT$(1)", "NAME SQUARE\n" },
     { "INSTRUMENT$ of an unused number", "PRINT INSTRUMENT$(25)", "NAME USER; OSC SINE 1 1 0 0.5; GAIN 1\n" },
     { "INSTRUMENT$ of a definition of the program", "INSTRUMENT 20,\"name x; osc saw,0.5,2; filter 3\":PRINT INSTRUMENT$(20)", "NAME X; OSC SAW 0.5 2 0 0.5; FILTER 3 0 0 0.2; GAIN 1\n" },
