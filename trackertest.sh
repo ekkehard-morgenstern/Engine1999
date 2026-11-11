@@ -5,13 +5,13 @@
 # Exit status = number of failures.
 cd "$(dirname "$0")" || exit 1
 out=$(TRACKER_HEADLESS=1 timeout 60 ./engine1999c tools/tracker.bas 2>&1)
-if [ "$out" != "tracker selftest ok 32" ]; then
+if [ "$out" != "tracker selftest ok 36" ]; then
     echo "FAILED: trackertest (output: $out)"
     exit 1
 fi
 out=$(TRACKER_HEADLESS=demos/groove.trk timeout 60 ./engine1999c --allow=read tools/tracker.bas 2>&1)
 case "$out" in
-    *"5 slots, 2 patterns, 160 rows"*"tracker selftest ok 32"*) ;;
+    *"5 slots, 2 patterns, 160 rows"*"tracker selftest ok 36"*) ;;
     *) echo "FAILED: trackertest (the demo song: $out)"; exit 1 ;;
 esac
 echo "tracker    ok"
