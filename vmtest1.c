@@ -918,6 +918,29 @@ static const testcase_t cases[] = {
     { "VIBRATO",                "VIBRATO 1,5,0.5",                                 "<vib 0 5 0.5>\n" },
     { "VIBRATO off",            "VIBRATO 4,0,0",                                   "<vib 3 0 0>\n" },
     { "VIBRATO depth",          "VIBRATO 1,5,25",                                  "? Illegal argument\n" },
+    { "CUTOFF",                 "CUTOFF 1,3,0.5",                                  "<cut 0 3 0.5>\n" },
+    { "CUTOFF without a time",  "CUTOFF 2,2",                                      "<cut 1 2 0>\n" },
+    { "CUTOFF back to the instrument's", "CUTOFF 1,-1,2",                          "<cut 0 -1 2>\n" },
+    { "CUTOFF 0 is refused",    "CUTOFF 1,0",                                      "? Illegal argument\n" },
+    { "CUTOFF 65 is refused",   "CUTOFF 1,65",                                     "? Illegal argument\n" },
+    { "CUTOFF seconds range",   "CUTOFF 1,2,61",                                   "? Illegal argument\n" },
+    { "CUTOFF channel range",   "CUTOFF 17,2",                                     "? Illegal argument\n" },
+    { "CUTOFF one argument",    "CUTOFF 1",                                        "? Comma ',' expected\n" },
+    { "CUTOFF in PLAY (K)",     "PLAY \"ML K2,0.5 C KR K4 C\"",                   "<sync 1>\n<cut 0 2 0.5>\n<tone 0 261.626 0.5 0.5>\n<cut 0 -1 0>\n<cut 0 4 0>\n<tone 0 261.626 0.5 0.5>\n<tone 0 0 0 0>\n" },
+    { "K out of range",         "PLAY \"K65\"",                                    "? Value missing or out of range after 'K'\n" },
+    { "K without a number",     "PLAY \"K C\"",                                    "? Value missing or out of range after 'K'\n" },
+    { "SFX takes back a cutoff", "CUTOFF 1,3:SFX 1,\"ML K5,1 R\":SFX 1,1",          "<cut 0 3 0>\n<sync 1>\n<wave 0 0>\n<env 0 off>\n<vib 0 0 0>\n<trem 0 0 0>\n<cut 0 -1 0>\n<cut 0 5 1>\n<tone 0 0 0 0.5>\n<tone 0 0 0 0>\n<cut 0 3 0>\n" },
+    { "PLAY chord",             "PLAY \"ML [CEG]4\"",                              "<sync 1>\n<chord 0 261.626 0.5>\n<chord 0 329.628 0.5>\n<tone 0 391.995 0.5 0.5>\n<tone 0 0 0 0>\n" },
+    { "PLAY chord then a note", "PLAY \"ML O3 [C E-G]2. A4\"",                     "<sync 1>\n<chord 0 130.813 0.5>\n<chord 0 155.563 0.5>\n<tone 0 195.998 0.5 1.5>\n<tone 0 220 0.5 0.5>\n<tone 0 0 0 0>\n" },
+    { "PLAY chord octave marks","PLAY \"ML [C<G>E]8\"",                            "<sync 1>\n<chord 0 261.626 0.5>\n<chord 0 195.998 0.5>\n<tone 0 329.628 0.5 0.25>\n<tone 0 0 0 0>\n" },
+    { "PLAY chord not closed",  "PLAY \"[CEG\"",                                   "? ']' expected at the end of a chord\n" },
+    { "PLAY chord empty",       "PLAY \"[]4\"",                                    "? A chord needs notes\n" },
+    { "PLAY chord bad letter",  "PLAY \"[CXG]\"",                                  "? A note or ']' expected in a chord\n" },
+    { "PLAY chord out of range","PLAY \"O0 [C]\"",                                 "? Note out of range\n" },
+    { "INSTRUMENT POLY",        "INSTRUMENT 20,\"OSC SINE;POLY 4\":PRINT INSTRUMENT$(20)", "NAME USER; OSC SINE 1 1 0 0.5; POLY 4; GAIN 1\n" },
+    { "INSTRUMENT POLY out of range", "INSTRUMENT 20,\"OSC SINE;POLY 9\"",           "? Instrument value out of range\n" },
+    { "INSTRUMENT POLY 0",      "INSTRUMENT 20,\"OSC SINE;POLY 0\"",                 "? Instrument value out of range\n" },
+    { "INSTRUMENT POLY 1 is not shown", "INSTRUMENT 20,\"OSC SINE;POLY 1\":PRINT INSTRUMENT$(20)", "NAME USER; OSC SINE 1 1 0 0.5; GAIN 1\n" },
     { "TREMOLO",                "TREMOLO 1,8,0.75",                                "<trem 0 8 0.75>\n" },
     { "TREMOLO depth",          "TREMOLO 1,8,2",                                   "? Illegal argument\n" },
     { "PLAY with H and S",      "PLAY \"ML H1000 S2000,200,2\"",                     "<sync 1>\n<tone 0 1000 0.5 0.5>\n<tone 0 2000 0.5 1 glide 200>\n<tone 0 0 0 0>\n" },
@@ -940,7 +963,20 @@ static const testcase_t cases[] = {
     { "INSTRUMENT 32", "INSTRUMENT 32", "? Illegal argument\n" },
     { "INSTRUMENT fixed-rate noise behind the filter", "WAVE 1,20:INSTRUMENT 20,\"OSC SAW;OSC NOISE 0.1 -5000 0 0.5 POST;FILTER 2\"", "<inst 0 20  w0 osc 1 gain 1 cut 0 res 0 pitch 0 env 0>\n<inst 0 20  w4 osc 2 gain 1 cut 2 res 0 pitch 0 env 0>\n" },
     { "INSTRUMENT a fixed frequency out of range", "INSTRUMENT 20,\"OSC SINE 1 -20001\"", "? Instrument value out of range\n" },
-    { "INSTRUMENT POST expected", "INSTRUMENT 20,\"OSC SINE 1 1 0 0.5 BOGUS\"", "? POST expected after the OSC values\n" },
+    { "INSTRUMENT POST expected", "INSTRUMENT 20,\"OSC SINE 1 1 0 0.5 BOGUS\"", "? POST, MOD or FM expected after the OSC values\n" },
+    { "INSTRUMENT$ of a preset", "PRINT INSTRUMENT$(7)", "NAME PLUCK; OSC SAW 0.7 1 0 0.5; OSC SQUARE 0.4 1 5 0.5; FILTER 8 0.2 2.5 0.12; ENV 0 0.25 0 0.1; GAIN 2.86\n" },
+    { "INSTRUMENT$ of a basic wave", "PRINT INSTRUMENT$(1)", "NAME SQUARE\n" },
+    { "INSTRUMENT$ of an unused number", "PRINT INSTRUMENT$(25)", "NAME USER; OSC SINE 1 1 0 0.5; GAIN 1\n" },
+    { "INSTRUMENT$ of a definition of the program", "INSTRUMENT 20,\"name x; osc saw,0.5,2; filter 3\":PRINT INSTRUMENT$(20)", "NAME X; OSC SAW 0.5 2 0 0.5; FILTER 3 0 0 0.2; GAIN 1\n" },
+    { "INSTRUMENT$ gives back what INSTRUMENT takes", "INSTRUMENT 20,INSTRUMENT$(11):PRINT INSTRUMENT$(20)=INSTRUMENT$(11):PRINT INSTRUMENT$(20)=INSTRUMENT$(12)", "-1\n0\n" },
+    { "INSTRUMENT$ shows FM, MOD, POST and a fixed frequency", "INSTRUMENT 20,\"OSC SINE 0.5 1 0 0.5 FM 2.5; OSC NOISE 1 -300 0 0.5 MOD POST; FMDECAY 0.3\":PRINT INSTRUMENT$(20)", "NAME USER; OSC SINE 0.5 1 0 0.5 FM 2.5; OSC NOISE 1 -300 0 0.5 MOD POST; FMDECAY 0.3; GAIN 1\n" },
+    { "INSTRUMENT$ after INSTRUMENT n is the factory one again", "INSTRUMENT 5,\"OSC SAW\":INSTRUMENT 5:PRINT LEFT$(INSTRUMENT$(5),10)", "NAME LEAD;\n" },
+    { "INSTRUMENT$ number range", "PRINT INSTRUMENT$(32)", "? Illegal argument\n" },
+    { "INSTRUMENT$ negative", "PRINT INSTRUMENT$(-1)", "? Illegal argument\n" },
+    { "INSTRUMENT FM operators", "INSTRUMENT 20,\"OSC SINE 0.5 1 0 0.5 FM 3; OSC SINE 1 2 0 0.5 MOD; FMDECAY 0.4\"", "" },
+    { "INSTRUMENT FM index out of range", "INSTRUMENT 20,\"OSC SINE 1 1 0 0.5 FM 21; OSC SINE\"", "? Instrument value out of range\n" },
+    { "INSTRUMENT FM needs a number", "INSTRUMENT 20,\"OSC SINE 1 1 0 0.5 FM\"", "? A number is missing after FM\n" },
+    { "INSTRUMENT FMDECAY out of range", "INSTRUMENT 20,\"OSC SINE;FMDECAY 11\"", "? Instrument value out of range\n" },
     { "INSTRUMENT unknown command", "INSTRUMENT 20,\"FOO 1\"", "? Unknown instrument command 'FOO'\n" },
     { "INSTRUMENT unknown wave", "INSTRUMENT 20,\"OSC BOGUS\"", "? Wave name expected after OSC (SINE SQUARE TRIANGLE NOISE SAW)\n" },
     { "INSTRUMENT four oscillators", "INSTRUMENT 20,\"OSC SINE;OSC SAW;OSC SQUARE;OSC NOISE\"", "? At most 3 oscillators\n" },
@@ -1853,6 +1889,18 @@ static void snd_settrem( void* usrdata, int chan, float rate, float depth ) {
     out_append( text );
 }
 
+static void snd_chord( void* usrdata, int chan, float freq, float vol ) {
+    char text[60];
+    snprintf( text, sizeof(text), "<chord %d %g %g>\n", chan, (double) freq, (double) vol );
+    out_append( text );
+}
+
+static void snd_setcut( void* usrdata, int chan, float mult, float seconds ) {
+    char text[60];
+    snprintf( text, sizeof(text), "<cut %d %g %g>\n", chan, (double) mult, (double) seconds );
+    out_append( text );
+}
+
 static void snd_setpitch( void* usrdata, int chan, float freq ) {
     char text[60];
     snprintf( text, sizeof(text), "<pitch %d %g>\n", chan, (double) freq );
@@ -1915,7 +1963,7 @@ static void snd_setinst( void* usrdata, int chan, int n, const synth_inst_t* def
     out_append( text );
 }
 
-static const vm_sound_t test_sound = { snd_tone, snd_setwave, snd_setenv, snd_setvib, snd_settrem, snd_setpitch, snd_setvolume, snd_setbpm, snd_getbpm, snd_sync, snd_silence, snd_isbusy, snd_setinst };
+static const vm_sound_t test_sound = { snd_tone, snd_setwave, snd_setenv, snd_setvib, snd_settrem, snd_setpitch, snd_setvolume, snd_setbpm, snd_getbpm, snd_sync, snd_silence, snd_isbusy, snd_setinst, snd_setcut, snd_chord };
 
 // a graphics host that logs every operation as "<gfx NAME args>" (an omitted argument is -); queries return the sum of their arguments
 static int gfx_polls = 0;

@@ -49,6 +49,7 @@ static void vm_chanstate_default( vm_chanstate_t* st ) {
     st->env[0] = -1.0f; st->env[1] = st->env[2] = st->env[3] = 0.0f;
     st->vib[0] = st->vib[1] = 0.0f;
     st->trem[0] = st->trem[1] = 0.0f;
+    st->cut = -1.0f;
 }
 
 void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem ) {
@@ -2302,6 +2303,11 @@ static void vm_set_vib( vm_t* vm, int chan, float rate, float depth ) {
     vm->chanstate[chan].vib[0] = rate; vm->chanstate[chan].vib[1] = depth;
 }
 
+static void vm_set_cut( vm_t* vm, int chan, float mult, float seconds ) {
+    if ( vm->sound->setcut != 0 ) vm->sound->setcut( vm->userdata, chan, mult, seconds );
+    vm->chanstate[chan].cut = mult;
+}
+
 static void vm_set_trem( vm_t* vm, int chan, float rate, float depth ) {
     vm->sound->settrem( vm->userdata, chan, rate, depth );
     vm->chanstate[chan].trem[0] = rate; vm->chanstate[chan].trem[1] = depth;
@@ -2335,6 +2341,12 @@ static void vm_queue_voice( vm_t* vm, int chan, const mml_t* m, double tobeats )
             case MML_TREM:
                 vm_set_trem( vm, chan, ev->p[0], ev->p[1] );
                 break;
+            case MML_CUT:
+                vm_set_cut( vm, chan, ev->p[0], ev->p[1] );
+                break;
+            case MML_CHORD:
+                if ( snd->chord != 0 ) snd->chord( ud, chan, ev->freq, ev->vol );
+                break;
         }
     }
     snd->tone( ud, chan, 0.0f, 0.0f, 0.0f, 0.0f );      // the end of the voice: nothing goes on sounding
@@ -2359,7 +2371,8 @@ static void vm_sfx_cleanup( vm_t* vm, int chan, const mml_t* m, double tobeats, 
     bool envd = memcmp( now->env, before->env, sizeof(now->env) ) != 0;
     bool vib  = memcmp( now->vib, before->vib, sizeof(now->vib) ) != 0;
     bool trem = memcmp( now->trem, before->trem, sizeof(now->trem) ) != 0;
-    if ( !wave && !envd && !vib && !trem ) {
+    bool cut  = now->cut != before->cut;
+    if ( !wave && !envd && !vib && !trem && !cut ) {
         return;
     }
     if ( env && release > 0.0 ) {
@@ -2369,6 +2382,7 @@ static void vm_sfx_cleanup( vm_t* vm, int chan, const mml_t* m, double tobeats, 
     if ( envd ) vm_set_env( vm, chan, before->env[0], before->env[1], before->env[2], before->env[3] );
     if ( vib  ) vm_set_vib( vm, chan, before->vib[0], before->vib[1] );
     if ( trem ) vm_set_trem( vm, chan, before->trem[0], before->trem[1] );
+    if ( cut  ) vm_set_cut( vm, chan, before->cut, 0.0f );
 }
 
 // the host's beats per second of music-string time
@@ -3085,6 +3099,28 @@ static bool vm_sfx_define( vm_t* vm ) {
     return ok;
 }
 
+// INSS ( n -- s ): INSTRUMENT$(n), the definition string of instrument n as it is now
+static bool vm_instrument_string( vm_t* vm ) {
+    double n = 0;
+    if ( !vm_dpop_num( vm, &n ) ) {
+        return false;
+    }
+    if ( !( n >= 0.0 && n < (double) SYNTH_NINST ) || n != floor( n ) ) {
+        return vm_error( vm, "Illegal argument" );
+    }
+    char text[MML_INSTSTRLEN];
+    if ( n < (double) SYNTH_NBASIC ) {
+        static const char* const names[SYNTH_NBASIC] = { "NAME SINE", "NAME SQUARE", "NAME TRIANGLE", "NAME NOISE" };
+        snprintf( text, sizeof(text), "%s", names[(int) n] );
+    } else {
+        synth_inst_t def;
+        vm_inst_get( vm, (int) n, &def );
+        mml_inst_string( &def, text, sizeof(text) );
+    }
+    char* s = vm_new_string( vm, text, strlen( text ) );
+    return s && vm_push_string( vm, s );
+}
+
 // INSTRUMENT n, a$ ( n s -- ): parses the definition and hands it to the host; INSTRUMENT n ( n -- ): the factory instrument again
 static bool vm_instrument( vm_t* vm, bool define ) {
     double n = 0; char* str = 0;
@@ -3154,6 +3190,7 @@ static bool vm_sfx_play( vm_t* vm ) {
     vm_set_env( vm, chan, -1.0f, 0.0f, 0.0f, 0.0f );
     vm_set_vib( vm, chan, 0.0f, 0.0f );
     vm_set_trem( vm, chan, 0.0f, 0.0f );
+    if ( vm->chanstate[chan].cut != -1.0f ) vm_set_cut( vm, chan, -1.0f, 0.0f );
     vm_queue_voice( vm, chan, m, tobeats );
     vm_sfx_cleanup( vm, chan, m, tobeats, &before );
     return true;
@@ -3819,6 +3856,15 @@ static bool vm_sound( vm_t* vm, uint16_t kind ) {
                 else vm_set_trem( vm, chan, (float) b, (float) c );
             }
             return true;
+        case SNDK_CUTOFF:
+            if ( !vm_dpop_num( vm, &c ) || !vm_dpop_num( vm, &b ) || !vm_dpop_num( vm, &a ) || !vm_sound_channel( vm, a, &chan ) ) {
+                return false;
+            }
+            if ( !( ( b == -1.0 || ( b >= 0.01 && b <= 64.0 ) ) && c >= 0.0 && c <= 60.0 ) ) {
+                return vm_error( vm, "Illegal argument" );
+            }
+            if ( snd ) vm_set_cut( vm, chan, (float) b, (float) c );
+            return true;
         case SNDK_TEMPO:
             if ( !vm_dpop_num( vm, &a ) ) {
                 return false;
@@ -4457,6 +4503,7 @@ static bool vm_step( vm_t* vm ) {
         case INS_BINS: case INS_QUAS: case INS_OCTS: case INS_HEXS: case INS_DECS:
         case INS_LFTS: case INS_RGTS: case INS_MIDS:
             return vm_system_function( vm, opcode );
+        case INS_INSS: return vm_instrument_string( vm );
         case INS_SHEX: return vm_shell_execute( vm );
         case INS_SAVE: return vm_save_program( vm, param16 );
         case INS_LOAD: return vm_load_program( vm );

@@ -56,6 +56,9 @@ O n    octave 0..8 (O4: middle C = C4, A4 = 440 Hz); <  >   one octave down / up
 L n    default length 1..64 (4)      T n   quarter notes per minute 1..1000 (120)
 V x    volume 0..1 with decimals (0.5)      W n  or  I n   wave 0..3, or the instrument 4..31 (the channel keeps its wave / instrument otherwise)
 ML MN MS   the note fills its length / sounds 7/8 of it (default) / 3/4 of it; the rest is silence, so equal notes in a row are heard separately
+[CEG]n     a chord (2.. 16 notes: A..G with # + -, and < > for the octave): the notes start together and last for the length n (dots too); an instrument with
+           POLY gives each note a voice (see "Polyphony"), a single-voice instrument plays only the last one
+K m[,s]    the filter cutoff of an instrument: m times the note frequency (0.01..64), reached within s seconds (0..60, default at once); KR[,s]: the instrument's own again
 ```
 
 Example: `PLAY "T120 O4 L8 CDEF G4 G4", "T120 O2 L2 C G"` (melody and bass line), `PLAY "W3 V1 ML O1 C16"` (a drum-like noise burst).
@@ -101,6 +104,7 @@ SFX n [, ch]                   plays effect n on channel ch; without ch on a fre
   sequence. They stay in effect until changed. Without an `ENVELOPE` a note fades in and out within 2.5 ms (no click); with one the
   note rises in `a` seconds, falls to the sustain level in `d` seconds and holds it until its end, then falls to silence in `r` seconds
   (the channel counts as busy during the release; a new note during the release goes up from where the level is; times of 0 are instant).
+- **`CUTOFF ch, mult [, seconds]`** (roadmap item 87, token 76) is the statement form of `K`: the filter cutoff of the instrument on the channel glides (geometrically: the same number of octaves a second) to `mult` x the note frequency within `seconds` (default 0 = at once); `mult` -1 = the instrument's own cutoff again (the glide goes there and the override ends). It is an event on the channel's time line like `VIBRATO`, so a sweep in the middle of a `PLAY` sequence is `PLAY "I20 K1 C K30,2 D"`. An instrument without a filter is wide open (64 x the note) until a `CUTOFF` gives it one; selecting another instrument drops the setting; `SFX` gives it back like the other settings. Values: `mult` -1 or 0.01..64, `seconds` 0..60, else "Illegal argument". Host: `vm_sound_t.setcut`, `sdlaud_setcutoff`, `SYNTH_EV_CUT`; instruction `SND` kind 16.
 - **Music string commands** for effects (`mml.[ch]`): `H f[,n]` (a tone of f Hz, for noise), `S f1,f2[,n]` (sweep), `X a,d,s,r` / `XR`
   (envelope / default), `~ rate,depth` (vibrato), `^ rate,depth` (tremolo). Numbers may have decimals, values are separated by
   commas. So a laser is `SFX 1,"W1 ML S3000,200,8"`, an explosion `SFX 2,"W3 ML X0,0.02,0.4,0.5 S800,60,2"`, a power-up
@@ -112,7 +116,7 @@ SFX n [, ch]                   plays effect n on channel ch; without ch on a fre
 - Wrong arguments are "Illegal argument", an `SFX` that was never defined is "Undefined effect".
 
 Host interface: `vm_sound_t` has `tone( chan, freq, freq2, vol, beats )` (freq2 != 0: glide), `setenv`, `setvib`, `settrem`, `setpitch`,
-`setvolume`; `sdlaud_playsweep`, `sdlaud_setenvelope/setvibrato/settremolo` (queued) and `sdlaud_setpitch/setvolume` (at once);
+`setvolume`, `setinst`, `setcut`, `chord`; `sdlaud_playsweep`, `sdlaud_setenvelope/setvibrato/settremolo` (queued) and `sdlaud_setpitch/setvolume` (at once);
 `synth_schedule_ev()` with `synth_evspec_t`, `synth_setpitch/setvolume`. Instructions: `SND` kinds 7..13 (see `instset.h`).
 
 Not done: stereo, `SFX` with parameters (a filter, a pulse width and a pitch envelope exist now as parts of the instruments in `synth.[ch]`, see "Instruments", but have no statements yet).
@@ -160,18 +164,21 @@ Definition string (`mml_parse_inst()`, `mml.h`): commands separated by `;`, valu
 
 ```
 NAME w                                 up to 11 letters / digits / _
-OSC wave [level [ratio [cents [pw]]]] [POST]
+OSC wave [level [ratio [cents [pw]]]] [FM index] [MOD] [POST]
                                        up to 3; wave = SINE SQUARE TRIANGLE NOISE SAW (or 0..4); level 0..2 (1), ratio 0..64 (1; noise 0 = white noise;
                                        NEGATIVE = a fixed frequency of -ratio Hz, 1..20000, independent of the note), cents -2400..2400 (0), pulse width
-                                       of SQUARE 0.02..0.98 (0.5); POST = the oscillator bypasses the filter (mixed in behind it)
+                                       of SQUARE 0.02..0.98 (0.5); POST = the oscillator bypasses the filter (mixed in behind it);
+                                       FM index (0..20 radians) = the NEXT oscillator modulates the phase of this one; MOD = a modulator only (not mixed)
 FILTER cutmul [res [fenv [fdecay]]]    low-pass at note frequency * cutmul (0..64); resonance 0..0.95; fenv -6..6 octaves; fdecay 0..10 s (0.2)
 PITCH semitones seconds                pitch envelope (-48..48, 0..10)
 ENV a d s r                            default envelope (seconds 0..60, sustain 0..1)
 VIB rate depth                         default vibrato (0..100 Hz, 0..24 semitones)
+FMDECAY seconds                        the FM indexes fall exponentially with this time constant (0..10; 0 = they stay)
+POLY n                                 voices 1..8 (1): see "Polyphony"
 GAIN g                                 overall level 0..4 (1)
 ```
 Example: `INSTRUMENT 20, "NAME MYBASS; OSC SAW 0.8; OSC SQUARE 0.6 0.5 0 0.3; FILTER 3 0.3 2 0.15; ENV 0.005 0.2 0.6 0.1; GAIN 0.6"`, then `PLAY "I20 O2 L8 CDEF"`.
-Errors: "Unknown instrument command 'X'", "Wave name expected after OSC ...", "POST expected after the OSC values", "At most 3 oscillators", "Wrong number of values in the instrument definition",
+Errors: "Unknown instrument command 'X'", "Wave name expected after OSC ...", "POST, MOD or FM expected after the OSC values", "A number is missing after FM", "At most 3 oscillators", "Wrong number of values in the instrument definition",
 "Instrument value out of range".
 
 A new note (a channel that was not sounding, or one in its release) restarts the pitch and filter envelopes; a legato note (a `PLAY` on a sounding channel without an
@@ -189,10 +196,48 @@ they start as a plain sine named `USER`). The percussion presets want a note of 
 **Fixed-frequency oscillators and `POST` (2026-11-10, owner's request after listening to FLUTE):** the first FLUTE had its breath noise tied to the note (a noise oscillator at 8 x the note, then the key-following filter at 4 x the note), so its breath was a low rumble in low octaves (measured: the noise centred at about 190 Hz at A2, 800 Hz at A4, 3 kHz at A6) and only sounded like breath above octave 4. Now the breath is `OSC NOISE 0.08 -5000 POST`: a sample-and-hold noise at a fixed 5000 Hz, behind the filter, so it is the same at every note (measured: identical level and 2500 sign changes per second at A2 and A6). The same two features suit a pitch-independent hiss (a hi-hat), a chiff, or a fixed formant. A noise oscillator with ratio 0 is still white noise (a new value every sample).
 
 Cost (`synthtest1`, one core, optimized build): 16 channels with the three-oscillator presets + filter = **about 5 % of a core**.
-Tests: `synthtest1` (333 checks): table / names, every preset (finite, audible, peak <= 1, silent after its release), ratio and cents (pitch measured), saw alias level and
+Tests: `synthtest1` (369 checks): table / names, every preset (finite, audible, peak <= 1, silent after its release), ratio and cents (pitch measured), saw alias level and
 amplitude, pulse width harmonics, low-pass attenuation measured with a Goertzel filter, resonance at the limits, pitch envelope, envelope
 precedence, `WAVE` after an instrument identical to the plain wave, validation; also under ASan / UBSan. `vmtest1` (definitions and errors, `WAVE` 4..31, `I` / `W` in `PLAY`, the `SFX` give-back, the order of a redefinition between two `PLAY`s),
 `repltest1`, `asmtest1` (`SND 14` / `15`), `contest1` (the console host checks the instrument statements and strings, 7 cases). **The basic waves are pinned by a golden test** in `synthtest1`: 4 waves x 5 settings (plain, envelope, vibrato + tremolo, glide, wave change mid-note) were rendered with the synthesizer as it was before the instruments (commit `7b7361b`) and the expected sums, RMS and sample values are in the test (tolerance for other CPUs / compilers); the old and the new code are bit-identical on those scenarios, and a deliberate 2 % change of the square wave makes seven checks fail. **`make hosttest`** (`hosttest.sh`, not in `make check`) runs the window host under Xvfb with the disk audio driver and checks the recorded audio (sine, then a redefined square wave): `docs/build-and-test.md`. The sound log (`ENGINE1999_SOUNDLOG`) shows an `instrument n NAME ...` line on the channel for each selection / redefinition.
 
-**Not done yet (roadmap 81):** the final list of presets (to agree with the owner; the instrument editor now makes tuning them by ear easy), switching the other games to instruments (`music3d.lib` is done). Later: FM operators on the
-same data structure, a polyphonic voice allocator, panning once the output is stereo, `INSTRUMENT$(n)` (the name), a query of the definition.
+**Tests of roadmap item 87:** `synthtest1` +36 (FM sidebands / `MOD` / `FMDECAY` / chains, the cutoff event at once / gliding / `KR` / on an unfiltered instrument, `mml_inst_string()` round trip of all presets, polyphony: chords, tails, voice limit, stealing, busy / silence, vibrato hand-over, a 600-note stress run; also under ASan / UBSan), `vmtest1` +36 (`CUTOFF`, `K`, chords, `INSTRUMENT$`, `POLY`, FM errors, the `SFX` give-back of the cutoff), `repltest1`, `asmtest1`, and `hosttest.sh` now also records a `[ACE]` chord on a `POLY` instrument (0.100 per note) and a `K1` / `K40` cutoff opening (the 8th harmonic 0.0001 -> 0.0195) through the real window host.
+
+**FM operators (roadmap item 87, 2026-11-11).** An oscillator with `FM index` has its phase modulated by the *next* oscillator of the definition (phase modulation, the
+"operator" form of FM): the phase offset in radians is `index x (the modulator's output x its level)`, so the modulator's level scales the index too, and a chain
+`osc 1 <- osc 2 <- osc 3` is a three-operator stack. `MOD` keeps a modulator out of the mix (it is heard only through the oscillator it modulates), so the
+ordinary algorithms are: a carrier + a MOD modulator (two operators), a chain with MOD on the inner ones (stack), or one carrier + a modulator that is also
+mixed (a "feedback-free" additive blend). `FMDECAY t` lets all indexes fall exponentially with the time constant t at every new note (the brightness of an
+electric piano, a bell, a pluck falls with the note; 0 = constant). Ratios and cents of a modulator work as for any oscillator (ratio 1 = harmonic sidebands,
+non-integer ratios = bell-like). Examples: `INSTRUMENT 20, "OSC SINE 0.5 1 0 0.5 FM 3; OSC SINE 1 2 0 0.5 MOD; FMDECAY 0.4; ENV 0 0.8 0 0.3; GAIN 1.8"` (an electric piano
+like tone), `"OSC SINE 0.4 1 0 0.5 FM 6; OSC SINE 1 3.5 0 0.5 MOD; FMDECAY 1.5; ENV 0 1.5 0 1; GAIN 1.7"` (a bell). Measured (`synthtest1`): carrier 1000 Hz, modulator 500 Hz,
+index 2: the sidebands have the amplitudes of the Bessel functions (0.5 x J1(2) = 0.288 at 1500 Hz), the modulator's level scales the index, `FMDECAY` removes the
+sidebands (0.2 s: 0.22 at the start, 0.01 after 0.9 s), a three-operator chain stays within the level. Only the waves' phase is shifted: the band-limiting of
+square and saw uses the shifted phase too, so strong FM of those waves can alias a little (sines are the normal carriers and modulators). The editor
+`tools/insted.bas` keeps FM / MOD / FMDECAY / POLY of a definition (it has no sliders for them: edit them in its string field and press Return, **Hold** plays it).
+
+**Polyphony (roadmap item 87).** A channel plays one note at a time, with the instrument's whole signal path: a new note while one sounds is legato, a note that follows a
+note in its release takes the channel over, and a chord needs one channel per note. An instrument with **`POLY n`** (2..8) changes that for the channels that use it:
+the channel then keeps only the *settings* (instrument, envelope, vibrato, tremolo, cutoff) and **every note is played by a voice** that takes a copy of them, from a pool of
+`SYNTH_NVOICES` = 32 voice slots shared by all channels (the slots are ordinary channel structures after the 16 channels, so the whole signal path is the same code; the
+mixer scales a loud sum down as before). Rules (`synth.c`, `synth_apply`):
+- **A `PLAY` event at another time than the channel's last one ends the notes the channel holds** (they *release*: their envelope tails go on sounding under the new note); **`PLAY`
+  events at the same time are a chord**; a `STOP` (the end of a note, a rest) releases all held notes. So `PLAY "I20 O3 L8 CDEFG"` with a long release is a run of overlapping tails, and
+  `PLAY "I20 [CEG]2 [DFA]2"` is two chords.
+- At most `n` notes of a channel sound at once (releasing ones count): the next note takes over the quietest releasing note, else the oldest. A full pool takes the channel's own
+  oldest voice, or drops the note if the channel has none (a note is never stolen from another channel).
+- A change of **vibrato, tremolo or `CUTOFF`** reaches the notes that sound; **`WAVE`, `ENVELOPE`, `INSTRUMENT`** apply to the notes started after them (a note keeps its envelope);
+  `VOLUME` changes all sounding notes, `PITCH` the newest one. Selecting a single-voice instrument releases the notes the channel holds. `PLAYING`, `SOUND OFF`, `SOUND OFF ch` count and end the voices too.
+- `[CEG]n` in a `PLAY` string (`mml.c`) emits `MML_CHORD` events for all notes but the last (the VM's `vm_sound_t.chord`, `sdlaud_playchord`: a `PLAY` event that does not move the
+  channel's time) and the last as the note with the length; a host without `chord` plays only the last note. Chord notes of a single-voice instrument therefore replace each other
+  (only the last is heard) — define `POLY` for chords.
+Measured (`synthtest1`, `hosttest.sh`): a chord of three sines of level 0.3 at volume 0.5 gives 0.1 per note (the sum of the gains 1.5 scales it, exactly as before for three channels);
+the tail of a note 0.5 s earlier (release 0.6 s) is 0.07 under the next note with POLY and absent without it; 600 random notes on 16 channels with a too small pool are finite, within range and ASan / UBSan clean.
+
+**`INSTRUMENT$(n)` (roadmap item 87):** the definition string of instrument n (0..31) as it is now, the program's own or the factory one (`mml_inst_string()`; the format is the one `INSTRUMENT n, a$` reads,
+all the parts a definition has: `PRINT INSTRUMENT$(9)` gives `NAME STRINGS; OSC SAW 0.33 1 -12 0.5; ...; GAIN 2.03`; a name-less one is `NAME USER`; 0..3, the basic waves, give only `NAME SQUARE` etc.
+because they are not definable; out of range "Illegal argument"). `INSTRUMENT 20, INSTRUMENT$(11)` copies a preset to take it apart; the name is `MID$(INSTRUMENT$(n),6,...)` up to the first `;`.
+Instruction `INSS` (0x190), token 75 in an expression.
+
+**Not done (roadmap 87 / 81):** a review of the presets by ear (the instrument editor now makes tuning easy; the preset gains were calibrated for loudness only), panning once the
+output is stereo, an FM feedback path (an operator modulating itself), algorithms beyond the chain (one modulator for two carriers).

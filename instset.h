@@ -367,6 +367,8 @@ The 4096 extended instructions are as follows:
                             14 INSTDEF ( n s -- )              define instrument n (4..31) from the definition string s (mml_parse_inst(), see mml.h);
                               the VM keeps it; the channels that use n get a snapshot queued at their own time (vm_sound_t.setinst)
                             15 INSTRESET ( n -- )              the factory instrument n (4..31) again
+                            16 CUTOFF ( ch mult seconds -- )   the filter cutoff of an instrument channel glides to mult * note frequency (0.01..64; -1 =
+                              back to the instrument's own) within seconds (0..60; 0 = at once); vm_sound_t.setcut
                             Everything but 7 and 8 is queued at the channel's time line; all return at once. Without sound
                             callbacks the arguments are only checked. A bad argument is "Illegal argument".
     0001 01000011       PLNG - is the channel busy? ( ch -- n ) C=0 P=0
@@ -592,6 +594,9 @@ The 4096 extended instructions are as follows:
                             the PNUM / PSTR that follow with the parameter bit PRTARG_USING put each value into the next field of the format (the format
                             starts again when it is used up) and the literal text around the fields; "Type mismatch" if a value does not fit the kind of
                             field, "Illegal argument" if the format has no field. Parameter 1: ends it (prints the literal text behind the last field that was used).
+    0001 10010000       INSS - the definition of an instrument ( n -- s ) C=0 P=0
+                            INSTRUMENT$(n): the definition string of instrument n (0..31) as it is now (the program's own or the factory one), in the form
+                            mml_inst_string() writes and INSTRUMENT n, a$ reads back; 0..3 give only "NAME SINE" etc. (the basic waves are not definable). Else "Illegal argument".
     0001 10001111       INSR - search in a string ( [start] hay needle -- n ) C=0 P=1
                             INSTR([start,] hay$, needle$): the position (1 = first byte) of the first needle in hay at or after start, 0 if it is not there. Parameter 0: no start (it is 1);
                             parameter 1: start is the first of the three values. start < 1 is "Illegal argument", start beyond the end of hay gives 0; an empty needle is found at start
@@ -807,5 +812,6 @@ The 4096 extended instructions are as follows:
 #define INS_TOOL        UINT16_C(0X18D)
 #define INS_RTRP        UINT16_C(0X18E)
 #define INS_INSR        UINT16_C(0X18F)
+#define INS_INSS        UINT16_C(0X190)
 
 #endif

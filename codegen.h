@@ -376,6 +376,7 @@ bool cgen_gen_bye( codegen_t* cgen );
 bool cgen_gen_rtrp( codegen_t* cgen );   // a plain RETURN in a procedure: a pending GOSUB returns, else falls through to the BRIA that leaves the procedure
 bool cgen_gen_argc( codegen_t* cgen );
 bool cgen_gen_args( codegen_t* cgen );
+bool cgen_gen_inss( codegen_t* cgen );
 bool cgen_gen_envs( codegen_t* cgen );
 bool cgen_gen_keyd( codegen_t* cgen );
 bool cgen_gen_mth2( codegen_t* cgen, uint16_t kind );     // MIN / MAX / ATAN2 / ROUND (1 / 2 / 3 / 4)

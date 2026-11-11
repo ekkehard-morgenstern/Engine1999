@@ -59,6 +59,8 @@ void sdlaud_setwave( int chan, int wave );                              // at th
 void sdlaud_setinst( int chan, int n, const synth_inst_t* def );        // at the channel's cursor: the channel uses instrument n (4..31) with this definition (a copy)
 void sdlaud_setenvelope( int chan, float attack, float decay, float sustain, float release );   // queued; attack < 0 = default
 void sdlaud_setvibrato( int chan, float rate, float depth );            // queued; depth 0 = off
+void sdlaud_playchord( int chan, float freq, float vol );                // queued: a note that starts at the channel's cursor without moving it (the other notes of a chord)
+void sdlaud_setcutoff( int chan, float mult, float seconds );           // queued: the filter cutoff of an instrument channel glides to mult * note (-1 = the instrument's own)
 void sdlaud_settremolo( int chan, float rate, float depth );            // queued; depth 0 = off
 void sdlaud_setpitch( int chan, float freq );                           // at once (no queue)
 void sdlaud_setvolume( int chan, float vol );                           // at once (no queue)

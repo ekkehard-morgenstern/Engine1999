@@ -965,6 +965,284 @@ static double crossings( const float* b, int from, int to ) {       // sign chan
     return (double) zc * RATE / (double)( to - from );
 }
 
+// a saw at 220 Hz through a low-pass at 1 x the note: renders 2 seconds, with a CUTOFF event (mult, seconds) at time "at" seconds (mult 0 = none)
+static void cut_render( const char* def, float mult, float secs, double at, float* buf ) {
+    synth_t s; synth_init( &s, RATE );
+    synth_inst_t d; char err[MML_ERRLEN];
+    mml_parse_inst( def, &d, err ); synth_setinst( &s, 20, &d );
+    synth_evspec_t sp; memset( &sp, 0, sizeof(sp) ); sp.type = SYNTH_EV_INST; sp.p[0] = 20.0f;
+    synth_schedule_ev( &s, 0, &sp );
+    synth_schedule( &s, 0, SYNTH_EV_PLAY, 0, 220.0f, 0.5f, SYNTH_SINE );
+    if ( mult != 0.0f ) {
+        memset( &sp, 0, sizeof(sp) ); sp.type = SYNTH_EV_CUT; sp.p[0] = mult; sp.p[1] = secs;
+        synth_schedule_ev( &s, (uint64_t)( at * 1.0e9 ), &sp );
+    }
+    synth_runevents( &s, 0 );
+    int done = 0;
+    while ( done < 2 * RATE ) {         // in blocks, so that the events of later times run
+        int n = 441;
+        synth_runevents( &s, (uint64_t)( (double) done * 1.0e9 / RATE ) );
+        synth_render( &s, buf + done, n );
+        done += n;
+    }
+    synth_cleanup( &s );
+}
+
+static void test_cutoff_event( void ) {
+    float* a = (float*) malloc( sizeof(float) * 2 * RATE );
+    char nm[200];
+    const char* def = "OSC SAW 0.5; FILTER 1 0 0 0";
+    cut_render( def, 0.0f, 0.0f, 0.0, a );
+    double dark = amp_at( a, 4000, 20000, 1760.0 );                  // the 8th harmonic of 220 Hz
+    cut_render( def, 32.0f, 0.0f, 0.0, a );
+    double bright = amp_at( a, 4000, 20000, 1760.0 );
+    snprintf( nm, sizeof(nm), "CUTOFF at once: the 8th harmonic %.4f with the instrument's cutoff, %.4f after CUTOFF 32", dark, bright );
+    check( dark < 0.002 && near( bright, 0.02, 0.004 ) && bright > 8.0 * dark, nm );
+    // a glide of 1 s starting at 0.5 s: dark before, brighter and brighter, bright after
+    cut_render( def, 32.0f, 1.0f, 0.5, a );
+    double w0 = amp_at( a, 4000, 20000, 1760.0 ), w1 = amp_at( a, RATE * 3 / 4, RATE * 3 / 4 + 8820, 1760.0 ), w2 = amp_at( a, RATE * 7 / 4, RATE * 2 - 100, 1760.0 );
+    snprintf( nm, sizeof(nm), "CUTOFF glide: %.4f before, %.4f half way, %.4f after", w0, w1, w2 );
+    check( w0 < 0.002 && w1 > w0 * 2.0 && w1 < w2 && near( w2, bright, 0.004 ), nm );
+    // KR: back to the instrument's own cutoff
+    cut_render( def, 32.0f, 0.0f, 0.0, a );
+    {
+        synth_t s; synth_init( &s, RATE );
+        synth_inst_t d; char err[MML_ERRLEN]; mml_parse_inst( def, &d, err ); synth_setinst( &s, 20, &d );
+        synth_evspec_t sp; memset( &sp, 0, sizeof(sp) ); sp.type = SYNTH_EV_INST; sp.p[0] = 20.0f; synth_schedule_ev( &s, 0, &sp );
+        synth_schedule( &s, 0, SYNTH_EV_PLAY, 0, 220.0f, 0.5f, SYNTH_SINE );
+        memset( &sp, 0, sizeof(sp) ); sp.type = SYNTH_EV_CUT; sp.p[0] = 32.0f; synth_schedule_ev( &s, 0, &sp );
+        memset( &sp, 0, sizeof(sp) ); sp.type = SYNTH_EV_CUT; sp.p[0] = -1.0f; synth_schedule_ev( &s, 1000000000ULL, &sp );
+        int done = 0;
+        while ( done < 2 * RATE ) {
+            synth_runevents( &s, (uint64_t)( (double) done * 1.0e9 / RATE ) );
+            synth_render( &s, a + done, 441 ); done += 441;
+        }
+        synth_cleanup( &s );
+    }
+    double b1 = amp_at( a, 4000, 20000, 1760.0 ), b2 = amp_at( a, RATE + 4000, RATE + 20000, 1760.0 );
+    snprintf( nm, sizeof(nm), "CUTOFF -1 restores the instrument's cutoff: %.4f bright, %.4f after", b1, b2 );
+    check( b1 > 0.012 && b2 < 0.002, nm );
+    // an instrument without a filter gets one from CUTOFF
+    cut_render( "OSC SAW 0.5", 1.0f, 0.0f, 0.0, a );
+    double nf = amp_at( a, 4000, 20000, 1760.0 );
+    cut_render( "OSC SAW 0.5", 0.0f, 0.0f, 0.0, a );
+    double nf0 = amp_at( a, 4000, 20000, 1760.0 );
+    snprintf( nm, sizeof(nm), "CUTOFF filters an instrument that has no filter: %.4f -> %.4f", nf0, nf );
+    check( nf < 0.002 && nf0 > 0.012, nm );
+    // values
+    synth_t s2; synth_init( &s2, RATE );
+    synth_evspec_t sp; memset( &sp, 0, sizeof(sp) ); sp.type = SYNTH_EV_CUT; sp.p[0] = 0.0f;
+    check( !synth_schedule_ev( &s2, 0, &sp ), "CUTOFF 0 is refused" );
+    sp.p[0] = 65.0f; check( !synth_schedule_ev( &s2, 0, &sp ), "CUTOFF 65 is refused" );
+    sp.p[0] = 2.0f; sp.p[1] = 61.0f; check( !synth_schedule_ev( &s2, 0, &sp ), "a glide of 61 s is refused" );
+    sp.p[1] = 1.0f; check( synth_schedule_ev( &s2, 0, &sp ), "CUTOFF 2 in 1 s is queued" );
+    synth_cleanup( &s2 );
+    free( a );
+}
+
+static void test_inst_string( void ) {
+    // mml_inst_string() writes what mml_parse_inst() reads back to the same instrument: every preset, and an FM / fixed / POST one
+    char text[MML_INSTSTRLEN], err[MML_ERRLEN];
+    int bad = 0;
+    for ( int n=SYNTH_NBASIC; n < SYNTH_NBASIC + SYNTH_NPRESET + 1; ++n ) {
+        synth_inst_t a, b;
+        if ( n < SYNTH_NBASIC + SYNTH_NPRESET ) synth_instpreset( n, &a );
+        else mml_parse_inst( "NAME X; OSC SINE 0.5 1 0 0.5 FM 2.5; OSC NOISE 1 -300 0 0.5 MOD POST; PITCH -7 0.04; FMDECAY 0.3", &a, err );
+        mml_inst_string( &a, text, sizeof(text) );
+        if ( !mml_parse_inst( text, &b, err ) ) { ++bad; printf( "  %d: %s -> %s\n", n, text, err ); continue; }
+        char text2[MML_INSTSTRLEN];
+        mml_inst_string( &b, text2, sizeof(text2) );
+        bool same = strcmp( text, text2 ) == 0 && a.nosc == b.nosc && a.gain == b.gain && a.cutmul == b.cutmul && a.res == b.res && a.fenv == b.fenv && a.fdecay == b.fdecay &&
+            a.pitch == b.pitch && a.pitchtime == b.pitchtime && a.env == b.env && a.a == b.a && a.d == b.d && a.s == b.s && a.r == b.r && a.fmdecay == b.fmdecay;
+        for ( int k=0; k < a.nosc; ++k ) {
+            same = same && a.osc[k].wave == b.osc[k].wave && a.osc[k].level == b.osc[k].level && a.osc[k].ratio == b.osc[k].ratio && a.osc[k].cents == b.osc[k].cents &&
+                a.osc[k].pw == b.osc[k].pw && a.osc[k].post == b.osc[k].post && a.osc[k].mod == b.osc[k].mod && a.osc[k].fm == b.osc[k].fm;
+        }
+        if ( !same ) { ++bad; printf( "  %d: %s\n     %s\n", n, text, text2 ); }
+    }
+    check( bad == 0, "mml_inst_string(): every preset and an FM instrument read back to the same instrument" );
+    synth_inst_t d; synth_instdefault( &d );
+    mml_inst_string( &d, text, 20 );
+    check( strlen( text ) == 19 && strncmp( text, "NAME USER; OSC SINE", 19 ) == 0, "mml_inst_string(): a small buffer is cut, not overrun" );
+}
+
+// instrument 20 from a definition on channel 0 (and instrument 21 = a plain sine on channel 1 if two), events from the list, rendered in blocks
+typedef struct { double at; int type; int chan; float freq, vol; } pev_t;
+
+static int voices_of( const synth_t* s, int chan ) {
+    int n = 0;
+    for ( int i=SYNTH_NCHAN; i < SYNTH_NCHAN + SYNTH_NVOICES; ++i ) {
+        const synth_chan_t* v = &s->chan[i];
+        if ( v->owner == chan + 1 && ( v->on || v->gain != 0.0f || v->target != 0.0f ) ) ++n;
+    }
+    return n;
+}
+
+static void poly_render( synth_t* s, const char* def, const pev_t* ev, int nev, float* buf, int seconds ) {
+    synth_init( s, RATE );
+    synth_inst_t d; char err[MML_ERRLEN];
+    if ( !mml_parse_inst( def, &d, err ) ) printf( "  poly def: %s\n", err );
+    synth_setinst( s, 20, &d );
+    synth_evspec_t sp; memset( &sp, 0, sizeof(sp) ); sp.type = SYNTH_EV_INST; sp.p[0] = 20.0f;
+    synth_schedule_ev( s, 0, &sp );
+    for ( int k=0; k < nev; ++k ) {
+        memset( &sp, 0, sizeof(sp) );
+        sp.type = (synth_evtype_t) ev[k].type; sp.chan = ev[k].chan; sp.freq = ev[k].freq; sp.vol = ev[k].vol;
+        synth_schedule_ev( s, (uint64_t)( ev[k].at * 1.0e9 ), &sp );
+    }
+    int done = 0;
+    while ( done < seconds * RATE ) {
+        synth_runevents( s, (uint64_t)( (double) done * 1.0e9 / RATE ) );
+        synth_render( s, buf + done, 441 );
+        done += 441;
+    }
+}
+
+static void test_polyphony( void ) {
+    float* a = (float*) malloc( sizeof(float) * 3 * RATE );
+    char nm[220];
+    synth_t s;
+    const char* poly = "OSC SINE 0.3; ENV 0.005 0 1 0.6; POLY 4";
+    // a chord (three PLAYs at the same time) sounds with all three notes
+    pev_t chord[] = { { 0.0, SYNTH_EV_PLAY, 0, 220.0f, 0.5f }, { 0.0, SYNTH_EV_PLAY, 0, 277.18f, 0.5f }, { 0.0, SYNTH_EV_PLAY, 0, 329.63f, 0.5f }, { 1.0, SYNTH_EV_STOP, 0, 0, 0 } };
+    poly_render( &s, poly, chord, 4, a, 3 );
+    double f1 = amp_at( a, 4000, 40000, 220.0 ), f2 = amp_at( a, 4000, 40000, 277.18 ), f3 = amp_at( a, 4000, 40000, 329.63 );
+    snprintf( nm, sizeof(nm), "POLY 4: a chord sounds with all three notes (%.3f %.3f %.3f; 0.3 x 0.5 each, scaled by the sum of the gains 1.5 = 0.1)", f1, f2, f3 );
+    check( near( f1, 0.1, 0.02 ) && near( f2, 0.1, 0.02 ) && near( f3, 0.1, 0.02 ), nm );
+    check( voices_of( &s, 0 ) == 0, "POLY 4: the voices are free after the release" );
+    synth_cleanup( &s );
+    // the same chord with a single-voice instrument: only the last note
+    poly_render( &s, "OSC SINE 0.3; ENV 0.005 0 1 0.6", chord, 4, a, 3 );
+    f1 = amp_at( a, 4000, 40000, 220.0 ); f3 = amp_at( a, 4000, 40000, 329.63 );
+    check( f1 < 0.01 && near( f3, 0.15, 0.03 ), "a single-voice instrument plays only the last note of a chord (the old behavior)" );
+    synth_cleanup( &s );
+    // the release tail of an earlier note sounds under the next one (0.5 s later, release 0.6 s)
+    pev_t seq[] = { { 0.0, SYNTH_EV_PLAY, 0, 220.0f, 0.5f }, { 0.5, SYNTH_EV_PLAY, 0, 330.0f, 0.5f }, { 1.5, SYNTH_EV_STOP, 0, 0, 0 } };
+    poly_render( &s, poly, seq, 3, a, 3 );
+    double tail = amp_at( a, RATE / 2 + 2000, RATE / 2 + 12000, 220.0 ), later = amp_at( a, RATE * 2, RATE * 2 + 8000, 220.0 );
+    snprintf( nm, sizeof(nm), "POLY: the first note's release tail sounds under the second (%.3f), then it is gone (%.4f)", tail, later );
+    check( tail > 0.04 && later < 0.002, nm );
+    synth_cleanup( &s );
+    poly_render( &s, "OSC SINE 0.3; ENV 0.005 0 1 0.6", seq, 3, a, 3 );
+    tail = amp_at( a, RATE / 2 + 2000, RATE / 2 + 12000, 220.0 );
+    check( tail < 0.01, "a single-voice instrument: the second note takes the channel over (no tail)" );
+    synth_cleanup( &s );
+    // at most POLY voices: five notes in a row, each held for the next (POLY 2): never more than two sound
+    pev_t five[] = { { 0.0, SYNTH_EV_PLAY, 0, 200.0f, 0.5f }, { 0.0, SYNTH_EV_PLAY, 0, 250.0f, 0.5f }, { 0.0, SYNTH_EV_PLAY, 0, 300.0f, 0.5f } };
+    poly_render( &s, "OSC SINE 0.3; ENV 0.005 0 1 0.6; POLY 2", five, 3, a, 1 );
+    snprintf( nm, sizeof(nm), "POLY 2: a chord of three has two voices (%d)", voices_of( &s, 0 ) );
+    check( voices_of( &s, 0 ) == 2, nm );
+    check( amp_at( a, 4000, 40000, 200.0 ) < 0.01 && amp_at( a, 4000, 40000, 300.0 ) > 0.1, "POLY 2: the oldest note was taken over by the third" );
+    check( synth_busy( &s, 0, 0 ), "busy: a polyphonic channel with sounding voices" );
+    synth_silencechan( &s, 0, 0 );
+    synth_render( &s, a, 4410 );        // the fade out
+    check( voices_of( &s, 0 ) == 0 && !synth_busy( &s, 0, 0 ), "silencechan ends the voices" );
+    synth_cleanup( &s );
+    // two channels share the pool; the other channel's notes are left alone; synth_silence() ends everything
+    {
+        synth_init( &s, RATE );
+        synth_inst_t d; char err[MML_ERRLEN]; mml_parse_inst( poly, &d, err ); synth_setinst( &s, 20, &d );
+        synth_evspec_t sp; memset( &sp, 0, sizeof(sp) ); sp.type = SYNTH_EV_INST; sp.p[0] = 20.0f;
+        for ( int c=0; c < 3; ++c ) { sp.chan = c; synth_schedule_ev( &s, 0, &sp ); }
+        for ( int c=0; c < 3; ++c ) for ( int k=0; k < 3; ++k ) synth_schedule( &s, 0, SYNTH_EV_PLAY, c, 200.0f + 50.0f * (float) k + 7.0f * (float) c, 0.4f, SYNTH_SINE );
+        synth_runevents( &s, 0 );
+        synth_render( &s, a, 4410 );
+        check( voices_of( &s, 0 ) == 3 && voices_of( &s, 1 ) == 3 && voices_of( &s, 2 ) == 3, "three channels with three notes each: nine voices" );
+        synth_silencechan( &s, 1, 0 );
+        synth_render( &s, a, 4410 );
+        check( voices_of( &s, 0 ) == 3 && voices_of( &s, 1 ) == 0 && voices_of( &s, 2 ) == 3, "silencechan( 1 ) ends only its voices" );
+        synth_silence( &s, 0 );
+        synth_render( &s, a, 4410 );
+        check( voices_of( &s, 0 ) == 0 && voices_of( &s, 2 ) == 0, "synth_silence() ends all voices" );
+        synth_cleanup( &s );
+    }
+    // switching to a single-voice instrument ends the notes that are held
+    {
+        synth_init( &s, RATE );
+        synth_inst_t d; char err[MML_ERRLEN]; mml_parse_inst( poly, &d, err ); synth_setinst( &s, 20, &d );
+        synth_evspec_t sp; memset( &sp, 0, sizeof(sp) ); sp.type = SYNTH_EV_INST; sp.p[0] = 20.0f; synth_schedule_ev( &s, 0, &sp );
+        synth_schedule( &s, 0, SYNTH_EV_PLAY, 0, 300.0f, 0.4f, SYNTH_SINE );
+        memset( &sp, 0, sizeof(sp) ); sp.type = SYNTH_EV_INST; sp.p[0] = 4.0f; synth_schedule_ev( &s, 1 * 1000000ULL * 100, &sp );
+        int done = 0;
+        while ( done < 2 * RATE ) { synth_runevents( &s, (uint64_t)( (double) done * 1.0e9 / RATE ) ); synth_render( &s, a + done, 441 ); done += 441; }
+        check( voices_of( &s, 0 ) == 0, "leaving a polyphonic instrument releases its notes" );
+        synth_cleanup( &s );
+    }
+    // vibrato set on a polyphonic channel reaches the notes that sound
+    {
+        pev_t vib[] = { { 0.0, SYNTH_EV_PLAY, 0, 440.0f, 0.5f } };
+        poly_render( &s, "OSC SINE 0.3; POLY 2", vib, 1, a, 1 );
+        synth_evspec_t sp; memset( &sp, 0, sizeof(sp) ); sp.type = SYNTH_EV_VIB; sp.chan = 0; sp.p[0] = 5.0f; sp.p[1] = 3.0f;
+        synth_schedule_ev( &s, 0, &sp ); synth_runevents( &s, 0 );
+        bool got = false;
+        for ( int i=SYNTH_NCHAN; i < SYNTH_NCHAN + SYNTH_NVOICES; ++i ) if ( s.chan[i].owner == 1 && s.chan[i].vib_depth == 3.0f ) got = true;
+        check( got, "a vibrato of the channel is handed to its sounding notes" );
+        synth_cleanup( &s );
+    }
+    // a stress run: many notes on many channels at random with the pool too small (checked with ASan): no crash, the output stays finite and within range
+    {
+        synth_init( &s, RATE );
+        synth_inst_t d; char err[MML_ERRLEN]; mml_parse_inst( "OSC SAW 0.5; FILTER 3 0.2 1 0.1; ENV 0.002 0.1 0.6 0.3; POLY 8; PITCH 5 0.02", &d, err ); synth_setinst( &s, 20, &d );
+        synth_evspec_t sp; memset( &sp, 0, sizeof(sp) ); sp.type = SYNTH_EV_INST; sp.p[0] = 20.0f;
+        for ( int c=0; c < SYNTH_NCHAN; ++c ) { sp.chan = c; synth_schedule_ev( &s, 0, &sp ); }
+        uint32_t rnd = 12345;
+        for ( int k=0; k < 600; ++k ) {
+            rnd = rnd * 1664525u + 1013904223u;
+            int c = (int)( ( rnd >> 8 ) % SYNTH_NCHAN ); uint64_t at = (uint64_t)( ( rnd >> 3 ) % 1500 ) * 1000000ULL;
+            if ( ( rnd & 7 ) == 0 ) synth_schedule( &s, at, SYNTH_EV_STOP, c, 0, 0, SYNTH_SINE );
+            else synth_schedule( &s, at, SYNTH_EV_PLAY, c, 100.0f + (float)( rnd % 800 ), 0.3f, SYNTH_SINE );
+        }
+        float* big = (float*) malloc( sizeof(float) * 2 * RATE );
+        int done = 0; bool fin = true; float pk = 0.0f;
+        while ( done < 2 * RATE ) {
+            synth_runevents( &s, (uint64_t)( (double) done * 1.0e9 / RATE ) ); synth_render( &s, big + done, 441 ); done += 441;
+        }
+        for ( int k=0; k < 2 * RATE; ++k ) { if ( !isfinite( big[k] ) ) fin = false; if ( fabsf( big[k] ) > pk ) pk = fabsf( big[k] ); }
+        check( fin && pk <= 1.0f && pk > 0.1f, "600 random notes with a pool that is too small: finite, within range" );
+        free( big ); synth_cleanup( &s );
+    }
+    free( a );
+}
+
+static void test_instrument_fm( void ) {
+    float* a = (float*) malloc( sizeof(float) * RATE );
+    char nm[200];
+    // carrier 1000 Hz (level 0.5) modulated by a 500 Hz sine (ratio 0.5) with the index 2: the sidebands at 1000 +- k * 500 have the
+    // amplitudes 0.5 * J_k(2): J0 = 0.2239, J1 = 0.5767, J2 = 0.3528 (the sidebands below 0 Hz fold back with a changed sign: the carrier is
+    // 0.5 * ( J0 - J4 ) = 0.095, the one at 500 Hz is 0.5 * ( J1 - J3 ) = 0.224)
+    check( render_def( "OSC SINE 0.5 1 0 0.5 FM 2; OSC SINE 1 0.5 MOD", 1000.0f, a ), "FM definition parses" );
+    double c0 = amp_at( a, 4000, RATE, 1000.0 ), s1 = amp_at( a, 4000, RATE, 1500.0 ), s2 = amp_at( a, 4000, RATE, 2000.0 ), l1 = amp_at( a, 4000, RATE, 500.0 );
+    snprintf( nm, sizeof(nm), "FM index 2: carrier %.4f (0.095), sidebands %.4f (0.288) / %.4f (0.224), second %.4f (0.176)", c0, s1, l1, s2 );
+    check( near( c0, 0.095, 0.006 ) && near( s1, 0.288, 0.01 ) && near( l1, 0.224, 0.01 ) && near( s2, 0.176, 0.01 ), nm );
+    // MOD without FM on the carrier: only the carrier is heard
+    render_def( "OSC SINE 0.5; OSC SINE 1 0.5 MOD", 1000.0f, a );
+    c0 = amp_at( a, 4000, RATE, 1000.0 ); l1 = amp_at( a, 4000, RATE, 500.0 );
+    check( near( c0, 0.5, 0.01 ) && l1 < 0.003, "MOD: the modulator is not mixed" );
+    // the same without MOD: both are heard
+    render_def( "OSC SINE 0.5; OSC SINE 1 0.5", 1000.0f, a );
+    check( near( amp_at( a, 4000, RATE, 500.0 ), 1.0 * 0.76, 0.2 ) || amp_at( a, 4000, RATE, 500.0 ) > 0.5, "without MOD the second oscillator is heard" );
+    // FM on the LAST oscillator has no modulator: nothing changes
+    render_def( "OSC SINE 0.5 1 0 0.5 FM 3", 1000.0f, a );
+    check( near( amp_at( a, 4000, RATE, 1000.0 ), 0.5, 0.01 ), "FM on the last oscillator does nothing" );
+    // the modulator's level scales the index: level 0.5 with FM 4 = index 2
+    render_def( "OSC SINE 0.5 1 0 0.5 FM 4; OSC SINE 0.5 0.5 MOD", 1000.0f, a );
+    check( near( amp_at( a, 4000, RATE, 1500.0 ), 0.288, 0.01 ), "the modulator's level scales the index" );
+    // FMDECAY: the index falls: strong sidebands at the start, hardly any a second later
+    render_def( "OSC SINE 0.5 1 0 0.5 FM 2; OSC SINE 1 0.5 MOD; FMDECAY 0.2", 1000.0f, a );
+    double early = amp_at( a, 200, 2600, 1500.0 ), late = amp_at( a, 40000, 44000, 1500.0 );
+    snprintf( nm, sizeof(nm), "FMDECAY 0.2: sideband %.3f at the start, %.4f after 0.9 s", early, late );
+    check( early > 0.2 && late < 0.03, nm );
+    // a chain of three (osc 1 <- osc 2 <- osc 3) stays finite and within the volume
+    render_def( "OSC SINE 0.6 1 0 0.5 FM 3; OSC SINE 1 2 0 0.5 FM 2 MOD; OSC SINE 1 3 MOD", 220.0f, a );
+    bool fin = true; for ( int k = 0; k < RATE; ++k ) if ( !isfinite( a[k] ) ) fin = false;
+    check( fin && peak( a, 2000, RATE ) <= 0.61f && peak( a, 2000, RATE ) > 0.3f, "a three-operator chain stays within the level" );
+    // values: the index 0..20, FMDECAY 0..10
+    check( !render_def( "OSC SINE 1 1 0 0.5 FM 21; OSC SINE", 220.0f, a ), "FM index 21 is refused" );
+    check( !render_def( "OSC SINE; FMDECAY 11", 220.0f, a ), "FMDECAY 11 is refused" );
+    check( !render_def( "OSC SINE 1 1 0 0.5 FM", 220.0f, a ), "FM without a number is refused" );
+    free( a );
+}
+
 static void test_instrument_fixed_post( void ) {
     float* a = (float*) malloc( sizeof(float) * RATE );
     float* b = (float*) malloc( sizeof(float) * RATE );
@@ -1009,7 +1287,7 @@ static void test_instrument_fixed_post( void ) {
     check( mml_parse_inst( "OSC NOISE 1 -5000 0 0.5 POST", &d, err ) && d.osc[0].ratio == -5000.0f && d.osc[0].post, "parser: negative ratio and POST" );
     check( mml_parse_inst( "OSC SINE POST", &d, err ) && d.osc[0].post && d.osc[0].level == 1.0f, "parser: POST right after the wave" );
     check( mml_parse_inst( "osc sine 1 1 0 0.5 post ; gain 2", &d, err ) && d.osc[0].post && d.gain == 2.0f, "parser: POST in lower case, then another command" );
-    check( !mml_parse_inst( "OSC SINE 1 1 0 0.5 BOGUS", &d, err ) && strstr( err, "POST expected" ) != 0, "parser: another word after the values is refused" );
+    check( !mml_parse_inst( "OSC SINE 1 1 0 0.5 BOGUS", &d, err ) && strstr( err, "POST, MOD or FM expected" ) != 0, "parser: another word after the values is refused" );
     check( !mml_parse_inst( "OSC SINE POST x", &d, err ), "parser: stray character after POST" );
     check( mml_parse_inst( "OSC SAW; OSC SINE 1 2", &d, err ) && !d.osc[0].post && !d.osc[1].post, "parser: POST is off by default" );
     free( a ); free( b );
@@ -1158,6 +1436,10 @@ int main( void ) {
     test_preset_loudness();
     test_insted_presets();
     test_instrument_fixed_post();
+    test_instrument_fm();
+    test_cutoff_event();
+    test_inst_string();
+    test_polyphony();
     test_instrument_snapshots();
     test_instrument_cpu();
     printf( "%d checks, %d failure(s)\n", total, failures );

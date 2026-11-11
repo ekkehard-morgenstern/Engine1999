@@ -681,6 +681,11 @@ bool cgen_from_soundstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
                 return false;
             }
             break;
+        case SNDK_CUTOFF:       // ( ch mult seconds ): 0 seconds = at once if omitted
+            if ( node->numbranches == 2U && !cgen_push_number( cgen, comp, 0.0 ) ) {
+                return false;
+            }
+            break;
         case SNDK_SFXPLAY:      // ( n ch ): channel 0 = a free one
             if ( node->numbranches == 1U && !cgen_push_number( cgen, comp, 0.0 ) ) {
                 return false;

@@ -32,7 +32,7 @@
 280 CURPG=0
 290 CUROSC=0
 300 NM$=""
-310 DIM OW(3),OEN(3),OFX(3),OPO(3),OL(3),RT(3),OC(3),OHZ(3),OP(3),PGR$(5),XC$(40),WN$(5)
+310 DIM OW(3),OEN(3),OFX(3),OPO(3),OFM(3),OMD(3),OL(3),RT(3),OC(3),OHZ(3),OP(3),PGR$(5),XC$(40),WN$(5)
 320 WN$(0)="SINE":WN$(1)="SQUARE":WN$(2)="TRIANGLE":WN$(3)="NOISE":WN$(4)="SAW"
 330 ' the model, in the units of the sliders (the controls follow it, a loaded string sets it exactly): OL level / 100, RT ratio / 100, OC cents, OP pulse width / 100,
 340 ' OHZ the fixed frequency in Hz (RT is not used while OFX is set), CUT cutoff / 10, RES / 100, FEN filter env / 10, FDC filter decay / 100, PIT semitones,
@@ -130,6 +130,8 @@
 1260         IF RT(K)=0 AND OW(K)<>3 THEN R$="0.01"
 1270       END IF
 1280       A$=A$+"; OSC "+WN$(OW(K))+" "+FN NUM$(OL(K)/100)+" "+R$+" "+FN NUM$(OC(K))+" "+FN NUM$(OP(K)/100)
+1285       IF OFM(K)>0 THEN A$=A$+" FM "+FN NUM$(OFM(K)/100)
+1287       IF OMD(K) THEN A$=A$+" MOD"
 1290       IF OPO(K) THEN A$=A$+" POST"
 1300     END IF
 1310   NEXT K
@@ -137,6 +139,8 @@
 1330   IF PIT<>0 THEN A$=A$+"; PITCH "+FN NUM$(PIT)+" "+FN NUM$(PTM/100)
 1340   IF ENVON THEN A$=A$+"; ENV "+FN NUM$(EA/1000)+" "+FN NUM$(ED/1000)+" "+FN NUM$(ES/100)+" "+FN NUM$(ER/1000)
 1350   IF VD>0 AND VR>0 THEN A$=A$+"; VIB "+FN NUM$(VR/10)+" "+FN NUM$(VD/100)
+1355   IF FMD>0 THEN A$=A$+"; FMDECAY "+FN NUM$(FMD/100)
+1357   IF PLY>1 THEN A$=A$+"; POLY "+STR$(PLY)
 1360   A$=A$+"; GAIN "+FN NUM$(GN/100)
 1370   RETURN A$
 1380 END FUNC
@@ -144,12 +148,12 @@
 1400 PROC DEFAULTS
 1410   LOCAL K
 1420   FOR K=0 TO 2
-1430     OW(K)=0:OEN(K)=0:OFX(K)=0:OPO(K)=0:OL(K)=100:RT(K)=100:OC(K)=0:OHZ(K)=1000:OP(K)=50
+1430     OW(K)=0:OEN(K)=0:OFX(K)=0:OPO(K)=0:OL(K)=100:RT(K)=100:OC(K)=0:OHZ(K)=1000:OP(K)=50:OFM(K)=0:OMD(K)=0
 1440   NEXT K
 1450   OEN(0)=-1
 1460   CUT=0:RES=0:FEN=0:FDC=20:PIT=0:PTM=0
 1470   ENVON=0:EA=0:ED=0:ES=100:ER=10
-1480   VR=0:VD=0:GN=100
+1480   VR=0:VD=0:GN=100:FMD=0:PLY=1
 1490   NM$=""
 1500 END PROC
 1510 ' splits A$ at the semicolons into XC$() (empty ones left out); XN is their number
@@ -195,9 +199,12 @@
 1910   END IF
 1920   OC(K)=INT(V2+0.5)
 1930   OP(K)=INT(V3*100+0.5)
-1940   OPO(K)=0
-1950   FOR J=2 TO 8
-1960     IF FN UP$(FN TOKN$(C$,J))="POST" THEN OPO(K)=-1
+1940   OPO(K)=0:OMD(K)=0:OFM(K)=0
+1950   FOR J=2 TO 12
+1960     T$=FN UP$(FN TOKN$(C$,J))
+1962     IF T$="POST" THEN OPO(K)=-1
+1964     IF T$="MOD" THEN OMD(K)=-1
+1966     IF T$="FM" THEN OFM(K)=INT(VAL(FN TOKN$(C$,J+1))*100+0.5)
 1970   NEXT J
 1980 END PROC
 1990 ' sets the model from a definition string (what the string does not say stays at the default of a plain sine)
@@ -236,6 +243,8 @@
 2320       VR=INT(VAL(FN TOKN$(C$,1))*10+0.5)
 2330       VD=INT(VAL(FN TOKN$(C$,2))*100+0.5)
 2340     END IF
+2345     IF W$="FMDECAY" THEN FMD=INT(VAL(FN TOKN$(C$,1))*100+0.5)
+2347     IF W$="POLY" THEN PLY=INT(VAL(FN TOKN$(C$,1)))
 2350     IF W$="GAIN" THEN GN=INT(VAL(FN TOKN$(C$,1))*100+0.5)
 2360   NEXT I
 2370   IF OI>0 THEN
@@ -680,7 +689,13 @@
 6760     PRINT "FAIL numbers: ";S1$
 6770     BAD=BAD+1
 6780   END IF
-6790   INSTRUMENT 31,S1$
+6785   CALL PARSE("OSC SINE 0.5 1 0 0.5 FM 2.5; OSC SINE 1 0.5 0 0.5 MOD; FMDECAY 0.3; POLY 4")
+6787   S1$=FN MAKE$()
+6788   IF S1$<>"NAME USER; OSC SINE 0.5 1 0 0.5 FM 2.5; OSC SINE 1 0.5 0 0.5 MOD; FMDECAY 0.3; POLY 4; GAIN 1" THEN
+6789     PRINT "FAIL FM: ";S1$
+6790     BAD=BAD+1
+6791   END IF
+6792   INSTRUMENT 31,S1$
 6800   IF BAD=0 THEN PRINT "insted selftest ok ";N ELSE PRINT "insted selftest FAILED ";BAD
 6810 END PROC
 6820 ' ====================================================================== the 16 factory instruments (4..19) as definition strings; synthtest1 checks them against synth.c

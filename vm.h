@@ -202,6 +202,10 @@ typedef struct _vm_sound_t {
     bool    (*busy)( void* usrdata, int chan );             // the channel sounds, or has events queued / a sequence running
     void    (*setinst)( void* usrdata, int chan, int n, const synth_inst_t* def );   // the channel uses instrument n (4..31) with this definition (a snapshot, queued at the
                                                                 // channel's time like WAVE; may be 0: then setwave( chan, n ) is called and the host's own table is used)
+    void    (*setcut)( void* usrdata, int chan, float mult, float seconds );        // queued: the filter cutoff of the channel's instrument glides to mult * note frequency within
+                                                                // seconds (mult -1 = the instrument's own); may be 0 (then CUTOFF only checks its arguments)
+    void    (*chord)( void* usrdata, int chan, float freq, float vol );             // a note of a chord that starts at the channel's time without taking any (the last note of the
+                                                                // chord is a tone() with the length); may be 0 (then these notes are left out)
 } vm_sound_t;
 
 #define VM_NUSERTIMERS      4           // AFTER / EVERY timers 0..3
@@ -249,6 +253,7 @@ typedef struct _vm_chanstate_t {
     float   env[4];         // attack, decay, sustain, release; attack < 0 = no envelope (-1, 0, 0, 0)
     float   vib[2];         // rate, depth (depth 0 = off)
     float   trem[2];
+    float   cut;            // the last CUTOFF target (-1 = none: the instrument's own)
 } vm_chanstate_t;
 
 typedef struct _vm_t {

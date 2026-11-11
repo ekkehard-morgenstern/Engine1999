@@ -58,6 +58,8 @@ of several channels (for chords). Events are applied in time order (stable for e
 queued in, so one channel's far-ahead events don't hold up another channel's.
 */
 
+#define SYNTH_NVOICES       32          // extra voice slots for the polyphonic channels (an instrument with POLY n > 1): see synth.c
+#define SYNTH_MAXPOLY       8           // voices of one channel (POLY)
 #define SYNTH_NCHAN         16          // 1..8 music, 9..16 effects (the split is made by the VM: nodetype.h SND_NMUSIC)
 #define SYNTH_NOTES         72          // note 0 = A at 110 Hz, 12 notes per octave, up to ~6.6 kHz
 #define SYNTH_FREQ_MIN      20.0f
@@ -98,6 +100,8 @@ typedef struct _synth_iosc_t {
     float           pw;                 // pulse width of the square wave 0.02..0.98 (0.5 = square)
     float           mul;                // derived (ratio * 2^(cents/1200), negative for a fixed frequency); set by synth_setinst()
     bool            post;               // the oscillator bypasses the low-pass filter (it is mixed in behind it): breath noise, a chiff, a fixed hiss
+    float           fm;                 // FM: the oscillator's phase is modulated by the NEXT oscillator (index + 1) with this index in radians (0 = none, 0..20)
+    bool            mod;                // a modulator: the oscillator is only heard through the oscillator it modulates (it is not mixed)
 } synth_iosc_t;
 
 typedef struct _synth_inst_t {
@@ -112,6 +116,9 @@ typedef struct _synth_inst_t {
     bool            env;                // a default ADSR envelope ...
     float           a, d, s, r;         // ... attack / decay / release seconds 0..60, sustain 0..1
     float           vibrate, vibdepth;  // default vibrato: rate 0..100 Hz, depth 0..24 semitones (0 = none)
+    float           fmdecay;            // the FM indexes fall exponentially with this time constant (s, 0..10; 0 = they stay)
+    int             poly;               // voices: 0 or 1 = one note at a time on a channel using the instrument (the channel itself sounds), 2..8 = every note of the channel
+                                        // gets its own voice from the pool (SYNTH_NVOICES slots), so chords and the release tails of earlier notes sound together
 } synth_inst_t;
 
 typedef enum _synth_evtype_t {
@@ -123,6 +130,7 @@ typedef enum _synth_evtype_t {
     SYNTH_EV_TREM,                      // tremolo: p[0] = rate Hz, p[1] = depth 0..1 (0 = off)
     SYNTH_EV_INST,                      // select the instrument p[0] = 0 .. SYNTH_NINST-1 (0..3: the basic waves; 4..31: the channel takes a copy of the
                                         // synth's table entry n at that moment)
+    SYNTH_EV_CUT,                       // filter cutoff of the channel's instrument: p[0] = multiple of the note 0.01..64 (-1 = the instrument's own), p[1] = seconds to glide there (0..60)
     SYNTH_EV_INSTDEF                    // select the instrument p[0] = 4..31 with the definition in "def" (a snapshot: the channel keeps its own copy,
                                         // so a later definition of the same number does not change the notes that are queued before it)
 } synth_evtype_t;
@@ -148,6 +156,17 @@ typedef struct _synth_chan_t {
     double          fa1, fa2, fa3;      // its coefficients (set every 32 samples)
     int             fcount;             // samples until the cutoff is computed again
     float           fenvlvl;            // filter envelope level 1 -> 0
+    bool            cut_on;             // CUT: the cutoff multiple is set by the program ...
+    bool            cut_glide, cut_restore;     // ... and is on its way to cut_to (restore: the instrument's own cutoff; the override ends there)
+    float           cut_val, cut_from, cut_to;
+    double          cut_pos, cut_total; // samples gone / samples of the glide
+    float           fmlvl;              // FM index scale 1 -> 0
+    double          fmdec;              // its factor per sample
+    int             owner;              // voice slots (chan[SYNTH_NCHAN ..]): the channel (1..) the note belongs to, 0 = never used
+    bool            held;               // voice slots: the note has not been released yet
+    uint64_t        seq;                // voice slots: the order the notes were started in (the oldest is stolen first)
+    uint64_t        poly_when;          // a polyphonic channel: the time of its last PLAY (events of the same time form a chord) ...
+    bool            poly_any;           // ... and whether there was one
     double          pe, pdec;           // pitch envelope: semitones left, factor per sample
     bool            uenv_on;            // the envelope set by the program (SYNTH_EV_ENV); else the instrument's
     float           uenv[4];
@@ -195,7 +214,8 @@ typedef struct _synth_t {
     int             rate;               // samples per second
     float           slewstep;           // gain change per sample
     int             bpm;
-    synth_chan_t    chan[SYNTH_NCHAN];
+    synth_chan_t    chan[SYNTH_NCHAN + SYNTH_NVOICES];      // the channels, then the voice slots of the polyphonic ones
+    uint64_t        voiceseq;
     synth_inst_t    inst[SYNTH_NINST];
     uint64_t        cursor[SYNTH_NCHAN];
     synth_event_t*  events;             // sorted by time

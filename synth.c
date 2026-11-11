@@ -141,6 +141,7 @@ void synth_instdefault( synth_inst_t* d ) {
         d->osc[i].level = i == 0 ? 1.0f : 0.0f;
     }
     d->gain = 1.0f;
+    d->poly = 1;
 }
 
 static void synth_inst_derive( synth_inst_t* d ) {
@@ -155,13 +156,13 @@ bool synth_instvalid( const synth_inst_t* d ) {
     for ( int i=0; i < d->nosc; ++i ) {
         const synth_iosc_t* o = &d->osc[i];
         if ( (int) o->wave < 0 || (int) o->wave >= SYNTH_NOSCWAVES ) return false;
-        if ( !RNG( o->level, 0.0f, 2.0f ) || !RNG( o->cents, -2400.0f, 2400.0f ) || !RNG( o->pw, 0.02f, 0.98f ) ) return false;
+        if ( !RNG( o->level, 0.0f, 2.0f ) || !RNG( o->cents, -2400.0f, 2400.0f ) || !RNG( o->pw, 0.02f, 0.98f ) || !RNG( o->fm, 0.0f, 20.0f ) ) return false;
         if ( !( o->ratio > 0.0f && o->ratio <= 64.0f ) && !( o->ratio >= -20000.0f && o->ratio <= -1.0f ) && !( o->wave == SYNTH_NOISE && o->ratio == 0.0f ) ) return false;
     }
     return RNG( d->gain, 0.0f, 4.0f ) && RNG( d->cutmul, 0.0f, 64.0f ) && RNG( d->res, 0.0f, 0.95f ) &&
         RNG( d->fenv, -6.0f, 6.0f ) && RNG( d->fdecay, 0.0f, 10.0f ) && RNG( d->pitch, -48.0f, 48.0f ) &&
         RNG( d->pitchtime, 0.0f, 10.0f ) && RNG( d->a, 0.0f, 60.0f ) && RNG( d->d, 0.0f, 60.0f ) &&
-        RNG( d->s, 0.0f, 1.0f ) && RNG( d->r, 0.0f, 60.0f ) && RNG( d->vibrate, 0.0f, 100.0f ) && RNG( d->vibdepth, 0.0f, 24.0f );
+        RNG( d->s, 0.0f, 1.0f ) && RNG( d->r, 0.0f, 60.0f ) && RNG( d->vibrate, 0.0f, 100.0f ) && RNG( d->vibdepth, 0.0f, 24.0f ) && RNG( d->fmdecay, 0.0f, 10.0f ) && d->poly >= 0 && d->poly <= SYNTH_MAXPOLY;
     #undef RNG
 }
 
@@ -221,22 +222,27 @@ static float synth_softlimit( float x ) {
 }
 
 // one sample of an instrument oscillator (-1 .. 1), then advances its phase; step = the note's phase step
-static float synth_iosc_next( synth_osc_t* o, const synth_iosc_t* d, double step, double invrate ) {
+static float synth_iosc_next( synth_osc_t* o, const synth_iosc_t* d, double step, double invrate, double pm ) {
     double dt = d->mul < 0.0f ? -(double) d->mul * invrate : step * (double) d->mul;      // a negative factor is a fixed frequency in Hz
     if ( dt > 0.45 ) dt = 0.45;
     float v;
+    double ph = o->phase;
+    if ( pm != 0.0 ) {              // FM: the phase the wave is read at is shifted by the modulator (pm in cycles); the oscillator's own phase runs on
+        ph += pm;
+        ph -= floor( ph );
+    }
     switch ( d->wave ) {
         case SYNTH_SQUARE: {
-            double t2 = o->phase - (double) d->pw;
+            double t2 = ph - (double) d->pw;
             if ( t2 < 0.0 ) t2 += 1.0;
-            v = ( o->phase < (double) d->pw ? 1.0f : -1.0f ) + synth_blep( o->phase, dt ) - synth_blep( t2, dt );
+            v = ( ph < (double) d->pw ? 1.0f : -1.0f ) + synth_blep( ph, dt ) - synth_blep( t2, dt );
             break;
         }
         case SYNTH_SAW:
-            v = (float)( 2.0 * o->phase - 1.0 ) - synth_blep( o->phase, dt );
+            v = (float)( 2.0 * ph - 1.0 ) - synth_blep( ph, dt );
             break;
         case SYNTH_TRIANGLE:
-            v = (float)( o->phase < 0.5 ? 4.0 * o->phase - 1.0 : 3.0 - 4.0 * o->phase );
+            v = (float)( ph < 0.5 ? 4.0 * ph - 1.0 : 3.0 - 4.0 * ph );
             break;
         case SYNTH_NOISE:
             if ( d->mul == 0.0f ) {         // white noise: a new value every sample (a negative factor is a fixed rate)
@@ -246,7 +252,7 @@ static float synth_iosc_next( synth_osc_t* o, const synth_iosc_t* d, double step
             break;
         case SYNTH_SINE:
         default:
-            v = (float) sin( TWOPI * o->phase );
+            v = (float) sin( TWOPI * ph );
             break;
     }
     o->phase += dt;
@@ -265,10 +271,11 @@ void synth_init( synth_t* s, int rate ) {
     s->rate = rate;
     s->slewstep = 1.0f / ( SYNTH_SLEW_SEC * (float) rate );
     s->bpm = SYNTH_DEFAULT_BPM;
-    for ( int i=0; i < SYNTH_NCHAN; ++i ) {
+    for ( int i=0; i < SYNTH_NCHAN + SYNTH_NVOICES; ++i ) {
         synth_osc_init( &s->chan[i].osc, 0x9E3779B9U * (uint32_t)( i + 1 ) );
         s->chan[i].osc.held = synth_noise( &s->chan[i].osc );
         s->chan[i].env = 1.0f;
+        s->chan[i].fmlvl = 1.0f; s->chan[i].fmdec = 1.0;
         for ( int k=0; k < SYNTH_INST_NOSC; ++k ) {
             synth_osc_init( &s->chan[i].iosc[k], 0x85EBCA6BU * (uint32_t)( i * SYNTH_INST_NOSC + k + 1 ) );
             s->chan[i].iosc[k].held = synth_noise( &s->chan[i].iosc[k] );
@@ -363,6 +370,11 @@ bool synth_schedule_ev( synth_t* s, uint64_t when, const synth_evspec_t* sp ) {
             break;
         case SYNTH_EV_INSTDEF:
             if ( !( sp->p[0] >= (float) SYNTH_NBASIC && sp->p[0] < (float) SYNTH_NINST ) || sp->def == 0 || !synth_instvalid( sp->def ) ) {
+                return false;
+            }
+            break;
+        case SYNTH_EV_CUT:
+            if ( !( ( sp->p[0] == -1.0f || ( sp->p[0] >= 0.01f && sp->p[0] <= 64.0f ) ) && sp->p[1] >= 0.0f && sp->p[1] <= 60.0f ) ) {
                 return false;
             }
             break;
@@ -463,60 +475,168 @@ static void synth_env_resolve( synth_t* s, synth_chan_t* c ) {
 }
 
 // the channel uses instrument n: a basic wave, or (4..31) a copy of def (0 = the synth's table entry)
+static void synth_poly_release( synth_t* s, int ch );
+
 static void synth_select( synth_t* s, synth_chan_t* c, int n, const synth_inst_t* def ) {
+    int ch = (int)( c - s->chan );
+    bool waspoly = c->inst >= SYNTH_NBASIC && c->cinst.poly > 1;
     if ( n < SYNTH_NBASIC ) {
         c->osc.wave = (synth_wave_t) n;
     } else {
         c->cinst = def != 0 ? *def : s->inst[n];
     }
+    if ( n != c->inst ) c->cut_on = false;      // another instrument: its own cutoff
     c->inst = n;
+    if ( waspoly && !( n >= SYNTH_NBASIC && c->cinst.poly > 1 ) && ch < SYNTH_NCHAN ) {
+        synth_poly_release( s, ch );            // the channel is not polyphonic any more: the notes it holds end
+    }
     synth_env_resolve( s, c );
+}
+
+// starts (or changes) the note on c: a channel, or a voice slot that has been set up for the note
+static void synth_play( synth_t* s, synth_chan_t* c, const synth_event_t* ev ) {
+    bool wason = c->on;
+    if ( !wason && c->gain == 0.0f ) {
+        c->osc.phase = 0.0;             // a new note starts at the beginning of the cycle; a sounding one goes on
+        c->vib_phase = 0.0; c->trem_phase = 0.0;
+    }
+    if ( c->inst >= SYNTH_NBASIC ) {
+        const synth_inst_t* in = &c->cinst;
+        bool retrig = !wason || ( c->env_on && ( c->envstate == SYNTH_ENV_RELEASE || c->envstate == SYNTH_ENV_IDLE ) );
+        if ( !wason && c->gain == 0.0f ) {
+            for ( int k=0; k < SYNTH_INST_NOSC; ++k ) c->iosc[k].phase = 0.0;
+        }
+        if ( retrig ) {
+            c->pe = (double) in->pitch;
+            c->pdec = in->pitchtime > 0.0f ? exp( -1.0 / ( (double) in->pitchtime * (double) s->rate ) ) : 0.0;
+            c->fenvlvl = 1.0f;
+            c->fmlvl = 1.0f;
+            c->fmdec = in->fmdecay > 0.0f ? exp( -1.0 / ( (double) in->fmdecay * (double) s->rate ) ) : 1.0;
+            c->fcount = 0;
+            if ( !wason ) { c->fic1 = 0.0; c->fic2 = 0.0; }
+        }
+    }
+    c->basestep = (double) ev->freq / (double) s->rate;
+    c->osc.step = c->basestep;
+    c->glide_left = 0;
+    if ( ev->freq2 > 0.0f && ev->dur > 0 ) {
+        double samples = floor( (double) ev->dur * (double) s->rate / 1.0e9 );
+        if ( samples < 1.0 ) samples = 1.0;
+        c->glide_ratio = pow( (double) ev->freq2 / (double) ev->freq, 1.0 / samples );
+        c->glide_left = (int) samples;
+        c->glide_end = (double) ev->freq2 / (double) s->rate;
+    }
+    c->vol = ev->vol;
+    c->target = ev->vol;
+    c->on = true;
+    if ( c->env_on && ( !wason || c->envstate == SYNTH_ENV_RELEASE || c->envstate == SYNTH_ENV_IDLE ) ) {
+        if ( !wason ) c->env = 0.0f;
+        c->envstate = SYNTH_ENV_ATTACK;
+    }
+}
+
+// the CUTOFF event on c (see SYNTH_EV_CUT)
+static void synth_cut_apply( synth_chan_t* c, const synth_event_t* ev, int rate ) {
+    float cur = c->cut_on ? c->cut_val : ( c->inst >= SYNTH_NBASIC && c->cinst.cutmul > 0.0f ? c->cinst.cutmul : 64.0f );     // no filter = wide open
+    bool restore = ev->p[0] < 0.0f;
+    float to = restore ? ( c->inst >= SYNTH_NBASIC && c->cinst.cutmul > 0.0f ? c->cinst.cutmul : 64.0f ) : ev->p[0];
+    if ( ev->p[1] <= 0.0f ) {
+        c->cut_val = to; c->cut_glide = false; c->cut_on = !restore;
+    } else {
+        c->cut_val = cur; c->cut_from = cur; c->cut_to = to; c->cut_pos = 0.0;
+        c->cut_total = (double) ev->p[1] * (double) rate;
+        c->cut_glide = true; c->cut_restore = restore; c->cut_on = true;
+    }
+    c->fcount = 0;
+}
+
+// -- polyphony: a channel whose instrument has POLY n > 1 keeps only the settings (instrument, envelope, vibrato, ...) itself; every note is
+// played by a voice slot (chan[SYNTH_NCHAN ..]) that takes a copy of them. A PLAY of another time ends the notes the channel holds (they
+// release: their tails go on sounding), PLAYs of the same time are a chord; a STOP ends all held notes.
+
+static bool synth_ispoly( const synth_chan_t* c ) {
+    return c->inst >= SYNTH_NBASIC && c->cinst.poly > 1;
+}
+
+static void synth_poly_release( synth_t* s, int ch ) {
+    for ( int i=SYNTH_NCHAN; i < SYNTH_NCHAN + SYNTH_NVOICES; ++i ) {
+        synth_chan_t* v = &s->chan[i];
+        if ( v->owner == ch + 1 && v->held ) {
+            v->held = false;
+            synth_release( s, v );
+        }
+    }
+}
+
+static bool synth_slot_free( const synth_chan_t* v ) {
+    return !v->on && v->gain == 0.0f && v->target == 0.0f;
+}
+
+// a voice slot for a new note of channel ch (maximum npoly notes at the same time): a free one, else the channel's quietest releasing note, else its oldest;
+// 0 if the channel has no note to take and the pool is full
+static synth_chan_t* synth_poly_alloc( synth_t* s, int ch, int npoly ) {
+    synth_chan_t* freev = 0; synth_chan_t* steal = 0;
+    int nown = 0;
+    for ( int i=SYNTH_NCHAN; i < SYNTH_NCHAN + SYNTH_NVOICES; ++i ) {
+        synth_chan_t* v = &s->chan[i];
+        if ( synth_slot_free( v ) ) {
+            if ( freev == 0 ) freev = v;
+            continue;
+        }
+        if ( v->owner != ch + 1 ) continue;
+        ++nown;
+        if ( steal == 0 ) {
+            steal = v;
+        } else if ( steal->held != v->held ) {
+            if ( steal->held ) steal = v;       // a note that is releasing goes before one that is held
+        } else if ( !v->held ? v->env < steal->env : v->seq < steal->seq ) {
+            steal = v;
+        }
+    }
+    if ( freev != 0 && nown < npoly ) {
+        return freev;
+    }
+    if ( steal != 0 ) {
+        steal->on = false; steal->target = 0.0f; steal->gain = 0.0f; steal->env = 0.0f; steal->envstate = SYNTH_ENV_IDLE;
+        steal->glide_left = 0; steal->held = false;
+        return steal;
+    }
+    return freev;
+}
+
+// the voice takes the channel's settings
+static void synth_poly_setup( synth_t* s, synth_chan_t* v, const synth_chan_t* c, int ch ) {
+    v->inst = c->inst; v->cinst = c->cinst;
+    v->uenv_on = c->uenv_on; memcpy( v->uenv, c->uenv, sizeof(v->uenv) );
+    v->vib_rate = c->vib_rate; v->vib_depth = c->vib_depth; v->trem_rate = c->trem_rate; v->trem_depth = c->trem_depth;
+    v->vib_phase = 0.0; v->trem_phase = 0.0;
+    v->cut_on = c->cut_on; v->cut_val = c->cut_val; v->cut_glide = false;
+    v->owner = ch + 1; v->held = true; v->seq = ++s->voiceseq;
+    v->on = false; v->env_on = false; v->env = 1.0f; v->envstate = SYNTH_ENV_IDLE;
+    synth_env_resolve( s, v );
 }
 
 static void synth_apply( synth_t* s, const synth_event_t* ev ) {
     synth_chan_t* c = &s->chan[ev->chan];
     switch ( ev->type ) {
         case SYNTH_EV_PLAY: {
-            bool wason = c->on;
-            if ( !wason && c->gain == 0.0f ) {
-                c->osc.phase = 0.0;             // a new note starts at the beginning of the cycle; a sounding one goes on
-                c->vib_phase = 0.0; c->trem_phase = 0.0;
-            }
-            if ( c->inst >= SYNTH_NBASIC ) {
-                const synth_inst_t* in = &c->cinst;
-                bool retrig = !wason || ( c->env_on && ( c->envstate == SYNTH_ENV_RELEASE || c->envstate == SYNTH_ENV_IDLE ) );
-                if ( !wason && c->gain == 0.0f ) {
-                    for ( int k=0; k < SYNTH_INST_NOSC; ++k ) c->iosc[k].phase = 0.0;
+            if ( synth_ispoly( c ) ) {
+                if ( !c->poly_any || ev->when != c->poly_when ) {
+                    synth_poly_release( s, ev->chan );      // the notes of an earlier time end (their tails go on)
                 }
-                if ( retrig ) {
-                    c->pe = (double) in->pitch;
-                    c->pdec = in->pitchtime > 0.0f ? exp( -1.0 / ( (double) in->pitchtime * (double) s->rate ) ) : 0.0;
-                    c->fenvlvl = 1.0f;
-                    c->fcount = 0;
-                    if ( !wason ) { c->fic1 = 0.0; c->fic2 = 0.0; }
+                c->poly_when = ev->when; c->poly_any = true;
+                synth_chan_t* v = synth_poly_alloc( s, ev->chan, c->cinst.poly );
+                if ( v != 0 ) {
+                    synth_poly_setup( s, v, c, ev->chan );
+                    synth_play( s, v, ev );
                 }
+                break;
             }
-            c->basestep = (double) ev->freq / (double) s->rate;
-            c->osc.step = c->basestep;
-            c->glide_left = 0;
-            if ( ev->freq2 > 0.0f && ev->dur > 0 ) {
-                double samples = floor( (double) ev->dur * (double) s->rate / 1.0e9 );
-                if ( samples < 1.0 ) samples = 1.0;
-                c->glide_ratio = pow( (double) ev->freq2 / (double) ev->freq, 1.0 / samples );
-                c->glide_left = (int) samples;
-                c->glide_end = (double) ev->freq2 / (double) s->rate;
-            }
-            c->vol = ev->vol;
-            c->target = ev->vol;
-            c->on = true;
-            if ( c->env_on && ( !wason || c->envstate == SYNTH_ENV_RELEASE || c->envstate == SYNTH_ENV_IDLE ) ) {
-                if ( !wason ) c->env = 0.0f;
-                c->envstate = SYNTH_ENV_ATTACK;
-            }
+            synth_play( s, c, ev );
             break;
         }
         case SYNTH_EV_STOP:
-            synth_release( s, c );
+            if ( synth_ispoly( c ) ) synth_poly_release( s, ev->chan ); else synth_release( s, c );
             break;
         case SYNTH_EV_WAVE:
             synth_select( s, c, (int) ev->wave, 0 );
@@ -536,11 +656,26 @@ static void synth_apply( synth_t* s, const synth_event_t* ev ) {
             }
             synth_env_resolve( s, c );
             break;
-        case SYNTH_EV_VIB:
-            c->vib_rate = ev->p[0]; c->vib_depth = ev->p[1];
+        case SYNTH_EV_CUT:
+            if ( synth_ispoly( c ) ) {
+                c->cut_on = ev->p[0] >= 0.0f; c->cut_val = ev->p[0]; c->cut_glide = false;      // the setting for the next notes: the target
+                for ( int i=SYNTH_NCHAN; i < SYNTH_NCHAN + SYNTH_NVOICES; ++i ) {
+                    if ( s->chan[i].owner == ev->chan + 1 && !synth_slot_free( &s->chan[i] ) ) synth_cut_apply( &s->chan[i], ev, s->rate );
+                }
+            } else {
+                synth_cut_apply( c, ev, s->rate );
+            }
             break;
+        case SYNTH_EV_VIB:
         case SYNTH_EV_TREM:
-            c->trem_rate = ev->p[0]; c->trem_depth = ev->p[1];
+            if ( ev->type == SYNTH_EV_VIB ) { c->vib_rate = ev->p[0]; c->vib_depth = ev->p[1]; } else { c->trem_rate = ev->p[0]; c->trem_depth = ev->p[1]; }
+            if ( synth_ispoly( c ) ) {      // the notes that sound follow
+                for ( int i=SYNTH_NCHAN; i < SYNTH_NCHAN + SYNTH_NVOICES; ++i ) {
+                    synth_chan_t* v = &s->chan[i];
+                    if ( v->owner != ev->chan + 1 ) continue;
+                    if ( ev->type == SYNTH_EV_VIB ) { v->vib_rate = ev->p[0]; v->vib_depth = ev->p[1]; } else { v->trem_rate = ev->p[0]; v->trem_depth = ev->p[1]; }
+                }
+            }
             break;
     }
 }
@@ -550,6 +685,14 @@ void synth_setpitch( synth_t* s, int chan, float freq ) {
         return;
     }
     synth_chan_t* c = &s->chan[chan];
+    if ( synth_ispoly( c ) ) {          // the newest note of a polyphonic channel
+        synth_chan_t* nv = 0;
+        for ( int i=SYNTH_NCHAN; i < SYNTH_NCHAN + SYNTH_NVOICES; ++i ) {
+            synth_chan_t* v = &s->chan[i];
+            if ( v->owner == chan + 1 && !synth_slot_free( v ) && ( nv == 0 || v->seq > nv->seq ) ) nv = v;
+        }
+        if ( nv != 0 ) c = nv; else return;
+    }
     c->basestep = (double) freq / (double) s->rate;
     c->osc.step = c->basestep;
     c->glide_left = 0;
@@ -563,6 +706,12 @@ void synth_setvolume( synth_t* s, int chan, float vol ) {
     c->vol = vol;
     if ( c->on ) {
         c->target = vol;
+    }
+    if ( synth_ispoly( c ) ) {          // all the notes of a polyphonic channel
+        for ( int i=SYNTH_NCHAN; i < SYNTH_NCHAN + SYNTH_NVOICES; ++i ) {
+            synth_chan_t* v = &s->chan[i];
+            if ( v->owner == chan + 1 && v->on ) { v->vol = vol; v->target = vol; }
+        }
     }
 }
 
@@ -595,6 +744,11 @@ bool synth_busy( const synth_t* s, int chan, uint64_t now ) {
     if ( s->chan[chan].on || s->chan[chan].target != 0.0f || s->chan[chan].gain != 0.0f || s->cursor[chan] > now ) {
         return true;
     }
+    for ( int i=SYNTH_NCHAN; i < SYNTH_NCHAN + SYNTH_NVOICES; ++i ) {       // a note of a polyphonic channel still sounds
+        if ( s->chan[i].owner == chan + 1 && !synth_slot_free( &s->chan[i] ) ) {
+            return true;
+        }
+    }
     for ( const synth_event_t* ev = s->events; ev != 0; ev = ev->next ) {
         if ( ev->chan == chan ) {
             return true;
@@ -624,17 +778,26 @@ void synth_silencechan( synth_t* s, int chan, uint64_t now ) {
     s->chan[chan].target = 0.0f;
     s->chan[chan].glide_left = 0;
     s->chan[chan].envstate = SYNTH_ENV_IDLE;
+    for ( int i=SYNTH_NCHAN; i < SYNTH_NCHAN + SYNTH_NVOICES; ++i ) {
+        synth_chan_t* v = &s->chan[i];
+        if ( v->owner == chan + 1 ) {
+            v->on = false; v->target = 0.0f; v->glide_left = 0; v->envstate = SYNTH_ENV_IDLE; v->held = false;
+        }
+    }
+    s->chan[chan].poly_any = false;
     s->cursor[chan] = now;
 }
 
 void synth_silence( synth_t* s, uint64_t now ) {
     synth_dropevents( s );
-    for ( int i=0; i < SYNTH_NCHAN; ++i ) {
+    for ( int i=0; i < SYNTH_NCHAN + SYNTH_NVOICES; ++i ) {
         s->chan[i].on = false;
         s->chan[i].target = 0.0f;
         s->chan[i].glide_left = 0;
         s->chan[i].envstate = SYNTH_ENV_IDLE;
-        s->cursor[i] = now;
+        s->chan[i].held = false;
+        s->chan[i].poly_any = false;
+        if ( i < SYNTH_NCHAN ) s->cursor[i] = now;
     }
 }
 
@@ -672,11 +835,12 @@ void synth_render( synth_t* s, float* buf, int count ) {
     const double invrate = 1.0 / (double) s->rate;
     for ( int j=0; j < count; ++j ) {
         float sum = 0.0f, sumgain = 0.0f;
-        for ( int i=0; i < SYNTH_NCHAN; ++i ) {
+        for ( int i=0; i < SYNTH_NCHAN + SYNTH_NVOICES; ++i ) {
             synth_chan_t* c = &s->chan[i];
             if ( !c->on && c->gain == 0.0f && c->target == 0.0f ) {
                 continue;
             }
+            int pi = i < SYNTH_NCHAN ? i : c->owner - 1;        // the channel the sound is counted for
             if ( c->gain < c->target ) {
                 c->gain += s->slewstep;
                 if ( c->gain > c->target ) c->gain = c->target;
@@ -720,15 +884,32 @@ void synth_render( synth_t* s, float* buf, int count ) {
                     c->pe *= c->pdec;
                     if ( fabs( c->pe ) < 0.005 ) c->pe = 0.0;
                 }
-                float x = 0.0f, xpost = 0.0f;
-                for ( int k=0; k < in->nosc; ++k ) {
-                    float o = synth_iosc_next( &c->iosc[k], &in->osc[k], step, invrate ) * in->osc[k].level;
-                    if ( in->osc[k].post ) xpost += o; else x += o;
+                float x = 0.0f, xpost = 0.0f, modout = 0.0f;
+                for ( int k=in->nosc-1; k >= 0; --k ) {     // from the last: an oscillator is modulated by the next one
+                    const synth_iosc_t* d = &in->osc[k];
+                    double pm = d->fm > 0.0f && k + 1 < in->nosc ? (double) d->fm * (double) c->fmlvl * (double) modout / TWOPI : 0.0;
+                    float o = synth_iosc_next( &c->iosc[k], d, step, invrate, pm ) * d->level;
+                    modout = o;
+                    if ( d->mod ) continue;
+                    if ( d->post ) xpost += o; else x += o;
                 }
-                if ( in->cutmul > 0.0f ) {
+                c->fmlvl = (float)( (double) c->fmlvl * c->fmdec );
+                float cutmul = c->cut_on ? c->cut_val : in->cutmul;     // CUTOFF of the program wins
+                if ( cutmul > 0.0f ) {
                     if ( --c->fcount <= 0 ) {       // the cutoff is computed every 32 samples
                         c->fcount = 32;
-                        double hz = step * (double) s->rate * (double) in->cutmul * exp2( (double)( in->fenv * c->fenvlvl ) );
+                        if ( c->cut_on && c->cut_glide ) {      // a glide of the cutoff multiple (geometric: the same number of octaves a second)
+                            c->cut_pos += 32.0;
+                            if ( c->cut_pos >= c->cut_total ) {
+                                c->cut_val = c->cut_to; c->cut_glide = false;
+                                if ( c->cut_restore ) c->cut_on = false;
+                            } else {
+                                c->cut_val = c->cut_from * (float) pow( (double)( c->cut_to / c->cut_from ), c->cut_pos / c->cut_total );
+                            }
+                            cutmul = c->cut_on ? c->cut_val : in->cutmul;
+                            if ( cutmul <= 0.0f ) cutmul = 64.0f;
+                        }
+                        double hz = step * (double) s->rate * (double) cutmul * exp2( (double)( in->fenv * c->fenvlvl ) );
                         if ( hz < 20.0 ) hz = 20.0;
                         if ( hz > (double) s->rate * 0.45 ) hz = (double) s->rate * 0.45;
                         double g = tan( 3.14159265358979 * hz / (double) s->rate ), k = 2.0 * ( 1.0 - (double) in->res );
@@ -745,7 +926,7 @@ void synth_render( synth_t* s, float* buf, int count ) {
                 v = synth_softlimit( ( x + xpost ) * in->gain ) * level;       // xpost: the oscillators behind the filter
             }
             sum += v;
-            if ( fabsf( v ) > s->peak[i] ) s->peak[i] = fabsf( v );
+            if ( fabsf( v ) > s->peak[pi] ) s->peak[pi] = fabsf( v );
             sumgain += c->gain;
         }
         buf[j] = sumgain > 1.0f ? sum / sumgain : sum;      // loud chords are scaled down, not clipped

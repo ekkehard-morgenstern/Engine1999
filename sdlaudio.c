@@ -244,6 +244,10 @@ void sdlaud_playfreq( int chan, float freq, float vol, float beats ) {
     sdlaud_event( chan, beats, SYNTH_EV_PLAY, freq, vol, SYNTH_SINE );
 }
 
+void sdlaud_playchord( int chan, float freq, float vol ) {
+    sdlaud_event( chan, 0.0f, SYNTH_EV_PLAY, freq, vol, SYNTH_SINE );
+}
+
 void sdlaud_playsweep( int chan, float freq, float freq2, float vol, float beats ) {
     synth_evspec_t sp;
     memset( &sp, 0, sizeof(sp) );
@@ -285,6 +289,10 @@ void sdlaud_setenvelope( int chan, float attack, float decay, float sustain, flo
 
 void sdlaud_setvibrato( int chan, float rate, float depth ) {
     sdlaud_setfx( chan, SYNTH_EV_VIB, rate, depth, 0.0f, 0.0f );
+}
+
+void sdlaud_setcutoff( int chan, float mult, float seconds ) {
+    sdlaud_setfx( chan, SYNTH_EV_CUT, mult, seconds, 0.0f, 0.0f );
 }
 
 void sdlaud_settremolo( int chan, float rate, float depth ) {

@@ -100,6 +100,8 @@ sys-str-fn-2-arg-call := ( TOK_BIN | TOK_QUA | TOK_OCT | TOK_DEC | TOK_HEX ) TOK
                          -- ARG$(n) is a program argument (0 = the program name, 1..ARGC the arguments, "" beyond them), ENV$(name$) the value of
                          -- an environment variable ("" if it is not set); the arguments come from the command line of engine1999c or of a built program
                          TOK_ARG TOK_STRING TOK_LPAREN num-expr TOK_RPAREN |
+                         -- INSTRUMENT$(n) is the definition string of instrument n (0..31) as it is now (see INSTRUMENT n, a$)
+                         TOK_INSTRUMENT TOK_STRING TOK_LPAREN num-expr TOK_RPAREN |
                          TOK_ENV TOK_STRING TOK_LPAREN str-expr TOK_RPAREN |
                          -- KEY$("EVENT") is the oldest key event that has not been read: "+A" (down) or "-A" (up), "" if there is none (window host)
                          TOK_KEY TOK_STRING TOK_LPAREN str-expr TOK_RPAREN |
@@ -407,12 +409,14 @@ sound-stmt := TOK_SOUND num-expr TOK_COMMA num-expr TOK_COMMA num-expr [ TOK_COM
               TOK_ENVELOPE num-expr [ TOK_COMMA num-expr TOK_COMMA num-expr TOK_COMMA num-expr TOK_COMMA num-expr ] |
               ( TOK_VIBRATO | TOK_TREMOLO ) num-expr TOK_COMMA num-expr TOK_COMMA num-expr |
               TOK_SFX num-expr TOK_COMMA str-expr | TOK_SFX num-expr [ TOK_COMMA num-expr ] |
-              TOK_INSTRUMENT num-expr [ TOK_COMMA str-expr ] .
+              TOK_INSTRUMENT num-expr [ TOK_COMMA str-expr ] |
+              TOK_CUTOFF num-expr TOK_COMMA num-expr [ TOK_COMMA num-expr ] .
 -- Sound effects (docs/sound.md): SOUND ch, f1, beats, vol, f2 glides from f1 to f2 during the tone; PITCH ch, f and VOLUME ch, v
 -- change a sounding channel at once; ENVELOPE ch, attack, decay, sustain, release shapes the tones (ENVELOPE ch alone: back to the
 -- default); VIBRATO / TREMOLO ch, rate, depth; SFX n, a$ stores a music string as effect n (1..64), SFX n [, ch] plays it
 -- (no channel: a free effects channel, 16 down to 9; else 16). INSTRUMENT n, a$ defines instrument n (4..31) from a definition string
--- (see docs/sound.md), INSTRUMENT n puts the factory instrument back.
+-- (see docs/sound.md), INSTRUMENT n puts the factory instrument back. CUTOFF ch, mult [, seconds] moves the filter cutoff of the
+-- instrument on the channel (mult times the note frequency; -1 = the instrument's own) to mult within the seconds (queued on the time line).
 
 --# Timing: WAIT, AFTER, EVERY
 -- WAIT n sleeps for n/60 seconds (the unit of TI) without using the processor; ESC breaks it. WAIT 0 returns at once.

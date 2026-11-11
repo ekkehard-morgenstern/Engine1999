@@ -87,6 +87,8 @@ static const testcase_t cases[] = {
     { "SFX is gone after RUN", "SFX 1,\"C\"\n10 SFX 1,1\nRUN",                     "? Undefined effect in line 10\n" },
     { "SFX defined in a program", "10 SFX 1,\"C\"\n20 SFX 1,1\n30 PRINT \"OK\"\nRUN", "OK\n" },
     { "effect statements without a sound output", "ENVELOPE 1,0,0,1,0:VIBRATO 1,5,1:TREMOLO 1,4,0.5:PITCH 1,440:VOLUME 1,0.5:SOUND 1,440,1,0.5,880:PRINT 1", "1\n" },
+    { "CUTOFF is listed and checked without a sound output", "10 CUTOFF 1,3\n20 CUTOFF 2,2,0.5\nLIST\nCUTOFF 1,0", "10 CUTOFF 1,3\n20 CUTOFF 2,2,0.5\n? Illegal argument\n" },
+    { "INSTRUMENT$ is listed and works", "10 A$=INSTRUMENT$(5)\n20 PRINT LEFT$(A$,10)\nLIST\nRUN", "10 A$=INSTRUMENT$(5)\n20 PRINT LEFT$(A$,10)\nNAME LEAD;\n" },
     { "effect statements are listed", "10 PITCH 1,440\n20 VOLUME 1,0.5\n30 ENVELOPE 1\n40 ENVELOPE 1,0,0.1,0.5,0.2\n50 VIBRATO 1,5,0.5\n60 TREMOLO 1,4,0.5\n70 SFX 1,\"S100,200\"\n80 SFX 1\n90 SFX 1,2\n100 SOUND 1,440,1,0.5,880\nLIST", "10 PITCH 1,440\n20 VOLUME 1,0.5\n30 ENVELOPE 1\n40 ENVELOPE 1,0,0.1,0.5,0.2\n50 VIBRATO 1,5,0.5\n60 TREMOLO 1,4,0.5\n70 SFX 1,\"S100,200\"\n80 SFX 1\n90 SFX 1,2\n100 SOUND 1,440,1,0.5,880\n" },
     { "file system statements are listed", "10 KILL \"a\"\n20 RENAME \"a\" TO \"b\"\n30 MKDIR \"d\"\n40 CHDIR \"d\"\n50 SEEK #1,2\nLIST", "10 KILL \"a\"\n20 RENAME \"a\" TO \"b\"\n30 MKDIR \"d\"\n40 CHDIR \"d\"\n50 SEEK #1,2\n" },
     { "RENAME and KILL on mem: in direct mode", "OPEN \"mem:q\" FOR OUTPUT AS #1:PRINT #1,\"ab\":CLOSE\nRENAME \"mem:q\" TO \"mem:r\"\nOPEN \"mem:r\" FOR INPUT AS #2:PRINT LOF(2):CLOSE\nKILL \"mem:r\"\nOPEN \"mem:r\" FOR INPUT AS #2", "3\n? File not found\n" },

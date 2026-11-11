@@ -568,6 +568,7 @@ const char* cgen_opcode_name( uint16_t opcode ) {
         case INS_TOOL:      return "TOOL";
         case INS_RTRP:      return "RTRP";
         case INS_INSR:      return "INSR";
+        case INS_INSS:      return "INSS";
         case INS_AFLT:      return "AFLT";
         case INS_GFXC:      return "GFXC";
         case INS_GFXQ:      return "GFXQ";
@@ -1335,6 +1336,7 @@ bool cgen_gen_poke( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_POKE, f
 bool cgen_gen_bld( codegen_t* cgen, uint16_t kind ) { return cgen_gen_ins12( cgen, INS_BLD, false, true, kind ); }
 bool cgen_gen_bye( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_BYE, false, false, UINT16_C(0) ); }
 bool cgen_gen_argc( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_ARGC, false, false, UINT16_C(0) ); }
+bool cgen_gen_inss( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_INSS, false, false, UINT16_C(0) ); }
 bool cgen_gen_args( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_ARGS, false, false, UINT16_C(0) ); }
 bool cgen_gen_brkm( codegen_t* cgen, uint16_t on ) { return cgen_gen_ins12( cgen, INS_BRKM, false, true, on ); }
 bool cgen_gen_envs( codegen_t* cgen ) { return cgen_gen_ins12( cgen, INS_ENVS, false, false, UINT16_C(0) ); }
@@ -1862,6 +1864,7 @@ UNEXP:      return cgen_unexpected_node( comp );
         case TOK_PEEK:  generator = nodetype == NT_SYSSTRFUNCARGCALL ? cgen_gen_peks : cgen_gen_peek; break;
         case TOK_ARGC:  generator = cgen_gen_argc; break;
         case TOK_ARG:   generator = cgen_gen_args; break;
+        case TOK_INSTRUMENT: generator = cgen_gen_inss; break;
         case TOK_ENV:   generator = cgen_gen_envs; break;
         case TOK_MKI:   generator = cgen_gen_mki; break;
         case TOK_MKL:   generator = cgen_gen_mkl; break;
