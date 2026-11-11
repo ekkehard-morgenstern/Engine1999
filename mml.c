@@ -259,7 +259,7 @@ bool mml_parse( const char* text, mml_t* mml, char err[MML_ERRLEN] ) {
                     if ( !mml_number( &st, true, &v ) || v > 1.0 ) goto RANGE;
                     st.vol = (float) v;
                     continue;
-                case 'W': case 'I':         // wave 0..3 or instrument 4..31: the same selection
+                case 'W': case 'I':         // wave 0..3 or instrument 4..63: the same selection
                     if ( !mml_number( &st, false, &v ) || v > (double)( SYNTH_NINST - 1 ) ) goto RANGE;
                     ev.kind = MML_WAVE; ev.wave = (int) v;
                     break;

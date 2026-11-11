@@ -2270,7 +2270,7 @@ static bool vm_sound_channel( vm_t* vm, double num, int* pchan ) {
 }
 
 // the sound settings of a channel: every change goes through these, so that the VM knows what a channel was set to
-// the definition of instrument n (4..31) as it is now: the program's own or the factory preset
+// the definition of instrument n (4..63) as it is now: the program's own or the factory preset
 static void vm_inst_get( const vm_t* vm, int n, synth_inst_t* def ) {
     if ( ( vm->instdefined & ( UINT32_C(1) << n ) ) != 0 ) {
         *def = vm->instdef[n];
@@ -2279,7 +2279,7 @@ static void vm_inst_get( const vm_t* vm, int n, synth_inst_t* def ) {
     }
 }
 
-// wave 4..31 = an instrument: the channel gets a snapshot of its current definition, queued at the channel's time like a wave change
+// wave 4..63 = an instrument: the channel gets a snapshot of its current definition, queued at the channel's time like a wave change
 static void vm_set_wave( vm_t* vm, int chan, int wave ) {
     if ( wave >= SYNTH_NBASIC && vm->sound->setinst != 0 ) {
         synth_inst_t def;
@@ -3812,7 +3812,7 @@ static bool vm_sound( vm_t* vm, uint16_t kind ) {
             if ( !vm_dpop_num( vm, &b ) || !vm_dpop_num( vm, &a ) || !vm_sound_channel( vm, a, &chan ) ) {
                 return false;
             }
-            if ( !( b >= 0.0 && b < (double) SYNTH_NINST ) ) {       // 0..3 a basic wave, 4..31 an instrument
+            if ( !( b >= 0.0 && b < (double) SYNTH_NINST ) ) {       // 0..3 a basic wave, 4..63 an instrument
                 return vm_error( vm, "Illegal argument" );
             }
             if ( snd ) vm_set_wave( vm, chan, (int) b );

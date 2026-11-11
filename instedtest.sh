@@ -4,7 +4,7 @@
 # The factory strings are compared with synth.c by synthtest1. Exit status = number of failures.
 cd "$(dirname "$0")" || exit 1
 out=$(INSTED_HEADLESS=1 timeout 60 ./engine1999c tools/insted.bas 2>&1)
-if [ "$out" = "insted selftest ok 16" ]; then
+if [ "$out" = "insted selftest ok 24" ]; then
     echo "insted     ok"
     exit 0
 fi

@@ -113,7 +113,7 @@ sys-str-fn-2-arg-call := ( BIN | QUA | OCT | DEC | HEX ) "$" "(" num-expr
     (* ARG$(n) is a program argument (0 = the program name, 1..ARGC the arguments, "" beyond them), ENV$(name$) the value of *)
     (* an environment variable ("" if it is not set); the arguments come from the command line of engine1999c or of a built program *)
                          ARG "$" "(" num-expr ")" |
-    (* INSTRUMENT$(n) is the definition string of instrument n (0..31) as it is now (see INSTRUMENT n, a$) *)
+    (* INSTRUMENT$(n) is the definition string of instrument n (0..63) as it is now (see INSTRUMENT n, a$) *)
                          INSTRUMENT "$" "(" num-expr ")" |
                          ENV "$" "(" str-expr ")" |
     (* KEY$("EVENT") is the oldest key event that has not been read: "+A" (down) or "-A" (up), "" if there is none (window host) *)
@@ -530,7 +530,7 @@ bye-stmt := ( BYE | QUIT ) [ num-expr ] .
 > "beats" (the tone ends then and the channel's next event follows; -1 = held until the next SOUND; 0 = zero length, only the state changes), vol 0..1 (default 0.5). SOUND OFF silences
 > one channel / all of them at once, SOUND SYNC lines up the time of the channels (to start them together). PLAY plays one
 > music string per voice (voice n = channel n, all start together); both return at once, PLAYING(ch) is -1 while the channel
-> still sounds or has music queued, else 0. WAVE ch, w: 0 sine, 1 square, 2 triangle, 3 noise, 4..31 an instrument. TEMPO bpm: beats per minute.
+> still sounds or has music queued, else 0. WAVE ch, w: 0 sine, 1 square, 2 triangle, 3 noise, 4..63 an instrument. TEMPO bpm: beats per minute.
 
 ```ebnf
 sound-stmt := SOUND num-expr "," num-expr "," num-expr [ "," num-expr [ "," num-expr ] ] |
@@ -547,7 +547,7 @@ sound-stmt := SOUND num-expr "," num-expr "," num-expr [ "," num-expr [ "," num-
 > Sound effects (docs/sound.md): SOUND ch, f1, beats, vol, f2 glides from f1 to f2 during the tone; PITCH ch, f and VOLUME ch, v
 > change a sounding channel at once; ENVELOPE ch, attack, decay, sustain, release shapes the tones (ENVELOPE ch alone: back to the
 > default); VIBRATO / TREMOLO ch, rate, depth; SFX n, a$ stores a music string as effect n (1..64), SFX n [, ch] plays it
-> (no channel: a free effects channel, 16 down to 9; else 16). INSTRUMENT n, a$ defines instrument n (4..31) from a definition string
+> (no channel: a free effects channel, 16 down to 9; else 16). INSTRUMENT n, a$ defines instrument n (4..63) from a definition string
 > (see docs/sound.md), INSTRUMENT n puts the factory instrument back. CUTOFF ch, mult [, seconds] moves the filter cutoff of the
 > instrument on the channel (mult times the note frequency; -1 = the instrument's own) to mult within the seconds (queued on the time line).
 

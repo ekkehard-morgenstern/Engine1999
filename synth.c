@@ -131,7 +131,32 @@ static const synth_inst_t synth_presets[SYNTH_NPRESET] = {
     { "ZAP", 2, { O( SYNTH_SAW, 0.7f, 1.0f, 0.0f, 0.5f ), O( SYNTH_SQUARE, 0.4f, 1.0f, 0.0f, 0.3f ), NOOSC },
       2.44f, 6.0f, 0.40f, 1.5f, 0.10f, 36.0f, 0.10f, true, 0.0f, 0.20f, 0.0f, 0.05f, 0.0f, 0.0f },
     { "EPIANO", 3, { OF( SYNTH_SINE, 0.7f, 1.0f, 0.0f, 0.5f, 2.0f, false ), OF( SYNTH_SINE, 1.0f, 1.0f, 0.0f, 0.5f, 0.0f, true ), O( SYNTH_SINE, 0.08f, 14.0f, 0.0f, 0.5f ) },
-      2.14f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.0f, 0.80f, 0.15f, 0.30f, 0.0f, 0.0f, 0.5f, 4 }
+      2.14f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.0f, 0.80f, 0.15f, 0.30f, 0.0f, 0.0f, 0.5f, 4 },
+    // the second set (20..27) and the placeholders (28..31)
+    { "ACOUSTIC", 3, { O( SYNTH_SAW, 0.6f, 1.0f, 0.0f, 0.5f ), O( SYNTH_TRIANGLE, 0.4f, 2.0f, 3.0f, 0.5f ), O( SYNTH_SINE, 0.15f, 3.0f, 0.0f, 0.5f ) },
+      1.90f, 7.0f, 0.10f, 2.0f, 0.25f, 0.0f, 0.0f, true, 0.002f, 0.90f, 0.0f, 0.25f, 0.0f, 0.0f, 0.0f, 6 },
+    { "METAL", 3, { OF( SYNTH_SAW, 0.7f, 1.0f, 0.0f, 0.5f, 1.5f, false ), OF( SYNTH_SAW, 1.0f, 1.0f, 5.0f, 0.5f, 0.0f, true ), O( SYNTH_SQUARE, 0.3f, 0.5f, 0.0f, 0.5f ) },
+      1.13f, 5.0f, 0.25f, 2.5f, 0.12f, 0.0f, 0.0f, true, 0.003f, 0.35f, 0.55f, 0.06f, 0.0f, 0.0f, 0.3f, 3 },
+    { "DISTGUIT", 3, { OF( SYNTH_SAW, 0.6f, 1.0f, 0.0f, 0.5f, 3.0f, false ), OF( SYNTH_SAW, 1.0f, 1.0f, 7.0f, 0.5f, 0.0f, true ), O( SYNTH_SQUARE, 0.3f, 2.0f, 0.0f, 0.5f ) },
+      0.96f, 4.0f, 0.35f, 1.5f, 0.30f, 0.0f, 0.0f, true, 0.01f, 0.20f, 0.90f, 0.20f, 5.0f, 0.10f, 0.0f, 2 },
+    { "METALLOPHONE", 3, { OF( SYNTH_SINE, 0.6f, 1.0f, 0.0f, 0.5f, 2.0f, false ), OF( SYNTH_SINE, 1.0f, 4.0f, 0.0f, 0.5f, 0.0f, true ), O( SYNTH_SINE, 0.25f, 3.9f, 0.0f, 0.5f ) },
+      1.51f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.0f, 1.20f, 0.0f, 0.50f, 0.0f, 0.0f, 0.2f, 6 },
+    { "MARIMBA", 2, { OF( SYNTH_SINE, 0.9f, 1.0f, 0.0f, 0.5f, 1.3f, false ), OF( SYNTH_SINE, 1.0f, 4.0f, 0.0f, 0.5f, 0.0f, true ), NOOSC },
+      0.93f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.0f, 0.50f, 0.0f, 0.06f, 0.0f, 0.0f, 0.06f, 6 },
+    { "HARP", 3, { O( SYNTH_TRIANGLE, 0.7f, 1.0f, 0.0f, 0.5f ), O( SYNTH_SINE, 0.3f, 2.0f, 0.0f, 0.5f ), O( SYNTH_SINE, 0.15f, 3.0f, 0.0f, 0.5f ) },
+      1.28f, 6.0f, 0.05f, 1.5f, 0.30f, 0.0f, 0.0f, true, 0.002f, 1.60f, 0.0f, 0.50f, 0.0f, 0.0f, 0.0f, 8 },
+    { "CLARINET", 2, { O( SYNTH_SQUARE, 0.6f, 1.0f, 0.0f, 0.5f ), O( SYNTH_TRIANGLE, 0.4f, 1.0f, 0.0f, 0.5f ), NOOSC },
+      0.68f, 3.5f, 0.10f, 1.0f, 0.15f, 0.0f, 0.0f, true, 0.04f, 0.05f, 0.90f, 0.10f, 5.0f, 0.06f },
+    { "ACIDBASS", 1, { O( SYNTH_SAW, 1.0f, 1.0f, 0.0f, 0.5f ), NOOSC, NOOSC },
+      0.74f, 2.0f, 0.70f, 5.0f, 0.20f, 0.0f, 0.0f, true, 0.0f, 0.25f, 0.70f, 0.05f, 0.0f, 0.0f },
+    { "UNASSIGNED", 1, { O( SYNTH_SINE, 1.0f, 1.0f, 0.0f, 0.5f ), NOOSC, NOOSC },
+      0.48f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f },
+    { "UNASSIGNED", 1, { O( SYNTH_SINE, 1.0f, 1.0f, 0.0f, 0.5f ), NOOSC, NOOSC },
+      0.48f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f },
+    { "UNASSIGNED", 1, { O( SYNTH_SINE, 1.0f, 1.0f, 0.0f, 0.5f ), NOOSC, NOOSC },
+      0.48f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f },
+    { "UNASSIGNED", 1, { O( SYNTH_SINE, 1.0f, 1.0f, 0.0f, 0.5f ), NOOSC, NOOSC },
+      0.48f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, true, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 0.0f }
 };
 
 void synth_instdefault( synth_inst_t* d ) {
@@ -352,7 +377,7 @@ bool synth_schedule_ev( synth_t* s, uint64_t when, const synth_evspec_t* sp ) {
             }
             break;
         case SYNTH_EV_WAVE:
-            if ( (int) sp->wave < 0 || (int) sp->wave >= SYNTH_NINST ) {      // 0..3 a basic wave, 4..31 an instrument
+            if ( (int) sp->wave < 0 || (int) sp->wave >= SYNTH_NINST ) {      // 0..3 a basic wave, 4..63 an instrument
                 return false;
             }
             break;
@@ -475,7 +500,7 @@ static void synth_env_resolve( synth_t* s, synth_chan_t* c ) {
     }
 }
 
-// the channel uses instrument n: a basic wave, or (4..31) a copy of def (0 = the synth's table entry)
+// the channel uses instrument n: a basic wave, or (4..63) a copy of def (0 = the synth's table entry)
 static void synth_poly_release( synth_t* s, int ch );
 
 static void synth_select( synth_t* s, synth_chan_t* c, int n, const synth_inst_t* def ) {

@@ -27,7 +27,7 @@ Channels are numbered 1..16 in BASIC (0..15 in the host): **1..8 are the music c
 
 ```
 TEMPO bpm                        tempo of the beats of SOUND, 1..1000, default 60 (1 beat = 1 s)
-WAVE ch, w                       wave type: 0 sine, 1 square, 2 triangle, 3 noise, or the instrument 4..31 (see "Instruments"); applies to the sounds queued after it
+WAVE ch, w                       wave type: 0 sine, 1 square, 2 triangle, 3 noise, or the instrument 4..63 (see "Instruments"); applies to the sounds queued after it
 SOUND ch, freq, beats [, vol [, f2]]  a tone of freq Hz (20..20000) for "beats", volume 0..1 (default 0.5), gliding to f2 (see effects).
                                  freq 0 = a rest of "beats". The tone ends after its beats (like a note of sheet music; a rest adds silence on top).
                                  beats -1 = no end: the tone goes on until the next SOUND on the
@@ -54,7 +54,7 @@ A..G [#|+|-] [n] [.]   a note (# or + sharp, - flat), n = length: 1 whole, 2 hal
 R or P [n] [.]         a rest
 O n    octave 0..8 (O4: middle C = C4, A4 = 440 Hz); <  >   one octave down / up
 L n    default length 1..64 (4)      T n   quarter notes per minute 1..1000 (120)
-V x    volume 0..1 with decimals (0.5)      W n  or  I n   wave 0..3, or the instrument 4..31 (the channel keeps its wave / instrument otherwise)
+V x    volume 0..1 with decimals (0.5)      W n  or  I n   wave 0..3, or the instrument 4..63 (the channel keeps its wave / instrument otherwise)
 ML MN MS   the note fills its length / sounds 7/8 of it (default) / 3/4 of it; the rest is silence, so equal notes in a row are heard separately
 [CEG]n     a chord (2.. 16 notes: A..G with # + -, and < > for the octave): the notes start together and last for the length n (dots too); an instrument with
            POLY gives each note a voice (see "Polyphony"), a single-voice instrument plays only the last one
@@ -128,7 +128,7 @@ Not done: stereo, `SFX` with parameters (a filter, a pulse width and a pitch env
 ## Instruments (roadmap item 81; core 2026-11-10, language the same day)
 
 `synth.[ch]` has instruments: instruments 0..3 are the four basic waves (the original signal path, unchanged sample for sample),
-instruments 4..31 are *subtractive / layered* voices. An instrument (`synth_inst_t`) has:
+instruments 4..63 are *subtractive / layered* voices. An instrument (`synth_inst_t`) has:
 
 | Part | Fields |
 |---|---|
@@ -139,12 +139,12 @@ instruments 4..31 are *subtractive / layered* voices. An instrument (`synth_inst
 | default vibrato | used while the program has set no `VIBRATO` (depth 0) on the channel. |
 | gain | the drive into a soft limiter (0..4): the signal is untouched up to 0.8 and compressed smoothly towards 1.0 above it, so the instrument's output never exceeds the volume asked for (a plain gain-1 sine peaks at about 95 % of it) and a high gain makes the instrument louder on average without clipping. |
 
-**Selecting** (BASIC): `WAVE ch, n` with n = 0..31 (0..3 the basic waves, 4..31 instruments), `W n` or `I n` in a `PLAY` string. It is an event on
+**Selecting** (BASIC): `WAVE ch, n` with n = 0..31 (0..3 the basic waves, 4..63 instruments), `W n` or `I n` in a `PLAY` string. It is an event on
 the channel's time line like `WAVE` always was, so it applies at the right place in a sequence; `vm_chanstate_t` keeps it and `SFX` gives it back.
-**Defining**: `INSTRUMENT n, a$` (n = 4..31; 0..3 are fixed: "Illegal argument") parses the definition string at once (a mistake is an error now) and hands the instrument to the host;
-`INSTRUMENT n` puts the factory instrument back (4..19 a preset, 20..31 a plain sine named `USER`).
+**Defining**: `INSTRUMENT n, a$` (n = 4..63; 0..3 are fixed: "Illegal argument") parses the definition string at once (a mistake is an error now) and hands the instrument to the host;
+`INSTRUMENT n` puts the factory instrument back (4..31 a preset, 32..63 a plain sine named `USER`).
 
-**Redefining is queued, like `PLAY` (2026-11-10, owner's design).** The VM keeps the program's definitions. Every time a channel selects an instrument 4..31 (`WAVE`, `W` / `I` in `PLAY`)
+**Redefining is queued, like `PLAY` (2026-11-10, owner's design).** The VM keeps the program's definitions. Every time a channel selects an instrument 4..63 (`WAVE`, `W` / `I` in `PLAY`)
 it gets a **snapshot** of the definition as it is *at that moment of the program*, queued on the channel's time line, and the channel plays with its own copy (`SYNTH_EV_INSTDEF`).
 `INSTRUMENT n, def$` stores the new definition and then queues a fresh snapshot, at each channel's own cursor, on every channel that currently uses instrument n. So notes
 queued *before* the statement keep the old sound and notes queued *after* it use the new one, however far ahead the music has been queued and whatever the other channels have queued:
@@ -186,8 +186,8 @@ envelope release in between) only changes the pitch. C API: `synth_setinst( s, n
 `synth_instname`, `synth_instdefault`, `synth_instpreset`; the instruments live in `synth_t`, so every synth starts with the presets.
 
 **Presets** (a first draft: names and sounds are to be agreed with the owner, he has not heard them): 4 BASS, 5 LEAD, 6 PAD, 7 PLUCK, 8 ORGAN,
-9 STRINGS, 10 BRASS, 11 FLUTE, 12 BELL, 13 KICK, 14 SNARE, 15 HIHAT, 16 TOM, 17 CLAP, 18 ZAP, 19 EPIANO (20..31 are free for the user's own instruments;
-they start as a plain sine named `USER`). **Revised 2026-11-11 with FM and polyphony (not heard by me):** BELL is an FM bell (carrier 1 modulated by a 3.5 x sine, index 4 falling with `FMDECAY 0.8`, plus the 5.4 x partial), EPIANO an FM electric piano (1:1, index 2 falling in 0.5 s, plus a quiet 14 x tine), BRASS an FM brass (index 3 falling in 0.6 s, a detuned saw added); PAD, ORGAN, STRINGS, BELL and EPIANO are `POLY 4`, PLUCK `POLY 3` (chords with `[CEG]`, notes ring out under the next one). Gains recalibrated (BRASS 1.24, BELL 1.89, EPIANO 2.14). BASS, LEAD, FLUTE and the percussion are unchanged and stay one voice. The percussion presets want a note of about 55 to 220 Hz (`O1 A` .. `O3 A`); their pitch envelopes are relative.
+9 STRINGS, 10 BRASS, 11 FLUTE, 12 BELL, 13 KICK, 14 SNARE, 15 HIHAT, 16 TOM, 17 CLAP, 18 ZAP, 19 EPIANO 20 ACOUSTIC, 21 METAL, 22 DISTGUIT, 23 METALLOPHONE, 24 MARIMBA, 25 HARP, 26 CLARINET, 27 ACIDBASS, 28..31 UNASSIGNED (a plain sine; placeholders for later presets) (32..63 are free for the user's own instruments;
+they start as a plain sine named `USER`). **Second set 2026-11-11 (not heard by me):** ACOUSTIC steel-string guitar (saw + octave, falling filter, `POLY 6`), METAL palm-muted rhythm guitar (FM saw on saw, `POLY 3` for power chords), DISTGUIT sustained distortion lead (FM index 3, vibrato, `POLY 2`), METALLOPHONE (FM bar, `POLY 6`), MARIMBA (FM with a 4 x modulator whose index dies in 60 ms, `POLY 6`), HARP (`POLY 8`), CLARINET (square + triangle, filter, vibrato), ACIDBASS (resonant saw, filter envelope). Distortion is made with FM (the gain is only the drive of a soft limiter, and every preset is calibrated to RMS 0.34). The names may be 15 characters long now. **Revised 2026-11-11 with FM and polyphony (not heard by me):** BELL is an FM bell (carrier 1 modulated by a 3.5 x sine, index 4 falling with `FMDECAY 0.8`, plus the 5.4 x partial), EPIANO an FM electric piano (1:1, index 2 falling in 0.5 s, plus a quiet 14 x tine), BRASS an FM brass (index 3 falling in 0.6 s, a detuned saw added); PAD, ORGAN, STRINGS, BELL and EPIANO are `POLY 4`, PLUCK `POLY 3` (chords with `[CEG]`, notes ring out under the next one). Gains recalibrated (BRASS 1.24, BELL 1.89, EPIANO 2.14). BASS, LEAD, FLUTE and the percussion are unchanged and stay one voice. The percussion presets want a note of about 55 to 220 Hz (`O1 A` .. `O3 A`); their pitch envelopes are relative.
 
 **The instrument editor (2026-11-10, roadmap item 85):** `tools/insted.bas` (`TOOL "insted"`) is a UI program in the style of `sfxed` that builds the definition string from sliders and plays it: tabs for the three oscillators (wave, level, ratio or **Fixed** Hz, cents, pulse width, **Post**, On), the filter and pitch envelope, and the envelope, vibrato and gain; `<` / `>` step through the factory instruments, `New` starts from a plain sine; **Play**, **Chord** (root, major third, fifth on channels 1 to 3), **Hold** (the note sounds until Stop and every change is heard at once: the instrument is redefined while it sounds, and the Note slider bends the pitch with `PITCH`), play on change; the string can be edited and applied with Return; Save / Open (`.ins`: one line), Export (`INSTRUMENT n,"..."` as a BASIC line), Copy (clipboard). It uses instrument 31. Details and the tests: `docs/ui-subsystem.md`, `docs/build-and-test.md` (`instedtest.sh`, `synthtest1`).
 
@@ -198,7 +198,7 @@ they start as a plain sine named `USER`). **Revised 2026-11-11 with FM and polyp
 Cost (`synthtest1`, one core, optimized build): 16 channels with the three-oscillator presets + filter = **about 5 % of a core**.
 Tests: `synthtest1` (369 checks): table / names, every preset (finite, audible, peak <= 1, silent after its release), ratio and cents (pitch measured), saw alias level and
 amplitude, pulse width harmonics, low-pass attenuation measured with a Goertzel filter, resonance at the limits, pitch envelope, envelope
-precedence, `WAVE` after an instrument identical to the plain wave, validation; also under ASan / UBSan. `vmtest1` (definitions and errors, `WAVE` 4..31, `I` / `W` in `PLAY`, the `SFX` give-back, the order of a redefinition between two `PLAY`s),
+precedence, `WAVE` after an instrument identical to the plain wave, validation; also under ASan / UBSan. `vmtest1` (definitions and errors, `WAVE` 4..63, `I` / `W` in `PLAY`, the `SFX` give-back, the order of a redefinition between two `PLAY`s),
 `repltest1`, `asmtest1` (`SND 14` / `15`), `contest1` (the console host checks the instrument statements and strings, 7 cases). **The basic waves are pinned by a golden test** in `synthtest1`: 4 waves x 5 settings (plain, envelope, vibrato + tremolo, glide, wave change mid-note) were rendered with the synthesizer as it was before the instruments (commit `7b7361b`) and the expected sums, RMS and sample values are in the test (tolerance for other CPUs / compilers); the old and the new code are bit-identical on those scenarios, and a deliberate 2 % change of the square wave makes seven checks fail. **`make hosttest`** (`hosttest.sh`, not in `make check`) runs the window host under Xvfb with the disk audio driver and checks the recorded audio (sine, then a redefined square wave): `docs/build-and-test.md`. The sound log (`ENGINE1999_SOUNDLOG`) shows an `instrument n NAME ...` line on the channel for each selection / redefinition.
 
 **Tests of roadmap item 87:** `synthtest1` +36 (FM sidebands / `MOD` / `FMDECAY` / chains, the cutoff event at once / gliding / `KR` / on an unfiltered instrument, `mml_inst_string()` round trip of all presets, polyphony: chords, tails, voice limit, stealing, busy / silence, vibrato hand-over, a 600-note stress run; also under ASan / UBSan), `vmtest1` +36 (`CUTOFF`, `K`, chords, `INSTRUMENT$`, `POLY`, FM errors, the `SFX` give-back of the cutoff), `repltest1`, `asmtest1`, and `hosttest.sh` now also records a `[ACE]` chord on a `POLY` instrument (0.100 per note) and a `K1` / `K40` cutoff opening (the 8th harmonic 0.0001 -> 0.0195) through the real window host.
@@ -234,7 +234,7 @@ mixer scales a loud sum down as before). Rules (`synth.c`, `synth_apply`):
 Measured (`synthtest1`, `hosttest.sh`): a chord of three sines of level 0.3 at volume 0.5 gives 0.1 per note (the sum of the gains 1.5 scales it, exactly as before for three channels);
 the tail of a note 0.5 s earlier (release 0.6 s) is 0.07 under the next note with POLY and absent without it; 600 random notes on 16 channels with a too small pool are finite, within range and ASan / UBSan clean.
 
-**`INSTRUMENT$(n)` (roadmap item 87):** the definition string of instrument n (0..31) as it is now, the program's own or the factory one (`mml_inst_string()`; the format is the one `INSTRUMENT n, a$` reads,
+**`INSTRUMENT$(n)` (roadmap item 87):** the definition string of instrument n (0..63) as it is now, the program's own or the factory one (`mml_inst_string()`; the format is the one `INSTRUMENT n, a$` reads,
 all the parts a definition has: `PRINT INSTRUMENT$(9)` gives `NAME STRINGS; OSC SAW 0.33 1 -12 0.5; ...; GAIN 2.03`; a name-less one is `NAME USER`; 0..3, the basic waves, give only `NAME SQUARE` etc.
 because they are not definable; out of range "Illegal argument"). `INSTRUMENT 20, INSTRUMENT$(11)` copies a preset to take it apart; the name is `MID$(INSTRUMENT$(n),6,...)` up to the first `;`.
 Instruction `INSS` (0x190), token 75 in an expression.

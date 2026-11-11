@@ -9,12 +9,12 @@
 50 ' Needs the window (engine1999).
 60 '   Six pages (a tab strip): Osc 1, Osc 2, Osc 3 (wave, level, frequency ratio or a fixed frequency in Hz, detune in cents, pulse width, Post = behind
 70 '   the filter, On = the oscillator is used), Filter (cutoff as a multiple of the note, resonance, filter envelope, pitch envelope) and Env
-80 '   (the instrument's own ADSR envelope, vibrato, gain). The buttons < and > step through the 16 factory instruments, New starts from a plain sine.
+80 '   (the instrument's own ADSR envelope, vibrato, gain). The buttons < and > step through the 24 factory instruments, New starts from a plain sine.
 90 '   Play plays the note (the slider Note, MIDI numbers), Chord three notes together, Stop silences. Hold keeps the note sounding until Stop: every
 100 '   change of a control is heard at once (the instrument is redefined while it sounds), and the Note slider changes its pitch. Play on change plays
 110 '   the note on every change. Every change rebuilds the definition string below; you may also type or paste a string and press Return.
 120 '   Save keeps the string in a text file (.ins), Open reads one, Export writes the BASIC line  INSTRUMENT n,"..."  that you can MERGE or LOAD,
-130 '   Copy puts the string on the clipboard. The tool uses instrument 31 and the sound channel 1 (and 2, 3 for the chord).
+130 '   Copy puts the string on the clipboard. The tool uses instrument 63 and the sound channel 1 (and 2, 3 for the chord).
 140 ' widget ids: 1 form, 200 prev, 201 next, 202 preset name, 203 New, 204 / 205 name, 210 the tab strip (Osc 1..3, Filter, Env, FM), 217 Hold, 216 Play on change, the oscillator page (shared by the
 150 ' three oscillators): 300..304 wave radios, checks On 305, Fixed 306, Post 307, sliders Level 310, Ratio 313, Cents 316, Hz 319, Width 322, filter page 500.. (cutoff, resonance, filter env,
 160 ' filter decay, pitch, pitch time), env page 520 (check), 523.. (attack, decay, sustain, release, vib rate, vib depth, gain), 560 / 561 the string,
@@ -106,7 +106,7 @@
 1020   IF V<>0 THEN RETURN -1
 1030   RETURN 0
 1040 END FUNC
-1050 ' a name made of letters, digits and _ only, 11 characters at most
+1050 ' a name made of letters, digits and _ only, 15 characters at most
 1060 FUNC CLEANNAME$(S$)
 1070   LOCAL I,C,R$
 1080   R$=""
@@ -114,7 +114,7 @@
 1100     C=ASC(MID$(S$,I,1))
 1110     IF (C>=48 AND C<=57) OR (C>=65 AND C<=90) OR (C>=97 AND C<=122) OR C=95 THEN R$=R$+CHR$(C)
 1120   NEXT I
-1130   RETURN LEFT$(FN UP$(R$),11)
+1130   RETURN LEFT$(FN UP$(R$),15)
 1140 END FUNC
 1150 ' the definition string made from the model
 1160 FUNC MAKE$()
@@ -493,7 +493,7 @@
 4710 END PROC
 4720 ' ====================================================================== sound
 4730 PROC DEFINE
-4740   INSTRUMENT 31,FN MAKE$()
+4740   INSTRUMENT 63,FN MAKE$()
 4750 END PROC
 4760 PROC PLAYNOTE
 4770   LOCAL F
@@ -502,12 +502,12 @@
 4800   SOUND OFF 1
 4810   IF UI("GET",217)<>0 THEN
 4820     ENVELOPE 1:VIBRATO 1,0,0:TREMOLO 1,0,0
-4830     WAVE 1,31
+4830     WAVE 1,63
 4840     SOUND 1,F,-1,0.5
 4850     HELD=-1
 4860   ELSE
 4870     HELD=0
-4880     PLAY "XR ~0,0 ^0,0 I31 V0.5 T240 ML H"+FN NUM$(F)+",1"
+4880     PLAY "XR ~0,0 ^0,0 I63 V0.5 T240 ML H"+FN NUM$(F)+",1"
 4890   END IF
 4900   LASTP=TI
 4910 END PROC
@@ -517,7 +517,7 @@
 4950   CALL DEFINE
 4960   SOUND OFF
 4970   HELD=0
-4980   PLAY "XR ~0,0 ^0,0 I31 V0.35 T120 ML H"+FN NUM$(F)+",1","XR ~0,0 ^0,0 I31 V0.35 T120 ML H"+FN NUM$(F*FN NOTEF(73)/FN NOTEF(69))+",1","XR ~0,0 ^0,0 I31 V0.35 T120 ML H"+FN NUM$(F*FN NOTEF(76)/FN NOTEF(69))+",1"
+4980   PLAY "XR ~0,0 ^0,0 I63 V0.35 T120 ML H"+FN NUM$(F)+",1","XR ~0,0 ^0,0 I63 V0.35 T120 ML H"+FN NUM$(F*FN NOTEF(73)/FN NOTEF(69))+",1","XR ~0,0 ^0,0 I63 V0.35 T120 ML H"+FN NUM$(F*FN NOTEF(76)/FN NOTEF(69))+",1"
 4990   LASTP=TI
 5000 END PROC
 5010 ' ====================================================================== files
@@ -541,10 +541,10 @@
 5190 END PROC
 5200 PROC EXPORTF(F$)
 5210   LOCAL N$
-5220   N$=FN UK_INPUT$("Export","The number of the instrument (4..31):","20")
+5220   N$=FN UK_INPUT$("Export","The number of the instrument (4..63):","20")
 5230   IF UK_OK=0 THEN EXIT PROC
 5240   IF VAL(N$)<4 OR VAL(N$)>31 THEN
-5250     CALL UK_MSG("Export","The number must be 4..31.")
+5250     CALL UK_MSG("Export","The number must be 4..63.")
 5260     EXIT PROC
 5270   END IF
 5280   N$=STR$(INT(VAL(N$)))
@@ -604,11 +604,11 @@
 5820     HELD=0
 5830   END IF
 5840   IF E=200 AND K=1 THEN
-5850     CALL LOADPRESET((PRN+15) MOD 16)
+5850     CALL LOADPRESET((PRN+23) MOD 24)
 5860     CALL CHANGED
 5870   END IF
 5880   IF E=201 AND K=1 THEN
-5890     CALL LOADPRESET((PRN+1) MOD 16)
+5890     CALL LOADPRESET((PRN+1) MOD 24)
 5900     CALL CHANGED
 5910   END IF
 5920   IF E=203 AND K=1 THEN
@@ -660,7 +660,7 @@
 6380   BAD=0
 6390   N=0
 6400   RESTORE PRESETS
-6410   FOR I=0 TO 15
+6410   FOR I=0 TO 23
 6420     READ P$,D$
 6430     CALL PARSE(D$)
 6440     S1$=FN MAKE$()
@@ -672,7 +672,7 @@
 6500       PRINT S2$
 6510       BAD=BAD+1
 6520     END IF
-6530     INSTRUMENT 31,S1$
+6530     INSTRUMENT 63,S1$
 6540     IF NM$<>P$ THEN
 6550       PRINT "FAIL name ";NM$;" <> ";P$
 6560       BAD=BAD+1
@@ -704,10 +704,10 @@
 6789     PRINT "FAIL FM: ";S1$
 6790     BAD=BAD+1
 6791   END IF
-6792   INSTRUMENT 31,S1$
+6792   INSTRUMENT 63,S1$
 6800   IF BAD=0 THEN PRINT "insted selftest ok ";N ELSE PRINT "insted selftest FAILED ";BAD
 6810 END PROC
-6820 ' ====================================================================== the 16 factory instruments (4..19) as definition strings; synthtest1 checks them against synth.c
+6820 ' ====================================================================== the 24 factory instruments (4..27) as definition strings; synthtest1 checks them against synth.c
 6830 LABEL PRESETS
 6840 DATA "BASS","NAME BASS; OSC SAW 0.8 1 0 0.5; OSC SQUARE 0.6 0.5 0 0.5; FILTER 3 0.3 2 0.15; ENV 0.005 0.2 0.6 0.1; GAIN 0.76"
 6850 DATA "LEAD","NAME LEAD; OSC SQUARE 0.6 1 0 0.25; OSC SAW 0.4 1 7 0.5; FILTER 6 0.1 0 0; ENV 0.01 0.1 0.7 0.15; VIB 5.5 0.15; GAIN 0.83"
@@ -725,3 +725,11 @@
 6970 DATA "CLAP","NAME CLAP; OSC NOISE 1 0 0 0.5; FILTER 8 0.5 0 0; ENV 0 0.12 0 0.02; GAIN 3.42"
 6980 DATA "ZAP","NAME ZAP; OSC SAW 0.7 1 0 0.5; OSC SQUARE 0.4 1 0 0.3; FILTER 6 0.4 1.5 0.1; PITCH 36 0.1; ENV 0 0.2 0 0.05; GAIN 2.44"
 6990 DATA "EPIANO","NAME EPIANO; OSC SINE 0.7 1 0 0.5 FM 2; OSC SINE 1 1 0 0.5 MOD; OSC SINE 0.08 14 0 0.5; ENV 0 0.8 0.15 0.3; FMDECAY 0.5; POLY 4; GAIN 2.14"
+7000 DATA "ACOUSTIC","NAME ACOUSTIC; OSC SAW 0.6 1 0 0.5; OSC TRIANGLE 0.4 2 3 0.5; OSC SINE 0.15 3 0 0.5; FILTER 7 0.1 2 0.25; ENV 0.002 0.9 0 0.25; POLY 6; GAIN 1.9"
+7010 DATA "METAL","NAME METAL; OSC SAW 0.7 1 0 0.5 FM 1.5; OSC SAW 1 1 5 0.5 MOD; OSC SQUARE 0.3 0.5 0 0.5; FILTER 5 0.25 2.5 0.12; ENV 0.003 0.35 0.55 0.06; FMDECAY 0.3; POLY 3; GAIN 1.13"
+7020 DATA "DISTGUIT","NAME DISTGUIT; OSC SAW 0.6 1 0 0.5 FM 3; OSC SAW 1 1 7 0.5 MOD; OSC SQUARE 0.3 2 0 0.5; FILTER 4 0.35 1.5 0.3; ENV 0.01 0.2 0.9 0.2; VIB 5 0.1; POLY 2; GAIN 0.96"
+7030 DATA "METALLOPHONE","NAME METALLOPHONE; OSC SINE 0.6 1 0 0.5 FM 2; OSC SINE 1 4 0 0.5 MOD; OSC SINE 0.25 3.9 0 0.5; ENV 0 1.2 0 0.5; FMDECAY 0.2; POLY 6; GAIN 1.51"
+7040 DATA "MARIMBA","NAME MARIMBA; OSC SINE 0.9 1 0 0.5 FM 1.3; OSC SINE 1 4 0 0.5 MOD; ENV 0 0.5 0 0.06; FMDECAY 0.06; POLY 6; GAIN 0.93"
+7050 DATA "HARP","NAME HARP; OSC TRIANGLE 0.7 1 0 0.5; OSC SINE 0.3 2 0 0.5; OSC SINE 0.15 3 0 0.5; FILTER 6 0.05 1.5 0.3; ENV 0.002 1.6 0 0.5; POLY 8; GAIN 1.28"
+7060 DATA "CLARINET","NAME CLARINET; OSC SQUARE 0.6 1 0 0.5; OSC TRIANGLE 0.4 1 0 0.5; FILTER 3.5 0.1 1 0.15; ENV 0.04 0.05 0.9 0.1; VIB 5 0.06; GAIN 0.68"
+7070 DATA "ACIDBASS","NAME ACIDBASS; OSC SAW 1 1 0 0.5; FILTER 2 0.7 5 0.2; ENV 0 0.25 0.7 0.05; GAIN 0.74"

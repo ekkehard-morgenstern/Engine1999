@@ -1321,7 +1321,7 @@
 13050   PT(0)=392:PT(1)=440:PT(2)=523.25:PT(3)=587.33:PT(4)=659.26:PT(5)=784:PT(6)=880:PT(7)=1046.5
 13060   MI=3:BR=0
 13070   WAVE 4,9:ENVELOPE 4,0.04,0.1,0.7,0.2:VIBRATO 4,5,0.25
-13080   WAVE 5,19:ENVELOPE 5,0.01,0.2,0.4,0.2
+13080   WAVE 5,25:ENVELOPE 5,0.01,0.2,0.4,0.2
 13090   WAVE 6,6:ENVELOPE 6,0.3,0,1,0.6
 13100   CALL MBAR
 13110   EVERY 120,0 GOSUB MUSICTIMER
@@ -1456,7 +1456,7 @@
 14920 ' on channel 3, over the chords C, A minor, F, G (like the game music, but in a fixed tune). It loops while the title waits: TITLETICK queues the next round shortly
 14930 ' before the last one ends (TI counts 1/60 s), so there is no gap. The game music (channels 4 to 6) starts when the game does.
 14940 PROC TITLEPLAY
-14950   PLAY "T72 I6 V0.18 ML O3 E2. E2. A2. B2. E2. E2. A2. B2. E2. A2. B2. E2.","T72 I19 V0.09 ML O4 L8 C E G E G E C E A E A E C F A F A F D G B G B G C E G E G E C E A E A E D F A F A F D G B G B G C E G E G E C F A F A F D G B G B G C E G E G E","T72 I9 V0.18 MN O5 L8 E4. G4. A4. G4. A4. E4. D4. G4. E G A G E D E4. C4. D F A F D F D4. G4. E4. G4. A4. F4. G A G E D E C4. R4."
+14950   PLAY "T72 I6 V0.18 ML O3 E2. E2. A2. B2. E2. E2. A2. B2. E2. A2. B2. E2.","T72 I25 V0.09 ML O4 L8 C E G E G E C E A E A E C F A F A F D G B G B G C E G E G E C E A E A E D F A F A F D G B G B G C E G E G E C F A F A F D G B G B G C E G E G E","T72 I9 V0.18 MN O5 L8 E4. G4. A4. G4. A4. E4. D4. G4. E G A G E D E4. C4. D F A F D F D4. G4. E4. G4. A4. F4. G A G E D E C4. R4."
 14960 END PROC
 14970 PROC TITLEMUSIC
 14980   CALL TITLEPLAY

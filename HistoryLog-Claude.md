@@ -13,7 +13,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-- **Factory instruments with FM and polyphony:** `synth.c` (`OF()` macro; BELL / EPIANO / BRASS as FM; `POLY 4` for PAD, ORGAN, STRINGS, BELL, EPIANO, `POLY 3` for PLUCK; gains recalibrated), `tools/insted.bas` (the 16 DATA strings), `vmtest1.c`, `docs/sound.md`, `SESSION.md`. Tests: `make check` (synthtest1 369 incl. loudness 0.30..0.38 per preset and the editor string comparison, instedtest, vmtest1 1545).
+- **28 factory instruments, user range 32..63, re-scored programs:** `synth.[ch]` (`SYNTH_NINST` 64, `SYNTH_NPRESET` 28, name length 16; presets 20..27 ACOUSTIC METAL DISTGUIT METALLOPHONE MARIMBA HARP CLARINET ACIDBASS, 28..31 UNASSIGNED; gains calibrated), range comments in `vm.[ch]`, `mml.[ch]`, `sdlaudio.[ch]`, `instset.h`, `bascomp.ebnf`, man page, `docs/sound.md`; `tools/insted.bas` (24 presets, work slot 63, 15-character names), `instedtest.sh`; `demos/instruments.bas` / `README.md` (28 presets, own instruments 32..36, two-column board); `demos/madrun2.bas` (METAL guitars, DISTGUIT lead, MARIMBA pickups), `demos/levels/music3d.bas` + `demos/lib/music3d.lib` (DISTGUIT danger leads, METALLOPHONE), `demos/orchard3.bas` (HARP arpeggio, MARIMBA / METALLOPHONE chimes), `demos/river2.bas` (HARP arpeggio); tests `synthtest1.c` 413, `vmtest1.c`, `repltest1.c`, `contest1.c`. Tests: `make check` (see below), levelstest, window host under Xvfb (sound log of madrun2, river2, orchard3).
 
 ## Log
 
@@ -1715,3 +1715,11 @@ The owner bundled three pieces of Claude work into this commit (oldest first):
 ### c131057 — 2026-11-11 03:47:48 +0100 — "UI tab control, improved instrument editor, created by Claude Code"
 16 files, +175/-31.
 - **FM / POLY controls in the instrument editor, widget limit 192:** `ui.h` (`UI_MAXWIDGETS` 192), `tools/insted.bas` (FM tab with FM decay / Poly voices sliders, FM index slider and Mod check on the oscillator pages, Hold now id 217), `docs/ui-subsystem.md`, `tools/README.md`, `docs/roadmap/sound.md`, `SESSION.md`; **new widget `UI TAB`** (`ui.[ch]` `UIK_TAB`, `gfxops.[ch]` / `engine1999.c` `GFXOP_UITAB` 139, grammar, man page, `docs/ui-subsystem.md`; the editor shows its pages with it instead of radio buttons). Tests: `uitest1` 311 (tab cases), `instedtest`, window host under Xvfb (FM index and Poly change the string).
+
+### 2d0411d — 2026-11-11 03:49:35 +0100 — "Claude session files update"
+2 files, +13/-5.
+- Session bookkeeping only (`SESSION.md`, `HistoryLog-Claude.md`) after the tab control commit.
+
+### bb0dcda — 2026-11-11 04:17:55 +0100 — "Improved default instruments, created by Claude Code"
+7 files, +24/-20.
+- **Factory instruments with FM and polyphony:** `synth.c` (`OF()` macro; BELL / EPIANO / BRASS as FM; `POLY 4` for PAD, ORGAN, STRINGS, BELL, EPIANO, `POLY 3` for PLUCK; gains recalibrated), `tools/insted.bas` (the 16 DATA strings), `vmtest1.c`, `docs/sound.md`, `SESSION.md`. Tests: `make check` (synthtest1 369 incl. loudness 0.30..0.38 per preset and the editor string comparison, instedtest, vmtest1 1545).

@@ -79,17 +79,17 @@ typedef enum _synth_wave_t {
 #define SYNTH_NWAVES        4           // the basic waves 0..3 = instruments 0..3
 
 // -- instruments ------------------------------------------------------------------------
-// Instruments 0..3 are the four basic waves (a plain oscillator, the original signal path, unchanged). Instruments 4..31 are
+// Instruments 0..3 are the four basic waves (a plain oscillator, the original signal path, unchanged). Instruments 4..63 are
 // "subtractive / layered": up to SYNTH_INST_NOSC band-limited oscillators (wave, level, frequency ratio, detune in cents, pulse
 // width of the square wave), one resonant low-pass filter whose cutoff follows the note (cutoff = note frequency * cutmul, with
 // an envelope that starts "fenv" octaves higher and decays), a pitch envelope (starts "pitch" semitones off and decays to the
 // note), a default ADSR envelope (an ENVELOPE of the program overrides it) and a default vibrato (a VIBRATO overrides it).
-// 4..19 are the presets of synth_init(); all of 4..31 can be redefined with synth_setinst().
-#define SYNTH_NINST         32
+// 4..63 are the presets of synth_init() (20..27 the second set, 28..31 UNASSIGNED placeholders; 32..63 start as USER); all of 4..63 can be redefined with synth_setinst().
+#define SYNTH_NINST         64
 #define SYNTH_NBASIC        4
-#define SYNTH_NPRESET       16          // instruments 4 .. 4 + SYNTH_NPRESET - 1
+#define SYNTH_NPRESET       28          // instruments 4 .. 4 + SYNTH_NPRESET - 1
 #define SYNTH_INST_NOSC     3
-#define SYNTH_INST_NAMELEN  12
+#define SYNTH_INST_NAMELEN  16
 
 typedef struct _synth_iosc_t {
     synth_wave_t    wave;               // SYNTH_SINE .. SYNTH_SAW
@@ -124,14 +124,14 @@ typedef struct _synth_inst_t {
 typedef enum _synth_evtype_t {
     SYNTH_EV_PLAY,                      // start (or change) the tone: freq, vol
     SYNTH_EV_STOP,                      // fade the channel out
-    SYNTH_EV_WAVE,                      // select the wave type 0..3, or the instrument 4..31 (takes effect at once, also while sounding)
+    SYNTH_EV_WAVE,                      // select the wave type 0..3, or the instrument 4..63 (takes effect at once, also while sounding)
     SYNTH_EV_ENV,                       // envelope: p[0..3] = attack s, decay s, sustain level, release s; p[0] < 0 = off
     SYNTH_EV_VIB,                       // vibrato: p[0] = rate Hz, p[1] = depth in semitones (0 = off)
     SYNTH_EV_TREM,                      // tremolo: p[0] = rate Hz, p[1] = depth 0..1 (0 = off)
-    SYNTH_EV_INST,                      // select the instrument p[0] = 0 .. SYNTH_NINST-1 (0..3: the basic waves; 4..31: the channel takes a copy of the
+    SYNTH_EV_INST,                      // select the instrument p[0] = 0 .. SYNTH_NINST-1 (0..3: the basic waves; 4..63: the channel takes a copy of the
                                         // synth's table entry n at that moment)
     SYNTH_EV_CUT,                       // filter cutoff of the channel's instrument: p[0] = multiple of the note 0.01..64 (-1 = the instrument's own), p[1] = seconds to glide there (0..60)
-    SYNTH_EV_INSTDEF                    // select the instrument p[0] = 4..31 with the definition in "def" (a snapshot: the channel keeps its own copy,
+    SYNTH_EV_INSTDEF                    // select the instrument p[0] = 4..63 with the definition in "def" (a snapshot: the channel keeps its own copy,
                                         // so a later definition of the same number does not change the notes that are queued before it)
 } synth_evtype_t;
 
@@ -248,7 +248,7 @@ bool synth_busy( const synth_t* s, int chan, uint64_t now );   // the channel so
 void synth_silencechan( synth_t* s, int chan, uint64_t now );   // the same for one channel
 void synth_silence( synth_t* s, uint64_t now );     // drops all queued events, fades all channels out, resets the cursors
 
-// instruments: 0..3 are fixed; 4..31 can be redefined. The table is the default of SYNTH_EV_INST / SYNTH_EV_WAVE with a number; a channel
+// instruments: 0..3 are fixed; 4..63 can be redefined. The table is the default of SYNTH_EV_INST / SYNTH_EV_WAVE with a number; a channel
 // plays with its own copy (see SYNTH_EV_INSTDEF). (false if n or a field is out of range; "name" may be 0)
 bool synth_setinst( synth_t* s, int n, const synth_inst_t* def );
 bool synth_instvalid( const synth_inst_t* def );                // every field in range (what synth_setinst() checks)

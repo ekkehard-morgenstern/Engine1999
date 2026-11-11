@@ -366,7 +366,7 @@ static void test_mml( void ) {
     check( mml_error( "L0", "out of range" ) && mml_error( "L65", "out of range" ), "mml: bad default length" );
     check( mml_error( "T0", "out of range" ) && mml_error( "T1001", "out of range" ), "mml: bad tempo" );
     check( mml_error( "V2", "out of range" ) && mml_error( "V", "out of range" ), "mml: bad volume" );
-    check( mml_error( "W32", "out of range" ) && mml_error( "I32", "out of range" ) && mml_error( "I", "out of range" ), "mml: bad wave / instrument" );
+    check( mml_error( "W64", "out of range" ) && mml_error( "I64", "out of range" ) && mml_error( "I", "out of range" ), "mml: bad wave / instrument" );
     {
         mml_t m; char err[MML_ERRLEN];
         check( mml_parse( "W4 C I31 D w0 E", &m, err ) && m.count == 6 + 0 && m.events[0].kind == MML_WAVE && m.events[0].wave == 4 &&
@@ -752,13 +752,13 @@ static void test_instruments( void ) {
         const char* nm = synth_instname( &s, i );
         if ( nm[0] == '\0' ) names_ok = false;
         for ( int k=0; k < i; ++k ) {
-            if ( i < SYNTH_NBASIC + SYNTH_NPRESET && strcmp( nm, synth_instname( &s, k ) ) == 0 ) names_ok = false;
+            if ( i < SYNTH_NBASIC + SYNTH_NPRESET && strcmp( nm, "UNASSIGNED" ) != 0 && strcmp( nm, synth_instname( &s, k ) ) == 0 ) names_ok = false;
         }
     }
-    check( names_ok, "32 instruments have names, the first 20 distinct" );
+    check( names_ok, "64 instruments have names, the presets distinct (UNASSIGNED may repeat)" );
     check( strcmp( synth_instname( &s, 2 ), "TRIANGLE" ) == 0 && strcmp( synth_instname( &s, 4 ), "BASS" ) == 0, "names of basic waves and presets" );
-    check( synth_instname( &s, 32 )[0] == '\0' && synth_instname( &s, -1 )[0] == '\0', "names out of range are empty" );
-    check( synth_getinst( &s, 3 ) == 0 && synth_getinst( &s, 4 ) != 0 && synth_getinst( &s, 31 ) != 0 && synth_getinst( &s, 32 ) == 0, "getinst range" );
+    check( synth_instname( &s, 64 )[0] == '\0' && synth_instname( &s, -1 )[0] == '\0', "names out of range are empty" );
+    check( synth_getinst( &s, 3 ) == 0 && synth_getinst( &s, 4 ) != 0 && synth_getinst( &s, 63 ) != 0 && synth_getinst( &s, 64 ) == 0, "getinst range" );
     synth_cleanup( &s );
 
     // every preset sounds (finite, audible, not clipping), reaches silence after the release, and is not a copy of another
@@ -903,7 +903,7 @@ static void test_instruments( void ) {
     // validation
     synth_inst_t bad; synth_instdefault( &bad );
     synth_init( &s, RATE );
-    check( !synth_setinst( &s, 0, &bad ) && !synth_setinst( &s, 3, &bad ) && !synth_setinst( &s, 32, &bad ) && !synth_setinst( &s, -1, &bad ), "instruments 0..3 and out of range can't be defined" );
+    check( !synth_setinst( &s, 0, &bad ) && !synth_setinst( &s, 3, &bad ) && !synth_setinst( &s, 64, &bad ) && !synth_setinst( &s, -1, &bad ), "instruments 0..3 and out of range can't be defined" );
     check( synth_setinst( &s, 31, &bad ) && synth_setinst( &s, 4, &bad ), "4 and 31 can" );
     bad.nosc = 0; check( !synth_setinst( &s, 5, &bad ), "0 oscillators refused" );
     bad.nosc = 4; check( !synth_setinst( &s, 5, &bad ), "4 oscillators refused" );
@@ -915,7 +915,7 @@ static void test_instruments( void ) {
     synth_instdefault( &bad ); bad.s = 1.5f; check( !synth_setinst( &s, 5, &bad ), "sustain 1.5 refused" );
     synth_instdefault( &bad ); bad.osc[0].wave = SYNTH_NOSCWAVES; check( !synth_setinst( &s, 5, &bad ), "unknown wave refused" );
     check( synth_schedule( &s, 0, SYNTH_EV_INST, 0, 0, 0, SYNTH_SINE ), "instrument 0 is selectable" );
-    sp.p[0] = 32.0f; check( !synth_schedule_ev( &s, 0, &sp ), "instrument 32 refused" );
+    sp.p[0] = 64.0f; check( !synth_schedule_ev( &s, 0, &sp ), "instrument 64 refused" );
     sp.p[0] = -1.0f; check( !synth_schedule_ev( &s, 0, &sp ), "instrument -1 refused" );
     synth_instpreset( 4, &bad ); check( strcmp( bad.name, "BASS" ) == 0 && bad.nosc == 2 && bad.osc[1].mul == 0.5f, "preset copy (derived ratio filled in)" );
     synth_cleanup( &s );
@@ -1321,10 +1321,10 @@ static void test_insted_presets( void ) {
             ok = near( got.gain, want.gain, 1e-5 ) && near( got.cutmul, want.cutmul, 1e-5 ) && near( got.res, want.res, 1e-5 ) && near( got.fenv, want.fenv, 1e-5 ) &&
                  near( got.fdecay, want.fdecay, 1e-5 ) && near( got.pitch, want.pitch, 1e-5 ) && near( got.pitchtime, want.pitchtime, 1e-5 ) &&
                  near( got.a, want.a, 1e-5 ) && near( got.d, want.d, 1e-5 ) && near( got.s, want.s, 1e-5 ) && near( got.r, want.r, 1e-5 ) &&
-                 near( got.vibrate, want.vibrate, 1e-5 ) && near( got.vibdepth, want.vibdepth, 1e-5 );
+                 near( got.vibrate, want.vibrate, 1e-5 ) && near( got.vibdepth, want.vibdepth, 1e-5 ) && near( got.fmdecay, want.fmdecay, 1e-5 ) && (got.poly > 1 ? got.poly : 1) == (want.poly > 1 ? want.poly : 1);
             for ( int k = 0; k < want.nosc && ok; ++k ) {
                 ok = got.osc[k].wave == want.osc[k].wave && got.osc[k].post == want.osc[k].post && near( got.osc[k].level, want.osc[k].level, 1e-5 ) &&
-                     near( got.osc[k].ratio, want.osc[k].ratio, 1e-5 ) && near( got.osc[k].cents, want.osc[k].cents, 1e-5 ) && near( got.osc[k].pw, want.osc[k].pw, 1e-5 );
+                     near( got.osc[k].ratio, want.osc[k].ratio, 1e-5 ) && near( got.osc[k].cents, want.osc[k].cents, 1e-5 ) && near( got.osc[k].pw, want.osc[k].pw, 1e-5 ) && near( got.osc[k].fm, want.osc[k].fm, 1e-5 ) && got.osc[k].mod == want.osc[k].mod;
             }
         }
         char nm[100]; snprintf( nm, sizeof(nm), "insted: the string of %s is the factory instrument", name );
@@ -1332,8 +1332,8 @@ static void test_insted_presets( void ) {
         if ( ok ) ++same;
     }
     fclose( f );
-    char nm[100]; snprintf( nm, sizeof(nm), "insted: all %d factory instruments are in the tool (found %d)", SYNTH_NPRESET, found );
-    check( found == SYNTH_NPRESET && same == SYNTH_NPRESET, nm );
+    char nm[100]; snprintf( nm, sizeof(nm), "insted: all %d named factory instruments are in the tool (found %d)", SYNTH_NPRESET - 4, found );
+    check( found == SYNTH_NPRESET - 4 && same == found, nm );
 }
 
 static void test_preset_loudness( void ) {

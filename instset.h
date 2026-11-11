@@ -352,7 +352,7 @@ The 4096 extended instructions are as follows:
                               needs beats > 0): the pitch glides to it during the tone
                             2 PLAY ( s1 .. sn n -- )           n music strings (1..8): string i plays on channel i, all
                               voices start together (the strings are parsed first: a wrong one queues nothing, see mml.h)
-                            3 WAVE ( ch wave -- )              wave type 0..3 (sine, square, triangle, noise) or the instrument 4..31
+                            3 WAVE ( ch wave -- )              wave type 0..3 (sine, square, triangle, noise) or the instrument 4..63
                             4 TEMPO ( bpm -- )                 beats per minute 1..1000 (the unit of the beats of SOUND)
                             5 OFF ( ch -- )                    silence the channel now and forget what is queued; 0 = all
                             6 SYNC ( ch1 .. chn n -- )         line up the channels' time (so that they start together)
@@ -364,9 +364,9 @@ The 4096 extended instructions are as follows:
                             11 TREMOLO ( ch rate depth -- )    rate 0..100 Hz, depth 0..1 (0 = off)
                             12 SFXDEF ( n s -- )               store the music string s as effect n (1..64)
                             13 SFXPLAY ( n ch -- )             play effect n on channel ch (0 = a free one)
-                            14 INSTDEF ( n s -- )              define instrument n (4..31) from the definition string s (mml_parse_inst(), see mml.h);
+                            14 INSTDEF ( n s -- )              define instrument n (4..63) from the definition string s (mml_parse_inst(), see mml.h);
                               the VM keeps it; the channels that use n get a snapshot queued at their own time (vm_sound_t.setinst)
-                            15 INSTRESET ( n -- )              the factory instrument n (4..31) again
+                            15 INSTRESET ( n -- )              the factory instrument n (4..63) again
                             16 CUTOFF ( ch mult seconds -- )   the filter cutoff of an instrument channel glides to mult * note frequency (0.01..64; -1 =
                               back to the instrument's own) within seconds (0..60; 0 = at once); vm_sound_t.setcut
                             Everything but 7 and 8 is queued at the channel's time line; all return at once. Without sound
@@ -595,7 +595,7 @@ The 4096 extended instructions are as follows:
                             starts again when it is used up) and the literal text around the fields; "Type mismatch" if a value does not fit the kind of
                             field, "Illegal argument" if the format has no field. Parameter 1: ends it (prints the literal text behind the last field that was used).
     0001 10010000       INSS - the definition of an instrument ( n -- s ) C=0 P=0
-                            INSTRUMENT$(n): the definition string of instrument n (0..31) as it is now (the program's own or the factory one), in the form
+                            INSTRUMENT$(n): the definition string of instrument n (0..63) as it is now (the program's own or the factory one), in the form
                             mml_inst_string() writes and INSTRUMENT n, a$ reads back; 0..3 give only "NAME SINE" etc. (the basic waves are not definable). Else "Illegal argument".
     0001 10001111       INSR - search in a string ( [start] hay needle -- n ) C=0 P=1
                             INSTR([start,] hay$, needle$): the position (1 = first byte) of the first needle in hay at or after start, 0 if it is not there. Parameter 0: no start (it is 1);

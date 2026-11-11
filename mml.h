@@ -47,7 +47,7 @@ a list of events with times in seconds; the VM hands them to the host's sound ca
     L n                    default note length 1..64 (starts as 4)
     T n                    tempo in quarter notes per minute, 1..1000 (starts as 120)
     V x                    volume 0..1, may have decimals (starts as 0.5)
-    W n  or  I n           wave 0..3 (0 sine, 1 square, 2 triangle, 3 noise) or instrument 4..31 (the presets, see synth.h and
+    W n  or  I n           wave 0..3 (0 sine, 1 square, 2 triangle, 3 noise) or instrument 4..63 (the presets, see synth.h and
                            INSTRUMENT); the channel keeps its wave / instrument otherwise
     ML, MN, MS             legato (the note fills its length), normal (7/8, then silence; the default) and staccato (3/4)
     blanks and ;           ignored; letters may be lower case

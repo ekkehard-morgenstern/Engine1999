@@ -200,7 +200,7 @@ typedef struct _vm_sound_t {
     void    (*sync)( void* usrdata, unsigned chanmask );    // lines up the time of the channels in the mask
     void    (*silence)( void* usrdata, int chan );          // now: drops what is queued for the channel, fades it out; -1 = all
     bool    (*busy)( void* usrdata, int chan );             // the channel sounds, or has events queued / a sequence running
-    void    (*setinst)( void* usrdata, int chan, int n, const synth_inst_t* def );   // the channel uses instrument n (4..31) with this definition (a snapshot, queued at the
+    void    (*setinst)( void* usrdata, int chan, int n, const synth_inst_t* def );   // the channel uses instrument n (4..63) with this definition (a snapshot, queued at the
                                                                 // channel's time like WAVE; may be 0: then setwave( chan, n ) is called and the host's own table is used)
     void    (*setcut)( void* usrdata, int chan, float mult, float seconds );        // queued: the filter cutoff of the channel's instrument glides to mult * note frequency within
                                                                 // seconds (mult -1 = the instrument's own); may be 0 (then CUTOFF only checks its arguments)
@@ -249,7 +249,7 @@ typedef struct _vm_stopstate_t {
 
 // the sound settings of one channel as the program set them (SFX restores them when an effect is over)
 typedef struct _vm_chanstate_t {
-    int     wave;           // 0 sine, 1 square, 2 triangle, 3 noise, 4..31 an instrument
+    int     wave;           // 0 sine, 1 square, 2 triangle, 3 noise, 4..63 an instrument
     float   env[4];         // attack, decay, sustain, release; attack < 0 = no envelope (-1, 0, 0, 0)
     float   vib[2];         // rate, depth (depth 0 = off)
     float   trem[2];

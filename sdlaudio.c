@@ -268,7 +268,7 @@ void sdlaud_setwave( int chan, int wave ) {
     sdlaud_event( chan, 0.0f, SYNTH_EV_WAVE, 0.0f, 0.0f, (synth_wave_t) wave );
 }
 
-// the channel uses instrument n (4..31) with this definition from the channel's cursor on (a snapshot: the audio engine keeps a copy)
+// the channel uses instrument n (4..63) with this definition from the channel's cursor on (a snapshot: the audio engine keeps a copy)
 void sdlaud_setinst( int chan, int n, const synth_inst_t* def ) {
     synth_evspec_t sp;
     memset( &sp, 0, sizeof(sp) );
