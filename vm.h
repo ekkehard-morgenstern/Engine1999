@@ -327,7 +327,7 @@ typedef struct _vm_t {
     bool            (*renumber)( struct _vm_t*, void*, const char* firstlabel, int32_t firstline, const char* lastlabel, int32_t lastline, int32_t step );
     vm_chanstate_t  chanstate[SND_NCHAN];     // what the VM has set on each sound channel (WAVE, ENVELOPE, VIBRATO, TREMOLO, W X ~ ^ of PLAY): SFX gives it back
     bool            sfx_defined[SND_MAXSFX];
-    uint32_t        instdefined;    // bit n: instrument n was defined by the program (RUN / NEW put the factory one back: bit cleared)
+    uint64_t        instdefined;    // bit n: instrument n was defined by the program (RUN / NEW put the factory one back: bit cleared)
     synth_inst_t    instdef[SYNTH_NINST];   // ... and its definition (the others are the presets of synth_instpreset())
     mml_t           sfx[SND_MAXSFX];    // the stored sound effects (SFX n, a$), parsed; cleared with the VM
     const vm_sound_t* sound;        // SOUND / PLAY / ...: the host's sound output; 0 = none (arguments are checked, nothing plays)

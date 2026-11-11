@@ -927,6 +927,7 @@ static const testcase_t cases[] = {
     { "CUTOFF channel range",   "CUTOFF 17,2",                                     "? Illegal argument\n" },
     { "CUTOFF one argument",    "CUTOFF 1",                                        "? Comma ',' expected\n" },
     { "CUTOFF in PLAY (K)",     "PLAY \"ML K2,0.5 C KR K4 C\"",                   "<sync 1>\n<cut 0 2 0.5>\n<tone 0 261.626 0.5 0.5>\n<cut 0 -1 0>\n<cut 0 4 0>\n<tone 0 261.626 0.5 0.5>\n<tone 0 0 0 0>\n" },
+    { "defining 36 does not touch the factory 4 (the bit mask had 32 bits)", "INSTRUMENT 36,\"OSC SAW\":WAVE 1,4:WAVE 2,36", "<inst 0 4 BASS factory>\n<inst 1 36  w4 osc 1 gain 1 cut 0 res 0 pitch 0 env 0>\n" },
     { "PAN",                    "PAN 1,-0.5",                                      "<pan 0 -0.5>\n" },
     { "PAN right, channel 16",  "PAN 16,1",                                        "<pan 15 1>\n" },
     { "PAN range",              "PAN 1,1.5",                                       "? Illegal argument\n" },

@@ -2273,7 +2273,7 @@ static bool vm_sound_channel( vm_t* vm, double num, int* pchan ) {
 // the sound settings of a channel: every change goes through these, so that the VM knows what a channel was set to
 // the definition of instrument n (4..63) as it is now: the program's own or the factory preset
 static void vm_inst_get( const vm_t* vm, int n, synth_inst_t* def ) {
-    if ( ( vm->instdefined & ( UINT32_C(1) << n ) ) != 0 ) {
+    if ( ( vm->instdefined & ( UINT64_C(1) << n ) ) != 0 ) {
         *def = vm->instdef[n];
     } else {
         synth_instpreset( n, def );
@@ -3148,7 +3148,7 @@ static bool vm_instrument( vm_t* vm, bool define ) {
     } else if ( define && !mml_parse_inst( str, &def, err ) ) {
         ok = vm_error( vm, err );
     } else {
-        uint32_t bit = UINT32_C(1) << (int) n;
+        uint64_t bit = UINT64_C(1) << (int) n;
         if ( define ) {
             vm->instdef[(int) n] = def;
             vm->instdefined |= bit;
