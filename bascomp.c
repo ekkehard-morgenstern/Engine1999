@@ -3998,10 +3998,11 @@ bool comp_eat_soundstmt( compiler_t* comp, node_t** pnode ) {
     //               TOK_ENVELOPE num-expr [ TOK_COMMA num-expr TOK_COMMA num-expr TOK_COMMA num-expr TOK_COMMA num-expr ] |
     //               ( TOK_VIBRATO | TOK_TREMOLO ) num-expr TOK_COMMA num-expr TOK_COMMA num-expr |
     //               TOK_SFX num-expr TOK_COMMA str-expr | TOK_SFX num-expr [ TOK_COMMA num-expr ] |
-    //               TOK_INSTRUMENT num-expr [ TOK_COMMA str-expr ] | TOK_CUTOFF num-expr TOK_COMMA num-expr [ TOK_COMMA num-expr ] .
+    //               TOK_INSTRUMENT num-expr [ TOK_COMMA str-expr ] | TOK_CUTOFF num-expr TOK_COMMA num-expr [ TOK_COMMA num-expr ] |
+    //               TOK_PAN num-expr TOK_COMMA num-expr .
     uint8_t tok = comp->currtok;
     if ( tok != TOK_SOUND && tok != TOK_PLAY && tok != TOK_WAVE && tok != TOK_TEMPO && tok != TOK_PITCH && tok != TOK_VOLUME &&
-         tok != TOK_ENVELOPE && tok != TOK_VIBRATO && tok != TOK_TREMOLO && tok != TOK_SFX && tok != TOK_INSTRUMENT && tok != TOK_CUTOFF ) {
+         tok != TOK_ENVELOPE && tok != TOK_VIBRATO && tok != TOK_TREMOLO && tok != TOK_SFX && tok != TOK_INSTRUMENT && tok != TOK_CUTOFF && tok != TOK_PAN ) {
         return false;
     }
     if ( !comp_fetchtok( comp ) ) {
@@ -4030,6 +4031,7 @@ bool comp_eat_soundstmt( compiler_t* comp, node_t** pnode ) {
         case TOK_SFX:       kind = SNDK_SFXPLAY; minargs = 1; maxargs = 2; break;
         case TOK_INSTRUMENT: kind = SNDK_INSTRESET; minargs = 1; maxargs = 2; break;
         case TOK_CUTOFF:    kind = SNDK_CUTOFF; minargs = 2; maxargs = 3; break;
+        case TOK_PAN:       kind = SNDK_PAN; minargs = maxargs = 2; break;
         default:            break;
     }
     /*

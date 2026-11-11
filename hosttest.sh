@@ -46,6 +46,7 @@ cat > "$T/insttest.bas" <<'EOP'
 46 INSTRUMENT 22,"OSC SAW 0.5; FILTER 1"
 47 PLAY "I21 T240 O3 L1 [ACE]"
 48 PLAY "I22 T240 O3 L4 K1 A K40 A"
+49 PLAY "I22 T240 O3 L4 K40 Y-1 A Y1 A"
 50 WAIT 480
 60 END
 EOP
@@ -65,11 +66,14 @@ sleep 6
 n=$(grep -c 'instrument 20 ' "$T/snd.log" 2> /dev/null)
 if [ "$n" != 3 ]; then echo "FAILED: hosttest (the sound log has $n selections of instrument 20, expected 3; see the host's output: $(head -c 300 "$T/win.out"))"; exit 1; fi
 [ -s "$T/out.raw" ] || { echo "FAILED: hosttest (no audio was recorded)"; exit 1; }
-# the recording: 32-bit float, mono, 44100 Hz. Find the start of the sound, then the amplitudes of 220 Hz and 660 Hz in a window of the first note (0.2 .. 0.7 s)
+# the recording: 32-bit float, stereo (left, right), 44100 Hz. Find the start of the sound, then the amplitudes of 220 Hz and 660 Hz in a window of the first note (0.2 .. 0.7 s)
 # and of the second one (1.2 .. 1.7 s), with the Goertzel algorithm.
-od -An -v -f -w4 "$T/out.raw" | awk '
-    { x[NR-1] = $1 + 0 }
+od -An -v -f -w8 "$T/out.raw" | awk '
+    { x[NR-1] = $1 + 0; y[NR-1] = $2 + 0 }
     function amp(from, f, n,    w, c, s0, s1, s2, i, re, im) {
+        return amps(x, from, f, n)
+    }
+    function amps(x, from, f, n,    w, c, s0, s1, s2, i, re, im) {
         if (n == 0) n = 22050; w = 2 * 3.14159265358979 * f / 44100; c = 2 * cos(w); s1 = 0; s2 = 0
         for (i = from; i < from + n; i++) { s0 = x[i] + c * s1 - s2; s2 = s1; s1 = s0 }
         re = s1 - s2 * cos(w); im = s2 * sin(w)
@@ -88,8 +92,17 @@ od -An -v -f -w4 "$T/out.raw" | awk '
         ca = amp(st + 92610, 220, 35000); cc = amp(st + 92610, 130.81, 35000); ce = amp(st + 92610, 164.81, 35000)
         printf "chord: A %.3f, C %.3f, E %.3f\n", ca, cc, ce
         if (!(ca > 0.07 && cc > 0.07 && ce > 0.07 && ca < 0.14)) { print "FAILED: hosttest (expected a chord of three notes)"; exit 1 }
-        # the cutoff: a saw with its filter at 1 x the note, then K40 (opened): the 8th harmonic of 220 Hz (1760) is absent in the first quarter note (3 .. 3.25 s), strong in the second (3.25 .. 3.5)
-        d1 = amp(st + 133600, 1760, 7000); b1 = amp(st + 145500, 1760, 7000)
+        # the stereo position: "K1 A K40 A K40 Y-1 A Y1 A" (quarter notes after the chord): the third note sounds only in the left channel (the right one is exactly 0),
+        # the fourth only in the right one; p = the first sample of the third note, found in the recording (the start of the sound varies a little with the device)
+        p = -1
+        for (i = st + 2 * 44100; i < NR; i++) if (x[i] > 0.05 && y[i] == 0) { p = i; break }
+        if (p < 0) { print "FAILED: hosttest (no sound only in the left channel)"; exit 1 }
+        l1 = amps(x, p + 2205, 220, 7000); r1 = amps(y, p + 2205, 220, 7000)
+        l2 = amps(x, p + 13230, 220, 7000); r2 = amps(y, p + 13230, 220, 7000)
+        printf "pan: first note left %.3f right %.4f; second note left %.4f right %.3f\n", l1, r1, l2, r2
+        if (!(l1 > 0.05 && r1 < 0.001 && r2 > 0.05 && l2 < 0.001)) { print "FAILED: hosttest (expected the notes at the left and at the right)"; exit 1 }
+        # the cutoff: a saw with its filter at 1 x the note, then K40 (opened): the 8th harmonic of 220 Hz (1760) is absent in the first quarter note, strong in the second
+        d1 = amps(x, p - 19845, 1760, 7000); b1 = amps(x, p - 8820, 1760, 7000)
         printf "cutoff: 8th harmonic %.4f before K40, %.4f after\n", d1, b1
         if (!(d1 < 0.005 && b1 > 0.01 && b1 > 5 * d1)) { print "FAILED: hosttest (expected the cutoff to open)"; exit 1 }
         print "hosttest ok"

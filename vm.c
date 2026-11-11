@@ -50,6 +50,7 @@ static void vm_chanstate_default( vm_chanstate_t* st ) {
     st->vib[0] = st->vib[1] = 0.0f;
     st->trem[0] = st->trem[1] = 0.0f;
     st->cut = -1.0f;
+    st->pan = 0.0f;
 }
 
 void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem ) {
@@ -2308,6 +2309,11 @@ static void vm_set_cut( vm_t* vm, int chan, float mult, float seconds ) {
     vm->chanstate[chan].cut = mult;
 }
 
+static void vm_set_pan( vm_t* vm, int chan, float pos ) {
+    if ( vm->sound->setpan != 0 ) vm->sound->setpan( vm->userdata, chan, pos );
+    vm->chanstate[chan].pan = pos;
+}
+
 static void vm_set_trem( vm_t* vm, int chan, float rate, float depth ) {
     vm->sound->settrem( vm->userdata, chan, rate, depth );
     vm->chanstate[chan].trem[0] = rate; vm->chanstate[chan].trem[1] = depth;
@@ -2344,6 +2350,9 @@ static void vm_queue_voice( vm_t* vm, int chan, const mml_t* m, double tobeats )
             case MML_CUT:
                 vm_set_cut( vm, chan, ev->p[0], ev->p[1] );
                 break;
+            case MML_PAN:
+                vm_set_pan( vm, chan, ev->p[0] );
+                break;
             case MML_CHORD:
                 if ( snd->chord != 0 ) snd->chord( ud, chan, ev->freq, ev->vol );
                 break;
@@ -2372,7 +2381,8 @@ static void vm_sfx_cleanup( vm_t* vm, int chan, const mml_t* m, double tobeats, 
     bool vib  = memcmp( now->vib, before->vib, sizeof(now->vib) ) != 0;
     bool trem = memcmp( now->trem, before->trem, sizeof(now->trem) ) != 0;
     bool cut  = now->cut != before->cut;
-    if ( !wave && !envd && !vib && !trem && !cut ) {
+    bool pan  = now->pan != before->pan;
+    if ( !wave && !envd && !vib && !trem && !cut && !pan ) {
         return;
     }
     if ( env && release > 0.0 ) {
@@ -2383,6 +2393,7 @@ static void vm_sfx_cleanup( vm_t* vm, int chan, const mml_t* m, double tobeats, 
     if ( vib  ) vm_set_vib( vm, chan, before->vib[0], before->vib[1] );
     if ( trem ) vm_set_trem( vm, chan, before->trem[0], before->trem[1] );
     if ( cut  ) vm_set_cut( vm, chan, before->cut, 0.0f );
+    if ( pan  ) vm_set_pan( vm, chan, before->pan );
 }
 
 // the host's beats per second of music-string time
@@ -3191,6 +3202,7 @@ static bool vm_sfx_play( vm_t* vm ) {
     vm_set_vib( vm, chan, 0.0f, 0.0f );
     vm_set_trem( vm, chan, 0.0f, 0.0f );
     if ( vm->chanstate[chan].cut != -1.0f ) vm_set_cut( vm, chan, -1.0f, 0.0f );
+    if ( vm->chanstate[chan].pan != 0.0f ) vm_set_pan( vm, chan, 0.0f );        // an effect is heard in the centre unless it says otherwise
     vm_queue_voice( vm, chan, m, tobeats );
     vm_sfx_cleanup( vm, chan, m, tobeats, &before );
     return true;
@@ -3864,6 +3876,15 @@ static bool vm_sound( vm_t* vm, uint16_t kind ) {
                 return vm_error( vm, "Illegal argument" );
             }
             if ( snd ) vm_set_cut( vm, chan, (float) b, (float) c );
+            return true;
+        case SNDK_PAN:
+            if ( !vm_dpop_num( vm, &b ) || !vm_dpop_num( vm, &a ) || !vm_sound_channel( vm, a, &chan ) ) {
+                return false;
+            }
+            if ( !( b >= -1.0 && b <= 1.0 ) ) {
+                return vm_error( vm, "Illegal argument" );
+            }
+            if ( snd ) vm_set_pan( vm, chan, (float) b );
             return true;
         case SNDK_TEMPO:
             if ( !vm_dpop_num( vm, &a ) ) {

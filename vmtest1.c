@@ -927,6 +927,16 @@ static const testcase_t cases[] = {
     { "CUTOFF channel range",   "CUTOFF 17,2",                                     "? Illegal argument\n" },
     { "CUTOFF one argument",    "CUTOFF 1",                                        "? Comma ',' expected\n" },
     { "CUTOFF in PLAY (K)",     "PLAY \"ML K2,0.5 C KR K4 C\"",                   "<sync 1>\n<cut 0 2 0.5>\n<tone 0 261.626 0.5 0.5>\n<cut 0 -1 0>\n<cut 0 4 0>\n<tone 0 261.626 0.5 0.5>\n<tone 0 0 0 0>\n" },
+    { "PAN",                    "PAN 1,-0.5",                                      "<pan 0 -0.5>\n" },
+    { "PAN right, channel 16",  "PAN 16,1",                                        "<pan 15 1>\n" },
+    { "PAN range",              "PAN 1,1.5",                                       "? Illegal argument\n" },
+    { "PAN range, left",        "PAN 1,-1.01",                                     "? Illegal argument\n" },
+    { "PAN channel range",      "PAN 17,0",                                        "? Illegal argument\n" },
+    { "PAN one argument",       "PAN 1",                                           "? Comma ',' expected\n" },
+    { "PAN in PLAY (Y)",        "PLAY \"ML Y-1 C Y.5 C Y0 C\"",                    "<sync 1>\n<pan 0 -1>\n<tone 0 261.626 0.5 0.5>\n<pan 0 0.5>\n<tone 0 261.626 0.5 0.5>\n<pan 0 0>\n<tone 0 261.626 0.5 0.5>\n<tone 0 0 0 0>\n" },
+    { "Y out of range",         "PLAY \"Y2\"",                                     "? Value missing or out of range after 'Y'\n" },
+    { "Y without a number",     "PLAY \"Y C\"",                                    "? Value missing or out of range after 'Y'\n" },
+    { "SFX is heard in the centre and gives the position back", "PAN 1,0.5:SFX 1,\"ML R\":SFX 1,1", "<pan 0 0.5>\n<sync 1>\n<wave 0 0>\n<env 0 off>\n<vib 0 0 0>\n<trem 0 0 0>\n<pan 0 0>\n<tone 0 0 0 0.5>\n<tone 0 0 0 0>\n<pan 0 0.5>\n" },
     { "K out of range",         "PLAY \"K65\"",                                    "? Value missing or out of range after 'K'\n" },
     { "K without a number",     "PLAY \"K C\"",                                    "? Value missing or out of range after 'K'\n" },
     { "SFX takes back a cutoff", "CUTOFF 1,3:SFX 1,\"ML K5,1 R\":SFX 1,1",          "<cut 0 3 0>\n<sync 1>\n<wave 0 0>\n<env 0 off>\n<vib 0 0 0>\n<trem 0 0 0>\n<cut 0 -1 0>\n<cut 0 5 1>\n<tone 0 0 0 0.5>\n<tone 0 0 0 0>\n<cut 0 3 0>\n" },
@@ -963,7 +973,7 @@ static const testcase_t cases[] = {
     { "INSTRUMENT 64", "INSTRUMENT 64", "? Illegal argument\n" },
     { "INSTRUMENT fixed-rate noise behind the filter", "WAVE 1,32:INSTRUMENT 32,\"OSC SAW;OSC NOISE 0.1 -5000 0 0.5 POST;FILTER 2\"", "<inst 0 32  w0 osc 1 gain 1 cut 0 res 0 pitch 0 env 0>\n<inst 0 32  w4 osc 2 gain 1 cut 2 res 0 pitch 0 env 0>\n" },
     { "INSTRUMENT a fixed frequency out of range", "INSTRUMENT 20,\"OSC SINE 1 -20001\"", "? Instrument value out of range\n" },
-    { "INSTRUMENT POST expected", "INSTRUMENT 20,\"OSC SINE 1 1 0 0.5 BOGUS\"", "? POST, MOD or FM expected after the OSC values\n" },
+    { "INSTRUMENT POST expected", "INSTRUMENT 20,\"OSC SINE 1 1 0 0.5 BOGUS\"", "? POST, MOD, FM or FB expected after the OSC values\n" },
     { "INSTRUMENT$ of a preset", "PRINT INSTRUMENT$(7)", "NAME PLUCK; OSC SAW 0.7 1 0 0.5; OSC SQUARE 0.4 1 5 0.5; FILTER 8 0.2 2.5 0.12; ENV 0 0.25 0 0.1; POLY 3; GAIN 2.86\n" },
     { "INSTRUMENT$ of a basic wave", "PRINT INSTRUMENT$(1)", "NAME SQUARE\n" },
     { "INSTRUMENT$ of an unused number", "PRINT INSTRUMENT$(40)", "NAME USER; OSC SINE 1 1 0 0.5; GAIN 1\n" },
@@ -1901,6 +1911,12 @@ static void snd_setcut( void* usrdata, int chan, float mult, float seconds ) {
     out_append( text );
 }
 
+static void snd_setpan( void* usrdata, int chan, float pos ) {
+    char text[60];
+    snprintf( text, sizeof(text), "<pan %d %g>\n", chan, (double) pos );
+    out_append( text );
+}
+
 static void snd_setpitch( void* usrdata, int chan, float freq ) {
     char text[60];
     snprintf( text, sizeof(text), "<pitch %d %g>\n", chan, (double) freq );
@@ -1963,7 +1979,7 @@ static void snd_setinst( void* usrdata, int chan, int n, const synth_inst_t* def
     out_append( text );
 }
 
-static const vm_sound_t test_sound = { snd_tone, snd_setwave, snd_setenv, snd_setvib, snd_settrem, snd_setpitch, snd_setvolume, snd_setbpm, snd_getbpm, snd_sync, snd_silence, snd_isbusy, snd_setinst, snd_setcut, snd_chord };
+static const vm_sound_t test_sound = { snd_tone, snd_setwave, snd_setenv, snd_setvib, snd_settrem, snd_setpitch, snd_setvolume, snd_setbpm, snd_getbpm, snd_sync, snd_silence, snd_isbusy, snd_setinst, snd_setcut, snd_chord, snd_setpan };
 
 // a graphics host that logs every operation as "<gfx NAME args>" (an omitted argument is -); queries return the sum of their arguments
 static int gfx_polls = 0;

@@ -66,7 +66,7 @@ static void sdlaud_callback( void* userdata, Uint8* stream, int len ) {
         ++sdlaud_cbcount;
         sdlaud_cblen = len / (int) sizeof(float);
     }
-    synth_render( &sdlaud_synth, (float*) stream, len / (int) sizeof(float) );
+    synth_render_stereo( &sdlaud_synth, (float*) stream, len / (int)( 2 * sizeof(float) ) );
     SDL_UnlockMutex( sdlaud_mtx );
 }
 
@@ -76,7 +76,7 @@ static bool sdlaud_init_sdl( void ) {
     memset( &sdlaud_spec_out, 0, sizeof(SDL_AudioSpec) );
     sdlaud_spec_in.freq     = SDLAUD_BUFFREQ;
     sdlaud_spec_in.format   = AUDIO_F32SYS;
-    sdlaud_spec_in.channels = UINT8_C(1);
+    sdlaud_spec_in.channels = UINT8_C(2);        // stereo: the channels have a pan position
     sdlaud_spec_in.samples  = SDLAUD_BUFSAMPLES;
     sdlaud_spec_in.callback = sdlaud_callback;
     sdlaud_spec_in.userdata = 0;
@@ -293,6 +293,10 @@ void sdlaud_setvibrato( int chan, float rate, float depth ) {
 
 void sdlaud_setcutoff( int chan, float mult, float seconds ) {
     sdlaud_setfx( chan, SYNTH_EV_CUT, mult, seconds, 0.0f, 0.0f );
+}
+
+void sdlaud_setpan( int chan, float pos ) {
+    sdlaud_setfx( chan, SYNTH_EV_PAN, pos, 0.0f, 0.0f, 0.0f );
 }
 
 void sdlaud_settremolo( int chan, float rate, float depth ) {

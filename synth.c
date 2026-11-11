@@ -182,13 +182,13 @@ bool synth_instvalid( const synth_inst_t* d ) {
     for ( int i=0; i < d->nosc; ++i ) {
         const synth_iosc_t* o = &d->osc[i];
         if ( (int) o->wave < 0 || (int) o->wave >= SYNTH_NOSCWAVES ) return false;
-        if ( !RNG( o->level, 0.0f, 2.0f ) || !RNG( o->cents, -2400.0f, 2400.0f ) || !RNG( o->pw, 0.02f, 0.98f ) || !RNG( o->fm, 0.0f, 20.0f ) ) return false;
+        if ( !RNG( o->level, 0.0f, 2.0f ) || !RNG( o->cents, -2400.0f, 2400.0f ) || !RNG( o->pw, 0.02f, 0.98f ) || !RNG( o->fm, 0.0f, 20.0f ) || !RNG( o->fb, 0.0f, 8.0f ) ) return false;
         if ( !( o->ratio > 0.0f && o->ratio <= 64.0f ) && !( o->ratio >= -20000.0f && o->ratio <= -1.0f ) && !( o->wave == SYNTH_NOISE && o->ratio == 0.0f ) ) return false;
     }
     return RNG( d->gain, 0.0f, 4.0f ) && RNG( d->cutmul, 0.0f, 64.0f ) && RNG( d->res, 0.0f, 0.95f ) &&
         RNG( d->fenv, -6.0f, 6.0f ) && RNG( d->fdecay, 0.0f, 10.0f ) && RNG( d->pitch, -48.0f, 48.0f ) &&
         RNG( d->pitchtime, 0.0f, 10.0f ) && RNG( d->a, 0.0f, 60.0f ) && RNG( d->d, 0.0f, 60.0f ) &&
-        RNG( d->s, 0.0f, 1.0f ) && RNG( d->r, 0.0f, 60.0f ) && RNG( d->vibrate, 0.0f, 100.0f ) && RNG( d->vibdepth, 0.0f, 24.0f ) && RNG( d->fmdecay, 0.0f, 10.0f ) && d->poly >= 0 && d->poly <= SYNTH_MAXPOLY;
+        RNG( d->s, 0.0f, 1.0f ) && RNG( d->r, 0.0f, 60.0f ) && RNG( d->vibrate, 0.0f, 100.0f ) && RNG( d->vibdepth, 0.0f, 24.0f ) && RNG( d->fmdecay, 0.0f, 10.0f ) && d->poly >= 0 && d->poly <= SYNTH_MAXPOLY && d->algo >= 0 && d->algo <= 1;
     #undef RNG
 }
 
@@ -404,6 +404,11 @@ bool synth_schedule_ev( synth_t* s, uint64_t when, const synth_evspec_t* sp ) {
                 return false;
             }
             break;
+        case SYNTH_EV_PAN:
+            if ( !( sp->p[0] >= -1.0f && sp->p[0] <= 1.0f ) ) {
+                return false;
+            }
+            break;
         case SYNTH_EV_VIB:
             if ( !( sp->p[0] >= 0.0f && sp->p[0] <= 100.0f && sp->p[1] >= 0.0f && sp->p[1] <= 24.0f ) ) {
                 return false;
@@ -530,7 +535,7 @@ static void synth_play( synth_t* s, synth_chan_t* c, const synth_event_t* ev ) {
         const synth_inst_t* in = &c->cinst;
         bool retrig = !wason || ( c->env_on && ( c->envstate == SYNTH_ENV_RELEASE || c->envstate == SYNTH_ENV_IDLE ) );
         if ( !wason && c->gain == 0.0f ) {
-            for ( int k=0; k < SYNTH_INST_NOSC; ++k ) c->iosc[k].phase = 0.0;
+            for ( int k=0; k < SYNTH_INST_NOSC; ++k ) { c->iosc[k].phase = 0.0; c->iosc[k].fbprev = 0.0f; }
         }
         if ( retrig ) {
             c->pe = (double) in->pitch;
@@ -691,6 +696,9 @@ static void synth_apply( synth_t* s, const synth_event_t* ev ) {
             } else {
                 synth_cut_apply( c, ev, s->rate );
             }
+            break;
+        case SYNTH_EV_PAN:
+            c->pan = ev->p[0];
             break;
         case SYNTH_EV_VIB:
         case SYNTH_EV_TREM:
@@ -857,10 +865,10 @@ static float synth_env_next( synth_chan_t* c ) {
     return c->env;
 }
 
-void synth_render( synth_t* s, float* buf, int count ) {
+static void synth_render_ex( synth_t* s, float* buf, int count, bool stereo ) {
     const double invrate = 1.0 / (double) s->rate;
     for ( int j=0; j < count; ++j ) {
-        float sum = 0.0f, sumgain = 0.0f;
+        float sum = 0.0f, sumgain = 0.0f, suml = 0.0f, sumr = 0.0f;
         for ( int i=0; i < SYNTH_NCHAN + SYNTH_NVOICES; ++i ) {
             synth_chan_t* c = &s->chan[i];
             if ( !c->on && c->gain == 0.0f && c->target == 0.0f ) {
@@ -910,12 +918,16 @@ void synth_render( synth_t* s, float* buf, int count ) {
                     c->pe *= c->pdec;
                     if ( fabs( c->pe ) < 0.005 ) c->pe = 0.0;
                 }
-                float x = 0.0f, xpost = 0.0f, modout = 0.0f;
-                for ( int k=in->nosc-1; k >= 0; --k ) {     // from the last: an oscillator is modulated by the next one
+                float x = 0.0f, xpost = 0.0f, modout = 0.0f, lastout = 0.0f;
+                for ( int k=in->nosc-1; k >= 0; --k ) {     // from the last: an oscillator is modulated by the next one (algorithm 1: by the last one)
                     const synth_iosc_t* d = &in->osc[k];
-                    double pm = d->fm > 0.0f && k + 1 < in->nosc ? (double) d->fm * (double) c->fmlvl * (double) modout / TWOPI : 0.0;
-                    float o = synth_iosc_next( &c->iosc[k], d, step, invrate, pm ) * d->level;
+                    double pm = d->fm > 0.0f && k + 1 < in->nosc ? (double) d->fm * (double) c->fmlvl * (double)( in->algo == 1 ? lastout : modout ) / TWOPI : 0.0;
+                    if ( d->fb > 0.0f ) pm += (double) d->fb * (double) c->fmlvl * (double) c->iosc[k].fbprev / TWOPI;
+                    float raw = synth_iosc_next( &c->iosc[k], d, step, invrate, pm );
+                    c->iosc[k].fbprev = raw;
+                    float o = raw * d->level;
                     modout = o;
+                    if ( k == in->nosc-1 ) lastout = o;
                     if ( d->mod ) continue;
                     if ( d->post ) xpost += o; else x += o;
                 }
@@ -952,10 +964,30 @@ void synth_render( synth_t* s, float* buf, int count ) {
                 v = synth_softlimit( ( x + xpost ) * in->gain ) * level;       // xpost: the oscillators behind the filter
             }
             sum += v;
+            if ( stereo ) {         // the balance law: the far side falls linearly, the near side stays
+                float pan = s->chan[pi].pan;
+                suml += pan > 0.0f ? v * ( 1.0f - pan ) : v;
+                sumr += pan < 0.0f ? v * ( 1.0f + pan ) : v;
+            }
             if ( fabsf( v ) > s->peak[pi] ) s->peak[pi] = fabsf( v );
             sumgain += c->gain;
         }
-        buf[j] = sumgain > 1.0f ? sum / sumgain : sum;      // loud chords are scaled down, not clipped
-        if ( fabsf( buf[j] ) > s->outpeak ) s->outpeak = fabsf( buf[j] );
+        if ( stereo ) {
+            float l = sumgain > 1.0f ? suml / sumgain : suml, r = sumgain > 1.0f ? sumr / sumgain : sumr;
+            buf[2*j] = l; buf[2*j+1] = r;
+            if ( fabsf( l ) > s->outpeak ) s->outpeak = fabsf( l );
+            if ( fabsf( r ) > s->outpeak ) s->outpeak = fabsf( r );
+        } else {
+            buf[j] = sumgain > 1.0f ? sum / sumgain : sum;      // loud chords are scaled down, not clipped
+            if ( fabsf( buf[j] ) > s->outpeak ) s->outpeak = fabsf( buf[j] );
+        }
     }
+}
+
+void synth_render( synth_t* s, float* buf, int count ) {
+    synth_render_ex( s, buf, count, false );
+}
+
+void synth_render_stereo( synth_t* s, float* buf, int frames ) {
+    synth_render_ex( s, buf, frames, true );
 }

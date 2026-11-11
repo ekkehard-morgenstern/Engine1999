@@ -708,6 +708,7 @@ bool cgen_from_soundstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
         case SNDK_VOLUME:
         case SNDK_VIBRATO:
         case SNDK_TREMOLO:
+        case SNDK_PAN:
         case SNDK_SFXDEF:
         case SNDK_INSTDEF:
         case SNDK_INSTRESET:

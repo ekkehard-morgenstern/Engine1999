@@ -82,7 +82,8 @@ typedef enum _mml_kind_t {
     MML_VIB,            // vibrato p[0] = rate, p[1] = depth
     MML_TREM,           // tremolo p[0] = rate, p[1] = depth
     MML_CUT,            // filter cutoff p[0] = multiple of the note (-1 = the instrument's own), p[1] = seconds to get there
-    MML_CHORD           // a note (freq, vol) that starts at once without taking time: the notes of a chord before its last one (that one is an MML_TONE)
+    MML_CHORD,          // a note (freq, vol) that starts at once without taking time: the notes of a chord before its last one (that one is an MML_TONE)
+    MML_PAN             // stereo position p[0] = -1 (left) .. 1 (right)
 } mml_kind_t;
 
 typedef struct _mml_event_t {

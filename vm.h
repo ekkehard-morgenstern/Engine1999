@@ -206,6 +206,7 @@ typedef struct _vm_sound_t {
                                                                 // seconds (mult -1 = the instrument's own); may be 0 (then CUTOFF only checks its arguments)
     void    (*chord)( void* usrdata, int chan, float freq, float vol );             // a note of a chord that starts at the channel's time without taking any (the last note of the
                                                                 // chord is a tone() with the length); may be 0 (then these notes are left out)
+    void    (*setpan)( void* usrdata, int chan, float pos );                        // queued: the stereo position of the channel, -1 (left) .. 1 (right); may be 0 (no stereo)
 } vm_sound_t;
 
 #define VM_NUSERTIMERS      4           // AFTER / EVERY timers 0..3
@@ -254,6 +255,7 @@ typedef struct _vm_chanstate_t {
     float   vib[2];         // rate, depth (depth 0 = off)
     float   trem[2];
     float   cut;            // the last CUTOFF target (-1 = none: the instrument's own)
+    float   pan;            // the last PAN position (0 = centre)
 } vm_chanstate_t;
 
 typedef struct _vm_t {

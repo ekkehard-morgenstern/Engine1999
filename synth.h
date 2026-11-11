@@ -102,6 +102,7 @@ typedef struct _synth_iosc_t {
     bool            post;               // the oscillator bypasses the low-pass filter (it is mixed in behind it): breath noise, a chiff, a fixed hiss
     float           fm;                 // FM: the oscillator's phase is modulated by the NEXT oscillator (index + 1) with this index in radians (0 = none, 0..20)
     bool            mod;                // a modulator: the oscillator is only heard through the oscillator it modulates (it is not mixed)
+    float           fb;                 // FM feedback: the oscillator modulates ITSELF with its last output, index in radians (0 = none, 0..8); falls with FMDECAY like fm
 } synth_iosc_t;
 
 typedef struct _synth_inst_t {
@@ -119,6 +120,7 @@ typedef struct _synth_inst_t {
     float           fmdecay;            // the FM indexes fall exponentially with this time constant (s, 0..10; 0 = they stay)
     int             poly;               // voices: 0 or 1 = one note at a time on a channel using the instrument (the channel itself sounds), 2..8 = every note of the channel
                                         // gets its own voice from the pool (SYNTH_NVOICES slots), so chords and the release tails of earlier notes sound together
+    int             algo;               // FM algorithm: 0 = chain (each oscillator is modulated by the next), 1 = the LAST oscillator modulates all the others (one modulator, two carriers)
 } synth_inst_t;
 
 typedef enum _synth_evtype_t {
@@ -131,8 +133,9 @@ typedef enum _synth_evtype_t {
     SYNTH_EV_INST,                      // select the instrument p[0] = 0 .. SYNTH_NINST-1 (0..3: the basic waves; 4..63: the channel takes a copy of the
                                         // synth's table entry n at that moment)
     SYNTH_EV_CUT,                       // filter cutoff of the channel's instrument: p[0] = multiple of the note 0.01..64 (-1 = the instrument's own), p[1] = seconds to glide there (0..60)
-    SYNTH_EV_INSTDEF                    // select the instrument p[0] = 4..63 with the definition in "def" (a snapshot: the channel keeps its own copy,
+    SYNTH_EV_INSTDEF,                   // select the instrument p[0] = 4..63 with the definition in "def" (a snapshot: the channel keeps its own copy,
                                         // so a later definition of the same number does not change the notes that are queued before it)
+    SYNTH_EV_PAN                        // stereo position of the channel: p[0] = -1 (left) .. 0 (centre) .. 1 (right); the notes that sound follow
 } synth_evtype_t;
 
 typedef enum _synth_envstate_t {
@@ -145,6 +148,7 @@ typedef struct _synth_osc_t {           // one oscillator (the building block of
     double          step;               // phase increment per sample (freq / rate)
     uint32_t        rng;                // noise generator state
     float           held;               // noise: the current sample-and-hold value
+    float           fbprev;             // FM feedback: the last output of the oscillator (before its level)
 } synth_osc_t;
 
 typedef struct _synth_chan_t {
@@ -161,6 +165,7 @@ typedef struct _synth_chan_t {
     float           cut_val, cut_from, cut_to;
     double          cut_pos, cut_total; // samples gone / samples of the glide
     float           fmlvl;              // FM index scale 1 -> 0
+    float           pan;                // stereo position -1 .. 1 (0 = centre); a voice slot follows the pan of its owner channel
     double          fmdec;              // its factor per sample
     int             owner;              // voice slots (chan[SYNTH_NCHAN ..]): the channel (1..) the note belongs to, 0 = never used
     bool            held;               // voice slots: the note has not been released yet
@@ -257,6 +262,9 @@ const char* synth_instname( const synth_t* s, int n );          // "SINE" .. "NO
 void synth_instdefault( synth_inst_t* def );                    // a plain instrument: one sine, no filter, no envelope
 void synth_instpreset( int n, synth_inst_t* def );              // the factory definition of 4..19 (else the plain one)
 
-void synth_render( synth_t* s, float* buf, int count );     // mono, count samples
+void synth_render( synth_t* s, float* buf, int count );     // mono, count samples (the stereo positions are ignored: the mix of the centre)
+void synth_render_stereo( synth_t* s, float* buf, int frames );     // stereo: frames pairs of samples (left, right) = 2 * frames floats; a channel at the
+                                        // pan position p sounds on both sides at the gain 1 for the centre, falling linearly to 0 on the far side (balance law:
+                                        // a centred channel is as loud on each side as in the mono render, a hard-panned one is full on one side only)
 
 #endif

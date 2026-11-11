@@ -298,6 +298,16 @@ bool mml_parse( const char* text, mml_t* mml, char err[MML_ERRLEN] ) {
                     ev.kind = MML_CUT; ev.p[0] = (float) m; ev.p[1] = (float) secs;
                     break;
                 }
+                case 'Y': {                 // Y pos: the stereo position -1 (left) .. 1 (right)
+                    double pos;
+                    mml_skip( &st );
+                    bool neg = *st.p == '-';
+                    if ( neg || *st.p == '+' ) ++st.p;
+                    if ( !mml_number( &st, true, &pos ) || pos > 1.0 ) goto RANGE;
+                    if ( neg ) pos = -pos;
+                    ev.kind = MML_PAN; ev.p[0] = (float) pos;
+                    break;
+                }
                 case '~': case '^': {
                     static const double lo[2] = { 0, 0 }, hi_v[2] = { 100, 24 }, hi_t[2] = { 100, 1 };
                     double v2[2];
@@ -418,25 +428,25 @@ bool mml_parse_inst( const char* text, synth_inst_t* in, char err[MML_ERRLEN] ) 
         while ( nv < 5 && mml_signed( &p, &v[nv] ) ) ++nv;
         while ( *p == ' ' || *p == '\t' || *p == ',' ) ++p;
         bool post = false, mod = false;
-        double fm = 0.0;
+        double fm = 0.0, fb = 0.0;
         while ( strcmp( cmd, "OSC" ) == 0 && ( ( *p >= 'A' && *p <= 'Z' ) || ( *p >= 'a' && *p <= 'z' ) ) ) {      // OSC ... POST / MOD / FM index
             char w[16];
             if ( !mml_word( &p, w, sizeof(w) ) ) {
-                snprintf( err, MML_ERRLEN, "POST, MOD or FM expected after the OSC values" );
+                snprintf( err, MML_ERRLEN, "POST, MOD, FM or FB expected after the OSC values" );
                 return false;
             }
             if ( strcmp( w, "POST" ) == 0 ) {
                 post = true;
             } else if ( strcmp( w, "MOD" ) == 0 ) {
                 mod = true;
-            } else if ( strcmp( w, "FM" ) == 0 ) {
+            } else if ( strcmp( w, "FM" ) == 0 || strcmp( w, "FB" ) == 0 ) {
                 while ( *p == ' ' || *p == '\t' || *p == ',' ) ++p;
-                if ( !mml_signed( &p, &fm ) ) {
-                    snprintf( err, MML_ERRLEN, "A number is missing after FM" );
+                if ( !mml_signed( &p, w[1] == 'M' ? &fm : &fb ) ) {
+                    snprintf( err, MML_ERRLEN, "A number is missing after %s", w );
                     return false;
                 }
             } else {
-                snprintf( err, MML_ERRLEN, "POST, MOD or FM expected after the OSC values" );
+                snprintf( err, MML_ERRLEN, "POST, MOD, FM or FB expected after the OSC values" );
                 return false;
             }
             while ( *p == ' ' || *p == '\t' || *p == ',' ) ++p;
@@ -454,7 +464,7 @@ bool mml_parse_inst( const char* text, synth_inst_t* in, char err[MML_ERRLEN] ) 
             o->wave = (synth_wave_t) wave; o->level = nv > 0 ? (float) v[0] : 1.0f;
             o->ratio = nv > 1 ? (float) v[1] : ( wave == SYNTH_NOISE ? 0.0f : 1.0f );
             o->cents = nv > 2 ? (float) v[2] : 0.0f; o->pw = nv > 3 ? (float) v[3] : 0.5f; o->post = post;
-            o->mod = mod; o->fm = (float) fm;
+            o->mod = mod; o->fm = (float) fm; o->fb = (float) fb;
         } else if ( strcmp( cmd, "FILTER" ) == 0 ) {    // FILTER cutmul [resonance [fenv [fdecay]]]
             if ( nv < 1 || nv > 4 ) goto COUNT;
             in->cutmul = (float) v[0]; in->res = nv > 1 ? (float) v[1] : 0.0f; in->fenv = nv > 2 ? (float) v[2] : 0.0f;
@@ -475,6 +485,13 @@ bool mml_parse_inst( const char* text, synth_inst_t* in, char err[MML_ERRLEN] ) 
                 return false;
             }
             in->poly = (int) v[0];
+        } else if ( strcmp( cmd, "ALGO" ) == 0 ) {      // ALGO 0 | 1
+            if ( nv != 1 ) goto COUNT;
+            if ( v[0] != 0.0 && v[0] != 1.0 ) {
+                snprintf( err, MML_ERRLEN, "Instrument value out of range" );
+                return false;
+            }
+            in->algo = (int) v[0];
         } else if ( strcmp( cmd, "FMDECAY" ) == 0 ) {   // FMDECAY seconds
             if ( nv != 1 ) goto COUNT;
             in->fmdecay = (float) v[0];
@@ -507,6 +524,7 @@ void mml_inst_string( const synth_inst_t* in, char* buf, size_t size ) {
         const synth_iosc_t* o = &in->osc[k];
         ADD( "; OSC %s %g %g %g %g", wn[ (int) o->wave < SYNTH_NOSCWAVES ? (int) o->wave : 0 ], (double) o->level, (double) o->ratio, (double) o->cents, (double) o->pw );
         if ( o->fm > 0.0f ) ADD( " FM %g", (double) o->fm );
+        if ( o->fb > 0.0f ) ADD( " FB %g", (double) o->fb );
         if ( o->mod ) ADD( " MOD" );
         if ( o->post ) ADD( " POST" );
     }
@@ -514,6 +532,7 @@ void mml_inst_string( const synth_inst_t* in, char* buf, size_t size ) {
     if ( in->pitch != 0.0f || in->pitchtime != 0.0f ) ADD( "; PITCH %g %g", (double) in->pitch, (double) in->pitchtime );
     if ( in->env ) ADD( "; ENV %g %g %g %g", (double) in->a, (double) in->d, (double) in->s, (double) in->r );
     if ( in->vibrate > 0.0f && in->vibdepth > 0.0f ) ADD( "; VIB %g %g", (double) in->vibrate, (double) in->vibdepth );
+    if ( in->algo != 0 ) ADD( "; ALGO %d", in->algo );
     if ( in->fmdecay > 0.0f ) ADD( "; FMDECAY %g", (double) in->fmdecay );
     if ( in->poly > 1 ) ADD( "; POLY %d", in->poly );
     ADD( "; GAIN %g", (double) in->gain );

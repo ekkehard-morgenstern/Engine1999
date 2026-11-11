@@ -369,6 +369,7 @@ The 4096 extended instructions are as follows:
                             15 INSTRESET ( n -- )              the factory instrument n (4..63) again
                             16 CUTOFF ( ch mult seconds -- )   the filter cutoff of an instrument channel glides to mult * note frequency (0.01..64; -1 =
                               back to the instrument's own) within seconds (0..60; 0 = at once); vm_sound_t.setcut
+                            17 PAN ( ch pos -- )               the stereo position of the channel, -1 (left) .. 1 (right), 0 = centre; vm_sound_t.setpan
                             Everything but 7 and 8 is queued at the channel's time line; all return at once. Without sound
                             callbacks the arguments are only checked. A bad argument is "Illegal argument".
     0001 01000011       PLNG - is the channel busy? ( ch -- n ) C=0 P=0

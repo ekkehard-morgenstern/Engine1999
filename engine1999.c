@@ -962,6 +962,11 @@ static void host_snd_chord( void* usrdata, int chan, float freq, float vol ) {
     sdlaud_playchord( chan, freq, vol );
 }
 
+static void host_snd_setpan( void* usrdata, int chan, float pos ) {
+    snd_logf( chan, "pan %g", (double) pos );
+    sdlaud_setpan( chan, pos );
+}
+
 static void host_snd_setcut( void* usrdata, int chan, float mult, float seconds ) {
     snd_logf( chan, "cutoff %g %g", (double) mult, (double) seconds );
     sdlaud_setcutoff( chan, mult, seconds );
@@ -1698,7 +1703,7 @@ static const vm_gfx_t host_gfx = { host_gfx_op, host_gfx_query };
 
 static const vm_sound_t host_sound = {
     host_snd_tone, host_snd_setwave, host_snd_setenv, host_snd_setvib, host_snd_settrem, host_snd_setpitch, host_snd_setvolume,
-    host_snd_setbpm, host_snd_getbpm, host_snd_sync, host_snd_silence, host_snd_busy, host_snd_setinst, host_snd_setcut, host_snd_chord
+    host_snd_setbpm, host_snd_getbpm, host_snd_sync, host_snd_silence, host_snd_busy, host_snd_setinst, host_snd_setcut, host_snd_chord, host_snd_setpan
 };
 
 // the line editor of EDIT: ENTER returns the edited line, ESC (or a closed window) returns 0

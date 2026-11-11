@@ -1047,16 +1047,16 @@ static void test_inst_string( void ) {
     for ( int n=SYNTH_NBASIC; n < SYNTH_NBASIC + SYNTH_NPRESET + 1; ++n ) {
         synth_inst_t a, b;
         if ( n < SYNTH_NBASIC + SYNTH_NPRESET ) synth_instpreset( n, &a );
-        else mml_parse_inst( "NAME X; OSC SINE 0.5 1 0 0.5 FM 2.5; OSC NOISE 1 -300 0 0.5 MOD POST; PITCH -7 0.04; FMDECAY 0.3", &a, err );
+        else mml_parse_inst( "NAME X; OSC SINE 0.5 1 0 0.5 FM 2.5 FB 1.5; OSC NOISE 1 -300 0 0.5 MOD POST; PITCH -7 0.04; FMDECAY 0.3; ALGO 1", &a, err );
         mml_inst_string( &a, text, sizeof(text) );
         if ( !mml_parse_inst( text, &b, err ) ) { ++bad; printf( "  %d: %s -> %s\n", n, text, err ); continue; }
         char text2[MML_INSTSTRLEN];
         mml_inst_string( &b, text2, sizeof(text2) );
         bool same = strcmp( text, text2 ) == 0 && a.nosc == b.nosc && a.gain == b.gain && a.cutmul == b.cutmul && a.res == b.res && a.fenv == b.fenv && a.fdecay == b.fdecay &&
-            a.pitch == b.pitch && a.pitchtime == b.pitchtime && a.env == b.env && a.a == b.a && a.d == b.d && a.s == b.s && a.r == b.r && a.fmdecay == b.fmdecay;
+            a.pitch == b.pitch && a.pitchtime == b.pitchtime && a.env == b.env && a.a == b.a && a.d == b.d && a.s == b.s && a.r == b.r && a.fmdecay == b.fmdecay && a.algo == b.algo;
         for ( int k=0; k < a.nosc; ++k ) {
             same = same && a.osc[k].wave == b.osc[k].wave && a.osc[k].level == b.osc[k].level && a.osc[k].ratio == b.osc[k].ratio && a.osc[k].cents == b.osc[k].cents &&
-                a.osc[k].pw == b.osc[k].pw && a.osc[k].post == b.osc[k].post && a.osc[k].mod == b.osc[k].mod && a.osc[k].fm == b.osc[k].fm;
+                a.osc[k].pw == b.osc[k].pw && a.osc[k].post == b.osc[k].post && a.osc[k].mod == b.osc[k].mod && a.osc[k].fm == b.osc[k].fm && a.osc[k].fb == b.osc[k].fb;
         }
         if ( !same ) { ++bad; printf( "  %d: %s\n     %s\n", n, text, text2 ); }
     }
@@ -1240,6 +1240,37 @@ static void test_instrument_fm( void ) {
     check( !render_def( "OSC SINE 1 1 0 0.5 FM 21; OSC SINE", 220.0f, a ), "FM index 21 is refused" );
     check( !render_def( "OSC SINE; FMDECAY 11", 220.0f, a ), "FMDECAY 11 is refused" );
     check( !render_def( "OSC SINE 1 1 0 0.5 FM", 220.0f, a ), "FM without a number is refused" );
+    // feedback: a sine that modulates itself grows harmonics (without FB there is no second harmonic)
+    render_def( "OSC SINE 0.5", 500.0f, a );
+    double h0 = amp_at( a, 4000, RATE, 1000.0 );
+    check( render_def( "OSC SINE 0.5 1 0 0.5 FB 2", 500.0f, a ), "FB definition parses" );
+    double h1 = amp_at( a, 4000, RATE, 500.0 ), h2 = amp_at( a, 4000, RATE, 1000.0 ), h3 = amp_at( a, 4000, RATE, 1500.0 );
+    snprintf( nm, sizeof(nm), "FB 2: harmonics %.3f %.3f %.3f (plain sine: second %.4f)", h1, h2, h3, h0 );
+    check( h0 < 0.003 && h2 > 0.05 && h3 > 0.03 && h1 > h2, nm );
+    render_def( "OSC SINE 0.5 1 0 0.5 FB 0.3", 500.0f, a );
+    double hw = amp_at( a, 4000, RATE, 1000.0 );
+    check( hw > 0.003 && hw < h2, "a weaker feedback gives weaker harmonics" );
+    render_def( "OSC SINE 0.5 1 0 0.5 FB 8", 220.0f, a );
+    fin = true; for ( int k = 0; k < RATE; ++k ) if ( !isfinite( a[k] ) ) fin = false;
+    check( fin && peak( a, 0, RATE ) <= 0.51f, "FB 8 stays finite and within the level" );
+    render_def( "OSC SINE 0.5 1 0 0.5 FB 2; FMDECAY 0.2", 500.0f, a );
+    double e2 = amp_at( a, 200, 2600, 1000.0 ), l2 = amp_at( a, 40000, 44000, 1000.0 );
+    snprintf( nm, sizeof(nm), "FMDECAY lets the feedback fall: second harmonic %.3f at the start, %.4f after 0.9 s", e2, l2 );
+    check( e2 > 0.04 && l2 < 0.01, nm );
+    check( !render_def( "OSC SINE 1 1 0 0.5 FB 9", 220.0f, a ), "FB 9 is refused" );
+    check( !render_def( "OSC SINE 1 1 0 0.5 FB", 220.0f, a ), "FB without a number is refused" );
+    // algorithm 1: the last oscillator modulates ALL the others (one modulator, two carriers): carrier A (1000 Hz) and B (3000 Hz), modulator 500 Hz, index 2:
+    // sidebands of A at 1500, of B at 2500 (each 0.25 * ( J1(2) - J3(2) ) = 0.112, the J3 term is the other carrier's third sideband folding onto it; the levels are low so that the soft limiter does not act); in the chain the modulator only reaches B, so A has no sideband at 1500
+    check( render_def( "OSC SINE 0.25 1 0 0.5 FM 2; OSC SINE 0.25 3 0 0.5 FM 2; OSC SINE 1 0.5 MOD; ALGO 1", 1000.0f, a ), "ALGO 1 parses" );
+    double a15 = amp_at( a, 4000, RATE, 1500.0 ), a25 = amp_at( a, 4000, RATE, 2500.0 );
+    snprintf( nm, sizeof(nm), "ALGO 1: sidebands %.3f (1500 Hz) and %.3f (2500 Hz), both 0.112", a15, a25 );
+    check( near( a15, 0.112, 0.006 ) && near( a25, 0.112, 0.006 ), nm );
+    // the middle oscillator is silent (level 0): in the chain it passes nothing on to the first one, with ALGO 1 the modulator reaches the first one directly
+    render_def( "OSC SINE 0.25 1 0 0.5 FM 2; OSC SINE 0 3 0 0.5 FM 2; OSC SINE 1 0.5 MOD", 1000.0f, a );
+    { double c15 = amp_at( a, 4000, RATE, 1500.0 ); snprintf( nm, sizeof(nm), "the chain (ALGO 0): the modulator reaches only the next oscillator: 1500 Hz is %.4f", c15 ); check( c15 < 0.003, nm ); }
+    render_def( "OSC SINE 0.25 1 0 0.5 FM 2; OSC SINE 0 3 0 0.5 FM 2; OSC SINE 1 0.5 MOD; ALGO 1", 1000.0f, a );
+    { double c15 = amp_at( a, 4000, RATE, 1500.0 ); snprintf( nm, sizeof(nm), "ALGO 1 reaches the first oscillator past the silent one: 1500 Hz is %.4f (0.144)", c15 ); check( near( c15, 0.144, 0.008 ), nm ); }
+    check( !render_def( "OSC SINE; ALGO 2", 220.0f, a ), "ALGO 2 is refused" );
     free( a );
 }
 
@@ -1287,7 +1318,7 @@ static void test_instrument_fixed_post( void ) {
     check( mml_parse_inst( "OSC NOISE 1 -5000 0 0.5 POST", &d, err ) && d.osc[0].ratio == -5000.0f && d.osc[0].post, "parser: negative ratio and POST" );
     check( mml_parse_inst( "OSC SINE POST", &d, err ) && d.osc[0].post && d.osc[0].level == 1.0f, "parser: POST right after the wave" );
     check( mml_parse_inst( "osc sine 1 1 0 0.5 post ; gain 2", &d, err ) && d.osc[0].post && d.gain == 2.0f, "parser: POST in lower case, then another command" );
-    check( !mml_parse_inst( "OSC SINE 1 1 0 0.5 BOGUS", &d, err ) && strstr( err, "POST, MOD or FM expected" ) != 0, "parser: another word after the values is refused" );
+    check( !mml_parse_inst( "OSC SINE 1 1 0 0.5 BOGUS", &d, err ) && strstr( err, "POST, MOD, FM or FB expected" ) != 0, "parser: another word after the values is refused" );
     check( !mml_parse_inst( "OSC SINE POST x", &d, err ), "parser: stray character after POST" );
     check( mml_parse_inst( "OSC SAW; OSC SINE 1 2", &d, err ) && !d.osc[0].post && !d.osc[1].post, "parser: POST is off by default" );
     free( a ); free( b );
@@ -1412,6 +1443,106 @@ static void test_instrument_cpu( void ) {
     free( buf ); synth_cleanup( &s );
 }
 
+// -- stereo: PAN ----------------------------------------------------------------------
+
+typedef struct _panev_t { double at; synth_evtype_t type; int chan; float freq, vol, pan; } panev_t;
+
+// renders "seconds" of the events either as mono (stereo false: out has seconds * RATE floats) or stereo (out has 2 * seconds * RATE floats)
+static void pan_render( const char* def, const panev_t* ev, int nev, int seconds, bool stereo, float* out ) {
+    synth_t s; synth_init( &s, RATE );
+    synth_evspec_t sp;
+    if ( def != 0 ) {
+        synth_inst_t d; char err[MML_ERRLEN];
+        if ( !mml_parse_inst( def, &d, err ) ) printf( "  pan def: %s\n", err );
+        synth_setinst( &s, 20, &d );
+        memset( &sp, 0, sizeof(sp) ); sp.type = SYNTH_EV_INST; sp.p[0] = 20.0f; synth_schedule_ev( &s, 0, &sp );
+    }
+    for ( int k=0; k < nev; ++k ) {
+        memset( &sp, 0, sizeof(sp) );
+        sp.type = ev[k].type; sp.chan = ev[k].chan; sp.freq = ev[k].freq; sp.vol = ev[k].vol; sp.p[0] = ev[k].pan;
+        synth_schedule_ev( &s, (uint64_t)( ev[k].at * 1.0e9 ), &sp );
+    }
+    int done = 0;
+    while ( done < seconds * RATE ) {
+        synth_runevents( &s, (uint64_t)( (double) done * 1.0e9 / RATE ) );
+        if ( stereo ) synth_render_stereo( &s, out + 2 * done, 441 ); else synth_render( &s, out + done, 441 );
+        done += 441;
+    }
+    synth_cleanup( &s );
+}
+
+static void test_pan( void ) {
+    const int N = 3 * RATE;
+    float* m = (float*) malloc( sizeof(float) * (size_t) N );
+    float* st = (float*) malloc( sizeof(float) * 2 * (size_t) N );
+    char nm[220];
+    // a sine on channel 1 at a pan position: the balance law (the far side falls linearly, the near side stays)
+    const float pans[] = { 0.0f, -1.0f, 1.0f, 0.5f, -0.25f };
+    panev_t base[3] = { { 0.0, SYNTH_EV_PAN, 0, 0, 0, 0.0f }, { 0.0, SYNTH_EV_WAVE, 0, 0, 0, 0.0f }, { 0.0, SYNTH_EV_PLAY, 0, 440.0f, 0.5f, 0.0f } };
+    pan_render( 0, base + 1, 2, 2, false, m );
+    double ref = peak( m, 2000, 2 * RATE );
+    for ( int k=0; k < 5; ++k ) {
+        base[0].pan = pans[k];
+        pan_render( 0, base, 3, 2, true, st );
+        float pl = 0.0f, pr = 0.0f;
+        for ( int i=2000; i < 2 * RATE; ++i ) { if ( fabsf( st[2*i] ) > pl ) pl = fabsf( st[2*i] ); if ( fabsf( st[2*i+1] ) > pr ) pr = fabsf( st[2*i+1] ); }
+        float el = pans[k] > 0.0f ? 1.0f - pans[k] : 1.0f, er = pans[k] < 0.0f ? 1.0f + pans[k] : 1.0f;
+        snprintf( nm, sizeof(nm), "PAN %g: left %.4f (%.4f), right %.4f (%.4f)", (double) pans[k], (double) pl, ref * (double) el, (double) pr, ref * (double) er );
+        check( near( pl, ref * (double) el, 0.0005 ) && near( pr, ref * (double) er, 0.0005 ), nm );
+    }
+    // the centre is the mono render, bit for bit, on both sides
+    base[0].pan = 0.0f;
+    pan_render( 0, base, 3, 2, true, st );
+    bool same = true;
+    for ( int i=0; i < 2 * RATE; ++i ) if ( st[2*i] != m[i] || st[2*i+1] != m[i] ) same = false;
+    check( same, "PAN 0: both stereo sides are the mono render, bit for bit" );
+    // the mono render ignores the position
+    base[0].pan = -1.0f;
+    float* m2 = (float*) malloc( sizeof(float) * (size_t) N );
+    pan_render( 0, base, 3, 2, false, m2 );
+    same = true; for ( int i=0; i < 2 * RATE; ++i ) if ( m2[i] != m[i] ) same = false;
+    check( same, "PAN: the mono render does not change" );
+    free( m2 );
+    // the position is an event of the channel's time: left for the first second, then right
+    panev_t seq[5] = { { 0.0, SYNTH_EV_WAVE, 0, 0, 0, 0.0f }, { 0.0, SYNTH_EV_PAN, 0, 0, 0, -1.0f }, { 0.0, SYNTH_EV_PLAY, 0, 440.0f, 0.5f, 0.0f },
+                       { 1.0, SYNTH_EV_PAN, 0, 0, 0, 1.0f }, { 2.5, SYNTH_EV_STOP, 0, 0, 0, 0.0f } };
+    pan_render( 0, seq, 5, 3, true, st );
+    float l1 = 0, r1 = 0, l2 = 0, r2 = 0;
+    for ( int i=2000; i < RATE - 100; ++i ) { l1 = fmaxf( l1, fabsf( st[2*i] ) ); r1 = fmaxf( r1, fabsf( st[2*i+1] ) ); }
+    for ( int i=RATE + 2000; i < 2 * RATE; ++i ) { l2 = fmaxf( l2, fabsf( st[2*i] ) ); r2 = fmaxf( r2, fabsf( st[2*i+1] ) ); }
+    snprintf( nm, sizeof(nm), "PAN as an event: first second left (%.3f / %.3f), then right (%.3f / %.3f)", (double) l1, (double) r1, (double) l2, (double) r2 );
+    check( l1 > 0.3f && r1 == 0.0f && r2 > 0.3f && l2 == 0.0f, nm );
+    // two channels at opposite sides: each ear hears one of them
+    panev_t two[6] = { { 0.0, SYNTH_EV_WAVE, 0, 0, 0, 0.0f }, { 0.0, SYNTH_EV_PAN, 0, 0, 0, -1.0f }, { 0.0, SYNTH_EV_PLAY, 0, 440.0f, 0.4f, 0.0f },
+                       { 0.0, SYNTH_EV_WAVE, 1, 0, 0, 0.0f }, { 0.0, SYNTH_EV_PAN, 1, 0, 0, 1.0f }, { 0.0, SYNTH_EV_PLAY, 1, 660.0f, 0.4f, 0.0f } };
+    pan_render( 0, two, 6, 2, true, st );
+    float* lch = (float*) malloc( sizeof(float) * (size_t) RATE ); float* rch = (float*) malloc( sizeof(float) * (size_t) RATE );
+    for ( int i=0; i < RATE; ++i ) { lch[i] = st[2*(i+RATE/2)]; rch[i] = st[2*(i+RATE/2)+1]; }
+    double l440 = amp_at( lch, 0, RATE, 440.0 ), l660 = amp_at( lch, 0, RATE, 660.0 ), r440 = amp_at( rch, 0, RATE, 440.0 ), r660 = amp_at( rch, 0, RATE, 660.0 );
+    snprintf( nm, sizeof(nm), "two channels at opposite sides: left %.3f / %.4f, right %.4f / %.3f (440 / 660 Hz)", l440, l660, r440, r660 );
+    check( l440 > 0.1 && l660 < 0.002 && r660 > 0.1 && r440 < 0.002, nm );
+    free( lch ); free( rch );
+    // the voices of a polyphonic channel follow the channel's position (also those that already sound)
+    panev_t chord[6] = { { 0.0, SYNTH_EV_PAN, 0, 0, 0, -1.0f }, { 0.0, SYNTH_EV_PLAY, 0, 220.0f, 0.5f, 0.0f }, { 0.0, SYNTH_EV_PLAY, 0, 277.18f, 0.5f, 0.0f },
+                         { 0.0, SYNTH_EV_PLAY, 0, 329.63f, 0.5f, 0.0f }, { 1.0, SYNTH_EV_PAN, 0, 0, 0, 1.0f }, { 2.0, SYNTH_EV_STOP, 0, 0, 0, 0.0f } };
+    pan_render( "OSC SINE 0.3; ENV 0.005 0 1 0.6; POLY 4", chord, 6, 3, true, st );
+    l1 = r1 = l2 = r2 = 0.0f;
+    for ( int i=4000; i < RATE - 100; ++i ) { l1 = fmaxf( l1, fabsf( st[2*i] ) ); r1 = fmaxf( r1, fabsf( st[2*i+1] ) ); }
+    for ( int i=RATE + 4000; i < 2 * RATE - 100; ++i ) { l2 = fmaxf( l2, fabsf( st[2*i] ) ); r2 = fmaxf( r2, fabsf( st[2*i+1] ) ); }
+    snprintf( nm, sizeof(nm), "POLY chord: left (%.3f / %.3f) then right (%.3f / %.3f)", (double) l1, (double) r1, (double) l2, (double) r2 );
+    check( l1 > 0.1f && r1 == 0.0f && r2 > 0.1f && l2 == 0.0f, nm );
+    // out of range is refused by the queue
+    synth_t s; synth_init( &s, RATE );
+    synth_evspec_t sp; memset( &sp, 0, sizeof(sp) ); sp.type = SYNTH_EV_PAN; sp.p[0] = 1.5f;
+    check( !synth_schedule_ev( &s, 0, &sp ), "PAN 1.5 is refused" );
+    sp.p[0] = -1.01f;
+    check( !synth_schedule_ev( &s, 0, &sp ), "PAN -1.01 is refused" );
+    sp.p[0] = -1.0f;
+    check( synth_schedule_ev( &s, 0, &sp ), "PAN -1 is accepted" );
+    synth_cleanup( &s );
+    free( m ); free( st );
+}
+
 int main( void ) {
     test_notes();
     test_pitch();
@@ -1437,6 +1568,7 @@ int main( void ) {
     test_insted_presets();
     test_instrument_fixed_post();
     test_instrument_fm();
+    test_pan();
     test_cutoff_event();
     test_inst_string();
     test_polyphony();

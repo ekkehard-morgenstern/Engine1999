@@ -698,6 +698,7 @@ Explanation of node types:
 #define SNDK_SFXPLAY            UINT8_C(13)     // SFX n [, ch]: 1 or 2 numeric branches
 #define SNDK_INSTDEF            UINT8_C(14)     // INSTRUMENT n, a$: a numeric and a string branch
 #define SNDK_INSTRESET          UINT8_C(15)     // INSTRUMENT n: 1 numeric branch (back to the factory instrument)
+#define SNDK_PAN                UINT8_C(17)     // PAN ch, pos: 2 numeric branches
 #define SNDK_CUTOFF             UINT8_C(16)     // CUTOFF ch, mult [, seconds]: 2 or 3 numeric branches
 #define SND_MAXVOICES           8               // PLAY strings per statement (= the music channels 1..8)
 #define SND_NMUSIC              8               // music channels 1..8: SOUND, PLAY, ...; SFX without a channel never takes them

@@ -410,13 +410,14 @@ sound-stmt := TOK_SOUND num-expr TOK_COMMA num-expr TOK_COMMA num-expr [ TOK_COM
               ( TOK_VIBRATO | TOK_TREMOLO ) num-expr TOK_COMMA num-expr TOK_COMMA num-expr |
               TOK_SFX num-expr TOK_COMMA str-expr | TOK_SFX num-expr [ TOK_COMMA num-expr ] |
               TOK_INSTRUMENT num-expr [ TOK_COMMA str-expr ] |
-              TOK_CUTOFF num-expr TOK_COMMA num-expr [ TOK_COMMA num-expr ] .
+              TOK_CUTOFF num-expr TOK_COMMA num-expr [ TOK_COMMA num-expr ] |
+              TOK_PAN num-expr TOK_COMMA num-expr .
 -- Sound effects (docs/sound.md): SOUND ch, f1, beats, vol, f2 glides from f1 to f2 during the tone; PITCH ch, f and VOLUME ch, v
 -- change a sounding channel at once; ENVELOPE ch, attack, decay, sustain, release shapes the tones (ENVELOPE ch alone: back to the
 -- default); VIBRATO / TREMOLO ch, rate, depth; SFX n, a$ stores a music string as effect n (1..64), SFX n [, ch] plays it
 -- (no channel: a free effects channel, 16 down to 9; else 16). INSTRUMENT n, a$ defines instrument n (4..63) from a definition string
 -- (see docs/sound.md), INSTRUMENT n puts the factory instrument back. CUTOFF ch, mult [, seconds] moves the filter cutoff of the
--- instrument on the channel (mult times the note frequency; -1 = the instrument's own) to mult within the seconds (queued on the time line).
+-- instrument on the channel (mult times the note frequency; -1 = the instrument's own) to mult within the seconds (queued on the time line). PAN ch, pos puts the channel at the stereo position pos (-1 left .. 1 right).
 
 --# Timing: WAIT, AFTER, EVERY
 -- WAIT n sleeps for n/60 seconds (the unit of TI) without using the processor; ESC breaks it. WAIT 0 returns at once.

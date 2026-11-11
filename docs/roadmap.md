@@ -73,7 +73,6 @@ the parts when items are done or added.
 | 82 | Screenshot key and `SCREENSHOT` (item 83 step 1) | Medium | [Graphics, UI and 3D](roadmap/graphics-and-ui.md) |
 | 83 | AV capture subsystem: audio / video recording with a lock-free queue and ffmpeg | Medium | [Graphics, UI and 3D](roadmap/graphics-and-ui.md) |
 | 84 | Demo "Y2K38", a sequel to Y2K Countdown (17) | Low | [Projects, games and packaging](roadmap/projects.md) |
-| 88 | Synth leftovers: preset review by ear, panning, FM feedback, sliders for FM / POLY in the editor (2b) | Low | [Sound and music](roadmap/sound.md) |
 
 
 *Token space (2026-11-01):* the one-byte tokens 0..255 are used up (only the unused `PUT`, 13, is free). New words are **extension words**: token 254 (`TOK_XFUNC`) plus a second byte (`XF_*`, table `xkeywtbl` in `bastok.c`): 255 more are possible. `SPACE STRING MIN MAX ATAN2` are the first. Keep this in mind when adding words: a new word is an `xkeywtbl` row plus its parser branch, not a `TOK_` define.

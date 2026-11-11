@@ -541,7 +541,8 @@ sound-stmt := SOUND num-expr "," num-expr "," num-expr [ "," num-expr [ "," num-
               ( VIBRATO | TREMOLO ) num-expr "," num-expr "," num-expr |
               SFX num-expr "," str-expr | SFX num-expr [ "," num-expr ] |
               INSTRUMENT num-expr [ "," str-expr ] |
-              CUTOFF num-expr "," num-expr [ "," num-expr ] .
+              CUTOFF num-expr "," num-expr [ "," num-expr ] |
+              PAN num-expr "," num-expr .
 ```
 
 > Sound effects (docs/sound.md): SOUND ch, f1, beats, vol, f2 glides from f1 to f2 during the tone; PITCH ch, f and VOLUME ch, v
@@ -549,7 +550,7 @@ sound-stmt := SOUND num-expr "," num-expr "," num-expr [ "," num-expr [ "," num-
 > default); VIBRATO / TREMOLO ch, rate, depth; SFX n, a$ stores a music string as effect n (1..64), SFX n [, ch] plays it
 > (no channel: a free effects channel, 16 down to 9; else 16). INSTRUMENT n, a$ defines instrument n (4..63) from a definition string
 > (see docs/sound.md), INSTRUMENT n puts the factory instrument back. CUTOFF ch, mult [, seconds] moves the filter cutoff of the
-> instrument on the channel (mult times the note frequency; -1 = the instrument's own) to mult within the seconds (queued on the time line).
+> instrument on the channel (mult times the note frequency; -1 = the instrument's own) to mult within the seconds (queued on the time line). PAN ch, pos puts the channel at the stereo position pos (-1 left .. 1 right).
 
 ## Timing: WAIT, AFTER, EVERY
 
