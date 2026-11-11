@@ -13,8 +13,6 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-- **28 factory instruments, user range 32..63, re-scored programs:** `synth.[ch]` (`SYNTH_NINST` 64, `SYNTH_NPRESET` 28, name length 16; presets 20..27 ACOUSTIC METAL DISTGUIT METALLOPHONE MARIMBA HARP CLARINET ACIDBASS, 28..31 UNASSIGNED; gains calibrated), range comments in `vm.[ch]`, `mml.[ch]`, `sdlaudio.[ch]`, `instset.h`, `bascomp.ebnf`, man page, `docs/sound.md`; `tools/insted.bas` (24 presets, work slot 63, 15-character names), `instedtest.sh`; `demos/instruments.bas` / `README.md` (28 presets, own instruments 32..36, two-column board); `demos/madrun2.bas` (METAL guitars, DISTGUIT lead, MARIMBA pickups), `demos/levels/music3d.bas` + `demos/lib/music3d.lib` (DISTGUIT danger leads, METALLOPHONE), `demos/orchard3.bas` (HARP arpeggio, MARIMBA / METALLOPHONE chimes), `demos/river2.bas` (HARP arpeggio); tests `synthtest1.c` 413, `vmtest1.c`, `repltest1.c`, `contest1.c`. Tests: `make check` (see below), levelstest, window host under Xvfb (sound log of madrun2, river2, orchard3).
-
 ## Log
 
 ### 7a6cb67 — 2026-10-17 13:32:27 +0200 — "Introduced Claude to the project"
@@ -1723,3 +1721,7 @@ The owner bundled three pieces of Claude work into this commit (oldest first):
 ### bb0dcda — 2026-11-11 04:17:55 +0100 — "Improved default instruments, created by Claude Code"
 7 files, +24/-20.
 - **Factory instruments with FM and polyphony:** `synth.c` (`OF()` macro; BELL / EPIANO / BRASS as FM; `POLY 4` for PAD, ORGAN, STRINGS, BELL, EPIANO, `POLY 3` for PLUCK; gains recalibrated), `tools/insted.bas` (the 16 DATA strings), `vmtest1.c`, `docs/sound.md`, `SESSION.md`. Tests: `make check` (synthtest1 369 incl. loudness 0.30..0.38 per preset and the editor string comparison, instedtest, vmtest1 1545).
+
+### 0c9505e — 2026-11-11 05:49:00 +0100 — "More instrument presets and updated demos, done by Claude Code"
+29 files, +176/-132.
+- **28 factory instruments, user range 32..63, re-scored programs:** `synth.[ch]` (`SYNTH_NINST` 64, `SYNTH_NPRESET` 28, name length 16; presets 20..27 ACOUSTIC METAL DISTGUIT METALLOPHONE MARIMBA HARP CLARINET ACIDBASS, 28..31 UNASSIGNED; gains calibrated), range comments in `vm.[ch]`, `mml.[ch]`, `sdlaudio.[ch]`, `instset.h`, `bascomp.ebnf`, man page, `docs/sound.md`; `tools/insted.bas` (24 presets, work slot 63, 15-character names), `instedtest.sh`; `demos/instruments.bas` / `README.md` (28 presets, own instruments 32..36, two-column board); `demos/madrun2.bas` (METAL guitars, DISTGUIT lead, MARIMBA pickups), `demos/levels/music3d.bas` + `demos/lib/music3d.lib` (DISTGUIT danger leads, METALLOPHONE), `demos/orchard3.bas` (HARP arpeggio, MARIMBA / METALLOPHONE chimes), `demos/river2.bas` (HARP arpeggio); tests `synthtest1.c` 413, `vmtest1.c`, `repltest1.c`, `contest1.c`. Tests: `make check` (see below), levelstest, window host under Xvfb (sound log of madrun2, river2, orchard3).
