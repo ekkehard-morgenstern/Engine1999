@@ -52,7 +52,7 @@ The module draws on a canvas it is given (two callbacks: box and pset), so the s
 callbacks to sdlscreen) and on a gfxcore bitmap in the test. All coordinates are pixels; the layout is the program's.
 */
 
-#define UI_MAXWIDGETS   128
+#define UI_MAXWIDGETS   192
 #define UI_TEXTMAX      255             // the longest text of a widget (a text field)
 #define UI_EDITMAX      60000           // the longest text of a multi-line editor (UIK_EDIT)
 #define UI_MAXITEMS     512             // the rows of a list
@@ -63,7 +63,7 @@ callbacks to sdlscreen) and on a gfxcore bitmap in the test. All coordinates are
 #define UI_THEMES       3               // the presets: 0 classic (grey), 1 dark, 2 high contrast
 
 typedef enum _ui_kind_t {
-    UIK_NONE = 0, UIK_LABEL, UIK_BUTTON, UIK_CHECK, UIK_RADIO, UIK_TEXT, UIK_LIST, UIK_PROGRESS, UIK_SLIDER, UIK_PANEL, UIK_SCROLL, UIK_CANVAS, UIK_EDIT, UIK_COUNT
+    UIK_NONE = 0, UIK_LABEL, UIK_BUTTON, UIK_CHECK, UIK_RADIO, UIK_TEXT, UIK_LIST, UIK_PROGRESS, UIK_SLIDER, UIK_PANEL, UIK_SCROLL, UIK_CANVAS, UIK_EDIT, UIK_TAB, UIK_COUNT
 } ui_kind_t;
 
 #define UIE_CLICK       1               // a button was clicked

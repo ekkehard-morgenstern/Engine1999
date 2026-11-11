@@ -750,6 +750,7 @@ on-mouse-stmt := ON MOUSE ( goto-kw goto-target | OFF ) .
 ```
 
 > The UI subsystem (docs/ui-subsystem.md; UI is an extension word): widgets on the graphics layer. Every widget has an id (a positive number the program chooses); x, y, w, h are
+> UI TAB id,x,y,w,h,names$ is a strip of tabs (the names separated by \|); UI("GET"\|VALUE) is the selected tab 0..; a change event when it changes (click, Left / Right); the program shows its pages.
 > UI EDIT is a multi-line text editor (lines separated by LF, selection, clipboard, undo; UI GETTEXT reads the text, UI("CARET" \| "LINE" \| "COLUMN" \| "SELECTED" \| "LINES", id) its state).
 > UI COLOR sets the colors of one widget (palette entries; -1 the theme's), UI THEME a preset (0 classic, 1 dark, 2 high contrast), UI SYNTAX the highlighting of an editor (0 none, 1 BASIC),
 > UI SYNTAXCOLOR the palette entry of a syntax slot 0..15, UI HILITE the slots a program gives (one byte per byte of the text); UI("THEME"), UI("SYNTAX", id), UI("COLOR", id, 0\|1), UI("SYNTAXCOLOR", slot) read them.
@@ -757,7 +758,7 @@ on-mouse-stmt := ON MOUSE ( goto-kw goto-target | OFF ) .
 
 ```ebnf
 ui-stmt := XFUNC(UI) ( OPEN | CLOSE | CLEAR | UPDATE |
-                           ( LABEL | BUTTON | CHECK | TEXT | EDIT | PANEL ) ui-geometry "," str-expr | CARET num-expr "," num-expr |
+                           ( LABEL | BUTTON | CHECK | TEXT | EDIT | PANEL | TAB ) ui-geometry "," str-expr | CARET num-expr "," num-expr |
                            RADIO ui-geometry "," str-expr [ "," num-expr ] |
                            ( LIST | PROGRESS ) ui-geometry | ( SLIDER | SCROLL ) ui-geometry [ "," num-expr ] |
                            PAGE num-expr "," num-expr | JOY num-expr |

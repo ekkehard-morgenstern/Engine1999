@@ -158,6 +158,7 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXOP_UISYNTAX  136             // UI SYNTAX id, mode                     (an editor: 0 plain, 1 BASIC)
 #define GFXOP_UISYNTAXCOLOR 137         // UI SYNTAXCOLOR slot, c                 (the palette entry a syntax slot 0..15 is drawn with)
 #define GFXOP_UIHILITE  138             // UI HILITE id, a$                       (an editor: a slot 0..15 per byte of the text)
+#define GFXOP_UITAB     139             // UI TAB id, x, y, w, h, tabs$            (a tab strip: the tab names separated by |; the value is the selected tab 0.., a change event when it changes; Left / Right on the focus; the program shows and hides its pages)
 #define GFXOP_UIPAGE    117             // UI PAGE id, n                           (the size of the visible part)
 
 // the 3D sector renderer (w3d.h, docs/3d-subsystem.md): the words after W3D

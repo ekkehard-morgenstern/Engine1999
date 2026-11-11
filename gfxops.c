@@ -106,6 +106,7 @@ static const gfxcmd_t cmds[] = {
     { "UI", "BUTTON",    GFXOP_UIBUTTON, "nnnnns",   0, false },
     { "UI", "CHECK",     GFXOP_UICHECK,  "nnnnns",   0, false },
     { "UI", "RADIO",     GFXOP_UIRADIO,  "nnnnnso",  0, false },
+    { "UI", "TAB",       GFXOP_UITAB,    "nnnnns",   0, false },
     { "UI", "TEXT",      GFXOP_UITEXT,   "nnnnns",   0, false },
     { "UI", "LIST",      GFXOP_UILIST,   "nnnnn",    0, false },
     { "UI", "PROGRESS",  GFXOP_UIPROGRESS, "nnnnn",  0, false },

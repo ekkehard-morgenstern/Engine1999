@@ -536,12 +536,13 @@ mouse-stmt := TOK_MOUSE ( SHOW | HIDE | POS num-expr TOK_COMMA num-expr | TIMEOU
 -- between statements like ON COLLISION and has the highest priority of the timers; OFF clears it.
 on-mouse-stmt := TOK_ON TOK_MOUSE ( goto-kw goto-target | TOK_OFF ) .
 -- The UI subsystem (docs/ui-subsystem.md; UI is an extension word): widgets on the graphics layer. Every widget has an id (a positive number the program chooses); x, y, w, h are
+-- UI TAB id,x,y,w,h,names$ is a strip of tabs (the names separated by |); UI("GET"|VALUE) is the selected tab 0..; a change event when it changes (click, Left / Right); the program shows its pages.
 -- UI EDIT is a multi-line text editor (lines separated by LF, selection, clipboard, undo; UI GETTEXT reads the text, UI("CARET" | "LINE" | "COLUMN" | "SELECTED" | "LINES", id) its state).
 -- UI COLOR sets the colors of one widget (palette entries; -1 the theme's), UI THEME a preset (0 classic, 1 dark, 2 high contrast), UI SYNTAX the highlighting of an editor (0 none, 1 BASIC),
 -- UI SYNTAXCOLOR the palette entry of a syntax slot 0..15, UI HILITE the slots a program gives (one byte per byte of the text); UI("THEME"), UI("SYNTAX", id), UI("COLOR", id, 0|1), UI("SYNTAXCOLOR", slot) read them.
 -- pixels on the 640 x 300 layer. UI UPDATE (once a frame) takes the mouse and the keys, draws what changed and queues events; UI("EVENT") is the id of the next event (0 = none).
 ui-stmt := TOK_XFUNC(UI) ( OPEN | CLOSE | CLEAR | UPDATE |
-                           ( LABEL | BUTTON | CHECK | TEXT | EDIT | PANEL ) ui-geometry TOK_COMMA str-expr | CARET num-expr TOK_COMMA num-expr |
+                           ( LABEL | BUTTON | CHECK | TEXT | EDIT | PANEL | TAB ) ui-geometry TOK_COMMA str-expr | CARET num-expr TOK_COMMA num-expr |
                            RADIO ui-geometry TOK_COMMA str-expr [ TOK_COMMA num-expr ] |
                            ( LIST | PROGRESS ) ui-geometry | ( SLIDER | SCROLL ) ui-geometry [ TOK_COMMA num-expr ] |
                            PAGE num-expr TOK_COMMA num-expr | JOY num-expr |

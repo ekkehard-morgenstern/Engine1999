@@ -70,7 +70,7 @@ static bool inside( const ui_widget_t* inner, const ui_widget_t* outer ) {
 
 static bool focusable( const ui_widget_t* w ) {
     return ( w->flags & UIF_VISIBLE ) && ( w->flags & UIF_ENABLED ) &&
-        ( w->kind == UIK_BUTTON || w->kind == UIK_CHECK || w->kind == UIK_RADIO || w->kind == UIK_TEXT || w->kind == UIK_LIST || w->kind == UIK_SLIDER || w->kind == UIK_SCROLL || w->kind == UIK_EDIT );
+        ( w->kind == UIK_BUTTON || w->kind == UIK_CHECK || w->kind == UIK_RADIO || w->kind == UIK_TEXT || w->kind == UIK_LIST || w->kind == UIK_SLIDER || w->kind == UIK_SCROLL || w->kind == UIK_EDIT || w->kind == UIK_TAB );
 }
 
 // does the widget react to input at the moment (a pop-up or a modal panel limits it)?
@@ -221,6 +221,57 @@ static void span_cb( void* ctx, int x, int y, int w, int color ) {
 static int text_width( ui_t* ui, int fontid, const char* text, size_t len ) {
     return font_measure( font_get( fontid ), text, len );
 }
+
+// -- the tab strip (UIK_TAB): the text holds the tab names separated by '|', the value is the selected one ---------------------------------------
+#define TAB_PAD     10                  // the space left and right of a tab's name
+
+static int tab_count( const ui_widget_t* w ) {
+    int n = 1;
+    for ( const char* p = w->text ? w->text : ""; *p; ++p ) {
+        n += *p == '|';
+    }
+    return n;
+}
+
+// the name of tab i (pointer and length) and its pixel range x1..x2 (relative to the widget)
+static bool tab_geom( ui_t* ui, const ui_widget_t* w, int i, const char** name, size_t* len, int* x1, int* x2 ) {
+    const char* p = w->text ? w->text : "";
+    int x = 0;
+    for ( int k = 0; ; ++k ) {
+        const char* e = strchr( p, '|' );
+        size_t l = e != 0 ? (size_t)( e - p ) : strlen( p );
+        int tw = text_width( ui, ui->theme.font, p, l ) + 2 * TAB_PAD;
+        if ( k == i ) {
+            *name = p; *len = l; *x1 = x; *x2 = x + tw - 1;
+            return true;
+        }
+        if ( e == 0 ) {
+            return false;
+        }
+        x += tw - 1;
+        p = e + 1;
+    }
+}
+
+static int tab_at( ui_t* ui, const ui_widget_t* w, int mx ) {
+    int n = tab_count( w );
+    for ( int i = 0; i < n; ++i ) {
+        const char* nm; size_t l; int a, b;
+        if ( tab_geom( ui, w, i, &nm, &l, &a, &b ) && mx - w->x >= a && mx - w->x <= b ) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+static void tab_select( ui_t* ui, ui_widget_t* w, int i ) {
+    if ( i >= 0 && i < tab_count( w ) && i != w->value ) {
+        w->value = i;
+        dirty( w );
+        push_event( ui, w->id, UIE_CHANGE, i );
+    }
+}
+
 
 static void draw_text( ui_t* ui, int fontid, int x, int y, const char* text, size_t len, int color ) {
     font_draw( font_get( fontid ), x, y, text, len, color, span_cb, ui );
@@ -1455,6 +1506,34 @@ static void draw_widget( ui_t* ui, int index ) {
             }
             break;
         }
+        case UIK_TAB: {
+            cbox( ui, x1, y1, x2, y2, ui->theme.face, true );
+            cbox( ui, x1, y2, x2, y2, t->border, true );                  // the line under the tabs
+            int n = tab_count( w );
+            for ( int pass = 0; pass < 2; ++pass ) {                     // the selected tab last (it overlaps its neighbours)
+                for ( int i = 0; i < n; ++i ) {
+                    bool sel = i == w->value;
+                    if ( sel != ( pass == 1 ) ) {
+                        continue;
+                    }
+                    const char* nm; size_t l; int a, b;
+                    if ( !tab_geom( ui, w, i, &nm, &l, &a, &b ) ) {
+                        continue;
+                    }
+                    int ty = y1 + ( sel ? 0 : 2 );
+                    cbox( ui, x1 + a, ty, x1 + b, y2, facec, true );
+                    bevel( ui, x1 + a, ty, x1 + b, y2, true );
+                    if ( sel ) {
+                        cbox( ui, x1 + a + 1, y2, x1 + b - 1, y2, facec, true );
+                    }
+                    draw_text( ui, t->font, x1 + a + TAB_PAD, ty + ( y2 - ty + 1 - FONT_HEIGHT ) / 2, nm, l, tc );
+                    if ( sel && focus ) {
+                        dotted( ui, x1 + a + 4, ty + 3, x1 + b - 4, y2 - 3, t->border );
+                    }
+                }
+            }
+            break;
+        }
         case UIK_RADIO: {
             if ( w->bg ) {
                 cbox( ui, x1, y1, x2, y2, w->bg, true );
@@ -2036,6 +2115,9 @@ bool ui_set_value( ui_t* ui, int id, int value ) {
         case UIK_SLIDER: case UIK_PROGRESS: case UIK_SCROLL:
             w->value = clampi( value, w->min, w->max );
             break;
+        case UIK_TAB:
+            w->value = clampi( value, 0, tab_count( w ) - 1 );
+            break;
         case UIK_LIST:
             w->value = value < 0 || value >= w->nitems ? -1 : value;
             if ( w->value >= 0 ) {
@@ -2537,6 +2619,13 @@ static void handle_key( ui_t* ui, int key ) {
                 push_event( ui, w->id, UIE_CHANGE, w->value );
             }
             break;
+        case UIK_TAB:
+            if ( key == UIKEY_LEFT ) {
+                tab_select( ui, w, w->value - 1 );
+            } else if ( key == UIKEY_RIGHT ) {
+                tab_select( ui, w, w->value + 1 );
+            }
+            break;
         case UIK_RADIO:
             if ( key == ' ' && !w->value ) {
                 radio_select( ui, w );
@@ -2777,6 +2866,8 @@ void ui_input( ui_t* ui, int mx, int my, int buttons, int wheel, const int* keys
                 if ( hot->kind == UIK_SLIDER ) {
                     slider_from_x( ui, hot, mx );
                 }
+            } else if ( hot->kind == UIK_TAB ) {
+                tab_select( ui, hot, tab_at( ui, hot, mx ) );
             } else if ( hot->kind == UIK_EDIT && hot->edit != 0 ) {
                 ui->capture = hot->id;
                 ui->cappart = UISB_NONE;

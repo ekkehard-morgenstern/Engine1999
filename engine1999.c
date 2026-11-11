@@ -1200,6 +1200,7 @@ static bool host_ui_op( int op, const double* a, int na, const char* s, size_t s
         case GFXOP_UILABEL:     ok = ui_add( &host_ui, UIK_LABEL, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), text, 0 ); break;
         case GFXOP_UIBUTTON:    ok = ui_add( &host_ui, UIK_BUTTON, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), text, 0 ); break;
         case GFXOP_UICHECK:     ok = ui_add( &host_ui, UIK_CHECK, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), text, 0 ); break;
+        case GFXOP_UITAB:       ok = ui_add( &host_ui, UIK_TAB, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), text, 0 ); break;
         case GFXOP_UIRADIO:     ok = ui_add( &host_ui, UIK_RADIO, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), text, gi( a[5], 0 ) ); break;
         case GFXOP_UIEDIT:      ok = ui_add( &host_ui, UIK_EDIT, id, gi( a[1], 0 ), gi( a[2], 0 ), gi( a[3], 1 ), gi( a[4], 1 ), text, 0 ); break;
         case GFXOP_UICARET:     ok = ui_edit_caret( &host_ui, id, gi( a[1], 0 ) ); break;
@@ -1492,7 +1493,7 @@ static bool host_gfx_op( void* usrdata, int op, const double* a, int na, const c
     if ( op >= GFXOP_W3DFIRST && op <= GFXOP_W3DLAST ) {
         return host_w3d_op( op, a, na, s, slen, err );
     }
-    if ( ( op >= GFXOP_UIOPEN && op <= GFXOP_UICARET ) || ( op >= GFXOP_UICOLOR && op <= GFXOP_UIHILITE ) ) {
+    if ( ( op >= GFXOP_UIOPEN && op <= GFXOP_UICARET ) || ( op >= GFXOP_UICOLOR && op <= GFXOP_UITAB ) ) {
         return host_ui_op( op, a, na, s, slen, out, outsz, outlen, err );
     }
     switch ( op ) {

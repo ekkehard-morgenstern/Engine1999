@@ -1189,6 +1189,42 @@ int main( void ) {
     check( "removing the canvas frees it", ui_remove( &ui, 7 ) );
     done();
 
+    // a tab strip: the value is the selected tab, a click on a tab and Left / Right change it
+    setup();
+    ui_add( &ui, UIK_TAB, 1, 10, 10, 300, 22, "One|Two|Three", 0 );
+    ui_add( &ui, UIK_BUTTON, 2, 10, 100, 50, 20, "Btn", 0 );
+    int tv = -1;
+    check( "a tab strip starts at tab 0", ui_get_value( &ui, 1, &tv ) && tv == 0 );
+    click( 14, 20 );
+    check( "a click on the selected tab is no change", none() );
+    ui_set_focus( &ui, 1 );
+    key( UIKEY_RIGHT );
+    check( "Right selects the next tab", expect( 1, UIE_CHANGE, 1 ) && ui_get_value( &ui, 1, &tv ) && tv == 1 );
+    key( UIKEY_RIGHT );
+    key( UIKEY_RIGHT );
+    check( "and stops at the last", expect( 1, UIE_CHANGE, 2 ) && none() && ui_get_value( &ui, 1, &tv ) && tv == 2 );
+    key( UIKEY_LEFT );
+    key( UIKEY_LEFT );
+    key( UIKEY_LEFT );
+    check( "Left goes back and stops at the first", expect( 1, UIE_CHANGE, 1 ) && expect( 1, UIE_CHANGE, 0 ) && none() );
+    int hit2 = -1;
+    for ( int x = 12; x < 300 && hit2 < 0; x += 2 ) {
+        click( x, 20 );
+        ui_get_value( &ui, 1, &tv );
+        if ( tv == 2 ) {
+            hit2 = x;
+        }
+        while ( ui.qcount > 0 ) {
+            ui_event_t ev;
+            ui_next_event( &ui, &ev );
+        }
+    }
+    check( "clicks reach all three tabs (the third one by position)", hit2 > 40 && tv == 2 );
+    check( "set_value selects without an event, clamped", ui_set_value( &ui, 1, 7 ) && none() && ui_get_value( &ui, 1, &tv ) && tv == 2 && ui_set_value( &ui, 1, -3 ) && ui_get_value( &ui, 1, &tv ) && tv == 0 );
+    ui_draw( &ui, true );
+    check( "a tab strip is drawn (the line under the tabs)", gfx_point( &g, 300, 31 ) != 0 );
+    done();
+
     // a popup and drawing never write outside of the canvas (a widget partly outside)
     setup();
     ui_add( &ui, UIK_BUTTON, 1, 380, 230, 60, 22, "Edge", 0 );

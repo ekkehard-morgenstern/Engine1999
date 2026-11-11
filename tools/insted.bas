@@ -7,7 +7,7 @@
 30 ' INSTRUMENT EDITOR - edits the definition string of a synthesizer instrument (INSTRUMENT n,a$ and I n in PLAY, see docs/sound.md "Instruments") with
 40 ' sliders and lets you hear it. It is written in BASIC on the UI subsystem and uses the libraries uikit (sliders, dialogs) and filereq (file requester).
 50 ' Needs the window (engine1999).
-60 '   Five pages (the tabs): Osc 1, Osc 2, Osc 3 (wave, level, frequency ratio or a fixed frequency in Hz, detune in cents, pulse width, Post = behind
+60 '   Six pages (a tab strip): Osc 1, Osc 2, Osc 3 (wave, level, frequency ratio or a fixed frequency in Hz, detune in cents, pulse width, Post = behind
 70 '   the filter, On = the oscillator is used), Filter (cutoff as a multiple of the note, resonance, filter envelope, pitch envelope) and Env
 80 '   (the instrument's own ADSR envelope, vibrato, gain). The buttons < and > step through the 16 factory instruments, New starts from a plain sine.
 90 '   Play plays the note (the slider Note, MIDI numbers), Chord three notes together, Stop silences. Hold keeps the note sounding until Stop: every
@@ -15,7 +15,7 @@
 110 '   the note on every change. Every change rebuilds the definition string below; you may also type or paste a string and press Return.
 120 '   Save keeps the string in a text file (.ins), Open reads one, Export writes the BASIC line  INSTRUMENT n,"..."  that you can MERGE or LOAD,
 130 '   Copy puts the string on the clipboard. The tool uses instrument 31 and the sound channel 1 (and 2, 3 for the chord).
-140 ' widget ids: 1 form, 200 prev, 201 next, 202 preset name, 203 New, 204 / 205 name, 210..214 tabs, 215 Hold, 216 Play on change, the oscillator page (shared by the
+140 ' widget ids: 1 form, 200 prev, 201 next, 202 preset name, 203 New, 204 / 205 name, 210 the tab strip (Osc 1..3, Filter, Env, FM), 217 Hold, 216 Play on change, the oscillator page (shared by the
 150 ' three oscillators): 300..304 wave radios, checks On 305, Fixed 306, Post 307, sliders Level 310, Ratio 313, Cents 316, Hz 319, Width 322, filter page 500.. (cutoff, resonance, filter env,
 160 ' filter decay, pitch, pitch time), env page 520 (check), 523.. (attack, decay, sustain, release, vib rate, vib depth, gain), 560 / 561 the string,
 170 ' 570 note slider, 575 note label, buttons 580..587, 590 status
@@ -32,7 +32,7 @@
 280 CURPG=0
 290 CUROSC=0
 300 NM$=""
-310 DIM OW(3),OEN(3),OFX(3),OPO(3),OFM(3),OMD(3),OL(3),RT(3),OC(3),OHZ(3),OP(3),PGR$(5),XC$(40),WN$(5)
+310 DIM OW(3),OEN(3),OFX(3),OPO(3),OFM(3),OMD(3),OL(3),RT(3),OC(3),OHZ(3),OP(3),PGR$(6),XC$(40),WN$(5)
 320 WN$(0)="SINE":WN$(1)="SQUARE":WN$(2)="TRIANGLE":WN$(3)="NOISE":WN$(4)="SAW"
 330 ' the model, in the units of the sliders (the controls follow it, a loaded string sets it exactly): OL level / 100, RT ratio / 100, OC cents, OP pulse width / 100,
 340 ' OHZ the fixed frequency in Hz (RT is not used while OFX is set), CUT cutoff / 10, RES / 100, FEN filter env / 10, FDC filter decay / 100, PIT semitones,
@@ -311,12 +311,14 @@
 2980   UI CHECK 305,350,72,44,16,"On"
 2990   UI CHECK 306,398,72,60,16,"Fixed"
 3000   UI CHECK 307,462,72,56,16,"Post"
-3010   CALL REGP(0,300,8)
+3010   UI CHECK 308,522,72,50,16,"Mod"
+3011   CALL REGP(0,300,9)
 3020   PGP=0:CALL PSLIDER(310,10,98,"Level",0,200,100,100)
 3030   PGP=0:CALL PSLIDER(313,10,120,"Ratio",0,2000,100,100)
 3040   PGP=0:CALL PSLIDER(316,10,142,"Cents",-2400,2400,0,1)
 3050   PGP=0:CALL PSLIDER(319,326,98,"Fixed Hz",0,300,150,1)
 3060   PGP=0:CALL PSLIDER(322,326,120,"Width",2,98,50,100)
+3065   PGP=0:CALL PSLIDER(325,326,142,"FM index",0,2000,0,100)
 3070 END PROC
 3080 PROC MAKEFORM
 3090   UI PANEL 1,0,0,640,300,"Instrument editor"
@@ -326,14 +328,9 @@
 3130   UI BUTTON 203,196,22,44,20,"New"
 3140   UI LABEL 204,250,25,40,14,"Name"
 3150   UI TEXT 205,292,22,120,20,""
-3160   UI RADIO 210,10,46,60,16,"Osc 1",2
-3170   UI RADIO 211,74,46,60,16,"Osc 2",2
-3180   UI RADIO 212,138,46,60,16,"Osc 3",2
-3190   UI RADIO 213,202,46,64,16,"Filter",2
-3200   UI RADIO 214,270,46,50,16,"Env",2
-3210   UI VALUE 210,1
-3220   UI CHECK 215,350,46,50,16,"Hold"
-3230   UI CHECK 216,404,46,130,16,"Play on change"
+3160   UI TAB 210,10,44,340,22,"Osc 1|Osc 2|Osc 3|Filter|Env|FM"
+3220   UI CHECK 217,366,46,50,16,"Hold"
+3230   UI CHECK 216,420,46,130,16,"Play on change"
 3240   CALL MAKEOSC
 3250   PGP=3:CALL PSLIDER(500,10,76,"Cutoff",0,640,0,10)
 3260   PGP=3:CALL PSLIDER(503,10,98,"Resonance",0,95,0,100)
@@ -350,6 +347,10 @@
 3370   PGP=4:CALL PSLIDER(535,326,76,"Vib rate",0,200,0,10)
 3380   PGP=4:CALL PSLIDER(538,326,98,"Vib depth",0,400,0,100)
 3390   PGP=4:CALL PSLIDER(541,326,120,"Gain",0,400,100,100)
+3392   UI LABEL 552,10,76,620,14,"Per oscillator (Osc pages): FM index = phase modulation by the next oscillator, Mod = not mixed."
+3393   CALL REGP(5,552,1)
+3394   PGP=5:CALL PSLIDER(545,10,100,"FM decay s",0,1000,0,100)
+3395   PGP=5:CALL PSLIDER(548,10,122,"Poly voices",1,8,1,1)
 3400   UI LABEL 560,10,170,400,14,"The definition string (Return applies it)"
 3410   UI TEXT 561,10,184,620,18,""
 3420   CALL UK_SLIDER(570,10,208,304,"Note",24,96,57)
@@ -376,7 +377,7 @@
 3630     SH=0
 3640     CALL OSCTOCONTROLS
 3650   END IF
-3660   FOR P=0 TO 4
+3660   FOR P=0 TO 5
 3670     FOR I=1 TO LEN(PGR$(P)) STEP 2
 3680       ID=CVI(MID$(PGR$(P),I,2))
 3690       UI SHOW ID,(P=SH)
@@ -397,6 +398,8 @@
 3840   UI VALUE 305,OEN(K)
 3850   UI VALUE 306,OFX(K)
 3860   UI VALUE 307,OPO(K)
+3865   UI VALUE 308,OMD(K)
+3867   CALL UK_SET(325,OFM(K))
 3870   CALL UK_SET(310,OL(K))
 3880   CALL UK_SET(313,RT(K))
 3890   CALL UK_SET(316,OC(K))
@@ -423,6 +426,8 @@
 4100   CALL UK_SET(535,VR)
 4110   CALL UK_SET(538,VD)
 4120   CALL UK_SET(541,GN)
+4125   CALL UK_SET(545,FMD)
+4127   CALL UK_SET(548,PLY)
 4130   UI CAPTION 205,NM$
 4140 END PROC
 4150 PROC UPDATE(E,V)
@@ -445,6 +450,8 @@
 4320       CALL UK_READ(E,STR$(OHZ(K)))
 4330     END IF
 4340     IF O=22 THEN OP(K)=V
+4342     IF O=8 THEN OMD(K)=FN BOOL(V)
+4344     IF O=25 THEN OFM(K)=V
 4350   END IF
 4360   IF E=500 THEN CUT=V
 4370   IF E=503 THEN RES=V
@@ -460,6 +467,8 @@
 4470   IF E=535 THEN VR=V
 4480   IF E=538 THEN VD=V
 4490   IF E=541 THEN GN=V
+4495   IF E=545 THEN FMD=V
+4497   IF E=548 THEN PLY=V
 4500 END PROC
 4510 PROC REFRESH
 4520   UI CAPTION 561,FN MAKE$()
@@ -491,7 +500,7 @@
 4780   F=FN NOTEF(UI("GET",570))
 4790   CALL DEFINE
 4800   SOUND OFF 1
-4810   IF UI("GET",215)<>0 THEN
+4810   IF UI("GET",217)<>0 THEN
 4820     ENVELOPE 1:VIBRATO 1,0,0:TREMOLO 1,0,0
 4830     WAVE 1,31
 4840     SOUND 1,F,-1,0.5
@@ -566,7 +575,7 @@
 5530 END PROC
 5540 PROC REACT(E,K,V)
 5550   LOCAL F$,T$
-5560   IF E>=210 AND E<=214 AND K=2 AND V<>0 THEN CALL SHOWPAGE(E-210)
+5560   IF E=210 AND K=2 THEN CALL SHOWPAGE(V)
 5570   IF FN UK_TRACK(E,V) THEN
 5580     IF E=570 THEN
 5590       CALL NOTELABEL
@@ -580,7 +589,7 @@
 5670       CALL CHANGED
 5680     END IF
 5690   ELSE
-5700     IF E>=300 AND E<=541 AND K=2 THEN
+5700     IF E>=300 AND E<=548 AND K=2 THEN
 5710       CALL UPDATE(E,V)
 5720       CALL CHANGED
 5730     END IF
@@ -590,7 +599,7 @@
 5770     NM$=FN CLEANNAME$(T$)
 5780     CALL REFRESH
 5790   END IF
-5800   IF E=215 AND K=2 AND V=0 AND HELD THEN
+5800   IF E=217 AND K=2 AND V=0 AND HELD THEN
 5810     SOUND OFF
 5820     HELD=0
 5830   END IF
