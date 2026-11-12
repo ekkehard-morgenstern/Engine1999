@@ -4,7 +4,7 @@
 4 ' in the executable (it shows with the command line option --engine1999-about).
 10 ' deqq2.bas - the house, garden and cellar of demos/deqq2.bas (Deqq's House II) as DATA lines: engine1999c deqq2.bas [file]  (without a file: standard output)
 20 LOAD LIBRARY "mkw3d"
-30 ' textures: 27 the front of the house (128 x 300: roof, two floors with windows), 28 a door in it (64 x 300), 1 gray brick, 2 plaster purple (hall), 3 plaster teal (kitchen), 4 plaster magenta (living room), 5 plaster blue (bedroom), 6 bath tiles,
+30 ' textures: 29 the backdrop behind the fences (128 x 300: tree line and night sky above a brick fence), 27 the front of the house (128 x 300: roof, two floors with windows), 28 a door in it (64 x 300), 1 gray brick, 2 plaster purple (hall), 3 plaster teal (kitchen), 4 plaster magenta (living room), 5 plaster blue (bedroom), 6 bath tiles,
 40 ' 7 plaster sand (landing), 8 stone (cellar), 9 planks, 10 grass, 11 sky, 12 brown door, 13 hall floor, 14 kitchen floor, 15 red carpet, 16 blue carpet,
 50 ' 17 bath floor, 18 stair planks, 19 mossy stone, 20 gray door, 23 dark alcove, 24 sand stone (front garden), 25 attic wall (planks darker), 26 cupboard wood
 60 ' tags: 1 front door, 2 back door, 3 shed door, 4 hatch, 50 a hiding place, 40 the chair platform, 99 nothing; rooms: 10 front garden, 11 west garden, 12 back yard,
@@ -13,7 +13,7 @@
 90 CALL MK_ROOM(0,-380,0,1240,300,0,300, "24,-1,255,10,1") ' front garden (a road of sand stone); 300 high: the house front stands on its north side
 100 CALL MK_ROOM(1,-380,300,180,700,0,300, "10,-1,255,11,1") ' west garden (the hatch); 300 high: the west side of the house
 110 CALL MK_ROOM(2,-380,700,180,1250,0,300, "10,-1,255,12,1") ' back yard; 300 high: the back of the house
-120 CALL MK_ROOM(3,-380,1250,-100,1500,0,100, "10,-1,255,13,1") ' the crash site (fence high)
+120 CALL MK_ROOM(3,-380,1250,-100,1500,0,300, "10,-1,255,13,1") ' the crash site (300 high like the rest of the garden)
 130 CALL MK_ROOM(4,840,300,1220,700,0,300, "10,-1,255,14,1") ' east garden; 300 high: the east side of the house
 140 CALL MK_ROOM(5,840,700,1220,1000,0,300, "10,-1,255,15,1") ' north-east corner (the well, the tree); 300 high: the east side of the house
 150 CALL MK_ROOM(9,1260,760,1460,960,0,128, "9,9,150,16,9") ' the tool shed
@@ -112,5 +112,6 @@
 1051 CALL MK_HOUSE(62,"S",180,460)
 1052 CALL MK_HOUSE(62,"E",1050,1192)
 1053 CALL MK_HOUSE(62,"N",360,460)
-1060 CALL MK_FINISH(27,100,1)
+1054 CALL MK_OUTDOOR(3)
+1060 CALL MK_FINISH(27,300,29)
 1070 CALL MK_EMIT(ARG$(1))
