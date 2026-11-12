@@ -1,0 +1,492 @@
+1 ' License: free for everybody to use, copy, change and build into executables (BUILD).
+2 ' An executable made with BUILD contains the Engine1999 runtime: the Engine1999 Runtime Exception
+3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
+4 ' in the executable (it shows with the command line option --engine1999-about).
+10 ' MAP EDITOR - a level editor for the W3D renderer (docs/3d-subsystem.md "Map files"): draws sectors top down, sets their heights, light and
+20 ' colors, joins them with portals, and walks through the result in 3D. It reads and writes the map files of the library w3dmap (WM_LOAD / WM_SAVE).
+30 ' Run it as a program (LOAD "tools/mapedit", RUN; it owns the graphics and puts them back when it ends); window only. Needs the libraries w3dkit and w3dmap.
+40 ' The map is a list of sectors, each a polygon of up to 24 corners. Colors: the "textures" are palette colors of the library w3dkit (hue 0..14, shade 0..15).
+50 ' MOUSE: left click selects the sector under the pointer (click again: the next one lying over it); drag a corner of the selected sector to move it
+60 '        (everything snaps to the grid); in drawing mode the left clicks add corners, a click on the first corner or RETURN closes the polygon;
+70 '        the right button drags the view; the wheel zooms.
+80 ' KEYS:  D draw a polygon   B draw a box (two clicks)   ESC cancels drawing   DELETE removes the selected sector   W weld: portals where edges of sectors coincide
+90 '        (sectors whose heights do not overlap stay apart: rooms over rooms)   U unweld the selected sector   G grid 8 / 16 / 32   arrows pan   + - zoom
+100 '        1 / 2 floor down / up   3 / 4 ceiling down / up   5 / 6 light   7 / 8 tag   9 / 0 floor color   F / H slope of the floor along x, I / J along y (1 / 100)
+110 '        P walk through the map in 3D (arrows / WASD, R F look, ESC back)   S save   O open   N new   Q quit
+120 ' headless self-test: MAPEDIT_HEADLESS=1 with the console host (model, weld, build, save, load).
+130 LOAD LIBRARY "w3dkit"
+140 LOAD LIBRARY "w3dmap"
+150 BREAK OFF
+160 ON ERROR GOTO FAILED
+170 DIM SU(100),SF(100),SC(100),SFT(100),SCT(100),SWT(100),SLT(100),STG(100),SNV(100),SGX(100),SGY(100)
+180 DIM VX(100,24),VY(100,24),EN(100,24),ET(100,24)
+190 DIM NX(300),NY(300),THL$(100)
+200 GOTO MAIN
+210 ' ---------------------------------------------------------------------------------------------------------- the model
+220 PROC CLEARALL
+230   LOCAL S
+240   FOR S=0 TO 99
+250     SU(S)=0
+260   NEXT S
+270   NTH=0
+280   SEL=-1
+290 END PROC
+300 ' a new sector with defaults; returns its number in NEWS (-1 if there is no room)
+310 PROC NEWSEC
+320   LOCAL S
+330   NEWS=-1
+340   FOR S=0 TO 99
+350     IF NEWS<0 AND SU(S)=0 THEN NEWS=S
+360   NEXT S
+370   IF NEWS<0 THEN EXIT PROC
+380   S=NEWS
+390   SU(S)=-1:SF(S)=0:SC(S)=128:SFT(S)=16+(S MOD 13)*16+9:SCT(S)=16+4:SWT(S)=16+8:SLT(S)=200:STG(S)=0:SNV(S)=0:SGX(S)=0:SGY(S)=0
+400 END PROC
+410 PROC ADDV(S,X,Y)
+420   IF SNV(S)>=24 THEN EXIT PROC
+430   VX(S,SNV(S))=X:VY(S,SNV(S))=Y:EN(S,SNV(S))=-1:ET(S,SNV(S))=-1
+440   SNV(S)=SNV(S)+1
+450 END PROC
+460 FUNC INSIDE(S,X,Y)
+470   LOCAL I,J,C
+480   C=0
+490   J=SNV(S)-1
+500   FOR I=0 TO SNV(S)-1
+510     IF (VY(S,I)>Y)<>(VY(S,J)>Y) THEN
+520       IF X<(VX(S,J)-VX(S,I))*(Y-VY(S,I))/(VY(S,J)-VY(S,I))+VX(S,I) THEN C=NOT C
+530     END IF
+540     J=I
+550   NEXT I
+560   RETURN C
+570 END FUNC
+580 ' portals where an edge of a sector is the same line (the other way round) as an edge of another whose heights overlap
+590 PROC WELD
+600   LOCAL A,B,I,J,K
+610   FOR A=0 TO 99
+620     FOR I=0 TO 23
+630       EN(A,I)=-1
+640     NEXT I
+650   NEXT A
+660   FOR A=0 TO 98
+670     IF SU(A) THEN
+680       FOR B=A+1 TO 99
+690         IF SU(B) AND SF(A)<SC(B) AND SF(B)<SC(A) THEN
+700           FOR I=0 TO SNV(A)-1
+710             FOR J=0 TO SNV(B)-1
+720               K=(I+1) MOD SNV(A)
+730               IF VX(A,I)=VX(B,(J+1) MOD SNV(B)) AND VY(A,I)=VY(B,(J+1) MOD SNV(B)) AND VX(A,K)=VX(B,J) AND VY(A,K)=VY(B,J) THEN
+740                 EN(A,I)=B:EN(B,J)=A
+750               END IF
+760             NEXT J
+770           NEXT I
+780         END IF
+790       NEXT B
+800     END IF
+810   NEXT A
+820 END PROC
+830 PROC UNWELD(S)
+840   LOCAL I,B,J
+850   FOR I=0 TO SNV(S)-1
+860     B=EN(S,I)
+870     IF B>=0 THEN
+880       FOR J=0 TO SNV(B)-1
+890         IF EN(B,J)=S THEN EN(B,J)=-1
+900       NEXT J
+910       EN(S,I)=-1
+920     END IF
+930   NEXT I
+940 END PROC
+950 ' the model -> the world (W3D statements)
+960 PROC MKWORLD
+970   LOCAL S,I,J,K
+980   W3D CLEAR
+990   FOR S=0 TO 99
+1000     IF SU(S) AND SNV(S)>=3 THEN
+1010       W3D SECTOR S,SF(S),SC(S),SFT(S),SCT(S),SLT(S)
+1020       W3D TAG S,STG(S)
+1030       FOR I=0 TO SNV(S)-1
+1040         J=(I+1) MOD SNV(S)
+1050         IF ET(S,I)>=0 THEN K=ET(S,I) ELSE K=SWT(S)
+1060         W3D WALL S,VX(S,I),VY(S,I),VX(S,J),VY(S,J),K,EN(S,I)
+1070       NEXT I
+1080       IF SGX(S)<>0 OR SGY(S)<>0 THEN W3D SLOPE S,0,SGX(S),SGY(S)
+1090     END IF
+1100   NEXT S
+1110   FOR I=0 TO NTH-1
+1120     CALL WM_LINE(THL$(I))
+1130   NEXT I
+1140 END PROC
+1150 ' the world -> the model (after WM_LOAD)
+1160 PROC IMPORT
+1170   LOCAL S,I,N,T$
+1180   CALL CLEARALL
+1190   FOR S=0 TO 99
+1200     IF S<W3D("SECTORS") THEN
+1210       IF W3D("SECINFO",S,12) THEN
+1220         CALL NEWSEC
+1230         SF(S)=W3D("SECINFO",S,0):SC(S)=W3D("SECINFO",S,1):SFT(S)=W3D("SECINFO",S,2):SCT(S)=W3D("SECINFO",S,3):SLT(S)=W3D("SECINFO",S,4):STG(S)=W3D("SECINFO",S,5)
+1240         SGX(S)=W3D("SECINFO",S,6):SGY(S)=W3D("SECINFO",S,7)
+1250         N=W3D("WALLS",S)
+1260         IF N>24 THEN N=24
+1270         FOR I=0 TO N-1
+1280           CALL ADDV(S,W3D("WALLINFO",S,I,0),W3D("WALLINFO",S,I,1))
+1290           EN(S,I)=W3D("WALLINFO",S,I,7):ET(S,I)=W3D("WALLINFO",S,I,4)
+1300         NEXT I
+1310         SWT(S)=ET(S,0)
+1320       END IF
+1330     END IF
+1340   NEXT S
+1350   NTH=0
+1360   FOR I=0 TO 99
+1370     IF I<1024 THEN
+1380       IF W3D("TON",I) AND NTH<100 THEN
+1390         T$="THING,"+STR$(I)
+1400         FOR S=0 TO 8
+1410           T$=T$+","+STR$(W3D("THINGINFO",I,S))
+1420         NEXT S
+1430         THL$(NTH)=T$:NTH=NTH+1
+1440       END IF
+1450     END IF
+1460   NEXT I
+1470 END PROC
+1480 ' ---------------------------------------------------------------------------------------------------------- the picture
+1490 FUNC SX(X)
+1500   RETURN INT(320+(X-PX0)*VZ)
+1510 END FUNC
+1520 FUNC SY(Y)
+1530   RETURN INT(132-(Y-PY0)*VZ)
+1540 END FUNC
+1550 FUNC WX(X)
+1560   RETURN (X-320)/VZ+PX0
+1570 END FUNC
+1580 FUNC WY(Y)
+1590   RETURN (132-Y)/VZ+PY0
+1600 END FUNC
+1610 FUNC SNAP(V)
+1620   RETURN INT(V/GRID+0.5)*GRID
+1630 END FUNC
+1640 PROC DRAWSEC(S)
+1650   LOCAL I,J,C,X1,Y1,X2,Y2,CX,CY
+1660   CX=0:CY=0
+1670   FOR I=0 TO SNV(S)-1
+1680     J=(I+1) MOD SNV(S)
+1690     X1=FN SX(VX(S,I)):Y1=FN SY(VY(S,I)):X2=FN SX(VX(S,J)):Y2=FN SY(VY(S,J))
+1700     IF EN(S,I)>=0 THEN C=FN W3K_C(7,7) ELSE C=FN W3K_C(0,13)
+1710     IF S=SEL THEN C=FN W3K_C(3,14)
+1720     IF ABS(X1)<4000 AND ABS(Y1)<4000 AND ABS(X2)<4000 AND ABS(Y2)<4000 THEN GFX LINE X1,Y1,X2,Y2,C
+1730     IF S=SEL THEN GFX LINE X1-2,Y1-2,X1+2,Y1+2,FN W3K_C(3,15),B
+1740     CX=CX+VX(S,I):CY=CY+VY(S,I)
+1750   NEXT I
+1760   IF SNV(S)>0 THEN
+1770     CX=FN SX(CX/SNV(S)):CY=FN SY(CY/SNV(S))
+1780     IF CX>0 AND CX<600 AND CY>0 AND CY<250 THEN GFX TEXT CX-12,CY-6,STR$(S)+":"+STR$(SF(S))+"/"+STR$(SC(S)),FN W3K_C(0,10)
+1790   END IF
+1800 END PROC
+1810 PROC DRAWGRID
+1820   LOCAL X,Y,G,X0,Y0
+1830   G=GRID*8
+1840   X0=INT(FN WX(0)/G)*G:Y0=INT(FN WY(263)/G)*G
+1850   FOR X=X0 TO FN WX(639)+G STEP G
+1860     IF FN SX(X)>=0 AND FN SX(X)<640 THEN GFX LINE FN SX(X),0,FN SX(X),263,FN W3K_C(0,2)
+1870   NEXT X
+1880   FOR Y=Y0 TO FN WY(0)+G STEP G
+1890     IF FN SY(Y)>=0 AND FN SY(Y)<264 THEN GFX LINE 0,FN SY(Y),639,FN SY(Y),FN W3K_C(0,2)
+1900   NEXT Y
+1910 END PROC
+1920 PROC STATUS
+1930   LOCAL T$
+1940   CALL W3K_HUDBAR(264,36)
+1950   T$=MSG$
+1960   IF T$="" THEN
+1970     IF SEL>=0 THEN
+1980       T$="SECTOR "+STR$(SEL)+"  FLOOR "+STR$(SF(SEL))+"  CEIL "+STR$(SC(SEL))+"  LIGHT "+STR$(SLT(SEL))+"  TAG "+STR$(STG(SEL))+"  CORNERS "+STR$(SNV(SEL))+"  SLOPE "+STR$(SGX(SEL))+","+STR$(SGY(SEL))
+1990     ELSE
+2000       T$="NO SECTOR SELECTED"
+2010     END IF
+2020   END IF
+2030   GFX TEXT 8,268,T$,FN W3K_C(3,14)
+2040   IF DRW=1 THEN
+2050     GFX TEXT 8,282,"DRAWING: CLICK THE CORNERS, RETURN OR A CLICK ON THE FIRST CORNER CLOSES, ESC CANCELS",FN W3K_C(0,12)
+2060   ELSE
+2070     GFX TEXT 8,282,"D POLYGON B BOX W WELD P 3D S SAVE O OPEN N NEW Q QUIT  1-9 0 EDIT  GRID "+STR$(GRID),FN W3K_C(0,10)
+2080   END IF
+2090 END PROC
+2100 PROC REDRAW
+2110   LOCAL S,I
+2120   GFX CLEAR 0
+2130   CALL DRAWGRID
+2140   FOR S=0 TO 99
+2150     IF SU(S) AND S<>SEL THEN CALL DRAWSEC(S)
+2160   NEXT S
+2170   IF SEL>=0 THEN CALL DRAWSEC(SEL)
+2180   IF DRW=1 THEN
+2190     FOR I=0 TO NN-1
+2200       GFX LINE FN SX(NX(I))-2,FN SY(NY(I))-2,FN SX(NX(I))+2,FN SY(NY(I))+2,FN W3K_C(11,12),B
+2210       IF I>0 THEN GFX LINE FN SX(NX(I-1)),FN SY(NY(I-1)),FN SX(NX(I)),FN SY(NY(I)),FN W3K_C(11,12)
+2220     NEXT I
+2230     IF NN>0 THEN GFX LINE FN SX(NX(NN-1)),FN SY(NY(NN-1)),FN SX(FN SNAP(FN WX(MOUSE("X")))),FN SY(FN SNAP(FN WY(MOUSE("Y")))),FN W3K_C(11,8)
+2240   END IF
+2250   CALL STATUS
+2260 END PROC
+2270 ' ---------------------------------------------------------------------------------------------------------- file names and the 3D walk
+2280 FUNC ASKFILE$(P$,D$)
+2290   LOCAL R$,K$,FR
+2300   R$=D$:FR=-1
+2310   REPEAT
+2320     CALL W3K_HUDBAR(264,36)
+2330     GFX TEXT 8,268,P$+R$+"_",FN W3K_C(3,14)
+2340     GFX TEXT 8,282,"TYPE THE NAME, RETURN OK, ESC CANCELS",FN W3K_C(0,10)
+2350     CALL W3K_SHOW
+2360     K$=INKEY$
+2365     IF K$>=" " AND LEN(K$)=1 AND FR THEN R$="":FR=0
+2370     IF K$>=" " AND LEN(K$)=1 THEN R$=R$+K$
+2380     IF (K$=CHR$(8) OR K$=CHR$(127)) AND LEN(R$)>0 THEN R$=LEFT$(R$,LEN(R$)-1)
+2390   UNTIL K$=CHR$(13) OR K$=CHR$(27)
+2400   IF K$=CHR$(27) THEN R$=""
+2410   RETURN R$
+2420 END FUNC
+2430 PROC WALK3D
+2440   LOCAL X,Y,A,K$
+2450   CALL MKWORLD
+2460   CALL W3K_VIEW(0,0,640,264,2)
+2470   W3D FOG 1500
+2480   W3D COLORMAP
+2490   W3D PLAYER 14,56,46,24
+2500   X=0:Y=0
+2510   IF SEL>=0 THEN
+2520     FOR A=0 TO SNV(SEL)-1
+2530       X=X+VX(SEL,A):Y=Y+VY(SEL,A)
+2540     NEXT A
+2550     X=X/SNV(SEL):Y=Y/SNV(SEL)
+2560     W3D CAMERA X,Y,0,0,0,SEL
+2570   ELSE
+2580     FOR A=0 TO 99
+2590       IF SU(A) AND X=0 AND Y=0 THEN X=VX(A,0)+4:Y=VY(A,0)+4
+2600     NEXT A
+2610     W3D CAMERA X,Y,0
+2620   END IF
+2630   W3K_T0=TI
+2640   REPEAT
+2650     CALL W3K_WALK
+2660     W3D RENDER
+2670     CALL W3K_HUDBAR(264,36)
+2680     GFX TEXT 8,268,"3D WALK: ARROWS / WASD WALK, R F LOOK, RIGHT MOUSE BUTTON LOOK, ESC BACK TO THE EDITOR",FN W3K_C(3,14)
+2690     CALL W3K_SHOW
+2700     K$=INKEY$
+2710   UNTIL K$=CHR$(27)
+2720 END PROC
+2730 ' ---------------------------------------------------------------------------------------------------------- the self-test
+2740 PROC CHECK(N$,C)
+2750   IF C THEN
+2760     PRINT "ok   ";N$
+2770   ELSE
+2780     PRINT "FAIL ";N$
+2790   END IF
+2800 END PROC
+2810 PROC SELFTEST
+2820   LOCAL I
+2830   CALL CLEARALL
+2840   CALL NEWSEC
+2850   CALL ADDV(0,0,0):CALL ADDV(0,200,0):CALL ADDV(0,200,200):CALL ADDV(0,0,200)
+2860   CALL NEWSEC
+2870   CALL ADDV(1,200,0):CALL ADDV(1,400,0):CALL ADDV(1,400,200):CALL ADDV(1,200,200)
+2880   CALL NEWSEC
+2890   CALL ADDV(2,0,0):CALL ADDV(2,200,0):CALL ADDV(2,200,200):CALL ADDV(2,0,200)
+2900   SF(2)=140:SC(2)=300
+2910   SC(0)=128:SF(1)=0:SC(1)=128
+2920   CALL NEWSEC
+2930   CALL ADDV(3,400,0):CALL ADDV(3,600,0):CALL ADDV(3,600,200):CALL ADDV(3,400,200)
+2940   SGX(3)=0.1
+2950   CALL WELD
+2960   CALL CHECK("inside",FN INSIDE(0,100,100) AND NOT FN INSIDE(0,300,100))
+2970   CALL CHECK("weld: neighbors",EN(0,1)=1 AND EN(0,2)=-1 AND EN(1,0)=-1 AND EN(1,3)=0 AND EN(1,1)=3 AND EN(3,3)=1)
+2980   CALL CHECK("weld: rooms over rooms stay apart",EN(2,1)=-1 AND EN(2,2)=-1 AND EN(0,2)<>2)
+2990   CALL MKWORLD
+3000   CALL CHECK("world: four sectors",W3D("SECTORS")=4)
+3010   CALL CHECK("world: floor and sector",W3D("SECTORAT",100,100)=0 AND W3D("SECTORZ",100,100,200)=2 AND W3D("SECTORAT",300,100)=1)
+3020   CALL CHECK("world: slope",ABS(W3D("FLOORAT",550,100)-5)<0.01)
+3030   W3D CAMERA 100,100,0,0,0,0
+3040   FOR I=1 TO 40
+3050     W3D MOVE 12,0
+3060   NEXT I
+3070   CALL CHECK("walk through the welded door",W3D("SECTOR")=3)
+3080   CALL WM_SAVE("mem:me")
+3090   W3D CLEAR
+3100   I=FN WM_LOAD("mem:me")
+3110   CALL CHECK("load: four sectors",I=4)
+3120   CALL IMPORT
+3130   CALL CHECK("import: sectors and corners",SU(0) AND SU(1) AND SU(2) AND SU(3) AND SNV(0)=4 AND SNV(2)=4)
+3140   CALL CHECK("import: heights and slope",SF(2)=140 AND SC(2)=300 AND ABS(SGX(3)-0.1)<0.0001)
+3150   CALL CHECK("import: portals",EN(0,1)=1 AND EN(1,3)=0 AND EN(1,1)=3)
+3160   CALL UNWELD(1)
+3170   CALL CHECK("unweld",EN(1,3)=-1 AND EN(0,1)=-1 AND EN(1,1)=-1)
+3180   CALL WELD
+3190   CALL CHECK("weld again",EN(0,1)=1 AND EN(1,1)=3)
+3200   PRINT "mapedit selftest done"
+3210 END PROC
+3220 ' ---------------------------------------------------------------------------------------------------------- the program
+3230 LABEL MAIN
+3240 IF ENV$("MAPEDIT_HEADLESS")<>"" THEN
+3250   CALL SELFTEST
+3260   BYE
+3270 END IF
+3280 CALL W3K_SETUP
+3290 GFX LAYER 2,OFF
+3300 VZ=0.5:PX0=200:PY0=100:GRID=16:DRW=0:NN=0:SEL=-1:MSG$="":MSGT=0:FIN=0:MX0=0:MY0=0:PANNING=0:DRAGV=-1:MODIFIED=0:FILE$="map.txt"
+3310 CALL CLEARALL
+3320 CALL NEWSEC
+3330 CALL ADDV(0,0,0):CALL ADDV(0,256,0):CALL ADDV(0,256,192):CALL ADDV(0,0,192)
+3340 SEL=0
+3350 REPEAT
+3360   P=MOUSE("PRESSED")
+3370   B=MOUSE("B")
+3380   MX=MOUSE("X"):MY=MOUSE("Y")
+3390   W=MOUSE("WHEEL")
+3400   IF W>0 THEN VZ=VZ*1.25
+3410   IF W<0 THEN VZ=VZ/1.25
+3420   IF VZ<0.05 THEN VZ=0.05
+3430   IF VZ>8 THEN VZ=8
+3440   IF (B AND 2)<>0 THEN
+3450     IF PANNING THEN
+3460       PX0=PX0-(MX-MX0)/VZ:PY0=PY0+(MY-MY0)/VZ
+3470     END IF
+3480     PANNING=-1
+3490   ELSE
+3500     PANNING=0
+3510   END IF
+3520   IF KEY("LEFT") THEN PX0=PX0-6/VZ
+3530   IF KEY("RIGHT") THEN PX0=PX0+6/VZ
+3540   IF KEY("UP") THEN PY0=PY0+6/VZ
+3550   IF KEY("DOWN") THEN PY0=PY0-6/VZ
+3560   MX0=MX:MY0=MY
+3570   ' mouse: select / drag corners / draw
+3580   IF MY<264 THEN
+3590     IF (P AND 1)<>0 THEN
+3600       IF DRW=0 THEN
+3610         DRAGV=-1
+3620         IF SEL>=0 THEN
+3630           FOR I=0 TO SNV(SEL)-1
+3640             IF ABS(FN SX(VX(SEL,I))-MX)<=4 AND ABS(FN SY(VY(SEL,I))-MY)<=4 THEN DRAGV=I
+3650           NEXT I
+3660         END IF
+3670         IF DRAGV<0 THEN
+3680           FOUND=-1
+3690           FOR K=1 TO 100
+3700             S=(SEL+K) MOD 100
+3710             IF FOUND<0 AND SU(S) AND SNV(S)>=3 THEN
+3720               IF FN INSIDE(S,FN WX(MX),FN WY(MY)) THEN FOUND=S
+3730             END IF
+3740           NEXT K
+3750           IF FOUND>=0 THEN SEL=FOUND
+3760         END IF
+3770       ELSE
+3780         X=FN SNAP(FN WX(MX)):Y=FN SNAP(FN WY(MY))
+3790         IF NN>=3 AND X=NX(0) AND Y=NY(0) THEN
+3800           CLOSEIT=-1
+3810         ELSE
+3820           IF NN<24 THEN NX(NN)=X:NY(NN)=Y:NN=NN+1
+3830         END IF
+3840         IF DRW=2 AND NN=2 THEN
+3850           NX(2)=NX(1):NY(2)=NY(1):NX(1)=NX(1):NY(1)=NY(0):NX(3)=NX(0):NY(3)=NY(2):NN=4:CLOSEIT=-1
+3860         END IF
+3870       END IF
+3880     END IF
+3890     IF (B AND 1)<>0 AND DRAGV>=0 AND SEL>=0 AND DRW=0 THEN
+3900       X=FN SNAP(FN WX(MX)):Y=FN SNAP(FN WY(MY))
+3910       IF X<>VX(SEL,DRAGV) OR Y<>VY(SEL,DRAGV) THEN
+3920         CALL UNWELD(SEL)
+3930         VX(SEL,DRAGV)=X:VY(SEL,DRAGV)=Y:MODIFIED=-1
+3940       END IF
+3950     ELSE
+3960       DRAGV=-1
+3970     END IF
+3980   END IF
+3990   ' keys
+4000   K$=INKEY$
+4010   IF K$<>"" THEN MSG$=""
+4020   IF K$="D" OR K$="d" THEN DRW=1:NN=0
+4030   IF K$="B" OR K$="b" THEN DRW=2:NN=0
+4040   IF K$=CHR$(27) THEN
+4050     IF DRW<>0 THEN DRW=0:NN=0 ELSE FIN=0
+4060   END IF
+4070   IF K$=CHR$(13) AND DRW=1 AND NN>=3 THEN CLOSEIT=-1
+4080   IF CLOSEIT THEN
+4090     CLOSEIT=0
+4100     CALL NEWSEC
+4110     IF NEWS>=0 THEN
+4120       FOR I=0 TO NN-1
+4130         CALL ADDV(NEWS,NX(I),NY(I))
+4140       NEXT I
+4150       SEL=NEWS:MODIFIED=-1
+4160     ELSE
+4170       MSG$="NO ROOM FOR ANOTHER SECTOR"
+4180     END IF
+4190     DRW=0:NN=0
+4200   END IF
+4210   IF SEL>=0 THEN
+4220     IF K$="1" THEN SF(SEL)=SF(SEL)-8:MODIFIED=-1
+4230     IF K$="2" THEN SF(SEL)=SF(SEL)+8:MODIFIED=-1
+4240     IF K$="3" THEN SC(SEL)=SC(SEL)-8:MODIFIED=-1
+4250     IF K$="4" THEN SC(SEL)=SC(SEL)+8:MODIFIED=-1
+4260     IF K$="5" AND SLT(SEL)>=16 THEN SLT(SEL)=SLT(SEL)-16:MODIFIED=-1
+4270     IF K$="6" AND SLT(SEL)<=239 THEN SLT(SEL)=SLT(SEL)+16:MODIFIED=-1
+4280     IF K$="7" THEN STG(SEL)=STG(SEL)-1:MODIFIED=-1
+4290     IF K$="8" THEN STG(SEL)=STG(SEL)+1:MODIFIED=-1
+4300     IF K$="9" AND SFT(SEL)>16 THEN SFT(SEL)=SFT(SEL)-16:MODIFIED=-1
+4310     IF K$="0" AND SFT(SEL)<240 THEN SFT(SEL)=SFT(SEL)+16:MODIFIED=-1
+4320     IF K$="f" OR K$="F" THEN SGX(SEL)=SGX(SEL)-0.01:MODIFIED=-1
+4330     IF K$="h" OR K$="H" THEN SGX(SEL)=SGX(SEL)+0.01:MODIFIED=-1
+4340     IF K$="i" OR K$="I" THEN SGY(SEL)=SGY(SEL)+0.01:MODIFIED=-1
+4350     IF K$="j" OR K$="J" THEN SGY(SEL)=SGY(SEL)-0.01:MODIFIED=-1
+4360     IF K$="u" OR K$="U" THEN CALL UNWELD(SEL)
+4370     IF K$=CHR$(127) OR K$="x" OR K$="X" THEN
+4380       CALL UNWELD(SEL)
+4390       SU(SEL)=0:SEL=-1:MODIFIED=-1
+4400     END IF
+4410     IF SEL>=0 AND SC(SEL)<SF(SEL) THEN SC(SEL)=SF(SEL)
+4420   END IF
+4430   IF K$="g" OR K$="G" THEN
+4440     IF GRID=8 THEN GRID=16 ELSE IF GRID=16 THEN GRID=32 ELSE GRID=8
+4450   END IF
+4460   IF K$="+" THEN VZ=VZ*1.25
+4470   IF K$="-" THEN VZ=VZ/1.25
+4480   IF K$="w" OR K$="W" THEN
+4490     CALL WELD
+4500     MSG$="WELDED"
+4510   END IF
+4520   IF K$="p" OR K$="P" THEN
+4530     CALL WALK3D
+4540     CALL W3K_RESETCLOCK
+4550   END IF
+4560   IF K$="n" OR K$="N" THEN
+4570     CALL CLEARALL
+4580     MODIFIED=0
+4590   END IF
+4600   IF K$="s" OR K$="S" THEN
+4610     F$=FN ASKFILE$("SAVE AS: ",FILE$)
+4620     IF F$<>"" THEN
+4630       FILE$=F$
+4640       CALL MKWORLD
+4650       CALL WM_SAVE(FILE$)
+4660       MSG$="SAVED "+FILE$:MODIFIED=0
+4670     END IF
+4680   END IF
+4690   IF K$="o" OR K$="O" THEN
+4700     F$=FN ASKFILE$("OPEN: ",FILE$)
+4710     IF F$<>"" THEN
+4720       FILE$=F$
+4730       N=FN WM_LOAD(FILE$)
+4740       CALL IMPORT
+4750       MSG$="LOADED "+STR$(N)+" SECTORS":MODIFIED=0
+4760     END IF
+4770   END IF
+4780   IF K$="q" OR K$="Q" THEN FIN=-1
+4790   CALL REDRAW
+4800   CALL W3K_SHOW
+4810 UNTIL FIN
+4820 CALL W3K_DONE
+4830 END
+4840 LABEL FAILED
+4850 CALL W3K_DONE
+4860 PRINT "Error: ";ERR$;" in line ";ERL
+4870 END

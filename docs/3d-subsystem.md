@@ -34,7 +34,7 @@ Speed (measured, one core): 0.5 ms per frame for a 320 x 150 picture, 2 ms for 6
 - **Textures** are numbered 0 .. 1023 and are pictures in the `GFX GRAB` format (`MKI$(w) + MKI$(h) + w * h palette indices`, up to 1024 x 1024). **A texture number that was never defined is drawn as the solid palette color of that number** (a quick way to
   try a map). Index 0 is see-through in things, masked walls and the sky; on a solid wall or a floor it leaves the pixel transparent (the layers below show).
   Wall pictures are anchored to the world height (the bottom edge at multiples of the picture's height) and repeat; floors and ceilings are anchored to the world's x, y.
-- **Sectors** are numbered 0 .. 4095, walls per sector (the number is the order they were added in, 0, 1, ...), things 0 .. 1023. A point must be in one sector only (no rooms above rooms).
+- **Sectors** are numbered 0 .. 4095, walls per sector (the number is the order they were added in, 0, 1, ...), things 0 .. 1023. Sectors may lie over each other (see "Rooms over rooms"); a ray only ever reaches the sectors that are joined by portals.
 - The **layer**: `W3D RENDER` draws into the layer `GFX TARGET` names (0 or 3), replacing the pixels of the view. The program draws its HUD on top with `GFX` statements. For a picture without flicker draw into the layer that is not shown and swap (`w3dkit`'s `W3K_SHOW`);
   the tile and text layers (1, 2) lie between layers 0 and 3, so a program that swaps those two hides them (`W3K_SETUP` does).
 
@@ -48,10 +48,10 @@ Speed (measured, one core): 0.5 ms per frame for a 320 x 150 picture, 2 ms for 6
 | `W3D WALL s, x1, y1, x2, y2, tex [, next]` | add a wall to sector s; `next` = the sector behind it (default -1: solid) |
 | `W3D WALLTEX s, i, mid, upper, lower` | pictures of wall i of sector s (-1 = keep): `mid` for a solid wall (and the masked picture of a portal), `upper` / `lower` for the steps of a portal (all start as `tex`) |
 | `W3D WALLOFF s, i, xoff, yoff` | shifts the picture of a wall |
-| `W3D WALLFLAG s, i, flags` | 1 = masked (the `mid` picture is drawn over the opening of a portal, index 0 see-through; it does not repeat vertically: it sits on the higher floor, `yoff` raises it), 2 = movement can't pass the portal (window, railing), 4 = shots and sight can't pass it (frosted glass). Flags belong to one side: set them on both walls of a window |
-| `W3D HEIGHT s, floor, ceil` | moves floor and ceiling (doors: ceiling = floor is closed; lifts) |
+| `W3D WALLFLAG s, i, flags` | 1 = masked (the `mid` picture is drawn over the opening of a portal, index 0 see-through; it does not repeat vertically: it sits on the higher floor, `yoff` raises it), 2 = movement can't pass the portal (window, railing), 4 = shots and sight can't pass it (frosted glass). Flags belong to one side: set them on both walls of a window, 8 = the wall shows the sky picture (a painted horizon), 16 = translucent (a portal: the picture is mixed with what is behind it) |
+| `W3D HEIGHT s, floor, ceil` | moves floor and ceiling at once (doors: ceiling = floor is closed; lifts); see `SECMOVE` for a smooth move |
 | `W3D LIGHT s, light`, `W3D TAG s, value` | brightness; a number of your own per sector (room names, door kinds, the exit) |
-| `W3D SKY tex` | the picture of the sky, mapped around the viewer by angle (wraps once around: make it 4 times as wide as the view) |
+| `W3D SKY tex [, repeat [, shift]]` | the picture of the sky, mapped around the viewer by angle (it goes around `repeat` times, default 1) and moved by `shift` rows |
 | `W3D CAMERA x, y, angle [, pitch [, lift]]` | puts the viewer somewhere (error "Position outside of all sectors"); `lift` is added to the eye height (jumping, crouching) |
 | `W3D TURN dangle [, dpitch]` | turns the viewer |
 | `W3D MOVE forward, right` | walks relative to the view direction, with collision: slides along walls, up steps of at most the step height, through portals the body fits through (opening at least the player's height); sets `W3D("HIT")` |
@@ -65,8 +65,11 @@ Speed (measured, one core): 0.5 ms per frame for a 320 x 150 picture, 2 ms for 6
 | `W3D THINGZ n, z` | height above the floor (flying things) |
 | `W3D THINGTEX n, tex`, `W3D THINGLIGHT n, light`, `W3D THINGOFF n` | change the picture (animation); a fixed brightness 0 .. 255 instead of the sector's, no darkening by distance (torches, shots; -1 = the sector's); remove |
 | `W3D THINGMOVE n, dx, dy` | walks a thing in world directions with the same collision as `W3D MOVE` (radius 0.35 * width, its height, step 24); sets `W3D("HIT")` |
+| `W3D SLOPE`, `W3D FAR`, `W3D TICK`, `W3D SECMOVE`, `W3D ANIM`, `W3D SCROLL`, `W3D LIGHTFX`, `W3D LAMP`, `W3D THINGTRANS`, `W3D CLEAR` | see "Newer features" |
 
 ## Functions
+
+New ones: `("SECTORZ", x, y, z)`, `("CEILAT", x, y)`, `("SLOPE", s, kind, axis)`, `("VISITED")`, `("MOVING", s)`, `("TIME")`, `("LIGHTNOW", s)`, `("WALLINFO", s, i, k)`, `("SECINFO", s, k)`, `("THINGINFO", n, k)` (see the sections below and `gfxops.h`).
 
 `W3D("X")`, `("Y")`, `("Z")` (the eye, absolute), `("ANGLE")` (0 .. 360), `("PITCH")`, `("SECTOR")` (-1 if none), `("FLOORZ")`, `("HIT")` (bits of the last move: 1 a wall pushed the body, 2 it could not move at all, 4 it changed sector),
 `("SECTORS")` (highest number + 1), `("LIFT")` (the jump height), `("SECTORAT", x, y)` (-1 outside), `("FLOORAT", x, y)` (-1000000 outside), `("FLOOR", s)`, `("CEIL", s)`, `("LIGHT", s)`, `("TAG", s)`, `("WALLS", s)` (= the number the next wall gets),
@@ -77,6 +80,56 @@ Afterwards `("SHOTKIND")` is 0 (nothing within range), 1 (a wall) or 2 (a thing)
 `("USE", reach)`: the sector behind the portal wall in front of the viewer within reach (-1 if the nearest wall is solid or none): the "open the door" test (door sectors carry a `TAG`).
 `("SEES", n)`: -1 if thing n has a line of sight to the viewer (from 70 % of its height to the eye; closed doors, solid walls and frosted glass block it), else 0.
 A bad number gives "Illegal argument".
+
+## Newer features (2026-11-12)
+
+These came with the showroom demo (`demos/showroom.bas`, its map is made by `demos/levels/showroom.bas`). All of them are in `w3d.c` and tested by `w3dtest1`.
+
+### Rooms over rooms
+
+Sectors may overlap in the plan: a hall and a gallery over it, a bridge and the road under it. Rendering never needed more than the portals (a ray only goes where portals lead), so
+nothing changed there; what was missing is **finding the sector of a point**. `W3D("SECTORZ", x, y, z)` returns the sector at a point *and a height* (the one whose floor is the highest at or below z and whose ceiling is above it,
+else the one with the nearest floor), `W3D CAMERA x, y, angle, pitch, lift, sector` and `W3D THING n, x, y, tex, w, h, sector` name the sector explicitly (an error if the point is not inside it; naming a sector for the camera also snaps the eye
+to that floor instead of easing). `W3D("SECTORAT", x, y)` prefers the viewer's own sector when it contains the point. Movement and collision change sector only through portals, so stacked rooms do not interfere; stairs or a ramp (below) join them.
+Nothing joins the floors of stacked rooms automatically: there is no hole to look through.
+
+### Slopes
+
+`W3D SLOPE s, kind, gx, gy [, ox, oy]` tilts the floor (kind 0), the ceiling (1) or both (2): `gx`, `gy` = rise per unit in x and y (|gx|, |gy| <= 100), around the point (ox, oy) (default: the middle of the sector's walls),
+where the sector keeps the heights given by `W3D SECTOR` / `W3D HEIGHT`. Walls, portal steps, flats, things (their feet), the viewer's feet, collision (a step is measured at the place where the body crosses the wall), shots and sight follow the plane.
+`W3D("FLOORAT", x, y)`, `W3D("CEILAT", x, y)`, `W3D("FLOORZ")`, `W3D("SLOPE", s, kind, axis)` read it. A floor is drawn per pixel by solving the plane for the pixel's ray (`depth = (eye - h) * f / (row - horizon + slope along the ray * f)`).
+Slopes of a few percent walk like ramps; the step limit still applies to the portal walls (a ramp that meets a floor at a different height needs a step of at most 24, as before).
+
+### Sky, draw distance
+
+`W3D SKY tex [, repeat [, shift]]`: the sky picture goes around the viewer `repeat` times (0.1 .. 64, default 1: a 256 pixel picture repeated 3 times is sharper than stretched once), `shift` moves it up or down in rows.
+A wall with the flag **8** shows the sky picture over its whole height: a *painted horizon* at the end of the world, so no ray ends in empty space (the fence sectors of Deqq's House II are the same job done with a backdrop picture).
+`W3D FAR d` stops the rays at distance d (0 = no limit): with `FOG` fading to black at d it saves the work of far sectors without a visible change; `W3D("VISITED")` is the number of sectors the last frame reached.
+(A single ray still passes at most 64 portals.)
+
+### Time: movers, scrolling, animated textures, light effects
+
+The world has a clock that **the program advances**: `W3D TICK seconds` (`w3dkit`'s `W3K_WALK` does it for you with the time since its last call). It drives:
+- `W3D SECMOVE s, speed, floor [, ceil]`: the floor and ceiling of sector s move to these heights at `speed` units a second (`W3D("MOVING", s)` is -1 while they do; `W3D HEIGHT` stops a mover). Lifts, doors, crushers: a program only starts them and asks when they are done.
+- `W3D ANIM n, first, count, fps`: texture number n shows the textures first .. first + count - 1 in turn (count 0 = off). Use n in walls, floors and things; the frames are textures like any other.
+- `W3D SCROLL s, kind, dx, dy`: the floor (0), ceiling (1) or walls (2) of the sector slide by dx, dy units a second (water, conveyor belts).
+- `W3D LIGHTFX s, mode [, amount [, rate]]`: 1 flicker (random between light - amount and light, `rate` changes a second), 2 pulse (sine, plus / minus amount, `rate` periods a second), 3 strobe (off by amount every other half period); `W3D("LIGHTNOW", s)` is the light of the last frame.
+`W3D("TIME")` reads the clock.
+
+### Lamps and translucency
+
+`W3D LAMP n, x, y, z, radius, amount` (n 0 .. 7; radius 0 or amount 0 switches it off): a point light that adds up to `amount` of brightness at its center, falling linearly to nothing at `radius` (in 3D), to walls, floors, ceilings and things.
+It brightens; the light is a level of the color map's shading, so there are **no colored lights** (a palette of hue ramps would need a color per level). Each lamp costs a little per floor pixel: a few are fine.
+**Translucency:** a portal wall with the flag **16** draws its middle picture over the opening mixed half and half with what is behind it (palette index 0 is see-through; like masked walls the picture sits on the higher floor and does not repeat vertically);
+`W3D THINGTRANS n, flag` does the same for a thing. The mix is the palette entry nearest to the mean of the two colors, from a 256 x 256 table that is made from the palette on the first frame that needs it (about 50 ms; it is made again after `W3D COLORMAP`).
+Translucent walls are drawn after the things (at most 4 per screen column), so a thing behind a pane of glass is seen through it.
+
+### Map files, the generators and the editor
+
+A map is a text file (`demos/lib/w3dmap.lib`, `LOAD LIBRARY "w3dmap"`: `N = FN WM_LOAD(file$)`, `CALL WM_SAVE(file$)`, `CALL WM_CLEAR`, `CALL WM_LINE(l$)` for lines that come from `DATA`; the format is in the library's header). The map holds the geometry, the sky and fog,
+the things; the pictures, animations, effects, lamps and the player belong to the program. `W3D CLEAR` deletes sectors and things and keeps the rest; the functions `W3D("WALLINFO", s, i, k)`, `("SECINFO", s, k)`, `("THINGINFO", n, k)` read everything back (that is how `WM_SAVE` works).
+`demos/levels/mkw3d.lib` gained **polygon sectors** (`MK_POLY(id, floor, ceil, look$, "x,y,x,y,...")`, `MK_PLINK` / `MK_PLINKT` / `MK_PTEX` for the edges, `FN MK_ARC$(cx, cy, r, a1, a2, steps)` for curves), `MK_SLOPE`, `MK_THING`, `MK_RAW` and the writers `MK_EMITMAP` / `MK_EMITMAPDATA`.
+The map editor is `tools/mapedit.bas` (see `tools/README.md`).
 
 ## Doors, lifts, stairs
 
@@ -129,9 +182,9 @@ The window host draws. **The console host runs the whole world** (`W3D RESET` ..
 
 ## Not done
 
-Hardware rendering (OpenGL / Vulkan; the interface would be `w3d_render()`), room-over-room, sloped sectors, multi-angle sprites, transparent (translucent) walls and things, a map view function, saving worlds to a file (`W3D LOAD` / `SAVE` of a map format), the mouse for looking around, floors that move things standing on them, texture mapping of the `W3D SECTOR` ceiling per sector offset, and things that block the player (do it in the program with `W3D("DIST", n)`).
+Hardware rendering (OpenGL / Vulkan; the interface would be `w3d_render()`), **holes between stacked rooms** (a floor opening you can look down through: stacked sectors are only joined by stairs, ramps and the like), **true tilt** of the view (looking up and down is still a shear of the picture, fine to about 30 degrees; mouse look exists in `w3dkit`: right button and drag), colored lights (lamps only brighten), multi-angle sprites, a map view function (the editor shows a plan), more than 4 translucent walls in a column, things on moving floors (they stay where they are; `W3D THINGMOVE` re-reads the floor), a sky that follows the view up and down (it moves with the horizon), a level editor that edits things and textures (it keeps the things a map has), floors that move things standing on them, texture mapping of the `W3D SECTOR` ceiling per sector offset, and things that block the player (do it in the program with `W3D("DIST", n)`).
 
 ## Tests
 
-`./w3dtest1` (no display; 91 cases: the picture of a small world pixel by pixel from the four directions, looking up, textures and offsets, masked walls, sky, light and the color map, concave rooms, movement (walls, sliding, doorways, steps, low ceilings, blocking portals), things, shots, sight, use, queries, errors, and 600 random frames that must keep the viewer inside its sector); `./vmtest1` has the 35 statement / function forms (parser, code generator, VM);
+`./w3dtest1` (no display; 202 cases, 91 of them the original ones, the rest slopes, stacked sectors, sky walls, the draw distance, movers, animation, scrolling, light effects, lamps and translucency; also run under ASan / UBSan; `sh w3dmaptest.sh` (map files: save, load, save again, the files must be equal), `sh showroomtest.sh` (the showroom map and a walk through it in the console host) and `sh mapedittest.sh` (the editor's model) are in `make check` as well; the picture of a small world pixel by pixel from the four directions, looking up, textures and offsets, masked walls, sky, light and the color map, concave rooms, movement (walls, sliding, doorways, steps, low ceilings, blocking portals), things, shots, sight, use, queries, errors, and 600 random frames that must keep the viewer inside its sector); `./vmtest1` has the 35 statement / function forms (parser, code generator, VM);
 the demos were run under Xvfb (screenshots of every room, keys held with XTest, a play through the first fights).

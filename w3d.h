@@ -57,6 +57,8 @@ Angles are in degrees: 0 = along +x, 90 = along +y (counterclockwise on the map 
 #define W3D_WF_MASKED   1               // a portal: the middle texture is drawn over the opening (palette index 0 is see-through)
 #define W3D_WF_BLOCK    2               // a portal that movement cannot pass (a window, a railing)
 #define W3D_WF_SOLID    4               // a portal that stops shots and sight (glass that is not clear)
+#define W3D_WF_TRANS    16              // a portal: the middle texture is drawn over the opening mixed half and half with what is behind it (palette index 0 is see-through)
+#define W3D_WF_SKY      8               // the wall (all three parts) shows the sky picture: a painted horizon at the end of the world
 
 // results of w3d_move()
 #define W3D_HIT_WALL    1               // a wall pushed the circle aside

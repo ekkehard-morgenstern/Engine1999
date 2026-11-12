@@ -31,6 +31,8 @@ check manor demos/levels/manor.bas demos/manor.bas
 check bunker demos/levels/bunker.bas demos/bughunt.bas
 check deqq2 demos/levels/deqq2.bas demos/deqq2.bas
 check deqq2art demos/levels/deqq2art.bas demos/deqq2.bas
+# the showroom generator writes quoted DATA lines for the map when it is given "-" and "data"
+if timeout 120 ./engine1999c demos/levels/showroom.bas - data > "$T/out" 2> "$T/err" && contains "$T/out" demos/showroom.bas; then printf '%-10s ok\n' showroom; else echo "FAILED: showroom (output is not in demos/showroom.bas)"; fail=$((fail+1)); fi
 # the music generator also prints a report on stdout: its file argument is a file in the generator's folder
 cp demos/levels/music3d.bas "$T/music3d.bas"
 ( cd "$T" && timeout 120 "$OLDPWD/engine1999c" music3d.bas out.txt > report 2> err ) || { echo "FAILED: music3d (the program failed)"; fail=$((fail+1)); }

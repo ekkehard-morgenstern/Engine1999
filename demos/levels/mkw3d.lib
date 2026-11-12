@@ -18,7 +18,13 @@
 140 '   CALL MK_HOUSE(id,side$,lo,hi)                an outdoor sector's wall between lo and hi is the house (see MK_FINISH)
 150 '   CALL MK_OUTDOOR(id)                          an outdoor sector without house walls
 160 '   CALL MK_FINISH(housetex,fenceh,fencetex)     outdoor sectors: solid walls become the house (tall picture) or a low fence sector behind the wall
-170 '   CALL MK_EMIT(file$)                          writes the DATA lines ("" = standard output)
+165 '   CALL MK_POLY(id,floor,ceil,look$,pts$)        a sector of any shape: pts$ = "x,y,x,y,..." (3 to 32 corners, walked in order, closed by itself); look$ as for MK_ROOM (the walltex is the default of all its walls)
+166 '   CALL MK_PLINK(a,edge,b)  /  CALL MK_PLINKT(a,edge,b,tex)   edge number e (0 = from the first corner to the second ...) of the polygon a is a portal to the sector b (whose edge must run along it, the other way round)
+167 '   CALL MK_PTEX(a,edge,tex)                     the picture of one edge;  FN MK_ARC$(cx,cy,radius,angle1,angle2,steps) = the corners "x,y,..." of an arc (angles in degrees, any DEG / RAD / GRAD mode)
+168 '   CALL MK_SLOPE(id,floorx,floory,ceilx,ceily)  slopes of the floor and ceiling (rise per unit; the heights given to the room are those at its middle)
+169 '   CALL MK_THING(n,x,y,tex,w,h,z)               a thing;   CALL MK_RAW(line$)  a line of the map file as it is (SKY, FOG, FAR ...; only for MK_EMITMAP)
+170 '   CALL MK_EMITMAP(file$) / CALL MK_EMITMAPDATA(file$)   writes the level as a map file for the library w3dmap (see there) instead of DATA lines; the second form writes DATA lines with quoted text (a program READs them and feeds WM_LINE)
+171 '   CALL MK_EMIT(file$)                          writes the DATA lines ("" = standard output)
 180 LIBRARY "mkw3d","MK_"
 190 PROC MK_INIT
 200   DIM MK_X1(600),MK_Y1(600),MK_X2(600),MK_Y2(600),MK_F(600),MK_C(600),MK_FT(600),MK_CT(600),MK_LT(600),MK_TG(600),MK_WT(600),MK_EX(600),MK_OUT(600)
@@ -26,7 +32,8 @@
 220   DIM MK_LA(2000),MK_LS(2000),MK_LLO(2000),MK_LHI(2000),MK_LB(2000),MK_LTX(2000),MK_LUP(2000),MK_LLW(2000),MK_LFL(2000),MK_LXO(2000),MK_LYO(2000)
 230   DIM MK_PR(800),MK_PK(800),MK_PX1(800),MK_PY1(800),MK_PX2(800),MK_PY2(800),MK_PB(800),MK_PTX(800)
 240   DIM MK_SL(200),MK_SH(200),MK_SB(200),MK_SI(200),MK_PV(20),MK_TI(2000),MK_WL(400,12),MK_GL(100),MK_GH(100),MK_PCK(100),MK_PCL(100),MK_PCH(100)
-250   MK_NR=0:MK_NL=0:MK_NP=0:MK_NW=0:MK_PN=0
+245   DIM MK_PLY(600),MK_PNN(600),MK_PPX(19200),MK_PPY(19200),MK_PEB(19200),MK_PET(19200),MK_PT(66),MK_SFX(600),MK_SFY(600),MK_SCX(600),MK_SCY(600),MK_SLO(600),MK_TH(300,8),MK_RW$(300)
+250   MK_NR=0:MK_NL=0:MK_NP=0:MK_NW=0:MK_PN=0:MK_NTH=0:MK_NRW=0
 260 END PROC
 270 ' MK_PARSE: the numbers of a comma separated string in MK_PV(0..MK_PN-1)
 280 PROC MK_PARSE(S$)
@@ -66,7 +73,7 @@
 620   IF NOT MK_EX(ID) THEN
 630     MK_ORD(MK_NR)=ID:MK_NR=MK_NR+1
 640   END IF
-650   MK_EX(ID)=-1:MK_OUT(ID)=0
+650   MK_EX(ID)=-1:MK_OUT(ID)=0:MK_PLY(ID)=0:MK_SLO(ID)=0
 660   MK_X1(ID)=X1:MK_Y1(ID)=Y1:MK_X2(ID)=X2:MK_Y2(ID)=Y2:MK_F(ID)=F:MK_C(ID)=C
 670   MK_FT(ID)=MK_PV(0):MK_CT(ID)=MK_PV(1):MK_LT(ID)=MK_PV(2):MK_TG(ID)=MK_PV(3):MK_WT(ID)=MK_PV(4)
 680   FOR K=0 TO 3
@@ -205,6 +212,10 @@
 2010 PROC MK_WALLS(R)
 2020   LOCAL K,FX,A0,A1,RV,HZ,POS,I,J,N,L,LO,HI,B,T
 2030   MK_NW=0
+2031   IF MK_PLY(R) THEN
+2032     CALL MK_POLYWALLS(R)
+2033     EXIT PROC
+2034   END IF
 2040   FOR K=0 TO 3
 2050     IF K=0 THEN FX=MK_Y1(R):A0=MK_X1(R):A1=MK_X2(R):RV=0:HZ=-1
 2060     IF K=1 THEN FX=MK_X2(R):A0=MK_Y1(R):A1=MK_Y2(R):RV=0:HZ=0
@@ -326,3 +337,132 @@
 3220   NEXT R
 3230   CLOSE #1
 3240 END PROC
+3250 ' -- sectors of any shape (polygons) ---------------------------------------------------------------------------------------------------
+3260 PROC MK_POLY(ID,F,C,L$,P$)
+3270   LOCAL I,K,N,C$,T$,X1,Y1,X2,Y2
+3280   N=0:T$=""
+3290   FOR I=1 TO LEN(P$)+1
+3300     IF I>LEN(P$) THEN C$="," ELSE C$=MID$(P$,I,1)
+3310     IF C$="," THEN
+3320       IF LEN(T$)>0 THEN
+3330         IF N>=64 THEN CALL MK_FAIL("too many corners")
+3340         MK_PT(N)=VAL(T$):N=N+1
+3350       END IF
+3360       T$=""
+3370     ELSE
+3380       IF C$<>" " THEN T$=T$+C$
+3390     END IF
+3400   NEXT I
+3410   IF N<6 OR N MOD 2<>0 THEN CALL MK_FAIL("a polygon needs 3 to 32 corners (x,y pairs)")
+3420   N=N\2
+3430   X1=MK_PT(0):X2=X1:Y1=MK_PT(1):Y2=Y1
+3440   FOR I=0 TO N-1
+3450     IF MK_PT(2*I)<X1 THEN X1=MK_PT(2*I)
+3460     IF MK_PT(2*I)>X2 THEN X2=MK_PT(2*I)
+3470     IF MK_PT(2*I+1)<Y1 THEN Y1=MK_PT(2*I+1)
+3480     IF MK_PT(2*I+1)>Y2 THEN Y2=MK_PT(2*I+1)
+3490   NEXT I
+3500   CALL MK_PARSE(L$)
+3510   CALL MK_ROOMN(ID,X1,Y1,X2,Y2,F,C)
+3520   MK_PLY(ID)=-1:MK_PNN(ID)=N
+3530   FOR I=0 TO N-1
+3540     K=ID*32+I
+3550     MK_PPX(K)=MK_PT(2*I):MK_PPY(K)=MK_PT(2*I+1):MK_PEB(K)=-1:MK_PET(K)=-1
+3560   NEXT I
+3570 END PROC
+3580 PROC MK_PLINKT(A,E,B,TEX)
+3590   IF NOT MK_EX(A) OR NOT MK_PLY(A) THEN CALL MK_FAIL("not a polygon: "+STR$(A))
+3600   IF E<0 OR E>=MK_PNN(A) THEN CALL MK_FAIL("no such edge")
+3610   MK_PEB(A*32+E)=B:MK_PET(A*32+E)=TEX
+3620 END PROC
+3630 PROC MK_PLINK(A,E,B)
+3640   CALL MK_PLINKT(A,E,B,-1)
+3650 END PROC
+3660 PROC MK_PTEX(A,E,TEX)
+3670   IF NOT MK_EX(A) OR NOT MK_PLY(A) THEN CALL MK_FAIL("not a polygon: "+STR$(A))
+3680   IF E<0 OR E>=MK_PNN(A) THEN CALL MK_FAIL("no such edge")
+3690   MK_PET(A*32+E)=TEX
+3700 END PROC
+3710 PROC MK_POLYWALLS(R)
+3720   LOCAL I,J,K,N,T
+3730   MK_NW=0
+3740   N=MK_PNN(R)
+3750   FOR I=0 TO N-1
+3760     J=(I+1) MOD N
+3770     K=R*32+I
+3780     T=MK_PET(K):IF T<0 THEN T=MK_WT(R)
+3790     CALL MK_SETR(0,-1,-1,0,0)
+3800     CALL MK_PUTW(MK_PPX(K),MK_PPY(K),MK_PPX(R*32+J),MK_PPY(R*32+J),T,MK_PEB(K))
+3810   NEXT I
+3820 END PROC
+3830 ' the corners of an arc around (CX,CY) from angle A1 to A2 degrees in STEPS steps (STEPS+1 corners), as "x,y,x,y..." for MK_POLY
+3840 FUNC MK_ARC$(CX,CY,R,A1,A2,ST)
+3850   LOCAL I,A,U,S$
+3860   IF ABS(SIN(30)-0.5)<0.0001 THEN
+3870     U=1
+3880   ELSE
+3890     IF ABS(SIN(33.333333)-0.5)<0.0001 THEN U=400/360 ELSE U=3.14159265358979/180
+3900   END IF
+3910   S$=""
+3920   FOR I=0 TO ST
+3930     A=(A1+(A2-A1)*I/ST)*U
+3940     IF I>0 THEN S$=S$+","
+3950     S$=S$+STR$(INT(CX+R*COS(A)+0.5))+","+STR$(INT(CY+R*SIN(A)+0.5))
+3960   NEXT I
+3970   RETURN S$
+3980 END FUNC
+3990 PROC MK_SLOPE(ID,FX,FY,CX,CY)
+4000   IF NOT MK_EX(ID) THEN CALL MK_FAIL("no such sector: "+STR$(ID))
+4010   MK_SFX(ID)=FX:MK_SFY(ID)=FY:MK_SCX(ID)=CX:MK_SCY(ID)=CY
+4020   MK_SLO(ID)=FX<>0 OR FY<>0 OR CX<>0 OR CY<>0
+4030 END PROC
+4040 PROC MK_THING(N,X,Y,TX,W,H,Z)
+4050   IF MK_NTH>=300 THEN CALL MK_FAIL("too many things")
+4060   MK_TH(MK_NTH,0)=N:MK_TH(MK_NTH,1)=X:MK_TH(MK_NTH,2)=Y:MK_TH(MK_NTH,3)=TX:MK_TH(MK_NTH,4)=W:MK_TH(MK_NTH,5)=H:MK_TH(MK_NTH,6)=Z
+4070   MK_NTH=MK_NTH+1
+4080 END PROC
+4090 PROC MK_RAW(L$)
+4100   IF MK_NRW>=300 THEN CALL MK_FAIL("too many lines")
+4110   MK_RW$(MK_NRW)=L$:MK_NRW=MK_NRW+1
+4120 END PROC
+4125 ' one line of the map: as it is, or as a quoted DATA line (MK_MAPDATA)
+4126 PROC MK_ML(L$)
+4127   IF MK_MAPDATA THEN PRINT #1,"DATA ";CHR$(34);L$;CHR$(34) ELSE PRINT #1,L$
+4128 END PROC
+4130 PROC MK_EMITMAP(F$)
+4132   MK_MAPDATA=0
+4134   CALL MK_MAPOUT(F$)
+4136 END PROC
+4138 PROC MK_EMITMAPDATA(F$)
+4140   MK_MAPDATA=-1
+4142   CALL MK_MAPOUT(F$)
+4144 END PROC
+4150 PROC MK_MAPOUT(F$)
+4160   LOCAL R,W,J,I,L$
+4170   IF F$="" THEN F$="stdout:"
+4180   OPEN F$ FOR OUTPUT AS #1
+4190   CALL MK_ML("W3DMAP,1")
+4200   FOR I=0 TO MK_NRW-1
+4210     CALL MK_ML(MK_RW$(I))
+4220   NEXT I
+4230   FOR R=0 TO 599
+4240     IF MK_EX(R) THEN
+4250       CALL MK_WALLS(R)
+4260       CALL MK_ML("SECTOR,"+STR$(R)+","+STR$(MK_F(R))+","+STR$(MK_C(R))+","+STR$(MK_FT(R))+","+STR$(MK_CT(R))+","+STR$(MK_LT(R))+","+STR$(MK_TG(R)))
+4270       IF MK_SLO(R) THEN CALL MK_ML("SLOPE,"+STR$(R)+","+STR$(MK_SFX(R))+","+STR$(MK_SFY(R))+","+STR$(MK_SCX(R))+","+STR$(MK_SCY(R))+","+STR$((MK_X1(R)+MK_X2(R))/2)+","+STR$((MK_Y1(R)+MK_Y2(R))/2))
+4280       FOR W=0 TO MK_NW-1
+4290         L$="WALL,"+STR$(R)+","+STR$(MK_WL(W,0))+","+STR$(MK_WL(W,1))+","+STR$(MK_WL(W,2))+","+STR$(MK_WL(W,3))+","+STR$(MK_WL(W,4))+","+STR$(MK_WL(W,5))
+4300         L$=L$+","+STR$(MK_WL(W,7))+","+STR$(MK_WL(W,8))+","+STR$(MK_WL(W,9))+","+STR$(MK_WL(W,10))+","+STR$(MK_WL(W,6))
+4310         CALL MK_ML(L$)
+4320       NEXT W
+4330     END IF
+4340   NEXT R
+4350   FOR I=0 TO MK_NTH-1
+4360     L$="THING"
+4370     FOR J=0 TO 6
+4380       L$=L$+","+STR$(MK_TH(I,J))
+4390     NEXT J
+4400     CALL MK_ML(L$+",-1,0,-1")
+4410   NEXT I
+4420   CLOSE #1
+4430 END PROC

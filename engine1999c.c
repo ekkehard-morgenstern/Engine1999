@@ -868,7 +868,7 @@ static bool con_w3d_get( void ) {
 static bool con_gfx_op( void* usrdata, int op, const double* a, int na, const char* s, size_t slen, uint8_t* out, size_t outsz,
     size_t* outlen, const char** err ) {
     (void) usrdata; (void) na; (void) s;
-    if ( op >= GFXOP_W3DFIRST && op <= GFXOP_W3DLAST ) {
+    if ( GFXOP_IS_W3D( op ) ) {
         if ( !con_w3d_get() ) {
             *err = "Out of memory";
             return false;

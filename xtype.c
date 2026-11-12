@@ -53,6 +53,7 @@ int main( int argc, char** argv ) {
         bool shift = false, ctrl = false;
         switch ( *p ) {
             case '\n': ks = XK_Return; break;
+            case '\033': ks = XK_Escape; break;
             case '\001': ks = XK_Print; break;       // the screenshot key
             case '\002': ks = XK_p; shift = true; ctrl = true; break;       // Ctrl+Shift+P, the other screenshot key
             case ' ':  ks = XK_space; break;

@@ -449,6 +449,276 @@ static void test_hidden_things( void ) {
     CHECK( px( fb, 160, 10 ) != 55 );
 }
 
+
+// -- slopes, sectors over each other, sky walls, draw distance, sky mapping ------------------------------------------------
+
+static void test_m1( void ) {
+    build();
+    const uint8_t* fb = w3d_render( W );
+    CHECK( px( fb, 160, 105 ) == 14 );              // flat floor: the north wall reaches down to row 111.8
+    // a floor rising to the north: 0.1 per unit around the middle of the walls (y 200): 20 units high at the north wall (200 away)
+    CHECK( op( GFXOP_W3DSLOPE, 4, 0.0, 0.0, 0.0, 0.1 ) );
+    CHECK( fabs( Q( GFXQ_W3DFLOORAT, 2, 200.0, 300.0 ) - 10.0 ) < 1.0e-9 );
+    CHECK( fabs( Q( GFXQ_W3DFLOORAT, 2, 200.0, 100.0 ) + 10.0 ) < 1.0e-9 );
+    CHECK( fabs( Q( GFXQ_W3DCEILAT, 2, 200.0, 300.0 ) - 128.0 ) < 1.0e-9 );
+    CHECK( fabs( Q( GFXQ_W3DSLOPE, 3, 0.0, 0.0, 1.0 ) - 0.1 ) < 1.0e-9 );
+    fb = w3d_render( W );
+    CHECK( px( fb, 160, 105 ) == 20 );              // the floor now meets the wall at row 95.8
+    CHECK( px( fb, 160, 85 ) == 14 );
+    CHECK( px( fb, 160, 147 ) == 20 );
+    // walking up the slope the feet follow the floor
+    op( GFXOP_W3DMOVE, 2, 100.0, 0.0 );
+    for ( int i=0; i < 30; ++i ) {
+        fb = w3d_render( W );                       // (the eye eases to the floor)
+    }
+    CHECK( fabs( Q( GFXQ_W3DFLOORZ, 0 ) - 10.0 ) < 1.0e-9 );
+    CHECK( fabs( Q( GFXQ_W3DZ, 0 ) - 56.0 ) < 1.0e-9 );
+    // a ceiling slope: lower to the north (-0.1: 20 units lower at the north wall, so it comes down to 108 there)
+    build();
+    CHECK( op( GFXOP_W3DSLOPE, 4, 0.0, 1.0, 0.0, -0.1 ) );
+    CHECK( fabs( Q( GFXQ_W3DCEILAT, 2, 200.0, 390.0 ) - 109.0 ) < 1.0e-9 );
+    fb = w3d_render( W );
+    CHECK( px( fb, 160, 20 ) == 30 );               // the wall top was at row 9.4 with a flat ceiling; now 128 -> 108: 75 - 62*0.8 = 25.4
+    CHECK( px( fb, 160, 30 ) == 14 );
+    CHECK( !op( GFXOP_W3DSLOPE, 4, 0.0, 3.0, 0.0, 0.0 ) );
+    CHECK( !op( GFXOP_W3DSLOPE, 4, 0.0, 0.0, 500.0, 0.0 ) );
+    CHECK( !op( GFXOP_W3DSLOPE, 4, 9.0, 0.0, 0.1, 0.0 ) );
+    // collision and shots with a slope: the doorway's step from sector 0 (floor 10 .. at x 400, y 200 with a gx slope 0.05 -> 10) to sector 1 (floor 0)
+    build();
+    op( GFXOP_W3DSLOPE, 4, 0.0, 0.0, 0.05, 0.0 );
+    op( GFXOP_W3DCAMERA, 5, 380.0, 200.0, 0.0, NONE, NONE );
+    op( GFXOP_W3DMOVE, 2, 60.0, 0.0 );              // 20 units further east: into sector 1 (the floor falls away: no step up)
+    CHECK( Q( GFXQ_W3DSECTOR, 0 ) == 1.0 );
+
+    // sectors over each other: sector 2 above sector 0 (floor 200, ceiling 300), joined by nothing
+    build();
+    op( GFXOP_W3DSECTOR, 6, 2.0, 200.0, 300.0, 40.0, 41.0, 255.0 );
+    wall( 2, 0, 0, 400, 0, 50, -1 );
+    wall( 2, 400, 0, 400, 400, 51, -1 );
+    wall( 2, 400, 400, 0, 400, 52, -1 );
+    wall( 2, 0, 400, 0, 0, 53, -1 );
+    CHECK( Q( GFXQ_W3DSECTORAT, 2, 200.0, 200.0 ) == 0.0 );             // (the player's sector is preferred)
+    CHECK( Q( GFXQ_W3DSECTORZ, 3, 200.0, 200.0, 250.0 ) == 2.0 );
+    CHECK( Q( GFXQ_W3DSECTORZ, 3, 200.0, 200.0, 50.0 ) == 0.0 );
+    CHECK( Q( GFXQ_W3DSECTORZ, 3, 200.0, 200.0, 150.0 ) == 0.0 );       // in the gap between: the nearest floor below
+    CHECK( op( GFXOP_W3DCAMERA, 6, 200.0, 200.0, 90.0, NONE, NONE, 2.0 ) );
+    CHECK( Q( GFXQ_W3DSECTOR, 0 ) == 2.0 );
+    fb = w3d_render( W );
+    CHECK( px( fb, 160, 75 ) == 52 );               // the upper room's own north wall
+    CHECK( Q( GFXQ_W3DVISITED, 0 ) == 1.0 );
+    CHECK( !op( GFXOP_W3DCAMERA, 6, 200.0, 200.0, 90.0, NONE, NONE, 1.0 ) );      // sector 1 is not there
+    CHECK( op( GFXOP_W3DCAMERA, 6, 200.0, 200.0, 90.0, NONE, NONE, 0.0 ) );
+    fb = w3d_render( W );
+    CHECK( px( fb, 160, 75 ) == 14 );
+    // things in the upper room
+    CHECK( op( GFXOP_W3DTHING, 7, 5.0, 100.0, 100.0, 60.0, 20.0, 40.0, 2.0 ) );
+    CHECK( Q( GFXQ_W3DTSECTOR, 1, 5.0 ) == 2.0 );
+    CHECK( op( GFXOP_W3DTHING, 6, 6.0, 100.0, 100.0, 61.0, 20.0, 40.0 ) );
+    CHECK( Q( GFXQ_W3DTSECTOR, 1, 6.0 ) == 0.0 );
+
+    // a sky wall: the north wall shows the sky picture (the palette entry 1 without a picture)
+    build();
+    fb = w3d_render( W );
+    CHECK( px( fb, 160, 75 ) == 14 );
+    op( GFXOP_W3DWALLFLAG, 3, 0.0, 4.0, (double) W3D_WF_SKY );
+    fb = w3d_render( W );
+    CHECK( px( fb, 160, 75 ) == 1 );
+    CHECK( px( fb, 160, 147 ) == 20 );
+    // sky mapping parameters
+    CHECK( op( GFXOP_W3DSKY, 3, 2.0, 4.0, 8.0 ) );
+    CHECK( !op( GFXOP_W3DSKY, 3, 2.0, 0.0, 0.0 ) );
+    CHECK( !op( GFXOP_W3DSKY, 3, 2.0, 100.0, 0.0 ) );
+    CHECK( op( GFXOP_W3DSKY, 1, 1.0 ) );
+
+    // the draw distance: the north wall is 200 away
+    build();
+    CHECK( op( GFXOP_W3DFAR, 1, 150.0 ) );
+    fb = w3d_render( W );
+    CHECK( px( fb, 160, 75 ) == 0 );
+    CHECK( op( GFXOP_W3DFAR, 1, 300.0 ) );
+    fb = w3d_render( W );
+    CHECK( px( fb, 160, 75 ) == 14 );
+    CHECK( op( GFXOP_W3DFAR, 1, 0.0 ) );
+    CHECK( !op( GFXOP_W3DFAR, 1, -1.0 ) );
+    // a long chain of sectors: only the ones in view are reached
+    op( GFXOP_W3DRESET, 0 );
+    for ( int i=0; i < 300; ++i ) {
+        op( GFXOP_W3DSECTOR, 6, (double) i, 0.0, 128.0, 20.0, 30.0, 255.0 );
+        double x0 = i * 100.0;
+        wall( i, x0, 0, x0 + 100, 0, 10, -1 );
+        wall( i, x0 + 100, 0, x0 + 100, 100, 12, i < 299 ? i + 1 : -1 );
+        wall( i, x0 + 100, 100, x0, 100, 14, -1 );
+        wall( i, x0, 100, x0, 0, 15, i > 0 ? i - 1 : -1 );
+    }
+    op( GFXOP_W3DFOG, 1, 0.0 );
+    op( GFXOP_W3DVIEW, 6, 0.0, 0.0, 320.0, 150.0, 1.0, 90.0 );
+    op( GFXOP_W3DCAMERA, 5, 50.0, 50.0, 0.0, NONE, NONE );
+    w3d_render( W );
+    CHECK( Q( GFXQ_W3DVISITED, 0 ) >= 60.0 );       // (a column looks through at most 64 sectors)
+    op( GFXOP_W3DFAR, 1, 1000.0 );
+    w3d_render( W );
+    CHECK( Q( GFXQ_W3DVISITED, 0 ) <= 12.0 );
+    CHECK( Q( GFXQ_W3DVISITED, 0 ) >= 10.0 );
+}
+
+// -- time, movers, animated textures, scrolling, light effects, lamps, translucency ------------------------------------------------
+
+static void gray_palette( void ) {
+    uint32_t pal[256];
+    for ( uint32_t i=0; i < 256; ++i ) {
+        pal[i] = 0xFF000000U | ( i << 16 ) | ( i << 8 ) | i;
+    }
+    w3d_colormap( W, pal );
+}
+
+static void tex1x1( int n, int col, int w, int h ) {
+    uint8_t s[ 4 + 512 ];
+    s[0] = (uint8_t)( w >> 8 ); s[1] = (uint8_t) w; s[2] = (uint8_t)( h >> 8 ); s[3] = (uint8_t) h;
+    for ( int i=0; i < w * h; ++i ) {
+        s[4 + i] = (uint8_t) col;
+    }
+    ops( GFXOP_W3DTEXTURE, 1, (const char*) s, (size_t)( 4 + w * h ), (double) n );
+}
+
+static void test_m2( void ) {
+    // movers and the clock
+    build();
+    CHECK( op( GFXOP_W3DSECMOVE, 4, 1.0, 20.0, 40.0, NONE ) );
+    CHECK( Q( GFXQ_W3DMOVING, 1, 1.0 ) == -1.0 );
+    CHECK( op( GFXOP_W3DTICK, 1, 1.0 ) );
+    CHECK( Q( GFXQ_W3DFLOOR, 1, 1.0 ) == 20.0 );
+    CHECK( Q( GFXQ_W3DTIME, 0 ) == 1.0 );
+    CHECK( op( GFXOP_W3DTICK, 1, 1.5 ) );
+    CHECK( Q( GFXQ_W3DFLOOR, 1, 1.0 ) == 40.0 );
+    CHECK( Q( GFXQ_W3DMOVING, 1, 1.0 ) == 0.0 );
+    CHECK( op( GFXOP_W3DSECMOVE, 4, 1.0, 100.0, 0.0, 60.0 ) );   // down again and the ceiling to 60
+    CHECK( op( GFXOP_W3DTICK, 1, 0.1 ) );
+    CHECK( fabs( Q( GFXQ_W3DFLOOR, 1, 1.0 ) - 30.0 ) < 1.0e-9 );
+    CHECK( fabs( Q( GFXQ_W3DCEIL, 1, 1.0 ) - 118.0 ) < 1.0e-9 );  // 128 - 10
+    CHECK( op( GFXOP_W3DHEIGHT, 3, 1.0, 0.0, 128.0 ) );           // a direct setting stops the mover
+    CHECK( Q( GFXQ_W3DMOVING, 1, 1.0 ) == 0.0 );
+    CHECK( !op( GFXOP_W3DSECMOVE, 4, 1.0, 0.0, 10.0, NONE ) );
+    CHECK( !op( GFXOP_W3DSECMOVE, 4, 1.0, 10.0, 90.0, 80.0 ) );
+    CHECK( !op( GFXOP_W3DTICK, 1, -1.0 ) );
+
+    // animated textures: 72 shows 70 and 71 in turn, one per second
+    build();
+    tex1x1( 70, 100, 1, 1 );
+    tex1x1( 71, 110, 1, 1 );
+    CHECK( op( GFXOP_W3DANIM, 4, 72.0, 70.0, 2.0, 1.0 ) );
+    op( GFXOP_W3DWALLTEX, 5, 0.0, 4.0, 72.0, -1.0, -1.0 );
+    const uint8_t* fb = w3d_render( W );
+    CHECK( px( fb, 160, 75 ) == 100 );
+    op( GFXOP_W3DTICK, 1, 1.0 );
+    fb = w3d_render( W );
+    CHECK( px( fb, 160, 75 ) == 110 );
+    op( GFXOP_W3DTICK, 1, 1.0 );
+    fb = w3d_render( W );
+    CHECK( px( fb, 160, 75 ) == 100 );
+    CHECK( op( GFXOP_W3DANIM, 4, 72.0, 70.0, 0.0, 1.0 ) );        // off: the texture is 72 itself (not defined: its number is the color)
+    fb = w3d_render( W );
+    CHECK( px( fb, 160, 75 ) == 72 );
+    CHECK( !op( GFXOP_W3DANIM, 4, 72.0, 1020.0, 10.0, 1.0 ) );
+    CHECK( !op( GFXOP_W3DANIM, 4, 72.0, 70.0, 2.0, 0.0 ) );
+
+    // scrolling walls: a texture of two columns (100, 110), the middle of the north wall shows column 0; one unit of scroll moves to column 1
+    build();
+    {
+        uint8_t s[6] = { 0, 2, 0, 1, 100, 110 };
+        ops( GFXOP_W3DTEXTURE, 1, (const char*) s, 6U, 73.0 );
+    }
+    op( GFXOP_W3DWALLTEX, 5, 0.0, 4.0, 73.0, -1.0, -1.0 );
+    fb = w3d_render( W );
+    CHECK( px( fb, 160, 75 ) == 100 );
+    CHECK( op( GFXOP_W3DSCROLL, 4, 0.0, 2.0, 1.0, 0.0 ) );
+    op( GFXOP_W3DTICK, 1, 1.0 );
+    fb = w3d_render( W );
+    CHECK( px( fb, 160, 75 ) == 110 );
+    CHECK( !op( GFXOP_W3DSCROLL, 4, 0.0, 3.0, 1.0, 0.0 ) );
+
+    // light effects
+    build();
+    CHECK( op( GFXOP_W3DLIGHTFX, 4, 0.0, 3.0, 255.0, 1.0 ) );     // strobe
+    w3d_render( W );
+    CHECK( Q( GFXQ_W3DLIGHTNOW, 1, 0.0 ) == 255.0 );
+    op( GFXOP_W3DTICK, 1, 0.5 );
+    w3d_render( W );
+    CHECK( Q( GFXQ_W3DLIGHTNOW, 1, 0.0 ) == 0.0 );
+    CHECK( op( GFXOP_W3DLIGHTFX, 4, 0.0, 2.0, 50.0, 1.0 ) );      // pulse around 255 (clamped), a quarter period later: +50, three quarters: -50
+    op( GFXOP_W3DLIGHT, 2, 0.0, 150.0 );
+    op( GFXOP_W3DTICK, 1, 0.75 );                                  // t = 1.25
+    w3d_render( W );
+    CHECK( Q( GFXQ_W3DLIGHTNOW, 1, 0.0 ) == 200.0 );
+    op( GFXOP_W3DTICK, 1, 0.5 );                                   // t = 1.75
+    w3d_render( W );
+    CHECK( Q( GFXQ_W3DLIGHTNOW, 1, 0.0 ) == 100.0 );
+    CHECK( op( GFXOP_W3DLIGHTFX, 4, 0.0, 1.0, 100.0, 10.0 ) );    // flicker: between 50 and 150, and not always the same
+    int lo = 1000, hi = -1;
+    for ( int i=0; i < 40; ++i ) {
+        op( GFXOP_W3DTICK, 1, 0.1 );
+        w3d_render( W );
+        int l = (int) Q( GFXQ_W3DLIGHTNOW, 1, 0.0 );
+        lo = l < lo ? l : lo;
+        hi = l > hi ? l : hi;
+    }
+    CHECK( lo >= 50 && hi <= 150 && hi - lo > 20 );
+    CHECK( op( GFXOP_W3DLIGHTFX, 4, 0.0, 0.0, NONE, NONE ) );
+    w3d_render( W );
+    CHECK( Q( GFXQ_W3DLIGHTNOW, 1, 0.0 ) == 150.0 );
+    CHECK( !op( GFXOP_W3DLIGHTFX, 4, 0.0, 4.0, 10.0, 1.0 ) );
+
+    // a lamp lights what is near it
+    build();
+    gray_palette();
+    op( GFXOP_W3DFOG, 1, 0.0 );
+    op( GFXOP_W3DLIGHT, 2, 0.0, 100.0 );
+    op( GFXOP_W3DWALLTEX, 5, 0.0, 4.0, 200.0, -1.0, -1.0 );
+    fb = w3d_render( W );
+    int dark = px( fb, 160, 75 ), darkfloor = px( fb, 160, 147 );
+    CHECK( dark > 0 && dark < 200 );
+    CHECK( op( GFXOP_W3DLAMP, 6, 0.0, 200.0, 380.0, 46.0, 200.0, 155.0 ) );
+    fb = w3d_render( W );
+    CHECK( px( fb, 160, 75 ) > dark + 40 );
+    CHECK( px( fb, 160, 100 ) > dark );                           // (the floor by the wall is lit as well)
+    CHECK( px( fb, 160, 147 ) >= darkfloor );
+    CHECK( op( GFXOP_W3DLAMP, 6, 0.0, 200.0, 380.0, 46.0, 0.0, 155.0 ) );      // off
+    fb = w3d_render( W );
+    CHECK( px( fb, 160, 75 ) == dark );
+    CHECK( !op( GFXOP_W3DLAMP, 6, 8.0, 0.0, 0.0, 0.0, 10.0, 10.0 ) );
+
+    // translucent walls: glass (100) in front of the east wall (200) gives 150, a masked wall gives the glass itself
+    build();
+    gray_palette();
+    op( GFXOP_W3DFOG, 1, 0.0 );
+    op( GFXOP_W3DCAMERA, 5, 200.0, 200.0, 0.0, NONE, NONE );
+    tex1x1( 80, 100, 1, 128 );
+    op( GFXOP_W3DWALLTEX, 5, 1.0, 1.0, 200.0, -1.0, -1.0 );
+    op( GFXOP_W3DWALLTEX, 5, 0.0, 2.0, 80.0, -1.0, -1.0 );
+    op( GFXOP_W3DWALLFLAG, 3, 0.0, 2.0, (double) W3D_WF_MASKED );
+    fb = w3d_render( W );
+    CHECK( px( fb, 160, 75 ) == 100 );
+    op( GFXOP_W3DWALLFLAG, 3, 0.0, 2.0, (double) W3D_WF_TRANS );
+    fb = w3d_render( W );
+    CHECK( px( fb, 160, 75 ) == 150 );
+    CHECK( px( fb, 160, 147 ) != 100 );
+    // a translucent thing in front of the north wall
+    build();
+    gray_palette();
+    op( GFXOP_W3DFOG, 1, 0.0 );
+    op( GFXOP_W3DWALLTEX, 5, 0.0, 4.0, 200.0, -1.0, -1.0 );
+    tex1x1( 81, 100, 1, 1 );
+    op( GFXOP_W3DTHING, 6, 0.0, 200.0, 300.0, 81.0, 40.0, 60.0 );
+    fb = w3d_render( W );
+    CHECK( px( fb, 160, 75 ) == 100 );
+    CHECK( op( GFXOP_W3DTHINGTRANS, 2, 0.0, 1.0 ) );
+    fb = w3d_render( W );
+    CHECK( px( fb, 160, 75 ) == 150 );
+    CHECK( op( GFXOP_W3DTHINGTRANS, 2, 0.0, 0.0 ) );
+    fb = w3d_render( W );
+    CHECK( px( fb, 160, 75 ) == 100 );
+    CHECK( !op( GFXOP_W3DTHINGTRANS, 2, 5.0, 1.0 ) );
+}
+
 int main( void ) {
     W = w3d_new();
     if ( W == 0 ) {
@@ -464,6 +734,8 @@ int main( void ) {
     test_concave();
     test_fuzz();
     test_hidden_things();
+    test_m1();
+    test_m2();
     w3d_free( W );
     printf( "w3dtest1: %d cases, %d failures\n", cases, failures );
     return failures;

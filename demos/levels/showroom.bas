@@ -1,0 +1,42 @@
+1 ' License: free for everybody to use, copy, change and build into executables (BUILD).
+2 ' An executable made with BUILD contains the Engine1999 runtime: the Engine1999 Runtime Exception
+3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
+4 ' in the executable (it shows with the command line option --engine1999-about).
+10 ' showroom.bas - the map of demos/showroom.bas (a map file for the library w3dmap): engine1999c showroom.bas [file|- [data]]  ("-" or no file: standard output; "data": quoted DATA lines for the program)
+20 LOAD LIBRARY "mkw3d"
+30 ' textures: 1 brick, 2 plaster, 3 stone, 4 planks, 5 tiles, 6 carpet, 7 metal, 8 grass, 9 sand stone, 11 sky, 44 glass, 45 water (animated)
+40 ' the hall (0) and the gallery (1) lie exactly over each other (room over room); the ramp (2) rises from the yard (3) to the gallery; the corridor (5)
+50 ' leads from the hall to the yard; the aquarium (6) looks onto the ramp through a pane of glass; the lift (7) stands in the yard; the rotunda (8) is round
+60 CALL MK_RAW("SKY,11,3,0")
+70 CALL MK_RAW("FOG,1500,0")
+80 CALL MK_ROOM(0,0,0,600,400,0,150,"5,3,100,10,2")
+90 CALL MK_ROOM(1,0,0,600,400,170,320,"6,3,130,11,4")
+100 CALL MK_ROOM(5,600,0,1000,150,0,150,"9,3,120,12,1")
+110 CALL MK_ROOM(2,600,150,1000,250,85,260,"7,3,140,13,7")
+120 CALL MK_SLOPE(2,-0.425,0,0,0)
+130 CALL MK_ROOM(6,600,250,1000,400,0,150,"5,3,170,14,1")
+140 CALL MK_ROOM(3,1000,0,1500,400,0,300,"8,-1,255,15,1")
+150 CALL MK_ROOM(7,1200,100,1300,200,0,300,"7,-1,255,16,7")
+160 CALL MK_POLY(8,0,300,"45,3,150,17,9",FN MK_ARC$(1500,200,180,-90,90,8))
+170 CALL MK_LINK(0,"E",20,100,5)
+180 CALL MK_LINK(5,"E",20,130,3)
+190 CALL MK_LINK(2,"E",160,240,3)
+200 CALL MK_LINK(2,"W",160,240,1)
+210 CALL MK_LINK(6,"E",260,390,3)
+220 CALL MK_LINKX(6,"S",640,960,2,"44,1,1,18,0,0")
+230 CALL MK_INNER(3,7,7)
+240 CALL MK_LINK(3,"E",20,380,8)
+250 CALL MK_PLINK(8,8,3)
+260 CALL MK_THING(0,100,100,95,28,40,0)
+270 CALL MK_THING(1,500,300,90,24,48,0)
+280 CALL MK_THING(2,300,200,91,16,60,0)
+290 CALL MK_THING(3,40,40,93,16,40,60)
+300 CALL MK_THING(4,560,360,93,16,40,60)
+310 CALL MK_THING(5,100,300,90,24,48,170)
+320 CALL MK_THING(6,500,100,95,28,40,170)
+330 CALL MK_THING(7,1100,300,90,24,48,0)
+340 CALL MK_THING(8,1400,60,90,24,48,0)
+350 CALL MK_THING(9,800,350,93,16,40,60)
+360 CALL MK_THING(10,1150,300,95,28,40,0)
+370 F$=ARG$(1):IF F$="-" THEN F$=""
+380 IF ARG$(2)="data" THEN CALL MK_EMITMAPDATA(F$) ELSE CALL MK_EMITMAP(F$)

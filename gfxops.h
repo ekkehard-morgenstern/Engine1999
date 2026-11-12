@@ -193,8 +193,21 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXOP_UIGRIDCLEAR 169           // UI GRIDCLEAR id [, fg [, bg]]              (spaces everywhere)
 #define GFXOP_SCREENSHOT 166            // SCREENSHOT [file$]                       (the composed picture as a BMP; no name: shot-YYYYMMDD-HHMMSS-n.bmp in the current directory)
 #define GFXOP_W3DLIFT   165             // W3D LIFT h                             (the height of the feet above the floor: a jump; the eye rises with it and steps up to step + h can be taken)
+#define GFXOP_W3DSLOPE  170             // W3D SLOPE s, kind, gx, gy [, ox, oy]   (kind 0 floor, 1 ceiling, 2 both; rise per unit in x and y around the origin, default the middle of the sector's walls)
+#define GFXOP_W3DFAR    171             // W3D FAR distance                       (draw distance, 0 = unlimited)
+#define GFXOP_W3DTICK   172             // W3D TICK seconds                       (advances the world's clock: movers, scrolling, animated textures, light effects)
+#define GFXOP_W3DSECMOVE 173            // W3D SECMOVE s, speed, floor [, ceil]   (the sector's floor / ceiling move to these heights at this speed per second; W3D("MOVING", s))
+#define GFXOP_W3DANIM   174             // W3D ANIM n, first, count, fps          (texture n shows the frames first .. first + count - 1 in turn; count 0 = off)
+#define GFXOP_W3DSCROLL 175             // W3D SCROLL s, kind, dx, dy             (kind 0 floor, 1 ceiling, 2 walls: texture offset speeds per second)
+#define GFXOP_W3DLIGHTFX 176            // W3D LIGHTFX s, mode [, amount [, rate]]  (mode 0 none, 1 flicker, 2 pulse, 3 strobe)
+#define GFXOP_W3DLAMP   177             // W3D LAMP n, x, y, z, radius, amount    (a point light: adds up to amount at the center, nothing at the radius; radius 0 = off)
+#define GFXOP_W3DTHINGTRANS 178         // W3D THINGTRANS n, flag                 (a translucent thing)
+#define GFXOP_W3DCLEAR  179             // W3D CLEAR                              (deletes the sectors, walls and things, keeps the pictures and the settings: a new map can be loaded)
 #define GFXOP_W3DFIRST  GFXOP_W3DRESET
 #define GFXOP_W3DLAST   GFXOP_W3DLIFT
+#define GFXOP_IS_W3D(op) ( ( (op) >= GFXOP_W3DFIRST && (op) <= GFXOP_W3DLAST ) || ( (op) >= GFXOP_W3DFIRST2 && (op) <= GFXOP_W3DLAST2 ) )
+#define GFXOP_W3DFIRST2 GFXOP_W3DSLOPE
+#define GFXOP_W3DLAST2  GFXOP_W3DCLEAR
 
 // queries (vm_gfx_t.query): functions of the language
 #define GFXQ_RGB        1               // RGB(r, g, b [, a]): computed by the VM itself
@@ -292,8 +305,18 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXQ_W3DFLOORZ  230             // W3D("FLOORZ"): the floor under the player
 #define GFXQ_W3DSHOTKIND 231            // W3D("SHOTKIND"): 0 nothing, 1 a wall, 2 a thing
 #define GFXQ_W3DLIFT    232             // W3D("LIFT")
+#define GFXQ_W3DCEILAT  233             // W3D("CEILAT", x, y)
+#define GFXQ_W3DVISITED 234             // W3D("VISITED"): the number of sectors the last frame reached
+#define GFXQ_W3DSLOPE   235             // W3D("SLOPE", s, kind, axis): kind 0 floor 1 ceiling, axis 0 = x 1 = y
+#define GFXQ_W3DSECTORZ 236             // W3D("SECTORZ", x, y, z): the sector at a point and height (sectors can lie over each other)
+#define GFXQ_W3DMOVING  237             // W3D("MOVING", s): -1 while the sector's heights are moving
+#define GFXQ_W3DTIME    238             // W3D("TIME"): the world's clock in seconds
+#define GFXQ_W3DLIGHTNOW 239            // W3D("LIGHTNOW", s): the light of the sector in the last frame (effects applied)
+#define GFXQ_W3DWALLINFO 240            // W3D("WALLINFO", s, i, k): k 0..3 x1 y1 x2 y2, 4 tex, 5 upper, 6 lower, 7 next, 8 xoff, 9 yoff, 10 flags
+#define GFXQ_W3DSECINFO 241             // W3D("SECINFO", s, k): k 0 floor, 1 ceiling, 2 floortex, 3 ceiltex, 4 light, 5 tag, 6..9 slopes (floor x, y, ceiling x, y), 10..11 slope origin, 12 -1 if the sector exists (0 if not: no error)
+#define GFXQ_W3DTHINGINFO 242           // W3D("THINGINFO", n, k): k 0 x, 1 y, 2 tex, 3 w, 4 h, 5 z, 6 light, 7 translucent, 8 sector
 #define GFXQ_W3DFIRST   GFXQ_W3DX
-#define GFXQ_W3DLAST    GFXQ_W3DLIFT
+#define GFXQ_W3DLAST    GFXQ_W3DTHINGINFO
 
 typedef struct _gfxcmd_t {
     const char* group;                  // "GFX", "TXT", "TILE", "SPRITE", "MOUSE", or "" for the statements that are reserved words themselves

@@ -67,7 +67,7 @@ the parts when items are done or added.
 | 58 | Demo scene programs (17) | Low | [Projects, games and packaging](roadmap/projects.md) |
 | 65 | Split screen: `TILE VIEW` and the cost of it (64) | Low-Medium | [Graphics, UI and 3D](roadmap/graphics-and-ui.md) |
 | 66 | Packages for Debian and Ubuntu, build system (60) | libc-dev`, `libsdl2-dev`), `engine1999-games` | [Projects, games and packaging](roadmap/projects.md) |
-| 80 | 3D renderer: hardware path, room-over-room, translucency, more (18) | Low | [Graphics, UI and 3D](roadmap/graphics-and-ui.md) |
+| 80 | 3D renderer: hardware path, true tilt, stacked-room holes, colored lights (rest done 2026-11-12) (18) | Low | [Graphics, UI and 3D](roadmap/graphics-and-ui.md) |
 | 81 | Synthesizer instruments: subtractive first, 16 presets (2b) | Medium | [Sound and music](roadmap/sound.md) |
 | 83 | AV capture subsystem: audio / video recording with a lock-free queue and ffmpeg | Medium | [Graphics, UI and 3D](roadmap/graphics-and-ui.md) |
 

@@ -42,9 +42,19 @@ typedef struct _wall_t {
 
 typedef struct _sector_t {
     bool    used;
-    double  fz, cz;
+    double  fz, cz;                     // the heights at the sector's slope origin (sox, soy)
+    double  fgx, fgy, cgx, cgy;         // slopes of floor and ceiling: rise per unit in x and y (all 0: flat)
+    double  sox, soy;
+    bool    sloped;
     int     ftex, ctex;                 // ctex -1 = sky
     int     light, tag;
+    int     elight;                     // the light of the frame (light effects applied)
+    int     fxmode;                     // 0 none, 1 flicker, 2 pulse, 3 strobe
+    double  fxamt, fxrate;
+    double  tfz, tcz, mspeed;           // a mover: the heights it moves to, units per second
+    bool    moving;
+    double  fsx, fsy, csx, csy, wsx, wsy;           // scrolling speeds (units per second) of the floor, ceiling and walls
+    double  fox, foy, cox, coy, wox, woy;           // ... and the offsets they have reached
     wall_t* walls;
     int     nwalls, cap;
     double  minx, miny, maxx, maxy;
@@ -57,9 +67,18 @@ typedef struct _tex_t {
 
 typedef struct _thing_t {
     bool    used;
+    bool    trans;
     double  x, y, zoff, w, h;
     int     tex, sector, light;         // light -1: the sector's
 } thing_t;
+
+typedef struct _lamp_t {
+    bool    on;
+    double  x, y, z, radius, amount;
+} lamp_t;
+
+#define W3D_MAXLAMPS    8
+#define MAXTRANS        4
 
 struct _w3d_t {
     sector_t*   sectors;
@@ -67,6 +86,21 @@ struct _w3d_t {
     tex_t*      texs;                   // W3D_MAXTEX entries
     thing_t*    things;                 // W3D_MAXTHINGS entries
     int         skytex;
+    double      skyrep, skyshift;       // how often the sky picture goes around, and its vertical shift in rows
+    double      farz;                   // draw distance (0 = unlimited)
+    double      time;                   // the world's clock (W3D TICK)
+    int         animfirst[W3D_MAXTEX], animcount[W3D_MAXTEX];   // animated textures: texture n shows frames first .. first + count - 1
+    double      animfps[W3D_MAXTEX];
+    lamp_t      lamps[W3D_MAXLAMPS];
+    int         nlamps;                 // the highest lamp in use + 1
+    uint32_t    pal[256];
+    bool        havepal;
+    bool        usetrans;               // something translucent exists (the blend table is made)
+    uint8_t*    blend;                  // 256 x 256: the palette entry nearest to the mean of two (made when the first translucent thing is drawn)
+    struct _tcol_t* trans;              // translucent walls of the frame: MAXTRANS per column, far to near
+    int*        ntrans;
+    int         transcap;
+    int         stat_visited;           // sectors the last frame reached
     double      cx, cy, angle, pitch, lift, pz;
     int         csector;
     bool        pzvalid;
@@ -158,7 +192,9 @@ static void free_world( w3d_t* w ) {
 }
 
 static void reset_state( w3d_t* w ) {
-    w->skytex = 1;
+    w->usetrans = false;
+    w->time = 0.0; memset( w->animcount, 0, sizeof(w->animcount) ); memset( w->lamps, 0, sizeof(w->lamps) ); w->nlamps = 0;
+    w->skytex = 1; w->skyrep = 1.0; w->skyshift = 0.0; w->farz = 0.0; w->stat_visited = 0;
     w->cx = w->cy = w->angle = w->pitch = w->lift = w->pz = 0.0;
     w->csector = -1;
     w->pzvalid = false;
@@ -191,7 +227,7 @@ void w3d_free( w3d_t* w ) {
     if ( w->texs != 0 && w->things != 0 ) {
         free_world( w );
     }
-    free( w->texs ); free( w->things ); free( w->order ); free( w->fb ); free( w->zb ); free( w->visited );
+    free( w->texs ); free( w->things ); free( w->order ); free( w->fb ); free( w->zb ); free( w->visited ); free( w->blend ); free( w->trans ); free( w->ntrans );
     free( w );
 }
 
@@ -208,6 +244,10 @@ void w3d_getview( const w3d_t* w, int* x, int* y, int* width, int* height, int* 
 // -- colors ---------------------------------------------------------------------------------------------
 
 void w3d_colormap( w3d_t* w, const uint32_t* argb ) {
+    memcpy( w->pal, argb, sizeof(w->pal) );
+    w->havepal = true;
+    free( w->blend );
+    w->blend = 0;
     for ( int l=0; l < W3D_LEVELS; ++l ) {
         double scale = (double) l / (double)( W3D_LEVELS - 1 );
         w->cmap[l][0] = 0;
@@ -251,10 +291,76 @@ static inline int lightlevel( const w3d_t* w, int light, double dist ) {
     return lv < 0 ? 0 : ( lv >= W3D_LEVELS ? W3D_LEVELS - 1 : lv );
 }
 
+// the light that the lamps add at a point (0 .. 255)
+static int lamp_light( const w3d_t* w, double x, double y, double z ) {
+    double sum = 0.0;
+    for ( int i=0; i < w->nlamps; ++i ) {
+        const lamp_t* l = &w->lamps[i];
+        if ( !l->on ) {
+            continue;
+        }
+        double dx = x - l->x, dy = y - l->y, dz = z - l->z;
+        double d2 = dx * dx + dy * dy + dz * dz;
+        if ( d2 < l->radius * l->radius ) {
+            sum += l->amount * ( 1.0 - sqrt( d2 ) / l->radius );
+        }
+    }
+    return sum > 255.0 ? 255 : (int) sum;
+}
+
+static const uint8_t* blend_get( const w3d_t* w ) {
+    return w->blend;
+}
+
+// the table of mixes: blend[ a * 256 + b ] = the entry nearest to the mean color of entries a and b
+static void make_blend( w3d_t* w ) {
+    if ( w->blend != 0 || !w->havepal ) {
+        return;
+    }
+    uint8_t* bl = (uint8_t*) malloc( 65536U );
+    if ( bl == 0 ) {
+        return;
+    }
+    for ( int a=0; a < 256; ++a ) {
+        for ( int b=a; b < 256; ++b ) {
+            int r = (int)( ( ( w->pal[a] >> 16 ) & 0xFFU ) + ( ( w->pal[b] >> 16 ) & 0xFFU ) ) / 2;
+            int g = (int)( ( ( w->pal[a] >> 8 ) & 0xFFU ) + ( ( w->pal[b] >> 8 ) & 0xFFU ) ) / 2;
+            int bb = (int)( ( w->pal[a] & 0xFFU ) + ( w->pal[b] & 0xFFU ) ) / 2;
+            int best = 0, bd = 1 << 30;
+            for ( int j=1; j < 256; ++j ) {
+                int dr = (int)( ( w->pal[j] >> 16 ) & 0xFFU ) - r, dg = (int)( ( w->pal[j] >> 8 ) & 0xFFU ) - g, db = (int)( w->pal[j] & 0xFFU ) - bb;
+                int d = 2 * dr * dr + 4 * dg * dg + 3 * db * db;
+                if ( d < bd ) {
+                    bd = d;
+                    best = j;
+                }
+            }
+            bl[ a * 256 + b ] = bl[ b * 256 + a ] = (uint8_t) best;
+        }
+    }
+    w->blend = bl;
+}
+
+static inline int lightlevel_at( const w3d_t* w, int light, double dist, double x, double y, double z ) {
+    if ( w->nlamps > 0 ) {
+        light = imin( 255, light + lamp_light( w, x, y, z ) );
+    }
+    return lightlevel( w, light, dist );
+}
+
 // -- geometry ---------------------------------------------------------------------------------------------
 
 static bool sector_valid( const w3d_t* w, int s ) {
     return s >= 0 && s < w->nsectors && w->sectors[s].used;
+}
+
+// the height of the floor / ceiling of a sector at a point (planes: a slope per axis around the sector's origin)
+static inline double floor_at( const sector_t* s, double x, double y ) {
+    return s->sloped ? s->fz + s->fgx * ( x - s->sox ) + s->fgy * ( y - s->soy ) : s->fz;
+}
+
+static inline double ceil_at( const sector_t* s, double x, double y ) {
+    return s->sloped ? s->cz + s->cgx * ( x - s->sox ) + s->cgy * ( y - s->soy ) : s->cz;
 }
 
 static bool inside( const sector_t* s, double x, double y ) {
@@ -269,6 +375,31 @@ static bool inside( const sector_t* s, double x, double y ) {
         }
     }
     return in;
+}
+
+// sectors may lie over each other (room over room, a bridge and the road under it): with a height z (not NONE) the sector whose floor is the
+// highest one at or below z (and whose ceiling is above it) wins, else the one with the nearest floor
+static int find_sector_z( const w3d_t* w, double x, double y, double z, int hint ) {
+    int best = -1;
+    double bestd = 1.0e30;
+    for ( int i=0; i < w->nsectors; ++i ) {
+        const sector_t* s = &w->sectors[i];
+        if ( !s->used || !inside( s, x, y ) ) {
+            continue;
+        }
+        double f = floor_at( s, x, y ), c = ceil_at( s, x, y );
+        double d;
+        if ( z >= f - 1.0e-6 && z < c ) {
+            d = z - f;                              // the nearest floor below z
+        } else {
+            d = 1.0e6 + ( z < f ? f - z : z - c );
+        }
+        if ( d < bestd || ( d == bestd && i == hint ) ) {
+            bestd = d;
+            best = i;
+        }
+    }
+    return best;
 }
 
 static int find_sector( const w3d_t* w, double x, double y, int hint ) {
@@ -293,15 +424,16 @@ static int find_sector( const w3d_t* w, double x, double y, int hint ) {
 }
 
 // can a body of this height and step-up ability walk through the wall of sector s?
-static bool wall_passable( const w3d_t* w, const sector_t* s, const wall_t* wl, double hgt, double step ) {
+static bool wall_passable( const w3d_t* w, const sector_t* s, const wall_t* wl, double px, double py, double hgt, double step ) {
     if ( !sector_valid( w, wl->next ) || ( wl->flags & W3D_WF_BLOCK ) != 0 ) {
         return false;
     }
     const sector_t* n = &w->sectors[wl->next];
-    if ( dmin( s->cz, n->cz ) - dmax( s->fz, n->fz ) < hgt ) {
+    double sf = floor_at( s, px, py ), nf = floor_at( n, px, py );
+    if ( dmin( ceil_at( s, px, py ), ceil_at( n, px, py ) ) - dmax( sf, nf ) < hgt ) {
         return false;
     }
-    return n->fz - s->fz <= step;
+    return nf - sf <= step;
 }
 
 // pushes (*nx, *ny) out of the walls of sector si closer than r; solidonly: only walls that nothing can pass (the neighbors' walls)
@@ -314,7 +446,10 @@ static bool push_walls( const w3d_t* w, int si, bool solidonly, double ox, doubl
         if ( solidonly ) {
             blocking = !sector_valid( w, wl->next ) || ( wl->flags & W3D_WF_BLOCK ) != 0;
         } else {
-            blocking = !wall_passable( w, s, wl, hgt, step );
+            double ex0 = wl->x2 - wl->x1, ey0 = wl->y2 - wl->y1;
+            double t0 = ( ( *nx - wl->x1 ) * ex0 + ( *ny - wl->y1 ) * ey0 ) / ( wl->len * wl->len );
+            t0 = t0 < 0.0 ? 0.0 : ( t0 > 1.0 ? 1.0 : t0 );
+            blocking = !wall_passable( w, s, wl, wl->x1 + t0 * ex0, wl->y1 + t0 * ey0, hgt, step );
         }
         if ( !blocking ) {
             continue;
@@ -389,7 +524,7 @@ static int move_circle( const w3d_t* w, double* px, double* py, int* psec, doubl
             ns = -1;
             for ( int i=0; i < cs->nwalls; ++i ) {
                 const wall_t* wl = &cs->walls[i];
-                if ( wall_passable( w, cs, wl, hgt, step ) && inside( &w->sectors[wl->next], nx, ny ) ) {
+                if ( wall_passable( w, cs, wl, nx, ny, hgt, step ) && inside( &w->sectors[wl->next], nx, ny ) ) {
                     ns = wl->next;
                     break;
                 }
@@ -462,7 +597,7 @@ static void trace( const w3d_t* w, double ox, double oy, double oz, double dx, d
                 }
                 double px = th->x - ox, py = th->y - oy;
                 double sd = px * dx + py * dy, lat = px * dy - py * dx;
-                double zb = s->fz + th->zoff, zr = oz + slope * sd;
+                double zb = floor_at( s, th->x, th->y ) + th->zoff, zr = oz + slope * sd;
                 if ( sd > tprev - 1.0e-9 && sd < t && sd < bs && fabs( lat ) <= th->w * 0.4 && zr >= zb && zr <= zb + th->h ) {
                     bs = sd;
                     bi = i;
@@ -480,7 +615,8 @@ static void trace( const w3d_t* w, double ox, double oy, double oz, double dx, d
         bool pass = false;
         if ( sector_valid( w, wl->next ) && ( wl->flags & W3D_WF_SOLID ) == 0 ) {
             const sector_t* n = &w->sectors[wl->next];
-            pass = zr >= dmax( s->fz, n->fz ) && zr <= dmin( s->cz, n->cz );
+            double hx = ox + dx * t, hy = oy + dy * t;
+            pass = zr >= dmax( floor_at( s, hx, hy ), floor_at( n, hx, hy ) ) && zr <= dmin( ceil_at( s, hx, hy ), ceil_at( n, hx, hy ) );
         }
         if ( !pass ) {
             out->kind = 1; out->dist = t; out->x = ox + dx * t; out->y = oy + dy * t;
@@ -502,19 +638,34 @@ typedef struct _rc_t {
     // the column being drawn
     double          skyu;
     bool            skyok;
+    double          crx, cry;           // the ray of the column (forward component 1)
     uint8_t*        visited;
+    double          wsx, wsy;           // the scroll offsets of the walls of the sector being drawn
+    struct _tcol_t* trans;
+    int*            ntrans;
 } rc_t;
 
 typedef struct _masked_t {
     const wall_t*   wall;
     const sector_t* sector;
     double          t, u, zbase;
-    int             y0, y1;
+    int             y0, y1, lv;
 } masked_t;
+
+typedef struct _tcol_t {
+    const wall_t*   wall;
+    const sector_t* sector;
+    double          t, u, zbase;
+    int             y0, y1, lv;
+} tcol_t;
 
 #define MAXMASKED   16
 
 static const tex_t* tex_get( const w3d_t* w, int n ) {
+    if ( n >= 0 && n < W3D_MAXTEX && w->animcount[n] > 0 ) {
+        double fr = floor( w->time * w->animfps[n] );
+        n = w->animfirst[n] + (int)( fmod( fr < 0.0 ? 0.0 : fr, (double) w->animcount[n] ) );
+    }
     if ( n < 0 || n >= W3D_MAXTEX || w->texs[n].col == 0 ) {
         return 0;
     }
@@ -530,37 +681,8 @@ static int wrapi( double v, int n ) {
     return r >= 0.0 && r < (double) n ? (int) r : 0;
 }
 
-static int texel_u( const tex_t* tx, const wall_t* wl, double u ) {
-    return wrapi( ( 1.0 - u ) * wl->len + wl->xoff, tx->w );
-}
-
-// rows y0 .. y1-1 of the wall in column x; the texture is anchored to the world height (its bottom at multiples of its height)
-static void draw_wall( rc_t* c, int x, int y0, int y1, const wall_t* wl, int texno, double u, double t, int lv ) {
-    if ( y0 >= y1 ) {
-        return;
-    }
-    const uint8_t* cm = c->w->cmap[lv];
-    uint8_t* fb = c->fb + x;
-    float* zb = c->zb + x;
-    const tex_t* tx = tex_get( c->w, texno );
-    if ( tx == 0 ) {
-        uint8_t col = cm[ (uint8_t) texno ];
-        for ( int y = y0; y < y1; ++y ) {
-            fb[ (size_t) y * c->W ] = col;
-            zb[ (size_t) y * c->W ] = (float) t;
-        }
-        return;
-    }
-    const uint8_t* colp = tx->col + (size_t) texel_u( tx, wl, u ) * (size_t) tx->h;
-    double dz = t / c->f;
-    double z = c->ez + ( c->horizon - ( y0 + 0.5 ) ) * dz + wl->yoff;
-    int th = tx->h;
-    for ( int y = y0; y < y1; ++y ) {
-        int zi = wrapi( z, th );
-        fb[ (size_t) y * c->W ] = cm[ colp[ th - 1 - zi ] ];
-        zb[ (size_t) y * c->W ] = (float) t;
-        z -= dz;
-    }
+static int texel_u( const tex_t* tx, const wall_t* wl, double u, double extra ) {
+    return wrapi( ( 1.0 - u ) * wl->len + wl->xoff + extra, tx->w );
 }
 
 static void draw_sky( rc_t* c, int x, int y0, int y1, double rx, double ry ) {
@@ -578,40 +700,77 @@ static void draw_sky( rc_t* c, int x, int y0, int y1, double rx, double ry ) {
     if ( !c->skyok ) {
         double ang = atan2( ry, rx ) / ( 2.0 * 3.14159265358979323846 );
         ang -= floor( ang );
-        c->skyu = ang * tx->w;
+        c->skyu = ang * tx->w * w->skyrep;
         c->skyok = true;
     }
-    int tu = (int) c->skyu % tx->w;
+    int tu = (int) fmod( c->skyu, (double) tx->w );
     const uint8_t* colp = tx->col + (size_t) tu * (size_t) tx->h;
     for ( int y = y0; y < y1; ++y ) {
-        int row = tx->h - 1 - dclamp( c->horizon - ( y + 0.5 ), 0, tx->h - 1 );
+        int row = tx->h - 1 - dclamp( c->horizon - ( y + 0.5 ) + w->skyshift, 0, tx->h - 1 );
         fb[ (size_t) y * c->W ] = cm[ colp[row] ];
     }
 }
 
-// rows y0 .. y1-1 of a floor or ceiling at height h
-static void draw_flat( rc_t* c, int x, int y0, int y1, double h, int texno, int light, double rx, double ry ) {
+// rows y0 .. y1-1 of the wall in column x; the texture is anchored to the world height (its bottom at multiples of its height)
+static void draw_wall( rc_t* c, int x, int y0, int y1, const wall_t* wl, int texno, double u, double t, int lv ) {
+    if ( y0 >= y1 ) {
+        return;
+    }
+    const uint8_t* cm = c->w->cmap[lv];
+    uint8_t* fb = c->fb + x;
+    float* zb = c->zb + x;
+    if ( ( wl->flags & W3D_WF_SKY ) != 0 ) {
+        draw_sky( c, x, y0, y1, c->crx, c->cry );
+        for ( int y = y0; y < y1; ++y ) {
+            zb[ (size_t) y * c->W ] = 1.0e30f;
+        }
+        return;
+    }
+    const tex_t* tx = tex_get( c->w, texno );
+    if ( tx == 0 ) {
+        uint8_t col = cm[ (uint8_t) texno ];
+        for ( int y = y0; y < y1; ++y ) {
+            fb[ (size_t) y * c->W ] = col;
+            zb[ (size_t) y * c->W ] = (float) t;
+        }
+        return;
+    }
+    const uint8_t* colp = tx->col + (size_t) texel_u( tx, wl, u, c->wsx ) * (size_t) tx->h;
+    double dz = t / c->f;
+    double z = c->ez + ( c->horizon - ( y0 + 0.5 ) ) * dz + wl->yoff + c->wsy;
+    int th = tx->h;
+    for ( int y = y0; y < y1; ++y ) {
+        int zi = wrapi( z, th );
+        fb[ (size_t) y * c->W ] = cm[ colp[ th - 1 - zi ] ];
+        zb[ (size_t) y * c->W ] = (float) t;
+        z -= dz;
+    }
+}
+
+// rows y0 .. y1-1 of a floor or ceiling: a0 = the height of the plane above the camera's position, gdr = how fast it rises along the column's ray
+// (a flat plane: gdr 0); the depth of the point seen in a row follows from ez + vz * t = a0 + gdr * t
+static void draw_flat( rc_t* c, int x, int y0, int y1, double a0, double gdr, int texno, int light, double rx, double ry, double offx, double offy ) {
     const w3d_t* w = c->w;
     const tex_t* tx = tex_get( w, texno );
     uint8_t* fb = c->fb + x;
     float* zb = c->zb + x;
-    double dh = c->ez - h;
+    double dh = c->ez - a0;
     for ( int y = y0; y < y1; ++y ) {
-        double dy = ( y + 0.5 ) - c->horizon;
+        double dy = ( y + 0.5 ) - c->horizon + gdr * c->f;
         if ( dy > -1.0e-6 && dy < 1.0e-6 ) {
             continue;
         }
         double depth = dh * c->f / dy;
-        if ( depth <= 0.0 ) {
+        if ( depth <= 0.0 || depth > 1.0e7 ) {
             continue;
         }
-        const uint8_t* cm = w->cmap[ lightlevel( w, light, depth ) ];
+        const uint8_t* cm = w->cmap[ w->nlamps > 0 ? lightlevel_at( w, light, depth, c->cx + rx * depth, c->cy + ry * depth, a0 + gdr * depth ) : lightlevel( w, light, depth ) ];
         uint8_t px;
         if ( tx == 0 ) {
             px = (uint8_t) texno;
         } else {
-            int u = wrapi( c->cx + rx * depth, tx->w );
-            int v = wrapi( c->cy + ry * depth, tx->h );
+            int u = wrapi( c->cx + rx * depth + offx, tx->w );
+            int v = wrapi( c->cy + ry * depth + offy, tx->h );
             px = tx->col[ (size_t) u * (size_t) tx->h + (size_t) v ];
         }
         fb[ (size_t) y * c->W ] = cm[px];
@@ -629,6 +788,7 @@ static void render_column( rc_t* c, int x ) {
     masked_t mk[MAXMASKED];
     int nmk = 0;
     c->skyok = false;
+    c->crx = rx; c->cry = ry;
     for ( int depth = 0; depth < 64 && ytop < ybot; ++depth ) {
         const sector_t* s = &w->sectors[cur];
         c->visited[cur] = 1;
@@ -644,39 +804,50 @@ static void render_column( rc_t* c, int x ) {
             u = ( ( wl->x1 - c->cx ) * ry - ( wl->y1 - c->cy ) * rx ) / den;
             u = u < 0.0 ? 0.0 : ( u > 1.0 ? 1.0 : u );
         }
+        if ( w->farz > 0.0 && t > w->farz ) {
+            break;                          // beyond the draw distance
+        }
         double inv = c->f / t;
-        int cy1 = iclamp( ceilrow( c->horizon - ( s->cz - c->ez ) * inv - 0.5 ), ytop, ybot );
-        int fy0 = iclamp( ceilrow( c->horizon - ( s->fz - c->ez ) * inv - 0.5 ), ytop, ybot );
+        double hx = c->cx + rx * t, hy = c->cy + ry * t;
+        double sfz = floor_at( s, hx, hy ), scz = ceil_at( s, hx, hy );
+        int cy1 = iclamp( ceilrow( c->horizon - ( scz - c->ez ) * inv - 0.5 ), ytop, ybot );
+        int fy0 = iclamp( ceilrow( c->horizon - ( sfz - c->ez ) * inv - 0.5 ), ytop, ybot );
         if ( fy0 < cy1 ) {
             fy0 = cy1;
         }
         if ( s->ctex < 0 ) {
             draw_sky( c, x, ytop, cy1, rx, ry );
         } else {
-            draw_flat( c, x, ytop, cy1, s->cz, s->ctex, s->light, rx, ry );
+            draw_flat( c, x, ytop, cy1, ceil_at( s, c->cx, c->cy ), s->sloped ? s->cgx * rx + s->cgy * ry : 0.0, s->ctex, s->elight, rx, ry, s->cox, s->coy );
         }
-        draw_flat( c, x, fy0, ybot, s->fz, s->ftex, s->light, rx, ry );
-        int lv = lightlevel( w, s->light, t );
+        draw_flat( c, x, fy0, ybot, floor_at( s, c->cx, c->cy ), s->sloped ? s->fgx * rx + s->fgy * ry : 0.0, s->ftex, s->elight, rx, ry, s->fox, s->foy );
+        int lv = lightlevel_at( w, s->elight, t, hx, hy, c->ez );
+        c->wsx = s->wox; c->wsy = s->woy;
         if ( !sector_valid( w, wl->next ) ) {
             draw_wall( c, x, cy1, fy0, wl, wl->tex, u, t, lv );
             break;
         }
         const sector_t* n = &w->sectors[wl->next];
         int top = cy1, bot = fy0;
-        if ( n->cz < s->cz && !( s->ctex < 0 && n->ctex < 0 ) ) {
-            int e = iclamp( ceilrow( c->horizon - ( n->cz - c->ez ) * inv - 0.5 ), cy1, fy0 );
+        double nfz = floor_at( n, hx, hy ), ncz = ceil_at( n, hx, hy );
+        if ( ncz < scz && !( s->ctex < 0 && n->ctex < 0 ) ) {
+            int e = iclamp( ceilrow( c->horizon - ( ncz - c->ez ) * inv - 0.5 ), cy1, fy0 );
             draw_wall( c, x, cy1, e, wl, wl->upper, u, t, lv );
             top = e;
         }
-        if ( n->fz > s->fz ) {
-            int e = iclamp( ceilrow( c->horizon - ( n->fz - c->ez ) * inv - 0.5 ), top, fy0 );
+        if ( nfz > sfz ) {
+            int e = iclamp( ceilrow( c->horizon - ( nfz - c->ez ) * inv - 0.5 ), top, fy0 );
             draw_wall( c, x, e, fy0, wl, wl->lower, u, t, lv );
             bot = e;
         }
-        if ( ( wl->flags & W3D_WF_MASKED ) != 0 && top < bot && nmk < MAXMASKED ) {
+        if ( ( wl->flags & W3D_WF_TRANS ) != 0 && top < bot && c->ntrans != 0 && c->ntrans[x] < MAXTRANS ) {
+            tcol_t* m = &c->trans[ (size_t) x * MAXTRANS + (size_t) c->ntrans[x]++ ];
+            m->wall = wl; m->sector = s; m->t = t; m->u = u; m->y0 = top; m->y1 = bot; m->lv = lv;
+            m->zbase = dmax( sfz, nfz );
+        } else if ( ( wl->flags & W3D_WF_MASKED ) != 0 && top < bot && nmk < MAXMASKED ) {
             masked_t* m = &mk[nmk++];
-            m->wall = wl; m->sector = s; m->t = t; m->u = u; m->y0 = top; m->y1 = bot;
-            m->zbase = dmax( s->fz, n->fz );
+            m->wall = wl; m->sector = s; m->t = t; m->u = u; m->y0 = top; m->y1 = bot; m->lv = lv;
+            m->zbase = dmax( sfz, nfz );
         }
         ytop = top;
         ybot = bot;
@@ -689,12 +860,12 @@ static void render_column( rc_t* c, int x ) {
         if ( tx == 0 ) {
             continue;
         }
-        const uint8_t* cm = w->cmap[ lightlevel( w, m->sector->light, m->t ) ];
-        const uint8_t* colp = tx->col + (size_t) texel_u( tx, m->wall, m->u ) * (size_t) tx->h;
+        const uint8_t* cm = w->cmap[ m->lv ];
+        const uint8_t* colp = tx->col + (size_t) texel_u( tx, m->wall, m->u, m->sector->wox ) * (size_t) tx->h;
         double dz = m->t / c->f;
         double z = c->ez + ( c->horizon - ( m->y0 + 0.5 ) ) * dz;
         for ( int y = m->y0; y < m->y1; ++y, z -= dz ) {
-            double rel = z - m->zbase - m->wall->yoff;
+            double rel = z - m->zbase - m->wall->yoff - m->sector->woy;
             if ( rel < 0.0 || rel >= tx->h ) {
                 continue;
             }
@@ -738,7 +909,7 @@ static void render_things( rc_t* c ) {
         double lat = dx * c->rx + dy * c->ry;
         double half = th->w * 0.5 * c->f / tz;
         double sxc = c->W * 0.5 + lat * c->f / tz;
-        double zb = w->sectors[th->sector].fz + th->zoff;
+        double zb = floor_at( &w->sectors[th->sector], th->x, th->y ) + th->zoff;
         double ytop = c->horizon - ( zb + th->h - c->ez ) * c->f / tz;
         double ybot = c->horizon - ( zb - c->ez ) * c->f / tz;
         if ( sxc + half < 0.0 || sxc - half >= c->W || ybot < 0.0 || ytop >= c->H ) {
@@ -752,7 +923,10 @@ static void render_things( rc_t* c ) {
         const spr_t* sp = &list[k];
         const thing_t* th = &w->things[sp->thing];
         const tex_t* tx = tex_get( w, th->tex );
-        int lv = th->light >= 0 ? lightlevel( w, th->light, 0.0 ) : lightlevel( w, w->sectors[th->sector].light, sp->tz );
+        const sector_t* tsec = &w->sectors[th->sector];
+        double tzz = floor_at( tsec, th->x, th->y ) + th->zoff + th->h * 0.5;
+        int lv = th->light >= 0 ? lightlevel_at( w, th->light, 0.0, th->x, th->y, tzz ) : lightlevel_at( w, tsec->elight, sp->tz, th->x, th->y, tzz );
+        const uint8_t* bl = th->trans ? blend_get( w ) : 0;
         const uint8_t* cm = w->cmap[lv];
         double left = sp->sxc - sp->half, width = sp->half * 2.0, height = sp->ybot - sp->ytop;
         if ( width <= 0.0 || height <= 0.0 ) {
@@ -775,8 +949,12 @@ static void render_things( rc_t* c ) {
                     px = tx->col[ (size_t) tu * (size_t) tx->h + (size_t) tv ];
                 }
                 if ( px != 0 ) {
-                    c->fb[at] = cm[px];
-                    c->zb[at] = (float) sp->tz;
+                    if ( bl != 0 ) {
+                        c->fb[at] = bl[ (size_t) cm[px] * 256U + c->fb[at] ];
+                    } else {
+                        c->fb[at] = cm[px];
+                        c->zb[at] = (float) sp->tz;
+                    }
                 }
             }
         }
@@ -784,11 +962,65 @@ static void render_things( rc_t* c ) {
     free( list );
 }
 
+// translucent walls of the frame, far to near, mixed with what is there (things included)
+static void render_trans( rc_t* c ) {
+    const w3d_t* w = c->w;
+    const uint8_t* bl = blend_get( w );
+    for ( int x=0; x < c->W; ++x ) {
+        for ( int k = c->ntrans[x] - 1; k >= 0; --k ) {
+            const tcol_t* m = &c->trans[ (size_t) x * MAXTRANS + (size_t) k ];
+            const tex_t* tx = tex_get( w, m->wall->tex );
+            if ( tx == 0 ) {
+                continue;
+            }
+            const uint8_t* cm = w->cmap[ m->lv ];
+            const uint8_t* colp = tx->col + (size_t) texel_u( tx, m->wall, m->u, m->sector->wox ) * (size_t) tx->h;
+            double dz = m->t / c->f;
+            double z = c->ez + ( c->horizon - ( m->y0 + 0.5 ) ) * dz;
+            for ( int y = m->y0; y < m->y1; ++y, z -= dz ) {
+                double rel = z - m->zbase - m->wall->yoff - m->sector->woy;
+                if ( rel < 0.0 || rel >= tx->h ) {
+                    continue;
+                }
+                uint8_t px = colp[ tx->h - 1 - (int) rel ];
+                size_t at = (size_t) y * c->W + (size_t) x;
+                if ( px != 0 && (float) m->t < c->zb[at] ) {
+                    c->fb[at] = bl != 0 ? bl[ (size_t) cm[px] * 256U + c->fb[at] ] : cm[px];
+                }
+            }
+        }
+    }
+}
+
+// the light effects of the frame
+static void update_effects( w3d_t* w ) {
+    for ( int i=0; i < w->nsectors; ++i ) {
+        sector_t* s = &w->sectors[i];
+        if ( !s->used ) {
+            continue;
+        }
+        double l = s->light;
+        if ( s->fxmode == 1 ) {
+            uint32_t h = (uint32_t) floor( w->time * s->fxrate ) * 2654435761U + (uint32_t) i * 40503U;
+            h ^= h >> 15; h *= 2246822519U; h ^= h >> 13;
+            l -= s->fxamt * (double)( h & 1023U ) / 1023.0;
+        } else if ( s->fxmode == 2 ) {
+            l += s->fxamt * sin( 2.0 * 3.14159265358979323846 * s->fxrate * w->time );
+        } else if ( s->fxmode == 3 ) {
+            if ( ( (long long) floor( w->time * s->fxrate * 2.0 ) & 1LL ) != 0 ) {
+                l -= s->fxamt;
+            }
+        }
+        s->elight = l < 0.0 ? 0 : ( l > 255.0 ? 255 : (int)( l + 0.5 ) );
+    }
+}
+
 static double eye_z( const w3d_t* w ) {
     const sector_t* s = &w->sectors[w->csector];
     double ez = w->pz + w->peye + w->lift;
-    if ( ez > s->cz - 2.0 ) {
-        ez = s->cz - 2.0;
+    double cz = ceil_at( s, w->cx, w->cy );
+    if ( ez > cz - 2.0 ) {
+        ez = cz - 2.0;
     }
     return ez;
 }
@@ -805,7 +1037,7 @@ const uint8_t* w3d_render( w3d_t* w ) {
     if ( !sector_valid( w, w->csector ) ) {
         return w->fb;
     }
-    double floor_ = w->sectors[w->csector].fz;
+    double floor_ = floor_at( &w->sectors[w->csector], w->cx, w->cy );
     if ( !w->pzvalid ) {
         w->pz = floor_;
         w->pzvalid = true;
@@ -823,8 +1055,25 @@ const uint8_t* w3d_render( w3d_t* w ) {
         w->visitcap = w->nsectors;
     }
     memset( w->visited, 0, (size_t) w->nsectors );
+    update_effects( w );
+    if ( w->usetrans ) {
+        make_blend( w );
+        if ( w->trans == 0 || w->ntrans == 0 || w->transcap < w->bw ) {
+            free( w->trans ); free( w->ntrans );
+            w->trans = (struct _tcol_t*) calloc( (size_t) w->bw * MAXTRANS, sizeof(tcol_t) );
+            w->ntrans = (int*) calloc( (size_t) w->bw, sizeof(int) );
+            w->transcap = w->trans != 0 && w->ntrans != 0 ? w->bw : 0;
+        }
+        if ( w->transcap >= w->bw ) {
+            memset( w->ntrans, 0, sizeof(int) * (size_t) w->bw );
+        }
+    }
     rc_t c;
     memset( &c, 0, sizeof(c) );
+    if ( w->usetrans && w->transcap >= w->bw ) {
+        c.trans = w->trans;
+        c.ntrans = w->ntrans;
+    }
     c.visited = w->visited;
     c.w = w; c.fb = w->fb; c.zb = w->zb; c.W = w->bw; c.H = w->bh;
     c.f = ( w->bw * 0.5 ) / tan( w->fov * 0.5 * DEG2RAD );
@@ -836,7 +1085,17 @@ const uint8_t* w3d_render( w3d_t* w ) {
     for ( int x=0; x < c.W; ++x ) {
         render_column( &c, x );
     }
+    {
+        int cnt = 0;
+        for ( int i=0; i < w->nsectors; ++i ) {
+            cnt += w->visited[i] != 0;
+        }
+        w->stat_visited = cnt;
+    }
     render_things( &c );
+    if ( c.ntrans != 0 ) {
+        render_trans( &c );
+    }
     return w->fb;
 }
 
@@ -963,7 +1222,7 @@ bool w3d_op( w3d_t* w, int op, const double* args, int na, const char* s, size_t
                 *err = "Out of memory";
                 return false;
             }
-            sec->used = true; sec->fz = a[1]; sec->cz = a[2]; sec->ftex = ft; sec->ctex = ct; sec->light = lt;
+            sec->used = true; sec->fz = a[1]; sec->cz = a[2]; sec->ftex = ft; sec->ctex = ct; sec->light = lt; sec->elight = lt;
             if ( isnew ) {
                 sec->minx = sec->miny = 1.0e30; sec->maxx = sec->maxy = -1.0e30;
             }
@@ -1036,19 +1295,22 @@ bool w3d_op( w3d_t* w, int op, const double* args, int na, const char* s, size_t
                 return false;
             }
             wl->flags = i3;
+            if ( ( i3 & W3D_WF_TRANS ) != 0 ) {
+                w->usetrans = true;
+            }
             return true;
         }
         case GFXOP_W3DHEIGHT:
             if ( !whole( a[0], 0, W3D_MAXSECTORS - 1, &i1 ) || !sector_valid( w, i1 ) || a[2] < a[1] ) {
                 return false;
             }
-            w->sectors[i1].fz = a[1]; w->sectors[i1].cz = a[2];
+            w->sectors[i1].fz = a[1]; w->sectors[i1].cz = a[2]; w->sectors[i1].moving = false;
             return true;
         case GFXOP_W3DLIGHT:
             if ( !whole( a[0], 0, W3D_MAXSECTORS - 1, &i1 ) || !sector_valid( w, i1 ) || !whole( a[1], 0, 255, &i2 ) ) {
                 return false;
             }
-            w->sectors[i1].light = i2;
+            w->sectors[i1].light = i2; w->sectors[i1].elight = i2;
             return true;
         case GFXOP_W3DTAG:
             if ( !whole( a[0], 0, W3D_MAXSECTORS - 1, &i1 ) || !sector_valid( w, i1 ) || !whole( a[1], -1000000, 1000000, &i2 ) ) {
@@ -1056,22 +1318,170 @@ bool w3d_op( w3d_t* w, int op, const double* args, int na, const char* s, size_t
             }
             w->sectors[i1].tag = i2;
             return true;
-        case GFXOP_W3DSKY:
-            return whole( a[0], 0, W3D_MAXTEX - 1, &w->skytex );
+        case GFXOP_W3DSKY: {
+            double rep = NONE_VAL( a[1] ) ? w->skyrep : a[1], shift = NONE_VAL( a[2] ) ? w->skyshift : a[2];
+            if ( !whole( a[0], 0, W3D_MAXTEX - 1, &i1 ) || !( rep >= 0.1 && rep <= 64.0 ) || !( shift >= -10000.0 && shift <= 10000.0 ) ) {
+                return false;
+            }
+            w->skytex = i1; w->skyrep = rep; w->skyshift = shift;
+            return true;
+        }
+        case GFXOP_W3DCLEAR:
+            for ( int k=0; k < w->nsectors; ++k ) {
+                free( w->sectors[k].walls );
+            }
+            free( w->sectors );
+            w->sectors = 0; w->nsectors = 0; w->capsectors = 0;
+            memset( w->things, 0, sizeof(thing_t) * W3D_MAXTHINGS );
+            w->csector = -1; w->pzvalid = false; w->hit = 0;
+            return true;
+        case GFXOP_W3DTICK: {
+            if ( !( a[0] >= 0.0 && a[0] <= 3600.0 ) ) {
+                return false;
+            }
+            w->time += a[0];
+            if ( w->time > 1.0e7 ) {
+                w->time = fmod( w->time, 1.0e6 );
+            }
+            for ( int i=0; i < w->nsectors; ++i ) {
+                sector_t* s = &w->sectors[i];
+                if ( !s->used ) {
+                    continue;
+                }
+                if ( s->moving ) {
+                    double step = s->mspeed * a[0];
+                    double df = s->tfz - s->fz, dc = s->tcz - s->cz;
+                    s->fz += df > step ? step : ( df < -step ? -step : df );
+                    s->cz += dc > step ? step : ( dc < -step ? -step : dc );
+                    if ( s->fz == s->tfz && s->cz == s->tcz ) {
+                        s->moving = false;
+                    }
+                }
+                s->fox = fmod( s->fox + s->fsx * a[0], 1.0e6 ); s->foy = fmod( s->foy + s->fsy * a[0], 1.0e6 );
+                s->cox = fmod( s->cox + s->csx * a[0], 1.0e6 ); s->coy = fmod( s->coy + s->csy * a[0], 1.0e6 );
+                s->wox = fmod( s->wox + s->wsx * a[0], 1.0e6 ); s->woy = fmod( s->woy + s->wsy * a[0], 1.0e6 );
+            }
+            return true;
+        }
+        case GFXOP_W3DSECMOVE: {
+            if ( !whole( a[0], 0, W3D_MAXSECTORS - 1, &i1 ) || !sector_valid( w, i1 ) || !( a[1] > 0.0 && a[1] <= 100000.0 ) ) {
+                return false;
+            }
+            sector_t* s = &w->sectors[i1];
+            double tf = NONE_VAL( a[2] ) ? s->fz : a[2], tc = NONE_VAL( a[3] ) ? s->cz : a[3];
+            if ( tc < tf ) {
+                return false;
+            }
+            s->tfz = tf; s->tcz = tc; s->mspeed = a[1];
+            s->moving = s->tfz != s->fz || s->tcz != s->cz;
+            return true;
+        }
+        case GFXOP_W3DANIM: {
+            if ( !whole( a[0], 0, W3D_MAXTEX - 1, &i1 ) || !whole( a[1], 0, W3D_MAXTEX - 1, &i2 ) || !whole( a[2], 0, W3D_MAXTEX, &i3 ) ||
+                 !( a[3] > 0.0 && a[3] <= 1000.0 ) || i2 + i3 > W3D_MAXTEX ) {
+                return false;
+            }
+            w->animfirst[i1] = i2; w->animcount[i1] = i3; w->animfps[i1] = a[3];
+            return true;
+        }
+        case GFXOP_W3DSCROLL: {
+            if ( !whole( a[0], 0, W3D_MAXSECTORS - 1, &i1 ) || !sector_valid( w, i1 ) || !whole( a[1], 0, 2, &i2 ) || !( fabs( a[2] ) <= 10000.0 ) || !( fabs( a[3] ) <= 10000.0 ) ) {
+                return false;
+            }
+            sector_t* s = &w->sectors[i1];
+            if ( i2 == 0 ) { s->fsx = a[2]; s->fsy = a[3]; }
+            else if ( i2 == 1 ) { s->csx = a[2]; s->csy = a[3]; }
+            else { s->wsx = a[2]; s->wsy = a[3]; }
+            return true;
+        }
+        case GFXOP_W3DLIGHTFX: {
+            double amt = NONE_VAL( a[2] ) ? 60.0 : a[2], rate = NONE_VAL( a[3] ) ? 8.0 : a[3];
+            if ( !whole( a[0], 0, W3D_MAXSECTORS - 1, &i1 ) || !sector_valid( w, i1 ) || !whole( a[1], 0, 3, &i2 ) || !( amt >= 0.0 && amt <= 255.0 ) || !( rate > 0.0 && rate <= 1000.0 ) ) {
+                return false;
+            }
+            sector_t* s = &w->sectors[i1];
+            s->fxmode = i2; s->fxamt = amt; s->fxrate = rate;
+            if ( i2 == 0 ) {
+                s->elight = s->light;
+            }
+            return true;
+        }
+        case GFXOP_W3DLAMP: {
+            if ( !whole( a[0], 0, W3D_MAXLAMPS - 1, &i1 ) || !( a[4] >= 0.0 && a[4] <= 100000.0 ) || !( a[5] >= 0.0 && a[5] <= 255.0 ) ) {
+                return false;
+            }
+            lamp_t* l = &w->lamps[i1];
+            l->x = a[1]; l->y = a[2]; l->z = a[3]; l->radius = a[4]; l->amount = a[5];
+            l->on = a[4] > 0.0 && a[5] > 0.0;
+            w->nlamps = 0;
+            for ( int k=0; k < W3D_MAXLAMPS; ++k ) {
+                if ( w->lamps[k].on ) {
+                    w->nlamps = k + 1;
+                }
+            }
+            return true;
+        }
+        case GFXOP_W3DTHINGTRANS: {
+            thing_t* th = thing_live( w, a[0] );
+            if ( th == 0 ) {
+                return false;
+            }
+            th->trans = a[1] != 0.0;
+            if ( th->trans ) {
+                w->usetrans = true;
+            }
+            return true;
+        }
+        case GFXOP_W3DFAR:
+            if ( !( a[0] >= 0.0 && a[0] <= 1.0e7 ) ) {
+                return false;
+            }
+            w->farz = a[0];
+            return true;
+        case GFXOP_W3DSLOPE: {
+            if ( !whole( a[0], 0, W3D_MAXSECTORS - 1, &i1 ) || !sector_valid( w, i1 ) || !whole( a[1], 0, 2, &i2 ) || !( fabs( a[2] ) <= 100.0 ) || !( fabs( a[3] ) <= 100.0 ) ) {
+                return false;
+            }
+            sector_t* sec = &w->sectors[i1];
+            if ( !NONE_VAL( a[4] ) && !NONE_VAL( a[5] ) ) {
+                sec->sox = a[4]; sec->soy = a[5];
+            } else if ( !sec->sloped ) {
+                sec->sox = sec->nwalls > 0 ? ( sec->minx + sec->maxx ) * 0.5 : 0.0;
+                sec->soy = sec->nwalls > 0 ? ( sec->miny + sec->maxy ) * 0.5 : 0.0;
+            }
+            if ( i2 == 0 || i2 == 2 ) {
+                sec->fgx = a[2]; sec->fgy = a[3];
+            }
+            if ( i2 == 1 || i2 == 2 ) {
+                sec->cgx = a[2]; sec->cgy = a[3];
+            }
+            sec->sloped = sec->fgx != 0.0 || sec->fgy != 0.0 || sec->cgx != 0.0 || sec->cgy != 0.0;
+            return true;
+        }
         case GFXOP_W3DCAMERA: {
             double pitch = NONE_VAL( a[3] ) ? w->pitch : a[3], lift = NONE_VAL( a[4] ) ? w->lift : a[4];
             if ( pitch < -80.0 || pitch > 80.0 ) {
                 return false;
             }
             int sec = find_sector( w, a[0], a[1], w->csector );
+            if ( !NONE_VAL( a[5] ) ) {
+                // the sector is named (sectors can lie over each other)
+                if ( !whole( a[5], 0, W3D_MAXSECTORS - 1, &i1 ) || !sector_valid( w, i1 ) || !inside( &w->sectors[i1], a[0], a[1] ) ) {
+                    return false;
+                }
+                sec = i1;
+            }
             if ( sec < 0 ) {
                 *err = "Position outside of all sectors";
                 return false;
             }
             w->cx = a[0]; w->cy = a[1]; w->angle = norm_angle( a[2] ); w->pitch = pitch; w->lift = lift;
             w->csector = sec;
+            if ( !NONE_VAL( a[5] ) ) {
+                w->pzvalid = false;                 // (a named sector is a jump to another floor: no easing)
+            }
             if ( !w->pzvalid ) {
-                w->pz = w->sectors[sec].fz;         // (the first position: no easing from nowhere)
+                w->pz = floor_at( &w->sectors[sec], a[0], a[1] );         // (the first position: no easing from nowhere)
                 w->pzvalid = true;
             }
             return true;
@@ -1132,6 +1542,12 @@ bool w3d_op( w3d_t* w, int op, const double* args, int na, const char* s, size_t
                 return false;
             }
             int sec = find_sector( w, a[1], a[2], t->used ? t->sector : -1 );
+            if ( !NONE_VAL( a[6] ) ) {
+                if ( !whole( a[6], 0, W3D_MAXSECTORS - 1, &i2 ) || !sector_valid( w, i2 ) || !inside( &w->sectors[i2], a[1], a[2] ) ) {
+                    return false;
+                }
+                sec = i2;
+            }
             if ( sec < 0 ) {
                 *err = "Position outside of all sectors";
                 return false;
@@ -1139,7 +1555,7 @@ bool w3d_op( w3d_t* w, int op, const double* args, int na, const char* s, size_t
             bool isnew = !t->used;
             t->used = true; t->x = a[1]; t->y = a[2]; t->tex = i1; t->w = a[4]; t->h = a[5]; t->sector = sec;
             if ( isnew ) {
-                t->zoff = 0.0; t->light = -1;
+                t->zoff = 0.0; t->light = -1; t->trans = false;
             }
             return true;
         }
@@ -1193,7 +1609,7 @@ bool w3d_op( w3d_t* w, int op, const double* args, int na, const char* s, size_t
 
 bool w3d_query( w3d_t* w, int q, const double* a, int na, double* result ) {
     (void) na;
-    int i1 = 0;
+    int i1 = 0, i2 = 0;
     *result = 0.0;
     for ( int i=0; i < na; ++i ) {
         if ( !num_ok( a[i] ) ) {
@@ -1207,11 +1623,68 @@ bool w3d_query( w3d_t* w, int q, const double* a, int na, double* result ) {
         case GFXQ_W3DANGLE:     *result = w->angle; return true;
         case GFXQ_W3DPITCH:     *result = w->pitch; return true;
         case GFXQ_W3DSECTOR:    *result = w->csector; return true;
-        case GFXQ_W3DFLOORZ:    *result = sector_valid( w, w->csector ) ? w->sectors[w->csector].fz : 0.0; return true;
+        case GFXQ_W3DFLOORZ:    *result = sector_valid( w, w->csector ) ? floor_at( &w->sectors[w->csector], w->cx, w->cy ) : 0.0; return true;
         case GFXQ_W3DSECTORAT:  *result = find_sector( w, a[0], a[1], w->csector ); return true;
-        case GFXQ_W3DFLOORAT: {
+        case GFXQ_W3DSECTORZ:   *result = find_sector_z( w, a[0], a[1], a[2], w->csector ); return true;
+        case GFXQ_W3DFLOORAT: case GFXQ_W3DCEILAT: {
             int s = find_sector( w, a[0], a[1], w->csector );
-            *result = s < 0 ? -1.0e6 : w->sectors[s].fz;
+            *result = s < 0 ? -1.0e6 : ( q == GFXQ_W3DFLOORAT ? floor_at( &w->sectors[s], a[0], a[1] ) : ceil_at( &w->sectors[s], a[0], a[1] ) );
+            return true;
+        }
+        case GFXQ_W3DVISITED:   *result = w->stat_visited; return true;
+        case GFXQ_W3DTIME:      *result = w->time; return true;
+        case GFXQ_W3DWALLINFO: {
+            const wall_t* wl = wall_get( w, a[0], a[1] );
+            if ( wl == 0 || !whole( a[2], 0, 10, &i1 ) ) {
+                return false;
+            }
+            const double v[11] = { wl->x1, wl->y1, wl->x2, wl->y2, wl->tex, wl->upper, wl->lower, wl->next, wl->xoff, wl->yoff, wl->flags };
+            *result = v[i1];
+            return true;
+        }
+        case GFXQ_W3DSECINFO: {
+            if ( !whole( a[0], 0, W3D_MAXSECTORS - 1, &i1 ) || !whole( a[1], 0, 12, &i2 ) ) {
+                return false;
+            }
+            if ( i2 == 12 ) {
+                *result = sector_valid( w, i1 ) ? -1.0 : 0.0;
+                return true;
+            }
+            if ( !sector_valid( w, i1 ) ) {
+                return false;
+            }
+            const sector_t* s = &w->sectors[i1];
+            const double v[12] = { s->fz, s->cz, s->ftex, s->ctex, s->light, s->tag, s->fgx, s->fgy, s->cgx, s->cgy, s->sox, s->soy };
+            *result = v[i2];
+            return true;
+        }
+        case GFXQ_W3DTHINGINFO: {
+            const thing_t* th = thing_live( w, a[0] );
+            if ( th == 0 || !whole( a[1], 0, 8, &i2 ) ) {
+                return false;
+            }
+            const double v[9] = { th->x, th->y, th->tex, th->w, th->h, th->zoff, th->light, th->trans ? -1.0 : 0.0, th->sector };
+            *result = v[i2];
+            return true;
+        }
+        case GFXQ_W3DLIGHTNOW:
+            if ( !whole( a[0], 0, W3D_MAXSECTORS - 1, &i1 ) || !sector_valid( w, i1 ) ) {
+                return false;
+            }
+            *result = w->sectors[i1].elight;
+            return true;
+        case GFXQ_W3DMOVING:
+            if ( !whole( a[0], 0, W3D_MAXSECTORS - 1, &i1 ) || !sector_valid( w, i1 ) ) {
+                return false;
+            }
+            *result = w->sectors[i1].moving ? -1.0 : 0.0;
+            return true;
+        case GFXQ_W3DSLOPE: {
+            if ( !whole( a[0], 0, W3D_MAXSECTORS - 1, &i1 ) || !sector_valid( w, i1 ) ) {
+                return false;
+            }
+            const sector_t* s = &w->sectors[i1];
+            *result = a[1] < 0.5 ? ( a[2] < 0.5 ? s->fgx : s->fgy ) : ( a[2] < 0.5 ? s->cgx : s->cgy );
             return true;
         }
         case GFXQ_W3DSECTORS:   *result = w->nsectors; return true;

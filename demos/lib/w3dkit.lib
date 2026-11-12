@@ -17,6 +17,8 @@
 130 ' CALL W3K_BRICK(N,H) W3K_STONE(N,H) W3K_PLASTER(N,H) W3K_METAL(N,H) W3K_CARPET(N,H) W3K_TILES(N,H1,H2) W3K_PLANKS(N) W3K_GRASS(N) W3K_DOORTEX(N,H)
 140 '   W3K_SKY(N) (256 x 64) make a texture N (64 x 64, plaster and doors 64 x 128); W3K_WINDOW(N) and W3K_GRATE(N) have see-through parts (for masked walls)
 150 ' CALL W3K_PLANT(N) W3K_LAMP(N) W3K_BARREL(N) W3K_TORCH(N) (two frames N, N+1) W3K_MEDKIT(N) W3K_AMMOBOX(N) W3K_KEYCARD(N,H)   sprites (index 0 is see-through)
+155 ' Each W3K_WALK also advances the world's clock (W3D TICK) by the time since the last call: movers, scrolling, animated textures and light effects run by themselves.
+156 ' Mouse look: hold the right mouse button and drag (turns and looks up / down); W3K_MSENS = the speed in percent (100), -1 switches it off.
 160 ' CALL W3K_WALK                 one frame of walking: arrow keys / WASD / R F look / SHIFT run, or a game controller (left stick walk and strafe,
 170 '                               right stick turn and look, LT run); applies W3D MOVE and W3D TURN scaled by the time since the last call
 180 ' CALL W3K_JUMP(J)              a jump: J = -1 while the jump button is held (the height is W3D LIFT); call it each frame after W3K_WALK
@@ -352,6 +354,8 @@
 3480   IF V>1 THEN F=F/V:S=S/V
 3490   IF F<>0 OR S<>0 THEN W3D MOVE F*SP*DT,S*SP*DT
 3500   IF T<>0 OR L<>0 THEN W3D TURN T*115*W3K_TURN/100*DT,L*60*DT
+3502   W3D TICK DT
+3504   CALL W3K_MOUSELOOK
 3510 END PROC
 3520 ' a jump: call it every frame with -1 while the jump button is held (a new press jumps, if the feet are on the ground): the height above the floor goes
 3530 ' up and down like a thrown stone (W3D LIFT), up to about 40 units; steps up to 24 + that height can be taken while it lasts (out of a pool)
@@ -384,3 +388,18 @@
 3800   GFX LINE 0,Y,639,Y+H-1,FN W3K_C(0,1),BF
 3810   GFX LINE 0,Y,639,Y,FN W3K_C(0,6)
 3820 END PROC
+3830 ' mouse look: while the right button is held, dragging the mouse turns and looks up / down (W3K_MSENS: percent of the default speed, 100; 0 = off)
+3840 PROC W3K_MOUSELOOK
+3850   LOCAL X,Y,B
+3860   IF W3K_MSENS=0 AND W3K_MSET=0 THEN W3K_MSENS=100:W3K_MSET=-1
+3870   IF W3K_MSENS<=0 THEN EXIT PROC
+3880   B=MOUSE("B")
+3890   X=MOUSE("X"):Y=MOUSE("Y")
+3900   IF (B AND 2)<>0 THEN
+3910     IF W3K_MB<>0 THEN W3D TURN -(X-W3K_MX)*0.25*W3K_MSENS/100,-(Y-W3K_MY)*0.2*W3K_MSENS/100
+3920     W3K_MB=-1
+3930   ELSE
+3940     W3K_MB=0
+3950   END IF
+3960   W3K_MX=X:W3K_MY=Y
+3970 END PROC

@@ -1,0 +1,125 @@
+1 ' License: free for everybody to use, copy, change and build into executables (BUILD).
+2 ' An executable made with BUILD contains the Engine1999 runtime: the Engine1999 Runtime Exception
+3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
+4 ' in the executable (it shows with the command line option --engine1999-about).
+10 ' w3dmap - map files for the W3D renderer (a library: LOAD LIBRARY "w3dmap").
+20 '   N=FN WM_LOAD(file$)         clears the world (W3D CLEAR: pictures and settings stay) and reads a map file; the number of sectors read. Errors (no file ...) are raised as usual.
+30 '   CALL WM_SAVE(file$)         writes the world as a map file.
+40 '   CALL WM_CLEAR               W3D CLEAR; then CALL WM_LINE(l$) feeds lines of a map one by one (from DATA lines, a string ...).
+50 ' The map is a text file, one record per line, fields separated by commas (all numbers; blank lines and lines starting with an apostrophe are ignored; unknown records are skipped):
+60 '   W3DMAP,1                                     header (version)
+70 '   SKY,tex,repeat,shift      FOG,distance      FAR,distance
+80 '   SECTOR,n,floor,ceiling,floortex,ceiltex,light,tag
+90 '   SLOPE,n,floorx,floory,ceilx,ceily,originx,originy     slopes (rise per unit) around the origin
+100 '  WALL,n,x1,y1,x2,y2,tex,next,upper,lower,xoff,yoff,flags    the walls of sector n in this order (next -1 = solid)
+110 '  THING,n,x,y,tex,w,h,z,light,translucent,sector
+120 ' Not in the file (they belong to the program): the pictures, animations, scrolling, light effects, lamps, the camera and the player. See docs/3d-subsystem.md "Map files".
+130 LIBRARY "w3dmap","WM_"
+140 PROC WM_INIT
+150   DIM WM_F(16)
+160   WM_NF=0
+170 END PROC
+180 ' splits a line at the commas into WM_F(0..WM_NF-1) (the first field is the record name: WM_R$)
+190 PROC WM_SPLIT(L$)
+200   LOCAL P,Q,N
+210   N=0:P=1
+220   WM_R$=""
+230   WHILE P<=LEN(L$)+1 AND N<16
+240     Q=INSTR(P,L$,",")
+250     IF Q=0 THEN Q=LEN(L$)+1
+260     IF N=0 THEN
+270       WM_R$=MID$(L$,P,Q-P)
+280     ELSE
+290       WM_F(N)=VAL(MID$(L$,P,Q-P))
+300     END IF
+310     N=N+1
+320     P=Q+1
+330   WEND
+340   WM_NF=N
+350 END PROC
+360 PROC WM_CLEAR
+370   W3D CLEAR
+380   WM_CUR=-1
+390 END PROC
+400 ' one line of a map
+410 PROC WM_LINE(L$)
+420   LOCAL N,K
+430   IF LEN(L$)=0 THEN EXIT PROC
+440   IF LEFT$(L$,1)="'" THEN EXIT PROC
+450   CALL WM_SPLIT(L$)
+460   IF WM_R$="SKY" AND WM_NF>=4 THEN W3D SKY WM_F(1),WM_F(2),WM_F(3)
+470   IF WM_R$="FOG" AND WM_NF>=2 THEN W3D FOG WM_F(1)
+480   IF WM_R$="FAR" AND WM_NF>=2 THEN W3D FAR WM_F(1)
+490   IF WM_R$="SECTOR" AND WM_NF>=8 THEN
+500     W3D SECTOR WM_F(1),WM_F(2),WM_F(3),WM_F(4),WM_F(5),WM_F(6)
+510     W3D TAG WM_F(1),WM_F(7)
+520   END IF
+530   IF WM_R$="SLOPE" AND WM_NF>=8 THEN
+540     N=WM_F(1)
+550     IF WM_F(2)<>0 OR WM_F(3)<>0 THEN W3D SLOPE N,0,WM_F(2),WM_F(3),WM_F(6),WM_F(7)
+560     IF WM_F(4)<>0 OR WM_F(5)<>0 THEN W3D SLOPE N,1,WM_F(4),WM_F(5),WM_F(6),WM_F(7)
+570   END IF
+580   IF WM_R$="WALL" AND WM_NF>=13 THEN
+590     N=WM_F(1)
+600     W3D WALL N,WM_F(2),WM_F(3),WM_F(4),WM_F(5),WM_F(6),WM_F(7)
+610     K=W3D("WALLS",N)-1
+620     W3D WALLTEX N,K,WM_F(6),WM_F(8),WM_F(9)
+630     W3D WALLOFF N,K,WM_F(10),WM_F(11)
+640     IF WM_F(12)<>0 THEN W3D WALLFLAG N,K,WM_F(12)
+650   END IF
+660   IF WM_R$="THING" AND WM_NF>=11 THEN
+670     IF WM_F(10)>=0 THEN W3D THING WM_F(1),WM_F(2),WM_F(3),WM_F(4),WM_F(5),WM_F(6),WM_F(10) ELSE W3D THING WM_F(1),WM_F(2),WM_F(3),WM_F(4),WM_F(5),WM_F(6)
+680     W3D THINGZ WM_F(1),WM_F(7)
+690     IF WM_F(8)>=0 THEN W3D THINGLIGHT WM_F(1),WM_F(8)
+700     IF WM_F(9)<>0 THEN W3D THINGTRANS WM_F(1),1
+710   END IF
+720 END PROC
+730 FUNC WM_LOAD(F$)
+740   LOCAL L$
+750   CALL WM_CLEAR
+760   OPEN F$ FOR INPUT AS #1
+770   WHILE NOT EOF(1)
+780     LINE INPUT #1,L$
+790     CALL WM_LINE(L$)
+800   WEND
+810   CLOSE #1
+820   RETURN W3D("SECTORS")
+830 END FUNC
+910 PROC WM_SAVE(F$)
+920   LOCAL S,I,N,T$,K
+930   OPEN F$ FOR OUTPUT AS #1
+940   PRINT #1,"W3DMAP,1"
+950   FOR S=0 TO W3D("SECTORS")-1
+960     IF W3D("SECINFO",S,12) THEN
+970       T$="SECTOR,"+STR$(S)
+980       FOR K=0 TO 5
+990         T$=T$+","+STR$(W3D("SECINFO",S,K))
+1000      NEXT K
+1010      PRINT #1,T$
+1020      IF W3D("SECINFO",S,6)<>0 OR W3D("SECINFO",S,7)<>0 OR W3D("SECINFO",S,8)<>0 OR W3D("SECINFO",S,9)<>0 THEN
+1030        T$="SLOPE,"+STR$(S)
+1040        FOR K=6 TO 11
+1050          T$=T$+","+STR$(W3D("SECINFO",S,K))
+1060        NEXT K
+1070        PRINT #1,T$
+1080      END IF
+1090      N=W3D("WALLS",S)
+1100      FOR I=0 TO N-1
+1110        T$="WALL,"+STR$(S)+","+STR$(W3D("WALLINFO",S,I,0))+","+STR$(W3D("WALLINFO",S,I,1))+","+STR$(W3D("WALLINFO",S,I,2))+","+STR$(W3D("WALLINFO",S,I,3))
+1120        T$=T$+","+STR$(W3D("WALLINFO",S,I,4))+","+STR$(W3D("WALLINFO",S,I,7))+","+STR$(W3D("WALLINFO",S,I,5))+","+STR$(W3D("WALLINFO",S,I,6))
+1130        T$=T$+","+STR$(W3D("WALLINFO",S,I,8))+","+STR$(W3D("WALLINFO",S,I,9))+","+STR$(W3D("WALLINFO",S,I,10))
+1140        PRINT #1,T$
+1150      NEXT I
+1160    END IF
+1170  NEXT S
+1180  FOR I=0 TO 1023
+1190    IF W3D("TON",I) THEN
+1200      T$="THING,"+STR$(I)
+1210      FOR K=0 TO 8
+1220        T$=T$+","+STR$(W3D("THINGINFO",I,K))
+1230      NEXT K
+1240      PRINT #1,T$
+1250    END IF
+1260  NEXT I
+1270  CLOSE #1
+1280 END PROC

@@ -794,7 +794,11 @@ ui-geometry := num-expr "," num-expr "," num-expr "," num-expr "," num-expr .
 > and TAG change them; CAMERA x,y,angle[,pitch[,lift]] sets the viewer, TURN turns it, MOVE forward,right walks with collision (PLAYER sets size and step height); VIEW x,y,w,h[,scale[,fov]]
 > is the picture's place, FOG its distance, COLORMAP builds the brightness table from the palette, RENDER draws. THING n,x,y,tex,w,h places a thing (THINGZ, THINGTEX, THINGOFF,
 > THINGMOVE dx,dy, THINGLIGHT). W3D("X"\|"Y"\|"Z"\|"ANGLE"\|"PITCH"\|"SECTOR"\|"FLOORZ"\|"LIFT"\|"HIT"\|"SECTORS"\|"SHOTDIST"\|"SHOTX"\|"SHOTY"\|"SHOTKIND") need no argument, W3D("SECTORAT"\|"FLOORAT",x,y) two,
-> the others one: a sector (FLOOR CEIL LIGHT TAG WALLS), a thing (TX TY TZ TSECTOR TON DIST BEARING SEES), a texture (TEXW TEXH), a range (SHOOT USE).
+> the others one: a sector (FLOOR CEIL LIGHT TAG WALLS MOVING LIGHTNOW), a thing (TX TY TZ TSECTOR TON DIST BEARING SEES), a texture (TEXW TEXH), a range (SHOOT USE).
+> Newer (2026-11-12): SLOPE s,kind,gx,gy[,ox,oy] tilts floors and ceilings, SKY tex[,repeat[,shift]], FAR distance, CAMERA ...[,sector] and THING ...[,sector] name the sector (sectors can lie over each other),
+> WALLFLAG 8 = sky wall, 16 = translucent; TICK seconds advances the clock that SECMOVE s,speed,floor[,ceil] (moving floors and ceilings), ANIM n,first,count,fps (animated textures), SCROLL s,kind,dx,dy and
+> LIGHTFX s,mode[,amount[,rate]] use; LAMP n,x,y,z,radius,amount (point lights), THINGTRANS n,flag, CLEAR (delete sectors and things). Functions: W3D("SECTORZ",x,y,z) three arguments, ("CEILAT",x,y) two,
+> ("WALLINFO",s,i,k) three, ("SECINFO",s,k) ("THINGINFO",n,k) ("SLOPE",s,kind,axis) ("SLOPE") two or three, ("VISITED") ("TIME") none (see docs/3d-subsystem.md).
 
 ```ebnf
 w3d-stmt := XFUNC(W3D) ( RESET | COLORMAP | RENDER | TEXTURE num-expr "," str-expr |
@@ -803,12 +807,18 @@ w3d-stmt := XFUNC(W3D) ( RESET | COLORMAP | RENDER | TEXTURE num-expr "," str-ex
                              WALLTEX num-expr "," num-expr "," num-expr "," num-expr "," num-expr |
                              ( WALLOFF | THINGMOVE ) num-expr "," num-expr "," num-expr [ "," num-expr ] |
                              ( WALLFLAG | HEIGHT ) num-expr "," num-expr "," num-expr |
-                             ( LIGHT | TAG | THINGZ | THINGTEX | THINGLIGHT | MOVE ) num-expr "," num-expr | ( SKY | FOG | LIFT | THINGOFF ) num-expr |
-                             CAMERA num-expr "," num-expr "," num-expr [ "," num-expr [ "," num-expr ] ] |
+                             ( LIGHT | TAG | THINGZ | THINGTEX | THINGLIGHT | MOVE ) num-expr "," num-expr | ( FOG | LIFT | THINGOFF ) num-expr | SKY num-expr [ "," num-expr [ "," num-expr ] ] |
+                             CAMERA num-expr "," num-expr "," num-expr [ "," num-expr [ "," num-expr [ "," num-expr ] ] ] |
                              TURN num-expr [ "," num-expr ] |
                              PLAYER num-expr "," num-expr "," num-expr "," num-expr |
                              VIEW num-expr "," num-expr "," num-expr "," num-expr [ "," num-expr [ "," num-expr ] ] |
-                             THING num-expr "," num-expr "," num-expr "," num-expr "," num-expr "," num-expr ) .
+                             SLOPE num-expr "," num-expr "," num-expr "," num-expr [ "," num-expr "," num-expr ] |
+                             SECMOVE num-expr "," num-expr "," num-expr [ "," num-expr ] |
+                             ( ANIM | SCROLL ) num-expr "," num-expr "," num-expr "," num-expr |
+                             LIGHTFX num-expr "," num-expr [ "," num-expr [ "," num-expr ] ] |
+                             LAMP num-expr "," num-expr "," num-expr "," num-expr "," num-expr "," num-expr |
+                             THINGTRANS num-expr "," num-expr | ( TICK | FAR ) num-expr | CLEAR |
+                             THING num-expr "," num-expr "," num-expr "," num-expr "," num-expr "," num-expr [ "," num-expr ] ) .
 gfx-all-stmt := gfx-stmt | txt-stmt | tile-stmt | sprite-stmt | mouse-stmt | on-mouse-stmt | ui-stmt | w3d-stmt | cls-stmt | locate-stmt | htab-stmt | vtab-stmt | screenshot-stmt | color-stmt | symbol-stmt | design-stmt | design-row | on-collision-stmt .
 ```
 
