@@ -303,8 +303,6 @@ state
 goto 480 600 90
 deqq 480 510
 step 10
-goto 480 150 90
-step 120
 state
 PLAY
 run
@@ -314,10 +312,8 @@ check "sec 11"                                  "Deqq's round leads him through 
 check "DEQQ HAS CAUGHT YOU"                     "being caught"
 check "DEQQ MUTTERS, LOSES YOUR TRACK"          "losing Deqq's track"
 check "caught=1 dqs"                            "caught once after the first chase"
-count "HAS SEEN YOU" 4                          "the alarms (caught, lost track, after hiding, the one he gives up) but none while hidden"
+count "HAS SEEN YOU" 4                          "the alarms (caught, lost track, after hiding, the last chase) but none while hidden"
 check "THE PARTS BUILT IN STAY"                 "what you carried is put back"
-check "OUTSIDE IS NOT MY BUSINESS"               "Deqq loses interest when you are outside"
-nocheck " sec 0$"                               "Deqq stays inside the house while you are outside"
 nocheck "^Error"                                "a run time error"
 if [ $fail -ne 0 ]; then echo "$fail failure(s)"; fi
 exit $fail

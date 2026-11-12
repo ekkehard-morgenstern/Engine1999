@@ -13,6 +13,8 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+- **Deqq's House II: Deqq's round back, a back to the house** (2026-11-12, owner's request). (1) Reverted the give-up change of 2026-11-08: Deqq's round is the original 38 way points again (front garden included), he follows you outside and notices you there; removed `FUNC OUTSIDE`, the `DQS=3` way back and the give-up; the start / caught way point indexes (21 / 5) are the old ones; `deqq2test.sh` lost its two outside checks (alarm count text changed); man page sentence changed. (2) The back of the house: new sector 62 (`demos/levels/deqq2.bas`: a 300-high nook x 180..460, y 1050..1192 behind the house, joined to the back yard by a portal, its south wall (the north face of the house), the tower's side and front are house walls: 68 sectors); the generator's output was pasted into `demos/deqq2.bas` (the data lines are numbered in steps of 9 now). Tests: `deqq2test.sh`, `levelstest.sh`, `make man-check` ok; seen under Xvfb from the back yard (the back wall and the tower with windows). Backup `pre-deqq2-backside`.
+
 
 ## Log
 
