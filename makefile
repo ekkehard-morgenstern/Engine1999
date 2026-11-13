@@ -301,12 +301,13 @@ kit/engine1999c: kit/engine1999c.o kit/engine.lib
 	$(CCOMP) $(KITFLAGS) $(LDFLAGS) -o $@ kit/engine1999c.o kit/engine.lib -lrt -lm
 
 install: kit games version.h
-	install -d $(DESTDIR)$(BINDIR) $(DESTDIR)$(GAMESBINDIR) $(DESTDIR)$(LIBDIR)/lib $(DESTDIR)$(LIBDIR)/tools $(DESTDIR)$(SHAREDIR)/demos/lib $(DESTDIR)$(DOCDIR)/docs/images $(DESTDIR)$(DOCDIR)/docs/roadmap \
+	install -d $(DESTDIR)$(BINDIR) $(DESTDIR)$(GAMESBINDIR) $(DESTDIR)$(LIBDIR)/lib $(DESTDIR)$(LIBDIR)/tools $(DESTDIR)$(LIBDIR)/worlds $(DESTDIR)$(SHAREDIR)/demos/lib $(DESTDIR)$(DOCDIR)/docs/images $(DESTDIR)$(DOCDIR)/docs/roadmap \
 		$(DESTDIR)$(MANDIR)/man1 $(DESTDIR)$(MANDIR)/man6 $(DESTDIR)$(MANDIR)/man7 $(DESTDIR)$(APPDIR) $(DESTDIR)$(ICONDIR)
 	install -m 755 kit/engine1999 kit/engine1999c $(DESTDIR)$(BINDIR)
 	install -m 755 $(GAMEEXE) $(CONEXE) $(DESTDIR)$(GAMESBINDIR)
 	install -m 644 kit/engine1999.o kit/engine1999c.o kit/engine.lib $(DESTDIR)$(LIBDIR)
-	install -m 644 demos/*.bas demos/*.trk demos/README.md $(DESTDIR)$(SHAREDIR)/demos
+	install -m 644 demos/*.bas demos/*.trk demos/*.json demos/README.md $(DESTDIR)$(SHAREDIR)/demos
+	install -m 644 demos/*.world.json $(DESTDIR)$(LIBDIR)/worlds
 	install -m 644 demos/lib/*.lib $(DESTDIR)$(SHAREDIR)/demos/lib
 	install -m 644 demos/lib/*.lib $(DESTDIR)$(LIBDIR)/lib
 	install -m 644 tools/*.bas $(DESTDIR)$(LIBDIR)/tools

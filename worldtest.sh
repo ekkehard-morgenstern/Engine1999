@@ -54,7 +54,7 @@ LABEL LEVELDATA
 BAS
 cat "$T/data.txt"
 } | awk '{ printf "%d %s\n", NR*10, $0 }' > "$T/cmp.bas"
-cp demos/deqq2.world.json "$T/"
+mkdir "$T/worlds" && cp demos/deqq2.world.json "$T/worlds/"      # JSON LOAD finds it in worlds/ (the well-known folders)
 if ( cd "$T" && timeout 300 "$OLDPWD/engine1999c" cmp.bas > out 2> err ); then
     if cmp -s "$T/a.map" "$T/b.map"; then ok "same world as the DATA lines ($(grep -c '^SECTOR' "$T/a.map") sectors, $(grep -c '^WALL' "$T/a.map") walls, $(grep -c '^THING' "$T/a.map") things)"; else bad "the world differs: $(diff "$T/a.map" "$T/b.map" | head -n 6 | tr '\n' ' ')"; fi
 else bad "the comparison program failed: $(head -n 3 "$T/err" "$T/out")"; fi
