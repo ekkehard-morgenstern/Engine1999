@@ -369,5 +369,22 @@ check "THE GATE CREAKS: DEQQ IS COMING HOME"    "the warning at the gate"
 check "away=0 wp="                              "Deqq comes home from the town"
 check "away=-1 wp=5[0-9]"                       "Deqq leaves the house again and walks through the town"
 nocheck "^Error"                                "a run time error"
+# 6. the town is open to the player: out through the gate, over the pavement (the ghost lawn's railing must not block it), across the road, along the strip beside it into the east fields
+cat > $T/play <<'PLAY'
+deqqoff
+goto 480 120 90
+walk 480 -30
+walk 480 -100
+state
+walk 1950 -240
+walk 1950 -600
+walk 3000 -600
+walk 3000 1000
+state
+PLAY
+run
+check "sector=40[0-9]"                          "standing on the road after leaving the premises"
+check "sector=42[2-5]"                          "walking in the open country outside the road"
+nocheck "failed at"                             "a walk outside that got stuck"
 if [ $fail -ne 0 ]; then echo "$fail failure(s)"; fi
 exit $fail

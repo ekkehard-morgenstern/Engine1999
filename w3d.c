@@ -500,7 +500,7 @@ static int move_circle( const w3d_t* w, double* px, double* py, int* psec, doubl
         int neigh[64], nn = 0;
         for ( int i=0; i < cs->nwalls && nn < 64; ++i ) {
             int nb = cs->walls[i].next;
-            if ( sector_valid( w, nb ) && nb != *psec ) {
+            if ( sector_valid( w, nb ) && nb != *psec && !w->sectors[nb].ghost ) {     // a ghost sector is nobody's neighbour: its walls are only for the eye
                 bool dup = false;
                 for ( int j=0; j < nn; ++j ) {
                     dup = dup || neigh[j] == nb;
