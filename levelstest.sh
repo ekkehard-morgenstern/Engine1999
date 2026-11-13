@@ -1,6 +1,6 @@
 #!/bin/sh
 # Test of the generators in demos/levels (written in the built-in BASIC, run by engine1999c): the DATA lines / PLAY procedures they write must be the ones
-# that the demos contain (the output was pasted into demos/manor.bas, demos/bughunt.bas, demos/deqq.bas, demos/deqq2.world.json (the world document), demos/lib/deqqart.lib and demos/lib/music3d.lib).
+# that the demos contain (the output was pasted into demos/manor.bas, demos/bughunt.bas, demos/deqq.bas, demos/lib/deqqart.lib and demos/lib/music3d.lib).
 # For each generator the output has to appear as one unbroken run of lines in the target file (line numbers and surrounding blanks ignored).
 # Exit status = number of failures.
 cd "$(dirname "$0")" || exit 1
@@ -29,8 +29,6 @@ check() {   # check name program target
 }
 check manor demos/levels/manor.bas demos/manor.bas
 check bunker demos/levels/bunker.bas demos/bughunt.bas
-# deqq2: the generator writes the world document in demos/ (the game loads it with JSON LOAD)
-if timeout 120 ./engine1999c --allow=write demos/levels/deqq2.bas "$T/world.json" > "$T/out" 2> "$T/err" && cmp -s "$T/world.json" demos/deqq2.world.json; then printf '%-10s ok\n' deqq2; else echo "FAILED: deqq2 (the document is not demos/deqq2.world.json)"; fail=$((fail+1)); fi
 check deqq2art demos/levels/deqq2art.bas demos/lib/deqqart.lib
 check deqq1 demos/levels/deqq1.bas demos/deqq.bas
 # the showroom generator writes quoted DATA lines for the map when it is given "-" and "data"

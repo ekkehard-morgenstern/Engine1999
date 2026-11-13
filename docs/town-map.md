@@ -43,4 +43,4 @@ Drawn first, built second (owner's advice, 2026-11-13). Coordinates are the leve
 - Things of the town: the generator writes them after the sectors (`DATA n,x,y,texture,width,height,feet`, ended by `DATA -1`): doors, trees, pumps, the booth.
   Lamps and the verge trees are placed by `TOWNTHINGS` in the game.
 - Numbers: sectors 400..417 the ring road, 418..421 pavement / railing / gate, 422..425 the four field strips, 430.. forecourt, lots, houses.
-- Generator: `demos/levels/deqq2.bas` (`YARD`, `SHOP`, `BLDG`, `ADDTH`); art: `demos/lib/deqqart.lib` (`DA_TOWN`, `DA_SKYLINE`).
+- The town is in the world document `demos/deqq2.world.json` (the former generator is gone: edit the document, `worldtest.sh` checks it); art: `demos/lib/deqqart.lib` (`DA_TOWN`, `DA_SKYLINE`).

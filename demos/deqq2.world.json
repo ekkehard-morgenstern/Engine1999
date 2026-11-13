@@ -155,7 +155,8 @@
           "side": "S",
           "range": [180, 840]
         }
-      ]
+      ],
+      "name": "back garden (behind the house)"
     },
     {
       "id": 9,
@@ -186,7 +187,9 @@
       },
       "light": 200,
       "tag": 1,
-      "walls": 12
+      "walls": 12,
+      "name": "front door",
+      "note": "a door: a passage as deep as the wall; the game opens it by raising its ceiling"
     },
     {
       "id": 7,
@@ -201,7 +204,9 @@
       },
       "light": 190,
       "tag": 2,
-      "walls": 12
+      "walls": 12,
+      "name": "kitchen door (west)",
+      "note": "a door: a passage as deep as the wall; the game opens it"
     },
     {
       "id": 8,
@@ -216,7 +221,9 @@
       },
       "light": 190,
       "tag": 3,
-      "walls": 12
+      "walls": 12,
+      "name": "shed door",
+      "note": "a door: the game opens it"
     },
     {
       "id": 61,
@@ -231,12 +238,13 @@
       },
       "light": 255,
       "tag": 0,
-      "walls": 1
+      "walls": 1,
+      "name": "shed door niche"
     },
     {
       "id": 10,
       "name": "kitchen",
-      "box": [200, 330, 400, 680],
+      "box": [200, 330, 395, 680],
       "floor": {
         "z": 0,
         "tex": 14
@@ -252,7 +260,7 @@
     {
       "id": 11,
       "name": "hall (front)",
-      "box": [400, 330, 560, 400],
+      "box": [405, 330, 555, 400],
       "floor": {
         "z": 0,
         "tex": 13
@@ -267,7 +275,7 @@
     },
     {
       "id": 65,
-      "box": [400, 400, 450, 592],
+      "box": [405, 400, 450, 592],
       "floor": {
         "z": 0,
         "tex": 13
@@ -278,11 +286,12 @@
       },
       "light": 215,
       "tag": 21,
-      "walls": 2
+      "walls": 2,
+      "name": "hall, west of the stairs"
     },
     {
       "id": 66,
-      "box": [510, 400, 560, 592],
+      "box": [510, 400, 555, 592],
       "floor": {
         "z": 0,
         "tex": 13
@@ -293,11 +302,12 @@
       },
       "light": 215,
       "tag": 21,
-      "walls": 2
+      "walls": 2,
+      "name": "hall, east of the stairs"
     },
     {
       "id": 67,
-      "box": [400, 592, 560, 680],
+      "box": [405, 592, 555, 680],
       "floor": {
         "z": 0,
         "tex": 13
@@ -308,12 +318,13 @@
       },
       "light": 215,
       "tag": 21,
-      "walls": 2
+      "walls": 2,
+      "name": "hall (back)"
     },
     {
       "id": 12,
       "name": "living room",
-      "box": [560, 330, 800, 680],
+      "box": [565, 330, 800, 680],
       "floor": {
         "z": 0,
         "tex": 15
@@ -339,7 +350,8 @@
       },
       "light": 195,
       "tag": 0,
-      "walls": 18
+      "walls": 18,
+      "name": "hall stairs, step 1"
     },
     {
       "id": 14,
@@ -354,7 +366,8 @@
       },
       "light": 195,
       "tag": 0,
-      "walls": 18
+      "walls": 18,
+      "name": "hall stairs, step 2"
     },
     {
       "id": 15,
@@ -369,7 +382,8 @@
       },
       "light": 195,
       "tag": 0,
-      "walls": 18
+      "walls": 18,
+      "name": "hall stairs, step 3"
     },
     {
       "id": 16,
@@ -384,7 +398,8 @@
       },
       "light": 195,
       "tag": 0,
-      "walls": 18
+      "walls": 18,
+      "name": "hall stairs, step 4"
     },
     {
       "id": 17,
@@ -399,7 +414,8 @@
       },
       "light": 195,
       "tag": 0,
-      "walls": 18
+      "walls": 18,
+      "name": "hall stairs, step 5"
     },
     {
       "id": 18,
@@ -414,7 +430,8 @@
       },
       "light": 195,
       "tag": 0,
-      "walls": 18
+      "walls": 18,
+      "name": "hall stairs, step 6"
     },
     {
       "id": 19,
@@ -429,7 +446,8 @@
       },
       "light": 195,
       "tag": 0,
-      "walls": 18
+      "walls": 18,
+      "name": "hall stairs, step 7"
     },
     {
       "id": 20,
@@ -444,12 +462,13 @@
       },
       "light": 195,
       "tag": 0,
-      "walls": 18
+      "walls": 18,
+      "name": "hall stairs, step 8"
     },
     {
       "id": 21,
       "name": "landing",
-      "box": [400, 592, 560, 680],
+      "box": [405, 592, 555, 680],
       "floor": {
         "z": 112,
         "tex": 9
@@ -465,7 +484,7 @@
     {
       "id": 23,
       "name": "bathroom",
-      "box": [200, 330, 400, 680],
+      "box": [200, 330, 395, 680],
       "floor": {
         "z": 112,
         "tex": 17
@@ -481,7 +500,7 @@
     {
       "id": 22,
       "name": "bedroom",
-      "box": [560, 330, 800, 620],
+      "box": [565, 330, 800, 620],
       "floor": {
         "z": 112,
         "tex": 16
@@ -496,7 +515,7 @@
     },
     {
       "id": 48,
-      "box": [560, 620, 608, 680],
+      "box": [565, 620, 608, 680],
       "floor": {
         "z": 112,
         "tex": 16
@@ -507,7 +526,8 @@
       },
       "light": 195,
       "tag": 24,
-      "walls": 5
+      "walls": 5,
+      "name": "bedroom, foot of the attic stairs"
     },
     {
       "id": 24,
@@ -522,7 +542,8 @@
       },
       "light": 160,
       "tag": 0,
-      "walls": 9
+      "walls": 9,
+      "name": "attic stairs, step 1"
     },
     {
       "id": 25,
@@ -537,7 +558,8 @@
       },
       "light": 160,
       "tag": 0,
-      "walls": 9
+      "walls": 9,
+      "name": "attic stairs, step 2"
     },
     {
       "id": 26,
@@ -552,7 +574,8 @@
       },
       "light": 160,
       "tag": 0,
-      "walls": 9
+      "walls": 9,
+      "name": "attic stairs, step 3"
     },
     {
       "id": 27,
@@ -567,7 +590,8 @@
       },
       "light": 160,
       "tag": 0,
-      "walls": 9
+      "walls": 9,
+      "name": "attic stairs, step 4"
     },
     {
       "id": 28,
@@ -582,7 +606,8 @@
       },
       "light": 160,
       "tag": 0,
-      "walls": 9
+      "walls": 9,
+      "name": "attic stairs, step 5"
     },
     {
       "id": 29,
@@ -597,7 +622,8 @@
       },
       "light": 160,
       "tag": 0,
-      "walls": 9
+      "walls": 9,
+      "name": "attic stairs, step 6"
     },
     {
       "id": 30,
@@ -612,7 +638,8 @@
       },
       "light": 160,
       "tag": 0,
-      "walls": 9
+      "walls": 9,
+      "name": "attic stairs, step 7"
     },
     {
       "id": 31,
@@ -627,7 +654,8 @@
       },
       "light": 160,
       "tag": 0,
-      "walls": 9
+      "walls": 9,
+      "name": "attic stairs, step 8"
     },
     {
       "id": 32,
@@ -658,7 +686,8 @@
       },
       "light": 150,
       "tag": 26,
-      "walls": 25
+      "walls": 25,
+      "name": "attic, north part"
     },
     {
       "id": 33,
@@ -689,7 +718,8 @@
       },
       "light": 255,
       "tag": 0,
-      "walls": 1
+      "walls": 1,
+      "name": "cellar hatch niche"
     },
     {
       "id": 34,
@@ -704,7 +734,8 @@
       },
       "light": 90,
       "tag": 0,
-      "walls": 8
+      "walls": 8,
+      "name": "cellar stairs, step 1"
     },
     {
       "id": 35,
@@ -719,7 +750,8 @@
       },
       "light": 90,
       "tag": 0,
-      "walls": 8
+      "walls": 8,
+      "name": "cellar stairs, step 2"
     },
     {
       "id": 36,
@@ -734,7 +766,8 @@
       },
       "light": 90,
       "tag": 0,
-      "walls": 8
+      "walls": 8,
+      "name": "cellar stairs, step 3"
     },
     {
       "id": 37,
@@ -749,7 +782,8 @@
       },
       "light": 90,
       "tag": 0,
-      "walls": 8
+      "walls": 8,
+      "name": "cellar stairs, step 4"
     },
     {
       "id": 38,
@@ -764,7 +798,8 @@
       },
       "light": 90,
       "tag": 0,
-      "walls": 8
+      "walls": 8,
+      "name": "cellar stairs, step 5"
     },
     {
       "id": 39,
@@ -784,7 +819,7 @@
     },
     {
       "id": 40,
-      "box": [410, 680, 440, 730],
+      "box": [410, 680, 440, 720],
       "floor": {
         "z": 0,
         "tex": 13
@@ -795,11 +830,13 @@
       },
       "light": 25,
       "tag": 50,
-      "walls": 23
+      "walls": 23,
+      "name": "alcove, hall (back wall)",
+      "note": "hiding place (tag 50): a recess in the wall that leaves 10 units of wall behind it"
     },
     {
       "id": 41,
-      "box": [220, 680, 270, 730],
+      "box": [220, 680, 270, 720],
       "floor": {
         "z": 0,
         "tex": 14
@@ -810,11 +847,13 @@
       },
       "light": 25,
       "tag": 50,
-      "walls": 23
+      "walls": 23,
+      "name": "alcove, kitchen (back wall)",
+      "note": "hiding place (tag 50): a recess in the wall that leaves 10 units of wall behind it"
     },
     {
       "id": 42,
-      "box": [700, 680, 760, 730],
+      "box": [700, 680, 760, 720],
       "floor": {
         "z": 0,
         "tex": 15
@@ -825,11 +864,13 @@
       },
       "light": 25,
       "tag": 50,
-      "walls": 23
+      "walls": 23,
+      "name": "alcove, living room (back wall)",
+      "note": "hiding place (tag 50): a recess in the wall that leaves 10 units of wall behind it"
     },
     {
       "id": 43,
-      "box": [562, 680, 604, 730],
+      "box": [565, 680, 604, 720],
       "floor": {
         "z": 112,
         "tex": 16
@@ -840,11 +881,13 @@
       },
       "light": 25,
       "tag": 50,
-      "walls": 23
+      "walls": 23,
+      "name": "alcove, bedroom stairs (back wall)",
+      "note": "hiding place (tag 50): a recess in the wall that leaves 10 units of wall behind it"
     },
     {
       "id": 44,
-      "box": [220, 680, 280, 730],
+      "box": [220, 680, 280, 720],
       "floor": {
         "z": 112,
         "tex": 17
@@ -855,7 +898,9 @@
       },
       "light": 25,
       "tag": 50,
-      "walls": 23
+      "walls": 23,
+      "name": "alcove, bathroom (back wall)",
+      "note": "hiding place (tag 50): a recess in the wall that leaves 10 units of wall behind it"
     },
     {
       "id": 45,
@@ -870,11 +915,13 @@
       },
       "light": 20,
       "tag": 50,
-      "walls": 23
+      "walls": 23,
+      "name": "alcove, cellar (west wall)",
+      "note": "hiding place (tag 50): a recess in the wall that leaves 10 units of wall behind it"
     },
     {
       "id": 46,
-      "box": [800, 340, 840, 400],
+      "box": [800, 340, 830, 400],
       "floor": {
         "z": 224,
         "tex": 9
@@ -885,7 +932,9 @@
       },
       "light": 20,
       "tag": 50,
-      "walls": 23
+      "walls": 23,
+      "name": "alcove, attic (east wall)",
+      "note": "hiding place (tag 50): a recess in the wall that leaves 10 units of wall behind it"
     },
     {
       "id": 80,
@@ -900,7 +949,9 @@
       },
       "light": 200,
       "tag": 0,
-      "walls": 1
+      "walls": 1,
+      "name": "window niche, front, ground floor (x 282)",
+      "note": "the niche behind a glass pane (translucent, blocks walking)"
     },
     {
       "id": 81,
@@ -915,7 +966,9 @@
       },
       "light": 200,
       "tag": 0,
-      "walls": 1
+      "walls": 1,
+      "name": "window niche, front, ground floor (x 672)",
+      "note": "the niche behind a glass pane (translucent, blocks walking)"
     },
     {
       "id": 82,
@@ -930,7 +983,9 @@
       },
       "light": 200,
       "tag": 0,
-      "walls": 1
+      "walls": 1,
+      "name": "window niche, front, upper floor (x 354)",
+      "note": "the niche behind a glass pane (translucent, blocks walking)"
     },
     {
       "id": 83,
@@ -945,7 +1000,9 @@
       },
       "light": 200,
       "tag": 0,
-      "walls": 1
+      "walls": 1,
+      "name": "window niche, front, upper floor (x 752)",
+      "note": "the niche behind a glass pane (translucent, blocks walking)"
     },
     {
       "id": 84,
@@ -960,7 +1017,9 @@
       },
       "light": 200,
       "tag": 0,
-      "walls": 1
+      "walls": 1,
+      "name": "window niche, front, attic (x 592)",
+      "note": "the niche behind a glass pane (translucent, blocks walking)"
     },
     {
       "id": 85,
@@ -975,7 +1034,9 @@
       },
       "light": 200,
       "tag": 0,
-      "walls": 1
+      "walls": 1,
+      "name": "window niche, west, ground floor (x 412)",
+      "note": "the niche behind a glass pane (translucent, blocks walking)"
     },
     {
       "id": 86,
@@ -990,7 +1051,9 @@
       },
       "light": 200,
       "tag": 0,
-      "walls": 1
+      "walls": 1,
+      "name": "window niche, west, upper floor (x 482)",
+      "note": "the niche behind a glass pane (translucent, blocks walking)"
     },
     {
       "id": 88,
@@ -1005,7 +1068,9 @@
       },
       "light": 200,
       "tag": 0,
-      "walls": 1
+      "walls": 1,
+      "name": "window niche, east, ground floor (x 432)",
+      "note": "the niche behind a glass pane (translucent, blocks walking)"
     },
     {
       "id": 89,
@@ -1020,7 +1085,9 @@
       },
       "light": 200,
       "tag": 0,
-      "walls": 1
+      "walls": 1,
+      "name": "window niche, east, upper floor (x 512)",
+      "note": "the niche behind a glass pane (translucent, blocks walking)"
     },
     {
       "id": 90,
@@ -1035,7 +1102,9 @@
       },
       "light": 200,
       "tag": 0,
-      "walls": 1
+      "walls": 1,
+      "name": "window niche, east, attic (x 590)",
+      "note": "the niche behind a glass pane (translucent, blocks walking)"
     },
     {
       "id": 92,
@@ -1050,7 +1119,9 @@
       },
       "light": 200,
       "tag": 0,
-      "walls": 1
+      "walls": 1,
+      "name": "window niche, back, ground floor (x 632)",
+      "note": "the niche behind a glass pane (translucent, blocks walking)"
     },
     {
       "id": 93,
@@ -1065,7 +1136,9 @@
       },
       "light": 200,
       "tag": 0,
-      "walls": 1
+      "walls": 1,
+      "name": "window niche, back, upper floor (x 332)",
+      "note": "the niche behind a glass pane (translucent, blocks walking)"
     },
     {
       "id": 94,
@@ -1080,7 +1153,9 @@
       },
       "light": 200,
       "tag": 0,
-      "walls": 1
+      "walls": 1,
+      "name": "window niche, back, upper floor (x 482)",
+      "note": "the niche behind a glass pane (translucent, blocks walking)"
     },
     {
       "id": 95,
@@ -1095,7 +1170,9 @@
       },
       "light": 200,
       "tag": 0,
-      "walls": 1
+      "walls": 1,
+      "name": "window niche, back, attic (x 566)",
+      "note": "the niche behind a glass pane (translucent, blocks walking)"
     },
     {
       "id": 400,
@@ -1110,7 +1187,8 @@
       },
       "light": 200,
       "tag": 30,
-      "walls": 214
+      "walls": 214,
+      "name": "road, south-west corner"
     },
     {
       "id": 409,
@@ -1125,7 +1203,8 @@
       },
       "light": 200,
       "tag": 30,
-      "walls": 214
+      "walls": 214,
+      "name": "road, north-west corner"
     },
     {
       "id": 401,
@@ -1140,7 +1219,8 @@
       },
       "light": 200,
       "tag": 30,
-      "walls": 214
+      "walls": 214,
+      "name": "road, south (west)"
     },
     {
       "id": 410,
@@ -1155,7 +1235,8 @@
       },
       "light": 200,
       "tag": 30,
-      "walls": 214
+      "walls": 214,
+      "name": "road, north (west)"
     },
     {
       "id": 402,
@@ -1170,7 +1251,8 @@
       },
       "light": 200,
       "tag": 30,
-      "walls": 214
+      "walls": 214,
+      "name": "road, south (middle)"
     },
     {
       "id": 411,
@@ -1185,7 +1267,8 @@
       },
       "light": 200,
       "tag": 30,
-      "walls": 214
+      "walls": 214,
+      "name": "road, north (middle)"
     },
     {
       "id": 403,
@@ -1200,7 +1283,8 @@
       },
       "light": 200,
       "tag": 30,
-      "walls": 214
+      "walls": 214,
+      "name": "road, south (east)"
     },
     {
       "id": 412,
@@ -1215,7 +1299,8 @@
       },
       "light": 200,
       "tag": 30,
-      "walls": 214
+      "walls": 214,
+      "name": "road, north (east)"
     },
     {
       "id": 404,
@@ -1230,7 +1315,8 @@
       },
       "light": 200,
       "tag": 30,
-      "walls": 214
+      "walls": 214,
+      "name": "road, south-east corner"
     },
     {
       "id": 413,
@@ -1245,7 +1331,8 @@
       },
       "light": 200,
       "tag": 30,
-      "walls": 214
+      "walls": 214,
+      "name": "road, north-east corner"
     },
     {
       "id": 405,
@@ -1260,7 +1347,8 @@
       },
       "light": 200,
       "tag": 30,
-      "walls": 214
+      "walls": 214,
+      "name": "road, west (south)"
     },
     {
       "id": 414,
@@ -1275,7 +1363,8 @@
       },
       "light": 200,
       "tag": 30,
-      "walls": 214
+      "walls": 214,
+      "name": "road, east (south)"
     },
     {
       "id": 406,
@@ -1290,7 +1379,8 @@
       },
       "light": 200,
       "tag": 30,
-      "walls": 214
+      "walls": 214,
+      "name": "road, west (middle)"
     },
     {
       "id": 415,
@@ -1305,7 +1395,8 @@
       },
       "light": 200,
       "tag": 30,
-      "walls": 214
+      "walls": 214,
+      "name": "road, east (middle)"
     },
     {
       "id": 407,
@@ -1320,7 +1411,8 @@
       },
       "light": 200,
       "tag": 30,
-      "walls": 214
+      "walls": 214,
+      "name": "road, west (north)"
     },
     {
       "id": 416,
@@ -1335,7 +1427,8 @@
       },
       "light": 200,
       "tag": 30,
-      "walls": 214
+      "walls": 214,
+      "name": "road, east (north)"
     },
     {
       "id": 408,
@@ -1350,7 +1443,8 @@
       },
       "light": 200,
       "tag": 30,
-      "walls": 214
+      "walls": 214,
+      "name": "road, west (far north)"
     },
     {
       "id": 417,
@@ -1365,7 +1459,8 @@
       },
       "light": 200,
       "tag": 30,
-      "walls": 214
+      "walls": 214,
+      "name": "road, east (far north)"
     },
     {
       "id": 418,
@@ -1380,7 +1475,8 @@
       },
       "light": 255,
       "tag": 31,
-      "walls": 214
+      "walls": 214,
+      "name": "pavement, in front of the fence"
     },
     {
       "id": 419,
@@ -1395,7 +1491,8 @@
       },
       "light": 255,
       "tag": 0,
-      "walls": 251
+      "walls": 251,
+      "name": "gate, west part"
     },
     {
       "id": 420,
@@ -1410,7 +1507,8 @@
       },
       "light": 255,
       "tag": 0,
-      "walls": 251
+      "walls": 251,
+      "name": "gate"
     },
     {
       "id": 421,
@@ -1425,7 +1523,8 @@
       },
       "light": 255,
       "tag": 0,
-      "walls": 251
+      "walls": 251,
+      "name": "gate, east part"
     },
     {
       "id": 422,
@@ -1440,7 +1539,8 @@
       },
       "light": 255,
       "tag": 0,
-      "walls": 29
+      "walls": 29,
+      "name": "grass strip, south"
     },
     {
       "id": 423,
@@ -1455,7 +1555,8 @@
       },
       "light": 255,
       "tag": 0,
-      "walls": 29
+      "walls": 29,
+      "name": "grass strip, north"
     },
     {
       "id": 424,
@@ -1470,7 +1571,8 @@
       },
       "light": 255,
       "tag": 0,
-      "walls": 29
+      "walls": 29,
+      "name": "grass strip, west"
     },
     {
       "id": 425,
@@ -1485,7 +1587,8 @@
       },
       "light": 255,
       "tag": 0,
-      "walls": 29
+      "walls": 29,
+      "name": "grass strip, east"
     },
     {
       "id": 426,
@@ -1503,6 +1606,74 @@
       "tag": 97,
       "walls": 214,
       "ghost": true
+    },
+    {
+      "id": 116,
+      "name": "doorway kitchen / hall",
+      "note": "the opening through the 10 thick partition between kitchen and hall",
+      "box": [395, 430, 405, 560],
+      "floor": {
+        "z": 0,
+        "tex": 13
+      },
+      "ceiling": {
+        "z": 112,
+        "tex": 2
+      },
+      "light": 215,
+      "tag": 21,
+      "walls": 2
+    },
+    {
+      "id": 117,
+      "name": "doorway hall / living room",
+      "note": "the opening through the 10 thick partition between hall and living room",
+      "box": [555, 430, 565, 560],
+      "floor": {
+        "z": 0,
+        "tex": 13
+      },
+      "ceiling": {
+        "z": 112,
+        "tex": 2
+      },
+      "light": 215,
+      "tag": 21,
+      "walls": 2
+    },
+    {
+      "id": 118,
+      "name": "doorway bathroom / landing",
+      "note": "the door opening through the 10 thick partition between bathroom and landing",
+      "box": [395, 610, 405, 670],
+      "floor": {
+        "z": 112,
+        "tex": 9
+      },
+      "ceiling": {
+        "z": 224,
+        "tex": 7
+      },
+      "light": 205,
+      "tag": 23,
+      "walls": 7
+    },
+    {
+      "id": 119,
+      "name": "doorway landing / bedroom stair foot",
+      "note": "the opening through the 10 thick partition between landing and the foot of the attic stairs",
+      "box": [555, 625, 565, 675],
+      "floor": {
+        "z": 112,
+        "tex": 9
+      },
+      "ceiling": {
+        "z": 224,
+        "tex": 7
+      },
+      "light": 205,
+      "tag": 23,
+      "walls": 7
     }
   ],
   "solids": [
@@ -1523,7 +1694,9 @@
       "in": 12,
       "rim": {
         "tex": 26
-      }
+      },
+      "name": "tall cupboard",
+      "note": "a solid block: the warp crystal is on top, out of reach"
     },
     {
       "id": 51,
@@ -1542,7 +1715,9 @@
       "in": 12,
       "rim": {
         "tex": 26
-      }
+      },
+      "name": "chair place",
+      "note": "the game raises it (W3D HEIGHT) when the chair is put under the cupboard"
     },
     {
       "id": 52,
@@ -1561,7 +1736,8 @@
       "in": 22,
       "rim": {
         "tex": 26
-      }
+      },
+      "name": "bed"
     },
     {
       "id": 53,
@@ -1580,7 +1756,8 @@
       "in": 10,
       "rim": {
         "tex": 26
-      }
+      },
+      "name": "kitchen table"
     },
     {
       "id": 70,
@@ -1599,7 +1776,9 @@
       "in": 5,
       "rim": {
         "tex": 19
-      }
+      },
+      "name": "pond",
+      "note": "water: animated by the game"
     },
     {
       "id": 430,
@@ -1618,7 +1797,8 @@
       "in": 422,
       "rim": {
         "tex": 285
-      }
+      },
+      "name": "house at x -432 y -350 (two storeys)"
     },
     {
       "id": 431,
@@ -1637,7 +1817,8 @@
       "in": 422,
       "rim": {
         "tex": 286
-      }
+      },
+      "name": "house at x -152 y -350 (two storeys)"
     },
     {
       "id": 432,
@@ -1656,7 +1837,8 @@
       "in": 422,
       "rim": {
         "tex": 287
-      }
+      },
+      "name": "house at x 128 y -350 (two storeys)"
     },
     {
       "id": 433,
@@ -1675,7 +1857,8 @@
       "in": 422,
       "rim": {
         "tex": 288
-      }
+      },
+      "name": "house at x 408 y -350 (two storeys)"
     },
     {
       "id": 434,
@@ -1694,7 +1877,8 @@
       "in": 422,
       "rim": {
         "tex": 220
-      }
+      },
+      "name": "gas station lot"
     },
     {
       "id": 435,
@@ -1713,7 +1897,8 @@
       "in": 434,
       "rim": {
         "tex": 289
-      }
+      },
+      "name": "gas station kiosk"
     },
     {
       "id": 436,
@@ -1732,7 +1917,8 @@
       "in": 434,
       "rim": {
         "tex": 251
-      }
+      },
+      "name": "price sign post"
     },
     {
       "id": 437,
@@ -1751,7 +1937,8 @@
       "in": 434,
       "rim": {
         "tex": 251
-      }
+      },
+      "name": "canopy post 1"
     },
     {
       "id": 438,
@@ -1770,7 +1957,8 @@
       "in": 434,
       "rim": {
         "tex": 251
-      }
+      },
+      "name": "canopy post 2"
     },
     {
       "id": 439,
@@ -1789,7 +1977,8 @@
       "in": 434,
       "rim": {
         "tex": 251
-      }
+      },
+      "name": "canopy post 3"
     },
     {
       "id": 440,
@@ -1808,7 +1997,8 @@
       "in": 434,
       "rim": {
         "tex": 251
-      }
+      },
+      "name": "canopy post 4"
     },
     {
       "id": 441,
@@ -1827,7 +2017,8 @@
       "in": 434,
       "rim": {
         "tex": 251
-      }
+      },
+      "name": "price board"
     },
     {
       "id": 442,
@@ -1847,7 +2038,9 @@
       "rim": {
         "tex": 250,
         "flags": ["masked", "block"]
-      }
+      },
+      "name": "lot at x 1320 y -352",
+      "note": "a fenced plot of the grass strip; the house stands on it"
     },
     {
       "id": 443,
@@ -1866,7 +2059,8 @@
       "in": 442,
       "rim": {
         "tex": 261
-      }
+      },
+      "name": "house at x 1320 y -304 (one storey)"
     },
     {
       "id": 444,
@@ -1886,7 +2080,9 @@
       "rim": {
         "tex": 250,
         "flags": ["masked", "block"]
-      }
+      },
+      "name": "lot at x 1660 y -352",
+      "note": "a fenced plot of the grass strip; the house stands on it"
     },
     {
       "id": 445,
@@ -1905,7 +2101,8 @@
       "in": 444,
       "rim": {
         "tex": 272
-      }
+      },
+      "name": "house at x 1660 y -304 (two storeys)"
     },
     {
       "id": 446,
@@ -1925,7 +2122,9 @@
       "rim": {
         "tex": 250,
         "flags": ["masked", "block"]
-      }
+      },
+      "name": "lot at x -400 y -660",
+      "note": "a fenced plot of the grass strip; the house stands on it"
     },
     {
       "id": 447,
@@ -1944,7 +2143,8 @@
       "in": 446,
       "rim": {
         "tex": 260
-      }
+      },
+      "name": "house at x -400 y -600 (one storey)"
     },
     {
       "id": 448,
@@ -1964,7 +2164,9 @@
       "rim": {
         "tex": 250,
         "flags": ["masked", "block"]
-      }
+      },
+      "name": "lot at x -60 y -660",
+      "note": "a fenced plot of the grass strip; the house stands on it"
     },
     {
       "id": 449,
@@ -1983,7 +2185,8 @@
       "in": 448,
       "rim": {
         "tex": 271
-      }
+      },
+      "name": "house at x -60 y -600 (two storeys)"
     },
     {
       "id": 450,
@@ -2003,7 +2206,9 @@
       "rim": {
         "tex": 250,
         "flags": ["masked", "block"]
-      }
+      },
+      "name": "lot at x 280 y -660",
+      "note": "a fenced plot of the grass strip; the house stands on it"
     },
     {
       "id": 451,
@@ -2022,7 +2227,8 @@
       "in": 450,
       "rim": {
         "tex": 263
-      }
+      },
+      "name": "house at x 280 y -600 (one storey)"
     },
     {
       "id": 452,
@@ -2042,7 +2248,9 @@
       "rim": {
         "tex": 250,
         "flags": ["masked", "block"]
-      }
+      },
+      "name": "lot at x 620 y -660",
+      "note": "a fenced plot of the grass strip; the house stands on it"
     },
     {
       "id": 453,
@@ -2061,7 +2269,8 @@
       "in": 452,
       "rim": {
         "tex": 270
-      }
+      },
+      "name": "house at x 620 y -600 (two storeys)"
     },
     {
       "id": 454,
@@ -2081,7 +2290,9 @@
       "rim": {
         "tex": 250,
         "flags": ["masked", "block"]
-      }
+      },
+      "name": "lot at x 960 y -660",
+      "note": "a fenced plot of the grass strip; the house stands on it"
     },
     {
       "id": 455,
@@ -2100,7 +2311,8 @@
       "in": 454,
       "rim": {
         "tex": 262
-      }
+      },
+      "name": "house at x 960 y -600 (one storey)"
     },
     {
       "id": 456,
@@ -2120,7 +2332,9 @@
       "rim": {
         "tex": 250,
         "flags": ["masked", "block"]
-      }
+      },
+      "name": "lot at x 1300 y -660",
+      "note": "a fenced plot of the grass strip; the house stands on it"
     },
     {
       "id": 457,
@@ -2139,7 +2353,8 @@
       "in": 456,
       "rim": {
         "tex": 273
-      }
+      },
+      "name": "house at x 1300 y -600 (two storeys)"
     },
     {
       "id": 458,
@@ -2159,7 +2374,9 @@
       "rim": {
         "tex": 250,
         "flags": ["masked", "block"]
-      }
+      },
+      "name": "lot at x -400 y -1000",
+      "note": "a fenced plot of the grass strip; the house stands on it"
     },
     {
       "id": 459,
@@ -2178,7 +2395,8 @@
       "in": 458,
       "rim": {
         "tex": 272
-      }
+      },
+      "name": "house at x -400 y -940 (two storeys)"
     },
     {
       "id": 460,
@@ -2198,7 +2416,9 @@
       "rim": {
         "tex": 250,
         "flags": ["masked", "block"]
-      }
+      },
+      "name": "lot at x -60 y -1000",
+      "note": "a fenced plot of the grass strip; the house stands on it"
     },
     {
       "id": 461,
@@ -2217,7 +2437,8 @@
       "in": 460,
       "rim": {
         "tex": 263
-      }
+      },
+      "name": "house at x -60 y -940 (one storey)"
     },
     {
       "id": 462,
@@ -2237,7 +2458,9 @@
       "rim": {
         "tex": 250,
         "flags": ["masked", "block"]
-      }
+      },
+      "name": "lot at x 280 y -1000",
+      "note": "a fenced plot of the grass strip; the house stands on it"
     },
     {
       "id": 463,
@@ -2256,7 +2479,8 @@
       "in": 462,
       "rim": {
         "tex": 260
-      }
+      },
+      "name": "house at x 280 y -940 (one storey)"
     },
     {
       "id": 464,
@@ -2276,7 +2500,9 @@
       "rim": {
         "tex": 250,
         "flags": ["masked", "block"]
-      }
+      },
+      "name": "lot at x 620 y -1000",
+      "note": "a fenced plot of the grass strip; the house stands on it"
     },
     {
       "id": 465,
@@ -2295,7 +2521,8 @@
       "in": 464,
       "rim": {
         "tex": 271
-      }
+      },
+      "name": "house at x 620 y -940 (two storeys)"
     },
     {
       "id": 466,
@@ -2315,7 +2542,9 @@
       "rim": {
         "tex": 250,
         "flags": ["masked", "block"]
-      }
+      },
+      "name": "lot at x 960 y -1000",
+      "note": "a fenced plot of the grass strip; the house stands on it"
     },
     {
       "id": 467,
@@ -2334,7 +2563,8 @@
       "in": 466,
       "rim": {
         "tex": 272
-      }
+      },
+      "name": "house at x 960 y -940 (two storeys)"
     },
     {
       "id": 468,
@@ -2354,7 +2584,9 @@
       "rim": {
         "tex": 250,
         "flags": ["masked", "block"]
-      }
+      },
+      "name": "lot at x 1300 y -1000",
+      "note": "a fenced plot of the grass strip; the house stands on it"
     },
     {
       "id": 469,
@@ -2373,7 +2605,8 @@
       "in": 468,
       "rim": {
         "tex": 260
-      }
+      },
+      "name": "house at x 1300 y -940 (one storey)"
     },
     {
       "id": 470,
@@ -2393,7 +2626,9 @@
       "rim": {
         "tex": 250,
         "flags": ["masked", "block"]
-      }
+      },
+      "name": "lot at x -790 y 50",
+      "note": "a fenced plot of the grass strip; the house stands on it"
     },
     {
       "id": 471,
@@ -2412,7 +2647,8 @@
       "in": 470,
       "rim": {
         "tex": 261
-      }
+      },
+      "name": "house at x -720 y 50 (one storey)"
     },
     {
       "id": 472,
@@ -2432,7 +2668,9 @@
       "rim": {
         "tex": 250,
         "flags": ["masked", "block"]
-      }
+      },
+      "name": "lot at x -790 y 1010",
+      "note": "a fenced plot of the grass strip; the house stands on it"
     },
     {
       "id": 473,
@@ -2451,7 +2689,8 @@
       "in": 472,
       "rim": {
         "tex": 273
-      }
+      },
+      "name": "house at x -720 y 1010 (two storeys)"
     },
     {
       "id": 474,
@@ -2471,7 +2710,9 @@
       "rim": {
         "tex": 250,
         "flags": ["masked", "block"]
-      }
+      },
+      "name": "lot at x -790 y 1330",
+      "note": "a fenced plot of the grass strip; the house stands on it"
     },
     {
       "id": 475,
@@ -2490,7 +2731,8 @@
       "in": 474,
       "rim": {
         "tex": 260
-      }
+      },
+      "name": "house at x -720 y 1330 (one storey)"
     },
     {
       "id": 476,
@@ -2510,7 +2752,9 @@
       "rim": {
         "tex": 250,
         "flags": ["masked", "block"]
-      }
+      },
+      "name": "lot at x -1130 y 50",
+      "note": "a fenced plot of the grass strip; the house stands on it"
     },
     {
       "id": 477,
@@ -2529,7 +2773,8 @@
       "in": 476,
       "rim": {
         "tex": 273
-      }
+      },
+      "name": "house at x -1060 y 50 (two storeys)"
     },
     {
       "id": 478,
@@ -2549,7 +2794,9 @@
       "rim": {
         "tex": 250,
         "flags": ["masked", "block"]
-      }
+      },
+      "name": "lot at x -1130 y 1010",
+      "note": "a fenced plot of the grass strip; the house stands on it"
     },
     {
       "id": 479,
@@ -2568,7 +2815,8 @@
       "in": 478,
       "rim": {
         "tex": 263
-      }
+      },
+      "name": "house at x -1060 y 1010 (one storey)"
     },
     {
       "id": 480,
@@ -2588,7 +2836,9 @@
       "rim": {
         "tex": 250,
         "flags": ["masked", "block"]
-      }
+      },
+      "name": "lot at x -1130 y 1330",
+      "note": "a fenced plot of the grass strip; the house stands on it"
     },
     {
       "id": 481,
@@ -2607,7 +2857,8 @@
       "in": 480,
       "rim": {
         "tex": 270
-      }
+      },
+      "name": "house at x -1060 y 1330 (two storeys)"
     },
     {
       "id": 482,
@@ -2627,7 +2878,9 @@
       "rim": {
         "tex": 250,
         "flags": ["masked", "block"]
-      }
+      },
+      "name": "lot at x 1880 y 50",
+      "note": "a fenced plot of the grass strip; the house stands on it"
     },
     {
       "id": 483,
@@ -2646,7 +2899,8 @@
       "in": 482,
       "rim": {
         "tex": 272
-      }
+      },
+      "name": "house at x 1810 y 50 (two storeys)"
     },
     {
       "id": 484,
@@ -2666,7 +2920,9 @@
       "rim": {
         "tex": 250,
         "flags": ["masked", "block"]
-      }
+      },
+      "name": "lot at x 1880 y 370",
+      "note": "a fenced plot of the grass strip; the house stands on it"
     },
     {
       "id": 485,
@@ -2685,7 +2941,8 @@
       "in": 484,
       "rim": {
         "tex": 260
-      }
+      },
+      "name": "house at x 1810 y 370 (one storey)"
     },
     {
       "id": 486,
@@ -2705,7 +2962,9 @@
       "rim": {
         "tex": 250,
         "flags": ["masked", "block"]
-      }
+      },
+      "name": "lot at x 1880 y 690",
+      "note": "a fenced plot of the grass strip; the house stands on it"
     },
     {
       "id": 487,
@@ -2724,7 +2983,8 @@
       "in": 486,
       "rim": {
         "tex": 271
-      }
+      },
+      "name": "house at x 1810 y 690 (two storeys)"
     },
     {
       "id": 488,
@@ -2744,7 +3004,9 @@
       "rim": {
         "tex": 250,
         "flags": ["masked", "block"]
-      }
+      },
+      "name": "lot at x 1880 y 1010",
+      "note": "a fenced plot of the grass strip; the house stands on it"
     },
     {
       "id": 489,
@@ -2763,7 +3025,8 @@
       "in": 488,
       "rim": {
         "tex": 263
-      }
+      },
+      "name": "house at x 1810 y 1010 (one storey)"
     },
     {
       "id": 490,
@@ -2783,7 +3046,9 @@
       "rim": {
         "tex": 250,
         "flags": ["masked", "block"]
-      }
+      },
+      "name": "lot at x 1880 y 1330",
+      "note": "a fenced plot of the grass strip; the house stands on it"
     },
     {
       "id": 491,
@@ -2802,7 +3067,8 @@
       "in": 490,
       "rim": {
         "tex": 270
-      }
+      },
+      "name": "house at x 1810 y 1330 (two storeys)"
     },
     {
       "id": 492,
@@ -2822,7 +3088,9 @@
       "rim": {
         "tex": 250,
         "flags": ["masked", "block"]
-      }
+      },
+      "name": "lot at x 2220 y 50",
+      "note": "a fenced plot of the grass strip; the house stands on it"
     },
     {
       "id": 493,
@@ -2841,7 +3109,8 @@
       "in": 492,
       "rim": {
         "tex": 263
-      }
+      },
+      "name": "house at x 2150 y 50 (one storey)"
     },
     {
       "id": 494,
@@ -2861,7 +3130,9 @@
       "rim": {
         "tex": 250,
         "flags": ["masked", "block"]
-      }
+      },
+      "name": "lot at x 2220 y 370",
+      "note": "a fenced plot of the grass strip; the house stands on it"
     },
     {
       "id": 495,
@@ -2880,7 +3151,8 @@
       "in": 494,
       "rim": {
         "tex": 271
-      }
+      },
+      "name": "house at x 2150 y 370 (two storeys)"
     },
     {
       "id": 496,
@@ -2900,7 +3172,9 @@
       "rim": {
         "tex": 250,
         "flags": ["masked", "block"]
-      }
+      },
+      "name": "lot at x 2220 y 690",
+      "note": "a fenced plot of the grass strip; the house stands on it"
     },
     {
       "id": 497,
@@ -2919,7 +3193,8 @@
       "in": 496,
       "rim": {
         "tex": 262
-      }
+      },
+      "name": "house at x 2150 y 690 (one storey)"
     },
     {
       "id": 498,
@@ -2939,7 +3214,9 @@
       "rim": {
         "tex": 250,
         "flags": ["masked", "block"]
-      }
+      },
+      "name": "lot at x 2220 y 1010",
+      "note": "a fenced plot of the grass strip; the house stands on it"
     },
     {
       "id": 499,
@@ -2958,7 +3235,8 @@
       "in": 498,
       "rim": {
         "tex": 270
-      }
+      },
+      "name": "house at x 2150 y 1010 (two storeys)"
     },
     {
       "id": 500,
@@ -2978,7 +3256,9 @@
       "rim": {
         "tex": 250,
         "flags": ["masked", "block"]
-      }
+      },
+      "name": "lot at x 2220 y 1330",
+      "note": "a fenced plot of the grass strip; the house stands on it"
     },
     {
       "id": 501,
@@ -2997,7 +3277,8 @@
       "in": 500,
       "rim": {
         "tex": 261
-      }
+      },
+      "name": "house at x 2150 y 1330 (one storey)"
     },
     {
       "id": 502,
@@ -3017,7 +3298,9 @@
       "rim": {
         "tex": 250,
         "flags": ["masked", "block"]
-      }
+      },
+      "name": "lot at x -400 y 1940",
+      "note": "a fenced plot of the grass strip; the house stands on it"
     },
     {
       "id": 503,
@@ -3036,7 +3319,8 @@
       "in": 502,
       "rim": {
         "tex": 273
-      }
+      },
+      "name": "house at x -400 y 1880 (two storeys)"
     },
     {
       "id": 504,
@@ -3056,7 +3340,9 @@
       "rim": {
         "tex": 250,
         "flags": ["masked", "block"]
-      }
+      },
+      "name": "lot at x -60 y 1940",
+      "note": "a fenced plot of the grass strip; the house stands on it"
     },
     {
       "id": 505,
@@ -3075,7 +3361,8 @@
       "in": 504,
       "rim": {
         "tex": 261
-      }
+      },
+      "name": "house at x -60 y 1880 (one storey)"
     },
     {
       "id": 506,
@@ -3095,7 +3382,9 @@
       "rim": {
         "tex": 250,
         "flags": ["masked", "block"]
-      }
+      },
+      "name": "lot at x 280 y 1940",
+      "note": "a fenced plot of the grass strip; the house stands on it"
     },
     {
       "id": 507,
@@ -3114,7 +3403,8 @@
       "in": 506,
       "rim": {
         "tex": 270
-      }
+      },
+      "name": "house at x 280 y 1880 (two storeys)"
     },
     {
       "id": 508,
@@ -3134,7 +3424,9 @@
       "rim": {
         "tex": 250,
         "flags": ["masked", "block"]
-      }
+      },
+      "name": "lot at x 620 y 1940",
+      "note": "a fenced plot of the grass strip; the house stands on it"
     },
     {
       "id": 509,
@@ -3153,7 +3445,8 @@
       "in": 508,
       "rim": {
         "tex": 262
-      }
+      },
+      "name": "house at x 620 y 1880 (one storey)"
     },
     {
       "id": 510,
@@ -3173,7 +3466,9 @@
       "rim": {
         "tex": 250,
         "flags": ["masked", "block"]
-      }
+      },
+      "name": "lot at x 960 y 1940",
+      "note": "a fenced plot of the grass strip; the house stands on it"
     },
     {
       "id": 511,
@@ -3192,7 +3487,8 @@
       "in": 510,
       "rim": {
         "tex": 271
-      }
+      },
+      "name": "house at x 960 y 1880 (two storeys)"
     },
     {
       "id": 512,
@@ -3212,7 +3508,9 @@
       "rim": {
         "tex": 250,
         "flags": ["masked", "block"]
-      }
+      },
+      "name": "lot at x 1300 y 1940",
+      "note": "a fenced plot of the grass strip; the house stands on it"
     },
     {
       "id": 513,
@@ -3231,7 +3529,8 @@
       "in": 512,
       "rim": {
         "tex": 263
-      }
+      },
+      "name": "house at x 1300 y 1880 (one storey)"
     },
     {
       "id": 514,
@@ -3251,7 +3550,9 @@
       "rim": {
         "tex": 250,
         "flags": ["masked", "block"]
-      }
+      },
+      "name": "lot at x 1640 y 1940",
+      "note": "a fenced plot of the grass strip; the house stands on it"
     },
     {
       "id": 515,
@@ -3270,7 +3571,8 @@
       "in": 514,
       "rim": {
         "tex": 270
-      }
+      },
+      "name": "house at x 1640 y 1880 (two storeys)"
     },
     {
       "id": 516,
@@ -3290,7 +3592,9 @@
       "rim": {
         "tex": 250,
         "flags": ["masked", "block"]
-      }
+      },
+      "name": "lot at x -400 y 2260",
+      "note": "a fenced plot of the grass strip; the house stands on it"
     },
     {
       "id": 517,
@@ -3309,7 +3613,8 @@
       "in": 516,
       "rim": {
         "tex": 262
-      }
+      },
+      "name": "house at x -400 y 2200 (one storey)"
     },
     {
       "id": 518,
@@ -3329,7 +3634,9 @@
       "rim": {
         "tex": 250,
         "flags": ["masked", "block"]
-      }
+      },
+      "name": "lot at x -60 y 2260",
+      "note": "a fenced plot of the grass strip; the house stands on it"
     },
     {
       "id": 519,
@@ -3348,7 +3655,8 @@
       "in": 518,
       "rim": {
         "tex": 272
-      }
+      },
+      "name": "house at x -60 y 2200 (two storeys)"
     },
     {
       "id": 520,
@@ -3368,7 +3676,9 @@
       "rim": {
         "tex": 250,
         "flags": ["masked", "block"]
-      }
+      },
+      "name": "lot at x 280 y 2260",
+      "note": "a fenced plot of the grass strip; the house stands on it"
     },
     {
       "id": 521,
@@ -3387,7 +3697,8 @@
       "in": 520,
       "rim": {
         "tex": 260
-      }
+      },
+      "name": "house at x 280 y 2200 (one storey)"
     },
     {
       "id": 522,
@@ -3407,7 +3718,9 @@
       "rim": {
         "tex": 250,
         "flags": ["masked", "block"]
-      }
+      },
+      "name": "lot at x 620 y 2260",
+      "note": "a fenced plot of the grass strip; the house stands on it"
     },
     {
       "id": 523,
@@ -3426,7 +3739,8 @@
       "in": 522,
       "rim": {
         "tex": 273
-      }
+      },
+      "name": "house at x 620 y 2200 (two storeys)"
     },
     {
       "id": 524,
@@ -3446,7 +3760,9 @@
       "rim": {
         "tex": 250,
         "flags": ["masked", "block"]
-      }
+      },
+      "name": "lot at x 960 y 2260",
+      "note": "a fenced plot of the grass strip; the house stands on it"
     },
     {
       "id": 525,
@@ -3465,7 +3781,8 @@
       "in": 524,
       "rim": {
         "tex": 261
-      }
+      },
+      "name": "house at x 960 y 2200 (one storey)"
     },
     {
       "id": 526,
@@ -3485,7 +3802,9 @@
       "rim": {
         "tex": 250,
         "flags": ["masked", "block"]
-      }
+      },
+      "name": "lot at x 1300 y 2260",
+      "note": "a fenced plot of the grass strip; the house stands on it"
     },
     {
       "id": 527,
@@ -3504,7 +3823,8 @@
       "in": 526,
       "rim": {
         "tex": 272
-      }
+      },
+      "name": "house at x 1300 y 2200 (two storeys)"
     },
     {
       "id": 528,
@@ -3524,7 +3844,9 @@
       "in": 426,
       "rim": {
         "tex": 25
-      }
+      },
+      "name": "shed building (seen over the lawn)",
+      "note": "a view-only block (ghost): the shed as seen from outside the fence; the shed room itself is sector 9"
     },
     {
       "id": 529,
@@ -3544,7 +3866,9 @@
       "in": 426,
       "rim": {
         "tex": 1
-      }
+      },
+      "name": "cellar hatch building (seen over the lawn)",
+      "note": "a view-only block (ghost): the hatch house as seen from outside the fence"
     }
   ],
   "openings": [
@@ -3640,39 +3964,27 @@
       "tex": 12
     },
     {
-      "from": 10,
-      "side": "E",
-      "range": [430, 560],
-      "to": 65
-    },
-    {
-      "from": 66,
-      "side": "E",
-      "range": [430, 560],
-      "to": 12
-    },
-    {
       "from": 11,
       "side": "N",
-      "range": [400, 450],
+      "range": [405, 450],
       "to": 65
     },
     {
       "from": 11,
       "side": "N",
-      "range": [510, 560],
+      "range": [510, 555],
       "to": 66
     },
     {
       "from": 65,
       "side": "N",
-      "range": [400, 450],
+      "range": [405, 450],
       "to": 67
     },
     {
       "from": 66,
       "side": "N",
-      "range": [510, 560],
+      "range": [510, 555],
       "to": 67
     },
     {
@@ -3739,21 +4051,9 @@
       "tex": 18
     },
     {
-      "from": 21,
-      "side": "W",
-      "range": [610, 670],
-      "to": 23
-    },
-    {
-      "from": 21,
-      "side": "E",
-      "range": [625, 675],
-      "to": 48
-    },
-    {
       "from": 22,
       "side": "N",
-      "range": [560, 608],
+      "range": [565, 608],
       "to": 48
     },
     {
@@ -3936,7 +4236,7 @@
     {
       "from": 48,
       "side": "N",
-      "range": [562, 604],
+      "range": [565, 604],
       "to": 43
     },
     {
@@ -4979,6 +5279,216 @@
       "lower": 1,
       "flags": ["block", "solid"],
       "oneway": true
+    },
+    {
+      "from": 10,
+      "side": "E",
+      "range": [430, 560],
+      "to": 116
+    },
+    {
+      "from": 116,
+      "side": "E",
+      "range": [430, 560],
+      "to": 65
+    },
+    {
+      "from": 66,
+      "side": "E",
+      "range": [430, 560],
+      "to": 117
+    },
+    {
+      "from": 117,
+      "side": "E",
+      "range": [430, 560],
+      "to": 12
+    },
+    {
+      "from": 21,
+      "side": "W",
+      "range": [610, 670],
+      "to": 118
+    },
+    {
+      "from": 118,
+      "side": "W",
+      "range": [610, 670],
+      "to": 23
+    },
+    {
+      "from": 21,
+      "side": "E",
+      "range": [625, 675],
+      "to": 119
+    },
+    {
+      "from": 119,
+      "side": "E",
+      "range": [625, 675],
+      "to": 48
+    },
+    {
+      "from": 65,
+      "side": "E",
+      "range": [400, 424],
+      "to": 13,
+      "flags": ["block"],
+      "lower": 18,
+      "note": "invisible rail: blocks walking, the stair mass shows below"
+    },
+    {
+      "from": 65,
+      "side": "E",
+      "range": [424, 448],
+      "to": 14,
+      "flags": ["block"],
+      "lower": 18,
+      "note": "invisible rail: blocks walking, the stair mass shows below"
+    },
+    {
+      "from": 65,
+      "side": "E",
+      "range": [448, 472],
+      "to": 15,
+      "flags": ["block"],
+      "lower": 18,
+      "note": "invisible rail: blocks walking, the stair mass shows below"
+    },
+    {
+      "from": 65,
+      "side": "E",
+      "range": [472, 496],
+      "to": 16,
+      "flags": ["block"],
+      "lower": 18,
+      "note": "invisible rail: blocks walking, the stair mass shows below"
+    },
+    {
+      "from": 65,
+      "side": "E",
+      "range": [496, 520],
+      "to": 17,
+      "flags": ["block"],
+      "lower": 18,
+      "note": "invisible rail: blocks walking, the stair mass shows below"
+    },
+    {
+      "from": 65,
+      "side": "E",
+      "range": [520, 544],
+      "to": 18,
+      "flags": ["block"],
+      "lower": 18,
+      "note": "invisible rail: blocks walking, the stair mass shows below"
+    },
+    {
+      "from": 65,
+      "side": "E",
+      "range": [544, 568],
+      "to": 19,
+      "flags": ["block"],
+      "lower": 18,
+      "note": "invisible rail: blocks walking, the stair mass shows below"
+    },
+    {
+      "from": 65,
+      "side": "E",
+      "range": [568, 592],
+      "to": 20,
+      "flags": ["block"],
+      "lower": 18,
+      "note": "invisible rail: blocks walking, the stair mass shows below"
+    },
+    {
+      "from": 13,
+      "side": "E",
+      "range": [400, 424],
+      "to": 66,
+      "flags": ["block"],
+      "lower": 18,
+      "note": "invisible rail: blocks walking, the stair mass shows below"
+    },
+    {
+      "from": 14,
+      "side": "E",
+      "range": [424, 448],
+      "to": 66,
+      "flags": ["block"],
+      "lower": 18,
+      "note": "invisible rail: blocks walking, the stair mass shows below"
+    },
+    {
+      "from": 15,
+      "side": "E",
+      "range": [448, 472],
+      "to": 66,
+      "flags": ["block"],
+      "lower": 18,
+      "note": "invisible rail: blocks walking, the stair mass shows below"
+    },
+    {
+      "from": 16,
+      "side": "E",
+      "range": [472, 496],
+      "to": 66,
+      "flags": ["block"],
+      "lower": 18,
+      "note": "invisible rail: blocks walking, the stair mass shows below"
+    },
+    {
+      "from": 17,
+      "side": "E",
+      "range": [496, 520],
+      "to": 66,
+      "flags": ["block"],
+      "lower": 18,
+      "note": "invisible rail: blocks walking, the stair mass shows below"
+    },
+    {
+      "from": 18,
+      "side": "E",
+      "range": [520, 544],
+      "to": 66,
+      "flags": ["block"],
+      "lower": 18,
+      "note": "invisible rail: blocks walking, the stair mass shows below"
+    },
+    {
+      "from": 19,
+      "side": "E",
+      "range": [544, 568],
+      "to": 66,
+      "flags": ["block"],
+      "lower": 18,
+      "note": "invisible rail: blocks walking, the stair mass shows below"
+    },
+    {
+      "from": 20,
+      "side": "E",
+      "range": [568, 592],
+      "to": 66,
+      "flags": ["block"],
+      "lower": 18,
+      "note": "invisible rail: blocks walking, the stair mass shows below"
+    },
+    {
+      "from": 22,
+      "side": "N",
+      "range": [608, 632],
+      "to": 24,
+      "flags": ["block"],
+      "lower": 9,
+      "note": "invisible rail: blocks walking, the stair mass shows below"
+    },
+    {
+      "from": 22,
+      "side": "N",
+      "range": [632, 656],
+      "to": 25,
+      "flags": ["block"],
+      "lower": 9,
+      "note": "invisible rail: blocks walking, the stair mass shows below"
     }
   ],
   "things": [
@@ -4988,7 +5498,8 @@
       "x": 1730,
       "y": 1660,
       "w": 32,
-      "h": 76
+      "h": 76,
+      "name": "telephone booth 1"
     },
     {
       "id": 401,
@@ -4996,7 +5507,8 @@
       "x": 760,
       "y": -330,
       "w": 24,
-      "h": 44
+      "h": 44,
+      "name": "gas pump 1"
     },
     {
       "id": 402,
@@ -5004,7 +5516,8 @@
       "x": 830,
       "y": -330,
       "w": 24,
-      "h": 44
+      "h": 44,
+      "name": "gas pump 2"
     },
     {
       "id": 403,
@@ -5012,7 +5525,8 @@
       "x": 900,
       "y": -330,
       "w": 24,
-      "h": 44
+      "h": 44,
+      "name": "gas pump 3"
     },
     {
       "id": 404,
@@ -5020,7 +5534,8 @@
       "x": 1320,
       "y": -253,
       "w": 28,
-      "h": 52
+      "h": 52,
+      "name": "door of a house 1"
     },
     {
       "id": 405,
@@ -5028,7 +5543,8 @@
       "x": 1200,
       "y": -440,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 1"
     },
     {
       "id": 406,
@@ -5036,7 +5552,8 @@
       "x": 1440,
       "y": -264,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 2"
     },
     {
       "id": 407,
@@ -5044,7 +5561,8 @@
       "x": 1660,
       "y": -253,
       "w": 28,
-      "h": 52
+      "h": 52,
+      "name": "door of a house 2"
     },
     {
       "id": 408,
@@ -5052,7 +5570,8 @@
       "x": 1540,
       "y": -440,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 3"
     },
     {
       "id": 409,
@@ -5060,7 +5579,8 @@
       "x": -400,
       "y": -549,
       "w": 28,
-      "h": 52
+      "h": 52,
+      "name": "door of a house 3"
     },
     {
       "id": 410,
@@ -5068,7 +5588,8 @@
       "x": -520,
       "y": -760,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 4"
     },
     {
       "id": 411,
@@ -5076,7 +5597,8 @@
       "x": -60,
       "y": -549,
       "w": 28,
-      "h": 52
+      "h": 52,
+      "name": "door of a house 4"
     },
     {
       "id": 412,
@@ -5084,7 +5606,8 @@
       "x": -180,
       "y": -760,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 5"
     },
     {
       "id": 413,
@@ -5092,7 +5615,8 @@
       "x": 60,
       "y": -560,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 6"
     },
     {
       "id": 414,
@@ -5100,7 +5624,8 @@
       "x": 280,
       "y": -549,
       "w": 28,
-      "h": 52
+      "h": 52,
+      "name": "door of a house 5"
     },
     {
       "id": 415,
@@ -5108,7 +5633,8 @@
       "x": 160,
       "y": -760,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 7"
     },
     {
       "id": 416,
@@ -5116,7 +5642,8 @@
       "x": 620,
       "y": -549,
       "w": 28,
-      "h": 52
+      "h": 52,
+      "name": "door of a house 6"
     },
     {
       "id": 417,
@@ -5124,7 +5651,8 @@
       "x": 500,
       "y": -760,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 8"
     },
     {
       "id": 418,
@@ -5132,7 +5660,8 @@
       "x": 960,
       "y": -549,
       "w": 28,
-      "h": 52
+      "h": 52,
+      "name": "door of a house 7"
     },
     {
       "id": 419,
@@ -5140,7 +5669,8 @@
       "x": 840,
       "y": -760,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 9"
     },
     {
       "id": 420,
@@ -5148,7 +5678,8 @@
       "x": 1080,
       "y": -560,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 10"
     },
     {
       "id": 421,
@@ -5156,7 +5687,8 @@
       "x": 1300,
       "y": -549,
       "w": 28,
-      "h": 52
+      "h": 52,
+      "name": "door of a house 8"
     },
     {
       "id": 422,
@@ -5164,7 +5696,8 @@
       "x": 1180,
       "y": -760,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 11"
     },
     {
       "id": 423,
@@ -5172,7 +5705,8 @@
       "x": 1420,
       "y": -560,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 12"
     },
     {
       "id": 424,
@@ -5180,7 +5714,8 @@
       "x": -400,
       "y": -889,
       "w": 28,
-      "h": 52
+      "h": 52,
+      "name": "door of a house 9"
     },
     {
       "id": 425,
@@ -5188,7 +5723,8 @@
       "x": -520,
       "y": -1100,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 13"
     },
     {
       "id": 426,
@@ -5196,7 +5732,8 @@
       "x": -280,
       "y": -900,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 14"
     },
     {
       "id": 427,
@@ -5204,7 +5741,8 @@
       "x": -60,
       "y": -889,
       "w": 28,
-      "h": 52
+      "h": 52,
+      "name": "door of a house 10"
     },
     {
       "id": 428,
@@ -5212,7 +5750,8 @@
       "x": -180,
       "y": -1100,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 15"
     },
     {
       "id": 429,
@@ -5220,7 +5759,8 @@
       "x": 60,
       "y": -900,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 16"
     },
     {
       "id": 430,
@@ -5228,7 +5768,8 @@
       "x": 280,
       "y": -889,
       "w": 28,
-      "h": 52
+      "h": 52,
+      "name": "door of a house 11"
     },
     {
       "id": 431,
@@ -5236,7 +5777,8 @@
       "x": 160,
       "y": -1100,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 17"
     },
     {
       "id": 432,
@@ -5244,7 +5786,8 @@
       "x": 400,
       "y": -900,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 18"
     },
     {
       "id": 433,
@@ -5252,7 +5795,8 @@
       "x": 620,
       "y": -889,
       "w": 28,
-      "h": 52
+      "h": 52,
+      "name": "door of a house 12"
     },
     {
       "id": 434,
@@ -5260,7 +5804,8 @@
       "x": 500,
       "y": -1100,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 19"
     },
     {
       "id": 435,
@@ -5268,7 +5813,8 @@
       "x": 740,
       "y": -900,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 20"
     },
     {
       "id": 436,
@@ -5276,7 +5822,8 @@
       "x": 960,
       "y": -889,
       "w": 28,
-      "h": 52
+      "h": 52,
+      "name": "door of a house 13"
     },
     {
       "id": 437,
@@ -5284,7 +5831,8 @@
       "x": 840,
       "y": -1100,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 21"
     },
     {
       "id": 438,
@@ -5292,7 +5840,8 @@
       "x": 1080,
       "y": -900,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 22"
     },
     {
       "id": 439,
@@ -5300,7 +5849,8 @@
       "x": 1300,
       "y": -889,
       "w": 28,
-      "h": 52
+      "h": 52,
+      "name": "door of a house 14"
     },
     {
       "id": 440,
@@ -5308,7 +5858,8 @@
       "x": 1180,
       "y": -1100,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 23"
     },
     {
       "id": 441,
@@ -5316,7 +5867,8 @@
       "x": -669,
       "y": 50,
       "w": 28,
-      "h": 52
+      "h": 52,
+      "name": "door of a house 15"
     },
     {
       "id": 442,
@@ -5324,7 +5876,8 @@
       "x": -900,
       "y": -60,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 24"
     },
     {
       "id": 443,
@@ -5332,7 +5885,8 @@
       "x": -680,
       "y": 160,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 25"
     },
     {
       "id": 444,
@@ -5340,7 +5894,8 @@
       "x": -669,
       "y": 1010,
       "w": 28,
-      "h": 52
+      "h": 52,
+      "name": "door of a house 16"
     },
     {
       "id": 445,
@@ -5348,7 +5903,8 @@
       "x": -900,
       "y": 900,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 26"
     },
     {
       "id": 446,
@@ -5356,7 +5912,8 @@
       "x": -680,
       "y": 1120,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 27"
     },
     {
       "id": 447,
@@ -5364,7 +5921,8 @@
       "x": -669,
       "y": 1330,
       "w": 28,
-      "h": 52
+      "h": 52,
+      "name": "door of a house 17"
     },
     {
       "id": 448,
@@ -5372,7 +5930,8 @@
       "x": -900,
       "y": 1220,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 28"
     },
     {
       "id": 449,
@@ -5380,7 +5939,8 @@
       "x": -1009,
       "y": 50,
       "w": 28,
-      "h": 52
+      "h": 52,
+      "name": "door of a house 18"
     },
     {
       "id": 450,
@@ -5388,7 +5948,8 @@
       "x": -1240,
       "y": -60,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 29"
     },
     {
       "id": 451,
@@ -5396,7 +5957,8 @@
       "x": -1009,
       "y": 1010,
       "w": 28,
-      "h": 52
+      "h": 52,
+      "name": "door of a house 19"
     },
     {
       "id": 452,
@@ -5404,7 +5966,8 @@
       "x": -1240,
       "y": 900,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 30"
     },
     {
       "id": 453,
@@ -5412,7 +5975,8 @@
       "x": -1020,
       "y": 1120,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 31"
     },
     {
       "id": 454,
@@ -5420,7 +5984,8 @@
       "x": -1009,
       "y": 1330,
       "w": 28,
-      "h": 52
+      "h": 52,
+      "name": "door of a house 20"
     },
     {
       "id": 455,
@@ -5428,7 +5993,8 @@
       "x": -1240,
       "y": 1220,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 32"
     },
     {
       "id": 456,
@@ -5436,7 +6002,8 @@
       "x": 1759,
       "y": 50,
       "w": 28,
-      "h": 52
+      "h": 52,
+      "name": "door of a house 21"
     },
     {
       "id": 457,
@@ -5444,7 +6011,8 @@
       "x": 1770,
       "y": -60,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 33"
     },
     {
       "id": 458,
@@ -5452,7 +6020,8 @@
       "x": 1759,
       "y": 370,
       "w": 28,
-      "h": 52
+      "h": 52,
+      "name": "door of a house 22"
     },
     {
       "id": 459,
@@ -5460,7 +6029,8 @@
       "x": 1770,
       "y": 260,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 34"
     },
     {
       "id": 460,
@@ -5468,7 +6038,8 @@
       "x": 1990,
       "y": 480,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 35"
     },
     {
       "id": 461,
@@ -5476,7 +6047,8 @@
       "x": 1759,
       "y": 690,
       "w": 28,
-      "h": 52
+      "h": 52,
+      "name": "door of a house 23"
     },
     {
       "id": 462,
@@ -5484,7 +6056,8 @@
       "x": 1770,
       "y": 580,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 36"
     },
     {
       "id": 463,
@@ -5492,7 +6065,8 @@
       "x": 1759,
       "y": 1010,
       "w": 28,
-      "h": 52
+      "h": 52,
+      "name": "door of a house 24"
     },
     {
       "id": 464,
@@ -5500,7 +6074,8 @@
       "x": 1770,
       "y": 900,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 37"
     },
     {
       "id": 465,
@@ -5508,7 +6083,8 @@
       "x": 1759,
       "y": 1330,
       "w": 28,
-      "h": 52
+      "h": 52,
+      "name": "door of a house 25"
     },
     {
       "id": 466,
@@ -5516,7 +6092,8 @@
       "x": 1770,
       "y": 1220,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 38"
     },
     {
       "id": 467,
@@ -5524,7 +6101,8 @@
       "x": 2099,
       "y": 50,
       "w": 28,
-      "h": 52
+      "h": 52,
+      "name": "door of a house 26"
     },
     {
       "id": 468,
@@ -5532,7 +6110,8 @@
       "x": 2110,
       "y": -60,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 39"
     },
     {
       "id": 469,
@@ -5540,7 +6119,8 @@
       "x": 2330,
       "y": 160,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 40"
     },
     {
       "id": 470,
@@ -5548,7 +6128,8 @@
       "x": 2099,
       "y": 370,
       "w": 28,
-      "h": 52
+      "h": 52,
+      "name": "door of a house 27"
     },
     {
       "id": 471,
@@ -5556,7 +6137,8 @@
       "x": 2110,
       "y": 260,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 41"
     },
     {
       "id": 472,
@@ -5564,7 +6146,8 @@
       "x": 2330,
       "y": 480,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 42"
     },
     {
       "id": 473,
@@ -5572,7 +6155,8 @@
       "x": 2099,
       "y": 690,
       "w": 28,
-      "h": 52
+      "h": 52,
+      "name": "door of a house 28"
     },
     {
       "id": 474,
@@ -5580,7 +6164,8 @@
       "x": 2110,
       "y": 580,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 43"
     },
     {
       "id": 475,
@@ -5588,7 +6173,8 @@
       "x": 2330,
       "y": 800,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 44"
     },
     {
       "id": 476,
@@ -5596,7 +6182,8 @@
       "x": 2099,
       "y": 1010,
       "w": 28,
-      "h": 52
+      "h": 52,
+      "name": "door of a house 29"
     },
     {
       "id": 477,
@@ -5604,7 +6191,8 @@
       "x": 2110,
       "y": 900,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 45"
     },
     {
       "id": 478,
@@ -5612,7 +6200,8 @@
       "x": 2099,
       "y": 1330,
       "w": 28,
-      "h": 52
+      "h": 52,
+      "name": "door of a house 30"
     },
     {
       "id": 479,
@@ -5620,7 +6209,8 @@
       "x": 2110,
       "y": 1220,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 46"
     },
     {
       "id": 480,
@@ -5628,7 +6218,8 @@
       "x": -400,
       "y": 1829,
       "w": 28,
-      "h": 52
+      "h": 52,
+      "name": "door of a house 31"
     },
     {
       "id": 481,
@@ -5636,7 +6227,8 @@
       "x": -520,
       "y": 1840,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 47"
     },
     {
       "id": 482,
@@ -5644,7 +6236,8 @@
       "x": -280,
       "y": 2040,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 48"
     },
     {
       "id": 483,
@@ -5652,7 +6245,8 @@
       "x": -60,
       "y": 1829,
       "w": 28,
-      "h": 52
+      "h": 52,
+      "name": "door of a house 32"
     },
     {
       "id": 484,
@@ -5660,7 +6254,8 @@
       "x": -180,
       "y": 1840,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 49"
     },
     {
       "id": 485,
@@ -5668,7 +6263,8 @@
       "x": 280,
       "y": 1829,
       "w": 28,
-      "h": 52
+      "h": 52,
+      "name": "door of a house 33"
     },
     {
       "id": 486,
@@ -5676,7 +6272,8 @@
       "x": 160,
       "y": 1840,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 50"
     },
     {
       "id": 487,
@@ -5684,7 +6281,8 @@
       "x": 400,
       "y": 2040,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 51"
     },
     {
       "id": 488,
@@ -5692,7 +6290,8 @@
       "x": 620,
       "y": 1829,
       "w": 28,
-      "h": 52
+      "h": 52,
+      "name": "door of a house 34"
     },
     {
       "id": 489,
@@ -5700,7 +6299,8 @@
       "x": 500,
       "y": 1840,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 52"
     },
     {
       "id": 490,
@@ -5708,7 +6308,8 @@
       "x": 740,
       "y": 2040,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 53"
     },
     {
       "id": 491,
@@ -5716,7 +6317,8 @@
       "x": 960,
       "y": 1829,
       "w": 28,
-      "h": 52
+      "h": 52,
+      "name": "door of a house 35"
     },
     {
       "id": 492,
@@ -5724,7 +6326,8 @@
       "x": 840,
       "y": 1840,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 54"
     },
     {
       "id": 493,
@@ -5732,7 +6335,8 @@
       "x": 1300,
       "y": 1829,
       "w": 28,
-      "h": 52
+      "h": 52,
+      "name": "door of a house 36"
     },
     {
       "id": 494,
@@ -5740,7 +6344,8 @@
       "x": 1180,
       "y": 1840,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 55"
     },
     {
       "id": 495,
@@ -5748,7 +6353,8 @@
       "x": 1640,
       "y": 1829,
       "w": 28,
-      "h": 52
+      "h": 52,
+      "name": "door of a house 37"
     },
     {
       "id": 496,
@@ -5756,7 +6362,8 @@
       "x": 1520,
       "y": 1840,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 56"
     },
     {
       "id": 497,
@@ -5764,7 +6371,8 @@
       "x": -400,
       "y": 2149,
       "w": 28,
-      "h": 52
+      "h": 52,
+      "name": "door of a house 38"
     },
     {
       "id": 498,
@@ -5772,7 +6380,8 @@
       "x": -520,
       "y": 2160,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 57"
     },
     {
       "id": 499,
@@ -5780,7 +6389,8 @@
       "x": -280,
       "y": 2360,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 58"
     },
     {
       "id": 500,
@@ -5788,7 +6398,8 @@
       "x": -60,
       "y": 2149,
       "w": 28,
-      "h": 52
+      "h": 52,
+      "name": "door of a house 39"
     },
     {
       "id": 501,
@@ -5796,7 +6407,8 @@
       "x": -180,
       "y": 2160,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 59"
     },
     {
       "id": 502,
@@ -5804,7 +6416,8 @@
       "x": 280,
       "y": 2149,
       "w": 28,
-      "h": 52
+      "h": 52,
+      "name": "door of a house 40"
     },
     {
       "id": 503,
@@ -5812,7 +6425,8 @@
       "x": 160,
       "y": 2160,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 60"
     },
     {
       "id": 504,
@@ -5820,7 +6434,8 @@
       "x": 400,
       "y": 2360,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 61"
     },
     {
       "id": 505,
@@ -5828,7 +6443,8 @@
       "x": 620,
       "y": 2149,
       "w": 28,
-      "h": 52
+      "h": 52,
+      "name": "door of a house 41"
     },
     {
       "id": 506,
@@ -5836,7 +6452,8 @@
       "x": 500,
       "y": 2160,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 62"
     },
     {
       "id": 507,
@@ -5844,7 +6461,8 @@
       "x": 740,
       "y": 2360,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 63"
     },
     {
       "id": 508,
@@ -5852,7 +6470,8 @@
       "x": 960,
       "y": 2149,
       "w": 28,
-      "h": 52
+      "h": 52,
+      "name": "door of a house 42"
     },
     {
       "id": 509,
@@ -5860,7 +6479,8 @@
       "x": 840,
       "y": 2160,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 64"
     },
     {
       "id": 510,
@@ -5868,7 +6488,8 @@
       "x": 1080,
       "y": 2360,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 65"
     },
     {
       "id": 511,
@@ -5876,7 +6497,8 @@
       "x": 1300,
       "y": 2149,
       "w": 28,
-      "h": 52
+      "h": 52,
+      "name": "door of a house 43"
     },
     {
       "id": 512,
@@ -5884,7 +6506,8 @@
       "x": 1180,
       "y": 2160,
       "w": 66,
-      "h": 100
+      "h": 100,
+      "name": "tree 66"
     }
   ],
   "environment": {
@@ -5902,5 +6525,6 @@
     "x": 1730,
     "y": 1570,
     "angle": 90
-  }
+  },
+  "note": "World document of Deqq's House II. Walls have depth: rooms never share a plane unless an opening joins them (doorway rooms, door rooms, alcoves). Check with the lint in worldtest.sh."
 }

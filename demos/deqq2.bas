@@ -13,7 +13,7 @@
 90 ' in front of you (the prompt at the bottom says what), G puts down the last thing you carry, O opens the 3D settings (invert axes, gamma, field of view, turning
 100 ' speed; kept for next time), M turns the music on and off, P pauses, Q or ESC quits. Game controller: left stick walks, right stick turns and looks, LT runs, A jumps, X uses and takes, B puts
 110 ' down, Y the settings, START pauses, BACK quits. The built parts are saved (the file deqq2.sav of the folder ~/.local/share/<name>/).
-120 ' How it is made: the house is DATA (rectangular sectors, walls and portals: demos/levels/deqq2.bas), the pictures are drawn by GFX statements from a table of
+120 ' How it is made: the house is the world document demos/deqq2.world.json (rooms, solids, openings: docs/world-model.md; JSON LOAD + W3D WORLD), the pictures are drawn by GFX statements from a table of
 130 ' drawing commands (demos/levels/deqq2art.bas) and grabbed into W3D TEXTURE, everything you can touch is a thing (W3D THING) that W3D("DIST"), ("BEARING") and ("SEES")
 140 ' find; Deqq walks with W3D THINGMOVE along a route of way points and sees you with W3D("SEES", 0). The whole game logic also runs in the console host without a
 150 ' picture, for the test deqq2test.sh: environment DEQQ2_HEADLESS=1 and DEQQ2_PLAY=file (commands; see PLAYBACK).
@@ -311,7 +311,7 @@
 3070   CALL W3K_BARREL(92)
 3080   W3D SKY 11
 3090 END PROC
-3100 ' the world: the document of docs/world-model.md (demos/deqq2.world.json, written by demos/levels/deqq2.bas); JSON LOAD looks in worlds/ and demos/ and in the installation
+3100 ' the world: the document of docs/world-model.md (demos/deqq2.world.json, the source of the world: edit it, worldtest.sh checks it); JSON LOAD looks in worlds/ and demos/ and in the installation
 3110 PROC LOADLEVEL
 3120   JSON LOAD "deqq2.world.json"
 3130   W3D WORLD
@@ -1358,7 +1358,7 @@
 13730 DATA 35,1330,925,88,28,22,40,-1,3,0,20,80,-1,0,"READ THE BLUEPRINT"
 13740 DATA 36,290,465,89,14,10,0,-1,3,0,20,70,-1,0,"READ THE NOTE"
 13750 DATA 37,780,370,82,34,30,20,-1,3,0,20,80,-1,0,"LOOK AT THE TELEVISION"
-13760 DATA 38,400,585,86,24,44,0,-1,3,0,20,80,-1,2,"LOOK AT THE TELESCOPE"
+13760 DATA 38,388,585,86,24,44,0,-1,3,0,20,80,-1,2,"LOOK AT THE TELESCOPE"
 13770 DATA 39,600,585,87,24,30,0,-1,3,0,20,80,-1,2,"LOOK AT THE STAR GLOBE"
 13780 DATA 40,1150,780,61,66,100,0,-1,3,0,20,90,-1,0,"LOOK AT THE TREE"
 13790 DATA 41,-100,1000,84,60,52,0,-1,3,0,20,80,-1,0,"LOOK AT THE WASHING LINE"
@@ -1388,7 +1388,7 @@
 14030 DATA 114,210,600,91,24,56,0,-1,0,0,0,0,-1,1,""
 14040 DATA 115,380,350,92,32,40,0,-1,0,0,0,0,-1,2,""
 14050 DATA 116,620,350,92,32,40,0,-1,0,0,0,0,-1,2,""
-14060 DATA 117,560,590,90,32,48,0,-1,0,0,0,0,-1,2,""
+14060 DATA 117,572,590,90,32,48,0,-1,0,0,0,0,-1,2,""
 14070 DATA 118,-980,350,92,32,40,0,-1,0,0,0,0,-1,-1,""
 14080 DATA 119,-980,640,92,32,40,0,-1,0,0,0,0,-1,-1,""
 14090 DATA 120,-760,640,92,32,40,0,-1,0,0,0,0,-1,-1,""
