@@ -349,14 +349,35 @@
 3450 CALL MK_HOUSE(5,"W",700,730)
 3460 CALL MK_HOUSE(69,"S",180,840)
 3470 CALL MK_OUTDOOR(3)
-3480 CALL MK_FENCE(250,3)
-3490 CALL MK_FINISH(27,300,253)
-3500 CALL MK_EMIT("")
-3510 OPEN "stdout:" FOR OUTPUT AS #2
-3520 FOR I=0 TO NTH-1
-3530   PRINT #2,"DATA ";STR$(THD(I,0));",";STR$(THD(I,1));",";STR$(THD(I,2));",";STR$(THD(I,3));",";STR$(THD(I,4));",";STR$(THD(I,5));",";STR$(THD(I,6))
-3540 NEXT I
-3550 PRINT #2,"DATA -1"
-3560 CLOSE #2
-3570 
-3580 
+3480 ' the lawn behind the fences: one sector over the whole block (it lies over the premises (tag 97 = a ghost sector, see LOADLEVEL): it is only reached through the fences' far portals); its edge is the railing again,
+3490 ' through which the ring road and the town beyond are seen
+3500 CALL MK_ROOM(426,-440,-60,1530,1580,0,300,"10,-1,255,97,214")
+3510 CALL MK_SETX(250,-1,-1,3,0,0)
+3520 FOR I=0 TO 4
+3530   A=MAX(XS(I),-440):B=MIN(XS(I+1),1530)
+3540   IF A<B THEN
+3550     CALL MK_ADD(426,0,A,B,400+I)
+3560     CALL MK_ADD(426,2,A,B,409+I)
+3570   END IF
+3580 NEXT I
+3590 FOR I=0 TO 3
+3600   CALL MK_ADD(426,3,YS(I),YS(I+1),405+I)
+3610   CALL MK_ADD(426,1,YS(I),YS(I+1),414+I)
+3620 NEXT I
+3630 ' the ends of the pavement and the railing: the same railing into the lawn (instead of a wall 300 high)
+3640 CALL MK_ADD(418,3,-60,-10,426)
+3650 CALL MK_ADD(418,1,-60,-10,426)
+3660 CALL MK_ADD(419,3,-10,0,426)
+3670 CALL MK_ADD(421,1,-10,0,426)
+3680 CALL MK_GROUND(426)
+3690 CALL MK_FENCE(250,3)
+3700 CALL MK_FINISH(27,300,214)
+3710 CALL MK_EMIT("")
+3720 OPEN "stdout:" FOR OUTPUT AS #2
+3730 FOR I=0 TO NTH-1
+3740   PRINT #2,"DATA ";STR$(THD(I,0));",";STR$(THD(I,1));",";STR$(THD(I,2));",";STR$(THD(I,3));",";STR$(THD(I,4));",";STR$(THD(I,5));",";STR$(THD(I,6))
+3750 NEXT I
+3760 PRINT #2,"DATA -1"
+3770 CLOSE #2
+3780 
+3790 

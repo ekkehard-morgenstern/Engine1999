@@ -15,464 +15,476 @@
 110 '   CALL MK_LINKX(a,side$,lo,hi,b,more$)         the same with everything: more$ = "tex,up,low,flags,xoff,yoff"
 120 '   CALL MK_PILLAR(a,x1,y1,x2,y2,tex)            a solid block in sector a
 130 '   CALL MK_INNER(a,b,tex)                       sector b lies inside sector a (a hole in a): all four sides of b are portals
-135 '   CALL MK_INNERF(a,b,tex,flags)                the same, the ring of walls (both sides) has these flags: a fence = 250 and 3 (a masked picture that blocks)
-140 '   CALL MK_HOUSE(id,side$,lo,hi)                an outdoor sector's wall between lo and hi is the house (see MK_FINISH)
-150 '   CALL MK_OUTDOOR(id)                          an outdoor sector without house walls
-155 '   CALL MK_FENCE(tex,flags)                     before MK_FINISH: the picture and the wall flags of the portal between an outdoor sector and its fence sector (default -1 and 6: nothing to see, nobody passes; 250 and 3 = a masked railing)
-160 '   CALL MK_FINISH(housetex,fenceh,fencetex)     outdoor sectors: solid walls become the house (tall picture) or a low fence sector behind the wall
-165 '   CALL MK_POLY(id,floor,ceil,look$,pts$)        a sector of any shape: pts$ = "x,y,x,y,..." (3 to 32 corners, walked in order, closed by itself); look$ as for MK_ROOM (the walltex is the default of all its walls)
-166 '   CALL MK_PLINK(a,edge,b)  /  CALL MK_PLINKT(a,edge,b,tex)   edge number e (0 = from the first corner to the second ...) of the polygon a is a portal to the sector b (whose edge must run along it, the other way round)
-167 '   CALL MK_PTEX(a,edge,tex)                     the picture of one edge;  FN MK_ARC$(cx,cy,radius,angle1,angle2,steps) = the corners "x,y,..." of an arc (angles in degrees, any DEG / RAD / GRAD mode)
-168 '   CALL MK_SLOPE(id,floorx,floory,ceilx,ceily)  slopes of the floor and ceiling (rise per unit; the heights given to the room are those at its middle)
-169 '   CALL MK_THING(n,x,y,tex,w,h,z)               a thing;   CALL MK_RAW(line$)  a line of the map file as it is (SKY, FOG, FAR ...; only for MK_EMITMAP)
-170 '   CALL MK_EMITMAP(file$) / CALL MK_EMITMAPDATA(file$)   writes the level as a map file for the library w3dmap (see there) instead of DATA lines; the second form writes DATA lines with quoted text (a program READs them and feeds WM_LINE)
-171 '   CALL MK_EMIT(file$)                          writes the DATA lines ("" = standard output)
-180 LIBRARY "mkw3d","MK_"
-190 PROC MK_INIT
-200   DIM MK_X1(600),MK_Y1(600),MK_X2(600),MK_Y2(600),MK_F(600),MK_C(600),MK_FT(600),MK_CT(600),MK_LT(600),MK_TG(600),MK_WT(600),MK_EX(600),MK_OUT(600)
-210   DIM MK_ORD(600),MK_HN(2400),MK_HLO(9600),MK_HHI(9600)
-220   DIM MK_LA(2000),MK_LS(2000),MK_LLO(2000),MK_LHI(2000),MK_LB(2000),MK_LTX(2000),MK_LUP(2000),MK_LLW(2000),MK_LFL(2000),MK_LXO(2000),MK_LYO(2000)
-230   DIM MK_PFL(800),MK_PR(800),MK_PK(800),MK_PX1(800),MK_PY1(800),MK_PX2(800),MK_PY2(800),MK_PB(800),MK_PTX(800)
-240   DIM MK_SL(200),MK_SH(200),MK_SB(200),MK_SI(200),MK_PV(20),MK_TI(2000),MK_WL(400,12),MK_GL(100),MK_GH(100),MK_PCK(100),MK_PCL(100),MK_PCH(100)
-245   DIM MK_PLY(600),MK_PNN(600),MK_PPX(19200),MK_PPY(19200),MK_PEB(19200),MK_PET(19200),MK_PT(66),MK_SFX(600),MK_SFY(600),MK_SCX(600),MK_SCY(600),MK_SLO(600),MK_TH(300,8),MK_RW$(300)
-250   MK_NR=0:MK_NL=0:MK_NP=0:MK_NW=0:MK_PN=0:MK_NTH=0:MK_NRW=0:MK_FTX0=-1:MK_FFL=6:MK_LF=0
-260 END PROC
-270 ' MK_PARSE: the numbers of a comma separated string in MK_PV(0..MK_PN-1)
-280 PROC MK_PARSE(S$)
-290   LOCAL I,C$,T$
-300   MK_PN=0:T$=""
-310   FOR I=1 TO LEN(S$)+1
-320     IF I>LEN(S$) THEN C$="," ELSE C$=MID$(S$,I,1)
-330     IF C$="," THEN
-340       MK_PV(MK_PN)=VAL(T$):MK_PN=MK_PN+1:T$=""
-350     ELSE
-360       IF C$<>" " THEN T$=T$+C$
-370     END IF
-380   NEXT I
-390 END PROC
-400 PROC MK_FAIL(M$)
-410   OPEN "stderr:" FOR OUTPUT AS #2
-420   PRINT #2,"mkw3d: ";M$
-430   CLOSE #2
-440   BYE 1
-450 END PROC
-460 FUNC MK_SIDE(S$)
-470   IF S$="S" THEN RETURN 0
-480   IF S$="E" THEN RETURN 1
-490   IF S$="N" THEN RETURN 2
-500   IF S$="W" THEN RETURN 3
-510   CALL MK_FAIL("bad side "+S$)
-520   RETURN 0
-530 END FUNC
-540 PROC MK_ROOM(ID,X1,Y1,X2,Y2,F,C,L$)
-550   CALL MK_PARSE(L$)
-560   CALL MK_ROOMN(ID,X1,Y1,X2,Y2,F,C)
-570 END PROC
-580 ' MK_ROOMN: a sector whose look is in MK_PV(0..4) (floortex,ceiltex,light,tag,walltex)
-590 PROC MK_ROOMN(ID,X1,Y1,X2,Y2,F,C)
-600   LOCAL K
-610   IF ID<0 OR ID>599 THEN CALL MK_FAIL("sector number out of range")
-620   IF NOT MK_EX(ID) THEN
-630     MK_ORD(MK_NR)=ID:MK_NR=MK_NR+1
-640   END IF
-650   MK_EX(ID)=-1:MK_OUT(ID)=0:MK_PLY(ID)=0:MK_SLO(ID)=0
-660   MK_X1(ID)=X1:MK_Y1(ID)=Y1:MK_X2(ID)=X2:MK_Y2(ID)=Y2:MK_F(ID)=F:MK_C(ID)=C
-670   MK_FT(ID)=MK_PV(0):MK_CT(ID)=MK_PV(1):MK_LT(ID)=MK_PV(2):MK_TG(ID)=MK_PV(3):MK_WT(ID)=MK_PV(4)
-680   FOR K=0 TO 3
-690     MK_HN(ID*4+K)=0
-700   NEXT K
-710 END PROC
-720 ' MK_ADD: a link; tex, upper, lower, flags, xoff, yoff are in MK_XTX, MK_XUP, MK_XLW, MK_XFL, MK_XXO, MK_XYO
-730 PROC MK_ADD(A,K,LO,HI,B)
-740   IF MK_NL>=2000 THEN CALL MK_FAIL("too many links")
-750   MK_LA(MK_NL)=A:MK_LS(MK_NL)=K:MK_LLO(MK_NL)=LO:MK_LHI(MK_NL)=HI:MK_LB(MK_NL)=B:MK_LTX(MK_NL)=MK_XTX
-760   MK_LUP(MK_NL)=MK_XUP:MK_LLW(MK_NL)=MK_XLW:MK_LFL(MK_NL)=MK_XFL:MK_LXO(MK_NL)=MK_XXO:MK_LYO(MK_NL)=MK_XYO
-770   MK_NL=MK_NL+1
-780 END PROC
-790 PROC MK_SETX(TEX,UP,LOW,FL,XO,YO)
-800   MK_XTX=TEX:MK_XUP=UP:MK_XLW=LOW:MK_XFL=FL:MK_XXO=XO:MK_XYO=YO
+140 '   CALL MK_INNERF(a,b,tex,flags)                the same, the ring of walls (both sides) has these flags: a fence = 250 and 3 (a masked picture that blocks)
+150 '   CALL MK_HOUSE(id,side$,lo,hi)                an outdoor sector's wall between lo and hi is the house (see MK_FINISH)
+160 '   CALL MK_OUTDOOR(id)                          an outdoor sector without house walls
+170 '   CALL MK_GROUND(g)                            before MK_FINISH: the far wall of every fence sector is a portal into the sector g (which may lie over the premises: rays only follow portals), so there is no wall behind the fence
+180 '   CALL MK_FENCE(tex,flags)                     before MK_FINISH: the picture and the wall flags of the portal between an outdoor sector and its fence sector (default -1 and 6: nothing to see, nobody passes; 250 and 3 = a masked railing)
+190 '   CALL MK_FINISH(housetex,fenceh,fencetex)     outdoor sectors: solid walls become the house (tall picture) or a low fence sector behind the wall
+200 '   CALL MK_POLY(id,floor,ceil,look$,pts$)        a sector of any shape: pts$ = "x,y,x,y,..." (3 to 32 corners, walked in order, closed by itself); look$ as for MK_ROOM (the walltex is the default of all its walls)
+210 '   CALL MK_PLINK(a,edge,b)  /  CALL MK_PLINKT(a,edge,b,tex)   edge number e (0 = from the first corner to the second ...) of the polygon a is a portal to the sector b (whose edge must run along it, the other way round)
+220 '   CALL MK_PTEX(a,edge,tex)                     the picture of one edge;  FN MK_ARC$(cx,cy,radius,angle1,angle2,steps) = the corners "x,y,..." of an arc (angles in degrees, any DEG / RAD / GRAD mode)
+230 '   CALL MK_SLOPE(id,floorx,floory,ceilx,ceily)  slopes of the floor and ceiling (rise per unit; the heights given to the room are those at its middle)
+240 '   CALL MK_THING(n,x,y,tex,w,h,z)               a thing;   CALL MK_RAW(line$)  a line of the map file as it is (SKY, FOG, FAR ...; only for MK_EMITMAP)
+250 '   CALL MK_EMITMAP(file$) / CALL MK_EMITMAPDATA(file$)   writes the level as a map file for the library w3dmap (see there) instead of DATA lines; the second form writes DATA lines with quoted text (a program READs them and feeds WM_LINE)
+260 '   CALL MK_EMIT(file$)                          writes the DATA lines ("" = standard output)
+270 LIBRARY "mkw3d","MK_"
+280 PROC MK_INIT
+290   DIM MK_X1(600),MK_Y1(600),MK_X2(600),MK_Y2(600),MK_F(600),MK_C(600),MK_FT(600),MK_CT(600),MK_LT(600),MK_TG(600),MK_WT(600),MK_EX(600),MK_OUT(600)
+300   DIM MK_ORD(600),MK_HN(2400),MK_HLO(9600),MK_HHI(9600)
+310   DIM MK_LA(2000),MK_LS(2000),MK_LLO(2000),MK_LHI(2000),MK_LB(2000),MK_LTX(2000),MK_LUP(2000),MK_LLW(2000),MK_LFL(2000),MK_LXO(2000),MK_LYO(2000)
+320   DIM MK_PFL(800),MK_PR(800),MK_PK(800),MK_PX1(800),MK_PY1(800),MK_PX2(800),MK_PY2(800),MK_PB(800),MK_PTX(800)
+330   DIM MK_SL(200),MK_SH(200),MK_SB(200),MK_SI(200),MK_PV(20),MK_TI(2000),MK_WL(400,12),MK_GL(100),MK_GH(100),MK_PCK(100),MK_PCL(100),MK_PCH(100)
+340   DIM MK_PLY(600),MK_PNN(600),MK_PPX(19200),MK_PPY(19200),MK_PEB(19200),MK_PET(19200),MK_PT(66),MK_SFX(600),MK_SFY(600),MK_SCX(600),MK_SCY(600),MK_SLO(600),MK_TH(300,8),MK_RW$(300)
+350   MK_NR=0:MK_NL=0:MK_NP=0:MK_NW=0:MK_PN=0:MK_NTH=0:MK_NRW=0:MK_FTX0=-1:MK_FFL=6:MK_LF=0:MK_GND=-1
+360 END PROC
+370 ' MK_PARSE: the numbers of a comma separated string in MK_PV(0..MK_PN-1)
+380 PROC MK_PARSE(S$)
+390   LOCAL I,C$,T$
+400   MK_PN=0:T$=""
+410   FOR I=1 TO LEN(S$)+1
+420     IF I>LEN(S$) THEN C$="," ELSE C$=MID$(S$,I,1)
+430     IF C$="," THEN
+440       MK_PV(MK_PN)=VAL(T$):MK_PN=MK_PN+1:T$=""
+450     ELSE
+460       IF C$<>" " THEN T$=T$+C$
+470     END IF
+480   NEXT I
+490 END PROC
+500 PROC MK_FAIL(M$)
+510   OPEN "stderr:" FOR OUTPUT AS #2
+520   PRINT #2,"mkw3d: ";M$
+530   CLOSE #2
+540   BYE 1
+550 END PROC
+560 FUNC MK_SIDE(S$)
+570   IF S$="S" THEN RETURN 0
+580   IF S$="E" THEN RETURN 1
+590   IF S$="N" THEN RETURN 2
+600   IF S$="W" THEN RETURN 3
+610   CALL MK_FAIL("bad side "+S$)
+620   RETURN 0
+630 END FUNC
+640 PROC MK_ROOM(ID,X1,Y1,X2,Y2,F,C,L$)
+650   CALL MK_PARSE(L$)
+660   CALL MK_ROOMN(ID,X1,Y1,X2,Y2,F,C)
+670 END PROC
+680 ' MK_ROOMN: a sector whose look is in MK_PV(0..4) (floortex,ceiltex,light,tag,walltex)
+690 PROC MK_ROOMN(ID,X1,Y1,X2,Y2,F,C)
+700   LOCAL K
+710   IF ID<0 OR ID>599 THEN CALL MK_FAIL("sector number out of range")
+720   IF NOT MK_EX(ID) THEN
+730     MK_ORD(MK_NR)=ID:MK_NR=MK_NR+1
+740   END IF
+750   MK_EX(ID)=-1:MK_OUT(ID)=0:MK_PLY(ID)=0:MK_SLO(ID)=0
+760   MK_X1(ID)=X1:MK_Y1(ID)=Y1:MK_X2(ID)=X2:MK_Y2(ID)=Y2:MK_F(ID)=F:MK_C(ID)=C
+770   MK_FT(ID)=MK_PV(0):MK_CT(ID)=MK_PV(1):MK_LT(ID)=MK_PV(2):MK_TG(ID)=MK_PV(3):MK_WT(ID)=MK_PV(4)
+780   FOR K=0 TO 3
+790     MK_HN(ID*4+K)=0
+800   NEXT K
 810 END PROC
-820 PROC MK_LINKX(A,S$,LO,HI,B,X$)
-830   CALL MK_PARSE(X$)
-840   CALL MK_LINKN(A,S$,LO,HI,B,MK_PV(0),MK_PV(1),MK_PV(2))
-850 END PROC
-860 ' MK_LINKN: a link with tex, upper, lower and the rest in MK_PV(3..5) (flags, xoff, yoff)
-870 PROC MK_LINKN(A,S$,LO,HI,B,TEX,UP,LOW)
-880   LOCAL K,O,C1,C2,R1,R2,R3,R4
-890   CALL MK_SETX(TEX,UP,LOW,MK_PV(3),MK_PV(4),MK_PV(5))
-900   IF NOT MK_EX(A) OR NOT MK_EX(B) THEN CALL MK_FAIL("link between unknown sectors "+STR$(A)+" "+STR$(B))
-910   K=FN MK_SIDE(S$):O=(K+2) MOD 4
-920   IF K=0 THEN
-930     C1=MK_Y1(A):C2=MK_Y2(B):R1=MK_X1(A):R2=MK_X2(A):R3=MK_X1(B):R4=MK_X2(B)
-940   END IF
-950   IF K=2 THEN
-960     C1=MK_Y2(A):C2=MK_Y1(B):R1=MK_X1(A):R2=MK_X2(A):R3=MK_X1(B):R4=MK_X2(B)
-970   END IF
-980   IF K=3 THEN
-990     C1=MK_X1(A):C2=MK_X2(B):R1=MK_Y1(A):R2=MK_Y2(A):R3=MK_Y1(B):R4=MK_Y2(B)
-1000   END IF
-1010   IF K=1 THEN
-1020     C1=MK_X2(A):C2=MK_X1(B):R1=MK_Y1(A):R2=MK_Y2(A):R3=MK_Y1(B):R4=MK_Y2(B)
-1030   END IF
-1040   IF C1<>C2 THEN CALL MK_FAIL("rooms do not touch: "+STR$(A)+" "+S$+" "+STR$(B))
-1050   IF NOT (R1<=LO AND LO<HI AND HI<=R2 AND R3<=LO AND HI<=R4) THEN CALL MK_FAIL("span outside: "+STR$(A)+" "+S$+" "+STR$(LO)+" "+STR$(B))
-1060   CALL MK_ADD(A,K,LO,HI,B)
-1070   CALL MK_ADD(B,O,LO,HI,A)
-1080 END PROC
-1090 PROC MK_SETV(A,B,C,D,E,F)
-1100   MK_PV(0)=A:MK_PV(1)=B:MK_PV(2)=C:MK_PV(3)=D:MK_PV(4)=E:MK_PV(5)=F
-1110 END PROC
-1120 PROC MK_LINKT(A,S$,LO,HI,B,TEX)
-1130   CALL MK_SETV(TEX,-1,-1,0,0,0)
-1140   CALL MK_LINKN(A,S$,LO,HI,B,TEX,-1,-1)
-1150 END PROC
-1160 PROC MK_LINK(A,S$,LO,HI,B)
-1170   CALL MK_SETV(-1,-1,-1,0,0,0)
-1180   CALL MK_LINKN(A,S$,LO,HI,B,-1,-1,-1)
-1190 END PROC
-1200 PROC MK_LOOP(A,KIND,X1,Y1,X2,Y2,B,TEX)
-1210   IF MK_NP>=800 THEN CALL MK_FAIL("too many loops")
-1220   MK_PFL(MK_NP)=MK_LF:MK_PR(MK_NP)=A:MK_PK(MK_NP)=KIND:MK_PX1(MK_NP)=X1:MK_PY1(MK_NP)=Y1:MK_PX2(MK_NP)=X2:MK_PY2(MK_NP)=Y2:MK_PB(MK_NP)=B:MK_PTX(MK_NP)=TEX
-1230   MK_NP=MK_NP+1
-1240 END PROC
-1250 PROC MK_PILLAR(A,X1,Y1,X2,Y2,TEX)
-1260   CALL MK_LOOP(A,0,X1,Y1,X2,Y2,-1,TEX)
-1270 END PROC
-1280 PROC MK_INNERF(A,B,TEX,FL)
-1290   LOCAL K
-1292   MK_LF=FL
-1300   CALL MK_LOOP(A,1,MK_X1(B),MK_Y1(B),MK_X2(B),MK_Y2(B),B,TEX)
-1302   MK_LF=0
-1310   IF FL=0 THEN CALL MK_SETX(-1,-1,-1,0,0,0) ELSE CALL MK_SETX(TEX,-1,-1,FL,0,0)
-1320   FOR K=0 TO 3
-1330     IF K=0 OR K=2 THEN CALL MK_ADD(B,K,MK_X1(B),MK_X2(B),A)
-1340     IF K=1 OR K=3 THEN CALL MK_ADD(B,K,MK_Y1(B),MK_Y2(B),A)
-1350   NEXT K
-1360 END PROC
-1365 PROC MK_INNER(A,B,TEX)
-1366   CALL MK_INNERF(A,B,TEX,0)
-1367 END PROC
-1370 PROC MK_HOUSE(ID,S$,LO,HI)
-1380   LOCAL K,N,J,P,OK
-1390   K=FN MK_SIDE(S$):MK_OUT(ID)=-1
-1400   N=MK_HN(ID*4+K):P=ID*16+K*4
-1410   IF N>=4 THEN CALL MK_FAIL("too many house spans")
-1420   J=N:OK=-1
-1430   WHILE OK
-1440     IF J=0 THEN
-1450       OK=0
-1460     ELSE
-1470       IF MK_HLO(P+J-1)>LO THEN
-1480         MK_HLO(P+J)=MK_HLO(P+J-1):MK_HHI(P+J)=MK_HHI(P+J-1):J=J-1
-1490       ELSE
-1500         OK=0
-1510       END IF
-1520     END IF
-1530   WEND
-1540   MK_HLO(P+J)=LO:MK_HHI(P+J)=HI
-1550   MK_HN(ID*4+K)=N+1
-1560 END PROC
-1570 PROC MK_OUTDOOR(ID)
-1580   MK_OUT(ID)=-1
-1590 END PROC
-1600 ' MK_SORT: the links of sector R on side K, ordered by their start (stable), as indices in MK_TI(0..MK_TN-1)
-1610 PROC MK_SORT(R,K)
-1620   LOCAL I,J,OK
-1630   MK_TN=0
-1640   FOR I=0 TO MK_NL-1
-1650     IF MK_LA(I)=R AND MK_LS(I)=K THEN
-1660       J=MK_TN:OK=-1
-1670       WHILE OK
-1680         IF J=0 THEN
-1690           OK=0
-1700         ELSE
-1710           IF MK_LLO(MK_TI(J-1))>MK_LLO(I) THEN
-1720             MK_TI(J)=MK_TI(J-1):J=J-1
-1730           ELSE
-1740             OK=0
-1750           END IF
-1760         END IF
-1770       WEND
-1780       MK_TI(J)=I:MK_TN=MK_TN+1
-1790     END IF
-1800   NEXT I
-1810 END PROC
-1820 ' MK_PUTW: a wall; flags, upper, lower, xoff, yoff are in MK_RFL, MK_RUP, MK_RLW, MK_RXO, MK_RYO
-1830 PROC MK_SETR(FL,UP,LW,XO,YO)
-1840   MK_RFL=FL:MK_RUP=UP:MK_RLW=LW:MK_RXO=XO:MK_RYO=YO
-1850 END PROC
-1860 PROC MK_PUTW(X1,Y1,X2,Y2,T,NX)
-1870   IF MK_NW>=400 THEN CALL MK_FAIL("too many walls in a sector")
-1880   MK_WL(MK_NW,0)=X1:MK_WL(MK_NW,1)=Y1:MK_WL(MK_NW,2)=X2:MK_WL(MK_NW,3)=Y2:MK_WL(MK_NW,4)=T:MK_WL(MK_NW,5)=NX
-1890   MK_WL(MK_NW,6)=MK_RFL:MK_WL(MK_NW,7)=MK_RUP:MK_WL(MK_NW,8)=MK_RLW:MK_WL(MK_NW,9)=MK_RXO:MK_WL(MK_NW,10)=MK_RYO
-1900   MK_NW=MK_NW+1
-1910 END PROC
-1920 ' one wall segment of the side K (fixed = the constant coordinate, P..Q along the side as walked)
-1930 PROC MK_SEG(HZ,FX,P,Q,T,NX)
-1940   IF HZ THEN
-1950     CALL MK_PUTW(P,FX,Q,FX,T,NX)
-1960   ELSE
-1970     CALL MK_PUTW(FX,P,FX,Q,T,NX)
-1980   END IF
-1990 END PROC
-2000 ' MK_WALLS: the walls of sector R in MK_WL(0..MK_NW-1, 0..10)
-2010 PROC MK_WALLS(R)
-2020   LOCAL K,FX,A0,A1,RV,HZ,POS,I,J,N,L,LO,HI,B,T
-2030   MK_NW=0
-2031   IF MK_PLY(R) THEN
-2032     CALL MK_POLYWALLS(R)
-2033     EXIT PROC
-2034   END IF
-2040   FOR K=0 TO 3
-2050     IF K=0 THEN FX=MK_Y1(R):A0=MK_X1(R):A1=MK_X2(R):RV=0:HZ=-1
-2060     IF K=1 THEN FX=MK_X2(R):A0=MK_Y1(R):A1=MK_Y2(R):RV=0:HZ=0
-2070     IF K=2 THEN FX=MK_Y2(R):A0=MK_X1(R):A1=MK_X2(R):RV=-1:HZ=-1
-2080     IF K=3 THEN FX=MK_X1(R):A0=MK_Y1(R):A1=MK_Y2(R):RV=-1:HZ=0
-2090     CALL MK_SORT(R,K)
-2100     POS=A0:N=0
-2110     FOR I=0 TO MK_TN-1
-2120       L=MK_TI(I)
-2130       IF MK_LLO(L)<POS THEN CALL MK_FAIL("links overlap in sector "+STR$(R))
-2140       IF MK_LLO(L)>POS THEN MK_SL(N)=POS:MK_SH(N)=MK_LLO(L):MK_SB(N)=-1:MK_SI(N)=-1:N=N+1
-2150       MK_SL(N)=MK_LLO(L):MK_SH(N)=MK_LHI(L):MK_SB(N)=MK_LB(L):MK_SI(N)=L:N=N+1
-2160       POS=MK_LHI(L)
-2170     NEXT I
-2180     IF POS<A1 THEN MK_SL(N)=POS:MK_SH(N)=A1:MK_SB(N)=-1:MK_SI(N)=-1:N=N+1
-2190     FOR J=0 TO N-1
-2200       IF RV THEN I=N-1-J ELSE I=J
-2210       IF RV THEN LO=MK_SH(I):HI=MK_SL(I) ELSE LO=MK_SL(I):HI=MK_SH(I)
-2220       L=MK_SI(I)
-2230       IF L<0 THEN
-2240         CALL MK_SETR(0,-1,-1,0,0)
-2250         CALL MK_SEG(HZ,FX,LO,HI,MK_WT(R),-1)
-2260       ELSE
-2270         T=MK_LTX(L):IF T<0 THEN T=MK_WT(R)
-2280         IF MK_SB(I)=-2 THEN
-2290           CALL MK_SETR(0,-1,-1,0,0)
-2300           CALL MK_SEG(HZ,FX,LO,HI,T,-1)
-2310         ELSE
-2320           CALL MK_SETR(MK_LFL(L),MK_LUP(L),MK_LLW(L),MK_LXO(L),MK_LYO(L))
-2330           CALL MK_SEG(HZ,FX,LO,HI,T,MK_SB(I))
-2340         END IF
-2350       END IF
-2360     NEXT J
-2370   NEXT K
-2380   FOR I=0 TO MK_NP-1
-2390     IF MK_PR(I)=R THEN
-2400       T=MK_PTX(I):IF T<0 THEN T=MK_WT(R)
-2410       B=MK_PB(I):CALL MK_SETR(MK_PFL(I),-1,-1,0,0)
-2420       CALL MK_PUTW(MK_PX1(I),MK_PY1(I),MK_PX1(I),MK_PY2(I),T,B)
-2430       CALL MK_PUTW(MK_PX1(I),MK_PY2(I),MK_PX2(I),MK_PY2(I),T,B)
-2440       CALL MK_PUTW(MK_PX2(I),MK_PY2(I),MK_PX2(I),MK_PY1(I),T,B)
-2450       CALL MK_PUTW(MK_PX2(I),MK_PY1(I),MK_PX1(I),MK_PY1(I),T,B)
-2460     END IF
-2470   NEXT I
-2480 END PROC
-2490 ' MK_FINISH: outdoor sectors higher than a fence (the house stands next to them): their solid walls are the house (a tall picture) or a low fence:
-2500 ' a thin sector behind the wall, as high as a fence and open to the sky, that you can see through but not walk into (flags 2 + 4).
-2505 PROC MK_FENCE(TEX,FL)
-2506   MK_FTX0=TEX:MK_FFL=FL
-2507 END PROC
-2510 PROC MK_FINISH(HT,FH,FTX)
-2520   LOCAL FID,N0,OI,R,K,A0,A1,GN,POS,I,L,G,G0,G1,CUR,NP,H,HN,P,LO,HI,Q
-2530   FID=100:N0=MK_NR
-2540   FOR OI=0 TO N0-1
-2550     R=MK_ORD(OI)
-2560     IF MK_OUT(R) THEN
-2570       FOR K=0 TO 3
-2580         IF K=0 OR K=2 THEN A0=MK_X1(R):A1=MK_X2(R) ELSE A0=MK_Y1(R):A1=MK_Y2(R)
-2590         CALL MK_SORT(R,K)
-2600         GN=0:POS=A0
-2610         FOR I=0 TO MK_TN-1
-2620           L=MK_TI(I)
-2630           IF MK_LLO(L)>POS THEN MK_GL(GN)=POS:MK_GH(GN)=MK_LLO(L):GN=GN+1
-2640           POS=MK_LHI(L)
-2650         NEXT I
-2660         IF POS<A1 THEN MK_GL(GN)=POS:MK_GH(GN)=A1:GN=GN+1
-2670         FOR G=0 TO GN-1
-2680           G0=MK_GL(G):G1=MK_GH(G):NP=0:CUR=G0
-2690           HN=MK_HN(R*4+K):P=R*16+K*4
-2700           FOR H=0 TO HN-1
-2710             LO=MK_HLO(P+H):IF G0>LO THEN LO=G0
-2720             HI=MK_HHI(P+H):IF G1<HI THEN HI=G1
-2730             IF LO<HI THEN
-2740               IF LO>CUR THEN MK_PCK(NP)=0:MK_PCL(NP)=CUR:MK_PCH(NP)=LO:NP=NP+1
-2750               MK_PCK(NP)=1:MK_PCL(NP)=LO:MK_PCH(NP)=HI:NP=NP+1
-2760               CUR=HI
-2770             END IF
-2780           NEXT H
-2790           IF CUR<G1 THEN MK_PCK(NP)=0:MK_PCL(NP)=CUR:MK_PCH(NP)=G1:NP=NP+1
-2800           FOR Q=0 TO NP-1
-2810             LO=MK_PCL(Q):HI=MK_PCH(Q)
-2820             IF MK_PCK(Q)=1 THEN
-2830               CALL MK_SETX(HT,-1,-1,0,0,0)
-2840               CALL MK_ADD(R,K,LO,HI,-2)
-2850             ELSE
-2860               MK_PV(0)=10:MK_PV(1)=-1:MK_PV(2)=255:MK_PV(3)=0:MK_PV(4)=FTX
-2870               IF K=0 THEN CALL MK_ROOMN(FID,LO,MK_Y1(R)-20,HI,MK_Y1(R),0,FH)
-2880               IF K=2 THEN CALL MK_ROOMN(FID,LO,MK_Y2(R),HI,MK_Y2(R)+20,0,FH)
-2890               IF K=3 THEN CALL MK_ROOMN(FID,MK_X1(R)-20,LO,MK_X1(R),HI,0,FH)
-2900               IF K=1 THEN CALL MK_ROOMN(FID,MK_X2(R),LO,MK_X2(R)+20,HI,0,FH)
-2910               CALL MK_SETV(-1,-1,-1,MK_FFL,0,0)
-2920               CALL MK_LINKN(R,MID$("SENW",K+1,1),LO,HI,FID,MK_FTX0,-1,-1)
-2930               FID=FID+1
-2940             END IF
-2950           NEXT Q
-2960         NEXT G
-2970       NEXT K
-2980     END IF
-2990   NEXT OI
-3000 END PROC
-3010 PROC MK_EMIT(F$)
-3020   LOCAL N,I,R,W,J,L$
-3030   IF F$="" THEN F$="stdout:"
-3040   OPEN F$ FOR OUTPUT AS #1
-3050   N=0
-3060   FOR R=0 TO 599
-3070     IF MK_EX(R) THEN N=N+1
-3080   NEXT R
-3090   PRINT #1,"DATA ";STR$(N)
-3100   FOR R=0 TO 599
-3110     IF MK_EX(R) THEN
-3120       CALL MK_WALLS(R)
-3130       PRINT #1,"DATA ";STR$(R);",";STR$(MK_F(R));",";STR$(MK_C(R));",";STR$(MK_FT(R));",";STR$(MK_CT(R));",";STR$(MK_LT(R));",";STR$(MK_TG(R));",";STR$(MK_NW)
-3140       FOR W=0 TO MK_NW-1
-3150         L$="DATA "+STR$(MK_WL(W,0))
-3160         FOR J=1 TO 10
-3170           L$=L$+","+STR$(MK_WL(W,J))
-3180         NEXT J
-3190         PRINT #1,L$
-3200       NEXT W
-3210     END IF
-3220   NEXT R
-3230   CLOSE #1
-3240 END PROC
-3250 ' -- sectors of any shape (polygons) ---------------------------------------------------------------------------------------------------
-3260 PROC MK_POLY(ID,F,C,L$,P$)
-3270   LOCAL I,K,N,C$,T$,X1,Y1,X2,Y2
-3280   N=0:T$=""
-3290   FOR I=1 TO LEN(P$)+1
-3300     IF I>LEN(P$) THEN C$="," ELSE C$=MID$(P$,I,1)
-3310     IF C$="," THEN
-3320       IF LEN(T$)>0 THEN
-3330         IF N>=64 THEN CALL MK_FAIL("too many corners")
-3340         MK_PT(N)=VAL(T$):N=N+1
-3350       END IF
-3360       T$=""
-3370     ELSE
-3380       IF C$<>" " THEN T$=T$+C$
-3390     END IF
-3400   NEXT I
-3410   IF N<6 OR N MOD 2<>0 THEN CALL MK_FAIL("a polygon needs 3 to 32 corners (x,y pairs)")
-3420   N=N\2
-3430   X1=MK_PT(0):X2=X1:Y1=MK_PT(1):Y2=Y1
-3440   FOR I=0 TO N-1
-3450     IF MK_PT(2*I)<X1 THEN X1=MK_PT(2*I)
-3460     IF MK_PT(2*I)>X2 THEN X2=MK_PT(2*I)
-3470     IF MK_PT(2*I+1)<Y1 THEN Y1=MK_PT(2*I+1)
-3480     IF MK_PT(2*I+1)>Y2 THEN Y2=MK_PT(2*I+1)
-3490   NEXT I
-3500   CALL MK_PARSE(L$)
-3510   CALL MK_ROOMN(ID,X1,Y1,X2,Y2,F,C)
-3520   MK_PLY(ID)=-1:MK_PNN(ID)=N
-3530   FOR I=0 TO N-1
-3540     K=ID*32+I
-3550     MK_PPX(K)=MK_PT(2*I):MK_PPY(K)=MK_PT(2*I+1):MK_PEB(K)=-1:MK_PET(K)=-1
-3560   NEXT I
+820 ' MK_ADD: a link; tex, upper, lower, flags, xoff, yoff are in MK_XTX, MK_XUP, MK_XLW, MK_XFL, MK_XXO, MK_XYO
+830 PROC MK_ADD(A,K,LO,HI,B)
+840   IF MK_NL>=2000 THEN CALL MK_FAIL("too many links")
+850   MK_LA(MK_NL)=A:MK_LS(MK_NL)=K:MK_LLO(MK_NL)=LO:MK_LHI(MK_NL)=HI:MK_LB(MK_NL)=B:MK_LTX(MK_NL)=MK_XTX
+860   MK_LUP(MK_NL)=MK_XUP:MK_LLW(MK_NL)=MK_XLW:MK_LFL(MK_NL)=MK_XFL:MK_LXO(MK_NL)=MK_XXO:MK_LYO(MK_NL)=MK_XYO
+870   MK_NL=MK_NL+1
+880 END PROC
+890 PROC MK_SETX(TEX,UP,LOW,FL,XO,YO)
+900   MK_XTX=TEX:MK_XUP=UP:MK_XLW=LOW:MK_XFL=FL:MK_XXO=XO:MK_XYO=YO
+910 END PROC
+920 PROC MK_LINKX(A,S$,LO,HI,B,X$)
+930   CALL MK_PARSE(X$)
+940   CALL MK_LINKN(A,S$,LO,HI,B,MK_PV(0),MK_PV(1),MK_PV(2))
+950 END PROC
+960 ' MK_LINKN: a link with tex, upper, lower and the rest in MK_PV(3..5) (flags, xoff, yoff)
+970 PROC MK_LINKN(A,S$,LO,HI,B,TEX,UP,LOW)
+980   LOCAL K,O,C1,C2,R1,R2,R3,R4
+990   CALL MK_SETX(TEX,UP,LOW,MK_PV(3),MK_PV(4),MK_PV(5))
+1000   IF NOT MK_EX(A) OR NOT MK_EX(B) THEN CALL MK_FAIL("link between unknown sectors "+STR$(A)+" "+STR$(B))
+1010   K=FN MK_SIDE(S$):O=(K+2) MOD 4
+1020   IF K=0 THEN
+1030     C1=MK_Y1(A):C2=MK_Y2(B):R1=MK_X1(A):R2=MK_X2(A):R3=MK_X1(B):R4=MK_X2(B)
+1040   END IF
+1050   IF K=2 THEN
+1060     C1=MK_Y2(A):C2=MK_Y1(B):R1=MK_X1(A):R2=MK_X2(A):R3=MK_X1(B):R4=MK_X2(B)
+1070   END IF
+1080   IF K=3 THEN
+1090     C1=MK_X1(A):C2=MK_X2(B):R1=MK_Y1(A):R2=MK_Y2(A):R3=MK_Y1(B):R4=MK_Y2(B)
+1100   END IF
+1110   IF K=1 THEN
+1120     C1=MK_X2(A):C2=MK_X1(B):R1=MK_Y1(A):R2=MK_Y2(A):R3=MK_Y1(B):R4=MK_Y2(B)
+1130   END IF
+1140   IF C1<>C2 THEN CALL MK_FAIL("rooms do not touch: "+STR$(A)+" "+S$+" "+STR$(B))
+1150   IF NOT (R1<=LO AND LO<HI AND HI<=R2 AND R3<=LO AND HI<=R4) THEN CALL MK_FAIL("span outside: "+STR$(A)+" "+S$+" "+STR$(LO)+" "+STR$(B))
+1160   CALL MK_ADD(A,K,LO,HI,B)
+1170   CALL MK_ADD(B,O,LO,HI,A)
+1180 END PROC
+1190 PROC MK_SETV(A,B,C,D,E,F)
+1200   MK_PV(0)=A:MK_PV(1)=B:MK_PV(2)=C:MK_PV(3)=D:MK_PV(4)=E:MK_PV(5)=F
+1210 END PROC
+1220 PROC MK_LINKT(A,S$,LO,HI,B,TEX)
+1230   CALL MK_SETV(TEX,-1,-1,0,0,0)
+1240   CALL MK_LINKN(A,S$,LO,HI,B,TEX,-1,-1)
+1250 END PROC
+1260 PROC MK_LINK(A,S$,LO,HI,B)
+1270   CALL MK_SETV(-1,-1,-1,0,0,0)
+1280   CALL MK_LINKN(A,S$,LO,HI,B,-1,-1,-1)
+1290 END PROC
+1300 PROC MK_LOOP(A,KIND,X1,Y1,X2,Y2,B,TEX)
+1310   IF MK_NP>=800 THEN CALL MK_FAIL("too many loops")
+1320   MK_PFL(MK_NP)=MK_LF:MK_PR(MK_NP)=A:MK_PK(MK_NP)=KIND:MK_PX1(MK_NP)=X1:MK_PY1(MK_NP)=Y1:MK_PX2(MK_NP)=X2:MK_PY2(MK_NP)=Y2:MK_PB(MK_NP)=B:MK_PTX(MK_NP)=TEX
+1330   MK_NP=MK_NP+1
+1340 END PROC
+1350 PROC MK_PILLAR(A,X1,Y1,X2,Y2,TEX)
+1360   CALL MK_LOOP(A,0,X1,Y1,X2,Y2,-1,TEX)
+1370 END PROC
+1380 PROC MK_INNERF(A,B,TEX,FL)
+1390   LOCAL K
+1400   MK_LF=FL
+1410   CALL MK_LOOP(A,1,MK_X1(B),MK_Y1(B),MK_X2(B),MK_Y2(B),B,TEX)
+1420   MK_LF=0
+1430   IF FL=0 THEN CALL MK_SETX(-1,-1,-1,0,0,0) ELSE CALL MK_SETX(TEX,-1,-1,FL,0,0)
+1440   FOR K=0 TO 3
+1450     IF K=0 OR K=2 THEN CALL MK_ADD(B,K,MK_X1(B),MK_X2(B),A)
+1460     IF K=1 OR K=3 THEN CALL MK_ADD(B,K,MK_Y1(B),MK_Y2(B),A)
+1470   NEXT K
+1480 END PROC
+1490 PROC MK_INNER(A,B,TEX)
+1500   CALL MK_INNERF(A,B,TEX,0)
+1510 END PROC
+1520 PROC MK_HOUSE(ID,S$,LO,HI)
+1530   LOCAL K,N,J,P,OK
+1540   K=FN MK_SIDE(S$):MK_OUT(ID)=-1
+1550   N=MK_HN(ID*4+K):P=ID*16+K*4
+1560   IF N>=4 THEN CALL MK_FAIL("too many house spans")
+1570   J=N:OK=-1
+1580   WHILE OK
+1590     IF J=0 THEN
+1600       OK=0
+1610     ELSE
+1620       IF MK_HLO(P+J-1)>LO THEN
+1630         MK_HLO(P+J)=MK_HLO(P+J-1):MK_HHI(P+J)=MK_HHI(P+J-1):J=J-1
+1640       ELSE
+1650         OK=0
+1660       END IF
+1670     END IF
+1680   WEND
+1690   MK_HLO(P+J)=LO:MK_HHI(P+J)=HI
+1700   MK_HN(ID*4+K)=N+1
+1710 END PROC
+1720 PROC MK_OUTDOOR(ID)
+1730   MK_OUT(ID)=-1
+1740 END PROC
+1750 ' MK_SORT: the links of sector R on side K, ordered by their start (stable), as indices in MK_TI(0..MK_TN-1)
+1760 PROC MK_SORT(R,K)
+1770   LOCAL I,J,OK
+1780   MK_TN=0
+1790   FOR I=0 TO MK_NL-1
+1800     IF MK_LA(I)=R AND MK_LS(I)=K THEN
+1810       J=MK_TN:OK=-1
+1820       WHILE OK
+1830         IF J=0 THEN
+1840           OK=0
+1850         ELSE
+1860           IF MK_LLO(MK_TI(J-1))>MK_LLO(I) THEN
+1870             MK_TI(J)=MK_TI(J-1):J=J-1
+1880           ELSE
+1890             OK=0
+1900           END IF
+1910         END IF
+1920       WEND
+1930       MK_TI(J)=I:MK_TN=MK_TN+1
+1940     END IF
+1950   NEXT I
+1960 END PROC
+1970 ' MK_PUTW: a wall; flags, upper, lower, xoff, yoff are in MK_RFL, MK_RUP, MK_RLW, MK_RXO, MK_RYO
+1980 PROC MK_SETR(FL,UP,LW,XO,YO)
+1990   MK_RFL=FL:MK_RUP=UP:MK_RLW=LW:MK_RXO=XO:MK_RYO=YO
+2000 END PROC
+2010 PROC MK_PUTW(X1,Y1,X2,Y2,T,NX)
+2020   IF MK_NW>=400 THEN CALL MK_FAIL("too many walls in a sector")
+2030   MK_WL(MK_NW,0)=X1:MK_WL(MK_NW,1)=Y1:MK_WL(MK_NW,2)=X2:MK_WL(MK_NW,3)=Y2:MK_WL(MK_NW,4)=T:MK_WL(MK_NW,5)=NX
+2040   MK_WL(MK_NW,6)=MK_RFL:MK_WL(MK_NW,7)=MK_RUP:MK_WL(MK_NW,8)=MK_RLW:MK_WL(MK_NW,9)=MK_RXO:MK_WL(MK_NW,10)=MK_RYO
+2050   MK_NW=MK_NW+1
+2060 END PROC
+2070 ' one wall segment of the side K (fixed = the constant coordinate, P..Q along the side as walked)
+2080 PROC MK_SEG(HZ,FX,P,Q,T,NX)
+2090   IF HZ THEN
+2100     CALL MK_PUTW(P,FX,Q,FX,T,NX)
+2110   ELSE
+2120     CALL MK_PUTW(FX,P,FX,Q,T,NX)
+2130   END IF
+2140 END PROC
+2150 ' MK_WALLS: the walls of sector R in MK_WL(0..MK_NW-1, 0..10)
+2160 PROC MK_WALLS(R)
+2170   LOCAL K,FX,A0,A1,RV,HZ,POS,I,J,N,L,LO,HI,B,T
+2180   MK_NW=0
+2190   IF MK_PLY(R) THEN
+2200     CALL MK_POLYWALLS(R)
+2210     EXIT PROC
+2220   END IF
+2230   FOR K=0 TO 3
+2240     IF K=0 THEN FX=MK_Y1(R):A0=MK_X1(R):A1=MK_X2(R):RV=0:HZ=-1
+2250     IF K=1 THEN FX=MK_X2(R):A0=MK_Y1(R):A1=MK_Y2(R):RV=0:HZ=0
+2260     IF K=2 THEN FX=MK_Y2(R):A0=MK_X1(R):A1=MK_X2(R):RV=-1:HZ=-1
+2270     IF K=3 THEN FX=MK_X1(R):A0=MK_Y1(R):A1=MK_Y2(R):RV=-1:HZ=0
+2280     CALL MK_SORT(R,K)
+2290     POS=A0:N=0
+2300     FOR I=0 TO MK_TN-1
+2310       L=MK_TI(I)
+2320       IF MK_LLO(L)<POS THEN CALL MK_FAIL("links overlap in sector "+STR$(R))
+2330       IF MK_LLO(L)>POS THEN MK_SL(N)=POS:MK_SH(N)=MK_LLO(L):MK_SB(N)=-1:MK_SI(N)=-1:N=N+1
+2340       MK_SL(N)=MK_LLO(L):MK_SH(N)=MK_LHI(L):MK_SB(N)=MK_LB(L):MK_SI(N)=L:N=N+1
+2350       POS=MK_LHI(L)
+2360     NEXT I
+2370     IF POS<A1 THEN MK_SL(N)=POS:MK_SH(N)=A1:MK_SB(N)=-1:MK_SI(N)=-1:N=N+1
+2380     FOR J=0 TO N-1
+2390       IF RV THEN I=N-1-J ELSE I=J
+2400       IF RV THEN LO=MK_SH(I):HI=MK_SL(I) ELSE LO=MK_SL(I):HI=MK_SH(I)
+2410       L=MK_SI(I)
+2420       IF L<0 THEN
+2430         CALL MK_SETR(0,-1,-1,0,0)
+2440         CALL MK_SEG(HZ,FX,LO,HI,MK_WT(R),-1)
+2450       ELSE
+2460         T=MK_LTX(L):IF T<0 THEN T=MK_WT(R)
+2470         IF MK_SB(I)=-2 THEN
+2480           CALL MK_SETR(0,-1,-1,0,0)
+2490           CALL MK_SEG(HZ,FX,LO,HI,T,-1)
+2500         ELSE
+2510           CALL MK_SETR(MK_LFL(L),MK_LUP(L),MK_LLW(L),MK_LXO(L),MK_LYO(L))
+2520           CALL MK_SEG(HZ,FX,LO,HI,T,MK_SB(I))
+2530         END IF
+2540       END IF
+2550     NEXT J
+2560   NEXT K
+2570   FOR I=0 TO MK_NP-1
+2580     IF MK_PR(I)=R THEN
+2590       T=MK_PTX(I):IF T<0 THEN T=MK_WT(R)
+2600       B=MK_PB(I):CALL MK_SETR(MK_PFL(I),-1,-1,0,0)
+2610       CALL MK_PUTW(MK_PX1(I),MK_PY1(I),MK_PX1(I),MK_PY2(I),T,B)
+2620       CALL MK_PUTW(MK_PX1(I),MK_PY2(I),MK_PX2(I),MK_PY2(I),T,B)
+2630       CALL MK_PUTW(MK_PX2(I),MK_PY2(I),MK_PX2(I),MK_PY1(I),T,B)
+2640       CALL MK_PUTW(MK_PX2(I),MK_PY1(I),MK_PX1(I),MK_PY1(I),T,B)
+2650     END IF
+2660   NEXT I
+2670 END PROC
+2680 ' MK_FINISH: outdoor sectors higher than a fence (the house stands next to them): their solid walls are the house (a tall picture) or a low fence:
+2690 ' a thin sector behind the wall, as high as a fence and open to the sky, that you can see through but not walk into (flags 2 + 4).
+2700 PROC MK_GROUND(G)
+2710   MK_GND=G
+2720 END PROC
+2730 PROC MK_FENCE(TEX,FL)
+2740   MK_FTX0=TEX:MK_FFL=FL
+2750 END PROC
+2760 PROC MK_FINISH(HT,FH,FTX)
+2770   LOCAL FID,N0,OI,R,K,A0,A1,GN,POS,I,L,G,G0,G1,CUR,NP,H,HN,P,LO,HI,Q
+2780   FID=100:N0=MK_NR
+2790   FOR OI=0 TO N0-1
+2800     R=MK_ORD(OI)
+2810     IF MK_OUT(R) THEN
+2820       FOR K=0 TO 3
+2830         IF K=0 OR K=2 THEN A0=MK_X1(R):A1=MK_X2(R) ELSE A0=MK_Y1(R):A1=MK_Y2(R)
+2840         CALL MK_SORT(R,K)
+2850         GN=0:POS=A0
+2860         FOR I=0 TO MK_TN-1
+2870           L=MK_TI(I)
+2880           IF MK_LLO(L)>POS THEN MK_GL(GN)=POS:MK_GH(GN)=MK_LLO(L):GN=GN+1
+2890           POS=MK_LHI(L)
+2900         NEXT I
+2910         IF POS<A1 THEN MK_GL(GN)=POS:MK_GH(GN)=A1:GN=GN+1
+2920         FOR G=0 TO GN-1
+2930           G0=MK_GL(G):G1=MK_GH(G):NP=0:CUR=G0
+2940           HN=MK_HN(R*4+K):P=R*16+K*4
+2950           FOR H=0 TO HN-1
+2960             LO=MK_HLO(P+H):IF G0>LO THEN LO=G0
+2970             HI=MK_HHI(P+H):IF G1<HI THEN HI=G1
+2980             IF LO<HI THEN
+2990               IF LO>CUR THEN MK_PCK(NP)=0:MK_PCL(NP)=CUR:MK_PCH(NP)=LO:NP=NP+1
+3000               MK_PCK(NP)=1:MK_PCL(NP)=LO:MK_PCH(NP)=HI:NP=NP+1
+3010               CUR=HI
+3020             END IF
+3030           NEXT H
+3040           IF CUR<G1 THEN MK_PCK(NP)=0:MK_PCL(NP)=CUR:MK_PCH(NP)=G1:NP=NP+1
+3050           FOR Q=0 TO NP-1
+3060             LO=MK_PCL(Q):HI=MK_PCH(Q)
+3070             IF MK_PCK(Q)=1 THEN
+3080               CALL MK_SETX(HT,-1,-1,0,0,0)
+3090               CALL MK_ADD(R,K,LO,HI,-2)
+3100             ELSE
+3110               MK_PV(0)=10:MK_PV(1)=-1:MK_PV(2)=255:MK_PV(3)=0:MK_PV(4)=FTX
+3120               IF K=0 THEN CALL MK_ROOMN(FID,LO,MK_Y1(R)-20,HI,MK_Y1(R),0,FH)
+3130               IF K=2 THEN CALL MK_ROOMN(FID,LO,MK_Y2(R),HI,MK_Y2(R)+20,0,FH)
+3140               IF K=3 THEN CALL MK_ROOMN(FID,MK_X1(R)-20,LO,MK_X1(R),HI,0,FH)
+3150               IF K=1 THEN CALL MK_ROOMN(FID,MK_X2(R),LO,MK_X2(R)+20,HI,0,FH)
+3160               CALL MK_SETV(-1,-1,-1,MK_FFL,0,0)
+3170               CALL MK_LINKN(R,MID$("SENW",K+1,1),LO,HI,FID,MK_FTX0,-1,-1)
+3180               IF MK_GND>=0 THEN
+3190                 CALL MK_SETX(-1,-1,-1,0,0,0)
+3200                 CALL MK_ADD(FID,K,LO,HI,MK_GND)
+3210                 IF K=0 THEN CALL MK_ADD(FID,1,MK_Y1(R)-20,MK_Y1(R),MK_GND):CALL MK_ADD(FID,3,MK_Y1(R)-20,MK_Y1(R),MK_GND)
+3220                 IF K=2 THEN CALL MK_ADD(FID,1,MK_Y2(R),MK_Y2(R)+20,MK_GND):CALL MK_ADD(FID,3,MK_Y2(R),MK_Y2(R)+20,MK_GND)
+3230                 IF K=3 THEN CALL MK_ADD(FID,0,MK_X1(R)-20,MK_X1(R),MK_GND):CALL MK_ADD(FID,2,MK_X1(R)-20,MK_X1(R),MK_GND)
+3240                 IF K=1 THEN CALL MK_ADD(FID,0,MK_X2(R),MK_X2(R)+20,MK_GND):CALL MK_ADD(FID,2,MK_X2(R),MK_X2(R)+20,MK_GND)
+3250               END IF
+3260               FID=FID+1
+3270             END IF
+3280           NEXT Q
+3290         NEXT G
+3300       NEXT K
+3310     END IF
+3320   NEXT OI
+3330 END PROC
+3340 PROC MK_EMIT(F$)
+3350   LOCAL N,I,R,W,J,L$
+3360   IF F$="" THEN F$="stdout:"
+3370   OPEN F$ FOR OUTPUT AS #1
+3380   N=0
+3390   FOR R=0 TO 599
+3400     IF MK_EX(R) THEN N=N+1
+3410   NEXT R
+3420   PRINT #1,"DATA ";STR$(N)
+3430   FOR R=0 TO 599
+3440     IF MK_EX(R) THEN
+3450       CALL MK_WALLS(R)
+3460       PRINT #1,"DATA ";STR$(R);",";STR$(MK_F(R));",";STR$(MK_C(R));",";STR$(MK_FT(R));",";STR$(MK_CT(R));",";STR$(MK_LT(R));",";STR$(MK_TG(R));",";STR$(MK_NW)
+3470       FOR W=0 TO MK_NW-1
+3480         L$="DATA "+STR$(MK_WL(W,0))
+3490         FOR J=1 TO 10
+3500           L$=L$+","+STR$(MK_WL(W,J))
+3510         NEXT J
+3520         PRINT #1,L$
+3530       NEXT W
+3540     END IF
+3550   NEXT R
+3560   CLOSE #1
 3570 END PROC
-3580 PROC MK_PLINKT(A,E,B,TEX)
-3590   IF NOT MK_EX(A) OR NOT MK_PLY(A) THEN CALL MK_FAIL("not a polygon: "+STR$(A))
-3600   IF E<0 OR E>=MK_PNN(A) THEN CALL MK_FAIL("no such edge")
-3610   MK_PEB(A*32+E)=B:MK_PET(A*32+E)=TEX
-3620 END PROC
-3630 PROC MK_PLINK(A,E,B)
-3640   CALL MK_PLINKT(A,E,B,-1)
-3650 END PROC
-3660 PROC MK_PTEX(A,E,TEX)
-3670   IF NOT MK_EX(A) OR NOT MK_PLY(A) THEN CALL MK_FAIL("not a polygon: "+STR$(A))
-3680   IF E<0 OR E>=MK_PNN(A) THEN CALL MK_FAIL("no such edge")
-3690   MK_PET(A*32+E)=TEX
-3700 END PROC
-3710 PROC MK_POLYWALLS(R)
-3720   LOCAL I,J,K,N,T
-3730   MK_NW=0
-3740   N=MK_PNN(R)
-3750   FOR I=0 TO N-1
-3760     J=(I+1) MOD N
-3770     K=R*32+I
-3780     T=MK_PET(K):IF T<0 THEN T=MK_WT(R)
-3790     CALL MK_SETR(0,-1,-1,0,0)
-3800     CALL MK_PUTW(MK_PPX(K),MK_PPY(K),MK_PPX(R*32+J),MK_PPY(R*32+J),T,MK_PEB(K))
-3810   NEXT I
-3820 END PROC
-3830 ' the corners of an arc around (CX,CY) from angle A1 to A2 degrees in STEPS steps (STEPS+1 corners), as "x,y,x,y..." for MK_POLY
-3840 FUNC MK_ARC$(CX,CY,R,A1,A2,ST)
-3850   LOCAL I,A,U,S$
-3860   IF ABS(SIN(30)-0.5)<0.0001 THEN
-3870     U=1
-3880   ELSE
-3890     IF ABS(SIN(33.333333)-0.5)<0.0001 THEN U=400/360 ELSE U=3.14159265358979/180
-3900   END IF
-3910   S$=""
-3920   FOR I=0 TO ST
-3930     A=(A1+(A2-A1)*I/ST)*U
-3940     IF I>0 THEN S$=S$+","
-3950     S$=S$+STR$(INT(CX+R*COS(A)+0.5))+","+STR$(INT(CY+R*SIN(A)+0.5))
-3960   NEXT I
-3970   RETURN S$
-3980 END FUNC
-3990 PROC MK_SLOPE(ID,FX,FY,CX,CY)
-4000   IF NOT MK_EX(ID) THEN CALL MK_FAIL("no such sector: "+STR$(ID))
-4010   MK_SFX(ID)=FX:MK_SFY(ID)=FY:MK_SCX(ID)=CX:MK_SCY(ID)=CY
-4020   MK_SLO(ID)=FX<>0 OR FY<>0 OR CX<>0 OR CY<>0
+3580 ' -- sectors of any shape (polygons) ---------------------------------------------------------------------------------------------------
+3590 PROC MK_POLY(ID,F,C,L$,P$)
+3600   LOCAL I,K,N,C$,T$,X1,Y1,X2,Y2
+3610   N=0:T$=""
+3620   FOR I=1 TO LEN(P$)+1
+3630     IF I>LEN(P$) THEN C$="," ELSE C$=MID$(P$,I,1)
+3640     IF C$="," THEN
+3650       IF LEN(T$)>0 THEN
+3660         IF N>=64 THEN CALL MK_FAIL("too many corners")
+3670         MK_PT(N)=VAL(T$):N=N+1
+3680       END IF
+3690       T$=""
+3700     ELSE
+3710       IF C$<>" " THEN T$=T$+C$
+3720     END IF
+3730   NEXT I
+3740   IF N<6 OR N MOD 2<>0 THEN CALL MK_FAIL("a polygon needs 3 to 32 corners (x,y pairs)")
+3750   N=N\2
+3760   X1=MK_PT(0):X2=X1:Y1=MK_PT(1):Y2=Y1
+3770   FOR I=0 TO N-1
+3780     IF MK_PT(2*I)<X1 THEN X1=MK_PT(2*I)
+3790     IF MK_PT(2*I)>X2 THEN X2=MK_PT(2*I)
+3800     IF MK_PT(2*I+1)<Y1 THEN Y1=MK_PT(2*I+1)
+3810     IF MK_PT(2*I+1)>Y2 THEN Y2=MK_PT(2*I+1)
+3820   NEXT I
+3830   CALL MK_PARSE(L$)
+3840   CALL MK_ROOMN(ID,X1,Y1,X2,Y2,F,C)
+3850   MK_PLY(ID)=-1:MK_PNN(ID)=N
+3860   FOR I=0 TO N-1
+3870     K=ID*32+I
+3880     MK_PPX(K)=MK_PT(2*I):MK_PPY(K)=MK_PT(2*I+1):MK_PEB(K)=-1:MK_PET(K)=-1
+3890   NEXT I
+3900 END PROC
+3910 PROC MK_PLINKT(A,E,B,TEX)
+3920   IF NOT MK_EX(A) OR NOT MK_PLY(A) THEN CALL MK_FAIL("not a polygon: "+STR$(A))
+3930   IF E<0 OR E>=MK_PNN(A) THEN CALL MK_FAIL("no such edge")
+3940   MK_PEB(A*32+E)=B:MK_PET(A*32+E)=TEX
+3950 END PROC
+3960 PROC MK_PLINK(A,E,B)
+3970   CALL MK_PLINKT(A,E,B,-1)
+3980 END PROC
+3990 PROC MK_PTEX(A,E,TEX)
+4000   IF NOT MK_EX(A) OR NOT MK_PLY(A) THEN CALL MK_FAIL("not a polygon: "+STR$(A))
+4010   IF E<0 OR E>=MK_PNN(A) THEN CALL MK_FAIL("no such edge")
+4020   MK_PET(A*32+E)=TEX
 4030 END PROC
-4040 PROC MK_THING(N,X,Y,TX,W,H,Z)
-4050   IF MK_NTH>=300 THEN CALL MK_FAIL("too many things")
-4060   MK_TH(MK_NTH,0)=N:MK_TH(MK_NTH,1)=X:MK_TH(MK_NTH,2)=Y:MK_TH(MK_NTH,3)=TX:MK_TH(MK_NTH,4)=W:MK_TH(MK_NTH,5)=H:MK_TH(MK_NTH,6)=Z
-4070   MK_NTH=MK_NTH+1
-4080 END PROC
-4090 PROC MK_RAW(L$)
-4100   IF MK_NRW>=300 THEN CALL MK_FAIL("too many lines")
-4110   MK_RW$(MK_NRW)=L$:MK_NRW=MK_NRW+1
-4120 END PROC
-4125 ' one line of the map: as it is, or as a quoted DATA line (MK_MAPDATA)
-4126 PROC MK_ML(L$)
-4127   IF MK_MAPDATA THEN PRINT #1,"DATA ";CHR$(34);L$;CHR$(34) ELSE PRINT #1,L$
-4128 END PROC
-4130 PROC MK_EMITMAP(F$)
-4132   MK_MAPDATA=0
-4134   CALL MK_MAPOUT(F$)
-4136 END PROC
-4138 PROC MK_EMITMAPDATA(F$)
-4140   MK_MAPDATA=-1
-4142   CALL MK_MAPOUT(F$)
-4144 END PROC
-4150 PROC MK_MAPOUT(F$)
-4160   LOCAL R,W,J,I,L$
-4170   IF F$="" THEN F$="stdout:"
-4180   OPEN F$ FOR OUTPUT AS #1
-4190   CALL MK_ML("W3DMAP,1")
-4200   FOR I=0 TO MK_NRW-1
-4210     CALL MK_ML(MK_RW$(I))
-4220   NEXT I
-4230   FOR R=0 TO 599
-4240     IF MK_EX(R) THEN
-4250       CALL MK_WALLS(R)
-4260       CALL MK_ML("SECTOR,"+STR$(R)+","+STR$(MK_F(R))+","+STR$(MK_C(R))+","+STR$(MK_FT(R))+","+STR$(MK_CT(R))+","+STR$(MK_LT(R))+","+STR$(MK_TG(R)))
-4270       IF MK_SLO(R) THEN CALL MK_ML("SLOPE,"+STR$(R)+","+STR$(MK_SFX(R))+","+STR$(MK_SFY(R))+","+STR$(MK_SCX(R))+","+STR$(MK_SCY(R))+","+STR$((MK_X1(R)+MK_X2(R))/2)+","+STR$((MK_Y1(R)+MK_Y2(R))/2))
-4280       FOR W=0 TO MK_NW-1
-4290         L$="WALL,"+STR$(R)+","+STR$(MK_WL(W,0))+","+STR$(MK_WL(W,1))+","+STR$(MK_WL(W,2))+","+STR$(MK_WL(W,3))+","+STR$(MK_WL(W,4))+","+STR$(MK_WL(W,5))
-4300         L$=L$+","+STR$(MK_WL(W,7))+","+STR$(MK_WL(W,8))+","+STR$(MK_WL(W,9))+","+STR$(MK_WL(W,10))+","+STR$(MK_WL(W,6))
-4310         CALL MK_ML(L$)
-4320       NEXT W
-4330     END IF
-4340   NEXT R
-4350   FOR I=0 TO MK_NTH-1
-4360     L$="THING"
-4370     FOR J=0 TO 6
-4380       L$=L$+","+STR$(MK_TH(I,J))
-4390     NEXT J
-4400     CALL MK_ML(L$+",-1,0,-1")
-4410   NEXT I
-4420   CLOSE #1
-4430 END PROC
+4040 PROC MK_POLYWALLS(R)
+4050   LOCAL I,J,K,N,T
+4060   MK_NW=0
+4070   N=MK_PNN(R)
+4080   FOR I=0 TO N-1
+4090     J=(I+1) MOD N
+4100     K=R*32+I
+4110     T=MK_PET(K):IF T<0 THEN T=MK_WT(R)
+4120     CALL MK_SETR(0,-1,-1,0,0)
+4130     CALL MK_PUTW(MK_PPX(K),MK_PPY(K),MK_PPX(R*32+J),MK_PPY(R*32+J),T,MK_PEB(K))
+4140   NEXT I
+4150 END PROC
+4160 ' the corners of an arc around (CX,CY) from angle A1 to A2 degrees in STEPS steps (STEPS+1 corners), as "x,y,x,y..." for MK_POLY
+4170 FUNC MK_ARC$(CX,CY,R,A1,A2,ST)
+4180   LOCAL I,A,U,S$
+4190   IF ABS(SIN(30)-0.5)<0.0001 THEN
+4200     U=1
+4210   ELSE
+4220     IF ABS(SIN(33.333333)-0.5)<0.0001 THEN U=400/360 ELSE U=3.14159265358979/180
+4230   END IF
+4240   S$=""
+4250   FOR I=0 TO ST
+4260     A=(A1+(A2-A1)*I/ST)*U
+4270     IF I>0 THEN S$=S$+","
+4280     S$=S$+STR$(INT(CX+R*COS(A)+0.5))+","+STR$(INT(CY+R*SIN(A)+0.5))
+4290   NEXT I
+4300   RETURN S$
+4310 END FUNC
+4320 PROC MK_SLOPE(ID,FX,FY,CX,CY)
+4330   IF NOT MK_EX(ID) THEN CALL MK_FAIL("no such sector: "+STR$(ID))
+4340   MK_SFX(ID)=FX:MK_SFY(ID)=FY:MK_SCX(ID)=CX:MK_SCY(ID)=CY
+4350   MK_SLO(ID)=FX<>0 OR FY<>0 OR CX<>0 OR CY<>0
+4360 END PROC
+4370 PROC MK_THING(N,X,Y,TX,W,H,Z)
+4380   IF MK_NTH>=300 THEN CALL MK_FAIL("too many things")
+4390   MK_TH(MK_NTH,0)=N:MK_TH(MK_NTH,1)=X:MK_TH(MK_NTH,2)=Y:MK_TH(MK_NTH,3)=TX:MK_TH(MK_NTH,4)=W:MK_TH(MK_NTH,5)=H:MK_TH(MK_NTH,6)=Z
+4400   MK_NTH=MK_NTH+1
+4410 END PROC
+4420 PROC MK_RAW(L$)
+4430   IF MK_NRW>=300 THEN CALL MK_FAIL("too many lines")
+4440   MK_RW$(MK_NRW)=L$:MK_NRW=MK_NRW+1
+4450 END PROC
+4460 ' one line of the map: as it is, or as a quoted DATA line (MK_MAPDATA)
+4470 PROC MK_ML(L$)
+4480   IF MK_MAPDATA THEN PRINT #1,"DATA ";CHR$(34);L$;CHR$(34) ELSE PRINT #1,L$
+4490 END PROC
+4500 PROC MK_EMITMAP(F$)
+4510   MK_MAPDATA=0
+4520   CALL MK_MAPOUT(F$)
+4530 END PROC
+4540 PROC MK_EMITMAPDATA(F$)
+4550   MK_MAPDATA=-1
+4560   CALL MK_MAPOUT(F$)
+4570 END PROC
+4580 PROC MK_MAPOUT(F$)
+4590   LOCAL R,W,J,I,L$
+4600   IF F$="" THEN F$="stdout:"
+4610   OPEN F$ FOR OUTPUT AS #1
+4620   CALL MK_ML("W3DMAP,1")
+4630   FOR I=0 TO MK_NRW-1
+4640     CALL MK_ML(MK_RW$(I))
+4650   NEXT I
+4660   FOR R=0 TO 599
+4670     IF MK_EX(R) THEN
+4680       CALL MK_WALLS(R)
+4690       CALL MK_ML("SECTOR,"+STR$(R)+","+STR$(MK_F(R))+","+STR$(MK_C(R))+","+STR$(MK_FT(R))+","+STR$(MK_CT(R))+","+STR$(MK_LT(R))+","+STR$(MK_TG(R)))
+4700       IF MK_SLO(R) THEN CALL MK_ML("SLOPE,"+STR$(R)+","+STR$(MK_SFX(R))+","+STR$(MK_SFY(R))+","+STR$(MK_SCX(R))+","+STR$(MK_SCY(R))+","+STR$((MK_X1(R)+MK_X2(R))/2)+","+STR$((MK_Y1(R)+MK_Y2(R))/2))
+4710       FOR W=0 TO MK_NW-1
+4720         L$="WALL,"+STR$(R)+","+STR$(MK_WL(W,0))+","+STR$(MK_WL(W,1))+","+STR$(MK_WL(W,2))+","+STR$(MK_WL(W,3))+","+STR$(MK_WL(W,4))+","+STR$(MK_WL(W,5))
+4730         L$=L$+","+STR$(MK_WL(W,7))+","+STR$(MK_WL(W,8))+","+STR$(MK_WL(W,9))+","+STR$(MK_WL(W,10))+","+STR$(MK_WL(W,6))
+4740         CALL MK_ML(L$)
+4750       NEXT W
+4760     END IF
+4770   NEXT R
+4780   FOR I=0 TO MK_NTH-1
+4790     L$="THING"
+4800     FOR J=0 TO 6
+4810       L$=L$+","+STR$(MK_TH(I,J))
+4820     NEXT J
+4830     CALL MK_ML(L$+",-1,0,-1")
+4840   NEXT I
+4850   CLOSE #1
+4860 END PROC

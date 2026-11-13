@@ -48,6 +48,7 @@ typedef struct _sector_t {
     bool    sloped;
     int     ftex, ctex;                 // ctex -1 = sky
     int     light, tag;
+    bool    ghost;                      // only seen through portals: never found by a position
     int     elight;                     // the light of the frame (light effects applied)
     int     fxmode;                     // 0 none, 1 flicker, 2 pulse, 3 strobe
     double  fxamt, fxrate;
@@ -384,7 +385,7 @@ static int find_sector_z( const w3d_t* w, double x, double y, double z, int hint
     double bestd = 1.0e30;
     for ( int i=0; i < w->nsectors; ++i ) {
         const sector_t* s = &w->sectors[i];
-        if ( !s->used || !inside( s, x, y ) ) {
+        if ( !s->used || s->ghost || !inside( s, x, y ) ) {
             continue;
         }
         double f = floor_at( s, x, y ), c = ceil_at( s, x, y );
@@ -410,13 +411,13 @@ static int find_sector( const w3d_t* w, double x, double y, int hint ) {
         }
         for ( int i=0; i < h->nwalls; ++i ) {
             int n = h->walls[i].next;
-            if ( sector_valid( w, n ) && inside( &w->sectors[n], x, y ) ) {
+            if ( sector_valid( w, n ) && !w->sectors[n].ghost && inside( &w->sectors[n], x, y ) ) {
                 return n;
             }
         }
     }
     for ( int i=0; i < w->nsectors; ++i ) {
-        if ( w->sectors[i].used && inside( &w->sectors[i], x, y ) ) {
+        if ( w->sectors[i].used && !w->sectors[i].ghost && inside( &w->sectors[i], x, y ) ) {
             return i;
         }
     }
@@ -1336,6 +1337,12 @@ bool w3d_op( w3d_t* w, int op, const double* args, int na, const char* s, size_t
                 return false;
             }
             w->sectors[i1].light = i2; w->sectors[i1].elight = i2;
+            return true;
+        case GFXOP_W3DGHOST:
+            if ( !whole( a[0], 0, W3D_MAXSECTORS - 1, &i1 ) || !sector_valid( w, i1 ) ) {
+                return false;
+            }
+            w->sectors[i1].ghost = a[1] != 0;
             return true;
         case GFXOP_W3DTAG:
             if ( !whole( a[0], 0, W3D_MAXSECTORS - 1, &i1 ) || !sector_valid( w, i1 ) || !whole( a[1], -1000000, 1000000, &i2 ) ) {

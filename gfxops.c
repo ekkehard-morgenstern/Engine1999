@@ -176,6 +176,7 @@ static const gfxcmd_t cmds[] = {
     { "W3D", "FAR",      GFXOP_W3DFAR,   "n",        0, false },
     { "W3D", "TICK",     GFXOP_W3DTICK,  "n",        0, false },
     { "W3D", "CLEAR",    GFXOP_W3DCLEAR, "",         0, false },
+    { "W3D", "GHOST",    GFXOP_W3DGHOST, "nn",       0, false },
     { "W3D", "SECMOVE",  GFXOP_W3DSECMOVE, "nnno",   0, false },
     { "W3D", "ANIM",     GFXOP_W3DANIM,  "nnnn",     0, false },
     { "W3D", "SCROLL",   GFXOP_W3DSCROLL, "nnnn",    0, false },

@@ -501,6 +501,12 @@ static void test_m1( void ) {
     CHECK( Q( GFXQ_W3DSECTORZ, 3, 200.0, 200.0, 250.0 ) == 2.0 );
     CHECK( Q( GFXQ_W3DSECTORZ, 3, 200.0, 200.0, 50.0 ) == 0.0 );
     CHECK( Q( GFXQ_W3DSECTORZ, 3, 200.0, 200.0, 150.0 ) == 0.0 );       // in the gap between: the nearest floor below
+    // a ghost sector (W3D GHOST) is never the sector of a position, though it lies over the others
+    CHECK( !op( GFXOP_W3DGHOST, 2, 99.0, 1.0 ) );
+    CHECK( op( GFXOP_W3DGHOST, 2, 2.0, 1.0 ) );
+    CHECK( Q( GFXQ_W3DSECTORZ, 3, 200.0, 200.0, 250.0 ) == 0.0 );
+    CHECK( op( GFXOP_W3DGHOST, 2, 2.0, 0.0 ) );
+    CHECK( Q( GFXQ_W3DSECTORZ, 3, 200.0, 200.0, 250.0 ) == 2.0 );
     CHECK( op( GFXOP_W3DCAMERA, 6, 200.0, 200.0, 90.0, NONE, NONE, 2.0 ) );
     CHECK( Q( GFXQ_W3DSECTOR, 0 ) == 2.0 );
     fb = w3d_render( W );
