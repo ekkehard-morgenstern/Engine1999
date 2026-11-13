@@ -204,6 +204,24 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXOP_W3DTHINGTRANS 178         // W3D THINGTRANS n, flag                 (a translucent thing)
 #define GFXOP_W3DCLEAR  179             // W3D CLEAR                              (deletes the sectors, walls and things, keeps the pictures and the settings: a new map can be loaded)
 #define GFXOP_W3DGHOST  180             // W3D GHOST s, flag                      (a ghost sector is only seen through portals: it is never the sector of a position, a thing or the camera)
+#define GFXOP_JSONCLEAR 181             // JSON CLEAR                             (the JSON statements work on one current document: json.h, docs/json-subsystem.md)
+#define GFXOP_JSONLOAD  182             // JSON LOAD file$                        (".json" is added if the name has no extension)
+#define GFXOP_JSONSAVE  183             // JSON SAVE file$ [, pretty]             (pretty: 0 = compact, default 1)
+#define GFXOP_JSONPARSE 184             // JSON PARSE text$
+#define GFXOP_JSONTEXT  185             // JSON TEXT path$, v$                    (the element as JSON text, "" = everything; at most 65535 bytes)
+#define GFXOP_JSONGET   186             // JSON GET path$, v$                     (a value as text; "" if there is none)
+#define GFXOP_JSONTYPE  187             // JSON TYPE path$, v$                    ("null" "boolean" "number" "string" "array" "object", "" if there is none)
+#define GFXOP_JSONCOUNT 188             // JSON COUNT path$, v$                   (the number of elements of an array / members of an object as text, 0 otherwise)
+#define GFXOP_JSONKEY   189             // JSON KEY path$, i, v$                  (the name of member i (from 0) of an object, "" if there is none)
+#define GFXOP_JSONSET   190             // JSON SET path$, number
+#define GFXOP_JSONSETS  191             // JSON SETS path$, text$                 (two strings: the VM joins them with one NUL byte for the host)
+#define GFXOP_JSONSETB  192             // JSON SETB path$, flag                  (true if flag is not 0)
+#define GFXOP_JSONNULL  193             // JSON NULL path$
+#define GFXOP_JSONNEW   194             // JSON NEW path$, OBJECT|ARRAY           (an empty one)
+#define GFXOP_JSONDELETE 195            // JSON DELETE path$
+#define GFXOP_JSONFIRST GFXOP_JSONCLEAR
+#define GFXOP_JSONLAST  GFXOP_JSONDELETE
+#define GFXOP_IS_JSON(op) ( (op) >= GFXOP_JSONFIRST && (op) <= GFXOP_JSONLAST )
 #define GFXOP_W3DFIRST  GFXOP_W3DRESET
 #define GFXOP_W3DLAST   GFXOP_W3DLIFT
 #define GFXOP_IS_W3D(op) ( ( (op) >= GFXOP_W3DFIRST && (op) <= GFXOP_W3DLAST ) || ( (op) >= GFXOP_W3DFIRST2 && (op) <= GFXOP_W3DLAST2 ) )

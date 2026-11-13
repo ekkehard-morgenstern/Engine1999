@@ -1992,7 +1992,7 @@ static bool comp_eat_xfunccall( compiler_t* comp, node_t** pnode, bool wantstr )
     }
     uint8_t xid = comp->currext;
     bool isstr = xid == XF_SPACE || xid == XF_STRING || xid == XF_FORMAT || xid == XF_CLIPBOARD;
-    if ( xid == XF_AT || xid == XF_HTAB || xid == XF_VTAB || xid == XF_SCREENSHOT ) {
+    if ( xid == XF_AT || xid == XF_HTAB || xid == XF_VTAB || xid == XF_SCREENSHOT || xid == XF_JSON ) {
         return false;                       // statements (AT inside a PRINT list), not functions
     }
     if ( xid == XF_JOY ) {
@@ -3288,10 +3288,10 @@ bool comp_eat_gfxstmt( compiler_t* comp, node_t** pnode ) {
             if ( comp->currext == XF_HTAB || comp->currext == XF_VTAB || comp->currext == XF_SCREENSHOT ) {
                 break;
             }
-            if ( comp->currext != XF_UI && comp->currext != XF_W3D ) {
+            if ( comp->currext != XF_UI && comp->currext != XF_W3D && comp->currext != XF_JSON ) {
                 return false;
             }
-            group = comp->currext == XF_UI ? "UI" : "W3D";
+            group = comp->currext == XF_UI ? "UI" : comp->currext == XF_JSON ? "JSON" : "W3D";
             break;
         case TOK_CLS: case TOK_LOCATE: case TOK_COLOR: case TOK_SYMBOL:
             break;

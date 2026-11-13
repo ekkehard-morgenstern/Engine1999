@@ -3488,7 +3488,29 @@ static bool vm_gfx_command( vm_t* vm, uint16_t op ) {
             continue;
         }
         if ( k == 's' || k == 'S' ) {
-            if ( !vm_dpop_bstr( vm, &s, &slen ) ) {
+            if ( s != 0 ) {
+                // a second string (the one before it in the source): the host gets both in one buffer, the first, a NUL byte, the second
+                char* s2 = 0; size_t l2 = 0;
+                if ( !vm_dpop_bstr( vm, &s2, &l2 ) ) {
+                    free( s2 );
+                    free( s );
+                    return false;
+                }
+                char* both = (char*) malloc( l2 + 1U + slen + 1U );
+                if ( both == 0 ) {
+                    free( s2 );
+                    free( s );
+                    return vm_error( vm, "Out of memory" );
+                }
+                memcpy( both, s2, l2 );
+                both[l2] = '\0';
+                memcpy( both + l2 + 1U, s, slen );
+                both[l2 + 1U + slen] = '\0';
+                free( s2 );
+                free( s );
+                s = both;
+                slen = l2 + 1U + slen;
+            } else if ( !vm_dpop_bstr( vm, &s, &slen ) ) {
                 free( s );
                 return false;
             }

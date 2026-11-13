@@ -817,9 +817,18 @@ w3d-stmt := XFUNC(W3D) ( RESET | COLORMAP | RENDER | TEXTURE num-expr "," str-ex
                              ( ANIM | SCROLL ) num-expr "," num-expr "," num-expr "," num-expr |
                              LIGHTFX num-expr "," num-expr [ "," num-expr [ "," num-expr ] ] |
                              LAMP num-expr "," num-expr "," num-expr "," num-expr "," num-expr "," num-expr |
-                             THINGTRANS num-expr "," num-expr | ( TICK | FAR ) num-expr | CLEAR |
+                             THINGTRANS num-expr "," num-expr | GHOST num-expr "," num-expr | ( TICK | FAR ) num-expr | CLEAR |
                              THING num-expr "," num-expr "," num-expr "," num-expr "," num-expr "," num-expr [ "," num-expr ] ) .
-gfx-all-stmt := gfx-stmt | txt-stmt | tile-stmt | sprite-stmt | mouse-stmt | on-mouse-stmt | ui-stmt | w3d-stmt | cls-stmt | locate-stmt | htab-stmt | vtab-stmt | screenshot-stmt | color-stmt | symbol-stmt | design-stmt | design-row | on-collision-stmt .
+```
+
+> JSON (2026-11-13; docs/json-subsystem.md): one current document of named values; a path "a.b.c" (array elements by number: "rooms.3.name" or "rooms[3].name") names an element.
+> GET, TYPE, COUNT, KEY, TEXT put their result into a string variable; a missing element gives "" (TEXT: an error); TYPE is "null" "boolean" "number" "string" "array" "object".
+
+```ebnf
+json-stmt := XFUNC(JSON) ( CLEAR | ( LOAD | PARSE | NULL | DELETE ) str-expr | SAVE str-expr [ "," num-expr ] |
+                               ( TEXT | GET | TYPE | COUNT ) str-expr "," str-var-ref | KEY str-expr "," num-expr "," str-var-ref |
+                               ( SET | SETB ) str-expr "," num-expr | SETS str-expr "," str-expr | NEW str-expr "," ( OBJECT | ARRAY ) ) .
+gfx-all-stmt := gfx-stmt | txt-stmt | tile-stmt | sprite-stmt | mouse-stmt | on-mouse-stmt | ui-stmt | w3d-stmt | json-stmt | cls-stmt | locate-stmt | htab-stmt | vtab-stmt | screenshot-stmt | color-stmt | symbol-stmt | design-stmt | design-row | on-collision-stmt .
 ```
 
 ## Statements and lines

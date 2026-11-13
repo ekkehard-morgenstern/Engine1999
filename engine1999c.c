@@ -35,6 +35,7 @@
 #include "basdebug.h"
 #include "gfxops.h"
 #include "w3d.h"
+#include "jsonops.h"
 #include "mouse.h"
 #include "cursors.h"
 #include "sprscreen.h"
@@ -867,7 +868,10 @@ static bool con_w3d_get( void ) {
 
 static bool con_gfx_op( void* usrdata, int op, const double* a, int na, const char* s, size_t slen, uint8_t* out, size_t outsz,
     size_t* outlen, const char** err ) {
-    (void) usrdata; (void) na; (void) s;
+    (void) na; (void) s;
+    if ( GFXOP_IS_JSON( op ) ) {
+        return jsonops_run( op, a, na, s, slen, out, outsz, outlen, ( (repl_t*) usrdata )->vm.addrcur, err );
+    }
     if ( GFXOP_IS_W3D( op ) ) {
         if ( !con_w3d_get() ) {
             *err = "Out of memory";

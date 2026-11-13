@@ -14,6 +14,7 @@ Players and BASIC programmers: start with the [README](../README.md). Engine con
 | [compiler-and-vm.md](compiler-and-vm.md) | Program store, syntax tree, node types, code generator, instruction set, variable memory |
 | [grammar.md](grammar.md) | **The language at a glance**: the whole syntax as a quick reference card, generated from `bascomp.ebnf` (also [grammar.html](grammar.html), with colors and links) |
 | [build-and-test.md](build-and-test.md) | Building, executables, test programs, tooling |
+| [json-subsystem.md](json-subsystem.md) | JSON trees from BASIC: `JSON LOAD` / `SAVE` / `SET` / `GET` ..., paths like `a.b.c` (implemented) |
 | [3d-subsystem.md](3d-subsystem.md) | the software 3D sector renderer `W3D` (Doom / Duke Nukem 3D style): sectors, walls, portals, things, movement, shots, the demos (implemented) |
 | [graphics-subsystem.md](graphics-subsystem.md) | BASIC statements for layers, palettes, the graphics layer, tiles, sprites, `DESIGN` pictures, collisions and text screen areas; the `sdlscr_*` API (implemented) |
 | [console-host.md](console-host.md) | The console host `engine1999c`: the BASIC system without a window for scripts and pipes (input, output, exit status, what the display statements do) |

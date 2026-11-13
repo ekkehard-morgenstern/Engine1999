@@ -593,9 +593,14 @@ w3d-stmt := TOK_XFUNC(W3D) ( RESET | COLORMAP | RENDER | TEXTURE num-expr TOK_CO
                              ( ANIM | SCROLL ) num-expr TOK_COMMA num-expr TOK_COMMA num-expr TOK_COMMA num-expr |
                              LIGHTFX num-expr TOK_COMMA num-expr [ TOK_COMMA num-expr [ TOK_COMMA num-expr ] ] |
                              LAMP num-expr TOK_COMMA num-expr TOK_COMMA num-expr TOK_COMMA num-expr TOK_COMMA num-expr TOK_COMMA num-expr |
-                             THINGTRANS num-expr TOK_COMMA num-expr | ( TICK | FAR ) num-expr | CLEAR |
+                             THINGTRANS num-expr TOK_COMMA num-expr | GHOST num-expr TOK_COMMA num-expr | ( TICK | FAR ) num-expr | CLEAR |
                              THING num-expr TOK_COMMA num-expr TOK_COMMA num-expr TOK_COMMA num-expr TOK_COMMA num-expr TOK_COMMA num-expr [ TOK_COMMA num-expr ] ) .
-gfx-all-stmt := gfx-stmt | txt-stmt | tile-stmt | sprite-stmt | mouse-stmt | on-mouse-stmt | ui-stmt | w3d-stmt | cls-stmt | locate-stmt | htab-stmt | vtab-stmt | screenshot-stmt | color-stmt | symbol-stmt | design-stmt | design-row | on-collision-stmt .
+-- JSON (2026-11-13; docs/json-subsystem.md): one current document of named values; a path "a.b.c" (array elements by number: "rooms.3.name" or "rooms[3].name") names an element.
+-- GET, TYPE, COUNT, KEY, TEXT put their result into a string variable; a missing element gives "" (TEXT: an error); TYPE is "null" "boolean" "number" "string" "array" "object".
+json-stmt := TOK_XFUNC(JSON) ( CLEAR | ( LOAD | PARSE | NULL | DELETE ) str-expr | SAVE str-expr [ TOK_COMMA num-expr ] |
+                               ( TEXT | GET | TYPE | COUNT ) str-expr TOK_COMMA str-var-ref | KEY str-expr TOK_COMMA num-expr TOK_COMMA str-var-ref |
+                               ( SET | SETB ) str-expr TOK_COMMA num-expr | SETS str-expr TOK_COMMA str-expr | NEW str-expr TOK_COMMA ( OBJECT | ARRAY ) ) .
+gfx-all-stmt := gfx-stmt | txt-stmt | tile-stmt | sprite-stmt | mouse-stmt | on-mouse-stmt | ui-stmt | w3d-stmt | json-stmt | cls-stmt | locate-stmt | htab-stmt | vtab-stmt | screenshot-stmt | color-stmt | symbol-stmt | design-stmt | design-row | on-collision-stmt .
 
 --# Statements and lines
 -- The statements by group: io-stmt (PRINT, INPUT, GET, DATA, READ, OPEN, CLOSE, ...), prog-stmt (program commands, sound, graphics, timers, error

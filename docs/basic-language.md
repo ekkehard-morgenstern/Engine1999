@@ -598,6 +598,8 @@ picture rows, the functions, the collision rules and the internals are in [graph
 
 `W3D RESET`, `W3D TEXTURE`, `W3D SECTOR`, `W3D WALL`, `W3D WALLTEX` / `WALLOFF` / `WALLFLAG`, `W3D HEIGHT`, `W3D LIGHT`, `W3D TAG`, `W3D SKY`, `W3D CAMERA`, `W3D TURN`, `W3D MOVE`, `W3D PLAYER`, `W3D VIEW`, `W3D FOG`, `W3D COLORMAP`, `W3D RENDER`, `W3D THING` and its relatives (`THINGZ`, `THINGTEX`, `THINGOFF`, `THINGMOVE`, `THINGLIGHT`) and the functions `W3D("X")`, `W3D("SECTORAT", x, y)`, `W3D("SHOOT", range)`, `W3D("SEES", n)`, `W3D("USE", reach)` ... build and walk through a world of sectors and portals in the style of Doom and Duke Nukem 3D. `W3D` is an extension word (`XF_W3D`, the same way as `UI`: a group word, then the statement word or a quoted function name). The full reference, the conventions (units, angles in degrees, counterclockwise walls), the design decisions and what is not done: **[3d-subsystem.md](3d-subsystem.md)**; the grammar rule is `w3d-stmt` in `bascomp.ebnf`. Demos: `demos/manor.bas`, `demos/bughunt.bas`.
 
+**`JSON ...` — trees of named values (2026-11-13).** One current tree, addressed by paths (`a.b.c`, `rooms.3.name`); `JSON LOAD` / `SAVE` / `PARSE` / `CLEAR`, `JSON SET` / `SETS` / `SETB` / `NULL` / `NEW` / `DELETE`, and `JSON GET` / `TYPE` / `COUNT` / `KEY` / `TEXT` with a string variable for the result. `JSON` is an extension word (`XF_JSON`); grammar rule `json-stmt`. Full description: **[json-subsystem.md](json-subsystem.md)**.
+
 ## Game controllers: `JOY`, `ON JOY`, `JOY DEADZONE` *(2026-11-01, window host)*
 
 Up to four game controllers (Xbox, PlayStation, Switch Pro and generic pads; see [controller-support.md](controller-support.md) for what works on a PC and how it is tested). Every pad is

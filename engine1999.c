@@ -36,6 +36,7 @@
 #include "basdebug.h"
 #include "gfxops.h"
 #include "w3d.h"
+#include "jsonops.h"
 #include "gfxfile.h"
 #include "shot.h"
 #include "iodev.h"
@@ -1540,6 +1541,9 @@ static bool host_gfx_op( void* usrdata, int op, const double* a, int na, const c
     int t = sdlscr_gfx_target();
     if ( GFXOP_IS_W3D( op ) ) {
         return host_w3d_op( op, a, na, s, slen, err );
+    }
+    if ( GFXOP_IS_JSON( op ) ) {
+        return jsonops_run( op, a, na, s, slen, out, outsz, outlen, repl.vm.addrcur, err );
     }
     if ( ( op >= GFXOP_UIOPEN && op <= GFXOP_UICARET ) || ( op >= GFXOP_UICOLOR && op <= GFXOP_UITAB ) || ( op >= GFXOP_UIGRID && op <= GFXOP_UIGRIDCLEAR ) ) {
         return host_ui_op( op, a, na, s, slen, out, outsz, outlen, err );
