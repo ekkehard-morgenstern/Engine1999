@@ -316,5 +316,58 @@ check "caught=1 dqs"                            "caught once after the first cha
 count "HAS SEEN YOU" 4                          "the alarms (caught, lost track, after hiding, the last chase) but none while hidden"
 check "THE PARTS BUILT IN STAY"                 "what you carried is put back"
 nocheck "^Error"                                "a run time error"
+# 5. the town: Deqq throws you out of the garden (and locks the gate for a while), his walk through the town and home again
+cat > $T/play <<'PLAY'
+goto 480 120 90
+deqqon
+deqq 480 60
+step 60
+state
+step 1700
+state
+PLAY
+run
+check "sector=418"                              "put down on the pavement outside the gate"
+check "THE GATE CLICKS: IT IS UNLOCKED AGAIN"   "the gate is unlocked after a while"
+cat > $T/play <<'PLAY'
+goto -250 1320 90
+deqqaway 66
+step 1500
+state
+deqqleave
+step 600
+state
+step 600
+state
+step 600
+state
+step 600
+state
+step 600
+state
+step 600
+state
+step 600
+state
+step 600
+state
+step 600
+state
+step 600
+state
+step 600
+state
+step 600
+state
+step 600
+state
+step 600
+state
+PLAY
+run
+check "THE GATE CREAKS: DEQQ IS COMING HOME"    "the warning at the gate"
+check "away=0 wp="                              "Deqq comes home from the town"
+check "away=-1 wp=5[0-9]"                       "Deqq leaves the house again and walks through the town"
+nocheck "^Error"                                "a run time error"
 if [ $fail -ne 0 ]; then echo "$fail failure(s)"; fi
 exit $fail
