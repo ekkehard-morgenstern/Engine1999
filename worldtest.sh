@@ -1,6 +1,6 @@
 #!/bin/sh
 # Test of the world loader (W3D WORLD, w3dworld.c, docs/world-model.md): the world document demos/deqq2.world.json (the source of Deqq's House II) builds, every
-# room, solid and thing has a name, and the built world passes worldlint.awk (no wall of zero depth with a face on each side). Then the error messages of the loader.
+# room, solid and thing has a name, and the built world passes worldlint.awk (no wall of zero depth with a face on each side, no portal that leads nowhere). Then the error messages of the loader.
 # Exit status = number of failures.
 cd "$(dirname "$0")" || exit 1
 T=$(mktemp -d) || exit 1
@@ -31,11 +31,14 @@ cat > "$T/w.bas" <<'BAS'
 BAS
 if ( cd "$T" && timeout 300 "$OLDPWD/engine1999c" w.bas > out 2> err ); then
     if grep -q UNNAMED "$T/out"; then bad "unnamed elements: $(grep UNNAMED "$T/out" | head -n 5 | tr '\n' ' ')"; else ok "all rooms, solids and things have names"; fi
-    if awk -f worldlint.awk "$T/a.map" > "$T/lint.txt"; then ok "no wall of zero depth ($(grep -c '^SECTOR' "$T/a.map") sectors, $(grep -c '^WALL' "$T/a.map") walls, $(grep -c '^THING' "$T/a.map") things)"; else bad "zero-depth walls: $(head -n 5 "$T/lint.txt" | tr '\n' ';')"; fi
+    if awk -f worldlint.awk "$T/a.map" > "$T/lint.txt"; then ok "no zero-depth wall, no lost portal ($(grep -c '^SECTOR' "$T/a.map") sectors, $(grep -c '^WALL' "$T/a.map") walls, $(grep -c '^THING' "$T/a.map") things)"; else bad "world faults: $(head -n 5 "$T/lint.txt" | tr '\n' ';')"; fi
 else bad "the world program failed: $(head -n 3 "$T/err" "$T/out")"; fi
 # 2. the check finds what it should: two rooms side by side with a solid wall between them (a zero-depth partition with a face on each side)
 printf 'W3DMAP,1\nSECTOR,1,0,100,1,1,255,0\nSECTOR,2,0,100,1,1,255,0\nWALL,1,10,0,10,10,2,-1,-1,-1,0,0,0\nWALL,2,10,10,10,0,3,-1,-1,-1,0,0,0\n' > "$T/z.map"
 if awk -f worldlint.awk "$T/z.map" > /dev/null; then bad "worldlint.awk missed a zero-depth partition"; else ok "worldlint finds a zero-depth partition"; fi
+# ... and a portal that leads nowhere: room 1's east wall opens into sector 2, whose walls are somewhere else (a ray would be lost there)
+printf 'W3DMAP,1\nSECTOR,1,0,100,1,1,255,0\nSECTOR,2,0,100,1,1,255,0\nWALL,1,0,0,10,0,2,-1,-1,-1,0,0,0\nWALL,1,10,0,10,10,2,2,-1,-1,0,0,0\nWALL,1,10,10,0,10,2,-1,-1,-1,0,0,0\nWALL,1,0,10,0,0,2,-1,-1,-1,0,0,0\nWALL,2,50,0,60,0,2,-1,-1,-1,0,0,0\nWALL,2,60,0,60,10,2,-1,-1,-1,0,0,0\nWALL,2,60,10,50,10,2,-1,-1,-1,0,0,0\nWALL,2,50,10,50,0,2,-1,-1,-1,0,0,0\n' > "$T/l.map"
+if awk -f worldlint.awk "$T/l.map" > "$T/l.txt"; then bad "worldlint.awk missed a portal that leads nowhere"; else grep -q 'lost portal' "$T/l.txt" && ok "worldlint finds a lost portal" || bad "worldlint: wrong message for a lost portal"; fi
 # 3. the error messages
 errtest() {   # name json expected-text
     echo "$2" > "$T/e.json"

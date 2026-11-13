@@ -247,13 +247,14 @@
 2410   CALL W3K_GRAB(N,64,64)
 2420 END PROC
 2430 ' a sky: 256 x 64, the color gets lighter toward the bottom (the horizon), with clouds that wrap around the edge
+2437 ' the sky picture (N, 256 x 64): a gradient and 9 clouds; the clouds stay below row 10, because the renderer stretches the top row when you look up (a cloud touching it would become a streak)
 2440 PROC W3K_SKY(N)
 2450   LOCAL Y,I,X,CY,RX
 2460   FOR Y=0 TO 63
 2470     GFX LINE 0,Y,255,Y,FN W3K_C(8,6+Y\8),BF
 2480   NEXT Y
 2490   FOR I=1 TO 9
-2500     X=FN W3K_R(256):CY=6+FN W3K_R(36):RX=10+FN W3K_R(14)
+2500     X=FN W3K_R(256):CY=18+FN W3K_R(30):RX=10+FN W3K_R(14)
 2510     GFX CIRCLE X,CY,RX,FN W3K_C(0,13),-1,-1,0.35
 2520     GFX CIRCLE X-256,CY,RX,FN W3K_C(0,13),-1,-1,0.35
 2530     GFX PAINT X,CY,FN W3K_C(0,15),FN W3K_C(0,13)

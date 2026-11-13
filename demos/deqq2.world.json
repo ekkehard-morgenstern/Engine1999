@@ -234,12 +234,13 @@
       },
       "ceiling": {
         "z": 100,
-        "tex": -1
+        "tex": 25
       },
       "light": 255,
       "tag": 0,
       "walls": 1,
-      "name": "shed door niche"
+      "name": "shed door niche",
+      "note": "the porch of a small building: it has a roof, so the door does not stand in the open"
     },
     {
       "id": 10,
@@ -714,12 +715,13 @@
       },
       "ceiling": {
         "z": 100,
-        "tex": -1
+        "tex": 25
       },
       "light": 255,
       "tag": 0,
       "walls": 1,
-      "name": "cellar hatch niche"
+      "name": "cellar hatch niche",
+      "note": "the porch of a small building: it has a roof, so the door does not stand in the open"
     },
     {
       "id": 34,
@@ -1919,26 +1921,6 @@
         "tex": 251
       },
       "name": "price sign post"
-    },
-    {
-      "id": 437,
-      "box": [700, -380, 712, -368],
-      "floor": {
-        "z": 100,
-        "tex": 6
-      },
-      "ceiling": {
-        "z": 400,
-        "tex": -1
-      },
-      "light": 255,
-      "tag": 0,
-      "walls": 251,
-      "in": 434,
-      "rim": {
-        "tex": 251
-      },
-      "name": "canopy post 1"
     },
     {
       "id": 438,
@@ -3828,7 +3810,7 @@
     },
     {
       "id": 528,
-      "box": [1220, 740, 1480, 980],
+      "box": [1260, 740, 1480, 980],
       "floor": {
         "z": 128,
         "tex": 6
@@ -3846,11 +3828,11 @@
         "tex": 25
       },
       "name": "shed building (seen over the lawn)",
-      "note": "a view-only block (ghost): the shed as seen from outside the fence; the shed room itself is sector 9"
+      "note": "a view-only block (ghost): the shed seen over the fence from the road; it stays clear of the fence sectors (x 1220 .. 1240) because their far walls open into the lawn; the shed room itself is sector 9"
     },
     {
       "id": 529,
-      "box": [-430, 400, -380, 504],
+      "box": [-430, 400, -404, 504],
       "floor": {
         "z": 112,
         "tex": 6
@@ -3868,7 +3850,7 @@
         "tex": 1
       },
       "name": "cellar hatch building (seen over the lawn)",
-      "note": "a view-only block (ghost): the hatch house as seen from outside the fence"
+      "note": "a view-only block (ghost): the hatch house seen over the fence from the road; it stays clear of the fence sectors (x -400 .. -380) because their far walls open into the lawn"
     }
   ],
   "openings": [
@@ -3947,7 +3929,9 @@
       "from": 5,
       "side": "E",
       "range": [820, 884],
-      "to": 61
+      "to": 61,
+      "flags": ["sky"],
+      "note": "the wall above the porch roof is painted sky (flag sky): a covered porch of a low building, not a tower"
     },
     {
       "from": 61,
@@ -4164,7 +4148,9 @@
       "from": 1,
       "side": "W",
       "range": [420, 484],
-      "to": 60
+      "to": 60,
+      "flags": ["sky"],
+      "note": "the wall above the porch roof is painted sky (flag sky): a covered porch of a low building, not a tower"
     },
     {
       "from": 60,
@@ -5238,46 +5224,6 @@
       "to": 426,
       "tex": 250,
       "flags": ["masked", "block"],
-      "oneway": true
-    },
-    {
-      "from": 5,
-      "side": "E",
-      "range": [740, 820],
-      "to": 528,
-      "upper": 25,
-      "lower": 25,
-      "flags": ["block", "solid"],
-      "oneway": true
-    },
-    {
-      "from": 5,
-      "side": "E",
-      "range": [884, 980],
-      "to": 528,
-      "upper": 25,
-      "lower": 25,
-      "flags": ["block", "solid"],
-      "oneway": true
-    },
-    {
-      "from": 1,
-      "side": "W",
-      "range": [400, 420],
-      "to": 529,
-      "upper": 1,
-      "lower": 1,
-      "flags": ["block", "solid"],
-      "oneway": true
-    },
-    {
-      "from": 1,
-      "side": "W",
-      "range": [484, 504],
-      "to": 529,
-      "upper": 1,
-      "lower": 1,
-      "flags": ["block", "solid"],
       "oneway": true
     },
     {
