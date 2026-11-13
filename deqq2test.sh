@@ -143,7 +143,7 @@ use
 walk -860 615
 face -900 615
 use
-goto -860 590 180
+goto -860 590 180 -60
 face -880 590
 use
 goto -250 1320 90

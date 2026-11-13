@@ -15,8 +15,10 @@
 110 '   CALL MK_LINKX(a,side$,lo,hi,b,more$)         the same with everything: more$ = "tex,up,low,flags,xoff,yoff"
 120 '   CALL MK_PILLAR(a,x1,y1,x2,y2,tex)            a solid block in sector a
 130 '   CALL MK_INNER(a,b,tex)                       sector b lies inside sector a (a hole in a): all four sides of b are portals
+135 '   CALL MK_INNERF(a,b,tex,flags)                the same, the ring of walls (both sides) has these flags: a fence = 250 and 3 (a masked picture that blocks)
 140 '   CALL MK_HOUSE(id,side$,lo,hi)                an outdoor sector's wall between lo and hi is the house (see MK_FINISH)
 150 '   CALL MK_OUTDOOR(id)                          an outdoor sector without house walls
+155 '   CALL MK_FENCE(tex,flags)                     before MK_FINISH: the picture and the wall flags of the portal between an outdoor sector and its fence sector (default -1 and 6: nothing to see, nobody passes; 250 and 3 = a masked railing)
 160 '   CALL MK_FINISH(housetex,fenceh,fencetex)     outdoor sectors: solid walls become the house (tall picture) or a low fence sector behind the wall
 165 '   CALL MK_POLY(id,floor,ceil,look$,pts$)        a sector of any shape: pts$ = "x,y,x,y,..." (3 to 32 corners, walked in order, closed by itself); look$ as for MK_ROOM (the walltex is the default of all its walls)
 166 '   CALL MK_PLINK(a,edge,b)  /  CALL MK_PLINKT(a,edge,b,tex)   edge number e (0 = from the first corner to the second ...) of the polygon a is a portal to the sector b (whose edge must run along it, the other way round)
@@ -30,10 +32,10 @@
 200   DIM MK_X1(600),MK_Y1(600),MK_X2(600),MK_Y2(600),MK_F(600),MK_C(600),MK_FT(600),MK_CT(600),MK_LT(600),MK_TG(600),MK_WT(600),MK_EX(600),MK_OUT(600)
 210   DIM MK_ORD(600),MK_HN(2400),MK_HLO(9600),MK_HHI(9600)
 220   DIM MK_LA(2000),MK_LS(2000),MK_LLO(2000),MK_LHI(2000),MK_LB(2000),MK_LTX(2000),MK_LUP(2000),MK_LLW(2000),MK_LFL(2000),MK_LXO(2000),MK_LYO(2000)
-230   DIM MK_PR(800),MK_PK(800),MK_PX1(800),MK_PY1(800),MK_PX2(800),MK_PY2(800),MK_PB(800),MK_PTX(800)
+230   DIM MK_PFL(800),MK_PR(800),MK_PK(800),MK_PX1(800),MK_PY1(800),MK_PX2(800),MK_PY2(800),MK_PB(800),MK_PTX(800)
 240   DIM MK_SL(200),MK_SH(200),MK_SB(200),MK_SI(200),MK_PV(20),MK_TI(2000),MK_WL(400,12),MK_GL(100),MK_GH(100),MK_PCK(100),MK_PCL(100),MK_PCH(100)
 245   DIM MK_PLY(600),MK_PNN(600),MK_PPX(19200),MK_PPY(19200),MK_PEB(19200),MK_PET(19200),MK_PT(66),MK_SFX(600),MK_SFY(600),MK_SCX(600),MK_SCY(600),MK_SLO(600),MK_TH(300,8),MK_RW$(300)
-250   MK_NR=0:MK_NL=0:MK_NP=0:MK_NW=0:MK_PN=0:MK_NTH=0:MK_NRW=0
+250   MK_NR=0:MK_NL=0:MK_NP=0:MK_NW=0:MK_PN=0:MK_NTH=0:MK_NRW=0:MK_FTX0=-1:MK_FFL=6:MK_LF=0
 260 END PROC
 270 ' MK_PARSE: the numbers of a comma separated string in MK_PV(0..MK_PN-1)
 280 PROC MK_PARSE(S$)
@@ -130,21 +132,26 @@
 1190 END PROC
 1200 PROC MK_LOOP(A,KIND,X1,Y1,X2,Y2,B,TEX)
 1210   IF MK_NP>=800 THEN CALL MK_FAIL("too many loops")
-1220   MK_PR(MK_NP)=A:MK_PK(MK_NP)=KIND:MK_PX1(MK_NP)=X1:MK_PY1(MK_NP)=Y1:MK_PX2(MK_NP)=X2:MK_PY2(MK_NP)=Y2:MK_PB(MK_NP)=B:MK_PTX(MK_NP)=TEX
+1220   MK_PFL(MK_NP)=MK_LF:MK_PR(MK_NP)=A:MK_PK(MK_NP)=KIND:MK_PX1(MK_NP)=X1:MK_PY1(MK_NP)=Y1:MK_PX2(MK_NP)=X2:MK_PY2(MK_NP)=Y2:MK_PB(MK_NP)=B:MK_PTX(MK_NP)=TEX
 1230   MK_NP=MK_NP+1
 1240 END PROC
 1250 PROC MK_PILLAR(A,X1,Y1,X2,Y2,TEX)
 1260   CALL MK_LOOP(A,0,X1,Y1,X2,Y2,-1,TEX)
 1270 END PROC
-1280 PROC MK_INNER(A,B,TEX)
+1280 PROC MK_INNERF(A,B,TEX,FL)
 1290   LOCAL K
+1292   MK_LF=FL
 1300   CALL MK_LOOP(A,1,MK_X1(B),MK_Y1(B),MK_X2(B),MK_Y2(B),B,TEX)
-1310   CALL MK_SETX(-1,-1,-1,0,0,0)
+1302   MK_LF=0
+1310   IF FL=0 THEN CALL MK_SETX(-1,-1,-1,0,0,0) ELSE CALL MK_SETX(TEX,-1,-1,FL,0,0)
 1320   FOR K=0 TO 3
 1330     IF K=0 OR K=2 THEN CALL MK_ADD(B,K,MK_X1(B),MK_X2(B),A)
 1340     IF K=1 OR K=3 THEN CALL MK_ADD(B,K,MK_Y1(B),MK_Y2(B),A)
 1350   NEXT K
 1360 END PROC
+1365 PROC MK_INNER(A,B,TEX)
+1366   CALL MK_INNERF(A,B,TEX,0)
+1367 END PROC
 1370 PROC MK_HOUSE(ID,S$,LO,HI)
 1380   LOCAL K,N,J,P,OK
 1390   K=FN MK_SIDE(S$):MK_OUT(ID)=-1
@@ -253,7 +260,7 @@
 2380   FOR I=0 TO MK_NP-1
 2390     IF MK_PR(I)=R THEN
 2400       T=MK_PTX(I):IF T<0 THEN T=MK_WT(R)
-2410       B=MK_PB(I):CALL MK_SETR(0,-1,-1,0,0)
+2410       B=MK_PB(I):CALL MK_SETR(MK_PFL(I),-1,-1,0,0)
 2420       CALL MK_PUTW(MK_PX1(I),MK_PY1(I),MK_PX1(I),MK_PY2(I),T,B)
 2430       CALL MK_PUTW(MK_PX1(I),MK_PY2(I),MK_PX2(I),MK_PY2(I),T,B)
 2440       CALL MK_PUTW(MK_PX2(I),MK_PY2(I),MK_PX2(I),MK_PY1(I),T,B)
@@ -263,6 +270,9 @@
 2480 END PROC
 2490 ' MK_FINISH: outdoor sectors higher than a fence (the house stands next to them): their solid walls are the house (a tall picture) or a low fence:
 2500 ' a thin sector behind the wall, as high as a fence and open to the sky, that you can see through but not walk into (flags 2 + 4).
+2505 PROC MK_FENCE(TEX,FL)
+2506   MK_FTX0=TEX:MK_FFL=FL
+2507 END PROC
 2510 PROC MK_FINISH(HT,FH,FTX)
 2520   LOCAL FID,N0,OI,R,K,A0,A1,GN,POS,I,L,G,G0,G1,CUR,NP,H,HN,P,LO,HI,Q
 2530   FID=100:N0=MK_NR
@@ -303,8 +313,8 @@
 2880               IF K=2 THEN CALL MK_ROOMN(FID,LO,MK_Y2(R),HI,MK_Y2(R)+20,0,FH)
 2890               IF K=3 THEN CALL MK_ROOMN(FID,MK_X1(R)-20,LO,MK_X1(R),HI,0,FH)
 2900               IF K=1 THEN CALL MK_ROOMN(FID,MK_X2(R),LO,MK_X2(R)+20,HI,0,FH)
-2910               CALL MK_SETV(-1,-1,-1,6,0,0)
-2920               CALL MK_LINKN(R,MID$("SENW",K+1,1),LO,HI,FID,-1,-1,-1)
+2910               CALL MK_SETV(-1,-1,-1,MK_FFL,0,0)
+2920               CALL MK_LINKN(R,MID$("SENW",K+1,1),LO,HI,FID,MK_FTX0,-1,-1)
 2930               FID=FID+1
 2940             END IF
 2950           NEXT Q
