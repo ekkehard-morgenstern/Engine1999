@@ -1,4 +1,4 @@
-# The renderer-independent world model (DRAFT, not implemented)
+# The renderer-independent world model (DRAFT, decisions made, not implemented)
 
 *2026-11-13, owner's idea: describe a world (Deqq's House II first) as one big JSON file of 3D objects, independent of the sector renderer; a single `W3D` statement loads such a document into the renderer, a later 3D renderer would build its own structures from the same file. Step 1 (the JSON feature, `docs/json-subsystem.md`) is done; this page is the proposed schema for step 2.*
 
@@ -20,4 +20,9 @@ Units as in `w3d.c`: x / y in the plan (y grows towards the viewer's "south" as 
 **thing** (sprite, decal, door sprite, pickup, car, light post): `id`, `tex`, `x`, `y`, `z`, `w`, `h`, `room`, `light`, `tags`.
 **light** (point lamp or sector effect): `kind` (`lamp`, `flicker`, `pulse`, `strobe`), `room` or position, `radius`, `amount`.
 
-Open questions for the owner: the level of the model (volumes / openings as above, versus polygons with named surfaces); how animated parts (doors that open, the gate, lifts, moving sectors) are described (a `mover` node with `floor` / `ceiling` targets and speeds); whether the game's own data (item tables, Deqq's way points, hiding places) lives in the same file under `game` (my suggestion: yes, so the file is the whole world).
+**Decisions (owner, 2026-11-13: "go with your recommendations on all three questions"):**
+1. The model is at the level of **rooms, solids and openings** (not raw polygons with named surfaces): the loader generates fences, the ghost lawn, outdoor ground and the portal pairs itself.
+2. **Animated parts** (doors, the gate, lifts, moving floors and ceilings) are separate **`movers`** nodes: `target` (a room, an opening or a thing), `floor` / `ceiling` / `open` targets, `speed`, `tag`; the game opens them by name or tag.
+3. **Game data lives in the same file** under `game` (items and their rooms, puzzles, Deqq's way points and hiding places, texts), so one file is the whole world; the `W3D` loader ignores `game`, the program reads it with the `JSON` statements.
+
+Next (step 2): the world of Deqq's House II as `demos/deqq2.world.json` (written by a BASIC generator from the existing level description, so it stays reproducible), then one `W3D` statement that builds the renderer's sectors, walls and things from the loaded document (`W3D WORLD [path$]`, reading the current `JSON` document), with a `w3dtest1` / `contest1` / `levelstest.sh` check that the result matches today's level.
