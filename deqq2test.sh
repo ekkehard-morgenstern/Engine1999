@@ -59,20 +59,22 @@ face -250 1370
 use
 goto 480 150 90
 walk 480 330
-walk 480 420
-walk 480 650
-walk 480 880
-walk 480 930
-walk 340 950
-face 330 990
+walk 480 365
+walk 480 580
+walk 480 635
+walk 430 640
+walk 330 620
+walk 260 560
+walk 250 460
+face 250 420
 use
 use
 use
 use
-goto 300 930 180
+goto 300 560 180 120
 drop
-goto 330 955 90
-face 330 990
+goto 250 455 90 120
+face 250 426
 use
 goto -250 1320 90
 face -250 1370
@@ -87,15 +89,15 @@ use
 goto -250 1320 90
 face -250 1370
 use
-goto 245 395 90
-face 235 345
+goto 235 395 90
+face 225 345
 use
 use
-goto 640 975 0
-face 650 985
+goto 640 555 90 120
+face 650 590
 use
-goto 725 975 0
-face 730 985
+goto 725 555 90 120
+face 730 590
 use
 goto -250 1320 90
 face -250 1370
@@ -150,15 +152,14 @@ use
 goto 770 500 0
 face 790 500
 use
-goto 480 640 90
-walk 480 700
-walk 480 880
-walk 480 940
-walk 480 1000
-walk 480 1190
-walk 480 1300
-walk 500 1350
-face 500 1385
+goto 480 365 90
+walk 480 580
+walk 480 635
+walk 584 650
+walk 790 650
+walk 790 590
+walk 500 550
+face 500 590
 use
 dial 731
 use
@@ -196,8 +197,8 @@ nocheck "failed at"                             "a walk that got stuck"
 # 2. the carrying limit
 cat > $T/play <<'PLAY'
 deqqoff
-goto 245 395 90
-face 235 345
+goto 235 395 90
+face 225 345
 use
 use
 face 262 372
@@ -282,13 +283,13 @@ step 300
 state
 step 300
 state
-goto 480 520 90
+goto 425 540 90
 give 10
-deqq 480 440
+deqq 425 440
 step 240
 state
-goto 480 520 90
-deqq 480 400
+goto 425 540 90
+deqq 425 420
 step 40
 goto -700 500 0
 step 400
@@ -300,8 +301,8 @@ say hidden
 goto 480 640 90
 step 60
 state
-goto 480 600 90
-deqq 480 510
+goto 425 560 90
+deqq 425 470
 step 10
 state
 PLAY

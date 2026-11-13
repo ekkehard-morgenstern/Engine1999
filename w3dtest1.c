@@ -515,6 +515,12 @@ static void test_m1( void ) {
     CHECK( Q( GFXQ_W3DTSECTOR, 1, 5.0 ) == 2.0 );
     CHECK( op( GFXOP_W3DTHING, 6, 6.0, 100.0, 100.0, 61.0, 20.0, 40.0 ) );
     CHECK( Q( GFXQ_W3DTSECTOR, 1, 6.0 ) == 0.0 );
+    // sight stops at the ceiling and the floor of stacked rooms: the camera is in sector 0 (ceiling 128), thing 5 stands upstairs, thing 6 in the room
+    CHECK( Q( GFXQ_W3DSEES, 1, 5.0 ) == 0.0 );
+    CHECK( Q( GFXQ_W3DSEES, 1, 6.0 ) == -1.0 );
+    CHECK( op( GFXOP_W3DCAMERA, 6, 200.0, 200.0, 90.0, NONE, NONE, 2.0 ) );
+    CHECK( Q( GFXQ_W3DSEES, 1, 5.0 ) == -1.0 );
+    CHECK( Q( GFXQ_W3DSEES, 1, 6.0 ) == 0.0 );        // and the thing downstairs is not seen through the floor
 
     // a sky wall: the north wall shows the sky picture (the palette entry 1 without a picture)
     build();

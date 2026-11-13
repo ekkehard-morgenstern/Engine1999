@@ -587,6 +587,28 @@ static void trace( const w3d_t* w, double ox, double oy, double oz, double dx, d
         const sector_t* s = &w->sectors[sec];
         double t = maxd;
         const wall_t* wl = nearest_wall( s, ox, oy, dx, dy, tprev, maxd, &t );
+        // the floor and the ceiling of the sector stop a ray too (stacked rooms: a thing upstairs can not be seen through the ceiling): z minus
+        // the plane is linear along the ray, so a sign change between the start and the end of this stretch is one crossing
+        bool flat = false;
+        {
+            double x0 = ox + dx * tprev, y0 = oy + dy * tprev, x1 = ox + dx * t, y1 = oy + dy * t;
+            double zs = oz + slope * tprev, ze = oz + slope * t;
+            double gf0 = zs - floor_at( s, x0, y0 ), gf1 = ze - floor_at( s, x1, y1 );
+            double gc0 = ceil_at( s, x0, y0 ) - zs, gc1 = ceil_at( s, x1, y1 ) - ze;
+            double tf = -1.0;
+            if ( gf0 >= 0.0 && gf1 < 0.0 ) {
+                tf = tprev + ( t - tprev ) * gf0 / ( gf0 - gf1 );
+            }
+            if ( gc0 >= 0.0 && gc1 < 0.0 ) {
+                double tc = tprev + ( t - tprev ) * gc0 / ( gc0 - gc1 );
+                if ( tf < 0.0 || tc < tf ) {
+                    tf = tc;
+                }
+            }
+            if ( tf >= 0.0 ) {
+                t = tf; wl = 0; flat = true;
+            }
+        }
         if ( wantthings ) {
             double bs = 1.0e30;
             int bi = -1;
@@ -609,6 +631,9 @@ static void trace( const w3d_t* w, double ox, double oy, double oz, double dx, d
             }
         }
         if ( wl == 0 ) {
+            if ( flat ) {
+                out->kind = 1; out->dist = t; out->x = ox + dx * t; out->y = oy + dy * t;
+            }
             return;
         }
         double zr = oz + slope * t;
