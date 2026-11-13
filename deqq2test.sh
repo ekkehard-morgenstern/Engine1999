@@ -291,7 +291,7 @@ state
 goto 425 540 90
 deqq 425 420
 step 40
-goto -700 500 0
+goto -700 500 0 -60
 step 400
 state
 goto 425 705 90
