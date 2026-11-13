@@ -203,6 +203,7 @@
 1990 CALL MK_LINK(418,"S",-142,316,401)
 2000 CALL MK_LINK(418,"S",316,774,402)
 2010 CALL MK_LINK(418,"S",774,1232,403)
+2015 CALL MK_LINK(418,"S",1232,1240,404)
 2020 CALL MK_ROOM(419,-380,-10,440,0,0,300, "24,-1,255,0,251")
 2030 CALL MK_ROOM(420,440,-10,520,0,0,300, "24,-1,255,0,251")
 2040 CALL MK_ROOM(421,520,-10,1240,0,0,300, "24,-1,255,0,251")
@@ -384,6 +385,15 @@
 3650 CALL MK_ADD(418,1,-60,-10,426)
 3660 CALL MK_ADD(419,3,-10,0,426)
 3670 CALL MK_ADD(421,1,-10,0,426)
+3671 ' the two outbuildings seen from outside (before, only their doors stood in the fence): solid blocks in the (ghost) lawn above the footprint of the rooms they enclose; the garden side of the fence is cut away where a building stands (the building front is the garden's edge)
+3672 ' the shed (rooms 8 / 9: x 1240 .. 1460, y 760 .. 960, 128 high): a block x 1220 .. 1480, y 740 .. 980, planks, the door niche (61) stays in its front
+3673 CALL MK_ROOM(HID,1220,740,1480,980,128,400,"6,-1,255,97,25")
+3674 CALL MK_INNER(426,HID,25)
+3675 CALL MK_SETX(-1,25,25,6,0,0):CALL MK_ADD(5,1,740,820,HID):CALL MK_ADD(5,1,884,980,HID)
+3676 HID=HID+1
+3677 ' the cellar hatch: the cellar itself lies under the west road and the strip beyond (x -1000 .. -400), a house for it would stand on the road: the stair house is as deep as the lawn allows (x -430 .. -380)
+3678 CALL MK_ROOM(HID,-430,400,-380,504,112,400,"6,-1,255,97,1")
+3679 CALL MK_INNER(426,HID,1):CALL MK_SETX(-1,1,1,6,0,0):CALL MK_ADD(1,3,400,420,HID):CALL MK_ADD(1,3,484,504,HID):HID=HID+1
 3680 CALL MK_GROUND(426)
 3690 CALL MK_FENCE(250,3)
 3700 CALL MK_FINISH(27,300,214)
