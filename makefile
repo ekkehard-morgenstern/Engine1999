@@ -80,8 +80,8 @@ grammar-check:
 	perl grammar.pl --check
 
 BASEMOD=sdlevent.o sdllayer.o sdlmain.o sdlscreen.o textscreen.o tilescreen.o sprscreen.o sprpath.o policy.o 8x12font1.o sdlaudio.o synth.o mml.o printusing.o clipboard.o sdlutil.o \
-		basic.o baspgm.o baslin.o bastok.o bascomp.o nodetype.o codegen.o cgenctl.o cgendecl.o cgenprog.o vars.o runtime.o vm.o basfiles.o iodev.o gfxcore.o gfxops.o w3d.o json.o jsonops.o bmp.o shot.o gfxfile.o basbuild.o baslib.o cgenlib.o basrepl.o basdebug.o ansi.o palette.o keyseq.o keystate.o cursors.o mouse.o joy.o sdljoy.o sdlkeys.o scredit.o conscr.o fulledit.o vmasm.o monitor.o font.o ui.o synhl.o
-BASEHDR=sdlevent.h sdllayer.h sdlmain.h sdlscreen.h sdltypes.h textscreen.h tilescreen.h sprscreen.h sprpath.h policy.h unxtypes.h sdlaudio.h synth.h mml.h printusing.h clipboard.h sdlutil.h basfiles.h iodev.h gfxcore.h gfxops.h w3d.h json.h jsonops.h bmp.h shot.h gfxfile.h basbuild.h baslib.h basic.h baspgm.h baslin.h bastok.h bascomp.h nodetype.h codegen.h instset.h vars.h runtime.h vm.h basrepl.h basdebug.h ansi.h palette.h keyseq.h keystate.h cursors.h mouse.h joy.h sdljoy.h sdlkeys.h scrdrv.h conscr.h fulledit.h vmasm.h monitor.h font.h ui.h synhl.h
+		basic.o baspgm.o baslin.o bastok.o bascomp.o nodetype.o codegen.o cgenctl.o cgendecl.o cgenprog.o vars.o runtime.o vm.o basfiles.o iodev.o gfxcore.o gfxops.o w3d.o w3dworld.o json.o jsonops.o bmp.o shot.o gfxfile.o basbuild.o baslib.o cgenlib.o basrepl.o basdebug.o ansi.o palette.o keyseq.o keystate.o cursors.o mouse.o joy.o sdljoy.o sdlkeys.o scredit.o conscr.o fulledit.o vmasm.o monitor.o font.o ui.o synhl.o
+BASEHDR=sdlevent.h sdllayer.h sdlmain.h sdlscreen.h sdltypes.h textscreen.h tilescreen.h sprscreen.h sprpath.h policy.h unxtypes.h sdlaudio.h synth.h mml.h printusing.h clipboard.h sdlutil.h basfiles.h iodev.h gfxcore.h gfxops.h w3d.h w3dworld.h json.h jsonops.h bmp.h shot.h gfxfile.h basbuild.h baslib.h basic.h baspgm.h baslin.h bastok.h bascomp.h nodetype.h codegen.h instset.h vars.h runtime.h vm.h basrepl.h basdebug.h ansi.h palette.h keyseq.h keystate.h cursors.h mouse.h joy.h sdljoy.h sdlkeys.h scrdrv.h conscr.h fulledit.h vmasm.h monitor.h font.h ui.h synhl.h
 
 LIBMOD=$(BASEMOD)
 LIBHDR=$(BASEHDR)
@@ -411,6 +411,8 @@ gfxops.o: gfxops.c $(BASEHDR)
 
 w3d.o: w3d.c $(BASEHDR)
 
+w3dworld.o: w3dworld.c $(BASEHDR)
+
 w3dtest1: w3dtest1.o $(LIBNAME)
 	$(CL) -o w3dtest1 w3dtest1.o $(LIBNAME) -lm
 
@@ -482,6 +484,7 @@ check: $(CHECKTESTS) engine1999 engine1999c
 	if sh deqqtest.sh > $$log 2>&1; then printf '%-12s ok\n' deqqtest; else printf '%-12s FAILED\n' deqqtest; tail -n 20 $$log; fail=$$((fail+1)); fi; \
 	if sh deqq2test.sh > $$log 2>&1; then printf '%-12s ok\n' deqq2test; else printf '%-12s FAILED\n' deqq2test; tail -n 20 $$log; fail=$$((fail+1)); fi; \
 	if sh levelstest.sh > $$log 2>&1; then printf '%-12s ok\n' levelstest; else printf '%-12s FAILED\n' levelstest; tail -n 20 $$log; fail=$$((fail+1)); fi; \
+	if sh worldtest.sh > $$log 2>&1; then printf '%-12s ok\n' worldtest; else printf '%-12s FAILED\n' worldtest; tail -n 20 $$log; fail=$$((fail+1)); fi; \
 	if sh instedtest.sh > $$log 2>&1; then printf '%-12s ok\n' instedtest; else printf '%-12s FAILED\n' instedtest; tail -n 20 $$log; fail=$$((fail+1)); fi; \
 	if sh w3dmaptest.sh > $$log 2>&1; then printf '%-12s ok\n' w3dmaptest; else printf '%-12s FAILED\n' w3dmaptest; tail -n 20 $$log; fail=$$((fail+1)); fi; \
 	if sh showroomtest.sh > $$log 2>&1; then printf '%-12s ok\n' showroomtest; else printf '%-12s FAILED\n' showroomtest; tail -n 20 $$log; fail=$$((fail+1)); fi; \

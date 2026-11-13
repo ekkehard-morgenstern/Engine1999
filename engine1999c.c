@@ -36,6 +36,7 @@
 #include "gfxops.h"
 #include "w3d.h"
 #include "jsonops.h"
+#include "w3dworld.h"
 #include "mouse.h"
 #include "cursors.h"
 #include "sprscreen.h"
@@ -883,6 +884,9 @@ static bool con_gfx_op( void* usrdata, int op, const double* a, int na, const ch
         }
         if ( op == GFXOP_W3DCOLORMAP ) {
             return true;
+        }
+        if ( op == GFXOP_W3DWORLD ) {
+            return w3dworld_load( con_w3d, jsonops_root(), err );
         }
         return w3d_op( con_w3d, op, a, na, s, slen, err );
     }

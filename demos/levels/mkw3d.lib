@@ -28,6 +28,9 @@
 240 '   CALL MK_THING(n,x,y,tex,w,h,z)               a thing;   CALL MK_RAW(line$)  a line of the map file as it is (SKY, FOG, FAR ...; only for MK_EMITMAP)
 250 '   CALL MK_EMITMAP(file$) / CALL MK_EMITMAPDATA(file$)   writes the level as a map file for the library w3dmap (see there) instead of DATA lines; the second form writes DATA lines with quoted text (a program READs them and feeds WM_LINE)
 260 '   CALL MK_EMIT(file$)                          writes the DATA lines ("" = standard output)
+262 '   CALL MK_ENVIRON(name$,fog,startx,starty,angle)  the name, fog distance and start of the world document;  CALL MK_NAME(id,name$)  a name for a room
+264 '   CALL MK_EMITJSON(file$)                      writes the level as a world document (docs/world-model.md: rooms, solids, openings, things, environment; W3D WORLD builds it); call it after MK_FINISH:
+266 '                                                it writes what was said (rooms, holes, links, house spans, the fence), not the sectors MK_FINISH made: the loader makes those again. Not supported: polygons, pillars, slopes
 270 LIBRARY "mkw3d","MK_"
 280 PROC MK_INIT
 290   DIM MK_X1(600),MK_Y1(600),MK_X2(600),MK_Y2(600),MK_F(600),MK_C(600),MK_FT(600),MK_CT(600),MK_LT(600),MK_TG(600),MK_WT(600),MK_EX(600),MK_OUT(600)
@@ -36,7 +39,8 @@
 320   DIM MK_PFL(800),MK_PR(800),MK_PK(800),MK_PX1(800),MK_PY1(800),MK_PX2(800),MK_PY2(800),MK_PB(800),MK_PTX(800)
 330   DIM MK_SL(200),MK_SH(200),MK_SB(200),MK_SI(200),MK_PV(20),MK_TI(2000),MK_WL(400,12),MK_GL(100),MK_GH(100),MK_PCK(100),MK_PCL(100),MK_PCH(100)
 340   DIM MK_PLY(600),MK_PNN(600),MK_PPX(19200),MK_PPY(19200),MK_PEB(19200),MK_PET(19200),MK_PT(66),MK_SFX(600),MK_SFY(600),MK_SCX(600),MK_SCY(600),MK_SLO(600),MK_TH(300,8),MK_RW$(300)
-350   MK_NR=0:MK_NL=0:MK_NP=0:MK_NW=0:MK_PN=0:MK_NTH=0:MK_NRW=0:MK_FTX0=-1:MK_FFL=6:MK_LF=0:MK_GND=-1
+345   DIM MK_JA(2000),MK_JK(2000),MK_JLO(2000),MK_JHI(2000),MK_JB(2000),MK_JTX(2000),MK_JUP(2000),MK_JLW(2000),MK_JFL(2000),MK_JXO(2000),MK_JYO(2000),MK_J2(2000),MK_INH(600),MK_ITX(600),MK_IFL(600),MK_NM$(600)
+350   MK_NR=0:MK_NL=0:MK_NP=0:MK_NW=0:MK_PN=0:MK_NTH=0:MK_NRW=0:MK_FTX0=-1:MK_FFL=6:MK_LF=0:MK_GND=-1:MK_NJ=0:MK_REC=-1:MK_NR0=-1:MK_FIN=0:MK_NPIL=0:MK_FOG=-1:MK_WNAME$=""
 360 END PROC
 370 ' MK_PARSE: the numbers of a comma separated string in MK_PV(0..MK_PN-1)
 380 PROC MK_PARSE(S$)
@@ -76,7 +80,7 @@
 720   IF NOT MK_EX(ID) THEN
 730     MK_ORD(MK_NR)=ID:MK_NR=MK_NR+1
 740   END IF
-750   MK_EX(ID)=-1:MK_OUT(ID)=0:MK_PLY(ID)=0:MK_SLO(ID)=0
+750   MK_EX(ID)=-1:MK_OUT(ID)=0:MK_PLY(ID)=0:MK_SLO(ID)=0:MK_INH(ID)=-1:MK_NM$(ID)=""
 760   MK_X1(ID)=X1:MK_Y1(ID)=Y1:MK_X2(ID)=X2:MK_Y2(ID)=Y2:MK_F(ID)=F:MK_C(ID)=C
 770   MK_FT(ID)=MK_PV(0):MK_CT(ID)=MK_PV(1):MK_LT(ID)=MK_PV(2):MK_TG(ID)=MK_PV(3):MK_WT(ID)=MK_PV(4)
 780   FOR K=0 TO 3
@@ -86,6 +90,7 @@
 820 ' MK_ADD: a link; tex, upper, lower, flags, xoff, yoff are in MK_XTX, MK_XUP, MK_XLW, MK_XFL, MK_XXO, MK_XYO
 830 PROC MK_ADD(A,K,LO,HI,B)
 840   IF MK_NL>=2000 THEN CALL MK_FAIL("too many links")
+845   IF MK_REC THEN CALL MK_JNOTE(A,K,LO,HI,B,0)
 850   MK_LA(MK_NL)=A:MK_LS(MK_NL)=K:MK_LLO(MK_NL)=LO:MK_LHI(MK_NL)=HI:MK_LB(MK_NL)=B:MK_LTX(MK_NL)=MK_XTX
 860   MK_LUP(MK_NL)=MK_XUP:MK_LLW(MK_NL)=MK_XLW:MK_LFL(MK_NL)=MK_XFL:MK_LXO(MK_NL)=MK_XXO:MK_LYO(MK_NL)=MK_XYO
 870   MK_NL=MK_NL+1
@@ -117,8 +122,11 @@
 1130   END IF
 1140   IF C1<>C2 THEN CALL MK_FAIL("rooms do not touch: "+STR$(A)+" "+S$+" "+STR$(B))
 1150   IF NOT (R1<=LO AND LO<HI AND HI<=R2 AND R3<=LO AND HI<=R4) THEN CALL MK_FAIL("span outside: "+STR$(A)+" "+S$+" "+STR$(LO)+" "+STR$(B))
+1155   MK_RS=MK_REC:IF MK_RS THEN CALL MK_JNOTE(A,K,LO,HI,B,-1)
+1156   MK_REC=0
 1160   CALL MK_ADD(A,K,LO,HI,B)
 1170   CALL MK_ADD(B,O,LO,HI,A)
+1175   MK_REC=MK_RS
 1180 END PROC
 1190 PROC MK_SETV(A,B,C,D,E,F)
 1200   MK_PV(0)=A:MK_PV(1)=B:MK_PV(2)=C:MK_PV(3)=D:MK_PV(4)=E:MK_PV(5)=F
@@ -137,6 +145,7 @@
 1330   MK_NP=MK_NP+1
 1340 END PROC
 1350 PROC MK_PILLAR(A,X1,Y1,X2,Y2,TEX)
+1355   MK_NPIL=MK_NPIL+1
 1360   CALL MK_LOOP(A,0,X1,Y1,X2,Y2,-1,TEX)
 1370 END PROC
 1380 PROC MK_INNERF(A,B,TEX,FL)
@@ -145,10 +154,12 @@
 1410   CALL MK_LOOP(A,1,MK_X1(B),MK_Y1(B),MK_X2(B),MK_Y2(B),B,TEX)
 1420   MK_LF=0
 1430   IF FL=0 THEN CALL MK_SETX(-1,-1,-1,0,0,0) ELSE CALL MK_SETX(TEX,-1,-1,FL,0,0)
+1435   MK_RS=MK_REC:MK_REC=0:MK_INH(B)=A:MK_ITX(B)=TEX:MK_IFL(B)=FL
 1440   FOR K=0 TO 3
 1450     IF K=0 OR K=2 THEN CALL MK_ADD(B,K,MK_X1(B),MK_X2(B),A)
 1460     IF K=1 OR K=3 THEN CALL MK_ADD(B,K,MK_Y1(B),MK_Y2(B),A)
 1470   NEXT K
+1475   MK_REC=MK_RS
 1480 END PROC
 1490 PROC MK_INNER(A,B,TEX)
 1500   CALL MK_INNERF(A,B,TEX,0)
@@ -280,6 +291,7 @@
 2760 PROC MK_FINISH(HT,FH,FTX)
 2770   LOCAL FID,N0,OI,R,K,A0,A1,GN,POS,I,L,G,G0,G1,CUR,NP,H,HN,P,LO,HI,Q
 2780   FID=100:N0=MK_NR
+2785   MK_NR0=MK_NR:MK_REC=0:MK_FIN=-1:MK_FHT=HT:MK_FFH=FH:MK_FFT=FTX
 2790   FOR OI=0 TO N0-1
 2800     R=MK_ORD(OI)
 2810     IF MK_OUT(R) THEN
@@ -488,3 +500,98 @@
 4840   NEXT I
 4850   CLOSE #1
 4860 END PROC
+4870 ' -- the world document (docs/world-model.md) --------------------------------------------------------------------------------------------------
+4880 PROC MK_JNOTE(A,K,LO,HI,B,TW)
+4890   IF MK_NJ>=2000 THEN CALL MK_FAIL("too many links for the world document")
+4900   MK_JA(MK_NJ)=A:MK_JK(MK_NJ)=K:MK_JLO(MK_NJ)=LO:MK_JHI(MK_NJ)=HI:MK_JB(MK_NJ)=B:MK_JTX(MK_NJ)=MK_XTX:MK_JUP(MK_NJ)=MK_XUP:MK_JLW(MK_NJ)=MK_XLW
+4910   MK_JFL(MK_NJ)=MK_XFL:MK_JXO(MK_NJ)=MK_XXO:MK_JYO(MK_NJ)=MK_XYO:MK_J2(MK_NJ)=TW
+4920   MK_NJ=MK_NJ+1
+4930 END PROC
+4940 PROC MK_ENVIRON(N$,FOG,SX,SY,AN)
+4950   MK_WNAME$=N$:MK_FOG=FOG:MK_SX=SX:MK_SY=SY:MK_SA=AN
+4960 END PROC
+4970 PROC MK_NAME(ID,N$)
+4980   IF NOT MK_EX(ID) THEN CALL MK_FAIL("no such sector: "+STR$(ID))
+4990   MK_NM$(ID)=N$
+5000 END PROC
+5010 ' wall flags as an array of names (bits without a name as a number)
+5020 PROC MK_JFLAGS(P$,FL)
+5030   LOCAL N,R
+5040   R=FL:N=0
+5050   JSON NEW P$,ARRAY
+5060   IF R AND 1 THEN JSON SETS P$+"."+STR$(N),"masked":N=N+1:R=R-1
+5070   IF R AND 2 THEN JSON SETS P$+"."+STR$(N),"block":N=N+1:R=R-2
+5080   IF R AND 4 THEN JSON SETS P$+"."+STR$(N),"solid":N=N+1:R=R-4
+5090   IF R AND 8 THEN JSON SETS P$+"."+STR$(N),"sky":N=N+1:R=R-8
+5100   IF R AND 16 THEN JSON SETS P$+"."+STR$(N),"translucent":N=N+1:R=R-16
+5110   IF R<>0 THEN JSON SET P$+"."+STR$(N),R
+5120 END PROC
+5130 ' the fields of a room or a solid
+5140 PROC MK_JROOM(P$,R)
+5150   LOCAL K,J,Q$,S$
+5160   JSON SET P$+".id",R
+5170   IF MK_NM$(R)<>"" THEN JSON SETS P$+".name",MK_NM$(R)
+5180   JSON SET P$+".box.0",MK_X1(R):JSON SET P$+".box.1",MK_Y1(R):JSON SET P$+".box.2",MK_X2(R):JSON SET P$+".box.3",MK_Y2(R)
+5190   JSON SET P$+".floor.z",MK_F(R):JSON SET P$+".floor.tex",MK_FT(R)
+5200   JSON SET P$+".ceiling.z",MK_C(R):JSON SET P$+".ceiling.tex",MK_CT(R)
+5210   JSON SET P$+".light",MK_LT(R):JSON SET P$+".tag",MK_TG(R):JSON SET P$+".walls",MK_WT(R)
+5220   IF MK_TG(R)=97 THEN JSON SETB P$+".ghost",-1
+5230   IF MK_PLY(R) OR MK_SLO(R) THEN CALL MK_FAIL("polygons and slopes are not part of the world document yet: sector "+STR$(R))
+5240 END PROC
+5250 PROC MK_EMITJSON(F$)
+5260   LOCAL I,R,K,J,P$,N0,NR,NS,Q,S$
+5270   IF MK_NPIL>0 THEN CALL MK_FAIL("pillars are not part of the world document yet")
+5280   N0=MK_NR:IF MK_NR0>=0 THEN N0=MK_NR0
+5290   JSON CLEAR
+5300   JSON SETS "format","e99-world":JSON SET "version",1
+5310   IF MK_WNAME$<>"" THEN JSON SETS "name",MK_WNAME$
+5320   JSON NEW "rooms",ARRAY:JSON NEW "solids",ARRAY:JSON NEW "openings",ARRAY:JSON NEW "things",ARRAY
+5330   NR=0:NS=0
+5340   FOR I=0 TO N0-1
+5350     R=MK_ORD(I)
+5360     IF MK_INH(R)<0 THEN
+5370       P$="rooms."+STR$(NR):NR=NR+1
+5380       CALL MK_JROOM(P$,R)
+5390       IF MK_OUT(R) THEN JSON SETB P$+".outdoor",-1
+5400       Q=0
+5410       FOR K=0 TO 3
+5420         FOR J=0 TO MK_HN(R*4+K)-1
+5430           S$=P$+".house."+STR$(Q):Q=Q+1
+5440           JSON SETS S$+".side",MID$("SENW",K+1,1)
+5450           JSON SET S$+".range.0",MK_HLO(R*16+K*4+J):JSON SET S$+".range.1",MK_HHI(R*16+K*4+J)
+5460         NEXT J
+5470       NEXT K
+5480     ELSE
+5490       P$="solids."+STR$(NS):NS=NS+1
+5500       CALL MK_JROOM(P$,R)
+5510       JSON SET P$+".in",MK_INH(R)
+5520       JSON SET P$+".rim.tex",MK_ITX(R)
+5530       IF MK_IFL(R)<>0 THEN CALL MK_JFLAGS(P$+".rim.flags",MK_IFL(R))
+5540     END IF
+5550   NEXT I
+5560   FOR I=0 TO MK_NJ-1
+5570     P$="openings."+STR$(I)
+5580     JSON SET P$+".from",MK_JA(I):JSON SETS P$+".side",MID$("SENW",MK_JK(I)+1,1)
+5590     JSON SET P$+".range.0",MK_JLO(I):JSON SET P$+".range.1",MK_JHI(I):JSON SET P$+".to",MK_JB(I)
+5600     IF MK_JTX(I)>=0 THEN JSON SET P$+".tex",MK_JTX(I)
+5610     IF MK_JUP(I)>=0 THEN JSON SET P$+".upper",MK_JUP(I)
+5620     IF MK_JLW(I)>=0 THEN JSON SET P$+".lower",MK_JLW(I)
+5630     IF MK_JFL(I)<>0 THEN CALL MK_JFLAGS(P$+".flags",MK_JFL(I))
+5640     IF MK_JXO(I)<>0 OR MK_JYO(I)<>0 THEN JSON SET P$+".offset.0",MK_JXO(I):JSON SET P$+".offset.1",MK_JYO(I)
+5650     IF MK_J2(I)=0 THEN JSON SETB P$+".oneway",-1
+5660   NEXT I
+5670   FOR I=0 TO MK_NTH-1
+5680     P$="things."+STR$(I)
+5690     JSON SET P$+".id",MK_TH(I,0):JSON SET P$+".tex",MK_TH(I,3)
+5700     JSON SET P$+".x",MK_TH(I,1):JSON SET P$+".y",MK_TH(I,2):JSON SET P$+".w",MK_TH(I,4):JSON SET P$+".h",MK_TH(I,5)
+5710     IF MK_TH(I,6)<>0 THEN JSON SET P$+".z",MK_TH(I,6)
+5720   NEXT I
+5730   IF MK_FIN THEN
+5740     JSON SET "environment.fence.tex",MK_FTX0
+5750     CALL MK_JFLAGS("environment.fence.flags",MK_FFL)
+5760     JSON SET "environment.fence.height",MK_FFH:JSON SET "environment.fence.wall",MK_FFT:JSON SET "environment.fence.house",MK_FHT
+5770     IF MK_GND>=0 THEN JSON SET "environment.fence.ground",MK_GND
+5780   END IF
+5790   IF MK_FOG>=0 THEN JSON SET "environment.fog",MK_FOG:JSON SET "start.x",MK_SX:JSON SET "start.y",MK_SY:JSON SET "start.angle",MK_SA
+5800   JSON SAVE F$
+5810 END PROC

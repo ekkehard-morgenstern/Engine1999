@@ -1,8 +1,30 @@
-# The renderer-independent world model (DRAFT, decisions made, not implemented)
+# The renderer-independent world model (step 2 done: the loader; the game does not use it yet)
 
-*2026-11-13, owner's idea: describe a world (Deqq's House II first) as one big JSON file of 3D objects, independent of the sector renderer; a single `W3D` statement loads such a document into the renderer, a later 3D renderer would build its own structures from the same file. Step 1 (the JSON feature, `docs/json-subsystem.md`) is done; this page is the proposed schema for step 2.*
+*2026-11-13, owner's idea: describe a world (Deqq's House II first) as one big JSON file of 3D objects, independent of the sector renderer; a single `W3D` statement loads such a document into the renderer, a later 3D renderer would build its own structures from the same file. Step 1 (the JSON feature, `docs/json-subsystem.md`) and step 2 (this page: the document `demos/deqq2.world.json` and `W3D WORLD`, `w3dworld.[ch]`) are done.*
 
-Units as in `w3d.c`: x / y in the plan (y grows towards the viewer's "south" as in the demos), z up, angles in degrees (0 = east, 90 = +y). Names (strings) are used for references; the loader resolves them.
+**What exists:** `JSON LOAD "deqq2.world.json"` + `W3D WORLD` builds the sectors, walls and things of the renderer from the document. The document of Deqq's House II is written by `engine1999c --allow=write demos/levels/deqq2.bas demos/deqq2.world.json` (the generator's `mkw3d.lib` got `MK_EMITJSON`, `MK_ENVIRON`, `MK_NAME`; without a file argument the generator still writes the `DATA` lines the game contains). `worldtest.sh` (in `make check`) proves that the document builds **exactly the same world** (217 sectors, 1463 walls, 113 things, compared as map files) as those `DATA` lines, and that the file in `demos/` is the one the generator writes. `demos/deqq2.bas` itself still loads its `DATA` lines: switching it to the document is the next step (the game would then `JSON LOAD` the file, which it must find next to itself, and the `DATA` block goes away).
+
+**What the loader does** (`w3dworld.c`, a port of the generator's work, so the output is identical): rooms are axis-parallel boxes; the walls of a room are cut along each side by its openings (gaps are solid walls in the room's own picture), solids are holes in a room with a ring of walls round them, `outdoor` rooms get **fence sectors** (thin, open to the sky, you see over them and cannot enter; numbered from `environment.fence.first`, default 100, in the order of the outdoor rooms) behind every solid wall and the **house** pictures where `house` spans say so, and the far wall and end caps of each fence sector open into the `ground` room (a ghost lawn: no ray ends in the void). Sector numbers are the rooms' `id` values (a game addresses sectors by number, tags and doors); `name` is for people. The loader checks what the generator checked (rooms must touch along an opening, spans lie inside both rooms, openings must not overlap) and names the element in its messages (`rooms[3]: "box" is missing`).
+
+**Not done yet (differences from the draft below):** polygon rooms (`outline`: "not supported yet"), slopes, pillars, `materials` / `palette` / `textures` (textures are plain numbers: the program still draws them), **`movers`, `lights` and `game` data are not read by the loader** (a program reads them with the `JSON` statements; Deqq's doors and lamps are still the game's own code), `ghost` rooms are given as `"ghost": true` (the generator writes it for tag 97), things are placed in the room found at their feet unless `room` says otherwise.
+
+## The schema as implemented
+
+```
+{ "format": "e99-world", "version": 1, "name": "Deqq's House II",
+  "rooms":    [ { "id": 0, "name": "front garden", "box": [x1,y1,x2,y2], "floor": {"z":0,"tex":24}, "ceiling": {"z":300,"tex":-1 | "sky"},
+                  "light": 255, "tag": 10, "walls": 1, "ghost": false, "outdoor": true, "house": [ {"side":"N","range":[180,840]} ] } ],
+  "solids":   [ { ...the same fields as a room..., "in": 12, "rim": {"tex": 26, "flags": ["masked","block"]} } ],     // a hole in the room "in": floor.z = its top
+  "openings": [ { "from": 10, "side": "N", "range": [lo,hi], "to": 11, "tex": 12, "upper": -1, "lower": -1, "flags": ["block","solid"], "offset": [xo,yo], "oneway": false } ],
+  "things":   [ { "id": 400, "tex": 280, "x": .., "y": .., "w": 28, "h": 52, "z": 0, "room": 3 } ],
+  "environment": { "fog": 4200, "far": 0, "sky": 11 | {"tex":11,"repeat":1,"shift":0},
+                   "fence": { "tex": 250, "flags": ["masked","block"], "height": 300, "wall": 214, "house": 27, "ground": 426, "first": 100 } },
+  "start": { "x": 1730, "y": 1570, "angle": 90 } }
+```
+
+`side` is "S" (the room's y1 edge), "E" (x2), "N" (y2) or "W" (x1); `range` runs along that edge; an opening is made in both rooms (the other side is the opposite edge) unless `"oneway": true`. `flags` is a number or names (`masked` 1, `block` 2, `solid` 4, `sky` 8, `translucent` 16). Rooms and solids are listed in the order they were made (the fence sector numbers follow it); a solid's host must come before it (all rooms first, then solids in order).
+
+## The first draft (2026-11-13), kept for the parts not done
 
 ```
 { "format": "e99-world", "version": 1, "name": "Deqq's House II",
@@ -25,4 +47,4 @@ Units as in `w3d.c`: x / y in the plan (y grows towards the viewer's "south" as 
 2. **Animated parts** (doors, the gate, lifts, moving floors and ceilings) are separate **`movers`** nodes: `target` (a room, an opening or a thing), `floor` / `ceiling` / `open` targets, `speed`, `tag`; the game opens them by name or tag.
 3. **Game data lives in the same file** under `game` (items and their rooms, puzzles, Deqq's way points and hiding places, texts), so one file is the whole world; the `W3D` loader ignores `game`, the program reads it with the `JSON` statements.
 
-Next (step 2): the world of Deqq's House II as `demos/deqq2.world.json` (written by a BASIC generator from the existing level description, so it stays reproducible), then one `W3D` statement that builds the renderer's sectors, walls and things from the loaded document (`W3D WORLD [path$]`, reading the current `JSON` document), with a `w3dtest1` / `contest1` / `levelstest.sh` check that the result matches today's level.
+Next (step 3): switch `demos/deqq2.bas` to the document (`JSON LOAD` + `W3D WORLD` instead of `LOADLEVEL`'s `DATA` block, which makes `levelstest.sh` check the document instead), then put the movers, lamps and game data (items, puzzles, way points, hiding places) into the same file and read them with the `JSON` statements; polygon rooms and slopes in the loader.

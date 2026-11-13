@@ -817,7 +817,7 @@ w3d-stmt := XFUNC(W3D) ( RESET | COLORMAP | RENDER | TEXTURE num-expr "," str-ex
                              ( ANIM | SCROLL ) num-expr "," num-expr "," num-expr "," num-expr |
                              LIGHTFX num-expr "," num-expr [ "," num-expr [ "," num-expr ] ] |
                              LAMP num-expr "," num-expr "," num-expr "," num-expr "," num-expr "," num-expr |
-                             THINGTRANS num-expr "," num-expr | GHOST num-expr "," num-expr | ( TICK | FAR ) num-expr | CLEAR |
+                             THINGTRANS num-expr "," num-expr | GHOST num-expr "," num-expr | ( TICK | FAR ) num-expr | CLEAR | WORLD |
                              THING num-expr "," num-expr "," num-expr "," num-expr "," num-expr "," num-expr [ "," num-expr ] ) .
 ```
 

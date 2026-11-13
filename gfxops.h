@@ -203,6 +203,7 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXOP_W3DLAMP   177             // W3D LAMP n, x, y, z, radius, amount    (a point light: adds up to amount at the center, nothing at the radius; radius 0 = off)
 #define GFXOP_W3DTHINGTRANS 178         // W3D THINGTRANS n, flag                 (a translucent thing)
 #define GFXOP_W3DCLEAR  179             // W3D CLEAR                              (deletes the sectors, walls and things, keeps the pictures and the settings: a new map can be loaded)
+#define GFXOP_W3DWORLD  196             // W3D WORLD                              (builds the world from the current JSON document: w3dworld.h, docs/world-model.md; replaces the sectors and things)
 #define GFXOP_W3DGHOST  180             // W3D GHOST s, flag                      (a ghost sector is only seen through portals: it is never the sector of a position, a thing or the camera)
 #define GFXOP_JSONCLEAR 181             // JSON CLEAR                             (the JSON statements work on one current document: json.h, docs/json-subsystem.md)
 #define GFXOP_JSONLOAD  182             // JSON LOAD file$                        (".json" is added if the name has no extension)
@@ -224,7 +225,7 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXOP_IS_JSON(op) ( (op) >= GFXOP_JSONFIRST && (op) <= GFXOP_JSONLAST )
 #define GFXOP_W3DFIRST  GFXOP_W3DRESET
 #define GFXOP_W3DLAST   GFXOP_W3DLIFT
-#define GFXOP_IS_W3D(op) ( ( (op) >= GFXOP_W3DFIRST && (op) <= GFXOP_W3DLAST ) || ( (op) >= GFXOP_W3DFIRST2 && (op) <= GFXOP_W3DLAST2 ) )
+#define GFXOP_IS_W3D(op) ( ( (op) >= GFXOP_W3DFIRST && (op) <= GFXOP_W3DLAST ) || ( (op) >= GFXOP_W3DFIRST2 && (op) <= GFXOP_W3DLAST2 ) || (op) == GFXOP_W3DWORLD )
 #define GFXOP_W3DFIRST2 GFXOP_W3DSLOPE
 #define GFXOP_W3DLAST2  GFXOP_W3DGHOST
 

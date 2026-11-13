@@ -177,6 +177,7 @@ static const gfxcmd_t cmds[] = {
     { "W3D", "TICK",     GFXOP_W3DTICK,  "n",        0, false },
     { "W3D", "CLEAR",    GFXOP_W3DCLEAR, "",         0, false },
     { "W3D", "GHOST",    GFXOP_W3DGHOST, "nn",       0, false },
+    { "W3D", "WORLD",    GFXOP_W3DWORLD, "",         0, false },
     { "JSON", "CLEAR",   GFXOP_JSONCLEAR, "",        0, false },
     { "JSON", "LOAD",    GFXOP_JSONLOAD, "s",        0, false },
     { "JSON", "SAVE",    GFXOP_JSONSAVE, "so",       0, false },

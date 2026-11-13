@@ -593,7 +593,7 @@ w3d-stmt := TOK_XFUNC(W3D) ( RESET | COLORMAP | RENDER | TEXTURE num-expr TOK_CO
                              ( ANIM | SCROLL ) num-expr TOK_COMMA num-expr TOK_COMMA num-expr TOK_COMMA num-expr |
                              LIGHTFX num-expr TOK_COMMA num-expr [ TOK_COMMA num-expr [ TOK_COMMA num-expr ] ] |
                              LAMP num-expr TOK_COMMA num-expr TOK_COMMA num-expr TOK_COMMA num-expr TOK_COMMA num-expr TOK_COMMA num-expr |
-                             THINGTRANS num-expr TOK_COMMA num-expr | GHOST num-expr TOK_COMMA num-expr | ( TICK | FAR ) num-expr | CLEAR |
+                             THINGTRANS num-expr TOK_COMMA num-expr | GHOST num-expr TOK_COMMA num-expr | ( TICK | FAR ) num-expr | CLEAR | WORLD |
                              THING num-expr TOK_COMMA num-expr TOK_COMMA num-expr TOK_COMMA num-expr TOK_COMMA num-expr TOK_COMMA num-expr [ TOK_COMMA num-expr ] ) .
 -- JSON (2026-11-13; docs/json-subsystem.md): one current document of named values; a path "a.b.c" (array elements by number: "rooms.3.name" or "rooms[3].name") names an element.
 -- GET, TYPE, COUNT, KEY, TEXT put their result into a string variable; a missing element gives "" (TEXT: an error); TYPE is "null" "boolean" "number" "string" "array" "object".

@@ -37,6 +37,7 @@
 #include "gfxops.h"
 #include "w3d.h"
 #include "jsonops.h"
+#include "w3dworld.h"
 #include "gfxfile.h"
 #include "shot.h"
 #include "iodev.h"
@@ -1520,6 +1521,9 @@ static bool host_w3d_op( int op, const double* a, int na, const char* s, size_t 
             sdlscr_gfx_putbuf( t, x, y, fb, bw, bh, scale );
         }
         return true;
+    }
+    if ( op == GFXOP_W3DWORLD ) {
+        return w3dworld_load( host_w3d, jsonops_root(), err );
     }
     return w3d_op( host_w3d, op, a, na, s, slen, err );
 }

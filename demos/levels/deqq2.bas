@@ -2,7 +2,7 @@
 2 ' An executable made with BUILD contains the Engine1999 runtime: the Engine1999 Runtime Exception
 3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
 4 ' in the executable (it shows with the command line option --engine1999-about).
-10 ' deqq2.bas - the house, garden and cellar of demos/deqq2.bas (Deqq's House II) as DATA lines: engine1999c deqq2.bas [file]  (without a file: standard output)
+10 ' deqq2.bas - the house, garden and cellar of demos/deqq2.bas (Deqq's House II) as DATA lines on standard output; with a file argument it also writes the world document (docs/world-model.md): engine1999c --allow=write deqq2.bas ../deqq2.world.json
 20 LOAD LIBRARY "mkw3d"
 30 PROC WIN(ID,S$,LO,HI,Z1,Z2,G,RR)
 40   LOCAL X1,Y1,X2,Y2,R,RT
@@ -246,6 +246,7 @@
 2380 END FUNC
 2390 ' a thing of the town (written after the sectors: DATA n,x,y,texture,width,height,height of the feet; they end with DATA -1)
 2400 PROC ADDTH(TX,X,Y,W,H,Z)
+2405   CALL MK_THING(400+NTH,X,Y,TX,W,H,Z)
 2410   THD(NTH,0)=400+NTH:THD(NTH,1)=X:THD(NTH,2)=Y:THD(NTH,3)=TX:THD(NTH,4)=W:THD(NTH,5)=H:THD(NTH,6)=Z
 2420   NTH=NTH+1
 2430 END PROC
@@ -397,7 +398,15 @@
 3680 CALL MK_GROUND(426)
 3690 CALL MK_FENCE(250,3)
 3700 CALL MK_FINISH(27,300,214)
-3710 CALL MK_EMIT("")
+3705 ' the world document (docs/world-model.md) when a file is given: engine1999c --allow=write demos/levels/deqq2.bas ../deqq2.world.json
+3706 IF ARG$(1)<>"" THEN
+3707   CALL MK_ENVIRON("Deqq's House II",4200,1730,1570,90)
+3708   CALL MK_NAME(0,"front garden"):CALL MK_NAME(1,"west garden"):CALL MK_NAME(2,"back yard"):CALL MK_NAME(3,"crash site"):CALL MK_NAME(4,"east garden"):CALL MK_NAME(5,"north-east corner")
+3709   CALL MK_NAME(9,"shed"):CALL MK_NAME(10,"kitchen"):CALL MK_NAME(11,"hall (front)"):CALL MK_NAME(12,"living room"):CALL MK_NAME(21,"landing"):CALL MK_NAME(22,"bedroom")
+3710   CALL MK_NAME(23,"bathroom"):CALL MK_NAME(32,"attic"):CALL MK_NAME(33,"cellar (stairs top)"):CALL MK_NAME(39,"cellar"):CALL MK_NAME(426,"lawn behind the fences (ghost)")
+3711   CALL MK_EMITJSON(ARG$(1))
+3712 END IF
+3715 CALL MK_EMIT("")
 3720 OPEN "stdout:" FOR OUTPUT AS #2
 3730 FOR I=0 TO NTH-1
 3740   PRINT #2,"DATA ";STR$(THD(I,0));",";STR$(THD(I,1));",";STR$(THD(I,2));",";STR$(THD(I,3));",";STR$(THD(I,4));",";STR$(THD(I,5));",";STR$(THD(I,6))
