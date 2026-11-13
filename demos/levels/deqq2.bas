@@ -212,6 +212,9 @@
 2080 CALL MK_LINKX(420,"N",440,520,0, "-1,251,251,0,0,0")
 2090 CALL MK_LINKX(418,"N",520,1240,421, "250,251,251,3,0,0")
 2100 CALL MK_LINKX(421,"N",520,1240,0, "250,251,251,3,0,0")
+2105 ' the gate's posts: no brick pillars 300 high, the same railing opening into the fence sectors either side of the gate
+2106 CALL MK_LINKX(419,"E",-10,0,420, "250,251,251,3,0,0")
+2107 CALL MK_LINKX(420,"E",-10,0,421, "250,251,251,3,0,0")
 2110 ' THE OPEN COUNTRY (since the town was made of real houses): the outer side of the ring road opens into four big strips of grass (sectors 422 south, 423 north, 424 west, 425 east, 300 high with the sky above and the backdrop texture 29 at the far
 2120 ' edge, 2400 .. 3000 units away) in which the houses stand as blocks (sector = hole of the strip with the floor at the height of the house: the walls are the facade pictures 210..214, 251; a few have a chimney, a smaller block on the roof)
 2130 CALL MK_ROOM(422,-3200,-3200,4300,-220,0,300,"10,-1,255,0,29")
@@ -365,7 +368,19 @@
 3610   CALL MK_ADD(426,1,YS(I),YS(I+1),414+I)
 3620 NEXT I
 3630 ' the ends of the pavement and the railing: the same railing into the lawn (instead of a wall 300 high)
-3640 CALL MK_ADD(418,3,-60,-10,426)
+3635 ' the road's own side of the lawn's edge: the same railing (before, solid 300-high hedge walls stood there: seen from the road they were "the wall")
+3636 FOR I=0 TO 3
+3637   CALL MK_ADD(405+I,1,YS(I),YS(I+1),426)
+3638   CALL MK_ADD(414+I,3,YS(I),YS(I+1),426)
+3639 NEXT I
+3640 CALL MK_ADD(400,2,-440,-380,426)
+3641 CALL MK_ADD(404,2,1240,1530,426)
+3642 CALL MK_ADD(409,0,-440,-142,426)
+3643 CALL MK_ADD(410,0,-142,316,426)
+3644 CALL MK_ADD(411,0,316,774,426)
+3645 CALL MK_ADD(412,0,774,1232,426)
+3646 CALL MK_ADD(413,0,1232,1530,426)
+3647 CALL MK_ADD(418,3,-60,-10,426)
 3650 CALL MK_ADD(418,1,-60,-10,426)
 3660 CALL MK_ADD(419,3,-10,0,426)
 3670 CALL MK_ADD(421,1,-10,0,426)
