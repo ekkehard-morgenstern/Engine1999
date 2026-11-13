@@ -1,6 +1,6 @@
 #!/bin/sh
 # Test of the generators in demos/levels (written in the built-in BASIC, run by engine1999c): the DATA lines / PLAY procedures they write must be the ones
-# that the demos contain (the output was pasted into demos/manor.bas, demos/bughunt.bas, demos/deqq2.bas and demos/lib/music3d.lib).
+# that the demos contain (the output was pasted into demos/manor.bas, demos/bughunt.bas, demos/deqq.bas, demos/deqq2.bas, demos/lib/deqqart.lib and demos/lib/music3d.lib).
 # For each generator the output has to appear as one unbroken run of lines in the target file (line numbers and surrounding blanks ignored).
 # Exit status = number of failures.
 cd "$(dirname "$0")" || exit 1
@@ -30,7 +30,8 @@ check() {   # check name program target
 check manor demos/levels/manor.bas demos/manor.bas
 check bunker demos/levels/bunker.bas demos/bughunt.bas
 check deqq2 demos/levels/deqq2.bas demos/deqq2.bas
-check deqq2art demos/levels/deqq2art.bas demos/deqq2.bas
+check deqq2art demos/levels/deqq2art.bas demos/lib/deqqart.lib
+check deqq1 demos/levels/deqq1.bas demos/deqq.bas
 # the showroom generator writes quoted DATA lines for the map when it is given "-" and "data"
 if timeout 120 ./engine1999c demos/levels/showroom.bas - data > "$T/out" 2> "$T/err" && contains "$T/out" demos/showroom.bas; then printf '%-10s ok\n' showroom; else echo "FAILED: showroom (output is not in demos/showroom.bas)"; fail=$((fail+1)); fi
 # the music generator also prints a report on stdout: its file argument is a file in the generator's folder
