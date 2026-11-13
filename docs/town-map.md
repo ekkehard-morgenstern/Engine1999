@@ -21,7 +21,7 @@ Drawn first, built second (owner's advice, 2026-11-13). Coordinates are the leve
   |a |   a gap in front of the cellar)                                   |ad| 2370), houses face
   |d |                                                                   |  | west
   +--+==================================================================+--+
-        pavement + railing + GATE (x 440 .. 520)        [P] phone booth (290,-30) = START
+        pavement + railing + GATE (x 440 .. 520)        (booth: NE corner, see below)
    south road (main street, 160 wide)                                           y -220 .. -60
    +-----------+-----------+-----------+-----------+ ... +---------------------------+
    |  BAKERY   |  GROCER   |   CAFE    | PHARMACY  |     |   GAS STATION             |
@@ -38,7 +38,7 @@ Drawn first, built second (owner's advice, 2026-11-13). Coordinates are the leve
   one or two storeys (112 / 224 high, four colors), pushed to the street side (small front yard, deep back yard), a door, one or two trees.
   Deqq's house is the odd one out on purpose: two storeys and an attic, behind a brick-posted fence and a hedge.
 - **Open country** behind the rows: grass out to a far backdrop (a tree line); no walls near the road.
-- **Phone booth**: on the pavement in front of Deqq's fence west of the gate; the game starts next to it: the player is an investigator
+- **Phone booth**: at (1730,1660) in the north-east corner beside the road (the far end of the town from the gate, about 2000 units); the game starts next to it, the player at (1730,1570) facing it (when Deqq throws you out you reappear at the gate, (480,-35), as before): the player is an investigator
   who has just called the chief and walks up to the gate (a banner says so).
 - Things of the town: the generator writes them after the sectors (`DATA n,x,y,texture,width,height,feet`, ended by `DATA -1`): doors, trees, pumps, the booth.
   Lamps and the verge trees are placed by `TOWNTHINGS` in the game.

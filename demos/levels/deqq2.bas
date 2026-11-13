@@ -281,7 +281,7 @@
 2770 END PROC
 2780 ' THE TOWN MAP (docs/town-map.md): south of the ring road the main street: three shops (bakery, grocer, cafe) and the gas station (forecourt, kiosk, pumps, canopy, price sign);
 2790 ' houses with yards in rows behind them and round the other three sides of the block
-2800 CALL ADDTH(282,290,-30,32,76,0)
+2800 CALL ADDTH(282,1730,1660,32,76,0)
 2810 CALL SHOP(422,-560,-440,-304,-260,285)
 2820 CALL SHOP(422,-280,-440,-24,-260,286)
 2830 CALL SHOP(422,0,-440,256,-260,287)
