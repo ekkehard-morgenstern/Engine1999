@@ -119,13 +119,17 @@ static bool flags( const json_node_t* o, const char* what, int* out ) {
     return true;
 }
 
-static bool wop( m3d_t* m, const char* what, int op, int na, double a0, double a1, double a2, double a3, double a4, double a5, double a6, double a7 ) {
-    const double a[8] = { a0, a1, a2, a3, a4, a5, a6, a7 };
+static bool wop9( m3d_t* m, const char* what, int op, int na, double a0, double a1, double a2, double a3, double a4, double a5, double a6, double a7, double a8 ) {
+    const double a[9] = { a0, a1, a2, a3, a4, a5, a6, a7, a8 };
     const char* e = 0;
     if ( !m3d_op( m, op, a, na, 0, 0, &e ) ) {
         return fail( "%s: the renderer refused (operation %d): %s", what, op, e != 0 ? e : "bad argument" );
     }
     return true;
+}
+
+static bool wop( m3d_t* m, const char* what, int op, int na, double a0, double a1, double a2, double a3, double a4, double a5, double a6, double a7 ) {
+    return wop9( m, what, op, na, a0, a1, a2, a3, a4, a5, a6, a7, 0 );
 }
 
 static bool readobject( m3d_t* m, const json_node_t* o, size_t i ) {
@@ -151,10 +155,12 @@ static bool readobject( m3d_t* m, const json_node_t* o, size_t i ) {
         return fail( "%s: \"boxes\" must be an array", what );
     }
     for ( size_t k=0; bx != 0 && k < bx->nkids; ++k ) {
-        double b[7] = { 0, 0, 0, 0, 0, 0, 0 };
+        double b[8] = { 0, 0, 0, 0, 0, 0, 0, 63 };
         char w2[96];
         snprintf( w2, sizeof(w2), "%s.boxes[%u]", what, (unsigned) k );
-        if ( !numarr( bx->kids[k], w2, 7, b ) || !wop( m, w2, GFXOP_M3DBOX, 8, id, b[0], b[1], b[2], b[3], b[4], b[5], b[6] ) ) {
+        const json_node_t* bk = bx->kids[k];
+        size_t nb = bk->type == JSON_ARR && bk->nkids == 8 ? 8 : 7;       // the optional 8th number: the faces to build (bit mask, default 63)
+        if ( !numarr( bk, w2, nb, b ) || !wop9( m, w2, GFXOP_M3DBOX, 9, id, b[0], b[1], b[2], b[3], b[4], b[5], b[6], b[7] ) ) {
             return false;
         }
     }

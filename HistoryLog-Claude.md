@@ -13,6 +13,12 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+### Town houses with baked-in doors, cars as meshes (2026-11-14, owner: "The doors from the town buildings that are not on Deqq's premises should be baked into their wall texture, not billboards. The car should be a 3D mesh, not a billboard. Will it work? Implement any feature that you need")
+- **Feature: `M3D BOX o,...,tex[,faces]`** (`m3d.c`, `gfxops.c`, `m3dworld.c`): the optional 9th argument is a bit mask of the sides to build (1 +x, 2 -x, 4 +y, 8 -y, 16 top, 32 bottom; default 63); the JSON document's box takes it as an optional 8th number. This lets a box leave out its front, which a quad with another picture covers. `m3d_op()` takes 9 arguments now. Grammar (`bascomp.ebnf`, `make grammar`), man page, `docs/3d-mesh-subsystem.md` updated; `m3dtest1` 1264 (a case with masks).
+- **Doors:** `demos/deqq2.mesh.json`: the 43 town houses are objects at their corner (`pos`, local boxes, so the 128 wide picture starts at the corner), a box without the front face plus a quad with the door picture; the 43 door things (sprite 280) are removed (Deqq's premises have real doors anyway). `demos/lib/deqqart.lib`: `DA_DOOR`, `DA_WALLTEX(N,HW,ST,DR)`; new pictures 264..267 / 274..277 (the houses with a door). The document keeps its one-entry-per-line layout.
+- **Cars:** `demos/deqq2.bas`: `CARTEX`, `MAKECARS` (pictures 230..237), `CARWHEEL`, `CARMESH`, `BUILDCARS` (called after `M3D WORLD`; nine objects 3200 + 3 * slot + color, passable), `CARS` moves them with `M3D OBJPOS` (yaw = the heading) and hides them with `M3D OBJSHOW`; the old four-view billboards (`CARSIDE`, `CARENDS`, `MAKECARS2`, things 130..132) are deleted.
+- Tests: `m3dtest1`, `deqq2test.sh` pass; seen in the window under Xvfb (door between the windows of a house, a green car from the side and from the front: body, glass cabin, eight sided wheels, headlight). Not seen: the other two colors, a car at speed, the baked doors on the x facing houses (east strip).
+
 
 
 ## Log

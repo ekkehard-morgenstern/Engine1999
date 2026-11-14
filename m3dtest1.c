@@ -354,6 +354,12 @@ int main( void ) {
         CHECK( Q( GFXQ_M3DTON, 1, 2.0 ) != 0 );
         CHECK( Q( GFXQ_M3DYAW, 0 ) == 45.0 && Q( GFXQ_M3DX, 0 ) == 1.0 );
         json_node_free( root );
+        // a box with a face mask (the 8th number): only the +y face (4) and the roof (16) are built
+        const char* fm = "{\"format\":\"e99-mesh-world\",\"objects\":[{\"id\":5,\"boxes\":[[0,0,0,10,10,50,2,20],[0,0,0,10,10,50,2,0]]},{\"id\":6,\"boxes\":[[0,0,0,10,10,50,2]]}]}";
+        CHECK( json_parse( fm, strlen( fm ), &root, jerr, sizeof(jerr) ) );
+        CHECK( m3dworld_load( M, root, &werr ) );
+        CHECK( Q( GFXQ_M3DVERTS, 1, 5.0 ) == 8 && Q( GFXQ_M3DTRIS, 1, 5.0 ) == 4 && Q( GFXQ_M3DTRIS, 1, 6.0 ) == 12 );
+        json_node_free( root );
         const char* bad = "{\"format\":\"e99-mesh-world\",\"objects\":[{\"id\":3,\"boxes\":[[0,0,0,10]]}]}";
         CHECK( json_parse( bad, strlen( bad ), &root, jerr, sizeof(jerr) ) );
         CHECK( !m3dworld_load( M, root, &werr ) && strstr( werr, "objects[0].boxes[0]" ) != 0 );

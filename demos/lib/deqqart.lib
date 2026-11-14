@@ -104,7 +104,7 @@
 1010   GFX LINE 0,280,127,299,FN W3K_C(5,2),BF
 1020   CALL W3K_GRAB(N,128,300)
 1030 END PROC
-1040 ' the houses of the town: one storey (128 x 112, textures 260 .. 263) and two storeys (128 x 224, 270 .. 273) in four colors, shops (256 x 224, 285 .. 288: BAKERY, GROCER, CAFE, PHARMACY),
+1040 ' the houses of the town: one storey (128 x 112, textures 260 .. 263) and two storeys (128 x 224, 270 .. 273) in four colors (the same with the front door baked in: 264 .. 267 and 274 .. 277), shops (256 x 224, 285 .. 288: BAKERY, GROCER, CAFE, PHARMACY),
 1050 ' the gas station's kiosk (256 x 112, 289) and its price sign (64 x 190, 290); sprites: 280 a door (28 x 52), 281 a gas pump (24 x 44), 282 a telephone booth (32 x 76)
 1060 PROC DA_WINDOW(X,Y,W,H)
 1070   GFX LINE X-2,Y-2,X+W+1,Y+H+1,FN W3K_C(12,4),BF
@@ -114,7 +114,18 @@
 1110   GFX LINE X,Y+H\2,X+W-1,Y+H\2,FN W3K_C(12,4)
 1120   GFX LINE X-3,Y+H+2,X+W+2,Y+H+3,FN W3K_C(0,10),BF
 1130 END PROC
-1140 PROC DA_WALLTEX(N,HW,ST)
+1135 ' the town houses' front door baked into the wall picture: 28 x 52, standing on the ground (the bottom row of the picture), in the middle of the 128 wide front
+1136 PROC DA_DOOR(Y)
+1137   GFX LINE 49,Y-3,78,Y+51,FN W3K_C(12,4),BF
+1138   GFX LINE 50,Y,77,Y+51,FN W3K_C(12,6),BF
+1139   GFX LINE 53,Y+4,74,Y+51,FN W3K_C(12,9),BF
+1140   GFX LINE 63,Y+4,64,Y+51,FN W3K_C(12,5)
+1141   GFX LINE 56,Y+8,61,Y+22,FN W3K_C(12,7)
+1142   GFX LINE 66,Y+8,71,Y+22,FN W3K_C(12,7)
+1143   GFX CIRCLE 60,Y+32,2,FN W3K_C(3,13)
+1144   GFX LINE 46,Y+49,81,Y+51,FN W3K_C(0,10),BF
+1145 END PROC
+1146 PROC DA_WALLTEX(N,HW,ST,DR)
 1150   LOCAL H,I,Y
 1160   H=112*ST
 1170   GFX CLEAR FN W3K_C(HW,9)
@@ -128,6 +139,7 @@
 1250     CALL DA_WINDOW(82,H-92-Y*112,32,40)
 1260   NEXT Y
 1270   IF ST=2 THEN GFX LINE 0,108,127,111,FN W3K_C(0,10),BF
+1275   IF DR THEN CALL DA_DOOR(H-52)
 1280   CALL W3K_GRAB(N,128,H)
 1290 END PROC
 1300 PROC DA_SHOPTEX(N,HW,SG,T$)
@@ -159,8 +171,10 @@
 1560 PROC DA_TOWN
 1570   LOCAL K
 1580   FOR K=0 TO 3
-1590     CALL DA_WALLTEX(260+K,VAL(MID$("13  7 14  3",K*3+1,3)),1)
-1600     CALL DA_WALLTEX(270+K,VAL(MID$("13  7 14  3",K*3+1,3)),2)
+1590     CALL DA_WALLTEX(260+K,VAL(MID$("13  7 14  3",K*3+1,3)),1,0)
+1600     CALL DA_WALLTEX(270+K,VAL(MID$("13  7 14  3",K*3+1,3)),2,0)
+1605     CALL DA_WALLTEX(264+K,VAL(MID$("13  7 14  3",K*3+1,3)),1,-1)
+1606     CALL DA_WALLTEX(274+K,VAL(MID$("13  7 14  3",K*3+1,3)),2,-1)
 1610   NEXT K
 1620   CALL DA_SHOPTEX(285,13,1,"BAKERY")
 1630   CALL DA_SHOPTEX(286,7,5,"GROCER")

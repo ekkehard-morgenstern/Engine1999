@@ -159,7 +159,7 @@ static const gfxcmd_t cmds[] = {
     { "M3D", "VERTEX", GFXOP_M3DVERTEX, "nnnnoo", 0, false },
     { "M3D", "FACE", GFXOP_M3DFACE, "nnnnn", 0, false },
     { "M3D", "QUAD", GFXOP_M3DQUAD, "nnnnnn", 0, false },
-    { "M3D", "BOX", GFXOP_M3DBOX, "nnnnnnnn", 0, false },
+    { "M3D", "BOX", GFXOP_M3DBOX, "nnnnnnnno", 0, false },
     { "M3D", "OBJPOS", GFXOP_M3DOBJPOS, "nnnno", 0, false },
     { "M3D", "OBJSHOW", GFXOP_M3DOBJSHOW, "nn", 0, false },
     { "M3D", "OBJLIGHT", GFXOP_M3DOBJLIGHT, "nn", 0, false },

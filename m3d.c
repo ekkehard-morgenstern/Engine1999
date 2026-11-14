@@ -375,7 +375,7 @@ static void obj_update( obj_t* o ) {
     o->rad = sqrt( dx * dx + dy * dy + dz * dz );
 }
 
-static bool obj_box( obj_t* o, double x1, double y1, double z1, double x2, double y2, double z2, int tex ) {
+static bool obj_box( obj_t* o, double x1, double y1, double z1, double x2, double y2, double z2, int tex, int faces ) {
     double lx = x1 < x2 ? x1 : x2, hx = x1 < x2 ? x2 : x1, ly = y1 < y2 ? y1 : y2, hy = y1 < y2 ? y2 : y1, lz = z1 < z2 ? z1 : z2, hz = z1 < z2 ? z2 : z1;
     // each face has its own four vertices (the pictures differ); counterclockwise seen from outside
     const double q[6][4][3] = {
@@ -387,6 +387,9 @@ static bool obj_box( obj_t* o, double x1, double y1, double z1, double x2, doubl
         { { lx, hy, lz }, { hx, hy, lz }, { hx, ly, lz }, { lx, ly, lz } }      // -z
     };
     for ( int f=0; f < 6; ++f ) {
+        if ( ( faces & ( 1 << f ) ) == 0 ) {
+            continue;
+        }
         int base = o->nv;
         for ( int k=0; k < 4; ++k ) {
             if ( !obj_addv( o, q[f][k][0], q[f][k][1], q[f][k][2], GFX_NONE, GFX_NONE ) ) {
@@ -675,9 +678,9 @@ static bool thing_get( m3d_t* m, double nv, thing_t** t ) {
 
 bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t slen, const char** err ) {
     int i1, i2, i3;
-    double args[8];
+    double args[9];
     *err = "Illegal argument";
-    for ( int i=0; i < 8; ++i ) {
+    for ( int i=0; i < 9; ++i ) {
         args[i] = i < na ? a[i] : GFX_NONE;             // arguments beyond na are omitted
         if ( i < na && !NONE_VAL( args[i] ) && !num_ok( args[i] ) && op != GFXOP_M3DTEXTURE ) {
             return false;
@@ -775,10 +778,11 @@ bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t sl
                 *err = "Object not defined";
                 return false;
             }
-            if ( !whole( a[7], 0, M3D_MAXTEX - 1, &i2 ) ) {
+            int faces = 63;
+            if ( !whole( a[7], 0, M3D_MAXTEX - 1, &i2 ) || ( !NONE_VAL( a[8] ) && !whole( a[8], 0, 63, &faces ) ) ) {
                 return false;
             }
-            if ( !obj_box( &m->objs[i1], a[1], a[2], a[3], a[4], a[5], a[6], i2 ) ) {
+            if ( !obj_box( &m->objs[i1], a[1], a[2], a[3], a[4], a[5], a[6], i2, faces ) ) {
                 *err = "Out of memory";
                 return false;
             }

@@ -10,7 +10,7 @@
 - **Things** (0 .. 1023) are billboards: a picture of a given width and height that always faces the viewer, with its bottom at `z`.
 - Coordinates: x east, y north, z up; angles in degrees, 0 = +x, 90 = +y; to the right of the view direction is clockwise. A triangle is **counterclockwise seen from its front** (the normal `(b-a) x (c-a)` points to the viewer); one-sided objects do not draw or collide with the back. `M3D OBJECT o,16` (two sided) draws both sides.
 - Pictures are `GFX GRAB` blocks (`M3D TEXTURE n,a$`, as for `W3D`); palette index 0 is see-through where the object is masked (flag 1) or translucent (flag 2) and always in things. A picture number with no picture draws that palette color flat.
-- `M3D BOX o,x1,y1,z1,x2,y2,z2,tex` adds the six faces of a box (picture coordinates 1 texel = 1 unit, anchored to the object, so neighbouring boxes match). `M3D VERTEX o,x,y,z[,u,v]` numbers vertices from 0 per object; `M3D FACE o,a,b,c,tex` and `M3D QUAD o,a,b,c,d,tex` add triangles; without `u,v` the picture coordinates follow the position by the direction of the face.
+- `M3D BOX o,x1,y1,z1,x2,y2,z2,tex[,faces]` adds the faces of a box (picture coordinates 1 texel = 1 unit, anchored to the object, so neighbouring boxes match; `faces` is a bit mask of the sides to build: 1 +x, 2 -x, 4 +y, 8 -y, 16 top, 32 bottom, default 63 = all, so a box can leave out a side that a quad with another picture covers: a house front with a door). `M3D VERTEX o,x,y,z[,u,v]` numbers vertices from 0 per object; `M3D FACE o,a,b,c,tex` and `M3D QUAD o,a,b,c,d,tex` add triangles; without `u,v` the picture coordinates follow the position by the direction of the face.
 - Object flags: 1 masked, 2 translucent (mixed half and half, drawn last, far to near), 4 **passable** (no collision and no floor or ceiling), 8 **see-through** (shots, `USE` of walls and sight pass: glass, a railing), 16 two sided.
 
 ## Drawing
@@ -35,7 +35,7 @@ Rays use the same triangles: `M3D("SHOOT",range)` (things and objects, the last 
   "zones":   [ { "id": 12, "name": "living room", "box": [x1,y1,x2,y2], "z": [z1,z2], "tag": 0 } ],
   "things":  [ { "id": 400, "tex": 282, "x": .., "y": .., "z": 0, "w": 32, "h": 76 } ],
   "objects": [ { "id": 12, "name": "..", "flags": ["masked","translucent","pass","seethru","twosided"] | number, "light": 255, "pos": [x,y,z], "yaw": 0,
-                 "boxes": [ [x1,y1,z1,x2,y2,z2,tex], .. ], "quads": [ [x,y,z, x,y,z, x,y,z, x,y,z, tex], .. ] } ] }
+                 "boxes": [ [x1,y1,z1,x2,y2,z2,tex[,faces]], .. ], "quads": [ [x,y,z, x,y,z, x,y,z, x,y,z, tex], .. ] } ] }
 ```
 
 Errors name the element (`objects[3].boxes[1] needs 7 numbers`). `name` and `note` are free text the loader ignores.
@@ -43,6 +43,8 @@ Errors name the element (`objects[3].boxes[1] needs 7 numbers`). `name` and `not
 ## Deqq's House II on the mesh renderer
 
 Since 2026-11-14 `demos/deqq2.bas` runs on `M3D` (`demos/deqq2.mesh.json`, the source of its world). The first version of the document was converted from the sector document `demos/deqq2.world.json` (which stays: the sector renderer's loader and `worldtest.sh` still use it): **every room became an object with the room's number** (a floor slab, a ceiling slab where there is one, walls 8 thick inside the room where there is no opening, lower and upper wall pieces round an opening between rooms of different heights, floor and jamb pieces across the gap between rooms), windows and railings are separate objects (ids 1000 + the opening's number: masked or translucent panes; 1500 +: invisible rails; 2000 +: fences), the doors 6, 7, 8 and 33 are leaves that turn about their hinge (`M3D OBJPOS`), 3000 is the garden gate (`M3D OBJSHOW`), 51 the chair platform, 600 the ground (with holes where the cellar lies), furniture and houses are boxes. Rooms of the old document are the zones. `M3D OBJLIGHT room,level` darkens or lights a room. Facts found while doing it: floors and ceilings are 1 unit thick so a floor above a room does not lower it; a thing that stands on furniture needs the furniture's top as its level (`TLZ` in the game's `OBJDATA`: values from 3 up are used as they are, 114 / 226 are the upper floor and the attic: `M3D("FLOORAT",x,y,z)` takes the highest surface at or below z, and the ceiling slab of the room below is at 112 .. 113); the test hooks of `deqq2test.sh` take the same hints (`goto x y angle z`).
+
+**Town houses and cars (2026-11-14).** The 43 houses of the town are objects at the house's corner (`pos`, the boxes in local coordinates, so the 128 wide picture starts at the corner): a box without its front face (the `faces` mask) and a quad for the front with the picture that has the door baked in (`deqqart.lib`: 260..263 / 270..273 plain, 264..267 / 274..277 with the door; the old door billboards, sprite 280, are gone from the document). The cars are meshes built by the game (`BUILDCARS` in `demos/deqq2.bas`, objects 3200 + 3 * slot + color, nine objects of which at most three are shown): a body box, a tapering cabin of glass quads with a body colored roof, lights, bumpers and four eight sided wheels (`M3D VERTEX` / `QUAD`), flat 16 x 16 pictures 230..237; they are *passable* (flag 4: harmless, as the game wants), `M3D OBJPOS` moves and turns them along the ring road, `M3D OBJSHOW` hides them.
 
 ## Not done yet
 
