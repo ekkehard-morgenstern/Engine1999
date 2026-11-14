@@ -111,6 +111,10 @@ static void fresh( void ) {
     tex_flat( 2, 8, 8, 200 );
     tex_flat( 3, 8, 8, 50 );
     // a floor 1000 x 1000
+    // object numbers run 0 .. 16383
+    CHECK( op( GFXOP_M3DOBJECT, 1, 16383.0 ) );
+    CHECK( Q( GFXQ_M3DOBJON, 1, 16383.0 ) != 0 );
+    CHECK( !op( GFXOP_M3DOBJECT, 1, 16384.0 ) );
     CHECK( op( GFXOP_M3DOBJECT, 1, 1.0 ) );
     CHECK( op( GFXOP_M3DBOX, 8, 1.0, -500.0, -500.0, -10.0, 500.0, 500.0, 0.0, 1.0 ) );
     CHECK( op( GFXOP_M3DCAMERA, 4, 0.0, 0.0, 0.0, 0.0 ) );
@@ -370,7 +374,7 @@ int main( void ) {
         json_node_free( root );
     }
     // -- errors -----------------------------------------------------------------------------------------------------------------------------
-    CHECK( !op( GFXOP_M3DOBJECT, 1, 5000.0 ) );
+    CHECK( !op( GFXOP_M3DOBJECT, 1, 20000.0 ) );
     CHECK( !op( GFXOP_M3DBOX, 8, 99.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0 ) );                 // object not defined
     CHECK( !op( GFXOP_M3DFACE, 5, 2.0, 0.0, 1.0, 99.0, 1.0 ) );                                 // vertices missing
     CHECK( !op( GFXOP_M3DVIEW, 4, 0.0, 0.0, 2.0, 2.0 ) );

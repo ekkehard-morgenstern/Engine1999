@@ -96,6 +96,7 @@ struct _m3d_t {
     int      drawn;
     // frame scratch
     int*     order;  double* odist;
+    int      top;                           // one above the highest object number in use (the loops stop there)
 };
 
 // -- small things ----------------------------------------------------------------------------------------------------------------
@@ -209,6 +210,7 @@ static void clear_world( m3d_t* m ) {
     for ( int i=0; i < M3D_MAXOBJECTS; ++i ) {
         free_obj( &m->objs[i] );
     }
+    m->top = 0;
     memset( m->things, 0, sizeof(thing_t) * M3D_MAXTHINGS );
     memset( m->lamps, 0, sizeof(m->lamps) );
     m->nobjs = 0;
@@ -493,7 +495,7 @@ typedef struct { double t; int obj, tri; } rayhit_t;
 static bool trace( m3d_t* m, v3_t o, v3_t d, double maxd, int skip, rayhit_t* hit ) {
     double best = maxd;
     bool found = false;
-    for ( int i=0; i < M3D_MAXOBJECTS; ++i ) {
+    for ( int i=0; i < m->top; ++i ) {
         obj_t* ob = &m->objs[i];
         if ( !ob->used || !ob->shown || ob->nt == 0 || ( ob->flags & skip ) != 0 ) {
             continue;
@@ -574,7 +576,7 @@ static bool push_out( m3d_t* m, const body_t* b, double* px, double* py, double 
     if ( z1 > z0 ) { zc[nz++] = z1; }
     for ( int it=0; it < 4; ++it ) {
         bool any = false;
-        for ( int i=0; i < M3D_MAXOBJECTS; ++i ) {
+        for ( int i=0; i < m->top; ++i ) {
             obj_t* ob = &m->objs[i];
             if ( !ob->used || !ob->shown || ob->nt == 0 || ( ob->flags & M3D_OF_PASS ) != 0 ) {
                 continue;
@@ -738,6 +740,7 @@ bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t sl
             bool keep = o->used;
             if ( keep ) { px = o->px; py = o->py; pz = o->pz; yaw = o->yaw; }
             free_obj( o );
+            if ( i1 >= m->top ) { m->top = i1 + 1; }
             o->used = true; o->shown = true; o->dirty = true; o->flags = fl; o->light = li;
             o->px = px; o->py = py; o->pz = pz; o->yaw = yaw; o->cs = cos( yaw * DEG2RAD ); o->sn = sin( yaw * DEG2RAD );
             return true;
@@ -1302,7 +1305,7 @@ const uint8_t* m3d_render( m3d_t* m ) {
         m->zb[i] = 1.0e30f;
     }
     int nt = 0;
-    for ( int i=0; i < M3D_MAXOBJECTS; ++i ) {
+    for ( int i=0; i < m->top; ++i ) {
         obj_t* o = &m->objs[i];
         if ( !o->used || !o->shown || o->nt == 0 ) {
             continue;

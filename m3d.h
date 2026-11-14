@@ -47,7 +47,7 @@ Coordinates: x east, y north, z up. Angles in degrees: 0 = along +x, 90 = along 
 counterclockwise when seen from their front (the normal (b-a) x (c-a) points to the viewer), unless the object is two sided.
 */
 
-#define M3D_MAXOBJECTS  4096
+#define M3D_MAXOBJECTS  16384
 #define M3D_MAXTEX      1024
 #define M3D_MAXTHINGS   1024
 #define M3D_MAXLAMPS    8

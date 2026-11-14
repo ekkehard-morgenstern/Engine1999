@@ -196,7 +196,7 @@
 1830   BEST=-1:BD=1000
 1840   FOR I=0 TO NIL-1
 1850     N=IL(I)
-1860     IF M3D("TON",N) THEN
+1860     IF M3D("TON",N) AND NOT ( N=23 AND FN ZONEP=CHAIRSEC ) THEN
 1870       D=M3D("DIST",N)
 1880       IF D<RCH(N) AND D<BD THEN
 1890         B=ABS(M3D("BEARING",N))
@@ -461,6 +461,8 @@
 4650       CALL USEUP(ICHAIR)
 4660       CHAIRON=-1
 4670       M3D OBJSHOW CHAIRSEC,-1
+4672       M3D CAMERA 660,490,M3D("FLOORAT",660,490,M3D("Z")),90
+4674       PX=660:PY=490
 4680       CALL SAY("YOU PUT THE CHAIR UNDER THE CUPBOARD. JUMP ONTO IT!")
 4690       CALL SOUND_(5)
 4700     ELSE
@@ -1238,6 +1240,7 @@
 12350       NEXT I
 12360     END IF
 12370     IF C$="walk" THEN CALL WALKTO(VAL(W$(1)),VAL(W$(2)))
+12375     IF C$="jump" THEN CALL JUMPTO(VAL(W$(1)),VAL(W$(2)))
 12380     IF C$="face" THEN M3D CAMERA M3D("X"),M3D("Y"),M3D("Z"),ATAN2(VAL(W$(2))-M3D("Y"),VAL(W$(1))-M3D("X"))*180/3.141592654
 12385     IF C$="shot" AND NOT HL THEN CALL W3K_SHOW:SCREENSHOT W$(1)
 12390     IF C$="use" THEN CALL USEKEY
@@ -1803,7 +1806,7 @@
 36005 ' The things of the game logic (OBJDATA: reach, prompts, states by the picture number TXN) stay where they are, but they are drawn as nothing (picture 299, one see-through
 36010 ' pixel); MESHSYNC (end of TICK) shows the mesh that belongs to them: a body (object 4000 + N) and, for each state picture T, a front (object 3500 + T) that is shown
 36015 ' while TXN(N) = T. Flat things (a mirror, a photo, the front of the cupboard) are quads in front of the surface next to them, with explicit picture coordinates.
-36020 ' pictures: 299 blank, 300 white enamel, 301 steel, 302 dark wood, 303 dark metal, 304 red cushion, 305 linen, 306 the cupboard's front (80 x 88), 307 water, 308 clay,
+36020 ' pictures: 299 blank, 300 white enamel, 301 steel, 302 dark wood, 303 dark metal, 304 red cushion, 305 linen, 306 the cupboard's front (80 x 58), 307 water, 308 clay,
 36025 ' 309 leaves, 310 yellow, 311 skin, 312 blue cloth, 313 red cloth
 36030 PROC MAKEFURN
 36035   CALL CARTEX(299,0,0,0)
@@ -1821,20 +1824,20 @@
 36095   CALL CARTEX(312,FN W3K_C(9,7),FN W3K_C(9,10),0)
 36100   CALL CARTEX(313,FN W3K_C(1,9),FN W3K_C(1,12),0)
 36105   GFX CLEAR FN W3K_C(12,5)
-36110   GFX LINE 0,0,79,87,FN W3K_C(12,7),B
-36115   GFX LINE 3,3,38,84,FN W3K_C(12,8),BF
-36120   GFX LINE 41,3,76,84,FN W3K_C(12,8),BF
-36125   GFX LINE 7,8,34,79,FN W3K_C(12,4),BF
-36130   GFX LINE 45,8,72,79,FN W3K_C(12,4),BF
-36135   GFX LINE 7,8,34,79,FN W3K_C(12,10),B
-36140   GFX LINE 45,8,72,79,FN W3K_C(12,10),B
-36145   GFX LINE 12,14,29,40,FN W3K_C(12,6),B
-36150   GFX LINE 50,14,67,40,FN W3K_C(12,6),B
-36155   GFX LINE 12,48,29,72,FN W3K_C(12,6),B
-36160   GFX LINE 50,48,67,72,FN W3K_C(12,6),B
-36165   GFX CIRCLE 31,44,2,FN W3K_C(3,14):GFX PAINT 31,44,FN W3K_C(3,14),FN W3K_C(3,14)
-36170   GFX CIRCLE 48,44,2,FN W3K_C(3,14):GFX PAINT 48,44,FN W3K_C(3,14),FN W3K_C(3,14)
-36175   CALL W3K_GRAB(306,80,88)
+36110   GFX LINE 0,0,79,57,FN W3K_C(12,7),B
+36115   GFX LINE 3,3,38,54,FN W3K_C(12,8),BF
+36120   GFX LINE 41,3,76,54,FN W3K_C(12,8),BF
+36125   GFX LINE 7,6,34,50,FN W3K_C(12,4),BF
+36130   GFX LINE 45,6,72,50,FN W3K_C(12,4),BF
+36135   GFX LINE 7,6,34,50,FN W3K_C(12,10),B
+36140   GFX LINE 45,6,72,50,FN W3K_C(12,10),B
+36145   GFX LINE 12,9,29,25,FN W3K_C(12,6),B
+36150   GFX LINE 50,9,67,25,FN W3K_C(12,6),B
+36155   GFX LINE 12,31,29,46,FN W3K_C(12,6),B
+36160   GFX LINE 50,31,67,46,FN W3K_C(12,6),B
+36165   GFX CIRCLE 31,28,2,FN W3K_C(3,14):GFX PAINT 31,28,FN W3K_C(3,14),FN W3K_C(3,14)
+36170   GFX CIRCLE 48,28,2,FN W3K_C(3,14):GFX PAINT 48,28,FN W3K_C(3,14),FN W3K_C(3,14)
+36175   CALL W3K_GRAB(306,80,58)
 36180 END PROC
 36185 ' a picture on a vertical plane: local plane x = X (the front of the thing is +x), from Y1 to Y2 and Z1 to Z2, one texel per unit
 36190 PROC PICQ(O,X,Y1,Y2,Z1,Z2,TX)
@@ -1886,7 +1889,7 @@
 36420 ' a chair (S = scale; the seat is 40 S wide and its top is 56 S high), the centre of the seat at x = y = 0, the front towards +x
 36425 PROC CHAIRMESH(O,S)
 36430   LOCAL L,H,Q,K,Y
-36435   L=20*S:H=56*S:Q=4*S
+36435   L=20*S:H=34*S:Q=4*S
 36440   M3D BOX O,-L,-L,H-7*S,L,L,H-3*S,26
 36445   M3D BOX O,-L+2*S,-L+2*S,H-3*S,L-2*S,L-2*S,H,304
 36450   M3D BOX O,-L,-L,0,-L+Q,-L+Q,H-7*S,26
@@ -2071,7 +2074,7 @@
 37345 ' the two chairs: the one standing at the cupboard (object 51, the platform of the game, solid) and the one you find (object 4016, follows thing 16)
 37350 PROC BUILDCHAIRS
 37355   M3D OBJECT 51,0
-37360   CALL CHAIRMESH(51,1)
+37360   CALL CHAIRMESH(51,0.9)
 37365   M3D OBJPOS 51,660,536,0,180
 37370   M3D OBJECT 4016,12
 37375   CALL CHAIRMESH(4016,0.7)
@@ -2123,7 +2126,7 @@
 37605 DATA 26,0,0,420,208,28,40,0,40,0,114, 76,76,77,77,-1,-1
 37610 DATA 27,0,2,500,792,20,26,0,40,0,1, 78,78,-1,-1,-1,-1
 37615 DATA 35,0,3,1330,952,28,22,0,40,0,1, 88,88,-1,-1,-1,-1
-37620 DATA 23,0,3,660,570,80,88,0,6,0,1, 99,306,-1,-1,-1,-1
+37620 DATA 23,0,3,660,570,80,58,0,6,0,1, 99,306,-1,-1,-1,-1
 37625 DATA 22,2,0,625,387,0,0,0,0,0,0, -1,-1,-1,-1,-1,-1
 37630 DATA 29,2,0,1020,880,0,0,0,0,0,0, -1,-1,-1,-1,-1,-1
 37635 DATA 34,2,0,300,220,0,0,0,0,0,0, -1,-1,-1,-1,-1,-1
@@ -2132,3 +2135,20 @@
 37650 DATA 39,2,0,600,585,0,0,0,0,0,0, -1,-1,-1,-1,-1,-1
 37655 DATA 36,3,0,0,0,0,0,0,0,0,0, -1,-1,-1,-1,-1,-1
 37660 DATA -1
+38000 PROC JUMPTO(X,Y)
+38005   LOCAL I,DX,DY,L,A,VZ,H
+38010   VZ=240:H=0
+38015   FOR I=1 TO 120
+38020     DX=X-M3D("X"):DY=Y-M3D("Y"):L=SQR(DX*DX+DY*DY)
+38025     A=ATAN2(DY,DX)*180/3.141592654
+38030     IF I=1 THEN M3D CAMERA M3D("X"),M3D("Y"),M3D("Z"),A
+38035     IF L>2 THEN M3D MOVE MIN(L,3.2),0
+38040     IF VZ<>0 OR H>0 THEN
+38045       VZ=VZ-12:H=M3D("LIFT")+VZ/60
+38050       IF H<=0 THEN H=0:VZ=0
+38055       M3D LIFT H
+38060     END IF
+38065     M3D RENDER
+38070   NEXT I
+38075   PRINT "# jump ended at ";INT(M3D("X"));",";INT(M3D("Y"));" z=";INT(M3D("Z"));" sector=";FN ZONEP
+38080 END PROC

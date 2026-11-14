@@ -121,7 +121,8 @@ use
 goto 660 530 90
 face 660 562
 use
-goto 660 536 90 60
+goto 660 490 90
+jump 660 540
 face 660 605
 use
 goto -250 1320 90
@@ -183,6 +184,7 @@ check "THE OVEN HAS COOLED DOWN"                "the oven (the flux coil)"
 check "THE GLORP EATS THE GREEN JELLY"          "the glorp (the thruster nozzle)"
 check "THE ICE HAS MELTED"                      "the ice (the star compass)"
 check "YOU PUT THE CHAIR UNDER THE CUPBOARD"    "the chair"
+check "# jump ended at 6[56][0-9],5[34][0-9] z=30 sector=51"  "a jump from the floor gets onto the chair"
 check "YOU TAKE THE WARP CRYSTAL"               "the crystal on the cupboard"
 check "THE WASHING MACHINE STOPS"               "the fuse box"
 check "YOU TAKE THE FUEL CELL"                  "the washing machine (the fuel cell)"
