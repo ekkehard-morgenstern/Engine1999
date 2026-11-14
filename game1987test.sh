@@ -109,6 +109,12 @@ f -1
 run 0
 wait 2
 state
+drones
+wait 30
+drones
+wait 60
+drones
+shot drones
 cam
 ray 0 -300 20 90 0
 ray 500 -300 20 90 10
@@ -150,6 +156,11 @@ expect "turn at speed: heading changed" "$turned" 20 240
 # 11b. blocked by the fence, pressing back reverses out of it
 expect "reverse out of the fence" "$(val state 16 bv)" -81 -20
 expect "reverse: moved away" "$(val state 16 by)" -400 -240
+# 11c. the drones hover high up and fly their route (they move, stay in the world, keep their altitude)
+expect "drone altitude" "$(val drone 1 z)" 340 450
+expect "drone flew on" "$(awk -v a="$(val drone 1 x)" -v b="$(val drone 2 x)" -v c="$(val drone 1 y)" -v d="$(val drone 2 y)" 'BEGIN { print sqrt((a-b)^2+(c-d)^2) }')" 500 3000
+expect "drone stays in the world" "$(val drone 3 x)" -3200 3200
+expect "drone reached a later way point" "$(val drone 3 t)" 0 7
 # 12. the camera stays above the ground, rays: the house wall is an object, open ground is not hit
 expect "camera: z above the ground" "$(val cam 1 z)" 20 400
 expect "ray at the house" "$(val ray 1 obj)" 300 300
