@@ -33,6 +33,7 @@ goto 0 -172 90
 f 1
 wait 3
 state
+shot walkpose
 f 0
 goto -60 -172 90
 f 1
@@ -49,6 +50,7 @@ state
 t 0
 f 1
 wait 3
+shot ridepose
 state
 run 1
 wait 3
