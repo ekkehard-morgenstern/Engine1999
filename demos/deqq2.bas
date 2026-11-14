@@ -27,7 +27,7 @@
 230 ON ERROR GOTO FAILED
 240 DIM KD(200),SL(200),HX(200),HY(200),TXN(200),TWD(200),THT(200),TZO(200),TLZ(200),TLT(200),ACT(200),RCH(200),NMS$(200),IL(100),PARTNO(200),DESC$(200),DG(3),W$(8)
 250 DIM DHX(5),DHY(5),DBY(5),DSG(5),INV(3),BUILT(9),DSEC(5),DOP(5),DLK(5),DCUR(5),WPX(140),WPY(140),WPP(140),CARON(4),CARD(4),CARV(4),CARCOL(4),CARHON(4),CARSND(4),NM$(30),CMT$(12)
-255 DIM LRR(10),LRZ(10),VOK(420),MCUR(200),MPX(200),MPY(200),MB(220),MBK(220),MD(200),BNL$(3)
+255 DIM LRR(10),LRZ(10),VOK(420),MCUR(200),MPX(200),MPY(200),MB(220),MBK(220),MD(200),FLG(200),FLN(8),FLT(200),FOX(200),FOY(200),FOZ(200),FTX(200),FTY(200),FTZ(200),BNL$(3)
 260 GOTO MAIN
 270 ' ------------------------------------------------------------------------------------------------ small helpers
 280 FUNC CI(H,S)
@@ -76,7 +76,7 @@
 640 PROC PLACEALL
 650   LOCAL N,X,Y,T,W,H,ZO,LT,K,SLT,A,R,SH,LV,NA$
 660   FOR N=0 TO 199
-670     KD(N)=0
+670     KD(N)=0:FLG(N)=0
 680     M3D THINGOFF N
 690   NEXT N
 700   NIL=0
@@ -131,6 +131,7 @@
 1180 ' a thing appears where it lies hidden (it is a new home for it)
 1190 PROC REVEAL(N)
 1200   CALL SHOWTHING(N)
+1205   CALL POPOUT(N)
 1210 END PROC
 1220 FUNC SLOTSUSED(X)
 1230   LOCAL I,S
@@ -160,7 +161,7 @@
 1470     IF INV(I)<0 THEN F=I
 1480   NEXT I
 1490   INV(F)=N
-1500   M3D THINGOFF N
+1500   M3D THINGOFF N:FLG(N)=0
 1510   CALL SAY("YOU TAKE THE "+NMS$(N)+".")
 1520   CALL SOUND_(1)
 1530 END PROC
@@ -185,29 +186,39 @@
 1720   X=PX+COS(A)*34:Y=PY+SIN(A)*34
 1730   IF M3D("ZONE",X,Y,M3D("Z")+2)<0 OR M3D("ZONETAG",X,Y,M3D("Z")+2)=50 THEN X=PX:Y=PY
 1740   IF M3D("ZONE",X,Y,M3D("Z")+2)<0 THEN EXIT PROC
+1745   IF NOT HL OR POPT THEN CALL FINDSPOT(60):IF LOKF THEN X=LX:Y=LY
 1750   INV(F)=-1
 1760   AZ=M3D("FLOORZ")+1
 1770   CALL SHOWAT(N,X,Y)
+1775   CALL LAUNCH(N,M3D("X"),M3D("Y"),M3D("Z")+30,X,Y)
 1780   CALL SAY("YOU PUT DOWN THE "+NMS$(N)+".")
 1790 END PROC
 1800 ' the nearest thing that you can use in front of you (within its reach, in view); -1 if there is none
 1810 FUNC TARGET(X)
-1820   LOCAL I,N,B,D,BEST,BD
-1830   BEST=-1:BD=1000
+1820   LOCAL I,N,B,D,BEST,BD,BI,BDI,BBI,BBF
+1825   REM an item that jumped out of a box (FLG) wins over a fixture that is not much nearer (up to 80 units: it lies beside or behind the box); else the nearest wins
+1830   BEST=-1:BD=1000:BI=-1:BDI=1000:BBI=999:BBF=999
 1840   FOR I=0 TO NIL-1
 1850     N=IL(I)
 1860     IF M3D("TON",N) AND NOT ( N=23 AND FN ZONEP=CHAIRSEC ) THEN
 1870       D=M3D("DIST",N)
-1880       IF D<RCH(N) AND D<BD THEN
+1880       IF D<RCH(N) THEN
 1890         B=ABS(M3D("BEARING",N))
 1900         IF B<40 OR D<30 THEN
 1910           IF M3D("SEES",N) THEN
-1920             BEST=N:BD=D
+1915             IF KD(N)<3 AND FLG(N)<>0 THEN
+1916               IF D<BDI THEN BI=N:BDI=D:BBI=B
+1917             ELSE
+1918               IF D<BD THEN BEST=N:BD=D:BBF=B
+1919             END IF
 1930           END IF
 1940         END IF
 1950       END IF
 1960     END IF
 1970   NEXT I
+1975   IF BI>=0 THEN
+1976     IF BEST<0 OR BDI<=BD+80 THEN RETURN BI
+1977   END IF
 1980   RETURN BEST
 1990 END FUNC
 2000 ' ------------------------------------------------------------------------------------------------ the safe's dial
@@ -1059,6 +1070,7 @@
 10400   CALL CARS(DT)
 10410   IF DQON THEN CALL DEQQAI(DT)
 10420   CALL MUSICMOOD
+10422   CALL FLYITEMS(DT)
 10425   CALL MESHSYNC
 10430 END PROC
 10440 PROC NEWGAME(CN)
@@ -1075,7 +1087,7 @@
 10550   OVENT=0:OVENCOOL=0:OVENOPEN=0:FRIDGEOP=0:MELTT=0:CHAIRON=0:FED=0:SCREWS=0:PLATEOUT=0:SAFEOP=0:CRANKED=0:PHOTOSEEN=0
 10560   POWEROFF=0:WASHOPEN=0:KEYTAKEN=0:TBOXOP=0:LANTON=-1:ENDREQ=0:QUITREQ=0:DIALIN$="":DIALMSG=0
 10570   REM
-10580   LFK=1:LFL=1:LFW=1:LFU=0:LVS=0:LV2=-1:WPH=0:WT=0
+10580   NFLY=0:LFK=1:LFL=1:LFW=1:LFU=0:LVS=0:LV2=-1:WPH=0:WT=0
 10590   DHX(1)=440:DHY(1)=315:DBY(1)=0:DHX(2)=190:DHY(2)=520:DBY(2)=90:DHX(3)=1250:DHY(3)=820:DBY(3)=90:DHX(4)=-410:DHY(4)=420:DBY(4)=90
 10595   DSG(1)=-1:DSG(2)=1:DSG(3)=1:DSG(4)=1
 10600   DSEC(1)=6:DSEC(2)=7:DSEC(3)=8:DSEC(4)=33
@@ -1204,7 +1216,7 @@
 11790   IF EXISTS("local:deqq2.sav") THEN KILL "local:deqq2.sav"
 11800 END PROC
 11810 ' ------------------------------------------------------------------------------------------------ playback (the headless test)
-11820 ' commands (lines of the file named by DEQQ2_PLAY): step n | goto x y angle | walk x y | face x y | use | drop | give n | dial 731 | deqq x y | deqqoff | deqqon | state | say text | continue | new | quit
+11820 ' commands (lines of the file named by DEQQ2_PLAY): step n | goto x y angle | walk x y | face x y | use | drop | give n | dial 731 | deqq x y | deqqoff | deqqon | state | say text | continue | new | popout 0/1 | quit
 11830 PROC SPLIT(L$)
 11840   LOCAL I,N,C$,CUR$
 11850   FOR I=0 TO 7
@@ -1262,7 +1274,7 @@
 12370     IF C$="walk" THEN CALL WALKTO(VAL(W$(1)),VAL(W$(2)))
 12375     IF C$="jump" THEN CALL JUMPTO(VAL(W$(1)),VAL(W$(2)))
 12380     IF C$="face" THEN M3D CAMERA M3D("X"),M3D("Y"),M3D("Z"),ATAN2(VAL(W$(2))-M3D("Y"),VAL(W$(1))-M3D("X"))*180/3.141592654
-12385     IF C$="shot" AND NOT HL THEN CALL W3K_SHOW:SCREENSHOT W$(1)
+12385     IF C$="shot" AND NOT HL THEN M3D RENDER:CALL W3K_SHOW:SCREENSHOT W$(1)
 12390     IF C$="use" THEN CALL USEKEY
 12400     IF C$="drop" THEN CALL DROPLAST
 12410     IF C$="give" THEN
@@ -1299,6 +1311,7 @@
 12720     END IF
 12730     IF C$="new" THEN CALL NEWGAME(0)
 12740     IF C$="quit" THEN QUITREQ=-1
+12741     IF C$="popout" THEN POPT=VAL(W$(1))
 12750     IF ENDREQ THEN
 12760       CALL ENDING
 12770       ENDREQ=0
@@ -1351,6 +1364,7 @@
 13230 SFX 15,"I23 V0.45 T220 ML O4 L16 C E G O5 C8 E G2":SFX 16,"I18 V0.45 ML S1400,60,6"
 13240 SFX 17,"W3 V0.22 ML X0,0.005,0.3,0.03 H2200,32 R32 H2200,32 R32 H2200,32 R32 H2200,32":SFX 18,"I16 V0.35 T300 ML O3 L16 C R C R C R C"
 13250 SFX 19,"I15 V0.4 ML O5 C32 R32 C32":SFX 20,"I24 V0.5 T240 ML O2 L16 C R G"
+13261 SFX 21,"I24 V0.25 ML O6 L32 C":SFX 22,"I15 V0.3 ML O5 L32 C O6 C"
 13265 IF ENV$("DEQQ2_PLAY")<>"" THEN OPEN ENV$("DEQQ2_PLAY") FOR INPUT AS #4:CALL NEWGAME(0):CALL PLAYBACK:BYE
 13270 CALL TITLE
 13280 WHILE IN_QUIT=0 AND TITLERES<>3
@@ -2658,3 +2672,104 @@
 40620     M3D OBJSHOW 3010+K,0
 40625   NEXT K
 40630 END PROC
+40700 ' ------------------------------------------------------------------------------------------------ items jump out and land on a free spot
+40705 ' a spot is free when it can be seen from the eye (nothing in the line of sight), is inside a room, at the player's floor level, flat all round (a circle of 10 units), with nothing standing on it up to 100 high
+40710 ' (furniture, boxes) and room above: so an item never lands inside or half in an object
+40715 FUNC SPOTOK(X,Y,ZR)
+40720   LOCAL I,A,F0,F1,XX,YY,PX1,PY1,T1
+40725   IF M3D("ZONE",X,Y,ZR+2)<0 THEN RETURN 0
+40730   IF M3D("ZONETAG",X,Y,ZR+2)=50 THEN RETURN 0
+40735   F0=M3D("FLOORAT",X,Y,ZR+30)
+40740   IF ABS(F0-ZR)>4 THEN RETURN 0
+40745   IF M3D("FLOORAT",X,Y,ZR+100)>F0+3 THEN RETURN 0
+40750   IF M3D("CEILAT",X,Y,F0+2)-F0<34 THEN RETURN 0
+40755   FOR I=0 TO 7
+40760     A=I*0.7853982
+40765     XX=X+COS(A)*10:YY=Y+SIN(A)*10
+40770     IF M3D("ZONE",XX,YY,ZR+2)<0 THEN RETURN 0
+40775     F1=M3D("FLOORAT",XX,YY,ZR+30)
+40780     IF ABS(F1-F0)>3 THEN RETURN 0
+40785     IF M3D("FLOORAT",XX,YY,ZR+100)>F0+3 THEN RETURN 0
+40790   NEXT I
+40791   PX1=M3D("X"):PY1=M3D("Y")
+40792   FOR I=1 TO 9:T1=I/10:XX=PX1+(X-PX1)*T1:YY=PY1+(Y-PY1)*T1
+40793     IF M3D("FLOORAT",XX,YY,ZR+120)>ZR+46+(F0-ZR-46)*T1-2 THEN RETURN 0
+40794   NEXT I
+40795   FOR I=1 TO 16
+40796     IF M3D("TON",I) THEN IF ABS(HX(I)-X)<20 AND ABS(HY(I)-Y)<20 AND ABS(M3D("TZ",I)-F0)<30 THEN RETURN 0
+40797   NEXT I
+40798   RETURN -1
+40800 END FUNC
+40805 ' looks for a free spot in front of the player (the view only shows the floor beyond about 114 units, so the distances start far: D0 on, angles up to 90 degrees to both sides): LOKF = -1 and LX, LY, else LOKF = 0
+40810 PROC FINDSPOT(D0)
+40815   LOCAL J,I,K,A,D,X,Y,ZR,PX0,PY0,YW,PS,ST,NI
+40825   LOKF=0
+40826   ZR=M3D("Z"):PX0=M3D("X"):PY0=M3D("Y"):YW=M3D("YAW")
+40827   REM first within 36 degrees of the view direction (so that USE finds the thing: it looks 40 degrees to each side), then all round the front
+40830   FOR PS=0 TO 1
+40831     ST=18:NI=4
+40832     IF PS=1 THEN ST=22:NI=8
+40833     FOR J=0 TO 4
+40835       D=D0+J*12
+40840       FOR I=0 TO NI
+40845         K=(I+1)\2
+40850         A=YW+K*ST
+40855         IF I MOD 2=0 THEN A=YW-K*ST
+40860         A=A*3.141592654/180
+40865         X=PX0+COS(A)*D:Y=PY0+SIN(A)*D
+40870         IF FN SPOTOK(X,Y,ZR) THEN LX=X:LY=Y:LOKF=-1:EXIT PROC
+40875       NEXT I
+40880     NEXT J
+40881   NEXT PS
+40885   LX=PX0:LY=PY0
+40890 END PROC
+40895 ' thing N jumps from (OX,OY,OZ) in a tight arc to (X,Y) and lands there (its home place from now on); without graphics it is simply there
+40900 PROC LAUNCH(N,OX,OY,OZ,X,Y)
+40905   LOCAL ZR,I,FL
+40906   IF HL AND POPT=0 THEN EXIT PROC
+40910   ZR=M3D("Z")
+40915   FTX(N)=X:FTY(N)=Y:FTZ(N)=M3D("FLOORAT",X,Y,ZR+30)
+40920   HX(N)=X:HY(N)=Y:TLZ(N)=FTZ(N)+1:TZO(N)=0:FLG(N)=-1
+40921   IF RCH(N)<200 THEN RCH(N)=200
+40925   IF HL THEN
+40930     M3D THINGPOS N,X,Y,FTZ(N)
+40932     PRINT "# launch ";N;" to ";INT(X);INT(Y);INT(FTZ(N));" spot ";LOKF
+40935     EXIT PROC
+40940   END IF
+40945   FOX(N)=OX:FOY(N)=OY:FOZ(N)=OZ:FLT(N)=0
+40950   FL=0
+40955   FOR I=0 TO NFLY-1
+40960     IF FLN(I)=N THEN FL=-1
+40965   NEXT I
+40970   IF NOT FL AND NFLY<8 THEN FLN(NFLY)=N:NFLY=NFLY+1
+40975   M3D THINGPOS N,OX,OY,OZ
+40980   CALL SOUND_(22)
+40985 END PROC
+40990 ' a thing that was revealed (found in a container) jumps out of it in front of the player
+40995 PROC POPOUT(N)
+41000   IF NOT M3D("TON",N) OR (HL AND POPT=0) THEN EXIT PROC
+41005   CALL FINDSPOT(125)
+41010   CALL LAUNCH(N,M3D("TX",N),M3D("TY",N),M3D("TZ",N)+6,LX,LY)
+41015 END PROC
+41020 ' every frame: the flying things move along their arcs
+41025 PROC FLYITEMS(DT)
+41030   LOCAL I,N,T
+41035   I=NFLY-1
+41040   WHILE I>=0
+41045     N=FLN(I)
+41050     IF NOT M3D("TON",N) THEN
+41055       FLN(I)=FLN(NFLY-1):NFLY=NFLY-1
+41060     ELSE
+41065       FLT(N)=FLT(N)+DT
+41070       T=FLT(N)/0.45
+41075       IF T>=1 THEN
+41080         M3D THINGPOS N,FTX(N),FTY(N),FTZ(N)
+41085         CALL SOUND_(21)
+41090         FLN(I)=FLN(NFLY-1):NFLY=NFLY-1
+41095       ELSE
+41100         M3D THINGPOS N,FOX(N)+(FTX(N)-FOX(N))*T,FOY(N)+(FTY(N)-FOY(N))*T,FOZ(N)+(FTZ(N)-FOZ(N))*T+136*T*(1-T)
+41105       END IF
+41110     END IF
+41115     I=I-1
+41120   WEND
+41125 END PROC

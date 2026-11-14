@@ -412,5 +412,23 @@ run
 check "sector=40[0-9]"                          "standing on the road after leaving the premises"
 check "sector=42[2-5]"                          "walking in the open country outside the road"
 nocheck "failed at"                             "a walk outside that got stuck"
+# 7. items that are found jump out to a free spot in front of the player (popout 1; the other parts of the test keep the items where they lie): the spare key
+# under the pot and the crank and screwdriver in the toolbox each get a spot that passed the checks (flat, inside a room, nothing on it), two items never share
+# one, and the player takes the key where it landed
+cat > $T/play <<'PLAY'
+deqqoff
+popout 1
+goto -240 880 180
+face -300 900
+use
+use
+goto 1400 885 90
+face 1400 860
+use
+PLAY
+run
+count "^# launch .* spot -1"                    3 "three items found a free spot"
+check "YOU TAKE THE SPARE KEY"                  "the key is taken where it landed"
+nocheck "^Error"                                "a run time error in the landing code"
 if [ $fail -ne 0 ]; then echo "$fail failure(s)"; fi
 exit $fail
