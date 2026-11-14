@@ -13,8 +13,6 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-- **Gas station: no fence on the road side.** `demos/deqq2.mesh.json`, object 2434 "fence (gas station)": the north wall (y -228..-224, the side that faces the south road, y -220..-60) is removed; the other three sides stay. Test: `deqq2test.sh`.
-
 ## Log
 
 ### 7a6cb67 — 2026-10-17 13:32:27 +0200 — "Introduced Claude to the project"
@@ -1969,3 +1967,7 @@ The owner bundled three pieces of Claude work into this commit (oldest first):
 - **Benchmark at pixel scale 1.** `PROC BENCH` in `demos/deqq2.bas` measures both renderers at scale 2 (320 x 132) and 1 (640 x 264) (`W3K_VIEW`). Under Xvfb: software 2.4 .. 4.0 ms at scale 2, 7.1 .. 14 ms at scale 1; hardware (llvmpipe) 4.3 .. 5 / 8.3 .. 10 ms. Real GPU (owner's GT 710): hardware 1.8 .. 1.9 ms at scale 2, 2.2 .. 2.9 ms at scale 1; software 2.2 .. 4.2 ms / 7.2 .. 14.3 ms. Owner asked for a later 3D preferences option for 320 x 132 / 640 x 264 (not done). Docs note.
 
 - **M3D hardware renderer: the three small differences fixed.** (1) `M3D("DRAWN")` of the hardware renderer counts like the software one: triangles left after clipping at the near plane (`nin` of the three vertices in front: 1 or 2 triangles), things no longer counted. (2) Index 0 of a plain (non-masked) picture is see-through: the object shader writes alpha 0 there in the opaque pass, the sky shader too. (3) A missing sky (no color, no picture; also color 0) clears with alpha 0; the read-back turns alpha 0 into the ARGB word 0. `sdlscr_3d_put()` now keeps alpha-0 pixels transparent (it forced every pixel opaque before): ARGB renderers must set the alpha (`gl3dtest1` source pixels got alpha FF). Tests: `m3dgltest1` 216 cases (new scene "see-through": a checker of index 0 / 120 and no sky, strict comparison of the see-through pixels; every scene now also compares `M3D("DRAWN")` of both renderers), `make check`, `m3dglhost.sh` (0 bytes differ), `gl3dtest.sh` pass. Docs: `docs/3d-mesh-subsystem.md`. Not seen in a game on the real display.
+
+### 05af4dc — 2026-11-14 12:55:20 +0100 — "Gas station wall removed, by Claude Code"
+3 files, +11/-6.
+- **Gas station: no fence on the road side.** `demos/deqq2.mesh.json`, object 2434 "fence (gas station)": the north wall (y -228..-224, the side that faces the south road, y -220..-60) is removed; the other three sides stay. Test: `deqq2test.sh`.
