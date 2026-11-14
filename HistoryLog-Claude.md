@@ -13,6 +13,8 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+- **Deqq's House II: the remaining billboards are meshes.** `demos/deqq2.bas` (new numbered lines from 38500 plus hooks): `MAKEMTEX` (pictures 314..338), `BUILDDECOR` / `BUILDTOWN` (trees, plants, lamps, barrels, sign, washing line, sofa, bookshelf, wreck with eight panels, parts, items, the town's pumps / trees / lamp posts), Deqq and the glorp as meshes that follow their things (`SYNCSPECIAL`, `MBK` kinds 4 and 5, `DQPIC` replaces the `M3D THINGTEX IDEQQ` calls, Deqq turns to his heading), `SYNCWRECK`, `MD()` (things whose picture is hidden: `SHOWTHING` / `SHOWAT`), the lamp things in `TOWNTHINGS` show picture 299, `MB` / `MBK` 220 entries. Tests: `deqq2test.sh`, `make check`; seen under Xvfb (pumps, trees, lamps, plant, barrel, sign, wreck, Deqq, glorp). Frame time about 5 % higher (A / B against the committed version on the same machine). Not seen: items, parts, panels, sofa, shelf, the alert pose. Docs: `docs/3d-mesh-subsystem.md`. Backup `pre-billboard-meshes`.
+
 ## Log
 
 ### 7a6cb67 — 2026-10-17 13:32:27 +0200 — "Introduced Claude to the project"
