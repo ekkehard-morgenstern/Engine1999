@@ -1,0 +1,151 @@
+1 ' License: free for everybody to use, copy, change and build into executables (BUILD).
+2 ' An executable made with BUILD contains the Engine1999 runtime: the Engine1999 Runtime Exception
+3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
+4 ' in the executable (it shows with the command line option --engine1999-about).
+10 ' banner - the "Engine1999 proudly presents" opening that the demo games show before they start (a library: LOAD LIBRARY "banner", prefix BN_).
+20 '   CALL BN_2D(T$)        the banner for a 2D game: rainbow copper bars (palette cycling), ENGINE1999 dropping in letter by letter, "proudly presents",
+30 '                         then the name of the game T$ (may be ""), with a short fanfare on six music channels. About 8 seconds; any key, a mouse button
+40 '                         or the A button of a pad skips it. The screen is left as the program found it (GFX RESET, CLS); the sound channels are silenced.
+50 '   CALL BN_S3D(T$)       the same for a game that uses the sector renderer (W3D): the words are on walls of a hall that the camera flies through
+60 '   CALL BN_M3D(T$)       the same for a game that uses the mesh renderer (M3D, software or hardware, whatever the game has chosen)
+70 '   FUNC BN_ON            -1 if the banner is wanted: not when the environment variable ENGINE1999_NOBANNER is set (the automatic tests set it) and not when
+80 '                         the file config:nobanner exists (the user's wish for all programs: create it with  OPEN "config:nobanner" FOR OUTPUT AS #1 : CLOSE #1).
+90 '                         The CALLs above do nothing when BN_ON is 0, so a game just calls one of them first thing in its main program.
+100 ' The banner uses the file channel #1 only for the test of config:nobanner and the layers 0, 3 (the 3D versions also the renderer's); the program must not have
+110 ' anything on the screen that it wants to keep. It runs from the clock (TI), so it takes the same time on every machine.
+120 LIBRARY "banner","BN_"
+130 PROC BN_INIT
+140   DIM BN_SX(41),BN_SY(41),BN_SP(41),BN_SS(41)
+150 END PROC
+160 ' hue 0..360 and brightness 0..1 -> a vibrant color
+170 FUNC BN_RGB(H,V)
+180   LOCAL S,F,R,G,B
+190   H=H-360*INT(H/360)
+200   S=INT(H/60)
+210   F=H/60-S
+220   IF S=0 THEN R=1:G=F:B=0
+230   IF S=1 THEN R=1-F:G=1:B=0
+240   IF S=2 THEN R=0:G=1:B=F
+250   IF S=3 THEN R=0:G=1-F:B=1
+260   IF S=4 THEN R=F:G=0:B=1
+270   IF S=5 THEN R=1:G=0:B=1-F
+280   RETURN RGB(INT(255*V*R),INT(255*V*G),INT(255*V*B))
+290 END FUNC
+300 FUNC BN_ON
+310   IF ENV$("ENGINE1999_NOBANNER")<>"" THEN RETURN 0
+320   IF EXISTS("config:nobanner") THEN RETURN 0
+330   RETURN -1
+340 END FUNC
+350 ' any key, a mouse button or the pad's A button
+360 FUNC BN_SKIP
+370   IF INKEY$<>"" THEN RETURN -1
+380   IF MOUSE("B")<>0 THEN RETURN -1
+390   IF JOY("A")<>0 THEN RETURN -1
+400   RETURN 0
+410 END FUNC
+420 ' the fanfare: D major, 4 bars of 2 seconds (strings, brass, timpani, bells, bass, harp)
+430 PROC BN_MUSIC
+440   PLAY "T120 I9 V0.30 ML O4 L1 [DF#A] [DGB] [C#EA] [DF#A]","T120 I10 V0.45 MN O4 L4 R1 A8 A8 O5 D4 F#4 R4 E4. D8 C#4 A4 D2. R4","T120 I13 V0.70 MN O2 L4 D8 D8 D8 D8 D4 D4 D4 R4 D4 R4 D4 R4 D4 D8 D8 D4 D4 D2","T120 I12 V0.30 MN O6 L16 R16 R16 R16 R16 R16 R16 R16 R16 D F# A D R16 R16 R16 R16 A8 R8 F#8 R8 A8 R8 D8 R8 C# E A C# E A C# E A4 R4 D F# A O7 D F# A D2 R8","T120 I4 V0.50 MN O2 L4 D2 D4 A4 G2 G4 D4 A2 A4 E4 D2. R4","T120 I25 V0.35 MN O4 L16 D A O5 D F# A O6 D F# A D R16 R16 R16 R16 R16 R16 O4 G B O5 D G D O4 B G B O5 D G D O4 B G C# E A O6 C# O5 A E C# E A O6 C# O5 A E C# E O5 D F# A O6 D F# A O7 D2 R2"
+450 END PROC
+460 ' ---- the 2D version ------------------------------------------------------------------------------------------------------------------------------------
+470 ' the palette of the bars (layer 0): 96 hues turning with the clock; Q = brightness 0..1 (the fade in and out)
+480 PROC BN_BARS(T,Q)
+490   LOCAL I
+500   FOR I=1 TO 96
+510     GFX PALETTE 0,I,FN BN_RGB(I*3.75+T*70,Q*0.55)
+520   NEXT I
+530 END PROC
+540 ' one letter, with a shadow: X,Y position, K the color index, SC the scale
+550 PROC BN_LETTER(X,Y,C$,K,SC)
+560   GFX TEXT X+SC,Y+SC,C$,3,SC,SC
+570   GFX TEXT X,Y,C$,K,SC,SC
+580 END PROC
+590 ' a four-pointed twinkling star of the size R at X,Y
+600 PROC BN_STAR(X,Y,R,K)
+610   GFX LINE X-R,Y,X+R,Y,K
+620   GFX LINE X,Y-R,X,Y+R,K
+630   IF R>3 THEN GFX LINE X-R\2,Y-R\2,X+R\2,Y+R\2,K:GFX LINE X-R\2,Y+R\2,X+R\2,Y-R\2,K
+640 END PROC
+650 ' the whole opening for a 2D game
+660 PROC BN_2D(T$)
+670   LOCAL I,T,T0,Q,E$,P$,K,X,Y,SC,GR,S,DT,W,SH,N,LN,NS,A,F
+680   IF NOT FN BN_ON THEN EXIT PROC
+690   E$="ENGINE1999":P$="proudly presents"
+700   RANDOMIZE 1999
+710   GFX RESET:CLS
+720   GFX LAYER 1,OFF:GFX LAYER 2,OFF:GFX LAYER 0,ON:GFX LAYER 3,ON
+730   GFX BACKDROP RGB(0,0,0)
+740   GFX TARGET 0:GFX CLEAR
+750   FOR Y=30 TO 269
+760     GFX LINE 0,Y,639,Y,1+(Y*2) MOD 96
+770   NEXT Y
+780   GFX LINE 0,29,639,29,2:GFX LINE 0,270,639,270,2
+790   GFX TARGET 3:GFX CLEAR
+800   FOR I=1 TO 40
+810     BN_SX(I)=RND(1)*620+10:BN_SY(I)=RND(1)*250+20:BN_SP(I)=RND(1)*6.28:BN_SS(I)=1.5+RND(1)*2.5
+820   NEXT I
+830   GFX PALETTE 3,1,RGB(255,255,255):GFX PALETTE 3,2,RGB(255,215,60):GFX PALETTE 3,3,RGB(10,10,30)
+840   NS=LEN(T$)
+850   SC=8
+860   IF NS>0 THEN SC=INT(600/(8*NS))
+870   IF SC>6 THEN SC=6
+880   IF SC<1 THEN SC=1
+890   CALL BN_MUSIC
+900   T0=TI
+910   WHILE -1
+920     GFX VSYNC
+930     T=(TI-T0)/60
+940     IF T>=8 OR FN BN_SKIP THEN EXIT
+950     Q=1
+960     IF T<0.5 THEN Q=T/0.5
+970     IF T>7.4 THEN Q=(8-T)/0.6
+980     CALL BN_BARS(T,Q)
+990     GFX TARGET 3:GFX CLEAR
+1000     ' the twinkling stars
+1010     FOR I=1 TO 40
+1020       S=SIN(T*BN_SS(I)*2+BN_SP(I))
+1030       IF S>0.2 THEN CALL BN_STAR(BN_SX(I),BN_SY(I),1+INT(S*5),1)
+1040     NEXT I
+1050     ' ENGINE1999: the letters fall in one after the other and bounce
+1060     W=8*SC
+1070     FOR I=1 TO 10
+1080       GR=40+0.0
+1090       LN=0.7+0.22*(I-1)
+1100       DT=T-LN
+1110       IF DT>-0.5 THEN
+1120         IF DT<0 THEN
+1130           Y=-90+(GR+90)*(1+DT/0.5)*(1+DT/0.5)
+1140         ELSE
+1150           Y=GR-16*EXP(-5*DT)*ABS(SIN(DT*13))
+1160         END IF
+1170         K=10+I
+1180         GFX PALETTE 3,K,FN BN_RGB(I*36+T*120,Q)
+1190         ' the shine runs over the letters when they have landed
+1200         SH=T-(3.0+0.09*(I-1))
+1210         IF SH>0 AND SH<0.14 THEN K=1
+1220         CALL BN_LETTER(40+(I-1)*56,Y,MID$(E$,I,1),K,7)
+1230         IF DT>=0 AND DT<0.12 THEN CALL BN_STAR(40+(I-1)*56+28,GR+84,6+INT(DT*60),2)
+1240       END IF
+1250     NEXT I
+1260     ' proudly presents, typed out in gold
+1270     N=INT((T-3.5)*14)
+1280     IF N>16 THEN N=16
+1290     IF N>0 THEN
+1300       GFX PALETTE 3,2,FN BN_RGB(50,Q)
+1310       CALL BN_LETTER(128,138,LEFT$(P$,N),2,3)
+1320       GFX LINE 128,176,128+INT(24*N),176,2
+1330     END IF
+1340     ' the name of the game zooms in
+1350     IF NS>0 AND T>5.4 THEN
+1360       F=(T-5.4)/0.6
+1370       IF F>1 THEN F=1
+1380       F=1-(1-F)*(1-F)
+1390       A=INT(1+(SC-1)*F)
+1400       GFX PALETTE 3,4,FN BN_RGB(T*200,Q)
+1410       W=8*A*NS
+1420       CALL BN_LETTER((640-W)\2,190+(12*SC-12*A)\2,T$,4,A)
+1430     END IF
+1440   WEND
+1450   SOUND OFF
+1460   GFX RESET:CLS
+1470 END PROC

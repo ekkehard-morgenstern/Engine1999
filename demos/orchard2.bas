@@ -6,7 +6,7 @@
 20 LOAD LIBRARY "util"
 30 LOAD LIBRARY "input"
 40 LOAD LIBRARY "hiscore"
-50 LOAD LIBRARY "text"
+50 LOAD LIBRARY "text":LOAD LIBRARY "banner":CALL BN_2D("ORCHARD DEFENSE II")
 60 ' ORCHARD DEFENSE II - the middle edition of the fruit games, written with procedures. Read Orchard Defense (orchard.bas) first: this is the same game
 70 ' with more of the engine. A gardener walks on the grass under a sunny sky and throws balls at the fruit that marches down; the fruit spits seeds back.
 80 ' Keys: LEFT / RIGHT or A / D walk (only while the key is held), SPACE or UP throws a ball, P = pause, Q = quit.

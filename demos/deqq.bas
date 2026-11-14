@@ -17,7 +17,7 @@
 130 ' Window only. Environment for testing: DEQQ_PLAY=file (commands are read from a file), DEQQ_LOG=file (transcript), DEQQ_HEADLESS=1 (no graphics).
 140 ' Written in the style of the other demos: PROC / FUNC / CALL / LOCAL, DATA tables for the world, labels for the main loop.
 150 LOAD LIBRARY "w3dkit"
-160 LOAD LIBRARY "deqqart"
+160 LOAD LIBRARY "deqqart":LOAD LIBRARY "banner3d":IF ENV$("DEQQ_HEADLESS")="" THEN CALL B3_S3D("DEQQ'S HOUSE")
 170 DIM OROOM(130),OIN(130),OREL(130),OSIZE(130),OOPEN(130),OHID(130),OSEEN(130),OFX(130),OFZ(130),OICON(130),OCOL(130),OTYP(130)
 180 DIM ONAME$(130),OWORDS$(130),ODESC$(130),OKEY$(130),OPK$(130),OFL$(130)
 190 DIM RNAME$(20),RDESC$(20),RKEY$(20),REX$(20),EX(20,10),RSEEN(20),RHIDE$(20)

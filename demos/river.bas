@@ -6,7 +6,7 @@
 6 LOAD LIBRARY "util"
 7 LOAD LIBRARY "input"
 8 LOAD LIBRARY "hiscore"
-9 LOAD LIBRARY "text"
+9 LOAD LIBRARY "text":LOAD LIBRARY "banner":CALL BN_2D("ETERNAL RIVER")
 10 DIM RS$(64),RCLA(64),RCRA(64),RDLA(64),RDRA(64)
 20 ' ETERNAL RIVER - a scroll-down boat game for Engine1999 (in the spirit of River Raid).
 30 ' You steer a boat down a river that meanders and never ends. Swimmers, divers and other boats are in the way, people on the banks throw rocks

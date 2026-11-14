@@ -12,7 +12,7 @@
 80 '   the sky is the background layer (palette entries drawn as bands), the clouds are tiles (layer 1), the grass and the bushes are
 90 '   drawn on the graphics layer (layer 3, POINT tells what is there), the pictures are DESIGN rows (sprites, layer 4),
 100 '   the sounds are SFX effects, the rustling of the leaves is noise.
-110 GOTO MAIN
+110 LOAD LIBRARY "banner":CALL BN_2D("ORCHARD DEFENSE"):GOTO MAIN
 120 ' ---------------------------------------------------------------------------------------------- random numbers
 130 ' RNG: R = a random number 0 .. RM-1
 140 LABEL RNG

@@ -6,7 +6,7 @@
 6 LOAD LIBRARY "util"
 7 LOAD LIBRARY "input"
 8 LOAD LIBRARY "hiscore"
-9 LOAD LIBRARY "text"
+9 LOAD LIBRARY "text":LOAD LIBRARY "banner":CALL BN_2D("THE LONG CLIMB")
 10 ' THE LONG CLIMB - a jump and run game for Engine1999.
 20 ' You are a construction worker and the ice cream stand is on the roof of the unfinished steel tower, 960 pixels above the street. Climb the ladders,
 30 ' jump the gaps, hurdles, cars and birds, and use your drill to make holes in the girders: a rust ball or slime that walks into a hole is trapped,

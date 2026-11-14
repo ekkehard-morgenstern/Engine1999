@@ -47,7 +47,7 @@
 430   RETURN RGB(FN CLAMP(INT(R),0,255),FN CLAMP(INT(G),0,255),FN CLAMP(INT(B),0,255))
 440 END FUNC
 450 ' ====================================================================== main program
-460 BREAK OFF
+460 BREAK OFF:LOAD LIBRARY "banner":CALL BN_2D("Y2K COUNTDOWN")
 470 RANDOMIZE 1999
 480 NP=9
 490 S=0

@@ -6,7 +6,7 @@
 6 LOAD LIBRARY "util"
 7 LOAD LIBRARY "input"
 8 LOAD LIBRARY "hiscore"
-9 LOAD LIBRARY "text"
+9 LOAD LIBRARY "text":LOAD LIBRARY "banner":CALL BN_2D("RUST IN PEACE")
 10 ' RUST IN PEACE - a labyrinth game for one to four players, for Engine1999.
 20 ' You are a rust ball, and the labyrinth is full of construction workers. They run away when they see you, so creep up on one from behind: whoever you touch
 30 ' on the back is covered in rust, turns into a statue and crumbles. Screws, nuts and bolts give you power: five of them make you one size bigger (up to three

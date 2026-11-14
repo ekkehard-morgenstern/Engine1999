@@ -6,7 +6,7 @@
 6 LOAD LIBRARY "util"
 7 LOAD LIBRARY "input"
 8 LOAD LIBRARY "hiscore"
-9 LOAD LIBRARY "text"
+9 LOAD LIBRARY "text":LOAD LIBRARY "banner":CALL BN_2D("MADRUN II")
 10 ' MADRUN II - the second edition of the crossing game for one to four players, for Engine1999: a traffic helicopter and pigeons that run on sprite paths.
 20 ' A telephone booth stands on the island in the middle of a busy crossing, and the phone is ringing! Get there before the caller hangs up.
 30 ' Cars, trucks, buses, motorbikes and (later) ambulances drive on sixteen lanes (two in each direction on each road). They stop for each other and for the crossing, but never for you.

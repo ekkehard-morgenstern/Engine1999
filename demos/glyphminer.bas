@@ -6,7 +6,7 @@
 60 LOAD LIBRARY "util"
 70 LOAD LIBRARY "input"
 80 LOAD LIBRARY "hiscore"
-90 LOAD LIBRARY "text"
+90 LOAD LIBRARY "text":LOAD LIBRARY "banner":CALL BN_2D("GLYPH MINER")
 100 ' GLYPH MINER - a cave digger in the spirit of the 8-bit classics (no likeness of any of them), for Engine1999. Window version only.
 110 ' The cave is the TEXT SCREEN: 40 x 12 cells, each cell is 2 x 2 redefined characters (SYMBOL): dirt, steel, brick, boulder, gem, door.
 120 ' The miner, the fireflies and the worms are sprites that glide from cell to cell, one cell is exactly the size of a sprite (16 x 24 pixels).

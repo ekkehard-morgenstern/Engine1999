@@ -63,7 +63,7 @@
 590   RETURN R$
 600 END FUNC
 610 ' ====================================================================== main program
-620 BREAK OFF
+620 BREAK OFF:LOAD LIBRARY "banner":CALL BN_2D("Y2K38")
 630 ON ERROR GOTO FAILED
 640 RANDOMIZE 2038
 650 NP=9

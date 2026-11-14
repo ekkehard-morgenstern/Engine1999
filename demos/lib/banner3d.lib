@@ -1,0 +1,226 @@
+1 ' License: free for everybody to use, copy, change and build into executables (BUILD).
+2 ' An executable made with BUILD contains the Engine1999 runtime: the Engine1999 Runtime Exception
+3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
+4 ' in the executable (it shows with the command line option --engine1999-about).
+10 ' banner3d - the "Engine1999 proudly presents" opening for the 3D demo games (a library: LOAD LIBRARY "banner3d", prefix B3_; the 2D version is the library banner).
+20 '   CALL B3_S3D(T$)   for a game that uses the sector renderer (W3D): a hall that the camera glides through to a wall that is a big colorful screen: ENGINE1999 drops
+30 '                     in letter by letter, "proudly presents" is typed out, then the name of the game T$ (may be "")
+40 '   CALL B3_M3D(T$)   for a game that uses the mesh renderer (M3D): ENGINE1999 is ten solid letters that tumble into a hall and spin, the other two lines are
+50 '                     panels floating in front of the wall. It draws with the renderer the user has (software or hardware, as W3K_MESH chooses).
+60 ' Both play the fanfare of the library banner (about 8 seconds; any key, a mouse button or the pad's A skips; BN_ON says whether the banner is wanted at all: the
+70 ' environment variable ENGINE1999_NOBANNER or the file config:nobanner turns it off). They set the screen up with w3dkit (W3K_SETUP) and take it down again
+80 ' (W3K_DONE: GFX RESET, a clear screen), so the game sets itself up afterwards as always. Call it first thing in the main program, before the game's own setup.
+90 LIBRARY "banner3d","B3_"
+100 LOAD LIBRARY "w3dkit"
+110 LOAD LIBRARY "banner"
+120 ' a color of the w3dkit palette: hue H (1..14), a fading shade for the brightness Q (0..1)
+130 FUNC B3_COL(H,S,Q)
+140   RETURN FN W3K_C(H,INT(S*Q))
+150 END FUNC
+160 ' the dither fade: black scan lines over the finished picture; Q = 1 shows everything, 0 nothing
+170 PROC B3_FADE(Q)
+180   LOCAL Y,K
+190   IF Q>=1 THEN EXIT PROC
+200   K=FN W3K_C(0,0)
+210   FOR Y=0 TO 263
+220     IF ((Y*5) MOD 8)>=Q*8 THEN GFX LINE 0,Y,639,Y,K
+230   NEXT Y
+240 END PROC
+250 ' the picture on the hall's end wall (320 x 128) at the top left of the drawing layer, grabbed as the texture N
+260 PROC B3_PIC(T$,T,Q,N)
+270   LOCAL R,I,H,Y,LN,DT,E$,P$,C,SC,W,NS,A,F,Z
+280   E$="ENGINE1999":P$="proudly presents"
+290   FOR R=0 TO 31
+300     H=1+((R+INT(T*5)) MOD 14)
+310     GFX LINE 0,R*4,319,R*4+3,FN B3_COL(H,6,Q),BF
+320   NEXT R
+330   FOR I=1 TO 10
+340     LN=0.7+0.2*(I-1)
+350     DT=T-LN
+360     IF DT>-0.5 THEN
+370       IF DT<0 THEN
+380         Y=-40+(18+40)*(1+DT/0.5)*(1+DT/0.5)
+390       ELSE
+400         Y=18-9*EXP(-5*DT)*ABS(SIN(DT*13))
+410       END IF
+420       C=FN B3_COL(1+((I*3+INT(T*8)) MOD 14),15,Q)
+430       Z=T-(3.0+0.09*(I-1))
+440       IF Z>0 AND Z<0.14 THEN C=FN W3K_C(0,15)
+450       GFX TEXT 40+(I-1)*24+2,Y+2,MID$(E$,I,1),FN W3K_C(0,0),3,3
+460       GFX TEXT 40+(I-1)*24,Y,MID$(E$,I,1),C,3,3
+470     END IF
+480   NEXT I
+490   F=INT((T-3.5)*14)
+500   IF F>16 THEN F=16
+510   IF F>0 THEN
+520     GFX TEXT 34,60,LEFT$(P$,F),FN W3K_C(0,0),2,2
+530     GFX TEXT 32,58,LEFT$(P$,F),FN B3_COL(3,15,Q),2,2
+540   END IF
+550   NS=LEN(T$)
+560   IF NS>0 AND T>5.4 THEN
+570     SC=3
+580     IF NS>13 THEN SC=2
+590     IF NS>20 THEN SC=1
+600     A=(T-5.4)/0.6
+610     IF A>1 THEN A=1
+620     A=SC*(1-(1-A)*(1-A))
+630     A=INT(A)
+640     IF A<1 THEN A=1
+650     W=8*A*NS
+660     GFX TEXT (320-W)\2+2,90+(36-12*A)\2+2,T$,FN W3K_C(0,0),A,A
+670     GFX TEXT (320-W)\2,90+(36-12*A)\2,T$,FN B3_COL(1+(INT(T*10) MOD 14),15,Q),A,A
+680   END IF
+690   CALL W3K_GRAB(N,320,128)
+700 END PROC
+710 ' ---- the sector renderer version -----------------------------------------------------------------------------------------------------------------------------
+720 PROC B3_S3D(T$)
+730   LOCAL T,T0,Q,X,Y,A
+740   IF NOT FN BN_ON THEN EXIT PROC
+750   CALL W3K_SETUP
+760   CALL W3K_VIEW(0,0,640,264,2)
+770   CALL W3K_TILES(1,9,10)
+780   CALL W3K_METAL(2,8)
+790   W3D SECTOR 0,0,128,1,2,255
+800   W3D WALL 0,0,0,320,0,2
+810   W3D WALL 0,320,0,320,520,2
+820   W3D WALL 0,320,520,0,520,3
+830   W3D WALL 0,0,520,0,0,2
+840   CALL B3_PIC(T$,0,1,3)
+850   CALL BN_MUSIC
+860   T0=TI
+870   WHILE -1
+880     T=(TI-T0)/60
+890     IF T>=8 OR FN BN_SKIP THEN EXIT
+900     Q=1
+910     IF T<0.5 THEN Q=T/0.5
+920     IF T>7.4 THEN Q=(8-T)/0.6
+930     CALL B3_PIC(T$,T,1,3)
+940     ' the camera glides down the hall to the wall and sways a little
+950     A=T/8
+960     Y=15+300*(1-(1-A)*(1-A))*0.8
+970     X=160+22*SIN(T*0.9)
+980     W3D CAMERA X,Y,90+5*SIN(T*0.7)
+990     W3D RENDER
+1000     CALL B3_FADE(Q)
+1010     CALL W3K_SHOW
+1020   WEND
+1030   SOUND OFF
+1040   CALL W3K_DONE
+1050 END PROC
+1060 ' ---- the mesh renderer version -------------------------------------------------------------------------------------------------------------------------------
+1070 ' the picture of a line of text on a panel N (W x H pixels): the letters in the color index C on index 0 (see-through), a shadow in dark
+1080 PROC B3_LINE(N,T$,SC,C,P)
+1090   LOCAL W,H,X,Y,A,B
+1100   W=8*SC*LEN(T$):H=12*SC+4
+1110   X=-W\2:Y=-(12*SC)\2
+1120   GFX CLEAR
+1130   ' (the picture is anchored to the object's middle: it wraps, so the text is drawn at the four places where it lands)
+1140   FOR A=0 TO 1
+1150     FOR B=0 TO 1
+1160       GFX TEXT X+A*P+2,Y+B*H+2,T$,FN W3K_C(0,0),SC,SC
+1170       GFX TEXT X+A*P,Y+B*H,T$,C,SC,SC
+1180     NEXT B
+1190   NEXT A
+1200   CALL W3K_GRAB(N,P,H)
+1210   GFX CLEAR
+1220 END PROC
+1230 PROC B3_M3D(T$)
+1240   LOCAL T,T0,Q,I,LN,DT,Y,Z,YW,S,F,N,SC,A,W,P
+1250   IF NOT FN BN_ON THEN EXIT PROC
+1260   CALL W3K_SETUP
+1270   CALL W3K_MESH
+1280   CALL W3K_VIEW(0,0,640,264,2)
+1290   M3D RESET
+1300   CALL W3K_TILES(101,9,10)
+1310   CALL W3K_METAL(102,8)
+1320   ' the hall: floor, side walls, a back wall with rainbow bars
+1330   GFX CLEAR FN W3K_C(0,0)
+1340   FOR I=0 TO 7
+1350     GFX LINE 0,I*8,63,I*8+7,FN W3K_C(1+I*2-INT(I/7)*14,6),BF
+1360   NEXT I
+1370   CALL W3K_GRAB(103,64,64)
+1380   GFX CLEAR
+1390   M3D OBJECT 0,0,255
+1400   M3D BOX 0,0,0,-4,320,420,0,101
+1410   M3D BOX 0,-8,0,0,0,420,140,102
+1420   M3D BOX 0,320,0,0,328,420,140,102
+1430   M3D BOX 0,-8,0,140,328,420,144,FN W3K_C(10,4)
+1440   M3D BOX 0,-8,420,0,328,428,140,103
+1450   M3D OBJSHOW 0,-1
+1460   ' the letters: ten boxes with a letter picture on the two big sides, bare color on the rest
+1470   FOR I=1 TO 10
+1480     GFX CLEAR
+1490     GFX LINE 0,0,31,63,FN W3K_C(0,2),BF
+1500     FOR A=0 TO 1
+1510       FOR Y=0 TO 1
+1520         GFX TEXT -12+A*32,-18+Y*64,MID$("ENGINE1999",I,1),FN W3K_C(1+((I*3) MOD 14),15),3,3
+1530       NEXT Y
+1540     NEXT A
+1550     CALL W3K_GRAB(110+I,32,64)
+1560     GFX CLEAR
+1570     M3D OBJECT I,0,255
+1580     M3D BOX I,-16,-4,-32,16,4,32,110+I,12
+1590     M3D BOX I,-16,-4,-32,16,4,32,FN W3K_C(0,4),51
+1600     M3D OBJSHOW I,0
+1610   NEXT I
+1620   M3D OBJECT 20,1,255
+1630   M3D BOX 20,-128,-1,-16,128,1,16,130,8
+1640   M3D OBJSHOW 20,0
+1650   N=LEN(T$)
+1660   SC=3
+1670   IF N>13 THEN SC=2
+1680   IF N>20 THEN SC=1
+1690   M3D OBJECT 21,1,255
+1700   P=32
+1710   WHILE P<8*SC*N+2
+1720     P=P*2
+1730   WEND
+1740   IF N>0 THEN M3D BOX 21,-P\2,-1,-(12*SC+4)\2,P\2,1,(12*SC+4)\2,131,8
+1750   M3D OBJSHOW 21,0
+1760   M3D LAMP 0,160,200,120,260,180
+1770   CALL BN_MUSIC
+1780   T0=TI
+1790   WHILE -1
+1800     T=(TI-T0)/60
+1810     IF T>=8 OR FN BN_SKIP THEN EXIT
+1820     Q=1
+1830     IF T<0.5 THEN Q=T/0.5
+1840     IF T>7.4 THEN Q=(8-T)/0.6
+1850     ' the letters tumble in one after the other, then each spins once
+1860     FOR I=1 TO 10
+1870       LN=0.7+0.2*(I-1)
+1880       DT=T-LN
+1890       IF DT>-0.6 THEN
+1900         S=DT/0.6
+1910         IF S>1 THEN S=1
+1920         IF DT<0 THEN S=0
+1930         Z=100+260*(1-S)*(1-S)
+1940         YW=360*(1-S)*(1-S)*(1-S)
+1950         IF DT>=0.6 THEN Z=100+3*SIN(T*3+I)
+1960         IF T>3.4+0.1*(I-1) AND T<3.9+0.1*(I-1) THEN YW=YW+720*(T-3.4-0.1*(I-1))
+1970         M3D OBJPOS I,160+(I-5.5)*30,300,Z,YW
+1980         M3D OBJSHOW I,-1
+1990       END IF
+2000     NEXT I
+2010     ' proudly presents is typed on its panel, the name flies in
+2020     F=INT((T-3.5)*14)
+2030     IF F>16 THEN F=16
+2040     IF F>0 AND F<=16 AND T<4.9 THEN
+2050       CALL B3_LINE(130,LEFT$("proudly presents",F),2,FN W3K_C(3,15),256)
+2060     END IF
+2070     IF F>0 THEN M3D OBJPOS 20,160,300,58:M3D OBJSHOW 20,-1
+2080     IF N>0 AND T>5.4 THEN
+2090       IF T<5.5 THEN CALL B3_LINE(131,T$,SC,FN W3K_C(2,15),P)
+2100       A=(T-5.4)/0.6
+2110       IF A>1 THEN A=1
+2120       M3D OBJPOS 21,160,300+250*(1-A)*(1-A),24
+2130       M3D OBJSHOW 21,-1
+2140     END IF
+2150     M3D CAMERA 160+20*SIN(T*0.8),10+60*(T/8),0,90+4*SIN(T*0.7)
+2160     CALL W3K_DRAW3D
+2170     CALL B3_FADE(Q)
+2180     CALL W3K_SHOW
+2190   WEND
+2200   SOUND OFF
+2210   CALL W3K_DONE
+2220 END PROC

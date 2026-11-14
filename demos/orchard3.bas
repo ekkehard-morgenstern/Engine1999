@@ -6,7 +6,7 @@
 20 LOAD LIBRARY "util"
 30 LOAD LIBRARY "input"
 40 LOAD LIBRARY "hiscore"
-50 LOAD LIBRARY "text"
+50 LOAD LIBRARY "text":LOAD LIBRARY "banner":CALL BN_2D("ORCHARD DEFENSE III")
 60 ' ORCHARD DEFENSE III - the top-notch edition of the fruit games: Orchard Defense II with a day that passes, wind, swaying fruit, power-ups and two players.
 70 ' Keys: one player: LEFT / RIGHT or A / D walk (only while the key is held), SPACE, UP or W throws a ball. Two players: player 1 A / D and W (or SPACE), pad 1;
 80 ' player 2 LEFT / RIGHT and UP (or RETURN), pad 2. P = pause, Q = quit, M = music on / off.
