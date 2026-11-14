@@ -26,14 +26,14 @@ Drawn first, built second (owner's advice, 2026-11-13). Coordinates are the leve
    +-----------+-----------+-----------+-----------+ ... +---------------------------+
    |  BAKERY   |  GROCER   |   CAFE    | PHARMACY  |     |   GAS STATION             |
    |  224 high |           |           |           |     |   forecourt, kiosk, 3 pumps|
-   |  x -560.. | -280..    | 0..256    | 280..536  |     |   canopy pillars, price sign|
+   |  x -560.. | -280..    | 0..256    | 280..536  |     |   price sign|
    +-----------+-----------+-----------+-----------+     |   x 600 .. 1100            |
                                                          +---------------------------+
    two more rows of yards: houses with a fenced garden each, facing the street
 ```
 
 - **Main street** = the south road in front of Deqq's gate: shops on the far side (two storeys, no yard, 256 wide, their own picture
-  with a sign), then the gas station (forecourt of asphalt, kiosk, pumps, four canopy pillars, price sign on a pole), then yards.
+  with a sign), then the gas station (forecourt of asphalt, kiosk, three pumps, price sign on a pole; the canopy pillars were removed 2026-11-14), then yards.
 - **Yards** (lots of 320 x 280): grass, a fence all round (masked railing, you see through it), a house 128 wide, 100 deep,
   one or two storeys (112 / 224 high, four colors), pushed to the street side (small front yard, deep back yard), a door, one or two trees.
   Deqq's house is the odd one out on purpose: two storeys and an attic, behind a brick-posted fence and a hedge.

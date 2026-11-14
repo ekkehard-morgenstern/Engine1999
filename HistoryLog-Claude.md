@@ -13,6 +13,8 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+- **Deqq's House II: three gas pumps, canopy pillars removed** (2026-11-14, owner: "The gas station now has only one gas pump and there are stone pillars standing around without purpose ... remove the stone pillars and instead put three gas pumps there"): **cause of the missing pumps: `BUILDTOWN` numbered the pump meshes 6100 + thing number (6501 .. 6503), the tree meshes are 6000 + thing number, and the trees 501 and 503 rebuilt (emptied) those objects** (only the middle pump survived); the pumps are objects 6800 .. 6802 now. The pillars were the leftover canopy posts 438 .. 440 of `deqq2.mesh.json` (the canopy itself and post 437 went earlier): deleted (the same ids exist as things: trees 438 and 440 stay). `docs/town-map.md` adjusted. Seen under Xvfb (the screenshot harness): three pumps in front of the kiosk, no pillars; `deqq2test.sh`, `m3dtest1` pass. Lesson: mesh object numbers built from thing numbers must not overlap between kinds.
+
 
 ## Log
 

@@ -2557,7 +2557,7 @@
 40040   WRB=-1
 40045   CALL BUILDTOWN
 40050 END PROC
-40055 ' the gas pumps (things 401 .. 403), the trees (404 ..) and the lamp posts (700 ..) of the town
+40055 ' the gas pumps (things 401 .. 403, objects 6800 .. 6802: not 6100 + n, which the trees 6000 + n of the things 501 .. 503 overwrote), the trees (404 ..) and the lamp posts (700 ..) of the town
 40060 PROC BUILDTOWN
 40065   LOCAL N,X,Y,O
 40070   FOR N=401 TO 599
@@ -2565,7 +2565,7 @@
 40080       X=M3D("TX",N):Y=M3D("TY",N)
 40085       M3D THINGTEX N,299
 40090       O=6000+N
-40095       IF N<=403 THEN O=6100+N:CALL MKPUMP(O) ELSE CALL MKTREE(O)
+40095       IF N<=403 THEN O=6800+N-401:CALL MKPUMP(O) ELSE CALL MKTREE(O)
 40100       CALL PUTMESH(O,X,Y,1,0)
 40105     END IF
 40110   NEXT N
