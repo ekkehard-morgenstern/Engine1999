@@ -92,6 +92,21 @@ state
 t 1
 wait 2
 state
+f 0
+run 0
+use
+wait 1
+bike 100 -300 90
+goto 90 -290 90
+use
+wait 0.6
+f 1
+run 1
+wait 3
+f -1
+run 0
+wait 2
+state
 cam
 ray 0 -300 20 90 0
 ray 500 -300 20 90 10
@@ -120,7 +135,7 @@ expect "sprint: stamina used" "$(val state 7 st)" 0 85
 # 7. rolling on: it slows down slowly, it does not stop at once
 expect "coast: still rolling after 3 s" "$(val state 8 bv)" 20 "$(val state 7 bv)"
 # 8. braking stops it, then you reverse slowly
-expect "brake: stopped or reversing" "$(val state 9 bv)" -46 1
+expect "brake: stopped or reversing" "$(val state 9 bv)" -81 1
 # 9. getting off: on foot again
 expect "dismount: on foot" "$(val state 10 mode)" 0 0
 # 10. a crash into the fence at speed (the fence is at y = -200, x >= 60): the bicycle is stopped
@@ -130,6 +145,9 @@ expect "crash: speed after the hit" "$(val state 11 bv)" -60 40
 expect "standstill: heading unchanged" "$(val state 13 bh)" -1 0
 turned=$(awk -v a="$(val state 14 bh)" -v b="$(val state 15 bh)" 'BEGIN { d = b - a; if (d < 0) d = -d; print d }')
 expect "turn at speed: heading changed" "$turned" 20 240
+# 11b. blocked by the fence, pressing back reverses out of it
+expect "reverse out of the fence" "$(val state 16 bv)" -81 -20
+expect "reverse: moved away" "$(val state 16 by)" -400 -240
 # 12. the camera stays above the ground, rays: the house wall is an object, open ground is not hit
 expect "camera: z above the ground" "$(val cam 1 z)" 20 400
 expect "ray at the house" "$(val ray 1 obj)" 300 300

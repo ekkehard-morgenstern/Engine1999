@@ -764,12 +764,12 @@
 7550   BV=BV+AC*DT-260*SL*DT
 7560   IF BV>0 THEN BV=BV-(9+0.05*BV)*DT
 7570   IF BV<0 THEN BV=BV+(9-0.05*BV)*DT
-7580   IF ABS(BV)<2 AND AC=0 AND ABS(SL)<0.02 THEN BV=0
+7580   IF ABS(BV)<2 AND AC=0 AND ABS(SL)<0.02 AND NOT (MODE=1 AND KF<0) THEN BV=0
 7590   IF MODE=1 AND (KB<>0 OR KF<0) THEN
 7600     IF BV>0.5 THEN
 7610       BV=BV-230*DT:IF BV<0 THEN BV=0
 7620     ELSE
-7630       BV=BV-70*DT:IF BV<-45 THEN BV=-45
+7630       BV=BV-110*DT:IF BV<-80 THEN BV=-80
 7640     END IF
 7650   END IF
 7660   ' steering: the angle of the front wheel shrinks with the speed, the turning rate follows from the wheel base (36 units)
