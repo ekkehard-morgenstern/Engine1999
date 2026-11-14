@@ -13,6 +13,8 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+- **Deqq's House II: a real car horn** (2026-11-14, owner: the honk was a barely audible blip): `INSTRUMENT 40` CARHORN (two detuned saws a major third apart + a sub square, quick attack, filtered) and `SFX 11` is now two honks (A4, short then long, V 0.7) in `demos/deqq2.bas` (line 13155 / 13210). Tests: string parses in the console host, `deqq2test.sh` passes. **Not heard by me**: tune levels by ear (the `INSTRUMENT 40` line, `V`, `T`).
+
 - **`JSON LOAD`: plain names skip the security policy** (2026-11-14, owner: loaders should behave like `TOOL`; only a path that is not plain-downward gets the check): `json_read_search()` in `jsonops.c` reads plain names (relative, no `..`, no driver) with stdio from the program's folder, the current folder, `worlds/`, `demos/` there and the system `worlds` folder, no policy; anything else (and the `res:` image of a BUILD executable as fallback) goes through `iodev_read_all`. Docs: `docs/json-subsystem.md`, man page. Tests: `jsontest1`, `contest1`, `worldtest.sh`, `make man-check` pending below. The W3D/M3D statements themselves read no files (they use the JSON tree).
 
 ## Log
