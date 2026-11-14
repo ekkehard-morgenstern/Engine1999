@@ -13,6 +13,8 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+- **`JSON LOAD`: plain names skip the security policy** (2026-11-14, owner: loaders should behave like `TOOL`; only a path that is not plain-downward gets the check): `json_read_search()` in `jsonops.c` reads plain names (relative, no `..`, no driver) with stdio from the program's folder, the current folder, `worlds/`, `demos/` there and the system `worlds` folder, no policy; anything else (and the `res:` image of a BUILD executable as fallback) goes through `iodev_read_all`. Docs: `docs/json-subsystem.md`, man page. Tests: `jsontest1`, `contest1`, `worldtest.sh`, `make man-check` pending below. The W3D/M3D statements themselves read no files (they use the JSON tree).
+
 ## Log
 
 ### 7a6cb67 — 2026-10-17 13:32:27 +0200 — "Introduced Claude to the project"

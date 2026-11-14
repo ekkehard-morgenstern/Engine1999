@@ -31,6 +31,7 @@
 #include "gfxops.h"
 #include "iodev.h"
 #include "baslib.h"
+#include "policy.h"
 
 static json_node_t* doc = 0;
 
@@ -82,7 +83,7 @@ static bool json_plain_name( const char* name ) {
     return name[0] != '\0' && name[0] != '/' && strchr( name, ':' ) == 0 && strstr( name, ".." ) == 0;
 }
 
-// the system folders are the installation's own (like the libraries and tools): read with stdio, the security policy does not apply
+// plain names and the system folders are the installation's / the program's own (like the libraries and tools): read with stdio, the security policy does not apply
 static bool json_read_plain( const char* path, uint8_t** data, size_t* len ) {
     FILE* f = fopen( path, "rb" );
     if ( f == 0 ) {
@@ -115,37 +116,44 @@ static bool json_read_plain( const char* path, uint8_t** data, size_t* len ) {
 }
 
 static bool json_read_search( const char* name, const char* defdriver, uint8_t** data, size_t* len, const char** ioerr ) {
-    if ( iodev_read_all( name, defdriver, data, len, ioerr ) ) {
-        return true;
-    }
-    static char firsterr[200];                          // the message for "not found anywhere" (later tries overwrite the layer's)
-    snprintf( firsterr, sizeof(firsterr), "%s", *ioerr != 0 ? *ioerr : "File not found" );
-    if ( !json_plain_name( name ) ) {
-        return false;
-    }
-    char path[2200];
-    static const char* const rel[] = { "worlds/", "demos/" };
-    for ( size_t i=0; i < sizeof(rel) / sizeof(rel[0]); ++i ) {
-        snprintf( path, sizeof(path), "%s%s", rel[i], name );
-        if ( iodev_read_all( path, defdriver, data, len, ioerr ) ) {
+    // A plain name (relative, going only downward, no driver) is looked for where the engine and the program expect such files: the program's folder and the
+    // current folder, each also with "worlds/" and "demos/", then the system folder "worlds". These reads do not go through the security policy (nothing
+    // outside those folders can be named); everything else (absolute, "..", a driver) does.
+    if ( json_plain_name( name ) ) {
+        static const char* const rel[] = { "", "worlds/", "demos/" };
+        const char* root = policy_root();
+        char path[2200];
+        for ( int pass=0; pass < 2; ++pass ) {
+            if ( pass == 0 && ( root == 0 || root[0] == '\0' ) ) {
+                continue;
+            }
+            for ( size_t i=0; i < sizeof(rel) / sizeof(rel[0]); ++i ) {
+                if ( pass == 0 ) {
+                    snprintf( path, sizeof(path), "%s/%s%s", root, rel[i], name );
+                } else {
+                    snprintf( path, sizeof(path), "%s%s", rel[i], name );
+                }
+                if ( json_read_plain( path, data, len ) ) {
+                    return true;
+                }
+            }
+        }
+        char* sys[4];
+        size_t ns = baslib_system_dirs( sys, 4 );       // ".../lib": the world documents are the folder "worlds" next to it
+        bool found = false;
+        for ( size_t i=0; i < ns; ++i ) {
+            size_t n = strlen( sys[i] );
+            if ( !found && n >= 4U && strcmp( sys[i] + n - 4U, "/lib" ) == 0 ) {
+                snprintf( path, sizeof(path), "%.*sworlds/%s", (int)( n - 3U ), sys[i], name );
+                found = json_read_plain( path, data, len );
+            }
+            free( sys[i] );
+        }
+        if ( found ) {
             return true;
         }
     }
-    char* sys[4];
-    size_t ns = baslib_system_dirs( sys, 4 );           // ".../lib": the world documents are the folder "worlds" next to it
-    bool found = false;
-    for ( size_t i=0; i < ns; ++i ) {
-        size_t n = strlen( sys[i] );
-        if ( !found && n >= 4U && strcmp( sys[i] + n - 4U, "/lib" ) == 0 ) {
-            snprintf( path, sizeof(path), "%.*sworlds/%s", (int)( n - 3U ), sys[i], name );
-            found = json_read_plain( path, data, len );
-        }
-        free( sys[i] );
-    }
-    if ( !found ) {
-        *ioerr = firsterr;
-    }
-    return found;
+    return iodev_read_all( name, defdriver, data, len, ioerr );     // (also the program image of a BUILD executable: res:)
 }
 
 bool jsonops_run( int op, const double* a, int na, const char* s, size_t slen, uint8_t* out, size_t outsz, size_t* outlen, const char* defdriver,
