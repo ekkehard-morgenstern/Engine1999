@@ -16,6 +16,7 @@ Players and BASIC programmers: start with the [README](../README.md). Engine con
 | [build-and-test.md](build-and-test.md) | Building, executables, test programs, tooling |
 | [json-subsystem.md](json-subsystem.md) | JSON trees from BASIC: `JSON LOAD` / `SAVE` / `SET` / `GET` ..., paths like `a.b.c` (implemented) |
 | [deqq2.md](deqq2.md) | **Deqq's House II**: the implementation guide and reference manual of the real-time 3D adventure on the mesh renderer: rules, architecture, the world document, things and puzzles, Deqq's AI, cars, light, sound, tests, procedure and variable reference |
+| [1987.md](1987.md) | **1987**: the implementation guide of the third-person adventure toy (John, his bicycle, the countryside) on the mesh renderer: world, the skeleton-animated figure, the bicycle's physics, the camera, the test mode |
 | [3d-subsystem.md](3d-subsystem.md) | the software 3D sector renderer `W3D` (Doom / Duke Nukem 3D style): sectors, walls, portals, things, movement, shots, the demos (implemented) |
 | [graphics-subsystem.md](graphics-subsystem.md) | BASIC statements for layers, palettes, the graphics layer, tiles, sprites, `DESIGN` pictures, collisions and text screen areas; the `sdlscr_*` API (implemented) |
 | [console-host.md](console-host.md) | The console host `engine1999c`: the BASIC system without a window for scripts and pipes (input, output, exit status, what the display statements do) |

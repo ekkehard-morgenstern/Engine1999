@@ -1,0 +1,13 @@
+# Engine1999 menu entry. @BINDIR@ / @GAMESBINDIR@ are filled in by "make install" (see the makefile, target install).
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=1987
+GenericName=3D adventure
+Comment=After the invasion: walk and ride your bicycle through the empty countryside, a wheat field ripe for the harvest
+Exec=@GAMESBINDIR@/engine1999-1987
+Icon=engine1999-1987
+Terminal=false
+Categories=Game;AdventureGame;
+Keywords=adventure;bicycle;3d;countryside;
+StartupNotify=false

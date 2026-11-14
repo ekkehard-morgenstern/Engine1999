@@ -1,0 +1,1131 @@
+1 ' License: free for everybody to use, copy, change and build into executables (BUILD).
+2 ' An executable made with BUILD contains the Engine1999 runtime: the Engine1999 Runtime Exception
+3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
+4 ' in the executable (it shows with the command line option --engine1999-about).
+10 ' 1987 - a third-person adventure toy for Engine1999, made with the software / hardware 3D mesh renderer (M3D ...). First step: the world and the two ways to move.
+20 ' The fictional year 1987. After the invasion nearly everybody on Earth was taken, up into the ships or away by beams of light. Only a few are left. One of them is John,
+30 ' a lean, gray-haired former teacher of physics and mathematics who likes comfortable clothes. He lives alone in a small wooden house in the country, next to a wheat field
+40 ' that is ripe for the harvest and has nobody to harvest it. Black, egg-shaped drones hover over the land and shoot red beams at whatever looks suspicious (they are not in
+50 ' this first step). John has his bicycle, and he loves it.
+60 ' What there is: rolling country with grass, dirt roads, groves of trees, the wooden house (you can walk in, with the bicycle too), the wheat field with a scarecrow, John
+70 ' (a skeleton-animated figure: walk cycle and pedalling) and the bicycle (it rolls on, pedals turn, wheels spin, handlebars steer).
+80 ' Keys: W / UP forward (on the bicycle: pedal), S / DOWN back (on the bicycle: brake, then reverse slowly), A D / LEFT RIGHT turn (on the bicycle: steer), SHIFT runs (on the
+90 ' bicycle: sprint, it tires you), SPACE brakes the bicycle, E or RETURN gets on and off the bicycle (stand close to it), B rings the bell, Z X or the right mouse button + drag
+100 ' turn the camera round John, PGUP PGDN tilt it, O opens the 3D settings, P pauses, Q or ESC quits. Game controller: left stick, LT, A brake, B bell, X use, Y settings,
+110 ' right stick turns the camera, START pauses, BACK quits.
+120 ' The bicycle behaves like the ones in GTA San Andreas: it has to be pedalled up to speed (slow at first, a sprint tires), it rolls on when you stop pedalling, hills speed
+130 ' it up and slow it down, the turning radius grows with the speed (a bicycle cannot turn on the spot), you can brake and reverse, and a wall at speed is a hard stop.
+140 ' Test mode (no keyboard needed): the environment variable G1987_PLAY names a file of commands, G1987_HEADLESS=1 runs it in the console host without any picture (see PLAYBACK).
+150 LOAD LIBRARY "w3dkit"
+160 LOAD LIBRARY "input"
+170 LOAD LIBRARY "text"
+180 LOAD LIBRARY "prefs3d"
+190 LOAD LIBRARY "music3d":LOAD LIBRARY "banner3d":IF ENV$("G1987_HEADLESS")="" THEN CALL B3_M3D("1987")
+200 BREAK OFF
+210 ON ERROR GOTO FAILED
+220 HL=0:IF ENV$("G1987_HEADLESS")<>"" THEN HL=-1
+230 DIM RPX(300),RPY(300),CPX(40),CPY(40),SMX(120),SMY(120),PLX(40),PLY(40),TRX(520),TRY(520),LRR(8),LRZ(8),LRV(8),W$(8)
+240 GOTO MAIN
+250 ' ------------------------------------------------------------------------------------------------ small helpers
+260 FUNC RN(M)
+270   RETURN INT(RND(1)*M)
+280 END FUNC
+290 FUNC CC(H,S)
+300   RETURN 16+H*16+S
+310 END FUNC
+320 ' the difference of two angles in degrees, -180 .. 180
+330 FUNC ADIFF(A,B)
+340   LOCAL D
+350   D=A-B
+360   D=D-INT((D+180)/360)*360
+370   RETURN D
+380 END FUNC
+390 ' 1 inside a box (centre CX,CY, half sizes RX,RY), falling to 0 over the margin M outside it (smooth)
+400 FUNC PW(X,Y,CX,CY,RX,RY,M)
+410   LOCAL DX,DY,D
+420   DX=ABS(X-CX)-RX:IF DX<0 THEN DX=0
+430   DY=ABS(Y-CY)-RY:IF DY<0 THEN DY=0
+440   D=SQR(DX*DX+DY*DY)/M
+450   IF D>=1 THEN RETURN 0
+460   RETURN (1-D)*(1-D)*(1+2*D)
+470 END FUNC
+480 ' the height of the ground: gentle hills, flat round the house and in the wheat field
+490 FUNC HT(X,Y)
+500   LOCAL H
+510   H=15*SIN(X/610+1)*COS(Y/530)+10*SIN((X+Y)/340)+7*COS(X/170-Y/230)+5*SIN(Y/95+X/130)+12
+520   RETURN 0.65*H*(1-FN PW(X,Y,0,0,260,200,420))*(1-FN PW(X,Y,1100,650,700,500,300))
+530 END FUNC
+540 ' the floor under a point (the ground, the porch, the floor of the house)
+550 FUNC FLR(X,Y)
+560   RETURN M3D("FLOORAT",X,Y,FN HT(X,Y)+40)
+570 END FUNC
+580 ' which picture covers the ground cell around X,Y: 1 grass, 2 dry grass, 3 lush grass, 20 the soil of the wheat field
+590 FUNC CELLTEX(X,Y)
+600   LOCAL N
+610   IF ABS(X-1100)<700 AND ABS(Y-650)<500 THEN RETURN 320
+620   N=SIN(X*0.0023+1)*COS(Y*0.0031)+SIN((X-Y)*0.0017)
+630   IF N>0.55 THEN RETURN 303
+640   IF N<-0.5 THEN RETURN 302
+650   RETURN 301
+660 END FUNC
+670 PROC SND(N)
+680   IF NOT HL THEN SFX N
+690 END PROC
+700 ' ------------------------------------------------------------------------------------------------ pictures
+710 PROC MKGRASS(N,H1,H2,FL)
+720   LOCAL I,X,Y
+730   GFX CLEAR FN CC(H1,5)
+740   FOR I=1 TO 520
+750     X=FN RN(64):Y=FN RN(64)
+760     GFX LINE X,Y,X+FN RN(3)-1,Y-1-FN RN(3),FN CC(H1+FN RN(2)*(H2-H1),3+FN RN(8))
+770   NEXT I
+780   FOR I=1 TO FL
+790     GFX PSET FN RN(64),FN RN(64),FN CC(3+FN RN(2)*8,13+FN RN(3))
+800   NEXT I
+810   CALL W3K_GRAB(N,64,64)
+820 END PROC
+830 ' the dirt road: the left and right edge are see-through (index 0), two wheel ruts, a ridge of grass between them
+840 PROC MKROAD
+850   LOCAL I,Y,L,R,X
+860   GFX CLEAR 0
+870   FOR Y=0 TO 63
+880     L=3+FN RN(4):R=60-FN RN(4)
+890     GFX LINE L,Y,R,Y,FN CC(13,8+FN RN(3))
+900     GFX LINE 15,Y,22,Y,FN CC(13,5+FN RN(3))
+910     GFX LINE 41,Y,48,Y,FN CC(13,5+FN RN(3))
+920   NEXT Y
+930   FOR I=1 TO 16
+940     X=27+FN RN(10):Y=FN RN(64)
+950     GFX LINE X,Y,X+1,Y-2-FN RN(3),FN CC(4,5+FN RN(4))
+960   NEXT I
+970   FOR I=1 TO 70
+980     GFX PSET 5+FN RN(54),FN RN(64),FN CC(13,9+FN RN(5))
+990   NEXT I
+1000   FOR I=1 TO 40
+1010     GFX PSET 5+FN RN(54),FN RN(64),FN CC(12,2+FN RN(3))
+1020   NEXT I
+1030   CALL W3K_GRAB(304,64,64)
+1040 END PROC
+1050 ' wheat seen from the side: stalks with heavy ears, the rest of the picture is see-through
+1060 PROC MKWHEAT
+1070   LOCAL I,X,H,D,Y
+1080   GFX CLEAR 0
+1090   FOR I=1 TO 70
+1100     X=FN RN(64):H=24+FN RN(34):D=FN RN(5)-2
+1110     GFX LINE X,63,X+D,63-H,FN CC(13,7+FN RN(4))
+1120     GFX LINE X+1,63,X+1+D,63-H,FN CC(12,6+FN RN(3))
+1130     Y=63-H
+1140     GFX LINE X+D-1,Y,X+D+1,Y+9,FN CC(3,10+FN RN(4))
+1150     GFX LINE X+D,Y-3,X+D,Y+8,FN CC(2,9+FN RN(4))
+1160   NEXT I
+1170   FOR I=1 TO 60
+1180     GFX PSET FN RN(64),52+FN RN(12),FN CC(12,4+FN RN(4))
+1190   NEXT I
+1200   CALL W3K_GRAB(308,64,64)
+1210 END PROC
+1220 ' the top of the wheat, seen from above
+1230 PROC MKWHEATTOP
+1240   LOCAL I
+1250   GFX CLEAR FN CC(3,8)
+1260   FOR I=1 TO 500
+1270     GFX LINE FN RN(64),FN RN(64),FN RN(64),FN RN(64),FN CC(3+FN RN(2)*10,8+FN RN(5))
+1280   NEXT I
+1290   FOR I=1 TO 400
+1300     GFX PSET FN RN(64),FN RN(64),FN CC(12,6+FN RN(4))
+1310   NEXT I
+1320   CALL W3K_GRAB(321,64,64)
+1330 END PROC
+1340 ' the plowed soil under the wheat
+1350 PROC MKSOIL
+1360   LOCAL I,Y
+1370   GFX CLEAR FN CC(12,4)
+1380   FOR Y=0 TO 7
+1390     GFX LINE 0,Y*8+2,63,Y*8+3,FN CC(12,2)
+1400     GFX LINE 0,Y*8+5,63,Y*8+5,FN CC(12,6)
+1410   NEXT Y
+1420   FOR I=1 TO 160
+1430     GFX PSET FN RN(64),FN RN(64),FN CC(13,4+FN RN(5))
+1440   NEXT I
+1450   CALL W3K_GRAB(320,64,64)
+1460 END PROC
+1470 ' leaves: dark at the bottom (row 63), light at the top (row 0)
+1480 PROC MKLEAVES(N,H1,H2)
+1490   LOCAL I,Y,X,S
+1500   FOR Y=0 TO 63
+1510     GFX LINE 0,Y,63,Y,FN CC(H1,2+(63-Y)\10)
+1520   NEXT Y
+1530   FOR I=1 TO 380
+1540     X=FN RN(64):Y=FN RN(64):S=(63-Y)\10
+1550     GFX LINE X,Y,X+1+FN RN(3),Y+FN RN(3)-1,FN CC(H1+FN RN(2)*(H2-H1),MAX(1,S-1+FN RN(5)))
+1560   NEXT I
+1570   CALL W3K_GRAB(N,64,64)
+1580 END PROC
+1590 PROC MKBARK
+1600   LOCAL I,X
+1610   GFX CLEAR FN CC(12,3)
+1620   FOR I=1 TO 40
+1630     X=FN RN(64)
+1640     GFX LINE X,0,X+FN RN(3)-1,63,FN CC(12,1+FN RN(5))
+1650   NEXT I
+1660   FOR I=1 TO 90
+1670     GFX PSET FN RN(64),FN RN(64),FN CC(12,5+FN RN(3))
+1680   NEXT I
+1690   CALL W3K_GRAB(312,64,64)
+1700 END PROC
+1710 ' the sky: 256 x 64; which end of the picture is up is found by looking
+1720 PROC MKSKY
+1730   LOCAL Y,I,X,CY,RX
+1740   FOR Y=0 TO 63
+1750     GFX LINE 0,Y,255,Y,FN CC(8,7+Y\9),BF
+1760   NEXT Y
+1770   FOR I=1 TO 14
+1780     X=FN RN(256):CY=10+FN RN(40):RX=8+FN RN(18)
+1790     GFX CIRCLE X,CY,RX,FN CC(0,13),-1,-1,0.3
+1800     GFX CIRCLE X-256,CY,RX,FN CC(0,13),-1,-1,0.3
+1810     GFX PAINT X,CY,FN CC(0,15),FN CC(0,13)
+1820     GFX PAINT X-256,CY,FN CC(0,15),FN CC(0,13)
+1830   NEXT I
+1840   CALL W3K_GRAB(311,256,64)
+1850 END PROC
+1860 PROC MAKETEX
+1870   RANDOMIZE 1987
+1880   CALL MKGRASS(301,5,4,0)
+1890   CALL MKGRASS(302,4,3,0)
+1900   CALL MKGRASS(303,5,4,30)
+1910   CALL MKROAD
+1920   CALL W3K_PLANKS(305)
+1930   CALL W3K_TILES(306,12,12)
+1940   CALL W3K_STONE(307,0)
+1950   CALL MKWHEAT
+1960   CALL MKLEAVES(309,5,4)
+1970   CALL MKLEAVES(310,5,6)
+1980   CALL MKSKY
+1990   CALL MKBARK
+2000   CALL W3K_WINDOW(313)
+2010   CALL MKSOIL
+2020   CALL MKWHEATTOP
+2030   CALL MKLEAVES(317,4,3)
+2040   CALL W3K_CARPET(323,1)
+2050   GFX CLEAR 0
+2060   GFX PSET 0,0,0
+2070   CALL W3K_GRAB(299,1,1)
+2080   M3D SKY 311
+2090 END PROC
+2100 ' ------------------------------------------------------------------------------------------------ mesh helpers
+2110 PROC BX(O,X1,Y1,Z1,X2,Y2,Z2,TX)
+2120   M3D BOX O,X1,Y1,Z1,X2,Y2,Z2,TX
+2130 END PROC
+2140 ' a lathe solid with 8 sides from the rings LRR (radius), LRZ (height), LRV (picture row) 0 .. NR-1, scaled by SC
+2150 PROC LATHE(O,NR,TX,SC)
+2160   LOCAL J,K,B,A,P,R
+2170   B=M3D("VERTS",O)
+2180   FOR J=0 TO NR-1
+2190     R=LRR(J)*SC:IF R<0.6 THEN R=0.6
+2200     FOR K=0 TO 8
+2210       A=K*0.7853982
+2220       M3D VERTEX O,R*COS(A),R*SIN(A),LRZ(J)*SC,K*8,LRV(J)
+2230     NEXT K
+2240   NEXT J
+2250   FOR J=0 TO NR-2
+2260     FOR K=0 TO 7
+2270       P=B+J*9+K
+2280       M3D QUAD O,P,P+1,P+10,P+9,TX
+2290     NEXT K
+2300   NEXT J
+2310 END PROC
+2320 ' a square rod between two points, half width H, the picture (or flat color) TBT
+2330 PROC TUBE(O,X1,Y1,Z1,X2,Y2,Z2,H)
+2340   LOCAL AX,AY,AZ,L,PX,PY,PZ,QX,QY,QZ,B,I,SA,SB
+2350   AX=X2-X1:AY=Y2-Y1:AZ=Z2-Z1
+2360   L=SQR(AX*AX+AY*AY+AZ*AZ):IF L<0.01 THEN EXIT PROC
+2370   AX=AX/L:AY=AY/L:AZ=AZ/L
+2380   PX=AY:PY=-AX:PZ=0
+2390   L=SQR(PX*PX+PY*PY)
+2400   IF L<0.001 THEN
+2410     PX=1:PY=0
+2420   ELSE
+2430     PX=PX/L:PY=PY/L
+2440   END IF
+2450   QX=AY*PZ-AZ*PY:QY=AZ*PX-AX*PZ:QZ=AX*PY-AY*PX
+2460   B=M3D("VERTS",O)
+2470   FOR I=0 TO 7
+2480     SA=1:IF (I AND 1) THEN SA=-1
+2490     SB=1:IF (I AND 2) THEN SB=-1
+2500     IF I<4 THEN
+2510       M3D VERTEX O,X1+H*SA*PX+H*SB*QX,Y1+H*SA*PY+H*SB*QY,Z1+H*SA*PZ+H*SB*QZ
+2520     ELSE
+2530       M3D VERTEX O,X2+H*SA*PX+H*SB*QX,Y2+H*SA*PY+H*SB*QY,Z2+H*SA*PZ+H*SB*QZ
+2540     END IF
+2550   NEXT I
+2560   M3D QUAD O,B,B+1,B+5,B+4,TBT
+2570   M3D QUAD O,B+1,B+3,B+7,B+5,TBT
+2580   M3D QUAD O,B+3,B+2,B+6,B+7,TBT
+2590   M3D QUAD O,B+2,B,B+4,B+6,TBT
+2600   M3D QUAD O,B+4,B+5,B+7,B+6,TBT
+2610   M3D QUAD O,B,B+2,B+3,B+1,TBT
+2620 END PROC
+2630 ' a vertical picture in the plane y = Y (a window pane) or x = X
+2640 PROC PANEY(O,X1,X2,Y,Z1,Z2,TX)
+2650   LOCAL B
+2660   B=M3D("VERTS",O)
+2670   M3D VERTEX O,X1,Y,Z1,0,95:M3D VERTEX O,X2,Y,Z1,63,95:M3D VERTEX O,X2,Y,Z2,63,0:M3D VERTEX O,X1,Y,Z2,0,0
+2680   M3D QUAD O,B,B+1,B+2,B+3,TX
+2690 END PROC
+2700 PROC PANEX(O,X,Y1,Y2,Z1,Z2,TX)
+2710   LOCAL B
+2720   B=M3D("VERTS",O)
+2730   M3D VERTEX O,X,Y1,Z1,0,95:M3D VERTEX O,X,Y2,Z1,63,95:M3D VERTEX O,X,Y2,Z2,63,0:M3D VERTEX O,X,Y1,Z2,0,0
+2740   M3D QUAD O,B,B+1,B+2,B+3,TX
+2750 END PROC
+2760 ' a ring (tyre) of 12 rods in the plane y = CY
+2770 PROC RING(O,CX,CY,CZ,R)
+2780   LOCAL I,A1,A2
+2790   FOR I=0 TO 11
+2800     A1=I*PI/6:A2=(I+1)*PI/6
+2810     CALL TUBE(O,CX+R*COS(A1),CY,CZ+R*SIN(A1),CX+R*COS(A2),CY,CZ+R*SIN(A2),1.4)
+2820   NEXT I
+2830 END PROC
+2840 ' spokes: three ribbons through the hub, turned by ANG (radians); they are rebuilt each frame, so the wheel seems to turn
+2850 PROC SPOKES(O,CX,CZ,ANG)
+2860   LOCAL I,A,B,DX,DZ,TX,TZ,R
+2870   R=9.6
+2880   FOR I=0 TO 2
+2890     A=ANG+I*PI/3
+2900     DX=COS(A):DZ=SIN(A):TX=-DZ*0.7:TZ=DX*0.7
+2910     B=M3D("VERTS",O)
+2920     M3D VERTEX O,CX-R*DX-TX,0,CZ-R*DZ-TZ:M3D VERTEX O,CX+R*DX-TX,0,CZ+R*DZ-TZ
+2930     M3D VERTEX O,CX+R*DX+TX,0,CZ+R*DZ+TZ:M3D VERTEX O,CX-R*DX+TX,0,CZ-R*DZ+TZ
+2940     M3D QUAD O,B,B+1,B+2,B+3,TBT
+2950   NEXT I
+2960   CALL BX(O,CX-1.2,-1.6,CZ-1.2,CX+1.2,1.6,CZ+1.2,FN CC(0,11))
+2970 END PROC
+2980 ' ------------------------------------------------------------------------------------------------ the terrain, the roads
+2990 PROC BUILDTERRAIN
+3000   LOCAL CI,CJ,O,I,J,X,Y,X0,Y0,B
+3010   FOR CJ=0 TO 7
+3020     FOR CI=0 TO 7
+3030       O=100+CI+CJ*8
+3040       M3D OBJECT O,0,235
+3050       X0=-3600+CI*900:Y0=-3600+CJ*900
+3060       FOR J=0 TO 9
+3070         FOR I=0 TO 9
+3080           X=X0+I*100:Y=Y0+J*100
+3090           M3D VERTEX O,X,Y,FN HT(X,Y),X*0.5,Y*0.5
+3100         NEXT I
+3110       NEXT J
+3120       FOR J=0 TO 8
+3130         FOR I=0 TO 8
+3140           B=J*10+I
+3150           M3D QUAD O,B,B+1,B+11,B+10,FN CELLTEX(X0+I*100+50,Y0+J*100+50)
+3160         NEXT I
+3170       NEXT J
+3180     NEXT CI
+3190   NEXT CJ
+3200 END PROC
+3210 LABEL ROADDATA
+3220 DATA 8, 0,-165, 0,-450, 250,-800, 800,-1000, 1500,-950, 2200,-700, 3000,-800, 3600,-1100
+3230 DATA 9, -40,150, -300,500, -350,1000, -200,1600, 300,2200, 1000,2600, 1800,2500, 2600,2800, 3600,3000
+3240 DATA 5, 1500,-950, 2300,-300, 2500,500, 2200,1500, 1800,2480
+3250 DATA 0
+3260 ' dirt roads: Catmull-Rom curves through the control points, a strip of quads laid 3 units above the ground (see-through edges)
+3270 PROC BUILDROADS
+3280   LOCAL R,N,I,K,T,T2,T3,A,B,NS,O,X,Y,DX,DY,L,Z,D,V,X0,Y0
+3290   RPN=0:NPL=0
+3300   RESTORE ROADDATA
+3310   R=0
+3320   READ N
+3330   WHILE N>0
+3340     FOR I=0 TO N-1
+3350       READ CPX(I),CPY(I)
+3360     NEXT I
+3370     NS=0
+3380     FOR I=0 TO N-2
+3390       A=I-1:IF A<0 THEN A=0
+3400       B=I+2:IF B>N-1 THEN B=N-1
+3410       FOR K=0 TO 5
+3420         T=K/6:T2=T*T:T3=T2*T
+3430         SMX(NS)=0.5*(2*CPX(I)+(CPX(I+1)-CPX(A))*T+(2*CPX(A)-5*CPX(I)+4*CPX(I+1)-CPX(B))*T2+(3*CPX(I)-CPX(A)-3*CPX(I+1)+CPX(B))*T3)
+3440         SMY(NS)=0.5*(2*CPY(I)+(CPY(I+1)-CPY(A))*T+(2*CPY(A)-5*CPY(I)+4*CPY(I+1)-CPY(B))*T2+(3*CPY(I)-CPY(A)-3*CPY(I+1)+CPY(B))*T3)
+3450         NS=NS+1
+3460       NEXT K
+3470     NEXT I
+3480     SMX(NS)=CPX(N-1):SMY(NS)=CPY(N-1):NS=NS+1
+3490     O=200+R
+3500     M3D OBJECT O,1,235
+3510     D=0
+3520     FOR K=0 TO NS-1
+3530       A=K-1:IF A<0 THEN A=0
+3540       B=K+1:IF B>NS-1 THEN B=NS-1
+3550       DX=SMX(B)-SMX(A):DY=SMY(B)-SMY(A)
+3560       L=SQR(DX*DX+DY*DY):DX=DX/L:DY=DY/L
+3570       IF K>0 THEN D=D+SQR((SMX(K)-SMX(K-1))^2+(SMY(K)-SMY(K-1))^2)
+3580       Z=FN HT(SMX(K),SMY(K))+3+R
+3590       X0=SMX(K):Y0=SMY(K)
+3600       M3D VERTEX O,X0+DY*55,Y0-DX*55,FN HT(X0+DY*55,Y0-DX*55)+3+R,64,D*0.58
+3610       M3D VERTEX O,X0-DY*55,Y0+DX*55,FN HT(X0-DY*55,Y0+DX*55)+3+R,0,D*0.58
+3620       IF RPN<300 THEN RPX(RPN)=X0:RPY(RPN)=Y0:RPN=RPN+1
+3630       IF R=0 AND K MOD 5=2 AND NPL<39 THEN PLX(NPL)=X0-DY*92:PLY(NPL)=Y0+DX*92:NPL=NPL+1
+3640     NEXT K
+3650     FOR K=0 TO NS-2
+3660       M3D QUAD O,K*2,K*2+2,K*2+3,K*2+1,304
+3670     NEXT K
+3680     R=R+1
+3690     READ N
+3700   WEND
+3710 END PROC
+3720 ' ------------------------------------------------------------------------------------------------ trees
+3730 ' a tree of the kind K (0 broadleaf, 1 pine, 2 poplar), scaled by S, standing at X,Y: the crown starts above 72 units, so you can walk and ride under it
+3740 PROC TREE(O,X,Y,S,K)
+3750   LOCAL J
+3760   M3D OBJECT O,24,235
+3770   LRR(0)=5:LRZ(0)=0:LRV(0)=63:LRR(1)=3.2:LRZ(1)=100:LRV(1)=0
+3780   IF K=2 THEN LRZ(1)=80
+3790   CALL LATHE(O,2,312,S)
+3800   IF K=0 THEN
+3810     LRR(0)=14:LRZ(0)=86:LRV(0)=63:LRR(1)=46:LRZ(1)=108:LRV(1)=50:LRR(2)=54:LRZ(2)=140:LRV(2)=32
+3820     LRR(3)=38:LRZ(3)=182:LRV(3)=14:LRR(4)=0.6:LRZ(4)=206:LRV(4)=0
+3830     CALL LATHE(O,5,309,S)
+3840   END IF
+3850   IF K=1 THEN
+3860     FOR J=0 TO 2
+3870       LRR(0)=38-J*7:LRZ(0)=74+J*38:LRV(0)=63:LRR(1)=0.6:LRZ(1)=134+J*38:LRV(1)=0
+3880       CALL LATHE(O,2,310,S)
+3890     NEXT J
+3900   END IF
+3910   IF K=2 THEN
+3920     LRR(0)=10:LRZ(0)=74:LRV(0)=63:LRR(1)=22:LRZ(1)=120:LRV(1)=45:LRR(2)=24:LRZ(2)=180:LRV(2)=25
+3930     LRR(3)=14:LRZ(3)=240:LRV(3)=8:LRR(4)=0.6:LRZ(4)=285:LRV(4)=0
+3940     CALL LATHE(O,5,317,S)
+3950   END IF
+3960   M3D OBJPOS O,X,Y,FN HT(X,Y)-2,FN RN(360)
+3970 END PROC
+3980 ' may a tree stand here? inside the limit LIM, not in the wheat field or the yard, not on a road, not too near another tree
+3990 FUNC TREEOK(X,Y,LIM)
+4000   LOCAL I,DX,DY
+4010   IF ABS(X)>LIM OR ABS(Y)>LIM THEN RETURN 0
+4020   IF ABS(X-1100)<790 AND ABS(Y-650)<590 THEN RETURN 0
+4030   IF ABS(X)<330 AND ABS(Y)<300 THEN RETURN 0
+4040   FOR I=0 TO RPN-1
+4050     DX=RPX(I)-X:DY=RPY(I)-Y
+4060     IF DX*DX+DY*DY<6400 THEN RETURN 0
+4070   NEXT I
+4080   FOR I=0 TO NTR-1
+4090     DX=TRX(I)-X:DY=TRY(I)-Y
+4100     IF DX*DX+DY*DY<4900 THEN RETURN 0
+4110   NEXT I
+4120   RETURN -1
+4130 END FUNC
+4140 LABEL GROVES
+4150 DATA -1800,1800,700,40,2, -2600,-600,600,34,2, -900,-2000,500,30,0, 2400,-1900,700,30,1, 2800,1800,600,30,2, 200,3000,600,26,0, -450,70,140,7,0, 3000,200,500,18,1
+4160 DATA -1200,300,260,10,0, 1800,-300,200,8,2, 0,0,0,0,0
+4170 PROC BUILDTREES
+4180   LOCAL CX,CY,R,N,K,I,T,A,D,X,Y,O,P,S,E
+4190   NTR=0:O=1000
+4200   RANDOMIZE 1987
+4210   RESTORE GROVES
+4220   READ CX,CY,R,N,K
+4230   WHILE N>0
+4240     FOR I=1 TO N*4
+4250       IF NTR<520 THEN
+4260         A=RND(1)*6.2832:D=SQR(RND(1))*R
+4270         X=CX+D*COS(A):Y=CY+D*SIN(A)
+4280         IF FN TREEOK(X,Y,3300) THEN
+4290           TRX(NTR)=X:TRY(NTR)=Y:NTR=NTR+1
+4300           T=K:IF K=2 THEN T=FN RN(3)
+4310           S=0.9+RND(1)*0.5:IF T=1 THEN S=1+RND(1)*0.4
+4320           CALL TREE(O,X,Y,S,T):O=O+1
+4330         END IF
+4340       END IF
+4350     NEXT I
+4360     READ CX,CY,R,N,K
+4370   WEND
+4380   ' the border: a ring of pines and poplars that closes the world
+4390   FOR E=0 TO 3
+4400     FOR P=-3500 TO 3500 STEP 150
+4410       A=FN RN(80)-40
+4420       IF E=0 THEN X=P+A:Y=-3470+FN RN(60)
+4430       IF E=1 THEN X=P+A:Y=3470-FN RN(60)
+4440       IF E=2 THEN X=-3470+FN RN(60):Y=P+A
+4450       IF E=3 THEN X=3470-FN RN(60):Y=P+A
+4460       IF NTR<520 THEN
+4470         IF FN TREEOK(X,Y,3580) THEN
+4480           TRX(NTR)=X:TRY(NTR)=Y:NTR=NTR+1
+4490           T=1+FN RN(2)
+4500           CALL TREE(O,X,Y,1+RND(1)*0.5,T):O=O+1
+4510         END IF
+4520       END IF
+4530     NEXT P
+4540   NEXT E
+4550   ' a big oak and a birch by the house
+4560   CALL TREE(O,-345,-70,1.4,0):O=O+1
+4570   CALL TREE(O,330,190,1.25,0):O=O+1
+4580 END PROC
+4590 ' ------------------------------------------------------------------------------------------------ the house
+4600 PROC BUILDHOUSE
+4610   LOCAL K,Z,H
+4620   M3D OBJECT 300,0,235
+4630   CALL BX(300,-130,-100,0,130,100,5,305)
+4640   ' south wall: the door, a window
+4650   CALL BX(300,-130,-100,5,-100,-92,106,305):CALL BX(300,-100,-100,5,-50,-92,44,305):CALL BX(300,-100,-100,84,-50,-92,106,305)
+4660   CALL BX(300,-50,-100,5,-24,-92,106,305):CALL BX(300,24,-100,5,130,-92,106,305):CALL BX(300,-24,-100,70,24,-92,106,305)
+4670   ' north wall: a window
+4680   CALL BX(300,-130,92,5,-70,100,106,305):CALL BX(300,-70,92,5,-20,100,44,305):CALL BX(300,-70,92,84,-20,100,106,305):CALL BX(300,-20,92,5,130,100,106,305)
+4690   ' west wall, east wall with a window
+4700   CALL BX(300,-130,-92,5,-122,92,106,305)
+4710   CALL BX(300,122,-92,5,130,-20,106,305):CALL BX(300,122,30,5,130,92,106,305):CALL BX(300,122,-20,5,130,30,44,305):CALL BX(300,122,-20,84,130,30,106,305)
+4720   CALL BX(300,-130,-100,100,130,100,104,305)
+4730   ' chimney
+4740   CALL BX(300,78,18,120,98,38,200,307)
+4750   ' the roof (two sided) and the gables
+4760   M3D OBJECT 301,16,230
+4770   M3D VERTEX 301,-142,-118,96,-71,0:M3D VERTEX 301,142,-118,96,71,0:M3D VERTEX 301,142,0,165,71,69:M3D VERTEX 301,-142,0,165,-71,69
+4780   M3D QUAD 301,0,1,2,3,306
+4790   M3D VERTEX 301,142,118,96,71,0:M3D VERTEX 301,-142,118,96,-71,0:M3D VERTEX 301,-142,0,165,-71,69:M3D VERTEX 301,142,0,165,71,69
+4800   M3D QUAD 301,4,5,6,7,306
+4810   M3D OBJECT 302,16,235
+4820   FOR K=0 TO 1
+4830     Z=-130+K*260
+4840     M3D VERTEX 302,Z,-100,106,0,59:M3D VERTEX 302,Z,100,106,100,59:M3D VERTEX 302,Z,0,165,50,0
+4850     M3D FACE 302,K*3,K*3+1,K*3+2,305
+4860   NEXT K
+4870   ' the porch
+4880   M3D OBJECT 304,0,235
+4890   CALL BX(304,-70,-150,0,70,-100,7,305)
+4900   CALL BX(304,-68,-148,7,-62,-142,92,305):CALL BX(304,62,-148,7,68,-142,92,305)
+4910   CALL BX(304,-76,-158,92,76,-96,97,306)
+4920   ' glass: panes of the windows (see-through frames)
+4930   M3D OBJECT 306,17,235
+4940   CALL PANEY(306,-100,-50,-96,44,84,313):CALL PANEY(306,-70,-20,96,44,84,313):CALL PANEX(306,126,-20,30,44,84,313)
+4950   ' the front door, standing open
+4960   M3D OBJECT 305,20,235
+4970   CALL BX(305,0,-2,5,44,2,68,305)
+4980   M3D OBJPOS 305,-22,-96,0,100
+4990   ' furniture
+5000   M3D OBJECT 307,0,235
+5010   CALL BX(307,-122,20,5,-78,92,15,305):CALL BX(307,-121,21,15,-79,91,23,FN CC(9,7)):CALL BX(307,-120,70,23,-82,90,28,FN CC(0,14)):CALL BX(307,-121,21,23,-79,66,26,FN CC(1,6))
+5020   CALL BX(307,-80,50,26,-30,85,29,305)
+5030   CALL BX(307,-78,52,5,-74,56,26,305):CALL BX(307,-36,52,5,-32,56,26,305):CALL BX(307,-78,79,5,-74,83,26,305):CALL BX(307,-36,79,5,-32,83,26,305)
+5040   CALL BX(307,-61,33,5,-49,45,17,305)
+5050   CALL BX(307,76,16,5,104,44,41,FN CC(0,2)):CALL BX(307,86,26,41,94,34,100,FN CC(0,3))
+5060   CALL BX(307,32,90,5,110,92,84,305):CALL BX(307,30,80,5,32,92,84,305):CALL BX(307,110,80,5,112,92,84,305)
+5070   FOR Z=28 TO 76 STEP 24
+5080     CALL BX(307,32,80,Z,110,92,Z+2,305)
+5090     FOR K=0 TO 7
+5100       H=1+FN RN(8)
+5110       CALL BX(307,34+K*9.5,83,Z+2,34+K*9.5+7,89,Z+2+14+FN RN(6),FN CC(H,7+FN RN(3)))
+5120     NEXT K
+5130   NEXT Z
+5140   CALL BX(307,-50,-40,5,30,30,6,323)
+5150 END PROC
+5160 ' the yard: a fence with two gates, the woodpile, mailbox, barrel, telephone poles, hay, the scarecrow
+5170 PROC BUILDYARD
+5180   LOCAL X,Y,K
+5190   M3D OBJECT 320,8,235
+5200   FOR X=-250 TO 250 STEP 40
+5210     IF ABS(X)>=60 THEN CALL BX(320,X-2,-202,0,X+2,-198,44,305)
+5220     IF X<-130 OR X>-20 THEN CALL BX(320,X-2,198,0,X+2,202,44,305)
+5230   NEXT X
+5240   CALL BX(320,-250,-201,20,-60,-199,26,305):CALL BX(320,-250,-201,34,-60,-199,40,305):CALL BX(320,60,-201,20,250,-199,26,305):CALL BX(320,60,-201,34,250,-199,40,305)
+5250   CALL BX(320,-250,199,20,-130,201,26,305):CALL BX(320,-250,199,34,-130,201,40,305):CALL BX(320,-20,199,20,250,201,26,305):CALL BX(320,-20,199,34,250,201,40,305)
+5260   FOR Y=-160 TO 160 STEP 40
+5270     CALL BX(320,-252,Y-2,0,-248,Y+2,44,305):CALL BX(320,248,Y-2,0,252,Y+2,44,305)
+5280   NEXT Y
+5290   CALL BX(320,-251,-200,20,-249,200,26,305):CALL BX(320,-251,-200,34,-249,200,40,305):CALL BX(320,249,-200,20,251,200,26,305):CALL BX(320,249,-200,34,251,200,40,305)
+5300   M3D OBJECT 321,8,235
+5310   FOR K=0 TO 5
+5320     CALL BX(321,135,-60+K*8,0,165,-54+K*8,10,FN CC(12,4+K))
+5330     IF K<5 THEN CALL BX(321,138,-56+K*8,10,162,-50+K*8,20,FN CC(12,6+K))
+5340   NEXT K
+5350   CALL BX(321,90,-185,0,93,-182,34,312):CALL BX(321,84,-190,34,100,-176,46,FN CC(9,5))
+5360   M3D OBJECT 322,8,235
+5370   LRR(0)=9:LRZ(0)=0:LRV(0)=0:LRR(1)=11:LRZ(1)=8:LRV(1)=0:LRR(2)=11:LRZ(2)=24:LRV(2)=0:LRR(3)=9:LRZ(3)=32:LRV(3)=0
+5380   CALL LATHE(322,4,FN CC(9,4),301)
+5390   M3D OBJPOS 322,-150,-135,0
+5400   M3D OBJECT 420,8,235
+5410   FOR K=0 TO NPL-1
+5420     CALL BX(420,PLX(K)-1.6,PLY(K)-1.6,0,PLX(K)+1.6,PLY(K)+1.6,150,312)
+5430     CALL BX(420,PLX(K)-12,PLY(K)-1.2,138,PLX(K)+12,PLY(K)+1.2,141,312)
+5440   NEXT K
+5450   M3D OBJECT 411,8,235
+5460   FOR K=0 TO 2
+5470     CALL BX(411,340,170+K*40,0,380,196+K*40,24,FN CC(3,9+K))
+5480   NEXT K
+5490   CALL BX(411,345,210,24,375,236,46,FN CC(3,11))
+5500   ' the scarecrow in the field
+5510   M3D OBJECT 410,8,235
+5520   CALL BX(410,-2,-2,0,2,2,72,312):CALL BX(410,-24,-1.5,50,24,1.5,54,312):CALL BX(410,-8,-4,32,8,4,56,FN CC(9,5))
+5530   CALL BX(410,-5,-5,58,5,5,68,FN CC(14,11)):CALL BX(410,-9,-9,68,9,9,71,312):CALL BX(410,-5,-5,71,5,5,80,312)
+5540   M3D OBJPOS 410,1100,650,0,200
+5550 END PROC
+5560 ' ------------------------------------------------------------------------------------------------ the wheat field: 16 blocks of crossing see-through rows with a top
+5570 PROC BUILDWHEAT
+5580   LOCAL BI,BJ,O,X1,Y1,X2,Y2,X,Y,B
+5590   FOR BJ=0 TO 3
+5600     FOR BI=0 TO 3
+5610       O=400+BI+BJ*4
+5620       M3D OBJECT O,29,235
+5630       X1=400+BI*350:X2=X1+350:Y1=150+BJ*250:Y2=Y1+250
+5640       M3D VERTEX O,X1,Y1,34,X1*0.5,Y1*0.5:M3D VERTEX O,X2,Y1,34,X2*0.5,Y1*0.5:M3D VERTEX O,X2,Y2,34,X2*0.5,Y2*0.5:M3D VERTEX O,X1,Y2,34,X1*0.5,Y2*0.5
+5650       M3D QUAD O,0,1,2,3,321
+5660       Y=Y1+3
+5670       WHILE Y<Y2
+5680         B=M3D("VERTS",O)
+5690         M3D VERTEX O,X1,Y,0,X1*1.3333,63:M3D VERTEX O,X2,Y,0,X2*1.3333,63:M3D VERTEX O,X2,Y,46,X2*1.3333,0:M3D VERTEX O,X1,Y,46,X1*1.3333,0
+5700         M3D QUAD O,B,B+1,B+2,B+3,308
+5710         Y=Y+30+FN RN(6)
+5720       WEND
+5730       X=X1+5
+5740       WHILE X<X2
+5750         B=M3D("VERTS",O)
+5760         M3D VERTEX O,X,Y1,0,Y1*1.3333,63:M3D VERTEX O,X,Y2,0,Y2*1.3333,63:M3D VERTEX O,X,Y2,46,Y2*1.3333,0:M3D VERTEX O,X,Y1,46,Y1*1.3333,0
+5770         M3D QUAD O,B,B+1,B+2,B+3,308
+5780         X=X+60+FN RN(8)
+5790       WEND
+5800     NEXT BI
+5810   NEXT BJ
+5820 END PROC
+5830 ' ------------------------------------------------------------------------------------------------ the bicycle
+5840 PROC BUILDBIKE
+5850   ' the frame: x forward, y left, z up, the origin on the ground halfway between the axles
+5860   M3D OBJECT 510,28,235
+5870   TBT=FN CC(1,9)
+5880   CALL TUBE(510,-2,0,9,-8,0,25,1.3)
+5890   CALL TUBE(510,-8,0,24,12,0,26,1.2)
+5900   CALL TUBE(510,-2,0,9,12,0,22,1.3)
+5910   CALL TUBE(510,12,0,21,12,0,29,1.6)
+5920   CALL TUBE(510,-2,0,9,-17,0,11,0.8)
+5930   CALL TUBE(510,-8,0,24,-17,0,11,0.8)
+5940   TBT=FN CC(0,6)
+5950   CALL TUBE(510,-8,0,25,-9,0,30,0.9)
+5960   CALL BX(510,-14,-2.6,29.4,-4,2.6,31,FN CC(12,4))
+5970   CALL BX(510,-18,-1,0,-16,1,2,FN CC(0,3))
+5980   TBT=FN CC(0,2)
+5990   CALL RING(510,-17,0,11,10.5)
+6000   CALL BX(510,-18.5,-3,15,-15.5,3,16.5,FN CC(0,4))
+6010   ' the front: fork, stem, handlebar and wheel, turning about the steering axis (origin: on the ground below it, 12 in front of the frame's origin)
+6020   M3D OBJECT 511,28,235
+6030   TBT=FN CC(0,9)
+6040   CALL TUBE(511,0,0,26,6,0,11,0.8)
+6050   CALL TUBE(511,0,0,26,-1,0,31,0.9)
+6060   CALL TUBE(511,-2,-10,31,-2,10,31,0.8)
+6070   TBT=FN CC(0,2)
+6080   CALL RING(511,6,0,11,10.5)
+6090   CALL BX(511,-3.5,-12,29.8,-0.5,-8,32.2,FN CC(0,1)):CALL BX(511,-3.5,8,29.8,-0.5,12,32.2,FN CC(0,1))
+6100   CALL BX(511,3,-1,36,5,1,38,FN CC(3,14))
+6110   M3D OBJECT 512,28,235
+6120   M3D OBJECT 513,28,235
+6130   M3D OBJECT 530,30,235:CALL BX(530,-9,-8,0,9,8,0.3,FN CC(0,0))
+6140   M3D OBJECT 531,30,235:CALL BX(531,-27,-6,0,27,6,0.3,FN CC(0,0))
+6150   M3D OBJPOS 510,0,0,0,0:M3D OBJPOS 511,12,0,0,0:M3D OBJPOS 512,0,0,0,0:M3D OBJPOS 513,12,0,0,0
+6160 END PROC
+6170 ' places the bicycle's objects at its position and heading; the wheels' spokes and the pedals are built again each frame
+6180 PROC PLACEBIKE
+6190   LOCAL C,S,FX,FY,A,PX,PZ,Q
+6200   C=COS(BH*PI/180):S=SIN(BH*PI/180)
+6210   FX=BX+12*C:FY=BY+12*S
+6220   M3D OBJPOS 510,BX,BY,BZ,BH
+6230   M3D OBJECT 512,28,235
+6240   TBT=FN CC(0,11)
+6250   CALL SPOKES(512,-17,11,WA)
+6260   TBT=FN CC(0,10)
+6270   FOR Q=0 TO 1
+6280     A=CA+Q*PI
+6290     PX=-2+5.5*COS(A):PZ=9+5.5*SIN(A)
+6300     IF Q=0 THEN
+6310       CALL TUBE(512,-2,3.5,9,PX,3.5,PZ,0.7)
+6320       CALL BX(512,PX-3,3.6,PZ-0.7,PX+3,7.6,PZ+0.7,FN CC(0,3))
+6330     ELSE
+6340       CALL TUBE(512,-2,-3.5,9,PX,-3.5,PZ,0.7)
+6350       CALL BX(512,PX-3,-7.6,PZ-0.7,PX+3,-3.6,PZ+0.7,FN CC(0,3))
+6360     END IF
+6370   NEXT Q
+6380   M3D OBJECT 513,28,235
+6390   CALL SPOKES(513,6,11,WA)
+6400   M3D OBJPOS 512,BX,BY,BZ,BH
+6410   M3D OBJPOS 511,FX,FY,BZ,BH+BSA
+6420   M3D OBJPOS 513,FX,FY,BZ,BH+BSA
+6430 END PROC
+6440 ' ------------------------------------------------------------------------------------------------ John
+6450 ' a two-bone limb: from the joint H to the end F, both bones L long, the middle joint bends towards the pole (PX,PY,PZ); the middle joint is left in KX,KY,KZ
+6460 PROC IK(HX,HY,HZ,FX,FY,FZ,L,Z)
+6470   LOCAL DX,DY,DZ,D,UX,UY,UZ,A,H,DP,NX,NY,NZ,NL
+6480   DX=FX-HX:DY=FY-HY:DZ=FZ-HZ
+6490   D=SQR(DX*DX+DY*DY+DZ*DZ)
+6500   IF D>2*L-0.05 THEN D=2*L-0.05
+6510   IF D<0.5 THEN D=0.5
+6520   UX=DX/SQR(DX*DX+DY*DY+DZ*DZ+0.0001):UY=DY/SQR(DX*DX+DY*DY+DZ*DZ+0.0001):UZ=DZ/SQR(DX*DX+DY*DY+DZ*DZ+0.0001)
+6530   A=D/2
+6540   H=SQR(MAX(0,L*L-A*A))
+6550   DP=PLX0*UX+PLY0*UY+PLZ0*UZ
+6560   NX=PLX0-DP*UX:NY=PLY0-DP*UY:NZ=PLZ0-DP*UZ
+6570   NL=SQR(NX*NX+NY*NY+NZ*NZ):IF NL<0.001 THEN NL=1
+6580   KX=HX+A*UX+H*NX/NL:KY=HY+A*UY+H*NY/NL:KZ=HZ+A*UZ+H*NZ/NL
+6590 END PROC
+6600 ' a limb with a pole, drawn as two rods; TBT is the color of the upper, TBU of the lower bone
+6610 PROC LIMB(O,HX,HY,HZ,FX,FY,FZ,L)
+6620   CALL IK(HX,HY,HZ,FX,FY,FZ,L,0)
+6630   CALL TUBE(O,HX,HY,HZ,KX,KY,KZ,LH)
+6640   TBT=TBU
+6650   CALL TUBE(O,KX,KY,KZ,FX,FY,FZ,LH*0.8)
+6660 END PROC
+6670 ' builds John into object 520: the body is in coordinates of the object (x forward, y left, z up; the origin on the ground below the hips when standing)
+6680 ' pose 0: standing / walking (PH = the walk phase, AM = the stride 0 .. 1), pose 1: riding (in the coordinates of the bicycle; CA = the cranks, BS = the steering)
+6690 PROC BUILDJOHN(POSE,PH,AM)
+6700   LOCAL Q,SG,FX,FZ,HX,HZ,PX,PZ,A,HY,GX,GY,LN,HIPX,HIPZ,SHX,SHZ,GXL,GYL,BOB
+6710   M3D OBJECT 520,28,235
+6720   CC1=FN CC(5,6):CC2=FN CC(8,5):CC3=FN CC(14,11):CC4=FN CC(0,12):CC5=FN CC(0,14)
+6730   IF POSE=0 THEN
+6740     BOB=0.9*ABS(SIN(PH))*AM
+6750     HIPX=0:HIPZ=27.5-BOB:SHX=0:SHZ=44.5-BOB
+6760     CALL BX(520,-4,-7,HIPZ+0.5,4,7,SHZ+0.5,CC1)
+6770     CALL BX(520,-4.2,-4,SHZ+2,4.2,4,SHZ+11,CC3):CALL BX(520,-4.8,-4.6,SHZ+7,3.6,4.6,SHZ+12.5,CC4):CALL BX(520,4.2,-3.6,SHZ+5.4,5.1,3.6,SHZ+7,FN CC(0,1))
+6780     FOR Q=0 TO 1
+6790       SG=1:IF Q=1 THEN SG=-1
+6800       A=PH+Q*PI
+6810       FX=AM*9*SIN(A):FZ=2.8+AM*MAX(0,COS(A))*5
+6820       PLX0=1:PLY0=0:PLZ0=0.1:LH=2.6:TBT=FN CC(8,5):TBU=TBT
+6830       CALL LIMB(520,0,SG*4,HIPZ,FX,SG*4,FZ,14.8)
+6840       CALL BX(520,FX-3.5,SG*4-3,FZ-2.8,FX+6,SG*4+3,FZ+1.5,FN CC(0,13))
+6850       HX=-AM*7*SIN(A)
+6860       PLX0=-1:PLY0=SG*0.35:PLZ0=-0.1:LH=2.3:TBT=CC1:TBU=CC3
+6870       CALL LIMB(520,0,SG*8.5,SHZ-1.2,HX,SG*9.5,FZ+19-AM*MAX(0,COS(A))*2,11)
+6880       CALL BX(520,HX-1.8,SG*9.5-1.8,FZ+16,HX+1.8,SG*9.5+1.8,FZ+20,CC3)
+6890     NEXT Q
+6900   ELSE
+6910     HIPX=-9.5:HIPZ=32.4:SHX=-3:SHZ=46.4
+6920     TBT=CC1
+6930     CALL TUBE(520,HIPX,3.4,HIPZ,SHX,3.4,SHZ,3.4):CALL TUBE(520,HIPX,-3.4,HIPZ,SHX,-3.4,SHZ,3.4)
+6940     CALL BX(520,SHX-0.5,-4,SHZ+2,SHX+8.5,4,SHZ+11,CC3):CALL BX(520,SHX-1.2,-4.6,SHZ+7,SHX+7.4,4.6,SHZ+12.5,CC4):CALL BX(520,SHX+8.5,-3.6,SHZ+5.4,SHX+9.4,3.6,SHZ+7,FN CC(0,1))
+6950     FOR Q=0 TO 1
+6960       SG=1:IF Q=1 THEN SG=-1
+6970       A=CA+Q*PI+PI
+6980       PX=-2+5.5*COS(A):PZ=9+5.5*SIN(A)
+6990       PLX0=1:PLY0=0:PLZ0=0.15:LH=2.6:TBT=FN CC(8,5):TBU=TBT
+7000       CALL LIMB(520,HIPX,SG*3.8,HIPZ,PX-0.5,SG*5.6,PZ+4.2,14.8)
+7010       CALL BX(520,PX-3.5,SG*5.6-2.8,PZ+0.8,PX+6,SG*5.6+2.8,PZ+4.5,FN CC(0,13))
+7020       GXL=-2:GYL=SG*10
+7030       GX=12+GXL*COS(BSA*PI/180)-GYL*SIN(BSA*PI/180)-12:GY=GXL*SIN(BSA*PI/180)+GYL*COS(BSA*PI/180)
+7040       PLX0=-0.4:PLY0=SG*0.9:PLZ0=-0.3:LH=2.3:TBT=CC1:TBU=CC3
+7050       CALL LIMB(520,SHX,SG*7,SHZ-1.5,12+GX,GY,31.8,11)
+7060       CALL BX(520,12+GX-1.8,GY-1.8,31,12+GX+1.8,GY+1.8,33.4,CC3)
+7070     NEXT Q
+7080   END IF
+7090 END PROC
+7100 ' ------------------------------------------------------------------------------------------------ the camera
+7110 PROC CAMUPDATE(DT)
+7120   LOCAL TX,TY,TZ,D,E,K,C,S,DS,CX,CY,CZ,TG,H,FZ,R
+7130   IF MODE=1 THEN TG=BH ELSE TG=JH
+7140   K=3.4:IF MODE=1 THEN K=2.4
+7150   CYW=CYW+FN ADIFF(TG+CO,CYW)*MIN(1,K*DT)
+7160   TX=JX:TY=JY:TZ=JZ+36:IF MODE=1 THEN TZ=JZ+40
+7170   D=125:IF MODE=1 THEN D=155+MAX(0,BV)*0.18
+7180   IF CZM>0 THEN D=CZM
+7190   E=(12+CP)*PI/180
+7200   C=COS(CYW*PI/180):S=SIN(CYW*PI/180)
+7210   ' a ray from John's head back to the wished place: whatever is in the way pulls the camera in
+7220   M3D CAMERA TX,TY,TZ-46,CYW+180,12+CP
+7230   R=M3D("SHOOT",D+16)
+7240   DS=D
+7250   IF M3D("SHOTKIND")=1 THEN DS=MIN(D,MAX(20,M3D("SHOTDIST")-12))
+7260   DSV=DS
+7270   CX=TX-C*DS*COS(E):CY=TY-S*DS*COS(E):CZ=TZ+DS*SIN(E)
+7280   FZ=MAX(M3D("FLOORAT",CX,CY,CZ),FN HT(CX,CY))+10
+7290   IF CZ<FZ THEN CZ=FZ
+7300   H=SQR((TX-CX)^2+(TY-CY)^2)
+7310   M3D CAMERA CX,CY,CZ-46,CYW,ATAN2(TZ-CZ,H)*180/PI
+7320 END PROC
+7330 ' ------------------------------------------------------------------------------------------------ the physics
+7340 PROC SIM(DT)
+7350   LOCAL TV,A,DX,DY,TH,C,S,SL,TP,DM,OM,MX,AC,SD,DD
+7360   ' ---- the bicycle (also when nobody rides it: it rolls out)
+7370   TH=0:IF MODE=1 THEN TH=KF
+7380   C=COS(BH*PI/180):S=SIN(BH*PI/180)
+7390   AC=0:SPRN=0
+7400   IF TH>0 THEN
+7410     IF KR<>0 AND ST>0.02 THEN
+7420       AC=170*(1-BV/310):SPRN=-1
+7430     ELSE
+7440       AC=78*(1-BV/190)
+7450     END IF
+7460     IF BV<0 THEN AC=AC+130
+7470   END IF
+7480   IF AC<0 THEN AC=0
+7490   IF SPRN THEN
+7500     ST=ST-0.2*DT:IF ST<0 THEN ST=0
+7510   ELSE
+7520     ST=ST+0.12*DT:IF ST>1 THEN ST=1
+7530   END IF
+7540   SL=(FN HT(BX+C*24,BY+S*24)-FN HT(BX,BY))/24
+7550   BV=BV+AC*DT-260*SL*DT
+7560   IF BV>0 THEN BV=BV-(9+0.05*BV)*DT
+7570   IF BV<0 THEN BV=BV+(9-0.05*BV)*DT
+7580   IF ABS(BV)<2 AND AC=0 AND ABS(SL)<0.02 THEN BV=0
+7590   IF MODE=1 AND (KB<>0 OR KF<0) THEN
+7600     IF BV>0.5 THEN
+7610       BV=BV-230*DT:IF BV<0 THEN BV=0
+7620     ELSE
+7630       BV=BV-70*DT:IF BV<-45 THEN BV=-45
+7640     END IF
+7650   END IF
+7660   ' steering: the angle of the front wheel shrinks with the speed, the turning rate follows from the wheel base (36 units)
+7670   TP=0:IF MODE=1 THEN TP=KT
+7680   BS=BS+(TP-BS)*MIN(1,7*DT)
+7690   DM=0.6/(1+(BV/95)^2)
+7700   OM=BV/36*TAN(DM*BS)*180/PI:BSA=DM*BS*180/PI
+7710   BH=BH+OM*DT
+7720   DX=COS(BH*PI/180)*BV*DT:DY=SIN(BH*PI/180)*BV*DT
+7730   IF ABS(BV)>0.3 THEN
+7740     M3D THINGMOVE 1,DX,DY
+7750     IF M3D("HIT")<>0 THEN
+7760       IF ABS(BV)>120 THEN
+7770         CALL SND(4):IF MODE=1 THEN ST=MAX(0,ST-0.25):CALL SAY("OUCH. THAT WAS A WALL.")
+7780         BV=-BV*0.2
+7790       ELSE
+7800         BV=BV*0.35
+7810       END IF
+7820     END IF
+7830   END IF
+7840   BX=M3D("TX",1):BY=M3D("TY",1):BZ=M3D("TZ",1)
+7850   IF ABS(BX)>3420 OR ABS(BY)>3420 THEN
+7860     BX=MAX(-3420,MIN(3420,BX)):BY=MAX(-3420,MIN(3420,BY))
+7870     M3D THINGPOS 1,BX,BY,BZ:BV=BV*0.5
+7880   END IF
+7890   WA=WA+BV*DT/11
+7900   IF TH>0 OR (MODE=1 AND BV<20 AND TH>0) THEN CA=CA+MAX(BV*DT/69*2*PI/2.3,TH*0.9*DT*3)
+7910   IF WA>1000 THEN WA=WA-1000*PI
+7920   IF CA>100 THEN CA=CA-100
+7930   TK=TK+ABS(BV)*DT
+7940   IF MODE<>1 AND TK>70 AND ABS(BV)>25 THEN TK=0:CALL SND(3)
+7950   IF MODE=1 AND TH<=0 AND TK>70 AND BV>25 THEN TK=0:CALL SND(3)
+7960   ' ---- John
+7970   IF MODE=0 THEN
+7980     TV=0
+7990     IF KF>0 THEN
+8000       TV=62*KF:IF KR<>0 THEN TV=155*KF
+8010     END IF
+8020     IF KF<0 THEN TV=38*KF
+8030     JV=JV+SGN(TV-JV)*MIN(ABS(TV-JV),520*DT)
+8040     JH=JH+KT*(150-JV*0.25)*DT
+8050     DX=COS(JH*PI/180)*JV*DT:DY=SIN(JH*PI/180)*JV*DT
+8060     IF ABS(JV)>0.3 THEN
+8070       M3D THINGMOVE 0,DX,DY
+8080       IF M3D("HIT")<>0 THEN JV=JV*0.6
+8090       JX=M3D("TX",0):JY=M3D("TY",0):JZ=M3D("TZ",0)
+8100       IF ABS(JX)>3420 OR ABS(JY)>3420 THEN
+8110         JX=MAX(-3420,MIN(3420,JX)):JY=MAX(-3420,MIN(3420,JY))
+8120         M3D THINGPOS 0,JX,JY,JZ
+8130       END IF
+8140     ELSE
+8150       JV=0
+8160     END IF
+8170     PH=PH+ABS(JV)*DT/21
+8180     IF ABS(JV)>5 THEN STD=STD+ABS(JV)*DT
+8190     IF STD>40 THEN STD=0:CALL SND(2)
+8200     ' get on
+8210     DX=BX-JX:DY=BY-JY
+8220     NEAR=0:IF DX*DX+DY*DY<4900 THEN NEAR=-1
+8230     IF KU<>0 AND NEAR THEN
+8240       MODE=2:MT=0:MFX=JX:MFY=JY:MFZ=JZ:CALL SND(2)
+8250     END IF
+8260   END IF
+8270   IF MODE=2 THEN
+8280     MT=MT+DT
+8290     A=MT/0.45:IF A>1 THEN A=1
+8300     JX=MFX+(BX-MFX)*A:JY=MFY+(BY-MFY)*A:JZ=MFZ+(BZ-MFZ)*A
+8310     JH=JH+FN ADIFF(BH,JH)*MIN(1,12*DT)
+8320     PH=PH+DT*7
+8330     IF MT>=0.45 THEN MODE=1:JV=0:CALL SAY("W: PEDAL   SHIFT: SPRINT   S: BRAKE   E: GET OFF   B: BELL")
+8340   END IF
+8350   IF MODE=1 THEN
+8360     JX=BX:JY=BY:JZ=BZ:JH=BH
+8370     M3D THINGPOS 0,JX,JY,JZ
+8380     IF KU<>0 THEN
+8390       MODE=3:MT=0:MFX=BX:MFY=BY:MFZ=BZ
+8400       DX=-SIN(BH*PI/180)*38:DY=COS(BH*PI/180)*38
+8410       M3D THINGPOS 0,BX,BY,BZ:M3D THINGMOVE 0,DX,DY
+8420       MGX=M3D("TX",0):MGY=M3D("TY",0):MGZ=M3D("TZ",0)
+8430       M3D THINGPOS 0,MFX,MFY,MFZ:CALL SND(2)
+8440     END IF
+8450   END IF
+8460   IF MODE=3 THEN
+8470     MT=MT+DT
+8480     A=MT/0.4:IF A>1 THEN A=1
+8490     JX=MFX+(MGX-MFX)*A:JY=MFY+(MGY-MFY)*A:JZ=MFZ+(MGZ-MFZ)*A
+8500     PH=PH+DT*7
+8510     IF MT>=0.4 THEN
+8520       MODE=0:JV=0:M3D THINGPOS 0,MGX,MGY,MGZ:JX=MGX:JY=MGY:JZ=MGZ
+8530     END IF
+8540   END IF
+8550   IF MSGT>0 THEN MSGT=MSGT-DT
+8560 END PROC
+8570 ' ------------------------------------------------------------------------------------------------ messages, input, the picture
+8580 PROC SAY(T$)
+8590   MSG$=T$:MSGT=5
+8600 END PROC
+8610 PROC READKEYS
+8620   LOCAL U,B,K
+8630   KF=0:KT=0
+8640   IF KEY("UP") OR KEY("W") THEN KF=KF+1
+8650   IF KEY("DOWN") OR KEY("S") THEN KF=KF-1
+8660   IF KEY("LEFT") OR KEY("A") THEN KT=KT+1
+8670   IF KEY("RIGHT") OR KEY("D") THEN KT=KT-1
+8680   KF=KF-JOY("LY"):KT=KT-JOY("LX")
+8690   IF KF>1 THEN KF=1
+8700   IF KF<-1 THEN KF=-1
+8710   IF KT>1 THEN KT=1
+8720   IF KT<-1 THEN KT=-1
+8730   KR=0:IF KEY("SHIFT") OR JOY("LT")>0.4 THEN KR=-1
+8740   KB=0:IF KEY("SPACE") OR JOY("A") THEN KB=-1
+8750   U=0:IF KEY("E") OR KEY("RETURN") OR JOY("X") THEN U=-1
+8760   KU=0:IF U<>0 AND UL=0 THEN KU=-1
+8770   UL=U
+8780   B=0:IF KEY("B") OR JOY("B") THEN B=-1
+8790   KBL=0:IF B<>0 AND BL=0 THEN KBL=-1
+8800   BL=B
+8810   K=0
+8820   IF KEY("Z") THEN K=K+1
+8830   IF KEY("X") THEN K=K-1
+8840   K=K+JOY("RX")*-1
+8850   IF K<>0 THEN CO=CO+K*80*DT0
+8860   IF KEY("PGUP") THEN CP=CP+40*DT0
+8870   IF KEY("PGDN") THEN CP=CP-40*DT0
+8880   CP=CP-JOY("RY")*40*DT0
+8890   IF CP>45 THEN CP=45
+8900   IF CP<-8 THEN CP=-8
+8910   ' the right mouse button drags the camera
+8920   IF (MOUSE("B") AND 2)<>0 THEN
+8930     IF MB<>0 THEN
+8940       CO=CO-(MOUSE("X")-MX)*0.35:CP=CP-(MOUSE("Y")-MY)*0.25
+8950     END IF
+8960     MB=-1
+8970   ELSE
+8980     MB=0
+8990   END IF
+9000   MX=MOUSE("X"):MY=MOUSE("Y")
+9010   ' the camera swings back behind John when you leave it alone
+9020   IF K=0 AND MB=0 AND NOT KEY("PGUP") AND NOT KEY("PGDN") THEN
+9030     CO=CO*(1-MIN(1,0.8*DT0))
+9040     IF ABS(KF)>0 THEN CP=CP*(1-MIN(1,0.6*DT0))
+9050   END IF
+9060   IF KBL<>0 THEN CALL SND(1)
+9070 END PROC
+9080 PROC HUD
+9090   LOCAL I,S,X
+9100   CALL W3K_HUDBAR(264,36)
+9110   IF MODE=1 THEN
+9120     GFX TEXT 8,269,"ON THE BICYCLE",FN CC(3,15)
+9130     S=INT(ABS(BV)*0.1152)
+9140     GFX TEXT 8,283,"SPEED "+STR$(S)+" KM/H",FN CC(0,13)
+9150   ELSE
+9160     GFX TEXT 8,269,"ON FOOT",FN CC(3,15)
+9170     GFX TEXT 8,283,"JOHN",FN CC(0,13)
+9180   END IF
+9190   GFX TEXT 230,269,"STAMINA",FN CC(0,12)
+9200   GFX LINE 230,284,339,293,FN CC(0,3),BF
+9210   GFX LINE 232,286,232+INT(105*ST),291,FN CC(4,12),BF
+9220   GFX TEXT 380,269,"1987",FN CC(2,13)
+9230   GFX TEXT 380,283,"THE SKY IS QUIET",FN CC(0,9)
+9240   IF MODE=0 AND NEAR THEN
+9250     GFX TEXT 8,6,"E: GET ON THE BICYCLE",FN CC(3,15)
+9260   END IF
+9270   IF MSGT>0 AND (MODE<>0 OR NOT NEAR) THEN
+9280     GFX TEXT (640-LEN(MSG$)*8)\2+1,7,MSG$,FN CC(0,1)
+9290     GFX TEXT (640-LEN(MSG$)*8)\2,6,MSG$,FN CC(3,15)
+9300   END IF
+9310 END PROC
+9320 PROC RIGS
+9330   IF MODE=1 THEN
+9340     CALL BUILDJOHN(1,PH,0)
+9350     M3D OBJPOS 520,BX,BY,BZ,BH
+9360   ELSE
+9370     AM=MIN(1,ABS(JV)/90):IF MODE>=2 THEN AM=0.7
+9380     CALL BUILDJOHN(0,PH,AM)
+9390     M3D OBJPOS 520,JX,JY,JZ,JH
+9400   END IF
+9410   CALL PLACEBIKE
+9420   M3D OBJPOS 531,BX,BY,FN FLR(BX,BY)+0.8,BH
+9430   IF MODE=1 THEN
+9440     M3D OBJSHOW 530,0
+9450   ELSE
+9460     M3D OBJSHOW 530,1:M3D OBJPOS 530,JX,JY,FN FLR(JX,JY)+0.8,JH
+9470   END IF
+9480 END PROC
+9490 PROC DRAWFRAME
+9500   CALL CAMUPDATE(DTF)
+9510   CALL RIGS
+9520   M3D RENDER
+9530   CALL HUD
+9540   CALL W3K_SHOW
+9550 END PROC
+9560 ' ------------------------------------------------------------------------------------------------ the game
+9570 PROC NEWGAME
+9580   JX=0:JY=-172:JH=90:JV=0:JZ=FN FLR(JX,JY)
+9590   BX=40:BY=-176:BH=270:BV=0:BS=0:BSA=0:BZ=FN FLR(BX,BY):WA=0:CA=0:ST=1
+9600   M3D THINGPOS 0,JX,JY,JZ:M3D THINGPOS 1,BX,BY,BZ
+9610   CZM=0:MODE=0:MT=0:PH=0:STD=0:TK=0:CYW=JH:CO=0:CP=0:KU=0:UL=0:BL=0:NEAR=0:MSGT=0:MB=0
+9620   CALL SAY("WALK WITH W A S D. THE BICYCLE IS BY THE PORCH: STAND NEAR IT AND PRESS E.")
+9630   MSGT=14
+9640 END PROC
+9650 PROC PLAYLOOP
+9660   LOCAL T0,FR,Y,YL,ST0
+9670   T0=TI:YL=0
+9680   REPEAT
+9690     DT0=(TI-T0)/60:T0=TI
+9700     IF DT0>0.1 THEN DT0=0.1
+9710     DTF=DT0
+9720     CALL READKEYS
+9730     IF KEY("ESC") THEN IN_QUIT=1
+9740     CALL SIM(DT0)
+9750     CALL DRAWFRAME
+9760     IF FN IN_SERVICE() THEN
+9770       CALL BIGTEXT(110,"PAUSED",FN CC(0,15),3)
+9780       CALL W3K_SHOW
+9790       CALL IN_PAUSELOOP
+9800       T0=TI:W3K_T0=TI
+9810     END IF
+9820     Y=JOY("Y")
+9830     IF IN_KEY=79 OR (Y<>0 AND YL=0) THEN
+9840       CALL P3_DIALOG
+9850       T0=TI
+9860     END IF
+9870     YL=Y
+9880   UNTIL IN_QUIT
+9890 END PROC
+9900 ' the title: the camera circles John's house
+9910 PROC TITLE
+9920   LOCAL A,T0,C,Q,X,Y
+9930   T0=TI:Q=0
+9940   CALL NEWGAME
+9950   REPEAT
+9960     A=4.712389+1.05*SIN((TI-T0)/260)
+9970     X=20+240*COS(A):Y=-150+240*SIN(A)
+9980     M3D CAMERA X,Y,100-46,(A+PI)*180/PI,-10
+9990     CALL RIGS
+10000     M3D RENDER
+10010     GFX LINE 0,60,639,150,FN CC(0,1),BF
+10020     CALL BIGTEXT(66,"1987",FN CC(3,15),6)
+10030     CALL BIGTEXT(150,"AFTER THE ARRIVAL",FN CC(0,13),2)
+10040     GFX LINE 0,264,639,299,FN CC(0,1),BF
+10050     CALL BIGTEXT(212,"THE SKY IS QUIET.  THE FIELD IS RIPE.  NOBODY IS LEFT TO HARVEST IT.",FN CC(0,13),1)
+10060     IF (TI-T0) MOD 60<40 THEN CALL BIGTEXT(274,"PRESS SPACE OR RETURN",FN CC(3,15),1)
+10070     CALL W3K_SHOW
+10080     IF FN IN_SERVICE() THEN Q=Q
+10090     C=0
+10100     IF IN_KEY=32 OR IN_KEY=13 THEN C=-1
+10110     IF KEY("SPACE") OR KEY("RETURN") OR JOY("A") OR JOY("START") THEN C=-1
+10120   UNTIL C OR IN_QUIT
+10130   CALL IN_WAITRELEASE
+10140 END PROC
+10150 ' ------------------------------------------------------------------------------------------------ test mode
+10160 PROC SPLIT(L$)
+10170   LOCAL I,N,C$,CUR$
+10180   FOR I=0 TO 7
+10190     W$(I)=""
+10200   NEXT I
+10210   N=0:CUR$=""
+10220   FOR I=1 TO LEN(L$)
+10230     C$=MID$(L$,I,1)
+10240     IF C$=" " THEN
+10250       IF CUR$<>"" AND N<7 THEN W$(N)=CUR$:N=N+1
+10260       CUR$=""
+10270     ELSE
+10280       CUR$=CUR$+C$
+10290     END IF
+10300   NEXT I
+10310   IF CUR$<>"" AND N<7 THEN W$(N)=CUR$
+10320 END PROC
+10330 ' commands, one per line of the file G1987_PLAY: f v (forward -1..1), t v (turn), run v, brake v, use (get on / off), wait seconds, goto x y heading,
+10340 ' bike x y heading, state (prints), shot name (a screenshot in the window host), say text, quit
+10350 PROC PLAYBACK
+10360   LOCAL L$,C$,I,N,PF,PT,PR,PB,T0
+10370   PF=0:PT=0:PR=0:PB=0
+10380   WHILE NOT EOF(4)
+10390     LINE INPUT #4,L$
+10400     CALL SPLIT(L$)
+10410     C$=W$(0)
+10420     IF C$="f" THEN PF=VAL(W$(1))
+10430     IF C$="t" THEN PT=VAL(W$(1))
+10440     IF C$="run" THEN PR=VAL(W$(1))
+10450     IF C$="brake" THEN PB=VAL(W$(1))
+10460     IF C$="use" THEN KU=-1
+10470     IF C$="goto" THEN
+10480       JX=VAL(W$(1)):JY=VAL(W$(2)):JH=VAL(W$(3)):JZ=FN FLR(JX,JY):JV=0:M3D THINGPOS 0,JX,JY,JZ
+10490     END IF
+10500     IF C$="bike" THEN
+10510       BX=VAL(W$(1)):BY=VAL(W$(2)):BH=VAL(W$(3)):BZ=FN FLR(BX,BY):BV=0:M3D THINGPOS 1,BX,BY,BZ
+10520     END IF
+10530     IF C$="wait" THEN
+10540       N=INT(VAL(W$(1))*60)
+10550       FOR I=1 TO N
+10560         KF=PF:KT=PT:KR=PR:KB=PB
+10570         CALL SIM(1/60)
+10580         KU=0
+10590         DTF=1/60
+10600         CALL CAMUPDATE(1/60)
+10610       NEXT I
+10620     END IF
+10630     IF C$="state" THEN
+10640       PRINT "state mode=";MODE;" jx=";INT(JX);" jy=";INT(JY);" jz=";INT(JZ+0.5);" jh=";INT(JH);" jv=";INT(JV);" bx=";INT(BX);" by=";INT(BY);" bz=";INT(BZ+0.5);" bh=";INT(BH);" bv=";INT(BV);" st=";INT(ST*100)
+10650     END IF
+10660     IF C$="ray" THEN
+10670       M3D CAMERA VAL(W$(1)),VAL(W$(2)),VAL(W$(3))-46,VAL(W$(4)),VAL(W$(5))
+10680       N=M3D("SHOOT",600)
+10690       PRINT "ray kind=";M3D("SHOTKIND");" obj=";M3D("SHOTOBJ");" dist=";INT(M3D("SHOTDIST"))
+10700     END IF
+10710     IF C$="bench" AND NOT HL THEN
+10720       N=INT(VAL(W$(1))):T0=TI
+10730       FOR I=1 TO N
+10740         CALL SIM(1/60):CALL DRAWFRAME
+10750       NEXT I
+10760       PRINT "bench";N;" frames, ms per frame";INT((TI-T0)*1000/60/N);" renderer";M3D("RENDERER");" drawn";M3D("DRAWN")
+10770       OPEN "bench.txt" FOR APPEND AS #5:PRINT #5,"bench";N;" ms per frame";INT((TI-T0)*1000/60/N);" renderer";M3D("RENDERER");" drawn";M3D("DRAWN"):CLOSE #5
+10780     END IF
+10790     IF C$="zoom" THEN CZM=VAL(W$(1))
+10800     IF C$="co" THEN CO=VAL(W$(1)):CYW=JH+CO
+10810     IF C$="cp" THEN CP=VAL(W$(1))
+10820     IF C$="cam" THEN
+10830       PRINT "ds=";INT(DSV)
+10840       PRINT "cam x=";INT(M3D("X"));" y=";INT(M3D("Y"));" z=";INT(M3D("Z")+46);" yaw=";INT(M3D("YAW"));" pitch=";INT(M3D("PITCH"))
+10850     END IF
+10860     IF C$="shot" AND NOT HL THEN
+10870       CALL DRAWFRAME
+10880       CALL DRAWFRAME
+10890       SCREENSHOT W$(1)
+10900     END IF
+10910     IF C$="quit" THEN EXIT PROC
+10920   WEND
+10930 END PROC
+10940 ' ------------------------------------------------------------------------------------------------ main
+10950 LABEL MAIN
+10960 IN_QUIT=0
+10970 IF NOT HL THEN CALL W3K_SETUP:CALL W3K_MESH:CALL MAKETEX
+10980 CALL BUILDTERRAIN
+10990 CALL BUILDROADS
+11000 CALL BUILDTREES
+11010 CALL BUILDHOUSE
+11020 CALL BUILDYARD
+11030 CALL BUILDWHEAT
+11040 CALL BUILDBIKE
+11050 M3D THING 0,0,0,0,299,30,56:M3D THING 1,0,0,0,299,35,40
+11060 M3D PLAYER 14,56,46,24
+11070 M3D FAR 2400
+11080 IF NOT HL THEN
+11090   CALL W3K_VIEW(0,0,640,264,2)
+11100   M3D COLORMAP
+11110   CALL P3_LOAD
+11120   SFX 1,"I12 V0.45 T200 ML O6 L16 C R32 C"
+11130   SFX 2,"W3 V0.12 ML X0,0.004,0.25,0.03 H420,32"
+11140   SFX 3,"W3 V0.05 ML X0,0.002,0.2,0.01 H3500,64"
+11150   SFX 4,"I4 V0.35 ML X0.2,0.3,0.5,0.4 S80,150,20 S150,70,30"
+11160 END IF
+11170 IF ENV$("G1987_PLAY")<>"" THEN OPEN ENV$("G1987_PLAY") FOR INPUT AS #4:CALL NEWGAME:DT0=1/60:CALL PLAYBACK:IF NOT HL THEN CALL W3K_DONE
+11180 IF ENV$("G1987_PLAY")<>"" THEN BYE
+11190 CALL TITLE
+11200 IF IN_QUIT=0 THEN CALL NEWGAME
+11210 IF IN_QUIT=0 THEN CALL PLAYLOOP
+11220 CALL W3K_DONE
+11230 CALL TX_BYE("1987")
+11240 END
+11250 LABEL FAILED
+11260 IF NOT HL THEN CALL W3K_DONE
+11270 PRINT "Error: ";ERR$;" in line ";ERL
