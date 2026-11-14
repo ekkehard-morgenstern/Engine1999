@@ -297,7 +297,6 @@
 2730   CALL DA_FACADE
 2740   CALL DA_FENCEBACK
 2750   CALL DA_TOWN
-2760   CALL MAKEGLASS
 2770   CALL MAKEWATER
 2780   CALL MAKETOWN
 2790   CALL MAKECARS
@@ -1550,13 +1549,10 @@
 15030 DATA 480,-5,0
 15040 DATA 480,60,0
 15050 DATA 9999
-33020 ' glass: no picture, a plain color: palette entry 11 (unused by the pictures and the world document, whose flat colors are 1 .. 10 and 12 .. 16) is a pale blue with an alpha of its own
-33030 ' (RGB(r,g,b,a)); the window panes (objects 1058 .. 1085 of the world document, flags 10 = translucent + see-through, flat picture number 11) are thin boxes in the window holes, and a
-33040 ' translucent object mixes a color that has an alpha of its own with that alpha (the renderers read it from the palette: docs/3d-mesh-subsystem.md, "Palette alpha")
-33050 PROC MAKEGLASS
-33060   GFX PALETTE 0,11,RGB(150,205,240,90)
-33070   GFX PALETTE 3,11,RGB(150,205,240,90)
-33150 END PROC
+33020 ' glass: the window panes (objects 1058 .. 1085 of the world document, flags 10 = translucent + see-through, thin boxes in the window holes) carry the picture number 11, which is the
+33030 ' SKY picture (CALL W3K_SKY(11), M3D SKY 11): so the glass shows the sky at 50 % over what lies behind it, a reflection of clouds in the panes. This began as a mistake (a plain tinted
+33040 ' glass was meant, picture number 11 = the flat palette color 11), the owner liked it and it stays; it is documented as such in docs/deqq2.md. For a plain tint give the panes an unused picture
+33050 ' number (no picture drawn for it: the palette color of that number is used flat) and set that palette entry with RGB(r,g,b,a): a translucent object mixes a color with an alpha of its own with it.
 33160 ' water (textures 201..204, 64 x 64): four phases of a ripple pattern that repeats sideways; texture 205 shows them in turn (W3D ANIM)
 33170 PROC MAKEWATER
 33180   LOCAL F,X,Y,YY
