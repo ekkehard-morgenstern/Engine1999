@@ -26,7 +26,7 @@
 220 BREAK OFF
 230 ON ERROR GOTO FAILED
 240 DIM KD(200),SL(200),HX(200),HY(200),TXN(200),TWD(200),THT(200),TZO(200),TLZ(200),TLT(200),ACT(200),RCH(200),NMS$(200),IL(100),PARTNO(200),DESC$(200),DG(3),W$(8)
-250 DIM DHX(5),DHY(5),DBY(5),DSG(5),INV(3),BUILT(9),DSEC(5),DOP(5),DLK(5),DCUR(5),WPX(140),WPY(140),WPP(140),CARON(4),CARD(4),CARV(4),CARCOL(4),CARHON(4),CARSND(4),NM$(30),CMT$(12)
+250 DIM DHX(5),DHY(5),DBY(5),DSG(5),INV(3),BUILT(9),DSEC(5),DOP(5),DLK(5),DCUR(5),WPX(140),WPY(140),WPP(140),CARON(6),CARD(6),CARV(6),CARCOL(6),CARHON(6),CARSND(6),NM$(30),CMT$(12)
 255 DIM LRR(10),LRZ(10),VOK(420),MCUR(200),MPX(200),MPY(200),MB(220),MBK(220),MD(200),FLG(200),FLN(8),FLT(200),FOX(200),FOY(200),FOZ(200),FTX(200),FTY(200),FTZ(200),BNL$(3)
 260 GOTO MAIN
 270 ' ------------------------------------------------------------------------------------------------ small helpers
@@ -1097,7 +1097,7 @@
 10640   DOP(1)=-1:DLK(1)=0:DCUR(1)=100
 10650   REM
 10660   M3D OBJSHOW 3000,0
-10670   FOR I=0 TO 2:CARON(I)=0:NEXT I:FOR I=0 TO 8:M3D OBJSHOW 3200+I,0:NEXT I
+10670   FOR I=0 TO 5:CARON(I)=0:NEXT I:FOR I=0 TO 17:M3D OBJSHOW 3200+I,0:NEXT I
 10680   CARNEXT=4:NCARS=0:CARSP=0
 10690   FOR I=2 TO 4
 10700     M3D OBJPOS DSEC(I),DHX(I),DHY(I),0,DBY(I)
@@ -1684,7 +1684,7 @@
 34330   CALL W3K_BRICK(251,0)
 34340 END PROC
 34350 ' ------------------------------------------------------------------------------------------------ cars on the ring road
-34358 ' the cars are meshes (objects 3200 + 3 * slot + color, up to three at a time in three colors, one of them shown): a lower body, a tapering cabin of glass with a body colored roof,
+34358 ' the cars are meshes (objects 3200 + 3 * slot + color, up to six at a time in three colors, one of them shown): a lower body, a tapering cabin of glass with a body colored roof,
 34366 ' lights, bumpers and four eight sided wheels; local coordinates: x forward (heading 0 = east), y to the left, z up; the pictures are 16 x 16 flat colors (230 .. 232 the bodies,
 34374 ' 233 glass, 234 tyre, 235 headlight, 236 tail light, 237 bumper, 238 wheel cap 80 x 22)
 34382 PROC CARTEX(N,C1,C2,GL)
@@ -1769,7 +1769,7 @@
 34942 END PROC
 34950 PROC BUILDCARS
 34958   LOCAL K,C
-34966   FOR K=0 TO 2
+34966   FOR K=0 TO 5
 34974     FOR C=0 TO 2
 34982       CALL CARMESH(3200+K*3+C,230+C)
 34990     NEXT C
@@ -1808,13 +1808,13 @@
 35128     END IF
 35129   END IF
 35240 END PROC
-35250 ' the cars: up to three at a time, a new one every 15 .. 40 seconds, each drives once round the block (51 s) and is gone; one that has you in front of it on the road
+35250 ' the cars: up to six at a time, a new one every 6 .. 20 seconds, each drives once round the block (51 s) and is gone; one that has you in front of it on the road
 35260 ' brakes and honks, then drives on when the way is free; the picture shows the car from the side it is seen from (4 views)
 35270 PROC CARS(DT)
 35280   LOCAL K,F,L,DX,DY,HX,HY,DT2,V
 35290   IF GT>=CARNEXT THEN
-35300     CARNEXT=GT+15+RND(1)*25
-35310     FOR K=0 TO 2
+35300     CARNEXT=GT+6+RND(1)*14
+35310     FOR K=0 TO 5
 35320       IF CARON(K)=0 AND CARSP=0 THEN
 35330         CARSP=1
 35340         CARON(K)=-1:CARD(K)=0:CARV(K)=0:CARCOL(K)=INT(RND(1)*3):CARHON(K)=0:CARSND(K)=0
@@ -1826,7 +1826,7 @@
 35390     CARSP=0
 35400   END IF
 35410   NCARS=0
-35420   FOR K=0 TO 2
+35420   FOR K=0 TO 5
 35430     IF CARON(K) THEN
 35440       NCARS=NCARS+1
 35450       CALL CARPLACE(CARD(K))

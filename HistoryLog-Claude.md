@@ -13,9 +13,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-- **Deqq's House II: a real car horn** (2026-11-14, owner: the honk was a barely audible blip): `INSTRUMENT 40` CARHORN (two detuned saws a major third apart + a sub square, quick attack, filtered) and `SFX 11` is now two honks (A4, short then long, V 0.7) in `demos/deqq2.bas` (line 13155 / 13210). Tests: string parses in the console host, `deqq2test.sh` passes. **Not heard by me**: tune levels by ear (the `INSTRUMENT 40` line, `V`, `T`).
-
-- **`JSON LOAD`: plain names skip the security policy** (2026-11-14, owner: loaders should behave like `TOOL`; only a path that is not plain-downward gets the check): `json_read_search()` in `jsonops.c` reads plain names (relative, no `..`, no driver) with stdio from the program's folder, the current folder, `worlds/`, `demos/` there and the system `worlds` folder, no policy; anything else (and the `res:` image of a BUILD executable as fallback) goes through `iodev_read_all`. Docs: `docs/json-subsystem.md`, man page. Tests: `jsontest1`, `contest1`, `worldtest.sh`, `make man-check` pending below. The W3D/M3D statements themselves read no files (they use the JSON tree).
+- **Deqq's House II: more cars** (2026-11-14, owner: "a few more cars ... so the road doesn't feel so empty"): up to six cars at a time (was three), a new one every 6 .. 20 s (was 15 .. 40); slots 0..5 = objects 3200..3217 (`BUILDCARS`, reset, `CARS`, arrays dimensioned 6) in `demos/deqq2.bas`; `docs/3d-subsystem.md`. Tests: `deqq2test.sh` passes. Not seen in the window (all cars share one speed, so they keep >= 900 units apart). The previous pending entries were moved to the Log (`f334019`, `bafe510`, `c490404`).
 
 ## Log
 
@@ -1987,3 +1985,15 @@ The owner bundled three pieces of Claude work into this commit (oldest first):
 ### a0a4c64 — 2026-11-14 14:23:19 +0100 — "Various improvements for Deqq's House II, created by Claude Code"
 6 files, +153/-14.
 - **Deqq's House II: found items jump out and land on a free spot.** `demos/deqq2.bas` (from line 40700): `SPOTOK` (zone, flat circle, nothing up to 100 high, headroom, no other item, line of sight from the eye), `FINDSPOT` (first within 36 degrees of the view, distances from 125 on; the put-down from 60), `LAUNCH`, `POPOUT`, `FLYITEMS` (a 0.45 s arc), hooks in `REVEAL`, `DROPLAST`, `TAKE`, `TICK`, `PLACEALL`; the reach of a launched item is 200 and `TARGET` prefers a launched item over a fixture that is not more than 80 units nearer; the playback `shot` renders first (it showed a stale frame after `step`); headless: `popout 0/1` (default 0: items stay where they lie, so the old test steps keep working); `deqq2test.sh` part 7 (three launches, the key is taken where it landed). Two new sounds (21 landing, 22 launch). Tests: `make check` passes; seen under Xvfb (the key in flight and landed beside the pot). Not seen: the other items, drops in the window. Docs: `docs/3d-mesh-subsystem.md`. Backups `deqq2-item-popout`, `deqq2-item-popout-final`.
+
+### f334019 — 2026-11-14 14:27:59 +0100 — "Claude session file update"
+2 files, +5/-2.
+- `SESSION.md` and `HistoryLog-Claude.md` bookkeeping only.
+
+### bafe510 — 2026-11-14 14:43:02 +0100 — "JSON LOAD behavior change, implemented by Claude Code"
+4 files, +41/-31.
+- **`JSON LOAD`: plain names skip the security policy** (2026-11-14, owner: loaders should behave like `TOOL`; only a path that is not plain-downward gets the check): `json_read_search()` in `jsonops.c` reads plain names (relative, no `..`, no driver) with stdio from the program's folder, the current folder, `worlds/`, `demos/` there and the system `worlds` folder, no policy; anything else (and the `res:` image of a BUILD executable as fallback) goes through `iodev_read_all`. Docs: `docs/json-subsystem.md`, man page. Tests: `jsontest1`, `contest1`, `worldtest.sh`, `make man-check`. The W3D/M3D statements themselves read no files (they use the JSON tree).
+
+### c490404 — 2026-11-14 14:47:08 +0100 — "Car horn fix, by Claude Code"
+2 files, +4/-1.
+- **Deqq's House II: a real car horn** (2026-11-14, owner: the honk was a barely audible blip): `INSTRUMENT 40` CARHORN (two detuned saws a major third apart + a sub square, quick attack, filtered) and `SFX 11` is now two honks (A4, short then long, V 0.7) in `demos/deqq2.bas` (line 13155 / 13210). Tests: string parses in the console host, `deqq2test.sh` passes. **Not heard by me**: tune levels by ear (the `INSTRUMENT 40` line, `V`, `T`).
