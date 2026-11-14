@@ -13,13 +13,11 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-### Town houses with baked-in doors, cars as meshes (2026-11-14, owner: "The doors from the town buildings that are not on Deqq's premises should be baked into their wall texture, not billboards. The car should be a 3D mesh, not a billboard. Will it work? Implement any feature that you need")
-- **Feature: `M3D BOX o,...,tex[,faces]`** (`m3d.c`, `gfxops.c`, `m3dworld.c`): the optional 9th argument is a bit mask of the sides to build (1 +x, 2 -x, 4 +y, 8 -y, 16 top, 32 bottom; default 63); the JSON document's box takes it as an optional 8th number. This lets a box leave out its front, which a quad with another picture covers. `m3d_op()` takes 9 arguments now. Grammar (`bascomp.ebnf`, `make grammar`), man page, `docs/3d-mesh-subsystem.md` updated; `m3dtest1` 1264 (a case with masks).
-- **Doors:** `demos/deqq2.mesh.json`: the 43 town houses are objects at their corner (`pos`, local boxes, so the 128 wide picture starts at the corner), a box without the front face plus a quad with the door picture; the 43 door things (sprite 280) are removed (Deqq's premises have real doors anyway). `demos/lib/deqqart.lib`: `DA_DOOR`, `DA_WALLTEX(N,HW,ST,DR)`; new pictures 264..267 / 274..277 (the houses with a door). The document keeps its one-entry-per-line layout.
-- **Cars:** `demos/deqq2.bas`: `CARTEX`, `MAKECARS` (pictures 230..237), `CARWHEEL`, `CARMESH`, `BUILDCARS` (called after `M3D WORLD`; nine objects 3200 + 3 * slot + color, passable), `CARS` moves them with `M3D OBJPOS` (yaw = the heading) and hides them with `M3D OBJSHOW`; the old four-view billboards (`CARSIDE`, `CARENDS`, `MAKECARS2`, things 130..132) are deleted.
-- Tests: `m3dtest1`, `deqq2test.sh` pass; seen in the window under Xvfb (door between the windows of a house, a green car from the side and from the front: body, glass cabin, eight sided wheels, headlight). Not seen: the other two colors, a car at speed, the baked doors on the x facing houses (east strip).
 
-
+### Wheel caps, fences cut to the railing (2026-11-14, owner: "the wheels are barely visible b/c they're roughly the same color as the road ... hubcaps as decals in the texture ... The fences are too high, cut them down to where there texture has a transparent line across it when counted from the bottom up")
+- **Wheels:** `demos/deqq2.bas`: the tyre picture 234 is black now (was dark gray like the asphalt); new `CARHUB` makes picture 238 (80 x 22: dark ring, bright hub cap, nut) for the six cap quads of each wheel (the wheels sit at x = +-40, height 11, so the position-anchored picture repeats exactly on them).
+- **Fences:** `demos/deqq2.mesh.json`: all 214 boxes with the railing picture 250 (fences 2000+, and the railing panes 1100+) are 56 high instead of 100: the picture is 60 high with the first fully transparent row at 56, so the fence now ends where the picture has its see-through line instead of repeating above it.
+- Tests: `deqq2test.sh` passes; seen in the window under Xvfb (car from the side and the front with caps; a fence along the ring road).
 
 ## Log
 
@@ -1898,3 +1896,11 @@ The owner bundled three pieces of Claude work into this commit (oldest first):
 - **Sector renderer demos marked (2026-11-14, owner: "Mark the demos using the sector renderer as demos for that feature. There's no plan to remove the sector renderer in the near future.")**
 - `demos/README.md`: rows of `manor`, `bughunt`, `showroom`, `deqq`, `y2k38`, `w3dkit`, `w3dmap`, `prefs3d` marked **[sector renderer demo]**; notes in `docs/3d-subsystem.md` (status: not planned for removal), `docs/3d-mesh-subsystem.md`, `tools/README.md` (mapedit). Docs only, no tests needed.
 - The same commit carries the log update for `3bfb032` / `8965965` (`HistoryLog-Claude.md`, `SESSION.md`).
+
+### 2964d87 — 2026-11-14 04:33:31 +0100 — "More changes for Deqq's House II, implemented by Claude Code"
+15 files, +192/-198.
+- **Town houses with baked-in doors, cars as meshes (2026-11-14, owner: "The doors from the town buildings that are not on Deqq's premises should be baked into their wall texture, not billboards. The car should be a 3D mesh, not a billboard. Will it work? Implement any feature that you need")**
+- **Feature: `M3D BOX o,...,tex[,faces]`** (`m3d.c`, `gfxops.c`, `m3dworld.c`): the optional 9th argument is a bit mask of the sides to build (1 +x, 2 -x, 4 +y, 8 -y, 16 top, 32 bottom; default 63); the JSON document's box takes it as an optional 8th number. This lets a box leave out its front, which a quad with another picture covers. `m3d_op()` takes 9 arguments now. Grammar (`bascomp.ebnf`, `make grammar`), man page, `docs/3d-mesh-subsystem.md` updated; `m3dtest1` 1264 (a case with masks).
+- **Doors:** `demos/deqq2.mesh.json`: the 43 town houses are objects at their corner (`pos`, local boxes, so the 128 wide picture starts at the corner), a box without the front face plus a quad with the door picture; the 43 door things (sprite 280) are removed (Deqq's premises have real doors anyway). `demos/lib/deqqart.lib`: `DA_DOOR`, `DA_WALLTEX(N,HW,ST,DR)`; new pictures 264..267 / 274..277 (the houses with a door). The document keeps its one-entry-per-line layout.
+- **Cars:** `demos/deqq2.bas`: `CARTEX`, `MAKECARS` (pictures 230..237), `CARWHEEL`, `CARMESH`, `BUILDCARS` (called after `M3D WORLD`; nine objects 3200 + 3 * slot + color, passable), `CARS` moves them with `M3D OBJPOS` (yaw = the heading) and hides them with `M3D OBJSHOW`; the old four-view billboards (`CARSIDE`, `CARENDS`, `MAKECARS2`, things 130..132) are deleted.
+- Tests: `m3dtest1`, `deqq2test.sh` pass; seen in the window under Xvfb (door between the windows of a house, a green car from the side and from the front: body, glass cabin, eight sided wheels, headlight). Not seen: the other two colors, a car at speed, the baked doors on the x facing houses (east strip).

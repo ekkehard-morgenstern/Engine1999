@@ -1639,7 +1639,7 @@
 34350 ' ------------------------------------------------------------------------------------------------ cars on the ring road
 34358 ' the cars are meshes (objects 3200 + 3 * slot + color, up to three at a time in three colors, one of them shown): a lower body, a tapering cabin of glass with a body colored roof,
 34366 ' lights, bumpers and four eight sided wheels; local coordinates: x forward (heading 0 = east), y to the left, z up; the pictures are 16 x 16 flat colors (230 .. 232 the bodies,
-34374 ' 233 glass, 234 tyre, 235 headlight, 236 tail light, 237 bumper)
+34374 ' 233 glass, 234 tyre, 235 headlight, 236 tail light, 237 bumper, 238 wheel cap 80 x 22)
 34382 PROC CARTEX(N,C1,C2,GL)
 34390   GFX CLEAR C1
 34398   GFX LINE 0,0,15,1,C2,BF
@@ -1653,12 +1653,21 @@
 34462     CALL CARTEX(230+K,FN W3K_C(HU,8),FN W3K_C(HU,12),0)
 34470   NEXT K
 34478   CALL CARTEX(233,FN W3K_C(9,3),FN W3K_C(9,10),-1)
-34486   CALL CARTEX(234,FN W3K_C(0,2),FN W3K_C(0,3),0)
+34486   CALL CARTEX(234,FN W3K_C(0,0),FN W3K_C(0,3),0)
+34487   CALL CARHUB(238)
 34494   CALL CARTEX(235,FN W3K_C(3,15),FN W3K_C(3,15),0)
 34502   CALL CARTEX(236,FN W3K_C(1,12),FN W3K_C(1,12),0)
 34510   CALL CARTEX(237,FN W3K_C(0,10),FN W3K_C(0,13),0)
 34518 END PROC
-34526 ' a wheel: an eight sided prism round the y axis, centre (X,Y) .. (X,Y+WD), height Z, radius R
+34519 ' the wheel caps (80 x 22: the wheels sit at x = +-40, height 11, so the picture repeats at the right places): rubber ring, bright hub cap, nut
+34520 PROC CARHUB(N)
+34521   GFX CLEAR FN W3K_C(0,0)
+34522   GFX CIRCLE 40,11,9,FN W3K_C(0,4):GFX PAINT 40,11,FN W3K_C(0,4),FN W3K_C(0,4)
+34523   GFX CIRCLE 40,11,6,FN W3K_C(0,14):GFX PAINT 40,11,FN W3K_C(0,14),FN W3K_C(0,14)
+34524   GFX CIRCLE 40,11,2,FN W3K_C(0,7):GFX PAINT 40,11,FN W3K_C(0,7),FN W3K_C(0,7)
+34525   CALL W3K_GRAB(N,80,22)
+34526 END PROC
+34527 ' a wheel: an eight sided prism round the y axis, centre (X,Y) .. (X,Y+WD), height Z, radius R
 34534 PROC CARWHEEL(O,X,Y,Z,R,WD)
 34542   LOCAL K,B,A
 34550   B=M3D("VERTS",O)
@@ -1673,12 +1682,12 @@
 34622   FOR K=0 TO 7
 34630     M3D QUAD O,B+K,B+8+K,B+8+((K+1) MOD 8),B+((K+1) MOD 8),234
 34638   NEXT K
-34646   M3D QUAD O,B,B+1,B+2,B+3,234
-34654   M3D QUAD O,B,B+3,B+4,B+5,234
-34662   M3D QUAD O,B,B+5,B+6,B+7,234
-34670   M3D QUAD O,B+8,B+11,B+10,B+9,234
-34678   M3D QUAD O,B+8,B+13,B+12,B+11,234
-34686   M3D QUAD O,B+8,B+15,B+14,B+13,234
+34646   M3D QUAD O,B,B+1,B+2,B+3,238
+34654   M3D QUAD O,B,B+3,B+4,B+5,238
+34662   M3D QUAD O,B,B+5,B+6,B+7,238
+34670   M3D QUAD O,B+8,B+11,B+10,B+9,238
+34678   M3D QUAD O,B+8,B+13,B+12,B+11,238
+34686   M3D QUAD O,B+8,B+15,B+14,B+13,238
 34694 END PROC
 34702 ' one of the nine car objects: TB = the body picture
 34710 PROC CARMESH(O,TB)
