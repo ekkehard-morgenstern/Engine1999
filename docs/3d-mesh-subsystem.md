@@ -64,7 +64,7 @@ The module is split into the world model (`m3d.c`: objects, things, lamps, camer
 
 `M3D SOFTWARE` switches to the software renderer (always possible, the default). `M3D HARDWARE` switches to the OpenGL 2 renderer; where there is none it is the error "Hardware renderer not available". `M3D("RENDERER")` is 0 or 1 for the one in use, `M3D("HWAVAIL")` is 1 when `M3D HARDWARE` can succeed (a program asks before it switches). `M3D RESET` keeps the choice; the palette and the view carry over a switch. The model (`m3d.c`) does not know OpenGL: the window host registers the hardware renderer with `m3d_set_hardware()` (`m3dgl.[ch]`: `m3d_gl_renderer()`); the console host registers none. Switching builds the new renderer's state first, so nothing changes when that fails. `m3dtest1` tests the switching with a stand-in renderer.
 
-**Status: the renderer exists** (`m3dgl.c`, step 4); the choice in the 3D preferences and the default (hardware when `M3D("HWAVAIL")`) are still to do.
+**Status: the renderer exists** (`m3dgl.c`, step 4); the choice in the 3D preferences and the default (hardware when `M3D("HWAVAIL")`) exist since step 5: `W3K_MESH` in `w3dkit.lib` selects the hardware renderer when it is available, `prefs3d.lib` has a **Renderer** row (Software / Hardware, saved as the sixth line of `local:3dprefs.cfg`, shown only for programs that use `W3K_MESH` when hardware is available).
 
 ### The OpenGL binding (`glload.[ch]`)
 
