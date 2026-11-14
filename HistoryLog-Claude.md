@@ -13,8 +13,6 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-- **Deqq's House II: the detour road is cut out of the grass** (2026-11-14, owner: grass and road overlap at the cellar detour, "or the road could be cut out of the grass"; he also saw Deqq and a car take the detour): in `demos/deqq2.mesh.json` the west grass strip (object 424) is rebuilt from 8 boxes that leave out the detour road 426 (checked: area = old strip minus road, 4 817 700); a first try with the grass one unit lower was dropped. The other strips are unchanged. Tests: `deqq2test.sh` passes. Not seen in the window.
-
 ## Log
 
 ### 7a6cb67 — 2026-10-17 13:32:27 +0200 — "Introduced Claude to the project"
@@ -2001,3 +1999,7 @@ The owner bundled three pieces of Claude work into this commit (oldest first):
 ### 94b0f87 — 2026-11-14 14:51:30 +0100 — "Car frequency fix, by Claude Code"
 3 files, +22/-12.
 - **Deqq's House II: more cars** (2026-11-14, owner: "a few more cars ... so the road doesn't feel so empty"): up to six cars at a time (was three), a new one every 6 .. 20 s (was 15 .. 40); slots 0..5 = objects 3200..3217 (`BUILDCARS`, reset, `CARS`, arrays dimensioned 6) in `demos/deqq2.bas`; `docs/3d-subsystem.md`. Tests: `deqq2test.sh` passes. Not seen in the window (all cars share one speed, so they keep >= 900 units apart).
+
+### 968cd82 — 2026-11-14 14:57:43 +0100 — "Detour road fix, by Claude Code"
+2 files, +6/-2.
+- **Deqq's House II: the detour road is cut out of the grass** (2026-11-14, owner: grass and road overlap at the cellar detour, "or the road could be cut out of the grass"; he also saw Deqq and a car take the detour): in `demos/deqq2.mesh.json` the west grass strip (object 424) is rebuilt from 8 boxes that leave out the detour road 426 (checked: area = old strip minus road, 4 817 700); a first try with the grass one unit lower was dropped. The other strips are unchanged. Tests: `deqq2test.sh` passes. Checked in the window by the owner: the road is cleanly cut out of the grass.
