@@ -115,6 +115,7 @@
 1020     CALL TT(N+2,1535,Y+140,299,24,56):CALL TT(N+3,1685,Y,299,24,56)
 1030     N=N+4
 1040   NEXT Y
+1045   IF NOT LAMPSB THEN CALL BUILDLAMPS
 1050 END PROC
 1060 ' puts thing N in the world at its place (its home place, or X,Y if they are given: CALL SHOWAT)
 1070 PROC SHOWTHING(N)
@@ -2565,13 +2566,6 @@
 40100       CALL PUTMESH(O,X,Y,1,0)
 40105     END IF
 40110   NEXT N
-40115   FOR N=700 TO 799
-40120     IF M3D("TON",N) THEN
-40125       X=M3D("TX",N):Y=M3D("TY",N)
-40130       CALL MKLAMP(6200+N-700)
-40135       CALL PUTMESH(6200+N-700,X,Y,1,0)
-40140     END IF
-40145   NEXT N
 40150 END PROC
 40155 ' every frame (called by MESHSYNC): Deqq (K = 4) and the glorp (K = 5) follow their things
 40160 PROC SYNCSPECIAL(K,N)
@@ -2763,3 +2757,16 @@
 41115     I=I-1
 41120   WEND
 41125 END PROC
+41130 ' the lamp posts of the town (things 700 .. 799, made by TOWNTHINGS when a game starts: they do not exist yet when LOADLEVEL runs BUILDTOWN, which is why the posts were
+41131 ' never seen after the billboards became meshes); called once by TOWNTHINGS, objects 6200 + n
+41132 PROC BUILDLAMPS
+41133   LOCAL N,X,Y
+41134   FOR N=700 TO 799
+41135     IF M3D("TON",N) THEN
+41136       X=M3D("TX",N):Y=M3D("TY",N)
+41137       CALL MKLAMP(6200+N-700)
+41138       CALL PUTMESH(6200+N-700,X,Y,1,0)
+41139     END IF
+41140   NEXT N
+41141   LAMPSB=-1
+41142 END PROC

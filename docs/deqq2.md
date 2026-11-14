@@ -193,7 +193,7 @@ Objects made by the game at start (all through `M3D OBJECT`, `BOX`, `VERTEX`, `Q
 | 5000 + N | static decorations: trees (61), plants (90), lamps (91), barrels (92), the sign (63), the washing line (84), sofa (80), shelf (83), the wreck (45: object 5000 + 32 = **5032**) |
 | 5300 .. 5307 | the eight hull panels of the wreck, shown as parts are built in |
 | 6000 + N | the town's trees (things 404 ..) |
-| 6200 + n | the lamp posts (things 700 .. 799) |
+| 6200 + n | the lamp posts (things 700 .. 799; built by `BUILDLAMPS`, called from `TOWNTHINGS` because the lamp things only exist after `PLACEALL`) |
 | 6800 .. 6802 | the three gas pumps (things 401 .. 403; *not* 6100 + n: see §19) |
 
 ### 4.4 Windows and glass
@@ -557,6 +557,7 @@ The **settings dialog** (O or pad Y; `P3_DIALOG`): invert X / Y of the right sti
 - *Translucent objects were skipped whenever the world had things* (2026-11-14): the renderers kept the list of translucent objects and the list of things in the same scratch array; the things' sort overwrote the list. Fixed in `m3dsoft.c` and `m3dgl.c` (the things use the upper half of the arrays), `m3dtest1` has a case that fails without the fix. Until then the 28 glass panes were never drawn.
 - *The gas station had one pump instead of three* (2026-11-14): the pump meshes were numbered 6100 + the thing number (6501 .. 6503), the trees' 6000 + the thing number reaches 6501 and 6503 (things 501, 503): the trees rebuilt (emptied) the pumps. The pumps are 6800 .. 6802 now. **Rule: mesh numbers derived from thing numbers must not overlap between kinds.**
 - *Object numbers and thing numbers are different spaces* (a leftover canopy post and a tree both had the number 438): when editing the JSON by script, edit objects by their section.
+- *The lamp posts never showed* (2026-11-14): their meshes were built in `LOADLEVEL`, but their things are created later by `TOWNTHINGS` (in `NEWGAME`); `M3D("TON",N)` was false when `BUILDTOWN` looked. Trees come from the JSON document and exist at load time. **Rule: a mesh made from a thing must be built after the thing exists** (`BUILDLAMPS`).
 - *Zone order matters* (first match wins).
 - *A test copy of the game takes the installed world document* unless one lies beside it (§15).
 - *The software renderer in a screenshot harness* needs the graphics layers switched on (`GFX LAYER 3,ON` / `0,ON`), the hardware renderer does not.
