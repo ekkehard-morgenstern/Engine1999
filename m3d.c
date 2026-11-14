@@ -70,11 +70,14 @@ typedef struct { int w, h; uint8_t* col; } tex_t;     // col[ u * h + v ]
 
 typedef struct { double x, y, z, r, amount; } lamp_t;
 
+typedef struct { int id, tag; double x1, y1, x2, y2, z1, z2; } zone_t;
+
 struct _m3d_t {
     tex_t*   texs;
     obj_t*   objs;     int nobjs;
     thing_t* things;
     lamp_t   lamps[M3D_MAXLAMPS];
+    zone_t*  zones;    int nzones;
     uint32_t pal[256];
     bool     havepal;
     uint8_t  cmap[M3D_LEVELS][256];
@@ -209,6 +212,7 @@ static void clear_world( m3d_t* m ) {
     memset( m->things, 0, sizeof(thing_t) * M3D_MAXTHINGS );
     memset( m->lamps, 0, sizeof(m->lamps) );
     m->nobjs = 0;
+    m->nzones = 0;
 }
 
 static bool set_view( m3d_t* m, int x, int y, int w, int h, int sc, double fov ) {
@@ -240,11 +244,12 @@ m3d_t* m3d_new( void ) {
     m->texs = (tex_t*) calloc( M3D_MAXTEX, sizeof(tex_t) );
     m->objs = (obj_t*) calloc( M3D_MAXOBJECTS, sizeof(obj_t) );
     m->things = (thing_t*) calloc( M3D_MAXTHINGS, sizeof(thing_t) );
+    m->zones = (zone_t*) calloc( M3D_MAXZONES, sizeof(zone_t) );
     m->order = (int*) calloc( M3D_MAXOBJECTS + M3D_MAXTHINGS, sizeof(int) );
     m->odist = (double*) calloc( M3D_MAXOBJECTS + M3D_MAXTHINGS, sizeof(double) );
     reset_state( m );
     default_colormap( m );
-    if ( m->texs == 0 || m->objs == 0 || m->things == 0 || m->order == 0 || m->odist == 0 || !set_view( m, 0, 0, 640, 300, 2, 90.0 ) ) {
+    if ( m->texs == 0 || m->objs == 0 || m->things == 0 || m->zones == 0 || m->order == 0 || m->odist == 0 || !set_view( m, 0, 0, 640, 300, 2, 90.0 ) ) {
         m3d_free( m );
         return 0;
     }
@@ -265,8 +270,13 @@ void m3d_free( m3d_t* m ) {
             free( m->texs[i].col );
         }
     }
+    free( m->zones );
     free( m->texs ); free( m->objs ); free( m->things ); free( m->order ); free( m->odist ); free( m->fb ); free( m->zb ); free( m->blend );
     free( m );
+}
+
+int m3d_nverts( const m3d_t* m, int o ) {
+    return o >= 0 && o < M3D_MAXOBJECTS && m->objs[o].used ? m->objs[o].nv : 0;
 }
 
 void m3d_getview( const m3d_t* m, int* x, int* y, int* width, int* height, int* scale, int* bmpw, int* bmph ) {
@@ -547,12 +557,14 @@ static double ceil_at( m3d_t* m, double x, double y, double z ) {
 // -- movement -------------------------------------------------------------------------------------------------------------------
 
 // pushes the capsule (spheres at its middle heights) out of the solid triangles near (x, y); returns whether anything pushed
-static bool push_out( m3d_t* m, double* px, double* py, double feet ) {
+typedef struct { double x, y, z, lift, radius, height, step; int hit; } body_t;
+
+static bool push_out( m3d_t* m, const body_t* b, double* px, double* py, double feet ) {
     bool pushed = false;
-    double r = m->radius;
+    double r = b->radius;
     double zc[3];
     int nz = 0;
-    double z0 = feet + m->step + r, z1 = feet + m->height - r;
+    double z0 = feet + b->step + r, z1 = feet + b->height - r;
     if ( z1 < z0 ) { z1 = z0; }
     zc[nz++] = z0;
     if ( z1 - z0 > r ) { zc[nz++] = ( z0 + z1 ) * 0.5; }
@@ -565,7 +577,7 @@ static bool push_out( m3d_t* m, double* px, double* py, double feet ) {
                 continue;
             }
             obj_update( ob );
-            if ( ob->dirty || *px + r < ob->minx || *px - r > ob->maxx || *py + r < ob->miny || *py - r > ob->maxy || feet + m->height < ob->minz || feet + m->step > ob->maxz ) {
+            if ( ob->dirty || *px + r < ob->minx || *px - r > ob->maxx || *py + r < ob->miny || *py - r > ob->maxy || feet + b->height < ob->minz || feet + b->step > ob->maxz ) {
                 continue;
             }
             for ( int j=0; j < ob->nt; ++j ) {
@@ -600,26 +612,54 @@ static bool push_out( m3d_t* m, double* px, double* py, double feet ) {
     return pushed;
 }
 
-static bool try_move( m3d_t* m, double nx, double ny ) {
-    double feet = m->z;
-    bool pushed = push_out( m, &nx, &ny, feet );
-    double fl = floor_at( m, nx, ny, feet + m->step );
+static bool try_move( m3d_t* m, body_t* b, double nx, double ny ) {
+    double feet = b->z;
+    bool pushed = push_out( m, b, &nx, &ny, feet );
+    double fl = floor_at( m, nx, ny, feet + b->step );
     if ( fl < -1.0e8 ) {
         return false;
     }
-    double nfeet = fl + m->lift;                    // the lift: the feet's height above the floor (a jump)
-    if ( fl - feet > m->step + 1.0e-6 ) {                // (a jump: steps up to step + lift are taken)
+    double nfeet = fl + b->lift;                    // the lift: the feet's height above the floor (a jump)
+    if ( fl - feet > b->step + 1.0e-6 ) {                // (a jump: steps up to step + lift are taken)
         return false;
     }
     double ce = ceil_at( m, nx, ny, fl + 0.5 );
-    if ( ce < nfeet + m->height ) {
+    if ( ce < nfeet + b->height ) {
         return false;
     }
-    m->x = nx; m->y = ny; m->z = nfeet;
+    b->x = nx; b->y = ny; b->z = nfeet;
     if ( pushed ) {
-        m->hit |= 1;
+        b->hit |= 1;
     }
     return true;
+}
+
+// walks a body by (dx, dy) in small pieces: pushed out of walls, sliding along an axis, following the floor; b->hit: 1 pushed, 2 no movement at all
+static void body_move( m3d_t* m, body_t* b, double dx, double dy ) {
+    b->hit = 0;
+    double len = sqrt( dx * dx + dy * dy );
+    int pieces = len > b->radius * 0.5 ? (int) ceil( len / ( b->radius * 0.5 ) ) : 1;
+    bool moved = false;
+    for ( int k=0; k < pieces; ++k ) {
+        double sx = dx / pieces, sy = dy / pieces;
+        if ( try_move( m, b, b->x + sx, b->y + sy ) ) { moved = true; continue; }
+        bool mx = sx != 0 && try_move( m, b, b->x + sx, b->y );
+        bool my = sy != 0 && try_move( m, b, b->x, b->y + sy );
+        b->hit |= 1;
+        if ( mx || my ) { moved = true; }
+    }
+    if ( !moved && len > 1.0e-9 ) {
+        b->hit |= 2;
+    }
+    double fl = floor_at( m, b->x, b->y, b->z + b->step );
+    if ( fl > -1.0e8 ) {
+        b->z = fl + b->lift;
+    }
+}
+
+static body_t player_body( const m3d_t* m ) {
+    body_t b = { m->x, m->y, m->z, m->lift, m->radius, m->height, m->step, 0 };
+    return b;
 }
 
 // -- operations -----------------------------------------------------------------------------------------------------------------
@@ -785,6 +825,9 @@ bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t sl
         }
         case GFXOP_M3DTHINGPOS: case GFXOP_M3DTHINGTEX: case GFXOP_M3DTHINGOFF: case GFXOP_M3DTHINGLIGHT: case GFXOP_M3DTHINGTRANS: {
             thing_t* t;
+            if ( op == GFXOP_M3DTHINGOFF && thing_get( m, a[0], &t ) && !t->on ) {
+                return true;                            // (removing a thing that is not there is fine)
+            }
             if ( !thing_get( m, a[0], &t ) || !t->on ) {
                 *err = "Thing not defined";
                 return false;
@@ -841,27 +884,30 @@ bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t sl
         }
         case GFXOP_M3DMOVE: {
             double c = cos( m->yaw * DEG2RAD ), sn = sin( m->yaw * DEG2RAD );
-            double dx = a[0] * c + a[1] * sn, dy = a[0] * sn - a[1] * c;
-            m->hit = 0;
-            double len = sqrt( dx * dx + dy * dy );
-            int pieces = len > m->radius * 0.5 ? (int) ceil( len / ( m->radius * 0.5 ) ) : 1;
-            bool moved = false;
-            for ( int k=0; k < pieces; ++k ) {
-                double sx = dx / pieces, sy = dy / pieces;
-                if ( try_move( m, m->x + sx, m->y + sy ) ) { moved = true; continue; }
-                // slide along one axis
-                bool mx = sx != 0 && try_move( m, m->x + sx, m->y );
-                bool my = sy != 0 && try_move( m, m->x, m->y + sy );
-                if ( mx || my ) { moved = true; m->hit |= 1; } else { m->hit |= 1; }
+            body_t b = player_body( m );
+            body_move( m, &b, a[0] * c + a[1] * sn, a[0] * sn - a[1] * c );
+            m->x = b.x; m->y = b.y; m->z = b.z; m->hit = b.hit;
+            return true;
+        }
+        case GFXOP_M3DTHINGMOVE: {
+            thing_t* t;
+            if ( !thing_get( m, a[0], &t ) || !t->on ) {
+                *err = "Thing not defined";
+                return false;
             }
-            if ( !moved && len > 1.0e-9 ) {
-                m->hit |= 2;
+            body_t b = { t->x, t->y, t->z, 0, t->w * 0.4 > 14 ? 14 : t->w * 0.4, t->h, m->step, 0 };
+            body_move( m, &b, a[1], a[2] );
+            t->x = b.x; t->y = b.y; t->z = b.z; m->hit = b.hit;
+            return true;
+        }
+        case GFXOP_M3DZONE: {
+            int id, tg = 0;
+            if ( !whole( a[0], 0, 65535, &id ) || m->nzones >= M3D_MAXZONES || ( !NONE_VAL( a[7] ) && !whole( a[7], 0, 65535, &tg ) ) ) {
+                return false;
             }
-            // follow the floor (also when standing still)
-            double fl = floor_at( m, m->x, m->y, m->z + m->step );
-            if ( fl > -1.0e8 ) {
-                m->z = fl + m->lift;
-            }
+            zone_t* z = &m->zones[m->nzones++];
+            z->id = id; z->tag = tg; z->x1 = fmin( a[1], a[3] ); z->x2 = fmax( a[1], a[3] ); z->y1 = fmin( a[2], a[4] ); z->y2 = fmax( a[2], a[4] );
+            z->z1 = fmin( a[5], a[6] ); z->z2 = fmax( a[5], a[6] );
             return true;
         }
         case GFXOP_M3DLAMP: {
@@ -1298,6 +1344,17 @@ bool m3d_query( m3d_t* m, int q, const double* a, int na, double* r ) {
         case GFXQ_M3DFLOORAT: *r = floor_at( m, a[0], a[1], a[2] ); return true;
         case GFXQ_M3DCEILAT: *r = ceil_at( m, a[0], a[1], a[2] ); return true;
         case GFXQ_M3DDRAWN: *r = m->drawn; return true;
+        case GFXQ_M3DZONE: case GFXQ_M3DZONETAG: {
+            *r = -1;
+            for ( int i=0; i < m->nzones; ++i ) {
+                const zone_t* z = &m->zones[i];
+                if ( a[0] >= z->x1 && a[0] < z->x2 && a[1] >= z->y1 && a[1] < z->y2 && a[2] >= z->z1 - 2.0 && a[2] < z->z2 ) {
+                    *r = q == GFXQ_M3DZONE ? z->id : z->tag;
+                    break;
+                }
+            }
+            return true;
+        }
         case GFXQ_M3DSHOTKIND: *r = m->shotkind; return true;
         case GFXQ_M3DSHOTOBJ: *r = m->shotobj; return true;
         case GFXQ_M3DSHOTDIST: *r = m->shotdist; return true;

@@ -80,8 +80,8 @@ grammar-check:
 	perl grammar.pl --check
 
 BASEMOD=sdlevent.o sdllayer.o sdlmain.o sdlscreen.o textscreen.o tilescreen.o sprscreen.o sprpath.o policy.o 8x12font1.o sdlaudio.o synth.o mml.o printusing.o clipboard.o sdlutil.o \
-		basic.o baspgm.o baslin.o bastok.o bascomp.o nodetype.o codegen.o cgenctl.o cgendecl.o cgenprog.o vars.o runtime.o vm.o basfiles.o iodev.o gfxcore.o gfxops.o w3d.o w3dworld.o m3d.o json.o jsonops.o bmp.o shot.o gfxfile.o basbuild.o baslib.o cgenlib.o basrepl.o basdebug.o ansi.o palette.o keyseq.o keystate.o cursors.o mouse.o joy.o sdljoy.o sdlkeys.o scredit.o conscr.o fulledit.o vmasm.o monitor.o font.o ui.o synhl.o
-BASEHDR=sdlevent.h sdllayer.h sdlmain.h sdlscreen.h sdltypes.h textscreen.h tilescreen.h sprscreen.h sprpath.h policy.h unxtypes.h sdlaudio.h synth.h mml.h printusing.h clipboard.h sdlutil.h basfiles.h iodev.h gfxcore.h gfxops.h w3d.h w3dworld.h m3d.h json.h jsonops.h bmp.h shot.h gfxfile.h basbuild.h baslib.h basic.h baspgm.h baslin.h bastok.h bascomp.h nodetype.h codegen.h instset.h vars.h runtime.h vm.h basrepl.h basdebug.h ansi.h palette.h keyseq.h keystate.h cursors.h mouse.h joy.h sdljoy.h sdlkeys.h scrdrv.h conscr.h fulledit.h vmasm.h monitor.h font.h ui.h synhl.h
+		basic.o baspgm.o baslin.o bastok.o bascomp.o nodetype.o codegen.o cgenctl.o cgendecl.o cgenprog.o vars.o runtime.o vm.o basfiles.o iodev.o gfxcore.o gfxops.o w3d.o w3dworld.o m3d.o m3dworld.o json.o jsonops.o bmp.o shot.o gfxfile.o basbuild.o baslib.o cgenlib.o basrepl.o basdebug.o ansi.o palette.o keyseq.o keystate.o cursors.o mouse.o joy.o sdljoy.o sdlkeys.o scredit.o conscr.o fulledit.o vmasm.o monitor.o font.o ui.o synhl.o
+BASEHDR=sdlevent.h sdllayer.h sdlmain.h sdlscreen.h sdltypes.h textscreen.h tilescreen.h sprscreen.h sprpath.h policy.h unxtypes.h sdlaudio.h synth.h mml.h printusing.h clipboard.h sdlutil.h basfiles.h iodev.h gfxcore.h gfxops.h w3d.h w3dworld.h m3d.h m3dworld.h json.h jsonops.h bmp.h shot.h gfxfile.h basbuild.h baslib.h basic.h baspgm.h baslin.h bastok.h bascomp.h nodetype.h codegen.h instset.h vars.h runtime.h vm.h basrepl.h basdebug.h ansi.h palette.h keyseq.h keystate.h cursors.h mouse.h joy.h sdljoy.h sdlkeys.h scrdrv.h conscr.h fulledit.h vmasm.h monitor.h font.h ui.h synhl.h
 
 LIBMOD=$(BASEMOD)
 LIBHDR=$(BASEHDR)
@@ -307,7 +307,7 @@ install: kit games version.h
 	install -m 755 $(GAMEEXE) $(CONEXE) $(DESTDIR)$(GAMESBINDIR)
 	install -m 644 kit/engine1999.o kit/engine1999c.o kit/engine.lib $(DESTDIR)$(LIBDIR)
 	install -m 644 demos/*.bas demos/*.trk demos/*.json demos/README.md $(DESTDIR)$(SHAREDIR)/demos
-	install -m 644 demos/*.world.json $(DESTDIR)$(LIBDIR)/worlds
+	install -m 644 demos/*.world.json demos/*.mesh.json $(DESTDIR)$(LIBDIR)/worlds
 	install -m 644 demos/lib/*.lib $(DESTDIR)$(SHAREDIR)/demos/lib
 	install -m 644 demos/lib/*.lib $(DESTDIR)$(LIBDIR)/lib
 	install -m 644 tools/*.bas $(DESTDIR)$(LIBDIR)/tools
@@ -415,6 +415,8 @@ w3d.o: w3d.c $(BASEHDR)
 w3dworld.o: w3dworld.c $(BASEHDR)
 
 m3d.o: m3d.c $(BASEHDR)
+
+m3dworld.o: m3dworld.c $(BASEHDR)
 
 m3dtest1: m3dtest1.o $(LIBNAME)
 	$(CL) -o m3dtest1 m3dtest1.o $(LIBNAME) -lm

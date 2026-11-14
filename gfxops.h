@@ -370,8 +370,11 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXOP_M3DMOVE   328             // M3D MOVE forward, right
 #define GFXOP_M3DLIFT   329             // M3D LIFT h
 #define GFXOP_M3DLAMP   330             // M3D LAMP n, x, y, z, radius, amount
+#define GFXOP_M3DTHINGMOVE 331          // M3D THINGMOVE n, dx, dy               (walks a thing like M3D MOVE: pushed out of walls, up steps, following the floor; M3D("HIT"))
+#define GFXOP_M3DZONE   332             // M3D ZONE id, x1, y1, x2, y2, z1, z2 [, tag]  (a named box of space for the game: M3D("ZONE", x, y, z) finds the first one containing a point)
+#define GFXOP_M3DWORLD  333             // M3D WORLD                              (builds the world from the current JSON document: m3dworld.h, docs/3d-mesh-subsystem.md)
 #define GFXOP_M3DFIRST  GFXOP_M3DRESET
-#define GFXOP_M3DLAST   GFXOP_M3DLAMP
+#define GFXOP_M3DLAST   GFXOP_M3DWORLD
 #define GFXOP_IS_M3D(op) ( (op) >= GFXOP_M3DFIRST && (op) <= GFXOP_M3DLAST )
 #define GFXQ_M3DX       350             // M3D("X"), ("Y"), ("Z" = the feet), ("EYE"), ("YAW"), ("PITCH"), ("LIFT"), ("HIT"), ("FLOORZ")
 #define GFXQ_M3DY       351
@@ -409,8 +412,10 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXQ_M3DVERTS   383             // M3D("VERTS", o), ("TRIS", o): counts
 #define GFXQ_M3DTRIS    384
 #define GFXQ_M3DDRAWN   385             // M3D("DRAWN"): the number of triangles the last frame rasterized
+#define GFXQ_M3DZONE    386             // M3D("ZONE", x, y, z): the id of the first zone containing the point, -1 none
+#define GFXQ_M3DZONETAG 387             // M3D("ZONETAG", x, y, z): its tag
 #define GFXQ_M3DFIRST   GFXQ_M3DX
-#define GFXQ_M3DLAST    GFXQ_M3DDRAWN
+#define GFXQ_M3DLAST    GFXQ_M3DZONETAG
 
 typedef struct _gfxcmd_t {
     const char* group;                  // "GFX", "TXT", "TILE", "SPRITE", "MOUSE", or "" for the statements that are reserved words themselves

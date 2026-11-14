@@ -37,6 +37,7 @@
 #include "gfxops.h"
 #include "w3d.h"
 #include "m3d.h"
+#include "m3dworld.h"
 #include "jsonops.h"
 #include "w3dworld.h"
 #include "gfxfile.h"
@@ -1581,6 +1582,9 @@ static bool host_m3d_op( int op, const double* a, int na, const char* s, size_t 
             sdlscr_gfx_putbuf( t, x, y, fb, bw, bh, scale );
         }
         return true;
+    }
+    if ( op == GFXOP_M3DWORLD ) {
+        return m3dworld_load( host_m3d, jsonops_root(), err );
     }
     return m3d_op( host_m3d, op, a, na, s, slen, err );
 }

@@ -29,6 +29,8 @@
 
 
 #include "m3d.h"
+#include "m3dworld.h"
+#include "json.h"
 #include "gfxops.h"
 
 /*
@@ -316,6 +318,51 @@ int main( void ) {
     CHECK( op( GFXOP_M3DOBJPOS, 5, 2.0, 100.0, 80.0, 0.0, 90.0 ) );
     CHECK( Q( GFXQ_M3DUSE, 1, 200.0 ) == -1 );
     CHECK( Q( GFXQ_M3DOBJYAW, 1, 2.0 ) == 90.0 );
+    // -- zones, walking things, the world document ----------------------------------------------------------------------------------
+    fresh();
+    CHECK( op( GFXOP_M3DZONE, 8, 7.0, 0.0, 0.0, 100.0, 100.0, 0.0, 100.0, 5.0 ) );
+    CHECK( op( GFXOP_M3DZONE, 7, 8.0, 0.0, 0.0, 300.0, 300.0, 0.0, 100.0 ) );
+    CHECK( Q( GFXQ_M3DZONE, 3, 50.0, 50.0, 1.0 ) == 7 );                                    // the first zone that contains the point
+    CHECK( Q( GFXQ_M3DZONETAG, 3, 50.0, 50.0, 1.0 ) == 5 );
+    CHECK( Q( GFXQ_M3DZONE, 3, 200.0, 50.0, 1.0 ) == 8 );
+    CHECK( Q( GFXQ_M3DZONE, 3, 200.0, 50.0, 150.0 ) == -1 );                                // above the zone
+    CHECK( Q( GFXQ_M3DZONE, 3, 900.0, 50.0, 1.0 ) == -1 );
+    CHECK( op( GFXOP_M3DOBJECT, 1, 2.0 ) );
+    CHECK( op( GFXOP_M3DBOX, 8, 2.0, 100.0, -300.0, 0.0, 110.0, 300.0, 100.0, 2.0 ) );
+    CHECK( op( GFXOP_M3DTHING, 7, 0.0, 0.0, 0.0, 0.0, 2.0, 28.0, 56.0 ) );
+    CHECK( op( GFXOP_M3DTHINGMOVE, 3, 0.0, 300.0, 0.0 ) );
+    CHECK( Q( GFXQ_M3DTX, 1, 0.0 ) < 100.0 && Q( GFXQ_M3DTX, 1, 0.0 ) > 60.0 );              // a thing is stopped by the wall
+    CHECK( ( (int) Q( GFXQ_M3DHIT, 0 ) & 1 ) != 0 );
+    CHECK( op( GFXOP_M3DTHINGMOVE, 3, 0.0, 0.0, 40.0 ) );
+    CHECK( Q( GFXQ_M3DTY, 1, 0.0 ) > 39.0 );                                                // and slides along it
+    CHECK( op( GFXOP_M3DTHINGOFF, 1, 5.0 ) );                                                // removing a thing that is not there is fine
+    CHECK( !op( GFXOP_M3DTHINGMOVE, 3, 5.0, 1.0, 1.0 ) );
+    {
+        const char* doc = "{\"format\":\"e99-mesh-world\",\"objects\":[{\"id\":3,\"flags\":[\"masked\",\"seethru\"],\"pos\":[10,20,0],\"yaw\":90,"
+            "\"boxes\":[[0,0,0,10,10,50,2]],\"quads\":[[0,0,60, 10,0,60, 10,10,60, 0,10,60, 3]]}],"
+            "\"zones\":[{\"id\":4,\"box\":[0,0,100,100],\"z\":[0,100],\"tag\":9}],\"things\":[{\"id\":2,\"tex\":1,\"x\":5,\"y\":5,\"w\":10,\"h\":10}],"
+            "\"environment\":{\"fog\":500},\"start\":{\"x\":1,\"y\":2,\"z\":0,\"angle\":45}}";
+        json_node_t* root = 0;
+        char jerr[100];
+        const char* werr = 0;
+        CHECK( json_parse( doc, strlen( doc ), &root, jerr, sizeof(jerr) ) );
+        CHECK( m3dworld_load( M, root, &werr ) );
+        CHECK( Q( GFXQ_M3DOBJON, 1, 3.0 ) != 0 && Q( GFXQ_M3DOBJON, 1, 1.0 ) == 0 );          // the old objects are gone
+        CHECK( Q( GFXQ_M3DVERTS, 1, 3.0 ) == 28 && Q( GFXQ_M3DTRIS, 1, 3.0 ) == 14 );         // a box (24 / 12) and a quad (4 / 2)
+        CHECK( Q( GFXQ_M3DOBJX, 1, 3.0 ) == 10 && Q( GFXQ_M3DOBJYAW, 1, 3.0 ) == 90 );
+        CHECK( Q( GFXQ_M3DZONETAG, 3, 50.0, 50.0, 1.0 ) == 9 );
+        CHECK( Q( GFXQ_M3DTON, 1, 2.0 ) != 0 );
+        CHECK( Q( GFXQ_M3DYAW, 0 ) == 45.0 && Q( GFXQ_M3DX, 0 ) == 1.0 );
+        json_node_free( root );
+        const char* bad = "{\"format\":\"e99-mesh-world\",\"objects\":[{\"id\":3,\"boxes\":[[0,0,0,10]]}]}";
+        CHECK( json_parse( bad, strlen( bad ), &root, jerr, sizeof(jerr) ) );
+        CHECK( !m3dworld_load( M, root, &werr ) && strstr( werr, "objects[0].boxes[0]" ) != 0 );
+        json_node_free( root );
+        const char* nofmt = "{\"objects\":[]}";
+        CHECK( json_parse( nofmt, strlen( nofmt ), &root, jerr, sizeof(jerr) ) );
+        CHECK( !m3dworld_load( M, root, &werr ) && strstr( werr, "format" ) != 0 );
+        json_node_free( root );
+    }
     // -- errors -----------------------------------------------------------------------------------------------------------------------------
     CHECK( !op( GFXOP_M3DOBJECT, 1, 5000.0 ) );
     CHECK( !op( GFXOP_M3DBOX, 8, 99.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0 ) );                 // object not defined

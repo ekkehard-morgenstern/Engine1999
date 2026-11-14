@@ -71,9 +71,9 @@ use
 use
 use
 use
-goto 300 560 180 120
+goto 300 560 180 114
 drop
-goto 250 455 90 120
+goto 250 455 90 114
 face 250 426
 use
 goto -250 1320 90
@@ -93,10 +93,10 @@ goto 235 395 90
 face 225 345
 use
 use
-goto 640 555 90 120
+goto 645 545 90 114
 face 650 590
 use
-goto 725 555 90 120
+goto 725 555 90 114
 face 730 590
 use
 goto -250 1320 90
@@ -121,7 +121,7 @@ use
 goto 660 530 90
 face 660 562
 use
-goto 660 536 90
+goto 660 536 90 60
 face 660 605
 use
 goto -250 1320 90
@@ -156,8 +156,8 @@ goto 480 365 90
 walk 480 580
 walk 480 635
 walk 584 650
-walk 790 650
-walk 790 590
+walk 775 650
+walk 775 590
 walk 500 550
 face 500 590
 use
@@ -235,53 +235,77 @@ check "# state built=0"                         "a new game starts with nothing 
 cat > $T/play <<'PLAY'
 goto -250 1320 90
 deqqon
-step 300
+step 150
 state
-step 300
+step 150
 state
-step 300
+step 150
 state
-step 300
+step 150
 state
-step 300
+step 150
 state
-step 300
+step 150
 state
-step 300
+step 150
 state
-step 300
+step 150
 state
-step 300
+step 150
 state
-step 300
+step 150
 state
-step 300
+step 150
 state
-step 300
+step 150
 state
-step 300
+step 150
 state
-step 300
+step 150
 state
-step 300
+step 150
 state
-step 300
+step 150
 state
-step 300
+step 150
 state
-step 300
+step 150
 state
-step 300
+step 150
 state
-step 300
+step 150
 state
-step 300
+step 150
 state
-step 300
+step 150
 state
-step 300
+step 150
 state
-step 300
+step 150
+state
+step 150
+state
+step 150
+state
+step 150
+state
+step 150
+state
+step 150
+state
+step 150
+state
+step 150
+state
+step 150
+state
+step 150
+state
+step 150
+state
+step 150
+state
+step 150
 state
 goto 425 540 90
 give 10
