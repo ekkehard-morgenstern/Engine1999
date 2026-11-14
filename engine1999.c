@@ -1580,6 +1580,18 @@ static bool host_m3d_op( int op, const double* a, int na, const char* s, size_t 
         int x, y, w, h, scale, bw, bh;
         m3d_getview( host_m3d, &x, &y, &w, &h, &scale, &bw, &bh );
         if ( m3d_is_argb( host_m3d ) ) {                // the hardware renderer: its own 32 bit layer, below the target layer
+            // it looks the colors up in the target layer's palette as it is now (M3D COLORMAP is not needed; a palette fade shows at once)
+            static uint32_t lastpal[256];
+            static bool havelast = false;
+            uint32_t pal[256];
+            for ( int i=0; i < 256; ++i ) {
+                pal[i] = sdlscr_palette_get( t, i );
+            }
+            if ( !havelast || memcmp( pal, lastpal, sizeof(pal) ) != 0 ) {
+                m3d_colormap( host_m3d, pal );
+                memcpy( lastpal, pal, sizeof(pal) );
+                havelast = true;
+            }
             const uint32_t* px = m3d_render32( host_m3d );
             if ( px != 0 ) {
                 sdlscr_3d_put( x, y, px, bw, bh, scale );

@@ -88,6 +88,8 @@ static const glentry_t gl_table[] = {
     ENT(Uniform2f),
     ENT(Uniform3f),
     ENT(Uniform4f),
+    ENT(Uniform1fv),
+    ENT(Uniform4fv),
     ENT(UniformMatrix4fv),
     ENT(EnableVertexAttribArray),
     ENT(DisableVertexAttribArray),

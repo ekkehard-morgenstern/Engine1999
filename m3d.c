@@ -96,10 +96,12 @@ static bool use_renderer( m3d_t* m, const m3drend_t* r, const char** err ) {
         return true;
     }
     void* rd = r->create( m );
-    if ( rd == 0 || !r->resize( m, rd, m->bw, m->bh ) ) {
-        if ( rd != 0 ) {
-            r->destroy( m, rd );
-        }
+    if ( rd == 0 ) {
+        *err = r == &m3d_soft_renderer ? "Out of memory" : "Hardware renderer could not be started";
+        return false;
+    }
+    if ( !r->resize( m, rd, m->bw, m->bh ) ) {
+        r->destroy( m, rd );
         *err = "Out of memory";
         return false;
     }
@@ -325,7 +327,7 @@ static bool set_texture( m3d_t* m, int n, const char* s, size_t slen, const char
         }
     }
     free( m->texs[n].col );
-    m->texs[n].col = col; m->texs[n].w = tw; m->texs[n].h = th;
+    m->texs[n].col = col; m->texs[n].w = tw; m->texs[n].h = th; ++m->texs[n].gen;
     return true;
 }
 

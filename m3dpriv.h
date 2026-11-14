@@ -84,7 +84,7 @@ typedef struct {
     double x, y, z, w, h;
 } thing_t;
 
-typedef struct { int w, h; uint8_t* col; } tex_t;     // col[ u * h + v ]
+typedef struct { int w, h; uint8_t* col; unsigned gen; } tex_t;     // col[ u * h + v ]; gen: counts the times the picture was set (a hardware renderer uploads again when it changed)
 
 typedef struct { double x, y, z, r, amount; } lamp_t;
 

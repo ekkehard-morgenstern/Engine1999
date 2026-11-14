@@ -99,6 +99,8 @@ typedef struct _glapi_t {
     void (*Uniform2f)( GLint,GLfloat,GLfloat );
     void (*Uniform3f)( GLint,GLfloat,GLfloat,GLfloat );
     void (*Uniform4f)( GLint,GLfloat,GLfloat,GLfloat,GLfloat );
+    void (*Uniform1fv)( GLint,GLsizei,const GLfloat* );
+    void (*Uniform4fv)( GLint,GLsizei,const GLfloat* );
     void (*UniformMatrix4fv)( GLint,GLsizei,GLboolean,const GLfloat* );
     void (*EnableVertexAttribArray)( GLuint );
     void (*DisableVertexAttribArray)( GLuint );

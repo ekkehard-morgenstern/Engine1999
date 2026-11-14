@@ -64,7 +64,7 @@ CL=$(CCOMP) $(CFLAGS) $(LDFLAGS)
 .c.o:
 	$(CCO) -o $@ $<
 
-PROGS=sdltest1 sdltest2 sdltest3 sdltest4 engine1999 joytest1 basictest1 testcomp1 basictest2 vmtest1 repltest1 ansitest1 txttest1 asmtest1 synthtest1 iotest1 gfxtest1 buildtest1 engine1999c contest1 keytest1 scrtest1 libtest1 fonttest1 uitest1 synhltest1 poltest1 w3dtest1 shottest1 jsontest1 m3dtest1 gltest1
+PROGS=sdltest1 sdltest2 sdltest3 sdltest4 engine1999 joytest1 basictest1 testcomp1 basictest2 vmtest1 repltest1 ansitest1 txttest1 asmtest1 synthtest1 iotest1 gfxtest1 buildtest1 engine1999c contest1 keytest1 scrtest1 libtest1 fonttest1 uitest1 synhltest1 poltest1 w3dtest1 shottest1 jsontest1 m3dtest1 gltest1 m3dgltest1
 
 all: $(PROGS)
 	echo ok >all
@@ -429,6 +429,11 @@ gltest1: gltest1.o $(LIBNAME)
 
 gltest1.o: gltest1.c $(LIBHDR)
 
+m3dgltest1: m3dgltest1.o $(LIBNAME)
+	$(CL) -o m3dgltest1 m3dgltest1.o $(LIBNAME) $(SDL_LIBS) -lrt -lm
+
+m3dgltest1.o: m3dgltest1.c $(LIBHDR)
+
 gl3dtest1: gl3dtest1.o $(LIBNAME)
 	$(CL) -o gl3dtest1 gl3dtest1.o $(LIBNAME) $(SDL_LIBS) -lrt -lm
 
@@ -498,7 +503,7 @@ monitor.o: monitor.c $(BASEHDR)
 # -- check and dist (packaging, roadmap item 66) ---------------------------------------------------------
 # make check: all automated tests (the programs of CHECKTESTS, no display needed) and the man pages check; prints one line per test, the output of
 # a failing one, and fails if any failed. Run it in the build directory.
-CHECKTESTS=poltest1 vmtest1 repltest1 ansitest1 txttest1 asmtest1 synthtest1 iotest1 gfxtest1 buildtest1 contest1 keytest1 scrtest1 libtest1 uitest1 synhltest1 fonttest1 joytest1 w3dtest1 shottest1 jsontest1 m3dtest1 gltest1
+CHECKTESTS=poltest1 vmtest1 repltest1 ansitest1 txttest1 asmtest1 synthtest1 iotest1 gfxtest1 buildtest1 contest1 keytest1 scrtest1 libtest1 uitest1 synhltest1 fonttest1 joytest1 w3dtest1 shottest1 jsontest1 m3dtest1 gltest1 m3dgltest1
 
 check: $(CHECKTESTS) engine1999 engine1999c
 	@fail=0; log=$$(mktemp); \
@@ -524,6 +529,7 @@ check: $(CHECKTESTS) engine1999 engine1999c
 hosttest: engine1999 gl3dtest1
 	sh hosttest.sh
 	sh gl3dtest.sh
+	sh m3dglhost.sh
 
 # make dist: engine1999-<version>.tar.gz with the files git tracks (but not the owner's backup and scratch folders) and the generated version.h,
 # so that the archive builds without git (tagtoverstr.sh keeps an existing version.h). Needs a git checkout; read-only git only.

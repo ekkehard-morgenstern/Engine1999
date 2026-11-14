@@ -35,7 +35,7 @@
 #endif
 
 /*
-The hardware (OpenGL 2) renderer of the mesh module, window host only (it needs SDL and the GL binding of glload.h). The module m3d.c knows
+The hardware (OpenGL 2) renderer of the mesh module, window host only (it needs SDL and the GL binding of glload.h; m3dgl.c). The module m3d.c knows
 it only as a `struct _m3drend_t`, which the host registers with m3d_set_hardware().
 */
 
