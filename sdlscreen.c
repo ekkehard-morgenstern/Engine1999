@@ -29,6 +29,7 @@
 #include "sdlscreen.h"
 #include "ansi.h"
 #include "sdllayer.h"
+#include "glload.h"
 #include "sdlevent.h"
 #include "textscreen.h"
 #include "tilescreen.h"
@@ -516,6 +517,8 @@ static int sdlscr_worker( void* arg ) {
         print_sdlerror( "set logical size" );
         goto ERR4;
     }
+
+    glload_probe();                     // is OpenGL 2 there? (the screen thread owns SDL's video: M3D HARDWARE asks glload_state() later)
 
     if ( !init_layers( renderer ) ) {
         fprintf( stderr, "failed to initialize layers\n" );

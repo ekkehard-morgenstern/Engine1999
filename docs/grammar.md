@@ -789,11 +789,11 @@ ui-geometry := num-expr "," num-expr "," num-expr "," num-expr "," num-expr .
 
 > The 3D mesh renderer (docs/3d-mesh-subsystem.md; M3D is an extension word): objects are triangle meshes with a position and heading, things are billboards. M3D OBJECT o[,flags[,light]], VERTEX o,x,y,z[,u[,v]],
 > FACE o,a,b,c,tex, QUAD o,a,b,c,d,tex, BOX o,x1,y1,z1,x2,y2,z2,tex[,faces], OBJPOS o,x,y,z[,yaw], OBJSHOW, OBJLIGHT, OBJFLAGS o,v, THING n,x,y,z,tex,w,h, THINGPOS n,x,y,z, THINGTEX / THINGLIGHT / THINGTRANS n,v, THINGOFF n,
-> CAMERA x,y,z,yaw[,pitch], TURN dyaw[,dpitch], PLAYER r,h,eye,step, MOVE fwd,right, LIFT h, LAMP n,x,y,z,r,amount, VIEW x,y,w,h[,scale[,fov]], FOG d, FAR d, SKY tex[,rep[,shift]], TEXTURE n,a$, RESET \| CLEAR \| COLORMAP \| RENDER.
-> Functions: M3D("X"\|"Y"\|"Z"\|"EYE"\|"YAW"\|"PITCH"\|"LIFT"\|"HIT"\|"FLOORZ"\|"SHOTKIND"\|"SHOTOBJ"\|"SHOTDIST"\|"SHOTX"\|"SHOTY"\|"SHOTZ"\|"DRAWN"), ("FLOORAT"\|"CEILAT"\|"ZONE"\|"ZONETAG",x,y,z), ("SHOOT"\|"USE"\|"SEES"\|"TON"\|"TX"\|"TY"\|"TZ"\|"DIST"\|"BEARING"\|"TEXW"\|"TEXH"\|"OBJON"\|"OBJX"\|"OBJY"\|"OBJZ"\|"OBJYAW"\|"VERTS"\|"TRIS",n).
+> CAMERA x,y,z,yaw[,pitch], TURN dyaw[,dpitch], PLAYER r,h,eye,step, MOVE fwd,right, LIFT h, LAMP n,x,y,z,r,amount, VIEW x,y,w,h[,scale[,fov]], FOG d, FAR d, SKY tex[,rep[,shift]], TEXTURE n,a$, RESET \| CLEAR \| COLORMAP \| RENDER, SOFTWARE \| HARDWARE (the renderer that draws).
+> Functions: M3D("X"\|"Y"\|"Z"\|"EYE"\|"YAW"\|"PITCH"\|"LIFT"\|"HIT"\|"FLOORZ"\|"SHOTKIND"\|"SHOTOBJ"\|"SHOTDIST"\|"SHOTX"\|"SHOTY"\|"SHOTZ"\|"DRAWN"\|"RENDERER"\|"HWAVAIL"), ("FLOORAT"\|"CEILAT"\|"ZONE"\|"ZONETAG",x,y,z), ("SHOOT"\|"USE"\|"SEES"\|"TON"\|"TX"\|"TY"\|"TZ"\|"DIST"\|"BEARING"\|"TEXW"\|"TEXH"\|"OBJON"\|"OBJX"\|"OBJY"\|"OBJZ"\|"OBJYAW"\|"VERTS"\|"TRIS",n).
 
 ```ebnf
-m3d-stmt := XFUNC(M3D) ( RESET | CLEAR | COLORMAP | RENDER | TEXTURE num-expr "," str-expr |
+m3d-stmt := XFUNC(M3D) ( RESET | CLEAR | COLORMAP | RENDER | SOFTWARE | HARDWARE | TEXTURE num-expr "," str-expr |
                              ( OBJECT | VERTEX | FACE | QUAD | BOX | OBJPOS | OBJSHOW | OBJLIGHT | OBJFLAGS | THING | THINGPOS | THINGTEX | THINGOFF | THINGLIGHT | THINGTRANS |
                                CAMERA | TURN | PLAYER | MOVE | LIFT | LAMP | VIEW | FOG | FAR | SKY | THINGMOVE | ZONE ) num-expr { "," num-expr } | WORLD ) .
 ```

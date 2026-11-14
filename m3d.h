@@ -72,6 +72,8 @@ bool   m3d_query( m3d_t* m, int q, const double* a, int na, double* result );
 int    m3d_nverts( const m3d_t* m, int o );                  // the number of vertices of an object (0: none)
 void   m3d_colormap( m3d_t* m, const uint32_t* argb );
 const uint8_t* m3d_render( m3d_t* m );
+struct _m3drend_t;
+void   m3d_set_hardware( m3d_t* m, const struct _m3drend_t* r );   // the host registers the hardware (OpenGL) renderer it has (0: none; M3D HARDWARE is then an error)
 void   m3d_getview( const m3d_t* m, int* x, int* y, int* width, int* height, int* scale, int* bmpw, int* bmph );
 
 #endif

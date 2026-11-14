@@ -29,6 +29,7 @@
 
 
 #include "m3d.h"
+#include "m3dpriv.h"
 #include "m3dworld.h"
 #include "json.h"
 #include "gfxops.h"
@@ -118,6 +119,75 @@ static void fresh( void ) {
     CHECK( op( GFXOP_M3DOBJECT, 1, 1.0 ) );
     CHECK( op( GFXOP_M3DBOX, 8, 1.0, -500.0, -500.0, -10.0, 500.0, 500.0, 0.0, 1.0 ) );
     CHECK( op( GFXOP_M3DCAMERA, 4, 0.0, 0.0, 0.0, 0.0 ) );
+}
+
+
+// -- switching the renderer: a stand-in for the hardware renderer ------------------------------------------------------------------
+
+typedef struct { int created, destroyed, resized, palettes, rendered, bw, bh; uint8_t* fb; } fake_t;
+static fake_t fk;
+
+static void* fake_create( m3d_t* m ) { (void) m; ++fk.created; return &fk; }
+static void fake_destroy( m3d_t* m, void* rd ) { (void) m; (void) rd; ++fk.destroyed; free( fk.fb ); fk.fb = 0; }
+static bool fake_resize( m3d_t* m, void* rd, int bw, int bh ) {
+    (void) m; (void) rd;
+    uint8_t* fb = (uint8_t*) malloc( (size_t) bw * (size_t) bh );
+    if ( fb == 0 ) { return false; }
+    memset( fb, 77, (size_t) bw * (size_t) bh );
+    free( fk.fb ); fk.fb = fb; fk.bw = bw; fk.bh = bh; ++fk.resized;
+    return true;
+}
+static void fake_palette( m3d_t* m, void* rd ) { (void) m; (void) rd; ++fk.palettes; }
+static const uint8_t* fake_render( m3d_t* m, void* rd ) { (void) m; (void) rd; ++fk.rendered; return fk.fb; }
+static const m3drend_t fake_renderer = { "fake", fake_create, fake_destroy, fake_resize, fake_palette, fake_render };
+
+static void test_switch( void ) {
+    fresh();
+    memset( &fk, 0, sizeof(fk) );
+    CHECK( Q( GFXQ_M3DRENDERER, 0 ) == 0 );
+    CHECK( Q( GFXQ_M3DHWAVAIL, 0 ) == 0 );
+    CHECK( !op( GFXOP_M3DHARDWARE, 0 ) );                       // none registered
+    CHECK( lasterr != 0 && strstr( lasterr, "not available" ) != 0 );
+    CHECK( Q( GFXQ_M3DRENDERER, 0 ) == 0 );
+    CHECK( op( GFXOP_M3DSOFTWARE, 0 ) );                        // already in use: fine
+    const uint8_t* soft = shot();
+    CHECK( soft != 0 && PX( soft, 80, 50 ) != 77 );
+    uint32_t pal[256];
+    for ( int i=0; i < 256; ++i ) { pal[i] = 0xFF000000U | (uint32_t)( i * 0x010101U ); }
+    m3d_colormap( M, pal );
+    m3d_set_hardware( M, &fake_renderer );
+    CHECK( Q( GFXQ_M3DHWAVAIL, 0 ) == 1 );
+    CHECK( Q( GFXQ_M3DRENDERER, 0 ) == 0 );                     // registering does not switch
+    CHECK( op( GFXOP_M3DHARDWARE, 0 ) );
+    CHECK( Q( GFXQ_M3DRENDERER, 0 ) == 1 );
+    CHECK( fk.created == 1 && fk.destroyed == 0 && fk.palettes == 1 );   // the palette was handed over
+    CHECK( fk.bw == 160 && fk.bh == 100 );                      // sized like the view
+    const uint8_t* hw = shot();
+    CHECK( hw != 0 && PX( hw, 5, 5 ) == 77 && fk.rendered == 1 );
+    CHECK( op( GFXOP_M3DVIEW, 6, 0.0, 0.0, 80.0, 40.0, 1.0, 90.0 ) );     // the view changes: the renderer follows
+    CHECK( fk.bw == 80 && fk.bh == 40 );
+    CHECK( !op( GFXOP_M3DVIEW, 6, 0.0, 0.0, 2.0, 2.0, 1.0, 90.0 ) );     // refused: nothing changes
+    CHECK( fk.bw == 80 && fk.bh == 40 );
+    m3d_colormap( M, pal );
+    CHECK( fk.palettes == 2 );
+    CHECK( op( GFXOP_M3DRESET, 0 ) );                           // RESET keeps the renderer
+    CHECK( Q( GFXQ_M3DRENDERER, 0 ) == 1 );
+    CHECK( op( GFXOP_M3DSOFTWARE, 0 ) );
+    CHECK( Q( GFXQ_M3DRENDERER, 0 ) == 0 );
+    CHECK( fk.destroyed == 1 );
+    CHECK( op( GFXOP_M3DVIEW, 6, 0.0, 0.0, 160.0, 100.0, 1.0, 90.0 ) );
+    const uint8_t* again = shot();
+    CHECK( again != 0 && fk.rendered == 1 );                    // the fake is no longer asked
+    CHECK( op( GFXOP_M3DHARDWARE, 0 ) );
+    CHECK( fk.created == 2 );
+    m3d_set_hardware( M, 0 );                                   // the host withdraws it: the one in use stays until switched
+    CHECK( Q( GFXQ_M3DHWAVAIL, 0 ) == 0 );
+    CHECK( op( GFXOP_M3DSOFTWARE, 0 ) );
+    CHECK( !op( GFXOP_M3DHARDWARE, 0 ) );
+    CHECK( fk.destroyed == 2 );
+    m3d_set_hardware( M, &fake_renderer );
+    CHECK( op( GFXOP_M3DHARDWARE, 0 ) );
+    // m3d_free (below) destroys the renderer in use
 }
 
 int main( void ) {
@@ -392,7 +462,9 @@ int main( void ) {
         CHECK( shot() != 0 );
         CHECK( op( GFXOP_M3DMOVE, 2, 7.0 * ( i % 5 ), 3.0 ) );
     }
+    test_switch();
     m3d_free( M );
+    CHECK( fk.destroyed == 3 );
     printf( "m3dtest1: %d cases, %d failures\n", cases, failures );
     return failures;
 }

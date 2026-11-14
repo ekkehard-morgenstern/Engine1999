@@ -99,6 +99,7 @@ struct _m3d_t {
     bool     havepal;
     int      vx, vy, vw, vh, scale, bw, bh;
     double   fov, fog, far;
+    const m3drend_t* hw;                       // the hardware renderer the host offered, or 0
     const m3drend_t* rend;  void* rdata;       // the renderer in use (m3dsoft.c: the software one)
     int      skytex;  double skyrep, skyshift;
     // the player

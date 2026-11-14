@@ -37,6 +37,7 @@
 #include "gfxops.h"
 #include "w3d.h"
 #include "m3d.h"
+#include "m3dgl.h"
 #include "m3dworld.h"
 #include "jsonops.h"
 #include "w3dworld.h"
@@ -1554,6 +1555,7 @@ static bool host_m3d_get( void ) {
     if ( host_m3d == 0 ) {
         host_m3d = m3d_new();
         if ( host_m3d != 0 ) {
+            m3d_set_hardware( host_m3d, m3d_gl_renderer() );
             atexit( host_m3d_free );
         }
     }

@@ -59,3 +59,13 @@ Rotation about other axes (an object turns only about z), true tilt, per-vertex 
 ## Renderer interface
 
 The module is split into the world model (`m3d.c`: objects, things, lamps, camera, collision, rays, the operations and queries) and a renderer behind the interface `m3drend_t` in `m3dpriv.h` (`create`, `destroy`, `resize`, `palette`, `render`). The model owns the palette and everything that behavior depends on, so a query answers the same whatever draws. The software rasterizer is `m3dsoft.c` (`m3d_soft_renderer`; its color map, translucency table, bitmap and depth buffer are its own). A second backend (OpenGL 2, 32 bit ARGB output) is planned; see `SESSION.md`.
+
+### Choosing the renderer (`M3D SOFTWARE`, `M3D HARDWARE`)
+
+`M3D SOFTWARE` switches to the software renderer (always possible, the default). `M3D HARDWARE` switches to the OpenGL 2 renderer; where there is none it is the error "Hardware renderer not available". `M3D("RENDERER")` is 0 or 1 for the one in use, `M3D("HWAVAIL")` is 1 when `M3D HARDWARE` can succeed (a program asks before it switches). `M3D RESET` keeps the choice; the palette and the view carry over a switch. The model (`m3d.c`) does not know OpenGL: the window host registers the hardware renderer with `m3d_set_hardware()` (`m3dgl.[ch]`: `m3d_gl_renderer()`); the console host registers none. Switching builds the new renderer's state first, so nothing changes when that fails. `m3dtest1` tests the switching with a stand-in renderer.
+
+**Status: the GL binding exists, the renderer does not yet** (`m3d_gl_renderer()` returns 0, so `HWAVAIL` is always 0 for now).
+
+### The OpenGL binding (`glload.[ch]`)
+
+No GL library is linked. SDL opens the system's library (`SDL_GL_LoadLibrary`) and hands out addresses (`SDL_GL_GetProcAddress`); `glload_bind()` keeps the 60 functions the renderer needs (GL 1.1 drawing and textures, buffers, GLSL shaders, framebuffer objects under the core, ARB or EXT names) in a `glapi_t` while a context is current; one missing function means "no OpenGL 2". `glload_probe()` runs once in the screen thread when the window opens: it makes a hidden window and context, binds, reads `GL_VERSION` (>= 2.0), destroys them again and gives the current context back to the SDL renderer; the result is an atomic state (`glload_state()`, `glload_info()` with the version, the renderer's name and the reason for a "no"). `ENGINE1999_NOGL=1` skips the probe (answer: no). `gltest1` (in `make check`; skipped without a display or without OpenGL 2, `GLTEST_REQUIRE=1` makes a skip a failure) checks the probe, the binding and real drawing: a shader fills a framebuffer object and `glReadPixels` returns it (seen with an NVIDIA driver and with Mesa's llvmpipe under Xvfb).

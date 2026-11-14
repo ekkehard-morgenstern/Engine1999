@@ -90,6 +90,34 @@ static bool set_view( m3d_t* m, int x, int y, int w, int h, int sc, double fov )
     return true;
 }
 
+// switches to another renderer: its state is made and sized first, so that nothing changes when that fails
+static bool use_renderer( m3d_t* m, const m3drend_t* r, const char** err ) {
+    if ( r == m->rend ) {
+        return true;
+    }
+    void* rd = r->create( m );
+    if ( rd == 0 || !r->resize( m, rd, m->bw, m->bh ) ) {
+        if ( rd != 0 ) {
+            r->destroy( m, rd );
+        }
+        *err = "Out of memory";
+        return false;
+    }
+    const m3drend_t* old = m->rend;
+    void* oldrd = m->rdata;
+    m->rend = r;
+    m->rdata = rd;
+    if ( m->havepal ) {
+        r->palette( m, rd );
+    }
+    old->destroy( m, oldrd );
+    return true;
+}
+
+void m3d_set_hardware( m3d_t* m, const m3drend_t* r ) {
+    m->hw = r;
+}
+
 static void reset_state( m3d_t* m ) {
     m->fog = 0; m->far = 0; m->skytex = -1; m->skyrep = 1; m->skyshift = 0;
     m->x = m->y = m->z = 0; m->yaw = 0; m->pitch = 0; m->lift = 0;
@@ -550,6 +578,14 @@ bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t sl
     }
     a = args;
     switch ( op ) {
+        case GFXOP_M3DSOFTWARE:
+            return use_renderer( m, &m3d_soft_renderer, err );
+        case GFXOP_M3DHARDWARE:
+            if ( m->hw == 0 ) {
+                *err = "Hardware renderer not available";
+                return false;
+            }
+            return use_renderer( m, m->hw, err );
         case GFXOP_M3DRESET:
             clear_world( m );
             for ( int i=0; i < M3D_MAXTEX; ++i ) {
@@ -811,6 +847,8 @@ bool m3d_query( m3d_t* m, int q, const double* a, int na, double* r ) {
         case GFXQ_M3DFLOORAT: *r = floor_at( m, a[0], a[1], a[2] ); return true;
         case GFXQ_M3DCEILAT: *r = ceil_at( m, a[0], a[1], a[2] ); return true;
         case GFXQ_M3DDRAWN: *r = m->drawn; return true;
+        case GFXQ_M3DRENDERER: *r = m->rend == m->hw && m->hw != 0 ? 1 : 0; return true;
+        case GFXQ_M3DHWAVAIL: *r = m->hw != 0 ? 1 : 0; return true;
         case GFXQ_M3DZONE: case GFXQ_M3DZONETAG: {
             *r = -1;
             for ( int i=0; i < m->nzones; ++i ) {
