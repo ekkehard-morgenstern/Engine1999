@@ -3,6 +3,8 @@
 *Roadmap item 78, 2026-11-08. Module `w3d.[ch]` (no SDL, no global state), statements and functions `W3D ...` (extension word `XF_W3D`), tests `w3dtest1`
 and `vmtest1`, demos `demos/manor.bas`, `demos/bughunt.bas`, library `demos/lib/w3dkit.lib`.*
 
+> **Status (2026-11-14):** the sector renderer is a supported feature and is **not planned for removal**. A second renderer, the mesh renderer `M3D` (`docs/3d-mesh-subsystem.md`), exists next to it; Deqq's House II uses that one. The demos of *this* renderer are Manor, Bug Hunt, the Showroom, Deqq's House I, the server room of Y2K38 and the map editor (`demos/README.md` marks them).
+
 ## What it is and why software
 
 A world in the style of **Doom and Duke Nukem 3D**: *sectors* (a floor and a ceiling height, a floor and a ceiling picture, a light level) bounded by

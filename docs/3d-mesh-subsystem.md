@@ -2,6 +2,8 @@
 
 *2026-11-14, owner's decision: the sector renderer (`W3D`, `docs/3d-subsystem.md`) cannot express Deqq's House II (a town round a house, tall things seen over fences, rooms over rooms), so a renderer without sectors was written next to it. The sector renderer stays for the other demos (Manor, Bug Hunt, the showroom, Deqq's House I). This page is the reference for the new one; the code is `m3d.[ch]` (no SDL, no global state), the test is `m3dtest1.c`.*
 
+> The sector renderer `W3D` (`docs/3d-subsystem.md`) stays: it is a supported feature with its own demos (Manor, Bug Hunt, Showroom, Deqq's House I, Y2K38's server room, the map editor), and nobody plans to remove it (owner, 2026-11-14). Which renderer fits depends on the world: sectors are fast and simple for rooms joined by portals; meshes can put anything anywhere.
+
 ## Model
 
 - A world is a set of **objects** (0 .. 4095). An object is a triangle mesh with a position, a heading (yaw about the z axis), a light level (0 .. 255) and flags. The mesh is in the object's own coordinates; `M3D OBJPOS o,x,y,z[,yaw]` moves and turns it (a door is an object that turns about its hinge).
