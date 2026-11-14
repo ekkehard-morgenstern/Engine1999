@@ -1517,7 +1517,11 @@
 14930 DATA 300,1620,3
 14940 DATA -480,1620,0
 14950 DATA -480,1100,0
-14960 DATA -480,600,3
+14952 DATA -480,755,0
+14954 DATA -1120,755,0
+14956 DATA -1120,520,3
+14958 DATA -1120,270,0
+14960 DATA -480,270,0
 14970 DATA -480,100,0
 14980 DATA -480,-100,0
 14990 DATA -200,-100,0
@@ -1755,19 +1759,35 @@
 35080 ' where a car is on the ring road: S = the distance driven (0 .. CARLOOP), the outer lanes, anticlockwise: the south road eastbound (y -190), the east road
 35090 ' northbound (x 1650), the north road westbound (y 1700), the west road southbound (x -560); sets CX, CY and CH (the heading, in radians, 0 = east)
 35100 PROC CARPLACE(S)
-35110   IF S<2210 THEN
-35120     CX=-560+S:CY=-190:CH=0
-35130   ELSE
-35140     IF S<4100 THEN
-35150       CX=1650:CY=-190+(S-2210):CH=1.5707963
-35160     ELSE
-35170       IF S<6310 THEN
-35180         CX=1650-(S-4100):CY=1700:CH=3.1415927
-35190       ELSE
-35200         CX=-560:CY=1700-(S-6310):CH=4.712389
-35210       END IF
-35220     END IF
-35230   END IF
+35101   IF S<2210 THEN
+35102     CX=-560+S:CY=-190:CH=0
+35103   ELSE
+35104     IF S<4100 THEN
+35105       CX=1650:CY=-190+(S-2210):CH=1.5707963
+35106     ELSE
+35107       IF S<6310 THEN
+35108         CX=1650-(S-4100):CY=1700:CH=3.1415927
+35109       ELSE
+35110         IF S<7230 THEN
+35111           CX=-560:CY=1700-(S-6310):CH=4.712389
+35112         ELSE
+35113           IF S<7820 THEN
+35114             CX=-560-(S-7230):CY=780:CH=3.1415927
+35115           ELSE
+35116             IF S<8355 THEN
+35117               CX=-1150:CY=780-(S-7820):CH=4.712389
+35118             ELSE
+35119               IF S<8945 THEN
+35120                 CX=-1150+(S-8355):CY=245:CH=0
+35121               ELSE
+35122                 CX=-560:CY=245-(S-8945):CH=4.712389
+35123               END IF
+35124             END IF
+35125           END IF
+35126         END IF
+35127       END IF
+35128     END IF
+35129   END IF
 35240 END PROC
 35250 ' the cars: up to three at a time, a new one every 15 .. 40 seconds, each drives once round the block (51 s) and is gone; one that has you in front of it on the road
 35260 ' brakes and honks, then drives on when the way is free; the picture shows the car from the side it is seen from (4 views)
@@ -1805,7 +1825,7 @@
 35570       IF CARV(K)<V THEN CARV(K)=MIN(V,CARV(K)+240*DT)
 35580       IF CARV(K)>V THEN CARV(K)=MAX(V,CARV(K)-480*DT)
 35590       CARD(K)=CARD(K)+CARV(K)*DT
-35600       IF CARD(K)>=8200 THEN
+35600       IF CARD(K)>=9380 THEN
 35610         CARON(K)=0:M3D OBJSHOW 3200+K*3+CARCOL(K),0
 35620       ELSE
 35630         CALL CARPLACE(CARD(K))
