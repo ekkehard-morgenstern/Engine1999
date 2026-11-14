@@ -2003,3 +2003,7 @@ The owner bundled three pieces of Claude work into this commit (oldest first):
 ### 968cd82 — 2026-11-14 14:57:43 +0100 — "Detour road fix, by Claude Code"
 2 files, +6/-2.
 - **Deqq's House II: the detour road is cut out of the grass** (2026-11-14, owner: grass and road overlap at the cellar detour, "or the road could be cut out of the grass"; he also saw Deqq and a car take the detour): in `demos/deqq2.mesh.json` the west grass strip (object 424) is rebuilt from 8 boxes that leave out the detour road 426 (checked: area = old strip minus road, 4 817 700); a first try with the grass one unit lower was dropped. The other strips are unchanged. Tests: `deqq2test.sh` passes. Checked in the window by the owner: the road is cleanly cut out of the grass.
+
+### 90965c5 — 2026-11-14 14:59:03 +0100 — "Claude history log change"
+1 file, +4/-2.
+- `HistoryLog-Claude.md` only: the `968cd82` entry now records that the owner checked the detour road in the window (cleanly cut out of the grass).
