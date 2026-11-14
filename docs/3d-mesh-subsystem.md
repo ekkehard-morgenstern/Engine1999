@@ -55,3 +55,7 @@ Rotation about other axes (an object turns only about z), true tilt, per-vertex 
 ## Tests
 
 `m3dtest1` (zones, walking things and the world document too; in `make check`, also clean under ASan / UBSan): the picture (wall, floor, depth order, culling, two sided, clipping inside a box, masked, translucent, fog, lamps, sky, things), movement (walls, sliding, steps, low ceiling, jump, passable), floors, shots, use, sight, a door turned about its hinge, errors, 300 random frames.
+
+## Renderer interface
+
+The module is split into the world model (`m3d.c`: objects, things, lamps, camera, collision, rays, the operations and queries) and a renderer behind the interface `m3drend_t` in `m3dpriv.h` (`create`, `destroy`, `resize`, `palette`, `render`). The model owns the palette and everything that behavior depends on, so a query answers the same whatever draws. The software rasterizer is `m3dsoft.c` (`m3d_soft_renderer`; its color map, translucency table, bitmap and depth buffer are its own). A second backend (OpenGL 2, 32 bit ARGB output) is planned; see `SESSION.md`.

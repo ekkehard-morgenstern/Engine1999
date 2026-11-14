@@ -13,6 +13,8 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+- **M3D renderer split (step 1 of making the mesh renderer pluggable; owner's decision: option A, the hardware renderer gets its own 32 bit layer later).** New `m3dpriv.h` (the world model's types, shared inline helpers and the renderer interface `m3drend_t`: `create` / `destroy` / `resize` / `palette` / `render`), new `m3dsoft.c` (the software rasterizer moved out of `m3d.c` unchanged; its own state `soft_t`: color map, translucency table, bitmap, depth buffer); `m3d.c` keeps the model (objects, collision, rays, ops, queries) and calls the renderer through `m->rend`; the palette (`pal`, `havepal`) stays in the model so a later backend switch keeps it. `m3d_obj_update` is no longer static. Makefile: `m3dsoft.o`, `m3dpriv.h`. No change of behavior and no new statements yet. Tests: `make check` all passed (`m3dtest1` 1306, `deqq2test`). Backup `pre-m3d-renderer-split`. Next: `M3D SOFTWARE` / `M3D HARDWARE` and the availability query, `glload.[ch]`, the 32 bit layer.
+
 ## Log
 
 ### 7a6cb67 — 2026-10-17 13:32:27 +0200 — "Introduced Claude to the project"
