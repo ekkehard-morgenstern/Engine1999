@@ -570,9 +570,9 @@ static bool thing_get( m3d_t* m, double nv, thing_t** t ) {
 
 bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t slen, const char** err ) {
     int i1, i2, i3;
-    double args[9];
+    double args[10];
     *err = "Illegal argument";
-    for ( int i=0; i < 9; ++i ) {
+    for ( int i=0; i < 10; ++i ) {
         args[i] = i < na ? a[i] : GFX_NONE;             // arguments beyond na are omitted
         if ( i < na && !NONE_VAL( args[i] ) && !num_ok( args[i] ) && op != GFXOP_M3DTEXTURE ) {
             return false;
@@ -820,6 +820,17 @@ bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t sl
                 return false;
             }
             lamp_t* l = &m->lamps[i1];
+            bool spot = !NONE_VAL( a[6] );
+            if ( spot ) {
+                double len = sqrt( a[6] * a[6] + a[7] * a[7] + a[8] * a[8] );
+                if ( NONE_VAL( a[7] ) || NONE_VAL( a[8] ) || NONE_VAL( a[9] ) || len < 1.0e-9 || a[9] < 1.0 || a[9] > 179.0 ) {
+                    *err = "M3D LAMP needs dx, dy, dz (not all 0) and an angle of 1 to 179 degrees for a cone";
+                    return false;
+                }
+                l->dx = a[6] / len; l->dy = a[7] / len; l->dz = a[8] / len;
+                l->cc = cos( a[9] * 3.14159265358979323846 / 180.0 );
+            }
+            l->spot = spot;
             l->x = a[1]; l->y = a[2]; l->z = a[3]; l->r = a[4]; l->amount = a[5];
             return true;
         }

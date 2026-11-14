@@ -28,6 +28,7 @@
 240 DIM KD(200),SL(200),HX(200),HY(200),TXN(200),TWD(200),THT(200),TZO(200),TLZ(200),TLT(200),ACT(200),RCH(200),NMS$(200),IL(100),PARTNO(200),DESC$(200),DG(3),W$(8)
 250 DIM DHX(5),DHY(5),DBY(5),DSG(5),INV(3),BUILT(9),DSEC(5),DOP(5),DLK(5),DCUR(5),WPX(140),WPY(140),WPP(140),CARON(6),CARD(6),CARV(6),CARCOL(6),CARHON(6),CARSND(6),NM$(30),CMT$(12)
 255 DIM LRR(10),LRZ(10),VOK(420),MCUR(200),MPX(200),MPY(200),MB(220),MBK(220),MD(200),FLG(200),FLN(8),FLT(200),FOX(200),FOY(200),FOZ(200),FTX(200),FTY(200),FTZ(200),BNL$(3)
+256 DIM LYW(100),LSN(4),LSD(4)
 260 GOTO MAIN
 270 ' ------------------------------------------------------------------------------------------------ small helpers
 280 FUNC CI(H,S)
@@ -98,24 +99,26 @@
 850   WEND
 860   CALL TOWNTHINGS
 870 END PROC
-880 ' trees and lamp posts of the town (things 300 ..): lamps along both edges of the ring road, trees on the strips of grass between the road and the first row of houses
-890 PROC TT(N,X,Y,TX,W,H)
+880 ' the lamp posts of the town (things 700 ..): along both edges of the ring road, one every 560 units on each side, the two sides staggered by 280; LYW(n) = the direction (degrees) that the
+890 ' arm of post n points to, over the road; the trees come from the world document (things 404 ..)
+895 PROC TT(N,X,Y,TX,W,H)
 900   M3D THING N,X,Y,M3D("FLOORAT",X,Y,1),TX,W,H
 910 END PROC
 920 PROC TOWNTHINGS
-930   LOCAL N,X,Y,K
+930   LOCAL N,X,Y
 940   N=700
-950   FOR X=-500 TO 1600 STEP 280
-960     CALL TT(N,X,-70,299,24,56):CALL TT(N+1,X+140,-212,299,24,56)
-970     CALL TT(N+2,X,1587,299,24,56):CALL TT(N+3,X+140,1733,299,24,56)
+950   FOR X=-500 TO 1600 STEP 560
+960     CALL TT(N,X,-70,299,24,56):LYW(N-700)=270:CALL TT(N+1,X+280,-212,299,24,56):LYW(N+1-700)=90
+970     CALL TT(N+2,X,1587,299,24,56):LYW(N+2-700)=90:CALL TT(N+3,X+280,1733,299,24,56):LYW(N+3-700)=270
 980     N=N+4
 990   NEXT X
-1000   FOR Y=0 TO 1500 STEP 280
-1010     CALL TT(N,-450,Y,299,24,56):CALL TT(N+1,-590,Y+140,299,24,56)
-1020     CALL TT(N+2,1535,Y+140,299,24,56):CALL TT(N+3,1685,Y,299,24,56)
+1000   FOR Y=0 TO 1500 STEP 560
+1010     CALL TT(N,-450,Y,299,24,56):LYW(N-700)=180:CALL TT(N+1,-590,Y+280,299,24,56):LYW(N+1-700)=0
+1020     CALL TT(N+2,1535,Y+280,299,24,56):LYW(N+2-700)=0:CALL TT(N+3,1685,Y,299,24,56):LYW(N+3-700)=180
 1030     N=N+4
 1040   NEXT Y
-1045   IF NOT LAMPSB THEN CALL BUILDLAMPS
+1045   NLAMPS=N-700
+1046   IF NOT LAMPSB THEN CALL BUILDLAMPS
 1050 END PROC
 1060 ' puts thing N in the world at its place (its home place, or X,Y if they are given: CALL SHOWAT)
 1070 PROC SHOWTHING(N)
@@ -1057,6 +1060,7 @@
 10290   CALL DOORS(DT)
 10300   CALL LANTERNLIGHT
 10301   CALL LIGHTFX(DT)
+10302   IF GT>=LAMPT THEN CALL LAMPLIGHT:LAMPT=GT+0.1
 10310   IF FN HAS(ILANT) THEN M3D LAMP 0,PX,PY,50,280,INT(170*LFL) ELSE M3D LAMP 0,PX,PY,50,0,0
 10320   IF M3D("TON",OWRECK) THEN M3D LAMP 1,M3D("TX",OWRECK),M3D("TY",OWRECK),60,320,INT((30+NBUILT*18)*LFW)
 10330   IF DQON AND DQS=2 THEN M3D LAMP 2,M3D("TX",IDEQQ),M3D("TY",IDEQQ),50,220,120 ELSE M3D LAMP 2,0,0,0,0,0
@@ -2758,15 +2762,59 @@
 41120   WEND
 41125 END PROC
 41130 ' the lamp posts of the town (things 700 .. 799, made by TOWNTHINGS when a game starts: they do not exist yet when LOADLEVEL runs BUILDTOWN, which is why the posts were
-41131 ' never seen after the billboards became meshes); called once by TOWNTHINGS, objects 6200 + n
+41131 ' never seen after the billboards became meshes); called once by TOWNTHINGS: objects 6200 + n, standing on the floor, the arm turned to LYW(n)
 41132 PROC BUILDLAMPS
 41133   LOCAL N,X,Y
 41134   FOR N=700 TO 799
 41135     IF M3D("TON",N) THEN
 41136       X=M3D("TX",N):Y=M3D("TY",N)
-41137       CALL MKLAMP(6200+N-700)
-41138       CALL PUTMESH(6200+N-700,X,Y,1,0)
+41137       CALL MKPOST(6200+N-700)
+41138       M3D OBJPOS 6200+N-700,X,Y,M3D("FLOORAT",X,Y,1),LYW(N-700)
 41139     END IF
 41140   NEXT N
 41141   LAMPSB=-1
 41142 END PROC
+41143 ' a roadside lamp post (local coordinates: the foot at the origin, the arm towards +x, 252 high): a foot and a collar, a pole 4.4 thick, an arm that curves over like an upside down
+41144 ' golf club (five bars), and the lamp head, a box that rises a little outwards with a glowing glass on its underside, so that the light looks down and out to the road
+41145 PROC MKPOST(O)
+41146   LOCAL B
+41147   M3D OBJECT O,28
+41148   M3D BOX O,-7,-7,0,7,7,10,303
+41149   M3D BOX O,-4,-4,10,4,4,22,303
+41150   M3D BOX O,-2.2,-2.2,22,2.2,2.2,226,303
+41151   TUBETX=303
+41152   CALL TUBE(O,0,0,226,8,0,238,2.2):CALL TUBE(O,8,0,238,22,0,247,2.2):CALL TUBE(O,22,0,247,40,0,251,2):CALL TUBE(O,40,0,251,58,0,252,2)
+41153   CALL TUBE(O,54,0,252,96,0,260,6)
+41154   B=M3D("VERTS",O)
+41155   M3D VERTEX O,55.1,-6,245.8:M3D VERTEX O,97.1,-6,253.8:M3D VERTEX O,97.1,6,253.8:M3D VERTEX O,55.1,6,245.8
+41156   M3D QUAD O,B,B+1,B+2,B+3,317
+41157 END PROC
+41158 ' the light of the posts: every tenth of a second the four posts nearest to the player within 600 units (two with the software renderer: it costs about 2 ms a lamp at 640 x 264) shine as cones from their heads (lamps 4 .. 7; 0 .. 3 are the lantern, the
+41159 ' wreck, Deqq and the television), the other lamps are off: the cone looks down and out towards the road from 246 high, 58 degrees wide, reaches 450 units
+41160 PROC LAMPLIGHT
+41161   LOCAL N,K,D,X,Y,A,J,T,TD,NL
+41162   FOR K=0 TO 3
+41163     LSN(K)=-1:LSD(K)=360000
+41164   NEXT K:NL=4:IF M3D("RENDERER")=0 THEN NL=2
+41165   FOR N=700 TO 699+NLAMPS
+41166     X=M3D("TX",N)-PX:Y=M3D("TY",N)-PY:D=X*X+Y*Y
+41167     IF D<360000 THEN
+41168       J=N:TD=D
+41169       FOR K=0 TO 3
+41170         IF TD<LSD(K) THEN
+41171           T=LSN(K):LSN(K)=J:J=T
+41172           T=LSD(K):LSD(K)=TD:TD=T
+41173         END IF
+41174       NEXT K
+41175     END IF
+41176   NEXT N
+41177   FOR K=0 TO 3
+41178     N=LSN(K)
+41179     IF N<0 OR K>=NL THEN
+41180       M3D LAMP 4+K,0,0,0,0,0
+41181     ELSE
+41182       A=LYW(N-700)*PI/180
+41183       M3D LAMP 4+K,M3D("TX",N)+76*COS(A),M3D("TY",N)+76*SIN(A),M3D("FLOORAT",M3D("TX",N),M3D("TY",N),1)+246,450,255,0.3*COS(A),0.3*SIN(A),-0.95,58
+41184     END IF
+41185   NEXT K
+41186 END PROC

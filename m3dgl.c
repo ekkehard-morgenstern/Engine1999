@@ -50,7 +50,7 @@ levels), translucent surfaces mix half and half in true color, the sky is looked
 typedef struct { int key; float v[3 * VFLOATS]; } gtri_t;
 
 typedef struct {
-    GLint eye, r, up, fw, proj, tex, pal, fog, far_, masked, alpha, uselamps, lampp, lampa;
+    GLint eye, r, up, fw, proj, tex, pal, fog, far_, masked, alpha, uselamps, lampp, lampa, lampd;
     GLint apos, auv, alight;
 } prog_t;
 
@@ -99,6 +99,7 @@ static const char* const fs_obj =
     "uniform sampler2D u_tex, u_pal;\n"
     "uniform float u_fog, u_far, u_masked, u_alpha, u_uselamps;\n"
     "uniform vec4 u_lampp[8];\n"
+    "uniform vec4 u_lampd[8];\n"
     "uniform float u_lampa[8];\n"
     "varying vec2 v_uv; varying float v_light; varying vec3 v_world; varying float v_z;\n"
     "void main() {\n"
@@ -110,7 +111,11 @@ static const char* const fs_obj =
     "        for ( int k = 0; k < 8; ++k ) {\n"
     "            if ( u_lampp[k].w > 0.0 && u_lampa[k] > 0.0 ) {\n"
     "                float dd = distance( v_world, u_lampp[k].xyz );\n"
-    "                if ( dd < u_lampp[k].w ) lv += u_lampa[k] * ( 1.0 - dd / u_lampp[k].w ) * 0.12156863;\n"
+    "                if ( dd < u_lampp[k].w ) {\n"
+    "                    float sp = 1.0;\n"
+    "                    if ( u_lampd[k].w > -1.5 ) sp = clamp( ( ( dd > 0.000001 ? dot( v_world - u_lampp[k].xyz, u_lampd[k].xyz ) / dd : 1.0 ) - u_lampd[k].w ) / ( 1.0 - u_lampd[k].w ), 0.0, 1.0 );\n"
+    "                    lv += u_lampa[k] * ( 1.0 - dd / u_lampp[k].w ) * sp * 0.12156863;\n"
+    "                }\n"
     "            }\n"
     "        }\n"
     "    }\n"
@@ -276,6 +281,7 @@ static void* gl_create( m3d_t* m ) {
     p->uselamps = gl->GetUniformLocation( g->prog, "u_uselamps" );
     p->lampp = gl->GetUniformLocation( g->prog, "u_lampp" );
     p->lampa = gl->GetUniformLocation( g->prog, "u_lampa" );
+    p->lampd = gl->GetUniformLocation( g->prog, "u_lampd" );
     p->apos = gl->GetAttribLocation( g->prog, "a_pos" );
     p->auv = gl->GetAttribLocation( g->prog, "a_uv" );
     p->alight = gl->GetAttribLocation( g->prog, "a_light" );
@@ -741,14 +747,16 @@ static const void* gl_render( m3d_t* m, void* rd ) {
         (GLfloat)( -2.0 * NEARZ * zfar / ( zfar - NEARZ ) ) );
     gl->Uniform1f( p->fog, (GLfloat) m->fog );
     gl->Uniform1f( p->far_, (GLfloat) m->far );
-    GLfloat lp[8 * 4], la[8];
+    GLfloat lp[8 * 4], la[8], ld[8 * 4];
     for ( int k=0; k < M3D_MAXLAMPS; ++k ) {
         const lamp_t* l = &m->lamps[k];
         bool on = l->r > 0 && l->amount > 0;
         lp[k*4] = (GLfloat) l->x; lp[k*4+1] = (GLfloat) l->y; lp[k*4+2] = (GLfloat) l->z; lp[k*4+3] = on ? (GLfloat) l->r : 0.0f;
         la[k] = on ? (GLfloat) l->amount : 0.0f;
+        ld[k*4] = (GLfloat) l->dx; ld[k*4+1] = (GLfloat) l->dy; ld[k*4+2] = (GLfloat) l->dz; ld[k*4+3] = l->spot ? (GLfloat) l->cc : -2.0f;    // w = -2: no cone
     }
     gl->Uniform4fv( p->lampp, 8, lp );
+    gl->Uniform4fv( p->lampd, 8, ld );
     gl->Uniform1fv( p->lampa, 8, la );
     gl->Enable( GL_DEPTH_TEST );
     gl->DepthFunc( GL_LESS );

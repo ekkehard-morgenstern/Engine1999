@@ -180,7 +180,7 @@ static const gfxcmd_t cmds[] = {
     { "M3D", "WORLD", GFXOP_M3DWORLD, "", 0, false },
     { "M3D", "SOFTWARE", GFXOP_M3DSOFTWARE, "", 0, false },
     { "M3D", "HARDWARE", GFXOP_M3DHARDWARE, "", 0, false },
-    { "M3D", "LAMP", GFXOP_M3DLAMP, "nnnnnn", 0, false },
+    { "M3D", "LAMP", GFXOP_M3DLAMP, "nnnnnnoooo", 0, false },
     { "W3D", "RESET",    GFXOP_W3DRESET, "",         0, false },
     { "W3D", "TEXTURE",  GFXOP_W3DTEXTURE, "ns",     0, false },
     { "W3D", "SECTOR",   GFXOP_W3DSECTOR, "nnnooo",  0, false },

@@ -193,7 +193,7 @@ Objects made by the game at start (all through `M3D OBJECT`, `BOX`, `VERTEX`, `Q
 | 5000 + N | static decorations: trees (61), plants (90), lamps (91), barrels (92), the sign (63), the washing line (84), sofa (80), shelf (83), the wreck (45: object 5000 + 32 = **5032**) |
 | 5300 .. 5307 | the eight hull panels of the wreck, shown as parts are built in |
 | 6000 + N | the town's trees (things 404 ..) |
-| 6200 + n | the lamp posts (things 700 .. 799; built by `BUILDLAMPS`, called from `TOWNTHINGS` because the lamp things only exist after `PLACEALL`) |
+| 6200 + n | the roadside **lamp posts** (things 700 .. 727; built by `BUILDLAMPS` with `MKPOST`, called from `TOWNTHINGS` because the lamp things only exist after `PLACEALL`; turned to `LYW(n)`, the direction of the arm) |
 | 6800 .. 6802 | the three gas pumps (things 401 .. 403; *not* 6100 + n: see §19) |
 
 ### 4.4 Windows and glass
@@ -323,7 +323,7 @@ At a new game Deqq starts away, in the town (`DQAWAY = -1`, `DQWP = 60`), `DQCD 
 
 ## 8 The town and the cars
 
-The town is described in [town-map.md](town-map.md): the premises with the fence and gate in the south, the ring road at x -560 .. 1650 / y -190 .. 1700 (zone tag 30), four grass strips with 43 houses and shops, the gas station (kiosk 435, three pumps, price sign 441 on post 436), trees, lamp posts (every 280 units along both edges), the phone booth at (1730, 1660). You start at (1730, 1570).
+The town is described in [town-map.md](town-map.md): the premises with the fence and gate in the south, the ring road at x -560 .. 1650 / y -190 .. 1700 (zone tag 30), four grass strips with 43 houses and shops, the gas station (kiosk 435, three pumps, price sign 441 on post 436), trees, lamp posts (28 of them: one every 560 units on each side of the road, the two sides staggered by 280; §11.1), the phone booth at (1730, 1660). You start at (1730, 1570).
 
 **Cars** (`MAKECARS`, `CARMESH`, `BUILDCARS`, `CARPLACE`, `CARS`):
 - Nine car objects are built (6 slots x 3 body colors), each: a lower body box, bumpers, two headlights and two tail lights (boxes), a tapering cabin of glass quads with a body-colored roof, four eight-sided wheels (`CARWHEEL`: prism quads with a tyre picture and a hub-cap picture 238 on the sides). Local coordinates: x forward, y left, z up; flags 12 (see-through + passable: harmless).
@@ -383,7 +383,11 @@ For each registered thing: if the thing is on, make its billboard blank (`M3D TH
 
 ### 11.1 Light
 
-Each object has a light level (0 .. 255, scaled to 32 levels of the color map); `M3D OBJLIGHT room,level` darkens or lights a whole room. Lamps (`M3D LAMP n,x,y,z,radius,amount`, up to 8, brightening only): 0 the lantern you carry, 1 the wreck's glow (radius 320, `30 + NBUILT * 18`, pulsing: faster at 8 parts), 2 Deqq's red glow while he chases (radius 220, 120), 3 the television in the living room (370, 792, 45, radius 120, flickering blue).
+Each object has a light level (0 .. 255, scaled to 32 levels of the color map); `M3D OBJLIGHT room,level` darkens or lights a whole room. Lamps (`M3D LAMP n,x,y,z,radius,amount[,dx,dy,dz,angle]`, up to 8, brightening only; with a direction and a half angle in degrees a lamp is a cone): 4 .. 7 the **street lamps** (below), 0 the lantern you carry, 1 the wreck's glow (radius 320, `30 + NBUILT * 18`, pulsing: faster at 8 parts), 2 Deqq's red glow while he chases (radius 220, 120), 3 the television in the living room (370, 792, 45, radius 120, flickering blue).
+
+**The street lamps.** The posts (`MKPOST`, 252 high) are shaped like an upside down golf club: a pole, an arm of five bars that curves over the road, and a lamp head that rises a little outwards with a glowing glass on its underside. There are 28 (things 700 .. 727, `TOWNTHINGS`), one every 560 units on each side of the ring road, the two sides staggered by 280 (it was one every 280 and 56 high). There are only 8 lamps, so every tenth of a second `LAMPLIGHT` gives lamps 4 .. 7 to the **four posts nearest to the player within 600 units** (**two** with the software renderer, see the cost below): a cone from the lamp head (76 units out along the arm, 246 up) aimed 17 degrees outwards from straight down, 58 degrees half angle, reach 450, amount 255; the other slots are switched off. Since lamps only *brighten*, the town's objects (the ring road, grass strips, pavement, houses, fences, the ground: 154 objects) have a light level of 130 in the document (the premises stay at 255), so that the pools of light show; change `"light":130` there (or the posts' cone in `LAMPLIGHT`) to taste.
+
+**Cost** (measured 2026-11-14 with a C micro benchmark on the real world document, software renderer, the worst case of four lamps close to the camera, one machine, noisy by about 15 %): 1.7 ms a frame at 320 x 132 without street lamps, 4.2 with four omni lamps, 5.6 with four cones; 5.6 ms at 640 x 264 without, about 14 with four omni lamps and about 21 with four cones (over the 16.7 ms of a picture at 60 Hz): so the software renderer, whose default render size is 320 x 132, gets two lit posts. The hardware renderer does the same per-pixel sum on the GPU (its shader already looped over all eight lamps): not measured on a real GPU, expected to be negligible. Where the time goes in software: every pixel of a triangle near a lamp does a distance (and for a cone a dot product and a square root); triangles are only given the lamps whose reach touches them (`lampmask`), but in a street everything is within reach.
 
 `LIGHTFX(DT)` (line 40410): `LFL` the flicker of the lantern flame, `LFK` the cellar bulb that flickers and now and then goes out for a moment (`LFU`; 0.3 of the light), `LFW` the wreck's pulse. In the cellar (`M3D("Z") < -4`) the light of the cellar rooms 34 .. 38 (stairs), 39 (cellar), 45 (its alcove) is set from these (with the lantern 170 / 185 level, without 90 / 45); `LANTERNLIGHT` sets the base levels when you take or drop the lantern.
 

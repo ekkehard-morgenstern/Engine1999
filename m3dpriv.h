@@ -86,7 +86,7 @@ typedef struct {
 
 typedef struct { int w, h; uint8_t* col; unsigned gen; } tex_t;     // col[ u * h + v ]; gen: counts the times the picture was set (a hardware renderer uploads again when it changed)
 
-typedef struct { double x, y, z, r, amount; } lamp_t;
+typedef struct { double x, y, z, r, amount, dx, dy, dz, cc; bool spot; } lamp_t;     // spot: a cone along (dx,dy,dz) (unit length) with the cosine cc of its half angle
 
 typedef struct { int id, tag; double x1, y1, x2, y2, z1, z2; } zone_t;
 

@@ -50,7 +50,7 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 */
 
 #define GFX_NONE        (-1.0e9)        // "argument omitted"
-#define GFX_MAXARGS     8
+#define GFX_MAXARGS     12              // (was 8 until 2026-11-14, but M3D BOX has 9 arguments: the VM wrote one past its argument array)
 
 // operations (vm_gfx_t.op)
 #define GFXOP_LAYER     1               // GFX LAYER n, ON|OFF
@@ -369,7 +369,7 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXOP_M3DPLAYER 327             // M3D PLAYER radius, height, eye, step
 #define GFXOP_M3DMOVE   328             // M3D MOVE forward, right
 #define GFXOP_M3DLIFT   329             // M3D LIFT h
-#define GFXOP_M3DLAMP   330             // M3D LAMP n, x, y, z, radius, amount
+#define GFXOP_M3DLAMP   330             // M3D LAMP n, x, y, z, radius, amount [, dx, dy, dz, angle]   (with a direction and a half angle in degrees: a cone, a spot light)
 #define GFXOP_M3DTHINGMOVE 331          // M3D THINGMOVE n, dx, dy               (walks a thing like M3D MOVE: pushed out of walls, up steps, following the floor; M3D("HIT"))
 #define GFXOP_M3DZONE   332             // M3D ZONE id, x1, y1, x2, y2, z1, z2 [, tag]  (a named box of space for the game: M3D("ZONE", x, y, z) finds the first one containing a point)
 #define GFXOP_M3DWORLD  333             // M3D WORLD                              (builds the world from the current JSON document: m3dworld.h, docs/3d-mesh-subsystem.md)

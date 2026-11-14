@@ -198,6 +198,7 @@ typedef struct {
     const tex_t* tx;
     int tex, flags, light;
     bool lamps;
+    unsigned lampmask;                      // the lamps whose reach touches the triangle's bounding box (bit k = lamp k)
 } tri_t;
 
 static void raster( rc_t* c, const tri_t* t, bool translucent ) {
@@ -258,10 +259,21 @@ static void raster( rc_t* c, const tri_t* t, bool translucent ) {
                             double wx = A[3] * z, wy = A[4] * z, wz = A[5] * z, add = 0;
                             for ( int k=0; k < M3D_MAXLAMPS; ++k ) {
                                 const lamp_t* l = &m->lamps[k];
-                                if ( l->r > 0 && l->amount > 0 ) {
-                                    double dx = wx - l->x, dy = wy - l->y, dz = wz - l->z, dd = sqrt( dx * dx + dy * dy + dz * dz );
-                                    if ( dd < l->r ) {
-                                        add += l->amount * ( 1.0 - dd / l->r );
+                                if ( ( t->lampmask >> k ) & 1U ) {
+                                    double dx = wx - l->x, dy = wy - l->y, dz = wz - l->z, d2 = dx * dx + dy * dy + dz * dz;
+                                    if ( d2 < l->r * l->r ) {
+                                        double sp = 1.0;
+                                        if ( l->spot ) {
+                                            // a cone: full on the axis, nothing at the edge (linear in the cosine of the angle to the axis); outside the cone is
+                                            // found without a square root (the cosine is positive: dot > 0 and dot^2 < cc^2 * d2 is outside)
+                                            double dot = dx * l->dx + dy * l->dy + dz * l->dz;
+                                            if ( l->cc > 0.0 && ( dot <= 0.0 || dot * dot < l->cc * l->cc * d2 ) ) {
+                                                continue;
+                                            }
+                                            sp = d2 > 1.0e-18 ? ( dot / (double) sqrtf( (float) d2 ) - l->cc ) / ( 1.0 - l->cc ) : 1.0;
+                                            sp = sp < 0.0 ? 0.0 : sp > 1.0 ? 1.0 : sp;
+                                        }
+                                        add += l->amount * ( 1.0 - (double) sqrtf( (float) d2 ) / l->r ) * sp;
                                     }
                                 }
                             }
@@ -300,10 +312,11 @@ static void raster( rc_t* c, const tri_t* t, bool translucent ) {
 }
 
 // one clipped polygon (view space) -> triangles
-static void draw_poly( rc_t* c, const cv_t* p, int n, const v3_t* wp, int tex, int flags, int light, bool translucent, bool lamps ) {
+static void draw_poly( rc_t* c, const cv_t* p, int n, const v3_t* wp, int tex, int flags, int light, bool translucent, unsigned lampmask ) {
+    bool lamps = lampmask != 0;
     // wp: the world position of the polygon's vertices (parallel to p; only used when lamps)
     tri_t t;
-    t.tx = tex_get( c->m, tex ); t.tex = tex; t.flags = flags; t.light = light; t.lamps = lamps; t.na = lamps ? 6 : 3;
+    t.tx = tex_get( c->m, tex ); t.tex = tex; t.flags = flags; t.light = light; t.lamps = lamps; t.lampmask = lampmask; t.na = lamps ? 6 : 3;
     double sx[8], sy[8], iz[8];
     for ( int i=0; i < n; ++i ) {
         iz[i] = 1.0 / p[i].z;
@@ -336,14 +349,15 @@ static void draw_poly( rc_t* c, const cv_t* p, int n, const v3_t* wp, int tex, i
     }
 }
 
-static bool lamp_near( const m3d_t* m, v3_t mn, v3_t mx ) {
+static unsigned lamp_near( const m3d_t* m, v3_t mn, v3_t mx ) {
+    unsigned mask = 0;
     for ( int k=0; k < M3D_MAXLAMPS; ++k ) {
         const lamp_t* l = &m->lamps[k];
         if ( l->r > 0 && l->amount > 0 && l->x + l->r >= mn.x && l->x - l->r <= mx.x && l->y + l->r >= mn.y && l->y - l->r <= mx.y && l->z + l->r >= mn.z && l->z - l->r <= mx.z ) {
-            return true;
+            mask |= 1U << k;
         }
     }
-    return false;
+    return mask;
 }
 
 static void draw_object( rc_t* c, obj_t* o, bool translucent ) {
@@ -406,7 +420,7 @@ static void draw_object( rc_t* c, obj_t* o, bool translucent ) {
         if ( offl || offr || offt || offb ) {
             continue;
         }
-        bool lamps = false;
+        unsigned lamps = 0;
         if ( c->nlamps > 0 ) {
             v3_t mn = { fmin( wa.x, fmin( wb.x, wc.x ) ), fmin( wa.y, fmin( wb.y, wc.y ) ), fmin( wa.z, fmin( wb.z, wc.z ) ) };
             v3_t mx = { fmax( wa.x, fmax( wb.x, wc.x ) ), fmax( wa.y, fmax( wb.y, wc.y ) ), fmax( wa.z, fmax( wb.z, wc.z ) ) };

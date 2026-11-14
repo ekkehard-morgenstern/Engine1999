@@ -356,6 +356,23 @@ int main( void ) {
     CHECK( op( GFXOP_M3DLAMP, 6, 0.0, 90.0, 0.0, 50.0, 80.0, 255.0 ) );                       // a lamp in front of the wall
     fb = shot();
     CHECK( PX( fb, 80, 50 ) > dark );
+    {   // a cone: the same lamp aimed at the wall lights only what is inside the cone, aimed away it lights nothing
+        int omni_side = PX( fb, 50, 50 );
+        CHECK( omni_side > dark );                                                                // (the omni lamp lights the wall's side too)
+        CHECK( op( GFXOP_M3DLAMP, 10, 0.0, 90.0, 0.0, 50.0, 80.0, 255.0, 1.0, 0.0, 0.0, 30.0 ) );
+        fb = shot();
+        CHECK( PX( fb, 80, 50 ) > dark );                                                         // on the axis
+        CHECK( PX( fb, 50, 50 ) == dark );                                                        // 76 degrees off the axis
+        CHECK( op( GFXOP_M3DLAMP, 10, 0.0, 90.0, 0.0, 50.0, 80.0, 255.0, -1.0, 0.0, 0.0, 30.0 ) );
+        fb = shot();
+        CHECK( PX( fb, 80, 50 ) == dark );                                                        // aimed away
+        CHECK( !op( GFXOP_M3DLAMP, 10, 0.0, 90.0, 0.0, 50.0, 80.0, 255.0, 0.0, 0.0, 0.0, 20.0 ) );   // no direction
+        CHECK( !op( GFXOP_M3DLAMP, 10, 0.0, 90.0, 0.0, 50.0, 80.0, 255.0, 1.0, 0.0, 0.0, 0.0 ) );    // no angle
+        CHECK( !op( GFXOP_M3DLAMP, 7, 0.0, 90.0, 0.0, 50.0, 80.0, 255.0, 1.0 ) );                    // a direction needs all four
+        CHECK( op( GFXOP_M3DLAMP, 6, 0.0, 90.0, 0.0, 50.0, 80.0, 255.0 ) );                        // omni again
+        fb = shot();
+        CHECK( PX( fb, 80, 50 ) > dark );
+    }
     // -- the sky ---------------------------------------------------------------------------------------------------------------------
     tex_flat( 9, 16, 16, 77 );
     CHECK( op( GFXOP_M3DSKY, 1, 9.0 ) );
