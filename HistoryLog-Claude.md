@@ -13,9 +13,6 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-### Sector renderer demos marked (2026-11-14, owner: "Mark the demos using the sector renderer as demos for that feature. There's no plan to remove the sector renderer in the near future.")
-- `demos/README.md`: rows of `manor`, `bughunt`, `showroom`, `deqq`, `y2k38`, `w3dkit`, `w3dmap`, `prefs3d` marked **[sector renderer demo]**; notes in `docs/3d-subsystem.md` (status: not planned for removal), `docs/3d-mesh-subsystem.md`, `tools/README.md` (mapedit). Docs only, no tests needed.
-
 
 
 ## Log
@@ -1889,3 +1886,9 @@ The owner bundled three pieces of Claude work into this commit (oldest first):
 - `demos/lib/w3dkit.lib`: `W3K_MESH` switches `W3K_VIEW`, `W3K_REAPPLY`, `W3K_WALK`, `W3K_JUMP`, the mouse look to `M3D`; `W3K_GRAB` hands pictures to both renderers (other programs unchanged).
 - `demos/deqq2.bas`: all `W3D` calls replaced (doors turn about hinges, the chair and the gate are shown / hidden objects, rooms are zones, things take their height from `M3D("FLOORAT")`, level hints 114 / 226 / explicit tops), a route point moved (the stairs corner), play-back in the window (`DEQQ2_PLAY` with `shot name`), `deqq2test.sh` adapted (hints, walks 8 off the walls, finer samples of Deqq's round). Seen in the window under Xvfb: the title, the first view, the front door, the hall stairs, a kitchen window with the town, the corner by the phone booth.
 - Tests: `m3dtest1` 1261, `deqq2test.sh` and `make check` pass. **Not done:** light effects and the scrolling pond; Deqq's walk with a real clock and the game played by hand; the sector renderer, `w3dworld.c` and its tests are still there (the owner decides when to remove them).
+
+### a7fdc5e — 2026-11-14 03:43:17 +0100 — "Docs update, by Claude Code"
+6 files, +42/-27.
+- **Sector renderer demos marked (2026-11-14, owner: "Mark the demos using the sector renderer as demos for that feature. There's no plan to remove the sector renderer in the near future.")**
+- `demos/README.md`: rows of `manor`, `bughunt`, `showroom`, `deqq`, `y2k38`, `w3dkit`, `w3dmap`, `prefs3d` marked **[sector renderer demo]**; notes in `docs/3d-subsystem.md` (status: not planned for removal), `docs/3d-mesh-subsystem.md`, `tools/README.md` (mapedit). Docs only, no tests needed.
+- The same commit carries the log update for `3bfb032` / `8965965` (`HistoryLog-Claude.md`, `SESSION.md`).
