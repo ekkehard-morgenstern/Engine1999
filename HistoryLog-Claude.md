@@ -13,6 +13,17 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+### The 3D mesh renderer `M3D` (core), next to the sector renderer (2026-11-14, owner: "Drop the sector renderer entirely and implement a software 3D renderer instead ... Deqq's House II cannot be implemented using it"; his answers: keep the sector renderer for the other demos, milestone 1 = core + Deqq's House II; backups `pre-one-town-sector`, `m3d-core`)
+- New module `m3d.[ch]` (no SDL, no global state): objects (triangle meshes, position, yaw, flags, light), billboard things, z-buffered perspective-correct rasterizer with near-plane clipping, color map shading, fog, lamps, sky, masked / translucent, capsule collision against triangles (steps, ceilings, sliding, floor following, jump lift), rays for shots / use / sight; `m3dtest1.c` (1227 cases, ASan / UBSan clean, in `make check`).
+- New extension word `M3D` (`XF_M3D` 35 in `bastok.h` / `bastok.c` / `bascomp.c`), 30 statements `GFXOP_M3D*` 300..330 and 36 functions `GFXQ_M3D*` 350..385 (`gfxops.[ch]`), both hosts (`engine1999.c`, `engine1999c.c`), makefile, grammar (`m3d-stmt`), man page `engine1999-basic.7` + keyword list, `docs/3d-mesh-subsystem.md`.
+- Seen: a test scene (`brick walls, checker floor, fog`) rendered to a picture: perspective-correct, 1.6 ms a frame at 320 x 150. **Not done: Deqq's House II is not rebuilt on it yet** (the game, its world and its tests still use `W3D`); no JSON loader (`M3D WORLD`); no window run of an M3D program.
+- Fix in the same stretch: the fence ends use sky walls (see the entry below).
+
+### Fences end on a sky wall instead of the ghost lawn (2026-11-14, owner: "You've recently implemented a lot of extra features into the renderer. Can you solve it with this?"; backup `pre-one-town-sector`)
+- `w3dworld.c`: new `environment.fence.sky` (bool): the far wall and end caps of the loader's fence sectors are **sky walls** (wall flag 8, a painted horizon), so a ray over a fence ends on the horizon with no ghost lawn and no 300 high backdrop. `wroom_t.skyw`, `roomwalls()` puts `W3D_WF_SKY` on the plain walls of such a room.
+- `demos/deqq2.world.json`: fence `height` 100, `ground` removed, `"sky": true` (the lawn 426 and the ghost blocks in it are still in the document, now unused).
+- `worldlint.awk`: sky walls (flag in field 13) are skipped by the zero-depth check (they show no face).
+- Tests: `worldtest.sh`, `deqq2test.sh`, `levelstest.sh`, `contest1`, `w3dtest1` pass. Not seen in the window yet. The earlier idea (the town as one sector) was dropped: the loader has only box rooms and holes with one neighbour; see the owner discussion.
 
 
 ## Log

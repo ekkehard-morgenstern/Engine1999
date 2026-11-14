@@ -787,6 +787,17 @@ ui-stmt := XFUNC(UI) ( OPEN | CLOSE | CLEAR | UPDATE |
 ui-geometry := num-expr "," num-expr "," num-expr "," num-expr "," num-expr .
 ```
 
+> The 3D mesh renderer (docs/3d-mesh-subsystem.md; M3D is an extension word): objects are triangle meshes with a position and heading, things are billboards. M3D OBJECT o[,flags[,light]], VERTEX o,x,y,z[,u[,v]],
+> FACE o,a,b,c,tex, QUAD o,a,b,c,d,tex, BOX o,x1,y1,z1,x2,y2,z2,tex, OBJPOS o,x,y,z[,yaw], OBJSHOW, OBJLIGHT, OBJFLAGS o,v, THING n,x,y,z,tex,w,h, THINGPOS n,x,y,z, THINGTEX / THINGLIGHT / THINGTRANS n,v, THINGOFF n,
+> CAMERA x,y,z,yaw[,pitch], TURN dyaw[,dpitch], PLAYER r,h,eye,step, MOVE fwd,right, LIFT h, LAMP n,x,y,z,r,amount, VIEW x,y,w,h[,scale[,fov]], FOG d, FAR d, SKY tex[,rep[,shift]], TEXTURE n,a$, RESET \| CLEAR \| COLORMAP \| RENDER.
+> Functions: M3D("X"\|"Y"\|"Z"\|"EYE"\|"YAW"\|"PITCH"\|"LIFT"\|"HIT"\|"FLOORZ"\|"SHOTKIND"\|"SHOTOBJ"\|"SHOTDIST"\|"SHOTX"\|"SHOTY"\|"SHOTZ"\|"DRAWN"), ("FLOORAT"\|"CEILAT",x,y,z), ("SHOOT"\|"USE"\|"SEES"\|"TON"\|"TX"\|"TY"\|"TZ"\|"DIST"\|"BEARING"\|"TEXW"\|"TEXH"\|"OBJON"\|"OBJX"\|"OBJY"\|"OBJZ"\|"OBJYAW"\|"VERTS"\|"TRIS",n).
+
+```ebnf
+m3d-stmt := XFUNC(M3D) ( RESET | CLEAR | COLORMAP | RENDER | TEXTURE num-expr "," str-expr |
+                             ( OBJECT | VERTEX | FACE | QUAD | BOX | OBJPOS | OBJSHOW | OBJLIGHT | OBJFLAGS | THING | THINGPOS | THINGTEX | THINGOFF | THINGLIGHT | THINGTRANS |
+                               CAMERA | TURN | PLAYER | MOVE | LIFT | LAMP | VIEW | FOG | FAR | SKY ) num-expr { "," num-expr } ) .
+```
+
 > The 3D sector renderer (docs/3d-subsystem.md; W3D is an extension word): a world of sectors (floor and ceiling height, flats, light) bounded by walls, some of them portals
 > into the next sector, drawn like Doom and Duke Nukem 3D into a view on the target graphics layer, plus flat pictures that face the viewer (things). Textures are pictures in
 > the GFX GRAB format. W3D SECTOR s,floor,ceil[,floortex[,ceiltex[,light]]] defines a sector (ceiltex -1 = the sky of W3D SKY), W3D WALL s,x1,y1,x2,y2,tex[,next] adds a wall
@@ -828,7 +839,7 @@ w3d-stmt := XFUNC(W3D) ( RESET | COLORMAP | RENDER | TEXTURE num-expr "," str-ex
 json-stmt := XFUNC(JSON) ( CLEAR | ( LOAD | PARSE | NULL | DELETE ) str-expr | SAVE str-expr [ "," num-expr ] |
                                ( TEXT | GET | TYPE | COUNT ) str-expr "," str-var-ref | KEY str-expr "," num-expr "," str-var-ref |
                                ( SET | SETB ) str-expr "," num-expr | SETS str-expr "," str-expr | NEW str-expr "," ( OBJECT | ARRAY ) ) .
-gfx-all-stmt := gfx-stmt | txt-stmt | tile-stmt | sprite-stmt | mouse-stmt | on-mouse-stmt | ui-stmt | w3d-stmt | json-stmt | cls-stmt | locate-stmt | htab-stmt | vtab-stmt | screenshot-stmt | color-stmt | symbol-stmt | design-stmt | design-row | on-collision-stmt .
+gfx-all-stmt := gfx-stmt | txt-stmt | tile-stmt | sprite-stmt | mouse-stmt | on-mouse-stmt | ui-stmt | w3d-stmt | m3d-stmt | json-stmt | cls-stmt | locate-stmt | htab-stmt | vtab-stmt | screenshot-stmt | color-stmt | symbol-stmt | design-stmt | design-row | on-collision-stmt .
 ```
 
 ## Statements and lines

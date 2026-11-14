@@ -36,6 +36,7 @@
 #include "basdebug.h"
 #include "gfxops.h"
 #include "w3d.h"
+#include "m3d.h"
 #include "jsonops.h"
 #include "w3dworld.h"
 #include "gfxfile.h"
@@ -1539,12 +1540,60 @@ static bool host_w3d_query( int q, const double* a, int na, double* result ) {
     return w3d_query( host_w3d, q, a, na, result );
 }
 
+// -- the 3D mesh renderer (m3d.h) -------------------------------------------------------------------
+
+static m3d_t* host_m3d;
+
+static void host_m3d_free( void ) {
+    m3d_free( host_m3d );
+    host_m3d = 0;
+}
+
+static bool host_m3d_get( void ) {
+    if ( host_m3d == 0 ) {
+        host_m3d = m3d_new();
+        if ( host_m3d != 0 ) {
+            atexit( host_m3d_free );
+        }
+    }
+    return host_m3d != 0;
+}
+
+static bool host_m3d_op( int op, const double* a, int na, const char* s, size_t slen, const char** err ) {
+    if ( !host_m3d_get() ) {
+        *err = "Out of memory";
+        return false;
+    }
+    int t = sdlscr_gfx_target();
+    if ( op == GFXOP_M3DCOLORMAP ) {
+        uint32_t pal[256];
+        for ( int i=0; i < 256; ++i ) {
+            pal[i] = sdlscr_palette_get( t, i );
+        }
+        m3d_colormap( host_m3d, pal );
+        return true;
+    }
+    if ( op == GFXOP_M3DRENDER ) {
+        const uint8_t* fb = m3d_render( host_m3d );
+        if ( fb != 0 ) {
+            int x, y, w, h, scale, bw, bh;
+            m3d_getview( host_m3d, &x, &y, &w, &h, &scale, &bw, &bh );
+            sdlscr_gfx_putbuf( t, x, y, fb, bw, bh, scale );
+        }
+        return true;
+    }
+    return m3d_op( host_m3d, op, a, na, s, slen, err );
+}
+
 static bool host_gfx_op( void* usrdata, int op, const double* a, int na, const char* s, size_t slen, uint8_t* out, size_t outsz,
     size_t* outlen, const char** err ) {
     (void) usrdata; (void) na;
     int t = sdlscr_gfx_target();
     if ( GFXOP_IS_W3D( op ) ) {
         return host_w3d_op( op, a, na, s, slen, err );
+    }
+    if ( GFXOP_IS_M3D( op ) ) {
+        return host_m3d_op( op, a, na, s, slen, err );
     }
     if ( GFXOP_IS_JSON( op ) ) {
         return jsonops_run( op, a, na, s, slen, out, outsz, outlen, repl.vm.addrcur, err );
@@ -1697,6 +1746,9 @@ static bool host_gfx_query( void* usrdata, int q, const double* a, int na, doubl
     (void) usrdata; (void) na;
     int x = 0, y = 0, w = 0, h = 0, bg = 0, fg = 0;
     *result = 0.0;
+    if ( q >= GFXQ_M3DFIRST && q <= GFXQ_M3DLAST ) {
+        return host_m3d_get() && m3d_query( host_m3d, q, a, na, result );
+    }
     if ( q >= GFXQ_W3DFIRST && q <= GFXQ_W3DLAST ) {
         return host_w3d_query( q, a, na, result );
     }

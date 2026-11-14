@@ -486,6 +486,7 @@ bool read_brclit( rbuf_t* rbuf, char** ptarget );
 #define XF_JSON         UINT8_C(34)         // JSON: trees of named values (statements JSON LOAD, JSON GET ..., docs/json-subsystem.md)
 #define XF_SCREENSHOT   UINT8_C(33)         // SCREENSHOT [file$]: saves the picture on the screen as a BMP file (roadmap item 82)
 #define XF_INSTR        UINT8_C(32)         // INSTR([start,] hay$, needle$): the position of needle in hay, 0 if none
+#define XF_M3D          UINT8_C(35)         // M3D: the software 3D mesh renderer: statements M3D OBJECT, M3D BOX ... and the function M3D("X")
 #define XF_W3D          UINT8_C(20)         // W3D: the software 3D sector renderer: statements W3D SECTOR, W3D WALL ... and the function W3D("X")
 #define XF_TOOL         UINT8_C(19)         // TOOL name$ [, arg$]: runs a tool (an editor in BASIC from the tools folder) without losing the current program
 #define XF_CLIPBOARD    UINT8_C(18)         // CLIPBOARD$ (the text on the clipboard) and the statement CLIPBOARD a$

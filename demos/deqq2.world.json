@@ -6460,10 +6460,10 @@
     "fence": {
       "tex": 250,
       "flags": ["masked", "block"],
-      "height": 300,
+      "height": 100,
       "wall": 214,
       "house": 27,
-      "ground": 426
+      "sky": true
     },
     "fog": 4200
   },

@@ -338,6 +338,80 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXQ_W3DFIRST   GFXQ_W3DX
 #define GFXQ_W3DLAST    GFXQ_W3DTHINGINFO
 
+
+// the 3D mesh renderer (m3d.h, docs/3d-mesh-subsystem.md): the words after M3D
+#define GFXOP_M3DRESET  300             // M3D RESET                              (everything: objects, things, pictures, settings)
+#define GFXOP_M3DTEXTURE 301            // M3D TEXTURE n, a$                      (a GFX GRAB block)
+#define GFXOP_M3DCLEAR  302             // M3D CLEAR                              (deletes the objects, things and lamps, keeps the pictures and the settings)
+#define GFXOP_M3DVIEW   303             // M3D VIEW x, y, w, h [, scale [, fov]]
+#define GFXOP_M3DFOG    304             // M3D FOG distance
+#define GFXOP_M3DFAR    305             // M3D FAR distance
+#define GFXOP_M3DSKY    306             // M3D SKY tex [, repeat [, shift]]
+#define GFXOP_M3DCOLORMAP 307           // M3D COLORMAP
+#define GFXOP_M3DRENDER 308             // M3D RENDER
+#define GFXOP_M3DOBJECT 309             // M3D OBJECT o [, flags [, light]]       (creates or empties object o)
+#define GFXOP_M3DVERTEX 310             // M3D VERTEX o, x, y, z [, u [, v]]      (vertices are numbered from 0 in the order they are added)
+#define GFXOP_M3DFACE   311             // M3D FACE o, a, b, c, tex               (a triangle, counterclockwise seen from the front)
+#define GFXOP_M3DQUAD   312             // M3D QUAD o, a, b, c, d, tex            (two triangles)
+#define GFXOP_M3DBOX    313             // M3D BOX o, x1, y1, z1, x2, y2, z2, tex (the six faces of a box)
+#define GFXOP_M3DOBJPOS 314             // M3D OBJPOS o, x, y, z [, yaw]
+#define GFXOP_M3DOBJSHOW 315            // M3D OBJSHOW o, flag
+#define GFXOP_M3DOBJLIGHT 316           // M3D OBJLIGHT o, light
+#define GFXOP_M3DOBJFLAGS 317           // M3D OBJFLAGS o, flags
+#define GFXOP_M3DTHING  319            // M3D THING n, x, y, z, tex, w, h        (a billboard; z = its bottom)
+#define GFXOP_M3DTHINGPOS 320           // M3D THINGPOS n, x, y, z
+#define GFXOP_M3DTHINGTEX 321           // M3D THINGTEX n, tex
+#define GFXOP_M3DTHINGOFF 322           // M3D THINGOFF n
+#define GFXOP_M3DTHINGLIGHT 323         // M3D THINGLIGHT n, light
+#define GFXOP_M3DTHINGTRANS 324         // M3D THINGTRANS n, flag
+#define GFXOP_M3DCAMERA 325             // M3D CAMERA x, y, z, yaw [, pitch]      (z = the feet)
+#define GFXOP_M3DTURN   326             // M3D TURN dyaw [, dpitch]
+#define GFXOP_M3DPLAYER 327             // M3D PLAYER radius, height, eye, step
+#define GFXOP_M3DMOVE   328             // M3D MOVE forward, right
+#define GFXOP_M3DLIFT   329             // M3D LIFT h
+#define GFXOP_M3DLAMP   330             // M3D LAMP n, x, y, z, radius, amount
+#define GFXOP_M3DFIRST  GFXOP_M3DRESET
+#define GFXOP_M3DLAST   GFXOP_M3DLAMP
+#define GFXOP_IS_M3D(op) ( (op) >= GFXOP_M3DFIRST && (op) <= GFXOP_M3DLAST )
+#define GFXQ_M3DX       350             // M3D("X"), ("Y"), ("Z" = the feet), ("EYE"), ("YAW"), ("PITCH"), ("LIFT"), ("HIT"), ("FLOORZ")
+#define GFXQ_M3DY       351
+#define GFXQ_M3DZ       352
+#define GFXQ_M3DEYE     353
+#define GFXQ_M3DYAW     354
+#define GFXQ_M3DPITCH   355
+#define GFXQ_M3DLIFT    356
+#define GFXQ_M3DHIT     357
+#define GFXQ_M3DFLOORZ  358
+#define GFXQ_M3DFLOORAT 359             // M3D("FLOORAT", x, y, z): the highest surface at or below z (-1e9 none)
+#define GFXQ_M3DCEILAT  360             // M3D("CEILAT", x, y, z): the lowest surface above z (1e9 none)
+#define GFXQ_M3DTON     361             // M3D("TON", n)
+#define GFXQ_M3DTX      362
+#define GFXQ_M3DTY      363
+#define GFXQ_M3DTZ      364
+#define GFXQ_M3DDIST    365             // M3D("DIST", n): distance in the plane to a thing
+#define GFXQ_M3DBEARING 366
+#define GFXQ_M3DSHOOT   367             // M3D("SHOOT", range): the thing hit along the view direction (-1 none); sets the SHOT values
+#define GFXQ_M3DSHOTKIND 368            // 0 nothing, 1 an object, 2 a thing
+#define GFXQ_M3DSHOTOBJ 369
+#define GFXQ_M3DSHOTDIST 370
+#define GFXQ_M3DSHOTX   371
+#define GFXQ_M3DSHOTY   372
+#define GFXQ_M3DSHOTZ   373
+#define GFXQ_M3DUSE     374             // M3D("USE", reach): the object in front of the player within reach, -1 none
+#define GFXQ_M3DSEES    375             // M3D("SEES", n): -1 if the thing has a line of sight to the eye
+#define GFXQ_M3DTEXW    376
+#define GFXQ_M3DTEXH    377
+#define GFXQ_M3DOBJON   378             // M3D("OBJON", o): -1 if the object exists
+#define GFXQ_M3DOBJX    379             // M3D("OBJX", o), ("OBJY", o), ("OBJZ", o), ("OBJYAW", o)
+#define GFXQ_M3DOBJY    380
+#define GFXQ_M3DOBJZ    381
+#define GFXQ_M3DOBJYAW  382
+#define GFXQ_M3DVERTS   383             // M3D("VERTS", o), ("TRIS", o): counts
+#define GFXQ_M3DTRIS    384
+#define GFXQ_M3DDRAWN   385             // M3D("DRAWN"): the number of triangles the last frame rasterized
+#define GFXQ_M3DFIRST   GFXQ_M3DX
+#define GFXQ_M3DLAST    GFXQ_M3DDRAWN
+
 typedef struct _gfxcmd_t {
     const char* group;                  // "GFX", "TXT", "TILE", "SPRITE", "MOUSE", or "" for the statements that are reserved words themselves
     const char* name;                   // the word after the group (the statement itself for group ""; "" for the position form of SPRITE)

@@ -6,7 +6,8 @@
 # Use: awk -f worldlint.awk file.map  (prints the faults, exit status 1 if there are any; only axis-parallel walls are looked at for the first check)
 BEGIN { FS = ","; n = 0; bad = 0 }
 $1 == "SECTOR" { fl[$2] = $3; ce[$2] = $4; next }
-$1 == "WALL" && $8 == -1 {
+# a sky wall (flag 8) shows the painted horizon, not a face: it can lie against any wall
+$1 == "WALL" && $8 == -1 && int( $13 / 8 ) % 2 == 0 {
     n++; s[n] = $2; x1[n] = $3; y1[n] = $4; x2[n] = $5; y2[n] = $6; t[n] = $7
 }
 $1 == "WALL" {

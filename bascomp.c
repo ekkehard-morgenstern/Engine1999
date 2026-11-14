@@ -3288,10 +3288,10 @@ bool comp_eat_gfxstmt( compiler_t* comp, node_t** pnode ) {
             if ( comp->currext == XF_HTAB || comp->currext == XF_VTAB || comp->currext == XF_SCREENSHOT ) {
                 break;
             }
-            if ( comp->currext != XF_UI && comp->currext != XF_W3D && comp->currext != XF_JSON ) {
+            if ( comp->currext != XF_UI && comp->currext != XF_W3D && comp->currext != XF_JSON && comp->currext != XF_M3D ) {
                 return false;
             }
-            group = comp->currext == XF_UI ? "UI" : comp->currext == XF_JSON ? "JSON" : "W3D";
+            group = comp->currext == XF_UI ? "UI" : comp->currext == XF_JSON ? "JSON" : comp->currext == XF_M3D ? "M3D" : "W3D";
             break;
         case TOK_CLS: case TOK_LOCATE: case TOK_COLOR: case TOK_SYMBOL:
             break;
@@ -3374,10 +3374,10 @@ bool comp_eat_gfxquerycall( compiler_t* comp, node_t** pnode ) {
         case TOK_SPRITE:    group = "SPRITE"; break;
         case TOK_MOUSE:     group = "MOUSE"; break;
         case TOK_XFUNC:                                     // UI("EVENT"), W3D("X")
-            if ( comp->currext != XF_UI && comp->currext != XF_W3D ) {
+            if ( comp->currext != XF_UI && comp->currext != XF_W3D && comp->currext != XF_M3D ) {
                 return false;
             }
-            group = comp->currext == XF_UI ? "UI" : "W3D";
+            group = comp->currext == XF_UI ? "UI" : comp->currext == XF_M3D ? "M3D" : "W3D";
             break;
         default:            return false;
     }

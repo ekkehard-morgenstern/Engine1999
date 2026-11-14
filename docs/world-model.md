@@ -14,6 +14,8 @@
 
 **Still the generator's heritage, not checked:** the exterior walls of the house have different depths (front 30, west 20, east 40, back 50: the gaps between the garden rooms and the house rooms); the town's houses are boxes (solids with a rim), the fences are the loader's 20-deep fence sectors.
 
+**Fence ends:** `environment.fence.ground` opens the far wall into a ghost room; **`"sky": true` (2026-11-14) makes the far wall and end caps sky walls** (flag 8, a painted horizon: a ray over the fence ends on the sky, no ghost lawn, the fence can be 100 high).
+
 **What the loader does** (`w3dworld.c`, a port of the generator's work, so the output is identical): rooms are axis-parallel boxes; the walls of a room are cut along each side by its openings (gaps are solid walls in the room's own picture), solids are holes in a room with a ring of walls round them, `outdoor` rooms get **fence sectors** (thin, open to the sky, you see over them and cannot enter; numbered from `environment.fence.first`, default 100, in the order of the outdoor rooms) behind every solid wall and the **house** pictures where `house` spans say so, and the far wall and end caps of each fence sector open into the `ground` room (a ghost lawn: no ray ends in the void). Sector numbers are the rooms' `id` values (a game addresses sectors by number, tags and doors); `name` is for people. The loader checks what the generator checked (rooms must touch along an opening, spans lie inside both rooms, openings must not overlap) and names the element in its messages (`rooms[3]: "box" is missing`).
 
 **Not done yet (differences from the draft below):** polygon rooms (`outline`: "not supported yet"), slopes, pillars, `materials` / `palette` / `textures` (textures are plain numbers: the program still draws them), **`movers`, `lights` and `game` data are not read by the loader** (a program reads them with the `JSON` statements; Deqq's doors and lamps are still the game's own code), `ghost` rooms are given as `"ghost": true` (the generator writes it for tag 97), things are placed in the room found at their feet unless `room` says otherwise.
@@ -28,7 +30,7 @@
   "openings": [ { "from": 10, "side": "N", "range": [lo,hi], "to": 11, "tex": 12, "upper": -1, "lower": -1, "flags": ["block","solid"], "offset": [xo,yo], "oneway": false } ],
   "things":   [ { "id": 400, "tex": 280, "x": .., "y": .., "w": 28, "h": 52, "z": 0, "room": 3 } ],
   "environment": { "fog": 4200, "far": 0, "sky": 11 | {"tex":11,"repeat":1,"shift":0},
-                   "fence": { "tex": 250, "flags": ["masked","block"], "height": 300, "wall": 214, "house": 27, "ground": 426, "first": 100 } },
+                   "fence": { "tex": 250, "flags": ["masked","block"], "height": 300, "wall": 214, "house": 27, "ground": 426, "first": 100, "sky": false } },
   "start": { "x": 1730, "y": 1570, "angle": 90 } }
 ```
 

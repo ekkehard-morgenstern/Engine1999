@@ -35,6 +35,7 @@
 #include "basdebug.h"
 #include "gfxops.h"
 #include "w3d.h"
+#include "m3d.h"
 #include "jsonops.h"
 #include "w3dworld.h"
 #include "mouse.h"
@@ -867,11 +868,42 @@ static bool con_w3d_get( void ) {
     return con_w3d != 0;
 }
 
+static m3d_t* con_m3d;
+
+static void con_m3d_free( void ) {
+    m3d_free( con_m3d );
+    con_m3d = 0;
+}
+
+static bool con_m3d_get( void ) {
+    if ( con_m3d == 0 ) {
+        con_m3d = m3d_new();
+        if ( con_m3d != 0 ) {
+            atexit( con_m3d_free );
+        }
+    }
+    return con_m3d != 0;
+}
+
 static bool con_gfx_op( void* usrdata, int op, const double* a, int na, const char* s, size_t slen, uint8_t* out, size_t outsz,
     size_t* outlen, const char** err ) {
     (void) na; (void) s;
     if ( GFXOP_IS_JSON( op ) ) {
         return jsonops_run( op, a, na, s, slen, out, outsz, outlen, ( (repl_t*) usrdata )->vm.addrcur, err );
+    }
+    if ( GFXOP_IS_M3D( op ) ) {
+        if ( !con_m3d_get() ) {
+            *err = "Out of memory";
+            return false;
+        }
+        if ( op == GFXOP_M3DRENDER ) {
+            m3d_render( con_m3d );          // (nothing to draw on, but the floor and the shot values behave as in the window)
+            return true;
+        }
+        if ( op == GFXOP_M3DCOLORMAP ) {
+            return true;
+        }
+        return m3d_op( con_m3d, op, a, na, s, slen, err );
     }
     if ( GFXOP_IS_W3D( op ) ) {
         if ( !con_w3d_get() ) {
@@ -966,6 +998,9 @@ static bool con_gfx_op( void* usrdata, int op, const double* a, int na, const ch
 
 static bool con_gfx_query( void* usrdata, int q, const double* a, int na, double* result ) {
     (void) usrdata; (void) na;
+    if ( q >= GFXQ_M3DFIRST && q <= GFXQ_M3DLAST ) {
+        return con_m3d_get() && m3d_query( con_m3d, q, a, na, result );
+    }
     if ( q >= GFXQ_W3DFIRST && q <= GFXQ_W3DLAST ) {
         return con_w3d_get() && w3d_query( con_w3d, q, a, na, result );
     }

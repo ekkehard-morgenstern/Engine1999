@@ -51,7 +51,7 @@ typedef struct {
 } wloop_t;
 
 typedef struct {
-    bool ex, outdoor, ghost;
+    bool ex, outdoor, ghost, skyw;          // skyw: the plain walls of the room are sky walls (a painted horizon)
     int ft, ct, lt, tg, wt;
     double x1, y1, x2, y2, f, c;
     int nh[4];                              // house spans per side
@@ -505,7 +505,7 @@ static bool roomwalls( ww_t* c, int r ) {
             double lo = rv ? sh[i] : sl[i], hi = rv ? sl[i] : sh[i];
             double x1 = hz ? lo : fx, y1 = hz ? fx : lo, x2 = hz ? hi : fx, y2 = hz ? fx : hi;
             if ( si[i] < 0 ) {
-                ok = putwall( c, x1, y1, x2, y2, rm->wt, -1, 0, -1, -1, 0, 0 );
+                ok = putwall( c, x1, y1, x2, y2, rm->wt, -1, rm->skyw ? W3D_WF_SKY : 0, -1, -1, 0, 0 );
             } else {
                 const wlink_t* l = &c->lk[si[i]];
                 int t = l->tex < 0 ? rm->wt : l->tex;
@@ -536,7 +536,7 @@ static bool roomwalls( ww_t* c, int r ) {
 
 // the outdoor rooms: a solid wall is the house (a tall picture) or a low fence: a thin sector behind it, open to the sky, that you see over and
 // can't enter; its far wall and end caps are portals into the "ground" room, so no ray ends in the void
-typedef struct { int tex, flags, height, wall, ground, house, first; } wfence_t;
+typedef struct { int tex, flags, height, wall, ground, house, first; bool sky; } wfence_t;
 
 static bool finish( ww_t* c, const wfence_t* fe ) {
     int fid = fe->first;
@@ -590,7 +590,7 @@ static bool finish( ww_t* c, const wfence_t* fe ) {
                     }
                     wroom_t* fr = &c->rooms[fid];
                     memset( fr, 0, sizeof(*fr) );
-                    fr->ex = true; fr->f = 0; fr->c = fe->height; fr->ft = 10; fr->ct = -1; fr->lt = 255; fr->tg = 0; fr->wt = fe->wall;
+                    fr->ex = true; fr->skyw = fe->sky; fr->f = 0; fr->c = fe->height; fr->ft = 10; fr->ct = -1; fr->lt = 255; fr->tg = 0; fr->wt = fe->wall;
                     switch ( k ) {
                         case 0: fr->x1 = lo; fr->y1 = rm->y1 - 20; fr->x2 = hi; fr->y2 = rm->y1; break;
                         case 2: fr->x1 = lo; fr->y1 = rm->y2; fr->x2 = hi; fr->y2 = rm->y2 + 20; break;
@@ -744,13 +744,13 @@ bool w3dworld_load( w3d_t* w, const json_node_t* root, const char** err ) {
     // the fence and the house walls of the outdoor rooms
     const json_node_t* fj = member( env, "fence" );
     if ( ok && c.nord > 0 ) {
-        wfence_t fe = { -1, W3D_WF_BLOCK | W3D_WF_SOLID, 100, 1, -1, -1, WW_FIRSTFENCE };
+        wfence_t fe = { -1, W3D_WF_BLOCK | W3D_WF_SOLID, 100, 1, -1, -1, WW_FIRSTFENCE, false };
         double h = 100, first = WW_FIRSTFENCE, ground = -1;
         if ( fj != 0 ) {
             ok = texref( fj, "tex", "environment.fence", -1, &fe.tex ) && wallflags( fj, "flags", "environment.fence", fe.flags, &fe.flags ) &&
                  num( fj, "height", "environment.fence", 100, &h ) && texref( fj, "wall", "environment.fence", 1, &fe.wall ) &&
                  num( fj, "ground", "environment.fence", -1, &ground ) && texref( fj, "house", "environment.fence", -1, &fe.house ) &&
-                 num( fj, "first", "environment.fence", WW_FIRSTFENCE, &first );
+                 num( fj, "first", "environment.fence", WW_FIRSTFENCE, &first ) && flag( fj, "sky", "environment.fence", false, &fe.sky );
             fe.height = (int) h; fe.ground = (int) ground; fe.first = (int) first;
             if ( ok && fe.ground >= 0 ) {
                 int g;
