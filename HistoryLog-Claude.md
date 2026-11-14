@@ -2007,3 +2007,6 @@ The owner bundled three pieces of Claude work into this commit (oldest first):
 ### 90965c5 — 2026-11-14 14:59:03 +0100 — "Claude history log change"
 1 file, +4/-2.
 - `HistoryLog-Claude.md` only: the `968cd82` entry now records that the owner checked the detour road in the window (cleanly cut out of the grass).
+
+### 94d5194 — 2026-11-14 14:59:34 +0100 — "Claude history log change" (tag v0.7.36)
+1 file, log bookkeeping only: the `90965c5` entry above. The owner tagged this commit `v0.7.36`.
