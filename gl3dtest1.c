@@ -77,7 +77,7 @@ int main( void ) {
     uint32_t col[4] = { 0xFFFF0000U, 0xFF00FF00U, 0xFF0000FFU, 0xFFFFFFFFU };
     for ( int y=0; y < 2; ++y ) {
         for ( int x=0; x < 4; ++x ) {
-            src[y*4+x] = col[x] & 0x00FFFFFFU;              // (the alpha is not trusted: the layer makes the picture opaque)
+            src[y*4+x] = col[x] | 0xFF000000U;               // (alpha 0 would be see-through)
         }
     }
     // graphics layer content: a magenta bar across the picture (stays in front), a cyan dot that lies under the picture (is cleared)

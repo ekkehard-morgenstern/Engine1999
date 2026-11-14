@@ -116,7 +116,8 @@ static const char* const fs_obj =
     "    }\n"
     "    if ( u_fog > 0.0 ) lv *= max( 1.0 - v_z / u_fog, 0.0 );\n"
     "    float b = clamp( lv, 0.0, 31.0 ) / 31.0;\n"
-    "    gl_FragColor = vec4( texture2D( u_pal, vec2( ( i + 0.5 ) / 256.0, 0.5 ) ).rgb * b, u_alpha );\n"
+    "    float a = ( u_masked < 0.5 && u_alpha > 0.99 && i < 0.5 ) ? 0.0 : u_alpha;\n"   // (index 0 of a plain picture is see-through, as in software)
+    "    gl_FragColor = vec4( texture2D( u_pal, vec2( ( i + 0.5 ) / 256.0, 0.5 ) ).rgb * b, a );\n"
     "}\n";
 
 static const char* const vs_sky =
@@ -136,7 +137,7 @@ static const char* const fs_sky =
     "    float r = clamp( float( int( u_horizon - gl_FragCoord.y + u_shift ) ), 0.0, u_size.y - 1.0 );\n"
     "    float row = u_size.y - 1.0 - r;\n"
     "    float i = floor( texture2D( u_tex, vec2( ( tu + 0.5 ) / u_size.x, ( row + 0.5 ) / u_size.y ) ).r * 255.0 + 0.5 );\n"
-    "    gl_FragColor = vec4( texture2D( u_pal, vec2( ( i + 0.5 ) / 256.0, 0.5 ) ).rgb, 1.0 );\n"
+    "    gl_FragColor = vec4( texture2D( u_pal, vec2( ( i + 0.5 ) / 256.0, 0.5 ) ).rgb, i < 0.5 ? 0.0 : 1.0 );\n"
     "}\n";
 
 static GLuint make_shader( gl_t* g, GLenum type, const char* src ) {
@@ -535,6 +536,17 @@ static void collect_object( gl_t* g, m3d_t* m, const cam_t* c, const obj_t* o ) 
         if ( !twosided && vdot( vcross( vsub( wb, wa ), vsub( wc, wa ) ), vsub( c->eye, wa ) ) <= 0 ) {
             continue;
         }
+        // (counted like the software renderer: the triangles left after clipping at the near plane)
+        int nin = 0;
+        for ( int k=0; k < 3; ++k ) {
+            const v3_t* wv3 = k == 0 ? &wa : k == 1 ? &wb : &wc;
+            if ( vdot( vsub( *wv3, c->eye ), c->fw ) >= NEARZ ) {
+                ++nin;
+            }
+        }
+        if ( nin == 0 ) {
+            continue;
+        }
         gtri_t* gt = add_tri( g );
         if ( gt == 0 ) {
             return;
@@ -552,7 +564,7 @@ static void collect_object( gl_t* g, m3d_t* m, const cam_t* c, const obj_t* o ) 
             }
             put_vertex( &gt->v[k * VFLOATS], wp[k], u, v, light );
         }
-        ++m->drawn;
+        m->drawn += nin == 2 ? 2 : 1;
     }
 }
 
@@ -636,7 +648,6 @@ static void draw_things_gl( gl_t* g, m3d_t* m, const cam_t* c ) {
         }
         set_pass( g, false, t->trans, 0.5f );
         flush_tris( g, m );
-        ++m->drawn;
     }
 }
 
@@ -675,12 +686,13 @@ static const void* gl_render( m3d_t* m, void* rd ) {
     gl->Disable( GL_DEPTH_TEST );
     // the sky: a picture looked up per pixel from the view direction, or one flat color
     const tex_t* sky = tex_get( m, m->skytex );
-    float cr = 0, cg = 0, cb = 0;
-    if ( sky == 0 && m->skytex >= 0 ) {
+    float cr = 0, cg = 0, cb = 0, ca = 0;
+    if ( sky == 0 && m->skytex > 0 ) {
+        ca = 1.0f;
         uint32_t col = m->pal[ (uint8_t) m->skytex ];
         cr = (float)( ( col >> 16 ) & 255U ) / 255.0f; cg = (float)( ( col >> 8 ) & 255U ) / 255.0f; cb = (float)( col & 255U ) / 255.0f;
     }
-    gl->ClearColor( cr, cg, cb, 1.0f );
+    gl->ClearColor( cr, cg, cb, ca );
     gl->Clear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
     if ( sky != 0 ) {
         const skyprog_t* s = &g->su;
@@ -780,7 +792,8 @@ static const void* gl_render( m3d_t* m, void* rd ) {
     size_t np = (size_t) W * (size_t) H;
     for ( size_t i=0; i < np; ++i ) {
         const uint8_t* q = &g->rgba[i * 4U];
-        g->out[i] = UINT32_C(0xFF000000) | (uint32_t) q[0] << 16 | (uint32_t) q[1] << 8 | (uint32_t) q[2];
+        // alpha 0 = nothing was drawn there (no sky, index 0 of a plain picture): the layers below show through, as with the software renderer
+        g->out[i] = q[3] == 0 ? 0U : UINT32_C(0xFF000000) | (uint32_t) q[0] << 16 | (uint32_t) q[1] << 8 | (uint32_t) q[2];
     }
     return g->out;
 }

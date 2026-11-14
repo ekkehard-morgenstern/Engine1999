@@ -107,12 +107,16 @@ static void scene_base( void ) {
     CHECK( op( GFXOP_M3DCAMERA, 5, 0.0, 0.0, 0.0, 90.0, 0.0 ) );  // looking along +y
 }
 
+static bool strict_zero = false;                              // the next compare() also checks where nothing is drawn (see-through pixels)
+static long drawn_of( void ) { double d = -1, a0[1] = { 0 }; m3d_query( M, GFXQ_M3DDRAWN, a0, 0, &d ); return (long) d; }
+
 static int tol( int a, int b ) { return a > b ? a - b : b - a; }
 
 // compares the two renderers on the scene as it is now; at most maxbad percent of the pixels may differ by more than `limit` (of 255)
 static void compare( const char* name, int limit, double maxbad ) {
     CHECK( op( GFXOP_M3DSOFTWARE, 0 ) );
     const uint8_t* sf = m3d_render( M );
+    long drawn_soft = drawn_of();
     CHECK( sf != 0 );
     if ( sf == 0 ) { return; }
     uint32_t* soft = (uint32_t*) malloc( sizeof(uint32_t) * VW * VH );
@@ -120,12 +124,15 @@ static void compare( const char* name, int limit, double maxbad ) {
     CHECK( op( GFXOP_M3DHARDWARE, 0 ) );
     const uint32_t* hard = m3d_render32( M );
     CHECK( hard != 0 );
+    long drawn_hard = drawn_of();
     if ( hard == 0 ) { free( soft ); return; }
+    CHECK( drawn_soft > 0 && drawn_hard == drawn_soft );     // M3D("DRAWN") counts the same triangles
     long bad = 0, sumd = 0;
     for ( int i=0; i < VW * VH; ++i ) {
         int d = tol( (int)( hard[i] & 255U ), (int)( soft[i] & 255U ) );
         int dg = tol( (int)( hard[i] >> 8 & 255U ), (int)( hard[i] & 255U ) );        // the hardware picture is gray too
         if ( d > limit || dg > 1 ) { ++bad; }
+        if ( strict_zero && ( ( soft[i] & 255U ) == 0 ) != ( hard[i] == 0 ) ) { ++bad; }       // see-through here, but not there
         sumd += d;
     }
     double pct = 100.0 * (double) bad / (double)( VW * VH );
@@ -197,6 +204,27 @@ int main( void ) {
     CHECK( op( GFXOP_M3DSKY, 1, 3.0 ) );                          // a picture
     CHECK( op( GFXOP_M3DCAMERA, 5, 0.0, 0.0, 0.0, 30.0, 10.0 ) );
     compare( "sky-picture", 24, 6.0 );
+
+    // nothing drawn (no sky) and index 0 of a plain picture are see-through (alpha 0) in both renderers
+    scene_base();
+    tex_pat( 6, 8, 8, 0, 120 );                                   // a checker of index 0 and 120
+    CHECK( op( GFXOP_M3DOBJECT, 1, 6.0 ) );
+    CHECK( op( GFXOP_M3DBOX, 8, 6.0, -40.0, 60.0, 5.0, 0.0, 64.0, 45.0, 6.0 ) );
+    CHECK( op( GFXOP_M3DOBJLIGHT, 2, 6.0, 255.0 ) );
+    CHECK( op( GFXOP_M3DOBJLIGHT, 2, 1.0, 255.0 ) );
+    CHECK( op( GFXOP_M3DOBJLIGHT, 2, 2.0, 255.0 ) );
+    strict_zero = true;
+    compare( "see-through", 24, 3.0 );
+    {
+        CHECK( op( GFXOP_M3DHARDWARE, 0 ) );
+        const uint32_t* h = m3d_render32( M );
+        CHECK( h != 0 );
+        if ( h == 0 ) { h = (const uint32_t*) calloc( VW * VH, 4 ); }
+        long zeros = 0;
+        for ( int i=0; i < VW * VH; ++i ) { if ( h[i] == 0 ) { ++zeros; } }
+        CHECK( zeros > VW * VH / 20 && zeros < VW * VH * 19 / 20 );   // the empty sky and the checker's holes, not everything
+    }
+    strict_zero = false;
 
     scene_base();
     CHECK( op( GFXOP_M3DOBJECT, 3, 4.0, 1.0, 255.0 ) );           // a masked object (flag 1)

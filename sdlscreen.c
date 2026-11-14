@@ -1933,7 +1933,8 @@ void sdlscr_3d_put( int x, int y, const uint32_t* src, int bw, int bh, int scale
         const uint32_t* row = src + (size_t)( ( dy - y ) / scale ) * (size_t) bw;
         uint32_t* dst = lay3d.argb + (size_t) dy * SDL_SCREENWIDTH;
         for ( int dx = x0; dx < x1; ++dx ) {
-            dst[dx] = row[ ( dx - x ) / scale ] | UINT32_C(0xFF000000);
+            uint32_t px = row[ ( dx - x ) / scale ];
+            dst[dx] = ( px >> 24 ) == 0 ? 0U : px | UINT32_C(0xFF000000);       // (alpha 0 = see-through: the layers below show)
         }
     }
     // what the target layer shows in that region is gone, as it was when the picture was copied into it: the program draws its HUD on the
