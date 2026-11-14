@@ -13,6 +13,8 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+- **Deqq's House I: seven text rows at the bottom** (2026-11-14, owner: "two more"): message window 6 lines (rows 18..23) + input row 24 (was 4 + 1); the 3D picture is 640 x 216 (`W3K_VIEW(0,0,640,216,1)`); `SHOWTAIL` shows six lines, `FLUSH` pages by five; `TEXTINIT` / `HISTORY` fills, sky/ground fills of title, lift-off, pitch dark and hiding frame end at y 215, labels moved up. `deqqtest.sh` passes headless; **not seen in the window**.
+
 - **Deqq's House I at full resolution** (2026-11-14, owner's request): `demos/deqq.bas` line 42340 `W3K_VIEW(0,0,640,240,1)` (was scale 2 = 320 x 120 drawn doubled); the 3D area stays 640 x 240 because the bottom 5 text rows (60 px) of the 300 px layer belong to the message window. `deqqtest.sh` passes (headless); **not seen in the window**.
 
 

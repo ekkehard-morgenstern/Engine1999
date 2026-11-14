@@ -8,7 +8,7 @@
 40 ' fewer than four parts built into the wreck he throws you out and bolts the door; hide, or leave in time. With four or more he only watches.
 50 ' You type commands (N S E W U D IN OUT, LOOK, EXAMINE, TAKE, DROP, PUT x IN/ON/UNDER y, OPEN, TURN ON/OFF, HIDE, HINT, SAVE ...; HELP lists them).
 60 '
-70 ' How it is made: the top 4/5 of the screen (640 x 240 pixels of the graphics layer) show the place as a picture of a small 3D world drawn by the sector
+70 ' How it is made: the top 216 pixels (640 x 216 pixels of the graphics layer) show the place as a picture of a small 3D world drawn by the sector
 80 ' renderer of the engine (W3D): every place is a box of its own (x = west to east 0..600, z = depth 0..400, y = height 0..170) seen from the south, like a
 90 ' doll's house; the walls, floors and furniture are textured blocks (the level is written by demos/levels/deqq1.bas), the things you can pick up, the doors
 100 ' and drawers, Deqq and the glorp are sprites painted with GFX statements and grabbed as W3D textures. The scene is drawn into the layer that is not shown
@@ -386,8 +386,8 @@
 3820     GFX LINE CX+FN UU(11),CY-FN UU(20),CX,CY-FN UU(30),FN CC(13,9)
 3830   END IF
 3840 END PROC
-3850 ' ------------------------------------------------------------------------------------------------ the message window (text rows 20..24)
-3860 ' SAY adds a message (word-wrapped to 76 columns) to the log; FLUSH shows the last four lines in rows 20..23 (a message of more than four
+3850 ' ------------------------------------------------------------------------------------------------ the message window (text rows 18..24)
+3860 ' SAY adds a message (word-wrapped to 76 columns) to the log; FLUSH shows the last six lines in rows 18..23 (a message of more than six
 3870 ' lines is shown in pages, "-- more --"). Colors: 1 normal, 2 Deqq's voice, 3 warning, 4 danger, 5 hint, 6 dim, 7 white.
 3880 FUNC TCOL(C)
 3890   RETURN 20+C
@@ -421,23 +421,23 @@
 4170 END PROC
 4180 PROC TXTROW(R,T$,C)
 4190   IF HL THEN EXIT PROC
-4200   LOCATE 0,20+R
+4200   LOCATE 0,18+R
 4210   COLOR FN TCOL(C),20
 4220   PRINT " ";LEFT$(T$+SPACE$(78),78);
 4230 END PROC
-4240 ' shows four log lines ending at log entry E (inclusive); M = 1: the last row says "-- more --"
+4240 ' shows six log lines ending at log entry E (inclusive); M = 1: the last row says "-- more --"
 4250 PROC SHOWTAIL(E,M)
 4260   LOCAL R,I
 4270   IF HL THEN EXIT PROC
-4280   FOR R=0 TO 3
-4290     I=E-3+R
+4280   FOR R=0 TO 5
+4290     I=E-5+R
 4300     IF I>=0 AND I>=LOGN-300 THEN
 4310       CALL TXTROW(R,LOGT$(I MOD 300),LOGC(I MOD 300))
 4320     ELSE
 4330       CALL TXTROW(R,"",1)
 4340     END IF
 4350   NEXT R
-4360   IF M THEN CALL TXTROW(3,"-- more --  (press a key)",3)
+4360   IF M THEN CALL TXTROW(5,"-- more --  (press a key)",3)
 4370 END PROC
 4380 PROC WAITKEY
 4390   LOCAL K$
@@ -454,10 +454,10 @@
 4500     EXIT PROC
 4510   END IF
 4520   PS=PSTART
-4530   WHILE LOGN-PS>4
-4540     CALL SHOWTAIL(PS+2,1)
+4530   WHILE LOGN-PS>6
+4540     CALL SHOWTAIL(PS+4,1)
 4550     CALL WAITKEY
-4560     PS=PS+3
+4560     PS=PS+5
 4570   WEND
 4580   CALL SHOWTAIL(LOGN-1,0)
 4590   PSTART=LOGN
@@ -468,7 +468,7 @@
 4640   CALL TEXTPAL
 4650   COLOR 21,0
 4660   CLS
-4670   TXT FILL 0,20,79,24,32,21,20
+4670   TXT FILL 0,18,79,24,32,21,20
 4680   LOCATE 0,0
 4690 END PROC
 4700 ' ------------------------------------------------------------------------------------------------ the input line
@@ -483,7 +483,7 @@
 4790   LOCAL R,I,N
 4800   IF HL OR PLAYON THEN EXIT PROC
 4810   GFX LAYER FR,OFF
-4820   TXT FILL 0,0,79,19,32,21,20
+4820   TXT FILL 0,0,79,17,32,21,20
 4830   N=FN MINI(23,LOGN)
 4840   FOR R=0 TO N-1
 4850     I=LOGN-N+R
@@ -492,7 +492,7 @@
 4880     PRINT " ";LEFT$(LOGT$(I MOD 300)+SPACE$(78),78);
 4890   NEXT R
 4900   CALL WAITKEY
-4910   TXT FILL 0,0,79,19,32,21,0
+4910   TXT FILL 0,0,79,17,32,21,0
 4920   GFX LAYER FR,ON
 4930   CALL SHOWTAIL(LOGN-1,0)
 4940 END PROC
@@ -2935,7 +2935,7 @@
 29310   T$="Parts "+STR$(FN BUILT)+"/8   Pack "+STR$(FN USED)+"/"+STR$(CAP)
 29320   CALL PUTLBL(5,14,T$,FN CC(15,14))
 29330   IF ONCHAIR THEN CALL PUTLBL(5,25,"(standing on the chair)",FN CC(4,14))
-29340   IF HIDING THEN CALL PUTLBL(250,225,"hiding - COME OUT to leave",FN CC(4,14))
+29340   IF HIDING THEN CALL PUTLBL(250,201,"hiding - COME OUT to leave",FN CC(4,14))
 29350 END PROC
 29360 PROC DRAWGLORP(X,Z,UNDER)
 29370   LOCAL SX,SY,S
@@ -4235,7 +4235,7 @@
 42310   IF HL THEN EXIT PROC
 42320   CALL W3K_SETUP
 42330   CALL W3K_SETPREFS(0,0,1,62,100)
-42340   CALL W3K_VIEW(0,0,640,240,1)
+42340   CALL W3K_VIEW(0,0,640,216,1)
 42350   W3D FOG 0
 42360   CALL V3_TEXTURES
 42370   CALL V3_LOADLEVEL
@@ -4254,15 +4254,15 @@
 42500   CURWH=11
 42510   FWG=0
 42520   IF FN ISDARK THEN
-42530     GFX LINE 0,0,639,239,FN CC(0,1),BF
+42530     GFX LINE 0,0,639,215,FN CC(0,1),BF
 42540     CALL PUTLBL(200,110,"It is pitch dark down here.",FN CC(0,9))
 42550   ELSE
 42560     CALL V3_DRAW(ROOM)
-42570     IF ROOM=R_CRASH THEN CALL PUTLBL(190,225,"The wreck: "+STR$(FN BUILT)+" of 8 parts built in",FN CC(15,14))
+42570     IF ROOM=R_CRASH THEN CALL PUTLBL(190,201,"The wreck: "+STR$(FN BUILT)+" of 8 parts built in",FN CC(15,14))
 42580   END IF
 42590   IF HIDING THEN
 42600     GFX LINE 0,0,639,84,1,BF
-42610     GFX LINE 0,160,639,239,1,BF
+42610     GFX LINE 0,160,639,215,1,BF
 42620     GFX LINE 0,85,50,159,1,BF
 42630     GFX LINE 590,85,639,159,1,BF
 42640   END IF
@@ -4378,14 +4378,14 @@
 43740   LOCAL I,X,Y
 43750   IF HL THEN EXIT PROC
 43760   CALL BEGINDRAW
-43770   FOR Y=0 TO 239
+43770   FOR Y=0 TO 215
 43780     GFX LINE 0,Y,639,Y,FN CC(8,1+INT(Y/22))
 43790   NEXT Y
 43800   FOR I=1 TO 90
 43810     GFX PSET FN RN(640),FN RN(150),FN CC(0,10+FN RN(6))
 43820   NEXT I
 43830   ' a crooked house on a hill, a small saucer in the sky
-43840   GFX LINE 0,200,639,239,FN CC(5,3),BF
+43840   GFX LINE 0,192,639,215,FN CC(5,3),BF
 43850   CALL FELL(320,215,330,28,FN CC(5,4))
 43860   CALL RECTO(250,150,390,205,FN CC(12,4))
 43870   CALL TRAPH(320,115,150,20,95,FN CC(12,3))
@@ -4399,7 +4399,7 @@
 43950   GFX LINE 575,120,610,190,FN CC(4,9)
 43960   GFX TEXT 82,12,"DEQQ'S HOUSE",1,5,5
 43970   GFX TEXT 80,10,"DEQQ'S HOUSE",FN CC(15,14),5,5
-43980   CALL PUTLBL(210,222,"A graphics adventure",FN CC(0,13))
+43980   CALL PUTLBL(210,202,"A graphics adventure",FN CC(0,13))
 43990   CALL ENDDRAW
 44000 END PROC
 44010 PROC INTRO
@@ -4422,14 +4422,14 @@
 44180   IF HL THEN EXIT PROC
 44190   FOR K=0 TO 70
 44200     CALL BEGINDRAW
-44210     FOR Y=0 TO 239
+44210     FOR Y=0 TO 215
 44220       GFX LINE 0,Y,639,Y,FN CC(8,1+INT(Y/30))
 44230     NEXT Y
 44240     FOR I=1 TO 40
 44250       X=(I*97+K*3) MOD 640
 44260       GFX PSET X,(I*53) MOD 200,FN CC(0,8+(I MOD 7))
 44270     NEXT I
-44280     GFX LINE 0,220,639,239,FN CC(5,3),BF
+44280     GFX LINE 0,196,639,215,FN CC(5,3),BF
 44290     Y=200-K*4
 44300     X=320
 44310     CALL TRAPH(X,Y-34,Y,3,12,FN CC(0,13))
