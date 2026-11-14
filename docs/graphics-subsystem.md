@@ -5,7 +5,7 @@ areas, and the internal `sdlscr_*` API. The design decisions of the project owne
 
 ## What exists
 
-The screen is 640 x 300 logical pixels, drawn as five layers from bottom to top (`sdlscreen.c`):
+The screen is 640 x 300 logical pixels, drawn as five layers from bottom to top (`sdlscreen.c`; a sixth, 32 bit layer for the hardware 3D renderer is described at the end of this section):
 
 | # | Layer | Content | Drawn by |
 |---|---|---|---|
@@ -20,6 +20,11 @@ Behind them is the backdrop color (`GFX BACKDROP`). **Every layer is 640 x 300 b
 Colors in all statements are palette indices of the layer that is drawn on.
 
 The 3D sector renderer (`W3D`, `w3d.[ch]`) draws into a view on the target graphics layer through `gfx_putbuf()` / `sdlscr_gfx_putbuf()`; it is described in [3d-subsystem.md](3d-subsystem.md).
+
+
+### The 32 bit layer of the hardware 3D renderer
+
+Every other layer is a screen-sized bitmap of palette indices (one byte per pixel) with its own palette; only the texture it is drawn from is ARGB. The OpenGL renderer of `M3D` (`docs/3d-mesh-subsystem.md`) makes true color pictures, so there is one more layer, `lay3d` in `sdlscreen.c`, that holds ARGB pixels (`sdllay_init32()`, `sdllayer_t.argb`, no palette, no `memory`) and is uploaded as it is. It is not part of the five and has no priority of its own: it is drawn **just below the graphics target layer** (the layer that was the `GFX TARGET` when the picture was put), so what a program draws on that layer (the HUD) stays in front of the 3D picture, and the text layer and the sprites keep their places. `sdlscr_3d_put( x, y, src, bw, bh, scale )` copies a `bw` x `bh` picture (each pixel `scale` x `scale`, made opaque) into it, clears the target layer's pixels in that region (as the software renderer's `sdlscr_gfx_putbuf()` overwrote them) and shows the layer; everything outside the region is transparent; the layer is cleared as a whole only when the region changes (a clear-and-fill every frame would flicker without locks). `sdlscr_3d_hide()` (also `M3D SOFTWARE` and `GFX RESET`) takes it away. Screenshots (`shot.c`) compose it in the same place (`shot_layer_t.argb`). Tests: `shottest1` (composition), `gl3dtest.sh` / `gl3dtest1` (in a window under Xvfb; `make hosttest`).
 
 ## Principles
 

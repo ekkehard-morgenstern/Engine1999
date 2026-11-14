@@ -429,6 +429,11 @@ gltest1: gltest1.o $(LIBNAME)
 
 gltest1.o: gltest1.c $(LIBHDR)
 
+gl3dtest1: gl3dtest1.o $(LIBNAME)
+	$(CL) -o gl3dtest1 gl3dtest1.o $(LIBNAME) $(SDL_LIBS) -lrt -lm
+
+gl3dtest1.o: gl3dtest1.c $(LIBHDR)
+
 m3dtest1: m3dtest1.o $(LIBNAME)
 	$(CL) -o m3dtest1 m3dtest1.o $(LIBNAME) -lm
 
@@ -516,8 +521,9 @@ check: $(CHECKTESTS) engine1999 engine1999c
 
 # make hosttest: the window host's sound path with Xvfb, XTest typing (xtype.c) and SDL's disk audio driver (hosttest.sh); skipped if the X tools are missing.
 # Not part of "make check" (needs an X server program).
-hosttest: engine1999
+hosttest: engine1999 gl3dtest1
 	sh hosttest.sh
+	sh gl3dtest.sh
 
 # make dist: engine1999-<version>.tar.gz with the files git tracks (but not the owner's backup and scratch folders) and the generated version.h,
 # so that the archive builds without git (tagtoverstr.sh keeps an existing version.h). Needs a git checkout; read-only git only.

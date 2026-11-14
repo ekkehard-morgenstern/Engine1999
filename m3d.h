@@ -71,7 +71,9 @@ bool   m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t 
 bool   m3d_query( m3d_t* m, int q, const double* a, int na, double* result );
 int    m3d_nverts( const m3d_t* m, int o );                  // the number of vertices of an object (0: none)
 void   m3d_colormap( m3d_t* m, const uint32_t* argb );
-const uint8_t* m3d_render( m3d_t* m );
+const uint8_t* m3d_render( m3d_t* m );                       // draws a frame; the palette bitmap, or 0 when the renderer in use makes 32 bit pictures
+bool   m3d_is_argb( const m3d_t* m );                         // the renderer in use makes 32 bit ARGB pictures (m3d_render32()), not palette bitmaps
+const uint32_t* m3d_render32( m3d_t* m );                     // draws a frame; the ARGB picture (bw x bh, see m3d_getview()), or 0 when the renderer makes palette bitmaps
 struct _m3drend_t;
 void   m3d_set_hardware( m3d_t* m, const struct _m3drend_t* r );   // the host registers the hardware (OpenGL) renderer it has (0: none; M3D HARDWARE is then an error)
 void   m3d_getview( const m3d_t* m, int* x, int* y, int* width, int* height, int* scale, int* bmpw, int* bmph );

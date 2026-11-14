@@ -42,7 +42,8 @@ typedef void (*sdllaycb_t)( struct _sdllayer_t*, void* );
 typedef struct _sdllayer_t {
     const char*  title;     // string constant
     SDL_Texture* texture;   // always screen sized
-    uint8_t*     memory;    // always screen sized
+    uint8_t*     memory;    // always screen sized (palette indices; 0 in a 32 bit layer)
+    uint32_t*    argb;      // a 32 bit layer (sdllay_init32): the pixels as ARGB8888, screen sized, uploaded as they are; else 0
     uint32_t     palette[256];  // ARGB8888
     bool         modified;  // modified flag
     bool         disabled;  // disabled flag (not rendered)
@@ -52,6 +53,7 @@ typedef struct _sdllayer_t {
 } sdllayer_t;
 
 bool sdllay_init( sdllayer_t* lay, const char* title, uint8_t priority, SDL_Renderer* renderer );
+bool sdllay_init32( sdllayer_t* lay, const char* title, uint8_t priority, SDL_Renderer* renderer );   // a layer of ARGB pixels (all transparent), no palette
 void sdllay_cleanup( sdllayer_t* lay );
 
 void sdllay_setcall( sdllayer_t* lay, sdllaycb_t callback, void* userdata );

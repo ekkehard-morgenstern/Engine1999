@@ -948,5 +948,13 @@ bool m3d_query( m3d_t* m, int q, const double* a, int na, double* r ) {
 // -- the renderer in use --------------------------------------------------------------------------------------------------------
 
 const uint8_t* m3d_render( m3d_t* m ) {
-    return m->rend->render( m, m->rdata );
+    return m->rend->argb ? 0 : (const uint8_t*) m->rend->render( m, m->rdata );
+}
+
+bool m3d_is_argb( const m3d_t* m ) {
+    return m->rend->argb;
+}
+
+const uint32_t* m3d_render32( m3d_t* m ) {
+    return m->rend->argb ? (const uint32_t*) m->rend->render( m, m->rdata ) : 0;
 }

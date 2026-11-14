@@ -228,6 +228,10 @@ uint32_t sdlscr_sprite_pathevents( void );
 // graphics bitmaps cleared, target 3, pen 1, mode SET, DRAW state; the tile cells and scrolling cleared; all sprites hidden and reset. The text
 // screen keeps its contents (CLS), but its pen and paper (COLOR, ANSI sequences) are back to the defaults. images = true also clears the tile images, sprite images and animation sequences and restores the built-in font.
 void     sdlscr_gfx_reset( bool images );
+// the 32 bit layer of the hardware 3D renderer: the bw x bh ARGB picture (each pixel scale x scale, opaque) at x, y, drawn just below the graphics target
+// layer (what the program draws there stays in front); the target layer's pixels in that region are cleared. Everything outside is transparent.
+void     sdlscr_3d_put( int x, int y, const uint32_t* src, int bw, int bh, int scale );
+void     sdlscr_3d_hide( void );                // the layer is not shown (the software renderer draws into the target layer; also GFX RESET)
 
 // timing (sdlscr_getframecnt() is above)
 void     sdlscr_vsync( void );                                  // waits for the next frame (or until the screen is closed)

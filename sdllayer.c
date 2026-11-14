@@ -61,13 +61,30 @@ bool sdllay_init( sdllayer_t* lay, const char* title, uint8_t priority, SDL_Rend
     __atomic_store_n( &lay->modified, true, __ATOMIC_RELEASE );
     lay->disabled = false;
     lay->priority = priority;
+    lay->argb = 0;
     lay->callback = 0;
     lay->userdata = 0;
     return true;
 }
 
+bool sdllay_init32( sdllayer_t* lay, const char* title, uint8_t priority, SDL_Renderer* renderer ) {
+    if ( !sdllay_init( lay, title, priority, renderer ) ) {
+        return false;
+    }
+    free( lay->memory );
+    lay->memory = 0;
+    lay->argb = (uint32_t*) calloc( (size_t) SDL_SCREENWIDTH * SDL_SCREENHEIGHT, sizeof(uint32_t) );
+    if ( lay->argb == 0 ) {
+        perror( "calloc(3)" );
+        SDL_DestroyTexture( lay->texture ); lay->texture = 0;
+        return false;
+    }
+    return true;
+}
+
 void sdllay_cleanup( sdllayer_t* lay ) {
     free( lay->memory ); lay->memory = 0;
+    free( lay->argb ); lay->argb = 0;
     SDL_DestroyTexture( lay->texture ); lay->texture = 0;
 }
 
@@ -123,17 +140,22 @@ bool sdllay_to_texture( sdllayer_t* lay ) {
     if ( lay->callback ) {
         lay->callback( lay, lay->userdata );
     }
-    const uint8_t* source = lay->memory;
-    const uint32_t* palette = lay->palette;
-    uint32_t* target = buf;
-    size_t pixcnt = SDL_SCREENWIDTH * SDL_SCREENHEIGHT;
-    while ( pixcnt-- ) {
-        *target++ = palette[*source++];
+    const uint32_t* pixels = buf;
+    if ( lay->argb != 0 ) {
+        pixels = lay->argb;                         // (a 32 bit layer: nothing to convert)
+    } else {
+        const uint8_t* source = lay->memory;
+        const uint32_t* palette = lay->palette;
+        uint32_t* target = buf;
+        size_t pixcnt = SDL_SCREENWIDTH * SDL_SCREENHEIGHT;
+        while ( pixcnt-- ) {
+            *target++ = palette[*source++];
+        }
     }
     int rv = SDL_UpdateTexture(
         lay->texture,
         0,
-        buf,
+        pixels,
         SDL_SCREENWIDTH * sizeof(uint32_t)
     );
     if ( rv < 0 ) {

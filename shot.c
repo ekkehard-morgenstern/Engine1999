@@ -44,11 +44,11 @@ void shot_compose( const shot_layer_t* lay, int n, uint32_t backdrop, uint32_t* 
                 break;
             }
         }
-        if ( l == 0 || !l->enabled || l->mem == 0 || l->pal == 0 ) {
+        if ( l == 0 || !l->enabled || ( l->argb == 0 && ( l->mem == 0 || l->pal == 0 ) ) ) {
             continue;
         }
         for ( size_t i=0; i < npix; ++i ) {
-            uint32_t s = l->pal[ l->mem[i] ];
+            uint32_t s = l->argb != 0 ? l->argb[i] : l->pal[ l->mem[i] ];
             uint32_t a = s >> 24;
             if ( a == 0U ) {
                 continue;

@@ -39,11 +39,12 @@ depends on (collision, queries), so it is the same whatever renderer is in use.
 
 typedef struct _m3drend_t {
     const char* name;
+    bool argb;                                                    // the picture is 32 bit ARGB (m3d_render32()), not a palette bitmap (m3d_render())
     void* (*create)( m3d_t* m );                                  // the renderer's own state (0: out of memory)
     void  (*destroy)( m3d_t* m, void* rd );
     bool  (*resize)( m3d_t* m, void* rd, int bw, int bh );        // the picture becomes bw x bh (before m->bw / m->bh change); false: out of memory, nothing changed
     void  (*palette)( m3d_t* m, void* rd );                       // m->pal changed
-    const uint8_t* (*render)( m3d_t* m, void* rd );               // draws one frame; the bitmap (m->bw x m->bh palette indices) or 0
+    const void* (*render)( m3d_t* m, void* rd );                  // draws one frame; the picture (m->bw x m->bh pixels: bytes of palette indices, or uint32_t ARGB when `argb`) or 0
 } m3drend_t;
 
 extern const m3drend_t m3d_soft_renderer;

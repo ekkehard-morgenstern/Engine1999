@@ -57,27 +57,69 @@ static const char* const layer_titles[NLAYERS] = {
     "background", "tiles", "text", "graphics", "sprites"
 };
 
+// The 32 bit layer of the hardware 3D renderer (sdlscr_3d_put()): ARGB pixels, no palette. It has no place of its own in the stack: it is drawn
+// just below the layer the 3D view belongs to (the graphics target when the picture was put), so that what a program draws on that layer
+// (the HUD) stays in front of the 3D picture, and the sprites and the text layer keep their places. lay3d_under is the layer index, or -1 when
+// the 3D layer is not shown; the program thread sets it, the screen thread reads it (atomic).
+#define LAY_3D          NLAYERS
+static sdllayer_t lay3d;
+static int lay3d_under = -1;
+static int lay3d_x0 = -1, lay3d_y0 = -1, lay3d_x1 = -1, lay3d_y1 = -1;     // the region of the last picture (program thread)
+
 static bool init_layers( SDL_Renderer* renderer ) {
-    return sdllay_init_many( &layers[0], NLAYERS, layer_titles, renderer );
+    if ( !sdllay_init_many( &layers[0], NLAYERS, layer_titles, renderer ) ) {
+        return false;
+    }
+    if ( !sdllay_init32( &lay3d, "3d", NLAYERS, renderer ) ) {
+        sdllay_cleanup_many( &layers[0], NLAYERS );
+        return false;
+    }
+    return true;
 }
 
 static void cleanup_layers( void ) {
     sdllay_cleanup_many( &layers[0], NLAYERS );
+    sdllay_cleanup( &lay3d );
+}
+
+// the layers from the back to the front: indices into layers[], and LAY_3D where the 3D layer comes; returns how many
+static int layer_order( int* out ) {
+    int under = __atomic_load_n( &lay3d_under, __ATOMIC_ACQUIRE );
+    int n = 0;
+    for ( int pri=0; pri < NLAYERS; ++pri ) {
+        for ( int j=0; j < NLAYERS; ++j ) {
+            if ( layers[j].priority == (uint8_t) pri ) {
+                if ( j == under ) {
+                    out[n++] = LAY_3D;
+                }
+                out[n++] = j;
+                break;
+            }
+        }
+    }
+    return n;
 }
 
 static void draw_layers( SDL_Renderer* renderer ) {
-    sdllay_draw_texture_many( &layers[0], NLAYERS, renderer );
+    int ord[NLAYERS + 1];
+    int n = layer_order( ord );
+    for ( int i=0; i < n; ++i ) {
+        sdllay_draw_texture( ord[i] == LAY_3D ? &lay3d : &layers[ord[i]], renderer );
+    }
 }
 
 // -- screenshots (shot.h) ---------------------------------------------------------------------------------------
 
 // the composed picture of the layers as they are now (the screen thread only: it owns the layer memories)
 static void sdlscr_shot_compose( uint32_t* out, uint32_t backdrop ) {
-    shot_layer_t sl[NLAYERS];
-    for ( int i=0; i < NLAYERS; ++i ) {
-        sl[i].mem = layers[i].memory; sl[i].pal = layers[i].palette; sl[i].enabled = !layers[i].disabled; sl[i].priority = layers[i].priority;
+    shot_layer_t sl[NLAYERS + 1];
+    int ord[NLAYERS + 1];
+    int n = layer_order( ord );
+    for ( int i=0; i < n; ++i ) {
+        const sdllayer_t* l = ord[i] == LAY_3D ? &lay3d : &layers[ord[i]];
+        sl[i].mem = l->memory; sl[i].pal = l->palette; sl[i].argb = l->argb; sl[i].enabled = !l->disabled; sl[i].priority = (uint8_t) i;
     }
-    shot_compose( sl, NLAYERS, backdrop, out );
+    shot_compose( sl, n, backdrop, out );
 }
 
 typedef struct _sdlscr_shotjob_t {
@@ -751,9 +793,9 @@ static int sdlscr_worker( void* arg ) {
         // shows the picture of two frames ago: an unchanged screen then alternated between the old and the new picture at the frame rate
         // (flickering cursor, line highlight, shifted sections: the owner's report of 2026-11-03). The software renderer keeps its buffer, so
         // it may skip the drawing of unchanged frames (this saves a lot of time there).
-        bool changed = sdllay_needsredraw( &layers[0], NLAYERS );
+        bool changed = sdllay_needsredraw( &layers[0], NLAYERS ) || sdllay_needsredraw( &lay3d, 1 );
         if ( changed ) {
-            if ( !sdllay_to_texture_many( &layers[0], NLAYERS ) ) {
+            if ( !sdllay_to_texture_many( &layers[0], NLAYERS ) || !sdllay_to_texture( &lay3d ) ) {
                 break;
             }
         }
@@ -1854,9 +1896,64 @@ int sdlscr_sprite_nextevent( void ) {
     return sprscr_nextevent();
 }
 
+// -- the 32 bit layer of the hardware 3D renderer -----------------------------------------------------------------
+
+void sdlscr_3d_hide( void ) {
+    if ( __atomic_load_n( &lay3d_under, __ATOMIC_ACQUIRE ) < 0 ) {
+        return;
+    }
+    __atomic_store_n( &lay3d_under, -1, __ATOMIC_RELEASE );
+    lay3d_x0 = -1;
+    sdllay_disable( &lay3d );
+    for ( int i=0; i < NLAYERS; ++i ) {
+        sdllay_set_modified( &layers[i] );          // (the screen is redrawn without the layer)
+    }
+}
+
+void sdlscr_3d_put( int x, int y, const uint32_t* src, int bw, int bh, int scale ) {
+    if ( lay3d.argb == 0 || src == 0 || bw < 1 || bh < 1 ) {
+        return;
+    }
+    if ( scale < 1 ) {
+        scale = 1;
+    }
+    int x0 = x < 0 ? 0 : x, y0 = y < 0 ? 0 : y;
+    int x1 = x + bw * scale, y1 = y + bh * scale;
+    if ( x1 > SDL_SCREENWIDTH ) { x1 = SDL_SCREENWIDTH; }
+    if ( y1 > SDL_SCREENHEIGHT ) { y1 = SDL_SCREENHEIGHT; }
+    if ( x1 <= x0 || y1 <= y0 ) {
+        return;
+    }
+    // everything outside the picture stays transparent: cleared only when the region changes (no flicker from a clear-then-fill every frame)
+    if ( x0 != lay3d_x0 || y0 != lay3d_y0 || x1 != lay3d_x1 || y1 != lay3d_y1 ) {
+        memset( lay3d.argb, 0, sizeof(uint32_t) * (size_t) SDL_SCREENWIDTH * SDL_SCREENHEIGHT );
+        lay3d_x0 = x0; lay3d_y0 = y0; lay3d_x1 = x1; lay3d_y1 = y1;
+    }
+    for ( int dy = y0; dy < y1; ++dy ) {
+        const uint32_t* row = src + (size_t)( ( dy - y ) / scale ) * (size_t) bw;
+        uint32_t* dst = lay3d.argb + (size_t) dy * SDL_SCREENWIDTH;
+        for ( int dx = x0; dx < x1; ++dx ) {
+            dst[dx] = row[ ( dx - x ) / scale ] | UINT32_C(0xFF000000);
+        }
+    }
+    // what the target layer shows in that region is gone, as it was when the picture was copied into it: the program draws its HUD on the
+    // transparent layer in front of the 3D picture
+    int t = sdlscr_gfxtgt;
+    if ( layers[t].memory != 0 ) {
+        for ( int dy = y0; dy < y1; ++dy ) {
+            memset( layers[t].memory + (size_t) dy * SDL_SCREENWIDTH + x0, 0, (size_t)( x1 - x0 ) );
+        }
+        sdllay_set_modified( &layers[t] );
+    }
+    sdllay_enable( &lay3d );
+    __atomic_store_n( &lay3d_under, t, __ATOMIC_RELEASE );
+    sdllay_set_modified( &lay3d );
+}
+
 // back to the defaults
 
 void sdlscr_gfx_reset( bool images ) {
+    sdlscr_3d_hide();
     for ( int i=0; i < NLAYERS; ++i ) {
         sdllay_enable( &layers[i] );
         layers[i].priority = (uint8_t) i;

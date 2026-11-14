@@ -453,7 +453,7 @@ static void draw_things( rc_t* c ) {
     }
 }
 
-static const uint8_t* soft_render( m3d_t* m, void* rd ) {
+static const void* soft_render( m3d_t* m, void* rd ) {
     soft_t* s = (soft_t*) rd;
     if ( s->fb == 0 ) {
         return 0;
@@ -540,4 +540,4 @@ static void soft_palette( m3d_t* m, void* rd ) {
     make_cmap( m, (soft_t*) rd );
 }
 
-const m3drend_t m3d_soft_renderer = { "software", soft_create, soft_destroy, soft_resize, soft_palette, soft_render };
+const m3drend_t m3d_soft_renderer = { "software", false, soft_create, soft_destroy, soft_resize, soft_palette, soft_render };

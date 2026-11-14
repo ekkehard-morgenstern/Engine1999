@@ -138,8 +138,12 @@ static bool fake_resize( m3d_t* m, void* rd, int bw, int bh ) {
     return true;
 }
 static void fake_palette( m3d_t* m, void* rd ) { (void) m; (void) rd; ++fk.palettes; }
-static const uint8_t* fake_render( m3d_t* m, void* rd ) { (void) m; (void) rd; ++fk.rendered; return fk.fb; }
-static const m3drend_t fake_renderer = { "fake", fake_create, fake_destroy, fake_resize, fake_palette, fake_render };
+static const void* fake_render( m3d_t* m, void* rd ) { (void) m; (void) rd; ++fk.rendered; return fk.fb; }
+static const m3drend_t fake_renderer = { "fake", false, fake_create, fake_destroy, fake_resize, fake_palette, fake_render };
+
+static uint32_t fake32[160 * 100];
+static const void* fake32_render( m3d_t* m, void* rd ) { (void) m; (void) rd; return fake32; }
+static const m3drend_t fake32_renderer = { "fake32", true, fake_create, fake_destroy, fake_resize, fake_palette, fake32_render };
 
 static void test_switch( void ) {
     fresh();
@@ -185,6 +189,18 @@ static void test_switch( void ) {
     CHECK( op( GFXOP_M3DSOFTWARE, 0 ) );
     CHECK( !op( GFXOP_M3DHARDWARE, 0 ) );
     CHECK( fk.destroyed == 2 );
+    m3d_set_hardware( M, &fake_renderer );
+    CHECK( op( GFXOP_M3DHARDWARE, 0 ) );
+    // a renderer with 32 bit pictures
+    CHECK( op( GFXOP_M3DSOFTWARE, 0 ) );
+    CHECK( !m3d_is_argb( M ) && m3d_render32( M ) == 0 && m3d_render( M ) != 0 );
+    m3d_set_hardware( M, &fake32_renderer );
+    CHECK( op( GFXOP_M3DHARDWARE, 0 ) );
+    CHECK( m3d_is_argb( M ) );
+    CHECK( m3d_render( M ) == 0 );                              // not a palette bitmap
+    CHECK( m3d_render32( M ) == fake32 );
+    CHECK( op( GFXOP_M3DSOFTWARE, 0 ) );
+    CHECK( !m3d_is_argb( M ) && m3d_render32( M ) == 0 );
     m3d_set_hardware( M, &fake_renderer );
     CHECK( op( GFXOP_M3DHARDWARE, 0 ) );
     // m3d_free (below) destroys the renderer in use
@@ -464,7 +480,7 @@ int main( void ) {
     }
     test_switch();
     m3d_free( M );
-    CHECK( fk.destroyed == 3 );
+    CHECK( fk.destroyed == 5 );
     printf( "m3dtest1: %d cases, %d failures\n", cases, failures );
     return failures;
 }

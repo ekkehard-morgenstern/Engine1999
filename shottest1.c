@@ -69,6 +69,18 @@ static void test_compose( void ) {
     shot_compose( l, 3, 0, out );
     check( out[10] == 0xFF008000U, "a disabled layer is not drawn (the green over the black backdrop)" );
     check( out[12] == 0xFF00807FU, "... and the layers below it show (green over blue)" );
+    // a 32 bit layer between them: its ARGB pixels are used as they are, the palette and the indices are not looked at
+    uint32_t* a1 = (uint32_t*) calloc( NPIX, sizeof(uint32_t) );
+    a1[10] = 0xFF00FFFFU; a1[11] = 0x80FFFFFFU;
+    shot_layer_t l32[3] = { { m0, p0, true, 0, 0 }, { 0, 0, true, 1, a1 }, { m2, p2, true, 2, 0 } };
+    shot_compose( l32, 3, 0x00000000U, out );
+    check( out[10] == 0xFF00FFFFU, "an opaque pixel of a 32 bit layer covers the layer below" );
+    check( ( out[11] & 0xFFU ) == 0x80U && ( out[11] >> 16 & 255U ) == 0x80U, "a half transparent one blends with the backdrop (128)" );
+    check( out[12] == 0xFF0000FFU, "a transparent pixel of a 32 bit layer shows the layers around it" );
+    l32[1].enabled = false;
+    shot_compose( l32, 3, 0, out );
+    check( out[10] == 0xFFFF0000U, "a disabled 32 bit layer is not drawn" );
+    free( a1 );
     free( m0 ); free( m1 ); free( m2 ); free( out );
 }
 

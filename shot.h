@@ -53,6 +53,7 @@ typedef struct _shot_layer_t {
     const uint32_t* pal;                // 256 ARGB entries
     bool            enabled;
     uint8_t         priority;           // drawn in ascending order (every number 0..n-1 once)
+    const uint32_t* argb;               // or (when not 0, then mem and pal are not used): a 32 bit layer, SHOT_WIDTH * SHOT_HEIGHT ARGB pixels
 } shot_layer_t;
 
 // draws n layers over the backdrop (ARGB, opaque) into out (SHOT_WIDTH * SHOT_HEIGHT opaque ARGB pixels)

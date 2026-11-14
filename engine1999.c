@@ -1577,13 +1577,27 @@ static bool host_m3d_op( int op, const double* a, int na, const char* s, size_t 
         return true;
     }
     if ( op == GFXOP_M3DRENDER ) {
-        const uint8_t* fb = m3d_render( host_m3d );
-        if ( fb != 0 ) {
-            int x, y, w, h, scale, bw, bh;
-            m3d_getview( host_m3d, &x, &y, &w, &h, &scale, &bw, &bh );
-            sdlscr_gfx_putbuf( t, x, y, fb, bw, bh, scale );
+        int x, y, w, h, scale, bw, bh;
+        m3d_getview( host_m3d, &x, &y, &w, &h, &scale, &bw, &bh );
+        if ( m3d_is_argb( host_m3d ) ) {                // the hardware renderer: its own 32 bit layer, below the target layer
+            const uint32_t* px = m3d_render32( host_m3d );
+            if ( px != 0 ) {
+                sdlscr_3d_put( x, y, px, bw, bh, scale );
+            }
+        } else {
+            const uint8_t* fb = m3d_render( host_m3d );
+            if ( fb != 0 ) {
+                sdlscr_gfx_putbuf( t, x, y, fb, bw, bh, scale );
+            }
         }
         return true;
+    }
+    if ( op == GFXOP_M3DSOFTWARE ) {
+        bool ok = m3d_op( host_m3d, op, a, na, s, slen, err );
+        if ( ok ) {
+            sdlscr_3d_hide();
+        }
+        return ok;
     }
     if ( op == GFXOP_M3DWORLD ) {
         return m3dworld_load( host_m3d, jsonops_root(), err );
