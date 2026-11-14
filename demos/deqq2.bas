@@ -2207,12 +2207,14 @@
 38170   M3D BOX 4100,-3,6,38,3,8,50,301
 38175   M3D BOX 4100,-6,6,30,6,8,36,301
 38180 END PROC
-38200 ' speed benchmark (sh m3dbench.sh): DEQQ2_BENCH=file, the program draws 120 frames turning in place at four places with each renderer, writes the times to the file and ends
+38200 ' speed benchmark (sh m3dbench.sh): DEQQ2_BENCH=file, the program draws 120 frames turning in place at four places with each renderer at the pixel scales 2 (320 x 132) and 1 (640 x 264), writes the times to the file and ends
 38210 PROC BENCH(F$)
-38220   LOCAL R,PS,F,CX,CY,T0,T1,NR,N$
+38220   LOCAL R,PS,F,CX,CY,T0,T1,NR,N$,SC
 38230   OPEN F$ FOR OUTPUT AS #2
 38240   PRINT #2,"hardware available:";M3D("HWAVAIL")
 38250   NR=0:IF M3D("HWAVAIL") THEN NR=1
+38255   FOR SC=2 TO 1 STEP -1
+38256   CALL W3K_VIEW(0,0,640,264,SC)
 38260   FOR R=0 TO NR
 38270     IF R=1 THEN M3D HARDWARE:N$="hardware" ELSE M3D SOFTWARE:N$="software"
 38280     FOR PS=0 TO 3
@@ -2224,9 +2226,10 @@
 38340       T0=TI
 38350       FOR F=0 TO 119:M3D CAMERA CX,CY,56,F*3,0:M3D RENDER:NEXT F
 38360       T1=TI
-38370       PRINT #2,N$;" place";PS;" ms/frame";INT((T1-T0)*1000/60/120*100)/100;" triangles";M3D("DRAWN")
+38370       PRINT #2,N$;" scale";SC;" place";PS;" ms/frame";INT((T1-T0)*1000/60/120*100)/100;" triangles";M3D("DRAWN")
 38380     NEXT PS
 38390   NEXT R
+38395   NEXT SC
 38400   CLOSE #2
 38410   BYE
 38420 END PROC
