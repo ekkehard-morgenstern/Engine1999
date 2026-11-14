@@ -237,6 +237,18 @@ int main( void ) {
     compare( "translucent", 40, 6.0 );
 
     scene_base();
+    {   // a color with an alpha of its own in the palette (< 255) in a translucent object: mixed with that alpha, in both renderers
+        uint32_t gp[256];
+        for ( int i=0; i < 256; ++i ) { gp[i] = 0xFF000000U | (uint32_t) i << 16 | (uint32_t) i << 8 | (uint32_t) i; }
+        gp[120] = 0x50000000U | 120U << 16 | 120U << 8 | 120U;
+        m3d_colormap( M, gp );
+        tex_pat( 5, 8, 8, 120, 120 );
+        CHECK( op( GFXOP_M3DOBJECT, 3, 5.0, 2.0, 255.0 ) );
+        CHECK( op( GFXOP_M3DBOX, 8, 5.0, -50.0, 60.0, 0.0, 10.0, 64.0, 60.0, 5.0 ) );
+        compare( "palette alpha", 40, 8.0 );
+    }
+
+    scene_base();
     CHECK( op( GFXOP_M3DTHING, 7, 0.0, 0.0, 100.0, 0.0, 2.0, 30.0, 50.0 ) );
     CHECK( op( GFXOP_M3DTHING, 7, 1.0, 20.0, 60.0, 0.0, 4.0, 20.0, 30.0 ) );
     compare( "things", 28, 5.0 );

@@ -1550,19 +1550,12 @@
 15030 DATA 480,-5,0
 15040 DATA 480,60,0
 15050 DATA 9999
-33020 ' glass (texture 200, 64 x 60): a pale blue pane with a wooden frame and a cross of bars, index 0 is see-through; the wall that carries it is translucent (flag 16)
-33030 PROC MAKEGLASS
-33040   GFX CLEAR 0
-33050   GFX LINE 3,3,60,56,FN W3K_C(7,13),BF
-33060   GFX LINE 8,8,20,10,FN W3K_C(0,15),BF
-33070   GFX LINE 12,14,16,22,FN W3K_C(0,15),BF
-33080   GFX LINE 0,0,63,2,FN W3K_C(12,5),BF
-33090   GFX LINE 0,57,63,59,FN W3K_C(12,5),BF
-33100   GFX LINE 0,0,2,59,FN W3K_C(12,5),BF
-33110   GFX LINE 61,0,63,59,FN W3K_C(12,5),BF
-33120   GFX LINE 30,0,33,59,FN W3K_C(12,6),BF
-33130   GFX LINE 0,28,63,31,FN W3K_C(12,6),BF
-33140   CALL W3K_GRAB(200,64,60)
+33020 ' glass: no picture, a plain color: palette entry 11 (unused by the pictures and the world document, whose flat colors are 1 .. 10 and 12 .. 16) is a pale blue with an alpha of its own
+33030 ' (RGB(r,g,b,a)); the window panes (objects 1058 .. 1085 of the world document, flags 10 = translucent + see-through, flat picture number 11) are thin boxes in the window holes, and a
+33040 ' translucent object mixes a color that has an alpha of its own with that alpha (the renderers read it from the palette: docs/3d-mesh-subsystem.md, "Palette alpha")
+33050 PROC MAKEGLASS
+33060   GFX PALETTE 0,11,RGB(150,205,240,90)
+33070   GFX PALETTE 3,11,RGB(150,205,240,90)
 33150 END PROC
 33160 ' water (textures 201..204, 64 x 64): four phases of a ripple pattern that repeats sideways; texture 205 shows them in turn (W3D ANIM)
 33170 PROC MAKEWATER

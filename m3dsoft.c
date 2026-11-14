@@ -37,6 +37,7 @@ The software renderer of the mesh module: every triangle is rasterized into a pa
 typedef struct {
     uint8_t  cmap[M3D_LEVELS][256];
     uint8_t* blend;
+    uint8_t* ablend[32];        // translucency tables for palette entries with an alpha of their own (index = alpha / 8, made when first needed)
     uint8_t* fb;
     float*   zb;
 } soft_t;
@@ -45,6 +46,10 @@ static void make_cmap( m3d_t* m, soft_t* s ) {
     const uint32_t* argb = m->pal;
     free( s->blend );
     s->blend = 0;
+    for ( int q=0; q < 32; ++q ) {
+        free( s->ablend[q] );
+        s->ablend[q] = 0;
+    }
     for ( int l=0; l < M3D_LEVELS; ++l ) {
         double scale = (double) l / (double)( M3D_LEVELS - 1 );
         s->cmap[l][0] = 0;
@@ -101,6 +106,39 @@ static void make_blend( const m3d_t* m, soft_t* s ) {
         }
     }
     s->blend = bl;
+}
+
+// the table for a texel color whose palette entry has the alpha q * 8 (1 .. 31): table[behind * 256 + front] = the palette entry nearest to
+// behind * (1 - w) + front * w, w = q / 32; made when a translucent object with such a color is drawn, thrown away with a palette change
+static const uint8_t* alpha_blend( const m3d_t* m, soft_t* s, int q ) {
+    if ( s->ablend[q] != 0 ) {
+        return s->ablend[q];
+    }
+    uint8_t* bl = (uint8_t*) malloc( 65536U );
+    if ( bl == 0 ) {
+        return 0;
+    }
+    double w = (double) q / 32.0;
+    for ( int a=0; a < 256; ++a ) {
+        for ( int b=0; b < 256; ++b ) {
+            double r = ( 1.0 - w ) * (double)( ( m->pal[a] >> 16 ) & 0xFFU ) + w * (double)( ( m->pal[b] >> 16 ) & 0xFFU );
+            double g = ( 1.0 - w ) * (double)( ( m->pal[a] >> 8 ) & 0xFFU ) + w * (double)( ( m->pal[b] >> 8 ) & 0xFFU );
+            double bb = ( 1.0 - w ) * (double)( m->pal[a] & 0xFFU ) + w * (double)( m->pal[b] & 0xFFU );
+            int best = 0;
+            double bd = 1.0e30;
+            for ( int j=1; j < 256; ++j ) {
+                double dr = (double)( ( m->pal[j] >> 16 ) & 0xFFU ) - r, dg = (double)( ( m->pal[j] >> 8 ) & 0xFFU ) - g, db = (double)( m->pal[j] & 0xFFU ) - bb;
+                double d = 2.0 * dr * dr + 4.0 * dg * dg + 3.0 * db * db;
+                if ( d < bd ) {
+                    bd = d;
+                    best = j;
+                }
+            }
+            bl[ a * 256 + b ] = (uint8_t) best;
+        }
+    }
+    s->ablend[q] = bl;
+    return bl;
 }
 
 // -- rendering ------------------------------------------------------------------------------------------------------------------
@@ -237,7 +275,16 @@ static void raster( rc_t* c, const tri_t* t, bool translucent ) {
                         cm = c->s->cmap[li];
                         uint8_t out = cm[col];
                         if ( translucent ) {
-                            out = c->s->blend != 0 ? c->s->blend[ (size_t) fb[x] * 256U + out ] : out;
+                            // a color with an alpha of its own in the palette (< 255) is mixed with that alpha (0: nothing), the others half and half
+                            unsigned pa = m->pal[col] >> 24;
+                            if ( pa == 0 ) {
+                                out = fb[x];
+                            } else if ( pa < 255U ) {
+                                const uint8_t* at = alpha_blend( m, c->s, pa < 8U ? 1 : (int)( pa >> 3 ) );
+                                out = at != 0 ? at[ (size_t) fb[x] * 256U + out ] : out;
+                            } else {
+                                out = c->s->blend != 0 ? c->s->blend[ (size_t) fb[x] * 256U + out ] : out;
+                            }
                         } else {
                             zb[x] = (float) z;
                         }
@@ -393,6 +440,9 @@ static bool object_visible( const rc_t* c, const obj_t* o, double* dist ) {
 static void draw_things( rc_t* c ) {
     m3d_t* m = c->m;
     int n = 0;
+    // (the upper part of the scratch arrays: the translucent objects collected before keep the lower part)
+    int* ord = m->order + M3D_MAXOBJECTS;
+    double* od = m->odist + M3D_MAXOBJECTS;
     for ( int i=0; i < M3D_MAXTHINGS; ++i ) {
         const thing_t* t = &m->things[i];
         if ( !t->on ) {
@@ -403,12 +453,12 @@ static void draw_things( rc_t* c ) {
         if ( zv < NEARZ ) {
             continue;
         }
-        m->order[n] = i; m->odist[i] = zv; ++n;
+        ord[n] = i; od[i] = zv; ++n;
     }
-    sort_desc( m->order, m->odist, n );
+    sort_desc( ord, od, n );
     for ( int k=0; k < n; ++k ) {
-        const thing_t* t = &m->things[m->order[k]];
-        double zv = m->odist[m->order[k]];
+        const thing_t* t = &m->things[ord[k]];
+        double zv = od[ord[k]];
         v3_t pb = { t->x - c->eye.x, t->y - c->eye.y, t->z - c->eye.z }, pt = { pb.x, pb.y, pb.z + t->h };
         double xv = vdot( pb, c->r );
         double ybot = vdot( pb, c->up ), ytop = vdot( pt, c->up );

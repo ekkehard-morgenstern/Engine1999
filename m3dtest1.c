@@ -304,6 +304,43 @@ int main( void ) {
     CHECK( op( GFXOP_M3DOBJFLAGS, 2, 2.0, (double) M3D_OF_TRANS ) );
     fb = shot();
     CHECK( PX( fb, 80, 40 ) != 0 );
+    {   // a thing in front of the camera must not disturb the list of translucent objects (the scratch arrays were shared: the glass panes vanished)
+        int mixed = PX( fb, 80, 40 );
+        CHECK( op( GFXOP_M3DTHING, 7, 0.0, 400.0, 300.0, 0.0, 2.0, 20.0, 20.0 ) );
+        fb = shot();
+        CHECK( PX( fb, 80, 40 ) == mixed );
+    }
+    {   // a translucent color with an alpha of its own in the palette (< 255) is mixed with that alpha, the others half and half
+        uint32_t gp[256];
+        for ( int i=0; i < 256; ++i ) { gp[i] = 0xFF000000U | (uint32_t)( i * 0x010101U ); }
+        gp[150] = 0x40000000U | ( 150U * 0x010101U );               // alpha 64 of 255: a quarter
+        gp[151] = 0x00000000U | ( 151U * 0x010101U );               // alpha 0: nothing
+        m3d_colormap( M, gp );
+        fresh();
+        tex_flat( 4, 8, 8, 150 );
+        tex_flat( 5, 8, 8, 151 );
+        CHECK( op( GFXOP_M3DOBJECT, 1, 2.0, 255.0 ) );
+        CHECK( op( GFXOP_M3DBOX, 8, 2.0, 100.0, -80.0, 0.0, 110.0, 80.0, 100.0, 3.0 ) );          // behind: 50
+        CHECK( op( GFXOP_M3DOBJECT, 1, 3.0, 255.0 ) );
+        CHECK( op( GFXOP_M3DOBJFLAGS, 2, 3.0, (double) M3D_OF_TRANS ) );
+        CHECK( op( GFXOP_M3DBOX, 8, 3.0, 60.0, -80.0, 0.0, 61.0, 80.0, 100.0, 4.0 ) );             // glass in front: 150 at an alpha of 64
+        fb = shot();
+        CHECK( PX( fb, 80, 50 ) == 75 );                                                         // 50 * 3/4 + 150 / 4
+        CHECK( op( GFXOP_M3DBOX, 8, 3.0, 60.0, -80.0, 0.0, 61.0, 80.0, 100.0, 2.0 ) );            // adds a half and half color (200 over 75)
+        fb = shot();
+        CHECK( PX( fb, 80, 50 ) != 75 && PX( fb, 80, 50 ) != 0 );
+        fresh();
+        tex_flat( 5, 8, 8, 151 );
+        CHECK( op( GFXOP_M3DOBJECT, 1, 2.0, 255.0 ) );
+        CHECK( op( GFXOP_M3DBOX, 8, 2.0, 100.0, -80.0, 0.0, 110.0, 80.0, 100.0, 3.0 ) );
+        CHECK( op( GFXOP_M3DOBJECT, 1, 3.0, 255.0 ) );
+        CHECK( op( GFXOP_M3DOBJFLAGS, 2, 3.0, (double) M3D_OF_TRANS ) );
+        CHECK( op( GFXOP_M3DBOX, 8, 3.0, 60.0, -80.0, 0.0, 61.0, 80.0, 100.0, 5.0 ) );             // alpha 0: nothing is drawn
+        fb = shot();
+        CHECK( PX( fb, 80, 50 ) == 50 );
+        for ( int i=0; i < 256; ++i ) { gp[i] = 0xFF000000U | (uint32_t)( i * 0x010101U ); }
+        m3d_colormap( M, gp );                                                                     // later tests expect the plain ramp
+    }
     // -- fog and lamps -------------------------------------------------------------------------------------------------------------
     fresh();
     CHECK( op( GFXOP_M3DOBJECT, 1, 2.0 ) );

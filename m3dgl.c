@@ -117,7 +117,9 @@ static const char* const fs_obj =
     "    if ( u_fog > 0.0 ) lv *= max( 1.0 - v_z / u_fog, 0.0 );\n"
     "    float b = clamp( lv, 0.0, 31.0 ) / 31.0;\n"
     "    float a = ( u_masked < 0.5 && u_alpha > 0.99 && i < 0.5 ) ? 0.0 : u_alpha;\n"   // (index 0 of a plain picture is see-through, as in software)
-    "    gl_FragColor = vec4( texture2D( u_pal, vec2( ( i + 0.5 ) / 256.0, 0.5 ) ).rgb * b, a );\n"
+    "    vec4 pc = texture2D( u_pal, vec2( ( i + 0.5 ) / 256.0, 0.5 ) );\n"
+    "    if ( u_alpha < 0.99 && pc.a < 0.99 ) a = pc.a;\n"    // (a translucent object: a color with an alpha of its own in the palette is mixed with that alpha, the others half and half)
+    "    gl_FragColor = vec4( pc.rgb * b, a );\n"
     "}\n";
 
 static const char* const vs_sky =
@@ -417,7 +419,7 @@ static void bind_texture( gl_t* g, const m3d_t* m, int key ) {
 static void upload_palette( gl_t* g, const m3d_t* m ) {
     uint8_t px[256 * 4];
     for ( int i=0; i < 256; ++i ) {
-        px[i*4] = (uint8_t)( m->pal[i] >> 16 ); px[i*4+1] = (uint8_t)( m->pal[i] >> 8 ); px[i*4+2] = (uint8_t) m->pal[i]; px[i*4+3] = 255;
+        px[i*4] = (uint8_t)( m->pal[i] >> 16 ); px[i*4+1] = (uint8_t)( m->pal[i] >> 8 ); px[i*4+2] = (uint8_t) m->pal[i]; px[i*4+3] = (uint8_t)( m->pal[i] >> 24 );
     }
     glapi_t* gl = &g->gl;
     gl->BindTexture( GL_TEXTURE_2D, g->paltex );
@@ -598,6 +600,9 @@ static void set_pass( gl_t* g, bool depthwrite, bool blend, float alpha ) {
 
 static void draw_things_gl( gl_t* g, m3d_t* m, const cam_t* c ) {
     int n = 0;
+    // (the upper part of the scratch arrays: the translucent objects collected before keep the lower part)
+    int* ord = m->order + M3D_MAXOBJECTS;
+    double* od = m->odist + M3D_MAXOBJECTS;
     for ( int i=0; i < M3D_MAXTHINGS; ++i ) {
         const thing_t* t = &m->things[i];
         if ( !t->on ) {
@@ -608,12 +613,12 @@ static void draw_things_gl( gl_t* g, m3d_t* m, const cam_t* c ) {
         if ( zv < NEARZ ) {
             continue;
         }
-        m->order[n] = i; m->odist[i] = zv; ++n;
+        ord[n] = i; od[i] = zv; ++n;
     }
-    sort_desc( m->order, m->odist, n );
+    sort_desc( ord, od, n );
     for ( int k=0; k < n; ++k ) {
-        const thing_t* t = &m->things[m->order[k]];
-        double zv = m->odist[m->order[k]];
+        const thing_t* t = &m->things[ord[k]];
+        double zv = od[ord[k]];
         v3_t pb = { t->x - c->eye.x, t->y - c->eye.y, t->z - c->eye.z };
         double xv = vdot( pb, c->r ), ybot = vdot( pb, c->up ), ytop = ybot + vdot( (v3_t){ 0, 0, t->h }, c->up );
         if ( t->w <= 0 || t->h <= 0 ) {
