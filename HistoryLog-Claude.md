@@ -13,6 +13,8 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+- **Deqq's House I at full resolution** (2026-11-14, owner's request): `demos/deqq.bas` line 42340 `W3K_VIEW(0,0,640,240,1)` (was scale 2 = 320 x 120 drawn doubled); the 3D area stays 640 x 240 because the bottom 5 text rows (60 px) of the 300 px layer belong to the message window. `deqqtest.sh` passes (headless); **not seen in the window**.
+
 
 ## Log
 
