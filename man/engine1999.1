@@ -168,7 +168,7 @@ Chosen as for any SDL2 program (for example
 to write the sound to a file).
 .TP
 .B ENGINE1999_AUDIOBUF
-The size of the audio device's buffer in samples (256 to 16384, default 1024; the device may grant another size).
+The size of the audio device's buffer in samples (256 to 16384, default 2048; the device may grant another size).
 A bigger buffer helps where the sound stutters or distorts because the system (a virtual machine, a busy computer) calls the
 audio callback late, at the price of a longer delay between a sound statement and the sound. The timing of the notes of
 .B PLAY
