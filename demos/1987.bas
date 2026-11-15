@@ -1346,12 +1346,12 @@
 11500 ' ------------------------------------------------------------------------------------------------ the game
 11510 PROC NEWGAME
 11520   JX=0:JY=-172:JH=90:JV=0:JZ=FN FLR(JX,JY)
-11530   BX=100:BY=-118:BH=0:BV=0:BS=0:BSA=0:BZ=FN FLR(BX,BY):WA=0:CA=0:ST=1
-11535   ' the bicycle leans against the south wall of the house, east of the porch, the handlebar turned towards the wall (bike state 1, see BIKEFALL)
+11530   BX=130:BY=-214:BH=0:BV=0:BS=0:BSA=0:BZ=FN FLR(BX,BY):WA=0:CA=0:ST=1
+11535   ' the bicycle leans against the south fence of the yard, on the outside, east of the gate, the handlebar turned towards the fence (bike state 1, see BIKEFALL)
 11536   BST=1:BLN=0.35:BLS=1:BSTR=50:BRT=0:BYW=0:BSD=0:BDR=-1:BVIS=-1:BLW=0:BLN0=0:BSTR0=0
 11540   M3D THINGPOS 0,JX,JY,JZ:M3D THINGPOS 1,BX,BY,BZ
 11550   CZI=0:CZM=0:CLP=0:NSL=0:MODE=0:MT=0:PH=0:KTS=0:KFA=0:KFD=0:KRA=0:KSH=0:KLT=0:EXH=0:ST=1:STD=0:TK=0:CYW=JH:CO=0:CP=0:KU=0:UL=0:BL=0:NEAR=0:MSGT=0:MB=0
-11560   CALL SAY("WALK WITH W A S D. THE BICYCLE LEANS AGAINST THE HOUSE EAST OF THE PORCH: STAND NEAR IT AND PRESS E.")
+11560   CALL SAY("WALK WITH W A S D. THE BICYCLE LEANS AGAINST THE FENCE OUTSIDE THE GATE, TO THE EAST: STAND NEAR IT AND PRESS E.")
 11570   MSGT=14
 11580 END PROC
 11590 PROC PLAYLOOP

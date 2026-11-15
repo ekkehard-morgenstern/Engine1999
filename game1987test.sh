@@ -222,6 +222,21 @@ f 1
 wait 2
 state
 rigs 0
+f 0
+run 0
+fa 0
+t 0
+wait 0.5
+goto 0 -172 270
+f 1
+wait 1.6
+state
+f 0
+goto 20 -240 0
+f 1
+wait 1.2
+state
+f 0
 drones
 wait 30
 drones
@@ -303,9 +318,9 @@ expect "bicycle: the sprint cost stamina" "$(val state 31 st)" 0 99
 expect "open ground: no wall at (-2564, 644)" "$(val state 32 jx)" -2480 -2380
 expect "edge: stopped at the line" "$(val state 33 jx)" 3419 3421
 expect "edge: stopped dead" "$(val state 33 jv)" 0 0
-# 11g. a bicycle cannot stand by itself: at the start it leans against the house (bst 1) and E picks it up (riding, upright); a riderless one rolls on for 3 s and then falls over
+# 11g. a bicycle cannot stand by itself: at the start it leans against the yard's fence (bst 1) and E picks it up (riding, upright); a riderless one rolls on for 3 s and then falls over
 #      (bst 3), slides on its side and turns (bst 4) and stops (bst 5, lying); a lying one is picked up like before; E near a falling or sliding one does nothing
-expect "start: the bicycle leans against the house" "$(val state 1 bst)" 1 1
+expect "start: the bicycle leans against the fence" "$(val state 1 bst)" 1 1
 expect "riderless, standing still: upright after 2 s" "$(val state 34 bst)" 0 0
 expect "riderless, standing still: lying after 4.5 s" "$(val state 35 bst)" 5 5
 expect "lying: picked up, riding" "$(val state 36 mode)" 1 1
@@ -326,6 +341,9 @@ expect "cache: standing still 5 s (300 frames): few body builds" "$(awk -v a="$(
 expect "cache: standing still 5 s (300 frames): few head builds" "$(awk -v a="$(val state 41 nh)" -v b="$(val state 42 nh)" 'BEGIN { print b - a }')" 0 8
 expect "cache: walking 2 s (120 frames): the body is built about every frame" "$(awk -v a="$(val state 42 nj)" -v b="$(val state 43 nj)" 'BEGIN { print b - a }')" 100 125
 expect "cache: the bicycle at rest keeps its spoke meshes" "$(awk -v a="$(val state 41 nb)" -v b="$(val state 42 nb)" 'BEGIN { print b - a }')" 0 3
+# 11j. the bicycle leans against the outside of the yard's south fence, east of the gate (130, -214): walking out of the gate and along the fence takes John within reach of it
+expect "gate: John walked out of the yard through the gate" "$(val state 44 jy)" -300 -205
+expect "fence: John at the bicycle's place within reach (70 units)" "$(awk -v x="$(val state 45 jx)" -v y="$(val state 45 jy)" 'BEGIN { print sqrt((x-130)^2+(y+214)^2) }')" 0 69
 # 12. the camera stays above the ground, rays: the house wall is an object, open ground is not hit
 expect "camera: z above the ground" "$(val cam 1 z)" 20 400
 expect "ray at the house" "$(val ray 1 obj)" 300 300
