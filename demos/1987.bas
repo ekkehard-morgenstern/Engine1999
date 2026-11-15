@@ -690,7 +690,7 @@
 6780 ' builds John into object 520: the body is in coordinates of the object (x forward, y left, z up; the origin on the ground below the hips when standing)
 6790 ' pose 0: standing / walking (PH = the walk phase, AM = the stride 0 .. 1), pose 1: riding (in the coordinates of the bicycle; CA = the cranks, BS = the steering)
 6800 PROC BUILDJOHN(POSE,PH,AM)
-6810   LOCAL Q,SG,FX,FZ,HX,HZ,PX,PZ,A,HY,GX,GY,LN,HIPX,HIPZ,SHX,SHZ,GXL,GYL,HH
+6810   LOCAL Q,SG,FX,FZ,HX,HZ,PX,PZ,A,HY,GX,GY,LN,HIPX,HIPZ,SHX,SHZ,GXL,GYL,HH,SWY,STY
 6820   M3D OBJECT 520,28,235
 6830   CC1=FN CC(5,6):CC2=FN CC(8,5):CC3=FN CC(14,11):CC4=FN CC(0,12):CC5=FN CC(0,14)
 6840   IF POSE=0 THEN
@@ -706,25 +706,28 @@
 6940     HIPZ=60
 6950     FOR Q=0 TO 1
 6960       IF GPS(Q)<>0 THEN
-6970         HH=2.8+SQR(MAX(1,27.6*27.6-GPX(Q)*GPX(Q)))
+6970         HH=2.8+SQR(MAX(1,27.6*27.6-0.7744*GPX(Q)*GPX(Q)))
 6980         IF HH<HIPZ THEN HIPZ=HH
 6990       END IF
 7000     NEXT Q
 7010     HIPX=0:SHX=0:SHZ=HIPZ+16
+7012     ' the sway: the pelvis moves sideways over the leg that carries the weight (that leg is on the ground from phase 0 to 0.6, its middle at 0.3), the upper body follows
+7013     ' with a little over half of it, and each hip goes forward with its leg (the pelvis turns: 0.12 of the foot's distance)
+7014     SWY=AM*1.6*SIN(PH-0.314):STY=SWY*0.55
 7015     ' the pelvis: a trouser colored block wider than the torso's waist, under it; the legs join it at the sides
-7016     CALL BX(520,-4.8,-8.2,HIPZ-4.5,4.8,8.2,HIPZ+3.5,CC2)
-7020     CALL BX(520,-4,-7,HIPZ+0.5,4,7,SHZ+0.5,CC1)
-7030     CALL BX(520,-4.2,-4,SHZ+2,4.2,4,SHZ+11,CC3):CALL BX(520,-4.8,-4.6,SHZ+7,3.6,4.6,SHZ+12.5,CC4):CALL BX(520,4.2,-3.6,SHZ+5.4,5.1,3.6,SHZ+7,FN CC(0,1))
+7016     CALL BX(520,-4.8,-8.2+SWY,HIPZ-4.5,4.8,8.2+SWY,HIPZ+3.5,CC2)
+7020     CALL BX(520,-4,-7+STY,HIPZ+0.5,4,7+STY,SHZ+0.5,CC1)
+7030     CALL BX(520,-4.2,-4+STY,SHZ+2,4.2,4+STY,SHZ+11,CC3):CALL BX(520,-4.8,-4.6+STY,SHZ+7,3.6,4.6+STY,SHZ+12.5,CC4):CALL BX(520,4.2,-3.6+STY,SHZ+5.4,5.1,3.6+STY,SHZ+7,FN CC(0,1))
 7040     FOR Q=0 TO 1
 7050       SG=1:IF Q=1 THEN SG=-1
 7060       FX=GPX(Q):FZ=GPZ(Q)
 7070       PLX0=1:PLY0=0:PLZ0=0.1:LH=2.6:TBT=FN CC(8,5):TBU=TBT
-7080       CALL LIMB(520,0,SG*4,HIPZ,FX,SG*4,FZ,14)
+7080       CALL LIMB(520,0.12*FX,SG*4+SWY,HIPZ,FX,SG*4,FZ,14)
 7090       CALL BX(520,FX-3.5,SG*4-3,FZ-2.8,FX+6,SG*4+3,FZ+1.5,FN CC(0,13))
 7100       HX=-0.7*FX
 7110       PLX0=-1:PLY0=SG*0.35:PLZ0=-0.1:LH=2.3:TBT=CC1:TBU=CC3
-7120       CALL LIMB(520,0,SG*8.5,SHZ-1.2,HX,SG*9.5,19+2.8,11)
-7130       CALL BX(520,HX-1.8,SG*9.5-1.8,FZ+16,HX+1.8,SG*9.5+1.8,FZ+20,CC3)
+7120       CALL LIMB(520,0,SG*8.5+STY,SHZ-1.2,HX,SG*9.5+STY,19+2.8,11)
+7130       CALL BX(520,HX-1.8,SG*9.5-1.8+STY,FZ+16,HX+1.8,SG*9.5+1.8+STY,FZ+20,CC3)
 7140     NEXT Q
 7150   ELSE
 7160     HIPX=-9.5:HIPZ=32.4:SHX=-3:SHZ=46.4
