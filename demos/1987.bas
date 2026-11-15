@@ -7,7 +7,7 @@
 30 ' a lean, gray-haired former teacher of physics and mathematics who likes comfortable clothes. He lives alone in a small wooden house in the country, next to a wheat field
 40 ' that is ripe for the harvest and has nobody to harvest it. Black, egg-shaped drones hover over the land and shoot red beams at whatever looks suspicious (they are not in
 50 ' this first step). John has his bicycle, and he loves it.
-60 ' What there is: rolling country with grass, dirt roads, groves of trees, the wooden house (you can walk in, with the bicycle too), the wheat field with a scarecrow, John
+60 ' What there is: rolling country with grass, sand roads, groves of trees, the wooden house (you can walk in, with the bicycle too), the wheat field with a scarecrow, John
 70 ' (a skeleton-animated figure: walk cycle and pedalling) and the bicycle (it rolls on, pedals turn, wheels spin, handlebars steer).
 80 ' Keys: W / UP forward (on the bicycle: pedal), S / DOWN back (on the bicycle: brake, then reverse slowly), A D / LEFT RIGHT turn (on the bicycle: steer), SHIFT runs (on the
 90 ' bicycle: sprint, it tires you), SPACE brakes the bicycle, E or RETURN gets on and off the bicycle (stand close to it), B rings the bell, Z X or the right mouse button + drag
@@ -24,7 +24,7 @@
 200 BREAK OFF
 210 ON ERROR GOTO FAILED
 220 HL=0:IF ENV$("G1987_HEADLESS")<>"" THEN HL=-1
-230 DIM RPX(300),RPY(300),CPX(40),CPY(40),SMX(120),SMY(120),PLX(40),PLY(40),TRX(520),TRY(520),LRR(8),LRZ(8),LRV(8),W$(8),GPX(2),GPZ(2),GPS(2),DWX(40),DWY(40),DRX(5),DRY(5),DRZ(5),DRH(5),DRT(5),DRA(5)
+230 DIM RPX(300),RPY(300),RPF(300),CPX(40),CPY(40),SMX(120),SMY(120),PLX(40),PLY(40),TRX(520),TRY(520),LRR(8),LRZ(8),LRV(8),W$(8),GPX(2),GPZ(2),GPS(2),DWX(40),DWY(40),DRX(5),DRY(5),DRZ(5),DRH(5),DRT(5),DRA(5)
 240 GOTO MAIN
 250 ' ------------------------------------------------------------------------------------------------ small helpers
 260 FUNC RN(M)
@@ -59,15 +59,23 @@
 550 FUNC FLR(X,Y)
 560   RETURN M3D("FLOORAT",X,Y,FN HT(X,Y)+40)
 570 END FUNC
-580 ' the ground under a point: 0 grass, 1 dirt road, 2 wood (the porch and the floor of the house), 3 wheat
+580 ' the ground under a point: 0 grass, 1 sand road, 2 wood (the porch and the floor of the house), 3 wheat
 590 FUNC SURF(X,Y,Z)
-600   LOCAL I,DX,DY
-610   IF Z-FN HT(X,Y)>2.5 THEN RETURN 2
+600   LOCAL I,DX,DY,UX,UY,TT,E
+605   ' the roads lie 3 .. 5 units above the ground (the walker stands on them), the porch 7, the floor of the house 5 (and no road reaches it)
+610   E=Z-FN HT(X,Y):IF E>6.5 THEN RETURN 2
 620   IF ABS(X-1100)<700 AND ABS(Y-650)<500 THEN RETURN 3
 630   FOR I=0 TO RPN-1
-640     DX=RPX(I)-X:DY=RPY(I)-Y
-650     IF DX*DX+DY*DY<2700 THEN RETURN 1
+640     IF RPF(I) THEN
+641       UX=RPX(I)-RPX(I-1):UY=RPY(I)-RPY(I-1)
+642       TT=((X-RPX(I-1))*UX+(Y-RPY(I-1))*UY)/(UX*UX+UY*UY)
+643       IF TT<0 THEN TT=0
+644       IF TT>1 THEN TT=1
+645       DX=RPX(I-1)+TT*UX-X:DY=RPY(I-1)+TT*UY-Y
+646       IF DX*DX+DY*DY<2025 THEN RETURN 1
+650     END IF
 660   NEXT I
+665   IF E>2.5 THEN RETURN 2
 670   RETURN 0
 680 END FUNC
 690 ' which picture covers the ground cell around X,Y: 1 grass, 2 dry grass, 3 lush grass, 20 the soil of the wheat field
@@ -95,25 +103,25 @@
 910   NEXT I
 920   CALL W3K_GRAB(N,64,64)
 930 END PROC
-940 ' the dirt road: the left and right edge are see-through (index 0), two wheel ruts, a ridge of grass between them
+940 ' the sand road (pale sand, hue 13): the left and right edge are see-through (index 0), two wheel ruts, a ridge of grass between them
 950 PROC MKROAD
 960   LOCAL I,Y,L,R,X
 970   GFX CLEAR 0
 980   FOR Y=0 TO 63
 990     L=3+FN RN(4):R=60-FN RN(4)
-1000     GFX LINE L,Y,R,Y,FN CC(13,8+FN RN(3))
-1010     GFX LINE 15,Y,22,Y,FN CC(13,5+FN RN(3))
-1020     GFX LINE 41,Y,48,Y,FN CC(13,5+FN RN(3))
+1000     GFX LINE L,Y,R,Y,FN CC(13,11+FN RN(3))
+1010     GFX LINE 15,Y,22,Y,FN CC(13,8+FN RN(3))
+1020     GFX LINE 41,Y,48,Y,FN CC(13,8+FN RN(3))
 1030   NEXT Y
 1040   FOR I=1 TO 16
 1050     X=27+FN RN(10):Y=FN RN(64)
 1060     GFX LINE X,Y,X+1,Y-2-FN RN(3),FN CC(4,5+FN RN(4))
 1070   NEXT I
 1080   FOR I=1 TO 70
-1090     GFX PSET 5+FN RN(54),FN RN(64),FN CC(13,9+FN RN(5))
+1090     GFX PSET 5+FN RN(54),FN RN(64),FN CC(13,12+FN RN(4))
 1100   NEXT I
 1110   FOR I=1 TO 40
-1120     GFX PSET 5+FN RN(54),FN RN(64),FN CC(12,2+FN RN(3))
+1120     GFX PSET 5+FN RN(54),FN RN(64),FN CC(13,6+FN RN(3))
 1130   NEXT I
 1140   CALL W3K_GRAB(304,64,64)
 1150 END PROC
@@ -338,7 +346,7 @@
 3340 DATA 9, -40,150, -300,500, -350,1000, -200,1600, 300,2200, 1000,2600, 1800,2500, 2600,2800, 3600,3000
 3350 DATA 5, 1500,-950, 2300,-300, 2500,500, 2200,1500, 1800,2480
 3360 DATA 0
-3370 ' dirt roads: Catmull-Rom curves through the control points, a strip of quads laid 3 units above the ground (see-through edges)
+3370 ' sand roads: Catmull-Rom curves through the control points, a strip of quads laid 3 units above the ground (see-through edges)
 3380 PROC BUILDROADS
 3390   LOCAL R,N,I,K,T,T2,T3,A,B,NS,O,X,Y,DX,DY,L,Z,D,V,X0,Y0
 3400   RPN=0:NPL=0
@@ -374,7 +382,7 @@
 3700       X0=SMX(K):Y0=SMY(K)
 3710       M3D VERTEX O,X0+DY*55,Y0-DX*55,FN HT(X0+DY*55,Y0-DX*55)+3+R,64,D*0.58
 3720       M3D VERTEX O,X0-DY*55,Y0+DX*55,FN HT(X0-DY*55,Y0+DX*55)+3+R,0,D*0.58
-3730       IF RPN<300 THEN RPX(RPN)=X0:RPY(RPN)=Y0:RPN=RPN+1
+3730       IF RPN<300 THEN RPX(RPN)=X0:RPY(RPN)=Y0:RPF(RPN)=(K>0):RPN=RPN+1
 3740       IF R=0 AND K MOD 5=2 AND NPL<39 THEN PLX(NPL)=X0-DY*92:PLY(NPL)=Y0+DX*92:NPL=NPL+1
 3750     NEXT K
 3760     FOR K=0 TO NS-2
@@ -854,8 +862,8 @@
 8500 END PROC
 8510 ' ------------------------------------------------------------------------------------------------ sound
 8520 ' The drones hum on the music channels 1 .. 4 (a held low note each, slightly different pitches, so they beat against each other; VOLUME follows the distance to the camera,
-8530 ' PITCH wobbles a little), the tyres' rolling noise is a held noise on channel 5 (louder with speed, on a dirt road, in the wheat); footsteps are effects, one at each heel strike
-8540 ' of the walk cycle, by the ground (SFX 2 grass, 5 dirt, 6 wood, 7 wheat); the freewheel ticks (SFX 3), the bell (SFX 1) and a thud (SFX 4) are as before.
+8530 ' PITCH wobbles a little), the tyres' rolling noise is a held noise on channel 5 (louder with speed, on a sand road, in the wheat); footsteps are effects, one at each heel strike
+8540 ' of the walk cycle, by the ground (SFX 2 grass, 5 sand, 6 wood, 7 wheat); the freewheel ticks (SFX 3), the bell (SFX 1) and a thud (SFX 4) are as before.
 8550 PROC SOUNDSTART
 8560   LOCAL K
 8570   INSTRUMENT 41,"NAME DRONEHUM; OSC SINE 0.7 1; OSC SAW 0.6 2.003 5; OSC SINE 0.45 3 -4; FILTER 6 0.2; ENV 0.8 0.1 1 0.5; GAIN 0.8"
