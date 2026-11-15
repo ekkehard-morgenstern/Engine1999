@@ -139,6 +139,38 @@ wait 0.3
 state
 wait 2
 state
+f 0
+fa 0.05
+run 0.5
+wait 2
+state
+fa 0
+f 1
+t 0.4
+run 1
+wait 11.5
+state
+f 0
+t 0
+run 0
+wait 4
+state
+f 1
+run 1
+wait 1.5
+state
+f 0
+run 0
+bike 700 400 0
+goto 690 400 0
+use
+wait 0.6
+fa 0.5
+wait 5
+state
+run 0.5
+wait 6
+state
 drones
 wait 30
 drones
@@ -204,6 +236,17 @@ expect "key: target speed starts low and rises" "$(val state 22 jv)" 20 45
 expect "key: top speed after holding" "$(val state 23 jv)" 154 156
 expect "key: released, slowing down" "$(val state 24 jv)" 85 125
 expect "key: released, standing" "$(val state 25 jv)" 0 0
+# 11e. the trigger is analog: pulled half way it sets the target speed 22 + 133 * 0.5 = 88 on foot (with the stick barely deflected); a sprint on foot
+#      tires John (the drain is 0.1 a second at the top speed), used up he walks slowly (22), after a rest (0.12 a second) he runs again; on the bicycle the stick's
+#      half deflection is half the pedalling speed (140 * 0.5 = 70) and the trigger half way a target between pedalling and the top speed (140 + 120 * 0.5 = 200)
+expect "trigger: half pulled sets the target speed" "$(val state 26 jv)" 80 95
+expect "exhausted: only the slow walk" "$(val state 27 jv)" 15 32
+expect "exhausted: stamina below the recovery level" "$(val state 27 st)" 0 24
+expect "rested: stamina is back" "$(val state 28 st)" 25 100
+expect "rested: running again" "$(val state 29 jv)" 100 156
+expect "bicycle: half stick, half pedalling speed" "$(val state 30 bv)" 55 75
+expect "bicycle: half trigger, half way to the top speed" "$(val state 31 bv)" 180 210
+expect "bicycle: the sprint cost stamina" "$(val state 31 st)" 0 99
 # 12. the camera stays above the ground, rays: the house wall is an object, open ground is not hit
 expect "camera: z above the ground" "$(val cam 1 z)" 20 400
 expect "ray at the house" "$(val ray 1 obj)" 300 300

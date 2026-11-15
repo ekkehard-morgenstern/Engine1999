@@ -27,7 +27,7 @@ The program is the demo \fI1987.bas\fR of Engine1999, made into an executable wi
 on foot: walk forward and back, turn. On the bicycle: pedal, brake (and then reverse), steer.
 .TP
 .B "SHIFT"
-on foot: run at once (otherwise a held walking key makes John faster and faster up to a run; letting go slows him down to a stop). On the bicycle: sprint (it uses up the stamina, which comes back when you ride normally).
+on foot: run at once (otherwise a held walking key makes John faster and faster up to a run; letting go slows him down to a stop). On the bicycle: sprint. Both use up the stamina (running only above a fast walk), which comes back when you walk slowly, ride normally or stand; when it is used up John only walks slowly and the bicycle only pedals normally until a quarter of it is back.
 .TP
 .B "SPACE"
 brake (on the bicycle).
@@ -50,7 +50,7 @@ opens the 3D settings: invert the X axis or the Y axis of the right stick, gamma
 .B "P, Q or ESC"
 pause, quit.
 .PP
-A game controller works as well: the left stick walks / pedals and turns / steers (on foot the deflection sets the speed: just past the dead zone a slow walk, fully pushed a run, with longer steps the faster he goes), the left trigger runs / sprints, A brakes, B rings the bell, X gets on and off, Y opens the settings, the right stick turns the camera, START pauses, BACK quits.
+A game controller works as well: the left stick walks / pedals and turns / steers (on foot the deflection sets the speed: just past the dead zone a slow walk, fully pushed a run, with longer steps the faster he goes), the left trigger is analog: pulled a part of the way it sets a target speed between a slow walk and a run (on the bicycle between plain pedalling and the top speed, 30 km/h), pulled fully it runs / sprints; on the bicycle the stick's deflection sets how fast to pedal; A brakes, B rings the bell, X gets on and off, Y opens the settings, the right stick turns the camera, START pauses, BACK quits.
 There are sounds for the walk (a footstep at each step, different on grass, on a sand road, on wood and in the wheat), for the bicycle (the rolling noise of the tyres, louder with speed and on sand or in the wheat, the ticking of the freewheel when you roll without pedalling, the bell and a thud when you crash).
 .SH FILES
 .I ~/.local/share/1987/3dprefs.cfg
