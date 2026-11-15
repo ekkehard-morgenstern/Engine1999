@@ -40,6 +40,7 @@ f 1
 wait 2.5
 state
 f 0
+bike 40 -176 270
 goto 20 -176 270
 use
 wait 1
@@ -184,6 +185,29 @@ state
 goto 3300 1500 0
 wait 4
 state
+bike 600 -500 0
+goto 560 -540 0
+wait 2
+state
+wait 2.5
+state
+goto 590 -500 0
+use
+wait 1
+state
+f 1
+run 1
+wait 4
+state
+f 0
+run 0
+use
+wait 1.5
+state
+wait 2.5
+state
+wait 5
+state
 drones
 wait 30
 drones
@@ -265,6 +289,20 @@ expect "bicycle: the sprint cost stamina" "$(val state 31 st)" 0 99
 expect "open ground: no wall at (-2564, 644)" "$(val state 32 jx)" -2480 -2380
 expect "edge: stopped at the line" "$(val state 33 jx)" 3419 3421
 expect "edge: stopped dead" "$(val state 33 jv)" 0 0
+# 11g. a bicycle cannot stand by itself: at the start it leans against the house (bst 1) and E picks it up (riding, upright); a riderless one rolls on for 3 s and then falls over
+#      (bst 3), slides on its side and turns (bst 4) and stops (bst 5, lying); a lying one is picked up like before; E near a falling or sliding one does nothing
+expect "start: the bicycle leans against the house" "$(val state 1 bst)" 1 1
+expect "riderless, standing still: upright after 2 s" "$(val state 34 bst)" 0 0
+expect "riderless, standing still: lying after 4.5 s" "$(val state 35 bst)" 5 5
+expect "lying: picked up, riding" "$(val state 36 mode)" 1 1
+expect "lying: picked up, upright" "$(val state 36 bst)" 0 0
+expect "riding fast" "$(val state 37 bv)" 200 261
+expect "riderless, moving: still rolling upright after 1.5 s" "$(val state 38 bst)" 0 0
+expect "riderless, moving: still moving after 1.5 s" "$(val state 38 bv)" 120 261
+expect "riderless, moving: fell over (falling or sliding) after 4 s" "$(val state 39 bst)" 3 4
+expect "riderless, moving: lying after 9 s" "$(val state 40 bst)" 5 5
+expect "riderless, moving: stopped" "$(val state 40 bv)" 0 0
+expect "riderless, moving: it turned while sliding" "$(awk -v a="$(val state 38 bh)" -v b="$(val state 40 bh)" 'BEGIN { d = b - a; if (d < 0) d = -d; print d }')" 20 1000
 # 12. the camera stays above the ground, rays: the house wall is an object, open ground is not hit
 expect "camera: z above the ground" "$(val cam 1 z)" 20 400
 expect "ray at the house" "$(val ray 1 obj)" 300 300

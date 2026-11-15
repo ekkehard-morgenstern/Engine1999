@@ -236,7 +236,7 @@
 2200 END PROC
 2210 ' ------------------------------------------------------------------------------------------------ mesh helpers
 2220 PROC BX(O,X1,Y1,Z1,X2,Y2,Z2,TX)
-2230   M3D BOX O,X1,Y1,Z1,X2,Y2,Z2,TX
+2230   IF XON THEN CALL BXX(O,X1,Y1,Z1,X2,Y2,Z2,TX) ELSE M3D BOX O,X1,Y1,Z1,X2,Y2,Z2,TX
 2240 END PROC
 2250 ' a lathe solid with 8 sides from the rings LRR (radius), LRZ (height), LRV (picture row) 0 .. NR-1, scaled by SC
 2260 PROC LATHE(O,NR,TX,SC)
@@ -258,7 +258,7 @@
 2420 END PROC
 2430 ' a square rod between two points, half width H, the picture (or flat color) TBT
 2440 PROC TUBE(O,X1,Y1,Z1,X2,Y2,Z2,H)
-2450   LOCAL AX,AY,AZ,L,PX,PY,PZ,QX,QY,QZ,B,I,SA,SB
+2450   LOCAL AX,AY,AZ,L,PX,PY,PZ,QX,QY,QZ,B,I,SA,SB,VX,VY,VZ
 2460   AX=X2-X1:AY=Y2-Y1:AZ=Z2-Z1
 2470   L=SQR(AX*AX+AY*AY+AZ*AZ):IF L<0.01 THEN EXIT PROC
 2480   AX=AX/L:AY=AY/L:AZ=AZ/L
@@ -275,10 +275,11 @@
 2590     SA=1:IF (I AND 1) THEN SA=-1
 2600     SB=1:IF (I AND 2) THEN SB=-1
 2610     IF I<4 THEN
-2620       M3D VERTEX O,X1+H*SA*PX+H*SB*QX,Y1+H*SA*PY+H*SB*QY,Z1+H*SA*PZ+H*SB*QZ
+2620       VX=X1+H*SA*PX+H*SB*QX:VY=Y1+H*SA*PY+H*SB*QY:VZ=Z1+H*SA*PZ+H*SB*QZ
 2630     ELSE
-2640       M3D VERTEX O,X2+H*SA*PX+H*SB*QX,Y2+H*SA*PY+H*SB*QY,Z2+H*SA*PZ+H*SB*QZ
+2640       VX=X2+H*SA*PX+H*SB*QX:VY=Y2+H*SA*PY+H*SB*QY:VZ=Z2+H*SA*PZ+H*SB*QZ
 2650     END IF
+2655     IF XON THEN CALL PXV(O,VX,VY,VZ) ELSE M3D VERTEX O,VX,VY,VZ
 2660   NEXT I
 2670   M3D QUAD O,B,B+1,B+5,B+4,TBT
 2680   M3D QUAD O,B+1,B+3,B+7,B+5,TBT
@@ -308,6 +309,10 @@
 2920     CALL TUBE(O,CX+R*COS(A1),CY,CZ+R*SIN(A1),CX+R*COS(A2),CY,CZ+R*SIN(A2),1.4)
 2930   NEXT I
 2940 END PROC
+2945 ' a vertex of a spoke ribbon (in the plane y = 0), through the tilt while XON is set
+2946 PROC SPV(O,X,Z)
+2947   IF XON THEN CALL PXV(O,X,0,Z) ELSE M3D VERTEX O,X,0,Z
+2948 END PROC
 2950 ' spokes: three ribbons through the hub, turned by ANG (radians); they are rebuilt each frame, so the wheel seems to turn
 2960 PROC SPOKES(O,CX,CZ,ANG)
 2970   LOCAL I,A,B,DX,DZ,TX,TZ,R
@@ -316,8 +321,8 @@
 3000     A=ANG+I*PI/3
 3010     DX=COS(A):DZ=SIN(A):TX=-DZ*0.7:TZ=DX*0.7
 3020     B=M3D("VERTS",O)
-3030     M3D VERTEX O,CX-R*DX-TX,0,CZ-R*DZ-TZ:M3D VERTEX O,CX+R*DX-TX,0,CZ+R*DZ-TZ
-3040     M3D VERTEX O,CX+R*DX+TX,0,CZ+R*DZ+TZ:M3D VERTEX O,CX-R*DX+TX,0,CZ-R*DZ+TZ
+3030     CALL SPV(O,CX-R*DX-TX,CZ-R*DZ-TZ):CALL SPV(O,CX+R*DX-TX,CZ+R*DZ-TZ)
+3040     CALL SPV(O,CX+R*DX+TX,CZ+R*DZ+TZ):CALL SPV(O,CX-R*DX+TX,CZ-R*DZ+TZ)
 3050     M3D QUAD O,B,B+1,B+2,B+3,TBT
 3060   NEXT I
 3070   CALL BX(O,CX-1.2,-1.6,CZ-1.2,CX+1.2,1.6,CZ+1.2,FN CC(0,11))
@@ -608,66 +613,169 @@
 5920   NEXT BJ
 5930 END PROC
 5940 ' ------------------------------------------------------------------------------------------------ the bicycle
-5950 PROC BUILDBIKE
-5960   ' the frame: x forward, y left, z up, the origin on the ground halfway between the axles
-5970   M3D OBJECT 510,28,235
-5980   TBT=FN CC(1,9)
-5990   CALL TUBE(510,-2,0,9,-8,0,25,1.3)
-6000   CALL TUBE(510,-8,0,24,12,0,26,1.2)
-6010   CALL TUBE(510,-2,0,9,12,0,22,1.3)
-6020   CALL TUBE(510,12,0,21,12,0,29,1.6)
-6030   CALL TUBE(510,-2,0,9,-17,0,11,0.8)
-6040   CALL TUBE(510,-8,0,24,-17,0,11,0.8)
-6050   TBT=FN CC(0,6)
-6060   CALL TUBE(510,-8,0,25,-9,0,30,0.9)
-6070   CALL BX(510,-14,-2.6,29.4,-4,2.6,31,FN CC(12,4))
-6080   CALL BX(510,-18,-1,0,-16,1,2,FN CC(0,3))
-6090   TBT=FN CC(0,2)
-6100   CALL RING(510,-17,0,11,10.5)
-6110   CALL BX(510,-18.5,-3,15,-15.5,3,16.5,FN CC(0,4))
-6120   ' the front: fork, stem, handlebar and wheel, turning about the steering axis (origin: on the ground below it, 12 in front of the frame's origin)
-6130   M3D OBJECT 511,28,235
-6140   TBT=FN CC(0,9)
-6150   CALL TUBE(511,0,0,26,6,0,11,0.8)
-6160   CALL TUBE(511,0,0,26,-1,0,31,0.9)
-6170   CALL TUBE(511,-2,-10,31,-2,10,31,0.8)
-6180   TBT=FN CC(0,2)
-6190   CALL RING(511,6,0,11,10.5)
-6200   CALL BX(511,-3.5,-12,29.8,-0.5,-8,32.2,FN CC(0,1)):CALL BX(511,-3.5,8,29.8,-0.5,12,32.2,FN CC(0,1))
-6210   CALL BX(511,3,-1,36,5,1,38,FN CC(3,14))
-6220   M3D OBJECT 512,28,235
-6230   M3D OBJECT 513,28,235
-6240   M3D OBJECT 530,30,235:CALL BX(530,-9,-8,0,9,8,0.3,FN CC(0,0))
-6250   M3D OBJECT 531,30,235:CALL BX(531,-27,-6,0,27,6,0.3,FN CC(0,0))
-6260   M3D OBJPOS 510,0,0,0,0:M3D OBJPOS 511,12,0,0,0:M3D OBJPOS 512,0,0,0,0:M3D OBJPOS 513,12,0,0,0
-6270 END PROC
-6280 ' places the bicycle's objects at its position and heading; the wheels' spokes and the pedals are built again each frame
-6290 PROC PLACEBIKE
-6300   LOCAL C,S,FX,FY,A,PX,PZ,Q
-6310   C=COS(BH*PI/180):S=SIN(BH*PI/180)
-6320   FX=BX+12*C:FY=BY+12*S
-6330   M3D OBJPOS 510,BX,BY,BZ,BH
-6340   M3D OBJECT 512,28,235
-6350   TBT=FN CC(0,11)
-6360   CALL SPOKES(512,-17,11,-WA)
-6370   TBT=FN CC(0,10)
-6380   FOR Q=0 TO 1
-6390     A=-(CA+Q*PI)
-6400     PX=-2+5.5*COS(A):PZ=9+5.5*SIN(A)
-6410     IF Q=0 THEN
-6420       CALL TUBE(512,-2,3.5,9,PX,3.5,PZ,0.7)
-6430       CALL BX(512,PX-3,3.6,PZ-0.7,PX+3,7.6,PZ+0.7,FN CC(0,3))
-6440     ELSE
-6450       CALL TUBE(512,-2,-3.5,9,PX,-3.5,PZ,0.7)
-6460       CALL BX(512,PX-3,-7.6,PZ-0.7,PX+3,-3.6,PZ+0.7,FN CC(0,3))
-6470     END IF
-6480   NEXT Q
-6490   M3D OBJECT 513,28,235
-6500   CALL SPOKES(513,6,11,-WA)
-6510   M3D OBJPOS 512,BX,BY,BZ,BH
-6520   M3D OBJPOS 511,FX,FY,BZ,BH+BSA
-6530   M3D OBJPOS 513,FX,FY,BZ,BH+BSA
-6540 END PROC
+5950 ' the bicycle: the frame (x forward, y left, z up, the origin on the ground halfway between the axles) and the front (fork, stem, handlebar and wheel, turning about the
+5951 ' steering axis; origin: on the ground below it, 12 in front of the frame's origin) are procedures of an object O, so that they can be built upright (objects 510 and 511) and
+5952 ' tilted by the transform of BUILDLEAN into one object (514) while the bicycle leans against a wall, falls, slides or lies
+5953 PROC BIKEFRAME(O)
+5960   TBT=FN CC(1,9)
+5962   CALL TUBE(O,-2,0,9,-8,0,25,1.3)
+5964   CALL TUBE(O,-8,0,24,12,0,26,1.2)
+5966   CALL TUBE(O,-2,0,9,12,0,22,1.3)
+5968   CALL TUBE(O,12,0,21,12,0,29,1.6)
+5970   CALL TUBE(O,-2,0,9,-17,0,11,0.8)
+5972   CALL TUBE(O,-8,0,24,-17,0,11,0.8)
+5974   TBT=FN CC(0,6)
+5976   CALL TUBE(O,-8,0,25,-9,0,30,0.9)
+5978   CALL BX(O,-14,-2.6,29.4,-4,2.6,31,FN CC(12,4))
+5980   CALL BX(O,-18,-1,0,-16,1,2,FN CC(0,3))
+5982   TBT=FN CC(0,2)
+5984   CALL RING(O,-17,0,11,10.5)
+5986   CALL BX(O,-18.5,-3,15,-15.5,3,16.5,FN CC(0,4))
+5988 END PROC
+5990 PROC BIKEFRONT(O)
+5992   TBT=FN CC(0,9)
+5994   CALL TUBE(O,0,0,26,6,0,11,0.8)
+5996   CALL TUBE(O,0,0,26,-1,0,31,0.9)
+5998   CALL TUBE(O,-2,-10,31,-2,10,31,0.8)
+6000   TBT=FN CC(0,2)
+6002   CALL RING(O,6,0,11,10.5)
+6004   CALL BX(O,-3.5,-12,29.8,-0.5,-8,32.2,FN CC(0,1)):CALL BX(O,-3.5,8,29.8,-0.5,12,32.2,FN CC(0,1))
+6006   CALL BX(O,3,-1,36,5,1,38,FN CC(3,14))
+6008 END PROC
+6010 PROC BUILDBIKE
+6013   M3D OBJECT 510,28,235:CALL BIKEFRAME(510)
+6016   M3D OBJECT 511,28,235:CALL BIKEFRONT(511)
+6019   M3D OBJECT 512,28,235
+6022   M3D OBJECT 513,28,235
+6025   M3D OBJECT 514,28,235:M3D OBJSHOW 514,0
+6028   M3D OBJECT 530,30,235:CALL BX(530,-9,-8,0,9,8,0.3,FN CC(0,0))
+6031   M3D OBJECT 531,30,235:CALL BX(531,-27,-6,0,27,6,0.3,FN CC(0,0))
+6034   M3D OBJPOS 510,0,0,0,0:M3D OBJPOS 511,12,0,0,0:M3D OBJPOS 512,0,0,0,0:M3D OBJPOS 513,12,0,0,0
+6037 END PROC
+6040 ' the parts of the bicycle that are built again each frame: the rear wheel's spokes with the cranks and pedals (object O in the frame's coordinates) ...
+6043 PROC BIKEREAR(O)
+6046   LOCAL A,PX,PZ,Q
+6049   TBT=FN CC(0,11)
+6052   CALL SPOKES(O,-17,11,-WA)
+6055   TBT=FN CC(0,10)
+6058   FOR Q=0 TO 1
+6061     A=-(CA+Q*PI)
+6064     PX=-2+5.5*COS(A):PZ=9+5.5*SIN(A)
+6067     IF Q=0 THEN
+6070       CALL TUBE(O,-2,3.5,9,PX,3.5,PZ,0.7)
+6073       CALL BX(O,PX-3,3.6,PZ-0.7,PX+3,7.6,PZ+0.7,FN CC(0,3))
+6076     ELSE
+6079       CALL TUBE(O,-2,-3.5,9,PX,-3.5,PZ,0.7)
+6082       CALL BX(O,PX-3,-7.6,PZ-0.7,PX+3,-3.6,PZ+0.7,FN CC(0,3))
+6085     END IF
+6088   NEXT Q
+6091 END PROC
+6094 ' ... and the front wheel's spokes (in the front's coordinates)
+6097 PROC BIKEFR(O)
+6100   TBT=FN CC(0,10)
+6103   CALL SPOKES(O,6,11,-WA)
+6106 END PROC
+6109 ' places the bicycle's objects at its position and heading (upright: the objects 510 .. 513, the spokes and the pedals are built again each frame; leaning, falling,
+6112 ' sliding or lying: the one tilted object 514, see PLACELEAN)
+6115 PROC PLACEBIKE
+6118   LOCAL C,S,FX,FY
+6121   IF BST<>0 THEN
+6124     CALL PLACELEAN
+6127     EXIT PROC
+6130   END IF
+6133   IF BVIS=0 THEN
+6136     BVIS=-1:M3D OBJSHOW 514,0:M3D OBJSHOW 510,1:M3D OBJSHOW 511,1:M3D OBJSHOW 512,1:M3D OBJSHOW 513,1
+6139   END IF
+6142   C=COS(BH*PI/180):S=SIN(BH*PI/180)
+6145   FX=BX+12*C:FY=BY+12*S
+6148   M3D OBJPOS 510,BX,BY,BZ,BH
+6151   M3D OBJECT 512,28,235:CALL BIKEREAR(512)
+6154   M3D OBJECT 513,28,235:CALL BIKEFR(513)
+6157   M3D OBJPOS 512,BX,BY,BZ,BH
+6160   M3D OBJPOS 511,FX,FY,BZ,BH+BSA
+6163   M3D OBJPOS 513,FX,FY,BZ,BH+BSA
+6166 END PROC
+6169 ' the tilt of the bicycle: every vertex of the parts built while XON is set goes through PXV: the front's parts (XFR) are first turned about the steering axis (12 in front of
+6172 ' the frame's origin) by the angle SD, then everything is rolled about the line where the wheels touch the ground (the x axis) by the lean LA (positive: the top goes to the left,
+6175 ' +y) and lifted by XLF so that the handlebar does not sink into the ground
+6178 PROC PXV(O,X,Y,Z)
+6181   LOCAL XX,YY
+6184   XX=X:YY=Y
+6187   IF XFR THEN XX=12+X*XFC-Y*XFS:YY=X*XFS+Y*XFC
+6190   M3D VERTEX O,XX,YY*XRC+Z*XRS,Z*XRC-YY*XRS+XLF
+6193 END PROC
+6196 ' a box through the tilt (the six faces are quads: a rolled box is not axis aligned any more)
+6199 PROC BXX(O,X1,Y1,Z1,X2,Y2,Z2,TX)
+6202   LOCAL B
+6205   B=M3D("VERTS",O)
+6208   CALL PXV(O,X1,Y1,Z1):CALL PXV(O,X2,Y1,Z1):CALL PXV(O,X2,Y2,Z1):CALL PXV(O,X1,Y2,Z1)
+6211   CALL PXV(O,X1,Y1,Z2):CALL PXV(O,X2,Y1,Z2):CALL PXV(O,X2,Y2,Z2):CALL PXV(O,X1,Y2,Z2)
+6214   M3D QUAD O,B,B+1,B+2,B+3,TX:M3D QUAD O,B+4,B+5,B+6,B+7,TX
+6217   M3D QUAD O,B,B+1,B+5,B+4,TX:M3D QUAD O,B+1,B+2,B+6,B+5,TX
+6220   M3D QUAD O,B+2,B+3,B+7,B+6,TX:M3D QUAD O,B+3,B,B+4,B+7,TX
+6223 END PROC
+6226 ' the whole bicycle in one object (514), rolled by the lean LA (radians) with the front wheel turned by SD degrees
+6229 PROC BUILDLEAN(LA,SD)
+6232   LOCAL Y1,Y2
+6235   XRS=SIN(LA):XRC=COS(LA):XFS=SIN(SD*PI/180):XFC=COS(SD*PI/180)
+6238   Y1=-2*XFS+12*XFC:Y2=-2*XFS-12*XFC
+6241   XLF=-MIN(0,MIN(31*XRC-Y1*XRS,MIN(31*XRC-Y2*XRS,-1.4*ABS(XRS))))
+6244   M3D OBJECT 514,28,235
+6247   XON=-1:XFR=0
+6250   CALL BIKEFRAME(514):CALL BIKEREAR(514)
+6253   XFR=-1
+6256   CALL BIKEFRONT(514):CALL BIKEFR(514)
+6259   XON=0:XFR=0
+6262 END PROC
+6265 PROC PLACELEAN
+6268   IF BVIS<>0 THEN
+6271     BVIS=0:M3D OBJSHOW 510,0:M3D OBJSHOW 511,0:M3D OBJSHOW 512,0:M3D OBJSHOW 513,0:M3D OBJSHOW 514,1
+6274   END IF
+6277   IF BDR<>0 OR BST=3 OR BST=6 THEN
+6280     CALL BUILDLEAN(BLS*BLN,BSTR):BDR=0
+6283   END IF
+6286   M3D OBJPOS 514,BX,BY,BZ,BH
+6289 END PROC
+6292 ' a bicycle cannot stand by itself. BST: 0 upright (ridden, or rolling on without a rider for WFALL seconds), 1 leaning against the house (the start), 3 falling over (the lean BLN
+6295 ' grows to 90 degrees, to the side BLS), 4 sliding on its side and turning (BYW) while it slows down (WSLIDE), 5 lying, 6 being picked up (E: the lean goes back to 0 in the time of getting on).
+6298 ' A slide goes straight on in the direction BSD while the bicycle turns about itself.
+6301 PROC BIKEFALL(DT)
+6304   LOCAL A
+6307   IF MODE=1 THEN
+6310     BST=0:BRT=0
+6313     EXIT PROC
+6316   END IF
+6319   IF BST=0 THEN
+6322     IF MODE=2 THEN
+6325       BRT=0
+6328     ELSE
+6331       BRT=BRT+DT
+6334       IF BRT>=WFALL THEN
+6337         BST=3:BLN=0:BLW=0.4:BLS=1:IF (INT(BX+BY) AND 1)<>0 THEN BLS=-1
+6340         BSTR=BLS*55:BDR=-1
+6343       END IF
+6346     END IF
+6349   END IF
+6352   IF BST=3 THEN
+6355     BLW=BLW+9*DT:BLN=BLN+BLW*DT
+6358     IF BLN>=1.5708 THEN
+6361       BLN=1.5708:BST=4:BSD=BH:BDR=-1
+6364       A=BX-JX:IF A*A+(BY-JY)*(BY-JY)<490000 THEN CALL SND(4)
+6367     END IF
+6370   END IF
+6373   IF BST=4 THEN
+6376     IF BV>0 THEN BV=MAX(0,BV-WSLIDE*DT)
+6379     IF BV<0 THEN BV=MIN(0,BV+WSLIDE*DT)
+6382     BYW=BLS*2.6*MIN(1,ABS(BV)/120)
+6385     BH=BH+BYW*DT*180/PI
+6388     IF ABS(BV)<1 THEN BV=0:BYW=0:BST=5
+6391   END IF
+6394   IF BST=6 THEN
+6397     A=MIN(1,MT/0.45):BLN=BLN0*(1-A):BSTR=BSTR0*(1-A)
+6400     IF A>=1 THEN BST=0:BRT=0:BLN=0
+6403   END IF
+6406   IF BST=1 OR BST=5 OR BST=6 THEN BV=0
+6409 END PROC
 6550 ' ------------------------------------------------------------------------------------------------ John
 6560 ' a two-bone limb: from the joint H to the end F, both bones L long, the middle joint bends towards the pole (PX,PY,PZ); the middle joint is left in KX,KY,KZ
 6570 PROC IK(HX,HY,HZ,FX,FY,FZ,L,Z)
@@ -985,7 +1093,8 @@
 9580   DM=0.6/(1+(BV/95)^2)
 9590   OM=BV/36*TAN(DM*BS)*180/PI:BSA=DM*BS*180/PI
 9600   BH=BH+OM*DT
-9610   DX=COS(BH*PI/180)*BV*DT:DY=SIN(BH*PI/180)*BV*DT
+9605   A=BH:IF BST=4 THEN A=BSD
+9610   DX=COS(A*PI/180)*BV*DT:DY=SIN(A*PI/180)*BV*DT
 9620   IF ABS(BV)>0.3 THEN
 9630     M3D THINGMOVE 1,DX,DY
 9640     IF M3D("HIT")<>0 THEN
@@ -1008,8 +1117,9 @@
 9810   IF WA>1000 THEN WA=WA-1000*PI
 9820   IF CA>100 THEN CA=CA-100
 9830   TK=TK+ABS(BV)*DT
-9840   IF MODE<>1 AND TK>70 AND ABS(BV)>25 THEN TK=0:CALL SND(3)
+9840   IF MODE<>1 AND BST=0 AND TK>70 AND ABS(BV)>25 THEN TK=0:CALL SND(3)
 9850   IF MODE=1 AND TH<=0 AND TK>70 AND BV>25 THEN TK=0:CALL SND(3)
+9855   CALL BIKEFALL(DT)
 9860   ' ---- John
 9870   IF MODE=0 THEN
 9880     ' the target speed TV: a stick gives it by its deflection (just past the dead zone: WSLOW, fully pushed: WFAST); a key raises it from WSLOW to WFAST
@@ -1061,8 +1171,9 @@
 10090     ' get on
 10100     DX=BX-JX:DY=BY-JY
 10110     NEAR=0:IF DX*DX+DY*DY<4900 THEN NEAR=-1
-10120     IF KU<>0 AND NEAR THEN
+10120     IF KU<>0 AND NEAR AND (BST=0 OR BST=1 OR BST=5) THEN
 10130       MODE=2:MT=0:MFX=JX:MFY=JY:MFZ=JZ:CALL SND(2)
+10135       IF BST>0 THEN BST=6:BLN0=BLN:BSTR0=BSTR
 10140     END IF
 10150   END IF
 10160   IF MODE=2 THEN
@@ -1214,10 +1325,12 @@
 11500 ' ------------------------------------------------------------------------------------------------ the game
 11510 PROC NEWGAME
 11520   JX=0:JY=-172:JH=90:JV=0:JZ=FN FLR(JX,JY)
-11530   BX=40:BY=-176:BH=270:BV=0:BS=0:BSA=0:BZ=FN FLR(BX,BY):WA=0:CA=0:ST=1
+11530   BX=100:BY=-118:BH=0:BV=0:BS=0:BSA=0:BZ=FN FLR(BX,BY):WA=0:CA=0:ST=1
+11535   ' the bicycle leans against the south wall of the house, east of the porch, the handlebar turned towards the wall (bike state 1, see BIKEFALL)
+11536   BST=1:BLN=0.35:BLS=1:BSTR=50:BRT=0:BYW=0:BSD=0:BDR=-1:BVIS=-1:BLW=0:BLN0=0:BSTR0=0
 11540   M3D THINGPOS 0,JX,JY,JZ:M3D THINGPOS 1,BX,BY,BZ
 11550   CZM=0:CLP=0:NSL=0:MODE=0:MT=0:PH=0:KTS=0:KFA=0:KFD=0:KRA=0:KSH=0:KLT=0:EXH=0:ST=1:STD=0:TK=0:CYW=JH:CO=0:CP=0:KU=0:UL=0:BL=0:NEAR=0:MSGT=0:MB=0
-11560   CALL SAY("WALK WITH W A S D. THE BICYCLE IS BY THE PORCH: STAND NEAR IT AND PRESS E.")
+11560   CALL SAY("WALK WITH W A S D. THE BICYCLE LEANS AGAINST THE HOUSE EAST OF THE PORCH: STAND NEAR IT AND PRESS E.")
 11570   MSGT=14
 11580 END PROC
 11590 PROC PLAYLOOP
@@ -1310,7 +1423,7 @@
 12440       JX=VAL(W$(1)):JY=VAL(W$(2)):JH=VAL(W$(3)):JZ=FN FLR(JX,JY):JV=0:M3D THINGPOS 0,JX,JY,JZ
 12450     END IF
 12460     IF C$="bike" THEN
-12470       BX=VAL(W$(1)):BY=VAL(W$(2)):BH=VAL(W$(3)):BZ=FN FLR(BX,BY):BV=0:M3D THINGPOS 1,BX,BY,BZ
+12470       BX=VAL(W$(1)):BY=VAL(W$(2)):BH=VAL(W$(3)):BZ=FN FLR(BX,BY):BV=0:BST=0:BRT=0:BLN=0:BDR=-1:M3D THINGPOS 1,BX,BY,BZ
 12480     END IF
 12490     IF C$="wait" THEN
 12500       N=INT(VAL(W$(1))*60)
@@ -1326,7 +1439,7 @@
 12570       NEXT I
 12580     END IF
 12590     IF C$="state" THEN
-12600       PRINT "state mode=";MODE;" jx=";INT(JX);" jy=";INT(JY);" jz=";INT(JZ+0.5);" jh=";INT(JH);" jv=";INT(JV);" bx=";INT(BX);" by=";INT(BY);" bz=";INT(BZ+0.5);" bh=";INT(BH);" bv=";INT(BV);" st=";INT(ST*100)
+12600       PRINT "state mode=";MODE;" jx=";INT(JX);" jy=";INT(JY);" jz=";INT(JZ+0.5);" jh=";INT(JH);" jv=";INT(JV);" bst=";BST;" bx=";INT(BX);" by=";INT(BY);" bz=";INT(BZ+0.5);" bh=";INT(BH);" bv=";INT(BV);" st=";INT(ST*100)
 12610     END IF
 12620     IF C$="ray" THEN
 12630       M3D CAMERA VAL(W$(1)),VAL(W$(2)),VAL(W$(3))-46,VAL(W$(4)),VAL(W$(5))
@@ -1369,6 +1482,8 @@
 12959 WPED=140:WTIRE=100:WBMIN=40
 12961 ' the edge of the world (the only invisible-looking limit; the red tiles of BUILDEDGE show it)
 12962 WLIM=3420
+12963 ' the bicycle without a rider: it rolls on upright for WFALL seconds, then falls over and slides on its side (deceleration WSLIDE units a second squared); XON / XFR: tilt on
+12964 WFALL=3:WSLIDE=120:XON=0:XFR=0:XRS=0:XRC=1:XFS=0:XFC=1:XLF=0
 12960 IF NOT HL THEN CALL W3K_SETUP:CALL W3K_MESH:M3D RESET:CALL MAKETEX
 12970 CALL BUILDTERRAIN
 12980 CALL BUILDROADS
