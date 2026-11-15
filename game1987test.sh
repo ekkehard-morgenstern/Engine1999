@@ -303,6 +303,9 @@ expect "riderless, moving: fell over (falling or sliding) after 4 s" "$(val stat
 expect "riderless, moving: lying after 9 s" "$(val state 40 bst)" 5 5
 expect "riderless, moving: stopped" "$(val state 40 bv)" 0 0
 expect "riderless, moving: it turned while sliding" "$(awk -v a="$(val state 38 bh)" -v b="$(val state 40 bh)" 'BEGIN { d = b - a; if (d < 0) d = -d; print d }')" 20 1000
+# 11h. the figure: the head turns to look (it follows a turn: t 1 gives about 22 degrees to the left unless a drone is in sight, then up to 80 either way), it breathes (the phase advances)
+expect "breathing: the phase advances" "$(awk -v a="$(val state 1 brp)" -v b="$(val state 40 brp)" 'BEGIN { print (b > a) ? 1 : 0 }')" 1 1
+expect "head: yaw and pitch stay in range" "$(awk -v y="$(val state 40 hly)" -v p="$(val state 40 hlp)" 'BEGIN { print (y >= -80 && y <= 80 && p >= -15 && p <= 40) ? 1 : 0 }')" 1 1
 # 12. the camera stays above the ground, rays: the house wall is an object, open ground is not hit
 expect "camera: z above the ground" "$(val cam 1 z)" 20 400
 expect "ray at the house" "$(val ray 1 obj)" 300 300

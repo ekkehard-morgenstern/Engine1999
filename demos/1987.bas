@@ -802,9 +802,9 @@
 6780 ' builds John into object 520: the body is in coordinates of the object (x forward, y left, z up; the origin on the ground below the hips when standing)
 6790 ' pose 0: standing / walking (PH = the walk phase, AM = the stride 0 .. 1), pose 1: riding (in the coordinates of the bicycle; CA = the cranks, BS = the steering)
 6800 PROC BUILDJOHN(POSE,PH,AM)
-6810   LOCAL Q,SG,FX,FZ,HX,HZ,PX,PZ,A,HY,GX,GY,LN,HIPX,HIPZ,SHX,SHZ,GXL,GYL,HH,SWY,STY
+6810   LOCAL Q,SG,FX,FZ,HX,HZ,PX,PZ,A,HY,GX,GY,LN,HIPX,HIPZ,SHX,SHZ,GXL,GYL,HH,SWY,STY,BRS
 6820   M3D OBJECT 520,28,235
-6830   CC1=FN CC(5,6):CC2=FN CC(8,5):CC3=FN CC(14,11):CC4=FN CC(0,12):CC5=FN CC(0,14)
+6830   CC1=FN CC(5,6):CC2=FN CC(8,5):CC3=FN CC(14,11):CC4=FN CC(0,12):CC5=FN CC(0,14):BRS=SIN(BRP)
 6840   IF POSE=0 THEN
 6850     SD=6+AM*12
 6860     FOR Q=0 TO 1
@@ -822,7 +822,7 @@
 6980         IF HH<HIPZ THEN HIPZ=HH
 6990       END IF
 7000     NEXT Q
-7010     HIPX=0:SHX=0:SHZ=HIPZ+16
+7010     HIPX=0:SHX=0:SHZ=HIPZ+16+0.35*BRS
 7012     ' the sway: the pelvis moves sideways over the leg that carries the weight (that leg is on the ground from phase 0 to 0.6, its middle at 0.3), the upper body follows
 7013     ' with a little over half of it, and each hip goes forward with its leg (the pelvis turns: 0.12 of the foot's distance)
 7014     SWY=MIN(1,ABS(JV)/WSLOW)*(0.8+0.8*AM)*SIN(PH-0.314):STY=SWY*0.55
@@ -832,38 +832,41 @@
 7018     CALL FRUST(520,HIPZ-4.5,HIPZ+0.5,CC2)
 7019     CALL BX(520,-3.75,-6.15+SWY,HIPZ-0.4,3.75,6.15+SWY,HIPZ+0.9,BELT)
 7020     ' the torso narrows to the waist (3.6 x 6.0) and widens to the chest (4.4 x 7.4)
-7021     F1X=3.6:F1Y=6.0:F2X=4.4:F2Y=7.4:FC1X=0:FC1Y=SWY:FC2X=0:FC2Y=STY
+7021     F1X=3.6:F1Y=6.0:F2X=4.4*(1+0.03*BRS):F2Y=7.4*(1+0.03*BRS):FC1X=0:FC1Y=SWY:FC2X=0:FC2Y=STY
 7022     CALL FRUST(520,HIPZ+0.5,SHZ+0.5,CC1)
-7030     CALL HEAD(520,0,STY,SHZ+2.5)
+7030     CALL COLLAR(520,0,STY,SHZ+0.5):CALL HEAD(520,0,STY,SHZ+2.5)
 7040     FOR Q=0 TO 1
 7050       SG=1:IF Q=1 THEN SG=-1
 7060       FX=GPX(Q):FZ=GPZ(Q)
 7070       PLX0=1:PLY0=0:PLZ0=0.1:LH=2.6:TBT=FN CC(8,5):TBU=TBT
 7080       CALL LIMB(520,0.12*FX,SG*3.6+SWY,HIPZ,FX,SG*4,FZ,14)
-7090       CALL BX(520,FX-3.5,SG*4-3,FZ-2.8,FX+6,SG*4+3,FZ+1.5,FN CC(0,13))
+7090       CALL SHOE(520,FX-3.5,SG*4,FZ-2.8)
 7100       HX=-0.7*FX
 7110       PLX0=-1:PLY0=SG*0.35:PLZ0=-0.1:LH=2.3:TBT=CC1:TBU=CC3
 7120       CALL LIMB(520,0,SG*8.5+STY,SHZ-1.2,HX,SG*9.5+STY,19+2.8,11)
-7130       CALL BX(520,HX-1.8,SG*9.5-1.8+STY,FZ+16,HX+1.8,SG*9.5+1.8+STY,FZ+20,CC3)
+7125       ' the sleeve ends at the elbow with a cuff (a lighter green band)
+7126       TBT=FN CC(5,10):CALL TUBE(520,KX+(0-KX)*0.22,KY+(SG*8.5+STY-KY)*0.22,KZ+(SHZ-1.2-KZ)*0.22,KX,KY,KZ,2.9)
+7130       CALL HAND(520,HX,SG*9.5+STY,21.8,SG)
 7140     NEXT Q
 7150   ELSE
 7160     HIPX=-9.5:HIPZ=32.4:SHX=-3:SHZ=46.4
 7170     TBT=CC1
 7175     CALL BX(520,HIPX-4.2,-6.8,HIPZ-3.5,HIPX+4.2,6.8,HIPZ+3.5,CC2)
 7180     CALL TUBE(520,HIPX,3.4,HIPZ,SHX,3.4,SHZ,3.4):CALL TUBE(520,HIPX,-3.4,HIPZ,SHX,-3.4,SHZ,3.4)
-7190     CALL HEAD(520,SHX+4,0,SHZ+2.5)
+7190     CALL COLLAR(520,SHX,0,SHZ+0.5):CALL HEAD(520,SHX+4,0,SHZ+2.5)
 7200     FOR Q=0 TO 1
 7210       SG=1:IF Q=1 THEN SG=-1
 7220       A=-(CA+Q*PI)
 7230       PX=-2+5.5*COS(A):PZ=9+5.5*SIN(A)
 7240       PLX0=1:PLY0=0:PLZ0=0.15:LH=2.6:TBT=FN CC(8,5):TBU=TBT
 7250       CALL LIMB(520,HIPX,SG*3.8,HIPZ,PX-0.5,SG*5.6,PZ+4.2,14.8)
-7260       CALL BX(520,PX-3.5,SG*5.6-2.8,PZ+0.8,PX+6,SG*5.6+2.8,PZ+4.5,FN CC(0,13))
+7260       CALL SHOE(520,PX-3.5,SG*5.6,PZ+0.8)
 7270       GXL=-2:GYL=SG*10
 7280       GX=12+GXL*COS(BSA*PI/180)-GYL*SIN(BSA*PI/180)-12:GY=GXL*SIN(BSA*PI/180)+GYL*COS(BSA*PI/180)
 7290       PLX0=-0.4:PLY0=SG*0.9:PLZ0=-0.3:LH=2.3:TBT=CC1:TBU=CC3
 7300       CALL LIMB(520,SHX,SG*7,SHZ-1.5,12+GX,GY,31.8,11)
-7310       CALL BX(520,12+GX-1.8,GY-1.8,31,12+GX+1.8,GY+1.8,33.4,CC3)
+7305       TBT=FN CC(5,10):CALL TUBE(520,KX+(SHX-KX)*0.22,KY+(SG*7-KY)*0.22,KZ+(SHZ-1.5-KZ)*0.22,KX,KY,KZ,2.9)
+7310       CALL FIST(520,12+GX,GY)
 7320     NEXT Q
 7330   END IF
 7340 END PROC
@@ -1209,11 +1212,12 @@
 10410       MODE=0:JV=0:M3D THINGPOS 0,MGX,MGY,MGZ:JX=MGX:JY=MGY:JZ=MGZ
 10420     END IF
 10430   END IF
-10435   ' stamina: it drains while sprinting (bicycle) or walking fast, else 0.12 a second come back; at 0.02 he is used up, until it is back at 0.25
+10435   ' (after the stamina: breathing, about 0.25 breaths a second at rest, faster when out of breath or moving fast, and the head looking around) stamina: it drains while sprinting (bicycle) or walking fast, else 0.12 a second come back; at 0.02 he is used up, until it is back at 0.25
 10436   IF DRN>0 THEN ST=MAX(0,ST-DRN*DT) ELSE ST=MIN(1,ST+0.12*DT)
 10437   IF ST<=0.02 THEN EXH=-1
 10438   IF ST>=0.25 THEN EXH=0
-10440   CALL DRONESIM(DT)
+10439   BRP=BRP+DT*2*PI*(0.25+0.45*(1-ST)+0.25*MIN(1,ABS(JV)/WFAST)):IF BRP>1000 THEN BRP=BRP-1000*PI
+10440   CALL DRONESIM(DT):CALL HEADLOOK(DT)
 10450   IF MSGT>0 THEN MSGT=MSGT-DT
 10460 END PROC
 10470 ' ------------------------------------------------------------------------------------------------ messages, input, the picture
@@ -1444,7 +1448,7 @@
 12570       NEXT I
 12580     END IF
 12590     IF C$="state" THEN
-12600       PRINT "state mode=";MODE;" jx=";INT(JX);" jy=";INT(JY);" jz=";INT(JZ+0.5);" jh=";INT(JH);" jv=";INT(JV);" bst=";BST;" bx=";INT(BX);" by=";INT(BY);" bz=";INT(BZ+0.5);" bh=";INT(BH);" bv=";INT(BV);" st=";INT(ST*100)
+12600       PRINT "state mode=";MODE;" jx=";INT(JX);" jy=";INT(JY);" jz=";INT(JZ+0.5);" jh=";INT(JH);" jv=";INT(JV);" bst=";BST;" hly=";INT(HLY);" hlp=";INT(HLP);" brp=";INT(BRP*100);" bx=";INT(BX);" by=";INT(BY);" bz=";INT(BZ+0.5);" bh=";INT(BH);" bv=";INT(BV);" st=";INT(ST*100)
 12610     END IF
 12620     IF C$="ray" THEN
 12630       M3D CAMERA VAL(W$(1)),VAL(W$(2)),VAL(W$(3))-46,VAL(W$(4)),VAL(W$(5))
@@ -1464,6 +1468,7 @@
 12770     IF C$="zoom" THEN CZM=VAL(W$(1))
 12780     IF C$="co" THEN CO=VAL(W$(1)):CYW=JH+CO
 12790     IF C$="cp" THEN CP=VAL(W$(1))
+12795     IF C$="look" THEN HLY=VAL(W$(1)):HLP=VAL(W$(2))
 12800     IF C$="cam" THEN
 12810       PRINT "ds=";INT(DSV)
 12820       PRINT "cam x=";INT(M3D("X"));" y=";INT(M3D("Y"));" z=";INT(M3D("Z")+46);" yaw=";INT(M3D("YAW"));" pitch=";INT(M3D("PITCH"))
@@ -1488,7 +1493,7 @@
 12961 ' the edge of the world (the only invisible-looking limit; the red tiles of BUILDEDGE show it)
 12962 WLIM=3420
 12963 ' the bicycle without a rider: it rolls on upright for WFALL seconds, then falls over and slides on its side (deceleration WSLIDE units a second squared); XON / XFR: tilt on
-12964 WFALL=3:WSLIDE=120:XON=0:XFR=0:XRS=0:XRC=1:XFS=0:XFC=1:XLF=0
+12964 HLY=0:HLP=0:BRP=0:HCX=0:HCY=0:HCZ=0:HYS=0:HYC=1:HPS=0:HPC=1:WFALL=3:WSLIDE=120:XON=0:XFR=0:XRS=0:XRC=1:XFS=0:XFC=1:XLF=0
 12960 IF NOT HL THEN CALL W3K_SETUP:CALL W3K_MESH:M3D RESET:CALL MAKETEX
 12970 CALL BUILDTERRAIN
 12980 CALL BUILDROADS
@@ -1565,54 +1570,142 @@
 13680   NEXT J
 13690   RETURN LRR(6)
 13700 END FUNC
-13710 ' the head: an egg standing on its narrow end (broad cranium, narrow chin; 10.5 high, 8.6 wide) with the chin at CZ, centred on (CX, CY), the face towards +x: a cap of jagged
-13720 ' gray hair that starts at the forehead in front, over the ears at the sides and at the nape at the back, ears, a neck, and a face: eyes (white with a dark pupil), eyebrows,
-13730 ' a nose and a mouth
-13740 PROC HEAD(O,CX,CY,CZ)
-13750   LOCAL J,K,B,A,R,T,F,H,NS,SK,SK2,JG
-13760   H=10.5:NS=12:SK=FN CC(14,11):SK2=FN CC(14,9)
-13770   LRZ(0)=0:LRZ(1)=0.12:LRZ(2)=0.3:LRZ(3)=0.55:LRZ(4)=0.78:LRZ(5)=0.93:LRZ(6)=1
-13780   LRR(0)=0.5:LRR(1)=2.6:LRR(2)=3.7:LRR(3)=4.3:LRR(4)=4.2:LRR(5)=3.1:LRR(6)=0.7
-13790   B=M3D("VERTS",O)
-13800   FOR J=0 TO 6
-13810     FOR K=0 TO NS-1
-13820       A=K*2*PI/NS
-13830       M3D VERTEX O,CX+LRR(J)*1.05*COS(A),CY+LRR(J)*0.95*SIN(A),CZ+LRZ(J)*H
-13840     NEXT K
-13850   NEXT J
-13860   FOR J=0 TO 5
-13870     FOR K=0 TO NS-1
-13880       M3D QUAD O,B+J*NS+K,B+J*NS+(K+1) MOD NS,B+(J+1)*NS+(K+1) MOD NS,B+(J+1)*NS+K,SK
-13890     NEXT K
-13900   NEXT J
-13910   ' the hair: five rings, the lowest one at a height that depends on the side and is ragged, the others pushed out by 0.55 and ragged in radius
-13920   B=M3D("VERTS",O)
-13930   FOR J=0 TO 4
-13940     FOR K=0 TO NS-1
-13950       A=K*2*PI/NS:F=(1-COS(A))/2:JG=((K*5) MOD 3)-1
-13960       IF J=0 THEN T=0.70-0.40*F+0.06*JG ELSE T=0.70+0.085*J
-13970       IF J=4 THEN T=1.02
-13980       R=FN HPRF(MIN(T,1))+0.55
-13990       IF J>=2 THEN R=R*(1+0.06*JG)
-14000       IF J=4 THEN R=0.6
-14010       M3D VERTEX O,CX+R*1.05*COS(A),CY+R*0.95*SIN(A),CZ+T*H
-14020     NEXT K
-14030   NEXT J
-14040   FOR J=0 TO 3
-14050     FOR K=0 TO NS-1
-14060       M3D QUAD O,B+J*NS+K,B+J*NS+(K+1) MOD NS,B+(J+1)*NS+(K+1) MOD NS,B+(J+1)*NS+K,CC4+(K MOD 2)*2
-14070     NEXT K
-14080   NEXT J
-14090   ' the neck and the ears
-14100   CALL BX(O,CX-1.8,CY-1.8,CZ-2.2,CX+1.8,CY+1.8,CZ+1.4,SK2)
-14110   CALL BX(O,CX-1,CY+3.9,CZ+4.8,CX+1.4,CY+4.8,CZ+7.2,SK2):CALL BX(O,CX-1,CY-4.8,CZ+4.8,CX+1.4,CY-3.9,CZ+7.2,SK2)
-14120   ' the face
-14130   FOR K=0 TO 1
-14140     F=1:IF K=1 THEN F=-1
-14150     IF F>0 THEN CALL BX(O,CX+3.5,CY+1.2,CZ+6.2,CX+4.25,CY+2.8,CZ+7.4,FN CC(0,15)) ELSE CALL BX(O,CX+3.5,CY-2.8,CZ+6.2,CX+4.25,CY-1.2,CZ+7.4,FN CC(0,15))
-14160     IF F>0 THEN CALL BX(O,CX+4.0,CY+1.7,CZ+6.4,CX+4.35,CY+2.5,CZ+7.2,FN CC(9,2)) ELSE CALL BX(O,CX+4.0,CY-2.5,CZ+6.4,CX+4.35,CY-1.7,CZ+7.2,FN CC(9,2))
-14170     IF F>0 THEN CALL BX(O,CX+3.6,CY+1,CZ+7.8,CX+4.2,CY+3.1,CZ+8.4,CC5) ELSE CALL BX(O,CX+3.6,CY-3.1,CZ+7.8,CX+4.2,CY-1,CZ+8.4,CC5)
-14180   NEXT K
-14190   CALL BX(O,CX+3.7,CY-0.8,CZ+3.5,CX+5.3,CY+0.8,CZ+5.8,SK2)
-14200   CALL BX(O,CX+3.2,CY-1.7,CZ+2.2,CX+3.85,CY+1.7,CZ+2.9,FN CC(1,5))
-14210 END PROC
+13710 ' the head: an egg standing on its narrow end (broad cranium, narrow chin; 10.5 high, 8.6 wide) with the chin at CZ, centred on (CX, CY), the face towards +x, turned by the yaw
+13720 ' HLY and the pitch HLP (degrees; the pivot is the chin / neck): every vertex goes through HV. A cap of jagged gray hair that starts at the forehead in front, over the ears at the sides
+13730 ' and at the nape at the back, ears, a neck (which does not turn), glasses with thin frames and temples, eyes (white with a dark pupil), eyebrows, a nose and a mouth
+13740 PROC HV(O,X,Y,Z)
+13750   LOCAL X1,Z1
+13760   X1=X*HPC-Z*HPS:Z1=X*HPS+Z*HPC
+13770   M3D VERTEX O,HCX+X1*HYC-Y*HYS,HCY+X1*HYS+Y*HYC,HCZ+Z1
+13780 END PROC
+13790 ' a box in the head's coordinates (it turns with the head, so it is built from six quads)
+13800 PROC HBX(O,X1,Y1,Z1,X2,Y2,Z2,TX)
+13810   LOCAL B
+13820   B=M3D("VERTS",O)
+13830   CALL HV(O,X1,Y1,Z1):CALL HV(O,X2,Y1,Z1):CALL HV(O,X2,Y2,Z1):CALL HV(O,X1,Y2,Z1)
+13840   CALL HV(O,X1,Y1,Z2):CALL HV(O,X2,Y1,Z2):CALL HV(O,X2,Y2,Z2):CALL HV(O,X1,Y2,Z2)
+13850   M3D QUAD O,B,B+1,B+2,B+3,TX:M3D QUAD O,B+4,B+5,B+6,B+7,TX
+13860   M3D QUAD O,B,B+1,B+5,B+4,TX:M3D QUAD O,B+1,B+2,B+6,B+5,TX
+13870   M3D QUAD O,B+2,B+3,B+7,B+6,TX:M3D QUAD O,B+3,B,B+4,B+7,TX
+13880 END PROC
+13890 PROC HEAD(O,CX,CY,CZ)
+13900   LOCAL J,K,B,A,R,T,F,H,NS,SK,SK2,JG,SG,GL
+13910   H=10.5:NS=12:SK=FN CC(14,11):SK2=FN CC(14,9):GL=FN CC(0,3)
+13920   HCX=CX:HCY=CY:HCZ=CZ
+13930   HYS=SIN(HLY*PI/180):HYC=COS(HLY*PI/180):HPS=SIN(HLP*PI/180):HPC=COS(HLP*PI/180)
+13940   LRZ(0)=0:LRZ(1)=0.12:LRZ(2)=0.3:LRZ(3)=0.55:LRZ(4)=0.78:LRZ(5)=0.93:LRZ(6)=1
+13950   LRR(0)=0.5:LRR(1)=2.6:LRR(2)=3.7:LRR(3)=4.3:LRR(4)=4.2:LRR(5)=3.1:LRR(6)=0.7
+13960   B=M3D("VERTS",O)
+13970   FOR J=0 TO 6
+13980     FOR K=0 TO NS-1
+13990       A=K*2*PI/NS
+14000       CALL HV(O,LRR(J)*1.05*COS(A),LRR(J)*0.95*SIN(A),LRZ(J)*H)
+14010     NEXT K
+14020   NEXT J
+14030   FOR J=0 TO 5
+14040     FOR K=0 TO NS-1
+14050       M3D QUAD O,B+J*NS+K,B+J*NS+(K+1) MOD NS,B+(J+1)*NS+(K+1) MOD NS,B+(J+1)*NS+K,SK
+14060     NEXT K
+14070   NEXT J
+14080   ' the hair: five rings, the lowest one at a height that depends on the side and is ragged, the others pushed out by 0.55 and ragged in radius
+14090   B=M3D("VERTS",O)
+14100   FOR J=0 TO 4
+14110     FOR K=0 TO NS-1
+14120       A=K*2*PI/NS:F=(1-COS(A))/2:JG=((K*5) MOD 3)-1
+14130       IF J=0 THEN T=0.70-0.40*F+0.06*JG ELSE T=0.70+0.085*J
+14140       IF J=4 THEN T=1.02
+14150       R=FN HPRF(MIN(T,1))+0.55
+14160       IF J>=2 THEN R=R*(1+0.06*JG)
+14170       IF J=4 THEN R=0.6
+14180       CALL HV(O,R*1.05*COS(A),R*0.95*SIN(A),T*H)
+14190     NEXT K
+14200   NEXT J
+14210   FOR J=0 TO 3
+14220     FOR K=0 TO NS-1
+14230       M3D QUAD O,B+J*NS+K,B+J*NS+(K+1) MOD NS,B+(J+1)*NS+(K+1) MOD NS,B+(J+1)*NS+K,CC4+(K MOD 2)*2
+14240     NEXT K
+14250   NEXT J
+14260   ' the neck (it stays upright and faces the front) and the ears
+14270   CALL BX(O,CX-1.8,CY-1.8,CZ-2.2,CX+1.8,CY+1.8,CZ+1.4,SK2)
+14280   CALL HBX(O,-1,3.9,4.8,1.4,4.8,7.2,SK2):CALL HBX(O,-1,-4.8,4.8,1.4,-3.9,7.2,SK2)
+14290   ' the face: eyes, eyebrows, nose, mouth
+14300   CALL HBX(O,3.5,1.2,6.2,4.25,2.8,7.4,FN CC(0,15)):CALL HBX(O,3.5,-2.8,6.2,4.25,-1.2,7.4,FN CC(0,15))
+14310   CALL HBX(O,4.0,1.7,6.4,4.35,2.5,7.2,FN CC(9,2)):CALL HBX(O,4.0,-2.5,6.4,4.35,-1.7,7.2,FN CC(9,2))
+14320   CALL HBX(O,3.6,1,7.9,4.2,3.1,8.5,CC5):CALL HBX(O,3.6,-3.1,7.9,4.2,-1,8.5,CC5)
+14330   CALL HBX(O,3.7,-0.8,3.5,5.3,0.8,5.8,SK2)
+14340   CALL HBX(O,3.2,-1.7,2.2,3.85,1.7,2.9,FN CC(1,5))
+14350   ' glasses: two thin rectangular rims, a bridge over the nose and the temples back to the ears
+14360   FOR SG=-1 TO 1 STEP 2
+14370     CALL HBX(O,4.3,SG*0.7-0.15,5.7,4.6,SG*3.4+0.15,5.95,GL):CALL HBX(O,4.3,SG*0.7-0.15,7.75,4.6,SG*3.4+0.15,8,GL)
+14380     CALL HBX(O,4.3,SG*0.7-0.15,5.7,4.6,SG*0.7+0.15,8,GL):CALL HBX(O,4.3,SG*3.4-0.15,5.7,4.6,SG*3.4+0.15,8,GL)
+14390     CALL HBX(O,0.8,SG*3.3-0.15,7.6,4.6,SG*3.3+0.15,7.9,GL)
+14400   NEXT SG
+14410   CALL HBX(O,4.3,-0.75,7.2,4.6,0.75,7.5,GL)
+14420 END PROC
+14430 ' the collar: a ring of eight flaps that stands up a little and folds out round the neck, open at the front (a V)
+14440 PROC COLLAR(O,CX,CY,CZ)
+14450   LOCAL K,B,A,R1,R2,C
+14460   C=FN CC(5,12)
+14470   B=M3D("VERTS",O)
+14480   FOR K=0 TO 11
+14490     A=(K+0.5)*2*PI/12
+14500     M3D VERTEX O,CX+2.4*COS(A),CY+2.6*SIN(A),CZ
+14510     M3D VERTEX O,CX+3.3*COS(A),CY+3.6*SIN(A),CZ+1.6
+14520   NEXT K
+14530   FOR K=0 TO 10
+14540     M3D QUAD O,B+K*2,B+K*2+1,B+(K+1)*2+1,B+(K+1)*2,C
+14550   NEXT K
+14560 END PROC
+14570 ' a hand at the wrist (WX, WY, WZ) hanging at the side, the palm to the thigh: a palm, four fingers (the middle one longest) curled a little forwards, a thumb; SG: 1 left, -1 right
+14580 PROC HAND(O,WX,WY,WZ,SG)
+14590   LOCAL I,L,FO
+14600   TBT=FN CC(14,11)
+14610   CALL BX(O,WX-1.3,WY-0.8,WZ-2.6,WX+1.3,WY+0.8,WZ+0.1,TBT)
+14620   FOR I=0 TO 3
+14630     FO=0.95-I*0.63:L=3.2:IF I=1 THEN L=3.6
+14640     IF I=3 THEN L=2.6
+14650     CALL TUBE(O,WX+FO,WY,WZ-2.6,WX+FO+0.5,WY,WZ-2.6-L,0.3)
+14660   NEXT I
+14670   CALL TUBE(O,WX+1.3,WY-SG*0.3,WZ-0.4,WX+2.4,WY-SG*0.3,WZ-3,0.38)
+14680 END PROC
+14690 ' a fist round the handlebar's grip at (GXX, GYY) (the grip's centre; the fingers wrap round its front)
+14700 PROC FIST(O,GXX,GYY)
+14710   LOCAL I
+14720   CALL BX(O,GXX-1.6,GYY-1.6,31.2,GXX+1.4,GYY+1.6,33.4,FN CC(14,11))
+14730   FOR I=0 TO 3
+14740     CALL BX(O,GXX+1.4,GYY-1.5+I*0.8,31.2,GXX+2.5,GYY-0.7+I*0.8,33.3,FN CC(14,9))
+14750   NEXT I
+14760   CALL BX(O,GXX-1.2,GYY-0.5,33.4,GXX+1.2,GYY+0.5,34.3,FN CC(14,11))
+14770 END PROC
+14780 ' a shoe: the heel at XH, the middle of its width at YC, the underside of the sole at ZB; 9.5 long, a dark sole, a gray upper with a high ankle, a tongue and three white laces
+14790 PROC SHOE(O,XH,YC,ZB)
+14800   LOCAL I
+14810   CALL BX(O,XH-0.2,YC-3.2,ZB,XH+9.7,YC+3.2,ZB+1,FN CC(0,4))
+14820   CALL BX(O,XH,YC-2.9,ZB+1,XH+4.3,YC+2.9,ZB+4.8,FN CC(0,13))
+14830   CALL BX(O,XH,YC-2.95,ZB+4.4,XH+4.3,YC+2.95,ZB+4.85,FN CC(0,7))
+14840   CALL BX(O,XH+4.3,YC-2.8,ZB+1,XH+6.7,YC+2.8,ZB+3.9,FN CC(0,13))
+14850   CALL BX(O,XH+6.7,YC-2.6,ZB+1,XH+9.5,YC+2.6,ZB+3,FN CC(0,13))
+14860   CALL BX(O,XH+4.3,YC-1,ZB+3.9,XH+6.5,YC+1,ZB+4.2,FN CC(0,9))
+14870   FOR I=0 TO 2
+14880     CALL BX(O,XH+4.5+I*0.7,YC-1.8,ZB+3.9,XH+4.9+I*0.7,YC+1.8,ZB+4.3,FN CC(0,15))
+14890   NEXT I
+14900 END PROC
+14910 ' the head looks at things: at the nearest drone (within 1400 units and not behind John) with the pitch up to it, else at the bicycle when it is near, else it leads into a turn; the yaw
+14920 ' (HLY, degrees to the left, at most 80) and the pitch (HLP, at most 40 up, 15 down) follow the target smoothly
+14930 PROC HEADLOOK(DT)
+14940   LOCAL I,D,DX,DY,DZ,AG,TY,TP,BD,BI
+14950   TY=KT*22:TP=0:BD=1000000
+14960   FOR I=0 TO NDR-1
+14970     DX=DRX(I)-JX:DY=DRY(I)-JY:D=SQR(DX*DX+DY*DY)
+14980     AG=FN ADIFF(ATAN2(DY,DX)*180/PI,JH)
+14990     IF D<1400 AND ABS(AG)<100 AND D<BD THEN
+15000       BD=D:TY=MAX(-80,MIN(80,AG)):DZ=DRZ(I)-(JZ+54):TP=MAX(0,MIN(40,ATAN2(DZ,D)*180/PI))
+15010     END IF
+15020   NEXT I
+15030   IF BD>=1000000 AND MODE=0 THEN
+15040     DX=BX-JX:DY=BY-JY:D=SQR(DX*DX+DY*DY)
+15050     AG=FN ADIFF(ATAN2(DY,DX)*180/PI,JH)
+15060     IF D<260 AND ABS(AG)<110 THEN TY=MAX(-80,MIN(80,AG)):TP=-15
+15070   END IF
+15080   HLY=HLY+(TY-HLY)*MIN(1,5*DT):HLP=HLP+(TP-HLP)*MIN(1,5*DT)
+15090 END PROC
