@@ -827,14 +827,19 @@
 7013     ' with a little over half of it, and each hip goes forward with its leg (the pelvis turns: 0.12 of the foot's distance)
 7014     SWY=MIN(1,ABS(JV)/WSLOW)*(0.8+0.8*AM)*SIN(PH-0.314):STY=SWY*0.55
 7015     ' the pelvis: a trouser colored block wider than the torso's waist, under it; the legs join it at the sides
-7016     CALL BX(520,-4.8,-8.2+SWY,HIPZ-4.5,4.8,8.2+SWY,HIPZ+3.5,CC2)
-7020     CALL BX(520,-4,-7+STY,HIPZ+0.5,4,7+STY,SHZ+0.5,CC1)
-7030     CALL BX(520,-4.2,-4+STY,SHZ+2,4.2,4+STY,SHZ+11,CC3):CALL BX(520,-4.8,-4.6+STY,SHZ+7,3.6,4.6+STY,SHZ+12.5,CC4):CALL BX(520,4.2,-3.6+STY,SHZ+5.4,5.1,3.6+STY,SHZ+7,FN CC(0,1))
+7016     ' (its top is exactly the torso's bottom: 3.6 x 6.0 half size; it flares to 3.9 x 6.5 at the thighs; a belt covers the seam)
+7017     F1X=3.9:F1Y=6.5:F2X=3.6:F2Y=6.0:FC1X=0:FC1Y=SWY:FC2X=0:FC2Y=SWY
+7018     CALL FRUST(520,HIPZ-4.5,HIPZ+0.5,CC2)
+7019     CALL BX(520,-3.75,-6.15+SWY,HIPZ-0.4,3.75,6.15+SWY,HIPZ+0.9,BELT)
+7020     ' the torso narrows to the waist (3.6 x 6.0) and widens to the chest (4.4 x 7.4)
+7021     F1X=3.6:F1Y=6.0:F2X=4.4:F2Y=7.4:FC1X=0:FC1Y=SWY:FC2X=0:FC2Y=STY
+7022     CALL FRUST(520,HIPZ+0.5,SHZ+0.5,CC1)
+7030     CALL HEAD(520,0,STY,SHZ+2.5)
 7040     FOR Q=0 TO 1
 7050       SG=1:IF Q=1 THEN SG=-1
 7060       FX=GPX(Q):FZ=GPZ(Q)
 7070       PLX0=1:PLY0=0:PLZ0=0.1:LH=2.6:TBT=FN CC(8,5):TBU=TBT
-7080       CALL LIMB(520,0.12*FX,SG*4+SWY,HIPZ,FX,SG*4,FZ,14)
+7080       CALL LIMB(520,0.12*FX,SG*3.6+SWY,HIPZ,FX,SG*4,FZ,14)
 7090       CALL BX(520,FX-3.5,SG*4-3,FZ-2.8,FX+6,SG*4+3,FZ+1.5,FN CC(0,13))
 7100       HX=-0.7*FX
 7110       PLX0=-1:PLY0=SG*0.35:PLZ0=-0.1:LH=2.3:TBT=CC1:TBU=CC3
@@ -844,9 +849,9 @@
 7150   ELSE
 7160     HIPX=-9.5:HIPZ=32.4:SHX=-3:SHZ=46.4
 7170     TBT=CC1
-7175     CALL BX(520,HIPX-4.8,-7,HIPZ-3.5,HIPX+4.8,7,HIPZ+3.5,CC2)
+7175     CALL BX(520,HIPX-4.2,-6.8,HIPZ-3.5,HIPX+4.2,6.8,HIPZ+3.5,CC2)
 7180     CALL TUBE(520,HIPX,3.4,HIPZ,SHX,3.4,SHZ,3.4):CALL TUBE(520,HIPX,-3.4,HIPZ,SHX,-3.4,SHZ,3.4)
-7190     CALL BX(520,SHX-0.5,-4,SHZ+2,SHX+8.5,4,SHZ+11,CC3):CALL BX(520,SHX-1.2,-4.6,SHZ+7,SHX+7.4,4.6,SHZ+12.5,CC4):CALL BX(520,SHX+8.5,-3.6,SHZ+5.4,SHX+9.4,3.6,SHZ+7,FN CC(0,1))
+7190     CALL HEAD(520,SHX+4,0,SHZ+2.5)
 7200     FOR Q=0 TO 1
 7210       SG=1:IF Q=1 THEN SG=-1
 7220       A=-(CA+Q*PI)
@@ -1479,7 +1484,7 @@
 12956 WSLOW=22:WFAST=155:WBACK=38:WACC=150:WDEC=170:WRAMP=60:ACL=0
 12957 ' the bicycle's top speed: 30 km/h = 8.33 m/s = 260 units/s at 3.2 cm a unit (the scale of docs/1987.md)
 12958 WBMAX=30/3.6/0.032
-12959 WPED=140:WTIRE=100:WBMIN=40
+12959 WPED=140:WTIRE=100:WBMIN=40:BELT=FN CC(12,3)
 12961 ' the edge of the world (the only invisible-looking limit; the red tiles of BUILDEDGE show it)
 12962 WLIM=3420
 12963 ' the bicycle without a rider: it rolls on upright for WFALL seconds, then falls over and slides on its side (deceleration WSLIDE units a second squared); XON / XFR: tilt on
@@ -1540,3 +1545,74 @@
 13480     NEXT K
 13490   NEXT S
 13500 END PROC
+13510 ' ------------------------------------------------------------------------------------------------ John's head and torso
+13520 ' a frustum (a box that is smaller at one end): the bottom z = Z1 with the half sizes F1X, F1Y round the centre (FC1X, FC1Y), the top z = Z2 with F2X, F2Y round (FC2X, FC2Y)
+13530 PROC FRUST(O,Z1,Z2,TX)
+13540   LOCAL B
+13550   B=M3D("VERTS",O)
+13560   M3D VERTEX O,FC1X-F1X,FC1Y-F1Y,Z1:M3D VERTEX O,FC1X+F1X,FC1Y-F1Y,Z1:M3D VERTEX O,FC1X+F1X,FC1Y+F1Y,Z1:M3D VERTEX O,FC1X-F1X,FC1Y+F1Y,Z1
+13570   M3D VERTEX O,FC2X-F2X,FC2Y-F2Y,Z2:M3D VERTEX O,FC2X+F2X,FC2Y-F2Y,Z2:M3D VERTEX O,FC2X+F2X,FC2Y+F2Y,Z2:M3D VERTEX O,FC2X-F2X,FC2Y+F2Y,Z2
+13580   M3D QUAD O,B,B+1,B+2,B+3,TX:M3D QUAD O,B+4,B+5,B+6,B+7,TX
+13590   M3D QUAD O,B,B+1,B+5,B+4,TX:M3D QUAD O,B+1,B+2,B+6,B+5,TX
+13600   M3D QUAD O,B+2,B+3,B+7,B+6,TX:M3D QUAD O,B+3,B,B+4,B+7,TX
+13610 END PROC
+13620 ' the radius of the head at the fraction T (0 chin .. 1 crown) of its height, from the profile in LRZ / LRR (set by HEAD)
+13630 FUNC HPRF(T)
+13640   LOCAL J
+13650   IF T<=LRZ(0) THEN RETURN LRR(0)
+13660   FOR J=1 TO 6
+13670     IF T<=LRZ(J) THEN RETURN LRR(J-1)+(LRR(J)-LRR(J-1))*(T-LRZ(J-1))/(LRZ(J)-LRZ(J-1))
+13680   NEXT J
+13690   RETURN LRR(6)
+13700 END FUNC
+13710 ' the head: an egg standing on its narrow end (broad cranium, narrow chin; 10.5 high, 8.6 wide) with the chin at CZ, centred on (CX, CY), the face towards +x: a cap of jagged
+13720 ' gray hair that starts at the forehead in front, over the ears at the sides and at the nape at the back, ears, a neck, and a face: eyes (white with a dark pupil), eyebrows,
+13730 ' a nose and a mouth
+13740 PROC HEAD(O,CX,CY,CZ)
+13750   LOCAL J,K,B,A,R,T,F,H,NS,SK,SK2,JG
+13760   H=10.5:NS=12:SK=FN CC(14,11):SK2=FN CC(14,9)
+13770   LRZ(0)=0:LRZ(1)=0.12:LRZ(2)=0.3:LRZ(3)=0.55:LRZ(4)=0.78:LRZ(5)=0.93:LRZ(6)=1
+13780   LRR(0)=0.5:LRR(1)=2.6:LRR(2)=3.7:LRR(3)=4.3:LRR(4)=4.2:LRR(5)=3.1:LRR(6)=0.7
+13790   B=M3D("VERTS",O)
+13800   FOR J=0 TO 6
+13810     FOR K=0 TO NS-1
+13820       A=K*2*PI/NS
+13830       M3D VERTEX O,CX+LRR(J)*1.05*COS(A),CY+LRR(J)*0.95*SIN(A),CZ+LRZ(J)*H
+13840     NEXT K
+13850   NEXT J
+13860   FOR J=0 TO 5
+13870     FOR K=0 TO NS-1
+13880       M3D QUAD O,B+J*NS+K,B+J*NS+(K+1) MOD NS,B+(J+1)*NS+(K+1) MOD NS,B+(J+1)*NS+K,SK
+13890     NEXT K
+13900   NEXT J
+13910   ' the hair: five rings, the lowest one at a height that depends on the side and is ragged, the others pushed out by 0.55 and ragged in radius
+13920   B=M3D("VERTS",O)
+13930   FOR J=0 TO 4
+13940     FOR K=0 TO NS-1
+13950       A=K*2*PI/NS:F=(1-COS(A))/2:JG=((K*5) MOD 3)-1
+13960       IF J=0 THEN T=0.70-0.40*F+0.06*JG ELSE T=0.70+0.085*J
+13970       IF J=4 THEN T=1.02
+13980       R=FN HPRF(MIN(T,1))+0.55
+13990       IF J>=2 THEN R=R*(1+0.06*JG)
+14000       IF J=4 THEN R=0.6
+14010       M3D VERTEX O,CX+R*1.05*COS(A),CY+R*0.95*SIN(A),CZ+T*H
+14020     NEXT K
+14030   NEXT J
+14040   FOR J=0 TO 3
+14050     FOR K=0 TO NS-1
+14060       M3D QUAD O,B+J*NS+K,B+J*NS+(K+1) MOD NS,B+(J+1)*NS+(K+1) MOD NS,B+(J+1)*NS+K,CC4+(K MOD 2)*2
+14070     NEXT K
+14080   NEXT J
+14090   ' the neck and the ears
+14100   CALL BX(O,CX-1.8,CY-1.8,CZ-2.2,CX+1.8,CY+1.8,CZ+1.4,SK2)
+14110   CALL BX(O,CX-1,CY+3.9,CZ+4.8,CX+1.4,CY+4.8,CZ+7.2,SK2):CALL BX(O,CX-1,CY-4.8,CZ+4.8,CX+1.4,CY-3.9,CZ+7.2,SK2)
+14120   ' the face
+14130   FOR K=0 TO 1
+14140     F=1:IF K=1 THEN F=-1
+14150     IF F>0 THEN CALL BX(O,CX+3.5,CY+1.2,CZ+6.2,CX+4.25,CY+2.8,CZ+7.4,FN CC(0,15)) ELSE CALL BX(O,CX+3.5,CY-2.8,CZ+6.2,CX+4.25,CY-1.2,CZ+7.4,FN CC(0,15))
+14160     IF F>0 THEN CALL BX(O,CX+4.0,CY+1.7,CZ+6.4,CX+4.35,CY+2.5,CZ+7.2,FN CC(9,2)) ELSE CALL BX(O,CX+4.0,CY-2.5,CZ+6.4,CX+4.35,CY-1.7,CZ+7.2,FN CC(9,2))
+14170     IF F>0 THEN CALL BX(O,CX+3.6,CY+1,CZ+7.8,CX+4.2,CY+3.1,CZ+8.4,CC5) ELSE CALL BX(O,CX+3.6,CY-3.1,CZ+7.8,CX+4.2,CY-1,CZ+8.4,CC5)
+14180   NEXT K
+14190   CALL BX(O,CX+3.7,CY-0.8,CZ+3.5,CX+5.3,CY+0.8,CZ+5.8,SK2)
+14200   CALL BX(O,CX+3.2,CY-1.7,CZ+2.2,CX+3.85,CY+1.7,CZ+2.9,FN CC(1,5))
+14210 END PROC
