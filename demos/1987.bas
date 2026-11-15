@@ -950,7 +950,7 @@
 9280   AC=0:SPRN=0
 9290   IF TH>0 THEN
 9300     IF KR<>0 AND ST>0.02 THEN
-9310       AC=170*(1-BV/310):SPRN=-1
+9310       AC=200*(1-BV/(1.25*WBMAX)):SPRN=-1
 9320     ELSE
 9330       AC=78*(1-BV/190)
 9340     END IF
@@ -964,6 +964,8 @@
 9420   END IF
 9430   SL=(FN HT(BX+C*24,BY+S*24)-FN HT(BX,BY))/24
 9440   BV=BV+AC*DT-260*SL*DT
+9445   ' the top speed of the bicycle: 30 km/h, also downhill (a sprint on the flat ends up at about this speed by itself)
+9446   IF BV>WBMAX THEN BV=WBMAX
 9450   IF BV>0 THEN BV=BV-(9+0.05*BV)*DT
 9460   IF BV<0 THEN BV=BV+(9-0.05*BV)*DT
 9470   IF ABS(BV)<2 AND AC=0 AND ABS(SL)<0.02 AND NOT (MODE=1 AND KF<0) THEN BV=0
@@ -1032,8 +1034,8 @@
 9950     DX=COS(JH*PI/180)*JV*DT:DY=SIN(JH*PI/180)*JV*DT
 9960     IF ABS(JV)>0.3 THEN
 9970       M3D THINGMOVE 0,DX,DY
-9975       ' a wall that stops him (he gets less than half of the way he meant to go) takes speed off; sliding along a wall does not
-9980       IF M3D("HIT")<>0 AND SQR((M3D("TX",0)-JX)^2+(M3D("TY",0)-JY)^2)<0.5*SQR(DX*DX+DY*DY) THEN JV=JV*0.6
+9975       ' a wall that stops him (he gets less than half of the way he meant to go) stops him dead (speed and the keys' target speed 0); sliding along a wall does not
+9980       IF M3D("HIT")<>0 AND SQR((M3D("TX",0)-JX)^2+(M3D("TY",0)-JY)^2)<0.5*SQR(DX*DX+DY*DY) THEN JV=0:KTS=0
 9990       JX=M3D("TX",0):JY=M3D("TY",0):JZ=M3D("TZ",0)
 10000       IF ABS(JX)>3420 OR ABS(JY)>3420 THEN
 10010         JX=MAX(-3420,MIN(3420,JX)):JY=MAX(-3420,MIN(3420,JY))
@@ -1042,7 +1044,7 @@
 10040     ELSE
 10050       JV=0
 10060     END IF
-10070     ' the stride (the distance of one step) grows with the speed from 10 units (about 30 cm) to 30 units (about 90 cm); a unit is about 3 cm (John is 58 units tall)
+10070     ' the stride (the distance of one step) grows with the speed from 10 units (about 30 cm) to 30 units (about 90 cm); a unit is about 3.2 cm (John is 58 units tall)
 10075     PH=PH+JV*DT*PI/(10+20*FN SPD1(JV))
 10080     NS=INT(PH/PI):IF NS<>NSL THEN NSL=NS:IF ABS(JV)>8 THEN CALL FOOTSTEP
 10090     ' get on
@@ -1334,8 +1336,10 @@
 12930 ' ------------------------------------------------------------------------------------------------ main
 12940 LABEL MAIN
 12950 IN_QUIT=0
-12955 ' walking: speeds in units per second (a unit is about 3 cm), accelerations in units per second squared
+12955 ' walking: speeds in units per second (a unit is about 3.2 cm), accelerations in units per second squared
 12956 WSLOW=22:WFAST=155:WBACK=38:WACC=150:WDEC=170:WRAMP=60:ACL=0
+12957 ' the bicycle's top speed: 30 km/h = 8.33 m/s = 260 units/s at 3.2 cm a unit (the scale of docs/1987.md)
+12958 WBMAX=30/3.6/0.032
 12960 IF NOT HL THEN CALL W3K_SETUP:CALL W3K_MESH:M3D RESET:CALL MAKETEX
 12970 CALL BUILDTERRAIN
 12980 CALL BUILDROADS

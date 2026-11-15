@@ -158,6 +158,7 @@ expect "start: the bicycle stands" "$(val state 1 bv)" 0 0
 expect "walk: through the open door into the house" "$(val state 2 jy)" -90 60
 # 2. walking at the wall west of the door stops at the wall (y = -100 less the body radius 12), on the porch (z 7)
 expect "walk: John stopped at the wall" "$(val state 3 jy)" -125 -100
+expect "walk: a wall stops John dead" "$(val state 3 jv)" 0 0
 expect "walk: John is on the porch" "$(val state 3 jz)" 5 9
 # 3. getting on the bicycle: John sits on it
 expect "mount: riding" "$(val state 4 mode)" 1 1
@@ -168,7 +169,7 @@ expect "no turning on the spot" "$(val state 5 bh)" 268 272
 expect "pedal: speed after 3 s" "$(val state 6 bv)" 70 190
 expect "pedal: rolled south" "$(val state 6 by)" -700 -250
 # 6. sprinting is faster and tires you
-expect "sprint: faster" "$(val state 7 bv)" "$(val state 6 bv)" 340
+expect "sprint: faster, but not above 30 km/h (260 units a second)" "$(val state 7 bv)" "$(val state 6 bv)" 261
 expect "sprint: stamina used" "$(val state 7 st)" 0 85
 # 7. rolling on: it slows down slowly, it does not stop at once
 expect "coast: still rolling after 3 s" "$(val state 8 bv)" 20 "$(val state 7 bv)"
