@@ -689,8 +689,12 @@
 6142   C=COS(BH*PI/180):S=SIN(BH*PI/180)
 6145   FX=BX+12*C:FY=BY+12*S
 6148   M3D OBJPOS 510,BX,BY,BZ,BH
-6151   M3D OBJECT 512,28,235:CALL BIKEREAR(512)
-6154   M3D OBJECT 513,28,235:CALL BIKEFR(513)
+6150   ' the spokes and the pedals depend on the wheel angle WA and the crank angle CA only: a bicycle that stands still keeps its meshes
+6151   IF WA<>PWA OR CA<>PCA THEN
+6152     PWA=WA:PCA=CA:CNB=CNB+1
+6153     M3D OBJECT 512,28,235:CALL BIKEREAR(512)
+6154     M3D OBJECT 513,28,235:CALL BIKEFR(513)
+6155   END IF
 6157   M3D OBJPOS 512,BX,BY,BZ,BH
 6160   M3D OBJPOS 511,FX,FY,BZ,BH+BSA
 6163   M3D OBJPOS 513,FX,FY,BZ,BH+BSA
@@ -803,8 +807,13 @@
 6790 ' pose 0: standing / walking (PH = the walk phase, AM = the stride 0 .. 1), pose 1: riding (in the coordinates of the bicycle; CA = the cranks, BS = the steering)
 6800 PROC BUILDJOHN(POSE,PH,AM)
 6810   LOCAL Q,SG,FX,FZ,HX,HZ,PX,PZ,A,HY,GX,GY,LN,HIPX,HIPZ,SHX,SHZ,GXL,GYL,HH,SWY,STY,BRS
-6820   M3D OBJECT 520,28,235
-6830   CC1=FN CC(5,6):CC2=FN CC(8,5):CC3=FN CC(14,11):CC4=FN CC(0,12):CC5=FN CC(0,14):BRS=SIN(BRP)
+6830   CC1=FN CC(5,6):CC2=FN CC(8,5):CC3=FN CC(14,11):CC4=FN CC(0,12):CC5=FN CC(0,14)
+6831   ' the mesh cache: the body (object 520, without the head) depends on nothing but the pose, the walk phase, the stride, the speed (the sway), the pedals, the steering and the breath
+6832   ' (rounded: the breath to a quarter of its range, the crank angle to 0.025 radians, the steering angle to 0.2 degrees), so when all of these are as at the last build the mesh is still right and is not built again (the object keeps its triangles)
+6833   BRS=INT(SIN(BRP)*4+0.5)/4
+6834   IF POSE=BJ1 AND PH=BJ2 AND AM=BJ3 AND INT(ABS(JV))=BJ4 AND INT(CA*40)=BJ5 AND INT(BSA*5)=BJ6 AND BRS=BJ7 THEN EXIT PROC
+6835   BJ1=POSE:BJ2=PH:BJ3=AM:BJ4=INT(ABS(JV)):BJ5=INT(CA*40):BJ6=INT(BSA*5):BJ7=BRS:CNJ=CNJ+1
+6836   M3D OBJECT 520,28,235
 6840   IF POSE=0 THEN
 6850     SD=6+AM*12
 6860     FOR Q=0 TO 1
@@ -834,7 +843,7 @@
 7020     ' the torso narrows to the waist (3.6 x 6.0) and widens to the chest (4.4 x 7.4)
 7021     F1X=3.6:F1Y=6.0:F2X=4.4*(1+0.03*BRS):F2Y=7.4*(1+0.03*BRS):FC1X=0:FC1Y=SWY:FC2X=0:FC2Y=STY
 7022     CALL FRUST(520,HIPZ+0.5,SHZ+0.5,CC1)
-7030     CALL COLLAR(520,0,STY,SHZ+0.5):CALL HEAD(520,0,STY,SHZ+2.5)
+7030     CALL COLLAR(520,0,STY,SHZ+0.5):HOX=0:HOY=STY:HOZ=SHZ+2.5
 7040     FOR Q=0 TO 1
 7050       SG=1:IF Q=1 THEN SG=-1
 7060       FX=GPX(Q):FZ=GPZ(Q)
@@ -853,7 +862,7 @@
 7170     TBT=CC1
 7175     CALL BX(520,HIPX-4.2,-6.8,HIPZ-3.5,HIPX+4.2,6.8,HIPZ+3.5,CC2)
 7180     CALL TUBE(520,HIPX,3.4,HIPZ,SHX,3.4,SHZ,3.4):CALL TUBE(520,HIPX,-3.4,HIPZ,SHX,-3.4,SHZ,3.4)
-7190     CALL COLLAR(520,SHX,0,SHZ+0.5):CALL HEAD(520,SHX+4,0,SHZ+2.5)
+7190     CALL COLLAR(520,SHX,0,SHZ+0.5):HOX=SHX+4:HOY=0:HOZ=SHZ+2.5
 7200     FOR Q=0 TO 1
 7210       SG=1:IF Q=1 THEN SG=-1
 7220       A=-(CA+Q*PI)
@@ -1310,11 +1319,11 @@
 11260   CALL DRONERIG
 11270   IF MODE=1 THEN
 11280     CALL BUILDJOHN(1,PH,0)
-11290     M3D OBJPOS 520,BX,BY,BZ,BH
+11290     M3D OBJPOS 520,BX,BY,BZ,BH:CALL PLACEHEAD(BX,BY,BZ,BH)
 11300   ELSE
 11310     AM=FN SPD1(JV):IF MODE>=2 THEN AM=0.4
 11320     CALL BUILDJOHN(0,PH,AM)
-11330     M3D OBJPOS 520,JX,JY,JZ,JH
+11330     M3D OBJPOS 520,JX,JY,JZ,JH:CALL PLACEHEAD(JX,JY,JZ,JH)
 11340   END IF
 11350   CALL PLACEBIKE
 11360   M3D OBJPOS 531,BX,BY,FN FLR(BX,BY)+0.8,BH
@@ -1415,8 +1424,8 @@
 12290 ' commands, one per line of the file G1987_PLAY: f v (forward -1..1), t v (turn), run v, brake v, use (get on / off), wait seconds, goto x y heading,
 12300 ' bike x y heading, state (prints), shot name (a screenshot in the window host), say text, quit
 12310 PROC PLAYBACK
-12320   LOCAL L$,C$,I,N,PF,PT,PR,PB,T0,PSH
-12330   PF=0:PFA=0:PT=0:PR=0:PB=0:PSH=0
+12320   LOCAL L$,C$,I,N,PF,PT,PR,PB,T0,PSH,PRG
+12330   PF=0:PFA=0:PT=0:PR=0:PB=0:PSH=0:PRG=0
 12340   WHILE NOT EOF(4)
 12350     LINE INPUT #4,L$
 12360     CALL SPLIT(L$)
@@ -1442,13 +1451,14 @@
 12522         KR=0:IF KRA>0 THEN KR=-1
 12523         KB=PB
 12530         CALL SIM(1/60)
+12535         IF PRG<>0 THEN CALL RIGS
 12540         KU=0
 12550         DTF=1/60
 12560         CALL CAMUPDATE(1/60)
 12570       NEXT I
 12580     END IF
 12590     IF C$="state" THEN
-12600       PRINT "state mode=";MODE;" jx=";INT(JX);" jy=";INT(JY);" jz=";INT(JZ+0.5);" jh=";INT(JH);" jv=";INT(JV);" bst=";BST;" hly=";INT(HLY);" hlp=";INT(HLP);" brp=";INT(BRP*100);" bx=";INT(BX);" by=";INT(BY);" bz=";INT(BZ+0.5);" bh=";INT(BH);" bv=";INT(BV);" st=";INT(ST*100)
+12600       PRINT "state mode=";MODE;" jx=";INT(JX);" jy=";INT(JY);" jz=";INT(JZ+0.5);" jh=";INT(JH);" jv=";INT(JV);" bst=";BST;" nj=";CNJ;" nh=";CNH;" nb=";CNB;" hly=";INT(HLY);" hlp=";INT(HLP);" brp=";INT(BRP*100);" bx=";INT(BX);" by=";INT(BY);" bz=";INT(BZ+0.5);" bh=";INT(BH);" bv=";INT(BV);" st=";INT(ST*100)
 12610     END IF
 12620     IF C$="ray" THEN
 12630       M3D CAMERA VAL(W$(1)),VAL(W$(2)),VAL(W$(3))-46,VAL(W$(4)),VAL(W$(5))
@@ -1469,6 +1479,7 @@
 12780     IF C$="co" THEN CO=VAL(W$(1)):CYW=JH+CO
 12790     IF C$="cp" THEN CP=VAL(W$(1))
 12795     IF C$="look" THEN HLY=VAL(W$(1)):HLP=VAL(W$(2))
+12796     IF C$="rigs" THEN PRG=VAL(W$(1))
 12800     IF C$="cam" THEN
 12810       PRINT "ds=";INT(DSV)
 12820       PRINT "cam x=";INT(M3D("X"));" y=";INT(M3D("Y"));" z=";INT(M3D("Z")+46);" yaw=";INT(M3D("YAW"));" pitch=";INT(M3D("PITCH"))
@@ -1493,7 +1504,7 @@
 12961 ' the edge of the world (the only invisible-looking limit; the red tiles of BUILDEDGE show it)
 12962 WLIM=3420
 12963 ' the bicycle without a rider: it rolls on upright for WFALL seconds, then falls over and slides on its side (deceleration WSLIDE units a second squared); XON / XFR: tilt on
-12964 HLY=0:HLP=0:BRP=0:HCX=0:HCY=0:HCZ=0:HYS=0:HYC=1:HPS=0:HPC=1:WFALL=3:WSLIDE=120:XON=0:XFR=0:XRS=0:XRC=1:XFS=0:XFC=1:XLF=0
+12964 HLY=0:HLP=0:BRP=0:HQY=0:HQP=0:HKEY=99999:HOX=0:HOY=0:HOZ=0:BJ1=-1:BJ2=0:BJ3=0:BJ4=0:BJ5=0:BJ6=0:BJ7=0:PWA=-99999:PCA=-99999:CNJ=0:CNH=0:CNB=0:HCX=0:HCY=0:HCZ=0:HYS=0:HYC=1:HPS=0:HPC=1:WFALL=3:WSLIDE=120:XON=0:XFR=0:XRS=0:XRC=1:XFS=0:XFC=1:XLF=0
 12960 IF NOT HL THEN CALL W3K_SETUP:CALL W3K_MESH:M3D RESET:CALL MAKETEX
 12970 CALL BUILDTERRAIN
 12980 CALL BUILDROADS
@@ -1571,7 +1582,7 @@
 13690   RETURN LRR(6)
 13700 END FUNC
 13710 ' the head: an egg standing on its narrow end (broad cranium, narrow chin; 10.5 high, 8.6 wide) with the chin at CZ, centred on (CX, CY), the face towards +x, turned by the yaw
-13720 ' HLY and the pitch HLP (degrees; the pivot is the chin / neck): every vertex goes through HV. A cap of jagged gray hair that starts at the forehead in front, over the ears at the sides
+13720 ' HQY and the pitch HQP (the head's yaw and pitch rounded to whole degrees; the pivot is the chin / neck): every vertex goes through HV. A cap of jagged gray hair that starts at the forehead in front, over the ears at the sides
 13730 ' and at the nape at the back, ears, a neck (which does not turn), glasses with thin frames and temples, eyes (white with a dark pupil), eyebrows, a nose and a mouth
 13740 PROC HV(O,X,Y,Z)
 13750   LOCAL X1,Z1
@@ -1592,7 +1603,7 @@
 13900   LOCAL J,K,B,A,R,T,F,H,NS,SK,SK2,JG,SG,GL
 13910   H=10.5:NS=12:SK=FN CC(14,11):SK2=FN CC(14,9):GL=FN CC(0,3)
 13920   HCX=CX:HCY=CY:HCZ=CZ
-13930   HYS=SIN(HLY*PI/180):HYC=COS(HLY*PI/180):HPS=SIN(HLP*PI/180):HPC=COS(HLP*PI/180)
+13930   HYS=SIN(HQY*PI/180):HYC=COS(HQY*PI/180):HPS=SIN(HQP*PI/180):HPC=COS(HQP*PI/180)
 13940   LRZ(0)=0:LRZ(1)=0.12:LRZ(2)=0.3:LRZ(3)=0.55:LRZ(4)=0.78:LRZ(5)=0.93:LRZ(6)=1
 13950   LRR(0)=0.5:LRR(1)=2.6:LRR(2)=3.7:LRR(3)=4.3:LRR(4)=4.2:LRR(5)=3.1:LRR(6)=0.7
 13960   B=M3D("VERTS",O)
@@ -1709,3 +1720,15 @@
 15070   END IF
 15080   HLY=HLY+(TY-HLY)*MIN(1,5*DT):HLP=HLP+(TP-HLP)*MIN(1,5*DT)
 15090 END PROC
+15100 ' the head is its own object (521, built in its own coordinates with the chin at the origin) so that it is built again only when the rounded yaw / pitch change (the head
+15110 ' moves with the body by its position and heading alone); HOX, HOY, HOZ: where the chin is in the body's coordinates (set by BUILDJOHN), OX, OY, OZ, OHD: the body's place
+15120 PROC PLACEHEAD(OX,OY,OZ,OHD)
+15130   LOCAL K,C,S
+15140   HQY=INT(HLY+0.5):HQP=INT(HLP+0.5):K=HQY*1000+HQP
+15150   IF K<>HKEY THEN
+15160     HKEY=K:CNH=CNH+1
+15170     M3D OBJECT 521,28,235:CALL HEAD(521,0,0,0)
+15180   END IF
+15190   C=COS(OHD*PI/180):S=SIN(OHD*PI/180)
+15200   M3D OBJPOS 521,OX+C*HOX-S*HOY,OY+S*HOX+C*HOY,OZ+HOZ,OHD
+15210 END PROC

@@ -208,6 +208,20 @@ wait 2.5
 state
 wait 5
 state
+goto 1500 -900 0
+f 0
+fa 0
+run 0
+t 0
+rigs 1
+wait 1
+state
+wait 5
+state
+f 1
+wait 2
+state
+rigs 0
 drones
 wait 30
 drones
@@ -306,6 +320,12 @@ expect "riderless, moving: it turned while sliding" "$(awk -v a="$(val state 38 
 # 11h. the figure: the head turns to look (it follows a turn: t 1 gives about 22 degrees to the left unless a drone is in sight, then up to 80 either way), it breathes (the phase advances)
 expect "breathing: the phase advances" "$(awk -v a="$(val state 1 brp)" -v b="$(val state 40 brp)" 'BEGIN { print (b > a) ? 1 : 0 }')" 1 1
 expect "head: yaw and pitch stay in range" "$(awk -v y="$(val state 40 hly)" -v p="$(val state 40 hlp)" 'BEGIN { print (y >= -80 && y <= 80 && p >= -15 && p <= 40) ? 1 : 0 }')" 1 1
+# 11i. mesh cache: a John who stands still (only the breath changes, rounded to a quarter of its range) and a head whose rounded angles stay the same are not built again every
+#      frame; 300 frames of standing still build the body only a few times, walking builds it every frame
+expect "cache: standing still 5 s (300 frames): few body builds" "$(awk -v a="$(val state 41 nj)" -v b="$(val state 42 nj)" 'BEGIN { print b - a }')" 0 40
+expect "cache: standing still 5 s (300 frames): few head builds" "$(awk -v a="$(val state 41 nh)" -v b="$(val state 42 nh)" 'BEGIN { print b - a }')" 0 8
+expect "cache: walking 2 s (120 frames): the body is built about every frame" "$(awk -v a="$(val state 42 nj)" -v b="$(val state 43 nj)" 'BEGIN { print b - a }')" 100 125
+expect "cache: the bicycle at rest keeps its spoke meshes" "$(awk -v a="$(val state 41 nb)" -v b="$(val state 42 nb)" 'BEGIN { print b - a }')" 0 3
 # 12. the camera stays above the ground, rays: the house wall is an object, open ground is not hit
 expect "camera: z above the ground" "$(val cam 1 z)" 20 400
 expect "ray at the house" "$(val ray 1 obj)" 300 300
