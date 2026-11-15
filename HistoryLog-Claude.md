@@ -13,6 +13,8 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+- **Sound log shows the granted audio buffer** (2026-11-15, owner sent a tester's `sound.log`: the callbacks were 1024 frames although 4096 was believed set; cause found by the owner: the audio changes were only on a feature branch, not in the tester's build). `sdlaudio.c`: the sound log starts with `audio driver X, N Hz, C channels, buffer G frames granted (asked for A)`, the state lines count callback sizes in frames (they counted floats before, i.e. twice the frames), a message on stderr when the device grants another size than asked. Tests: `hosttest.sh` passes. The tester's old-build log: 37 callbacks a second instead of 43, gaps 42 .. 67 ms, mix peak <= 0.97 (no clipping), to be compared with a log of the new build.
+
 
 ## Log
 
