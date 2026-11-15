@@ -31,13 +31,13 @@ cat > $T/play <<'PLAY'
 state
 goto 0 -172 90
 f 1
-wait 3
+wait 2
 state
 shot walkpose
 f 0
-goto -60 -172 90
+goto -45 -172 90
 f 1
-wait 2
+wait 2.5
 state
 f 0
 goto 20 -176 270
@@ -109,6 +109,36 @@ f -1
 run 0
 wait 2
 state
+use
+wait 1
+goto 600 -500 0
+f 0
+t 0
+run 0
+fa 0.05
+wait 1
+state
+fa 1
+wait 0.3
+state
+wait 2
+state
+fa 0
+wait 0.3
+state
+wait 2
+state
+fa 0
+f 1
+wait 0.3
+state
+wait 4
+state
+f 0
+wait 0.3
+state
+wait 2
+state
 drones
 wait 30
 drones
@@ -161,6 +191,18 @@ expect "drone altitude" "$(val drone 1 z)" 340 450
 expect "drone flew on" "$(awk -v a="$(val drone 1 x)" -v b="$(val drone 2 x)" -v c="$(val drone 1 y)" -v d="$(val drone 2 y)" 'BEGIN { print sqrt((a-b)^2+(c-d)^2) }')" 500 3000
 expect "drone stays in the world" "$(val drone 3 x)" -3200 3200
 expect "drone reached a later way point" "$(val drone 3 t)" 0 7
+# 11d. variable walking speed: a barely deflected stick gives slow walking (22 + 133 * 0.05 / 0.95 = 29), a fully pushed one the top speed (155), accelerating
+#      steadily (150 per second: 45 in 0.3 s); letting go slows down steadily (170 per second) to a stop; a held key raises the target from 22 to 155
+#      (60 per second: 22 + 18 after 0.3 s) and letting go stops the same way
+expect "analog: barely above the dead zone is slow" "$(val state 17 jv)" 25 33
+expect "analog: accelerating towards the top speed" "$(val state 18 jv)" 60 90
+expect "analog: top speed reached and held" "$(val state 19 jv)" 154 156
+expect "analog: released, slowing down" "$(val state 20 jv)" 85 125
+expect "analog: released, standing" "$(val state 21 jv)" 0 0
+expect "key: target speed starts low and rises" "$(val state 22 jv)" 20 45
+expect "key: top speed after holding" "$(val state 23 jv)" 154 156
+expect "key: released, slowing down" "$(val state 24 jv)" 85 125
+expect "key: released, standing" "$(val state 25 jv)" 0 0
 # 12. the camera stays above the ground, rays: the house wall is an object, open ground is not hit
 expect "camera: z above the ground" "$(val cam 1 z)" 20 400
 expect "ray at the house" "$(val ray 1 obj)" 300 300

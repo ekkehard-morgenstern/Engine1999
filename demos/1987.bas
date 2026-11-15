@@ -60,6 +60,10 @@
 560   RETURN M3D("FLOORAT",X,Y,FN HT(X,Y)+40)
 570 END FUNC
 580 ' the ground under a point: 0 grass, 1 sand road, 2 wood (the porch and the floor of the house), 3 wheat
+582 ' how fast John walks, 0 (the slow walk WSLOW or slower) .. 1 (the top speed WFAST)
+584 FUNC SPD1(V)
+586   RETURN MAX(0,MIN(1,(ABS(V)-WSLOW)/(WFAST-WSLOW)))
+588 END FUNC
 590 FUNC SURF(X,Y,Z)
 600   LOCAL I,DX,DY,UX,UY,TT,E
 605   ' the roads lie 3 .. 5 units above the ground (the walker stands on them), the porch 7, the floor of the house 5 (and no road reaches it)
@@ -694,7 +698,7 @@
 6820   M3D OBJECT 520,28,235
 6830   CC1=FN CC(5,6):CC2=FN CC(8,5):CC3=FN CC(14,11):CC4=FN CC(0,12):CC5=FN CC(0,14)
 6840   IF POSE=0 THEN
-6850     SD=6+AM*8
+6850     SD=6+AM*12
 6860     FOR Q=0 TO 1
 6870       A=PH/(2*PI)+Q*0.5:A=A-INT(A)
 6880       IF A<0.6 THEN
@@ -713,7 +717,7 @@
 7010     HIPX=0:SHX=0:SHZ=HIPZ+16
 7012     ' the sway: the pelvis moves sideways over the leg that carries the weight (that leg is on the ground from phase 0 to 0.6, its middle at 0.3), the upper body follows
 7013     ' with a little over half of it, and each hip goes forward with its leg (the pelvis turns: 0.12 of the foot's distance)
-7014     SWY=AM*1.6*SIN(PH-0.314):STY=SWY*0.55
+7014     SWY=MIN(1,ABS(JV)/WSLOW)*(0.8+0.8*AM)*SIN(PH-0.314):STY=SWY*0.55
 7015     ' the pelvis: a trouser colored block wider than the torso's waist, under it; the legs join it at the sides
 7016     CALL BX(520,-4.8,-8.2+SWY,HIPZ-4.5,4.8,8.2+SWY,HIPZ+3.5,CC2)
 7020     CALL BX(520,-4,-7+STY,HIPZ+0.5,4,7+STY,SHZ+0.5,CC1)
@@ -1003,17 +1007,33 @@
 9850   IF MODE=1 AND TH<=0 AND TK>70 AND BV>25 THEN TK=0:CALL SND(3)
 9860   ' ---- John
 9870   IF MODE=0 THEN
-9880     TV=0
-9890     IF KF>0 THEN
-9900       TV=62*KF:IF KR<>0 THEN TV=155*KF
-9910     END IF
-9920     IF KF<0 THEN TV=38*KF
-9930     JV=JV+SGN(TV-JV)*MIN(ABS(TV-JV),520*DT)
+9880     ' the target speed TV: a stick gives it by its deflection (just past the dead zone: WSLOW, fully pushed: WFAST); a key raises it from WSLOW to WFAST
+9881     ' while it is held (WRAMP per second; SHIFT / the left trigger go straight to WFAST); letting go sets it to 0. John accelerates towards it (WACC),
+9882     ' and slows down (WDEC) to a lower target or to a stop: no acceleration once it is reached.
+9883     TV=0
+9884     IF KFA>0 THEN
+9885       TV=WSLOW+(WFAST-WSLOW)*MIN(1,KFA/0.95):KTS=0
+9886     ELSE
+9887       IF KFA<0 THEN
+9888         TV=-WBACK*MIN(1,-KFA/0.95):KTS=0
+9889       ELSE
+9890         IF KFD>0 THEN
+9891           IF KTS<WSLOW THEN KTS=WSLOW
+9892           KTS=MIN(WFAST,KTS+WRAMP*DT):TV=KTS
+9893         ELSE
+9894           KTS=0:IF KFD<0 THEN TV=-WBACK
+9895         END IF
+9896       END IF
+9897     END IF
+9898     IF KR<>0 AND TV>0 THEN TV=WFAST:KTS=WFAST
+9900     ACL=WDEC:IF ABS(TV)>ABS(JV) AND TV*JV>=0 THEN ACL=WACC
+9930     JV=JV+SGN(TV-JV)*MIN(ABS(TV-JV),ACL*DT)
 9940     JH=JH+KT*(150-JV*0.25)*DT
 9950     DX=COS(JH*PI/180)*JV*DT:DY=SIN(JH*PI/180)*JV*DT
 9960     IF ABS(JV)>0.3 THEN
 9970       M3D THINGMOVE 0,DX,DY
-9980       IF M3D("HIT")<>0 THEN JV=JV*0.6
+9975       ' a wall that stops him (he gets less than half of the way he meant to go) takes speed off; sliding along a wall does not
+9980       IF M3D("HIT")<>0 AND SQR((M3D("TX",0)-JX)^2+(M3D("TY",0)-JY)^2)<0.5*SQR(DX*DX+DY*DY) THEN JV=JV*0.6
 9990       JX=M3D("TX",0):JY=M3D("TY",0):JZ=M3D("TZ",0)
 10000       IF ABS(JX)>3420 OR ABS(JY)>3420 THEN
 10010         JX=MAX(-3420,MIN(3420,JX)):JY=MAX(-3420,MIN(3420,JY))
@@ -1022,7 +1042,8 @@
 10040     ELSE
 10050       JV=0
 10060     END IF
-10070     PH=PH+JV*DT*2*PI/(3.333*(6+8*MIN(1,ABS(JV)/155)))
+10070     ' the stride (the distance of one step) grows with the speed from 10 units (about 30 cm) to 30 units (about 90 cm); a unit is about 3 cm (John is 58 units tall)
+10075     PH=PH+JV*DT*PI/(10+20*FN SPD1(JV))
 10080     NS=INT(PH/PI):IF NS<>NSL THEN NSL=NS:IF ABS(JV)>8 THEN CALL FOOTSTEP
 10090     ' get on
 10100     DX=BX-JX:DY=BY-JY
@@ -1068,12 +1089,13 @@
 10500 END PROC
 10510 PROC READKEYS
 10520   LOCAL U,B,K
-10530   KF=0:KT=0
-10540   IF KEY("UP") OR KEY("W") THEN KF=KF+1
-10550   IF KEY("DOWN") OR KEY("S") THEN KF=KF-1
+10530   KF=0:KT=0:KFD=0
+10540   IF KEY("UP") OR KEY("W") THEN KFD=KFD+1
+10550   IF KEY("DOWN") OR KEY("S") THEN KFD=KFD-1
+10555   KFA=-JOY("LY"):KF=KFD
 10560   IF KEY("LEFT") OR KEY("A") THEN KT=KT+1
 10570   IF KEY("RIGHT") OR KEY("D") THEN KT=KT-1
-10580   KF=KF-JOY("LY"):KT=KT-JOY("LX")
+10580   KF=KF+KFA:KT=KT-JOY("LX")
 10590   IF KF>1 THEN KF=1
 10600   IF KF<-1 THEN KF=-1
 10610   IF KT>1 THEN KT=1
@@ -1146,7 +1168,7 @@
 11280     CALL BUILDJOHN(1,PH,0)
 11290     M3D OBJPOS 520,BX,BY,BZ,BH
 11300   ELSE
-11310     AM=MIN(1,ABS(JV)/155):IF MODE>=2 THEN AM=0.4
+11310     AM=FN SPD1(JV):IF MODE>=2 THEN AM=0.4
 11320     CALL BUILDJOHN(0,PH,AM)
 11330     M3D OBJPOS 520,JX,JY,JZ,JH
 11340   END IF
@@ -1170,7 +1192,7 @@
 11520   JX=0:JY=-172:JH=90:JV=0:JZ=FN FLR(JX,JY)
 11530   BX=40:BY=-176:BH=270:BV=0:BS=0:BSA=0:BZ=FN FLR(BX,BY):WA=0:CA=0:ST=1
 11540   M3D THINGPOS 0,JX,JY,JZ:M3D THINGPOS 1,BX,BY,BZ
-11550   CZM=0:CLP=0:NSL=0:MODE=0:MT=0:PH=0:STD=0:TK=0:CYW=JH:CO=0:CP=0:KU=0:UL=0:BL=0:NEAR=0:MSGT=0:MB=0
+11550   CZM=0:CLP=0:NSL=0:MODE=0:MT=0:PH=0:KTS=0:KFA=0:KFD=0:STD=0:TK=0:CYW=JH:CO=0:CP=0:KU=0:UL=0:BL=0:NEAR=0:MSGT=0:MB=0
 11560   CALL SAY("WALK WITH W A S D. THE BICYCLE IS BY THE PORCH: STAND NEAR IT AND PRESS E.")
 11570   MSGT=14
 11580 END PROC
@@ -1248,12 +1270,13 @@
 12300 ' bike x y heading, state (prints), shot name (a screenshot in the window host), say text, quit
 12310 PROC PLAYBACK
 12320   LOCAL L$,C$,I,N,PF,PT,PR,PB,T0
-12330   PF=0:PT=0:PR=0:PB=0
+12330   PF=0:PFA=0:PT=0:PR=0:PB=0
 12340   WHILE NOT EOF(4)
 12350     LINE INPUT #4,L$
 12360     CALL SPLIT(L$)
 12370     C$=W$(0)
 12380     IF C$="f" THEN PF=VAL(W$(1))
+12385     IF C$="fa" THEN PFA=VAL(W$(1))
 12390     IF C$="t" THEN PT=VAL(W$(1))
 12400     IF C$="run" THEN PR=VAL(W$(1))
 12410     IF C$="brake" THEN PB=VAL(W$(1))
@@ -1267,7 +1290,7 @@
 12490     IF C$="wait" THEN
 12500       N=INT(VAL(W$(1))*60)
 12510       FOR I=1 TO N
-12520         KF=PF:KT=PT:KR=PR:KB=PB
+12520         KFD=PF:KFA=PFA:KF=MAX(-1,MIN(1,PF+PFA)):KT=PT:KR=PR:KB=PB
 12530         CALL SIM(1/60)
 12540         KU=0
 12550         DTF=1/60
@@ -1311,6 +1334,8 @@
 12930 ' ------------------------------------------------------------------------------------------------ main
 12940 LABEL MAIN
 12950 IN_QUIT=0
+12955 ' walking: speeds in units per second (a unit is about 3 cm), accelerations in units per second squared
+12956 WSLOW=22:WFAST=155:WBACK=38:WACC=150:WDEC=170:WRAMP=60:ACL=0
 12960 IF NOT HL THEN CALL W3K_SETUP:CALL W3K_MESH:M3D RESET:CALL MAKETEX
 12970 CALL BUILDTERRAIN
 12980 CALL BUILDROADS
