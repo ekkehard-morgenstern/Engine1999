@@ -2191,3 +2191,7 @@ Log bookkeeping only (the `94d5194` entry).
 ### 41fba20 — 2026-11-15 11:26:21 +0100 — "Sound engine accuracy fix by Claude Code, default size changed to 2048"
 9 files, +110/-23.
 - **Sample-accurate sound events, `ENGINE1999_AUDIOBUF`** (2026-11-15, owner: 2048 samples made the Madrun II title tune choppy; a VirtualBox user hears distortion). Cause: the worker applied events by wall time, so notes began at the start of the next callback (timing quantized to the buffer). Now `synth_render_timed()` (`synth.c/.h`) applies events in 32 frame blocks inside the callback against an audio clock (`sdlaudio.c`, resynchronised with the wall clock); the worker only logs; new env var `ENGINE1999_AUDIOBUF` (256..16384, default 2048, changed by the owner before committing). Docs: `docs/sound.md` "Timing and the device buffer", man page `engine1999.1`. Tests: `synthtest1` 444 (+6: identical samples for buffers 64..8192, note onset at its frame), `hosttest.sh` passes with the default and with 4096. The owner tested various games at 2048 and made it the default; the VirtualBox tester has yet to check.
+
+### 25a8cc5 — 2026-11-15 11:35:21 +0100 — "Documentation, History and Claude session file update"
+4 files, +7/-4.
+- Bookkeeping for `41fba20`: the history entry moved from Pending into the Log; `man/engine1999.1`, `docs/sound.md` and `SESSION.md` say the default audio buffer is 2048.
