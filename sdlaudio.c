@@ -69,7 +69,7 @@ static void sdlaud_callback( void* userdata, Uint8* stream, int len ) {
         if ( sdlaud_cbtime != 0 && t - sdlaud_cbtime > sdlaud_cbgap ) sdlaud_cbgap = t - sdlaud_cbtime;
         sdlaud_cbtime = t;
         ++sdlaud_cbcount;
-        sdlaud_cblen = len / (int) sizeof(float);
+        sdlaud_cblen = len / (int)( 2 * sizeof(float) );
     }
     // Events are applied inside the callback against the audio clock, in small blocks, so a note starts at its own sample, not at the start
     // of the next device buffer: the size of the buffer only changes the latency, not the timing. The audio clock follows the wall clock
@@ -121,6 +121,9 @@ static bool sdlaud_init_sdl( void ) {
         return false;
     }
     sdlaud_bufsamples = sdlaud_spec_out.samples;
+    if ( sdlaud_spec_out.samples != sdlaud_spec_in.samples ) {
+        fprintf( stderr, "audio: the device granted a buffer of %d frames instead of %d\n", (int) sdlaud_spec_out.samples, (int) sdlaud_spec_in.samples );
+    }
     synth_init( &sdlaud_synth, SDLAUD_BUFFREQ );
     SDL_PauseAudioDevice( sdlaud_id, 0 );
     return true;
@@ -172,7 +175,7 @@ static int sdlaud_worker( void* arg ) {
                     }
                     sdlaud_synth.peak[i] = 0.0f;
                 }
-                fprintf( lg, " | mix pk%.2f callbacks %d of %d samples, longest gap %.0f ms", (double) sdlaud_synth.outpeak, sdlaud_cbcount,
+                fprintf( lg, " | mix pk%.2f callbacks %d of %d frames, longest gap %.0f ms", (double) sdlaud_synth.outpeak, sdlaud_cbcount,
                          sdlaud_cblen, (double) sdlaud_cbgap / 1.0e6 );
                 sdlaud_synth.outpeak = 0.0f; sdlaud_cbcount = 0; sdlaud_cbgap = 0;
                 fputc( '\n', lg );
@@ -278,6 +281,11 @@ void sdlaud_playsweep( int chan, float freq, float freq2, float vol, float beats
 
 void sdlaud_setlog( FILE* f, uint64_t start ) {
     sdlaud_logstart = start;
+    if ( f != 0 ) {         // what the device really granted (it may differ from ENGINE1999_AUDIOBUF)
+        const char* drv = SDL_GetCurrentAudioDriver();
+        fprintf( f, "0.000 audio driver %s, %d Hz, %d channels, buffer %d frames granted (asked for %d)\n", drv != 0 ? drv : "?",
+                 (int) sdlaud_spec_out.freq, (int) sdlaud_spec_out.channels, (int) sdlaud_spec_out.samples, (int) sdlaud_spec_in.samples );
+    }
     sdlaud_log = f;
 }
 
