@@ -24,7 +24,7 @@
 200 BREAK OFF
 210 ON ERROR GOTO FAILED
 220 HL=0:IF ENV$("G1987_HEADLESS")<>"" THEN HL=-1
-230 DIM TIH(33),RPX(300),RPY(300),RPF(300),CPX(40),CPY(40),SMX(120),SMY(120),PLX(40),PLY(40),TRX(520),TRY(520),LRR(8),LRZ(8),LRV(8),W$(8),GPX(2),GPZ(2),GPS(2),DWX(40),DWY(40),DRX(5),DRY(5),DRZ(5),DRH(5),DRT(5),DRA(5)
+230 DIM FLJ$(13),TIH(33),RPX(300),RPY(300),RPF(300),CPX(40),CPY(40),SMX(120),SMY(120),PLX(40),PLY(40),TRX(520),TRY(520),LRR(8),LRZ(8),LRV(8),W$(8),GPX(2),GPZ(2),GPS(2),DWX(40),DWY(40),DRX(5),DRY(5),DRZ(5),DRH(5),DRT(5),DRA(5)
 240 GOTO MAIN
 250 ' ------------------------------------------------------------------------------------------------ small helpers
 260 FUNC RN(M)
@@ -1049,7 +1049,10 @@
 9020   IF MODE=1 THEN TG=BH ELSE TG=JH
 9030   K=3.4:IF MODE=1 THEN K=2.4
 9040   CYW=CYW+FN ADIFF(TG+CO,CYW)*MIN(1,K*DT)
-9050   TX=JX:TY=JY:TZ=JZ+36:IF MODE=1 THEN TZ=JZ+40
+9045   ' the camera follows John's height smoothly (about 0.1 s): he steps up onto a road (3 .. 5 units), the porch (7) and over bumps in one frame, and the picture must not jump with him
+9046   IF CZI=0 OR ABS(JZ-CZS)>40 THEN CZS=JZ:CZI=-1
+9047   CZS=CZS+(JZ-CZS)*MIN(1,9*DT)
+9050   TX=JX:TY=JY:TZ=CZS+36:IF MODE=1 THEN TZ=CZS+40
 9060   D=125:IF MODE=1 THEN D=155+MAX(0,BV)*0.18
 9070   IF CZM>0 THEN D=CZM
 9080   E=(12+CP)*PI/180
@@ -1347,13 +1350,14 @@
 11535   ' the bicycle leans against the south wall of the house, east of the porch, the handlebar turned towards the wall (bike state 1, see BIKEFALL)
 11536   BST=1:BLN=0.35:BLS=1:BSTR=50:BRT=0:BYW=0:BSD=0:BDR=-1:BVIS=-1:BLW=0:BLN0=0:BSTR0=0
 11540   M3D THINGPOS 0,JX,JY,JZ:M3D THINGPOS 1,BX,BY,BZ
-11550   CZM=0:CLP=0:NSL=0:MODE=0:MT=0:PH=0:KTS=0:KFA=0:KFD=0:KRA=0:KSH=0:KLT=0:EXH=0:ST=1:STD=0:TK=0:CYW=JH:CO=0:CP=0:KU=0:UL=0:BL=0:NEAR=0:MSGT=0:MB=0
+11550   CZI=0:CZM=0:CLP=0:NSL=0:MODE=0:MT=0:PH=0:KTS=0:KFA=0:KFD=0:KRA=0:KSH=0:KLT=0:EXH=0:ST=1:STD=0:TK=0:CYW=JH:CO=0:CP=0:KU=0:UL=0:BL=0:NEAR=0:MSGT=0:MB=0
 11560   CALL SAY("WALK WITH W A S D. THE BICYCLE LEANS AGAINST THE HOUSE EAST OF THE PORCH: STAND NEAR IT AND PRESS E.")
 11570   MSGT=14
 11580 END PROC
 11590 PROC PLAYLOOP
 11600   LOCAL T0,FR,Y,YL,ST0
-11610   T0=TI:YL=0:NFR=0:FL$=ENV$("G1987_FRAMELOG"):FLN=0:CALL SOUNDSTART
+11610   T0=TI:YL=0:NFR=0:FL$=ENV$("G1987_FRAMELOG"):FLN=0:FLN2=300:IF ENV$("G1987_FRAMES")<>"" THEN FLN2=VAL(ENV$("G1987_FRAMES"))
+11612   CALL SOUNDSTART
 11620   REPEAT
 11622     ' the frame time: TI counts whole 1/60 s ticks, and a loop that waits for the display sees 0, 1 or 2 ticks in a frame by turns (measured under Xvfb: 0 in 36 %, 1 in 28 %,
 11624     ' 2 in 36 % of the frames), so everything that moves by the frame time stutters, or jumps now and then; the time of a frame is the average over the last 32 frames
@@ -1740,12 +1744,19 @@
 15200   M3D OBJPOS 521,OX+C*HOX-S*HOY,OY+S*HOX+C*HOY,OZ+HOZ,OHD
 15210 END PROC
 15300 ' G1987_FRAMELOG=file: skips the title, plays 300 frames and writes how many ticks (1/60 s) the frames took (raw, as TI sees them) and the smallest, largest and mean frame time that the
-15310 ' game used (the smoothed DT0), then quits: a way to see whether the frames come evenly
+15310 ' game used (the smoothed DT0) and the frames where the camera or John's height jumped (by more than 2 units / 1.5 degrees from one frame to the next; the first 12 with what changed), then quits: a way to see whether the frames come evenly and the picture quietly
 15320 PROC FRAMELOG
 15330   LOCAL D
 15340   IF NFR<=40 THEN EXIT PROC
 15350   D=0
-15360   IF FLN=0 THEN FLN=1:FLMN=9:FLMX=0:FLS=0:FLC=0:FLT0=0:FLT1=0:FLT2=0:FLT3=0:FLK=TI
+15360   IF FLN=0 THEN FLN=1:FLMN=9:FLMX=0:FLS=0:FLC=0:FLT0=0:FLT1=0:FLT2=0:FLT3=0:FLK=TI:PD1=0:PD2=0:PD3=0:PD4=0:PD5=0:FLJ=0:FLQ=0:FL1=M3D("X"):FL2=M3D("Y"):FL3=M3D("Z"):FL4=M3D("YAW"):FL5=M3D("PITCH"):FL6=JZ
+15362   ' jumps of the picture: a sudden change of the camera's movement from one frame to the next (the second difference of its position and angles above 1.5 units / 1.2 degrees),
+15363   ' or a step of John's height of more than 1 unit; turning or walking steadily does not count
+15364   DX1=M3D("X")-FL1:DY1=M3D("Y")-FL2:DZ1=M3D("Z")-FL3:DA1=FN ADIFF(M3D("YAW"),FL4):DP1=M3D("PITCH")-FL5:DJ1=JZ-FL6
+15365   IF FLC>1 AND (ABS(DX1-PD1)>1.5 OR ABS(DY1-PD2)>1.5 OR ABS(DZ1-PD3)>1.5 OR ABS(DA1-PD4)>1.2 OR ABS(DP1-PD5)>1.2 OR ABS(DJ1)>1) THEN
+15366     FLJ=FLJ+1:IF FLJ<=12 THEN FLJ$(FLJ)="frame "+STR$(FLC)+": cam moved "+STR$(INT(DX1))+" "+STR$(INT(DY1))+" "+STR$(INT(DZ1))+" (before "+STR$(INT(PD1))+" "+STR$(INT(PD2))+" "+STR$(INT(PD3))+") yaw "+STR$(INT(DA1))+" (before "+STR$(INT(PD4))+") pitch "+STR$(INT(DP1))+" (before "+STR$(INT(PD5))+") John z "+STR$(INT(DJ1*10)/10)+" distance "+STR$(INT(DSV))+" turn input "+STR$(KT)+" forward "+STR$(KF)+" mode "+STR$(MODE)
+15368   END IF
+15369   PD1=DX1:PD2=DY1:PD3=DZ1:PD4=DA1:PD5=DP1:FL1=M3D("X"):FL2=M3D("Y"):FL3=M3D("Z"):FL4=M3D("YAW"):FL5=M3D("PITCH"):FL6=JZ
 15370   D=TI-FLK:FLK=TI
 15380   IF D=0 THEN FLT0=FLT0+1
 15390   IF D=1 THEN FLT1=FLT1+1
@@ -1754,10 +1765,14 @@
 15420   IF DT0<FLMN THEN FLMN=DT0
 15430   IF DT0>FLMX THEN FLMX=DT0
 15440   FLS=FLS+DT0:FLC=FLC+1
-15450   IF FLC>=300 THEN
+15450   IF FLC>=FLN2 THEN
 15460     OPEN FL$ FOR OUTPUT AS #7
 15470     PRINT #7,"ticks per frame: 0:";FLT0;" 1:";FLT1;" 2:";FLT2;" 3+:";FLT3
 15480     PRINT #7,"frame time used: min ";FLMN;" max ";FLMX;" mean ";FLS/FLC
+15481     PRINT #7,"jumps of the picture (a sudden change of the camera's movement, or a step of John's height): ";FLJ
+15482     FOR FLQ=1 TO MIN(FLJ,12)
+15483       PRINT #7,FLJ$(FLQ)
+15484     NEXT FLQ
 15490     CLOSE #7
 15500     IN_QUIT=1
 15510   END IF
