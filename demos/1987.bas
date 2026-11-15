@@ -24,7 +24,7 @@
 200 BREAK OFF
 210 ON ERROR GOTO FAILED
 220 HL=0:IF ENV$("G1987_HEADLESS")<>"" THEN HL=-1
-230 DIM FLJ$(81),TIH(33),RPX(300),RPY(300),RPF(300),CPX(40),CPY(40),SMX(120),SMY(120),PLX(40),PLY(40),TRX(520),TRY(520),LRR(8),LRZ(8),LRV(8),W$(8),GPX(2),GPZ(2),GPS(2),DWX(40),DWY(40),DRX(5),DRY(5),DRZ(5),DRH(5),DRT(5),DRA(5)
+230 DIM GNS(8),GGX(160),FLJ$(81),TIH(33),RPX(300),RPY(300),RPF(300),CPX(40),CPY(40),SMX(120),SMY(120),PLX(40),PLY(40),TRX(520),TRY(520),LRR(8),LRZ(8),LRV(8),W$(8),GPX(2),GPZ(2),GPS(2),DWX(40),DWY(40),DRX(5),DRY(5),DRZ(5),DRH(5),DRT(5),DRA(5)
 240 GOTO MAIN
 250 ' ------------------------------------------------------------------------------------------------ small helpers
 260 FUNC RN(M)
@@ -1045,44 +1045,8 @@
 8980 END PROC
 8990 ' ------------------------------------------------------------------------------------------------ the camera
 9000 PROC CAMUPDATE(DT)
-9010   LOCAL TX,TY,TZ,D,E,K,C,S,DS,CX,CY,CZ,TG,H,FZ,R,DD,RT
-9020   IF MODE=1 THEN TG=BH ELSE TG=JH
-9030   K=3.4:IF MODE=1 THEN K=2.4
-9040   CYW=CYW+FN ADIFF(TG+CO,CYW)*MIN(1,K*DT)
-9045   ' the camera follows John's height smoothly (about 0.1 s): he steps up onto a road (3 .. 5 units), the porch (7) and over bumps in one frame, and the picture must not jump with him
-9046   IF CZI=0 OR ABS(JZ-CZS)>40 THEN CZS=JZ:CZI=-1
-9047   CZS=CZS+(JZ-CZS)*MIN(1,9*DT)
-9048   ZT=36:IF MODE=1 THEN ZT=40
-9049   IF ZOI=0 THEN ZOS=ZT:ZOI=-1
-9050   ZOS=ZOS+(ZT-ZOS)*MIN(1,5*DT):TX=JX:TY=JY:TZ=CZS+ZOS
-9060   D=125:IF MODE=1 THEN D=155+MAX(0,BV)*0.18
-9070   IF CZM>0 THEN D=CZM
-9072   ' the wished distance follows the mode and the speed smoothly too (getting off the bicycle at speed, or a crash that throws it back, changed it by up to 70 units in one frame)
-9074   IF DWI=0 THEN DWS=D:DWI=-1
-9076   DWS=DWS+(D-DWS)*MIN(1,5*DT):D=DWS
-9080   E=(12+CP)*PI/180
-9090   C=COS(CYW*PI/180):S=SIN(CYW*PI/180)
-9100   ' three rays from John's head back to the wished place, straight and 9 degrees to each side (whiskers: a wall that comes into the picture from the side pulls the camera in before it
-9102   ' is right behind John, so the camera does not pop in): whatever is in the way pulls the camera in
-9110   DS=D
-9112   FOR K=-1 TO 1
-9114     M3D CAMERA TX,TY,TZ-46,CYW+180+K*9,12+CP
-9120     R=M3D("SHOOT",D+16)
-9130     IF M3D("SHOTKIND")=1 THEN DS=MIN(DS,MAX(20,M3D("SHOTDIST")-12))
-9140   NEXT K
-9142   ' the wall ray's distance changes by a few units from frame to frame (a bump, a rough edge; measured on the owner's machine: 125 -> 116 -> 118 -> 125 in three frames, which moved the
-9144   ' camera 9 units in one): a drop of up to 10 units (less than the 12 units of clearance, so the camera never gets behind the wall) and any rise are eased, a bigger drop (a wall) is followed at once
-9146   IF CDI=0 THEN DSS=DS:CDI=-1
-9147   DD=DS-DSS:RT=4:IF DD<0 THEN RT=14
-9148   IF DD<-10 THEN DSS=DS ELSE DSS=DSS+DD*MIN(1,RT*DT)
-9149   DS=DSS
-9150   DSV=DS
-9160   CX=TX-C*DS*COS(E):CY=TY-S*DS*COS(E):CZ=TZ+DS*SIN(E)
-9170   FZ=MAX(M3D("FLOORAT",CX,CY,CZ),FN HT(CX,CY))+10
-9180   IF CZ<FZ THEN CZ=FZ
-9190   H=SQR((TX-CX)^2+(TY-CY)^2)
-9200   M3D CAMERA CX,CY,CZ-46,CYW,ATAN2(TZ-CZ,H)*180/PI+CLP
-9210 END PROC
+9010   CALL CAMAGENT(DT)
+9020 END PROC
 9220 ' ------------------------------------------------------------------------------------------------ the physics
 9230 PROC SIM(DT)
 9240   LOCAL TV,A,DX,DY,TH,C,S,SL,TP,DM,OM,MX,AC,SD,DD,BT,TS,TL,DRN
@@ -1302,12 +1266,9 @@
 10900     MB=0
 10910   END IF
 10920   MX=MOUSE("X"):MY=MOUSE("Y")
-10930   ' the camera swings back behind John when you leave it alone
-10940   IF K=0 AND MB=0 AND NOT KEY("PGUP") AND NOT KEY("PGDN") THEN
-10950     CO=CO*(1-MIN(1,0.8*DT0))
-10960     IF ABS(KF)>0 THEN CP=CP*(1-MIN(1,0.6*DT0))
-10970     IF NOT KEY("R") AND NOT KEY("F") AND (MOUSE("B") AND 2)=0 THEN CLP=CLP*(1-MIN(1,0.7*DT0))
-10980   END IF
+10930   ' the camera controls are instructions to the camera (an agent, see CAMAGENT): CMIN says that one is given now; letting go lets the camera go back to its own business
+10940   CMIN=0
+10950   IF K<>0 OR KEY("R") OR KEY("F") OR KEY("PGUP") OR KEY("PGDN") OR JOY("RY")<>0 OR (MOUSE("B") AND 2)<>0 THEN CMIN=-1
 10990   IF KBL<>0 THEN CALL SND(1)
 11000 END PROC
 11010 PROC HUD
@@ -1327,12 +1288,13 @@
 11150   GFX TEXT 380,269,"1987",FN CC(2,13)
 11160   GFX TEXT 380,283,"THE SKY IS QUIET",FN CC(0,9)
 11170   IF MODE=0 AND NEAR THEN
-11180     GFX TEXT 8,6,"E: GET ON THE BICYCLE",FN CC(3,15)
+11180     GFX TEXT 8,22,"E: GET ON THE BICYCLE",FN CC(3,15)
 11190   END IF
 11200   IF MSGT>0 AND (MODE<>0 OR NOT NEAR) THEN
-11210     GFX TEXT (640-LEN(MSG$)*8)\2+1,7,MSG$,FN CC(0,1)
-11220     GFX TEXT (640-LEN(MSG$)*8)\2,6,MSG$,FN CC(3,15)
+11210     GFX TEXT (640-LEN(MSG$)*8)\2+1,23,MSG$,FN CC(0,1)
+11220     GFX TEXT (640-LEN(MSG$)*8)\2,22,MSG$,FN CC(3,15)
 11230   END IF
+11235   CALL CAMHUD
 11240 END PROC
 11250 PROC RIGS
 11260   CALL DRONERIG
@@ -1366,7 +1328,7 @@
 11535   ' the bicycle leans against the south fence of the yard, on the outside, east of the gate, the handlebar turned towards the fence (bike state 1, see BIKEFALL)
 11536   BST=1:BLN=0.35:BLS=1:BSTR=50:BRT=0:BYW=0:BSD=0:BDR=-1:BVIS=-1:BLW=0:BLN0=0:BSTR0=0
 11540   M3D THINGPOS 0,JX,JY,JZ:M3D THINGPOS 1,BX,BY,BZ
-11550   DWI=0:ZOI=0:CDI=0:CZI=0:CZM=0:CLP=0:NSL=0:MODE=0:MT=0:PH=0:KTS=0:KFA=0:KFD=0:KRA=0:KSH=0:KLT=0:EXH=0:ST=1:STD=0:TK=0:CYW=JH:CO=0:CP=0:KU=0:UL=0:BL=0:NEAR=0:MSGT=0:MB=0
+11550   CMINIT=0:CMB=0:CMT=0:CMIDLE=0:CMNEXT=7:CMHOLD=0:CMAZ=0:CMEL=0:CMIN=0:CMLASTB=0:CMPC=-1:DWI=0:ZOI=0:CDI=0:CZI=0:CZM=0:CLP=0:NSL=0:MODE=0:MT=0:PH=0:KTS=0:KFA=0:KFD=0:KRA=0:KSH=0:KLT=0:EXH=0:ST=1:STD=0:TK=0:CYW=JH:CO=0:CP=0:KU=0:UL=0:BL=0:NEAR=0:MSGT=0:MB=0
 11560   CALL SAY("WALK WITH W A S D. THE BICYCLE LEANS AGAINST THE FENCE OUTSIDE THE GATE, TO THE EAST: STAND NEAR IT AND PRESS E.")
 11570   MSGT=14
 11580 END PROC
@@ -1450,8 +1412,8 @@
 12290 ' commands, one per line of the file G1987_PLAY: f v (forward -1..1), t v (turn), run v, brake v, use (get on / off), wait seconds, goto x y heading,
 12300 ' bike x y heading, state (prints), shot name (a screenshot in the window host), say text, quit
 12310 PROC PLAYBACK
-12320   LOCAL L$,C$,I,N,PF,PT,PR,PB,T0,PSH,PRG
-12330   PF=0:PFA=0:PT=0:PR=0:PB=0:PSH=0:PRG=0
+12320   LOCAL L$,C$,I,N,PF,PT,PR,PB,T0,PSH,PRG,PCO
+12330   PF=0:PFA=0:PT=0:PR=0:PB=0:PSH=0:PRG=0:PCO=0
 12340   WHILE NOT EOF(4)
 12350     LINE INPUT #4,L$
 12360     CALL SPLIT(L$)
@@ -1464,7 +1426,7 @@
 12410     IF C$="brake" THEN PB=VAL(W$(1))
 12420     IF C$="use" THEN KU=-1
 12430     IF C$="goto" THEN
-12440       JX=VAL(W$(1)):JY=VAL(W$(2)):JH=VAL(W$(3)):JZ=FN FLR(JX,JY):JV=0:M3D THINGPOS 0,JX,JY,JZ
+12440       JX=VAL(W$(1)):JY=VAL(W$(2)):JH=VAL(W$(3)):JZ=FN FLR(JX,JY):JV=0:M3D THINGPOS 0,JX,JY,JZ:CYW=JH:CMINIT=0
 12450     END IF
 12460     IF C$="bike" THEN
 12470       BX=VAL(W$(1)):BY=VAL(W$(2)):BH=VAL(W$(3)):BZ=FN FLR(BX,BY):BV=0:BST=0:BRT=0:BLN=0:BDR=-1:M3D THINGPOS 1,BX,BY,BZ
@@ -1476,6 +1438,7 @@
 12521         KRA=KLT:IF KSH<>0 THEN KRA=1
 12522         KR=0:IF KRA>0 THEN KR=-1
 12523         KB=PB
+12524         CMIN=0:IF PCO<>0 THEN CO=CO+PCO*80/60:CMIN=-1
 12530         CALL SIM(1/60)
 12535         IF PRG<>0 THEN CALL RIGS
 12540         KU=0
@@ -1484,7 +1447,7 @@
 12570       NEXT I
 12580     END IF
 12590     IF C$="state" THEN
-12600       PRINT "state mode=";MODE;" jx=";INT(JX);" jy=";INT(JY);" jz=";INT(JZ+0.5);" jh=";INT(JH);" jv=";INT(JV);" bst=";BST;" nj=";CNJ;" nh=";CNH;" nb=";CNB;" hly=";INT(HLY);" hlp=";INT(HLP);" brp=";INT(BRP*100);" bx=";INT(BX);" by=";INT(BY);" bz=";INT(BZ+0.5);" bh=";INT(BH);" bv=";INT(BV);" st=";INT(ST*100)
+12600       PRINT "state mode=";MODE;" jx=";INT(JX);" jy=";INT(JY);" jz=";INT(JZ+0.5);" jh=";INT(JH);" jv=";INT(JV);" bst=";BST;" nj=";CNJ;" nh=";CNH;" nb=";CNB;" cmb=";CMB;" hly=";INT(HLY);" hlp=";INT(HLP);" brp=";INT(BRP*100);" bx=";INT(BX);" by=";INT(BY);" bz=";INT(BZ+0.5);" bh=";INT(BH);" bv=";INT(BV);" st=";INT(ST*100)
 12610     END IF
 12620     IF C$="ray" THEN
 12630       M3D CAMERA VAL(W$(1)),VAL(W$(2)),VAL(W$(3))-46,VAL(W$(4)),VAL(W$(5))
@@ -1500,10 +1463,11 @@
 12730       OPEN "bench.txt" FOR APPEND AS #5:PRINT #5,"bench";N;" ms per frame";INT((TI-T0)*1000/60/N);" renderer";M3D("RENDERER");" drawn";M3D("DRAWN"):CLOSE #5
 12740     END IF
 12750     IF C$="drones" THEN PRINT "drone x=";INT(DRX(0));" y=";INT(DRY(0));" z=";INT(DRZ(0));" t=";DRT(0)
-12760     IF C$="clp" THEN CLP=VAL(W$(1))
-12770     IF C$="zoom" THEN CZM=VAL(W$(1))
-12780     IF C$="co" THEN CO=VAL(W$(1)):CYW=JH+CO
-12790     IF C$="cp" THEN CP=VAL(W$(1))
+12760     IF C$="clp" THEN CLP=VAL(W$(1)):CMINIT=0
+12770     IF C$="zoom" THEN CZM=VAL(W$(1)):CMINIT=0
+12780     IF C$="co" THEN CO=VAL(W$(1)):CYW=JH:CMINIT=0
+12790     IF C$="cp" THEN CP=VAL(W$(1)):CMINIT=0
+12791     IF C$="orbit" THEN PCO=VAL(W$(1))
 12795     IF C$="look" THEN HLY=VAL(W$(1)):HLP=VAL(W$(2))
 12796     IF C$="rigs" THEN PRG=VAL(W$(1))
 12797     IF C$="playloop" THEN CALL PLAYLOOP
@@ -1531,7 +1495,7 @@
 12961 ' the edge of the world (the only invisible-looking limit; the red tiles of BUILDEDGE show it)
 12962 WLIM=3420
 12963 ' the bicycle without a rider: it rolls on upright for WFALL seconds, then falls over and slides on its side (deceleration WSLIDE units a second squared); XON / XFR: tilt on
-12964 HLY=0:HLP=0:BRP=0:HQY=0:HQP=0:HKEY=99999:HOX=0:HOY=0:HOZ=0:BJ1=-1:BJ2=0:BJ3=0:BJ4=0:BJ5=0:BJ6=0:BJ7=0:PWA=-99999:PCA=-99999:CNJ=0:CNH=0:CNB=0:HCX=0:HCY=0:HCZ=0:HYS=0:HYC=1:HPS=0:HPC=1:WFALL=3:WSLIDE=120:XON=0:XFR=0:XRS=0:XRC=1:XFS=0:XFC=1:XLF=0
+12964 CGI=0:CGT=0:CMX=0:CMY=0:CMZ=0:CMVX=0:CMVY=0:CMVZ=0:CMYW=0:CMPT=0:CMWY=0:CMWP=0:CMPX=0:CMPY=0:CMPZ=0:CMPX0=0:CMPY0=0:CMPZ0=0:CMTVX=0:CMTVY=0:CMTVZ=0:CMPI=0:CMPK=0:CMDUR=0:CMAZR=0:HLY=0:HLP=0:BRP=0:HQY=0:HQP=0:HKEY=99999:HOX=0:HOY=0:HOZ=0:BJ1=-1:BJ2=0:BJ3=0:BJ4=0:BJ5=0:BJ6=0:BJ7=0:PWA=-99999:PCA=-99999:CNJ=0:CNH=0:CNB=0:HCX=0:HCY=0:HCZ=0:HYS=0:HYC=1:HPS=0:HPC=1:WFALL=3:WSLIDE=120:XON=0:XFR=0:XRS=0:XRC=1:XFS=0:XFC=1:XLF=0
 12960 IF NOT HL THEN CALL W3K_SETUP:CALL W3K_MESH:M3D RESET:CALL MAKETEX
 12970 CALL BUILDTERRAIN
 12980 CALL BUILDROADS
@@ -1793,3 +1757,203 @@
 15500     IN_QUIT=1
 15510   END IF
 15520 END PROC
+15600 ' ------------------------------------------------------------------------------------------------ the camera: an agent
+15610 ' The camera is a creature of its own (the owner's idea, 2026-11-15): it has a position, a velocity and an acceleration limit (a point mass chasing the place it wants to be at with a
+15620 ' spring and a damper, plus the velocity of that place so that it does not lag), and a view direction with an angular velocity (the same kind of controller), and a behavior:
+15630 ' CMB 0 follow: it goes to a place behind John and above him and looks at his head, the way it has always done (the azimuth follows his heading with a delay, CYW); 1 directed: the player
+15640 ' uses the camera controls (orbit Z / X, the right stick, the right mouse button; look up / down R / F; raise / lower PGUP / PGDN), which are only instructions (CO the azimuth, CP the elevation,
+15650 ' CLP the look pitch, as wished offsets): the camera carries them out with its own acceleration, a circling course round John; when they are let go it waits a second and then
+15660 ' goes back to its own business, CO and the others die away; 2 circling (on its own, when the player has done nothing for a while): it circles round John, a little higher, watching him;
+15670 ' 3 watching a point of interest (the bicycle when John is on foot near it, a drone, the house, the scarecrow, the gate): it looks at it for a few seconds. Any input of the player (also
+15680 ' walking or riding) ends 2 and 3 at once. Whatever it does it keeps clear of walls: three rays from John's head to the wished place (straight and 9 degrees to each side) shorten the
+15690 ' distance, and a ray from John's head to the camera itself pulls it in front of anything it would be behind. REC and the red glyphs (CAMHUD) show that it acts on its own.
+15700 PROC CAMAGENT(DT)
+15710   LOCAL TX,TY,TZ,TG,K,D,E,C,S,DS,R,PX,PY,PZ,EX,EY,EZ,AX,AY,AZ,SP,LX,LY,LZ,H,FZ,PM,YW,PT,ER,DX,DY,DZ,D2,HH,KP,KD
+15715   IF DT<0.002 THEN EXIT PROC
+15720   IF CZI=0 OR ABS(JZ-CZS)>40 THEN CZS=JZ:CZI=-1
+15730   CZS=CZS+(JZ-CZS)*MIN(1,9*DT)
+15740   ZT=36:IF MODE=1 THEN ZT=40
+15750   IF ZOI=0 THEN ZOS=ZT:ZOI=-1
+15760   ZOS=ZOS+(ZT-ZOS)*MIN(1,5*DT)
+15770   TX=JX:TY=JY:TZ=CZS+ZOS
+15780   IF MODE=1 THEN TG=BH ELSE TG=JH
+15790   K=3.4:IF MODE=1 THEN K=2.4
+15800   CYW=CYW+FN ADIFF(TG,CYW)*MIN(1,K*DT)
+15810   ' ---- what the player does, and what the camera does about it
+15820   PM=0:IF KFA<>0 OR KFD<>0 OR KT<>0 OR KLT>0 OR KSH<>0 OR KB<>0 OR KU<>0 OR MODE>=2 THEN PM=-1
+15830   IF CMIN<>0 THEN
+15840     CMB=1:CMHOLD=1:CMIDLE=0
+15850   ELSE
+15860     IF CMB=1 THEN
+15870       CMHOLD=CMHOLD-DT
+15880       IF CMHOLD<=0 THEN CMB=0:CMT=0
+15890     END IF
+15900     IF PM THEN
+15910       CMIDLE=0:IF CMB>=2 THEN CMB=0:CMT=0
+15920     ELSE
+15930       CMIDLE=CMIDLE+DT
+15940     END IF
+15950   END IF
+15960   CMT=CMT+DT
+15970   IF CMB=0 AND CMIDLE>CMNEXT THEN CALL CAMSTART
+15980   IF CMB=0 THEN
+15990     ' its own business: the wished offsets die away (the elevation only while John moves, as before)
+16000     IF ABS(CO)>180 THEN CO=CO-INT((CO+180)/360)*360
+16010     CO=CO*(1-MIN(1,1.1*DT)):CMAZ=CMAZ*(1-MIN(1,1.1*DT)):CMEL=CMEL*(1-MIN(1,1.1*DT))
+16020     IF PM THEN CP=CP*(1-MIN(1,0.6*DT))
+16030     CLP=CLP*(1-MIN(1,0.7*DT))
+16040   END IF
+16050   IF CMB=2 THEN
+16060     CMAZ=CMAZ+CMAZR*DT:CMEL=CMEL+(9-CMEL)*MIN(1,1.5*DT)
+16070     IF CMT>CMDUR THEN CMB=0:CMT=0:CMNEXT=CMIDLE+6+RND*6
+16080   END IF
+16090   IF CMB=3 THEN
+16100     CMAZ=CMAZ*(1-MIN(1,0.8*DT)):CMEL=CMEL+(4-CMEL)*MIN(1,1.5*DT)
+16110     IF CMPK=1 THEN CMPX=DRX(CMPI):CMPY=DRY(CMPI):CMPZ=DRZ(CMPI)
+16120     IF CMT>CMDUR THEN CMB=0:CMT=0:CMNEXT=CMIDLE+6+RND*6
+16130   END IF
+16140   CP=MAX(-8,MIN(45,CP)):CLP=MAX(-5,MIN(45,CLP))
+16150   ' ---- the place it wants to be at: behind John (as seen from where it looks), above him, as far as the walls allow
+16160   YW=CYW+CO+CMAZ
+16170   D=125:IF MODE=1 THEN D=155+MAX(0,BV)*0.18
+16180   IF CZM>0 THEN D=CZM
+16190   E=12+CP+CMEL
+16200   C=COS(YW*PI/180):S=SIN(YW*PI/180)
+16210   DS=D
+16220   FOR K=-1 TO 1
+16230     M3D CAMERA TX,TY,TZ-46,YW+180+K*9,E
+16240     R=M3D("SHOOT",D+16)
+16250     IF M3D("SHOTKIND")=1 THEN DS=MIN(DS,MAX(20,M3D("SHOTDIST")-12))
+16260   NEXT K
+16270   PX=TX-C*DS*COS(E*PI/180):PY=TY-S*DS*COS(E*PI/180):PZ=TZ+DS*SIN(E*PI/180)
+16280   ' ---- where it wants to look: at John's head, or at a point of interest
+16290   LX=TX:LY=TY:LZ=TZ
+16300   IF CMB=3 THEN LX=CMPX:LY=CMPY:LZ=CMPZ
+16310   ' ---- first time, or a teleport (a test command, a long fall): it is simply there
+16320   EX=PX-CMX:EY=PY-CMY:EZ=PZ-CMZ
+16330   IF CMINIT=0 OR EX*EX+EY*EY+EZ*EZ>490000 THEN
+16340     CMX=PX:CMY=PY:CMZ=PZ:CMVX=0:CMVY=0:CMVZ=0:CMPX0=PX:CMPY0=PY:CMPZ0=PZ:CMTVX=0:CMTVY=0:CMTVZ=0
+16350     DX=LX-CMX:DY=LY-CMY:DZ=LZ-CMZ:HH=SQR(DX*DX+DY*DY)
+16360     CMYW=ATAN2(DY,DX)*180/PI:CMPT=ATAN2(DZ,HH)*180/PI+CLP:CMWY=0:CMWP=0:CMINIT=-1
+16370     EX=0:EY=0:EZ=0
+16380   END IF
+16390   ' ---- movement: the velocity of the wished place is known (so a camera behind a bicycle does not lag), the rest is a spring and a damper; the acceleration and the speed are limited
+16400   CMTVX=CMTVX+((PX-CMPX0)/DT-CMTVX)*MIN(1,12*DT):CMTVY=CMTVY+((PY-CMPY0)/DT-CMTVY)*MIN(1,12*DT):CMTVZ=CMTVZ+((PZ-CMPZ0)/DT-CMTVZ)*MIN(1,12*DT)
+16410   CMPX0=PX:CMPY0=PY:CMPZ0=PZ
+16420   AX=26*EX+10.2*(CMTVX-CMVX):AY=26*EY+10.2*(CMTVY-CMVY):AZ=26*EZ+10.2*(CMTVZ-CMVZ)
+16430   SP=SQR(AX*AX+AY*AY+AZ*AZ):IF SP>1800 THEN AX=AX*1800/SP:AY=AY*1800/SP:AZ=AZ*1800/SP
+16440   CMVX=CMVX+AX*DT:CMVY=CMVY+AY*DT:CMVZ=CMVZ+AZ*DT
+16450   SP=SQR(CMVX*CMVX+CMVY*CMVY+CMVZ*CMVZ):IF SP>900 THEN CMVX=CMVX*900/SP:CMVY=CMVY*900/SP:CMVZ=CMVZ*900/SP
+16460   CMX=CMX+CMVX*DT:CMY=CMY+CMVY*DT:CMZ=CMZ+CMVZ*DT
+16470   ' ---- it never gets behind anything: a ray from John's head to the camera
+16480   DX=CMX-TX:DY=CMY-TY:DZ=CMZ-TZ:D2=SQR(DX*DX+DY*DY+DZ*DZ):HH=SQR(DX*DX+DY*DY)
+16490   IF D2>30 THEN
+16500     M3D CAMERA TX,TY,TZ-46,ATAN2(DY,DX)*180/PI,ATAN2(DZ,HH)*180/PI
+16510     R=M3D("SHOOT",D2+4)
+16520     IF M3D("SHOTKIND")=1 THEN
+16530       IF M3D("SHOTDIST")<D2+2 THEN
+16540         D=MAX(20,M3D("SHOTDIST")-12):CMX=TX+DX/D2*D:CMY=TY+DY/D2*D:CMZ=TZ+DZ/D2*D:CMVX=CMVX*0.3:CMVY=CMVY*0.3:CMVZ=CMVZ*0.3
+16550       END IF
+16560     END IF
+16570   END IF
+16580   FZ=MAX(M3D("FLOORAT",CMX,CMY,CMZ),FN HT(CMX,CMY))+10
+16590   IF CMZ<FZ THEN
+16600     CMZ=FZ:IF CMVZ<0 THEN CMVZ=0
+16610   END IF
+16620   ' ---- looking: the same kind of controller for the yaw and the pitch (degrees, degrees a second)
+16630   DX=LX-CMX:DY=LY-CMY:DZ=LZ-CMZ:HH=SQR(DX*DX+DY*DY)
+16640   YW=ATAN2(DY,DX)*180/PI:PT=ATAN2(DZ,HH)*180/PI+CLP
+16645   ' (a lazier look, a glance, when it turns to a point of interest)
+16646   KP=90:KD=19:IF CMB=3 THEN KP=28:KD=10.6
+16650   ER=FN ADIFF(YW,CMYW):CMWY=CMWY+(KP*ER-KD*CMWY)*DT
+16660   IF ABS(CMWY)>540 THEN CMWY=SGN(CMWY)*540
+16670   CMYW=CMYW+CMWY*DT
+16680   ER=PT-CMPT:CMWP=CMWP+(KP*ER-KD*CMWP)*DT
+16690   IF ABS(CMWP)>360 THEN CMWP=SGN(CMWP)*360
+16700   CMPT=CMPT+CMWP*DT
+16710   M3D CAMERA CMX,CMY,CMZ-46,CMYW,CMPT
+16720   DSV=SQR((CMX-TX)^2+(CMY-TY)^2+(CMZ-TZ)^2)
+16730 END PROC
+16740 ' the camera decides to do something on its own: watch a point of interest (the bicycle when John is on foot and near it, the nearest drone, the house, the scarecrow, the gate: the next
+16750 ' one that is of use, round and round) or, after one, circle round John
+16760 PROC CAMSTART
+16770   LOCAL T,DX,DY,D,BD,I,OK
+16780   IF CMLASTB=3 AND RND<0.6 THEN
+16790     OK=0
+16800   ELSE
+16810     OK=0:T=0
+16820     WHILE T<5 AND OK=0
+16830       T=T+1:CMPC=(CMPC+1) MOD 5
+16840       IF CMPC=0 AND MODE=0 THEN
+16850         DX=BX-JX:DY=BY-JY
+16860         IF DX*DX+DY*DY<810000 THEN OK=-1:CMPK=0:CMPX=BX:CMPY=BY:CMPZ=BZ+18
+16870       END IF
+16880       IF CMPC=1 THEN
+16890         BD=1800:CMPI=-1
+16900         FOR I=0 TO NDR-1
+16910           DX=DRX(I)-JX:DY=DRY(I)-JY:D=SQR(DX*DX+DY*DY)
+16920           IF D<BD THEN BD=D:CMPI=I
+16930         NEXT I
+16940         IF CMPI>=0 THEN OK=-1:CMPK=1:CMPX=DRX(CMPI):CMPY=DRY(CMPI):CMPZ=DRZ(CMPI)
+16950       END IF
+16960       IF CMPC=2 THEN
+16970         IF JX*JX+JY*JY<1210000 THEN OK=-1:CMPK=0:CMPX=0:CMPY=0:CMPZ=90
+16980       END IF
+16990       IF CMPC=3 THEN
+17000         DX=1100-JX:DY=650-JY
+17010         IF DX*DX+DY*DY<1690000 THEN OK=-1:CMPK=0:CMPX=1100:CMPY=650:CMPZ=45
+17020       END IF
+17030       IF CMPC=4 THEN
+17040         DX=-JX:DY=-200-JY
+17050         IF DX*DX+DY*DY<1000000 THEN OK=-1:CMPK=0:CMPX=0:CMPY=-200:CMPZ=40
+17060       END IF
+17070     WEND
+17080   END IF
+17090   IF OK THEN
+17100     CMB=3:CMDUR=4+RND*2.5:CMLASTB=3
+17110   ELSE
+17120     CMB=2:CMDUR=8+RND*4:CMAZR=14+RND*10:IF RND<0.5 THEN CMAZR=-CMAZR
+17130     CMLASTB=2
+17140   END IF
+17150   CMT=0
+17160 END PROC
+17170 ' the red glyphs of an alien script: a glyph is three to five strokes between points of a 7 x 10 grid, each one a stroke after the other from where the last one ended or from a new point
+17180 PROC NEWGLYPH(G)
+17190   LOCAL N,S,X0,Y0
+17200   N=3+INT(RND*3):GNS(G)=N:X0=INT(RND*7):Y0=INT(RND*10)
+17210   FOR S=0 TO N-1
+17220     GGX(G*20+S*4)=X0:GGX(G*20+S*4+1)=Y0
+17230     IF RND<0.5 THEN X0=INT(RND*7) ELSE Y0=INT(RND*10)
+17240     IF RND<0.35 THEN X0=INT(RND*7):Y0=INT(RND*10)
+17250     GGX(G*20+S*4+2)=X0:GGX(G*20+S*4+3)=Y0
+17260   NEXT S
+17270 END PROC
+17280 ' the camera shows that it acts on its own (it does not when the player directs it): a red dot that blinks with REC in the upper left corner, and in the lower right corner a row of red
+17290 ' glyphs of an alien script, one of which is made new from time to time (more often when the camera is busy with something)
+17300 PROC CAMHUD
+17310   LOCAL G,S,X,Y,C1,C2
+17320   IF CMB=1 THEN EXIT PROC
+17330   IF CGI=0 THEN
+17340     FOR G=0 TO 6
+17350       CALL NEWGLYPH(G)
+17360     NEXT G
+17370     CGI=-1:CGT=1
+17380   END IF
+17390   CGT=CGT-DTF
+17400   IF CGT<=0 THEN
+17410     CALL NEWGLYPH(INT(RND*7)):CGT=0.25+RND*1.6
+17420     IF CMB>=2 THEN CGT=0.08+RND*0.5
+17430   END IF
+17440   C1=FN CC(1,13):C2=FN CC(1,8)
+17450   IF (TI MOD 72)<48 THEN
+17460     GFX LINE 9,8,19,12,C1,BF:GFX LINE 10,6,18,14,C1,BF:GFX LINE 12,5,16,15,C1,BF
+17470   END IF
+17480   GFX TEXT 24,6,"REC",C1
+17490   FOR G=0 TO 6
+17500     X=546+G*12:Y=271
+17510     FOR S=0 TO GNS(G)-1
+17520       GFX LINE X+GGX(G*20+S*4)+1,Y+GGX(G*20+S*4+1)+1,X+GGX(G*20+S*4+2)+1,Y+GGX(G*20+S*4+3)+1,C2
+17530       GFX LINE X+GGX(G*20+S*4),Y+GGX(G*20+S*4+1),X+GGX(G*20+S*4+2),Y+GGX(G*20+S*4+3),C1
+17540     NEXT S
+17550   NEXT G
+17560 END PROC

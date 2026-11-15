@@ -237,6 +237,21 @@ f 1
 wait 1.2
 state
 f 0
+goto 600 -500 0
+wait 3
+cam
+orbit 1
+wait 1.5
+cam
+orbit 0
+wait 5
+cam
+wait 5
+state
+f 1
+wait 0.3
+state
+f 0
 drones
 wait 30
 drones
@@ -344,8 +359,16 @@ expect "cache: the bicycle at rest keeps its spoke meshes" "$(awk -v a="$(val st
 # 11j. the bicycle leans against the outside of the yard's south fence, east of the gate (130, -214): walking out of the gate and along the fence takes John within reach of it
 expect "gate: John walked out of the yard through the gate" "$(val state 44 jy)" -300 -205
 expect "fence: John at the bicycle's place within reach (70 units)" "$(awk -v x="$(val state 45 jx)" -v y="$(val state 45 jy)" 'BEGIN { print sqrt((x-130)^2+(y+214)^2) }')" 0 69
+# 11k. the camera is an agent: it follows John from behind and above; an orbit instruction (as if Z were held) takes it round him (it accelerates: it is not there at once); when the
+#      instruction stops it goes back behind him; left alone for a while (7 s) it acts on its own (cmb 2: circling, 3: watching a point of interest); the player's input ends that at once
+expect "camera: behind John, looking the way he faces" "$(val cam 1 yaw)" -10 10
+expect "camera: above the ground" "$(val cam 1 z)" 20 400
+expect "camera: orbiting takes it round John" "$(awk -v y="$(val cam 2 yaw)" 'BEGIN { print (y > 60 || y < -60) ? 1 : 0 }')" 1 1
+expect "camera: goes back behind him when the instruction stops" "$(val cam 3 yaw)" -10 10
+expect "camera: acts on its own when the player is idle" "$(val state 46 cmb)" 2 3
+expect "camera: the player's input ends it" "$(val state 47 cmb)" 0 0
 # 12. the camera stays above the ground, rays: the house wall is an object, open ground is not hit
-expect "camera: z above the ground" "$(val cam 1 z)" 20 400
+expect "camera: z above the ground" "$(val cam 4 z)" 20 400
 expect "ray at the house" "$(val ray 1 obj)" 300 300
 expect "ray over open ground" "$(val ray 2 kind)" 0 1
 # 13. the game ran without an error
