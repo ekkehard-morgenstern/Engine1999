@@ -45,14 +45,31 @@ levels), translucent surfaces mix half and half in true color, the sky is looked
 
 #define NKEYS       ( M3D_MAXTEX + 256 )        // picture keys: 0 .. M3D_MAXTEX-1 a picture, M3D_MAXTEX + i a flat color (palette index i)
 #define LIGHTK      ( 31.0 / 255.0 )            // object light (0..255) -> light level (0..31)
-#define VFLOATS     6                           // x y z (world) u v light
+#define VFLOATS     5                           // x y z u v: local coordinates and texels in a kept mesh; world coordinates and 0 .. 1 picture coordinates in the stream of the billboards
 
 typedef struct { int key; float v[3 * VFLOATS]; } gtri_t;
 
 typedef struct {
+    double f, cx, cy;
+    v3_t   eye, r, up, fw;
+} cam_t;
+
+typedef struct {
     GLint eye, r, up, fw, proj, tex, pal, fog, far_, masked, alpha, uselamps, lampp, lampa, lampd;
-    GLint apos, auv, alight;
+    GLint org, rot, texsz, light;
+    GLint apos, auv;
 } prog_t;
+
+// a mesh kept in the graphics memory (one buffer per object, in the object's own coordinates; the object's place and heading are uniforms): built again only when the object's mesh
+// generation (obj_t.gen) or the set of numbers that have pictures (m3d_t.presepoch) is not the one it was built for. The triangles are grouped by picture.
+typedef struct { int key, first, count; } grange_t;                        // key: the picture, or M3D_MAXTEX + a palette index for a flat color; first, count: vertices
+typedef struct {
+    GLuint     vbo;
+    uint32_t   gen;
+    unsigned   pres;
+    int        nr;
+    grange_t*  r;
+} gobj_t;
 
 typedef struct {
     GLint yaw, f, cx, horizon, rep, shift, size, tex, pal;
@@ -68,12 +85,16 @@ typedef struct {
     skyprog_t     su;
     GLuint        fbo, colortex, depthrb;
     GLuint        paltex, idtex, vbo, skyvbo;
+    gobj_t*       gobjs;                        // one per object number (M3D_MAXOBJECTS), allocated at the first frame
+    long          built;                        // how many meshes were built (a test can see that unchanged ones are not)
     int           fw, fh;                       // the size of the framebuffer object (0: none yet)
     bool          paldirty;
     GLuint        texid[M3D_MAXTEX];            // 0: not uploaded
     unsigned      texgen[M3D_MAXTEX];
     gtri_t*       tris;  int ntris, captris;
     float*        vb;    size_t capvb;
+    bool          havecam;
+    cam_t         cam;                          // the camera of the last frame (the triangle count is made from it when asked for)
     uint8_t*      rgba;                         // the read back picture
     uint32_t*     out;                          // ... as ARGB (what m3d_render32() returns)
     int           ow, oh;
@@ -85,13 +106,15 @@ static const char* const vs_obj =
     "#version 120\n"
     "uniform vec3 u_eye, u_r, u_up, u_fw;\n"
     "uniform vec4 u_proj;\n"
-    "attribute vec3 a_pos; attribute vec2 a_uv; attribute float a_light;\n"
+    "uniform vec3 u_org; uniform vec2 u_rot, u_texsz; uniform float u_light;\n"      // the object's place, cos / sin of its heading, the picture's size in texels, its light
+    "attribute vec3 a_pos; attribute vec2 a_uv;\n"
     "varying vec2 v_uv; varying float v_light; varying vec3 v_world; varying float v_z;\n"
     "void main() {\n"
-    "    vec3 d = a_pos - u_eye;\n"
+    "    vec3 w = vec3( a_pos.x * u_rot.x - a_pos.y * u_rot.y, a_pos.x * u_rot.y + a_pos.y * u_rot.x, a_pos.z ) + u_org;\n"
+    "    vec3 d = w - u_eye;\n"
     "    float vx = dot( d, u_r ), vy = dot( d, u_up ), vz = dot( d, u_fw );\n"
     "    gl_Position = vec4( vx * u_proj.x, vy * u_proj.y, vz * u_proj.z + u_proj.w, vz );\n"
-    "    v_uv = a_uv; v_light = a_light; v_world = a_pos; v_z = vz;\n"
+    "    v_uv = a_uv / u_texsz; v_light = u_light; v_world = w; v_z = vz;\n"
     "}\n";
 
 static const char* const fs_obj =
@@ -284,7 +307,10 @@ static void* gl_create( m3d_t* m ) {
     p->lampd = gl->GetUniformLocation( g->prog, "u_lampd" );
     p->apos = gl->GetAttribLocation( g->prog, "a_pos" );
     p->auv = gl->GetAttribLocation( g->prog, "a_uv" );
-    p->alight = gl->GetAttribLocation( g->prog, "a_light" );
+    p->org = gl->GetUniformLocation( g->prog, "u_org" );
+    p->rot = gl->GetUniformLocation( g->prog, "u_rot" );
+    p->texsz = gl->GetUniformLocation( g->prog, "u_texsz" );
+    p->light = gl->GetUniformLocation( g->prog, "u_light" );
     skyprog_t* s = &g->su;
     s->yaw = gl->GetUniformLocation( g->skyprog, "u_yaw" );
     s->f = gl->GetUniformLocation( g->skyprog, "u_f" );
@@ -296,7 +322,7 @@ static void* gl_create( m3d_t* m ) {
     s->tex = gl->GetUniformLocation( g->skyprog, "u_tex" );
     s->pal = gl->GetUniformLocation( g->skyprog, "u_pal" );
     s->apos = gl->GetAttribLocation( g->skyprog, "a_pos" );
-    if ( p->apos < 0 || p->auv < 0 || p->alight < 0 || s->apos < 0 ) {
+    if ( p->apos < 0 || p->auv < 0 || s->apos < 0 ) {
         gl_destroy( m, g );
         return 0;
     }
@@ -348,6 +374,11 @@ static void gl_destroy( m3d_t* m, void* rd ) {
             }
             if ( g->paltex != 0 ) { gl->DeleteTextures( 1, &g->paltex ); }
             if ( g->idtex != 0 ) { gl->DeleteTextures( 1, &g->idtex ); }
+            if ( g->gobjs != 0 ) {
+                for ( int i=0; i < M3D_MAXOBJECTS; ++i ) {
+                    if ( g->gobjs[i].vbo != 0 ) { gl->DeleteBuffers( 1, &g->gobjs[i].vbo ); }
+                }
+            }
             if ( g->vbo != 0 ) { gl->DeleteBuffers( 1, &g->vbo ); }
             if ( g->skyvbo != 0 ) { gl->DeleteBuffers( 1, &g->skyvbo ); }
             if ( g->prog != 0 ) { gl->DeleteProgram( g->prog ); }
@@ -357,6 +388,12 @@ static void gl_destroy( m3d_t* m, void* rd ) {
     }
     if ( g->ctx != 0 ) { SDL_GL_DeleteContext( g->ctx ); }
     if ( g->win != 0 ) { SDL_DestroyWindow( g->win ); }
+    if ( g->gobjs != 0 ) {
+        for ( int i=0; i < M3D_MAXOBJECTS; ++i ) {
+            free( g->gobjs[i].r );
+        }
+    }
+    free( g->gobjs );
     free( g->tris ); free( g->vb ); free( g->rgba ); free( g->out );
     free( g );
 }
@@ -452,8 +489,8 @@ static gtri_t* add_tri( gl_t* g ) {
     return &g->tris[ g->ntris++ ];
 }
 
-static void put_vertex( float* d, v3_t p, double u, double v, double light ) {
-    d[0] = (float) p.x; d[1] = (float) p.y; d[2] = (float) p.z; d[3] = (float) u; d[4] = (float) v; d[5] = (float) light;
+static void put_vertex( float* d, v3_t p, double u, double v ) {
+    d[0] = (float) p.x; d[1] = (float) p.y; d[2] = (float) p.z; d[3] = (float) u; d[4] = (float) v;
 }
 
 static int cmp_key( const void* a, const void* b ) {
@@ -461,17 +498,23 @@ static int cmp_key( const void* a, const void* b ) {
     return ka < kb ? -1 : ka > kb;
 }
 
-typedef struct {
-    double f, cx, cy;
-    v3_t   eye, r, up, fw;
-} cam_t;
+// the transform of a kept mesh: the object's place and heading, its light; the picture's size in texels (1 x 1: the coordinates are 0 .. 1 already)
+static void set_object( gl_t* g, double px, double py, double pz, double cs, double sn, double light ) {
+    glapi_t* gl = &g->gl;
+    gl->Uniform3f( g->pu.org, (GLfloat) px, (GLfloat) py, (GLfloat) pz );
+    gl->Uniform2f( g->pu.rot, (GLfloat) cs, (GLfloat) sn );
+    gl->Uniform1f( g->pu.light, (GLfloat) light );
+    gl->Uniform2f( g->pu.texsz, 1.0f, 1.0f );
+}
 
-// draws the collected triangles (sorted by picture) and empties the list; key = picture * 2 + masked
-static void flush_tris( gl_t* g, const m3d_t* m ) {
+// draws the collected triangles (sorted by picture) and empties the list (the billboards: world coordinates, 0 .. 1 picture coordinates); key = picture * 2 + masked
+static void flush_tris( gl_t* g, const m3d_t* m, double light ) {
     if ( g->ntris == 0 ) {
         return;
     }
     glapi_t* gl = &g->gl;
+    set_object( g, 0, 0, 0, 1, 0, light );
+    gl->Disable( GL_CULL_FACE );
     qsort( g->tris, (size_t) g->ntris, sizeof(gtri_t), cmp_key );
     size_t need = (size_t) g->ntris * 3U * VFLOATS;
     if ( need > g->capvb ) {
@@ -491,10 +534,8 @@ static void flush_tris( gl_t* g, const m3d_t* m ) {
     const GLsizei stride = (GLsizei)( VFLOATS * sizeof(float) );
     gl->EnableVertexAttribArray( (GLuint) p->apos );
     gl->EnableVertexAttribArray( (GLuint) p->auv );
-    gl->EnableVertexAttribArray( (GLuint) p->alight );
     gl->VertexAttribPointer( (GLuint) p->apos, 3, GL_FLOAT, GL_FALSE, stride, (const void*) 0 );
     gl->VertexAttribPointer( (GLuint) p->auv, 2, GL_FLOAT, GL_FALSE, stride, (const void*)( 3 * sizeof(float) ) );
-    gl->VertexAttribPointer( (GLuint) p->alight, 1, GL_FLOAT, GL_FALSE, stride, (const void*)( 5 * sizeof(float) ) );
     int i = 0;
     while ( i < g->ntris ) {
         int key = g->tris[i].key, j = i;
@@ -508,7 +549,6 @@ static void flush_tris( gl_t* g, const m3d_t* m ) {
     }
     gl->DisableVertexAttribArray( (GLuint) p->apos );
     gl->DisableVertexAttribArray( (GLuint) p->auv );
-    gl->DisableVertexAttribArray( (GLuint) p->alight );
     gl->BindBuffer( GL_ARRAY_BUFFER, 0 );
     g->ntris = 0;
 }
@@ -533,47 +573,155 @@ static bool object_seen( const m3d_t* m, const cam_t* c, const obj_t* o, double*
     return true;
 }
 
-// the visible triangles of an object into the list
-static void collect_object( gl_t* g, m3d_t* m, const cam_t* c, const obj_t* o ) {
-    bool twosided = ( o->flags & M3D_OF_TWOSIDED ) != 0;
-    int masked = ( o->flags & M3D_OF_MASKED ) != 0 || ( o->flags & M3D_OF_TRANS ) != 0 ? 1 : 0;
-    double light = (double) o->light * LIGHTK;
+// does the triangle face the eye (a one sided object shows only those), and how many triangles are left of it after clipping at the near plane (0, 1 or 2): as the software renderer counts
+static int tri_drawn( const cam_t* c, const obj_t* o, const mt_t* t, bool twosided ) {
+    v3_t wa = o->wv[t->a], wb = o->wv[t->b], wc = o->wv[t->c];
+    if ( !twosided && vdot( vcross( vsub( wb, wa ), vsub( wc, wa ) ), vsub( c->eye, wa ) ) <= 0 ) {
+        return 0;
+    }
+    int nin = 0;
+    const v3_t* p3[3] = { &wa, &wb, &wc };
+    for ( int k=0; k < 3; ++k ) {
+        if ( vdot( vsub( *p3[k], c->eye ), c->fw ) >= NEARZ ) {
+            ++nin;
+        }
+    }
+    return nin == 0 ? 0 : nin == 2 ? 2 : 1;
+}
+
+// builds the object's mesh in the graphics memory: the triangles grouped by picture, in the object's own coordinates
+static bool build_gobj( gl_t* g, const m3d_t* m, const obj_t* o, gobj_t* go ) {
+    glapi_t* gl = &g->gl;
+    g->ntris = 0;
     for ( int j=0; j < o->nt; ++j ) {
         const mt_t* t = &o->t[j];
-        v3_t wa = o->wv[t->a], wb = o->wv[t->b], wc = o->wv[t->c];
-        if ( !twosided && vdot( vcross( vsub( wb, wa ), vsub( wc, wa ) ), vsub( c->eye, wa ) ) <= 0 ) {
-            continue;
-        }
-        // (counted like the software renderer: the triangles left after clipping at the near plane)
-        int nin = 0;
-        for ( int k=0; k < 3; ++k ) {
-            const v3_t* wv3 = k == 0 ? &wa : k == 1 ? &wb : &wc;
-            if ( vdot( vsub( *wv3, c->eye ), c->fw ) >= NEARZ ) {
-                ++nin;
-            }
-        }
-        if ( nin == 0 ) {
-            continue;
-        }
         gtri_t* gt = add_tri( g );
         if ( gt == 0 ) {
-            return;
+            g->ntris = 0;
+            return false;
         }
         int pk = pic_key( m, t->tex );
-        gt->key = pk * 2 + masked;
+        gt->key = pk;
         const tex_t* tx = tex_get( m, t->tex );
-        const v3_t wp[3] = { wa, wb, wc };
+        const int vi[3] = { t->a, t->b, t->c };
         for ( int k=0; k < 3; ++k ) {
-            double u, v;
+            const mv_t* v = &o->v[vi[k]];
+            v3_t lp = { v->x, v->y, v->z };
+            double u, w;
             if ( tx != 0 ) {
-                u = t->u[k] / (double) tx->w; v = t->v[k] / (double) tx->h;
+                u = t->u[k]; w = t->v[k];               // in texels: the picture's size is a uniform when it is drawn
             } else {
-                u = ( (double)( t->tex & 255 ) + 0.5 ) / 256.0; v = 0.5;
+                u = ( (double)( t->tex & 255 ) + 0.5 ) / 256.0; w = 0.5;
             }
-            put_vertex( &gt->v[k * VFLOATS], wp[k], u, v, light );
+            put_vertex( &gt->v[k * VFLOATS], lp, u, w );
         }
-        m->drawn += nin == 2 ? 2 : 1;
     }
+    qsort( g->tris, (size_t) g->ntris, sizeof(gtri_t), cmp_key );
+    size_t need = (size_t) g->ntris * 3U * VFLOATS;
+    if ( need > g->capvb ) {
+        float* nv = (float*) realloc( g->vb, need * sizeof(float) );
+        if ( nv == 0 ) {
+            g->ntris = 0;
+            return false;
+        }
+        g->vb = nv; g->capvb = need;
+    }
+    int nr = 0;
+    grange_t* rg = (grange_t*) malloc( sizeof(grange_t) * (size_t)( g->ntris > 0 ? g->ntris : 1 ) );
+    if ( rg == 0 ) {
+        g->ntris = 0;
+        return false;
+    }
+    for ( int i=0; i < g->ntris; ++i ) {
+        memcpy( g->vb + (size_t) i * 3U * VFLOATS, g->tris[i].v, sizeof(float) * 3U * VFLOATS );
+        if ( nr == 0 || rg[nr-1].key != g->tris[i].key ) {
+            rg[nr].key = g->tris[i].key; rg[nr].first = i * 3; rg[nr].count = 0;
+            ++nr;
+        }
+        rg[nr-1].count += 3;
+    }
+    if ( go->vbo == 0 ) {
+        gl->GenBuffers( 1, &go->vbo );
+    }
+    gl->BindBuffer( GL_ARRAY_BUFFER, go->vbo );
+    gl->BufferData( GL_ARRAY_BUFFER, (GLsizeiptr)( need * sizeof(float) ), g->vb, GL_STATIC_DRAW );
+    gl->BindBuffer( GL_ARRAY_BUFFER, 0 );
+    free( go->r );
+    go->r = rg; go->nr = nr;
+    go->gen = o->gen; go->pres = m->presepoch;
+    g->ntris = 0;
+    ++g->built;
+    return true;
+}
+
+// draws a kept mesh (building it first when it is new or changed): one draw per picture; a one sided object is culled by the graphics hardware (the picture is drawn upside down,
+// so the faces that turn towards the viewer wind clockwise)
+static void draw_gobj( gl_t* g, const m3d_t* m, const obj_t* o, int idx ) {
+    glapi_t* gl = &g->gl;
+    gobj_t* go = &g->gobjs[idx];
+    if ( go->vbo == 0 || go->gen != o->gen || go->pres != m->presepoch ) {
+        if ( !build_gobj( g, m, o, go ) ) {
+            return;
+        }
+    }
+    if ( go->nr == 0 ) {
+        return;
+    }
+    const prog_t* p = &g->pu;
+    bool twosided = ( o->flags & M3D_OF_TWOSIDED ) != 0;
+    float masked = ( o->flags & M3D_OF_MASKED ) != 0 || ( o->flags & M3D_OF_TRANS ) != 0 ? 1.0f : 0.0f;
+    set_object( g, o->px, o->py, o->pz, o->cs, o->sn, (double) o->light * LIGHTK );
+    if ( twosided ) {
+        gl->Disable( GL_CULL_FACE );
+    } else {
+        gl->Enable( GL_CULL_FACE );
+    }
+    const GLsizei stride = (GLsizei)( VFLOATS * sizeof(float) );
+    gl->BindBuffer( GL_ARRAY_BUFFER, go->vbo );
+    gl->EnableVertexAttribArray( (GLuint) p->apos );
+    gl->EnableVertexAttribArray( (GLuint) p->auv );
+    gl->VertexAttribPointer( (GLuint) p->apos, 3, GL_FLOAT, GL_FALSE, stride, (const void*) 0 );
+    gl->VertexAttribPointer( (GLuint) p->auv, 2, GL_FLOAT, GL_FALSE, stride, (const void*)( 3 * sizeof(float) ) );
+    gl->Uniform1f( p->masked, masked );
+    for ( int i=0; i < go->nr; ++i ) {
+        const grange_t* rg = &go->r[i];
+        const tex_t* tx = rg->key < M3D_MAXTEX ? tex_get( m, rg->key ) : 0;
+        if ( tx != 0 ) {
+            gl->Uniform2f( p->texsz, (GLfloat) tx->w, (GLfloat) tx->h );
+        } else {
+            gl->Uniform2f( p->texsz, 1.0f, 1.0f );
+        }
+        bind_texture( g, m, rg->key );
+        gl->DrawArrays( GL_TRIANGLES, rg->first, rg->count );
+    }
+    gl->DisableVertexAttribArray( (GLuint) p->apos );
+    gl->DisableVertexAttribArray( (GLuint) p->auv );
+    gl->BindBuffer( GL_ARRAY_BUFFER, 0 );
+}
+
+// the number of triangles of the last frame (M3D("DRAWN")): counted when asked for, from the camera of the last frame and the objects as they are now (nothing is counted while drawing)
+static long gl_drawn( m3d_t* m, void* rd ) {
+    gl_t* g = (gl_t*) rd;
+    if ( !g->havecam ) {
+        return 0;
+    }
+    long n = 0;
+    for ( int i=0; i < m->top; ++i ) {
+        obj_t* o = &m->objs[i];
+        if ( !o->used || !o->shown || o->nt == 0 ) {
+            continue;
+        }
+        m3d_obj_update( o );
+        double dist;
+        if ( o->dirty || !object_seen( m, &g->cam, o, &dist ) ) {
+            continue;
+        }
+        bool twosided = ( o->flags & M3D_OF_TWOSIDED ) != 0;
+        for ( int j=0; j < o->nt; ++j ) {
+            n += tri_drawn( &g->cam, o, &o->t[j], twosided );
+        }
+    }
+    return n;
 }
 
 static void sort_desc( int* idx, const double* key, int n ) {
@@ -654,11 +802,11 @@ static void draw_things_gl( gl_t* g, m3d_t* m, const cam_t* c ) {
             gt->key = pic_key( m, t->tex ) * 2 + 1;
             for ( int e=0; e < 3; ++e ) {
                 int ci = idx[q * 3 + e];
-                put_vertex( &gt->v[e * VFLOATS], cn[ci], uu[ci], vv[ci], light );
+                put_vertex( &gt->v[e * VFLOATS], cn[ci], uu[ci], vv[ci] );
             }
         }
         set_pass( g, false, t->trans, 0.5f );
-        flush_tris( g, m );
+        flush_tris( g, m, light );
     }
 }
 
@@ -688,10 +836,19 @@ static const void* gl_render( m3d_t* m, void* rd ) {
     c.up.x = -sin( pr ) * cos( yr ); c.up.y = -sin( pr ) * sin( yr ); c.up.z = cos( pr );
     double horizon = H * 0.5 + tan( pr ) * c.f;
     m->drawn = 0;
+    g->cam = c; g->havecam = true;
+    if ( g->gobjs == 0 ) {
+        g->gobjs = (gobj_t*) calloc( M3D_MAXOBJECTS, sizeof(gobj_t) );
+        if ( g->gobjs == 0 ) {
+            return 0;
+        }
+    }
 
     gl->BindFramebuffer( GL_FRAMEBUFFER, g->fbo );
     gl->Viewport( 0, 0, W, H );
     gl->Disable( GL_CULL_FACE );
+    gl->FrontFace( GL_CW );
+    gl->CullFace( GL_BACK );
     gl->Disable( GL_BLEND );
     gl->DepthMask( GL_TRUE );
     gl->Disable( GL_DEPTH_TEST );
@@ -780,23 +937,22 @@ static const void* gl_render( m3d_t* m, void* rd ) {
             m->order[nt] = i; m->odist[i] = dist; ++nt;
             continue;
         }
-        collect_object( g, m, &c, o );
+        draw_gobj( g, m, o, i );
     }
-    flush_tris( g, m );
     gl->Uniform1f( p->uselamps, 0.0f );
     draw_things_gl( g, m, &c );
     if ( nt > 0 ) {
         gl->Uniform1f( p->uselamps, 1.0f );
         sort_desc( m->order, m->odist, nt );
         for ( int k=0; k < nt; ++k ) {
-            collect_object( g, m, &c, &m->objs[m->order[k]] );
             set_pass( g, false, true, 0.5f );
-            flush_tris( g, m );
+            draw_gobj( g, m, &m->objs[m->order[k]], m->order[k] );
         }
     }
     gl->UseProgram( 0 );
     gl->DepthMask( GL_TRUE );
     gl->Disable( GL_BLEND );
+    gl->Disable( GL_CULL_FACE );
     gl->Disable( GL_DEPTH_TEST );
 
     gl->PixelStorei( GL_PACK_ALIGNMENT, 1 );
@@ -811,7 +967,11 @@ static const void* gl_render( m3d_t* m, void* rd ) {
     return g->out;
 }
 
-static const m3drend_t gl_renderer = { "hardware", true, gl_create, gl_destroy, gl_resize, gl_palette, gl_render };
+static const m3drend_t gl_renderer = { "hardware", true, gl_create, gl_destroy, gl_resize, gl_palette, gl_render, gl_drawn };
+
+long m3d_gl_built( const struct _m3d_t* m ) {
+    return m != 0 && m->rend == &gl_renderer && m->rdata != 0 ? ((const gl_t*) m->rdata)->built : -1;
+}
 
 const struct _m3drend_t* m3d_gl_renderer( void ) {
     if ( glload_state() != GLLOAD_YES ) {

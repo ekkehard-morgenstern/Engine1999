@@ -211,6 +211,39 @@ int main( void ) {
     CHECK( op( GFXOP_M3DCAMERA, 5, 0.0, 0.0, 0.0, 30.0, 10.0 ) );
     compare( "sky-picture", 24, 6.0 );
 
+    // kept meshes: an object's mesh sits in the graphics memory and is built again only when it changed (or a picture number got a picture); moving, turning, light and flags are free
+    scene_base();
+    CHECK( op( GFXOP_M3DHARDWARE, 0 ) );
+    CHECK( m3d_render32( M ) != 0 );
+    long b0 = m3d_gl_built( M );
+    CHECK( b0 >= 3 );                                             // the floor, the wall and the block
+    CHECK( m3d_render32( M ) != 0 );
+    CHECK( m3d_gl_built( M ) == b0 );                             // nothing changed: nothing built
+    CHECK( op( GFXOP_M3DOBJPOS, 5, 3.0, 30.0, 10.0, 0.0, 40.0 ) );
+    CHECK( op( GFXOP_M3DOBJLIGHT, 2, 2.0, 140.0 ) );
+    CHECK( op( GFXOP_M3DOBJFLAGS, 2, 2.0, 5.0 ) );
+    CHECK( m3d_render32( M ) != 0 );
+    CHECK( m3d_gl_built( M ) == b0 );                             // moved, turned, dimmed, flags changed: still nothing built
+    compare( "kept, moved", 24, 3.0 );                            // (it ends with the software renderer: switching back may start the hardware renderer's state anew)
+    CHECK( op( GFXOP_M3DHARDWARE, 0 ) );
+    CHECK( m3d_render32( M ) != 0 );
+    b0 = m3d_gl_built( M );
+    CHECK( m3d_render32( M ) != 0 );
+    CHECK( m3d_gl_built( M ) == b0 );
+    CHECK( op( GFXOP_M3DBOX, 8, 3.0, -60.0, 100.0, 0.0, -30.0, 120.0, 30.0, 3.0 ) );
+    CHECK( m3d_render32( M ) != 0 );
+    CHECK( m3d_gl_built( M ) == b0 + 1 );                         // a changed mesh: that object only
+    long b1 = m3d_gl_built( M );
+    CHECK( op( GFXOP_M3DOBJECT, 1, 3.0 ) );                       // an object made again from nothing
+    CHECK( op( GFXOP_M3DBOX, 8, 3.0, 40.0, 100.0, 0.0, 80.0, 140.0, 50.0, 3.0 ) );
+    CHECK( m3d_render32( M ) != 0 );
+    CHECK( m3d_gl_built( M ) == b1 + 1 );
+    long b2 = m3d_gl_built( M );
+    tex_pat( 9, 8, 8, 0, 90 );                                    // a picture number that had none (the triangles are grouped by picture, so every mesh is built again)
+    CHECK( m3d_render32( M ) != 0 );
+    CHECK( m3d_gl_built( M ) >= b2 + 3 );
+    compare( "kept, rebuilt", 24, 3.0 );
+
     // nothing drawn (no sky) and index 0 of a plain picture are see-through (alpha 0) in both renderers
     scene_base();
     tex_pat( 6, 8, 8, 0, 120 );                                   // a checker of index 0 and 120

@@ -604,4 +604,4 @@ static void soft_palette( m3d_t* m, void* rd ) {
     make_cmap( m, (soft_t*) rd );
 }
 
-const m3drend_t m3d_soft_renderer = { "software", false, soft_create, soft_destroy, soft_resize, soft_palette, soft_render };
+const m3drend_t m3d_soft_renderer = { "software", false, soft_create, soft_destroy, soft_resize, soft_palette, soft_render, 0 };

@@ -45,6 +45,7 @@ typedef struct _m3drend_t {
     bool  (*resize)( m3d_t* m, void* rd, int bw, int bh );        // the picture becomes bw x bh (before m->bw / m->bh change); false: out of memory, nothing changed
     void  (*palette)( m3d_t* m, void* rd );                       // m->pal changed
     const void* (*render)( m3d_t* m, void* rd );                  // draws one frame; the picture (m->bw x m->bh pixels: bytes of palette indices, or uint32_t ARGB when `argb`) or 0
+    long  (*drawn)( m3d_t* m, void* rd );                         // the number of triangles of the last frame, when the renderer does not count them while drawing (0: m->drawn is kept by render)
 } m3drend_t;
 
 extern const m3drend_t m3d_soft_renderer;
@@ -69,6 +70,8 @@ typedef struct {
 
 typedef struct {
     bool    used, shown, dirty;
+    uint32_t gen;                           // the generation of the mesh: a new number whenever the vertices or triangles change (a moved object keeps it): a renderer that keeps
+                                            // the mesh in its own memory (m3dgl.c: a vertex buffer) builds it again only when this differs from the number it saw
     int     flags, light;
     mv_t*   v;  int nv, capv;
     mt_t*   t;  int nt, capt;
@@ -114,6 +117,7 @@ struct _m3d_t {
     // frame scratch
     int*     order;  double* odist;
     int      top;                           // one above the highest object number in use (the loops stop there)
+    unsigned presepoch;                     // counts the times a picture number got or lost its picture (the renderer's kept meshes group the triangles by that)
 };
 
 // -- shared helpers -------------------------------------------------------------------------------------------------------------

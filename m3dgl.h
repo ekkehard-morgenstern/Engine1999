@@ -40,8 +40,13 @@ it only as a `struct _m3drend_t`, which the host registers with m3d_set_hardware
 */
 
 struct _m3drend_t;
+struct _m3d_t;
 
 // the renderer, or 0 when OpenGL 2 was not found (glload_probe()) or the renderer is not built in; the screen thread must have probed first
 const struct _m3drend_t* m3d_gl_renderer( void );
+
+// how many object meshes the hardware renderer has built in the graphics memory so far (it builds one when an object is new or its mesh changed, or when a picture number got or
+// lost its picture: not when it only moved); -1 when the hardware renderer is not the one in use. For tests.
+long m3d_gl_built( const struct _m3d_t* m );
 
 #endif

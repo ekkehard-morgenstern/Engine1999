@@ -65,6 +65,15 @@ void m3d_colormap( m3d_t* m, const uint32_t* argb ) {
 
 // -- lifetime -------------------------------------------------------------------------------------------------------------------
 
+static uint32_t gen_seq = 0;
+
+static uint32_t next_gen( void ) {
+    if ( ++gen_seq == 0 ) {
+        ++gen_seq;
+    }
+    return gen_seq;
+}
+
 static void free_obj( obj_t* o ) {
     free( o->v ); free( o->t ); free( o->wv );
     memset( o, 0, sizeof(*o) );
@@ -201,6 +210,7 @@ static bool obj_addv( obj_t* o, double x, double y, double z, double u, double v
     mv_t* p = &o->v[o->nv++];
     p->x = x; p->y = y; p->z = z; p->u = u; p->v = v;
     o->dirty = true;
+    o->gen = next_gen();
     return true;
 }
 
@@ -239,6 +249,7 @@ static bool obj_addt( obj_t* o, int a, int b, int c, int tex ) {
         }
     }
     o->dirty = true;
+    o->gen = next_gen();
     return true;
 }
 
@@ -325,6 +336,9 @@ static bool set_texture( m3d_t* m, int n, const char* s, size_t slen, const char
         for ( int u=0; u < tw; ++u ) {
             col[ (size_t) u * (size_t) th + (size_t) v ] = b[ 4 + (size_t) v * (size_t) tw + (size_t) u ];
         }
+    }
+    if ( m->texs[n].col == 0 ) {
+        ++m->presepoch;
     }
     free( m->texs[n].col );
     m->texs[n].col = col; m->texs[n].w = tw; m->texs[n].h = th; ++m->texs[n].gen;
@@ -594,6 +608,7 @@ bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t sl
                 free( m->texs[i].col );
                 m->texs[i].col = 0;
             }
+            ++m->presepoch;
             reset_state( m );
             return set_view( m, 0, 0, 640, 300, 2, 90.0 );
         case GFXOP_M3DCLEAR:
@@ -639,7 +654,7 @@ bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t sl
             if ( keep ) { px = o->px; py = o->py; pz = o->pz; yaw = o->yaw; }
             free_obj( o );
             if ( i1 >= m->top ) { m->top = i1 + 1; }
-            o->used = true; o->shown = true; o->dirty = true; o->flags = fl; o->light = li;
+            o->used = true; o->shown = true; o->dirty = true; o->flags = fl; o->light = li; o->gen = next_gen();
             o->px = px; o->py = py; o->pz = pz; o->yaw = yaw; o->cs = cos( yaw * DEG2RAD ); o->sn = sin( yaw * DEG2RAD );
             return true;
         }
@@ -859,7 +874,12 @@ bool m3d_query( m3d_t* m, int q, const double* a, int na, double* r ) {
         case GFXQ_M3DFLOORZ: *r = floor_at( m, m->x, m->y, m->z + m->step ); return true;
         case GFXQ_M3DFLOORAT: *r = floor_at( m, a[0], a[1], a[2] ); return true;
         case GFXQ_M3DCEILAT: *r = ceil_at( m, a[0], a[1], a[2] ); return true;
-        case GFXQ_M3DDRAWN: *r = m->drawn; return true;
+        case GFXQ_M3DDRAWN:
+            if ( m->rend != 0 && m->rend->drawn != 0 ) {
+                m->drawn = (int) m->rend->drawn( m, m->rdata );
+            }
+            *r = m->drawn;
+            return true;
         case GFXQ_M3DRENDERER: *r = m->rend == m->hw && m->hw != 0 ? 1 : 0; return true;
         case GFXQ_M3DHWAVAIL: *r = m->hw != 0 ? 1 : 0; return true;
         case GFXQ_M3DZONE: case GFXQ_M3DZONETAG: {
