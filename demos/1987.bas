@@ -24,7 +24,7 @@
 200 BREAK OFF
 210 ON ERROR GOTO FAILED
 220 HL=0:IF ENV$("G1987_HEADLESS")<>"" THEN HL=-1
-230 DIM FLJ$(13),TIH(33),RPX(300),RPY(300),RPF(300),CPX(40),CPY(40),SMX(120),SMY(120),PLX(40),PLY(40),TRX(520),TRY(520),LRR(8),LRZ(8),LRV(8),W$(8),GPX(2),GPZ(2),GPS(2),DWX(40),DWY(40),DRX(5),DRY(5),DRZ(5),DRH(5),DRT(5),DRA(5)
+230 DIM FLJ$(41),TIH(33),RPX(300),RPY(300),RPF(300),CPX(40),CPY(40),SMX(120),SMY(120),PLX(40),PLY(40),TRX(520),TRY(520),LRR(8),LRZ(8),LRV(8),W$(8),GPX(2),GPZ(2),GPS(2),DWX(40),DWY(40),DRX(5),DRY(5),DRZ(5),DRH(5),DRT(5),DRA(5)
 240 GOTO MAIN
 250 ' ------------------------------------------------------------------------------------------------ small helpers
 260 FUNC RN(M)
@@ -1045,7 +1045,7 @@
 8980 END PROC
 8990 ' ------------------------------------------------------------------------------------------------ the camera
 9000 PROC CAMUPDATE(DT)
-9010   LOCAL TX,TY,TZ,D,E,K,C,S,DS,CX,CY,CZ,TG,H,FZ,R
+9010   LOCAL TX,TY,TZ,D,E,K,C,S,DS,CX,CY,CZ,TG,H,FZ,R,DD,RT
 9020   IF MODE=1 THEN TG=BH ELSE TG=JH
 9030   K=3.4:IF MODE=1 THEN K=2.4
 9040   CYW=CYW+FN ADIFF(TG+CO,CYW)*MIN(1,K*DT)
@@ -1062,6 +1062,12 @@
 9120   R=M3D("SHOOT",D+16)
 9130   DS=D
 9140   IF M3D("SHOTKIND")=1 THEN DS=MIN(D,MAX(20,M3D("SHOTDIST")-12))
+9142   ' the wall ray's distance changes by a few units from frame to frame (a bump, a rough edge; measured on the owner's machine: 125 -> 116 -> 118 -> 125 in three frames, which moved the
+9144   ' camera 9 units in one): a drop of up to 10 units (less than the 12 units of clearance, so the camera never gets behind the wall) and any rise are eased, a bigger drop (a wall) is followed at once
+9146   IF CDI=0 THEN DSS=DS:CDI=-1
+9147   DD=DS-DSS:RT=4:IF DD<0 THEN RT=14
+9148   IF DD<-10 THEN DSS=DS ELSE DSS=DSS+DD*MIN(1,RT*DT)
+9149   DS=DSS
 9150   DSV=DS
 9160   CX=TX-C*DS*COS(E):CY=TY-S*DS*COS(E):CZ=TZ+DS*SIN(E)
 9170   FZ=MAX(M3D("FLOORAT",CX,CY,CZ),FN HT(CX,CY))+10
@@ -1199,6 +1205,7 @@
 10160   IF MODE=2 THEN
 10170     MT=MT+DT
 10180     A=MT/0.45:IF A>1 THEN A=1
+10185     A=A*A*(3-2*A)
 10190     JX=MFX+(BX-MFX)*A:JY=MFY+(BY-MFY)*A:JZ=MFZ+(BZ-MFZ)*A
 10200     JH=JH+FN ADIFF(BH,JH)*MIN(1,12*DT)
 10210     PH=PH+DT*7
@@ -1218,6 +1225,7 @@
 10350   IF MODE=3 THEN
 10360     MT=MT+DT
 10370     A=MT/0.4:IF A>1 THEN A=1
+10375     A=A*A*(3-2*A)
 10380     JX=MFX+(MGX-MFX)*A:JY=MFY+(MGY-MFY)*A:JZ=MFZ+(MGZ-MFZ)*A
 10390     PH=PH+DT*7
 10400     IF MT>=0.4 THEN
@@ -1350,7 +1358,7 @@
 11535   ' the bicycle leans against the south fence of the yard, on the outside, east of the gate, the handlebar turned towards the fence (bike state 1, see BIKEFALL)
 11536   BST=1:BLN=0.35:BLS=1:BSTR=50:BRT=0:BYW=0:BSD=0:BDR=-1:BVIS=-1:BLW=0:BLN0=0:BSTR0=0
 11540   M3D THINGPOS 0,JX,JY,JZ:M3D THINGPOS 1,BX,BY,BZ
-11550   CZI=0:CZM=0:CLP=0:NSL=0:MODE=0:MT=0:PH=0:KTS=0:KFA=0:KFD=0:KRA=0:KSH=0:KLT=0:EXH=0:ST=1:STD=0:TK=0:CYW=JH:CO=0:CP=0:KU=0:UL=0:BL=0:NEAR=0:MSGT=0:MB=0
+11550   CDI=0:CZI=0:CZM=0:CLP=0:NSL=0:MODE=0:MT=0:PH=0:KTS=0:KFA=0:KFD=0:KRA=0:KSH=0:KLT=0:EXH=0:ST=1:STD=0:TK=0:CYW=JH:CO=0:CP=0:KU=0:UL=0:BL=0:NEAR=0:MSGT=0:MB=0
 11560   CALL SAY("WALK WITH W A S D. THE BICYCLE LEANS AGAINST THE FENCE OUTSIDE THE GATE, TO THE EAST: STAND NEAR IT AND PRESS E.")
 11570   MSGT=14
 11580 END PROC
@@ -1754,7 +1762,7 @@
 15363   ' or a step of John's height of more than 1 unit; turning or walking steadily does not count
 15364   DX1=M3D("X")-FL1:DY1=M3D("Y")-FL2:DZ1=M3D("Z")-FL3:DA1=FN ADIFF(M3D("YAW"),FL4):DP1=M3D("PITCH")-FL5:DJ1=JZ-FL6
 15365   IF FLC>1 AND (ABS(DX1-PD1)>1.5 OR ABS(DY1-PD2)>1.5 OR ABS(DZ1-PD3)>1.5 OR ABS(DA1-PD4)>1.2 OR ABS(DP1-PD5)>1.2 OR ABS(DJ1)>1) THEN
-15366     FLJ=FLJ+1:IF FLJ<=12 THEN FLJ$(FLJ)="frame "+STR$(FLC)+": cam moved "+STR$(INT(DX1))+" "+STR$(INT(DY1))+" "+STR$(INT(DZ1))+" (before "+STR$(INT(PD1))+" "+STR$(INT(PD2))+" "+STR$(INT(PD3))+") yaw "+STR$(INT(DA1))+" (before "+STR$(INT(PD4))+") pitch "+STR$(INT(DP1))+" (before "+STR$(INT(PD5))+") John z "+STR$(INT(DJ1*10)/10)+" distance "+STR$(INT(DSV))+" turn input "+STR$(KT)+" forward "+STR$(KF)+" mode "+STR$(MODE)
+15366     FLJ=FLJ+1:IF FLJ<=40 THEN FLJ$(FLJ)="frame "+STR$(FLC)+": cam moved "+STR$(INT(DX1))+" "+STR$(INT(DY1))+" "+STR$(INT(DZ1))+" (before "+STR$(INT(PD1))+" "+STR$(INT(PD2))+" "+STR$(INT(PD3))+") yaw "+STR$(INT(DA1))+" (before "+STR$(INT(PD4))+") pitch "+STR$(INT(DP1))+" (before "+STR$(INT(PD5))+") John z "+STR$(INT(DJ1*10)/10)+" distance "+STR$(INT(DSV))+" turn input "+STR$(KT)+" forward "+STR$(KF)+" mode "+STR$(MODE)
 15368   END IF
 15369   PD1=DX1:PD2=DY1:PD3=DZ1:PD4=DA1:PD5=DP1:FL1=M3D("X"):FL2=M3D("Y"):FL3=M3D("Z"):FL4=M3D("YAW"):FL5=M3D("PITCH"):FL6=JZ
 15370   D=TI-FLK:FLK=TI
@@ -1770,7 +1778,7 @@
 15470     PRINT #7,"ticks per frame: 0:";FLT0;" 1:";FLT1;" 2:";FLT2;" 3+:";FLT3
 15480     PRINT #7,"frame time used: min ";FLMN;" max ";FLMX;" mean ";FLS/FLC
 15481     PRINT #7,"jumps of the picture (a sudden change of the camera's movement, or a step of John's height): ";FLJ
-15482     FOR FLQ=1 TO MIN(FLJ,12)
+15482     FOR FLQ=1 TO MIN(FLJ,40)
 15483       PRINT #7,FLJ$(FLQ)
 15484     NEXT FLQ
 15490     CLOSE #7
