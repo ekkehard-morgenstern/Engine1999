@@ -171,6 +171,18 @@ state
 run 0.5
 wait 6
 state
+fa 0
+run 0
+wait 1
+use
+wait 1
+goto -2564 644 0
+fa 0.35
+wait 2.5
+state
+goto 3300 1500 0
+wait 4
+state
 drones
 wait 30
 drones
@@ -247,6 +259,11 @@ expect "rested: running again" "$(val state 29 jv)" 100 156
 expect "bicycle: half stick, half pedalling speed" "$(val state 30 bv)" 55 75
 expect "bicycle: half trigger, half way to the top speed" "$(val state 31 bv)" 180 210
 expect "bicycle: the sprint cost stamina" "$(val state 31 st)" 0 99
+# 11f. no invisible walls: here a barrel of 301 times its size once stood (a ring round the yard, 2400 .. 3300 units out); walking on open ground goes on;
+#      the edge of the world at 3420 stops John dead (the red tiles lie just outside it)
+expect "open ground: no wall at (-2564, 644)" "$(val state 32 jx)" -2480 -2380
+expect "edge: stopped at the line" "$(val state 33 jx)" 3419 3421
+expect "edge: stopped dead" "$(val state 33 jv)" 0 0
 # 12. the camera stays above the ground, rays: the house wall is an object, open ground is not hit
 expect "camera: z above the ground" "$(val cam 1 z)" 20 400
 expect "ray at the house" "$(val ray 1 obj)" 300 300
