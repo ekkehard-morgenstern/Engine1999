@@ -168,7 +168,8 @@ wait 0.6
 fa 0.5
 wait 5
 state
-run 0.5
+fa 0
+run 1
 wait 6
 state
 fa 0
@@ -250,14 +251,14 @@ expect "key: released, slowing down" "$(val state 24 jv)" 85 125
 expect "key: released, standing" "$(val state 25 jv)" 0 0
 # 11e. the trigger is analog: pulled half way it sets the target speed 22 + 133 * 0.5 = 88 on foot (with the stick barely deflected); a sprint on foot
 #      tires John (the drain is 0.1 a second at the top speed), used up he walks slowly (22), after a rest (0.12 a second) he runs again; on the bicycle the stick's
-#      half deflection is half the pedalling speed (140 * 0.5 = 70) and the trigger half way a target between pedalling and the top speed (140 + 120 * 0.5 = 200)
+#      half deflection sets the target 40 + 220 * 0.5 / 0.95 = 156 (WBMIN .. WBMAX), the trigger alone pulled all the way the top speed 260
 expect "trigger: half pulled sets the target speed" "$(val state 26 jv)" 80 95
 expect "exhausted: only the slow walk" "$(val state 27 jv)" 15 32
 expect "exhausted: stamina below the recovery level" "$(val state 27 st)" 0 24
 expect "rested: stamina is back" "$(val state 28 st)" 25 100
 expect "rested: running again" "$(val state 29 jv)" 100 156
-expect "bicycle: half stick, half pedalling speed" "$(val state 30 bv)" 55 75
-expect "bicycle: half trigger, half way to the top speed" "$(val state 31 bv)" 180 210
+expect "bicycle: half stick gives a target between the minimum and the top speed" "$(val state 30 bv)" 148 160
+expect "bicycle: the trigger alone, all the way, gives the top speed" "$(val state 31 bv)" 245 261
 expect "bicycle: the sprint cost stamina" "$(val state 31 st)" 0 99
 # 11f. no invisible walls: here a barrel of 301 times its size once stood (a ring round the yard, 2400 .. 3300 units out); walking on open ground goes on;
 #      the edge of the world at 3420 stops John dead (the red tiles lie just outside it)

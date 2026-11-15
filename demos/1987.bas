@@ -943,22 +943,23 @@
 9210 END PROC
 9220 ' ------------------------------------------------------------------------------------------------ the physics
 9230 PROC SIM(DT)
-9240   LOCAL TV,A,DX,DY,TH,C,S,SL,TP,DM,OM,MX,AC,SD,DD,PE,BT,TS,TL,DRN
+9240   LOCAL TV,A,DX,DY,TH,C,S,SL,TP,DM,OM,MX,AC,SD,DD,BT,TS,TL,DRN
 9250   ' ---- the bicycle (also when nobody rides it: it rolls out)
-9260   TH=0:IF MODE=1 THEN TH=KF
+9260   TH=0:IF MODE=1 THEN TH=KF:IF KF=0 AND KLT>0 THEN TH=KLT
 9270   C=COS(BH*PI/180):S=SIN(BH*PI/180)
 9280   AC=0:SPRN=0:DRN=0
-9281   ' pedalling has a target speed BT: the keys mean full effort (WPED, plain pedalling), the stick's deflection a part of it; the left trigger (or SHIFT) pulled
-9282   ' a part of the way sets a target between WPED and the top speed WBMAX (a sprint: it uses stamina in proportion to the pull, and is refused when the stamina
-9283   ' is used up: then only plain pedalling); thrust stops when the target is reached. WPED = 140 units a second (plain pedalling), WTIRE = 100 (walking faster tires)
+9281   ' pedalling has a target speed BT, from WBMIN (a barely deflected stick or a light pull of the trigger) up to the top speed WBMAX (all the way): the stick's
+9282   ' deflection and the left trigger (an alternate control: it also works alone) give it the same way, the larger wins; the forward key means plain pedalling WPED, with
+9283   ' SHIFT the top speed. Thrust stops when the target is reached (a lower target is reached by coasting; the brake is A / S). A target above WPED is a sprint: it drains
+9284   ' stamina in proportion (0.2 a second at the top speed); used up (EXH) the target is at most WPED. WBMIN = 40, WPED = 140 units a second
 9290   IF TH>0 THEN
-9300     PE=1:IF KFD<=0 THEN PE=MIN(1,KFA/0.95)
-9310     BT=WPED*PE
-9320     IF KRA>0 AND NOT EXH THEN
-9330       TS=WPED+(WBMAX-WPED)*KRA
-9340       IF TS>BT THEN BT=TS:SPRN=-1:DRN=0.2*KRA
-9350     END IF
-9355     IF BV<BT THEN
+9300     BT=0
+9310     IF KFD>0 THEN BT=WPED:IF KSH<>0 THEN BT=WBMAX
+9320     IF KFA>0 THEN TS=WBMIN+(WBMAX-WBMIN)*MIN(1,KFA/0.95):IF TS>BT THEN BT=TS
+9330     IF KLT>0 THEN TS=WBMIN+(WBMAX-WBMIN)*KLT:IF TS>BT THEN BT=TS
+9340     IF EXH AND BT>WPED THEN BT=WPED
+9345     IF BT>WPED THEN SPRN=-1:DRN=0.2*(BT-WPED)/(WBMAX-WPED)
+9350     IF BV<BT THEN
 9360       IF SPRN THEN AC=200*(1-BV/(1.25*WBMAX)) ELSE AC=78*(1-BV/190)
 9365     END IF
 9370     IF BV<0 THEN AC=AC+130
@@ -1030,7 +1031,7 @@
 9896       END IF
 9897     END IF
 9898     ' the trigger (or SHIFT) pulled a part of the way sets the target speed between WSLOW and WFAST while he means to go forward; the larger target wins
-9899     IF (KFA>0 OR KFD>0) AND KRA>0 THEN
+9899     IF (KFA>0 OR KFD>0 OR KLT>0) AND KRA>0 THEN
 9900       TL=WSLOW+(WFAST-WSLOW)*KRA
 9901       IF TL>TV THEN TV=TL
 9903     END IF
@@ -1116,13 +1117,14 @@
 10600   IF KF<-1 THEN KF=-1
 10610   IF KT>1 THEN KT=1
 10620   IF KT<-1 THEN KT=-1
-10630   ' the run / sprint pull KRA 0 .. 1: SHIFT is all the way, the left trigger is analog (the first 8 % and the last 7 % of the pull are cut off)
-10631   KRA=0:IF KEY("SHIFT") THEN KRA=1
-10632   L=JOY("LT")
+10630   ' KSH: SHIFT; KLT: the left trigger, analog 0 .. 1 (the first 8 % and the last 7 % of the pull are cut off); KRA: the run / sprint pull, the larger of the two (SHIFT is all the way)
+10631   KSH=0:IF KEY("SHIFT") THEN KSH=-1
+10632   L=JOY("LT"):KLT=0
 10633   IF L>0.08 THEN
-10634     L=MIN(1,(L-0.08)/0.85):IF L>KRA THEN KRA=L
+10634     KLT=MIN(1,(L-0.08)/0.85)
 10635   END IF
-10636   KR=0:IF KRA>0 THEN KR=-1
+10636   KRA=KLT:IF KSH<>0 THEN KRA=1
+10637   KR=0:IF KRA>0 THEN KR=-1
 10640   KB=0:IF KEY("SPACE") OR JOY("A") THEN KB=-1
 10650   U=0:IF KEY("E") OR KEY("RETURN") OR JOY("X") THEN U=-1
 10660   KU=0:IF U<>0 AND UL=0 THEN KU=-1
@@ -1214,7 +1216,7 @@
 11520   JX=0:JY=-172:JH=90:JV=0:JZ=FN FLR(JX,JY)
 11530   BX=40:BY=-176:BH=270:BV=0:BS=0:BSA=0:BZ=FN FLR(BX,BY):WA=0:CA=0:ST=1
 11540   M3D THINGPOS 0,JX,JY,JZ:M3D THINGPOS 1,BX,BY,BZ
-11550   CZM=0:CLP=0:NSL=0:MODE=0:MT=0:PH=0:KTS=0:KFA=0:KFD=0:KRA=0:EXH=0:ST=1:STD=0:TK=0:CYW=JH:CO=0:CP=0:KU=0:UL=0:BL=0:NEAR=0:MSGT=0:MB=0
+11550   CZM=0:CLP=0:NSL=0:MODE=0:MT=0:PH=0:KTS=0:KFA=0:KFD=0:KRA=0:KSH=0:KLT=0:EXH=0:ST=1:STD=0:TK=0:CYW=JH:CO=0:CP=0:KU=0:UL=0:BL=0:NEAR=0:MSGT=0:MB=0
 11560   CALL SAY("WALK WITH W A S D. THE BICYCLE IS BY THE PORCH: STAND NEAR IT AND PRESS E.")
 11570   MSGT=14
 11580 END PROC
@@ -1291,8 +1293,8 @@
 12290 ' commands, one per line of the file G1987_PLAY: f v (forward -1..1), t v (turn), run v, brake v, use (get on / off), wait seconds, goto x y heading,
 12300 ' bike x y heading, state (prints), shot name (a screenshot in the window host), say text, quit
 12310 PROC PLAYBACK
-12320   LOCAL L$,C$,I,N,PF,PT,PR,PB,T0
-12330   PF=0:PFA=0:PT=0:PR=0:PB=0
+12320   LOCAL L$,C$,I,N,PF,PT,PR,PB,T0,PSH
+12330   PF=0:PFA=0:PT=0:PR=0:PB=0:PSH=0
 12340   WHILE NOT EOF(4)
 12350     LINE INPUT #4,L$
 12360     CALL SPLIT(L$)
@@ -1301,6 +1303,7 @@
 12385     IF C$="fa" THEN PFA=VAL(W$(1))
 12390     IF C$="t" THEN PT=VAL(W$(1))
 12400     IF C$="run" THEN PR=VAL(W$(1))
+12401     IF C$="shift" THEN PSH=VAL(W$(1))
 12410     IF C$="brake" THEN PB=VAL(W$(1))
 12420     IF C$="use" THEN KU=-1
 12430     IF C$="goto" THEN
@@ -1312,8 +1315,10 @@
 12490     IF C$="wait" THEN
 12500       N=INT(VAL(W$(1))*60)
 12510       FOR I=1 TO N
-12520         KFD=PF:KFA=PFA:KF=MAX(-1,MIN(1,PF+PFA)):KT=PT:KRA=PR:KR=0:IF PR>0 THEN KR=-1
-12521         KB=PB
+12520         KFD=PF:KFA=PFA:KF=MAX(-1,MIN(1,PF+PFA)):KT=PT:KLT=PR:KSH=0:IF PSH<>0 THEN KSH=-1
+12521         KRA=KLT:IF KSH<>0 THEN KRA=1
+12522         KR=0:IF KRA>0 THEN KR=-1
+12523         KB=PB
 12530         CALL SIM(1/60)
 12540         KU=0
 12550         DTF=1/60
@@ -1361,7 +1366,7 @@
 12956 WSLOW=22:WFAST=155:WBACK=38:WACC=150:WDEC=170:WRAMP=60:ACL=0
 12957 ' the bicycle's top speed: 30 km/h = 8.33 m/s = 260 units/s at 3.2 cm a unit (the scale of docs/1987.md)
 12958 WBMAX=30/3.6/0.032
-12959 WPED=140:WTIRE=100
+12959 WPED=140:WTIRE=100:WBMIN=40
 12961 ' the edge of the world (the only invisible-looking limit; the red tiles of BUILDEDGE show it)
 12962 WLIM=3420
 12960 IF NOT HL THEN CALL W3K_SETUP:CALL W3K_MESH:M3D RESET:CALL MAKETEX
