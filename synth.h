@@ -267,4 +267,9 @@ void synth_render_stereo( synth_t* s, float* buf, int frames );     // stereo: f
                                         // pan position p sounds on both sides at the gain 1 for the centre, falling linearly to 0 on the far side (balance law:
                                         // a centred channel is as loud on each side as in the mono render, a hard-panned one is full on one side only)
 
+// Sample-accurate rendering: renders "frames" stereo frames in blocks of at most "block" frames; before each block the events due at the
+// time of its first frame are applied (start_ns + frame * 1e9 / rate). The result does not depend on how the caller splits the stream
+// into buffers (up to the block size). The audio device's callback uses it, so the size of the device buffer only changes the latency.
+void synth_render_timed( synth_t* s, float* buf, int frames, uint64_t start_ns, int block );
+
 #endif

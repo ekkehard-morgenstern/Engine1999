@@ -38,7 +38,7 @@
 #include "synth.h"
 
 #define SDLAUD_BUFFREQ      44100
-#define SDLAUD_BUFSAMPLES   1024
+#define SDLAUD_BUFSAMPLES   2048
 
 #define SDLAUD_LOGCHAN      SYNTH_NCHAN
 

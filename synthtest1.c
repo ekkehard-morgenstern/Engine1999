@@ -1543,6 +1543,41 @@ static void test_pan( void ) {
     free( m ); free( st );
 }
 
+
+// synth_render_timed(): events start at their own sample whatever the device buffer size is
+static float* timed_render( int bufsize, int total_frames ) {
+    synth_t s; synth_init( &s, RATE );
+    synth_schedule( &s, 0, SYNTH_EV_WAVE, 0, 0, 0, SYNTH_SQUARE );
+    synth_schedule( &s, 100 * MS + 300000, SYNTH_EV_PLAY, 0, 440.0f, 0.5f, SYNTH_SQUARE );
+    synth_schedule( &s, 163 * MS + 700000, SYNTH_EV_STOP, 0, 0, 0, SYNTH_SQUARE );
+    synth_schedule( &s, 250 * MS + 100000, SYNTH_EV_PLAY, 0, 660.0f, 0.5f, SYNTH_SQUARE );
+    float* out = (float*) calloc( (size_t) total_frames * 2, sizeof(float) );
+    for ( int done=0; done < total_frames; done += bufsize ) {
+        uint64_t t0 = (uint64_t)( (double) done * 1.0e9 / RATE );
+        synth_render_timed( &s, out + 2 * done, bufsize, t0, 32 );
+    }
+    synth_cleanup( &s );
+    return out;
+}
+
+static void test_render_timed( void ) {
+    const int N = 16384;           // multiple of every buffer size below
+    float* ref = timed_render( 64, N );
+    int sizes[] = { 256, 1024, 2048, 4096, 8192 };
+    for ( int k=0; k < 5; ++k ) {
+        float* o = timed_render( sizes[k], N );
+        bool same = memcmp( ref, o, sizeof(float) * (size_t) N * 2 ) == 0;
+        char nm[96]; snprintf( nm, sizeof nm, "render_timed: buffer of %d frames gives the same samples as 64", sizes[k] );
+        check( same, nm );
+        free( o );
+    }
+    int first = -1;
+    for ( int i=0; i < N; ++i ) { if ( fabsf( ref[2*i] ) > 1.0e-6f ) { first = i; break; } }
+    int want = (int)( 100.3e-3 * RATE );        // frame 4423
+    check( first >= want - 1 && first <= want + 32, "render_timed: a note begins at its own frame, not at a buffer start" );
+    free( ref );
+}
+
 int main( void ) {
     test_notes();
     test_pitch();
@@ -1574,6 +1609,7 @@ int main( void ) {
     test_polyphony();
     test_instrument_snapshots();
     test_instrument_cpu();
+    test_render_timed();
     printf( "%d checks, %d failure(s)\n", total, failures );
     return failures;
 }

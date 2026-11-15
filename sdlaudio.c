@@ -35,8 +35,10 @@
 // The synthesizer itself is in synth.c (no SDL). Here: the audio device, whose callback renders the synth, and a worker
 // thread that applies the queued events when their time has come. One mutex guards the synth.
 
-#define SDLAUD_POLL_NSEC    UINT64_C(1000000)       // while events are queued the worker looks at the queue this often
-#define SDLAUD_IDLE_MSEC    50                      // with an empty queue it sleeps this long at most (or until an event is queued)
+#define SDLAUD_IDLE_MSEC    50                      // the worker (sound log only) wakes this often (or when an event is queued)
+#define SDLAUD_BLOCK        32                      // events are applied with a resolution of this many frames (0.7 ms)
+#define SDLAUD_MINBUF       256
+#define SDLAUD_MAXBUF       16384
 
 static SDL_AudioSpec sdlaud_spec_in, sdlaud_spec_out;
 static SDL_AudioDeviceID sdlaud_id;
@@ -51,6 +53,9 @@ static FILE* volatile sdlaud_log = 0;
 static uint64_t sdlaud_logstart = 0;      // sound log (ENGINE1999_SOUNDLOG, see engine1999.c)
 static uint64_t sdlaud_cbtime = 0, sdlaud_cbgap = 0;     // sound log: time of the last callback, longest gap since the last state line
 static int sdlaud_cbcount = 0, sdlaud_cblen = 0;
+static int sdlaud_bufsamples = SDLAUD_BUFSAMPLES;       // device buffer size in samples (ENGINE1999_AUDIOBUF; the size the device granted after opening)
+static uint64_t sdlaud_frames = 0;      // the audio clock: frames rendered so far; the event times are applied against base + frames / rate
+static uint64_t sdlaud_base = 0;        // wall clock time (ns) of frame 0 of the audio clock; 0 = not set yet (first callback)
 
 static void sdlaud_callback( void* userdata, Uint8* stream, int len ) {
     (void) userdata;
@@ -66,7 +71,25 @@ static void sdlaud_callback( void* userdata, Uint8* stream, int len ) {
         ++sdlaud_cbcount;
         sdlaud_cblen = len / (int) sizeof(float);
     }
-    synth_render_stereo( &sdlaud_synth, (float*) stream, len / (int)( 2 * sizeof(float) ) );
+    // Events are applied inside the callback against the audio clock, in small blocks, so a note starts at its own sample, not at the start
+    // of the next device buffer: the size of the buffer only changes the latency, not the timing. The audio clock follows the wall clock
+    // (the time base of the queued events) within a window: a device that stalls (underrun, virtual machine) or runs fast is resynchronised.
+    int frames = len / (int)( 2 * sizeof(float) );
+    int64_t wall = (int64_t) sdlutil_getnsec( 0 );
+    int64_t dur = (int64_t)( (double) frames * 1.0e9 / (double) SDLAUD_BUFFREQ );
+    if ( sdlaud_base == 0 ) {
+        sdlaud_base = (uint64_t) wall;
+        sdlaud_frames = 0;
+    }
+    int64_t t0 = (int64_t) sdlaud_base + (int64_t)( (double) sdlaud_frames * 1.0e9 / (double) SDLAUD_BUFFREQ );
+    int64_t lowest = wall - dur - INT64_C(50000000), highest = wall + 4 * dur + INT64_C(50000000);
+    if ( t0 < lowest ) {            // the audio clock fell behind (stalled device): jump forward, the missed events are applied at once
+        sdlaud_base += (uint64_t)( lowest - t0 ); t0 = lowest;
+    } else if ( t0 > highest ) {    // the device runs faster than the wall clock: pull the audio clock back
+        sdlaud_base -= (uint64_t)( t0 - highest ); t0 = highest;
+    }
+    synth_render_timed( &sdlaud_synth, (float*) stream, frames, (uint64_t) t0, SDLAUD_BLOCK );
+    sdlaud_frames += (uint64_t) frames;
     SDL_UnlockMutex( sdlaud_mtx );
 }
 
@@ -77,7 +100,19 @@ static bool sdlaud_init_sdl( void ) {
     sdlaud_spec_in.freq     = SDLAUD_BUFFREQ;
     sdlaud_spec_in.format   = AUDIO_F32SYS;
     sdlaud_spec_in.channels = UINT8_C(2);        // stereo: the channels have a pan position
-    sdlaud_spec_in.samples  = SDLAUD_BUFSAMPLES;
+    sdlaud_base = 0; sdlaud_frames = 0;
+    sdlaud_bufsamples = SDLAUD_BUFSAMPLES;
+    const char* bs = getenv( "ENGINE1999_AUDIOBUF" );       // a bigger buffer helps on machines that stall the callback (virtual machines)
+    if ( bs != 0 && *bs != 0 ) {
+        char* endp = 0;
+        long v = strtol( bs, &endp, 10 );
+        if ( *endp == 0 && v >= SDLAUD_MINBUF && v <= SDLAUD_MAXBUF ) {
+            sdlaud_bufsamples = (int) v;
+        } else {
+            fprintf( stderr, "ENGINE1999_AUDIOBUF ignored: use %d to %d samples\n", SDLAUD_MINBUF, SDLAUD_MAXBUF );
+        }
+    }
+    sdlaud_spec_in.samples  = (Uint16) sdlaud_bufsamples;
     sdlaud_spec_in.callback = sdlaud_callback;
     sdlaud_spec_in.userdata = 0;
     sdlaud_id = SDL_OpenAudioDevice( 0, 0, &sdlaud_spec_in, &sdlaud_spec_out, 0 );
@@ -85,6 +120,7 @@ static bool sdlaud_init_sdl( void ) {
         fprintf( stderr, "failed to open SDL audio device: %s\n", SDL_GetError() );
         return false;
     }
+    sdlaud_bufsamples = sdlaud_spec_out.samples;
     synth_init( &sdlaud_synth, SDLAUD_BUFFREQ );
     SDL_PauseAudioDevice( sdlaud_id, 0 );
     return true;
@@ -118,10 +154,8 @@ static int sdlaud_worker( void* arg ) {
     sdlev_raise( SDLEV_AUDIOWORKERINITDONE );
 
     while ( !sdlaud_request_exit ) {
-        uint64_t now = sdlutil_getnsec( 0 ), next = 0;
-        bool queued;
-        SDL_LockMutex( sdlaud_mtx );
-        synth_runevents( &sdlaud_synth, now );
+        uint64_t now = sdlutil_getnsec( 0 );
+        SDL_LockMutex( sdlaud_mtx );       // the events themselves are applied by the audio callback (sample accurate); the worker only writes the sound log
         FILE* lg = sdlaud_log;
         if ( lg != 0 ) {        // the state of the channels twice a second: on / gain / how far ahead of now the channel is queued (s) or idle, queue length
             static uint64_t lastlog = 0;
@@ -144,21 +178,8 @@ static int sdlaud_worker( void* arg ) {
                 fputc( '\n', lg );
             }
         }
-        queued = synth_nextevent( &sdlaud_synth, &next );
-        if ( !queued && !sdlaud_request_exit ) {
-            SDL_CondWaitTimeout( sdlaud_cond, sdlaud_mtx, SDLAUD_IDLE_MSEC );     // an event that is queued meanwhile wakes us
-            SDL_UnlockMutex( sdlaud_mtx );
-            continue;
-        }
+        SDL_CondWaitTimeout( sdlaud_cond, sdlaud_mtx, SDLAUD_IDLE_MSEC );
         SDL_UnlockMutex( sdlaud_mtx );
-        uint64_t wait = SDLAUD_POLL_NSEC;
-        if ( queued && next > now && next - now < wait ) {
-            wait = next - now;
-        }
-        if ( queued && next <= now ) {
-            continue;       // more events are due already
-        }
-        sdlutil_nanosleep( wait, 0 );
     }
 
     sdlaud_initok = false;

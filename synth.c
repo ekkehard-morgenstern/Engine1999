@@ -991,3 +991,14 @@ void synth_render( synth_t* s, float* buf, int count ) {
 void synth_render_stereo( synth_t* s, float* buf, int frames ) {
     synth_render_ex( s, buf, frames, true );
 }
+
+void synth_render_timed( synth_t* s, float* buf, int frames, uint64_t start_ns, int block ) {
+    if ( block < 1 ) block = 1;
+    for ( int done=0; done < frames; ) {
+        int n = frames - done;
+        if ( n > block ) n = block;
+        synth_runevents( s, start_ns + (uint64_t)( (double) done * 1.0e9 / (double) s->rate ) );
+        synth_render_ex( s, buf + 2 * done, n, true );
+        done += n;
+    }
+}

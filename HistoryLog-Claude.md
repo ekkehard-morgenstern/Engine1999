@@ -13,6 +13,8 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+- **Sample-accurate sound events, `ENGINE1999_AUDIOBUF`** (2026-11-15, owner: 2048 samples made the Madrun II title tune choppy; a VirtualBox user hears distortion). Cause: the worker applied events by wall time, so notes began at the start of the next callback (timing quantized to the buffer). Now `synth_render_timed()` (`synth.c/.h`) applies events in 32 frame blocks inside the callback against an audio clock (`sdlaudio.c`, resynchronised with the wall clock); the worker only logs; new env var `ENGINE1999_AUDIOBUF` (256..16384, default 1024). Docs: `docs/sound.md` "Timing and the device buffer", man page `engine1999.1`. Tests: `synthtest1` 444 (+6: identical samples for buffers 64..8192, note onset at its frame), `hosttest.sh` passes with the default and with 4096. Not heard by me; not tried on VirtualBox.
+
 ## Log
 
 ### 7a6cb67 — 2026-10-17 13:32:27 +0200 — "Introduced Claude to the project"
