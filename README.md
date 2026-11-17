@@ -224,3 +224,12 @@ Engine1999 is written by **Ekkehard Morgenstern**, together with **Claude** (Cla
 under his direction. Everything Claude changed is recorded commit by commit in [HistoryLog-Claude.md](HistoryLog-Claude.md).
 
 Contact: ekkehard@ekkehardmorgenstern.de
+
+## A personal note
+
+I've been programming computers since I was 11, back in 1981. I started out on an Entec MAC, an 8 bit toy computer programmed in 4 bit BCD machine code, then moved to a VIC-20 at the end of 1982. In school, we used Apple II computers, and at home, I had an Apple II clone for a while, and both of these helped me get into programming quickly, learning BASIC, 6502 machine code and assembly language, and UCSD Pascal. From 1984, I had a CPC-464, and I loved its Locomotive BASIC interpreter and Z80A CPU. I also began learning C, without having a compiler to use it at first. And in 1986 I had an Amiga and finally, a C compiler. C became my favorite programming language quickly, and programming in M68000 series machine code was a lot of fun. When I got my first job employed as a programmer, I had to use MS-DOS and x86 machine code, and at first, it felt like a step backwards compared to the Amiga. From then on, I explored PC operating systems and development over the decades, Windows 3.1 to Windows 10, OS/2 2.11 to Warp 4, AIX, Solaris, HP-UX and Linux, FreeBSD and OpenBSD. Linux quickly became my favorite OS. I learned many programming languages, including BCPL, C++, Perl, PHP and JavaScript / Typescript. I wrote all kinds of applications, many of them development tools and libraries, and various business-related stuff.
+
+During all these years, I wanted to recreate the feeling of developing in BASIC, but on modern Systems. I developed countless half-finished prototypes since 1989, which is now 37 years of not coming up with a complete, workable solution, mainly for a lack for spare time rather than motivation. So, a few weeks ago, after seeing I could progress significantly using AI on this project, I decided to get my own Claude Code license and use it to flesh out this concept. And it worked! Claude managed to do what I never could b/c of the lack of time. It made this dream of mine a reality, and I made sure everybody can use it, by putting it under the GPLv3 license, and developing it publicly right from the beginning. I've not decided on a Windows version yet. First, I wanted to get it all running on Linux, and it does. Enjoy!
+
+*Ekkehard Morgenstern, November 17, 2026.*
+
