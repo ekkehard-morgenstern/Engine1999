@@ -1117,6 +1117,14 @@ static void test_gfxfile( void ) {
     // without PALETTE the same picture is matched to the existing palette (index 0 of the file is not entry 0)
     fake_reset();
     check( gfxfile_load_layer( &fh, 0, f, len, 0, 0, false, &err ) && f_point( &fake, 0, 0, 0 ) != 2 && f_point( &fake, 0, 2, 0 ) != 0, "gfxfile: matched to the palette without PALETTE" );
+    // M3D TEXTURE LOAD: the same picture as a GRAB block (size, then the rows from the top)
+    {
+        uint8_t* pic = 0; size_t plen = 0;
+        check( gfxfile_make_picture( &fh, 0, f, len, true, &pic, &plen, &err ) && plen == 4U + 3U && pic[0] == 0 && pic[1] == 3 && pic[2] == 0 && pic[3] == 1, "gfxfile: picture block has the size in its header" );
+        check( plen == 7U && pic[4] == 2 && pic[5] == 1 && pic[6] == 0, "gfxfile: picture block keeps the indices (PALETTE)" );
+        free( pic );
+        check( !gfxfile_make_picture( &fh, 0, (const uint8_t*) "junk", 4, false, &pic, &plen, &err ) && err != 0, "gfxfile: picture block of junk is refused" );
+    }
     free( f );
     // a bad file
     uint8_t junk[40] = { 0 };

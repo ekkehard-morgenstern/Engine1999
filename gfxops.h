@@ -384,8 +384,9 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXOP_M3DMOUNTAINS 342          // M3D MOUNTAINS seed, scale, amp, octaves, lo, hi   (ridged mountains where a slow noise is between lo and hi; amp 0 removes them)
 #define GFXOP_M3DLAKES  343             // M3D LAKES seed, scale, depth, lo, hi              (basins where a noise is above lo .. hi; depth 0 removes them)
 #define GFXOP_M3DGROUNDQUIET 344        // M3D GROUNDQUIET cx, cy, rx, ry, margin   (no mountains and no lakes inside this box, fading in over the margin; margin 0 removes it)
+#define GFXOP_M3DTEXLOAD 345            // M3D TEXTURE LOAD n, f$ [, PALETTE]       (a BMP file as picture n; the window host reads it, see gfxfile_make_picture())
 #define GFXOP_M3DFIRST  GFXOP_M3DRESET
-#define GFXOP_M3DLAST   GFXOP_M3DGROUNDQUIET
+#define GFXOP_M3DLAST   GFXOP_M3DTEXLOAD
 #define GFXOP_IS_M3D(op) ( (op) >= GFXOP_M3DFIRST && (op) <= GFXOP_M3DLAST )
 #define GFXQ_M3DX       350             // M3D("X"), ("Y"), ("Z" = the feet), ("EYE"), ("YAW"), ("PITCH"), ("LIFT"), ("HIT"), ("FLOORZ")
 #define GFXQ_M3DY       351

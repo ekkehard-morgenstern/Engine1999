@@ -86,6 +86,34 @@ static uint8_t* map_image( const gfxfile_host_t* h, int layer, const bmp_image_t
     return out;
 }
 
+bool gfxfile_make_picture( const gfxfile_host_t* h, int layer, const uint8_t* file, size_t len, bool setpal, uint8_t** pout, size_t* plen, const char** err ) {
+    bmp_image_t img;
+    if ( !bmp_decode( file, len, &img, err ) ) {
+        return false;
+    }
+    if ( img.w > 65535 || img.h > 65535 ) {
+        bmp_free( &img );
+        *err = "Illegal argument";
+        return false;
+    }
+    uint8_t* px = map_image( h, layer, &img, setpal );
+    size_t n = (size_t) img.w * (size_t) img.h;
+    uint8_t* out = px == 0 ? 0 : (uint8_t*) malloc( 4U + n );
+    if ( out == 0 ) {
+        free( px );
+        bmp_free( &img );
+        *err = "Out of memory";
+        return false;
+    }
+    out[0] = (uint8_t)( img.w >> 8 ); out[1] = (uint8_t) img.w;
+    out[2] = (uint8_t)( img.h >> 8 ); out[3] = (uint8_t) img.h;
+    memcpy( out + 4, px, n );
+    free( px );
+    bmp_free( &img );
+    *pout = out; *plen = 4U + n;
+    return true;
+}
+
 bool gfxfile_load_layer( const gfxfile_host_t* h, int layer, const uint8_t* file, size_t len, int x, int y, bool setpal, const char** err ) {
     bmp_image_t img;
     if ( !bmp_decode( file, len, &img, err ) ) {

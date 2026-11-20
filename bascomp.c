@@ -3340,6 +3340,12 @@ bool comp_eat_gfxstmt( compiler_t* comp, node_t** pnode ) {
         if ( !comp_fetchtok( comp ) ) {
             return false;
         }
+        if ( cmd->op == GFXOP_M3DTEXTURE && comp_word( comp, w, sizeof(w) ) && strcmp( w, "LOAD" ) == 0 ) {
+            cmd = gfxops_find( "M3D", "TEXLOAD" );          // M3D TEXTURE LOAD n, file$ [, PALETTE]
+            if ( cmd == 0 || !comp_fetchtok( comp ) ) {
+                return false;
+            }
+        }
     }
     if ( cmd == 0 ) {
         comp_error( comp, "Unknown statement" );

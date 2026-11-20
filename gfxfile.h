@@ -58,6 +58,9 @@ typedef struct _gfxfile_host_t {
     void        (*putcell)( void* ud, int kind, int n, const uint8_t* data );
 } gfxfile_host_t;
 
+// M3D TEXTURE LOAD: the whole picture as a GFX GRAB block (width and height as two big endian words, then the indices row by row), colors matched to
+// the palette of 'layer' (or with setpal the file's palette installed first); *pout is malloc()ed
+bool gfxfile_make_picture( const gfxfile_host_t* h, int layer, const uint8_t* file, size_t len, bool setpal, uint8_t** pout, size_t* plen, const char** err );
 // GFX LOAD: the picture at x, y of the bitmap layer (clipped)
 bool gfxfile_load_layer( const gfxfile_host_t* h, int layer, const uint8_t* file, size_t len, int x, int y, bool setpal, const char** err );
 // GFX SAVE: the rectangle (clipped to the layer) as an 8 bit BMP with the palette of the layer; *pout is malloc()ed

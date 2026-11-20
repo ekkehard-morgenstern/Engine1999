@@ -1392,6 +1392,8 @@ static bool ff_name( const char* s, size_t slen, char* buf, size_t bufsz, const 
     return true;
 }
 
+static bool host_m3d_get( void );
+static m3d_t* host_m3d;
 static bool host_picture_op( int op, const double* a, const char* s, size_t slen, const char** err ) {
     static char errbuf[160];
     char name[1100];
@@ -1420,6 +1422,16 @@ static bool host_picture_op( int op, const double* a, const char* s, size_t slen
         case GFXOP_PALLOAD:
             ok = gfxfile_load_palette( &ff_host, gi( a[0], 0 ), data, len, &ferr );
             break;
+        case GFXOP_M3DTEXLOAD: {        // the file as a GRAB block into picture a[0], matched to the palette of the target layer
+            uint8_t* pic = 0; size_t plen = 0;
+            ok = gfxfile_make_picture( &ff_host, t, data, len, a[1] > -1.0e8, &pic, &plen, &ferr );
+            if ( ok ) {
+                double na[1] = { a[0] };
+                ok = host_m3d_get() && m3d_op( host_m3d, GFXOP_M3DTEXTURE, na, 1, (const char*) pic, plen, &ferr );
+            }
+            free( pic );
+            break;
+        }
         case GFXOP_SPRLOAD: case GFXOP_TILELOAD:
             ok = gfxfile_load_cells( &ff_host, op == GFXOP_SPRLOAD ? GFXFILE_SPRITE : GFXFILE_TILE, gi( a[0], 0 ), gi( a[1], -1 ), data, len,
                 a[2] > -1.0e8, &ferr );
@@ -1544,7 +1556,6 @@ static bool host_w3d_query( int q, const double* a, int na, double* result ) {
 
 // -- the 3D mesh renderer (m3d.h) -------------------------------------------------------------------
 
-static m3d_t* host_m3d;
 
 static void host_m3d_free( void ) {
     m3d_free( host_m3d );
@@ -1623,6 +1634,9 @@ static bool host_gfx_op( void* usrdata, int op, const double* a, int na, const c
     int t = sdlscr_gfx_target();
     if ( GFXOP_IS_W3D( op ) ) {
         return host_w3d_op( op, a, na, s, slen, err );
+    }
+    if ( op == GFXOP_M3DTEXLOAD ) {
+        return host_picture_op( op, a, s, slen, err );
     }
     if ( GFXOP_IS_M3D( op ) ) {
         return host_m3d_op( op, a, na, s, slen, err );

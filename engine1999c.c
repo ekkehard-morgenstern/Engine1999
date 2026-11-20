@@ -907,6 +907,10 @@ static bool con_gfx_op( void* usrdata, int op, const double* a, int na, const ch
         if ( op == GFXOP_M3DWORLD ) {
             return m3dworld_load( con_m3d, jsonops_root(), err );
         }
+        if ( op == GFXOP_M3DTEXLOAD ) {
+            *err = "M3D TEXTURE LOAD needs the window host (there is no palette here)";
+            return false;
+        }
         return m3d_op( con_m3d, op, a, na, s, slen, err );
     }
     if ( GFXOP_IS_W3D( op ) ) {
