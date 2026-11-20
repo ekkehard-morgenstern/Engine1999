@@ -798,10 +798,11 @@ ui-geometry := num-expr "," num-expr "," num-expr "," num-expr "," num-expr .
 ```ebnf
 m3d-stmt := XFUNC(M3D) ( RESET | CLEAR | COLORMAP | RENDER | SOFTWARE | HARDWARE | TEXTURE num-expr "," str-expr | TEXTURE LOAD num-expr "," str-expr [ "," PALETTE ] |
                              ( OBJECT | VERTEX | FACE | QUAD | BOX | OBJPOS | OBJSHOW | OBJLIGHT | OBJFLAGS | THING | THINGPOS | THINGTEX | THINGOFF | THINGLIGHT | THINGTRANS |
-                               CAMERA | TURN | PLAYER | MOVE | LIFT | LAMP | VIEW | FOG | FAR | SKY | THINGMOVE | ZONE | GROUND | GROUNDFLAT | INSTANCE | OBJSCALE | OBJFREE | MOUNTAINS | LAKES | GROUNDQUIET ) num-expr { "," num-expr } |
+                               CAMERA | TURN | PLAYER | MOVE | LIFT | LAMP | VIEW | FOG | FAR | SKY | THINGMOVE | ZONE | GROUND | GROUNDFLAT | INSTANCE | OBJSCALE | OBJFREE | MOUNTAINS | LAKES | GROUNDQUIET | SUN ) num-expr { "," num-expr } |
                              TERRAIN num-expr { "," num-expr } [ "," str-expr { "," num-expr } ] | WORLD ) .
 ```
 
+> M3D SUN dx,dy,dz[,ambient[,steps[,stride]]] shades terrain cells by their slope (pictures t + k \* stride; all zero = off).
 > M3D INSTANCE o,src[,x,y,z[,yaw[,scale]]] makes object o share the mesh of object src (copy on write), M3D OBJSCALE o,scale sets a size, M3D OBJFREE a,b deletes objects a .. b.
 > M3D MOUNTAINS seed,scale,amp,octaves,lo,hi adds ridged mountains where a slow noise is between lo and hi, M3D LAKES seed,scale,depth,lo,hi basins, M3D GROUNDQUIET cx,cy,rx,ry,margin keeps both out of a box.
 > M3D GROUND seed,scale,amp,octaves[,base[,gain[,lacunarity]]] defines the height of the ground (fractal noise, in C), M3D GROUNDFLAT n,cx,cy,rx,ry,margin flattens it round a box,

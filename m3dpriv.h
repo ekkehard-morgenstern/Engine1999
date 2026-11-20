@@ -107,6 +107,16 @@ typedef struct {
     struct { bool on; double cx, cy, rx, ry, margin; } quiet;                       // mountains and lakes fade out towards this box
 } ground_t;
 
+// M3D SUN: terrain cells get a picture shaded by their slope. A shaded picture is made from the cell's own picture t (palette indices mapped to the nearest
+// darker color) and has the number t + k * stride for the shade step k = 1 .. steps - 1; lvl[n] is that k for a picture the engine made (0: not made), src[n] the t.
+typedef struct {
+    bool     on;
+    double   lx, ly, lz, ambient;           // the direction to the sun (unit vector, lz > 0) and the brightness of the darkest step (0 .. 1)
+    int      steps, stride;
+    uint16_t src[M3D_MAXTEX];
+    uint8_t  lvl[M3D_MAXTEX];
+} sun_t;
+
 struct _m3d_t {
     tex_t*   texs;
     obj_t*   objs;     int nobjs;
@@ -131,9 +141,13 @@ struct _m3d_t {
     // frame scratch
     int*     order;  double* odist;
     ground_t gnd;
+    sun_t    sun;
     int      top;                           // one above the highest object number in use (the loops stop there)
     unsigned presepoch;                     // counts the times a picture number got or lost its picture (the renderer's kept meshes group the triangles by that)
 };
+
+// the palette index nearest to color i of the palette darkened to 'scale' (0 .. 1); used by the software color map and by the shaded terrain pictures
+int m3d_shade_index( const uint32_t* argb, int i, double scale );
 
 // -- shared helpers -------------------------------------------------------------------------------------------------------------
 

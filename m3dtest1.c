@@ -599,6 +599,63 @@ int main( void ) {
     CHECK( !op( GFXOP_M3DGROUND, 7, 1.0, 100.0, 10.0, 3.0, 0.0, 0.5, 0.5 ) );                        // lacunarity below 1
     CHECK( !op( GFXOP_M3DGROUNDFLAT, 6, 8.0, 0.0, 0.0, 1.0, 1.0, 1.0 ) );                            // slot 8
     CHECK( op( GFXOP_M3DCLEAR, 0 ) && Q( GFXQ_M3DGROUND, 2, 100.0, 200.0 ) == 0.0 );                 // M3D CLEAR forgets the ground function
+    // -- M3D SUN: terrain cells shaded by their slope with pictures t + k * stride ----------------------------------------------------------------------------
+    fresh();
+    {
+        uint32_t gp[256];
+        for ( int i=0; i < 256; ++i ) { gp[i] = 0xFF000000U | (uint32_t) i << 16 | (uint32_t) i << 8 | (uint32_t) i; }
+        m3d_colormap( M, gp );                                                                    // a grey ramp: the nearest darker color of index i at scale s is about i * s
+    }
+    tex_flat( 301, 4, 4, 100 );
+    CHECK( op( GFXOP_M3DOBJECT, 1, 1.0, 0.0 ) );
+    CHECK( !op( GFXOP_M3DSUN, 3, 0.0, 0.0, -1.0 ) && strstr( lasterr, "above the horizon" ) != 0 );
+    CHECK( !op( GFXOP_M3DSUN, 4, 1.0, 0.0, 1.0, 1.5 ) && !op( GFXOP_M3DSUN, 5, 1.0, 0.0, 1.0, 0.5, 9.0 ) && !op( GFXOP_M3DSUN, 5, 1.0, 0.0, 1.0, 0.5, 1.0 ) );
+    CHECK( !op( GFXOP_M3DSUN, 6, 1.0, 0.0, 1.0, 0.5, 4.0, 1024.0 ) );
+    // level ground: nothing is shaded
+    CHECK( op( GFXOP_M3DGROUND, 4, 5.0, 300.0, 0.0, 2.0 ) );
+    CHECK( op( GFXOP_M3DSUN, 6, -0.5, -0.3, 0.8, 0.5, 4.0, 100.0 ) );
+    CHECK( op( GFXOP_M3DOBJECT, 1, 30.0, 0.0 ) );
+    CHECK( ops( GFXOP_M3DTERRAIN, 7, 0, 30.0, 0.0, 0.0, 6.0, 6.0, 100.0, 301.0 ) );
+    CHECK( Q( GFXQ_M3DTEXW, 1, 401.0 ) == 0.0 && Q( GFXQ_M3DTEXW, 1, 501.0 ) == 0.0 && Q( GFXQ_M3DTEXW, 1, 601.0 ) == 0.0 );
+    // steep hills: shaded pictures appear, darker by step (k = 1: scale 1 - 1/3 * 0.5, k = 3: 0.5), index 0 stays, the picture's size stays
+    CHECK( op( GFXOP_M3DGROUND, 4, 5.0, 300.0, 400.0, 2.0 ) );
+    CHECK( op( GFXOP_M3DOBJECT, 1, 31.0, 0.0 ) );
+    CHECK( ops( GFXOP_M3DTERRAIN, 7, 0, 31.0, 0.0, 0.0, 12.0, 12.0, 100.0, 301.0 ) );
+    {
+        int made = 0, dark = 0;
+        for ( int k = 1; k <= 3; ++k ) {
+            if ( Q( GFXQ_M3DTEXW, 1, (double)( 301 + 100 * k ) ) == 4.0 && Q( GFXQ_M3DTEXH, 1, (double)( 301 + 100 * k ) ) == 4.0 ) {
+                ++made;
+                int v = M->texs[301 + 100 * k].col[0];
+                double want = 100.0 * ( 1.0 - (double) k / 3.0 * 0.5 );
+                if ( fabs( v - want ) <= 1.0 ) { ++dark; }
+            }
+        }
+        CHECK( made >= 2 && dark == made );
+    }
+    CHECK( Q( GFXQ_M3DTRIS, 1, 31.0 ) == 288.0 );
+    // a flat color above 255 is not shaded (no picture to make), a flat color below is a picture of one texel
+    CHECK( op( GFXOP_M3DOBJECT, 1, 32.0, 0.0 ) );
+    CHECK( ops( GFXOP_M3DTERRAIN, 7, 0, 32.0, 0.0, 0.0, 12.0, 12.0, 100.0, 150.0 ) );
+    {
+        int one = 0;
+        for ( int k = 1; k <= 3; ++k ) {
+            if ( Q( GFXQ_M3DTEXW, 1, (double)( 150 + 100 * k ) ) == 1.0 ) { ++one; }
+        }
+        CHECK( one >= 1 );
+    }
+    // a palette change makes the shaded pictures again; sun off deletes them
+    {
+        int n = -1;
+        for ( int k = 3; k >= 1; --k ) { if ( M->texs[301 + 100 * k].col != 0 ) { n = 301 + 100 * k; } }
+        uint32_t gp[256];
+        for ( int i=0; i < 256; ++i ) { gp[i] = 0xFF000000U | (uint32_t)( 255 - i ) << 16 | (uint32_t)( 255 - i ) << 8 | (uint32_t)( 255 - i ); }
+        gp[0] = 0xFF000000U;
+        m3d_colormap( M, gp );
+        CHECK( n > 0 && M->texs[n].col != 0 );
+        CHECK( op( GFXOP_M3DSUN, 3, 0.0, 0.0, 0.0 ) );
+        CHECK( n > 0 && M->texs[n].col == 0 && M->texs[301].col != 0 );                          // the picture itself stays
+    }
     // -- instances: shared meshes (M3D INSTANCE, OBJSCALE, OBJFREE) ----------------------------------------------------------------------------------------
     fresh();
     CHECK( op( GFXOP_M3DOBJECT, 1, 1.0, 0.0 ) );                                              // the floor of fresh() is gone

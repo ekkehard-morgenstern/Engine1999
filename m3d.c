@@ -45,6 +45,92 @@ static bool whole( double v, int lo, int hi, int* out ) {
     return true;
 }
 
+int m3d_shade_index( const uint32_t* argb, int i, double scale ) {
+    double tr = (double)( ( argb[i] >> 16 ) & 0xFFU ) * scale;
+    double tg = (double)( ( argb[i] >> 8 ) & 0xFFU ) * scale;
+    double tb = (double)( argb[i] & 0xFFU ) * scale;
+    double best = 1.0e30;
+    int bi = i;
+    for ( int j=1; j < 256; ++j ) {
+        double dr = (double)( ( argb[j] >> 16 ) & 0xFFU ) - tr;
+        double dg = (double)( ( argb[j] >> 8 ) & 0xFFU ) - tg;
+        double db = (double)( argb[j] & 0xFFU ) - tb;
+        double cr = ( (double)( ( argb[j] >> 16 ) & 0xFFU ) - (double)( ( argb[j] >> 8 ) & 0xFFU ) ) - ( tr - tg );
+        double cb = ( (double)( argb[j] & 0xFFU ) - (double)( ( argb[j] >> 8 ) & 0xFFU ) ) - ( tb - tg );
+        double d = 2.0 * dr * dr + 4.0 * dg * dg + 3.0 * db * db + 6.0 * cr * cr + 6.0 * cb * cb;
+        if ( d < best ) {
+            best = d;
+            bi = j;
+        }
+    }
+    return bi;
+}
+
+// -- shaded terrain pictures (M3D SUN) ------------------------------------------------------------------------------------------
+
+static bool set_picture( m3d_t* m, int n, int w, int h, uint8_t* col ) {      // takes col (u * h + v)
+    if ( m->texs[n].col == 0 ) {
+        ++m->presepoch;
+    }
+    free( m->texs[n].col );
+    m->texs[n].col = col; m->texs[n].w = w; m->texs[n].h = h; ++m->texs[n].gen;
+    return true;
+}
+
+// (re)makes the shaded picture n = t + k * stride from the picture t as it is now: false when it cannot be made (no palette yet, out of memory, a flat color above 255)
+static bool sun_make( m3d_t* m, int t, int k ) {
+    int n = t + k * m->sun.stride;
+    if ( n >= M3D_MAXTEX || !m->havepal ) {
+        return false;
+    }
+    uint8_t tab[256];
+    double scale = 1.0 - (double) k / (double)( m->sun.steps - 1 ) * ( 1.0 - m->sun.ambient );
+    tab[0] = 0;
+    for ( int i=1; i < 256; ++i ) {
+        tab[i] = (uint8_t) m3d_shade_index( m->pal, i, scale );
+    }
+    int w = 1, h = 1;
+    uint8_t* col;
+    if ( m->texs[t].col != 0 ) {
+        w = m->texs[t].w; h = m->texs[t].h;
+        col = (uint8_t*) malloc( (size_t) w * (size_t) h );
+        if ( col == 0 ) {
+            return false;
+        }
+        for ( size_t i = 0; i < (size_t) w * (size_t) h; ++i ) {
+            col[i] = tab[ m->texs[t].col[i] ];
+        }
+    } else if ( t < 256 ) {                                 // a flat color: a picture of one texel
+        col = (uint8_t*) malloc( 1 );
+        if ( col == 0 ) {
+            return false;
+        }
+        col[0] = tab[t];
+    } else {
+        return false;
+    }
+    set_picture( m, n, w, h, col );
+    m->sun.src[n] = (uint16_t) t; m->sun.lvl[n] = (uint8_t) k;
+    return true;
+}
+
+// the shaded pictures that exist are made again (the sun, the palette or a source picture changed); those of a step that is gone are deleted
+static void sun_remake( m3d_t* m ) {
+    for ( int n = 0; n < M3D_MAXTEX; ++n ) {
+        int k = m->sun.lvl[n];
+        if ( k == 0 ) {
+            continue;
+        }
+        int t = m->sun.src[n];
+        if ( !m->sun.on || k >= m->sun.steps || n != t + k * m->sun.stride || !sun_make( m, t, k ) ) {
+            free( m->texs[n].col );
+            m->texs[n].col = 0;
+            ++m->presepoch;
+            m->sun.lvl[n] = 0;
+        }
+    }
+}
+
 static void default_colormap( m3d_t* m ) {
     uint32_t pal[256];
     for ( int i=0; i < 256; ++i ) {
@@ -58,6 +144,7 @@ static void default_colormap( m3d_t* m ) {
 void m3d_colormap( m3d_t* m, const uint32_t* argb ) {
     memcpy( m->pal, argb, sizeof(m->pal) );
     m->havepal = true;
+    sun_remake( m );
     if ( m->rend != 0 ) {
         m->rend->palette( m, m->rdata );
     }
@@ -117,6 +204,7 @@ static void clear_world( m3d_t* m ) {
     m->nobjs = 0;
     m->nzones = 0;
     memset( &m->gnd, 0, sizeof(m->gnd) );
+    memset( &m->sun, 0, sizeof(m->sun) );          // (shaded pictures stay, as plain pictures now)
 }
 
 static bool set_view( m3d_t* m, int x, int y, int w, int h, int sc, double fov ) {
@@ -332,7 +420,30 @@ static bool obj_addt( obj_t* o, int a, int b, int c, int tex ) {
 
 // nx x ny cells of the size `cell` from (x0,y0) on, the heights from the ground function; the picture of a cell is tex + the code of its character in cells (0 = tex for all);
 // skirt > 0 hangs a wall of that depth under the four edges (it hides the cracks between a coarse grid and its finer neighbour)
-static bool obj_terrain( const m3d_t* m, obj_t* o, double x0, double y0, int nx, int ny, double cell, int tex, const char* cells, double skirt, double uvs ) {
+// the picture of a terrain cell t shaded for the slope of the cell (heights z00 z10 z01 z11: x then y)
+static int cell_picture( m3d_t* m, int t, double cell, double z00, double z10, double z01, double z11 ) {
+    if ( !m->sun.on ) {
+        return t;
+    }
+    double dzx = ( ( z10 + z11 ) - ( z00 + z01 ) ) / ( 2.0 * cell ), dzy = ( ( z01 + z11 ) - ( z00 + z10 ) ) / ( 2.0 * cell );
+    double inv = 1.0 / sqrt( dzx * dzx + dzy * dzy + 1.0 );
+    double lam = ( -dzx * m->sun.lx - dzy * m->sun.ly + m->sun.lz ) * inv / m->sun.lz;        // 1 on level ground
+    lam = lam < 0.0 ? 0.0 : lam > 1.0 ? 1.0 : lam;
+    int k = (int) floor( ( 1.0 - lam ) * (double)( m->sun.steps - 1 ) + 0.5 );
+    if ( k <= 0 ) {
+        return t;
+    }
+    int n = t + k * m->sun.stride;
+    if ( n >= M3D_MAXTEX ) {
+        return t;
+    }
+    if ( m->texs[n].col == 0 && !sun_make( m, t, k ) ) {
+        return t;
+    }
+    return n;
+}
+
+static bool obj_terrain( m3d_t* m, obj_t* o, double x0, double y0, int nx, int ny, double cell, int tex, const char* cells, double skirt, double uvs ) {
     int base = o->nv, w = nx + 1;
     for ( int j = 0; j <= ny; ++j ) {
         for ( int i = 0; i <= nx; ++i ) {
@@ -345,6 +456,7 @@ static bool obj_terrain( const m3d_t* m, obj_t* o, double x0, double y0, int nx,
     for ( int j = 0; j < ny; ++j ) {
         for ( int i = 0; i < nx; ++i ) {
             int b = base + j * w + i, t = tex + ( cells != 0 ? (unsigned char) cells[ j * nx + i ] : 0 );
+            t = cell_picture( m, t, cell, o->v[b].z, o->v[b + 1].z, o->v[b + w].z, o->v[b + w + 1].z );
             if ( !obj_addt( o, b, b + 1, b + w + 1, t ) || !obj_addt( o, b, b + w + 1, b + w, t ) ) {
                 return false;
             }
@@ -365,6 +477,10 @@ static bool obj_terrain( const m3d_t* m, obj_t* o, double x0, double y0, int nx,
                 int va = base + ia, vb = base + ib, nv = o->nv;
                 const mv_t pa = o->v[va], pb = o->v[vb];
                 int t = tex + ( cells != 0 ? (unsigned char) cells[ cell_j * nx + cell_i ] : 0 );
+                {
+                    int b0 = base + cell_j * w + cell_i;
+                    t = cell_picture( m, t, cell, o->v[b0].z, o->v[b0 + 1].z, o->v[b0 + w].z, o->v[b0 + w + 1].z );
+                }
                 if ( !obj_addv( o, pa.x, pa.y, pa.z - skirt, pa.u, pa.v ) || !obj_addv( o, pb.x, pb.y, pb.z - skirt, pb.u, pb.v ) ||
                      !obj_addt( o, nv, nv + 1, vb, t ) || !obj_addt( o, nv, vb, va, t ) ) {
                     return false;
@@ -809,6 +925,28 @@ bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t sl
             }
             m->gnd.lake.on = a[2] != 0.0; m->gnd.lake.seed = (uint64_t)(int64_t) floor( a[0] ); m->gnd.lake.scale = a[1]; m->gnd.lake.depth = a[2];
             m->gnd.lake.lo = a[3]; m->gnd.lake.hi = a[4];
+            return true;
+        }
+        case GFXOP_M3DSUN: {
+            double amb = NONE_VAL( a[3] ) ? 0.5 : a[3];
+            int steps = 4, stride = 100;
+            if ( !( fabs( a[0] ) < 1.0e6 && fabs( a[1] ) < 1.0e6 && fabs( a[2] ) < 1.0e6 ) || !( amb >= 0.0 && amb <= 1.0 ) ||
+                 ( !NONE_VAL( a[4] ) && !whole( a[4], 2, 8, &steps ) ) || ( !NONE_VAL( a[5] ) && !whole( a[5], 1, M3D_MAXTEX - 1, &stride ) ) ) {
+                return false;
+            }
+            if ( a[0] == 0.0 && a[1] == 0.0 && a[2] == 0.0 ) {
+                m->sun.on = false;                          // off: the shaded pictures made so far are deleted
+                sun_remake( m );
+                return true;
+            }
+            if ( !( a[2] > 0.0 ) ) {
+                *err = "The sun must be above the horizon";
+                return false;
+            }
+            double len = sqrt( a[0] * a[0] + a[1] * a[1] + a[2] * a[2] );
+            m->sun.lx = a[0] / len; m->sun.ly = a[1] / len; m->sun.lz = a[2] / len;
+            m->sun.ambient = amb; m->sun.steps = steps; m->sun.stride = stride; m->sun.on = true;
+            sun_remake( m );
             return true;
         }
         case GFXOP_M3DGROUNDQUIET: {

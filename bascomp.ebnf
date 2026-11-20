@@ -574,8 +574,9 @@ ui-geometry := num-expr TOK_COMMA num-expr TOK_COMMA num-expr TOK_COMMA num-expr
 -- Functions: M3D("X"|"Y"|"Z"|"EYE"|"YAW"|"PITCH"|"LIFT"|"HIT"|"FLOORZ"|"SHOTKIND"|"SHOTOBJ"|"SHOTDIST"|"SHOTX"|"SHOTY"|"SHOTZ"|"DRAWN"|"RENDERER"|"HWAVAIL"), ("FLOORAT"|"CEILAT"|"ZONE"|"ZONETAG",x,y,z), ("SHOOT"|"USE"|"SEES"|"TON"|"TX"|"TY"|"TZ"|"DIST"|"BEARING"|"TEXW"|"TEXH"|"OBJON"|"OBJX"|"OBJY"|"OBJZ"|"OBJYAW"|"VERTS"|"TRIS",n), ("GROUND",x,y).
 m3d-stmt := TOK_XFUNC(M3D) ( RESET | CLEAR | COLORMAP | RENDER | SOFTWARE | HARDWARE | TEXTURE num-expr TOK_COMMA str-expr | TEXTURE LOAD num-expr TOK_COMMA str-expr [ TOK_COMMA PALETTE ] |
                              ( OBJECT | VERTEX | FACE | QUAD | BOX | OBJPOS | OBJSHOW | OBJLIGHT | OBJFLAGS | THING | THINGPOS | THINGTEX | THINGOFF | THINGLIGHT | THINGTRANS |
-                               CAMERA | TURN | PLAYER | MOVE | LIFT | LAMP | VIEW | FOG | FAR | SKY | THINGMOVE | ZONE | GROUND | GROUNDFLAT | INSTANCE | OBJSCALE | OBJFREE | MOUNTAINS | LAKES | GROUNDQUIET ) num-expr { TOK_COMMA num-expr } |
+                               CAMERA | TURN | PLAYER | MOVE | LIFT | LAMP | VIEW | FOG | FAR | SKY | THINGMOVE | ZONE | GROUND | GROUNDFLAT | INSTANCE | OBJSCALE | OBJFREE | MOUNTAINS | LAKES | GROUNDQUIET | SUN ) num-expr { TOK_COMMA num-expr } |
                              TERRAIN num-expr { TOK_COMMA num-expr } [ TOK_COMMA str-expr { TOK_COMMA num-expr } ] | WORLD ) .
+-- M3D SUN dx,dy,dz[,ambient[,steps[,stride]]] shades terrain cells by their slope (pictures t + k * stride; all zero = off).
 -- M3D INSTANCE o,src[,x,y,z[,yaw[,scale]]] makes object o share the mesh of object src (copy on write), M3D OBJSCALE o,scale sets a size, M3D OBJFREE a,b deletes objects a .. b.
 -- M3D MOUNTAINS seed,scale,amp,octaves,lo,hi adds ridged mountains where a slow noise is between lo and hi, M3D LAKES seed,scale,depth,lo,hi basins, M3D GROUNDQUIET cx,cy,rx,ry,margin keeps both out of a box.
 -- M3D GROUND seed,scale,amp,octaves[,base[,gain[,lacunarity]]] defines the height of the ground (fractal noise, in C), M3D GROUNDFLAT n,cx,cy,rx,ry,margin flattens it round a box,

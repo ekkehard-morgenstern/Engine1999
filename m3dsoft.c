@@ -58,23 +58,7 @@ static void make_cmap( m3d_t* m, soft_t* s ) {
                 s->cmap[l][i] = (uint8_t) i;
                 continue;
             }
-            double tr = (double)( ( argb[i] >> 16 ) & 0xFFU ) * scale;
-            double tg = (double)( ( argb[i] >> 8 ) & 0xFFU ) * scale;
-            double tb = (double)( argb[i] & 0xFFU ) * scale;
-            double best = 1.0e30;
-            int bi = i;
-            for ( int j=1; j < 256; ++j ) {
-                double dr = (double)( ( argb[j] >> 16 ) & 0xFFU ) - tr;
-                double dg = (double)( ( argb[j] >> 8 ) & 0xFFU ) - tg;
-                double db = (double)( argb[j] & 0xFFU ) - tb;
-                double cr = ( (double)( ( argb[j] >> 16 ) & 0xFFU ) - (double)( ( argb[j] >> 8 ) & 0xFFU ) ) - ( tr - tg );
-                double cb = ( (double)( argb[j] & 0xFFU ) - (double)( ( argb[j] >> 8 ) & 0xFFU ) ) - ( tb - tg );
-                double d = 2.0 * dr * dr + 4.0 * dg * dg + 3.0 * db * db + 6.0 * cr * cr + 6.0 * cb * cb;
-                if ( d < best ) {
-                    best = d;
-                    bi = j;
-                }
-            }
+            int bi = m3d_shade_index( argb, i, scale );
             s->cmap[l][i] = (uint8_t) bi;
         }
     }
