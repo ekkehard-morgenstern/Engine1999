@@ -381,8 +381,11 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXOP_M3DINSTANCE 339           // M3D INSTANCE o, src [, x, y, z [, yaw [, scale]]]   (object o shares the mesh of object src: a copy that costs no memory for the mesh)
 #define GFXOP_M3DOBJSCALE 340           // M3D OBJSCALE o, scale                 (the size of an object, > 0)
 #define GFXOP_M3DOBJFREE 341            // M3D OBJFREE a, b                      (deletes the objects a .. b: they are not defined any more)
+#define GFXOP_M3DMOUNTAINS 342          // M3D MOUNTAINS seed, scale, amp, octaves, lo, hi   (ridged mountains where a slow noise is between lo and hi; amp 0 removes them)
+#define GFXOP_M3DLAKES  343             // M3D LAKES seed, scale, depth, lo, hi              (basins where a noise is above lo .. hi; depth 0 removes them)
+#define GFXOP_M3DGROUNDQUIET 344        // M3D GROUNDQUIET cx, cy, rx, ry, margin   (no mountains and no lakes inside this box, fading in over the margin; margin 0 removes it)
 #define GFXOP_M3DFIRST  GFXOP_M3DRESET
-#define GFXOP_M3DLAST   GFXOP_M3DOBJFREE
+#define GFXOP_M3DLAST   GFXOP_M3DGROUNDQUIET
 #define GFXOP_IS_M3D(op) ( (op) >= GFXOP_M3DFIRST && (op) <= GFXOP_M3DLAST )
 #define GFXQ_M3DX       350             // M3D("X"), ("Y"), ("Z" = the feet), ("EYE"), ("YAW"), ("PITCH"), ("LIFT"), ("HIT"), ("FLOORZ")
 #define GFXQ_M3DY       351
@@ -419,6 +422,7 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXQ_M3DOBJYAW  382
 #define GFXQ_HASH       400             // HASH(a [,b [,c [,d]]]): computed by the VM itself (noise.c); the arguments are padded with 0 and the count follows them
 #define GFXQ_NOISE      401             // NOISE(seed, x [,y [,z]]): the VM pads with 0 and pushes the count of the arguments (1, 2 or 3 coordinates)
+#define GFXQ_RIDGED     403             // RIDGED(seed, x, y, octaves [,gain [,lacunarity]]): like FBM, ridged, 0 .. 1
 #define GFXQ_FBM        402             // FBM(seed, x, y, octaves [,gain [,lacunarity]]): padded with the defaults 0.5 and 2
 #define GFXQ_M3DVERTS   383             // M3D("VERTS", o), ("TRIS", o): counts
 #define GFXQ_M3DTRIS    384

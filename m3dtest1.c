@@ -43,6 +43,7 @@ per failure; the exit status is the number of failures. M3D_DUMP=file writes the
 
 static int failures = 0, cases = 0;
 
+#define NEAR(a,b,eps) do { ++cases; double _a = (a), _b = (b); if ( !( fabs( _a - _b ) <= (eps) ) ) { ++failures; printf( "FAIL line %d: %s = %.17g, expected %.17g\n", __LINE__, #a, _a, _b ); } } while (0)
 #define CHECK(cond) do { ++cases; if ( !(cond) ) { ++failures; printf( "FAIL line %d: %s\n", __LINE__, #cond ); } } while (0)
 
 static m3d_t* M;
@@ -661,6 +662,46 @@ int main( void ) {
         if ( i % 7 == 0 ) { CHECK( op( GFXOP_M3DOBJFREE, 2, (double)( 101 + i % 150 ), (double)( 101 + i % 150 ) ) ); }
     }
     CHECK( shot() != 0 );
+    // -- mountains and lakes in the ground function ----------------------------------------------------------------------------------------------------
+    fresh();
+    CHECK( op( GFXOP_M3DGROUND, 4, 7.0, 400.0, 20.0, 3.0 ) );
+    {
+        double x = 1234.5, y = -987.25, plain = Q( GFXQ_M3DGROUND, 2, x, y );
+        CHECK( op( GFXOP_M3DMOUNTAINS, 6, 5.0, 300.0, 100.0, 4.0, -1.0, -0.99 ) );                 // everywhere (the slow noise is above -0.99 nearly all over): t = 1
+        double m = nz_fbm( 6, x / 1200.0, y / 1200.0, 2, 0.5, 2.0 ), t = ( m + 1.0 ) / 0.01;
+        t = t <= 0 ? 0 : t >= 1 ? 1 : t * t * ( 3 - 2 * t );
+        NEAR( Q( GFXQ_M3DGROUND, 2, x, y ), plain + 100.0 * t * nz_ridged( 5, x / 300.0, y / 300.0, 4, 0.5, 2.0 ), 1e-9 );
+        CHECK( Q( GFXQ_M3DGROUND, 2, x, y ) >= plain - 1e-9 );
+        CHECK( op( GFXOP_M3DMOUNTAINS, 6, 5.0, 300.0, 0.0, 4.0, -1.0, -0.99 ) );                   // amp 0 takes them away
+        CHECK( Q( GFXQ_M3DGROUND, 2, x, y ) == plain );
+        CHECK( op( GFXOP_M3DMOUNTAINS, 6, 5.0, 300.0, 100.0, 4.0, 0.95, 1.0 ) );                   // a mask that is (almost) never reached: nothing here
+        CHECK( !op( GFXOP_M3DMOUNTAINS, 6, 5.0, 300.0, 100.0, 4.0, 0.5, 0.5 ) && !op( GFXOP_M3DMOUNTAINS, 6, 5.0, 0.0, 100.0, 4.0, 0.0, 0.5 ) );
+        CHECK( Q( GFXQ_M3DGROUND, 2, x, y ) == plain );
+        CHECK( op( GFXOP_M3DLAKES, 5, 9.0, 500.0, 30.0, -1.0, -0.99 ) );                           // basins everywhere
+        {
+            double lm = ( nz_fbm( 9, x / 500.0, y / 500.0, 2, 0.5, 2.0 ) + 1.0 ) / 0.01, lt = lm <= 0 ? 0 : lm >= 1 ? 1 : lm * lm * ( 3 - 2 * lm );
+            NEAR( Q( GFXQ_M3DGROUND, 2, x, y ), plain - 30.0 * lt, 1e-9 );
+        }
+        CHECK( Q( GFXQ_M3DGROUND, 2, x, y ) <= plain + 1e-9 && Q( GFXQ_M3DGROUND, 2, x, y ) >= plain - 30.0 - 1e-9 );
+        CHECK( op( GFXOP_M3DLAKES, 5, 9.0, 500.0, 0.0, -1.0, -0.99 ) );
+        CHECK( Q( GFXQ_M3DGROUND, 2, x, y ) == plain );
+        CHECK( !op( GFXOP_M3DLAKES, 5, 9.0, 0.0, 30.0, -1.0, 0.5 ) );
+        // a quiet box: no mountains and no lakes inside it, the full effect beyond its margin
+        CHECK( op( GFXOP_M3DMOUNTAINS, 6, 5.0, 300.0, 100.0, 4.0, -1.0, -0.99 ) && op( GFXOP_M3DLAKES, 5, 9.0, 500.0, 30.0, -1.0, -0.99 ) );
+        double withboth = Q( GFXQ_M3DGROUND, 2, x, y );
+        CHECK( withboth != plain );
+        CHECK( op( GFXOP_M3DGROUNDQUIET, 5, x, y, 10.0, 10.0, 50.0 ) );
+        CHECK( Q( GFXQ_M3DGROUND, 2, x, y ) == plain );                                          // inside: the plain hills
+        double mid = Q( GFXQ_M3DGROUND, 2, x + 40.0, y ), plainmid;
+        CHECK( op( GFXOP_M3DMOUNTAINS, 6, 5.0, 300.0, 0.0, 4.0, -1.0, -0.99 ) && op( GFXOP_M3DLAKES, 5, 9.0, 500.0, 0.0, -1.0, -0.99 ) );
+        plainmid = Q( GFXQ_M3DGROUND, 2, x + 40.0, y );
+        CHECK( mid != plainmid );                                                                // in the margin they are there, partly
+        CHECK( op( GFXOP_M3DMOUNTAINS, 6, 5.0, 300.0, 100.0, 4.0, -1.0, -0.99 ) && op( GFXOP_M3DLAKES, 5, 9.0, 500.0, 30.0, -1.0, -0.99 ) );
+        CHECK( op( GFXOP_M3DGROUNDQUIET, 5, x, y, 10.0, 10.0, 0.0 ) );                           // margin 0 removes it
+        CHECK( Q( GFXQ_M3DGROUND, 2, x, y ) == withboth );
+        CHECK( !op( GFXOP_M3DGROUNDQUIET, 5, x, y, -1.0, 10.0, 5.0 ) );
+        CHECK( op( GFXOP_M3DMOUNTAINS, 6, 5.0, 300.0, 100.0, 4.0, -1.0, -0.99 ) && op( GFXOP_M3DCLEAR, 0 ) && Q( GFXQ_M3DGROUND, 2, x, y ) == 0.0 );   // CLEAR forgets them too
+    }
     // -- errors -----------------------------------------------------------------------------------------------------------------------------
     CHECK( !op( GFXOP_M3DOBJECT, 1, 20000.0 ) );
     CHECK( !op( GFXOP_M3DBOX, 8, 99.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0 ) );                 // object not defined

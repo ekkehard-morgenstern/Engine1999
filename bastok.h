@@ -489,6 +489,7 @@ bool read_brclit( rbuf_t* rbuf, char** ptarget );
 #define XF_HASH         UINT8_C(36)         // HASH(a [,b [,c [,d]]]): a number in [0, 1) from up to four integers (noise.h)
 #define XF_NOISE        UINT8_C(37)         // NOISE(seed, x [,y [,z]]): smooth gradient noise in 1, 2 or 3 dimensions, -1 .. 1
 #define XF_FBM          UINT8_C(38)         // FBM(seed, x, y, octaves [,gain [,lacunarity]]): fractal noise, -1 .. 1
+#define XF_RIDGED       UINT8_C(39)         // RIDGED(seed, x, y, octaves [,gain [,lacunarity]]): ridged fractal noise, 0 .. 1
 #define XF_M3D          UINT8_C(35)         // M3D: the software 3D mesh renderer: statements M3D OBJECT, M3D BOX ... and the function M3D("X")
 #define XF_W3D          UINT8_C(20)         // W3D: the software 3D sector renderer: statements W3D SECTOR, W3D WALL ... and the function W3D("X")
 #define XF_TOOL         UINT8_C(19)         // TOOL name$ [, arg$]: runs a tool (an editor in BASIC from the tools folder) without losing the current program

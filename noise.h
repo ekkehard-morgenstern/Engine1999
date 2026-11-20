@@ -40,6 +40,7 @@ result on every machine; only integer arithmetic and + - * / of doubles are used
 
 nz_hash:    a number in [0, 1) from up to four integers (SplitMix64 finalizer, 53 bits)
 nz_noise:   smooth gradient noise ("Perlin noise") in 1, 2 or 3 dimensions, in [-1, 1], 0 at every lattice point, period-free; the seed selects another noise
+nz_ridged:  ridged fractal noise: 1 - |noise| squared per octave, the crests are sharp ridges (mountain ranges), 0 .. 1
 nz_fbm:     fractal noise: the sum of octaves of 2 D noise, each with twice the frequency and half the amplitude (by default), normalized to [-1, 1]
 */
 
@@ -50,5 +51,6 @@ uint64_t nz_hash64( uint64_t seed, int64_t a, int64_t b, int64_t c, int64_t d );
 double   nz_hash( int64_t a, int64_t b, int64_t c, int64_t d );                 // in [0, 1)
 double   nz_noise( uint64_t seed, int dims, double x, double y, double z );     // dims 1 .. 3: the unused coordinates are ignored
 double   nz_fbm( uint64_t seed, double x, double y, int octaves, double gain, double lacunarity );
+double   nz_ridged( uint64_t seed, double x, double y, int octaves, double gain, double lacunarity );   // ridged noise: sharp crests, in [0, 1]
 
 #endif

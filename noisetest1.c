@@ -57,6 +57,22 @@ int main( void ) {
     NEAR( nz_fbm( 99, 12.34, -56.78, 6, 0.5, 2.0 ), -0.16703415569336791, 1e-12 );
     NEAR( nz_fbm( 5, 0.25, 0.75, 3, 0.7, 3.0 ), -0.07953037665458372, 1e-12 );
 
+    NEAR( nz_ridged( 3, 1.7, -2.2, 4, 0.5, 2.0 ), 0.79763041376779631, 1e-12 );
+    NEAR( nz_ridged( 11, 0.3, 0.9, 1, 0.5, 2.0 ), 0.99155365497391401, 1e-12 );
+    NEAR( nz_ridged( 5, 0.25, 0.75, 3, 0.7, 3.0 ), 0.5722325150236115, 1e-12 );
+    {   // ridged noise: 0 .. 1, sharp crests: more values near the top than fractal noise squared would give, and a different noise per seed
+        double mn = 1, mx = 0, sum = 0; const int N = 100000;
+        for ( int i = 0; i < N; ++i ) {
+            double v = nz_ridged( 21, i * 0.0731 - 3000.0, ( i % 719 ) * 1.37 - 400.0, 5, 0.5, 2.0 );
+            CHECK( v >= 0.0 && v <= 1.0 );
+            if ( v < mn ) mn = v;
+            if ( v > mx ) mx = v;
+            sum += v;
+        }
+        CHECK( mx > 0.9 && mn < 0.5 && sum / N > 0.5 && sum / N < 0.9 );
+        CHECK( nz_ridged( 21, 3.3, 4.4, 5, 0.5, 2.0 ) != nz_ridged( 22, 3.3, 4.4, 5, 0.5, 2.0 ) );
+        CHECK( nz_ridged( 21, 3.3, 4.4, 0, 0.5, 2.0 ) == nz_ridged( 21, 3.3, 4.4, 1, 0.5, 2.0 ) );
+    }
     // -- hash: range, uniform distribution, every bit, order of the arguments, avalanche ------------------------------
     {
         int bins[16] = { 0 }; long bits[53] = { 0 }; const int N = 160000;

@@ -3375,7 +3375,7 @@ bool comp_eat_gfxquerycall( compiler_t* comp, node_t** pnode ) {
         case TOK_SPRITE:    group = "SPRITE"; break;
         case TOK_MOUSE:     group = "MOUSE"; break;
         case TOK_XFUNC:                                     // UI("EVENT"), W3D("X"); HASH(...), NOISE(...), FBM(...) take numbers only
-            if ( comp->currext == XF_HASH || comp->currext == XF_NOISE || comp->currext == XF_FBM ) {
+            if ( comp->currext == XF_HASH || comp->currext == XF_NOISE || comp->currext == XF_FBM || comp->currext == XF_RIDGED ) {
                 break;
             }
             if ( comp->currext != XF_UI && comp->currext != XF_W3D && comp->currext != XF_M3D ) {

@@ -264,6 +264,21 @@ ray 0 -300 20 90 0
 ray 500 -300 20 90 10
 goto 20000 -15000 0
 chunks
+f 0
+fa 1
+goto 11200 0 0
+wait 40
+state
+fa 0
+goto -14400 -5900 0
+fa 1
+wait 30
+state
+fa 0
+chunks
+goto 1350 8550 0
+wait 1
+chunks
 goto -9000 7000 0
 wait 2
 chunks
@@ -351,10 +366,23 @@ expect "chunks: far jump: none missing" "$(val chunks 2 missing)" 0 0
 expect "chunks: far jump: right levels at once" "$(val chunks 2 stale)" 0 0
 expect "chunks: far jump: 9 fine chunks" "$(val chunks 2 fine)" 9 9
 expect "chunks: far jump: trees within the budget" "$(val chunks 2 trees)" 0 1176
-expect "chunks: second far jump (-9000, 7000) and 2 s: window complete" "$(val chunks 3 have)" 49 49
-expect "chunks: second far jump: nothing stale" "$(val chunks 3 stale)" 0 0
-expect "chunks: second far jump: some forest" "$(val chunks 3 trees)" 1 1176
-expect "chunks: a different place has other chunks than the first" "$(awk -v a="$(val chunks 2 sig)" -v b="$(val chunks 3 sig)" 'BEGIN { print (a != b) ? 1 : 0 }')" 1 1
+expect "chunks: second far jump (-9000, 7000) and 2 s: window complete" "$(val chunks 5 have)" 49 49
+expect "chunks: second far jump: nothing stale" "$(val chunks 5 stale)" 0 0
+# 11f3. mountains and lakes (outside the hand-made area): ridged mountains and basins in the ground function; John cannot walk up a mountain (too high or too steep) and does not wade into
+#       deep water: walking east from (11200, 0) he stops at the foot of the mountain whose top is at (13500, 0); walking east from (-14400, -5900) he stops dead at the shore of a lake (water level -12, wading is possible down to -24)
+expect "lake: the chunks round the shore have water (translucent planes at the water level)" "$(val chunks 3 water)" 1 49
+# 11f4. a city ruin site (big region of 7200 units, a chance of 30 %): buildings of brick walls; roads between the region points; hay bales in the fields; the chunks of the window around (1350, 8550)
+expect "ruins: the chunks round (1350, 8550) have buildings of a city ruin" "$(val chunks 4 ruins)" 3 49
+expect "roads: some chunks have a road" "$(val chunks 4 roads)" 1 49
+expect "bales: hay bales in the fields" "$(val chunks 4 bales)" 1 49
+expect "mountain: John stops before the top" "$(val state 48 jx)" 12500 13500
+expect "mountain: stopped dead" "$(val state 48 jv)" 0 0
+expect "mountain: not on ground above the limit (120)" "$(val state 48 gh)" 0 120
+expect "lake: John stops at the shore" "$(val state 49 jx)" -13700 -13300
+expect "lake: stopped dead" "$(val state 49 jv)" 0 0
+expect "lake: the ground under him is not deeper than the limit (water level -12, 12 below it is too deep)" "$(val state 49 gh)" -26 -12
+expect "chunks: second far jump: some forest" "$(val chunks 5 trees)" 1 1176
+expect "chunks: a different place has other chunks than the first" "$(awk -v a="$(val chunks 2 sig)" -v b="$(val chunks 5 sig)" 'BEGIN { print (a != b) ? 1 : 0 }')" 1 1
 # 11g. a bicycle cannot stand by itself: at the start it leans against the yard's fence (bst 1) and E picks it up (riding, upright); a riderless one rolls on for 3 s and then falls over
 #      (bst 3), slides on its side and turns (bst 4) and stops (bst 5, lying); a lying one is picked up like before; E near a falling or sliding one does nothing
 expect "start: the bicycle leans against the fence" "$(val state 1 bst)" 1 1

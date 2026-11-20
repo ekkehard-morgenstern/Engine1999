@@ -101,7 +101,10 @@ typedef struct {
     uint64_t seed;
     double   scale, amp, base, gain, lac;
     int      oct;
+    struct { bool on; uint64_t seed; double scale, amp, lo, hi; int oct; } mnt;     // mountains: ridged noise where a slow noise is above lo .. hi
+    struct { bool on; uint64_t seed; double scale, depth, lo, hi; } lake;           // lakes: the ground sinks by depth where a noise is above lo .. hi
     struct { bool on; double cx, cy, rx, ry, margin; } flat[8];
+    struct { bool on; double cx, cy, rx, ry, margin; } quiet;                       // mountains and lakes fade out towards this box
 } ground_t;
 
 struct _m3d_t {

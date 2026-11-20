@@ -3558,7 +3558,7 @@ static bool vm_gfx_query( vm_t* vm, uint16_t q ) {
         return vm_error( vm, "Internal error (bad graphics query)" );
     }
     double a[GFX_MAXARGS];
-    bool isnoise = q == GFXQ_HASH || q == GFXQ_NOISE || q == GFXQ_FBM;
+    bool isnoise = q == GFXQ_HASH || q == GFXQ_NOISE || q == GFXQ_FBM || q == GFXQ_RIDGED;
     int na = q == GFXQ_RGB ? 4 : isnoise ? qd->maxargs + 1 : qd->maxargs;      // HASH / NOISE / FBM: the count of the given arguments is the last one
     for ( int i = na - 1; i >= 0; --i ) {
         if ( !vm_dpop_num( vm, &a[i] ) ) {
@@ -3579,6 +3579,9 @@ static bool vm_gfx_query( vm_t* vm, uint16_t q ) {
         }
         if ( !( a[3] >= 1.0 && a[3] <= (double) NZ_MAXOCTAVES && a[4] >= 0.0 && a[4] <= 4.0 && a[5] >= 1.0 && a[5] <= 16.0 ) ) {
             return vm_error( vm, "Illegal argument" );
+        }
+        if ( q == GFXQ_RIDGED ) {
+            return vm_dpush_num( vm, nz_ridged( (uint64_t)(int64_t) floor( a[0] ), a[1], a[2], (int) a[3], a[4], a[5] ) );
         }
         return vm_dpush_num( vm, nz_fbm( (uint64_t)(int64_t) floor( a[0] ), a[1], a[2], (int) a[3], a[4], a[5] ) );
     }

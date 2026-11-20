@@ -179,3 +179,23 @@ double nz_fbm( uint64_t seed, double x, double y, int octaves, double gain, doub
     }
     return norm > 0.0 ? sum / norm : 0.0;
 }
+
+double nz_ridged( uint64_t seed, double x, double y, int octaves, double gain, double lacunarity ) {
+    if ( octaves < 1 ) {
+        octaves = 1;
+    }
+    if ( octaves > NZ_MAXOCTAVES ) {
+        octaves = NZ_MAXOCTAVES;
+    }
+    double sum = 0.0, norm = 0.0, amp = 1.0, freq = 1.0;
+    for ( int o = 0; o < octaves; ++o ) {
+        uint64_t h = nz_hash64( seed, o, 0x5244, 0, 0 );
+        double offx = (double)( h >> 40 ) * ( 1.0 / 16384.0 ), offy = (double)( ( h >> 16 ) & UINT64_C(0xffffff) ) * ( 1.0 / 16384.0 );
+        double r = 1.0 - fabs( nz_noise( h, 2, x * freq + offx, y * freq + offy, 0.0 ) );
+        sum += amp * r * r;
+        norm += amp;
+        amp *= gain;
+        freq *= lacunarity;
+    }
+    return norm > 0.0 ? sum / norm : 0.0;
+}

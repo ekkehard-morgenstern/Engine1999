@@ -197,10 +197,10 @@ sys-noarg-str-call := sys-noarg-str .
 > the name is a string literal and the number of arguments after it depends on the name.
 > HASH(a[,b[,c[,d]]]) is a number in [0,1) from up to four integers (the integer parts; missing arguments are 0); NOISE(seed,x[,y[,z]]) is smooth gradient noise in 1, 2 or 3
 > dimensions (-1 .. 1, 0 at whole numbers); FBM(seed,x,y,octaves[,gain[,lacunarity]]) is fractal noise of 1 .. 16 octaves of the 2 D noise (gain 0 .. 4 default 0.5,
-> lacunarity 1 .. 16 default 2), -1 .. 1. All three are pure functions: the same arguments give the same number on every machine (docs/noise.md).
+> lacunarity 1 .. 16 default 2), -1 .. 1; RIDGED(seed,x,y,octaves[,gain[,lacunarity]]) is the ridged variant (sharp crests), 0 .. 1. All of them are pure functions: the same arguments give the same number on every machine (docs/noise.md).
 
 ```ebnf
-gfx-query-call := ( RGB | POINT | TILE | HASH | NOISE | FBM ) "(" num-expr { "," num-expr } ")" |
+gfx-query-call := ( RGB | POINT | TILE | HASH | NOISE | FBM | RIDGED ) "(" num-expr { "," num-expr } ")" |
                   ( GFX | TXT | SPRITE | MOUSE | XFUNC(UI) | XFUNC(W3D) ) "(" <string> { "," num-expr } ")" .
 num-func-call := num-usr-fn-call | sys-num-fn-arg-call | sys-noarg-num-call | gfx-query-call .
 str-func-call := str-usr-fn-call | sys-str-fn-arg-call | sys-noarg-str-call .
@@ -798,11 +798,12 @@ ui-geometry := num-expr "," num-expr "," num-expr "," num-expr "," num-expr .
 ```ebnf
 m3d-stmt := XFUNC(M3D) ( RESET | CLEAR | COLORMAP | RENDER | SOFTWARE | HARDWARE | TEXTURE num-expr "," str-expr |
                              ( OBJECT | VERTEX | FACE | QUAD | BOX | OBJPOS | OBJSHOW | OBJLIGHT | OBJFLAGS | THING | THINGPOS | THINGTEX | THINGOFF | THINGLIGHT | THINGTRANS |
-                               CAMERA | TURN | PLAYER | MOVE | LIFT | LAMP | VIEW | FOG | FAR | SKY | THINGMOVE | ZONE | GROUND | GROUNDFLAT | INSTANCE | OBJSCALE | OBJFREE ) num-expr { "," num-expr } |
+                               CAMERA | TURN | PLAYER | MOVE | LIFT | LAMP | VIEW | FOG | FAR | SKY | THINGMOVE | ZONE | GROUND | GROUNDFLAT | INSTANCE | OBJSCALE | OBJFREE | MOUNTAINS | LAKES | GROUNDQUIET ) num-expr { "," num-expr } |
                              TERRAIN num-expr { "," num-expr } [ "," str-expr { "," num-expr } ] | WORLD ) .
 ```
 
 > M3D INSTANCE o,src[,x,y,z[,yaw[,scale]]] makes object o share the mesh of object src (copy on write), M3D OBJSCALE o,scale sets a size, M3D OBJFREE a,b deletes objects a .. b.
+> M3D MOUNTAINS seed,scale,amp,octaves,lo,hi adds ridged mountains where a slow noise is between lo and hi, M3D LAKES seed,scale,depth,lo,hi basins, M3D GROUNDQUIET cx,cy,rx,ry,margin keeps both out of a box.
 > M3D GROUND seed,scale,amp,octaves[,base[,gain[,lacunarity]]] defines the height of the ground (fractal noise, in C), M3D GROUNDFLAT n,cx,cy,rx,ry,margin flattens it round a box,
 > M3D TERRAIN o,x0,y0,nx,ny,cell,tex[,cells$[,skirt[,uvscale]]] fills object o with a grid of it (cells$: a character a cell, picture tex + its code), M3D("GROUND",x,y) is its height.
 > The 3D sector renderer (docs/3d-subsystem.md; W3D is an extension word): a world of sectors (floor and ceiling height, flats, light) bounded by walls, some of them portals

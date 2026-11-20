@@ -227,24 +227,40 @@ void m3d_getview( const m3d_t* m, int* x, int* y, int* width, int* height, int* 
 
 // the ground's height at x,y; every flat box multiplies it by 1 - w, where w is 1 inside the box (centre cx,cy, half sizes rx,ry) and falls to 0 over the
 // margin outside it (smooth: the curve of PW in demos/1987.bas)
+static double smooth01( double t ) {
+    return t <= 0.0 ? 0.0 : t >= 1.0 ? 1.0 : t * t * ( 3.0 - 2.0 * t );
+}
+
+// 1 inside the box (centre cx,cy, half sizes rx,ry), falling to 0 over the margin outside it (smooth: the curve of PW in demos/1987.bas)
+static double box_weight( double x, double y, double cx, double cy, double rx, double ry, double margin ) {
+    double dx = fabs( x - cx ) - rx, dy = fabs( y - cy ) - ry;
+    if ( dx < 0 ) { dx = 0; }
+    if ( dy < 0 ) { dy = 0; }
+    double d = sqrt( dx * dx + dy * dy ) / margin;
+    return d >= 1.0 ? 0.0 : ( 1.0 - d ) * ( 1.0 - d ) * ( 1.0 + 2.0 * d );
+}
+
 double m3d_ground( const m3d_t* m, double x, double y ) {
     const ground_t* g = &m->gnd;
     if ( !g->on ) {
         return 0.0;
     }
     double h = g->base + g->amp * nz_fbm( g->seed, x / g->scale, y / g->scale, g->oct, g->gain, g->lac );
+    double quiet = g->quiet.on ? 1.0 - box_weight( x, y, g->quiet.cx, g->quiet.cy, g->quiet.rx, g->quiet.ry, g->quiet.margin ) : 1.0;
+    if ( g->mnt.on && quiet > 0.0 ) {                   // ridged mountains where the (four times slower) noise of the range is high
+        double t = quiet * smooth01( ( nz_fbm( g->mnt.seed + 1, x / ( g->mnt.scale * 4.0 ), y / ( g->mnt.scale * 4.0 ), 2, 0.5, 2.0 ) - g->mnt.lo ) / ( g->mnt.hi - g->mnt.lo ) );
+        if ( t > 0.0 ) {
+            h += g->mnt.amp * t * nz_ridged( g->mnt.seed, x / g->mnt.scale, y / g->mnt.scale, g->mnt.oct, 0.5, 2.0 );
+        }
+    }
+    if ( g->lake.on && quiet > 0.0 ) {                  // basins
+        double t = smooth01( ( nz_fbm( g->lake.seed, x / g->lake.scale, y / g->lake.scale, 2, 0.5, 2.0 ) - g->lake.lo ) / ( g->lake.hi - g->lake.lo ) );
+        h -= g->lake.depth * t * quiet;
+    }
     for ( int i=0; i < 8; ++i ) {
-        if ( !g->flat[i].on ) {
-            continue;
+        if ( g->flat[i].on ) {
+            h *= 1.0 - box_weight( x, y, g->flat[i].cx, g->flat[i].cy, g->flat[i].rx, g->flat[i].ry, g->flat[i].margin );
         }
-        double dx = fabs( x - g->flat[i].cx ) - g->flat[i].rx, dy = fabs( y - g->flat[i].cy ) - g->flat[i].ry;
-        if ( dx < 0 ) { dx = 0; }
-        if ( dy < 0 ) { dy = 0; }
-        double d = sqrt( dx * dx + dy * dy ) / g->flat[i].margin;
-        if ( d >= 1.0 ) {
-            continue;                                   // outside the margin: no change
-        }
-        h *= 1.0 - ( 1.0 - d ) * ( 1.0 - d ) * ( 1.0 + 2.0 * d );
     }
     return h;
 }
@@ -776,6 +792,30 @@ bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t sl
             }
             g->seed = (uint64_t)(int64_t) floor( a[0] ); g->scale = a[1]; g->amp = a[2]; g->oct = oct; g->base = base; g->gain = gain; g->lac = lac;
             g->on = true;
+            return true;
+        }
+        case GFXOP_M3DMOUNTAINS: {
+            int oct;
+            if ( !( fabs( a[0] ) < 4.4e9 ) || !( a[1] > 0.0 && a[1] < 1.0e9 ) || !( fabs( a[2] ) < 1.0e9 ) || !whole( a[3], 1, NZ_MAXOCTAVES, &oct ) || !( a[4] >= -1.0 && a[5] <= 1.0 && a[5] > a[4] ) ) {
+                return false;
+            }
+            m->gnd.mnt.on = a[2] != 0.0; m->gnd.mnt.seed = (uint64_t)(int64_t) floor( a[0] ); m->gnd.mnt.scale = a[1]; m->gnd.mnt.amp = a[2]; m->gnd.mnt.oct = oct;
+            m->gnd.mnt.lo = a[4]; m->gnd.mnt.hi = a[5];
+            return true;
+        }
+        case GFXOP_M3DLAKES: {
+            if ( !( fabs( a[0] ) < 4.4e9 ) || !( a[1] > 0.0 && a[1] < 1.0e9 ) || !( fabs( a[2] ) < 1.0e9 ) || !( a[3] >= -1.0 && a[4] <= 1.0 && a[4] > a[3] ) ) {
+                return false;
+            }
+            m->gnd.lake.on = a[2] != 0.0; m->gnd.lake.seed = (uint64_t)(int64_t) floor( a[0] ); m->gnd.lake.scale = a[1]; m->gnd.lake.depth = a[2];
+            m->gnd.lake.lo = a[3]; m->gnd.lake.hi = a[4];
+            return true;
+        }
+        case GFXOP_M3DGROUNDQUIET: {
+            if ( !( a[4] >= 0.0 && a[4] < 1.0e9 ) || !( a[2] >= 0.0 && a[3] >= 0.0 && a[2] < 1.0e9 && a[3] < 1.0e9 ) || !( fabs( a[0] ) < 1.0e9 && fabs( a[1] ) < 1.0e9 ) ) {
+                return false;
+            }
+            m->gnd.quiet.on = a[4] > 0.0; m->gnd.quiet.cx = a[0]; m->gnd.quiet.cy = a[1]; m->gnd.quiet.rx = a[2]; m->gnd.quiet.ry = a[3]; m->gnd.quiet.margin = a[4];
             return true;
         }
         case GFXOP_M3DGROUNDFLAT: {

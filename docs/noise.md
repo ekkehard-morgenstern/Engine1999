@@ -12,6 +12,7 @@ A world that is made up on the way (chunks, see `docs/1987.md` "The world in chu
 | `NOISE(seed, x)` | smooth **gradient noise** ("Perlin noise", improved fade curve `6t^5 - 15t^4 + 10t^3`) along a line: `-1 .. 1`, exactly 0 at every whole `x`, mean 0. |
 | `NOISE(seed, x, y)` | the same in the plane (32 gradient directions). |
 | `NOISE(seed, x, y, z)` | the same in space (the 12 cube edge directions). |
+| `RIDGED(seed, x, y, octaves [,gain [,lacunarity]])` | **ridged** fractal noise (added 2026-11-20): `(1 - |noise|)^2` per octave, so the crests are sharp ridges, `0 .. 1` (mean about 0.6); the same arguments, defaults and limits as `FBM`, its own offsets. For mountain ranges (`M3D MOUNTAINS` uses it). |
 | `FBM(seed, x, y, octaves [,gain [,lacunarity]])` | **fractal noise**: the sum of `octaves` (1 .. 16) layers of the 2 D noise, each layer `lacunarity` times (default 2) finer and `gain` times (default 0.5) weaker than the one before, divided by the sum of the weights: `-1 .. 1`. Every layer has its own noise and its own offset (the plain noise is 0 at the origin, so without offsets all layers would be). `gain` 0 .. 4, `lacunarity` 1 .. 16, else "Illegal argument". |
 
 The `seed` selects another noise (any integer; different seeds give unrelated noises): use one seed for the height, another for the moisture, another for the forests. All arguments must be within +-4.4e9 ("Illegal argument" beyond). `NOISE` with one argument and `HASH()` are "Too few arguments", more than four (`NOISE`), four (`HASH`) or six (`FBM`) are "Too many arguments".
@@ -22,7 +23,7 @@ H=FBM(7,X/800,Y/800,5)*100              ' the same with finer detail on top
 IF HASH(CX,CY,3)<0.2 THEN ...           ' a chunk has a ruin with a chance of one in five
 ```
 
-**New reserved words** (extension words 36 .. 38): programs that use `HASH`, `NOISE` or `FBM` as the name of a variable, procedure or function must be changed. Of the programs in this repository only `river` and `river2` did (a `FUNC HASH`, now `RHASH`).
+**New reserved words** (extension words 36 .. 39: `HASH NOISE FBM RIDGED`): programs that use `HASH`, `NOISE` or `FBM` as the name of a variable, procedure or function must be changed. Of the programs in this repository only `river` and `river2` did (a `FUNC HASH`, now `RHASH`).
 
 ## Pure and portable
 
@@ -41,5 +42,5 @@ All three are pure functions: no state, no `RND`, so building a chunk does not d
 
 ## Not done / ideas
 
-- Value and simplex noise, a ridged variant (`1 - |noise|`: mountain ridges; for now `1 - ABS(NOISE(...))` in BASIC), domain warping, a 3 D `FBM`, a `NOISE` with a period (tiling); a `HASH` over strings.
+- Value and simplex noise, domain warping, a 3 D `FBM`, a `NOISE` with a period (tiling); a `HASH` over strings.
 - Done next (2026-11-20): the terrain grid primitive, `M3D GROUND` / `M3D TERRAIN` (`docs/3d-mesh-subsystem.md`): a chunk's ground is built in C from `FBM`.
