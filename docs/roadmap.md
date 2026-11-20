@@ -74,6 +74,7 @@ the parts when items are done or added.
 | 92 | **1987**: the third-person game (done so far: world, John, the bicycle, drones that scout, sound, the camera as an agent); open: drones that react, a goal, music, a much larger world, figure / bicycle / camera ideas, animations (open) | Medium | [Projects, games and packaging](roadmap/projects.md) |
 | 93 | A finer clock for programs: `TI` counts whole 1/60 s ticks (open) | Medium-Low | [Language](roadmap/language.md) |
 | 94 | Mesh renderer follow-ups: real GPU measurements of the kept buffers, a spatial structure, buffer housekeeping, true tilt of objects, a collision quirk (open) | Low-Medium | [Graphics, UI and 3D](roadmap/graphics-and-ui.md) |
+| 95 | **1987 / engine**: a large procedurally generated world streamed in chunks (noise / hash in C, terrain grid, instancing, `chunks.lib`, JSON prefabs and deltas); step 1, the BASIC prototype in `1987.bas`, and the C functions `HASH` / `NOISE` / `FBM` done 2026-11-20, the rest open | Medium | [Projects, games and packaging](roadmap/projects.md) |
 
 
 *Token space (2026-11-01):* the one-byte tokens 0..255 are used up (only the unused `PUT`, 13, is free). New words are **extension words**: token 254 (`TOK_XFUNC`) plus a second byte (`XF_*`, table `xkeywtbl` in `bastok.c`): 255 more are possible. `SPACE STRING MIN MAX ATAN2` are the first. Keep this in mind when adding words: a new word is an `xkeywtbl` row plus its parser branch, not a `TOK_` define.

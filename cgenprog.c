@@ -437,6 +437,17 @@ bool cgen_from_gfxquery( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     if ( q == GFXQ_RGB && node->numbranches == 3U && !cgen_push_number( cgen, comp, 255.0 ) ) {
         return false;
     }
+    if ( q == GFXQ_HASH || q == GFXQ_NOISE || q == GFXQ_FBM ) {
+        // HASH / NOISE / FBM: the missing arguments are filled up (0, and for FBM the gain 0.5 and the lacunarity 2) and the count of the given ones comes last
+        for ( int i = (int) node->numbranches; i < qd->maxargs; ++i ) {
+            if ( !cgen_push_number( cgen, comp, q == GFXQ_FBM ? ( i == 4 ? 0.5 : 2.0 ) : 0.0 ) ) {
+                return false;
+            }
+        }
+        if ( !cgen_push_number( cgen, comp, (double) node->numbranches ) ) {
+            return false;
+        }
+    }
     return cgen_gen_gfxq( cgen, q ) || cgen_out_of_code_memory( comp );
 }
 

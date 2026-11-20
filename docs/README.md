@@ -14,6 +14,7 @@ Players and BASIC programmers: start with the [README](../README.md). Engine con
 | [compiler-and-vm.md](compiler-and-vm.md) | Program store, syntax tree, node types, code generator, instruction set, variable memory |
 | [grammar.md](grammar.md) | **The language at a glance**: the whole syntax as a quick reference card, generated from `bascomp.ebnf` (also [grammar.html](grammar.html), with colors and links) |
 | [build-and-test.md](build-and-test.md) | Building, executables, test programs, tooling |
+| [noise.md](noise.md) | `HASH`, `NOISE`, `FBM`: pure hash and gradient / fractal noise for procedural worlds (implemented) |
 | [json-subsystem.md](json-subsystem.md) | JSON trees from BASIC: `JSON LOAD` / `SAVE` / `SET` / `GET` ..., paths like `a.b.c` (implemented) |
 | [deqq2.md](deqq2.md) | **Deqq's House II**: the implementation guide and reference manual of the real-time 3D adventure on the mesh renderer: rules, architecture, the world document, things and puzzles, Deqq's AI, cars, light, sound, tests, procedure and variable reference |
 | [1987.md](1987.md) | **1987**: the implementation guide of the third-person adventure toy (John, his bicycle, the countryside) on the mesh renderer: world, the skeleton-animated figure, the bicycle's physics, the camera, the test mode |

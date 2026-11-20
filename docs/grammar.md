@@ -195,9 +195,12 @@ sys-noarg-str-call := sys-noarg-str .
 > MOUSE("X"\|"Y"\|"B"\|"PRESSED"\|"RELEASED"\|"WHEEL"\|"SHAPE"\|"VISIBLE"\|"EVENTS") (no further arguments),
 > TXT("CHAR",x,y), TXT("FGAT",x,y), TXT("BGAT",x,y), TXT("WIDTH"), TXT("HEIGHT"), TXT("GLYPH",code,row), TXT("BUILTIN",code,row), SPRITE("X"\|"Y"\|"IMAGE"\|"ON"\|"HITS"\|"COLLIDE"\|"MOVING"\|"COLS"\|"ROWS",n):
 > the name is a string literal and the number of arguments after it depends on the name.
+> HASH(a[,b[,c[,d]]]) is a number in [0,1) from up to four integers (the integer parts; missing arguments are 0); NOISE(seed,x[,y[,z]]) is smooth gradient noise in 1, 2 or 3
+> dimensions (-1 .. 1, 0 at whole numbers); FBM(seed,x,y,octaves[,gain[,lacunarity]]) is fractal noise of 1 .. 16 octaves of the 2 D noise (gain 0 .. 4 default 0.5,
+> lacunarity 1 .. 16 default 2), -1 .. 1. All three are pure functions: the same arguments give the same number on every machine (docs/noise.md).
 
 ```ebnf
-gfx-query-call := ( RGB | POINT | TILE ) "(" num-expr { "," num-expr } ")" |
+gfx-query-call := ( RGB | POINT | TILE | HASH | NOISE | FBM ) "(" num-expr { "," num-expr } ")" |
                   ( GFX | TXT | SPRITE | MOUSE | XFUNC(UI) | XFUNC(W3D) ) "(" <string> { "," num-expr } ")" .
 num-func-call := num-usr-fn-call | sys-num-fn-arg-call | sys-noarg-num-call | gfx-query-call .
 str-func-call := str-usr-fn-call | sys-str-fn-arg-call | sys-noarg-str-call .

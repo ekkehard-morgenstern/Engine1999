@@ -411,6 +411,9 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXQ_M3DOBJY    380
 #define GFXQ_M3DOBJZ    381
 #define GFXQ_M3DOBJYAW  382
+#define GFXQ_HASH       400             // HASH(a [,b [,c [,d]]]): computed by the VM itself (noise.c); the arguments are padded with 0 and the count follows them
+#define GFXQ_NOISE      401             // NOISE(seed, x [,y [,z]]): the VM pads with 0 and pushes the count of the arguments (1, 2 or 3 coordinates)
+#define GFXQ_FBM        402             // FBM(seed, x, y, octaves [,gain [,lacunarity]]): padded with the defaults 0.5 and 2
 #define GFXQ_M3DVERTS   383             // M3D("VERTS", o), ("TRIS", o): counts
 #define GFXQ_M3DTRIS    384
 #define GFXQ_M3DDRAWN   385             // M3D("DRAWN"): the number of triangles the last frame rasterized

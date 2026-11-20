@@ -468,6 +468,10 @@ Extension words (token 254 + `XF_ASN` .. `XF_CDBL` 21..31); instructions `MATH` 
 - `CINT(x)`: `x` rounded to the nearest integer, halves away from zero; "Overflow" outside -2147483648 .. 2147483647 (unlike `INT`, which floors, and `FIX`, which truncates). `CDBL(x)`: the number itself (every number is a double here); it exists so that programs written for other BASICs run.
 - New reserved words (check that your variable and procedure names do not use them): `ASN ACS SINH COSH TANH ASINH ACOSH ATANH ROUND CINT CDBL`. None of the demos did.
 
+## `HASH`, `NOISE`, `FBM` (2026-11-20, roadmap item 95)
+
+Extension words 36 .. 38; computed by the VM itself (`noise.[ch]`), pure functions that give the same numbers on every machine. `HASH(a[,b[,c[,d]]])`: a number 0 <= h < 1 from up to four integers (missing ones are 0). `NOISE(seed,x[,y[,z]])`: smooth gradient noise in 1 .. 3 dimensions, -1 .. 1, 0 at whole numbers. `FBM(seed,x,y,octaves[,gain[,lacunarity]])`: fractal noise of 1 .. 16 octaves, -1 .. 1. Full description, definition and measurements: [noise.md](noise.md). **New reserved words** `HASH NOISE FBM` (the demos `river` and `river2` had a `FUNC HASH`, now `RHASH`).
+
 ## Numeric functions, `\`, `MOD`, `RND`
 
 ```

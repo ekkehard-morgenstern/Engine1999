@@ -24,7 +24,7 @@
 200 BREAK OFF
 210 ON ERROR GOTO FAILED
 220 HL=0:IF ENV$("G1987_HEADLESS")<>"" THEN HL=-1
-230 DIM GNS(8),GGX(160),FLJ$(81),TIH(33),RPX(300),RPY(300),RPF(300),CPX(40),CPY(40),SMX(120),SMY(120),PLX(40),PLY(40),TRX(520),TRY(520),LRR(8),LRZ(8),LRV(8),W$(8),GPX(2),GPZ(2),GPS(2),DWX(40),DWY(40),DRX(5),DRY(5),DRZ(5),DRH(5),DRT(5),DRA(5)
+230 DIM CKX(64),CKY(64),CKN(64),CKRX(9),CKRY(9),CKRT(9),CTX(24),CTY(24),GNS(8),GGX(160),FLJ$(81),TIH(33),RPX(300),RPY(300),RPF(300),CPX(40),CPY(40),SMX(120),SMY(120),PLX(40),PLY(40),TRX(520),TRY(520),LRR(8),LRZ(8),LRV(8),W$(8),GPX(2),GPZ(2),GPS(2),DWX(40),DWY(40),DRX(5),DRY(5),DRZ(5),DRH(5),DRT(5),DRA(5)
 240 GOTO MAIN
 250 ' ------------------------------------------------------------------------------------------------ small helpers
 260 FUNC RN(M)
@@ -328,28 +328,163 @@
 3070   CALL BX(O,CX-1.2,-1.6,CZ-1.2,CX+1.2,1.6,CZ+1.2,FN CC(0,11))
 3080 END PROC
 3090 ' ------------------------------------------------------------------------------------------------ the terrain, the roads
-3100 PROC BUILDTERRAIN
-3110   LOCAL CI,CJ,O,I,J,X,Y,X0,Y0,B
-3120   FOR CJ=0 TO 7
-3130     FOR CI=0 TO 7
-3140       O=100+CI+CJ*8
-3150       M3D OBJECT O,0,235
-3160       X0=-3600+CI*900:Y0=-3600+CJ*900
-3170       FOR J=0 TO 9
-3180         FOR I=0 TO 9
-3190           X=X0+I*100:Y=Y0+J*100
-3200           M3D VERTEX O,X,Y,FN HT(X,Y),X*0.5,Y*0.5
-3210         NEXT I
-3220       NEXT J
-3230       FOR J=0 TO 8
-3240         FOR I=0 TO 8
-3250           B=J*10+I
-3260           M3D QUAD O,B,B+1,B+11,B+10,FN CELLTEX(X0+I*100+50,Y0+J*100+50)
-3270         NEXT I
-3280       NEXT J
-3290     NEXT CI
-3300   NEXT CJ
-3310 END PROC
+3100 ' ------------------------------------------------------------------------------------------------ the world in chunks (roadmap item 95, step 1: a prototype)
+3101 ' The ground is cut into square chunks of 900 units (9 x 9 cells of 100). Only the chunks round John exist (7 x 7: 3 in every direction, so the nearest hole is more than 2700
+3102 ' units away, beyond the far plane of 2400). A chunk is a pure function of its numbers cx,cy: the same chunk always comes out the same, however often it is built again. It owns a
+3103 ' fixed block of object numbers by its slot, (cx mod 8) + 8 (cy mod 8): the ground 100 + slot, up to 24 trees 2000 + 24 slot + n; building a chunk overwrites the one that was
+3104 ' in the slot, nothing is allocated or freed. The chunks cx, cy = -4 .. 3 are the hand-made area (the house, the roads, the groves, the field); the rest is made by the rules
+3105 ' below. One chunk is built per frame (the nearest missing one first); a jump (NEWGAME, goto) builds all that are missing at once.
+3117 ' the slot of a chunk (0 .. 63)
+3118 FUNC CKSLOT(CX,CY)
+3119   RETURN (CX-INT(CX/8)*8)+(CY-INT(CY/8)*8)*8
+3120 END FUNC
+3121 ' the kind of ground at X,Y: the kind of the nearest of the nine feature points CKRX / CKRY / CKRT (set by CHREGIONS for the chunk): 0 plain, 1 meadow, 2 field, 3 forest
+3122 FUNC GKIND(X,Y)
+3123   LOCAL K,B,D,BD
+3124   BD=1000000000000:B=0
+3125   FOR K=0 TO 8
+3126     D=(CKRX(K)-X)*(CKRX(K)-X)+(CKRY(K)-Y)*(CKRY(K)-Y)
+3127     IF D<BD THEN BD=D:B=K
+3128   NEXT K
+3129   RETURN CKRT(B)
+3130 END FUNC
+3131 ' the picture of the ground cell round X,Y: the hand-made area keeps its CELLTEX, outside it the kind of ground gives it: meadow lush grass, field soil, forest dry grass (needles)
+3132 FUNC OCELL(X,Y)
+3133   LOCAL K
+3134   IF X>=-3600 AND X<3600 AND Y>=-3600 AND Y<3600 THEN RETURN FN CELLTEX(X,Y)
+3135   K=FN GKIND(X,Y)
+3136   IF K=1 THEN RETURN 303
+3137   IF K=2 THEN RETURN 320
+3138   IF K=3 THEN RETURN 302
+3139   RETURN FN CELLTEX(X,Y)
+3140 END FUNC
+3141 ' the feature points of the regions (1800 units = 2 chunks square) round the chunk's region: one point in each, anywhere in it, with a kind (38 % forest, 28 % meadow, 20 % field, 14 % plain)
+3142 PROC CHREGIONS(CX,CY)
+3143   LOCAL RX,RY,I,J,K,U
+3144   RX=INT(CX/2):RY=INT(CY/2):K=0
+3145   FOR J=-1 TO 1
+3146     FOR I=-1 TO 1
+3147       CKRX(K)=(RX+I)*1800+HASH(RX+I,RY+J,1)*1800
+3148       CKRY(K)=(RY+J)*1800+HASH(RX+I,RY+J,2)*1800
+3149       U=HASH(RX+I,RY+J,3)
+3150       CKRT(K)=0
+3151       IF U<0.86 THEN CKRT(K)=2
+3152       IF U<0.66 THEN CKRT(K)=1
+3153       IF U<0.38 THEN CKRT(K)=3
+3154       K=K+1
+3155     NEXT I
+3156   NEXT J
+3157 END PROC
+3158 ' the unused tree numbers N .. 23 of a slot become empty objects
+3159 PROC CHCLEAR(SL,N)
+3160   LOCAL J
+3161   FOR J=N TO 23
+3162     M3D OBJECT 2000+SL*24+J,0,235
+3163   NEXT J
+3164   CKN(SL)=N
+3165 END PROC
+3166 ' the trees of a chunk: up to 24 at hashed places in forest, at least 70 units apart (CHREGIONS was called)
+3167 PROC CHTREES(CX,CY,SL)
+3168   LOCAL I,J,N,X,Y,K,T,OK,DX,DY
+3169   N=0
+3170   FOR I=0 TO 59
+3171     IF N<24 THEN
+3172       X=CX*900+HASH(CX,CY,100+I)*900
+3173       Y=CY*900+HASH(CX,CY,200+I)*900
+3174       OK=0
+3175       IF FN GKIND(X,Y)=3 THEN
+3176         IF HASH(CX,CY,300+I)<0.7 THEN OK=-1
+3177       END IF
+3178       FOR J=0 TO N-1
+3179         DX=CTX(J)-X:DY=CTY(J)-Y
+3180         IF DX*DX+DY*DY<4900 THEN OK=0
+3181       NEXT J
+3182       IF OK THEN
+3183         CTX(N)=X:CTY(N)=Y
+3184         K=HASH(CX,CY,400+I)
+3185         T=0:IF K>=0.45 THEN T=1
+3186         IF K>=0.8 THEN T=2
+3187         TYW=HASH(CX,CY,500+I)*360
+3188         CALL TREE(2000+SL*24+N,X,Y,0.9+HASH(CX,CY,600+I)*0.5,T)
+3189         N=N+1
+3190       END IF
+3191     END IF
+3192   NEXT I
+3193   TYW=-1
+3194   CALL CHCLEAR(SL,N)
+3195 END PROC
+3196 ' builds the chunk cx,cy into the slot SL: the ground (10 x 10 vertices, 9 x 9 quads) and the trees
+3197 PROC CHUNKBUILD(CX,CY,SL)
+3198   LOCAL O,I,J,X,Y,X0,Y0,B,T0
+3199   T0=TI
+3200   CALL CHREGIONS(CX,CY)
+3201   O=100+SL
+3202   M3D OBJECT O,0,235
+3203   X0=CX*900:Y0=CY*900
+3204   FOR J=0 TO 9
+3205     FOR I=0 TO 9
+3206       X=X0+I*100:Y=Y0+J*100
+3207       M3D VERTEX O,X,Y,FN HT(X,Y),X*0.5,Y*0.5
+3208     NEXT I
+3209   NEXT J
+3210   FOR J=0 TO 8
+3211     FOR I=0 TO 8
+3212       B=J*10+I
+3213       M3D QUAD O,B,B+1,B+11,B+10,FN OCELL(X0+I*100+50,Y0+J*100+50)
+3214     NEXT I
+3215   NEXT J
+3216   IF CX<-4 OR CX>3 OR CY<-4 OR CY>3 THEN
+3217     CALL CHTREES(CX,CY,SL)
+3218   ELSE
+3219     CALL CHCLEAR(SL,0)
+3220   END IF
+3221   CKX(SL)=CX:CKY(SL)=CY
+3222   T0=TI-T0:CKCNT=CKCNT+1:CKTOT=CKTOT+T0:IF T0>CKMAX THEN CKMAX=T0
+3223 END PROC
+3224 ' makes sure the chunks round PX,PY exist: builds up to MAXN of the missing ones, the nearest first (64 = all)
+3225 PROC CHUNKS(PX,PY,MAXN)
+3226   LOCAL PCX,PCY,N,I,J,CX,CY,SL,D,BD,BCX,BCY,BSL
+3227   PCX=INT(PX/900):PCY=INT(PY/900)
+3228   FOR N=1 TO MAXN
+3229     BD=1000000000
+3230     FOR J=-3 TO 3
+3231       FOR I=-3 TO 3
+3232         CX=PCX+I:CY=PCY+J:SL=FN CKSLOT(CX,CY)
+3233         IF CKX(SL)<>CX OR CKY(SL)<>CY THEN
+3234           D=I*I+J*J
+3235           IF D<BD THEN BD=D:BCX=CX:BCY=CY:BSL=SL
+3236         END IF
+3237       NEXT I
+3238     NEXT J
+3239     IF BD<1000000000 THEN CALL CHUNKBUILD(BCX,BCY,BSL)
+3240   NEXT N
+3241 END PROC
+3242 ' the first world: no chunks yet, then the ones round the start
+3243 PROC BUILDTERRAIN
+3244   LOCAL S
+3245   FOR S=0 TO 63
+3246     CKX(S)=1000000000:CKY(S)=1000000000:CKN(S)=0
+3247   NEXT S
+3248   CKCNT=0:CKTOT=0:CKMAX=0
+3249   CALL CHUNKS(0,0,64)
+3250 END PROC
+3251 ' test mode: what the window round PX,PY looks like (for game1987test.sh): the chunks present and missing, the trees in them and a signature of their trees
+3252 PROC CHUNKSTAT(PX,PY)
+3253   LOCAL PCX,PCY,I,J,CX,CY,SL,N,M,NT,SG
+3254   PCX=INT(PX/900):PCY=INT(PY/900)
+3255   FOR J=-3 TO 3
+3256     FOR I=-3 TO 3
+3257       CX=PCX+I:CY=PCY+J:SL=FN CKSLOT(CX,CY)
+3258       IF CKX(SL)=CX AND CKY(SL)=CY THEN
+3259         N=N+1:NT=NT+CKN(SL):SG=SG+CKN(SL)*(SL+1)
+3260       ELSE
+3261         M=M+1
+3262       END IF
+3263     NEXT I
+3264   NEXT J
+3265   PRINT "chunks have=";N;" missing=";M;" trees=";NT;" sig=";SG;" cx=";PCX;" cy=";PCY
+3266   PRINT "chunktime built=";CKCNT;" ticks=";CKTOT;" max=";CKMAX
+3267 END PROC
 3320 LABEL ROADDATA
 3330 DATA 8, 0,-165, 0,-450, 250,-800, 800,-1000, 1500,-950, 2200,-700, 3000,-800, 3600,-1100
 3340 DATA 9, -40,150, -300,500, -350,1000, -200,1600, 300,2200, 1000,2600, 1800,2500, 2600,2800, 3600,3000
@@ -404,7 +539,7 @@
 3830 ' ------------------------------------------------------------------------------------------------ trees
 3840 ' a tree of the kind K (0 broadleaf, 1 pine, 2 poplar), scaled by S, standing at X,Y: the crown starts above 72 units, so you can walk and ride under it
 3850 PROC TREE(O,X,Y,S,K)
-3860   LOCAL J
+3860   LOCAL J,YW
 3870   M3D OBJECT O,24,235
 3880   LRR(0)=5:LRZ(0)=0:LRV(0)=63:LRR(1)=3.2:LRZ(1)=100:LRV(1)=0
 3890   IF K=2 THEN LRZ(1)=80
@@ -425,7 +560,8 @@
 4040     LRR(3)=14:LRZ(3)=240:LRV(3)=8:LRR(4)=0.6:LRZ(4)=285:LRV(4)=0
 4050     CALL LATHE(O,5,317,S)
 4060   END IF
-4070   M3D OBJPOS O,X,Y,FN HT(X,Y)-2,FN RN(360)
+4070   YW=TYW:IF YW<0 THEN YW=FN RN(360)
+4075   M3D OBJPOS O,X,Y,FN HT(X,Y)-2,YW
 4080 END PROC
 4090 ' may a tree stand here? inside the limit LIM, not in the wheat field or the yard, not on a road, not too near another tree
 4100 FUNC TREEOK(X,Y,LIM)
@@ -467,23 +603,6 @@
 4460     NEXT I
 4470     READ CX,CY,R,N,K
 4480   WEND
-4490   ' the border: a ring of pines and poplars that closes the world
-4500   FOR E=0 TO 3
-4510     FOR P=-3500 TO 3500 STEP 150
-4520       A=FN RN(80)-40
-4530       IF E=0 THEN X=P+A:Y=-3470+FN RN(60)
-4540       IF E=1 THEN X=P+A:Y=3470-FN RN(60)
-4550       IF E=2 THEN X=-3470+FN RN(60):Y=P+A
-4560       IF E=3 THEN X=3470-FN RN(60):Y=P+A
-4570       IF NTR<520 THEN
-4580         IF FN TREEOK(X,Y,3580) THEN
-4590           TRX(NTR)=X:TRY(NTR)=Y:NTR=NTR+1
-4600           T=1+FN RN(2)
-4610           CALL TREE(O,X,Y,1+RND(1)*0.5,T):O=O+1
-4620         END IF
-4630       END IF
-4640     NEXT P
-4650   NEXT E
 4660   ' a big oak and a birch by the house
 4670   CALL TREE(O,-345,-70,1.4,0):O=O+1
 4680   CALL TREE(O,330,190,1.25,0):O=O+1
@@ -1323,7 +1442,7 @@
 11490 END PROC
 11500 ' ------------------------------------------------------------------------------------------------ the game
 11510 PROC NEWGAME
-11520   JX=0:JY=-172:JH=90:JV=0:JZ=FN FLR(JX,JY)
+11520   JX=0:JY=-172:JH=90:JV=0:CALL CHUNKS(JX,JY,64):JZ=FN FLR(JX,JY)
 11530   BX=130:BY=-214:BH=0:BV=0:BS=0:BSA=0:BZ=FN FLR(BX,BY):WA=0:CA=0:ST=1
 11535   ' the bicycle leans against the south fence of the yard, on the outside, east of the gate, the handlebar turned towards the fence (bike state 1, see BIKEFALL)
 11536   BST=1:BLN=0.35:BLS=1:BSTR=50:BRT=0:BYW=0:BSD=0:BDR=-1:BVIS=-1:BLW=0:BLN0=0:BSTR0=0
@@ -1348,7 +1467,7 @@
 11650     DTF=DT0
 11660     CALL READKEYS
 11670     IF KEY("ESC") THEN IN_QUIT=1
-11680     CALL SIM(DT0):CALL AMBIENT
+11680     CALL SIM(DT0):CALL AMBIENT:CALL CHUNKS(JX,JY,1)
 11690     CALL DRAWFRAME
 11700     IF FN IN_SERVICE() THEN
 11710       CALL BIGTEXT(110,"PAUSED",FN CC(0,15),3)
@@ -1426,7 +1545,7 @@
 12410     IF C$="brake" THEN PB=VAL(W$(1))
 12420     IF C$="use" THEN KU=-1
 12430     IF C$="goto" THEN
-12440       JX=VAL(W$(1)):JY=VAL(W$(2)):JH=VAL(W$(3)):JZ=FN FLR(JX,JY):JV=0:M3D THINGPOS 0,JX,JY,JZ:CYW=JH:CMINIT=0
+12440       JX=VAL(W$(1)):JY=VAL(W$(2)):JH=VAL(W$(3)):CALL CHUNKS(JX,JY,64):JZ=FN FLR(JX,JY):JV=0:M3D THINGPOS 0,JX,JY,JZ:CYW=JH:CMINIT=0
 12450     END IF
 12460     IF C$="bike" THEN
 12470       BX=VAL(W$(1)):BY=VAL(W$(2)):BH=VAL(W$(3)):BZ=FN FLR(BX,BY):BV=0:BST=0:BRT=0:BLN=0:BDR=-1:M3D THINGPOS 1,BX,BY,BZ
@@ -1439,13 +1558,14 @@
 12522         KR=0:IF KRA>0 THEN KR=-1
 12523         KB=PB
 12524         CMIN=0:IF PCO<>0 THEN CO=CO+PCO*80/60:CMIN=-1
-12530         CALL SIM(1/60)
+12530         CALL SIM(1/60):CALL CHUNKS(JX,JY,1)
 12535         IF PRG<>0 THEN CALL RIGS
 12540         KU=0
 12550         DTF=1/60
 12560         CALL CAMUPDATE(1/60)
 12570       NEXT I
 12580     END IF
+12585     IF C$="chunks" THEN CALL CHUNKSTAT(JX,JY)
 12590     IF C$="state" THEN
 12600       PRINT "state mode=";MODE;" jx=";INT(JX);" jy=";INT(JY);" jz=";INT(JZ+0.5);" jh=";INT(JH);" jv=";INT(JV);" bst=";BST;" nj=";CNJ;" nh=";CNH;" nb=";CNB;" cmb=";CMB;" hly=";INT(HLY);" hlp=";INT(HLP);" brp=";INT(BRP*100);" bx=";INT(BX);" by=";INT(BY);" bz=";INT(BZ+0.5);" bh=";INT(BH);" bv=";INT(BV);" st=";INT(ST*100)
 12610     END IF
@@ -1492,8 +1612,8 @@
 12957 ' the bicycle's top speed: 30 km/h = 8.33 m/s = 260 units/s at 3.2 cm a unit (the scale of docs/1987.md)
 12958 WBMAX=30/3.6/0.032
 12959 WPED=140:WTIRE=100:WBMIN=40:BELT=FN CC(12,3)
-12961 ' the edge of the world (the only invisible-looking limit; the red tiles of BUILDEDGE show it)
-12962 WLIM=3420
+12961 ' the limit John and the bicycle are kept inside (far away: the world is made of chunks as you go, see CHUNKS); TYW = -1: a tree gets a random yaw
+12962 WLIM=50000:TYW=-1
 12963 ' the bicycle without a rider: it rolls on upright for WFALL seconds, then falls over and slides on its side (deceleration WSLIDE units a second squared); XON / XFR: tilt on
 12964 CGI=0:CGT=0:CMX=0:CMY=0:CMZ=0:CMVX=0:CMVY=0:CMVZ=0:CMYW=0:CMPT=0:CMWY=0:CMWP=0:CMPX=0:CMPY=0:CMPZ=0:CMPX0=0:CMPY0=0:CMPZ0=0:CMTVX=0:CMTVY=0:CMTVZ=0:CMPI=0:CMPK=0:CMDUR=0:CMAZR=0:HLY=0:HLP=0:BRP=0:HQY=0:HQP=0:HKEY=99999:HOX=0:HOY=0:HOZ=0:BJ1=-1:BJ2=0:BJ3=0:BJ4=0:BJ5=0:BJ6=0:BJ7=0:PWA=-99999:PCA=-99999:CNJ=0:CNH=0:CNB=0:HCX=0:HCY=0:HCZ=0:HYS=0:HYC=1:HPS=0:HPC=1:WFALL=3:WSLIDE=120:XON=0:XFR=0:XRS=0:XRC=1:XFS=0:XFC=1:XLF=0
 12960 IF NOT HL THEN CALL W3K_SETUP:CALL W3K_MESH:M3D RESET:CALL MAKETEX
@@ -1502,7 +1622,6 @@
 12990 CALL BUILDTREES
 13000 CALL BUILDHOUSE
 13010 CALL BUILDYARD
-13015 CALL BUILDEDGE
 13020 CALL BUILDWHEAT
 13030 CALL BUILDBIKE
 13040 CALL BUILDDRONES
@@ -1532,26 +1651,6 @@
 13280 LABEL FAILED
 13290 IF NOT HL THEN CALL W3K_DONE
 13300 PRINT "Error: ";ERR$;" in line ";ERL
-13310 ' the edge of the world: a band of red tiles (alternating bright and dark) on the ground just outside the line WLIM that John and the bicycle cannot cross; four passable
-13320 ' objects 330 .. 333, one for each side, the tiles 100 units long and 30 wide, laid 2.5 above the ground
-13330 PROC BUILDEDGE
-13340   LOCAL S,K,O,B,T1,T2,X1,X2,Y1,Y2,C
-13350   FOR S=0 TO 3
-13360     O=330+S:M3D OBJECT O,20,255
-13370     FOR K=0 TO 68
-13380       T1=-3450+K*100:T2=T1+100
-13390       IF S=0 THEN X1=WLIM:X2=WLIM+30:Y1=T1:Y2=T2
-13400       IF S=1 THEN X1=-WLIM-30:X2=-WLIM:Y1=T1:Y2=T2
-13410       IF S=2 THEN X1=T1:X2=T2:Y1=WLIM:Y2=WLIM+30
-13420       IF S=3 THEN X1=T1:X2=T2:Y1=-WLIM-30:Y2=-WLIM
-13430       C=FN CC(1,13):IF K MOD 2=1 THEN C=FN CC(1,7)
-13440       B=M3D("VERTS",O)
-13450       M3D VERTEX O,X1,Y1,FN HT(X1,Y1)+2.5,0,0:M3D VERTEX O,X2,Y1,FN HT(X2,Y1)+2.5,0,0
-13460       M3D VERTEX O,X2,Y2,FN HT(X2,Y2)+2.5,0,0:M3D VERTEX O,X1,Y2,FN HT(X1,Y2)+2.5,0,0
-13470       M3D QUAD O,B,B+1,B+2,B+3,C
-13480     NEXT K
-13490   NEXT S
-13500 END PROC
 13510 ' ------------------------------------------------------------------------------------------------ John's head and torso
 13520 ' a frustum (a box that is smaller at one end): the bottom z = Z1 with the half sizes F1X, F1Y round the centre (FC1X, FC1Y), the top z = Z2 with F2X, F2Y round (FC2X, FC2Y)
 13530 PROC FRUST(O,Z1,Z2,TX)

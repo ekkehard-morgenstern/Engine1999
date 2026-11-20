@@ -3366,6 +3366,7 @@ bool comp_eat_gfxquerycall( compiler_t* comp, node_t** pnode ) {
     // gfx-query-call := ( TOK_RGB | TOK_POINT | TOK_TILE ) TOK_LPAREN num-expr { TOK_COMMA num-expr } TOK_RPAREN |
     //                   ( TOK_GFX | TOK_TXT | TOK_SPRITE | TOK_MOUSE | TOK_XFUNC(UI) | TOK_XFUNC(W3D) ) TOK_LPAREN TOK_STRLIT { TOK_COMMA num-expr } TOK_RPAREN .
     uint8_t tok = comp->currtok;
+    uint8_t xid = comp->currext;                            // (the extension word; currext changes with the next token)
     const char* group = "";
     switch ( tok ) {
         case TOK_RGB: case TOK_POINT: case TOK_TILE: break;
@@ -3373,7 +3374,10 @@ bool comp_eat_gfxquerycall( compiler_t* comp, node_t** pnode ) {
         case TOK_TXT:       group = "TXT"; break;
         case TOK_SPRITE:    group = "SPRITE"; break;
         case TOK_MOUSE:     group = "MOUSE"; break;
-        case TOK_XFUNC:                                     // UI("EVENT"), W3D("X")
+        case TOK_XFUNC:                                     // UI("EVENT"), W3D("X"); HASH(...), NOISE(...), FBM(...) take numbers only
+            if ( comp->currext == XF_HASH || comp->currext == XF_NOISE || comp->currext == XF_FBM ) {
+                break;
+            }
             if ( comp->currext != XF_UI && comp->currext != XF_W3D && comp->currext != XF_M3D ) {
                 return false;
             }
@@ -3391,7 +3395,11 @@ bool comp_eat_gfxquerycall( compiler_t* comp, node_t** pnode ) {
     const gfxquery_t* q = 0;
     bool needcomma = false;
     if ( group[0] == '\0' ) {
-        q = gfxops_findquery( "", keyword_name( tok ) );
+        q = gfxops_findquery( "", tok == TOK_XFUNC ? xkeyword_name( xid ) : keyword_name( tok ) );
+        if ( q == 0 ) {
+            comp_error( comp, "Unknown function" );
+            return false;
+        }
     } else {
         if ( comp->currtok != TOK_STRLIT ) {
             comp_error( comp, "String literal expected (the name of the value)" );

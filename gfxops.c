@@ -239,6 +239,9 @@ static const gfxcmd_t cmds[] = {
 static const gfxquery_t queries[] = {
     { "",       "RGB",      GFXQ_RGB,       3, 4 },
     { "",       "POINT",    GFXQ_POINT,     2, 2 },
+    { "",       "HASH",     GFXQ_HASH,      1, 4 },
+    { "",       "NOISE",    GFXQ_NOISE,     2, 4 },
+    { "",       "FBM",      GFXQ_FBM,       4, 6 },
     { "",       "TILE",     GFXQ_TILECELL,  2, 2 },
     { "GFX",    "FRAME",    GFXQ_FRAME,     0, 0 },
     { "GFX",    "LAYER",    GFXQ_LAYER,     1, 1 },

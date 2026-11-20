@@ -2,7 +2,7 @@
 # Automated test of the demo game demos/1987.bas ("1987": John, his house, the wheat field and his bicycle), run headless in the console host (the 3D mesh
 # renderer's logic works there without a picture) with a play-back file:
 #   G1987_HEADLESS=1 (no graphics), G1987_PLAY=file (commands: f v, t v, run v, brake v, use, wait seconds, goto x y heading, bike x y heading, state, cam,
-#   ray x y z yaw pitch, quit; "state" and "cam" print key=value lines that this script reads).
+#   ray x y z yaw pitch, chunks, quit; "state", "cam" and "chunks" print key=value lines that this script reads).
 # It checks the walk (through the open door, against the house wall), getting on and off the bicycle, pedalling from a standstill, the sprint and the stamina,
 # rolling on, braking and reversing, the turning radius (a bicycle does not turn on the spot), a crash into a fence, the camera, a ray against the house, and that
 # the world and the game are the same in every run. Exit status = number of failures. HOME is a temporary folder.
@@ -185,6 +185,7 @@ state
 goto 3300 1500 0
 wait 4
 state
+chunks
 bike 600 -500 0
 goto 560 -540 0
 wait 2
@@ -261,6 +262,11 @@ shot drones
 cam
 ray 0 -300 20 90 0
 ray 500 -300 20 90 10
+goto 20000 -15000 0
+chunks
+goto -9000 7000 0
+wait 2
+chunks
 quit
 PLAY
 run
@@ -329,10 +335,21 @@ expect "bicycle: half stick gives a target between the minimum and the top speed
 expect "bicycle: the trigger alone, all the way, gives the top speed" "$(val state 31 bv)" 245 261
 expect "bicycle: the sprint cost stamina" "$(val state 31 st)" 0 99
 # 11f. no invisible walls: here a barrel of 301 times its size once stood (a ring round the yard, 2400 .. 3300 units out); walking on open ground goes on;
-#      the edge of the world at 3420 stops John dead (the red tiles lie just outside it)
+#      there is no edge of the world any more (since the chunks, roadmap item 95): walking east goes on past the old line at 3420, and the chunks round John are built as he goes
 expect "open ground: no wall at (-2564, 644)" "$(val state 32 jx)" -2480 -2380
-expect "edge: stopped at the line" "$(val state 33 jx)" 3419 3421
-expect "edge: stopped dead" "$(val state 33 jv)" 0 0
+expect "no edge: John walks on past the old line at 3420" "$(val state 33 jx)" 3430 4000
+expect "no edge: John is still moving" "$(val state 33 jv)" 1 200
+expect "chunks: the 7 x 7 window round John is complete after the walk" "$(val chunks 1 have)" 49 49
+expect "chunks: none missing after the walk" "$(val chunks 1 missing)" 0 0
+expect "chunks: trees grow in the forests outside the hand-made area" "$(val chunks 1 trees)" 1 1176
+# 11f2. a jump far away (a goto builds all missing chunks at once): the window is complete there too, the number of trees stays within the 24 a chunk may carry, and the same
+#       place built again gives the same chunks (the chunks line is part of the two-run comparison at the end)
+expect "chunks: far jump (20000, -15000): window complete" "$(val chunks 2 have)" 49 49
+expect "chunks: far jump: none missing" "$(val chunks 2 missing)" 0 0
+expect "chunks: far jump: trees within the budget" "$(val chunks 2 trees)" 0 1176
+expect "chunks: second far jump (-9000, 7000) and 2 s: window complete" "$(val chunks 3 have)" 49 49
+expect "chunks: second far jump: some forest" "$(val chunks 3 trees)" 1 1176
+expect "chunks: a different place has other chunks than the first" "$(awk -v a="$(val chunks 2 sig)" -v b="$(val chunks 3 sig)" 'BEGIN { print (a != b) ? 1 : 0 }')" 1 1
 # 11g. a bicycle cannot stand by itself: at the start it leans against the yard's fence (bst 1) and E picks it up (riding, upright); a riderless one rolls on for 3 s and then falls over
 #      (bst 3), slides on its side and turns (bst 4) and stops (bst 5, lying); a lying one is picked up like before; E near a falling or sliding one does nothing
 expect "start: the bicycle leans against the fence" "$(val state 1 bst)" 1 1
@@ -374,7 +391,7 @@ expect "ray over open ground" "$(val ray 2 kind)" 0 1
 # 13. the game ran without an error
 if grep -q '^Error' $T/out; then echo "FAILED: the game stopped with: $(grep '^Error' $T/out)"; fail=$((fail+1)); fi
 # 14. the world and the game are the same every run
-first=$(grep -E '^(state|cam|ray)' $T/out | md5sum); run; second=$(grep -E '^(state|cam|ray)' $T/out | md5sum)
+first=$(grep -E '^(state|cam|ray|chunks)' $T/out | md5sum); run; second=$(grep -E '^(state|cam|ray|chunks)' $T/out | md5sum)
 [ "$first" = "$second" ] || { echo "FAILED: two runs differ"; fail=$((fail+1)); }
 if [ $fail -ne 0 ]; then echo "$fail failure(s)"; fi
 exit $fail

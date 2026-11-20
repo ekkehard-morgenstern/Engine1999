@@ -38,6 +38,7 @@
 #include "gfxops.h"
 #include "mml.h"
 #include "joy.h"
+#include "noise.h"
 #include "instset.h"
 
 // -- helpers ---------------------------------------------------------------
@@ -3557,11 +3558,29 @@ static bool vm_gfx_query( vm_t* vm, uint16_t q ) {
         return vm_error( vm, "Internal error (bad graphics query)" );
     }
     double a[GFX_MAXARGS];
-    int na = q == GFXQ_RGB ? 4 : qd->maxargs;
+    bool isnoise = q == GFXQ_HASH || q == GFXQ_NOISE || q == GFXQ_FBM;
+    int na = q == GFXQ_RGB ? 4 : isnoise ? qd->maxargs + 1 : qd->maxargs;      // HASH / NOISE / FBM: the count of the given arguments is the last one
     for ( int i = na - 1; i >= 0; --i ) {
         if ( !vm_dpop_num( vm, &a[i] ) ) {
             return false;
         }
+    }
+    if ( isnoise ) {
+        for ( int i=0; i < na; ++i ) {
+            if ( !( a[i] > -4.4e9 && a[i] < 4.4e9 ) ) {
+                return vm_error( vm, "Illegal argument" );
+            }
+        }
+        if ( q == GFXQ_HASH ) {
+            return vm_dpush_num( vm, nz_hash( (int64_t) floor( a[0] ), (int64_t) floor( a[1] ), (int64_t) floor( a[2] ), (int64_t) floor( a[3] ) ) );
+        }
+        if ( q == GFXQ_NOISE ) {
+            return vm_dpush_num( vm, nz_noise( (uint64_t)(int64_t) floor( a[0] ), (int) a[4] - 1, a[1], a[2], a[3] ) );
+        }
+        if ( !( a[3] >= 1.0 && a[3] <= (double) NZ_MAXOCTAVES && a[4] >= 0.0 && a[4] <= 4.0 && a[5] >= 1.0 && a[5] <= 16.0 ) ) {
+            return vm_error( vm, "Illegal argument" );
+        }
+        return vm_dpush_num( vm, nz_fbm( (uint64_t)(int64_t) floor( a[0] ), a[1], a[2], (int) a[3], a[4], a[5] ) );
     }
     if ( q == GFXQ_RGB ) {
         for ( int i=0; i < 4; ++i ) {
