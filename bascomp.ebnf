@@ -574,8 +574,9 @@ ui-geometry := num-expr TOK_COMMA num-expr TOK_COMMA num-expr TOK_COMMA num-expr
 -- Functions: M3D("X"|"Y"|"Z"|"EYE"|"YAW"|"PITCH"|"LIFT"|"HIT"|"FLOORZ"|"SHOTKIND"|"SHOTOBJ"|"SHOTDIST"|"SHOTX"|"SHOTY"|"SHOTZ"|"DRAWN"|"RENDERER"|"HWAVAIL"), ("FLOORAT"|"CEILAT"|"ZONE"|"ZONETAG",x,y,z), ("SHOOT"|"USE"|"SEES"|"TON"|"TX"|"TY"|"TZ"|"DIST"|"BEARING"|"TEXW"|"TEXH"|"OBJON"|"OBJX"|"OBJY"|"OBJZ"|"OBJYAW"|"VERTS"|"TRIS",n), ("GROUND",x,y).
 m3d-stmt := TOK_XFUNC(M3D) ( RESET | CLEAR | COLORMAP | RENDER | SOFTWARE | HARDWARE | TEXTURE num-expr TOK_COMMA str-expr |
                              ( OBJECT | VERTEX | FACE | QUAD | BOX | OBJPOS | OBJSHOW | OBJLIGHT | OBJFLAGS | THING | THINGPOS | THINGTEX | THINGOFF | THINGLIGHT | THINGTRANS |
-                               CAMERA | TURN | PLAYER | MOVE | LIFT | LAMP | VIEW | FOG | FAR | SKY | THINGMOVE | ZONE | GROUND | GROUNDFLAT ) num-expr { TOK_COMMA num-expr } |
+                               CAMERA | TURN | PLAYER | MOVE | LIFT | LAMP | VIEW | FOG | FAR | SKY | THINGMOVE | ZONE | GROUND | GROUNDFLAT | INSTANCE | OBJSCALE | OBJFREE ) num-expr { TOK_COMMA num-expr } |
                              TERRAIN num-expr { TOK_COMMA num-expr } [ TOK_COMMA str-expr { TOK_COMMA num-expr } ] | WORLD ) .
+-- M3D INSTANCE o,src[,x,y,z[,yaw[,scale]]] makes object o share the mesh of object src (copy on write), M3D OBJSCALE o,scale sets a size, M3D OBJFREE a,b deletes objects a .. b.
 -- M3D GROUND seed,scale,amp,octaves[,base[,gain[,lacunarity]]] defines the height of the ground (fractal noise, in C), M3D GROUNDFLAT n,cx,cy,rx,ry,margin flattens it round a box,
 -- M3D TERRAIN o,x0,y0,nx,ny,cell,tex[,cells$[,skirt[,uvscale]]] fills object o with a grid of it (cells$: a character a cell, picture tex + its code), M3D("GROUND",x,y) is its height.
 -- The 3D sector renderer (docs/3d-subsystem.md; W3D is an extension word): a world of sectors (floor and ceiling height, flats, light) bounded by walls, some of them portals

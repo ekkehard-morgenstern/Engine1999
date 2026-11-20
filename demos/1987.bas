@@ -20,11 +20,12 @@
 160 LOAD LIBRARY "input"
 170 LOAD LIBRARY "text"
 180 LOAD LIBRARY "prefs3d"
+195 LOAD LIBRARY "chunks"
 190 LOAD LIBRARY "music3d":LOAD LIBRARY "banner3d":IF ENV$("G1987_HEADLESS")="" THEN CALL B3_M3D("1987")
 200 BREAK OFF
 210 ON ERROR GOTO FAILED
 220 HL=0:IF ENV$("G1987_HEADLESS")<>"" THEN HL=-1
-230 DIM CKX(64),CKY(64),CKN(64),CKRX(9),CKRY(9),CKRT(9),CTX(24),CTY(24),GNS(8),GGX(160),FLJ$(81),TIH(33),RPX(300),RPY(300),RPF(300),CPX(40),CPY(40),SMX(120),SMY(120),PLX(40),PLY(40),TRX(520),TRY(520),LRR(8),LRZ(8),LRV(8),W$(8),GPX(2),GPZ(2),GPS(2),DWX(40),DWY(40),DRX(5),DRY(5),DRZ(5),DRH(5),DRT(5),DRA(5)
+230 DIM CKN(64),CKRX(9),CKRY(9),CKRT(9),CTX(24),CTY(24),GNS(8),GGX(160),FLJ$(81),TIH(33),RPX(300),RPY(300),RPF(300),CPX(40),CPY(40),SMX(120),SMY(120),PLX(40),PLY(40),TRX(520),TRY(520),LRR(8),LRZ(8),LRV(8),W$(8),GPX(2),GPZ(2),GPS(2),DWX(40),DWY(40),DRX(5),DRY(5),DRZ(5),DRH(5),DRT(5),DRA(5)
 240 GOTO MAIN
 250 ' ------------------------------------------------------------------------------------------------ small helpers
 260 FUNC RN(M)
@@ -324,10 +325,6 @@
 3103 ' fixed block of object numbers by its slot, (cx mod 8) + 8 (cy mod 8): the ground 100 + slot, up to 24 trees 2000 + 24 slot + n; building a chunk overwrites the one that was
 3104 ' in the slot, nothing is allocated or freed. The chunks cx, cy = -4 .. 3 are the hand-made area (the house, the roads, the groves, the field); the rest is made by the rules
 3105 ' below. One chunk is built per frame (the nearest missing one first); a jump (NEWGAME, goto) builds all that are missing at once.
-3117 ' the slot of a chunk (0 .. 63)
-3118 FUNC CKSLOT(CX,CY)
-3119   RETURN (CX-INT(CX/8)*8)+(CY-INT(CY/8)*8)*8
-3120 END FUNC
 3121 ' the kind of ground at X,Y: the kind of the nearest of the nine feature points CKRX / CKRY / CKRT (set by CHREGIONS for the chunk): 0 plain, 1 meadow, 2 field, 3 forest
 3122 FUNC GKIND(X,Y)
 3123   LOCAL K,B,D,BD
@@ -367,10 +364,7 @@
 3157 END PROC
 3158 ' the unused tree numbers N .. 23 of a slot become empty objects
 3159 PROC CHCLEAR(SL,N)
-3160   LOCAL J
-3161   FOR J=N TO 23
-3162     M3D OBJECT 2000+SL*24+J,0,235
-3163   NEXT J
+3160   IF N<24 THEN M3D OBJFREE 2000+SL*24+N,2000+SL*24+23
 3164   CKN(SL)=N
 3165 END PROC
 3166 ' the trees of a chunk: up to 24 at hashed places in forest, at least 70 units apart (CHREGIONS was called)
@@ -403,74 +397,72 @@
 3193   TYW=-1
 3194   CALL CHCLEAR(SL,N)
 3195 END PROC
-3196 ' builds the chunk cx,cy into the slot SL: the ground (10 x 10 vertices, 9 x 9 quads) and the trees
-3197 PROC CHUNKBUILD(CX,CY,SL)
-3198   LOCAL O,I,J,X0,Y0,T0,C$
+3196 ' builds the chunk cx,cy into the slot SL at the level LV (0 fine, 1 coarse; NEWC: it is a new chunk, not only a new level): the ground and, for a new chunk, the trees
+3197 PROC CHUNKBUILD(CX,CY,SL,LV,NEWC)
+3198   LOCAL O,I,J,X0,Y0,T0,C$,N,ST
 3199   T0=TI
 3200   CALL CHREGIONS(CX,CY)
 3201   O=100+SL
 3202   M3D OBJECT O,0,235
 3203   X0=CX*900:Y0=CY*900
-3204   ' the cells' pictures as one string (picture 301 + the code of the character), the grid itself is made in C from the ground function (M3D TERRAIN)
-3205   C$=""
-3206   FOR J=0 TO 8
-3207     FOR I=0 TO 8
-3208       C$=C$+CHR$(FN OCELL(X0+I*100+50,Y0+J*100+50)-301)
-3209     NEXT I
-3210   NEXT J
-3211   M3D TERRAIN O,X0,Y0,9,9,100,301,C$
-3216   IF CX<-4 OR CX>3 OR CY<-4 OR CY>3 THEN
-3217     CALL CHTREES(CX,CY,SL)
-3218   ELSE
-3219     CALL CHCLEAR(SL,0)
-3220   END IF
-3221   CKX(SL)=CX:CKY(SL)=CY
+3204   ' the ground: level 0 is 9 x 9 cells of 100 units, farther away (levels 1, 2) 3 x 3 cells of 300; the cells' pictures as one string (picture 301 + the code of the character);
+3205   ' the grid itself is made in C from the ground function (M3D TERRAIN), with a skirt of 24 under the edges that hides the cracks between the two grid sizes
+3206   N=9:ST=100:IF LV>0 THEN N=3:ST=300
+3207   C$=""
+3208   FOR J=0 TO N-1
+3209     FOR I=0 TO N-1
+3210       C$=C$+CHR$(FN OCELL(X0+I*ST+ST/2,Y0+J*ST+ST/2)-301)
+3211     NEXT I
+3212   NEXT J
+3213   M3D TERRAIN O,X0,Y0,N,N,ST,301,C$,24
+3214   ' the trees only when the chunk is new (a change of the level leaves them)
+3215   IF NEWC THEN
+3216     IF CX<-4 OR CX>3 OR CY<-4 OR CY>3 THEN
+3217       CALL CHTREES(CX,CY,SL)
+3218     ELSE
+3219       CALL CHCLEAR(SL,0)
+3220     END IF
+3221   END IF
 3222   T0=TI-T0:CKCNT=CKCNT+1:CKTOT=CKTOT+T0:IF T0>CKMAX THEN CKMAX=T0
 3223 END PROC
-3224 ' makes sure the chunks round PX,PY exist: builds up to MAXN of the missing ones, the nearest first (64 = all)
+3224 ' makes sure the chunks round PX,PY exist: builds up to MAXN of the missing ones (or those whose level changed), the nearest first (64 = all); chunks.lib keeps the book
 3225 PROC CHUNKS(PX,PY,MAXN)
-3226   LOCAL PCX,PCY,N,I,J,CX,CY,SL,D,BD,BCX,BCY,BSL
-3227   PCX=INT(PX/900):PCY=INT(PY/900)
+3226   LOCAL N
+3227   CALL CK_UPDATE(PX,PY)
 3228   FOR N=1 TO MAXN
-3229     BD=1000000000
-3230     FOR J=-3 TO 3
-3231       FOR I=-3 TO 3
-3232         CX=PCX+I:CY=PCY+J:SL=FN CKSLOT(CX,CY)
-3233         IF CKX(SL)<>CX OR CKY(SL)<>CY THEN
-3234           D=I*I+J*J
-3235           IF D<BD THEN BD=D:BCX=CX:BCY=CY:BSL=SL
-3236         END IF
-3237       NEXT I
-3238     NEXT J
-3239     IF BD<1000000000 THEN CALL CHUNKBUILD(BCX,BCY,BSL)
-3240   NEXT N
-3241 END PROC
-3242 ' the first world: no chunks yet, then the ones round the start
-3243 PROC BUILDTERRAIN
-3244   LOCAL S
-3245   FOR S=0 TO 63
-3246     CKX(S)=1000000000:CKY(S)=1000000000:CKN(S)=0
-3247   NEXT S
-3248   CKCNT=0:CKTOT=0:CKMAX=0
-3249   CALL CHUNKS(0,0,64)
-3250 END PROC
-3251 ' test mode: what the window round PX,PY looks like (for game1987test.sh): the chunks present and missing, the trees in them and a signature of their trees
-3252 PROC CHUNKSTAT(PX,PY)
-3253   LOCAL PCX,PCY,I,J,CX,CY,SL,N,M,NT,SG
-3254   PCX=INT(PX/900):PCY=INT(PY/900)
-3255   FOR J=-3 TO 3
-3256     FOR I=-3 TO 3
-3257       CX=PCX+I:CY=PCY+J:SL=FN CKSLOT(CX,CY)
-3258       IF CKX(SL)=CX AND CKY(SL)=CY THEN
-3259         N=N+1:NT=NT+CKN(SL):SG=SG+CKN(SL)*(SL+1)
-3260       ELSE
-3261         M=M+1
-3262       END IF
-3263     NEXT I
-3264   NEXT J
-3265   PRINT "chunks have=";N;" missing=";M;" trees=";NT;" sig=";SG;" cx=";PCX;" cy=";PCY
-3266   PRINT "chunktime built=";CKCNT;" ticks=";CKTOT;" max=";CKMAX
-3267 END PROC
+3229     IF NOT FN CK_NEXT() THEN EXIT
+3230     CALL CHUNKBUILD(FN CK_CX(),FN CK_CY(),FN CK_CSLOT(),FN CK_CLEVEL(),FN CK_CNEW())
+3231     CALL CK_DONE
+3232   NEXT N
+3233 END PROC
+3234 ' the first world: the tree kinds, no chunks yet (7 x 7 chunks of 900 units; up to 1 chunk away level 0, farther away level 1), then the ones round the start
+3235 PROC BUILDTERRAIN
+3236   LOCAL S
+3237   CALL CK_SETUP(900,3,1,3)
+3238   FOR S=0 TO 63
+3239     CKN(S)=0
+3240   NEXT S
+3241   CKCNT=0:CKTOT=0:CKMAX=0:CALL TREEPROTOS
+3242   CALL CHUNKS(0,0,64)
+3243 END PROC
+3244 ' test mode: what the window round PX,PY looks like (for game1987test.sh): the chunks present, missing or of the wrong level, those of level 0, the trees in them and a signature
+3245 PROC CHUNKSTAT(PX,PY)
+3246   LOCAL PCX,PCY,I,J,CX,CY,SL,N,M,NT,SG,NF
+3247   PCX=INT(PX/900):PCY=INT(PY/900)
+3248   FOR J=-3 TO 3
+3249     FOR I=-3 TO 3
+3250       CX=PCX+I:CY=PCY+J:SL=FN CK_SLOT(CX,CY)
+3251       IF FN CK_HAS(CX,CY) THEN
+3252         N=N+1:NT=NT+CKN(SL):SG=SG+CKN(SL)*(SL+1)
+3253         IF FN CK_LEVELAT(CX,CY)=0 THEN NF=NF+1
+3254       ELSE
+3255         M=M+1
+3256       END IF
+3257     NEXT I
+3258   NEXT J
+3259   PRINT "chunks have=";N;" missing=";M;" trees=";NT;" sig=";SG;" cx=";PCX;" cy=";PCY;" fine=";NF;" stale=";FN CK_STALE()
+3260   PRINT "chunktime built=";CKCNT;" ticks=";CKTOT;" max=";CKMAX
+3261 END PROC
 3270 ' the ground function of the engine: hills of fractal noise (about 900 units across, 4 octaves, up to about 30 high), flattened round the house and over the wheat field
 3271 PROC SETGROUND
 3272   M3D GROUND 1987,900,22,4,8
@@ -529,9 +521,11 @@
 3810   WEND
 3820 END PROC
 3830 ' ------------------------------------------------------------------------------------------------ trees
-3840 ' a tree of the kind K (0 broadleaf, 1 pine, 2 poplar), scaled by S, standing at X,Y: the crown starts above 72 units, so you can walk and ride under it
-3850 PROC TREE(O,X,Y,S,K)
-3860   LOCAL J,YW
+3840 ' the three kinds of tree (K: 0 broadleaf, 1 pine, 2 poplar) are built once, hidden, as the objects 340 .. 342; TREE makes object O an instance of one (it shares the mesh, M3D INSTANCE)
+3841 ' scaled by S, standing at X,Y: the crown starts above 72 units, so you can walk and ride under it
+3850 PROC TREEPROTO(K)
+3860   LOCAL J,O,S
+3865   O=340+K:S=1
 3870   M3D OBJECT O,24,235
 3880   LRR(0)=5:LRZ(0)=0:LRV(0)=63:LRR(1)=3.2:LRZ(1)=100:LRV(1)=0
 3890   IF K=2 THEN LRZ(1)=80
@@ -552,9 +546,17 @@
 4040     LRR(3)=14:LRZ(3)=240:LRV(3)=8:LRR(4)=0.6:LRZ(4)=285:LRV(4)=0
 4050     CALL LATHE(O,5,317,S)
 4060   END IF
-4070   YW=TYW:IF YW<0 THEN YW=FN RN(360)
-4075   M3D OBJPOS O,X,Y,FN HT(X,Y)-2,YW
+4070   M3D OBJSHOW O,0
 4080 END PROC
+4081 PROC TREE(O,X,Y,S,K)
+4082   LOCAL YW
+4083   YW=TYW:IF YW<0 THEN YW=FN RN(360)
+4084   M3D INSTANCE O,340+K,X,Y,FN HT(X,Y)-2,YW,S
+4085 END PROC
+4086 PROC TREEPROTOS
+4087   LOCAL K
+4088   FOR K=0 TO 2:CALL TREEPROTO(K):NEXT K
+4089 END PROC
 4090 ' may a tree stand here? inside the limit LIM, not in the wheat field or the yard, not on a road, not too near another tree
 4100 FUNC TREEOK(X,Y,LIM)
 4110   LOCAL I,DX,DY

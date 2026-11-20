@@ -76,8 +76,35 @@ static uint32_t next_gen( void ) {
 }
 
 static void free_obj( obj_t* o ) {
-    free( o->v ); free( o->t ); free( o->wv );
+    if ( o->mref == 0 || --*o->mref <= 0 ) {                // the last one who holds the mesh frees it
+        free( o->v ); free( o->t ); free( o->mref );
+    }
+    free( o->wv );
     memset( o, 0, sizeof(*o) );
+}
+
+// before an object's mesh is changed: if it is shared with other objects it gets a private copy (copy on write); false when out of memory
+static bool obj_unshare( obj_t* o ) {
+    if ( o->mref == 0 ) {
+        return true;
+    }
+    if ( *o->mref > 1 ) {
+        mv_t* v = o->nv > 0 ? (mv_t*) malloc( sizeof(mv_t) * (size_t) o->nv ) : 0;
+        mt_t* t = o->nt > 0 ? (mt_t*) malloc( sizeof(mt_t) * (size_t) o->nt ) : 0;
+        if ( ( o->nv > 0 && v == 0 ) || ( o->nt > 0 && t == 0 ) ) {
+            free( v ); free( t );
+            return false;
+        }
+        if ( v != 0 ) { memcpy( v, o->v, sizeof(mv_t) * (size_t) o->nv ); }
+        if ( t != 0 ) { memcpy( t, o->t, sizeof(mt_t) * (size_t) o->nt ); }
+        --*o->mref;
+        o->v = v; o->t = t; o->capv = o->nv; o->capt = o->nt;
+    } else {
+        free( o->mref );                                    // the only holder left: the mesh is its own again (its capacities were not kept: 0 makes the next add grow it)
+        o->capv = o->nv; o->capt = o->nt;
+    }
+    o->mref = 0;
+    return true;
 }
 
 static void clear_world( m3d_t* m ) {
@@ -227,6 +254,9 @@ static bool obj_valid( const m3d_t* m, int o ) {
 }
 
 static bool obj_addv( obj_t* o, double x, double y, double z, double u, double v ) {
+    if ( o->mref != 0 && !obj_unshare( o ) ) {
+        return false;
+    }
     if ( o->nv >= o->capv ) {
         int nc = o->capv == 0 ? 16 : o->capv * 2;
         mv_t* n = (mv_t*) realloc( o->v, sizeof(mv_t) * (size_t) nc );
@@ -255,6 +285,9 @@ static void auto_uv( double nx, double ny, double nz, double x, double y, double
 }
 
 static bool obj_addt( obj_t* o, int a, int b, int c, int tex ) {
+    if ( o->mref != 0 && !obj_unshare( o ) ) {
+        return false;
+    }
     if ( o->nt >= o->capt ) {
         int nc = o->capt == 0 ? 16 : o->capt * 2;
         mt_t* n = (mt_t*) realloc( o->t, sizeof(mt_t) * (size_t) nc );
@@ -342,10 +375,12 @@ void m3d_obj_update( obj_t* o ) {
         return;
     }
     o->wv = wv;
+    const double s = o->scale > 0.0 ? o->scale : 1.0;
     o->minx = o->miny = o->minz = 1.0e30; o->maxx = o->maxy = o->maxz = -1.0e30;
     for ( int i=0; i < o->nv; ++i ) {
         const mv_t* p = &o->v[i];
-        double x = o->px + o->cs * p->x - o->sn * p->y, y = o->py + o->sn * p->x + o->cs * p->y, z = o->pz + p->z;
+        double px = p->x * s, py = p->y * s;
+        double x = o->px + o->cs * px - o->sn * py, y = o->py + o->sn * px + o->cs * py, z = o->pz + p->z * s;
         wv[i].x = x; wv[i].y = y; wv[i].z = z;
         if ( x < o->minx ) { o->minx = x; }
         if ( x > o->maxx ) { o->maxx = x; }
@@ -727,7 +762,7 @@ bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t sl
             if ( keep ) { px = o->px; py = o->py; pz = o->pz; yaw = o->yaw; }
             free_obj( o );
             if ( i1 >= m->top ) { m->top = i1 + 1; }
-            o->used = true; o->shown = true; o->dirty = true; o->flags = fl; o->light = li; o->gen = next_gen();
+            o->used = true; o->shown = true; o->dirty = true; o->flags = fl; o->light = li; o->gen = next_gen(); o->scale = 1.0;
             o->px = px; o->py = py; o->pz = pz; o->yaw = yaw; o->cs = cos( yaw * DEG2RAD ); o->sn = sin( yaw * DEG2RAD );
             return true;
         }
@@ -778,6 +813,65 @@ bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t sl
             if ( !obj_terrain( m, &m->objs[i1], a[1], a[2], nx, ny, a[5], tex, slen != 0 ? s : 0, skirt, uvs ) ) {
                 *err = "Out of memory";
                 return false;
+            }
+            return true;
+        }
+        case GFXOP_M3DINSTANCE: {
+            int src;
+            double sc = NONE_VAL( a[6] ) ? 1.0 : a[6];
+            if ( !whole( a[0], 0, M3D_MAXOBJECTS - 1, &i1 ) || !whole( a[1], 0, M3D_MAXOBJECTS - 1, &src ) || !( sc > 0.0 && sc < 1.0e6 ) ) {
+                return false;
+            }
+            if ( !obj_valid( m, src ) ) {
+                *err = "Object not defined";
+                return false;
+            }
+            if ( i1 == src ) {
+                *err = "An object cannot be its own instance";
+                return false;
+            }
+            obj_t* s = &m->objs[src];
+            if ( s->mref == 0 && s->nv + s->nt > 0 ) {
+                s->mref = (int*) malloc( sizeof(int) );
+                if ( s->mref == 0 ) {
+                    *err = "Out of memory";
+                    return false;
+                }
+                *s->mref = 1;
+            }
+            obj_t* o = &m->objs[i1];
+            free_obj( o );
+            if ( i1 >= m->top ) { m->top = i1 + 1; }
+            o->used = true; o->shown = true; o->dirty = true; o->flags = s->flags; o->light = s->light; o->gen = next_gen(); o->scale = sc;
+            o->v = s->v; o->nv = s->nv; o->t = s->t; o->nt = s->nt; o->capv = s->nv; o->capt = s->nt;
+            if ( s->mref != 0 ) {
+                o->mref = s->mref;
+                ++*o->mref;
+            }
+            o->px = NONE_VAL( a[2] ) ? 0.0 : a[2]; o->py = NONE_VAL( a[3] ) ? 0.0 : a[3]; o->pz = NONE_VAL( a[4] ) ? 0.0 : a[4];
+            o->yaw = NONE_VAL( a[5] ) ? 0.0 : a[5]; o->cs = cos( o->yaw * DEG2RAD ); o->sn = sin( o->yaw * DEG2RAD );
+            return true;
+        }
+        case GFXOP_M3DOBJSCALE: {
+            if ( !whole( a[0], 0, M3D_MAXOBJECTS - 1, &i1 ) || !obj_valid( m, i1 ) ) {
+                *err = "Object not defined";
+                return false;
+            }
+            if ( !( a[1] > 0.0 && a[1] < 1.0e6 ) ) {
+                return false;
+            }
+            m->objs[i1].scale = a[1]; m->objs[i1].dirty = true; m->objs[i1].gen = next_gen();
+            return true;
+        }
+        case GFXOP_M3DOBJFREE: {
+            if ( !whole( a[0], 0, M3D_MAXOBJECTS - 1, &i1 ) || !whole( a[1], 0, M3D_MAXOBJECTS - 1, &i2 ) || i2 < i1 ) {
+                return false;
+            }
+            for ( int k = i1; k <= i2; ++k ) {
+                free_obj( &m->objs[k] );
+            }
+            while ( m->top > 0 && !m->objs[m->top - 1].used ) {
+                --m->top;
             }
             return true;
         }

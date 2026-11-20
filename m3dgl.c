@@ -56,7 +56,7 @@ typedef struct {
 
 typedef struct {
     GLint eye, r, up, fw, proj, tex, pal, fog, far_, masked, alpha, uselamps, lampp, lampa, lampd;
-    GLint org, rot, texsz, light;
+    GLint org, rot, texsz, light, scale;
     GLint apos, auv;
 } prog_t;
 
@@ -106,11 +106,11 @@ static const char* const vs_obj =
     "#version 120\n"
     "uniform vec3 u_eye, u_r, u_up, u_fw;\n"
     "uniform vec4 u_proj;\n"
-    "uniform vec3 u_org; uniform vec2 u_rot, u_texsz; uniform float u_light;\n"      // the object's place, cos / sin of its heading, the picture's size in texels, its light
+    "uniform vec3 u_org; uniform vec2 u_rot, u_texsz; uniform float u_light, u_scale;\n"      // the object's place, cos / sin of its heading, the picture's size in texels, its light, its size
     "attribute vec3 a_pos; attribute vec2 a_uv;\n"
     "varying vec2 v_uv; varying float v_light; varying vec3 v_world; varying float v_z;\n"
     "void main() {\n"
-    "    vec3 w = vec3( a_pos.x * u_rot.x - a_pos.y * u_rot.y, a_pos.x * u_rot.y + a_pos.y * u_rot.x, a_pos.z ) + u_org;\n"
+    "    vec3 w = vec3( a_pos.x * u_rot.x - a_pos.y * u_rot.y, a_pos.x * u_rot.y + a_pos.y * u_rot.x, a_pos.z ) * u_scale + u_org;\n"
     "    vec3 d = w - u_eye;\n"
     "    float vx = dot( d, u_r ), vy = dot( d, u_up ), vz = dot( d, u_fw );\n"
     "    gl_Position = vec4( vx * u_proj.x, vy * u_proj.y, vz * u_proj.z + u_proj.w, vz );\n"
@@ -311,6 +311,7 @@ static void* gl_create( m3d_t* m ) {
     p->rot = gl->GetUniformLocation( g->prog, "u_rot" );
     p->texsz = gl->GetUniformLocation( g->prog, "u_texsz" );
     p->light = gl->GetUniformLocation( g->prog, "u_light" );
+    p->scale = gl->GetUniformLocation( g->prog, "u_scale" );
     skyprog_t* s = &g->su;
     s->yaw = gl->GetUniformLocation( g->skyprog, "u_yaw" );
     s->f = gl->GetUniformLocation( g->skyprog, "u_f" );
@@ -499,11 +500,12 @@ static int cmp_key( const void* a, const void* b ) {
 }
 
 // the transform of a kept mesh: the object's place and heading, its light; the picture's size in texels (1 x 1: the coordinates are 0 .. 1 already)
-static void set_object( gl_t* g, double px, double py, double pz, double cs, double sn, double light ) {
+static void set_object( gl_t* g, double px, double py, double pz, double cs, double sn, double light, double scale ) {
     glapi_t* gl = &g->gl;
     gl->Uniform3f( g->pu.org, (GLfloat) px, (GLfloat) py, (GLfloat) pz );
     gl->Uniform2f( g->pu.rot, (GLfloat) cs, (GLfloat) sn );
     gl->Uniform1f( g->pu.light, (GLfloat) light );
+    gl->Uniform1f( g->pu.scale, (GLfloat) scale );
     gl->Uniform2f( g->pu.texsz, 1.0f, 1.0f );
 }
 
@@ -513,7 +515,7 @@ static void flush_tris( gl_t* g, const m3d_t* m, double light ) {
         return;
     }
     glapi_t* gl = &g->gl;
-    set_object( g, 0, 0, 0, 1, 0, light );
+    set_object( g, 0, 0, 0, 1, 0, light, 1.0 );
     gl->Disable( GL_CULL_FACE );
     qsort( g->tris, (size_t) g->ntris, sizeof(gtri_t), cmp_key );
     size_t need = (size_t) g->ntris * 3U * VFLOATS;
@@ -670,7 +672,7 @@ static void draw_gobj( gl_t* g, const m3d_t* m, const obj_t* o, int idx ) {
     const prog_t* p = &g->pu;
     bool twosided = ( o->flags & M3D_OF_TWOSIDED ) != 0;
     float masked = ( o->flags & M3D_OF_MASKED ) != 0 || ( o->flags & M3D_OF_TRANS ) != 0 ? 1.0f : 0.0f;
-    set_object( g, o->px, o->py, o->pz, o->cs, o->sn, (double) o->light * LIGHTK );
+    set_object( g, o->px, o->py, o->pz, o->cs, o->sn, (double) o->light * LIGHTK, o->scale > 0.0 ? o->scale : 1.0 );
     if ( twosided ) {
         gl->Disable( GL_CULL_FACE );
     } else {

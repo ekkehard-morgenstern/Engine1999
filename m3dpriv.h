@@ -75,6 +75,8 @@ typedef struct {
     int     flags, light;
     mv_t*   v;  int nv, capv;
     mt_t*   t;  int nt, capt;
+    int*    mref;                           // not 0: v and t are shared with other objects (M3D INSTANCE); *mref counts the sharers, the last one frees them (copy on write)
+    double  scale;                          // the size (1 = as the mesh is; the picture coordinates do not change)
     double  px, py, pz, yaw, cs, sn;
     v3_t*   wv;                             // world coordinates of the vertices (valid when !dirty)
     double  minx, miny, minz, maxx, maxy, maxz;

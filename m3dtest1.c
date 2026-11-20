@@ -598,6 +598,69 @@ int main( void ) {
     CHECK( !op( GFXOP_M3DGROUND, 7, 1.0, 100.0, 10.0, 3.0, 0.0, 0.5, 0.5 ) );                        // lacunarity below 1
     CHECK( !op( GFXOP_M3DGROUNDFLAT, 6, 8.0, 0.0, 0.0, 1.0, 1.0, 1.0 ) );                            // slot 8
     CHECK( op( GFXOP_M3DCLEAR, 0 ) && Q( GFXQ_M3DGROUND, 2, 100.0, 200.0 ) == 0.0 );                 // M3D CLEAR forgets the ground function
+    // -- instances: shared meshes (M3D INSTANCE, OBJSCALE, OBJFREE) ----------------------------------------------------------------------------------------
+    fresh();
+    CHECK( op( GFXOP_M3DOBJECT, 1, 1.0, 0.0 ) );                                              // the floor of fresh() is gone
+    CHECK( op( GFXOP_M3DOBJECT, 2, 40.0, 0.0, 255.0 ) );
+    CHECK( op( GFXOP_M3DBOX, 8, 40.0, -5.0, -5.0, 0.0, 5.0, 5.0, 20.0, 1.0 ) );                // the prototype: a box 10 x 10 x 20
+    CHECK( op( GFXOP_M3DOBJPOS, 4, 40.0, -300.0, 0.0, 0.0 ) );
+    CHECK( op( GFXOP_M3DOBJSHOW, 2, 40.0, 0.0 ) );                                              // hidden: it does not stand in the way
+    CHECK( op( GFXOP_M3DINSTANCE, 7, 41.0, 40.0, 100.0, 0.0, 0.0, 0.0, 2.0 ) );                 // twice the size at (100, 0)
+    CHECK( op( GFXOP_M3DINSTANCE, 5, 42.0, 40.0, 200.0, 50.0, 3.0 ) );                          // 1 x, yaw 0, raised 3 at (200, 50)
+    CHECK( op( GFXOP_M3DINSTANCE, 6, 43.0, 40.0, 300.0, 0.0, 0.0, 90.0 ) );                     // turned by 90 degrees
+    CHECK( Q( GFXQ_M3DVERTS, 1, 41.0 ) == 24.0 && Q( GFXQ_M3DTRIS, 1, 41.0 ) == 12.0 );
+    CHECK( Q( GFXQ_M3DOBJX, 1, 41.0 ) == 100.0 && Q( GFXQ_M3DOBJYAW, 1, 43.0 ) == 90.0 );
+    CHECK( Q( GFXQ_M3DOBJON, 1, 41.0 ) != 0.0 );
+    CHECK( Q( GFXQ_M3DFLOORAT, 3, 100.0, 0.0, 1000.0 ) == 40.0 );                               // the top of the doubled box: 20 * 2
+    CHECK( Q( GFXQ_M3DFLOORAT, 3, 109.0, 0.0, 1000.0 ) == 40.0 && Q( GFXQ_M3DFLOORAT, 3, 111.0, 0.0, 1000.0 ) < -1.0e8 );   // it is 20 wide now: 90 .. 110
+    CHECK( Q( GFXQ_M3DFLOORAT, 3, 200.0, 50.0, 1000.0 ) == 23.0 );                              // raised by 3
+    CHECK( Q( GFXQ_M3DFLOORAT, 3, -300.0, 0.0, 1000.0 ) < -1.0e8 );                            // the hidden prototype is not there
+    // copy on write: changing the prototype does not change the instances, changing an instance does not change the prototype
+    CHECK( op( GFXOP_M3DBOX, 8, 40.0, 50.0, 50.0, 0.0, 60.0, 60.0, 5.0, 1.0 ) );
+    CHECK( Q( GFXQ_M3DVERTS, 1, 40.0 ) == 48.0 && Q( GFXQ_M3DVERTS, 1, 41.0 ) == 24.0 && Q( GFXQ_M3DVERTS, 1, 42.0 ) == 24.0 );
+    CHECK( op( GFXOP_M3DBOX, 8, 42.0, 70.0, 70.0, 0.0, 80.0, 80.0, 5.0, 1.0 ) );
+    CHECK( Q( GFXQ_M3DVERTS, 1, 42.0 ) == 48.0 && Q( GFXQ_M3DVERTS, 1, 43.0 ) == 24.0 && Q( GFXQ_M3DVERTS, 1, 40.0 ) == 48.0 );
+    // an instance of an instance; the size changes later; the instance of a made-again object
+    CHECK( op( GFXOP_M3DINSTANCE, 5, 44.0, 43.0, 0.0, 0.0, 0.0 ) );
+    CHECK( Q( GFXQ_M3DVERTS, 1, 44.0 ) == 24.0 );
+    CHECK( op( GFXOP_M3DOBJSCALE, 2, 44.0, 3.0 ) && Q( GFXQ_M3DFLOORAT, 3, 0.0, 0.0, 1000.0 ) == 60.0 );
+    CHECK( op( GFXOP_M3DOBJECT, 1, 43.0, 0.0 ) );                                               // object 43 made again (empty): its instance keeps the mesh
+    CHECK( Q( GFXQ_M3DVERTS, 1, 43.0 ) == 0.0 && Q( GFXQ_M3DVERTS, 1, 44.0 ) == 24.0 );
+    CHECK( op( GFXOP_M3DINSTANCE, 5, 44.0, 43.0, 0.0, 0.0, 0.0 ) && Q( GFXQ_M3DVERTS, 1, 44.0 ) == 0.0 );   // an instance of an empty one is empty
+    // a picture: an instance is drawn like the object it copies
+    fresh();
+    CHECK( op( GFXOP_M3DOBJECT, 1, 1.0, 0.0 ) );
+    CHECK( op( GFXOP_M3DOBJECT, 2, 50.0, 0.0, 255.0 ) );
+    CHECK( op( GFXOP_M3DBOX, 8, 50.0, 100.0, -10.0, 0.0, 110.0, 10.0, 40.0, 2.0 ) );
+    CHECK( op( GFXOP_M3DINSTANCE, 5, 51.0, 50.0, 0.0, 0.0, 0.0 ) );
+    CHECK( op( GFXOP_M3DOBJSHOW, 2, 50.0, 0.0 ) );
+    CHECK( op( GFXOP_M3DCAMERA, 4, 0.0, 0.0, 0.0, 0.0 ) );
+    {
+        const uint8_t* fb = shot();
+        CHECK( PX( fb, 80, 70 ) == 200 );                                                       // the instance at 100 in front of the camera is seen (the prototype is hidden)
+    }
+    // OBJFREE: objects are not defined any more (and the highest number in use falls)
+    CHECK( op( GFXOP_M3DOBJFREE, 2, 40.0, 51.0 ) );
+    CHECK( Q( GFXQ_M3DOBJON, 1, 50.0 ) == 0.0 && Q( GFXQ_M3DOBJON, 1, 51.0 ) == 0.0 && Q( GFXQ_M3DVERTS, 1, 50.0 ) == -7777777.0 );
+    CHECK( !op( GFXOP_M3DOBJFREE, 2, 5.0, 4.0 ) );                                              // b below a
+    CHECK( op( GFXOP_M3DOBJFREE, 2, 7000.0, 7003.0 ) );                                         // objects that are not there: fine
+    // errors
+    CHECK( !op( GFXOP_M3DINSTANCE, 2, 60.0, 99.0 ) && strstr( lasterr, "not defined" ) != 0 );
+    CHECK( op( GFXOP_M3DOBJECT, 1, 61.0 ) );
+    CHECK( !op( GFXOP_M3DINSTANCE, 2, 61.0, 61.0 ) && strstr( lasterr, "own instance" ) != 0 );
+    CHECK( !op( GFXOP_M3DINSTANCE, 7, 62.0, 61.0, 0.0, 0.0, 0.0, 0.0, 0.0 ) );                  // scale 0
+    CHECK( !op( GFXOP_M3DOBJSCALE, 2, 99.0, 2.0 ) );
+    CHECK( !op( GFXOP_M3DOBJSCALE, 2, 61.0, 0.0 ) );
+    // many instances and changes: nothing leaks or crashes (run under ASan / valgrind to see it)
+    fresh();
+    CHECK( op( GFXOP_M3DOBJECT, 1, 100.0, 0.0 ) );
+    CHECK( op( GFXOP_M3DBOX, 8, 100.0, -5.0, -5.0, 0.0, 5.0, 5.0, 20.0, 1.0 ) );
+    for ( int i=0; i < 300; ++i ) {
+        (void) ( op( GFXOP_M3DINSTANCE, 7, (double)( 101 + i % 150 ), (double)( i % 3 == 0 ? 100 : 101 + ( i + 7 ) % 150 ), (double)( i * 13 % 400 - 200 ), (double)( i * 7 % 300 ), 0.0, (double)( i % 360 ), 1.0 + ( i % 4 ) * 0.5 ) );     // (some of the sources were freed: those fail, which is right)
+        if ( i % 5 == 0 ) { (void) op( GFXOP_M3DBOX, 8, (double)( 101 + i % 150 ), 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0 ); }
+        if ( i % 7 == 0 ) { CHECK( op( GFXOP_M3DOBJFREE, 2, (double)( 101 + i % 150 ), (double)( 101 + i % 150 ) ) ); }
+    }
+    CHECK( shot() != 0 );
     // -- errors -----------------------------------------------------------------------------------------------------------------------------
     CHECK( !op( GFXOP_M3DOBJECT, 1, 20000.0 ) );
     CHECK( !op( GFXOP_M3DBOX, 8, 99.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0 ) );                 // object not defined

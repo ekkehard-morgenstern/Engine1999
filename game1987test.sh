@@ -341,13 +341,18 @@ expect "no edge: John walks on past the old line at 3420" "$(val state 33 jx)" 3
 expect "no edge: John is still moving" "$(val state 33 jv)" 1 200
 expect "chunks: the 7 x 7 window round John is complete after the walk" "$(val chunks 1 have)" 49 49
 expect "chunks: none missing after the walk" "$(val chunks 1 missing)" 0 0
+expect "chunks: none missing or of the wrong level after the walk (levels change as John goes)" "$(val chunks 1 stale)" 0 0
+expect "chunks: the 3 x 3 chunks round John are fine (level 0), the others coarse" "$(val chunks 1 fine)" 9 9
 expect "chunks: trees grow in the forests outside the hand-made area" "$(val chunks 1 trees)" 1 1176
 # 11f2. a jump far away (a goto builds all missing chunks at once): the window is complete there too, the number of trees stays within the 24 a chunk may carry, and the same
 #       place built again gives the same chunks (the chunks line is part of the two-run comparison at the end)
 expect "chunks: far jump (20000, -15000): window complete" "$(val chunks 2 have)" 49 49
 expect "chunks: far jump: none missing" "$(val chunks 2 missing)" 0 0
+expect "chunks: far jump: right levels at once" "$(val chunks 2 stale)" 0 0
+expect "chunks: far jump: 9 fine chunks" "$(val chunks 2 fine)" 9 9
 expect "chunks: far jump: trees within the budget" "$(val chunks 2 trees)" 0 1176
 expect "chunks: second far jump (-9000, 7000) and 2 s: window complete" "$(val chunks 3 have)" 49 49
+expect "chunks: second far jump: nothing stale" "$(val chunks 3 stale)" 0 0
 expect "chunks: second far jump: some forest" "$(val chunks 3 trees)" 1 1176
 expect "chunks: a different place has other chunks than the first" "$(awk -v a="$(val chunks 2 sig)" -v b="$(val chunks 3 sig)" 'BEGIN { print (a != b) ? 1 : 0 }')" 1 1
 # 11g. a bicycle cannot stand by itself: at the start it leans against the yard's fence (bst 1) and E picks it up (riding, upright); a riderless one rolls on for 3 s and then falls over

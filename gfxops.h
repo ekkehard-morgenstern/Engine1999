@@ -378,8 +378,11 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXOP_M3DGROUND 336             // M3D GROUND seed, scale, amp, octaves [, base [, gain [, lacunarity]]]   (defines the ground height function, in C)
 #define GFXOP_M3DGROUNDFLAT 337         // M3D GROUNDFLAT n, cx, cy, rx, ry, margin  (a box where the ground is flattened towards 0; margin 0 removes slot n)
 #define GFXOP_M3DTERRAIN 338            // M3D TERRAIN o, x0, y0, nx, ny, cell, tex [, cells$ [, skirt [, uvscale]]]   (fills object o with a nx x ny grid of the ground)
+#define GFXOP_M3DINSTANCE 339           // M3D INSTANCE o, src [, x, y, z [, yaw [, scale]]]   (object o shares the mesh of object src: a copy that costs no memory for the mesh)
+#define GFXOP_M3DOBJSCALE 340           // M3D OBJSCALE o, scale                 (the size of an object, > 0)
+#define GFXOP_M3DOBJFREE 341            // M3D OBJFREE a, b                      (deletes the objects a .. b: they are not defined any more)
 #define GFXOP_M3DFIRST  GFXOP_M3DRESET
-#define GFXOP_M3DLAST   GFXOP_M3DTERRAIN
+#define GFXOP_M3DLAST   GFXOP_M3DOBJFREE
 #define GFXOP_IS_M3D(op) ( (op) >= GFXOP_M3DFIRST && (op) <= GFXOP_M3DLAST )
 #define GFXQ_M3DX       350             // M3D("X"), ("Y"), ("Z" = the feet), ("EYE"), ("YAW"), ("PITCH"), ("LIFT"), ("HIT"), ("FLOORZ")
 #define GFXQ_M3DY       351

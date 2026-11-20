@@ -1,0 +1,111 @@
+1 ' License: free for everybody to use, copy, change and build into executables (BUILD).
+2 ' An executable made with BUILD contains the Engine1999 runtime: the Engine1999 Runtime Exception
+3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
+4 ' in the executable (it shows with the command line option --engine1999-about).
+10 ' chunks - a world that is made of square chunks round the player (a library: LOAD LIBRARY "chunks", prefix CK_; roadmap item 95, docs/1987.md "The world in chunks").
+20 ' The library keeps the book: which chunks exist, which one is wanted next, at which level of detail. It builds nothing (a library cannot call the program's procedures), so the
+30 ' program pulls: it tells where the player is, asks for the next chunk to build, builds it and says that it is done:
+40 '   CALL CK_SETUP(SIZE,RADIUS,FINE,MEDIUM)  SIZE: the edge of a chunk in units (900); RADIUS: how many chunks round the player's one exist (1..3: a window of up to 7 x 7);
+50 '                                           FINE / MEDIUM: the chunks up to FINE chunks away from the player's (a ring: the larger of the two differences) want level 0, up to
+60 '                                           MEDIUM level 1, farther ones level 2 (the program decides what a level is: for instance a grid of 9 x 9 cells, 3 x 3, 1 x 1)
+70 '   CALL CK_UPDATE(PX,PY)                   the player is at PX,PY (call it every frame: it only notes the place)
+80 '   FN CK_NEXT()                            -1 when a chunk has to be built (or built again, because its level changed) and 0 when the window is complete; it is the nearest
+90 '                                           one to the player. Ask for its data with  FN CK_CX(), FN CK_CY()  (chunk numbers: the chunk covers x from CX * SIZE),
+100 '                                           FN CK_CSLOT()  (0..63: the slot the chunk lives in, a fixed block of object numbers of yours: a chunk takes the slot of the one
+110 '                                           that was there, nothing is allocated or freed),  FN CK_CLEVEL()  (0..2),  FN CK_CNEW()  (-1: the slot held another chunk, build all of
+120 '                                           it; 0: only the level changed, the same chunk is built again, you may keep what does not depend on the level)
+130 '   CALL CK_DONE()                          the chunk CK_NEXT gave is built
+140 '   FN CK_SLOT(CX,CY)  the slot of any chunk;   FN CK_HAS(CX,CY)  -1 if the chunk is there;   FN CK_LEVELAT(CX,CY)  its level, -1 if it is not there
+150 '   FN CK_STALE()      how many chunks of the window are missing or have the wrong level;   FN CK_PCX(), FN CK_PCY()  the chunk the player is in
+160 '   CALL CK_FORGET()   all chunks are gone (after M3D RESET)
+170 LIBRARY "chunks","CK_"
+180 PROC CK_INIT
+190   DIM CK_OX(64),CK_OY(64),CK_OL(64)
+200   CK_SZ=900:CK_R=3:CK_F=1:CK_M=3:CK_PX=0:CK_PY=0:CK_WCX=0:CK_WCY=0:CK_WS=0:CK_WL=0:CK_WN=0
+210   CALL CK_FORGET
+220 END PROC
+230 PROC CK_FORGET
+240   LOCAL S
+250   FOR S=0 TO 63
+260     CK_OX(S)=1000000000:CK_OY(S)=1000000000:CK_OL(S)=-1
+270   NEXT S
+280 END PROC
+290 PROC CK_SETUP(SIZE,RADIUS,FINE,MEDIUM)
+300   IF SIZE<=0 OR RADIUS<1 OR RADIUS>3 OR FINE<0 OR MEDIUM<FINE THEN ERROR 5
+310   CK_SZ=SIZE:CK_R=RADIUS:CK_F=FINE:CK_M=MEDIUM
+320   CALL CK_FORGET
+330 END PROC
+340 FUNC CK_SLOT(CX,CY)
+350   RETURN (CX-INT(CX/8)*8)+(CY-INT(CY/8)*8)*8
+360 END FUNC
+370 FUNC CK_PCX()
+380   RETURN INT(CK_PX/CK_SZ)
+390 END FUNC
+400 FUNC CK_PCY()
+410   RETURN INT(CK_PY/CK_SZ)
+420 END FUNC
+430 PROC CK_UPDATE(PX,PY)
+440   CK_PX=PX:CK_PY=PY
+450 END PROC
+460 ' the level a chunk wants, by its ring distance from the player's chunk
+470 FUNC CK_WANT(DX,DY)
+480   LOCAL D
+490   D=MAX(ABS(DX),ABS(DY))
+500   IF D<=CK_F THEN RETURN 0
+510   IF D<=CK_M THEN RETURN 1
+520   RETURN 2
+530 END FUNC
+540 FUNC CK_HAS(CX,CY)
+550   LOCAL S
+560   S=FN CK_SLOT(CX,CY)
+570   RETURN CK_OX(S)=CX AND CK_OY(S)=CY
+580 END FUNC
+590 FUNC CK_LEVELAT(CX,CY)
+600   LOCAL S
+610   S=FN CK_SLOT(CX,CY)
+620   IF CK_OX(S)=CX AND CK_OY(S)=CY THEN RETURN CK_OL(S)
+630   RETURN -1
+640 END FUNC
+650 FUNC CK_STALE()
+660   LOCAL I,J,CX,CY,S,N,PCX,PCY
+670   PCX=INT(CK_PX/CK_SZ):PCY=INT(CK_PY/CK_SZ):N=0
+680   FOR J=-CK_R TO CK_R
+690     FOR I=-CK_R TO CK_R
+700       CX=PCX+I:CY=PCY+J:S=FN CK_SLOT(CX,CY)
+710       IF CK_OX(S)<>CX OR CK_OY(S)<>CY OR CK_OL(S)<>FN CK_WANT(I,J) THEN N=N+1
+720     NEXT I
+730   NEXT J
+740   RETURN N
+750 END FUNC
+760 FUNC CK_NEXT()
+770   LOCAL I,J,CX,CY,S,D,BD,PCX,PCY,W
+780   PCX=INT(CK_PX/CK_SZ):PCY=INT(CK_PY/CK_SZ):BD=1000000000
+790   FOR J=-CK_R TO CK_R
+800     FOR I=-CK_R TO CK_R
+810       CX=PCX+I:CY=PCY+J:S=FN CK_SLOT(CX,CY):W=FN CK_WANT(I,J)
+820       IF CK_OX(S)<>CX OR CK_OY(S)<>CY OR CK_OL(S)<>W THEN
+830         D=I*I+J*J
+840         IF D<BD THEN BD=D:CK_WCX=CX:CK_WCY=CY:CK_WS=S:CK_WL=W:CK_WN=(CK_OX(S)<>CX OR CK_OY(S)<>CY)
+850       END IF
+860     NEXT I
+870   NEXT J
+880   RETURN BD<1000000000
+890 END FUNC
+900 FUNC CK_CX()
+910   RETURN CK_WCX
+920 END FUNC
+930 FUNC CK_CY()
+940   RETURN CK_WCY
+950 END FUNC
+960 FUNC CK_CSLOT()
+970   RETURN CK_WS
+980 END FUNC
+990 FUNC CK_CLEVEL()
+1000   RETURN CK_WL
+1010 END FUNC
+1020 FUNC CK_CNEW()
+1030   RETURN CK_WN
+1040 END FUNC
+1050 PROC CK_DONE
+1060   CK_OX(CK_WS)=CK_WCX:CK_OY(CK_WS)=CK_WCY:CK_OL(CK_WS)=CK_WL
+1070 END PROC
