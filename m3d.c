@@ -29,6 +29,7 @@
 
 #include "m3dpriv.h"
 #include "gfxops.h"
+#include "noise.h"
 
 // -- small things ----------------------------------------------------------------------------------------------------------------
 
@@ -88,6 +89,7 @@ static void clear_world( m3d_t* m ) {
     memset( m->lamps, 0, sizeof(m->lamps) );
     m->nobjs = 0;
     m->nzones = 0;
+    memset( &m->gnd, 0, sizeof(m->gnd) );
 }
 
 static bool set_view( m3d_t* m, int x, int y, int w, int h, int sc, double fov ) {
@@ -194,6 +196,32 @@ void m3d_getview( const m3d_t* m, int* x, int* y, int* width, int* height, int* 
 
 // -- objects --------------------------------------------------------------------------------------------------------------------
 
+// -- the ground ----------------------------------------------------------------------------------------------------------------
+
+// the ground's height at x,y; every flat box multiplies it by 1 - w, where w is 1 inside the box (centre cx,cy, half sizes rx,ry) and falls to 0 over the
+// margin outside it (smooth: the curve of PW in demos/1987.bas)
+double m3d_ground( const m3d_t* m, double x, double y ) {
+    const ground_t* g = &m->gnd;
+    if ( !g->on ) {
+        return 0.0;
+    }
+    double h = g->base + g->amp * nz_fbm( g->seed, x / g->scale, y / g->scale, g->oct, g->gain, g->lac );
+    for ( int i=0; i < 8; ++i ) {
+        if ( !g->flat[i].on ) {
+            continue;
+        }
+        double dx = fabs( x - g->flat[i].cx ) - g->flat[i].rx, dy = fabs( y - g->flat[i].cy ) - g->flat[i].ry;
+        if ( dx < 0 ) { dx = 0; }
+        if ( dy < 0 ) { dy = 0; }
+        double d = sqrt( dx * dx + dy * dy ) / g->flat[i].margin;
+        if ( d >= 1.0 ) {
+            continue;                                   // outside the margin: no change
+        }
+        h *= 1.0 - ( 1.0 - d ) * ( 1.0 - d ) * ( 1.0 + 2.0 * d );
+    }
+    return h;
+}
+
 static bool obj_valid( const m3d_t* m, int o ) {
     return o >= 0 && o < M3D_MAXOBJECTS && m->objs[o].used;
 }
@@ -250,6 +278,51 @@ static bool obj_addt( obj_t* o, int a, int b, int c, int tex ) {
     }
     o->dirty = true;
     o->gen = next_gen();
+    return true;
+}
+
+// nx x ny cells of the size `cell` from (x0,y0) on, the heights from the ground function; the picture of a cell is tex + the code of its character in cells (0 = tex for all);
+// skirt > 0 hangs a wall of that depth under the four edges (it hides the cracks between a coarse grid and its finer neighbour)
+static bool obj_terrain( const m3d_t* m, obj_t* o, double x0, double y0, int nx, int ny, double cell, int tex, const char* cells, double skirt, double uvs ) {
+    int base = o->nv, w = nx + 1;
+    for ( int j = 0; j <= ny; ++j ) {
+        for ( int i = 0; i <= nx; ++i ) {
+            double x = x0 + i * cell, y = y0 + j * cell;
+            if ( !obj_addv( o, x, y, m3d_ground( m, x, y ), x * uvs, y * uvs ) ) {
+                return false;
+            }
+        }
+    }
+    for ( int j = 0; j < ny; ++j ) {
+        for ( int i = 0; i < nx; ++i ) {
+            int b = base + j * w + i, t = tex + ( cells != 0 ? (unsigned char) cells[ j * nx + i ] : 0 );
+            if ( !obj_addt( o, b, b + 1, b + w + 1, t ) || !obj_addt( o, b, b + w + 1, b + w, t ) ) {
+                return false;
+            }
+        }
+    }
+    if ( skirt > 0.0 ) {
+        // the four edges counterclockwise seen from above (south going east, east going north, north going west, west going south): a wall facing out is a, b, b up, a up
+        for ( int side = 0; side < 4; ++side ) {
+            int n = side % 2 == 0 ? nx : ny;
+            for ( int k = 0; k < n; ++k ) {
+                int ia, ib, cell_i, cell_j;
+                switch ( side ) {
+                    case 0:  ia = k;                  ib = k + 1;              cell_i = k;          cell_j = 0;          break;
+                    case 1:  ia = nx + k * w;         ib = nx + ( k + 1 ) * w; cell_i = nx - 1;     cell_j = k;          break;
+                    case 2:  ia = ny * w + nx - k;    ib = ny * w + nx - k - 1; cell_i = nx - 1 - k; cell_j = ny - 1;     break;
+                    default: ia = ( ny - k ) * w;     ib = ( ny - k - 1 ) * w; cell_i = 0;          cell_j = ny - 1 - k; break;
+                }
+                int va = base + ia, vb = base + ib, nv = o->nv;
+                const mv_t pa = o->v[va], pb = o->v[vb];
+                int t = tex + ( cells != 0 ? (unsigned char) cells[ cell_j * nx + cell_i ] : 0 );
+                if ( !obj_addv( o, pa.x, pa.y, pa.z - skirt, pa.u, pa.v ) || !obj_addv( o, pb.x, pb.y, pb.z - skirt, pb.u, pb.v ) ||
+                     !obj_addt( o, nv, nv + 1, vb, t ) || !obj_addt( o, nv, vb, va, t ) ) {
+                    return false;
+                }
+            }
+        }
+    }
     return true;
 }
 
@@ -658,6 +731,56 @@ bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t sl
             o->px = px; o->py = py; o->pz = pz; o->yaw = yaw; o->cs = cos( yaw * DEG2RAD ); o->sn = sin( yaw * DEG2RAD );
             return true;
         }
+        case GFXOP_M3DGROUND: {
+            ground_t* g = &m->gnd;
+            int oct = 1;
+            double base = NONE_VAL( a[4] ) ? 0.0 : a[4], gain = NONE_VAL( a[5] ) ? 0.5 : a[5], lac = NONE_VAL( a[6] ) ? 2.0 : a[6];
+            if ( !( a[0] > -4.4e9 && a[0] < 4.4e9 ) || !( a[1] > 0.0 && a[1] < 1.0e9 ) || !( a[2] > -1.0e9 && a[2] < 1.0e9 ) || !whole( a[3], 1, NZ_MAXOCTAVES, &oct ) ||
+                 !( base > -1.0e9 && base < 1.0e9 ) || !( gain >= 0.0 && gain <= 4.0 ) || !( lac >= 1.0 && lac <= 16.0 ) ) {
+                return false;
+            }
+            g->seed = (uint64_t)(int64_t) floor( a[0] ); g->scale = a[1]; g->amp = a[2]; g->oct = oct; g->base = base; g->gain = gain; g->lac = lac;
+            g->on = true;
+            return true;
+        }
+        case GFXOP_M3DGROUNDFLAT: {
+            if ( !whole( a[0], 0, 7, &i1 ) || !( a[5] >= 0.0 && a[5] < 1.0e9 ) || !( a[3] >= 0.0 && a[4] >= 0.0 && a[3] < 1.0e9 && a[4] < 1.0e9 ) ||
+                 !( fabs( a[1] ) < 1.0e9 && fabs( a[2] ) < 1.0e9 ) ) {
+                return false;
+            }
+            m->gnd.flat[i1].on = a[5] > 0.0;
+            m->gnd.flat[i1].cx = a[1]; m->gnd.flat[i1].cy = a[2]; m->gnd.flat[i1].rx = a[3]; m->gnd.flat[i1].ry = a[4]; m->gnd.flat[i1].margin = a[5];
+            return true;
+        }
+        case GFXOP_M3DTERRAIN: {
+            int nx, ny, tex;
+            double skirt = NONE_VAL( a[7] ) ? 0.0 : a[7], uvs = NONE_VAL( a[8] ) ? 0.5 : a[8];
+            if ( !whole( a[0], 0, M3D_MAXOBJECTS - 1, &i1 ) || !obj_valid( m, i1 ) ) {
+                *err = "Object not defined";
+                return false;
+            }
+            if ( !whole( a[3], 1, 256, &nx ) || !whole( a[4], 1, 256, &ny ) || !( a[5] > 0.0 && a[5] < 1.0e9 ) || !whole( a[6], 0, M3D_MAXTEX - 1, &tex ) ||
+                 !( fabs( a[1] ) < 1.0e9 && fabs( a[2] ) < 1.0e9 ) || !( skirt >= 0.0 && skirt < 1.0e9 ) || !( fabs( uvs ) < 1.0e6 ) ) {
+                return false;
+            }
+            if ( slen != 0 ) {
+                if ( slen != (size_t) nx * (size_t) ny ) {
+                    *err = "The cell string needs one character per cell";
+                    return false;
+                }
+                for ( size_t k = 0; k < slen; ++k ) {
+                    if ( tex + (unsigned char) s[k] >= M3D_MAXTEX ) {
+                        *err = "Picture number out of range";
+                        return false;
+                    }
+                }
+            }
+            if ( !obj_terrain( m, &m->objs[i1], a[1], a[2], nx, ny, a[5], tex, slen != 0 ? s : 0, skirt, uvs ) ) {
+                *err = "Out of memory";
+                return false;
+            }
+            return true;
+        }
         case GFXOP_M3DVERTEX: {
             if ( !whole( a[0], 0, M3D_MAXOBJECTS - 1, &i1 ) || !obj_valid( m, i1 ) ) {
                 *err = "Object not defined";
@@ -863,6 +986,7 @@ bool m3d_query( m3d_t* m, int q, const double* a, int na, double* r ) {
     int i1;
     *r = 0;
     switch ( q ) {
+        case GFXQ_M3DGROUND: *r = m3d_ground( m, a[0], a[1] ); return true;
         case GFXQ_M3DX: *r = m->x; return true;
         case GFXQ_M3DY: *r = m->y; return true;
         case GFXQ_M3DZ: *r = m->z; return true;

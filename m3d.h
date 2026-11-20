@@ -69,6 +69,7 @@ m3d_t* m3d_new( void );
 void   m3d_free( m3d_t* m );
 bool   m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t slen, const char** err );
 bool   m3d_query( m3d_t* m, int q, const double* a, int na, double* result );
+double m3d_ground( const m3d_t* m, double x, double y );          // the height of the ground function (M3D GROUND), 0 when none is defined
 int    m3d_nverts( const m3d_t* m, int o );                  // the number of vertices of an object (0: none)
 void   m3d_colormap( m3d_t* m, const uint32_t* argb );
 const uint8_t* m3d_render( m3d_t* m );                       // draws a frame; the palette bitmap, or 0 when the renderer in use makes 32 bit pictures

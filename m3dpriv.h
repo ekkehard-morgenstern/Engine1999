@@ -93,6 +93,15 @@ typedef struct { double x, y, z, r, amount, dx, dy, dz, cc; bool spot; } lamp_t;
 
 typedef struct { int id, tag; double x1, y1, x2, y2, z1, z2; } zone_t;
 
+// the ground height function (M3D GROUND, GROUNDFLAT): base + amp * FBM(seed, x / scale, y / scale), times (1 - flatten) for every flat box
+typedef struct {
+    bool     on;
+    uint64_t seed;
+    double   scale, amp, base, gain, lac;
+    int      oct;
+    struct { bool on; double cx, cy, rx, ry, margin; } flat[8];
+} ground_t;
+
 struct _m3d_t {
     tex_t*   texs;
     obj_t*   objs;     int nobjs;
@@ -116,6 +125,7 @@ struct _m3d_t {
     int      drawn;
     // frame scratch
     int*     order;  double* odist;
+    ground_t gnd;
     int      top;                           // one above the highest object number in use (the loops stop there)
     unsigned presepoch;                     // counts the times a picture number got or lost its picture (the renderer's kept meshes group the triangles by that)
 };

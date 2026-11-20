@@ -42,4 +42,4 @@ All three are pure functions: no state, no `RND`, so building a chunk does not d
 ## Not done / ideas
 
 - Value and simplex noise, a ridged variant (`1 - |noise|`: mountain ridges; for now `1 - ABS(NOISE(...))` in BASIC), domain warping, a 3 D `FBM`, a `NOISE` with a period (tiling); a `HASH` over strings.
-- Next in roadmap item 95: the terrain grid primitive that fills a chunk from these functions in C, so that the BASIC program does not need one `M3D VERTEX` per grid point.
+- Done next (2026-11-20): the terrain grid primitive, `M3D GROUND` / `M3D TERRAIN` (`docs/3d-mesh-subsystem.md`): a chunk's ground is built in C from `FBM`.

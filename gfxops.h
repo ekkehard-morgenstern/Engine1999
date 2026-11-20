@@ -375,8 +375,11 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXOP_M3DWORLD  333             // M3D WORLD                              (builds the world from the current JSON document: m3dworld.h, docs/3d-mesh-subsystem.md)
 #define GFXOP_M3DSOFTWARE 334           // M3D SOFTWARE                           (the software renderer draws; always possible)
 #define GFXOP_M3DHARDWARE 335           // M3D HARDWARE                           (the OpenGL renderer draws; an error when it is not available, see M3D("HWAVAIL"))
+#define GFXOP_M3DGROUND 336             // M3D GROUND seed, scale, amp, octaves [, base [, gain [, lacunarity]]]   (defines the ground height function, in C)
+#define GFXOP_M3DGROUNDFLAT 337         // M3D GROUNDFLAT n, cx, cy, rx, ry, margin  (a box where the ground is flattened towards 0; margin 0 removes slot n)
+#define GFXOP_M3DTERRAIN 338            // M3D TERRAIN o, x0, y0, nx, ny, cell, tex [, cells$ [, skirt [, uvscale]]]   (fills object o with a nx x ny grid of the ground)
 #define GFXOP_M3DFIRST  GFXOP_M3DRESET
-#define GFXOP_M3DLAST   GFXOP_M3DHARDWARE
+#define GFXOP_M3DLAST   GFXOP_M3DTERRAIN
 #define GFXOP_IS_M3D(op) ( (op) >= GFXOP_M3DFIRST && (op) <= GFXOP_M3DLAST )
 #define GFXQ_M3DX       350             // M3D("X"), ("Y"), ("Z" = the feet), ("EYE"), ("YAW"), ("PITCH"), ("LIFT"), ("HIT"), ("FLOORZ")
 #define GFXQ_M3DY       351
@@ -422,7 +425,8 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXQ_M3DRENDERER 388            // M3D("RENDERER"): 0 the software renderer is in use, 1 the hardware (OpenGL) renderer
 #define GFXQ_M3DHWAVAIL 389             // M3D("HWAVAIL"): 1 when M3D HARDWARE can succeed (OpenGL 2 was found and the renderer is built in), else 0
 #define GFXQ_M3DFIRST   GFXQ_M3DX
-#define GFXQ_M3DLAST    GFXQ_M3DHWAVAIL
+#define GFXQ_M3DGROUND  390             // M3D("GROUND", x, y): the height of the ground function (0 when none is defined)
+#define GFXQ_M3DLAST    GFXQ_M3DGROUND
 
 typedef struct _gfxcmd_t {
     const char* group;                  // "GFX", "TXT", "TILE", "SPRITE", "MOUSE", or "" for the statements that are reserved words themselves

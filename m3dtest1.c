@@ -33,6 +33,7 @@
 #include "m3dworld.h"
 #include "json.h"
 #include "gfxops.h"
+#include "noise.h"
 
 /*
 Automated test of the software 3D mesh renderer (m3d.[ch], no SDL): objects and their faces, the picture (depth, culling, clipping, masked / translucent
@@ -57,6 +58,18 @@ static bool op( int o, int n, ... ) {
     va_end( ap );
     lasterr = 0;
     return m3d_op( M, o, a, n, 0, 0, &lasterr );
+}
+
+static bool ops( int o, int n, const char* s, ... ) {                  // an operation with a string argument (after the n numbers)
+    double a[10];
+    va_list ap;
+    va_start( ap, s );
+    for ( int i=0; i < n; ++i ) {
+        a[i] = va_arg( ap, double );
+    }
+    va_end( ap );
+    lasterr = 0;
+    return m3d_op( M, o, a, n, s, s != 0 ? strlen( s ) : 0, &lasterr );
 }
 
 static double Q( int q, int n, ... ) {
@@ -513,6 +526,78 @@ int main( void ) {
         CHECK( !m3dworld_load( M, root, &werr ) && strstr( werr, "format" ) != 0 );
         json_node_free( root );
     }
+    // -- the ground function and the terrain grid (M3D GROUND, GROUNDFLAT, TERRAIN, M3D("GROUND")) ------------------------------------------------------------
+    fresh();
+    CHECK( Q( GFXQ_M3DGROUND, 2, 100.0, 200.0 ) == 0.0 );                                       // no ground function defined: 0
+    CHECK( op( GFXOP_M3DGROUND, 7, 7.0, 400.0, 60.0, 5.0, 10.0, 0.5, 2.0 ) );
+    {
+        double h = 10.0 + 60.0 * nz_fbm( 7, 100.0 / 400.0, 200.0 / 400.0, 5, 0.5, 2.0 );
+        CHECK( Q( GFXQ_M3DGROUND, 2, 100.0, 200.0 ) == h );                                      // the function is base + amp * FBM
+        CHECK( Q( GFXQ_M3DGROUND, 2, 100.0, 200.0 ) == Q( GFXQ_M3DGROUND, 2, 100.0, 200.0 ) );
+        CHECK( Q( GFXQ_M3DGROUND, 2, -1234.5, 99999.25 ) == 10.0 + 60.0 * nz_fbm( 7, -1234.5 / 400.0, 99999.25 / 400.0, 5, 0.5, 2.0 ) );
+    }
+    CHECK( op( GFXOP_M3DGROUND, 4, 7.0, 400.0, 60.0, 5.0 ) );                                  // base 0, gain 0.5, lacunarity 2 by default
+    CHECK( Q( GFXQ_M3DGROUND, 2, 100.0, 200.0 ) == 60.0 * nz_fbm( 7, 100.0 / 400.0, 200.0 / 400.0, 5, 0.5, 2.0 ) );
+    {   // a flat box: 0 inside, the plain height beyond the margin, between them a smooth fall (monotonic)
+        double plain = Q( GFXQ_M3DGROUND, 2, 700.0, 10.0 );
+        CHECK( op( GFXOP_M3DGROUNDFLAT, 6, 0.0, 0.0, 0.0, 100.0, 50.0, 200.0 ) );
+        CHECK( Q( GFXQ_M3DGROUND, 2, 0.0, 0.0 ) == 0.0 && Q( GFXQ_M3DGROUND, 2, 99.0, 49.0 ) == 0.0 );
+        CHECK( Q( GFXQ_M3DGROUND, 2, 700.0, 10.0 ) == plain );                                  // 600 beyond the box: outside the margin
+        double plain2 = 60.0 * nz_fbm( 7, 250.0 / 400.0, 0.0, 5, 0.5, 2.0 ), mid = Q( GFXQ_M3DGROUND, 2, 250.0, 0.0 );   // 150 beyond the box: d = 0.75, weight 0.0156 * ...
+        CHECK( fabs( mid ) <= fabs( plain2 ) + 1e-9 );
+        CHECK( fabs( mid - plain2 * ( 1.0 - ( 0.25 * 0.25 * 2.5 ) ) ) < 1e-9 );                 // 1 - (1-d)^2 (1+2d) with d = 0.75
+        CHECK( op( GFXOP_M3DGROUNDFLAT, 6, 0.0, 0.0, 0.0, 100.0, 50.0, 0.0 ) );                 // margin 0 removes it
+        CHECK( Q( GFXQ_M3DGROUND, 2, 0.0, 0.0 ) == 60.0 * nz_fbm( 7, 0.0, 0.0, 5, 0.5, 2.0 ) );
+    }
+    // the grid: (nx + 1) (ny + 1) vertices, 2 nx ny triangles, the heights are the ground's (the floor of fresh() is taken away: the ground is also below 0)
+    CHECK( op( GFXOP_M3DOBJECT, 1, 1.0, 0.0 ) );
+    CHECK( op( GFXOP_M3DOBJECT, 2, 20.0, 0.0 ) );
+    CHECK( ops( GFXOP_M3DTERRAIN, 7, 0, 20.0, 0.0, 0.0, 9.0, 9.0, 100.0, 1.0 ) );
+    CHECK( Q( GFXQ_M3DVERTS, 1, 20.0 ) == 100.0 && Q( GFXQ_M3DTRIS, 1, 20.0 ) == 162.0 );
+    {   // you can walk on it: the floor at a grid point is the ground's height (and between the points it is a slope: its mean)
+        CHECK( fabs( Q( GFXQ_M3DFLOORAT, 3, 300.0, 400.0, 1000.0 ) - Q( GFXQ_M3DGROUND, 2, 300.0, 400.0 ) ) < 1e-9 );
+        double a = Q( GFXQ_M3DGROUND, 2, 300.0, 400.0 ), b = Q( GFXQ_M3DGROUND, 2, 400.0, 400.0 ), c = Q( GFXQ_M3DGROUND, 2, 300.0, 500.0 ), d = Q( GFXQ_M3DGROUND, 2, 400.0, 500.0 );
+        double f = Q( GFXQ_M3DFLOORAT, 3, 350.0, 450.0, 1000.0 );                               // the middle of a cell: on the diagonal b .. c of the triangles (a b d) / (a d c)
+        CHECK( fabs( f - ( a + d ) / 2.0 ) < 1e-9 );
+        (void) b; (void) c;
+    }
+    // a coarse grid: 3 x 3 cells of 300 units covers the same square
+    CHECK( op( GFXOP_M3DOBJECT, 2, 21.0, 0.0 ) );
+    CHECK( ops( GFXOP_M3DTERRAIN, 7, 0, 21.0, 900.0, 0.0, 3.0, 3.0, 300.0, 1.0 ) );
+    CHECK( Q( GFXQ_M3DVERTS, 1, 21.0 ) == 16.0 && Q( GFXQ_M3DTRIS, 1, 21.0 ) == 18.0 );
+    // skirts: 2 vertices and 2 triangles for every cell along each of the four edges
+    CHECK( op( GFXOP_M3DOBJECT, 2, 22.0, 0.0 ) );
+    CHECK( ops( GFXOP_M3DTERRAIN, 8, 0, 22.0, 0.0, 0.0, 3.0, 2.0, 100.0, 1.0, 20.0 ) );
+    CHECK( Q( GFXQ_M3DVERTS, 1, 22.0 ) == 12.0 + 2.0 * 10.0 && Q( GFXQ_M3DTRIS, 1, 22.0 ) == 12.0 + 2.0 * 10.0 );
+    // pictures of the cells: a flat ground, two cells, the pictures 1 and 2 (colors 100 and 200), seen from above
+    fresh();
+    CHECK( op( GFXOP_M3DGROUND, 4, 1.0, 100.0, 0.0, 1.0 ) );
+    CHECK( op( GFXOP_M3DOBJECT, 1, 1.0, 0.0 ) );                                                // (no floor box in the way)
+    CHECK( op( GFXOP_M3DOBJECT, 3, 30.0, 0.0, 255.0 ) );
+    {
+        const char cells[2] = { 0, 1 };                                                          // the cell string is bytes (the first cell picture 1, the second 1 + 1)
+        double a[9] = { 30.0, -100.0, 0.0, 2.0, 1.0, 100.0, 1.0, GFX_NONE, GFX_NONE };
+        lasterr = 0;
+        CHECK( m3d_op( M, GFXOP_M3DTERRAIN, a, 9, cells, 2, &lasterr ) );
+    }
+    CHECK( op( GFXOP_M3DCAMERA, 5, 0.0, 50.0, 150.0, 0.0, -89.0 ) );
+    {
+        const uint8_t* fb = shot();
+        CHECK( PX( fb, 80, 70 ) == 100 && PX( fb, 80, 30 ) == 200 );                              // the camera looks along +x: ahead (up in the picture) is the second cell
+    }
+    // errors: the object, the cell string, the sizes
+    CHECK( !ops( GFXOP_M3DTERRAIN, 7, 0, 99.0, 0.0, 0.0, 3.0, 3.0, 100.0, 1.0 ) && strstr( lasterr, "not defined" ) != 0 );
+    CHECK( op( GFXOP_M3DOBJECT, 1, 23.0 ) );
+    CHECK( !ops( GFXOP_M3DTERRAIN, 7, "abc", 23.0, 0.0, 0.0, 2.0, 2.0, 100.0, 1.0 ) && strstr( lasterr, "one character per cell" ) != 0 );
+    CHECK( !ops( GFXOP_M3DTERRAIN, 7, "\2", 23.0, 0.0, 0.0, 1.0, 1.0, 100.0, (double)( M3D_MAXTEX - 1 ) ) );   // the last picture number + 2 is none
+    CHECK( !ops( GFXOP_M3DTERRAIN, 7, 0, 23.0, 0.0, 0.0, 0.0, 3.0, 100.0, 1.0 ) );                  // no cells
+    CHECK( !ops( GFXOP_M3DTERRAIN, 7, 0, 23.0, 0.0, 0.0, 257.0, 3.0, 100.0, 1.0 ) );                // more than 256
+    CHECK( !ops( GFXOP_M3DTERRAIN, 7, 0, 23.0, 0.0, 0.0, 3.0, 3.0, 0.0, 1.0 ) );                    // a cell of no size
+    CHECK( !op( GFXOP_M3DGROUND, 4, 1.0, 0.0, 10.0, 3.0 ) );                                         // scale 0
+    CHECK( !op( GFXOP_M3DGROUND, 4, 1.0, 100.0, 10.0, 17.0 ) );                                      // 17 octaves
+    CHECK( !op( GFXOP_M3DGROUND, 7, 1.0, 100.0, 10.0, 3.0, 0.0, 0.5, 0.5 ) );                        // lacunarity below 1
+    CHECK( !op( GFXOP_M3DGROUNDFLAT, 6, 8.0, 0.0, 0.0, 1.0, 1.0, 1.0 ) );                            // slot 8
+    CHECK( op( GFXOP_M3DCLEAR, 0 ) && Q( GFXQ_M3DGROUND, 2, 100.0, 200.0 ) == 0.0 );                 // M3D CLEAR forgets the ground function
     // -- errors -----------------------------------------------------------------------------------------------------------------------------
     CHECK( !op( GFXOP_M3DOBJECT, 1, 20000.0 ) );
     CHECK( !op( GFXOP_M3DBOX, 8, 99.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0 ) );                 // object not defined

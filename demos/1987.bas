@@ -40,21 +40,11 @@
 360   D=D-INT((D+180)/360)*360
 370   RETURN D
 380 END FUNC
-390 ' 1 inside a box (centre CX,CY, half sizes RX,RY), falling to 0 over the margin M outside it (smooth)
-400 FUNC PW(X,Y,CX,CY,RX,RY,M)
-410   LOCAL DX,DY,D
-420   DX=ABS(X-CX)-RX:IF DX<0 THEN DX=0
-430   DY=ABS(Y-CY)-RY:IF DY<0 THEN DY=0
-440   D=SQR(DX*DX+DY*DY)/M
-450   IF D>=1 THEN RETURN 0
-460   RETURN (1-D)*(1-D)*(1+2*D)
-470 END FUNC
-480 ' the height of the ground: gentle hills, flat round the house and in the wheat field
-490 FUNC HT(X,Y)
-500   LOCAL H
-510   H=15*SIN(X/610+1)*COS(Y/530)+10*SIN((X+Y)/340)+7*COS(X/170-Y/230)+5*SIN(Y/95+X/130)+12
-520   RETURN 0.65*H*(1-FN PW(X,Y,0,0,260,200,420))*(1-FN PW(X,Y,1100,650,700,500,300))
-530 END FUNC
+480 ' the height of the ground: gentle hills, flat round the house and in the wheat field; the engine's ground function (SETGROUND defines it: fractal noise in C, since 2026-11-20;
+490 ' before it was a sum of sines in BASIC)
+500 FUNC HT(X,Y)
+510   RETURN M3D("GROUND",X,Y)
+520 END FUNC
 540 ' the floor under a point (the ground, the porch, the floor of the house)
 550 FUNC FLR(X,Y)
 560   RETURN M3D("FLOORAT",X,Y,FN HT(X,Y)+40)
@@ -415,24 +405,20 @@
 3195 END PROC
 3196 ' builds the chunk cx,cy into the slot SL: the ground (10 x 10 vertices, 9 x 9 quads) and the trees
 3197 PROC CHUNKBUILD(CX,CY,SL)
-3198   LOCAL O,I,J,X,Y,X0,Y0,B,T0
+3198   LOCAL O,I,J,X0,Y0,T0,C$
 3199   T0=TI
 3200   CALL CHREGIONS(CX,CY)
 3201   O=100+SL
 3202   M3D OBJECT O,0,235
 3203   X0=CX*900:Y0=CY*900
-3204   FOR J=0 TO 9
-3205     FOR I=0 TO 9
-3206       X=X0+I*100:Y=Y0+J*100
-3207       M3D VERTEX O,X,Y,FN HT(X,Y),X*0.5,Y*0.5
-3208     NEXT I
-3209   NEXT J
-3210   FOR J=0 TO 8
-3211     FOR I=0 TO 8
-3212       B=J*10+I
-3213       M3D QUAD O,B,B+1,B+11,B+10,FN OCELL(X0+I*100+50,Y0+J*100+50)
-3214     NEXT I
-3215   NEXT J
+3204   ' the cells' pictures as one string (picture 301 + the code of the character), the grid itself is made in C from the ground function (M3D TERRAIN)
+3205   C$=""
+3206   FOR J=0 TO 8
+3207     FOR I=0 TO 8
+3208       C$=C$+CHR$(FN OCELL(X0+I*100+50,Y0+J*100+50)-301)
+3209     NEXT I
+3210   NEXT J
+3211   M3D TERRAIN O,X0,Y0,9,9,100,301,C$
 3216   IF CX<-4 OR CX>3 OR CY<-4 OR CY>3 THEN
 3217     CALL CHTREES(CX,CY,SL)
 3218   ELSE
@@ -485,6 +471,12 @@
 3265   PRINT "chunks have=";N;" missing=";M;" trees=";NT;" sig=";SG;" cx=";PCX;" cy=";PCY
 3266   PRINT "chunktime built=";CKCNT;" ticks=";CKTOT;" max=";CKMAX
 3267 END PROC
+3270 ' the ground function of the engine: hills of fractal noise (about 900 units across, 4 octaves, up to about 30 high), flattened round the house and over the wheat field
+3271 PROC SETGROUND
+3272   M3D GROUND 1987,900,22,4,8
+3273   M3D GROUNDFLAT 0,0,0,260,200,420
+3274   M3D GROUNDFLAT 1,1100,650,700,500,300
+3275 END PROC
 3320 LABEL ROADDATA
 3330 DATA 8, 0,-165, 0,-450, 250,-800, 800,-1000, 1500,-950, 2200,-700, 3000,-800, 3600,-1100
 3340 DATA 9, -40,150, -300,500, -350,1000, -200,1600, 300,2200, 1000,2600, 1800,2500, 2600,2800, 3600,3000
@@ -1617,6 +1609,7 @@
 12963 ' the bicycle without a rider: it rolls on upright for WFALL seconds, then falls over and slides on its side (deceleration WSLIDE units a second squared); XON / XFR: tilt on
 12964 CGI=0:CGT=0:CMX=0:CMY=0:CMZ=0:CMVX=0:CMVY=0:CMVZ=0:CMYW=0:CMPT=0:CMWY=0:CMWP=0:CMPX=0:CMPY=0:CMPZ=0:CMPX0=0:CMPY0=0:CMPZ0=0:CMTVX=0:CMTVY=0:CMTVZ=0:CMPI=0:CMPK=0:CMDUR=0:CMAZR=0:HLY=0:HLP=0:BRP=0:HQY=0:HQP=0:HKEY=99999:HOX=0:HOY=0:HOZ=0:BJ1=-1:BJ2=0:BJ3=0:BJ4=0:BJ5=0:BJ6=0:BJ7=0:PWA=-99999:PCA=-99999:CNJ=0:CNH=0:CNB=0:HCX=0:HCY=0:HCZ=0:HYS=0:HYC=1:HPS=0:HPC=1:WFALL=3:WSLIDE=120:XON=0:XFR=0:XRS=0:XRC=1:XFS=0:XFC=1:XLF=0
 12960 IF NOT HL THEN CALL W3K_SETUP:CALL W3K_MESH:M3D RESET:CALL MAKETEX
+12965 CALL SETGROUND
 12970 CALL BUILDTERRAIN
 12980 CALL BUILDROADS
 12990 CALL BUILDTREES

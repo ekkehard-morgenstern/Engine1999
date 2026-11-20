@@ -793,14 +793,17 @@ ui-geometry := num-expr "," num-expr "," num-expr "," num-expr "," num-expr .
 > The 3D mesh renderer (docs/3d-mesh-subsystem.md; M3D is an extension word): objects are triangle meshes with a position and heading, things are billboards. M3D OBJECT o[,flags[,light]], VERTEX o,x,y,z[,u[,v]],
 > FACE o,a,b,c,tex, QUAD o,a,b,c,d,tex, BOX o,x1,y1,z1,x2,y2,z2,tex[,faces], OBJPOS o,x,y,z[,yaw], OBJSHOW, OBJLIGHT, OBJFLAGS o,v, THING n,x,y,z,tex,w,h, THINGPOS n,x,y,z, THINGTEX / THINGLIGHT / THINGTRANS n,v, THINGOFF n,
 > CAMERA x,y,z,yaw[,pitch], TURN dyaw[,dpitch], PLAYER r,h,eye,step, MOVE fwd,right, LIFT h, LAMP n,x,y,z,r,amount[,dx,dy,dz,angle] (a cone: direction and half angle in degrees), VIEW x,y,w,h[,scale[,fov]], FOG d, FAR d, SKY tex[,rep[,shift]], TEXTURE n,a$, RESET \| CLEAR \| COLORMAP \| RENDER, SOFTWARE \| HARDWARE (the renderer that draws).
-> Functions: M3D("X"\|"Y"\|"Z"\|"EYE"\|"YAW"\|"PITCH"\|"LIFT"\|"HIT"\|"FLOORZ"\|"SHOTKIND"\|"SHOTOBJ"\|"SHOTDIST"\|"SHOTX"\|"SHOTY"\|"SHOTZ"\|"DRAWN"\|"RENDERER"\|"HWAVAIL"), ("FLOORAT"\|"CEILAT"\|"ZONE"\|"ZONETAG",x,y,z), ("SHOOT"\|"USE"\|"SEES"\|"TON"\|"TX"\|"TY"\|"TZ"\|"DIST"\|"BEARING"\|"TEXW"\|"TEXH"\|"OBJON"\|"OBJX"\|"OBJY"\|"OBJZ"\|"OBJYAW"\|"VERTS"\|"TRIS",n).
+> Functions: M3D("X"\|"Y"\|"Z"\|"EYE"\|"YAW"\|"PITCH"\|"LIFT"\|"HIT"\|"FLOORZ"\|"SHOTKIND"\|"SHOTOBJ"\|"SHOTDIST"\|"SHOTX"\|"SHOTY"\|"SHOTZ"\|"DRAWN"\|"RENDERER"\|"HWAVAIL"), ("FLOORAT"\|"CEILAT"\|"ZONE"\|"ZONETAG",x,y,z), ("SHOOT"\|"USE"\|"SEES"\|"TON"\|"TX"\|"TY"\|"TZ"\|"DIST"\|"BEARING"\|"TEXW"\|"TEXH"\|"OBJON"\|"OBJX"\|"OBJY"\|"OBJZ"\|"OBJYAW"\|"VERTS"\|"TRIS",n), ("GROUND",x,y).
 
 ```ebnf
 m3d-stmt := XFUNC(M3D) ( RESET | CLEAR | COLORMAP | RENDER | SOFTWARE | HARDWARE | TEXTURE num-expr "," str-expr |
                              ( OBJECT | VERTEX | FACE | QUAD | BOX | OBJPOS | OBJSHOW | OBJLIGHT | OBJFLAGS | THING | THINGPOS | THINGTEX | THINGOFF | THINGLIGHT | THINGTRANS |
-                               CAMERA | TURN | PLAYER | MOVE | LIFT | LAMP | VIEW | FOG | FAR | SKY | THINGMOVE | ZONE ) num-expr { "," num-expr } | WORLD ) .
+                               CAMERA | TURN | PLAYER | MOVE | LIFT | LAMP | VIEW | FOG | FAR | SKY | THINGMOVE | ZONE | GROUND | GROUNDFLAT ) num-expr { "," num-expr } |
+                             TERRAIN num-expr { "," num-expr } [ "," str-expr { "," num-expr } ] | WORLD ) .
 ```
 
+> M3D GROUND seed,scale,amp,octaves[,base[,gain[,lacunarity]]] defines the height of the ground (fractal noise, in C), M3D GROUNDFLAT n,cx,cy,rx,ry,margin flattens it round a box,
+> M3D TERRAIN o,x0,y0,nx,ny,cell,tex[,cells$[,skirt[,uvscale]]] fills object o with a grid of it (cells$: a character a cell, picture tex + its code), M3D("GROUND",x,y) is its height.
 > The 3D sector renderer (docs/3d-subsystem.md; W3D is an extension word): a world of sectors (floor and ceiling height, flats, light) bounded by walls, some of them portals
 > into the next sector, drawn like Doom and Duke Nukem 3D into a view on the target graphics layer, plus flat pictures that face the viewer (things). Textures are pictures in
 > the GFX GRAB format. W3D SECTOR s,floor,ceil[,floortex[,ceiltex[,light]]] defines a sector (ceiltex -1 = the sky of W3D SKY), W3D WALL s,x1,y1,x2,y2,tex[,next] adds a wall
