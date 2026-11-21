@@ -38,6 +38,8 @@ API: `init_varmem` / `cleanup_varmem` (frees every variable), `vmem_var( vmem, n
 
 ## Instruction set (`instset.h`, the spec)
 
+**The reference of every instruction (codes, stack effects, flags, details) is [vm-instructions.md](vm-instructions.md), generated from `instset.h` (`make vmref`; `make vmref-check` is part of `make check`).** The text below describes how the code generator and the VM use them.
+
 Stack VM, **two stacks**: data stack of 64-bit doubles (strings are heap pointers that instructions free), return stack of 32-bit code addresses. Forth-style stack comments in the spec.
 
 Encoding: `<ins> [<ext>] [<hi><lo>]`, or `[<b3><b2><b1><b0>]` with the W flag. Instruction byte = `P C E W | iiii` (P: has a param, C: param/stack is code vs data, E: extended 12-bit opcode follows, W: the param has 32 bits). The code generator emits code addresses (`PHPA.C`, `BRIA`, `BRIR`, and `RSTR` with a target) always wide, because they are patched after the instruction was generated (`cgen_patch_param()`); data offsets (`PHPA.D`, `INPL`), `LINE` numbers and `PHIM` immediates only when they don't fit 16 (17) bits. Nothing in a program limits the size of the code or data segment except the soft limit.

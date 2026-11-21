@@ -12,6 +12,7 @@ Part of the roadmap: see [the central roadmap](../roadmap.md). The I/O subsystem
 | 29 | `LIST #n` **done 2026-11-08**; open: `PRINT` comma zones on files, files kept open across `CHAIN` (1, 4, 8) | I/O corners | Low | |
 | 32 | Machine monitor limits (5) | no step-over, conditional breakpoints, watches; no variable inspection | Low | |
 | 33 | VM leftovers (5) | `WRLV`, inline assembler `[ … ]` / `{ … }`, `DEF FN` can't call itself | Low | |
+| 97 | Performance follow-ups (2026-11-21) | VM: string / call-heavy code is not fused (`RRSV`, `CALF`, `INS_*` functions) and `vmtest1` has no fusion-specific cases beyond `fusetest.sh`; software renderer: SIMD measured only on a Sandy Bridge (AVX, no AVX2 / FMA), not in the 1987 game itself; one palette change (`M3D COLORMAP`) costs ~72 M instructions (`m3d_shade_index()` searches the palette for every shade: a fade every frame would be expensive); triangle setup / `draw_object` (4 % of a frame) and gathers (translucent mixing, texel fetch) left scalar on purpose | Low-Medium | `docs/compiler-and-vm.md`, `docs/3d-mesh-subsystem.md` |
 | 34 | Remaining fixed limits (6) | 16-bit variable numbers, 6 array dimensions, strings ≤ 65535 | Low | far from being reached |
 
 ## 5. VM and instruction set leftovers

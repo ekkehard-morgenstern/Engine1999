@@ -95,6 +95,8 @@ The version is the newest git tag of the form `vMAJOR.MINOR.BUILD` (`./bump_vers
 
 ## Font and colors
 
+`perl instref.pl` (or `make vmref`) reads the specification comment and the `#define INS_*` codes of `instset.h` and writes `docs/vm-instructions.md`; `make vmref-check` (in `make check`) fails if that file is out of date, if a code in the comment differs from its `#define`, or if a `#define` has no entry in the comment. Change `instset.h` first, then run `make vmref`.
+
 `perl grammar.pl` (or `make grammar`) reads `bascomp.ebnf` and writes the quick reference `docs/grammar.md` and `docs/grammar.html`; `make grammar-check` (`perl grammar.pl --check`) fails if a grammar rule is used but not defined or if the two files are out of date. Not part of `make all` (it needs perl); run it whenever `bascomp.ebnf` changes.
 
 `perl fontcomp.pl` reads `8x12font1.txt` and writes `8x12font1.c` (it is not wired into `make`; output is written directly to `8x12font1.c`, overwriting it).

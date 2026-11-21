@@ -69,7 +69,7 @@ PROGS=sdltest1 sdltest2 sdltest3 sdltest4 engine1999 joytest1 basictest1 testcom
 all: $(PROGS)
 	echo ok >all
 
-.PHONY: grammar grammar-check kit install uninstall man-check check hosttest dist orig clean distclean
+.PHONY: grammar grammar-check vmref vmref-check kit install uninstall man-check check hosttest dist orig clean distclean
 
 # the quick reference of the language (docs/grammar.md and docs/grammar.html) from bascomp.ebnf; needs perl
 grammar:
@@ -78,6 +78,14 @@ grammar:
 # fails if a rule is used but not defined, or if the quick reference is out of date
 grammar-check:
 	perl grammar.pl --check
+
+# the VM instruction reference (docs/vm-instructions.md) from the specification in instset.h; needs perl
+vmref:
+	perl instref.pl
+
+# fails if the reference is out of date, or if a code in the specification comment of instset.h differs from its #define
+vmref-check:
+	perl instref.pl --check
 
 BASEMOD=glload.o m3dgl.o sdlevent.o sdllayer.o sdlmain.o sdlscreen.o textscreen.o tilescreen.o sprscreen.o sprpath.o policy.o 8x12font1.o sdlaudio.o synth.o mml.o printusing.o clipboard.o sdlutil.o \
 		basic.o baspgm.o baslin.o bastok.o bascomp.o nodetype.o codegen.o cgenctl.o cgendecl.o cgenprog.o vars.o runtime.o vm.o basfiles.o iodev.o gfxcore.o gfxops.o w3d.o w3dworld.o m3d.o m3dsoft.o m3dworld.o json.o jsonops.o noise.o roadnet.o bmp.o shot.o gfxfile.o basbuild.o baslib.o cgenlib.o basrepl.o basdebug.o ansi.o palette.o keyseq.o keystate.o cursors.o mouse.o joy.o sdljoy.o sdlkeys.o scredit.o conscr.o fulledit.o vmasm.o monitor.o font.o ui.o synhl.o
@@ -526,6 +534,7 @@ check: $(CHECKTESTS) engine1999 engine1999c
 	if sh game1987test.sh > $$log 2>&1; then printf '%-12s ok\n' game1987test; else printf '%-12s FAILED\n' game1987test; tail -n 20 $$log; fail=$$((fail+1)); fi; \
 	if sh chunkstest.sh > $$log 2>&1; then printf '%-12s ok\n' chunkstest; else printf '%-12s FAILED\n' chunkstest; tail -n 20 $$log; fail=$$((fail+1)); fi; \
 	if sh fusetest.sh > $$log 2>&1; then printf '%-12s ok\n' fusetest; else printf '%-12s FAILED\n' fusetest; tail -n 20 $$log; fail=$$((fail+1)); fi; \
+	if perl instref.pl --check > $$log 2>&1; then printf '%-12s ok\n' vmref-check; else printf '%-12s FAILED\n' vmref-check; tail -n 20 $$log; fail=$$((fail+1)); fi; \
 	if sh levelstest.sh > $$log 2>&1; then printf '%-12s ok\n' levelstest; else printf '%-12s FAILED\n' levelstest; tail -n 20 $$log; fail=$$((fail+1)); fi; \
 	if sh worldtest.sh > $$log 2>&1; then printf '%-12s ok\n' worldtest; else printf '%-12s FAILED\n' worldtest; tail -n 20 $$log; fail=$$((fail+1)); fi; \
 	if sh instedtest.sh > $$log 2>&1; then printf '%-12s ok\n' instedtest; else printf '%-12s FAILED\n' instedtest; tail -n 20 $$log; fail=$$((fail+1)); fi; \

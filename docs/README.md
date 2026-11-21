@@ -13,6 +13,7 @@ Players and BASIC programmers: start with the [README](../README.md). Engine con
 | [basic-language.md](basic-language.md) | Tokenized line format, binary program file (`.e99`) format, token set, literals, grammar summary |
 | [compiler-and-vm.md](compiler-and-vm.md) | Program store, syntax tree, node types, code generator, instruction set, variable memory |
 | [grammar.md](grammar.md) | **The language at a glance**: the whole syntax as a quick reference card, generated from `bascomp.ebnf` (also [grammar.html](grammar.html), with colors and links) |
+| [vm-instructions.md](vm-instructions.md) | **VM instruction reference**: encoding, every instruction with code, stack effect, flags and details; generated from `instset.h` by `instref.pl` (`make vmref`, `make vmref-check`) |
 | [build-and-test.md](build-and-test.md) | Building, executables, test programs, tooling |
 | [noise.md](noise.md) | `HASH`, `NOISE`, `FBM`: pure hash and gradient / fractal noise for procedural worlds (implemented) |
 | [json-subsystem.md](json-subsystem.md) | JSON trees from BASIC: `JSON LOAD` / `SAVE` / `SET` / `GET` ..., paths like `a.b.c` (implemented) |
