@@ -483,5 +483,35 @@ if grep -q '^Error' $T/out; then echo "FAILED: the game stopped with: $(grep '^E
 # 14. the world and the game are the same every run
 first=$(grep -E '^(state|cam|ray|chunks)' $T/out | md5sum); run; second=$(grep -E '^(state|cam|ray|chunks)' $T/out | md5sum)
 [ "$first" = "$second" ] || { echo "FAILED: two runs differ"; fail=$((fail+1)); }
+# 15. the static world (world mode: G1987_WORLD names the folder of the world, G1987_WORLDSIZE its size in chunks): the world is made (a progress loop without a picture), the game runs on it
+#     (jumps, walking on the ground of the world), the position is saved in the folder when the game ends and read again by the next start
+W=$T/world
+rm -rf "$W" 2>/dev/null
+cat > $T/play <<'PLAY'
+state
+goto 0 -172 90
+f 1
+wait 1
+state
+goto 9000 7000 45
+wait 1
+state
+goto -30000 12000 200
+wait 1
+state
+quit
+PLAY
+HOME=$T G1987_WORLD=$W G1987_WORLDSIZE=16 G1987_HEADLESS=1 G1987_PLAY=$T/play timeout 300 sh -c 'printf "LOAD \"demos/1987\"\nRUN\nBYE\n" | ./engine1999c --allow=all' > $T/out 2>&1
+[ -s "$W/world.dat" ] || { echo "FAILED: world mode made no world"; fail=$((fail+1)); }
+expect "world: John at the house" "$(val state 2 jx)" -5 60
+expect "world: after a jump" "$(val state 3 jx)" 8000 10000
+expect "world: John stands on the ground of the world" "$(awk -v z="$(val state 3 jz)" 'BEGIN { print (z > -400 && z < 4000) ? 1 : 0 }')" 1 1
+if grep -q '^Error' $T/out; then echo "FAILED: the game in world mode stopped with: $(grep '^Error' $T/out)"; fail=$((fail+1)); fi
+# the position: a start that plays 3 frames (G1987_FRAMELOG) saves it; the saved position is loaded by the next start
+printf '4000\n-3000\n90\n4100\n-3100\n' > "$W/player.dat"
+HOME=$T G1987_WORLD=$W G1987_HEADLESS=1 G1987_FRAMELOG=$T/fl G1987_FRAMES=3 timeout 300 sh -c 'printf "LOAD \"demos/1987\"\nRUN\nBYE\n" | ./engine1999c --allow=all' > $T/out 2>&1
+saved=$(head -1 "$W/player.dat" 2>/dev/null)
+expect "world: the saved position was loaded and saved again" "${saved:-0}" 3900 4100
+rm -rf "$W" "$T/fl" 2>/dev/null
 if [ $fail -ne 0 ]; then echo "$fail failure(s)"; fi
 exit $fail

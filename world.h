@@ -48,7 +48,7 @@ so the same world gives the same ground on every machine, and neighbouring chunk
 #define WORLD_CHUNK     15625.0         // units a chunk is wide (500 m)
 #define WORLD_RECSIZE   32
 #define WORLD_HDRSIZE   64
-#define WORLD_VERSION   2
+#define WORLD_VERSION   3
 
 // flags of a chunk
 #define WCF_TAR         1               // a tarred road passes through the chunk

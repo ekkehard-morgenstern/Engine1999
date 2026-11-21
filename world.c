@@ -92,6 +92,8 @@ static void ground_setup( ground_t* g, uint64_t seed ) {
     g->mnt[0].r0 = 14000.0; g->mnt[0].r1 = 22000.0;
     g->lake.on = true; g->lake.seed = nz_mix( seed + 4 ); g->lake.scale = 40000.0; g->lake.depth = 600.0; g->lake.lo = 0.35; g->lake.hi = 0.55;
     g->net.on = true; g->net.spacing = 9000.0; g->net.chance = 0.5; g->net.wdirt = 400.0; g->net.tspacing = 200000.0; g->net.tchance = 0.85; g->net.wtar = 3000.0;
+    g->flat[0].on = true; g->flat[0].cx = 0.0; g->flat[0].cy = 0.0; g->flat[0].rx = 260.0; g->flat[0].ry = 200.0; g->flat[0].margin = 1500.0;        // the yard of the house of demos/1987.bas: ground 0
+    g->flat[1].on = true; g->flat[1].cx = 1100.0; g->flat[1].cy = 650.0; g->flat[1].rx = 700.0; g->flat[1].ry = 500.0; g->flat[1].margin = 1200.0;    // its wheat field
     g->quiet.on = true; g->quiet.cx = 0.0; g->quiet.cy = 0.0; g->quiet.rx = 3900.0; g->quiet.ry = 3900.0; g->quiet.margin = 1200.0;
     m3d_ground_sync_roads( g );
 }
