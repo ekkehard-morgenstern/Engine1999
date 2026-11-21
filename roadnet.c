@@ -31,6 +31,18 @@
 #include <string.h>
 #include <stdlib.h>
 
+#pragma GCC optimize ("fp-contract=off")             // (the vector loop of rnet_near() and its scalar twin must give the same bits)
+#pragma GCC diagnostic ignored "-Wpsabi"
+
+typedef double v4d __attribute__((vector_size(32)));
+typedef long long v4l __attribute__((vector_size(32)));
+
+static int rn_simd = -1;
+
+void rnet_set_simd( int on ) {                             // 1 = vector loop, 0 = scalar twin, -1 = by the environment (ENGINE1999_NOSIMD) again (tests)
+    rn_simd = on;
+}
+
 #define RNET_MAXPTS 320         // a road of more steps than this is not cached (computed again at every call)
 #define RNET_CACHE  512
 
@@ -197,7 +209,43 @@ void rnet_near( const rnet_t* n, double x, double y, double reach, rnear_t* out 
                     } else {
                         rnet_point( l, (double) kmin / (double) l->steps, &ax, &ay );
                     }
-                    for ( int k = kmin; k <= kmax; ++k ) {
+                    int kstart = kmin;
+                    if ( rn_simd < 0 ) {
+                        rn_simd = getenv( "ENGINE1999_NOSIMD" ) != 0 ? 0 : 1;
+                    }
+                    if ( rn_simd && rc->npts[e] > 0 ) {
+                        // four segments at a time: their distances to (x, y) are found together (the division and the clamp); the square root (and the choice of the
+                        // first nearest one) is made only for a lane that can beat the best so far: d2 > best^2 (1 + 1e-9) cannot (so the result is the scalar loop's)
+                        const double* P = rc->pts[e];
+                        v4d vx = { x, x, x, x }, vy = { y, y, y, y }, zero = { 0, 0, 0, 0 }, one = { 1, 1, 1, 1 }, eps = { 1.0e-12, 1.0e-12, 1.0e-12, 1.0e-12 };
+                        for ( ; kstart + 3 <= kmax; kstart += 4 ) {
+                            const double* q = P + 2 * kstart;
+                            v4d ax4 = { q[0], q[2], q[4], q[6] }, ay4 = { q[1], q[3], q[5], q[7] }, px4 = { q[2], q[4], q[6], q[8] }, py4 = { q[3], q[5], q[7], q[9] };
+                            v4d ux4 = px4 - ax4, uy4 = py4 - ay4, len24 = ux4 * ux4 + uy4 * uy4;
+                            v4d num = ( vx - ax4 ) * ux4 + ( vy - ay4 ) * uy4;
+                            v4d u4 = num / len24;
+                            v4l big = len24 > eps;
+                            u4 = (v4d)( (v4l) u4 & big );                             // len2 <= 1e-12: u = 0
+                            v4l lo = u4 < zero, hi = u4 > one;
+                            u4 = (v4d)( ( (v4l) u4 & ~lo ) & ~hi ) + (v4d)( (v4l) one & hi );
+                            v4d dx4 = ax4 + u4 * ux4 - vx, dy4 = ay4 + u4 * uy4 - vy, d24 = dx4 * dx4 + dy4 * dy4;
+                            double bl = best * best * ( 1.0 + 1.0e-9 );
+                            for ( int j = 0; j < 4; ++j ) {
+                                if ( d24[j] <= bl ) {
+                                    double d = sqrt( d24[j] );
+                                    if ( d < best ) {
+                                        best = d;
+                                        bt = ( (double)( kstart + j ) + u4[j] ) / (double) l->steps;
+                                        bl = best * best * ( 1.0 + 1.0e-9 );
+                                    }
+                                }
+                            }
+                        }
+                        if ( kstart <= kmax ) {
+                            ax = P[2 * kstart]; ay = P[2 * kstart + 1];
+                        }
+                    }
+                    for ( int k = kstart; k <= kmax; ++k ) {
                         if ( rc->npts[e] > 0 ) {
                             px = rc->pts[e][2 * ( k + 1 )]; py = rc->pts[e][2 * ( k + 1 ) + 1];
                         } else {

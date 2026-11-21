@@ -181,6 +181,8 @@ const int* m3d_used( m3d_t* m, int* n );
 
 // -- shared helpers -------------------------------------------------------------------------------------------------------------
 
+void m3d_soft_set_simd( int on );                                  // m3dsoft.c: the span kernel of the software rasteriser: 1 vectors, 0 scalar twin (same bits), -1 by the environment
+
 static inline int imod( int a, int n ) {
     int r = a % n;
     return r < 0 ? r + n : r;

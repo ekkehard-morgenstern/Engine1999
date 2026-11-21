@@ -66,6 +66,7 @@ typedef struct _rnear_t {
 bool rnet_link( const rnet_t* n, int net, int64_t rx, int64_t ry, int e, rlink_t* l );
 // frees the cache of the calling thread (the worker thread of m3d.c calls it when it ends)
 void rnet_flush( void );
+void rnet_set_simd( int on );                               // rnet_near(): 1 vector loop, 0 scalar twin (same bits), -1 by the environment ENGINE1999_NOSIMD
 // the roads of a network (0 dirt, 1 tarred) that may touch the rectangle (their bounding box and their wander cross it): up to max of them, how many
 int  rnet_links( const rnet_t* n, int net, double x0, double y0, double x1, double y1, rlink_t* out, int max );
 // the place at t (0 .. 1) of a road

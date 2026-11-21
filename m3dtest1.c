@@ -1120,6 +1120,58 @@ int main( void ) {
         CHECK( shot() != 0 );
         CHECK( op( GFXOP_M3DMOVE, 2, 7.0 * ( i % 5 ), 3.0 ) );
     }
+    // -- rnet_near(): the vector loop against its scalar twin (the same bits for 20000 places, dirt tracks and tarred roads) -------------------------------------
+    {
+        rnet_t rn;
+        memset( &rn, 0, sizeof(rn) );
+        rn.on = true; rn.spacing = 1800.0; rn.chance = 0.45; rn.wdirt = 140.0; rn.tspacing = 9000.0; rn.tchance = 0.4; rn.wtar = 600.0;
+        int diff = 0;
+        for ( int i=0; i < 20000; ++i ) {
+            double x = (double)( ( i * 7919 ) % 40000 ) - 20000.0 + i * 0.37, y = (double)( ( i * 104729 ) % 40000 ) - 20000.0 + i * 0.11;
+            rnear_t a, b;
+            rnet_set_simd( 1 ); rnet_near( &rn, x, y, 500.0, &a );
+            rnet_set_simd( 0 ); rnet_near( &rn, x, y, 500.0, &b );
+            if ( a.dirt != b.dirt || a.tar != b.tar || a.tt != b.tt ) { ++diff; }
+        }
+        CHECK( diff == 0 );
+        rnet_set_simd( -1 );
+    }
+    // -- the vector span kernel against its scalar twin: the same bytes (fog, haze, lamps, translucency, textures of any size, several views) ------------------
+    {
+        fresh();
+        // a patterned picture 7 x 5 (not a power of two: wraps by division) and one of 8 x 16 (wraps by a mask)
+        uint8_t b7[4 + 35], b8[4 + 128];
+        b7[0] = 0; b7[1] = 7; b7[2] = 0; b7[3] = 5; b8[0] = 0; b8[1] = 8; b8[2] = 0; b8[3] = 16;
+        for ( int i=0; i < 35; ++i ) { b7[4+i] = (uint8_t)( 1 + ( i * 37 ) % 200 ); }
+        for ( int i=0; i < 128; ++i ) { b8[4+i] = (uint8_t)( 1 + ( i * 53 ) % 200 ); }
+        double a1[1] = { 4.0 }, a2[1] = { 5.0 };
+        const char* err = 0;
+        CHECK( m3d_op( M, GFXOP_M3DTEXTURE, a1, 1, (const char*) b7, sizeof(b7), &err ) );
+        CHECK( m3d_op( M, GFXOP_M3DTEXTURE, a2, 1, (const char*) b8, sizeof(b8), &err ) );
+        CHECK( op( GFXOP_M3DOBJECT, 1, 2.0 ) );
+        CHECK( op( GFXOP_M3DBOX, 8, 2.0, 100.0, -60.0, 0.0, 130.0, 60.0, 90.0, 4.0 ) );
+        CHECK( op( GFXOP_M3DOBJECT, 1, 3.0 ) );
+        CHECK( op( GFXOP_M3DBOX, 8, 3.0, 40.0, 70.0, 0.0, 90.0, 120.0, 60.0, 5.0 ) );
+        CHECK( op( GFXOP_M3DOBJECT, 2, 4.0, 0.0 ) );
+        CHECK( op( GFXOP_M3DBOX, 8, 4.0, 60.0, -30.0, 10.0, 80.0, 30.0, 50.0, 2.0 ) );
+        CHECK( op( GFXOP_M3DLAMP, 6, 0.0, 60.0, 0.0, 40.0, 300.0, 200.0 ) );
+        for ( int mode = 0; mode < 3; ++mode ) {
+            if ( mode == 1 ) { CHECK( op( GFXOP_M3DFOG, 1, 400.0 ) ); }
+            if ( mode == 2 ) { CHECK( op( GFXOP_M3DFOG, 3, 400.0, 5.0, 100.0 ) ); }
+            for ( int yaw = 0; yaw < 360; yaw += 37 ) {
+                CHECK( op( GFXOP_M3DCAMERA, 5, 0.0, 0.0, 0.0, (double) yaw, -12.0 ) );
+                m3d_soft_set_simd( 1 );
+                const uint8_t* fa = m3d_render( M );
+                uint8_t* copy = (uint8_t*) malloc( 160U * 100U );
+                memcpy( copy, fa, 160U * 100U );
+                m3d_soft_set_simd( 0 );
+                const uint8_t* fb2 = m3d_render( M );
+                CHECK( memcmp( copy, fb2, 160U * 100U ) == 0 );
+                free( copy );
+            }
+        }
+        m3d_soft_set_simd( -1 );
+    }
     test_switch();
     m3d_free( M );
     CHECK( fk.destroyed == 5 );

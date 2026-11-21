@@ -28,6 +28,11 @@
 
 #include "m3dpriv.h"
 #include "gfxops.h"
+#if defined(__SSE__)
+#include <xmmintrin.h>
+#endif
+
+#pragma GCC optimize ("fp-contract=off", "no-math-errno")      // (sqrtf then is one instruction; no errno for a negative argument is needed)
 
 /*
 The software renderer of the mesh module: every triangle is rasterized into a palette bitmap with a depth buffer. Its state (the color map of
@@ -202,6 +207,188 @@ typedef struct {
     unsigned lampmask;                      // the lamps whose reach touches the triangle's bounding box (bit k = lamp k)
 } tri_t;
 
+// -- the span kernel: 4 pixels at a time ---------------------------------------------------------------------------------------
+// For four neighbouring pixels of a row: the depth z = 1 / iz and the texel coordinates floor( u / z ), floor( v / z ). GCC's vector extensions (four doubles:
+// one AVX register, two SSE2 ones on a plain x86-64, two NEON ones elsewhere) do the divisions and the floor together; no intrinsics, so any target builds.
+// z of a lane is 0 when the pixel is not drawn (behind the eye, farther than the far limit, or not nearer than the depth buffer: zb is only read for the
+// first nl lanes). The scalar twin gives the same numbers bit for bit (the file is compiled without fused multiply-add contraction: #pragma above); the
+// environment variable ENGINE1999_NOSIMD selects it (tests compare the two).
+#pragma GCC diagnostic ignored "-Wpsabi"                            // (32 byte vectors in static inline functions: the ABI does not matter, nothing is exported)
+typedef double v4d __attribute__((vector_size(32)));
+typedef long long v4l __attribute__((vector_size(32)));
+typedef int v4i __attribute__((vector_size(16)));
+
+static int soft_simd = -1;
+
+typedef struct { double base, fogd, fogstart, far, ifog, iden; bool haze; const lamp_t* lamps; unsigned lampmask; double ir[M3D_MAXLAMPS], icn[M3D_MAXLAMPS]; } fogp_t;       // ir = 1 / radius, icn = 1 / ( 1 - cos of the cone angle ) of each lamp: multiplied, not divided, per pixel       // the light of the triangle, the fog (m3d_t) and the lamps that reach it
+
+void m3d_soft_set_simd( int on ) {                                      // 1 = vector kernel, 0 = scalar twin, -1 = by the environment again (tests)
+    soft_simd = on;
+}
+
+// the light the lamps add at a world point (brightening only: 0 .. much); a cone is full on its axis and nothing at the edge
+static double lamp_add1( const fogp_t* fp, double wx, double wy, double wz ) {
+    double add = 0;
+    for ( int k=0; k < M3D_MAXLAMPS; ++k ) {
+        const lamp_t* l = &fp->lamps[k];
+        if ( ( fp->lampmask >> k ) & 1U ) {
+            double dx = wx - l->x, dy = wy - l->y, dz = wz - l->z, d2 = dx * dx + dy * dy + dz * dz;
+            if ( d2 < l->r * l->r ) {
+                double sp = 1.0;
+                if ( l->spot ) {
+                    // a cone: full on the axis, nothing at the edge (linear in the cosine of the angle to the axis); outside the cone is
+                    // found without a square root (the cosine is positive: dot > 0 and dot^2 < cc^2 * d2 is outside)
+                    double dot = dx * l->dx + dy * l->dy + dz * l->dz;
+                    if ( l->cc > 0.0 && ( dot <= 0.0 || dot * dot < l->cc * l->cc * d2 ) ) {
+                        continue;
+                    }
+                    sp = d2 > 1.0e-18 ? ( dot / (double) sqrtf( (float) d2 ) - l->cc ) * fp->icn[k] : 1.0;
+                    sp = sp < 0.0 ? 0.0 : sp > 1.0 ? 1.0 : sp;
+                }
+                add += l->amount * ( 1.0 - (double) sqrtf( (float) d2 ) * fp->ir[k] ) * sp;
+            }
+        }
+    }
+    return add;
+}
+
+static void span4_scalar( const tri_t* t, const double* B, int x0, int nl, const float* zb, const fogp_t* fp, double* lz, int* lu, int* lv, int* li, int* hk ) {
+    double far = fp->far;
+    for ( int j=0; j < 4; ++j ) {
+        double xf = (double)( x0 + j ) + 0.5;
+        double iz = B[0] + t->gx[0] * xf;
+        lz[j] = 0.0; lu[j] = lv[j] = li[j] = hk[j] = 0;
+        if ( j < nl && iz > 1.0e-12 ) {
+            double z = 1.0 / iz;
+            if ( z < (double) zb[x0 + j] && ( far <= 0 || z <= far ) ) {
+                lz[j] = z;
+                lu[j] = (int) floor( ( B[1] + t->gx[1] * xf ) * z );
+                lv[j] = (int) floor( ( B[2] + t->gx[2] * xf ) * z );
+                double l = fp->base;
+                if ( fp->lampmask != 0 ) {
+                    l += lamp_add1( fp, ( B[3] + t->gx[3] * xf ) * z, ( B[4] + t->gx[4] * xf ) * z, ( B[5] + t->gx[5] * xf ) * z ) * ( (double)( M3D_LEVELS - 1 ) / 255.0 );
+                }
+                int h = 0;
+                if ( fp->fogd > 0 ) {
+                    if ( fp->haze ) {
+                        double q = ( z - fp->fogstart ) * fp->iden;
+                        h = q <= 0.0 ? 0 : q >= 1.0 ? 15 : (int)( q * q * 15.0 + 0.5 );
+                    } else {
+                        double ff = 1.0 - z * fp->ifog;
+                        l *= ff < 0 ? 0 : ff;
+                    }
+                }
+                li[j] = (int)( l + 0.5 ); hk[j] = h;
+            }
+        }
+    }
+}
+
+typedef float v4f __attribute__((vector_size(16)));
+
+// sqrtf( (float) x ) for four lanes, as doubles: the same value as the scalar expression (a float square root is correctly rounded: sqrtps = sqrtss)
+static inline v4d sqrtf4( v4d x ) {
+    v4f f = __builtin_convertvector( x, v4f );
+#if defined(__SSE__)
+    f = (v4f) _mm_sqrt_ps( (__m128) f );
+#else
+    for ( int j=0; j < 4; ++j ) { f[j] = sqrtf( f[j] ); }
+#endif
+    return __builtin_convertvector( f, v4d );
+}
+
+static inline v4d sel4( v4l m, v4d a, v4d b ) {                       // lane-wise m ? a : b
+    return (v4d)( ( (v4l) a & m ) | ( (v4l) b & ~m ) );
+}
+
+static inline v4i floor4( v4d x ) {
+    v4i ti = __builtin_convertvector( x, v4i );                             // truncates; one too high for a negative fraction
+    v4d back = __builtin_convertvector( ti, v4d );
+    v4l lt = x < back;                                                      // -1 where x < trunc( x )
+    return ti + __builtin_convertvector( lt, v4i );
+}
+
+static void span4( const tri_t* t, const double* B, int x0, int W, const float* zb, const fogp_t* fp, double* lz, int* lu, int* lv, int* li, int* hk ) {
+    double far = fp->far;
+    int nl = W - x0 < 4 ? W - x0 : 4;
+    if ( soft_simd < 0 ) {
+        soft_simd = getenv( "ENGINE1999_NOSIMD" ) != 0 ? 0 : 1;
+    }
+    if ( !soft_simd ) {
+        span4_scalar( t, B, x0, nl, zb, fp, lz, lu, lv, li, hk );
+        return;
+    }
+    double xf0 = (double) x0 + 0.5;
+    v4d xf = { xf0, xf0 + 1.0, xf0 + 2.0, xf0 + 3.0 };
+    v4d iz = B[0] + t->gx[0] * xf;
+    v4d zero = { 0, 0, 0, 0 };
+    v4d one = { 1, 1, 1, 1 };
+    v4d zbv = { zb[x0], nl > 1 ? zb[x0+1] : -1.0f, nl > 2 ? zb[x0+2] : -1.0f, nl > 3 ? zb[x0+3] : -1.0f };
+    v4d eps = { 1.0e-12, 1.0e-12, 1.0e-12, 1.0e-12 };
+    v4d z = one / iz;
+    v4l ok = ( iz > eps ) & ( z < zbv );
+    if ( far > 0 ) {
+        v4d fv = { far, far, far, far };
+        ok &= ( z <= fv );
+    }
+    if ( ok[0] == 0 && ok[1] == 0 && ok[2] == 0 && ok[3] == 0 ) {
+        lz[0] = lz[1] = lz[2] = lz[3] = 0.0; lu[0] = lu[1] = lu[2] = lu[3] = 0; lv[0] = lv[1] = lv[2] = lv[3] = 0; li[0] = li[1] = li[2] = li[3] = 0; hk[0] = hk[1] = hk[2] = hk[3] = 0;
+        return;
+    }
+    v4d u = ( B[1] + t->gx[1] * xf ) * z, v = ( B[2] + t->gx[2] * xf ) * z;
+    v4l zi = (v4l) z & ok;
+    v4d zz = (v4d) zi;
+    v4i iu = floor4( u ), iv = floor4( v );
+    v4d lvv = { fp->base, fp->base, fp->base, fp->base };
+    v4i hkv = { 0, 0, 0, 0 };
+    if ( fp->lampmask != 0 ) {
+        v4d wx = ( B[3] + t->gx[3] * xf ) * z, wy = ( B[4] + t->gx[4] * xf ) * z, wz = ( B[5] + t->gx[5] * xf ) * z;
+        v4d add = zero;
+        for ( int k=0; k < M3D_MAXLAMPS; ++k ) {
+            if ( !( ( fp->lampmask >> k ) & 1U ) ) {
+                continue;
+            }
+            const lamp_t* l = &fp->lamps[k];
+            v4d dx = wx - l->x, dy = wy - l->y, dz = wz - l->z, d2 = dx * dx + dy * dy + dz * dz;
+            v4d rr = { l->r * l->r, l->r * l->r, l->r * l->r, l->r * l->r };
+            v4l in = d2 < rr;
+            v4d sqv = sqrtf4( d2 );
+            v4d sp = one;
+            if ( l->spot ) {
+                v4d dot = dx * l->dx + dy * l->dy + dz * l->dz;
+                if ( l->cc > 0.0 ) {
+                    v4d cc2 = { l->cc * l->cc, l->cc * l->cc, l->cc * l->cc, l->cc * l->cc };
+                    in &= ~( ( dot <= zero ) | ( dot * dot < cc2 * d2 ) );
+                }
+                v4d tiny = { 1.0e-18, 1.0e-18, 1.0e-18, 1.0e-18 };
+                v4d s2 = ( dot / sqv - l->cc ) * fp->icn[k];
+                s2 = sel4( d2 > tiny, s2, one );
+                sp = sel4( s2 < zero, zero, sel4( s2 > one, one, s2 ) );
+            }
+            v4d term = l->amount * ( one - sqv * fp->ir[k] ) * sp;
+            add = sel4( in, add + term, add );
+        }
+        lvv = lvv + add * ( (double)( M3D_LEVELS - 1 ) / 255.0 );
+    }
+    if ( fp->fogd > 0 ) {
+        if ( fp->haze ) {
+            v4d q = ( z - fp->fogstart ) * fp->iden;                              // clamped to 0 .. 1 first: the scalar rule gives the same steps
+            v4d qc = sel4( q < zero, zero, sel4( q > one, one, q ) );
+            v4d half = { 0.5, 0.5, 0.5, 0.5 };
+            hkv = __builtin_convertvector( ( qc * qc * 15.0 ) + half, v4i );
+        } else {
+            v4d ff = one - z * fp->ifog;
+            ff = sel4( ff < zero, zero, ff );
+            lvv = lvv * ff;
+        }
+    }
+    v4d half2 = { 0.5, 0.5, 0.5, 0.5 };
+    v4i liv = __builtin_convertvector( lvv + half2, v4i );
+    for ( int j=0; j < 4; ++j ) {
+        lz[j] = zz[j]; lu[j] = ok[j] != 0 ? iu[j] : 0; lv[j] = ok[j] != 0 ? iv[j] : 0; li[j] = liv[j]; hk[j] = hkv[j];
+    }
+}
+
 static void raster( rc_t* c, const tri_t* t, bool translucent ) {
     m3d_t* m = c->m;
     int a = 0, b = 1, d = 2;
@@ -221,6 +408,19 @@ static void raster( rc_t* c, const tri_t* t, bool translucent ) {
     double fogd = m->fog;
     bool haze = m->hazecol >= 0;
     bool masked = ( t->flags & M3D_OF_MASKED ) != 0 || translucent;
+    // a picture of a power of two size wraps with a mask (for a negative coordinate too: two's complement), the others with a division
+    fogp_t fpar = { base, fogd, m->fogstart, m->far, fogd > 0 ? 1.0 / fogd : 0.0, fogd > 0 && haze ? 1.0 / ( fogd - m->fogstart ) : 0.0, haze, m->lamps, t->lamps ? t->lampmask : 0U, { 0 }, { 0 } };
+    for ( int k=0; k < M3D_MAXLAMPS; ++k ) {
+        if ( ( fpar.lampmask >> k ) & 1U ) {
+            fpar.ir[k] = 1.0 / m->lamps[k].r;
+            fpar.icn[k] = m->lamps[k].spot ? 1.0 / ( 1.0 - m->lamps[k].cc ) : 0.0;
+        }
+    }
+    int wm = -1, hm = -1;
+    if ( t->tx != 0 ) {
+        wm = ( t->tx->w & ( t->tx->w - 1 ) ) == 0 ? t->tx->w - 1 : -1;
+        hm = ( t->tx->h & ( t->tx->h - 1 ) ) == 0 ? t->tx->h - 1 : -1;
+    }
     for ( int y = ys; y < ye; ++y ) {
         double yc = y + 0.5;
         double xa = t->sx[a] + ( yc - y0 ) * ( t->sx[d] - t->sx[a] ) / ( y2 - y0 );
@@ -237,61 +437,31 @@ static void raster( rc_t* c, const tri_t* t, bool translucent ) {
         if ( xs >= xe ) {
             continue;
         }
-        double A[7];
+        double B[6];                                                        // the plane values of this row at x = 0 (the pixel's own are B + gx * (x + 0.5): no running sums)
         for ( int k=0; k < t->na; ++k ) {
-            A[k] = t->A0[k] + t->gx[k] * ( xs + 0.5 ) + t->gy[k] * yc;
+            B[k] = t->A0[k] + t->gy[k] * yc;
         }
         uint8_t* fb = c->fb + (size_t) y * (size_t) c->W;
         float* zb = c->zb + (size_t) y * (size_t) c->W;
-        for ( int x = xs; x < xe; ++x ) {
-            double iz = A[0];
-            if ( iz > 1.0e-12 ) {
-                double z = 1.0 / iz;
-                if ( z < zb[x] && ( m->far <= 0 || z <= m->far ) ) {
+        for ( int x0 = xs; x0 < xe; x0 += 4 ) {
+            int nl = xe - x0 < 4 ? xe - x0 : 4;
+            double lz[4];                                                   // per lane: 1 / iz (0 = not drawn), the texture coordinates
+            int lu[4], lv_[4], lli[4], lhk[4];
+            span4( t, B, x0, c->W, zb, &fpar, lz, lu, lv_, lli, lhk );
+            for ( int j=0; j < nl; ++j ) {
+                double z = lz[j];
+                if ( z > 0.0 ) {
+                    int x = x0 + j;
                     uint8_t col;
                     if ( t->tx != 0 ) {
-                        int tu = imod( (int) floor( A[1] * z ), t->tx->w ), tv = imod( (int) floor( A[2] * z ), t->tx->h );
+                        int tu = wm >= 0 ? lu[j] & wm : imod( lu[j], t->tx->w ), tv = hm >= 0 ? lv_[j] & hm : imod( lv_[j], t->tx->h );
                         col = t->tx->col[ (size_t) tu * (size_t) t->tx->h + (size_t) tv ];
                     } else {
                         col = (uint8_t) t->tex;
                     }
                     if ( !( masked && col == 0 ) ) {
-                        double lv = base;
-                        if ( t->lamps ) {
-                            double wx = A[3] * z, wy = A[4] * z, wz = A[5] * z, add = 0;
-                            for ( int k=0; k < M3D_MAXLAMPS; ++k ) {
-                                const lamp_t* l = &m->lamps[k];
-                                if ( ( t->lampmask >> k ) & 1U ) {
-                                    double dx = wx - l->x, dy = wy - l->y, dz = wz - l->z, d2 = dx * dx + dy * dy + dz * dz;
-                                    if ( d2 < l->r * l->r ) {
-                                        double sp = 1.0;
-                                        if ( l->spot ) {
-                                            // a cone: full on the axis, nothing at the edge (linear in the cosine of the angle to the axis); outside the cone is
-                                            // found without a square root (the cosine is positive: dot > 0 and dot^2 < cc^2 * d2 is outside)
-                                            double dot = dx * l->dx + dy * l->dy + dz * l->dz;
-                                            if ( l->cc > 0.0 && ( dot <= 0.0 || dot * dot < l->cc * l->cc * d2 ) ) {
-                                                continue;
-                                            }
-                                            sp = d2 > 1.0e-18 ? ( dot / (double) sqrtf( (float) d2 ) - l->cc ) / ( 1.0 - l->cc ) : 1.0;
-                                            sp = sp < 0.0 ? 0.0 : sp > 1.0 ? 1.0 : sp;
-                                        }
-                                        add += l->amount * ( 1.0 - (double) sqrtf( (float) d2 ) / l->r ) * sp;
-                                    }
-                                }
-                            }
-                            lv += add * ( (double)( M3D_LEVELS - 1 ) / 255.0 );
-                        }
-                        int hk = 0;
-                        if ( fogd > 0 ) {
-                            if ( haze ) {                                   // the fog fades to the haze color (quadratically: gentle near, strong far; nothing before the start)
-                                double q = ( z - m->fogstart ) / ( fogd - m->fogstart );
-                                hk = q <= 0.0 ? 0 : q >= 1.0 ? 15 : (int)( q * q * 15.0 + 0.5 );
-                            } else {
-                                double ff = 1.0 - z / fogd;
-                                lv *= ff < 0 ? 0 : ff;
-                            }
-                        }
-                        int li = iclamp( (int)( lv + 0.5 ), 0, M3D_LEVELS - 1 );
+                        int hk = lhk[j];                                    // (the fog fades to the haze color, quadratically: gentle near, strong far; nothing before the start)
+                        int li = iclamp( lli[j], 0, M3D_LEVELS - 1 );
                         cm = c->s->cmap[li];
                         uint8_t out = cm[col];
                         if ( hk > 0 ) {
@@ -314,9 +484,6 @@ static void raster( rc_t* c, const tri_t* t, bool translucent ) {
                         fb[x] = out;
                     }
                 }
-            }
-            for ( int k=0; k < t->na; ++k ) {
-                A[k] += t->gx[k];
             }
         }
     }
