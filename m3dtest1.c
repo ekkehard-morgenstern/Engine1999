@@ -656,6 +656,40 @@ int main( void ) {
         CHECK( op( GFXOP_M3DSUN, 3, 0.0, 0.0, 0.0 ) );
         CHECK( n > 0 && M->texs[n].col == 0 && M->texs[301].col != 0 );                          // the picture itself stays
     }
+    // -- M3D MINIMAP: a shaded height map of the ground function ------------------------------------------------------------------------------------------
+    fresh();
+    {
+        uint32_t mp[256];
+        memset( mp, 0, sizeof(mp) );
+        mp[1] = 0xFF2A5AAAU;                                                                      // water
+        mp[2] = 0xFF3C8232U;                                                                      // low green (60, 130, 50)
+        mp[3] = 0xFFF5F5F5U;                                                                      // snow
+        mp[4] = 0xFF828282U;                                                                      // rock
+        m3d_colormap( M, mp );
+        uint8_t px[32 * 32], px2[32 * 32];
+        CHECK( op( GFXOP_M3DGROUND, 4, 1.0, 100.0, 0.0, 1.0 ) );                                  // no ground (flat 0): level
+        CHECK( m3d_minimap( M, mp, 32, 32, 0.0, 0.0, 500.0, -1.0e9, px ) );
+        int same = 1;
+        for ( int i=1; i < 32 * 32; ++i ) { if ( px[i] != px[0] ) { same = 0; } }
+        CHECK( same && px[0] == 2 );                                                              // level land at height 0 is the low green
+        CHECK( m3d_minimap( M, mp, 32, 32, 0.0, 0.0, 500.0, 10.0, px ) && px[0] == 1 && px[32 * 32 - 1] == 1 );   // below the water level: water
+        CHECK( op( GFXOP_M3DGROUND, 5, 1.0, 100.0, 0.001, 1.0, 400.0 ) );                         // a plateau at 400: snow
+        CHECK( m3d_minimap( M, mp, 8, 8, 0.0, 0.0, 100.0, -1.0e9, px ) && px[0] == 3 );
+        // real hills: pictures differ from place to place, the same call gives the same picture, the picture follows the centre
+        CHECK( op( GFXOP_M3DGROUND, 4, 7.0, 200.0, 120.0, 4.0 ) );
+        CHECK( m3d_minimap( M, mp, 32, 32, 0.0, 0.0, 800.0, 20.0, px ) && m3d_minimap( M, mp, 32, 32, 0.0, 0.0, 800.0, 20.0, px2 ) && memcmp( px, px2, sizeof(px) ) == 0 );
+        int kinds[8] = { 0 };
+        for ( int i=0; i < 32 * 32; ++i ) { if ( px[i] < 8 ) { kinds[px[i]] = 1; } }
+        CHECK( kinds[1] + kinds[2] + kinds[3] + kinds[4] >= 2 );
+        CHECK( m3d_minimap( M, mp, 32, 32, 100.0, 0.0, 800.0, 20.0, px2 ) && memcmp( px, px2, sizeof(px) ) != 0 );
+        // north is up: the pixel at the top is world y larger: a ground that rises with y gives a higher color at the top
+        CHECK( op( GFXOP_M3DGROUND, 4, 7.0, 200.0, 0.0, 1.0, 0.0 ) );
+        CHECK( !m3d_minimap( M, mp, 0, 8, 0.0, 0.0, 100.0, 0.0, px ) && !m3d_minimap( M, mp, 8, 8, 0.0, 0.0, 0.0, 0.0, px ) );
+        // the statement only checks (the host draws)
+        CHECK( op( GFXOP_M3DMINIMAP, 7, 10.0, 20.0, 64.0, 64.0, 0.0, 0.0, 1000.0 ) && op( GFXOP_M3DMINIMAP, 8, 10.0, 20.0, 64.0, 64.0, 0.0, 0.0, 1000.0, -12.0 ) );
+        CHECK( !op( GFXOP_M3DMINIMAP, 7, 10.0, 20.0, 0.0, 64.0, 0.0, 0.0, 1000.0 ) && !op( GFXOP_M3DMINIMAP, 7, 10.0, 20.0, 513.0, 64.0, 0.0, 0.0, 1000.0 ) &&
+               !op( GFXOP_M3DMINIMAP, 7, 10.0, 20.0, 64.0, 64.0, 0.0, 0.0, 0.0 ) );
+    }
     // -- instances: shared meshes (M3D INSTANCE, OBJSCALE, OBJFREE) ----------------------------------------------------------------------------------------
     fresh();
     CHECK( op( GFXOP_M3DOBJECT, 1, 1.0, 0.0 ) );                                              // the floor of fresh() is gone

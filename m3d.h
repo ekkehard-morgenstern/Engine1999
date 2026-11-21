@@ -72,6 +72,9 @@ bool   m3d_query( m3d_t* m, int q, const double* a, int na, double* result );
 double m3d_ground( const m3d_t* m, double x, double y );          // the height of the ground function (M3D GROUND), 0 when none is defined
 int    m3d_nverts( const m3d_t* m, int o );                  // the number of vertices of an object (0: none)
 void   m3d_colormap( m3d_t* m, const uint32_t* argb );
+// M3D MINIMAP: w * h palette indices (row by row, north up) of a height map of the ground function: the square of 'span' units across round (wx, wy), colored by
+// height (water below 'water', green, brown, grey, white) and shaded by the slope against the sun (M3D SUN, or a default sun); colors are the nearest entries of pal (256 ARGB)
+bool   m3d_minimap( const m3d_t* m, const uint32_t* pal, int w, int h, double wx, double wy, double span, double water, uint8_t* out );
 const uint8_t* m3d_render( m3d_t* m );                       // draws a frame; the palette bitmap, or 0 when the renderer in use makes 32 bit pictures
 bool   m3d_is_argb( const m3d_t* m );                         // the renderer in use makes 32 bit ARGB pictures (m3d_render32()), not palette bitmaps
 const uint32_t* m3d_render32( m3d_t* m );                     // draws a frame; the ARGB picture (bw x bh, see m3d_getview()), or 0 when the renderer makes palette bitmaps

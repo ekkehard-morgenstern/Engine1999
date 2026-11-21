@@ -154,6 +154,7 @@ static const testcase_t cases[] = {
     { "m3d texture load: the console host has no palette", 0, "", "M3D TEXTURE LOAD 400,\"x.bmp\"\n", "", "? M3D TEXTURE LOAD needs the window host (there is no palette here)\n", 0, false },
     { "m3d texture load: the PALETTE word parses", 0, "", "M3D TEXTURE LOAD 400,\"x.bmp\",PALETTE\n", "", "? M3D TEXTURE LOAD needs the window host (there is no palette here)\n", 0, false },
     { "m3d texture: the plain form still works", 0, "", "M3D TEXTURE 400,MKI$(2)+MKI$(1)+CHR$(1)+CHR$(2)\nPRINT M3D(\"TEXW\",400);M3D(\"TEXH\",400)\n", "21\n", "", 0, false },
+    { "m3d minimap: checked, nothing drawn in the console host", 0, "", "M3D GROUND 7,400,60,5,10\nM3D MINIMAP 0,0,64,64,0,0,1000,-12\nPRINT \"ok\"\nM3D MINIMAP 0,0,0,64,0,0,1000\n", "ok\n", "? Illegal argument\n", 0, false },
     { "m3d terrain: errors", 0, "", "M3D GROUND 1,0,5,2\n", "", "? Illegal argument\n", 0, false },
     { "json: load a missing file", 0, "", "JSON LOAD \"nonexistent-json-file\"\n", "", "? File not found\n", 0, false },
     { "json: save without a document", 0, "", "JSON SAVE \"t2\"\n", "", "? No JSON document\n", 0, false },

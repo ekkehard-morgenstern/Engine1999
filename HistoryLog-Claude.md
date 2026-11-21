@@ -13,7 +13,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-- **`M3D SUN`: terrain shaded by slope** (2026-11-21, owner: "Yes, do the baked version in M3D TERRAIN"): `m3d.c` (`m3d_shade_index()` = the nearest-darker-color search moved out of `make_cmap`; `sun_make` / `sun_remake` / `cell_picture`; `obj_terrain` picks `t + k * stride` per cell and for the skirt; `M3D_colormap` remakes the shaded pictures; `clear_world` forgets the sun), `m3dpriv.h` (`sun_t`), `m3dsoft.c` (`make_cmap` uses the shared search), `gfxops.[ch]` (`GFXOP_M3DSUN` 346, `GFXOP_M3DLAST` moved), `demos/1987.bas` (lines 12966 .. 12968: `M3D COLORMAP` early, `M3D SUN`). Tests: `m3dtest1` 1634 (+28), clean under ASan / UBSan, `contest1`, `vmtest1`, `game1987test.sh`. Docs: `docs/3d-mesh-subsystem.md`, grammar, man page. Lesson: a helper that writes its PID with a relative path from a subshell in another directory dropped `epid` / screenshots into the repo (removed).
+- **`M3D MINIMAP`** (2026-11-21, owner: "Yes, add the minimap statement"): `m3d.[ch]` (`m3d_minimap()`: height ramp, water, slope shading with the sun, nearest palette color; op `GFXOP_M3DMINIMAP` 347 validates), `gfxops.[ch]` (op and table entry, `GFXOP_M3DLAST` moved), `engine1999.c` (`host_m3d_op` draws the indices on the target layer). Tests: `m3dtest1` 1656 (+22), `contest1` +1. Docs: `docs/3d-mesh-subsystem.md`, grammar, man page. A first test run failed on the plateau case because `M3D GROUND` with amp 0 switches the function off (fixed in the test with a tiny amp).
 
 ## Log
 
@@ -2239,3 +2239,9 @@ Log bookkeeping only (the `94d5194` entry).
 19 files changed, 173 insertions(+), 12 deletions(-)
 
 **`M3D TEXTURE LOAD n,file$[,PALETTE]`** (2026-11-20, owner: "Yes, add M3D TEXTURE LOAD"): `gfxfile.[ch]` `gfxfile_make_picture()` (BMP to a GRAB block, colors matched to the layer's palette or the file's with `PALETTE`), `gfxops.[ch]` `GFXOP_M3DTEXLOAD` 345 (table entry `M3D TEXLOAD`, `GFXOP_M3DLAST` moved), `bascomp.c` (after `M3D TEXTURE` the word `LOAD` selects it), `engine1999.c` (`host_picture_op` reads the file and calls `m3d_op( TEXTURE )`; forward declaration of `host_m3d_get`), `engine1999c.c` (error: needs the window host). Tests: `gfxtest1` +3 (297), `contest1` +3, new `m3dtexhost.sh` (Xvfb, `make hosttest`): grabbed and loaded texture render identically. Finding: palette entries >= ~128 are translucent twins (alpha 136) of lower entries and the nearest match ignores alpha. Docs: `docs/3d-mesh-subsystem.md`, `bascomp.ebnf` + `make grammar`, man page, makefile `hosttest`.
+
+### 9b103a8 — 2026-11-21 00:48:04 +0100 — "M3D SUN, created by Claude Code"
+
+15 files changed, 234 insertions(+), 26 deletions(-)
+
+**`M3D SUN`: terrain shaded by slope** (2026-11-21, owner: "Yes, do the baked version in M3D TERRAIN"): `m3d.c` (`m3d_shade_index()` = the nearest-darker-color search moved out of `make_cmap`; `sun_make` / `sun_remake` / `cell_picture`; `obj_terrain` picks `t + k * stride` per cell and for the skirt; `M3D_colormap` remakes the shaded pictures; `clear_world` forgets the sun), `m3dpriv.h` (`sun_t`), `m3dsoft.c` (`make_cmap` uses the shared search), `gfxops.[ch]` (`GFXOP_M3DSUN` 346, `GFXOP_M3DLAST` moved), `demos/1987.bas` (lines 12966 .. 12968: `M3D COLORMAP` early, `M3D SUN`). Tests: `m3dtest1` 1634 (+28), clean under ASan / UBSan, `contest1`, `vmtest1`, `game1987test.sh`. Docs: `docs/3d-mesh-subsystem.md`, grammar, man page. Lesson: a helper that writes its PID with a relative path from a subshell in another directory dropped `epid` / screenshots into the repo (removed).

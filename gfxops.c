@@ -163,6 +163,7 @@ static const gfxcmd_t cmds[] = {
     { "M3D", "MOUNTAINS", GFXOP_M3DMOUNTAINS, "nnnnnn", 0, false },
     { "M3D", "LAKES", GFXOP_M3DLAKES, "nnnnn", 0, false },
     { "M3D", "GROUNDQUIET", GFXOP_M3DGROUNDQUIET, "nnnnn", 0, false },
+    { "M3D", "MINIMAP", GFXOP_M3DMINIMAP, "nnnnnnno", 0, false },
     { "M3D", "SUN", GFXOP_M3DSUN, "nnnooo", 0, false },
     { "M3D", "TEXLOAD", GFXOP_M3DTEXLOAD, "nsW", "PALETTE", false },       // (written M3D TEXTURE LOAD: the compiler turns the two words into this one)
     { "M3D", "GROUNDFLAT", GFXOP_M3DGROUNDFLAT, "nnnnnn", 0, false },

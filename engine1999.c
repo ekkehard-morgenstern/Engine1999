@@ -1587,6 +1587,35 @@ static bool host_m3d_op( int op, const double* a, int na, const char* s, size_t 
         m3d_colormap( host_m3d, pal );
         return true;
     }
+    if ( op == GFXOP_M3DMINIMAP ) {                         // checked by the engine, drawn here onto the target layer
+        if ( !m3d_op( host_m3d, op, a, na, s, slen, err ) ) {
+            return false;
+        }
+        int w = (int) floor( a[2] + 0.5 ), h = (int) floor( a[3] + 0.5 );
+        uint8_t* px = (uint8_t*) malloc( (size_t) w * (size_t) h );
+        if ( px == 0 ) {
+            *err = "Out of memory";
+            return false;
+        }
+        uint32_t pal[256];
+        for ( int i=0; i < 256; ++i ) {
+            pal[i] = sdlscr_palette_get( t, i );
+        }
+        bool ok = m3d_minimap( host_m3d, pal, w, h, a[4], a[5], a[6], a[7] < -1.0e8 ? -1.0e9 : a[7], px );
+        int mode = sdlscr_gfx_getmode();
+        sdlscr_gfx_setmode( GFXM_SET );
+        for ( int j=0; ok && j < h; ++j ) {
+            for ( int i=0; i < w; ++i ) {
+                sdlscr_gfx_pset( t, (int) floor( a[0] + 0.5 ) + i, (int) floor( a[1] + 0.5 ) + j, px[ (size_t) j * (size_t) w + (size_t) i ] );
+            }
+        }
+        sdlscr_gfx_setmode( mode );
+        free( px );
+        if ( !ok ) {
+            *err = "Illegal argument";
+        }
+        return ok;
+    }
     if ( op == GFXOP_M3DRENDER ) {
         int x, y, w, h, scale, bw, bh;
         m3d_getview( host_m3d, &x, &y, &w, &h, &scale, &bw, &bh );

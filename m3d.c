@@ -66,6 +66,82 @@ int m3d_shade_index( const uint32_t* argb, int i, double scale ) {
     return bi;
 }
 
+// -- the height map (M3D MINIMAP) ---------------------------------------------------------------------------------------------
+
+static int nearest_color( const uint32_t* pal, int r, int g, int b ) {
+    double best = 1.0e30;
+    int bi = 1;
+    for ( int j=1; j < 256; ++j ) {
+        double dr = (double)( (int)( ( pal[j] >> 16 ) & 0xFFU ) - r ), dg = (double)( (int)( ( pal[j] >> 8 ) & 0xFFU ) - g ), db = (double)( (int)( pal[j] & 0xFFU ) - b );
+        double d = 2.0 * dr * dr + 4.0 * dg * dg + 3.0 * db * db;
+        if ( d < best ) {
+            best = d;
+            bi = j;
+        }
+    }
+    return bi;
+}
+
+// the color of a height: (height, red, green, blue) points, linear in between
+static void height_color( double h, double* r, double* g, double* b ) {
+    static const double ramp[6][4] = { { 0, 60, 130, 50 }, { 40, 110, 150, 60 }, { 90, 140, 110, 70 }, { 150, 130, 130, 130 }, { 230, 245, 245, 245 }, { 1.0e9, 245, 245, 245 } };
+    if ( h <= ramp[0][0] ) {
+        *r = ramp[0][1]; *g = ramp[0][2]; *b = ramp[0][3];
+        return;
+    }
+    for ( int i=1; i < 6; ++i ) {
+        if ( h <= ramp[i][0] ) {
+            double t = ( h - ramp[i - 1][0] ) / ( ramp[i][0] - ramp[i - 1][0] );
+            *r = ramp[i - 1][1] + t * ( ramp[i][1] - ramp[i - 1][1] );
+            *g = ramp[i - 1][2] + t * ( ramp[i][2] - ramp[i - 1][2] );
+            *b = ramp[i - 1][3] + t * ( ramp[i][3] - ramp[i - 1][3] );
+            return;
+        }
+    }
+}
+
+bool m3d_minimap( const m3d_t* m, const uint32_t* pal, int w, int h, double wx, double wy, double span, double water, uint8_t* out ) {
+    if ( w < 1 || h < 1 || !( span > 0.0 ) || out == 0 ) {
+        return false;
+    }
+    double lx = -0.55, ly = -0.35, lz = 0.75;
+    if ( m->sun.on ) {
+        lx = m->sun.lx; ly = m->sun.ly; lz = m->sun.lz;
+    } else {
+        double len = sqrt( lx * lx + ly * ly + lz * lz );
+        lx /= len; ly /= len; lz /= len;
+    }
+    double px = span / (double) w;                                  // the size of a pixel in world units (square pixels)
+    int lr = -1, lg = -1, lb = -1, li = 1;
+    for ( int j=0; j < h; ++j ) {
+        for ( int i=0; i < w; ++i ) {
+            double x = wx + ( (double) i + 0.5 - (double) w * 0.5 ) * px, y = wy - ( (double) j + 0.5 - (double) h * 0.5 ) * px;
+            double z = m3d_ground( m, x, y ), r = 0.0, g = 0.0, b = 0.0;
+            double gx = ( m3d_ground( m, x + px, y ) - m3d_ground( m, x - px, y ) ) / ( 2.0 * px );
+            double gy = ( m3d_ground( m, x, y + px ) - m3d_ground( m, x, y - px ) ) / ( 2.0 * px );
+            double lam = ( -gx * lx - gy * ly + lz ) / sqrt( gx * gx + gy * gy + 1.0 ) / lz;      // 1 on level ground, as in the shaded terrain
+            double f = 0.6 + 0.4 * lam;
+            f = f < 0.45 ? 0.45 : f > 1.2 ? 1.2 : f;
+            if ( z < water ) {
+                double d = water - z;
+                d = d > 40.0 ? 40.0 : d;
+                r = 40.0 - d * 0.5; g = 90.0 - d; b = 170.0 - d;     // deeper is darker
+                f = 1.0;
+            } else {
+                height_color( z, &r, &g, &b );
+            }
+            int ir = (int) floor( r * f + 0.5 ), ig = (int) floor( g * f + 0.5 ), ib = (int) floor( b * f + 0.5 );
+            ir = ir < 0 ? 0 : ir > 255 ? 255 : ir; ig = ig < 0 ? 0 : ig > 255 ? 255 : ig; ib = ib < 0 ? 0 : ib > 255 ? 255 : ib;
+            if ( ir != lr || ig != lg || ib != lb ) {
+                lr = ir; lg = ig; lb = ib;
+                li = nearest_color( pal, ir, ig, ib );
+            }
+            out[ (size_t) j * (size_t) w + (size_t) i ] = (uint8_t) li;
+        }
+    }
+    return true;
+}
+
 // -- shaded terrain pictures (M3D SUN) ------------------------------------------------------------------------------------------
 
 static bool set_picture( m3d_t* m, int n, int w, int h, uint8_t* col ) {      // takes col (u * h + v)
@@ -927,6 +1003,9 @@ bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t sl
             m->gnd.lake.lo = a[3]; m->gnd.lake.hi = a[4];
             return true;
         }
+        case GFXOP_M3DMINIMAP:                              // (the picture is drawn by the host with m3d_minimap(); this only checks the numbers)
+            return whole( a[0], -32768, 32767, &i1 ) && whole( a[1], -32768, 32767, &i2 ) && whole( a[2], 1, 512, &i3 ) && a[3] >= 1.0 && a[3] <= 512.0 &&
+                   fabs( a[4] ) < 1.0e9 && fabs( a[5] ) < 1.0e9 && a[6] > 0.0 && a[6] < 1.0e9 && ( NONE_VAL( a[7] ) || fabs( a[7] ) < 1.0e9 );
         case GFXOP_M3DSUN: {
             double amb = NONE_VAL( a[3] ) ? 0.5 : a[3];
             int steps = 4, stride = 100;
