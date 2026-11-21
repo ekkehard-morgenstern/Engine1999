@@ -2329,7 +2329,7 @@
 23310 ' opens the world; the water is one translucent plane at the water level that follows the player in steps of 512 units (the picture repeats every 128), seen only where the ground dips below it
 23320 PROC WORLDOPENUP
 23330   LOCAL R
-23340   M3D WORLDOPEN WDIR$,5000,0,255
+23340   M3D WORLDOPEN WDIR$,5000,1,255
 23350   WN=M3D("WORLDINFO",1):WLIM=WN*15625/2-6*15625
 23360   R=170000
 23370   M3D OBJECT 250,30,235

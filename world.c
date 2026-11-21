@@ -85,13 +85,13 @@ static void hdr_put( uint8_t* h, int n, uint64_t seed, uint32_t state ) {
 static void ground_setup( ground_t* g, uint64_t seed ) {
     memset( g, 0, sizeof(*g) );
     // tuned for chunks of 500 m (2026-11-21): rolling ground of 150 m waves 5 m high that never dips below the water level (-12) by itself, hills of 80 m, mountain ranges of
-    // 1.6 km with a mask of 6 km (peaks up to 1.9 km), lakes of about 1 km (water only where a lake is), dirt tracks every 290 m, tarred roads every 6.4 km
+    // 1.6 km with a mask of 6 km (peaks up to 1.9 km), lakes of about 1 km (water only where a lake is), dirt tracks every 290 m, tarred roads every 2.3 km
     g->on = true; g->seed = nz_mix( seed + 1 ); g->scale = 5000.0; g->amp = 150.0; g->oct = 4; g->base = 150.0; g->gain = 0.5; g->lac = 2.0;
     g->mnt[1].on = true; g->mnt[1].seed = nz_mix( seed + 2 ); g->mnt[1].scale = 2500.0; g->mnt[1].amp = 700.0; g->mnt[1].oct = 5; g->mnt[1].lo = 0.05; g->mnt[1].hi = 0.4;
     g->mnt[0].on = true; g->mnt[0].seed = nz_mix( seed + 3 ); g->mnt[0].scale = 50000.0; g->mnt[0].amp = 60000.0; g->mnt[0].oct = 4; g->mnt[0].lo = 0.22; g->mnt[0].hi = 0.55;
     g->mnt[0].r0 = 14000.0; g->mnt[0].r1 = 22000.0;
     g->lake.on = true; g->lake.seed = nz_mix( seed + 4 ); g->lake.scale = 40000.0; g->lake.depth = 600.0; g->lake.lo = 0.35; g->lake.hi = 0.55;
-    g->net.on = true; g->net.spacing = 9000.0; g->net.chance = 0.5; g->net.wdirt = 400.0; g->net.tspacing = 200000.0; g->net.tchance = 0.85; g->net.wtar = 3000.0;
+    g->net.on = true; g->net.spacing = 9000.0; g->net.chance = 0.5; g->net.wdirt = 400.0; g->net.tspacing = 114500.0; g->net.tchance = 0.85; g->net.wtar = 3000.0;
     g->flat[0].on = true; g->flat[0].cx = 0.0; g->flat[0].cy = 0.0; g->flat[0].rx = 260.0; g->flat[0].ry = 200.0; g->flat[0].margin = 1500.0;        // the yard of the house of demos/1987.bas: ground 0
     g->flat[1].on = true; g->flat[1].cx = 1100.0; g->flat[1].cy = 650.0; g->flat[1].rx = 700.0; g->flat[1].ry = 500.0; g->flat[1].margin = 1200.0;    // its wheat field
     g->quiet.on = true; g->quiet.cx = 0.0; g->quiet.cy = 0.0; g->quiet.rx = 3900.0; g->quiet.ry = 3900.0; g->quiet.margin = 1200.0;

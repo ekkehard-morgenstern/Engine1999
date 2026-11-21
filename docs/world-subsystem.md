@@ -30,7 +30,7 @@ written by several threads at once.
 | Offset | Header | |
 |---|---|---|
 | 0 | `"E99WORLD"` | magic |
-| 8 | u32 | version (`WORLD_VERSION` = 3) |
+| 8 | u32 | version (`WORLD_VERSION` = 4) |
 | 12 | u32 | `n` |
 | 16 | u64 | the world seed |
 | 24 | u32 | chunk size in units (15625) |
@@ -71,13 +71,13 @@ What made it fast enough (a full 1000 x 1000 world in well under a few minutes o
 
 ## The ground (`world_height`)
 
-`world_height(w, x, y)` is the ground function of the 1987 game (the pure layers of `m3d.c`, `m3d_ground_eval`), **tuned for 500 m chunks** (version 3 of the file: version 3 flattens the yard of the house and its wheat field at the origin to ground 0 for `demos/1987.bas`; version 1 had
+`world_height(w, x, y)` is the ground function of the 1987 game (the pure layers of `m3d.c`, `m3d_ground_eval`), **tuned for 500 m chunks** (version 4 of the file: version 3 flattened the yard of the house and its wheat field at the origin to ground 0 for `demos/1987.bas`; version 1 had
 the numbers of the old 29 m chunks, where 73 % of the chunks held water and a tarred road crossed every kilometre): rolling ground (waves of 150 m, 5 m high, base 4.8 m so it never
 dips below the water level -12 by itself), hills (80 m waves, up to 22 m), mountain ranges (scale 1.6 km, peaks up to 1.9 km, mask 6.4 km, none within 14 .. 22 km of the
-origin), lakes (about 1 km, 19 m deep; water only where a lake is), dirt tracks and kinds of ground (meadow / field / forest patches) on a 290 m grid, **tarred roads every 6.4 km**
-(`tspacing` 200000), a quiet box at the origin, and **the wall**: from four chunks inside the edge the ground rises smoothly by 90000 units (2.9 km) over three chunks, so the world is
+origin), lakes (about 1 km, 19 m deep; water only where a lake is), dirt tracks and kinds of ground (meadow / field / forest patches) on a 290 m grid, **tarred roads every 3.7 km** (since version 4; version 3 had 6.4 km)
+(`tspacing` 114500), a quiet box at the origin, and **the wall**: from four chunks inside the edge the ground rises smoothly by 90000 units (2.9 km) over three chunks, so the world is
 closed by an impassable ring of mountains. It is pure and thread safe. Measured over the whole 1000 x 1000 world (sample of 3481 chunks): water in 12 % of the chunks, mountain 23 %,
-a tarred road through 5.5 %; kinds: plain 16 %, meadow 28 %, field 20 %, forest 36 %. The record's `ntar` / `WCF_TAR` count the tarred links whose way passes through the chunk.
+a tarred road through about 15 % (version 3: 5.5 %); kinds: plain 16 %, meadow 28 %, field 20 %, forest 36 %. The record's `ntar` / `WCF_TAR` count the tarred links whose way passes through the chunk.
 
 ## Tests
 
