@@ -46,7 +46,7 @@ void rnet_set_simd( int on ) {                             // 1 = vector loop, 0
     rn_simd = on;
 }
 
-#define RNET_MAXPTS 320         // a road of more steps than this is not cached (computed again at every call)
+#define RNET_MAXPTS 700         // a road of more steps than this is not cached (computed again at every call)
 #define RNET_CACHE  512
 
 // the point of region (rx, ry) of a network (0 dirt: salts 1 / 2, 1 tarred: salts 11 / 12 and its own spacing)
@@ -72,13 +72,13 @@ double rnet_mountain( const rmask_t* m, double x, double y ) {
     return t;
 }
 
-// does the way (the chord of a road, a strip of the road's wander and the margin on both sides) touch the mountains? sampled every 300 units
-static bool crosses_mountains( const rnet_t* n, const rlink_t* l ) {
+// does the way (the chord between two nodes, widened by 'side' on both sides) touch the mountains? sampled every 500 units, on 5 lines
+static bool strip_in_mountains( const rnet_t* n, double x1, double y1, double x2, double y2, double len, double side ) {
     const rmask_t* m = &n->mask;
-    double side = l->wa + m->margin, ux = ( l->x2 - l->x1 ) / l->len, uy = ( l->y2 - l->y1 ) / l->len;
-    int ns = (int)( l->len / 300.0 ) + 1;
+    double ux = ( x2 - x1 ) / len, uy = ( y2 - y1 ) / len;
+    int ns = (int)( len / 500.0 ) + 1;
     for ( int k = 0; k <= ns; ++k ) {
-        double t = (double) k / (double) ns, x = l->x1 + ( l->x2 - l->x1 ) * t, y = l->y1 + ( l->y2 - l->y1 ) * t;
+        double t = (double) k / (double) ns, x = x1 + ( x2 - x1 ) * t, y = y1 + ( y2 - y1 ) * t;
         for ( int s = -2; s <= 2; ++s ) {
             if ( rnet_mountain( m, x - uy * side * 0.5 * (double) s, y + ux * side * 0.5 * (double) s ) > m->limit ) {
                 return true;
@@ -88,29 +88,148 @@ static bool crosses_mountains( const rnet_t* n, const rlink_t* l ) {
     return false;
 }
 
-bool rnet_link( const rnet_t* n, int net, int64_t rx, int64_t ry, int e, rlink_t* l ) {
+// does the road of network net from region (rx, ry) to its west (e = 0) / south (e = 1) neighbour exist? (the hash, a length, and no mountains: the way may bulge by a tenth of its length)
+static bool link_exists( const rnet_t* n, int net, int64_t rx, int64_t ry, int e ) {
     if ( !n->on || ( net ? n->tspacing <= 0.0 : n->spacing <= 0.0 ) || nz_hash( rx, ry, ( net ? 160 : 60 ) + e, 0 ) >= ( net ? n->tchance : n->chance ) ) {
         return false;
     }
+    double x1, y1, x2, y2;
+    net_point( n, net, rx, ry, &x1, &y1 );
+    net_point( n, net, rx - ( e == 0 ), ry - ( e == 1 ), &x2, &y2 );
+    double len = sqrt( ( x2 - x1 ) * ( x2 - x1 ) + ( y2 - y1 ) * ( y2 - y1 ) );
+    if ( len <= 1.0e-9 ) {
+        return false;
+    }
+    return !( n->mask.on && strip_in_mountains( n, x1, y1, x2, y2, len, ( net ? n->wtar : n->wdirt ) + n->mask.margin + 0.1 * len ) );
+}
+
+enum { SIDE_W = 0, SIDE_S = 1, SIDE_E = 2, SIDE_N = 3 };
+
+// what a node (the point of region (rx, ry)) is like as the end of the road that leaves it by 'side': the unit vector of the road's direction there and whether the node is an
+// intersection. An intersection (3 or 4 tarred roads) has its arms square to its sides (axis aligned); a node of 2 roads has one tangent for both (Catmull-Rom: from the one
+// partner to the other: the road goes on smoothly, a turn becomes a curve); a node of 1 road, and a node of a dirt track with 3 or 4 roads, points the road at its partner.
+static void node_dir( const rnet_t* n, int net, int64_t rx, int64_t ry, int side, double* dx, double* dy, bool* hub ) {
+    static const int sx[4] = { -1, 0, 1, 0 }, sy[4] = { 0, -1, 0, 1 };
+    bool has[4];
+    has[SIDE_W] = link_exists( n, net, rx, ry, 0 );
+    has[SIDE_S] = link_exists( n, net, rx, ry, 1 );
+    has[SIDE_E] = link_exists( n, net, rx + 1, ry, 0 );
+    has[SIDE_N] = link_exists( n, net, rx, ry + 1, 1 );
+    int deg = has[0] + has[1] + has[2] + has[3];
+    double px, py, qx, qy;
+    net_point( n, net, rx, ry, &px, &py );
+    net_point( n, net, rx + sx[side], ry + sy[side], &qx, &qy );
+    *hub = false;
+    if ( net && deg >= 3 ) {
+        *hub = true;
+        *dx = sx[side]; *dy = sy[side];
+        return;
+    }
+    double vx = qx - px, vy = qy - py;                      // (the chord to the partner)
+    if ( deg == 2 ) {
+        for ( int o = 0; o < 4; ++o ) {
+            if ( o != side && has[o] ) {
+                double ox, oy;
+                net_point( n, net, rx + sx[o], ry + sy[o], &ox, &oy );
+                if ( ( qx - ox ) * ( qx - ox ) + ( qy - oy ) * ( qy - oy ) > 1.0 ) { vx = qx - ox; vy = qy - oy; }
+                break;
+            }
+        }
+    }
+    double l = sqrt( vx * vx + vy * vy );
+    *dx = l > 1.0e-9 ? vx / l : 1.0; *dy = l > 1.0e-9 ? vy / l : 0.0;
+}
+
+// the curve without the wander, at u (0 .. 1) between the ends of the stubs
+static void hermite( const rlink_t* l, double u, double* x, double* y ) {
+    double u2 = u * u, u3 = u2 * u, h00 = 2.0 * u3 - 3.0 * u2 + 1.0, h10 = u3 - 2.0 * u2 + u, h01 = -2.0 * u3 + 3.0 * u2, h11 = u3 - u2;
+    *x = h00 * l->sax + h10 * l->m0x + h01 * l->sbx + h11 * l->m1x;
+    *y = h00 * l->say + h10 * l->m0y + h01 * l->sby + h11 * l->m1y;
+}
+
+// the way without the wander at t (0 .. 1)
+static void base_point( const rlink_t* l, double t, double* x, double* y ) {
+    if ( l->fa > 0.0 && t < l->fa ) {
+        double s = t / l->fa;
+        *x = l->x1 + ( l->sax - l->x1 ) * s; *y = l->y1 + ( l->say - l->y1 ) * s;
+    } else if ( l->fb > 0.0 && t > 1.0 - l->fb ) {
+        double s = ( t - ( 1.0 - l->fb ) ) / l->fb;
+        *x = l->sbx + ( l->x2 - l->sbx ) * s; *y = l->sby + ( l->y2 - l->sby ) * s;
+    } else {
+        double span = 1.0 - l->fa - l->fb;
+        hermite( l, span > 1.0e-12 ? ( t - l->fa ) / span : 0.0, x, y );
+    }
+}
+
+#define STUB_LEN   700.0        // an intersection's arm runs straight (square to the intersection) for this long
+#define WANDER_OFF 800.0        // no wander this near a tarred road's end
+
+void rnet_point( const rlink_t* l, double t, double* x, double* y ) {
+    base_point( l, t, x, y );
+    if ( l->wamp != 0.0 ) {
+        double d = ( t < 1.0 - t ? t : 1.0 - t ) * l->len - ( l->tar ? WANDER_OFF : 0.0 ), rl = l->len * 0.3 < 2500.0 ? l->len * 0.3 : 2500.0;
+        double w = l->wamp * nz_noise( 77, 2, t * 3.0, l->key, 0.0 ) * smooth01( d / rl );
+        *x -= ( l->y2 - l->y1 ) / l->clen * w;
+        *y += ( l->x2 - l->x1 ) / l->clen * w;
+    }
+}
+
+double rnet_arc( const rlink_t* l, double t ) {
+    int ns = 8 + (int)( t * (double) l->steps );
+    ns = ns > 400 ? 400 : ns;
+    double px, py, ax, ay, sum = 0.0;
+    rnet_point( l, 0.0, &ax, &ay );
+    for ( int k = 1; k <= ns; ++k ) {
+        rnet_point( l, t * (double) k / (double) ns, &px, &py );
+        sum += sqrt( ( px - ax ) * ( px - ax ) + ( py - ay ) * ( py - ay ) );
+        ax = px; ay = py;
+    }
+    return sum;
+}
+
+bool rnet_link( const rnet_t* n, int net, int64_t rx, int64_t ry, int e, rlink_t* l ) {
+    if ( !link_exists( n, net, rx, ry, e ) ) {
+        return false;
+    }
+    memset( l, 0, sizeof(*l) );
     net_point( n, net, rx, ry, &l->x1, &l->y1 );
     net_point( n, net, rx - ( e == 0 ), ry - ( e == 1 ), &l->x2, &l->y2 );
     double dx = l->x2 - l->x1, dy = l->y2 - l->y1;
-    l->len = sqrt( dx * dx + dy * dy );
+    l->clen = sqrt( dx * dx + dy * dy );
     l->tar = net != 0;
     l->key = (double) rx * 31.0 + (double) ry * 57.0 + (double) e * 7.0 + ( net ? 7777.5 : 0.5 );
     l->step = net ? 200.0 : 50.0;
-    l->steps = (int)( l->len / l->step ) + 1;
-    l->wa = net ? n->wtar : n->wdirt;
-    if ( l->len <= 1.0e-9 ) {
-        return false;
+    double d1x, d1y, d2x, d2y;                              // the road's direction at the two nodes (away from the node; at the second one the travel direction is the opposite)
+    node_dir( n, net, rx, ry, e == 0 ? SIDE_W : SIDE_S, &d1x, &d1y, &l->hub1 );
+    node_dir( n, net, rx - ( e == 0 ), ry - ( e == 1 ), e == 0 ? SIDE_E : SIDE_N, &d2x, &d2y, &l->hub2 );
+    double s1 = l->hub1 ? STUB_LEN : 0.0, s2 = l->hub2 ? STUB_LEN : 0.0;
+    l->sax = l->x1 + d1x * s1; l->say = l->y1 + d1y * s1;
+    l->sbx = l->x2 + d2x * s2; l->sby = l->y2 + d2y * s2;
+    double k = sqrt( ( l->sbx - l->sax ) * ( l->sbx - l->sax ) + ( l->sby - l->say ) * ( l->sby - l->say ) );
+    l->m0x = d1x * k; l->m0y = d1y * k;
+    l->m1x = -d2x * k; l->m1y = -d2y * k;
+    // the length: the stubs and the curve (24 pieces), then the shares of t
+    double hl = 0.0, hx, hy, qx = l->sax, qy = l->say;
+    for ( int i = 1; i <= 24; ++i ) {
+        hermite( l, (double) i / 24.0, &hx, &hy );
+        hl += sqrt( ( hx - qx ) * ( hx - qx ) + ( hy - qy ) * ( hy - qy ) );
+        qx = hx; qy = hy;
     }
-    return !( n->mask.on && crosses_mountains( n, l ) );
-}
-
-void rnet_point( const rlink_t* l, double t, double* x, double* y ) {
-    double w = l->wa * nz_noise( 77, 2, t * 3.0, l->key, 0.0 ) * sin( 3.14159265358979323846 * t );
-    *x = l->x1 + ( l->x2 - l->x1 ) * t - ( l->y2 - l->y1 ) / l->len * w;
-    *y = l->y1 + ( l->y2 - l->y1 ) * t + ( l->x2 - l->x1 ) / l->len * w;
+    l->len = hl + s1 + s2;
+    l->wamp = net ? n->wtar : n->wdirt;                     // (a short road wanders less: the slope of the wander stays gentle, 4 % of the length at most)
+    if ( l->wamp > 0.04 * l->len ) { l->wamp = 0.04 * l->len; }
+    l->fa = s1 / l->len; l->fb = s2 / l->len;
+    l->steps = (int)( l->len / l->step ) + 1;
+    // how far the way gets from the straight line at the same t (the curve), and the wander
+    double dev = 0.0;
+    for ( int i = 0; i <= 64; ++i ) {
+        double t = (double) i / 64.0, bx, by;
+        base_point( l, t, &bx, &by );
+        double ex = bx - ( l->x1 + dx * t ), ey = by - ( l->y1 + dy * t ), dd = sqrt( ex * ex + ey * ey );
+        if ( dd > dev ) { dev = dd; }
+    }
+    l->wa = dev * 1.05 + l->wamp + 1.0;
+    return true;
 }
 
 /*
@@ -124,6 +243,7 @@ typedef struct {
     rnet_t  cfg;
     double  px, py;
     int     kind;
+    bool    hub;                    // an intersection (tarred roads only): 3 or 4 roads meet here
     bool    has[2];
     rlink_t link[2];
     int     npts[2];                // 0: not cached (too long)
@@ -164,6 +284,7 @@ static const rcache_t* region( const rnet_t* n, int net, int64_t rx, int64_t ry 
     net_point( n, net, rx, ry, &c->px, &c->py );
     double u = nz_hash( rx, ry, 3, 0 );
     c->kind = u < 0.38 ? 3 : u < 0.66 ? 1 : u < 0.86 ? 2 : 0;
+    c->hub = net && ( link_exists( n, net, rx, ry, 0 ) + link_exists( n, net, rx, ry, 1 ) + link_exists( n, net, rx + 1, ry, 0 ) + link_exists( n, net, rx, ry + 1, 1 ) ) >= 3;
     for ( int e = 0; e < 2; ++e ) {
         c->has[e] = rnet_link( n, net, rx, ry, e, &c->link[e] );
         if ( c->has[e] && c->link[e].steps <= RNET_MAXPTS ) {
@@ -185,7 +306,7 @@ int rnet_links( const rnet_t* n, int net, double x0, double y0, double x1, doubl
     if ( !n->on || sp <= 0.0 ) {
         return 0;
     }
-    double wa = net ? n->wtar : n->wdirt;
+    double wa = ( net ? n->wtar : n->wdirt ) + 0.4 * sp;               // (a curve bulges by a tenth of its length, the nodes are a region away)
     int64_t ax = (int64_t) floor( ( x0 - wa ) / sp ) - 1, bx = (int64_t) floor( ( x1 + wa ) / sp ) + 1;
     int64_t ay = (int64_t) floor( ( y0 - wa ) / sp ) - 1, by = (int64_t) floor( ( y1 + wa ) / sp ) + 1;
     for ( int64_t ry = ay; ry <= by; ++ry ) {
@@ -202,6 +323,37 @@ int rnet_links( const rnet_t* n, int net, double x0, double y0, double x1, doubl
                 if ( cnt < max ) {
                     out[cnt] = *l;
                 }
+                ++cnt;
+            }
+        }
+    }
+    return cnt < max ? cnt : max;
+}
+
+bool rnet_cached_link( const rnet_t* n, int net, int64_t rx, int64_t ry, int e, rlink_t* l ) {
+    if ( !n->on || ( net ? n->tspacing <= 0.0 : n->spacing <= 0.0 ) ) {
+        return false;
+    }
+    const rcache_t* c = region( n, net, rx, ry );
+    if ( !c->has[e] ) {
+        return false;
+    }
+    *l = c->link[e];
+    return true;
+}
+
+int rnet_hubs( const rnet_t* n, double x0, double y0, double x1, double y1, double* xy, int max ) {
+    int cnt = 0;
+    double sp = n->tspacing;
+    if ( !n->on || sp <= 0.0 ) {
+        return 0;
+    }
+    int64_t ax = (int64_t) floor( x0 / sp ), bx = (int64_t) floor( x1 / sp ), ay = (int64_t) floor( y0 / sp ), by = (int64_t) floor( y1 / sp );
+    for ( int64_t ry = ay; ry <= by; ++ry ) {
+        for ( int64_t rx = ax; rx <= bx; ++rx ) {
+            const rcache_t* c = region( n, 1, rx, ry );
+            if ( c->hub && c->px >= x0 && c->px < x1 && c->py >= y0 && c->py < y1 ) {
+                if ( cnt < max ) { xy[2 * cnt] = c->px; xy[2 * cnt + 1] = c->py; }
                 ++cnt;
             }
         }
@@ -238,7 +390,7 @@ void rnet_near( const rnet_t* n, double x, double y, double reach, rnear_t* out 
                     }
                     double best = 1.0e9, bt = 0.0, px, py, ax, ay;
                     // only the steps whose place along the straight line from point to point is near that of (x, y): the road never leaves the line by more than wa
-                    double cdx = l->x2 - l->x1, cdy = l->y2 - l->y1, t0 = ( ( x - l->x1 ) * cdx + ( y - l->y1 ) * cdy ) / ( l->len * l->len ), dt = wmax / l->len;
+                    double cdx = l->x2 - l->x1, cdy = l->y2 - l->y1, t0 = ( ( x - l->x1 ) * cdx + ( y - l->y1 ) * cdy ) / ( l->clen * l->clen ), dt = wmax / l->clen;
                     int kmin = (int) floor( ( t0 - dt ) * (double) l->steps ), kmax = (int) ceil( ( t0 + dt ) * (double) l->steps );
                     kmin = kmin < 0 ? 0 : kmin; kmax = kmax > l->steps - 1 ? l->steps - 1 : kmax;
                     if ( kmin > kmax ) {

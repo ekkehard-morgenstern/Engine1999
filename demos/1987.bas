@@ -25,7 +25,7 @@
 200 BREAK OFF
 210 ON ERROR GOTO FAILED
 220 HL=0:IF ENV$("G1987_HEADLESS")<>"" THEN HL=-1
-230 DIM PV(60),SNX(300),SNY(300),SEX(300),SEY(300),SGX(300),SGY(300),SGU(300),SGV(300),SGK(300),SGD(300),SGE(300),SGI(300),RGX(6),RGY(6),RGP(6),RGQ(6),CKN(400),CHB(400),CKRX(9),CKRY(9),CKRT(9),CTX(24),CTY(24),GNS(8),GGX(160),FLJ$(81),TIH(33),RPX(300),RPY(300),RPF(300),CPX(40),CPY(40),SMX(120),SMY(120),PLX(40),PLY(40),TRX(520),TRY(520),LRR(8),LRZ(8),LRV(8),W$(8),GPX(2),GPZ(2),GPS(2),DWX(40),DWY(40),DRX(5),DRY(5),DRZ(5),DRH(5),DRT(5),DRA(5)
+230 DIM PV(60),SGL(300),SGH(300),SGX(300),SGY(300),SGU(300),SGV(300),SGK(300),SGD(300),SGE(300),SGI(300),RGX(6),RGY(6),RGP(6),RGQ(6),CKN(400),CHB(400),CKRX(9),CKRY(9),CKRT(9),CTX(24),CTY(24),GNS(8),GGX(160),FLJ$(81),TIH(33),RPX(300),RPY(300),RPF(300),CPX(40),CPY(40),SMX(120),SMY(120),PLX(40),PLY(40),TRX(520),TRY(520),LRR(8),LRZ(8),LRV(8),W$(8),GPX(2),GPZ(2),GPS(2),DWX(40),DWY(40),DRX(5),DRY(5),DRZ(5),DRH(5),DRT(5),DRA(5)
 240 GOTO MAIN
 250 ' ------------------------------------------------------------------------------------------------ small helpers
 260 FUNC RN(M)
@@ -2163,35 +2163,33 @@
 19530 ' the rest dirt tracks (110 wide, picture 304, see-through edges). No road over water, steep or high ground. A step is a SEGMENT; CHSEGS lists the segments that start near the chunk
 19540 ' (so that trees and bales keep away from them: NEARROAD), CHROADS builds the ones that start in it
 19550 PROC CHSEGS(CX,CY)
-19560   LOCAL NT,NET,SP,CH,NI,NJ,RX,RY,I,J,E,R1X,R1Y,R2X,R2Y,L,NS,K,T,A,AX,AY,CX2,CY2,X0,Y0,W,TR,WA,STP,P1,P2,PX,T0,DT,KA,KB,EX,XB
+19560   LOCAL NT,SP,RX,RY,I,J,E,L,NS,K,T,AX,AY,CX2,CY2,X0,Y0,TR,T0,DT,KA,KB,XB,WA,R1X,R1Y,R2X,R2Y,CL,TL,HB,A0,A1
 19570   X0=CX*900:Y0=CY*900:NSG=0
 19572   FOR NT=1 TO 0 STEP -1
-19573     NET=NT
-19574     SP=1800:CH=0.45:WA=140:STP=50:TR=0:P1=1:P2=2:EX=60:XB=160
-19576     IF NET THEN SP=36000:CH=0.85:WA=900:STP=200:TR=-1:P1=11:P2=12:EX=160:XB=380
+19574     SP=1800:TR=0:XB=160
+19576     IF NT THEN SP=36000:TR=-1:XB=380
 19580     RX=INT(X0/SP):RY=INT(Y0/SP)
 19582     FOR J=-1 TO 1
 19590       FOR I=-1 TO 1
 19600         FOR E=0 TO 1
-19610           IF M3D("ROADLINK",NET,RX+I,RY+J,E) THEN
-19620             R1X=(RX+I)*SP+HASH(RX+I,RY+J,P1)*SP:R1Y=(RY+J)*SP+HASH(RX+I,RY+J,P2)*SP
-19630             NI=RX+I+(E=0):NJ=RY+J+(E=1)
-19640             R2X=NI*SP+HASH(NI,NJ,P1)*SP:R2Y=NJ*SP+HASH(NI,NJ,P2)*SP
+19610           IF M3D("ROADLINK",NT,RX+I,RY+J,E) THEN
+19620             R1X=M3D("ROADPT",NT,RX+I,RY+J,E,0,0):R1Y=M3D("ROADPT",NT,RX+I,RY+J,E,0,1)
+19640             R2X=M3D("ROADPT",NT,RX+I,RY+J,E,1,0):R2Y=M3D("ROADPT",NT,RX+I,RY+J,E,1,1)
+19645             WA=M3D("ROADINFO",NT,RX+I,RY+J,E,4)
 19650             IF MAX(R1X,R2X)>X0-WA-520 AND MIN(R1X,R2X)<X0+WA+1420 AND MAX(R1Y,R2Y)>Y0-WA-520 AND MIN(R1Y,R2Y)<Y0+WA+1420 THEN
-19660               L=SQR((R2X-R1X)^2+(R2Y-R1Y)^2):NS=INT(L/STP)+1
-19672               LR1X=R1X:LR1Y=R1Y:LR2X=R2X:LR2Y=R2Y:LL=L:LWA=WA:LKEY=(RX+I)*31+(RY+J)*57+E*7+0.5+7777*NET
-19674               T0=((X0+450-R1X)*(R2X-R1X)+(Y0+450-R1Y)*(R2Y-R1Y))/(L*L):DT=(WA+1500)/L
+19660               L=M3D("ROADINFO",NT,RX+I,RY+J,E,1):NS=M3D("ROADINFO",NT,RX+I,RY+J,E,0):CL=SQR((R2X-R1X)^2+(R2Y-R1Y)^2)
+19672               HB=M3D("ROADINFO",NT,RX+I,RY+J,E,2)+2*M3D("ROADINFO",NT,RX+I,RY+J,E,3):TL=-1
+19674               T0=((X0+450-R1X)*(R2X-R1X)+(Y0+450-R1Y)*(R2Y-R1Y))/(CL*CL):DT=(WA+1500)/CL
 19676               KA=MAX(0,INT((T0-DT)*NS)):KB=MIN(NS-1,INT((T0+DT)*NS)+1)
 19680               FOR K=KA TO KB
-19690                 T=K/NS:A=T:W=WA*NOISE(77,T*3,LKEY)*SIN(PI*T)
-19700                 AX=R1X+(R2X-R1X)*T-(R2Y-R1Y)/L*W:AY=R1Y+(R2Y-R1Y)*T+(R2X-R1X)/L*W
+19690                 T=K/NS:AX=M3D("ROADPT",NT,RX+I,RY+J,E,T,0):AY=M3D("ROADPT",NT,RX+I,RY+J,E,T,1)
 19710                 IF AX>=X0-XB AND AX<X0+900+XB AND AY>=Y0-XB AND AY<Y0+900+XB AND NSG<299 THEN
-19720                   T=(K+1)/NS:W=WA*NOISE(77,T*3,LKEY)*SIN(PI*T)
-19730                   CX2=R1X+(R2X-R1X)*T-(R2Y-R1Y)/L*W:CY2=R1Y+(R2Y-R1Y)*T+(R2X-R1X)/L*W
+19720                   T=(K+1)/NS:CX2=M3D("ROADPT",NT,RX+I,RY+J,E,T,0):CY2=M3D("ROADPT",NT,RX+I,RY+J,E,T,1)
 19740                   IF M3D("QUIET",AX,AY)>=0.99 THEN
-19750                     SGX(NSG)=AX:SGY(NSG)=AY:SGU(NSG)=CX2:SGV(NSG)=CY2:SGK(NSG)=TR:SGD(NSG)=A*L:SGE(NSG)=T*L
+19750                     SGX(NSG)=AX:SGY(NSG)=AY:SGU(NSG)=CX2:SGV(NSG)=CY2:SGK(NSG)=TR:SGD(NSG)=0:SGE(NSG)=0:SGL(NSG)=L:SGH(NSG)=HB
 19760                     SGI(NSG)=(AX>=X0 AND AX<X0+900 AND AY>=Y0 AND AY<Y0+900)
-19762                     CALL PATHNORM(K,NS):SNX(NSG)=PNX:SNY(NSG)=PNY:CALL PATHNORM(K+1,NS):SEX(NSG)=PNX:SEY(NSG)=PNY:NSG=NSG+1
+19762                     IF TR AND SGI(NSG) THEN SGD(NSG)=M3D("ROADARC",NT,RX+I,RY+J,E,K/NS):SGE(NSG)=M3D("ROADARC",NT,RX+I,RY+J,E,T)
+19764                     NSG=NSG+1
 19770                   END IF
 19780                 END IF
 19790               NEXT K
@@ -2206,19 +2204,23 @@
 19870 ' direction of the road shows a white reflector to the traffic that comes from behind and a red one to the oncoming traffic, the one on the left the other way round: the right-hand side of
 19880 ' each driver has the white ones, the left-hand side the red ones. (The road itself, tar and dirt, is a ribbon in the mesh of the chunk's ground job.)
 19890 PROC CHROADS(CX,CY,SL)
-19900   LOCAL I,P0,NP,CX2,CY2,DX,DY,D,YW,PX,PY,NK,F,MX,MY
+19900   LOCAL I,P0,NP,CX2,CY2,DX,DY,D,YW,PX,PY,NK,F,MX,MY,PD,OK
 19910   P0=8800+SL*6:NP=0
 19920   M3D OBJFREE P0,P0+5
 19930   FOR I=0 TO NSG-1
 19940     IF SGI(I) AND SGK(I) THEN
 19950       CX2=SGU(I):CY2=SGV(I):DX=CX2-SGX(I):DY=CY2-SGY(I):D=SQR(DX*DX+DY*DY):DX=DX/D:DY=DY/D
-19960       NK=INT(SGE(I)/1562.5)
+19960       NK=INT(SGE(I)/1562.5):PD=NK*1562.5
 19962       IF INT(SGD(I)/1562.5)<>NK AND NP<5 THEN
-19964         F=(NK*1562.5-SGD(I))/(SGE(I)-SGD(I)):MX=SGX(I)+(CX2-SGX(I))*F:MY=SGY(I)+(CY2-SGY(I))*F
-19970         YW=ATAN2(DY,DX)*180/PI
-19980         PX=MX+DY*232:PY=MY-DX*232:M3D INSTANCE P0+NP,344,PX,PY,FN HT(PX,PY),YW,1:NP=NP+1
-19990         PX=MX-DY*232:PY=MY+DX*232:M3D INSTANCE P0+NP,344,PX,PY,FN HT(PX,PY),YW+180,1:NP=NP+1
-20000       END IF
+19963         OK=-1:IF (SGH(I) AND 1) AND PD<520 THEN OK=0
+19964         IF (SGH(I) AND 2) AND PD>SGL(I)-520 THEN OK=0
+19965         IF OK THEN
+19966           F=(PD-SGD(I))/(SGE(I)-SGD(I)):MX=SGX(I)+(CX2-SGX(I))*F:MY=SGY(I)+(CY2-SGY(I))*F
+19970           YW=ATAN2(DY,DX)*180/PI
+19980           PX=MX+DY*232:PY=MY-DX*232:M3D INSTANCE P0+NP,344,PX,PY,FN HT(PX,PY),YW,1:NP=NP+1
+19990           PX=MX-DY*232:PY=MY+DX*232:M3D INSTANCE P0+NP,344,PX,PY,FN HT(PX,PY),YW+180,1:NP=NP+1
+19996         END IF
+19999       END IF
 20010     END IF
 20020   NEXT I
 20030 END PROC
@@ -2244,20 +2246,6 @@
 20400   M3D BOX 344,2.5,-2,21,3.5,2,31,FN CC(1,11)
 20410   M3D OBJSHOW 344,0
 20420 END PROC
-21000 ' the place of a road at T (0 .. 1) into PPX, PPY (the road is described by LR1X, LR1Y, LR2X, LR2Y, LL, LWA, LKEY: set by CHSEGS), and the right-hand unit normal of the road at step K
-21010 ' of NS into PNX, PNY, from the places K - 1 and K + 1: the segments that meet at a step share it, so a wide road has no slits at its bends
-21020 PROC PATHPT(T)
-21030   LOCAL W
-21040   W=LWA*NOISE(77,T*3,LKEY)*SIN(PI*T)
-21050   PPX=LR1X+(LR2X-LR1X)*T-(LR2Y-LR1Y)/LL*W:PPY=LR1Y+(LR2Y-LR1Y)*T+(LR2X-LR1X)/LL*W
-21060 END PROC
-21070 PROC PATHNORM(K,NS)
-21080   LOCAL X1,Y1,D
-21090   CALL PATHPT(MAX(0,K-1)/NS):X1=PPX:Y1=PPY
-21100   CALL PATHPT(MIN(NS,K+1)/NS)
-21110   X1=PPX-X1:Y1=PPY-Y1:D=SQR(X1*X1+Y1*Y1)
-21120   PNX=Y1/D:PNY=-X1/D
-21130 END PROC
 21200 ' ------------------------------------------------------------------------------------------------ the rings of the far ground (M3D RING jobs of the engine's worker thread)
 21210 ' Round the 17 x 17 chunks of CHUNKS (15300 units) the ground goes on in three rings of cells that grow with the distance, each a square grid with a hole where the finer one is:
 21220 ' ring 2 cells of 900 (45 x 45 = 40500, the hole is the window: 17 x 17 cells), ring 3 cells of 2700 (36 x 36 = 97200, hole = ring 2), ring 4 cells of 8100 (40 x 40 = 324000 = 10 km,

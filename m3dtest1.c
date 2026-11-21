@@ -75,7 +75,7 @@ static bool ops( int o, int n, const char* s, ... ) {                  // an ope
 }
 
 static double Q( int q, int n, ... ) {
-    double a[4] = { 0, 0, 0, 0 }, r = 0;
+    double a[8] = { 0, 0, 0, 0, 0, 0, 0, 0 }, r = 0;
     va_list ap;
     va_start( ap, n );
     for ( int i=0; i < n; ++i ) {
@@ -934,6 +934,87 @@ int main( void ) {
         int again = 0;
         for ( int64_t ry = -20; ry < 20; ++ry ) { for ( int64_t rx = -20; rx < 20; ++rx ) { for ( int e = 0; e < 2; ++e ) { rlink_t l; if ( rnet_link( &M->gnd.net, 0, rx, ry, e, &l ) ) { ++again; } } } }
         CHECK( again == before );
+    }
+    CHECK( op( GFXOP_M3DCLEAR, 0 ) );
+    // -- the shape of the roads: smooth curves, intersections with arms square to their sides, the queries of the language ------------------------------------------------
+    fresh();
+    CHECK( op( GFXOP_M3DGROUND, 7, 1987.0, 900.0, 22.0, 4.0, 8.0, 0.5, 2.0 ) );
+    CHECK( op( GFXOP_M3DROADNET, 6, 1800.0, 0.45, 140.0, 36000.0, 0.85, 900.0 ) );
+    {
+        int links = 0, hubends = 0, badarm = 0, sharp = 0, badq = 0, nodes_hub = 0, found_hub = 0, badtan = 0;
+        double maxturn = 0.0;
+        for ( int64_t ry = -10; ry < 10; ++ry ) {
+            for ( int64_t rx = -10; rx < 10; ++rx ) {
+                for ( int e = 0; e < 2; ++e ) {
+                    rlink_t l;
+                    if ( !rnet_link( &M->gnd.net, 1, rx, ry, e, &l ) ) { continue; }
+                    ++links;
+                    double px[800], py[800];
+                    int np = 0;
+                    for ( int k = 0; k <= l.steps && np < 800; ++k ) { rnet_point( &l, (double) k / (double) l.steps, &px[np], &py[np] ); ++np; }
+                    for ( int k = 1; k + 1 < np; ++k ) {                                                // no corner: the direction changes by less than 40 degrees from one step of 200 units to the next
+                        double ax = px[k] - px[k - 1], ay = py[k] - py[k - 1], bx = px[k + 1] - px[k], by = py[k + 1] - py[k];
+                        double ang = fabs( atan2( ax * by - ay * bx, ax * bx + ay * by ) ) * 57.29578;
+                        if ( ang > maxturn ) { maxturn = ang; }
+                        if ( ang > 40.0 ) { ++sharp; }
+                    }
+                    if ( l.hub1 ) {                                                                     // an arm leaves the node along an axis (west for e = 0, south for e = 1), 300 units straight
+                        ++hubends;
+                        double ax, ay;
+                        rnet_point( &l, 0.4 * l.fa, &ax, &ay );
+                        if ( !( e == 0 ? fabs( ay - l.y1 ) < 1e-6 && ax < l.x1 : fabs( ax - l.x1 ) < 1e-6 && ay < l.y1 ) ) { ++badarm; }
+                    }
+                    if ( l.hub2 ) {                                                                     // ... and at the other end (east / north of that node)
+                        ++hubends;
+                        double ax, ay;
+                        rnet_point( &l, 1.0 - 0.4 * l.fb, &ax, &ay );
+                        if ( !( e == 0 ? fabs( ay - l.y2 ) < 1e-6 && ax > l.x2 : fabs( ax - l.x2 ) < 1e-6 && ay > l.y2 ) ) { ++badarm; }
+                    }
+                    // the queries of the language give the same numbers
+                    double qx = Q( GFXQ_M3DROADPT, 6, 1.0, (double) rx, (double) ry, (double) e, 0.37, 0.0 ), qy = Q( GFXQ_M3DROADPT, 6, 1.0, (double) rx, (double) ry, (double) e, 0.37, 1.0 ), cx, cy;
+                    rnet_point( &l, 0.37, &cx, &cy );
+                    if ( qx != cx || qy != cy || Q( GFXQ_M3DROADINFO, 5, 1.0, (double) rx, (double) ry, (double) e, 0.0 ) != (double) l.steps ||
+                         Q( GFXQ_M3DROADINFO, 5, 1.0, (double) rx, (double) ry, (double) e, 2.0 ) != ( l.hub1 ? 1.0 : 0.0 ) ) { ++badq; }
+                    double arc = Q( GFXQ_M3DROADARC, 5, 1.0, (double) rx, (double) ry, (double) e, 1.0 );
+                    if ( !( arc >= l.clen && arc < l.len * 1.1 + 50.0 && Q( GFXQ_M3DROADARC, 5, 1.0, (double) rx, (double) ry, (double) e, 0.5 ) < arc ) ) { ++badq; }
+                }
+                // a node is an intersection when 3 or 4 roads meet there: rnet_hubs finds exactly those
+                int deg = 0;
+                rlink_t t;
+                deg += rnet_link( &M->gnd.net, 1, rx, ry, 0, &t ) + rnet_link( &M->gnd.net, 1, rx, ry, 1, &t ) + rnet_link( &M->gnd.net, 1, rx + 1, ry, 0, &t ) + rnet_link( &M->gnd.net, 1, rx, ry + 1, 1, &t );
+                double nx = ( (double) rx + nz_hash( rx, ry, 11, 0 ) ) * 36000.0, ny = ( (double) ry + nz_hash( rx, ry, 12, 0 ) ) * 36000.0, hxy[8];
+                int nh = rnet_hubs( &M->gnd.net, nx - 1.0, ny - 1.0, nx + 1.0, ny + 1.0, hxy, 4 );
+                if ( deg >= 3 ) { ++nodes_hub; found_hub += nh == 1; } else if ( nh != 0 ) { ++badtan; }
+            }
+        }
+        CHECK( links > 100 && hubends > 100 );
+        CHECK( sharp == 0 && maxturn < 40.0 );
+        CHECK( badarm == 0 && badq == 0 );
+        CHECK( nodes_hub > 50 && found_hub == nodes_hub && badtan == 0 );
+        // the tangent is the same on both sides of a node of two roads (no turn at the node): the directions just before and after it differ by less than 25 degrees
+        int nd2 = 0, kink = 0;
+        for ( int64_t ry = -10; ry < 10; ++ry ) {
+            for ( int64_t rx = -10; rx < 10; ++rx ) {
+                rlink_t lw, ls;
+                bool w = rnet_link( &M->gnd.net, 0, rx, ry, 0, &lw ), s = rnet_link( &M->gnd.net, 0, rx, ry, 1, &ls ), ee = false, nn = false;
+                rlink_t le, ln;
+                ee = rnet_link( &M->gnd.net, 0, rx + 1, ry, 0, &le ); nn = rnet_link( &M->gnd.net, 0, rx, ry + 1, 1, &ln );
+                if ( w + s + ee + nn != 2 ) { continue; }
+                const rlink_t* a[2]; int bsd[2], na = 0;
+                if ( w ) { a[na] = &lw; bsd[na++] = 0; } if ( s ) { a[na] = &ls; bsd[na++] = 0; } if ( ee ) { a[na] = &le; bsd[na++] = 1; } if ( nn ) { a[na] = &ln; bsd[na++] = 1; }
+                double ox[2], oy[2];
+                for ( int i = 0; i < 2; ++i ) {                                                          // the way 0.5 % along each road away from the node
+                    double nx = bsd[i] ? a[i]->x2 : a[i]->x1, ny = bsd[i] ? a[i]->y2 : a[i]->y1, tx, ty;
+                    rnet_point( a[i], bsd[i] ? 1.0 - 1.0 / (double) a[i]->steps * 0.3 : 1.0 / (double) a[i]->steps * 0.3, &tx, &ty );
+                    ox[i] = tx - nx; oy[i] = ty - ny;
+                }
+                double dot = ox[0] * ox[1] + oy[0] * oy[1], cr = ox[0] * oy[1] - oy[0] * ox[1];
+                double ang = fabs( atan2( cr, -dot ) ) * 57.29578;                                    // 0 when the two leave the node in opposite directions (a straight way through)
+                ++nd2;
+                if ( ang > 60.0 ) { ++kink; }
+            }
+        }
+        CHECK( nd2 > 20 && kink <= nd2 / 4 );                                                          // (the wander and the sharp bends of very short tracks are allowed to differ: most nodes pass smoothly)
     }
     CHECK( op( GFXOP_M3DCLEAR, 0 ) );
     // -- M3D SUN: terrain cells shaded by their slope with pictures t + k * stride ----------------------------------------------------------------------------

@@ -36,9 +36,9 @@
 /*
 The road network of a procedural world (no SDL, pure: everything is a function of the numbers, like noise.c). The plane is cut into regions of 'spacing' units; every region has a
 feature point (anywhere in it) with a kind of ground (forest, meadow, field, plain); a road joins a region's point to the point of its west and of its south neighbour with a chance
-('chance'), a part of the roads ('tarfrac') are tarred, the others dirt tracks. A road is a path from point to point that wanders sideways (noise, 'wdirt' / 'wtar' units at most,
-zero at both ends) and is cut into steps (50 units for a dirt track, 200 for a tarred road); the tarred roads are a second network of their own with far apart regions; the same numbers are used by demos/1987.bas (HASH(rx, ry, 1 / 2 / 3) = the point, HASH(rx, ry, 60 + e) = the road exists,
-the tarred network: HASH(rx, ry, 11 / 12) = the point, HASH(rx, ry, 160 + e) = the road exists, NOISE(77, t * 3, rx * 31 + ry * 57 + e * 7 + 7777.5) = the wander; dirt: NOISE(77, t * 3, rx * 31 + ry * 57 + e * 7 + 0.5)), so the game draws the roads where the ground function expects them.
+('chance'), a part of the roads ('tarfrac') are tarred, the others dirt tracks. A road is a smooth curve from point to point (a cubic Hermite spline: the direction at a point is the same on both sides, so a road never turns at a point; at a point where two roads meet it is the line from the one partner to the other (Catmull-Rom), where
+3 or 4 tarred roads meet there is an INTERSECTION: every arm leaves it square to the side of a square, west / south / east / north, 700 units straight before it curves) plus a sideways wander (noise, at most 'wdirt' / 'wtar' units and 4 % of the length, zero near the ends) and is cut into steps (50 units for a dirt track, 200 for a tarred road); the tarred roads are a second network of their own with far apart regions. The points are
+HASH(rx, ry, 1 / 2) (dirt) and HASH(rx, ry, 11 / 12) (tarred), a road exists when HASH(rx, ry, 60 / 160 + e) is below the chance and it keeps out of the mountains; demos/1987.bas does not compute the roads itself any more but asks the engine (M3D("ROADLINK" / "ROADINFO" / "ROADPT" / "ROADARC")).
 */
 
 // where the mountains are (the mask of M3D MOUNTAINS: a slow noise between lo and hi, faded in between the distances r0 and r1 from the origin): a road is not made where it is up
@@ -58,12 +58,21 @@ typedef struct _rnet_t {
 } rnet_t;
 
 typedef struct _rlink_t {
-    double  x1, y1, x2, y2, len;            // the two points and the distance between them
+    double  x1, y1, x2, y2;                 // the two nodes (region points)
+    double  len;                            // the length of the way (an estimate: the way is a curve)
     bool    tar;
     double  key;                            // the second argument of the wander noise
     int     steps;                          // len / step + 1 (50 units for a dirt track, 200 for a tarred road)
     double  step;
-    double  wa;                             // the wander
+    double  wa;                             // how far the way gets from the straight line between the nodes at the same t (curve and wander): the bound for searches
+    // the way: from a node a straight stub (only at an intersection: it leaves the node square to the intersection's side), then a cubic Hermite curve to the stub of the other node,
+    // plus a sideways wander (noise, zero near the ends); a road never turns at a node, its tangent there is the same on both sides (or axis aligned at an intersection)
+    double  sax, say, sbx, sby;             // where the stubs end (the nodes themselves without a stub)
+    double  m0x, m0y, m1x, m1y;             // the curve's tangents there (travel direction)
+    double  fa, fb;                         // the shares of t of the two stubs
+    double  clen;                           // the straight distance between the nodes
+    double  wamp;                           // the wander
+    bool    hub1, hub2;                     // the node is an intersection (3 or 4 tarred roads)
 } rlink_t;
 
 typedef struct _rnear_t {
@@ -81,6 +90,12 @@ void rnet_flush( void );
 void rnet_set_simd( int on );                               // rnet_near(): 1 vector loop, 0 scalar twin (same bits), -1 by the environment ENGINE1999_NOSIMD
 // the roads of a network (0 dirt, 1 tarred) that may touch the rectangle (their bounding box and their wander cross it): up to max of them, how many
 int  rnet_links( const rnet_t* n, int net, double x0, double y0, double x1, double y1, rlink_t* out, int max );
+// the intersections (nodes where 3 or 4 tarred roads meet; their arms are axis aligned: west, south, east, north) that lie in the rectangle: up to max of them (x, y pairs), how many
+int  rnet_hubs( const rnet_t* n, double x0, double y0, double x1, double y1, double* xy, int max );
+// the same road from the cache (cheap: the queries of the language use it; rnet_link() works it out)
+bool rnet_cached_link( const rnet_t* n, int net, int64_t rx, int64_t ry, int e, rlink_t* l );
+// the length of the way of a road from its start to t (0 .. 1)
+double rnet_arc( const rlink_t* l, double t );
 // the place at t (0 .. 1) of a road
 void rnet_point( const rlink_t* l, double t, double* x, double* y );
 // the nearest roads to (x, y) within reach (at most 700)

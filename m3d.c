@@ -728,6 +728,28 @@ static void job_ribbons( tjob_t* j, int net ) {
             }
         }
     }
+    if ( net ) {                                                                // the intersections: a square of plain tar over the roads' ends (a little above the arms), the arms leave it square to its sides
+        double hxy[2 * 24];
+        int nh = rnet_hubs( &j->gnd.net, j->x0 - 1.0, j->y0 - 1.0, ex + 1.0, ey + 1.0, hxy, 24 );
+        int htex = j->pic.tarfar > 0 ? j->pic.tarfar : tex;
+        for ( int h = 0; h < nh; ++h ) {
+            double cx = hxy[2 * h], cy = hxy[2 * h + 1];
+            if ( j->mode == 0 && j->hn > 0 && cx >= j->hx0 && cx < j->hx0 + j->hn * j->cell && cy >= j->hy0 && cy < j->hy0 + j->hn * j->cell ) { continue; }
+            if ( j->gnd.quiet.on && 1.0 - box_weight( cx, cy, j->gnd.quiet.cx, j->gnd.quiet.cy, j->gnd.quiet.rx, j->gnd.quiet.ry, j->gnd.quiet.margin ) < 0.99 ) { continue; }
+            int vi[9];
+            for ( int q = 0; q < 9; ++q ) {                                     // 3 x 3 vertices, so the square follows the mesh
+                double vx = cx + ( (double)( q % 3 ) - 1.0 ) * half, vy = cy + ( (double)( q / 3 ) - 1.0 ) * half, vz = job_meshh( j, vx, vy ) + lift + 1.5 + j->cell * 0.01;
+                vi[q] = jv_addm( j, vx, vy, vz, (double)( q % 3 ) * 32.0, (double)( q / 3 ) * 32.0, morph ? job_coarse( j, vx, vy ) + lift + 1.5 + j->cell * 0.01 : vz );
+                if ( vi[q] < 0 ) { return; }
+            }
+            for ( int cj = 0; cj < 2; ++cj ) {
+                for ( int ci = 0; ci < 2; ++ci ) {
+                    int b = cj * 3 + ci;
+                    if ( !jt_add( j, vi[b], vi[b + 1], vi[b + 4], htex ) || !jt_add( j, vi[b], vi[b + 4], vi[b + 3], htex ) ) { return; }
+                }
+            }
+        }
+    }
 }
 
 // a vertex of a tree: it moves with the ground under the tree (dz: the coarser surface minus the true ground there)
@@ -2107,9 +2129,21 @@ bool m3d_query( m3d_t* m, int q, const double* a, int na, double* r ) {
             *r = q == GFXQ_M3DROADD ? rn.dirt : rn.tar;
             return true;
         }
-        case GFXQ_M3DROADLINK: {                            // M3D("ROADLINK", net, rx, ry, e): is there such a road (the hash and the mountains)
+        case GFXQ_M3DROADLINK: case GFXQ_M3DROADINFO: case GFXQ_M3DROADPT: case GFXQ_M3DROADARC: {          // the roads by region: the road of network net (0 dirt, 1 tarred) from region (rx, ry) to its west (e = 0) / south (e = 1) neighbour
             rlink_t lk;
-            *r = rnet_link( &m->gnd.net, a[0] != 0.0 ? 1 : 0, (int64_t) floor( a[1] ), (int64_t) floor( a[2] ), a[3] != 0.0 ? 1 : 0, &lk ) ? 1.0 : 0.0;
+            bool has = rnet_cached_link( &m->gnd.net, a[0] != 0.0 ? 1 : 0, (int64_t) floor( a[1] ), (int64_t) floor( a[2] ), a[3] != 0.0 ? 1 : 0, &lk );
+            if ( q == GFXQ_M3DROADLINK || !has ) {
+                *r = has ? 1.0 : 0.0;
+            } else if ( q == GFXQ_M3DROADINFO ) {              // what: 0 steps, 1 length, 2 the start is an intersection, 3 the end is, 4 how far the way gets from the straight line between the nodes
+                int w = (int) floor( a[4] );
+                *r = w == 0 ? (double) lk.steps : w == 1 ? lk.len : w == 2 ? ( lk.hub1 ? 1.0 : 0.0 ) : w == 3 ? ( lk.hub2 ? 1.0 : 0.0 ) : lk.wa;
+            } else if ( q == GFXQ_M3DROADPT ) {                // at t (0 .. 1): what 0 x, 1 y
+                double t = a[4] < 0.0 ? 0.0 : a[4] > 1.0 ? 1.0 : a[4], px, py;
+                rnet_point( &lk, t, &px, &py );
+                *r = a[5] == 0.0 ? px : py;
+            } else {                                           // the length of the way up to t
+                *r = rnet_arc( &lk, a[4] < 0.0 ? 0.0 : a[4] > 1.0 ? 1.0 : a[4] );
+            }
             return true;
         }
         case GFXQ_M3DKIND: *r = rnet_kind( &m->gnd.net, a[0], a[1] ); return true;

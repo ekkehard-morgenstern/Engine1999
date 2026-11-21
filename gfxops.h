@@ -452,7 +452,10 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXQ_M3DRINGBUSY 396            // M3D("RINGBUSY"): the ground jobs that are not taken yet
 #define GFXQ_M3DQUIET   397             // M3D("QUIET", x, y): 0 inside the quiet box (the hand-made area), 1 outside
 #define GFXQ_M3DROADLINK 398            // M3D("ROADLINK", net, rx, ry, e): 1 when the road of network net (0 dirt, 1 tarred) from region (rx, ry) to its west (e = 0) / south (e = 1) neighbour exists, else 0
-#define GFXQ_M3DLAST    GFXQ_M3DROADLINK
+#define GFXQ_M3DROADINFO 399            // M3D("ROADINFO", net, rx, ry, e, what): of the road that M3D("ROADLINK") finds: what 0 the number of steps, 1 its length, 2 / 3 whether its start / end is an intersection, 4 how far it gets from the straight line between its nodes; 0 for none
+#define GFXQ_M3DROADPT  404             // M3D("ROADPT", net, rx, ry, e, t, axis): the place at t (0 .. 1) of that road (axis 0 x, 1 y)
+#define GFXQ_M3DROADARC 405             // M3D("ROADARC", net, rx, ry, e, t): the length of that road from its start to t
+#define GFXQ_M3DLAST    GFXQ_M3DROADARC      // (400 .. 403 in between are HASH / NOISE / RIDGED / FBM, which the VM computes itself and never sends to a host)
 
 typedef struct _gfxcmd_t {
     const char* group;                  // "GFX", "TXT", "TILE", "SPRITE", "MOUSE", or "" for the statements that are reserved words themselves
