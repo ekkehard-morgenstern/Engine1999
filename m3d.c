@@ -759,12 +759,15 @@ static bool trace( m3d_t* m, v3_t o, v3_t d, double maxd, int skip, rayhit_t* hi
 }
 
 // the highest surface at or below z at (x, y); -1e9 if none
-static double floor_at( m3d_t* m, double x, double y, double z ) {
+static double floor_at( m3d_t* m, double x, double y, double z, rayhit_t* hit ) {
     v3_t o = { x, y, z }, d = { 0, 0, -1 };
     rayhit_t h;
     // the ray starts exactly on a floor sometimes: lift it a little
     o.z += 0.01;
     if ( trace( m, o, d, 20000.0, M3D_OF_PASS, &h ) ) {
+        if ( hit != 0 ) {
+            *hit = h;
+        }
         return o.z - h.t;
     }
     return -1.0e9;
@@ -840,7 +843,7 @@ static bool push_out( m3d_t* m, const body_t* b, double* px, double* py, double 
 static bool try_move( m3d_t* m, body_t* b, double nx, double ny ) {
     double feet = b->z;
     bool pushed = push_out( m, b, &nx, &ny, feet );
-    double fl = floor_at( m, nx, ny, feet + b->step );
+    double fl = floor_at( m, nx, ny, feet + b->step, 0 );
     if ( fl < -1.0e8 ) {
         return false;
     }
@@ -876,7 +879,7 @@ static void body_move( m3d_t* m, body_t* b, double dx, double dy ) {
     if ( !moved && len > 1.0e-9 ) {
         b->hit |= 2;
     }
-    double fl = floor_at( m, b->x, b->y, b->z + b->step );
+    double fl = floor_at( m, b->x, b->y, b->z + b->step, 0 );
     if ( fl > -1.0e8 ) {
         b->z = fl + b->lift;
     }
@@ -1267,7 +1270,7 @@ bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t sl
             if ( !( a[0] >= -1000.0 && a[0] <= 10000.0 ) ) { return false; }
         {
             double nl = a[0] < 0 ? 0 : a[0];
-            double fl = floor_at( m, m->x, m->y, m->z - m->lift + m->step );
+            double fl = floor_at( m, m->x, m->y, m->z - m->lift + m->step, 0 );
             if ( fl > -1.0e8 ) {
                 m->z = fl + nl;
             } else {
@@ -1346,8 +1349,20 @@ bool m3d_query( m3d_t* m, int q, const double* a, int na, double* r ) {
         case GFXQ_M3DPITCH: *r = m->pitch; return true;
         case GFXQ_M3DLIFT: *r = m->lift; return true;
         case GFXQ_M3DHIT: *r = m->hit; return true;
-        case GFXQ_M3DFLOORZ: *r = floor_at( m, m->x, m->y, m->z + m->step ); return true;
-        case GFXQ_M3DFLOORAT: *r = floor_at( m, a[0], a[1], a[2] ); return true;
+        case GFXQ_M3DFLOORZ: *r = floor_at( m, m->x, m->y, m->z + m->step, 0 ); return true;
+        case GFXQ_M3DFLOORAT: *r = floor_at( m, a[0], a[1], a[2], 0 ); return true;
+        case GFXQ_M3DFLOORTEX: case GFXQ_M3DFLOOROBJ: {         // what the floor under the point is made of: the surface M3D("FLOORAT") finds
+            rayhit_t h;
+            if ( floor_at( m, a[0], a[1], a[2], &h ) < -1.0e8 ) {
+                *r = -1;
+            } else if ( q == GFXQ_M3DFLOOROBJ ) {
+                *r = h.obj;
+            } else {
+                int t = m->objs[h.obj].t[h.tri].tex;
+                *r = t >= 0 && t < M3D_MAXTEX && m->sun.lvl[t] != 0 ? m->sun.src[t] : t;      // a shaded copy tells its cell's own picture
+            }
+            return true;
+        }
         case GFXQ_M3DCEILAT: *r = ceil_at( m, a[0], a[1], a[2] ); return true;
         case GFXQ_M3DDRAWN:
             if ( m->rend != 0 && m->rend->drawn != 0 ) {

@@ -322,6 +322,8 @@ static const gfxquery_t queries[] = {
     { "M3D",    "HIT", GFXQ_M3DHIT, 0, 0 },
     { "M3D",    "FLOORZ", GFXQ_M3DFLOORZ, 0, 0 },
     { "M3D",    "FLOORAT", GFXQ_M3DFLOORAT, 3, 3 },
+    { "M3D",    "FLOORTEX", GFXQ_M3DFLOORTEX, 3, 3 },
+    { "M3D",    "FLOOROBJ", GFXQ_M3DFLOOROBJ, 3, 3 },
     { "M3D",    "CEILAT", GFXQ_M3DCEILAT, 3, 3 },
     { "M3D",    "TON", GFXQ_M3DTON, 1, 1 },
     { "M3D",    "TX", GFXQ_M3DTX, 1, 1 },

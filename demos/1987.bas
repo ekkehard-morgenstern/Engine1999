@@ -56,22 +56,16 @@
 586   RETURN MAX(0,MIN(1,(ABS(V)-WSLOW)/(WFAST-WSLOW)))
 588 END FUNC
 590 FUNC SURF(X,Y,Z)
-600   LOCAL I,DX,DY,UX,UY,TT,E
-605   ' the roads lie 3 .. 5 units above the ground (the walker stands on them), the porch 7, the floor of the house 5 (and no road reaches it)
-610   E=Z-FN HT(X,Y):IF E>6.5 THEN RETURN 2
-620   IF ABS(X-1100)<700 AND ABS(Y-650)<500 THEN RETURN 3
-630   FOR I=0 TO RPN-1
-640     IF RPF(I) THEN
-641       UX=RPX(I)-RPX(I-1):UY=RPY(I)-RPY(I-1)
-642       TT=((X-RPX(I-1))*UX+(Y-RPY(I-1))*UY)/(UX*UX+UY*UY)
-643       IF TT<0 THEN TT=0
-644       IF TT>1 THEN TT=1
-645       DX=RPX(I-1)+TT*UX-X:DY=RPY(I-1)+TT*UY-Y
-646       IF DX*DX+DY*DY<2025 THEN RETURN 1
-650     END IF
-660   NEXT I
-665   IF E>2.5 THEN RETURN 2
-670   RETURN 0
+600   LOCAL T
+602   ' what the ground is made of: the picture of the floor under the feet (the engine's M3D("FLOORTEX"): the highest solid triangle below, so roads, planks, tiles and
+604   ' the soil of the lakes are told by their pictures, not by the height); 0 grass (301 .. 303, carpet 323, anything else), 1 sand (road 304, mud 320), 2 wood / hard
+606   ' (planks 305, tiles 306, stone 307, rock 324, brick 326), 3 wheat (308, 321, and the soil of the field)
+610   T=M3D("FLOORTEX",X,Y,Z+3)
+620   IF T=320 AND ABS(X-1100)<700 AND ABS(Y-650)<500 THEN RETURN 3
+630   IF T=308 OR T=321 THEN RETURN 3
+640   IF T=304 OR T=320 THEN RETURN 1
+650   IF T=305 OR T=306 OR T=307 OR T=324 OR T=326 THEN RETURN 2
+660   RETURN 0
 680 END FUNC
 690 ' which picture covers the ground cell around X,Y: 1 grass, 2 dry grass, 3 lush grass, 20 the soil of the wheat field
 700 FUNC CELLTEX(X,Y)
@@ -1595,7 +1589,7 @@
 12580     END IF
 12585     IF C$="chunks" THEN CALL CHUNKSTAT(JX,JY)
 12590     IF C$="state" THEN
-12600       PRINT "state mode=";MODE;" jx=";INT(JX);" jy=";INT(JY);" jz=";INT(JZ+0.5);" jh=";INT(JH);" jv=";INT(JV);" bst=";BST;" nj=";CNJ;" nh=";CNH;" nb=";CNB;" cmb=";CMB;" hly=";INT(HLY);" hlp=";INT(HLP);" brp=";INT(BRP*100);" bx=";INT(BX);" by=";INT(BY);" bz=";INT(BZ+0.5);" bh=";INT(BH);" bv=";INT(BV);" st=";INT(ST*100);" gh=";INT(FN HT(JX,JY))
+12600       PRINT "state mode=";MODE;" jx=";INT(JX);" jy=";INT(JY);" jz=";INT(JZ+0.5);" jh=";INT(JH);" jv=";INT(JV);" bst=";BST;" nj=";CNJ;" nh=";CNH;" nb=";CNB;" cmb=";CMB;" hly=";INT(HLY);" hlp=";INT(HLP);" brp=";INT(BRP*100);" bx=";INT(BX);" by=";INT(BY);" bz=";INT(BZ+0.5);" bh=";INT(BH);" bv=";INT(BV);" st=";INT(ST*100);" gh=";INT(FN HT(JX,JY));" sf=";FN SURF(JX,JY,JZ)
 12610     END IF
 12620     IF C$="ray" THEN
 12630       M3D CAMERA VAL(W$(1)),VAL(W$(2)),VAL(W$(3))-46,VAL(W$(4)),VAL(W$(5))

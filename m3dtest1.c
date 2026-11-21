@@ -690,6 +690,33 @@ int main( void ) {
         CHECK( !op( GFXOP_M3DMINIMAP, 7, 10.0, 20.0, 0.0, 64.0, 0.0, 0.0, 1000.0 ) && !op( GFXOP_M3DMINIMAP, 7, 10.0, 20.0, 513.0, 64.0, 0.0, 0.0, 1000.0 ) &&
                !op( GFXOP_M3DMINIMAP, 7, 10.0, 20.0, 64.0, 64.0, 0.0, 0.0, 0.0 ) );
     }
+    // -- M3D("FLOORTEX") / M3D("FLOOROBJ"): what the floor under a point is made of ----------------------------------------------------------------------
+    fresh();
+    tex_flat( 301, 4, 4, 100 ); tex_flat( 302, 4, 4, 120 );
+    CHECK( op( GFXOP_M3DOBJECT, 1, 1.0, 0.0 ) );
+    CHECK( op( GFXOP_M3DOBJECT, 2, 50.0, 0.0 ) && op( GFXOP_M3DBOX, 8, 50.0, 0.0, 0.0, 0.0, 100.0, 100.0, 10.0, 301.0 ) );                  // a slab, top at 10
+    CHECK( op( GFXOP_M3DOBJECT, 2, 51.0, 0.0 ) && op( GFXOP_M3DBOX, 8, 51.0, 20.0, 20.0, 10.0, 40.0, 40.0, 30.0, 302.0 ) );                  // a block on it, top at 30
+    CHECK( Q( GFXQ_M3DFLOORTEX, 3, 10.0, 10.0, 100.0 ) == 301.0 && Q( GFXQ_M3DFLOOROBJ, 3, 10.0, 10.0, 100.0 ) == 50.0 );
+    CHECK( Q( GFXQ_M3DFLOORTEX, 3, 30.0, 30.0, 100.0 ) == 302.0 && Q( GFXQ_M3DFLOOROBJ, 3, 30.0, 30.0, 100.0 ) == 51.0 );                    // the highest one below the point
+    CHECK( Q( GFXQ_M3DFLOORTEX, 3, 30.0, 30.0, 20.0 ) == 301.0 );                                                                           // the point is below the block's top: the slab
+    CHECK( Q( GFXQ_M3DFLOORTEX, 3, 500.0, 500.0, 100.0 ) == -1.0 && Q( GFXQ_M3DFLOOROBJ, 3, 500.0, 500.0, 100.0 ) == -1.0 );                // nothing there
+    CHECK( op( GFXOP_M3DOBJFLAGS, 2, 51.0, 4.0 ) && Q( GFXQ_M3DFLOORTEX, 3, 30.0, 30.0, 100.0 ) == 301.0 );                                // a passable object is no floor
+    {   // a shaded terrain cell tells its own picture, not the shaded copy
+        uint32_t gp[256];
+        for ( int i=0; i < 256; ++i ) { gp[i] = 0xFF000000U | (uint32_t) i << 16 | (uint32_t) i << 8 | (uint32_t) i; }
+        m3d_colormap( M, gp );
+        CHECK( op( GFXOP_M3DGROUND, 4, 5.0, 300.0, 400.0, 2.0 ) && op( GFXOP_M3DSUN, 6, -0.5, -0.3, 0.8, 0.5, 4.0, 100.0 ) );
+        CHECK( op( GFXOP_M3DOBJECT, 2, 60.0, 0.0 ) && ops( GFXOP_M3DTERRAIN, 7, 0, 60.0, 0.0, 0.0, 12.0, 12.0, 100.0, 301.0 ) );
+        int shaded = 0, bad = 0;
+        for ( int j=0; j < 12; ++j ) {
+            for ( int i=0; i < 12; ++i ) {
+                double x = i * 100.0 + 50.0, y = j * 100.0 + 50.0, t = Q( GFXQ_M3DFLOORTEX, 3, x, y, 5000.0 );
+                if ( t != 301.0 ) { ++bad; }
+            }
+        }
+        for ( int k = 1; k <= 3; ++k ) { if ( M->texs[301 + 100 * k].col != 0 ) { ++shaded; } }
+        CHECK( shaded >= 1 && bad == 0 );
+    }
     // -- instances: shared meshes (M3D INSTANCE, OBJSCALE, OBJFREE) ----------------------------------------------------------------------------------------
     fresh();
     CHECK( op( GFXOP_M3DOBJECT, 1, 1.0, 0.0 ) );                                              // the floor of fresh() is gone

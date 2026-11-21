@@ -282,6 +282,24 @@ chunks
 goto -9000 7000 0
 wait 2
 chunks
+goto 0 -100 90
+wait 1
+state
+goto 0 -172 90
+wait 1
+state
+goto -1500 -1500 0
+wait 1
+state
+goto 1100 650 0
+wait 1
+state
+goto 13500 0 0
+wait 20
+state
+goto -13300 -5900 0
+wait 30
+state
 quit
 PLAY
 run
@@ -381,6 +399,13 @@ expect "mountain: not on ground above the limit (120)" "$(val state 48 gh)" 0 12
 expect "lake: John stops at the shore" "$(val state 49 jx)" -13700 -13300
 expect "lake: stopped dead" "$(val state 49 jv)" 0 0
 expect "lake: the ground under him is not deeper than the limit (water level -12, 12 below it is too deep)" "$(val state 49 gh)" -26 -12
+# 11i. the surface under the feet comes from the pictures (M3D("FLOORTEX"): FN SURF, state "sf": 0 grass, 1 sand / mud, 2 wood / hard, 3 wheat), not from the height
+expect "surface: the house floor (tiles) is hard" "$(val state 50 sf)" 2 2
+expect "surface: the sand road in the yard" "$(val state 51 sf)" 1 1
+expect "surface: grass" "$(val state 52 sf)" 0 0
+expect "surface: the wheat field" "$(val state 53 sf)" 3 3
+expect "surface: the rock of a mountain is hard" "$(val state 54 sf)" 2 2
+expect "surface: the mud of a lake bed is soft sand" "$(val state 55 sf)" 1 1
 expect "chunks: second far jump: some forest" "$(val chunks 5 trees)" 1 1176
 expect "chunks: a different place has other chunks than the first" "$(awk -v a="$(val chunks 2 sig)" -v b="$(val chunks 5 sig)" 'BEGIN { print (a != b) ? 1 : 0 }')" 1 1
 # 11g. a bicycle cannot stand by itself: at the start it leans against the yard's fence (bst 1) and E picks it up (riding, upright); a riderless one rolls on for 3 s and then falls over

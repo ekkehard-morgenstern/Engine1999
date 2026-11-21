@@ -13,7 +13,9 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-- **`M3D MINIMAP`** (2026-11-21, owner: "Yes, add the minimap statement"): `m3d.[ch]` (`m3d_minimap()`: height ramp, water, slope shading with the sun, nearest palette color; op `GFXOP_M3DMINIMAP` 347 validates), `gfxops.[ch]` (op and table entry, `GFXOP_M3DLAST` moved), `engine1999.c` (`host_m3d_op` draws the indices on the target layer). Tests: `m3dtest1` 1656 (+22), `contest1` +1. Docs: `docs/3d-mesh-subsystem.md`, grammar, man page. A first test run failed on the plateau case because `M3D GROUND` with amp 0 switches the function off (fixed in the test with a tiny amp).
+- **"1987": `FN SURF` by `M3D("FLOORTEX")`** (2026-11-21, owner: "Yes, switch FN SURF to FLOORTEX"): `demos/1987.bas` `FUNC SURF` (lines 600 .. 660: picture of the floor 3 units above the feet; 304 / 320 sand, 305 / 306 / 307 / 324 / 326 hard, 308 / 321 and the field's 320 wheat, else grass), `state` line `sf=`; `game1987test.sh` 11i (6 checks, passes), `docs/1987.md`. The roadmap / docs note that procedural roads sounded like grass is gone. Not heard.
+
+- **`M3D("FLOORTEX")` / `M3D("FLOOROBJ")`** (2026-11-21, owner: asked about a 1 x 1 minimap for the terrain type, suggested a texture query for the highest triangle below a position): `m3d.c` (`floor_at()` returns the hit; the two queries; shaded copies map back to their source picture), `gfxops.[ch]` (`GFXQ_M3DFLOORTEX` 391, `GFXQ_M3DFLOOROBJ` 392, `GFXQ_M3DLAST` moved). Tests: `m3dtest1` 1675 (+19; an own test setup slip: `op( OBJECT, 3, ... )` with two numbers read a stray argument), `contest1` +1. Docs: `docs/3d-mesh-subsystem.md`, grammar, man page.
 
 ## Log
 
@@ -2245,3 +2247,9 @@ Log bookkeeping only (the `94d5194` entry).
 15 files changed, 234 insertions(+), 26 deletions(-)
 
 **`M3D SUN`: terrain shaded by slope** (2026-11-21, owner: "Yes, do the baked version in M3D TERRAIN"): `m3d.c` (`m3d_shade_index()` = the nearest-darker-color search moved out of `make_cmap`; `sun_make` / `sun_remake` / `cell_picture`; `obj_terrain` picks `t + k * stride` per cell and for the skirt; `M3D_colormap` remakes the shaded pictures; `clear_world` forgets the sun), `m3dpriv.h` (`sun_t`), `m3dsoft.c` (`make_cmap` uses the shared search), `gfxops.[ch]` (`GFXOP_M3DSUN` 346, `GFXOP_M3DLAST` moved), `demos/1987.bas` (lines 12966 .. 12968: `M3D COLORMAP` early, `M3D SUN`). Tests: `m3dtest1` 1634 (+28), clean under ASan / UBSan, `contest1`, `vmtest1`, `game1987test.sh`. Docs: `docs/3d-mesh-subsystem.md`, grammar, man page. Lesson: a helper that writes its PID with a relative path from a subshell in another directory dropped `epid` / screenshots into the repo (removed).
+
+### 88ad774 — 2026-11-21 01:04:46 +0100 — "M3D MINIMAP, created by Claude Code"
+
+15 files changed, 166 insertions(+), 8 deletions(-)
+
+**`M3D MINIMAP`** (2026-11-21, owner: "Yes, add the minimap statement"): `m3d.[ch]` (`m3d_minimap()`: height ramp, water, slope shading with the sun, nearest palette color; op `GFXOP_M3DMINIMAP` 347 validates), `gfxops.[ch]` (op and table entry, `GFXOP_M3DLAST` moved), `engine1999.c` (`host_m3d_op` draws the indices on the target layer). Tests: `m3dtest1` 1656 (+22), `contest1` +1. Docs: `docs/3d-mesh-subsystem.md`, grammar, man page. A first test run failed on the plateau case because `M3D GROUND` with amp 0 switches the function off (fixed in the test with a tiny amp).

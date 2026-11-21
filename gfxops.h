@@ -436,7 +436,9 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXQ_M3DHWAVAIL 389             // M3D("HWAVAIL"): 1 when M3D HARDWARE can succeed (OpenGL 2 was found and the renderer is built in), else 0
 #define GFXQ_M3DFIRST   GFXQ_M3DX
 #define GFXQ_M3DGROUND  390             // M3D("GROUND", x, y): the height of the ground function (0 when none is defined)
-#define GFXQ_M3DLAST    GFXQ_M3DGROUND
+#define GFXQ_M3DFLOORTEX 391            // M3D("FLOORTEX", x, y, z): the picture number of the surface that M3D("FLOORAT") finds (-1 none; shaded terrain pictures give their cell's own picture)
+#define GFXQ_M3DFLOOROBJ 392            // M3D("FLOOROBJ", x, y, z): the number of the object that surface belongs to (-1 none)
+#define GFXQ_M3DLAST    GFXQ_M3DFLOOROBJ
 
 typedef struct _gfxcmd_t {
     const char* group;                  // "GFX", "TXT", "TILE", "SPRITE", "MOUSE", or "" for the statements that are reserved words themselves
