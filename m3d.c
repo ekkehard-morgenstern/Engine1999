@@ -459,7 +459,7 @@ static double ridged_layer( const mnt_t* mn, double x, double y, double quiet ) 
 }
 
 // the roads keep out of the mountains: the road network gets the mask of the mountain layer (the places where it is above 2 % and 1500 units round them)
-static void sync_road_mask( ground_t* g ) {
+void m3d_ground_sync_roads( ground_t* g ) {
     const mnt_t* mn = &g->mnt[0];
     rmask_t* k = &g->net.mask;
     memset( k, 0, sizeof(*k) );
@@ -483,7 +483,7 @@ The ground is made in layers, each one adapting to the ones before it (the order
 6. the flat boxes (the house, the field) as the last word.
 Everything the roads do fades out towards the quiet box.
 */
-static double ground_eval( const ground_t* g, double x, double y ) {
+double m3d_ground_eval( const ground_t* g, double x, double y ) {
     if ( !g->on ) {
         return 0.0;
     }
@@ -525,7 +525,7 @@ static double ground_eval( const ground_t* g, double x, double y ) {
 }
 
 double m3d_ground( const m3d_t* m, double x, double y ) {
-    return ground_eval( &m->gnd, x, y );
+    return m3d_ground_eval( &m->gnd, x, y );
 }
 
 // -- asynchronous ground jobs: M3D RING (a worker thread makes the ground meshes while the program goes on) ----------------------------------------------------------------
@@ -602,13 +602,13 @@ static bool jt_add( tjob_t* j, int a, int b, int c, int tex ) {
 
 // the height of a vertex of the job: the ground function
 static double job_height( const tjob_t* j, double x, double y ) {
-    return ground_eval( &j->gnd, x, y );
+    return m3d_ground_eval( &j->gnd, x, y );
 }
 
 // the surface of the coarser grid (3 x the cell, on the world's grid: the triangles of the coarser ring) at (x, y)
 static double job_coarse( const tjob_t* j, double x, double y ) {
     double c2 = j->cell * 3.0, gx = floor( x / c2 ) * c2, gy = floor( y / c2 ) * c2;
-    double h00 = ground_eval( &j->gnd, gx, gy ), h10 = ground_eval( &j->gnd, gx + c2, gy ), h11 = ground_eval( &j->gnd, gx + c2, gy + c2 ), h01 = ground_eval( &j->gnd, gx, gy + c2 );
+    double h00 = m3d_ground_eval( &j->gnd, gx, gy ), h10 = m3d_ground_eval( &j->gnd, gx + c2, gy ), h11 = m3d_ground_eval( &j->gnd, gx + c2, gy + c2 ), h01 = m3d_ground_eval( &j->gnd, gx, gy + c2 );
     double u = ( x - gx ) / c2, v = ( y - gy ) / c2;
     return u >= v ? h00 + u * ( h10 - h00 ) + v * ( h11 - h10 ) : h00 + v * ( h01 - h00 ) + u * ( h11 - h01 );
 }
@@ -628,7 +628,7 @@ static int job_cellpic( const tjob_t* j, double cx, double cy, double zc, double
         if ( fabs( cx - 1100.0 ) < 700.0 && fabs( cy - 650.0 ) < 500.0 ) { return p->mud; }
         return celltex;
     }
-    double s = fabs( ground_eval( &j->gnd, cx + 50.0, cy ) - ground_eval( &j->gnd, cx - 50.0, cy ) ) + fabs( ground_eval( &j->gnd, cx, cy + 50.0 ) - ground_eval( &j->gnd, cx, cy - 50.0 ) );
+    double s = fabs( m3d_ground_eval( &j->gnd, cx + 50.0, cy ) - m3d_ground_eval( &j->gnd, cx - 50.0, cy ) ) + fabs( m3d_ground_eval( &j->gnd, cx, cy + 50.0 ) - m3d_ground_eval( &j->gnd, cx, cy - 50.0 ) );
     if ( zc > p->rockh || s > 45.0 ) { return p->rock; }
     if ( zc < p->level + 1.5 ) { return p->mud; }
     int k = rnet_kind( &j->gnd.net, cx, cy );
@@ -659,7 +659,7 @@ static double job_meshh( const tjob_t* j, double x, double y ) {
     int ci = (int) floor( ( x - j->x0 ) / j->cell ), cj = (int) floor( ( y - j->y0 ) / j->cell );
     int hi0 = j->hn > 0 ? (int) floor( ( j->hx0 - j->x0 ) / j->cell + 0.5 ) : 0, hj0 = j->hn > 0 ? (int) floor( ( j->hy0 - j->y0 ) / j->cell + 0.5 ) : 0;
     if ( ci < 0 || ci >= n || cj < 0 || cj >= n || ( j->hn > 0 && ci >= hi0 && ci < hi0 + j->hn && cj >= hj0 && cj < hj0 + j->hn ) ) {
-        return ground_eval( &j->gnd, x, y );
+        return m3d_ground_eval( &j->gnd, x, y );
     }
     int b = cj * w + ci;
     double z00 = j->v[b].z, z10 = j->v[b + 1].z, z01 = j->v[b + w].z, z11 = j->v[b + w + 1].z;
@@ -836,7 +836,7 @@ static void job_trees( tjob_t* j ) {
     for ( int i = 0; i < 60 && cnt < 24; ++i ) {
         double x = (double) cx * 900.0 + nz_hash( cx, cy, 100 + i, 0 ) * 900.0, y = (double) cy * 900.0 + nz_hash( cx, cy, 200 + i, 0 ) * 900.0;
         if ( rnet_kind( &j->gnd.net, x, y ) != 3 ) { continue; }
-        double h = ground_eval( &j->gnd, x, y );
+        double h = m3d_ground_eval( &j->gnd, x, y );
         if ( !( h > j->pic.level + 2.0 && h < 70.0 ) || nz_hash( cx, cy, 300 + i, 0 ) >= 0.7 ) { continue; }
         rnear_t rn;
         rnet_near( &j->gnd.net, x, y, 320.0, &rn );
@@ -1715,7 +1715,7 @@ bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t sl
             mn->r0 = r0; mn->r1 = r1;
             mn->on = a[2] != 0.0; mn->seed = (uint64_t)(int64_t) floor( a[0] ); mn->scale = a[1]; mn->amp = a[2]; mn->oct = oct;
             mn->lo = a[4]; mn->hi = a[5];
-            sync_road_mask( &m->gnd );
+            m3d_ground_sync_roads( &m->gnd );
             return true;
         }
         case GFXOP_M3DLAKES: {
@@ -1787,7 +1787,7 @@ bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t sl
             }
             rnet_t* nt = &m->gnd.net;
             nt->on = a[0] > 0.0 || a[3] > 0.0; nt->spacing = a[0]; nt->chance = a[1]; nt->wdirt = a[2]; nt->tspacing = a[3]; nt->tchance = a[4]; nt->wtar = a[5];
-            sync_road_mask( &m->gnd );
+            m3d_ground_sync_roads( &m->gnd );
             return true;
         }
         case GFXOP_M3DSUN: {

@@ -102,5 +102,6 @@ void rnet_point( const rlink_t* l, double t, double* x, double* y );
 void rnet_near( const rnet_t* n, double x, double y, double reach, rnear_t* out );
 // the kind of ground at (x, y): 0 plain, 1 meadow, 2 field, 3 forest (the nearest feature point of the 3 x 3 regions)
 int  rnet_kind( const rnet_t* n, double x, double y );
+int  rnet_kind_cold( const rnet_t* n, double x, double y );   // the same, without the region cache (for places asked about once)
 
 #endif

@@ -89,7 +89,7 @@ static bool strip_in_mountains( const rnet_t* n, double x1, double y1, double x2
 }
 
 // does the road of network net from region (rx, ry) to its west (e = 0) / south (e = 1) neighbour exist? (the hash, a length, and no mountains: the way may bulge by a tenth of its length)
-static bool link_exists( const rnet_t* n, int net, int64_t rx, int64_t ry, int e ) {
+static bool link_exists_calc( const rnet_t* n, int net, int64_t rx, int64_t ry, int e ) {
     if ( !n->on || ( net ? n->tspacing <= 0.0 : n->spacing <= 0.0 ) || nz_hash( rx, ry, ( net ? 160 : 60 ) + e, 0 ) >= ( net ? n->tchance : n->chance ) ) {
         return false;
     }
@@ -101,6 +101,26 @@ static bool link_exists( const rnet_t* n, int net, int64_t rx, int64_t ry, int e
         return false;
     }
     return !( n->mask.on && strip_in_mountains( n, x1, y1, x2, y2, len, ( net ? n->wtar : n->wdirt ) + n->mask.margin + 0.1 * len ) );
+}
+
+static bool same_cfg( const rnet_t* a, const rnet_t* b );
+
+// link_exists() is asked many times for the same link (the nodes at both ends ask for all their links), and each answer samples the mountains along a long strip: a small
+// direct mapped memo per thread keeps the answers (the world creation asks for a million chunks)
+typedef struct { bool valid, res; int net, e; int64_t rx, ry; rnet_t cfg; } lemo_t;
+#define LEMO_SIZE 1024
+static _Thread_local lemo_t lemo[LEMO_SIZE];
+
+static bool link_exists( const rnet_t* n, int net, int64_t rx, int64_t ry, int e ) {
+    unsigned i = (unsigned)( nz_mix( (uint64_t) rx * 0x9E3779B97F4A7C15ULL + (uint64_t) ry * 0xC2B2AE3D27D4EB4FULL + (uint64_t)( net * 2 + e ) ) % LEMO_SIZE );
+    lemo_t* m = &lemo[i];
+    if ( m->valid && m->net == net && m->e == e && m->rx == rx && m->ry == ry && same_cfg( &m->cfg, n ) ) {
+        return m->res;
+    }
+    bool r = link_exists_calc( n, net, rx, ry, e );
+    memset( m, 0, sizeof(*m) );
+    m->valid = true; m->res = r; m->net = net; m->e = e; m->rx = rx; m->ry = ry; m->cfg = *n;
+    return r;
 }
 
 enum { SIDE_W = 0, SIDE_S = 1, SIDE_E = 2, SIDE_N = 3 };
@@ -464,6 +484,29 @@ void rnet_near( const rnet_t* n, double x, double y, double reach, rnear_t* out 
             }
         }
     }
+}
+
+// the same without the region cache (no links are made: a place that is asked about once, as the world creation does for a million chunks, would only fill the cache)
+int rnet_kind_cold( const rnet_t* n, double x, double y ) {
+    if ( !n->on || n->spacing <= 0.0 ) {
+        return 0;
+    }
+    int64_t rx = (int64_t) floor( x / n->spacing ), ry = (int64_t) floor( y / n->spacing );
+    double bd = 1.0e30;
+    int kind = 0;
+    for ( int j = -1; j <= 1; ++j ) {
+        for ( int i = -1; i <= 1; ++i ) {
+            double px, py;
+            net_point( n, 0, rx + i, ry + j, &px, &py );
+            double d = ( px - x ) * ( px - x ) + ( py - y ) * ( py - y );
+            if ( d < bd ) {
+                bd = d;
+                double u = nz_hash( rx + i, ry + j, 3, 0 );
+                kind = u < 0.38 ? 3 : u < 0.66 ? 1 : u < 0.86 ? 2 : 0;
+            }
+        }
+    }
+    return kind;
 }
 
 int rnet_kind( const rnet_t* n, double x, double y ) {

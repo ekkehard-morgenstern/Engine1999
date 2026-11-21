@@ -116,6 +116,9 @@ typedef struct {
     struct { bool on; double cx, cy, rx, ry, margin; } quiet;                       // mountains and lakes fade out towards this box
 } ground_t;
 
+double m3d_ground_eval( const ground_t* g, double x, double y );         // the ground function without an M3D object (used by world.c)
+void   m3d_ground_sync_roads( ground_t* g );                            // after the mountain layer or the road network changed
+
 // M3D SUN: terrain cells get a picture shaded by their slope. A shaded picture is made from the cell's own picture t (palette indices mapped to the nearest
 // darker color) and has the number t + k * stride for the shade step k = 1 .. steps - 1; lvl[n] is that k for a picture the engine made (0: not made), src[n] the t.
 typedef struct {
