@@ -28,14 +28,17 @@
 
 #include "roadnet.h"
 #include "noise.h"
+#include "vecext.h"
 #include <string.h>
 #include <stdlib.h>
 
-#pragma GCC optimize ("fp-contract=off")             // (the vector loop of rnet_near() and its scalar twin must give the same bits)
-#pragma GCC diagnostic ignored "-Wpsabi"
+E99_NO_CONTRACT                                      // (the vector loop of rnet_near() and its scalar twin must give the same bits)
+E99_NO_PSABI
 
+#if E99_VEC
 typedef double v4d __attribute__((vector_size(32)));
 typedef long long v4l __attribute__((vector_size(32)));
+#endif
 
 static int rn_simd = -1;
 
@@ -213,6 +216,7 @@ void rnet_near( const rnet_t* n, double x, double y, double reach, rnear_t* out 
                     if ( rn_simd < 0 ) {
                         rn_simd = getenv( "ENGINE1999_NOSIMD" ) != 0 ? 0 : 1;
                     }
+                    #if E99_VEC
                     if ( rn_simd && rc->npts[e] > 0 ) {
                         // four segments at a time: their distances to (x, y) are found together (the division and the clamp); the square root (and the choice of the
                         // first nearest one) is made only for a lane that can beat the best so far: d2 > best^2 (1 + 1e-9) cannot (so the result is the scalar loop's)
@@ -245,6 +249,7 @@ void rnet_near( const rnet_t* n, double x, double y, double reach, rnear_t* out 
                             ax = P[2 * kstart]; ay = P[2 * kstart + 1];
                         }
                     }
+#endif
                     for ( int k = kstart; k <= kmax; ++k ) {
                         if ( rc->npts[e] > 0 ) {
                             px = rc->pts[e][2 * ( k + 1 )]; py = rc->pts[e][2 * ( k + 1 ) + 1];

@@ -28,11 +28,16 @@
 
 #include "m3dpriv.h"
 #include "gfxops.h"
-#if defined(__SSE__)
+#include "vecext.h"
+#if E99_VEC && defined(__SSE__)
 #include <xmmintrin.h>
 #endif
 
-#pragma GCC optimize ("fp-contract=off", "no-math-errno")      // (sqrtf then is one instruction; no errno for a negative argument is needed)
+E99_NO_CONTRACT
+E99_NO_PSABI
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC optimize ("no-math-errno")      // (sqrtf then is one instruction; no errno for a negative argument is needed)
+#endif
 
 /*
 The software renderer of the mesh module: every triangle is rasterized into a palette bitmap with a depth buffer. Its state (the color map of
@@ -213,10 +218,11 @@ typedef struct {
 // z of a lane is 0 when the pixel is not drawn (behind the eye, farther than the far limit, or not nearer than the depth buffer: zb is only read for the
 // first nl lanes). The scalar twin gives the same numbers bit for bit (the file is compiled without fused multiply-add contraction: #pragma above); the
 // environment variable ENGINE1999_NOSIMD selects it (tests compare the two).
-#pragma GCC diagnostic ignored "-Wpsabi"                            // (32 byte vectors in static inline functions: the ABI does not matter, nothing is exported)
+#if E99_VEC
 typedef double v4d __attribute__((vector_size(32)));
 typedef long long v4l __attribute__((vector_size(32)));
 typedef int v4i __attribute__((vector_size(16)));
+#endif
 
 static int soft_simd = -1;
 
@@ -284,6 +290,7 @@ static void span4_scalar( const tri_t* t, const double* B, int x0, int nl, const
     }
 }
 
+#if E99_VEC
 typedef float v4f __attribute__((vector_size(16)));
 
 // sqrtf( (float) x ) for four lanes, as doubles: the same value as the scalar expression (a float square root is correctly rounded: sqrtps = sqrtss)
@@ -388,6 +395,12 @@ static void span4( const tri_t* t, const double* B, int x0, int W, const float* 
         lz[j] = zz[j]; lu[j] = ok[j] != 0 ? iu[j] : 0; lv[j] = ok[j] != 0 ? iv[j] : 0; li[j] = liv[j]; hk[j] = hkv[j];
     }
 }
+#else
+// no vector extensions with this compiler (see vecext.h): the scalar twin does it all
+static void span4( const tri_t* t, const double* B, int x0, int W, const float* zb, const fogp_t* fp, double* lz, int* lu, int* lv, int* li, int* hk ) {
+    span4_scalar( t, B, x0, W - x0 < 4 ? W - x0 : 4, zb, fp, lz, lu, lv, li, hk );
+}
+#endif
 
 static void raster( rc_t* c, const tri_t* t, bool translucent ) {
     m3d_t* m = c->m;
