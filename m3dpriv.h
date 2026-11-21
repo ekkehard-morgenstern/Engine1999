@@ -166,6 +166,7 @@ struct _m3d_t {
     struct _tjobs* jobs;
     double   mlx, mly;                      // the camera of the last M3D MORPH
     bool     mvalid, mforce;
+    int*     ul;  int nul;  bool ulok;      // the numbers of the objects in use (m3d_used())
     int      top;                           // one above the highest object number in use (the loops stop there)
     unsigned presepoch;                     // counts the times a picture number got or lost its picture (the renderer's kept meshes group the triangles by that)
 };
@@ -174,6 +175,9 @@ struct _m3d_t {
 int m3d_shade_index( const uint32_t* argb, int i, double scale );
 // the palette index (1 .. 255) nearest to the color (r, g, b: 0 .. 255) with the weights of the shading; used by the fog's haze table
 int m3d_nearest_rgb( const uint32_t* argb, double r, double g, double b );
+
+// the numbers of the objects that are in use, ascending: the loops over all objects run over these (a world of 300 chunks has some 1500 objects in a table of 28000 numbers)
+const int* m3d_used( m3d_t* m, int* n );
 
 // -- shared helpers -------------------------------------------------------------------------------------------------------------
 

@@ -396,8 +396,18 @@ static void vm_out( vm_t* vm, const char* text ) {
 
 // -- stacks ----------------------------------------------------------------
 
-static bool vm_dpush( vm_t* vm, vmval_t val ) {
-    if ( vm->dsp == vm->dmax ) {
+static bool vm_dpush_grow( vm_t* vm );
+
+static inline bool vm_dpush( vm_t* vm, vmval_t val ) {
+    if ( __builtin_expect( vm->dsp == vm->dmax, 0 ) && !vm_dpush_grow( vm ) ) {
+        return false;
+    }
+    vm->dstack[ vm->dsp++ ] = val;
+    return true;
+}
+
+static bool vm_dpush_grow( vm_t* vm ) {
+    {
         size_t newmax = vm->dmax ? vm->dmax * 2U : 64U;
         vmval_t* p = (vmval_t*) realloc( vm->dstack, newmax * sizeof(vmval_t) );
         if ( p == 0 ) {
@@ -406,11 +416,10 @@ static bool vm_dpush( vm_t* vm, vmval_t val ) {
         vm->dstack = p;
         vm->dmax = newmax;
     }
-    vm->dstack[ vm->dsp++ ] = val;
     return true;
 }
 
-static bool vm_dpush_num( vm_t* vm, double num ) {
+static inline bool vm_dpush_num( vm_t* vm, double num ) {
     vmval_t v; v.isstr = false; v.num = num;
     return vm_dpush( vm, v );
 }
@@ -845,6 +854,12 @@ static bool vm_set_value( vm_t* vm, uint16_t varoffs, uint8_t vartype, uint8_t n
 static bool vm_rpush( vm_t* vm, uint32_t addr );
 
 static bool vm_read_var( vm_t* vm, uint16_t varoffs, uint8_t vartype ) {
+    if ( vartype == VARTYPEV_FLOAT ) {                  // the common case: a plain numeric variable
+        const var_t* var = vmem_var( vm->vmem, varoffs );
+        if ( var != 0 && var->type == VARTYPEV_FLOAT ) {
+            return vm_dpush_num( vm, var->v.dbl );
+        }
+    }
     if ( ( vartype & VARTYPEM_BASE ) == VARTYPEV_LABEL ) {
         // a label is a code address; it goes on the return stack
         varvalue_t value;
@@ -864,6 +879,13 @@ static bool vm_read_var( vm_t* vm, uint16_t varoffs, uint8_t vartype ) {
 }
 
 static bool vm_write_var( vm_t* vm, uint16_t varoffs, uint8_t vartype ) {
+    if ( vartype == VARTYPEV_FLOAT && vm->dsp > 0 && !vm->dstack[ vm->dsp - 1 ].isstr ) {
+        var_t* var = vmem_var( vm->vmem, varoffs );
+        if ( var != 0 && var->type == VARTYPEV_FLOAT ) {
+            var->v.dbl = vm->dstack[ --vm->dsp ].num;
+            return true;
+        }
+    }
     vmval_t val;
     return vm_dpop( vm, &val ) && vm_set_value( vm, varoffs, vartype, 0, 0, val );
 }
@@ -4317,6 +4339,28 @@ static bool vm_system_function( vm_t* vm, uint16_t opcode ) {
 
 static bool vm_binary_num( vm_t* vm, uint16_t opcode ) {
     double a, b, r = 0.0;
+    if ( vm->dsp >= 2 && !vm->dstack[ vm->dsp - 1 ].isstr && !vm->dstack[ vm->dsp - 2 ].isstr ) {      // fast path: no integer conversion needed
+        b = vm->dstack[ vm->dsp - 1 ].num; a = vm->dstack[ vm->dsp - 2 ].num;
+        bool done = true;
+        switch ( opcode ) {
+            case INS_ADD:  r = a + b; break;
+            case INS_SUB:  r = a - b; break;
+            case INS_MUL:  r = a * b; break;
+            case INS_CNEQ: r = a == b ? -1.0 : 0.0; break;
+            case INS_CNNE: r = a != b ? -1.0 : 0.0; break;
+            case INS_CNGE: r = a >= b ? -1.0 : 0.0; break;
+            case INS_CNLE: r = a <= b ? -1.0 : 0.0; break;
+            case INS_CNGT: r = a >  b ? -1.0 : 0.0; break;
+            case INS_CNLT: r = a <  b ? -1.0 : 0.0; break;
+            case INS_DIV:  if ( b == 0.0 ) { done = false; } else { r = a / b; } break;
+            default:       done = false; break;
+        }
+        if ( done ) {
+            vm->dsp -= 2;
+            vm->dstack[ vm->dsp ].isstr = false; vm->dstack[ vm->dsp ].num = r; ++vm->dsp;
+            return true;
+        }
+    }
     if ( !vm_dpop_num( vm, &b ) || !vm_dpop_num( vm, &a ) ) {
         return false;
     }

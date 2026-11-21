@@ -564,7 +564,9 @@ static const void* soft_render( m3d_t* m, void* rd ) {
         s->zb[i] = 1.0e30f;
     }
     int nt = 0;
-    for ( int i=0; i < m->top; ++i ) {
+    int nul_; const int* ul_ = m3d_used( m, &nul_ );
+    for ( int ui_=0; ui_ < nul_; ++ui_ ) {
+        int i = ul_[ui_];
         obj_t* o = &m->objs[i];
         if ( !o->used || !o->shown || o->nt == 0 ) {
             continue;

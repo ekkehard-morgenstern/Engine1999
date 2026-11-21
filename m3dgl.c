@@ -713,7 +713,9 @@ static long gl_drawn( m3d_t* m, void* rd ) {
         return 0;
     }
     long n = 0;
-    for ( int i=0; i < m->top; ++i ) {
+    int nul_; const int* ul_ = m3d_used( m, &nul_ );
+    for ( int ui_=0; ui_ < nul_; ++ui_ ) {
+        int i = ul_[ui_];
         obj_t* o = &m->objs[i];
         if ( !o->used || !o->shown || o->nt == 0 ) {
             continue;
@@ -937,7 +939,9 @@ static const void* gl_render( m3d_t* m, void* rd ) {
     gl->Uniform1f( p->uselamps, 1.0f );
     set_pass( g, true, false, 1.0f );
     int nt = 0;
-    for ( int i=0; i < m->top; ++i ) {
+    int nul_; const int* ul_ = m3d_used( m, &nul_ );
+    for ( int ui_=0; ui_ < nul_; ++ui_ ) {
+        int i = ul_[ui_];
         obj_t* o = &m->objs[i];
         if ( !o->used || !o->shown || o->nt == 0 ) {
             continue;

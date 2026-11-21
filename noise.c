@@ -123,15 +123,9 @@ static double dot1( uint64_t seed, int64_t x, double dx ) {
     return ( lat( seed, 1, x, 0, 0 ) & 1U ) ? dx : -dx;
 }
 
-static double dot2( uint64_t seed, int64_t x, int64_t y, double dx, double dy ) {
-    const double* g = grad2[ lat( seed, 2, x, y, 0 ) >> 59 ];                   // the top five bits
-    return g[0] * dx + g[1] * dy;
-}
-
-static double dot3( uint64_t seed, int64_t x, int64_t y, int64_t z, double dx, double dy, double dz ) {
-    const double* g = grad3[ lat( seed, 3, x, y, z ) >> 60 ];                   // the top four bits
-    return g[0] * dx + g[1] * dy + g[2] * dz;
-}
+// one step of the hash (as in nz_hash64): the lattice hashes of the corners of a cell share their first mixes (the seed, the x of two corners, the y of four ...), computed once
+#define NZ_GOLD UINT64_C(0x9e3779b97f4a7c15)
+static inline uint64_t mx( uint64_t h, uint64_t v ) { return nz_mix( ( h ^ v ) + NZ_GOLD ); }
 
 double nz_noise( uint64_t seed, int dims, double x, double y, double z ) {
     double fx = floor( x ), tx = x - fx; int64_t ix = (int64_t) fx;
@@ -143,22 +137,52 @@ double nz_noise( uint64_t seed, int dims, double x, double y, double z ) {
     double fy = floor( y ), ty = y - fy; int64_t iy = (int64_t) fy;
     double v = fade( ty );
     if ( dims == 2 ) {
-        double a = lerp( dot2( seed, ix, iy,     tx,       ty ),       dot2( seed, ix + 1, iy,     tx - 1.0, ty ),       u );
-        double b = lerp( dot2( seed, ix, iy + 1, tx,       ty - 1.0 ), dot2( seed, ix + 1, iy + 1, tx - 1.0, ty - 1.0 ), u );
+        uint64_t h0 = nz_mix( seed + 2U * UINT64_C(0x632be59bd9b4e019) + NZ_GOLD );
+        uint64_t hx0 = mx( h0, (uint64_t) ix ), hx1 = mx( h0, (uint64_t)( ix + 1 ) );
+        const double* g00 = grad2[ mx( mx( mx( hx0, (uint64_t) iy ), 0 ), 0 ) >> 59 ];
+        const double* g10 = grad2[ mx( mx( mx( hx1, (uint64_t) iy ), 0 ), 0 ) >> 59 ];
+        const double* g01 = grad2[ mx( mx( mx( hx0, (uint64_t)( iy + 1 ) ), 0 ), 0 ) >> 59 ];
+        const double* g11 = grad2[ mx( mx( mx( hx1, (uint64_t)( iy + 1 ) ), 0 ), 0 ) >> 59 ];
+        double a = lerp( g00[0] * tx + g00[1] * ty,             g10[0] * ( tx - 1.0 ) + g10[1] * ty,             u );
+        double b = lerp( g01[0] * tx + g01[1] * ( ty - 1.0 ),   g11[0] * ( tx - 1.0 ) + g11[1] * ( ty - 1.0 ),   u );
         double r = lerp( a, b, v ) * ( 1.0 / NZ_MAX2 );
         return r > 1.0 ? 1.0 : r < -1.0 ? -1.0 : r;
     }
     double fz = floor( z ), tz = z - fz; int64_t iz = (int64_t) fz;
     double w = fade( tz );
-    double a0 = lerp( dot3( seed, ix, iy,     iz,     tx, ty,       tz ),       dot3( seed, ix + 1, iy,     iz,     tx - 1.0, ty,       tz ),       u );
-    double b0 = lerp( dot3( seed, ix, iy + 1, iz,     tx, ty - 1.0, tz ),       dot3( seed, ix + 1, iy + 1, iz,     tx - 1.0, ty - 1.0, tz ),       u );
-    double a1 = lerp( dot3( seed, ix, iy,     iz + 1, tx, ty,       tz - 1.0 ), dot3( seed, ix + 1, iy,     iz + 1, tx - 1.0, ty,       tz - 1.0 ), u );
-    double b1 = lerp( dot3( seed, ix, iy + 1, iz + 1, tx, ty - 1.0, tz - 1.0 ), dot3( seed, ix + 1, iy + 1, iz + 1, tx - 1.0, ty - 1.0, tz - 1.0 ), u );
+    uint64_t h0 = nz_mix( seed + 3U * UINT64_C(0x632be59bd9b4e019) + NZ_GOLD );
+    uint64_t hx[2] = { mx( h0, (uint64_t) ix ), mx( h0, (uint64_t)( ix + 1 ) ) };
+    double c[2][2][2];                                                        // the corner values [dx][dy][dz]
+    for ( int cx = 0; cx < 2; ++cx ) {
+        for ( int cy = 0; cy < 2; ++cy ) {
+            uint64_t hy = mx( hx[cx], (uint64_t)( iy + cy ) );
+            for ( int cz = 0; cz < 2; ++cz ) {
+                const double* g = grad3[ mx( mx( hy, (uint64_t)( iz + cz ) ), 0 ) >> 60 ];
+                c[cx][cy][cz] = g[0] * ( tx - cx ) + g[1] * ( ty - cy ) + g[2] * ( tz - cz );
+            }
+        }
+    }
+    double a0 = lerp( c[0][0][0], c[1][0][0], u ), b0 = lerp( c[0][1][0], c[1][1][0], u );
+    double a1 = lerp( c[0][0][1], c[1][0][1], u ), b1 = lerp( c[0][1][1], c[1][1][1], u );
     double r = lerp( lerp( a0, b0, v ), lerp( a1, b1, v ), w ) * ( 1.0 / NZ_MAX3 );
     return r > 1.0 ? 1.0 : r < -1.0 ? -1.0 : r;
 }
 
 // -- fractal noise ------------------------------------------------------------------------------------------------
+
+// the hash of an octave (and its offsets) depends on the seed and the octave only: a small cache per thread
+typedef struct { uint64_t seed, h; int kind, o; double offx, offy; bool valid; } nz_oct_t;
+static _Thread_local nz_oct_t octcache[64];
+
+static const nz_oct_t* octave( uint64_t seed, int kind, int o ) {
+    nz_oct_t* e = &octcache[ ( ( seed * UINT64_C(0x9e3779b97f4a7c15) >> 58 ) ^ (unsigned)( o * 7 + kind ) ) & 63U ];
+    if ( !( e->valid && e->seed == seed && e->kind == kind && e->o == o ) ) {
+        uint64_t h = nz_hash64( seed, o, kind == 0 ? 0x4f43 : 0x5244, 0, 0 );
+        e->seed = seed; e->kind = kind; e->o = o; e->h = h; e->valid = true;
+        e->offx = (double)( h >> 40 ) * ( 1.0 / 16384.0 ); e->offy = (double)( ( h >> 16 ) & UINT64_C(0xffffff) ) * ( 1.0 / 16384.0 );
+    }
+    return e;
+}
 
 double nz_fbm( uint64_t seed, double x, double y, int octaves, double gain, double lacunarity ) {
     if ( octaves < 1 ) {
@@ -170,9 +194,8 @@ double nz_fbm( uint64_t seed, double x, double y, int octaves, double gain, doub
     double sum = 0.0, norm = 0.0, amp = 1.0, freq = 1.0;
     for ( int o = 0; o < octaves; ++o ) {
         // every octave has its own noise and its own offset (all octaves would be 0 at the origin otherwise)
-        uint64_t h = nz_hash64( seed, o, 0x4f43, 0, 0 );
-        double offx = (double)( h >> 40 ) * ( 1.0 / 16384.0 ), offy = (double)( ( h >> 16 ) & UINT64_C(0xffffff) ) * ( 1.0 / 16384.0 );
-        sum += amp * nz_noise( h, 2, x * freq + offx, y * freq + offy, 0.0 );
+        const nz_oct_t* oc = octave( seed, 0, o );
+        sum += amp * nz_noise( oc->h, 2, x * freq + oc->offx, y * freq + oc->offy, 0.0 );
         norm += amp;
         amp *= gain;
         freq *= lacunarity;
@@ -189,9 +212,8 @@ double nz_ridged( uint64_t seed, double x, double y, int octaves, double gain, d
     }
     double sum = 0.0, norm = 0.0, amp = 1.0, freq = 1.0;
     for ( int o = 0; o < octaves; ++o ) {
-        uint64_t h = nz_hash64( seed, o, 0x5244, 0, 0 );
-        double offx = (double)( h >> 40 ) * ( 1.0 / 16384.0 ), offy = (double)( ( h >> 16 ) & UINT64_C(0xffffff) ) * ( 1.0 / 16384.0 );
-        double r = 1.0 - fabs( nz_noise( h, 2, x * freq + offx, y * freq + offy, 0.0 ) );
+        const nz_oct_t* oc = octave( seed, 1, o );
+        double r = 1.0 - fabs( nz_noise( oc->h, 2, x * freq + oc->offx, y * freq + oc->offy, 0.0 ) );
         sum += amp * r * r;
         norm += amp;
         amp *= gain;

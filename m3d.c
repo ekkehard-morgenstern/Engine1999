@@ -258,6 +258,18 @@ static uint32_t next_gen( void ) {
     return gen_seq;
 }
 
+const int* m3d_used( m3d_t* m, int* n ) {                      // the numbers of the objects in use, ascending (rebuilt after objects were made or deleted)
+    if ( !m->ulok ) {
+        int c = 0;
+        for ( int i=0; i < m->top; ++i ) {
+            if ( m->objs[i].used ) { m->ul[c++] = i; }
+        }
+        m->nul = c; m->ulok = true;
+    }
+    *n = m->nul;
+    return m->ul;
+}
+
 static void free_obj( obj_t* o ) {
     if ( o->mref == 0 || --*o->mref <= 0 ) {                // the last one who holds the mesh frees it
         free( o->v ); free( o->t ); free( o->mref );
@@ -298,7 +310,7 @@ static void clear_world( m3d_t* m ) {
     for ( int i=0; i < M3D_MAXOBJECTS; ++i ) {
         free_obj( &m->objs[i] );
     }
-    m->top = 0;
+    m->top = 0; m->ulok = false;
     memset( m->things, 0, sizeof(thing_t) * M3D_MAXTHINGS );
     memset( m->lamps, 0, sizeof(m->lamps) );
     m->nobjs = 0;
@@ -361,6 +373,7 @@ m3d_t* m3d_new( void ) {
     }
     m->texs = (tex_t*) calloc( M3D_MAXTEX, sizeof(tex_t) );
     m->objs = (obj_t*) calloc( M3D_MAXOBJECTS, sizeof(obj_t) );
+    m->ul = (int*) calloc( M3D_MAXOBJECTS, sizeof(int) );
     m->things = (thing_t*) calloc( M3D_MAXTHINGS, sizeof(thing_t) );
     m->zones = (zone_t*) calloc( M3D_MAXZONES, sizeof(zone_t) );
     m->order = (int*) calloc( M3D_MAXOBJECTS + M3D_MAXTHINGS, sizeof(int) );
@@ -402,7 +415,7 @@ void m3d_free( m3d_t* m ) {
         m->rend->destroy( m, m->rdata );
     }
     free( m->zones );
-    free( m->texs ); free( m->objs ); free( m->things ); free( m->order ); free( m->odist );
+    free( m->texs ); free( m->objs ); free( m->ul ); free( m->things ); free( m->order ); free( m->odist );
     free( m );
 }
 
@@ -1022,7 +1035,9 @@ void m3d_morph( m3d_t* m, double cx, double cy ) {
         return;
     }
     m->mlx = cx; m->mly = cy; m->mvalid = true; m->mforce = false;
-    for ( int i=0; i < m->top; ++i ) {
+    int nul_; const int* ul_ = m3d_used( m, &nul_ );
+    for ( int ui_=0; ui_ < nul_; ++ui_ ) {
+        int i = ul_[ui_];
         obj_t* o = &m->objs[i];
         if ( !o->used || o->mc == 0 || o->mf == 0 || !( o->mb > o->ma ) ) {
             continue;
@@ -1336,7 +1351,9 @@ typedef struct { double t; int obj, tri; } rayhit_t;
 static bool trace( m3d_t* m, v3_t o, v3_t d, double maxd, int skip, rayhit_t* hit ) {
     double best = maxd;
     bool found = false;
-    for ( int i=0; i < m->top; ++i ) {
+    int nul_; const int* ul_ = m3d_used( m, &nul_ );
+    for ( int ui_=0; ui_ < nul_; ++ui_ ) {
+        int i = ul_[ui_];
         obj_t* ob = &m->objs[i];
         if ( !ob->used || !ob->shown || ob->nt == 0 || ( ob->flags & skip ) != 0 ) {
             continue;
@@ -1422,7 +1439,9 @@ static bool push_out( m3d_t* m, const body_t* b, double* px, double* py, double 
     if ( z1 > z0 ) { zc[nz++] = z1; }
     for ( int it=0; it < 4; ++it ) {
         bool any = false;
-        for ( int i=0; i < m->top; ++i ) {
+        int nul_; const int* ul_ = m3d_used( m, &nul_ );
+    for ( int ui_=0; ui_ < nul_; ++ui_ ) {
+        int i = ul_[ui_];
             obj_t* ob = &m->objs[i];
             if ( !ob->used || !ob->shown || ob->nt == 0 || ( ob->flags & M3D_OF_PASS ) != 0 ) {
                 continue;
@@ -1634,6 +1653,7 @@ bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t sl
             bool keep = o->used;
             if ( keep ) { px = o->px; py = o->py; pz = o->pz; yaw = o->yaw; }
             free_obj( o );
+            m->ulok = false;
             if ( i1 >= m->top ) { m->top = i1 + 1; }
             o->used = true; o->shown = true; o->dirty = true; o->flags = fl; o->light = li; o->gen = next_gen(); o->scale = 1.0;
             o->px = px; o->py = py; o->pz = pz; o->yaw = yaw; o->cs = cos( yaw * DEG2RAD ); o->sn = sin( yaw * DEG2RAD );
@@ -1827,6 +1847,7 @@ bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t sl
             }
             obj_t* o = &m->objs[i1];
             free_obj( o );
+            m->ulok = false;
             if ( i1 >= m->top ) { m->top = i1 + 1; }
             o->used = true; o->shown = true; o->dirty = true; o->flags = s->flags; o->light = s->light; o->gen = next_gen(); o->scale = sc;
             o->v = s->v; o->nv = s->nv; o->t = s->t; o->nt = s->nt; o->capv = s->nv; o->capt = s->nt;
@@ -1854,7 +1875,7 @@ bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t sl
                 return false;
             }
             for ( int k = i1; k <= i2; ++k ) {
-                free_obj( &m->objs[k] );
+                free_obj( &m->objs[k] ); m->ulok = false;
             }
             while ( m->top > 0 && !m->objs[m->top - 1].used ) {
                 --m->top;
