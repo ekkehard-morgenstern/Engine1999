@@ -389,13 +389,14 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXOP_M3DMINIMAP 347            // M3D MINIMAP sx, sy, w, h, wx, wy, span [, water]   (a shaded height map of the ground onto the target layer; the window host draws it)
 #define GFXOP_M3DHILLS  348             // M3D HILLS seed, scale, amp, octaves, lo, hi        (a second ridged layer, as M3D MOUNTAINS: so a game can have hills and real mountains)
 #define GFXOP_M3DROADNET 349            // M3D ROADNET spacing, chance, wdirt, tspacing, tchance, wtar   (the road network of the ground function; spacing 0 = none)
-#define GFXOP_M3DRING   350             // M3D RING o, x0, y0, n, cell, skirt, mode, hx0, hy0, hn   (a worker thread makes the ground mesh of object o: n x n cells, a hole of hn x hn cells; see M3D POLL)
-#define GFXOP_M3DRINGPIC 351            // M3D RINGPIC water, rock, grass, tar, tarfar, mud, meadow, field, forest, level, rockh
-#define GFXOP_M3DRINGMORPH 352          // M3D RINGMORPH inner   (0 = off)
+#define GFXOP_M3DRING   350             // M3D RING o, x0, y0, n, cell, skirt, mode, hx0, hy0, hn [, a, b]   (a worker thread makes the ground mesh of object o: n x n cells, a hole of hn x hn cells; mode 0 ring, 1 chunk, 2 chunk with trees, 3 with cheap trees; a < b: the ring morphs between the distances a and b; see M3D POLL)
+#define GFXOP_M3DRINGPIC 351            // M3D RINGPIC water, rock, grass, tar, tarfar, mud, meadow, field, forest, level, rockh [, dirt]
+#define GFXOP_M3DMORPH  352             // M3D MORPH x, y     (the camera is at x, y: the vertices of the rings that morph blend their heights by their distance)
+#define GFXOP_M3DTREEPIC 355            // M3D TREEPIC bark, leaf0, leaf1, leaf2   (the pictures of the trees of the ground jobs of mode 2 and 3)
 #define GFXOP_M3DPOLL   353             // M3D POLL           (takes the finished ground jobs when none is pending any more)
 #define GFXOP_M3DRINGWAIT 354           // M3D RINGWAIT       (waits for all ground jobs and takes them)
 #define GFXOP_M3DFIRST  GFXOP_M3DRESET
-#define GFXOP_M3DLAST   GFXOP_M3DRINGWAIT
+#define GFXOP_M3DLAST   GFXOP_M3DTREEPIC
 #define GFXOP_IS_M3D(op) ( (op) >= GFXOP_M3DFIRST && (op) <= GFXOP_M3DLAST )
 #define GFXQ_M3DX       350             // M3D("X"), ("Y"), ("Z" = the feet), ("EYE"), ("YAW"), ("PITCH"), ("LIFT"), ("HIT"), ("FLOORZ")
 #define GFXQ_M3DY       351

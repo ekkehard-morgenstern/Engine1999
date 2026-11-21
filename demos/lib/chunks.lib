@@ -5,13 +5,13 @@
 10 ' chunks - a world that is made of square chunks round the player (a library: LOAD LIBRARY "chunks", prefix CK_; roadmap item 95, docs/1987.md "The world in chunks").
 20 ' The library keeps the book: which chunks exist, which one is wanted next, at which level of detail. It builds nothing (a library cannot call the program's procedures), so the
 30 ' program pulls: it tells where the player is, asks for the next chunk to build, builds it and says that it is done:
-40 '   CALL CK_SETUP(SIZE,RADIUS,FINE,MEDIUM)  SIZE: the edge of a chunk in units (900); RADIUS: how many chunks round the player's one exist (1..3: a window of up to 7 x 7);
+40 '   CALL CK_SETUP(SIZE,RADIUS,FINE,MEDIUM)  SIZE: the edge of a chunk in units (900); RADIUS: how many chunks round the player's one exist (1..9: a window of up to 7 x 7);
 50 '                                           FINE / MEDIUM: the chunks up to FINE chunks away from the player's (a ring: the larger of the two differences) want level 0, up to
 60 '                                           MEDIUM level 1, farther ones level 2 (the program decides what a level is: for instance a grid of 9 x 9 cells, 3 x 3, 1 x 1)
 70 '   CALL CK_UPDATE(PX,PY)                   the player is at PX,PY (call it every frame: it only notes the place)
 80 '   FN CK_NEXT()                            -1 when a chunk has to be built (or built again, because its level changed) and 0 when the window is complete; it is the nearest
 90 '                                           one to the player. Ask for its data with  FN CK_CX(), FN CK_CY()  (chunk numbers: the chunk covers x from CX * SIZE),
-100 '                                           FN CK_CSLOT()  (0..63: the slot the chunk lives in, a fixed block of object numbers of yours: a chunk takes the slot of the one
+100 '                                           FN CK_CSLOT()  (0..399: the slot the chunk lives in, a fixed block of object numbers of yours: a chunk takes the slot of the one
 110 '                                           that was there, nothing is allocated or freed),  FN CK_CLEVEL()  (0..2),  FN CK_CNEW()  (-1: the slot held another chunk, build all of
 120 '                                           it; 0: only the level changed, the same chunk is built again, you may keep what does not depend on the level)
 130 '   CALL CK_DONE()                          the chunk CK_NEXT gave is built
@@ -20,23 +20,23 @@
 160 '   CALL CK_FORGET()   all chunks are gone (after M3D RESET)
 170 LIBRARY "chunks","CK_"
 180 PROC CK_INIT
-190   DIM CK_OX(64),CK_OY(64),CK_OL(64)
+190   DIM CK_OX(400),CK_OY(400),CK_OL(400)
 200   CK_SZ=900:CK_R=3:CK_F=1:CK_M=3:CK_PX=0:CK_PY=0:CK_WCX=0:CK_WCY=0:CK_WS=0:CK_WL=0:CK_WN=0
 210   CALL CK_FORGET
 220 END PROC
 230 PROC CK_FORGET
 240   LOCAL S
-250   FOR S=0 TO 63
+250   FOR S=0 TO 399
 260     CK_OX(S)=1000000000:CK_OY(S)=1000000000:CK_OL(S)=-1
 270   NEXT S
 280 END PROC
 290 PROC CK_SETUP(SIZE,RADIUS,FINE,MEDIUM)
-300   IF SIZE<=0 OR RADIUS<1 OR RADIUS>3 OR FINE<0 OR MEDIUM<FINE THEN ERROR 5
+300   IF SIZE<=0 OR RADIUS<1 OR RADIUS>9 OR FINE<0 OR MEDIUM<FINE THEN ERROR 5
 310   CK_SZ=SIZE:CK_R=RADIUS:CK_F=FINE:CK_M=MEDIUM
 320   CALL CK_FORGET
 330 END PROC
 340 FUNC CK_SLOT(CX,CY)
-350   RETURN (CX-INT(CX/8)*8)+(CY-INT(CY/8)*8)*8
+350   RETURN (CX-INT(CX/20)*20)+(CY-INT(CY/20)*20)*20
 360 END FUNC
 370 FUNC CK_PCX()
 380   RETURN INT(CK_PX/CK_SZ)

@@ -9,7 +9,7 @@ trap 'rm -f "$T/lib" "$T/ck.bas" "$T/out"; rmdir "$T"' EXIT
 ln -s "$R/demos/lib" "$T/lib"
 cat > "$T/ck.bas" <<'BAS'
 10 LOAD LIBRARY "chunks"
-20 DIM SEEN(64),LV(64)
+20 DIM SEEN(400),LV(400)
 30 ON ERROR GOTO 900
 40 CALL CK_SETUP(900,3,1,3)
 50 CALL CK_UPDATE(100,100)
@@ -49,7 +49,7 @@ cat > "$T/ck.bas" <<'BAS'
 390 WEND
 400 CALL T("13 built, 7 of them new and 6 only a level change",N=13 AND NNEW=7 AND NCH=6)
 410 CALL T("nothing stale",FN CK_STALE()=0)
-420 CALL T("a chunk took the slot of the one that left",FN CK_HAS(4,0) AND NOT FN CK_HAS(-4,0) AND FN CK_SLOT(4,0)=FN CK_SLOT(-4,0))
+420 CALL T("the new column is there, the slots of the window are different (modulus 20)",FN CK_HAS(4,0) AND NOT FN CK_HAS(-4,0) AND FN CK_SLOT(4,0)<>FN CK_SLOT(-3,0) AND FN CK_SLOT(10,0)=FN CK_SLOT(-10,0))
 430 CALL T("a chunk that left stays in its slot until the slot is needed",FN CK_HAS(-3,0))
 440 CALL T("new levels: (2,0) fine, (-2,0) coarse",FN CK_LEVELAT(2,0)=0 AND FN CK_LEVELAT(-2,0)=1)
 450 ' FORGET
@@ -69,7 +69,7 @@ cat > "$T/ck.bas" <<'BAS'
 590 ERRS=0
 600 A=0:B=3:C=1:D=3:GOSUB 800
 610 A=900:B=0:C=1:D=3:GOSUB 800
-620 A=900:B=4:C=1:D=3:GOSUB 800
+620 A=900:B=10:C=1:D=3:GOSUB 800
 630 A=900:B=3:C=-1:D=3:GOSUB 800
 640 A=900:B=3:C=2:D=1:GOSUB 800
 650 CALL T("bad settings are errors",ERRS=5)

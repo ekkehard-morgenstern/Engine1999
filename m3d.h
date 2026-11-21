@@ -47,7 +47,7 @@ Coordinates: x east, y north, z up. Angles in degrees: 0 = along +x, 90 = along 
 counterclockwise when seen from their front (the normal (b-a) x (c-a) points to the viewer), unless the object is two sided.
 */
 
-#define M3D_MAXOBJECTS  16384
+#define M3D_MAXOBJECTS  28000
 #define M3D_MAXTEX      1024
 #define M3D_MAXTHINGS   1024
 #define M3D_MAXLAMPS    8
@@ -75,6 +75,8 @@ int    m3d_nverts( const m3d_t* m, int o );                  // the number of ve
 void   m3d_colormap( m3d_t* m, const uint32_t* argb );
 // M3D MINIMAP: w * h palette indices (row by row, north up) of a height map of the ground function: the square of 'span' units across round (wx, wy), colored by
 // height (water below 'water', green, brown, grey, white) and shaded by the slope against the sun (M3D SUN, or a default sun); colors are the nearest entries of pal (256 ARGB)
+// M3D MORPH: the camera is at (x, y): the rings that morph blend the heights of their vertices (made as they are / as the coarser ring has them) by the distance
+void   m3d_morph( m3d_t* m, double x, double y );
 bool   m3d_minimap( const m3d_t* m, const uint32_t* pal, int w, int h, double wx, double wy, double span, double water, uint8_t* out );
 const uint8_t* m3d_render( m3d_t* m );                       // draws a frame; the palette bitmap, or 0 when the renderer in use makes 32 bit pictures
 bool   m3d_is_argb( const m3d_t* m );                         // the renderer in use makes 32 bit ARGB pictures (m3d_render32()), not palette bitmaps

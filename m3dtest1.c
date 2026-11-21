@@ -127,10 +127,10 @@ static void fresh( void ) {
     tex_flat( 2, 8, 8, 200 );
     tex_flat( 3, 8, 8, 50 );
     // a floor 1000 x 1000
-    // object numbers run 0 .. 16383
-    CHECK( op( GFXOP_M3DOBJECT, 1, 16383.0 ) );
-    CHECK( Q( GFXQ_M3DOBJON, 1, 16383.0 ) != 0 );
-    CHECK( !op( GFXOP_M3DOBJECT, 1, 16384.0 ) );
+    // object numbers run 0 .. 27999
+    CHECK( op( GFXOP_M3DOBJECT, 1, 27999.0 ) );
+    CHECK( Q( GFXQ_M3DOBJON, 1, 27999.0 ) != 0 );
+    CHECK( !op( GFXOP_M3DOBJECT, 1, 28000.0 ) );
     CHECK( op( GFXOP_M3DOBJECT, 1, 1.0 ) );
     CHECK( op( GFXOP_M3DBOX, 8, 1.0, -500.0, -500.0, -10.0, 500.0, 500.0, 0.0, 1.0 ) );
     CHECK( op( GFXOP_M3DCAMERA, 4, 0.0, 0.0, 0.0, 0.0 ) );
@@ -772,7 +772,7 @@ int main( void ) {
     tex_flat( 301, 4, 4, 100 );
     CHECK( op( GFXOP_M3DOBJECT, 1, 1.0, 0.0 ) );
     CHECK( op( GFXOP_M3DGROUND, 7, 3.0, 700.0, 40.0, 4.0, 10.0, 0.5, 2.0 ) );
-    CHECK( op( GFXOP_M3DRINGPIC, 11, 325.0, 324.0, 301.0, 327.0, 327.0, 320.0, 303.0, 320.0, 302.0, -12.0, 70.0 ) );
+    CHECK( op( GFXOP_M3DRINGPIC, 12, 325.0, 324.0, 301.0, 327.0, 327.0, 320.0, 303.0, 320.0, 302.0, -12.0, 70.0, 304.0 ) );
     CHECK( op( GFXOP_M3DOBJECT, 2, 3.0, 0.0 ) && op( GFXOP_M3DOBJECT, 2, 4.0, 0.0 ) && op( GFXOP_M3DOBJECT, 2, 5.0, 0.0 ) );
     CHECK( op( GFXOP_M3DRING, 10, 3.0, 0.0, 0.0, 8.0, 100.0, 0.0, 0.0, 0.0, 0.0, 0.0 ) );
     CHECK( Q( GFXQ_M3DRINGBUSY, 0 ) >= 0.0 );
@@ -785,17 +785,20 @@ int main( void ) {
     CHECK( Q( GFXQ_M3DTRIS, 1, 3.0 ) == 2.0 * ( 64.0 - 4.0 ) + 2.0 * ( 4.0 * 8.0 - 0.0 + 4.0 * 2.0 - 0.0 ) );    // 60 cells, a wall piece for each of the 32 outer and 8 inner edges
     CHECK( !op( GFXOP_M3DRING, 10, 9.0, 0.0, 0.0, 8.0, 100.0, 0.0, 0.0, 0.0, 0.0, 0.0 ) );             // object 9 is not defined
     CHECK( !op( GFXOP_M3DRING, 10, 3.0, 0.0, 0.0, 0.0, 100.0, 0.0, 0.0, 0.0, 0.0, 0.0 ) );             // no cells
-    // the jobs of two grids that meet: the outer vertices of the fine ring lie on the coarse ring's surface (morph), a vertex inside has the true height
-    CHECK( op( GFXOP_M3DRINGMORPH, 1, 0.5 ) );
-    CHECK( op( GFXOP_M3DRING, 10, 4.0, 0.0, 0.0, 9.0, 300.0, 0.0, 0.0, 0.0, 0.0, 0.0 ) );              // a ring of 9 x 9 cells of 300: x 0 .. 2700
+    // morphing: a ring with a morph range (the distances 100 .. 1000 from the camera): at a vertex near the camera it has the true height, far from it the surface of the coarser grid (3 x the cell)
+    CHECK( op( GFXOP_M3DRING, 12, 4.0, 0.0, 0.0, 9.0, 300.0, 0.0, 0.0, 0.0, 0.0, 0.0, 100.0, 1000.0 ) );   // a ring of 9 x 9 cells of 300: x 0 .. 2700
     CHECK( op( GFXOP_M3DRINGWAIT, 0 ) );
     {
         double h00 = Q( GFXQ_M3DGROUND, 2, 0.0, 900.0 ), h01 = Q( GFXQ_M3DGROUND, 2, 0.0, 1800.0 );
-        CHECK( fabs( Q( GFXQ_M3DFLOORAT, 3, 0.0, 1200.0, 9000.0 ) - ( h00 + ( h01 - h00 ) / 3.0 ) ) < 1e-6 );   // on the edge: on the coarse surface (a cell of 900, u = 0, v = 1/3)
-        CHECK( fabs( Q( GFXQ_M3DFLOORAT, 3, 0.0, 900.0, 9000.0 ) - h00 ) < 1e-6 );                          // on the edge at a coarse vertex: the true height
-        CHECK( fabs( Q( GFXQ_M3DFLOORAT, 3, 1200.0, 1500.0, 9000.0 ) - Q( GFXQ_M3DGROUND, 2, 1200.0, 1500.0 ) ) < 1e-9 );   // in the middle: the true height
+        CHECK( op( GFXOP_M3DMORPH, 2, 0.0, 1200.0 ) );                                                        // the camera is at the vertex: the true height
+        CHECK( fabs( Q( GFXQ_M3DFLOORAT, 3, 0.0, 1200.0, 9000.0 ) - Q( GFXQ_M3DGROUND, 2, 0.0, 1200.0 ) ) < 1e-3 );
+        CHECK( op( GFXOP_M3DMORPH, 2, 100000.0, 100000.0 ) );                                                 // far away: the surface of the coarser grid (a cell of 900, u = 0, v = 1/3)
+        CHECK( fabs( Q( GFXQ_M3DFLOORAT, 3, 0.0, 1200.0, 9000.0 ) - ( h00 + ( h01 - h00 ) / 3.0 ) ) < 1e-3 );
+        CHECK( fabs( Q( GFXQ_M3DFLOORAT, 3, 0.0, 900.0, 9000.0 ) - h00 ) < 1e-3 );                          // at a coarse vertex both are the same
+        CHECK( op( GFXOP_M3DMORPH, 2, 550.0, 1200.0 ) );                                                      // halfway: in between (550 from the vertex = w 0.5)
+        double mid = Q( GFXQ_M3DFLOORAT, 3, 0.0, 1200.0, 9000.0 ), tru = Q( GFXQ_M3DGROUND, 2, 0.0, 1200.0 ), crs = h00 + ( h01 - h00 ) / 3.0;
+        CHECK( fabs( mid - ( tru + ( crs - tru ) * 0.5 ) ) < 1e-2 );
     }
-    CHECK( op( GFXOP_M3DRINGMORPH, 1, 0.0 ) );
     // tarred roads as ribbons in a ring, and the kinds of ground in a chunk (mode 1)
     CHECK( op( GFXOP_M3DROADNET, 6, 1800.0, 0.45, 140.0, 36000.0, 0.85, 900.0 ) );
     {
@@ -815,9 +818,48 @@ int main( void ) {
             double fz = Q( GFXQ_M3DFLOORAT, 3, px, py, 500.0 ), gz = Q( GFXQ_M3DGROUND, 2, px, py );
             CHECK( fz > gz + 1.0 && fz < gz + 12.0 );
         }
-        CHECK( op( GFXOP_M3DRINGPIC, 11, 325.0, 324.0, 301.0, 0.0, 0.0, 320.0, 303.0, 320.0, 302.0, -12.0, 70.0 ) );   // no tar picture: no ribbons
+        CHECK( op( GFXOP_M3DRINGPIC, 12, 325.0, 324.0, 301.0, 0.0, 0.0, 320.0, 303.0, 320.0, 302.0, -12.0, 70.0, 0.0 ) );   // no tar picture: no ribbons
         CHECK( op( GFXOP_M3DRING, 10, 5.0, gx, gy, 12.0, 300.0, 0.0, 1.0, 0.0, 0.0, 0.0 ) );
         CHECK( op( GFXOP_M3DRINGWAIT, 0 ) && Q( GFXQ_M3DTRIS, 1, 5.0 ) == 288.0 );
+    }
+    // trees in a chunk (mode 2: lathe solids, mode 3: cheap ones) and the dirt tracks of a chunk as ribbons
+    {
+        CHECK( op( GFXOP_M3DTREEPIC, 4, 312.0, 309.0, 310.0, 317.0 ) );
+        CHECK( op( GFXOP_M3DGROUND, 7, 3.0, 700.0, 4.0, 2.0, 10.0, 0.5, 2.0 ) );                       // gentle ground, no water, no hills
+        int64_t fcx = -1, fcy = -1;
+        for ( int64_t cy = 30; cy < 70 && fcx < 0; ++cy ) {
+            for ( int64_t cx = 30; cx < 70 && fcx < 0; ++cx ) {
+                rnear_t rn;
+                rnet_near( &M->gnd.net, (double) cx * 900.0 + 450.0, (double) cy * 900.0 + 450.0, 700.0, &rn );
+                if ( rnet_kind( &M->gnd.net, (double) cx * 900.0 + 450.0, (double) cy * 900.0 + 450.0 ) == 3 && rn.dirt > 700.0 && rn.tar > 700.0 ) { fcx = cx; fcy = cy; }
+            }
+        }
+        CHECK( fcx >= 0 );
+        double cx0 = (double) fcx * 900.0, cy0 = (double) fcy * 900.0;
+        CHECK( op( GFXOP_M3DRING, 10, 5.0, cx0, cy0, 3.0, 300.0, 0.0, 1.0, 0.0, 0.0, 0.0 ) );
+        CHECK( op( GFXOP_M3DRINGWAIT, 0 ) );
+        double t1 = Q( GFXQ_M3DTRIS, 1, 5.0 );
+        CHECK( t1 == 18.0 );
+        CHECK( op( GFXOP_M3DRING, 10, 5.0, cx0, cy0, 3.0, 300.0, 0.0, 2.0, 0.0, 0.0, 0.0 ) );
+        CHECK( op( GFXOP_M3DRINGWAIT, 0 ) );
+        double t2 = Q( GFXQ_M3DTRIS, 1, 5.0 );
+        CHECK( t2 > t1 + 60.0 );                                                                          // trees: some 64 .. 80 triangles each
+        CHECK( op( GFXOP_M3DRING, 10, 5.0, cx0, cy0, 3.0, 300.0, 0.0, 3.0, 0.0, 0.0, 0.0 ) );
+        CHECK( op( GFXOP_M3DRINGWAIT, 0 ) );
+        double t3 = Q( GFXQ_M3DTRIS, 1, 5.0 );
+        CHECK( t3 > t1 && t3 < t2 );                                                                      // cheap trees: 12 each
+        CHECK( fmod( t3 - t1, 12.0 ) == 0.0 );
+        // dirt tracks: a chunk that holds the start of a piece has more triangles with the dirt picture than without
+        rlink_t dl; bool gotd = false;
+        for ( int64_t ry = 20; ry < 60 && !gotd; ++ry ) { for ( int64_t rx = 20; rx < 60 && !gotd; ++rx ) { if ( rnet_link( &M->gnd.net, 0, rx, ry, 0, &dl ) ) { gotd = true; } } }
+        CHECK( gotd );
+        double dpx, dpy;
+        rnet_point( &dl, 0.5, &dpx, &dpy );
+        double dx0 = floor( dpx / 900.0 ) * 900.0, dy0 = floor( dpy / 900.0 ) * 900.0;
+        CHECK( op( GFXOP_M3DRINGPIC, 12, 325.0, 324.0, 301.0, 0.0, 0.0, 320.0, 303.0, 320.0, 302.0, -12.0, 70.0, 304.0 ) );
+        CHECK( op( GFXOP_M3DRING, 10, 5.0, dx0, dy0, 3.0, 300.0, 0.0, 1.0, 0.0, 0.0, 0.0 ) );
+        CHECK( op( GFXOP_M3DRINGWAIT, 0 ) );
+        CHECK( Q( GFXQ_M3DTRIS, 1, 5.0 ) > 18.0 );
     }
     CHECK( op( GFXOP_M3DCLEAR, 0 ) && Q( GFXQ_M3DRINGBUSY, 0 ) == 0.0 );
     // -- M3D SUN: terrain cells shaded by their slope with pictures t + k * stride ----------------------------------------------------------------------------
@@ -1042,7 +1084,7 @@ int main( void ) {
         CHECK( op( GFXOP_M3DMOUNTAINS, 6, 5.0, 300.0, 100.0, 4.0, -1.0, -0.99 ) && op( GFXOP_M3DCLEAR, 0 ) && Q( GFXQ_M3DGROUND, 2, x, y ) == 0.0 );   // CLEAR forgets them too
     }
     // -- errors -----------------------------------------------------------------------------------------------------------------------------
-    CHECK( !op( GFXOP_M3DOBJECT, 1, 20000.0 ) );
+    CHECK( !op( GFXOP_M3DOBJECT, 1, 30000.0 ) );
     CHECK( !op( GFXOP_M3DBOX, 8, 99.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0 ) );                 // object not defined
     CHECK( !op( GFXOP_M3DFACE, 5, 2.0, 0.0, 1.0, 99.0, 1.0 ) );                                 // vertices missing
     CHECK( !op( GFXOP_M3DVIEW, 4, 0.0, 0.0, 2.0, 2.0 ) );

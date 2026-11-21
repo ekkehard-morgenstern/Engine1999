@@ -76,6 +76,9 @@ typedef struct {
     int     flags, light;
     mv_t*   v;  int nv, capv;
     mt_t*   t;  int nt, capt;
+    float*  mf;                             // M3D RING with a morph range: the height of every vertex as it was made (mf) and as the coarser ring has it (mc): M3D MORPH blends them by the distance
+    float*  mc;
+    double  ma, mb;                         // the distances (Chebyshev, from the camera) where the blend starts (0) and is complete (1)
     int*    mref;                           // not 0: v and t are shared with other objects (M3D INSTANCE); *mref counts the sharers, the last one frees them (copy on write)
     double  scale;                          // the size (1 = as the mesh is; the picture coordinates do not change)
     double  px, py, pz, yaw, cs, sn;
@@ -123,7 +126,8 @@ typedef struct {
 
 // M3D RINGPIC: the pictures and thresholds of the ground jobs (M3D RING)
 typedef struct {
-    int    water, rock, grass, tar, tarfar, mud, meadow, field, forest;
+    int    water, rock, grass, tar, tarfar, mud, meadow, field, forest, dirt;
+    int    bark, leaf[3];                   // the pictures of the trees (M3D TREEPIC)
     double level, rockh;                    // the water level and the height above which ground is rock
 } ringpic_t;
 
@@ -157,7 +161,6 @@ struct _m3d_t {
     ground_t gnd;
     sun_t    sun;
     ringpic_t rpic;
-    double   rmorph;                        // M3D RINGMORPH: 0 = off, else the part of a ring (from its middle) that keeps its own heights; further out they fade to the coarser ring
     struct _tjobs* jobs;
     int      top;                           // one above the highest object number in use (the loops stop there)
     unsigned presepoch;                     // counts the times a picture number got or lost its picture (the renderer's kept meshes group the triangles by that)
