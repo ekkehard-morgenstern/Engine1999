@@ -117,7 +117,9 @@ typedef struct {
 } ground_t;
 
 double m3d_ground_eval( const ground_t* g, double x, double y );         // the ground function without an M3D object (used by world.c)
-void   m3d_ground_sync_roads( ground_t* g );                            // after the mountain layer or the road network changed
+void   m3d_ground_sync_roads( ground_t* g );
+struct _world;
+const ground_t* world_ground( const struct _world* w );                // the ground function of a static world (world.c): the same layers, for the ground jobs                            // after the mountain layer or the road network changed
 
 // M3D SUN: terrain cells get a picture shaded by their slope. A shaded picture is made from the cell's own picture t (palette indices mapped to the nearest
 // darker color) and has the number t + k * stride for the shade step k = 1 .. steps - 1; lvl[n] is that k for a picture the engine made (0: not made), src[n] the t.
@@ -167,6 +169,8 @@ struct _m3d_t {
     sun_t    sun;
     ringpic_t rpic;
     struct _tjobs* jobs;
+    struct _wl*    wl;                      // the static world's tiles (M3D WORLDOPEN, m3d.c)
+    struct _wmake* wmake;                   // the world being made in the background (M3D WORLDMAKE)
     double   mlx, mly;                      // the camera of the last M3D MORPH
     bool     mvalid, mforce;
     int*     ul;  int nul;  bool ulok;      // the numbers of the objects in use (m3d_used())

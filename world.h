@@ -48,10 +48,10 @@ so the same world gives the same ground on every machine, and neighbouring chunk
 #define WORLD_CHUNK     15625.0         // units a chunk is wide (500 m)
 #define WORLD_RECSIZE   32
 #define WORLD_HDRSIZE   64
-#define WORLD_VERSION   1
+#define WORLD_VERSION   2
 
 // flags of a chunk
-#define WCF_TAR         1               // a tarred road passes near (within the chunk's box plus a margin)
+#define WCF_TAR         1               // a tarred road passes through the chunk
 #define WCF_DIRT        2               // a dirt track does
 #define WCF_WATER       4               // some of the ground lies below the water level
 #define WCF_MOUNTAIN    8               // some of the ground is above MOUNTAIN_H
@@ -65,7 +65,7 @@ typedef struct {
     int32_t  hmin, hmax, hmean;         // heights in units (sampled on 5 x 5 points, 125 m apart)
     uint8_t  kind;                      // 0 plain, 1 meadow, 2 field, 3 forest (at the chunk's middle)
     uint8_t  flags;                     // WCF_*
-    uint8_t  ntar, ndirt;               // tarred road links near the chunk (ndirt: unused, 0)
+    uint8_t  ntar, ndirt;               // tarred road links through the chunk (ndirt: unused, 0)
 } wchunk_t;
 
 typedef struct _world world_t;
@@ -86,6 +86,13 @@ double      world_x0( const world_t* w, int cx );               // the west edge
 double      world_y0( const world_t* w, int cy );               // the south edge of chunk row cy
 bool        world_chunk_at( const world_t* w, double x, double y, int* cx, int* cy );   // the chunk that holds the place (false: outside the world)
 double      world_height( const world_t* w, double x, double y );   // the ground height, units: the same everywhere on every call (thread safe, 0 outside)
+
+// creation in the background (for a program that must go on: the game shows a progress bar): world_make_start() makes the world on a thread of its own
+typedef struct _wmake wmake_t;
+wmake_t*    world_make_start( const char* dir, int n, uint64_t seed, int threads );    // 0: out of memory
+int         world_make_progress( wmake_t* m, int* total );     // rows done (of *total); -1 when the creation failed; the end is world_make_done()
+bool        world_make_done( wmake_t* m );
+world_t*    world_make_finish( wmake_t* m );                   // waits for the end, frees the handle, returns the opened world (0: failed, world_error() says why)
 
 // the place's seed field, for the test and for tools: the seed of chunk (cx, cy) as the creation computes it (walks the field: O(cx + cy) steps)
 uint64_t    world_field_seed( uint64_t seed, int cx, int cy );

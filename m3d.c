@@ -31,6 +31,7 @@
 #include "gfxops.h"
 #include "noise.h"
 #include "roadnet.h"
+#include "world.h"
 #include <pthread.h>
 #include <stdatomic.h>
 #include <time.h>
@@ -304,8 +305,12 @@ static bool obj_unshare( obj_t* o ) {
 }
 
 static void jobs_discard( m3d_t* m );
+static void wl_close( m3d_t* m );
+static double wl_height( const m3d_t* m, double x, double y );
+static void wl_built( m3d_t* m, int obj );
 
 static void clear_world( m3d_t* m ) {
+    wl_close( m );
     jobs_discard( m );
     for ( int i=0; i < M3D_MAXOBJECTS; ++i ) {
         free_obj( &m->objs[i] );
@@ -399,6 +404,8 @@ void m3d_free( m3d_t* m ) {
     if ( m == 0 ) {
         return;
     }
+    wl_close( m );
+    if ( m->wmake != 0 ) { world_close( world_make_finish( m->wmake ) ); m->wmake = 0; }
     jobs_stop( m );
     rnet_flush();
     if ( m->objs != 0 ) {
@@ -525,6 +532,7 @@ double m3d_ground_eval( const ground_t* g, double x, double y ) {
 }
 
 double m3d_ground( const m3d_t* m, double x, double y ) {
+    if ( m->wl != 0 ) { return wl_height( m, x, y ); }
     return m3d_ground_eval( &m->gnd, x, y );
 }
 
@@ -545,6 +553,8 @@ typedef struct {
     int     obj, n, mode, hn;
     double  x0, y0, cell, skirt, hx0, hy0, ma, mb;
     ground_t gnd;
+    const world_t* world;                   // a tile of the static world (mode 4): the heights are the world's function (the wall included)
+    double  ratio;                          // the cell of the coarser grid the morph blends to, in cells (0: 3; 2 in the world: nested grids)
     bool    sunon;
     double  lx, ly, lz;
     int     steps, stride;
@@ -602,23 +612,29 @@ static bool jt_add( tjob_t* j, int a, int b, int c, int tex ) {
 
 // the height of a vertex of the job: the ground function
 static double job_height( const tjob_t* j, double x, double y ) {
-    return m3d_ground_eval( &j->gnd, x, y );
+    return j->world != 0 ? world_height( j->world, x, y ) : m3d_ground_eval( &j->gnd, x, y );
 }
 
 // the surface of the coarser grid (3 x the cell, on the world's grid: the triangles of the coarser ring) at (x, y)
 static double job_coarse( const tjob_t* j, double x, double y ) {
-    double c2 = j->cell * 3.0, gx = floor( x / c2 ) * c2, gy = floor( y / c2 ) * c2;
-    double h00 = m3d_ground_eval( &j->gnd, gx, gy ), h10 = m3d_ground_eval( &j->gnd, gx + c2, gy ), h11 = m3d_ground_eval( &j->gnd, gx + c2, gy + c2 ), h01 = m3d_ground_eval( &j->gnd, gx, gy + c2 );
+    double c2 = j->cell * ( j->ratio > 0.0 ? j->ratio : 3.0 ), gx = floor( x / c2 ) * c2, gy = floor( y / c2 ) * c2;
+    double h00 = job_height( j, gx, gy ), h10 = job_height( j, gx + c2, gy ), h11 = job_height( j, gx + c2, gy + c2 ), h01 = job_height( j, gx, gy + c2 );
     double u = ( x - gx ) / c2, v = ( y - gy ) / c2;
     return u >= v ? h00 + u * ( h10 - h00 ) + v * ( h11 - h10 ) : h00 + v * ( h01 - h00 ) + u * ( h11 - h01 );
 }
 
-static int job_cellpic( const tjob_t* j, double cx, double cy, double zc, double zmax, double zmin ) {
+static int job_cellpic( const tjob_t* j, double cx, double cy, double zc, double zmax, double zmin, double sl ) {
     const ringpic_t* p = &j->pic;
     if ( j->mode == 0 ) {
         if ( zc < p->level - 3.0 ) { return p->water; }
         if ( zc > p->rockh || ( zmax - zmin ) / j->cell > 0.9 ) { return p->rock; }
         return p->grass;
+    }
+    if ( j->mode == 4 ) {                                   // a tile of the static world: the kinds of ground of the road network, rock, mud, no hand-made area
+        if ( zc > p->rockh || sl > 45.0 ) { return p->rock; }
+        if ( zc < p->level + 1.5 ) { return p->mud; }
+        int kw = rnet_kind( &j->gnd.net, cx, cy );
+        return kw == 1 ? p->meadow : kw == 2 ? p->field : kw == 3 ? p->forest : p->grass;
     }
     // mode 1: FN OCELL
     int celltex = p->grass;
@@ -677,14 +693,14 @@ static void job_ribbons( tjob_t* j, int net ) {
     double ex = j->x0 + n * j->cell, ey = j->y0 + n * j->cell;
     int nl = rnet_links( &j->gnd.net, net, j->x0 - 500.0, j->y0 - 500.0, ex + 500.0, ey + 500.0, links, 40 );
     int cols = net ? RIBBON_COLS : 3;
-    double half = net ? ( j->mode >= 1 ? 220.0 : fmax( 220.0, j->cell * 0.25 ) ) : 55.0, lift = net ? 3.0 + j->cell * 0.02 : 3.0, vsc = net ? 0.17 : 0.58;
-    int tex = net ? ( j->mode == 0 && j->cell >= 2700.0 ? j->pic.tarfar : j->pic.tar ) : j->pic.dirt;
+    double half = net ? ( j->mode == 4 ? fmax( 220.0, j->cell * 0.2 ) : j->mode >= 1 ? 220.0 : fmax( 220.0, j->cell * 0.25 ) ) : 55.0, lift = net ? 3.0 + j->cell * 0.02 : 3.0, vsc = net ? 0.17 : 0.58;
+    int tex = net ? ( ( j->mode == 0 || j->mode == 4 ) && j->cell >= 2700.0 ? j->pic.tarfar : j->pic.tar ) : j->pic.dirt;
     bool morph = j->mb > j->ma;
     static _Thread_local double px[1500], py[1500], pd[1500];
     static _Thread_local int row[1500];
     for ( int li = 0; li < nl; ++li ) {
         const rlink_t* l = &links[li];
-        double sub = ( net && j->mode >= 1 ) ? 2.0 : net ? 1.0 / fmax( 1.0, floor( j->cell / l->step ) ) : 1.0;
+        double sub = j->mode == 4 ? l->step / fmax( net ? 100.0 : 50.0, j->cell * 0.5 ) : ( net && j->mode >= 1 ) ? 2.0 : net ? 1.0 / fmax( 1.0, floor( j->cell / l->step ) ) : 1.0;
         double dt = 1.0 / ( (double) l->steps * sub );
         int np = 0;
         for ( double t = 0.0; t < 1.0 - 1.0e-9 && np < 1499; t += dt ) { rnet_point( l, t, &px[np], &py[np] ); ++np; }
@@ -872,7 +888,8 @@ static void job_run( tjob_t* j ) {
             double z00 = j->v[b].z, z10 = j->v[b + 1].z, z01 = j->v[b + w].z, z11 = j->v[b + w + 1].z;
             double zmax = fmax( fmax( z00, z10 ), fmax( z01, z11 ) ), zmin = fmin( fmin( z00, z10 ), fmin( z01, z11 ) );
             double cx = j->x0 + ( ci + 0.5 ) * j->cell, cy = j->y0 + ( cj + 0.5 ) * j->cell;
-            int p = job_cellpic( j, cx, cy, ( z00 + z10 + z01 + z11 ) * 0.25, zmax, zmin );
+            double sl = 100.0 * ( fabs( ( z10 + z11 ) - ( z00 + z01 ) ) + fabs( ( z01 + z11 ) - ( z00 + z10 ) ) ) / ( 2.0 * j->cell );     // the slope, as FN OCELL measures it
+            int p = job_cellpic( j, cx, cy, ( z00 + z10 + z01 + z11 ) * 0.25, zmax, zmin, sl );
             int k = job_shade( j, j->cell, z00, z10, z01, z11 );
             if ( k > 0 && p + k * j->stride < M3D_MAXTEX ) { job_var( j, p, k ); p += k * j->stride; }
             if ( !jt_add( j, b, b + 1, b + w + 1, p ) || !jt_add( j, b, b + w + 1, b + w, p ) ) { return; }
@@ -904,7 +921,7 @@ static void job_run( tjob_t* j ) {
     if ( j->pic.tar > 0 && j->gnd.net.on ) {
         job_ribbons( j, 1 );
     }
-    if ( j->mode >= 1 && j->pic.dirt > 0 && j->gnd.net.on ) {
+    if ( j->mode >= 1 && j->pic.dirt > 0 && j->gnd.net.on && ( j->mode != 4 || j->cell <= 250.0 ) ) {
         job_ribbons( j, 0 );
     }
     if ( j->mode >= 2 && j->pic.bark > 0 && j->gnd.net.on ) {
@@ -999,7 +1016,7 @@ static bool jobs_submit( m3d_t* m, tjob_t* proto ) {
     slot->obj = proto->obj; slot->n = proto->n; slot->mode = proto->mode; slot->hn = proto->hn;
     slot->x0 = proto->x0; slot->y0 = proto->y0; slot->cell = proto->cell; slot->skirt = proto->skirt; slot->hx0 = proto->hx0; slot->hy0 = proto->hy0; slot->ma = proto->ma; slot->mb = proto->mb;
     slot->gnd = proto->gnd; slot->sunon = proto->sunon; slot->lx = proto->lx; slot->ly = proto->ly; slot->lz = proto->lz; slot->steps = proto->steps; slot->stride = proto->stride;
-    slot->pic = proto->pic;
+    slot->pic = proto->pic; slot->world = proto->world; slot->ratio = proto->ratio;
     atomic_store( &slot->state, 1 );
     return true;
 }
@@ -1036,6 +1053,7 @@ static int jobs_apply( m3d_t* m ) {
             }
             ++applied;
         }
+        wl_built( m, best->obj );
         job_free_result( best );
         atomic_store( &best->state, 0 );
     }
@@ -1089,6 +1107,272 @@ void m3d_morph( m3d_t* m, double cx, double cy ) {
         }
         o->msat = dmax <= o->ma ? 1 : dmin >= o->mb ? 2 : 0;
         o->dirty = true; o->gen = next_gen();
+    }
+}
+
+
+// -- the static world: a quadtree of ground tiles (docs/world-subsystem.md, M3D WORLDOPEN) --------------------------------------------------------------------------------------
+/*
+The ground of a static world (world.[ch]) is drawn by tiles of 8 x 8 cells of every size s = S0 * 2^level (S0 = a sixteenth of a chunk = 976.6 units, 3.9 m cells; the top level 6 is
+62500 units): a quadtree on the chunk grid. A tile is split into its four children when the camera comes nearer than R = 3 s (Chebyshev distance to the tile's box), merged again
+beyond 1.1 R. The grids are nested (a coarse cell is two fine ones), every tile morphs from its own grid into the grid of its parent between the distances a = 4.42 s and b = 6 s
+(the morph of M3D RING, ratio 2), so:
+  * a tile is split at dmin < R, when all its vertices are nearer than a (blend 0: its own grid) and the children have all vertices farther than R = 6 s_child = b (blend 1: the
+    parent's grid): the surface is the same before and after, nothing pops; merging is the same the other way round (the children are blended wholly, dmin >= 1.1 R > b);
+  * the children are built beforehand (nearer than 1.6 R) and a split waits until all four are there, so a slow worker thread never leaves a gap or shows a half made tile;
+  * cracks between neighbours of different sizes are closed by skirts.
+Every tile is one object (slot i = object obj0 + i) made by a ground job of mode 4 on the worker thread; the heights are `world_height()`, pure, the same every time.
+*/
+#define WL_TOP      6
+#define WL_S0       ( WORLD_CHUNK / 16.0 )
+#define WL_RF       3.0
+#define WL_SLOTS    3072
+#define WL_HASH     4096
+#define WL_REQMAX   384
+
+typedef struct { bool used, dead, built, queued, split, shown; int lvl; int64_t tx, ty; unsigned stamp; } wtile_t;
+
+typedef struct { int slot; double d; } wreq_t;
+
+typedef struct _wl {
+    world_t* w;
+    int      obj0, flags, light;
+    double   half;                           // half the world's side, units
+    wtile_t  t[WL_SLOTS];
+    int16_t  hash[WL_HASH];                  // slot + 1; 0 empty, -1 removed
+    unsigned frame;
+    int      nshown, nbuilt, nqueued, changed;
+    wreq_t   req[WL_REQMAX];
+    int      nreq;
+    double   cx, cy;
+} wl_t;
+
+static double wl_size( int lvl ) { return WL_S0 * (double)( 1 << lvl ); }
+
+static unsigned wl_key( int lvl, int64_t tx, int64_t ty ) {
+    return (unsigned)( nz_mix( (uint64_t) tx * 0x9E3779B97F4A7C15ULL + (uint64_t) ty * 0xC2B2AE3D27D4EB4FULL + (uint64_t) lvl ) % WL_HASH );
+}
+
+static int wl_find( const wl_t* wl, int lvl, int64_t tx, int64_t ty ) {
+    unsigned h = wl_key( lvl, tx, ty );
+    for ( int k = 0; k < WL_HASH; ++k ) {
+        int e = wl->hash[ ( h + (unsigned) k ) % WL_HASH ];
+        if ( e == 0 ) { return -1; }
+        if ( e > 0 ) {
+            const wtile_t* t = &wl->t[e - 1];
+            if ( !t->dead && t->lvl == lvl && t->tx == tx && t->ty == ty ) { return e - 1; }
+        }
+    }
+    return -1;
+}
+
+static void wl_unhash( wl_t* wl, int slot ) {
+    unsigned h = wl_key( wl->t[slot].lvl, wl->t[slot].tx, wl->t[slot].ty );
+    for ( int k = 0; k < WL_HASH; ++k ) {
+        unsigned i = ( h + (unsigned) k ) % WL_HASH;
+        if ( wl->hash[i] == slot + 1 ) { wl->hash[i] = -1; return; }
+        if ( wl->hash[i] == 0 ) { return; }
+    }
+}
+
+static int wl_add( m3d_t* m, wl_t* wl, int lvl, int64_t tx, int64_t ty ) {
+    int slot = -1;
+    for ( int i = 0; i < WL_SLOTS; ++i ) {
+        if ( !wl->t[i].used ) { slot = i; break; }
+    }
+    if ( slot < 0 ) { return -1; }
+    unsigned h = wl_key( lvl, tx, ty );
+    int at = -1;
+    for ( int k = 0; k < WL_HASH; ++k ) {
+        unsigned i = ( h + (unsigned) k ) % WL_HASH;
+        if ( wl->hash[i] <= 0 ) { at = (int) i; break; }
+    }
+    if ( at < 0 ) { return -1; }
+    wtile_t* t = &wl->t[slot];
+    memset( t, 0, sizeof(*t) );
+    t->used = true; t->lvl = lvl; t->tx = tx; t->ty = ty;
+    wl->hash[at] = (int16_t)( slot + 1 );
+    int o = wl->obj0 + slot;                    // the object, empty and hidden until the job's mesh is taken
+    free_obj( &m->objs[o] );
+    m->ulok = false;
+    if ( o >= m->top ) { m->top = o + 1; }
+    obj_t* ob = &m->objs[o];
+    ob->used = true; ob->shown = false; ob->dirty = true; ob->flags = wl->flags; ob->light = wl->light; ob->gen = next_gen(); ob->scale = 1.0; ob->cs = 1.0;
+    return slot;
+}
+
+static void wl_release( m3d_t* m, wl_t* wl, int slot ) {       // the slot is free again (the object is emptied)
+    free_obj( &m->objs[wl->obj0 + slot] );
+    m->ulok = false;
+    memset( &wl->t[slot], 0, sizeof(wl->t[slot]) );
+}
+
+static void wl_remove( m3d_t* m, wl_t* wl, int slot ) {        // a tile nobody wants any more; one whose job is still out stays as a hidden husk until the job is done
+    wtile_t* t = &wl->t[slot];
+    wl_unhash( wl, slot );
+    if ( t->shown ) { wl->changed++; }
+    if ( t->queued ) {
+        t->dead = true; t->shown = false; t->split = false;
+        m->objs[wl->obj0 + slot].shown = false;
+    } else {
+        wl_release( m, wl, slot );
+    }
+}
+
+static void wl_built( m3d_t* m, int obj ) {                    // jobs_apply took the mesh for object obj
+    wl_t* wl = m->wl;
+    if ( wl == 0 || obj < wl->obj0 || obj >= wl->obj0 + WL_SLOTS ) { return; }
+    int slot = obj - wl->obj0;
+    wtile_t* t = &wl->t[slot];
+    if ( !t->used ) { return; }
+    t->queued = false;
+    if ( t->dead ) { wl_release( m, wl, slot ); return; }
+    t->built = true;
+    wl->changed++;
+}
+
+static bool wl_request( m3d_t* m, wl_t* wl, int slot ) {
+    wtile_t* t = &wl->t[slot];
+    double s = wl_size( t->lvl );
+    tjob_t* pj = (tjob_t*) calloc( 1, sizeof(tjob_t) );
+    if ( pj == 0 ) { return false; }
+    pj->obj = wl->obj0 + slot; pj->n = 8; pj->x0 = (double) t->tx * s; pj->y0 = (double) t->ty * s; pj->cell = s / 8.0; pj->skirt = pj->cell * 0.75 + 10.0; pj->mode = 4;
+    if ( t->lvl < WL_TOP ) { pj->ma = ( WL_RF + 1.42 ) * s; pj->mb = 2.0 * WL_RF * s; }
+    pj->gnd = *world_ground( wl->w ); pj->world = wl->w; pj->ratio = 2.0; pj->pic = m->rpic;
+    pj->sunon = m->sun.on; pj->lx = m->sun.lx; pj->ly = m->sun.ly; pj->lz = m->sun.lz; pj->steps = m->sun.steps; pj->stride = m->sun.stride;
+    bool ok = jobs_submit( m, pj );
+    free( pj );
+    if ( ok ) { t->queued = true; }
+    return ok;
+}
+
+static void wl_want( wl_t* wl, int slot, double d ) {          // a tile that must be built: remembered, the nearest ones are submitted first
+    if ( wl->nreq < WL_REQMAX ) { wl->req[wl->nreq].slot = slot; wl->req[wl->nreq].d = d; ++wl->nreq; }
+}
+
+static void wl_show( m3d_t* m, wl_t* wl, int slot, bool on ) {
+    wtile_t* t = &wl->t[slot];
+    if ( t->shown != on ) { t->shown = on; m->objs[wl->obj0 + slot].shown = on; wl->changed++; }
+}
+
+static double wl_dist( const wl_t* wl, int lvl, int64_t tx, int64_t ty ) {      // the Chebyshev distance from the camera to the tile's box
+    double s = wl_size( lvl ), x0 = (double) tx * s, y0 = (double) ty * s;
+    double dx = fmax( fmax( x0 - wl->cx, wl->cx - ( x0 + s ) ), 0.0 ), dy = fmax( fmax( y0 - wl->cy, wl->cy - ( y0 + s ) ), 0.0 );
+    return fmax( dx, dy );
+}
+
+static bool wl_inworld( const wl_t* wl, int lvl, int64_t tx, int64_t ty ) {
+    double s = wl_size( lvl ), x0 = (double) tx * s, y0 = (double) ty * s;
+    return x0 < wl->half && y0 < wl->half && x0 + s > -wl->half && y0 + s > -wl->half;
+}
+
+// the tile (lvl, tx, ty) is wanted: found or made (and stamped), asked for when it has no mesh; -1 outside the world or no slot
+static int wl_need( m3d_t* m, wl_t* wl, int lvl, int64_t tx, int64_t ty ) {
+    if ( !wl_inworld( wl, lvl, tx, ty ) ) { return -1; }
+    int sl = wl_find( wl, lvl, tx, ty );
+    if ( sl < 0 ) { sl = wl_add( m, wl, lvl, tx, ty ); }
+    if ( sl < 0 ) { return -1; }
+    wtile_t* t = &wl->t[sl];
+    t->stamp = wl->frame;
+    if ( !t->built && !t->queued ) { wl_want( wl, sl, wl_dist( wl, lvl, tx, ty ) ); }
+    return sl;
+}
+
+static void wl_visit( m3d_t* m, wl_t* wl, int lvl, int64_t tx, int64_t ty ) {
+    int sl = wl_need( m, wl, lvl, tx, ty );
+    if ( sl < 0 ) { return; }
+    wtile_t* t = &wl->t[sl];
+    double dmin = wl_dist( wl, lvl, tx, ty ), R = WL_RF * wl_size( lvl );
+    if ( t->split ) {
+        bool ok = lvl > 0 && dmin < 1.1 * R;
+        for ( int q = 0; q < 4 && ok; ++q ) {                      // (a child that is not there: back to the parent, no gap)
+            int c = wl_find( wl, lvl - 1, 2 * tx + ( q & 1 ), 2 * ty + ( q >> 1 ) );
+            if ( c < 0 ? wl_inworld( wl, lvl - 1, 2 * tx + ( q & 1 ), 2 * ty + ( q >> 1 ) ) : !wl->t[c].built ) { ok = false; }
+        }
+        if ( ok ) {
+            wl_show( m, wl, sl, false );
+            for ( int q = 0; q < 4; ++q ) { wl_visit( m, wl, lvl - 1, 2 * tx + ( q & 1 ), 2 * ty + ( q >> 1 ) ); }
+            return;
+        }
+        t->split = false; wl->changed++;                          // merge: the children are not visited and so are swept
+    }
+    wl_show( m, wl, sl, t->built );
+    if ( lvl > 0 && dmin < 1.6 * R ) {                             // the children are made beforehand
+        bool all = true;
+        int cs[4];
+        for ( int q = 0; q < 4; ++q ) {
+            cs[q] = wl_need( m, wl, lvl - 1, 2 * tx + ( q & 1 ), 2 * ty + ( q >> 1 ) );
+            if ( cs[q] >= 0 && !t->split ) { wl_show( m, wl, cs[q], false ); wl->t[cs[q]].split = false; }      // (kept for later, hidden: a stale split would show grandchildren that are gone)
+            if ( cs[q] >= 0 && !wl->t[cs[q]].built ) { all = false; }
+            if ( cs[q] < 0 && wl_inworld( wl, lvl - 1, 2 * tx + ( q & 1 ), 2 * ty + ( q >> 1 ) ) ) { all = false; }     // (no slot: wait)
+        }
+        if ( dmin < R && all && t->built ) {
+            t->split = true; wl->changed++;
+            wl_show( m, wl, sl, false );
+            for ( int q = 0; q < 4; ++q ) { wl_visit( m, wl, lvl - 1, 2 * tx + ( q & 1 ), 2 * ty + ( q >> 1 ) ); }
+        }
+    }
+}
+
+static int wl_reqcmp( const void* a, const void* b ) {
+    double da = ( (const wreq_t*) a )->d, db = ( (const wreq_t*) b )->d;
+    return da < db ? -1 : da > db ? 1 : 0;
+}
+
+// every frame (M3D WORLDVIEW x, y): takes finished meshes, decides splits and merges, submits the jobs for what is wanted (the nearest first), morphs
+static void wl_view( m3d_t* m, double x, double y ) {
+    wl_t* wl = m->wl;
+    if ( wl == 0 ) { return; }
+    jobs_apply( m );
+    wl->cx = x; wl->cy = y; ++wl->frame; wl->nreq = 0; wl->changed = 0;
+    double st = wl_size( WL_TOP ), rad = ( 10.5 * WORLD_CHUNK );
+    int64_t ax = (int64_t) floor( ( x - rad ) / st ), bx = (int64_t) floor( ( x + rad ) / st ), ay = (int64_t) floor( ( y - rad ) / st ), by = (int64_t) floor( ( y + rad ) / st );
+    for ( int64_t ty = ay; ty <= by; ++ty ) {
+        for ( int64_t tx = ax; tx <= bx; ++tx ) { wl_visit( m, wl, WL_TOP, tx, ty ); }
+    }
+    wl->nshown = wl->nbuilt = wl->nqueued = 0;
+    for ( int i = 0; i < WL_SLOTS; ++i ) {                        // what nobody visited goes (the children of a merged tile, tiles far away)
+        wtile_t* t = &wl->t[i];
+        if ( t->used && !t->dead && t->stamp != wl->frame ) { wl_remove( m, wl, i ); continue; }
+        if ( t->used && !t->dead ) {
+            wl->nshown += t->shown; wl->nbuilt += t->built; wl->nqueued += t->queued;
+        }
+    }
+    qsort( wl->req, (size_t) wl->nreq, sizeof(wl->req[0]), wl_reqcmp );
+    int budget = 24;
+    for ( int i = 0; i < wl->nreq && budget > 0 && jobs_pending( m ) < 300; ++i ) {
+        wtile_t* t = &wl->t[wl->req[i].slot];
+        if ( t->used && !t->dead && !t->built && !t->queued && wl_request( m, wl, wl->req[i].slot ) ) { --budget; ++wl->nqueued; }
+    }
+    m3d_morph( m, x, y );
+}
+
+// waits until every wanted tile is there and the splits are done (the start of the game, a jump)
+static void wl_settle( m3d_t* m ) {
+    wl_t* wl = m->wl;
+    if ( wl == 0 ) { return; }
+    for ( int pass = 0; pass < 400; ++pass ) {
+        wl_view( m, wl->cx, wl->cy );
+        if ( wl->nreq == 0 && wl->nqueued == 0 && wl->changed == 0 && jobs_pending( m ) == 0 ) { break; }
+        jobs_wait( m );
+    }
+}
+
+static double wl_height( const m3d_t* m, double x, double y ) {
+    return world_height( m->wl->w, x, y );
+}
+
+static void wl_close( m3d_t* m ) {
+    if ( m->wl != 0 ) {
+        wl_t* wl = m->wl;
+        jobs_discard( m );
+        for ( int i = 0; i < WL_SLOTS; ++i ) {
+            if ( wl->t[i].used ) { free_obj( &m->objs[wl->obj0 + i] ); }
+        }
+        m->ulok = false;
+        world_close( wl->w );
+        free( wl );
+        m->wl = 0;
     }
 }
 
@@ -1755,6 +2039,52 @@ bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t sl
         case GFXOP_M3DPOLL:
             jobs_apply( m );
             return true;
+        case GFXOP_M3DWORLDMAKE: {                           // M3D WORLDMAKE dir$, n, seed: the world is made on threads of its own (M3D("WORLDINFO", 5) is the progress)
+            int n;
+            char dir[1000];
+            if ( !whole( a[0], 1, WORLD_MAXN, &n ) || !( fabs( a[1] ) < 9.0e15 ) || slen == 0 || slen >= sizeof(dir) ) { return false; }
+            if ( m->wmake != 0 ) {
+                if ( !world_make_done( m->wmake ) ) { *err = "A world is being made"; return false; }
+                world_close( world_make_finish( m->wmake ) );
+                m->wmake = 0;
+            }
+            memcpy( dir, s, slen ); dir[slen] = 0;
+            m->wmake = world_make_start( dir, n, (uint64_t)(int64_t) floor( a[1] ), 0 );
+            if ( m->wmake == 0 ) { *err = "Out of memory"; return false; }
+            return true;
+        }
+        case GFXOP_M3DWORLDOPEN: {                           // M3D WORLDOPEN dir$, obj0 [, flags [, light]]: the world's tiles are the objects obj0 .. obj0 + 3071
+            int fl = 0, li = 255, o0;
+            char dir[1000];
+            if ( !whole( a[0], 0, M3D_MAXOBJECTS - WL_SLOTS, &o0 ) || ( !NONE_VAL( a[1] ) && !whole( a[1], 0, 255, &fl ) ) || ( !NONE_VAL( a[2] ) && !whole( a[2], 0, 255, &li ) ) || slen == 0 || slen >= sizeof(dir) ) { return false; }
+            if ( m->wmake != 0 ) {
+                if ( !world_make_done( m->wmake ) ) { *err = "A world is being made"; return false; }
+                world_close( world_make_finish( m->wmake ) );
+                m->wmake = 0;
+            }
+            memcpy( dir, s, slen ); dir[slen] = 0;
+            wl_close( m );
+            world_t* w = world_open( dir );
+            if ( w == 0 ) { *err = world_error(); return false; }
+            wl_t* wl = (wl_t*) calloc( 1, sizeof(wl_t) );
+            if ( wl == 0 ) { world_close( w ); *err = "Out of memory"; return false; }
+            wl->w = w; wl->obj0 = o0; wl->flags = fl; wl->light = li; wl->half = 0.5 * (double) world_size( w ) * WORLD_CHUNK;
+            m->wl = wl;
+            m->gnd = *world_ground( w );                     // the queries about the roads and kinds of ground (M3D("KIND"), ("ROADLINK"), ...) answer for this world
+            return true;
+        }
+        case GFXOP_M3DWORLDCLOSE:
+            wl_close( m );
+            return true;
+        case GFXOP_M3DWORLDVIEW:
+            if ( m->wl == 0 ) { *err = "No world open"; return false; }
+            if ( !( fabs( a[0] ) < 1.0e9 && fabs( a[1] ) < 1.0e9 ) ) { return false; }
+            wl_view( m, a[0], a[1] );
+            return true;
+        case GFXOP_M3DWORLDWAIT:
+            if ( m->wl == 0 ) { *err = "No world open"; return false; }
+            wl_settle( m );
+            return true;
         case GFXOP_M3DRINGWAIT:
             jobs_wait( m );
             return true;
@@ -2147,6 +2477,34 @@ bool m3d_query( m3d_t* m, int q, const double* a, int na, double* r ) {
             return true;
         }
         case GFXQ_M3DKIND: *r = rnet_kind( &m->gnd.net, a[0], a[1] ); return true;
+        case GFXQ_M3DWORLDINFO: {                           // M3D("WORLDINFO", k): 0 open, 1 size n, 2 tiles shown, 3 tiles built, 4 tiles being made, 5 progress of WORLDMAKE (0 .. 1000, -1 failed or none), 6 1 when WORLDMAKE has ended
+            int k = (int) a[0];
+            const wl_t* wl = m->wl;
+            switch ( k ) {
+                case 0: *r = wl != 0; return true;
+                case 1: *r = wl != 0 ? world_size( wl->w ) : 0; return true;
+                case 2: *r = wl != 0 ? wl->nshown : 0; return true;
+                case 3: *r = wl != 0 ? wl->nbuilt : 0; return true;
+                case 4: *r = wl != 0 ? wl->nqueued : 0; return true;
+                case 5: {
+                    int tot = 1, dn = 0;
+                    if ( m->wmake == 0 ) { *r = -1; return true; }
+                    dn = world_make_progress( m->wmake, &tot );
+                    *r = dn < 0 ? -1 : world_make_done( m->wmake ) ? 1000 : floor( 1000.0 * dn / (double)( tot > 0 ? tot : 1 ) );
+                    return true;
+                }
+                case 6: *r = m->wmake != 0 && world_make_done( m->wmake ); return true;
+                default: *r = 0; return true;
+            }
+        }
+        case GFXQ_M3DWORLDCHUNK: {                          // M3D("WORLDCHUNK", x, y, f): the record of the chunk that holds the place: f 0 cx, 1 cy, 2 lowest, 3 highest, 4 mean height, 5 kind, 6 flags, 7 tarred links; -1 outside / no world
+            wchunk_t c;
+            int cx, cy, f = (int) a[2];
+            *r = -1.0;
+            if ( m->wl == 0 || !world_chunk_at( m->wl->w, a[0], a[1], &cx, &cy ) || !world_chunk( m->wl->w, cx, cy, &c ) ) { return true; }
+            *r = f == 0 ? cx : f == 1 ? cy : f == 2 ? c.hmin : f == 3 ? c.hmax : f == 4 ? c.hmean : f == 5 ? c.kind : f == 6 ? c.flags : f == 7 ? c.ntar : -1.0;
+            return true;
+        }
         case GFXQ_M3DRINGBUSY: *r = jobs_pending( m ); return true;
         case GFXQ_M3DQUIET:
             *r = m->gnd.quiet.on ? 1.0 - box_weight( a[0], a[1], m->gnd.quiet.cx, m->gnd.quiet.cy, m->gnd.quiet.rx, m->gnd.quiet.ry, m->gnd.quiet.margin ) : 1.0;

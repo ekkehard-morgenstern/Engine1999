@@ -1,7 +1,7 @@
 # The static world (`world.[ch]`, `randseed.[ch]`)
 
-Status: **steps 1 and 2 of the static-world project** (2026-11-21): the file format, the seed field and the creation step. The loader that builds the meshes round the player
-(step 3), the stored features (step 4), saving the game (step 5) and the game's *New game / Continue* start (step 6) follow; the plan is at the end.
+Status: **steps 1 .. 3 of the static-world project** (2026-11-21): the file format, the seed field, the creation step and the loader (the ground drawn by a quadtree of tiles). The stored
+features (trees, ruins, water, step 4), saving the game (step 5) and the game's *New game / Continue* start (step 6) follow; the plan is at the end.
 
 ## Why
 
@@ -30,7 +30,7 @@ written by several threads at once.
 | Offset | Header | |
 |---|---|---|
 | 0 | `"E99WORLD"` | magic |
-| 8 | u32 | version (`WORLD_VERSION` = 1) |
+| 8 | u32 | version (`WORLD_VERSION` = 2) |
 | 12 | u32 | `n` |
 | 16 | u64 | the world seed |
 | 24 | u32 | chunk size in units (15625) |
@@ -42,8 +42,8 @@ written by several threads at once.
 | 0 | u64 | the chunk's **seed** |
 | 8 | i32 x 3 | lowest, highest and mean height in units (5 x 5 samples of the ground *without* the road cuts) |
 | 20 | u8 | kind of ground at the middle: 0 plain, 1 meadow, 2 field, 3 forest |
-| 21 | u8 | flags: 1 tarred road near, 2 dirt tracks, 4 water, 8 mountain (above 48 m), 16 in the wall |
-| 22 | u8 | tarred road links near the chunk |
+| 21 | u8 | flags: 1 a tarred road passes, 2 dirt tracks, 4 water, 8 mountain (above 48 m), 16 in the wall |
+| 22 | u8 | tarred road links through the chunk |
 | 23 | u8 | unused (0) |
 | 24 | 8 bytes | reserved (0) |
 
@@ -71,9 +71,13 @@ What made it fast enough (a full 1000 x 1000 world in well under a few minutes o
 
 ## The ground (`world_height`)
 
-`world_height(w, x, y)` is the ground function of the 1987 game (`demos/1987.bas` lines 3272 .. 3278: ground noise scale 900 / amplitude 22, hills, mountains from 14000 .. 22000
-units from the origin on, lakes, dirt tracks every 1800 units, tarred roads every 36000, a quiet box at the origin) without the hand-made area, plus **the wall**: from four
-chunks inside the edge the ground rises smoothly by 90000 units (2.9 km) over three chunks, so the world is closed by an impassable ring of mountains. It is pure and thread safe.
+`world_height(w, x, y)` is the ground function of the 1987 game (the pure layers of `m3d.c`, `m3d_ground_eval`), **tuned for 500 m chunks** (version 2 of the file; version 1 had
+the numbers of the old 29 m chunks, where 73 % of the chunks held water and a tarred road crossed every kilometre): rolling ground (waves of 150 m, 5 m high, base 4.8 m so it never
+dips below the water level -12 by itself), hills (80 m waves, up to 22 m), mountain ranges (scale 1.6 km, peaks up to 1.9 km, mask 6.4 km, none within 14 .. 22 km of the
+origin), lakes (about 1 km, 19 m deep; water only where a lake is), dirt tracks and kinds of ground (meadow / field / forest patches) on a 290 m grid, **tarred roads every 6.4 km**
+(`tspacing` 200000), a quiet box at the origin, and **the wall**: from four chunks inside the edge the ground rises smoothly by 90000 units (2.9 km) over three chunks, so the world is
+closed by an impassable ring of mountains. It is pure and thread safe. Measured over the whole 1000 x 1000 world (sample of 3481 chunks): water in 12 % of the chunks, mountain 23 %,
+a tarred road through 5.5 %; kinds: plain 16 %, meadow 28 %, field 20 %, forest 36 %. The record's `ntar` / `WCF_TAR` count the tarred links whose way passes through the chunk.
 
 ## Tests
 
@@ -81,11 +85,38 @@ chunks inside the edge the ground rises smoothly by 90000 units (2.9 km) over th
 `world_field_seed`, the summary is consistent, the wall is marked, `world_chunk_at` and the origin, reopening, another seed differs, unfinished / truncated / foreign files are
 refused, a one chunk world, and a 100 x 100 timing line.
 
+## The loader: a quadtree of ground tiles (`m3d.c`, `M3D WORLDOPEN`)
+
+The first idea (one mesh per 500 m chunk, a window of 21 x 21) cannot give fine ground near the player and coarse ground far away: a chunk is too big a unit. So the ground is drawn
+by **tiles of 8 x 8 cells** of every size `s = 976.56 * 2^level` units (`WL_S0` = a sixteenth of a chunk; level 0: cells of 3.9 m; level 4 is a chunk; the top, level 6, is
+62500 units with cells of 244 m), a quadtree on the chunk grid. A tile is **split** into its four children when the camera comes nearer than `R = 3 s` (Chebyshev distance to the
+tile's box) and **merged** again beyond `1.1 R`. A window of 10.5 chunks round the camera is drawn (roots of level 6; tiles outside the world are left out).
+
+**Why nothing pops.** The grids are nested (a coarse cell is two fine ones, all on the world's grid) and every tile *morphs* (the `M3D RING` machinery, ratio 2): its vertices blend
+from their own height into the surface of the parent's grid between the distances `a = 4.42 s` and `b = 6 s` from the camera. A tile splits at `dmin < R = 3 s`: all its vertices
+are nearer than `a`, so it still shows its own grid, and the children's vertices are all farther than `R = 6 * s_child = b`, so they show the parent's grid: the surface is the same
+before and after the split. Merging is the same the other way round. The children are made beforehand (nearer than 1.6 R) and a split waits until all four are there, so a slow
+worker never leaves a gap or shows a half made tile; a child that is gone sends the parent back to showing itself. Cracks between neighbours of different sizes are closed by skirts.
+
+**Work.** Every tile is one object (slot `i` = object `obj0 + i`, 3072 slots) made by a ground job of **mode 4** on the one worker thread of `M3D RING`: 81 vertices from
+`world_height()` (pure, so the same every time), the picture of a cell by the kinds of ground / rock / mud rules, the slope shading of `M3D SUN`, **ribbons** of tarred roads (all
+levels, wider far away) and of dirt tracks (cells up to 250 units), hubs. A tile costs about 2 ms; a whole window is a second of worker time, and while the player walks tiles are
+made ahead (nearest first, at most 24 jobs a frame), never on the program thread. Tiles that are not visited any more are freed (a tile whose job is still out stays as a hidden
+husk until the job ends).
+
+**BASIC.** `M3D WORLDMAKE dir$,n,seed` (background, progress `M3D("WORLDINFO",5)`), `M3D WORLDOPEN dir$,obj0[,flags[,light]]`, `M3D WORLDVIEW x,y` every frame, `M3D WORLDWAIT`,
+`M3D WORLDCLOSE`, `M3D("WORLDINFO",k)`, `M3D("WORLDCHUNK",x,y,f)`; after opening, `M3D("GROUND",x,y)`, `M3D("KIND")`, `M3D("ROADD" / "ROADT")` and the road queries answer for the
+world, and `M3D RINGPIC` / `M3D SUN` choose the pictures (the pictures a game sets for rings serve the tiles; `rockh` should be about 900 in this world).
+
+**Measured** (`m3dtest1`, world of 24 x 24 chunks, camera at the origin): about 600 .. 900 tiles shown (2 .. 3 times that built, hidden, for the splits), 10 ms a frame in the
+software renderer at 640 x 264 (16000 triangles drawn), every place covered by exactly one shown tile, the floor within 1 unit of the ground function near the camera, walking
+24 km in steps of 150 units changes the surface at 24 places by at most 11 units between two steps (the steep walls of mountains; nothing steps). Clean under ASan, UBSan and
+ThreadSanitizer.
+
 ## Plan
 
 1. File format, seed field, creation step (**done**).
-2. The loader: a worker thread builds the 21 x 21 window from the records (full detail near the player, a coarser mesh on the same surface farther away, no morphing: coarse
-   vertices lie on the fine surface), the game thread never generates anything.
+2. The loader (**done**): a quadtree of morphing tiles on the one worker thread; the program thread never generates anything.
 3. Stored features: roads, lakes, ruins and forest as records (and, where they matter, per chunk feature lists in a second file).
 4. Saving: the player's state and changed chunks on exit; *Continue*.
 5. `1987.bas`: *New game / Continue*, a statement / functions to reach all this from BASIC (`WORLD CREATE`, `WORLD OPEN`, ...).

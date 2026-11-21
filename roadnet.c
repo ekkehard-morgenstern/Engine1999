@@ -27,6 +27,7 @@
 */
 
 #include "roadnet.h"
+#include <stdatomic.h>
 #include "noise.h"
 #include "vecext.h"
 #include <string.h>
@@ -40,10 +41,10 @@ typedef double v4d __attribute__((vector_size(32)));
 typedef long long v4l __attribute__((vector_size(32)));
 #endif
 
-static int rn_simd = -1;
+static _Atomic int rn_simd = -1;                          // (read by every thread that asks for the nearest road: relaxed atomic)
 
 void rnet_set_simd( int on ) {                             // 1 = vector loop, 0 = scalar twin, -1 = by the environment (ENGINE1999_NOSIMD) again (tests)
-    rn_simd = on;
+    atomic_store_explicit( &rn_simd, on, memory_order_relaxed );
 }
 
 #define RNET_MAXPTS 700         // a road of more steps than this is not cached (computed again at every call)
@@ -422,11 +423,13 @@ void rnet_near( const rnet_t* n, double x, double y, double reach, rnear_t* out 
                         rnet_point( l, (double) kmin / (double) l->steps, &ax, &ay );
                     }
                     int kstart = kmin;
-                    if ( rn_simd < 0 ) {
-                        rn_simd = getenv( "ENGINE1999_NOSIMD" ) != 0 ? 0 : 1;
+                    int simd = atomic_load_explicit( &rn_simd, memory_order_relaxed );
+                    if ( simd < 0 ) {
+                        simd = getenv( "ENGINE1999_NOSIMD" ) != 0 ? 0 : 1;
+                        atomic_store_explicit( &rn_simd, simd, memory_order_relaxed );
                     }
                     #if E99_VEC
-                    if ( rn_simd && rc->npts[e] > 0 ) {
+                    if ( simd && rc->npts[e] > 0 ) {
                         // four segments at a time: their distances to (x, y) are found together (the division and the clamp); the square root (and the choice of the
                         // first nearest one) is made only for a lane that can beat the best so far: d2 > best^2 (1 + 1e-9) cannot (so the result is the scalar loop's)
                         const double* P = rc->pts[e];

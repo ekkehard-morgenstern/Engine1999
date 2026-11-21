@@ -84,12 +84,14 @@ static void hdr_put( uint8_t* h, int n, uint64_t seed, uint32_t state ) {
 // -- the ground function of the world (the layers of the 1987 game: demos/1987.bas lines 3272 .. 3278, without the hand-made area) --------------------------------------------
 static void ground_setup( ground_t* g, uint64_t seed ) {
     memset( g, 0, sizeof(*g) );
-    g->on = true; g->seed = nz_mix( seed + 1 ); g->scale = 900.0; g->amp = 22.0; g->oct = 4; g->base = 8.0; g->gain = 0.5; g->lac = 2.0;
-    g->mnt[1].on = true; g->mnt[1].seed = nz_mix( seed + 2 ); g->mnt[1].scale = 500.0; g->mnt[1].amp = 260.0; g->mnt[1].oct = 5; g->mnt[1].lo = 0.05; g->mnt[1].hi = 0.4;
-    g->mnt[0].on = true; g->mnt[0].seed = nz_mix( seed + 3 ); g->mnt[0].scale = 9000.0; g->mnt[0].amp = 80000.0; g->mnt[0].oct = 4; g->mnt[0].lo = 0.25; g->mnt[0].hi = 0.6;
+    // tuned for chunks of 500 m (2026-11-21): rolling ground of 150 m waves 5 m high that never dips below the water level (-12) by itself, hills of 80 m, mountain ranges of
+    // 1.6 km with a mask of 6 km (peaks up to 1.9 km), lakes of about 1 km (water only where a lake is), dirt tracks every 290 m, tarred roads every 6.4 km
+    g->on = true; g->seed = nz_mix( seed + 1 ); g->scale = 5000.0; g->amp = 150.0; g->oct = 4; g->base = 150.0; g->gain = 0.5; g->lac = 2.0;
+    g->mnt[1].on = true; g->mnt[1].seed = nz_mix( seed + 2 ); g->mnt[1].scale = 2500.0; g->mnt[1].amp = 700.0; g->mnt[1].oct = 5; g->mnt[1].lo = 0.05; g->mnt[1].hi = 0.4;
+    g->mnt[0].on = true; g->mnt[0].seed = nz_mix( seed + 3 ); g->mnt[0].scale = 50000.0; g->mnt[0].amp = 60000.0; g->mnt[0].oct = 4; g->mnt[0].lo = 0.22; g->mnt[0].hi = 0.55;
     g->mnt[0].r0 = 14000.0; g->mnt[0].r1 = 22000.0;
-    g->lake.on = true; g->lake.seed = nz_mix( seed + 4 ); g->lake.scale = 9000.0; g->lake.depth = 350.0; g->lake.lo = 0.3; g->lake.hi = 0.5;
-    g->net.on = true; g->net.spacing = 1800.0; g->net.chance = 0.45; g->net.wdirt = 140.0; g->net.tspacing = 36000.0; g->net.tchance = 0.85; g->net.wtar = 900.0;
+    g->lake.on = true; g->lake.seed = nz_mix( seed + 4 ); g->lake.scale = 40000.0; g->lake.depth = 600.0; g->lake.lo = 0.35; g->lake.hi = 0.55;
+    g->net.on = true; g->net.spacing = 9000.0; g->net.chance = 0.5; g->net.wdirt = 400.0; g->net.tspacing = 200000.0; g->net.tchance = 0.85; g->net.wtar = 3000.0;
     g->quiet.on = true; g->quiet.cx = 0.0; g->quiet.cy = 0.0; g->quiet.rx = 3900.0; g->quiet.ry = 3900.0; g->quiet.margin = 1200.0;
     m3d_ground_sync_roads( g );
 }
@@ -157,10 +159,23 @@ static void summarize( const ground_t* g, const ground_t* gflat, int n, int cx, 
     double half = 0.5 * n * WORLD_CHUNK;
     if ( fmax( fabs( x0 + 0.5 * WORLD_CHUNK ), fabs( y0 + 0.5 * WORLD_CHUNK ) ) > half - WALL_START * WORLD_CHUNK ) { c->flags |= WCF_EDGE; }
     c->kind = (uint8_t) rnet_kind_cold( &g->net, x0 + 0.5 * WORLD_CHUNK, y0 + 0.5 * WORLD_CHUNK );
-    static _Thread_local rlink_t links[256];
-    int nt = rnet_links( &g->net, 1, x0, y0, x0 + WORLD_CHUNK, y0 + WORLD_CHUNK, links, 256 );
-    c->ntar = (uint8_t) ( nt > 255 ? 255 : nt );
-    if ( nt > 0 ) { c->flags |= WCF_TAR; }
+    // tarred roads through the chunk: the links whose way comes within the chunk's half diagonal of its middle (checked on 32 points of the way)
+    static _Thread_local rlink_t links[64];
+    double mx = x0 + 0.5 * WORLD_CHUNK, my = y0 + 0.5 * WORLD_CHUNK, reach = 0.72 * WORLD_CHUNK;
+    rnear_t rn;
+    rnet_near( &g->net, mx, my, reach, &rn );
+    if ( rn.tar < reach ) {
+        int nl = rnet_links( &g->net, 1, mx - reach, my - reach, mx + reach, my + reach, links, 64 ), nt = 0;
+        for ( int i=0; i < nl && i < 64; ++i ) {
+            for ( int k=0; k <= 32; ++k ) {
+                double px, py;
+                rnet_point( &links[i], k / 32.0, &px, &py );
+                if ( fmax( fabs( px - mx ), fabs( py - my ) ) < 0.5 * WORLD_CHUNK ) { ++nt; break; }
+            }
+        }
+        c->ntar = (uint8_t) nt;
+        if ( nt > 0 ) { c->flags |= WCF_TAR; }
+    }
     if ( g->net.spacing > 0.0 ) { c->flags |= WCF_DIRT; }
 }
 
@@ -201,6 +216,7 @@ static void* worker( void* arg ) {
         ++j->done;
     }
     free( row );
+    rnet_flush();                                       // (the road cache of this thread)
     return 0;
 }
 
@@ -356,4 +372,65 @@ bool world_chunk( const world_t* w, int cx, int cy, wchunk_t* out ) {
     }
     rec_get( rec, out );
     return true;
+}
+
+const ground_t* world_ground( const world_t* w ) {
+    return &w->gnd;
+}
+
+// -- creation in the background -------------------------------------------------------------------------------------------------------------------------------------------
+struct _wmake {
+    pthread_t   th;
+    char        dir[1024];
+    int         n, threads;
+    uint64_t    seed;
+    _Atomic int done, total, ended;
+    world_t*    result;
+    char        err[1400];
+};
+
+static void make_cb( void* ud, int done, int total ) {
+    wmake_t* m = (wmake_t*) ud;
+    m->done = done; m->total = total;
+}
+
+static void* make_main( void* arg ) {
+    wmake_t* m = (wmake_t*) arg;
+    m->result = world_create( m->dir, m->n, m->seed, m->threads, make_cb, m );
+    if ( m->result == 0 ) {
+        snprintf( m->err, sizeof(m->err), "%s", world_err );
+    }
+    m->ended = 1;
+    return 0;
+}
+
+wmake_t* world_make_start( const char* dir, int n, uint64_t seed, int threads ) {
+    wmake_t* m = (wmake_t*) calloc( 1, sizeof(wmake_t) );
+    if ( m == 0 ) { return 0; }
+    snprintf( m->dir, sizeof(m->dir), "%s", dir );
+    m->n = n; m->seed = seed; m->threads = threads; m->total = n;
+    if ( pthread_create( &m->th, 0, make_main, m ) != 0 ) {
+        free( m );
+        return 0;
+    }
+    return m;
+}
+
+int world_make_progress( wmake_t* m, int* total ) {
+    *total = m->total;
+    return ( m->ended && m->result == 0 ) ? -1 : m->done;
+}
+
+bool world_make_done( wmake_t* m ) {
+    return m->ended != 0;
+}
+
+world_t* world_make_finish( wmake_t* m ) {
+    pthread_join( m->th, 0 );
+    world_t* w = m->result;
+    if ( w == 0 ) {
+        snprintf( world_err, sizeof(world_err), "%s", m->err );
+    }
+    free( m );
+    return w;
 }

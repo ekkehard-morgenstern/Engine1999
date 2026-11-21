@@ -30,6 +30,9 @@
 
 #include "m3d.h"
 #include "m3dpriv.h"
+#include "world.h"
+#include "noise.h"
+#include <unistd.h>
 #include "m3dworld.h"
 #include "json.h"
 #include "gfxops.h"
@@ -159,6 +162,111 @@ static const m3drend_t fake_renderer = { "fake", false, fake_create, fake_destro
 static uint32_t fake32[160 * 100];
 static const void* fake32_render( m3d_t* m, void* rd ) { (void) m; (void) rd; return fake32; }
 static const m3drend_t fake32_renderer = { "fake32", true, fake_create, fake_destroy, fake_resize, fake_palette, fake32_render };
+
+
+// -- the static world: creation in the background, the quadtree of tiles, coverage, no popping ------------------------------------------------------------------------------------
+static void test_world( const char* base ) {
+    char dir[600];
+    snprintf( dir, sizeof(dir), "%s/m3dtest1-world", base );
+    CHECK( op( GFXOP_M3DRESET, 0 ) );
+    CHECK( !op( GFXOP_M3DWORLDVIEW, 2, 0.0, 0.0 ) );                                // no world open
+    CHECK( !ops( GFXOP_M3DWORLDOPEN, 1, "/nonexistent-world-folder", 100.0 ) );
+    CHECK( !ops( GFXOP_M3DWORLDMAKE, 2, dir, 0.0, 5.0 ) );                          // no chunks
+    CHECK( ops( GFXOP_M3DWORLDMAKE, 2, dir, 24.0, 5.0 ) );
+    CHECK( !ops( GFXOP_M3DWORLDMAKE, 2, dir, 24.0, 5.0 ) || Q( GFXQ_M3DWORLDINFO, 1, 6.0 ) == 1.0 );   // a second one while the first runs fails (or it was quick)
+    for ( int i = 0; i < 600 && Q( GFXQ_M3DWORLDINFO, 1, 6.0 ) != 1.0; ++i ) { struct timespec ts = { 0, 50000000L }; nanosleep( &ts, 0 ); }
+    CHECK( Q( GFXQ_M3DWORLDINFO, 1, 6.0 ) == 1.0 && Q( GFXQ_M3DWORLDINFO, 1, 5.0 ) == 1000.0 );
+    CHECK( ops( GFXOP_M3DWORLDOPEN, 1, dir, 100.0 ) );
+    CHECK( Q( GFXQ_M3DWORLDINFO, 1, 0.0 ) == 1.0 && Q( GFXQ_M3DWORLDINFO, 1, 1.0 ) == 24.0 );
+    CHECK( Q( GFXQ_M3DWORLDCHUNK, 3, 0.0, 0.0, 0.0 ) == 12.0 && Q( GFXQ_M3DWORLDCHUNK, 3, 0.0, 0.0, 1.0 ) == 12.0 );
+    CHECK( Q( GFXQ_M3DWORLDCHUNK, 3, 1.0e7, 0.0, 0.0 ) == -1.0 );
+    CHECK( op( GFXOP_M3DRINGPIC, 11, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, -12.0, 900.0 ) );
+    // the ground function is the world's
+    CHECK( Q( GFXQ_M3DGROUND, 2, 3000.0, 4000.0 ) == Q( GFXQ_M3DGROUND, 2, 3000.0, 4000.0 ) && fabs( Q( GFXQ_M3DGROUND, 2, 3000.0, 4000.0 ) ) < 2000.0 );
+    CHECK( Q( GFXQ_M3DGROUND, 2, 11.0 * WORLD_CHUNK, 0.0 ) > 30000.0 );             // the wall
+    // the first view: waits for everything
+    CHECK( op( GFXOP_M3DWORLDVIEW, 2, 0.0, 0.0 ) );
+    CHECK( op( GFXOP_M3DWORLDWAIT, 0 ) );
+    double shown = Q( GFXQ_M3DWORLDINFO, 1, 2.0 );
+    printf( "world: %g tiles shown, %g built\n", shown, Q( GFXQ_M3DWORLDINFO, 1, 3.0 ) );
+    CHECK( shown > 20.0 && shown < 900.0 && Q( GFXQ_M3DWORLDINFO, 1, 4.0 ) == 0.0 );
+    {
+        CHECK( op( GFXOP_M3DVIEW, 5, 0.0, 0.0, 640.0, 264.0, 2.0 ) );
+        CHECK( op( GFXOP_M3DCAMERA, 5, 0.0, 0.0, Q( GFXQ_M3DGROUND, 2, 0.0, 0.0 ) + 160.0, 30.0, 0.0 ) );
+        struct timespec t0, t1;
+        m3d_render( M );
+        clock_gettime( CLOCK_MONOTONIC, &t0 );
+        for ( int i = 0; i < 10; ++i ) { m3d_render( M ); }
+        clock_gettime( CLOCK_MONOTONIC, &t1 );
+        printf( "world render at 640 x 264 (software): %.1f ms a frame, %g triangles drawn\n", ( ( t1.tv_sec - t0.tv_sec ) + 1e-9 * ( t1.tv_nsec - t0.tv_nsec ) ) * 100.0, Q( GFXQ_M3DDRAWN, 0 ) );
+    }
+    for ( int pass = 0; pass < 3; ++pass ) {
+        double cx = pass == 0 ? 0.0 : pass == 1 ? 30000.0 : -60000.0, cy = pass == 0 ? 0.0 : pass == 1 ? -20000.0 : 45000.0;
+        if ( pass > 0 ) {
+            CHECK( op( GFXOP_M3DWORLDVIEW, 2, cx, cy ) );
+            CHECK( op( GFXOP_M3DWORLDWAIT, 0 ) );
+        }
+        // every place is covered by exactly one tile that is shown
+        int bad = 0;
+        for ( int i = 0; i < 400; ++i ) {
+            double x = cx + ( nz_hash( 7, i, pass, 1 ) - 0.5 ) * 250000.0, y = cy + ( nz_hash( 7, i, pass, 2 ) - 0.5 ) * 250000.0;
+            if ( fabs( x ) > 180000.0 || fabs( y ) > 180000.0 ) { continue; }
+            int cnt = 0;
+            for ( int k = 100; k < 100 + 3072; ++k ) {
+                const obj_t* o = &M->objs[k];
+                if ( o->used && o->shown && o->nv > 0 && x >= o->mx0 && x < o->mx1 && y >= o->my0 && y < o->my1 ) { ++cnt; }
+            }
+            if ( cnt != 1 ) {
+                ++bad;
+                if ( bad <= 2 ) {
+                    printf( "  point %.0f %.0f covered %d times:", x, y, cnt );
+                    for ( int k = 100; k < 100 + 3072; ++k ) {
+                        const obj_t* o = &M->objs[k];
+                        if ( o->used && o->shown && o->nv > 0 && x >= o->mx0 && x < o->mx1 && y >= o->my0 && y < o->my1 ) { printf( " [obj %d %.0f..%.0f %.0f..%.0f]", k - 100, o->mx0, o->mx1, o->my0, o->my1 ); }
+                    }
+                    printf( "\n" );
+                }
+            }
+        }
+        CHECK( bad == 0 );
+        // near the camera the surface is the ground (cells of 122 units): the floor follows the mesh
+        double worst = 0.0;
+        for ( int i = 0; i < 30; ++i ) {
+            double x = cx + ( nz_hash( 9, i, pass, 1 ) - 0.5 ) * 4000.0, y = cy + ( nz_hash( 9, i, pass, 2 ) - 0.5 ) * 4000.0;
+            double gz = Q( GFXQ_M3DGROUND, 2, x, y ), fz = Q( GFXQ_M3DFLOORAT, 3, x, y, gz + 300.0 );
+            if ( fabs( fz - gz ) > worst ) { worst = fabs( fz - gz ); }
+        }
+        CHECK( worst < 60.0 );
+        printf( "world pass %d: floor differs from the ground by at most %.2f units near the camera\n", pass, worst );
+    }
+    // walking: no popping. Fixed places 500 .. 40000 units away are read after every step of 150 units; the surface may change smoothly, never by a step
+    double px[24], py[24], last[24], maxjump = 0.0;
+    for ( int i = 0; i < 24; ++i ) {
+        double r = 500.0 + nz_hash( 3, i, 0, 0 ) * 40000.0, an = nz_hash( 3, i, 1, 0 ) * 6.2831853;
+        px[i] = -60000.0 + r * cos( an ); py[i] = 45000.0 + r * sin( an ); last[i] = 0.0;
+    }
+    int splits_changed = 0;
+    for ( int step = 0; step <= 160; ++step ) {
+        double cx = -60000.0 + 150.0 * step, cy = 45000.0 - 60.0 * step;
+        CHECK( op( GFXOP_M3DWORLDVIEW, 2, cx, cy ) );
+        CHECK( op( GFXOP_M3DRINGWAIT, 0 ) );
+        CHECK( op( GFXOP_M3DWORLDVIEW, 2, cx, cy ) );
+        for ( int i = 0; i < 24; ++i ) {
+            double z = Q( GFXQ_M3DFLOORAT, 3, px[i], py[i], Q( GFXQ_M3DGROUND, 2, px[i], py[i] ) + 300.0 );
+            if ( step > 0 && fabs( z - last[i] ) > maxjump ) { maxjump = fabs( z - last[i] ); }
+            last[i] = z;
+        }
+        if ( step == 0 ) { splits_changed = (int) Q( GFXQ_M3DWORLDINFO, 1, 2.0 ); }
+    }
+    printf( "world walk: the surface at 24 places changed by at most %.2f units between steps of 150 (tiles shown %d at the start, %g at the end)\n", maxjump, splits_changed, Q( GFXQ_M3DWORLDINFO, 1, 2.0 ) );
+    CHECK( maxjump < 40.0 );
+    CHECK( op( GFXOP_M3DWORLDCLOSE, 0 ) );
+    CHECK( Q( GFXQ_M3DWORLDINFO, 1, 0.0 ) == 0.0 );
+    CHECK( !M->objs[100].used );
+    char path[700];
+    snprintf( path, sizeof(path), "%s/world.dat", dir );
+    unlink( path ); rmdir( dir );
+}
 
 static void test_switch( void ) {
     fresh();
@@ -1309,6 +1417,7 @@ int main( void ) {
         }
         m3d_soft_set_simd( -1 );
     }
+    test_world( getenv( "TMPDIR" ) != 0 ? getenv( "TMPDIR" ) : "/tmp" );
     test_switch();
     m3d_free( M );
     CHECK( fk.destroyed == 5 );

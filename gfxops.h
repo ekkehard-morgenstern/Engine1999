@@ -395,8 +395,13 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXOP_M3DTREEPIC 355            // M3D TREEPIC bark, leaf0, leaf1, leaf2   (the pictures of the trees of the ground jobs of mode 2 and 3)
 #define GFXOP_M3DPOLL   353             // M3D POLL           (takes the finished ground jobs when none is pending any more)
 #define GFXOP_M3DRINGWAIT 354           // M3D RINGWAIT       (waits for all ground jobs and takes them)
+#define GFXOP_M3DWORLDOPEN 356          // M3D WORLDOPEN dir$, obj0 [, flags [, light]]   (opens a static world; its ground tiles are the objects obj0 .. obj0 + 3071)
+#define GFXOP_M3DWORLDCLOSE 357         // M3D WORLDCLOSE
+#define GFXOP_M3DWORLDVIEW 358          // M3D WORLDVIEW x, y   (every frame: tiles split and merge by the distance from x, y, finished meshes are taken, jobs submitted, the morph done)
+#define GFXOP_M3DWORLDWAIT 359          // M3D WORLDWAIT       (waits until every wanted tile is there)
+#define GFXOP_M3DWORLDMAKE 360          // M3D WORLDMAKE dir$, n, seed   (makes a new world of n x n chunks in the background; M3D("WORLDINFO", 5) is the progress)
 #define GFXOP_M3DFIRST  GFXOP_M3DRESET
-#define GFXOP_M3DLAST   GFXOP_M3DTREEPIC
+#define GFXOP_M3DLAST   GFXOP_M3DWORLDMAKE
 #define GFXOP_IS_M3D(op) ( (op) >= GFXOP_M3DFIRST && (op) <= GFXOP_M3DLAST )
 #define GFXQ_M3DX       350             // M3D("X"), ("Y"), ("Z" = the feet), ("EYE"), ("YAW"), ("PITCH"), ("LIFT"), ("HIT"), ("FLOORZ")
 #define GFXQ_M3DY       351
@@ -455,7 +460,9 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXQ_M3DROADINFO 399            // M3D("ROADINFO", net, rx, ry, e, what): of the road that M3D("ROADLINK") finds: what 0 the number of steps, 1 its length, 2 / 3 whether its start / end is an intersection, 4 how far it gets from the straight line between its nodes; 0 for none
 #define GFXQ_M3DROADPT  404             // M3D("ROADPT", net, rx, ry, e, t, axis): the place at t (0 .. 1) of that road (axis 0 x, 1 y)
 #define GFXQ_M3DROADARC 405             // M3D("ROADARC", net, rx, ry, e, t): the length of that road from its start to t
-#define GFXQ_M3DLAST    GFXQ_M3DROADARC      // (400 .. 403 in between are HASH / NOISE / RIDGED / FBM, which the VM computes itself and never sends to a host)
+#define GFXQ_M3DWORLDINFO 406           // M3D("WORLDINFO", k): 0 a world is open, 1 its size, 2 tiles shown, 3 built, 4 being made, 5 progress of WORLDMAKE (0 .. 1000, -1 none or failed), 6 WORLDMAKE has ended
+#define GFXQ_M3DWORLDCHUNK 407          // M3D("WORLDCHUNK", x, y, f): a field of the record of the chunk holding the place (0 cx, 1 cy, 2 lowest, 3 highest, 4 mean height, 5 kind, 6 flags, 7 tarred links; -1 none)
+#define GFXQ_M3DLAST    GFXQ_M3DWORLDCHUNK      // (400 .. 403 in between are HASH / NOISE / RIDGED / FBM, which the VM computes itself and never sends to a host)
 
 typedef struct _gfxcmd_t {
     const char* group;                  // "GFX", "TXT", "TILE", "SPRITE", "MOUSE", or "" for the statements that are reserved words themselves
