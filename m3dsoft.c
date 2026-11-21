@@ -36,14 +36,31 @@ The software renderer of the mesh module: every triangle is rasterized into a pa
 
 typedef struct {
     uint8_t  cmap[M3D_LEVELS][256];
+    uint8_t  haze[16][256];     // the fog of a haze color: haze[k][i] = the palette color nearest to color i mixed with the haze color by k / 15 (made when first needed)
+    int      haze_for;          // the palette index of the haze color the table was made for (-1: none)
     uint8_t* blend;
     uint8_t* ablend[32];        // translucency tables for palette entries with an alpha of their own (index = alpha / 8, made when first needed)
     uint8_t* fb;
     float*   zb;
 } soft_t;
 
+static void make_haze( const m3d_t* m, soft_t* s ) {
+    const uint32_t* argb = m->pal;
+    double hr = (double)( ( argb[m->hazecol] >> 16 ) & 0xFFU ), hg = (double)( ( argb[m->hazecol] >> 8 ) & 0xFFU ), hb = (double)( argb[m->hazecol] & 0xFFU );
+    for ( int k=0; k < 16; ++k ) {
+        double t = (double) k / 15.0 * M3D_HAZEMAX;
+        s->haze[k][0] = 0;
+        for ( int i=1; i < 256; ++i ) {
+            s->haze[k][i] = k == 0 ? (uint8_t) i : (uint8_t) m3d_nearest_rgb( argb, ( 1.0 - t ) * (double)( ( argb[i] >> 16 ) & 0xFFU ) + t * hr,
+                ( 1.0 - t ) * (double)( ( argb[i] >> 8 ) & 0xFFU ) + t * hg, ( 1.0 - t ) * (double)( argb[i] & 0xFFU ) + t * hb );
+        }
+    }
+    s->haze_for = m->hazecol;
+}
+
 static void make_cmap( m3d_t* m, soft_t* s ) {
     const uint32_t* argb = m->pal;
+    s->haze_for = -1;
     free( s->blend );
     s->blend = 0;
     for ( int q=0; q < 32; ++q ) {
@@ -202,6 +219,7 @@ static void raster( rc_t* c, const tri_t* t, bool translucent ) {
     const uint8_t* cm;
     double base = (double) t->light * ( (double)( M3D_LEVELS - 1 ) / 255.0 );
     double fogd = m->fog;
+    bool haze = m->hazecol >= 0;
     bool masked = ( t->flags & M3D_OF_MASKED ) != 0 || translucent;
     for ( int y = ys; y < ye; ++y ) {
         double yc = y + 0.5;
@@ -263,13 +281,22 @@ static void raster( rc_t* c, const tri_t* t, bool translucent ) {
                             }
                             lv += add * ( (double)( M3D_LEVELS - 1 ) / 255.0 );
                         }
+                        int hk = 0;
                         if ( fogd > 0 ) {
-                            double ff = 1.0 - z / fogd;
-                            lv *= ff < 0 ? 0 : ff;
+                            if ( haze ) {                                   // the fog fades to the haze color (quadratically: gentle near, strong far)
+                                double q = z / fogd;
+                                hk = q >= 1.0 ? 15 : (int)( q * q * 15.0 + 0.5 );
+                            } else {
+                                double ff = 1.0 - z / fogd;
+                                lv *= ff < 0 ? 0 : ff;
+                            }
                         }
                         int li = iclamp( (int)( lv + 0.5 ), 0, M3D_LEVELS - 1 );
                         cm = c->s->cmap[li];
                         uint8_t out = cm[col];
+                        if ( hk > 0 ) {
+                            out = c->s->haze[hk][out];
+                        }
                         if ( translucent ) {
                             // a color with an alpha of its own in the palette (< 255) is mixed with that alpha (0: nothing), the others half and half
                             unsigned pa = m->pal[col] >> 24;
@@ -468,9 +495,15 @@ static void draw_things( rc_t* c ) {
             continue;
         }
         double lv = (double) t->light * ( (double)( M3D_LEVELS - 1 ) / 255.0 );
+        int hk = 0;
         if ( m->fog > 0 ) {
-            double ff = 1.0 - zv / m->fog;
-            lv *= ff < 0 ? 0 : ff;
+            if ( m->hazecol >= 0 ) {
+                double q = zv / m->fog;
+                hk = q >= 1.0 ? 15 : (int)( q * q * 15.0 + 0.5 );
+            } else {
+                double ff = 1.0 - zv / m->fog;
+                lv *= ff < 0 ? 0 : ff;
+            }
         }
         const uint8_t* cm = c->s->cmap[ iclamp( (int)( lv + 0.5 ), 0, M3D_LEVELS - 1 ) ];
         if ( t->trans ) { make_blend( m, c->s ); }
@@ -491,6 +524,7 @@ static void draw_things( rc_t* c ) {
                     continue;
                 }
                 uint8_t out = cm[col];
+                if ( hk > 0 ) { out = c->s->haze[hk][out]; }
                 uint8_t* p = &c->fb[ (size_t) y * (size_t) c->W + (size_t) x ];
                 if ( t->trans && c->s->blend != 0 ) {
                     out = c->s->blend[ (size_t) *p * 256U + out ];
@@ -505,6 +539,9 @@ static const void* soft_render( m3d_t* m, void* rd ) {
     soft_t* s = (soft_t*) rd;
     if ( s->fb == 0 ) {
         return 0;
+    }
+    if ( m->hazecol >= 0 && s->haze_for != m->hazecol ) {
+        make_haze( m, s );
     }
     rc_t c;
     memset( &c, 0, sizeof(c) );

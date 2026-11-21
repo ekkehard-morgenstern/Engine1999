@@ -4,7 +4,7 @@
 #   G1987_HEADLESS=1 (no graphics), G1987_PLAY=file (commands: f v, t v, run v, brake v, use, wait seconds, goto x y heading, bike x y heading, state, cam,
 #   ray x y z yaw pitch, chunks, quit; "state", "cam" and "chunks" print key=value lines that this script reads).
 # It checks the walk (through the open door, against the house wall), getting on and off the bicycle, pedalling from a standstill, the sprint and the stamina,
-# rolling on, braking and reversing, the turning radius (a bicycle does not turn on the spot), a crash into a fence, the camera, a ray against the house, and that
+# rolling on, braking and reversing, the turning radius (a bicycle only walks round on the spot, slowly), a crash into a fence, the camera, a ray against the house, and that
 # the world and the game are the same in every run. Exit status = number of failures. HOME is a temporary folder.
 cd "$(dirname "$0")" || exit 1
 T=$(mktemp -d) || exit 1
@@ -48,6 +48,8 @@ state
 t 1
 wait 2
 state
+t -1
+wait 2
 t 0
 f 1
 wait 3
@@ -87,6 +89,8 @@ state
 t 1
 wait 3
 state
+t -1
+wait 3
 t 0
 f 1
 run 1
@@ -95,6 +99,7 @@ state
 t 1
 wait 2
 state
+t 0
 f 0
 run 0
 use
@@ -215,7 +220,7 @@ fa 0
 run 0
 t 0
 rigs 1
-wait 1
+wait 4
 state
 wait 5
 state
@@ -270,7 +275,7 @@ goto 11200 0 0
 wait 40
 state
 fa 0
-goto -14400 -5900 0
+goto 2000 -5500 0
 fa 1
 wait 30
 state
@@ -297,8 +302,17 @@ state
 goto 13500 0 0
 wait 20
 state
-goto -13300 -5900 0
-wait 30
+goto 5000 -5500 0
+wait 5
+state
+goto 3000 -5500 0
+wait 3
+state
+goto 7000 -5500 0
+wait 3
+state
+goto 21750 500 0
+wait 4
 state
 quit
 PLAY
@@ -315,8 +329,8 @@ expect "walk: John is on the porch" "$(val state 3 jz)" 5 9
 # 3. getting on the bicycle: John sits on it
 expect "mount: riding" "$(val state 4 mode)" 1 1
 expect "mount: John is on the bicycle" "$(val state 4 jx)" 38 42
-# 4. steering at a standstill does not turn a bicycle on the spot
-expect "no turning on the spot" "$(val state 5 bh)" 268 272
+# 4. steering at a standstill turns the bicycle slowly on the spot (45 degrees a second, walking it round; 2 s of steering: about 90 degrees), so a rider can always turn away
+expect "slow turning on the spot (2 s: about 90 degrees)" "$(awk -v a="$(val state 4 bh)" -v b="$(val state 5 bh)" 'BEGIN { d = b - a; if (d < 0) d = -d; print d }')" 70 100
 # 5. pedalling from a standstill gets up to a cruising speed (it takes time), the bicycle rolls south down the road
 expect "pedal: speed after 3 s" "$(val state 6 bv)" 70 190
 expect "pedal: rolled south" "$(val state 6 by)" -700 -250
@@ -332,8 +346,8 @@ expect "dismount: on foot" "$(val state 10 mode)" 0 0
 # 10. a crash into the fence at speed (the fence is at y = -200, x >= 60): the bicycle is stopped
 expect "crash: stopped by the fence" "$(val state 11 by)" -300 -180
 expect "crash: speed after the hit" "$(val state 11 bv)" -60 40
-# 11. at a standstill the heading stays; at speed a turn changes it by a sensible amount
-expect "standstill: heading unchanged" "$(val state 13 bh)" -1 0
+# 11. at a standstill steering walks the bike round slowly (45 degrees a second: 3 s about 135, the heading is 0 at the start); at speed a turn changes it by a sensible amount
+expect "standstill: slow turning, not a spin (3 s)" "$(awk -v h="$(val state 13 bh)" 'BEGIN { if (h > 180) h = 360 - h; print h }')" 100 160
 turned=$(awk -v a="$(val state 14 bh)" -v b="$(val state 15 bh)" 'BEGIN { d = b - a; if (d < 0) d = -d; print d }')
 expect "turn at speed: heading changed" "$turned" 20 240
 # 11b. blocked by the fence, pressing back reverses out of it
@@ -386,17 +400,15 @@ expect "chunks: far jump: 9 fine chunks" "$(val chunks 2 fine)" 9 9
 expect "chunks: far jump: trees within the budget" "$(val chunks 2 trees)" 0 1176
 expect "chunks: second far jump (-9000, 7000) and 2 s: window complete" "$(val chunks 5 have)" 49 49
 expect "chunks: second far jump: nothing stale" "$(val chunks 5 stale)" 0 0
-# 11f3. mountains and lakes (outside the hand-made area): ridged mountains and basins in the ground function; John cannot walk up a mountain (too high or too steep) and does not wade into
-#       deep water: walking east from (11200, 0) he stops at the foot of the mountain whose top is at (13500, 0); walking east from (-14400, -5900) he stops dead at the shore of a lake (water level -12, wading is possible down to -24)
+# 11f3. hills, mountains and lakes (outside the hand-made area): ridged hills (rocky, walkable), real mountains (up to 1190 m: 37000 units of 3.2 cm; steep walls 14000 .. 22000 units from the house) and real lakes (basins 350 deep, 100 .. 190 m across) in the ground function; John walks over the rocky hills (every slope up to 72 degrees is walkable) but does not wade into
+#       deep water: walking east from (11200, 0) he crosses the mountain whose top is at (13500, 0) and is beyond it after 40 s; walking east from (2000, -5500) he stops dead at the shore of a lake (water level -12, wading is possible down to -24)
 expect "lake: the chunks round the shore have water (translucent planes at the water level)" "$(val chunks 3 water)" 1 49
 # 11f4. a city ruin site (big region of 7200 units, a chance of 30 %): buildings of brick walls; roads between the region points; hay bales in the fields; the chunks of the window around (1350, 8550)
 expect "ruins: the chunks round (1350, 8550) have buildings of a city ruin" "$(val chunks 4 ruins)" 3 49
 expect "roads: some chunks have a road" "$(val chunks 4 roads)" 1 49
 expect "bales: hay bales in the fields" "$(val chunks 4 bales)" 1 49
-expect "mountain: John stops before the top" "$(val state 48 jx)" 12500 13500
-expect "mountain: stopped dead" "$(val state 48 jv)" 0 0
-expect "mountain: not on ground above the limit (120)" "$(val state 48 gh)" 0 120
-expect "lake: John stops at the shore" "$(val state 49 jx)" -13700 -13300
+expect "mountain: John walks over the rocky hill (the top is at 13500)" "$(val state 48 jx)" 13800 20000
+expect "lake: John stops at the shore (the water starts at x = 2700 on this line)" "$(val state 49 jx)" 2400 2760
 expect "lake: stopped dead" "$(val state 49 jv)" 0 0
 expect "lake: the ground under him is not deeper than the limit (water level -12, 12 below it is too deep)" "$(val state 49 gh)" -26 -12
 # 11i. the surface under the feet comes from the pictures (M3D("FLOORTEX"): FN SURF, state "sf": 0 grass, 1 sand / mud, 2 wood / hard, 3 wheat), not from the height
@@ -406,6 +418,12 @@ expect "surface: grass" "$(val state 52 sf)" 0 0
 expect "surface: the wheat field" "$(val state 53 sf)" 3 3
 expect "surface: the rock of a mountain is hard" "$(val state 54 sf)" 2 2
 expect "surface: the mud of a lake bed is soft sand" "$(val state 55 sf)" 1 1
+# 11f5. real sizes: a lake is 100 m (3125 units) across or more: both ends of a line of 4000 units across the lake at y = -5500 are under water (the water level is -12); the highest mountain is more
+#       than 1000 m (31250 units) high; the far land (7 x 7 tiles of 8 x 8 chunks) is built
+expect "lake: the west end of a line across it is under water" "$(val state 56 gh)" -400 -13
+expect "lake: the east end, 4000 units (128 m) away, too" "$(val state 57 gh)" -400 -13
+expect "mountain: more than 1000 m (31250 units) high" "$(val state 58 gh)" 31250 45000
+expect "far land: 49 tiles" "$(val chunks 5 far)" 49 49
 expect "chunks: second far jump: some forest" "$(val chunks 5 trees)" 1 1176
 expect "chunks: a different place has other chunks than the first" "$(awk -v a="$(val chunks 2 sig)" -v b="$(val chunks 5 sig)" 'BEGIN { print (a != b) ? 1 : 0 }')" 1 1
 # 11g. a bicycle cannot stand by itself: at the start it leans against the yard's fence (bst 1) and E picks it up (riding, upright); a riderless one rolls on for 3 s and then falls over

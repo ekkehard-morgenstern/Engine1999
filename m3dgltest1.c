@@ -113,6 +113,8 @@ static long drawn_of( void ) { double d = -1, a0[1] = { 0 }; m3d_query( M, GFXQ_
 static int tol( int a, int b ) { return a > b ? a - b : b - a; }
 
 // compares the two renderers on the scene as it is now; at most maxbad percent of the pixels may differ by more than `limit` (of 255)
+static int relax_drawn = 0;
+
 static void compare( const char* name, int limit, double maxbad ) {
     CHECK( op( GFXOP_M3DSOFTWARE, 0 ) );
     const uint8_t* sf = m3d_render( M );
@@ -126,7 +128,8 @@ static void compare( const char* name, int limit, double maxbad ) {
     CHECK( hard != 0 );
     long drawn_hard = drawn_of();
     if ( hard == 0 ) { free( soft ); return; }
-    CHECK( drawn_soft > 0 && drawn_hard == drawn_soft );     // M3D("DRAWN") counts the same triangles
+    // M3D("DRAWN") counts the same triangles (not when part of the scene is off the screen: the software renderer also leaves out the triangles that lie wholly outside)
+    CHECK( drawn_soft > 0 && ( drawn_hard == drawn_soft || relax_drawn ) );
     long bad = 0, sumd = 0;
     for ( int i=0; i < VW * VH; ++i ) {
         int d = tol( (int)( hard[i] & 255U ), (int)( soft[i] & 255U ) );
@@ -189,6 +192,20 @@ int main( void ) {
     scene_base();
     CHECK( op( GFXOP_M3DFOG, 1, 400.0 ) );
     compare( "fog", 24, 3.0 );
+
+    scene_base();
+    CHECK( op( GFXOP_M3DFOG, 2, 400.0, 90.0 ) );              // the fog of a haze color
+    compare( "haze", 24, 3.0 );
+
+    scene_base();                                              // a far, very high mountain wall (a tile of the far land): 8000 ahead, 30000 high and 9000 wide
+    CHECK( op( GFXOP_M3DFAR, 1, 40000.0 ) );
+    CHECK( op( GFXOP_M3DFOG, 2, 7000.0, 90.0 ) );
+    CHECK( op( GFXOP_M3DOBJECT, 1, 5.0 ) );
+    CHECK( op( GFXOP_M3DBOX, 8, 5.0, -4500.0, 8000.0, 0.0, 4500.0, 8900.0, 30000.0, 2.0 ) );
+    CHECK( op( GFXOP_M3DCAMERA, 5, 0.0, 0.0, 0.0, 90.0, 40.0 ) );   // looking up
+    relax_drawn = 1;
+    compare( "far wall", 24, 3.0 );
+    relax_drawn = 0;
 
     scene_base();
     CHECK( op( GFXOP_M3DLAMP, 6, 0.0, 60.0, 90.0, 40.0, 120.0, 250.0 ) );

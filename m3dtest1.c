@@ -362,6 +362,23 @@ int main( void ) {
     CHECK( op( GFXOP_M3DFOG, 1, 130.0 ) );
     fb = shot();
     CHECK( PX( fb, 80, 50 ) != 200 );                                                        // darkened by the fog (100 of 130 away)
+    // the fog of a haze color: the wall (200, 100 away) fades to color 40 quadratically with the distance (the palette is a gray ramp: the index is the gray)
+    CHECK( op( GFXOP_M3DFOG, 2, 200.0, 40.0 ) );
+    fb = shot();
+    NEAR( PX( fb, 80, 50 ), 161.0, 4.0 );                                                    // q = 0.5: 4 / 15 of the way (times 0.92): 0.755 * 200 + 0.245 * 40
+    CHECK( op( GFXOP_M3DFOG, 2, 130.0, 40.0 ) );
+    fb = shot();
+    NEAR( PX( fb, 80, 50 ), 112.0, 4.0 );                                                    // q = 0.77: 9 / 15 (times 0.92): 0.448 * 200 + 0.552 * 40
+    CHECK( op( GFXOP_M3DFOG, 2, 90.0, 40.0 ) );
+    fb = shot();
+    NEAR( PX( fb, 80, 50 ), 53.0, 3.0 );                                                     // beyond the fog distance: nearly only haze (92 %: 0.08 * 200 + 0.92 * 40)
+    CHECK( op( GFXOP_M3DFOG, 2, 5000.0, 40.0 ) );
+    fb = shot();
+    NEAR( PX( fb, 80, 50 ), 200.0, 2.0 );                                                    // far inside: unchanged
+    CHECK( !op( GFXOP_M3DFOG, 2, 100.0, 0.0 ) && !op( GFXOP_M3DFOG, 2, 100.0, 256.0 ) );
+    CHECK( op( GFXOP_M3DFOG, 1, 130.0 ) );                                                   // without a haze color it darkens again
+    fb = shot();
+    CHECK( PX( fb, 80, 50 ) < 200 && PX( fb, 80, 50 ) != 112 );
     CHECK( op( GFXOP_M3DFOG, 1, 0.0 ) );
     CHECK( op( GFXOP_M3DOBJLIGHT, 2, 2.0, 100.0 ) );
     fb = shot();
@@ -599,6 +616,85 @@ int main( void ) {
     CHECK( !op( GFXOP_M3DGROUND, 7, 1.0, 100.0, 10.0, 3.0, 0.0, 0.5, 0.5 ) );                        // lacunarity below 1
     CHECK( !op( GFXOP_M3DGROUNDFLAT, 6, 8.0, 0.0, 0.0, 1.0, 1.0, 1.0 ) );                            // slot 8
     CHECK( op( GFXOP_M3DCLEAR, 0 ) && Q( GFXQ_M3DGROUND, 2, 100.0, 200.0 ) == 0.0 );                 // M3D CLEAR forgets the ground function
+    // -- walking on hills: slopes are floors, a body cannot be lost with a ground function ----------------------------------------------------------------------
+    fresh();
+    tex_flat( 301, 4, 4, 100 );
+    CHECK( op( GFXOP_M3DOBJECT, 1, 1.0, 0.0 ) );
+    CHECK( op( GFXOP_M3DOBJECT, 2, 20.0, 0.0 ) );
+    // a ramp of 60 degrees (rise 173 over 100): a thing climbs it (before 2026-11-21 the sloping triangle pushed it back like a wall)
+    CHECK( op( GFXOP_M3DVERTEX, 4, 20.0, 0.0, -200.0, 0.0 ) && op( GFXOP_M3DVERTEX, 4, 20.0, 600.0, -200.0, 0.0 ) &&
+           op( GFXOP_M3DVERTEX, 4, 20.0, 600.0, 200.0, 0.0 ) && op( GFXOP_M3DVERTEX, 4, 20.0, 0.0, 200.0, 0.0 ) );
+    CHECK( op( GFXOP_M3DVERTEX, 4, 20.0, 800.0, -200.0, 0.0 ) && op( GFXOP_M3DVERTEX, 4, 20.0, 800.0, 200.0, 0.0 ) );
+    CHECK( op( GFXOP_M3DQUAD, 6, 20.0, 0.0, 1.0, 2.0, 3.0, 301.0 ) );                                                    // the flat part x 0 .. 600 at z 0
+    CHECK( op( GFXOP_M3DVERTEX, 4, 20.0, 700.0, -200.0, 173.0 ) && op( GFXOP_M3DVERTEX, 4, 20.0, 700.0, 200.0, 173.0 ) );  // 6, 7: the top of the ramp
+    CHECK( op( GFXOP_M3DQUAD, 6, 20.0, 1.0, 6.0, 7.0, 2.0, 301.0 ) );                                                    // from x 600 (z 0) to x 700 (z 173): 60 degrees
+    CHECK( op( GFXOP_M3DTHING, 7, 0.0, 500.0, 0.0, 0.0, 2.0, 28.0, 56.0 ) );
+    for ( int i=0; i < 40; ++i ) { op( GFXOP_M3DTHINGMOVE, 3, 0.0, 10.0, 0.0 ); }
+    CHECK( Q( GFXQ_M3DTX, 1, 0.0 ) > 650.0 && Q( GFXQ_M3DTZ, 1, 0.0 ) > 80.0 );                                           // on the ramp, high up
+    // a wall (a vertical quad) still stops it
+    CHECK( op( GFXOP_M3DOBJECT, 2, 21.0, 0.0 ) && op( GFXOP_M3DBOX, 8, 21.0, 100.0, -200.0, 0.0, 120.0, 200.0, 100.0, 301.0 ) );
+    CHECK( op( GFXOP_M3DTHINGPOS, 4, 0.0, 0.0, 0.0, 0.0 ) );
+    for ( int i=0; i < 30; ++i ) { op( GFXOP_M3DTHINGMOVE, 3, 0.0, 10.0, 0.0 ); }
+    CHECK( Q( GFXQ_M3DTX, 1, 0.0 ) < 100.0 );
+    // with a ground function: no floor mesh there -> the ground function is the floor; buried under the mesh -> lifted onto it
+    fresh();
+    CHECK( op( GFXOP_M3DGROUND, 5, 3.0, 300.0, 0.001, 1.0, 50.0 ) );                                                    // the ground is a plateau at 50
+    CHECK( op( GFXOP_M3DOBJECT, 1, 1.0, 0.0 ) );                                                                         // (the floor of fresh() is gone)
+    CHECK( op( GFXOP_M3DTHING, 7, 0.0, 0.0, 0.0, 45.0, 2.0, 28.0, 56.0 ) );
+    CHECK( op( GFXOP_M3DTHINGMOVE, 3, 0.0, 5.0, 0.0 ) );
+    CHECK( fabs( Q( GFXQ_M3DTZ, 1, 0.0 ) - 50.0 ) < 0.01 && fabs( Q( GFXQ_M3DTX, 1, 0.0 ) - 5.0 ) < 0.01 );               // nothing built: it stands on the function
+    CHECK( op( GFXOP_M3DOBJECT, 2, 30.0, 0.0 ) && ops( GFXOP_M3DTERRAIN, 7, 0, 30.0, -500.0, -500.0, 10.0, 10.0, 100.0, 301.0 ) );
+    CHECK( op( GFXOP_M3DTHINGPOS, 4, 0.0, 0.0, 0.0, -400.0 ) );                                                          // far below the surface
+    CHECK( op( GFXOP_M3DTHINGMOVE, 3, 0.0, 1.0, 0.0 ) );
+    CHECK( fabs( Q( GFXQ_M3DTZ, 1, 0.0 ) - 50.0 ) < 1.0 );                                                               // lifted back on top
+    CHECK( op( GFXOP_M3DCLEAR, 0 ) );
+    // without a ground function a body below everything stays lost (the old behaviour: nothing to stand on)
+    CHECK( op( GFXOP_M3DOBJECT, 1, 5.0, 0.0 ) && op( GFXOP_M3DBOX, 8, 5.0, -100.0, -100.0, 0.0, 100.0, 100.0, 10.0, 301.0 ) );
+    CHECK( op( GFXOP_M3DTHING, 7, 0.0, 0.0, 0.0, -400.0, 2.0, 28.0, 56.0 ) );
+    CHECK( op( GFXOP_M3DTHINGMOVE, 3, 0.0, 1.0, 0.0 ) && Q( GFXQ_M3DTZ, 1, 0.0 ) < -300.0 );
+    // -- a far, very high wall (the far land and its mountains): 8000 ahead, 30000 high, seen looking up; with a far limit of 40000 and haze ------------------------------
+    fresh();
+    CHECK( op( GFXOP_M3DOBJECT, 1, 1.0, 0.0 ) );
+    CHECK( op( GFXOP_M3DFAR, 1, 40000.0 ) );
+    CHECK( op( GFXOP_M3DFOG, 2, 7000.0, 40.0 ) );
+    CHECK( op( GFXOP_M3DOBJECT, 1, 5.0 ) );
+    CHECK( op( GFXOP_M3DBOX, 8, 5.0, -4500.0, 8000.0, 0.0, 4500.0, 8900.0, 30000.0, 2.0 ) );
+    CHECK( op( GFXOP_M3DCAMERA, 5, 0.0, 0.0, 0.0, 90.0, 40.0 ) );
+    fb = shot();
+    CHECK( PX( fb, 80, 50 ) != 0 && Q( GFXQ_M3DDRAWN, 0 ) > 0 );                              // the wall is seen (about 92 % haze)
+    CHECK( op( GFXOP_M3DOBJFLAGS, 2, 5.0, 12.0 ) );                                            // passable and see-through (as the far tiles of 1987): still drawn
+    fb = shot();
+    CHECK( PX( fb, 80, 50 ) != 0 && Q( GFXQ_M3DDRAWN, 0 ) > 0 );
+    // -- M3D HILLS (a second ridged layer next to M3D MOUNTAINS) and holes in a terrain grid (cell character 255) ---------------------------------------------------
+    fresh();
+    CHECK( op( GFXOP_M3DGROUND, 5, 3.0, 300.0, 0.001, 1.0, 10.0 ) );
+    {
+        double p0 = Q( GFXQ_M3DGROUND, 2, 1234.0, 5678.0 ), g1, g2, g12;
+        CHECK( op( GFXOP_M3DMOUNTAINS, 6, 11.0, 2000.0, 30000.0, 4.0, -1.0, 0.0 ) );          // the mask is high almost everywhere (lo -1 .. hi 0 of a noise in -1 .. 1)
+        g1 = Q( GFXQ_M3DGROUND, 2, 1234.0, 5678.0 ) - p0;
+        CHECK( op( GFXOP_M3DMOUNTAINS, 6, 11.0, 2000.0, 0.0, 4.0, -1.0, 0.0 ) );              // amp 0 removes them
+        CHECK( fabs( Q( GFXQ_M3DGROUND, 2, 1234.0, 5678.0 ) - p0 ) < 1e-9 );
+        CHECK( op( GFXOP_M3DHILLS, 6, 12.0, 300.0, 200.0, 4.0, -1.0, 0.0 ) );
+        g2 = Q( GFXQ_M3DGROUND, 2, 1234.0, 5678.0 ) - p0;
+        CHECK( op( GFXOP_M3DMOUNTAINS, 6, 11.0, 2000.0, 30000.0, 4.0, -1.0, 0.0 ) );
+        g12 = Q( GFXQ_M3DGROUND, 2, 1234.0, 5678.0 ) - p0;
+        CHECK( fabs( g12 - ( g1 + g2 ) ) < 1e-6 && ( g1 != 0.0 || g2 != 0.0 ) );              // the two layers add up
+        CHECK( Q( GFXQ_M3DGROUND, 2, 0.0, 0.0 ) < 31000.0 );                                    // 30000 high mountains are possible (and heights this large are no problem)
+        CHECK( op( GFXOP_M3DHILLS, 6, 12.0, 300.0, 0.0, 4.0, -1.0, 0.0 ) );
+    }
+    CHECK( op( GFXOP_M3DCLEAR, 0 ) );
+    CHECK( op( GFXOP_M3DGROUND, 4, 5.0, 300.0, 5.0, 2.0 ) );
+    CHECK( op( GFXOP_M3DOBJECT, 2, 70.0, 0.0 ) );
+    {
+        char holes[9] = { 0, 0, 0, 0, (char) 255, 0, 0, 0, 0 };                                  // the middle cell of 3 x 3 is a hole
+        double ta[8] = { 70.0, 0.0, 0.0, 3.0, 3.0, 100.0, 301.0, GFX_NONE };
+        CHECK( m3d_op( M, GFXOP_M3DTERRAIN, ta, 7, holes, 9, &lasterr ) );
+        CHECK( Q( GFXQ_M3DVERTS, 1, 70.0 ) == 16.0 && Q( GFXQ_M3DTRIS, 1, 70.0 ) == 16.0 );
+        CHECK( op( GFXOP_M3DOBJECT, 2, 71.0, 0.0 ) );
+        double tb[8] = { 71.0, 0.0, 0.0, 3.0, 3.0, 100.0, 301.0, 20.0 };
+        CHECK( m3d_op( M, GFXOP_M3DTERRAIN, tb, 8, holes, 9, &lasterr ) );   // with a skirt: only the edge cells have walls (8 cells, 12 edge pieces, 2 triangles)
+        CHECK( Q( GFXQ_M3DTRIS, 1, 71.0 ) == 16.0 + 24.0 );
+    }
     // -- M3D SUN: terrain cells shaded by their slope with pictures t + k * stride ----------------------------------------------------------------------------
     fresh();
     {

@@ -55,7 +55,7 @@ typedef struct {
 } cam_t;
 
 typedef struct {
-    GLint eye, r, up, fw, proj, tex, pal, fog, far_, masked, alpha, uselamps, lampp, lampa, lampd;
+    GLint eye, r, up, fw, proj, tex, pal, fog, haze, far_, masked, alpha, uselamps, lampp, lampa, lampd;
     GLint org, rot, texsz, light, scale;
     GLint apos, auv;
 } prog_t;
@@ -121,6 +121,7 @@ static const char* const fs_obj =
     "#version 120\n"
     "uniform sampler2D u_tex, u_pal;\n"
     "uniform float u_fog, u_far, u_masked, u_alpha, u_uselamps;\n"
+    "uniform vec4 u_haze;\n"
     "uniform vec4 u_lampp[8];\n"
     "uniform vec4 u_lampd[8];\n"
     "uniform float u_lampa[8];\n"
@@ -142,12 +143,13 @@ static const char* const fs_obj =
     "            }\n"
     "        }\n"
     "    }\n"
-    "    if ( u_fog > 0.0 ) lv *= max( 1.0 - v_z / u_fog, 0.0 );\n"
+    "    float hf = 0.0;\n"
+    "    if ( u_fog > 0.0 ) { if ( u_haze.w > 0.5 ) { hf = clamp( v_z / u_fog, 0.0, 1.0 ); hf *= hf * 0.92; } else lv *= max( 1.0 - v_z / u_fog, 0.0 ); }\n"
     "    float b = clamp( lv, 0.0, 31.0 ) / 31.0;\n"
     "    float a = ( u_masked < 0.5 && u_alpha > 0.99 && i < 0.5 ) ? 0.0 : u_alpha;\n"   // (index 0 of a plain picture is see-through, as in software)
     "    vec4 pc = texture2D( u_pal, vec2( ( i + 0.5 ) / 256.0, 0.5 ) );\n"
     "    if ( u_alpha < 0.99 && pc.a < 0.99 ) a = pc.a;\n"    // (a translucent object: a color with an alpha of its own in the palette is mixed with that alpha, the others half and half)
-    "    gl_FragColor = vec4( pc.rgb * b, a );\n"
+    "    gl_FragColor = vec4( mix( pc.rgb * b, u_haze.rgb, hf ), a );\n"
     "}\n";
 
 static const char* const vs_sky =
@@ -298,6 +300,7 @@ static void* gl_create( m3d_t* m ) {
     p->tex = gl->GetUniformLocation( g->prog, "u_tex" );
     p->pal = gl->GetUniformLocation( g->prog, "u_pal" );
     p->fog = gl->GetUniformLocation( g->prog, "u_fog" );
+    p->haze = gl->GetUniformLocation( g->prog, "u_haze" );
     p->far_ = gl->GetUniformLocation( g->prog, "u_far" );
     p->masked = gl->GetUniformLocation( g->prog, "u_masked" );
     p->alpha = gl->GetUniformLocation( g->prog, "u_alpha" );
@@ -905,6 +908,12 @@ static const void* gl_render( m3d_t* m, void* rd ) {
     gl->Uniform4f( p->proj, (GLfloat)( c.f / c.cx ), (GLfloat)( -c.f / c.cy ), (GLfloat)( ( zfar + NEARZ ) / ( zfar - NEARZ ) ),
         (GLfloat)( -2.0 * NEARZ * zfar / ( zfar - NEARZ ) ) );
     gl->Uniform1f( p->fog, (GLfloat) m->fog );
+    if ( m->hazecol >= 0 ) {
+        uint32_t hc = m->pal[m->hazecol];
+        gl->Uniform4f( p->haze, (GLfloat)( ( hc >> 16 ) & 0xFFU ) / 255.0f, (GLfloat)( ( hc >> 8 ) & 0xFFU ) / 255.0f, (GLfloat)( hc & 0xFFU ) / 255.0f, 1.0f );
+    } else {
+        gl->Uniform4f( p->haze, 0.0f, 0.0f, 0.0f, 0.0f );
+    }
     gl->Uniform1f( p->far_, (GLfloat) m->far );
     GLfloat lp[8 * 4], la[8], ld[8 * 4];
     for ( int k=0; k < M3D_MAXLAMPS; ++k ) {

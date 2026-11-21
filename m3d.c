@@ -142,6 +142,22 @@ bool m3d_minimap( const m3d_t* m, const uint32_t* pal, int w, int h, double wx, 
     return true;
 }
 
+int m3d_nearest_rgb( const uint32_t* argb, double tr, double tg, double tb ) {
+    double best = 1.0e30;
+    int bi = 1;
+    for ( int j=1; j < 256; ++j ) {
+        double dr = (double)( ( argb[j] >> 16 ) & 0xFFU ) - tr, dg = (double)( ( argb[j] >> 8 ) & 0xFFU ) - tg, db = (double)( argb[j] & 0xFFU ) - tb;
+        double cr = ( (double)( ( argb[j] >> 16 ) & 0xFFU ) - (double)( ( argb[j] >> 8 ) & 0xFFU ) ) - ( tr - tg );
+        double cb = ( (double)( argb[j] & 0xFFU ) - (double)( ( argb[j] >> 8 ) & 0xFFU ) ) - ( tb - tg );
+        double d = 2.0 * dr * dr + 4.0 * dg * dg + 3.0 * db * db + 6.0 * cr * cr + 6.0 * cb * cb;
+        if ( d < best ) {
+            best = d;
+            bi = j;
+        }
+    }
+    return bi;
+}
+
 // -- shaded terrain pictures (M3D SUN) ------------------------------------------------------------------------------------------
 
 static bool set_picture( m3d_t* m, int n, int w, int h, uint8_t* col ) {      // takes col (u * h + v)
@@ -323,7 +339,7 @@ void m3d_set_hardware( m3d_t* m, const m3drend_t* r ) {
 }
 
 static void reset_state( m3d_t* m ) {
-    m->fog = 0; m->far = 0; m->skytex = -1; m->skyrep = 1; m->skyshift = 0;
+    m->fog = 0; m->far = 0; m->hazecol = -1; m->skytex = -1; m->skyrep = 1; m->skyshift = 0;
     m->x = m->y = m->z = 0; m->yaw = 0; m->pitch = 0; m->lift = 0;
     m->radius = 14; m->height = 56; m->eye = 46; m->step = 24;
     m->hit = 0; m->shotkind = 0; m->shotobj = -1; m->shotdist = 0; m->shotx = m->shoty = m->shotz = 0;
@@ -411,10 +427,17 @@ double m3d_ground( const m3d_t* m, double x, double y ) {
     }
     double h = g->base + g->amp * nz_fbm( g->seed, x / g->scale, y / g->scale, g->oct, g->gain, g->lac );
     double quiet = g->quiet.on ? 1.0 - box_weight( x, y, g->quiet.cx, g->quiet.cy, g->quiet.rx, g->quiet.ry, g->quiet.margin ) : 1.0;
-    if ( g->mnt.on && quiet > 0.0 ) {                   // ridged mountains where the (four times slower) noise of the range is high
-        double t = quiet * smooth01( ( nz_fbm( g->mnt.seed + 1, x / ( g->mnt.scale * 4.0 ), y / ( g->mnt.scale * 4.0 ), 2, 0.5, 2.0 ) - g->mnt.lo ) / ( g->mnt.hi - g->mnt.lo ) );
+    for ( int k=0; k < 2; ++k ) {                       // mountains and hills: ridged noise where the (four times slower) noise of the range is high
+        const mnt_t* mn = &g->mnt[k];
+        if ( !mn->on || quiet <= 0.0 ) {
+            continue;
+        }
+        double t = quiet * smooth01( ( nz_fbm( mn->seed + 1, x / ( mn->scale * 4.0 ), y / ( mn->scale * 4.0 ), 2, 0.5, 2.0 ) - mn->lo ) / ( mn->hi - mn->lo ) );
+        if ( mn->r1 > 0.0 && t > 0.0 ) {                // faded in between the distances r0 and r1 from the origin (0, 0)
+            t *= smooth01( ( sqrt( x * x + y * y ) - mn->r0 ) / ( mn->r1 - mn->r0 ) );
+        }
         if ( t > 0.0 ) {
-            h += g->mnt.amp * t * nz_ridged( g->mnt.seed, x / g->mnt.scale, y / g->mnt.scale, g->mnt.oct, 0.5, 2.0 );
+            h += mn->amp * t * nz_ridged( mn->seed, x / mn->scale, y / mn->scale, mn->oct, 0.5, 2.0 );
         }
     }
     if ( g->lake.on && quiet > 0.0 ) {                  // basins
@@ -531,6 +554,9 @@ static bool obj_terrain( m3d_t* m, obj_t* o, double x0, double y0, int nx, int n
     }
     for ( int j = 0; j < ny; ++j ) {
         for ( int i = 0; i < nx; ++i ) {
+            if ( cells != 0 && (unsigned char) cells[ j * nx + i ] == 255U ) {            // a character 255: no cell here (the grid has a hole)
+                continue;
+            }
             int b = base + j * w + i, t = tex + ( cells != 0 ? (unsigned char) cells[ j * nx + i ] : 0 );
             t = cell_picture( m, t, cell, o->v[b].z, o->v[b + 1].z, o->v[b + w].z, o->v[b + w + 1].z );
             if ( !obj_addt( o, b, b + 1, b + w + 1, t ) || !obj_addt( o, b, b + w + 1, b + w, t ) ) {
@@ -549,6 +575,9 @@ static bool obj_terrain( m3d_t* m, obj_t* o, double x0, double y0, int nx, int n
                     case 1:  ia = nx + k * w;         ib = nx + ( k + 1 ) * w; cell_i = nx - 1;     cell_j = k;          break;
                     case 2:  ia = ny * w + nx - k;    ib = ny * w + nx - k - 1; cell_i = nx - 1 - k; cell_j = ny - 1;     break;
                     default: ia = ( ny - k ) * w;     ib = ( ny - k - 1 ) * w; cell_i = 0;          cell_j = ny - 1 - k; break;
+                }
+                if ( cells != 0 && (unsigned char) cells[ cell_j * nx + cell_i ] == 255U ) {
+                    continue;
                 }
                 int va = base + ia, vb = base + ib, nv = o->nv;
                 const mv_t pa = o->v[va], pb = o->v[vb];
@@ -787,6 +816,8 @@ static double ceil_at( m3d_t* m, double x, double y, double z ) {
 // pushes the capsule (spheres at its middle heights) out of the solid triangles near (x, y); returns whether anything pushed
 typedef struct { double x, y, z, lift, radius, height, step; int hit; } body_t;
 
+#define M3D_WALKABLE_NZ 0.3             // the smallest |normal z| of a triangle that does not push a body sideways (a slope of up to 72.5 degrees)
+
 static bool push_out( m3d_t* m, const body_t* b, double* px, double* py, double feet ) {
     bool pushed = false;
     double r = b->radius;
@@ -815,6 +846,14 @@ static bool push_out( m3d_t* m, const body_t* b, double* px, double* py, double 
                 if ( *px + r < mnx || *px - r > mxx || *py + r < mny || *py - r > mxy ) {
                     continue;
                 }
+                {   // a triangle that is more floor than wall (its normal is within about 72 degrees of vertical) is no wall: the floor under the body and the step height
+                    // decide whether it can be climbed (a hillside is not a wall until it is steeper than that)
+                    v3_t e1 = vsub( b, a ), e2 = vsub( c, a ), nn = vcross( e1, e2 );
+                    double nl = sqrt( vdot( nn, nn ) );
+                    if ( nl > 1.0e-12 && fabs( nn.z ) / nl >= M3D_WALKABLE_NZ ) {
+                        continue;
+                    }
+                }
                 for ( int k=0; k < nz; ++k ) {
                     v3_t cen = { *px, *py, zc[k] };
                     v3_t q = closest_tri( cen, a, b, c );
@@ -840,10 +879,38 @@ static bool push_out( m3d_t* m, const body_t* b, double* px, double* py, double 
     return pushed;
 }
 
+// With a ground function (M3D GROUND) a body cannot be lost: when there is no floor under it (the mesh is not there yet) the ground function is the floor, and a body
+// that is buried in the ground (the mesh was made again under it) is lifted onto the first surface above it (or onto the ground function's height)
+static double body_floor( m3d_t* m, double x, double y, double from, double feet ) {
+    double fl = floor_at( m, x, y, from, 0 );
+    if ( fl > -1.0e8 || !m->gnd.on ) {
+        return fl;
+    }
+    rayhit_t h;
+    v3_t o = { x, y, feet + 0.01 }, d = { 0, 0, 1 };
+    if ( trace( m, o, d, 20000.0, M3D_OF_PASS, &h ) ) {
+        return o.z + h.t;
+    }
+    return m3d_ground( m, x, y );
+}
+
+static void unbury( m3d_t* m, body_t* b ) {
+    if ( !m->gnd.on ) {
+        return;
+    }
+    double g = m3d_ground( m, b->x, b->y );
+    if ( b->z - b->lift >= g - 60.0 ) {
+        return;
+    }
+    rayhit_t h;
+    v3_t o = { b->x, b->y, b->z - b->lift + 0.01 }, d = { 0, 0, 1 };
+    b->z = ( trace( m, o, d, 20000.0, M3D_OF_PASS, &h ) ? o.z + h.t : g ) + b->lift;
+}
+
 static bool try_move( m3d_t* m, body_t* b, double nx, double ny ) {
     double feet = b->z;
     bool pushed = push_out( m, b, &nx, &ny, feet );
-    double fl = floor_at( m, nx, ny, feet + b->step, 0 );
+    double fl = body_floor( m, nx, ny, feet + b->step, feet );
     if ( fl < -1.0e8 ) {
         return false;
     }
@@ -865,6 +932,7 @@ static bool try_move( m3d_t* m, body_t* b, double nx, double ny ) {
 // walks a body by (dx, dy) in small pieces: pushed out of walls, sliding along an axis, following the floor; b->hit: 1 pushed, 2 no movement at all
 static void body_move( m3d_t* m, body_t* b, double dx, double dy ) {
     b->hit = 0;
+    unbury( m, b );
     double len = sqrt( dx * dx + dy * dy );
     int pieces = len > b->radius * 0.5 ? (int) ceil( len / ( b->radius * 0.5 ) ) : 1;
     bool moved = false;
@@ -879,7 +947,7 @@ static void body_move( m3d_t* m, body_t* b, double dx, double dy ) {
     if ( !moved && len > 1.0e-9 ) {
         b->hit |= 2;
     }
-    double fl = floor_at( m, b->x, b->y, b->z + b->step, 0 );
+    double fl = body_floor( m, b->x, b->y, b->z + b->step, b->z );
     if ( fl > -1.0e8 ) {
         b->z = fl + b->lift;
     }
@@ -949,8 +1017,9 @@ bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t sl
             return i3 / sc >= 4 && h / sc >= 4 && set_view( m, i1, i2, i3, h, sc, fov );
         }
         case GFXOP_M3DFOG:
-            if ( !( a[0] >= 0.0 && a[0] <= 1.0e6 ) ) { return false; }
+            if ( !( a[0] >= 0.0 && a[0] <= 1.0e6 ) || ( !NONE_VAL( a[1] ) && !whole( a[1], 1, 255, &i1 ) ) ) { return false; }
             m->fog = a[0];
+            m->hazecol = NONE_VAL( a[1] ) ? -1 : i1;
             return true;
         case GFXOP_M3DFAR:
             if ( !( a[0] >= 0.0 && a[0] <= 1.0e6 ) ) { return false; }
@@ -989,13 +1058,17 @@ bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t sl
             g->on = true;
             return true;
         }
-        case GFXOP_M3DMOUNTAINS: {
+        case GFXOP_M3DMOUNTAINS: case GFXOP_M3DHILLS: {
             int oct;
-            if ( !( fabs( a[0] ) < 4.4e9 ) || !( a[1] > 0.0 && a[1] < 1.0e9 ) || !( fabs( a[2] ) < 1.0e9 ) || !whole( a[3], 1, NZ_MAXOCTAVES, &oct ) || !( a[4] >= -1.0 && a[5] <= 1.0 && a[5] > a[4] ) ) {
+            mnt_t* mn = &m->gnd.mnt[op == GFXOP_M3DHILLS ? 1 : 0];
+            double r0 = NONE_VAL( a[6] ) ? 0.0 : a[6], r1 = NONE_VAL( a[7] ) ? 0.0 : a[7];
+            if ( !( fabs( a[0] ) < 4.4e9 ) || !( a[1] > 0.0 && a[1] < 1.0e9 ) || !( fabs( a[2] ) < 1.0e9 ) || !whole( a[3], 1, NZ_MAXOCTAVES, &oct ) || !( a[4] >= -1.0 && a[5] <= 1.0 && a[5] > a[4] ) ||
+                 !( r0 >= 0.0 && r0 < 1.0e9 && r1 >= 0.0 && r1 < 1.0e9 ) || ( r1 > 0.0 && r1 <= r0 ) ) {
                 return false;
             }
-            m->gnd.mnt.on = a[2] != 0.0; m->gnd.mnt.seed = (uint64_t)(int64_t) floor( a[0] ); m->gnd.mnt.scale = a[1]; m->gnd.mnt.amp = a[2]; m->gnd.mnt.oct = oct;
-            m->gnd.mnt.lo = a[4]; m->gnd.mnt.hi = a[5];
+            mn->r0 = r0; mn->r1 = r1;
+            mn->on = a[2] != 0.0; mn->seed = (uint64_t)(int64_t) floor( a[0] ); mn->scale = a[1]; mn->amp = a[2]; mn->oct = oct;
+            mn->lo = a[4]; mn->hi = a[5];
             return true;
         }
         case GFXOP_M3DLAKES: {
@@ -1064,7 +1137,7 @@ bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t sl
                     return false;
                 }
                 for ( size_t k = 0; k < slen; ++k ) {
-                    if ( tex + (unsigned char) s[k] >= M3D_MAXTEX ) {
+                    if ( (unsigned char) s[k] != 255U && tex + (unsigned char) s[k] >= M3D_MAXTEX ) {       // (255: no cell here)
                         *err = "Picture number out of range";
                         return false;
                     }

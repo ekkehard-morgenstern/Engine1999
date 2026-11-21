@@ -55,6 +55,7 @@ counterclockwise when seen from their front (the normal (b-a) x (c-a) points to 
 #define M3D_MAXVIEWW    1280
 #define M3D_MAXVIEWH    800
 #define M3D_LEVELS      32
+#define M3D_HAZEMAX     0.92            // the most a haze color mixes in (at and beyond the fog distance): far things keep a trace of their own color
 
 // object flags
 #define M3D_OF_MASKED   1               // texture index 0 is see-through

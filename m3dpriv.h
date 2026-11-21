@@ -95,13 +95,15 @@ typedef struct { double x, y, z, r, amount, dx, dy, dz, cc; bool spot; } lamp_t;
 
 typedef struct { int id, tag; double x1, y1, x2, y2, z1, z2; } zone_t;
 
+typedef struct { bool on; uint64_t seed; double scale, amp, lo, hi, r0, r1; int oct; } mnt_t;      // ridged noise where a slow noise is above lo .. hi
+
 // the ground height function (M3D GROUND, GROUNDFLAT): base + amp * FBM(seed, x / scale, y / scale), times (1 - flatten) for every flat box
 typedef struct {
     bool     on;
     uint64_t seed;
     double   scale, amp, base, gain, lac;
     int      oct;
-    struct { bool on; uint64_t seed; double scale, amp, lo, hi; int oct; } mnt;     // mountains: ridged noise where a slow noise is above lo .. hi
+    mnt_t    mnt[2];                                                                // mountains [0] and hills [1]
     struct { bool on; uint64_t seed; double scale, depth, lo, hi; } lake;           // lakes: the ground sinks by depth where a noise is above lo .. hi
     struct { bool on; double cx, cy, rx, ry, margin; } flat[8];
     struct { bool on; double cx, cy, rx, ry, margin; } quiet;                       // mountains and lakes fade out towards this box
@@ -127,6 +129,7 @@ struct _m3d_t {
     bool     havepal;
     int      vx, vy, vw, vh, scale, bw, bh;
     double   fov, fog, far;
+    int      hazecol;                       // M3D FOG d, haze: the palette index the fog fades to (-1: the fog darkens)
     const m3drend_t* hw;                       // the hardware renderer the host offered, or 0
     const m3drend_t* rend;  void* rdata;       // the renderer in use (m3dsoft.c: the software one)
     int      skytex;  double skyrep, skyshift;
@@ -148,6 +151,8 @@ struct _m3d_t {
 
 // the palette index nearest to color i of the palette darkened to 'scale' (0 .. 1); used by the software color map and by the shaded terrain pictures
 int m3d_shade_index( const uint32_t* argb, int i, double scale );
+// the palette index (1 .. 255) nearest to the color (r, g, b: 0 .. 255) with the weights of the shading; used by the fog's haze table
+int m3d_nearest_rgb( const uint32_t* argb, double r, double g, double b );
 
 // -- shared helpers -------------------------------------------------------------------------------------------------------------
 
