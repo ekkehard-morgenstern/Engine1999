@@ -458,6 +458,17 @@ static double ridged_layer( const mnt_t* mn, double x, double y, double quiet ) 
     return t > 0.0 ? mn->amp * t * nz_ridged( mn->seed, x / mn->scale, y / mn->scale, mn->oct, 0.5, 2.0 ) : 0.0;
 }
 
+// the roads keep out of the mountains: the road network gets the mask of the mountain layer (the places where it is above 2 % and 1500 units round them)
+static void sync_road_mask( ground_t* g ) {
+    const mnt_t* mn = &g->mnt[0];
+    rmask_t* k = &g->net.mask;
+    memset( k, 0, sizeof(*k) );
+    if ( mn->on && mn->amp != 0.0 ) {
+        k->on = true; k->seed = mn->seed; k->scale = mn->scale; k->lo = mn->lo; k->hi = mn->hi; k->r0 = mn->r0; k->r1 = mn->r1;
+        k->limit = 0.02; k->margin = 1500.0;
+    }
+}
+
 static double fade01( double d, double inner, double outer ) {      // 0 at 'inner' or nearer, 1 at 'outer' or farther
     return smooth01( ( d - inner ) / ( outer - inner ) );
 }
@@ -1682,6 +1693,7 @@ bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t sl
             mn->r0 = r0; mn->r1 = r1;
             mn->on = a[2] != 0.0; mn->seed = (uint64_t)(int64_t) floor( a[0] ); mn->scale = a[1]; mn->amp = a[2]; mn->oct = oct;
             mn->lo = a[4]; mn->hi = a[5];
+            sync_road_mask( &m->gnd );
             return true;
         }
         case GFXOP_M3DLAKES: {
@@ -1753,6 +1765,7 @@ bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t sl
             }
             rnet_t* nt = &m->gnd.net;
             nt->on = a[0] > 0.0 || a[3] > 0.0; nt->spacing = a[0]; nt->chance = a[1]; nt->wdirt = a[2]; nt->tspacing = a[3]; nt->tchance = a[4]; nt->wtar = a[5];
+            sync_road_mask( &m->gnd );
             return true;
         }
         case GFXOP_M3DSUN: {
@@ -2092,6 +2105,11 @@ bool m3d_query( m3d_t* m, int q, const double* a, int na, double* r ) {
             rnear_t rn;
             rnet_near( &m->gnd.net, a[0], a[1], 700.0, &rn );
             *r = q == GFXQ_M3DROADD ? rn.dirt : rn.tar;
+            return true;
+        }
+        case GFXQ_M3DROADLINK: {                            // M3D("ROADLINK", net, rx, ry, e): is there such a road (the hash and the mountains)
+            rlink_t lk;
+            *r = rnet_link( &m->gnd.net, a[0] != 0.0 ? 1 : 0, (int64_t) floor( a[1] ), (int64_t) floor( a[2] ), a[3] != 0.0 ? 1 : 0, &lk ) ? 1.0 : 0.0;
             return true;
         }
         case GFXQ_M3DKIND: *r = rnet_kind( &m->gnd.net, a[0], a[1] ); return true;

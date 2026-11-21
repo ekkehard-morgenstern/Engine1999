@@ -56,6 +56,38 @@ static void net_point( const rnet_t* n, int net, int64_t rx, int64_t ry, double*
     *y = (double) ry * sp + nz_hash( rx, ry, net ? 12 : 2, 0 ) * sp;
 }
 
+static double smooth01( double t ) {
+    return t <= 0.0 ? 0.0 : t >= 1.0 ? 1.0 : t * t * ( 3.0 - 2.0 * t );
+}
+
+// the t of ridged_layer() in m3d.c (without the quiet box): the same numbers, so a road keeps out of exactly the places where mountains rise
+double rnet_mountain( const rmask_t* m, double x, double y ) {
+    if ( !m->on ) {
+        return 0.0;
+    }
+    double t = smooth01( ( nz_fbm( m->seed + 1, x / ( m->scale * 4.0 ), y / ( m->scale * 4.0 ), 2, 0.5, 2.0 ) - m->lo ) / ( m->hi - m->lo ) );
+    if ( m->r1 > 0.0 && t > 0.0 ) {
+        t *= smooth01( ( sqrt( x * x + y * y ) - m->r0 ) / ( m->r1 - m->r0 ) );
+    }
+    return t;
+}
+
+// does the way (the chord of a road, a strip of the road's wander and the margin on both sides) touch the mountains? sampled every 300 units
+static bool crosses_mountains( const rnet_t* n, const rlink_t* l ) {
+    const rmask_t* m = &n->mask;
+    double side = l->wa + m->margin, ux = ( l->x2 - l->x1 ) / l->len, uy = ( l->y2 - l->y1 ) / l->len;
+    int ns = (int)( l->len / 300.0 ) + 1;
+    for ( int k = 0; k <= ns; ++k ) {
+        double t = (double) k / (double) ns, x = l->x1 + ( l->x2 - l->x1 ) * t, y = l->y1 + ( l->y2 - l->y1 ) * t;
+        for ( int s = -2; s <= 2; ++s ) {
+            if ( rnet_mountain( m, x - uy * side * 0.5 * (double) s, y + ux * side * 0.5 * (double) s ) > m->limit ) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 bool rnet_link( const rnet_t* n, int net, int64_t rx, int64_t ry, int e, rlink_t* l ) {
     if ( !n->on || ( net ? n->tspacing <= 0.0 : n->spacing <= 0.0 ) || nz_hash( rx, ry, ( net ? 160 : 60 ) + e, 0 ) >= ( net ? n->tchance : n->chance ) ) {
         return false;
@@ -69,7 +101,10 @@ bool rnet_link( const rnet_t* n, int net, int64_t rx, int64_t ry, int e, rlink_t
     l->step = net ? 200.0 : 50.0;
     l->steps = (int)( l->len / l->step ) + 1;
     l->wa = net ? n->wtar : n->wdirt;
-    return l->len > 1.0e-9;
+    if ( l->len <= 1.0e-9 ) {
+        return false;
+    }
+    return !( n->mask.on && crosses_mountains( n, l ) );
 }
 
 void rnet_point( const rlink_t* l, double t, double* x, double* y ) {
@@ -100,7 +135,9 @@ static _Thread_local rcache_t cache[RNET_CACHE];          // (one cache for each
 static _Thread_local unsigned cache_next[RNET_CACHE / RNET_WAYS];
 
 static bool same_cfg( const rnet_t* a, const rnet_t* b ) {
-    return a->on == b->on && a->spacing == b->spacing && a->chance == b->chance && a->wdirt == b->wdirt && a->tspacing == b->tspacing && a->tchance == b->tchance && a->wtar == b->wtar;
+    return a->on == b->on && a->spacing == b->spacing && a->chance == b->chance && a->wdirt == b->wdirt && a->tspacing == b->tspacing && a->tchance == b->tchance && a->wtar == b->wtar &&
+           a->mask.on == b->mask.on && a->mask.seed == b->mask.seed && a->mask.scale == b->mask.scale && a->mask.lo == b->mask.lo && a->mask.hi == b->mask.hi && a->mask.r0 == b->mask.r0 &&
+           a->mask.r1 == b->mask.r1 && a->mask.limit == b->mask.limit && a->mask.margin == b->mask.margin;
 }
 
 void rnet_flush( void ) {                                  // frees the cache of this thread (a thread that goes away calls it)

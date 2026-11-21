@@ -451,7 +451,8 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXQ_M3DKIND    395             // M3D("KIND", x, y): the kind of ground of the road network's regions: 0 plain, 1 meadow, 2 field, 3 forest
 #define GFXQ_M3DRINGBUSY 396            // M3D("RINGBUSY"): the ground jobs that are not taken yet
 #define GFXQ_M3DQUIET   397             // M3D("QUIET", x, y): 0 inside the quiet box (the hand-made area), 1 outside
-#define GFXQ_M3DLAST    GFXQ_M3DQUIET
+#define GFXQ_M3DROADLINK 398            // M3D("ROADLINK", net, rx, ry, e): 1 when the road of network net (0 dirt, 1 tarred) from region (rx, ry) to its west (e = 0) / south (e = 1) neighbour exists, else 0
+#define GFXQ_M3DLAST    GFXQ_M3DROADLINK
 
 typedef struct _gfxcmd_t {
     const char* group;                  // "GFX", "TXT", "TILE", "SPRITE", "MOUSE", or "" for the statements that are reserved words themselves

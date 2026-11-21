@@ -314,7 +314,7 @@ state
 goto 21750 500 0
 wait 4
 state
-goto 29400 -17400 0
+goto 36000 -30000 0
 wait 3
 chunks
 goto -6000 -9000 0
@@ -435,7 +435,7 @@ expect "rings: no ground job left" "$(val chunks 5 busy)" 0 0
 #       one step to the next: the chunks morph between their levels of detail, so no hill rises or goes in front of the player (before the morph the levels changed with a step of up to 100 units)
 expect "popping: the ground ahead changes by less than 6 units a step" "$(awk '$1=="poptest" { split($3,a,"="); print a[2] }' $T/out)" 0 6
 expect "popping: samples were taken" "$(awk '$1=="poptest" { split($2,a,"="); print a[2] }' $T/out)" 1000 100000
-# 11f6. tarred roads (440 wide, 2 lanes each way with edge lines and dashes, picture 327) with reflector posts every 50 m, and trees that keep away from the roads: the chunks round (29400, -17400): a tarred road runs north-south along x = 29400
+# 11f6. tarred roads (440 wide, 2 lanes each way with edge lines and dashes, picture 327) with reflector posts every 50 m, and trees that keep away from the roads: the chunks round (36000, -30000): a tarred road runs diagonally through them (the old test place (29400, -17400) lost its road when roads learned to keep out of the mountains)
 expect "tarred road: the floor under the road is the tar picture (hard surface)" "$(val chunks 6 roads)" 1 289
 expect "tarred road: reflector posts beside it" "$(val chunks 6 posts)" 1 289
 expect "chunks: second far jump: some forest" "$(val chunks 5 trees)" 1 1176

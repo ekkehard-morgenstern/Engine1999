@@ -2173,9 +2173,9 @@
 19582     FOR J=-1 TO 1
 19590       FOR I=-1 TO 1
 19600         FOR E=0 TO 1
-19610           IF HASH(RX+I,RY+J,EX+E)<CH THEN
+19610           IF M3D("ROADLINK",NET,RX+I,RY+J,E) THEN
 19620             R1X=(RX+I)*SP+HASH(RX+I,RY+J,P1)*SP:R1Y=(RY+J)*SP+HASH(RX+I,RY+J,P2)*SP
-19630             NI=RX+I-(E=0):NJ=RY+J-(E=1)
+19630             NI=RX+I+(E=0):NJ=RY+J+(E=1)
 19640             R2X=NI*SP+HASH(NI,NJ,P1)*SP:R2Y=NJ*SP+HASH(NI,NJ,P2)*SP
 19650             IF MAX(R1X,R2X)>X0-WA-520 AND MIN(R1X,R2X)<X0+WA+1420 AND MAX(R1Y,R2Y)>Y0-WA-520 AND MIN(R1Y,R2Y)<Y0+WA+1420 THEN
 19660               L=SQR((R2X-R1X)^2+(R2Y-R1Y)^2):NS=INT(L/STP)+1
@@ -2202,20 +2202,22 @@
 19840     NEXT J
 19842   NEXT NT
 19850 END PROC
-19860 ' builds the reflector posts of the chunk's tarred roads (instances of the post 344, 8800 + 6 slot + n): a post every 50 m (1562 units) on both sides; the post on the right-hand side of the
+19860 ' builds the reflector posts of the chunk's tarred roads (instances of the post 344, 8800 + 6 slot + n): a post every 50 m (1562.5 units, measured along the straight line between the two region points and put exactly on the road, not at the end of the step) on both edges (232 units from the middle: just outside the 440 wide tar); the post on the right-hand side of the
 19870 ' direction of the road shows a white reflector to the traffic that comes from behind and a red one to the oncoming traffic, the one on the left the other way round: the right-hand side of
 19880 ' each driver has the white ones, the left-hand side the red ones. (The road itself, tar and dirt, is a ribbon in the mesh of the chunk's ground job.)
 19890 PROC CHROADS(CX,CY,SL)
-19900   LOCAL I,P0,NP,CX2,CY2,DX,DY,D,YW,PX,PY
+19900   LOCAL I,P0,NP,CX2,CY2,DX,DY,D,YW,PX,PY,NK,F,MX,MY
 19910   P0=8800+SL*6:NP=0
 19920   M3D OBJFREE P0,P0+5
 19930   FOR I=0 TO NSG-1
 19940     IF SGI(I) AND SGK(I) THEN
 19950       CX2=SGU(I):CY2=SGV(I):DX=CX2-SGX(I):DY=CY2-SGY(I):D=SQR(DX*DX+DY*DY):DX=DX/D:DY=DY/D
-19960       IF INT(SGD(I)/1562.5)<>INT(SGE(I)/1562.5) AND NP<5 THEN
+19960       NK=INT(SGE(I)/1562.5)
+19962       IF INT(SGD(I)/1562.5)<>NK AND NP<5 THEN
+19964         F=(NK*1562.5-SGD(I))/(SGE(I)-SGD(I)):MX=SGX(I)+(CX2-SGX(I))*F:MY=SGY(I)+(CY2-SGY(I))*F
 19970         YW=ATAN2(DY,DX)*180/PI
-19980         PX=CX2+DY*250:PY=CY2-DX*250:M3D INSTANCE P0+NP,344,PX,PY,FN HT(PX,PY),YW,1:NP=NP+1
-19990         PX=CX2-DY*250:PY=CY2+DX*250:M3D INSTANCE P0+NP,344,PX,PY,FN HT(PX,PY),YW+180,1:NP=NP+1
+19980         PX=MX+DY*232:PY=MY-DX*232:M3D INSTANCE P0+NP,344,PX,PY,FN HT(PX,PY),YW,1:NP=NP+1
+19990         PX=MX-DY*232:PY=MY+DX*232:M3D INSTANCE P0+NP,344,PX,PY,FN HT(PX,PY),YW+180,1:NP=NP+1
 20000       END IF
 20010     END IF
 20020   NEXT I

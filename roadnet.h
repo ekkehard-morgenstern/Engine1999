@@ -41,10 +41,20 @@ zero at both ends) and is cut into steps (50 units for a dirt track, 200 for a t
 the tarred network: HASH(rx, ry, 11 / 12) = the point, HASH(rx, ry, 160 + e) = the road exists, NOISE(77, t * 3, rx * 31 + ry * 57 + e * 7 + 7777.5) = the wander; dirt: NOISE(77, t * 3, rx * 31 + ry * 57 + e * 7 + 0.5)), so the game draws the roads where the ground function expects them.
 */
 
+// where the mountains are (the mask of M3D MOUNTAINS: a slow noise between lo and hi, faded in between the distances r0 and r1 from the origin): a road is not made where it is up
+typedef struct _rmask_t {
+    bool     on;
+    uint64_t seed;
+    double   scale, lo, hi, r0, r1;
+    double   limit;                         // a road keeps away from every place where the mask is above this (0 .. 1)
+    double   margin;                        // ... and from the places up to 'margin' units beside its way (the mountain's foot)
+} rmask_t;
+
 typedef struct _rnet_t {
     bool    on;
     double  spacing, chance, wdirt;         // the dirt tracks: regions of 'spacing' units, a track to the west / south neighbour with a chance, wandering by at most wdirt
     double  tspacing, tchance, wtar;        // the tarred roads (a network of its own, far apart and long): the same with tspacing, tchance, wtar
+    rmask_t mask;                           // roads never cross a mountain (they go round: a road that would is not there; a tunnel would be the way through)
 } rnet_t;
 
 typedef struct _rlink_t {
@@ -62,7 +72,9 @@ typedef struct _rnear_t {
     double  tt;                             // and the place on it, 0 .. 1
 } rnear_t;
 
-// the road of the network (0 dirt, 1 tarred) from the point of region (rx, ry) to its neighbour west (e = 0) or south (e = 1); false when there is none
+// how much mountain the mask says there is at (x, y): 0 (none) .. 1 (the full range)
+double rnet_mountain( const rmask_t* m, double x, double y );
+// the road of the network (0 dirt, 1 tarred) from the point of region (rx, ry) to its neighbour west (e = 0) or south (e = 1); false when there is none (the hash says no, or it would cross mountains)
 bool rnet_link( const rnet_t* n, int net, int64_t rx, int64_t ry, int e, rlink_t* l );
 // frees the cache of the calling thread (the worker thread of m3d.c calls it when it ends)
 void rnet_flush( void );

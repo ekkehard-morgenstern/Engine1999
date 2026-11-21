@@ -728,6 +728,8 @@ int main( void ) {
         CHECK( op( GFXOP_M3DHILLS, 6, 5.0, 500.0, 260.0, 5.0, -1.0, 0.0 ) );
         CHECK( op( GFXOP_M3DMOUNTAINS, 6, 11.0, 2000.0, 30000.0, 4.0, -1.0, 0.0 ) );
         CHECK( op( GFXOP_M3DLAKES, 5, 3.0, 400.0, 300.0, -1.0, 0.0 ) );
+        CHECK( M->gnd.net.mask.on );
+        M->gnd.net.mask.on = false;                                                                 // (mountains everywhere would drop every road: here the layers' keep-away is tested, the mask has a test of its own below)
         double base_c, gd, gt;
         rnet_point( &dirt, 0.5, &px, &py );
         base_c = 8.0 + 22.0 * nz_fbm( 1987, px / 900.0, py / 900.0, 4, 0.5, 2.0 );
@@ -880,6 +882,60 @@ int main( void ) {
         CHECK( Q( GFXQ_M3DTRIS, 1, 5.0 ) > 18.0 );
     }
     CHECK( op( GFXOP_M3DCLEAR, 0 ) && Q( GFXQ_M3DRINGBUSY, 0 ) == 0.0 );
+    // -- roads keep out of the mountains: a link is not there where the mountain mask is up on its way (and beside it); M3D("ROADLINK") says the same -----------------------------
+    fresh();
+    CHECK( op( GFXOP_M3DGROUND, 7, 1987.0, 900.0, 22.0, 4.0, 8.0, 0.5, 2.0 ) );
+    CHECK( op( GFXOP_M3DROADNET, 6, 1800.0, 0.45, 140.0, 36000.0, 0.85, 900.0 ) );
+    {
+        int before = 0, after = 0, dropped = 0, bad = 0, qdiff = 0;
+        for ( int64_t ry = -20; ry < 20; ++ry ) { for ( int64_t rx = -20; rx < 20; ++rx ) { for ( int e = 0; e < 2; ++e ) { rlink_t l; if ( rnet_link( &M->gnd.net, 0, rx, ry, e, &l ) ) { ++before; } } } }
+        CHECK( !M->gnd.net.mask.on );
+        CHECK( op( GFXOP_M3DMOUNTAINS, 8, 7.0, 9000.0, 80000.0, 4.0, 0.25, 0.6, 14000.0, 22000.0 ) );
+        CHECK( M->gnd.net.mask.on && M->gnd.net.mask.limit > 0.0 );
+        for ( int64_t ry = -20; ry < 20; ++ry ) {
+            for ( int64_t rx = -20; rx < 20; ++rx ) {
+                for ( int e = 0; e < 2; ++e ) {
+                    rlink_t l;
+                    bool has = rnet_link( &M->gnd.net, 0, rx, ry, e, &l );
+                    if ( has ) {
+                        ++after;
+                        for ( int k = 0; k <= 4; ++k ) {                                                // the way: its points are in no mountain
+                            double px, py;
+                            rnet_point( &l, (double) k / 4.0, &px, &py );
+                            if ( rnet_mountain( &M->gnd.net.mask, px, py ) > M->gnd.net.mask.limit ) { ++bad; }
+                        }
+                    }
+                    if ( ( Q( GFXQ_M3DROADLINK, 4, 0.0, (double) rx, (double) ry, (double) e ) != 0.0 ) != has ) { ++qdiff; }
+                }
+            }
+        }
+        dropped = before - after;
+        CHECK( dropped > 20 && after > 100 );                                                           // some roads are gone, the others are there
+        CHECK( bad == 0 && qdiff == 0 );
+        CHECK( Q( GFXQ_M3DGROUND, 2, 0.0, 0.0 ) == Q( GFXQ_M3DGROUND, 2, 0.0, 0.0 ) );
+        // no tall wall beside a road any more: the ground 700 units to the side of every road's middle is never a mountain's wall
+        double hmax = 0.0;
+        for ( int64_t ry = -20; ry < 20; ++ry ) {
+            for ( int64_t rx = -20; rx < 20; ++rx ) {
+                rlink_t l;
+                if ( !rnet_link( &M->gnd.net, 0, rx, ry, 0, &l ) ) { continue; }
+                for ( int k = 1; k < 4; ++k ) {
+                    double px, py;
+                    rnet_point( &l, (double) k / 4.0, &px, &py );
+                    for ( int sd = -1; sd <= 1; sd += 2 ) {
+                        double g = Q( GFXQ_M3DGROUND, 2, px + sd * 700.0, py );
+                        if ( g > hmax ) { hmax = g; }
+                    }
+                }
+            }
+        }
+        CHECK( hmax < 3000.0 );
+        CHECK( op( GFXOP_M3DMOUNTAINS, 8, 7.0, 9000.0, 0.0, 4.0, 0.25, 0.6, 14000.0, 22000.0 ) && !M->gnd.net.mask.on );     // amp 0: no mountains, all the roads are back
+        int again = 0;
+        for ( int64_t ry = -20; ry < 20; ++ry ) { for ( int64_t rx = -20; rx < 20; ++rx ) { for ( int e = 0; e < 2; ++e ) { rlink_t l; if ( rnet_link( &M->gnd.net, 0, rx, ry, e, &l ) ) { ++again; } } } }
+        CHECK( again == before );
+    }
+    CHECK( op( GFXOP_M3DCLEAR, 0 ) );
     // -- M3D SUN: terrain cells shaded by their slope with pictures t + k * stride ----------------------------------------------------------------------------
     fresh();
     {
