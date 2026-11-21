@@ -177,6 +177,7 @@ static const gfxcmd_t cmds[] = {
     { "M3D", "WORLDVIEW", GFXOP_M3DWORLDVIEW, "nn", 0, false },
     { "M3D", "WORLDWAIT", GFXOP_M3DWORLDWAIT, "", 0, false },
     { "M3D", "WORLDMAKE", GFXOP_M3DWORLDMAKE, "snn", 0, false },
+    { "M3D", "MSAA", GFXOP_M3DMSAA, "n", 0, false },
     { "M3D", "SUN", GFXOP_M3DSUN, "nnnooo", 0, false },
     { "M3D", "TEXLOAD", GFXOP_M3DTEXLOAD, "nsW", "PALETTE", false },       // (written M3D TEXTURE LOAD: the compiler turns the two words into this one)
     { "M3D", "GROUNDFLAT", GFXOP_M3DGROUNDFLAT, "nnnnnn", 0, false },
@@ -379,6 +380,8 @@ static const gfxquery_t queries[] = {
     { "M3D",    "ZONETAG", GFXQ_M3DZONETAG, 3, 3 },
     { "M3D",    "RENDERER", GFXQ_M3DRENDERER, 0, 0 },
     { "M3D",    "HWAVAIL", GFXQ_M3DHWAVAIL, 0, 0 },
+    { "M3D",    "MSAA", GFXQ_M3DMSAA, 0, 0 },
+    { "M3D",    "MSAAMAX", GFXQ_M3DMSAAMAX, 0, 0 },
     { "W3D",    "X",         GFXQ_W3DX, 0, 0 },
     { "W3D",    "Y",         GFXQ_W3DY, 0, 0 },
     { "W3D",    "Z",         GFXQ_W3DZ, 0, 0 },

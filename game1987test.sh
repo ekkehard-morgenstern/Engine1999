@@ -499,6 +499,9 @@ state
 goto -30000 12000 200
 wait 1
 state
+reset
+state
+coords -1
 quit
 PLAY
 HOME=$T G1987_WORLD=$W G1987_WORLDSIZE=16 G1987_HEADLESS=1 G1987_PLAY=$T/play timeout 300 sh -c 'printf "LOAD \"demos/1987\"\nRUN\nBYE\n" | ./engine1999c --allow=all' > $T/out 2>&1
@@ -506,6 +509,9 @@ HOME=$T G1987_WORLD=$W G1987_WORLDSIZE=16 G1987_HEADLESS=1 G1987_PLAY=$T/play ti
 expect "world: John at the house" "$(val state 2 jx)" -5 60
 expect "world: after a jump" "$(val state 3 jx)" 8000 10000
 expect "world: John stands on the ground of the world" "$(awk -v z="$(val state 3 jz)" 'BEGIN { print (z > -400 && z < 4000) ? 1 : 0 }')" 1 1
+grep -q '^coords X -*[0-9.]*  Y -*[0-9.]*  Z -*[0-9.]* M  CHUNK 8,[78]$' $T/out || { echo "FAILED: the coordinates line: $(grep '^coords' $T/out)"; fail=$((fail+1)); }
+expect "world: reset puts John back at the start" "$(val state 5 jx)" -5 60
+expect "world: reset puts John back at the start (y)" "$(val state 5 jy)" -200 -140
 if grep -q '^Error' $T/out; then echo "FAILED: the game in world mode stopped with: $(grep '^Error' $T/out)"; fail=$((fail+1)); fi
 # the position: a start that plays 3 frames (G1987_FRAMELOG) saves it; the saved position is loaded by the next start
 printf '4000\n-3000\n90\n4100\n-3100\n' > "$W/player.dat"

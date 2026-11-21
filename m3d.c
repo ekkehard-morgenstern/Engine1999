@@ -1950,6 +1950,11 @@ bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t sl
             m->fog = a[0];
             m->hazecol = NONE_VAL( a[1] ) ? -1 : i1;
             return true;
+        case GFXOP_M3DMSAA:
+            if ( !( a[0] >= 0.0 && a[0] <= 16.0 ) ) { return false; }
+            i1 = (int) floor( a[0] + 0.5 );
+            m->msaa = i1 < 2 ? 0 : i1;
+            return true;
         case GFXOP_M3DFAR:
             if ( !( a[0] >= 0.0 && a[0] <= 1.0e6 ) ) { return false; }
             m->far = a[0];
@@ -2540,6 +2545,12 @@ bool m3d_query( m3d_t* m, int q, const double* a, int na, double* r ) {
             return true;
         case GFXQ_M3DRENDERER: *r = m->rend == m->hw && m->hw != 0 ? 1 : 0; return true;
         case GFXQ_M3DHWAVAIL: *r = m->hw != 0 ? 1 : 0; return true;
+        case GFXQ_M3DMSAAMAX: *r = m->hw != 0 && m->hw->msaamax != 0 ? m->hw->msaamax() : 0; return true;
+        case GFXQ_M3DMSAA: {
+            int mx = m->hw != 0 && m->hw->msaamax != 0 ? m->hw->msaamax() : 0;
+            *r = m->rend == m->hw && m->hw != 0 && m->msaa >= 2 && mx >= 2 ? ( m->msaa < mx ? m->msaa : mx ) : 0;
+            return true;
+        }
         case GFXQ_M3DZONE: case GFXQ_M3DZONETAG: {
             *r = -1;
             for ( int i=0; i < m->nzones; ++i ) {

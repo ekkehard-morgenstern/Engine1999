@@ -400,8 +400,9 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXOP_M3DWORLDVIEW 358          // M3D WORLDVIEW x, y   (every frame: tiles split and merge by the distance from x, y, finished meshes are taken, jobs submitted, the morph done)
 #define GFXOP_M3DWORLDWAIT 359          // M3D WORLDWAIT       (waits until every wanted tile is there)
 #define GFXOP_M3DWORLDMAKE 360          // M3D WORLDMAKE dir$, n, seed   (makes a new world of n x n chunks in the background; M3D("WORLDINFO", 5) is the progress)
+#define GFXOP_M3DMSAA   361             // M3D MSAA n   (full-scene antialiasing of the hardware renderer: n samples, 0 off; n above M3D("MSAAMAX") is cut down)
 #define GFXOP_M3DFIRST  GFXOP_M3DRESET
-#define GFXOP_M3DLAST   GFXOP_M3DWORLDMAKE
+#define GFXOP_M3DLAST   GFXOP_M3DMSAA
 #define GFXOP_IS_M3D(op) ( (op) >= GFXOP_M3DFIRST && (op) <= GFXOP_M3DLAST )
 #define GFXQ_M3DX       350             // M3D("X"), ("Y"), ("Z" = the feet), ("EYE"), ("YAW"), ("PITCH"), ("LIFT"), ("HIT"), ("FLOORZ")
 #define GFXQ_M3DY       351
@@ -462,7 +463,9 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXQ_M3DROADARC 405             // M3D("ROADARC", net, rx, ry, e, t): the length of that road from its start to t
 #define GFXQ_M3DWORLDINFO 406           // M3D("WORLDINFO", k): 0 a world is open, 1 its size, 2 tiles shown, 3 built, 4 being made, 5 progress of WORLDMAKE (0 .. 1000, -1 none or failed), 6 WORLDMAKE has ended
 #define GFXQ_M3DWORLDCHUNK 407          // M3D("WORLDCHUNK", x, y, f): a field of the record of the chunk holding the place (0 cx, 1 cy, 2 lowest, 3 highest, 4 mean height, 5 kind, 6 flags, 7 tarred links; -1 none)
-#define GFXQ_M3DLAST    GFXQ_M3DWORLDCHUNK      // (400 .. 403 in between are HASH / NOISE / RIDGED / FBM, which the VM computes itself and never sends to a host)
+#define GFXQ_M3DMSAA    408             // M3D("MSAA"): the samples the hardware renderer draws with now (0: none, or the software renderer is in use)
+#define GFXQ_M3DMSAAMAX 409             // M3D("MSAAMAX"): the most samples the hardware can do (0: none, or no hardware renderer)
+#define GFXQ_M3DLAST    GFXQ_M3DMSAAMAX      // (400 .. 403 in between are HASH / NOISE / RIDGED / FBM, which the VM computes itself and never sends to a host)
 
 typedef struct _gfxcmd_t {
     const char* group;                  // "GFX", "TXT", "TILE", "SPRITE", "MOUSE", or "" for the statements that are reserved words themselves

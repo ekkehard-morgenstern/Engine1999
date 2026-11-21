@@ -47,6 +47,7 @@ typedef struct _m3drend_t {
     void  (*palette)( m3d_t* m, void* rd );                       // m->pal changed
     const void* (*render)( m3d_t* m, void* rd );                  // draws one frame; the picture (m->bw x m->bh pixels: bytes of palette indices, or uint32_t ARGB when `argb`) or 0
     long  (*drawn)( m3d_t* m, void* rd );                         // the number of triangles of the last frame, when the renderer does not count them while drawing (0: m->drawn is kept by render)
+    int   (*msaamax)( void );                                     // the most samples of full-scene antialiasing the renderer can do (0 none; the field is 0 for a renderer without)
 } m3drend_t;
 
 extern const m3drend_t m3d_soft_renderer;
@@ -151,6 +152,7 @@ struct _m3d_t {
     int      vx, vy, vw, vh, scale, bw, bh;
     double   fov, fog, far;
     double   fogstart;                      // M3D FOG d,haze,start: nothing before this distance (the fog is the quadratic part from start to d)
+    int      msaa;                          // M3D MSAA: the samples of full-scene antialiasing wanted (0 or 2 .. 16), used by the hardware renderer
     int      hazecol;                       // M3D FOG d, haze: the palette index the fog fades to (-1: the fog darkens)
     const m3drend_t* hw;                       // the hardware renderer the host offered, or 0
     const m3drend_t* rend;  void* rdata;       // the renderer in use (m3dsoft.c: the software one)

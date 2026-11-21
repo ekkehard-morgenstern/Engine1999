@@ -49,6 +49,9 @@ opens the 3D settings: invert the X axis or the Y axis of the right stick, gamma
 .TP
 .B "P, Q or ESC"
 pause, quit.
+.TP
+.B P
+opens the pause menu: P continues, R puts John and the bicycle back at the start of a new game (the position is reset, the world stays), C shows or hides the world coordinates of the player on the screen (metres from the origin of the world, the height and the chunk number; kept in player.dat), Q quits. On a game controller: START continues, X resets, Y shows the coordinates, BACK quits. O (or Y while playing) opens the 3D settings, which include full-scene antialiasing when the graphics card can do it.
 .PP
 .PP
 \fBThe camera\fR is not a fixed formula but a creature of its own: it flies behind John and above him and watches him, it obeys the camera controls only as instructions (it accelerates into a circling course and brakes out of it), and when you let them go it returns to watching his back. When you do nothing at all for a few seconds it acts on its own: it circles round John or looks at things worth seeing (the bicycle, a drone, the house, the scarecrow, the gate); any key or stick movement ends that at once. While the camera acts on its own a red blinking dot with REC shows in the upper left corner of the screen and a row of red glyphs of an unknown script in the lower right corner that keep changing; while you direct the camera they are gone.

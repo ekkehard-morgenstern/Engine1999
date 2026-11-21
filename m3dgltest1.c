@@ -326,6 +326,39 @@ int main( void ) {
     px = m3d_render32( M );
     CHECK( px != 0 && px[ 25 * 80 + 40 ] != a );
 
+    // full-scene antialiasing: with samples the edges get in-between shades, the rest stays; off again gives the first picture back
+    scene_base();
+    CHECK( op( GFXOP_M3DHARDWARE, 0 ) );
+    {
+        double q = 0.0;
+        CHECK( m3d_query( M, GFXQ_M3DMSAAMAX, 0, 0, &q ) );
+        int mx = (int) q;
+        CHECK( op( GFXOP_M3DMSAA, 1, 4.0 ) );
+        CHECK( !op( GFXOP_M3DMSAA, 1, 99.0 ) && !op( GFXOP_M3DMSAA, 1, -1.0 ) );
+        CHECK( m3d_query( M, GFXQ_M3DMSAA, 0, 0, &q ) );
+        CHECK( mx < 2 ? q == 0.0 : q == ( mx < 4 ? mx : 4 ) );
+        CHECK( op( GFXOP_M3DMSAA, 1, 0.0 ) );
+        const uint32_t* p0 = m3d_render32( M );
+        CHECK( p0 != 0 );
+        uint32_t* plain = (uint32_t*) malloc( sizeof(uint32_t) * VW * VH );
+        if ( p0 != 0 ) { memcpy( plain, p0, sizeof(uint32_t) * VW * VH ); } else { memset( plain, 0, sizeof(uint32_t) * VW * VH ); }
+        CHECK( op( GFXOP_M3DMSAA, 1, 4.0 ) );
+        const uint32_t* p4 = m3d_render32( M );
+        CHECK( p4 != 0 );
+        long diff = 0;
+        for ( int i=0; p4 != 0 && i < VW * VH; ++i ) { if ( p4[i] != plain[i] ) { ++diff; } }
+        printf( "  antialiasing           max %d samples, %.2f %% of the pixels changed\n", mx, 100.0 * (double) diff / (double)( VW * VH ) );
+        if ( mx >= 2 ) {
+            CHECK( diff > 0 && diff < VW * VH / 5 );              // the edges only
+        } else {
+            CHECK( diff == 0 );
+        }
+        CHECK( op( GFXOP_M3DMSAA, 1, 0.0 ) );
+        p0 = m3d_render32( M );
+        CHECK( p0 != 0 && memcmp( p0, plain, sizeof(uint32_t) * VW * VH ) == 0 );
+        free( plain );
+    }
+
     m3d_free( M );
     SDL_Quit();
     printf( "m3dgltest1: %d cases, %d failures\n", cases, failures );

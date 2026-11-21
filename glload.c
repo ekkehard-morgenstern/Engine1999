@@ -106,6 +106,12 @@ static const glentry_t gl_table[] = {
     ENTFB(FramebufferRenderbuffer),
 };
 
+// functions that may be missing (full-scene antialiasing then is off)
+static const glentry_t gl_opt_table[] = {
+    ENTFB(RenderbufferStorageMultisample),
+    ENTFB(BlitFramebuffer),
+};
+
 static void gl_set( char* err, size_t errsz, const char* fmt, const char* a ) {
     if ( err != 0 && errsz > 0 ) {
         snprintf( err, errsz, fmt, a );
@@ -129,6 +135,13 @@ bool glload_bind( glapi_t* api, char* err, size_t errsz ) {
             return false;
         }
         memcpy( (char*) api + e->off, &p, sizeof(p) );
+    }
+    for ( size_t i=0; i < sizeof(gl_opt_table) / sizeof(gl_opt_table[0]); ++i ) {
+        const glentry_t* e = &gl_opt_table[i];
+        void* p = SDL_GL_GetProcAddress( e->name );
+        if ( p == 0 ) { p = SDL_GL_GetProcAddress( e->alt1 ); }
+        if ( p == 0 ) { p = SDL_GL_GetProcAddress( e->alt2 ); }
+        memcpy( (char*) api + e->off, &p, sizeof(p) );            // (0 when missing)
     }
     return true;
 }
@@ -176,6 +189,11 @@ static int gl_probe_run( void ) {
     if ( gl_info.major < 2 ) {
         rv = gl_fail( "OpenGL older than 2.0" );
         goto DONE_CTX;
+    }
+    if ( api.RenderbufferStorageMultisample != 0 && api.BlitFramebuffer != 0 ) {
+        GLint ms = 0;
+        api.GetIntegerv( 0x8D57 /* GL_MAX_SAMPLES */, &ms );
+        gl_info.maxsamples = ms >= 2 ? (int) ms : 0;
     }
     rv = GLLOAD_YES;
 DONE_CTX:

@@ -115,6 +115,9 @@ typedef struct _glapi_t {
     void (*BindRenderbuffer)( GLenum,GLuint );
     void (*RenderbufferStorage)( GLenum,GLenum,GLsizei,GLsizei );
     void (*FramebufferRenderbuffer)( GLenum,GLenum,GLenum,GLuint );
+    // optional (0 when the driver has none: no multisampling)
+    void (*RenderbufferStorageMultisample)( GLenum,GLsizei,GLenum,GLsizei,GLsizei );
+    void (*BlitFramebuffer)( GLint,GLint,GLint,GLint,GLint,GLint,GLint,GLint,GLbitfield,GLenum );
 } glapi_t;
 
 #define GLLOAD_UNKNOWN  (-1)            // glload_probe() has not run
@@ -126,6 +129,7 @@ typedef struct _glinfo_t {
     char version[128];                  // GL_VERSION
     char renderer[128];                 // GL_RENDERER
     char why[160];                      // when GLLOAD_NO: what was missing
+    int  maxsamples;                    // the most samples a multisampled framebuffer can have (0: none, 1: not usable), for full-scene antialiasing
 } glinfo_t;
 
 bool glload_bind( glapi_t* api, char* err, size_t errsz );       // a context must be current; false: a function (or the version) is missing

@@ -84,6 +84,9 @@ typedef struct {
     prog_t        pu;
     skyprog_t     su;
     GLuint        fbo, colortex, depthrb;
+    GLuint        msfbo, mscolor, msdepth;      // full-scene antialiasing: the frame is drawn into multisampled buffers and resolved into fbo
+    int           want;                         // the samples asked for (M3D MSAA) when the buffers were made
+    int           samples;                      // the samples of the multisampled buffers now (0: drawn straight into fbo)
     GLuint        paltex, idtex, vbo, skyvbo;
     gobj_t*       gobjs;                        // one per object number (M3D_MAXOBJECTS), allocated at the first frame
     long          built;                        // how many meshes were built (a test can see that unchanged ones are not)
@@ -231,10 +234,22 @@ static void delete_fbo( gl_t* g ) {
     if ( g->fbo != 0 ) { gl->DeleteFramebuffers( 1, &g->fbo ); g->fbo = 0; }
     if ( g->colortex != 0 ) { gl->DeleteTextures( 1, &g->colortex ); g->colortex = 0; }
     if ( g->depthrb != 0 ) { gl->DeleteRenderbuffers( 1, &g->depthrb ); g->depthrb = 0; }
+    if ( g->msfbo != 0 ) { gl->DeleteFramebuffers( 1, &g->msfbo ); g->msfbo = 0; }
+    if ( g->mscolor != 0 ) { gl->DeleteRenderbuffers( 1, &g->mscolor ); g->mscolor = 0; }
+    if ( g->msdepth != 0 ) { gl->DeleteRenderbuffers( 1, &g->msdepth ); g->msdepth = 0; }
+    g->samples = 0;
     g->fw = g->fh = 0;
 }
 
-static bool make_fbo( gl_t* g, int w, int h ) {
+#ifndef GL_RGBA8
+#define GL_RGBA8 0x8058
+#endif
+#ifndef GL_READ_FRAMEBUFFER
+#define GL_READ_FRAMEBUFFER 0x8CA8
+#define GL_DRAW_FRAMEBUFFER 0x8CA9
+#endif
+
+static bool make_fbo( gl_t* g, int w, int h, int samples ) {
     glapi_t* gl = &g->gl;
     delete_fbo( g );
     gl->GenTextures( 1, &g->colortex );
@@ -254,6 +269,28 @@ static bool make_fbo( gl_t* g, int w, int h ) {
         return false;
     }
     g->fw = w; g->fh = h;
+    if ( samples >= 2 && gl->RenderbufferStorageMultisample != 0 && gl->BlitFramebuffer != 0 ) {
+        // the multisampled twin; when the driver refuses it the frame is drawn without antialiasing
+        (void) gl->GetError();                                      // (clears an old error)
+        gl->GenRenderbuffers( 1, &g->mscolor );
+        gl->BindRenderbuffer( GL_RENDERBUFFER, g->mscolor );
+        gl->RenderbufferStorageMultisample( GL_RENDERBUFFER, samples, GL_RGBA8, w, h );
+        gl->GenRenderbuffers( 1, &g->msdepth );
+        gl->BindRenderbuffer( GL_RENDERBUFFER, g->msdepth );
+        gl->RenderbufferStorageMultisample( GL_RENDERBUFFER, samples, GL_DEPTH_COMPONENT24, w, h );
+        gl->GenFramebuffers( 1, &g->msfbo );
+        gl->BindFramebuffer( GL_FRAMEBUFFER, g->msfbo );
+        gl->FramebufferRenderbuffer( GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, g->mscolor );
+        gl->FramebufferRenderbuffer( GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, g->msdepth );
+        if ( gl->GetError() == GL_NO_ERROR && gl->CheckFramebufferStatus( GL_FRAMEBUFFER ) == GL_FRAMEBUFFER_COMPLETE ) {
+            g->samples = samples;
+        } else {
+            gl->BindFramebuffer( GL_FRAMEBUFFER, 0 );
+            gl->DeleteFramebuffers( 1, &g->msfbo ); g->msfbo = 0;
+            gl->DeleteRenderbuffers( 1, &g->mscolor ); g->mscolor = 0;
+            gl->DeleteRenderbuffers( 1, &g->msdepth ); g->msdepth = 0;
+        }
+    }
     return true;
 }
 
@@ -827,8 +864,10 @@ static const void* gl_render( m3d_t* m, void* rd ) {
     }
     gl_make_current( g );
     int W = m->bw, H = m->bh;
-    if ( g->fw != W || g->fh != H ) {
-        if ( !make_fbo( g, W, H ) ) {
+    int want = m->msaa >= 2 ? m->msaa : 0;
+    if ( g->fw != W || g->fh != H || g->want != want ) {
+        g->want = want;
+        if ( !make_fbo( g, W, H, want ) ) {
             return 0;
         }
     }
@@ -853,7 +892,7 @@ static const void* gl_render( m3d_t* m, void* rd ) {
         }
     }
 
-    gl->BindFramebuffer( GL_FRAMEBUFFER, g->fbo );
+    gl->BindFramebuffer( GL_FRAMEBUFFER, g->samples > 0 ? g->msfbo : g->fbo );
     gl->Viewport( 0, 0, W, H );
     gl->Disable( GL_CULL_FACE );
     gl->FrontFace( GL_CW );
@@ -973,6 +1012,12 @@ static const void* gl_render( m3d_t* m, void* rd ) {
     gl->Disable( GL_CULL_FACE );
     gl->Disable( GL_DEPTH_TEST );
 
+    if ( g->samples > 0 ) {                                              // resolve the samples
+        gl->BindFramebuffer( GL_READ_FRAMEBUFFER, g->msfbo );
+        gl->BindFramebuffer( GL_DRAW_FRAMEBUFFER, g->fbo );
+        gl->BlitFramebuffer( 0, 0, W, H, 0, 0, W, H, GL_COLOR_BUFFER_BIT, GL_NEAREST );
+        gl->BindFramebuffer( GL_FRAMEBUFFER, g->fbo );
+    }
     gl->PixelStorei( GL_PACK_ALIGNMENT, 1 );
     gl->ReadPixels( 0, 0, W, H, GL_RGBA, GL_UNSIGNED_BYTE, g->rgba );
     gl->BindFramebuffer( GL_FRAMEBUFFER, 0 );
@@ -985,7 +1030,13 @@ static const void* gl_render( m3d_t* m, void* rd ) {
     return g->out;
 }
 
-static const m3drend_t gl_renderer = { "hardware", true, gl_create, gl_destroy, gl_resize, gl_palette, gl_render, gl_drawn };
+static int gl_msaamax( void ) {
+    glinfo_t gi;
+    glload_info( &gi );
+    return glload_state() == GLLOAD_YES ? gi.maxsamples : 0;
+}
+
+static const m3drend_t gl_renderer = { "hardware", true, gl_create, gl_destroy, gl_resize, gl_palette, gl_render, gl_drawn, gl_msaamax };
 
 long m3d_gl_built( const struct _m3d_t* m ) {
     return m != 0 && m->rend == &gl_renderer && m->rdata != 0 ? ((const gl_t*) m->rdata)->built : -1;
