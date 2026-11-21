@@ -483,6 +483,11 @@ if grep -q '^Error' $T/out; then echo "FAILED: the game stopped with: $(grep '^E
 # 14. the world and the game are the same every run
 first=$(grep -E '^(state|cam|ray|chunks)' $T/out | md5sum); run; second=$(grep -E '^(state|cam|ray|chunks)' $T/out | md5sum)
 [ "$first" = "$second" ] || { echo "FAILED: two runs differ"; fail=$((fail+1)); }
+# 14b. no line number twice in the game and its libraries (a duplicate silently replaces a line: once it removed the CALL that applies a setting)
+for f in demos/1987.bas demos/lib/prefs3d.lib demos/lib/w3dkit.lib demos/lib/input.lib; do
+    d=$(awk '$1 ~ /^[0-9]+$/ { print $1 }' $f | sort -n | uniq -d | head -3 | tr '\n' ' ')
+    if [ -n "$d" ]; then echo "FAILED: $f has line numbers twice: $d"; fail=$((fail+1)); fi
+done
 # 15. the static world (world mode: G1987_WORLD names the folder of the world, G1987_WORLDSIZE its size in chunks): the world is made (a progress loop without a picture), the game runs on it
 #     (jumps, walking on the ground of the world), the position is saved in the folder when the game ends and read again by the next start
 W=$T/world
