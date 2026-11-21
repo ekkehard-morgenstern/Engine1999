@@ -1457,7 +1457,7 @@
 11580 END PROC
 11590 PROC PLAYLOOP
 11600   LOCAL T0,FR,Y,YL,ST0
-11610   T0=TI:YL=0:NFR=0:FL$=ENV$("G1987_FRAMELOG"):FLN=0:FLN2=300:IF ENV$("G1987_FRAMES")<>"" THEN FLN2=VAL(ENV$("G1987_FRAMES"))
+11610   T0=TI:YL=0:NFR=0:FL$=ENV$("G1987_FRAMELOG"):FLN=0:FLN2=10000:IF ENV$("G1987_FRAMES")<>"" THEN FLN2=VAL(ENV$("G1987_FRAMES"))
 11612   CALL SOUNDSTART
 11620   REPEAT
 11622     ' the frame time: TI counts whole 1/60 s ticks, and a loop that waits for the display sees 0, 1 or 2 ticks in a frame by turns (measured under Xvfb: 0 in 36 %, 1 in 28 %,
@@ -1831,7 +1831,7 @@
 15190   C=COS(OHD*PI/180):S=SIN(OHD*PI/180)
 15200   M3D OBJPOS 521,OX+C*HOX-S*HOY,OY+S*HOX+C*HOY,OZ+HOZ,OHD
 15210 END PROC
-15300 ' G1987_FRAMELOG=file: skips the title, plays 300 frames and writes how many ticks (1/60 s) the frames took (raw, as TI sees them) and the smallest, largest and mean frame time that the
+15300 ' G1987_FRAMELOG=file: skips the title, plays 10000 frames (G1987_FRAMES=n changes the number) and writes how many ticks (1/60 s) the frames took (raw, as TI sees them) and the smallest, largest and mean frame time that the
 15310 ' game used (the smoothed DT0) and the frames where the camera or John's height jumped (by more than 2 units / 1.5 degrees from one frame to the next; the first 12 with what changed), then quits: a way to see whether the frames come evenly and the picture quietly
 15320 PROC FRAMELOG
 15330   LOCAL D
