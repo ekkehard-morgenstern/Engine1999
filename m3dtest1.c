@@ -822,6 +822,24 @@ int main( void ) {
         CHECK( op( GFXOP_M3DRING, 10, 5.0, gx, gy, 12.0, 300.0, 0.0, 1.0, 0.0, 0.0, 0.0 ) );
         CHECK( op( GFXOP_M3DRINGWAIT, 0 ) && Q( GFXQ_M3DTRIS, 1, 5.0 ) == 288.0 );
     }
+    // a chunk morphs too (M3D RING with a,b): its 4 x 4 vertices of 300 blend into the surface of the grid of 900 (a hill is the same either way at the distance b, the camera moves)
+    CHECK( op( GFXOP_M3DGROUND, 7, 3.0, 700.0, 60.0, 4.0, 10.0, 0.5, 2.0 ) );
+    CHECK( op( GFXOP_M3DRING, 12, 4.0, 900.0, 1800.0, 3.0, 300.0, 0.0, 1.0, 0.0, 0.0, 0.0, 900.0, 1800.0 ) );
+    CHECK( op( GFXOP_M3DRINGWAIT, 0 ) );
+    {
+        double g00 = Q( GFXQ_M3DGROUND, 2, 900.0, 1800.0 ), g10 = Q( GFXQ_M3DGROUND, 2, 1800.0, 1800.0 ), g11 = Q( GFXQ_M3DGROUND, 2, 1800.0, 2700.0 ), g01 = Q( GFXQ_M3DGROUND, 2, 900.0, 2700.0 );
+        double coarse = g00 + ( g10 - g00 ) / 3.0 + ( g11 - g10 ) / 3.0;                                     // the vertex (1200, 2100): u = 1/3, v = 1/3, u >= v
+        (void) g01;
+        double tru = Q( GFXQ_M3DGROUND, 2, 1200.0, 2100.0 );
+        CHECK( op( GFXOP_M3DMORPH, 2, 1200.0, 2100.0 ) );                                                     // the camera is on it: the true height
+        CHECK( fabs( Q( GFXQ_M3DFLOORAT, 3, 1200.0, 2100.0, 9000.0 ) - tru ) < 1e-3 );
+        CHECK( op( GFXOP_M3DMORPH, 2, 50000.0, 50000.0 ) );                                                   // far away: the grid of 900
+        CHECK( fabs( Q( GFXQ_M3DFLOORAT, 3, 1200.0, 2100.0, 9000.0 ) - coarse ) < 1e-3 );
+        CHECK( op( GFXOP_M3DMORPH, 2, 50003.0, 50003.0 ) );                                                   // a move of 6 units changes nothing (and the object is left alone: all blended)
+        CHECK( fabs( Q( GFXQ_M3DFLOORAT, 3, 1200.0, 2100.0, 9000.0 ) - coarse ) < 1e-3 );
+        CHECK( op( GFXOP_M3DMORPH, 2, 1200.0, 2100.0 ) );                                                     // coming back: the true height again
+        CHECK( fabs( Q( GFXQ_M3DFLOORAT, 3, 1200.0, 2100.0, 9000.0 ) - tru ) < 1e-3 );
+    }
     // trees in a chunk (mode 2: lathe solids, mode 3: cheap ones) and the dirt tracks of a chunk as ribbons
     {
         CHECK( op( GFXOP_M3DTREEPIC, 4, 312.0, 309.0, 310.0, 317.0 ) );

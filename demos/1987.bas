@@ -25,7 +25,7 @@
 200 BREAK OFF
 210 ON ERROR GOTO FAILED
 220 HL=0:IF ENV$("G1987_HEADLESS")<>"" THEN HL=-1
-230 DIM SNX(300),SNY(300),SEX(300),SEY(300),SGX(300),SGY(300),SGU(300),SGV(300),SGK(300),SGD(300),SGE(300),SGI(300),RGX(6),RGY(6),RGP(6),RGQ(6),CKN(400),CHB(400),CKRX(9),CKRY(9),CKRT(9),CTX(24),CTY(24),GNS(8),GGX(160),FLJ$(81),TIH(33),RPX(300),RPY(300),RPF(300),CPX(40),CPY(40),SMX(120),SMY(120),PLX(40),PLY(40),TRX(520),TRY(520),LRR(8),LRZ(8),LRV(8),W$(8),GPX(2),GPZ(2),GPS(2),DWX(40),DWY(40),DRX(5),DRY(5),DRZ(5),DRH(5),DRT(5),DRA(5)
+230 DIM PV(60),SNX(300),SNY(300),SEX(300),SEY(300),SGX(300),SGY(300),SGU(300),SGV(300),SGK(300),SGD(300),SGE(300),SGI(300),RGX(6),RGY(6),RGP(6),RGQ(6),CKN(400),CHB(400),CKRX(9),CKRY(9),CKRT(9),CTX(24),CTY(24),GNS(8),GGX(160),FLJ$(81),TIH(33),RPX(300),RPY(300),RPF(300),CPX(40),CPY(40),SMX(120),SMY(120),PLX(40),PLY(40),TRX(520),TRY(520),LRR(8),LRZ(8),LRV(8),W$(8),GPX(2),GPZ(2),GPS(2),DWX(40),DWY(40),DRX(5),DRY(5),DRZ(5),DRH(5),DRT(5),DRA(5)
 240 GOTO MAIN
 250 ' ------------------------------------------------------------------------------------------------ small helpers
 260 FUNC RN(M)
@@ -376,28 +376,28 @@
 3159 PROC CHCLEAR(SL)
 3160   M3D OBJFREE 14000+SL*32,14000+SL*32+31:M3D OBJFREE 11200+SL*6,11200+SL*6+5:M3D OBJFREE 8800+SL*6,8800+SL*6+5:CHB(SL)=0
 3165 END PROC
-3166 ' builds the chunk cx,cy into the slot SL at the level LV (0: 9 x 9 cells of 100 units, 1: 3 x 3 of 300, 2: one cell of 900; NEWC: it is a new chunk, not only a new level): the ground, the road
+3166 ' builds the chunk cx,cy into the slot SL at the level LV (0: 9 x 9 cells of 100 units up to 2 chunks away, 1: 3 x 3 of 300 up to 5, 2: one cell of 900; the chunks MORPH: level 0 from 900 to 1800 units from the player into the grid of 300, level 1 from 2700 to 4500 into the grid of 900; NEWC: it is a new chunk, not only a new level): the ground, the road
 3167 ' ribbons and the trees are made by the engine's worker thread (M3D RING mode 1: the hand-made area, 2: with trees, 3: with cheap trees: the chunks 4 or more away), taken by M3D POLL;
 3168 ' the water plane of a new chunk, and for the chunks up to 3 away the ruins, hay bales and reflector posts (made once, freed again when the chunk goes farther away)
 3169 PROC CHUNKBUILD(CX,CY,SL,LV,NEWC)
-3170   LOCAL O,X0,Y0,T0,N,ST,MD,HM
+3170   LOCAL O,X0,Y0,T0,N,ST,MD,HM,MA,MB
 3171   T0=TI
 3172   CALL CHREGIONS(CX,CY):IF NEWC THEN CHB(SL)=0:CALL CHWATER(CX,CY,SL)
 3173   O=8000+SL
 3174   IF M3D("OBJON",O)=0 THEN M3D OBJECT O,1,235
 3175   X0=CX*900:Y0=CY*900
 3176   HM=(CX>=-4 AND CX<=3 AND CY>=-4 AND CY<=3)
-3177   N=9:ST=100:MD=2:IF LV=1 THEN N=3:ST=300
-3178   IF LV=2 THEN N=1:ST=900:MD=3
+3177   N=9:ST=100:MD=2:MA=900:MB=1800:IF LV=1 THEN N=3:ST=300:MD=3:MA=2700:MB=4500
+3178   IF LV=2 THEN N=1:ST=900:MD=3:MA=0:MB=0
 3179   IF HM THEN MD=1
-3180   M3D RING O,X0,Y0,N,ST,200,MD,0,0,0
+3180   M3D RING O,X0,Y0,N,ST,200,MD,0,0,0,MA,MB
 3181   IF HM THEN
 3182     IF NEWC THEN CALL CHCLEAR(SL)
 3183   ELSE
-3184     IF LV<=1 AND NOT CHB(SL) THEN
+3184     IF LV=0 AND NOT CHB(SL) THEN
 3185       CALL CHSEGS(CX,CY):CALL CHRUINS(CX,CY,SL):CALL CHROADS(CX,CY,SL):CALL CHBALES(CX,CY,SL):CHB(SL)=-1
 3186     END IF
-3187     IF LV=2 AND CHB(SL) THEN CALL CHCLEAR(SL)
+3187     IF LV>=1 AND CHB(SL) THEN CALL CHCLEAR(SL)
 3188   END IF
 3189   T0=TI-T0:CKCNT=CKCNT+1:CKTOT=CKTOT+T0:IF T0>CKMAX THEN CKMAX=T0
 3190 END PROC
@@ -414,7 +414,7 @@
 3234 ' the first world: the tree kinds, the four rings, then the chunks round the start (a window of 17 x 17 chunks of 900 units)
 3235 PROC BUILDTERRAIN
 3236   LOCAL S
-3237   CALL CK_SETUP(900,8,1,3)
+3237   CALL CK_SETUP(900,8,2,5)
 3238   FOR S=0 TO 399
 3239     CKN(S)=0:CHB(S)=0
 3240   NEXT S
@@ -1588,6 +1588,7 @@
 12740     END IF
 12750     IF C$="drones" THEN PRINT "drone x=";INT(DRX(0));" y=";INT(DRY(0));" z=";INT(DRZ(0));" t=";DRT(0)
 12760     IF C$="clp" THEN CLP=VAL(W$(1)):CMINIT=0
+12761     IF C$="pop" THEN CALL POPTEST(VAL(W$(1)),VAL(W$(2)))
 12770     IF C$="zoom" THEN CZM=VAL(W$(1)):CMINIT=0
 12780     IF C$="co" THEN CO=VAL(W$(1)):CYW=JH:CMINIT=0
 12790     IF C$="cp" THEN CP=VAL(W$(1)):CMINIT=0
@@ -2275,3 +2276,26 @@
 21370   IF C3 THEN M3D RING 27003,O3X,O3Y,36,2700,150,0,O2X,O2Y,15,23000,40500:RGX(3)=O3X:RGY(3)=O3Y:RGP(3)=O2X:RGQ(3)=O2Y
 21380   IF C4 THEN M3D RING 27004,O4X,O4Y,40,8100,400,0,O3X,O3Y,12:RGX(4)=O4X:RGY(4)=O4Y:RGP(4)=O3X:RGQ(4)=O3Y
 21390 END PROC
+22000 ' test mode (play-back command "pop n step"): John walks n steps of "step" units east and after every step the height of the ground (the chunks' meshes) at 40 fixed places 700 .. 6400 units
+22010 ' ahead is read again: how much the largest change from one step to the next is (a hill that pops up in front of the player shows as a big one); prints "poptest samples= max= over3="
+22020 PROC POPTEST(N,SS)
+22030   LOCAL I,K,D,X,Y,H,MX,CNT,BIG,SK,X0,Y0
+22040   X0=INT(JX/300)*300+700:Y0=INT(JY/300)*300:MX=0:CNT=0:BIG=0
+22050   FOR I=1 TO N
+22060     JX=JX+SS
+22070     CALL CHUNKS(JX,JY,1):CALL RINGUPDATE(JX,JY):M3D POLL:M3D MORPH JX,JY
+22080     SK=0
+22090     FOR K=0 TO 19
+22100       FOR D=0 TO 1
+22110         X=X0+K*300:Y=Y0+D*200:H=M3D("FLOORAT",X,Y,9000)
+22120         IF I>5 AND PV(SK)>-100000 AND H>-100000 THEN
+22130           IF ABS(H-PV(SK))>MX THEN MX=ABS(H-PV(SK))
+22140           IF ABS(H-PV(SK))>3 THEN BIG=BIG+1
+22150           CNT=CNT+1
+22160         END IF
+22170         PV(SK)=H:SK=SK+1
+22180       NEXT D
+22190     NEXT K
+22200   NEXT I
+22210   PRINT "poptest samples=";CNT;" max=";INT(MX*10)/10;" over3=";BIG
+22220 END PROC

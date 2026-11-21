@@ -78,6 +78,8 @@ typedef struct {
     mt_t*   t;  int nt, capt;
     float*  mf;                             // M3D RING with a morph range: the height of every vertex as it was made (mf) and as the coarser ring has it (mc): M3D MORPH blends them by the distance
     float*  mc;
+    double  mx0, my0, mx1, my1;             // the rectangle the mesh covers (M3D RING): which vertices can be inside the morph band
+    int     msat;                           // 0 not set yet, 1 all vertices as made (w = 0), 2 all blended (w = 1)
     double  ma, mb;                         // the distances (Chebyshev, from the camera) where the blend starts (0) and is complete (1)
     int*    mref;                           // not 0: v and t are shared with other objects (M3D INSTANCE); *mref counts the sharers, the last one frees them (copy on write)
     double  scale;                          // the size (1 = as the mesh is; the picture coordinates do not change)
@@ -162,6 +164,8 @@ struct _m3d_t {
     sun_t    sun;
     ringpic_t rpic;
     struct _tjobs* jobs;
+    double   mlx, mly;                      // the camera of the last M3D MORPH
+    bool     mvalid, mforce;
     int      top;                           // one above the highest object number in use (the loops stop there)
     unsigned presepoch;                     // counts the times a picture number got or lost its picture (the renderer's kept meshes group the triangles by that)
 };

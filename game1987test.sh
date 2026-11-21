@@ -317,6 +317,9 @@ state
 goto 29400 -17400 0
 wait 3
 chunks
+goto -6000 -9000 0
+wait 5
+pop 300 5
 quit
 PLAY
 run
@@ -392,14 +395,14 @@ expect "no edge: John is still moving" "$(val state 33 jv)" 1 200
 expect "chunks: the 17 x 17 window round John is complete after the walk" "$(val chunks 1 have)" 289 289
 expect "chunks: none missing after the walk" "$(val chunks 1 missing)" 0 0
 expect "chunks: none missing or of the wrong level after the walk (levels change as John goes)" "$(val chunks 1 stale)" 0 0
-expect "chunks: the 3 x 3 chunks round John are fine (level 0), the others coarse" "$(val chunks 1 fine)" 9 9
+expect "chunks: the 5 x 5 chunks round John are fine (level 0), the others coarse" "$(val chunks 1 fine)" 25 25
 expect "chunks: trees grow in the forests outside the hand-made area" "$(val chunks 1 trees)" 1 1176
 # 11f2. a jump far away (a goto builds all missing chunks at once): the window is complete there too, the number of trees stays within the 24 a chunk may carry, and the same
 #       place built again gives the same chunks (the chunks line is part of the two-run comparison at the end)
 expect "chunks: far jump (20000, -15000): window complete" "$(val chunks 2 have)" 289 289
 expect "chunks: far jump: none missing" "$(val chunks 2 missing)" 0 0
 expect "chunks: far jump: right levels at once" "$(val chunks 2 stale)" 0 0
-expect "chunks: far jump: 9 fine chunks" "$(val chunks 2 fine)" 9 9
+expect "chunks: far jump: 25 fine chunks" "$(val chunks 2 fine)" 25 25
 expect "chunks: far jump: trees within the budget" "$(val chunks 2 trees)" 0 1176
 expect "chunks: second far jump (-9000, 7000) and 2 s: window complete" "$(val chunks 5 have)" 289 289
 expect "chunks: second far jump: nothing stale" "$(val chunks 5 stale)" 0 0
@@ -428,6 +431,10 @@ expect "lake: the east end, 3300 units (105 m) away, too" "$(val state 57 gh)" -
 expect "mountain: more than 1000 m (31250 units) high" "$(val state 58 gh)" 31250 45000
 expect "rings: the three rings of the far ground are there" "$(val chunks 5 rings)" 3 3
 expect "rings: no ground job left" "$(val chunks 5 busy)" 0 0
+# 11f7. no popping: walking 300 steps of 5 units (1500 units) over hilly ground, the ground ahead (40 places 700 .. 6400 units away, read from the chunks' meshes) never changes by more than 6 units from
+#       one step to the next: the chunks morph between their levels of detail, so no hill rises or goes in front of the player (before the morph the levels changed with a step of up to 100 units)
+expect "popping: the ground ahead changes by less than 6 units a step" "$(awk '$1=="poptest" { split($3,a,"="); print a[2] }' $T/out)" 0 6
+expect "popping: samples were taken" "$(awk '$1=="poptest" { split($2,a,"="); print a[2] }' $T/out)" 1000 100000
 # 11f6. tarred roads (440 wide, 2 lanes each way with edge lines and dashes, picture 327) with reflector posts every 50 m, and trees that keep away from the roads: the chunks round (29400, -17400): a tarred road runs north-south along x = 29400
 expect "tarred road: the floor under the road is the tar picture (hard surface)" "$(val chunks 6 roads)" 1 289
 expect "tarred road: reflector posts beside it" "$(val chunks 6 posts)" 1 289

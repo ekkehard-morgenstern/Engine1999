@@ -560,10 +560,6 @@ static int jv_addm( tjob_t* j, double x, double y, double z, double u, double v,
     return j->nv++;
 }
 
-static int jv_add( tjob_t* j, double x, double y, double z, double u, double v ) {
-    return jv_addm( j, x, y, z, u, v, z );
-}
-
 static bool jt_add( tjob_t* j, int a, int b, int c, int tex ) {
     if ( j->nt >= j->capt ) {
         int nc = j->capt == 0 ? 8192 : j->capt * 2;
@@ -710,8 +706,13 @@ static void job_ribbons( tjob_t* j, int net ) {
     }
 }
 
+// a vertex of a tree: it moves with the ground under the tree (dz: the coarser surface minus the true ground there)
+static int jv_addtree( tjob_t* j, double dz, double x, double y, double z, double u, double v ) {
+    return jv_addm( j, x, y, z, u, v, z + dz );
+}
+
 // a tree: the lathe solids of demos/1987.bas (8 sides: a trunk and a crown of 2 .. 5 rings), or a cheap one for the far chunks (a cone of 4 sides on a square trunk: 12 triangles)
-static bool job_tree( tjob_t* j, double x, double y, double z, double yaw, double sc, int kind, bool cheap ) {
+static bool job_tree( tjob_t* j, double x, double y, double z, double yaw, double sc, int kind, bool cheap, double dz ) {
     static const double crown[3][5][3] = {
         { { 14, 86, 63 }, { 46, 108, 50 }, { 54, 140, 32 }, { 38, 182, 14 }, { 0.6, 206, 0 } },
         { { 38, 74, 63 }, { 0.6, 134, 0 }, { 31, 112, 63 }, { 0.6, 172, 0 } },            // (the third cone follows below)
@@ -727,14 +728,14 @@ static bool job_tree( tjob_t* j, double x, double y, double z, double yaw, doubl
             base[r] = j->nv;
             for ( int k = 0; k < 5; ++k ) {
                 double a = (double) k * 1.5707963, lx = rad * cos( a ), ly = rad * sin( a );
-                if ( jv_add( j, x + ( lx * cs - ly * sn ) * sc, y + ( lx * sn + ly * cs ) * sc, z + zz * sc, (double) k * 8.0, r == 0 ? 63.0 : 40.0 ) < 0 ) { return false; }
+                if ( jv_addtree( j, dz, x + ( lx * cs - ly * sn ) * sc, y + ( lx * sn + ly * cs ) * sc, z + zz * sc, (double) k * 8.0, r == 0 ? 63.0 : 40.0 ) < 0 ) { return false; }
             }
         }
-        int top = jv_add( j, x, y, z + tz * sc, 16.0, 0.0 ), tt[5];
+        int top = jv_addtree( j, dz, x, y, z + tz * sc, 16.0, 0.0 ), tt[5];
         if ( top < 0 ) { return false; }
         for ( int k = 0; k < 5; ++k ) {                                    // the top of the trunk: a ring at the cone's foot, narrow
             double a = (double) k * 1.5707963, lx = 3.2 * cos( a ), ly = 3.2 * sin( a );
-            tt[k] = jv_add( j, x + ( lx * cs - ly * sn ) * sc, y + ( lx * sn + ly * cs ) * sc, z + bz * sc, (double) k * 8.0, 0.0 );
+            tt[k] = jv_addtree( j, dz, x + ( lx * cs - ly * sn ) * sc, y + ( lx * sn + ly * cs ) * sc, z + bz * sc, (double) k * 8.0, 0.0 );
             if ( tt[k] < 0 ) { return false; }
         }
         for ( int k = 0; k < 4; ++k ) {
@@ -750,7 +751,7 @@ static bool job_tree( tjob_t* j, double x, double y, double z, double yaw, doubl
         double rad = r == 0 ? 5.0 : 3.2, zz = r == 0 ? 0.0 : th;
         for ( int k = 0; k <= 8; ++k ) {
             double a = (double) k * 0.7853982, lx = rad * cos( a ), ly = rad * sin( a );
-            if ( jv_add( j, x + ( lx * cs - ly * sn ) * sc, y + ( lx * sn + ly * cs ) * sc, z + zz * sc, (double) k * 8.0, r == 0 ? 63.0 : 0.0 ) < 0 ) { return false; }
+            if ( jv_addtree( j, dz, x + ( lx * cs - ly * sn ) * sc, y + ( lx * sn + ly * cs ) * sc, z + zz * sc, (double) k * 8.0, r == 0 ? 63.0 : 0.0 ) < 0 ) { return false; }
         }
     }
     for ( int k = 0; k < 8; ++k ) {
@@ -768,7 +769,7 @@ static bool job_tree( tjob_t* j, double x, double y, double z, double yaw, doubl
             if ( rad < 0.6 / sc ) { rad = 0.6 / sc; }
             for ( int k = 0; k <= 8; ++k ) {
                 double a = (double) k * 0.7853982, lx = rad * cos( a ), ly = rad * sin( a );
-                if ( jv_add( j, x + ( lx * cs - ly * sn ) * sc, y + ( lx * sn + ly * cs ) * sc, z + zz * sc, (double) k * 8.0, vv ) < 0 ) { return false; }
+                if ( jv_addtree( j, dz, x + ( lx * cs - ly * sn ) * sc, y + ( lx * sn + ly * cs ) * sc, z + zz * sc, (double) k * 8.0, vv ) < 0 ) { return false; }
             }
         }
         for ( int r = 0; r + 1 < nr; ++r ) {
@@ -800,7 +801,7 @@ static void job_trees( tjob_t* j ) {
         tx[cnt] = x; ty[cnt] = y; ++cnt;
         double kk = nz_hash( cx, cy, 400 + i, 0 );
         int kind = kk >= 0.8 ? 2 : kk >= 0.45 ? 1 : 0;
-        if ( !job_tree( j, x, y, h - 2.0, nz_hash( cx, cy, 500 + i, 0 ) * 360.0, 0.9 + nz_hash( cx, cy, 600 + i, 0 ) * 0.5, kind, j->mode == 3 ) ) { return; }
+        if ( !job_tree( j, x, y, h - 2.0, nz_hash( cx, cy, 500 + i, 0 ) * 360.0, 0.9 + nz_hash( cx, cy, 600 + i, 0 ) * 0.5, kind, j->mode == 3, j->mb > j->ma ? job_coarse( j, x, y ) - h : 0.0 ) ) { return; }
     }
 }
 
@@ -975,13 +976,17 @@ static int jobs_apply( m3d_t* m ) {
             free( o->mf ); free( o->mc );
             o->mref = 0;
             o->mf = best->mf; o->mc = best->mc; o->ma = best->ma; o->mb = best->mb; best->mf = best->mc = 0;
+            o->mx0 = best->x0; o->my0 = best->y0; o->mx1 = best->x0 + best->n * best->cell; o->my1 = best->y0 + best->n * best->cell; o->msat = 0; m->mforce = true;
             o->v = best->v; o->nv = best->nv; o->capv = best->capv;
             o->t = best->t; o->nt = best->nt; o->capt = best->capt;
             best->v = 0; best->t = 0; best->nv = best->nt = best->capv = best->capt = 0;
             o->dirty = true; o->gen = next_gen();
             for ( int i=0; i < best->nvar; ++i ) {
                 int t = best->vars[i][0], k = best->vars[i][1], nn = t + k * m->sun.stride;
-                if ( m->sun.on && nn < M3D_MAXTEX && m->texs[nn].col == 0 ) { sun_make( m, t, k ); }
+                bool ok = m->sun.on && nn < M3D_MAXTEX && ( m->texs[nn].col != 0 || sun_make( m, t, k ) );
+                if ( !ok ) {                                            // no shaded picture (no palette yet, the sun is off): the cells keep their own picture
+                    for ( int q = 0; q < o->nt; ++q ) { if ( o->t[q].tex == nn ) { o->t[q].tex = t; } }
+                }
             }
             ++applied;
         }
@@ -1013,9 +1018,19 @@ static void jobs_discard( m3d_t* m ) {                         // forget everyth
 
 
 void m3d_morph( m3d_t* m, double cx, double cy ) {
+    if ( m->mvalid && !m->mforce && fabs( cx - m->mlx ) + fabs( cy - m->mly ) < 8.0 ) {      // (the weights change by a fraction of a percent: not every frame)
+        return;
+    }
+    m->mlx = cx; m->mly = cy; m->mvalid = true; m->mforce = false;
     for ( int i=0; i < m->top; ++i ) {
         obj_t* o = &m->objs[i];
         if ( !o->used || o->mc == 0 || o->mf == 0 || !( o->mb > o->ma ) ) {
+            continue;
+        }
+        // the Chebyshev distances of the nearest and the farthest corner of the mesh's rectangle: an object that lies wholly in w = 0 or in w = 1 and is so already is left alone
+        double dxn = fmax( fmax( o->mx0 - cx, cx - o->mx1 ), 0.0 ), dyn = fmax( fmax( o->my0 - cy, cy - o->my1 ), 0.0 );
+        double dmin = fmax( dxn, dyn ), dmax = fmax( fmax( fabs( o->mx0 - cx ), fabs( o->mx1 - cx ) ), fmax( fabs( o->my0 - cy ), fabs( o->my1 - cy ) ) );
+        if ( ( dmax <= o->ma && o->msat == 1 ) || ( dmin >= o->mb && o->msat == 2 ) ) {
             continue;
         }
         double inv = 1.0 / ( o->mb - o->ma );
@@ -1024,6 +1039,7 @@ void m3d_morph( m3d_t* m, double cx, double cy ) {
             double d = fmax( fabs( p->x - cx ), fabs( p->y - cy ) ), w = smooth01( ( d - o->ma ) * inv );
             p->z = (double) o->mf[k] + ( (double) o->mc[k] - (double) o->mf[k] ) * w;
         }
+        o->msat = dmax <= o->ma ? 1 : dmin >= o->mb ? 2 : 0;
         o->dirty = true; o->gen = next_gen();
     }
 }
@@ -1702,7 +1718,7 @@ bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t sl
             tjob_t* pj = (tjob_t*) calloc( 1, sizeof(tjob_t) );
             if ( pj == 0 ) { *err = "Out of memory"; return false; }
             pj->obj = i1; pj->n = n; pj->x0 = a[1]; pj->y0 = a[2]; pj->cell = a[4]; pj->skirt = a[5]; pj->mode = i2; pj->hx0 = a[7]; pj->hy0 = a[8]; pj->hn = i3;
-            pj->ma = i2 == 0 ? ma : 0.0; pj->mb = i2 == 0 ? mb : 0.0;
+            pj->ma = ma; pj->mb = mb;
             pj->gnd = m->gnd; pj->pic = m->rpic;
             pj->sunon = m->sun.on; pj->lx = m->sun.lx; pj->ly = m->sun.ly; pj->lz = m->sun.lz; pj->steps = m->sun.steps; pj->stride = m->sun.stride;
             bool ok = jobs_submit( m, pj );
