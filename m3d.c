@@ -30,6 +30,10 @@
 #include "m3dpriv.h"
 #include "gfxops.h"
 #include "noise.h"
+#include "roadnet.h"
+#include <pthread.h>
+#include <stdatomic.h>
+#include <time.h>
 
 // -- small things ----------------------------------------------------------------------------------------------------------------
 
@@ -286,7 +290,10 @@ static bool obj_unshare( obj_t* o ) {
     return true;
 }
 
+static void jobs_discard( m3d_t* m );
+
 static void clear_world( m3d_t* m ) {
+    jobs_discard( m );
     for ( int i=0; i < M3D_MAXOBJECTS; ++i ) {
         free_obj( &m->objs[i] );
     }
@@ -297,6 +304,8 @@ static void clear_world( m3d_t* m ) {
     m->nzones = 0;
     memset( &m->gnd, 0, sizeof(m->gnd) );
     memset( &m->sun, 0, sizeof(m->sun) );          // (shaded pictures stay, as plain pictures now)
+    memset( &m->rpic, 0, sizeof(m->rpic) );
+    m->rmorph = 0.0;
 }
 
 static bool set_view( m3d_t* m, int x, int y, int w, int h, int sc, double fov ) {
@@ -339,7 +348,7 @@ void m3d_set_hardware( m3d_t* m, const m3drend_t* r ) {
 }
 
 static void reset_state( m3d_t* m ) {
-    m->fog = 0; m->far = 0; m->hazecol = -1; m->skytex = -1; m->skyrep = 1; m->skyshift = 0;
+    m->fog = 0; m->far = 0; m->hazecol = -1; m->fogstart = 0; m->skytex = -1; m->skyrep = 1; m->skyshift = 0;
     m->x = m->y = m->z = 0; m->yaw = 0; m->pitch = 0; m->lift = 0;
     m->radius = 14; m->height = 56; m->eye = 46; m->step = 24;
     m->hit = 0; m->shotkind = 0; m->shotobj = -1; m->shotdist = 0; m->shotx = m->shoty = m->shotz = 0;
@@ -371,10 +380,14 @@ m3d_t* m3d_new( void ) {
     return m;
 }
 
+static void jobs_stop( m3d_t* m );
+
 void m3d_free( m3d_t* m ) {
     if ( m == 0 ) {
         return;
     }
+    jobs_stop( m );
+    rnet_flush();
     if ( m->objs != 0 ) {
         for ( int i=0; i < M3D_MAXOBJECTS; ++i ) {
             free_obj( &m->objs[i] );
@@ -420,29 +433,64 @@ static double box_weight( double x, double y, double cx, double cy, double rx, d
     return d >= 1.0 ? 0.0 : ( 1.0 - d ) * ( 1.0 - d ) * ( 1.0 + 2.0 * d );
 }
 
-double m3d_ground( const m3d_t* m, double x, double y ) {
-    const ground_t* g = &m->gnd;
+// the height one ridged layer adds at (x, y): amp * (a mask of the range) * ridged noise
+static double ridged_layer( const mnt_t* mn, double x, double y, double quiet ) {
+    if ( !mn->on || quiet <= 0.0 ) {
+        return 0.0;
+    }
+    double t = quiet * smooth01( ( nz_fbm( mn->seed + 1, x / ( mn->scale * 4.0 ), y / ( mn->scale * 4.0 ), 2, 0.5, 2.0 ) - mn->lo ) / ( mn->hi - mn->lo ) );
+    if ( mn->r1 > 0.0 && t > 0.0 ) {                    // faded in between the distances r0 and r1 from the origin (0, 0)
+        t *= smooth01( ( sqrt( x * x + y * y ) - mn->r0 ) / ( mn->r1 - mn->r0 ) );
+    }
+    return t > 0.0 ? mn->amp * t * nz_ridged( mn->seed, x / mn->scale, y / mn->scale, mn->oct, 0.5, 2.0 ) : 0.0;
+}
+
+static double fade01( double d, double inner, double outer ) {      // 0 at 'inner' or nearer, 1 at 'outer' or farther
+    return smooth01( ( d - inner ) / ( outer - inner ) );
+}
+
+/*
+The ground is made in layers, each one adapting to the ones before it (the order of the generation):
+1. the basic hills of fractal noise, and the kinds of ground (meadows and fields: a field is flat);
+2. dirt roads (M3D ROADNET): the hills keep away from them (they lie on the ground as it is);
+3. the hills (M3D HILLS): none on a field, none on a dirt road;
+4. tarred roads: they go across any terrain: the ground along a road (about 480 wide) is cut or filled to the road's height, the mean of the ground along the road;
+5. lakes and mountains: they keep away from every road (a mountain's foot or a lake's shore never reaches a road);
+6. the flat boxes (the house, the field) as the last word.
+Everything the roads do fades out towards the quiet box.
+*/
+static double ground_eval( const ground_t* g, double x, double y ) {
     if ( !g->on ) {
         return 0.0;
     }
     double h = g->base + g->amp * nz_fbm( g->seed, x / g->scale, y / g->scale, g->oct, g->gain, g->lac );
     double quiet = g->quiet.on ? 1.0 - box_weight( x, y, g->quiet.cx, g->quiet.cy, g->quiet.rx, g->quiet.ry, g->quiet.margin ) : 1.0;
-    for ( int k=0; k < 2; ++k ) {                       // mountains and hills: ridged noise where the (four times slower) noise of the range is high
-        const mnt_t* mn = &g->mnt[k];
-        if ( !mn->on || quiet <= 0.0 ) {
-            continue;
+    rnear_t rn;
+    double hf = 1.0, rf = 1.0;                          // how much of the hills / of the lakes and mountains is left at this place
+    bool net = g->net.on && quiet > 0.0;
+    if ( net ) {
+        rnet_near( &g->net, x, y, 700.0, &rn );
+        hf = 1.0 - quiet * ( 1.0 - fade01( rn.dirt, 80.0, 280.0 ) );
+        if ( rnet_kind( &g->net, x, y ) == 2 ) {
+            hf *= 1.0 - 0.9 * quiet;
         }
-        double t = quiet * smooth01( ( nz_fbm( mn->seed + 1, x / ( mn->scale * 4.0 ), y / ( mn->scale * 4.0 ), 2, 0.5, 2.0 ) - mn->lo ) / ( mn->hi - mn->lo ) );
-        if ( mn->r1 > 0.0 && t > 0.0 ) {                // faded in between the distances r0 and r1 from the origin (0, 0)
-            t *= smooth01( ( sqrt( x * x + y * y ) - mn->r0 ) / ( mn->r1 - mn->r0 ) );
-        }
-        if ( t > 0.0 ) {
-            h += mn->amp * t * nz_ridged( mn->seed, x / mn->scale, y / mn->scale, mn->oct, 0.5, 2.0 );
-        }
+        rf = 1.0 - quiet * ( 1.0 - fmin( fade01( rn.dirt, 120.0, 300.0 ), fade01( rn.tar, 300.0, 700.0 ) ) );
     }
+    h += hf * ridged_layer( &g->mnt[1], x, y, quiet );
+    if ( net && rn.tar < 520.0 ) {                      // a tarred road: cut and fill to the mean height of the ground along it (7 places 150 apart)
+        double wt = quiet * ( 1.0 - fade01( rn.tar, 240.0, 520.0 ) ), hd = 0.0;
+        for ( int j = -3; j <= 3; ++j ) {
+            double t = rn.tt + (double) j * 150.0 / rn.tlink.len, px, py;
+            t = t < 0.0 ? 0.0 : t > 1.0 ? 1.0 : t;
+            rnet_point( &rn.tlink, t, &px, &py );
+            hd += g->base + g->amp * nz_fbm( g->seed, px / g->scale, py / g->scale, g->oct, g->gain, g->lac ) + ridged_layer( &g->mnt[1], px, py, 1.0 );
+        }
+        h += ( hd / 7.0 - h ) * wt;
+    }
+    h += rf * ridged_layer( &g->mnt[0], x, y, quiet );
     if ( g->lake.on && quiet > 0.0 ) {                  // basins
         double t = smooth01( ( nz_fbm( g->lake.seed, x / g->lake.scale, y / g->lake.scale, 2, 0.5, 2.0 ) - g->lake.lo ) / ( g->lake.hi - g->lake.lo ) );
-        h -= g->lake.depth * t * quiet;
+        h -= g->lake.depth * t * quiet * rf;
     }
     for ( int i=0; i < 8; ++i ) {
         if ( g->flat[i].on ) {
@@ -451,6 +499,404 @@ double m3d_ground( const m3d_t* m, double x, double y ) {
     }
     return h;
 }
+
+double m3d_ground( const m3d_t* m, double x, double y ) {
+    return ground_eval( &m->gnd, x, y );
+}
+
+// -- asynchronous ground jobs: M3D RING (a worker thread makes the ground meshes while the program goes on) ----------------------------------------------------------------
+/*
+A job makes the whole mesh of one object: a square grid of cells from the ground function (a hole of cells may be left out: the finer grid inside), pictures chosen by a rule in C
+(mode 0, the rings: water, rock, grass; mode 1, the chunks round the player: the kinds of ground, mud, rock as FN OCELL of demos/1987.bas does), the slope shading of M3D SUN
+(the shaded pictures are made when the result is taken), skirts under the edges, the vertices of the outer cells morphed to the coarser neighbour grid (M3D RINGMORPH: no step
+where two rings meet) and, in the rings, the tarred roads as ribbons. The worker thread only reads a copy of the ground function; the result waits until M3D POLL (or RINGWAIT):
+it replaces the object's mesh when no job is pending any more, so all rings change together. The ground function and the road network are pure (the road cache is thread local).
+*/
+#define TJOBS      160
+#define TJOB_VARS  96
+
+typedef struct {
+    _Atomic int state;                      // 0 free, 1 queued, 2 working, 3 done
+    long    seq;
+    int     obj, n, mode, hn;
+    double  x0, y0, cell, skirt, hx0, hy0, morph;
+    ground_t gnd;
+    bool    sunon;
+    double  lx, ly, lz;
+    int     steps, stride;
+    ringpic_t pic;
+    mv_t*   v;  int nv, capv;
+    mt_t*   t;  int nt, capt;
+    int     nvar;
+    int     vars[TJOB_VARS][2];             // (picture, shade step) pairs whose shaded pictures the result needs
+} tjob_t;
+
+typedef struct _tjobs {
+    tjob_t  job[TJOBS];
+    pthread_t th;
+    bool    started;
+    _Atomic int quit;
+    long    seq;
+} tjobs_t;
+
+static int jv_add( tjob_t* j, double x, double y, double z, double u, double v ) {
+    if ( j->nv >= j->capv ) {
+        int nc = j->capv == 0 ? 4096 : j->capv * 2;
+        mv_t* nvv = (mv_t*) realloc( j->v, sizeof(mv_t) * (size_t) nc );
+        if ( nvv == 0 ) { return -1; }
+        j->v = nvv; j->capv = nc;
+    }
+    mv_t* p = &j->v[j->nv];
+    p->x = x; p->y = y; p->z = z; p->u = u; p->v = v;
+    return j->nv++;
+}
+
+static bool jt_add( tjob_t* j, int a, int b, int c, int tex ) {
+    if ( j->nt >= j->capt ) {
+        int nc = j->capt == 0 ? 8192 : j->capt * 2;
+        mt_t* nt = (mt_t*) realloc( j->t, sizeof(mt_t) * (size_t) nc );
+        if ( nt == 0 ) { return false; }
+        j->t = nt; j->capt = nc;
+    }
+    mt_t* t = &j->t[j->nt++];
+    t->a = a; t->b = b; t->c = c; t->tex = tex;
+    const int ix[3] = { a, b, c };
+    for ( int k=0; k < 3; ++k ) {
+        t->u[k] = j->v[ix[k]].u; t->v[k] = j->v[ix[k]].v;
+    }
+    return true;
+}
+
+// the height of a ring's vertex: the ground, and towards the outer edge of the ring more and more the surface of the coarser grid (3 x the cell) that lies beyond
+static double job_height( const tjob_t* j, double x, double y ) {
+    double h = ground_eval( &j->gnd, x, y );
+    if ( j->morph > 0.0 && j->mode == 0 ) {
+        double half = (double) j->n * j->cell * 0.5, cx = j->x0 + half, cy = j->y0 + half;
+        double d = fmax( fabs( x - cx ), fabs( y - cy ) ), inner = j->morph * half;
+        if ( d > inner ) {
+            double w = smooth01( ( d - inner ) / ( half - inner ) );
+            double c2 = j->cell * 3.0, gx = floor( x / c2 ) * c2, gy = floor( y / c2 ) * c2;
+            double h00 = ground_eval( &j->gnd, gx, gy ), h10 = ground_eval( &j->gnd, gx + c2, gy ), h11 = ground_eval( &j->gnd, gx + c2, gy + c2 ), h01 = ground_eval( &j->gnd, gx, gy + c2 );
+            double u = ( x - gx ) / c2, v = ( y - gy ) / c2;
+            double hc = u >= v ? h00 + u * ( h10 - h00 ) + v * ( h11 - h10 ) : h00 + v * ( h01 - h00 ) + u * ( h11 - h01 );
+            h += ( hc - h ) * w;
+        }
+    }
+    return h;
+}
+
+static int job_cellpic( const tjob_t* j, double cx, double cy, double zc, double zmax, double zmin ) {
+    const ringpic_t* p = &j->pic;
+    if ( j->mode == 0 ) {
+        if ( zc < p->level - 3.0 ) { return p->water; }
+        if ( zc > p->rockh || ( zmax - zmin ) / j->cell > 0.9 ) { return p->rock; }
+        return p->grass;
+    }
+    // mode 1: FN OCELL
+    int celltex = p->grass;
+    double nz = sin( cx * 0.0023 + 1.0 ) * cos( cy * 0.0031 ) + sin( ( cx - cy ) * 0.0017 );
+    celltex = nz > 0.55 ? p->grass + 2 : nz < -0.5 ? p->grass + 1 : p->grass;
+    if ( cx >= -3600.0 && cx < 3600.0 && cy >= -3600.0 && cy < 3600.0 ) {
+        if ( fabs( cx - 1100.0 ) < 700.0 && fabs( cy - 650.0 ) < 500.0 ) { return p->mud; }
+        return celltex;
+    }
+    double s = fabs( ground_eval( &j->gnd, cx + 50.0, cy ) - ground_eval( &j->gnd, cx - 50.0, cy ) ) + fabs( ground_eval( &j->gnd, cx, cy + 50.0 ) - ground_eval( &j->gnd, cx, cy - 50.0 ) );
+    if ( zc > p->rockh || s > 45.0 ) { return p->rock; }
+    if ( zc < p->level + 1.5 ) { return p->mud; }
+    int k = rnet_kind( &j->gnd.net, cx, cy );
+    return k == 1 ? p->meadow : k == 2 ? p->field : k == 3 ? p->forest : celltex;
+}
+
+static int job_shade( const tjob_t* j, double cell, double z00, double z10, double z01, double z11 ) {
+    if ( !j->sunon ) { return 0; }
+    double dzx = ( ( z10 + z11 ) - ( z00 + z01 ) ) / ( 2.0 * cell ), dzy = ( ( z01 + z11 ) - ( z00 + z10 ) ) / ( 2.0 * cell );
+    double inv = 1.0 / sqrt( dzx * dzx + dzy * dzy + 1.0 );
+    double lam = ( -dzx * j->lx - dzy * j->ly + j->lz ) * inv / j->lz;
+    lam = lam < 0.0 ? 0.0 : lam > 1.0 ? 1.0 : lam;
+    return (int) floor( ( 1.0 - lam ) * (double)( j->steps - 1 ) + 0.5 );
+}
+
+static void job_var( tjob_t* j, int pic, int k ) {
+    for ( int i=0; i < j->nvar; ++i ) {
+        if ( j->vars[i][0] == pic && j->vars[i][1] == k ) { return; }
+    }
+    if ( j->nvar < TJOB_VARS ) {
+        j->vars[j->nvar][0] = pic; j->vars[j->nvar][1] = k; ++j->nvar;
+    }
+}
+
+// the height of the mesh of the job at (x, y) (the triangles of its cells), the ground function where there is none (outside, in the hole)
+static double job_meshh( const tjob_t* j, double x, double y ) {
+    int n = j->n, w = n + 1;
+    int ci = (int) floor( ( x - j->x0 ) / j->cell ), cj = (int) floor( ( y - j->y0 ) / j->cell );
+    int hi0 = j->hn > 0 ? (int) floor( ( j->hx0 - j->x0 ) / j->cell + 0.5 ) : 0, hj0 = j->hn > 0 ? (int) floor( ( j->hy0 - j->y0 ) / j->cell + 0.5 ) : 0;
+    if ( ci < 0 || ci >= n || cj < 0 || cj >= n || ( j->hn > 0 && ci >= hi0 && ci < hi0 + j->hn && cj >= hj0 && cj < hj0 + j->hn ) ) {
+        return ground_eval( &j->gnd, x, y );
+    }
+    int b = cj * w + ci;
+    double z00 = j->v[b].z, z10 = j->v[b + 1].z, z01 = j->v[b + w].z, z11 = j->v[b + w + 1].z;
+    double u = ( x - ( j->x0 + ci * j->cell ) ) / j->cell, v = ( y - ( j->y0 + cj * j->cell ) ) / j->cell;
+    return u >= v ? z00 + u * ( z10 - z00 ) + v * ( z11 - z10 ) : z00 + v * ( z01 - z00 ) + u * ( z11 - z01 );
+}
+
+#define RIBBON_COLS 5
+
+static void job_ribbons( tjob_t* j ) {
+    int n = j->n;
+    rlink_t links[32];
+    double ex = j->x0 + n * j->cell, ey = j->y0 + n * j->cell;
+    int nl = rnet_links( &j->gnd.net, 1, j->x0 - 500.0, j->y0 - 500.0, ex + 500.0, ey + 500.0, links, 32 );
+    double half = j->mode == 1 ? 220.0 : fmax( 220.0, j->cell * 0.25 ), lift = 3.0 + j->cell * 0.02;
+    int tex = j->mode == 0 && j->cell >= 2700.0 ? j->pic.tarfar : j->pic.tar;
+    static _Thread_local double px[1500], py[1500], pd[1500];
+    static _Thread_local int row[1500];
+    for ( int li = 0; li < nl; ++li ) {
+        const rlink_t* l = &links[li];
+        // the places along the road: every 100 units in a chunk (a piece of ribbon follows the mesh at least that closely), every cell in a ring
+        double sub = j->mode == 1 ? 2.0 : 1.0 / fmax( 1.0, floor( j->cell / l->step ) );
+        double dt = 1.0 / ( (double) l->steps * sub );
+        int np = 0;
+        for ( double t = 0.0; t < 1.0 - 1.0e-9 && np < 1499; t += dt ) { rnet_point( l, t, &px[np], &py[np] ); ++np; }
+        rnet_point( l, 1.0, &px[np], &py[np] ); ++np;
+        pd[0] = 0.0;
+        for ( int k = 1; k < np; ++k ) { pd[k] = pd[k - 1] + sqrt( ( px[k] - px[k - 1] ) * ( px[k] - px[k - 1] ) + ( py[k] - py[k - 1] ) * ( py[k] - py[k - 1] ) ); row[k] = -1; }
+        row[0] = -1;
+        for ( int k = 0; k + 1 < np; ++k ) {
+            double sx = px[k], sy = py[k];
+            bool mine;
+            if ( j->mode == 1 ) {                                        // a chunk makes the pieces that start in it
+                mine = sx >= j->x0 && sx < ex && sy >= j->y0 && sy < ey;
+            } else {                                                     // a ring the pieces in it, none over the finer ring
+                double mx = ( sx + px[k + 1] ) * 0.5, my = ( sy + py[k + 1] ) * 0.5;
+                mine = mx >= j->x0 && mx < ex && my >= j->y0 && my < ey;
+                if ( mine && j->hn > 0 && mx >= j->hx0 && mx < j->hx0 + j->hn * j->cell && my >= j->hy0 && my < j->hy0 + j->hn * j->cell ) { mine = false; }
+            }
+            if ( !mine ) { continue; }
+            double qw = 1.0;
+            if ( j->gnd.quiet.on ) { qw = 1.0 - box_weight( sx, sy, j->gnd.quiet.cx, j->gnd.quiet.cy, j->gnd.quiet.rx, j->gnd.quiet.ry, j->gnd.quiet.margin ); }
+            if ( qw < 0.99 ) { continue; }
+            for ( int e = 0; e < 2; ++e ) {                              // the two ends: a row of vertices across the road on the mesh (the normal from the places before and after: shared with the neighbouring piece)
+                int kk = k + e;
+                if ( row[kk] >= 0 ) { continue; }
+                int k0 = kk > 0 ? kk - 1 : 0, k1 = kk < np - 1 ? kk + 1 : np - 1;
+                double tx = px[k1] - px[k0], ty = py[k1] - py[k0], tl = sqrt( tx * tx + ty * ty );
+                if ( tl < 1.0e-9 ) { tl = 1.0; tx = 1.0; ty = 0.0; }
+                double nx = ty / tl, ny = -tx / tl;
+                int first = -1;
+                for ( int c = 0; c < RIBBON_COLS; ++c ) {
+                    double off = half - 2.0 * half * (double) c / (double)( RIBBON_COLS - 1 );
+                    double vx = px[kk] + nx * off, vy = py[kk] + ny * off;
+                    int vi = jv_add( j, vx, vy, job_meshh( j, vx, vy ) + lift, 64.0 * ( 1.0 - (double) c / (double)( RIBBON_COLS - 1 ) ), pd[kk] * 0.17 );
+                    if ( vi < 0 ) { return; }
+                    if ( c == 0 ) { first = vi; }
+                }
+                row[kk] = first;
+            }
+            for ( int c = 0; c + 1 < RIBBON_COLS; ++c ) {
+                int a0 = row[k] + c, a1 = row[k] + c + 1, b0 = row[k + 1] + c, b1 = row[k + 1] + c + 1;
+                if ( !jt_add( j, a0, b0, b1, tex ) || !jt_add( j, a0, b1, a1, tex ) ) { return; }
+            }
+        }
+    }
+}
+
+static void job_run( tjob_t* j ) {
+    int n = j->n, w = n + 1;
+    j->nv = j->nt = j->nvar = 0;
+    double uvs = j->mode == 1 ? 0.5 : j->cell <= 300.0 ? 0.5 : j->cell <= 900.0 ? 0.1 : 0.02;
+    int hi0 = j->hn > 0 ? (int) floor( ( j->hx0 - j->x0 ) / j->cell + 0.5 ) : 0, hj0 = j->hn > 0 ? (int) floor( ( j->hy0 - j->y0 ) / j->cell + 0.5 ) : 0;
+    for ( int jy = 0; jy <= n; ++jy ) {
+        for ( int jx = 0; jx <= n; ++jx ) {
+            double x = j->x0 + jx * j->cell, y = j->y0 + jy * j->cell;
+            if ( jv_add( j, x, y, job_height( j, x, y ), x * uvs, y * uvs ) < 0 ) { return; }
+        }
+    }
+    #define HOLE(ci,cj) ( j->hn > 0 && (ci) >= hi0 && (ci) < hi0 + j->hn && (cj) >= hj0 && (cj) < hj0 + j->hn )
+    #define CELL_OFF(ci,cj) ( (ci) < 0 || (ci) >= n || (cj) < 0 || (cj) >= n || HOLE(ci,cj) )
+    for ( int cj = 0; cj < n; ++cj ) {
+        for ( int ci = 0; ci < n; ++ci ) {
+            if ( HOLE( ci, cj ) ) { continue; }
+            int b = cj * w + ci;
+            double z00 = j->v[b].z, z10 = j->v[b + 1].z, z01 = j->v[b + w].z, z11 = j->v[b + w + 1].z;
+            double zmax = fmax( fmax( z00, z10 ), fmax( z01, z11 ) ), zmin = fmin( fmin( z00, z10 ), fmin( z01, z11 ) );
+            double cx = j->x0 + ( ci + 0.5 ) * j->cell, cy = j->y0 + ( cj + 0.5 ) * j->cell;
+            int p = job_cellpic( j, cx, cy, ( z00 + z10 + z01 + z11 ) * 0.25, zmax, zmin );
+            int k = job_shade( j, j->cell, z00, z10, z01, z11 );
+            if ( k > 0 && p + k * j->stride < M3D_MAXTEX ) { job_var( j, p, k ); p += k * j->stride; }
+            if ( !jt_add( j, b, b + 1, b + w + 1, p ) || !jt_add( j, b, b + w + 1, b + w, p ) ) { return; }
+        }
+    }
+    if ( j->skirt > 0.0 ) {
+        for ( int cj = 0; cj < n; ++cj ) {
+            for ( int ci = 0; ci < n; ++ci ) {
+                if ( HOLE( ci, cj ) ) { continue; }
+                int b = cj * w + ci;
+                // the four edges counterclockwise: south, east, north, west; a wall where the neighbour cell is off the grid or in the hole
+                const int va[4] = { b, b + 1, b + w + 1, b + w }, vb[4] = { b + 1, b + w + 1, b + w, b };
+                const bool off[4] = { CELL_OFF( ci, cj - 1 ), CELL_OFF( ci + 1, cj ), CELL_OFF( ci, cj + 1 ), CELL_OFF( ci - 1, cj ) };
+                int pc = 0;
+                if ( j->nt >= 2 ) { pc = j->t[ j->nt - 1 ].tex; }
+                for ( int s = 0; s < 4; ++s ) {
+                    if ( !off[s] ) { continue; }
+                    mv_t pa = j->v[va[s]], pb = j->v[vb[s]];
+                    int na = jv_add( j, pa.x, pa.y, pa.z - j->skirt, pa.u, pa.v ), nb = jv_add( j, pb.x, pb.y, pb.z - j->skirt, pb.u, pb.v );
+                    if ( na < 0 || nb < 0 || !jt_add( j, na, nb, vb[s], pc ) || !jt_add( j, na, vb[s], va[s], pc ) ) { return; }
+                }
+            }
+        }
+    }
+    #undef HOLE
+    #undef CELL_OFF
+    // the tarred roads as ribbons on the mesh (about 440 wide; in the rings wider so that they are seen), a little above the mesh: the chunk that holds the start of a piece makes it
+    if ( j->pic.tar > 0 && j->gnd.net.on ) {
+        job_ribbons( j );
+    }
+}
+
+static void* job_worker( void* arg ) {
+    tjobs_t* js = (tjobs_t*) arg;
+    while ( !atomic_load( &js->quit ) ) {
+        tjob_t* best = 0;
+        for ( int i=0; i < TJOBS; ++i ) {
+            if ( atomic_load( &js->job[i].state ) == 1 && ( best == 0 || js->job[i].seq < best->seq ) ) { best = &js->job[i]; }
+        }
+        if ( best == 0 ) {
+            struct timespec ts = { 0, 1000000L };
+            nanosleep( &ts, 0 );
+            continue;
+        }
+        atomic_store( &best->state, 2 );
+        job_run( best );
+        atomic_store( &best->state, 3 );
+    }
+    rnet_flush();
+    return 0;
+}
+
+static void job_free_result( tjob_t* j ) {
+    free( j->v ); free( j->t );
+    j->v = 0; j->t = 0; j->nv = j->nt = j->capv = j->capt = 0;
+}
+
+static void jobs_stop( m3d_t* m ) {
+    tjobs_t* js = m->jobs;
+    if ( js == 0 ) { return; }
+    atomic_store( &js->quit, 1 );
+    if ( js->started ) { pthread_join( js->th, 0 ); }
+    for ( int i=0; i < TJOBS; ++i ) { job_free_result( &js->job[i] ); }
+    free( js );
+    m->jobs = 0;
+}
+
+static int jobs_pending( const m3d_t* m ) {                     // jobs that are queued, working or done and not taken yet
+    int c = 0;
+    if ( m->jobs != 0 ) {
+        for ( int i=0; i < TJOBS; ++i ) { if ( atomic_load( &m->jobs->job[i].state ) != 0 ) { ++c; } }
+    }
+    return c;
+}
+
+static int jobs_running_mode( const m3d_t* m, int mode ) {      // queued or working (mode -1: all)
+    int c = 0;
+    if ( m->jobs != 0 ) {
+        for ( int i=0; i < TJOBS; ++i ) {
+            int s = atomic_load( &m->jobs->job[i].state );
+            if ( ( s == 1 || s == 2 ) && ( mode < 0 || m->jobs->job[i].mode == mode ) ) { ++c; }
+        }
+    }
+    return c;
+}
+
+static int jobs_running( const m3d_t* m ) {                    // queued or working
+    return jobs_running_mode( m, -1 );
+}
+
+static bool jobs_submit( m3d_t* m, tjob_t* proto ) {
+    if ( m->jobs == 0 ) {
+        m->jobs = (tjobs_t*) calloc( 1, sizeof(tjobs_t) );
+        if ( m->jobs == 0 ) { return false; }
+    }
+    tjobs_t* js = m->jobs;
+    if ( !js->started ) {
+        if ( pthread_create( &js->th, 0, job_worker, js ) != 0 ) { return false; }
+        js->started = true;
+    }
+    tjob_t* slot = 0;
+    for ( int i=0; i < TJOBS; ++i ) {                           // a job for the same object that has not started is replaced
+        if ( atomic_load( &js->job[i].state ) == 1 && js->job[i].obj == proto->obj ) { slot = &js->job[i]; break; }
+    }
+    if ( slot != 0 ) {
+        if ( !atomic_compare_exchange_strong( &slot->state, &(int){ 1 }, 4 ) ) { slot = 0; }     // 4: being filled (the worker leaves it)
+    }
+    if ( slot == 0 ) {
+        for ( int i=0; i < TJOBS; ++i ) {
+            int zero = 0;
+            if ( atomic_compare_exchange_strong( &js->job[i].state, &zero, 4 ) ) { slot = &js->job[i]; break; }
+        }
+    }
+    if ( slot == 0 ) { return false; }
+    job_free_result( slot );
+    slot->seq = ++js->seq;
+    slot->obj = proto->obj; slot->n = proto->n; slot->mode = proto->mode; slot->hn = proto->hn;
+    slot->x0 = proto->x0; slot->y0 = proto->y0; slot->cell = proto->cell; slot->skirt = proto->skirt; slot->hx0 = proto->hx0; slot->hy0 = proto->hy0; slot->morph = proto->morph;
+    slot->gnd = proto->gnd; slot->sunon = proto->sunon; slot->lx = proto->lx; slot->ly = proto->ly; slot->lz = proto->lz; slot->steps = proto->steps; slot->stride = proto->stride;
+    slot->pic = proto->pic;
+    atomic_store( &slot->state, 1 );
+    return true;
+}
+
+// takes the finished jobs (a chunk (mode 1) at once, the rings (mode 0) only when none of them is queued or working any more: they change together): the object's mesh is replaced
+static int jobs_apply( m3d_t* m ) {
+    tjobs_t* js = m->jobs;
+    int applied = 0;
+    if ( js == 0 ) { return 0; }
+    bool ringsok = jobs_running_mode( m, 0 ) == 0;                // the rings (mode 0) change together, the chunks (mode 1) one by one
+    for ( ;; ) {
+        tjob_t* best = 0;
+        for ( int i=0; i < TJOBS; ++i ) {
+            if ( atomic_load( &js->job[i].state ) == 3 && ( js->job[i].mode == 1 || ringsok ) && ( best == 0 || js->job[i].seq < best->seq ) ) { best = &js->job[i]; }
+        }
+        if ( best == 0 ) { break; }
+        if ( best->obj >= 0 && best->obj < M3D_MAXOBJECTS && m->objs[best->obj].used && best->v != 0 ) {
+            obj_t* o = &m->objs[best->obj];
+            if ( o->mref == 0 || --*o->mref <= 0 ) { free( o->v ); free( o->t ); free( o->mref ); }
+            o->mref = 0;
+            o->v = best->v; o->nv = best->nv; o->capv = best->capv;
+            o->t = best->t; o->nt = best->nt; o->capt = best->capt;
+            best->v = 0; best->t = 0; best->nv = best->nt = best->capv = best->capt = 0;
+            o->dirty = true; o->gen = next_gen();
+            for ( int i=0; i < best->nvar; ++i ) {
+                int t = best->vars[i][0], k = best->vars[i][1], nn = t + k * m->sun.stride;
+                if ( m->sun.on && nn < M3D_MAXTEX && m->texs[nn].col == 0 ) { sun_make( m, t, k ); }
+            }
+            ++applied;
+        }
+        job_free_result( best );
+        atomic_store( &best->state, 0 );
+    }
+    return applied;
+}
+
+static void jobs_wait( m3d_t* m ) {
+    while ( jobs_running( m ) > 0 ) {
+        struct timespec ts = { 0, 500000L };
+        nanosleep( &ts, 0 );
+    }
+    jobs_apply( m );
+}
+
+static void jobs_discard( m3d_t* m ) {                         // forget everything that is queued or done (M3D CLEAR / RESET)
+    tjobs_t* js = m->jobs;
+    if ( js == 0 ) { return; }
+    while ( jobs_running( m ) > 0 ) {
+        struct timespec ts = { 0, 500000L };
+        nanosleep( &ts, 0 );
+    }
+    for ( int i=0; i < TJOBS; ++i ) {
+        if ( atomic_load( &js->job[i].state ) == 3 ) { job_free_result( &js->job[i] ); atomic_store( &js->job[i].state, 0 ); }
+    }
+}
+
 
 static bool obj_valid( const m3d_t* m, int o ) {
     return o >= 0 && o < M3D_MAXOBJECTS && m->objs[o].used;
@@ -970,10 +1416,10 @@ static bool thing_get( m3d_t* m, double nv, thing_t** t ) {
 }
 
 bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t slen, const char** err ) {
-    int i1, i2, i3;
-    double args[10];
+    int i1 = 0, i2, i3;
+    double args[12];
     *err = "Illegal argument";
-    for ( int i=0; i < 10; ++i ) {
+    for ( int i=0; i < 12; ++i ) {
         args[i] = i < na ? a[i] : GFX_NONE;             // arguments beyond na are omitted
         if ( i < na && !NONE_VAL( args[i] ) && !num_ok( args[i] ) && op != GFXOP_M3DTEXTURE ) {
             return false;
@@ -1017,7 +1463,8 @@ bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t sl
             return i3 / sc >= 4 && h / sc >= 4 && set_view( m, i1, i2, i3, h, sc, fov );
         }
         case GFXOP_M3DFOG:
-            if ( !( a[0] >= 0.0 && a[0] <= 1.0e6 ) || ( !NONE_VAL( a[1] ) && !whole( a[1], 1, 255, &i1 ) ) ) { return false; }
+            if ( !( a[0] >= 0.0 && a[0] <= 1.0e6 ) || ( !NONE_VAL( a[1] ) && !whole( a[1], 1, 255, &i1 ) ) || ( !NONE_VAL( a[2] ) && !( a[2] >= 0.0 && a[2] < a[0] ) ) ) { return false; }
+            m->fogstart = NONE_VAL( a[2] ) ? 0.0 : a[2];
             m->fog = a[0];
             m->hazecol = NONE_VAL( a[1] ) ? -1 : i1;
             return true;
@@ -1082,6 +1529,57 @@ bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t sl
         case GFXOP_M3DMINIMAP:                              // (the picture is drawn by the host with m3d_minimap(); this only checks the numbers)
             return whole( a[0], -32768, 32767, &i1 ) && whole( a[1], -32768, 32767, &i2 ) && whole( a[2], 1, 512, &i3 ) && a[3] >= 1.0 && a[3] <= 512.0 &&
                    fabs( a[4] ) < 1.0e9 && fabs( a[5] ) < 1.0e9 && a[6] > 0.0 && a[6] < 1.0e9 && ( NONE_VAL( a[7] ) || fabs( a[7] ) < 1.0e9 );
+        case GFXOP_M3DRINGPIC: {
+            int pv[9];
+            for ( int k = 0; k < 9; ++k ) {
+                if ( !whole( a[k], 0, M3D_MAXTEX - 1, &pv[k] ) ) { return false; }
+            }
+            if ( !( fabs( a[9] ) < 1.0e9 ) || !( fabs( a[10] ) < 1.0e9 ) ) { return false; }
+            ringpic_t* rp = &m->rpic;
+            rp->water = pv[0]; rp->rock = pv[1]; rp->grass = pv[2]; rp->tar = pv[3]; rp->tarfar = pv[4]; rp->mud = pv[5]; rp->meadow = pv[6]; rp->field = pv[7]; rp->forest = pv[8];
+            rp->level = a[9]; rp->rockh = a[10];
+            return true;
+        }
+        case GFXOP_M3DRINGMORPH:
+            if ( !( a[0] >= 0.0 && a[0] < 1.0 ) ) { return false; }
+            m->rmorph = a[0];
+            return true;
+        case GFXOP_M3DPOLL:
+            jobs_apply( m );
+            return true;
+        case GFXOP_M3DRINGWAIT:
+            jobs_wait( m );
+            return true;
+        case GFXOP_M3DRING: {
+            int n;
+            if ( !whole( a[0], 0, M3D_MAXOBJECTS - 1, &i1 ) || !obj_valid( m, i1 ) ) {
+                *err = "Object not defined";
+                return false;
+            }
+            if ( !whole( a[3], 1, 128, &n ) || !( a[4] >= 1.0 && a[4] < 1.0e7 ) || !( a[5] >= 0.0 && a[5] < 1.0e7 ) || !whole( a[6], 0, 1, &i2 ) || !whole( a[9], 0, 128, &i3 ) ||
+                 !( fabs( a[1] ) < 1.0e9 && fabs( a[2] ) < 1.0e9 && fabs( a[7] ) < 1.0e9 && fabs( a[8] ) < 1.0e9 ) ) {
+                return false;
+            }
+            tjob_t* pj = (tjob_t*) calloc( 1, sizeof(tjob_t) );
+            if ( pj == 0 ) { *err = "Out of memory"; return false; }
+            pj->obj = i1; pj->n = n; pj->x0 = a[1]; pj->y0 = a[2]; pj->cell = a[4]; pj->skirt = a[5]; pj->mode = i2; pj->hx0 = a[7]; pj->hy0 = a[8]; pj->hn = i3;
+            pj->morph = i2 == 0 ? m->rmorph : 0.0;
+            pj->gnd = m->gnd; pj->pic = m->rpic;
+            pj->sunon = m->sun.on; pj->lx = m->sun.lx; pj->ly = m->sun.ly; pj->lz = m->sun.lz; pj->steps = m->sun.steps; pj->stride = m->sun.stride;
+            bool ok = jobs_submit( m, pj );
+            free( pj );
+            if ( !ok ) { *err = "Too many ground jobs"; return false; }
+            return true;
+        }
+        case GFXOP_M3DROADNET: {
+            if ( !( a[0] >= 0.0 && a[0] < 1.0e7 ) || !( a[1] >= 0.0 && a[1] <= 1.0 ) || !( a[2] >= 0.0 && a[2] <= 1.0e4 ) || !( a[3] >= 0.0 && a[3] < 1.0e7 ) || !( a[4] >= 0.0 && a[4] <= 1.0 ) ||
+                 !( a[5] >= 0.0 && a[5] <= 1.0e4 ) ) {
+                return false;
+            }
+            rnet_t* nt = &m->gnd.net;
+            nt->on = a[0] > 0.0 || a[3] > 0.0; nt->spacing = a[0]; nt->chance = a[1]; nt->wdirt = a[2]; nt->tspacing = a[3]; nt->tchance = a[4]; nt->wtar = a[5];
+            return true;
+        }
         case GFXOP_M3DSUN: {
             double amb = NONE_VAL( a[3] ) ? 0.5 : a[3];
             int steps = 4, stride = 100;
@@ -1414,6 +1912,17 @@ bool m3d_query( m3d_t* m, int q, const double* a, int na, double* r ) {
     *r = 0;
     switch ( q ) {
         case GFXQ_M3DGROUND: *r = m3d_ground( m, a[0], a[1] ); return true;
+        case GFXQ_M3DROADD: case GFXQ_M3DROADT: {
+            rnear_t rn;
+            rnet_near( &m->gnd.net, a[0], a[1], 700.0, &rn );
+            *r = q == GFXQ_M3DROADD ? rn.dirt : rn.tar;
+            return true;
+        }
+        case GFXQ_M3DKIND: *r = rnet_kind( &m->gnd.net, a[0], a[1] ); return true;
+        case GFXQ_M3DRINGBUSY: *r = jobs_pending( m ); return true;
+        case GFXQ_M3DQUIET:
+            *r = m->gnd.quiet.on ? 1.0 - box_weight( a[0], a[1], m->gnd.quiet.cx, m->gnd.quiet.cy, m->gnd.quiet.rx, m->gnd.quiet.ry, m->gnd.quiet.margin ) : 1.0;
+            return true;
         case GFXQ_M3DX: *r = m->x; return true;
         case GFXQ_M3DY: *r = m->y; return true;
         case GFXQ_M3DZ: *r = m->z; return true;

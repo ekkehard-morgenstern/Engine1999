@@ -388,8 +388,14 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXOP_M3DSUN    346             // M3D SUN dx, dy, dz [, ambient [, steps [, stride]]]   (shade terrain cells by slope with pictures t + k * stride; all zero = off)
 #define GFXOP_M3DMINIMAP 347            // M3D MINIMAP sx, sy, w, h, wx, wy, span [, water]   (a shaded height map of the ground onto the target layer; the window host draws it)
 #define GFXOP_M3DHILLS  348             // M3D HILLS seed, scale, amp, octaves, lo, hi        (a second ridged layer, as M3D MOUNTAINS: so a game can have hills and real mountains)
+#define GFXOP_M3DROADNET 349            // M3D ROADNET spacing, chance, wdirt, tspacing, tchance, wtar   (the road network of the ground function; spacing 0 = none)
+#define GFXOP_M3DRING   350             // M3D RING o, x0, y0, n, cell, skirt, mode, hx0, hy0, hn   (a worker thread makes the ground mesh of object o: n x n cells, a hole of hn x hn cells; see M3D POLL)
+#define GFXOP_M3DRINGPIC 351            // M3D RINGPIC water, rock, grass, tar, tarfar, mud, meadow, field, forest, level, rockh
+#define GFXOP_M3DRINGMORPH 352          // M3D RINGMORPH inner   (0 = off)
+#define GFXOP_M3DPOLL   353             // M3D POLL           (takes the finished ground jobs when none is pending any more)
+#define GFXOP_M3DRINGWAIT 354           // M3D RINGWAIT       (waits for all ground jobs and takes them)
 #define GFXOP_M3DFIRST  GFXOP_M3DRESET
-#define GFXOP_M3DLAST   GFXOP_M3DHILLS
+#define GFXOP_M3DLAST   GFXOP_M3DRINGWAIT
 #define GFXOP_IS_M3D(op) ( (op) >= GFXOP_M3DFIRST && (op) <= GFXOP_M3DLAST )
 #define GFXQ_M3DX       350             // M3D("X"), ("Y"), ("Z" = the feet), ("EYE"), ("YAW"), ("PITCH"), ("LIFT"), ("HIT"), ("FLOORZ")
 #define GFXQ_M3DY       351
@@ -439,7 +445,12 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXQ_M3DGROUND  390             // M3D("GROUND", x, y): the height of the ground function (0 when none is defined)
 #define GFXQ_M3DFLOORTEX 391            // M3D("FLOORTEX", x, y, z): the picture number of the surface that M3D("FLOORAT") finds (-1 none; shaded terrain pictures give their cell's own picture)
 #define GFXQ_M3DFLOOROBJ 392            // M3D("FLOOROBJ", x, y, z): the number of the object that surface belongs to (-1 none)
-#define GFXQ_M3DLAST    GFXQ_M3DFLOOROBJ
+#define GFXQ_M3DROADD   393             // M3D("ROADD", x, y): the distance to the nearest dirt road (1e9: none within 700)
+#define GFXQ_M3DROADT   394             // M3D("ROADT", x, y): the distance to the nearest tarred road
+#define GFXQ_M3DKIND    395             // M3D("KIND", x, y): the kind of ground of the road network's regions: 0 plain, 1 meadow, 2 field, 3 forest
+#define GFXQ_M3DRINGBUSY 396            // M3D("RINGBUSY"): the ground jobs that are not taken yet
+#define GFXQ_M3DQUIET   397             // M3D("QUIET", x, y): 0 inside the quiet box (the hand-made area), 1 outside
+#define GFXQ_M3DLAST    GFXQ_M3DQUIET
 
 typedef struct _gfxcmd_t {
     const char* group;                  // "GFX", "TXT", "TILE", "SPRITE", "MOUSE", or "" for the statements that are reserved words themselves

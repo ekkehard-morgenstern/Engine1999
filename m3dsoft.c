@@ -283,9 +283,9 @@ static void raster( rc_t* c, const tri_t* t, bool translucent ) {
                         }
                         int hk = 0;
                         if ( fogd > 0 ) {
-                            if ( haze ) {                                   // the fog fades to the haze color (quadratically: gentle near, strong far)
-                                double q = z / fogd;
-                                hk = q >= 1.0 ? 15 : (int)( q * q * 15.0 + 0.5 );
+                            if ( haze ) {                                   // the fog fades to the haze color (quadratically: gentle near, strong far; nothing before the start)
+                                double q = ( z - m->fogstart ) / ( fogd - m->fogstart );
+                                hk = q <= 0.0 ? 0 : q >= 1.0 ? 15 : (int)( q * q * 15.0 + 0.5 );
                             } else {
                                 double ff = 1.0 - z / fogd;
                                 lv *= ff < 0 ? 0 : ff;
@@ -498,8 +498,8 @@ static void draw_things( rc_t* c ) {
         int hk = 0;
         if ( m->fog > 0 ) {
             if ( m->hazecol >= 0 ) {
-                double q = zv / m->fog;
-                hk = q >= 1.0 ? 15 : (int)( q * q * 15.0 + 0.5 );
+                double q = ( zv - m->fogstart ) / ( m->fog - m->fogstart );
+                hk = q <= 0.0 ? 0 : q >= 1.0 ? 15 : (int)( q * q * 15.0 + 0.5 );
             } else {
                 double ff = 1.0 - zv / m->fog;
                 lv *= ff < 0 ? 0 : ff;

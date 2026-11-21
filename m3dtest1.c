@@ -34,6 +34,7 @@
 #include "json.h"
 #include "gfxops.h"
 #include "noise.h"
+#include "roadnet.h"
 
 /*
 Automated test of the software 3D mesh renderer (m3d.[ch], no SDL): objects and their faces, the picture (depth, culling, clipping, masked / translucent
@@ -50,7 +51,7 @@ static m3d_t* M;
 static const char* lasterr;
 
 static bool op( int o, int n, ... ) {
-    double a[10];
+    double a[12];
     va_list ap;
     va_start( ap, n );
     for ( int i=0; i < n; ++i ) {
@@ -62,7 +63,7 @@ static bool op( int o, int n, ... ) {
 }
 
 static bool ops( int o, int n, const char* s, ... ) {                  // an operation with a string argument (after the n numbers)
-    double a[10];
+    double a[12];
     va_list ap;
     va_start( ap, s );
     for ( int i=0; i < n; ++i ) {
@@ -695,6 +696,130 @@ int main( void ) {
         CHECK( m3d_op( M, GFXOP_M3DTERRAIN, tb, 8, holes, 9, &lasterr ) );   // with a skirt: only the edge cells have walls (8 cells, 12 edge pieces, 2 triangles)
         CHECK( Q( GFXQ_M3DTRIS, 1, 71.0 ) == 16.0 + 24.0 );
     }
+    // -- the layers of the ground: fields and dirt roads first, then hills, tarred roads across everything, lakes and mountains last (M3D ROADNET) ---------------------------------------
+    fresh();
+    CHECK( op( GFXOP_M3DOBJECT, 1, 1.0, 0.0 ) );
+    CHECK( op( GFXOP_M3DGROUND, 7, 1987.0, 900.0, 22.0, 4.0, 8.0, 0.5, 2.0 ) );
+    CHECK( op( GFXOP_M3DROADNET, 6, 1800.0, 0.45, 140.0, 36000.0, 0.85, 900.0 ) );
+    {
+        const rnet_t* nt = &M->gnd.net;
+        CHECK( nt->on && nt->spacing == 1800.0 && nt->tspacing == 36000.0 );
+        // the road network itself: the ends of a road are the region points, the wander is zero there, the kinds are those of demos/1987.bas
+        rlink_t dirt, tar;
+        bool hd = false, ht = false;
+        for ( int64_t ry = 20; ry < 60 && !hd; ++ry ) {
+            for ( int64_t rx = 20; rx < 60 && !hd; ++rx ) {
+                if ( rnet_link( nt, 0, rx, ry, 0, &dirt ) ) { hd = true; }
+            }
+        }
+        for ( int64_t ry = 1; ry < 9 && !ht; ++ry ) {
+            for ( int64_t rx = 1; rx < 9 && !ht; ++rx ) {
+                if ( rnet_link( nt, 1, rx, ry, 0, &tar ) ) { ht = true; }
+            }
+        }
+        CHECK( hd && ht && tar.tar && !dirt.tar );
+        double px, py;
+        rnet_point( &tar, 0.0, &px, &py );
+        NEAR( px, tar.x1, 1e-9 ); NEAR( py, tar.y1, 1e-9 );
+        rnet_point( &tar, 1.0, &px, &py );
+        NEAR( px, tar.x2, 1e-9 ); NEAR( py, tar.y2, 1e-9 );
+        CHECK( tar.len > 5000.0 && tar.len < 60000.0 && tar.steps == (int)( tar.len / 200.0 ) + 1 && dirt.steps == (int)( dirt.len / 50.0 ) + 1 );   // the tarred roads are long
+        // hills (amp 260), mountains (amp 30000 everywhere) and lakes (everywhere) all want to be where the roads are: they keep away
+        CHECK( op( GFXOP_M3DHILLS, 6, 5.0, 500.0, 260.0, 5.0, -1.0, 0.0 ) );
+        CHECK( op( GFXOP_M3DMOUNTAINS, 6, 11.0, 2000.0, 30000.0, 4.0, -1.0, 0.0 ) );
+        CHECK( op( GFXOP_M3DLAKES, 5, 3.0, 400.0, 300.0, -1.0, 0.0 ) );
+        double base_c, gd, gt;
+        rnet_point( &dirt, 0.5, &px, &py );
+        base_c = 8.0 + 22.0 * nz_fbm( 1987, px / 900.0, py / 900.0, 4, 0.5, 2.0 );
+        gd = Q( GFXQ_M3DGROUND, 2, px, py );
+        CHECK( Q( GFXQ_M3DROADD, 2, px, py ) < 5.0 );                                                // (the steps of 50 units are straight: a point of the curve is a little off)
+        NEAR( gd, base_c, 1e-6 );                                                                 // on a dirt road: the plain ground, no hill, no mountain, no lake
+        rnet_point( &tar, 0.5, &px, &py );
+        gt = Q( GFXQ_M3DGROUND, 2, px, py );
+        CHECK( Q( GFXQ_M3DROADT, 2, px, py ) < 5.0 && gt > -50.0 && gt < 800.0 );                  // on a tarred road: not drowned, no mountain
+        {   // across the road the ground is flat (cut and fill to the height of the road): 200 to the side, which is the road's shoulder
+            double nx = -( tar.y2 - tar.y1 ) / tar.len, ny = ( tar.x2 - tar.x1 ) / tar.len;
+            double g1 = Q( GFXQ_M3DGROUND, 2, px + nx * 200.0, py + ny * 200.0 ), g2 = Q( GFXQ_M3DGROUND, 2, px - nx * 200.0, py - ny * 200.0 );
+            CHECK( fabs( g1 - gt ) < 5.0 && fabs( g2 - gt ) < 5.0 );
+            CHECK( op( GFXOP_M3DROADNET, 6, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 ) );                              // without the network the mountains and lakes are everywhere
+            double off = Q( GFXQ_M3DGROUND, 2, px, py );
+            CHECK( off > 2000.0 || off < -50.0 );
+            CHECK( op( GFXOP_M3DROADNET, 6, 1800.0, 0.45, 140.0, 36000.0, 0.85, 900.0 ) );
+        }
+        // a field is flat: the hills are only a tenth there (no road within 700, kind 2)
+        int found = 0;
+        for ( int i = 0; i < 4000 && !found; ++i ) {
+            double fx = 36000.0 + (double)( i % 63 ) * 137.0, fy = 36000.0 + (double)( i / 63 ) * 137.0;
+            rnear_t rn;
+            rnet_near( nt, fx, fy, 700.0, &rn );
+            if ( rn.dirt > 700.0 && rn.tar > 700.0 && Q( GFXQ_M3DKIND, 2, fx, fy ) == 2.0 ) {
+                found = 1;
+                CHECK( op( GFXOP_M3DMOUNTAINS, 6, 11.0, 2000.0, 0.0, 4.0, -1.0, 0.0 ) );
+                CHECK( op( GFXOP_M3DLAKES, 5, 3.0, 400.0, 0.0, -1.0, 0.0 ) );
+                double gf = Q( GFXQ_M3DGROUND, 2, fx, fy );
+                CHECK( op( GFXOP_M3DROADNET, 6, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 ) );                          // without the network the full hills
+                double gh = Q( GFXQ_M3DGROUND, 2, fx, fy ), bb = 8.0 + 22.0 * nz_fbm( 1987, fx / 900.0, fy / 900.0, 4, 0.5, 2.0 );
+                NEAR( gf - bb, 0.1 * ( gh - bb ), 1e-6 );
+                CHECK( fabs( gh - bb ) > 1.0 );
+            }
+        }
+        CHECK( found );
+    }
+    CHECK( !op( GFXOP_M3DROADNET, 6, 1800.0, 1.5, 140.0, 36000.0, 0.85, 900.0 ) );
+    CHECK( op( GFXOP_M3DCLEAR, 0 ) && Q( GFXQ_M3DROADD, 2, 0.0, 0.0 ) > 1.0e8 );                   // M3D CLEAR forgets the network
+    // -- M3D RING: ground meshes made by a worker thread ----------------------------------------------------------------------------------------------------------
+    fresh();
+    tex_flat( 301, 4, 4, 100 );
+    CHECK( op( GFXOP_M3DOBJECT, 1, 1.0, 0.0 ) );
+    CHECK( op( GFXOP_M3DGROUND, 7, 3.0, 700.0, 40.0, 4.0, 10.0, 0.5, 2.0 ) );
+    CHECK( op( GFXOP_M3DRINGPIC, 11, 325.0, 324.0, 301.0, 327.0, 327.0, 320.0, 303.0, 320.0, 302.0, -12.0, 70.0 ) );
+    CHECK( op( GFXOP_M3DOBJECT, 2, 3.0, 0.0 ) && op( GFXOP_M3DOBJECT, 2, 4.0, 0.0 ) && op( GFXOP_M3DOBJECT, 2, 5.0, 0.0 ) );
+    CHECK( op( GFXOP_M3DRING, 10, 3.0, 0.0, 0.0, 8.0, 100.0, 0.0, 0.0, 0.0, 0.0, 0.0 ) );
+    CHECK( Q( GFXQ_M3DRINGBUSY, 0 ) >= 0.0 );
+    CHECK( op( GFXOP_M3DRINGWAIT, 0 ) && Q( GFXQ_M3DRINGBUSY, 0 ) == 0.0 );
+    CHECK( Q( GFXQ_M3DVERTS, 1, 3.0 ) == 81.0 && Q( GFXQ_M3DTRIS, 1, 3.0 ) == 128.0 );             // 8 x 8 cells, no skirt, no hole
+    CHECK( fabs( Q( GFXQ_M3DFLOORAT, 3, 200.0, 300.0, 5000.0 ) - Q( GFXQ_M3DGROUND, 2, 200.0, 300.0 ) ) < 1e-9 );   // the heights are the ground function's at a vertex
+    CHECK( op( GFXOP_M3DRING, 10, 3.0, 0.0, 0.0, 8.0, 100.0, 20.0, 0.0, 300.0, 300.0, 2.0 ) );     // a hole of 2 x 2 cells and a skirt
+    CHECK( op( GFXOP_M3DPOLL, 0 ) );                                                                  // (maybe not taken yet)
+    CHECK( op( GFXOP_M3DRINGWAIT, 0 ) );
+    CHECK( Q( GFXQ_M3DTRIS, 1, 3.0 ) == 2.0 * ( 64.0 - 4.0 ) + 2.0 * ( 4.0 * 8.0 - 0.0 + 4.0 * 2.0 - 0.0 ) );    // 60 cells, a wall piece for each of the 32 outer and 8 inner edges
+    CHECK( !op( GFXOP_M3DRING, 10, 9.0, 0.0, 0.0, 8.0, 100.0, 0.0, 0.0, 0.0, 0.0, 0.0 ) );             // object 9 is not defined
+    CHECK( !op( GFXOP_M3DRING, 10, 3.0, 0.0, 0.0, 0.0, 100.0, 0.0, 0.0, 0.0, 0.0, 0.0 ) );             // no cells
+    // the jobs of two grids that meet: the outer vertices of the fine ring lie on the coarse ring's surface (morph), a vertex inside has the true height
+    CHECK( op( GFXOP_M3DRINGMORPH, 1, 0.5 ) );
+    CHECK( op( GFXOP_M3DRING, 10, 4.0, 0.0, 0.0, 9.0, 300.0, 0.0, 0.0, 0.0, 0.0, 0.0 ) );              // a ring of 9 x 9 cells of 300: x 0 .. 2700
+    CHECK( op( GFXOP_M3DRINGWAIT, 0 ) );
+    {
+        double h00 = Q( GFXQ_M3DGROUND, 2, 0.0, 900.0 ), h01 = Q( GFXQ_M3DGROUND, 2, 0.0, 1800.0 );
+        CHECK( fabs( Q( GFXQ_M3DFLOORAT, 3, 0.0, 1200.0, 9000.0 ) - ( h00 + ( h01 - h00 ) / 3.0 ) ) < 1e-6 );   // on the edge: on the coarse surface (a cell of 900, u = 0, v = 1/3)
+        CHECK( fabs( Q( GFXQ_M3DFLOORAT, 3, 0.0, 900.0, 9000.0 ) - h00 ) < 1e-6 );                          // on the edge at a coarse vertex: the true height
+        CHECK( fabs( Q( GFXQ_M3DFLOORAT, 3, 1200.0, 1500.0, 9000.0 ) - Q( GFXQ_M3DGROUND, 2, 1200.0, 1500.0 ) ) < 1e-9 );   // in the middle: the true height
+    }
+    CHECK( op( GFXOP_M3DRINGMORPH, 1, 0.0 ) );
+    // tarred roads as ribbons in a ring, and the kinds of ground in a chunk (mode 1)
+    CHECK( op( GFXOP_M3DROADNET, 6, 1800.0, 0.45, 140.0, 36000.0, 0.85, 900.0 ) );
+    {
+        rlink_t tl;
+        bool got = false;
+        for ( int64_t ry = 1; ry < 9 && !got; ++ry ) { for ( int64_t rx = 1; rx < 9 && !got; ++rx ) { if ( rnet_link( &M->gnd.net, 1, rx, ry, 0, &tl ) ) { got = true; } } }
+        CHECK( got );
+        double px, py;
+        rnet_point( &tl, 0.5, &px, &py );
+        double gx = floor( ( px - 2000.0 ) / 300.0 ) * 300.0, gy = floor( ( py - 2000.0 ) / 300.0 ) * 300.0;
+        CHECK( op( GFXOP_M3DRING, 10, 5.0, gx, gy, 12.0, 300.0, 0.0, 0.0, 0.0, 0.0, 0.0 ) );
+        CHECK( op( GFXOP_M3DRINGWAIT, 0 ) );
+        CHECK( Q( GFXQ_M3DTRIS, 1, 5.0 ) > 288.0 );                                                      // 12 x 12 cells = 288 triangles and the ribbon
+        CHECK( op( GFXOP_M3DRING, 10, 5.0, gx, gy, 12.0, 300.0, 0.0, 1.0, 0.0, 0.0, 0.0 ) );               // as a chunk (mode 1): the ribbon too, made by the chunk that holds its start
+        CHECK( op( GFXOP_M3DRINGWAIT, 0 ) && Q( GFXQ_M3DTRIS, 1, 5.0 ) > 288.0 );
+        {   // the ribbon lies on the mesh: the floor above the road's middle is the ribbon, 3 above the ground (the corridor is flat there)
+            double fz = Q( GFXQ_M3DFLOORAT, 3, px, py, 500.0 ), gz = Q( GFXQ_M3DGROUND, 2, px, py );
+            CHECK( fz > gz + 1.0 && fz < gz + 12.0 );
+        }
+        CHECK( op( GFXOP_M3DRINGPIC, 11, 325.0, 324.0, 301.0, 0.0, 0.0, 320.0, 303.0, 320.0, 302.0, -12.0, 70.0 ) );   // no tar picture: no ribbons
+        CHECK( op( GFXOP_M3DRING, 10, 5.0, gx, gy, 12.0, 300.0, 0.0, 1.0, 0.0, 0.0, 0.0 ) );
+        CHECK( op( GFXOP_M3DRINGWAIT, 0 ) && Q( GFXQ_M3DTRIS, 1, 5.0 ) == 288.0 );
+    }
+    CHECK( op( GFXOP_M3DCLEAR, 0 ) && Q( GFXQ_M3DRINGBUSY, 0 ) == 0.0 );
     // -- M3D SUN: terrain cells shaded by their slope with pictures t + k * stride ----------------------------------------------------------------------------
     fresh();
     {

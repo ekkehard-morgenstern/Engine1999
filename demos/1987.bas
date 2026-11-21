@@ -25,7 +25,7 @@
 200 BREAK OFF
 210 ON ERROR GOTO FAILED
 220 HL=0:IF ENV$("G1987_HEADLESS")<>"" THEN HL=-1
-230 DIM FTX(49),FTY(49),FWX(49),FWY(49),CKN(64),CKRX(9),CKRY(9),CKRT(9),CTX(24),CTY(24),GNS(8),GGX(160),FLJ$(81),TIH(33),RPX(300),RPY(300),RPF(300),CPX(40),CPY(40),SMX(120),SMY(120),PLX(40),PLY(40),TRX(520),TRY(520),LRR(8),LRZ(8),LRV(8),W$(8),GPX(2),GPZ(2),GPS(2),DWX(40),DWY(40),DRX(5),DRY(5),DRZ(5),DRH(5),DRT(5),DRA(5)
+230 DIM TSC(1536),GRT(64),SNX(150),SNY(150),SEX(150),SEY(150),SGX(150),SGY(150),SGU(150),SGV(150),SGK(150),SGD(150),SGE(150),SGI(150),RGX(6),RGY(6),RGP(6),RGQ(6),CKN(64),CKRX(9),CKRY(9),CKRT(9),CTX(24),CTY(24),GNS(8),GGX(160),FLJ$(81),TIH(33),RPX(300),RPY(300),RPF(300),CPX(40),CPY(40),SMX(120),SMY(120),PLX(40),PLY(40),TRX(520),TRY(520),LRR(8),LRZ(8),LRV(8),W$(8),GPX(2),GPZ(2),GPS(2),DWX(40),DWY(40),DRX(5),DRY(5),DRZ(5),DRH(5),DRT(5),DRA(5)
 240 GOTO MAIN
 250 ' ------------------------------------------------------------------------------------------------ small helpers
 260 FUNC RN(M)
@@ -64,7 +64,7 @@
 620   IF T=320 AND ABS(X-1100)<700 AND ABS(Y-650)<500 THEN RETURN 3
 630   IF T=308 OR T=321 THEN RETURN 3
 640   IF T=304 OR T=320 THEN RETURN 1
-650   IF T=305 OR T=306 OR T=307 OR T=324 OR T=326 THEN RETURN 2
+650   IF T=305 OR T=306 OR T=307 OR T=324 OR T=326 OR T=327 THEN RETURN 2
 660   RETURN 0
 680 END FUNC
 690 ' which picture covers the ground cell around X,Y: 1 grass, 2 dry grass, 3 lush grass, 20 the soil of the wheat field
@@ -217,7 +217,7 @@
 2160   GFX CLEAR 0
 2170   GFX PSET 0,0,0
 2180   CALL W3K_GRAB(299,1,1)
-2185   CALL MKROCK:CALL MKWATER:CALL W3K_BRICK(326,1)
+2185   CALL MKROCK:CALL MKWATER:CALL W3K_BRICK(326,1):CALL MKTAR
 2190   M3D SKY 311
 2200 END PROC
 2210 ' ------------------------------------------------------------------------------------------------ mesh helpers
@@ -320,6 +320,21 @@
 3103 ' fixed block of object numbers by its slot, (cx mod 8) + 8 (cy mod 8): the ground 100 + slot, up to 24 trees 2000 + 24 slot + n; building a chunk overwrites the one that was
 3104 ' in the slot, nothing is allocated or freed. The chunks cx, cy = -4 .. 3 are the hand-made area (the house, the roads, the groves, the field); the rest is made by the rules
 3105 ' below. One chunk is built per frame (the nearest missing one first); a jump (NEWGAME, goto) builds all that are missing at once.
+3106 ' what is near a road: the segments of the roads round the chunk (CHSEGS): -1 when X,Y is nearer than 100 to a dirt road's middle (55 wide, plus room) or than 310 to a tarred road's (220 wide
+3107 ' and the posts beside it): no trees, no bales there
+3108 FUNC NEARROAD(X,Y)
+3109   LOCAL I,CL,UX,UY,TT,DX,DY
+3110   FOR I=0 TO NSG-1
+3111     CL=100:IF SGK(I) THEN CL=310
+3112     IF X>MIN(SGX(I),SGU(I))-CL AND X<MAX(SGX(I),SGU(I))+CL AND Y>MIN(SGY(I),SGV(I))-CL AND Y<MAX(SGY(I),SGV(I))+CL THEN
+3113       UX=SGU(I)-SGX(I):UY=SGV(I)-SGY(I)
+3114       TT=((X-SGX(I))*UX+(Y-SGY(I))*UY)/(UX*UX+UY*UY):TT=MAX(0,MIN(1,TT))
+3115       DX=SGX(I)+TT*UX-X:DY=SGY(I)+TT*UY-Y
+3116       IF DX*DX+DY*DY<CL*CL THEN RETURN -1
+3117     END IF
+3118   NEXT I
+3119   RETURN 0
+3120 END FUNC
 3121 ' the kind of ground at X,Y: the kind of the nearest of the nine feature points CKRX / CKRY / CKRT (set by CHREGIONS for the chunk): 0 plain, 1 meadow, 2 field, 3 forest
 3122 FUNC GKIND(X,Y)
 3123   LOCAL K,B,D,BD
@@ -360,7 +375,7 @@
 3158 ' the unused tree numbers N .. 23 of a slot become empty objects
 3159 PROC CHCLEAR(SL,N)
 3160   IF N<24 THEN M3D OBJFREE 2000+SL*24+N,2000+SL*24+23
-3161   M3D OBJFREE 5000+SL*32,5000+SL*32+31:M3D OBJFREE 8000+SL,8000+SL:M3D OBJFREE 3600+SL*6,3600+SL*6+5
+3161   M3D OBJFREE 5000+SL*32,5000+SL*32+31:M3D OBJFREE 8000+SL,8000+SL:M3D OBJFREE 8100+SL,8100+SL:M3D OBJFREE 15000+SL*6,15000+SL*6+5:M3D OBJFREE 3600+SL*6,3600+SL*6+5
 3164   CKN(SL)=N
 3165 END PROC
 3166 ' the trees of a chunk: up to 24 at hashed places in forest, at least 70 units apart (CHREGIONS was called)
@@ -373,7 +388,7 @@
 3173       Y=CY*900+HASH(CX,CY,200+I)*900
 3174       OK=0
 3175       IF FN GKIND(X,Y)=3 AND FN HT(X,Y)>WZ+2 AND FN HT(X,Y)<70 THEN
-3176         IF HASH(CX,CY,300+I)<0.7 THEN OK=-1
+3176         IF HASH(CX,CY,300+I)<0.7 AND NOT FN NEARROAD(X,Y) THEN OK=-1
 3177       END IF
 3178       FOR J=0 TO N-1
 3179         DX=CTX(J)-X:DY=CTY(J)-Y
@@ -385,13 +400,13 @@
 3185         T=0:IF K>=0.45 THEN T=1
 3186         IF K>=0.8 THEN T=2
 3187         TYW=HASH(CX,CY,500+I)*360
-3188         CALL TREE(2000+SL*24+N,X,Y,0.9+HASH(CX,CY,600+I)*0.5,T)
+3188         SCL=0.9+HASH(CX,CY,600+I)*0.5:TSC(SL*24+N)=SCL:GF=1+GROWON*0.97:CALL TREE(2000+SL*24+N,X,Y,SCL*GF,T)
 3189         N=N+1
 3190       END IF
 3191     END IF
 3192   NEXT I
 3193   TYW=-1
-3194   CALL CHCLEAR(SL,N)
+3194   CALL CHCLEAR(SL,N):GRT(SL)=10*(GROWON<>0)*-1
 3195 END PROC
 3196 ' builds the chunk cx,cy into the slot SL at the level LV (0 fine, 1 coarse; NEWC: it is a new chunk, not only a new level): the ground and, for a new chunk, the trees
 3197 PROC CHUNKBUILD(CX,CY,SL,LV,NEWC)
@@ -399,22 +414,16 @@
 3199   T0=TI
 3200   CALL CHREGIONS(CX,CY):IF NEWC THEN CALL CHWATER(CX,CY,SL)
 3201   O=100+SL
-3202   M3D OBJECT O,0,235
+3202   IF M3D("OBJON",O)=0 THEN M3D OBJECT O,0,235
 3203   X0=CX*900:Y0=CY*900
 3204   ' the ground: level 0 is 9 x 9 cells of 100 units, farther away (levels 1, 2) 3 x 3 cells of 300; the cells' pictures as one string (picture 301 + the code of the character);
 3205   ' the grid itself is made in C from the ground function (M3D TERRAIN), with a skirt of 200 under the edges that hides the cracks between the two grid sizes and the far tiles
 3206   N=9:ST=100:IF LV>0 THEN N=3:ST=300
-3207   C$=""
-3208   FOR J=0 TO N-1
-3209     FOR I=0 TO N-1
-3210       C$=C$+CHR$(FN OCELL(X0+I*ST+ST/2,Y0+J*ST+ST/2)-301)
-3211     NEXT I
-3212   NEXT J
-3213   M3D TERRAIN O,X0,Y0,N,N,ST,301,C$,200
+3213   M3D RING O,X0,Y0,N,ST,200,1,0,0,0
 3214   ' the trees only when the chunk is new (a change of the level leaves them)
 3215   IF NEWC THEN
 3216     IF CX<-4 OR CX>3 OR CY<-4 OR CY>3 THEN
-3217       CALL CHTREES(CX,CY,SL):CALL CHRUINS(CX,CY,SL):CALL CHROADS(CX,CY,SL):CALL CHBALES(CX,CY,SL)
+3217       CALL CHSEGS(CX,CY):CALL CHTREES(CX,CY,SL):CALL CHRUINS(CX,CY,SL):CALL CHROADS(CX,CY,SL):CALL CHBALES(CX,CY,SL)
 3218     ELSE
 3219       CALL CHCLEAR(SL,0)
 3220     END IF
@@ -424,7 +433,7 @@
 3224 ' makes sure the chunks round PX,PY exist: builds up to MAXN of the missing ones (or those whose level changed), the nearest first (64 = all); chunks.lib keeps the book
 3225 PROC CHUNKS(PX,PY,MAXN)
 3226   LOCAL N
-3227   CALL CK_UPDATE(PX,PY)
+3227   CALL CK_UPDATE(PX,PY):GROWON=0:IF MAXN<64 THEN GROWON=-1
 3228   FOR N=1 TO MAXN
 3229     IF NOT FN CK_NEXT() THEN EXIT
 3230     CALL CHUNKBUILD(FN CK_CX(),FN CK_CY(),FN CK_CSLOT(),FN CK_CLEVEL(),FN CK_CNEW())
@@ -438,25 +447,25 @@
 3238   FOR S=0 TO 63
 3239     CKN(S)=0
 3240   NEXT S
-3241   FARON=0:CKCNT=0:CKTOT=0:CKMAX=0:CALL TREEPROTOS
-3242   CALL CHUNKS(0,0,64):CALL FARUPDATE(0,0,64)
+3241   FOR K=0 TO 5:RGX(K)=-999999:RGY(K)=-999999:RGP(K)=-999999:RGQ(K)=-999999:NEXT K:FOR K=1 TO 4:M3D OBJECT 12000+K,12,235:NEXT K:CKCNT=0:CKTOT=0:CKMAX=0:CALL TREEPROTOS
+3242   CALL CHUNKS(0,0,64):CALL RINGUPDATE(0,0):M3D RINGWAIT
 3243 END PROC
 3244 ' test mode: what the window round PX,PY looks like (for game1987test.sh): the chunks present, missing or of the wrong level, those of level 0, the trees in them and a signature
 3245 PROC CHUNKSTAT(PX,PY)
-3246   LOCAL PCX,PCY,I,J,CX,CY,SL,N,M,NT,SG,NF,NW,NR,NO,NB,NFT,K
+3246   LOCAL PCX,PCY,I,J,CX,CY,SL,N,M,NT,SG,NF,NW,NR,NO,NB,NFT,K,NPS,NMD,II
 3247   PCX=INT(PX/900):PCY=INT(PY/900)
 3248   FOR J=-3 TO 3
 3249     FOR I=-3 TO 3
 3250       CX=PCX+I:CY=PCY+J:SL=FN CK_SLOT(CX,CY)
 3251       IF FN CK_HAS(CX,CY) THEN
-3252         N=N+1:NT=NT+CKN(SL):SG=SG+CKN(SL)*(SL+1):NW=NW-(M3D("OBJON",4000+SL)<>0):NR=NR-(M3D("OBJON",5000+SL*32)<>0):NO=NO-(M3D("OBJON",8000+SL)<>0):NB=NB-(M3D("OBJON",3600+SL*6)<>0)
+3252         N=N+1:NT=NT+CKN(SL):SG=SG+CKN(SL)*(SL+1):NW=NW-(M3D("OBJON",4000+SL)<>0):NR=NR-(M3D("OBJON",5000+SL*32)<>0):NO=NO-(M3D("OBJON",8000+SL)<>0 OR M3D("OBJON",8100+SL)<>0):NPS=NPS-(M3D("OBJON",15000+SL*6)<>0):NB=NB-(M3D("OBJON",3600+SL*6)<>0)
 3253         IF FN CK_LEVELAT(CX,CY)=0 THEN NF=NF+1
 3254       ELSE
 3255         M=M+1
 3256       END IF
 3257     NEXT I
 3258   NEXT J
-3259   FOR K=0 TO 48:NFT=NFT-(FTX(K)<>-99999):NEXT K:PRINT "chunks have=";N;" missing=";M;" trees=";NT;" sig=";SG;" cx=";PCX;" cy=";PCY;" fine=";NF;" stale=";FN CK_STALE();" water=";NW;" ruins=";NR;" roads=";NO;" bales=";NB;" far=";NFT
+3259   FOR K=1 TO 4:NFT=NFT-(M3D("OBJON",12000+K)<>0 AND M3D("TRIS",12000+K)>0):NEXT K:NMD=M3D("RINGBUSY"):PRINT "chunks have=";N;" missing=";M;" trees=";NT;" sig=";SG;" cx=";PCX;" cy=";PCY;" fine=";NF;" stale=";FN CK_STALE();" water=";NW;" ruins=";NR;" roads=";NO;" bales=";NB;" rings=";NFT;" posts=";NPS;" busy=";NMD
 3260   PRINT "chunktime built=";CKCNT;" ticks=";CKTOT;" max=";CKMAX
 3261 END PROC
 3270 ' the ground function of the engine: hills of fractal noise (about 900 units across, 4 octaves, up to about 30 high), flattened round the house and over the wheat field
@@ -466,7 +475,7 @@
 3274   M3D GROUNDFLAT 1,1100,650,700,500,300
 3275   ' a unit is 3.2 cm: HILLS (ridged noise up to 260 = 8 m high, rocky and walkable), real MOUNTAINS (peaks up to 37000 = 1190 m high, steep walls, 14000 .. 22000 units from the house: ridged noise where a very slow noise is high) and real LAKES (basins 350 = 11 m deep and 3000 .. 6000 = 100 .. 190 m across); none over the hand-made area (3900 units round the house, fading in over 1200)
 3276   M3D GROUNDQUIET 0,0,3900,3900,1200
-3277   M3D HILLS 1987,500,260,5,0.05,0.4:M3D MOUNTAINS 7,9000,80000,4,0.25,0.6,14000,22000
+3277   M3D ROADNET 1800,0.45,140,36000,0.85,900:M3D RINGPIC 325,324,301,327,328,320,303,320,302,WZ,70:M3D RINGMORPH 0.5:M3D HILLS 1987,500,260,5,0.05,0.4:M3D MOUNTAINS 7,9000,80000,4,0.25,0.6,14000,22000
 3278   M3D LAKES 4711,9000,350,0.3,0.5
 3279 END PROC
 3280 ' what stops John and the bicycle: only water too deep to wade (12 below the water level WZ); the rocky hills are walkable and rideable (the engine lets a body climb every slope up to 72 degrees and lifts one that got buried)
@@ -577,7 +586,7 @@
 4085 END PROC
 4086 PROC TREEPROTOS
 4087   LOCAL K
-4088   FOR K=0 TO 2:CALL TREEPROTO(K):NEXT K:CALL MKBALE
+4088   FOR K=0 TO 2:CALL TREEPROTO(K):NEXT K:CALL MKBALE:CALL MKPOST
 4089 END PROC
 4090 ' may a tree stand here? inside the limit LIM, not in the wheat field or the yard, not on a road, not too near another tree
 4100 FUNC TREEOK(X,Y,LIM)
@@ -1462,7 +1471,7 @@
 11490 END PROC
 11500 ' ------------------------------------------------------------------------------------------------ the game
 11510 PROC NEWGAME
-11520   JX=0:JY=-172:JH=90:JV=0:CALL CHUNKS(JX,JY,64):CALL FARUPDATE(JX,JY,64):JZ=FN FLR(JX,JY)
+11520   JX=0:JY=-172:JH=90:JV=0:CALL CHUNKS(JX,JY,64):CALL RINGUPDATE(JX,JY):M3D RINGWAIT:JZ=FN FLR(JX,JY)
 11530   BX=130:BY=-214:BH=0:BV=0:BS=0:BSA=0:BZ=FN FLR(BX,BY):WA=0:CA=0:ST=1
 11535   ' the bicycle leans against the south fence of the yard, on the outside, east of the gate, the handlebar turned towards the fence (bike state 1, see BIKEFALL)
 11536   BST=1:BLN=0.35:BLS=1:BSTR=50:BRT=0:BYW=0:BSD=0:BDR=-1:BVIS=-1:BLW=0:BLN0=0:BSTR0=0
@@ -1487,7 +1496,7 @@
 11650     DTF=DT0
 11660     CALL READKEYS
 11670     IF KEY("ESC") THEN IN_QUIT=1
-11680     CALL SIM(DT0):CALL AMBIENT:CALL CHUNKS(JX,JY,1):CALL FARUPDATE(JX,JY,1)
+11680     CALL SIM(DT0):CALL AMBIENT:CALL CHUNKS(JX,JY,1):CALL GROWTREES:CALL RINGUPDATE(JX,JY):M3D POLL
 11690     CALL DRAWFRAME
 11700     IF FN IN_SERVICE() THEN
 11710       CALL BIGTEXT(110,"PAUSED",FN CC(0,15),3)
@@ -1565,7 +1574,7 @@
 12410     IF C$="brake" THEN PB=VAL(W$(1))
 12420     IF C$="use" THEN KU=-1
 12430     IF C$="goto" THEN
-12440       JX=VAL(W$(1)):JY=VAL(W$(2)):JH=VAL(W$(3)):CALL CHUNKS(JX,JY,64):CALL FARUPDATE(JX,JY,64):JZ=FN FLR(JX,JY):JV=0:M3D THINGPOS 0,JX,JY,JZ:CYW=JH:CMINIT=0
+12440       JX=VAL(W$(1)):JY=VAL(W$(2)):JH=VAL(W$(3)):CALL CHUNKS(JX,JY,64):CALL RINGUPDATE(JX,JY):M3D RINGWAIT:JZ=FN FLR(JX,JY):JV=0:M3D THINGPOS 0,JX,JY,JZ:CYW=JH:CMINIT=0
 12450     END IF
 12460     IF C$="bike" THEN
 12470       BX=VAL(W$(1)):BY=VAL(W$(2)):BH=VAL(W$(3)):BZ=FN FLR(BX,BY):BV=0:BST=0:BRT=0:BLN=0:BDR=-1:M3D THINGPOS 1,BX,BY,BZ
@@ -1578,7 +1587,7 @@
 12522         KR=0:IF KRA>0 THEN KR=-1
 12523         KB=PB
 12524         CMIN=0:IF PCO<>0 THEN CO=CO+PCO*80/60:CMIN=-1
-12530         CALL SIM(1/60):CALL CHUNKS(JX,JY,1):CALL FARUPDATE(JX,JY,1)
+12530         CALL SIM(1/60):CALL CHUNKS(JX,JY,1):CALL GROWTREES:CALL RINGUPDATE(JX,JY):M3D POLL
 12535         IF PRG<>0 THEN CALL RIGS
 12540         KU=0
 12550         DTF=1/60
@@ -1651,7 +1660,7 @@
 13040 CALL BUILDDRONES
 13050 M3D THING 0,0,0,0,299,30,56:M3D THING 1,0,0,0,299,35,40
 13060 M3D PLAYER 14,56,46,24
-13070 M3D FAR 40000:M3D FOG 7000,FN CC(8,14)
+13070 M3D FAR 160000:M3D FOG 156000,FN CC(8,14),100000
 13080 IF NOT HL THEN
 13090   CALL W3K_VIEW(0,0,640,264,2)
 13100   M3D COLORMAP
@@ -2111,15 +2120,6 @@
 17880   S=ABS(FN HT(X+20,Y)-H)+ABS(FN HT(X,Y+20)-H)
 17890   RETURN S>SLLIM
 17900 END FUNC
-17910 ' ------------------------------------------------------------------------------------------------ the far land (tiles of 8 x 8 chunks beyond the chunks)
-17920 ' the picture of a far cell (seen through the haze, so only the ground itself matters): water, rock above 70 (the hills, the mountains) or grass
-17930 FUNC FCELL(X,Y)
-17940   LOCAL H
-17950   H=FN HT(X,Y)
-17960   IF H<WZ-3 THEN RETURN 325
-17970   IF H>70 THEN RETURN 324
-17980   RETURN 301
-17990 END FUNC
 18000 ' ------------------------------------------------------------------------------------------------ city ruins, roads, hay bales of the wild world (roadmap item 95)
 18010 ' A city ruin site: big regions of 7200 units (8 chunks) each have one with a chance of 30 %, at a hashed place with a radius of 450 .. 900 units; the ground inside is cut into lots of 180 units,
 18020 ' 70 % of them hold a ruin (up to four brick walls of 8 units thickness, each there with 78 %, broken off at 30 .. 160 units, taller towards the middle, and three heaps of rubble);
@@ -2166,45 +2166,6 @@
 18430     NEXT I
 18440   NEXT J
 18450 END PROC
-18460 ' Roads: the region points (1800 units, see CHREGIONS) are joined to their east and south neighbours with a chance of 45 %: a path of 50 unit steps that wanders (noise) and meets the
-18470 ' points exactly; a strip 110 wide laid 3 units above the ground (picture 304, see-through edges), one object of 4 vertices a step per chunk (8000 + slot), a step belongs to the chunk it starts in;
-18480 ' no road over water, steep or high ground
-18490 PROC CHROADS(CX,CY,SL)
-18500   LOCAL NI,NJ,RX,RY,I,J,E,R1X,R1Y,R2X,R2Y,L,NS,K,T,A,B,AX,AY,CX2,CY2,DX,DY,O,V,N,H1,H2,H3,H4,X0,Y0,W,D
-18510   O=8000+SL:X0=CX*900:Y0=CY*900:RX=INT(CX/2):RY=INT(CY/2):N=0
-18520   M3D OBJECT O,1,235
-18530   FOR J=-1 TO 1
-18540     FOR I=-1 TO 1
-18550       FOR E=0 TO 1
-18560         IF HASH(RX+I,RY+J,60+E)<0.45 THEN
-18570           R1X=(RX+I)*1800+HASH(RX+I,RY+J,1)*1800:R1Y=(RY+J)*1800+HASH(RX+I,RY+J,2)*1800
-18575           NI=RX+I-(E=0):NJ=RY+J-(E=1)
-18580           R2X=NI*1800+HASH(NI,NJ,1)*1800:R2Y=NJ*1800+HASH(NI,NJ,2)*1800
-18590           L=SQR((R2X-R1X)^2+(R2Y-R1Y)^2):NS=INT(L/50)+1
-18600           FOR K=0 TO NS-1
-18610             T=K/NS:A=T:W=140*NOISE(77,T*3,(RX+I)*31+(RY+J)*57+E*7+0.5)*SIN(PI*T)
-18620             AX=R1X+(R2X-R1X)*T-(R2Y-R1Y)/L*W:AY=R1Y+(R2Y-R1Y)*T+(R2X-R1X)/L*W
-18630             IF AX>=X0 AND AX<X0+900 AND AY>=Y0 AND AY<Y0+900 THEN
-18640               T=(K+1)/NS:W=140*NOISE(77,T*3,(RX+I)*31+(RY+J)*57+E*7+0.5)*SIN(PI*T)
-18650               CX2=R1X+(R2X-R1X)*T-(R2Y-R1Y)/L*W:CY2=R1Y+(R2Y-R1Y)*T+(R2X-R1X)/L*W
-18660               DX=CX2-AX:DY=CY2-AY:D=SQR(DX*DX+DY*DY):DX=DX/D:DY=DY/D
-18670               H1=FN HT(AX,AY):H2=FN HT(CX2,CY2)
-18680               IF NOT FN ROUGH(AX,AY) AND NOT FN ROUGH(CX2,CY2) AND H1>WZ+3 AND H2>WZ+3 THEN
-18690                 V=M3D("VERTS",O)
-18700                 M3D VERTEX O,AX+DY*55,AY-DX*55,FN HT(AX+DY*55,AY-DX*55)+3,64,A*L*0.58
-18710                 M3D VERTEX O,AX-DY*55,AY+DX*55,FN HT(AX-DY*55,AY+DX*55)+3,0,A*L*0.58
-18720                 M3D VERTEX O,CX2+DY*55,CY2-DX*55,FN HT(CX2+DY*55,CY2-DX*55)+3,64,T*L*0.58
-18730                 M3D VERTEX O,CX2-DY*55,CY2+DX*55,FN HT(CX2-DY*55,CY2+DX*55)+3,0,T*L*0.58
-18740                 M3D QUAD O,V,V+2,V+3,V+1,304:N=N+1
-18750               END IF
-18760             END IF
-18770           NEXT K
-18780         END IF
-18790       NEXT E
-18800     NEXT I
-18810   NEXT J
-18820   IF N=0 THEN M3D OBJFREE O,O
-18830 END PROC
 18840 ' hay bales in the fields: up to 6 a chunk, instances of the bale 343 (a box), objects 3600 + 6 slot + n
 18850 PROC CHBALES(CX,CY,SL)
 18860   LOCAL I,N,X,Y
@@ -2212,7 +2173,7 @@
 18880   N=0
 18890   FOR I=0 TO 11
 18900     X=CX*900+HASH(CX,CY,700+I)*900:Y=CY*900+HASH(CX,CY,800+I)*900
-18910     IF N<6 AND FN GKIND(X,Y)=2 AND HASH(CX,CY,900+I)<0.5 AND NOT FN ROUGH(X,Y) AND FN HT(X,Y)>WZ+3 THEN
+18910     IF N<6 AND FN GKIND(X,Y)=2 AND HASH(CX,CY,900+I)<0.5 AND NOT FN NEARROAD(X,Y) AND NOT FN ROUGH(X,Y) AND FN HT(X,Y)>WZ+3 THEN
 18920       M3D INSTANCE 3600+SL*6+N,343,X,Y,FN HT(X,Y)-1,HASH(CX,CY,950+I)*360,0.8+HASH(CX,CY,980+I)*0.5:N=N+1
 18930     END IF
 18940   NEXT I
@@ -2220,49 +2181,148 @@
 18960 PROC MKBALE
 18970   M3D OBJECT 343,0,235:M3D BOX 343,-22,-14,0,22,14,22,321:M3D OBJSHOW 343,0
 18980 END PROC
-19000 ' ------------------------------------------------------------------------------------------------ the far land: the ground out to 25000 units (800 m), where only the mountains are seen
-19010 ' tiles of 8 x 8 chunks (7200 units, cells of 900 = one chunk), 7 x 7 of them round the player, object 12000 + slot; seen through the haze (M3D FOG), without trees, passable and
-19020 ' see-through for the game (the chunks are the floor), 150 lower than the ground so that they never show through the chunks; the cells over the 5 x 5 chunks round the place the tile was
-19030 ' made for are holes (character 255): the chunks cover them (the window is 7 x 7, so a tile stays right while the player moves one chunk; it is made again after that)
-19040 PROC FARBUILD(TX,TY,SL,PCX,PCY)
-19050   LOCAL O,I,J,CX,CY,C$
-19060   O=12000+SL
-19070   M3D OBJECT O,12,255
-19080   C$=""
-19090   FOR J=0 TO 7
-19100     FOR I=0 TO 7
-19110       CX=TX*8+I:CY=TY*8+J
-19120       IF ABS(CX-PCX)<=2 AND ABS(CY-PCY)<=2 THEN
-19130         C$=C$+CHR$(255)
-19140       ELSE
-19150         C$=C$+CHR$(FN FCELL(CX*900+450,CY*900+450)-301)
-19160       END IF
-19170     NEXT I
-19180   NEXT J
-19190   M3D TERRAIN O,TX*7200,TY*7200,8,8,900,301,C$,200,0.01
-19200   M3D OBJPOS O,0,0,-150
-19210   FTX(SL)=TX:FTY(SL)=TY:FWX(SL)=PCX:FWY(SL)=PCY
-19220 END PROC
-19230 ' makes sure the far tiles round PX,PY exist (and the ones under the chunks have their holes where the chunks are now): builds up to MAXN of them (64 = all)
-19240 PROC FARUPDATE(PX,PY,MAXN)
-19250   LOCAL PTX,PTY,PCX,PCY,I,J,TX,TY,SL,N,NEED
-19260   PCX=INT(PX/900):PCY=INT(PY/900):PTX=INT(PX/7200):PTY=INT(PY/7200):N=0
-19270   IF NOT FARON THEN
-19280     FOR I=0 TO 48
-19290       FTX(I)=-99999:FTY(I)=-99999
-19300     NEXT I
-19310     FARON=-1
-19320   END IF
-19330   FOR J=-3 TO 3
-19340     FOR I=-3 TO 3
-19350       TX=PTX+I:TY=PTY+J
-19360       SL=(TX-7*INT(TX/7))+7*(TY-7*INT(TY/7))
-19370       NEED=0
-19380       IF FTX(SL)<>TX OR FTY(SL)<>TY THEN NEED=-1
-19390       IF NOT NEED AND TX*8<=PCX+3 AND TX*8+7>=PCX-3 AND TY*8<=PCY+3 AND TY*8+7>=PCY-3 THEN
-19400         IF FWX(SL)<>PCX OR FWY(SL)<>PCY THEN NEED=-1
-19410       END IF
-19420       IF NEED AND N<MAXN THEN CALL FARBUILD(TX,TY,SL,PCX,PCY):N=N+1
-19430     NEXT I
-19440   NEXT J
-19450 END PROC
+19500 ' ------------------------------------------------------------------------------------------------ roads of the wild world: dirt tracks and tarred roads
+19510 ' The region points (1800 units, see CHREGIONS) are joined to their east and south neighbours with a chance of 45 %: a path of 50 unit steps that wanders (noise) and meets the points
+19520 ' exactly. 40 % of the roads are TARRED (a real road: 4 lanes of 3.1 m (100 units) = 400 and a shoulder of 20 on each side, 440 wide, picture 327 with the markings; 3 m is about 94 units),
+19530 ' the rest dirt tracks (110 wide, picture 304, see-through edges). No road over water, steep or high ground. A step is a SEGMENT; CHSEGS lists the segments that start near the chunk
+19540 ' (so that trees and bales keep away from them: NEARROAD), CHROADS builds the ones that start in it
+19550 PROC CHSEGS(CX,CY)
+19560   LOCAL NET,SP,CH,NI,NJ,RX,RY,I,J,E,R1X,R1Y,R2X,R2Y,L,NS,K,T,A,AX,AY,CX2,CY2,X0,Y0,W,TR,WA,STP,P1,P2,PX,T0,DT,KA,KB,EX,XB
+19570   X0=CX*900:Y0=CY*900:NSG=0
+19572   FOR NET=0 TO 1
+19574     SP=1800:CH=0.45:WA=140:STP=50:TR=0:P1=1:P2=2:EX=60:XB=160
+19576     IF NET THEN SP=36000:CH=0.85:WA=900:STP=200:TR=-1:P1=11:P2=12:EX=160:XB=380
+19580     RX=INT(X0/SP):RY=INT(Y0/SP)
+19582     FOR J=-1 TO 1
+19590       FOR I=-1 TO 1
+19600         FOR E=0 TO 1
+19610           IF HASH(RX+I,RY+J,EX+E)<CH THEN
+19620             R1X=(RX+I)*SP+HASH(RX+I,RY+J,P1)*SP:R1Y=(RY+J)*SP+HASH(RX+I,RY+J,P2)*SP
+19630             NI=RX+I-(E=0):NJ=RY+J-(E=1)
+19640             R2X=NI*SP+HASH(NI,NJ,P1)*SP:R2Y=NJ*SP+HASH(NI,NJ,P2)*SP
+19650             IF MAX(R1X,R2X)>X0-WA-520 AND MIN(R1X,R2X)<X0+WA+1420 AND MAX(R1Y,R2Y)>Y0-WA-520 AND MIN(R1Y,R2Y)<Y0+WA+1420 THEN
+19660               L=SQR((R2X-R1X)^2+(R2Y-R1Y)^2):NS=INT(L/STP)+1
+19672               LR1X=R1X:LR1Y=R1Y:LR2X=R2X:LR2Y=R2Y:LL=L:LWA=WA:LKEY=(RX+I)*31+(RY+J)*57+E*7+0.5+7777*NET
+19674               T0=((X0+450-R1X)*(R2X-R1X)+(Y0+450-R1Y)*(R2Y-R1Y))/(L*L):DT=(WA+1500)/L
+19676               KA=MAX(0,INT((T0-DT)*NS)):KB=MIN(NS-1,INT((T0+DT)*NS)+1)
+19680               FOR K=KA TO KB
+19690                 T=K/NS:A=T:W=WA*NOISE(77,T*3,LKEY)*SIN(PI*T)
+19700                 AX=R1X+(R2X-R1X)*T-(R2Y-R1Y)/L*W:AY=R1Y+(R2Y-R1Y)*T+(R2X-R1X)/L*W
+19710                 IF AX>=X0-XB AND AX<X0+900+XB AND AY>=Y0-XB AND AY<Y0+900+XB AND NSG<149 THEN
+19720                   T=(K+1)/NS:W=WA*NOISE(77,T*3,LKEY)*SIN(PI*T)
+19730                   CX2=R1X+(R2X-R1X)*T-(R2Y-R1Y)/L*W:CY2=R1Y+(R2Y-R1Y)*T+(R2X-R1X)/L*W
+19740                   IF M3D("QUIET",AX,AY)>=0.99 THEN
+19750                     SGX(NSG)=AX:SGY(NSG)=AY:SGU(NSG)=CX2:SGV(NSG)=CY2:SGK(NSG)=TR:SGD(NSG)=A*L:SGE(NSG)=T*L
+19760                     SGI(NSG)=(AX>=X0 AND AX<X0+900 AND AY>=Y0 AND AY<Y0+900)
+19762                     CALL PATHNORM(K,NS):SNX(NSG)=PNX:SNY(NSG)=PNY:CALL PATHNORM(K+1,NS):SEX(NSG)=PNX:SEY(NSG)=PNY:NSG=NSG+1
+19770                   END IF
+19780                 END IF
+19790               NEXT K
+19800             END IF
+19810           END IF
+19820         NEXT E
+19830       NEXT I
+19840     NEXT J
+19842   NEXT NET
+19850 END PROC
+19860 ' builds the roads of the chunk: the dirt tracks (object 8000 + slot; the tarred road is a ribbon of the chunk's ground job, M3D RING mode 1) and the reflector posts beside them (instances of the post 344, 15000 + 6 slot + n): a post every
+19870 ' 50 m (1562 units) on both sides; the post on the right-hand side of the direction of the road shows a white reflector to the traffic that comes from behind and a red one to the oncoming
+19880 ' traffic, the one on the left the other way round: the right-hand side of each driver has the white ones, the left-hand side the red ones
+19890 PROC CHROADS(CX,CY,SL)
+19900   LOCAL I,O1,O2,P0,N1,N2,NP,V,AX,AY,CX2,CY2,DX,DY,D,YW,PX,PY
+19910   O1=8000+SL:O2=8100+SL:P0=15000+SL*6:N1=0:N2=0:NP=0
+19920   M3D OBJECT O1,1,235:M3D OBJFREE O2,O2:M3D OBJFREE P0,P0+5
+19930   FOR I=0 TO NSG-1
+19940     IF SGI(I) THEN
+19950       AX=SGX(I):AY=SGY(I):CX2=SGU(I):CY2=SGV(I)
+19960       DX=CX2-AX:DY=CY2-AY:D=SQR(DX*DX+DY*DY):DX=DX/D:DY=DY/D
+19970       IF SGK(I) THEN
+20040         IF INT(SGD(I)/1562.5)<>INT(SGE(I)/1562.5) AND NP<5 THEN
+20050           YW=ATAN2(DY,DX)*180/PI
+20060           PX=CX2+DY*250:PY=CY2-DX*250:M3D INSTANCE P0+NP,344,PX,PY,FN HT(PX,PY),YW,1:NP=NP+1
+20070           PX=CX2-DY*250:PY=CY2+DX*250:M3D INSTANCE P0+NP,344,PX,PY,FN HT(PX,PY),YW+180,1:NP=NP+1
+20080         END IF
+20090       ELSE
+20100         V=M3D("VERTS",O1)
+20110         M3D VERTEX O1,AX+SNX(I)*55,AY+SNY(I)*55,FN HT(AX+SNX(I)*55,AY+SNY(I)*55)+3,64,SGD(I)*0.58
+20120         M3D VERTEX O1,AX-SNX(I)*55,AY-SNY(I)*55,FN HT(AX-SNX(I)*55,AY-SNY(I)*55)+3,0,SGD(I)*0.58
+20130         M3D VERTEX O1,CX2+SEX(I)*55,CY2+SEY(I)*55,FN HT(CX2+SEX(I)*55,CY2+SEY(I)*55)+3,64,SGE(I)*0.58
+20140         M3D VERTEX O1,CX2-SEX(I)*55,CY2-SEY(I)*55,FN HT(CX2-SEX(I)*55,CY2-SEY(I)*55)+3,0,SGE(I)*0.58
+20150         M3D QUAD O1,V,V+2,V+3,V+1,304:N1=N1+1
+20160       END IF
+20170     END IF
+20180   NEXT I
+20190   IF N1=0 THEN M3D OBJFREE O1,O1
+20210 END PROC
+20220 ' the picture of a tarred road: 64 x 64 texels, across the road (440 units, about 6.9 units a texel) and along it (64 texels = 376 units = 12 m); dark tar with speckles, a continuous
+20230 ' white edge line on each side (x 3 and 60), a dashed white middle line (x 31 / 32: 4.5 m dashes, 7.5 m gaps) and dashed white lane lines between the two lanes of a direction (x 17 and 46)
+20240 PROC MKTAR
+20250   LOCAL I
+20260   GFX LINE 0,0,63,63,FN CC(0,3),BF
+20270   FOR I=1 TO 220
+20280     GFX PSET FN RN(64),FN RN(64),FN CC(0,2+FN RN(3))
+20290   NEXT I
+20300   GFX LINE 3,0,3,63,FN CC(0,15):GFX LINE 60,0,60,63,FN CC(0,15)
+20310   GFX LINE 31,0,32,23,FN CC(0,15),BF
+20320   GFX LINE 17,0,17,15,FN CC(0,15):GFX LINE 46,0,46,15,FN CC(0,15)
+20330   CALL W3K_GRAB(327,64,64)
+20335   GFX LINE 0,0,3,3,FN CC(0,4),BF:CALL W3K_GRAB(328,4,4)
+20340 END PROC
+20350 ' the reflector post (object 344, hidden, passable): a white post of 36 units (1.1 m) with a white reflector on its -x face and a red one on its +x face; the road's direction is its +x
+20360 PROC MKPOST
+20370   M3D OBJECT 344,4,255
+20380   M3D BOX 344,-2.5,-2.5,0,2.5,2.5,36,FN CC(0,13)
+20390   M3D BOX 344,-3.5,-2,21,-2.5,2,31,FN CC(0,15)
+20400   M3D BOX 344,2.5,-2,21,3.5,2,31,FN CC(1,11)
+20410   M3D OBJSHOW 344,0
+20420 END PROC
+21000 ' the place of a road at T (0 .. 1) into PPX, PPY (the road is described by LR1X, LR1Y, LR2X, LR2Y, LL, LWA, LKEY: set by CHSEGS), and the right-hand unit normal of the road at step K
+21010 ' of NS into PNX, PNY, from the places K - 1 and K + 1: the segments that meet at a step share it, so a wide road has no slits at its bends
+21020 PROC PATHPT(T)
+21030   LOCAL W
+21040   W=LWA*NOISE(77,T*3,LKEY)*SIN(PI*T)
+21050   PPX=LR1X+(LR2X-LR1X)*T-(LR2Y-LR1Y)/LL*W:PPY=LR1Y+(LR2Y-LR1Y)*T+(LR2X-LR1X)/LL*W
+21060 END PROC
+21070 PROC PATHNORM(K,NS)
+21080   LOCAL X1,Y1,D
+21090   CALL PATHPT(MAX(0,K-1)/NS):X1=PPX:Y1=PPY
+21100   CALL PATHPT(MIN(NS,K+1)/NS)
+21110   X1=PPX-X1:Y1=PPY-Y1:D=SQR(X1*X1+Y1*Y1)
+21120   PNX=Y1/D:PNY=-X1/D
+21130 END PROC
+21200 ' ------------------------------------------------------------------------------------------------ the rings of the far ground (M3D RING jobs of the engine's worker thread)
+21210 ' Round the 7 x 7 chunks of CHUNKS the ground goes on in four rings of cells that grow with the distance, each a square grid with a hole where the finer ring is: ring 1 cells of 300
+21220 ' (45 x 45: 13500 units, the hole is the window of the chunks: 21 x 21 cells), ring 2 cells of 900 (36 x 36: 32400, hole = ring 1), ring 3 cells of 2700 (36 x 36: 97200, hole = ring 2),
+21230 ' ring 4 cells of 8100 (40 x 40: 324000 = 10 km, hole = ring 3: the view reaches 5 km); the outer cells of a ring are morphed to the coarser ring's surface (M3D RINGMORPH) so there is no step,
+21240 ' the tarred roads are ribbons in the rings. Ring k lies on the grid of the next coarser ring (its corner a multiple of 2700 / 2700 / 8100 / 8100), so it is made again only when the player
+21250 ' has moved so far (or the finer ring did): objects 12001 .. 12004; the jobs run on the worker thread and are taken together by M3D POLL (precomputed: nothing appears while it works)
+21260 PROC RINGUPDATE(PX,PY)
+21270   LOCAL PCX,PCY,O1X,O1Y,O2X,O2Y,O3X,O3Y,O4X,O4Y,C1,C2,C3,C4
+21280   PCX=INT(PX/900):PCY=INT(PY/900)
+21290   O1X=INT((PX-6750)/2700)*2700:O1Y=INT((PY-6750)/2700)*2700
+21300   O2X=INT((PX-16200)/2700)*2700:O2Y=INT((PY-16200)/2700)*2700
+21310   O3X=INT((PX-48600)/8100)*8100:O3Y=INT((PY-48600)/8100)*8100
+21320   O4X=INT((PX-162000)/8100)*8100:O4Y=INT((PY-162000)/8100)*8100
+21330   C1=(O1X<>RGX(1) OR O1Y<>RGY(1) OR PCX<>RGP(1) OR PCY<>RGQ(1))
+21340   C2=(O2X<>RGX(2) OR O2Y<>RGY(2) OR O1X<>RGP(2) OR O1Y<>RGQ(2))
+21350   C3=(O3X<>RGX(3) OR O3Y<>RGY(3) OR O2X<>RGP(3) OR O2Y<>RGQ(3))
+21360   C4=(O4X<>RGX(4) OR O4Y<>RGY(4) OR O3X<>RGP(4) OR O3Y<>RGQ(4))
+21370   IF C1 THEN M3D RING 12001,O1X,O1Y,45,300,40,0,(PCX-3)*900,(PCY-3)*900,21:RGX(1)=O1X:RGY(1)=O1Y:RGP(1)=PCX:RGQ(1)=PCY
+21380   IF C2 THEN M3D RING 12002,O2X,O2Y,36,900,60,0,O1X,O1Y,15:RGX(2)=O2X:RGY(2)=O2Y:RGP(2)=O1X:RGQ(2)=O1Y
+21390   IF C3 THEN M3D RING 12003,O3X,O3Y,36,2700,150,0,O2X,O2Y,12:RGX(3)=O3X:RGY(3)=O3Y:RGP(3)=O2X:RGQ(3)=O2Y
+21400   IF C4 THEN M3D RING 12004,O4X,O4Y,40,8100,400,0,O3X,O3Y,12:RGX(4)=O4X:RGY(4)=O4Y:RGP(4)=O3X:RGQ(4)=O3Y
+21410 END PROC
+21500 ' the trees of a new chunk grow (from 3 % to full size in 10 steps, one every 4 frames: the chunk is made at the edge of the window, so nothing pops up): GRT(slot) = the steps left,
+21510 ' TSC(24 slot + n) = the full size of a tree; no growing while the world is made at once (CHUNKS with 64)
+21520 PROC GROWTREES
+21530   LOCAL S,N,F
+21540   FRC=FRC+1
+21550   FOR S=0 TO 63
+21560     IF GRT(S)>0 AND (FRC+S)-4*INT((FRC+S)/4)=0 THEN
+21570       GRT(S)=GRT(S)-1:F=0.03+0.97*(1-GRT(S)/10)
+21580       FOR N=0 TO CKN(S)-1
+21590         M3D OBJSCALE 2000+S*24+N,TSC(S*24+N)*F
+21600       NEXT N
+21610     END IF
+21620   NEXT S
+21630 END PROC

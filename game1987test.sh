@@ -275,7 +275,7 @@ goto 11200 0 0
 wait 40
 state
 fa 0
-goto 2000 -5500 0
+goto 2000 -5000 0
 fa 1
 wait 30
 state
@@ -302,18 +302,21 @@ state
 goto 13500 0 0
 wait 20
 state
-goto 5000 -5500 0
+goto 5000 -5000 0
 wait 5
 state
-goto 3000 -5500 0
+goto 3500 -5000 0
 wait 3
 state
-goto 7000 -5500 0
+goto 6800 -5000 0
 wait 3
 state
 goto 21750 500 0
 wait 4
 state
+goto 29400 -17400 0
+wait 3
+chunks
 quit
 PLAY
 run
@@ -401,14 +404,14 @@ expect "chunks: far jump: trees within the budget" "$(val chunks 2 trees)" 0 117
 expect "chunks: second far jump (-9000, 7000) and 2 s: window complete" "$(val chunks 5 have)" 49 49
 expect "chunks: second far jump: nothing stale" "$(val chunks 5 stale)" 0 0
 # 11f3. hills, mountains and lakes (outside the hand-made area): ridged hills (rocky, walkable), real mountains (up to 1190 m: 37000 units of 3.2 cm; steep walls 14000 .. 22000 units from the house) and real lakes (basins 350 deep, 100 .. 190 m across) in the ground function; John walks over the rocky hills (every slope up to 72 degrees is walkable) but does not wade into
-#       deep water: walking east from (11200, 0) he crosses the mountain whose top is at (13500, 0) and is beyond it after 40 s; walking east from (2000, -5500) he stops dead at the shore of a lake (water level -12, wading is possible down to -24)
+#       deep water: walking east from (11200, 0) he crosses the mountain whose top is at (13500, 0) and is beyond it after 40 s; walking east from (2000, -5000) he stops dead at the shore of a lake (water level -12, wading is possible down to -24)
 expect "lake: the chunks round the shore have water (translucent planes at the water level)" "$(val chunks 3 water)" 1 49
 # 11f4. a city ruin site (big region of 7200 units, a chance of 30 %): buildings of brick walls; roads between the region points; hay bales in the fields; the chunks of the window around (1350, 8550)
 expect "ruins: the chunks round (1350, 8550) have buildings of a city ruin" "$(val chunks 4 ruins)" 3 49
 expect "roads: some chunks have a road" "$(val chunks 4 roads)" 1 49
 expect "bales: hay bales in the fields" "$(val chunks 4 bales)" 1 49
 expect "mountain: John walks over the rocky hill (the top is at 13500)" "$(val state 48 jx)" 13800 20000
-expect "lake: John stops at the shore (the water starts at x = 2700 on this line)" "$(val state 49 jx)" 2400 2760
+expect "lake: John stops at the shore (the water starts at x = 2300 on this line: a pond west of a dirt road)" "$(val state 49 jx)" 2230 2400
 expect "lake: stopped dead" "$(val state 49 jv)" 0 0
 expect "lake: the ground under him is not deeper than the limit (water level -12, 12 below it is too deep)" "$(val state 49 gh)" -26 -12
 # 11i. the surface under the feet comes from the pictures (M3D("FLOORTEX"): FN SURF, state "sf": 0 grass, 1 sand / mud, 2 wood / hard, 3 wheat), not from the height
@@ -418,12 +421,16 @@ expect "surface: grass" "$(val state 52 sf)" 0 0
 expect "surface: the wheat field" "$(val state 53 sf)" 3 3
 expect "surface: the rock of a mountain is hard" "$(val state 54 sf)" 2 2
 expect "surface: the mud of a lake bed is soft sand" "$(val state 55 sf)" 1 1
-# 11f5. real sizes: a lake is 100 m (3125 units) across or more: both ends of a line of 4000 units across the lake at y = -5500 are under water (the water level is -12); the highest mountain is more
-#       than 1000 m (31250 units) high; the far land (7 x 7 tiles of 8 x 8 chunks) is built
+# 11f5. real sizes: a lake is 100 m (3125 units) across or more: both ends of a line of 3300 units across the lake at y = -5000 are under water (the water level is -12); the highest mountain is more
+#       than 1000 m (31250 units) high; the four rings of the far ground are built (jobs of the worker thread, all taken)
 expect "lake: the west end of a line across it is under water" "$(val state 56 gh)" -400 -13
-expect "lake: the east end, 4000 units (128 m) away, too" "$(val state 57 gh)" -400 -13
+expect "lake: the east end, 3300 units (105 m) away, too" "$(val state 57 gh)" -400 -13
 expect "mountain: more than 1000 m (31250 units) high" "$(val state 58 gh)" 31250 45000
-expect "far land: 49 tiles" "$(val chunks 5 far)" 49 49
+expect "rings: the four rings of the far ground are there" "$(val chunks 5 rings)" 4 4
+expect "rings: no ground job left" "$(val chunks 5 busy)" 0 0
+# 11f6. tarred roads (440 wide, 2 lanes each way with edge lines and dashes, picture 327) with reflector posts every 50 m, and trees that keep away from the roads: the chunks round (29400, -17400): a tarred road runs north-south along x = 29400
+expect "tarred road: the floor under the road is the tar picture (hard surface)" "$(val chunks 6 roads)" 1 49
+expect "tarred road: reflector posts beside it" "$(val chunks 6 posts)" 1 49
 expect "chunks: second far jump: some forest" "$(val chunks 5 trees)" 1 1176
 expect "chunks: a different place has other chunks than the first" "$(awk -v a="$(val chunks 2 sig)" -v b="$(val chunks 5 sig)" 'BEGIN { print (a != b) ? 1 : 0 }')" 1 1
 # 11g. a bicycle cannot stand by itself: at the start it leans against the yard's fence (bst 1) and E picks it up (riding, upright); a riderless one rolls on for 3 s and then falls over

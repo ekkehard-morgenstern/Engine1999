@@ -30,6 +30,7 @@
 #define M3DPRIV_H   1
 
 #include "m3d.h"
+#include "roadnet.h"
 
 /*
 Private to m3d.c and the renderers (m3dsoft.c, later m3dgl.c): the world model and the interface between the model and a renderer. A renderer draws
@@ -103,6 +104,7 @@ typedef struct {
     uint64_t seed;
     double   scale, amp, base, gain, lac;
     int      oct;
+    rnet_t   net;                                                          // the road network (M3D ROADNET): hills keep away from dirt roads, tarred roads cut across everything, lakes and mountains keep away from roads
     mnt_t    mnt[2];                                                                // mountains [0] and hills [1]
     struct { bool on; uint64_t seed; double scale, depth, lo, hi; } lake;           // lakes: the ground sinks by depth where a noise is above lo .. hi
     struct { bool on; double cx, cy, rx, ry, margin; } flat[8];
@@ -119,6 +121,14 @@ typedef struct {
     uint8_t  lvl[M3D_MAXTEX];
 } sun_t;
 
+// M3D RINGPIC: the pictures and thresholds of the ground jobs (M3D RING)
+typedef struct {
+    int    water, rock, grass, tar, tarfar, mud, meadow, field, forest;
+    double level, rockh;                    // the water level and the height above which ground is rock
+} ringpic_t;
+
+struct _tjobs;                              // the asynchronous ground jobs and their worker thread (m3d.c)
+
 struct _m3d_t {
     tex_t*   texs;
     obj_t*   objs;     int nobjs;
@@ -129,6 +139,7 @@ struct _m3d_t {
     bool     havepal;
     int      vx, vy, vw, vh, scale, bw, bh;
     double   fov, fog, far;
+    double   fogstart;                      // M3D FOG d,haze,start: nothing before this distance (the fog is the quadratic part from start to d)
     int      hazecol;                       // M3D FOG d, haze: the palette index the fog fades to (-1: the fog darkens)
     const m3drend_t* hw;                       // the hardware renderer the host offered, or 0
     const m3drend_t* rend;  void* rdata;       // the renderer in use (m3dsoft.c: the software one)
@@ -145,6 +156,9 @@ struct _m3d_t {
     int*     order;  double* odist;
     ground_t gnd;
     sun_t    sun;
+    ringpic_t rpic;
+    double   rmorph;                        // M3D RINGMORPH: 0 = off, else the part of a ring (from its middle) that keeps its own heights; further out they fade to the coarser ring
+    struct _tjobs* jobs;
     int      top;                           // one above the highest object number in use (the loops stop there)
     unsigned presepoch;                     // counts the times a picture number got or lost its picture (the renderer's kept meshes group the triangles by that)
 };

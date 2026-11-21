@@ -796,16 +796,18 @@ ui-geometry := num-expr "," num-expr "," num-expr "," num-expr "," num-expr .
 > Functions: M3D("X"\|"Y"\|"Z"\|"EYE"\|"YAW"\|"PITCH"\|"LIFT"\|"HIT"\|"FLOORZ"\|"SHOTKIND"\|"SHOTOBJ"\|"SHOTDIST"\|"SHOTX"\|"SHOTY"\|"SHOTZ"\|"DRAWN"\|"RENDERER"\|"HWAVAIL"), ("FLOORAT"\|"FLOORTEX"\|"FLOOROBJ"\|"CEILAT"\|"ZONE"\|"ZONETAG",x,y,z), ("SHOOT"\|"USE"\|"SEES"\|"TON"\|"TX"\|"TY"\|"TZ"\|"DIST"\|"BEARING"\|"TEXW"\|"TEXH"\|"OBJON"\|"OBJX"\|"OBJY"\|"OBJZ"\|"OBJYAW"\|"VERTS"\|"TRIS",n), ("GROUND",x,y).
 
 ```ebnf
-m3d-stmt := XFUNC(M3D) ( RESET | CLEAR | COLORMAP | RENDER | SOFTWARE | HARDWARE | TEXTURE num-expr "," str-expr | TEXTURE LOAD num-expr "," str-expr [ "," PALETTE ] |
+m3d-stmt := XFUNC(M3D) ( RESET | CLEAR | COLORMAP | RENDER | POLL | RINGWAIT | SOFTWARE | HARDWARE | TEXTURE num-expr "," str-expr | TEXTURE LOAD num-expr "," str-expr [ "," PALETTE ] |
                              ( OBJECT | VERTEX | FACE | QUAD | BOX | OBJPOS | OBJSHOW | OBJLIGHT | OBJFLAGS | THING | THINGPOS | THINGTEX | THINGOFF | THINGLIGHT | THINGTRANS |
-                               CAMERA | TURN | PLAYER | MOVE | LIFT | LAMP | VIEW | FOG | FAR | SKY | THINGMOVE | ZONE | GROUND | GROUNDFLAT | INSTANCE | OBJSCALE | OBJFREE | MOUNTAINS | LAKES | GROUNDQUIET | SUN | MINIMAP | HILLS ) num-expr { "," num-expr } |
+                               CAMERA | TURN | PLAYER | MOVE | LIFT | LAMP | VIEW | FOG | FAR | SKY | THINGMOVE | ZONE | GROUND | GROUNDFLAT | INSTANCE | OBJSCALE | OBJFREE | MOUNTAINS | LAKES | GROUNDQUIET | SUN | MINIMAP | HILLS | ROADNET | RING | RINGPIC | RINGMORPH ) num-expr { "," num-expr } |
                              TERRAIN num-expr { "," num-expr } [ "," str-expr { "," num-expr } ] | WORLD ) .
 ```
 
 > M3D MINIMAP sx,sy,w,h,wx,wy,span[,water] draws a shaded height map of the ground function onto the target layer (window host).
 > M3D SUN dx,dy,dz[,ambient[,steps[,stride]]] shades terrain cells by their slope (pictures t + k \* stride; all zero = off).
 > M3D INSTANCE o,src[,x,y,z[,yaw[,scale]]] makes object o share the mesh of object src (copy on write), M3D OBJSCALE o,scale sets a size, M3D OBJFREE a,b deletes objects a .. b.
-> M3D FOG d[,haze] darkens with the distance, or fades to the palette color haze (quadratically, at most 92 %); M3D HILLS is a second ridged layer next to M3D MOUNTAINS seed,scale,amp,octaves,lo,hi[,r0,r1] (faded in between the distances r0 and r1 from the origin); the cell character 255 of M3D TERRAIN is a hole.
+> M3D ROADNET spacing,chance,wdirt,tspacing,tchance,wtar gives the ground function a road network (roadnet.c): hills keep away from dirt roads and fields, tarred roads cut across everything, lakes and mountains keep away from all roads; M3D("ROADD"\|"ROADT"\|"KIND",x,y) read it.
+> M3D RING o,x0,y0,n,cell,skirt,mode,hx0,hy0,hn makes the ground mesh of object o on a worker thread (mode 0 a ring with tarred road ribbons, mode 1 a chunk), M3D RINGPIC sets its pictures, M3D RINGMORPH the blending of a ring to the coarser one, M3D POLL takes the finished jobs, M3D RINGWAIT waits for them all; M3D("RINGBUSY") counts the jobs not taken, M3D("QUIET",x,y).
+> M3D FOG d[,haze[,start]] darkens with the distance, or fades to the palette color haze (quadratically, at most 92 %); M3D HILLS is a second ridged layer next to M3D MOUNTAINS seed,scale,amp,octaves,lo,hi[,r0,r1] (faded in between the distances r0 and r1 from the origin); the cell character 255 of M3D TERRAIN is a hole.
 > M3D MOUNTAINS seed,scale,amp,octaves,lo,hi adds ridged mountains where a slow noise is between lo and hi, M3D LAKES seed,scale,depth,lo,hi basins, M3D GROUNDQUIET cx,cy,rx,ry,margin keeps both out of a box.
 > M3D GROUND seed,scale,amp,octaves[,base[,gain[,lacunarity]]] defines the height of the ground (fractal noise, in C), M3D GROUNDFLAT n,cx,cy,rx,ry,margin flattens it round a box,
 > M3D TERRAIN o,x0,y0,nx,ny,cell,tex[,cells$[,skirt[,uvscale]]] fills object o with a grid of it (cells$: a character a cell, picture tex + its code), M3D("GROUND",x,y) is its height.
