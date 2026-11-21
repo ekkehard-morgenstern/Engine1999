@@ -63,9 +63,9 @@ There are sounds for the walk (a footstep at each step, different on grass, on a
 holds the 3D settings.
 .br
 .I ~/.engine1987-world/
-is the world: the first start of the game makes it (1000 by 1000 chunks of 500 m, 32 MB, a few minutes, with a progress bar), later starts open it at once. The world is made once and never changes while you play: the ground, the lakes, the mountains and the roads are where they were. The file
+is the world: the first start of the game makes it (300 by 300 chunks of 500 m, 3 MB, about 20 seconds, with a progress bar), later starts open it at once. The world is made once and never changes while you play: the ground, the lakes, the mountains and the roads are where they were. The file
 .I player.dat
-in it holds the position of John and of the bicycle, saved when the game ends and read at the next start. At the title screen, N makes a new world (the old one is replaced).
+in it holds the position of John and of the bicycle, saved when the game ends and read at the next start; a saved position that is outside the world, in a lake or on a mountain is not used (John starts at the house instead), and every newly made world forgets the old position. At the title screen, N makes a new world (the old one is replaced).
 .SH ENVIRONMENT
 .TP
 .B G1987_WORLD

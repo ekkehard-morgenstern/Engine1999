@@ -518,11 +518,23 @@ grep -q '^coords X -*[0-9.]*  Y -*[0-9.]*  Z -*[0-9.]* M  CHUNK 8,[78]$' $T/out 
 expect "world: reset puts John back at the start" "$(val state 5 jx)" -5 60
 expect "world: reset puts John back at the start (y)" "$(val state 5 jy)" -200 -140
 if grep -q '^Error' $T/out; then echo "FAILED: the game in world mode stopped with: $(grep '^Error' $T/out)"; fail=$((fail+1)); fi
-# the position: a start that plays 3 frames (G1987_FRAMELOG) saves it; the saved position is loaded by the next start
+# the position (play mode): the game starts from player.dat (NEWGAME reads it), `state` shows where John is, `wsave` writes it again
+printf 'state\nwsave\nquit\n' > $T/play2
+runplay() { HOME=$T G1987_WORLD=$W G1987_WORLDSIZE=16 G1987_HEADLESS=1 G1987_PLAY=$T/play2 timeout 300 sh -c 'printf "LOAD \"demos/1987\"\nRUN\nBYE\n" | ./engine1999c --allow=all' > $T/out 2>&1; }
 printf '4000\n-3000\n90\n4100\n-3100\n' > "$W/player.dat"
-HOME=$T G1987_WORLD=$W G1987_HEADLESS=1 G1987_FRAMELOG=$T/fl G1987_FRAMES=3 timeout 300 sh -c 'printf "LOAD \"demos/1987\"\nRUN\nBYE\n" | ./engine1999c --allow=all' > $T/out 2>&1
+runplay
+expect "world: the saved position was loaded" "$(val state 1 jx)" 3900 4100
 saved=$(head -1 "$W/player.dat" 2>/dev/null)
-expect "world: the saved position was loaded and saved again" "${saved:-0}" 3900 4100
-rm -rf "$W" "$T/fl" 2>/dev/null
+expect "world: the saved position was written again" "${saved:-0}" 3900 4100
+# a saved position that is no place to start from (outside the world) is not used
+printf '99999999\n-3000\n90\n4100\n-3100\n' > "$W/player.dat"
+runplay
+expect "world: an unfit saved position falls back to the start" "$(val state 1 jx)" -200 200
+# a new world forgets the old saved position (the file of an earlier world is left over when the world is made again)
+rm -f "$W/world.dat"; printf '4000\n-3000\n90\n4100\n-3100\n' > "$W/player.dat"
+runplay
+expect "world: a newly made world starts at the start" "$(val state 1 jx)" -200 200
+[ -s "$W/world.dat" ] || { echo "FAILED: the world was not made again"; fail=$((fail+1)); }
+rm -rf "$W" 2>/dev/null
 if [ $fail -ne 0 ]; then echo "$fail failure(s)"; fi
 exit $fail

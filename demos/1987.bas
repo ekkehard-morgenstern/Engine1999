@@ -1571,6 +1571,7 @@
 12560         CALL CAMUPDATE(1/60)
 12570       NEXT I
 12580     END IF
+12582     IF C$="wsave" AND WLD THEN CALL WSAVE
 12583     IF C$="reset" THEN CALL RESETPOS
 12584     IF C$="coords" THEN SXY=VAL(W$(1)):CALL COORDTXT:PRINT "coords ";CT$
 12585     IF C$="chunks" THEN CALL CHUNKSTAT(JX,JY)
@@ -2350,6 +2351,7 @@
 23510 PROC WORLDMAKEUP
 23520   LOCAL P,T0
 23530   RANDOMIZE TI
+23535   IF EXISTS(WDIR$+"/player.dat") THEN KILL WDIR$+"/player.dat"
 23540   M3D WORLDMAKE WDIR$,WSZ,INT(RND(1)*1000000)+1
 23550   T0=TI
 23560   REPEAT
@@ -2368,7 +2370,7 @@
 23690   UNTIL M3D("WORLDINFO",6)=1 OR P<0
 23700   IF P<0 THEN PRINT "the world could not be made in ";WDIR$:IN_QUIT=1
 23710 END PROC
-23720 ' N at the title: a new world (the old one is replaced), the saved position is forgotten
+23720 ' N at the title: a new world (the old one is replaced), the saved position is forgotten (WORLDMAKEUP does that for every new world)
 23730 PROC WORLDREMAKE
 23740   M3D WORLDCLOSE
 23750   IF EXISTS(WDIR$+"/player.dat") THEN KILL WDIR$+"/player.dat"
@@ -2380,6 +2382,14 @@
 23810   PRINT #6,JX:PRINT #6,JY:PRINT #6,JH:PRINT #6,BX:PRINT #6,BY:PRINT #6,SXY
 23820   CLOSE #6
 23830 END PROC
+23831 ' a place that is fit to start from: inside the walls of the world, on dry ground that is not a mountain (a saved position of another world may be anywhere)
+23832 FUNC SAFESPOT(X,Y)
+23833   LOCAL G
+23834   IF ABS(X)>WLIM OR ABS(Y)>WLIM THEN RETURN 0
+23835   G=M3D("GROUND",X,Y)
+23836   IF G<WZ+4 OR G>1200 THEN RETURN 0
+23837   RETURN -1
+23838 END FUNC
 23840 ' the saved position (if there is one): John and the bicycle are there again
 23850 PROC WLOAD
 23860   IF WLD AND NOT WNEW THEN
@@ -2387,6 +2397,8 @@
 23880       OPEN WDIR$+"/player.dat" FOR INPUT AS #6
 23890       INPUT #6,JX:INPUT #6,JY:INPUT #6,JH:INPUT #6,BX:INPUT #6,BY:IF NOT EOF(6) THEN INPUT #6,SXY
 23900       CLOSE #6
+23905       IF NOT FN SAFESPOT(JX,JY) THEN JX=0:JY=-172:JH=90
+23907       IF NOT FN SAFESPOT(BX,BY) THEN BX=130:BY=-214
 23910       CALL TERRAINJUMP(JX,JY):JZ=FN FLR(JX,JY):BZ=FN FLR(BX,BY)
 23920     END IF
 23930   END IF
