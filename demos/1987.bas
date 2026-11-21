@@ -2296,7 +2296,7 @@
 22210   PRINT "poptest samples=";CNT;" max=";INT(MX*10)/10;" over3=";BIG
 22220 END PROC
 23000 ' ------------------------------------------------------------------------------------------------ the static world (docs/world-subsystem.md)
-23010 ' The ground is a world made once (M3D WORLDMAKE: 1000 x 1000 chunks of 500 m, kept in the folder WDIR$, by default ~/.engine1987-world; G1987_WORLD names another folder, G1987_WORLDSIZE the
+23010 ' The ground is a world made once (M3D WORLDMAKE: 300 x 300 chunks of 500 m by default (up to 1000 x 1000), kept in the folder WDIR$, by default ~/.engine1987-world; G1987_WORLD names another folder, G1987_WORLDSIZE the
 23020 ' size) and only drawn while you play (M3D WORLDVIEW): nothing is decided or changed in front of you. The old dynamic chunks are still there: G1987_DYNAMIC=1 (and every headless test).
 23030 ' The position is saved in the folder when the game ends (player.dat) and loaded again by NEWGAME; N at the title makes a new world.
 23040 PROC RINGOBJS
@@ -2338,11 +2338,11 @@
 23400   M3D WORLDVIEW 0,0:M3D WORLDWAIT
 23410   M3D OBJPOS 250,0,0,WZ
 23420 END PROC
-23430 ' a world is there, or is made now (with a bar: the first start of the game takes a few minutes for 1000 x 1000 chunks, later starts none)
+23430 ' a world is there, or is made now (with a bar: the first start of the game takes a few minutes for 300 x 300 chunks (about 20 s), later starts none)
 23440 PROC WORLDPREP
 23450   IF WLD THEN
 23460     WDIR$=ENV$("G1987_WORLD"):IF WDIR$="" THEN WDIR$=ENV$("HOME")+"/.engine1987-world"
-23470     WSZ=1000:IF ENV$("G1987_WORLDSIZE")<>"" THEN WSZ=VAL(ENV$("G1987_WORLDSIZE"))
+23470     WSZ=300:IF ENV$("G1987_WORLDSIZE")<>"" THEN WSZ=VAL(ENV$("G1987_WORLDSIZE"))
 23480     IF NOT EXISTS(WDIR$+"/world.dat") THEN CALL WORLDMAKEUP
 23490   END IF
 23500 END PROC

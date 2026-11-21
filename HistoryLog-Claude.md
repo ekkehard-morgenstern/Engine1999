@@ -13,6 +13,8 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+- **Default world size 300 x 300 chunks** (2026-11-21, owner: "300 x 300 chunks, this should be enough for the time being ... plenty of headroom later"): `demos/1987.bas` (`WSZ=300`, comments), `docs/1987.md`, `man/engine1999-1987.6`; the format and `G1987_WORLDSIZE` still allow up to 1000. Tests: `game1987test.sh` passes (uses size 16), `mancheck.sh` ok. An existing 1000 world in `~/.engine1987-world` is kept as it is.
+
 - **Tar roads every 3.7 km (15 % of the chunks), dirt roads no longer black** (2026-11-21, owner: world creation took ~200 s; dirt roads black underneath; no tarred road seen; "raise the probability of a tarred road in a chunk to 15%"): `world.c` `tspacing` 200000 -> 114500 (measured on a 400 x 400 world: 110000 gave 16.3 %, 118000 gave 14.0 % of the chunks with `WCF_TAR`; 73000 gave 27 %), `WORLD_VERSION` 3 -> 4 (old worlds are refused and must be made again). The black: picture 304 (dirt) has index 0 at its edges and the tiles were not masked (`M3D WORLDOPEN ...,0,255`): index 0 of a plain picture is drawn as pixel 0, which the layer shows as transparent (black); `demos/1987.bas` line 23340 now opens the world with flags 1 (masked). Tar and dirt do not share coordinates (separate networks, hashes 160 + e and 60 + e). Tried and dropped: a `discard` in the GL fragment shader (`m3dgltest1` "see-through" case wants the pixel 0). Docs: `docs/world-subsystem.md`, `docs/1987.md`. Tests: `make check` all passed; looked at in a window under Xvfb (software renderer; the GL path not run).
 
 
