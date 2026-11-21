@@ -525,6 +525,7 @@ check: $(CHECKTESTS) engine1999 engine1999c
 	if sh deqq2test.sh > $$log 2>&1; then printf '%-12s ok\n' deqq2test; else printf '%-12s FAILED\n' deqq2test; tail -n 20 $$log; fail=$$((fail+1)); fi; \
 	if sh game1987test.sh > $$log 2>&1; then printf '%-12s ok\n' game1987test; else printf '%-12s FAILED\n' game1987test; tail -n 20 $$log; fail=$$((fail+1)); fi; \
 	if sh chunkstest.sh > $$log 2>&1; then printf '%-12s ok\n' chunkstest; else printf '%-12s FAILED\n' chunkstest; tail -n 20 $$log; fail=$$((fail+1)); fi; \
+	if sh fusetest.sh > $$log 2>&1; then printf '%-12s ok\n' fusetest; else printf '%-12s FAILED\n' fusetest; tail -n 20 $$log; fail=$$((fail+1)); fi; \
 	if sh levelstest.sh > $$log 2>&1; then printf '%-12s ok\n' levelstest; else printf '%-12s FAILED\n' levelstest; tail -n 20 $$log; fail=$$((fail+1)); fi; \
 	if sh worldtest.sh > $$log 2>&1; then printf '%-12s ok\n' worldtest; else printf '%-12s FAILED\n' worldtest; tail -n 20 $$log; fail=$$((fail+1)); fi; \
 	if sh instedtest.sh > $$log 2>&1; then printf '%-12s ok\n' instedtest; else printf '%-12s FAILED\n' instedtest; tail -n 20 $$log; fail=$$((fail+1)); fi; \

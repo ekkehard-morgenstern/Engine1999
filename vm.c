@@ -57,6 +57,9 @@ static void vm_chanstate_default( vm_chanstate_t* st ) {
 void init_vm( vm_t* vm, codegen_t* cgen, varmem_t* vmem ) {
     vm->cgen     = cgen;
     vm->vmem     = vmem;
+    vm->fuse     = 0;
+    vm->fusesize = 0;
+    vm->fusing   = false;
     vm->dstack   = 0;
     vm->dsp      = 0;
     vm->dmax     = 0;
@@ -246,6 +249,10 @@ void vm_clear_request( vm_t* vm ) {
 
 void cleanup_vm( vm_t* vm ) {
     vm_discard_stop( vm );
+    free( vm->fuse );
+    vm->fuse = 0;
+    vm->fusesize = 0;
+    vm->fusing = false;
     free( vm->moddata );
     vm->moddata = 0;
     vm->nmoddata = 0;
@@ -4459,6 +4466,387 @@ static bool vm_branch_to( vm_t* vm, uint32_t target ) {
     return true;
 }
 
+
+// -- fused instructions ------------------------------------------------------
+/*
+A side table (vm->fuse, one byte per code address, built lazily while the program runs: 0xFF = this address was not looked
+at yet) says for an address which "fused" handler can execute the instruction there together with the ones that follow, in
+one go and without the general decoding of vm_step(). The code itself is not changed (the monitor, LIST and every jump into
+the middle of a sequence keep working: each address has its own entry). A fused handler checks all its preconditions first
+(types, a free stack slot, subscripts in range, a divisor that is not 0 ...) and, if any fails, executes just the first
+instruction with vm_step() so that the error messages and effects are exactly the ordinary ones. Fusing is switched off
+while single-stepping, with breakpoints, with a step limit (the step count would change) and by E1999_NOFUSE in the environment.
+*/
+enum { FZ_NONE = 0, FZ_LINE, FZ_RRNV, FZ_WRNV, FZ_PHIM, FZ_BIN, FZ_RR_RR, FZ_RR_PHIM, FZ_RR_BIN, FZ_PHIM_BIN, FZ_BIN_WR,
+    FZ_JC, FZ_CMP_JC, FZ_ARR_R, FZ_ARR_W, FZ_RR_AR1, FZ_RR_AW1, FZ_BRIA, FZ_LANC, FZ_UNKNOWN = 0xFF };
+enum { FI_OTHER = 0, FI_LINE, FI_RRNV, FI_WRNV, FI_PHIM, FI_BIN, FI_CMP, FI_PHPAC, FI_JPCC, FI_BRIA, FI_PHPAD, FI_LAND, FI_RAE, FI_WAE };
+
+#define FZ_RD16(p)  ( (uint16_t)( ( (uint16_t)(p)[0] << UINT8_C(8) ) | (p)[1] ) )
+#define FZ_RD32(p)  ( ( (uint32_t)(p)[0] << UINT8_C(24) ) | ( (uint32_t)(p)[1] << UINT8_C(16) ) | ( (uint32_t)(p)[2] << UINT8_C(8) ) | (p)[3] )
+
+// what the instruction at q is (only the short forms the code generator uses for the hot cases); *plen = its length
+static unsigned fz_probe( const uint8_t* c, uint32_t size, uint32_t q, uint32_t* plen ) {
+    unsigned tag = FI_OTHER; uint32_t len = 0;
+    if ( q < size ) {
+        switch ( c[q] ) {
+            case 0x89: tag = FI_LINE; len = 3U; break;
+            case 0x99: tag = FI_LINE; len = 5U; break;
+            case 0x83: case 0xC3: tag = FI_PHIM; len = 3U; break;
+            case 0xD2: tag = FI_PHPAC; len = 5U; break;
+            case 0x46: tag = FI_JPCC; len = 1U; break;
+            case 0x94: tag = FI_BRIA; len = 5U; break;
+            case 0x82: tag = FI_PHPAD; len = 3U; break;
+            case 0x92: tag = FI_PHPAD; len = 5U; break;
+            case 0x0A: tag = FI_LAND; len = 1U; break;
+            case 0xA1:
+                len = 4U;
+                switch ( q + 1U < size ? c[ q + 1U ] : 0xFF ) {
+                    case 0x00: tag = FI_RRNV; break;
+                    case 0x08: tag = FI_WRNV; break;
+                    case 0x04: case 0x05: tag = FI_RAE; break;
+                    case 0x0C: case 0x0D: tag = FI_WAE; break;
+                    default: len = 0; break;
+                }
+                break;
+            case 0x20:
+                len = 2U;
+                switch ( q + 1U < size ? c[ q + 1U ] : 0xFF ) {
+                    case 0x14: case 0x15: case 0x16: case 0x17: case 0x18: case 0x1A: case 0x1C: tag = FI_BIN; break;
+                    case 0x20: case 0x21: case 0x22: case 0x23: case 0x24: case 0x25: tag = FI_CMP; break;
+                    default: len = 0; break;
+                }
+                break;
+            default:
+                break;
+        }
+    }
+    if ( len == 0 || q + len > size ) {
+        *plen = 0;
+        return FI_OTHER;
+    }
+    *plen = len;
+    return tag;
+}
+
+static uint8_t fz_classify( const uint8_t* c, uint32_t size, uint32_t p ) {
+    uint32_t l1 = 0, l2 = 0, l3 = 0;
+    unsigned t1 = fz_probe( c, size, p, &l1 ), t2, t3;
+    switch ( t1 ) {
+        case FI_LINE: return FZ_LINE;
+        case FI_RRNV:
+            t2 = fz_probe( c, size, p + l1, &l2 );
+            if ( t2 == FI_RRNV ) { return FZ_RR_RR; }
+            if ( t2 == FI_PHIM ) {
+                t3 = fz_probe( c, size, p + l1 + l2, &l3 );
+                if ( c[ p + l1 ] == 0x83 && FZ_RD16( &c[ p + l1 + 1U ] ) == 1U ) {
+                    if ( t3 == FI_RAE ) { return FZ_RR_AR1; }
+                    if ( t3 == FI_WAE ) { return FZ_RR_AW1; }
+                }
+                return FZ_RR_PHIM;
+            }
+            if ( t2 == FI_BIN || t2 == FI_CMP ) { return FZ_RR_BIN; }
+            return FZ_RRNV;
+        case FI_WRNV: return FZ_WRNV;
+        case FI_PHIM:
+            t2 = fz_probe( c, size, p + l1, &l2 );
+            if ( c[p] == 0x83 && ( FZ_RD16( &c[ p + 1U ] ) == 1U || FZ_RD16( &c[ p + 1U ] ) == 2U ) ) {
+                if ( t2 == FI_RAE ) { return FZ_ARR_R; }
+                if ( t2 == FI_WAE ) { return FZ_ARR_W; }
+            }
+            if ( t2 == FI_BIN || t2 == FI_CMP ) { return FZ_PHIM_BIN; }
+            return FZ_PHIM;
+        case FI_BIN: case FI_CMP:
+            t2 = fz_probe( c, size, p + l1, &l2 );
+            if ( t1 == FI_CMP && t2 == FI_PHPAC && fz_probe( c, size, p + l1 + l2, &l3 ) == FI_JPCC ) { return FZ_CMP_JC; }
+            return t2 == FI_WRNV ? FZ_BIN_WR : FZ_BIN;
+        case FI_PHPAC:
+            return fz_probe( c, size, p + l1, &l2 ) == FI_JPCC ? FZ_JC : FZ_NONE;
+        case FI_BRIA: return FZ_BRIA;
+        case FI_PHPAD:
+            return fz_probe( c, size, p + l1, &l2 ) == FI_LAND ? FZ_LANC : FZ_NONE;
+        default:
+            break;
+    }
+    return FZ_NONE;
+}
+
+// the binary operators of the fast path (numbers only); false: leave it to vm_binary_num() (errors, the rare operators)
+static inline bool fz_bin( uint8_t op, double a, double b, double* r ) {
+    switch ( op ) {
+        case (uint8_t) INS_ADD:  *r = a + b; return true;
+        case (uint8_t) INS_SUB:  *r = a - b; return true;
+        case (uint8_t) INS_MUL:  *r = a * b; return true;
+        case (uint8_t) INS_DIV:  if ( b == 0.0 ) { return false; } *r = a / b; return true;
+        case (uint8_t) INS_AND:  *r = (double)( vm_to_int32( a ) & vm_to_int32( b ) ); return true;
+        case (uint8_t) INS_OR:   *r = (double)( vm_to_int32( a ) | vm_to_int32( b ) ); return true;
+        case (uint8_t) INS_XOR:  *r = (double)( vm_to_int32( a ) ^ vm_to_int32( b ) ); return true;
+        case (uint8_t) INS_CNEQ: *r = a == b ? -1.0 : 0.0; return true;
+        case (uint8_t) INS_CNNE: *r = a != b ? -1.0 : 0.0; return true;
+        case (uint8_t) INS_CNGE: *r = a >= b ? -1.0 : 0.0; return true;
+        case (uint8_t) INS_CNLE: *r = a <= b ? -1.0 : 0.0; return true;
+        case (uint8_t) INS_CNGT: *r = a >  b ? -1.0 : 0.0; return true;
+        case (uint8_t) INS_CNLT: *r = a <  b ? -1.0 : 0.0; return true;
+        default: break;
+    }
+    return false;
+}
+
+// a 17 bit immediate of a short PHIM at p (sign extended)
+static inline double fz_imm( const uint8_t* p ) {
+    uint32_t v = FZ_RD16( &p[1] ) | ( p[0] & INSF_C ? UINT32_C(0x10000) : UINT32_C(0) );
+    return (double)( v & UINT32_C(0x10000) ? (int32_t)( v | UINT32_C(0xFFFE0000) ) : (int32_t) v );
+}
+
+// a regular numeric variable's value, as the number it holds (false: not a plain numeric variable)
+static inline var_t* fz_numvar( vm_t* vm, const uint8_t* p ) {
+    var_t* v = vmem_var( vm->vmem, FZ_RD16( p ) );
+    return v != 0 && v->type == VARTYPEV_FLOAT ? v : 0;
+}
+
+// the element of a one or two dimensional numeric / integer array; false: anything out of the ordinary
+static inline bool fz_elem( const var_t* v, uint8_t basetype, unsigned n, double i0, double i1, size_t* pindex ) {
+    if ( v == 0 || v->type != ( VARTYPEF_ARRAY | basetype ) || v->numdims != n || !( i0 > -1.0 && i0 < 65536.0 ) ) {
+        return false;
+    }
+    uint16_t u0 = (uint16_t) i0;
+    if ( u0 >= v->dims[0] ) {
+        return false;
+    }
+    size_t index = (size_t) u0 * v->slice[0];
+    if ( n == 2U ) {
+        if ( !( i1 > -1.0 && i1 < 65536.0 ) ) {
+            return false;
+        }
+        uint16_t u1 = (uint16_t) i1;
+        if ( u1 >= v->dims[1] ) {
+            return false;
+        }
+        index += (size_t) u1 * v->slice[1];
+    }
+    *pindex = index;
+    return true;
+}
+
+// ( inx ... -- n ): reads the element, base = INS_RNAE / INS_RIAE low byte; false = leave it
+static inline bool fz_aread( const var_t* v, uint8_t rop, unsigned n, double i0, double i1, double* out ) {
+    uint8_t bt = rop == (uint8_t) INS_RIAE ? VARTYPEV_INT : VARTYPEV_FLOAT;
+    size_t index = 0;
+    if ( !fz_elem( v, bt, n, i0, i1, &index ) ) {
+        return false;
+    }
+    *out = bt == VARTYPEV_INT ? (double) v->elems.ints[ index ] : v->elems.dbls[ index ];
+    return true;
+}
+
+static inline bool fz_awrite( var_t* v, uint8_t wop, unsigned n, double i0, double i1, double val ) {
+    uint8_t bt = wop == (uint8_t) INS_WIAE ? VARTYPEV_INT : VARTYPEV_FLOAT;
+    size_t index = 0;
+    if ( !fz_elem( v, bt, n, i0, i1, &index ) ) {
+        return false;
+    }
+    if ( bt == VARTYPEV_INT ) {
+        if ( !( val > -32769.0 && val < 32768.0 ) ) {
+            return false;
+        }
+        v->elems.ints[ index ] = (int16_t) val;
+    } else {
+        v->elems.dbls[ index ] = val;
+    }
+    return true;
+}
+
+static bool vm_step( vm_t* vm );
+
+// executes the fused instruction(s) of <kind> at vm->pc
+static bool vm_fused( vm_t* vm, uint8_t kind ) {
+    const uint8_t* c = vm->cgen->code;
+    uint32_t pc = vm->pc;
+    vmval_t* ds = vm->dstack;
+    size_t sp = vm->dsp;
+    for (;;) {
+        switch ( kind ) {
+            case FZ_LINE: {
+                if ( vm->trace ) {
+                    goto slow;
+                }
+                if ( c[pc] == 0x89 ) { vm->line = FZ_RD16( &c[ pc + 1U ] ); pc += 3U; }
+                else                 { vm->line = FZ_RD32( &c[ pc + 1U ] ); pc += 5U; }
+                vm->pc = pc;
+                kind = vm->fuse[pc];
+                if ( kind == FZ_UNKNOWN ) {
+                    kind = vm->fuse[pc] = fz_classify( c, vm->cgen->codesize, pc );
+                }
+                if ( kind == FZ_NONE ) {
+                    return true;
+                }
+                continue;
+            }
+            case FZ_RRNV: {
+                var_t* v = fz_numvar( vm, &c[ pc + 2U ] );
+                if ( v == 0 || sp >= vm->dmax ) { goto slow; }
+                ds[sp].isstr = false; ds[sp].num = v->v.dbl; vm->dsp = sp + 1U;
+                vm->pc = pc + 4U;
+                return true;
+            }
+            case FZ_WRNV: {
+                var_t* v = fz_numvar( vm, &c[ pc + 2U ] );
+                if ( v == 0 || sp < 1U || ds[ sp - 1U ].isstr ) { goto slow; }
+                v->v.dbl = ds[ sp - 1U ].num; vm->dsp = sp - 1U;
+                vm->pc = pc + 4U;
+                return true;
+            }
+            case FZ_PHIM:
+                if ( sp >= vm->dmax ) { goto slow; }
+                ds[sp].isstr = false; ds[sp].num = fz_imm( &c[pc] ); vm->dsp = sp + 1U;
+                vm->pc = pc + 3U;
+                return true;
+            case FZ_BIN: {
+                double r;
+                if ( sp < 2U || ds[ sp - 1U ].isstr || ds[ sp - 2U ].isstr ||
+                     !fz_bin( c[ pc + 1U ], ds[ sp - 2U ].num, ds[ sp - 1U ].num, &r ) ) { goto slow; }
+                ds[ sp - 2U ].isstr = false; ds[ sp - 2U ].num = r; vm->dsp = sp - 1U;
+                vm->pc = pc + 2U;
+                return true;
+            }
+            case FZ_RR_RR: {
+                var_t* a = fz_numvar( vm, &c[ pc + 2U ] );
+                var_t* b = fz_numvar( vm, &c[ pc + 6U ] );
+                if ( a == 0 || b == 0 || sp + 2U > vm->dmax ) { goto slow; }
+                ds[sp].isstr = false; ds[sp].num = a->v.dbl; ds[ sp + 1U ].isstr = false; ds[ sp + 1U ].num = b->v.dbl;
+                vm->dsp = sp + 2U;
+                vm->pc = pc + 8U;
+                return true;
+            }
+            case FZ_RR_PHIM: {
+                var_t* a = fz_numvar( vm, &c[ pc + 2U ] );
+                if ( a == 0 || sp + 2U > vm->dmax ) { goto slow; }
+                ds[sp].isstr = false; ds[sp].num = a->v.dbl; ds[ sp + 1U ].isstr = false; ds[ sp + 1U ].num = fz_imm( &c[ pc + 4U ] );
+                vm->dsp = sp + 2U;
+                vm->pc = pc + 7U;
+                return true;
+            }
+            case FZ_RR_BIN: {
+                var_t* b = fz_numvar( vm, &c[ pc + 2U ] );
+                double r;
+                if ( b == 0 || sp < 1U || ds[ sp - 1U ].isstr || !fz_bin( c[ pc + 5U ], ds[ sp - 1U ].num, b->v.dbl, &r ) ) { goto slow; }
+                ds[ sp - 1U ].num = r;
+                vm->pc = pc + 6U;
+                return true;
+            }
+            case FZ_PHIM_BIN: {
+                double r;
+                if ( sp < 1U || ds[ sp - 1U ].isstr || !fz_bin( c[ pc + 4U ], ds[ sp - 1U ].num, fz_imm( &c[pc] ), &r ) ) { goto slow; }
+                ds[ sp - 1U ].num = r;
+                vm->pc = pc + 5U;
+                return true;
+            }
+            case FZ_BIN_WR: {
+                var_t* v = fz_numvar( vm, &c[ pc + 4U ] );
+                double r;
+                if ( v == 0 || sp < 2U || ds[ sp - 1U ].isstr || ds[ sp - 2U ].isstr ||
+                     !fz_bin( c[ pc + 1U ], ds[ sp - 2U ].num, ds[ sp - 1U ].num, &r ) ) { goto slow; }
+                v->v.dbl = r; vm->dsp = sp - 2U;
+                vm->pc = pc + 6U;
+                return true;
+            }
+            case FZ_JC: {      // PHPA.C a ; JPCC
+                uint32_t target = FZ_RD32( &c[ pc + 1U ] );
+                if ( sp < 1U || ds[ sp - 1U ].isstr || target > vm->cgen->codesize ) { goto slow; }
+                vm->dsp = sp - 1U;
+                vm->pc = vm_to_int32( ds[ sp - 1U ].num ) != 0 ? target : pc + 6U;
+                return true;
+            }
+            case FZ_CMP_JC: {  // CMPxx ; PHPA.C a ; JPCC
+                uint32_t target = FZ_RD32( &c[ pc + 3U ] );
+                double r;
+                if ( sp < 2U || ds[ sp - 1U ].isstr || ds[ sp - 2U ].isstr || target > vm->cgen->codesize ||
+                     !fz_bin( c[ pc + 1U ], ds[ sp - 2U ].num, ds[ sp - 1U ].num, &r ) ) { goto slow; }
+                vm->dsp = sp - 2U;
+                vm->pc = r != 0.0 ? target : pc + 8U;
+                return true;
+            }
+            case FZ_ARR_R: {   // PHIM n ; RNAE / RIAE v
+                unsigned n = FZ_RD16( &c[ pc + 1U ] );
+                double r;
+                if ( sp < n || ds[ sp - 1U ].isstr || ( n == 2U && ds[ sp - 2U ].isstr ) ||
+                     !fz_aread( vmem_var( vm->vmem, FZ_RD16( &c[ pc + 5U ] ) ), c[ pc + 4U ], n,
+                                ds[ sp - n ].num, ds[ sp - 1U ].num, &r ) ) { goto slow; }
+                ds[ sp - n ].isstr = false; ds[ sp - n ].num = r; vm->dsp = sp - n + 1U;
+                vm->pc = pc + 7U;
+                return true;
+            }
+            case FZ_ARR_W: {   // PHIM n ; WNAE / WIAE v
+                unsigned n = FZ_RD16( &c[ pc + 1U ] );
+                if ( sp < n + 1U || ds[ sp - 1U ].isstr || ( n == 2U && ds[ sp - 2U ].isstr ) || ds[ sp - n - 1U ].isstr ||
+                     !fz_awrite( vmem_var( vm->vmem, FZ_RD16( &c[ pc + 5U ] ) ), c[ pc + 4U ], n,
+                                 ds[ sp - n ].num, ds[ sp - 1U ].num, ds[ sp - n - 1U ].num ) ) { goto slow; }
+                vm->dsp = sp - n - 1U;
+                vm->pc = pc + 7U;
+                return true;
+            }
+            case FZ_RR_AR1: {  // RRNV i ; PHIM 1 ; RNAE / RIAE v
+                var_t* iv = fz_numvar( vm, &c[ pc + 2U ] );
+                double r;
+                if ( iv == 0 || sp >= vm->dmax ||
+                     !fz_aread( vmem_var( vm->vmem, FZ_RD16( &c[ pc + 9U ] ) ), c[ pc + 8U ], 1U, iv->v.dbl, 0.0, &r ) ) { goto slow; }
+                ds[sp].isstr = false; ds[sp].num = r; vm->dsp = sp + 1U;
+                vm->pc = pc + 11U;
+                return true;
+            }
+            case FZ_RR_AW1: {  // value ; RRNV i ; PHIM 1 ; WNAE / WIAE v
+                var_t* iv = fz_numvar( vm, &c[ pc + 2U ] );
+                if ( iv == 0 || sp < 1U || ds[ sp - 1U ].isstr ||
+                     !fz_awrite( vmem_var( vm->vmem, FZ_RD16( &c[ pc + 9U ] ) ), c[ pc + 8U ], 1U, iv->v.dbl, 0.0, ds[ sp - 1U ].num ) ) { goto slow; }
+                vm->dsp = sp - 1U;
+                vm->pc = pc + 11U;
+                return true;
+            }
+            case FZ_BRIA: {
+                uint32_t target = FZ_RD32( &c[ pc + 1U ] );
+                if ( target > vm->cgen->codesize ) { goto slow; }
+                vm->pc = target;
+                return true;
+            }
+            case FZ_LANC: {    // PHPA.D a ; LAN.D
+                uint32_t a, n;
+                if ( c[pc] == 0x82 ) { a = FZ_RD16( &c[ pc + 1U ] ); n = 3U; } else { a = FZ_RD32( &c[ pc + 1U ] ); n = 5U; }
+                if ( sp >= vm->dmax || (uint64_t) a + 8U > vm->cgen->datasize ) { goto slow; }
+                ds[sp].isstr = false; ds[sp].num = vm_extract_float( &vm->cgen->data[a] ); vm->dsp = sp + 1U;
+                vm->pc = pc + n + 1U;
+                return true;
+            }
+            default:
+                break;
+        }
+        break;
+    }
+slow:
+    vm->pc = pc;
+    return vm_step( vm );
+}
+
+// vm_resume() calls this: is fusing on, and the table ready (everything "not looked at yet")?
+static bool vm_fuse_prepare( vm_t* vm, bool singlestep ) {
+    vm->fusing = false;
+    if ( singlestep || vm->nbreakpoints != 0 || vm->maxsteps != 0 || getenv( "E1999_NOFUSE" ) != 0 ) {
+        return false;
+    }
+    uint32_t need = vm->cgen->codesize + 1U;
+    if ( vm->fusesize < need ) {
+        free( vm->fuse );
+        vm->fuse = (uint8_t*) malloc( need );
+        vm->fusesize = 0;
+        if ( vm->fuse == 0 ) {
+            return false;
+        }
+        vm->fusesize = need;
+    }
+    memset( vm->fuse, FZ_UNKNOWN, need );
+    vm->fuse[ need - 1U ] = FZ_NONE;
+    vm->fusing = true;
+    return true;
+}
+
 static bool vm_step( vm_t* vm ) {
     const codegen_t* cgen = vm->cgen;
     uint32_t pc = vm->pc;
@@ -4919,6 +5307,7 @@ bool vm_resume( vm_t* vm, bool singlestep ) {
     vm->stopreason = VMSTOP_NONE;
     vm->brkhit = false;
     vm->suspended = false;
+    const bool fz = vm_fuse_prepare( vm, singlestep );
     while ( vm->pc < vm->cgen->codesize ) {
         if ( steps > 0 && vm_at_breakpoint( vm ) ) {
             vm->stopreason = VMSTOP_BREAKPOINT;
@@ -4942,7 +5331,14 @@ bool vm_resume( vm_t* vm, bool singlestep ) {
             }
             return false;
         }
-        bool stepok = vm_step( vm );
+        uint8_t fk = FZ_NONE;
+        if ( fz ) {
+            fk = vm->fuse[ vm->pc ];
+            if ( fk == FZ_UNKNOWN ) {
+                fk = vm->fuse[ vm->pc ] = fz_classify( vm->cgen->code, vm->cgen->codesize, vm->pc );
+            }
+        }
+        bool stepok = fk != FZ_NONE ? vm_fused( vm, fk ) : vm_step( vm );
         if ( stepok && vm->iofail != 0 ) {
             const char* text = vm->iofail;
             vm->iofail = 0;

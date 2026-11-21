@@ -936,7 +936,12 @@ bool cgen_from_forstmt( codegen_t* cgen, compiler_t* comp, node_t* node ) {
     if ( !cc_here( cgen, comp, &top ) ) {
         return false;
     }
-    bool ok =
+    // without STEP the direction is known at compile time (+1, or -1 with DOWNTO): only one of the two tests is needed
+    bool ok;
+    if ( node->branches[3] == NODE_NONE ) {
+        ok = cc_read_var( cgen, vartype, varoffs ) && cgen_gen_rrnv( cgen, limvar ) && ( downto ? cgen_gen_cnlt( cgen ) : cgen_gen_cngt( cgen ) );
+    } else
+    ok =
         cgen_gen_rrnv( cgen, stepvar ) && cgen_gen_phim( cgen, 0 ) && cgen_gen_cnge( cgen ) &&
         cc_read_var( cgen, vartype, varoffs ) && cgen_gen_rrnv( cgen, limvar ) && cgen_gen_cngt( cgen ) &&
         cgen_gen_and( cgen ) &&

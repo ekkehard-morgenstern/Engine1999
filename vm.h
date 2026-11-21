@@ -273,6 +273,9 @@ typedef struct _vm_t {
     size_t          nmoddata;
     uint32_t        line;           // current line number (LINE instruction)
     uint64_t        maxsteps;       // stop with an error after this many instructions (0 = unlimited)
+    uint8_t*        fuse;           // superinstruction table: one byte per code address (0xFF = not classified yet), see vm.c "fused instructions"
+    uint32_t        fusesize;       // allocated entries of fuse
+    bool            fusing;         // (internal) fuse is valid for the current vm_resume()
     // debugging (set by the host before vm_resume(); the VM doesn't keep them across init_vm())
     bool            debug;          // BRK stops the run (VMSTOP_BRK) instead of reporting "Breakpoint"
     const uint32_t* breakpoints;    // code offsets where the run stops before the instruction; not owned
