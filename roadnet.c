@@ -55,6 +55,9 @@ static void net_point( const rnet_t* n, int net, int64_t rx, int64_t ry, double*
     double sp = net ? n->tspacing : n->spacing;
     *x = (double) rx * sp + nz_hash( rx, ry, net ? 11 : 1, 0 ) * sp;
     *y = (double) ry * sp + nz_hash( rx, ry, net ? 12 : 2, 0 ) * sp;
+    if ( net && n->home && rx == -1 && ( ry == 0 || ry == -1 ) ) {      // the home road: both its ends at x = RNET_HOMEX (the y stay: it runs north to south past the house)
+        *x = RNET_HOMEX;
+    }
 }
 
 static double smooth01( double t ) {
@@ -91,6 +94,9 @@ static bool strip_in_mountains( const rnet_t* n, double x1, double y1, double x2
 
 // does the road of network net from region (rx, ry) to its west (e = 0) / south (e = 1) neighbour exist? (the hash, a length, and no mountains: the way may bulge by a tenth of its length)
 static bool link_exists_calc( const rnet_t* n, int net, int64_t rx, int64_t ry, int e ) {
+    if ( net && n->home && n->on && n->tspacing > 0.0 && rx == -1 && ry == 0 && e == 1 ) {     // the home road is always there (the mountains are kept away from the house by the ground function)
+        return true;
+    }
     if ( !n->on || ( net ? n->tspacing <= 0.0 : n->spacing <= 0.0 ) || nz_hash( rx, ry, ( net ? 160 : 60 ) + e, 0 ) >= ( net ? n->tchance : n->chance ) ) {
         return false;
     }
@@ -276,7 +282,7 @@ static _Thread_local rcache_t cache[RNET_CACHE];          // (one cache for each
 static _Thread_local unsigned cache_next[RNET_CACHE / RNET_WAYS];
 
 static bool same_cfg( const rnet_t* a, const rnet_t* b ) {
-    return a->on == b->on && a->spacing == b->spacing && a->chance == b->chance && a->wdirt == b->wdirt && a->tspacing == b->tspacing && a->tchance == b->tchance && a->wtar == b->wtar &&
+    return a->on == b->on && a->spacing == b->spacing && a->chance == b->chance && a->wdirt == b->wdirt && a->tspacing == b->tspacing && a->tchance == b->tchance && a->wtar == b->wtar && a->home == b->home &&
            a->mask.on == b->mask.on && a->mask.seed == b->mask.seed && a->mask.scale == b->mask.scale && a->mask.lo == b->mask.lo && a->mask.hi == b->mask.hi && a->mask.r0 == b->mask.r0 &&
            a->mask.r1 == b->mask.r1 && a->mask.limit == b->mask.limit && a->mask.margin == b->mask.margin;
 }

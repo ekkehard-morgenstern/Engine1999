@@ -113,6 +113,10 @@ software renderer at 640 x 264 (16000 triangles drawn), every place covered by e
 24 km in steps of 150 units changes the surface at 24 places by at most 11 units between two steps (the steep walls of mountains; nothing steps). Clean under ASan, UBSan and
 ThreadSanitizer.
 
+## The home road (2026-11-22)
+
+The tarred roads are a lattice of regions of 3.7 km with a road to the west and south neighbour (chance 0.85, none across mountains; the network is the same in every world, only the mountains differ), so near the house there was a road in about 4 of 6 worlds and none for 2.7 km in the others (the owner never found one). **`rnet_t.home`** (set in `ground_setup`): the road from region (-1, 0) to region (-1, -1) always exists and its two points lie at x = 9000 (`RNET_HOMEX`, 290 m east of the house), so a tarred road runs north to south past the house in every world, wandering by at most 3000 units; it ends in the south (a dead end) and is an intersection with two more roads in the north (at y = 83000, 2.7 km away). `worldtest1` checks 12 seeds. The chunk records of worlds made before do not hold it (the game does not use them).
+
 ## Trees (step 4, first piece, 2026-11-22)
 
 Owner's rule: **geometry is added only at the far end of the view, never in the middle.** So the trees are not part of the ground tiles (those split at 90 m and would add trees there) but

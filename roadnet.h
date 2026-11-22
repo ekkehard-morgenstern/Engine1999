@@ -50,10 +50,13 @@ typedef struct _rmask_t {
     double   margin;                        // ... and from the places up to 'margin' units beside its way (the mountain's foot)
 } rmask_t;
 
+#define RNET_HOMEX 9000.0                  // the x of the home road: 290 m east of the house (the yard and the wheat field end at 3000), inside the chunks east of the origin, wandering at most 3000
+
 typedef struct _rnet_t {
     bool    on;
     double  spacing, chance, wdirt;         // the dirt tracks: regions of 'spacing' units, a track to the west / south neighbour with a chance, wandering by at most wdirt
     double  tspacing, tchance, wtar;        // the tarred roads (a network of its own, far apart and long): the same with tspacing, tchance, wtar
+    bool    home;                           // the static world: the tarred road from the point of region (-1, 0) to the one of region (-1, -1) always exists (mountains or not) and lies at x = RNET_HOMEX, so a tarred road passes the house
     rmask_t mask;                           // roads never cross a mountain (they go round: a road that would is not there; a tunnel would be the way through)
 } rnet_t;
 

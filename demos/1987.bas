@@ -1118,7 +1118,7 @@
 8500 END PROC
 8510 ' ------------------------------------------------------------------------------------------------ sound
 8520 ' The drones hum on the music channels 1 .. 4 (a held low note each, slightly different pitches, so they beat against each other; VOLUME follows the distance to the camera,
-8530 ' PITCH wobbles a little), the tyres' rolling noise is a held noise on channel 5 (louder with speed, on a sand road, in the wheat); footsteps are effects, one at each heel strike
+8530 ' PITCH wobbles a little), the tyres' rolling noise is a held noise on channel 5 (louder with speed, near silent on grass, sand roads, fields and wheat, a little quieter on hard ground); footsteps are effects, one at each heel strike
 8540 ' of the walk cycle, by the ground (SFX 2 grass, 5 sand, 6 wood, 7 wheat); the freewheel ticks (SFX 3), the bell (SFX 1) and a thud (SFX 4) are as before.
 8550 PROC SOUNDSTART
 8560   LOCAL K
@@ -1143,8 +1143,8 @@
 8750   S=ABS(BV)/250:IF S>1 THEN S=1
 8760   SF=FN SURF(BX,BY,BZ)
 8770   TV=S*0.1
-8780   IF SF=1 THEN TV=S*0.2
-8790   IF SF=3 THEN TV=S*0.26
+8780   IF SF=1 THEN TV=S*0.1
+8790   IF SF=3 THEN TV=S*0.1
 8800   IF SF=2 THEN TV=S*0.08
 8810   DX=BX-JX:DY=BY-JY:D=SQR(DX*DX+DY*DY)
 8820   IF D>600 THEN TV=0

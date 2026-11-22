@@ -30,6 +30,7 @@
 // worldtest1: the static world (world.[ch], randseed.[ch]): creation, reading, determinism, errors. Exit status = number of failures. Works in $TMPDIR / the folder given as argument 1.
 
 #include "world.h"
+#include "m3dpriv.h"
 #include "randseed.h"
 #include <sys/stat.h>
 #include <unistd.h>
@@ -142,6 +143,23 @@ int main( int argc, char** argv ) {
     CHECK( !same_file( p1, p3 ) );
     CHECK( world_height( w3, 3000.0, 4000.0 ) != world_height( w, 3000.0, 4000.0 ) );
     world_close( w3 );
+
+    // the home road: a tarred road runs past the house at x = RNET_HOMEX in every world (a world holds no road network of its own: all worlds have the same roads, the mountains differ)
+    for ( int sd = 1; sd <= 12; ++sd ) {
+        world_t* wh = world_create( d3, 4, (uint64_t) sd * 7919, 1, 0, 0 );
+        CHECK( wh != 0 );
+        if ( wh == 0 ) { continue; }
+        const ground_t* g = world_ground( wh );
+        double best = 1.0e9, bx = 0.0;
+        for ( double x = 3000.0; x <= 15000.0; x += 100.0 ) {
+            rnear_t rn;
+            rnet_near( &g->net, x, 0.0, 800.0, &rn );
+            if ( rn.tar < best ) { best = rn.tar; bx = x; }
+        }
+        if ( !( best < 60.0 ) ) { printf( "  seed %d: nearest tarred road at y = 0: %.0f units away (x %.0f)\n", sd * 7919, best, bx ); }
+        CHECK( best < 60.0 && bx > 5000.0 && bx < 13000.0 );
+        world_close( wh );
+    }
 
     // an unfinished or damaged file is refused
     FILE* f = fopen( p3, "r+b" );
