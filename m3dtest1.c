@@ -197,11 +197,15 @@ static void test_world( const char* base ) {
         CHECK( op( GFXOP_M3DVIEW, 5, 0.0, 0.0, 640.0, 264.0, 2.0 ) );
         CHECK( op( GFXOP_M3DCAMERA, 5, 0.0, 0.0, Q( GFXQ_M3DGROUND, 2, 0.0, 0.0 ) + 160.0, 30.0, 0.0 ) );
         struct timespec t0, t1;
-        m3d_render( M );
-        clock_gettime( CLOCK_MONOTONIC, &t0 );
-        for ( int i = 0; i < 10; ++i ) { m3d_render( M ); }
-        clock_gettime( CLOCK_MONOTONIC, &t1 );
-        printf( "world render at 640 x 264 (software): %.1f ms a frame, %g triangles drawn\n", ( ( t1.tv_sec - t0.tv_sec ) + 1e-9 * ( t1.tv_nsec - t0.tv_nsec ) ) * 100.0, Q( GFXQ_M3DDRAWN, 0 ) );
+        for ( int mode = 0; mode < 3; ++mode ) {                                                                    // object order, nearest first, nearest first with the occlusion test
+            CHECK( op( GFXOP_M3DCULL, 3, 1.0, mode > 0 ? 1.0 : 0.0, mode > 1 ? 1.0 : 0.0 ) );
+            m3d_render( M );
+            clock_gettime( CLOCK_MONOTONIC, &t0 );
+            for ( int i = 0; i < 10; ++i ) { m3d_render( M ); }
+            clock_gettime( CLOCK_MONOTONIC, &t1 );
+            printf( "world render at 640 x 264 (software%s): %.1f ms a frame, %g triangles drawn, %g of %g objects drawn, %g hidden\n", mode == 0 ? ", object order" : mode == 1 ? ", nearest first" : ", nearest first, occlusion",
+                    ( ( t1.tv_sec - t0.tv_sec ) + 1e-9 * ( t1.tv_nsec - t0.tv_nsec ) ) * 100.0, Q( GFXQ_M3DDRAWN, 0 ), Q( GFXQ_M3DCULL, 1, 1.0 ), Q( GFXQ_M3DCULL, 1, 0.0 ), Q( GFXQ_M3DCULL, 1, 5.0 ) );
+        }
     }
     for ( int pass = 0; pass < 3; ++pass ) {
         double cx = pass == 0 ? 0.0 : pass == 1 ? 30000.0 : -60000.0, cy = pass == 0 ? 0.0 : pass == 1 ? -20000.0 : 45000.0;
@@ -1545,6 +1549,29 @@ int main( void ) {
         CHECK( hidden >= no - 6 );                                                                                 // all but the floor and the wall are behind the wall
         printf( "cull bench: %d objects hidden behind a wall (the far ones first): %.2f ms a frame in object order, %.2f ms nearest first, %.2f ms with the occlusion test (%d skipped)\n", no - 3, ms[0], ms[1], ms[2], hidden );
         free( pic[0] ); free( pic[1] ); free( pic[2] );
+        // the same boxes without the wall (nothing is hidden but the boxes behind others): what the test itself costs
+        fresh();
+        CHECK( op( GFXOP_M3DVIEW, 5, 0.0, 0.0, 640.0, 264.0, 1.0 ) );
+        no = 2;
+        for ( int col = 40; col >= 1; --col ) {
+            for ( int row = -4; row <= 4; ++row ) {
+                CHECK( op( GFXOP_M3DOBJECT, 1, (double) no ) );
+                CHECK( op( GFXOP_M3DBOX, 8, (double) no, 100.0 + col * 40.0, row * 60.0 - 20.0, 0.0, 100.0 + col * 40.0 + 30.0, row * 60.0 + 20.0, 80.0, 1.0 + ( no & 1 ) ) );
+                ++no;
+            }
+        }
+        for ( int mode = 1; mode < 3; ++mode ) {
+            CHECK( op( GFXOP_M3DCULL, 3, 1.0, 1.0, mode > 1 ? 1.0 : 0.0 ) );
+            struct timespec t0, t1;
+            m3d_render( M );
+            clock_gettime( CLOCK_MONOTONIC, &t0 );
+            for ( int i = 0; i < 20; ++i ) { m3d_render( M ); }
+            clock_gettime( CLOCK_MONOTONIC, &t1 );
+            ms[mode] = ( ( t1.tv_sec - t0.tv_sec ) + 1e-9 * ( t1.tv_nsec - t0.tv_nsec ) ) * 50.0;
+            hidden = (int) Q( GFXQ_M3DCULL, 1, 5.0 );
+        }
+        printf( "cull bench: the same boxes without the wall: %.2f ms a frame nearest first, %.2f ms with the occlusion test (%d of %d hidden behind others)\n", ms[1], ms[2], hidden, no - 2 );
+        CHECK( op( GFXOP_M3DCULL, 3, 1.0, 1.0, 1.0 ) );
         // a see-through (masked) wall hides nothing, a box that sticks out beside the wall is not hidden, and the pictures stay the same
         fresh();
         tex_flat( 4, 8, 8, 0 );
