@@ -452,7 +452,7 @@
 3274   RH=70:IF WLD THEN RH=900
 3275   ' a unit is 3.2 cm: HILLS (ridged noise up to 260 = 8 m high, rocky and walkable), real MOUNTAINS (peaks up to 37000 = 1190 m high, steep walls, 14000 .. 22000 units from the house: ridged noise where a very slow noise is high) and real LAKES (basins 350 = 11 m deep and 3000 .. 6000 = 100 .. 190 m across); none over the hand-made area (3900 units round the house, fading in over 1200)
 3276   IF NOT WLD THEN M3D GROUNDQUIET 0,0,3900,3900,1200:M3D ROADNET 1800,0.45,140,36000,0.85,900:M3D HILLS 1987,500,260,5,0.05,0.4:M3D MOUNTAINS 7,9000,80000,4,0.25,0.6,14000,22000
-3277   M3D RINGPIC 325,324,301,327,328,320,303,320,302,WZ,RH,304:M3D TREEPIC 312,309,310,317:IF WLD THEN M3D POSTPIC FN CC(0,13),FN CC(0,15),FN CC(1,11)
+3277   M3D RINGPIC 325,324,301,327,328,320,303,320,302,WZ,RH,304:M3D TREEPIC 312,309,310,317:IF WLD THEN M3D POSTPIC FN CC(0,13),FN CC(0,15),FN CC(1,11),321
 3278   IF NOT WLD THEN M3D LAKES 4711,9000,350,0.3,0.5
 3279 END PROC
 3280 ' what stops John and the bicycle: only water too deep to wade (12 below the water level WZ); the rocky hills are walkable and rideable (the engine lets a body climb every slope up to 72 degrees and lifts one that got buried)

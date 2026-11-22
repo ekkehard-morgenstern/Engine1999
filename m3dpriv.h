@@ -138,6 +138,8 @@ typedef struct {
     int    bark, leaf[3];                   // the pictures of the trees (M3D TREEPIC)
     bool   posts;                           // reflector posts beside the tarred roads (M3D POSTPIC): the post, the white and the red reflector
     int    post[3];
+    bool   bales;                           // hay bales in the fields (the 4th argument of M3D POSTPIC)
+    int    bale;
     double level, rockh;                    // the water level and the height above which ground is rock
 } ringpic_t;
 

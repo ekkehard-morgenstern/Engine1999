@@ -403,7 +403,7 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXOP_M3DMSAA   361             // M3D MSAA n   (full-scene antialiasing of the hardware renderer: n samples, 0 off; n above M3D("MSAAMAX") is cut down)
 #define GFXOP_M3DHIDE   362             // M3D HIDE   (the window host stops showing the hardware renderer's picture until the next M3D RENDER: a program that shows 2D screens between 3D frames calls it, else the last 3D picture shows through whenever the other buffer layer is the visible one)
 #define GFXOP_M3DFIRST  GFXOP_M3DRESET
-#define GFXOP_M3DPOSTPIC 363            // M3D POSTPIC post, white, red   (the palette colors or pictures of the reflector posts beside the tarred roads of the static world; the posts stand in the cells of trees; -1 for all three: none)
+#define GFXOP_M3DPOSTPIC 363            // M3D POSTPIC post, white, red [, bale]   (the palette colors or pictures of the reflector posts beside the tarred roads of the static world and of the hay bales in its fields; they stand in the cells of trees; -1 for post, white and red: no posts; a bale of -1 or none: no bales)
 #define GFXOP_M3DLAST   GFXOP_M3DPOSTPIC
 #define GFXOP_IS_M3D(op) ( (op) >= GFXOP_M3DFIRST && (op) <= GFXOP_M3DLAST )
 #define GFXQ_M3DX       350             // M3D("X"), ("Y"), ("Z" = the feet), ("EYE"), ("YAW"), ("PITCH"), ("LIFT"), ("HIT"), ("FLOORZ")

@@ -304,6 +304,27 @@ static void test_world( const char* base ) {
         CHECK( tri[1] > tri[0] && tri[1] == tri[2] );
         CHECK( op( GFXOP_M3DPOSTPIC, 3, -1.0, -1.0, -1.0 ) );
     }
+    // hay bales in the fields: the fourth argument of M3D POSTPIC (all shown objects, summed over six places)
+    {
+        long tri[3] = { 0, 0, 0 };
+        CHECK( !op( GFXOP_M3DPOSTPIC, 4, -1.0, -1.0, -1.0, 300000.0 ) );                              // a picture number out of range
+        for ( int run = 0; run < 3; ++run ) {
+            CHECK( op( GFXOP_M3DWORLDCLOSE, 0 ) );
+            CHECK( op( GFXOP_M3DPOSTPIC, 4, -1.0, -1.0, -1.0, run == 0 ? -1.0 : 33.0 ) );
+            CHECK( ops( GFXOP_M3DWORLDOPEN, 1, dir, 100.0 ) );
+            for ( int pl = 0; pl < 6; ++pl ) {
+                CHECK( op( GFXOP_M3DWORLDVIEW, 2, -50000.0 + 20000.0 * pl, 30000.0 - 9000.0 * pl ) );
+                CHECK( op( GFXOP_M3DWORLDWAIT, 0 ) );
+                for ( int k = 100; k < 100 + 3072; ++k ) {
+                    const obj_t* o = &M->objs[k];
+                    if ( o->used && o->shown && o->nv > 0 ) { tri[run] += o->nt; }
+                }
+            }
+        }
+        printf( "world bales: %ld triangles shown without bales, %ld with, %ld again\n", tri[0], tri[1], tri[2] );
+        CHECK( tri[1] > tri[0] && tri[1] == tri[2] );
+        CHECK( op( GFXOP_M3DPOSTPIC, 4, -1.0, -1.0, -1.0, -1.0 ) );
+    }
     CHECK( op( GFXOP_M3DWORLDCLOSE, 0 ) );
     CHECK( Q( GFXQ_M3DWORLDINFO, 1, 0.0 ) == 0.0 );
     CHECK( !M->objs[100].used );

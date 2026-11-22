@@ -179,7 +179,7 @@ static const gfxcmd_t cmds[] = {
     { "M3D", "WORLDMAKE", GFXOP_M3DWORLDMAKE, "snn", 0, false },
     { "M3D", "MSAA", GFXOP_M3DMSAA, "n", 0, false },
     { "M3D", "HIDE", GFXOP_M3DHIDE, "", 0, false },
-    { "M3D", "POSTPIC", GFXOP_M3DPOSTPIC, "nnn", 0, false },
+    { "M3D", "POSTPIC", GFXOP_M3DPOSTPIC, "nnno", 0, false },
     { "M3D", "SUN", GFXOP_M3DSUN, "nnnooo", 0, false },
     { "M3D", "TEXLOAD", GFXOP_M3DTEXLOAD, "nsW", "PALETTE", false },       // (written M3D TEXTURE LOAD: the compiler turns the two words into this one)
     { "M3D", "GROUNDFLAT", GFXOP_M3DGROUNDFLAT, "nnnnnn", 0, false },

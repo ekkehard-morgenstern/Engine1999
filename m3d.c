@@ -972,6 +972,51 @@ static void job_wposts( tjob_t* j ) {
     }
 }
 
+// a hay bale (a box of 44 x 28 x 22 units like the one of demos/1987.bas, 10 triangles: four sides and the top), scaled by sc, turned by yaw; the vertices morph to the foot
+static bool job_bale( tjob_t* j, double x, double y, double z, double yaw, double sc ) {
+    double cs = cos( yaw * DEG2RAD ), sn = sin( yaw * DEG2RAD );
+    j->tbase = z;
+    static const double cx[4] = { 22.0, 22.0, -22.0, -22.0 }, cy[4] = { -14.0, 14.0, 14.0, -14.0 };
+    int b[4], t[4];
+    for ( int k = 0; k < 4; ++k ) {
+        double lx = cx[k] * sc, ly = cy[k] * sc;
+        b[k] = jv_addtree( j, 0.0, x + lx * cs - ly * sn, y + lx * sn + ly * cs, z, (double) k * 16.0, 63.0 );
+        t[k] = jv_addtree( j, 0.0, x + lx * cs - ly * sn, y + lx * sn + ly * cs, z + 22.0 * sc, (double) k * 16.0, 0.0 );
+        if ( b[k] < 0 || t[k] < 0 ) { return false; }
+    }
+    int tex = j->pic.bale;
+    for ( int k = 0; k < 4; ++k ) {
+        int k1 = ( k + 1 ) & 3;
+        if ( !jt_add( j, b[k], b[k1], t[k1], tex ) || !jt_add( j, b[k], t[k1], t[k], tex ) ) { return false; }
+    }
+    return jt_add( j, t[0], t[1], t[2], tex ) && jt_add( j, t[0], t[2], t[3], tex );
+}
+
+// the bales of a cell: on the same grid of squares as the trees (162.8 units), in a field (rnet_kind 2) a bale in 12 squares out of 100, hashed from the world seed (other hash
+// channels than the trees), not on or beside a road, not in the yard or on the hand-made wheat field, not on rough ground or under the water
+static void job_wbales( tjob_t* j ) {
+    const double sub = WORLD_CHUNK / 96.0;
+    const int ns = (int) floor( j->cell * (double) j->n / sub + 0.5 );
+    int64_t i0 = (int64_t) floor( j->x0 / sub + 0.5 ), k0 = (int64_t) floor( j->y0 / sub + 0.5 );
+    for ( int q = 0; q < ns; ++q ) {
+        for ( int p = 0; p < ns; ++p ) {
+            int64_t ia = i0 + p, ka = k0 + q;
+            if ( job_wh( j, ia, ka, 13 ) >= 0.12 ) { continue; }
+            double x = ( (double) ia + job_wh( j, ia, ka, 11 ) ) * sub, y = ( (double) ka + job_wh( j, ia, ka, 12 ) ) * sub;
+            if ( fabs( x ) < 1500.0 && fabs( y ) < 1500.0 ) { continue; }
+            if ( fabs( x - 1100.0 ) < 900.0 && fabs( y - 650.0 ) < 700.0 ) { continue; }
+            if ( rnet_kind( &j->gnd.net, x, y ) != 2 ) { continue; }
+            double h = job_height( j, x, y );
+            if ( !( h > j->pic.level + 3.0 && h < j->pic.rockh - 60.0 ) ) { continue; }
+            if ( fabs( job_height( j, x + 30.0, y ) - job_height( j, x - 30.0, y ) ) > 40.0 || fabs( job_height( j, x, y + 30.0 ) - job_height( j, x, y - 30.0 ) ) > 40.0 ) { continue; }
+            rnear_t rn;
+            rnet_near( &j->gnd.net, x, y, 320.0, &rn );
+            if ( rn.dirt < 100.0 || rn.tar < 310.0 ) { continue; }
+            if ( !job_bale( j, x, y, h - 1.0, job_wh( j, ia, ka, 14 ) * 360.0, 0.8 + job_wh( j, ia, ka, 15 ) * 0.5 ) ) { return; }
+        }
+    }
+}
+
 static void job_run( tjob_t* j ) {
     int n = j->n, w = n + 1;
     j->nv = j->nt = j->nvar = 0;
@@ -980,6 +1025,7 @@ static void job_run( tjob_t* j ) {
             j->tcol = true;
             if ( j->pic.bark > 0 ) { job_wtrees( j ); }
             if ( j->pic.posts ) { job_wposts( j ); }
+            if ( j->pic.bales ) { job_wbales( j ); }
         }
         return;
     }
@@ -1448,7 +1494,7 @@ static void wl_view( m3d_t* m, double x, double y ) {
         for ( int64_t tx = ax; tx <= bx; ++tx ) { wl_visit( m, wl, WL_TOP, tx, ty ); }
     }
     // the cells of trees: made at the far end of their range (the trees are still flat on the ground there), shown from the range on, dropped when far again
-    if ( m->rpic.bark > 0 || m->rpic.posts ) {
+    if ( m->rpic.bark > 0 || m->rpic.posts || m->rpic.bales ) {
         double ts = wl_size( WL_TREE ), reach = WL_TB + 4.5 * ts;
         int64_t ax2 = (int64_t) floor( ( x - reach ) / ts ), bx2 = (int64_t) floor( ( x + reach ) / ts ), ay2 = (int64_t) floor( ( y - reach ) / ts ), by2 = (int64_t) floor( ( y + reach ) / ts );
         for ( int64_t ty = ay2; ty <= by2; ++ty ) {
@@ -2171,6 +2217,9 @@ bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t sl
             return true;
         }
         case GFXOP_M3DPOSTPIC: {
+            int bv = -1;
+            if ( !NONE_VAL( a[3] ) && a[3] >= 0.0 && !whole( a[3], 0, M3D_MAXTEX - 1, &bv ) ) { return false; }
+            m->rpic.bales = bv >= 0; m->rpic.bale = bv;
             if ( a[0] < 0.0 && a[1] < 0.0 && a[2] < 0.0 ) { m->rpic.posts = false; return true; }
             int pv[3];
             for ( int k = 0; k < 3; ++k ) {
