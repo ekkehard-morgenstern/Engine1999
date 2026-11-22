@@ -546,6 +546,7 @@ check: $(CHECKTESTS) engine1999 engine1999c
 	if perl instref.pl --check > $$log 2>&1; then printf '%-12s ok\n' vmref-check; else printf '%-12s FAILED\n' vmref-check; tail -n 20 $$log; fail=$$((fail+1)); fi; \
 	if sh levelstest.sh > $$log 2>&1; then printf '%-12s ok\n' levelstest; else printf '%-12s FAILED\n' levelstest; tail -n 20 $$log; fail=$$((fail+1)); fi; \
 	if sh housegentest.sh > $$log 2>&1; then printf '%-12s ok\n' housegentest; else printf '%-12s FAILED\n' housegentest; tail -n 20 $$log; fail=$$((fail+1)); fi; \
+	if sh house3dtest.sh > $$log 2>&1; then printf '%-12s ok\n' house3dtest; else printf '%-12s FAILED\n' house3dtest; tail -n 20 $$log; fail=$$((fail+1)); fi; \
 	if sh worldtest.sh > $$log 2>&1; then printf '%-12s ok\n' worldtest; else printf '%-12s FAILED\n' worldtest; tail -n 20 $$log; fail=$$((fail+1)); fi; \
 	if sh instedtest.sh > $$log 2>&1; then printf '%-12s ok\n' instedtest; else printf '%-12s FAILED\n' instedtest; tail -n 20 $$log; fail=$$((fail+1)); fi; \
 	if sh w3dmaptest.sh > $$log 2>&1; then printf '%-12s ok\n' w3dmaptest; else printf '%-12s FAILED\n' w3dmaptest; tail -n 20 $$log; fail=$$((fail+1)); fi; \
