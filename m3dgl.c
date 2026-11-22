@@ -444,7 +444,7 @@ static void gl_destroy( m3d_t* m, void* rd ) {
 static bool gl_resize( m3d_t* m, void* rd, int bw, int bh ) {
     (void) m;
     gl_t* g = (gl_t*) rd;
-    uint8_t* rgba = (uint8_t*) malloc( (size_t) bw * (size_t) bh * 4U );
+    uint8_t* rgba = (uint8_t*) calloc( (size_t) bw * (size_t) bh, 4U );   // (zeroed: if a read-back ever fails the picture is clear, not garbage)
     uint32_t* out = (uint32_t*) calloc( (size_t) bw * (size_t) bh, sizeof(uint32_t) );
     if ( rgba == 0 || out == 0 ) {
         free( rgba ); free( out );
