@@ -115,14 +115,19 @@ ThreadSanitizer.
 
 ## Trees (step 4, first piece, 2026-11-22)
 
-The finest tiles (level 0, 976 units = 31 m, cells of 122 units) carry **trees**, made by the ground job (`job_wtrees` in `m3d.c`) when tree pictures are set (`M3D TREEPIC`): the tile is cut
-into 6 x 6 squares on the world's grid and each square holds at most one tree at a place hashed from the **world seed** and the square's number (`nz_hash64`), so the same tree stands in
-the same place whatever tiles are built and in whatever order; nothing is stored (the chunk's own seed is not needed yet). Chance 0.6 in forest, 0.025 elsewhere (a lone tree); none on
-or beside roads (the dirt and tarred distances of `rnet_near`), on steep ground (over 50 units height difference per 100), below the water + 2 or above `rockh - 60`, in the house's yard
-or on its wheat field. The trees are the **cheap** ones (12 triangles: a square trunk and a cone), three kinds; their vertices morph with the ground like the cells. Coarser tiles have
-no trees (the forest picture shows there), so trees appear and vanish where level 0 and 1 tiles meet (about 90 m from the camera). `m3dtest1` checks that the finest tiles hold more
-triangles with tree pictures than without and exactly the same number on every opening. **Open:** the trees pop at 90 m (a second tree level for level 1 tiles with fewer trees, or
-fog), full-detail trees near the player, collision with trunks (John walks through them, as in the dynamic mode), ruins, bales, posts, real water.
+Owner's rule: **geometry is added only at the far end of the view, never in the middle.** So the trees are not part of the ground tiles (those split at 90 m and would add trees there) but
+live in **cells of trees** of their own: squares of 3906 units (125 m), one object each, made by a job of **mode 5** (`job_wtrees`, no ground) when tree pictures are set (`M3D TREEPIC`).
+A cell is cut into squares of 162.8 units (5 m) on the world's grid; each holds at most one tree at a place hashed from the **world seed** and the square's number (`nz_hash64`), so the
+same tree stands in the same place whatever cells are built and in whatever order; nothing is stored (the chunk's own seed is not needed yet). Chance 0.6 in forest, 0.025 elsewhere (a
+lone tree); none on or beside roads, on steep ground, below the water + 2 or above `rockh - 60`, in the house's yard or on its wheat field. The trees are the **cheap** ones (12
+triangles, three kinds).
+
+**Growing, not popping:** every vertex of a tree morphs (the machinery of the ground tiles, `M3D MORPH`) between the distances `WL_TB - WL_TBAND` = 6300 and `WL_TB` = 7000 units (224 m)
+from the camera to the *foot* of its tree (`tcol` / `tbase` in the job), so a tree beyond 224 m is a flat disc on the ground and grows out of it while the camera comes nearer; a cell is
+made when the camera is within `WL_TB` + 3.5 cells, shown from `WL_TB` on, dropped beyond `WL_TB` + 4.5 cells. What appears, appears at the far end and flat. `m3dtest1` checks that more
+triangles are shown with tree pictures than without and exactly the same number on every opening (about 16000 more triangles a view in these samples; a dense forest holds up to about
+35000 within 224 m). **Open:** the range (224 m) is set by the triangle budget (the hardware renderer could take more); full-detail trees near the player; collision with trunks (John walks
+through them, as in the dynamic mode); beyond the range only the forest ground picture shows; ruins, bales, posts, real water.
 
 ## Plan
 

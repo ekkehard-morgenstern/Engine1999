@@ -562,6 +562,7 @@ typedef struct {
     double  x0, y0, cell, skirt, hx0, hy0, ma, mb;
     ground_t gnd;
     const world_t* world;                   // a tile of the static world (mode 4): the heights are the world's function (the wall included)
+    bool    tcol; double tbase;             // mode 5 (the trees of a cell of the world): every vertex of a tree morphs down to the foot of the tree (tbase), so the tree grows out of the ground
     double  ratio;                          // the cell of the coarser grid the morph blends to, in cells (0: 3; 2 in the world: nested grids)
     bool    sunon;
     double  lx, ly, lz;
@@ -778,7 +779,7 @@ static void job_ribbons( tjob_t* j, int net ) {
 
 // a vertex of a tree: it moves with the ground under the tree (dz: the coarser surface minus the true ground there)
 static int jv_addtree( tjob_t* j, double dz, double x, double y, double z, double u, double v ) {
-    return jv_addm( j, x, y, z, u, v, z + dz );
+    return jv_addm( j, x, y, z, u, v, j->tcol ? j->tbase : z + dz );
 }
 
 // a tree: the lathe solids of demos/1987.bas (8 sides: a trunk and a crown of 2 .. 5 rings), or a cheap one for the far chunks (a cone of 4 sides on a square trunk: 12 triangles)
@@ -788,6 +789,7 @@ static bool job_tree( tjob_t* j, double x, double y, double z, double yaw, doubl
         { { 38, 74, 63 }, { 0.6, 134, 0 }, { 31, 112, 63 }, { 0.6, 172, 0 } },            // (the third cone follows below)
         { { 10, 74, 63 }, { 22, 120, 45 }, { 24, 180, 25 }, { 14, 240, 8 }, { 0.6, 285, 0 } } };
     double cs = cos( yaw * DEG2RAD ), sn = sin( yaw * DEG2RAD );
+    j->tbase = z;
     int bark = j->pic.bark, leaf = j->pic.leaf[kind];
     if ( cheap ) {
         double br = kind == 0 ? 46.0 : kind == 1 ? 36.0 : 22.0, bz = kind == 0 ? 108.0 : kind == 1 ? 74.0 : 120.0, tz = kind == 0 ? 206.0 : kind == 1 ? 248.0 : 285.0;
@@ -875,18 +877,20 @@ static void job_trees( tjob_t* j ) {
     }
 }
 
-// the trees of a finest tile of the static world (level 0, 976 units = 31 m): the tile is cut into 6 x 6 squares on the world's grid, each holds at most one tree at a hashed place
-// (the world seed and the square's number decide, so the same tree stands there whatever tiles are built), in forest mostly, now and then alone on a meadow or plain; not on or beside a
-// road, not on steep or high ground, not in the yard of the house and its field; cheap trees (12 triangles). Coarser tiles have none (the forest picture shows there).
+// the trees of a cell of the static world (mode 5: 3906 units = 125 m square, an object of its own, no ground): the cell is cut into squares of 162.8 units (5 m) on the world's grid,
+// each holds at most one tree at a place hashed from the world seed and the square's number (so the same tree stands in the same place whatever cells are built), in forest mostly, now and
+// then alone on a meadow or plain; not on or beside a road, not on steep or high ground, not in the yard of the house and its field; cheap trees (12 triangles). Every vertex morphs down to
+// the foot of its tree (tcol), the ground job sets the distances: a tree grows out of the ground between a and b, nothing is added in the middle of the view.
 static double job_wh( const tjob_t* j, int64_t a, int64_t b, int64_t c ) {
     return (double)( nz_hash64( world_seed( j->world ), a, b, c, 0 ) >> 11 ) * ( 1.0 / 9007199254740992.0 );
 }
 
 static void job_wtrees( tjob_t* j ) {
-    const double sub = j->cell * 8.0 / 6.0;
+    const double sub = WORLD_CHUNK / 96.0;
+    const int ns = (int) floor( j->cell * (double) j->n / sub + 0.5 );
     int64_t i0 = (int64_t) floor( j->x0 / sub + 0.5 ), k0 = (int64_t) floor( j->y0 / sub + 0.5 );
-    for ( int q = 0; q < 6; ++q ) {
-        for ( int p = 0; p < 6; ++p ) {
+    for ( int q = 0; q < ns; ++q ) {
+        for ( int p = 0; p < ns; ++p ) {
             int64_t ia = i0 + p, ka = k0 + q;
             double x = ( (double) ia + job_wh( j, ia, ka, 1 ) ) * sub, y = ( (double) ka + job_wh( j, ia, ka, 2 ) ) * sub;
             if ( fabs( x ) < 1500.0 && fabs( y ) < 1500.0 ) { continue; }                          // the house and its yard
@@ -902,7 +906,7 @@ static void job_wtrees( tjob_t* j ) {
             if ( rn.dirt < 100.0 || rn.tar < 310.0 ) { continue; }
             double kk = job_wh( j, ia, ka, 4 );
             int kind = kk >= 0.8 ? 2 : kk >= 0.45 ? 1 : 0;
-            if ( !job_tree( j, x, y, h - 2.0, job_wh( j, ia, ka, 5 ) * 360.0, 0.9 + job_wh( j, ia, ka, 6 ) * 0.5, kind, true, j->mb > j->ma ? job_coarse( j, x, y ) - h : 0.0 ) ) { return; }
+            if ( !job_tree( j, x, y, h - 2.0, job_wh( j, ia, ka, 5 ) * 360.0, 0.9 + job_wh( j, ia, ka, 6 ) * 0.5, kind, true, 0.0 ) ) { return; }
         }
     }
 }
@@ -910,6 +914,10 @@ static void job_wtrees( tjob_t* j ) {
 static void job_run( tjob_t* j ) {
     int n = j->n, w = n + 1;
     j->nv = j->nt = j->nvar = 0;
+    if ( j->mode == 5 ) {                                          // the trees of a cell of the static world, no ground
+        if ( j->pic.bark > 0 && j->world != 0 ) { j->tcol = true; job_wtrees( j ); }
+        return;
+    }
     double uvs = j->mode == 1 ? 0.5 : j->cell <= 300.0 ? 0.5 : j->cell <= 900.0 ? 0.1 : 0.02;
     int hi0 = j->hn > 0 ? (int) floor( ( j->hx0 - j->x0 ) / j->cell + 0.5 ) : 0, hj0 = j->hn > 0 ? (int) floor( ( j->hy0 - j->y0 ) / j->cell + 0.5 ) : 0;
     for ( int jy = 0; jy <= n; ++jy ) {
@@ -964,9 +972,7 @@ static void job_run( tjob_t* j ) {
     if ( j->mode >= 1 && j->pic.dirt > 0 && j->gnd.net.on && ( j->mode != 4 || j->cell <= 250.0 ) ) {
         job_ribbons( j, 0 );
     }
-    if ( j->mode == 4 && j->cell < 125.0 && j->pic.bark > 0 && j->world != 0 ) {
-        job_wtrees( j );
-    } else if ( j->mode >= 2 && j->mode != 4 && j->pic.bark > 0 && j->gnd.net.on ) {
+    if ( j->mode >= 2 && j->mode != 4 && j->pic.bark > 0 && j->gnd.net.on ) {
         job_trees( j );
     }
 }
@@ -1171,6 +1177,9 @@ Every tile is one object (slot i = object obj0 + i) made by a ground job of mode
 #define WL_SLOTS    3072
 #define WL_HASH     4096
 #define WL_REQMAX   384
+#define WL_TREE     100                      // the "level" of a cell of trees (size 4 S0 = 3906 units); the trees of a cell grow out of the ground between WL_TB - WL_TBAND and WL_TB from the camera
+#define WL_TB       7000.0
+#define WL_TBAND    700.0
 
 typedef struct { bool used, dead, built, queued, split, shown; int lvl; int64_t tx, ty; unsigned stamp; } wtile_t;
 
@@ -1189,7 +1198,7 @@ typedef struct _wl {
     double   cx, cy;
 } wl_t;
 
-static double wl_size( int lvl ) { return WL_S0 * (double)( 1 << lvl ); }
+static double wl_size( int lvl ) { return lvl == WL_TREE ? 4.0 * WL_S0 : WL_S0 * (double)( 1 << lvl ); }
 
 static unsigned wl_key( int lvl, int64_t tx, int64_t ty ) {
     return (unsigned)( nz_mix( (uint64_t) tx * 0x9E3779B97F4A7C15ULL + (uint64_t) ty * 0xC2B2AE3D27D4EB4FULL + (uint64_t) lvl ) % WL_HASH );
@@ -1278,8 +1287,9 @@ static bool wl_request( m3d_t* m, wl_t* wl, int slot ) {
     double s = wl_size( t->lvl );
     tjob_t* pj = (tjob_t*) calloc( 1, sizeof(tjob_t) );
     if ( pj == 0 ) { return false; }
-    pj->obj = wl->obj0 + slot; pj->n = 8; pj->x0 = (double) t->tx * s; pj->y0 = (double) t->ty * s; pj->cell = s / 8.0; pj->skirt = pj->cell * 0.75 + 10.0; pj->mode = 4;
-    if ( t->lvl < WL_TOP ) { pj->ma = ( WL_RF + 1.42 ) * s; pj->mb = 2.0 * WL_RF * s; }
+    pj->obj = wl->obj0 + slot; pj->n = 8; pj->x0 = (double) t->tx * s; pj->y0 = (double) t->ty * s; pj->cell = s / 8.0; pj->skirt = pj->cell * 0.75 + 10.0; pj->mode = t->lvl == WL_TREE ? 5 : 4;
+    if ( t->lvl == WL_TREE ) { pj->ma = WL_TB - WL_TBAND; pj->mb = WL_TB; }
+    else if ( t->lvl < WL_TOP ) { pj->ma = ( WL_RF + 1.42 ) * s; pj->mb = 2.0 * WL_RF * s; }
     pj->gnd = *world_ground( wl->w ); pj->world = wl->w; pj->ratio = 2.0; pj->pic = m->rpic;
     pj->sunon = m->sun.on; pj->lx = m->sun.lx; pj->ly = m->sun.ly; pj->lz = m->sun.lz; pj->steps = m->sun.steps; pj->stride = m->sun.stride;
     bool ok = jobs_submit( m, pj );
@@ -1372,13 +1382,26 @@ static void wl_view( m3d_t* m, double x, double y ) {
     for ( int64_t ty = ay; ty <= by; ++ty ) {
         for ( int64_t tx = ax; tx <= bx; ++tx ) { wl_visit( m, wl, WL_TOP, tx, ty ); }
     }
+    // the cells of trees: made at the far end of their range (the trees are still flat on the ground there), shown from the range on, dropped when far again
+    if ( m->rpic.bark > 0 ) {
+        double ts = wl_size( WL_TREE ), reach = WL_TB + 4.5 * ts;
+        int64_t ax2 = (int64_t) floor( ( x - reach ) / ts ), bx2 = (int64_t) floor( ( x + reach ) / ts ), ay2 = (int64_t) floor( ( y - reach ) / ts ), by2 = (int64_t) floor( ( y + reach ) / ts );
+        for ( int64_t ty = ay2; ty <= by2; ++ty ) {
+            for ( int64_t tx = ax2; tx <= bx2; ++tx ) {
+                double d = wl_dist( wl, WL_TREE, tx, ty );
+                if ( d >= reach || !wl_inworld( wl, WL_TREE, tx, ty ) ) { continue; }
+                int sl = d < WL_TB + 3.5 * ts ? wl_need( m, wl, WL_TREE, tx, ty ) : wl_find( wl, WL_TREE, tx, ty );
+                if ( sl < 0 ) { continue; }
+                wl->t[sl].stamp = wl->frame;
+                wl_show( m, wl, sl, wl->t[sl].built && d < WL_TB );
+            }
+        }
+    }
     wl->nshown = wl->nbuilt = wl->nqueued = 0;
     for ( int i = 0; i < WL_SLOTS; ++i ) {                        // what nobody visited goes (the children of a merged tile, tiles far away)
         wtile_t* t = &wl->t[i];
         if ( t->used && !t->dead && t->stamp != wl->frame ) { wl_remove( m, wl, i ); continue; }
-        if ( t->used && !t->dead ) {
-            wl->nshown += t->shown; wl->nbuilt += t->built; wl->nqueued += t->queued;
-        }
+        if ( t->used && !t->dead ) { wl->nshown += t->shown; wl->nbuilt += t->built; wl->nqueued += t->queued; }
     }
     qsort( wl->req, (size_t) wl->nreq, sizeof(wl->req[0]), wl_reqcmp );
     int budget = 24;
