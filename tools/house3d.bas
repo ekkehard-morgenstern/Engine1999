@@ -3,13 +3,13 @@
 3 ' (file LICENSE-EXCEPTION of Engine1999) applies if the runtime is unmodified and its notice stays
 4 ' in the executable (it shows with the command line option --engine1999-about).
 10 ' HOUSE3D - the 3D version of the family houses of HOUSEGEN (tools/housegen.bas) on the mesh renderer (M3D): a house you can walk round and into. It is the study for the ruins of the
-20 ' static world (docs/world-subsystem.md "Ruins"). Two house types (1 the plain gable house, 2 the same with a garage annex at the east gable) at five stages of damage by a directed
+20 ' static world (docs/world-subsystem.md "Ruins"). Five house types (1 the plain gable house, 2 the same with a garage annex at the east gable, 3 a hip roof, 4 a steep roof with a dormer and a porch, 5 with a bay window and a flat roofed extension at the back) at five stages of damage by a directed
 30 ' energy weapon (1 intact, 2 scorched, 3 roof burnt, 4 the floors fallen, 5 a shell), all from one seed: the same house burns the same way at every stage (a piece that is gone
 40 ' at a stage stays gone). Run it in the window version: LOAD "tools/house3d", RUN. Keys: W A S D / arrows walk, R F or Page Up / Down look, 1 .. 5 the stage, T the type,
-50 ' N the next seed, H back to the start, Q quit. The environment variables H3_TYPE, H3_STAGE, H3_SEED start with another house, H3_CAM="x,y,z,yaw,pitch" (dm, degrees) with another viewpoint.
+50 ' N the next seed, H back to the start, Q quit (T cycles the five types). The environment variables H3_TYPE, H3_STAGE, H3_SEED start with another house, H3_CAM="x,y,z,yaw,pitch" (dm, degrees) with another viewpoint.
 60 ' Units: the builder works in dm (10 cm), the game in units of 3.2 cm (U = 3.125 a dm). The generator part (rooms, doors, windows, furniture) is that of HOUSEGEN.
 70 LOAD LIBRARY "w3dkit"
-80 DIM RM(2,8,6),RMN(2),DOR(2,16,4),DON(2),WIN(40,7),FU(2,64,5),FUC(2,64),FUN(2),CL(2,24,4),CLN(2),FLZ(2),DS(5),OA1(70),OA2(70),OZ1(70),OZ2(70),OTY(70),ZB(160),LA1(70),LA2(70),RA1(40),RA2(40),CV(5)
+80 DIM RM(2,8,6),RMN(2),DOR(2,16,4),DON(2),WIN(40,7),FU(2,64,5),FUC(2,64),FUN(2),CL(2,24,4),CLN(2),FLZ(2),DS(5),OA1(70),OA2(70),OZ1(70),OZ2(70),OTY(70),ZB(160),LA1(70),LA2(70),RA1(40),RA2(40),CV(5),XBK(40),YBK(40)
 90 ON ERROR GOTO FAILED
 100 U=3.125:TW=4:FLZ(0)=3:FLZ(1)=32:RC=0:SD=1:WN=0:PW=0:OKP=0
 110 GOTO MAIN
@@ -214,768 +214,1007 @@
 2100     CALL SETF(F,I,6,5,FN RI(0,3),FN RN(),54)
 2110     CALL SETF(F,I,4.5,7,FN RI(0,3),FN RN(),54)
 2120   END IF
-2130   IF T=10 THEN
-2140     CALL SETF(F,I,24,6,FN RI(0,3),FN RN(),41)
-2150     CALL SETF(F,I,16,3.5,FN RI(0,3),FN RN(),40)
-2160     CALL SETF(F,I,8,8,FN RI(0,3),FN RN(),39)
-2170     CALL SETC(F,I,6,6,40)
-2180   END IF
-2190 END PROC
-2200 ' ------------------------------------------------------------------------------------------------ making a house from the seed SD
-2210 PROC GENHOUSE
-2220   LOCAL I,IW,LW,RW,ZLO,ZHI,YE,XE,C,C2,Q,XC,XD,XA1,XA2,XB1,XB2,YF1,YF2,YC,J
-2230   RC=0:WN=0
-2240   FOR I=0 TO 1:RMN(I)=0:DON(I)=0:FUN(I)=0:CLN(I)=0:NEXT I
-2250   LX=FN RI(100,120):DY=FN RI(80,100)
-2260   HX=FN RI(26,30):IW=LX-2*TW
-2270   LW=INT((IW-HX-2)*(0.45+FN RN()*0.1)):RW=IW-HX-2-LW
-2280   FD=FN RI(28,36):IF FD>DY-50 THEN FD=DY-50
-2290   WCD=FN RI(20,26)
-2300   XA1=TW+LW:XA2=XA1+1:XB1=XA2+HX:XB2=XB1+1:XE=LX-TW:YE=DY-TW
-2310   YF1=TW+FD:YF2=YF1+1:WY=YE-WCD-1
-2320   SS=FN RI(0,1)
-2330   ' the stairs: 10 dm wide, 31 long, along the hall wall of the living side, ending at the WC / bathroom wall
-2340   IF SS=0 THEN SX1=XA2:SX2=XA2+10 ELSE SX1=XB1-10:SX2=XB1
-2350   SY1=WY-31:SY2=WY
-2360   FOR I=0 TO 1:C=CLN(I):CL(I,C,0)=SX1-1:CL(I,C,1)=SY1-1:CL(I,C,2)=SX2+1:CL(I,C,3)=SY2:CLN(I)=C+1:NEXT I
-2370   XC=(XA2+XB1)/2:XD=XC+4:IF SS=1 THEN XD=XC-4
-2380   ' ground floor rooms: 0 hall, 1 WC, 2 west front, 3 west back, 4 east front, 5 east back
-2390   CALL ADDROOM(0,XA2,TW,XB1,WY,1):CALL ADDROOM(0,XA2,WY+1,XB1,YE,2)
-2400   IF SS=0 THEN
-2410     CALL ADDROOM(0,TW,TW,XA1,YF1,4):CALL ADDROOM(0,TW,YF2,XA1,YE,3)
-2420     CALL ADDROOM(0,XB2,TW,XE,YF1,6):CALL ADDROOM(0,XB2,YF2,XE,YE,5)
-2430   ELSE
-2440     CALL ADDROOM(0,TW,TW,XA1,YF1,6):CALL ADDROOM(0,TW,YF2,XA1,YE,5)
-2450     CALL ADDROOM(0,XB2,TW,XE,YF1,4):CALL ADDROOM(0,XB2,YF2,XE,YE,3)
-2460   END IF
-2470   ' doors of the ground floor: the front door, the WC, the dining room (to the hall), living and dining room open to each other, the kitchen and the study to the hall
-2480   CALL ADDWIN(0,0,XD,10,0,21,2)
-2490   CALL ADDDOOR(0,1,XD,WY,8)
-2500   IF SS=0 THEN
-2510     CALL ADDDOOR(0,0,XA1,FN RI(TW+5,YF1-5),9)
-2520     CALL ADDDOOR(0,1,(TW+XA1)/2,YF1,16)
-2530     CALL ADDDOOR(0,0,XB1,FN RI(TW+5,YF1-5),9)
-2540     CALL ADDDOOR(0,0,XB1,FN RI(YF2+5,WY-5),9)
-2550   ELSE
-2560     CALL ADDDOOR(0,0,XB1,FN RI(TW+5,YF1-5),9)
-2570     CALL ADDDOOR(0,1,(XB2+XE)/2,YF1,16)
-2580     CALL ADDDOOR(0,0,XA1,FN RI(TW+5,YF1-5),9)
-2590     CALL ADDDOOR(0,0,XA1,FN RI(YF2+5,WY-5),9)
-2600   END IF
-2610   ' upper floor: 0 landing, 1 bathroom, 2 the long room over the living side, 3 service side front, 4 service side back
-2620   CALL ADDROOM(1,XA2,TW,XB1,WY,1):CALL ADDROOM(1,XA2,WY+1,XB1,YE,9)
-2630   IF SS=0 THEN
-2640     CALL ADDROOM(1,TW,TW,XA1,YE,8)
-2650     CALL ADDROOM(1,XB2,TW,XE,YF1,8):CALL ADDROOM(1,XB2,YF2,XE,YE,7)
-2660   ELSE
-2670     CALL ADDROOM(1,XB2,TW,XE,YE,8)
-2680     CALL ADDROOM(1,TW,TW,XA1,YF1,8):CALL ADDROOM(1,TW,YF2,XA1,YE,7)
+2130   IF T=11 THEN
+2140     CALL SETC(F,I,16,8,40)
+2150     IF OKP THEN
+2160       TX1=LQ1:TY1=LQ2:TX2=LQ3:TY2=LQ4
+2170       CALL ADDFU(F,TX1+2,TY1-3.5,TX1+5,TY1-0.5,41):CALL ADDFU(F,TX2-5,TY2+0.5,TX2-2,TY2+3.5,41)
+2180     END IF
+2190     CALL SETF(F,I,14,3.5,FN RI(0,3),FN RN(),41)
+2200     CALL SETF(F,I,10,6,FN RI(0,3),FN RN(),42)
+2210   END IF
+2220   IF T=10 THEN
+2230     CALL SETF(F,I,24,6,FN RI(0,3),FN RN(),41)
+2240     CALL SETF(F,I,16,3.5,FN RI(0,3),FN RN(),40)
+2250     CALL SETF(F,I,8,8,FN RI(0,3),FN RN(),39)
+2260     CALL SETC(F,I,6,6,40)
+2270   END IF
+2280 END PROC
+2290 ' ------------------------------------------------------------------------------------------------ making a house from the seed SD
+2300 PROC GENHOUSE
+2310   LOCAL I,IW,LW,RW,ZLO,ZHI,YE,XE,C,C2,Q,XC,XD,XA1,XA2,XB1,XB2,YF1,YF2,YC,J,EXD,EXC
+2320   RC=0:WN=0
+2330   FOR I=0 TO 1:RMN(I)=0:DON(I)=0:FUN(I)=0:CLN(I)=0:NEXT I
+2340   LX=FN RI(100,120):DY=FN RI(80,100)
+2350   HX=FN RI(26,30):IW=LX-2*TW
+2360   LW=INT((IW-HX-2)*(0.45+FN RN()*0.1)):RW=IW-HX-2-LW
+2370   FD=FN RI(28,36):IF FD>DY-50 THEN FD=DY-50
+2380   WCD=FN RI(20,26)
+2390   XA1=TW+LW:XA2=XA1+1:XB1=XA2+HX:XB2=XB1+1:XE=LX-TW:YE=DY-TW
+2400   YF1=TW+FD:YF2=YF1+1:WY=YE-WCD-1
+2410   SS=FN RI(0,1)
+2420   ' the stairs: 10 dm wide, 31 long, along the hall wall of the living side, ending at the WC / bathroom wall
+2430   IF SS=0 THEN SX1=XA2:SX2=XA2+10 ELSE SX1=XB1-10:SX2=XB1
+2440   SY1=WY-31:SY2=WY
+2450   FOR I=0 TO 1:C=CLN(I):CL(I,C,0)=SX1-1:CL(I,C,1)=SY1-1:CL(I,C,2)=SX2+1:CL(I,C,3)=SY2:CLN(I)=C+1:NEXT I
+2460   XC=(XA2+XB1)/2:XD=XC+4:IF SS=1 THEN XD=XC-4
+2470   ' ground floor rooms: 0 hall, 1 WC, 2 west front, 3 west back, 4 east front, 5 east back
+2480   CALL ADDROOM(0,XA2,TW,XB1,WY,1):CALL ADDROOM(0,XA2,WY+1,XB1,YE,2)
+2490   IF SS=0 THEN
+2500     CALL ADDROOM(0,TW,TW,XA1,YF1,4):CALL ADDROOM(0,TW,YF2,XA1,YE,3)
+2510     CALL ADDROOM(0,XB2,TW,XE,YF1,6):CALL ADDROOM(0,XB2,YF2,XE,YE,5)
+2520   ELSE
+2530     CALL ADDROOM(0,TW,TW,XA1,YF1,6):CALL ADDROOM(0,TW,YF2,XA1,YE,5)
+2540     CALL ADDROOM(0,XB2,TW,XE,YF1,4):CALL ADDROOM(0,XB2,YF2,XE,YE,3)
+2550   END IF
+2560   ' doors of the ground floor: the front door, the WC, the dining room (to the hall), living and dining room open to each other, the kitchen and the study to the hall
+2570   CALL ADDWIN(0,0,XD,10,0,21,2)
+2580   CALL ADDDOOR(0,1,XD,WY,8)
+2590   IF SS=0 THEN
+2600     CALL ADDDOOR(0,0,XA1,FN RI(TW+5,YF1-5),9)
+2610     CALL ADDDOOR(0,1,(TW+XA1)/2,YF1,16)
+2620     CALL ADDDOOR(0,0,XB1,FN RI(TW+5,YF1-5),9)
+2630     CALL ADDDOOR(0,0,XB1,FN RI(YF2+5,WY-5),9)
+2640   ELSE
+2650     CALL ADDDOOR(0,0,XB1,FN RI(TW+5,YF1-5),9)
+2660     CALL ADDDOOR(0,1,(XB2+XE)/2,YF1,16)
+2670     CALL ADDDOOR(0,0,XA1,FN RI(TW+5,YF1-5),9)
+2680     CALL ADDDOOR(0,0,XA1,FN RI(YF2+5,WY-5),9)
 2690   END IF
-2700   CALL ADDWIN(1,0,XC,10,9,21,0)
-2710   CALL ADDDOOR(1,1,XD,WY,8)
+2700   ' upper floor: 0 landing, 1 bathroom, 2 the long room over the living side, 3 service side front, 4 service side back
+2710   CALL ADDROOM(1,XA2,TW,XB1,WY,1):CALL ADDROOM(1,XA2,WY+1,XB1,YE,9)
 2720   IF SS=0 THEN
-2730     CALL ADDDOOR(1,0,XA1,FN RI(TW+5,SY1-5),9)
-2740     CALL ADDDOOR(1,0,XB1,FN RI(TW+5,YF1-5),9)
-2750     CALL ADDDOOR(1,0,XB1,FN RI(YF2+5,WY-5),9)
-2760   ELSE
-2770     CALL ADDDOOR(1,0,XB1,FN RI(TW+5,SY1-5),9)
-2780     CALL ADDDOOR(1,0,XA1,FN RI(TW+5,YF1-5),9)
-2790     CALL ADDDOOR(1,0,XA1,FN RI(YF2+5,WY-5),9)
-2800   END IF
-2810   ' windows (the hall of the ground floor has the door instead)
-2820   FOR C=0 TO 1
-2830     FOR I=0 TO RMN(C)-1
-2840       IF I>0 THEN CALL ROOMWIN(C,I)
-2850     NEXT I
-2860   NEXT C
-2870   ' type 2: a single storey annex (the garage) at the east gable, with a door from the east room at the front
-2880   IF HT=2 THEN
-2890     AI=FN RI(45,55):AY=FN RI(50,65)
-2900     CALL ADDROOM(0,LX,TW,LX+AI,AY,10)
-2910     J=0
-2920     FOR I=0 TO WN-1
-2930       IF NOT ( WIN(I,0)=0 AND WIN(I,1)=3 AND WIN(I,2)-WIN(I,3)/2<AY+TW ) THEN
-2940         FOR C=0 TO 6:WIN(J,C)=WIN(I,C):NEXT C
-2950         J=J+1
-2960       END IF
-2970     NEXT I
-2980     WN=J
-2990     CALL ADDWIN(0,3,(TW+YF1)/2,9,0,21,3)
-3000     CALL ADDWIN(0,4,LX+AI/2,24,0,22,4)
-3010     CALL ADDWIN(0,5,AY/2+2,10,10,20,0)
-3020   END IF
-3030   ' the roof: the eaves, the ridge 8.5 .. 10 m high with a pitch of 27 .. 43 degrees
-3040   KN=FN RI(0,6):EZ=FLZ(1)+28+KN
-3050   ZLO=MAX(85,INT(EZ+0.52*DY/2)):ZHI=MIN(100,INT(EZ+0.95*DY/2)):IF ZHI<ZLO THEN ZHI=ZLO
-3060   ZR=FN RI(ZLO,ZHI):CHX=FN RI(INT(LX*0.25),INT(LX*0.65))
-3070   PLC=8+FN RI(0,5):RFC=26+FN RI(0,2):ATT=FN RI(0,1)
-3080   ' the furniture
-3090   FOR C=0 TO 1
-3100     FOR I=0 TO RMN(C)-1
-3110       CALL FITROOM(C,I)
-3120     NEXT I
-3130   NEXT C
-3140 END PROC
-3150 ' ------------------------------------------------------------------------------------------------ the 3D house (units: dm in the builder, U = 3.125 game units a dm)
-3160 FUNC HR(A,B)
-3170   RETURN HASH(SD*7919+5,A,B)
-3180 END FUNC
-3190 FUNC CLP(V,A,B)
-3200   IF V<A THEN RETURN A
-3210   IF V>B THEN RETURN B
-3220   RETURN V
-3230 END FUNC
-3240 ' a box in dm; FC = the faces (M3D BOX mask), 0 = all
-3250 PROC BXD(O,X1,Y1,Z1,X2,Y2,Z2,TX)
-3260   LOCAL T,FC
-3270   IF X2<X1 THEN T=X1:X1=X2:X2=T
-3280   IF Y2<Y1 THEN T=Y1:Y1=Y2:Y2=T
-3290   IF Z2<Z1 THEN T=Z1:Z1=Z2:Z2=T
-3300   FC=BFC:BFC=63
-3310   IF X2-X1<0.05 OR Y2-Y1<0.05 OR Z2-Z1<0.05 THEN EXIT PROC
-3320   M3D BOX O,X1*U,Y1*U,Z1*U,X2*U,Y2*U,Z2*U,TX,FC
-3330 END PROC
-3340 ' ---- walls: a wall runs along the axis AX (0: x, 1: y) over A1 .. A2, its thickness is C1 .. C2 across, from Z1 to Z2. PWID names it for the hash, PF is the floor, WTOP the top
-3350 ' of the whole wall. The wall is cut into columns of 10 dm (a column's height after the damage and its picture come from the hash), openings are cut out by WALLSEG.
-3360 PROC PIECE(O,AX,C1,C2,A1,A2,Z1,Z2)
-3370   LOCAL K,K1,K2,CA1,CA2,RR,RR2,RR3,ZT,KP,FR,BP,T
-3380   K1=INT(A1/10):K2=INT((A2-0.001)/10)
-3390   FOR K=K1 TO K2
-3400     CA1=MAX(A1,K*10):CA2=MIN(A2,K*10+10)
-3410     IF CA2-CA1>0.05 THEN
-3420       RR=FN HR(PWID*64+K,3):RR2=FN HR(PWID*64+K,4+INT(Z1/9)*3):RR3=FN HR(PWID*64+K,5+INT(Z1/9)*3)
-3430       ZT=Z2
-3440       IF PF=1 AND D>0.6 THEN
-3450         KP=(0.97-D)*2.6:IF KP<0 THEN KP=0
-3460         FR=KP*(0.4+0.6*RR):IF FR>1 THEN FR=1
-3470         ZT=FLZ(1)+(WTOP-FLZ(1))*FR
-3480       END IF
-3490       IF PF=0 AND D>0.9 THEN ZT=MIN(ZT,FLZ(1)*(0.74+0.26*RR))
-3500       ZT=MIN(ZT,Z2)
-3510       IF ZT-Z1>0.3 THEN
-3520         BP=D*0.6:IF PF=1 THEN BP=D*1.4
-3530         T=PTX
-3540         IF RR2<BP THEN
-3550           T=PTXC
-3560         ELSE
-3570           IF PCAT=0 AND RR3<D*0.6 THEN T=303
-3580         END IF
-3590         IF AX=0 THEN BFC=63:CALL BXD(O,CA1,C1,Z1,CA2,C2,ZT,T) ELSE BFC=63:CALL BXD(O,C1,CA1,Z1,C2,CA2,ZT,T)
-3600       END IF
-3610     END IF
-3620   NEXT K
-3630 END PROC
-3640 PROC SORTL
-3650   LOCAL I,J,T
-3660   FOR I=0 TO NL-2
-3670     FOR J=0 TO NL-2-I
-3680       IF LA1(J)>LA1(J+1) THEN
-3690         T=LA1(J):LA1(J)=LA1(J+1):LA1(J+1)=T
-3700         T=LA2(J):LA2(J)=LA2(J+1):LA2(J+1)=T
-3710       END IF
-3720     NEXT J
-3730   NEXT I
-3740 END PROC
-3750 ' the parts of A1 .. A2 that the sorted list LA1 / LA2 (NL entries) does not cover, as wall pieces of the band B1 .. B2
-3760 PROC FREEIV(O,AX,C1,C2,A1,A2,B1,B2)
-3770   LOCAL J,P,Q
-3780   P=A1
-3790   FOR J=0 TO NL-1
-3800     Q=MIN(LA1(J),A2)
-3810     IF Q>P THEN CALL PIECE(O,AX,C1,C2,P,Q,B1,B2)
-3820     P=MAX(P,LA2(J))
-3830   NEXT J
-3840   IF A2>P THEN CALL PIECE(O,AX,C1,C2,P,A2,B1,B2)
-3850 END PROC
-3860 ' a wall with the openings OPN (OA1 .. OA2 along, OZ1 .. OZ2 high; type 0 opening, 1 hole of the beam, 2 its glassy rim: drawn with the picture RTX when RTX > 0)
-3870 PROC WALLSEG(O,AX,C1,C2,A1,A2,Z1,Z2)
-3880   LOCAL I,J,K,NZ,B1,B2,V,T1,T2,NR
-3890   NZ=2:ZB(0)=Z1:ZB(1)=Z2
-3900   FOR I=0 TO OPN-1
-3910     FOR J=0 TO 1
-3920       IF J=0 THEN V=OZ1(I) ELSE V=OZ2(I)
-3930       IF V>Z1+0.05 AND V<Z2-0.05 AND NZ<158 THEN ZB(NZ)=V:NZ=NZ+1
-3940     NEXT J
-3950   NEXT I
-3960   FOR I=0 TO NZ-2
-3970     FOR J=0 TO NZ-2-I
-3980       IF ZB(J)>ZB(J+1) THEN V=ZB(J):ZB(J)=ZB(J+1):ZB(J+1)=V
-3990     NEXT J
-4000   NEXT I
-4010   FOR K=0 TO NZ-2
-4020     B1=ZB(K):B2=ZB(K+1)
-4030     IF B2-B1>0.05 THEN
-4040       NL=0:NR=0
-4050       FOR I=0 TO OPN-1
-4060         IF OZ1(I)<=B1+0.01 AND OZ2(I)>=B2-0.01 THEN
-4070           T1=MAX(A1,OA1(I)):T2=MIN(A2,OA2(I))
-4080           IF T2>T1 THEN
-4090             LA1(NL)=T1:LA2(NL)=T2:NL=NL+1
-4100             IF OTY(I)=2 THEN RA1(NR)=T1:RA2(NR)=T2:NR=NR+1
-4110           END IF
-4120         END IF
-4130       NEXT I
-4140       CALL SORTL
-4150       CALL FREEIV(O,AX,C1,C2,A1,A2,B1,B2)
-4160       IF RTX>0 AND NR>0 THEN
-4170         NL=0
-4180         FOR I=0 TO OPN-1
-4190           IF OTY(I)<2 AND OZ1(I)<=B1+0.01 AND OZ2(I)>=B2-0.01 THEN
-4200             T1=MAX(A1,OA1(I)):T2=MIN(A2,OA2(I))
-4210             IF T2>T1 THEN LA1(NL)=T1:LA2(NL)=T2:NL=NL+1
-4220           END IF
-4230         NEXT I
-4240         CALL SORTL
-4250         SV1=PTX:SV2=PTXC:SV3=PCAT:PTX=RTX:PTXC=RTX:PCAT=1
-4260         FOR I=0 TO NR-1
-4270           PTX=RTX:PTXC=RTX:PCAT=1:CALL FREEIV(O,AX,C1,C2,RA1(I),RA2(I),B1,B2)
-4280         NEXT I
-4290         PTX=SV1:PTXC=SV2:PCAT=SV3
-4300       END IF
-4310     END IF
-4320   NEXT K
+2730     CALL ADDROOM(1,TW,TW,XA1,YE,8)
+2740     CALL ADDROOM(1,XB2,TW,XE,YF1,8):CALL ADDROOM(1,XB2,YF2,XE,YE,7)
+2750   ELSE
+2760     CALL ADDROOM(1,XB2,TW,XE,YE,8)
+2770     CALL ADDROOM(1,TW,TW,XA1,YF1,8):CALL ADDROOM(1,TW,YF2,XA1,YE,7)
+2780   END IF
+2790   CALL ADDWIN(1,0,XC,10,9,21,0)
+2800   CALL ADDDOOR(1,1,XD,WY,8)
+2810   IF SS=0 THEN
+2820     CALL ADDDOOR(1,0,XA1,FN RI(TW+5,SY1-5),9)
+2830     CALL ADDDOOR(1,0,XB1,FN RI(TW+5,YF1-5),9)
+2840     CALL ADDDOOR(1,0,XB1,FN RI(YF2+5,WY-5),9)
+2850   ELSE
+2860     CALL ADDDOOR(1,0,XB1,FN RI(TW+5,SY1-5),9)
+2870     CALL ADDDOOR(1,0,XA1,FN RI(TW+5,YF1-5),9)
+2880     CALL ADDDOOR(1,0,XA1,FN RI(YF2+5,WY-5),9)
+2890   END IF
+2900   ' windows (the hall of the ground floor has the door instead)
+2910   FOR C=0 TO 1
+2920     FOR I=0 TO RMN(C)-1
+2930       IF I>0 THEN CALL ROOMWIN(C,I)
+2940     NEXT I
+2950   NEXT C
+2960   ' type 2: a single storey annex (the garage) at the east gable, with a door from the east room at the front
+2970   IF HT=2 THEN
+2980     AI=FN RI(45,55):AY=FN RI(50,65)
+2990     CALL ADDROOM(0,LX,TW,LX+AI,AY,10)
+3000     J=0
+3010     FOR I=0 TO WN-1
+3020       IF NOT ( WIN(I,0)=0 AND WIN(I,1)=3 AND WIN(I,2)-WIN(I,3)/2<AY+TW ) THEN
+3030         FOR C=0 TO 6:WIN(J,C)=WIN(I,C):NEXT C
+3040         J=J+1
+3050       END IF
+3060     NEXT I
+3070     WN=J
+3080     CALL ADDWIN(0,3,(TW+YF1)/2,9,0,21,3)
+3090     CALL ADDWIN(0,4,LX+AI/2,24,0,22,4)
+3100     CALL ADDWIN(0,5,AY/2+2,10,10,20,0)
+3110   END IF
+3120   ' type 5: a bay window (two storeys) in the front of the west front room and a flat roofed extension at the back, at the widest back room that is not the WC
+3130   IF HT=5 THEN
+3140     BC=LX/4:BW=16
+3150     FOR I=0 TO RMN(0)-1
+3160       IF RM(0,I,0)=TW AND RM(0,I,1)=TW THEN BC=(RM(0,I,0)+RM(0,I,2))/2:BW=MIN(18,RM(0,I,2)-RM(0,I,0)-8)
+3170     NEXT I
+3180     BX1=BC-BW/2:BX2=BC+BW/2
+3190     J=0
+3200     FOR I=0 TO WN-1
+3210       IF NOT ( WIN(I,1)=0 AND WIN(I,2)+WIN(I,3)/2>BX1-1 AND WIN(I,2)-WIN(I,3)/2<BX2+1 ) THEN
+3220         FOR C=0 TO 6:WIN(J,C)=WIN(I,C):NEXT C
+3230         J=J+1
+3240       END IF
+3250     NEXT I
+3260     WN=J
+3270     CALL ADDWIN(0,0,BC,BW,0,21,5):CALL ADDWIN(1,0,BC,BW,0,21,5)
+3280     EXD=0:EXC=LX/2
+3290     FOR I=0 TO RMN(0)-1
+3300       IF RM(0,I,3)=YE AND RM(0,I,4)<>2 AND RM(0,I,2)-RM(0,I,0)>EXD THEN EXD=RM(0,I,2)-RM(0,I,0):EXC=(RM(0,I,0)+RM(0,I,2))/2
+3310     NEXT I
+3320     EXW=FN RI(34,46):EXY=FN RI(28,38)
+3330     EXX1=EXC-EXW/2:EXX2=EXX1+EXW
+3340     IF EXX1<TW+4 THEN EXX1=TW+4:EXX2=EXX1+EXW
+3350     IF EXX2>LX-TW-4 THEN EXX2=LX-TW-4:EXX1=EXX2-EXW
+3360     IF EXC<EXX1+6 THEN EXC=EXX1+6
+3370     IF EXC>EXX2-6 THEN EXC=EXX2-6
+3380     CALL ADDROOM(0,EXX1,DY,EXX2,DY+EXY,11)
+3390     J=0
+3400     FOR I=0 TO WN-1
+3410       IF NOT ( WIN(I,0)=0 AND WIN(I,1)=1 AND WIN(I,2)+WIN(I,3)/2>EXX1-4 AND WIN(I,2)-WIN(I,3)/2<EXX2+4 ) THEN
+3420         FOR C=0 TO 6:WIN(J,C)=WIN(I,C):NEXT C
+3430         J=J+1
+3440       END IF
+3450     NEXT I
+3460     WN=J
+3470     CALL ADDWIN(0,1,EXC,9,0,21,3)
+3480     CALL ADDWIN(0,9,(EXX1+EXX2)/2,20,0,22,1)
+3490     CALL ADDWIN(0,7,DY+EXY/2,12,9,21,0):CALL ADDWIN(0,8,DY+EXY/2,12,9,21,0)
+3500   END IF
+3510   ' the roof: the eaves, the ridge 8.5 .. 10 m high with a pitch of 27 .. 43 degrees
+3520   KN=FN RI(0,6):EZ=FLZ(1)+28+KN
+3530   ZLO=MAX(85,INT(EZ+0.52*DY/2)):ZHI=MIN(100,INT(EZ+0.95*DY/2)):IF ZHI<ZLO THEN ZHI=ZLO
+3540   ZR=FN RI(ZLO,ZHI):CHX=FN RI(INT(LX*0.25),INT(LX*0.65))
+3550   PLC=8+FN RI(0,5):RFC=26+FN RI(0,2):ATT=FN RI(0,1)
+3560   ' the furniture
+3570   FOR C=0 TO 1
+3580     FOR I=0 TO RMN(C)-1
+3590       CALL FITROOM(C,I)
+3600     NEXT I
+3610   NEXT C
+3620 END PROC
+3630 ' ------------------------------------------------------------------------------------------------ the 3D house (units: dm in the builder, U = 3.125 game units a dm)
+3640 FUNC HR(A,B)
+3650   RETURN HASH(SD*7919+5,A,B)
+3660 END FUNC
+3670 FUNC CLP(V,A,B)
+3680   IF V<A THEN RETURN A
+3690   IF V>B THEN RETURN B
+3700   RETURN V
+3710 END FUNC
+3720 ' a box in dm; FC = the faces (M3D BOX mask), 0 = all
+3730 PROC BXD(O,X1,Y1,Z1,X2,Y2,Z2,TX)
+3740   LOCAL T,FC
+3750   IF X2<X1 THEN T=X1:X1=X2:X2=T
+3760   IF Y2<Y1 THEN T=Y1:Y1=Y2:Y2=T
+3770   IF Z2<Z1 THEN T=Z1:Z1=Z2:Z2=T
+3780   FC=BFC:BFC=63
+3790   IF X2-X1<0.05 OR Y2-Y1<0.05 OR Z2-Z1<0.05 THEN EXIT PROC
+3800   M3D BOX O,X1*U,Y1*U,Z1*U,X2*U,Y2*U,Z2*U,TX,FC
+3810 END PROC
+3820 ' ---- walls: a wall runs along the axis AX (0: x, 1: y) over A1 .. A2, its thickness is C1 .. C2 across, from Z1 to Z2. PWID names it for the hash, PF is the floor, WTOP the top
+3830 ' of the whole wall. The wall is cut into columns of 10 dm (a column's height after the damage and its picture come from the hash), openings are cut out by WALLSEG.
+3840 PROC PIECE(O,AX,C1,C2,A1,A2,Z1,Z2)
+3850   LOCAL K,K1,K2,CA1,CA2,RR,RR2,RR3,ZT,KP,FR,BP,T
+3860   K1=INT(A1/10):K2=INT((A2-0.001)/10)
+3870   FOR K=K1 TO K2
+3880     CA1=MAX(A1,K*10):CA2=MIN(A2,K*10+10)
+3890     IF CA2-CA1>0.05 THEN
+3900       RR=FN HR(PWID*64+K,3):RR2=FN HR(PWID*64+K,4+INT(Z1/9)*3):RR3=FN HR(PWID*64+K,5+INT(Z1/9)*3)
+3910       ZT=Z2
+3920       IF PF=1 AND D>0.6 THEN
+3930         KP=(0.97-D)*2.6:IF KP<0 THEN KP=0
+3940         FR=KP*(0.4+0.6*RR):IF FR>1 THEN FR=1
+3950         ZT=FLZ(1)+(WTOP-FLZ(1))*FR
+3960       END IF
+3970       IF PF=0 AND D>0.9 THEN ZT=MIN(ZT,FLZ(1)*(0.74+0.26*RR))
+3980       ZT=MIN(ZT,Z2)
+3990       IF ZT-Z1>0.3 THEN
+4000         BP=D*0.6:IF PF=1 THEN BP=D*1.4
+4010         T=PTX
+4020         IF RR2<BP THEN
+4030           T=PTXC
+4040         ELSE
+4050           IF PCAT=0 AND RR3<D*0.6 THEN T=303
+4060         END IF
+4070         IF AX=0 THEN BFC=63:CALL BXD(O,CA1,C1,Z1,CA2,C2,ZT,T) ELSE BFC=63:CALL BXD(O,C1,CA1,Z1,C2,CA2,ZT,T)
+4080       END IF
+4090     END IF
+4100   NEXT K
+4110 END PROC
+4120 PROC SORTL
+4130   LOCAL I,J,T
+4140   FOR I=0 TO NL-2
+4150     FOR J=0 TO NL-2-I
+4160       IF LA1(J)>LA1(J+1) THEN
+4170         T=LA1(J):LA1(J)=LA1(J+1):LA1(J+1)=T
+4180         T=LA2(J):LA2(J)=LA2(J+1):LA2(J+1)=T
+4190       END IF
+4200     NEXT J
+4210   NEXT I
+4220 END PROC
+4230 ' the parts of A1 .. A2 that the sorted list LA1 / LA2 (NL entries) does not cover, as wall pieces of the band B1 .. B2
+4240 PROC FREEIV(O,AX,C1,C2,A1,A2,B1,B2)
+4250   LOCAL J,P,Q
+4260   P=A1
+4270   FOR J=0 TO NL-1
+4280     Q=MIN(LA1(J),A2)
+4290     IF Q>P THEN CALL PIECE(O,AX,C1,C2,P,Q,B1,B2)
+4300     P=MAX(P,LA2(J))
+4310   NEXT J
+4320   IF A2>P THEN CALL PIECE(O,AX,C1,C2,P,A2,B1,B2)
 4330 END PROC
-4340 ' the openings of the outer wall SIDE (0 south, 1 north, 2 west, 3 east, 4 / 6 / 5 the garage's south / north / east wall) of floor F: windows, doors and the hole of the beam
-4350 PROC OPWALL(F,SIDE)
-4360   LOCAL I,J,ZC,R,YB,W,W2,BH
-4370   OPN=0
-4380   FOR I=0 TO WN-1
-4390     IF WIN(I,0)=F AND WIN(I,1)=SIDE THEN
-4400       OA1(OPN)=WIN(I,2)-WIN(I,3)/2:OA2(OPN)=WIN(I,2)+WIN(I,3)/2:OZ1(OPN)=FLZ(F)+WIN(I,4):OZ2(OPN)=FLZ(F)+WIN(I,5):OTY(OPN)=0:OPN=OPN+1
-4410     END IF
-4420   NEXT I
-4430   IF HOLE AND F=0 AND SIDE=HS THEN
-4440     R=HRAD:BH=2*R/9
-4450     FOR J=0 TO 8
-4460       YB=(J+0.5)*BH-R
-4470       W=SQR(MAX(0,R*R-YB*YB)):W2=SQR(MAX(0,(R+1.2)*(R+1.2)-YB*YB))
-4480       OA1(OPN)=HC-W:OA2(OPN)=HC+W:OZ1(OPN)=HZC-R+J*BH:OZ2(OPN)=HZC-R+(J+1)*BH:OTY(OPN)=1:OPN=OPN+1
-4490       OA1(OPN)=HC-W2:OA2(OPN)=HC+W2:OZ1(OPN)=HZC-R+J*BH:OZ2(OPN)=HZC-R+(J+1)*BH:OTY(OPN)=2:OPN=OPN+1
-4500     NEXT J
-4510     OA1(OPN)=HC-5.4:OA2(OPN)=HC+5.4:OZ1(OPN)=HZC+R:OZ2(OPN)=HZC+R+1.2:OTY(OPN)=2:OPN=OPN+1
-4520     OA1(OPN)=HC-5.4:OA2(OPN)=HC+5.4:OZ1(OPN)=HZC-R-1.2:OZ2(OPN)=HZC-R:OTY(OPN)=2:OPN=OPN+1
-4530   END IF
-4540 END PROC
-4550 ' the doors of a partition: AX 0 a wall at x = CC, AX 1 a wall at y = CC (its low side)
-4560 PROC OPDOOR(F,AX,CC)
-4570   LOCAL I,P,Q
-4580   OPN=0
-4590   FOR I=0 TO DON(F)-1
-4600     IF DOR(F,I,0)=AX THEN
-4610       IF AX=0 THEN P=DOR(F,I,1):Q=DOR(F,I,2) ELSE P=DOR(F,I,2):Q=DOR(F,I,1)
-4620       IF ABS(P-CC)<0.01 THEN
-4630         OA1(OPN)=Q-DOR(F,I,3)/2:OA2(OPN)=Q+DOR(F,I,3)/2:OZ1(OPN)=FLZ(F):OZ2(OPN)=FLZ(F)+21:OTY(OPN)=0:OPN=OPN+1
-4640       END IF
-4650     END IF
-4660   NEXT I
-4670 END PROC
-4680 ' ---- the outer walls (3.5 dm of plaster over brick; the rooms add their own 0.5 dm of colour inside), floor by floor
-4690 PROC SHELLS
-4700   LOCAL F,Z1,Z2,S
-4710   FOR F=0 TO 1
-4720     PF=F
-4730     IF F=0 THEN Z1=0:Z2=FLZ(1) ELSE Z1=FLZ(1):Z2=EZ
-4740     WTOP=Z2
-4750     FOR S=0 TO 3
-4760       CALL OPWALL(F,S):PWID=100+F*10+S
-4770       IF S=0 THEN PTX=301:PTXC=302:PCAT=0:RTX=330:CALL WALLSEG(2,0,0,3.5,0,LX,Z1,Z2)
-4780       IF S=1 THEN PTX=301:PTXC=302:PCAT=0:RTX=330:CALL WALLSEG(2,0,DY-3.5,DY,0,LX,Z1,Z2)
-4790       IF S=2 THEN PTX=301:PTXC=302:PCAT=0:RTX=330:CALL WALLSEG(2,1,0,3.5,0,DY,Z1,Z2)
-4800       IF S=3 THEN PTX=301:PTXC=302:PCAT=0:RTX=330:CALL WALLSEG(2,1,LX-3.5,LX,0,DY,Z1,Z2)
-4810     NEXT S
-4820   NEXT F
-4830   IF HT=2 THEN
-4840     PF=0:WTOP=FLZ(1)-3
-4850     CALL OPWALL(0,4):PWID=150:PTX=301:PTXC=302:PCAT=0:RTX=0:CALL WALLSEG(2,0,0,3.5,LX,LX+AI+4,0,FLZ(1)-3)
-4860     CALL OPWALL(0,6):PWID=151:PTX=301:PTXC=302:PCAT=0:RTX=0:CALL WALLSEG(2,0,AY+0.5,AY+4,LX,LX+AI+4,0,FLZ(1)-3)
-4870     CALL OPWALL(0,5):PWID=152:PTX=301:PTXC=302:PCAT=0:RTX=0:CALL WALLSEG(2,1,LX+AI+0.5,LX+AI+4,0,AY+4,0,FLZ(1)-3)
-4880   END IF
-4890 END PROC
-4900 ' the gable triangles (both sides drawn) over the end walls: they stand while the upper floor's walls do
-4910 PROC GABLE(X1,X2,TX)
-4920   LOCAL B
-4930   B=M3D("VERTS",2)
-4940   M3D VERTEX 2,X1*U,0,EZ*U:M3D VERTEX 2,X1*U,DY*U,EZ*U:M3D VERTEX 2,X1*U,DY/2*U,ZR*U
-4950   M3D VERTEX 2,X2*U,0,EZ*U:M3D VERTEX 2,X2*U,DY*U,EZ*U:M3D VERTEX 2,X2*U,DY/2*U,ZR*U
-4960   M3D FACE 2,B,B+1,B+2,TX:M3D FACE 2,B,B+2,B+1,TX
-4970   M3D FACE 2,B+3,B+4,B+5,TX:M3D FACE 2,B+3,B+5,B+4,TX
-4980 END PROC
-4990 PROC GABLES
-5000   LOCAL T
-5010   IF D>0.6 THEN EXIT PROC
-5020   T=301:IF FN HR(300,1)<D*1.4 THEN T=302
-5030   CALL GABLE(0,3.5,T)
-5040   T=301:IF FN HR(300,2)<D*1.4 THEN T=302
-5050   CALL GABLE(LX-3.5,LX,T)
-5060 END PROC
-5070 ' ---- the rooms: 0.5 dm of colour on every wall of a room, openings cut, the floor
-5080 PROC ROOMLAYERS(F,I)
-5090   LOCAL X1,Y1,X2,Y2,T,TX,Z1,Z2,AN
-5100   X1=RM(F,I,0):Y1=RM(F,I,1):X2=RM(F,I,2):Y2=RM(F,I,3):T=RM(F,I,4)
-5110   TX=305+RM(F,I,5)-20
-5120   AN=(T=10)
-5130   Z1=FLZ(F):Z2=FLZ(F)+26
-5140   PF=F:WTOP=Z2
-5150   PWID=200+F*40+I*4
-5160   IF Y1=TW THEN
-5170     IF AN THEN CALL OPWALL(F,4) ELSE CALL OPWALL(F,0)
-5180   ELSE
-5190     CALL OPDOOR(F,1,Y1-1)
-5200   END IF
-5210   PTX=TX:PTXC=302:PCAT=1:RTX=0:CALL WALLSEG(3,0,Y1-0.5,Y1,X1,X2,Z1,Z2)
-5220   PWID=PWID+1
-5230   IF AN THEN
-5240     CALL OPWALL(F,6)
-5250   ELSE
-5260     IF Y2=DY-TW THEN CALL OPWALL(F,1) ELSE CALL OPDOOR(F,1,Y2)
-5270   END IF
-5280   PTX=TX:PTXC=302:PCAT=1:RTX=0:CALL WALLSEG(3,0,Y2,Y2+0.5,X1,X2,Z1,Z2)
-5290   PWID=PWID+1
-5300   IF NOT AN THEN
-5310     IF X1=TW THEN CALL OPWALL(F,2) ELSE CALL OPDOOR(F,0,X1-1)
-5320     PTX=TX:PTXC=302:PCAT=1:RTX=0:CALL WALLSEG(3,1,X1-0.5,X1,Y1,Y2,Z1,Z2)
-5330   END IF
-5340   PWID=PWID+1
-5350   IF AN THEN
-5360     CALL OPWALL(F,5)
-5370   ELSE
-5380     IF X2=LX-TW THEN CALL OPWALL(F,3) ELSE CALL OPDOOR(F,0,X2)
-5390   END IF
-5400   PTX=TX:PTXC=302:PCAT=1:RTX=0:CALL WALLSEG(3,1,X2,X2+0.5,Y1,Y2,Z1,Z2)
-5410 END PROC
-5420 ' the picture of a room's floor
-5430 FUNC FLOORTEX(T)
-5440   IF T=1 OR T=2 OR T=5 OR T=9 THEN RETURN 313
-5450   IF T=10 THEN RETURN 304
-5460   RETURN 312
-5470 END FUNC
-5480 ' the plate of the upper floor in a rectangle (cell present by the hash of the 12 dm grid)
-5490 PROC SLABRECT(X1,Y1,X2,Y2,TX)
-5500   LOCAL GX,GY,P1,Q1,P2,Q2
-5510   IF X2-X1<0.05 OR Y2-Y1<0.05 THEN EXIT PROC
-5520   FOR GX=INT(X1/12) TO INT((X2-0.001)/12)
-5530     FOR GY=INT(Y1/12) TO INT((Y2-0.001)/12)
-5540       IF D<0.55+0.4*FN HR(1000+GX,GY) THEN
-5550         P1=MAX(X1,GX*12):P2=MIN(X2,GX*12+12):Q1=MAX(Y1,GY*12):Q2=MIN(Y2,GY*12+12)
-5560         BFC=16:CALL BXD(4,P1,Q1,FLZ(1)-0.4,P2,Q2,FLZ(1),TX)
-5570         BFC=63:CALL BXD(4,P1,Q1,FLZ(1)-3,P2,Q2,FLZ(1)-0.4,310)
-5580       END IF
-5590     NEXT GY
-5600   NEXT GX
-5610 END PROC
-5620 PROC FLOORPIECE(X1,Y1,X2,Y2,TX)
-5630   IF X2<=SX1 OR X1>=SX2 OR Y2<=SY1 OR Y1>=SY2 THEN
-5640     CALL SLABRECT(X1,Y1,X2,Y2,TX)
-5650     EXIT PROC
-5660   END IF
-5670   IF SX1>X1 THEN CALL SLABRECT(X1,Y1,SX1,Y2,TX)
-5680   IF X2>SX2 THEN CALL SLABRECT(SX2,Y1,X2,Y2,TX)
-5690   IF SY1>Y1 THEN CALL SLABRECT(MAX(X1,SX1),Y1,MIN(X2,SX2),SY1,TX)
-5700   IF Y2>SY2 THEN CALL SLABRECT(MAX(X1,SX1),SY2,MIN(X2,SX2),Y2,TX)
-5710 END PROC
-5720 ' ground floor, upper floor with its stairwell, the ceiling over it, the flat roof of the garage
-5730 PROC SLABS
-5740   LOCAL I,GX,GY,P1,Q1,P2,Q2,T
-5750   BFC=63:CALL BXD(4,0,0,0,LX,DY,FLZ(0)-0.4,304)
-5760   IF HT=2 THEN BFC=63:CALL BXD(4,LX,0,0,LX+AI+4,AY+4,FLZ(0)-0.4,304)
-5770   FOR I=0 TO RMN(0)-1
-5780     BFC=16:CALL BXD(4,RM(0,I,0),RM(0,I,1),FLZ(0)-0.4,RM(0,I,2),RM(0,I,3),FLZ(0),FN FLOORTEX(RM(0,I,4)))
-5790   NEXT I
-5800   FOR I=0 TO RMN(1)-1
-5810     CALL FLOORPIECE(RM(1,I,0),RM(1,I,1),RM(1,I,2),RM(1,I,3),FN FLOORTEX(RM(1,I,4)))
-5820   NEXT I
-5830   FOR GX=0 TO INT((LX-0.001)/12)
-5840     FOR GY=0 TO INT((DY-0.001)/12)
-5850       IF D<0.35+0.4*FN HR(2000+GX,GY) THEN
-5860         P1=GX*12:P2=MIN(LX,GX*12+12):Q1=GY*12:Q2=MIN(DY,GY*12+12)
-5870         BFC=63:CALL BXD(4,P1,Q1,FLZ(1)+26,P2,Q2,FLZ(1)+28,309)
-5880       END IF
-5890     NEXT GY
-5900   NEXT GX
-5910   IF HT=2 THEN
-5920     FOR GX=INT(LX/12) TO INT((LX+AI+3.999)/12)
-5930       FOR GY=0 TO INT((AY+3.999)/12)
-5940         IF D<0.3+0.5*FN HR(3000+GX,GY) AND D<0.7 THEN
-5950           P1=MAX(LX,GX*12):P2=MIN(LX+AI+4,GX*12+12):Q1=GY*12:Q2=MIN(AY+4,GY*12+12)
-5960           T=304:IF FN HR(3500+GX,GY)<D*1.5 THEN T=302
-5970           BFC=63:CALL BXD(4,P1,Q1,FLZ(1)-3,P2,Q2,FLZ(1),T)
-5980         END IF
-5990       NEXT GY
-6000     NEXT GX
-6010   END IF
-6020 END PROC
-6030 ' the stairs: 16 steps along the stairwell, solid
-6040 PROC STAIRS
-6050   LOCAL I,T,Y1,Y2
-6060   T=312:IF D>0.25 THEN T=302
-6070   FOR I=0 TO 15
-6080     Y1=SY1+I*(SY2-SY1)/16:Y2=SY1+(I+1)*(SY2-SY1)/16
-6090     BFC=63:CALL BXD(9,SX1,Y1,FLZ(0)-0.4,SX2,Y2,FLZ(0)+(I+1)*(FLZ(1)-FLZ(0))/16,T)
-6100   NEXT I
-6110 END PROC
-6120 ' ---- the roof: a gable roof over the long side, cells of about 10 dm that burn away, rafters under them
-6130 PROC ROOF
-6140   LOCAL NX,WX,SL,OV,ZE,I,J,S,X1,X2,T1,T2,Y1,Y2,Z1,Z2,B,TX,R,IX
-6150   OV=5:SL=(ZR-EZ)/(DY/2):ZE=EZ-OV*SL
-6160   NX=INT((LX+6)/10)+1:WX=(LX+6)/NX
-6170   FOR S=0 TO 1
-6180     FOR I=0 TO NX-1
-6190       FOR J=0 TO 3
-6200         IX=S*1000+I*10+J
-6210         R=FN HR(500,IX)
-6220         IF D<0.3+0.5*R AND D<0.7 THEN
-6230           X1=-3+I*WX:X2=X1+WX
-6240           T1=J/4:T2=(J+1)/4
-6250           Y1=-OV+(DY/2+OV)*T1:Y2=-OV+(DY/2+OV)*T2:Z1=ZE+(ZR-ZE)*T1:Z2=ZE+(ZR-ZE)*T2
-6260           IF S=1 THEN Y1=DY-Y1:Y2=DY-Y2
-6270           TX=315:IF FN HR(501,IX)<D*1.5 THEN TX=302
-6280           B=M3D("VERTS",5)
-6290           M3D VERTEX 5,X1*U,Y1*U,Z1*U:M3D VERTEX 5,X2*U,Y1*U,Z1*U:M3D VERTEX 5,X2*U,Y2*U,Z2*U:M3D VERTEX 5,X1*U,Y2*U,Z2*U
-6300           M3D QUAD 5,B,B+1,B+2,B+3,TX
-6310         END IF
-6320       NEXT J
-6330     NEXT I
-6340   NEXT S
-6350   ' rafters and the ridge beam
-6360   IF D<=0.8 THEN
-6370     FOR S=0 TO 1
-6380       FOR I=0 TO INT((LX-2)/8)
-6390         IX=S*100+I
-6400         IF D<=0.6 THEN
-6410           X1=2+I*8
-6420           Y1=-OV:Y2=DY/2:Z1=ZE-0.3:Z2=ZR-0.3
-6430           IF S=1 THEN Y1=DY-Y1:Y2=DY-Y2
-6440           B=M3D("VERTS",5)
-6450           M3D VERTEX 5,(X1-0.6)*U,Y1*U,Z1*U:M3D VERTEX 5,(X1+0.6)*U,Y1*U,Z1*U:M3D VERTEX 5,(X1+0.6)*U,Y2*U,Z2*U:M3D VERTEX 5,(X1-0.6)*U,Y2*U,Z2*U
-6460           M3D QUAD 5,B,B+1,B+2,B+3,302
-6470         END IF
-6480       NEXT I
-6490     NEXT S
-6500     B=M3D("VERTS",5)
-6510     M3D VERTEX 5,-3*U,(DY/2-0.8)*U,(ZR-0.8)*U:M3D VERTEX 5,(LX+3)*U,(DY/2-0.8)*U,(ZR-0.8)*U:M3D VERTEX 5,(LX+3)*U,(DY/2+0.8)*U,(ZR-0.8)*U:M3D VERTEX 5,-3*U,(DY/2+0.8)*U,(ZR-0.8)*U
-6520     IF D<=0.6 THEN M3D QUAD 5,B,B+1,B+2,B+3,302
-6530   END IF
-6540   ' the chimney stack on the west gable: brick, it stands at every stage
-6550   BFC=63:CALL BXD(2,-6,DY/2-4,0,0,DY/2+4,ZR+5,303)
-6560 END PROC
-6570 ' ---- furniture
-6580 FUNC FUH(W,H,C)
-6590   LOCAL L,S
-6600   L=MAX(W,H):S=MIN(W,H)
-6610   IF C=54 THEN
-6620     IF L>=15 THEN RETURN 5
-6630     RETURN 8
-6640   END IF
-6650   IF C=53 OR C=42 OR C=58 THEN
-6660     IF L>1.6*S THEN RETURN 8
-6670     RETURN 5
-6680   END IF
-6690   IF L<=4 THEN RETURN 9
-6700   IF S<=4.5 THEN RETURN 17
-6710   IF S<=7.5 AND L>=12 THEN RETURN 9
-6720   RETURN 7.5
-6730 END FUNC
-6740 FUNC FUTEX(C)
-6750   IF C=39 THEN RETURN 320
-6760   IF C=40 THEN RETURN 321
-6770   IF C=41 THEN RETURN 322
-6780   IF C=42 THEN RETURN 323
-6790   IF C=53 THEN RETURN 324
-6800   IF C=54 THEN RETURN 325
-6810   IF C=58 THEN RETURN 326
-6820   RETURN 321
-6830 END FUNC
-6840 PROC FURNITURE
-6850   LOCAL F,I,X1,Y1,X2,Y2,C,H,T,R,OK,CX,CY
-6860   FOR F=0 TO 1
-6870     FOR I=0 TO FUN(F)-1
-6880       X1=FU(F,I,0):Y1=FU(F,I,1):X2=FU(F,I,2):Y2=FU(F,I,3):C=FUC(F,I)
-6890       OK=-1
-6900       CX=(X1+X2)/2:CY=(Y1+Y2)/2
-6910       IF F=1 THEN
-6920         IF NOT (D<0.55+0.4*FN HR(1000+INT(CX/12),INT(CY/12))) THEN OK=0
-6930       END IF
-6940       IF D>0.4 THEN
-6950         IF FN HR(700+F,I)>1.25-D*0.9 THEN OK=0
-6960       END IF
-6970       IF OK THEN
-6980         H=FN FUH(X2-X1,Y2-Y1,C)
-6990         T=FN FUTEX(C):IF FN HR(710+F,I)<D*1.3 THEN T=302
-7000         BFC=63:CALL BXD(6,X1,Y1,FLZ(F),X2,Y2,FLZ(F)+H,T)
-7010       END IF
-7020     NEXT I
-7030   NEXT F
-7040 END PROC
-7050 ' ---- debris on the ground floor where the ceilings fell
-7060 PROC RUBBLE
-7070   LOCAL I,N,R,X,Y,W,H,L,K,F
-7080   IF D<0.7 THEN EXIT PROC
-7090   N=INT((D-0.5)*70)
-7100   FOR I=0 TO N-1
-7110     R=INT(FN HR(800,I)*RMN(0)):IF R>=RMN(0) THEN R=RMN(0)-1
-7120     IF RM(0,R,4)<>10 OR FN HR(801,I)<0.4 THEN
-7130       X=RM(0,R,0)+2+FN HR(802,I)*(RM(0,R,2)-RM(0,R,0)-4):Y=RM(0,R,1)+2+FN HR(803,I)*(RM(0,R,3)-RM(0,R,1)-4)
-7140       IF FN HR(804,I)<0.35 THEN
-7150         L=15+FN HR(805,I)*15
-7160         IF FN HR(806,I)<0.5 THEN BFC=63:CALL BXD(8,X,Y,FLZ(0),X+L,Y+1.3,FLZ(0)+1.3,302) ELSE BFC=63:CALL BXD(8,X,Y,FLZ(0),X+1.3,Y+L,FLZ(0)+1.3,302)
-7170       ELSE
-7180         W=3+FN HR(807,I)*6:H=3+FN HR(808,I)*6:K=1+FN HR(809,I)*3
-7190         IF FN HR(810,I)<0.5 THEN F=302 ELSE F=337
-7200         BFC=63:CALL BXD(8,X,Y,FLZ(0),X+W,Y+H,FLZ(0)+K,F)
-7210       END IF
-7220     END IF
-7230   NEXT I
-7240 END PROC
-7250 ' ---- windows and doors: flat quads in the openings (frames with see-through panes, doors ajar); present while the fire has not taken them
-7260 PROC LEAF(S,PP,W,Z1,Z2,TX)
-7270   LOCAL B,X1,X2,Y1,Y2,PLN
-7280   PLN=2
-7290   IF S=0 OR S=4 THEN
-7300     B=M3D("VERTS",7)
-7310     M3D VERTEX 7,(PP-W/2)*U,PLN*U,Z2*U,0,0:M3D VERTEX 7,(PP+W/2)*U,PLN*U,Z2*U,64,0:M3D VERTEX 7,(PP+W/2)*U,PLN*U,Z1*U,64,96:M3D VERTEX 7,(PP-W/2)*U,PLN*U,Z1*U,0,96
-7320   END IF
-7330   IF S=1 OR S=6 THEN
-7340     IF S=1 THEN PLN=DY-2 ELSE PLN=AY+2
-7350     B=M3D("VERTS",7)
-7360     M3D VERTEX 7,(PP-W/2)*U,PLN*U,Z2*U,0,0:M3D VERTEX 7,(PP+W/2)*U,PLN*U,Z2*U,64,0:M3D VERTEX 7,(PP+W/2)*U,PLN*U,Z1*U,64,96:M3D VERTEX 7,(PP-W/2)*U,PLN*U,Z1*U,0,96
-7370   END IF
-7380   IF S=2 OR S=3 OR S=5 THEN
-7390     IF S=3 THEN PLN=LX-2
-7400     IF S=5 THEN PLN=LX+AI+2
-7410     B=M3D("VERTS",7)
-7420     M3D VERTEX 7,PLN*U,(PP-W/2)*U,Z2*U,0,0:M3D VERTEX 7,PLN*U,(PP+W/2)*U,Z2*U,64,0:M3D VERTEX 7,PLN*U,(PP+W/2)*U,Z1*U,64,96:M3D VERTEX 7,PLN*U,(PP-W/2)*U,Z1*U,0,96
-7430   END IF
-7440   M3D QUAD 7,B,B+1,B+2,B+3,TX
+4340 ' a wall with the openings OPN (OA1 .. OA2 along, OZ1 .. OZ2 high; type 0 opening, 1 hole of the beam, 2 its glassy rim: drawn with the picture RTX when RTX > 0)
+4350 PROC WALLSEG(O,AX,C1,C2,A1,A2,Z1,Z2)
+4360   LOCAL I,J,K,NZ,B1,B2,V,T1,T2,NR
+4370   NZ=2:ZB(0)=Z1:ZB(1)=Z2
+4380   FOR I=0 TO OPN-1
+4390     FOR J=0 TO 1
+4400       IF J=0 THEN V=OZ1(I) ELSE V=OZ2(I)
+4410       IF V>Z1+0.05 AND V<Z2-0.05 AND NZ<158 THEN ZB(NZ)=V:NZ=NZ+1
+4420     NEXT J
+4430   NEXT I
+4440   FOR I=0 TO NZ-2
+4450     FOR J=0 TO NZ-2-I
+4460       IF ZB(J)>ZB(J+1) THEN V=ZB(J):ZB(J)=ZB(J+1):ZB(J+1)=V
+4470     NEXT J
+4480   NEXT I
+4490   FOR K=0 TO NZ-2
+4500     B1=ZB(K):B2=ZB(K+1)
+4510     IF B2-B1>0.05 THEN
+4520       NL=0:NR=0
+4530       FOR I=0 TO OPN-1
+4540         IF OZ1(I)<=B1+0.01 AND OZ2(I)>=B2-0.01 THEN
+4550           T1=MAX(A1,OA1(I)):T2=MIN(A2,OA2(I))
+4560           IF T2>T1 THEN
+4570             LA1(NL)=T1:LA2(NL)=T2:NL=NL+1
+4580             IF OTY(I)=2 THEN RA1(NR)=T1:RA2(NR)=T2:NR=NR+1
+4590           END IF
+4600         END IF
+4610       NEXT I
+4620       CALL SORTL
+4630       CALL FREEIV(O,AX,C1,C2,A1,A2,B1,B2)
+4640       IF RTX>0 AND NR>0 THEN
+4650         NL=0
+4660         FOR I=0 TO OPN-1
+4670           IF OTY(I)<2 AND OZ1(I)<=B1+0.01 AND OZ2(I)>=B2-0.01 THEN
+4680             T1=MAX(A1,OA1(I)):T2=MIN(A2,OA2(I))
+4690             IF T2>T1 THEN LA1(NL)=T1:LA2(NL)=T2:NL=NL+1
+4700           END IF
+4710         NEXT I
+4720         CALL SORTL
+4730         SV1=PTX:SV2=PTXC:SV3=PCAT:PTX=RTX:PTXC=RTX:PCAT=1
+4740         FOR I=0 TO NR-1
+4750           PTX=RTX:PTXC=RTX:PCAT=1:CALL FREEIV(O,AX,C1,C2,RA1(I),RA2(I),B1,B2)
+4760         NEXT I
+4770         PTX=SV1:PTXC=SV2:PCAT=SV3
+4780       END IF
+4790     END IF
+4800   NEXT K
+4810 END PROC
+4820 ' the openings of the outer wall SIDE (0 south, 1 north, 2 west, 3 east, 4 / 6 / 5 the garage's south / north / east wall) of floor F: windows, doors and the hole of the beam
+4830 PROC OPWALL(F,SIDE)
+4840   LOCAL I,J,ZC,R,YB,W,W2,BH
+4850   OPN=0
+4860   FOR I=0 TO WN-1
+4870     IF WIN(I,0)=F AND WIN(I,1)=SIDE THEN
+4880       OA1(OPN)=WIN(I,2)-WIN(I,3)/2:OA2(OPN)=WIN(I,2)+WIN(I,3)/2:OZ1(OPN)=FLZ(F)+WIN(I,4):OZ2(OPN)=FLZ(F)+WIN(I,5):OTY(OPN)=0:OPN=OPN+1
+4890     END IF
+4900   NEXT I
+4910   IF HOLE AND F=0 AND SIDE=HS THEN
+4920     R=HRAD:BH=2*R/9
+4930     FOR J=0 TO 8
+4940       YB=(J+0.5)*BH-R
+4950       W=SQR(MAX(0,R*R-YB*YB)):W2=SQR(MAX(0,(R+1.2)*(R+1.2)-YB*YB))
+4960       OA1(OPN)=HC-W:OA2(OPN)=HC+W:OZ1(OPN)=HZC-R+J*BH:OZ2(OPN)=HZC-R+(J+1)*BH:OTY(OPN)=1:OPN=OPN+1
+4970       OA1(OPN)=HC-W2:OA2(OPN)=HC+W2:OZ1(OPN)=HZC-R+J*BH:OZ2(OPN)=HZC-R+(J+1)*BH:OTY(OPN)=2:OPN=OPN+1
+4980     NEXT J
+4990     OA1(OPN)=HC-5.4:OA2(OPN)=HC+5.4:OZ1(OPN)=HZC+R:OZ2(OPN)=HZC+R+1.2:OTY(OPN)=2:OPN=OPN+1
+5000     OA1(OPN)=HC-5.4:OA2(OPN)=HC+5.4:OZ1(OPN)=HZC-R-1.2:OZ2(OPN)=HZC-R:OTY(OPN)=2:OPN=OPN+1
+5010   END IF
+5020 END PROC
+5030 ' the doors of a partition: AX 0 a wall at x = CC, AX 1 a wall at y = CC (its low side)
+5040 PROC OPDOOR(F,AX,CC)
+5050   LOCAL I,P,Q
+5060   OPN=0
+5070   FOR I=0 TO DON(F)-1
+5080     IF DOR(F,I,0)=AX THEN
+5090       IF AX=0 THEN P=DOR(F,I,1):Q=DOR(F,I,2) ELSE P=DOR(F,I,2):Q=DOR(F,I,1)
+5100       IF ABS(P-CC)<0.01 THEN
+5110         OA1(OPN)=Q-DOR(F,I,3)/2:OA2(OPN)=Q+DOR(F,I,3)/2:OZ1(OPN)=FLZ(F):OZ2(OPN)=FLZ(F)+21:OTY(OPN)=0:OPN=OPN+1
+5120       END IF
+5130     END IF
+5140   NEXT I
+5150 END PROC
+5160 ' ---- the outer walls (3.5 dm of plaster over brick; the rooms add their own 0.5 dm of colour inside), floor by floor
+5170 PROC SHELLS
+5180   LOCAL F,Z1,Z2,S
+5190   FOR F=0 TO 1
+5200     PF=F
+5210     IF F=0 THEN Z1=0:Z2=FLZ(1) ELSE Z1=FLZ(1):Z2=EZ
+5220     WTOP=Z2
+5230     FOR S=0 TO 3
+5240       CALL OPWALL(F,S):PWID=100+F*10+S
+5250       IF S=0 THEN PTX=301:PTXC=302:PCAT=0:RTX=330:CALL WALLSEG(2,0,0,3.5,0,LX,Z1,Z2)
+5260       IF S=1 THEN PTX=301:PTXC=302:PCAT=0:RTX=330:CALL WALLSEG(2,0,DY-3.5,DY,0,LX,Z1,Z2)
+5270       IF S=2 THEN PTX=301:PTXC=302:PCAT=0:RTX=330:CALL WALLSEG(2,1,0,3.5,0,DY,Z1,Z2)
+5280       IF S=3 THEN PTX=301:PTXC=302:PCAT=0:RTX=330:CALL WALLSEG(2,1,LX-3.5,LX,0,DY,Z1,Z2)
+5290     NEXT S
+5300   NEXT F
+5310   IF HT=2 THEN
+5320     PF=0:WTOP=FLZ(1)-3
+5330     CALL OPWALL(0,4):PWID=150:PTX=301:PTXC=302:PCAT=0:RTX=0:CALL WALLSEG(2,0,0,3.5,LX,LX+AI+4,0,FLZ(1)-3)
+5340     CALL OPWALL(0,6):PWID=151:PTX=301:PTXC=302:PCAT=0:RTX=0:CALL WALLSEG(2,0,AY+0.5,AY+4,LX,LX+AI+4,0,FLZ(1)-3)
+5350     CALL OPWALL(0,5):PWID=152:PTX=301:PTXC=302:PCAT=0:RTX=0:CALL WALLSEG(2,1,LX+AI+0.5,LX+AI+4,0,AY+4,0,FLZ(1)-3)
+5360   END IF
+5370   IF HT=5 THEN
+5380     PF=0:WTOP=FLZ(1)-3
+5390     CALL OPWALL(0,7):PWID=153:PTX=301:PTXC=302:PCAT=0:RTX=0:CALL WALLSEG(2,1,EXX1-4,EXX1-0.5,DY,DY+EXY+4,0,FLZ(1)-3)
+5400     CALL OPWALL(0,8):PWID=154:PTX=301:PTXC=302:PCAT=0:RTX=0:CALL WALLSEG(2,1,EXX2+0.5,EXX2+4,DY,DY+EXY+4,0,FLZ(1)-3)
+5410     CALL OPWALL(0,9):PWID=155:PTX=301:PTXC=302:PCAT=0:RTX=0:CALL WALLSEG(2,0,DY+EXY+0.5,DY+EXY+4,EXX1-4,EXX2+4,0,FLZ(1)-3)
+5420   END IF
+5430 END PROC
+5440 ' the gable triangles (both sides drawn) over the end walls: they stand while the upper floor's walls do
+5450 PROC GABLE(X1,X2,TX)
+5460   LOCAL B
+5470   B=M3D("VERTS",2)
+5480   M3D VERTEX 2,X1*U,0,EZ*U:M3D VERTEX 2,X1*U,DY*U,EZ*U:M3D VERTEX 2,X1*U,DY/2*U,ZR*U
+5490   M3D VERTEX 2,X2*U,0,EZ*U:M3D VERTEX 2,X2*U,DY*U,EZ*U:M3D VERTEX 2,X2*U,DY/2*U,ZR*U
+5500   M3D FACE 2,B,B+1,B+2,TX:M3D FACE 2,B,B+2,B+1,TX
+5510   M3D FACE 2,B+3,B+4,B+5,TX:M3D FACE 2,B+3,B+5,B+4,TX
+5520 END PROC
+5530 PROC GABLES
+5540   LOCAL T
+5550   IF D>0.6 OR HT=3 THEN EXIT PROC
+5560   T=301:IF FN HR(300,1)<D*1.4 THEN T=302
+5570   CALL GABLE(0,3.5,T)
+5580   T=301:IF FN HR(300,2)<D*1.4 THEN T=302
+5590   CALL GABLE(LX-3.5,LX,T)
+5600 END PROC
+5610 ' ---- the rooms: 0.5 dm of colour on every wall of a room, openings cut, the floor
+5620 PROC ROOMLAYERS(F,I)
+5630   LOCAL X1,Y1,X2,Y2,T,TX,Z1,Z2,AN,ET
+5640   X1=RM(F,I,0):Y1=RM(F,I,1):X2=RM(F,I,2):Y2=RM(F,I,3):T=RM(F,I,4)
+5650   TX=305+RM(F,I,5)-20
+5660   AN=(T=10):ET=(T=11)
+5670   Z1=FLZ(F):Z2=FLZ(F)+26
+5680   PF=F:WTOP=Z2
+5690   PWID=200+F*40+I*4
+5700   IF NOT ET THEN
+5710     IF Y1=TW THEN
+5720       IF AN THEN CALL OPWALL(F,4) ELSE CALL OPWALL(F,0)
+5730     ELSE
+5740       CALL OPDOOR(F,1,Y1-1)
+5750     END IF
+5760     PTX=TX:PTXC=302:PCAT=1:RTX=0:CALL WALLSEG(3,0,Y1-0.5,Y1,X1,X2,Z1,Z2)
+5770   END IF
+5780   PWID=PWID+1
+5790   IF AN THEN
+5800     CALL OPWALL(F,6)
+5810   ELSE
+5820     IF ET THEN
+5830       CALL OPWALL(F,9)
+5840     ELSE
+5850       IF Y2=DY-TW THEN CALL OPWALL(F,1) ELSE CALL OPDOOR(F,1,Y2)
+5860     END IF
+5870   END IF
+5880   PTX=TX:PTXC=302:PCAT=1:RTX=0:CALL WALLSEG(3,0,Y2,Y2+0.5,X1,X2,Z1,Z2)
+5890   PWID=PWID+1
+5900   IF NOT AN THEN
+5910     IF ET THEN
+5920       CALL OPWALL(F,7)
+5930     ELSE
+5940       IF X1=TW THEN CALL OPWALL(F,2) ELSE CALL OPDOOR(F,0,X1-1)
+5950     END IF
+5960     PTX=TX:PTXC=302:PCAT=1:RTX=0:CALL WALLSEG(3,1,X1-0.5,X1,Y1,Y2,Z1,Z2)
+5970   END IF
+5980   PWID=PWID+1
+5990   IF AN THEN
+6000     CALL OPWALL(F,5)
+6010   ELSE
+6020     IF ET THEN
+6030       CALL OPWALL(F,8)
+6040     ELSE
+6050       IF X2=LX-TW THEN CALL OPWALL(F,3) ELSE CALL OPDOOR(F,0,X2)
+6060     END IF
+6070   END IF
+6080   PTX=TX:PTXC=302:PCAT=1:RTX=0:CALL WALLSEG(3,1,X2,X2+0.5,Y1,Y2,Z1,Z2)
+6090 END PROC
+6100 ' the picture of a room's floor
+6110 FUNC FLOORTEX(T)
+6120   IF T=1 OR T=2 OR T=5 OR T=9 OR T=11 THEN RETURN 313
+6130   IF T=10 THEN RETURN 304
+6140   RETURN 312
+6150 END FUNC
+6160 ' the plate of the upper floor in a rectangle (cell present by the hash of the 12 dm grid)
+6170 PROC SLABRECT(X1,Y1,X2,Y2,TX)
+6180   LOCAL GX,GY,P1,Q1,P2,Q2
+6190   IF X2-X1<0.05 OR Y2-Y1<0.05 THEN EXIT PROC
+6200   FOR GX=INT(X1/12) TO INT((X2-0.001)/12)
+6210     FOR GY=INT(Y1/12) TO INT((Y2-0.001)/12)
+6220       IF D<0.55+0.4*FN HR(1000+GX,GY) THEN
+6230         P1=MAX(X1,GX*12):P2=MIN(X2,GX*12+12):Q1=MAX(Y1,GY*12):Q2=MIN(Y2,GY*12+12)
+6240         BFC=16:CALL BXD(4,P1,Q1,FLZ(1)-0.4,P2,Q2,FLZ(1),TX)
+6250         BFC=63:CALL BXD(4,P1,Q1,FLZ(1)-3,P2,Q2,FLZ(1)-0.4,310)
+6260       END IF
+6270     NEXT GY
+6280   NEXT GX
+6290 END PROC
+6300 PROC FLOORPIECE(X1,Y1,X2,Y2,TX)
+6310   IF X2<=SX1 OR X1>=SX2 OR Y2<=SY1 OR Y1>=SY2 THEN
+6320     CALL SLABRECT(X1,Y1,X2,Y2,TX)
+6330     EXIT PROC
+6340   END IF
+6350   IF SX1>X1 THEN CALL SLABRECT(X1,Y1,SX1,Y2,TX)
+6360   IF X2>SX2 THEN CALL SLABRECT(SX2,Y1,X2,Y2,TX)
+6370   IF SY1>Y1 THEN CALL SLABRECT(MAX(X1,SX1),Y1,MIN(X2,SX2),SY1,TX)
+6380   IF Y2>SY2 THEN CALL SLABRECT(MAX(X1,SX1),SY2,MIN(X2,SX2),Y2,TX)
+6390 END PROC
+6400 ' ground floor, upper floor with its stairwell, the ceiling over it, the flat roof of the garage
+6410 PROC SLABS
+6420   LOCAL I,GX,GY,P1,Q1,P2,Q2,T
+6430   BFC=63:CALL BXD(4,0,0,0,LX,DY,FLZ(0)-0.4,304)
+6440   IF HT=2 THEN BFC=63:CALL BXD(4,LX,0,0,LX+AI+4,AY+4,FLZ(0)-0.4,304)
+6450   IF HT=5 THEN BFC=63:CALL BXD(4,EXX1-4,DY,0,EXX2+4,DY+EXY+4,FLZ(0)-0.4,304)
+6460   FOR I=0 TO RMN(0)-1
+6470     BFC=16:CALL BXD(4,RM(0,I,0),RM(0,I,1),FLZ(0)-0.4,RM(0,I,2),RM(0,I,3),FLZ(0),FN FLOORTEX(RM(0,I,4)))
+6480   NEXT I
+6490   FOR I=0 TO RMN(1)-1
+6500     CALL FLOORPIECE(RM(1,I,0),RM(1,I,1),RM(1,I,2),RM(1,I,3),FN FLOORTEX(RM(1,I,4)))
+6510   NEXT I
+6520   FOR GX=0 TO INT((LX-0.001)/12)
+6530     FOR GY=0 TO INT((DY-0.001)/12)
+6540       IF D<0.35+0.4*FN HR(2000+GX,GY) THEN
+6550         P1=GX*12:P2=MIN(LX,GX*12+12):Q1=GY*12:Q2=MIN(DY,GY*12+12)
+6560         BFC=63:CALL BXD(4,P1,Q1,FLZ(1)+26,P2,Q2,FLZ(1)+28,309)
+6570       END IF
+6580     NEXT GY
+6590   NEXT GX
+6600   IF HT=2 THEN
+6610     FOR GX=INT(LX/12) TO INT((LX+AI+3.999)/12)
+6620       FOR GY=0 TO INT((AY+3.999)/12)
+6630         IF D<0.3+0.5*FN HR(3000+GX,GY) AND D<0.7 THEN
+6640           P1=MAX(LX,GX*12):P2=MIN(LX+AI+4,GX*12+12):Q1=GY*12:Q2=MIN(AY+4,GY*12+12)
+6650           T=304:IF FN HR(3500+GX,GY)<D*1.5 THEN T=302
+6660           BFC=63:CALL BXD(4,P1,Q1,FLZ(1)-3,P2,Q2,FLZ(1),T)
+6670         END IF
+6680       NEXT GY
+6690     NEXT GX
+6700   END IF
+6710   IF HT=5 THEN
+6720     FOR GX=INT((EXX1-4)/12) TO INT((EXX2+3.999)/12)
+6730       FOR GY=INT(DY/12) TO INT((DY+EXY+3.999)/12)
+6740         IF D<0.3+0.5*FN HR(3000+GX,GY) AND D<0.7 THEN
+6750           P1=MAX(EXX1-4,GX*12):P2=MIN(EXX2+4,GX*12+12):Q1=MAX(DY,GY*12):Q2=MIN(DY+EXY+4,GY*12+12)
+6760           T=304:IF FN HR(3500+GX,GY)<D*1.5 THEN T=302
+6770           BFC=63:CALL BXD(4,P1,Q1,FLZ(1)-3,P2,Q2,FLZ(1),T)
+6780         END IF
+6790       NEXT GY
+6800     NEXT GX
+6810   END IF
+6820 END PROC
+6830 ' the stairs: 16 steps along the stairwell, solid
+6840 PROC STAIRS
+6850   LOCAL I,T,Y1,Y2
+6860   T=312:IF D>0.25 THEN T=302
+6870   FOR I=0 TO 15
+6880     Y1=SY1+I*(SY2-SY1)/16:Y2=SY1+(I+1)*(SY2-SY1)/16
+6890     BFC=63:CALL BXD(9,SX1,Y1,FLZ(0)-0.4,SX2,Y2,FLZ(0)+(I+1)*(FLZ(1)-FLZ(0))/16,T)
+6900   NEXT I
+6910 END PROC
+6920 ' ---- the roof: a gable roof over the long side, cells of about 10 dm that burn away, rafters under them
+6930 FUNC HZ(X,Y,SL)
+6940   RETURN EZ+SL*MIN(MIN(X,LX-X),MIN(Y,DY-Y))
+6950 END FUNC
+6960 PROC ROOFGABLE
+6970   LOCAL NX,WX,SL,OV,ZE,I,J,S,X1,X2,T1,T2,Y1,Y2,Z1,Z2,B,TX,R,IX
+6980   OV=5:SL=(ZR-EZ)/(DY/2):ZE=EZ-OV*SL
+6990   NX=INT((LX+6)/10)+1:WX=(LX+6)/NX
+7000   FOR S=0 TO 1
+7010     FOR I=0 TO NX-1
+7020       FOR J=0 TO 3
+7030         IX=S*1000+I*10+J
+7040         R=FN HR(500,IX)
+7050         IF D<0.3+0.5*R AND D<0.7 THEN
+7060           X1=-3+I*WX:X2=X1+WX
+7070           T1=J/4:T2=(J+1)/4
+7080           Y1=-OV+(DY/2+OV)*T1:Y2=-OV+(DY/2+OV)*T2:Z1=ZE+(ZR-ZE)*T1:Z2=ZE+(ZR-ZE)*T2
+7090           IF S=1 THEN Y1=DY-Y1:Y2=DY-Y2
+7100           TX=315:IF FN HR(501,IX)<D*1.5 THEN TX=302
+7110           B=M3D("VERTS",5)
+7120           M3D VERTEX 5,X1*U,Y1*U,Z1*U:M3D VERTEX 5,X2*U,Y1*U,Z1*U:M3D VERTEX 5,X2*U,Y2*U,Z2*U:M3D VERTEX 5,X1*U,Y2*U,Z2*U
+7130           M3D QUAD 5,B,B+1,B+2,B+3,TX
+7140         END IF
+7150       NEXT J
+7160     NEXT I
+7170   NEXT S
+7180 END PROC
+7190 FUNC FRONTX()
+7200   LOCAL I,X
+7210   X=LX/2
+7220   FOR I=0 TO WN-1
+7230     IF WIN(I,0)=0 AND WIN(I,1)=0 AND WIN(I,6)=2 THEN X=WIN(I,2)
+7240   NEXT I
+7250   RETURN X
+7260 END FUNC
+7270 ' rafters (ribbons under the roof, from X RX1 to RX2) and the ridge beam (RB1 to RB2): they burn with the roof
+7280 PROC RAFTERS(RX1,RX2,RB1,RB2)
+7290   LOCAL OV,SL,ZE,I,S,X1,Y1,Y2,Z1,Z2,B
+7300   IF D>0.6 THEN EXIT PROC
+7310   OV=5:SL=(ZR-EZ)/(DY/2):ZE=EZ-OV*SL
+7320   FOR S=0 TO 1
+7330     FOR I=0 TO INT((RX2-RX1)/8)
+7340       X1=RX1+I*8
+7350       Y1=-OV:Y2=DY/2:Z1=ZE-0.3:Z2=ZR-0.3
+7360       IF S=1 THEN Y1=DY-Y1:Y2=DY-Y2
+7370       B=M3D("VERTS",5)
+7380       M3D VERTEX 5,(X1-0.6)*U,Y1*U,Z1*U:M3D VERTEX 5,(X1+0.6)*U,Y1*U,Z1*U:M3D VERTEX 5,(X1+0.6)*U,Y2*U,Z2*U:M3D VERTEX 5,(X1-0.6)*U,Y2*U,Z2*U
+7390       M3D QUAD 5,B,B+1,B+2,B+3,302
+7400     NEXT I
+7410   NEXT S
+7420   B=M3D("VERTS",5)
+7430   M3D VERTEX 5,RB1*U,(DY/2-0.8)*U,(ZR-0.8)*U:M3D VERTEX 5,RB2*U,(DY/2-0.8)*U,(ZR-0.8)*U:M3D VERTEX 5,RB2*U,(DY/2+0.8)*U,(ZR-0.8)*U:M3D VERTEX 5,RB1*U,(DY/2+0.8)*U,(ZR-0.8)*U
+7440   M3D QUAD 5,B,B+1,B+2,B+3,302
 7450 END PROC
-7460 ' a door leaf hinged at (HX0, HY0), W wide, TH degrees open from the closed position along the wall (AX 0: the wall runs along y, 1: along x)
-7470 PROC DOORLEAF(AX,HX0,HY0,W,TH,Z1,Z2,TX)
-7480   LOCAL B,DX,DYY,A
-7490   A=TH*PI/180
-7500   IF AX=0 THEN DX=W*SIN(A):DYY=W*COS(A) ELSE DX=W*COS(A):DYY=W*SIN(A)
-7510   B=M3D("VERTS",7)
-7520   M3D VERTEX 7,HX0*U,HY0*U,Z2*U,0,0:M3D VERTEX 7,(HX0+DX)*U,(HY0+DYY)*U,Z2*U,64,0:M3D VERTEX 7,(HX0+DX)*U,(HY0+DYY)*U,Z1*U,64,128:M3D VERTEX 7,HX0*U,HY0*U,Z1*U,0,128
-7530   M3D QUAD 7,B,B+1,B+2,B+3,TX
-7540 END PROC
-7550 PROC LEAVES
-7560   LOCAL I,F,S,PP,W,Z1,Z2,K,R,TH
-7570   FOR I=0 TO WN-1
-7580     F=WIN(I,0):S=WIN(I,1):PP=WIN(I,2):W=WIN(I,3):K=WIN(I,6)
-7590     Z1=FLZ(F)+WIN(I,4):Z2=FLZ(F)+WIN(I,5)
-7600     R=FN HR(600,I)
-7610     IF D<0.3+0.5*R AND D<0.7 THEN
-7620       IF K=0 OR K=1 THEN CALL LEAF(S,PP,W,Z1,Z2,331)
-7630       IF K=4 THEN CALL LEAF(S,PP,W,Z1,Z2,333)
-7640       IF K=2 OR K=3 THEN
-7650         TH=80+FN HR(601,I)*12
-7660         IF S=0 THEN CALL DOORLEAF(1,PP-W/2,2,W,TH,Z1,Z2,332)
-7670         IF S=3 THEN CALL DOORLEAF(0,LX-2,PP-W/2,W,TH,Z1,Z2,332)
-7680       END IF
-7690     END IF
-7700   NEXT I
-7710   FOR F=0 TO 1
-7720     FOR I=0 TO DON(F)-1
-7730       IF D<0.45+0.5*FN HR(620+F,I) AND D<0.75 THEN
-7740         TH=60+FN HR(630+F,I)*35
-7750         IF DOR(F,I,0)=0 THEN CALL DOORLEAF(0,DOR(F,I,1)+0.5,DOR(F,I,2)-DOR(F,I,3)/2,DOR(F,I,3),TH,FLZ(F),FLZ(F)+21,332)
-7760         IF DOR(F,I,0)=1 THEN CALL DOORLEAF(1,DOR(F,I,1)-DOR(F,I,3)/2,DOR(F,I,2)+0.5,DOR(F,I,3),TH,FLZ(F),FLZ(F)+21,332)
-7770       END IF
-7780     NEXT I
-7790   NEXT F
-7800 END PROC
-7810 ' ---- the pictures
-7820 PROC MKFLAT(N,H,S)
-7830   LOCAL I
-7840   GFX CLEAR FN W3K_C(H,S)
-7850   FOR I=1 TO 140
-7860     GFX PSET FN W3K_R(64),FN W3K_R(64),FN W3K_C(H,FN CLP(S-2+FN W3K_R(5),1,15))
-7870   NEXT I
-7880   CALL W3K_GRAB(N,64,64)
-7890 END PROC
-7900 PROC MKCHAR(N)
-7910   LOCAL I
-7920   GFX CLEAR FN W3K_C(0,1)
-7930   FOR I=1 TO 260
-7940     GFX PSET FN W3K_R(64),FN W3K_R(64),FN W3K_C(0,FN W3K_R(5))
-7950   NEXT I
-7960   FOR I=1 TO 30
-7970     GFX PSET FN W3K_R(64),FN W3K_R(64),FN W3K_C(12,2+FN W3K_R(3))
-7980   NEXT I
-7990   CALL W3K_GRAB(N,64,64)
-8000 END PROC
-8010 PROC MKGLASS(N)
-8020   LOCAL I
-8030   GFX CLEAR FN W3K_C(9,4)
-8040   FOR I=1 TO 60
-8050     GFX PSET FN W3K_R(64),FN W3K_R(64),FN W3K_C(7,9+FN W3K_R(6))
-8060   NEXT I
-8070   CALL W3K_GRAB(N,64,64)
-8080 END PROC
-8090 PROC MKTEX
-8100   LOCAL I,H
-8110   RANDOMIZE 1987
-8120   CALL W3K_GRASS(334):CALL W3K_SKY(335)
-8130   CALL W3K_BRICK(303,0):CALL W3K_STONE(304,0)
-8140   CALL MKCHAR(302):CALL MKGLASS(330):CALL W3K_STONE(337,0)
-8150   CALL W3K_PLANKS(312):CALL W3K_TILES(313,8,0)
-8160   CALL W3K_WINDOW(331):CALL W3K_DOORTEX(332,12):CALL W3K_DOORTEX(333,0)
-8170   CALL MKFLAT(320,12,12):CALL MKFLAT(321,12,9):CALL MKFLAT(322,12,6):CALL MKFLAT(323,8,8):CALL MKFLAT(324,1,8):CALL MKFLAT(325,0,15):CALL MKFLAT(326,5,7)
-8180 END PROC
-8190 ' the pictures that depend on the house: the outer plaster, the six room colours, the roof
-8200 PROC MKHOUSETEX
-8210   LOCAL I,H,S
-8220   RANDOMIZE SD
-8230   I=INT(FN HR(40,1)*6):IF I>5 THEN I=5
-8240   RESTORE OUTERHUES
-8250   FOR H=0 TO I:READ OHU,OSH:NEXT H
-8260   CALL MKFLAT(301,OHU,OSH)
-8270   RESTORE INNERHUES
-8280   FOR H=0 TO 5
-8290     READ IHU,ISH
-8300     CALL MKFLAT(305+H,IHU,ISH)
-8310   NEXT H
-8320   I=INT(FN HR(40,2)*3):IF I>2 THEN I=2
-8330   H=1:IF I=1 THEN H=12
-8340   IF I=2 THEN H=0
-8350   CALL W3K_TILES(315,H,H)
-8360 END PROC
-8370 ' ---- the whole house
-8380 PROC MAKEHOUSE
-8390   LOCAL I,T0
-8400   T0=TI
-8410   CALL GENHOUSE
-8420   D=DS(STG)
-8430   CALL MKHOUSETEX
-8440   HOLE=(D>=0.5):HS=INT(FN HR(9,1)*4):IF HS>3 THEN HS=3
-8450   IF HT=2 AND HS=3 THEN HS=1
-8460   IF HS<2 THEN HC=LX*(0.3+0.4*FN HR(9,2)) ELSE HC=DY*(0.3+0.4*FN HR(9,2))
-8470   HRAD=8+2*FN HR(9,3):HZC=FLZ(0)+13
-8480   FOR I=1 TO 9:M3D OBJECT I,0,235:NEXT I
-8490   M3D OBJECT 5,16,235:M3D OBJECT 7,21,235:M3D OBJECT 3,0,235
-8500   M3D BOX 1,-2400,-2400,-30,2400,2400,0,334,16
-8510   CALL SHELLS
-8520   FOR I=0 TO RMN(0)-1:CALL ROOMLAYERS(0,I):NEXT I
-8530   FOR I=0 TO RMN(1)-1:CALL ROOMLAYERS(1,I):NEXT I
-8540   CALL GABLES
-8550   CALL SLABS
-8560   CALL STAIRS
-8570   CALL ROOF
-8580   CALL FURNITURE
-8590   CALL RUBBLE
-8600   CALL LEAVES
-8610   BMS=INT((TI-T0)*1000/60)
-8620 END PROC
-8630 PROC STAGENAME
-8640   SN$="INTACT"
-8650   IF STG=1 THEN SN$="SCORCHED"
-8660   IF STG=2 THEN SN$="ROOF BURNT"
-8670   IF STG=3 THEN SN$="FLOORS FELL"
-8680   IF STG=4 THEN SN$="SHELL"
-8690 END PROC
-8700 ' put the viewer in front of the house (CX, CY in dm), looking at it
-8710 PROC CAMENV
-8720   LOCAL A$,P,I
-8730   A$=ENV$("H3_CAM")+","
-8740   FOR I=0 TO 4
-8750     P=INSTR(A$,",")
-8760     CV(I)=VAL(LEFT$(A$,P-1)):A$=MID$(A$,P+1)
-8770   NEXT I
-8780   M3D CAMERA CV(0)*U,CV(1)*U,CV(2)*U,CV(3),CV(4)
-8790 END PROC
-8800 PROC STARTPOS
-8810   LOCAL I,X
-8820   X=LX/2
-8830   FOR I=0 TO WN-1
-8840     IF WIN(I,0)=0 AND WIN(I,1)=0 AND WIN(I,6)=2 THEN X=WIN(I,2)
-8850   NEXT I
-8860   M3D CAMERA X*U,-60*U,0,90
-8870 END PROC
-8880 ' the self test (H3_TEST=1, no graphics, run by engine1999c): the invariants of 100 houses of each type (the generator part: ridge height, rooms, the garage annex with its doors, windows on their walls, furniture inside the rooms); exit status = the number of failures
-8890 PROC SELFTEST3
-8900   LOCAL T,S,I,F,J,NH,NF,BAD,N0,K3,K4,OKF,L1,L2
-8910   NH=0:NF=0
-8920   FOR T=1 TO 2
-8930     HT=T
-8940     FOR S=1 TO 100
-8950       SD=S:CALL GENHOUSE:NH=NH+1:BAD=0
-8960       IF ZR>100 OR ZR<EZ+8 OR EZ>FLZ(1)+34 OR ZR<85 THEN BAD=1
-8970       N0=6:IF HT=2 THEN N0=7
-8980       IF RMN(0)<>N0 OR RMN(1)<>5 THEN BAD=2
-8990       IF HT=2 THEN
-9000         IF RM(0,6,0)<>LX OR RM(0,6,2)<>LX+AI OR RM(0,6,1)<>TW OR RM(0,6,3)<>AY OR AY+4>DY THEN BAD=3
-9010         K3=0:K4=0
-9020         FOR I=0 TO WN-1
-9030           IF WIN(I,6)=3 THEN
-9040             K3=K3+1
-9050             IF WIN(I,1)<>3 OR WIN(I,2)<TW+5 OR WIN(I,2)>AY-5 THEN BAD=4
-9060           END IF
-9070           IF WIN(I,6)=4 THEN
-9080             K4=K4+1
-9090             IF WIN(I,1)<>4 OR WIN(I,2)-WIN(I,3)/2<LX OR WIN(I,2)+WIN(I,3)/2>LX+AI THEN BAD=5
-9100           END IF
-9110           IF WIN(I,0)=0 AND WIN(I,1)=3 AND WIN(I,6)<>3 AND WIN(I,2)-WIN(I,3)/2<AY+TW THEN BAD=6
-9120         NEXT I
-9130         IF K3<>1 OR K4<>1 THEN BAD=7
-9140       ELSE
-9150         FOR I=0 TO WN-1
-9160           IF WIN(I,1)>3 OR WIN(I,6)>2 THEN BAD=8
-9170         NEXT I
-9180       END IF
-9190       FOR F=0 TO 1
-9200         FOR I=0 TO FUN(F)-1
-9210           OKF=0
-9220           FOR J=0 TO RMN(F)-1
-9230             IF FU(F,I,0)>=RM(F,J,0)-0.01 AND FU(F,I,2)<=RM(F,J,2)+0.01 AND FU(F,I,1)>=RM(F,J,1)-0.01 AND FU(F,I,3)<=RM(F,J,3)+0.01 THEN OKF=-1
-9240           NEXT J
-9250           IF NOT OKF THEN BAD=9
-9260         NEXT I
-9270       NEXT F
-9280       IF BAD>0 THEN PRINT "house";S;" type";T;" fails check";BAD:NF=NF+1
-9290     NEXT S
-9300   NEXT T
-9310   PRINT "house3d selftest: ";NH;" houses, ";NF;" failures"
-9320   IF NF>0 THEN BYE 1
-9330   BYE 0
-9340 END PROC
-9350 LABEL MAIN
-9360 IF ENV$("H3_TEST")<>"" THEN CALL SELFTEST3
-9370 DS(0)=0:DS(1)=0.25:DS(2)=0.5:DS(3)=0.75:DS(4)=1
-9380 HT=1:STG=0:SD=1:BMS=0:BFC=63:PTX=301:PTXC=302:PCAT=0:RTX=0:SV1=0:SV2=0:SV3=0:HOLE=0:HS=0:HC=0:HRAD=9:HZC=16:AI=50:AY=55:OPN=0:NL=0:PF=0:PWID=0:WTOP=0:D=0
-9390 IF ENV$("H3_TYPE")<>"" THEN HT=VAL(ENV$("H3_TYPE"))
-9400 IF ENV$("H3_STAGE")<>"" THEN STG=VAL(ENV$("H3_STAGE"))
-9410 IF ENV$("H3_SEED")<>"" THEN SD=VAL(ENV$("H3_SEED"))
-9420 CALL W3K_SETUP:CALL W3K_MESH:M3D RESET
-9430 CALL W3K_VIEW(0,0,640,264,2)
-9440 CALL MKTEX
-9450 M3D COLORMAP
-9460 M3D SKY 335
-9470 M3D FAR 9000
-9480 CALL MAKEHOUSE
-9490 CALL STARTPOS
-9500 IF ENV$("H3_CAM")<>"" THEN
-9510   CALL CAMENV
-9520 END IF
-9530 QF=0
-9540 REPEAT
-9550   CALL W3K_WALK
-9560   K$=INKEY$
-9570   IF K$="q" OR K$="Q" THEN QF=-1
-9580   IF K$>="1" AND K$<="5" THEN STG=VAL(K$)-1:CALL MAKEHOUSE
-9590   IF K$="t" OR K$="T" THEN HT=3-HT:CALL MAKEHOUSE
-9600   IF K$="n" OR K$="N" THEN SD=SD+1:CALL MAKEHOUSE
-9610   IF K$="h" OR K$="H" THEN CALL STARTPOS
-9620   M3D RENDER
-9630   CALL STAGENAME
-9640   GFX TEXT 6,4,"TYPE "+STR$(HT)+"  STAGE "+STR$(STG+1)+" "+SN$+"  SEED "+STR$(SD),FN W3K_C(3,15)
-9650   GFX TEXT 6,14,"1-5 STAGE  T TYPE  N SEED  H HOME  Q QUIT  WASD WALK "+STR$(BMS)+" ms  "+STR$(M3D("DRAWN"))+" drawn",FN W3K_C(0,12)
-9660   CALL W3K_SHOW
-9670 UNTIL QF
-9680 CALL W3K_DONE
-9690 END
-9700 LABEL FAILED
-9710 GFX RESET
-9720 PRINT "Error: ";ERR$;" in line ";ERL
-9730 END
-9740 LABEL OUTERHUES
-9750 DATA 13,12, 3,13, 8,12, 14,12, 5,12, 0,13
-9760 LABEL INNERHUES
-9770 DATA 3,14, 13,13, 4,13, 8,14, 14,13, 0,14
+7460 ' the hip roof (type 3): four planes of one pitch, z = EZ + slope * the distance to the nearest wall, cells of the grid XBK / YBK (the creases run along its diagonals), two triangles a cell
+7470 PROC ROOFHIP
+7480   LOCAL OV,SL,NX,NY,I,J,K,N,X1,X2,Y1,Y2,CX,CY,IX,TX,R,B
+7490   OV=5:SL=(ZR-EZ)/(DY/2)
+7500   NX=0:XBK(0)=-OV:XBK(1)=0:NX=2
+7510   K=10
+7520   WHILE K<DY/2-1
+7530     XBK(NX)=K:NX=NX+1:K=K+10
+7540   WEND
+7550   XBK(NX)=DY/2:NX=NX+1
+7560   N=INT((LX-DY)/12)+1
+7570   FOR I=1 TO N-1
+7580     XBK(NX)=DY/2+(LX-DY)*I/N:NX=NX+1
+7590   NEXT I
+7600   XBK(NX)=LX-DY/2:NX=NX+1
+7610   K=10:WHILE K<DY/2-1:K=K+10:WEND
+7620   K=K-10
+7630   WHILE K>=10
+7640     XBK(NX)=LX-K:NX=NX+1:K=K-10
+7650   WEND
+7660   XBK(NX)=LX:XBK(NX+1)=LX+OV:NX=NX+2
+7670   NY=0:YBK(0)=-OV:YBK(1)=0:NY=2
+7680   K=10
+7690   WHILE K<DY/2-1
+7700     YBK(NY)=K:NY=NY+1:K=K+10
+7710   WEND
+7720   YBK(NY)=DY/2:NY=NY+1
+7730   K=10:WHILE K<DY/2-1:K=K+10:WEND
+7740   K=K-10
+7750   WHILE K>=10
+7760     YBK(NY)=DY-K:NY=NY+1:K=K-10
+7770   WEND
+7780   YBK(NY)=DY:YBK(NY+1)=DY+OV:NY=NY+2
+7790   FOR I=0 TO NX-2
+7800     FOR J=0 TO NY-2
+7810       X1=XBK(I):X2=XBK(I+1):Y1=YBK(J):Y2=YBK(J+1)
+7820       IX=I*40+J:R=FN HR(500,IX)
+7830       IF D<0.3+0.5*R AND D<0.7 THEN
+7840         TX=315:IF FN HR(501,IX)<D*1.5 THEN TX=302
+7850         CX=(X1+X2)/2:CY=(Y1+Y2)/2
+7860         B=M3D("VERTS",5)
+7870         IF (CX<LX/2)=(CY<DY/2) THEN
+7880           M3D VERTEX 5,X1*U,Y1*U,FN HZ(X1,Y1,SL)*U:M3D VERTEX 5,X2*U,Y1*U,FN HZ(X2,Y1,SL)*U:M3D VERTEX 5,X2*U,Y2*U,FN HZ(X2,Y2,SL)*U
+7890           M3D FACE 5,B,B+1,B+2,TX
+7900           M3D VERTEX 5,X1*U,Y1*U,FN HZ(X1,Y1,SL)*U:M3D VERTEX 5,X2*U,Y2*U,FN HZ(X2,Y2,SL)*U:M3D VERTEX 5,X1*U,Y2*U,FN HZ(X1,Y2,SL)*U
+7910           M3D FACE 5,B+3,B+4,B+5,TX
+7920         ELSE
+7930           M3D VERTEX 5,X1*U,Y1*U,FN HZ(X1,Y1,SL)*U:M3D VERTEX 5,X2*U,Y1*U,FN HZ(X2,Y1,SL)*U:M3D VERTEX 5,X1*U,Y2*U,FN HZ(X1,Y2,SL)*U
+7940           M3D FACE 5,B,B+1,B+2,TX
+7950           M3D VERTEX 5,X2*U,Y1*U,FN HZ(X2,Y1,SL)*U:M3D VERTEX 5,X2*U,Y2*U,FN HZ(X2,Y2,SL)*U:M3D VERTEX 5,X1*U,Y2*U,FN HZ(X1,Y2,SL)*U
+7960           M3D FACE 5,B+3,B+4,B+5,TX
+7970         END IF
+7980       END IF
+7990     NEXT J
+8000   NEXT I
+8010 END PROC
+8020 PROC ROOF
+8030   IF HT=3 THEN
+8040     CALL ROOFHIP
+8050     CALL RAFTERS(DY/2,LX-DY/2,DY/2,LX-DY/2)
+8060   ELSE
+8070     CALL ROOFGABLE
+8080     CALL RAFTERS(2,LX-2,-3,LX+3)
+8090   END IF
+8100   ' the chimney stack on the west wall: brick, it stands at every stage
+8110   BFC=63:CALL BXD(2,-6,DY/2-4,0,0,DY/2+4,ZR+5,303)
+8120   IF HT=4 THEN CALL DORMER
+8130 END PROC
+8140 ' ---- furniture
+8150 FUNC FUH(W,H,C)
+8160   LOCAL L,S
+8170   L=MAX(W,H):S=MIN(W,H)
+8180   IF C=54 THEN
+8190     IF L>=15 THEN RETURN 5
+8200     RETURN 8
+8210   END IF
+8220   IF C=53 OR C=42 OR C=58 THEN
+8230     IF L>1.6*S THEN RETURN 8
+8240     RETURN 5
+8250   END IF
+8260   IF L<=4 THEN RETURN 9
+8270   IF S<=4.5 THEN RETURN 17
+8280   IF S<=7.5 AND L>=12 THEN RETURN 9
+8290   RETURN 7.5
+8300 END FUNC
+8310 FUNC FUTEX(C)
+8320   IF C=39 THEN RETURN 320
+8330   IF C=40 THEN RETURN 321
+8340   IF C=41 THEN RETURN 322
+8350   IF C=42 THEN RETURN 323
+8360   IF C=53 THEN RETURN 324
+8370   IF C=54 THEN RETURN 325
+8380   IF C=58 THEN RETURN 326
+8390   RETURN 321
+8400 END FUNC
+8410 PROC FURNITURE
+8420   LOCAL F,I,X1,Y1,X2,Y2,C,H,T,R,OK,CX,CY
+8430   FOR F=0 TO 1
+8440     FOR I=0 TO FUN(F)-1
+8450       X1=FU(F,I,0):Y1=FU(F,I,1):X2=FU(F,I,2):Y2=FU(F,I,3):C=FUC(F,I)
+8460       OK=-1
+8470       CX=(X1+X2)/2:CY=(Y1+Y2)/2
+8480       IF F=1 THEN
+8490         IF NOT (D<0.55+0.4*FN HR(1000+INT(CX/12),INT(CY/12))) THEN OK=0
+8500       END IF
+8510       IF D>0.4 THEN
+8520         IF FN HR(700+F,I)>1.25-D*0.9 THEN OK=0
+8530       END IF
+8540       IF OK THEN
+8550         H=FN FUH(X2-X1,Y2-Y1,C)
+8560         T=FN FUTEX(C):IF FN HR(710+F,I)<D*1.3 THEN T=302
+8570         BFC=63:CALL BXD(6,X1,Y1,FLZ(F),X2,Y2,FLZ(F)+H,T)
+8580       END IF
+8590     NEXT I
+8600   NEXT F
+8610 END PROC
+8620 ' ---- debris on the ground floor where the ceilings fell
+8630 PROC RUBBLE
+8640   LOCAL I,N,R,X,Y,W,H,L,K,F
+8650   IF D<0.7 THEN EXIT PROC
+8660   N=INT((D-0.5)*70)
+8670   FOR I=0 TO N-1
+8680     R=INT(FN HR(800,I)*RMN(0)):IF R>=RMN(0) THEN R=RMN(0)-1
+8690     IF RM(0,R,4)<>10 OR FN HR(801,I)<0.4 THEN
+8700       X=RM(0,R,0)+2+FN HR(802,I)*(RM(0,R,2)-RM(0,R,0)-4):Y=RM(0,R,1)+2+FN HR(803,I)*(RM(0,R,3)-RM(0,R,1)-4)
+8710       IF FN HR(804,I)<0.35 THEN
+8720         L=15+FN HR(805,I)*15
+8730         IF FN HR(806,I)<0.5 THEN BFC=63:CALL BXD(8,X,Y,FLZ(0),X+L,Y+1.3,FLZ(0)+1.3,302) ELSE BFC=63:CALL BXD(8,X,Y,FLZ(0),X+1.3,Y+L,FLZ(0)+1.3,302)
+8740       ELSE
+8750         W=3+FN HR(807,I)*6:H=3+FN HR(808,I)*6:K=1+FN HR(809,I)*3
+8760         IF FN HR(810,I)<0.5 THEN F=302 ELSE F=337
+8770         BFC=63:CALL BXD(8,X,Y,FLZ(0),X+W,Y+H,FLZ(0)+K,F)
+8780       END IF
+8790     END IF
+8800   NEXT I
+8810 END PROC
+8820 ' ---- windows and doors: flat quads in the openings (frames with see-through panes, doors ajar); present while the fire has not taken them
+8830 ' the dormer of type 4 on the south slope, with a window, and the porch over the front door (posts and a canopy)
+8840 PROC DORMER
+8850   LOCAL SL,DX,DW,YF,ZR0,ZT,YB,R,T,B
+8860   IF D>0.6 THEN EXIT PROC
+8870   SL=(ZR-EZ)/(DY/2)
+8880   DX=LX*(0.4+0.2*FN HR(190,1)):DW=18:YF=9
+8890   ZR0=EZ+SL*YF:ZT=MIN(ZR0+14,ZR-6):YB=(ZT-EZ)/SL
+8900   T=301:IF FN HR(191,1)<D*1.4 THEN T=302
+8910   BFC=63:CALL BXD(2,DX-DW/2,YF,ZR0-1,DX+DW/2,YF+1.5,ZR0+3,T)
+8920   BFC=63:CALL BXD(2,DX-DW/2,YF,ZT-3,DX+DW/2,YF+1.5,ZT,T)
+8930   BFC=63:CALL BXD(2,DX-DW/2,YF,ZR0+3,DX-DW/2+2,YF+1.5,ZT-3,T)
+8940   BFC=63:CALL BXD(2,DX+DW/2-2,YF,ZR0+3,DX+DW/2,YF+1.5,ZT-3,T)
+8950   BFC=63:CALL BXD(2,DX-DW/2,YF,ZR0-1,DX-DW/2+1.2,YB+1,ZT,T)
+8960   BFC=63:CALL BXD(2,DX+DW/2-1.2,YF,ZR0-1,DX+DW/2,YB+1,ZT,T)
+8970   T=315:IF FN HR(192,1)<D*1.5 THEN T=302
+8980   IF D<0.5+0.3*FN HR(193,1) THEN BFC=63:CALL BXD(2,DX-DW/2-1.5,YF-1.5,ZT,DX+DW/2+1.5,YB+1.5,ZT+1.2,T)
+8990   IF D<0.3+0.5*FN HR(194,1) THEN
+9000     B=M3D("VERTS",7)
+9010     M3D VERTEX 7,(DX-DW/2+2)*U,(YF+0.75)*U,(ZT-3)*U,0,0:M3D VERTEX 7,(DX+DW/2-2)*U,(YF+0.75)*U,(ZT-3)*U,64,0:M3D VERTEX 7,(DX+DW/2-2)*U,(YF+0.75)*U,(ZR0+3)*U,64,96:M3D VERTEX 7,(DX-DW/2+2)*U,(YF+0.75)*U,(ZR0+3)*U,0,96
+9020     M3D QUAD 7,B,B+1,B+2,B+3,331
+9030   END IF
+9040 END PROC
+9050 PROC PORCH
+9060   LOCAL P0,I,T,X
+9070   P0=FN FRONTX()
+9080   BFC=63:CALL BXD(4,P0-14,-14,0,P0+14,0.5,FLZ(0)-0.4,304)
+9090   FOR I=0 TO 1
+9100     IF FN HR(195,I)>D*0.5 THEN
+9110       T=301:IF FN HR(196,I)<D*1.4 THEN T=302
+9120       X=P0-13+I*24
+9130       BFC=63:CALL BXD(2,X,-13,FLZ(0)-0.4,X+2,-11,FLZ(0)+22.5,T)
+9140     END IF
+9150   NEXT I
+9160   IF D<0.5+0.3*FN HR(197,1) AND D<0.7 THEN
+9170     T=315:IF FN HR(198,1)<D*1.5 THEN T=302
+9180     BFC=63:CALL BXD(2,P0-15,-15,FLZ(0)+22.5,P0+15,1,FLZ(0)+24.3,T)
+9190   END IF
+9200 END PROC
+9210 ' the bay window of type 5 on the front: two storeys, cheeks and a front with a window, a flat roof
+9220 PROC BAY
+9230   LOCAL F,Z1,Z2,B,T
+9240   FOR F=0 TO 1
+9250     PF=F:Z1=FLZ(F):Z2=FLZ(F)+26
+9260     IF F=0 THEN Z1=0:Z2=FLZ(1)
+9270     WTOP=FLZ(F)+26:PWID=170+F*5
+9280     PTX=301:PTXC=302:PCAT=0
+9290     CALL PIECE(2,1,BX1-1.5,BX1,-9,0,Z1,Z2)
+9300     PWID=PWID+1:CALL PIECE(2,1,BX2,BX2+1.5,-9,0,Z1,Z2)
+9310     PWID=PWID+1:CALL PIECE(2,0,-9,-7.5,BX1-1.5,BX2+1.5,Z1,FLZ(F)+3)
+9320     PWID=PWID+1:CALL PIECE(2,0,-9,-7.5,BX1-1.5,BX2+1.5,FLZ(F)+22,Z2)
+9330     BFC=63:CALL BXD(4,BX1-1.5,-9,FLZ(F)-3,BX2+1.5,0,FLZ(F)-0.4,304)
+9340     BFC=16:CALL BXD(4,BX1,-7.5,FLZ(F)-0.4,BX2,0,FLZ(F),312)
+9350     IF D<0.3+0.5*FN HR(180,F) AND D<0.7 THEN
+9360       B=M3D("VERTS",7)
+9370       M3D VERTEX 7,BX1*U,-8*U,(FLZ(F)+22)*U,0,0:M3D VERTEX 7,BX2*U,-8*U,(FLZ(F)+22)*U,64,0:M3D VERTEX 7,BX2*U,-8*U,(FLZ(F)+3)*U,64,96:M3D VERTEX 7,BX1*U,-8*U,(FLZ(F)+3)*U,0,96
+9380       M3D QUAD 7,B,B+1,B+2,B+3,331
+9390     END IF
+9400   NEXT F
+9410   IF D<0.5+0.3*FN HR(181,0) AND D<0.7 THEN
+9420     T=315:IF FN HR(182,0)<D*1.5 THEN T=302
+9430     BFC=63:CALL BXD(4,BX1-2.5,-10.5,FLZ(1)+26,BX2+2.5,0.5,FLZ(1)+28.6,T)
+9440   END IF
+9450 END PROC
+9460 PROC LEAF(S,PP,W,Z1,Z2,TX)
+9470   LOCAL B,X1,X2,Y1,Y2,PLN
+9480   PLN=2
+9490   IF S=0 OR S=4 THEN
+9500     B=M3D("VERTS",7)
+9510     M3D VERTEX 7,(PP-W/2)*U,PLN*U,Z2*U,0,0:M3D VERTEX 7,(PP+W/2)*U,PLN*U,Z2*U,64,0:M3D VERTEX 7,(PP+W/2)*U,PLN*U,Z1*U,64,96:M3D VERTEX 7,(PP-W/2)*U,PLN*U,Z1*U,0,96
+9520   END IF
+9530   IF S=1 OR S=6 OR S=9 THEN
+9540     IF S=1 THEN PLN=DY-2
+9550     IF S=6 THEN PLN=AY+2
+9560     IF S=9 THEN PLN=DY+EXY+2
+9570     B=M3D("VERTS",7)
+9580     M3D VERTEX 7,(PP-W/2)*U,PLN*U,Z2*U,0,0:M3D VERTEX 7,(PP+W/2)*U,PLN*U,Z2*U,64,0:M3D VERTEX 7,(PP+W/2)*U,PLN*U,Z1*U,64,96:M3D VERTEX 7,(PP-W/2)*U,PLN*U,Z1*U,0,96
+9590   END IF
+9600   IF S=2 OR S=3 OR S=5 OR S=7 OR S=8 THEN
+9610     IF S=3 THEN PLN=LX-2
+9620     IF S=5 THEN PLN=LX+AI+2
+9630     IF S=7 THEN PLN=EXX1-2
+9640     IF S=8 THEN PLN=EXX2+2
+9650     B=M3D("VERTS",7)
+9660     M3D VERTEX 7,PLN*U,(PP-W/2)*U,Z2*U,0,0:M3D VERTEX 7,PLN*U,(PP+W/2)*U,Z2*U,64,0:M3D VERTEX 7,PLN*U,(PP+W/2)*U,Z1*U,64,96:M3D VERTEX 7,PLN*U,(PP-W/2)*U,Z1*U,0,96
+9670   END IF
+9680   M3D QUAD 7,B,B+1,B+2,B+3,TX
+9690 END PROC
+9700 ' a door leaf hinged at (HX0, HY0), W wide, TH degrees open from the closed position along the wall (AX 0: the wall runs along y, 1: along x)
+9710 PROC DOORLEAF(AX,HX0,HY0,W,TH,Z1,Z2,TX)
+9720   LOCAL B,DX,DYY,A
+9730   A=TH*PI/180
+9740   IF AX=0 THEN DX=W*SIN(A):DYY=W*COS(A) ELSE DX=W*COS(A):DYY=W*SIN(A)
+9750   B=M3D("VERTS",7)
+9760   M3D VERTEX 7,HX0*U,HY0*U,Z2*U,0,0:M3D VERTEX 7,(HX0+DX)*U,(HY0+DYY)*U,Z2*U,64,0:M3D VERTEX 7,(HX0+DX)*U,(HY0+DYY)*U,Z1*U,64,128:M3D VERTEX 7,HX0*U,HY0*U,Z1*U,0,128
+9770   M3D QUAD 7,B,B+1,B+2,B+3,TX
+9780 END PROC
+9790 PROC LEAVES
+9800   LOCAL I,F,S,PP,W,Z1,Z2,K,R,TH
+9810   FOR I=0 TO WN-1
+9820     F=WIN(I,0):S=WIN(I,1):PP=WIN(I,2):W=WIN(I,3):K=WIN(I,6)
+9830     Z1=FLZ(F)+WIN(I,4):Z2=FLZ(F)+WIN(I,5)
+9840     R=FN HR(600,I)
+9850     IF D<0.3+0.5*R AND D<0.7 THEN
+9860       IF K=0 OR K=1 THEN CALL LEAF(S,PP,W,Z1,Z2,331)
+9870       IF K=4 THEN CALL LEAF(S,PP,W,Z1,Z2,333)
+9880       IF K=2 OR K=3 THEN
+9890         TH=80+FN HR(601,I)*12
+9900         IF S=0 THEN CALL DOORLEAF(1,PP-W/2,2,W,TH,Z1,Z2,332)
+9910         IF S=3 THEN CALL DOORLEAF(0,LX-2,PP-W/2,W,TH,Z1,Z2,332)
+9920         IF S=1 THEN CALL DOORLEAF(1,PP-W/2,DY-2,W,TH,Z1,Z2,332)
+9930       END IF
+9940     END IF
+9950   NEXT I
+9960   FOR F=0 TO 1
+9970     FOR I=0 TO DON(F)-1
+9980       IF D<0.45+0.5*FN HR(620+F,I) AND D<0.75 THEN
+9990         TH=60+FN HR(630+F,I)*35
+10000         IF DOR(F,I,0)=0 THEN CALL DOORLEAF(0,DOR(F,I,1)+0.5,DOR(F,I,2)-DOR(F,I,3)/2,DOR(F,I,3),TH,FLZ(F),FLZ(F)+21,332)
+10010         IF DOR(F,I,0)=1 THEN CALL DOORLEAF(1,DOR(F,I,1)-DOR(F,I,3)/2,DOR(F,I,2)+0.5,DOR(F,I,3),TH,FLZ(F),FLZ(F)+21,332)
+10020       END IF
+10030     NEXT I
+10040   NEXT F
+10050 END PROC
+10060 ' ---- the pictures
+10070 PROC MKFLAT(N,H,S)
+10080   LOCAL I
+10090   GFX CLEAR FN W3K_C(H,S)
+10100   FOR I=1 TO 140
+10110     GFX PSET FN W3K_R(64),FN W3K_R(64),FN W3K_C(H,FN CLP(S-2+FN W3K_R(5),1,15))
+10120   NEXT I
+10130   CALL W3K_GRAB(N,64,64)
+10140 END PROC
+10150 PROC MKCHAR(N)
+10160   LOCAL I
+10170   GFX CLEAR FN W3K_C(0,1)
+10180   FOR I=1 TO 260
+10190     GFX PSET FN W3K_R(64),FN W3K_R(64),FN W3K_C(0,FN W3K_R(5))
+10200   NEXT I
+10210   FOR I=1 TO 30
+10220     GFX PSET FN W3K_R(64),FN W3K_R(64),FN W3K_C(12,2+FN W3K_R(3))
+10230   NEXT I
+10240   CALL W3K_GRAB(N,64,64)
+10250 END PROC
+10260 PROC MKGLASS(N)
+10270   LOCAL I
+10280   GFX CLEAR FN W3K_C(9,4)
+10290   FOR I=1 TO 60
+10300     GFX PSET FN W3K_R(64),FN W3K_R(64),FN W3K_C(7,9+FN W3K_R(6))
+10310   NEXT I
+10320   CALL W3K_GRAB(N,64,64)
+10330 END PROC
+10340 PROC MKTEX
+10350   LOCAL I,H
+10360   RANDOMIZE 1987
+10370   CALL W3K_GRASS(334):CALL W3K_SKY(335)
+10380   CALL W3K_BRICK(303,0):CALL W3K_STONE(304,0)
+10390   CALL MKCHAR(302):CALL MKGLASS(330):CALL W3K_STONE(337,0)
+10400   CALL W3K_PLANKS(312):CALL W3K_TILES(313,8,0)
+10410   CALL W3K_WINDOW(331):CALL W3K_DOORTEX(332,12):CALL W3K_DOORTEX(333,0)
+10420   CALL MKFLAT(320,12,12):CALL MKFLAT(321,12,9):CALL MKFLAT(322,12,6):CALL MKFLAT(323,8,8):CALL MKFLAT(324,1,8):CALL MKFLAT(325,0,15):CALL MKFLAT(326,5,7)
+10430 END PROC
+10440 ' the pictures that depend on the house: the outer plaster, the six room colours, the roof
+10450 PROC MKHOUSETEX
+10460   LOCAL I,H,S
+10470   RANDOMIZE SD
+10480   I=INT(FN HR(40,1)*6):IF I>5 THEN I=5
+10490   RESTORE OUTERHUES
+10500   FOR H=0 TO I:READ OHU,OSH:NEXT H
+10510   CALL MKFLAT(301,OHU,OSH)
+10520   RESTORE INNERHUES
+10530   FOR H=0 TO 5
+10540     READ IHU,ISH
+10550     CALL MKFLAT(305+H,IHU,ISH)
+10560   NEXT H
+10570   I=INT(FN HR(40,2)*3):IF I>2 THEN I=2
+10580   H=1:IF I=1 THEN H=12
+10590   IF I=2 THEN H=0
+10600   CALL W3K_TILES(315,H,H)
+10610 END PROC
+10620 ' ---- the whole house
+10630 PROC MAKEHOUSE
+10640   LOCAL I,T0
+10650   T0=TI
+10660   CALL GENHOUSE
+10670   D=DS(STG)
+10680   CALL MKHOUSETEX
+10690   HOLE=(D>=0.5):HS=INT(FN HR(9,1)*4):IF HS>3 THEN HS=3
+10700   IF HT=2 AND HS=3 THEN HS=1
+10710   IF HT=4 AND HS=0 THEN HS=1
+10720   IF HT=5 THEN HS=2+(HS AND 1)
+10730   IF HS<2 THEN HC=LX*(0.3+0.4*FN HR(9,2)) ELSE HC=DY*(0.3+0.4*FN HR(9,2))
+10740   HRAD=8+2*FN HR(9,3):HZC=FLZ(0)+13
+10750   FOR I=1 TO 9:M3D OBJECT I,0,235:NEXT I
+10760   M3D OBJECT 5,16,235:M3D OBJECT 7,21,235:M3D OBJECT 3,0,235
+10770   M3D BOX 1,-2400,-2400,-30,2400,2400,0,334,16
+10780   CALL SHELLS
+10790   FOR I=0 TO RMN(0)-1:CALL ROOMLAYERS(0,I):NEXT I
+10800   FOR I=0 TO RMN(1)-1:CALL ROOMLAYERS(1,I):NEXT I
+10810   CALL GABLES
+10820   CALL SLABS
+10830   CALL STAIRS
+10840   CALL ROOF
+10850   IF HT=4 THEN CALL PORCH
+10860   IF HT=5 THEN CALL BAY
+10870   CALL FURNITURE
+10880   CALL RUBBLE
+10890   CALL LEAVES
+10900   BMS=INT((TI-T0)*1000/60)
+10910 END PROC
+10920 PROC STAGENAME
+10930   SN$="INTACT"
+10940   IF STG=1 THEN SN$="SCORCHED"
+10950   IF STG=2 THEN SN$="ROOF BURNT"
+10960   IF STG=3 THEN SN$="FLOORS FELL"
+10970   IF STG=4 THEN SN$="SHELL"
+10980 END PROC
+10990 ' put the viewer in front of the house (CX, CY in dm), looking at it
+11000 PROC CAMENV
+11010   LOCAL A$,P,I
+11020   A$=ENV$("H3_CAM")+","
+11030   FOR I=0 TO 4
+11040     P=INSTR(A$,",")
+11050     CV(I)=VAL(LEFT$(A$,P-1)):A$=MID$(A$,P+1)
+11060   NEXT I
+11070   M3D CAMERA CV(0)*U,CV(1)*U,CV(2)*U,CV(3),CV(4)
+11080 END PROC
+11090 PROC STARTPOS
+11100   M3D CAMERA FN FRONTX()*U,-60*U,0,90
+11110 END PROC
+11120 ' the self test (H3_TEST=1, no graphics, run by engine1999c): the invariants of 100 houses of each of the five types (the generator part: ridge height, rooms, the garage annex of type 2 and the bay window and extension of type 5 with their doors and windows, windows on their walls, furniture inside the rooms); exit status = the number of failures
+11130 PROC SELFTEST3
+11140   LOCAL T,S,I,F,J,NH,NF,BAD,N0,K3,K4,K5,OKF,KT
+11150   NH=0:NF=0
+11160   FOR T=1 TO 5
+11170     HT=T
+11180     FOR S=1 TO 100
+11190       SD=S:CALL GENHOUSE:NH=NH+1:BAD=0
+11200       IF ZR>100 OR ZR<EZ+8 OR EZ>FLZ(1)+34 OR ZR<85 THEN BAD=1
+11210       N0=6:IF HT=2 OR HT=5 THEN N0=7
+11220       IF RMN(0)<>N0 OR RMN(1)<>5 THEN BAD=2
+11230       K3=0:K4=0:K5=0:KT=0
+11240       FOR I=0 TO WN-1
+11250         IF WIN(I,6)=3 THEN K3=K3+1
+11260         IF WIN(I,6)=4 THEN K4=K4+1
+11270         IF WIN(I,6)=5 THEN K5=K5+1
+11280         IF WIN(I,6)=1 AND WIN(I,1)=9 THEN KT=KT+1
+11290         IF WIN(I,1)>3 AND HT<>2 AND HT<>5 THEN BAD=8
+11300       NEXT I
+11310       IF HT=2 THEN
+11320         IF RM(0,6,0)<>LX OR RM(0,6,2)<>LX+AI OR RM(0,6,1)<>TW OR RM(0,6,3)<>AY OR AY+4>DY THEN BAD=3
+11330         FOR I=0 TO WN-1
+11340           IF WIN(I,6)=3 THEN
+11350             IF WIN(I,1)<>3 OR WIN(I,2)<TW+5 OR WIN(I,2)>AY-5 THEN BAD=4
+11360           END IF
+11370           IF WIN(I,6)=4 THEN
+11380             IF WIN(I,1)<>4 OR WIN(I,2)-WIN(I,3)/2<LX OR WIN(I,2)+WIN(I,3)/2>LX+AI THEN BAD=5
+11390           END IF
+11400           IF WIN(I,0)=0 AND WIN(I,1)=3 AND WIN(I,6)<>3 AND WIN(I,2)-WIN(I,3)/2<AY+TW THEN BAD=6
+11410         NEXT I
+11420         IF K3<>1 OR K4<>1 THEN BAD=7
+11430       END IF
+11440       IF HT=5 THEN
+11450         IF RM(0,6,1)<>DY OR RM(0,6,3)<>DY+EXY OR RM(0,6,0)<>EXX1 OR RM(0,6,2)<>EXX2 OR EXX1<TW+4 OR EXX2>LX-TW-4 THEN BAD=3
+11460         IF K3<>1 OR K5<>2 OR KT<>1 THEN BAD=7
+11470         FOR I=0 TO WN-1
+11480           IF WIN(I,6)=3 THEN
+11490             IF WIN(I,1)<>1 OR WIN(I,2)<EXX1+5 OR WIN(I,2)>EXX2-5 THEN BAD=4
+11500           END IF
+11510           IF WIN(I,6)=5 THEN
+11520             IF WIN(I,1)<>0 OR WIN(I,2)-WIN(I,3)/2<TW OR WIN(I,3)<8 THEN BAD=5
+11530           END IF
+11540           IF WIN(I,6)<>5 AND WIN(I,1)=0 AND WIN(I,2)+WIN(I,3)/2>BX1-1 AND WIN(I,2)-WIN(I,3)/2<BX2+1 THEN BAD=6
+11550           IF WIN(I,6)<>3 AND WIN(I,0)=0 AND WIN(I,1)=1 AND WIN(I,2)+WIN(I,3)/2>EXX1-4 AND WIN(I,2)-WIN(I,3)/2<EXX2+4 THEN BAD=6
+11560         NEXT I
+11570       END IF
+11580       FOR F=0 TO 1
+11590         FOR I=0 TO FUN(F)-1
+11600           OKF=0
+11610           FOR J=0 TO RMN(F)-1
+11620             IF FU(F,I,0)>=RM(F,J,0)-0.01 AND FU(F,I,2)<=RM(F,J,2)+0.01 AND FU(F,I,1)>=RM(F,J,1)-0.01 AND FU(F,I,3)<=RM(F,J,3)+0.01 THEN OKF=-1
+11630           NEXT J
+11640           IF NOT OKF THEN BAD=9
+11650         NEXT I
+11660       NEXT F
+11670       IF BAD>0 THEN PRINT "house";S;" type";T;" fails check";BAD:NF=NF+1
+11680     NEXT S
+11690   NEXT T
+11700   PRINT "house3d selftest: ";NH;" houses, ";NF;" failures"
+11710   IF NF>0 THEN BYE 1
+11720   BYE 0
+11730 END PROC
+11740 LABEL MAIN
+11750 IF ENV$("H3_TEST")<>"" THEN CALL SELFTEST3
+11760 DS(0)=0:DS(1)=0.25:DS(2)=0.5:DS(3)=0.75:DS(4)=1
+11770 HT=1:STG=0:SD=1:BMS=0:BFC=63:PTX=301:PTXC=302:PCAT=0:RTX=0:SV1=0:SV2=0:SV3=0:HOLE=0:HS=0:HC=0:HRAD=9:HZC=16:AI=50:AY=55:OPN=0:NL=0:PF=0:PWID=0:WTOP=0:D=0
+11780 IF ENV$("H3_TYPE")<>"" THEN HT=VAL(ENV$("H3_TYPE"))
+11790 IF ENV$("H3_STAGE")<>"" THEN STG=VAL(ENV$("H3_STAGE"))
+11800 IF ENV$("H3_SEED")<>"" THEN SD=VAL(ENV$("H3_SEED"))
+11810 CALL W3K_SETUP:CALL W3K_MESH:M3D RESET
+11820 CALL W3K_VIEW(0,0,640,264,2)
+11830 CALL MKTEX
+11840 M3D COLORMAP
+11850 M3D SKY 335
+11860 M3D FAR 9000
+11870 CALL MAKEHOUSE
+11880 CALL STARTPOS
+11890 IF ENV$("H3_CAM")<>"" THEN
+11900   CALL CAMENV
+11910 END IF
+11920 QF=0
+11930 REPEAT
+11940   CALL W3K_WALK
+11950   K$=INKEY$
+11960   IF K$="q" OR K$="Q" THEN QF=-1
+11970   IF K$>="1" AND K$<="5" THEN STG=VAL(K$)-1:CALL MAKEHOUSE
+11980   IF K$="t" OR K$="T" THEN HT=HT MOD 5+1:CALL MAKEHOUSE
+11990   IF K$="n" OR K$="N" THEN SD=SD+1:CALL MAKEHOUSE
+12000   IF K$="h" OR K$="H" THEN CALL STARTPOS
+12010   M3D RENDER
+12020   CALL STAGENAME
+12030   GFX TEXT 6,4,"TYPE "+STR$(HT)+"  STAGE "+STR$(STG+1)+" "+SN$+"  SEED "+STR$(SD),FN W3K_C(3,15)
+12040   GFX TEXT 6,14,"1-5 STAGE  T TYPE  N SEED  H HOME  Q QUIT  WASD WALK "+STR$(BMS)+" ms  "+STR$(M3D("DRAWN"))+" drawn",FN W3K_C(0,12)
+12050   CALL W3K_SHOW
+12060 UNTIL QF
+12070 CALL W3K_DONE
+12080 END
+12090 LABEL FAILED
+12100 GFX RESET
+12110 PRINT "Error: ";ERR$;" in line ";ERL
+12120 END
+12130 LABEL OUTERHUES
+12140 DATA 13,12, 3,13, 8,12, 14,12, 5,12, 0,13
+12150 LABEL INNERHUES
+12160 DATA 3,14, 13,13, 4,13, 8,14, 14,13, 0,14
