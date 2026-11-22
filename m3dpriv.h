@@ -140,6 +140,8 @@ typedef struct {
     int    post[3];
     bool   bales;                           // hay bales in the fields (the 4th argument of M3D POSTPIC)
     int    bale;
+    bool   houses;                          // settlements along the tarred roads (set by M3D HOUSEPIC): the pictures of the materials (-1: a plain colour) and the sizes of those that are pictures
+    int    hpic[18], hpw[18], hph[18];
     double level, rockh;                    // the water level and the height above which ground is rock
 } ringpic_t;
 

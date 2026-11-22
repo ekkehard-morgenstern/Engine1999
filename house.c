@@ -512,6 +512,7 @@ static const double sdx[4] = { 0, 0, -1, 1 }, sdy[4] = { -1, 1, 0, 0 };         
 
 // a vertical rectangle on a wall: the side, the plane's coordinate, the range along the wall, the heights, pushed off the wall by off (dm)
 static void wface( mb_t* b, int side, double plane, double a1, double a2, double z1, double z2, int mat, double off ) {
+    if ( ( mat == HM_GLASS || mat == HM_FRAME ) && b->stage >= 3 ) { return; }    // the windows are gone from stage 3 on
     double pl = plane + off * ( side == 0 || side == 2 ? -1.0 : 1.0 ), p[4][3];
     for ( int k = 0; k < 4; ++k ) {
         double a = k == 0 || k == 3 ? a1 : a2, z = k < 2 ? z1 : z2;

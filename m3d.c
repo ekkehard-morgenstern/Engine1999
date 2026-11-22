@@ -548,6 +548,29 @@ double m3d_ground( const m3d_t* m, double x, double y ) {
     return m3d_ground_eval( &m->gnd, x, y );
 }
 
+// the pictures (or palette colours) of the materials of a house: the plain colours as palette indices of the 16-shade hue ramps (index = 16 + 16 * hue + shade, the palette of
+// demos/lib/w3dkit.lib; the engine's own colors are only pictures < 256), the pictures of M3D HOUSEPIC where one is set and defined (pic[], and the size pw[] x ph[] of a picture
+// >= 256, 0 where it is not defined); mw / mh are the size of the picture of the material, 0 for a plain colour
+static void house_mats( const int pic[18], const int pw[18], const int ph[18], int plasterc, int roofcc, int mat[HM_NMAT], int mw[HM_NMAT], int mh[HM_NMAT] ) {
+    static const int plaster[6] = { 16 + 16 * 13 + 12, 16 + 16 * 3 + 13, 16 + 16 * 8 + 12, 16 + 16 * 14 + 12, 16 + 16 * 5 + 12, 16 + 0 * 16 + 13 };
+    static const int roofc[3] = { 16 + 16 * 1 + 10, 16 + 16 * 12 + 10, 16 + 0 * 16 + 10 };
+    mat[HM_PLASTER] = plaster[plasterc]; mat[HM_CHAR] = 16 + 2; mat[HM_BRICK] = 16 + 8; mat[HM_ROOF] = roofc[roofcc]; mat[HM_GLASS] = 16 + 16 * 9 + 3;
+    mat[HM_DOOR] = 16 + 16 * 12 + 6; mat[HM_WOOD] = 16 + 16 * 12 + 8; mat[HM_CONCRETE] = 16 + 9; mat[HM_RIM] = 16 + 16 * 7 + 12; mat[HM_GARAGE] = 16 + 8;
+    mat[HM_FRAME] = 16 + 16 * 12 + 10;
+    int slot[HM_NMAT];
+    slot[HM_PLASTER] = plasterc; slot[HM_ROOF] = 6 + roofcc; slot[HM_CHAR] = 9; slot[HM_BRICK] = 10; slot[HM_GLASS] = 11; slot[HM_DOOR] = 12; slot[HM_WOOD] = 13;
+    slot[HM_CONCRETE] = 14; slot[HM_RIM] = 15; slot[HM_GARAGE] = 16; slot[HM_FRAME] = 17;
+    for ( int k = 0; k < HM_NMAT; ++k ) {
+        int p = pic[slot[k]];
+        mw[k] = mh[k] = 0;
+        if ( p >= 256 && pw[slot[k]] > 0 ) { mat[k] = p; mw[k] = pw[slot[k]]; mh[k] = ph[slot[k]]; }
+        else if ( p >= 0 && p < 256 ) { mat[k] = p; }
+    }
+}
+
+// picture coordinates from the position, by the direction of the face (see obj_addt)
+static void auto_uv( double nx, double ny, double nz, double x, double y, double z, double* u, double* v );
+
 // -- asynchronous ground jobs: M3D RING (a worker thread makes the ground meshes while the program goes on) ----------------------------------------------------------------
 /*
 A job makes the whole mesh of one object: a square grid of cells from the ground function (a hole of cells may be left out: the finer grid inside), pictures chosen by a rule in C
@@ -1021,9 +1044,115 @@ static void job_wbales( tjob_t* j ) {
     }
 }
 
+// -- the settlements of the static world ---------------------------------------------------------------------------------------------------------------------------------------
+/*
+The tarred roads are cut into stretches of 200 m (6250 units) counted from the start of each road (so every cell finds the same ones); a stretch holds a settlement with a chance of
+25 % (hashed from the world seed and the road): up to six houses, three on each side in turn, their fronts 520 units from the middle of the road, turned to face it (house type and
+seed from the hash). A house is left out where it would stand on water, rock, a steep slope, in a forest, near another road or an intersection, or in the quiet box of the home. The
+damage grows with the distance from the middle of the world (the player's home area is not destroyed yet): stage = (distance / 40 km * 4.4 + hash * 0.9 - 0.45) cut to 0 .. 4.
+The cell (a chunk, level WL_HOUSE) holds the middle level meshes of the houses whose front lies in it, in world coordinates (one object, no morphing).
+*/
+#define HOUSE_SEG   6250.0
+#define HOUSE_SET   0.25
+#define HOUSE_DMGR  1.25e6
+
+static bool job_house( tjob_t* j, house_t* hh, double fx, double fy, double nx, double ny, int type, int64_t seed, double hr_ ) {
+    house_gen( hh, type, seed );
+    double ya[2] = { nx, ny }, xa[2] = { ny, -nx };                          // the house's +y runs away from the road, its +x along it
+    double w = hh->lx * 3.125, d = hh->dy * 3.125;
+    double ox = fx - xa[0] * w * 0.5, oy = fy - xa[1] * w * 0.5;
+    double zmin = 1.0e9, zmax = -1.0e9;
+    for ( int q = 0; q < 5; ++q ) {                                        // the four corners and the middle
+        double lx = q == 4 ? w * 0.5 : ( q & 1 ) ? w : 0.0, ly = q == 4 ? d * 0.5 : ( q & 2 ) ? d : 0.0;
+        double h = job_height( j, ox + xa[0] * lx + ya[0] * ly, oy + xa[1] * lx + ya[1] * ly );
+        zmin = fmin( zmin, h ); zmax = fmax( zmax, h );
+    }
+    if ( !( zmin > j->pic.level + 3.0 && zmax < j->pic.rockh - 60.0 ) || zmax - zmin > 60.0 ) { return true; }
+    double cx = ox + xa[0] * w * 0.5 + ya[0] * d * 0.5, cy = oy + xa[1] * w * 0.5 + ya[1] * d * 0.5;
+    if ( rnet_kind( &j->gnd.net, cx, cy ) == 3 ) { return true; }
+    rnear_t rn;
+    rnet_near( &j->gnd.net, cx, cy, 700.0, &rn );
+    if ( rn.dirt < 420.0 || rn.tar < 560.0 ) { return true; }
+    double t = hypot( cx, cy ) / HOUSE_DMGR * 4.4 + hr_ * 0.9 - 0.45;
+    int stage = t < 0.0 ? 0 : t > 4.0 ? 4 : (int) floor( t );
+    hmesh_t hm;
+    if ( !house_mesh( hh, stage, 1, &hm ) ) { return false; }
+    int mat[HM_NMAT], mw[HM_NMAT], mh[HM_NMAT];
+    house_mats( j->pic.hpic, j->pic.hpw, j->pic.hph, hm.plaster, hm.roofc, mat, mw, mh );
+    int base = j->nv;
+    bool ok = true;
+    double z0 = zmin - 2.0;
+    for ( int k = 0; k < hm.nv && ok; ++k ) {
+        double lx = hm.v[k].x, ly = hm.v[k].y;
+        ok = jv_addm( j, ox + xa[0] * lx + ya[0] * ly, oy + xa[1] * lx + ya[1] * ly, z0 + hm.v[k].z, -1.0e9, -1.0e9, 0.0 ) >= 0;
+    }
+    for ( int k = 0; k < hm.nt && ok; ++k ) {
+        int tm = hm.t[k].mat, ix[3] = { hm.t[k].a + base, hm.t[k].b + base, hm.t[k].c + base };
+        ok = jt_add( j, ix[0], ix[1], ix[2], mat[tm] );
+        if ( !ok ) { break; }
+        mt_t* tt = &j->t[j->nt - 1];
+        const mv_t* v[3] = { &j->v[ix[0]], &j->v[ix[1]], &j->v[ix[2]] };
+        double ux = v[1]->x - v[0]->x, uy = v[1]->y - v[0]->y, uz = v[1]->z - v[0]->z, wx = v[2]->x - v[0]->x, wy = v[2]->y - v[0]->y, wz = v[2]->z - v[0]->z;
+        double nnx = uy * wz - uz * wy, nny = uz * wx - ux * wz, nnz = ux * wy - uy * wx;
+        const int hv[3] = { hm.t[k].a, hm.t[k].b, hm.t[k].c };
+        for ( int q = 0; q < 3; ++q ) {
+            if ( mw[tm] > 0 && hm.v[hv[q]].u >= 0.0 ) { tt->u[q] = hm.v[hv[q]].u * (double) mw[tm]; tt->v[q] = hm.v[hv[q]].v * (double) mh[tm]; }
+            else { auto_uv( nnx, nny, nnz, v[q]->x, v[q]->y, v[q]->z, &tt->u[q], &tt->v[q] ); }
+        }
+    }
+    house_mesh_free( &hm );
+    return ok;
+}
+
+static void job_whouses( tjob_t* j ) {
+    const double ex = j->x0 + j->n * j->cell, ey = j->y0 + j->n * j->cell;
+    rlink_t links[24];
+    int nl = rnet_links( &j->gnd.net, 1, j->x0 - 2000.0, j->y0 - 2000.0, ex + 2000.0, ey + 2000.0, links, 24 );
+    static _Thread_local double px[2000], py[2000], pd[2000];
+    house_t* hh = (house_t*) malloc( sizeof(house_t) );
+    if ( hh == 0 ) { return; }
+    for ( int li = 0; li < nl; ++li ) {
+        const rlink_t* l = &links[li];
+        int np = 0, ns = l->steps * 4 < 1999 ? l->steps * 4 : 1999;
+        for ( int k = 0; k <= ns; ++k ) { rnet_point( l, (double) k / (double) ns, &px[np], &py[np] ); ++np; }
+        pd[0] = 0.0;
+        for ( int k = 1; k < np; ++k ) { pd[k] = pd[k - 1] + hypot( px[k] - px[k - 1], py[k] - py[k - 1] ); }
+        double total = pd[np - 1];
+        int64_t lk = (int64_t) floor( l->x1 ) * 1000003 + (int64_t) floor( l->y1 ) * 7919 + (int64_t) floor( l->x2 ) * 31 + (int64_t) floor( l->y2 );
+        for ( int seg = 0; (double) seg * HOUSE_SEG < total; ++seg ) {
+            if ( job_wh( j, lk, seg, 201 ) >= HOUSE_SET ) { continue; }
+            for ( int i = 0; i < 6; ++i ) {
+                double a = (double) seg * HOUSE_SEG + 500.0 + (double)( i >> 1 ) * 1700.0 + job_wh( j, lk, seg * 8 + i, 202 ) * 300.0;
+                if ( a > total || ( l->hub1 && a < 1500.0 ) || ( l->hub2 && a > total - 1500.0 ) ) { continue; }
+                if ( job_wh( j, lk, seg * 8 + i, 203 ) < 0.12 ) { continue; }               // a gap now and then
+                int k = 1;
+                while ( k < np - 1 && pd[k] < a ) { ++k; }
+                double sl = pd[k] - pd[k - 1], f = sl > 0.0 ? ( a - pd[k - 1] ) / sl : 0.0;
+                double mx = px[k - 1] + ( px[k] - px[k - 1] ) * f, my = py[k - 1] + ( py[k] - py[k - 1] ) * f;
+                double ux = ( px[k] - px[k - 1] ) / ( sl > 0.0 ? sl : 1.0 ), uy = ( py[k] - py[k - 1] ) / ( sl > 0.0 ? sl : 1.0 );
+                double sg = ( i & 1 ) ? -1.0 : 1.0, nx = uy * sg, ny = -ux * sg;
+                double fx = mx + nx * 520.0, fy = my + ny * 520.0;
+                if ( fx < j->x0 || fx >= ex || fy < j->y0 || fy >= ey ) { continue; }
+                if ( fabs( fx ) < 3000.0 && fabs( fy ) < 3000.0 ) { continue; }              // the home
+                if ( fabs( fx - 1100.0 ) < 1500.0 && fabs( fy - 650.0 ) < 1300.0 ) { continue; }
+                if ( j->gnd.quiet.on && 1.0 - box_weight( fx, fy, j->gnd.quiet.cx, j->gnd.quiet.cy, j->gnd.quiet.rx, j->gnd.quiet.ry, j->gnd.quiet.margin ) < 0.99 ) { continue; }
+                int type = 1 + (int) floor( job_wh( j, lk, seg * 8 + i, 204 ) * 5.0 );
+                if ( type > 5 ) { type = 5; }
+                int64_t seed = 1 + (int64_t) floor( job_wh( j, lk, seg * 8 + i, 205 ) * 1.0e6 );
+                if ( !job_house( j, hh, fx, fy, nx, ny, type, seed, job_wh( j, lk, seg * 8 + i, 206 ) ) ) { free( hh ); return; }
+            }
+        }
+    }
+    free( hh );
+}
+
 static void job_run( tjob_t* j ) {
     int n = j->n, w = n + 1;
     j->nv = j->nt = j->nvar = 0;
+    if ( j->mode == 6 ) {                                          // the houses of a cell of the static world, no ground, no morphing
+        if ( j->world != 0 && j->pic.houses ) { job_whouses( j ); }
+        return;
+    }
     if ( j->mode == 5 ) {                                          // the trees of a cell of the static world, no ground
         if ( j->world != 0 ) {
             j->tcol = true;
@@ -1293,6 +1422,8 @@ Every tile is one object (slot i = object obj0 + i) made by a ground job of mode
 #define WL_HASH     4096
 #define WL_REQMAX   384
 #define WL_TREE     100                      // the "level" of a cell of trees (size 4 S0 = 3906 units); the trees of a cell grow out of the ground between WL_TB - WL_TBAND and WL_TB from the camera
+#define WL_HOUSE    101                      // the "level" of a cell of houses (a chunk, 15625 units): shown nearer than WL_HB, built from WL_HB + a chunk on
+#define WL_HB       32000.0
 #define WL_TB       7000.0
 #define WL_TBAND    700.0
 
@@ -1313,7 +1444,7 @@ typedef struct _wl {
     double   cx, cy;
 } wl_t;
 
-static double wl_size( int lvl ) { return lvl == WL_TREE ? 4.0 * WL_S0 : WL_S0 * (double)( 1 << lvl ); }
+static double wl_size( int lvl ) { return lvl == WL_HOUSE ? 16.0 * WL_S0 : lvl == WL_TREE ? 4.0 * WL_S0 : WL_S0 * (double)( 1 << lvl ); }
 
 static unsigned wl_key( int lvl, int64_t tx, int64_t ty ) {
     return (unsigned)( nz_mix( (uint64_t) tx * 0x9E3779B97F4A7C15ULL + (uint64_t) ty * 0xC2B2AE3D27D4EB4FULL + (uint64_t) lvl ) % WL_HASH );
@@ -1363,7 +1494,7 @@ static int wl_add( m3d_t* m, wl_t* wl, int lvl, int64_t tx, int64_t ty ) {
     m->ulok = false;
     if ( o >= m->top ) { m->top = o + 1; }
     obj_t* ob = &m->objs[o];
-    ob->used = true; ob->shown = false; ob->dirty = true; ob->flags = wl->flags; ob->light = wl->light; ob->gen = next_gen(); ob->scale = 1.0; ob->cs = 1.0;
+    ob->used = true; ob->shown = false; ob->dirty = true; ob->flags = lvl == WL_HOUSE ? ( wl->flags | M3D_OF_TWOSIDED | M3D_OF_MASKED ) : wl->flags; ob->light = lvl == WL_HOUSE ? 235 : wl->light; ob->gen = next_gen(); ob->scale = 1.0; ob->cs = 1.0;
     return slot;
 }
 
@@ -1397,15 +1528,26 @@ static void wl_built( m3d_t* m, int obj ) {                    // jobs_apply too
     wl->changed++;
 }
 
+static bool world_houses( const m3d_t* m ) {                  // houses stand in the world once a plaster picture or colour is set (M3D HOUSEPIC)
+    for ( int k = 0; k < 6; ++k ) { if ( m->hpic[k] >= 0 ) { return true; } }
+    return false;
+}
+
 static bool wl_request( m3d_t* m, wl_t* wl, int slot ) {
     wtile_t* t = &wl->t[slot];
     double s = wl_size( t->lvl );
     tjob_t* pj = (tjob_t*) calloc( 1, sizeof(tjob_t) );
     if ( pj == 0 ) { return false; }
-    pj->obj = wl->obj0 + slot; pj->n = 8; pj->x0 = (double) t->tx * s; pj->y0 = (double) t->ty * s; pj->cell = s / 8.0; pj->skirt = pj->cell * 0.75 + 10.0; pj->mode = t->lvl == WL_TREE ? 5 : 4;
-    if ( t->lvl == WL_TREE ) { pj->ma = WL_TB - WL_TBAND; pj->mb = WL_TB; }
+    pj->obj = wl->obj0 + slot; pj->n = 8; pj->x0 = (double) t->tx * s; pj->y0 = (double) t->ty * s; pj->cell = s / 8.0; pj->skirt = pj->cell * 0.75 + 10.0; pj->mode = t->lvl == WL_HOUSE ? 6 : t->lvl == WL_TREE ? 5 : 4;
+    if ( t->lvl == WL_HOUSE ) { pj->ma = pj->mb = 0.0; }
+    else if ( t->lvl == WL_TREE ) { pj->ma = WL_TB - WL_TBAND; pj->mb = WL_TB; }
     else if ( t->lvl < WL_TOP ) { pj->ma = ( WL_RF + 1.42 ) * s; pj->mb = 2.0 * WL_RF * s; }
     pj->gnd = *world_ground( wl->w ); pj->world = wl->w; pj->ratio = 2.0; pj->pic = m->rpic;
+    pj->pic.houses = world_houses( m );
+    for ( int k = 0; k < 18; ++k ) {
+        const tex_t* tq = m->hpic[k] >= 256 ? tex_get( m, m->hpic[k] ) : 0;
+        pj->pic.hpic[k] = m->hpic[k]; pj->pic.hpw[k] = tq != 0 ? tq->w : 0; pj->pic.hph[k] = tq != 0 ? tq->h : 0;
+    }
     pj->sunon = m->sun.on; pj->lx = m->sun.lx; pj->ly = m->sun.ly; pj->lz = m->sun.lz; pj->steps = m->sun.steps; pj->stride = m->sun.stride;
     bool ok = jobs_submit( m, pj );
     free( pj );
@@ -1509,6 +1651,20 @@ static void wl_view( m3d_t* m, double x, double y ) {
                 if ( sl < 0 ) { continue; }
                 wl->t[sl].stamp = wl->frame;
                 wl_show( m, wl, sl, wl->t[sl].built && d < WL_TB );
+            }
+        }
+    }
+    if ( world_houses( m ) ) {                                    // the cells of houses: built a chunk before they are shown
+        double hs = wl_size( WL_HOUSE ), reach = WL_HB + 2.0 * hs;
+        int64_t ax3 = (int64_t) floor( ( x - reach ) / hs ), bx3 = (int64_t) floor( ( x + reach ) / hs ), ay3 = (int64_t) floor( ( y - reach ) / hs ), by3 = (int64_t) floor( ( y + reach ) / hs );
+        for ( int64_t ty = ay3; ty <= by3; ++ty ) {
+            for ( int64_t tx = ax3; tx <= bx3; ++tx ) {
+                double d = wl_dist( wl, WL_HOUSE, tx, ty );
+                if ( d >= reach || !wl_inworld( wl, WL_HOUSE, tx, ty ) ) { continue; }
+                int sl = d < WL_HB + hs ? wl_need( m, wl, WL_HOUSE, tx, ty ) : wl_find( wl, WL_HOUSE, tx, ty );
+                if ( sl < 0 ) { continue; }
+                wl->t[sl].stamp = wl->frame;
+                wl_show( m, wl, sl, wl->t[sl].built && d < WL_HB );
             }
         }
     }
@@ -2509,12 +2665,9 @@ bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t sl
             return true;
         }
         case GFXOP_M3DHOUSE: {
-            // the colours as palette indices of the 16-shade hue ramps (index = 16 + 16 * hue + shade, the palette of demos/lib/w3dkit.lib; the engine's own colors are only pictures < 256)
-            static const int plaster[6] = { 16 + 16 * 13 + 12, 16 + 16 * 3 + 13, 16 + 16 * 8 + 12, 16 + 16 * 14 + 12, 16 + 16 * 5 + 12, 16 + 0 * 16 + 13 };
-            static const int roofc[3] = { 16 + 16 * 1 + 10, 16 + 16 * 12 + 10, 16 + 0 * 16 + 10 };
-            int ty, st, lv = 1;
+            int ty, st, lv = 1, gl = -1;
             if ( !whole( a[0], 0, M3D_MAXOBJECTS - 1, &i1 ) || !whole( a[1], 1, 5, &ty ) || !whole( a[2], 0, 4, &st ) || !( a[3] > -4.4e9 && a[3] < 4.4e9 ) ||
-                 ( !NONE_VAL( a[4] ) && !whole( a[4], 0, 1, &lv ) ) ) {
+                 ( !NONE_VAL( a[4] ) && !whole( a[4], 0, 1, &lv ) ) || ( !NONE_VAL( a[5] ) && ( !whole( a[5], 0, M3D_MAXOBJECTS - 1, &gl ) || gl == i1 ) ) ) {
                 return false;
             }
             house_t* hh = (house_t*) malloc( sizeof(house_t) );
@@ -2526,33 +2679,34 @@ bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t sl
             double oa[3] = { (double) i1, (double)( M3D_OF_TWOSIDED | M3D_OF_MASKED ), 235.0 };      // (masked: the panes of a window picture are see-through)
             if ( !m3d_op( m, GFXOP_M3DOBJECT, oa, 3, 0, 0, err ) ) { house_mesh_free( &hm ); return false; }
             obj_t* o = &m->objs[i1];
-            int mat[HM_NMAT];
-            mat[HM_PLASTER] = plaster[hm.plaster]; mat[HM_CHAR] = 16 + 2; mat[HM_BRICK] = 16 + 8; mat[HM_ROOF] = roofc[hm.roofc]; mat[HM_GLASS] = 16 + 16 * 9 + 3;
-            mat[HM_DOOR] = 16 + 16 * 12 + 6; mat[HM_WOOD] = 16 + 16 * 12 + 8; mat[HM_CONCRETE] = 16 + 9; mat[HM_RIM] = 16 + 16 * 7 + 12; mat[HM_GARAGE] = 16 + 8;
-            mat[HM_FRAME] = 16 + 16 * 12 + 10;
-            // the pictures of M3D HOUSEPIC where one is set and defined, else the plain colours; the pictures a quad covers whole (frames, doors) get u, v over their size, the rest the engine's own
-            int slot[HM_NMAT];
-            slot[HM_PLASTER] = hm.plaster; slot[HM_ROOF] = 6 + hm.roofc; slot[HM_CHAR] = 9; slot[HM_BRICK] = 10; slot[HM_GLASS] = 11; slot[HM_DOOR] = 12; slot[HM_WOOD] = 13;
-            slot[HM_CONCRETE] = 14; slot[HM_RIM] = 15; slot[HM_GARAGE] = 16; slot[HM_FRAME] = 17;
-            const tex_t* tp[HM_NMAT];
-            for ( int k = 0; k < HM_NMAT; ++k ) {
-                int pic = m->hpic[slot[k]];
-                tp[k] = 0;
-                if ( pic >= 256 && tex_get( m, pic ) != 0 ) { mat[k] = pic; tp[k] = tex_get( m, pic ); }
-                else if ( pic >= 0 && pic < 256 ) { mat[k] = pic; }
+            obj_t* og = 0;
+            if ( gl >= 0 ) {                                                                    // the glass in an object of its own: translucent, so the palette alpha of its color shows
+                double ga[3] = { (double) gl, (double)( M3D_OF_TWOSIDED | M3D_OF_TRANS ), 235.0 };
+                if ( !m3d_op( m, GFXOP_M3DOBJECT, ga, 3, 0, 0, err ) ) { house_mesh_free( &hm ); return false; }
+                og = &m->objs[gl];
             }
+            int pw[18], ph[18], mat[HM_NMAT], mw[HM_NMAT], mh[HM_NMAT];
+            for ( int k = 0; k < 18; ++k ) {
+                const tex_t* tq = m->hpic[k] >= 256 ? tex_get( m, m->hpic[k] ) : 0;
+                pw[k] = tq != 0 ? tq->w : 0; ph[k] = tq != 0 ? tq->h : 0;
+            }
+            house_mats( m->hpic, pw, ph, hm.plaster, hm.roofc, mat, mw, mh );      // (the pictures a quad covers whole, frames and doors, get u, v over their size, the rest the engine's own)
             bool ok = true;
-            for ( int k = 0; k < hm.nv && ok; ++k ) { ok = obj_addv( o, hm.v[k].x, hm.v[k].y, hm.v[k].z, -1.0e9, -1.0e9 ); }
+            for ( int k = 0; k < hm.nv && ok; ++k ) {
+                ok = obj_addv( o, hm.v[k].x, hm.v[k].y, hm.v[k].z, -1.0e9, -1.0e9 );
+                if ( ok && og != 0 ) { ok = obj_addv( og, hm.v[k].x, hm.v[k].y, hm.v[k].z, -1.0e9, -1.0e9 ); }
+            }
             // (the vertices are shared by the triangles of one quad, whose material is the same: u, v from the first triangle that uses a vertex)
             for ( int k = 0; k < hm.nt && ok; ++k ) {
                 int tm = hm.t[k].mat;
-                if ( tp[tm] != 0 && ( tm == HM_FRAME || tm == HM_DOOR || tm == HM_GARAGE ) ) {
+                if ( mw[tm] > 0 && ( tm == HM_FRAME || tm == HM_DOOR || tm == HM_GARAGE ) ) {
                     int ix[3] = { hm.t[k].a, hm.t[k].b, hm.t[k].c };
                     for ( int q = 0; q < 3; ++q ) {
-                        if ( hm.v[ix[q]].u >= 0.0 ) { o->v[ix[q]].u = hm.v[ix[q]].u * (double) tp[tm]->w; o->v[ix[q]].v = hm.v[ix[q]].v * (double) tp[tm]->h; }
+                        if ( hm.v[ix[q]].u >= 0.0 ) { o->v[ix[q]].u = hm.v[ix[q]].u * (double) mw[tm]; o->v[ix[q]].v = hm.v[ix[q]].v * (double) mh[tm]; }
                     }
                 }
-                ok = obj_addt( o, hm.t[k].a, hm.t[k].b, hm.t[k].c, mat[tm] );
+                if ( tm == HM_GLASS && og != 0 ) { ok = obj_addt( og, hm.t[k].a, hm.t[k].b, hm.t[k].c, mat[tm] ); }
+                else { ok = obj_addt( o, hm.t[k].a, hm.t[k].b, hm.t[k].c, mat[tm] ); }
             }
             house_mesh_free( &hm );
             if ( !ok ) { *err = "Out of memory"; return false; }

@@ -308,6 +308,27 @@ static void test_world( const char* base ) {
         CHECK( tri[1] > tri[0] && tri[1] == tri[2] );
         CHECK( op( GFXOP_M3DPOSTPIC, 3, -1.0, -1.0, -1.0 ) );
     }
+    // houses in settlements along the tarred roads: M3D HOUSEPIC switches them on (all shown objects of a house level, summed over a grid of places)
+    {
+        long tri[3] = { 0, 0, 0 };
+        int nobj[3] = { 0, 0, 0 };
+        for ( int run = 0; run < 2; ++run ) {
+            CHECK( op( GFXOP_M3DWORLDCLOSE, 0 ) );
+            for ( int k = 0; k < 6; ++k ) { CHECK( op( GFXOP_M3DHOUSEPIC, 2, (double) k, run == 0 ? -1.0 : 20.0 + k ) ); }
+            CHECK( ops( GFXOP_M3DWORLDOPEN, 1, dir, 100.0 ) );
+            for ( int pl = 0; pl < 9; ++pl ) {
+                CHECK( op( GFXOP_M3DWORLDVIEW, 2, -120000.0 + 120000.0 * ( pl % 3 ), -120000.0 + 120000.0 * ( pl / 3 ) ) );
+                CHECK( op( GFXOP_M3DWORLDWAIT, 0 ) );
+                for ( int k = 100; k < 100 + 3072; ++k ) {
+                    const obj_t* o = &M->objs[k];
+                    if ( o->used && o->shown && o->nv > 0 && ( o->flags & 17 ) == 17 ) { tri[run] += o->nt; ++nobj[run]; }
+                }
+            }
+        }
+        printf( "world houses: %ld triangles (%d cells) without house pictures, %ld (%d) with, %ld (%d) again\n", tri[0], nobj[0], tri[1], nobj[1], tri[2], nobj[2] );
+        CHECK( tri[0] == 0 && tri[1] > 0 );
+        for ( int k = 0; k < 6; ++k ) { CHECK( op( GFXOP_M3DHOUSEPIC, 2, (double) k, -1.0 ) ); }
+    }
     // hay bales in the fields: the fourth argument of M3D POSTPIC (all shown objects, summed over six places)
     {
         long tri[3] = { 0, 0, 0 };
@@ -1497,6 +1518,11 @@ int main( void ) {
         CHECK( op( GFXOP_M3DHOUSE, 4, 5.0, 3.0, 4.0, 7.0 ) && Q( GFXQ_M3DTRIS, 1, 5.0 ) > 100.0 );                  // made again with another stage: the object is replaced
         CHECK( !op( GFXOP_M3DHOUSE, 4, 7.0, 6.0, 0.0, 7.0 ) && !op( GFXOP_M3DHOUSE, 4, 7.0, 1.0, 5.0, 7.0 ) && !op( GFXOP_M3DHOUSE, 4, 28000.0, 1.0, 0.0, 7.0 ) );
         CHECK( !op( GFXOP_M3DHOUSE, 5, 7.0, 1.0, 0.0, 7.0, 2.0 ) );
+        // the glass in an object of its own (6th argument): the triangles of both are those of one object, the glass is translucent
+        CHECK( op( GFXOP_M3DHOUSE, 5, 20.0, 1.0, 0.0, 7.0, 1.0 ) && op( GFXOP_M3DHOUSE, 6, 21.0, 1.0, 0.0, 7.0, 1.0, 22.0 ) );
+        CHECK( Q( GFXQ_M3DTRIS, 1, 22.0 ) > 0.0 && Q( GFXQ_M3DTRIS, 1, 21.0 ) + Q( GFXQ_M3DTRIS, 1, 22.0 ) == Q( GFXQ_M3DTRIS, 1, 20.0 ) );
+        CHECK( M->objs[22].flags == ( M3D_OF_TWOSIDED | M3D_OF_TRANS ) );
+        CHECK( !op( GFXOP_M3DHOUSE, 6, 21.0, 1.0, 0.0, 7.0, 1.0, 21.0 ) && !op( GFXOP_M3DHOUSE, 6, 21.0, 1.0, 0.0, 7.0, 1.0, 28000.0 ) );
         CHECK( op( GFXOP_M3DOBJPOS, 4, 6.0, 300.0, -60.0, 0.0 ) );
         CHECK( op( GFXOP_M3DCAMERA, 5, 0.0, 0.0, 20.0, 0.0, 0.0 ) );
         const uint8_t* f = m3d_render( M );
