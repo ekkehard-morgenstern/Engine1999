@@ -1573,6 +1573,43 @@ static bool host_m3d_get( void ) {
     return host_m3d != 0;
 }
 
+// ENGINE1999_PALLOG=file: a line for what the 3D renderer is given as its palette (the green nose and ears of 1987 are a wrong color of the palette entry 249): when the program asks for the
+// color map or renders (the first 12 renders, and each one where entry 249 of the target layer changed or a target layer is seen for the first time), the time, the target layer, the renderer, a checksum of the target
+// layer's palette and the entries 248 .. 251 of the layers 0, 3, 4 and the target, as ARGB hex
+static void host_palog( const char* what, int t, bool every ) {
+    static const char* path = 0;
+    static bool known = false;
+    static int nrend = 0;
+    static uint32_t last249[8];
+    static bool seen[8];
+    if ( !known ) {
+        path = getenv( "ENGINE1999_PALLOG" );
+        if ( path != 0 && path[0] == 0 ) { path = 0; }
+        known = true;
+    }
+    if ( path == 0 ) { return; }
+    uint32_t cur = sdlscr_palette_get( t, 249 );
+    int ti = t >= 0 && t < 8 ? t : 0;
+    bool log = every || nrend < 12 || !seen[ti] || cur != last249[ti];
+    if ( !every ) { ++nrend; }
+    last249[ti] = cur; seen[ti] = true;
+    if ( !log ) { return; }
+    FILE* f = fopen( path, "a" );
+    if ( f == 0 ) { return; }
+    struct timespec ts;
+    clock_gettime( CLOCK_MONOTONIC, &ts );
+    uint32_t sum = 2166136261U;
+    for ( int i=0; i < 256; ++i ) { sum = ( sum ^ sdlscr_palette_get( t, i ) ) * 16777619U; }
+    fprintf( f, "%ld.%03ld %s target %d %s sum %08x", (long) ts.tv_sec % 100000, ts.tv_nsec / 1000000, what, t, m3d_is_argb( host_m3d ) ? "hardware" : "software", sum );
+    const int ls[4] = { 0, 3, 4, t };
+    for ( int k = 0; k < 4; ++k ) {
+        fprintf( f, " | L%d", ls[k] );
+        for ( int i = 248; i <= 251; ++i ) { fprintf( f, " %08x", sdlscr_palette_get( ls[k], i ) ); }
+    }
+    fprintf( f, "\n" );
+    fclose( f );
+}
+
 static bool host_m3d_op( int op, const double* a, int na, const char* s, size_t slen, const char** err ) {
     if ( !host_m3d_get() ) {
         *err = "Out of memory";
@@ -1585,6 +1622,7 @@ static bool host_m3d_op( int op, const double* a, int na, const char* s, size_t 
         return true;
     }
     if ( op == GFXOP_M3DCOLORMAP ) {
+        host_palog( "colormap", t, true );
         uint32_t pal[256];
         for ( int i=0; i < 256; ++i ) {
             pal[i] = sdlscr_palette_get( t, i );
@@ -1622,6 +1660,7 @@ static bool host_m3d_op( int op, const double* a, int na, const char* s, size_t 
         return ok;
     }
     if ( op == GFXOP_M3DRENDER ) {
+        host_palog( "render", t, false );
         int x, y, w, h, scale, bw, bh;
         m3d_getview( host_m3d, &x, &y, &w, &h, &scale, &bw, &bh );
         if ( m3d_is_argb( host_m3d ) ) {                // the hardware renderer: its own 32 bit layer, below the target layer
@@ -2113,7 +2152,8 @@ static int host_policy_ask( void* ud, int category, const char* what ) {
     uint8_t* saved = 0;
     size_t savedlen = 0;
     bool layerwas = sdlscr_layer_enabled( UI_LAYER );
-    uint32_t pal[ UI_PAL_COLORS ];
+    uint32_t pal[ UI_PAL_COLORS + UI_SYN_COLORS ];                          // (the theme AND the syntax colors: host_ui_start() sets all 32 entries 224 .. 255)
+    int themewas = host_ui_theme;
     int answer = POL_ANS_DENY;
     if ( !wasopen ) {
         size_t need = sdlscr_gfx_grab( UI_LAYER, 0, 0, 639, 299, 0, 0 );
@@ -2121,7 +2161,7 @@ static int host_policy_ask( void* ud, int category, const char* what ) {
         if ( saved != 0 ) {
             savedlen = sdlscr_gfx_grab( UI_LAYER, 0, 0, 639, 299, saved, need );
         }
-        for ( int i = 0; i < UI_PAL_COLORS; ++i ) {
+        for ( int i = 0; i < UI_PAL_COLORS + UI_SYN_COLORS; ++i ) {
             pal[i] = sdlscr_palette_get( UI_LAYER, UI_PALBASE + i );
         }
         host_ui_start();
@@ -2188,13 +2228,14 @@ static int host_policy_ask( void* ud, int category, const char* what ) {
         ui_draw( &host_ui, true );
     } else {
         host_ui_shutdown();
-        for ( int i = 0; i < UI_PAL_COLORS; ++i ) {
+        for ( int i = 0; i < UI_PAL_COLORS + UI_SYN_COLORS; ++i ) {
             sdlscr_palette_set( UI_LAYER, UI_PALBASE + i, pal[i] );
         }
         if ( saved != 0 && savedlen > 0 ) {
             sdlscr_gfx_blit( UI_LAYER, saved, savedlen, 0, 0, false );
         }
         sdlscr_layer_enable( UI_LAYER, layerwas );
+        host_ui_theme = themewas;
     }
     free( saved );
     return answer;

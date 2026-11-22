@@ -181,6 +181,11 @@ for standard error): every call of a sound statement to the audio engine (tone, 
 written there with the time in seconds, and twice a second the state of the eight channels (on or off, volume, how far ahead the
 channel is queued, length of the event queue). For finding out why a sound is missing; off by default.
 .TP
+.B ENGINE1999_PALLOG
+A file name: every time the 3D renderer is given its palette (\fBM3D COLORMAP\fR; the first 12 frames of \fBM3D RENDER\fR; each frame where entry 249 of the
+target layer changed or a target layer is seen for the first time) one line is appended with the time, the target layer, the renderer, a checksum of the target
+layer's palette and the entries 248 to 251 of the layers 0, 3, 4 and the target (ARGB, hex). For finding out why a palette color is wrong; off by default.
+.TP
 .B ENGINE1999_NOGL
 If set (and not 0): the window version does not look for OpenGL 2 at startup, so
 .B M3D HARDWARE
