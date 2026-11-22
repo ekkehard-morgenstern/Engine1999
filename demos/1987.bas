@@ -1117,16 +1117,16 @@
 8490   NEXT K
 8500 END PROC
 8510 ' ------------------------------------------------------------------------------------------------ sound
-8520 ' The drones hum on the music channels 1 .. 4 (a held low note each, slightly different pitches, so they beat against each other; VOLUME follows the distance to the camera,
-8530 ' PITCH wobbles a little), the tyres' rolling noise is a held noise on channel 5 (louder with speed, near silent on grass, sand roads, fields and wheat, a little quieter on hard ground); footsteps are effects, one at each heel strike
+8520 ' The drones are anti-gravity machines: no rotors, no engines, an electric hum (like a transformer: 100 Hz and its octave, a faint high whine) on the music channels 1 .. 4 (a held note each, slightly different pitches; VOLUME follows the distance to the camera,
+8530 ' PITCH drifts a little), the tyres' rolling noise is a held noise on channel 5 (louder with speed, near silent on grass, sand roads, fields and wheat, a little quieter on hard ground); footsteps are effects, one at each heel strike
 8540 ' of the walk cycle, by the ground (SFX 2 grass, 5 sand, 6 wood, 7 wheat); the freewheel ticks (SFX 3), the bell (SFX 1) and a thud (SFX 4) are as before.
 8550 PROC SOUNDSTART
 8560   LOCAL K
-8570   INSTRUMENT 41,"NAME DRONEHUM; OSC SINE 0.7 1; OSC SAW 0.6 2.003 5; OSC SINE 0.45 3 -4; FILTER 6 0.2; ENV 0.8 0.1 1 0.5; GAIN 0.8"
+8570   INSTRUMENT 41,"NAME DRONEHUM; OSC SINE 0.6 1; OSC SINE 0.3 2 3; OSC SINE 0.035 -2350; ENV 0.8 0.1 1 0.5; GAIN 0.8"
 8580   INSTRUMENT 42,"NAME TYRE; OSC NOISE 1; FILTER 3 0.1; ENV 0.2 0.1 1 0.3; GAIN 1.4"
 8590   FOR K=0 TO NDR-1
 8600     WAVE K+1,41
-8610     SOUND K+1,52+K*3.3,-1,0
+8610     SOUND K+1,100+K*2.7,-1,0
 8620   NEXT K
 8630   WAVE 5,42
 8640   SOUND 5,400,-1,0
@@ -1138,7 +1138,7 @@
 8700     D=SQR(DX*DX+DY*DY+DZ*DZ)
 8710     V=1-D/2600:IF V<0 THEN V=0
 8720     VOLUME K+1,0.8*V*V
-8730     PITCH K+1,(52+K*3.3)*(1+0.012*SIN(GT*1.3+K))
+8730     PITCH K+1,(100+K*2.7)*(1+0.002*SIN(GT*0.9+K))
 8740   NEXT K
 8750   S=ABS(BV)/250:IF S>1 THEN S=1
 8760   SF=FN SURF(BX,BY,BZ)
