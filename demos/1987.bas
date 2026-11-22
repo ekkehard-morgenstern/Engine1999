@@ -25,7 +25,7 @@
 200 BREAK OFF
 210 ON ERROR GOTO FAILED
 220 HL=0:IF ENV$("G1987_HEADLESS")<>"" THEN HL=-1
-221 SXY=0:LDS=0:LDON=0:NOLOAD=0:WLD=0:IF ENV$("G1987_WORLD")<>"" OR ( ENV$("G1987_DYNAMIC")="" AND NOT HL ) THEN WLD=-1
+221 SXY=0:LDS=0:LDON=0:LDLAST=0:NOLOAD=0:WLD=0:IF ENV$("G1987_WORLD")<>"" OR ( ENV$("G1987_DYNAMIC")="" AND NOT HL ) THEN WLD=-1
 230 DIM PV(60),SGL(300),SGH(300),SGX(300),SGY(300),SGU(300),SGV(300),SGK(300),SGD(300),SGE(300),SGI(300),RGX(6),RGY(6),RGP(6),RGQ(6),CKN(400),CHB(400),CKRX(9),CKRY(9),CKRT(9),CTX(24),CTY(24),GNS(8),GGX(160),FLJ$(81),TIH(33),RPX(300),RPY(300),RPF(300),CPX(40),CPY(40),SMX(120),SMY(120),PLX(40),PLY(40),TRX(520),TRY(520),LRR(8),LRZ(8),LRV(8),W$(8),GPX(2),GPZ(2),GPS(2),DWX(40),DWY(40),DRX(5),DRY(5),DRZ(5),DRH(5),DRT(5),DRA(5)
 231 DIM QX1(14),QY1(14),QX2(14),QY2(14)
 240 GOTO MAIN
@@ -1665,7 +1665,8 @@
 13010 CALL LOADING("FENCING THE YARD",0.65,""):CALL BUILDYARD
 13020 CALL LOADING("SOWING THE WHEAT",0.75,""):CALL BUILDWHEAT
 13030 CALL LOADING("OILING THE BICYCLE",0.85,""):CALL BUILDBIKE
-13040 CALL LOADING("WAKING THE DRONES",0.95,""):CALL BUILDDRONES:CALL LOADEND
+13040 CALL LOADING("WAKING THE DRONES",0.95,""):CALL BUILDDRONES
+13045 ' the drone stays on screen until the game starts (SESSION calls LOADEND): P3_LOAD and NEWGAME read files, which can raise a permission dialog
 13050 M3D THING 0,0,0,0,299,30,56:M3D THING 1,0,0,0,299,35,40
 13060 M3D PLAYER 14,56,46,24
 13070 M3D FAR 160000:M3D FOG 156000,FN CC(8,14),100000
@@ -1673,6 +1674,7 @@
 13090   CALL W3K_VIEW(0,0,640,264,2)
 13100   M3D COLORMAP
 13110   CALL P3_LOAD
+13115   CALL LOADING("WAKING THE DRONES",0.99,"")
 13120   SFX 1,"I12 V0.45 T200 ML O6 L16 C R32 C"
 13130   SFX 2,"W3 V0.12 ML X0,0.004,0.25,0.03 H420,32"
 13140   SFX 3,"W3 V0.05 ML X0,0.002,0.2,0.01 H3500,64"
@@ -2493,6 +2495,7 @@
 24715   NEWG=-1
 24720   REPEAT
 24730     IF NEWG THEN CALL NEWGAME:NEWG=0
+24735     CALL LOADEND
 24740     CALL PLAYLOOP
 24750     IF WLD THEN CALL WSAVE
 24760     IF ENV$("G1987_FRAMELOG")<>"" THEN
@@ -2505,14 +2508,17 @@
 24820     END IF
 24830   UNTIL IN_QUIT
 24840 END PROC
-24900 ' the loading screen: a colored background and a cute little drone (the black drones of the game, as a friendly egg with big eyes and a rotor) that bobs and blinks; P 0 .. 1 draws a bar (below 0: none),
+24900 ' the loading screen: a colored background and a cute little drone (the black drones of the game, as a friendly egg with big eyes and an anti-gravity glow under it) that bobs and blinks; P 0 .. 1 draws a bar (below 0: none),
 24910 ' N$ a small line under it; every call is one frame, so the drone moves as long as the program calls it now and then
 24920 PROC LOADING(M$,P,N$)
 24930   LOCAL I,T
 24940   IF HL THEN EXIT PROC
-24945   M3D HIDE
+24941   M3D HIDE
+24942   ' a permission dialog (or anything else that held the program up for 1.5 s) can leave the drone gone: after such a gap the sprites are made and shown again
+24943   IF LDON AND TI-LDLAST>90 THEN LDS=0:LDON=0
 24946   IF LDS=0 THEN CALL LDSPRITES
 24947   IF NOT LDON THEN CALL LDSHOW
+24948   LDLAST=TI
 24950   LDT=LDT+3:T=LDT
 24960   FOR I=0 TO 14
 24970     GFX LINE 0,I*20,639,I*20+19,FN CC(6,2+I\2),BF
@@ -2528,32 +2534,27 @@
 25280   IF N$<>"" THEN CALL BIGTEXT(250,N$,FN CC(0,15),1)
 25290   CALL W3K_SHOW
 25300 END PROC
-25310 ' the loading drone: three groups of sprites that the engine animates by itself (SPRITE SEQ / ANIM; SPRITE PATH bobs them all the same way): the body (head 200, 8 x 5 sprites: the rotors
-25320 ' flap), the face (head 240, 3 x 2: the eyes look about and blink) and the flame (246, one sprite: it flickers). The pictures are drawn once with GFX and grabbed; the sprite palette takes the graphics palette
+25310 ' the loading drone: three groups of sprites that the engine animates by itself (SPRITE SEQ / ANIM; SPRITE PATH bobs them all the same way): the body (head 200, 8 x 5 sprites, still: an anti-gravity
+25320 ' drone has no rotors), the face (head 240, 3 x 2: the eyes look about and blink) and the field under it (190, 3 x 1 sprites: a glowing disc that pulses). The pictures are drawn once with GFX and grabbed; the sprite palette takes the graphics palette
 25330 PROC LDSPRITES
 25340   LOCAL V,K
 25350   FOR K=0 TO 255:GFX PALETTE 4,K,GFX("PALETTE",0,K):NEXT K
-25360   FOR V=0 TO 2
-25365     K=24:IF V=1 THEN K=34
-25366     IF V=2 THEN K=14
-25370     CALL LDBODY(64,60,K):CALL LDGRAB(V*40,8,5)
-25380   NEXT V
+25360   CALL LDBODY(64,60):CALL LDGRAB(0,8,5)
 25390   FOR V=0 TO 3
 25400     K=0:IF V=1 THEN K=-3
 25402     IF V=2 THEN K=3
 25404     CALL LDEYES(24,30,K,V=3):CALL LDGRAB(120+V*6,3,2)
 25410   NEXT V
 25420   FOR V=0 TO 2
-25430     CALL LDFLAME(8,12,4+V):CALL LDGRAB(144+V,1,1)
+25430     CALL LDFIELD(24,12,17+2*V):CALL LDGRAB(144+V*3,3,1)
 25440   NEXT V
 25450   SPRITE 200,SIZE 8,5:SPRITE 200,PRIORITY 5
 25460   SPRITE 240,SIZE 3,2:SPRITE 240,PRIORITY 6
-25470   SPRITE 246,PRIORITY 4
-25480   SPRITE SEQ 20,CHR$(0)+CHR$(40)+CHR$(80)+CHR$(40)
+25470   SPRITE 190,SIZE 3,1:SPRITE 190,PRIORITY 4
 25490   SPRITE SEQ 21,CHR$(120)+CHR$(120)+CHR$(126)+CHR$(126)+CHR$(120)+CHR$(120)+CHR$(132)+CHR$(132)+CHR$(132)+CHR$(120)+CHR$(120)+CHR$(120)+CHR$(120)+CHR$(138)
-25500   SPRITE SEQ 22,CHR$(144)+CHR$(145)+CHR$(146)+CHR$(145)
-25510   SPRITE 200,256,44,0:SPRITE 240,296,74,120:SPRITE 246,312,132,144
-25520   SPRITE 200,ANIM 20,4,4:SPRITE 240,ANIM 21,14,6:SPRITE 246,ANIM 22,4,2
+25500   SPRITE SEQ 22,CHR$(144)+CHR$(147)+CHR$(150)+CHR$(147)
+25510   SPRITE 200,256,44,0:SPRITE 240,296,74,120:SPRITE 190,296,132,144
+25520   SPRITE 240,ANIM 21,14,6:SPRITE 190,ANIM 22,4,2
 25530   LDS=-1:LDON=0
 25540 END PROC
 25552 ' the pictures of the groups are in the rows 0 .. 23 and columns 0 .. 127 of the graphics layer: COLS x ROWS sprites from the image IM on
@@ -2566,21 +2567,20 @@
 25559 END PROC
 25560 ' the three groups go on and off together (the paths start in the same frame, so they bob alike)
 25570 PROC LDSHOW
-25572   SPRITE 200,ON:SPRITE 240,ON:SPRITE 246,ON
-25574   SPRITE 200,PATH "T 30 Y-7 Y+14 Y-7 R":SPRITE 240,PATH "T 30 Y-7 Y+14 Y-7 R":SPRITE 246,PATH "T 30 Y-7 Y+14 Y-7 R"
+25572   SPRITE 200,ON:SPRITE 240,ON:SPRITE 190,ON
+25574   SPRITE 200,PATH "T 30 Y-7 Y+14 Y-7 R":SPRITE 240,PATH "T 30 Y-7 Y+14 Y-7 R":SPRITE 190,PATH "T 30 Y-7 Y+14 Y-7 R"
 25576   LDON=-1
 25578 END PROC
 25580 PROC LOADEND
-25582   IF LDON THEN SPRITE 200,OFF:SPRITE 240,OFF:SPRITE 246,OFF:LDON=0
+25582   IF LDON THEN SPRITE 200,OFF:SPRITE 240,OFF:SPRITE 190,OFF:LDON=0
 25584 END PROC
-25590 ' the body of the egg drone at CX, CY on the graphics layer: dark, with a shine and a gray belt, rotors with half-width RW and a red antenna ball
-25600 PROC LDBODY(CX,CY,RW)
+25590 ' the body of the egg drone at CX, CY on the graphics layer: dark, with a shine, a gray belt, a red antenna ball and the plate of the anti-gravity emitter underneath
+25600 PROC LDBODY(CX,CY)
 25610   GFX LINE 0,0,127,119,0,BF
-25620   GFX LINE CX-18,CY-34,CX-24,CY-44,FN CC(0,9):GFX LINE CX+18,CY-34,CX+24,CY-44,FN CC(0,9)
-25630   GFX LINE CX-24-RW,CY-46,CX-24+RW,CY-44,FN CC(0,13):GFX LINE CX+24-RW,CY-44,CX+24+RW,CY-46,FN CC(0,13)
 25640   GFX CIRCLE CX,CY,27,FN CC(0,3),0,360,1.25:GFX PAINT CX,CY,FN CC(0,3),FN CC(0,3)
 25650   GFX CIRCLE CX-12,CY-20,6,FN CC(0,8),0,360,0.7:GFX PAINT CX-12,CY-20,FN CC(0,8),FN CC(0,8)
 25660   GFX LINE CX-26,CY+10,CX+26,CY+16,FN CC(0,9),BF
+25665   GFX CIRCLE CX,CY+31,12,FN CC(0,6),0,360,0.3:GFX PAINT CX,CY+31,FN CC(0,6),FN CC(0,6):GFX CIRCLE CX,CY+31,12,FN CC(8,12),0,360,0.3
 25670   GFX LINE CX,CY-34,CX,CY-46,FN CC(0,9):GFX CIRCLE CX,CY-50,4,FN CC(1,12):GFX PAINT CX,CY-50,FN CC(1,12),FN CC(1,12)
 25680 END PROC
 25690 ' the face (CX, CY is the body's middle in the face picture): big eyes with pupils shifted by PX (BL: closed), cheeks and a smile
@@ -2595,10 +2595,12 @@
 25770   NEXT I
 25780   GFX CIRCLE CX,CY+2,9,FN CC(0,15),215,325
 25790 END PROC
-25800 ' the flame under the egg, R wide
-25810 PROC LDFLAME(CX,CY,R)
-25820   GFX LINE 0,0,127,119,0,BF
-25830   GFX CIRCLE CX,CY,R,FN CC(2,14),0,360,1.6:GFX PAINT CX,CY,FN CC(2,14),FN CC(2,14)
+25800 ' the field under the egg (the anti-gravity glow): a flat disc, R wide, pale blue with a white core
+25810 PROC LDFIELD(CX,CY,R)
+25820   GFX LINE 0,0,47,23,0,BF
+25830   GFX CIRCLE CX,CY,R,FN CC(8,8),0,360,0.3:GFX PAINT CX,CY,FN CC(8,8),FN CC(8,8)
+25832   GFX CIRCLE CX,CY,R*0.7,FN CC(8,13),0,360,0.3:GFX PAINT CX,CY,FN CC(8,13),FN CC(8,13)
+25834   GFX CIRCLE CX,CY,R*0.35,FN CC(0,15),0,360,0.3:GFX PAINT CX,CY,FN CC(0,15),FN CC(0,15)
 25840 END PROC
 25850 ' the compass: a tape at the top left of the screen (centre x 160, 1.5 pixels a degree, 60 degrees to each side) that shows where N, E, S and W are; the world's +x is east and +y north
 25860 ' (the camera's yaw 0 looks east, 90 north), so the bearing is 90 minus the yaw; ticks every 15 degrees, the letters at the four directions, small ticks at the corners
