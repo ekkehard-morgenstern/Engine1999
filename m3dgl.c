@@ -508,9 +508,11 @@ static void upload_palette( gl_t* g, const m3d_t* m ) {
         px[i*4] = (uint8_t)( m->pal[i] >> 16 ); px[i*4+1] = (uint8_t)( m->pal[i] >> 8 ); px[i*4+2] = (uint8_t) m->pal[i]; px[i*4+3] = (uint8_t)( m->pal[i] >> 24 );
     }
     glapi_t* gl = &g->gl;
+    gl->ActiveTexture( GL_TEXTURE1 );                                   // (the palette lives on unit 1; the pictures use unit 0)
     gl->BindTexture( GL_TEXTURE_2D, g->paltex );
     gl->PixelStorei( GL_UNPACK_ALIGNMENT, 1 );
     gl->TexSubImage2D( GL_TEXTURE_2D, 0, 0, 0, 256, 1, GL_RGBA, GL_UNSIGNED_BYTE, px );
+    gl->ActiveTexture( GL_TEXTURE0 );
     g->paldirty = false;
 }
 
@@ -871,9 +873,7 @@ static const void* gl_render( m3d_t* m, void* rd ) {
             return 0;
         }
     }
-    if ( g->paldirty ) {
-        upload_palette( g, m );
-    }
+    upload_palette( g, m );                                              // (every frame: 1 KB, and the palette texture can never be stale)
     cam_t c;
     double yr = m->yaw * DEG2RAD, pr = m->pitch * DEG2RAD;
     c.f = ( W * 0.5 ) / tan( m->fov * 0.5 * DEG2RAD );

@@ -796,7 +796,7 @@ ui-geometry := num-expr "," num-expr "," num-expr "," num-expr "," num-expr .
 > Functions: M3D("X"\|"Y"\|"Z"\|"EYE"\|"YAW"\|"PITCH"\|"LIFT"\|"HIT"\|"FLOORZ"\|"SHOTKIND"\|"SHOTOBJ"\|"SHOTDIST"\|"SHOTX"\|"SHOTY"\|"SHOTZ"\|"DRAWN"\|"RENDERER"\|"HWAVAIL"\|"MSAA"\|"MSAAMAX"), ("FLOORAT"\|"FLOORTEX"\|"FLOOROBJ"\|"CEILAT"\|"ZONE"\|"ZONETAG",x,y,z), ("SHOOT"\|"USE"\|"SEES"\|"TON"\|"TX"\|"TY"\|"TZ"\|"DIST"\|"BEARING"\|"TEXW"\|"TEXH"\|"OBJON"\|"OBJX"\|"OBJY"\|"OBJZ"\|"OBJYAW"\|"VERTS"\|"TRIS",n), ("GROUND",x,y).
 
 ```ebnf
-m3d-stmt := XFUNC(M3D) ( RESET | CLEAR | COLORMAP | RENDER | POLL | RINGWAIT | WORLDCLOSE | WORLDWAIT | SOFTWARE | HARDWARE | TEXTURE num-expr "," str-expr | TEXTURE LOAD num-expr "," str-expr [ "," PALETTE ] |
+m3d-stmt := XFUNC(M3D) ( RESET | CLEAR | COLORMAP | RENDER | HIDE | POLL | RINGWAIT | WORLDCLOSE | WORLDWAIT | SOFTWARE | HARDWARE | TEXTURE num-expr "," str-expr | TEXTURE LOAD num-expr "," str-expr [ "," PALETTE ] |
                              ( OBJECT | VERTEX | FACE | QUAD | BOX | OBJPOS | OBJSHOW | OBJLIGHT | OBJFLAGS | THING | THINGPOS | THINGTEX | THINGOFF | THINGLIGHT | THINGTRANS |
                                CAMERA | TURN | PLAYER | MOVE | LIFT | LAMP | VIEW | FOG | FAR | MSAA | SKY | THINGMOVE | ZONE | GROUND | GROUNDFLAT | INSTANCE | OBJSCALE | OBJFREE | MOUNTAINS | LAKES | GROUNDQUIET | SUN | MINIMAP | HILLS | ROADNET | RING | RINGPIC | MORPH | TREEPIC | WORLDVIEW ) num-expr { "," num-expr } |
                              ( WORLDOPEN | WORLDMAKE ) str-expr { "," num-expr } |

@@ -360,6 +360,14 @@ static bool use_renderer( m3d_t* m, const m3drend_t* r, const char** err ) {
     return true;
 }
 
+void m3d_invalidate( m3d_t* m ) {
+    ++m->presepoch;                                         // the kept meshes of the hardware renderer are built again
+    if ( m->havepal && m->rend != 0 ) {
+        m->rend->palette( m, m->rdata );                    // the palette texture / color map again
+    }
+    m->mvalid = false;
+}
+
 void m3d_set_hardware( m3d_t* m, const m3drend_t* r ) {
     m->hw = r;
 }
@@ -1949,6 +1957,8 @@ bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t sl
             m->fogstart = NONE_VAL( a[2] ) ? 0.0 : a[2];
             m->fog = a[0];
             m->hazecol = NONE_VAL( a[1] ) ? -1 : i1;
+            return true;
+        case GFXOP_M3DHIDE:                                   // the window host hides the hardware renderer's layer (host_m3d_op); the model has nothing to do
             return true;
         case GFXOP_M3DMSAA:
             if ( !( a[0] >= 0.0 && a[0] <= 16.0 ) ) { return false; }

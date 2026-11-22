@@ -171,6 +171,7 @@ static void test_world( const char* base ) {
     CHECK( op( GFXOP_M3DRESET, 0 ) );
     CHECK( op( GFXOP_M3DMSAA, 1, 4.0 ) && op( GFXOP_M3DMSAA, 1, 0.0 ) && !op( GFXOP_M3DMSAA, 1, 17.0 ) && !op( GFXOP_M3DMSAA, 1, -2.0 ) );    // antialiasing: the setting is kept, none is in use without the hardware renderer
     CHECK( Q( GFXQ_M3DMSAA, 0 ) == 0.0 && Q( GFXQ_M3DMSAAMAX, 0 ) == 0.0 );
+    CHECK( op( GFXOP_M3DHIDE, 0 ) );                                                                    // hiding the host's 3D layer: nothing to do in the model
     CHECK( !op( GFXOP_M3DWORLDVIEW, 2, 0.0, 0.0 ) );                                // no world open
     CHECK( !ops( GFXOP_M3DWORLDOPEN, 1, "/nonexistent-world-folder", 100.0 ) );
     CHECK( !ops( GFXOP_M3DWORLDMAKE, 2, dir, 0.0, 5.0 ) );                          // no chunks

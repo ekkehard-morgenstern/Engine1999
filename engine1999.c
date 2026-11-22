@@ -1579,6 +1579,11 @@ static bool host_m3d_op( int op, const double* a, int na, const char* s, size_t 
         return false;
     }
     int t = sdlscr_gfx_target();
+    if ( op == GFXOP_M3DHIDE ) {                            // 2D screens between 3D frames: the 3D layer must not show through (it sits just below the layer it was drawn for)
+        sdlscr_3d_hide();
+        m3d_invalidate( host_m3d );                          // and what the renderer keeps (palette, meshes, pictures) is made again from the model before the next 3D frame
+        return true;
+    }
     if ( op == GFXOP_M3DCOLORMAP ) {
         uint32_t pal[256];
         for ( int i=0; i < 256; ++i ) {
