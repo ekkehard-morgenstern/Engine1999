@@ -896,7 +896,7 @@ static void job_wtrees( tjob_t* j ) {
             if ( fabs( x ) < 1500.0 && fabs( y ) < 1500.0 ) { continue; }                          // the house and its yard
             if ( fabs( x - 1100.0 ) < 900.0 && fabs( y - 650.0 ) < 700.0 ) { continue; }          // the wheat field
             int kw = rnet_kind( &j->gnd.net, x, y );
-            double chance = kw == 3 ? 0.6 : 0.025;
+            double chance = kw == 3 ? 0.15 : 0.006;
             if ( job_wh( j, ia, ka, 3 ) >= chance ) { continue; }
             double h = job_height( j, x, y );
             if ( !( h > j->pic.level + 2.0 && h < j->pic.rockh - 60.0 ) ) { continue; }

@@ -118,7 +118,7 @@ ThreadSanitizer.
 Owner's rule: **geometry is added only at the far end of the view, never in the middle.** So the trees are not part of the ground tiles (those split at 90 m and would add trees there) but
 live in **cells of trees** of their own: squares of 3906 units (125 m), one object each, made by a job of **mode 5** (`job_wtrees`, no ground) when tree pictures are set (`M3D TREEPIC`).
 A cell is cut into squares of 162.8 units (5 m) on the world's grid; each holds at most one tree at a place hashed from the **world seed** and the square's number (`nz_hash64`), so the
-same tree stands in the same place whatever cells are built and in whatever order; nothing is stored (the chunk's own seed is not needed yet). Chance 0.6 in forest, 0.025 elsewhere (a
+same tree stands in the same place whatever cells are built and in whatever order; nothing is stored (the chunk's own seed is not needed yet). Chance 0.15 in forest (0.6 at first: the frame rate tanked, the owner had three quarters taken away), 0.006 elsewhere (a
 lone tree); none on or beside roads, on steep ground, below the water + 2 or above `rockh - 60`, in the house's yard or on its wheat field. The trees are the **cheap** ones (12
 triangles, three kinds).
 
