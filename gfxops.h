@@ -404,7 +404,7 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXOP_M3DHIDE   362             // M3D HIDE   (the window host stops showing the hardware renderer's picture until the next M3D RENDER: a program that shows 2D screens between 3D frames calls it, else the last 3D picture shows through whenever the other buffer layer is the visible one)
 #define GFXOP_M3DFIRST  GFXOP_M3DRESET
 #define GFXOP_M3DPOSTPIC 363            // M3D POSTPIC post, white, red [, bale]   (the palette colors or pictures of the reflector posts beside the tarred roads of the static world and of the hay bales in its fields; they stand in the cells of trees; -1 for post, white and red: no posts; a bale of -1 or none: no bales)
-#define GFXOP_M3DCULL   364             // M3D CULL smallpx [, sort]   (objects whose bounding sphere is smaller than smallpx pixels are not drawn, default 1, 0 = off; sort 0 / 1: opaque objects nearest first, default 1)
+#define GFXOP_M3DCULL   364             // M3D CULL smallpx [, sort [, occlusion]]   (objects whose bounding sphere is smaller than smallpx pixels are not drawn, default 1, 0 = off; sort 0 / 1: opaque objects nearest first, default 1; occlusion 0 / 1: the software renderer skips objects that lie behind what is already drawn, needs sort, default 1)
 #define GFXOP_M3DLAST   GFXOP_M3DCULL
 #define GFXOP_IS_M3D(op) ( (op) >= GFXOP_M3DFIRST && (op) <= GFXOP_M3DLAST )
 #define GFXQ_M3DX       350             // M3D("X"), ("Y"), ("Z" = the feet), ("EYE"), ("YAW"), ("PITCH"), ("LIFT"), ("HIT"), ("FLOORZ")
@@ -468,7 +468,7 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXQ_M3DWORLDCHUNK 407          // M3D("WORLDCHUNK", x, y, f): a field of the record of the chunk holding the place (0 cx, 1 cy, 2 lowest, 3 highest, 4 mean height, 5 kind, 6 flags, 7 tarred links; -1 none)
 #define GFXQ_M3DMSAA    408             // M3D("MSAA"): the samples the hardware renderer draws with now (0: none, or the software renderer is in use)
 #define GFXQ_M3DMSAAMAX 409             // M3D("MSAAMAX"): the most samples the hardware can do (0: none, or no hardware renderer)
-#define GFXQ_M3DCULL    410             // M3D("CULL", k): of the last frame: 0 objects asked, 1 drawn, 2 skipped behind the viewer or beyond FAR, 3 skipped outside the sides of the view, 4 skipped as too small, 5 skipped as hidden (none yet), 6 triangles of the drawn objects
+#define GFXQ_M3DCULL    410             // M3D("CULL", k): of the last frame: 0 objects asked, 1 drawn, 2 skipped behind the viewer or beyond FAR, 3 skipped outside the sides of the view, 4 skipped as too small, 5 skipped as hidden behind what was drawn (software renderer), 6 triangles of the drawn objects
 #define GFXQ_M3DLAST    GFXQ_M3DCULL      // (400 .. 403 in between are HASH / NOISE / RIDGED / FBM, which the VM computes itself and never sends to a host)
 
 typedef struct _gfxcmd_t {

@@ -169,7 +169,7 @@ struct _m3d_t {
     int      shotkind, shotobj;
     double   shotdist, shotx, shoty, shotz;
     int      drawn;
-    double   smallpx;  bool nearsort;            // M3D CULL: objects below smallpx pixels are skipped; opaque objects are drawn nearest first
+    double   smallpx;  bool nearsort, occlude;            // M3D CULL: objects below smallpx pixels are skipped; opaque objects are drawn nearest first
     int      cull[8];                         // the counts of the last frame (M3D("CULL", k))
     // frame scratch
     int*     order;  double* odist;

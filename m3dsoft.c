@@ -52,6 +52,9 @@ typedef struct {
     uint8_t* ablend[32];        // translucency tables for palette entries with an alpha of their own (index = alpha / 8, made when first needed)
     uint8_t* fb;
     float*   zb;
+    float*   tz;                // occlusion: per tile of OCC_T x OCC_T pixels the farthest depth in the depth buffer (1e30: some pixel is not covered) ...
+    uint8_t* td;                // ... valid when the tile is not dirty (something was drawn in it since)
+    int      ntx, nty;
 } soft_t;
 
 static void make_haze( const m3d_t* m, soft_t* s ) {
@@ -167,6 +170,75 @@ typedef struct {
     double horizon;
     int nlamps;
 } rc_t;
+
+#define OCC_T 8
+
+// the screen rectangle of an object's bounding box (the 8 corners of its world box) and the smallest depth in view space; false when a corner is not in front of the near plane
+static bool obj_rect( const rc_t* c, const obj_t* o, int* x0, int* y0, int* x1, int* y1, double* zmin ) {
+    double sx0 = 1.0e30, sx1 = -1.0e30, sy0 = 1.0e30, sy1 = -1.0e30, zm = 1.0e30;
+    for ( int k=0; k < 8; ++k ) {
+        v3_t d = { ( k & 1 ? o->maxx : o->minx ) - c->eye.x, ( k & 2 ? o->maxy : o->miny ) - c->eye.y, ( k & 4 ? o->maxz : o->minz ) - c->eye.z };
+        double zv = vdot( d, c->fw );
+        if ( zv <= NEARZ ) {
+            return false;
+        }
+        double sx = c->cx + c->f * vdot( d, c->r ) / zv, sy = c->cy - c->f * vdot( d, c->up ) / zv;
+        if ( sx < sx0 ) { sx0 = sx; }
+        if ( sx > sx1 ) { sx1 = sx; }
+        if ( sy < sy0 ) { sy0 = sy; }
+        if ( sy > sy1 ) { sy1 = sy; }
+        if ( zv < zm ) { zm = zv; }
+    }
+    *x0 = iclamp( (int) floor( sx0 ), 0, c->W - 1 ); *x1 = iclamp( (int) floor( sx1 ), 0, c->W - 1 );
+    *y0 = iclamp( (int) floor( sy0 ), 0, c->H - 1 ); *y1 = iclamp( (int) floor( sy1 ), 0, c->H - 1 );
+    *zmin = zm;
+    return true;
+}
+
+static void tile_refresh( rc_t* c, int tx, int ty ) {
+    float mx = 0;
+    int xe = ( tx + 1 ) * OCC_T < c->W ? ( tx + 1 ) * OCC_T : c->W, ye = ( ty + 1 ) * OCC_T < c->H ? ( ty + 1 ) * OCC_T : c->H;
+    for ( int y = ty * OCC_T; y < ye; ++y ) {
+        const float* p = c->zb + (size_t) y * (size_t) c->W;
+        for ( int x = tx * OCC_T; x < xe; ++x ) {
+            if ( p[x] > mx ) { mx = p[x]; }
+        }
+    }
+    c->s->tz[ty * c->s->ntx + tx] = mx;
+    c->s->td[ty * c->s->ntx + tx] = 0;
+}
+
+// is every pixel the object could cover already nearer than the object's nearest point? (then it is not drawn at all)
+static bool obj_occluded( rc_t* c, const obj_t* o ) {
+    int x0, y0, x1, y1;
+    double zmin;
+    if ( !obj_rect( c, o, &x0, &y0, &x1, &y1, &zmin ) ) {
+        return false;
+    }
+    for ( int ty = y0 / OCC_T; ty <= y1 / OCC_T; ++ty ) {
+        for ( int tx = x0 / OCC_T; tx <= x1 / OCC_T; ++tx ) {
+            if ( c->s->td[ty * c->s->ntx + tx] ) {
+                tile_refresh( c, tx, ty );
+            }
+            if ( !( zmin > (double) c->s->tz[ty * c->s->ntx + tx] * 1.00001 + 0.01 ) ) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+static void tiles_dirty( rc_t* c, const obj_t* o ) {
+    int x0, y0, x1, y1;
+    double zmin;
+    if ( !obj_rect( c, o, &x0, &y0, &x1, &y1, &zmin ) ) {
+        memset( c->s->td, 1, (size_t) c->s->ntx * (size_t) c->s->nty );
+        return;
+    }
+    for ( int ty = y0 / OCC_T; ty <= y1 / OCC_T; ++ty ) {
+        memset( c->s->td + ty * c->s->ntx + x0 / OCC_T, 1, (size_t)( x1 / OCC_T - x0 / OCC_T + 1 ) );
+    }
+}
 
 static void sort_asc( int* idx, const double* key, int n ) {
     for ( int gap = n / 2; gap > 0; gap /= 2 ) {
@@ -782,21 +854,34 @@ static const void* soft_render( m3d_t* m, void* rd ) {
             ++m->cull[why + 1];
             continue;
         }
-        ++m->cull[1]; m->cull[6] += o->nt;
         if ( ( o->flags & M3D_OF_TRANS ) != 0 ) {
+            ++m->cull[1]; m->cull[6] += o->nt;
             m->order[nt] = i; m->odist[i] = dist; ++nt;
             continue;
         }
         if ( m->nearsort ) {
-            opq[no] = i; m->odist[i] = dist; ++no;
+            opq[no] = i; m->odist[i] = dist - o->rad; ++no;                // (the nearest point of the sphere: big objects come first, they hide most)
             continue;
         }
+        ++m->cull[1]; m->cull[6] += o->nt;
         draw_object( &c, o, false );
     }
     if ( no > 0 ) {
         sort_asc( opq, m->odist, no );
+        bool occ = m->occlude && s->tz != 0;
+        if ( occ ) {
+            for ( int i=0; i < s->ntx * s->nty; ++i ) { s->tz[i] = 1.0e30f; }
+            memset( s->td, 0, (size_t) s->ntx * (size_t) s->nty );
+        }
         for ( int k=0; k < no; ++k ) {
+            const obj_t* o = &m->objs[opq[k]];
+            if ( occ && obj_occluded( &c, o ) ) {
+                ++m->cull[5];
+                continue;
+            }
+            ++m->cull[1]; m->cull[6] += o->nt;
             draw_object( &c, &m->objs[opq[k]], false );
+            if ( occ ) { tiles_dirty( &c, o ); }
         }
     }
     draw_things( &c );
@@ -821,7 +906,7 @@ static void soft_destroy( m3d_t* m, void* rd ) {
     (void) m;
     soft_t* s = (soft_t*) rd;
     if ( s != 0 ) {
-        free( s->fb ); free( s->zb ); free( s->blend );
+        free( s->fb ); free( s->zb ); free( s->blend ); free( s->tz ); free( s->td );
         free( s );
     }
 }
@@ -835,8 +920,11 @@ static bool soft_resize( m3d_t* m, void* rd, int bw, int bh ) {
         free( fb ); free( zb );
         return false;
     }
-    free( s->fb ); free( s->zb );
+    free( s->fb ); free( s->zb ); free( s->tz ); free( s->td );
     s->fb = fb; s->zb = zb;
+    s->ntx = ( bw + OCC_T - 1 ) / OCC_T; s->nty = ( bh + OCC_T - 1 ) / OCC_T;
+    s->tz = (float*) calloc( (size_t) s->ntx * (size_t) s->nty, sizeof(float) );
+    s->td = (uint8_t*) calloc( (size_t) s->ntx * (size_t) s->nty, 1 );
     return true;
 }
 

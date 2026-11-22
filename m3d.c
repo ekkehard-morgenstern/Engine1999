@@ -377,7 +377,7 @@ static void reset_state( m3d_t* m ) {
     m->x = m->y = m->z = 0; m->yaw = 0; m->pitch = 0; m->lift = 0;
     m->radius = 14; m->height = 56; m->eye = 46; m->step = 24;
     m->hit = 0; m->shotkind = 0; m->shotobj = -1; m->shotdist = 0; m->shotx = m->shoty = m->shotz = 0;
-    m->smallpx = 1.0; m->nearsort = true;
+    m->smallpx = 1.0; m->nearsort = true; m->occlude = true;
     memset( m->cull, 0, sizeof(m->cull) );
 }
 
@@ -2219,11 +2219,12 @@ bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t sl
             return true;
         }
         case GFXOP_M3DCULL:
-            if ( !( a[0] >= 0.0 && a[0] <= 100.0 ) || ( !NONE_VAL( a[1] ) && !( a[1] == 0.0 || a[1] == 1.0 ) ) ) {
+            if ( !( a[0] >= 0.0 && a[0] <= 100.0 ) || ( !NONE_VAL( a[1] ) && !( a[1] == 0.0 || a[1] == 1.0 ) ) || ( !NONE_VAL( a[2] ) && !( a[2] == 0.0 || a[2] == 1.0 ) ) ) {
                 return false;
             }
             m->smallpx = a[0];
             if ( !NONE_VAL( a[1] ) ) { m->nearsort = a[1] != 0.0; }
+            if ( !NONE_VAL( a[2] ) ) { m->occlude = a[2] != 0.0; }
             return true;
         case GFXOP_M3DPOSTPIC: {
             int bv = -1;

@@ -1500,12 +1500,17 @@ int main( void ) {
         CHECK( Q( GFXQ_M3DCULL, 1, 7.0 ) == -7777777.0 );                                                          // no such count
         CHECK( op( GFXOP_M3DCULL, 1, 0.0 ) );                                                                      // off: the small box is drawn
         m3d_render( M );
-        CHECK( Q( GFXQ_M3DCULL, 1, 4.0 ) == 0.0 && Q( GFXQ_M3DCULL, 1, 1.0 ) == 3.0 );
+        CHECK( Q( GFXQ_M3DCULL, 1, 4.0 ) == 0.0 && Q( GFXQ_M3DCULL, 1, 1.0 ) + Q( GFXQ_M3DCULL, 1, 5.0 ) == 3.0 );          // the small box is a candidate again: it lies behind the near box, so it is skipped as hidden
+        CHECK( Q( GFXQ_M3DCULL, 1, 5.0 ) == 1.0 );
+        CHECK( op( GFXOP_M3DCULL, 3, 0.0, 1.0, 0.0 ) );                                                          // and without the occlusion test it is drawn
+        m3d_render( M );
+        CHECK( Q( GFXQ_M3DCULL, 1, 1.0 ) == 3.0 && Q( GFXQ_M3DCULL, 1, 5.0 ) == 0.0 );
+        CHECK( op( GFXOP_M3DCULL, 3, 0.0, 1.0, 1.0 ) );
         CHECK( op( GFXOP_M3DCULL, 1, 50.0 ) );                                                                     // 50 px: the near box (radius 70, f 80, distance 105) is 53 px: still drawn
         m3d_render( M );
         CHECK( Q( GFXQ_M3DCULL, 1, 1.0 ) == 2.0 );
-        CHECK( !op( GFXOP_M3DCULL, 1, 101.0 ) && !op( GFXOP_M3DCULL, 1, -1.0 ) && !op( GFXOP_M3DCULL, 2, 1.0, 2.0 ) );
-        CHECK( op( GFXOP_M3DCULL, 2, 1.0, 1.0 ) );
+        CHECK( !op( GFXOP_M3DCULL, 1, 101.0 ) && !op( GFXOP_M3DCULL, 1, -1.0 ) && !op( GFXOP_M3DCULL, 2, 1.0, 2.0 ) && !op( GFXOP_M3DCULL, 3, 1.0, 1.0, 2.0 ) );
+        CHECK( op( GFXOP_M3DCULL, 3, 1.0, 1.0, 1.0 ) );
         // many boxes behind each other, the far ones first, a big wall in front of them: the same picture sorted and not, and the time of both
         fresh();
         CHECK( op( GFXOP_M3DVIEW, 5, 0.0, 0.0, 640.0, 264.0, 1.0 ) );
@@ -1519,23 +1524,55 @@ int main( void ) {
         }
         CHECK( op( GFXOP_M3DOBJECT, 1, (double) no ) );
         CHECK( op( GFXOP_M3DBOX, 8, (double) no, 30.0, -300.0, -50.0, 40.0, 300.0, 300.0, 3.0 ) );                // the wall that hides them all
-        double ms[2] = { 0, 0 };
-        uint8_t* pic[2] = { 0, 0 };
-        for ( int sorted = 1; sorted >= 0; --sorted ) {
-            CHECK( op( GFXOP_M3DCULL, 2, 1.0, (double) sorted ) );
+        // three ways: object order, nearest first, nearest first with the occlusion test
+        double ms[3] = { 0, 0, 0 };
+        uint8_t* pic[3] = { 0, 0, 0 };
+        int hidden = 0;
+        for ( int mode = 0; mode < 3; ++mode ) {
+            CHECK( op( GFXOP_M3DCULL, 3, 1.0, mode > 0 ? 1.0 : 0.0, mode > 1 ? 1.0 : 0.0 ) );
             struct timespec t0, t1;
             const uint8_t* f = m3d_render( M );
             clock_gettime( CLOCK_MONOTONIC, &t0 );
             for ( int i = 0; i < 20; ++i ) { f = m3d_render( M ); }
             clock_gettime( CLOCK_MONOTONIC, &t1 );
-            ms[sorted] = ( ( t1.tv_sec - t0.tv_sec ) + 1e-9 * ( t1.tv_nsec - t0.tv_nsec ) ) * 50.0;
-            pic[sorted] = (uint8_t*) malloc( 640U * 264U );
-            memcpy( pic[sorted], f, 640U * 264U );
+            ms[mode] = ( ( t1.tv_sec - t0.tv_sec ) + 1e-9 * ( t1.tv_nsec - t0.tv_nsec ) ) * 50.0;
+            pic[mode] = (uint8_t*) malloc( 640U * 264U );
+            memcpy( pic[mode], f, 640U * 264U );
+            if ( mode == 2 ) { hidden = (int) Q( GFXQ_M3DCULL, 1, 5.0 ); }
+            else { CHECK( Q( GFXQ_M3DCULL, 1, 5.0 ) == 0.0 ); }
         }
-        CHECK( memcmp( pic[0], pic[1], 640U * 264U ) == 0 );
-        printf( "cull bench: %d objects hidden behind a wall (the far ones first): %.2f ms a frame nearest first, %.2f ms in object order\n", no - 3, ms[1], ms[0] );
+        CHECK( memcmp( pic[0], pic[1], 640U * 264U ) == 0 && memcmp( pic[1], pic[2], 640U * 264U ) == 0 );
+        CHECK( hidden >= no - 6 );                                                                                 // all but the floor and the wall are behind the wall
+        printf( "cull bench: %d objects hidden behind a wall (the far ones first): %.2f ms a frame in object order, %.2f ms nearest first, %.2f ms with the occlusion test (%d skipped)\n", no - 3, ms[0], ms[1], ms[2], hidden );
+        free( pic[0] ); free( pic[1] ); free( pic[2] );
+        // a see-through (masked) wall hides nothing, a box that sticks out beside the wall is not hidden, and the pictures stay the same
+        fresh();
+        tex_flat( 4, 8, 8, 0 );
+        CHECK( op( GFXOP_M3DOBJECT, 2, 2.0, 1.0 ) ); CHECK( op( GFXOP_M3DBOX, 8, 2.0, 30.0, -300.0, -50.0, 40.0, 300.0, 300.0, 4.0 ) );          // masked, all index 0
+        CHECK( op( GFXOP_M3DOBJECT, 1, 3.0 ) ); CHECK( op( GFXOP_M3DBOX, 8, 3.0, 100.0, -20.0, 0.0, 110.0, 20.0, 50.0, 3.0 ) );
+        for ( int occ = 0; occ < 2; ++occ ) {
+            CHECK( op( GFXOP_M3DCULL, 3, 1.0, 1.0, (double) occ ) );
+            const uint8_t* f = m3d_render( M );
+            pic[occ] = (uint8_t*) malloc( 160U * 100U ); memcpy( pic[occ], f, 160U * 100U );
+            CHECK( PX( f, 80, 50 ) == 50 );                                                                        // the box shows through the masked wall
+            CHECK( Q( GFXQ_M3DCULL, 1, 5.0 ) == 0.0 );
+        }
+        CHECK( memcmp( pic[0], pic[1], 160U * 100U ) == 0 );
         free( pic[0] ); free( pic[1] );
-        CHECK( op( GFXOP_M3DCULL, 2, 1.0, 1.0 ) );
+        fresh();
+        CHECK( op( GFXOP_M3DOBJECT, 1, 2.0 ) ); CHECK( op( GFXOP_M3DBOX, 8, 2.0, 40.0, -10.0, -50.0, 50.0, 10.0, 300.0, 2.0 ) );                 // a narrow post, close
+        CHECK( op( GFXOP_M3DOBJECT, 1, 3.0 ) ); CHECK( op( GFXOP_M3DBOX, 8, 3.0, 200.0, -40.0, 0.0, 210.0, 40.0, 50.0, 3.0 ) );                  // a box, wider than the post's picture
+        CHECK( op( GFXOP_M3DOBJECT, 1, 4.0 ) ); CHECK( op( GFXOP_M3DBOX, 8, 4.0, 200.0, 100.0, 0.0, 210.0, 110.0, 50.0, 3.0 ) );                 // a box behind nothing
+        for ( int occ = 0; occ < 2; ++occ ) {
+            CHECK( op( GFXOP_M3DCULL, 3, 1.0, 1.0, (double) occ ) );
+            const uint8_t* f = m3d_render( M );
+            pic[occ] = (uint8_t*) malloc( 160U * 100U ); memcpy( pic[occ], f, 160U * 100U );
+            CHECK( PX( f, 80, 50 ) == 200 );                                                                       // the post
+            if ( occ ) { CHECK( Q( GFXQ_M3DCULL, 1, 5.0 ) == 0.0 ); }                                              // partly behind the post, so not skipped
+        }
+        CHECK( memcmp( pic[0], pic[1], 160U * 100U ) == 0 );
+        free( pic[0] ); free( pic[1] );
+        CHECK( op( GFXOP_M3DCULL, 3, 1.0, 1.0, 1.0 ) );
     }
     test_world( getenv( "TMPDIR" ) != 0 ? getenv( "TMPDIR" ) : "/tmp" );
     test_switch();

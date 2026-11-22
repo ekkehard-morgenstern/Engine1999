@@ -6,7 +6,7 @@
 20 ' static world (docs/world-subsystem.md "Ruins"). Five house types (1 the plain gable house, 2 the same with a garage annex at the east gable, 3 a hip roof, 4 a steep roof with a dormer and a porch, 5 with a bay window and a flat roofed extension at the back) at five stages of damage by a directed
 30 ' energy weapon (1 intact, 2 scorched, 3 roof burnt, 4 the floors fallen, 5 a shell), all from one seed: the same house burns the same way at every stage (a piece that is gone
 40 ' at a stage stays gone). Run it in the window version: LOAD "tools/house3d", RUN. Keys: W A S D / arrows walk, R F or Page Up / Down look, 1 .. 5 the stage, T the type,
-50 ' N the next seed, H back to the start, Q quit (T cycles the five types). The environment variables H3_TYPE, H3_STAGE, H3_SEED start with another house, H3_CAM="x,y,z,yaw,pitch" (dm, degrees) with another viewpoint, H3_VILLAGE=1 starts in the village (V toggles), H3_NEAR / H3_MID the distances in units of its levels of detail.
+50 ' N the next seed, H back to the start, Q quit (T cycles the five types). The environment variables H3_TYPE, H3_STAGE, H3_SEED start with another house, H3_CAM="x,y,z,yaw,pitch" (dm, degrees) with another viewpoint, H3_VILLAGE=1 starts in the village (V toggles), H3_SOFT=1 the software renderer (the hardware one has no occlusion test), H3_NEAR / H3_MID the distances in units of its levels of detail.
 60 ' Units: the builder works in dm (10 cm), the game in units of 3.2 cm (U = 3.125 a dm). The generator part (rooms, doors, windows, furniture) is that of HOUSEGEN.
 70 LOAD LIBRARY "w3dkit"
 80 DIM RM(2,8,6),RMN(2),DOR(2,16,4),DON(2),WIN(40,7),FU(2,64,5),FUC(2,64),FUN(2),CL(2,24,4),CLN(2),FLZ(2),DS(5),OA1(70),OA2(70),OZ1(70),OZ2(70),OTY(70),ZB(160),LA1(70),LA2(70),RA1(40),RA2(40),CV(40),CT(40),CZ(40),QX(4),QY(4),QZ(4),LKW(25),LKD(25),HLK(40),HLV(40),HPX(40),HPY(40),HCX(40),HCY(40),PM(10),XBK(40),YBK(40)
@@ -1420,62 +1420,63 @@
 14160 IF ENV$("H3_MID")<>"" THEN MIDU=VAL(ENV$("H3_MID"))
 14170 CALL W3K_SETUP:CALL W3K_MESH:M3D RESET
 14180 CALL W3K_VIEW(0,0,640,264,2)
-14190 CALL MKTEX
-14200 M3D COLORMAP
-14210 M3D SKY 335
-14220 M3D FAR 9000
-14230 CALL MAKEHOUSE
-14240 CALL STARTPOS
-14250 CALL INTVIS
-14260 IF ENV$("H3_VILLAGE")<>"" THEN CALL VILLAGE
-14270 IF ENV$("H3_CAM")<>"" THEN
-14280   CALL CAMENV
-14290 END IF
-14300 QF=0
-14310 REPEAT
-14320   CALL W3K_WALK
-14330   K$=INKEY$
-14340   IF K$="q" OR K$="Q" THEN QF=-1
-14350   IF NOT VIL THEN
-14360     IF K$>="1" AND K$<="5" THEN STG=VAL(K$)-1:CALL MAKEHOUSE
-14370     IF K$="t" OR K$="T" THEN HT=HT MOD 5+1:CALL MAKEHOUSE
-14380     IF K$="n" OR K$="N" THEN SD=SD+1:CALL MAKEHOUSE
-14390     IF K$="i" OR K$="I" THEN IMODE=(IMODE+1) MOD 3
-14400   END IF
-14410   IF K$="h" OR K$="H" THEN
-14420     IF VIL THEN M3D CAMERA 1500,-500,0,90 ELSE CALL STARTPOS
-14430   END IF
-14440   IF K$="v" OR K$="V" THEN
-14450     IF VIL THEN
-14460       M3D OBJFREE 1,9000:VIL=0:OB=0:TXO=301:TXI=305:TXR=315:CALL MAKEHOUSE:CALL STARTPOS
-14470     ELSE
-14480       CALL VILLAGE
-14490     END IF
-14500   END IF
-14510   IF VIL THEN CALL LODUPD ELSE CALL INTVIS
-14520   M3D RENDER
-14530   CALL STAGENAME
-14540   IF VIL THEN
-14550     GFX TEXT 6,4,"VILLAGE  "+STR$(NHV)+" HOUSES OF 25 LOOKS (INSTANCES)",FN W3K_C(3,15)
-14560     GFX TEXT 6,14,"V BACK TO ONE HOUSE  H START  Q QUIT  WASD WALK",FN W3K_C(0,12)
-14570     GFX TEXT 6,24,STR$(M3D("DRAWN"))+" drawn   far "+STR$(LF)+"  outside "+STR$(LM)+"  inside "+STR$(LN),FN W3K_C(0,12)
-14580   ELSE
-14590     GFX TEXT 6,4,"TYPE "+STR$(HT)+"  STAGE "+STR$(STG+1)+" "+SN$+"  SEED "+STR$(SD),FN W3K_C(3,15)
-14600     GFX TEXT 6,14,"1-5 STAGE  T TYPE  N SEED  I INTERIOR  V VILLAGE  H HOME  Q QUIT  WASD WALK",FN W3K_C(0,12)
-14610     IM$="AUTO":IF IMODE=1 THEN IM$="ON"
-14620     IF IMODE=2 THEN IM$="OFF"
-14630     GFX TEXT 6,24,STR$(BMS)+" ms  "+STR$(INT(BVT/2))+" triangles built  "+STR$(M3D("DRAWN"))+" drawn  interior "+IM$,FN W3K_C(0,12)
-14640   END IF
-14650   GFX TEXT 6,34,"OBJECTS "+STR$(M3D("CULL",0))+"  DRAWN "+STR$(M3D("CULL",1))+"  BEHIND "+STR$(M3D("CULL",2))+"  SIDE "+STR$(M3D("CULL",3))+"  SMALL "+STR$(M3D("CULL",4))+"  TRIS "+STR$(M3D("CULL",6)),FN W3K_C(0,12)
-14660   CALL W3K_SHOW
-14670 UNTIL QF
-14680 CALL W3K_DONE
-14690 END
-14700 LABEL FAILED
-14710 GFX RESET
-14720 PRINT "Error: ";ERR$;" in line ";ERL
-14730 END
-14740 LABEL OUTERHUES
-14750 DATA 13,12, 3,13, 8,12, 14,12, 5,12, 0,13
-14760 LABEL INNERHUES
-14770 DATA 3,14, 13,13, 4,13, 8,14, 14,13, 0,14
+14190 IF ENV$("H3_SOFT")<>"" THEN CALL W3K_SETRENDER(0)
+14200 CALL MKTEX
+14210 M3D COLORMAP
+14220 M3D SKY 335
+14230 M3D FAR 9000
+14240 CALL MAKEHOUSE
+14250 CALL STARTPOS
+14260 CALL INTVIS
+14270 IF ENV$("H3_VILLAGE")<>"" THEN CALL VILLAGE
+14280 IF ENV$("H3_CAM")<>"" THEN
+14290   CALL CAMENV
+14300 END IF
+14310 QF=0
+14320 REPEAT
+14330   CALL W3K_WALK
+14340   K$=INKEY$
+14350   IF K$="q" OR K$="Q" THEN QF=-1
+14360   IF NOT VIL THEN
+14370     IF K$>="1" AND K$<="5" THEN STG=VAL(K$)-1:CALL MAKEHOUSE
+14380     IF K$="t" OR K$="T" THEN HT=HT MOD 5+1:CALL MAKEHOUSE
+14390     IF K$="n" OR K$="N" THEN SD=SD+1:CALL MAKEHOUSE
+14400     IF K$="i" OR K$="I" THEN IMODE=(IMODE+1) MOD 3
+14410   END IF
+14420   IF K$="h" OR K$="H" THEN
+14430     IF VIL THEN M3D CAMERA 1500,-500,0,90 ELSE CALL STARTPOS
+14440   END IF
+14450   IF K$="v" OR K$="V" THEN
+14460     IF VIL THEN
+14470       M3D OBJFREE 1,9000:VIL=0:OB=0:TXO=301:TXI=305:TXR=315:CALL MAKEHOUSE:CALL STARTPOS
+14480     ELSE
+14490       CALL VILLAGE
+14500     END IF
+14510   END IF
+14520   IF VIL THEN CALL LODUPD ELSE CALL INTVIS
+14530   M3D RENDER
+14540   CALL STAGENAME
+14550   IF VIL THEN
+14560     GFX TEXT 6,4,"VILLAGE  "+STR$(NHV)+" HOUSES OF 25 LOOKS (INSTANCES)",FN W3K_C(3,15)
+14570     GFX TEXT 6,14,"V BACK TO ONE HOUSE  H START  Q QUIT  WASD WALK",FN W3K_C(0,12)
+14580     GFX TEXT 6,24,STR$(M3D("DRAWN"))+" drawn   far "+STR$(LF)+"  outside "+STR$(LM)+"  inside "+STR$(LN),FN W3K_C(0,12)
+14590   ELSE
+14600     GFX TEXT 6,4,"TYPE "+STR$(HT)+"  STAGE "+STR$(STG+1)+" "+SN$+"  SEED "+STR$(SD),FN W3K_C(3,15)
+14610     GFX TEXT 6,14,"1-5 STAGE  T TYPE  N SEED  I INTERIOR  V VILLAGE  H HOME  Q QUIT  WASD WALK",FN W3K_C(0,12)
+14620     IM$="AUTO":IF IMODE=1 THEN IM$="ON"
+14630     IF IMODE=2 THEN IM$="OFF"
+14640     GFX TEXT 6,24,STR$(BMS)+" ms  "+STR$(INT(BVT/2))+" triangles built  "+STR$(M3D("DRAWN"))+" drawn  interior "+IM$,FN W3K_C(0,12)
+14650   END IF
+14660   GFX TEXT 6,34,"OBJECTS "+STR$(M3D("CULL",0))+"  DRAWN "+STR$(M3D("CULL",1))+"  BEHIND "+STR$(M3D("CULL",2))+"  SIDE "+STR$(M3D("CULL",3))+"  SMALL "+STR$(M3D("CULL",4))+"  HIDDEN "+STR$(M3D("CULL",5))+"  TRIS "+STR$(M3D("CULL",6)),FN W3K_C(0,12)
+14670   CALL W3K_SHOW
+14680 UNTIL QF
+14690 CALL W3K_DONE
+14700 END
+14710 LABEL FAILED
+14720 GFX RESET
+14730 PRINT "Error: ";ERR$;" in line ";ERL
+14740 END
+14750 LABEL OUTERHUES
+14760 DATA 13,12, 3,13, 8,12, 14,12, 5,12, 0,13
+14770 LABEL INNERHUES
+14780 DATA 3,14, 13,13, 4,13, 8,14, 14,13, 0,14
