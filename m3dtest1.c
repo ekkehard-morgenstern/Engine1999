@@ -1501,6 +1501,27 @@ int main( void ) {
         CHECK( op( GFXOP_M3DCAMERA, 5, 0.0, 0.0, 20.0, 0.0, 0.0 ) );
         const uint8_t* f = m3d_render( M );
         CHECK( f != 0 && Q( GFXQ_M3DCULL, 1, 1.0 ) >= 2.0 );                                                      // the floor and the house are drawn
+        // M3D HOUSEPIC: the pictures of the materials; -1 the plain colours; a picture that is not defined is not used
+        CHECK( !op( GFXOP_M3DHOUSEPIC, 2, 18.0, 2.0 ) && !op( GFXOP_M3DHOUSEPIC, 2, -1.0, 2.0 ) && !op( GFXOP_M3DHOUSEPIC, 2, 0.0, 1024.0 ) && !op( GFXOP_M3DHOUSEPIC, 2, 0.0, -2.0 ) );
+        CHECK( op( GFXOP_M3DOBJPOS, 4, 6.0, 0.0, 0.0, 0.0 ) && op( GFXOP_M3DOBJPOS, 4, 5.0, 150.0, -150.0, 0.0 ) );
+        CHECK( op( GFXOP_M3DHOUSE, 5, 5.0, 4.0, 0.0, 7.0, 1.0 ) && op( GFXOP_M3DOBJLIGHT, 2, 5.0, 255.0 ) && op( GFXOP_M3DCAMERA, 5, 0.0, 0.0, 20.0, 0.0, 0.0 ) );
+        int n200 = 0;
+        {
+            const uint8_t* g = m3d_render( M );
+            for ( int i = 0; i < 160 * 100; ++i ) { if ( g[i] == 200 ) { ++n200; } }
+        }
+        CHECK( n200 < 40 );                                                                                         // the plain colours: no pixel of the picture 2 (200)
+        for ( int k = 0; k < 6; ++k ) { CHECK( op( GFXOP_M3DHOUSEPIC, 2, (double) k, 2.0 ) ); }                     // all plaster colours = the picture 2
+        CHECK( op( GFXOP_M3DHOUSE, 5, 5.0, 4.0, 0.0, 7.0, 1.0 ) && op( GFXOP_M3DOBJLIGHT, 2, 5.0, 255.0 ) );
+        n200 = 0;
+        {
+            const uint8_t* g = m3d_render( M );
+            for ( int i = 0; i < 160 * 100; ++i ) { if ( g[i] == 200 ) { ++n200; } }
+        }
+        CHECK( n200 > 300 );                                                                                        // the walls show the picture
+        CHECK( op( GFXOP_M3DHOUSEPIC, 2, 0.0, 77.0 ) );                                                             // a number below 256 is a plain palette colour
+        CHECK( op( GFXOP_M3DHOUSE, 5, 5.0, 4.0, 0.0, 7.0, 1.0 ) );
+        for ( int k = 0; k < 6; ++k ) { CHECK( op( GFXOP_M3DHOUSEPIC, 2, (double) k, -1.0 ) ); }
     }
     // -- the counts of M3D("CULL"), small objects (M3D CULL px) and the nearest first order of the opaque objects ----------------------------------------
     {

@@ -379,6 +379,7 @@ static void reset_state( m3d_t* m ) {
     m->radius = 14; m->height = 56; m->eye = 46; m->step = 24;
     m->hit = 0; m->shotkind = 0; m->shotobj = -1; m->shotdist = 0; m->shotx = m->shoty = m->shotz = 0;
     m->smallpx = 1.0; m->nearsort = true; m->occlude = true;
+    for ( int k = 0; k < 18; ++k ) { m->hpic[k] = -1; }
     memset( m->cull, 0, sizeof(m->cull) );
 }
 
@@ -2499,6 +2500,14 @@ bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t sl
             }
             return true;
         }
+        case GFXOP_M3DHOUSEPIC: {
+            int slot, pic;
+            if ( !whole( a[0], 0, 17, &slot ) || !whole( a[1], -1, M3D_MAXTEX - 1, &pic ) ) {
+                return false;
+            }
+            m->hpic[slot] = pic;
+            return true;
+        }
         case GFXOP_M3DHOUSE: {
             // the colours as palette indices of the 16-shade hue ramps (index = 16 + 16 * hue + shade, the palette of demos/lib/w3dkit.lib; the engine's own colors are only pictures < 256)
             static const int plaster[6] = { 16 + 16 * 13 + 12, 16 + 16 * 3 + 13, 16 + 16 * 8 + 12, 16 + 16 * 14 + 12, 16 + 16 * 5 + 12, 16 + 0 * 16 + 13 };
@@ -2514,16 +2523,37 @@ bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t sl
             house_gen( hh, ty, (int64_t) floor( a[3] ) );
             if ( !house_mesh( hh, st, lv, &hm ) ) { free( hh ); *err = "Out of memory"; return false; }
             free( hh );
-            double oa[3] = { (double) i1, (double) M3D_OF_TWOSIDED, 235.0 };
+            double oa[3] = { (double) i1, (double)( M3D_OF_TWOSIDED | M3D_OF_MASKED ), 235.0 };      // (masked: the panes of a window picture are see-through)
             if ( !m3d_op( m, GFXOP_M3DOBJECT, oa, 3, 0, 0, err ) ) { house_mesh_free( &hm ); return false; }
             obj_t* o = &m->objs[i1];
             int mat[HM_NMAT];
             mat[HM_PLASTER] = plaster[hm.plaster]; mat[HM_CHAR] = 16 + 2; mat[HM_BRICK] = 16 + 8; mat[HM_ROOF] = roofc[hm.roofc]; mat[HM_GLASS] = 16 + 16 * 9 + 3;
             mat[HM_DOOR] = 16 + 16 * 12 + 6; mat[HM_WOOD] = 16 + 16 * 12 + 8; mat[HM_CONCRETE] = 16 + 9; mat[HM_RIM] = 16 + 16 * 7 + 12; mat[HM_GARAGE] = 16 + 8;
             mat[HM_FRAME] = 16 + 16 * 12 + 10;
+            // the pictures of M3D HOUSEPIC where one is set and defined, else the plain colours; the pictures a quad covers whole (frames, doors) get u, v over their size, the rest the engine's own
+            int slot[HM_NMAT];
+            slot[HM_PLASTER] = hm.plaster; slot[HM_ROOF] = 6 + hm.roofc; slot[HM_CHAR] = 9; slot[HM_BRICK] = 10; slot[HM_GLASS] = 11; slot[HM_DOOR] = 12; slot[HM_WOOD] = 13;
+            slot[HM_CONCRETE] = 14; slot[HM_RIM] = 15; slot[HM_GARAGE] = 16; slot[HM_FRAME] = 17;
+            const tex_t* tp[HM_NMAT];
+            for ( int k = 0; k < HM_NMAT; ++k ) {
+                int pic = m->hpic[slot[k]];
+                tp[k] = 0;
+                if ( pic >= 256 && tex_get( m, pic ) != 0 ) { mat[k] = pic; tp[k] = tex_get( m, pic ); }
+                else if ( pic >= 0 && pic < 256 ) { mat[k] = pic; }
+            }
             bool ok = true;
-            for ( int k = 0; k < hm.nv && ok; ++k ) { ok = obj_addv( o, hm.v[k].x, hm.v[k].y, hm.v[k].z, hm.v[k].u, hm.v[k].v ); }
-            for ( int k = 0; k < hm.nt && ok; ++k ) { ok = obj_addt( o, hm.t[k].a, hm.t[k].b, hm.t[k].c, mat[hm.t[k].mat] ); }
+            for ( int k = 0; k < hm.nv && ok; ++k ) { ok = obj_addv( o, hm.v[k].x, hm.v[k].y, hm.v[k].z, -1.0e9, -1.0e9 ); }
+            // (the vertices are shared by the triangles of one quad, whose material is the same: u, v from the first triangle that uses a vertex)
+            for ( int k = 0; k < hm.nt && ok; ++k ) {
+                int tm = hm.t[k].mat;
+                if ( tp[tm] != 0 && ( tm == HM_FRAME || tm == HM_DOOR || tm == HM_GARAGE ) ) {
+                    int ix[3] = { hm.t[k].a, hm.t[k].b, hm.t[k].c };
+                    for ( int q = 0; q < 3; ++q ) {
+                        if ( hm.v[ix[q]].u >= 0.0 ) { o->v[ix[q]].u = hm.v[ix[q]].u * (double) tp[tm]->w; o->v[ix[q]].v = hm.v[ix[q]].v * (double) tp[tm]->h; }
+                    }
+                }
+                ok = obj_addt( o, hm.t[k].a, hm.t[k].b, hm.t[k].c, mat[tm] );
+            }
             house_mesh_free( &hm );
             if ( !ok ) { *err = "Out of memory"; return false; }
             return true;

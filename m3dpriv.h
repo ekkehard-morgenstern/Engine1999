@@ -170,6 +170,7 @@ struct _m3d_t {
     double   shotdist, shotx, shoty, shotz;
     int      drawn;
     double   smallpx;  bool nearsort, occlude;            // M3D CULL: objects below smallpx pixels are skipped; opaque objects are drawn nearest first
+    int      hpic[18];                         // M3D HOUSEPIC: the pictures of the materials of M3D HOUSE (-1: the plain palette colour)
     int      cull[8];                         // the counts of the last frame (M3D("CULL", k))
     // frame scratch
     int*     order;  double* odist;

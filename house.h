@@ -80,7 +80,7 @@ void house_gen( house_t* h, int type, int64_t seed );
 // -- the outside as a mesh ------------------------------------------------------------------------------------------------------
 enum { HM_PLASTER, HM_CHAR, HM_BRICK, HM_ROOF, HM_GLASS, HM_DOOR, HM_WOOD, HM_CONCRETE, HM_RIM, HM_GARAGE, HM_FRAME, HM_NMAT };
 
-typedef struct { double x, y, z, u, v; } hvert_t;
+typedef struct { double x, y, z, u, v; } hvert_t;          // u, v: 0 .. 1 over the whole picture of the material (the frame, doors and garage doors), or -1: the engine finds them from the position (the walls, roof, ...)
 typedef struct { int a, b, c, mat; } htri_t;
 typedef struct {
     hvert_t* v;  int nv, capv;

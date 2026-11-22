@@ -453,7 +453,7 @@ static double hr( const mb_t* b, int64_t a, int64_t c ) {
     return nz_hash( b->h->seed * 7919 + 5, a, c, 0 );
 }
 
-static int mv( mb_t* b, double x, double y, double z ) {
+static int mv( mb_t* b, double x, double y, double z, double u, double v ) {
     hmesh_t* m = b->m;
     if ( m->nv >= m->capv ) {
         int nc = m->capv == 0 ? 512 : m->capv * 2;
@@ -462,7 +462,7 @@ static int mv( mb_t* b, double x, double y, double z ) {
         m->v = nv; m->capv = nc;
     }
     hvert_t* p = &m->v[m->nv];
-    p->x = x * UNIT; p->y = y * UNIT; p->z = z * UNIT; p->u = 0; p->v = 0;
+    p->x = x * UNIT; p->y = y * UNIT; p->z = z * UNIT; p->u = u; p->v = v;
     return m->nv++;
 }
 
@@ -480,16 +480,20 @@ static void mt( mb_t* b, int v0, int v1, int v2, int mat ) {
 }
 
 // a quad from 4 points (dm), turned so that it faces the direction (ox, oy, oz)
-static void quad( mb_t* b, const double p[4][3], double ox, double oy, double oz, int mat ) {
+static void quadu( mb_t* b, const double p[4][3], const double uv[4][2], double ox, double oy, double oz, int mat ) {
     double e1[3] = { p[1][0] - p[0][0], p[1][1] - p[0][1], p[1][2] - p[0][2] }, e2[3] = { p[2][0] - p[0][0], p[2][1] - p[0][1], p[2][2] - p[0][2] };
     double nx = e1[1] * e2[2] - e1[2] * e2[1], ny = e1[2] * e2[0] - e1[0] * e2[2], nz = e1[0] * e2[1] - e1[1] * e2[0];
     bool flip = nx * ox + ny * oy + nz * oz < 0;
     int v[4];
     for ( int k = 0; k < 4; ++k ) {
         int s = flip ? ( 4 - k ) & 3 : k;
-        v[k] = mv( b, p[s][0], p[s][1], p[s][2] );
+        v[k] = mv( b, p[s][0], p[s][1], p[s][2], uv != 0 ? uv[s][0] : -1.0, uv != 0 ? uv[s][1] : -1.0 );
     }
     mt( b, v[0], v[1], v[2], mat ); mt( b, v[0], v[2], v[3], mat );
+}
+
+static void quad( mb_t* b, const double p[4][3], double ox, double oy, double oz, int mat ) {
+    quadu( b, p, 0, ox, oy, oz, mat );
 }
 
 static void tri3( mb_t* b, const double p[3][3], double ox, double oy, double oz, int mat ) {
@@ -499,7 +503,7 @@ static void tri3( mb_t* b, const double p[3][3], double ox, double oy, double oz
     int v[3];
     for ( int k = 0; k < 3; ++k ) {
         int s = flip ? ( 3 - k ) % 3 : k;
-        v[k] = mv( b, p[s][0], p[s][1], p[s][2] );
+        v[k] = mv( b, p[s][0], p[s][1], p[s][2], -1.0, -1.0 );
     }
     mt( b, v[0], v[1], v[2], mat );
 }
@@ -513,6 +517,13 @@ static void wface( mb_t* b, int side, double plane, double a1, double a2, double
         double a = k == 0 || k == 3 ? a1 : a2, z = k < 2 ? z1 : z2;
         if ( side < 2 ) { p[k][0] = a; p[k][1] = pl; } else { p[k][0] = pl; p[k][1] = a; }
         p[k][2] = z;
+    }
+    if ( mat == HM_FRAME || mat == HM_DOOR || mat == HM_GARAGE ) {                  // the whole picture on the rectangle (u across as seen from outside, v from the top)
+        bool rev = side == 1 || side == 2;
+        double u0 = rev ? 1.0 : 0.0, u1 = rev ? 0.0 : 1.0;
+        double uv[4][2] = { { u0, 1.0 }, { u1, 1.0 }, { u1, 0.0 }, { u0, 0.0 } };
+        quadu( b, p, uv, sdx[side], sdy[side], 0, mat );
+        return;
     }
     quad( b, p, sdx[side], sdy[side], 0, mat );
 }
@@ -639,8 +650,8 @@ static void openings( mb_t* b ) {
         } else if ( k == 2 || k == 3 ) {
             wface( b, ws, plane, a1, a2, z1, z2, whole ? HM_DOOR : HM_GLASS, 0.3 );
         } else if ( whole ) {
-            if ( b->level > 0 ) { wface( b, ws, plane, a1 - 0.6, a2 + 0.6, z1 - 0.6, z2 + 0.6, HM_FRAME, 0.15 ); }
-            wface( b, ws, plane, a1, a2, z1, z2, HM_GLASS, 0.3 );
+            if ( b->level > 0 ) { wface( b, ws, plane, a1 - 0.6, a2 + 0.6, z1 - 0.6, z2 + 0.6, HM_FRAME, 0.4 ); }     // (the frame stands in front of the pane: its picture has see-through panes)
+            wface( b, ws, plane, a1, a2, z1, z2, HM_GLASS, b->level > 0 ? 0.2 : 0.3 );
         } else {
             wface( b, ws, plane, a1, a2, z1, z2, HM_CHAR, 0.3 );               // a dark opening
         }
