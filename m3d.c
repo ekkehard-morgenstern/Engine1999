@@ -875,6 +875,38 @@ static void job_trees( tjob_t* j ) {
     }
 }
 
+// the trees of a finest tile of the static world (level 0, 976 units = 31 m): the tile is cut into 6 x 6 squares on the world's grid, each holds at most one tree at a hashed place
+// (the world seed and the square's number decide, so the same tree stands there whatever tiles are built), in forest mostly, now and then alone on a meadow or plain; not on or beside a
+// road, not on steep or high ground, not in the yard of the house and its field; cheap trees (12 triangles). Coarser tiles have none (the forest picture shows there).
+static double job_wh( const tjob_t* j, int64_t a, int64_t b, int64_t c ) {
+    return (double)( nz_hash64( world_seed( j->world ), a, b, c, 0 ) >> 11 ) * ( 1.0 / 9007199254740992.0 );
+}
+
+static void job_wtrees( tjob_t* j ) {
+    const double sub = j->cell * 8.0 / 6.0;
+    int64_t i0 = (int64_t) floor( j->x0 / sub + 0.5 ), k0 = (int64_t) floor( j->y0 / sub + 0.5 );
+    for ( int q = 0; q < 6; ++q ) {
+        for ( int p = 0; p < 6; ++p ) {
+            int64_t ia = i0 + p, ka = k0 + q;
+            double x = ( (double) ia + job_wh( j, ia, ka, 1 ) ) * sub, y = ( (double) ka + job_wh( j, ia, ka, 2 ) ) * sub;
+            if ( fabs( x ) < 1500.0 && fabs( y ) < 1500.0 ) { continue; }                          // the house and its yard
+            if ( fabs( x - 1100.0 ) < 900.0 && fabs( y - 650.0 ) < 700.0 ) { continue; }          // the wheat field
+            int kw = rnet_kind( &j->gnd.net, x, y );
+            double chance = kw == 3 ? 0.6 : 0.025;
+            if ( job_wh( j, ia, ka, 3 ) >= chance ) { continue; }
+            double h = job_height( j, x, y );
+            if ( !( h > j->pic.level + 2.0 && h < j->pic.rockh - 60.0 ) ) { continue; }
+            if ( fabs( job_height( j, x + 50.0, y ) - job_height( j, x - 50.0, y ) ) > 50.0 || fabs( job_height( j, x, y + 50.0 ) - job_height( j, x, y - 50.0 ) ) > 50.0 ) { continue; }
+            rnear_t rn;
+            rnet_near( &j->gnd.net, x, y, 320.0, &rn );
+            if ( rn.dirt < 100.0 || rn.tar < 310.0 ) { continue; }
+            double kk = job_wh( j, ia, ka, 4 );
+            int kind = kk >= 0.8 ? 2 : kk >= 0.45 ? 1 : 0;
+            if ( !job_tree( j, x, y, h - 2.0, job_wh( j, ia, ka, 5 ) * 360.0, 0.9 + job_wh( j, ia, ka, 6 ) * 0.5, kind, true, j->mb > j->ma ? job_coarse( j, x, y ) - h : 0.0 ) ) { return; }
+        }
+    }
+}
+
 static void job_run( tjob_t* j ) {
     int n = j->n, w = n + 1;
     j->nv = j->nt = j->nvar = 0;
@@ -932,7 +964,9 @@ static void job_run( tjob_t* j ) {
     if ( j->mode >= 1 && j->pic.dirt > 0 && j->gnd.net.on && ( j->mode != 4 || j->cell <= 250.0 ) ) {
         job_ribbons( j, 0 );
     }
-    if ( j->mode >= 2 && j->pic.bark > 0 && j->gnd.net.on ) {
+    if ( j->mode == 4 && j->cell < 125.0 && j->pic.bark > 0 && j->world != 0 ) {
+        job_wtrees( j );
+    } else if ( j->mode >= 2 && j->mode != 4 && j->pic.bark > 0 && j->gnd.net.on ) {
         job_trees( j );
     }
 }

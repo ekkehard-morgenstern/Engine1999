@@ -263,6 +263,26 @@ static void test_world( const char* base ) {
     }
     printf( "world walk: the surface at 24 places changed by at most %.2f units between steps of 150 (tiles shown %d at the start, %g at the end)\n", maxjump, splits_changed, Q( GFXQ_M3DWORLDINFO, 1, 2.0 ) );
     CHECK( maxjump < 40.0 );
+    // trees: the finest tiles hold hashed trees where tree pictures are set, the same ones every time (the tiles that are shown, summed over six places)
+    {
+        long tri[3] = { 0, 0, 0 };
+        for ( int run = 0; run < 3; ++run ) {
+            CHECK( op( GFXOP_M3DWORLDCLOSE, 0 ) );
+            CHECK( op( GFXOP_M3DTREEPIC, 4, run == 0 ? 0.0 : 312.0, run == 0 ? 0.0 : 309.0, run == 0 ? 0.0 : 310.0, run == 0 ? 0.0 : 317.0 ) );
+            CHECK( ops( GFXOP_M3DWORLDOPEN, 1, dir, 100.0 ) );
+            for ( int pl = 0; pl < 6; ++pl ) {
+                CHECK( op( GFXOP_M3DWORLDVIEW, 2, -50000.0 + 20000.0 * pl, 30000.0 - 9000.0 * pl ) );
+                CHECK( op( GFXOP_M3DWORLDWAIT, 0 ) );
+                for ( int k = 100; k < 100 + 3072; ++k ) {
+                    const obj_t* o = &M->objs[k];
+                    if ( o->used && o->shown && o->nv > 0 && o->mx1 - o->mx0 < 1000.0 ) { tri[run] += o->nt; }
+                }
+            }
+        }
+        printf( "world trees: %ld triangles in the finest tiles without tree pictures, %ld with, %ld again\n", tri[0], tri[1], tri[2] );
+        CHECK( tri[1] > tri[0] && tri[1] == tri[2] );
+        CHECK( op( GFXOP_M3DTREEPIC, 4, 0.0, 0.0, 0.0, 0.0 ) );
+    }
     CHECK( op( GFXOP_M3DWORLDCLOSE, 0 ) );
     CHECK( Q( GFXQ_M3DWORLDINFO, 1, 0.0 ) == 0.0 );
     CHECK( !M->objs[100].used );

@@ -113,6 +113,17 @@ software renderer at 640 x 264 (16000 triangles drawn), every place covered by e
 24 km in steps of 150 units changes the surface at 24 places by at most 11 units between two steps (the steep walls of mountains; nothing steps). Clean under ASan, UBSan and
 ThreadSanitizer.
 
+## Trees (step 4, first piece, 2026-11-22)
+
+The finest tiles (level 0, 976 units = 31 m, cells of 122 units) carry **trees**, made by the ground job (`job_wtrees` in `m3d.c`) when tree pictures are set (`M3D TREEPIC`): the tile is cut
+into 6 x 6 squares on the world's grid and each square holds at most one tree at a place hashed from the **world seed** and the square's number (`nz_hash64`), so the same tree stands in
+the same place whatever tiles are built and in whatever order; nothing is stored (the chunk's own seed is not needed yet). Chance 0.6 in forest, 0.025 elsewhere (a lone tree); none on
+or beside roads (the dirt and tarred distances of `rnet_near`), on steep ground (over 50 units height difference per 100), below the water + 2 or above `rockh - 60`, in the house's yard
+or on its wheat field. The trees are the **cheap** ones (12 triangles: a square trunk and a cone), three kinds; their vertices morph with the ground like the cells. Coarser tiles have
+no trees (the forest picture shows there), so trees appear and vanish where level 0 and 1 tiles meet (about 90 m from the camera). `m3dtest1` checks that the finest tiles hold more
+triangles with tree pictures than without and exactly the same number on every opening. **Open:** the trees pop at 90 m (a second tree level for level 1 tiles with fewer trees, or
+fog), full-detail trees near the player, collision with trunks (John walks through them, as in the dynamic mode), ruins, bales, posts, real water.
+
 ## Plan
 
 1. File format, seed field, creation step (**done**).
