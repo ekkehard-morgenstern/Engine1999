@@ -405,7 +405,8 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXOP_M3DFIRST  GFXOP_M3DRESET
 #define GFXOP_M3DPOSTPIC 363            // M3D POSTPIC post, white, red [, bale]   (the palette colors or pictures of the reflector posts beside the tarred roads of the static world and of the hay bales in its fields; they stand in the cells of trees; -1 for post, white and red: no posts; a bale of -1 or none: no bales)
 #define GFXOP_M3DCULL   364             // M3D CULL smallpx [, sort [, occlusion]]   (objects whose bounding sphere is smaller than smallpx pixels are not drawn, default 1, 0 = off; sort 0 / 1: opaque objects nearest first, default 1; occlusion 0 / 1: the software renderer skips objects that lie behind what is already drawn, needs sort, default 1)
-#define GFXOP_M3DLAST   GFXOP_M3DCULL
+#define GFXOP_M3DHOUSE  365             // M3D HOUSE o, type, stage, seed [, level]   (object o = the outside of a family house of house.[ch]: type 1 .. 5, stage 0 .. 4 of damage, level 0 far / 1 middle (default), at the origin; plain palette colours of the 16-shade hue ramps of w3dkit)
+#define GFXOP_M3DLAST   GFXOP_M3DHOUSE
 #define GFXOP_IS_M3D(op) ( (op) >= GFXOP_M3DFIRST && (op) <= GFXOP_M3DLAST )
 #define GFXQ_M3DX       350             // M3D("X"), ("Y"), ("Z" = the feet), ("EYE"), ("YAW"), ("PITCH"), ("LIFT"), ("HIT"), ("FLOORZ")
 #define GFXQ_M3DY       351

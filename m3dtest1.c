@@ -1486,6 +1486,22 @@ int main( void ) {
         }
         m3d_soft_set_simd( -1 );
     }
+    // -- M3D HOUSE: the outside of a family house of house.[ch] as an object -------------------------------------------------------------------------------
+    {
+        fresh();
+        CHECK( op( GFXOP_M3DHOUSE, 4, 5.0, 1.0, 0.0, 7.0 ) );
+        double mid = Q( GFXQ_M3DTRIS, 1, 5.0 );
+        CHECK( op( GFXOP_M3DHOUSE, 5, 6.0, 1.0, 0.0, 7.0, 0.0 ) );
+        double far = Q( GFXQ_M3DTRIS, 1, 6.0 );
+        CHECK( far > 20.0 && mid > far && mid < 4000.0 );
+        CHECK( op( GFXOP_M3DHOUSE, 4, 5.0, 3.0, 4.0, 7.0 ) && Q( GFXQ_M3DTRIS, 1, 5.0 ) > 100.0 );                  // made again with another stage: the object is replaced
+        CHECK( !op( GFXOP_M3DHOUSE, 4, 7.0, 6.0, 0.0, 7.0 ) && !op( GFXOP_M3DHOUSE, 4, 7.0, 1.0, 5.0, 7.0 ) && !op( GFXOP_M3DHOUSE, 4, 28000.0, 1.0, 0.0, 7.0 ) );
+        CHECK( !op( GFXOP_M3DHOUSE, 5, 7.0, 1.0, 0.0, 7.0, 2.0 ) );
+        CHECK( op( GFXOP_M3DOBJPOS, 4, 6.0, 300.0, -60.0, 0.0 ) );
+        CHECK( op( GFXOP_M3DCAMERA, 5, 0.0, 0.0, 20.0, 0.0, 0.0 ) );
+        const uint8_t* f = m3d_render( M );
+        CHECK( f != 0 && Q( GFXQ_M3DCULL, 1, 1.0 ) >= 2.0 );                                                      // the floor and the house are drawn
+    }
     // -- the counts of M3D("CULL"), small objects (M3D CULL px) and the nearest first order of the opaque objects ----------------------------------------
     {
         fresh();                                                                                                   // object 1: the floor

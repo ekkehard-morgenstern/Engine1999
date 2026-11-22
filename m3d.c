@@ -31,6 +31,7 @@
 #include "gfxops.h"
 #include "noise.h"
 #include "roadnet.h"
+#include "house.h"
 #include "world.h"
 #include <pthread.h>
 #include <stdatomic.h>
@@ -2496,6 +2497,35 @@ bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t sl
                 *err = "Out of memory";
                 return false;
             }
+            return true;
+        }
+        case GFXOP_M3DHOUSE: {
+            // the colours as palette indices of the 16-shade hue ramps (index = 16 + 16 * hue + shade, the palette of demos/lib/w3dkit.lib; the engine's own colors are only pictures < 256)
+            static const int plaster[6] = { 16 + 16 * 13 + 12, 16 + 16 * 3 + 13, 16 + 16 * 8 + 12, 16 + 16 * 14 + 12, 16 + 16 * 5 + 12, 16 + 0 * 16 + 13 };
+            static const int roofc[3] = { 16 + 16 * 1 + 10, 16 + 16 * 12 + 10, 16 + 0 * 16 + 10 };
+            int ty, st, lv = 1;
+            if ( !whole( a[0], 0, M3D_MAXOBJECTS - 1, &i1 ) || !whole( a[1], 1, 5, &ty ) || !whole( a[2], 0, 4, &st ) || !( a[3] > -4.4e9 && a[3] < 4.4e9 ) ||
+                 ( !NONE_VAL( a[4] ) && !whole( a[4], 0, 1, &lv ) ) ) {
+                return false;
+            }
+            house_t* hh = (house_t*) malloc( sizeof(house_t) );
+            hmesh_t hm;
+            if ( hh == 0 ) { *err = "Out of memory"; return false; }
+            house_gen( hh, ty, (int64_t) floor( a[3] ) );
+            if ( !house_mesh( hh, st, lv, &hm ) ) { free( hh ); *err = "Out of memory"; return false; }
+            free( hh );
+            double oa[3] = { (double) i1, (double) M3D_OF_TWOSIDED, 235.0 };
+            if ( !m3d_op( m, GFXOP_M3DOBJECT, oa, 3, 0, 0, err ) ) { house_mesh_free( &hm ); return false; }
+            obj_t* o = &m->objs[i1];
+            int mat[HM_NMAT];
+            mat[HM_PLASTER] = plaster[hm.plaster]; mat[HM_CHAR] = 16 + 2; mat[HM_BRICK] = 16 + 8; mat[HM_ROOF] = roofc[hm.roofc]; mat[HM_GLASS] = 16 + 16 * 9 + 3;
+            mat[HM_DOOR] = 16 + 16 * 12 + 6; mat[HM_WOOD] = 16 + 16 * 12 + 8; mat[HM_CONCRETE] = 16 + 9; mat[HM_RIM] = 16 + 16 * 7 + 12; mat[HM_GARAGE] = 16 + 8;
+            mat[HM_FRAME] = 16 + 16 * 12 + 10;
+            bool ok = true;
+            for ( int k = 0; k < hm.nv && ok; ++k ) { ok = obj_addv( o, hm.v[k].x, hm.v[k].y, hm.v[k].z, hm.v[k].u, hm.v[k].v ); }
+            for ( int k = 0; k < hm.nt && ok; ++k ) { ok = obj_addt( o, hm.t[k].a, hm.t[k].b, hm.t[k].c, mat[hm.t[k].mat] ); }
+            house_mesh_free( &hm );
+            if ( !ok ) { *err = "Out of memory"; return false; }
             return true;
         }
         case GFXOP_M3DOBJPOS: {
