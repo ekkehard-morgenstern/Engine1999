@@ -1421,6 +1421,7 @@
 11230   END IF
 11235   CALL CAMHUD
 11236   IF SXY THEN CALL COORDS
+11237   CALL COMPASS
 11240 END PROC
 11250 PROC RIGS
 11260   CALL DRONERIG
@@ -2600,3 +2601,26 @@
 25820   GFX LINE 0,0,127,119,0,BF
 25830   GFX CIRCLE CX,CY,R,FN CC(2,14),0,360,1.6:GFX PAINT CX,CY,FN CC(2,14),FN CC(2,14)
 25840 END PROC
+25850 ' the compass: a tape at the top left of the screen (centre x 160, 1.5 pixels a degree, 60 degrees to each side) that shows where N, E, S and W are; the world's +x is east and +y north
+25860 ' (the camera's yaw 0 looks east, 90 north), so the bearing is 90 minus the yaw; ticks every 15 degrees, the letters at the four directions, small ticks at the corners
+25870 PROC COMPASS
+25880   LOCAL B,K,D,X
+25890   B=90-M3D("YAW")
+25900   GFX LINE 70,3,250,15,FN CC(0,3),BF
+25910   FOR K=0 TO 23
+25920     D=FN ADIFF(K*15,B)
+25930     IF ABS(D)<=56 THEN
+25940       X=160+INT(D*1.5)
+25950       IF K MOD 6=0 THEN
+25960         X=X-4
+25970         IF K=0 THEN GFX TEXT X,3,"N",FN CC(2,13)
+25980         IF K=6 THEN GFX TEXT X,3,"E",FN CC(3,15)
+25990         IF K=12 THEN GFX TEXT X,3,"S",FN CC(3,15)
+26000         IF K=18 THEN GFX TEXT X,3,"W",FN CC(3,15)
+26010       ELSE
+26020         GFX LINE X,11,X,14,FN CC(0,13)
+26030       END IF
+26040     END IF
+26050   NEXT K
+26060   GFX LINE 160,16,160,19,FN CC(3,15)
+26070 END PROC
