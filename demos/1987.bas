@@ -2256,7 +2256,7 @@
 20020   NEXT I
 20030 END PROC
 20220 ' the picture of a tarred road: 64 x 64 texels, across the road (440 units, about 6.9 units a texel) and along it (64 texels = 376 units = 12 m); dark tar with speckles, a continuous
-20230 ' white edge line on each side (x 3 and 60), a dashed white middle line (x 31 / 32: 4.5 m dashes, 7.5 m gaps) and dashed white lane lines between the two lanes of a direction (x 17 and 46)
+20230 ' white edge line on each side (x 3 and 60), and a dashed white middle line (x 31 / 32: 4.5 m dashes, 7.5 m gaps); no lane lines (owner 2026-11-22: only the one dashed line in the middle)
 20240 PROC MKTAR
 20250   LOCAL I
 20260   GFX LINE 0,0,63,63,FN CC(0,3),BF
@@ -2265,7 +2265,6 @@
 20290   NEXT I
 20300   GFX LINE 3,0,3,63,FN CC(0,15):GFX LINE 60,0,60,63,FN CC(0,15)
 20310   GFX LINE 31,0,32,23,FN CC(0,15),BF
-20320   GFX LINE 17,0,17,15,FN CC(0,15):GFX LINE 46,0,46,15,FN CC(0,15)
 20330   CALL W3K_GRAB(327,64,64)
 20335   GFX LINE 0,0,3,3,FN CC(0,4),BF:CALL W3K_GRAB(328,4,4)
 20340 END PROC
