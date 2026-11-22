@@ -13,7 +13,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-- **Step 4: hay bales in the fields of the static world** (2026-11-22, owner: "add the hay bales back from step 4 (I figure full-size wheat fields would be too many polygons, right?)"): yes, too many (answered in the docs). `M3D POSTPIC` got an optional fourth argument, the bale picture (`gfxops.[ch]` `"nnno"`, `m3dpriv.h` `bales` / `bale`); `m3d.c` `job_wbales` / `job_bale` in the mode 5 cell jobs: on the trees' grid, a bale in 12 squares out of 100 where `rnet_kind` is field (about 0.4 of the dynamic game's density), 44 x 28 x 22 box of 10 triangles scaled 0.8 .. 1.3, random yaw, not near roads / the yard / the hand-made wheat field / rough ground / water, morphing out of the ground like the trees. `demos/1987.bas` line 3277 passes 321. `m3dtest1` +48 cases (2639: range check, more triangles with bales, same on reopening). Seen in an Xvfb window in the field east of the house. `docs/world-subsystem.md` "Hay bales".
+(none)
 
 ## Log
 
@@ -2446,3 +2446,9 @@ The owner bundled four pieces of work into this commit: tarred roads with posts,
 4 files changed, 13 insertions(+), 5 deletions(-)
 
 - **Tarred roads: no lane lines** (2026-11-22, owner: "There should only be the one dashed line in the middle, the two smaller ones to the left and right of it can be removed"): `demos/1987.bas` `MKTAR` no longer draws the two dashed lane lines (texture columns 17 and 46) in the tar picture 327; the white edge lines and the dashed middle line stay. Looked at in an Xvfb window on the home road: only the edge lines and the middle line.
+
+### 9739720 — 2026-11-22 08:37:02 +0100 — "Hay bales added back by Claude Code"
+
+9 files changed, 88 insertions(+), 6 deletions(-)
+
+- **Step 4: hay bales in the fields of the static world** (2026-11-22, owner: "add the hay bales back from step 4 (I figure full-size wheat fields would be too many polygons, right?)"): yes, too many (answered in the docs). `M3D POSTPIC` got an optional fourth argument, the bale picture (`gfxops.[ch]` `"nnno"`, `m3dpriv.h` `bales` / `bale`); `m3d.c` `job_wbales` / `job_bale` in the mode 5 cell jobs: on the trees' grid, a bale in 12 squares out of 100 where `rnet_kind` is field (about 0.4 of the dynamic game's density), 44 x 28 x 22 box of 10 triangles scaled 0.8 .. 1.3, random yaw, not near roads / the yard / the hand-made wheat field / rough ground / water, morphing out of the ground like the trees. `demos/1987.bas` line 3277 passes 321. `m3dtest1` +48 cases (2639: range check, more triangles with bales, same on reopening). Seen in an Xvfb window in the field east of the house. `docs/world-subsystem.md` "Hay bales".
