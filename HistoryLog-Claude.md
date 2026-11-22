@@ -13,7 +13,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-(none)
+- **House generator `tools/housegen.bas` for the ruins of the static world** (2026-11-22, owner: the ruins should be destroyed German family houses; "Yes to all; write the BASIC house generator first"; the concept was discussed first, web search on size and roof pitch of Einfamilienhaeuser): a window program that generates randomized houses from a seed (10 .. 12 x 8 .. 10 m, two storeys, gable roof 27 .. 43 degrees, ridge 8.5 .. 10 m, chimney, shutter boxes, porch canopy; a hall column with stairs, WC / bathroom, a living side and a service side, rooms, doors, windows, wooden furniture that keeps clear of doors and stairs) and draws contact sheets (front, gable side, ground floor, upper floor) for damage D 0 .. 1 (soot, plaster off, glass gone, burnt roof, falling walls, charred furniture, fallen floors, rubble) and with the round hole of a beam; saves `housegen-1.bmp` .. `-5.bmp` (`HOUSEGEN_DIR`, `HOUSEGEN_AUTO`, `HOUSEGEN_SEED`); `HOUSEGEN_TEST=1` is a self test in the console host (300 houses: sizes, pitch, rooms inside and not overlapping, doors, windows, furniture; `housegentest.sh`, added to `make check`). Reserved words that bit me: `PUT`, `AUTO`, `LN`, `POS`; `STR$` has no leading space. The contact sheets are in `docs/images/housegen-1.png` .. `-5.png`. `docs/world-subsystem.md` "Ruins" (concept and decisions), `tools/README.md`, `docs/roadmap/projects.md`. The BASIC builder on `M3D` and the C version are next.
 
 ## Log
 
