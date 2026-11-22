@@ -133,6 +133,10 @@ triangles are shown with tree pictures than without and exactly the same number 
 35000 within 224 m). **Open:** the range (224 m) is set by the triangle budget (the hardware renderer could take more); full-detail trees near the player; collision with trunks (John walks
 through them, as in the dynamic mode); beyond the range only the forest ground picture shows; ruins, bales, posts, real water.
 
+## Reflector posts (step 4, second piece, 2026-11-22)
+
+The posts beside the tarred roads (the post of `demos/1987.bas`: 5 across, 36 units = 1.1 m high, a white reflector on its -x face, a red one on its +x face) stand in the **same cells as the trees** (mode 5, `job_wposts`, `job_post`), set by `M3D POSTPIC post, white, red` (palette colors or pictures; all three -1: none; the cells are made when trees *or* posts are set). Every 50 m (1562.5 units) along each tarred road, measured on the way from its start (the same for every cell: a cell makes the posts that stand inside it), a pair at 232 units from the middle (just outside the 220 half width), the right-hand one in the road's direction, the left-hand one turned round; none within 520 units of an intersection and none in the quiet box round the house (where the road is not made). 14 triangles a post, so about 280 a kilometre of road; the vertices morph to the foot like the trees' (they grow out of the ground at 224 m, nothing appears in the middle of the view). `m3dtest1` checks that more triangles are shown with post pictures and the same number on every opening (three places along the home road). Seen under Xvfb from the road: a pair of white posts with their reflectors on both sides. **Open:** posts beside the dirt tracks (the dynamic game has none), collision.
+
 ## Plan
 
 1. File format, seed field, creation step (**done**).

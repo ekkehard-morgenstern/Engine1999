@@ -911,11 +911,76 @@ static void job_wtrees( tjob_t* j ) {
     }
 }
 
+// a reflector post (the one of demos/1987.bas, 14 triangles): a square post 5 across and 36 high, on its -x face a white reflector (seen by the traffic that comes from behind), on its +x face
+// a red one (the oncoming traffic's); the road's direction is the post's +x; the vertices morph to the foot like a tree's
+static bool job_post( tjob_t* j, double x, double y, double z, double yaw ) {
+    double cs = cos( yaw * DEG2RAD ), sn = sin( yaw * DEG2RAD );
+    j->tbase = z;
+    #define PV(lx,ly,lz) jv_addtree( j, 0.0, x + (lx) * cs - (ly) * sn, y + (lx) * sn + (ly) * cs, z + (lz), 0.0, 0.0 )
+    int b[4], t[4];
+    static const double cx[4] = { 2.5, 2.5, -2.5, -2.5 }, cy[4] = { -2.5, 2.5, 2.5, -2.5 };
+    for ( int k = 0; k < 4; ++k ) { b[k] = PV( cx[k], cy[k], 0.0 ); t[k] = PV( cx[k], cy[k], 36.0 ); }
+    // reflectors: a quad a little proud of the face, bottom left, bottom right, top right, top left as seen from outside
+    int w[4] = { PV( -2.9, 2.0, 21.0 ), PV( -2.9, -2.0, 21.0 ), PV( -2.9, -2.0, 31.0 ), PV( -2.9, 2.0, 31.0 ) };
+    int r[4] = { PV( 2.9, -2.0, 21.0 ), PV( 2.9, 2.0, 21.0 ), PV( 2.9, 2.0, 31.0 ), PV( 2.9, -2.0, 31.0 ) };
+    #undef PV
+    for ( int k = 0; k < 4; ++k ) {
+        if ( b[k] < 0 || t[k] < 0 || w[k] < 0 || r[k] < 0 ) { return false; }
+    }
+    int tex = j->pic.post[0];
+    for ( int k = 0; k < 4; ++k ) {
+        int k1 = ( k + 1 ) & 3;
+        if ( !jt_add( j, b[k], b[k1], t[k1], tex ) || !jt_add( j, b[k], t[k1], t[k], tex ) ) { return false; }
+    }
+    return jt_add( j, t[0], t[1], t[2], tex ) && jt_add( j, t[0], t[2], t[3], tex )
+        && jt_add( j, w[0], w[1], w[2], j->pic.post[1] ) && jt_add( j, w[0], w[2], w[3], j->pic.post[1] )
+        && jt_add( j, r[0], r[1], r[2], j->pic.post[2] ) && jt_add( j, r[0], r[2], r[3], j->pic.post[2] );
+}
+
+// the posts of a cell: every 50 m (1562.5 units) along each tarred road, measured on the way from its start, on both sides (232 from the middle, the right-hand one faces the traffic, the left-hand
+// one is turned round); none within 520 of an intersection, none where the road is not made (the quiet box round the house)
+static void job_wposts( tjob_t* j ) {
+    const double S = 1562.5, ex = j->x0 + j->n * j->cell, ey = j->y0 + j->n * j->cell;
+    rlink_t links[16];
+    int nl = rnet_links( &j->gnd.net, 1, j->x0 - 300.0, j->y0 - 300.0, ex + 300.0, ey + 300.0, links, 16 );
+    static _Thread_local double px[2000], py[2000];
+    for ( int li = 0; li < nl; ++li ) {
+        const rlink_t* l = &links[li];
+        int np = 0, ns = l->steps * 4 < 1999 ? l->steps * 4 : 1999;
+        for ( int k = 0; k <= ns; ++k ) { rnet_point( l, (double) k / (double) ns, &px[np], &py[np] ); ++np; }
+        double total = 0.0;
+        for ( int k = 1; k < np; ++k ) { total += hypot( px[k] - px[k - 1], py[k] - py[k - 1] ); }
+        double d = 0.0, next = S;
+        for ( int k = 1; k < np; ++k ) {
+            double dx = px[k] - px[k - 1], dy = py[k] - py[k - 1], sl = hypot( dx, dy );
+            while ( sl > 0.0 && d + sl >= next ) {
+                double f = ( next - d ) / sl, mx = px[k - 1] + dx * f, my = py[k - 1] + dy * f, pd = next;
+                next += S;
+                if ( ( l->hub1 && pd < 520.0 ) || ( l->hub2 && pd > total - 520.0 ) ) { continue; }
+                if ( j->gnd.quiet.on && 1.0 - box_weight( mx, my, j->gnd.quiet.cx, j->gnd.quiet.cy, j->gnd.quiet.rx, j->gnd.quiet.ry, j->gnd.quiet.margin ) < 0.99 ) { continue; }
+                double ux = dx / sl, uy = dy / sl, yaw = atan2( uy, ux ) / DEG2RAD;
+                for ( int side = 0; side < 2; ++side ) {
+                    double sg = side == 0 ? 1.0 : -1.0, qx = mx + uy * 232.0 * sg, qy = my - ux * 232.0 * sg;
+                    if ( qx < j->x0 || qx >= ex || qy < j->y0 || qy >= ey ) { continue; }
+                    double h = job_height( j, qx, qy );
+                    if ( !( h > j->pic.level + 1.0 ) ) { continue; }
+                    if ( !job_post( j, qx, qy, h - 1.0, side == 0 ? yaw : yaw + 180.0 ) ) { return; }
+                }
+            }
+            d += sl;
+        }
+    }
+}
+
 static void job_run( tjob_t* j ) {
     int n = j->n, w = n + 1;
     j->nv = j->nt = j->nvar = 0;
     if ( j->mode == 5 ) {                                          // the trees of a cell of the static world, no ground
-        if ( j->pic.bark > 0 && j->world != 0 ) { j->tcol = true; job_wtrees( j ); }
+        if ( j->world != 0 ) {
+            j->tcol = true;
+            if ( j->pic.bark > 0 ) { job_wtrees( j ); }
+            if ( j->pic.posts ) { job_wposts( j ); }
+        }
         return;
     }
     double uvs = j->mode == 1 ? 0.5 : j->cell <= 300.0 ? 0.5 : j->cell <= 900.0 ? 0.1 : 0.02;
@@ -1383,7 +1448,7 @@ static void wl_view( m3d_t* m, double x, double y ) {
         for ( int64_t tx = ax; tx <= bx; ++tx ) { wl_visit( m, wl, WL_TOP, tx, ty ); }
     }
     // the cells of trees: made at the far end of their range (the trees are still flat on the ground there), shown from the range on, dropped when far again
-    if ( m->rpic.bark > 0 ) {
+    if ( m->rpic.bark > 0 || m->rpic.posts ) {
         double ts = wl_size( WL_TREE ), reach = WL_TB + 4.5 * ts;
         int64_t ax2 = (int64_t) floor( ( x - reach ) / ts ), bx2 = (int64_t) floor( ( x + reach ) / ts ), ay2 = (int64_t) floor( ( y - reach ) / ts ), by2 = (int64_t) floor( ( y + reach ) / ts );
         for ( int64_t ty = ay2; ty <= by2; ++ty ) {
@@ -2103,6 +2168,15 @@ bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t sl
                 if ( !whole( a[k], 0, M3D_MAXTEX - 1, &tv[k] ) ) { return false; }
             }
             m->rpic.bark = tv[0]; m->rpic.leaf[0] = tv[1]; m->rpic.leaf[1] = tv[2]; m->rpic.leaf[2] = tv[3];
+            return true;
+        }
+        case GFXOP_M3DPOSTPIC: {
+            if ( a[0] < 0.0 && a[1] < 0.0 && a[2] < 0.0 ) { m->rpic.posts = false; return true; }
+            int pv[3];
+            for ( int k = 0; k < 3; ++k ) {
+                if ( !whole( a[k], 0, M3D_MAXTEX - 1, &pv[k] ) ) { return false; }
+            }
+            m->rpic.posts = true; m->rpic.post[0] = pv[0]; m->rpic.post[1] = pv[1]; m->rpic.post[2] = pv[2];
             return true;
         }
         case GFXOP_M3DMORPH:

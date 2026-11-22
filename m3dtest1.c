@@ -283,6 +283,27 @@ static void test_world( const char* base ) {
         CHECK( tri[1] > tri[0] && tri[1] == tri[2] );
         CHECK( op( GFXOP_M3DTREEPIC, 4, 0.0, 0.0, 0.0, 0.0 ) );
     }
+    // reflector posts beside the tarred roads: the home road runs past the house at x of about 8200 (all shown objects, summed over three places along it)
+    {
+        long tri[3] = { 0, 0, 0 };
+        CHECK( !op( GFXOP_M3DPOSTPIC, 3, 300000.0, 1.0, 1.0 ) );                                       // a picture number out of range
+        for ( int run = 0; run < 3; ++run ) {
+            CHECK( op( GFXOP_M3DWORLDCLOSE, 0 ) );
+            CHECK( op( GFXOP_M3DPOSTPIC, 3, run == 0 ? -1.0 : 30.0, run == 0 ? -1.0 : 31.0, run == 0 ? -1.0 : 32.0 ) );
+            CHECK( ops( GFXOP_M3DWORLDOPEN, 1, dir, 100.0 ) );
+            for ( int pl = 0; pl < 3; ++pl ) {
+                CHECK( op( GFXOP_M3DWORLDVIEW, 2, 8225.0, -4600.0 - 3000.0 * pl ) );
+                CHECK( op( GFXOP_M3DWORLDWAIT, 0 ) );
+                for ( int k = 100; k < 100 + 3072; ++k ) {
+                    const obj_t* o = &M->objs[k];
+                    if ( o->used && o->shown && o->nv > 0 ) { tri[run] += o->nt; }
+                }
+            }
+        }
+        printf( "world posts: %ld triangles shown without post pictures, %ld with, %ld again\n", tri[0], tri[1], tri[2] );
+        CHECK( tri[1] > tri[0] && tri[1] == tri[2] );
+        CHECK( op( GFXOP_M3DPOSTPIC, 3, -1.0, -1.0, -1.0 ) );
+    }
     CHECK( op( GFXOP_M3DWORLDCLOSE, 0 ) );
     CHECK( Q( GFXQ_M3DWORLDINFO, 1, 0.0 ) == 0.0 );
     CHECK( !M->objs[100].used );
