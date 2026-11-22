@@ -168,6 +168,20 @@ typedef struct {
     int nlamps;
 } rc_t;
 
+static void sort_asc( int* idx, const double* key, int n ) {
+    for ( int gap = n / 2; gap > 0; gap /= 2 ) {
+        for ( int i = gap; i < n; ++i ) {
+            int t = idx[i];
+            int j = i;
+            while ( j >= gap && ( key[idx[j-gap]] > key[t] || ( key[idx[j-gap]] == key[t] && idx[j-gap] > t ) ) ) {
+                idx[j] = idx[j-gap];
+                j -= gap;
+            }
+            idx[j] = t;
+        }
+    }
+}
+
 static void sort_desc( int* idx, const double* key, int n ) {
     for ( int gap = n / 2; gap > 0; gap /= 2 ) {
         for ( int i = gap; i < n; ++i ) {
@@ -622,24 +636,28 @@ static void draw_object( rc_t* c, obj_t* o, bool translucent ) {
     free( vv );
 }
 
-static bool object_visible( const rc_t* c, const obj_t* o, double* dist ) {
+// 0 visible, 1 behind the viewer or beyond FAR, 2 outside the sides of the view, 3 too small (the bounding sphere under M3D CULL's smallpx pixels, when the object does not reach the near plane)
+static int object_visible( const rc_t* c, const obj_t* o, double* dist ) {
     v3_t d = { o->cx - c->eye.x, o->cy - c->eye.y, o->cz - c->eye.z };
     double zv = vdot( d, c->fw ), xv = vdot( d, c->r ), yv = vdot( d, c->up );
     *dist = zv;
     if ( zv + o->rad < NEARZ ) {
-        return false;
+        return 1;
     }
     if ( c->m->far > 0 && zv - o->rad > c->m->far ) {
-        return false;
+        return 1;
     }
     double zz = zv + o->rad;
     if ( fabs( xv ) - o->rad > zz * ( c->cx / c->f ) + 0 && zz > 0 && fabs( xv ) > zz * ( c->cx / c->f ) + o->rad * 1.5 ) {
-        return false;
+        return 2;
     }
     if ( zz > 0 && fabs( yv ) > zz * ( c->cy / c->f ) + o->rad * 1.5 ) {
-        return false;
+        return 2;
     }
-    return true;
+    if ( c->m->smallpx > 0 && zv - o->rad > NEARZ && o->rad * c->f < c->m->smallpx * zv ) {
+        return 3;
+    }
+    return 0;
 }
 
 static void draw_things( rc_t* c ) {
@@ -738,12 +756,14 @@ static const void* soft_render( m3d_t* m, void* rd ) {
         if ( m->lamps[k].r > 0 && m->lamps[k].amount > 0 ) { ++c.nlamps; }
     }
     m->drawn = 0;
+    memset( m->cull, 0, sizeof(m->cull) );
     draw_sky_bg( &c );
     size_t np = (size_t) m->bw * (size_t) m->bh;
     for ( size_t i=0; i < np; ++i ) {
         s->zb[i] = 1.0e30f;
     }
-    int nt = 0;
+    int nt = 0, no = 0;
+    int* opq = m->order + M3D_MAXOBJECTS + M3D_MAXTHINGS;                  // the opaque objects of the frame, nearest first (M3D CULL ..., 1)
     int nul_; const int* ul_ = m3d_used( m, &nul_ );
     for ( int ui_=0; ui_ < nul_; ++ui_ ) {
         int i = ul_[ui_];
@@ -752,15 +772,32 @@ static const void* soft_render( m3d_t* m, void* rd ) {
             continue;
         }
         m3d_obj_update( o );
-        double dist;
-        if ( o->dirty || !object_visible( &c, o, &dist ) ) {
+        if ( o->dirty ) {
             continue;
         }
+        ++m->cull[0];
+        double dist;
+        int why = object_visible( &c, o, &dist );
+        if ( why != 0 ) {
+            ++m->cull[why + 1];
+            continue;
+        }
+        ++m->cull[1]; m->cull[6] += o->nt;
         if ( ( o->flags & M3D_OF_TRANS ) != 0 ) {
             m->order[nt] = i; m->odist[i] = dist; ++nt;
             continue;
         }
+        if ( m->nearsort ) {
+            opq[no] = i; m->odist[i] = dist; ++no;
+            continue;
+        }
         draw_object( &c, o, false );
+    }
+    if ( no > 0 ) {
+        sort_asc( opq, m->odist, no );
+        for ( int k=0; k < no; ++k ) {
+            draw_object( &c, &m->objs[opq[k]], false );
+        }
     }
     draw_things( &c );
     if ( nt > 0 ) {

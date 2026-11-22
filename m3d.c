@@ -377,6 +377,8 @@ static void reset_state( m3d_t* m ) {
     m->x = m->y = m->z = 0; m->yaw = 0; m->pitch = 0; m->lift = 0;
     m->radius = 14; m->height = 56; m->eye = 46; m->step = 24;
     m->hit = 0; m->shotkind = 0; m->shotobj = -1; m->shotdist = 0; m->shotx = m->shoty = m->shotz = 0;
+    m->smallpx = 1.0; m->nearsort = true;
+    memset( m->cull, 0, sizeof(m->cull) );
 }
 
 m3d_t* m3d_new( void ) {
@@ -389,7 +391,7 @@ m3d_t* m3d_new( void ) {
     m->ul = (int*) calloc( M3D_MAXOBJECTS, sizeof(int) );
     m->things = (thing_t*) calloc( M3D_MAXTHINGS, sizeof(thing_t) );
     m->zones = (zone_t*) calloc( M3D_MAXZONES, sizeof(zone_t) );
-    m->order = (int*) calloc( M3D_MAXOBJECTS + M3D_MAXTHINGS, sizeof(int) );
+    m->order = (int*) calloc( 2 * M3D_MAXOBJECTS + M3D_MAXTHINGS, sizeof(int) );        // (the translucent objects, the things, then the opaque objects of a frame)
     m->odist = (double*) calloc( M3D_MAXOBJECTS + M3D_MAXTHINGS, sizeof(double) );
     reset_state( m );
     m->rend = &m3d_soft_renderer;
@@ -2216,6 +2218,13 @@ bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t sl
             m->rpic.bark = tv[0]; m->rpic.leaf[0] = tv[1]; m->rpic.leaf[1] = tv[2]; m->rpic.leaf[2] = tv[3];
             return true;
         }
+        case GFXOP_M3DCULL:
+            if ( !( a[0] >= 0.0 && a[0] <= 100.0 ) || ( !NONE_VAL( a[1] ) && !( a[1] == 0.0 || a[1] == 1.0 ) ) ) {
+                return false;
+            }
+            m->smallpx = a[0];
+            if ( !NONE_VAL( a[1] ) ) { m->nearsort = a[1] != 0.0; }
+            return true;
         case GFXOP_M3DPOSTPIC: {
             int bv = -1;
             if ( !NONE_VAL( a[3] ) && a[3] >= 0.0 && !whole( a[3], 0, M3D_MAXTEX - 1, &bv ) ) { return false; }
@@ -2727,6 +2736,15 @@ bool m3d_query( m3d_t* m, int q, const double* a, int na, double* r ) {
             return true;
         }
         case GFXQ_M3DCEILAT: *r = ceil_at( m, a[0], a[1], a[2] ); return true;
+        case GFXQ_M3DCULL: {
+            int k = (int) a[0];
+            if ( a[0] != k || k < 0 || k > 6 ) { return false; }
+            if ( m->rend != 0 && m->rend->drawn != 0 ) {                      // (the hardware renderer counts when asked)
+                m->drawn = (int) m->rend->drawn( m, m->rdata );
+            }
+            *r = m->cull[k];
+            return true;
+        }
         case GFXQ_M3DDRAWN:
             if ( m->rend != 0 && m->rend->drawn != 0 ) {
                 m->drawn = (int) m->rend->drawn( m, m->rdata );

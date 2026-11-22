@@ -599,24 +599,28 @@ static void flush_tris( gl_t* g, const m3d_t* m, double light ) {
     g->ntris = 0;
 }
 
-static bool object_seen( const m3d_t* m, const cam_t* c, const obj_t* o, double* dist ) {
+// 0 visible, 1 behind the viewer or beyond FAR, 2 outside the sides of the view, 3 too small (as in the software renderer)
+static int object_seen( const m3d_t* m, const cam_t* c, const obj_t* o, double* dist ) {
     v3_t d = { o->cx - c->eye.x, o->cy - c->eye.y, o->cz - c->eye.z };
     double zv = vdot( d, c->fw ), xv = vdot( d, c->r ), yv = vdot( d, c->up );
     *dist = zv;
     if ( zv + o->rad < NEARZ ) {
-        return false;
+        return 1;
     }
     if ( m->far > 0 && zv - o->rad > m->far ) {
-        return false;
+        return 1;
     }
     double zz = zv + o->rad;
     if ( zz > 0 && fabs( xv ) > zz * ( c->cx / c->f ) + o->rad * 1.5 ) {
-        return false;
+        return 2;
     }
     if ( zz > 0 && fabs( yv ) > zz * ( c->cy / c->f ) + o->rad * 1.5 ) {
-        return false;
+        return 2;
     }
-    return true;
+    if ( m->smallpx > 0 && zv - o->rad > NEARZ && o->rad * c->f < m->smallpx * zv ) {
+        return 3;
+    }
+    return 0;
 }
 
 // does the triangle face the eye (a one sided object shows only those), and how many triangles are left of it after clipping at the near plane (0, 1 or 2): as the software renderer counts
@@ -761,7 +765,7 @@ static long gl_drawn( m3d_t* m, void* rd ) {
         }
         m3d_obj_update( o );
         double dist;
-        if ( o->dirty || !object_seen( m, &g->cam, o, &dist ) ) {
+        if ( o->dirty || object_seen( m, &g->cam, o, &dist ) != 0 ) {
             continue;
         }
         bool twosided = ( o->flags & M3D_OF_TWOSIDED ) != 0;
@@ -884,6 +888,7 @@ static const void* gl_render( m3d_t* m, void* rd ) {
     c.up.x = -sin( pr ) * cos( yr ); c.up.y = -sin( pr ) * sin( yr ); c.up.z = cos( pr );
     double horizon = H * 0.5 + tan( pr ) * c.f;
     m->drawn = 0;
+    memset( m->cull, 0, sizeof(m->cull) );
     g->cam = c; g->havecam = true;
     if ( g->gobjs == 0 ) {
         g->gobjs = (gobj_t*) calloc( M3D_MAXOBJECTS, sizeof(gobj_t) );
@@ -987,9 +992,16 @@ static const void* gl_render( m3d_t* m, void* rd ) {
         }
         m3d_obj_update( o );
         double dist;
-        if ( o->dirty || !object_seen( m, &c, o, &dist ) ) {
+        if ( o->dirty ) {
             continue;
         }
+        ++m->cull[0];
+        int why = object_seen( m, &c, o, &dist );
+        if ( why != 0 ) {
+            ++m->cull[why + 1];
+            continue;
+        }
+        ++m->cull[1]; m->cull[6] += o->nt;
         if ( ( o->flags & M3D_OF_TRANS ) != 0 ) {
             m->order[nt] = i; m->odist[i] = dist; ++nt;
             continue;

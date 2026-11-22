@@ -1482,6 +1482,61 @@ int main( void ) {
         }
         m3d_soft_set_simd( -1 );
     }
+    // -- the counts of M3D("CULL"), small objects (M3D CULL px) and the nearest first order of the opaque objects ----------------------------------------
+    {
+        fresh();                                                                                                   // object 1: the floor
+        CHECK( op( GFXOP_M3DOBJECT, 1, 2.0 ) ); CHECK( op( GFXOP_M3DBOX, 8, 2.0, 100.0, -50.0, 0.0, 110.0, 50.0, 100.0, 2.0 ) );          // in front
+        CHECK( op( GFXOP_M3DOBJECT, 1, 3.0 ) ); CHECK( op( GFXOP_M3DBOX, 8, 3.0, 3000.0, 0.0, 0.0, 3001.0, 1.0, 1.0, 3.0 ) );             // 1 unit, far away: under a pixel
+        CHECK( op( GFXOP_M3DOBJECT, 1, 4.0 ) ); CHECK( op( GFXOP_M3DBOX, 8, 4.0, -110.0, -10.0, 0.0, -100.0, 10.0, 20.0, 3.0 ) );         // behind the viewer
+        CHECK( op( GFXOP_M3DOBJECT, 1, 5.0 ) ); CHECK( op( GFXOP_M3DBOX, 8, 5.0, 100.0, 400.0, 0.0, 110.0, 410.0, 20.0, 3.0 ) );          // far to the side
+        m3d_render( M );
+        CHECK( Q( GFXQ_M3DCULL, 1, 0.0 ) == 5.0 );                                                                 // asked
+        CHECK( Q( GFXQ_M3DCULL, 1, 1.0 ) == 2.0 );                                                                 // drawn: the floor and the box
+        CHECK( Q( GFXQ_M3DCULL, 1, 2.0 ) == 1.0 );                                                                 // behind
+        CHECK( Q( GFXQ_M3DCULL, 1, 3.0 ) == 1.0 );                                                                 // the side
+        CHECK( Q( GFXQ_M3DCULL, 1, 4.0 ) == 1.0 );                                                                 // small
+        CHECK( Q( GFXQ_M3DCULL, 1, 5.0 ) == 0.0 );
+        CHECK( Q( GFXQ_M3DCULL, 1, 6.0 ) == 24.0 );                                                                 // the 12 triangles of the box and of the floor box
+        CHECK( Q( GFXQ_M3DCULL, 1, 7.0 ) == -7777777.0 );                                                          // no such count
+        CHECK( op( GFXOP_M3DCULL, 1, 0.0 ) );                                                                      // off: the small box is drawn
+        m3d_render( M );
+        CHECK( Q( GFXQ_M3DCULL, 1, 4.0 ) == 0.0 && Q( GFXQ_M3DCULL, 1, 1.0 ) == 3.0 );
+        CHECK( op( GFXOP_M3DCULL, 1, 50.0 ) );                                                                     // 50 px: the near box (radius 70, f 80, distance 105) is 53 px: still drawn
+        m3d_render( M );
+        CHECK( Q( GFXQ_M3DCULL, 1, 1.0 ) == 2.0 );
+        CHECK( !op( GFXOP_M3DCULL, 1, 101.0 ) && !op( GFXOP_M3DCULL, 1, -1.0 ) && !op( GFXOP_M3DCULL, 2, 1.0, 2.0 ) );
+        CHECK( op( GFXOP_M3DCULL, 2, 1.0, 1.0 ) );
+        // many boxes behind each other, the far ones first, a big wall in front of them: the same picture sorted and not, and the time of both
+        fresh();
+        CHECK( op( GFXOP_M3DVIEW, 5, 0.0, 0.0, 640.0, 264.0, 1.0 ) );
+        int no = 2;
+        for ( int col = 40; col >= 1; --col ) {
+            for ( int row = -4; row <= 4; ++row ) {
+                CHECK( op( GFXOP_M3DOBJECT, 1, (double) no ) );
+                CHECK( op( GFXOP_M3DBOX, 8, (double) no, 100.0 + col * 40.0, row * 60.0 - 20.0, 0.0, 100.0 + col * 40.0 + 30.0, row * 60.0 + 20.0, 80.0, 1.0 + ( no & 1 ) ) );
+                ++no;
+            }
+        }
+        CHECK( op( GFXOP_M3DOBJECT, 1, (double) no ) );
+        CHECK( op( GFXOP_M3DBOX, 8, (double) no, 30.0, -300.0, -50.0, 40.0, 300.0, 300.0, 3.0 ) );                // the wall that hides them all
+        double ms[2] = { 0, 0 };
+        uint8_t* pic[2] = { 0, 0 };
+        for ( int sorted = 1; sorted >= 0; --sorted ) {
+            CHECK( op( GFXOP_M3DCULL, 2, 1.0, (double) sorted ) );
+            struct timespec t0, t1;
+            const uint8_t* f = m3d_render( M );
+            clock_gettime( CLOCK_MONOTONIC, &t0 );
+            for ( int i = 0; i < 20; ++i ) { f = m3d_render( M ); }
+            clock_gettime( CLOCK_MONOTONIC, &t1 );
+            ms[sorted] = ( ( t1.tv_sec - t0.tv_sec ) + 1e-9 * ( t1.tv_nsec - t0.tv_nsec ) ) * 50.0;
+            pic[sorted] = (uint8_t*) malloc( 640U * 264U );
+            memcpy( pic[sorted], f, 640U * 264U );
+        }
+        CHECK( memcmp( pic[0], pic[1], 640U * 264U ) == 0 );
+        printf( "cull bench: %d objects hidden behind a wall (the far ones first): %.2f ms a frame nearest first, %.2f ms in object order\n", no - 3, ms[1], ms[0] );
+        free( pic[0] ); free( pic[1] );
+        CHECK( op( GFXOP_M3DCULL, 2, 1.0, 1.0 ) );
+    }
     test_world( getenv( "TMPDIR" ) != 0 ? getenv( "TMPDIR" ) : "/tmp" );
     test_switch();
     m3d_free( M );
