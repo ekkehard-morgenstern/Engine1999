@@ -651,8 +651,8 @@ static void openings( mb_t* b ) {
         } else if ( k == 2 || k == 3 ) {
             wface( b, ws, plane, a1, a2, z1, z2, whole ? HM_DOOR : HM_GLASS, 0.3 );
         } else if ( whole ) {
-            if ( b->level > 0 ) { wface( b, ws, plane, a1 - 0.6, a2 + 0.6, z1 - 0.6, z2 + 0.6, HM_FRAME, 0.4 ); }     // (the frame stands in front of the pane: its picture has see-through panes)
             wface( b, ws, plane, a1, a2, z1, z2, HM_GLASS, b->level > 0 ? 0.2 : 0.3 );
+            if ( b->level > 0 ) { wface( b, ws, plane, a1 - 0.6, a2 + 0.6, z1 - 0.6, z2 + 0.6, HM_FRAME, 0.6 ); }     // (the frame stands in front of the pane and comes after it: its picture has see-through panes; a gap of 0.4 dm and the later triangle keep the pane from covering it where the depth buffer cannot tell them apart)
         } else {
             wface( b, ws, plane, a1, a2, z1, z2, HM_CHAR, 0.3 );               // a dark opening
         }

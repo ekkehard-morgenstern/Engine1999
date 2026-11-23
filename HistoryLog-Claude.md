@@ -13,6 +13,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+- **Window frames really drawn; SHARE takes a screenshot** (2026-11-23, owner: windows look the same; "make the SHARE button create a screenshot"): the frames were in the mesh but the pane (emitted after them, 0.2 dm vs 0.4 dm off the wall) covered them where the depth buffer cannot separate such small gaps: `house.c` now emits the pane first and the frame 0.6 dm off the wall (found by running the real game under Xvfb with a copy of the owner's world and saved position; the frames and mullions now show on the far houses). `demos/1987.bas`: the pad's Share button (`JOY("SHARE")`, edge, in `READKEYS`) runs `SCREENSHOT` (not in the headless test; the variable must not be `SHL`, a reserved word: first try gave "AND expression expected"); header comment and `man/engine1999-1987.6` mention it. Tests: `housetest1` 2759 / 0, `game1987test.sh`, `make man-check`.
 - **Window frames and mullions** (2026-11-23, owner: "frames and mullions on the windows would look a bit better"): `demos/1987.bas` `MKWINDOWF` (picture 313: a 7-pixel pale frame and a cross of 7-pixel mullions, see-through panes) instead of `W3K_WINDOW`; `tools/house3d.bas` the same (`MKWINDOWF(331)`). Checked in House3D under Xvfb (frames and cross visible); `game1987test.sh` passes. **Not looked at in the world.**
 
 ## Log

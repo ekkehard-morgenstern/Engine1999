@@ -12,7 +12,7 @@
 80 ' Keys: W / UP forward (on the bicycle: pedal), S / DOWN back (on the bicycle: brake, then reverse slowly), A D / LEFT RIGHT turn (on the bicycle: steer), SHIFT runs (on the
 90 ' bicycle: sprint, it tires you), SPACE brakes the bicycle, E or RETURN gets on and off the bicycle (stand close to it), B rings the bell, Z X or the right mouse button + drag
 100 ' turn the camera round John, PGUP PGDN tilt it, O opens the 3D settings, P pauses, Q or ESC quits. Game controller: left stick, LT, A brake, B bell, X use, Y settings,
-110 ' right stick turns the camera, START pauses, BACK quits.
+110 ' right stick turns the camera, START pauses, BACK quits, SHARE takes a screenshot.
 120 ' The bicycle behaves like the ones in GTA San Andreas: it has to be pedalled up to speed (slow at first, a sprint tires), it rolls on when you stop pedalling, hills speed
 130 ' it up and slow it down, the turning radius grows with the speed (a bicycle cannot turn on the spot), you can brake and reverse, and a wall at speed is a hard stop.
 140 ' Test mode (no keyboard needed): the environment variable G1987_PLAY names a file of commands, G1987_HEADLESS=1 runs it in the console host without any picture (see PLAYBACK).
@@ -1387,6 +1387,10 @@
 10680   B=0:IF KEY("B") OR JOY("B") THEN B=-1
 10690   KBL=0:IF B<>0 AND BL=0 THEN KBL=-1
 10700   BL=B
+10705   ' the Share button of a pad takes a screenshot (shot-YYYYMMDD-HHMMSS-n.bmp in the current folder), once per press
+10706   SHB=0:IF JOY("SHARE") THEN SHB=-1
+10707   IF SHB<>0 AND SHP=0 THEN IF HL=0 THEN SCREENSHOT
+10708   SHP=SHB
 10710   K=0
 10720   IF KEY("Z") THEN K=K+1
 10730   IF KEY("X") THEN K=K-1
