@@ -1185,9 +1185,9 @@
 8990 ' ------------------------------------------------------------------------------------------------ the camera
 8991 ' the camera agent advances by DT in equal steps of at most 1/57 s (a long frame behaves like several short ones: the spring and the rays see the same motion at any frame rate)
 8992 PROC CAMSTEPS(DT)
-8994   LOCAL N,K
-8996   N=MAX(1,CEIL(DT*57))
-8998   FOR K=1 TO N:CALL CAMUPDATE(DT/N):NEXT K
+8994   LOCAL CSN,CSK
+8996   CSN=MAX(1,CEIL(DT*57))
+8998   FOR CSK=1 TO CSN:CALL CAMUPDATE(DT/CSN):NEXT CSK
 8999 END PROC
 9000 PROC CAMUPDATE(DT)
 9010   CALL CAMAGENT(DT)
@@ -1488,36 +1488,43 @@
 11570   MSGT=14
 11580 END PROC
 11590 PROC PLAYLOOP
-11600   LOCAL T0,FR,Y,YL,ST0,TL,NS,NK,DS
+11600   LOCAL T0,FR,Y,YL,ST0,FTL,FTS,FTI,FTD,FTC,FTK,FTT,FTR,FTA,FTN,FTP
 11610   T0=TI:YL=0:NFR=0:FL$=ENV$("G1987_FRAMELOG"):FLN=0:FLN2=10000:IF ENV$("G1987_FRAMES")<>"" THEN FLN2=VAL(ENV$("G1987_FRAMES"))
-11612   CALL SOUNDSTART:TL=TIMER
+11612   CALL SOUNDSTART:FTL=TIMER:FTC=GFX("FRAME"):FTP=1/60:FTA=0:FTN=0
 11620   REPEAT
-11622     ' the frame time is the real time since the last frame, from the precise clock TIMER (TI counts whole 1/60 s ticks: a frame showed 0, 1 or 2 of them by turns, so the time of a
-11624     ' frame used to be the average of the last 32 frames, and the world moved by that average however long the frame really took: uneven motion, a camera that lagged and caught up).
-11626     ' The physics and the camera agent advance by exactly that time, in equal steps of at most 1/57 s, so a slow frame (software renderer) gives the same motion as many fast ones
-11630     NFR=NFR+1:T0=TI
-11632     DT0=TIMER-TL:TL=TIMER
-11634     IF DT0>0.1 THEN DT0=0.1
-11636     IF DT0<0.001 THEN DT0=0.001
+11622     ' the frame time. TI counts whole 1/60 s ticks (a frame showed 0, 1 or 2 of them by turns, so the time of a frame used to be the average of the last 32 frames, and the world moved by that
+11624     ' average however long the frame really took); TIMER is the precise clock. But what the eye sees is the time between two DISPLAYS: a finished picture is shown at the next refresh
+11626     ' of the screen (the screen thread counts them, GFX("FRAME"); W3K_SHOW waits for one), so the time between the starts of two frames carries the jitter of the render time and of the
+11628     ' thread wake-up, which shows as a jump. The world advances by the number of refreshes that passed times the refresh period (measured over 90 refreshes: FTP); only where the count
+11630     ' does not fit the clock (no refresh counted, another rate not measured yet, a pause) the real time is used. The physics and the camera agent advance in equal steps of at most 1/57 s
+11632     NFR=NFR+1:T0=TI
+11633     FTT=TIMER:FTR=FTT-FTL:FTL=FTT:FTK=GFX("FRAME")-FTC:FTC=FTC+FTK
+11634     FTA=FTA+FTR:FTN=FTN+FTK:IF FTN>=90 AND FTA>0 THEN FTP=FTA/FTN:FTA=0:FTN=0
+11635     DT0=FTR
+11636     IF FTK>=1 AND FTP>0.004 AND FTP<0.04 THEN
+11637       IF ABS(FTK*FTP-FTR)<0.6*FTP THEN DT0=FTK*FTP
+11638     END IF
+11639     IF DT0>0.1 THEN DT0=0.1
+11640     IF DT0<0.001 THEN DT0=0.001
 11641     IF FL$<>"" THEN CALL FRAMELOG
 11650     DTF=DT0
 11660     CALL READKEYS
 11670     IF KEY("ESC") THEN IN_QUIT=1
-11680     NS=MAX(1,CEIL(DT0*57)):DS=DT0/NS
-11682     FOR NK=1 TO NS
-11684       CALL SIM(DS)
-11686     NEXT NK
+11680     FTS=MAX(1,CEIL(DT0*57)):FTD=DT0/FTS
+11682     FOR FTI=1 TO FTS
+11684       CALL SIM(FTD)
+11686     NEXT FTI
 11688     CALL AMBIENT:CALL TERRAINUPDATE(JX,JY)
 11690     CALL DRAWFRAME
 11700     IF FN IN_SERVICE() THEN
 11730       CALL SOUNDMUTE
 11740       CALL PAUSEMENU
-11750       T0=TI:W3K_T0=TI:NFR=0:TL=TIMER
+11750       T0=TI:W3K_T0=TI:NFR=0:FTL=TIMER:FTC=GFX("FRAME"):FTA=0:FTN=0
 11760     END IF
 11770     Y=JOY("Y")
 11780     IF IN_KEY=79 OR (Y<>0 AND YL=0) THEN
 11790       CALL P3_DIALOG
-11800       T0=TI:NFR=0:TL=TIMER
+11800       T0=TI:NFR=0:FTL=TIMER:FTC=GFX("FRAME"):FTA=0:FTN=0
 11810     END IF
 11820     YL=Y
 11830   UNTIL IN_QUIT
