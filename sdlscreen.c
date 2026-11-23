@@ -63,7 +63,8 @@ static const char* const layer_titles[NLAYERS] = {
 // the 3D layer is not shown; the program thread sets it, the screen thread reads it (atomic).
 #define LAY_3D          NLAYERS
 static sdllayer_t lay3d;
-static int lay3d_under = -1;
+static int lay3d_under = -1;        // the layer the 3D picture was put for (program thread writes, screen thread reads)
+static int lay3d_place = -1;        // the layer it is drawn below (screen thread only, see lay3d_settle())
 static int lay3d_x0 = -1, lay3d_y0 = -1, lay3d_x1 = -1, lay3d_y1 = -1;     // the region of the last picture (program thread)
 
 static bool init_layers( SDL_Renderer* renderer ) {
@@ -83,8 +84,18 @@ static void cleanup_layers( void ) {
 }
 
 // the layers from the back to the front: indices into layers[], and LAY_3D where the 3D layer comes; returns how many
+// The 3D picture moves to its new place in the stack only when the layer it was put for is on (the screen thread, after sdllay_snapshot()). A program
+// that flips two graphics layers puts the picture for the back layer first and draws the HUD on it, and switches layers when it is done: placed at once, the
+// picture would lie over the old, still visible layer for that time and hide the part of the HUD inside the 3D region (the compass flickered).
+static void lay3d_settle( void ) {
+    int want = __atomic_load_n( &lay3d_under, __ATOMIC_ACQUIRE );
+    if ( want < 0 || layers[want].vis || lay3d_place < 0 ) {
+        lay3d_place = want;
+    }
+}
+
 static int layer_order( int* out ) {
-    int under = __atomic_load_n( &lay3d_under, __ATOMIC_ACQUIRE );
+    int under = lay3d_place;
     int n = 0;
     for ( int pri=0; pri < NLAYERS; ++pri ) {
         for ( int j=0; j < NLAYERS; ++j ) {
@@ -799,7 +810,7 @@ static int sdlscr_worker( void* arg ) {
         // Which layers are on is read ONCE for the whole frame (the program thread switches layers while it flips between two of them): a layer that is switched on
         // between the conversion and the drawing would be drawn with the texture of two frames ago (it was not converted as long as it was off), the other view of a
         // double buffered picture, now and then, at the beat between the program's and the screen's frame rate.
-        sdllay_snapshot( &layers[0], NLAYERS ); sdllay_snapshot( &lay3d, 1 );
+        sdllay_snapshot( &layers[0], NLAYERS ); sdllay_snapshot( &lay3d, 1 ); lay3d_settle();
         bool changed = sdllay_needsredraw( &layers[0], NLAYERS ) || sdllay_needsredraw( &lay3d, 1 );
         if ( changed ) {
             if ( !sdllay_to_texture_many( &layers[0], NLAYERS ) || !sdllay_to_texture( &lay3d ) ) {

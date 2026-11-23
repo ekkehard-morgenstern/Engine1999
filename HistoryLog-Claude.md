@@ -13,6 +13,8 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+- **Hardware renderer: the compass flickered** (2026-11-23, owner: "the compass seems to flicker occasionally"): `sdlscr_3d_put()` set the place of the 3D layer (just below the target layer) at `M3D RENDER`, but `W3K_SHOW` flips the two HUD layers only after the HUD is drawn: for that time the new 3D picture lay over the old, still visible layer and hid what is drawn inside the 3D region (compass, coordinate line, messages; the bar at the bottom is outside it). Fix in `sdlscreen.c`: `lay3d_place` (screen thread only) follows `lay3d_under` only when that layer is on (`lay3d_settle()` after the snapshot of the flags). Hypothesis from the code, not seen on a real GL display; `make flicktest` ok, `m3dgltest1` 359/0.
+
 ## Log
 
 ### 7a6cb67 — 2026-10-17 13:32:27 +0200 — "Introduced Claude to the project"
