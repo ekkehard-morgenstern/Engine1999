@@ -609,7 +609,7 @@ The 4096 extended instructions are as follows:
     COLT with the parameter bit 16: ON KEY OFF (16) / GOSUB (17) / GOTO (18): a handler for the key events (the bit 8 is ON JOY, 4 is ON MOUSE).
     COLT with the parameter bit 8: ON JOY OFF (8) / GOSUB (9) / GOTO (10) (the bit 4 is ON MOUSE).
     MATH kinds 14..16: CEIL, LOG2, LOG10 (kind 1, INT, is FLOOR as well); 17..24: ASN, ACS (angle in the unit of DEG / RAD / GRAD), SINH, COSH, TANH, ASINH, ACOSH, ATANH;
-    25: CINT (round half away from zero, "Overflow" outside 32 bits), 26: CDBL (the number itself).
+    25: CINT (round half away from zero, "Overflow" outside 32 bits), 26: CDBL (the number itself), 27: TIMER (no argument: seconds since the VM was created, with fractions, like PI it pushes a value).
 
     0001 01111110       MTH2 - numeric function of two numbers ( x y -- z ) C=0 P=1
                             Parameter 1 = MIN, 2 = MAX, 3 = ATAN2 (y = the first argument, x = the second; the angle is in the unit of DEG / RAD / GRAD), 4 = ROUND (x rounded to y decimals, halves away from zero; y < 0 rounds to tens, hundreds ...).

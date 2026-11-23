@@ -486,6 +486,7 @@ bool read_brclit( rbuf_t* rbuf, char** ptarget );
 #define XF_JSON         UINT8_C(34)         // JSON: trees of named values (statements JSON LOAD, JSON GET ..., docs/json-subsystem.md)
 #define XF_SCREENSHOT   UINT8_C(33)         // SCREENSHOT [file$]: saves the picture on the screen as a BMP file (roadmap item 82)
 #define XF_INSTR        UINT8_C(32)         // INSTR([start,] hay$, needle$): the position of needle in hay, 0 if none
+#define XF_TIMER        UINT8_C(40)         // TIMER: seconds since the program started, with fractions (the precise clock; TI counts whole 1/60 s ticks)
 #define XF_HASH         UINT8_C(36)         // HASH(a [,b [,c [,d]]]): a number in [0, 1) from up to four integers (noise.h)
 #define XF_NOISE        UINT8_C(37)         // NOISE(seed, x [,y [,z]]): smooth gradient noise in 1, 2 or 3 dimensions, -1 .. 1
 #define XF_FBM          UINT8_C(38)         // FBM(seed, x, y, octaves [,gain [,lacunarity]]): fractal noise, -1 .. 1

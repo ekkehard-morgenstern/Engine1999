@@ -2937,6 +2937,11 @@ static bool vm_math( vm_t* vm, uint16_t kind ) {
     if ( kind == 13 ) {
         return vm_dpush_num( vm, 3.14159265358979323846 );
     }
+    if ( kind == 27 ) {                     // TIMER: seconds since the VM was created (the clock behind TI, not cut to whole ticks)
+        struct timespec now;
+        clock_gettime( CLOCK_MONOTONIC, &now );
+        return vm_dpush_num( vm, (double)( now.tv_sec - vm->started.tv_sec ) + (double)( now.tv_nsec - vm->started.tv_nsec ) / 1e9 );
+    }
     if ( !vm_dpop_num( vm, &x ) ) {
         return false;
     }

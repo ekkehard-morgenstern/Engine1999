@@ -1183,6 +1183,12 @@
 8970   IF S=3 THEN CALL SND(7)
 8980 END PROC
 8990 ' ------------------------------------------------------------------------------------------------ the camera
+8991 ' the camera agent advances by DT in equal steps of at most 1/57 s (a long frame behaves like several short ones: the spring and the rays see the same motion at any frame rate)
+8992 PROC CAMSTEPS(DT)
+8994   LOCAL N,K
+8996   N=MAX(1,CEIL(DT*57))
+8998   FOR K=1 TO N:CALL CAMUPDATE(DT/N):NEXT K
+8999 END PROC
 9000 PROC CAMUPDATE(DT)
 9010   CALL CAMAGENT(DT)
 9020 END PROC
@@ -1464,7 +1470,7 @@
 11410   END IF
 11420 END PROC
 11430 PROC DRAWFRAME
-11440   CALL CAMUPDATE(DTF)
+11440   CALL CAMSTEPS(DTF)
 11450   CALL RIGS
 11460   M3D RENDER
 11470   CALL HUD
@@ -1482,32 +1488,36 @@
 11570   MSGT=14
 11580 END PROC
 11590 PROC PLAYLOOP
-11600   LOCAL T0,FR,Y,YL,ST0
+11600   LOCAL T0,FR,Y,YL,ST0,TL,NS,NK,DS
 11610   T0=TI:YL=0:NFR=0:FL$=ENV$("G1987_FRAMELOG"):FLN=0:FLN2=10000:IF ENV$("G1987_FRAMES")<>"" THEN FLN2=VAL(ENV$("G1987_FRAMES"))
-11612   CALL SOUNDSTART
+11612   CALL SOUNDSTART:TL=TIMER
 11620   REPEAT
-11622     ' the frame time: TI counts whole 1/60 s ticks, and a loop that waits for the display sees 0, 1 or 2 ticks in a frame by turns (measured under Xvfb: 0 in 36 %, 1 in 28 %,
-11624     ' 2 in 36 % of the frames), so everything that moves by the frame time stutters, or jumps now and then; the time of a frame is the average over the last 32 frames
-11626     NFR=NFR+1:TIK=NFR MOD 32
-11630     DT0=(TI-T0)/60:T0=TI
-11632     IF NFR>32 THEN DT0=(TI-TIH(TIK))/32/60
-11634     TIH(TIK)=TI
-11640     IF DT0>0.1 THEN DT0=0.1
+11622     ' the frame time is the real time since the last frame, from the precise clock TIMER (TI counts whole 1/60 s ticks: a frame showed 0, 1 or 2 of them by turns, so the time of a
+11624     ' frame used to be the average of the last 32 frames, and the world moved by that average however long the frame really took: uneven motion, a camera that lagged and caught up).
+11626     ' The physics and the camera agent advance by exactly that time, in equal steps of at most 1/57 s, so a slow frame (software renderer) gives the same motion as many fast ones
+11630     NFR=NFR+1:T0=TI
+11632     DT0=TIMER-TL:TL=TIMER
+11634     IF DT0>0.1 THEN DT0=0.1
+11636     IF DT0<0.001 THEN DT0=0.001
 11641     IF FL$<>"" THEN CALL FRAMELOG
 11650     DTF=DT0
 11660     CALL READKEYS
 11670     IF KEY("ESC") THEN IN_QUIT=1
-11680     CALL SIM(DT0):CALL AMBIENT:CALL TERRAINUPDATE(JX,JY)
+11680     NS=MAX(1,CEIL(DT0*57)):DS=DT0/NS
+11682     FOR NK=1 TO NS
+11684       CALL SIM(DS)
+11686     NEXT NK
+11688     CALL AMBIENT:CALL TERRAINUPDATE(JX,JY)
 11690     CALL DRAWFRAME
 11700     IF FN IN_SERVICE() THEN
 11730       CALL SOUNDMUTE
 11740       CALL PAUSEMENU
-11750       T0=TI:W3K_T0=TI:NFR=0
+11750       T0=TI:W3K_T0=TI:NFR=0:TL=TIMER
 11760     END IF
 11770     Y=JOY("Y")
 11780     IF IN_KEY=79 OR (Y<>0 AND YL=0) THEN
 11790       CALL P3_DIALOG
-11800       T0=TI:NFR=0
+11800       T0=TI:NFR=0:TL=TIMER
 11810     END IF
 11820     YL=Y
 11830   UNTIL IN_QUIT

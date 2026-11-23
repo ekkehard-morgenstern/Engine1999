@@ -704,3 +704,9 @@ Sound effects: `PITCH ch, f` and `VOLUME ch, v` (at once), a glide as the fifth 
 `TREMOLO ch, rate, depth`, and stored effects `SFX n, a$` / `SFX n [, ch]` (music strings with the extra commands `H S X ~ ^`).
 Full description, examples, the instruction/host interface: `docs/sound.md`. The words `SOUND PLAY WAVE TEMPO PLAYING SYNC PITCH VOLUME
 ENVELOPE VIBRATO TREMOLO SFX` are keywords now (they can't be variable names).
+
+## `TIMER` (2026-11-23, owner: make the camera of `1987` independent of the frame time)
+
+`TIMER` (extension word `XF_TIMER` 40, no argument, no parentheses; instruction `MATH` kind 27): the seconds since the program started, **with fractions** (a double from the monotonic nanosecond clock, the clock behind `TI`). `TI` is the same clock cut down to whole ticks of 1/60 s, which is too coarse to measure the time of one frame (a frame shows 0, 1 or 2 ticks by turns). Use `TIMER` for frame times and `TI` / `WAIT` where ticks are meant.
+- New reserved word (check that your variable and procedure names do not use it): `TIMER`. None of the demos, libraries or tools did.
+- Tests: `vmtest1` +2.

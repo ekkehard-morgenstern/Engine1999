@@ -232,6 +232,8 @@ static const testcase_t cases[] = {
     { "DEC$ negative",          "PRINT DEC$(0-5)",                                "-5\n" },
     { "radix digits range",     "PRINT HEX$(1,300)",                              "? Illegal argument\n" },
     { "TI",                     "PRINT TI>=0",                                    "-1\n" },
+    { "TIMER is seconds with fractions", "A=TIMER:FOR I=1 TO 20000:NEXT:B=TIMER:PRINT B>A;B-A<5;ABS(TIMER-TI/60)<0.05;A<>INT(A)", "-1-1-1-1\n" },
+    { "TIMER in an expression", "PRINT TIMER*2>=0;-TIMER<=0", "-1-1\n" },
     { "TI does not go back",    "A=TI:B=TI:PRINT B>=A",                           "-1\n" },
     { "FRE",                    "PRINT FRE(0)>0",                                 "-1\n" },
     { "INKEY$",                 "PRINT INKEY$;INKEY$;\"[\"+INKEY$+\"]\"",          "AB[]\n", "AB" },

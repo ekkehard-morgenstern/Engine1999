@@ -171,7 +171,12 @@ xfunc-call := ( MIN | MAX | ATAN2 ) "(" num-expr "," num-expr ")" |
 ```ebnf
 sys-num-fn-arg-call := sys-num-fn-1-arg-call | xfunc-call .
 sys-str-fn-arg-call := sys-str-fn-2-arg-call | xfunc-call .
-sys-noarg-num-name := TI | ERL | PI | ARGC .
+```
+
+> TIMER (extension word) is the precise clock: seconds since the program started, with fractions (TI counts whole ticks of 1/60 s).
+
+```ebnf
+sys-noarg-num-name := TI | ERL | PI | ARGC | XFUNC(TIMER) .
 ```
 
 > MKI$ MKL$ MKS$ MKD$ pack a number into a binary string (2, 4, 4, 8 bytes, big endian), CVI CVL CVS CVD unpack it again

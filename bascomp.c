@@ -1992,7 +1992,7 @@ static bool comp_eat_xfunccall( compiler_t* comp, node_t** pnode, bool wantstr )
     }
     uint8_t xid = comp->currext;
     bool isstr = xid == XF_SPACE || xid == XF_STRING || xid == XF_FORMAT || xid == XF_CLIPBOARD;
-    if ( xid == XF_AT || xid == XF_HTAB || xid == XF_VTAB || xid == XF_SCREENSHOT || xid == XF_JSON ) {
+    if ( xid == XF_AT || xid == XF_HTAB || xid == XF_VTAB || xid == XF_SCREENSHOT || xid == XF_JSON || xid == XF_TIMER ) {
         return false;                       // statements (AT inside a PRINT list), not functions
     }
     if ( xid == XF_JOY ) {
@@ -2218,6 +2218,17 @@ bool comp_eat_sysnoargnumcall( compiler_t* comp, node_t** pnode ) {
     // sys-noarg-num := sys-noarg-num-name .
     // sys-noarg-num-call := sys-no-arg-num .
     uint8_t tok = comp->currtok;
+    if ( tok == TOK_XFUNC && comp->currext == XF_TIMER ) {      // TIMER: no argument; the node's data are TOK_XFUNC and the extension id
+        uint8_t td[2] = { TOK_XFUNC, XF_TIMER };
+        if ( !comp_fetchtok( comp ) ) {
+            return false;
+        }
+        if ( !comp_create_node( comp, pnode, NT_SYSNOARGNUMCALL, UINT8_C(0), UINT16_C(2), td ) || *pnode == NODE_NONE ) {
+            out_of_memory( comp );
+            return false;
+        }
+        return true;
+    }
     if ( tok == TOK_ERR ) {         // ERR (the number of the last error); ERR$ is the string function
         comp_push_context( comp );
         if ( !comp_fetchtok( comp ) || comp->currtok == TOK_STRING ) {

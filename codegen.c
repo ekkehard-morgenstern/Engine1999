@@ -1788,6 +1788,9 @@ bool cgen_from_sysfncall( codegen_t* cgen, compiler_t* comp, node_t* node ) {
 UNEXP:      return cgen_unexpected_node( comp );
     }
     uint16_t datalen = node->datalen;
+    if ( !hasargs && nodetype == NT_SYSNOARGNUMCALL && datalen == UINT16_C(2) && node->data[0] == TOK_XFUNC && node->data[1] == XF_TIMER ) {
+        return cgen_gen_math( cgen, 27 ) || cgen_out_of_code_memory( comp );        // TIMER
+    }
     if ( datalen != UINT16_C(1) && !( hasargs && datalen >= UINT16_C(2) && datalen <= UINT16_C(3) && node->data[0] == TOK_XFUNC ) ) {
         goto UNEXP;
     }

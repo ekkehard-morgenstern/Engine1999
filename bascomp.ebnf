@@ -141,7 +141,8 @@ xfunc-call := ( MIN | MAX | ATAN2 ) TOK_LPAREN num-expr TOK_COMMA num-expr TOK_R
 sys-num-fn-arg-call := sys-num-fn-1-arg-call | xfunc-call .
 sys-str-fn-arg-call := sys-str-fn-2-arg-call | xfunc-call .
 
-sys-noarg-num-name := TOK_TI | TOK_ERL | TOK_PI | TOK_ARGC .
+-- TIMER (extension word) is the precise clock: seconds since the program started, with fractions (TI counts whole ticks of 1/60 s).
+sys-noarg-num-name := TOK_TI | TOK_ERL | TOK_PI | TOK_ARGC | TOK_XFUNC(TIMER) .
 -- MKI$ MKL$ MKS$ MKD$ pack a number into a binary string (2, 4, 4, 8 bytes, big endian), CVI CVL CVS CVD unpack it again
 -- (the grammar is that of STR$/CHR$ resp. ASC/VAL/LEN, see sys-str-fn-2-arg-call and sys-num-fn-1-arg-call).
 sys-noarg-num := sys-noarg-num-name .
