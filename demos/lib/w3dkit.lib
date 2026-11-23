@@ -387,9 +387,9 @@
 3650   END IF
 3660 END PROC
 3670 PROC W3K_SHOW
-3680   GFX LAYER W3K_B,OFF
-3690   W3K_B=3-W3K_B
-3700   GFX LAYER W3K_B,ON
+3680   ' the new picture goes on first, then the old one off: the window is composed whenever a layer changes, and with both off for a moment it shows what lies below (a stale picture)
+3690   GFX LAYER 3-W3K_B,ON
+3700   GFX LAYER W3K_B,OFF:W3K_B=3-W3K_B
 3710   FRAME
 3720   GFX TARGET 3-W3K_B
 3730   CALL MU_TICK

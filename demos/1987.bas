@@ -211,7 +211,7 @@
 2080   CALL MKLEAVES(310,5,6)
 2090   CALL MKSKY
 2100   CALL MKBARK
-2110   CALL MKWINDOWF(313)
+2110   CALL W3K_WINDOW(313):CALL MKWINDOWG(370)
 2120   CALL MKSOIL
 2130   CALL MKWHEATTOP
 2140   CALL MKLEAVES(317,4,3)
@@ -232,15 +232,15 @@
 2207   CALL W3K_GRAB(N,64,64)
 2208 END PROC
 2210 ' ------------------------------------------------------------------------------------------------ mesh helpers
-2211 ' the window frame of the settlements: a pale frame and a cross of mullions over see-through panes (the dark glass shows through); thick, so it still reads from far (64 x 96)
-2212 PROC MKWINDOWF(N)
-2213   LOCAL C
-2214   C=FN CC(13,14)
-2215   GFX CLEAR 0
-2216   GFX LINE 0,0,63,95,C,BF:GFX LINE 7,7,56,88,0,BF
-2217   GFX LINE 28,7,35,88,C,BF:GFX LINE 7,42,56,49,C,BF
-2218   CALL W3K_GRAB(N,64,96)
-2219 END PROC
+2211 PROC MKWINDOWG(N)
+2212   LOCAL I
+2213   GFX CLEAR FN CC(9,3)
+2214   GFX LINE 0,0,63,95,FN CC(12,8),B:GFX LINE 1,1,62,94,FN CC(12,6),B:GFX LINE 2,2,61,93,FN CC(12,9),B:GFX LINE 3,3,60,92,FN CC(12,5),B
+2215   GFX LINE 29,3,34,92,FN CC(12,7),BF:GFX LINE 3,44,60,49,FN CC(12,7),BF
+2216   FOR I=0 TO 3:GFX LINE 8+I*2,12+I*2,12+I*2,16+I*2,FN CC(7,14):NEXT I
+2217   CALL W3K_GRAB(N,64,96)
+2218 END PROC
+2219 ' (MKWINDOWG: picture 370, 64 x 96, for the glass of the settlements' houses: dark blue glass, opaque because nothing is behind a pane, with the brown frame, the cross of mullions and a reflection of W3K_WINDOW; the frame is in the picture, not geometry)
 2220 PROC BX(O,X1,Y1,Z1,X2,Y2,Z2,TX)
 2230   IF XON THEN CALL BXX(O,X1,Y1,Z1,X2,Y2,Z2,TX) ELSE M3D BOX O,X1,Y1,Z1,X2,Y2,Z2,TX
 2240 END PROC
@@ -471,7 +471,7 @@
 3275   ' a unit is 3.2 cm: HILLS (ridged noise up to 260 = 8 m high, rocky and walkable), real MOUNTAINS (peaks up to 37000 = 1190 m high, steep walls, 14000 .. 22000 units from the house: ridged noise where a very slow noise is high) and real LAKES (basins 350 = 11 m deep and 3000 .. 6000 = 100 .. 190 m across); none over the hand-made area (3900 units round the house, fading in over 1200)
 3276   IF NOT WLD THEN M3D GROUNDQUIET 0,0,3900,3900,1200:M3D ROADNET 1800,0.45,140,36000,0.85,900:M3D HILLS 1987,500,260,5,0.05,0.4:M3D MOUNTAINS 7,9000,80000,4,0.25,0.6,14000,22000
 3277   M3D RINGPIC 325,324,301,327,328,320,303,320,302,WZ,RH,304:M3D TREEPIC 312,309,310,317:IF WLD THEN M3D POSTPIC FN CC(0,13),FN CC(0,15),FN CC(1,11),321
-3278   IF WLD THEN M3D HOUSEPIC 0,361:M3D HOUSEPIC 1,362:M3D HOUSEPIC 2,363:M3D HOUSEPIC 3,364:M3D HOUSEPIC 4,365:M3D HOUSEPIC 5,366:M3D HOUSEPIC 6,306:M3D HOUSEPIC 7,306:M3D HOUSEPIC 8,306:M3D HOUSEPIC 10,326:M3D HOUSEPIC 12,305:M3D HOUSEPIC 13,305:M3D HOUSEPIC 14,307:M3D HOUSEPIC 17,313 ELSE M3D LAKES 4711,9000,350,0.3,0.5
+3278   IF WLD THEN M3D HOUSEPIC 0,361:M3D HOUSEPIC 1,362:M3D HOUSEPIC 2,363:M3D HOUSEPIC 3,364:M3D HOUSEPIC 4,365:M3D HOUSEPIC 5,366:M3D HOUSEPIC 6,306:M3D HOUSEPIC 7,306:M3D HOUSEPIC 8,306:M3D HOUSEPIC 10,326:M3D HOUSEPIC 12,305:M3D HOUSEPIC 13,305:M3D HOUSEPIC 14,307:M3D HOUSEPIC 11,370 ELSE M3D LAKES 4711,9000,350,0.3,0.5
 3279 END PROC
 3280 ' what stops John and the bicycle: only water too deep to wade (12 below the water level WZ); the rocky hills are walkable and rideable (the engine lets a body climb every slope up to 72 degrees and lifts one that got buried)
 3281 FUNC BLOCKED(X,Y)

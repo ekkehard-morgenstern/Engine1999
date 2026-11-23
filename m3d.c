@@ -2766,7 +2766,7 @@ bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t sl
             // (the vertices are shared by the triangles of one quad, whose material is the same: u, v from the first triangle that uses a vertex)
             for ( int k = 0; k < hm.nt && ok; ++k ) {
                 int tm = hm.t[k].mat;
-                if ( mw[tm] > 0 && ( tm == HM_FRAME || tm == HM_DOOR || tm == HM_GARAGE ) ) {
+                if ( mw[tm] > 0 && ( tm == HM_GLASS || tm == HM_FRAME || tm == HM_DOOR || tm == HM_GARAGE ) ) {
                     int ix[3] = { hm.t[k].a, hm.t[k].b, hm.t[k].c };
                     for ( int q = 0; q < 3; ++q ) {
                         if ( hm.v[ix[q]].u >= 0.0 ) { o->v[ix[q]].u = hm.v[ix[q]].u * (double) mw[tm]; o->v[ix[q]].v = hm.v[ix[q]].v * (double) mh[tm]; }

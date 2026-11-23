@@ -519,7 +519,7 @@ static void wface( mb_t* b, int side, double plane, double a1, double a2, double
         if ( side < 2 ) { p[k][0] = a; p[k][1] = pl; } else { p[k][0] = pl; p[k][1] = a; }
         p[k][2] = z;
     }
-    if ( mat == HM_FRAME || mat == HM_DOOR || mat == HM_GARAGE ) {                  // the whole picture on the rectangle (u across as seen from outside, v from the top)
+    if ( mat == HM_GLASS || mat == HM_FRAME || mat == HM_DOOR || mat == HM_GARAGE ) {   // the whole picture on the rectangle (u across as seen from outside, v from the top)
         bool rev = side == 1 || side == 2;
         double u0 = rev ? 1.0 : 0.0, u1 = rev ? 0.0 : 1.0;
         double uv[4][2] = { { u0, 1.0 }, { u1, 1.0 }, { u1, 0.0 }, { u0, 0.0 } };
@@ -651,8 +651,7 @@ static void openings( mb_t* b ) {
         } else if ( k == 2 || k == 3 ) {
             wface( b, ws, plane, a1, a2, z1, z2, whole ? HM_DOOR : HM_GLASS, 0.3 );
         } else if ( whole ) {
-            wface( b, ws, plane, a1, a2, z1, z2, HM_GLASS, b->level > 0 ? 0.2 : 0.3 );
-            if ( b->level > 0 ) { wface( b, ws, plane, a1 - 0.6, a2 + 0.6, z1 - 0.6, z2 + 0.6, HM_FRAME, 0.6 ); }     // (the frame stands in front of the pane and comes after it: its picture has see-through panes; a gap of 0.4 dm and the later triangle keep the pane from covering it where the depth buffer cannot tell them apart)
+            wface( b, ws, plane, a1, a2, z1, z2, HM_GLASS, 0.3 );             // (the frame and the mullions are in the picture of the glass, no geometry)
         } else {
             wface( b, ws, plane, a1, a2, z1, z2, HM_CHAR, 0.3 );               // a dark opening
         }
