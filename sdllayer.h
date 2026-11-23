@@ -46,7 +46,8 @@ typedef struct _sdllayer_t {
     uint32_t*    argb;      // a 32 bit layer (sdllay_init32): the pixels as ARGB8888, screen sized, uploaded as they are; else 0
     uint32_t     palette[256];  // ARGB8888
     bool         modified;  // modified flag
-    bool         disabled;  // disabled flag (not rendered)
+    bool         disabled;  // disabled flag (not rendered); written by the program thread (atomically)
+    bool         vis;       // the screen thread's copy of the flag for one frame (sdllay_snapshot): converted and drawn by this one, so a layer that the program switches on while a frame is being made is never drawn with a texture that was not converted
     uint8_t      priority;  // render priority
     sdllaycb_t   callback;  // memory renderer callback
     void*        userdata;  // memory renderer userdata
@@ -61,6 +62,7 @@ void sdllay_setcall( sdllayer_t* lay, sdllaycb_t callback, void* userdata );
 bool sdllay_init_many( sdllayer_t* lay, size_t cnt, const char* const* titles, SDL_Renderer* renderer );
 void sdllay_cleanup_many( sdllayer_t* lay, size_t cnt );
 
+void sdllay_snapshot( sdllayer_t* lay, size_t cnt );              // (screen thread, once at the start of a frame) vis = !disabled
 bool sdllay_needsredraw( const sdllayer_t* lay, size_t cnt );
 
 bool sdllay_to_texture( sdllayer_t* lay );

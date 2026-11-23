@@ -59,7 +59,7 @@ bool sdllay_init( sdllayer_t* lay, const char* title, uint8_t priority, SDL_Rend
     }
     // NOTE that the color names aren't currently used, which might change in a future version.
     __atomic_store_n( &lay->modified, true, __ATOMIC_RELEASE );
-    lay->disabled = false;
+    lay->disabled = false; lay->vis = true;
     lay->priority = priority;
     lay->argb = 0;
     lay->callback = 0;
@@ -113,9 +113,15 @@ void sdllay_cleanup_many( sdllayer_t* lay, size_t cnt ) {
     }
 }
 
+void sdllay_snapshot( sdllayer_t* lay, size_t cnt ) {
+    for ( size_t i=0; i < cnt; ++i ) {
+        lay[i].vis = !__atomic_load_n( &lay[i].disabled, __ATOMIC_ACQUIRE );
+    }
+}
+
 bool sdllay_needsredraw( const sdllayer_t* lay, size_t cnt ) {
     for ( size_t i=0; i < cnt; ++i ) {
-        if ( __atomic_load_n( &lay[i].modified, __ATOMIC_ACQUIRE ) && !lay[i].disabled ) return true;
+        if ( __atomic_load_n( &lay[i].modified, __ATOMIC_ACQUIRE ) && lay[i].vis ) return true;
     }
     return false;
 }
@@ -129,7 +135,7 @@ bool sdllay_to_texture( sdllayer_t* lay ) {
             return false;
         }
     }
-    if ( !__atomic_load_n( &lay->modified, __ATOMIC_ACQUIRE ) || lay->disabled ) {
+    if ( !__atomic_load_n( &lay->modified, __ATOMIC_ACQUIRE ) || !lay->vis ) {
         return true;
     }
     // The flag is cleared *before* the layer memory is read, with an atomic exchange (a full fence): a change that the other thread makes while the
@@ -175,7 +181,7 @@ bool sdllay_to_texture_many( sdllayer_t* lay, size_t cnt ) {
 }
 
 void sdllay_draw_texture( const sdllayer_t* lay, SDL_Renderer* renderer ) {
-    if ( lay->disabled ) {
+    if ( !lay->vis ) {
         return;
     }
     SDL_RenderCopy(
@@ -218,11 +224,11 @@ void sdllay_set_modified( sdllayer_t* lay ) {
 }
 
 void sdllay_enable( sdllayer_t* lay ) {
-    lay->disabled = false;
+    __atomic_store_n( &lay->disabled, false, __ATOMIC_RELEASE );
 }
 
 void sdllay_disable( sdllayer_t* lay ) {
-    lay->disabled = true;
+    __atomic_store_n( &lay->disabled, true, __ATOMIC_RELEASE );
 }
 
 bool sdllay_enabled( const sdllayer_t* lay ) {

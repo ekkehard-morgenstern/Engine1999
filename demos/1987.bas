@@ -1623,6 +1623,7 @@
 12583     IF C$="reset" THEN CALL RESETPOS
 12584     IF C$="coords" THEN SXY=VAL(W$(1)):CALL COORDTXT:PRINT "coords ";CT$
 12585     IF C$="chunks" THEN CALL CHUNKSTAT(JX,JY)
+12586     IF C$="sweep" THEN CALL SWEEPCAM(VAL(W$(1)),VAL(W$(2)))
 12590     IF C$="state" THEN
 12600       PRINT "state mode=";MODE;" jx=";INT(JX);" jy=";INT(JY);" jz=";INT(JZ+0.5);" jh=";INT(JH);" jv=";INT(JV);" bst=";BST;" nj=";CNJ;" nh=";CNH;" nb=";CNB;" cmb=";CMB;" hly=";INT(HLY);" hlp=";INT(HLP);" brp=";INT(BRP*100);" bx=";INT(BX);" by=";INT(BY);" bz=";INT(BZ+0.5);" bh=";INT(BH);" bv=";INT(BV);" st=";INT(ST*100);" gh=";INT(FN HT(JX,JY));" sf=";FN SURF(JX,JY,JZ)
 12610     END IF
@@ -2649,3 +2650,14 @@
 26050   NEXT K
 26060   GFX LINE 160,16,160,19,FN CC(3,15)
 26070 END PROC
+26080 ' SWEEP DT SECONDS (a test command): the camera is swept round John for a second to one side, a second to the other (as if Z, then X were held), with a frame time of DT; prints the camera of every frame
+26081 PROC SWEEPCAM(SD,SEC)
+26082   LOCAL SN,SK,SS
+26083   SN=INT(SEC/SD)
+26084   FOR SK=1 TO SN
+26085     SS=1:IF INT(SK*SD) MOD 2=1 THEN SS=-1
+26086     KFD=0:KFA=0:KF=0:KT=0:KLT=0:KSH=0:KRA=0:KR=0:KB=0:KU=0:CO=CO+SS*80*SD:CMIN=-1
+26087     CALL SIM(SD):CALL TERRAINUPDATE(JX,JY):DTF=SD:CALL CAMUPDATE(SD)
+26088     PRINT "sweep ";SK;" ";INT(M3D("X")*10)/10;" ";INT(M3D("Y")*10)/10;" ";INT(M3D("Z")*10)/10;" ";INT(M3D("YAW")*10)/10;" ";INT(M3D("PITCH")*10)/10;" ";CMPUL
+26089   NEXT SK
+26090 END PROC

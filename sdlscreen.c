@@ -503,6 +503,8 @@ static void sdlscr_tryraise( SDL_Window* window ) {
     }
 }
 
+static int sdlscr_dbgdelay;              // E1999_SCREENDELAY (milliseconds, a test aid), E1999_NOSNAP
+static bool sdlscr_dbgnosnap;
 static bool sdlscr_keepsbackbuffer;    // the renderer keeps its back buffer between frames (the software renderer): unchanged frames need no drawing
 
 static int sdlscr_worker( void* arg ) {
@@ -549,6 +551,7 @@ static int sdlscr_worker( void* arg ) {
         SDL_RendererInfo info;
         sdlscr_keepsbackbuffer = SDL_GetRendererInfo( renderer, &info ) == 0 && info.name != 0 && strcmp( info.name, "software" ) == 0;
     }
+    { const char* e = getenv( "E1999_SCREENDELAY" ); sdlscr_dbgdelay = e != 0 ? atoi( e ) : 0; sdlscr_dbgnosnap = getenv( "E1999_NOSNAP" ) != 0; }
     SDL_SetHint( SDL_HINT_RENDER_SCALE_QUALITY, "linear" );
     int rv = SDL_RenderSetLogicalSize(
         renderer,
@@ -793,11 +796,19 @@ static int sdlscr_worker( void* arg ) {
         // shows the picture of two frames ago: an unchanged screen then alternated between the old and the new picture at the frame rate
         // (flickering cursor, line highlight, shifted sections: the owner's report of 2026-11-03). The software renderer keeps its buffer, so
         // it may skip the drawing of unchanged frames (this saves a lot of time there).
+        // Which layers are on is read ONCE for the whole frame (the program thread switches layers while it flips between two of them): a layer that is switched on
+        // between the conversion and the drawing would be drawn with the texture of two frames ago (it was not converted as long as it was off), the other view of a
+        // double buffered picture, now and then, at the beat between the program's and the screen's frame rate.
+        sdllay_snapshot( &layers[0], NLAYERS ); sdllay_snapshot( &lay3d, 1 );
         bool changed = sdllay_needsredraw( &layers[0], NLAYERS ) || sdllay_needsredraw( &lay3d, 1 );
         if ( changed ) {
             if ( !sdllay_to_texture_many( &layers[0], NLAYERS ) || !sdllay_to_texture( &lay3d ) ) {
                 break;
             }
+        }
+        if ( sdlscr_dbgdelay > 0 ) {            // (a test of the snapshot above: E1999_SCREENDELAY=ms waits here, between the conversion and the drawing, E1999_NOSNAP=1 reads the flags again after it, as the screen did before)
+            SDL_Delay( (Uint32) sdlscr_dbgdelay );
+            if ( sdlscr_dbgnosnap ) { sdllay_snapshot( &layers[0], NLAYERS ); sdllay_snapshot( &lay3d, 1 ); }
         }
         if ( shotkey ) {
             sdlscr_shot_key( sdlscr_bgcol );

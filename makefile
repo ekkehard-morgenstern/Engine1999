@@ -69,7 +69,7 @@ PROGS=sdltest1 sdltest2 sdltest3 sdltest4 engine1999 joytest1 basictest1 testcom
 all: $(PROGS)
 	echo ok >all
 
-.PHONY: grammar grammar-check vmref vmref-check kit install uninstall man-check check hosttest dist orig clean distclean
+.PHONY: grammar grammar-check vmref vmref-check kit install uninstall man-check check hosttest flicktest dist orig clean distclean
 
 # the quick reference of the language (docs/grammar.md and docs/grammar.html) from bascomp.ebnf; needs perl
 grammar:
@@ -565,6 +565,10 @@ check: $(CHECKTESTS) engine1999 engine1999c
 
 # make hosttest: the window host's sound path with Xvfb, XTest typing (xtype.c) and SDL's disk audio driver (hosttest.sh); skipped if the X tools are missing.
 # Not part of "make check" (needs an X server program).
+# make flicktest: the window host's layer flip (stale pictures of a double buffer) with Xvfb, ffmpeg and XTest typing (flicktest.sh); skipped if the tools are missing.
+flicktest: engine1999
+	sh flicktest.sh
+
 hosttest: engine1999 gl3dtest1
 	sh hosttest.sh
 	sh gl3dtest.sh
