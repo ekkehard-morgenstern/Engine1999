@@ -13,6 +13,7 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+- **Plaster pictures were never made** (2026-11-23, owner: walls still flat colour after the third round): the `MKPLASTER` calls (line 2186 of `demos/1987.bas`) had not been inserted (my text replace did not match the indented line), so pictures 361..366 did not exist and the houses fell back to flat colours; now in `MAKETEX`. Checked the same plaster in House3D under Xvfb (speckle visible); `game1987test.sh` passes. **Not looked at in the world.**
 - **Settlements, third round** (2026-11-23, owner: coordinate line overlaps the compass; walls and windows of the settlement houses show no texture): `demos/1987.bas`: the coordinate line moved below the compass tape (y 20/21 instead of 4/5); new `MKPLASTER` (pictures 361..366: the house colour with speckle and streaks, made in `MAKETEX`) used for `M3D HOUSEPIC 0..5` instead of flat palette colours, so the walls get a picture. Windows: the glass stays opaque dark blue by the owner's choice, the frame is picture 313. Tests: `game1987test.sh` passes. **Not looked at in a window.**
 
 ## Log
