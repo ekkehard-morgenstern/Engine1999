@@ -1897,7 +1897,7 @@
 15363   ' (John's own height steps are not counted: the camera follows them smoothly; the step is printed); turning or walking steadily does not count
 15364   DX1=M3D("X")-FL1:DY1=M3D("Y")-FL2:DZ1=M3D("Z")-FL3:DA1=FN ADIFF(M3D("YAW"),FL4):DP1=M3D("PITCH")-FL5:DJ1=JZ-FL6
 15365   IF FLC>1 AND (ABS(DX1-PD1)>1.5 OR ABS(DY1-PD2)>1.5 OR ABS(DZ1-PD3)>1.5 OR ABS(DA1-PD4)>1.2 OR ABS(DP1-PD5)>1.2) THEN
-15366     FLJ=FLJ+1:IF FLJ<=80 THEN FLJ$(FLJ)="frame "+STR$(FLC)+": cam moved "+STR$(INT(DX1))+" "+STR$(INT(DY1))+" "+STR$(INT(DZ1))+" (before "+STR$(INT(PD1))+" "+STR$(INT(PD2))+" "+STR$(INT(PD3))+") yaw "+STR$(INT(DA1))+" (before "+STR$(INT(PD4))+") pitch "+STR$(INT(DP1))+" (before "+STR$(INT(PD5))+") John z "+STR$(INT(DJ1*10)/10)+" distance "+STR$(INT(DSV))+" turn input "+STR$(KT)+" forward "+STR$(KF)+" mode "+STR$(MODE)
+15366     FLJ=FLJ+1:IF FLJ<=80 THEN FLJ$(FLJ)="frame "+STR$(FLC)+": cam moved "+STR$(INT(DX1))+" "+STR$(INT(DY1))+" "+STR$(INT(DZ1))+" (before "+STR$(INT(PD1))+" "+STR$(INT(PD2))+" "+STR$(INT(PD3))+") yaw "+STR$(INT(DA1))+" (before "+STR$(INT(PD4))+") pitch "+STR$(INT(DP1))+" (before "+STR$(INT(PD5))+") John z "+STR$(INT(DJ1*10)/10)+" distance "+STR$(INT(DSV))+" turn input "+STR$(KT)+" forward "+STR$(KF)+" mode "+STR$(MODE)+" pulled "+STR$(CMPUL)+" behavior "+STR$(CMB)+" shot "+STR$(INT(CMSH))
 15368   END IF
 15369   PD1=DX1:PD2=DY1:PD3=DZ1:PD4=DA1:PD5=DP1:FL1=M3D("X"):FL2=M3D("Y"):FL3=M3D("Z"):FL4=M3D("YAW"):FL5=M3D("PITCH"):FL6=JZ
 15370   D=TI-FLK:FLK=TI
@@ -1931,7 +1931,7 @@
 15680 ' walking or riding) ends 2 and 3 at once. Whatever it does it keeps clear of walls: three rays from John's head to the wished place (straight and 9 degrees to each side) shorten the
 15690 ' distance, and a ray from John's head to the camera itself pulls it in front of anything it would be behind. REC and the red glyphs (CAMHUD) show that it acts on its own.
 15700 PROC CAMAGENT(DT)
-15710   LOCAL TX,TY,TZ,TG,K,D,E,C,S,DS,R,PX,PY,PZ,EX,EY,EZ,AX,AY,AZ,SP,LX,LY,LZ,H,FZ,PM,YW,PT,ER,DX,DY,DZ,D2,HH,KP,KD
+15710   LOCAL QD,QV,TX,TY,TZ,TG,K,D,E,C,S,DS,R,PX,PY,PZ,EX,EY,EZ,AX,AY,AZ,SP,LX,LY,LZ,H,FZ,PM,YW,PT,ER,DX,DY,DZ,D2,HH,KP,KD
 15715   IF DT<0.002 THEN EXIT PROC
 15720   IF CZI=0 OR ABS(JZ-CZS)>40 THEN CZS=JZ:CZI=-1
 15730   CZS=CZS+(JZ-CZS)*MIN(1,9*DT)
@@ -2003,7 +2003,9 @@
 16390   ' ---- movement: the velocity of the wished place is known (so a camera behind a bicycle does not lag), the rest is a spring and a damper; the acceleration and the speed are limited
 16400   CMTVX=CMTVX+((PX-CMPX0)/DT-CMTVX)*MIN(1,12*DT):CMTVY=CMTVY+((PY-CMPY0)/DT-CMTVY)*MIN(1,12*DT):CMTVZ=CMTVZ+((PZ-CMPZ0)/DT-CMTVZ)*MIN(1,12*DT)
 16410   CMPX0=PX:CMPY0=PY:CMPZ0=PZ
-16420   AX=26*EX+10.2*(CMTVX-CMVX):AY=26*EY+10.2*(CMTVY-CMVY):AZ=26*EZ+10.2*(CMTVZ-CMVZ)
+16415   ' (backward Euler: a frame longer than ~50 ms made the plain spring and damper ring from one frame to the next, the picture jumped between two views; this form is stable for any frame time and the same for short ones)
+16416   QD=1+10.2*DT+26*DT*DT:QV=10.2+26*DT
+16420   AX=(26*EX+10.2*CMTVX-QV*CMVX)/QD:AY=(26*EY+10.2*CMTVY-QV*CMVY)/QD:AZ=(26*EZ+10.2*CMTVZ-QV*CMVZ)/QD
 16430   SP=SQR(AX*AX+AY*AY+AZ*AZ):IF SP>1800 THEN AX=AX*1800/SP:AY=AY*1800/SP:AZ=AZ*1800/SP
 16440   CMVX=CMVX+AX*DT:CMVY=CMVY+AY*DT:CMVZ=CMVZ+AZ*DT
 16450   SP=SQR(CMVX*CMVX+CMVY*CMVY+CMVZ*CMVZ):IF SP>900 THEN CMVX=CMVX*900/SP:CMVY=CMVY*900/SP:CMVZ=CMVZ*900/SP
@@ -2012,10 +2014,10 @@
 16480   DX=CMX-TX:DY=CMY-TY:DZ=CMZ-TZ:D2=SQR(DX*DX+DY*DY+DZ*DZ):HH=SQR(DX*DX+DY*DY)
 16490   IF D2>30 THEN
 16500     M3D CAMERA TX,TY,TZ-46,ATAN2(DY,DX)*180/PI,ATAN2(DZ,HH)*180/PI
-16510     R=M3D("SHOOT",D2+4)
+16510     R=M3D("SHOOT",D2+4):CMPUL=0:CMSH=M3D("SHOTDIST")-D2
 16520     IF M3D("SHOTKIND")=1 THEN
 16530       IF M3D("SHOTDIST")<D2+2 THEN
-16540         D=MAX(20,M3D("SHOTDIST")-12):CMX=TX+DX/D2*D:CMY=TY+DY/D2*D:CMZ=TZ+DZ/D2*D:CMVX=CMVX*0.3:CMVY=CMVY*0.3:CMVZ=CMVZ*0.3
+16540         CMPUL=-1:D=MAX(20,M3D("SHOTDIST")-12):CMX=TX+DX/D2*D:CMY=TY+DY/D2*D:CMZ=TZ+DZ/D2*D:CMVX=CMVX*0.3:CMVY=CMVY*0.3:CMVZ=CMVZ*0.3
 16550       END IF
 16560     END IF
 16570   END IF
@@ -2028,10 +2030,10 @@
 16640   YW=ATAN2(DY,DX)*180/PI:PT=ATAN2(DZ,HH)*180/PI+CLP
 16645   ' (a lazier look, a glance, when it turns to a point of interest)
 16646   KP=90:KD=19:IF CMB=3 THEN KP=28:KD=10.6
-16650   ER=FN ADIFF(YW,CMYW):CMWY=CMWY+(KP*ER-KD*CMWY)*DT
+16650   QD=1+KD*DT+KP*DT*DT:ER=FN ADIFF(YW,CMYW):CMWY=(CMWY+KP*ER*DT)/QD
 16660   IF ABS(CMWY)>540 THEN CMWY=SGN(CMWY)*540
 16670   CMYW=CMYW+CMWY*DT
-16680   ER=PT-CMPT:CMWP=CMWP+(KP*ER-KD*CMWP)*DT
+16680   ER=PT-CMPT:CMWP=(CMWP+KP*ER*DT)/QD
 16690   IF ABS(CMWP)>360 THEN CMWP=SGN(CMWP)*360
 16700   CMPT=CMPT+CMWP*DT
 16710   M3D CAMERA CMX,CMY,CMZ-46,CMYW,CMPT
@@ -2468,8 +2470,8 @@
 24100 END PROC
 24110 PROC COORDS
 24112   CALL COORDTXT
-24114   GFX TEXT 640-LEN(CT$)*8-5,21,CT$,FN CC(0,1)
-24116   GFX TEXT 640-LEN(CT$)*8-6,20,CT$,FN CC(3,15)
+24114   GFX TEXT 640-LEN(CT$)*8-5,33,CT$,FN CC(0,1)
+24116   GFX TEXT 640-LEN(CT$)*8-6,32,CT$,FN CC(3,15)
 24120 END PROC
 24130 FUNC PADX(X)
 24140   RETURN JOY("X")<>0
