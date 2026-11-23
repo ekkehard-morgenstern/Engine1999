@@ -211,7 +211,7 @@
 2080   CALL MKLEAVES(310,5,6)
 2090   CALL MKSKY
 2100   CALL MKBARK
-2110   CALL W3K_WINDOW(313)
+2110   CALL MKWINDOWF(313)
 2120   CALL MKSOIL
 2130   CALL MKWHEATTOP
 2140   CALL MKLEAVES(317,4,3)
@@ -232,6 +232,15 @@
 2207   CALL W3K_GRAB(N,64,64)
 2208 END PROC
 2210 ' ------------------------------------------------------------------------------------------------ mesh helpers
+2211 ' the window frame of the settlements: a pale frame and a cross of mullions over see-through panes (the dark glass shows through); thick, so it still reads from far (64 x 96)
+2212 PROC MKWINDOWF(N)
+2213   LOCAL C
+2214   C=FN CC(13,14)
+2215   GFX CLEAR 0
+2216   GFX LINE 0,0,63,95,C,BF:GFX LINE 7,7,56,88,0,BF
+2217   GFX LINE 28,7,35,88,C,BF:GFX LINE 7,42,56,49,C,BF
+2218   CALL W3K_GRAB(N,64,96)
+2219 END PROC
 2220 PROC BX(O,X1,Y1,Z1,X2,Y2,Z2,TX)
 2230   IF XON THEN CALL BXX(O,X1,Y1,Z1,X2,Y2,Z2,TX) ELSE M3D BOX O,X1,Y1,Z1,X2,Y2,Z2,TX
 2240 END PROC
