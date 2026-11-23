@@ -453,7 +453,7 @@
 3275   ' a unit is 3.2 cm: HILLS (ridged noise up to 260 = 8 m high, rocky and walkable), real MOUNTAINS (peaks up to 37000 = 1190 m high, steep walls, 14000 .. 22000 units from the house: ridged noise where a very slow noise is high) and real LAKES (basins 350 = 11 m deep and 3000 .. 6000 = 100 .. 190 m across); none over the hand-made area (3900 units round the house, fading in over 1200)
 3276   IF NOT WLD THEN M3D GROUNDQUIET 0,0,3900,3900,1200:M3D ROADNET 1800,0.45,140,36000,0.85,900:M3D HILLS 1987,500,260,5,0.05,0.4:M3D MOUNTAINS 7,9000,80000,4,0.25,0.6,14000,22000
 3277   M3D RINGPIC 325,324,301,327,328,320,303,320,302,WZ,RH,304:M3D TREEPIC 312,309,310,317:IF WLD THEN M3D POSTPIC FN CC(0,13),FN CC(0,15),FN CC(1,11),321
-3278   IF NOT WLD THEN M3D LAKES 4711,9000,350,0.3,0.5
+3278   IF WLD THEN M3D HOUSEPIC 0,FN CC(13,12):M3D HOUSEPIC 1,FN CC(3,13):M3D HOUSEPIC 2,FN CC(8,12):M3D HOUSEPIC 3,FN CC(14,12):M3D HOUSEPIC 4,FN CC(5,12):M3D HOUSEPIC 5,FN CC(0,13):M3D HOUSEPIC 6,306:M3D HOUSEPIC 7,306:M3D HOUSEPIC 8,306:M3D HOUSEPIC 10,326:M3D HOUSEPIC 12,305:M3D HOUSEPIC 13,305:M3D HOUSEPIC 14,307:M3D HOUSEPIC 17,313 ELSE M3D LAKES 4711,9000,350,0.3,0.5
 3279 END PROC
 3280 ' what stops John and the bicycle: only water too deep to wade (12 below the water level WZ); the rocky hills are walkable and rideable (the engine lets a body climb every slope up to 72 degrees and lifts one that got buried)
 3281 FUNC BLOCKED(X,Y)
@@ -2437,10 +2437,10 @@
 24020   LOCAL X,Y,Z,A$,CX,CY
 24030   IF MODE=1 THEN X=BX:Y=BY ELSE X=JX:Y=JY
 24040   Z=FN FLR(X,Y)
-24050   A$="X "+STR$(INT(X*3.2+0.5)/100)+"  Y "+STR$(INT(Y*3.2+0.5)/100)+"  Z "+STR$(INT(Z*3.2+0.5)/100)+" M"
+24050   A$="X "+FORMAT$(X*0.032,"#######.##")+"  Y "+FORMAT$(Y*0.032,"#######.##")+"  Z "+FORMAT$(Z*0.032,"####.##")+" M"
 24060   IF WLD THEN
 24070     CX=M3D("WORLDCHUNK",X,Y,0):CY=M3D("WORLDCHUNK",X,Y,1)
-24080     IF CX>=0 THEN A$=A$+"  CHUNK "+STR$(CX)+","+STR$(CY)
+24080     IF CX>=0 THEN A$=A$+"  CHUNK "+FORMAT$(CX,"###")+","+FORMAT$(CY,"###")
 24090   END IF
 24095   CT$=A$
 24100 END PROC

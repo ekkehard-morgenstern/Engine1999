@@ -312,6 +312,7 @@ static void test_world( const char* base ) {
     {
         long tri[3] = { 0, 0, 0 };
         int nobj[3] = { 0, 0, 0 };
+        bool walked = false;
         for ( int run = 0; run < 2; ++run ) {
             CHECK( op( GFXOP_M3DWORLDCLOSE, 0 ) );
             for ( int k = 0; k < 6; ++k ) { CHECK( op( GFXOP_M3DHOUSEPIC, 2, (double) k, run == 0 ? -1.0 : 20.0 + k ) ); }
@@ -323,10 +324,38 @@ static void test_world( const char* base ) {
                     const obj_t* o = &M->objs[k];
                     if ( o->used && o->shown && o->nv > 0 && ( o->flags & 17 ) == 17 ) { tri[run] += o->nt; ++nobj[run]; }
                 }
+                if ( run == 1 && !walked ) {                                                          // collision: walk at the largest wall of a shown house
+                    for ( int k = 100; k < 100 + 3072 && !walked; ++k ) {
+                        const obj_t* o = &M->objs[k];
+                        if ( !( o->used && o->shown && o->nv > 0 && ( o->flags & 17 ) == 17 ) ) { continue; }
+                        int bj = -1; double ba = 0.0;
+                        for ( int j = 0; j < o->nt; ++j ) {
+                            const mv_t *p = &o->v[o->t[j].a], *q = &o->v[o->t[j].b], *r = &o->v[o->t[j].c];
+                            double nx = ( q->y - p->y ) * ( r->z - p->z ) - ( q->z - p->z ) * ( r->y - p->y ), ny = ( q->z - p->z ) * ( r->x - p->x ) - ( q->x - p->x ) * ( r->z - p->z ), nz = ( q->x - p->x ) * ( r->y - p->y ) - ( q->y - p->y ) * ( r->x - p->x );
+                            double ar = sqrt( nx * nx + ny * ny + nz * nz );
+                            double gz = Q( GFXQ_M3DGROUND, 2, p->x, p->y );
+                            if ( ar > ba && fabs( nz ) < 0.02 * ar && fmin( p->z, fmin( q->z, r->z ) ) < gz + 10.0 && fmax( p->z, fmax( q->z, r->z ) ) > gz + 40.0 ) { ba = ar; bj = j; }
+                        }
+                        if ( bj < 0 ) { continue; }
+                        const mv_t *p = &o->v[o->t[bj].a], *q = &o->v[o->t[bj].b], *r = &o->v[o->t[bj].c];
+                        double nx = ( q->y - p->y ) * ( r->z - p->z ) - ( q->z - p->z ) * ( r->y - p->y ), ny = ( q->z - p->z ) * ( r->x - p->x ) - ( q->x - p->x ) * ( r->z - p->z );
+                        double nl = hypot( nx, ny ), cx = ( p->x + q->x + r->x ) / 3.0, cy = ( p->y + q->y + r->y ) / 3.0;
+                        nx /= nl; ny /= nl;
+                        double sx = cx + nx * 40.0, sy = cy + ny * 40.0, yaw = atan2( -ny, -nx ) * 180.0 / 3.14159265358979;
+                        CHECK( op( GFXOP_M3DPLAYER, 4, 14.0, 56.0, 50.0, 10.0 ) );
+                        CHECK( op( GFXOP_M3DCAMERA, 5, sx, sy, Q( GFXQ_M3DGROUND, 2, sx, sy ) + 1.0, yaw, 0.0 ) );
+                        CHECK( op( GFXOP_M3DMOVE, 2, 5.0, 0.0 ) );
+                        CHECK( op( GFXOP_M3DMOVE, 2, 120.0, 0.0 ) );                                   // 120 units towards the wall that is 40 away
+                        double side = ( Q( GFXQ_M3DX, 0 ) - cx ) * nx + ( Q( GFXQ_M3DY, 0 ) - cy ) * ny;
+                        printf( "house wall: stopped %.1f from the wall plane (hit %g)\n", side, Q( GFXQ_M3DHIT, 0 ) );
+                        CHECK( side > 5.0 && side < 40.0 );
+                        walked = true;
+                    }
+                }
             }
         }
         printf( "world houses: %ld triangles (%d cells) without house pictures, %ld (%d) with, %ld (%d) again\n", tri[0], nobj[0], tri[1], nobj[1], tri[2], nobj[2] );
-        CHECK( tri[0] == 0 && tri[1] > 0 );
+        CHECK( tri[0] == 0 && tri[1] > 0 && walked );
         for ( int k = 0; k < 6; ++k ) { CHECK( op( GFXOP_M3DHOUSEPIC, 2, (double) k, -1.0 ) ); }
     }
     // hay bales in the fields: the fourth argument of M3D POSTPIC (all shown objects, summed over six places)

@@ -591,6 +591,7 @@ typedef struct {
     const world_t* world;                   // a tile of the static world (mode 4): the heights are the world's function (the wall included)
     bool    tcol; double tbase;             // mode 5 (the trees of a cell of the world): every vertex of a tree morphs down to the foot of the tree (tbase), so the tree grows out of the ground
     double  ratio;                          // the cell of the coarser grid the morph blends to, in cells (0: 3; 2 in the world: nested grids)
+    int     hlv;                            // mode 6 (the houses of a cell): 0 far, 1 middle level
     bool    sunon;
     double  lx, ly, lz;
     int     steps, stride;
@@ -905,6 +906,166 @@ static void job_trees( tjob_t* j ) {
 }
 
 // the trees of a cell of the static world (mode 5: 3906 units = 125 m square, an object of its own, no ground): the cell is cut into squares of 162.8 units (5 m) on the world's grid,
+// -- the settlements of the static world ---------------------------------------------------------------------------------------------------------------------------------------
+/*
+The roads (the tarred ones and the dirt tracks) are cut into stretches of 200 m (6250 units) counted from the start of each road (so every cell finds the same ones); a stretch holds a
+settlement with a chance of 25 % (tarred) or 12 % (dirt): up to six houses, three on each side in turn, their fronts 520 (tarred) or 250 units (dirt) from the middle of the road, turned to
+face it (house type and seed from the hash). A house is left out where it would stand on water, rock, a steep slope, in a forest, near another road or an intersection, or in the home. The
+damage grows with the distance from the middle of the world (the player's home area is not destroyed yet): stage = (distance / 40 km * 4.4 + hash * 0.9 - 0.45) cut to 0 .. 4. A cell (a chunk)
+holds the houses whose front lies in it, in world coordinates (one object, no morphing); the near level is the middle mesh, the far level the far mesh. The trees and bales of the other cells ask
+house_list() too, so that none stands in a house.
+*/
+static double job_wh( const tjob_t* j, int64_t a, int64_t b, int64_t c );
+#define HOUSE_SEG   6250.0
+#define HOUSE_DMGR  1.25e6
+
+typedef struct {
+    double cx, cy;                          // the middle of the footprint
+    double hw, hd;                          // half the width (along the road) and depth
+    double xx, xy, yx, yy;                  // the house's +x (along the road) and +y (away from the road)
+    double ox, oy, z;                       // the south west corner (local 0, 0) and the base height
+    int    type, stage;
+    int64_t seed;
+} hsite_t;
+
+typedef struct { bool ok; int net; double k[4]; int np; double px[2000], py[2000], pd[2000]; } hline_t;
+
+// the polyline of a road with its arc lengths (kept for the last few roads: a cell of trees asks for the same ones as its neighbours)
+static const hline_t* hline_get( const tjob_t* j, const rlink_t* l, int net ) {
+    static _Thread_local hline_t cache[6];
+    static _Thread_local int next;
+    for ( int i = 0; i < 6; ++i ) {
+        if ( cache[i].ok && cache[i].net == net && cache[i].k[0] == l->x1 && cache[i].k[1] == l->y1 && cache[i].k[2] == l->x2 && cache[i].k[3] == l->y2 ) { return &cache[i]; }
+    }
+    (void) j;
+    hline_t* c = &cache[next]; next = ( next + 1 ) % 6;
+    c->ok = true; c->net = net; c->k[0] = l->x1; c->k[1] = l->y1; c->k[2] = l->x2; c->k[3] = l->y2;
+    int ns = l->steps * 4 < 1999 ? l->steps * 4 : 1999;
+    c->np = 0;
+    for ( int k = 0; k <= ns; ++k ) { rnet_point( l, (double) k / (double) ns, &c->px[c->np], &c->py[c->np] ); ++c->np; }
+    c->pd[0] = 0.0;
+    for ( int k = 1; k < c->np; ++k ) { c->pd[k] = c->pd[k - 1] + hypot( c->px[k] - c->px[k - 1], c->py[k] - c->py[k - 1] ); }
+    return c;
+}
+
+// the houses whose front lies in the box (bx0, by0) .. (bx1, by1): the places that pass every test (ground, roads, home); at most max
+static int house_list( const tjob_t* j, double bx0, double by0, double bx1, double by1, hsite_t* out, int max ) {
+    if ( j->world == 0 || !j->pic.houses || !j->gnd.net.on ) { return 0; }
+    rlink_t links[40];
+    house_t* hh = (house_t*) malloc( sizeof(house_t) );
+    if ( hh == 0 ) { return 0; }
+    int n = 0;
+    for ( int net = 1; net >= 0; --net ) {
+        int nl = rnet_links( &j->gnd.net, net, bx0 - 2000.0, by0 - 2000.0, bx1 + 2000.0, by1 + 2000.0, links, 40 );
+        const double setback = net ? 520.0 : 250.0, chance = net ? 0.25 : 0.12, dirtmin = net ? 420.0 : 330.0;
+        for ( int li = 0; li < nl; ++li ) {
+            const rlink_t* l = &links[li];
+            const hline_t* c = hline_get( j, l, net );
+            double total = c->pd[c->np - 1];
+            int64_t lk = ( (int64_t) floor( l->x1 ) * 1000003 + (int64_t) floor( l->y1 ) * 7919 + (int64_t) floor( l->x2 ) * 31 + (int64_t) floor( l->y2 ) ) * 2 + net;
+            for ( int seg = 0; (double) seg * HOUSE_SEG < total; ++seg ) {
+                if ( job_wh( j, lk, seg, 201 ) >= chance ) { continue; }
+                for ( int i = 0; i < 6; ++i ) {
+                    double a = (double) seg * HOUSE_SEG + 500.0 + (double)( i >> 1 ) * 1700.0 + job_wh( j, lk, seg * 8 + i, 202 ) * 300.0;
+                    if ( a > total || ( l->hub1 && a < 1500.0 ) || ( l->hub2 && a > total - 1500.0 ) ) { continue; }
+                    if ( job_wh( j, lk, seg * 8 + i, 203 ) < 0.12 ) { continue; }               // a gap now and then
+                    int k = 1;
+                    while ( k < c->np - 1 && c->pd[k] < a ) { ++k; }
+                    double sl = c->pd[k] - c->pd[k - 1], f = sl > 0.0 ? ( a - c->pd[k - 1] ) / sl : 0.0, sn = sl > 0.0 ? sl : 1.0;
+                    double mx = c->px[k - 1] + ( c->px[k] - c->px[k - 1] ) * f, my = c->py[k - 1] + ( c->py[k] - c->py[k - 1] ) * f;
+                    double ux = ( c->px[k] - c->px[k - 1] ) / sn, uy = ( c->py[k] - c->py[k - 1] ) / sn;
+                    double sg = ( i & 1 ) ? -1.0 : 1.0, nx = uy * sg, ny = -ux * sg;
+                    double fx = mx + nx * setback, fy = my + ny * setback;
+                    if ( fx < bx0 || fx >= bx1 || fy < by0 || fy >= by1 ) { continue; }
+                    if ( fabs( fx ) < 3000.0 && fabs( fy ) < 3000.0 ) { continue; }              // the home
+                    if ( fabs( fx - 1100.0 ) < 1500.0 && fabs( fy - 650.0 ) < 1300.0 ) { continue; }
+                    if ( j->gnd.quiet.on && 1.0 - box_weight( fx, fy, j->gnd.quiet.cx, j->gnd.quiet.cy, j->gnd.quiet.rx, j->gnd.quiet.ry, j->gnd.quiet.margin ) < 0.99 ) { continue; }
+                    int type = 1 + (int) floor( job_wh( j, lk, seg * 8 + i, 204 ) * 5.0 );
+                    if ( type > 5 ) { type = 5; }
+                    int64_t seed = 1 + (int64_t) floor( job_wh( j, lk, seg * 8 + i, 205 ) * 1.0e6 );
+                    house_gen( hh, type, seed );
+                    double w = hh->lx * 3.125, d = hh->dy * 3.125;
+                    double xa0 = ny, xa1 = -nx;                                                // the house's +x runs along the road
+                    double ox = fx - xa0 * w * 0.5, oy = fy - xa1 * w * 0.5;
+                    double zmin = 1.0e9, zmax = -1.0e9;
+                    for ( int q = 0; q < 5; ++q ) {                                        // the four corners and the middle
+                        double lx = q == 4 ? w * 0.5 : ( q & 1 ) ? w : 0.0, ly = q == 4 ? d * 0.5 : ( q & 2 ) ? d : 0.0;
+                        double h = job_height( j, ox + xa0 * lx + nx * ly, oy + xa1 * lx + ny * ly );
+                        zmin = fmin( zmin, h ); zmax = fmax( zmax, h );
+                    }
+                    if ( !( zmin > j->pic.level + 3.0 && zmax < j->pic.rockh - 60.0 ) || zmax - zmin > 60.0 ) { continue; }
+                    double cx = ox + xa0 * w * 0.5 + nx * d * 0.5, cy = oy + xa1 * w * 0.5 + ny * d * 0.5;
+                    if ( rnet_kind( &j->gnd.net, cx, cy ) == 3 ) { continue; }
+                    rnear_t rn;
+                    rnet_near( &j->gnd.net, cx, cy, 700.0, &rn );
+                    if ( rn.dirt < dirtmin || rn.tar < 560.0 ) { continue; }
+                    if ( n >= max ) { free( hh ); return n; }
+                    hsite_t* s = &out[n++];
+                    s->cx = cx; s->cy = cy; s->hw = w * 0.5; s->hd = d * 0.5; s->xx = xa0; s->xy = xa1; s->yx = nx; s->yy = ny;
+                    s->ox = ox; s->oy = oy; s->z = zmin - 2.0; s->type = type; s->seed = seed;
+                    double t = hypot( cx, cy ) / HOUSE_DMGR * 4.4 + job_wh( j, lk, seg * 8 + i, 206 ) * 0.9 - 0.45;
+                    s->stage = t < 0.0 ? 0 : t > 4.0 ? 4 : (int) floor( t );
+                }
+            }
+        }
+    }
+    free( hh );
+    return n;
+}
+
+// is the point in a house (with a margin)?
+static bool house_hit( const hsite_t* hs, int n, double x, double y, double margin ) {
+    for ( int i = 0; i < n; ++i ) {
+        double dx = x - hs[i].cx, dy = y - hs[i].cy;
+        if ( fabs( dx * hs[i].xx + dy * hs[i].xy ) < hs[i].hw + margin && fabs( dx * hs[i].yx + dy * hs[i].yy ) < hs[i].hd + margin ) { return true; }
+    }
+    return false;
+}
+
+static bool job_house( tjob_t* j, house_t* hh, const hsite_t* s, int level ) {
+    house_gen( hh, s->type, s->seed );
+    hmesh_t hm;
+    if ( !house_mesh( hh, s->stage, level, &hm ) ) { return false; }
+    int mat[HM_NMAT], mw[HM_NMAT], mh[HM_NMAT];
+    house_mats( j->pic.hpic, j->pic.hpw, j->pic.hph, hm.plaster, hm.roofc, mat, mw, mh );
+    int base = j->nv;
+    bool ok = true;
+    for ( int k = 0; k < hm.nv && ok; ++k ) {
+        double lx = hm.v[k].x, ly = hm.v[k].y;
+        ok = jv_addm( j, s->ox + s->xx * lx + s->yx * ly, s->oy + s->xy * lx + s->yy * ly, s->z + hm.v[k].z, -1.0e9, -1.0e9, 0.0 ) >= 0;
+    }
+    for ( int k = 0; k < hm.nt && ok; ++k ) {
+        int tm = hm.t[k].mat, ix[3] = { hm.t[k].a + base, hm.t[k].b + base, hm.t[k].c + base };
+        ok = jt_add( j, ix[0], ix[1], ix[2], mat[tm] );
+        if ( !ok ) { break; }
+        mt_t* tt = &j->t[j->nt - 1];
+        const mv_t* v[3] = { &j->v[ix[0]], &j->v[ix[1]], &j->v[ix[2]] };
+        double ux = v[1]->x - v[0]->x, uy = v[1]->y - v[0]->y, uz = v[1]->z - v[0]->z, wx = v[2]->x - v[0]->x, wy = v[2]->y - v[0]->y, wz = v[2]->z - v[0]->z;
+        double nnx = uy * wz - uz * wy, nny = uz * wx - ux * wz, nnz = ux * wy - uy * wx;
+        const int hv[3] = { hm.t[k].a, hm.t[k].b, hm.t[k].c };
+        for ( int q = 0; q < 3; ++q ) {
+            if ( mw[tm] > 0 && hm.v[hv[q]].u >= 0.0 ) { tt->u[q] = hm.v[hv[q]].u * (double) mw[tm]; tt->v[q] = hm.v[hv[q]].v * (double) mh[tm]; }
+            else { auto_uv( nnx, nny, nnz, v[q]->x, v[q]->y, v[q]->z, &tt->u[q], &tt->v[q] ); }
+        }
+    }
+    house_mesh_free( &hm );
+    return ok;
+}
+
+#define HOUSE_CELLMAX 600
+static void job_whouses( tjob_t* j ) {
+    const double ex = j->x0 + j->n * j->cell, ey = j->y0 + j->n * j->cell;
+    hsite_t* hs = (hsite_t*) malloc( sizeof(hsite_t) * HOUSE_CELLMAX );
+    house_t* hh = (house_t*) malloc( sizeof(house_t) );
+    if ( hs != 0 && hh != 0 ) {
+        int n = house_list( j, j->x0, j->y0, ex, ey, hs, HOUSE_CELLMAX );
+        for ( int i = 0; i < n; ++i ) {
+            if ( !job_house( j, hh, &hs[i], j->hlv ) ) { break; }
+        }
+    }
+    free( hs ); free( hh );
+}
+
 // each holds at most one tree at a place hashed from the world seed and the square's number (so the same tree stands in the same place whatever cells are built), in forest mostly, now and
 // then alone on a meadow or plain; not on or beside a road, not on steep or high ground, not in the yard of the house and its field; cheap trees (12 triangles). Every vertex morphs down to
 // the foot of its tree (tcol), the ground job sets the distances: a tree grows out of the ground between a and b, nothing is added in the middle of the view.
@@ -916,10 +1077,13 @@ static void job_wtrees( tjob_t* j ) {
     const double sub = WORLD_CHUNK / 96.0;
     const int ns = (int) floor( j->cell * (double) j->n / sub + 0.5 );
     int64_t i0 = (int64_t) floor( j->x0 / sub + 0.5 ), k0 = (int64_t) floor( j->y0 / sub + 0.5 );
+    hsite_t hs[48];
+    int nh = house_list( j, j->x0 - 1200.0, j->y0 - 1200.0, j->x0 + j->n * j->cell + 1200.0, j->y0 + j->n * j->cell + 1200.0, hs, 48 );
     for ( int q = 0; q < ns; ++q ) {
         for ( int p = 0; p < ns; ++p ) {
             int64_t ia = i0 + p, ka = k0 + q;
             double x = ( (double) ia + job_wh( j, ia, ka, 1 ) ) * sub, y = ( (double) ka + job_wh( j, ia, ka, 2 ) ) * sub;
+            if ( nh > 0 && house_hit( hs, nh, x, y, 160.0 ) ) { continue; }
             if ( fabs( x ) < 1500.0 && fabs( y ) < 1500.0 ) { continue; }                          // the house and its yard
             if ( fabs( x - 1100.0 ) < 900.0 && fabs( y - 650.0 ) < 700.0 ) { continue; }          // the wheat field
             int kw = rnet_kind( &j->gnd.net, x, y );
@@ -1025,11 +1189,14 @@ static void job_wbales( tjob_t* j ) {
     const double sub = WORLD_CHUNK / 96.0;
     const int ns = (int) floor( j->cell * (double) j->n / sub + 0.5 );
     int64_t i0 = (int64_t) floor( j->x0 / sub + 0.5 ), k0 = (int64_t) floor( j->y0 / sub + 0.5 );
+    hsite_t hs[48];
+    int nh = house_list( j, j->x0 - 1200.0, j->y0 - 1200.0, j->x0 + j->n * j->cell + 1200.0, j->y0 + j->n * j->cell + 1200.0, hs, 48 );
     for ( int q = 0; q < ns; ++q ) {
         for ( int p = 0; p < ns; ++p ) {
             int64_t ia = i0 + p, ka = k0 + q;
             if ( job_wh( j, ia, ka, 13 ) >= 0.12 ) { continue; }
             double x = ( (double) ia + job_wh( j, ia, ka, 11 ) ) * sub, y = ( (double) ka + job_wh( j, ia, ka, 12 ) ) * sub;
+            if ( nh > 0 && house_hit( hs, nh, x, y, 120.0 ) ) { continue; }
             if ( fabs( x ) < 1500.0 && fabs( y ) < 1500.0 ) { continue; }
             if ( fabs( x - 1100.0 ) < 900.0 && fabs( y - 650.0 ) < 700.0 ) { continue; }
             if ( rnet_kind( &j->gnd.net, x, y ) != 2 ) { continue; }
@@ -1042,108 +1209,6 @@ static void job_wbales( tjob_t* j ) {
             if ( !job_bale( j, x, y, h - 1.0, job_wh( j, ia, ka, 14 ) * 360.0, 0.8 + job_wh( j, ia, ka, 15 ) * 0.5 ) ) { return; }
         }
     }
-}
-
-// -- the settlements of the static world ---------------------------------------------------------------------------------------------------------------------------------------
-/*
-The tarred roads are cut into stretches of 200 m (6250 units) counted from the start of each road (so every cell finds the same ones); a stretch holds a settlement with a chance of
-25 % (hashed from the world seed and the road): up to six houses, three on each side in turn, their fronts 520 units from the middle of the road, turned to face it (house type and
-seed from the hash). A house is left out where it would stand on water, rock, a steep slope, in a forest, near another road or an intersection, or in the quiet box of the home. The
-damage grows with the distance from the middle of the world (the player's home area is not destroyed yet): stage = (distance / 40 km * 4.4 + hash * 0.9 - 0.45) cut to 0 .. 4.
-The cell (a chunk, level WL_HOUSE) holds the middle level meshes of the houses whose front lies in it, in world coordinates (one object, no morphing).
-*/
-#define HOUSE_SEG   6250.0
-#define HOUSE_SET   0.25
-#define HOUSE_DMGR  1.25e6
-
-static bool job_house( tjob_t* j, house_t* hh, double fx, double fy, double nx, double ny, int type, int64_t seed, double hr_ ) {
-    house_gen( hh, type, seed );
-    double ya[2] = { nx, ny }, xa[2] = { ny, -nx };                          // the house's +y runs away from the road, its +x along it
-    double w = hh->lx * 3.125, d = hh->dy * 3.125;
-    double ox = fx - xa[0] * w * 0.5, oy = fy - xa[1] * w * 0.5;
-    double zmin = 1.0e9, zmax = -1.0e9;
-    for ( int q = 0; q < 5; ++q ) {                                        // the four corners and the middle
-        double lx = q == 4 ? w * 0.5 : ( q & 1 ) ? w : 0.0, ly = q == 4 ? d * 0.5 : ( q & 2 ) ? d : 0.0;
-        double h = job_height( j, ox + xa[0] * lx + ya[0] * ly, oy + xa[1] * lx + ya[1] * ly );
-        zmin = fmin( zmin, h ); zmax = fmax( zmax, h );
-    }
-    if ( !( zmin > j->pic.level + 3.0 && zmax < j->pic.rockh - 60.0 ) || zmax - zmin > 60.0 ) { return true; }
-    double cx = ox + xa[0] * w * 0.5 + ya[0] * d * 0.5, cy = oy + xa[1] * w * 0.5 + ya[1] * d * 0.5;
-    if ( rnet_kind( &j->gnd.net, cx, cy ) == 3 ) { return true; }
-    rnear_t rn;
-    rnet_near( &j->gnd.net, cx, cy, 700.0, &rn );
-    if ( rn.dirt < 420.0 || rn.tar < 560.0 ) { return true; }
-    double t = hypot( cx, cy ) / HOUSE_DMGR * 4.4 + hr_ * 0.9 - 0.45;
-    int stage = t < 0.0 ? 0 : t > 4.0 ? 4 : (int) floor( t );
-    hmesh_t hm;
-    if ( !house_mesh( hh, stage, 1, &hm ) ) { return false; }
-    int mat[HM_NMAT], mw[HM_NMAT], mh[HM_NMAT];
-    house_mats( j->pic.hpic, j->pic.hpw, j->pic.hph, hm.plaster, hm.roofc, mat, mw, mh );
-    int base = j->nv;
-    bool ok = true;
-    double z0 = zmin - 2.0;
-    for ( int k = 0; k < hm.nv && ok; ++k ) {
-        double lx = hm.v[k].x, ly = hm.v[k].y;
-        ok = jv_addm( j, ox + xa[0] * lx + ya[0] * ly, oy + xa[1] * lx + ya[1] * ly, z0 + hm.v[k].z, -1.0e9, -1.0e9, 0.0 ) >= 0;
-    }
-    for ( int k = 0; k < hm.nt && ok; ++k ) {
-        int tm = hm.t[k].mat, ix[3] = { hm.t[k].a + base, hm.t[k].b + base, hm.t[k].c + base };
-        ok = jt_add( j, ix[0], ix[1], ix[2], mat[tm] );
-        if ( !ok ) { break; }
-        mt_t* tt = &j->t[j->nt - 1];
-        const mv_t* v[3] = { &j->v[ix[0]], &j->v[ix[1]], &j->v[ix[2]] };
-        double ux = v[1]->x - v[0]->x, uy = v[1]->y - v[0]->y, uz = v[1]->z - v[0]->z, wx = v[2]->x - v[0]->x, wy = v[2]->y - v[0]->y, wz = v[2]->z - v[0]->z;
-        double nnx = uy * wz - uz * wy, nny = uz * wx - ux * wz, nnz = ux * wy - uy * wx;
-        const int hv[3] = { hm.t[k].a, hm.t[k].b, hm.t[k].c };
-        for ( int q = 0; q < 3; ++q ) {
-            if ( mw[tm] > 0 && hm.v[hv[q]].u >= 0.0 ) { tt->u[q] = hm.v[hv[q]].u * (double) mw[tm]; tt->v[q] = hm.v[hv[q]].v * (double) mh[tm]; }
-            else { auto_uv( nnx, nny, nnz, v[q]->x, v[q]->y, v[q]->z, &tt->u[q], &tt->v[q] ); }
-        }
-    }
-    house_mesh_free( &hm );
-    return ok;
-}
-
-static void job_whouses( tjob_t* j ) {
-    const double ex = j->x0 + j->n * j->cell, ey = j->y0 + j->n * j->cell;
-    rlink_t links[24];
-    int nl = rnet_links( &j->gnd.net, 1, j->x0 - 2000.0, j->y0 - 2000.0, ex + 2000.0, ey + 2000.0, links, 24 );
-    static _Thread_local double px[2000], py[2000], pd[2000];
-    house_t* hh = (house_t*) malloc( sizeof(house_t) );
-    if ( hh == 0 ) { return; }
-    for ( int li = 0; li < nl; ++li ) {
-        const rlink_t* l = &links[li];
-        int np = 0, ns = l->steps * 4 < 1999 ? l->steps * 4 : 1999;
-        for ( int k = 0; k <= ns; ++k ) { rnet_point( l, (double) k / (double) ns, &px[np], &py[np] ); ++np; }
-        pd[0] = 0.0;
-        for ( int k = 1; k < np; ++k ) { pd[k] = pd[k - 1] + hypot( px[k] - px[k - 1], py[k] - py[k - 1] ); }
-        double total = pd[np - 1];
-        int64_t lk = (int64_t) floor( l->x1 ) * 1000003 + (int64_t) floor( l->y1 ) * 7919 + (int64_t) floor( l->x2 ) * 31 + (int64_t) floor( l->y2 );
-        for ( int seg = 0; (double) seg * HOUSE_SEG < total; ++seg ) {
-            if ( job_wh( j, lk, seg, 201 ) >= HOUSE_SET ) { continue; }
-            for ( int i = 0; i < 6; ++i ) {
-                double a = (double) seg * HOUSE_SEG + 500.0 + (double)( i >> 1 ) * 1700.0 + job_wh( j, lk, seg * 8 + i, 202 ) * 300.0;
-                if ( a > total || ( l->hub1 && a < 1500.0 ) || ( l->hub2 && a > total - 1500.0 ) ) { continue; }
-                if ( job_wh( j, lk, seg * 8 + i, 203 ) < 0.12 ) { continue; }               // a gap now and then
-                int k = 1;
-                while ( k < np - 1 && pd[k] < a ) { ++k; }
-                double sl = pd[k] - pd[k - 1], f = sl > 0.0 ? ( a - pd[k - 1] ) / sl : 0.0;
-                double mx = px[k - 1] + ( px[k] - px[k - 1] ) * f, my = py[k - 1] + ( py[k] - py[k - 1] ) * f;
-                double ux = ( px[k] - px[k - 1] ) / ( sl > 0.0 ? sl : 1.0 ), uy = ( py[k] - py[k - 1] ) / ( sl > 0.0 ? sl : 1.0 );
-                double sg = ( i & 1 ) ? -1.0 : 1.0, nx = uy * sg, ny = -ux * sg;
-                double fx = mx + nx * 520.0, fy = my + ny * 520.0;
-                if ( fx < j->x0 || fx >= ex || fy < j->y0 || fy >= ey ) { continue; }
-                if ( fabs( fx ) < 3000.0 && fabs( fy ) < 3000.0 ) { continue; }              // the home
-                if ( fabs( fx - 1100.0 ) < 1500.0 && fabs( fy - 650.0 ) < 1300.0 ) { continue; }
-                if ( j->gnd.quiet.on && 1.0 - box_weight( fx, fy, j->gnd.quiet.cx, j->gnd.quiet.cy, j->gnd.quiet.rx, j->gnd.quiet.ry, j->gnd.quiet.margin ) < 0.99 ) { continue; }
-                int type = 1 + (int) floor( job_wh( j, lk, seg * 8 + i, 204 ) * 5.0 );
-                if ( type > 5 ) { type = 5; }
-                int64_t seed = 1 + (int64_t) floor( job_wh( j, lk, seg * 8 + i, 205 ) * 1.0e6 );
-                if ( !job_house( j, hh, fx, fy, nx, ny, type, seed, job_wh( j, lk, seg * 8 + i, 206 ) ) ) { free( hh ); return; }
-            }
-        }
-    }
-    free( hh );
 }
 
 static void job_run( tjob_t* j ) {
@@ -1423,6 +1488,8 @@ Every tile is one object (slot i = object obj0 + i) made by a ground job of mode
 #define WL_REQMAX   384
 #define WL_TREE     100                      // the "level" of a cell of trees (size 4 S0 = 3906 units); the trees of a cell grow out of the ground between WL_TB - WL_TBAND and WL_TB from the camera
 #define WL_HOUSE    101                      // the "level" of a cell of houses (a chunk, 15625 units): shown nearer than WL_HB, built from WL_HB + a chunk on
+#define WL_HOUSEF   102                      // the same cells with the far level meshes: shown from WL_HM to WL_HB, the middle level (WL_HOUSE) nearer than WL_HM
+#define WL_HM       6000.0
 #define WL_HB       32000.0
 #define WL_TB       7000.0
 #define WL_TBAND    700.0
@@ -1444,7 +1511,7 @@ typedef struct _wl {
     double   cx, cy;
 } wl_t;
 
-static double wl_size( int lvl ) { return lvl == WL_HOUSE ? 16.0 * WL_S0 : lvl == WL_TREE ? 4.0 * WL_S0 : WL_S0 * (double)( 1 << lvl ); }
+static double wl_size( int lvl ) { return lvl == WL_HOUSE || lvl == WL_HOUSEF ? 16.0 * WL_S0 : lvl == WL_TREE ? 4.0 * WL_S0 : WL_S0 * (double)( 1 << lvl ); }
 
 static unsigned wl_key( int lvl, int64_t tx, int64_t ty ) {
     return (unsigned)( nz_mix( (uint64_t) tx * 0x9E3779B97F4A7C15ULL + (uint64_t) ty * 0xC2B2AE3D27D4EB4FULL + (uint64_t) lvl ) % WL_HASH );
@@ -1494,7 +1561,7 @@ static int wl_add( m3d_t* m, wl_t* wl, int lvl, int64_t tx, int64_t ty ) {
     m->ulok = false;
     if ( o >= m->top ) { m->top = o + 1; }
     obj_t* ob = &m->objs[o];
-    ob->used = true; ob->shown = false; ob->dirty = true; ob->flags = lvl == WL_HOUSE ? ( wl->flags | M3D_OF_TWOSIDED | M3D_OF_MASKED ) : wl->flags; ob->light = lvl == WL_HOUSE ? 235 : wl->light; ob->gen = next_gen(); ob->scale = 1.0; ob->cs = 1.0;
+    ob->used = true; ob->shown = false; ob->dirty = true; ob->flags = lvl == WL_HOUSE || lvl == WL_HOUSEF ? ( wl->flags | M3D_OF_TWOSIDED | M3D_OF_MASKED ) : wl->flags; ob->light = lvl == WL_HOUSE || lvl == WL_HOUSEF ? 235 : wl->light; ob->gen = next_gen(); ob->scale = 1.0; ob->cs = 1.0;
     return slot;
 }
 
@@ -1538,8 +1605,8 @@ static bool wl_request( m3d_t* m, wl_t* wl, int slot ) {
     double s = wl_size( t->lvl );
     tjob_t* pj = (tjob_t*) calloc( 1, sizeof(tjob_t) );
     if ( pj == 0 ) { return false; }
-    pj->obj = wl->obj0 + slot; pj->n = 8; pj->x0 = (double) t->tx * s; pj->y0 = (double) t->ty * s; pj->cell = s / 8.0; pj->skirt = pj->cell * 0.75 + 10.0; pj->mode = t->lvl == WL_HOUSE ? 6 : t->lvl == WL_TREE ? 5 : 4;
-    if ( t->lvl == WL_HOUSE ) { pj->ma = pj->mb = 0.0; }
+    pj->obj = wl->obj0 + slot; pj->n = 8; pj->x0 = (double) t->tx * s; pj->y0 = (double) t->ty * s; pj->cell = s / 8.0; pj->skirt = pj->cell * 0.75 + 10.0; pj->mode = t->lvl == WL_HOUSE || t->lvl == WL_HOUSEF ? 6 : t->lvl == WL_TREE ? 5 : 4;
+    if ( t->lvl == WL_HOUSE || t->lvl == WL_HOUSEF ) { pj->ma = pj->mb = 0.0; pj->hlv = t->lvl == WL_HOUSE ? 1 : 0; }
     else if ( t->lvl == WL_TREE ) { pj->ma = WL_TB - WL_TBAND; pj->mb = WL_TB; }
     else if ( t->lvl < WL_TOP ) { pj->ma = ( WL_RF + 1.42 ) * s; pj->mb = 2.0 * WL_RF * s; }
     pj->gnd = *world_ground( wl->w ); pj->world = wl->w; pj->ratio = 2.0; pj->pic = m->rpic;
@@ -1654,17 +1721,17 @@ static void wl_view( m3d_t* m, double x, double y ) {
             }
         }
     }
-    if ( world_houses( m ) ) {                                    // the cells of houses: built a chunk before they are shown
+    if ( world_houses( m ) ) {                                    // the cells of houses: the middle level nearer than WL_HM, the far level from there to WL_HB; both are built a little before they are shown
         double hs = wl_size( WL_HOUSE ), reach = WL_HB + 2.0 * hs;
         int64_t ax3 = (int64_t) floor( ( x - reach ) / hs ), bx3 = (int64_t) floor( ( x + reach ) / hs ), ay3 = (int64_t) floor( ( y - reach ) / hs ), by3 = (int64_t) floor( ( y + reach ) / hs );
         for ( int64_t ty = ay3; ty <= by3; ++ty ) {
             for ( int64_t tx = ax3; tx <= bx3; ++tx ) {
                 double d = wl_dist( wl, WL_HOUSE, tx, ty );
                 if ( d >= reach || !wl_inworld( wl, WL_HOUSE, tx, ty ) ) { continue; }
-                int sl = d < WL_HB + hs ? wl_need( m, wl, WL_HOUSE, tx, ty ) : wl_find( wl, WL_HOUSE, tx, ty );
-                if ( sl < 0 ) { continue; }
-                wl->t[sl].stamp = wl->frame;
-                wl_show( m, wl, sl, wl->t[sl].built && d < WL_HB );
+                int sm = d < WL_HM + 3000.0 ? wl_need( m, wl, WL_HOUSE, tx, ty ) : wl_find( wl, WL_HOUSE, tx, ty );
+                if ( sm >= 0 ) { wl->t[sm].stamp = wl->frame; wl_show( m, wl, sm, wl->t[sm].built && d < WL_HM ); }
+                int sf = d < WL_HB + hs ? wl_need( m, wl, WL_HOUSEF, tx, ty ) : wl_find( wl, WL_HOUSEF, tx, ty );
+                if ( sf >= 0 ) { wl->t[sf].stamp = wl->frame; wl_show( m, wl, sf, wl->t[sf].built && d >= WL_HM && d < WL_HB ); }
             }
         }
     }
