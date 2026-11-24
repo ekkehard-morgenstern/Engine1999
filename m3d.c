@@ -366,7 +366,7 @@ void m3d_invalidate( m3d_t* m ) {
     if ( m->havepal && m->rend != 0 ) {
         m->rend->palette( m, m->rdata );                    // the palette texture / color map again
     }
-    m->mvalid = false;
+    m->mvalid = false; m->mpass = false;
 }
 
 void m3d_set_hardware( m3d_t* m, const m3drend_t* r ) {
@@ -1396,7 +1396,7 @@ static int jobs_apply( m3d_t* m ) {
             free( o->mf ); free( o->mc );
             o->mref = 0;
             o->mf = best->mf; o->mc = best->mc; o->ma = best->ma; o->mb = best->mb; best->mf = best->mc = 0;
-            o->mx0 = best->x0; o->my0 = best->y0; o->mx1 = best->x0 + best->n * best->cell; o->my1 = best->y0 + best->n * best->cell; o->msat = 0; m->mforce = true;
+            o->mx0 = best->x0; o->my0 = best->y0; o->mx1 = best->x0 + best->n * best->cell; o->my1 = best->y0 + best->n * best->cell; o->msat = -1;
             o->v = best->v; o->nv = best->nv; o->capv = best->capv;
             o->t = best->t; o->nt = best->nt; o->capt = best->capt;
             best->v = 0; best->t = 0; best->nv = best->nt = best->capv = best->capt = 0;
@@ -1438,32 +1438,77 @@ static void jobs_discard( m3d_t* m ) {                         // forget everyth
 }
 
 
-void m3d_morph( m3d_t* m, double cx, double cy ) {
-    if ( m->mvalid && !m->mforce && fabs( cx - m->mlx ) + fabs( cy - m->mly ) < 8.0 ) {      // (the weights change by a fraction of a percent: not every frame)
+// The morph of the ground (the weights blend the fine and the coarse surface by the distance to the camera) is carried out in passes: a pass starts when the camera has moved 12 units
+// since the last one, takes a snapshot of the camera and goes over the objects in thirds, one third per call, so that the rebuilding of the meshes (the hardware renderer makes
+// every changed mesh again) is spread over three frames instead of coming in one frame (profile of the owner's frame log, 2026-11-24: 126 meshes a frame on average, up to 664
+// in one frame). A new tile (msat -1) is morphed at once, with the camera of the call.
+static void morph_one( obj_t* o, double cx, double cy ) {
+    // the Chebyshev distances of the nearest and the farthest corner of the mesh's rectangle: an object that lies wholly in w = 0 or in w = 1 and is so already is left alone
+    double dxn = fmax( fmax( o->mx0 - cx, cx - o->mx1 ), 0.0 ), dyn = fmax( fmax( o->my0 - cy, cy - o->my1 ), 0.0 );
+    double dmin = fmax( dxn, dyn ), dmax = fmax( fmax( fabs( o->mx0 - cx ), fabs( o->mx1 - cx ) ), fmax( fabs( o->my0 - cy ), fabs( o->my1 - cy ) ) );
+    if ( ( dmax <= o->ma && o->msat == 1 ) || ( dmin >= o->mb && o->msat == 2 ) ) {
         return;
     }
-    m->mlx = cx; m->mly = cy; m->mvalid = true; m->mforce = false;
+    double inv = 1.0 / ( o->mb - o->ma );
+    for ( int k=0; k < o->nv; ++k ) {
+        mv_t* p = &o->v[k];
+        double d = fmax( fabs( p->x - cx ), fabs( p->y - cy ) ), w = smooth01( ( d - o->ma ) * inv );
+        p->z = (double) o->mf[k] + ( (double) o->mc[k] - (double) o->mf[k] ) * w;
+    }
+    o->msat = dmax <= o->ma ? 1 : dmin >= o->mb ? 2 : 0;
+    o->dirty = true; o->gen = next_gen();
+}
+
+// M3D MORPH (the statement, the rings of the BASIC games): everything at once, as ever; a new object (msat -1) makes it run even when the camera has hardly moved
+static void m3d_morph_now( m3d_t* m, double cx, double cy ) {
     int nul_; const int* ul_ = m3d_used( m, &nul_ );
+    bool any = false;
+    for ( int ui_=0; ui_ < nul_ && !any; ++ui_ ) {
+        const obj_t* o = &m->objs[ul_[ui_]];
+        any = o->used && o->mc != 0 && o->mf != 0 && o->msat < 0;
+    }
+    if ( m->mvalid && !any && fabs( cx - m->mlx ) + fabs( cy - m->mly ) < 8.0 ) {
+        return;
+    }
+    m->mlx = cx; m->mly = cy; m->mvalid = true; m->mpass = false;
+    for ( int ui_=0; ui_ < nul_; ++ui_ ) {
+        obj_t* o = &m->objs[ul_[ui_]];
+        if ( !o->used || o->mc == 0 || o->mf == 0 || !( o->mb > o->ma ) ) {
+            continue;
+        }
+        morph_one( o, cx, cy );
+    }
+}
+
+void m3d_morph( m3d_t* m, double cx, double cy ) {
+    int nul_; const int* ul_ = m3d_used( m, &nul_ );
+    if ( !m->mpass && !( m->mvalid && fabs( cx - m->mlx ) + fabs( cy - m->mly ) < 12.0 ) ) {      // (the weights change by a fraction of a percent: not every frame)
+        m->mlx = cx; m->mly = cy; m->mvalid = true;
+        m->mpass = true; m->mpos = 0;
+    }
+    int per = nul_ / 3 + 1, done = 0;
     for ( int ui_=0; ui_ < nul_; ++ui_ ) {
         int i = ul_[ui_];
         obj_t* o = &m->objs[i];
         if ( !o->used || o->mc == 0 || o->mf == 0 || !( o->mb > o->ma ) ) {
             continue;
         }
-        // the Chebyshev distances of the nearest and the farthest corner of the mesh's rectangle: an object that lies wholly in w = 0 or in w = 1 and is so already is left alone
-        double dxn = fmax( fmax( o->mx0 - cx, cx - o->mx1 ), 0.0 ), dyn = fmax( fmax( o->my0 - cy, cy - o->my1 ), 0.0 );
-        double dmin = fmax( dxn, dyn ), dmax = fmax( fmax( fabs( o->mx0 - cx ), fabs( o->mx1 - cx ) ), fmax( fabs( o->my0 - cy ), fabs( o->my1 - cy ) ) );
-        if ( ( dmax <= o->ma && o->msat == 1 ) || ( dmin >= o->mb && o->msat == 2 ) ) {
+        if ( o->msat < 0 ) {                                // new: at once
+            morph_one( o, cx, cy );
+        }
+    }
+    if ( !m->mpass ) {
+        return;
+    }
+    for ( ; m->mpos < nul_ && done < per; ++m->mpos, ++done ) {
+        obj_t* o = &m->objs[ul_[m->mpos]];
+        if ( !o->used || o->mc == 0 || o->mf == 0 || !( o->mb > o->ma ) ) {
             continue;
         }
-        double inv = 1.0 / ( o->mb - o->ma );
-        for ( int k=0; k < o->nv; ++k ) {
-            mv_t* p = &o->v[k];
-            double d = fmax( fabs( p->x - cx ), fabs( p->y - cy ) ), w = smooth01( ( d - o->ma ) * inv );
-            p->z = (double) o->mf[k] + ( (double) o->mc[k] - (double) o->mf[k] ) * w;
-        }
-        o->msat = dmax <= o->ma ? 1 : dmin >= o->mb ? 2 : 0;
-        o->dirty = true; o->gen = next_gen();
+        morph_one( o, m->mlx, m->mly );
+    }
+    if ( m->mpos >= nul_ ) {
+        m->mpass = false;
     }
 }
 
@@ -2464,7 +2509,7 @@ bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t sl
             return true;
         }
         case GFXOP_M3DMORPH:
-            m3d_morph( m, a[0], a[1] );
+            m3d_morph_now( m, a[0], a[1] );
             return true;
         case GFXOP_M3DPOLL:
             jobs_apply( m );

@@ -80,7 +80,7 @@ typedef struct {
     float*  mf;                             // M3D RING with a morph range: the height of every vertex as it was made (mf) and as the coarser ring has it (mc): M3D MORPH blends them by the distance
     float*  mc;
     double  mx0, my0, mx1, my1;             // the rectangle the mesh covers (M3D RING): which vertices can be inside the morph band
-    int     msat;                           // 0 not set yet, 1 all vertices as made (w = 0), 2 all blended (w = 1)
+    int     msat;                           // -1 new (morphed at once), 0 partly blended, 1 all vertices as made (w = 0), 2 all blended (w = 1)
     double  ma, mb;                         // the distances (Chebyshev, from the camera) where the blend starts (0) and is complete (1)
     int*    mref;                           // not 0: v and t are shared with other objects (M3D INSTANCE); *mref counts the sharers, the last one frees them (copy on write)
     double  scale;                          // the size (1 = as the mesh is; the picture coordinates do not change)
@@ -183,7 +183,8 @@ struct _m3d_t {
     struct _wl*    wl;                      // the static world's tiles (M3D WORLDOPEN, m3d.c)
     struct _wmake* wmake;                   // the world being made in the background (M3D WORLDMAKE)
     double   mlx, mly;                      // the camera of the last M3D MORPH
-    bool     mvalid, mforce;
+    bool     mvalid, mpass;          // mpass: a morph pass is going over the objects (m3d_morph(), a third of them per call), mpos how far
+    int      mpos;
     int*     ul;  int nul;  bool ulok;      // the numbers of the objects in use (m3d_used())
     int      top;                           // one above the highest object number in use (the loops stop there)
     unsigned presepoch;                     // counts the times a picture number got or lost its picture (the renderer's kept meshes group the triangles by that)
