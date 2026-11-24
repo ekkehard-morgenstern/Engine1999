@@ -28,6 +28,7 @@
 221 SXY=0:LDS=0:LDON=0:LDLAST=0:NOLOAD=0:WLD=0:IF ENV$("G1987_WORLD")<>"" OR ( ENV$("G1987_DYNAMIC")="" AND NOT HL ) THEN WLD=-1
 230 DIM PV(60),SGL(300),SGH(300),SGX(300),SGY(300),SGU(300),SGV(300),SGK(300),SGD(300),SGE(300),SGI(300),RGX(6),RGY(6),RGP(6),RGQ(6),CKN(400),CHB(400),CKRX(9),CKRY(9),CKRT(9),CTX(24),CTY(24),GNS(8),GGX(160),FLJ$(81),TIH(33),RPX(300),RPY(300),RPF(300),CPX(40),CPY(40),SMX(120),SMY(120),PLX(40),PLY(40),TRX(520),TRY(520),LRR(8),LRZ(8),LRV(8),W$(8),GPX(2),GPZ(2),GPS(2),DWX(40),DWY(40),DRX(5),DRY(5),DRZ(5),DRH(5),DRT(5),DRA(5)
 231 DIM QX1(14),QY1(14),QX2(14),QY2(14)
+232 DIM FPS(9),FPX(9),FPC(9),FPB(9)
 240 GOTO MAIN
 250 ' ------------------------------------------------------------------------------------------------ small helpers
 260 FUNC RN(M)
@@ -1471,10 +1472,15 @@
 11420 END PROC
 11430 PROC DRAWFRAME
 11440   CALL CAMSTEPS(DTF)
+11441   IF FL$<>"" THEN CALL FLPH(4)
 11450   CALL RIGS
+11451   IF FL$<>"" THEN CALL FLPH(5)
 11460   M3D RENDER
+11461   IF FL$<>"" THEN CALL FLPH(6)
 11470   CALL HUD
+11471   IF FL$<>"" THEN CALL FLPH(7)
 11480   CALL W3K_SHOW
+11481   IF FL$<>"" THEN CALL FLPH(8)
 11490 END PROC
 11500 ' ------------------------------------------------------------------------------------------------ the game
 11510 PROC NEWGAME
@@ -1507,14 +1513,18 @@
 11639     IF DT0>0.1 THEN DT0=0.1
 11640     IF DT0<0.001 THEN DT0=0.001
 11641     IF FL$<>"" THEN CALL FRAMELOG
+11642     IF FL$<>"" THEN CALL FLFOLD(FTK):CALL FLPH(0)
 11650     DTF=DT0
 11660     CALL READKEYS
+11661     IF FL$<>"" THEN CALL FLPH(1)
 11670     IF KEY("ESC") THEN IN_QUIT=1
 11680     FTS=MAX(1,CEIL(DT0*57)):FTD=DT0/FTS
 11682     FOR FTI=1 TO FTS
 11684       CALL SIM(FTD)
 11686     NEXT FTI
+11687     IF FL$<>"" THEN CALL FLPH(2)
 11688     CALL AMBIENT:CALL TERRAINUPDATE(JX,JY)
+11689     IF FL$<>"" THEN CALL FLPH(3)
 11690     CALL DRAWFRAME
 11700     IF FN IN_SERVICE() THEN
 11730       CALL SOUNDMUTE
@@ -1934,10 +1944,30 @@
 15482     FOR FLQ=1 TO MIN(FLJ,80)
 15483       PRINT #7,FLJ$(FLQ)
 15484     NEXT FLQ
+15485     PRINT #7,"phases of a frame in ms: mean, largest, mean in the frames that took 2 or more refreshes (";FPM;" of ";FPN;"):"
+15486     FOR FLQ=0 TO 8
+15487       PRINT #7,MID$("other   keys    SIM     ambient camera  rigs    RENDER  HUD     show    ",FLQ*8+1,8);": ";INT(FPS(FLQ)/MAX(1,FPN)*10000)/10;"  ";INT(FPX(FLQ)*10000)/10;"  ";INT(FPC(FLQ)/MAX(1,FPM)*10000)/10
+15488     NEXT FLQ
 15490     CLOSE #7
 15500     IN_QUIT=1
 15510   END IF
 15520 END PROC
+15521 ' the phases of a frame (only with G1987_FRAMELOG): FLPH(K) adds the time since the last mark to phase K of the running frame (0 the rest of the loop, 1 the keys, 2 SIM,
+15522 ' 3 ambient sound and terrain, 4 camera, 5 the rigs, 6 M3D RENDER, 7 the HUD, 8 showing the picture and waiting for the display), FLFOLD(K) adds a finished frame that took K
+15523 ' refreshes to the sums (the first 40 frames are left out)
+15524 PROC FLPH(K)
+15525   LOCAL FPT
+15526   FPT=TIMER:FPB(K)=FPT-FLPT:FLPT=FPT
+15527 END PROC
+15528 PROC FLFOLD(K)
+15529   LOCAL FPI
+15530   IF NFR<=40 THEN EXIT PROC
+15531   FPN=FPN+1:IF K>=2 THEN FPM=FPM+1
+15532   FOR FPI=0 TO 8
+15533     FPS(FPI)=FPS(FPI)+FPB(FPI):IF FPB(FPI)>FPX(FPI) THEN FPX(FPI)=FPB(FPI)
+15534     IF K>=2 THEN FPC(FPI)=FPC(FPI)+FPB(FPI)
+15535   NEXT FPI
+15536 END PROC
 15600 ' ------------------------------------------------------------------------------------------------ the camera: an agent
 15610 ' The camera is a creature of its own (the owner's idea, 2026-11-15): it has a position, a velocity and an acceleration limit (a point mass chasing the place it wants to be at with a
 15620 ' spring and a damper, plus the velocity of that place so that it does not lag), and a view direction with an angular velocity (the same kind of controller), and a behavior:

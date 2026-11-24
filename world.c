@@ -115,8 +115,25 @@ static double height_of( const ground_t* g, int n, double x, double y ) {
     return h;
 }
 
+// a small memo of the heights per thread: the ground job of a tile asks for the corners of the coarser grid for every vertex (four heights, each of them shared by
+// many vertices) and the height is pure, so a direct-mapped cache of the last answers saves most of the noise evaluations (profile 2026-11-24: `world_height` was
+// 74 % of the samples). An entry is valid for one world (pointer and epoch: opening or closing a world changes the epoch, so a new world at the same address
+// never sees old heights).
+#define HCACHE_N 8192
+typedef struct { const world_t* w; uint32_t epoch; double x, y, h; } hcache_t;
+static _Thread_local hcache_t hcache[HCACHE_N];
+static unsigned world_epoch_ = 1;
+
 double world_height( const world_t* w, double x, double y ) {
-    return height_of( &w->gnd, w->n, x, y );
+    uint64_t kx, ky;
+    memcpy( &kx, &x, sizeof(kx) ); memcpy( &ky, &y, sizeof(ky) );
+    uint64_t k = ( kx * UINT64_C(0x9E3779B97F4A7C15) ) ^ ( ky * UINT64_C(0xC2B2AE3D27D4EB4F) );
+    hcache_t* e = &hcache[ ( k >> 40 ) & ( HCACHE_N - 1 ) ];
+    uint32_t ep = __atomic_load_n( &world_epoch_, __ATOMIC_ACQUIRE );
+    if ( e->w == w && e->epoch == ep && e->x == x && e->y == y ) { return e->h; }
+    double h = height_of( &w->gnd, w->n, x, y );
+    e->w = w; e->epoch = ep; e->x = x; e->y = y; e->h = h;
+    return h;
 }
 
 double world_x0( const world_t* w, int cx ) { return ( (double) cx - 0.5 * w->n ) * WORLD_CHUNK; }
@@ -314,6 +331,7 @@ world_t* world_open( const char* dir ) {
     world_err[0] = 0;
     world_t* w = (world_t*) calloc( 1, sizeof(world_t) );
     if ( w == 0 ) { snprintf( world_err, sizeof(world_err), "out of memory" ); return 0; }
+    __atomic_add_fetch( &world_epoch_, 1, __ATOMIC_ACQ_REL );
     if ( strlen( dir ) + 16 >= sizeof(w->dir) ) { snprintf( world_err, sizeof(world_err), "folder name too long" ); free( w ); return 0; }
     snprintf( w->dir, sizeof(w->dir), "%s", dir );
     char path[1100];
@@ -355,6 +373,7 @@ world_t* world_open( const char* dir ) {
 
 void world_close( world_t* w ) {
     if ( w != 0 ) {
+        __atomic_add_fetch( &world_epoch_, 1, __ATOMIC_ACQ_REL );
         close( w->fd );
         free( w );
     }
