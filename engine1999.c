@@ -1576,6 +1576,76 @@ static bool host_m3d_get( void ) {
 // ENGINE1999_PALLOG=file: a line for what the 3D renderer is given as its palette (the green nose and ears of 1987 are a wrong color of the palette entry 249): when the program asks for the
 // color map or renders (the first 12 renders, and each one where entry 249 of the target layer changed or a target layer is seen for the first time), the time, the target layer, the renderer, a checksum of the target
 // layer's palette and the entries 248 .. 251 of the layers 0, 3, 4 and the target, as ARGB hex
+// -- ENGINE1999_RENDERLOG=file: the time of M3D RENDER ----------------------------------------------------------------------------------------------------------------
+// (written when the program ends: the renderer, how often it ran, and for the picture's making (render) and its putting on the screen (put) the mean, the largest and the
+// mean of the slowest tenth in ms; the hardware renderer adds its phases: draw calls, resolve + ReadPixels, conversion)
+typedef struct { long n; double sum, max; double* all; } rlog_stat_t;
+static rlog_stat_t rlog_st[5];
+static int rlog_hw = -1;
+static bool rlog_on = false, rlog_init = false;
+static long rlog_cap = 0;
+
+static double rlog_now( void ) {
+    struct timespec ts;
+    clock_gettime( CLOCK_MONOTONIC, &ts );
+    return (double) ts.tv_sec * 1000.0 + (double) ts.tv_nsec * 1.0e-6;
+}
+
+static int rlog_cmp( const void* a, const void* b ) {
+    double x = *(const double*) a, y = *(const double*) b;
+    return x < y ? -1 : x > y ? 1 : 0;
+}
+
+static void rlog_write( void ) {
+    const char* fn = getenv( "ENGINE1999_RENDERLOG" );
+    FILE* f = fn != 0 ? fopen( fn, "w" ) : 0;
+    if ( f == 0 ) { return; }
+    static const char* names[5] = { "render (make the picture)", "put (onto the screen)", "hw: setup + draw calls", "hw: resolve + ReadPixels", "hw: conversion to ARGB" };
+    fprintf( f, "renderer: %s, M3D RENDER calls: %ld\n", rlog_hw == 1 ? "hardware" : "software", rlog_st[0].n );
+    fprintf( f, "ms:  mean  largest  mean of the slowest tenth\n" );
+    for ( int k=0; k < 5; ++k ) {
+        rlog_stat_t* s = &rlog_st[k];
+        if ( s->n == 0 ) { continue; }
+        qsort( s->all, (size_t) s->n, sizeof(double), rlog_cmp );
+        long from = s->n - s->n / 10 - 1;
+        if ( from < 0 ) { from = 0; }
+        double top = 0.0;
+        for ( long i=from; i < s->n; ++i ) { top += s->all[i]; }
+        fprintf( f, "%-28s %7.2f %7.2f %7.2f\n", names[k], s->sum / (double) s->n, s->max, top / (double)( s->n - from ) );
+    }
+    fclose( f );
+}
+
+static void rlog_one( int k, double ms ) {
+    rlog_stat_t* s = &rlog_st[k];
+    if ( s->n >= rlog_cap ) { return; }
+    s->all[s->n++] = ms;
+    s->sum += ms;
+    if ( ms > s->max ) { s->max = ms; }
+}
+
+static void rlog_add( int hw, double render, double put ) {
+    if ( !rlog_init ) {
+        rlog_init = true;
+        if ( getenv( "ENGINE1999_RENDERLOG" ) != 0 ) {
+            rlog_cap = 200000;
+            rlog_on = true;
+            for ( int k=0; k < 5; ++k ) {
+                rlog_st[k].all = (double*) calloc( (size_t) rlog_cap, sizeof(double) );
+                if ( rlog_st[k].all == 0 ) { rlog_on = false; }
+            }
+            if ( rlog_on ) { atexit( rlog_write ); }
+        }
+    }
+    if ( !rlog_on ) { return; }
+    rlog_hw = hw;
+    rlog_one( 0, render );
+    rlog_one( 1, put );
+    if ( hw ) {
+        for ( int k=0; k < 3; ++k ) { rlog_one( 2 + k, m3dgl_ms[k] ); }
+    }
+}
+
 static void host_palog( const char* what, int t, bool every ) {
     static const char* path = 0;
     static bool known = false;
@@ -1676,15 +1746,21 @@ static bool host_m3d_op( int op, const double* a, int na, const char* s, size_t 
                 memcpy( lastpal, pal, sizeof(pal) );
                 havelast = true;
             }
+            double tr0 = rlog_now();
             const uint32_t* px = m3d_render32( host_m3d );
+            double tr1 = rlog_now();
             if ( px != 0 ) {
                 sdlscr_3d_put( x, y, px, bw, bh, scale );
             }
+            rlog_add( 1, tr1 - tr0, rlog_now() - tr1 );
         } else {
+            double tr0 = rlog_now();
             const uint8_t* fb = m3d_render( host_m3d );
+            double tr1 = rlog_now();
             if ( fb != 0 ) {
                 sdlscr_gfx_putbuf( t, x, y, fb, bw, bh, scale );
             }
+            rlog_add( 0, tr1 - tr0, rlog_now() - tr1 );
         }
         return true;
     }

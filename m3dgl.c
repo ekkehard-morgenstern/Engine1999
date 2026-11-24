@@ -862,12 +862,22 @@ static void draw_things_gl( gl_t* g, m3d_t* m, const cam_t* c ) {
     }
 }
 
+// the time of the phases of the last gl_render() in ms (the engine's ENGINE1999_RENDERLOG): 0 setup + culling + draw calls, 1 resolve + ReadPixels (the GPU is waited for here),
+// 2 the conversion to ARGB
+double m3dgl_ms[3];
+static double gl_now_ms( void ) {
+    struct timespec ts;
+    clock_gettime( CLOCK_MONOTONIC, &ts );
+    return (double) ts.tv_sec * 1000.0 + (double) ts.tv_nsec * 1.0e-6;
+}
+
 static const void* gl_render( m3d_t* m, void* rd ) {
     gl_t* g = (gl_t*) rd;
     glapi_t* gl = &g->gl;
     if ( g->out == 0 ) {
         return 0;
     }
+    double tm0 = gl_now_ms();
     gl_make_current( g );
     int W = m->bw, H = m->bh;
     int want = m->msaa >= 2 ? m->msaa : 0;
@@ -1024,6 +1034,7 @@ static const void* gl_render( m3d_t* m, void* rd ) {
     gl->Disable( GL_CULL_FACE );
     gl->Disable( GL_DEPTH_TEST );
 
+    double tm1 = gl_now_ms();
     if ( g->samples > 0 ) {                                              // resolve the samples
         gl->BindFramebuffer( GL_READ_FRAMEBUFFER, g->msfbo );
         gl->BindFramebuffer( GL_DRAW_FRAMEBUFFER, g->fbo );
@@ -1033,12 +1044,15 @@ static const void* gl_render( m3d_t* m, void* rd ) {
     gl->PixelStorei( GL_PACK_ALIGNMENT, 1 );
     gl->ReadPixels( 0, 0, W, H, GL_RGBA, GL_UNSIGNED_BYTE, g->rgba );
     gl->BindFramebuffer( GL_FRAMEBUFFER, 0 );
+    double tm2 = gl_now_ms();
     size_t np = (size_t) W * (size_t) H;
     for ( size_t i=0; i < np; ++i ) {
         const uint8_t* q = &g->rgba[i * 4U];
         // alpha 0 = nothing was drawn there (no sky, index 0 of a plain picture): the layers below show through, as with the software renderer
         g->out[i] = q[3] == 0 ? 0U : UINT32_C(0xFF000000) | (uint32_t) q[0] << 16 | (uint32_t) q[1] << 8 | (uint32_t) q[2];
     }
+    double tm3 = gl_now_ms();
+    m3dgl_ms[0] = tm1 - tm0; m3dgl_ms[1] = tm2 - tm1; m3dgl_ms[2] = tm3 - tm2;
     return g->out;
 }
 
