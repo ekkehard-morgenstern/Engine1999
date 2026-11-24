@@ -48,6 +48,6 @@ const struct _m3drend_t* m3d_gl_renderer( void );
 // how many object meshes the hardware renderer has built in the graphics memory so far (it builds one when an object is new or its mesh changed, or when a picture number got or
 // lost its picture: not when it only moved); -1 when the hardware renderer is not the one in use. For tests.
 long m3d_gl_built( const struct _m3d_t* m );
-extern double m3dgl_ms[3];                                    // the phases of the last hardware render in ms (draw calls, resolve + ReadPixels, conversion), for ENGINE1999_RENDERLOG
+extern double m3dgl_ms[6];                                    // the phases of the last hardware render in ms (draw calls, resolve + ReadPixels, conversion, vertex buffer building, buffers built, draw calls), for ENGINE1999_RENDERLOG
 
 #endif

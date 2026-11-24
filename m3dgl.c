@@ -31,6 +31,8 @@
 #include "m3dpriv.h"
 #include "glload.h"
 
+static double gl_now_ms( void );
+
 /*
 The hardware (OpenGL 2) renderer of the mesh module (docs/3d-mesh-subsystem.md "Hardware renderer"): the same scene as the software renderer, drawn
 by the graphics card into a framebuffer object and read back as 32 bit ARGB. It runs on the thread that calls m3d_render() (the program thread),
@@ -710,7 +712,11 @@ static void draw_gobj( gl_t* g, const m3d_t* m, const obj_t* o, int idx ) {
     glapi_t* gl = &g->gl;
     gobj_t* go = &g->gobjs[idx];
     if ( go->vbo == 0 || go->gen != o->gen || go->pres != m->presepoch ) {
-        if ( !build_gobj( g, m, o, go ) ) {
+        double tb0 = gl_now_ms();
+        bool bok = build_gobj( g, m, o, go );
+        m3dgl_ms[3] += gl_now_ms() - tb0;
+        m3dgl_ms[4] += 1.0;
+        if ( !bok ) {
             return;
         }
     }
@@ -743,6 +749,7 @@ static void draw_gobj( gl_t* g, const m3d_t* m, const obj_t* o, int idx ) {
         }
         bind_texture( g, m, rg->key );
         gl->DrawArrays( GL_TRIANGLES, rg->first, rg->count );
+        m3dgl_ms[5] += 1.0;
     }
     gl->DisableVertexAttribArray( (GLuint) p->apos );
     gl->DisableVertexAttribArray( (GLuint) p->auv );
@@ -864,7 +871,8 @@ static void draw_things_gl( gl_t* g, m3d_t* m, const cam_t* c ) {
 
 // the time of the phases of the last gl_render() in ms (the engine's ENGINE1999_RENDERLOG): 0 setup + culling + draw calls, 1 resolve + ReadPixels (the GPU is waited for here),
 // 2 the conversion to ARGB
-double m3dgl_ms[3];
+double m3dgl_ms[6];
+// 3 the part of phase 0 that went into making the vertex buffers of new or changed objects (build_gobj), 4 how many were built, 5 the draw calls of the frame
 static double gl_now_ms( void ) {
     struct timespec ts;
     clock_gettime( CLOCK_MONOTONIC, &ts );
@@ -878,6 +886,7 @@ static const void* gl_render( m3d_t* m, void* rd ) {
         return 0;
     }
     double tm0 = gl_now_ms();
+    m3dgl_ms[3] = 0.0; m3dgl_ms[4] = 0.0; m3dgl_ms[5] = 0.0;
     gl_make_current( g );
     int W = m->bw, H = m->bh;
     int want = m->msaa >= 2 ? m->msaa : 0;

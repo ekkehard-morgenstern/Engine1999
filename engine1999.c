@@ -1580,7 +1580,7 @@ static bool host_m3d_get( void ) {
 // (written when the program ends: the renderer, how often it ran, and for the picture's making (render) and its putting on the screen (put) the mean, the largest and the
 // mean of the slowest tenth in ms; the hardware renderer adds its phases: draw calls, resolve + ReadPixels, conversion)
 typedef struct { long n; double sum, max; double* all; } rlog_stat_t;
-static rlog_stat_t rlog_st[5];
+static rlog_stat_t rlog_st[8];
 static int rlog_hw = -1;
 static bool rlog_on = false, rlog_init = false;
 static long rlog_cap = 0;
@@ -1600,10 +1600,10 @@ static void rlog_write( void ) {
     const char* fn = getenv( "ENGINE1999_RENDERLOG" );
     FILE* f = fn != 0 ? fopen( fn, "w" ) : 0;
     if ( f == 0 ) { return; }
-    static const char* names[5] = { "render (make the picture)", "put (onto the screen)", "hw: setup + draw calls", "hw: resolve + ReadPixels", "hw: conversion to ARGB" };
+    static const char* names[8] = { "render (make the picture)", "put (onto the screen)", "hw: setup + draw calls", "hw: resolve + ReadPixels", "hw: conversion to ARGB", "hw: vertex buffer building", "hw: buffers built (count)", "hw: draw calls (count)" };
     fprintf( f, "renderer: %s, M3D RENDER calls: %ld\n", rlog_hw == 1 ? "hardware" : "software", rlog_st[0].n );
     fprintf( f, "ms:  mean  largest  mean of the slowest tenth\n" );
-    for ( int k=0; k < 5; ++k ) {
+    for ( int k=0; k < 8; ++k ) {
         rlog_stat_t* s = &rlog_st[k];
         if ( s->n == 0 ) { continue; }
         qsort( s->all, (size_t) s->n, sizeof(double), rlog_cmp );
@@ -1630,7 +1630,7 @@ static void rlog_add( int hw, double render, double put ) {
         if ( getenv( "ENGINE1999_RENDERLOG" ) != 0 ) {
             rlog_cap = 200000;
             rlog_on = true;
-            for ( int k=0; k < 5; ++k ) {
+            for ( int k=0; k < 8; ++k ) {
                 rlog_st[k].all = (double*) calloc( (size_t) rlog_cap, sizeof(double) );
                 if ( rlog_st[k].all == 0 ) { rlog_on = false; }
             }
@@ -1642,7 +1642,8 @@ static void rlog_add( int hw, double render, double put ) {
     rlog_one( 0, render );
     rlog_one( 1, put );
     if ( hw ) {
-        for ( int k=0; k < 3; ++k ) { rlog_one( 2 + k, m3dgl_ms[k] ); }
+        rlog_one( 2, m3dgl_ms[0] ); rlog_one( 3, m3dgl_ms[1] ); rlog_one( 4, m3dgl_ms[2] );
+        rlog_one( 5, m3dgl_ms[3] ); rlog_one( 6, m3dgl_ms[4] ); rlog_one( 7, m3dgl_ms[5] );
     }
 }
 
