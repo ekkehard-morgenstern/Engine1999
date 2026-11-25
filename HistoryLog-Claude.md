@@ -13,8 +13,6 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
-- **PBO read-back is the default** (2026-11-25, owner: "Make PBO the default with a switch for the tests"): `m3dgl.c` `pbo_wanted()`: on unless `ENGINE1999_PBO=0`; `m3dglhost.sh` exports `ENGINE1999_PBO=0` (it compares the picture of the frame just drawn); `man/engine1999.1` and `SESSION.md` updated. Tests: `make check`, `sh m3dglhost.sh`.
-
 ## Log
 
 ### 7a6cb67 — 2026-10-17 13:32:27 +0200 — "Introduced Claude to the project"
@@ -2602,3 +2600,7 @@ The owner bundled four pieces of work into this commit: tarred roads with posts,
 6 files changed, 54 insertions(+), 4 deletions(-).
 - **`ENGINE1999_PBO`: asynchronous read-back of the hardware renderer** (2026-11-24, owner: "Try the PBO readback for ReadPixels"; `ReadPixels` was 3.6 ms a frame in the owner's `render2.log`, the CPU waiting for the GPU): `m3dgl.c`: with `ENGINE1999_PBO` set (and OpenGL 2.1, `glGetBufferSubData` found: new optional entry in `glload.[ch]`) the frame is read into one of two pixel buffer objects (`GL_PIXEL_PACK_BUFFER`, `GL_STREAM_READ`) and the picture handed on is the one of the frame before (read from the other buffer; the first frame after a start / resize waits for its own), so the CPU does not wait for the GPU; **the 3D picture is one frame late** (the HUD is not), which is why it is opt-in: the default read-back is unchanged (tests, screenshots, the play-back see the same frame). `man/engine1999.1`. Tests: `make check`; under Xvfb (software GL, where the read-back cannot be faster) with the variable: runs, picture correct (screenshot after 9 s of walking). **Not measured on a real GPU**: run `ENGINE1999_PBO=1 ENGINE1999_RENDERLOG=render3.log G1987_FRAMELOG=frame3.log ./engine1999` and compare with `render2.log` / `frame2.log` (the line "resolve + ReadPixels" should drop, the render mean with it).
   Measured by the owner (`render3.log` / `frame3.log`, 15000 frames riding, hardware renderer, `ENGINE1999_PBO=1`): resolve + ReadPixels 3.61 -> 0.21 ms mean, render 6.84 -> 2.76 ms mean, frames of 2 or more refreshes 524 -> 1 of 14999.
+
+### e582106 — 2026-11-25 05:40:24 +0100 — "Renderer PBO option default=1, created by Claude Code"
+5 files changed, 20 insertions(+), 8 deletions(-).
+- **PBO read-back is the default** (2026-11-25, owner: "Make PBO the default with a switch for the tests"): `m3dgl.c` `pbo_wanted()`: on unless `ENGINE1999_PBO=0`; `m3dglhost.sh` exports and `m3dgltest1` sets `ENGINE1999_PBO=0` (they compare the picture of the frame just drawn); `man/engine1999.1` and `SESSION.md` updated. Tests: `make check`, `sh m3dglhost.sh`.

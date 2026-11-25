@@ -162,6 +162,7 @@ static void compare( const char* name, int limit, double maxbad ) {
 }
 
 int main( void ) {
+    setenv( "ENGINE1999_PBO", "0", 1 );   // the test compares the picture of the frame just drawn
     if ( SDL_Init( SDL_INIT_VIDEO ) != 0 ) {
         printf( "m3dgltest1: skipped (no video)\n" );
         const char* req = getenv( "GLTEST_REQUIRE" );
