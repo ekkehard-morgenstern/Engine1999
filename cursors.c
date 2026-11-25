@@ -51,15 +51,6 @@ static int cWhite, cBlack, cShadow, cFrost;
 static hue_t hBlue, hGold, hGreen, hRed, hPurple, hTeal;
 static int comet[8];
 
-static int pal_index( const char* name, int dflt ) {
-    for ( int i = 0; i < 256; ++i ) {
-        if ( strcasecmp( pal_title( i ), name ) == 0 ) {
-            return i;
-        }
-    }
-    return dflt;
-}
-
 static void cv_clear( void ) {
     memset( tgt, 0, SPRITE_WIDTH * SPRITE_HEIGHT );
 }
@@ -412,22 +403,39 @@ static void put_image( int index ) {
     sprscr_sys_writemap( index, cv );
 }
 
+// The colors of the pointer: CUR_PAL_COUNT entries from CUR_PAL_FIRST of the sprite layer's palette, as names of the color table. Order: black, white, shadow,
+// frost, then light / mid / dark / rim of the six hues (blue, gold, green, red, purple, teal), then the eight colors of the comet.
+static const char* const palnames[CUR_PAL_COUNT] = {
+    "Black", "White", "TransparentBlack", "TransparentWhite",
+    "TransparentLightSkyBlue", "TransparentDodgerBlue",  "TransparentRoyalBlue",    "MidnightBlue",
+    "TransparentGold",         "TransparentOrange",      "TransparentDarkOrange",   "SaddleBrown",
+    "TransparentPaleGreen",    "TransparentLimeGreen",   "TransparentForestGreen",  "DarkGreen",
+    "TransparentSalmon",       "TransparentRed",         "TransparentDarkRed",      "Maroon",
+    "TransparentViolet",       "TransparentBlueViolet",  "TransparentIndigo",       "Indigo",
+    "TransparentAquamarine",   "TransparentDarkTurquoise", "TransparentTeal",       "DarkSlateGray",
+    "White", "Yellow", "Gold", "Orange", "OrangeRed", "DeepPink", "MediumPurple", "DodgerBlue"
+};
+
+void cursors_palette( uint32_t pal[256] ) {
+    for ( int k = 0; k < CUR_PAL_COUNT; ++k ) {
+        uint32_t argb = 0xFFFFFFFFU;        // (white if a name is missing from the color table)
+        pal_find( palnames[k], &argb );
+        pal[ CUR_PAL_FIRST + k ] = argb;
+    }
+}
+
 void cursors_install( void ) {
-    cBlack = pal_index( "Black", 1 );
-    cWhite = pal_index( "White", 140 );
-    cShadow = pal_index( "TransparentBlack", cBlack );
-    cFrost = pal_index( "TransparentWhite", cWhite );
-    #define HUE(h, l, m, d, r) h.light = pal_index( l, cWhite ); h.mid = pal_index( m, cWhite ); h.dark = pal_index( d, cBlack ); h.rim = pal_index( r, cBlack )
-    HUE( hBlue,   "TransparentLightSkyBlue", "TransparentDodgerBlue",  "TransparentRoyalBlue",    "MidnightBlue" );
-    HUE( hGold,   "TransparentGold",         "TransparentOrange",      "TransparentDarkOrange",   "SaddleBrown" );
-    HUE( hGreen,  "TransparentPaleGreen",    "TransparentLimeGreen",   "TransparentForestGreen",  "DarkGreen" );
-    HUE( hRed,    "TransparentSalmon",       "TransparentRed",         "TransparentDarkRed",      "Maroon" );
-    HUE( hPurple, "TransparentViolet",       "TransparentBlueViolet",  "TransparentIndigo",       "Indigo" );
-    HUE( hTeal,   "TransparentAquamarine",   "TransparentDarkTurquoise", "TransparentTeal",       "DarkSlateGray" );
-    #undef HUE
-    static const char* const cometnames[8] = { "White", "Yellow", "Gold", "Orange", "OrangeRed", "DeepPink", "MediumPurple", "DodgerBlue" };
+    cBlack = CUR_PAL_FIRST;
+    cWhite = CUR_PAL_FIRST + 1;
+    cShadow = CUR_PAL_FIRST + 2;
+    cFrost = CUR_PAL_FIRST + 3;
+    hue_t* hues[6] = { &hBlue, &hGold, &hGreen, &hRed, &hPurple, &hTeal };
+    for ( int h = 0; h < 6; ++h ) {
+        int b = CUR_PAL_FIRST + 4 + h * 4;
+        hues[h]->light = b; hues[h]->mid = b + 1; hues[h]->dark = b + 2; hues[h]->rim = b + 3;
+    }
     for ( int k = 0; k < 8; ++k ) {
-        comet[k] = pal_index( cometnames[k], cWhite );
+        comet[k] = CUR_PAL_FIRST + 28 + k;
     }
     cv_clear(); draw_arrow(); put_image( shapes[CUR_ARROW].first );
     uint8_t seq[16];

@@ -55,8 +55,8 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 // operations (vm_gfx_t.op)
 #define GFXOP_LAYER     1               // GFX LAYER n, ON|OFF
 #define GFXOP_PRIORITY  2               // GFX PRIORITY n, p
-#define GFXOP_PALETTE   3               // GFX PALETTE n, i, argb
-#define GFXOP_PALNAME   4               // GFX PALNAME n, i, name$
+#define GFXOP_PALETTE   3               // GFX PALETTE n, i, argb [, POINTER]
+#define GFXOP_PALNAME   4               // GFX PALNAME n, i, name$ [, POINTER]
 #define GFXOP_PALRESET  5               // GFX PALRESET [n]
 #define GFXOP_BACKDROP  6               // GFX BACKDROP argb
 #define GFXOP_TARGET    7               // GFX TARGET 0|3

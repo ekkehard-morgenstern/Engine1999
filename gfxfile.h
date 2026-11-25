@@ -56,6 +56,7 @@ typedef struct _gfxfile_host_t {
     void        (*pset)( void* ud, int layer, int x, int y, int color );
     bool        (*getcell)( void* ud, int kind, int n, uint8_t* out );      // GFXFILE_CELLW * GFXFILE_CELLH bytes
     void        (*putcell)( void* ud, int kind, int n, const uint8_t* data );
+    int         (*palusable)( void* ud, int layer );                        // optional: entries 0 .. n-1 of the palette are free for pictures (256 if 0; the sprite layer reserves the pointer's)
 } gfxfile_host_t;
 
 // M3D TEXTURE LOAD: the whole picture as a GFX GRAB block (width and height as two big endian words, then the indices row by row), colors matched to

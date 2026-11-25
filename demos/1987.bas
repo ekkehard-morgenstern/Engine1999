@@ -2609,9 +2609,10 @@
 25300 END PROC
 25310 ' the loading drone: three groups of sprites that the engine animates by itself (SPRITE SEQ / ANIM; SPRITE PATH bobs them all the same way): the body (head 200, 8 x 5 sprites, still: an anti-gravity
 25320 ' drone has no rotors), the face (head 240, 3 x 2: the eyes look about and blink) and the field under it (190, 3 x 1 sprites: a glowing disc that pulses). The pictures are drawn once with GFX and grabbed; the sprite palette takes the graphics palette
+25325 ' (the sprite palette takes entries 0..219 only: 220..255 are the mouse pointer's glass colors, and a program's change of them is ignored)
 25330 PROC LDSPRITES
 25340   LOCAL V,K
-25350   FOR K=0 TO 255:GFX PALETTE 4,K,GFX("PALETTE",0,K):NEXT K
+25350   FOR K=0 TO 219:GFX PALETTE 4,K,GFX("PALETTE",0,K):NEXT K
 25360   CALL LDBODY(64,60):CALL LDGRAB(0,8,5)
 25390   FOR V=0 TO 3
 25400     K=0:IF V=1 THEN K=-3
@@ -2664,7 +2665,7 @@
 25730   FOR I=-1 TO 1 STEP 2
 25740     GFX CIRCLE CX+I*11,CY-6,8,FN CC(0,15),0,360,ER:GFX PAINT CX+I*11,CY-6,FN CC(0,15),FN CC(0,15)
 25750     IF NOT BL THEN GFX CIRCLE CX+I*11+PX,CY-6,4,FN CC(0,1):GFX PAINT CX+I*11+PX,CY-6,FN CC(0,1),FN CC(0,1)
-25760     GFX CIRCLE CX+I*19,CY+3,4,FN CC(14,10),0,360,0.6:GFX PAINT CX+I*19,CY+3,FN CC(14,10),FN CC(14,10)
+25760     GFX CIRCLE CX+I*19,CY+3,4,FN CC(1,12),0,360,0.6:GFX PAINT CX+I*19,CY+3,FN CC(1,12),FN CC(1,12)
 25770   NEXT I
 25780   GFX CIRCLE CX,CY+2,9,FN CC(0,15),215,325
 25790 END PROC

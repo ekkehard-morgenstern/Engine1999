@@ -986,8 +986,9 @@ static void f_pset( void* ud, int l, int x, int y, int c ) { uint8_t* p = f_pix(
 static bool f_getcell( void* ud, int k, int n, uint8_t* out ) { memcpy( out, ((fakescr_t*) ud)->cells[k][n], GFXFILE_CELLW * GFXFILE_CELLH ); return true; }
 static void f_putcell( void* ud, int k, int n, const uint8_t* d ) { memcpy( ((fakescr_t*) ud)->cells[k][n], d, GFXFILE_CELLW * GFXFILE_CELLH ); }
 
+static int f_usable( void* ud, int l ) { (void) ud; return l == 4 ? 220 : 256; }       // (the pointer's colors are the last 36 entries of the sprite palette)
 static fakescr_t fake;
-static gfxfile_host_t fh = { &fake, f_palget, f_palset, f_point, f_pset, f_getcell, f_putcell };
+static gfxfile_host_t fh = { &fake, f_palget, f_palset, f_point, f_pset, f_getcell, f_putcell, f_usable };
 
 static void fake_reset( void ) {
     memset( &fake, 0, sizeof(fake) );
@@ -1167,6 +1168,31 @@ static void test_gfxfile( void ) {
     check( gfxfile_load_cells( &fh, GFXFILE_SPRITE, 246, -1, f, len, false, &err ) && fake.cells[0][246][0] == 1 && fake.cells[0][247][0] == 2 && fake.cells[0][248][0] == 0, "cells: default count stops at sprite 247" );
     check( !gfxfile_load_cells( &fh, GFXFILE_SPRITE, 0, 5, f, len, false, &err ), "cells: more images than the sheet has is refused" );
     free( f );
+    {   // reserved palette entries (the mouse pointer's colors, 220..255 of the sprite palette) are not matched: a grey that is exactly entry 230 lands on a free entry
+        uint8_t grey[16 * 24 * 3];
+        memset( grey, 230, sizeof(grey) );
+        fake_reset();
+        f = make_bmp( 16, 24, 24, 0, 0, 0, grey, 48, false, &len );
+        check( gfxfile_load_cells( &fh, GFXFILE_SPRITE, 30, 1, f, len, false, &err ) && fake.cells[0][30][0] > 0 && fake.cells[0][30][0] < 220, "cells: sprite pictures are matched to the free palette entries only" );
+        fake_reset();
+        fh.palusable = 0;
+        check( gfxfile_load_cells( &fh, GFXFILE_SPRITE, 30, 1, f, len, false, &err ) && fake.cells[0][30][0] == 230, "cells: without a reserved block the exact entry is found" );
+        fh.palusable = f_usable;
+        free( f );
+        // an image with 3000 distinct colors quantized into the sprite palette stays below the reserved block
+        uint8_t* many = (uint8_t*) malloc( 64 * 72 * 3 );
+        for ( int y=0; y < 72; ++y ) for ( int x=0; x < 64; ++x ) {
+            uint8_t* q = many + y * 192 + x * 3;
+            q[0] = (uint8_t)( x * 4 ); q[1] = (uint8_t)( y * 3 ); q[2] = (uint8_t)( x * y );
+        }
+        fake_reset();
+        f = make_bmp( 64, 72, 24, 0, 0, 0, many, 192, false, &len );
+        bool okq = gfxfile_load_cells( &fh, GFXFILE_SPRITE, 40, 12, f, len, true, &err );
+        bool low = true;
+        for ( int k=0; k < 12; ++k ) for ( int j=0; j < GFXFILE_CELLW * GFXFILE_CELLH; ++j ) if ( fake.cells[0][40 + k][j] >= 220 ) low = false;
+        check( okq && low, "cells: quantized sprite sheets use only the free palette entries" );
+        free( f ); free( many );
+    }
     uint8_t smallrow[4 * 3] = { 0 };
     f = make_bmp( 1, 1, 24, 0, 0, 0, smallrow, 4, false, &len );
     check( !gfxfile_load_cells( &fh, GFXFILE_SPRITE, 0, -1, f, len, false, &err ) && strstr( err, "smaller" ) != 0, "cells: a picture smaller than one image" );

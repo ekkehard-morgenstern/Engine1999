@@ -151,10 +151,12 @@ void     sdlscr_layer_enable( int layer, bool enable );
 bool     sdlscr_layer_enabled( int layer );
 void     sdlscr_layer_setpriority( int layer, int prio );       // swaps places with the layer that has prio
 int      sdlscr_layer_getpriority( int layer );                 // -1 for a bad layer
-void     sdlscr_palette_set( int layer, int index, uint32_t argb );
+void     sdlscr_palette_set( int layer, int index, uint32_t argb );           // (an entry reserved for the mouse pointer is left alone)
+void     sdlscr_palette_setx( int layer, int index, uint32_t argb, bool reserved );   // reserved = true: also the pointer's entries (CUR_PAL_FIRST .. 255 of the sprite layer)
+int      sdlscr_palette_usable( int layer );                                  // entries 0 .. n-1 are free for programs (256; 220 on the sprite layer)
 uint32_t sdlscr_palette_get( int layer, int index );
 void     sdlscr_palette_reset( int layer );                     // -1 = all layers
-bool     sdlscr_palette_setbyname( int layer, int index, const char* name );    // false if the name is unknown
+bool     sdlscr_palette_setbyname( int layer, int index, const char* name, bool reserved );    // false if the name is unknown
 void     sdlscr_setbackdrop( uint32_t argb );
 
 // the bitmap layers 0 (background) and 3 (graphics); color -1 = the pen; everything is clipped to 640 x 300

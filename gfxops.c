@@ -37,8 +37,8 @@
 static const gfxcmd_t cmds[] = {
     { "GFX", "LAYER",    GFXOP_LAYER,    "nw",       "OFF,ON", false },
     { "GFX", "PRIORITY", GFXOP_PRIORITY, "nn",       0, false },
-    { "GFX", "PALETTE",  GFXOP_PALETTE,  "nnn",      0, false },
-    { "GFX", "PALNAME",  GFXOP_PALNAME,  "nns",      0, false },
+    { "GFX", "PALETTE",  GFXOP_PALETTE,  "nnnW",     "POINTER", false },
+    { "GFX", "PALNAME",  GFXOP_PALNAME,  "nnsW",     "POINTER", false },
     { "GFX", "PALRESET", GFXOP_PALRESET, "o",        0, false },
     { "GFX", "BACKDROP", GFXOP_BACKDROP, "n",        0, false },
     { "GFX", "TARGET",   GFXOP_TARGET,   "n",        0, false },

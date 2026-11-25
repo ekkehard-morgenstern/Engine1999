@@ -481,7 +481,8 @@ angle-stmt := TOK_DEG | TOK_RAD | TOK_GRAD .
 -- are keywords; the second words (LAYER, PSET, ...) are identifiers recognized after the group word, so they stay free as variable names.
 -- x, y, c ... are num-expr; a$ is a str-expr, a string variable where the statement returns a string (GRAB, TILE GET, SPRITE GET, TXT SAVE).
 gfx-stmt := TOK_GFX ( LAYER num-expr TOK_COMMA ( TOK_ON | TOK_OFF ) | PRIORITY num-expr TOK_COMMA num-expr |
-                      PALETTE num-expr TOK_COMMA num-expr TOK_COMMA num-expr | PALNAME num-expr TOK_COMMA num-expr TOK_COMMA str-expr |
+                      PALETTE num-expr TOK_COMMA num-expr TOK_COMMA num-expr [ TOK_COMMA POINTER ] |
+                      PALNAME num-expr TOK_COMMA num-expr TOK_COMMA str-expr [ TOK_COMMA POINTER ] |
                       PALRESET [ num-expr ] | BACKDROP num-expr | TARGET num-expr | PEN num-expr |
                       MODE ( SET | CLEAR | XOR | OR | AND ) | CLEAR [ num-expr ] | PSET num-expr TOK_COMMA num-expr [ TOK_COMMA num-expr ] |
                       LINE num-expr TOK_COMMA num-expr TOK_COMMA num-expr TOK_COMMA num-expr [ TOK_COMMA num-expr [ TOK_COMMA ( B | BF ) ] ] |

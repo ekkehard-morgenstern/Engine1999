@@ -39,6 +39,11 @@ static int kind_layer( int kind ) {
     return kind == GFXFILE_SPRITE ? 4 : 1;
 }
 
+static int usable_colors( const gfxfile_host_t* h, int layer ) {
+    int n = h->palusable != 0 ? h->palusable( h->ud, layer ) : 256;
+    return n < 2 ? 2 : n > 256 ? 256 : n;
+}
+
 static void read_palette( const gfxfile_host_t* h, int layer, uint32_t pal[256] ) {
     for ( int i=0; i < 256; ++i ) {
         pal[i] = h->palget( h->ud, layer, i );
@@ -55,9 +60,14 @@ static uint8_t* map_image( const gfxfile_host_t* h, int layer, const bmp_image_t
     }
     uint32_t pal[256];
     int first = 1;
+    int usable = usable_colors( h, layer );
     if ( setpal ) {
-        if ( img->idx != 0 ) {
-            for ( int i=0; i < img->npal; ++i ) {
+        bool keep = img->idx != 0;
+        for ( size_t i=0; keep && usable < 256 && i < n; ++i ) {
+            keep = img->idx[i] < usable;                // (a picture that uses reserved entries can't keep its indices: it is quantized)
+        }
+        if ( keep ) {
+            for ( int i=0; i < img->npal && i < usable; ++i ) {
                 // (entry 0 stays transparent: it is "nothing" on every layer, an opaque color there would cover the whole layer)
                 h->palset( h->ud, layer, i, i == 0 ? ( img->pal[i] & 0x00FFFFFFU ) : img->pal[i] );
             }
@@ -66,7 +76,7 @@ static uint8_t* map_image( const gfxfile_host_t* h, int layer, const bmp_image_t
         }
         memset( pal, 0, sizeof(pal) );
         first = 1;                                  // (entry 0 is never given a color: transparent, as on every layer)
-        int cnt = bmp_quantize( img->argb, n, pal, first, 256 - first );
+        int cnt = bmp_quantize( img->argb, n, pal, first, usable - first );
         for ( int i=0; i < cnt; ++i ) {
             h->palset( h->ud, layer, first + i, pal[first + i] );
         }
@@ -75,6 +85,9 @@ static uint8_t* map_image( const gfxfile_host_t* h, int layer, const bmp_image_t
         }
     }
     read_palette( h, layer, pal );
+    for ( int i = usable; i < 256; ++i ) {
+        pal[i] = 0;                                 // (reserved entries are not matched: they count as transparent)
+    }
     uint32_t lastc = 0; int lasti = 0; bool have = false;
     for ( size_t i=0; i < n; ++i ) {
         uint32_t c = img->argb[i];
@@ -266,6 +279,7 @@ bool gfxfile_load_palette( const gfxfile_host_t* h, int layer, const uint8_t* fi
     if ( !bmp_decode( file, len, &img, err ) ) {
         return false;
     }
+    int usable = usable_colors( h, layer );
     if ( img.idx != 0 ) {
         for ( int i=0; i < img.npal; ++i ) {
             h->palset( h->ud, layer, i, img.pal[i] );
@@ -274,7 +288,7 @@ bool gfxfile_load_palette( const gfxfile_host_t* h, int layer, const uint8_t* fi
         uint32_t pal[256];
         memset( pal, 0, sizeof(pal) );
         size_t n = (size_t) img.w * (size_t) img.h;
-        int cnt = bmp_quantize( img.argb, n, pal, 1, 255 );
+        int cnt = bmp_quantize( img.argb, n, pal, 1, usable - 1 );
         for ( int i=0; i < cnt; ++i ) {
             h->palset( h->ud, layer, 1 + i, pal[1 + i] );
         }

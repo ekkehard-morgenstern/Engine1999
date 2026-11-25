@@ -46,6 +46,13 @@ Every shape has a hot spot: the pixel of the picture that is "where the pointer 
 (0..639, 0..299), whatever the shape is.
 */
 
+// The pointer's colors are reserved entries of the sprite layer's palette: CUR_PAL_COUNT entries from CUR_PAL_FIRST (220..255). The engine puts them there at
+// start-up and with every palette reset, and a program's change of those entries is ignored unless it asks for it (GFX PALETTE ..., POINTER).
+#define CUR_PAL_FIRST   220
+#define CUR_PAL_COUNT   36
+
+void cursors_palette( uint32_t pal[256] );      // writes the pointer's colors into entries CUR_PAL_FIRST .. 255 of a sprite palette
+
 #define CUR_ARROW       0       // the pointer (hot spot: the tip)
 #define CUR_WAIT        1       // a ring of dots that turns (animated)
 #define CUR_BUSY        2       // the pointer with a small turning ring (animated)

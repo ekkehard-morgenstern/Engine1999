@@ -55,8 +55,8 @@ drawing is clipped, never an error. `c` is a palette index (omitted: the pen). O
 -- layers, palettes
 GFX LAYER n, ON | OFF                 layer 0..4 shown / hidden
 GFX PRIORITY n, p                     the layer n takes place p (0 = bottom) and swaps with the one that had it
-GFX PALETTE n, i, argb                color i (0..255) of layer n; argb as RGB() gives it
-GFX PALNAME n, i, a$                  the same by a name of the color table: GFX PALNAME 1,5,"Gold" (an unknown name is an error)
+GFX PALETTE n, i, argb [, POINTER]    color i (0..255) of layer n; argb as RGB() gives it (entries 220..255 of layer 4 are the mouse pointer's: see below)
+GFX PALNAME n, i, a$ [, POINTER]      the same by a name of the color table: GFX PALNAME 1,5,"Gold" (an unknown name is an error)
 GFX PALRESET [n]                      the palette of layer n (or all) back to the table
 GFX BACKDROP argb                     the color behind all layers
 -- the graphics layer (and the background layer)
@@ -201,8 +201,7 @@ with the others. The engine reaches them through `sprscr_sys_*` (`sprscreen.h`).
 
 The pointer's pictures are drawn by `cursors.[ch]` (no SDL) at start-up, in the look of **colored glass that floats above the screen**: every shape is a silhouette that is turned into a
 translucent body in one of six hues (blue, gold, green, red, purple, teal: the translucent entries 141..255 of the palette, so the picture behind shows through), with a bright edge at the
-top left, a dark edge at the bottom right, a lighter and a darker band inside (a bevel) and a soft shadow that falls to the lower right. They are the colors of the sprite layer's palette:
-a program that changes that palette changes the pointer. The shapes are 10 to 14 pixels wide: `ARROW` (blue, hot spot at the tip), `WAIT` (a teal glass badge with a comet of eight colored
+top left, a dark edge at the bottom right, a lighter and a darker band inside (a bevel) and a soft shadow that falls to the lower right. They are **reserved entries of the sprite layer's palette** (2026-11-25): the last 36 entries, **220..255** (`CUR_PAL_FIRST` / `CUR_PAL_COUNT` in `cursors.h`: black, white, shadow, frost, light / mid / dark / rim of the six hues, the eight colors of the comet). The engine writes them at start-up and with every `GFX PALETTE` reset (`GFX PALRESET`, `GFX RESET`), and **a program's change of one of them is ignored** (`GFX PALETTE 4,i,...`, `GFX PALNAME 4,i,...`, `GFX PALLOAD 4,...`, `SPRITE LOAD ...,PALETTE`): programs copying a whole palette into the sprite layer no longer turn the glass solid (`1987` did, after the 3D palette of the `w3kit` library had been copied). **To recolor the pointer on purpose** give the keyword `POINTER` as the last argument: `GFX PALETTE 4,230,RGB(255,0,0,128),POINTER` (also `GFX PALNAME`). Pictures loaded from files (`SPRITE LOAD`) are matched to the free entries 0..219 only and a `PALETTE` load quantizes into them; sprite images that use the colors 220..255 directly (`DESIGN SPRITE n` with a base of 208 or more) show the pointer's colors. Reading (`GFX("PALETTE",4,i)`) is not restricted. The shapes are 10 to 14 pixels wide: `ARROW` (blue, hot spot at the tip), `WAIT` (a teal glass badge with a comet of eight colored
 dots that turns, 8 frames), `BUSY` (the arrow with a small glass badge and a comet, 8 frames), `TEXT` (I-beam, teal), `HAND` (pointing, gold), `GRAB` (a closed hand for dragging, gold), `CROSS`
 (crosshair, green), `SIZEH`, `SIZEV` (resize arrows, purple), `MOVE` (four arrows, purple), `NO` (a red ring and slash around frosted glass) and `HELP` (the arrow with a gold bubble that holds a
 question mark). `cursors_set()`, `cursors_move()` (the hot spot to x, y), `cursors_show()`; the window has `sdlscr_cursor_*`. **BASIC reaches the pointer with `MOUSE`** (see the next section and `docs/basic-language.md`, "The mouse"). `sdltest3` shows all shapes on a light, a dark and a striped background (the stripes show the translucency) and lets you move

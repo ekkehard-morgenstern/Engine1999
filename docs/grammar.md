@@ -669,7 +669,8 @@ angle-stmt := DEG | RAD | GRAD .
 
 ```ebnf
 gfx-stmt := GFX ( LAYER num-expr "," ( ON | OFF ) | PRIORITY num-expr "," num-expr |
-                      PALETTE num-expr "," num-expr "," num-expr | PALNAME num-expr "," num-expr "," str-expr |
+                      PALETTE num-expr "," num-expr "," num-expr [ "," POINTER ] |
+                      PALNAME num-expr "," num-expr "," str-expr [ "," POINTER ] |
                       PALRESET [ num-expr ] | BACKDROP num-expr | TARGET num-expr | PEN num-expr |
                       MODE ( SET | CLEAR | XOR | OR | AND ) | CLEAR [ num-expr ] | PSET num-expr "," num-expr [ "," num-expr ] |
                       LINE num-expr "," num-expr "," num-expr "," num-expr [ "," num-expr [ "," ( B | BF ) ] ] |

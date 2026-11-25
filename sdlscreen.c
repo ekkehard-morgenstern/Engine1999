@@ -75,6 +75,7 @@ static bool init_layers( SDL_Renderer* renderer ) {
         sdllay_cleanup_many( &layers[0], NLAYERS );
         return false;
     }
+    cursors_palette( layers[LAY_SPR].palette );     // (the pointer's colors, the reserved last entries of the sprite palette)
     return true;
 }
 
@@ -1539,12 +1540,33 @@ int sdlscr_layer_getpriority( int layer ) {
     return sdlscr_goodlayer( layer ) ? (int) layers[layer].priority : -1;
 }
 
-void sdlscr_palette_set( int layer, int index, uint32_t argb ) {
+// the palette of a layer back to the color table; the sprite layer's last entries (CUR_PAL_FIRST ..) are the colors of the mouse pointer
+static void sdlscr_layer_palette_reset( int i ) {
+    sdllay_reset_palette( &layers[i] );
+    if ( i == LAY_SPR ) {
+        cursors_palette( layers[i].palette );
+    }
+}
+
+// how many entries of a layer's palette programs can use freely (the pointer's colors are reserved on the sprite layer)
+int sdlscr_palette_usable( int layer ) {
+    return layer == LAY_SPR ? CUR_PAL_FIRST : 256;
+}
+
+// a program's change of a reserved entry is ignored unless it asks for it (reserved = true: GFX PALETTE ..., POINTER)
+void sdlscr_palette_setx( int layer, int index, uint32_t argb, bool reserved ) {
     if ( !sdlscr_goodlayer( layer ) || index < 0 || index > 255 ) {
+        return;
+    }
+    if ( index >= sdlscr_palette_usable( layer ) && !reserved ) {
         return;
     }
     layers[layer].palette[index] = argb;
     sdllay_set_modified( &layers[layer] );
+}
+
+void sdlscr_palette_set( int layer, int index, uint32_t argb ) {
+    sdlscr_palette_setx( layer, index, argb, false );
 }
 
 uint32_t sdlscr_palette_get( int layer, int index ) {
@@ -1557,17 +1579,17 @@ uint32_t sdlscr_palette_get( int layer, int index ) {
 void sdlscr_palette_reset( int layer ) {
     for ( int i=0; i < NLAYERS; ++i ) {
         if ( layer < 0 || layer == i ) {
-            sdllay_reset_palette( &layers[i] );
+            sdlscr_layer_palette_reset( i );
         }
     }
 }
 
-bool sdlscr_palette_setbyname( int layer, int index, const char* name ) {
+bool sdlscr_palette_setbyname( int layer, int index, const char* name, bool reserved ) {
     uint32_t argb = 0;
     if ( !sdlscr_goodlayer( layer ) || index < 0 || index > 255 || !sdllay_findcolor( name, &argb ) ) {
         return false;
     }
-    sdlscr_palette_set( layer, index, argb );
+    sdlscr_palette_setx( layer, index, argb, reserved );
     return true;
 }
 
@@ -1980,7 +2002,7 @@ void sdlscr_gfx_reset( bool images ) {
     for ( int i=0; i < NLAYERS; ++i ) {
         sdllay_enable( &layers[i] );
         layers[i].priority = (uint8_t) i;
-        sdllay_reset_palette( &layers[i] );
+        sdlscr_layer_palette_reset( i );
     }
     sdlscr_bgcol = SDLSCR_DEFAULT_BGCOL;
     sdlscr_gfxtgt = LAY_GFX;

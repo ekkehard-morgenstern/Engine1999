@@ -1364,6 +1364,7 @@ static uint32_t ff_palget( void* ud, int layer, int i ) { (void) ud; return sdls
 static void ff_palset( void* ud, int layer, int i, uint32_t argb ) { (void) ud; sdlscr_palette_set( layer, i, argb ); }
 static int ff_point( void* ud, int layer, int x, int y ) { (void) ud; return sdlscr_gfx_point( layer, x, y ); }
 static void ff_pset( void* ud, int layer, int x, int y, int c ) { (void) ud; sdlscr_gfx_pset( layer, x, y, c ); }
+static int ff_palusable( void* ud, int layer ) { (void) ud; return sdlscr_palette_usable( layer ); }
 static bool ff_getcell( void* ud, int kind, int n, uint8_t* out ) {
     (void) ud;
     return kind == GFXFILE_SPRITE ? sdlscr_sprite_getmap( n, out ) : sdlscr_tile_getimage( n, out );
@@ -1373,7 +1374,7 @@ static void ff_putcell( void* ud, int kind, int n, const uint8_t* data ) {
     if ( kind == GFXFILE_SPRITE ) sdlscr_writesprite( n, data ); else sdlscr_writetile( n, data );
 }
 
-static const gfxfile_host_t ff_host = { 0, ff_palget, ff_palset, ff_point, ff_pset, ff_getcell, ff_putcell };
+static const gfxfile_host_t ff_host = { 0, ff_palget, ff_palset, ff_point, ff_pset, ff_getcell, ff_putcell, ff_palusable };
 
 // a file name for a picture: ".bmp" is added if the last part has no extension
 static bool ff_name( const char* s, size_t slen, char* buf, size_t bufsz, const char** err ) {
@@ -1804,9 +1805,9 @@ static bool host_gfx_op( void* usrdata, int op, const double* a, int na, const c
         case GFXOP_SCREENSHOT:  return host_screenshot( s, slen, err );
         case GFXOP_LAYER:       sdlscr_layer_enable( gi( a[0], 0 ), a[1] != 0.0 ); break;
         case GFXOP_PRIORITY:    sdlscr_layer_setpriority( gi( a[0], 0 ), gi( a[1], 0 ) ); break;
-        case GFXOP_PALETTE:     sdlscr_palette_set( gi( a[0], 0 ), gi( a[1], 0 ), (uint32_t)(int64_t) a[2] ); break;
+        case GFXOP_PALETTE:     sdlscr_palette_setx( gi( a[0], 0 ), gi( a[1], 0 ), (uint32_t)(int64_t) a[2], a[3] > -1.0e8 ); break;
         case GFXOP_PALNAME:
-            if ( !sdlscr_palette_setbyname( gi( a[0], 0 ), gi( a[1], 0 ), s ) ) {
+            if ( !sdlscr_palette_setbyname( gi( a[0], 0 ), gi( a[1], 0 ), s, a[2] > -1.0e8 ) ) {
                 *err = "Unknown color name";
                 return false;
             }
