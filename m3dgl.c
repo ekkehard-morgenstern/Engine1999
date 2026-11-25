@@ -103,7 +103,7 @@ typedef struct {
     uint8_t*      rgba;                         // the read back picture
     uint32_t*     out;                          // ... as ARGB (what m3d_render32() returns)
     int           ow, oh;
-    bool          usepbo;                       // the picture is read back through two pixel buffer objects, one frame late (only with ENGINE1999_PBO=1; otherwise it is read at once)
+    bool          usepbo;                       // the picture is read back through two pixel buffer objects, one frame late (the default; ENGINE1999_PBO=0 reads it at once)
     GLuint        pbo[2];
     size_t        pbosize;                      // bytes of each (0: to be made)
     int           pboi, pbofill;                // the one the next frame reads into, how many have been read into
@@ -308,6 +308,12 @@ static bool make_fbo( gl_t* g, int w, int h, int samples ) {
 
 static void gl_destroy( m3d_t* m, void* rd );
 
+// ENGINE1999_PBO=0 switches the asynchronous read-back off (tests and screenshots want the picture of the frame just drawn)
+static bool pbo_wanted( void ) {
+    const char* e = getenv( "ENGINE1999_PBO" );
+    return e == 0 || e[0] != '0';
+}
+
 static void* gl_create( m3d_t* m ) {
     (void) m;
     if ( glload_state() != GLLOAD_YES ) {
@@ -338,7 +344,7 @@ static void* gl_create( m3d_t* m ) {
     {
         glinfo_t gi;
         glload_info( &gi );
-        g->usepbo = gl->GetBufferSubData != 0 && ( gi.major > 2 || ( gi.major == 2 && gi.minor >= 1 ) ) && getenv( "ENGINE1999_PBO" ) != 0;
+        g->usepbo = gl->GetBufferSubData != 0 && ( gi.major > 2 || ( gi.major == 2 && gi.minor >= 1 ) ) && pbo_wanted();
     }
     g->prog = make_program( g, vs_obj, fs_obj );
     g->skyprog = make_program( g, vs_sky, fs_sky );

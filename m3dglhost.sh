@@ -24,6 +24,7 @@ int main(void) { return 0; }' > "$T/probe.c"
 cc -o "$T/probe" "$T/probe.c" -lX11 -lXtst > /dev/null 2>&1 || skip "no X11 / Xtst development files"
 cc -Wall -o "$T/xtype" xtype.c -lX11 -lXtst || { echo "FAILED: m3dglhost (xtype.c does not compile)"; exit 1; }
 ENG=$PWD/engine1999
+export ENGINE1999_PBO=0   # the test looks at the picture of the frame just drawn
 N=90
 while [ -e "/tmp/.X11-unix/X$N" ] && [ $N -lt 120 ]; do N=$((N+1)); done
 Xvfb ":$N" -screen 0 800x600x24 > /dev/null 2>&1 &

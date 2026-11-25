@@ -175,10 +175,9 @@ audio callback late, at the price of a longer delay between a sound statement an
 and the other sound statements does not depend on it: events start at their own sample.
 .TP
 .B ENGINE1999_PBO
-Set to any value (for example
-.BR 1 ):
-the hardware 3D renderer reads its picture back through two pixel buffer objects, so that the program does not wait for the graphics card to finish the frame. The picture
-on the screen is then one frame late (the 3D picture, not the text or the graphics layers). Needs OpenGL 2.1; off by default (experimental).
+The hardware 3D renderer reads its picture back through two pixel buffer objects, so that the program does not wait for the graphics card to finish the frame (needs OpenGL 2.1). The 3D picture on the screen is then one frame late (not the text or the graphics layers). On by default; set to
+.B 0
+to read the picture back at once (for tests and screenshots, which want the frame just drawn).
 .TP
 .B ENGINE1999_RENDERLOG
 A file name: when the program ends, the time of the
