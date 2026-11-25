@@ -270,6 +270,16 @@ static void test_edit( void ) {
     typed( "y" );
     check( "edit: typing into a full editor does nothing", (int) strlen( ed_text() ) == UI_EDITMAX );
     free( big );
+    {   // a long program (the 1987 demo is 148 KB) is no longer cut: EDIT WINDOW showed only the first 60000 bytes and OK would have thrown the rest away
+        size_t n = 400000U;
+        char* prog = (char*) malloc( n + 1U );
+        for ( size_t i = 0; i < n; ++i ) {
+            prog[i] = ( i % 40U ) == 39U ? '\n' : 'a' + (char)( i % 26U );
+        }
+        prog[n] = '\0';
+        check( "edit: a text of 400000 bytes is kept whole", ui_set_text( &ui, 1, prog ) && strlen( ed_text() ) == n && strcmp( ed_text(), prog ) == 0 );
+        free( prog );
+    }
     ui_set_text( &ui, 1, "ab\ncd" );
     check( "edit: ui_edit_caret moves the caret", ui_edit_caret( &ui, 1, 4 ) && ui_edit_query( &ui, 1, 1 ) == 1 && ui_edit_query( &ui, 1, 2 ) == 1 && !ui_edit_caret( &ui, 2, 0 ) );
     check( "edit: the queries refuse other widgets", ui_edit_query( &ui, 2, 0 ) == -1 );

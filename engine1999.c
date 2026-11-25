@@ -2332,6 +2332,11 @@ static void host_edit_window( void ) {
     if ( orig == 0 ) {
         return;
     }
+    if ( len > (size_t) UI_EDITMAX ) {                  // (the widget would cut the text and OK would then replace the program by the cut one: never open it)
+        free( orig );
+        repl.report( &repl, "? The program is too long for the editor window: use EDIT\n" );
+        return;
+    }
     uint8_t* saved = 0;
     size_t savedlen = 0;
     bool layerwas = sdlscr_layer_enabled( UI_LAYER );

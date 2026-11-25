@@ -55,6 +55,7 @@ The tokenizer, program store, syntax tree and variables are heap structures (ide
 - Function naming is `<module>_<verb>`: `sdlscr_*`, `txtscr_*`, `comp_eat_*`, `cgen_gen_*`, `cgen_from_*`, `vmem_*`; tokenizer helpers come in `eat_/print_/emit_/read_` quadruples.
 - Booleans signal success; `bool` functions that can't continue report via the module's `report`/`halt` callbacks (`comp_error`, `rt->halt`, `vmem->halt`) — `halt` is `ATTR_NORETURN` and usually `longjmp`s.
 - All multi-byte values inside the tokenized program, syntax tree node data and bytecode are **big endian**, read/written with explicit shifts (`EXTRACT16`, `VEXTRACT16`, `emit_*`/`read_*`), never by casting.
+- Numbered BASIC programs (owner's convention, 2026-11-26, `docs/basic-language.md` "Numbering a program by sections"): sections at multiples of 1000, each `PROC` / `FUNC` / data block at a multiple of 100, steps of 10 inside; new lines go into the block's gaps (`RENUM a-b,step` respaces one block). `demos/1987.bas` follows it; older demos stay 10, 20, 30.
 - Section dividers in `.c`/`.h`: `// -- name ------…`.
 - Commit messages in this repo are terse ("Refactor WIP (bastok)", "Codegen WIP"); history carries little explanation, so keep `docs/` current instead.
 

@@ -370,6 +370,19 @@ FOR EACH K,V IN A(): PRINT K;V;: NEXT V    ' key (the index) and value
   parameters reuses it; a `PROC` or `FUNC` can't be defined inside another one; a `GOTO` out of a body leaves the call frame open (as with `DEF FN`; `POP` doesn't know about it).
 - New reserved words: `PROC FUNC CALL LOCAL RESUME` (tokens 235..239).
 
+## Numbering a program by sections (2026-11-26, owner's convention from the VIC-20 and the CPC 464)
+
+Line numbers are an address book, not just a sequence: **group the parts of a program by line number and give each part a large, easy to remember start**, so that one part can grow, shrink or be replaced without touching the numbers of any other.
+
+- **Sections** start at a multiple of 1000 (`1000` small helpers, `3000` pictures, ...); the section's first line is a divider comment (`' ---- name`), so that `LIST 3000-` and the map in the program's documentation point at it.
+- **Each `PROC`, `FUNC` or data block** (`LABEL` with its `DATA`) starts at a multiple of 100, with the comment that describes it on the first line of its block; inside, the lines go in steps of 10, so nine lines fit between two of them. A procedure longer than ten lines takes the next hundreds (it simply ends below the next multiple of 100).
+- **The main program** and the short start lines before the first section are at the bottom (`10`, `20`, ...); lines 1 .. 4 are the license comment of the program (`BUILD`).
+- **Order still matters where the language wants it**: a `FUNC` is defined before the line that calls it, a `DIM` comes before the first use of its name, so a section that holds functions others use gets a lower number.
+- **Changing one part**: add lines inside its block (`1015`, or `RENUM 8100-8190,5` to respace one block and nothing else: `RENUM` takes a range, and `GOTO` / `GOSUB` / `RUN` targets follow), delete it with `DELETE 8100-8199`, `LIST 8100-8199` to see it. A program that uses labels (`GOTO MAIN`) has no numbers to keep in step at all.
+- **A large program** (like `demos/1987.bas`, 2900 lines, numbers up to 57000) fits easily: line numbers go up to 999999.
+
+`demos/1987.bas` follows it since 2026-11-26 (the map is in `docs/1987.md`, "Where things are in the program"). The older demos are numbered 10, 20, 30 ... throughout, and stay so until somebody works on them.
+
 ## `STOP`, `CONT`, `TRACE`, `AUTO`
 
 - **`STOP`** ends the run like the Break key ("Break in line n"), but keeps the state of the program for **`CONT`**: the next instruction, the data stack, the `GOSUB` return stack and

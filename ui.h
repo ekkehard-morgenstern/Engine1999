@@ -54,7 +54,7 @@ callbacks to sdlscreen) and on a gfxcore bitmap in the test. All coordinates are
 
 #define UI_MAXWIDGETS   192
 #define UI_TEXTMAX      255             // the longest text of a widget (a text field)
-#define UI_EDITMAX      60000           // the longest text of a multi-line editor (UIK_EDIT)
+#define UI_EDITMAX      4194304         // the longest text of a multi-line editor (UIK_EDIT): 4 MiB (it was 60000, which cut a long program in EDIT WINDOW)
 #define UI_MAXITEMS     512             // the rows of a list
 #define UI_EVENTS       64              // the event queue
 
