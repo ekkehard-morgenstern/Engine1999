@@ -110,6 +110,7 @@ static const glentry_t gl_table[] = {
 static const glentry_t gl_opt_table[] = {
     ENTFB(RenderbufferStorageMultisample),
     ENTFB(BlitFramebuffer),
+    ENT(GetBufferSubData),
 };
 
 static void gl_set( char* err, size_t errsz, const char* fmt, const char* a ) {

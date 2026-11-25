@@ -103,6 +103,10 @@ typedef struct {
     uint8_t*      rgba;                         // the read back picture
     uint32_t*     out;                          // ... as ARGB (what m3d_render32() returns)
     int           ow, oh;
+    bool          usepbo;                       // the picture is read back through two pixel buffer objects, one frame late (only with ENGINE1999_PBO=1; otherwise it is read at once)
+    GLuint        pbo[2];
+    size_t        pbosize;                      // bytes of each (0: to be made)
+    int           pboi, pbofill;                // the one the next frame reads into, how many have been read into
 } gl_t;
 
 // -- shaders --------------------------------------------------------------------------------------------------------------------
@@ -246,6 +250,12 @@ static void delete_fbo( gl_t* g ) {
 #ifndef GL_RGBA8
 #define GL_RGBA8 0x8058
 #endif
+#ifndef GL_PIXEL_PACK_BUFFER
+#define GL_PIXEL_PACK_BUFFER 0x88EB
+#endif
+#ifndef GL_STREAM_READ
+#define GL_STREAM_READ 0x88E1
+#endif
 #ifndef GL_READ_FRAMEBUFFER
 #define GL_READ_FRAMEBUFFER 0x8CA8
 #define GL_DRAW_FRAMEBUFFER 0x8CA9
@@ -325,6 +335,11 @@ static void* gl_create( m3d_t* m ) {
         return 0;
     }
     glapi_t* gl = &g->gl;
+    {
+        glinfo_t gi;
+        glload_info( &gi );
+        g->usepbo = gl->GetBufferSubData != 0 && ( gi.major > 2 || ( gi.major == 2 && gi.minor >= 1 ) ) && getenv( "ENGINE1999_PBO" ) != 0;
+    }
     g->prog = make_program( g, vs_obj, fs_obj );
     g->skyprog = make_program( g, vs_sky, fs_sky );
     if ( g->prog == 0 || g->skyprog == 0 ) {
@@ -425,6 +440,7 @@ static void gl_destroy( m3d_t* m, void* rd ) {
                 }
             }
             if ( g->vbo != 0 ) { gl->DeleteBuffers( 1, &g->vbo ); }
+            if ( g->pbo[0] != 0 ) { gl->DeleteBuffers( 2, g->pbo ); }
             if ( g->skyvbo != 0 ) { gl->DeleteBuffers( 1, &g->skyvbo ); }
             if ( g->prog != 0 ) { gl->DeleteProgram( g->prog ); }
             if ( g->skyprog != 0 ) { gl->DeleteProgram( g->skyprog ); }
@@ -453,7 +469,7 @@ static bool gl_resize( m3d_t* m, void* rd, int bw, int bh ) {
         return false;
     }
     free( g->rgba ); free( g->out );
-    g->rgba = rgba; g->out = out; g->ow = bw; g->oh = bh;       // (the framebuffer object follows at the next frame)
+    g->rgba = rgba; g->out = out; g->ow = bw; g->oh = bh; g->pbosize = 0;       // (the framebuffer object follows at the next frame)
     return true;
 }
 
@@ -1051,7 +1067,29 @@ static const void* gl_render( m3d_t* m, void* rd ) {
         gl->BindFramebuffer( GL_FRAMEBUFFER, g->fbo );
     }
     gl->PixelStorei( GL_PACK_ALIGNMENT, 1 );
-    gl->ReadPixels( 0, 0, W, H, GL_RGBA, GL_UNSIGNED_BYTE, g->rgba );
+    if ( g->usepbo ) {
+        // asynchronous read-back: this frame is read into one pixel buffer (the call returns at once, the GPU copies when it is done), and the picture handed on is the one
+        // of the frame before, read into the other buffer (the first frame after a (re)start waits for its own); the picture is one frame late, but the CPU does not wait for the GPU
+        size_t bytes = (size_t) W * (size_t) H * 4U;
+        if ( g->pbosize != bytes ) {
+            if ( g->pbo[0] == 0 ) { gl->GenBuffers( 2, g->pbo ); }
+            for ( int k=0; k < 2; ++k ) {
+                gl->BindBuffer( GL_PIXEL_PACK_BUFFER, g->pbo[k] );
+                gl->BufferData( GL_PIXEL_PACK_BUFFER, (GLsizeiptr) bytes, 0, GL_STREAM_READ );
+            }
+            g->pbosize = bytes; g->pboi = 0; g->pbofill = 0;
+        }
+        int cur = g->pboi;
+        g->pboi ^= 1;
+        gl->BindBuffer( GL_PIXEL_PACK_BUFFER, g->pbo[cur] );
+        gl->ReadPixels( 0, 0, W, H, GL_RGBA, GL_UNSIGNED_BYTE, (GLvoid*) 0 );
+        gl->BindBuffer( GL_PIXEL_PACK_BUFFER, g->pbo[ g->pbofill > 0 ? cur ^ 1 : cur ] );
+        gl->GetBufferSubData( GL_PIXEL_PACK_BUFFER, 0, (GLsizeiptr) bytes, g->rgba );
+        gl->BindBuffer( GL_PIXEL_PACK_BUFFER, 0 );
+        if ( g->pbofill < 1 ) { g->pbofill = 1; }
+    } else {
+        gl->ReadPixels( 0, 0, W, H, GL_RGBA, GL_UNSIGNED_BYTE, g->rgba );
+    }
     gl->BindFramebuffer( GL_FRAMEBUFFER, 0 );
     double tm2 = gl_now_ms();
     size_t np = (size_t) W * (size_t) H;

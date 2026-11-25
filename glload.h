@@ -118,6 +118,7 @@ typedef struct _glapi_t {
     // optional (0 when the driver has none: no multisampling)
     void (*RenderbufferStorageMultisample)( GLenum,GLsizei,GLenum,GLsizei,GLsizei );
     void (*BlitFramebuffer)( GLint,GLint,GLint,GLint,GLint,GLint,GLint,GLint,GLbitfield,GLenum );
+    void (*GetBufferSubData)( GLenum,GLintptr,GLsizeiptr,GLvoid* );        // (with GL 2.1: the read-back through pixel buffer objects)
 } glapi_t;
 
 #define GLLOAD_UNKNOWN  (-1)            // glload_probe() has not run
