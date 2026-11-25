@@ -13,6 +13,8 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+- **Roadmap item 98: spread the vertex-buffer uploads over frames** (2026-11-25, owner: "Put the upload spreading onto the roadmap"): row in `docs/roadmap.md` and `docs/roadmap/graphics-and-ui.md` (idea, how to measure, why draw-call batching is not worth it yet). Docs only, no code, no tests needed.
+
 ## Log
 
 ### 7a6cb67 — 2026-10-17 13:32:27 +0200 — "Introduced Claude to the project"
@@ -2604,3 +2606,7 @@ The owner bundled four pieces of work into this commit: tarred roads with posts,
 ### e582106 — 2026-11-25 05:40:24 +0100 — "Renderer PBO option default=1, created by Claude Code"
 5 files changed, 20 insertions(+), 8 deletions(-).
 - **PBO read-back is the default** (2026-11-25, owner: "Make PBO the default with a switch for the tests"): `m3dgl.c` `pbo_wanted()`: on unless `ENGINE1999_PBO=0`; `m3dglhost.sh` exports and `m3dgltest1` sets `ENGINE1999_PBO=0` (they compare the picture of the frame just drawn); `man/engine1999.1` and `SESSION.md` updated. Tests: `make check`, `sh m3dglhost.sh`.
+
+### 0e5477b — 2026-11-25 05:52:34 +0100 — "Renderer PBO option default=1, created by Claude Code"
+2 files changed, 5 insertions(+), 2 deletions(-).
+- Follow-up to `e582106`: `m3dgltest1.c` sets `ENGINE1999_PBO=0` itself (it compares the picture of the frame just drawn; 3 cases failed with the new default). `make check`: all checks passed. The log entry of `e582106` was adjusted.
