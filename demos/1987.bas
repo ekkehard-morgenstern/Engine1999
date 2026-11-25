@@ -26,7 +26,7 @@
 210 ON ERROR GOTO FAILED
 220 HL=0:IF ENV$("G1987_HEADLESS")<>"" THEN HL=-1
 221 SXY=0:LDS=0:LDON=0:LDLAST=0:NOLOAD=0:WLD=0:IF ENV$("G1987_WORLD")<>"" OR ( ENV$("G1987_DYNAMIC")="" AND NOT HL ) THEN WLD=-1
-230 DIM PV(60),SGL(300),SGH(300),SGX(300),SGY(300),SGU(300),SGV(300),SGK(300),SGD(300),SGE(300),SGI(300),RGX(6),RGY(6),RGP(6),RGQ(6),CKN(400),CHB(400),CKRX(9),CKRY(9),CKRT(9),CTX(24),CTY(24),GNS(8),GGX(160),FLJ$(81),TIH(33),RPX(300),RPY(300),RPF(300),CPX(40),CPY(40),SMX(120),SMY(120),PLX(40),PLY(40),TRX(520),TRY(520),LRR(8),LRZ(8),LRV(8),W$(8),GPX(2),GPZ(2),GPS(2),DWX(40),DWY(40),DRX(5),DRY(5),DRZ(5),DRH(5),DRT(5),DRA(5)
+230 DIM PV(60),SGL(300),SGH(300),SGX(300),SGY(300),SGU(300),SGV(300),SGK(300),SGD(300),SGE(300),SGI(300),RGX(6),RGY(6),RGP(6),RGQ(6),CKN(400),CHB(400),CKRX(9),CKRY(9),CKRT(9),CTX(24),CTY(24),GNS(8),GGX(160),FLJ$(81),TIH(33),RPX(300),RPY(300),RPF(300),CPX(40),CPY(40),SMX(120),SMY(120),PLX(40),PLY(40),TRX(520),TRY(520),LRR(8),LRZ(8),LRV(8),W$(8),GPX(2),GPZ(2),GPS(2),DWX(40),DWY(40),DRX(10),DRY(10),DRZ(10),DRH(10),DRT(10),DRA(10),DRM(10),DRTM(10),DRTX(10),DRTY(10),DRBM(10),DRV(10),DDD(10),DRP(10)
 231 DIM QX1(14),QY1(14),QX2(14),QY2(14)
 232 DIM FPS(9),FPX(9),FPC(9),FPB(9)
 240 GOTO MAIN
@@ -711,8 +711,9 @@
 5500   M3D OBJPOS 322,-150,-135,0
 5510   M3D OBJECT 420,8,235
 5520   FOR K=0 TO NPL-1
-5530     CALL BX(420,PLX(K)-1.6,PLY(K)-1.6,0,PLX(K)+1.6,PLY(K)+1.6,150,312)
-5540     CALL BX(420,PLX(K)-12,PLY(K)-1.2,138,PLX(K)+12,PLY(K)+1.2,141,312)
+5522     PZG=FN HT(PLX(K),PLY(K))
+5530     CALL BX(420,PLX(K)-1.6,PLY(K)-1.6,PZG-6,PLX(K)+1.6,PLY(K)+1.6,PZG+150,312)
+5540     CALL BX(420,PLX(K)-12,PLY(K)-1.2,PZG+138,PLX(K)+12,PLY(K)+1.2,PZG+141,312)
 5550   NEXT K
 5560   M3D OBJECT 411,8,235
 5570   FOR K=0 TO 2
@@ -1020,22 +1021,45 @@
 7330   END IF
 7340 END PROC
 7350 ' ------------------------------------------------------------------------------------------------ the drones
-7360 ' black, egg-shaped scouts that hover high above the land, fly their routes (eight way points each) and sweep a red beam over the ground. They are objects 600 + n
-7370 ' (the body), 610 + n (the beam and its spot on the ground, rebuilt each frame), 620 + n (a shadow). This step: they scout; they do not shoot at anything yet.
-7380 PROC BUILDDRONES
-7390   LOCAL K,J,O
-7400   NDR=4:GT=0
-7410   FOR K=0 TO NDR-1
-7420     FOR J=0 TO 7
-7430       DWX(K*8+J)=INT(2500*SIN(K*2.1+J*1.3+0.5)):DWY(K*8+J)=INT(2500*COS(K*1.3+J*1.7+K))
-7440     NEXT J
-7450   NEXT K
-7460   RESTORE DRONEROUTE
-7470   FOR J=0 TO 7
-7480     READ DWX(J),DWY(J)
-7490   NEXT J
+7352 ' black, egg-shaped scouts with a life of their own (owner, 2026-11-25): they have no route. A drone cruises to a place it picks, then scans the ground there with a red beam,
+7354 ' or hangs and looks round, or flies on. A drone belongs to no chunk: it may fly from one to the next as long as the chunk (DCS = 15625 units = 500 m) holds fewer than DCAP = 3
+7356 ' drones (counting where they are and where they are going). The pool of NDR drones (6; G1987_DRONES = 0 .. 10) lives round John: one that gets farther than 17000 units away is made
+7358 ' again on a ring of 13000 .. 15000 units, so the land seems full of drones. They are objects 600 + n (body), 610 + n (beam and its spot, rebuilt each frame), 620 + n (shadow).
+7360 ' Modes DRM: 0 cruise to (DRTX,DRTY), 1 scan (the beam on, hangs low), 2 look (hangs and turns). They ignore John (this step); nothing here shoots.
+7362 FUNC DCELL(X)
+7364   RETURN INT(X/DCS)
+7366 END FUNC
+7368 ' how many other drones than K are in the chunk (CX,CY) or on their way to it
+7370 FUNC DCOUNT(CX,CY,K)
+7372   LOCAL J,C
+7374   C=0
+7376   FOR J=0 TO NDR-1
+7378     IF J<>K THEN
+7380       IF FN DCELL(DRX(J))=CX AND FN DCELL(DRY(J))=CY THEN
+7382         C=C+1
+7384       ELSE
+7386         IF DRM(J)=0 THEN IF FN DCELL(DRTX(J))=CX AND FN DCELL(DRTY(J))=CY THEN C=C+1
+7388       END IF
+7390     END IF
+7392   NEXT J
+7394   RETURN C
+7396 END FUNC
+7398 ' the largest number of drones that are in one chunk (a test value)
+7400 FUNC DMAXCELL()
+7402   LOCAL J,C,M
+7404   M=0
+7406   FOR J=0 TO NDR-1
+7408     C=FN DCOUNT(FN DCELL(DRX(J)),FN DCELL(DRY(J)),J)+1
+7410     IF C>M THEN M=C
+7412   NEXT J
+7414   RETURN M
+7416 END FUNC
+7418 PROC BUILDDRONES
+7419   LOCAL K,J,O
+7420   NDR=6:GT=0:DCAP=3:DCS=15625:DINIT=-1:DPK=0:DCT=0
+7422   IF ENV$("G1987_DRONES")<>"" THEN NDR=MAX(0,MIN(10,VAL(ENV$("G1987_DRONES"))))
 7500   FOR K=0 TO NDR-1
-7510     DRX(K)=DWX(K*8):DRY(K)=DWY(K*8):DRT(K)=1:DRH(K)=K*70:DRA(K)=380+K*35:DRZ(K)=DRA(K)
+7510     DRX(K)=JX+3000+K*400:DRY(K)=JY:DRH(K)=K*70:DRA(K)=300+((K*37) MOD 150):DRZ(K)=FN HT(DRX(K),DRY(K))+DRA(K):DRM(K)=2:DRTM(K)=1:DRBM(K)=0:DRV(K)=0:DRTX(K)=DRX(K):DRTY(K)=DRY(K)
 7520     O=600+K
 7530     M3D OBJECT O,28,235
 7540     LRR(0)=0.6:LRZ(0)=-30:LRV(0)=0:LRR(1)=13:LRZ(1)=-26:LRV(1)=0:LRR(2)=24:LRZ(2)=-12:LRV(2)=0:LRR(3)=29:LRZ(3)=6:LRV(3)=0
@@ -1084,41 +1108,115 @@
 7970   CALL TUBE(O,0,0,76,10,-6,118,1.6):CALL TUBE(O,10,-6,118,2,-14,150,1.2)
 7980   CALL BX(O,0,-17,148,5,-11,153,FN CC(1,15))
 7990 END PROC
-8000 LABEL DRONEROUTE
-8010 DATA 300,-300, 1100,650, 1700,300, 1100,1000, 400,900, -500,300, -1100,-400, -300,-900
-8020 ' flies the drones: each turns towards its next way point (a curve, not a corner) and bobs a little; the beam's target sweeps round below it
-8030 PROC DRONESIM(DT)
-8040   LOCAL K,W,DX,DY,L,TA
-8050   GT=GT+DT
-8060   FOR K=0 TO NDR-1
-8070     W=K*8+DRT(K)
-8080     DX=DWX(W)-DRX(K):DY=DWY(W)-DRY(K):L=SQR(DX*DX+DY*DY)
-8090     IF L<80 THEN
-8100       DRT(K)=(DRT(K)+1) MOD 8
-8110     ELSE
-8120       TA=ATAN2(DY,DX)*180/PI
-8130       DRH(K)=DRH(K)+FN ADIFF(TA,DRH(K))*MIN(1,1.1*DT)
-8140     END IF
-8150     DRX(K)=DRX(K)+COS(DRH(K)*PI/180)*85*DT:DRY(K)=DRY(K)+SIN(DRH(K)*PI/180)*85*DT
-8160     DRZ(K)=DRA(K)+12*SIN(GT*0.9+K)
-8170   NEXT K
-8180 END PROC
+8020 ' a drone that lives: it makes a new place to go (DRPICK), arrives, and then scans, looks or flies on (DRNEXT); it keeps its height above the ground (and above the ground
+8021 ' ahead: mountains), bobs, and does not enter a chunk that already holds DCAP drones
+8022 PROC DRSPAWN(K,FIRST)
+8023   LOCAL I,A,R,X,Y,OK
+8024   I=0:OK=0
+8025   WHILE NOT OK AND I<10
+8026     A=RND*2*PI
+8027     IF FIRST THEN R=2200+RND*9000 ELSE R=13000+RND*2000
+8028     X=JX+R*COS(A):Y=JY+R*SIN(A)
+8029     IF FN DCOUNT(FN DCELL(X),FN DCELL(Y),K)<DCAP THEN OK=-1
+8030     I=I+1
+8031   WEND
+8032   DRX(K)=X:DRY(K)=Y:DRH(K)=RND*360:DRA(K)=300+RND*150:DRV(K)=60:DRBM(K)=0
+8033   DRZ(K)=FN HT(X,Y)+DRA(K):DRM(K)=2:DRTM(K)=0.5:DRTX(K)=X:DRTY(K)=Y
+8034 END PROC
+8035 PROC DRPICK(K)
+8036   LOCAL I,A,R,X,Y,OK,DX,DY
+8037   I=0:OK=0
+8038   WHILE NOT OK AND I<6
+8039     A=DRH(K)+(RND-0.5)*140
+8040     DX=JX-DRX(K):DY=JY-DRY(K)
+8041     IF DX*DX+DY*DY>81000000 THEN A=ATAN2(DY,DX)*180/PI+(RND-0.5)*100
+8042     R=2500+RND*6000
+8043     X=DRX(K)+R*COS(A*PI/180):Y=DRY(K)+R*SIN(A*PI/180)
+8044     IF FN DCOUNT(FN DCELL(X),FN DCELL(Y),K)<DCAP THEN OK=-1
+8045     I=I+1
+8046   WEND
+8047   IF OK THEN
+8048     DRTX(K)=X:DRTY(K)=Y:DRM(K)=0
+8049   ELSE
+8050     DRM(K)=2:DRTM(K)=1.5+RND*2
+8051   END IF
+8052 END PROC
+8053 ' arrived: scan the ground (45 %), look round (25 %) or fly on
+8054 PROC DRNEXT(K)
+8055   LOCAL R
+8056   R=RND
+8057   IF R<0.45 THEN
+8058     DRM(K)=1:DRTM(K)=10+RND*12
+8059   ELSE
+8060     IF R<0.7 THEN DRM(K)=2:DRTM(K)=4+RND*5 ELSE CALL DRPICK(K)
+8061   END IF
+8062 END PROC
+8063 PROC DRONESIM(DT)
+8064   LOCAL K,DX,DY,L,TA,GA,GB,TS,AL,NX,NY
+8065   GT=GT+DT
+8066   IF DINIT THEN
+8067     FOR K=0 TO NDR-1
+8068       CALL DRSPAWN(K,-1)
+8069     NEXT K
+8070     DINIT=0
+8071   END IF
+8072   FOR K=0 TO NDR-1
+8073     DX=DRX(K)-JX:DY=DRY(K)-JY
+8074     IF DX*DX+DY*DY>289000000 THEN CALL DRSPAWN(K,0)
+8075     TS=0:AL=DRA(K)
+8076     IF DRM(K)=0 THEN
+8077       DX=DRTX(K)-DRX(K):DY=DRTY(K)-DRY(K):L=SQR(DX*DX+DY*DY)
+8078       IF L<150 THEN
+8079         CALL DRNEXT(K)
+8080       ELSE
+8081         TA=ATAN2(DY,DX)*180/PI
+8082         DRH(K)=DRH(K)+FN ADIFF(TA,DRH(K))*MIN(1,1.1*DT)
+8083         TS=85
+8084       END IF
+8085     ELSE
+8086       DRTM(K)=DRTM(K)-DT
+8087       IF DRM(K)=1 THEN
+8088         TS=12:AL=170+((K*29) MOD 50):DRH(K)=DRH(K)+10*SIN(GT*0.3+K)*DT
+8089       ELSE
+8090         DRH(K)=DRH(K)+35*SIN(GT*0.5+K*1.7)*DT
+8091       END IF
+8092       IF DRTM(K)<=0 THEN CALL DRPICK(K)
+8093     END IF
+8094     IF DRM(K)=1 THEN
+8095       DRBM(K)=MIN(1,DRBM(K)+1.2*DT)
+8096     ELSE
+8097       DRBM(K)=MAX(0,DRBM(K)-2*DT)
+8098     END IF
+8099     DRV(K)=DRV(K)+(TS-DRV(K))*MIN(1,0.8*DT)
+8100     NX=DRX(K)+COS(DRH(K)*PI/180)*DRV(K)*DT:NY=DRY(K)+SIN(DRH(K)*PI/180)*DRV(K)*DT
+8101     IF FN DCELL(NX)<>FN DCELL(DRX(K)) OR FN DCELL(NY)<>FN DCELL(DRY(K)) THEN
+8102       IF FN DCOUNT(FN DCELL(NX),FN DCELL(NY),K)>=DCAP THEN
+8103         NX=DRX(K):NY=DRY(K):DRV(K)=0:CALL DRPICK(K)
+8104       END IF
+8105     END IF
+8106     DRX(K)=NX:DRY(K)=NY
+8107     GA=FN HT(NX,NY):GB=FN HT(NX+COS(DRH(K)*PI/180)*700,NY+SIN(DRH(K)*PI/180)*700):IF GB>GA THEN GA=GB
+8108     DRZ(K)=DRZ(K)+(GA+AL+12*SIN(GT*0.9+K)-DRZ(K))*MIN(1,1.2*DT)
+8109   NEXT K
+8110   DCT=DCT-DT:IF DCT<=0 THEN DCT=0.25:DPN=FN DMAXCELL():IF DPN>DPK THEN DPK=DPN
+8111 END PROC
 8190 ' places the drones and builds the red beams (only for the drones near the camera)
 8200 PROC DRONERIG
-8210   LOCAL K,O,TX,TY,GZ,A,I,DX,DY,B
+8210   LOCAL K,O,TX,TY,GZ,A,I,DX,DY,B,SC
 8220   FOR K=0 TO NDR-1
 8230     M3D OBJPOS 600+K,DRX(K),DRY(K),DRZ(K),GT*20+K*50
 8240     M3D OBJPOS 620+K,DRX(K),DRY(K),FN HT(DRX(K),DRY(K))+3.5,0
 8250     DX=DRX(K)-M3D("X"):DY=DRY(K)-M3D("Y")
 8260     O=610+K
 8270     M3D OBJECT O,30,235
-8280     IF DX*DX+DY*DY<2600*2600 THEN
+8280     IF DX*DX+DY*DY<2600*2600 AND DRBM(K)>0.04 THEN
+8285       SC=0.35+0.65*DRBM(K)
 8290       TX=DRX(K)+300*COS(GT*0.5+K*2):TY=DRY(K)+300*SIN(GT*0.7+K*2)
 8300       GZ=FN HT(TX,TY)+4
 8310       M3D VERTEX O,DRX(K),DRY(K),DRZ(K)-62
 8320       FOR I=0 TO 3
 8330         A=I*PI/2+GT
-8340         M3D VERTEX O,TX+26*COS(A),TY+26*SIN(A),GZ
+8340         M3D VERTEX O,TX+26*SC*COS(A),TY+26*SC*SIN(A),GZ
 8350       NEXT I
 8360       FOR I=1 TO 4
 8370         M3D FACE O,0,I,1+(I MOD 4),FN CC(1,13)
@@ -1127,7 +1225,7 @@
 8400       M3D VERTEX O,TX,TY,GZ+0.3
 8410       FOR I=0 TO 7
 8420         A=I*PI/4
-8430         M3D VERTEX O,TX+48*COS(A),TY+48*SIN(A),GZ+0.3
+8430         M3D VERTEX O,TX+48*SC*COS(A),TY+48*SC*SIN(A),GZ+0.3
 8440       NEXT I
 8450       FOR I=0 TO 7
 8460         M3D FACE O,B,B+1+I,B+1+((I+1) MOD 8),FN CC(1,12)
@@ -1143,22 +1241,52 @@
 8560   LOCAL K
 8570   INSTRUMENT 41,"NAME DRONEHUM; OSC SINE 0.6 1; OSC SINE 0.3 2 3; OSC SINE 0.035 -2350; ENV 0.8 0.1 1 0.5; GAIN 0.8"
 8580   INSTRUMENT 42,"NAME TYRE; OSC NOISE 1; FILTER 3 0.1; ENV 0.2 0.1 1 0.3; GAIN 1.4"
-8590   FOR K=0 TO NDR-1
+8590   FOR K=0 TO 3
 8600     WAVE K+1,41
 8610     SOUND K+1,100+K*2.7,-1,0
 8620   NEXT K
+8625   INSTRUMENT 43,"NAME POLEHUM; OSC SINE 0.6 1; OSC SINE 0.35 2; OSC SINE 0.2 3; ENV 0.8 0.1 1 0.5; GAIN 0.8"
+8626   WAVE 6,43
+8627   SOUND 6,100,-1,0
 8630   WAVE 5,42
 8640   SOUND 5,400,-1,0
 8650 END PROC
-8660 PROC AMBIENT
-8670   LOCAL K,DX,DY,DZ,D,V,S,TV,SF
-8680   FOR K=0 TO NDR-1
-8690     DX=DRX(K)-M3D("X"):DY=DRY(K)-M3D("Y"):DZ=DRZ(K)-M3D("Z")-46
-8700     D=SQR(DX*DX+DY*DY+DZ*DZ)
-8710     V=1-D/2600:IF V<0 THEN V=0
-8720     VOLUME K+1,0.8*V*V
-8730     PITCH K+1,(100+K*2.7)*(1+0.002*SIN(GT*0.9+K))
-8740   NEXT K
+8655 ' Sounds that belong to a place (owner, 2026-11-25: "ambient sounds that grow louder if we are close to an object that emits a sound ... also the drones"): EMIT sets the
+8656 ' volume of a channel from the distance between the listener (the camera) and the source (up and down: the square of 1 - distance / radius) and puts it left or right (PAN) by the
+8657 ' direction. Used for the drones' hum (channels 1 .. 4: the four nearest drones, the others are too far to hear) and the telephone poles' hum (channel 6: the nearest pole).
+8658 PROC EMIT(CH,EX,EY,EZ,RNG,AMP)
+8659   LOCAL DX,DY,DZ,D,V,AG
+8660   DX=EX-M3D("X"):DY=EY-M3D("Y"):DZ=EZ-M3D("Z")-46
+8661   D=SQR(DX*DX+DY*DY+DZ*DZ):V=1-D/RNG:IF V<0 THEN V=0
+8662   VOLUME CH,AMP*V*V
+8663   AG=FN ADIFF(ATAN2(DY,DX)*180/PI,M3D("YAW")):PAN CH,-SIN(AG*PI/180)*MIN(1,D/400)
+8664 END PROC
+8665 PROC AMBIENT
+8666   LOCAL K,C,B,DX,DY,DZ,D,S,TV,SF,BD
+8667   FOR K=0 TO NDR-1
+8668     DX=DRX(K)-M3D("X"):DY=DRY(K)-M3D("Y"):DZ=DRZ(K)-M3D("Z")-46
+8669     DDD(K)=SQR(DX*DX+DY*DY+DZ*DZ):DRP(K)=0
+8670   NEXT K
+8671   FOR C=1 TO 4
+8672     B=-1:BD=1000000000
+8673     FOR K=0 TO NDR-1
+8674       IF DRP(K)=0 AND DDD(K)<BD THEN BD=DDD(K):B=K
+8675     NEXT K
+8676     IF B<0 THEN
+8677       VOLUME C,0
+8678     ELSE
+8679       DRP(B)=1
+8680       CALL EMIT(C,DRX(B),DRY(B),DRZ(B),2600,0.8)
+8681       PITCH C,(100+B*2.7)*(1+0.002*SIN(GT*0.9+B))
+8682     END IF
+8683   NEXT C
+8684   BD=1000000000:B=-1
+8685   FOR K=0 TO NPL-1
+8686     DX=PLX(K)-M3D("X"):DY=PLY(K)-M3D("Y")
+8687     D=DX*DX+DY*DY
+8688     IF D<BD THEN BD=D:B=K
+8689   NEXT K
+8690   IF B>=0 AND BD<1000000 THEN CALL EMIT(6,PLX(B),PLY(B),FN HT(PLX(B),PLY(B))+130,900,0.5) ELSE VOLUME 6,0
 8750   S=ABS(BV)/250:IF S>1 THEN S=1
 8760   SF=FN SURF(BX,BY,BZ)
 8770   TV=S*0.1
@@ -1171,7 +1299,7 @@
 8840 END PROC
 8850 PROC SOUNDMUTE
 8860   LOCAL K
-8870   FOR K=1 TO 5
+8870   FOR K=1 TO 6
 8880     VOLUME K,0
 8890   NEXT K
 8900 END PROC
@@ -1659,6 +1787,14 @@
 12640       N=M3D("SHOOT",600)
 12650       PRINT "ray kind=";M3D("SHOTKIND");" obj=";M3D("SHOTOBJ");" dist=";INT(M3D("SHOTDIST"))
 12660     END IF
+12662     IF C$="poles" THEN
+12663       PH=0:PU=0
+12664       FOR PK=0 TO NPL-1
+12665         PGZ=FN HT(PLX(PK),PLY(PK)):M3D CAMERA PLX(PK)-60,PLY(PK),PGZ+100-46,0,0:P1=M3D("USE",600)
+12666         M3D CAMERA PLX(PK)-60,PLY(PK),PGZ+170-46,0,0:IF P1=420 AND M3D("USE",600)<>420 THEN PH=PH+1
+12667       NEXT PK
+12668       PRINT "pole n=";NPL;" hit=";PH
+12669     END IF
 12670     IF C$="bench" AND NOT HL THEN
 12680       N=INT(VAL(W$(1))):T0=TI
 12690       FOR I=1 TO N
@@ -1667,7 +1803,7 @@
 12720       PRINT "bench";N;" frames, ms per frame";INT((TI-T0)*1000/60/N);" renderer";M3D("RENDERER");" drawn";M3D("DRAWN")
 12730       OPEN "bench.txt" FOR APPEND AS #5:PRINT #5,"bench";N;" ms per frame";INT((TI-T0)*1000/60/N);" renderer";M3D("RENDERER");" drawn";M3D("DRAWN"):CLOSE #5
 12740     END IF
-12750     IF C$="drones" THEN PRINT "drone x=";INT(DRX(0));" y=";INT(DRY(0));" z=";INT(DRZ(0));" t=";DRT(0)
+12750     IF C$="drones" THEN PRINT "drone x=";INT(DRX(0));" y=";INT(DRY(0));" z=";INT(DRZ(0));" m=";DRM(0);" gz=";INT(FN HT(DRX(0),DRY(0)));" n=";NDR;" maxcell=";FN DMAXCELL();" peak=";DPK
 12760     IF C$="clp" THEN CLP=VAL(W$(1)):CMINIT=0
 12761     IF C$="pop" THEN CALL POPTEST(VAL(W$(1)),VAL(W$(2)))
 12770     IF C$="zoom" THEN CZM=VAL(W$(1)):CMINIT=0

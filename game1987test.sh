@@ -264,6 +264,7 @@ drones
 wait 60
 drones
 shot drones
+poles
 cam
 ray 0 -300 20 90 0
 ray 500 -300 20 90 10
@@ -359,11 +360,18 @@ expect "turn at speed: heading changed" "$turned" 20 240
 # 11b. blocked by the fence, pressing back reverses out of it
 expect "reverse out of the fence" "$(val state 16 bv)" -81 -20
 expect "reverse: moved away" "$(val state 16 by)" -400 -240
-# 11c. the drones hover high up and fly their route (they move, stay in the world, keep their altitude)
-expect "drone altitude" "$(val drone 1 z)" 340 450
-expect "drone flew on" "$(awk -v a="$(val drone 1 x)" -v b="$(val drone 2 x)" -v c="$(val drone 1 y)" -v d="$(val drone 2 y)" 'BEGIN { print sqrt((a-b)^2+(c-d)^2) }')" 500 3000
-expect "drone stays in the world" "$(val drone 3 x)" -3200 3200
-expect "drone reached a later way point" "$(val drone 3 t)" 0 7
+# 11c. the drones live (owner, 2026-11-25): they hold their height above the ground, move round on their own (cruise, scan, look), stay near John, and never make
+#      more than 3 in one chunk (500 m: `peak` is the largest number seen every quarter second, `maxcell` the number now)
+expect "drone count" "$(val drone 1 n)" 6 6
+expect "drone height above the ground" "$(awk -v z="$(val drone 1 z)" -v g="$(val drone 1 gz)" 'BEGIN { print z - g }')" 140 520
+expect "drone height above the ground, later" "$(awk -v z="$(val drone 3 z)" -v g="$(val drone 3 gz)" 'BEGIN { print z - g }')" 140 520
+expect "drone moved on its own" "$(awk -v a="$(val drone 1 x)" -v b="$(val drone 3 x)" -v c="$(val drone 1 y)" -v d="$(val drone 3 y)" 'BEGIN { print sqrt((a-b)^2+(c-d)^2) }')" 50 30000
+expect "drone has a mode" "$(val drone 3 m)" 0 2
+expect "drone stays near John" "$(val drone 3 x)" -20000 20000
+expect "at most 3 drones in a chunk now" "$(val drone 3 maxcell)" 1 3
+expect "at most 3 drones in a chunk, ever" "$(val drone 3 peak)" 1 3
+# 11c2. the telephone poles stand on the ground (a ray at 100 units above the ground hits, one at 170 passes over the top)
+expect "poles stand on the ground" "$(val pole 1 hit)" 7 9
 # 11d. variable walking speed: a barely deflected stick gives slow walking (22 + 133 * 0.05 / 0.95 = 29), a fully pushed one the top speed (155), accelerating
 #      steadily (150 per second: 45 in 0.3 s); letting go slows down steadily (170 per second) to a stop; a held key raises the target from 22 to 155
 #      (60 per second: 22 + 18 after 0.3 s) and letting go stops the same way
@@ -507,6 +515,7 @@ state
 reset
 state
 coords -1
+poles
 quit
 PLAY
 HOME=$T G1987_WORLD=$W G1987_WORLDSIZE=16 G1987_HEADLESS=1 G1987_PLAY=$T/play timeout 300 sh -c 'printf "LOAD \"demos/1987\"\nRUN\nBYE\n" | ./engine1999c --allow=all' > $T/out 2>&1
@@ -516,6 +525,7 @@ expect "world: after a jump" "$(val state 3 jx)" 8000 10000
 expect "world: John stands on the ground of the world" "$(awk -v z="$(val state 3 jz)" 'BEGIN { print (z > -400 && z < 4000) ? 1 : 0 }')" 1 1
 grep -q '^coords X  *-*[0-9.]*  Y  *-*[0-9.]*  Z  *-*[0-9.]* M  CHUNK  *8,  *[78]$' $T/out || { echo "FAILED: the coordinates line: $(grep '^coords' $T/out)"; fail=$((fail+1)); }
 expect "world: reset puts John back at the start" "$(val state 5 jx)" -5 60
+expect "world: the poles stand on the raised ground" "$(val pole 1 hit)" 9 9
 expect "world: reset puts John back at the start (y)" "$(val state 5 jy)" -200 -140
 if grep -q '^Error' $T/out; then echo "FAILED: the game in world mode stopped with: $(grep '^Error' $T/out)"; fail=$((fail+1)); fi
 # the position (play mode): the game starts from player.dat (NEWGAME reads it), `state` shows where John is, `wsave` writes it again
