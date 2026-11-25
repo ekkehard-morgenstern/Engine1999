@@ -13,6 +13,8 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+- **Optional 30 frames a second mode for the 3D programs** (2026-11-25, owner: "an optional 30 fps mode (60 fps being the default) in the video settings dialog, for all the 3d renderers"): `demos/lib/w3dkit.lib`: `W3K_FPS` / `W3K_FC`, `PROC W3K_SETFPS(n)`; `W3K_SHOW` in the 30 mode first waits until one refresh has passed since the last picture came on (`GFX("FRAME")` against `W3K_FC`), then flips the layers and waits one refresh as before: exactly two refreshes between two pictures, and a program that needs longer is not held back further (every program that shows pictures with `W3K_SHOW`: `W3D`, software and hardware `M3D`; the time steps come from the clock, so nothing runs slower). `demos/lib/prefs3d.lib`: `P3_FPS` (60 / 30), the ninth value line of `3dprefs.cfg` (older files: 60), `P3_PUSH` -> `W3K_SETFPS`, a "FRAME RATE" row (last row of the dialog; row pitch 16 -> 14 pixels so nine rows fit above the help text), cancel (ESC) now restores the antialiasing setting too (it was forgotten). Docs: `docs/3d-subsystem.md` ("Frame rate"), `docs/deqq2.md`. Test: new `fps30host.sh` (Xvfb + XTest, in `make hosttest`): 1 refresh between two pictures at 60, 2 at 30, the setting saved and read back, an old eight-value file gives 60; looked at the dialog in a screenshot under Xvfb (nine rows fit). `make check`.
+
 ## Log
 
 ### 7a6cb67 — 2026-10-17 13:32:27 +0200 — "Introduced Claude to the project"

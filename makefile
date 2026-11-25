@@ -574,6 +574,7 @@ hosttest: engine1999 gl3dtest1
 	sh gl3dtest.sh
 	sh m3dglhost.sh
 	sh m3dtexhost.sh
+	sh fps30host.sh
 
 # make dist: engine1999-<version>.tar.gz with the files git tracks (but not the owner's backup and scratch folders) and the generated version.h,
 # so that the archive builds without git (tagtoverstr.sh keeps an existing version.h). Needs a git checkout; read-only git only.

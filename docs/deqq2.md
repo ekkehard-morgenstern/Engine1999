@@ -447,7 +447,7 @@ Added 2026-11-14 (the owner: found items should jump out of their container "in 
 
 `M3D FOG 4200`, `M3D SKY 11` (the sky picture, §4.4), `M3D PLAYER 14,56,46,24`.
 
-The **settings dialog** (O or pad Y; `P3_DIALOG`): invert X / Y of the right stick, gamma (0.6 .. 1.8), field of view (60 .. 110), turning speed (50 .. 200 %), renderer (when hardware is available), render size; RETURN saves to `local:3dprefs.cfg` (`~/.local/share/<program>/`), ESC cancels. The defaults are those of `prefs3d` (field of view 90); `P3_LOAD` applies the file if there is one.
+The **settings dialog** (O or pad Y; `P3_DIALOG`): invert X / Y of the right stick, gamma (0.6 .. 1.8), field of view (60 .. 110), turning speed (50 .. 200 %), renderer (when hardware is available), render size, antialiasing, frame rate (60 or 30 a second); RETURN saves to `local:3dprefs.cfg` (`~/.local/share/<program>/`), ESC cancels. The defaults are those of `prefs3d` (field of view 90); `P3_LOAD` applies the file if there is one.
 
 `DEQQ2_BENCH=file` runs a speed benchmark (`m3dbench.sh`): 120 frames turning in place at four places per renderer and render size.
 
