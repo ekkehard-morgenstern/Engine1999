@@ -496,6 +496,45 @@ for f in demos/1987.bas demos/lib/prefs3d.lib demos/lib/w3dkit.lib demos/lib/inp
     d=$(awk '$1 ~ /^[0-9]+$/ { print $1 }' $f | sort -n | uniq -d | head -3 | tr '\n' ' ')
     if [ -n "$d" ]; then echo "FAILED: $f has line numbers twice: $d"; fail=$((fail+1)); fi
 done
+# 16. the beam that makes John black out (owner, 2026-11-25): a drone that has found John hangs over him, its beam grows stronger while he is in it, and after about 9 seconds he
+#     collapses (off the bicycle, if he rides), the drone loses interest and moves on, he lies for 7 .. 11 seconds and comes to; a scanning drone notices John when its spot stays on
+#     him; the beam's spot lies on the highest thing below (a roof), not on the ground under it. `catch` puts drone 0 over John in the focus mode, `scanat` a scanning drone's spot on him
+cat > $T/play <<'PLAY'
+bike 40 -176 270
+goto 20 -176 270
+use
+wait 1
+state
+catch
+wait 3
+state
+drones
+wait 7
+state
+wait 12
+state
+drones
+scanat
+wait 0.5
+drones
+spotz 0 40
+quit
+PLAY
+HOME=$T G1987_HEADLESS=1 G1987_PLAY=$T/play timeout 300 sh -c 'printf "LOAD \"demos/1987\"\nRUN\nBYE\n" | ./engine1999c --allow=all' > $T/out 2>&1
+expect "blackout: John rides the bicycle first" "$(val state 1 mode)" 1 1
+expect "blackout: the meter fills while he is in the beam (3 s)" "$(val state 2 bl)" 10 45
+expect "blackout: the drone focuses on him and the beam grows" "$(val drone 1 ri)" 30 90
+expect "blackout: the drone is in the focus mode" "$(val drone 1 m)" 3 3
+expect "blackout: John lies unconscious after about 9 seconds" "$(val state 3 mode)" 5 5
+expect "blackout: the meter is full" "$(val state 3 bl)" 100 100
+expect "blackout: he fell off the bicycle (beside it)" "$(awk -v a="$(val state 3 jx)" -v b="$(val state 3 bx)" -v c="$(val state 3 jy)" -v d="$(val state 3 by)" 'BEGIN { print sqrt((a-b)^2+(c-d)^2) }')" 20 60
+expect "blackout: he comes to" "$(val state 4 mode)" 0 0
+expect "blackout: the meter is empty again" "$(val state 4 bl)" 0 0
+expect "blackout: the drone lost interest and moved on" "$(val drone 2 m)" 0 2
+expect "blackout: a scanning drone notices him when its spot is on him" "$(val drone 3 m)" 3 3
+expect "beam: the spot lies on the roof of the house, not on the ground under it" "$(val spotz 1 z)" 60 400
+expect "beam: the ground there is low" "$(val spotz 1 gz)" -50 50
+if grep -q '^Error' $T/out; then echo "FAILED: the blackout run stopped with: $(grep '^Error' $T/out)"; fail=$((fail+1)); fi
 # 15. the static world (world mode: G1987_WORLD names the folder of the world, G1987_WORLDSIZE its size in chunks): the world is made (a progress loop without a picture), the game runs on it
 #     (jumps, walking on the ground of the world), the position is saved in the folder when the game ends and read again by the next start
 W=$T/world

@@ -66,6 +66,8 @@ holds the 3D settings.
 is the world: the first start of the game makes it (300 by 300 chunks of 500 m, 3 MB, about 20 seconds, with a progress bar), later starts open it at once. The world is made once and never changes while you play: the ground, the lakes, the mountains and the roads are where they were. The file
 .I player.dat
 in it holds the position of John and of the bicycle, saved when the game ends and read at the next start; a saved position that is outside the world, in a lake or on a mountain is not used (John starts at the house instead), and every newly made world forgets the old position. The title screen comes first (a still picture): SPACE starts (making the world first when there is none, with a loading screen), N makes a new world (the old one is replaced), Q ends the program. In the game Q, BACK or ESC leave to the title screen.
+.SH THE DRONES
+The drones watch the land and ignore John, until he walks or rides under the red beam of one that is scanning the ground. Then it hangs over him and the beam grows stronger while he stays in it; the picture goes dark, and after about nine seconds John collapses (off the bicycle, if he rides), lies unconscious for a few seconds and comes to. The drone loses interest when he falls, and no drone notices him for some time afterwards. Get out of the beam: a bicycle is faster than the spot.
 .SH ENVIRONMENT
 .TP
 .B G1987_WORLD
