@@ -2741,14 +2741,16 @@
 53720 END FUNC
 53800 ' the pause menu: P / Q / START / BACK go on with the game, R / X reset the positions, C / Y show or hide the coordinates (the game is left only while playing: Q, BACK or ESC)
 53900 PROC PAUSEMENU
-53910   LOCAL K$,K,DONE,LX,LY,D,PT0,DC
+53910   LOCAL K$,K,DONE,LX,LY,D,PT0
 53920   WHILE FN IN_ANYSTART(0)
 53930     GFX VSYNC
 53940   WEND
-53950   D=-1:DONE=0:LX=-1:LY=-1:PT0=TI:DC=0
-53955   ' a held P repeats: the characters of the repeat must neither close the pause at once nor open it again; the dialog is drawn again in the first 10 passes (the 3D picture's read-back can land over it once; later passes flicker), and again when C changes it
+53950   D=-1:DONE=0:LX=-1:LY=-1:PT0=TI
+53955   ' a held P repeats: the characters of the repeat must neither close the pause at once nor open it again. The dialog is drawn straight onto the layer that is on show (W3K_B), once (again when C
+53956   ' changes it), and the other layer is never shown: showing the two layers by turns (W3K_SHOW) flickered, they hold the last two frames, which differ (the scrolling message, the camera)
 53960   REPEAT
 53970     IF D THEN
+53975       GFX TARGET W3K_B
 53980       CALL BIGTEXT(110,"PAUSED",FN CC(0,15),3)
 53990       GFX LINE 0,146,639,222,FN CC(0,1),BF
 54000       CALL BIGTEXT(150,"P: CONTINUE",FN CC(3,15),1)
@@ -2756,15 +2758,15 @@
 54020       IF SXY THEN CALL BIGTEXT(178,"C: WORLD COORDINATES ON THE SCREEN: ON",FN CC(0,13),1) ELSE CALL BIGTEXT(178,"C: WORLD COORDINATES ON THE SCREEN: OFF",FN CC(0,13),1)
 54030       CALL BIGTEXT(192,"(Q OR ESC WHILE PLAYING: LEAVE THE GAME)",FN CC(0,9),1)
 54040       CALL BIGTEXT(208,"PAD: START CONTINUE  X RESET  Y COORDINATES",FN CC(0,9),1)
-54050       CALL W3K_SHOW
-54060       DC=DC+1:D=(DC<10)
+54050       GFX TARGET 3-W3K_B
+54060       D=0
 54070     END IF
 54080     GFX VSYNC
 54090     K$=INKEY$:K=0
 54100     IF K$<>"" THEN K=ASC(K$)
 54105     IF TI-PT0<25 AND K<>0 THEN K=0
 54110     IF K>=97 AND K<=122 THEN K=K-32
-54120     IF K=67 OR (FN PADY(0) AND NOT LY) THEN SXY=NOT SXY:D=-1:DC=0
+54120     IF K=67 OR (FN PADY(0) AND NOT LY) THEN SXY=NOT SXY:D=-1
 54130     IF K=82 OR (FN PADX(0) AND NOT LX) THEN CALL RESETPOS:CALL SAY("BACK AT THE START."):DONE=-1
 54140     LX=FN PADX(0):LY=FN PADY(0)
 54150     IF K=80 OR FN IN_ANYSTART(0) THEN DONE=-1
