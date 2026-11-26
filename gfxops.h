@@ -407,7 +407,8 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXOP_M3DCULL   364             // M3D CULL smallpx [, sort [, occlusion]]   (objects whose bounding sphere is smaller than smallpx pixels are not drawn, default 1, 0 = off; sort 0 / 1: opaque objects nearest first, default 1; occlusion 0 / 1: the software renderer skips objects that lie behind what is already drawn, needs sort, default 1)
 #define GFXOP_M3DHOUSE  365             // M3D HOUSE o, type, stage, seed [, level]   (object o = the outside of a family house of house.[ch]: type 1 .. 5, stage 0 .. 4 of damage, level 0 far / 1 middle (default), at the origin; plain palette colours of the 16-shade hue ramps of w3dkit)
 #define GFXOP_M3DHOUSEPIC 366           // M3D HOUSEPIC slot, pic   (the picture of a material of M3D HOUSE: slots 0 .. 5 the plaster colours, 6 .. 8 the roofs, 9 char, 10 brick, 11 glass, 12 door, 13 wood, 14 concrete, 15 rim, 16 garage door, 17 window frame; -1 = the plain palette colour)
-#define GFXOP_M3DLAST   GFXOP_M3DHOUSEPIC
+#define GFXOP_M3DAMBIENT 367            // M3D AMBIENT a   (the daylight: a factor 0 .. 1 on the light of every object (not those with the glow flag 32), the things and the sky, before the lamps add theirs; 1 = day, the default)
+#define GFXOP_M3DLAST   GFXOP_M3DAMBIENT
 #define GFXOP_IS_M3D(op) ( (op) >= GFXOP_M3DFIRST && (op) <= GFXOP_M3DLAST )
 #define GFXQ_M3DX       350             // M3D("X"), ("Y"), ("Z" = the feet), ("EYE"), ("YAW"), ("PITCH"), ("LIFT"), ("HIT"), ("FLOORZ")
 #define GFXQ_M3DY       351
@@ -471,7 +472,8 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXQ_M3DMSAA    408             // M3D("MSAA"): the samples the hardware renderer draws with now (0: none, or the software renderer is in use)
 #define GFXQ_M3DMSAAMAX 409             // M3D("MSAAMAX"): the most samples the hardware can do (0: none, or no hardware renderer)
 #define GFXQ_M3DCULL    410             // M3D("CULL", k): of the last frame: 0 objects asked, 1 drawn, 2 skipped behind the viewer or beyond FAR, 3 skipped outside the sides of the view, 4 skipped as too small, 5 skipped as hidden behind what was drawn (software renderer), 6 triangles of the drawn objects
-#define GFXQ_M3DLAST    GFXQ_M3DCULL      // (400 .. 403 in between are HASH / NOISE / RIDGED / FBM, which the VM computes itself and never sends to a host)
+#define GFXQ_M3DAMBIENT 411             // M3D("AMBIENT"): the factor of M3D AMBIENT (1 after M3D RESET)
+#define GFXQ_M3DLAST    GFXQ_M3DAMBIENT      // (400 .. 403 in between are HASH / NOISE / RIDGED / FBM, which the VM computes itself and never sends to a host)
 
 typedef struct _gfxcmd_t {
     const char* group;                  // "GFX", "TXT", "TILE", "SPRITE", "MOUSE", or "" for the statements that are reserved words themselves

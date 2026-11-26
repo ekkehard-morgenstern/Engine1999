@@ -568,6 +568,71 @@ expect "drones: two drones focus on John on foot: he collapses" "$(val state 2 m
 sep=$(awk -v ax="$(val drone 2 x)" -v bx="$(val drone 3 x)" -v ay="$(val drone 2 y)" -v by="$(val drone 3 y)" 'BEGIN { dx = ax - bx; dy = ay - by; if (dx < 0) dx = -dx; if (dy < 0) dy = -dy; print (dx > dy) ? dx : dy }')
 expect "drones: two drones over John do not overlap (their boxes are 120 apart)" "$sep" 100 400
 if grep -q '^Error' $T/out; then echo "FAILED: the two-drone run stopped with: $(grep '^Error' $T/out)"; fail=$((fail+1)); fi
+# a drone within 10 m finds John, one within 50 m flies toward him, and in the quiet time (PROT) after he came to it steers away (owner, 2026-11-26)
+cat > $T/play <<'PLAY'
+hide
+goto 20 -176 270
+wait 0.5
+place 0 280
+wait 0.4
+dist 0
+place 1 1300
+wait 0.1
+dist 1
+wait 3
+dist 1
+prot 30
+place 2 900
+wait 0.1
+dist 2
+wait 3
+dist 2
+quit
+PLAY
+HOME=$T G1987_HEADLESS=1 G1987_PLAY=$T/play timeout 300 sh -c 'printf "LOAD \"demos/1987\"\nRUN\nBYE\n" | ./engine1999c --allow=all' > $T/out 2>&1
+expect "near: a drone 280 units (9 m) away finds John" "$(val dist 1 m)" 3 3
+expect "near: a drone 1300 units (42 m) away flies toward him (closer after 3 s)" "$(awk -v a="$(val dist 2 d)" -v b="$(val dist 3 d)" 'BEGIN { print a - b }')" 60 2000
+expect "near: in the quiet time a drone 900 units away steers away (farther after 3 s)" "$(awk -v a="$(val dist 4 d)" -v b="$(val dist 5 d)" 'BEGIN { print b - a }')" 60 2000
+if grep -q '^Error' $T/out; then echo "FAILED: the drone-near run stopped with: $(grep '^Error' $T/out)"; fail=$((fail+1)); fi
+# 17. day and night (owner, 2026-11-26): the daylight M3D AMBIENT follows the hour (1 by day, 0.16 at night), the bicycle's headlamp (M3D LAMP 0) is on while John rides in the dark and
+#     off by day and on foot; the time passes (a day is G1987_DAYLEN seconds); `time h` sets the hour
+cat > $T/play <<'PLAY'
+time 12
+state
+time 0
+state
+time 6
+state
+time 18
+state
+time 21
+state
+bike 40 -176 270
+goto 20 -176 270
+use
+wait 1
+state
+time 12
+state
+time 23
+state
+f 0
+wait 1
+state
+quit
+PLAY
+HOME=$T G1987_DAYLEN=60 G1987_HEADLESS=1 G1987_PLAY=$T/play timeout 300 sh -c 'printf "LOAD \"demos/1987\"\nRUN\nBYE\n" | ./engine1999c --allow=all' > $T/out 2>&1
+expect "day: noon is full daylight" "$(val state 1 amb)" 100 100
+expect "night: midnight is dark" "$(val state 2 amb)" 10 20
+expect "dawn: 6 o'clock is in between" "$(val state 3 amb)" 25 80
+expect "dusk: 18 o'clock is in between" "$(val state 4 amb)" 25 80
+expect "night: 21 o'clock is dark" "$(val state 5 amb)" 10 20
+expect "lamp: off while John walks" "$(val state 5 lamp)" 0 0
+expect "lamp: on while John rides in the dark" "$(val state 6 lamp)" -1 -1
+expect "lamp: off by day" "$(val state 7 lamp)" 0 0
+expect "lamp: on again at night" "$(val state 8 lamp)" -1 -1
+expect "time: it passes (60 s a day: 1 s is 0.4 h; the hour has moved on)" "$(awk -v a="$(val state 8 tod)" -v b="$(val state 9 tod)" 'BEGIN { d = b - a; if (d < 0) d += 2400; print d }')" 20 120
+if grep -q '^Error' $T/out; then echo "FAILED: the day / night run stopped with: $(grep '^Error' $T/out)"; fail=$((fail+1)); fi
 # 15. the static world (world mode: G1987_WORLD names the folder of the world, G1987_WORLDSIZE its size in chunks): the world is made (a progress loop without a picture), the game runs on it
 #     (jumps, walking on the ground of the world), the position is saved in the folder when the game ends and read again by the next start
 W=$T/world

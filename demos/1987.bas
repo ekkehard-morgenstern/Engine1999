@@ -49,6 +49,12 @@
 1600 FUNC HT(X,Y)
 1610   RETURN M3D("GROUND",X,Y)
 1620 END FUNC
+1630 ' the time of day as hh:mm (H in hours, 0 .. 24; day and night, section 60000)
+1640 FUNC CLOCK$(H)
+1650   LOCAL HH,MM
+1660   HH=INT(H):MM=INT((H-HH)*60)
+1670   RETURN MID$(STR$(100+HH),2)+":"+MID$(STR$(100+MM),2)
+1680 END FUNC
 1700 ' the floor under a point (the ground, the porch, the floor of the house)
 1800 FUNC FLR(X,Y)
 1810   RETURN M3D("FLOORAT",X,Y,FN HT(X,Y)+40)
@@ -1087,8 +1093,8 @@
 23830     LRR(0)=9:LRZ(0)=-26:LRR(1)=5:LRZ(1)=-31:LRR(2)=0.6:LRZ(2)=-32
 23840     CALL LATHE(O,3,FN CC(1,15),2)
 23850     CALL DRONEARMS(O,K)
-23860     M3D OBJECT 610+K,30,235
-23870     M3D OBJECT 620+K,30,235:CALL BX(620+K,-50,-50,0,50,50,0.3,FN CC(0,0))
+23860     M3D OBJECT 610+K,62,255
+23870     M3D OBJECT 620+K,62,255:CALL BX(620+K,-50,-50,0,50,50,0.3,FN CC(0,0))
 23880   NEXT K
 23890 END PROC
 23900 ' the drone's armor and weapons, none of it symmetric: a crest of jagged blades on the back, four claws underneath (the fourth is shorter), a gun pod with a red muzzle on one side,
@@ -1182,8 +1188,8 @@
 25210   FOR K=0 TO NDR-1
 25220     DX=DRX(K)-JX:DY=DRY(K)-JY
 25230     IF DX*DX+DY*DY>289000000 THEN CALL DRSPAWN(K,0)
-25240     ' John within 2 m (horizontally) of a drone: it has found him at once
-25250     IF DRM(K)<3 AND PROT<=0 AND MODE<>5 AND DX*DX+DY*DY<4096 THEN CALL DRFOUND(K)
+25240     ' John near a drone: within 10 m it has found him, within 50 m it turns toward him (DRNEAR)
+25250     IF DRM(K)<3 THEN CALL DRNEAR(K,DX*DX+DY*DY)
 25260     TS=0:AL=DRA(K)
 25270     IF DRM(K)>=3 THEN
 25280       IF DRM(K)=3 THEN CALL DRFOCUS(K,DT) ELSE CALL DRCAM(K,DT)
@@ -1248,7 +1254,7 @@
 26140     M3D OBJPOS 620+K,DRX(K),DRY(K),FN HT(DRX(K),DRY(K))+3.5,0
 26150     DX=DRX(K)-M3D("X"):DY=DRY(K)-M3D("Y")
 26160     O=610+K
-26170     M3D OBJECT O,30,235
+26170     M3D OBJECT O,62,255
 26180     IF DX*DX+DY*DY<2600*2600 AND DRBM(K)>0.04 THEN
 26190       SC=(0.35+0.65*DRBM(K))*(1+0.45*DRI(K))
 26200       C1=FN CC(1,13):C2=FN CC(1,12):IF DRI(K)>0.5 THEN C1=FN CC(1,15):C2=FN CC(1,14)
@@ -1631,6 +1637,7 @@
 32930   GFX LINE 232,286,232+INT(105*ST),291,FN CC(4,12),BF
 32940   GFX TEXT 380,269,"1987",FN CC(2,13)
 32950   GFX TEXT 380,283,"THE SKY IS QUIET",FN CC(0,9)
+32955   GFX TEXT 424,269,FN CLOCK$(DAYH),FN CC(0,13)
 32960   IF MODE=0 AND NEAR THEN
 32970     GFX TEXT 8,22,"E: GET ON THE BICYCLE",FN CC(3,15)
 32980   END IF
@@ -1687,6 +1694,7 @@
 34200 PROC PLAYLOOP
 34210   LOCAL T0,FR,Y,YL,ST0,FTL,FTS,FTI,FTD,FTC,FTK,FTT,FTR,FTA,FTN,FTP
 34211   IF ENV$("G1987_LIETEST")<>"" THEN MODE=5:UT=1.9:UTM=100000
+34212   IF ENV$("G1987_RIDE")<>"" THEN MODE=1:JX=BX:JY=BY:JZ=BZ:JH=BH:M3D THINGPOS 0,JX,JY,JZ
 34220   VT$=ENV$("G1987_SHOT"):SHF=60:IF ENV$("G1987_SHOTFRAME")<>"" THEN SHF=VAL(ENV$("G1987_SHOTFRAME"))
 34221   T0=TI:YL=0:NFR=0:FL$=ENV$("G1987_FRAMELOG"):FLN=0:FLN2=10000:IF ENV$("G1987_FRAMES")<>"" THEN FLN2=VAL(ENV$("G1987_FRAMES"))
 34230   CALL SOUNDSTART:FTL=TIMER:FTC=GFX("FRAME"):FTP=1/60:FTA=0:FTN=0
@@ -1716,7 +1724,7 @@
 34470       CALL SIM(FTD)
 34480     NEXT FTI
 34490     IF FL$<>"" THEN CALL FLPH(2)
-34500     CALL AMBIENT:CALL TERRAINUPDATE(JX,JY)
+34500     CALL AMBIENT:CALL TERRAINUPDATE(JX,JY):CALL DAYNIGHT(DT0)
 34510     IF FL$<>"" THEN CALL FLPH(3)
 34520     CALL DRAWFRAME
 34521     IF ENV$("G1987_CATCHTEST")<>"" AND NFR=VAL(ENV$("G1987_CATCHTEST")) THEN PROT=0:DRX(0)=JX+60:DRY(0)=JY:DRM(0)=3:DRI(0)=0:DRL(0)=0:DSX(0)=JX:DSY(0)=JY:DRBM(0)=1:DRZ(0)=FN HT(JX,JY)+190
@@ -1841,7 +1849,7 @@
 36650         KR=0:IF KRA>0 THEN KR=-1
 36660         KB=PB
 36670         CMIN=0:IF PCO<>0 THEN CO=CO+PCO*80/60:CMIN=-1
-36680         CALL SIM(1/60):CALL TERRAINUPDATE(JX,JY)
+36680         CALL SIM(1/60):CALL TERRAINUPDATE(JX,JY):CALL DAYNIGHT(1/60)
 36690         IF PRG<>0 THEN CALL RIGS
 36700         KU=0
 36710         DTF=1/60
@@ -1854,13 +1862,17 @@
 36780     IF C$="chunks" THEN CALL CHUNKSTAT(JX,JY)
 36790     IF C$="sweep" THEN CALL SWEEPCAM(VAL(W$(1)),VAL(W$(2)))
 36800     IF C$="state" THEN
-36810       PRINT "state mode=";MODE;" bl=";INT(BL*100);" ut=";INT(UT);" jx=";INT(JX);" jy=";INT(JY);" jz=";INT(JZ+0.5);" jh=";INT(JH);" jv=";INT(JV);" bst=";BST;" nj=";CNJ;" nh=";CNH;" nb=";CNB;" cmb=";CMB;" hly=";INT(HLY);" hlp=";INT(HLP);" brp=";INT(BRP*100);" bx=";INT(BX);" by=";INT(BY);" bz=";INT(BZ+0.5);" bh=";INT(BH);" bv=";INT(BV);" st=";INT(ST*100);" gh=";INT(FN HT(JX,JY));" sf=";FN SURF(JX,JY,JZ);" cmf=";CMF;" cmg=";INT(CMZ-FN HT(CMX,CMY));" vlv=";VLV
+36810       PRINT "state mode=";MODE;" bl=";INT(BL*100);" ut=";INT(UT);" jx=";INT(JX);" jy=";INT(JY);" jz=";INT(JZ+0.5);" jh=";INT(JH);" jv=";INT(JV);" bst=";BST;" nj=";CNJ;" nh=";CNH;" nb=";CNB;" cmb=";CMB;" hly=";INT(HLY);" hlp=";INT(HLP);" brp=";INT(BRP*100);" bx=";INT(BX);" by=";INT(BY);" bz=";INT(BZ+0.5);" bh=";INT(BH);" bv=";INT(BV);" st=";INT(ST*100);" gh=";INT(FN HT(JX,JY));" sf=";FN SURF(JX,JY,JZ);" cmf=";CMF;" cmg=";INT(CMZ-FN HT(CMX,CMY));" vlv=";VLV;" tod=";INT(DAYH*100);" amb=";INT(M3D("AMBIENT")*100+0.5);" lamp=";LAMPON
 36820     END IF
 36821     IF C$="catch" THEN TQ=VAL(W$(1)):PROT=0:DRX(TQ)=JX+VAL(W$(2)):DRY(TQ)=JY:DRM(TQ)=3:DRI(TQ)=0:DRL(TQ)=0:DSX(TQ)=JX:DSY(TQ)=JY:DRBM(TQ)=1:DRZ(TQ)=FN HT(JX,JY)+190
 36822     IF C$="scanat" THEN PROT=0:DRM(0)=1:DRBM(0)=1:DRTM(0)=60:DRX(0)=JX-300*COS(GT*0.5):DRY(0)=JY-300*SIN(GT*0.7)
 36823     IF C$="spotz" THEN PRINT "spotz z=";INT(FN BEAMZ(VAL(W$(1)),VAL(W$(2)),2000));" gz=";INT(FN HT(VAL(W$(1)),VAL(W$(2))))
 36824     IF C$="hide" THEN FOR TQ=0 TO NDR-1:DRX(TQ)=JX+16500:DRY(TQ)=JY+TQ*300:DRM(TQ)=2:DRTM(TQ)=15:DRBM(TQ)=0:DRI(TQ)=0:NEXT TQ
 36825     IF C$="above" THEN TQ=VAL(W$(1)):PROT=0:DRX(TQ)=JX+30:DRY(TQ)=JY:DRM(TQ)=0:DRSC(TQ)=0:DRBM(TQ)=0:DRTX(TQ)=JX+9000:DRTY(TQ)=JY:DRZ(TQ)=FN HT(JX,JY)+300
+36826     IF C$="place" THEN TQ=VAL(W$(1)):DRX(TQ)=JX+VAL(W$(2)):DRY(TQ)=JY:DRM(TQ)=2:DRTM(TQ)=100:DRSC(TQ)=0:DRBM(TQ)=0:DRZ(TQ)=FN HT(JX,JY)+300:DRV(TQ)=0
+36827     IF C$="prot" THEN PROT=VAL(W$(1))
+36828     IF C$="dist" THEN TQ=VAL(W$(1)):PRINT "dist d=";INT(SQR((DRX(TQ)-JX)^2+(DRY(TQ)-JY)^2));" m=";DRM(TQ)
+36829     IF C$="time" THEN DAYH=VAL(W$(1)):CALL DAYNIGHT(0)
 36830     IF C$="ray" THEN
 36840       M3D CAMERA VAL(W$(1)),VAL(W$(2)),VAL(W$(3))-46,VAL(W$(4)),VAL(W$(5))
 36850       N=M3D("SHOOT",600)
@@ -1918,6 +1930,8 @@
 38190 WLIM=50000:TYW=-1:WZ=-12:MTLIM=120:SLLIM=22:WSTAND=45
 38200 ' the bicycle without a rider: it rolls on upright for WFALL seconds, then falls over and slides on its side (deceleration WSLIDE units a second squared); XON / XFR: tilt on
 38210 BKL=0:CGI=0:CGT=0:CMX=0:CMY=0:CMZ=0:CMVX=0:CMVY=0:CMVZ=0:CMYW=0:CMPT=0:CMF=0:CMFT=0:CMFV=0:CMFS=0:CMWY=0:CMWP=0:CMPX=0:CMPY=0:CMPZ=0:CMPX0=0:CMPY0=0:CMPZ0=0:CMTVX=0:CMTVY=0:CMTVZ=0:CMPI=0:CMPK=0:CMDUR=0:CMAZR=0:HLY=0:HLP=0:BRP=0:HQY=0:HQP=0:HKEY=99999:HOX=0:HOY=0:HOZ=0:BJ1=-1:BJ2=0:BJ3=0:BJ4=0:BJ5=0:BJ6=0:BJ7=0:PWA=-99999:PCA=-99999:CNJ=0:CNH=0:CNB=0:HCX=0:HCY=0:HCZ=0:HYS=0:HYC=1:HPS=0:HPC=1:WFALL=3:WSLIDE=120:XON=0:XFR=0:XRS=0:XRC=1:XFS=0:XFC=1:XLF=0
+38215 DAYH=10:DAYSEC=1440:DAYLV=-1:LAMPON=0:DAYA=1:IF ENV$("G1987_TIME")<>"" THEN DAYH=VAL(ENV$("G1987_TIME"))
+38216 IF ENV$("G1987_DAYLEN")<>"" THEN DAYSEC=MAX(10,VAL(ENV$("G1987_DAYLEN")))
 38220 CALL SETGROUND
 38230 ' the sun: terrain cells get pictures shaded by their slope (M3D SUN: steps 301.. + 100, 200, 300; needs the palette's color map first)
 38240 IF NOT HL THEN M3D COLORMAP
@@ -2693,7 +2707,7 @@
 51560 END PROC
 51600 PROC WSAVE
 51610   OPEN WDIR$+"/player.dat" FOR OUTPUT AS #6
-51620   PRINT #6,JX:PRINT #6,JY:PRINT #6,JH:PRINT #6,BX:PRINT #6,BY:PRINT #6,SXY
+51620   PRINT #6,JX:PRINT #6,JY:PRINT #6,JH:PRINT #6,BX:PRINT #6,BY:PRINT #6,SXY:PRINT #6,DAYH
 51630   CLOSE #6
 51640 END PROC
 51700 ' a place that is fit to start from: inside the walls of the world, on dry ground that is not a mountain (a saved position of another world may be anywhere)
@@ -2710,6 +2724,7 @@
 52020     IF EXISTS(WDIR$+"/player.dat") THEN
 52030       OPEN WDIR$+"/player.dat" FOR INPUT AS #6
 52040       INPUT #6,JX:INPUT #6,JY:INPUT #6,JH:INPUT #6,BX:INPUT #6,BY:IF NOT EOF(6) THEN INPUT #6,SXY
+52045       IF NOT EOF(6) THEN INPUT #6,DAYH
 52050       CLOSE #6
 52060       IF NOT FN SAFESPOT(JX,JY) THEN JX=0:JY=-172:JH=270
 52070       IF NOT FN SAFESPOT(BX,BY) THEN BX=130:BY=-214
@@ -2959,7 +2974,7 @@
 57480   NEXT AXK
 57490 END PROC
 58000 ' ------------------------------------------------------------------------------------------------ the black-out: a drone finds John, the beam, the fall of John and of the camera
-58010 ' (owner, 2026-11-26) A drone finds John when its spot stays on him (DRCATCH) or when he is within 2 m of it (DRFOUND); its spot then locks on him (DRFOCUS), the beam grows for a second or two and
+58010 ' (owner, 2026-11-26) A drone finds John when its spot stays on him (DRCATCH) or when he is within 10 m of it (DRNEAR, DRFOUND); its spot then locks on him (DRFOCUS), the beam grows for a second or two and
 58020 ' John collapses (BLACKOUT): off the bicycle, or to the ground. The drone then turns the beam on the camera (DRCAM, mode 4): the camera is a drone too, it is the viewer. Its beam holds on the camera
 58030 ' for 1.5 s, the camera falls and lies on the ground (CAMDOWN, CAMFALL: CMF 1 falling, 2 lying), and only then the picture goes black (VEIL). John comes to after UTM seconds (UNCON), the camera
 58040 ' rises again, and for 25 s (PROT) no drone looks at him.
@@ -3035,6 +3050,18 @@
 58970     CALL SAY("JOHN COMES TO."):MSGT=5
 58980   END IF
 58990 END PROC
+59000 ' drones near John (owner, 2026-11-26): within 10 m (312 units, horizontally) a drone finds him at once; within 50 m (1600) it flies toward him with its beam on (curious); in the quiet
+59005 ' time after he came to (PROT) the drones within 50 m steer away from him instead. D2: the squared distance of the drone from John
+59010 PROC DRNEAR(K,D2)
+59020   LOCAL L,DX,DY
+59030   IF MODE=5 OR D2>2560000 THEN EXIT PROC
+59040   IF PROT>0 THEN
+59050     L=SQR(D2):IF L<1 THEN L=1:DX=1:DY=0 ELSE DX=(DRX(K)-JX)/L:DY=(DRY(K)-JY)/L
+59055     DRTX(K)=DRX(K)+DX*3000:DRTY(K)=DRY(K)+DY*3000:DRM(K)=0:DRSC(K)=0
+59060   ELSE
+59070     IF D2<97656 THEN CALL DRFOUND(K) ELSE DRTX(K)=JX:DRTY(K)=JY:DRM(K)=0:DRSC(K)=-1
+59080   END IF
+59090 END PROC
 59100 ' the camera is hit by the beam and falls (owner, 2026-11-26: the viewer is the camera drone): CMF 1 it falls (gravity, a spin, the view tips down; it bounces once), 2 it lies on the ground
 59110 ' (CMFT: the seconds since it landed). CAMAGENT leaves everything to CAMFALL while CMF is not 0; UNCON sets CMF to 0 when John comes to and the camera's own spring lifts it back
 59120 PROC CAMDOWN
@@ -3085,7 +3112,7 @@
 59680   IF VT>=0 THEN V=VT/15
 59690   L=INT(V*15+0.5):IF L>15 THEN L=15
 59700   IF L<=0 THEN
-59710     IF VLV<>0 THEN M3D OBJECT 720,30,235:VLV=0
+59710     IF VLV<>0 THEN M3D OBJECT 720,62,235:VLV=0
 59720     EXIT PROC
 59730   END IF
 59740   VLV=L
@@ -3093,7 +3120,7 @@
 59760   CY=COS(M3D("YAW")*PI/180):SY=SIN(M3D("YAW")*PI/180):CP=COS(M3D("PITCH")*PI/180):SP=SIN(M3D("PITCH")*PI/180)
 59770   FX=CP*CY:FY=CP*SY:FZ=SP:RX=SY:RY=-CY:UX=-SP*CY:UY=-SP*SY:UZ=CP
 59780   CX=X+3*FX:CY=Y+3*FY:CZ=Z+3*FZ
-59790   F=30:IF L>=15 THEN F=28:L=0
+59790   F=62:IF L>=15 THEN F=60:L=0
 59800   M3D OBJECT 720,F,255
 59810   M3D VERTEX 720,CX-40*RX-40*UX,CY-40*RY-40*UY,CZ-40*UZ
 59820   M3D VERTEX 720,CX+40*RX-40*UX,CY+40*RY-40*UY,CZ-40*UZ
@@ -3101,3 +3128,32 @@
 59840   M3D VERTEX 720,CX-40*RX+40*UX,CY-40*RY+40*UY,CZ+40*UZ
 59850   M3D QUAD 720,0,1,2,3,1+L
 59860 END PROC
+60000 ' ------------------------------------------------------------------------------------------------ day and night
+60010 ' (owner, 2026-11-26) A day lasts DAYSEC seconds (24 minutes; G1987_DAYLEN), the game starts at 10 o'clock (G1987_TIME). DAYH is the hour 0 .. 24 (kept in player.dat). The daylight DAYAMB(h) is the sun's height
+60020 ' as a factor (0.16 at night, 1 by day, a short dusk and dawn round 6 and 18 o'clock): M3D AMBIENT darkens every object, the things and the sky (not the objects with the glow flag 32: the drones' beams, the
+60030 ' shadows, the veil) before the lamps add theirs; the haze of the fog (M3D FOG) gets a darker color of the same hue (DAYLV). The bicycle has a headlamp (M3D LAMP 0: a cone of 24 degrees, 3000 units
+60040 ' long, tilted down a little) that glows as the daylight gets low (below 85 %) while John rides. Pickups (a flashlight) come later.
+60100 FUNC DAYAMB(H)
+60110   LOCAL S,X
+60120   S=SIN((H-6)*PI/12)
+60130   X=(S+0.25)/0.6:IF X<0 THEN X=0
+60140   IF X>1 THEN X=1
+60150   RETURN 0.16+0.84*X*X*(3-2*X)
+60160 END FUNC
+60300 PROC DAYNIGHT(DT)
+60310   LOCAL A,LV,DX,DY,LA
+60320   DAYH=DAYH+DT*24/DAYSEC:IF DAYH>=24 THEN DAYH=DAYH-24
+60330   A=FN DAYAMB(DAYH):DAYA=A
+60340   M3D AMBIENT A
+60350   LV=INT(2+12*(A-0.16)/0.84+0.5)
+60360   IF LV<>DAYLV THEN DAYLV=LV:M3D FOG 156000,FN CC(8,LV),100000
+60400   ' the bicycle's headlamp: on while John rides and the daylight is below 85 %, brighter the darker it is
+60410   LA=(0.85-A)/0.3:IF LA>1 THEN LA=1
+60420   IF MODE=1 AND LA>0 THEN
+60430     DX=COS(BH*PI/180):DY=SIN(BH*PI/180)
+60440     M3D LAMP 0,BX+DX*34,BY+DY*34,BZ+38,3000,255*LA,DX,DY,-0.14,24
+60450     LAMPON=-1
+60460   ELSE
+60470     IF LAMPON THEN M3D LAMP 0,0,0,0,1,0:LAMPON=0
+60480   END IF
+60490 END PROC

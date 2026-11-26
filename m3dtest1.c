@@ -632,6 +632,38 @@ int main( void ) {
         fb = shot();
         CHECK( PX( fb, 80, 50 ) > dark );
     }
+    {   // the daylight (M3D AMBIENT): a factor 0 .. 1 on the light of every object (not of those with the glow flag), the things' and the sky's; the lamps add their own light after it
+        CHECK( Q( GFXQ_M3DAMBIENT, 0 ) == 1.0 );
+        CHECK( op( GFXOP_M3DLAMP, 6, 0.0, 90.0, 0.0, 50.0, 80.0, 0.0 ) );                          // the lamp off
+        CHECK( op( GFXOP_M3DOBJLIGHT, 2, 2.0, 255.0 ) );
+        fb = shot();
+        int bright = PX( fb, 80, 50 );
+        CHECK( op( GFXOP_M3DAMBIENT, 1, 0.5 ) && Q( GFXQ_M3DAMBIENT, 0 ) == 0.5 );
+        fb = shot();
+        int half = PX( fb, 80, 50 );
+        CHECK( half < bright && half > 0 );                                                       // darker
+        CHECK( op( GFXOP_M3DAMBIENT, 1, 0.0 ) );
+        fb = shot();
+        CHECK( PX( fb, 80, 50 ) < half );                                                         // darkest
+        CHECK( op( GFXOP_M3DLAMP, 6, 0.0, 90.0, 0.0, 50.0, 80.0, 255.0 ) );                       // a lamp at night: the lit wall is brighter than the dark one
+        fb = shot();
+        CHECK( PX( fb, 80, 50 ) > 0 );
+        CHECK( op( GFXOP_M3DLAMP, 6, 0.0, 90.0, 0.0, 50.0, 80.0, 0.0 ) );
+        CHECK( op( GFXOP_M3DOBJFLAGS, 2, 2.0, (double) M3D_OF_GLOW ) );
+        fb = shot();
+        CHECK( PX( fb, 80, 50 ) == bright );                                                      // the glow flag: not darkened at all
+        CHECK( op( GFXOP_M3DOBJFLAGS, 2, 2.0, 0.0 ) );
+        CHECK( !op( GFXOP_M3DAMBIENT, 1, 1.5 ) && !op( GFXOP_M3DAMBIENT, 1, -0.1 ) && Q( GFXQ_M3DAMBIENT, 0 ) == 0.0 );
+        tex_flat( 9, 16, 16, 77 );
+        CHECK( op( GFXOP_M3DSKY, 1, 9.0 ) );
+        CHECK( op( GFXOP_M3DAMBIENT, 1, 1.0 ) );
+        fb = shot();
+        int skyday = PX( fb, 80, 2 );
+        CHECK( op( GFXOP_M3DAMBIENT, 1, 0.5 ) );
+        fb = shot();
+        CHECK( PX( fb, 80, 2 ) < skyday );                                                        // the sky is darkened too
+        CHECK( op( GFXOP_M3DAMBIENT, 1, 1.0 ) );
+    }
     // -- the sky ---------------------------------------------------------------------------------------------------------------------
     tex_flat( 9, 16, 16, 77 );
     CHECK( op( GFXOP_M3DSKY, 1, 9.0 ) );

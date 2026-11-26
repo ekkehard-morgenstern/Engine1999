@@ -221,6 +221,18 @@ int main( void ) {
     compare( "spot lamp", 28, 6.0 );
 
     scene_base();
+    CHECK( op( GFXOP_M3DAMBIENT, 1, 0.4 ) );                      // the daylight at 40 %: everything darker, the lamp adds its light after it
+    CHECK( op( GFXOP_M3DLAMP, 10, 0.0, 60.0, 90.0, 40.0, 140.0, 250.0, 0.3, 1.0, -0.4, 35.0 ) );
+    CHECK( op( GFXOP_M3DOBJLIGHT, 2, 2.0, 200.0 ) );
+    CHECK( op( GFXOP_M3DOBJLIGHT, 2, 1.0, 200.0 ) );
+    compare( "ambient + lamp", 28, 6.0 );
+
+    scene_base();
+    CHECK( op( GFXOP_M3DAMBIENT, 1, 0.4 ) );
+    CHECK( op( GFXOP_M3DSKY, 1, 150.0 ) );
+    compare( "ambient sky-flat", 28, 4.0 );
+
+    scene_base();
     CHECK( op( GFXOP_M3DSKY, 1, 150.0 ) );                        // a flat sky color
     compare( "sky-flat", 24, 3.0 );
 

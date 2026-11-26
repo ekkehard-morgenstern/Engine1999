@@ -74,7 +74,7 @@ typedef struct {
 } gobj_t;
 
 typedef struct {
-    GLint yaw, f, cx, horizon, rep, shift, size, tex, pal;
+    GLint yaw, f, cx, horizon, rep, shift, size, tex, pal, amb;
     GLint apos;
 } skyprog_t;
 
@@ -170,7 +170,7 @@ static const char* const vs_sky =
 static const char* const fs_sky =
     "#version 120\n"
     "uniform sampler2D u_tex, u_pal;\n"
-    "uniform float u_yaw, u_f, u_cx, u_horizon, u_rep, u_shift;\n"
+    "uniform float u_yaw, u_f, u_cx, u_horizon, u_rep, u_shift, u_amb;\n"
     "uniform vec2 u_size;\n"
     "void main() {\n"
     "    float ang = ( u_yaw - degrees( atan( ( gl_FragCoord.x - u_cx ) / u_f ) ) ) / 360.0;\n"
@@ -179,7 +179,7 @@ static const char* const fs_sky =
     "    float r = clamp( float( int( u_horizon - gl_FragCoord.y + u_shift ) ), 0.0, u_size.y - 1.0 );\n"
     "    float row = u_size.y - 1.0 - r;\n"
     "    float i = floor( texture2D( u_tex, vec2( ( tu + 0.5 ) / u_size.x, ( row + 0.5 ) / u_size.y ) ).r * 255.0 + 0.5 );\n"
-    "    gl_FragColor = vec4( texture2D( u_pal, vec2( ( i + 0.5 ) / 256.0, 0.5 ) ).rgb, i < 0.5 ? 0.0 : 1.0 );\n"
+    "    gl_FragColor = vec4( texture2D( u_pal, vec2( ( i + 0.5 ) / 256.0, 0.5 ) ).rgb * u_amb, i < 0.5 ? 0.0 : 1.0 );\n"
     "}\n";
 
 static GLuint make_shader( gl_t* g, GLenum type, const char* src ) {
@@ -384,6 +384,7 @@ static void* gl_create( m3d_t* m ) {
     s->horizon = gl->GetUniformLocation( g->skyprog, "u_horizon" );
     s->rep = gl->GetUniformLocation( g->skyprog, "u_rep" );
     s->shift = gl->GetUniformLocation( g->skyprog, "u_shift" );
+    s->amb = gl->GetUniformLocation( g->skyprog, "u_amb" );
     s->size = gl->GetUniformLocation( g->skyprog, "u_size" );
     s->tex = gl->GetUniformLocation( g->skyprog, "u_tex" );
     s->pal = gl->GetUniformLocation( g->skyprog, "u_pal" );
@@ -748,7 +749,7 @@ static void draw_gobj( gl_t* g, const m3d_t* m, const obj_t* o, int idx ) {
     const prog_t* p = &g->pu;
     bool twosided = ( o->flags & M3D_OF_TWOSIDED ) != 0;
     float masked = ( o->flags & M3D_OF_MASKED ) != 0 || ( o->flags & M3D_OF_TRANS ) != 0 ? 1.0f : 0.0f;
-    set_object( g, o->px, o->py, o->pz, o->cs, o->sn, (double) o->light * LIGHTK, o->scale > 0.0 ? o->scale : 1.0 );
+    set_object( g, o->px, o->py, o->pz, o->cs, o->sn, (double) o->light * LIGHTK * ( ( o->flags & M3D_OF_GLOW ) ? 1.0 : m->ambient ), o->scale > 0.0 ? o->scale : 1.0 );
     if ( twosided ) {
         gl->Disable( GL_CULL_FACE );
     } else {
@@ -873,7 +874,7 @@ static void draw_things_gl( gl_t* g, m3d_t* m, const cam_t* c ) {
         if ( tx == 0 ) {
             for ( int q=0; q < 4; ++q ) { uu[q] = ( (double)( t->tex & 255 ) + 0.5 ) / 256.0; vv[q] = 0.5; }
         }
-        double light = (double) t->light * LIGHTK;
+        double light = (double) t->light * LIGHTK * m->ambient;
         static const int idx[6] = { 0, 1, 2, 0, 2, 3 };
         for ( int q=0; q < 2; ++q ) {
             gtri_t* gt = add_tri( g );
@@ -952,7 +953,7 @@ static const void* gl_render( m3d_t* m, void* rd ) {
     if ( sky == 0 && m->skytex > 0 ) {
         ca = 1.0f;
         uint32_t col = m->pal[ (uint8_t) m->skytex ];
-        cr = (float)( ( col >> 16 ) & 255U ) / 255.0f; cg = (float)( ( col >> 8 ) & 255U ) / 255.0f; cb = (float)( col & 255U ) / 255.0f;
+        cr = (float)( ( col >> 16 ) & 255U ) / 255.0f * (float) m->ambient; cg = (float)( ( col >> 8 ) & 255U ) / 255.0f * (float) m->ambient; cb = (float)( col & 255U ) / 255.0f * (float) m->ambient;
     }
     gl->ClearColor( cr, cg, cb, ca );
     gl->Clear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
@@ -971,6 +972,7 @@ static const void* gl_render( m3d_t* m, void* rd ) {
         gl->Uniform1f( s->horizon, (GLfloat) horizon );
         gl->Uniform1f( s->rep, (GLfloat) m->skyrep );
         gl->Uniform1f( s->shift, (GLfloat) m->skyshift );
+        gl->Uniform1f( s->amb, (GLfloat) m->ambient );
         gl->Uniform2f( s->size, (GLfloat) sky->w, (GLfloat) sky->h );
         gl->BindBuffer( GL_ARRAY_BUFFER, g->skyvbo );
         gl->EnableVertexAttribArray( (GLuint) s->apos );

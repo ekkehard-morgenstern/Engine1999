@@ -62,6 +62,7 @@ counterclockwise when seen from their front (the normal (b-a) x (c-a) points to 
 #define M3D_OF_TRANS    2               // drawn mixed half and half with what is behind it (index 0 see-through), after everything else
 #define M3D_OF_PASS     4               // movement passes through it and it is no floor or ceiling (a decoration, an open doorway)
 #define M3D_OF_SEETHRU  8               // shots and sight pass through it (glass, a railing)
+#define M3D_OF_GLOW     32              // lit by itself: M3D AMBIENT (the daylight) does not darken it (a beam of light, a lamp's glass, a window at night)
 #define M3D_OF_TWOSIDED 16              // both sides of every triangle are drawn and solid
 
 typedef struct _m3d_t m3d_t;

@@ -271,7 +271,7 @@ static void sort_desc( int* idx, const double* key, int n ) {
 static void draw_sky_bg( rc_t* c ) {
     m3d_t* m = c->m;
     const tex_t* tx = tex_get( m, m->skytex );
-    const uint8_t* cm = c->s->cmap[M3D_LEVELS - 1];
+    const uint8_t* cm = c->s->cmap[ iclamp( (int)( (double)( M3D_LEVELS - 1 ) * m->ambient + 0.5 ), 0, M3D_LEVELS - 1 ) ];       // the daylight darkens the sky too
     if ( tx == 0 ) {
         memset( c->fb, m->skytex >= 0 ? cm[ (uint8_t) m->skytex ] : 0, (size_t) c->W * (size_t) c->H );
         return;
@@ -703,7 +703,7 @@ static void draw_object( rc_t* c, obj_t* o, bool translucent ) {
             v3_t mx = { fmax( wa.x, fmax( wb.x, wc.x ) ), fmax( wa.y, fmax( wb.y, wc.y ) ), fmax( wa.z, fmax( wb.z, wc.z ) ) };
             lamps = lamp_near( m, mn, mx );
         }
-        draw_poly( c, out, n, wout, t->tex, o->flags, o->light, translucent, lamps );
+        draw_poly( c, out, n, wout, t->tex, o->flags, ( o->flags & M3D_OF_GLOW ) ? o->light : (int)( (double) o->light * m->ambient + 0.5 ), translucent, lamps );
     }
     free( vv );
 }
@@ -764,7 +764,7 @@ static void draw_things( rc_t* c ) {
         if ( hw <= 0 || sy1 - sy0 <= 0 ) {
             continue;
         }
-        double lv = (double) t->light * ( (double)( M3D_LEVELS - 1 ) / 255.0 );
+        double lv = (double) t->light * m->ambient * ( (double)( M3D_LEVELS - 1 ) / 255.0 );
         int hk = 0;
         if ( m->fog > 0 ) {
             if ( m->hazecol >= 0 ) {

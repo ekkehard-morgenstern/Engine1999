@@ -157,6 +157,7 @@ struct _m3d_t {
     bool     havepal;
     int      vx, vy, vw, vh, scale, bw, bh;
     double   fov, fog, far;
+    double   ambient;                       // M3D AMBIENT: the daylight, a factor 0 .. 1 on every object's light (not those with M3D_OF_GLOW), the things' and the sky's
     double   fogstart;                      // M3D FOG d,haze,start: nothing before this distance (the fog is the quadratic part from start to d)
     int      msaa;                          // M3D MSAA: the samples of full-scene antialiasing wanted (0 or 2 .. 16), used by the hardware renderer
     int      hazecol;                       // M3D FOG d, haze: the palette index the fog fades to (-1: the fog darkens)

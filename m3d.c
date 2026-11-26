@@ -374,7 +374,7 @@ void m3d_set_hardware( m3d_t* m, const m3drend_t* r ) {
 }
 
 static void reset_state( m3d_t* m ) {
-    m->fog = 0; m->far = 0; m->hazecol = -1; m->fogstart = 0; m->skytex = -1; m->skyrep = 1; m->skyshift = 0;
+    m->ambient = 1.0; m->fog = 0; m->far = 0; m->hazecol = -1; m->fogstart = 0; m->skytex = -1; m->skyrep = 1; m->skyshift = 0;
     m->x = m->y = m->z = 0; m->yaw = 0; m->pitch = 0; m->lift = 0;
     m->radius = 14; m->height = 56; m->eye = 46; m->step = 24;
     m->hit = 0; m->shotkind = 0; m->shotobj = -1; m->shotdist = 0; m->shotx = m->shoty = m->shotz = 0;
@@ -2398,6 +2398,10 @@ bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t sl
             m->fog = a[0];
             m->hazecol = NONE_VAL( a[1] ) ? -1 : i1;
             return true;
+        case GFXOP_M3DAMBIENT:
+            if ( !( a[0] >= 0.0 && a[0] <= 1.0 ) ) { return false; }
+            m->ambient = a[0];
+            return true;
         case GFXOP_M3DHIDE:                                   // the window host hides the hardware renderer's layer (host_m3d_op); the model has nothing to do
             return true;
         case GFXOP_M3DMSAA:
@@ -3040,6 +3044,7 @@ bool m3d_query( m3d_t* m, int q, const double* a, int na, double* r ) {
         case GFXQ_M3DQUIET:
             *r = m->gnd.quiet.on ? 1.0 - box_weight( a[0], a[1], m->gnd.quiet.cx, m->gnd.quiet.cy, m->gnd.quiet.rx, m->gnd.quiet.ry, m->gnd.quiet.margin ) : 1.0;
             return true;
+        case GFXQ_M3DAMBIENT: *r = m->ambient; return true;
         case GFXQ_M3DX: *r = m->x; return true;
         case GFXQ_M3DY: *r = m->y; return true;
         case GFXQ_M3DZ: *r = m->z; return true;
