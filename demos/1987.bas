@@ -1736,9 +1736,15 @@
 34650 END PROC
 34700 ' the title: the camera circles John's house
 34800 PROC TITLE
-34810   LOCAL A,T0,C,I,X$,Y,Q,K,H,X1,Y1,X2,Y2,QK,QL,QA,QX,QY,QU,QV,QF
+34810   LOCAL TG,A,T0,C,I,X$,Y,Q,K,H,X1,Y1,X2,Y2,QK,QL,QA,QX,QY,QU,QV,QF
 34820   CALL LOADEND
 34830   T0=TI:WNEW=0:IN_QUIT=0
+34832   ' (owner, 2026-11-26) the key that confirmed the permission dialog of the save, or any other key still down or waiting, must not start the game again: wait until the keys are up, empty the
+34834   ' key buffer, and take no key for the first half second
+34836   WHILE KEY("SPACE") OR KEY("RETURN") OR KEY("ESC")
+34837     GFX VSYNC
+34838   WEND
+34839   CALL IN_WAITRELEASE:TG=TI
 34840   ' a still scene (no 3D, no world needed: it shows before the world is made or opened, and when a game is left) with a Qix: a line that moves, turns and changes its length, with the
 34850   ' last 14 positions drawn as a fading trail in a slowly changing color (the old arcade game's mystery)
 34860   QX=320:QY=150:QU=2.9:QV=2.1:QA=0:QL=100:QK=0:QF=0
@@ -1783,6 +1789,7 @@
 35250     IF WLD AND ( IN_KEY=78 OR IN_KEY=110 ) THEN C=-1:WNEW=-1
 35260     IF KEY("SPACE") OR KEY("RETURN") OR JOY("A") OR JOY("START") THEN C=-1
 35270     IF KEY("ESC") THEN IN_QUIT=1
+35275     IF TI-TG<30 THEN C=0:WNEW=0:IN_QUIT=0
 35280   UNTIL C OR IN_QUIT
 35290   CALL IN_WAITRELEASE
 35300 END PROC
