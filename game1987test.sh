@@ -215,6 +215,7 @@ state
 wait 5
 state
 goto 1500 -900 0
+hide
 f 0
 fa 0
 run 0
@@ -364,7 +365,7 @@ expect "reverse: moved away" "$(val state 16 by)" -400 -240
 #      more than 3 in one chunk (500 m: `peak` is the largest number seen every quarter second, `maxcell` the number now)
 expect "drone count" "$(val drone 1 n)" 6 6
 expect "drone height above the ground" "$(awk -v z="$(val drone 1 z)" -v g="$(val drone 1 gz)" 'BEGIN { print z - g }')" 140 520
-expect "drone height above the ground, later" "$(awk -v z="$(val drone 3 z)" -v g="$(val drone 3 gz)" 'BEGIN { print z - g }')" 140 520
+expect "drone height above the ground, later" "$(awk -v z="$(val drone 3 z)" -v g="$(val drone 3 gz)" 'BEGIN { print z - g }')" 140 900
 expect "drone moved on its own" "$(awk -v a="$(val drone 1 x)" -v b="$(val drone 3 x)" -v c="$(val drone 1 y)" -v d="$(val drone 3 y)" 'BEGIN { print sqrt((a-b)^2+(c-d)^2) }')" 50 30000
 expect "drone has a mode" "$(val drone 3 m)" 0 2
 expect "drone stays near John" "$(val drone 3 x)" -20000 20000
@@ -496,45 +497,77 @@ for f in demos/1987.bas demos/lib/prefs3d.lib demos/lib/w3dkit.lib demos/lib/inp
     d=$(awk '$1 ~ /^[0-9]+$/ { print $1 }' $f | sort -n | uniq -d | head -3 | tr '\n' ' ')
     if [ -n "$d" ]; then echo "FAILED: $f has line numbers twice: $d"; fail=$((fail+1)); fi
 done
-# 16. the beam that makes John black out (owner, 2026-11-25): a drone that has found John hangs over him, its beam grows stronger while he is in it, and after about 9 seconds he
-#     collapses (off the bicycle, if he rides), the drone loses interest and moves on, he lies for 7 .. 11 seconds and comes to; a scanning drone notices John when its spot stays on
-#     him; the beam's spot lies on the highest thing below (a roof), not on the ground under it. `catch` puts drone 0 over John in the focus mode, `scanat` a scanning drone's spot on him
+# 16. the beam that makes John black out (owner, 2026-11-25 / 26): a drone that has found John locks its beam on him (the spot chases at 1200 units a second), the beam grows for a second or two and
+#     he collapses (off the bicycle, if he rides); the drone then turns the beam on the camera (mode 4), 1.5 s later the camera falls and lies on the ground (cmf 2), only then the picture goes black;
+#     he lies for 10 .. 14 seconds, comes to, the camera rises (cmf 0) and the drone moves on; a scanning drone finds John when its spot stays on him; a drone finds him when he is within 2 m of it;
+#     two drones never overlap; the beam's spot lies on the highest thing below (a roof), not on the ground under it. `catch k x` puts drone k over John (x units east) in the focus mode, `scanat`
+#     a scanning drone's spot on him, `above k` a cruising drone 30 units from him
 cat > $T/play <<'PLAY'
 bike 40 -176 270
 goto 20 -176 270
 use
 wait 1
 state
-catch
-wait 3
+catch 0 0
+wait 1
 state
-drones
-wait 7
+drones 0
+wait 1.2
+state
+drones 0
+wait 2.2
 state
 wait 12
 state
-drones
+drones 0
 scanat
 wait 0.5
-drones
+drones 0
 spotz 0 40
 quit
 PLAY
 HOME=$T G1987_HEADLESS=1 G1987_PLAY=$T/play timeout 300 sh -c 'printf "LOAD \"demos/1987\"\nRUN\nBYE\n" | ./engine1999c --allow=all' > $T/out 2>&1
 expect "blackout: John rides the bicycle first" "$(val state 1 mode)" 1 1
-expect "blackout: the meter fills while he is in the beam (3 s)" "$(val state 2 bl)" 10 45
-expect "blackout: the drone focuses on him and the beam grows" "$(val drone 1 ri)" 30 90
+expect "blackout: the meter fills while he is in the beam (1 s)" "$(val state 2 bl)" 20 65
+expect "blackout: the drone focuses on him and the beam grows" "$(val drone 1 ri)" 45 95
 expect "blackout: the drone is in the focus mode" "$(val drone 1 m)" 3 3
-expect "blackout: John lies unconscious after about 9 seconds" "$(val state 3 mode)" 5 5
-expect "blackout: the meter is full" "$(val state 3 bl)" 100 100
+expect "blackout: John lies unconscious after about 2 seconds" "$(val state 3 mode)" 5 5
+expect "blackout: the camera still stands (the picture is not dark yet)" "$(val state 3 cmf)" 0 0
+expect "blackout: the drone turns the beam on the camera" "$(val drone 2 m)" 4 4
 expect "blackout: he fell off the bicycle (beside it)" "$(awk -v a="$(val state 3 jx)" -v b="$(val state 3 bx)" -v c="$(val state 3 jy)" -v d="$(val state 3 by)" 'BEGIN { print sqrt((a-b)^2+(c-d)^2) }')" 20 60
-expect "blackout: he comes to" "$(val state 4 mode)" 0 0
-expect "blackout: the meter is empty again" "$(val state 4 bl)" 0 0
-expect "blackout: the drone lost interest and moved on" "$(val drone 2 m)" 0 2
-expect "blackout: a scanning drone notices him when its spot is on him" "$(val drone 3 m)" 3 3
+expect "blackout: the camera lies on the ground" "$(val state 4 cmf)" 2 2
+expect "blackout: the camera is low (a little above the ground)" "$(val state 4 cmg)" 0 25
+expect "blackout: he comes to" "$(val state 5 mode)" 0 0
+expect "blackout: the camera is up again" "$(val state 5 cmf)" 0 0
+expect "blackout: the meter is empty again" "$(val state 5 bl)" 0 0
+expect "blackout: the drone lost interest and moved on" "$(val drone 3 m)" 0 2
+expect "blackout: a scanning drone notices him when its spot is on him" "$(val drone 4 m)" 3 3
 expect "beam: the spot lies on the roof of the house, not on the ground under it" "$(val spotz 1 z)" 60 400
 expect "beam: the ground there is low" "$(val spotz 1 gz)" -50 50
 if grep -q '^Error' $T/out; then echo "FAILED: the blackout run stopped with: $(grep '^Error' $T/out)"; fail=$((fail+1)); fi
+# on foot, two drones at once, and a drone that John walks under
+cat > $T/play <<'PLAY'
+goto 20 -176 270
+wait 0.5
+above 2
+wait 0.3
+drones 2
+state
+catch 0 0
+catch 1 20
+wait 1
+drones 0
+drones 1
+wait 2
+state
+quit
+PLAY
+HOME=$T G1987_HEADLESS=1 G1987_PLAY=$T/play timeout 300 sh -c 'printf "LOAD \"demos/1987\"\nRUN\nBYE\n" | ./engine1999c --allow=all' > $T/out 2>&1
+expect "drones: a drone finds John when he is within 2 m of it" "$(val drone 1 m)" 3 3
+expect "drones: two drones focus on John on foot: he collapses" "$(val state 2 mode)" 5 5
+sep=$(awk -v ax="$(val drone 2 x)" -v bx="$(val drone 3 x)" -v ay="$(val drone 2 y)" -v by="$(val drone 3 y)" 'BEGIN { dx = ax - bx; dy = ay - by; if (dx < 0) dx = -dx; if (dy < 0) dy = -dy; print (dx > dy) ? dx : dy }')
+expect "drones: two drones over John do not overlap (their boxes are 120 apart)" "$sep" 100 400
+if grep -q '^Error' $T/out; then echo "FAILED: the two-drone run stopped with: $(grep '^Error' $T/out)"; fail=$((fail+1)); fi
 # 15. the static world (world mode: G1987_WORLD names the folder of the world, G1987_WORLDSIZE its size in chunks): the world is made (a progress loop without a picture), the game runs on it
 #     (jumps, walking on the ground of the world), the position is saved in the folder when the game ends and read again by the next start
 W=$T/world

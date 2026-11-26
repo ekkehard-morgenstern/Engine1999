@@ -26,7 +26,7 @@
 220 ON ERROR GOTO FAILED
 230 HL=0:IF ENV$("G1987_HEADLESS")<>"" THEN HL=-1
 240 SXY=0:LDS=0:LDON=0:LDLAST=0:NOLOAD=0:WLD=0:IF ENV$("G1987_WORLD")<>"" OR ( ENV$("G1987_DYNAMIC")="" AND NOT HL ) THEN WLD=-1
-250 DIM PV(60),SGL(300),SGH(300),SGX(300),SGY(300),SGU(300),SGV(300),SGK(300),SGD(300),SGE(300),SGI(300),RGX(6),RGY(6),RGP(6),RGQ(6),CKN(400),CHB(400),CKRX(9),CKRY(9),CKRT(9),CTX(24),CTY(24),GNS(8),GGX(160),FLJ$(81),TIH(33),RPX(300),RPY(300),RPF(300),CPX(40),CPY(40),SMX(120),SMY(120),PLX(40),PLY(40),TRX(520),TRY(520),LRR(8),LRZ(8),LRV(8),W$(8),GPX(2),GPZ(2),GPS(2),DWX(40),DWY(40),DRX(10),DRY(10),DRZ(10),DRH(10),DRT(10),DRA(10),DRM(10),DRTM(10),DRTX(10),DRTY(10),DRBM(10),DRV(10),DDD(10),DRP(10),DSX(10),DSY(10),DRI(10),DRW(10),DRL(10)
+250 DIM PV(60),SGL(300),SGH(300),SGX(300),SGY(300),SGU(300),SGV(300),SGK(300),SGD(300),SGE(300),SGI(300),RGX(6),RGY(6),RGP(6),RGQ(6),CKN(400),CHB(400),CKRX(9),CKRY(9),CKRT(9),CTX(24),CTY(24),GNS(8),GGX(160),FLJ$(81),TIH(33),RPX(300),RPY(300),RPF(300),CPX(40),CPY(40),SMX(120),SMY(120),PLX(40),PLY(40),TRX(520),TRY(520),LRR(8),LRZ(8),LRV(8),W$(8),GPX(2),GPZ(2),GPS(2),DWX(40),DWY(40),DRX(10),DRY(10),DRZ(10),DRH(10),DRT(10),DRA(10),DRM(10),DRTM(10),DRTX(10),DRTY(10),DRBM(10),DRV(10),DDD(10),DRP(10),DSX(10),DSY(10),DRI(10),DRW(10),DRL(10),DRSC(10)
 260 DIM QX1(14),QY1(14),QX2(14),QY2(14)
 270 DIM FPS(9),FPX(9),FPC(9),FPB(9)
 280 GOTO MAIN
@@ -1042,7 +1042,7 @@
 23020 ' or hangs and looks round, or flies on. A drone belongs to no chunk: it may fly from one to the next as long as the chunk (DCS = 15625 units = 500 m) holds fewer than DCAP = 3
 23030 ' drones (counting where they are and where they are going). The pool of NDR drones (6; G1987_DRONES = 0 .. 10) lives round John: one that gets farther than 17000 units away is made
 23040 ' again on a ring of 13000 .. 15000 units, so the land seems full of drones. They are objects 600 + n (body), 610 + n (beam and its spot, rebuilt each frame), 620 + n (shadow).
-23050 ' Modes DRM: 0 cruise to (DRTX,DRTY), 1 scan (the beam on, hangs low), 2 look (hangs and turns). They ignore John (this step); nothing here shoots.
+23050 ' Modes DRM: 0 cruise to (DRTX,DRTY), half of the cruising drones scan on the way (DRSC), 1 scan (the beam on, hangs low), 2 look (hangs and turns), 3 found John, 4 beam on the camera (section 58000). Two drones never overlap (DRSEP).
 23100 FUNC DCELL(X)
 23110   RETURN INT(X/DCS)
 23120 END FUNC
@@ -1073,10 +1073,10 @@
 23680 END FUNC
 23700 PROC BUILDDRONES
 23710   LOCAL K,J,O
-23720   NDR=6:GT=0:DCAP=3:DCS=15625:DINIT=-1:DPK=0:DCT=0:BL=0:UT=0:UTM=8:PROT=0:VLV=0:DFTS=0:DFIN=0:VT=-1:IF ENV$("G1987_VEILTEST")<>"" THEN VT=VAL(ENV$("G1987_VEILTEST"))
+23720   NDR=6:GT=0:DCAP=3:DCS=15625:DINIT=-1:DPK=0:DCT=0:BL=0:UT=0:UTM=8:PROT=0:VLV=0:DFTS=0:DFIN=0:VT=-1:DSW=120:DSZ=90:CMF=0:CMFT=0:CMFV=0:CMFS=0:IF ENV$("G1987_VEILTEST")<>"" THEN VT=VAL(ENV$("G1987_VEILTEST"))
 23730   IF ENV$("G1987_DRONES")<>"" THEN NDR=MAX(0,MIN(10,VAL(ENV$("G1987_DRONES"))))
 23740   FOR K=0 TO NDR-1
-23750     DRX(K)=JX+3000+K*400:DRY(K)=JY:DRH(K)=K*70:DRA(K)=300+((K*37) MOD 150):DRZ(K)=FN HT(DRX(K),DRY(K))+DRA(K):DRM(K)=2:DRTM(K)=1:DRBM(K)=0:DRV(K)=0:DRI(K)=0:DRW(K)=0:DRL(K)=0:DSX(K)=DRX(K):DSY(K)=DRY(K):DRTX(K)=DRX(K):DRTY(K)=DRY(K)
+23750     DRX(K)=JX+3000+K*400:DRY(K)=JY:DRH(K)=K*70:DRA(K)=300+((K*37) MOD 150):DRZ(K)=FN HT(DRX(K),DRY(K))+DRA(K):DRM(K)=2:DRTM(K)=1:DRBM(K)=0:DRV(K)=0:DRI(K)=0:DRW(K)=0:DRL(K)=0:DRSC(K)=0:DSX(K)=DRX(K):DSY(K)=DRY(K):DRTX(K)=DRX(K):DRTY(K)=DRY(K)
 23760     O=600+K
 23770     M3D OBJECT O,28,235
 23780     LRR(0)=0.6:LRZ(0)=-30:LRV(0)=0:LRR(1)=13:LRZ(1)=-26:LRV(1)=0:LRR(2)=24:LRZ(2)=-12:LRV(2)=0:LRR(3)=29:LRZ(3)=6:LRV(3)=0
@@ -1138,7 +1138,7 @@
 24580     I=I+1
 24590   WEND
 24600   DRX(K)=X:DRY(K)=Y:DRH(K)=RND*360:DRA(K)=300+RND*150:DRV(K)=60:DRBM(K)=0
-24610   DRZ(K)=FN HT(X,Y)+DRA(K):DRM(K)=2:DRTM(K)=0.5:DRTX(K)=X:DRTY(K)=Y
+24610   DRZ(K)=FN HT(X,Y)+DRA(K):DRM(K)=2:DRTM(K)=0.5:DRTX(K)=X:DRTY(K)=Y:DRSC(K)=0:DRI(K)=0:DRL(K)=0
 24620 END PROC
 24700 PROC DRPICK(K)
 24710   LOCAL I,A,R,X,Y,OK,DX,DY
@@ -1146,30 +1146,30 @@
 24730   WHILE NOT OK AND I<6
 24740     A=DRH(K)+(RND-0.5)*140
 24750     DX=JX-DRX(K):DY=JY-DRY(K)
-24760     IF DX*DX+DY*DY>81000000 THEN A=ATAN2(DY,DX)*180/PI+(RND-0.5)*100
-24770     R=2500+RND*6000
+24760     IF DX*DX+DY*DY>56250000 THEN A=ATAN2(DY,DX)*180/PI+(RND-0.5)*100
+24770     R=1800+RND*4200
 24780     X=DRX(K)+R*COS(A*PI/180):Y=DRY(K)+R*SIN(A*PI/180)
 24790     IF FN DCOUNT(FN DCELL(X),FN DCELL(Y),K)<DCAP THEN OK=-1
 24800     I=I+1
 24810   WEND
 24820   IF OK THEN
-24830     DRTX(K)=X:DRTY(K)=Y:DRM(K)=0
+24830     DRTX(K)=X:DRTY(K)=Y:DRM(K)=0:DRSC(K)=0:IF RND<0.5 THEN DRSC(K)=-1
 24840   ELSE
 24850     DRM(K)=2:DRTM(K)=1.5+RND*2
 24860   END IF
 24870 END PROC
-24900 ' arrived: scan the ground (45 %), look round (25 %) or fly on
+24900 ' arrived: scan the ground (70 %), look round (12 %) or fly on (cruising drones scan on the way too, half of them)
 25000 PROC DRNEXT(K)
 25010   LOCAL R
 25020   R=RND
-25030   IF R<0.45 THEN
-25040     DRM(K)=1:DRTM(K)=10+RND*12
+25030   IF R<0.7 THEN
+25040     DRM(K)=1:DRTM(K)=7+RND*9
 25050   ELSE
-25060     IF R<0.7 THEN DRM(K)=2:DRTM(K)=4+RND*5 ELSE CALL DRPICK(K)
+25060     IF R<0.82 THEN DRM(K)=2:DRTM(K)=3+RND*4 ELSE CALL DRPICK(K)
 25070   END IF
 25080 END PROC
 25100 PROC DRONESIM(DT)
-25110   LOCAL K,DX,DY,L,TA,GA,GB,TS,AL,NX,NY,BI
+25110   LOCAL K,DX,DY,L,TA,GA,GB,TS,AL,NX,NY,BI,BF
 25120   GT=GT+DT
 25130   IF PROT>0 THEN PROT=PROT-DT
 25140   IF DINIT THEN
@@ -1178,176 +1178,123 @@
 25170     NEXT K
 25180     DINIT=0
 25190   END IF
-25200   BI=0
+25200   BI=0:BF=0
 25210   FOR K=0 TO NDR-1
 25220     DX=DRX(K)-JX:DY=DRY(K)-JY
 25230     IF DX*DX+DY*DY>289000000 THEN CALL DRSPAWN(K,0)
-25240     TS=0:AL=DRA(K)
-25250     IF DRM(K)=3 THEN
-25260       CALL DRFOCUS(K,DT):TS=DFTS:AL=190
-25270       IF DFIN AND DRI(K)>BI THEN BI=DRI(K)
-25280     ELSE
-25290       DSX(K)=DRX(K)+300*COS(GT*0.5+K*2):DSY(K)=DRY(K)+300*SIN(GT*0.7+K*2)
-25300       IF DRM(K)=1 THEN CALL DRCATCH(K,DT) ELSE DRW(K)=0
-25310       IF DRM(K)=0 THEN
-25320         DX=DRTX(K)-DRX(K):DY=DRTY(K)-DRY(K):L=SQR(DX*DX+DY*DY)
-25330         IF L<150 THEN
-25340           CALL DRNEXT(K)
-25350         ELSE
-25360           TA=ATAN2(DY,DX)*180/PI
-25370           DRH(K)=DRH(K)+FN ADIFF(TA,DRH(K))*MIN(1,1.1*DT)
-25380           TS=85
-25390         END IF
-25400       ELSE
-25410         DRTM(K)=DRTM(K)-DT
-25420         IF DRM(K)=1 THEN
-25430           TS=12:AL=170+((K*29) MOD 50):DRH(K)=DRH(K)+10*SIN(GT*0.3+K)*DT
-25440         ELSE
-25450           DRH(K)=DRH(K)+35*SIN(GT*0.5+K*1.7)*DT
-25460         END IF
-25470         IF DRTM(K)<=0 THEN CALL DRPICK(K)
-25480       END IF
-25490     END IF
-25500     IF DRM(K)=1 OR DRM(K)=3 THEN
-25510       DRBM(K)=MIN(1,DRBM(K)+1.2*DT)
-25520     ELSE
-25530       DRBM(K)=MAX(0,DRBM(K)-2*DT)
+25240     ' John within 2 m (horizontally) of a drone: it has found him at once
+25250     IF DRM(K)<3 AND PROT<=0 AND MODE<>5 AND DX*DX+DY*DY<4096 THEN CALL DRFOUND(K)
+25260     TS=0:AL=DRA(K)
+25270     IF DRM(K)>=3 THEN
+25280       IF DRM(K)=3 THEN CALL DRFOCUS(K,DT) ELSE CALL DRCAM(K,DT)
+25290       TS=DFTS:AL=190
+25300       IF DRM(K)=3 AND DFIN THEN BF=-1:BI=MIN(1.5,BI+DRI(K))
+25310     ELSE
+25320       DSX(K)=DRX(K)+300*COS(GT*0.5+K*2):DSY(K)=DRY(K)+300*SIN(GT*0.7+K*2)
+25330       IF DRM(K)=1 OR (DRM(K)=0 AND DRSC(K)) THEN CALL DRCATCH(K,DT) ELSE DRW(K)=0
+25340       IF DRM(K)=0 THEN
+25350         DX=DRTX(K)-DRX(K):DY=DRTY(K)-DRY(K):L=SQR(DX*DX+DY*DY)
+25360         IF L<150 THEN
+25370           CALL DRNEXT(K)
+25380         ELSE
+25390           TA=ATAN2(DY,DX)*180/PI
+25400           DRH(K)=DRH(K)+FN ADIFF(TA,DRH(K))*MIN(1,1.1*DT)
+25410           TS=110
+25420         END IF
+25430       ELSE
+25440         IF DRM(K)<3 THEN
+25450           DRTM(K)=DRTM(K)-DT
+25460           IF DRM(K)=1 THEN
+25470             TS=12:AL=170+((K*29) MOD 50):DRH(K)=DRH(K)+10*SIN(GT*0.3+K)*DT
+25480           ELSE
+25490             DRH(K)=DRH(K)+35*SIN(GT*0.5+K*1.7)*DT
+25500           END IF
+25510           IF DRTM(K)<=0 THEN CALL DRPICK(K)
+25520         END IF
+25530       END IF
 25540     END IF
-25550     DRV(K)=DRV(K)+(TS-DRV(K))*MIN(1,0.8*DT)
-25560     NX=DRX(K)+COS(DRH(K)*PI/180)*DRV(K)*DT:NY=DRY(K)+SIN(DRH(K)*PI/180)*DRV(K)*DT
-25570     IF FN DCELL(NX)<>FN DCELL(DRX(K)) OR FN DCELL(NY)<>FN DCELL(DRY(K)) THEN
-25580       IF FN DCOUNT(FN DCELL(NX),FN DCELL(NY),K)>=DCAP THEN
-25590         NX=DRX(K):NY=DRY(K):DRV(K)=0:IF DRM(K)<>3 THEN CALL DRPICK(K)
-25600       END IF
-25610     END IF
-25620     DRX(K)=NX:DRY(K)=NY
-25630     GA=FN HT(NX,NY):GB=FN HT(NX+COS(DRH(K)*PI/180)*700,NY+SIN(DRH(K)*PI/180)*700):IF GB>GA THEN GA=GB
-25640     DRZ(K)=DRZ(K)+(GA+AL+12*SIN(GT*0.9+K)-DRZ(K))*MIN(1,1.2*DT)
-25650   NEXT K
-25660   DCT=DCT-DT:IF DCT<=0 THEN DCT=0.25:DPN=FN DMAXCELL():IF DPN>DPK THEN DPK=DPN
-25670   IF MODE<>5 THEN
-25680     IF BI>0 THEN BL=MIN(1,BL+(0.03+0.19*BI)*DT) ELSE BL=MAX(0,BL-0.12*DT)
-25690     IF BL>=1 AND (MODE=0 OR MODE=1) THEN CALL BLACKOUT
-25695   END IF
-25699 END PROC
-25700 ' the height of what the beam's spot lies on: the ground or the top of anything standing on it (a roof, a fence, the bicycle): the drones study the surfaces of things
-25710 FUNC BEAMZ(X,Y,Z)
-25720   RETURN MAX(M3D("FLOORAT",X,Y,Z),FN HT(X,Y))+4
-25730 END FUNC
-25800 PROC DRONERIG
-25810   LOCAL K,O,TX,TY,GZ,A,I,DX,DY,B,SC,Z0,C1,C2
-25820   FOR K=0 TO NDR-1
-25830     M3D OBJPOS 600+K,DRX(K),DRY(K),DRZ(K),GT*20+K*50
-25840     M3D OBJPOS 620+K,DRX(K),DRY(K),FN HT(DRX(K),DRY(K))+3.5,0
-25850     DX=DRX(K)-M3D("X"):DY=DRY(K)-M3D("Y")
-25860     O=610+K
-25870     M3D OBJECT O,30,235
-25880     IF DX*DX+DY*DY<2600*2600 AND DRBM(K)>0.04 THEN
-25890       SC=(0.35+0.65*DRBM(K))*(1+0.45*DRI(K))
-25900       C1=FN CC(1,13):C2=FN CC(1,12):IF DRI(K)>0.5 THEN C1=FN CC(1,15):C2=FN CC(1,14)
-25910       TX=DSX(K):TY=DSY(K):Z0=DRZ(K)-62
-25920       GZ=FN BEAMZ(TX,TY,Z0)
-25930       M3D VERTEX O,DRX(K),DRY(K),Z0
-25940       FOR I=0 TO 3
-25950         A=I*PI/2+GT
-25960         M3D VERTEX O,TX+26*SC*COS(A),TY+26*SC*SIN(A),FN BEAMZ(TX+26*SC*COS(A),TY+26*SC*SIN(A),Z0)
-25970       NEXT I
-25980       FOR I=1 TO 4
-25990         M3D FACE O,0,I,1+(I MOD 4),C1
-26000       NEXT I
-26010       B=M3D("VERTS",O)
-26020       M3D VERTEX O,TX,TY,GZ+0.3
-26030       FOR I=0 TO 7
-26040         A=I*PI/4
-26050         M3D VERTEX O,TX+48*SC*COS(A),TY+48*SC*SIN(A),FN BEAMZ(TX+48*SC*COS(A),TY+48*SC*SIN(A),Z0)+0.3
-26060       NEXT I
-26070       FOR I=0 TO 7
-26080         M3D FACE O,B,B+1+I,B+1+((I+1) MOD 8),C2
-26090       NEXT I
-26095     END IF
-26098   NEXT K
-26099 END PROC
-26100 ' a drone that has found John: it hangs over him, its spot chases him (480 units a second: a bicycle gets away, a walker does not); while he is in the spot the beam grows
-26110 ' stronger (DRI 0 .. 1 in 5.5 s), out of it the beam weakens and after 2.5 s without him the drone loses interest. DFTS: its speed, DFIN: John is in the spot
-26120 PROC DRFOCUS(K,DT)
-26130   LOCAL DX,DY,L,S
-26140   DX=JX-DRX(K):DY=JY-DRY(K):L=SQR(DX*DX+DY*DY)
-26150   DRH(K)=DRH(K)+FN ADIFF(ATAN2(DY,DX)*180/PI,DRH(K))*MIN(1,2*DT)
-26160   DFTS=MIN(150,MAX(0,(L-40)*1.3))
-26170   DX=JX-DSX(K):DY=JY-DSY(K):L=SQR(DX*DX+DY*DY)
-26180   IF L>0.01 THEN S=MIN(L,480*DT):DSX(K)=DSX(K)+DX/L*S:DSY(K)=DSY(K)+DY/L*S
-26190   DX=JX-DSX(K):DY=JY-DSY(K):DFIN=(DX*DX+DY*DY<8100)
-26200   IF DFIN THEN
-26210     DRI(K)=MIN(1,DRI(K)+0.18*DT):DRL(K)=0
-26220   ELSE
-26230     DRI(K)=MAX(0,DRI(K)-0.25*DT):DRL(K)=DRL(K)+DT
-26240   END IF
-26250   IF DRL(K)>2.5 OR MODE=5 THEN DRM(K)=2:DRTM(K)=2+RND*2:DRI(K)=0:DRL(K)=0
-26260 END PROC
-26300 ' a scanning drone notices John when its spot stays on him for 0.12 s (he walks or rides under the beam); not while he is unconscious or in the quiet time (PROT) after he came to
-26310 PROC DRCATCH(K,DT)
-26320   LOCAL DX,DY
-26330   IF PROT>0 OR MODE=5 OR DRBM(K)<0.7 THEN DRW(K)=0:EXIT PROC
-26340   DX=JX-DSX(K):DY=JY-DSY(K)
-26350   IF DX*DX+DY*DY<8100 THEN DRW(K)=DRW(K)+DT ELSE DRW(K)=0
-26360   IF DRW(K)>0.12 THEN
-26370     DRM(K)=3:DRI(K)=0:DRL(K)=0:DRW(K)=0:CALL SAY("THE BEAM HAS FOUND YOU. GET OUT OF IT!"):MSGT=5
-26380   END IF
-26390 END PROC
-26400 ' BL (0 .. 1) is how far John is gone: it grows while he is in a beam (faster the stronger the beam), shrinks when he is out of it; at 1 he collapses (BLACKOUT): he falls off the
-26410 ' bicycle (the bicycle rolls on and falls by itself), the drone loses interest and moves on, he lies for UTM seconds (7 .. 11) and comes to (UNCON), then no drone looks at him for 25 s (PROT)
-26420 PROC BLACKOUT
-26430   LOCAL K,DX,DY
-26440   FOR K=0 TO NDR-1
-26450     IF DRM(K)=3 THEN DRM(K)=2:DRTM(K)=3+RND*3:DRI(K)=0:DRL(K)=0
-26460   NEXT K
-26470   IF MODE=1 THEN
-26480     DX=-SIN(BH*PI/180)*38:DY=COS(BH*PI/180)*38
-26490     M3D THINGPOS 0,BX,BY,BZ:M3D THINGMOVE 0,DX,DY
-26500     JX=M3D("TX",0):JY=M3D("TY",0):JZ=M3D("TZ",0)
-26510   END IF
-26520   MODE=5:UT=0:UTM=7+RND*4:JV=0:KTS=0:BL=1
-26530   CALL SND(4):CALL SAY("JOHN COLLAPSES."):MSGT=5
-26540 END PROC
-26550 PROC UNCON(DT)
-26560   IF MODE<>5 THEN EXIT PROC
-26570   UT=UT+DT:JV=0
-26580   IF UT>=UTM THEN MODE=0:BL=0:UT=0:PROT=25:M3D THINGPOS 0,JX,JY,JZ:CALL SAY("JOHN COMES TO."):MSGT=5
-26590 END PROC
-26600 ' the veil: the vision going dark, as a quad in front of the camera that is translucent black. The palette entries 2 .. 15 (levels 1 .. 14: black with the alpha 17 .. 238, VEILPAL; the
-26610 ' game's colors start at 16, W3K_PALETTE leaves them alone; set before the color map is made) are the veil's; level 15 is the opaque one (entry 1, black). Object 720, made new each frame while the veil is there. V: BL squared while he is going, 1 for a second after he collapsed, then 0.62
-26620 ' while he lies, then fading out in the last 3 seconds. G1987_VEILTEST=level (0 .. 15) holds a level for a picture test
-26630 PROC VEILPAL
-26640   LOCAL K
-26650   FOR K=1 TO 14
-26660     GFX PALETTE 0,1+K,RGB(0,0,0,K*17):GFX PALETTE 3,1+K,RGB(0,0,0,K*17)
-26670   NEXT K
-26680 END PROC
-26700 PROC VEIL
-26710   LOCAL V,L,X,Y,Z,CY,SY,CP,SP,FX,FY,FZ,RX,RY,UX,UY,UZ,CX,CZ,F
-26720   V=BL*BL
-26730   IF MODE=5 THEN
-26740     IF UT<UTM-3 THEN V=0.62+0.38*MAX(0,MIN(1,1-(UT-1))) ELSE V=0.62*MAX(0,(UTM-UT)/3)
-26750   END IF
-26760   IF VT>=0 THEN V=VT/15
-26770   L=INT(V*15+0.5):IF L>15 THEN L=15
-26780   IF L<=0 THEN
-26790     IF VLV<>0 THEN M3D OBJECT 720,30,235:VLV=0
-26800     EXIT PROC
-26810   END IF
-26820   VLV=L
-26830   X=M3D("X"):Y=M3D("Y"):Z=M3D("Z")+46
-26840   CY=COS(M3D("YAW")*PI/180):SY=SIN(M3D("YAW")*PI/180):CP=COS(M3D("PITCH")*PI/180):SP=SIN(M3D("PITCH")*PI/180)
-26850   FX=CP*CY:FY=CP*SY:FZ=SP:RX=SY:RY=-CY:UX=-SP*CY:UY=-SP*SY:UZ=CP
-26860   CX=X+3*FX:CY=Y+3*FY:CZ=Z+3*FZ
-26870   F=30:IF L>=15 THEN F=28:L=0
-26880   M3D OBJECT 720,F,255
-26890   M3D VERTEX 720,CX-40*RX-40*UX,CY-40*RY-40*UY,CZ-40*UZ
-26900   M3D VERTEX 720,CX+40*RX-40*UX,CY+40*RY-40*UY,CZ-40*UZ
-26910   M3D VERTEX 720,CX+40*RX+40*UX,CY+40*RY+40*UY,CZ+40*UZ
-26920   M3D VERTEX 720,CX-40*RX+40*UX,CY-40*RY+40*UY,CZ+40*UZ
-26930   M3D QUAD 720,0,1,2,3,1+L
-26940 END PROC
+25550     IF DRM(K)=1 OR DRM(K)>=3 OR (DRM(K)=0 AND DRSC(K)) THEN
+25560       DRBM(K)=MIN(1,DRBM(K)+1.2*DT):IF DRM(K)>=3 THEN DRBM(K)=MIN(1,DRBM(K)+1.8*DT)
+25570     ELSE
+25580       DRBM(K)=MAX(0,DRBM(K)-2*DT)
+25590     END IF
+25600     DRV(K)=DRV(K)+(TS-DRV(K))*MIN(1,0.8*DT)
+25610     NX=DRX(K)+COS(DRH(K)*PI/180)*DRV(K)*DT:NY=DRY(K)+SIN(DRH(K)*PI/180)*DRV(K)*DT
+25620     IF FN DCELL(NX)<>FN DCELL(DRX(K)) OR FN DCELL(NY)<>FN DCELL(DRY(K)) THEN
+25630       IF FN DCOUNT(FN DCELL(NX),FN DCELL(NY),K)>=DCAP THEN
+25640         NX=DRX(K):NY=DRY(K):DRV(K)=0:IF DRM(K)<3 THEN CALL DRPICK(K)
+25650       END IF
+25660     END IF
+25670     DRX(K)=NX:DRY(K)=NY
+25680     GA=FN HT(NX,NY):GB=FN HT(NX+COS(DRH(K)*PI/180)*700,NY+SIN(DRH(K)*PI/180)*700):IF GB>GA THEN GA=GB
+25690     DRZ(K)=DRZ(K)+(GA+AL+12*SIN(GT*0.9+K)-DRZ(K))*MIN(1,1.2*DT)
+25700   NEXT K
+25710   CALL DRSEP(DT)
+25720   DCT=DCT-DT:IF DCT<=0 THEN DCT=0.25:DPN=FN DMAXCELL():IF DPN>DPK THEN DPK=DPN
+25730   ' the meter of the black-out: it fills while a drone's beam is on John (faster with two), and empties again when he is out of it
+25740   IF MODE<>5 THEN
+25750     IF BF THEN BL=MIN(1,BL+(0.2+0.6*BI)*DT) ELSE BL=MAX(0,BL-0.3*DT)
+25760     IF BL>=1 AND (MODE=0 OR MODE=1) THEN CALL BLACKOUT
+25770   END IF
+25780 END PROC
+25800 ' the height of what the beam's spot lies on: the ground or the top of anything standing on it (a roof, a fence, the bicycle): the drones study the surfaces of things
+25810 FUNC BEAMZ(X,Y,Z)
+25820   RETURN MAX(M3D("FLOORAT",X,Y,Z),FN HT(X,Y))+4
+25830 END FUNC
+26100 PROC DRONERIG
+26110   LOCAL K,O,TX,TY,GZ,A,I,DX,DY,B,SC,Z0,C1,C2
+26120   FOR K=0 TO NDR-1
+26130     M3D OBJPOS 600+K,DRX(K),DRY(K),DRZ(K),GT*20+K*50
+26140     M3D OBJPOS 620+K,DRX(K),DRY(K),FN HT(DRX(K),DRY(K))+3.5,0
+26150     DX=DRX(K)-M3D("X"):DY=DRY(K)-M3D("Y")
+26160     O=610+K
+26170     M3D OBJECT O,30,235
+26180     IF DX*DX+DY*DY<2600*2600 AND DRBM(K)>0.04 THEN
+26190       SC=(0.35+0.65*DRBM(K))*(1+0.45*DRI(K))
+26200       C1=FN CC(1,13):C2=FN CC(1,12):IF DRI(K)>0.5 THEN C1=FN CC(1,15):C2=FN CC(1,14)
+26210       TX=DSX(K):TY=DSY(K):Z0=DRZ(K)-62
+26220       GZ=FN BEAMZ(TX,TY,Z0)
+26230       M3D VERTEX O,DRX(K),DRY(K),Z0
+26240       FOR I=0 TO 3
+26250         A=I*PI/2+GT
+26260         M3D VERTEX O,TX+26*SC*COS(A),TY+26*SC*SIN(A),FN BEAMZ(TX+26*SC*COS(A),TY+26*SC*SIN(A),Z0)
+26270       NEXT I
+26280       FOR I=1 TO 4
+26290         M3D FACE O,0,I,1+(I MOD 4),C1
+26300       NEXT I
+26310       B=M3D("VERTS",O)
+26320       M3D VERTEX O,TX,TY,GZ+0.3
+26330       FOR I=0 TO 7
+26340         A=I*PI/4
+26350         M3D VERTEX O,TX+48*SC*COS(A),TY+48*SC*SIN(A),FN BEAMZ(TX+48*SC*COS(A),TY+48*SC*SIN(A),Z0)+0.3
+26360       NEXT I
+26370       FOR I=0 TO 7
+26380         M3D FACE O,B,B+1+I,B+1+((I+1) MOD 8),C2
+26390       NEXT I
+26395     END IF
+26398   NEXT K
+26399 END PROC
+26500 ' two drones never overlap (owner, 2026-11-26): each has a box of 240 x 240 units (the width of a body, its claws and a margin) and 180 high; when two boxes meet (their centers closer than DSW on both
+26510 ' horizontal axes and than DSZ vertically) the two are pushed apart along the axis of the smaller overlap, half each. They keep their height themselves, so only the horizontal axes are used
+26520 PROC DRSEP(DT)
+26530   LOCAL K,J,DX,DY,PX,PY,S
+26540   FOR K=0 TO NDR-2
+26550     FOR J=K+1 TO NDR-1
+26560       IF ABS(DRZ(J)-DRZ(K))<DSZ THEN
+26570         DX=DRX(J)-DRX(K):DY=DRY(J)-DRY(K)
+26580         IF ABS(DX)<DSW AND ABS(DY)<DSW THEN
+26590           IF DX=0 AND DY=0 THEN DX=COS(K*2.1+J):DY=SIN(K*2.1+J)
+26600           PX=DSW-ABS(DX):PY=DSW-ABS(DY)
+26610           IF PX<PY THEN
+26620             S=SGN(DX)*PX*0.5*MIN(1,8*DT):DRX(J)=DRX(J)+S:DRX(K)=DRX(K)-S
+26630           ELSE
+26640             S=SGN(DY)*PY*0.5*MIN(1,8*DT):DRY(J)=DRY(J)+S:DRY(K)=DRY(K)-S
+26650           END IF
+26660         END IF
+26670       END IF
+26680     NEXT J
+26690   NEXT K
+26700 END PROC
 27000 ' ------------------------------------------------------------------------------------------------ sound
 27010 ' The drones are anti-gravity machines: no rotors, no engines, an electric hum (like a transformer: 100 Hz and its octave, a faint high whine) on the music channels 1 .. 4 (a held note each, slightly different pitches; VOLUME follows the distance to the camera,
 27020 ' PITCH drifts a little), the tyres' rolling noise is a held noise on channel 5 (louder with speed, near silent on grass, sand roads, fields and wheat, a little quieter on hard ground); footsteps are effects, one at each heel strike
@@ -1635,8 +1582,8 @@
 32430   KU=0:IF U<>0 AND UL=0 THEN KU=-1
 32440   UL=U
 32450   B=0:IF KEY("B") OR JOY("B") THEN B=-1
-32460   KBL=0:IF B<>0 AND BL=0 THEN KBL=-1
-32470   BL=B
+32460   KBL=0:IF B<>0 AND BKL=0 THEN KBL=-1
+32470   BKL=B
 32480   ' the Share button of a pad takes a screenshot (shot-YYYYMMDD-HHMMSS-n.bmp in the current folder), once per press
 32490   SHB=0:IF JOY("SHARE") THEN SHB=-1
 32500   IF SHB<>0 AND SHP=0 THEN IF HL=0 THEN SCREENSHOT
@@ -1733,14 +1680,15 @@
 34130   ' the bicycle leans against the south fence of the yard, on the outside, east of the gate, the handlebar turned towards the fence (bike state 1, see BIKEFALL)
 34140   BST=1:BLN=0.35:BLS=1:BSTR=50:BRT=0:BYW=0:BSD=0:BDR=-1:BVIS=-1:BLW=0:BLN0=0:BSTR0=0:IF NOT NOLOAD THEN CALL WLOAD
 34150   M3D THINGPOS 0,JX,JY,JZ:M3D THINGPOS 1,BX,BY,BZ
-34160   CMINIT=0:CMB=0:CMT=0:CMIDLE=0:CMNEXT=7:CMHOLD=0:CMAZ=0:CMEL=0:CMIN=0:CMLASTB=0:CMPC=-1:DWI=0:ZOI=0:CDI=0:CZI=0:CZM=0:CLP=0:NSL=0:MODE=0:BL=0:UT=0:PROT=0:MT=0:PH=0:KTS=0:KFA=0:KFD=0:KRA=0:KSH=0:KLT=0:EXH=0:ST=1:STD=0:TK=0:CYW=JH:CO=0:CP=0:KU=0:UL=0:BL=0:NEAR=0:MSGT=0:MB=0
+34160   CMINIT=0:CMB=0:CMT=0:CMIDLE=0:CMNEXT=7:CMHOLD=0:CMAZ=0:CMEL=0:CMIN=0:CMLASTB=0:CMPC=-1:DWI=0:ZOI=0:CDI=0:CZI=0:CZM=0:CLP=0:NSL=0:MODE=0:BL=0:UT=0:PROT=0:CMF=0:MT=0:PH=0:KTS=0:KFA=0:KFD=0:KRA=0:KSH=0:KLT=0:EXH=0:ST=1:STD=0:TK=0:CYW=JH:CO=0:CP=0:KU=0:UL=0:BL=0:NEAR=0:MSGT=0:MB=0
 34170   CALL SAY("WALK WITH W A S D. THE BICYCLE LEANS AGAINST THE FENCE OUTSIDE THE GATE, TO THE EAST: STAND NEAR IT AND PRESS E.")
 34180   MSGT=14
 34190 END PROC
 34200 PROC PLAYLOOP
 34210   LOCAL T0,FR,Y,YL,ST0,FTL,FTS,FTI,FTD,FTC,FTK,FTT,FTR,FTA,FTN,FTP
-34211   IF ENV$("G1987_LIETEST")<>"" THEN MODE=5:UT=1.5:UTM=100000
-34220   VT$=ENV$("G1987_SHOT"):T0=TI:YL=0:NFR=0:FL$=ENV$("G1987_FRAMELOG"):FLN=0:FLN2=10000:IF ENV$("G1987_FRAMES")<>"" THEN FLN2=VAL(ENV$("G1987_FRAMES"))
+34211   IF ENV$("G1987_LIETEST")<>"" THEN MODE=5:UT=1.9:UTM=100000
+34220   VT$=ENV$("G1987_SHOT"):SHF=60:IF ENV$("G1987_SHOTFRAME")<>"" THEN SHF=VAL(ENV$("G1987_SHOTFRAME"))
+34221   T0=TI:YL=0:NFR=0:FL$=ENV$("G1987_FRAMELOG"):FLN=0:FLN2=10000:IF ENV$("G1987_FRAMES")<>"" THEN FLN2=VAL(ENV$("G1987_FRAMES"))
 34230   CALL SOUNDSTART:FTL=TIMER:FTC=GFX("FRAME"):FTP=1/60:FTA=0:FTN=0
 34240   REPEAT
 34250     ' the frame time. TI counts whole 1/60 s ticks (a frame showed 0, 1 or 2 of them by turns, so the time of a frame used to be the average of the last 32 frames, and the world moved by that
@@ -1771,7 +1719,8 @@
 34500     CALL AMBIENT:CALL TERRAINUPDATE(JX,JY)
 34510     IF FL$<>"" THEN CALL FLPH(3)
 34520     CALL DRAWFRAME
-34521     IF VT$<>"" AND NFR=60 THEN SCREENSHOT VT$:IN_QUIT=1
+34521     IF ENV$("G1987_CATCHTEST")<>"" AND NFR=VAL(ENV$("G1987_CATCHTEST")) THEN PROT=0:DRX(0)=JX+60:DRY(0)=JY:DRM(0)=3:DRI(0)=0:DRL(0)=0:DSX(0)=JX:DSY(0)=JY:DRBM(0)=1:DRZ(0)=FN HT(JX,JY)+190
+34522     IF VT$<>"" AND NFR=SHF THEN SCREENSHOT VT$:IN_QUIT=1
 34530     IF FN IN_SERVICE() THEN
 34540       CALL SOUNDMUTE
 34550       CALL PAUSEMENU
@@ -1898,11 +1847,13 @@
 36780     IF C$="chunks" THEN CALL CHUNKSTAT(JX,JY)
 36790     IF C$="sweep" THEN CALL SWEEPCAM(VAL(W$(1)),VAL(W$(2)))
 36800     IF C$="state" THEN
-36810       PRINT "state mode=";MODE;" bl=";INT(BL*100);" ut=";INT(UT);" jx=";INT(JX);" jy=";INT(JY);" jz=";INT(JZ+0.5);" jh=";INT(JH);" jv=";INT(JV);" bst=";BST;" nj=";CNJ;" nh=";CNH;" nb=";CNB;" cmb=";CMB;" hly=";INT(HLY);" hlp=";INT(HLP);" brp=";INT(BRP*100);" bx=";INT(BX);" by=";INT(BY);" bz=";INT(BZ+0.5);" bh=";INT(BH);" bv=";INT(BV);" st=";INT(ST*100);" gh=";INT(FN HT(JX,JY));" sf=";FN SURF(JX,JY,JZ)
+36810       PRINT "state mode=";MODE;" bl=";INT(BL*100);" ut=";INT(UT);" jx=";INT(JX);" jy=";INT(JY);" jz=";INT(JZ+0.5);" jh=";INT(JH);" jv=";INT(JV);" bst=";BST;" nj=";CNJ;" nh=";CNH;" nb=";CNB;" cmb=";CMB;" hly=";INT(HLY);" hlp=";INT(HLP);" brp=";INT(BRP*100);" bx=";INT(BX);" by=";INT(BY);" bz=";INT(BZ+0.5);" bh=";INT(BH);" bv=";INT(BV);" st=";INT(ST*100);" gh=";INT(FN HT(JX,JY));" sf=";FN SURF(JX,JY,JZ);" cmf=";CMF;" cmg=";INT(CMZ-FN HT(CMX,CMY));" vlv=";VLV
 36820     END IF
-36821     IF C$="catch" THEN PROT=0:DRX(0)=JX:DRY(0)=JY:DRM(0)=3:DRI(0)=0:DRL(0)=0:DSX(0)=JX:DSY(0)=JY:DRBM(0)=1
+36821     IF C$="catch" THEN TQ=VAL(W$(1)):PROT=0:DRX(TQ)=JX+VAL(W$(2)):DRY(TQ)=JY:DRM(TQ)=3:DRI(TQ)=0:DRL(TQ)=0:DSX(TQ)=JX:DSY(TQ)=JY:DRBM(TQ)=1:DRZ(TQ)=FN HT(JX,JY)+190
 36822     IF C$="scanat" THEN PROT=0:DRM(0)=1:DRBM(0)=1:DRTM(0)=60:DRX(0)=JX-300*COS(GT*0.5):DRY(0)=JY-300*SIN(GT*0.7)
 36823     IF C$="spotz" THEN PRINT "spotz z=";INT(FN BEAMZ(VAL(W$(1)),VAL(W$(2)),2000));" gz=";INT(FN HT(VAL(W$(1)),VAL(W$(2))))
+36824     IF C$="hide" THEN FOR TQ=0 TO NDR-1:DRX(TQ)=JX+16500:DRY(TQ)=JY+TQ*300:DRM(TQ)=2:DRTM(TQ)=15:DRBM(TQ)=0:DRI(TQ)=0:NEXT TQ
+36825     IF C$="above" THEN TQ=VAL(W$(1)):PROT=0:DRX(TQ)=JX+30:DRY(TQ)=JY:DRM(TQ)=0:DRSC(TQ)=0:DRBM(TQ)=0:DRTX(TQ)=JX+9000:DRTY(TQ)=JY:DRZ(TQ)=FN HT(JX,JY)+300
 36830     IF C$="ray" THEN
 36840       M3D CAMERA VAL(W$(1)),VAL(W$(2)),VAL(W$(3))-46,VAL(W$(4)),VAL(W$(5))
 36850       N=M3D("SHOOT",600)
@@ -1924,7 +1875,7 @@
 37010       PRINT "bench";N;" frames, ms per frame";INT((TI-T0)*1000/60/N);" renderer";M3D("RENDERER");" drawn";M3D("DRAWN")
 37020       OPEN "bench.txt" FOR APPEND AS #5:PRINT #5,"bench";N;" ms per frame";INT((TI-T0)*1000/60/N);" renderer";M3D("RENDERER");" drawn";M3D("DRAWN"):CLOSE #5
 37030     END IF
-37040     IF C$="drones" THEN PRINT "drone x=";INT(DRX(0));" y=";INT(DRY(0));" z=";INT(DRZ(0));" m=";DRM(0);" gz=";INT(FN HT(DRX(0),DRY(0)));" n=";NDR;" maxcell=";FN DMAXCELL();" peak=";DPK;" ri=";INT(DRI(0)*100)
+37040     IF C$="drones" THEN TQ=VAL(W$(1)):PRINT "drone x=";INT(DRX(TQ));" y=";INT(DRY(TQ));" z=";INT(DRZ(TQ));" m=";DRM(TQ);" gz=";INT(FN HT(DRX(TQ),DRY(TQ)));" n=";NDR;" maxcell=";FN DMAXCELL();" peak=";DPK;" ri=";INT(DRI(TQ)*100);" sc=";DRSC(TQ)
 37050     IF C$="clp" THEN CLP=VAL(W$(1)):CMINIT=0
 37060     IF C$="pop" THEN CALL POPTEST(VAL(W$(1)),VAL(W$(2)))
 37070     IF C$="zoom" THEN CZM=VAL(W$(1)):CMINIT=0
@@ -1959,7 +1910,7 @@
 38180 ' the limit John and the bicycle are kept inside (far away: the world is made of chunks as you go, see CHUNKS); TYW = -1: a tree gets a random yaw
 38190 WLIM=50000:TYW=-1:WZ=-12:MTLIM=120:SLLIM=22:WSTAND=45
 38200 ' the bicycle without a rider: it rolls on upright for WFALL seconds, then falls over and slides on its side (deceleration WSLIDE units a second squared); XON / XFR: tilt on
-38210 CGI=0:CGT=0:CMX=0:CMY=0:CMZ=0:CMVX=0:CMVY=0:CMVZ=0:CMYW=0:CMPT=0:CMWY=0:CMWP=0:CMPX=0:CMPY=0:CMPZ=0:CMPX0=0:CMPY0=0:CMPZ0=0:CMTVX=0:CMTVY=0:CMTVZ=0:CMPI=0:CMPK=0:CMDUR=0:CMAZR=0:HLY=0:HLP=0:BRP=0:HQY=0:HQP=0:HKEY=99999:HOX=0:HOY=0:HOZ=0:BJ1=-1:BJ2=0:BJ3=0:BJ4=0:BJ5=0:BJ6=0:BJ7=0:PWA=-99999:PCA=-99999:CNJ=0:CNH=0:CNB=0:HCX=0:HCY=0:HCZ=0:HYS=0:HYC=1:HPS=0:HPC=1:WFALL=3:WSLIDE=120:XON=0:XFR=0:XRS=0:XRC=1:XFS=0:XFC=1:XLF=0
+38210 BKL=0:CGI=0:CGT=0:CMX=0:CMY=0:CMZ=0:CMVX=0:CMVY=0:CMVZ=0:CMYW=0:CMPT=0:CMF=0:CMFT=0:CMFV=0:CMFS=0:CMWY=0:CMWP=0:CMPX=0:CMPY=0:CMPZ=0:CMPX0=0:CMPY0=0:CMPZ0=0:CMTVX=0:CMTVY=0:CMTVZ=0:CMPI=0:CMPK=0:CMDUR=0:CMAZR=0:HLY=0:HLP=0:BRP=0:HQY=0:HQP=0:HKEY=99999:HOX=0:HOY=0:HOZ=0:BJ1=-1:BJ2=0:BJ3=0:BJ4=0:BJ5=0:BJ6=0:BJ7=0:PWA=-99999:PCA=-99999:CNJ=0:CNH=0:CNB=0:HCX=0:HCY=0:HCZ=0:HYS=0:HYC=1:HPS=0:HPC=1:WFALL=3:WSLIDE=120:XON=0:XFR=0:XRS=0:XRC=1:XFS=0:XFC=1:XLF=0
 38220 CALL SETGROUND
 38230 ' the sun: terrain cells get pictures shaded by their slope (M3D SUN: steps 301.. + 100, 200, 300; needs the palette's color map first)
 38240 IF NOT HL THEN M3D COLORMAP
@@ -2239,6 +2190,7 @@
 43100 PROC CAMAGENT(DT)
 43110   LOCAL QD,QV,TX,TY,TZ,TG,K,D,E,C,S,DS,R,PX,PY,PZ,EX,EY,EZ,AX,AY,AZ,SP,LX,LY,LZ,H,FZ,PM,YW,PT,ER,DX,DY,DZ,D2,HH,KP,KD
 43120   IF DT<0.002 THEN EXIT PROC
+43125   IF CMF>0 THEN CALL CAMFALL(DT):EXIT PROC
 43130   IF CZI=0 OR ABS(JZ-CZS)>40 THEN CZS=JZ:CZI=-1
 43140   CZS=CZS+(JZ-CZS)*MIN(1,9*DT)
 43150   ZT=36:IF MODE=1 THEN ZT=40
@@ -2399,11 +2351,10 @@
 44970     GGX(G*20+S*4+2)=X0:GGX(G*20+S*4+3)=Y0
 44980   NEXT S
 44990 END PROC
-45000 ' the camera shows that it acts on its own (it does not when the player directs it): a red dot that blinks with REC in the upper left corner, and in the lower right corner a row of red
+45000 ' the camera shows that it records (owner, 2026-11-26: also while the player only gives it instructions): a red dot that blinks with REC in the upper left corner, and in the lower right corner a row of red
 45010 ' glyphs of an alien script, one of which is made new from time to time (more often when the camera is busy with something)
 45100 PROC CAMHUD
 45110   LOCAL G,S,X,Y,C1,C2
-45120   IF CMB=1 THEN EXIT PROC
 45130   IF CGI=0 THEN
 45140     FOR G=0 TO 6
 45150       CALL NEWGLYPH(G)
@@ -2788,11 +2739,12 @@
 53720 END FUNC
 53800 ' the pause menu: P / Q / START / BACK go on with the game, R / X reset the positions, C / Y show or hide the coordinates (the game is left only while playing: Q, BACK or ESC)
 53900 PROC PAUSEMENU
-53910   LOCAL K$,K,DONE,LX,LY,D
+53910   LOCAL K$,K,DONE,LX,LY,D,PT0
 53920   WHILE FN IN_ANYSTART(0)
 53930     GFX VSYNC
 53940   WEND
-53950   D=-1:DONE=0:LX=-1:LY=-1
+53950   D=-1:DONE=0:LX=-1:LY=-1:PT0=TI
+53955   ' a held P repeats: the characters of the repeat must neither close the pause at once nor open it again; the dialog is drawn again in every pass (the 3D picture's read-back can land over it once, then no new picture comes to cover it)
 53960   REPEAT
 53970     IF D THEN
 53980       CALL BIGTEXT(110,"PAUSED",FN CC(0,15),3)
@@ -2803,11 +2755,12 @@
 54030       CALL BIGTEXT(192,"(Q OR ESC WHILE PLAYING: LEAVE THE GAME)",FN CC(0,9),1)
 54040       CALL BIGTEXT(208,"PAD: START CONTINUE  X RESET  Y COORDINATES",FN CC(0,9),1)
 54050       CALL W3K_SHOW
-54060       D=0
+54060       D=-1
 54070     END IF
 54080     GFX VSYNC
 54090     K$=INKEY$:K=0
 54100     IF K$<>"" THEN K=ASC(K$)
+54105     IF TI-PT0<25 AND K<>0 THEN K=0
 54110     IF K>=97 AND K<=122 THEN K=K-32
 54120     IF K=67 OR (FN PADY(0) AND NOT LY) THEN SXY=NOT SXY:D=-1
 54130     IF K=82 OR (FN PADX(0) AND NOT LX) THEN CALL RESETPOS:CALL SAY("BACK AT THE START."):DONE=-1
@@ -2818,7 +2771,12 @@
 54180   WHILE FN IN_ANYSTART(0)
 54190     GFX VSYNC
 54200   WEND
-54210   IN_PSK=0
+54210   WHILE KEY("P")
+54212     GFX VSYNC
+54214   WEND
+54216   WHILE INKEY$<>""
+54218   WEND
+54219   IN_PSK=0
 54220 END PROC
 54300 ' the game sessions: play, save, back to the title (Q, BACK or ESC leave the game; Q, BACK or ESC at the title end the program); SPACE there resumes the game exactly as it was (no new game: John, the bicycle,
 54310 ' the camera and the state of everything stay); N at the title makes a new world and starts a new game in it
@@ -2989,3 +2947,146 @@
 57470     GFX TEXT AXX+INT(AXU*9)-4,AXZ+INT(AXW*9)-4,AXT$,AXC
 57480   NEXT AXK
 57490 END PROC
+58000 ' ------------------------------------------------------------------------------------------------ the black-out: a drone finds John, the beam, the fall of John and of the camera
+58010 ' (owner, 2026-11-26) A drone finds John when its spot stays on him (DRCATCH) or when he is within 2 m of it (DRFOUND); its spot then locks on him (DRFOCUS), the beam grows for a second or two and
+58020 ' John collapses (BLACKOUT): off the bicycle, or to the ground. The drone then turns the beam on the camera (DRCAM, mode 4): the camera is a drone too, it is the viewer. Its beam holds on the camera
+58030 ' for 1.5 s, the camera falls and lies on the ground (CAMDOWN, CAMFALL: CMF 1 falling, 2 lying), and only then the picture goes black (VEIL). John comes to after UTM seconds (UNCON), the camera
+58040 ' rises again, and for 25 s (PROT) no drone looks at him.
+58100 ' a drone has found John: its beam locks on him
+58110 PROC DRFOUND(K)
+58120   DRM(K)=3:DRI(K)=0:DRL(K)=0:DRW(K)=0:DRSC(K)=0
+58130   CALL SAY("THE DRONE HAS FOUND YOU."):MSGT=5
+58140 END PROC
+58200 ' a drone that has found John: it hangs over him, its spot chases him (1200 units a second: no bicycle gets away); while he is in the spot the beam grows stronger (DRI 0 .. 1 in 1.4 s), out of
+58210 ' it the beam weakens and after 2.5 s without him the drone loses interest. DFTS: its speed, DFIN: John is in the spot
+58220 PROC DRFOCUS(K,DT)
+58230   LOCAL DX,DY,L,S
+58240   DX=JX-DRX(K):DY=JY-DRY(K):L=SQR(DX*DX+DY*DY)
+58250   DRH(K)=DRH(K)+FN ADIFF(ATAN2(DY,DX)*180/PI,DRH(K))*MIN(1,2*DT)
+58260   DFTS=MIN(260,MAX(0,(L-40)*1.3))
+58270   DX=JX-DSX(K):DY=JY-DSY(K):L=SQR(DX*DX+DY*DY)
+58280   IF L>0.01 THEN S=MIN(L,1200*DT):DSX(K)=DSX(K)+DX/L*S:DSY(K)=DSY(K)+DY/L*S
+58290   DX=JX-DSX(K):DY=JY-DSY(K):DFIN=(DX*DX+DY*DY<8100)
+58300   IF DFIN THEN
+58310     DRI(K)=MIN(1,DRI(K)+0.7*DT):DRL(K)=0
+58320   ELSE
+58330     DRI(K)=MAX(0,DRI(K)-0.25*DT):DRL(K)=DRL(K)+DT
+58340   END IF
+58350   IF DRL(K)>2.5 OR MODE=5 THEN DRM(K)=2:DRTM(K)=2+RND*2:DRI(K)=0:DRL(K)=0
+58360 END PROC
+58400 ' a scanning (or cruising, with the beam on) drone finds John when its spot stays on him for 0.12 s; not while he is unconscious or in the quiet time (PROT) after he came to
+58410 PROC DRCATCH(K,DT)
+58420   LOCAL DX,DY
+58430   IF PROT>0 OR MODE=5 OR DRBM(K)<0.7 THEN DRW(K)=0:EXIT PROC
+58440   DX=JX-DSX(K):DY=JY-DSY(K)
+58450   IF DX*DX+DY*DY<8100 THEN DRW(K)=DRW(K)+DT ELSE DRW(K)=0
+58460   IF DRW(K)>0.12 THEN CALL DRFOUND(K)
+58470 END PROC
+58500 ' mode 4: John is down and the drone has turned its beam on the camera. The spot lies where the line from the drone through the camera meets the ground, so the camera is in the beam; after 1.5 s
+58510 ' the camera goes down (CAMDOWN); the drone stays until it has lain there for 1.5 s, then it moves on (or at once when John is up)
+58520 PROC DRCAM(K,DT)
+58530   LOCAL DX,DY,L,S,Z0,GZ,T,SX,SY
+58540   DX=JX-DRX(K):DY=JY-DRY(K):L=SQR(DX*DX+DY*DY)
+58550   DRH(K)=DRH(K)+FN ADIFF(ATAN2(DY,DX)*180/PI,DRH(K))*MIN(1,2*DT)
+58560   DFTS=MIN(260,MAX(0,(L-40)*1.3))
+58570   Z0=DRZ(K)-62:GZ=FN HT(CMX,CMY)
+58580   T=(Z0-GZ)/MAX(20,Z0-CMZ):T=MAX(1,MIN(4,T))
+58590   SX=DRX(K)+(CMX-DRX(K))*T:SY=DRY(K)+(CMY-DRY(K))*T
+58600   DX=SX-DSX(K):DY=SY-DSY(K):L=SQR(DX*DX+DY*DY)
+58610   IF L>0.01 THEN S=MIN(L,1200*DT):DSX(K)=DSX(K)+DX/L*S:DSY(K)=DSY(K)+DY/L*S
+58620   DRI(K)=MIN(1,DRI(K)+0.7*DT):DRL(K)=DRL(K)+DT
+58630   IF DRL(K)>1.5 AND CMF=0 THEN CALL CAMDOWN
+58640   IF (CMF=2 AND CMFT>1.5) OR MODE<>5 THEN DRM(K)=2:DRTM(K)=3+RND*3:DRI(K)=0:DRL(K)=0
+58650 END PROC
+58700 ' BL (0 .. 1) is how far John is gone: it grows while he is in a beam (faster the stronger the beam, and with two drones), shrinks when he is out of it; at 1 he collapses (BLACKOUT): he falls
+58710 ' off the bicycle (the bicycle rolls on and falls by itself) or to the ground, the drones turn their beams on the camera, he lies for UTM seconds (10 .. 14) and comes to (UNCON), then no drone
+58720 ' looks at him for 25 s (PROT)
+58730 PROC BLACKOUT
+58740   LOCAL K,DX,DY
+58750   FOR K=0 TO NDR-1
+58760     IF DRM(K)=3 THEN DRM(K)=4:DRL(K)=0
+58770   NEXT K
+58780   IF MODE=1 THEN
+58790     DX=-SIN(BH*PI/180)*38:DY=COS(BH*PI/180)*38
+58800     M3D THINGPOS 0,BX,BY,BZ:M3D THINGMOVE 0,DX,DY
+58810     JX=M3D("TX",0):JY=M3D("TY",0):JZ=M3D("TZ",0)
+58820   END IF
+58830   MODE=5:UT=0:UTM=10+RND*4:JV=0:KTS=0:BL=1:CMF=0
+58840   CALL SND(4):CALL SAY("JOHN COLLAPSES."):MSGT=5
+58850 END PROC
+58900 PROC UNCON(DT)
+58910   IF MODE<>5 THEN EXIT PROC
+58920   UT=UT+DT:JV=0
+58930   IF CMF=0 AND UT>1.8 THEN CALL CAMDOWN
+58940   IF UT>=UTM THEN
+58950     MODE=0:BL=0:UT=0:PROT=25:M3D THINGPOS 0,JX,JY,JZ
+58960     CMF=0:CMWY=0:CMWP=0:CMVX=0:CMVY=0:CMVZ=0
+58970     CALL SAY("JOHN COMES TO."):MSGT=5
+58980   END IF
+58990 END PROC
+59100 ' the camera is hit by the beam and falls (owner, 2026-11-26: the viewer is the camera drone): CMF 1 it falls (gravity, a spin, the view tips down; it bounces once), 2 it lies on the ground
+59110 ' (CMFT: the seconds since it landed). CAMAGENT leaves everything to CAMFALL while CMF is not 0; UNCON sets CMF to 0 when John comes to and the camera's own spring lifts it back
+59120 PROC CAMDOWN
+59130   CMF=1:CMFT=0:CMFV=0:CMFS=80+RND*60:IF RND<0.5 THEN CMFS=-CMFS
+59140   CALL SAY("THE CAMERA DRONE GOES DOWN.")
+59150 END PROC
+59200 PROC CAMFALL(DT)
+59210   LOCAL FZ
+59220   CMFT=CMFT+DT
+59230   FZ=MAX(M3D("FLOORAT",CMX,CMY,CMZ),FN HT(CMX,CMY))+10
+59240   IF CMF=1 THEN
+59250     CMFV=CMFV-650*DT
+59260     CMX=CMX+CMVX*DT:CMY=CMY+CMVY*DT:CMZ=CMZ+CMFV*DT
+59270     CMVX=CMVX*(1-MIN(1,1.2*DT)):CMVY=CMVY*(1-MIN(1,1.2*DT))
+59280     CMYW=CMYW+CMFS*DT:CMFS=CMFS*(1-MIN(1,0.8*DT))
+59290     CMPT=CMPT+(-38-CMPT)*MIN(1,2.5*DT)
+59300     IF CMZ<=FZ THEN
+59310       CMZ=FZ
+59320       IF CMFV<-140 THEN
+59330         CMFV=-CMFV*0.3:CALL SND(4)
+59340       ELSE
+59350         CMF=2:CMFT=0:CMFV=0:CMVX=0:CMVY=0
+59360       END IF
+59370     END IF
+59380   ELSE
+59390     CMZ=FZ:CMYW=CMYW+CMFS*DT:CMFS=CMFS*(1-MIN(1,2*DT))
+59400   END IF
+59410   M3D CAMERA CMX,CMY,CMZ-46,CMYW,CMPT
+59420   DSV=SQR((CMX-JX)^2+(CMY-JY)^2+(CMZ-JZ-36)^2)
+59430 END PROC
+59500 ' the veil: the vision going dark, as a quad in front of the camera that is translucent black. The palette entries 2 .. 15 (levels 1 .. 14: black with the alpha 17 .. 238, VEILPAL; the
+59510 ' game's colors start at 16, W3K_PALETTE leaves them alone; set before the color map is made) are the veil's; level 15 is the opaque one (entry 1, black). Object 720, made new each frame while the veil is there. V: 0 until the camera lies on the ground (CMF=2), then 1 in 0.8 s, 1 until 1.6 s, 0.62 from 2.6 s,
+59520 ' while he lies, then fading out in the last 3 seconds. G1987_VEILTEST=level (0 .. 15) holds a level for a picture test
+59530 PROC VEILPAL
+59540   LOCAL K
+59550   FOR K=1 TO 14
+59560     GFX PALETTE 0,1+K,RGB(0,0,0,K*17):GFX PALETTE 3,1+K,RGB(0,0,0,K*17)
+59570   NEXT K
+59580 END PROC
+59600 PROC VEIL
+59610   LOCAL V,L,X,Y,Z,CY,SY,CP,SP,FX,FY,FZ,RX,RY,UX,UY,UZ,CX,CZ,F
+59620   V=0
+59630   IF CMF=2 THEN
+59640     V=MIN(1,CMFT/0.8)
+59650     IF CMFT>1.6 THEN V=0.62+0.38*MAX(0,1-(CMFT-1.6))
+59660     IF MODE=5 AND UT>UTM-3 THEN V=V*MAX(0,(UTM-UT)/3)
+59670   END IF
+59680   IF VT>=0 THEN V=VT/15
+59690   L=INT(V*15+0.5):IF L>15 THEN L=15
+59700   IF L<=0 THEN
+59710     IF VLV<>0 THEN M3D OBJECT 720,30,235:VLV=0
+59720     EXIT PROC
+59730   END IF
+59740   VLV=L
+59750   X=M3D("X"):Y=M3D("Y"):Z=M3D("Z")+46
+59760   CY=COS(M3D("YAW")*PI/180):SY=SIN(M3D("YAW")*PI/180):CP=COS(M3D("PITCH")*PI/180):SP=SIN(M3D("PITCH")*PI/180)
+59770   FX=CP*CY:FY=CP*SY:FZ=SP:RX=SY:RY=-CY:UX=-SP*CY:UY=-SP*SY:UZ=CP
+59780   CX=X+3*FX:CY=Y+3*FY:CZ=Z+3*FZ
+59790   F=30:IF L>=15 THEN F=28:L=0
+59800   M3D OBJECT 720,F,255
+59810   M3D VERTEX 720,CX-40*RX-40*UX,CY-40*RY-40*UY,CZ-40*UZ
+59820   M3D VERTEX 720,CX+40*RX-40*UX,CY+40*RY-40*UY,CZ-40*UZ
+59830   M3D VERTEX 720,CX+40*RX+40*UX,CY+40*RY+40*UY,CZ+40*UZ
+59840   M3D VERTEX 720,CX-40*RX+40*UX,CY-40*RY+40*UY,CZ+40*UZ
+59850   M3D QUAD 720,0,1,2,3,1+L
+59860 END PROC
