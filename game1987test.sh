@@ -662,6 +662,54 @@ expect "foot: not down at the moment he gets on" "$(val state 1 fd)" 0 0
 expect "foot: down after a second of standing still" "$(val state 2 fd)" 100 100
 expect "foot: up again when he pedals" "$(val state 3 fd)" 0 0
 if grep -q '^Error' $T/out; then echo "FAILED: the foot-down run stopped with: $(grep '^Error' $T/out)"; fail=$((fail+1)); fi
+# 19. items, the inventory and the notebook (owner, 2026-11-27): the flashlight lies in the yard and is picked up with E, it is a cone lamp at night on foot (M3D LAMP 2) and burns a battery
+#     down (900 s); a battery in the inventory goes in when it is dry; finds lie in the cells of the land by hash and are picked up (notes go into the notebook)
+cat > $T/play <<'PLAY'
+goto 60 -190 0
+wait 0.5
+inv
+use
+wait 0.3
+inv
+time 22
+fl
+wait 0.3
+inv
+fl
+wait 0.3
+inv
+charge 0.5
+fl
+wait 1
+inv
+give 2 1
+charge 0.5
+fl
+wait 1
+inv
+finditem
+wait 0.5
+inv
+use
+wait 0.3
+inv
+quit
+PLAY
+HOME=$T G1987_HEADLESS=1 G1987_PLAY=$T/play timeout 300 sh -c 'printf "LOAD \"demos/1987\"\nRUN\nBYE\n" | ./engine1999c --allow=all' > $T/out 2>&1
+expect "items: the flashlight in the yard is in reach" "$(val inv 1 ni)" 0 9
+expect "items: nothing carried at the start" "$(val inv 1 tch)" 0 0
+expect "items: E picks up the flashlight" "$(val inv 2 tch)" -1 -1
+expect "items: a picked find is remembered" "$(val inv 2 pk)" 1 1
+expect "items: it is charged for 15 minutes" "$(val inv 2 tcq)" 890 900
+expect "flashlight: on at night, the lamp is lit" "$(val inv 3 lamp)" -1 -1
+expect "flashlight: off again" "$(val inv 4 lamp)" 0 0
+expect "flashlight: dry and no battery, it stays off" "$(val inv 5 tcn)" 0 0
+expect "flashlight: a battery goes in when it is dry" "$(val inv 6 b)" 0 0
+expect "flashlight: the new battery burns" "$(val inv 6 tcn)" -1 -1
+expect "flashlight: charged again" "$(val inv 6 tcq)" 850 900
+expect "finds: one lies within reach" "$(val inv 7 ni)" 0 9
+expect "finds: it was picked up (a thing or a note)" "$(awk -v l="$(grep '^inv' $T/out | sed -n 8p)" 'BEGIN { n = split(l, a, " "); s = 0; for (i = 1; i <= n; i++) { split(a[i], k, "="); if (k[1] == "b" || k[1] == "r" || k[1] == "c" || k[1] == "l" || k[1] == "nb") s += k[2] } print s }')" 2 2
+if grep -q '^Error' $T/out; then echo "FAILED: the items run stopped with: $(grep '^Error' $T/out)"; fail=$((fail+1)); fi
 # 15. the static world (world mode: G1987_WORLD names the folder of the world, G1987_WORLDSIZE its size in chunks): the world is made (a progress loop without a picture), the game runs on it
 #     (jumps, walking on the ground of the world), the position is saved in the folder when the game ends and read again by the next start
 W=$T/world
@@ -711,6 +759,18 @@ rm -f "$W/world.dat"; printf '4000\n-3000\n90\n4100\n-3100\n' > "$W/player.dat"
 runplay
 expect "world: a newly made world starts at the start" "$(val state 1 jx)" -200 200
 [ -s "$W/world.dat" ] || { echo "FAILED: the world was not made again"; fail=$((fail+1)); }
+# items and the notebook are saved with the position (items.dat, notebook.dat) and read again
+printf 'inv\nwsave\nquit\n' > $T/play2
+printf '4000\n-3000\n90\n4100\n-3100\n' > "$W/player.dat"
+printf -- '-1\n0\n500\n0\n2\n0\n1\n1\n1\n-1\n' > "$W/items.dat"
+printf 'LINE ONE\nLINE TWO\n' > "$W/notebook.dat"
+runplay
+expect "items: the flashlight was loaded" "$(val inv 1 tch)" -1 -1
+expect "items: the batteries were loaded" "$(val inv 1 b)" 2 2
+expect "items: the charge was loaded" "$(val inv 1 tcq)" 499 500
+expect "items: the picked find was loaded" "$(val inv 1 pk)" 1 1
+expect "items: the notebook was loaded" "$(val inv 1 nb)" 2 2
+grep -q 'LINE TWO' "$W/notebook.dat" && [ -s "$W/items.dat" ] || { echo "FAILED: items / notebook not written again"; fail=$((fail+1)); }
 rm -rf "$W" 2>/dev/null
 if [ $fail -ne 0 ]; then echo "$fail failure(s)"; fi
 exit $fail
