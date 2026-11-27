@@ -693,6 +693,9 @@ inv
 use
 wait 0.3
 inv
+reset
+wait 0.3
+inv
 quit
 PLAY
 HOME=$T G1987_HEADLESS=1 G1987_PLAY=$T/play timeout 300 sh -c 'printf "LOAD \"demos/1987\"\nRUN\nBYE\n" | ./engine1999c --allow=all' > $T/out 2>&1
@@ -708,6 +711,7 @@ expect "flashlight: a battery goes in when it is dry" "$(val inv 6 b)" 0 0
 expect "flashlight: the new battery burns" "$(val inv 6 tcn)" -1 -1
 expect "flashlight: charged again" "$(val inv 6 tcq)" 850 900
 expect "finds: one lies within reach" "$(val inv 7 ni)" 0 9
+expect "items: a reset (the pause menu's R) leaves no stale pick-up state" "$(val inv 9 ni)" -1 9
 expect "finds: it was picked up (a thing or a note)" "$(awk -v l="$(grep '^inv' $T/out | sed -n 8p)" 'BEGIN { n = split(l, a, " "); s = 0; for (i = 1; i <= n; i++) { split(a[i], k, "="); if (k[1] == "b" || k[1] == "r" || k[1] == "c" || k[1] == "l" || k[1] == "nb") s += k[2] } print s }')" 2 2
 if grep -q '^Error' $T/out; then echo "FAILED: the items run stopped with: $(grep '^Error' $T/out)"; fail=$((fail+1)); fi
 # 15. the static world (world mode: G1987_WORLD names the folder of the world, G1987_WORLDSIZE its size in chunks): the world is made (a progress loop without a picture), the game runs on it

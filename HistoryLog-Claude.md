@@ -13,6 +13,8 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+- **1987: "Subscript out of range in line 32965" after resetting John to the home (2026-11-27, owner's playtest: "ni is -1").** The status line's pick-up hint used the stale flag `NIP` while `NI` was -1 (`ITK(-1)`). `demos/1987.bas`: the hint needs `NI>=0`, `ITEMS` clears `NIP` when `NI<0`, `PICKUP` is only called with `NI>=0`. `game1987test.sh` section 19: a `reset` after the pick-ups. Whole script passes.
+
 ## Log
 
 ### 7a6cb67 — 2026-10-17 13:32:27 +0200 — "Introduced Claude to the project"
