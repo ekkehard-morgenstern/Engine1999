@@ -833,6 +833,7 @@
 19130     CALL PLACELEAN
 19140     EXIT PROC
 19150   END IF
+19155   IF FD>0 THEN CALL PLACEFOOT:EXIT PROC
 19160   IF BVIS=0 THEN
 19170     BVIS=-1:M3D OBJSHOW 514,0:M3D OBJSHOW 510,1:M3D OBJSHOW 511,1:M3D OBJSHOW 512,1:M3D OBJSHOW 513,1
 19180   END IF
@@ -930,6 +931,32 @@
 20640   END IF
 20650   IF BST=1 OR BST=5 OR BST=6 THEN BV=0
 20660 END PROC
+20700 ' a bicycle cannot stand by itself (owner, 2026-11-27): when John has come to a standstill on it (not pedalling, not rolling) he puts a foot on the ground, on the side he was steering
+20710 ' to (right by default), and the bicycle leans that way. FD 0 .. 1 is how far the foot is down (it takes 0.3 s), FDS the side (+1 left, -1 right), FDL the lean in radians; the
+20720 ' lean is the whole bicycle in object 514 (BUILDLEAN, see PLACEFOOT), the rider stays upright (BUILDJOHN: hips and shoulders shift over the foot, the leg reaches the ground)
+20800 PROC FOOTDOWN(DT,TH)
+20810   LOCAL T
+20820   T=0
+20830   IF MODE=1 AND BST=0 AND BV=0 AND TH<=0 THEN T=1
+20840   IF T=1 AND FD=0 AND FDT=0 THEN
+20850     IF ABS(BSA)>2 THEN FDS=1:IF BSA<0 THEN FDS=-1
+20860   END IF
+20870   FDT=T
+20880   IF MODE<>1 OR BST<>0 THEN
+20890     FD=0
+20900   ELSE
+20910     IF T=1 THEN FD=MIN(1,FD+3.3*DT) ELSE FD=MAX(0,FD-4*DT)
+20920   END IF
+20930   FDL=FDS*FD*FD*(3-2*FD)*0.15
+20940 END PROC
+20950 ' the bicycle leaning on John's foot: the whole bicycle in the tilted object 514 (built again when the lean or the steering changed)
+20960 PROC PLACEFOOT
+20970   LOCAL Q
+20980   IF BVIS<>0 THEN BVIS=0:M3D OBJSHOW 510,0:M3D OBJSHOW 511,0:M3D OBJSHOW 512,0:M3D OBJSHOW 513,0:M3D OBJSHOW 514,1:PFQ=-99999
+20985   Q=INT(FDL*400+0.5)*1000+INT(BSA*5+0.5)
+20990   IF Q<>PFQ THEN PFQ=Q:CALL BUILDLEAN(FDL,BSA)
+20995   M3D OBJPOS 514,BX,BY,BZ,BH
+20999 END PROC
 21000 ' ------------------------------------------------------------------------------------------------ John
 21010 ' a two-bone limb: from the joint H to the end F, both bones L long, the middle joint bends towards the pole (PX,PY,PZ); the middle joint is left in KX,KY,KZ
 21100 PROC IK(HX,HY,HZ,FX,FY,FZ,L,Z)
@@ -956,13 +983,13 @@
 21500 ' builds John into object 520: the body is in coordinates of the object (x forward, y left, z up; the origin on the ground below the hips when standing)
 21510 ' pose 0: standing / walking (PH = the walk phase, AM = the stride 0 .. 1), pose 1: riding (in the coordinates of the bicycle; CA = the cranks, BS = the steering)
 21600 PROC BUILDJOHN(POSE,PH,AM)
-21610   LOCAL Q,SG,FX,FZ,HX,HZ,PX,PZ,A,HY,GX,GY,LN,HIPX,HIPZ,SHX,SHZ,GXL,GYL,HH,SWY,STY,BRS
+21610   LOCAL Q,SG,FX,FZ,HX,HZ,PX,PZ,A,HY,GX,GY,LN,HIPX,HIPZ,SHX,SHZ,GXL,GYL,HH,SWY,STY,BRS,FSY,SHY,FB,FLS,FLC
 21620   CC1=FN CC(5,6):CC2=FN CC(8,5):CC3=FN CC(14,11):CC4=FN CC(0,12):CC5=FN CC(0,14)
 21630   ' the mesh cache: the body (object 520, without the head) depends on nothing but the pose, the walk phase, the stride, the speed (the sway), the pedals, the steering and the breath
 21640   ' (rounded: the breath to a quarter of its range, the crank angle to 0.025 radians, the steering angle to 0.2 degrees), so when all of these are as at the last build the mesh is still right and is not built again (the object keeps its triangles)
 21650   BRS=INT(SIN(BRP)*4+0.5)/4
-21660   IF POSE=BJ1 AND PH=BJ2 AND AM=BJ3 AND INT(ABS(JV))=BJ4 AND INT(CA*40)=BJ5 AND INT(BSA*5)=BJ6 AND BRS=BJ7 THEN EXIT PROC
-21670   BJ1=POSE:BJ2=PH:BJ3=AM:BJ4=INT(ABS(JV)):BJ5=INT(CA*40):BJ6=INT(BSA*5):BJ7=BRS:CNJ=CNJ+1
+21660   IF POSE=BJ1 AND PH=BJ2 AND AM=BJ3 AND INT(ABS(JV))=BJ4 AND INT(CA*40)=BJ5 AND INT(BSA*5)=BJ6 AND BRS=BJ7 AND INT(FD*100)*FDS=BJ8 THEN EXIT PROC
+21670   BJ1=POSE:BJ2=PH:BJ3=AM:BJ4=INT(ABS(JV)):BJ5=INT(CA*40):BJ6=INT(BSA*5):BJ7=BRS:BJ8=INT(FD*100)*FDS:CNJ=CNJ+1
 21680   M3D OBJECT 520,28,235
 21685   IF POSE=2 THEN CALL BUILDLYING:EXIT PROC
 21690   IF POSE=0 THEN
@@ -1010,23 +1037,33 @@
 22110     NEXT Q
 22120   ELSE
 22130     HIPX=-9.5:HIPZ=32.4:SHX=-3:SHZ=46.4
+22132     ' standing still: the hips and shoulders shift over the foot that is down (FD 0 .. 1, side FDS), the bicycle is rolled by FDL under him
+22134     FB=FD*FD*(3-2*FD):FSY=FDS*FB*3:SHY=FSY*0.5:FLS=SIN(FDL):FLC=COS(FDL)
 22140     TBT=CC1
-22150     CALL BX(520,HIPX-4.2,-6.8,HIPZ-3.5,HIPX+4.2,6.8,HIPZ+3.5,CC2)
-22160     CALL TUBE(520,HIPX,3.4,HIPZ,SHX,3.4,SHZ,3.4):CALL TUBE(520,HIPX,-3.4,HIPZ,SHX,-3.4,SHZ,3.4)
-22170     CALL COLLAR(520,SHX,0,SHZ+0.5):HOX=SHX:HOY=0:HOZ=SHZ+2.5
+22150     CALL BX(520,HIPX-4.2,-6.8+FSY,HIPZ-3.5,HIPX+4.2,6.8+FSY,HIPZ+3.5,CC2)
+22160     CALL TUBE(520,HIPX,3.4+FSY,HIPZ,SHX,3.4+SHY,SHZ,3.4):CALL TUBE(520,HIPX,-3.4+FSY,HIPZ,SHX,-3.4+SHY,SHZ,3.4)
+22170     CALL COLLAR(520,SHX,SHY,SHZ+0.5):HOX=SHX:HOY=SHY:HOZ=SHZ+2.5
 22180     FOR Q=0 TO 1
 22190       SG=1:IF Q=1 THEN SG=-1
 22200       A=-(CA+Q*PI)
 22210       PX=-2+5.5*COS(A):PZ=9+5.5*SIN(A)
 22220       PLX0=1:PLY0=0:PLZ0=0.15:LH=2.6:TBT=FN CC(8,5):TBU=TBT
-22230       CALL LIMB(520,HIPX,SG*3.8,HIPZ,PX-0.5,SG*5.6,PZ+4.2,14.8)
-22240       CALL SHOE(520,PX-3.5,SG*5.6,PZ+0.8)
+22230       IF FB>0 AND SG=FDS THEN
+22232         ' this foot is on the ground: from the pedal to a place beside the bicycle (ankle 2.8 above the ground)
+22234         CALL LIMB(520,HIPX,SG*3.8+FSY,HIPZ,PX-0.5+(-3-PX+0.5)*FB,SG*(5.6+5.4*FB),PZ+4.2+(2.8-PZ-4.2)*FB,14.8)
+22236         CALL SHOE(520,PX-3.5+(-6.5-PX+3.5)*FB,SG*(5.6+5.4*FB),(PZ+0.8)*(1-FB))
+22238       ELSE
+22239         CALL LIMB(520,HIPX,SG*3.8+FSY,HIPZ,PX-0.5,SG*5.6,PZ+4.2,14.8)
+22240         CALL SHOE(520,PX-3.5,SG*5.6,PZ+0.8)
+22241       END IF
 22250       GXL=-2:GYL=SG*10
 22260       GX=12+GXL*COS(BSA*PI/180)-GYL*SIN(BSA*PI/180)-12:GY=GXL*SIN(BSA*PI/180)+GYL*COS(BSA*PI/180)
 22270       PLX0=-0.4:PLY0=SG*0.9:PLZ0=-0.3:LH=2.3:TBT=CC1:TBU=CC3
-22280       CALL LIMB(520,SHX,SG*7,SHZ-1.5,12+GX,GY,31.8,11)
-22290       TBT=FN CC(5,10):CALL TUBE(520,KX+(SHX-KX)*0.22,KY+(SG*7-KY)*0.22,KZ+(SHZ-1.5-KZ)*0.22,KX,KY,KZ,2.9)
-22300       CALL FIST(520,12+GX,GY)
+22275       ' the handlebar is rolled with the bicycle: a grip moves sideways and down on the other side
+22276       HZO=-GY*FLS-31.8*(1-FLC):GY=GY*FLC+31.8*FLS
+22280       CALL LIMB(520,SHX,SG*7+SHY,SHZ-1.5,12+GX,GY,31.8+HZO,11)
+22290       TBT=FN CC(5,10):CALL TUBE(520,KX+(SHX-KX)*0.22,KY+(SG*7+SHY-KY)*0.22,KZ+(SHZ-1.5-KZ)*0.22,KX,KY,KZ,2.9)
+22300       CALL FIST(520,12+GX,GY):HZO=0
 22310     NEXT Q
 22320   END IF
 22330 END PROC
@@ -1466,6 +1503,7 @@
 30800   IF MODE<>1 AND BST=0 AND TK>70 AND ABS(BV)>25 THEN TK=0:CALL SND(3)
 30810   IF MODE=1 AND TH<=0 AND TK>70 AND BV>25 THEN TK=0:CALL SND(3)
 30820   CALL BIKEFALL(DT)
+30825   CALL FOOTDOWN(DT,TH)
 30830   ' ---- John
 30840   IF MODE=0 THEN
 30850     ' the target speed TV: a stick gives it by its deflection (just past the dead zone: WSLOW, fully pushed: WFAST); a key raises it from WSLOW to WFAST
@@ -1865,7 +1903,7 @@
 36780     IF C$="chunks" THEN CALL CHUNKSTAT(JX,JY)
 36790     IF C$="sweep" THEN CALL SWEEPCAM(VAL(W$(1)),VAL(W$(2)))
 36800     IF C$="state" THEN
-36810       PRINT "state mode=";MODE;" bl=";INT(BL*100);" ut=";INT(UT);" jx=";INT(JX);" jy=";INT(JY);" jz=";INT(JZ+0.5);" jh=";INT(JH);" jv=";INT(JV);" bst=";BST;" nj=";CNJ;" nh=";CNH;" nb=";CNB;" cmb=";CMB;" hly=";INT(HLY);" hlp=";INT(HLP);" brp=";INT(BRP*100);" bx=";INT(BX);" by=";INT(BY);" bz=";INT(BZ+0.5);" bh=";INT(BH);" bv=";INT(BV);" st=";INT(ST*100);" gh=";INT(FN HT(JX,JY));" sf=";FN SURF(JX,JY,JZ);" cmf=";CMF;" cmg=";INT(CMZ-FN HT(CMX,CMY));" vlv=";VLV;" tod=";INT(DAYH*100);" amb=";INT(M3D("AMBIENT")*100+0.5);" lamp=";LAMPON;" dyn=";INT(DYN*100)
+36810       PRINT "state mode=";MODE;" bl=";INT(BL*100);" ut=";INT(UT);" jx=";INT(JX);" jy=";INT(JY);" jz=";INT(JZ+0.5);" jh=";INT(JH);" jv=";INT(JV);" bst=";BST;" nj=";CNJ;" nh=";CNH;" nb=";CNB;" cmb=";CMB;" hly=";INT(HLY);" hlp=";INT(HLP);" brp=";INT(BRP*100);" bx=";INT(BX);" by=";INT(BY);" bz=";INT(BZ+0.5);" bh=";INT(BH);" bv=";INT(BV);" st=";INT(ST*100);" gh=";INT(FN HT(JX,JY));" sf=";FN SURF(JX,JY,JZ);" cmf=";CMF;" cmg=";INT(CMZ-FN HT(CMX,CMY));" vlv=";VLV;" tod=";INT(DAYH*100);" amb=";INT(M3D("AMBIENT")*100+0.5);" lamp=";LAMPON;" dyn=";INT(DYN*100);" fd=";INT(FD*100);" fds=";FDS
 36820     END IF
 36821     IF C$="catch" THEN TQ=VAL(W$(1)):PROT=0:DRX(TQ)=JX+VAL(W$(2)):DRY(TQ)=JY:DRM(TQ)=3:DRI(TQ)=0:DRL(TQ)=0:DSX(TQ)=JX:DSY(TQ)=JY:DRBM(TQ)=1:DRZ(TQ)=FN HT(JX,JY)+190
 36822     IF C$="scanat" THEN PROT=0:DRM(0)=1:DRBM(0)=1:DRTM(0)=60:DRX(0)=JX-300*COS(GT*0.5):DRY(0)=JY-300*SIN(GT*0.7)
@@ -1936,6 +1974,7 @@
 38215 DYN=0:LENSON=0:DAYH=10:DAYSEC=1440:DAYLV=-1:LAMPON=0:DAYA=1:IF ENV$("G1987_TIME")<>"" THEN DAYH=VAL(ENV$("G1987_TIME"))
 38216 IF ENV$("G1987_DAYLEN")<>"" THEN DAYSEC=MAX(10,VAL(ENV$("G1987_DAYLEN")))
 38217 DYNF=-1:IF ENV$("G1987_DYNAMO")<>"" THEN DYNF=VAL(ENV$("G1987_DYNAMO"))
+38218 FD=0:FDS=-1:FDT=0:FDL=0:PFQ=0:HZO=0:BJ8=0
 38220 CALL SETGROUND
 38230 ' the sun: terrain cells get pictures shaded by their slope (M3D SUN: steps 301.. + 100, 200, 300; needs the palette's color map first)
 38240 IF NOT HL THEN M3D COLORMAP
@@ -2097,11 +2136,11 @@
 41000 ' a fist round the handlebar's grip at (GXX, GYY) (the grip's centre; the fingers wrap round its front)
 41100 PROC FIST(O,GXX,GYY)
 41110   LOCAL I
-41120   CALL BX(O,GXX-1.6,GYY-1.6,31.2,GXX+1.4,GYY+1.6,33.4,FN CC(14,11))
+41120   CALL BX(O,GXX-1.6,GYY-1.6,31.2+HZO,GXX+1.4,GYY+1.6,33.4+HZO,FN CC(14,11))
 41130   FOR I=0 TO 3
-41140     CALL BX(O,GXX+1.4,GYY-1.5+I*0.8,31.2,GXX+2.5,GYY-0.7+I*0.8,33.3,FN CC(14,9))
+41140     CALL BX(O,GXX+1.4,GYY-1.5+I*0.8,31.2+HZO,GXX+2.5,GYY-0.7+I*0.8,33.3+HZO,FN CC(14,9))
 41150   NEXT I
-41160   CALL BX(O,GXX-1.2,GYY-0.5,33.4,GXX+1.2,GYY+0.5,34.3,FN CC(14,11))
+41160   CALL BX(O,GXX-1.2,GYY-0.5,33.4+HZO,GXX+1.2,GYY+0.5,34.3+HZO,FN CC(14,11))
 41170 END PROC
 41200 ' a shoe: the heel at XH, the middle of its width at YC, the underside of the sole at ZB; 9.5 long, a dark sole, a gray upper with a high ankle, a tongue and three white laces
 41300 PROC SHOE(O,XH,YC,ZB)
@@ -3163,7 +3202,7 @@
 60422     IF LENSON=0 THEN LENSON=-1:M3D OBJSHOW 515,1:M3D OBJSHOW 516,1
 60424     C=COS(BH*PI/180):S=SIN(BH*PI/180)
 60426     L=40+215*DYN:M3D OBJLIGHT 515,L:M3D OBJLIGHT 516,L
-60428     M3D OBJPOS 515,BX+12*C,BY+12*S,BZ,BH+BSA:M3D OBJPOS 516,BX,BY,BZ,BH
+60428     M3D OBJPOS 515,BX+12*C-S*26*SIN(FDL),BY+12*S+C*26*SIN(FDL),BZ,BH+BSA:M3D OBJPOS 516,BX-S*30*SIN(FDL),BY+C*30*SIN(FDL),BZ,BH
 60430     IF DYN>0.02 THEN
 60432       DX=COS((BH+BSA)*PI/180):DY=SIN((BH+BSA)*PI/180)
 60434       M3D LAMP 0,BX+12*C+DX*6,BY+12*S+DY*6,BZ+25,1000+2000*DYN,255*LA*DYN,DX,DY,-0.14,24

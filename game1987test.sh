@@ -642,6 +642,26 @@ expect "lamp: on again at night" "$(val state 9 lamp)" -1 -1
 expect "lamp: out again when he stops" "$(val state 10 lamp)" 0 0
 expect "time: it passes (60 s a day: 1 s is 0.4 h; the hour has moved on)" "$(awk -v a="$(val state 9 tod)" -v b="$(val state 10 tod)" 'BEGIN { d = b - a; if (d < 0) d += 2400; print d }')" 20 400
 if grep -q '^Error' $T/out; then echo "FAILED: the day / night run stopped with: $(grep '^Error' $T/out)"; fail=$((fail+1)); fi
+# 18. a bicycle cannot stand by itself (owner, 2026-11-27): standing still on it John puts a foot down (FD goes to 1, the bicycle leans), pedalling takes it up again
+cat > $T/play <<'PLAY'
+bike 40 -176 270
+goto 20 -176 270
+use
+wait 0.1
+state
+wait 1
+state
+f 1
+wait 1.5
+state
+f 0
+quit
+PLAY
+HOME=$T G1987_HEADLESS=1 G1987_PLAY=$T/play timeout 300 sh -c 'printf "LOAD \"demos/1987\"\nRUN\nBYE\n" | ./engine1999c --allow=all' > $T/out 2>&1
+expect "foot: not down at the moment he gets on" "$(val state 1 fd)" 0 0
+expect "foot: down after a second of standing still" "$(val state 2 fd)" 100 100
+expect "foot: up again when he pedals" "$(val state 3 fd)" 0 0
+if grep -q '^Error' $T/out; then echo "FAILED: the foot-down run stopped with: $(grep '^Error' $T/out)"; fail=$((fail+1)); fi
 # 15. the static world (world mode: G1987_WORLD names the folder of the world, G1987_WORLDSIZE its size in chunks): the world is made (a progress loop without a picture), the game runs on it
 #     (jumps, walking on the ground of the world), the position is saved in the folder when the game ends and read again by the next start
 W=$T/world
