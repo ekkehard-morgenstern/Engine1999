@@ -612,12 +612,18 @@ goto 20 -176 270
 use
 wait 1
 state
+f 1
+wait 3
+state
 time 12
 state
 time 23
 state
 f 0
-wait 1
+brake 1
+wait 0.3
+brake 0
+wait 2
 state
 quit
 PLAY
@@ -628,10 +634,13 @@ expect "dawn: 6 o'clock is in between" "$(val state 3 amb)" 25 80
 expect "dusk: 18 o'clock is in between" "$(val state 4 amb)" 25 80
 expect "night: 21 o'clock is dark" "$(val state 5 amb)" 10 20
 expect "lamp: off while John walks" "$(val state 5 lamp)" 0 0
-expect "lamp: on while John rides in the dark" "$(val state 6 lamp)" -1 -1
-expect "lamp: off by day" "$(val state 7 lamp)" 0 0
-expect "lamp: on again at night" "$(val state 8 lamp)" -1 -1
-expect "time: it passes (60 s a day: 1 s is 0.4 h; the hour has moved on)" "$(awk -v a="$(val state 8 tod)" -v b="$(val state 9 tod)" 'BEGIN { d = b - a; if (d < 0) d += 2400; print d }')" 20 120
+expect "lamp: off while John stands still on the bicycle (the dynamo gives nothing)" "$(val state 6 lamp)" 0 0
+expect "lamp: on while John rides in the dark" "$(val state 7 lamp)" -1 -1
+expect "dynamo: gives current while he rides" "$(val state 7 dyn)" 20 100
+expect "lamp: off by day" "$(val state 8 lamp)" 0 0
+expect "lamp: on again at night" "$(val state 9 lamp)" -1 -1
+expect "lamp: out again when he stops" "$(val state 10 lamp)" 0 0
+expect "time: it passes (60 s a day: 1 s is 0.4 h; the hour has moved on)" "$(awk -v a="$(val state 9 tod)" -v b="$(val state 10 tod)" 'BEGIN { d = b - a; if (d < 0) d += 2400; print d }')" 20 400
 if grep -q '^Error' $T/out; then echo "FAILED: the day / night run stopped with: $(grep '^Error' $T/out)"; fail=$((fail+1)); fi
 # 15. the static world (world mode: G1987_WORLD names the folder of the world, G1987_WORLDSIZE its size in chunks): the world is made (a progress loop without a picture), the game runs on it
 #     (jumps, walking on the ground of the world), the position is saved in the folder when the game ends and read again by the next start

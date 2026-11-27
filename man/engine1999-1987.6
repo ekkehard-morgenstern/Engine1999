@@ -69,7 +69,7 @@ in it holds the position of John and of the bicycle, saved when the game ends an
 .SH THE DRONES
 The drones watch the land and ignore John, until he walks or rides under the red beam of one that is scanning the ground, or comes within two metres of one. Then it hangs over him, its beam locks on him and grows stronger, and after a second or two John collapses (off the bicycle, if he rides, or to the ground). The drone then turns its beam on the camera, which is a drone too: the camera falls and lies on the ground, and only then the picture goes black. After ten to fourteen seconds John comes to, the camera rises, and for some time no drone notices him. You cannot get out of the beam. Two drones never overlap.
 .PP
-A day lasts 24 minutes. At night the land is dark, the sky and the haze too; the bicycle's headlamp lights the way while John rides. The time is shown next to the title in the status line.
+A day lasts 24 minutes. At night the land is dark, the sky and the haze too; the bicycle's lights (a white headlamp with a cone of light and a red tail lamp) come on in the dusk while John rides. A dynamo drives them: the faster he cycles the brighter they are, and they go out when he stops. The time is shown next to the title in the status line.
 .SH ENVIRONMENT
 .TP
 .B G1987_WORLD
@@ -88,7 +88,10 @@ the number of drones that live round John (default 6, 0 to 10). They fly, scan t
 the hour of the day the game starts at (default 10; a saved game goes on from the saved hour).
 .TP
 .B G1987_DAYLEN
-the length of a day in seconds (default 1440, 24 minutes). The light follows the hour: day, dusk, night, dawn; the bicycle has a headlamp that comes on in the dusk while John rides.
+the length of a day in seconds (default 1440, 24 minutes). The light follows the hour: day, dusk, night, dawn; the bicycle has a headlamp and a red tail lamp that come on in the dusk while John rides, brighter the faster he is.
+.TP
+.B G1987_DYNAMO
+for testing: holds the dynamo's current at a value from 0 to 1, whatever the speed.
 .TP
 .B ENGINE1999_NOBANNER
 set to anything: no "Engine1999 proudly presents" opening at the start (the file config:nobanner does the same).

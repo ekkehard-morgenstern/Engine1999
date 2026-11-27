@@ -13,6 +13,8 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+- **1987: the bicycle's lights run on a dynamo, plus a red tail lamp (2026-11-26, owner after playtesting the night: "the energy for the light comes from a dynamo ... the faster the rider cycles, the brighter the light is. When the rider stops, the light goes out. In addition to the white front light, there should be a red back light ... a point light; it would be nice if you could see both lamps").** `demos/1987.bas`: `DAYNIGHT` computes `DYN` from the speed (`(|BV|-8)/110`, smoothed) and scales the headlamp cone (`M3D LAMP 0`, length 1000 .. 3000, amount, direction `BH+BSA`) and a new all-round point lamp (`M3D LAMP 1`) behind the carrier; lamp housings on the fork (`BIKEFRONT`) and the carrier (`BIKEFRAME`); new `BUILDLENS` makes the glowing lens objects 515 (white octagon, front coordinates) and 516 (red, frame coordinates), shown / dimmed (`M3D OBJLIGHT`) with `DYN` while the lights are on, hidden when John is off the bicycle; `state` prints `dyn`. `game1987test.sh` section 17: lamp off when standing, on while riding, out again after stopping. `docs/1987.md`, `man/engine1999-1987.6`. A lamp only brightens, so the red is the lens, not the light.
+
 ## Log
 
 ### 7a6cb67 — 2026-10-17 13:32:27 +0200 — "Introduced Claude to the project"
