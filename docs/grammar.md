@@ -804,7 +804,7 @@ ui-geometry := num-expr "," num-expr "," num-expr "," num-expr "," num-expr .
 ```ebnf
 m3d-stmt := XFUNC(M3D) ( RESET | CLEAR | COLORMAP | RENDER | HIDE | POLL | RINGWAIT | WORLDCLOSE | WORLDWAIT | SOFTWARE | HARDWARE | TEXTURE num-expr "," str-expr | TEXTURE LOAD num-expr "," str-expr [ "," PALETTE ] |
                              ( OBJECT | VERTEX | FACE | QUAD | BOX | OBJPOS | OBJSHOW | OBJLIGHT | OBJFLAGS | THING | THINGPOS | THINGTEX | THINGOFF | THINGLIGHT | THINGTRANS |
-                               CAMERA | TURN | PLAYER | MOVE | LIFT | LAMP | VIEW | FOG | FAR | MSAA | SKY | THINGMOVE | ZONE | GROUND | GROUNDFLAT | INSTANCE | OBJSCALE | OBJFREE | MOUNTAINS | LAKES | GROUNDQUIET | SUN | MINIMAP | HILLS | ROADNET | RING | RINGPIC | MORPH | TREEPIC | POSTPIC | CULL | HOUSE | HOUSEPIC | HOUSEINT | AMBIENT | WORLDVIEW ) num-expr { "," num-expr } |
+                               CAMERA | TURN | PLAYER | MOVE | LIFT | LAMP | VIEW | FOG | FAR | MSAA | SKY | THINGMOVE | ZONE | GROUND | GROUNDFLAT | INSTANCE | OBJSCALE | OBJFREE | MOUNTAINS | LAKES | GROUNDQUIET | SUN | MINIMAP | HILLS | ROADNET | RING | RINGPIC | MORPH | TREEPIC | POSTPIC | CULL | HOUSE | HOUSEPIC | HOUSEINT | PASSBOX | AMBIENT | WORLDVIEW ) num-expr { "," num-expr } |
                              ( WORLDOPEN | WORLDMAKE ) str-expr { "," num-expr } |
                              TERRAIN num-expr { "," num-expr } [ "," str-expr { "," num-expr } ] | WORLD ) .
 ```

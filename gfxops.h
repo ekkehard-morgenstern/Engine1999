@@ -409,7 +409,8 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXOP_M3DHOUSEPIC 366           // M3D HOUSEPIC slot, pic   (the picture of a material of M3D HOUSE: slots 0 .. 5 the plaster colours, 6 .. 8 the roofs, 9 char, 10 brick, 11 glass, 12 door, 13 wood, 14 concrete, 15 rim, 16 garage door, 17 window frame; -1 = the plain palette colour)
 #define GFXOP_M3DAMBIENT 367            // M3D AMBIENT a   (the daylight: a factor 0 .. 1 on the light of every object (not those with the glow flag 32), the things and the sky, before the lamps add theirs; 1 = day, the default)
 #define GFXOP_M3DHOUSEINT 368           // M3D HOUSEINT o, type, stage, seed   (object o = the inside of that family house, same coordinates as M3D HOUSE: rooms, floors, ceilings, stairs, furniture; two sided)
-#define GFXOP_M3DLAST   GFXOP_M3DHOUSEINT
+#define GFXOP_M3DPASSBOX 369            // M3D PASSBOX n, x1, y1, z1, x2, y2, z2   (n 0 .. 3: a box in which solid surfaces do not stop a body: an open door; x2 <= x1 switches it off)
+#define GFXOP_M3DLAST   GFXOP_M3DPASSBOX
 #define GFXOP_IS_M3D(op) ( (op) >= GFXOP_M3DFIRST && (op) <= GFXOP_M3DLAST )
 #define GFXQ_M3DX       350             // M3D("X"), ("Y"), ("Z" = the feet), ("EYE"), ("YAW"), ("PITCH"), ("LIFT"), ("HIT"), ("FLOORZ")
 #define GFXQ_M3DY       351
@@ -474,7 +475,7 @@ The statement runs the instruction GFXC with the operation number; the VM pops t
 #define GFXQ_M3DMSAAMAX 409             // M3D("MSAAMAX"): the most samples the hardware can do (0: none, or no hardware renderer)
 #define GFXQ_M3DCULL    410             // M3D("CULL", k): of the last frame: 0 objects asked, 1 drawn, 2 skipped behind the viewer or beyond FAR, 3 skipped outside the sides of the view, 4 skipped as too small, 5 skipped as hidden behind what was drawn (software renderer), 6 triangles of the drawn objects
 #define GFXQ_M3DAMBIENT 411             // M3D("AMBIENT"): the factor of M3D AMBIENT (1 after M3D RESET)
-#define GFXQ_M3DHOUSESITE 412           // M3D("HOUSESITE", k, x, y): k = 0 looks for the house of the static world whose front door is nearest to (x, y) within 25 m and returns 1 (found) or 0; k = 1 .. 12 then give its type, seed, stage, south west corner x, y, base z, heading (degrees, of the house's +x), front door x, y, distance of (x, y) from the door, width and depth (units)
+#define GFXQ_M3DHOUSESITE 412           // M3D("HOUSESITE", k, x, y): k = 0 looks for the house of the static world whose front door is nearest to (x, y) within 25 m and returns 1 (found) or 0; k = 1 .. 13 then give its type, seed, stage, south west corner x, y, base z, heading (degrees, of the house's +x), front door x, y, distance of (x, y) from the door, width and depth, the door's width (units)
 #define GFXQ_M3DLAST    GFXQ_M3DHOUSESITE      // (400 .. 403 in between are HASH / NOISE / RIDGED / FBM, which the VM computes itself and never sends to a host)
 
 typedef struct _gfxcmd_t {

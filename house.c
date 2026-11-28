@@ -468,7 +468,7 @@ static void gen_house( house_t* h, int type, int64_t seed, bool walk ) {
 // A walking test on a grid of 1 dm: the front door to every room of both floors (the upper floor over the stairs). The walker has a radius of RAD dm: the rooms shrink by
 // it, the furniture grows by it, and a door is as wide as its opening minus twice RAD. Doors: the inner doors (hdoor_t), the front door and the doors (kind 3) between the
 // house and its garage / extension.
-#define WALK_RAD    1.5
+#define WALK_RAD    2.6                 // John's body radius in a house: 8 units (2.56 dm), see HOUSEBODY in demos/1987.bas
 #define WALK_MAXX   260
 #define WALK_MAXY   220
 
@@ -737,7 +737,7 @@ static void wall_run( mb_t* b, int side, double plane, double lo, double hi, dou
         while ( j + 1 < nc && c[j + 1].top == c[k].top && c[j + 1].mat == c[k].mat ) { ++j; }
         double a1 = single ? lo : lo + k * 10.0, a2 = single ? hi : fmin( hi, lo + ( j + 1 ) * 10.0 ), zt = c[k].top;
         int mat = c[k].mat;
-        wface( b, side, plane, a1, a2, 0, zt, mat, 0 );
+        wface( b, side, plane, a1, a2, -HOUSE_SKIRT, zt, mat, 0 );          // (down into the ground: the site is flat to 14 units, the base z is its highest point - 6)
         if ( d > 0.3 ) {                                                       // seen from above and from inside once the roof is open
             double p[4][3];
             double t0 = plane, t1 = plane + ( side == 0 || side == 2 ? 3.5 : -3.5 );
@@ -1084,6 +1084,7 @@ static void ilayer( mb_t* b, int f, int axis, double pl, double a1, double a2, d
 }
 
 // a horizontal rectangle with a rectangular hole (the stairwell)
+#define GROW 0.55                       // floors and ceilings reach half a partition (1 dm) over the wall: no gap a body could fall through
 static void ifloor( mb_t* b, double x1, double y1, double x2, double y2, const double* hole, double z, int mat, bool up ) {
     if ( hole == 0 || hole[0] >= x2 || hole[2] <= x1 || hole[1] >= y2 || hole[3] <= y1 ) { hface( b, x1, y1, x2, y2, z, mat, up ); return; }
     double hx1 = fmax( hole[0], x1 ), hx2 = fmin( hole[2], x2 ), hy1 = fmax( hole[1], y1 ), hy2 = fmin( hole[3], y2 );
@@ -1161,8 +1162,8 @@ bool house_mesh_inside( const house_t* h, int stage, hmesh_t* m ) {
                 ilayer( &b, f, 1, r->y1, r->x1, r->x2, z0, zc, HM_PAINT0 + pc );
                 ilayer( &b, f, 1, r->y2, r->x1, r->x2, z0, zc, HM_PAINT0 + pc );
             }
-            if ( floorok ) { ifloor( &b, r->x1, r->y1, r->x2, r->y2, r->type == 1 && f == 1 ? hole : 0, z0, HM_WOOD, true ); }
-            if ( ceilok && layers ) { ifloor( &b, r->x1, r->y1, r->x2, r->y2, r->type == 1 && f == 0 ? hole : 0, zc, HM_PAINT5, false ); }
+            if ( floorok ) { ifloor( &b, r->x1 - GROW, r->y1 - GROW, r->x2 + GROW, r->y2 + GROW, r->type == 1 && f == 1 ? hole : 0, z0, HM_WOOD, true ); }
+            if ( ceilok && layers ) { ifloor( &b, r->x1 - GROW, r->y1 - GROW, r->x2 + GROW, r->y2 + GROW, r->type == 1 && f == 0 ? hole : 0, zc, HM_PAINT5, false ); }
         }
         if ( layers ) { iwindows( &b, f ); }
         for ( int i = 0; i < h->nfu[f]; ++i ) {
@@ -1185,6 +1186,14 @@ bool house_mesh_inside( const house_t* h, int stage, hmesh_t* m ) {
         wface( &b, 0, y1, h->sx1, h->sx2, zt - ( h->flz[1] - h->flz[0] ) / 16, zt, HM_WOOD, 0 );
         wface( &b, 2, h->sx1, y1, y2, h->flz[0], zt, HM_WOOD, 0 );
         wface( &b, 3, h->sx2, y1, y2, h->flz[0], zt, HM_WOOD, 0 );
+    }
+    // the stoop in front of the front door: three steps down from the floor into the ground (the ground in front of the door is 3 .. 17 units below the floor), so one can walk in
+    for ( int i = 0; i < h->nwin; ++i ) {
+        const hwin_t* w = &h->win[i];
+        if ( w->floor != 0 || w->kind != 2 || w->side != 0 ) { continue; }
+        for ( int k = 1; k <= 3; ++k ) {
+            hbox( &b, w->pos - w->w / 2 - 2, -7.0 * k, -HOUSE_SKIRT, w->pos + w->w / 2 + 2, -7.0 * ( k - 1 ), h->flz[0] - 1.8 * k, HM_CONCRETE, true );
+        }
     }
     m->w = h->lx * UNIT; m->d = h->dy * UNIT; m->h = ( h->zr + 5 ) * UNIT;
     if ( !b.ok ) { house_mesh_free( m ); return false; }

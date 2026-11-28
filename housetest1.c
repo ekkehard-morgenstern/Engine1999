@@ -363,7 +363,7 @@ static void test_inside( void ) {
                 prev = m.nt;
                 for ( int i = 0; i < m.nv; ++i ) {
                     const hvert_t* v = &m.v[i];
-                    if ( !( isfinite( v->x ) && isfinite( v->y ) && isfinite( v->z ) ) || v->x < -2 || v->x > 260 * 3.125 || v->y < -2 || v->y > 240 * 3.125 || v->z < -2 || v->z > 70 * 3.125 ) { ++bad; }
+                    if ( !( isfinite( v->x ) && isfinite( v->y ) && isfinite( v->z ) ) || v->x < -2 || v->x > 260 * 3.125 || v->y < -70 || v->y > 240 * 3.125 || v->z < -17 || v->z > 70 * 3.125 ) { ++bad; }
                 }
                 for ( int i = 0; i < m.nt; ++i ) {
                     const htri_t* tr = &m.t[i];
@@ -398,7 +398,7 @@ static void test_mesh( void ) {
                     ntl[level] = m.nt;
                     for ( int i = 0; i < m.nv; ++i ) {
                         const hvert_t* v = &m.v[i];
-                        if ( !( isfinite( v->x ) && isfinite( v->y ) && isfinite( v->z ) ) || v->x < -20 * 3.125 || v->x > 200 * 3.125 || v->y < -20 * 3.125 || v->y > 160 * 3.125 || v->z < -1 || v->z > 110 * 3.125 ) { ++bad; }
+                        if ( !( isfinite( v->x ) && isfinite( v->y ) && isfinite( v->z ) ) || v->x < -20 * 3.125 || v->x > 200 * 3.125 || v->y < -20 * 3.125 || v->y > 160 * 3.125 || v->z < -17 || v->z > 110 * 3.125 ) { ++bad; }
                     }
                     for ( int i = 0; i < m.nt; ++i ) {
                         const htri_t* tr = &m.t[i];

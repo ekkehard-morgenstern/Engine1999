@@ -41,6 +41,7 @@ stage of damage by a directed energy weapon (0 intact .. 4 a shell) in two level
 */
 
 #define HOUSE_TW        4               // the thickness of the outer walls in dm
+#define HOUSE_SKIRT     5               // the outer walls reach this far (dm) below the base, into the ground: a site is flat to 14 units and its base z is its highest corner - 6
 #define HOUSE_MAXROOMS  8
 #define HOUSE_MAXDOORS  16
 #define HOUSE_MAXWINS   40

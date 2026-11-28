@@ -787,6 +787,16 @@ expect "houses: John stands outside (in front of the door)" "$(val house 2 ly)" 
 expect "houses: and stays shown" "$(val house 3 hen)" -1 -1
 expect "houses: the inside is hidden again far away" "$(val house 4 hen)" 0 0
 if grep -q '^Error' $T/out; then echo "FAILED: the houses run stopped with: $(grep '^Error' $T/out)"; fail=$((fail+1)); fi
+# 21. collision in houses (owner, 2026-11-28, step 3): the closed front door stops John, E opens it, then he walks in over the stoop onto the floor and the back wall stops him
+printf 'findhouse\nwait 1\nhwalk 90 10 10\nuse\nwait 1\nhwalk 90 1 1\nhwalk 90 5 10\nhwalk 90 60 10\nhwalk 90 1 1\nquit\n' > $T/play2
+runplay
+expect "collision: the closed front door stops John" "$(val hwalk 1 ly)" -25 -1
+expect "collision: E opens the door and he is still outside" "$(val hwalk 2 ly)" -25 5
+expect "collision: through the open door he stands in the house" "$(val hwalk 3 ly)" 20 120
+expect "collision: the back wall stops him (he does not leave the house)" "$(val hwalk 4 ly)" 60 400
+expect "collision: he stands on the floor of the house (about 9 units over the base)" "$(val hwalk 3 dz)" 5 14
+expect "collision: the floor under him is the inside of the house (object 560)" "$(val hwalk 3 fo)" 560 560
+if grep -q '^Error' $T/out; then echo "FAILED: the collision run stopped with: $(grep '^Error' $T/out)"; fail=$((fail+1)); fi
 rm -rf "$W" 2>/dev/null
 if [ $fail -ne 0 ]; then echo "$fail failure(s)"; fi
 exit $fail

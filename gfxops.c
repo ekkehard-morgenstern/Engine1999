@@ -184,6 +184,7 @@ static const gfxcmd_t cmds[] = {
     { "M3D", "HOUSE", GFXOP_M3DHOUSE, "nnnnoo", 0, false },
     { "M3D", "HOUSEPIC", GFXOP_M3DHOUSEPIC, "nn", 0, false },
     { "M3D", "HOUSEINT", GFXOP_M3DHOUSEINT, "nnnn", 0, false },
+    { "M3D", "PASSBOX", GFXOP_M3DPASSBOX, "nnnnnnn", 0, false },
     { "M3D", "AMBIENT", GFXOP_M3DAMBIENT, "n", 0, false },
     { "M3D", "SUN", GFXOP_M3DSUN, "nnnooo", 0, false },
     { "M3D", "TEXLOAD", GFXOP_M3DTEXLOAD, "nsW", "PALETTE", false },       // (written M3D TEXTURE LOAD: the compiler turns the two words into this one)

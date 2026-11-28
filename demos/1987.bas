@@ -1570,6 +1570,7 @@
 31343     NIP=0
 31344     IF NI>=0 THEN IF NEAR=0 OR (ITX(NI)-JX)*(ITX(NI)-JX)+(ITY(NI)-JY)*(ITY(NI)-JY)<DX*DX+DY*DY THEN NIP=-1
 31345     IF KU<>0 AND NIP<>0 AND NI>=0 THEN CALL PICKUP:KU=0:NIP=0
+31346     IF KU<>0 AND HEN<>0 THEN CALL HOUSEUSE
 31350     IF KU<>0 AND NEAR AND (BST=0 OR BST=1 OR BST=5) THEN
 31360       MODE=2:MT=0:MFX=JX:MFY=JY:MFZ=JZ:CALL SND(2)
 31370       IF BST>0 THEN BST=6:BLN0=BLN:BSTR0=BSTR
@@ -1950,7 +1951,7 @@
 36876       ZC=0:FOR ZA=-4 TO 4:FOR ZB=-4 TO 4:IF ZC=0 THEN CALL ITCELL(ZA,ZB):IF IFK>0 THEN ZC=IFK:JX=IFX:JY=IFY
 36877       NEXT ZB:NEXT ZA:CALL TERRAINJUMP(JX,JY):JZ=FN FLR(JX,JY):M3D THINGPOS 0,JX,JY,JZ:ITT=0:PRINT "finditem k=";ZC
 36878     END IF
-36879     IF C$="house" OR C$="findhouse" THEN CALL HOUSECMD(C$)
+36879     IF C$="house" OR C$="findhouse" OR C$="hwalk" THEN CALL HOUSECMD(C$)
 36880     IF C$="poles" THEN
 36890       PH=0:PU=0
 36900       FOR PK=0 TO NPL-1
@@ -2006,7 +2007,7 @@
 38215 DYN=0:LENSON=0:DAYH=10:DAYSEC=1440:DAYLV=-1:LAMPON=0:DAYA=1:IF ENV$("G1987_TIME")<>"" THEN DAYH=VAL(ENV$("G1987_TIME"))
 38216 IF ENV$("G1987_DAYLEN")<>"" THEN DAYSEC=MAX(10,VAL(ENV$("G1987_DAYLEN")))
 38217 DYNF=-1:IF ENV$("G1987_DYNAMO")<>"" THEN DYNF=VAL(ENV$("G1987_DYNAMO"))
-38218 HEN=0:HET=0:HEON=156:HEOFF=203:HETY=0:HEST=0:HESD=0:HELX=0:HELY=0:HEDD=0:HEOX=0:HEOY=0:HEOZ=0:HEH=0:HEW=0:HED=0:HEDX=0:HEDY=0:TCV=0:FLX=30:FLY=-9.5:FLZ=40:BJ9=0:NIP=0:PRL=0:PLL=0:FD=0:FDS=-1:FDT=0:FDL=0:PFQ=0:HZO=0:BJ8=0
+38218 HEN=0:HET=0:HEON=156:HEOFF=203:HETY=0:HEST=0:HESD=0:HELX=0:HELY=0:HEDD=0:HEOX=0:HEOY=0:HEOZ=0:HEH=0:HEW=0:HED=0:HEDX=0:HEDY=0:HDO=0:HEDW=0:HEDLX=0:HEPS=24:TCV=0:FLX=30:FLY=-9.5:FLZ=40:BJ9=0:NIP=0:PRL=0:PLL=0:FD=0:FDS=-1:FDT=0:FDL=0:PFQ=0:HZO=0:BJ8=0
 38220 CALL SETGROUND
 38230 ' the sun: terrain cells get pictures shaded by their slope (M3D SUN: steps 301.. + 100, 200, 300; needs the palette's color map first)
 38240 IF NOT HL THEN M3D COLORMAP
@@ -3605,10 +3606,11 @@
 66010 ' (owner, 2026-11-28) Every house of the static world can be entered: when John (or the bicycle) is within 5 m of a house's front door, on the outside, the inside of the house is
 66020 ' built as the object HEO (M3D HOUSEINT: the rooms' walls with doorways, floors, ceilings, stairs, furniture; the house is a function of its type, seed and stage of damage, so the same
 66030 ' every time and nothing of it is saved: a game saved inside a house builds it again at once) and shown; when he is on the outside again and further than 6.5 m from the door, it is
-66040 ' hidden. The outside of the house (M3D HOUSE, part of the cells of the world) stays as it is; the doors and walls do not stop John yet (collision comes next).
+66040 ' hidden. The outside of the house (M3D HOUSE, part of the cells of the world) stays as it is. Its walls and the closed door stop John (the engine's body collision); E near the front door opens it
+66042 ' (a box in which the walls do not count, M3D PASSBOX 0, and the open door as the object 561) or closes it again.
 66050 ' M3D("HOUSESITE", 0, x, y) finds the house, 1 .. 12 give type, seed, stage, corner x / y / z, heading, door x / y, distance, width and depth. HEN: the inside is shown.
 66100 PROC HOUSES(DT)
-66110   LOCAL QX,QY,C,S,F,LX,LY,DD
+66110   LOCAL QX,QY,C,S,F,LX,LY,DD,ST
 66120   IF NOT WLD THEN EXIT PROC
 66130   HET=HET-DT
 66140   IF HET>0 THEN EXIT PROC
@@ -3619,7 +3621,10 @@
 66190     LX=(QX-HEOX)*C+(QY-HEOY)*S:LY=-(QX-HEOX)*S+(QY-HEOY)*C
 66200     DD=SQR((QX-HEDX)*(QX-HEDX)+(QY-HEDY)*(QY-HEDY))
 66210     HELX=LX:HELY=LY:HEDD=DD
-66220     IF DD>HEOFF AND NOT (LX>=-20 AND LX<=HEW+20 AND LY>=0 AND LY<=HED+20) THEN M3D OBJSHOW 560,0:HEN=0
+66212     ' inside the walls John's step is low (8 units, the stairs take 5.7), so that he cannot climb onto the furniture; outside it is 24
+66214     ST=24:IF LX>=0 AND LX<=HEW AND LY>=6 AND LY<=HED THEN ST=8
+66216     IF ST<>HEPS THEN M3D PLAYER 14,56,46,ST:HEPS=ST
+66220     IF DD>HEOFF AND NOT (LX>=-20 AND LX<=HEW+20 AND LY>=0 AND LY<=HED+20) THEN CALL HOUSEDOOR(0):M3D OBJSHOW 560,0:HEN=0:CALL HOUSEBODY(30):IF HEPS<>24 THEN M3D PLAYER 14,56,46,24:HEPS=24
 66230   ELSE
 66240     F=M3D("HOUSESITE",0,QX,QY)
 66250     IF F<>0 THEN
@@ -3638,14 +3643,27 @@
 66430   HEOZ=M3D("HOUSESITE",6,0,0):HEDX=M3D("HOUSESITE",8,0,0):HEDY=M3D("HOUSESITE",9,0,0)
 66440   M3D HOUSEINT 560,HETY,HEST,HESD
 66450   M3D OBJPOS 560,HEOX,HEOY,HEOZ,HEH
+66452   CALL HOUSEDOORBUILD:IF ENV$("G1987_DOOR")<>"" THEN CALL HOUSEDOOR(-1)
 66460   M3D OBJSHOW 560,1
-66470   HEN=-1
+66470   HEN=-1:CALL HOUSEBODY(20)
 66480 END PROC
 66500 ' play commands: house = what the inside is doing, findhouse = jump to the front door of the nearest house on a grid round John (needs a world with houses)
 66510 PROC HOUSECMD(C$)
-66520   LOCAL A,B,F,X0,Y0,BD,BX0,BY0,D
-66530   IF C$="house" THEN
-66540     PRINT "house hen=";HEN;" ty=";HETY;" st=";HEST;" lx=";INT(HELX);" ly=";INT(HELY);" dd=";INT(HEDD);" shown=";HEN
+66520   LOCAL A,B,F,X0,Y0,BD,BX0,BY0,D,N,CA,SA,LX,LY
+66521   IF C$="hwalk" THEN
+66522     ' hwalk a n s: n steps of s units along the angle a (degrees) of the house's own frame (0 = along the road, 90 = into the house), the way John walks (M3D THINGMOVE)
+66523     CA=(VAL(W$(1))+HEH)*PI/180
+66524     FOR N=1 TO VAL(W$(2))
+66525       M3D THINGMOVE 0,COS(CA)*VAL(W$(3)),SIN(CA)*VAL(W$(3))
+66526       JX=M3D("TX",0):JY=M3D("TY",0):JZ=M3D("TZ",0)
+66527     NEXT N
+66528     CA=COS(HEH*PI/180):SA=SIN(HEH*PI/180)
+66529     LX=(JX-HEOX)*CA+(JY-HEOY)*SA:LY=-(JX-HEOX)*SA+(JY-HEOY)*CA
+66530     PRINT "hwalk lx=";INT(LX);" ly=";INT(LY);" dz=";INT(JZ-HEOZ);" fo=";M3D("FLOOROBJ",JX,JY,JZ+2);" dh=";INT(FN HT(JX,JY)-HEOZ)
+66531     EXIT PROC
+66532   END IF
+66533   IF C$="house" THEN
+66540     PRINT "house hen=";HEN;" ty=";HETY;" sd=";HESD;" st=";HEST;" lx=";INT(HELX);" ly=";INT(HELY);" dd=";INT(HEDD);" shown=";HEN
 66550   ELSE
 66560     X0=JX:Y0=JY:BD=1000000000:BX0=0:BY0=0
 66570     FOR A=-30 TO 30
@@ -3665,3 +3683,44 @@
 66710     END IF
 66720   END IF
 66730 END PROC
+66800 ' the front door: the object 561 (the doorway dark and the open leaf swung outward, in the house's own frame; no collision) and the box that lets John through
+66810 PROC HOUSEDOORBUILD
+66812   LOCAL C,S,W,Z0,Z1
+66814   HEDW=M3D("HOUSESITE",13,0,0)
+66816   C=COS(HEH*PI/180):S=SIN(HEH*PI/180)
+66818   HEDLX=(HEDX-HEOX)*C+(HEDY-HEOY)*S
+66820   W=HEDW/2:Z0=9.4:Z1=75
+66822   M3D OBJECT 561,20,235
+66824   M3D VERTEX 561,HEDLX-W,-1.6,Z0:M3D VERTEX 561,HEDLX+W,-1.6,Z0:M3D VERTEX 561,HEDLX+W,-1.6,Z1:M3D VERTEX 561,HEDLX-W,-1.6,Z1
+66826   M3D FACE 561,0,1,2,FN CC(0,1):M3D FACE 561,0,2,3,FN CC(0,1)
+66828   M3D VERTEX 561,HEDLX-W,-1.9,Z0:M3D VERTEX 561,HEDLX-W,-1.9-HEDW,Z0:M3D VERTEX 561,HEDLX-W,-1.9-HEDW,Z1:M3D VERTEX 561,HEDLX-W,-1.9,Z1
+66829   M3D FACE 561,4,5,6,305:M3D FACE 561,4,6,7,305
+66830   M3D OBJPOS 561,HEOX,HEOY,HEOZ,HEH:M3D OBJSHOW 561,0
+66832   HDO=0:M3D PASSBOX 0,0,0,0,0,0,0
+66834 END PROC
+66900 ' open (F) or close the front door
+66902 PROC HOUSEDOOR(F)
+66904   LOCAL C,S,I,X,Y,LX,LY,X1,Y1,X2,Y2
+66906   IF F=0 THEN
+66908     IF HDO<>0 THEN M3D PASSBOX 0,0,0,0,0,0,0:M3D OBJSHOW 561,0:HDO=0
+66910     EXIT PROC
+66912   END IF
+66914   C=COS(HEH*PI/180):S=SIN(HEH*PI/180):X1=1000000000:Y1=X1:X2=-X1:Y2=X2
+66916   FOR I=0 TO 3
+66918     LX=HEDLX+(I MOD 2)*HEDW-HEDW/2:LY=-16+INT(I/2)*32
+66920     X=HEOX+LX*C-LY*S:Y=HEOY+LX*S+LY*C
+66922     X1=MIN(X1,X):X2=MAX(X2,X):Y1=MIN(Y1,Y):Y2=MAX(Y2,Y)
+66924   NEXT I
+66926   M3D PASSBOX 0,X1,Y1,HEOZ,X2,Y2,HEOZ+90:M3D OBJSHOW 561,1:HDO=-1
+66928 END PROC
+67000 ' E: opens or closes the front door when John is within 90 units of it
+67002 PROC HOUSEUSE
+67004   IF SQR((JX-HEDX)^2+(JY-HEDY)^2)<90 THEN
+67006     IF HDO THEN CALL HOUSEDOOR(0) ELSE CALL HOUSEDOOR(-1)
+67008     KU=0
+67010   END IF
+67012 END PROC
+67100 ' John's body: 30 wide outside (a radius of 12 units); in a house 20 (8 units = 2.56 dm: the house generator's walkable test uses this radius, so doors and furniture leave room for him)
+67110 PROC HOUSEBODY(W)
+67120   M3D THING 0,JX,JY,JZ,299,W,56
+67130 END PROC

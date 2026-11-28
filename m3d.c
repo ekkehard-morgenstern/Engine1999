@@ -321,6 +321,7 @@ static void clear_world( m3d_t* m ) {
     memset( m->lamps, 0, sizeof(m->lamps) );
     m->nobjs = 0;
     m->nzones = 0;
+    memset( m->pbox, 0, sizeof(m->pbox) );
     memset( &m->gnd, 0, sizeof(m->gnd) );
     memset( &m->sun, 0, sizeof(m->sun) );          // (shaded pictures stay, as plain pictures now)
     memset( &m->rpic, 0, sizeof(m->rpic) );
@@ -988,12 +989,13 @@ static int house_list( const tjob_t* j, double bx0, double by0, double bx1, doub
                     double xa0 = ny, xa1 = -nx;                                                // the house's +x runs along the road
                     double ox = fx - xa0 * w * 0.5, oy = fy - xa1 * w * 0.5;
                     double zmin = 1.0e9, zmax = -1.0e9;
-                    for ( int q = 0; q < 5; ++q ) {                                        // the four corners and the middle
-                        double lx = q == 4 ? w * 0.5 : ( q & 1 ) ? w : 0.0, ly = q == 4 ? d * 0.5 : ( q & 2 ) ? d : 0.0;
+                    for ( int q = 0; q < 36; ++q ) {                                       // 6 x 6 points over the footprint and a margin of a yard in front of the door
+                        double lx = w * (double)( q % 6 ) / 5.0, ly = -40.0 + ( d + 40.0 ) * (double)( q / 6 ) / 5.0;
                         double h = job_height( j, ox + xa0 * lx + nx * ly, oy + xa1 * lx + ny * ly );
                         zmin = fmin( zmin, h ); zmax = fmax( zmax, h );
                     }
-                    if ( !( zmin > j->pic.level + 3.0 && zmax < j->pic.rockh - 60.0 ) || zmax - zmin > 60.0 ) { continue; }
+                    // (every house can be entered: the ground must not rise above its floor, so the site has to be flat to 14 units (45 cm); the floor is 9.4 above the base)
+                    if ( !( zmin > j->pic.level + 3.0 && zmax < j->pic.rockh - 60.0 ) || zmax - zmin > 14.0 ) { continue; }
                     double cx = ox + xa0 * w * 0.5 + nx * d * 0.5, cy = oy + xa1 * w * 0.5 + ny * d * 0.5;
                     if ( rnet_kind( &j->gnd.net, cx, cy ) == 3 ) { continue; }
                     rnear_t rn;
@@ -1002,7 +1004,7 @@ static int house_list( const tjob_t* j, double bx0, double by0, double bx1, doub
                     if ( n >= max ) { return n; }
                     hsite_t* s = &out[n++];
                     s->cx = cx; s->cy = cy; s->hw = w * 0.5; s->hd = d * 0.5; s->xx = xa0; s->xy = xa1; s->yx = nx; s->yy = ny;
-                    s->ox = ox; s->oy = oy; s->z = zmin - 2.0; s->type = type; s->seed = seed;
+                    s->ox = ox; s->oy = oy; s->z = zmax - 6.0; s->type = type; s->seed = seed;
                     double t = hypot( cx, cy ) / HOUSE_DMGR * 4.4 + job_wh( j, lk, seg * 8 + i, 206 ) * 0.9 - 0.45;
                     s->stage = t < 0.0 ? 0 : t > 4.0 ? 4 : (int) floor( t );
                 }
@@ -1681,14 +1683,14 @@ static bool house_near( m3d_t* m, double x, double y, double r ) {
         double best = r;
         for ( int i = 0; i < n; ++i ) {
             house_gen( hh, hs[i].type, hs[i].seed );
-            double pos = hh->lx / 2;
-            for ( int q = 0; q < hh->nwin; ++q ) { if ( hh->win[q].floor == 0 && hh->win[q].kind == 2 ) { pos = hh->win[q].pos; } }
+            double pos = hh->lx / 2, dw = 10.0;
+            for ( int q = 0; q < hh->nwin; ++q ) { if ( hh->win[q].floor == 0 && hh->win[q].kind == 2 ) { pos = hh->win[q].pos; dw = hh->win[q].w; } }
             double lx = pos * 3.125, dx = hs[i].ox + hs[i].xx * lx, dy = hs[i].oy + hs[i].xy * lx, d = hypot( x - dx, y - dy );
             if ( d >= best ) { continue; }
             best = d; found = true;
             double* o = m->hsite;
             o[0] = hs[i].type; o[1] = (double) hs[i].seed; o[2] = hs[i].stage; o[3] = hs[i].ox; o[4] = hs[i].oy; o[5] = hs[i].z;
-            o[6] = atan2( hs[i].xy, hs[i].xx ) / DEG2RAD; o[7] = dx; o[8] = dy; o[9] = d; o[10] = hh->lx * 3.125; o[11] = hh->dy * 3.125;
+            o[6] = atan2( hs[i].xy, hs[i].xx ) / DEG2RAD; o[7] = dx; o[8] = dy; o[9] = d; o[10] = hh->lx * 3.125; o[11] = hh->dy * 3.125; o[12] = dw * 3.125;
         }
     }
     free( pj ); free( hs ); free( hh );
@@ -2220,6 +2222,17 @@ typedef struct { double x, y, z, lift, radius, height, step; int hit; } body_t;
 
 #define M3D_WALKABLE_NZ 0.3             // the smallest |normal z| of a triangle that does not push a body sideways (a slope of up to 72.5 degrees)
 
+// a point in one of the boxes of M3D PASSBOX (an open door): the surface there is no wall
+static bool in_passbox( const m3d_t* m, v3_t q ) {
+    for ( int i=0; i < 4; ++i ) {
+        const double* p = m->pbox[i];
+        if ( p[3] > p[0] && q.x >= p[0] && q.x <= p[3] && q.y >= p[1] && q.y <= p[4] && q.z >= p[2] - 0.01 && q.z <= p[5] ) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static bool push_out( m3d_t* m, const body_t* b, double* px, double* py, double feet ) {
     bool pushed = false;
     double r = b->radius;
@@ -2261,6 +2274,9 @@ static bool push_out( m3d_t* m, const body_t* b, double* px, double* py, double 
                 for ( int k=0; k < nz; ++k ) {
                     v3_t cen = { *px, *py, zc[k] };
                     v3_t q = closest_tri( cen, a, b, c );
+                    if ( in_passbox( m, q ) ) {
+                        continue;
+                    }
                     v3_t d = vsub( cen, q );
                     double len = sqrt( vdot( d, d ) );
                     if ( len >= r || len < 1.0e-9 ) {
@@ -2973,6 +2989,13 @@ bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t sl
             t->x = b.x; t->y = b.y; t->z = b.z; m->hit = b.hit;
             return true;
         }
+        case GFXOP_M3DPASSBOX: {
+            if ( !whole( a[0], 0, 3, &i1 ) ) {
+                return false;
+            }
+            for ( int k=0; k < 6; ++k ) { m->pbox[i1][k] = a[1+k]; }
+            return true;
+        }
         case GFXOP_M3DZONE: {
             int id, tg = 0;
             if ( !whole( a[0], 0, 65535, &id ) || m->nzones >= M3D_MAXZONES || ( !NONE_VAL( a[7] ) && !whole( a[7], 0, 65535, &tg ) ) ) {
@@ -3077,7 +3100,7 @@ bool m3d_query( m3d_t* m, int q, const double* a, int na, double* r ) {
         case GFXQ_M3DHOUSESITE: {
             int k = (int) floor( a[0] );
             if ( k == 0 ) { *r = house_near( m, a[1], a[2], 800.0 ) ? 1.0 : 0.0; return true; }
-            *r = k >= 1 && k <= 12 ? m->hsite[k - 1] : 0.0;
+            *r = k >= 1 && k <= 13 ? m->hsite[k - 1] : 0.0;
             return true;
         }
         case GFXQ_M3DX: *r = m->x; return true;

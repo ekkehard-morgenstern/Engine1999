@@ -153,11 +153,12 @@ struct _m3d_t {
     thing_t* things;
     lamp_t   lamps[M3D_MAXLAMPS];
     zone_t*  zones;    int nzones;
+    double   pbox[4][6];                    // M3D PASSBOX: boxes (x1, y1, z1, x2, y2, z2) in which solid surfaces do not push a body (x2 <= x1: off)
     uint32_t pal[256];
     bool     havepal;
     int      vx, vy, vw, vh, scale, bw, bh;
     double   fov, fog, far;
-    double   hsite[12];                     // M3D("HOUSESITE"): the house found by the last search
+    double   hsite[13];                     // M3D("HOUSESITE"): the house found by the last search
     double   ambient;                       // M3D AMBIENT: the daylight, a factor 0 .. 1 on every object's light (not those with M3D_OF_GLOW), the things' and the sky's
     double   fogstart;                      // M3D FOG d,haze,start: nothing before this distance (the fog is the quadratic part from start to d)
     int      msaa;                          // M3D MSAA: the samples of full-scene antialiasing wanted (0 or 2 .. 16), used by the hardware renderer
