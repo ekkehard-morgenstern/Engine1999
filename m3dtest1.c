@@ -1579,6 +1579,13 @@ int main( void ) {
         CHECK( op( GFXOP_M3DHOUSE, 4, 5.0, 3.0, 4.0, 7.0 ) && Q( GFXQ_M3DTRIS, 1, 5.0 ) > 100.0 );                  // made again with another stage: the object is replaced
         CHECK( !op( GFXOP_M3DHOUSE, 4, 7.0, 6.0, 0.0, 7.0 ) && !op( GFXOP_M3DHOUSE, 4, 7.0, 1.0, 5.0, 7.0 ) && !op( GFXOP_M3DHOUSE, 4, 28000.0, 1.0, 0.0, 7.0 ) );
         CHECK( !op( GFXOP_M3DHOUSE, 5, 7.0, 1.0, 0.0, 7.0, 2.0 ) );
+        // M3D HOUSEINT: the inside; every stage has triangles, the intact one the most, a bad argument is refused; no world: M3D("HOUSESITE") finds nothing
+        CHECK( op( GFXOP_M3DHOUSEINT, 4, 8.0, 1.0, 0.0, 7.0 ) );
+        double in0 = Q( GFXQ_M3DTRIS, 1, 8.0 );
+        CHECK( in0 > 100.0 && in0 < 6000.0 );
+        CHECK( op( GFXOP_M3DHOUSEINT, 4, 8.0, 1.0, 4.0, 7.0 ) && Q( GFXQ_M3DTRIS, 1, 8.0 ) < in0 );
+        CHECK( !op( GFXOP_M3DHOUSEINT, 4, 8.0, 6.0, 0.0, 7.0 ) && !op( GFXOP_M3DHOUSEINT, 4, 8.0, 1.0, 5.0, 7.0 ) );
+        CHECK( Q( GFXQ_M3DHOUSESITE, 3, 0.0, 0.0, 0.0 ) == 0.0 );
         // the glass in an object of its own (6th argument): the triangles of both are those of one object, the glass is translucent
         CHECK( op( GFXOP_M3DHOUSE, 5, 20.0, 1.0, 0.0, 7.0, 1.0 ) && op( GFXOP_M3DHOUSE, 6, 21.0, 1.0, 0.0, 7.0, 1.0, 22.0 ) );
         CHECK( Q( GFXQ_M3DTRIS, 1, 22.0 ) > 0.0 && Q( GFXQ_M3DTRIS, 1, 21.0 ) + Q( GFXQ_M3DTRIS, 1, 22.0 ) == Q( GFXQ_M3DTRIS, 1, 20.0 ) );

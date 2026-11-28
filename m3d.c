@@ -560,6 +560,7 @@ static void house_mats( const int pic[18], const int pw[18], const int ph[18], i
     int slot[HM_NMAT];
     slot[HM_PLASTER] = plasterc; slot[HM_ROOF] = 6 + roofcc; slot[HM_CHAR] = 9; slot[HM_BRICK] = 10; slot[HM_GLASS] = 11; slot[HM_DOOR] = 12; slot[HM_WOOD] = 13;
     slot[HM_CONCRETE] = 14; slot[HM_RIM] = 15; slot[HM_GARAGE] = 16; slot[HM_FRAME] = 17;
+    for ( int k = 0; k < 6; ++k ) { mat[HM_PAINT0 + k] = plaster[k]; slot[HM_PAINT0 + k] = k; }          // the paint of the rooms inside: the plaster colours
     for ( int k = 0; k < HM_NMAT; ++k ) {
         int p = pic[slot[k]];
         mw[k] = mh[k] = 0;
@@ -1663,6 +1664,35 @@ static bool wl_request( m3d_t* m, wl_t* wl, int slot ) {
     free( pj );
     if ( ok ) { t->queued = true; }
     return ok;
+}
+
+// the house of the static world whose front door is nearest to (x, y) within r units: m->hsite (type, seed, stage, corner x, y, base z, heading, door x, y, distance, width, depth)
+static bool house_near( m3d_t* m, double x, double y, double r ) {
+    wl_t* wl = m->wl;
+    memset( m->hsite, 0, sizeof(m->hsite) );
+    if ( wl == 0 || !world_houses( m ) ) { return false; }
+    tjob_t* pj = (tjob_t*) calloc( 1, sizeof(tjob_t) );
+    hsite_t* hs = (hsite_t*) calloc( 24, sizeof(hsite_t) );
+    house_t* hh = (house_t*) calloc( 1, sizeof(house_t) );
+    bool found = false;
+    if ( pj != 0 && hs != 0 && hh != 0 ) {
+        pj->gnd = *world_ground( wl->w ); pj->world = wl->w; pj->pic = m->rpic; pj->pic.houses = true;
+        int n = house_list( pj, x - r - 600.0, y - r - 600.0, x + r + 600.0, y + r + 600.0, hs, 24 );
+        double best = r;
+        for ( int i = 0; i < n; ++i ) {
+            house_gen( hh, hs[i].type, hs[i].seed );
+            double pos = hh->lx / 2;
+            for ( int q = 0; q < hh->nwin; ++q ) { if ( hh->win[q].floor == 0 && hh->win[q].kind == 2 ) { pos = hh->win[q].pos; } }
+            double lx = pos * 3.125, dx = hs[i].ox + hs[i].xx * lx, dy = hs[i].oy + hs[i].xy * lx, d = hypot( x - dx, y - dy );
+            if ( d >= best ) { continue; }
+            best = d; found = true;
+            double* o = m->hsite;
+            o[0] = hs[i].type; o[1] = (double) hs[i].seed; o[2] = hs[i].stage; o[3] = hs[i].ox; o[4] = hs[i].oy; o[5] = hs[i].z;
+            o[6] = atan2( hs[i].xy, hs[i].xx ) / DEG2RAD; o[7] = dx; o[8] = dy; o[9] = d; o[10] = hh->lx * 3.125; o[11] = hh->dy * 3.125;
+        }
+    }
+    free( pj ); free( hs ); free( hh );
+    return found;
 }
 
 static void wl_want( wl_t* wl, int slot, double d ) {          // a tile that must be built: remembered, the nearest ones are submitted first
@@ -2778,17 +2808,18 @@ bool m3d_op( m3d_t* m, int op, const double* a, int na, const char* s, size_t sl
             m->hpic[slot] = pic;
             return true;
         }
-        case GFXOP_M3DHOUSE: {
+        case GFXOP_M3DHOUSE: case GFXOP_M3DHOUSEINT: {
             int ty, st, lv = 1, gl = -1;
+            bool inside = op == GFXOP_M3DHOUSEINT;
             if ( !whole( a[0], 0, M3D_MAXOBJECTS - 1, &i1 ) || !whole( a[1], 1, 5, &ty ) || !whole( a[2], 0, 4, &st ) || !( a[3] > -4.4e9 && a[3] < 4.4e9 ) ||
-                 ( !NONE_VAL( a[4] ) && !whole( a[4], 0, 1, &lv ) ) || ( !NONE_VAL( a[5] ) && ( !whole( a[5], 0, M3D_MAXOBJECTS - 1, &gl ) || gl == i1 ) ) ) {
+                 ( !inside && !NONE_VAL( a[4] ) && !whole( a[4], 0, 1, &lv ) ) || ( !inside && !NONE_VAL( a[5] ) && ( !whole( a[5], 0, M3D_MAXOBJECTS - 1, &gl ) || gl == i1 ) ) ) {
                 return false;
             }
             house_t* hh = (house_t*) malloc( sizeof(house_t) );
             hmesh_t hm;
             if ( hh == 0 ) { *err = "Out of memory"; return false; }
             house_gen( hh, ty, (int64_t) floor( a[3] ) );
-            if ( !house_mesh( hh, st, lv, &hm ) ) { free( hh ); *err = "Out of memory"; return false; }
+            if ( !( inside ? house_mesh_inside( hh, st, &hm ) : house_mesh( hh, st, lv, &hm ) ) ) { free( hh ); *err = "Out of memory"; return false; }
             free( hh );
             double oa[3] = { (double) i1, (double)( M3D_OF_TWOSIDED | M3D_OF_MASKED ), 235.0 };      // (masked: the panes of a window picture are see-through)
             if ( !m3d_op( m, GFXOP_M3DOBJECT, oa, 3, 0, 0, err ) ) { house_mesh_free( &hm ); return false; }
@@ -3043,6 +3074,12 @@ bool m3d_query( m3d_t* m, int q, const double* a, int na, double* r ) {
             *r = m->gnd.quiet.on ? 1.0 - box_weight( a[0], a[1], m->gnd.quiet.cx, m->gnd.quiet.cy, m->gnd.quiet.rx, m->gnd.quiet.ry, m->gnd.quiet.margin ) : 1.0;
             return true;
         case GFXQ_M3DAMBIENT: *r = m->ambient; return true;
+        case GFXQ_M3DHOUSESITE: {
+            int k = (int) floor( a[0] );
+            if ( k == 0 ) { *r = house_near( m, a[1], a[2], 800.0 ) ? 1.0 : 0.0; return true; }
+            *r = k >= 1 && k <= 12 ? m->hsite[k - 1] : 0.0;
+            return true;
+        }
         case GFXQ_M3DX: *r = m->x; return true;
         case GFXQ_M3DY: *r = m->y; return true;
         case GFXQ_M3DZ: *r = m->z; return true;

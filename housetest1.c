@@ -348,6 +348,41 @@ static void test_walk( void ) {
     CHECK( nbad == 0 );
 }
 
+static void test_inside( void ) {
+    house_t h;
+    int bad = 0, degenerate = 0, minn = 1 << 30, maxn = 0;
+    for ( int t = 1; t <= 5; ++t ) {
+        for ( int s = 1; s <= 20; ++s ) {
+            house_gen( &h, t, s );
+            int prev = 1 << 30;
+            for ( int stage = 0; stage < 5; ++stage ) {
+                hmesh_t m;
+                CHECK( house_mesh_inside( &h, stage, &m ) );
+                if ( stage == 0 ) { if ( m.nt < minn ) { minn = m.nt; } if ( m.nt > maxn ) { maxn = m.nt; } }
+                if ( m.nt > prev + 40 ) { ++bad; }                             // the damage only takes away (the colour of a piece may change, never its number grows much)
+                prev = m.nt;
+                for ( int i = 0; i < m.nv; ++i ) {
+                    const hvert_t* v = &m.v[i];
+                    if ( !( isfinite( v->x ) && isfinite( v->y ) && isfinite( v->z ) ) || v->x < -2 || v->x > 260 * 3.125 || v->y < -2 || v->y > 240 * 3.125 || v->z < -2 || v->z > 70 * 3.125 ) { ++bad; }
+                }
+                for ( int i = 0; i < m.nt; ++i ) {
+                    const htri_t* tr = &m.t[i];
+                    if ( tr->a < 0 || tr->b < 0 || tr->c < 0 || tr->a >= m.nv || tr->b >= m.nv || tr->c >= m.nv || tr->mat < 0 || tr->mat >= HM_NMAT ) { ++bad; continue; }
+                    const hvert_t *a = &m.v[tr->a], *b = &m.v[tr->b], *c = &m.v[tr->c];
+                    double e1[3] = { b->x - a->x, b->y - a->y, b->z - a->z }, e2[3] = { c->x - a->x, c->y - a->y, c->z - a->z };
+                    double nx = e1[1] * e2[2] - e1[2] * e2[1], ny = e1[2] * e2[0] - e1[0] * e2[2], nz = e1[0] * e2[1] - e1[1] * e2[0];
+                    if ( nx * nx + ny * ny + nz * nz < 1e-12 ) { ++degenerate; }
+                }
+                house_mesh_free( &m );
+            }
+        }
+    }
+    printf( "house insides (stage 0): %d .. %d triangles\n", minn, maxn );
+    CHECK( bad == 0 );
+    CHECK( degenerate == 0 );
+    CHECK( minn >= 200 && maxn <= 6000 );
+}
+
 static void test_mesh( void ) {
     house_t h;
     int minl1 = 1 << 30, maxl1 = 0, minl0 = 1 << 30, maxl0 = 0, bad = 0, degenerate = 0, outward = 0, wallsn = 0;
@@ -418,6 +453,7 @@ int main( void ) {
     test_gen();
     test_mesh();
     test_walk();
+    test_inside();
     printf( "housetest1: %d cases, %d failures\n", cases, failures );
     return failures;
 }

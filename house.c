@@ -1022,3 +1022,171 @@ void house_mesh_free( hmesh_t* m ) {
     free( m->v ); free( m->t );
     memset( m, 0, sizeof(*m) );
 }
+
+// -- the inside as a mesh -------------------------------------------------------------------------------------------------------------------------------------
+// Everything the player sees from inside: the room layers (the walls, in the paint of the room, with doorways and painted windows), the floors, the ceilings, the stairs and
+// the furniture. The outer walls of house_mesh stay as they are (they are two sided in the game), the layers stand 4 dm in front of them. Damage: ground floor layers up to
+// stage 3, upper floor layers up to stage 2; ceilings and upper floors by their own thresholds of the hash; furniture thins out from D > 0.4 and chars.
+
+// a vertical rectangle in the plane axis 0: x = pl, ranging over y c1 .. c2; axis 1: y = pl over x
+static void irect( mb_t* b, int axis, double pl, double c1, double c2, double z1, double z2, int mat ) {
+    if ( c2 <= c1 + 0.001 || z2 <= z1 + 0.001 ) { return; }
+    double p[4][3];
+    for ( int k = 0; k < 4; ++k ) {
+        double c = k == 0 || k == 3 ? c1 : c2, z = k < 2 ? z1 : z2;
+        if ( axis == 0 ) { p[k][0] = pl; p[k][1] = c; } else { p[k][0] = c; p[k][1] = pl; }
+        p[k][2] = z;
+    }
+    if ( axis == 0 ) { quad( b, p, 1, 0, 0, mat ); } else { quad( b, p, 0, 1, 0, mat ); }
+}
+
+typedef struct { double c1, c2; } ihole_t;
+
+// the doorways in the layer (axis, plane) of floor f between a1 and a2: the inner doors, the front door, the doors to the garage and the extension
+static int iholes( const house_t* h, int f, int axis, double pl, double a1, double a2, ihole_t* out, int max ) {
+    int n = 0;
+    for ( int i = 0; i < h->ndor[f] && n < max; ++i ) {
+        const hdoor_t* d = &h->dor[f][i];
+        if ( d->axis != axis ) { continue; }
+        double wallc = axis == 0 ? d->x : d->y, mid = axis == 0 ? d->y : d->x;
+        if ( fabs( pl - wallc ) > 1.01 ) { continue; }
+        if ( mid + d->w / 2 > a1 && mid - d->w / 2 < a2 ) { out[n].c1 = mid - d->w / 2; out[n].c2 = mid + d->w / 2; ++n; }
+    }
+    if ( f == 0 ) {
+        for ( int i = 0; i < h->nwin && n < max; ++i ) {
+            const hwin_t* w = &h->win[i];
+            if ( w->floor != 0 || ( w->kind != 2 && w->kind != 3 ) ) { continue; }
+            bool hit = false;
+            if ( w->side == 0 && axis == 1 && fabs( pl - HOUSE_TW ) < 0.01 ) { hit = true; }
+            if ( w->side == 1 && axis == 1 && ( fabs( pl - ( h->dy - HOUSE_TW ) ) < 0.01 || fabs( pl - h->dy ) < 0.01 ) ) { hit = true; }
+            if ( w->side == 3 && axis == 0 && ( fabs( pl - ( h->lx - HOUSE_TW ) ) < 0.01 || fabs( pl - h->lx ) < 0.01 ) ) { hit = true; }
+            if ( hit && w->pos + w->w / 2 > a1 && w->pos - w->w / 2 < a2 ) { out[n].c1 = w->pos - w->w / 2; out[n].c2 = w->pos + w->w / 2; ++n; }
+        }
+    }
+    return n;
+}
+
+// a wall layer with doorways of the height 21 dm
+static void ilayer( mb_t* b, int f, int axis, double pl, double a1, double a2, double z1, double z2, int mat ) {
+    ihole_t hl[12];
+    int n = iholes( b->h, f, axis, pl, a1, a2, hl, 12 );
+    for ( int i = 0; i < n; ++i ) { for ( int j = i + 1; j < n; ++j ) { if ( hl[j].c1 < hl[i].c1 ) { ihole_t t = hl[i]; hl[i] = hl[j]; hl[j] = t; } } }
+    double cur = a1;
+    for ( int i = 0; i < n; ++i ) {
+        double c1 = fmax( hl[i].c1, a1 ), c2 = fmin( hl[i].c2, a2 );
+        if ( c1 < cur ) { c1 = cur; }
+        if ( c2 <= c1 ) { continue; }
+        irect( b, axis, pl, cur, c1, z1, z2, mat );
+        irect( b, axis, pl, c1, c2, z1 + 21.0, z2, mat );
+        cur = c2;
+    }
+    irect( b, axis, pl, cur, a2, z1, z2, mat );
+}
+
+// a horizontal rectangle with a rectangular hole (the stairwell)
+static void ifloor( mb_t* b, double x1, double y1, double x2, double y2, const double* hole, double z, int mat, bool up ) {
+    if ( hole == 0 || hole[0] >= x2 || hole[2] <= x1 || hole[1] >= y2 || hole[3] <= y1 ) { hface( b, x1, y1, x2, y2, z, mat, up ); return; }
+    double hx1 = fmax( hole[0], x1 ), hx2 = fmin( hole[2], x2 ), hy1 = fmax( hole[1], y1 ), hy2 = fmin( hole[3], y2 );
+    if ( hy1 > y1 ) { hface( b, x1, y1, x2, hy1, z, mat, up ); }
+    if ( hy2 < y2 ) { hface( b, x1, hy2, x2, y2, z, mat, up ); }
+    if ( hx1 > x1 ) { hface( b, x1, hy1, hx1, hy2, z, mat, up ); }
+    if ( hx2 < x2 ) { hface( b, hx2, hy1, x2, hy2, z, mat, up ); }
+}
+
+static double ifuh( double w, double hh, int c ) {              // the height of a piece of furniture (FUH of tools/house3d.bas)
+    double l = fmax( w, hh ), s = fmin( w, hh );
+    if ( c == 54 ) { return l >= 15 ? 5 : 8; }
+    if ( c == 53 || c == 42 || c == 58 ) { return l > 1.6 * s ? 8 : 5; }
+    if ( l <= 4 ) { return 9; }
+    if ( s <= 4.5 ) { return 17; }
+    if ( s <= 7.5 && l >= 12 ) { return 9; }
+    return 7.5;
+}
+
+// the painted window of a room layer: the frame and the glass a little in front of the layer
+static void iwindows( mb_t* b, int f ) {
+    const house_t* h = b->h;
+    if ( b->stage >= 3 ) { return; }
+    for ( int i = 0; i < h->nwin; ++i ) {
+        const hwin_t* w = &h->win[i];
+        if ( w->floor != f || w->kind == 2 || ( w->kind == 3 ) ) { continue; }
+        int side, mat = w->kind == 4 ? HM_GARAGE : HM_GLASS;
+        double plane;
+        switch ( w->side ) {
+            case 0: side = 0; plane = HOUSE_TW; break;
+            case 1: side = 1; plane = h->dy - HOUSE_TW; break;
+            case 2: side = 2; plane = HOUSE_TW; break;
+            case 3: continue;
+            case 4: side = 0; plane = HOUSE_TW; break;
+            case 5: side = 3; plane = h->lx + h->ai; break;
+            case 6: side = 1; plane = h->ay; break;
+            case 7: side = 2; plane = h->exx1; break;
+            case 8: side = 3; plane = h->exx2; break;
+            default: side = 1; plane = h->dy + h->exy; break;
+        }
+        if ( w->side == 1 && h->type == 5 && w->pos + w->w / 2 > h->exx1 - 4 && w->pos - w->w / 2 < h->exx2 + 4 ) { continue; }
+        double z1 = h->flz[f] + w->sill, z2 = h->flz[f] + w->head;
+        if ( w->kind != 4 ) { wface( b, side, plane, w->pos - w->w / 2 - 0.8, w->pos + w->w / 2 + 0.8, z1 - 0.8, z2 + 0.8, HM_FRAME, -0.15 ); }
+        wface( b, side, plane, w->pos - w->w / 2, w->pos + w->w / 2, z1, z2, mat, -0.25 );
+    }
+}
+
+bool house_mesh_inside( const house_t* h, int stage, hmesh_t* m ) {
+    static const double dmg[5] = { 0, 0.25, 0.5, 0.75, 1.0 };
+    memset( m, 0, sizeof(*m) );
+    if ( stage < 0 ) { stage = 0; }
+    if ( stage > 4 ) { stage = 4; }
+    mb_t b = { m, h, dmg[stage], stage, 1, true };
+    double d = b.d;
+    {
+        m->plaster = (int) floor( hr( &b, 40, 1 ) * 6 );
+        if ( m->plaster > 5 ) { m->plaster = 5; }
+        m->roofc = (int) floor( hr( &b, 40, 2 ) * 3 );
+        if ( m->roofc > 2 ) { m->roofc = 2; }
+    }
+    const double hole[4] = { h->sx1, h->sy1, h->sx2, h->sy2 };
+    for ( int f = 0; f <= 1; ++f ) {
+        double z0 = h->flz[f], zc = f == 0 ? h->flz[1] - 3 : h->flz[1] + 26;
+        bool layers = f == 0 ? stage <= 3 : stage <= 2;
+        for ( int i = 0; i < h->nrm[f]; ++i ) {
+            const hroom_t* r = &h->rm[f][i];
+            int pc = r->color - 20;
+            if ( pc < 0 ) { pc = 0; }
+            if ( pc > 5 ) { pc = 5; }
+            bool floorok = f == 0 || d < 0.55 + 0.4 * hr( &b, 6000 + i, 1 );
+            bool ceilok = f == 0 ? d < 0.35 + 0.4 * hr( &b, 5000 + i, 1 ) : d < 0.35 + 0.4 * hr( &b, 7000 + i, 1 );
+            if ( layers && ( f == 0 || floorok ) ) {
+                ilayer( &b, f, 0, r->x1, r->y1, r->y2, z0, zc, HM_PAINT0 + pc );
+                ilayer( &b, f, 0, r->x2, r->y1, r->y2, z0, zc, HM_PAINT0 + pc );
+                ilayer( &b, f, 1, r->y1, r->x1, r->x2, z0, zc, HM_PAINT0 + pc );
+                ilayer( &b, f, 1, r->y2, r->x1, r->x2, z0, zc, HM_PAINT0 + pc );
+            }
+            if ( floorok ) { ifloor( &b, r->x1, r->y1, r->x2, r->y2, r->type == 1 && f == 1 ? hole : 0, z0, HM_WOOD, true ); }
+            if ( ceilok && layers ) { ifloor( &b, r->x1, r->y1, r->x2, r->y2, r->type == 1 && f == 0 ? hole : 0, zc, HM_PAINT5, false ); }
+        }
+        if ( layers ) { iwindows( &b, f ); }
+        for ( int i = 0; i < h->nfu[f]; ++i ) {
+            const hfurn_t* u = &h->fu[f][i];
+            if ( f == 1 ) {
+                if ( !( d < 0.55 + 0.4 * hr( &b, 1000 + (int)( ( u->x1 + u->x2 ) / 24 ), (int)( ( u->y1 + u->y2 ) / 24 ) ) ) ) { continue; }
+            }
+            if ( d > 0.4 && hr( &b, 700 + f, i ) > 1.25 - d * 0.9 ) { continue; }
+            int c = u->color;
+            int mat = c == 54 ? HM_PAINT5 : ( c == 41 || c == 42 || c == 58 ) ? HM_WOOD : HM_FRAME;
+            if ( hr( &b, 710 + f, i ) < d * 1.3 ) { mat = HM_CHAR; }
+            hbox( &b, u->x1, u->y1, z0, u->x2, u->y2, z0 + ifuh( u->x2 - u->x1, u->y2 - u->y1, c ), mat, true );
+        }
+    }
+    // the stairs: 16 steps along y from the ground floor to the upper floor
+    for ( int i = 0; i < 16; ++i ) {
+        double y1 = h->sy1 + i * ( h->sy2 - h->sy1 ) / 16, y2 = h->sy1 + ( i + 1 ) * ( h->sy2 - h->sy1 ) / 16;
+        double zt = h->flz[0] + ( i + 1 ) * ( h->flz[1] - h->flz[0] ) / 16;
+        hface( &b, h->sx1, y1, h->sx2, y2, zt, HM_WOOD, true );
+        wface( &b, 0, y1, h->sx1, h->sx2, zt - ( h->flz[1] - h->flz[0] ) / 16, zt, HM_WOOD, 0 );
+        wface( &b, 2, h->sx1, y1, y2, h->flz[0], zt, HM_WOOD, 0 );
+        wface( &b, 3, h->sx2, y1, y2, h->flz[0], zt, HM_WOOD, 0 );
+    }
+    m->w = h->lx * UNIT; m->d = h->dy * UNIT; m->h = ( h->zr + 5 ) * UNIT;
+    if ( !b.ok ) { house_mesh_free( m ); return false; }
+    return true;
+}

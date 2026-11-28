@@ -83,7 +83,7 @@ void house_size( int type, int64_t seed, double* lx, double* dy );     // the ou
 int house_unreachable( const house_t* h );
 
 // -- the outside as a mesh ------------------------------------------------------------------------------------------------------
-enum { HM_PLASTER, HM_CHAR, HM_BRICK, HM_ROOF, HM_GLASS, HM_DOOR, HM_WOOD, HM_CONCRETE, HM_RIM, HM_GARAGE, HM_FRAME, HM_NMAT };
+enum { HM_PLASTER, HM_CHAR, HM_BRICK, HM_ROOF, HM_GLASS, HM_DOOR, HM_WOOD, HM_CONCRETE, HM_RIM, HM_GARAGE, HM_FRAME, HM_PAINT0, HM_PAINT1, HM_PAINT2, HM_PAINT3, HM_PAINT4, HM_PAINT5, HM_NMAT };     // HM_PAINT0 .. 5: the paint of the rooms inside (the same colours as the plaster 0 .. 5)
 
 typedef struct { double x, y, z, u, v; } hvert_t;          // u, v: 0 .. 1 over the whole picture of the material (the frame, doors and garage doors), or -1: the engine finds them from the position (the walls, roof, ...)
 typedef struct { int a, b, c, mat; } htri_t;
@@ -99,5 +99,9 @@ typedef struct {
 // to about 1,500); false when out of memory; free with house_mesh_free
 bool house_mesh( const house_t* h, int stage, int level, hmesh_t* m );
 void house_mesh_free( hmesh_t* m );
+
+// the inside of the house at the stage 0 .. 4: the walls of the rooms (paint, with the doorways and painted windows), floors, ceilings, the stairs, the furniture; the same house
+// coordinates as house_mesh (so the two fit); meant for a two sided object that is shown while the player is near (docs/world-subsystem.md "Every room can be entered")
+bool house_mesh_inside( const house_t* h, int stage, hmesh_t* m );
 
 #endif

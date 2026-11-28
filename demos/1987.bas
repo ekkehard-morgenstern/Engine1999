@@ -1781,7 +1781,7 @@
 34470       CALL SIM(FTD)
 34480     NEXT FTI
 34490     IF FL$<>"" THEN CALL FLPH(2)
-34500     CALL AMBIENT:CALL TERRAINUPDATE(JX,JY):CALL DAYNIGHT(DT0):CALL ITEMS(DT0)
+34500     CALL AMBIENT:CALL TERRAINUPDATE(JX,JY):CALL DAYNIGHT(DT0):CALL ITEMS(DT0):CALL HOUSES(DT0)
 34510     IF FL$<>"" THEN CALL FLPH(3)
 34520     CALL DRAWFRAME
 34521     IF ENV$("G1987_CATCHTEST")<>"" AND NFR=VAL(ENV$("G1987_CATCHTEST")) THEN PROT=0:DRX(0)=JX+60:DRY(0)=JY:DRM(0)=3:DRI(0)=0:DRL(0)=0:DSX(0)=JX:DSY(0)=JY:DRBM(0)=1:DRZ(0)=FN HT(JX,JY)+190
@@ -1913,7 +1913,7 @@
 36650         KR=0:IF KRA>0 THEN KR=-1
 36660         KB=PB
 36670         CMIN=0:IF PCO<>0 THEN CO=CO+PCO*80/60:CMIN=-1
-36680         CALL SIM(1/60):CALL TERRAINUPDATE(JX,JY):CALL DAYNIGHT(1/60):CALL ITEMS(1/60)
+36680         CALL SIM(1/60):CALL TERRAINUPDATE(JX,JY):CALL DAYNIGHT(1/60):CALL ITEMS(1/60):CALL HOUSES(1/60)
 36690         IF PRG<>0 THEN CALL RIGS
 36700         KU=0
 36710         DTF=1/60
@@ -1950,6 +1950,7 @@
 36876       ZC=0:FOR ZA=-4 TO 4:FOR ZB=-4 TO 4:IF ZC=0 THEN CALL ITCELL(ZA,ZB):IF IFK>0 THEN ZC=IFK:JX=IFX:JY=IFY
 36877       NEXT ZB:NEXT ZA:CALL TERRAINJUMP(JX,JY):JZ=FN FLR(JX,JY):M3D THINGPOS 0,JX,JY,JZ:ITT=0:PRINT "finditem k=";ZC
 36878     END IF
+36879     IF C$="house" OR C$="findhouse" THEN CALL HOUSECMD(C$)
 36880     IF C$="poles" THEN
 36890       PH=0:PU=0
 36900       FOR PK=0 TO NPL-1
@@ -2005,7 +2006,7 @@
 38215 DYN=0:LENSON=0:DAYH=10:DAYSEC=1440:DAYLV=-1:LAMPON=0:DAYA=1:IF ENV$("G1987_TIME")<>"" THEN DAYH=VAL(ENV$("G1987_TIME"))
 38216 IF ENV$("G1987_DAYLEN")<>"" THEN DAYSEC=MAX(10,VAL(ENV$("G1987_DAYLEN")))
 38217 DYNF=-1:IF ENV$("G1987_DYNAMO")<>"" THEN DYNF=VAL(ENV$("G1987_DYNAMO"))
-38218 TCV=0:FLX=30:FLY=-9.5:FLZ=40:BJ9=0:NIP=0:PRL=0:PLL=0:FD=0:FDS=-1:FDT=0:FDL=0:PFQ=0:HZO=0:BJ8=0
+38218 HEN=0:HET=0:HEON=156:HEOFF=203:HETY=0:HEST=0:HESD=0:HELX=0:HELY=0:HEDD=0:HEOX=0:HEOY=0:HEOZ=0:HEH=0:HEW=0:HED=0:HEDX=0:HEDY=0:TCV=0:FLX=30:FLY=-9.5:FLZ=40:BJ9=0:NIP=0:PRL=0:PLL=0:FD=0:FDS=-1:FDT=0:FDL=0:PFQ=0:HZO=0:BJ8=0
 38220 CALL SETGROUND
 38230 ' the sun: terrain cells get pictures shaded by their slope (M3D SUN: steps 301.. + 100, 200, 300; needs the palette's color map first)
 38240 IF NOT HL THEN M3D COLORMAP
@@ -3600,3 +3601,67 @@
 65790   END IF
 65800   ITT=0
 65810 END PROC
+66000 ' ------------------------------------------------------------------------------------------------ enterable houses
+66010 ' (owner, 2026-11-28) Every house of the static world can be entered: when John (or the bicycle) is within 5 m of a house's front door, on the outside, the inside of the house is
+66020 ' built as the object HEO (M3D HOUSEINT: the rooms' walls with doorways, floors, ceilings, stairs, furniture; the house is a function of its type, seed and stage of damage, so the same
+66030 ' every time and nothing of it is saved: a game saved inside a house builds it again at once) and shown; when he is on the outside again and further than 6.5 m from the door, it is
+66040 ' hidden. The outside of the house (M3D HOUSE, part of the cells of the world) stays as it is; the doors and walls do not stop John yet (collision comes next).
+66050 ' M3D("HOUSESITE", 0, x, y) finds the house, 1 .. 12 give type, seed, stage, corner x / y / z, heading, door x / y, distance, width and depth. HEN: the inside is shown.
+66100 PROC HOUSES(DT)
+66110   LOCAL QX,QY,C,S,F,LX,LY,DD
+66120   IF NOT WLD THEN EXIT PROC
+66130   HET=HET-DT
+66140   IF HET>0 THEN EXIT PROC
+66150   HET=0.3
+66160   QX=JX:QY=JY:IF MODE=1 THEN QX=BX:QY=BY
+66170   IF HEN THEN
+66180     C=COS(HEH*PI/180):S=SIN(HEH*PI/180)
+66190     LX=(QX-HEOX)*C+(QY-HEOY)*S:LY=-(QX-HEOX)*S+(QY-HEOY)*C
+66200     DD=SQR((QX-HEDX)*(QX-HEDX)+(QY-HEDY)*(QY-HEDY))
+66210     HELX=LX:HELY=LY:HEDD=DD
+66220     IF DD>HEOFF AND NOT (LX>=-20 AND LX<=HEW+20 AND LY>=0 AND LY<=HED+20) THEN M3D OBJSHOW 560,0:HEN=0
+66230   ELSE
+66240     F=M3D("HOUSESITE",0,QX,QY)
+66250     IF F<>0 THEN
+66260       DD=M3D("HOUSESITE",10,0,0)
+66270       HEOX=M3D("HOUSESITE",4,0,0):HEOY=M3D("HOUSESITE",5,0,0):HEH=M3D("HOUSESITE",7,0,0)
+66280       HEW=M3D("HOUSESITE",11,0,0):HED=M3D("HOUSESITE",12,0,0)
+66290       C=COS(HEH*PI/180):S=SIN(HEH*PI/180)
+66300       LX=(QX-HEOX)*C+(QY-HEOY)*S:LY=-(QX-HEOX)*S+(QY-HEOY)*C
+66310       IF DD<=HEON OR (LX>=0 AND LX<=HEW AND LY>=0 AND LY<=HED) THEN CALL HOUSEBUILD
+66320     END IF
+66330   END IF
+66340 END PROC
+66400 ' the inside of the house found last by M3D("HOUSESITE")
+66410 PROC HOUSEBUILD
+66420   HETY=M3D("HOUSESITE",1,0,0):HESD=M3D("HOUSESITE",2,0,0):HEST=M3D("HOUSESITE",3,0,0)
+66430   HEOZ=M3D("HOUSESITE",6,0,0):HEDX=M3D("HOUSESITE",8,0,0):HEDY=M3D("HOUSESITE",9,0,0)
+66440   M3D HOUSEINT 560,HETY,HEST,HESD
+66450   M3D OBJPOS 560,HEOX,HEOY,HEOZ,HEH
+66460   M3D OBJSHOW 560,1
+66470   HEN=-1
+66480 END PROC
+66500 ' play commands: house = what the inside is doing, findhouse = jump to the front door of the nearest house on a grid round John (needs a world with houses)
+66510 PROC HOUSECMD(C$)
+66520   LOCAL A,B,F,X0,Y0,BD,BX0,BY0,D
+66530   IF C$="house" THEN
+66540     PRINT "house hen=";HEN;" ty=";HETY;" st=";HEST;" lx=";INT(HELX);" ly=";INT(HELY);" dd=";INT(HEDD);" shown=";HEN
+66550   ELSE
+66560     X0=JX:Y0=JY:BD=1000000000:BX0=0:BY0=0
+66570     FOR A=-30 TO 30
+66580       FOR B=-30 TO 30
+66590         F=M3D("HOUSESITE",0,X0+A*2000,Y0+B*2000)
+66600         IF F<>0 THEN
+66610           D=(M3D("HOUSESITE",8,0,0)-X0)^2+(M3D("HOUSESITE",9,0,0)-Y0)^2
+66620           IF D<BD THEN BD=D:BX0=M3D("HOUSESITE",8,0,0):BY0=M3D("HOUSESITE",9,0,0):HEH=M3D("HOUSESITE",7,0,0)
+66630         END IF
+66640       NEXT B
+66650     NEXT A
+66660     IF BD<1000000000 THEN
+66670       JX=BX0+SIN(HEH*PI/180)*100:JY=BY0-COS(HEH*PI/180)*100:CALL TERRAINJUMP(JX,JY):JZ=FN FLR(JX,JY):M3D THINGPOS 0,JX,JY,JZ:HET=0
+66680       PRINT "findhouse x=";INT(BX0);" y=";INT(BY0);" h=";INT(HEH)
+66690     ELSE
+66700       PRINT "findhouse none"
+66710     END IF
+66720   END IF
+66730 END PROC

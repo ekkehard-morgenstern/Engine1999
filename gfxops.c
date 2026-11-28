@@ -183,6 +183,7 @@ static const gfxcmd_t cmds[] = {
     { "M3D", "CULL", GFXOP_M3DCULL, "noo", 0, false },
     { "M3D", "HOUSE", GFXOP_M3DHOUSE, "nnnnoo", 0, false },
     { "M3D", "HOUSEPIC", GFXOP_M3DHOUSEPIC, "nn", 0, false },
+    { "M3D", "HOUSEINT", GFXOP_M3DHOUSEINT, "nnnn", 0, false },
     { "M3D", "AMBIENT", GFXOP_M3DAMBIENT, "n", 0, false },
     { "M3D", "SUN", GFXOP_M3DSUN, "nnnooo", 0, false },
     { "M3D", "TEXLOAD", GFXOP_M3DTEXLOAD, "nsW", "PALETTE", false },       // (written M3D TEXTURE LOAD: the compiler turns the two words into this one)
@@ -340,6 +341,7 @@ static const gfxquery_t queries[] = {
     { "M3D",    "PITCH", GFXQ_M3DPITCH, 0, 0 },
     { "M3D",    "LIFT", GFXQ_M3DLIFT, 0, 0 },
     { "M3D",    "AMBIENT", GFXQ_M3DAMBIENT, 0, 0 },
+    { "M3D",    "HOUSESITE", GFXQ_M3DHOUSESITE, 3, 3 },
     { "M3D",    "HIT", GFXQ_M3DHIT, 0, 0 },
     { "M3D",    "FLOORZ", GFXQ_M3DFLOORZ, 0, 0 },
     { "M3D",    "FLOORAT", GFXQ_M3DFLOORAT, 3, 3 },

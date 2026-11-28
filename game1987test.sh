@@ -777,6 +777,16 @@ expect "items: the charge was loaded" "$(val inv 1 tcq)" 499 500
 expect "items: the picked find was loaded" "$(val inv 1 pk)" 1 1
 expect "items: the notebook was loaded" "$(val inv 1 nb)" 2 2
 grep -q 'LINE TWO' "$W/notebook.dat" && [ -s "$W/items.dat" ] || { echo "FAILED: items / notebook not written again"; fail=$((fail+1)); }
+# 20. enterable houses (owner, 2026-11-28): within 5 m of a house's front door (outside) the inside of the house is built and shown (HEN), beyond 6.5 m it is hidden again
+printf 'house\nfindhouse\nwait 1\nhouse\nwait 1\nhouse\ngoto 0 -172 90\nwait 1\nhouse\nquit\n' > $T/play2
+runplay
+expect "houses: no inside before one is near" "$(val house 1 hen)" 0 0
+expect "houses: the inside is shown within 5 m of the front door" "$(val house 2 hen)" -1 -1
+expect "houses: it is a house of the five types" "$(val house 2 ty)" 1 5
+expect "houses: John stands outside (in front of the door)" "$(val house 2 ly)" -160 -10
+expect "houses: and stays shown" "$(val house 3 hen)" -1 -1
+expect "houses: the inside is hidden again far away" "$(val house 4 hen)" 0 0
+if grep -q '^Error' $T/out; then echo "FAILED: the houses run stopped with: $(grep '^Error' $T/out)"; fail=$((fail+1)); fi
 rm -rf "$W" 2>/dev/null
 if [ $fail -ne 0 ]; then echo "$fail failure(s)"; fi
 exit $fail
