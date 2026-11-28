@@ -13,6 +13,8 @@ Related files: `SESSION.md` (current state), `docs/roadmap.md` (open work), `doc
 
 ## Pending (not committed yet)
 
+- **1987: the lit flashlight is held out in John's right hand (2026-11-27, owner: "John is holding the flashlight in his right hand, and the light emanates from the front of it ... his right arm should be stretched out ... when he turns it off, it disappears from view and he returns to his normal posture").** `demos/1987.bas`: `TCV` (lit and charged, on foot) in `ITEMS`; `BUILDJOHN` walking pose: right arm stretched forward, fist, flashlight body and head, `FLLENS` (glowing lens object 517, positioned with John in `RIGS`), mesh cache key has `TCV`; the cone lamp starts at the lens (`FLX/FLY/FLZ`) and points where he faces; test hooks env `G1987_FLASH`, `G1987_TURN`; `inv` prints `tcv`. `game1987test.sh` 2 checks. `docs/1987.md`. Window pictures under Xvfb: the cone lights the wheat / the house, the arm reaches forward; the flashlight body itself was not clearly seen (dark, camera behind or end-on).
+
 - **1987: "Subscript out of range in line 32965" after resetting John to the home (2026-11-27, owner's playtest: "ni is -1").** The status line's pick-up hint used the stale flag `NIP` while `NI` was -1 (`ITK(-1)`). `demos/1987.bas`: the hint needs `NI>=0`, `ITEMS` clears `NIP` when `NI<0`, `PICKUP` is only called with `NI>=0`. `game1987test.sh` section 19: a `reset` after the pick-ups. Whole script passes.
 
 ## Log

@@ -706,6 +706,8 @@ expect "items: a picked find is remembered" "$(val inv 2 pk)" 1 1
 expect "items: it is charged for 15 minutes" "$(val inv 2 tcq)" 890 900
 expect "flashlight: on at night, the lamp is lit" "$(val inv 3 lamp)" -1 -1
 expect "flashlight: off again" "$(val inv 4 lamp)" 0 0
+expect "flashlight: John holds it out in his right hand while it is on" "$(val inv 3 tcv)" -1 -1
+expect "flashlight: and puts the arm down when it is off" "$(val inv 4 tcv)" 0 0
 expect "flashlight: dry and no battery, it stays off" "$(val inv 5 tcn)" 0 0
 expect "flashlight: a battery goes in when it is dry" "$(val inv 6 b)" 0 0
 expect "flashlight: the new battery burns" "$(val inv 6 tcn)" -1 -1
