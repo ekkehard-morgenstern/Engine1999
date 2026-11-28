@@ -994,8 +994,13 @@ static int house_list( const tjob_t* j, double bx0, double by0, double bx1, doub
                         double h = job_height( j, ox + xa0 * lx + nx * ly, oy + xa1 * lx + ny * ly );
                         zmin = fmin( zmin, h ); zmax = fmax( zmax, h );
                     }
-                    // (every house can be entered: the ground must not rise above its floor, so the site has to be flat to 14 units (45 cm); the floor is 9.4 above the base)
-                    if ( !( zmin > j->pic.level + 3.0 && zmax < j->pic.rockh - 60.0 ) || zmax - zmin > 14.0 ) { continue; }
+                    // the ground inside the footprint is cut away (job_run), the walls reach 69 units down: a slope of up to 60 units is fine
+                    if ( !( zmin > j->pic.level + 3.0 && zmax < j->pic.rockh - 60.0 ) || zmax - zmin > 60.0 ) { continue; }
+                    double zf = -1.0e9;                                                    // the ground in front of the door: the floor lies 11 units above the base, the highest point decides
+                    for ( int q = 0; q < 12; ++q ) {
+                        double lx = w * ( 0.25 + 0.25 * (double)( q % 3 ) ), ly = -23.0 * (double)( q / 3 );
+                        zf = fmax( zf, job_height( j, ox + xa0 * lx + nx * ly, oy + xa1 * lx + ny * ly ) );
+                    }
                     double cx = ox + xa0 * w * 0.5 + nx * d * 0.5, cy = oy + xa1 * w * 0.5 + ny * d * 0.5;
                     if ( rnet_kind( &j->gnd.net, cx, cy ) == 3 ) { continue; }
                     rnear_t rn;
@@ -1004,7 +1009,7 @@ static int house_list( const tjob_t* j, double bx0, double by0, double bx1, doub
                     if ( n >= max ) { return n; }
                     hsite_t* s = &out[n++];
                     s->cx = cx; s->cy = cy; s->hw = w * 0.5; s->hd = d * 0.5; s->xx = xa0; s->xy = xa1; s->yx = nx; s->yy = ny;
-                    s->ox = ox; s->oy = oy; s->z = zmax - 6.0; s->type = type; s->seed = seed;
+                    s->ox = ox; s->oy = oy; s->z = zf - 2.0; s->type = type; s->seed = seed;
                     double t = hypot( cx, cy ) / HOUSE_DMGR * 4.4 + job_wh( j, lk, seg * 8 + i, 206 ) * 0.9 - 0.45;
                     s->stage = t < 0.0 ? 0 : t > 4.0 ? 4 : (int) floor( t );
                 }
@@ -1212,6 +1217,98 @@ static void job_wbales( tjob_t* j ) {
     }
 }
 
+
+// -- the ground inside a house is cut away (the clean solution: no ground rises through a floor, a cellar can be dug later) ------------------------------------------------------
+typedef struct { double x, y, z, u, v, c; } cv_t;
+
+// the part of the convex polygon in (n <= 8 points) where a * x + b * y + k >= 0 (side > 0) or <= 0 (side < 0); returns the number of points
+static int cv_clip( const cv_t* in, int n, cv_t* out, double a, double b, double k, int side ) {
+    int m = 0;
+    for ( int i = 0; i < n; ++i ) {
+        const cv_t* p = &in[i]; const cv_t* q = &in[( i + 1 ) % n];
+        double fp = ( a * p->x + b * p->y + k ) * side, fq = ( a * q->x + b * q->y + k ) * side;
+        if ( fp >= 0.0 && m < 11 ) { out[m++] = *p; }
+        if ( ( fp > 0.0 && fq < 0.0 ) || ( fp < 0.0 && fq > 0.0 ) ) {
+            double t = fp / ( fp - fq );
+            cv_t* o = &out[m];
+            o->x = p->x + ( q->x - p->x ) * t; o->y = p->y + ( q->y - p->y ) * t; o->z = p->z + ( q->z - p->z ) * t;
+            o->u = p->u + ( q->u - p->u ) * t; o->v = p->v + ( q->v - p->v ) * t; o->c = p->c + ( q->c - p->c ) * t;
+            if ( m < 11 ) { ++m; }
+        }
+    }
+    return m;
+}
+
+#define HOUSE_HOLE 11.0                     // the hole stops 11 units inside the outer face: the ground stays under the walls (3.5 dm; the floors start at 3.45)
+
+// a ground triangle minus the holes of the houses; the pieces are added with the texture tex; false when memory is out
+static bool job_cutri( tjob_t* j, const cv_t* t3, int tex, const hsite_t* hs, int nh ) {
+    cv_t tri[96][3];
+    int nt = 1;
+    memcpy( tri[0], t3, sizeof(cv_t) * 3 );
+    for ( int h = 0; h < nh; ++h ) {
+        const hsite_t* s = &hs[h];
+        double w = s->hw * 2.0 - HOUSE_HOLE, d = s->hd * 2.0 - HOUSE_HOLE;
+        // the four sides as a * x + b * y + k > 0 outside the hole
+        const double pl[4][3] = {
+            { -s->xx, -s->xy, HOUSE_HOLE + ( s->ox * s->xx + s->oy * s->xy ) },
+            {  s->xx,  s->xy, -w - ( s->ox * s->xx + s->oy * s->xy ) },
+            { -s->yx, -s->yy, HOUSE_HOLE + ( s->ox * s->yx + s->oy * s->yy ) },
+            {  s->yx,  s->yy, -d - ( s->ox * s->yx + s->oy * s->yy ) } };
+        cv_t next[96][3];
+        int nn = 0;
+        for ( int i = 0; i < nt && nn < 80; ++i ) {
+            // quick reject: all three points beyond one side
+            bool out = false;
+            for ( int q = 0; q < 4 && !out; ++q ) {
+                int c = 0;
+                for ( int k = 0; k < 3; ++k ) { if ( pl[q][0] * tri[i][k].x + pl[q][1] * tri[i][k].y + pl[q][2] > 0.0 ) { ++c; } }
+                out = c == 3;
+            }
+            if ( out ) { memcpy( next[nn++], tri[i], sizeof(cv_t) * 3 ); continue; }
+            cv_t poly[11], piece[11], rest[11];
+            int np = 3;
+            memcpy( poly, tri[i], sizeof(cv_t) * 3 );
+            for ( int q = 0; q < 4 && np >= 3; ++q ) {
+                int m = cv_clip( poly, np, piece, pl[q][0], pl[q][1], pl[q][2], 1 );
+                for ( int k = 1; k + 1 < m && nn < 90; ++k ) { next[nn][0] = piece[0]; next[nn][1] = piece[k]; next[nn][2] = piece[k + 1]; ++nn; }
+                np = cv_clip( poly, np, rest, pl[q][0], pl[q][1], pl[q][2], -1 );
+                memcpy( poly, rest, sizeof(cv_t) * (size_t) np );
+            }
+        }
+        nt = nn > 90 ? 90 : nn;
+        memcpy( tri, next, sizeof(cv_t) * 3 * (size_t) nt );
+    }
+    for ( int i = 0; i < nt; ++i ) {
+        int ix[3];
+        for ( int k = 0; k < 3; ++k ) {
+            ix[k] = jv_addm( j, tri[i][k].x, tri[i][k].y, tri[i][k].z, tri[i][k].u, tri[i][k].v, tri[i][k].c );
+            if ( ix[k] < 0 ) { return false; }
+        }
+        if ( !jt_add( j, ix[0], ix[1], ix[2], tex ) ) { return false; }
+    }
+    return true;
+}
+
+// does the cell (the four vertices b, b + 1, b + w, b + w + 1) touch the hole of a house?
+static bool job_cellhole( const tjob_t* j, int b, int w, const hsite_t* hs, int nh ) {
+    const int ix[4] = { b, b + 1, b + w, b + w + 1 };
+    for ( int h = 0; h < nh; ++h ) {
+        const hsite_t* s = &hs[h];
+        double lw = s->hw * 2.0 - HOUSE_HOLE, ld = s->hd * 2.0 - HOUSE_HOLE;
+        int c[4] = { 0, 0, 0, 0 };
+        for ( int k = 0; k < 4; ++k ) {
+            double dx = j->v[ix[k]].x - s->ox, dy = j->v[ix[k]].y - s->oy, lx = dx * s->xx + dy * s->xy, ly = dx * s->yx + dy * s->yy;
+            if ( lx < HOUSE_HOLE ) { ++c[0]; }
+            if ( lx > lw ) { ++c[1]; }
+            if ( ly < HOUSE_HOLE ) { ++c[2]; }
+            if ( ly > ld ) { ++c[3]; }
+        }
+        if ( c[0] < 4 && c[1] < 4 && c[2] < 4 && c[3] < 4 ) { return true; }
+    }
+    return false;
+}
+
 static void job_run( tjob_t* j ) {
     int n = j->n, w = n + 1;
     j->nv = j->nt = j->nvar = 0;
@@ -1237,6 +1334,9 @@ static void job_run( tjob_t* j ) {
             if ( jv_addm( j, x, y, hz, x * uvs, y * uvs, j->mb > j->ma ? job_coarse( j, x, y ) : hz ) < 0 ) { return; }
         }
     }
+    hsite_t hs[48];
+    int nhs = 0;
+    if ( j->mode == 4 && j->world != 0 && j->pic.houses ) { nhs = house_list( j, j->x0 - 1200.0, j->y0 - 1200.0, j->x0 + j->n * j->cell + 1200.0, j->y0 + j->n * j->cell + 1200.0, hs, 48 ); }
     #define HOLE(ci,cj) ( j->hn > 0 && (ci) >= hi0 && (ci) < hi0 + j->hn && (cj) >= hj0 && (cj) < hj0 + j->hn )
     #define CELL_OFF(ci,cj) ( (ci) < 0 || (ci) >= n || (cj) < 0 || (cj) >= n || HOLE(ci,cj) )
     for ( int cj = 0; cj < n; ++cj ) {
@@ -1250,6 +1350,18 @@ static void job_run( tjob_t* j ) {
             int p = job_cellpic( j, cx, cy, ( z00 + z10 + z01 + z11 ) * 0.25, zmax, zmin, sl );
             int k = job_shade( j, j->cell, z00, z10, z01, z11 );
             if ( k > 0 && p + k * j->stride < M3D_MAXTEX ) { job_var( j, p, k ); p += k * j->stride; }
+            if ( nhs > 0 && job_cellhole( j, b, w, hs, nhs ) ) {
+                const int q[2][3] = { { b, b + 1, b + w + 1 }, { b, b + w + 1, b + w } };
+                for ( int t = 0; t < 2; ++t ) {
+                    cv_t c3[3];
+                    for ( int k = 0; k < 3; ++k ) {
+                        const mv_t* v = &j->v[q[t][k]];
+                        c3[k].x = v->x; c3[k].y = v->y; c3[k].z = v->z; c3[k].u = v->u; c3[k].v = v->v; c3[k].c = j->mb > j->ma ? j->mc[q[t][k]] : v->z;
+                    }
+                    if ( !job_cutri( j, c3, p, hs, nhs ) ) { return; }
+                }
+                continue;
+            }
             if ( !jt_add( j, b, b + 1, b + w + 1, p ) || !jt_add( j, b, b + w + 1, b + w, p ) ) { return; }
         }
     }

@@ -296,8 +296,8 @@ void house_size( int type, int64_t seed, double* lx, double* dy ) {
     memset( &gg, 0, sizeof(gg) );
     gg.sd = seed;
     (void) type;
-    *lx = ri( &gg, 100, 120 );
-    *dy = ri( &gg, 80, 100 );
+    *lx = ri( &gg, 124, 148 );   // (the game's houses: 20 % larger than the BASIC prototype's, see house_gen_basic)
+    *dy = ri( &gg, 100, 124 );
 }
 
 static void gen_house( house_t* h, int type, int64_t seed, bool walk );
@@ -311,24 +311,28 @@ static void gen_house( house_t* h, int type, int64_t seed, bool walk ) {
     memset( g, 0, sizeof(*g) );
     g->h = h; g->sd = seed; g->walk = walk;
     h->type = type; h->seed = seed;
-    h->flz[0] = 3; h->flz[1] = 32;
+    // house_gen makes the larger houses of the game (owner, 2026-11-28: "I felt like Gulliver in Lilliput"): 12.4 .. 14.8 m by 10 .. 12.4 m, a ceiling height of 2.8 m, a stair run of 3.8 m, 1.2 m wide; house_gen_basic
+    // keeps the sizes of the BASIC prototype tools/housegen.bas, which housetest1 compares it with
+    const bool big = walk;
+    h->flz[0] = 3; h->flz[1] = big ? 34 : 32;
     int ht = type;
-    h->lx = ri( g, 100, 120 ); h->dy = ri( g, 80, 100 );
-    double hx = ri( g, 26, 30 ), iw = h->lx - 2 * TW;
+    if ( big ) { h->lx = ri( g, 124, 148 ); h->dy = ri( g, 100, 124 ); } else { h->lx = ri( g, 100, 120 ); h->dy = ri( g, 80, 100 ); }
+    double hx = big ? ri( g, 32, 38 ) : ri( g, 26, 30 ), iw = h->lx - 2 * TW;
     double lw = floor( ( iw - hx - 2 ) * ( 0.45 + rn( g ) * 0.1 ) );
-    double fd = ri( g, 28, 36 );
+    double fd = big ? ri( g, 36, 46 ) : ri( g, 28, 36 );
     if ( fd > h->dy - 50 ) { fd = h->dy - 50; }
-    double wcd = ri( g, 20, 26 );
+    double wcd = big ? ri( g, 24, 30 ) : ri( g, 20, 26 );
     double xa1 = TW + lw, xa2 = xa1 + 1, xb1 = xa2 + hx, xb2 = xb1 + 1, xe = h->lx - TW, ye = h->dy - TW;
     double yf1 = TW + fd, yf2 = yf1 + 1;
     h->wy = ye - wcd - 1;
     double wy = h->wy;
     h->ss = ri( g, 0, 1 );
-    if ( h->ss == 0 ) { h->sx1 = xa2; h->sx2 = xa2 + 10; } else { h->sx1 = xb1 - 10; h->sx2 = xb1; }
-    h->sy1 = wy - 31; h->sy2 = wy;
+    const double stw = big ? 12 : 10, stl = big ? 38 : 31;
+    if ( h->ss == 0 ) { h->sx1 = xa2; h->sx2 = xa2 + stw; } else { h->sx1 = xb1 - stw; h->sx2 = xb1; }
+    h->sy2 = wy - ( big ? 8 : 0 ); h->sy1 = h->sy2 - stl;               // (the big houses: a landing of 0.8 m at the top, where one steps off sideways, between the stairs and the wall)
     for ( int i = 0; i <= 1; ++i ) {
         int c = h->ncl[i];
-        h->cl[i][c][0] = h->sx1 - 1; h->cl[i][c][1] = h->sy1 - 1; h->cl[i][c][2] = h->sx2 + 1; h->cl[i][c][3] = h->sy2;
+        h->cl[i][c][0] = h->sx1 - 1; h->cl[i][c][1] = h->sy1 - 1; h->cl[i][c][2] = h->sx2 + 1; h->cl[i][c][3] = h->sy2 + ( big ? 8 : 0 );
         h->ncl[i] = c + 1;
     }
     double xc = ( xa2 + xb1 ) / 2, xd = xc + 4;
@@ -546,8 +550,8 @@ int house_unreachable( const house_t* h ) {
     else {
         walk_flood( m0, (int) floor( fx ), (int) floor( fy ), nx, ny, st );
         // up the stairs: the cell at the top of the stairs (the hall of the upper floor, next to the stairwell)
-        int ux = (int) floor( ( h->sx1 + h->sx2 ) / 2 ), uy = (int) floor( h->sy1 + 2 );
-        if ( ux >= 0 && uy >= 0 && ux < nx && uy < ny && m0[uy * nx + ux] == 2 ) { walk_flood( m1, ux, uy, nx, ny, st ); }
+        int ux = (int) floor( ( h->sx1 + h->sx2 ) / 2 ), uy = (int) floor( h->sy1 + 2 ), ly = h->wy - h->sy2 > 4 ? (int) floor( h->sy2 + 3 ) : uy;     // the foot of the stairs, the landing at the top
+        if ( ux >= 0 && uy >= 0 && ux < nx && uy < ny && ly < ny && m0[uy * nx + ux] == 2 ) { walk_flood( m1, ux, ly, nx, ny, st ); }
         for ( int f = 0; f <= 1; ++f ) {
             const unsigned char* m = f == 0 ? m0 : m1;
             for ( int i = 0; i < h->nrm[f]; ++i ) {
@@ -737,7 +741,7 @@ static void wall_run( mb_t* b, int side, double plane, double lo, double hi, dou
         while ( j + 1 < nc && c[j + 1].top == c[k].top && c[j + 1].mat == c[k].mat ) { ++j; }
         double a1 = single ? lo : lo + k * 10.0, a2 = single ? hi : fmin( hi, lo + ( j + 1 ) * 10.0 ), zt = c[k].top;
         int mat = c[k].mat;
-        wface( b, side, plane, a1, a2, -HOUSE_SKIRT, zt, mat, 0 );          // (down into the ground: the site is flat to 14 units, the base z is its highest point - 6)
+        wface( b, side, plane, a1, a2, -HOUSE_SKIRT, zt, mat, 0 );          // (down into the ground: the base z is the door front's highest point - 2, the site slopes by at most 60 units)
         if ( d > 0.3 ) {                                                       // seen from above and from inside once the roof is open
             double p[4][3];
             double t0 = plane, t1 = plane + ( side == 0 || side == 2 ? 3.5 : -3.5 );
@@ -1147,7 +1151,7 @@ bool house_mesh_inside( const house_t* h, int stage, hmesh_t* m ) {
     }
     const double hole[4] = { h->sx1, h->sy1, h->sx2, h->sy2 };
     for ( int f = 0; f <= 1; ++f ) {
-        double z0 = h->flz[f], zc = f == 0 ? h->flz[1] - 3 : h->flz[1] + 26;
+        double z0 = h->flz[f], zc = f == 0 ? h->flz[1] - 3 : h->flz[1] + ( h->flz[1] > 33 ? 27 : 26 );
         bool layers = f == 0 ? stage <= 3 : stage <= 2;
         for ( int i = 0; i < h->nrm[f]; ++i ) {
             const hroom_t* r = &h->rm[f][i];
@@ -1194,6 +1198,8 @@ bool house_mesh_inside( const house_t* h, int stage, hmesh_t* m ) {
         for ( int k = 1; k <= 3; ++k ) {
             hbox( &b, w->pos - w->w / 2 - 2, -7.0 * k, -HOUSE_SKIRT, w->pos + w->w / 2 + 2, -7.0 * ( k - 1 ), h->flz[0] - 1.8 * k, HM_CONCRETE, true );
         }
+        // the threshold: the ground is cut away inside the outer walls' inner face, so the doorway needs its own floor
+        hface( &b, w->pos - w->w / 2, 0, w->pos + w->w / 2, TW + 0.6, h->flz[0], HM_CONCRETE, true );
     }
     m->w = h->lx * UNIT; m->d = h->dy * UNIT; m->h = ( h->zr + 5 ) * UNIT;
     if ( !b.ok ) { house_mesh_free( m ); return false; }

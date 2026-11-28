@@ -2336,6 +2336,7 @@
 43560   ' ---- the place it wants to be at: behind John (as seen from where it looks), above him, as far as the walls allow
 43570   YW=CYW+CO+CMAZ
 43580   D=125:IF MODE=1 THEN D=155+MAX(0,BV)*0.18
+43585   IF HEPS<>24 THEN D=70
 43590   IF CZM>0 THEN D=CZM
 43600   E=12+CP+CMEL
 43610   C=COS(YW*PI/180):S=SIN(YW*PI/180)

@@ -292,7 +292,7 @@ static void test_gen( void ) {
             house_gen( &h, t, s );
             int bad = 0;
             if ( h.zr > 100 || h.zr < h.ez + 8 || h.ez > h.flz[1] + 34 || h.zr < 85 ) { bad = 1; }
-            if ( h.lx < 100 || h.lx > 120 || h.dy < 80 || h.dy > 100 ) { bad = 2; }
+            if ( h.lx < 124 || h.lx > 148 || h.dy < 100 || h.dy > 124 ) { bad = 2; }
             int n0 = t == 2 || t == 5 ? 7 : 6;
             if ( h.nrm[0] != n0 || h.nrm[1] != 5 ) { bad = 3; }
             for ( int f = 0; f < 2; ++f ) {
@@ -319,6 +319,7 @@ static void test_gen( void ) {
             }
             if ( t == 2 && ( h.ai < 45 || h.ai > 55 || h.ay < 50 || h.ay > 65 || h.rm[0][6].type != 10 ) ) { bad = 9; }
             if ( t == 5 && ( h.exx1 < HOUSE_TW + 4 || h.exx2 > h.lx - HOUSE_TW - 4 || h.rm[0][6].type != 11 || h.bw < 8 ) ) { bad = 9; }
+            if ( h.wy - h.sy2 < 7.9 || h.sy1 < HOUSE_TW + 12 || h.sx2 - h.sx1 < 11.9 ) { bad = 10; }          // the stairs: a landing at the top, room for the doors at the foot, 1.2 m wide
             if ( bad ) { ++nf; printf( "house type %d seed %d fails check %d\n", t, s, bad ); }
         }
     }
@@ -363,7 +364,7 @@ static void test_inside( void ) {
                 prev = m.nt;
                 for ( int i = 0; i < m.nv; ++i ) {
                     const hvert_t* v = &m.v[i];
-                    if ( !( isfinite( v->x ) && isfinite( v->y ) && isfinite( v->z ) ) || v->x < -2 || v->x > 260 * 3.125 || v->y < -70 || v->y > 240 * 3.125 || v->z < -17 || v->z > 70 * 3.125 ) { ++bad; }
+                    if ( !( isfinite( v->x ) && isfinite( v->y ) && isfinite( v->z ) ) || v->x < -2 || v->x > 260 * 3.125 || v->y < -70 || v->y > 240 * 3.125 || v->z < -70 || v->z > 70 * 3.125 ) { ++bad; }
                 }
                 for ( int i = 0; i < m.nt; ++i ) {
                     const htri_t* tr = &m.t[i];
@@ -398,7 +399,7 @@ static void test_mesh( void ) {
                     ntl[level] = m.nt;
                     for ( int i = 0; i < m.nv; ++i ) {
                         const hvert_t* v = &m.v[i];
-                        if ( !( isfinite( v->x ) && isfinite( v->y ) && isfinite( v->z ) ) || v->x < -20 * 3.125 || v->x > 200 * 3.125 || v->y < -20 * 3.125 || v->y > 160 * 3.125 || v->z < -17 || v->z > 110 * 3.125 ) { ++bad; }
+                        if ( !( isfinite( v->x ) && isfinite( v->y ) && isfinite( v->z ) ) || v->x < -20 * 3.125 || v->x > 230 * 3.125 || v->y < -20 * 3.125 || v->y > 190 * 3.125 || v->z < -70 || v->z > 110 * 3.125 ) { ++bad; }
                     }
                     for ( int i = 0; i < m.nt; ++i ) {
                         const htri_t* tr = &m.t[i];
