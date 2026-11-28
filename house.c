@@ -38,6 +38,7 @@ typedef struct {
     bool     okp;
     int      pw;
     double   lq[4];
+    bool     walk;                  // the additions of 2026-11-28: clear zones at the outer doors, no room cut off (the BASIC generator has neither)
 } gen_t;
 
 #define TW ( (double) HOUSE_TW )
@@ -287,11 +288,28 @@ static void fitroom( gen_t* g, int f, int i ) {
     }
 }
 
-void house_gen( house_t* h, int type, int64_t seed ) {
+static void house_clearwalk( house_t* h );
+
+// only the outer size in dm (the first two random numbers of house_gen): the site search of the world needs no more, and the full generator with its walking test costs ~1 ms
+void house_size( int type, int64_t seed, double* lx, double* dy ) {
+    gen_t gg;
+    memset( &gg, 0, sizeof(gg) );
+    gg.sd = seed;
+    (void) type;
+    *lx = ri( &gg, 100, 120 );
+    *dy = ri( &gg, 80, 100 );
+}
+
+static void gen_house( house_t* h, int type, int64_t seed, bool walk );
+
+void house_gen( house_t* h, int type, int64_t seed ) { gen_house( h, type, seed, true ); }
+void house_gen_basic( house_t* h, int type, int64_t seed ) { gen_house( h, type, seed, false ); }
+
+static void gen_house( house_t* h, int type, int64_t seed, bool walk ) {
     gen_t gg, *g = &gg;
     memset( h, 0, sizeof(*h) );
     memset( g, 0, sizeof(*g) );
-    g->h = h; g->sd = seed;
+    g->h = h; g->sd = seed; g->walk = walk;
     h->type = type; h->seed = seed;
     h->flz[0] = 3; h->flz[1] = 32;
     int ht = type;
@@ -426,11 +444,150 @@ void house_gen( house_t* h, int type, int64_t seed ) {
     h->zr = ri( g, (int) zlo, (int) zhi );
     h->chx = ri( g, (int) floor( h->lx * 0.25 ), (int) floor( h->lx * 0.65 ) );
     h->plc = 8 + ri( g, 0, 5 ); h->rfc = 26 + ri( g, 0, 2 ); h->att = ri( g, 0, 1 );
+    // the doors in the outer walls (the front door, the doors to the garage and the extension) get a clear zone inside, like the inner doors: since 2026-11-28 (owner: some
+    // prototypes could not be entered, the front door was blocked by furniture); the BASIC generator tools/house3d.bas does not have it
+    for ( int i = 0; i < h->nwin; ++i ) {
+        const hwin_t* w = &h->win[i];
+        if ( !g->walk || w->floor != 0 || ( w->kind != 2 && w->kind != 3 ) || h->ncl[0] >= HOUSE_MAXCLEAR ) { continue; }
+        double* q = h->cl[0][h->ncl[0]];
+        double a = w->pos - w->w / 2 - 1.5, b = w->pos + w->w / 2 + 1.5;
+        if ( w->side == 0 ) { q[0] = a; q[1] = TW; q[2] = b; q[3] = TW + 12; h->ncl[0]++; }
+        if ( w->side == 1 ) { q[0] = a; q[1] = h->dy - TW - 12; q[2] = b; q[3] = h->dy + 12; h->ncl[0]++; }
+        if ( w->side == 3 ) { q[0] = h->lx - TW - 12; q[1] = a; q[2] = h->lx + 12; q[3] = b; h->ncl[0]++; }
+    }
     // the furniture
     for ( int c = 0; c <= 1; ++c ) {
         for ( int i = 0; i < h->nrm[c]; ++i ) {
             fitroom( g, c, i );
         }
+    }
+    if ( g->walk ) { house_clearwalk( h ); }
+}
+
+// -- can one walk through the house? ---------------------------------------------------------------------------------------------------------------------------
+// A walking test on a grid of 1 dm: the front door to every room of both floors (the upper floor over the stairs). The walker has a radius of RAD dm: the rooms shrink by
+// it, the furniture grows by it, and a door is as wide as its opening minus twice RAD. Doors: the inner doors (hdoor_t), the front door and the doors (kind 3) between the
+// house and its garage / extension.
+#define WALK_RAD    1.5
+#define WALK_MAXX   260
+#define WALK_MAXY   220
+
+// sets the cells whose centre lies in [x1, x2] x [y1, y2] to v
+static void walk_rect( unsigned char* g, int nx, int ny, double x1, double y1, double x2, double y2, unsigned char v ) {
+    int ix1 = (int) ceil( x1 - 0.5 ), ix2 = (int) floor( x2 - 0.5 ), iy1 = (int) ceil( y1 - 0.5 ), iy2 = (int) floor( y2 - 0.5 );
+    if ( ix1 < 0 ) { ix1 = 0; }
+    if ( iy1 < 0 ) { iy1 = 0; }
+    if ( ix2 >= nx ) { ix2 = nx - 1; }
+    if ( iy2 >= ny ) { iy2 = ny - 1; }
+    for ( int y = iy1; y <= iy2; ++y ) { memset( g + y * nx + ix1, v, ix2 >= ix1 ? (size_t)( ix2 - ix1 + 1 ) : 0 ); }
+}
+
+// the grid of floor f: 1 = a walker's centre can be there
+static void walk_grid( const house_t* h, int f, unsigned char* g, int nx, int ny ) {
+    memset( g, 0, (size_t) nx * (size_t) ny );
+    for ( int i = 0; i < h->nrm[f]; ++i ) {
+        const hroom_t* r = &h->rm[f][i];
+        walk_rect( g, nx, ny, r->x1 + WALK_RAD, r->y1 + WALK_RAD, r->x2 - WALK_RAD, r->y2 - WALK_RAD, 1 );
+    }
+    for ( int i = 0; i < h->ndor[f]; ++i ) {
+        const hdoor_t* d = &h->dor[f][i];
+        double hw = d->w / 2 - WALK_RAD, t = 1.0 + WALK_RAD;
+        if ( d->axis == 0 ) { walk_rect( g, nx, ny, d->x - t, d->y - hw, d->x + 1 + t, d->y + hw, 1 ); }
+        else                { walk_rect( g, nx, ny, d->x - hw, d->y - t, d->x + hw, d->y + 1 + t, 1 ); }
+    }
+    if ( f == 0 ) {
+        for ( int i = 0; i < h->nwin; ++i ) {
+            const hwin_t* w = &h->win[i];
+            if ( w->floor != 0 || ( w->kind != 2 && w->kind != 3 ) ) { continue; }
+            double hw = w->w / 2 - WALK_RAD;
+            if ( w->side == 0 ) { walk_rect( g, nx, ny, w->pos - hw, -2, w->pos + hw, HOUSE_TW + WALK_RAD, 1 ); }
+            if ( w->side == 1 ) { walk_rect( g, nx, ny, w->pos - hw, h->dy - HOUSE_TW - WALK_RAD, w->pos + hw, h->dy + WALK_RAD, 1 ); }
+            if ( w->side == 3 ) { walk_rect( g, nx, ny, h->lx - HOUSE_TW - WALK_RAD, w->pos - hw, h->lx + WALK_RAD, w->pos + hw, 1 ); }
+        }
+    }
+    for ( int i = 0; i < h->nfu[f]; ++i ) {                         // (the open interval: a cell exactly WALK_RAD away is free)
+        const hfurn_t* u = &h->fu[f][i];
+        walk_rect( g, nx, ny, u->x1 - WALK_RAD + 1e-6, u->y1 - WALK_RAD + 1e-6, u->x2 + WALK_RAD - 1e-6, u->y2 + WALK_RAD - 1e-6, 0 );
+    }
+}
+
+// floods the grid g (1 open, 2 reached) from the cell (sx, sy)
+static void walk_flood( unsigned char* g, int sx, int sy, int nx, int ny, int* st ) {
+    int sp = 0;
+    if ( sx >= 0 && sy >= 0 && sx < nx && sy < ny && g[sy * nx + sx] == 1 ) { g[sy * nx + sx] = 2; st[sp++] = sy * nx + sx; }
+    while ( sp > 0 ) {
+        int c = st[--sp], x = c % nx, y = c / nx;
+        static const int dx[4] = { 1, -1, 0, 0 }, dy[4] = { 0, 0, 1, -1 };
+        for ( int k = 0; k < 4; ++k ) {
+            int ax = x + dx[k], ay = y + dy[k];
+            if ( ax < 0 || ay < 0 || ax >= nx || ay >= ny || g[ay * nx + ax] != 1 ) { continue; }
+            g[ay * nx + ax] = 2; st[sp++] = ay * nx + ax;
+        }
+    }
+}
+
+// the number of rooms (both floors) one cannot walk into from the front door, or -1 when out of memory; the stairs lead from the ground floor to the upper floor
+
+int house_unreachable( const house_t* h ) {
+    int nx = (int) ceil( h->lx + h->ai + 6 ), ny = (int) ceil( h->dy + h->exy + 6 );
+    if ( nx > WALK_MAXX ) { nx = WALK_MAXX; }
+    if ( ny > WALK_MAXY ) { ny = WALK_MAXY; }
+    size_t n = (size_t) nx * (size_t) ny;
+    unsigned char* m0 = (unsigned char*) malloc( n * 2 );
+    int* st = (int*) malloc( sizeof(int) * n );
+    if ( m0 == 0 || st == 0 ) { free( m0 ); free( st ); return -1; }
+    unsigned char* m1 = m0 + n;
+    int bad = 0;
+    double fx = -1, fy = HOUSE_TW + 2;                              // the front door: the cell just inside it
+    for ( int i = 0; i < h->nwin; ++i ) { if ( h->win[i].floor == 0 && h->win[i].kind == 2 ) { fx = h->win[i].pos; } }
+    walk_grid( h, 0, m0, nx, ny );
+    walk_grid( h, 1, m1, nx, ny );
+    if ( fx < 0 ) { bad = h->nrm[0] + h->nrm[1]; }
+    else {
+        walk_flood( m0, (int) floor( fx ), (int) floor( fy ), nx, ny, st );
+        // up the stairs: the cell at the top of the stairs (the hall of the upper floor, next to the stairwell)
+        int ux = (int) floor( ( h->sx1 + h->sx2 ) / 2 ), uy = (int) floor( h->sy1 + 2 );
+        if ( ux >= 0 && uy >= 0 && ux < nx && uy < ny && m0[uy * nx + ux] == 2 ) { walk_flood( m1, ux, uy, nx, ny, st ); }
+        for ( int f = 0; f <= 1; ++f ) {
+            const unsigned char* m = f == 0 ? m0 : m1;
+            for ( int i = 0; i < h->nrm[f]; ++i ) {
+                const hroom_t* r = &h->rm[f][i];
+                bool got = false;
+                for ( int y = (int) floor( r->y1 ); y < (int) ceil( r->y2 ) && y < ny && !got; ++y ) {
+                    for ( int x = (int) floor( r->x1 ); x < (int) ceil( r->x2 ) && x < nx; ++x ) { if ( m[y * nx + x] == 2 ) { got = true; break; } }
+                }
+                if ( !got ) { ++bad; }
+            }
+        }
+    }
+    free( m0 ); free( st );
+    return bad;
+}
+
+// Furniture that cuts a room off (a table and its chairs across a room whose door is on the far side, ...) goes: one piece at a time, the one whose removal leaves the fewest
+// rooms cut off, the smaller one of equal ones; no random numbers are used, so a house stays the same house.
+static void house_clearwalk( house_t* h ) {
+    for ( int iter = 0; iter < 12; ++iter ) {
+        int u = house_unreachable( h );
+        if ( u <= 0 ) { return; }
+        int bf = -1, bi = -1, bu = 1 << 30;
+        double ba = 0;
+        for ( int f = 0; f <= 1; ++f ) {
+            for ( int i = 0; i < h->nfu[f]; ++i ) {
+                hfurn_t sv = h->fu[f][i];
+                memmove( &h->fu[f][i], &h->fu[f][i + 1], sizeof(hfurn_t) * (size_t)( h->nfu[f] - i - 1 ) );
+                --h->nfu[f];
+                int u2 = house_unreachable( h );
+                memmove( &h->fu[f][i + 1], &h->fu[f][i], sizeof(hfurn_t) * (size_t)( h->nfu[f] - i ) );
+                h->fu[f][i] = sv;
+                ++h->nfu[f];
+                double a = ( sv.x2 - sv.x1 ) * ( sv.y2 - sv.y1 );
+                if ( u2 < bu || ( u2 == bu && a < ba ) ) { bu = u2; bf = f; bi = i; ba = a; }
+            }
+        }
+        if ( bf < 0 ) { return; }
+        memmove( &h->fu[bf][bi], &h->fu[bf][bi + 1], sizeof(hfurn_t) * (size_t)( h->nfu[bf] - bi - 1 ) );
+        --h->nfu[bf];
     }
 }
 

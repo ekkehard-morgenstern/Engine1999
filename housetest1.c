@@ -276,7 +276,7 @@ static void test_gen( void ) {
     house_t h;
     for ( int n = 0; n < 200; ++n ) {
         const double* r = ref[n];
-        house_gen( &h, (int) r[0], (int64_t) r[1] );
+        house_gen_basic( &h, (int) r[0], (int64_t) r[1] );
         int bad = 0;
         if ( h.lx != r[2] || h.dy != r[3] || h.zr != r[4] || h.ez != r[5] || h.ss != (int) r[6] || h.nwin != (int) r[7] ) { bad = 1; }
         if ( h.nrm[0] != (int) r[8] || h.nrm[1] != (int) r[9] || h.ndor[0] != (int) r[10] || h.ndor[1] != (int) r[11] || h.nfu[0] != (int) r[12] || h.nfu[1] != (int) r[13] ) { bad = 2; }
@@ -323,12 +323,29 @@ static void test_gen( void ) {
         }
     }
     CHECK( nf == 0 );
+    // the cheap size is the size of the house
+    for ( int s = 1; s < 50; ++s ) { double a, b; house_gen( &h, 1 + s % 5, s ); house_size( 1 + s % 5, s, &a, &b ); CHECK( a == h.lx && b == h.dy ); }
     // the same seed, the same house
     house_t h2;
     house_gen( &h, 3, 77 ); house_gen( &h2, 3, 77 );
     CHECK( memcmp( &h, &h2, sizeof(h) ) == 0 );
     house_gen( &h2, 3, 78 );
     CHECK( memcmp( &h, &h2, sizeof(h) ) != 0 );
+}
+
+static void test_walk( void ) {
+    house_t h;
+    int nbad = 0, nh = 0, rooms = 0;
+    for ( int t = 1; t <= 5; ++t ) {
+        for ( int s = 1; s <= 400; ++s ) {
+            house_gen( &h, t, s );
+            int u = house_unreachable( &h );
+            ++nh;
+            if ( u != 0 ) { ++nbad; rooms += u; if ( nbad <= 10 ) { printf( "house type %d seed %d: %d room(s) cannot be reached\n", t, s, u ); } }
+        }
+    }
+    printf( "walkable: %d of %d houses have a room one cannot reach (%d rooms)\n", nbad, nh, rooms );
+    CHECK( nbad == 0 );
 }
 
 static void test_mesh( void ) {
@@ -400,6 +417,7 @@ static void test_mesh( void ) {
 int main( void ) {
     test_gen();
     test_mesh();
+    test_walk();
     printf( "housetest1: %d cases, %d failures\n", cases, failures );
     return failures;
 }

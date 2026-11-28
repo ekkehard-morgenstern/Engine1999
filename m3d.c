@@ -952,8 +952,6 @@ static const hline_t* hline_get( const tjob_t* j, const rlink_t* l, int net ) {
 static int house_list( const tjob_t* j, double bx0, double by0, double bx1, double by1, hsite_t* out, int max ) {
     if ( j->world == 0 || !j->pic.houses || !j->gnd.net.on ) { return 0; }
     rlink_t links[40];
-    house_t* hh = (house_t*) malloc( sizeof(house_t) );
-    if ( hh == 0 ) { return 0; }
     int n = 0;
     for ( int net = 1; net >= 0; --net ) {
         int nl = rnet_links( &j->gnd.net, net, bx0 - 2000.0, by0 - 2000.0, bx1 + 2000.0, by1 + 2000.0, links, 40 );
@@ -983,8 +981,9 @@ static int house_list( const tjob_t* j, double bx0, double by0, double bx1, doub
                     int type = 1 + (int) floor( job_wh( j, lk, seg * 8 + i, 204 ) * 5.0 );
                     if ( type > 5 ) { type = 5; }
                     int64_t seed = 1 + (int64_t) floor( job_wh( j, lk, seg * 8 + i, 205 ) * 1.0e6 );
-                    house_gen( hh, type, seed );
-                    double w = hh->lx * 3.125, d = hh->dy * 3.125;
+                    double hlx, hdy;
+                    house_size( type, seed, &hlx, &hdy );
+                    double w = hlx * 3.125, d = hdy * 3.125;
                     double xa0 = ny, xa1 = -nx;                                                // the house's +x runs along the road
                     double ox = fx - xa0 * w * 0.5, oy = fy - xa1 * w * 0.5;
                     double zmin = 1.0e9, zmax = -1.0e9;
@@ -999,7 +998,7 @@ static int house_list( const tjob_t* j, double bx0, double by0, double bx1, doub
                     rnear_t rn;
                     rnet_near( &j->gnd.net, cx, cy, 700.0, &rn );
                     if ( rn.dirt < dirtmin || rn.tar < 560.0 ) { continue; }
-                    if ( n >= max ) { free( hh ); return n; }
+                    if ( n >= max ) { return n; }
                     hsite_t* s = &out[n++];
                     s->cx = cx; s->cy = cy; s->hw = w * 0.5; s->hd = d * 0.5; s->xx = xa0; s->xy = xa1; s->yx = nx; s->yy = ny;
                     s->ox = ox; s->oy = oy; s->z = zmin - 2.0; s->type = type; s->seed = seed;
@@ -1009,7 +1008,6 @@ static int house_list( const tjob_t* j, double bx0, double by0, double bx1, doub
             }
         }
     }
-    free( hh );
     return n;
 }
 

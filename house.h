@@ -76,6 +76,11 @@ typedef struct {
 } house_t;
 
 void house_gen( house_t* h, int type, int64_t seed );
+void house_gen_basic( house_t* h, int type, int64_t seed );   // without the clear zones at the outer doors and without removing furniture that cuts a room off: the same house as tools/house3d.bas
+void house_size( int type, int64_t seed, double* lx, double* dy );     // the outer size alone (cheap)
+
+// the number of rooms (both floors) one cannot walk into from the front door (a walker of 3 dm width, over the stairs to the upper floor); 0 = every room can be entered, -1 out of memory
+int house_unreachable( const house_t* h );
 
 // -- the outside as a mesh ------------------------------------------------------------------------------------------------------
 enum { HM_PLASTER, HM_CHAR, HM_BRICK, HM_ROOF, HM_GLASS, HM_DOOR, HM_WOOD, HM_CONCRETE, HM_RIM, HM_GARAGE, HM_FRAME, HM_NMAT };
